@@ -1,5 +1,6 @@
 // 34-appearance-kept (e2e/traces/appearance-kept.trace): the app started again: dark from its first frame, as the
 // core kept it (its prefs: appearance dark); 跟随系统 chosen again for the runs after (prefs.set appearance system).
+// before it: 33-appearance-dark
 
 ///|
 test "34-appearance-kept" {

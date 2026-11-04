@@ -26,7 +26,7 @@ fn login_core(
       done(Ok(answer(name)))
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=844.0, platform=2, pointing?)
   t.run_for(@ui.move_most_ms)
   t
@@ -37,7 +37,7 @@ fn login_of(more : Array[(String, Json)]) -> Json {
   with_fields(
     {
       "id": "login-1",
-      "title": "在 Studio 上登录 gh",
+      "title": "在 Willow 上登录 gh",
       "state": "browser",
       "active": true,
       "statusText": "等你在浏览器里登录",
@@ -51,7 +51,7 @@ fn login_of(more : Array[(String, Json)]) -> Json {
 /// The fixture's chat (its login card at its foot) with the station's logins answering `machineLogins`.
 fn with_logins(t : @ui.Tester) -> @ui.Tester {
   for _ in 0..<6 {
-    if t.find("在 Studio 上登录 gh") is Some(_) {
+    if t.find("在 Willow 上登录 gh") is Some(_) {
       break
     }
     t.wheel(195.0, 400.0, -300.0)
@@ -112,16 +112,16 @@ test "a login the station's own browser can do: seldom used, in the ⋯ by the s
         ("step", "loopback"),
         ("url", "https://accounts.google.com/o/oauth2/auth"),
         ("browser", true),
-        ("browserText", "在 Studio 的浏览器中打开"),
+        ("browserText", "在 Willow 的浏览器中打开"),
       ]),
       answer=fn(name) { if name == "machineLogin.browser" { { "screen": "browser:T1" } } else { Json::object({}) } },
     ),
   )
-  assert_true(t.find("在 Studio 的浏览器中打开") is None, msg="not a button of its own")
+  assert_true(t.find("在 Willow 的浏览器中打开") is None, msg="not a button of its own")
   t.click(Button, label="其他方式")
   assert_true(@sf.presenting())
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
-  t.tap_text("在 Studio 的浏览器中打开")
+  t.tap_text("在 Willow 的浏览器中打开")
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   let asked = named(calls, "machineLogin.browser")
   assert_eq(asked.length(), 1)
@@ -139,11 +139,11 @@ test "a device that cannot take a loopback's callback: the station's browser is 
   let t = with_logins(
     login_core(
       calls,
-      login_of([("step", "loopback"), ("url", Json::string(page)), ("browser", true), ("browserText", "在 Studio 的浏览器中打开")]),
+      login_of([("step", "loopback"), ("url", Json::string(page)), ("browser", true), ("browserText", "在 Willow 的浏览器中打开")]),
       relay=false,
     ),
   )
-  assert_true(t.find("在 Studio 的浏览器中打开") is Some(_))
+  assert_true(t.find("在 Willow 的浏览器中打开") is Some(_))
   assert_true(t.query(Button, label="其他方式") is None)
   assert_true(t.find("这一步要在桌面或安卓 app 里完成") is None)
   let none = with_logins(login_core(calls, login_of([("step", "loopback"), ("url", Json::string(page))]), relay=false))
@@ -161,12 +161,12 @@ test "this device's port taken just now: the station's browser is the step, this
         ("url", "https://accounts.google.com/o/oauth2/auth"),
         ("relayText", "本机 8085 端口被占用"),
         ("browser", true),
-        ("browserText", "在 Studio 的浏览器中打开"),
+        ("browserText", "在 Willow 的浏览器中打开"),
       ]),
     ),
   )
   assert_true(t.find("本机 8085 端口被占用") is Some(_))
-  assert_true(t.find("在 Studio 的浏览器中打开") is Some(_))
+  assert_true(t.find("在 Willow 的浏览器中打开") is Some(_))
   t.click(Button, label="其他方式")
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("在浏览器里登录") is Some(_))

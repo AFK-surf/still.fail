@@ -83,7 +83,7 @@ fn work_source(mode : String, on? : @signals.Signal[Bool] = @signals.signal(true
 test "an agent's card over its name, as over its picture: its background work and its checklist in one line, which leads to its execution history" {
   new_run()
   let src = work_source("chat-agent-card")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   assert_eq(word(work_line).length(), 0)

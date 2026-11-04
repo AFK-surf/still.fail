@@ -12,7 +12,7 @@
 let host_start : Double = -16.0
 
 ///|
-/// The screenshots' window (scripts/shots.sh: MBUI_WIN=390x844), at the scale the Mac recorded its text in (Mini1's
+/// The screenshots' window (scripts/shots.sh: MBUI_WIN=390x844), at the scale the Mac recorded its text in (the host's
 /// display, 1 pixel a point; the goldens' 390 × 844).
 let window_w : Double = 390.0
 
@@ -76,7 +76,7 @@ fn screen(mode : String, opening : Double) -> @ui.Tester raise {
   let missing = t.text_missing()
   if missing.length() > 0 {
     fail(
-      "\{mode}: the Mac's text lacks \{missing.length()} (on Mini1: bash apps/mbui/scripts/screens.sh rec \{mode}): " +
+      "\{mode}: the Mac's text lacks \{missing.length()} (on a Mac: bash apps/mbui/scripts/screens.sh rec \{mode}): " +
       missing[:5].to_array().join(", "),
     )
   }
@@ -476,7 +476,7 @@ test "chat-station-ref" {
   screen_check(t, "chat-station-ref")
   // the station's file in the draft its card in the composer: its name, the station it is on and how it goes
   assert_true(t.locate("=发布清单").length() > 0, msg="no card of the draft's station file in the composer")
-  assert_true(t.locate("=Studio · 路径").length() > 0, msg="the card says not where the file is and how it goes")
+  assert_true(t.locate("=Willow · 路径").length() > 0, msg="the card says not where the file is and how it goes")
 }
 
 ///|

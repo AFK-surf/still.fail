@@ -29,13 +29,13 @@ test "添加目录 opens before the station's folders are said, and they come in
   let t = preset_add(true)
   // open already: browsing a station's folders there, nothing else to pick yet, nothing to type a path into
   assert_true(shows(t, "浏览文件夹…"), msg="\{t.text_runs().map(fn(r) { r.text })}")
-  assert_false(shows(t, "tstst"))
+  assert_false(shows(t, "web-app"))
   assert_false(shows(t, "输入路径"))
   // said: in the pick that is open, not one opened again
   @sffixture.fix_presets_say()
   t.draw()
   t.run_for(@ui.move_most_ms)
-  assert_true(shows(t, "tstst"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+  assert_true(shows(t, "web-app"), msg="\{t.text_runs().map(fn(r) { r.text })}")
   assert_true(shows(t, "浏览文件夹…"))
 }
 
@@ -43,12 +43,12 @@ test "添加目录 opens before the station's folders are said, and they come in
 test "wide, 添加目录 shows the other stations' folders while its own says nothing, and its own as they come, frames going on" {
   let t = preset_add(true, wide=true)
   assert_true(shows(t, "浏览文件夹…"), msg="\{t.text_runs().map(fn(r) { r.text })}")
-  // (MBA's, said: there whatever the preset's station says)
+  // (Maple's, said: there whatever the preset's station says)
   assert_true(shows(t, "still.fail 设计稿"), msg="\{t.text_runs().map(fn(r) { r.text })}")
   // said: the frames that follow show it, none drawn on purpose
   @sffixture.fix_presets_say()
   t.run_for(@ui.move_most_ms)
-  assert_true(shows(t, "tstst"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+  assert_true(shows(t, "web-app"), msg="\{t.text_runs().map(fn(r) { r.text })}")
 }
 
 ///|
@@ -58,9 +58,9 @@ test "adding directories groups them by station, including the same repository o
   t.tap_text("搜仓库或目录")
   t.type_text("still.fail")
   t.frame()
-  assert_true(shows(t, "Studio") && shows(t, "MBA"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+  assert_true(shows(t, "Willow") && shows(t, "Maple"), msg="\{t.text_runs().map(fn(r) { r.text })}")
   assert_eq(t.all(Button, label="still.fail").length(), 2, msg=t.semantics_dump())
-  assert_true(shows(t, "~/WebstormProjects/still.fail · 41 个对话用过"))
+  assert_true(shows(t, "~/projects/still.fail · 12 个对话用过"))
   assert_true(shows(t, "~/code/still.fail · 2 个对话用过"))
 }
 
@@ -74,7 +74,7 @@ test "a phone's new chat shows its preset's control, the composer a capsule as t
   t.run_for(@ui.move_most_ms)
   // (a round beside the composer's ＋, on its one line as when it is opened; where it runs and on what over it whole)
   assert_true(t.query(Button, label="预设") is Some(_), msg=t.semantics_dump())
-  assert_true(shows(t, "Studio"))
+  assert_true(shows(t, "Willow"))
   // pressed: the presets to pick, from the foot
   t.click(Button, label="预设")
   t.run_for(@ui.move_most_ms)
@@ -98,7 +98,7 @@ test "browsing starts on the station picked in the new chat composer" {
   open_mode("newchat-preset-new-browse")
   t.draw()
   t.run_for(@ui.move_most_ms)
-  assert_true(t.query(Button, label="选择文件夹所在的 station: MBA") is Some(_), msg=t.semantics_dump())
+  assert_true(t.query(Button, label="选择文件夹所在的 station: Maple") is Some(_), msg=t.semantics_dump())
   assert_eq(text(Some(named(calls, "drive.folders")[0].params), "station"), "ws1/st2")
 }
 
@@ -122,9 +122,9 @@ test "switching the browsing station starts at its home and saves the chosen fol
   t.click(Button, label="项目")
   t.frame()
   assert_eq(text(Some(named(calls, "drive.folders")[1].params), "path"), "/Users/lin/项目")
-  t.click(Button, label="选择文件夹所在的 station: Studio")
+  t.click(Button, label="选择文件夹所在的 station: Willow")
   t.run_for(@ui.move_most_ms)
-  t.click(MenuItemRadio, label="MBA")
+  t.click(MenuItemRadio, label="Maple")
   t.run_for(@ui.move_most_ms)
   let asks = named(calls, "drive.folders")
   assert_eq(text(Some(asks[2].params), "station"), "ws1/st2")
@@ -139,7 +139,7 @@ test "switching the browsing station starts at its home and saves the chosen fol
   let folder = Some(items(made, "dirs")[0])
   assert_eq(text(folder, "path"), "/Users/lin/项目")
   assert_eq(text(folder, "station"), "ws1/st2")
-  assert_eq(text(folder, "stationName"), "MBA")
+  assert_eq(text(folder, "stationName"), "Maple")
   let picked = Some(named(calls, "newChat.pick").last().unwrap().params)
   assert_eq(text(picked, "presetStation"), "ws1/st1")
 }
@@ -180,6 +180,6 @@ test "editing another station's preset still starts browsing on the composer's s
   t.run_for(@ui.move_most_ms)
   t.click(Button, label="浏览文件夹…")
   t.run_for(@ui.move_most_ms)
-  assert_true(t.query(Button, label="选择文件夹所在的 station: MBA") is Some(_), msg=t.semantics_dump())
+  assert_true(t.query(Button, label="选择文件夹所在的 station: Maple") is Some(_), msg=t.semantics_dump())
   assert_eq(text(Some(named(calls, "drive.folders")[0].params), "station"), "ws1/st2")
 }

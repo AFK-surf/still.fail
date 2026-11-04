@@ -483,8 +483,7 @@ export const unix: Platform = {
   /// (this process is let go) and a restart (the service's processes are stopped).
   installerExt: "sh",
   async startInstaller(script, runDir, env) {
-    // A copy: the installer replaces the release it is in. Off the station's thread (0.4 s held on ccvm short of
-    // memory, 2026-11-03).
+    // A copy: the installer replaces the release it is in. Off the station's thread so file I/O does not hold it up.
     const copy = join(runDir, "install.sh");
     try {
       await copyFile(script, copy);

@@ -78,7 +78,7 @@ export function toolsLostIn(frame: Json, calls: Set<string>): string | null {
 export const userMessage = (text: string) => JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "text", text }] } });
 
 /// Claude keeps a session at $CLAUDE_CONFIG_DIR/projects/<encoded cwd>/<id>.jsonl: looked for in the directory of `cwd`
-/// (where it runs on), then in every project's (it ran elsewhere before: 923 directories on ccvm, each looked at).
+/// (where it runs on), then in every project's (it ran elsewhere before: many directories on a station, each looked at).
 export function transcriptExists(home: string, sessionId: string, cwd: string): boolean {
   const project = claudeProject(cwd);
   if (project !== null && existsSync(join(home, "projects", project, `${sessionId}.jsonl`))) return true;

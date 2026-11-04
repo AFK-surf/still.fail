@@ -5,8 +5,7 @@
 // the fastest and slowest of the 10 samples), the sizings it did, and the layout it came to (the root's size and the
 // sums of every node's left, top, width and height), to compare with another engine's or another commit's.
 //
-// AWLY_ONLY=<index> runs one workload; AWLY_PROFILE=<seconds> lays it out over and over for a profiler (Studio, its
-// screen locked: `xcrun xctrace record --template 'Time Profiler' --launch -- <exe>`; `sample` hangs there).
+// AWLY_ONLY=<index> runs one workload; AWLY_PROFILE=<seconds> lays it out over and over for a profiler.
 // Workloads: scripts/awly_gen.py <arewelayoutyet>/benchmarks/pangui > src/awly/workloads.mbt. Build and run:
 // moon build --target native --release src/awly && _build/native/release/build/awly/awly.exe > run.jsonl; two runs
 // compared: scripts/awly_compare.py before.jsonl after.jsonl.

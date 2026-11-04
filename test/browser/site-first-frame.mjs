@@ -80,8 +80,8 @@ for (const [label, size, path, colorScheme] of [
   await page.evaluate(() => {
     const air = document.querySelector('[data-drawn]').lastElementChild;
     window.__openingFlying = [...air.children].filter((e) => e.tagName !== 'STYLE');
-    window.__openingStudio = [...document.querySelectorAll('[data-idea="1"] #demo button')]
-      .find((e) => e.getClientRects().length && e.textContent.includes('Studio'));
+    window.__openingWillow = [...document.querySelectorAll('[data-idea="1"] #demo button')]
+      .find((e) => e.getClientRects().length && e.textContent.includes('Willow'));
   });
   await shot(page, `${label}-1-page-script`);
   const first = await page.evaluate(() => {
@@ -183,12 +183,12 @@ for (const [label, size, path, colorScheme] of [
   }
   if (label.startsWith('narrow')) {
     // The row taken over from the opening frame must respond to input, not just retain its appearance.
-    const studio = page.locator('[data-idea="1"] #demo button').filter({ hasText: 'Studio' }).first();
-    assert.ok(await studio.evaluate((el) => el === window.__openingStudio), `${label}: the opening Studio card was replaced`);
-    await studio.click({ force: true });
+    const willow = page.locator('[data-idea="1"] #demo button').filter({ hasText: 'Willow' }).first();
+    assert.ok(await willow.evaluate((el) => el === window.__openingWillow), `${label}: the opening Willow card was replaced`);
+    await willow.click({ force: true });
     await page.waitForFunction(() => [...document.querySelectorAll('[data-idea="1"] #demo button')]
       .some((e) => e.textContent.trim() === 'Station' && e.getClientRects().length));
-    report.push(`${label}: the opening Studio card opened its page`);
+    report.push(`${label}: the opening Willow card opened its page`);
   }
   await context.close();
 }

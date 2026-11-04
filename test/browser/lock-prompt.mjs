@@ -30,7 +30,7 @@ const withLock = {
 // Asking into two workspaces of the person's: 日常 is not the one open.
 const request = {
   device: 'cc'.repeat(32), email: 'lier@example.com', name: '李二', kind: 'app', label: 'still.fail 安卓版 · Pixel 8', code: '482913', created_at: Math.floor(Date.now() / 1000) - 60,
-  workspaces: [{ id: 'w1', name: '3720' }, { id: 'w2', name: '日常', emoji: '☀️' }],
+  workspaces: [{ id: 'w1', name: '示例工作区' }, { id: 'w2', name: '日常', emoji: '☀️' }],
 };
 const lock = (pairing) => ({ pairing });
 let server, browser, madeFixture = false, madeHtml = false;
@@ -70,8 +70,8 @@ createRoot(root).render(<DemoApp phone={location.search.includes('phone')} />);
     });
     await page.waitForTimeout(600);
     assert.ok(await page.getByText('482 913', { exact: true }).isVisible(), 'it shows the code to type there');
-    // Its mark (an emoji) beside its name.
-    for (const name of ['3720', '☀️日常']) assert.ok(await page.getByText(name, { exact: true }).isVisible(), `it names ${name}`);
+    // Its generated first-letter mark or emoji beside its name.
+    for (const name of ['示示例工作区', '☀️日常']) assert.ok(await page.getByText(name, { exact: true }).isVisible(), `it names ${name}`);
     assert.equal(await page.getByRole('button', { name: /批准/ }).count(), 0, 'nothing here approves it');
     const asked = async (call) => (await page.evaluate(() => globalThis.__calls ?? [])).filter(([n]) => n === call).map(([, p]) => p.device);
     assert.deepEqual(await asked('lockPrompt.deny'), [], 'not turned away just for coming up');

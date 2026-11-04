@@ -63,7 +63,7 @@ test("a read abandoned while running cannot return a late answer or hold the nex
   assert.equal(Atomics.load(state, 0), 2, "the next read was answered");
 });
 
-// On ccvm (2026-11-02 15:41 UTC) a usage read held one reader for 97 s and sidebar updates the other: what was told of
+// On a station (2026-11-02 15:41 UTC) a usage read held one reader for 97 s and sidebar updates the other: what was told of
 // two messages just said waited 50 s and 31 s, a push notice 55 s.
 test("what the station tells is read while every reader of what devices ask is held", { timeout: 30_000 }, async () => {
   const { readers, state, args, started, open } = gated(2);
@@ -105,7 +105,7 @@ for (const bulk of ["usage", "openJobs", "changed", "timeline", "aNewRead"]) tes
   assert.equal(Atomics.load(state, 0), 3);
 });
 
-// On ccvm (2026-11-03) a device's history sweep (POST /batch, four pages at once, 1 to 4 s each) held the sidebar, a
+// On a station (2026-11-03) a device's history sweep (POST /batch, four pages at once, 1 to 4 s each) held the sidebar, a
 // session opened and the rest 10 s and more behind it.
 test("a history brought on in the background is read after every other read, one page at a time, a reader left beside it", { timeout: 30_000 }, async () => {
   const { readers, state, args, started, open } = gated(2);
@@ -129,7 +129,7 @@ test("a history brought on in the background is read after every other read, one
 });
 
 test("a history's pages are read by readers of their own: what devices ask is read beside them", { timeout: 30_000 }, async () => {
-  // In line with what devices ask, the sidebar and a chat opened waited 20 s and more behind them on ccvm (2026-11-03).
+  // In line with what devices ask, the sidebar and a chat opened waited 20 s and more behind them on a station (2026-11-03).
   const { readers, state, args, started, open } = gated(2);
   const asked = [readers.read("timeline", args(true), "en"), readers.read("timeline", args(true), "en")];
   try {
@@ -170,10 +170,9 @@ test("the sidebar, a session's detail, the machine's sample and the jobs up are 
     await started(1);
     assert.equal(await readers.read("chats", args(false), "en"), "{}");
     assert.equal(await readers.read("session", args(false), "en"), "{}");
-    // The machine's sample too: it waited 2 to 6 s behind the usage page's reads on ccvm (2026-11-03).
+    // A machine sample is interactive too.
     assert.equal(await readers.read("host", args(false), "en"), "{}");
-    // And the jobs up without their chats, read again by every device as a job starts: 40 s behind them on ccvm
-    // (2026-11-03). With their chats, a bulk read (below).
+    // So are the jobs up without their chats; with their chats, they are a bulk read (below).
     assert.equal(await readers.read("openJobs", { ...args(false), chats: false }, "en"), "{}");
     assert.equal(Atomics.load(state, 0), 5, "the usage read waiting still waits");
   } finally {
@@ -182,7 +181,7 @@ test("the sidebar, a session's detail, the machine's sample and the jobs up are 
   }
 });
 
-// On ccvm (2026-11-02) the log waited up to 98 s behind bulk reads, growing until the main connection wrote it itself;
+// On a station (2026-11-02) the log waited up to 98 s behind bulk reads, growing until the main connection wrote it itself;
 // then, going before them in their readers, it held the one left for a chat 53 s (2026-11-03).
 test("the database's log is written into it by a reader of its own, while every device reader is held", { timeout: 30_000 }, async () => {
   const { readers, state, args, started, open } = gated(2);

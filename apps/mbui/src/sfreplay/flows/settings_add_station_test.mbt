@@ -1,4 +1,4 @@
-// 80-add-station (e2e/traces/settings-add-station.trace: Studio against the local still.fail): Settings → Station → ＋,
+// 80-add-station (e2e/traces/settings-add-station.trace: Mac against the local still.fail): Settings → Station → ＋,
 // a new machine named, 生成命令 (workspace.enroll); the runner enrolled a second station with the command (the cloud's
 // stations say it joined); 完成, its page → "…" → 从 workspace 移除 (its menu and the asking first the presenters') (workspace.removeStation), gone from the list.
 
@@ -10,7 +10,7 @@ test "80-add-station" {
     f.run_to(@ui.nav_rest())
     f.tap("=Station")
     f.run_to(@ui.nav_rest())
-    f.see("=studio")
+    f.see("=willow")
     f.tap("icon:plus")
     f.run_to(@kit.sheet_rest("sf-present"))
     f.see("添加 station")
@@ -38,13 +38,13 @@ test "80-add-station" {
     // said as the cloud answers (its toast's time its own: looked at as it shows), the page going back
     f.see("已移除 station")
     // the pointer off it (a toast waits while the pointer is on it: the tap was where it shows), its time run out
-    f.hover("=studio")
+    f.hover("=willow")
     f.toast_gone()
     let back = @ui.nav_rest()
     if back > f.t.time() {
       f.run_to(back)
     }
-    f.see("=studio")
+    f.see("=willow")
     f.gone("e2e-080726-b")
     // the confirming sheet gone down behind the page (at rest already when the page's way back took longer)
     let down = @kit.sheet_rest("sf-present")

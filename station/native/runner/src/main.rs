@@ -45,8 +45,7 @@ const SETTLE: Duration = Duration::from_secs(1);
 const CHUNK: usize = 64 * 1024;
 const STREAMS: [&str; 2] = ["out", "err"];
 /// How much of a stream acknowledged is let go of at once: its file keeps its length (offsets stay as they were), the
-/// disk under what was acknowledged is given back (sys::punch). A Codex app-server's `.out`, kept whole as it ran for
-/// days, was 0.8 GB on ccvm with 1.3 GB left (2026-11-04).
+/// disk under what was acknowledged is given back (sys::punch), so a long-running stream does not consume disk indefinitely.
 const PUNCH_EVERY: u64 = 32 * 1024 * 1024;
 
 struct Args {

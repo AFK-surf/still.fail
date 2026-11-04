@@ -82,18 +82,42 @@ fn scrub(v : @rjson.Value) -> @rjson.Value {
 }
 
 ///|
-/// Keep paths consistent across the recording without keeping the recording machine's checkout or home.
-fn recording_paths(v : @rjson.Value, checkout : String, home : String) -> @rjson.Value {
+/// Keep paths consistent without keeping the recording machine's checkout, its private parent, test work or home.
+fn recording_paths(v : @rjson.Value, checkout : String, work : String, home : String) -> @rjson.Value {
   match v {
-    Obj(kvs) => Obj(kvs.map(fn(kv) { (kv.0, recording_paths(kv.1, checkout, home)) }))
-    Arr(xs) => Arr(xs.map(fn(x) { recording_paths(x, checkout, home) }))
+    Obj(kvs) => Obj(kvs.map(fn(kv) { (kv.0, recording_paths(kv.1, checkout, work, home)) }))
+    Arr(xs) => Arr(xs.map(fn(x) { recording_paths(x, checkout, work, home) }))
     Str(s) => {
       let s = if checkout.length() > 1 {
         s.replace_all(old=checkout, new="/test-worktree")
       } else { s }
+      let s = if work.length() > 1 {
+        s.replace_all(old=work, new="/test-e2e")
+      } else { s }
+      // A service or tool can live beside the checkout instead of inside the test work directory.
+      // Only replace that parent when it is below home; never replace home itself or a shared /tmp directory.
+      let parent = match checkout.rev_find("/") {
+        Some(k) => checkout.view(end_offset=k).to_string()
+        None => ""
+      }
+      let s = if home.length() > 1 && parent.has_prefix(home + "/") {
+        s.replace_all(old=parent, new="/test-workspace")
+      } else { s }
       Str(if home.length() > 1 { s.replace_all(old=home, new="/test-home") } else { s })
     }
     x => x
+  }
+}
+
+///|
+/// A host text answer kept after removing local paths. A shape's offsets and glyph keys describe the original
+/// words, so they cannot be used for a shortened path; leave that answer out for the fake host to shape anew.
+fn recording_text(v : @rjson.Value, checkout : String, work : String, home : String) -> @rjson.Value? {
+  let clean = recording_paths(v, checkout, work, home)
+  if (v.get("s") is Some(_) || v.get("k") is Some(_)) && compact(clean) != compact(v) {
+    None
+  } else {
+    Some(clean)
   }
 }
 
@@ -331,6 +355,10 @@ fn make(args : Array[String]) -> Unit {
   }
   let src_abs = abspath(src)
   let checkout = abspath(root() + "/../..")
+  let work = match env("E2E_WORK") {
+    Some(path) if path != "" => abspath(path)
+    _ => ""
+  }
   let home = env("HOME").unwrap_or("")
   let lines : Array[String] = []
   let texts : Array[String] = []
@@ -340,7 +368,11 @@ fn make(args : Array[String]) -> Unit {
     match line.find("TEXTREC ") {
       Some(t) => {
         match parse(line.view(start_offset=t + 8).to_string()) {
-          Some(j) => texts.push(compact(Obj([("textrec", recording_paths(j, checkout, home))])))
+          Some(j) =>
+            match recording_text(j, checkout, work, home) {
+              Some(kept) => texts.push(compact(Obj([("textrec", kept)])))
+              None => ()
+            }
           None => ()
         }
         continue
@@ -397,7 +429,7 @@ fn make(args : Array[String]) -> Unit {
         ev = ev.remove("b").set("bn", Num((b.length() / 2).to_string()))
       _ => ()
     }
-    lines.push(compact(recording_paths(ev, checkout, home)))
+    lines.push(compact(recording_paths(ev, checkout, work, home)))
   }
   for t in texts {
     lines.push(t)

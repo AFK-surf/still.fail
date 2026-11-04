@@ -8,7 +8,7 @@
 #     E2E_APK=FILE E2E_PKG=PACKAGE: that APK instead of a debug build (the beta app: fail.still.mbui; not debuggable, so
 #     the files to attach are not put in it and the core's store is not read back: flows that need them fail)
 #   e2e/run.sh ios [NAME…]        the same on the iOS simulator (a simulator of our own: MBUI_IOS_DEVICE, default
-#     ios-mbui-sf, as mbui's; scripts/ios.sh; on Mini1: Studio's simulators open no app), the app installed afresh, its
+#     ios-mbui-sf, as mbui's; scripts/ios.sh), the app installed afresh, its
 #     log followed (e2e/ios-flow.sh), recorded; with no NAME its smoke flows only (01, 03, 05)
 #   Outside CI the app is Wasm in mbui's native shell on each (scripts/wasm-app.sh: no C of it compiled); E2E_NATIVE=1
 #   the native app.

@@ -165,7 +165,7 @@ test "a desktop's video over its chat, its speeds opened: Escape closes them, th
   new_run()
   let src = fixture("chat-preview-video")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.draw()
   t.run_for(@ui.move_most_ms)
   assert_true(viewer.get() is Some(_), msg="up")

@@ -40,6 +40,7 @@ like, nothing else changes):
             Without it the cloud takes no traces.
   review    <deploy>/review-accounts.json, [{"email", "password", "name"}]: the accounts that sign in with a
             password (cloud/src/password.ts), App Store review's. Without it nobody signs in that way.
+  admin     STILLFAIL_ADMIN_EMAIL, or <deploy>/admin-email: the operator console's Google account.
 Cloudflare: an interactive `wrangler login` (or CLOUDFLARE_API_TOKEN). Docker (OrbStack) builds the relay image.
 """
 import argparse
@@ -86,6 +87,17 @@ VAPID = DEPLOY / "vapid.json"
 FCM = DEPLOY / "fcm-service-account.json"
 APNS = DEPLOY / "apns.json"
 REVIEW = DEPLOY / "review-accounts.json"
+
+
+def admin_email(dry_run: bool) -> str:
+    """Read the operator's account outside the shared repository; fail closed for a real API deploy."""
+    if dry_run:
+        return "admin@example.test"
+    path = DEPLOY / "admin-email"
+    email = (env_var("ADMIN_EMAIL") or (path.read_text() if path.exists() else "")).strip()
+    if email:
+        return email
+    sys.exit("no administrator configured: set STILLFAIL_ADMIN_EMAIL or put it in <deploy>/admin-email")
 
 
 def write_private(path: Path, value) -> None:
@@ -345,6 +357,7 @@ def main() -> None:
     if unknown:
         sys.exit(f"no such part: {', '.join(sorted(unknown))}")
     parts = [p for p in PARTS if p in args.parts] or list(DEFAULT_PARTS)
+    admin_account = admin_email(args.dry_run) if "api" in parts and not args.check else None
 
     template = read_template()
     origin = template["vars"]["PUBLIC_ORIGIN"]
@@ -410,7 +423,7 @@ def main() -> None:
     def deploy(part: str, env) -> None:
         config = {**read_template(PARTS[part]), "account_id": account}
         if part == "api":
-            config["vars"] = {**config["vars"], "GOOGLE_CLIENT_ID": web.get("client_id", "dry-run")}
+            config["vars"] = {**config["vars"], "GOOGLE_CLIENT_ID": web.get("client_id", "dry-run"), "ADMIN_EMAIL": admin_account}
             if not beta:
                 config = without_beta(config)
         local = ROOT / PARTS[part].replace(".jsonc", ".local.json")

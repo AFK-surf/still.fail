@@ -2,7 +2,7 @@
 # The host's and the text's contracts on macOS (docs/determinism.md, "What is compared, and where"; scripts/
 # host_contract.sh), on macos-ci (mbui's runner there, label mbui-render): kitdemo's controls page run in a window with its
 # scripted taps, its tape made a Tester's test and run here (every frame the same), then the tape macos-ci kept
-# (mini1_controls) asked of Core Text again (every answer the same). When the macOS host changes.
+# (mac_capture_controls) asked of Core Text again (every answer the same). When the macOS host changes.
 name: mbui-host-mac
 on:
   pull_request:
@@ -20,7 +20,7 @@ on:
       - "apps/mbui/mbui/tools/chk/textrec.mbt"
       - "apps/mbui/mbui/test/host/**"
       - "apps/mbui/mbui/src/kitdemo/gallery/textcheck.mbt"
-      - "apps/mbui/mbui/src/kitdemo/gallery/textrec_mini1_*"
+      - "apps/mbui/mbui/src/kitdemo/gallery/textrec_mac_capture_*"
       - ".github/workflows/mbui-host-mac.yml"
       - "apps/mbui/mbui/src/host/marks.mbt"
       - "apps/mbui/mbui/src/host/host_native.mbt"
@@ -71,7 +71,7 @@ jobs:
               - "tools/chk/textrec.mbt"
               - "test/host/**"
               - "src/kitdemo/gallery/textcheck.mbt"
-              - "src/kitdemo/gallery/textrec_mini1_*"
+              - "src/kitdemo/gallery/textrec_mac_capture_*"
               - ".github/workflows/mbui-host-mac.yml"
               - "src/host/host_native.mbt"
               - "src/kitdemo/main.mbt"
@@ -105,7 +105,7 @@ jobs:
       - name: "The host's contract: a run's tape = a Tester's frames"
         if: steps.f.outputs.host != 'false'
         run: scripts/host_contract.sh mac record
-      - name: "The text's contract: mini1_controls = Core Text's"
+      - name: "The text's contract: mac_capture_controls = Core Text's"
         if: steps.f.outputs.host != 'false'
         run: scripts/host_contract.sh mac text
       - name: "The native views' contract: one placed between pixels is put where it was told, on whole device pixels"

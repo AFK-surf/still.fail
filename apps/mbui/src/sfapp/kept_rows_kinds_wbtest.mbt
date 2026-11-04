@@ -23,7 +23,7 @@ let kept_rows_still_ms : Double = 70.0
 fn kept_rows_open(mode : String, w : Double, h : Double) -> @ui.Tester {
   new_run()
   let src = fixture(mode)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let large = w >= 1000.0
   // (two ways of drawing compared: the corner rule is held where the chats' pictures are tested)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform=if large { 0 } else { 2 }, corners_held=false)

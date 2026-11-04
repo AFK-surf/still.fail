@@ -44,7 +44,7 @@ test "activity: a row reserved for later reveals its words in its own turn" {
   let clock = Ref::new(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
@@ -152,8 +152,8 @@ test "activity: glyphs do not collide when their widths change" {
   activity_glyphs_do_not_collide("宽宽宽宽宽宽宽宽宽宽宽宽", "iiiiiiiiiiii")
   activity_glyphs_do_not_collide("iiiiiiiiiiii", "宽宽宽宽宽宽")
   activity_glyphs_do_not_collide("宽宽宽宽宽宽", "iiiiiiiiiiii")
-  activity_glyphs_do_not_collide("在 Studio 上跑整套检查", "正在核对动效和测试结果")
-  activity_glyphs_do_not_collide("在 Studio 上跑整套检查：先编译 mbui 的原生代码", "正在核对动效和测试结果")
+  activity_glyphs_do_not_collide("在 Willow 上跑整套检查", "正在核对动效和测试结果")
+  activity_glyphs_do_not_collide("在 Willow 上跑整套检查：先编译 mbui 的原生代码", "正在核对动效和测试结果")
 }
 
 ///|

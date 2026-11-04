@@ -298,7 +298,7 @@ export function liveMemory(o: { data: string; store: Store; jobs: Jobs; notify: 
     jobs: () => watchedJobs(store),
     agents: async () => (await runnersWithSessions(o.data, whose)).map((r) => ({ pid: r.pid, session: r.session })),
     // Among the sessions shown first; every session ever only for a directory none of them has (an archived one's),
-    // and what that found kept: under memory pressure (the whole while on ccvm) the watch looks every few seconds, and
+    // and what that found kept: under memory pressure (the whole while on a station) the watch looks every few seconds, and
     // every session read each time held the main thread 3.2 s (2026-11-02).
     sessionAt: (dir) => sessionIn(store.liveSessions(), dir) ?? elsewhere(dir),
     tell: (unit, text) => {

@@ -309,7 +309,14 @@ pub fn rows_view(
   let naming = s.b.renaming().unwrap_or("")
   let shows = fn(l : ListLine) {
     match l {
-      At(Row(a, e, _, _)) if naming != "" && row_key(a.path, e.name) == naming => "naming"
+      At(Row(a, e, _, _)) => {
+        let k = row_key(a.path, e.name)
+        let named = if naming != "" && k == naming { "naming" } else { "" }
+        // The last row carries the card's bottom room. Tell ListRows when that room moves to another row,
+        // so it changes height along with a row coming or going rather than jumping when the old row is gone.
+        let last = if all_keys.length() >= 2 && all_keys[all_keys.length() - 2] == "r/" + k { "/last" } else { "" }
+        named + last
+      }
       // (what its head shows besides itself: the files going up here, its columns' heads: `head_shows`)
       Head => head_shows
       _ => ""
@@ -352,7 +359,9 @@ pub fn rows_view(
   // and going where it is by its key: its room opening and closing, the ground not faded nor moved with what it holds
   let line_at = fn(i : Int, line : Line) {
     let first = line_of[i] == 0
-    let last = line_of[i] == lines_n - 1
+    // A departing last row keeps its corners while the new last row receives its room.
+    let last = line_of[i] == lines_n - 1 ||
+      (all_keys.length() >= 2 && shown_keys[i] == all_keys[all_keys.length() - 2])
     let held = fn(body : () -> Unit) {
       let b = c.box(style=@sf.full_width, body)
       lr.enter(c, b, shown_keys[i])

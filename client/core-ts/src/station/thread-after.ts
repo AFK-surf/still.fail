@@ -2,7 +2,7 @@
 // read, who wrote in it), brought on by what its station's stream says was said in it, here: the station tells what it
 // writes as it writes it, and leaves what a thread's summary makes of that to the device (docs/core-ts.md, sync).
 // Made by the station, the summary was read again for every viewer after every message (a phone's few languages and
-// workspaces each), from the disk while its machine was short of memory: seconds for each on ccvm (2026-11-02).
+// workspaces each), from the disk while its machine was short of memory: seconds for each on a station (2026-11-02).
 import { get, isObject } from "../util.ts";
 
 type J = Record<string, any>;

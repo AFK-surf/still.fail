@@ -770,7 +770,7 @@ export class Jobs {
   /// The end of a job an earlier station started (not this one's child): its exit file appearing (heard from the watch
   /// on jobs/exit), or its leader gone (looked at once a second: that end writes no file and has no event). The file is
   /// looked for once a second too only where the directory is not watched: each look waits on the disk on the main
-  /// thread (four jobs followed on ccvm, 2026-10-25).
+  /// thread (four jobs followed on a station, 2026-10-25).
   private leaderGone(id: string, pgid: number): Effect.Effect<void> {
     const exit = this.exitFile(id);
     const over = () => !pidAlive(pgid) || (this.exitWatch === null && existsSync(exit));

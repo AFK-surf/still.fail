@@ -1,0 +1,47 @@
+///|
+test "emission waits for explicit picture requests, not incidental cached pictures" {
+  let lines : Array[String] = []
+  script.val = Some(lines)
+  emit_answered(["picture", "chat.pin"])
+  assert_eq(lines, ["answered chat.pin"])
+  emit_answered_to("picture", 1)
+  assert_eq(lines, ["answered chat.pin", "answered picture"])
+  script.val = None
+}
+
+///|
+test "emission waits for explicit machine session requests, not cached offers" {
+  let lines : Array[String] = []
+  script.val = Some(lines)
+  emit_answered(["machineSessions.list", "chat.pin"])
+  assert_eq(lines, ["answered chat.pin"])
+  emit_answered_to("machineSessions.list", 1)
+  assert_eq(lines, ["answered chat.pin", "answered machineSessions.list"])
+  script.val = None
+}
+
+///|
+test "a recording script is complete only after the flow ends" {
+  let lines : Array[String] = []
+  script.val = Some(lines)
+  emit("tap action")
+  assert_eq(lines, ["tap action"])
+  emit_end()
+  assert_eq(lines, ["tap action", "# flow complete"])
+  assert_true(script.val is None)
+}
+
+///|
+test "incidental host calls are scoped to the steps that need them" {
+  let lines : Array[String] = []
+  script.val = Some(lines)
+  incidental_calls.val = ["drive.read"]
+  emit_answered(["drive.read", "drive.browse"])
+  assert_eq(lines, ["answered drive.browse"])
+  emit_answered_to("drive.read", 1)
+  assert_eq(lines, ["answered drive.browse", "answered drive.read"])
+  incidental_calls.val = []
+  emit_answered(["drive.read"])
+  assert_eq(lines, ["answered drive.browse", "answered drive.read", "answered drive.read"])
+  script.val = None
+}

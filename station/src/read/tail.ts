@@ -18,7 +18,7 @@ export type Mark = { offset: number; index: number; inner: [string, number][] };
 
 /// A mark is taken once at least this many entries came after the last, or this many bytes with at least one entry: a
 /// read from the mark before an entry reads no more than that before it. 8 MB apart, a page of a Codex history read 2 to
-/// 16 MB, 1 to 7 s from a disk short of memory on ccvm (2026-11-03).
+/// 16 MB, 1 to 7 s from a disk short of memory on a station (2026-11-03).
 export const MARK_EVERY = 256;
 export const MARK_BYTES = 1 << 20;
 

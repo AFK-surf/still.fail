@@ -137,7 +137,7 @@ export function listSessions(s: Store): SessionRow[] {
 }
 
 /// The sessions not archived (the sidebar's), the latest active first, by the index of those alone (schema.ts
-/// sessions_live): each read of the sidebar went over every session the station ever had (1,505 on ccvm, 1,398 of them
+/// sessions_live): each read of the sidebar went over every session the station ever had (many on a station, many of them
 /// archived) to pick out its 107 (2026-11-03).
 export const SHOWN_SESSIONS = "SELECT * FROM sessions INDEXED BY sessions_live WHERE archived_at IS NULL ORDER BY last_active_at DESC";
 export function shownSessions(s: Store): SessionRow[] {
@@ -701,7 +701,7 @@ export function askingMessage(s: Store, thread: number, about: number | null, du
 /// A turn of a session that ended blocked between two times (ms), in any of the words a turn's end is kept in (today's,
 /// need_help and need_decision, and block from before: store/rows.ts `saidBefore`), by the index of its turns by their
 /// end. Asked as `block` alone, none of today's matched (each blocked ask was told again at every turn that ended on
-/// it), and by the session's turns from its first, every turn it had was read: 1,891 for one on ccvm (2026-11-02).
+/// it), and by the session's turns from its first, every turn it had was read: many for one on a station (2026-11-02).
 export const TOLD_BLOCKED =
   "SELECT 1 FROM turns WHERE session_key = ? AND ended_at >= ? AND ended_at < ? AND declared IN ('block', 'need_help', 'need_human', 'need_decision') LIMIT 1";
 
@@ -742,8 +742,7 @@ function answersOf(s: Store, thread: number, since: number): { thread: number; n
 export function answersSince(s: Store, since: number, threads: number[] | null = null): CardAnswer[] {
   const out: CardAnswer[] = [];
   // Of some threads alone (the items of a sidebar a change touched), each by its cards (a few) and the first person's
-  // message after each: every person's message of the last day and a half on the station, each with a few lookups, was
-  // some 2,600 statements; one chat's 76 of them, with its 3 cards, 1 to 1.5 s on ccvm short of memory (2026-11-03).
+  // message after each: looking up every recent message in every thread would need work unrelated to the changed items.
   const said: Json[] =
     threads === null
       ? all(s, "SELECT thread, n FROM entries WHERE author_kind = 'person' AND kind = 'message' AND at >= ?", since)
@@ -830,7 +829,7 @@ function turnSummary(r: Json, startedAt: number): TurnSummary {
 /// Each session's counts and last turn (`sessionStats`), each by a lookup the size of what it finds: its turns as the
 /// database keeps them counted (store/schema.ts SESSION_TURNS), its messages not delivered yet by the index of those
 /// alone (as store.ts STATS_OF), its first words and its latest turn. Its every turn counted and its every delivery read
-/// (the deliveries by session and thread), each summary of a long session read some 65 pages, from the disk on ccvm
+/// (the deliveries by session and thread), each summary of a long session read some 65 pages, from the disk on a station
 /// short of memory (2026-11-02), as often as the session changed.
 export const SESSION_STATS = `SELECT s.key,
        COALESCE((SELECT c.n FROM session_turns c WHERE c.session = s.key), 0) AS turns,
@@ -888,7 +887,7 @@ export const JOBS_NOW = 50;
 /// A session's latest jobs by when they were made (the index on their session, from its end), and those of it still up
 /// (running, or a service being started again: by the index of those up): what a device's list of them shows, those
 /// that matter now (client/core-ts jobs.ts `isCurrent`). Its every job was read for it, with each one's notices and
-/// log: 378 of one session on ccvm (2026-11-03).
+/// log: 378 of one session on a station (2026-11-03).
 export const LATEST_JOBS = "SELECT * FROM jobs INDEXED BY jobs_by_session WHERE session_key = ? ORDER BY rowid DESC LIMIT ?";
 export const UP_JOBS_OF = "SELECT * FROM jobs INDEXED BY jobs_up WHERE state = 'running' AND session_key = ?1 UNION ALL SELECT * FROM jobs INDEXED BY jobs_up WHERE state = 'exited' AND port IS NOT NULL AND session_key = ?1";
 export function jobsNow(s: Store, session: string): JobRow[] {

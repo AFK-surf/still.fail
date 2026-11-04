@@ -90,7 +90,7 @@ export function feishuConnectDemo(failing = false): DemoExtension {
       if (t.topic !== "connects" || !value || typeof value !== "object") return undefined;
       const v = value as ConnectsView;
       const station = v.items[0]?.station ?? "";
-      return { ...v, items: [...v.items, { station, stationName: "Studio", connect: feishuConnect(failing), sessions: [], candidates: [], running: 0, changes: [] }] };
+      return { ...v, items: [...v.items, { station, stationName: "Willow", connect: feishuConnect(failing), sessions: [], candidates: [], running: 0, changes: [] }] };
     },
   };
 }

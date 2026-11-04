@@ -129,7 +129,7 @@ test("a big file in parts, a whole one streamed, a video's poster or none", asyn
   }
 });
 
-// On ccvm (2026-11-02) an image waited 26 s in the readers' line for a lookup of 5 ms: a file sent in a chat is found
+// On a station (2026-11-02) an image waited 26 s in the readers' line for a lookup of 5 ms: a file sent in a chat is found
 // without them.
 test("a chat's file is given though no reader answers", async () => {
   const data = mkdtempSync(join(tmpdir(), "file-readers-"));

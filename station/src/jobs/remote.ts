@@ -71,7 +71,7 @@ const SWEEP_EVERY = "1 hour";
 export const GIVE_UP_MS = 10 * 60_000;
 /// A mirror (a task's `dir` on the target) no task of its session has run in or synced for this long goes, with what
 /// its tasks made there; the next start syncs it anew. Chats made one for each worktree and kept them all: 204 of
-/// one session's on Studio, a session's 78 holding 112G, the stations' disks full in hours (2026-10-20).
+/// one session's, enough to fill the station's disk in hours (2026-10-20).
 export const MIRROR_IDLE_MS = 24 * 3600 * 1000;
 /// With the station's disk low (`relieve`), a mirror used within this stays.
 export const MIRROR_RECENT_MS = 3600 * 1000;
@@ -139,7 +139,7 @@ export function readJson(path: string): Json {
 
 /// What chats used of other stations' workspaces (`usedPath`), as last written or read here: what `workspaceTargets`
 /// says of every chat shown, again and again, read from the disk each time on the station's thread, 16 of them held it
-/// 2.5 s on ccvm short of memory (2026-11-03), and `recordUse` at each of their tool calls. Written only by this station
+/// 2.5 s on a station short of memory (2026-11-03), and `recordUse` at each of their tool calls. Written only by this station
 /// (`writeJson` keeps it current); null: none written.
 const used = new Map<string, Json | null>();
 
@@ -147,7 +147,7 @@ const used = new Map<string, Json | null>();
 const writes = new Map<string, number>();
 
 /// Every chat's record read in, off the station's thread, as the station starts: read on it as each chat is first
-/// shown after every update, 9 of them held it 0.9 s on ccvm short of memory (2026-11-03).
+/// shown after every update, the reads can hold up its other work.
 async function readAllUsed(dir: string): Promise<void> {
   for (const name of await readdir(dir).catch(() => [] as string[])) {
     if (!name.endsWith(".json")) continue;
@@ -292,7 +292,7 @@ export class Remote {
   /// Each source session's requests that change something here, one after another; those of different sessions at
   /// once, and those that only read (READS) as they come. All of them in one line, a task's state asked by one chat
   /// waited behind another chat's sync of a big directory on a loaded station, past its caller's 30 s, and the callers
-  /// asked again into the same line (2026-10-21, Studio for ccvm: a 1 KB file synced in 61 s).
+  /// asked again into the same line (2026-10-21, one test host for another: a 1 KB file synced in 61 s).
   private lanes = new Map<string, Promise<unknown>>();
   /// The records followed now (outgoing tasks, closing sessions).
   private watching = new Set<string>();
@@ -374,7 +374,7 @@ export class Remote {
   }
 
   /// The tasks started from here not told yet followed again, and the sessions closing: their records read off the
-  /// station's thread (every task's ever started from here is kept: 13,000 on ccvm, read at each start).
+  /// station's thread (every task's ever started from here is kept: many on a station, read at each start).
   private async resume(): Promise<void> {
     const read = async (dir: string, wanted: (v: Json) => boolean): Promise<string[]> => {
       const names = await readdir(join(this.root, dir)).catch(() => [] as string[]);
@@ -484,8 +484,7 @@ export class Remote {
     const path = join(this.root, "outgoing", `${ref}.json`);
     let entry: Json;
     try {
-      // Off the station's thread: a task's station tells this at each change, 3 read on it held it 1.3 s on ccvm short
-      // of memory (2026-11-03).
+      // Off the station's thread: a task's station tells this at each change.
       entry = await readJsonSoon(path);
     } catch {
       throw new Error("unknown task");
@@ -497,8 +496,7 @@ export class Remote {
   }
 
   /// What tasks brought back (`station-back/<key>` of each session's workspace in use) let go of once nothing in it
-  /// changed for BACK_KEPT_MS: kept for good, they were 5.9 GB of ccvm's disk, 1.3 GB left (2026-11-04, the user's
-  /// call: 6 hours). Off the station's thread.
+  /// changed for BACK_KEPT_MS: kept indefinitely, these files can fill the disk. Off the station's thread.
   private async tidyBack(): Promise<void> {
     const now = wall.now();
     for (const row of this.store.liveSessions()) {
@@ -917,7 +915,7 @@ export class Remote {
   }
 
   /// A session's prepared tasks' directories and what they bring back, as this station has them: one directory per
-  /// session, so closing one removes its own without reading the others' (2,875 on ccvm, each read on the station's
+  /// session, so closing one removes its own without reading the others' (many on a station, each read on the station's
   /// thread at every close, 24 seconds held while memory was short).
   private preparedDir(session: string): string {
     return join(this.root, "prepared", hash(session));
@@ -1798,7 +1796,7 @@ export class Remote {
     }
     const result = "result" in got ? got.result : null;
     // Never started there (its prepare or start did not get through, and the agent went on with another key): followed
-    // for good, every 5 s, by the dozen on a loaded station (2026-10-21, ccvm's 90 to Studio). Given up on, said once.
+    // for good, every 5 s, by the dozen on a loaded station (2026-10-21, the station's 90 to another host). Given up on, said once.
     const unknown = "refused" in got && /unknown task/.test(got.refused);
     if (unknown || (result !== null && field(result, "job") === null)) {
       if (now - entry.since < GIVE_UP_MS) return { at: entry.since + GIVE_UP_MS };
@@ -2104,7 +2102,7 @@ export class Remote {
       }
       let synced: Synced | null = null;
       if (action === "start") {
-        // Read off the station's thread: only this start reads it (76 ms on ccvm short of memory, 2026-11-03).
+        // Read off the station's thread: only this start reads it (76 ms on a station short of memory, 2026-11-03).
         let local: Json = null;
         try {
           local = await readJsonSoon(prepared);

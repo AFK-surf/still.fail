@@ -127,7 +127,7 @@ test("a change's sidebar items and a chat's view read their own shares, openers 
 
 test("the jobs up are listed with their own chats, not every job and chat the station ever had", () => {
   // Read with every job ever run, the whole sidebar and, for a job whose session had no listed chat of its own, the
-  // whole archive: 56 s a read on ccvm short of memory (2026-11-02), read again by every device that read the station.
+  // whole archive: 56 s a read on a station short of memory (2026-11-02), read again by every device that read the station.
   const dir = mkdtempSync(join(tmpdir(), "chat-row-scope-"));
   const store = Store.open(join(dir, "stillfail.db"), join(dir, "archive"));
   try {

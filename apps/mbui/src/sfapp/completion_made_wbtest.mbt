@@ -19,7 +19,7 @@ test "归档建议 made once on each screen, as a page of the settings and as a 
       @sfdesk.bring_page()
       t.run_for(@ui.move_most_ms)
       let own = tree_words_drawn()
-      for word in ["Studio", "GPT-6 mini", @sf.t("web-pages.automaticDecisions.enabled")] {
+      for word in ["Willow", "GPT-6 mini", @sf.t("web-pages.automaticDecisions.enabled")] {
         assert_true(own.iter().any(fn(o) { o.contains(word) }), msg="\{word} not the tree's own at \{at}: \{own}")
       }
       assert_eq(named(calls, "automaticDecisions.form.open").length(), 1, msg=at)

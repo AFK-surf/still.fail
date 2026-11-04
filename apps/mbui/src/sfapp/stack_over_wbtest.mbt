@@ -2,7 +2,7 @@
 // it shows, then slides in: from its causes' moments (pushed, answered, its wait over), whichever frames come between.
 
 ///|
-let over_chat : ChatRef = { station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" }
+let over_chat : ChatRef = { station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Willow" }
 
 ///|
 /// The fixture's core, the chat opened over the page's view held back till `answered` (an event from outside: what reads
@@ -35,7 +35,7 @@ fn over_seen(late : Double?, frames : Array[Double], at : Double) -> (Double, In
   new_run()
   let answered = @signals.signal(false)
   let src = over_source(answered)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.draw()
   t.run_for(@ui.move_most_ms)
@@ -118,7 +118,7 @@ test "中屏: a chat opened over the page in use, its view later than its wait: 
 test "中屏: a chat opened over the page in use, then back at once, no frame between: the chat taken off, the page under it on top, still in use" {
   new_run()
   let src = over_source(@signals.signal(true))
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.draw()
   t.run_for(@ui.move_most_ms)
@@ -140,7 +140,7 @@ test "中屏: a chat opened over the page in use, then back at once, no frame be
 /// 中屏 on the tape (a mouse's, 720 wide), the page in use, its core `src`: the tester, the window's tree, and a moment
 /// just after its last frame.
 fn over_tape(src : Source) -> (@ui.Tester, @view.Tree, Double) raise {
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.draw()
   t.run_for(@ui.move_most_ms)
@@ -160,7 +160,7 @@ fn over_x(t : @ui.Tester, title : String) -> Double {
 }
 
 ///|
-let third_chat : ChatRef = { station: "ws1/st1", session: "s-c3", title: "第三个对话", station_name: "Studio" }
+let third_chat : ChatRef = { station: "ws1/st1", session: "s-c3", title: "第三个对话", station_name: "Willow" }
 
 ///|
 /// Events at their moments (ms after `t0`, in order), each before the frames at and after it; frames at `t0 +` each of
@@ -317,7 +317,7 @@ fn over_brought(from_panel : Bool) -> (
   new_run()
   let answered = @signals.signal(false)
   let src = over_source(answered)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.draw()
   t.run_for(@ui.move_most_ms)

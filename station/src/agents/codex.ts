@@ -438,7 +438,7 @@ export type CodexDriverOptions = {
   /// Settled once what the station before this one left is taken up (sessions/agents.ts `start`). Until then an
   /// app-server a runner keeps is that station's, to be taken up with its snapshot by the session that ran on it. Asked
   /// for before (a profile's quota or the model catalog, as the station starts), one was taken up as after a crash, all
-  /// it ever wrote read again on the main thread (131 MB on ccvm, 2026-11-02: held 4.8 s as devices came back after an
+  /// it ever wrote read again on the main thread (131 MB on a station, 2026-11-02: held 4.8 s as devices came back after an
   /// update), and taken from the station still handing over, which let go of the turns running on it.
   takenUp?: Promise<unknown>;
 };

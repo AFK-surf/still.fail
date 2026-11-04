@@ -1043,7 +1043,7 @@ test("a job's notice given to a session while the next station starts, before it
   await settle();
   await first.hub.handOver();
   // The next station, held while it starts (agents.ts): a task followed from here is told ended (Remote.resume, once
-  // the peers' bus is there) before the hub takes the sessions up (2026-10-30 ccvm, a Studio task's end lost so).
+  // the peers' bus is there) before the hub takes the sessions up (2026-10-30 a station, a another station task's end lost so).
   const claude = new FakeDriver("claude");
   const hub = first.newHub({ chats: (id) => (id === "cl" ? first.chat : undefined), drivers: [claude, new FakeDriver("codex")], internal: false });
   hub.hold("starting");

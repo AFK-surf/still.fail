@@ -3,9 +3,9 @@
 // one (a Mac's, Windows', Linux's host), a note alone elsewhere.
 
 ///|
-/// A service of this machine's running in 星火工作室 as Studio, as the host says it.
+/// A service of this machine's running in 星火工作室 as Willow, as the host says it.
 let local_running : String =
-  #|{"data":"~/.stillfail","runner":"service","version":"0.1.4600","service":{"kind":"launchd","name":"fail.still.station"},"workspace":{"id":"ws1","name":"星火工作室","stationName":"Studio","removed":false}}
+  #|{"data":"~/.stillfail","runner":"service","version":"0.1.4600","service":{"kind":"launchd","name":"fail.still.station"},"workspace":{"id":"ws1","name":"星火工作室","stationName":"Willow","removed":false}}
 
 ///|
 test "本机 Station, at each width and with either hand: as the system says it (a service running in a workspace), its facts in its card, stopped from its menu" {
@@ -15,7 +15,7 @@ test "本机 Station, at each width and with either hand: as the system says it 
     t.set_local_station(local_running)
     t.draw()
     let at = "\{w} platform \{platform}"
-    for words in ["本机 Station", "Studio", "运行中", "单独安装（launchd）", "0.1.4600", "在 星火工作室", "~/.stillfail"] {
+    for words in ["本机 Station", "Willow", "运行中", "单独安装（launchd）", "0.1.4600", "在 星火工作室", "~/.stillfail"] {
       assert_true(t.find(words) is Some(_), msg="\{at}: \{words}")
     }
     // (its facts going on in lines where the room ends: none cut, none past the card)

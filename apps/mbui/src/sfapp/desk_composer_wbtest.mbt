@@ -26,7 +26,7 @@ fn desk_composer_tester(
       (base.call_bytes)(name, params, bytes, done)
     },
   }
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   let t = @ui.Tester::new(
     fn(c) {
       // (the library's words as the app's view says them: without, the composer said its keys, and passed only after
@@ -185,11 +185,11 @@ test "desk composer: the `@` menu offers the workspace's other stations' chats t
   let calls : Array[Made] = []
   let (t, _) = desk_composer_tester(calls)
   desk_focus(t)
-  // written in Studio's (ws1/st1); 夜里的构建又失败了 is MBA's (ws1/st2)
+  // written in Willow's (ws1/st1); 夜里的构建又失败了 is Maple's (ws1/st2)
   t.type_text("@的")
   t.frame()
   // (then when it was last active)
-  assert_true(after_on_its_row(t, "夜里的构建又失败了") == ["MBA", "15 分钟前"], msg=about_its_row(t, "夜里的构建又失败了"))
+  assert_true(after_on_its_row(t, "夜里的构建又失败了") == ["Maple", "15 分钟前"], msg=about_its_row(t, "夜里的构建又失败了"))
   assert_true(after_on_its_row(t, "首页的列表改成按天分组") == ["8 分钟前"], msg=about_its_row(t, "首页的列表改成按天分组"))
   // keyboard and mouse's row: a menu's 34 (a finger's 44: chat_refs_wbtest)
   let (_, _, _, high) = t.get(Button, label="夜里的构建又失败了").rect
@@ -869,7 +869,7 @@ test "the composer growing a line as it is typed in draws none of its words over
 test "a chat's composer growing a line as it is typed in keeps its send whole on its way, nothing of it faded or cut" {
   new_run()
   let src = fixture("chat")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=400.0, h=800.0, platform=2, pointing=Finger)
   t.run_for(@ui.move_most_ms)
@@ -1009,7 +1009,7 @@ test "desk composer: 抄送 opens a menu of the chat's Slack and Feishu threads;
       (base.call)(name, params, done)
     },
   }
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   let on = Ref(false)
   let t = @ui.Tester::new(
     fn(c) {
@@ -1052,7 +1052,7 @@ test "desk composer: 抄送 opens a menu of the chat's Slack and Feishu threads;
 test "desk composer: where 抄送 copies to is said just before send in either shape, staying where it is as the composer opens and shuts, 抄送 beside it once opened (chat.cc)" {
   new_run()
   let src = fixture("chat-cc")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0, pointing=Mouse)
   t.run_for(@ui.move_most_ms)
@@ -1090,7 +1090,7 @@ test "desk composer: where 抄送 copies to is said just before send in either s
 test "desk composer: 抄送's menu has each thread's platform mark before its place, its check only at its end (chat.cc)" {
   new_run()
   let src = fixture("chat")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   let t = @ui.Tester::new(
     fn(c) {
       @sf.set_words(fill)

@@ -4,7 +4,7 @@
 # size and steps in a Tester of this Mac's text, and what differs listed in OUT/STORY.md (missing, extra, off by N px,
 # another corner, ground, words' size). Topics mbui's app asks that the page did not are taken from the page too, in a
 # second round, which also takes each page again and fails where it is not the same as the first time. On a Mac
-# (Studio: station_task), the repository's packages installed (root and client/core-ts). For
+# with the repository's packages installed (root and client/core-ts). For
 # finding what is left to port: not a check, not in CI.
 #   apps/mbui/scripts/layout.sh [OUT] [STORY[@X,Y],…] [WxH]
 #     (by default out/layout, the sidebar open, folded and shown a while: app-chat,app-sidebar-folded@640,400,

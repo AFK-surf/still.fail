@@ -2910,5 +2910,8 @@ pub fn Ctx::wake_in(self : Ctx, ms : Double, later? : Bool = false, loc~ : Sourc
   if !later && self.wake_by is None {
     self.wake_by = Some(loc)
   }
-  self.wake_at_time(self.clock + dmax(ms, 1.0), later~, loc~)
+  // Keep a positive fractional delay at its requested moment. Only move a wake on when adding the delay cannot advance
+  // the clock (including zero or a negative delay), so it cannot ask for the same frame forever.
+  let at = self.clock + ms
+  self.wake_at_time(if at > self.clock { at } else { self.clock + 1.0 }, later~, loc~)
 }

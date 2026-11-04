@@ -43,10 +43,7 @@ compressed (`accept-encoding: zstd`; an event stream flushed event by event and
 compressed against its last megabyte, station/src/mesh/compress.ts), and it is
 decompressed as it comes; a station from before sends it as it is. The native
 apps' shell takes it apart (libzstd, `zstd.*`: `Host.unzstd`), off the core's
-thread: Hermes has no JIT, and fzstd in it made some 10 MB a second of what it
-decompresses on an M2 Max, a tenth of V8's (`apps/mbui/scripts/core.sh
-zstd-read`), slower again on a phone holding back its clock. The browser,
-with no zstd of its own, uses fzstd.
+thread; the browser, with no zstd of its own, uses fzstd.
 A station's history — every chat's entries (the latest chats first, a page of
 each in turn), each listed session's detail where its turns changed and the
 latest page of its transcript — is brought onto the device in the background

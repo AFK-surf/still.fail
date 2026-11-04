@@ -8,7 +8,7 @@ test "07-draft-restart" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("draft-restart"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
-    f.see("=studio")
+    f.see("=willow")
     // the draft back in the field
     f.tap("发消息")
     f.field("还没发出去的草稿 082947")

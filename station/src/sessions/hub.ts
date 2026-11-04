@@ -146,10 +146,10 @@ export class Hub {
   /// What running turns are doing, for the pages' live view.
   readonly live: LiveHub;
   /// Every thread as lists have it, read by the readers (agents.ts sets it): chat_list's, not read on the main thread
-  /// (some 15 queries a thread, 1,200 threads on ccvm: 10 seconds held while memory was short). Unset (tests): the store.
+  /// (some 15 queries a thread, 1,200 threads on a station: 10 seconds held while memory was short). Unset (tests): the store.
   threadList: (() => Promise<ThreadSummary[]>) | null = null;
   /// A thread's latest `limit` messages, oldest first, read by the readers (agents.ts sets it): the archive review's
-  /// (review.ts), up to 400 of them through the merged view, 3 seconds held on ccvm. Unset (tests): the store.
+  /// (review.ts), up to 400 of them through the merged view, 3 seconds held on a station. Unset (tests): the store.
   latestMessages: ((thread: number, limit: number) => Promise<MessageRow[]>) | null = null;
   /// The station's logins (logins/module.ts sets it): whether one waits for a code from its page (a Slack login card
   /// takes one only then), and that code handed to it, entered by `by` on its card. Unset: no logins here.
@@ -417,7 +417,7 @@ export class Hub {
       // Claude's and dsh's runner is the session's own (an idle one is taken up too); codex sessions share their
       // profile's host, which its driver finds, for a turn that was running.
       if (!runtime || (runtime !== "codex" ? !runners.has(runnerId(runtime, row.key)) : !row.running)) continue;
-      // Its latest turn alone: every one it had read for it, the main thread took 254 ms for 3,664 on ccvm (2026-11-03).
+      // Its latest turn alone: every one it had read for it, the main thread took 254 ms for many on a station (2026-11-03).
       const turn = row.running ? (this.store.latestTurn(row.key) ?? undefined) : undefined;
       const snap: Snapshot = {
         key: row.key,

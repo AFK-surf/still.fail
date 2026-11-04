@@ -11,11 +11,11 @@ test "a login is for a site: its own host, a host under it, or one it is under; 
 
 ///|
 test "op's answers: a site's logins from its list, a login's account and password from its fields" {
-  let listed = "[{\"id\":\"a\",\"title\":\"GitHub\",\"additional_information\":\"zzj\",\"urls\":[{\"href\":\"https://github.com\"}]},{\"id\":\"b\",\"title\":\"GitLab\",\"urls\":[{\"href\":\"https://gitlab.com\"}]},{\"id\":\"c\",\"title\":\"No site\"}]"
-  assert_eq(@hostapi.logins_for(listed, "github.com"), [{ id: "a", title: "GitHub", username: "zzj" }])
+  let listed = "[{\"id\":\"a\",\"title\":\"GitHub\",\"additional_information\":\"demo-user\",\"urls\":[{\"href\":\"https://github.com\"}]},{\"id\":\"b\",\"title\":\"GitLab\",\"urls\":[{\"href\":\"https://gitlab.com\"}]},{\"id\":\"c\",\"title\":\"No site\"}]"
+  assert_eq(@hostapi.logins_for(listed, "github.com"), [{ id: "a", title: "GitHub", username: "demo-user" }])
   assert_eq(@hostapi.logins_for("not json", "github.com"), [])
-  let got = "[{\"id\":\"username\",\"label\":\"username\",\"value\":\"zzj\"},{\"id\":\"password\",\"label\":\"password\",\"purpose\":\"PASSWORD\",\"value\":\"s3cret\"}]"
-  assert_eq(@hostapi.login_fields(got), ("zzj", "s3cret"))
+  let got = "[{\"id\":\"username\",\"label\":\"username\",\"value\":\"demo-user\"},{\"id\":\"password\",\"label\":\"password\",\"purpose\":\"PASSWORD\",\"value\":\"s3cret\"}]"
+  assert_eq(@hostapi.login_fields(got), ("demo-user", "s3cret"))
   assert_eq(@hostapi.login_fields("{\"label\":\"password\",\"value\":\"only\"}"), ("", "only"))
 }
 

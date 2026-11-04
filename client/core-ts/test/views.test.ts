@@ -1967,7 +1967,7 @@ test("an_image_sent_while_going_up_is_among_its_messages_files_at_once", async (
   assert.deepEqual([f.attachments.map((a: J) => a.path), f.uploads, f.waits], [["upload:u3"], undefined, undefined]);
 });
 
-// A video sent with a new chat's first message showed as a file card (zuozijian, 2026-10-29): a new chat's files go up
+// A video sent with a new chat's first message showed as a file card: a new chat's files go up
 // only as its message goes, so its video was still going up when its row came. Drawn as its message draws it once up:
 // in its place and shape, its still the one picked here.
 test("a_video_sent_while_going_up_is_among_its_messages_files_at_once", async () => {

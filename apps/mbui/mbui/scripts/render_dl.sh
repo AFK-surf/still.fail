@@ -1,5 +1,5 @@
 #!/bin/bash
-# The draw list the renderer's references are of, goldens/render/controls.dl (kitdemo's controls page over mini1's kept
+# The draw list the renderer's references are of, goldens/render/controls.dl (kitdemo's controls page over its kept
 # text, as a Tester printed it: src/kitdemo/gallery/dl_print_wbtest.mbt), copied into $1 (default
 # out/render/controls.dl). Kept beside the references, not printed each run: they say what each renderer draws of one
 # list, so only a renderer or the list's format (src/ui/drawlist.mbt) changes them, never a control drawn otherwise

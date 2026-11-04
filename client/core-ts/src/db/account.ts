@@ -1994,7 +1994,7 @@ export function placeTurn(detail: J, summary: unknown): boolean {
 /// Whether a session's summary says what is shown of its turns (how many, how long they ran: `turns`, `workMs`, none for
 /// one with turns from before that was kept, which shows how many alone), so
 /// that its detail, read once, needs no reading again as they start and end: a detail listed every turn for that, read
-/// again after each one, 3,685 of one session in 25 s on ccvm (2026-11-03). A station from before says none.
+/// again after each one, many of one session in 25 s on a station (2026-11-03). A station from before says none.
 export function counted(summary: unknown): boolean {
   if (!isObject(summary) || !("workMs" in summary)) return false;
   return (typeof summary.workMs === "number" || summary.workMs === null) && typeof summary.turns === "number";

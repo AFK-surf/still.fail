@@ -8,7 +8,7 @@ test "24-close-option" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("close-option"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
-    f.see("=studio")
+    f.see("=willow")
     f.tap("发消息")
     f.type_text("部署吗 083209 card:要不要部署 083209|现在部署 083209*|不需要部署 083209!")
     f.tap("icon:arrow-up")

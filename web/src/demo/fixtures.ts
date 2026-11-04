@@ -208,7 +208,7 @@ function chatItem(chat: DemoChat): ChatItem {
   const byAgent = chat.running || last?.authorKind === "agent" || last?.authorKind === "ember";
   return {
     id: chat.key, session: chat.key, thread: chat.thread, title: chat.title, agents: [agent], unread: chat.unread, mine: true,
-    lastActiveAt: at, station: STATION, stationName: "Studio", ...(agent.mark ? { state: agent.mark } : {}),
+    lastActiveAt: at, station: STATION, stationName: "Willow", ...(agent.mark ? { state: agent.mark } : {}),
     ...(chat.originText ? { originText: chat.originText } : {}),
     // Who is in it: who asked first started it.
     people: chat.people, ...(chat.people[0] ? { creator: chat.people[0] } : {}),
@@ -233,7 +233,7 @@ export function chatsView(chats: DemoChat[]): ChatsView {
   const earlier = items.filter((item) => !today.includes(item));
   const working = items.some((i) => i.state === "run") ? 1 : 0;
   return {
-    me: { id: "local" }, stations: [{ id: "local", station: STATION, name: "Studio", state: "online" }], loading: false,
+    me: { id: "local" }, stations: [{ id: "local", station: STATION, name: "Willow", state: "online" }], loading: false,
     days: [{ daysAgo: 0, at: Date.now(), label: "今天", items: today }, ...(earlier.length ? [{ daysAgo: 1, at: ago(24 * 60), label: "昨天", items: earlier }] : [])],
     // As the core puts them (client/core-ts/src/looks.ts): the workspace's one station, at work while a chat runs.
     glyph: { online: 1, dim: 0, failing: 0, working, summary: working ? "这台机器 · 运行中" : "本机", label: working ? "1 台 station，1 台在线，1 台在干活" : "1 台 station，1 台在线" },

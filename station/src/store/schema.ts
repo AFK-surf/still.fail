@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS decision_checks (
 CREATE INDEX IF NOT EXISTS decision_checks_session ON decision_checks (session, id);
 CREATE INDEX IF NOT EXISTS decision_checks_at ON decision_checks (created_at);
 -- Each session's latest check of the last days (store.ts LATEST_DECISIONS): from the index alone, and then only the
--- rows of those latest (ccvm: 1,025 checks of 210 sessions in a week).
+-- rows of those latest (a station: many checks of many sessions in a week).
 CREATE INDEX IF NOT EXISTS decision_checks_lately ON decision_checks (created_at, session);
 CREATE TABLE IF NOT EXISTS sessions (
   key TEXT PRIMARY KEY,
@@ -133,7 +133,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS entries_ts ON entries (thread, ts) WHERE ts IS
 -- A message's latest edit (the merged view, at each message any list or page reads): by the thread, the message and
 -- the edit's own number, found at once. With (thread, target) alone, node's SQLite (3.53) took the latest from the
 -- primary key instead, going back over the whole thread for a message never edited: every message read had a long
--- chat's every page read with it, 5 to 8 s on ccvm with its pages put out (2026-10-25).
+-- chat's every page read with it, 5 to 8 s on a station with its pages put out (2026-10-25).
 CREATE INDEX IF NOT EXISTS entries_edits ON entries (thread, target, n) WHERE target IS NOT NULL;
 -- A thread's people's messages since a time (rows.ts SAID_SINCE: the cards they answered, of the sidebar items a change
 -- touched): without it each went over the thread's every entry.
@@ -591,7 +591,7 @@ export function addSizeColumn(db: DatabaseSync): void {
 /// by the database itself as calls are recorded (or their output grows), whatever station process records them. A
 /// session's usage is a few rows, where adding up its calls read every one of them, scattered over the table: some
 /// 20,000 for a long chat, seconds of reading on a machine short of memory, on the main thread, each time the live view
-/// of a session at work told its usage (ccvm, 2026-10-24: the station stopped answering for up to a minute).
+/// of a session at work told its usage (a station, 2026-10-24: the station stopped answering for up to a minute).
 /// The triggers that add a call to its session's totals and take one away, each by the calls it is (usage.calls).
 const USAGE_TOTALS_KEPT = `
 CREATE TRIGGER usage_totals_add AFTER INSERT ON usage BEGIN
@@ -675,7 +675,7 @@ export function addUsageTotals(db: DatabaseSync): void {
 /// The calls added up by quarter of an hour (`quarter`: their time, ms, over QUARTER_MS) and by session, thread, person,
 /// profile, runtime, model and speed (none of them said: 0 or ''), kept by the database itself as calls are recorded (or
 /// their output grows), as the totals are. Kept for older station processes during handover; the current usage page
-/// reads the finer statistics in usage-detail.ts. Adding up its 30 days read every call of them, 440,000 on ccvm, each time a page showing
+/// reads the finer statistics in usage-detail.ts. Adding up its 30 days read every call of them, many on a station, each time a page showing
 /// it was told usage changed (every minute while agents work): 30 to 100 seconds a read on a machine short of memory,
 /// both of the station's readers held by it and every other read waiting.
 const USAGE_QUARTERS_DROP = `
@@ -950,7 +950,7 @@ END;`;
 /// The decision cards agents asked with (an options card, or options from before cards) and how each was answered,
 /// kept by the database as messages are written, as the lists' state is (LIST_STATE): what the usage page's 决策点击率
 /// counts (read/store.ts `decisionCards`). Worked out from every card each time it was read, each looking up the next
-/// thing a person said: 30 to 98 seconds a read on ccvm short of memory (2026-11-02), every minute while a page showed
+/// thing a person said: 30 to 98 seconds a read on a station short of memory (2026-11-02), every minute while a page showed
 /// usage, one of the readers held by it all along.
 /// - labels: its options' labels, trimmed (`cardLabels`).
 /// - answered: a person has said something in its chat since; `said`: the first such message was one of its labels.
@@ -1013,7 +1013,7 @@ export function addCardOutcomes(db: DatabaseSync): void {
 /// How many turns each session has had, kept by the database as turns are written and removed (as LIST_STATE): what a
 /// session's summary says (read/store.ts `sessionStats`). Counted from all of a session's turns, it was read again each
 /// time the session changed: with the session's every delivery besides (its undelivered ones looked for by the wrong
-/// index), 65 pages for a session of 1,900 turns, each from the disk on ccvm short of memory (2026-11-02).
+/// index), 65 pages for a session of 1,900 turns, each from the disk on a station short of memory (2026-11-02).
 const SESSION_TURNS = `
 CREATE TABLE session_turns (
   session TEXT PRIMARY KEY,
@@ -1048,7 +1048,7 @@ export function addSessionTurns(db: DatabaseSync): void {
 /// a session's summary says beside how many turns it had (`workMs`), the work a device shows ("12 turns, 3 h"). Kept from
 /// when it began to be kept (`session_work_from`) and never added up from the turns before: a session with a turn that
 /// ended by then says none (read/store.ts SESSION_STATS), and shows its turns alone (the user, 2026-11-03). To add them
-/// up, a device read a session with its every turn, again after each one: 3,685 of one session took 25 s on ccvm short
+/// up, a device read a session with its every turn, again after each one: many of one session took 25 s on a station short
 /// of memory (2026-11-03).
 const SESSION_WORK = `
 CREATE TABLE session_work (
@@ -1096,7 +1096,7 @@ export function addSessionWork(db: DatabaseSync, now: number): void {
 /// it is posted, answered and closed: what the sidebar's marks read for every chat shown, one row each (read/views.ts
 /// `chatMarks`). Kept from when it was made on (`pending_cards_from`, the entries there were then), never worked out of
 /// what was said before: a chat with a card from before is read the way it was (read/store.ts `pendingCard`). Worked
-/// out at each read, it was a dozen lookups a chat, 26 s for 68 chats on ccvm short of memory (2026-11-03).
+/// out at each read, it was a dozen lookups a chat, 26 s for 68 chats on a station short of memory (2026-11-03).
 const PENDING_CARDS = `
 CREATE TABLE pending_cards (
   thread INTEGER PRIMARY KEY,
@@ -1143,7 +1143,7 @@ export function addPendingCards(db: DatabaseSync): void {
 /// lookup the size of what it finds rather than of the chat's history:
 /// - entries_said: a chat's messages after where a viewer read, counted from the index alone (read/store.ts `unreadOf`;
 ///   `letter`, always none here, so that SQLite need not read the message to know it). From the messages themselves, a
-///   page each: a notice of a chat of 534 messages read 479 pages, 3 to 16 s each time on ccvm short of memory
+///   page each: a notice of a chat of many messages read many pages, 3 to 16 s each time on a station short of memory
 ///   (2026-11-02).
 /// - entries_agent_at: what an agent said during a turn, by when (`askingMessage`): by the chat alone, every message
 ///   it had was read.
@@ -1155,7 +1155,7 @@ export function addTellIndexes(db: DatabaseSync): void {
   db.exec("CREATE INDEX IF NOT EXISTS entries_agent_at ON entries (thread, at) WHERE kind = 'message' AND author_kind = 'agent'");
   db.exec("CREATE INDEX IF NOT EXISTS turns_by_end ON turns (session_key, ended_at)");
   // The archive's, a page at a time by
-  // when each was archived (ARCHIVED_PAGE): its whole list was made at once, 60 s on ccvm (2026-11-03).
+  // when each was archived (ARCHIVED_PAGE): its whole list was made at once, 60 s on a station (2026-11-03).
   db.exec("CREATE INDEX IF NOT EXISTS sessions_put_away ON sessions (archived_at, key) WHERE archived_at IS NOT NULL");
   db.exec("CREATE INDEX IF NOT EXISTS threads_put_away ON threads (hidden_at, id) WHERE hidden_at IS NOT NULL");
   db.exec("CREATE INDEX IF NOT EXISTS sessions_models ON sessions (created_by, created_at, runtime, model)");

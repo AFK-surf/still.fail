@@ -122,29 +122,14 @@ for t in $targets; do
     exit 0
   fi
   s=$(date +%s)
-  # (moon runs a program's tests one after another: sfapp's, the screens and every screen's squeeze among them, were
-  # one core's 71 s of the app part's run while the other packages' were done, 2026-10-24. Its files in SFAPP_SHARDS
-  # moon tests side by side over the build made, the other packages in one more: two moon tests at once go as fast
-  # as one, 7 s for 14 on Studio)
+  # Moon runs each test program serially; shard sfapp alongside the other packages.
   runs=("$pkgs")
   if [[ " $pkgs " = *" -p stillfail/sfapp "* ]]; then
     files=(src/sfapp/*_wbtest.mbt)
     n=${SFAPP_SHARDS:-5}
     runs=("$(echo " $pkgs " | sed 's| -p stillfail/sfapp | |')")
-    # (the files that sweep every screen, each a Tester from scratch per screen (screens, squeeze: 10.7 and 7.8 of the
-    # 39 s on Studio, 2026-10-25; corners, every screen in five windows and both languages: 64), a process each beside
-    # the pages', so the run takes the longest of them, not their sum. corners' tests, one a language, a process each:
-    # the one file was the run's longest, 39 s on Studio beside the pages' 34, 2026-10-25; on CI's four cores the app
-    # part's run went from 44 s to 67 with it. squeeze's screens measured in corners' sweep, on the frames it opens
-    # (all of them among its own): squeeze's 32 s process on CI, the same screens opened again, gone, 2026-10-25)
-    # (the squeeze sweep again with what people wrote at its longest, squeeze_said_wbtest.mbt: every screen once more,
-    # a process of its own)
-    # (contrast's, every screen in every window in the dark theme, contrast_wbtest.mbt: left among the pages, their
-    # process went from 96 s to 129 on CI and the app part's run with it, 2026-10-26; a process of its own)
-    # (kept_rows_kinds_wbtest.mbt's, every kind of message the fixtures hold opened twice, its rows kept and built,
-    # in five tests: 70 of the pages' 128 s, each file run alone on CI, 2026-10-27, 40344557870; among the pages one
-    # of their two processes was 207 s, the other 84; two processes of its own, then four: the third runner's job was
-    # its first's 0-5 alone in one process, three of its four cores waiting, 65 s of its 183 on main 99a74aa4, 2026-10-31)
+    # Run the screen sweeps beside page tests, so their durations do not add. Corners includes squeeze's screens;
+    # the long-text, contrast, and kept-row sweeps have their own processes.
     sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:3 src/sfapp/squeeze_said_wbtest.mbt:1
       src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:4)
     pages=()

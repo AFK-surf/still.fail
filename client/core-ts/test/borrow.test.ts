@@ -20,18 +20,18 @@ const MINI = "c".repeat(64);
 
 function workspace(): J[] {
   return [
-    station(HERE, "ccvm", [
+    station(HERE, "lab-node", [
       profile("mine", ["claude-opus-5-5"]),
-      // A copy Studio shares with it.
+      // A copy Office shares with it.
       profile("go", ["kimi-k3"], { runtimes: ["claude", "codex", "dsh"], access: { kind: "opencode-go", key: "st_1…" }, share: { id: "sh-go", role: "user", host: STUDIO } }),
     ]),
-    station(STUDIO, "Studio", [
+    station(STUDIO, "Office", [
       profile("go", ["kimi-k3"], { runtimes: ["claude", "codex", "dsh"], access: { kind: "opencode-go", key: "st_1…" }, share: { id: "sh-go", role: "host", host: STUDIO, allow: [HERE] } }),
       profile("cx", ["gpt-6-astra"], { runtime: "codex", runtimes: ["codex"] }),
       profile("ds", ["deepseek-v4-pro", "claude-opus-5-5"], { runtimes: ["dsh"], access: { kind: "api-provider", key: "sk…" }, share: { id: "sh-ds", role: "host", host: STUDIO, allow: [MINI] } }),
     ], { emoji: "🖥️" }),
     // Down: what it has is not known.
-    station(MINI, "Mini1", [profile("m", ["glm-5.2"])], { online: false }),
+    station(MINI, "TestStation", [profile("m", ["glm-5.2"])], { online: false }),
   ];
 }
 
@@ -39,13 +39,13 @@ test("a_station_offers_its_own_models_says_which_are_borrowed_and_lists_what_oth
   const ws = workspace();
   const here = ws[0].overview;
   const own = sourced(models(here, 0), here, ws);
-  assert.deepEqual(own.map((o: J) => [o.model, o.availability, o.fromText ?? null, o.fromStation ?? null]), [["claude-opus-5-5", "here", null, null], ["kimi-k3", "borrowed", "借自 Studio", { name: "Studio", emoji: "🖥️" }]]);
+  assert.deepEqual(own.map((o: J) => [o.model, o.availability, o.fromText ?? null, o.fromStation ?? null]), [["claude-opus-5-5", "here", null, null], ["kimi-k3", "borrowed", "借自 Office", { name: "Office", emoji: "🖥️" }]]);
   const lend = borrowable(ws, `ws/${HERE}`, own, null, 0);
-  // Opus is here already; Kimi is borrowed; Mini1 is down.
-  assert.deepEqual(lend.map((o: J) => [o.model, o.availability, o.fromText, o.runtimes]), [["gpt-6-astra", "borrowable", "在 Studio 上", ["codex"]], ["deepseek-v4-pro", "borrowable", "在 Studio 上", ["dsh"]]]);
+  // Opus is here already; Kimi is borrowed; TestStation is down.
+  assert.deepEqual(lend.map((o: J) => [o.model, o.availability, o.fromText, o.runtimes]), [["gpt-6-astra", "borrowable", "在 Office 上", ["codex"]], ["deepseek-v4-pro", "borrowable", "在 Office 上", ["dsh"]]]);
   const ds = lend.find((o: J) => o.model === "deepseek-v4-pro");
-  assert.deepEqual(ds.fromStation, { name: "Studio", emoji: "🖥️" });
-  assert.deepEqual(ds.borrow, { station: `ws/${STUDIO}`, stationName: "Studio", profile: "ds", profileName: "ds@x.com", subscription: false, pending: false, allow: [MINI] });
+  assert.deepEqual(ds.fromStation, { name: "Office", emoji: "🖥️" });
+  assert.deepEqual(ds.borrow, { station: `ws/${STUDIO}`, stationName: "Office", profile: "ds", profileName: "ds@x.com", subscription: false, pending: false, allow: [MINI] });
   assert.deepEqual(ds.accounts, { dsh: [] }, "not run here till borrowed");
   assert.equal(lend.find((o: J) => o.model === "gpt-6-astra").borrow.subscription, true);
   // A control whose runtime cannot change: only what runs on it.
@@ -74,13 +74,13 @@ test("picking_another_stations_model_asks_to_borrow_it_and_borrowing_shares_it_w
   choose.set(at, of, { model: "deepseek-v4-pro" });
   const v: J = (choose.compute({ topic: "pick", station: at, of }) as J).ok;
   assert.equal(v.option, "deepseek-v4-pro");
-  assert.deepEqual([v.borrow.note, v.borrow.title, v.borrow.action, v.borrow.allowed], ["此 station 还不能用 DeepSeek V4 Pro", "向 Studio 借用 ds@x.com", "借用账号", true]);
+  assert.deepEqual([v.borrow.note, v.borrow.title, v.borrow.action, v.borrow.allowed], ["此 station 还不能用 DeepSeek V4 Pro", "向 Office 借用 ds@x.com", "借用账号", true]);
   assert.equal(v.borrow.lines.length, 3);
   assert.ok(v.borrow.lines[1].includes("副本"), v.borrow.lines[1]);
   assert.ok(v.borrow.lines[2].includes("环境"), v.borrow.lines[2]);
   // Not saved till borrowed.
   assert.throws(() => choose.save(at, of), /请先借用/);
-  // Borrowed: Studio is asked to share the profile with this station too, as a manager may.
+  // Borrowed: Office is asked to share the profile with this station too, as a manager may.
   const op: J = choose.borrow(at, of);
   assert.equal(op.target.station, `ws/${STUDIO}`);
   assert.equal(op.path, "/profiles/ds/share");

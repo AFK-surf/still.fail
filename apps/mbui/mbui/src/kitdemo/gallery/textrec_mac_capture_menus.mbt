@@ -1,10 +1,10 @@
-// Kept from a real host's run (mini1_menus: MBUI_TEXT_RECORD=1 MBUI_DRAW_LOG=1 MBUI_SCREEN=menus MBUI_WIN=960x720, platform 0),
+// Kept from a real host's run (mac_capture_menus: MBUI_TEXT_RECORD=1 MBUI_DRAW_LOG=1 MBUI_SCREEN=menus MBUI_WIN=960x720, platform 0),
 // made by scripts/chk textrec: not edited by hand.
 // Its frames' hashes since made again by a Tester over this text (scripts/chk textrec --rehash): a change to
 // what mbui draws, not to the host's.
 
 ///|
-let run_mini1_menus : String =
+let run_mac_capture_menus : String =
   #|TEXTREC {"s":[12,600,0,"Light"],"r":[0,1,7.0185441970825195,0,1,1,3.269124984741211,1,2,1,7.585239887237549,2,3,1,7.392658710479736,3,4,1,4.734160423278809,4]}
   #|TEXTREC {"m":[12,600,0],"r":[11.6015625,2.53125,17]}
   #|TEXTREC {"s":[12,600,0,"Dropdown menu"],"r":[0,1,8.87645673751831,5,1,1,4.903591632843018,6,2,1,7.230164051055908,7,3,1,7.602524757385254,8,4,1,7.653110504150391,9,5,1,7.182313442230225,7,6,1,9.71940565109253,10,7,1,7.334064960479736,11,8,1,3.1968841552734375,-1,9,1,10.912671089172363,12,10,1,7.0799689292907715,13,11,1,7.334064960479736,11,12,1,7.334064960479736,14]}

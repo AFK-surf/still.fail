@@ -150,7 +150,7 @@ test("what a reader writes down of a reading goes on as the transcript grows: on
 test("a reading is written down as it goes on past what is written, not at its marks alone: one that starts again reads little", () => {
   // At its marks alone (every MARK_EVERY entries or MARK_BYTES), a reading kept on disk was up to MB behind: every
   // reader starting again (each start of the station) read and parsed it again, 27 MB of the transcripts at work on
-  // ccvm (2026-11-02), the first reads of their histories taking seconds after every update.
+  // a station (2026-11-02), the first reads of their histories taking seconds after every update.
   forgetKept();
   const dir = temp();
   const marks = join(dir, "marks");

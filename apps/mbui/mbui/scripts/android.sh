@@ -31,7 +31,7 @@ APP_ID=${MBUI_APP_ID:-dev.mbui.demo}
 VARIANT=${VARIANT:-debug}
 APK_OUT=$PROJ/app/build/outputs/apk/$VARIANT
 APK_FILE=$APK_OUT/app-$VARIANT.apk
-# Studio's SDK, or the one the machine says (CI: ANDROID_HOME, ANDROID_NDK_LATEST_HOME)
+# The SDK the machine says, or the usual macOS SDK location (CI: ANDROID_HOME, ANDROID_NDK_LATEST_HOME).
 SDK=${ANDROID_HOME:-$HOME/Library/Android/sdk}
 NDK=${ANDROID_NDK_HOME:-${ANDROID_NDK_LATEST_HOME:-$SDK/ndk/28.2.13676358}}
 HOST_TAG=$([ "$(uname)" = Darwin ] && echo darwin-x86_64 || echo linux-x86_64)

@@ -124,8 +124,8 @@ export class LiveHub {
   private listeners = new Map<string, Sub[]>();
   private watched = new Map<string, Watched>();
   /// Where the reading of transcripts no longer watched stood here (or in the process before, carried over): watched
-  /// again, read on from there, the readers not asked. Asked at each station update, a reader read on from what it kept
-  /// on disk, a session's 1.7 MB in 1.5 s on ccvm short of memory (2026-11-03), its chat waiting on it.
+  /// again, read on from there, the readers not asked. Reading it again from disk after each station update can keep
+  /// the chat waiting.
   private stood = new Map<string, TailState[]>();
   /// Whether the process before's were taken up (`takeTails`).
   private tookTails = false;
@@ -223,7 +223,7 @@ export class LiveHub {
   /// Its checklist as it begins to be watched, its transcripts `end` entries long: read on from where it was read to
   /// before (watched again: a turn after HELD_AFTER_MS, a device opening it, the next station process), else read back
   /// from the latest pages to where a call says it whole (or PLAN_PAGES of them); then what was gained meanwhile. Read
-  /// back each time, 4 pages of a long Claude transcript were 30 to 50 MB read at every station update on ccvm short of
+  /// back each time, 4 pages of a long Claude transcript were 30 to 50 MB read at every station update on a station short of
   /// memory (2026-11-03), every read waiting on the disk meanwhile.
   private readPlanBack(key: string, end: number) {
     if (this.history === null) return;
@@ -608,8 +608,7 @@ export class LiveHub {
   /// What the process before read of transcripts, where none is watched here yet.
   takeTails(carried: { key: string; states: TailState[] }[]): void {
     if (!Array.isArray(carried)) return;
-    // How many were taken up, and why not the rest: one asked of the readers after an update all the same (ccvm,
-    // 2026-11-03), unsaid whether it came.
+    // Say how many were taken up and why not the rest, including when a later request still asks a reader.
     let taken = 0;
     let watched = 0;
     for (const c of carried) {

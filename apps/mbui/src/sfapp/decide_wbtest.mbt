@@ -148,7 +148,7 @@ test "the history: a group opens to its steps, a step to its call and what came 
   assert_true(t.find("moon test -p ui -f list_test.mbt") is None)
   t.tap_text("详情")
   assert_true(t.find("Claude Code 2.1.3") is Some(_))
-  assert_true(t.find("Mac Studio · macOS 26 · M2 Max") is Some(_))
+  assert_true(t.find("MacBook Pro · macOS 26 · M1 Pro") is Some(_))
   // the last tap's ripple shown whole, its way in and out
   t.run_for(@motion.ripple_tap_ms)
   t.assert_idle()
@@ -241,7 +241,7 @@ test "an options card: nothing drawn between two options (SettingParts.kt Decisi
 test "the history's post: where it went with its platform's mark, in the accent's ink, a chat here back to it" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "history-link")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   app.nav.push(Chat(r))
   app.nav.push(History(r, "s-c1", None))
   t.run_for(@ui.move_most_ms)

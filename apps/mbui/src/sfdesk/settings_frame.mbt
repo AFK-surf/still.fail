@@ -92,7 +92,7 @@ fn settings_fixture(src : Source, core : Core) -> Unit {
   match @settings.fixture_desk() {
     "policy-text" => @sfpages.fx_policy_up.val = "text"
     "policy-option" => @sfpages.fx_policy_up.val = "option"
-    "lock-join" => join_dialog(core, "ws1", "st2", "MBA")
+    "lock-join" => join_dialog(core, "ws1", "st2", "Maple")
     "lock-off" => turn_off_dialog(core, "ws1", "星火工作室")
     "local-fonts" => @sfpages.local_open.val = true
     "connect-mode" =>

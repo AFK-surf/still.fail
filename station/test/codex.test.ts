@@ -680,7 +680,7 @@ describe("the Codex driver", { concurrency: true }, () => {
     });
   }
 
-  // On ccvm (2026-11-02) a next station asked a profile's quota as it started: it took the app-server up as after a
+  // On a station (2026-11-02) a next station asked a profile's quota as it started: it took the app-server up as after a
   // crash, from the station still handing over, which let go of the turn running on it.
   test("a next driver takes no app-server up before the station before it is taken up: that one hears its turn to the end", { timeout: 60_000 }, async () => {
     const first = driver();

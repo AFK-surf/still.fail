@@ -1321,6 +1321,31 @@ test "a box gone with what it holds (carry): what is new in it carried on its gr
 }
 
 ///|
+test "a resize interrupting a carried box reports only its change of shape" {
+  let stage = Ref::new(0)
+  let over = Ref::new(0.0)
+  let t = @ui.Tester::new(fn(c) {
+    // As a list does for its composer, read its last measured height and the moving shape during the build.
+    @motion.measured(c, "carried/height") |> ignore
+    over.val = @motion.reshaped_over(c, "carried/box")
+    c.column(fn() {
+      let top = if stage.val == 0 { 200.0 } else if stage.val == 1 { 100.0 } else { 80.0 }
+      c.box(h=Px(top), fn() {}) |> ignore
+      let b = c.box(w=Px(100.0), h=Px(if stage.val == 2 { 40.0 } else { 20.0 }), fn() {})
+      @motion.measure(c, b, "carried/height")
+      @motion.reshape(c, b, "carried/box", by="\{stage.val}", spec=@motion.tween(reshape_ms, ease=Linear), carry=stage.val == 1)
+    }) |> ignore
+  })
+  stage.val = 1
+  t.frame()
+  t.run_for(reshape_midway_ms)
+  assert_eq(over.val, 0.0, msg="the carried translation is not a change of shape")
+  stage.val = 2
+  t.frame()
+  assert_eq(over.val, -20.0, msg="only the extra line moves what stands on the box")
+}
+
+///|
 test "a box changed in its place (no carry): what is new in it is in its place from the first" {
   let there = Ref::new(false)
   let t = moved_box(there, false)

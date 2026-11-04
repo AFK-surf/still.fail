@@ -68,7 +68,7 @@ test "back laid out Large, a computer's and a tablet's: the chat popped to the l
 ///|
 test "a page closed through the shell: taken off where it lies with what is over it; not there, or the root, nothing" {
   new_run()
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   let read : Page = DriveRead({ station: "ws1/st1", root: Some("r"), path: "a.md" })
   app.nav.push(Chat(r))
   app.nav.push(read)

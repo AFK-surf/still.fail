@@ -97,7 +97,7 @@ test "a message that did not go: a finger can select and copy its words" {
       (base.call)(name, params, done)
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   let words = "好，就按这个改，顺便把深色模式的截图也换掉"
@@ -133,7 +133,7 @@ test "a message that did not go: a finger can select and copy its words" {
 test "a message on its way: a finger can select and copy its words" {
   new_run()
   let src = fixture("chat-sending")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   let words = "好，就按这个改，顺便把深色模式的截图也换掉"
@@ -158,7 +158,7 @@ test "a message picked on its way and then delivered keeps its selection and quo
       (base.call)(name, params, done)
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")

@@ -58,7 +58,7 @@ const post = (h: Harness, body: string, headers: Record<string, string> = {}) =>
 async function enrolled(h: Harness) {
   const alice = h.as(await h.login("alice"));
   const workspace = ((await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as any).id as string;
-  const enrollment = (await (await alice("POST", `/v1/workspaces/${workspace}/enrollments`, { name: "studio" })).json()) as any;
+  const enrollment = (await (await alice("POST", `/v1/workspaces/${workspace}/enrollments`, { name: "willow" })).json()) as any;
   const station = await key();
   const response = await h.fetch("/v1/stations/enroll", {
     method: "POST",

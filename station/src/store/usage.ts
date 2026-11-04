@@ -142,7 +142,7 @@ export const ACTIVE_SESSIONS = "SELECT session_key FROM turns WHERE ended_at IS 
 export function usageActiveSessions(db: DatabaseSync, since: number): string[] {
   // Each half by the index on when turns ended, the sessions made distinct here: asked as one OR, or as a UNION or a
   // DISTINCT, the station's SQLite (node's, 3.53; not the sqlite3 command's) answers it in order of session by reading
-  // every turn of the station's, 33 s on ccvm with its pages put out (2026-10-25).
+  // every turn of the station's, 33 s on a station with its pages put out (2026-10-25).
   const rows = db.prepare(ACTIVE_SESSIONS).all(since) as Json[];
   return [...new Set(rows.map((r) => r.session_key as string))];
 }

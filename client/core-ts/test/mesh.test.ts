@@ -950,7 +950,7 @@ sim("ways_as_good_as_each_other_are_not_swapped", async (s) => {
 });
 
 /// Two large replies through b side by side, each coming at half its speed: b is taken to be as fast as the two came
-/// together, not as either did. Each alone held Beijing's way to ccvm at a third of its speed, and it lost to ways
+/// together, not as either did. Each alone held a relay path to a station at a third of its speed, and it lost to ways
 /// never tried (2026-10-28).
 sim("replies_side_by_side_tell_how_fast_their_way_is_together", async (s) => {
   const b = s.relay("https://b.relay.test/", { device: { ms: 20, bps: 256 * 1024 } });
@@ -1538,7 +1538,7 @@ async function tunnelOn(s: Sim, conn: J): Promise<J> {
   return s.settle(opened, 10_000).catch(() => null);
 }
 
-/// 2026-10-17, a phone on ccvm's LAN: every tunnel the station opened went unanswered ("the phone did not answer"), adb
+/// 2026-10-17, a phone on a station's LAN: every tunnel the station opened went unanswered ("the phone did not answer"), adb
 /// connect and pair alike, while the phone's requests went on its LAN way. The phone answers each tunnel on the link its
 /// latest offer went on, whichever way that is, for as long as it is offered.
 sim("tunnels_are_answered_on_the_lan_way", async (s) => {

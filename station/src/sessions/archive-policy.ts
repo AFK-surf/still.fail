@@ -165,7 +165,7 @@ export function policyView(store: Viewed, ws: string | null, mine: (session: str
     text: policy.policy,
     options: policy.options.map((o) => {
       const chats = byOption.get(o.id) ?? [];
-      // Named only as shown: each name is a lookup of the chat's (a week's checks came to 210 chats on ccvm).
+      // Named only as shown: each name is a lookup of the chat's (a week's checks came to many chats on a station).
       return { ...o, count: chats.length, chats: chats.slice(0, VIEW_CHATS).map(({ session, ...c }) => ({ session, title: title(session), ...c })) };
     }),
     days: VIEW_DAYS,

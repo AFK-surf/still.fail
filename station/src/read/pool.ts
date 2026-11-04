@@ -1,6 +1,6 @@
 // The readers: worker threads, each with its own read-only connection, in two lines that share none of them. What the
 // station tells as things change (the event streams, its notices: `told`) is read by a reader of its own; what devices
-// ask, by the others. Neither waits on the other: on ccvm (2026-11-02) one line served both, and what was told of a
+// ask, by the others. Neither waits on the other: on a station (2026-11-02) one line served both, and what was told of a
 // message just said waited 50 s behind a usage read and sidebar updates, a push notice 55 s. Among what devices ask,
 // bulk reads leave room for chat reads. None of these reads holds up writes.
 // A reader is a V8 of its own (tens of MB), so they are started when reads come and let go once none has come for a
@@ -52,22 +52,15 @@ const HOMES = 4096;
 /// How long after the store changes its log is written into the database (`checkpointSoon`): at most this often.
 const CHECKPOINT_MS = 2_000;
 /// Writing the store's log into the database (worker.ts `checkpoint`) is no read and waits for no one: it has a reader
-/// of its own (`log`). In line behind reads, it waited up to 98 s on ccvm (2026-11-02) while the log grew, until the main
-/// connection wrote it itself at its next commit (store.ts WAL_PAGES), holding every device and agent as it reached the
-/// disk; going before them in their readers, it held the one left for a chat 53 s as it reached a disk short of memory
-/// (2026-11-03), devices' reads waiting 40 s and more behind it.
+/// of its own (`log`). In line behind reads, a checkpoint may wait as the log grows until the main connection writes it
+/// at its next commit (store.ts WAL_PAGES); on a device reader it can hold up interactive reads while reaching disk.
 const CHECKPOINT = "checkpoint";
 const cancelled = () => new HttpError(503, "read cancelled");
 /// The scoped reads on the path to showing a chat, and those a device's lists are made of, each of a few rows and the
 /// statistics kept of them (the sidebar, a session's detail and summary, a chat's latest messages). Other page reads,
 /// including new kinds not yet classified, leave room for these, and these go before them: a slow transcript or resource
-/// snapshot can block just as a slow aggregate can. Behind a usage read of 76 s and a history's pages, the sidebar
-/// waited 7 s and a session opened 9 s on ccvm (2026-11-03), their own reads 0.2 s. And the machine's sample (api/host.ts,
-/// once in 10 s however many ask: a station's page, a task's start waiting on its queue), 0.3 to 0.9 s itself, that
-/// waited 2 to 6 s behind the usage page's reads.
-/// And a job, and the list of jobs up without their chats (GET /jobs?chats=0, a few rows: 9 on ccvm), read again by
-/// every device as a job starts, that waited up to 40 s behind the usage page's reads one after another (2026-11-03);
-/// with their chats (an older device's, the sidebar made for it), a bulk read.
+/// snapshot can block just as a slow aggregate can. A machine sample (api/host.ts), one job, and the jobs up without
+/// their chats are interactive too; jobs with their chats (an older device's, the sidebar made for it) are a bulk read.
 const INTERACTIVE = new Set(["thread", "chats", "chatMarks", "session", "summary", "latestMessages", "host", "hostTicks", "job"]);
 
 /// One thread's current or older page is interactive. An `after` or explicit range can ask for an unbounded amount on
@@ -83,7 +76,7 @@ function interactive(a: Asked): boolean {
 
 /// A stretch of a session's history in brief (`from` and `to`): what a client fills in of it in the background, where its
 /// stream left a hole or it holds less than there is (client/core-ts/src/station/channel-kinds.ts TRANSCRIPT). Up to
-/// 1,000 items a read, 16 MB of a Codex transcript and 6 s on ccvm (2026-11-03), the sidebar waiting 9 s behind them.
+/// 1,000 items a read, 16 MB of a Codex transcript and 6 s on a station (2026-11-03), the sidebar waiting 9 s behind them.
 /// One read whole (a step opened) is someone's waiting on it.
 function filling(op: string, args: unknown): boolean {
   const a = args as { from?: unknown; to?: unknown; brief?: unknown } | null;
@@ -91,7 +84,7 @@ function filling(op: string, args: unknown): boolean {
 }
 
 /// Reads by the pages' readers (`pages`): a history's pages, and the machine's own sessions (GET /machine-sessions, a walk
-/// of every Claude and Codex project there, 14 s on ccvm, 2026-11-03), each of the files on the disk rather than the
+/// of every Claude and Codex project there, 14 s on a station, 2026-11-03), each of the files on the disk rather than the
 /// database.
 const PAGES = new Set(["timeline", "machineSessions"]);
 
@@ -100,7 +93,7 @@ export class Readers {
   private asked: Line;
   /// The pages of sessions' histories (`timeline`), by a reader of their own: a page is read from the mark before it
   /// (read/transcripts.ts), megabytes of a long transcript, seconds from a disk short of memory; in line with what
-  /// devices ask, the sidebar and a chat opened waited 20 s and more behind them on ccvm (2026-11-03).
+  /// devices ask, the sidebar and a chat opened waited 20 s and more behind them on a station (2026-11-03).
   private pages: Line;
   private told: Line;
   /// The store's log written into the database (CHECKPOINT), by a reader of its own.
@@ -152,7 +145,7 @@ export class Readers {
     const begun = wall.now();
     worker.on("message", (answer: Answer | Ready) => {
       // How long a reader took to start: a read given it as it starts waits on that (one read of 1.9 s took 18 s on
-      // ccvm short of memory, 2026-11-03, a reader started for it).
+      // a station short of memory, 2026-11-03, a reader started for it).
       if ("ready" in answer) {
         const ms = wall.now() - begun;
         if (ms >= 1_000) log.warn("readers", "a reader started slowly", { ms, line: line === this.asked ? "asked" : line === this.pages ? "pages" : line === this.log ? "log" : "told", ...answer.ready });
@@ -166,7 +159,7 @@ export class Readers {
         const now = wall.now();
         if (now - asked.at > SLOW_MS) log.warn("readers", "a read went slowly", { op: asked.ask.op, told: line.told, waitedMs: asked.took - asked.at, ms: now - asked.took });
         // A background read rests its line as long as it took before the next: one after another, a history brought on
-        // read 40 MB of a transcript in 10 s on ccvm short of memory (2026-11-03), every write and read waiting on the
+        // read 40 MB of a transcript in 10 s on a station short of memory (2026-11-03), every write and read waiting on the
         // disk meanwhile.
         if (asked.background) line.rested = now + (now - asked.took);
         if (answer.text !== undefined) asked.resolve(answer.text);
@@ -187,7 +180,7 @@ export class Readers {
   }
 
   /// A reader with nothing to do goes after IDLE_MS, but not those of a line someone waits on (what devices ask, what
-  /// streams tell): one started for a read took 3 s on ccvm short of memory (2026-11-03, its code read in again), the
+  /// streams tell): one started for a read took 3 s on a station short of memory (2026-11-03, its code read in again), the
   /// read itself 40 ms; the second of what devices ask, started as the first was busy, 16 s.
   private letGoLater(slot: Slot, line: Line) {
     if (slot.idle) return;
@@ -213,7 +206,7 @@ export class Readers {
   /// The answer, as JSON text. `told`: what an event stream or a notice tells, read by the station's own reader.
   /// `background`: what a client brings onto its device in the background (POST /batch: a session's history page after
   /// page): after every other read waiting, and one at a time. In line with the rest, a sweep's pages (1 to 4 s each on
-  /// ccvm, 2 to 7 MB of a Codex transcript read: 2026-11-03) held the sidebar, a session opened and the rest 10 s and
+  /// a station, 2 to 7 MB of a Codex transcript read: 2026-11-03) held the sidebar, a session opened and the rest 10 s and
   /// more behind them, four at once from each device.
   read(op: string, args: unknown, lang: Ask["lang"], { told = false, background = false, signal }: { told?: boolean; background?: boolean; signal?: AbortSignal } = {}): Promise<string> {
     if (op === "usage") return this.usageRead(args, lang, told, signal);

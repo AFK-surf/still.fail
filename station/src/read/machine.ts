@@ -504,7 +504,7 @@ function shown(s: MachineSession): Json {
 export function machineSessions(s: Store, source: Roots = roots()): Json {
   const found = list(source, 100);
   // The session going on with each, by the index of runtime sessions (the latest active of two): every session the
-  // station ever had was read with its runtime sessions for it, 1,500 on ccvm, 14 s (2026-11-03).
+  // station ever had was read with its runtime sessions for it, 1,500 on a station, 14 s (2026-11-03).
   for (const m of found) m.session = sessionOfRuntime(s, m.runtime, m.id);
   return { sessions: found.map(shown) };
 }

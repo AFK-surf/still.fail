@@ -931,7 +931,7 @@ test("a job's chat named from the sidebar's items as they are, none of their mes
 });
 
 test("a device makes the sidebar from the summaries and marks as the station makes it", async () => {
-  // The station made every row again for every viewer at every change, 3 to 10 s each on ccvm (2026-11-03): a device
+  // The station made every row again for every viewer at every change, 3 to 10 s each on a station (2026-11-03): a device
   // makes it from what it holds (client/core-ts/src/station/rows-made.ts), by the same rules.
   const r = rig();
   try {

@@ -547,14 +547,14 @@ test("a login card names its login, and closes for everyone as the login ends", 
     const n = r.said(thread.id).at(-1)!.n;
     return r.store.entriesBetween(thread.id, n, n)[0]!;
   };
-  const said = await r.call(key, "chat_post", { to, text: "要在 studio 上登录 GitHub", kind: "need_human", need: "登录 GitHub", card: { type: "login", login: "abc123", assignee: "a@x.com" } });
+  const said = await r.call(key, "chat_post", { to, text: "要在 orchard 上登录 GitHub", kind: "need_human", need: "登录 GitHub", card: { type: "login", login: "abc123", assignee: "a@x.com" } });
   assert.ok(said.includes("People finish the login from the card"), said);
   assert.deepEqual(kept().card, { type: "login", login: "abc123", assignee: "a@x.com" });
   assert.ok(r.store.pendingCard(thread.id) !== null);
   const refused = (args: Json) => r.refused(key, "chat_post", args);
   assert.ok((await refused({ to, text: "x", card: { type: "login" } })).includes("a login card names the login"));
   assert.ok((await refused({ to, text: "x", card: { type: "login", login: "a b" } })).includes("a login card names the login"));
-  assert.ok((await refused({ to, text: "x", card: { type: "login", login: "abc", station: "studio" } })).includes("card.station"));
+  assert.ok((await refused({ to, text: "x", card: { type: "login", login: "abc", station: "orchard" } })).includes("card.station"));
   // Another login's end leaves it; its own closes it (nobody answered: withdrawn, as by its agent).
   assert.deepEqual(r.store.closeLoginCards("abc12"), []);
   assert.ok(r.store.pendingCard(thread.id) !== null);
@@ -1173,7 +1173,7 @@ test("an agent keeps at most a few chats it opened going at once", async () => {
 });
 
 test("an agent opens a chat on another station: made there once per key, its first message and files sent once, its turns told back", async () => {
-  // "near" opens a chat on "far" (named studio); each answers the other as the transport would.
+  // "near" opens a chat on "far" (named orchard); each answers the other as the transport would.
   const near = new Rig({ link: true });
   const far = new Rig({ link: true });
   const a = say("<@UBOT> test on the mac");
@@ -1183,7 +1183,7 @@ test("an agent opens a chat on another station: made there once per key, its fir
   const asked: string[] = [];
   let farDown = false;
   near.hub.onPeer(async (station, request) => {
-    if (request.method === "peers") return { workspace: "ws", stations: [{ id: "st", name: "ccvm" }, { id: "far", name: "Studio" }], current: true };
+    if (request.method === "peers") return { workspace: "ws", stations: [{ id: "st", name: "cedar" }, { id: "far", name: "orchard" }], current: true };
     assert.equal(station, "far");
     asked.push(request.method);
     if (farDown) throw new Error("peer unavailable");
@@ -1198,11 +1198,11 @@ test("an agent opens a chat on another station: made there once per key, its fir
   });
   writeFileSync(join(near.session(keyA).workspace, "plan.txt"), "run them all");
   // Nothing used there yet, and two runtimes to choose from: not opened, the agent is told which to ask about.
-  const which = await near.refused(keyA, "chat_create", { key: "tests", station: "studio", text: "run the tests" });
+  const which = await near.refused(keyA, "chat_create", { key: "tests", station: "orchard", text: "run the tests" });
   assert.ok(which.includes("no one model is clearly the most used") && which.includes("claude's default") && which.includes("codex's default"), which);
   assert.equal(far.store.listSessions().length, 0);
   asked.length = 0;
-  const said = await near.call(keyA, "chat_create", { key: "tests", station: "studio", runtime: "claude", text: "run the tests", title: "跑测试", files: ["plan.txt"] });
+  const said = await near.call(keyA, "chat_create", { key: "tests", station: "orchard", runtime: "claude", text: "run the tests", title: "跑测试", files: ["plan.txt"] });
   assert.deepEqual(asked, [CREATE, "session.put", "session.message"]);
   assert.ok(said.includes("station far"), said);
   const [child] = far.store.listSessions().map((s) => s.key);
@@ -1256,17 +1256,17 @@ test("an agent opens a chat on another station: made there once per key, its fir
   assert.ok(down.includes("same key"), down);
   // One from before chats can be opened there says so.
   near.hub.onPeer(async (_station, request) => {
-    if (request.method === "peers") return { stations: [{ id: "far", name: "Studio" }] };
+    if (request.method === "peers") return { stations: [{ id: "far", name: "orchard" }] };
     throw new Refused("remote tasks are not enabled for this source station");
   });
   assert.ok((await near.refused(keyA, "chat_create", { key: "old", station: "far", text: "x" })).includes("not updated yet"));
-  assert.ok((await near.refused(keyA, "chat_create", { key: "nowhere", station: "mars", text: "x" })).includes("Studio"));
+  assert.ok((await near.refused(keyA, "chat_create", { key: "nowhere", station: "mars", text: "x" })).includes("orchard"));
   await near.close();
   await far.close();
 });
 
 test("a chat opened on another station without a model runs what its starter uses most there, not its opener's", async () => {
-  // As on 2026-10-19: the opener runs Claude's Opus here; Studio runs gpt-6-astra on codex and DeepSeek, no Opus.
+  // As on 2026-10-19: the opener runs Claude's Opus here; orchard runs gpt-6-astra on codex and DeepSeek, no Opus.
   const near = new Rig({ link: true });
   const far = new Rig({ link: true });
   far.raw.profiles = [
@@ -1280,7 +1280,7 @@ test("a chat opened on another station without a model runs what its starter use
   const keyA = sessionKey("cl", "C1", a.threadTs);
   assert.equal(near.session(keyA).model, "opus");
   near.hub.onPeer(async (_station, request) => {
-    if (request.method === "peers") return { workspace: "ws", stations: [{ id: "st", name: "ccvm" }, { id: "far", name: "Studio" }], current: true };
+    if (request.method === "peers") return { workspace: "ws", stations: [{ id: "st", name: "cedar" }, { id: "far", name: "orchard" }], current: true };
     if (request.method === CREATE) return createForPeer(far.hub, "near", request);
     return fromPeer(far.hub, "near", request);
   });
@@ -1297,15 +1297,15 @@ test("a chat opened on another station without a model runs what its starter use
   used("u5", "claude", "deepseek-v4.1-flash", now - 90 * 86_400_000);
   used("u6", "claude", "deepseek-v4.1-flash", now - 90 * 86_400_000);
   far.store.db.prepare("UPDATE sessions SET created_by = 'someone else', created_at = ? WHERE key IN ('u4', 'u5')").run(now);
-  await near.call(keyA, "chat_create", { key: "login", station: "Studio", text: "run the login" });
+  await near.call(keyA, "chat_create", { key: "login", station: "orchard", text: "run the login" });
   const child = far.store.openedWith("near", keyA, "login", "")!.child;
   assert.deepEqual([far.session(child).runtime, far.session(child).model], ["codex", "gpt-6-astra"]);
   // Close to it (3 to 2, the chat just opened counting too): asked.
   used("u7", "claude", "deepseek-v4.1-flash", now - 3600_000);
-  const which = await near.refused(keyA, "chat_create", { key: "login-2", station: "Studio", text: "run the login" });
+  const which = await near.refused(keyA, "chat_create", { key: "login-2", station: "orchard", text: "run the login" });
   assert.ok(which.includes("gpt-6-astra (runtime codex, 3 chats") && which.includes("deepseek-v4.1-flash (runtime claude, 2 chats"), which);
   // A runtime named: its model there.
-  await near.call(keyA, "chat_create", { key: "login-3", station: "Studio", runtime: "claude", text: "run the login" });
+  await near.call(keyA, "chat_create", { key: "login-3", station: "orchard", runtime: "claude", text: "run the login" });
   const third = far.store.openedWith("near", keyA, "login-3", "")!.child;
   assert.deepEqual([far.session(third).runtime, far.session(third).model], ["claude", "deepseek-v4.1-flash"]);
   await near.close();

@@ -58,7 +58,7 @@ fn hold(t : @ui.Tester, s : String) -> Unit {
 ///|
 test "文件: favorites and each station with a drive, with an offline station said so" {
   let t = drive_tester("files")
-  for words in ["文件", "个人收藏", "Station", "Studio", "离线", "文档", "照片"] {
+  for words in ["文件", "个人收藏", "Station", "Willow", "离线", "文档", "照片"] {
     assert_true(t.find(words) is Some(_), msg=words)
   }
   // back says the page under it
@@ -197,7 +197,7 @@ test "a text read: where it was left, a tap brings its bars, the contents go to 
 test "＋'s Station 文件: a file ticked in a folder lent goes into the chat's draft, named by its path" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   let log = t.drive(
     "tap icon:plus\ntap Station 文件\nuntil 所有位置\nuntil 主目录\ntap =文档\nuntil 整个文件夹\ntap 发布清单.md\ntap 添加 1 个\ngone 所有位置\n",

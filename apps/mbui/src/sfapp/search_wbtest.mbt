@@ -190,7 +190,7 @@ test "nothing found; still being looked for, what could not be, what the core sa
   }
   t.type_text("等等")
   assert_true(t.find("未找到结果") is None)
-  assert_true(t.find("MBA 无法搜索：它的版本太旧") is Some(_))
+  assert_true(t.find("Maple 无法搜索：它的版本太旧") is Some(_))
   assert_true(t.find("还有 1 台 station 离线，没有搜它上面的内容") is Some(_))
 }
 
@@ -285,7 +285,7 @@ test "as the Android app's SearchResultsTest: each kind, 查看更多 only where
   assert_true(t.find("Safari 17 上点了登录没有任何反应") is Some(_))
   // two stations: each found thing says which it is on, with when
   // (which, a part of the line under it that leaves it before what was found is cut short; when)
-  assert_true(t.find("studio ·") is Some(_) && t.find("10 分钟前") is Some(_))
+  assert_true(t.find("willow ·") is Some(_) && t.find("10 分钟前") is Some(_))
   assert_true(t.find("mac ·") is Some(_) && t.find("80 分钟前") is Some(_))
   // a member: no station
   assert_true(t.find("登录组 · 王五") is Some(_))

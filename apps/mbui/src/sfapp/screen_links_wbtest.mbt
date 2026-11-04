@@ -33,7 +33,7 @@ fn screen_links_core(
     cancel: fn(id) { cancelled.push(id) },
     topic: fn(name, params) { over(name, (base.topic)(name, params)) },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t
@@ -95,7 +95,7 @@ test "a link alone in a paragraph is its card, a bare one in a sentence reads as
   // 共享调试 bare in a sentence: its title, a link; alone: its card
   assert_true(t.run_rects("共享调试").length() > 0)
   assert_eq(t.run_rects("https://still.fail/w/ws1/s/st1/adb").length(), 0)
-  assert_true(t.find("允许 Studio 的 agent 调试此设备？") is Some(_))
+  assert_true(t.find("允许 Willow 的 agent 调试此设备？") is Some(_))
   // a link to anywhere else as it was
   assert_true(t.run_rects("https://example.com/login-v2").length() > 0)
   // the title in the sentence opens the link, the card too, as a tap on the link would
@@ -129,7 +129,7 @@ test "a link to the chat's web service alone in a paragraph is its card: its sta
   // (clear of the composer over the list's foot, where a tap is the composer's)
   middle_words(t, "打开定价页")
   // the link's own words its title, over the service's station with its port and how it stands, as the core says
-  assert_true(t.find("Studio :5173 · 在线") is Some(_))
+  assert_true(t.find("Willow :5173 · 在线") is Some(_))
   assert_eq(t.run_rects("打开定价页").length(), 0, msg="a card, not a link in the words")
   t.tap_text("打开定价页")
   t.frame()
@@ -203,7 +203,7 @@ test "共享调试's card: lent from the chat where the phone has all it takes; 
   assert_eq(started.length(), 1)
   guard started[0].1 is Object(m) else { fail("adb.start's params") }
   assert_eq(m.get("station"), Some(Json::string("ws1/st1")))
-  assert_eq(m.get("name"), Some(Json::string("Studio")))
+  assert_eq(m.get("name"), Some(Json::string("Willow")))
   assert_eq(t.opened(), [])
   for c in t.native_calls() {
     t.answer_native(c.0, {})
@@ -244,7 +244,7 @@ test "共享调试's card while it is lent there: how it stands, 停止共享 st
   })
   t.wheel(195.0, 400.0, 2000.0)
   t.run_for(@ui.move_most_ms)
-  assert_true(t.find("正在共享调试给 Studio") is Some(_))
+  assert_true(t.find("正在共享调试给 Willow") is Some(_))
   assert_true(t.find("共享中 · 剩余 58 分钟") is Some(_))
   guard adb_button_at(t, "停止共享") is Some((x, y)) else { fail("the card's 停止共享") }
   t.tap(x, y)

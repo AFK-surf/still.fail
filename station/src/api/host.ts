@@ -71,7 +71,12 @@ export class Host {
   /// The machine sample and its GPUs, one at a time however many ask. GPU failures do not prevent the other
   /// measurements from being shown.
   sample(lang: Lang = "zh"): Promise<any> {
-    this.sampling ??= Promise.all([this.info(lang), this.gpus.read().catch(() => null)])
+    this.sampling ??= Promise.all([
+      this.info(lang),
+      process.env.STILLFAIL_TEST_HOST === "1"
+        ? Promise.resolve([{ name: "Test GPU", cores: 4, busy: 0.25 }])
+        : this.gpus.read().catch(() => null),
+    ])
       .then(([info, gpus]) => ({ ...info, gpus }))
       .finally(() => (this.sampling = null));
     return this.sampling;

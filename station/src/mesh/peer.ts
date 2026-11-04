@@ -136,8 +136,8 @@ export function peerCall(
   const connections = new Map<string, Connection>();
   // Each request dialed its own while none was open, and one that timed out dropped its connection for the next to
   // dial another, the old one left open with its requests still run: a station following dozens of tasks on a loaded
-  // one dialed dozens at once, again after each timeout, and the loaded one answered all of them (2026-10-21, ccvm to
-  // Studio).
+  // one dialed dozens at once, again after each timeout, and the loaded one answered all of them (2026-10-21, one station to
+  // another).
   const dialing = new Map<string, Promise<Connection>>();
   const connected = (target: string): Promise<Connection> => {
     const open = connections.get(target);
@@ -272,7 +272,7 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Pick<Pee
   // Each request answered on its own, as it comes: answered one after another, a slow one (a sync while the station
   // was loaded) held up every other one of the caller's, whose chats all share the connection; each timed out at 30 s,
   // the caller dialed again and its next requests queued behind the same, while those left on the old connection were
-  // still run (2026-10-20, ccvm to Studio for hours after Studio's load came down). Idle only with none being answered.
+  // still run (2026-10-20, between stations for hours after the load came down). Idle only with none being answered.
   // The stream being waited for stays the one waited for past each minute: one asked for again would be lost to it.
   let answering = 0;
   let next: Promise<Stream | null> | null = null;
@@ -332,7 +332,7 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Pick<Pee
       outgoing = null;
     }
     // A request this slow has callers giving up at 30 s: said, so who held the station up is found (2026-10-20: nothing
-    // in Studio's log said which of ccvm's requests took it twenty minutes).
+    // in the other station's log said which request took it twenty minutes).
     const ms = Math.round(performance.now() - begun);
     if (ms >= SLOW_MS) {
       const r = asked as { method?: unknown; session?: unknown; key?: unknown } | null;

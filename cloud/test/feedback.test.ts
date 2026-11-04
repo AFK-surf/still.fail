@@ -19,7 +19,7 @@ async function workspace(h: Harness) {
   const aliceTokens = await h.login("alice");
   const alice = h.as(aliceTokens);
   const id = ((await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as any).id as string;
-  const enrollment = (await (await alice("POST", `/v1/workspaces/${id}/enrollments`, { name: "studio" })).json()) as any;
+  const enrollment = (await (await alice("POST", `/v1/workspaces/${id}/enrollments`, { name: "willow" })).json()) as any;
   const station = await key();
   const response = await h.fetch("/v1/stations/enroll", {
     method: "POST",
@@ -82,7 +82,7 @@ test("a station's report is kept once, numbered, and listed in the console with 
     const listed = (await (await admin("GET", "/v1/admin/feedback")).json()) as any;
     assert.deepEqual(listed.feedback.map((f: any) => [f.number, f.channel, f.area]), [[2, "beta", "unknown"], [1, "stable", "station"]]);
     const one = listed.feedback[1];
-    assert.deepEqual(one.station, { id: station.id, name: "studio" });
+    assert.deepEqual(one.station, { id: station.id, name: "willow" });
     assert.deepEqual(one.workspace, { id, name: "Home" });
     assert.equal(one.account, null);
     assert.equal(one.title, "chat_post 发不出去");

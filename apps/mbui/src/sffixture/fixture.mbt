@@ -204,7 +204,7 @@ pub fn row(
     "mine": true,
     "lastActiveAt": 0,
     "station": Json::string(station),
-    "stationName": Json::string(if station == "ws1/st1" { "Studio" } else { "MBA" }),
+    "stationName": Json::string(if station == "ws1/st1" { "Willow" } else { "Maple" }),
     "stationIcon": Json::string(
       if station == "ws1/st1" {
         "glyph:desktop"
@@ -460,8 +460,8 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
   ]
   let earlier = [
     row("c9", "迁移数据库的演练", "ws1/st2", "星期三", {
-      "offline": "MBA 离线",
-      "last": last("演练到第二步时 MBA 断开了"),
+      "offline": "Maple 离线",
+      "last": last("演练到第二步时 Maple 断开了"),
       "agents": [agent("anthropic", "claude"), agent("openai", "codex"), agent("deepseek", "dsh"), agent("qwen", "dsh"), agent("kimi", "dsh")],
     }),
     row("c10", "周报的模板", "ws1/st1", "星期三", {
@@ -555,21 +555,21 @@ pub fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
     Some(String(s)) => s
     _ => ""
   }
-  // each with how many of its agents are at work, as the core says it (views.ts: looks.doing): Studio's one at work,
-  // MBA down; the card to share's (share-card, and share-card-… over the rest of the app) more of them, on more stations
+  // each with how many of its agents are at work, as the core says it (views.ts: looks.doing): Willow's one at work,
+  // Maple down; the card to share's (share-card, and share-card-… over the rest of the app) more of them, on more stations
   let stations : Json = if f.mode == "webdemo" {
-    [{ "id": "ws1/st1", "name": "Studio" }]
+    [{ "id": "ws1/st1", "name": "Willow" }]
   } else if f.mode.has_prefix("share-card") {
     [
-      { "id": "ws1/st1", "station": "ws1/st1", "name": "Studio", "state": "online", "running": 5, "doing": "5 个正在运行" },
-      { "id": "ws1/st3", "station": "ws1/st3", "name": "ccvm", "state": "online", "running": 3, "doing": "3 个正在运行" },
-      { "id": "ws1/st4", "station": "ws1/st4", "name": "Mini1", "state": "online", "running": 1, "doing": "1 个正在运行" },
-      { "id": "ws1/st2", "station": "ws1/st2", "name": "MBA", "state": "error", "running": 0, "doing": "连不上" },
+      { "id": "ws1/st1", "station": "ws1/st1", "name": "Willow", "state": "online", "running": 5, "doing": "5 个正在运行" },
+      { "id": "ws1/st3", "station": "ws1/st3", "name": "Birch", "state": "online", "running": 3, "doing": "3 个正在运行" },
+      { "id": "ws1/st4", "station": "ws1/st4", "name": "Cedar", "state": "online", "running": 1, "doing": "1 个正在运行" },
+      { "id": "ws1/st2", "station": "ws1/st2", "name": "Maple", "state": "error", "running": 0, "doing": "连不上" },
     ]
   } else {
     [
-      { "id": "ws1/st1", "station": "ws1/st1", "name": "Studio", "state": "online", "running": 1, "doing": "1 个正在运行" },
-      { "id": "ws1/st2", "station": "ws1/st2", "name": "MBA", "state": "offline", "running": 0, "doing": "离线" },
+      { "id": "ws1/st1", "station": "ws1/st1", "name": "Willow", "state": "online", "running": 1, "doing": "1 个正在运行" },
+      { "id": "ws1/st2", "station": "ws1/st2", "name": "Maple", "state": "offline", "running": 0, "doing": "离线" },
     ]
   }
   let rich = f.mode.has_prefix("share-card")
@@ -614,7 +614,7 @@ pub fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
     "days": Json::array(days),
     "leading": "agents",
     "note": { "reading": false, "failing": [], "empty": Json::boolean(empty) },
-    // the stations at a glance (Station's place in the bar): Studio online, MBA not (the web's demo: its one, online)
+    // the stations at a glance (Station's place in the bar): Willow online, Maple not (the web's demo: its one, online)
     "glyph": if scope == "ws1" && f.mode != "webdemo" {
       {
         "online": if rich { 3 } else { 1 },
@@ -871,7 +871,7 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
     "job" | "previewLoad" => fixture_service_topic(f, name, params)
     "shareIn" => fixture_share_topic(params)
     "imageNear" => fixture_image_near(params)
-    // (待处理 open, MBA offline: decide_fixture.mbt)
+    // (待处理 open, Maple offline: decide_fixture.mbt)
     "chats" if f.mode == "home-attention" => fixture_chats(f, params).map(fn(v) { fix_with_trouble(v, params) })
     "chats" if f.mode == "home-syncing" => fixture_chats(f, params).map(fix_with_syncing)
     "chats" => fixture_chats(f, params)
@@ -1567,7 +1567,7 @@ pub fn fixture_kept(name : String, params : Json, bytes : Bytes?) -> Result[(Jso
 
 ///|
 /// The card shared of the agents at work (the core's `fleet` view, views/fleet.ts), as the made-up workspace has it:
-/// its one Claude subscription's tokens, Studio's one chat at work; the card to share's (share-card, share-card-…) three
+/// its one Claude subscription's tokens, Willow's one chat at work; the card to share's (share-card, share-card-…) three
 /// kinds of subscription (six Claude accounts' 2.5 亿 tokens, two ChatGPT's, two OpenCode Go's: 3.1 亿 in all, as the
 /// week's input tokens say), nine chats at work on three stations, and their week.
 pub fn fixture_fleet(f : Fixture) -> Json {

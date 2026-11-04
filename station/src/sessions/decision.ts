@@ -220,8 +220,8 @@ function codexConfig(text: string): { provider?: string; providers: Record<strin
 }
 
 /// A profile's files `connection` reads, each as read in the last READ_FOR_MS (null: not there): it is asked again for
-/// every profile as the profiles are shown and checked, read on the station's thread each time, 4 of them 0.3 to 0.4 s
-/// held on ccvm short of memory (2026-11-03). A change is seen once that has passed.
+/// every profile as the profiles are shown and checked; repeated synchronous reads hold the station's thread. A change
+/// is seen once that interval has passed.
 const READ_FOR_MS = 10_000;
 const lately = new Map<string, { at: number; text: string | null }>();
 function readLately(path: string): string | null {

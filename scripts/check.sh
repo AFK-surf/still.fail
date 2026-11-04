@@ -3,7 +3,7 @@
 #   quick: what a commit or push touches, in seconds (icons, TypeScript); the git hooks (.githooks) run it, on
 #          whoever commits or pushes, so merging stays quick.
 #   full:  that, the tests, cloud's tests, the core's tests, the web against the real iroh wasm, Rust:
-#          minutes. Run before a deploy (~/bin/ember-deploy on studio runs it on what the deploy carries).
+#          minutes. Run before a deploy on what the deploy carries.
 #
 #   sh scripts/check.sh commit        quick, on what is staged (pre-commit)
 #   sh scripts/check.sh push <range>  quick, on what a push carries (pre-push), e.g. origin/main..HEAD

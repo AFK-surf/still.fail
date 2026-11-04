@@ -10,7 +10,7 @@ test "73-pick-words" {
     let said = "选词测试 201409 这一句话里有好几个可以单独选中的词语"
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
-    f.see("=studio")
+    f.see("=willow")
     f.tap("发消息")
     f.type_text("说一句长一点的话 201409 post:" + said)
     f.tap("icon:arrow-up")

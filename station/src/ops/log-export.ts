@@ -29,7 +29,7 @@ const SEVERITY: Record<Level, number> = { INFO: 9, WARN: 13, ERROR: 17 };
 const WORKSPACE_ID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
 const EMAIL = /[^\s@"'`<>()=,;:]+@[^\s@"'`<>()=,;:]+\.[A-Za-z]{2,}/g;
-/// A profile's id made of an email (zzj3720-gmail-com).
+/// A profile's id made of an email (alice-example-com).
 const EMAIL_SLUG = /\b[\w.+]+-(?:[a-z0-9]+-)*(?:com|net|org|me|io|cn|dev|ai|co|app)\b/gi;
 /// JWTs, API keys and tokens by their usual prefixes, AWS access keys.
 const SECRET = /\beyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]*|\b(?:sk|pk|rk|ghp|gho|ghs|ghu|github_pat|xox[abpr]|glpat)[-_][\w-]{16,}|\bAKIA[0-9A-Z]{16}\b/g;

@@ -65,7 +65,7 @@ export const MeshLive = Layer.effectDiscard(
       // Online at the cloud only once a relay can reach the station: a device that saw "online" and connected before
       // the relay link was up had its first packets dropped (~3 s of retransmits). Its members' connections are taken
       // meanwhile (below): those that reach it already (on its LAN, or by a relay it is on) are not kept waiting. Taken
-      // only after this, every device lost the station some 7 s at each update (ccvm, 2026-10-24: its relay link took
+      // only after this, every device lost the station some 7 s at each update (a station, 2026-10-24: its relay link took
       // that long, 32 updates that day).
       yield* Effect.forkScoped(
         Effect.gen(function* () {

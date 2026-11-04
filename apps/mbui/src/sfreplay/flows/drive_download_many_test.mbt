@@ -3,6 +3,7 @@
 // page wide: what is chosen several at a time, ⌘A): one of them 48 MB, read a part at a time (drive.read, 4 MB each);
 // each kept (@ui.keep_begin), each said. (The run's trace keeps none of the big file's bytes: that a file is kept byte
 // for byte is the end-to-end smoke's, 90-drive-download.)
+// before it: 15-drive-lend
 
 ///|
 test "91-drive-download-many" {

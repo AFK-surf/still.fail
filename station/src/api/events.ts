@@ -23,7 +23,7 @@
 // telling for all their streams, kept like the rest), and the one that comes back is told how they stand now. Its answer
 // says it was (`stillfail-resumed: 1`). Past KEPT_MS with nobody, nothing more is made, and nothing before can be resumed.
 //
-// The same again when the station process is replaced (an update: on ccvm 32 a day, each with every device's streams
+// The same again when the station process is replaced (an update: on a station 32 a day, each with every device's streams
 // cut): what is kept, and what each viewer's streams were told of their sidebar and overview, go over to the next
 // process (`handOver`, `takeUp`), which goes on with the same run and numbers, made and kept as while nobody follows,
 // so a stream that comes back to it is resumed as the old one would have. What it is to tell before then waits, and is
@@ -37,7 +37,7 @@
 // What is said in a thread is told as the store wrote it: its entries come with the change, and are made into what the
 // pages show here (`said`), with nothing read first. What else a change touches (each viewer's thread, their sidebar,
 // a session's summary, a job) is read by the station's own reader (`told`: read/pool.ts), which nothing a device asks
-// takes: on ccvm (2026-11-02) both shared two readers, and a message just said was told 50 s late.
+// takes: on a station (2026-11-02) both shared two readers, and a message just said was told 50 s late.
 import { type FSWatcher, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { type Viewer, readOnly } from "../mesh/credential.ts";
@@ -218,7 +218,7 @@ export class Events {
   private overviewTold = new Map<string, string>();
   /// For each viewer whose streams all went (by `viewerKey`), what changed of their sidebar since (`Away`): as one comes
   /// back, only that is read (`cameBack`). Read whole at each, every device that came back (each link that moved, every
-  /// station update) had its viewer's whole sidebar read: 42 to 46 s a read on ccvm short of memory (2026-11-02), its
+  /// station update) had its viewer's whole sidebar read: 42 to 46 s a read on a station short of memory (2026-11-02), its
   /// devices' every other read waiting behind it, up to 99 s.
   private away = new Map<string, Away>();
   private deps: EventsDeps;
@@ -718,8 +718,7 @@ export class Events {
     switch (change.type) {
       case "session":
         // Its messages taken: how many it has yet to take, told now (its summary, read after, says it too): read
-        // behind the station's other tells, 2 to 6 s each on ccvm short of memory (2026-11-03), a person's message
-        // showed it waits for its agent all that while.
+        // behind the station's other tells can leave a person's message showing that it waits for its agent.
         if (change.pending !== undefined) this.emit("session-pending", { key: change.key, pending: change.pending }, { sees: { session: change.key } });
         this.dirty.sessions.add(change.key);
         // Its summary is told (`session`): a device that makes its rows puts it in them.
@@ -956,7 +955,7 @@ export class Events {
     const whole = (v: { viewer: Viewer; lang: Lang }) => dirty.rowsAll || dirty.rows.has(v.viewer.email) || (readsMade(v) && dirty.madeRows.has(v.viewer.email)) || (touched(v) && !this.rowsTold.has(viewerKey(v.viewer, v.lang)));
     // The viewers the same changes touch alike are read together (read/ops.ts `chatRowsOf`): one read, what the first
     // read in serving the others. One a viewer, one person's devices in two languages or workspaces read the same chats
-    // again each (four of them on ccvm, 2026-11-02), each from the disk while memory was short.
+    // again each (four of them on a station, 2026-11-02), each from the disk while memory was short.
     const alike = new Map<string, { sessions: string[]; threads: number[]; viewers: { viewer: Viewer; lang: Lang }[] }>();
     for (const v of everyone.filter((v) => !whole(v) && touched(v))) {
       const sessions = [...sessionsOf(v)].sort();

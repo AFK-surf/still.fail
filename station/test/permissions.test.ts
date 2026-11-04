@@ -181,8 +181,7 @@ test("a station without the folders' grants lists the screen's two only", { skip
   await s.end();
 });
 
-/// 2026-10-18, a MacBook on studio's Wi-Fi: the desktop app (and the station it runs) could reach nothing on its own
-/// subnet, macOS's Local Network not switched on for it. The station's own: listed last once it is on a LAN, with the
+/// macOS's Local Network must be enabled before the desktop app can reach its subnet. The station's own: listed last once it is on a LAN, with the
 /// app it is switched on for; asked for, System Settings' Local Network list comes up on the Mac, once in a while.
 test("the station's Local Network: listed once on a LAN, asked for it opens System Settings there", { skip: WINDOWS }, async () => {
   const s = station();

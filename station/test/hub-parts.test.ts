@@ -579,7 +579,7 @@ test("a Claude transcript is looked for in the project of its session's working 
     // No places said: every project's looked in, as before.
     assert.deepEqual(transcriptPaths("claude", dir, [], ["since"]).paths, [join(shared, there, "since.jsonl")]);
     assert.equal(listed.length, 2);
-    // Asked by the live view (the station's main thread): in its places alone, nothing listed (on ccvm each new chat's
+    // Asked by the live view (the station's main thread): in its places alone, nothing listed (on a station each new chat's
     // look through every project held every device 22 s and 45 s, 2026-11-02); one that ran elsewhere is not found so.
     assert.deepEqual(transcriptPaths("claude", dir, [], ["fresh"], places, { anywhere: false }), { paths: [], current: false });
     assert.deepEqual(transcriptPaths("claude", dir, [], ["gone-before"], places, { anywhere: false }).paths, []);

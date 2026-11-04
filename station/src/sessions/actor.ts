@@ -639,7 +639,7 @@ export class SessionActor {
     return this.enqueue(async () => {
       const agent = this.agent;
       // Work it has going in the background would end with it. A wait goes on without it: the station asks again in a
-      // new one (each waiting chat's kept its process, 11 of them on ccvm's 8 GB, 2026-11-04).
+      // new one, so waiting chats need not keep a process resident.
       if (!agent || agent.session.busy() || this.turn || this.holding()) return;
       this.agent = null;
       log.info("session", "evicting idle session process", { session: this.key });

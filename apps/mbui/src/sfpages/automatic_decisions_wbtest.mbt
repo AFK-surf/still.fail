@@ -29,7 +29,7 @@ test "归档建议, at each width and with either hand: a row a station, its rul
       { ..s, call: fn(name, params, done) { calls.push(name); (s.call)(name, params, done) } }
     })
     let at = "\{w} platform \{platform}"
-    assert_true(t.find("Studio") is Some(_), msg=at)
+    assert_true(t.find("Willow") is Some(_), msg=at)
     assert_true(t.find("GPT-6 mini") is Some(_), msg=at)
     // one offline: what it waits for
     assert_true(t.find("station 上线后可配置和查看记录") is Some(_), msg=at)
