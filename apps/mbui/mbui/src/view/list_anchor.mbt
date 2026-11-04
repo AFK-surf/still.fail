@@ -21,6 +21,8 @@ impl[T] Eq for Same[T] with equal(a, b) {
 /// under its last row, whether it is put at a row (by how often it was), and the rooms' moment.
 priv struct AnchoredIn[K] {
   keys : Same[Array[K]]
+  /// For an indexed source: its shape revision and length, captured before layout.
+  indexed : (Int, Int)?
   x : Double
   foot : Double
   put : (K, Double)?
@@ -41,6 +43,7 @@ impl[K : Eq] Eq for AnchoredIn[K] with equal(a, b) {
   // (the rows the same where their array is, or where it was made again holding the same: what pulls them makes it
   // anew each time it is read)
   (physical_equal(a.keys.v, b.keys.v) || a.keys.v == b.keys.v) &&
+  a.indexed == b.indexed &&
   a.x == b.x &&
   a.foot == b.foot &&
   a.put_n == b.put_n &&
@@ -57,12 +60,26 @@ impl[K : Eq] Eq for AnchoredIn[K] with equal(a, b) {
 let anchored_tail = 8
 
 ///|
+/// A keyed list that can be read by position without assembling all of its keys. Snapshot follows changes to the
+/// set or order and returns its revision and length. Key and find read that snapshot without signals; find may use
+/// near as a hint. Removed_since returns keys removed after a revision, or None if that history is no longer
+/// available; contains checks the current set. The source keeps changes until the list is released.
+pub(all) struct AnchoredSource[K] {
+  snapshot : () -> (Int, Int)
+  key : (Int) -> K
+  find : (K, Int) -> Int?
+  removed_since : (Int) -> Array[K]?
+  contains : (K) -> Bool
+}
+
+///|
 /// Blocks `keys` names, each made by `make` in a row of its own as it comes in the window or `ahead` past it, laid out
 /// from the column's end (at its foot while they are fewer than fill it; shown at its end; kept there as rows come
 /// while it is there), as View::scrolls_window's from its end says, by its anchor. `follows` says whether it is at
 /// its end; `shown` is told the keys in sight; `put` puts a row's top that far under the window's top; `room` is a
 /// row's room as its measured height changes, `moving` says when rooms move; `kept_keys` rows made and laid out
-/// though not in sight (a send's landing); `foot_room` room under the last row.
+/// though not in sight (a send's landing); `foot_room` room under the last row. An indexed source supplies its
+/// keys by position instead of `keys`.
 pub fn[K : Hash + Eq] View::scrolls_anchored(
   self : View,
   s : Scroll,
@@ -84,6 +101,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   kept_keys? : () -> Array[K],
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
   foot_room? : () -> Double = fn() { 0.0 },
+  indexed? : AnchoredSource[K],
 ) -> View {
   guard self.live() is Some(_) else { return self }
   let put_at = put.unwrap_or(@signals.signal(None))
@@ -215,7 +233,8 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
     held.layout_box(
       By(fn() {
         {
-          keys: { v: keys() },
+          keys: { v: if indexed is Some(_) { [] } else { keys() } },
+          indexed: indexed.map(fn(s) { (s.snapshot)() }),
           x: s.drawn(self.tree),
           foot: foot_room(),
           put: put_at.get(),
@@ -226,11 +245,13 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
           },
           rooms: { v: current_rooms.get() },
           fresh: {
-            let ks = keys()
+            let ks = if indexed is Some(_) { [] } else { keys() }
+            let n = match indexed { Some(s) => (s.snapshot)().1; None => ks.length() }
             let out = []
-            for i in dmax_i(0, ks.length() - anchored_tail)..<ks.length() {
-              if fresh(ks[i]) {
-                out.push((ks[i], read_from_top(ks[i])))
+            for i in dmax_i(0, n - anchored_tail)..<n {
+              let k = match indexed { Some(s) => (s.key)(i); None => ks[i] }
+              if fresh(k) {
+                out.push((k, read_from_top(k)))
               }
             }
             out
@@ -242,13 +263,17 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
       }),
       fn(l, c) {
         let all = c.keys.v
-        let n = all.length()
+        let n = c.indexed.map(fn(s) { s.1 }).unwrap_or(all.length())
         count.val = n
         foot_laid.val = c.foot
         let h = l.height - c.foot
         window_h.val = h
         // (the row a key is, looked for from where it was, out both ways)
         let find = fn(k : K, near : Int) -> Int? {
+          match indexed {
+            Some(source) => return (source.find)(k, near)
+            None => ()
+          }
           let near = if near < 0 { 0 } else if near >= n { n - 1 } else { near }
           let mut d = 0
           while near - d >= 0 || near + d < n {
@@ -261,6 +286,9 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
             d = d + 1
           }
           None
+        }
+        let key_at = fn(i : Int) {
+          match indexed { Some(source) => (source.key)(i); None => all[i] }
         }
         // (a row's node, made the first time it is asked for, the same one while it is asked for each layout)
         let slot_of = fn(k : K) -> View {
@@ -312,7 +340,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
         }
         // (a row measured: as tall as it is, its room's height where its room moves)
         let measure = fn(i : Int) -> Double {
-          let k = all[i]
+          let k = key_at(i)
           let slot = slot_of(k)
           let natural = l.measure(slot, l.width).1
           naturals[k] = natural
@@ -379,7 +407,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
                 // (the row over it as it was laid out: kept where its foot was)
                 match find(f.0, n - 1) {
                   Some(i) if i > 0 => {
-                    let over = all[i - 1]
+                    let over = key_at(i - 1)
                     for q in 0..<was.keys.length() {
                       if was.keys[q] == over {
                         anchor.val = Some({ key: over, under: was.tops[q] + was.heights[q] - h, near: i - 1 })
@@ -395,9 +423,10 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
             }
           _ => ()
         }
-        was_tail.val = all[dmax_i(0, n - anchored_tail):].to_array()
-        let key_of = fn(i : Int) { all[i] }
-        let known = fn(i : Int) { heights.get(all[i]) }
+        let tail_start = dmax_i(0, n - anchored_tail)
+        was_tail.val = Array::makei(n - tail_start, fn(i) { key_at(tail_start + i) })
+        let key_of = fn(i : Int) { key_at(i) }
+        let known = fn(i : Int) { heights.get(key_at(i)) }
         let lay = fn(from : ListAnchor[K]?, by : Double) {
           if from_end {
             list_laid_from_end(n, key_of, find, measure, from, h, by~, ahead~, known~)
@@ -569,6 +598,15 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   })
   // (its rows in sight by their places, it put at one, how far past the first in sight's top it is, and where one is:
   // what a test reads and asks, Tree::list_rows)
+  let key_now = fn(i : Int) -> K? {
+    @signals.untracked(fn() {
+      match indexed {
+        Some(source) =>
+          if i >= 0 && i < (source.snapshot)().1 { Some((source.key)(i)) } else { None }
+        None => keys().get(i)
+      }
+    })
+  }
   s.rows = Some((
     fn() {
       match laid.val {
@@ -590,7 +628,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
       }
     },
     fn(i) {
-      match @signals.untracked(keys).get(i) {
+      match key_now(i) {
         Some(k) => put_at.set(Some((k, 0.0)))
         None => ()
       }
@@ -609,34 +647,53 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
       }
     },
     fn(i) {
-      @signals.untracked(keys).get(i).bind(fn(k) { slots.get(k).map(fn(v) { v.rect() }) })
+      key_now(i).bind(fn(k) { slots.get(k).map(fn(v) { v.rect() }) })
     },
   ))
   self.owns(fn() { s.rows = None }) |> ignore
-  self.reacts(keys, fn(now) {
-    let here : Set[K] = Set::new()
-    for k in now {
-      here.add(k)
-    }
-    for k in row_ids.keys().collect() {
-      if !here.contains(k) {
-        row_ids.remove(k)
+  let forget = fn(k : K) {
+    row_ids.remove(k)
+    names.remove(k)
+    match heights.get(k) {
+      Some(h) => {
+        known_sum.val = known_sum.val - h
+        heights.remove(k)
       }
+      None => ()
+    }
+    naturals.remove(k)
+    rooms_laid.remove(k)
+  }
+  let forget_missing = fn(contains : (K) -> Bool) {
+    for k in row_ids.keys().collect() {
+      if !contains(k) { forget(k) }
     }
     for k in names.keys().collect() {
-      if !here.contains(k) {
-        names.remove(k)
-      }
+      if !contains(k) { forget(k) }
     }
     for k in heights.keys().collect() {
-      if !here.contains(k) {
-        known_sum.val = known_sum.val - heights.get(k).unwrap_or(0.0)
-        heights.remove(k)
-        naturals.remove(k)
-        rooms_laid.remove(k)
-      }
+      if !contains(k) { forget(k) }
     }
-  })
+  }
+  match indexed {
+    Some(source) => {
+      let seen = Ref(@signals.untracked(fn() { (source.snapshot)().0 }))
+      self.reacts(fn() { (source.snapshot)().0 }, fn(revision) {
+        if revision != seen.val {
+          match (source.removed_since)(seen.val) {
+            Some(gone) => for k in gone { if !(source.contains)(k) { forget(k) } }
+            None => forget_missing(source.contains)
+          }
+          seen.val = revision
+        }
+      })
+    }
+    None => self.reacts(keys, fn(now) {
+      let here : Set[K] = Set::new()
+      for k in now { here.add(k) }
+      forget_missing(fn(k) { here.contains(k) })
+    })
+  }
   out
 }
 
