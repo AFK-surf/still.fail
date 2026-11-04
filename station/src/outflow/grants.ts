@@ -9,7 +9,8 @@ import { join } from "node:path";
 import { log } from "../ops/log.ts";
 
 /// The kinds of data a program may be granted.
-export const SCOPES = ["usage", "chats", "messages"] as const;
+/// `operate` is no read: its program acts in the station as the workspace's members do (docs/data-outflow.md).
+export const SCOPES = ["usage", "chats", "messages", "operate"] as const;
 export type Scope = (typeof SCOPES)[number];
 
 /// A program as the system says it (the other end of the socket): its code signature where it has one, else its
@@ -65,6 +66,8 @@ export type Grant = {
   reach?: Reach;
   /// The admin who allowed it (their email); absent on a grant from before, allowed at this machine.
   allowedBy?: string;
+  /// That person's role then: a program granted `operate` has it only when it acts as them.
+  allowedRole?: string;
   grantedAt: number;
   /// The latest reads, the newest last (at most READS_KEPT).
   reads: Read[];
@@ -181,7 +184,7 @@ export class OutflowGrants {
 
   /// An admin's answer to request `id` (`by`: their email): allowed with the kinds and reach they left of it (no more
   /// than it asked), or refused. False when there is no such request waiting for one.
-  answer(id: string, by: string, answer: { allow: false } | { allow: true; scopes: Scope[]; reach: Reach }): boolean {
+  answer(id: string, by: string, answer: { allow: false } | { allow: true; scopes: Scope[]; reach: Reach }, role?: string): boolean {
     this.#expire();
     const request = this.#requests.find((r) => r.id === id && r.answer === null);
     if (!request) return false;
@@ -192,7 +195,7 @@ export class OutflowGrants {
       const reach: Reach = request.reach === "workspace" && answer.reach === "workspace" ? "workspace" : "station";
       // The grant stands from now on: in the list, revocable; another of the same program under the same key goes.
       const it = whose(request.identity, request.key);
-      const grant: Grant = { id: randomBytes(8).toString("hex"), token: "", identity: request.identity, said: request.said, ...(request.key === "" ? {} : { key: request.key }), scopes, reach, allowedBy: by, grantedAt: at, reads: [] };
+      const grant: Grant = { id: randomBytes(8).toString("hex"), token: "", identity: request.identity, said: request.said, ...(request.key === "" ? {} : { key: request.key }), scopes, reach, allowedBy: by, ...(role === undefined ? {} : { allowedRole: role }), grantedAt: at, reads: [] };
       this.#grants = [...this.#grants.filter((g) => whose(g.identity, g.key) !== it), grant];
       request.answer = { at, by, allow: true, grant: grant.id };
     } else request.answer = { at, by, allow: false };
