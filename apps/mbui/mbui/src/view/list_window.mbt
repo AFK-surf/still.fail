@@ -131,6 +131,20 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     out
   })
+  // (where each block is in `laid`, by its key: what each slot reads its own of, not looked for among all of them by
+  // each: a long chat's three thousand slots each walked the three thousand as `laid` changed, its opening 2.8 s on
+  // wasm-gc, 1.1 s so, 2026-11-04)
+  let laid_at = @signals.computed(fn(_) {
+    let m : Map[K, Int] = {}
+    for i, b in laid.get() {
+      m[b.0] = i
+    }
+    m
+  })
+  let laid_of = fn(k : K) -> (K, Double, Double, Bool, ListRoom)? {
+    let all = laid.get()
+    laid_at.get().get(k).map(fn(i) { all[i] })
+  }
   // (where it is scrolled to, as what it holds is drawn now)
   let at = fn() { s.drawn(self.tree) }
   // (those that show: their room met by the column's, as tall as it shows, from the first down to one not laid out yet;
@@ -154,6 +168,51 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     out
   })
+  // (what the column holds: a slot for each block in sight or kept, in their order, and between them, over the first and
+  // under the last, a gap as tall as the blocks there are counted. Not a slot for every block: a long chat's three
+  // thousand were laid out and gone through in every frame, at rest too, 3.2 ms a frame on wasm-gc against 0.4 for a
+  // short chat's, 2026-11-04; nor one for each between a kept block far from those in sight and them)
+  let made = @signals.computed(fn(_) {
+    let all = laid.get()
+    let index = laid_at.get()
+    let at : Map[Int, Bool] = {}
+    for k in window.get() {
+      match index.get(k) {
+        Some(i) => at[i] = true
+        None => ()
+      }
+    }
+    for i, b in all {
+      if kept(b.0) {
+        at[i] = true
+      }
+    }
+    let ix = at.keys().collect()
+    ix.sort()
+    let out : Array[Made[K]] = []
+    let mut last = -1
+    for i in ix {
+      if i > last + 1 {
+        out.push(Gap(last, i))
+      }
+      out.push(Slot(all[i].0))
+      last = i
+    }
+    if last + 1 < all.length() {
+      out.push(Gap(last, all.length()))
+    }
+    out
+  }, same=fn(a, b) { a == b })
+  // (a gap's height: from the bottom of the block before it, or the column's top, to the top of the one after, or the end)
+  let gap_height = fn(from : Int, to : Int) -> Double {
+    let all = laid.get()
+    let top = if from < 0 { 0.0 } else { all.get(from).map(fn(b) { b.1 + b.2 }).unwrap_or(0.0) }
+    let end = match all.get(to) {
+      Some(b) => b.1
+      None => all.last().map(fn(b) { b.1 + b.2 }).unwrap_or(0.0)
+    }
+    dmax(0.0, end - top)
+  }
   // (its blocks in sight by their places, it put at one, and how far past the first in sight's top it is: what a test
   // reads and asks, Tree::list_rows)
   s.rows = Some((
@@ -306,22 +365,30 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       |> ignore
     }
     held.padding(By(fn() { (0.0, 0.0, 0.0, foot_room()) })) |> ignore
-    held.each(keys, fn(k) { k }, fn(slot, item) {
-      let k = @signals.untracked(fn() { item.get() })
+    held.each(fn() { made.get() }, made_key, fn(slot, item) {
+      let k = match @signals.untracked(fn() { item.get() }) {
+        Slot(k) => k
+        Gap(_, _) => {
+          slot.height(By(fn() {
+            match item.get() {
+              Gap(from, to) => Some(gap_height(from, to))
+              Slot(_) => Some(0.0)
+            }
+          }))
+          .shrink(Is(0.0))
+          |> ignore
+          return
+        }
+      }
       slots[k] = slot
       slot.owns(fn() { slots.remove(k) }) |> ignore
       let shows = fn() { window.get().contains(k) || kept(k) }
-      let room_now = fn() {
-        laid.get().iter().find_first(fn(b) { b.0 == k }).map(fn(b) { b.4 }).unwrap_or(list_room(0.0))
-      }
+      let room_now = fn() { laid_of(k).map(fn(b) { b.4 }).unwrap_or(list_room(0.0)) }
       slot.lends(windowed_room, room_now) |> ignore
       // (as tall as it is counted, showing or not: as what it holds was told laid out, est before; never as tall as
       // what it holds is while that is still to be laid out, the column's end gone up and back in one frame)
       slot
-      .height(By(fn() {
-        let all = laid.get()
-        all.search_by(fn(b) { b.0 == k }).map(fn(i) { all[i].2 })
-      }))
+      .height(By(fn() { laid_of(k).map(fn(b) { b.2 }) }))
       .shrink(Is(0.0))
       |> ignore
       if room is Some(_) {
@@ -513,4 +580,27 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     })
   }
   out
+}
+
+///|
+/// What a windowed list's column holds (View::scrolls_window): a block's slot, or the gap between those with slots (the
+/// block before it and the one after by their places, -1 and how many there are at its ends).
+priv enum Made[K] {
+  Slot(K)
+  Gap(Int, Int)
+} derive(Eq)
+
+///|
+/// A slot by its block's key; a gap by the block before it, as long as that is so.
+priv enum MadeKey[K] {
+  SlotOf(K)
+  GapAfter(Int)
+} derive(Eq, Hash)
+
+///|
+fn[K] made_key(m : Made[K]) -> MadeKey[K] {
+  match m {
+    Slot(k) => SlotOf(k)
+    Gap(from, _) => GapAfter(from)
+  }
 }

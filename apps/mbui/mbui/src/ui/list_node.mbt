@@ -108,11 +108,20 @@ pub fn[T] ListRows::in_node(
     }
     all.set(rows)
   })
+  // (where each row is among them, by its key: what a row's room reads, not looked for among all of them, the room of
+  // each of a long chat's three thousand counted as its windowed list lays them out)
+  let key_at = @signals.computed(fn(_) {
+    let m : Map[String, Int] = {}
+    for i, k in all.get().1 {
+      m[k] = i
+    }
+    m
+  })
   let room = fn(k : String, natural : Double) -> @view.ListRoom {
-    let (items, keys) = all.get()
+    let (items, _) = all.get()
     let c = self.causes
     c.read()
-    let i = keys.search(k).unwrap_or(-1)
+    let i = key_at.get().get(k).unwrap_or(-1)
     guard i >= 0 else { return @view.list_room(natural) }
     let going = self.going.contains(k)
     let by_room = going || middle(items[i])
