@@ -50,7 +50,8 @@ function driver() {
 let n = 0;
 function options(extra: Partial<OpenOptions> = {}, access: Record<string, unknown> = { kind: "opencode-go", key: "k1" }): OpenOptions & { dump: string } {
   const i = ++n;
-  const home = join(data, `h${i}`);
+  // A normal directory can contain "tok"; only the complete mock secret must be absent from the patch.
+  const home = join(data, `h${i}-token-path`);
   mkdirSync(home, { recursive: true });
   const dump = join(data, `dump${i}`);
   return {
@@ -59,7 +60,7 @@ function options(extra: Partial<OpenOptions> = {}, access: Record<string, unknow
     cwd: data,
     model: "m1",
     instructions: "be brief; {{not a variable}}",
-    mcpToken: "tok",
+    mcpToken: "fake-mcp-secret-76c49f207abe",
     mcpUrl: "http://127.0.0.1:4750/mcp",
     route: `route${i}`,
     dump,
@@ -120,7 +121,7 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
         config: { transport: "streamable-http", serverName: "stillfail", url: o.mcpUrl, headers: { Authorization: "!!js 'Bearer ' + process.env.STILLFAIL_MCP_TOKEN" }, failOnStartupError: true },
       },
     ]);
-    assert.equal(env.STILLFAIL_MCP_TOKEN, "tok");
+    assert.equal(env.STILLFAIL_MCP_TOKEN, o.mcpToken);
     assert.ok(existsSync(BRIDGE));
     assert.deepEqual(byId["llm-pi-ai"].config.providers.stillfail, {
       displayName: "OpenCode Go", api: "openai-completions", baseURL: "https://opencode.ai/zen/go/v1", apiKeyEnv: "STILLFAIL_DSH_KEY",
@@ -133,7 +134,7 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
     // Opened with the route its agent asks for.
     const sent = stdin(o.dump);
     assert.deepEqual(sent[0], { id: "open", op: "open", cwd: o.cwd, provider: "stillfail", model: "m1" });
-    assert.ok(!readFileSync(run.argv[3], "utf8").includes("tok"));
+    assert.ok(!readFileSync(run.argv[3], "utf8").includes(o.mcpToken));
     assert.equal(sent[1].op, "prompt");
     assert.equal(sent[1].text, "say:hello");
     await assert.rejects(session.prompt("x").then(() => session.prompt("y")), /a turn is already running/);
