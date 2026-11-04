@@ -2812,13 +2812,21 @@ fn view_event(f : () -> Unit) -> Unit {
 /// One event (view_event's) whose own facts (`said`: what the host says it came by) are so as of its moment, told
 /// before it is taken (Tree::event_said).
 fn view_event_said(said : () -> Unit, f : () -> Unit) -> Unit {
-  let at = h_event_time()
+  view_event_said_at(h_event_time(), said, f)
+}
+
+///|
+// A layout may be settling an earlier timeline change before this input. Keep that change's own time.
+fn view_event_said_at(at : Double, said : () -> Unit, f : () -> Unit) -> Unit {
   if frame_running.val && view_frame_committed.val {
     view_events.push((at, said, f))
     h_frame_owed()
     return
   }
+  // Events deferred by the last frame precede a later input even when no display frame came between them.
+  if !frame_running.val { view_events_taken() }
   view_event_at(at, said, f)
+  if !frame_running.val { view_events_taken() }
 }
 
 ///|
@@ -2830,10 +2838,18 @@ let view_frame_committed : Ref[Bool] = Ref(false)
 let view_events : Array[(Double, () -> Unit, () -> Unit)] = []
 
 ///|
+let view_events_taking : Ref[Bool] = Ref(false)
+
+///|
 fn view_events_taken() -> Unit {
-  let pending = view_events.copy()
-  view_events.clear()
-  for (at, said, f) in pending { view_event_at(at, said, f) }
+  if view_events_taking.val { return }
+  view_events_taking.val = true
+  while !view_events.is_empty() {
+    let pending = view_events.copy()
+    view_events.clear()
+    for (at, said, f) in pending { view_event_at(at, said, f) }
+  }
+  view_events_taking.val = false
 }
 
 ///|

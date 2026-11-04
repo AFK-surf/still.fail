@@ -130,6 +130,30 @@ test "a chat whose latest page is all letters to other chats: the page before co
 }
 
 ///|
+test "reaching the older page by input asks for it even if no display frame comes between inputs" {
+  new_run()
+  let base = fixture("chat")
+  let asked = Ref(0)
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      if name == "chat.older" { asked.val += 1 }
+      (base.call)(name, params, done)
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  let before = asked.val
+  let at = t.time()
+  t.advance(100.0)
+  for i in 0..<40 {
+    t.wheel_told(195.0, 400.0, 0.0, -300.0, 0, at + i.to_double() + 1.0)
+  }
+  assert_true(asked.val > before, msg="the page before is requested at the input's moment")
+}
+
+///|
 test "a reference to another chat is its chip, and opens that chat" {
   let t = chat_tester("chat")
   let scrolled = scroll_run_clear(t, "首页的列表改成按天分组")

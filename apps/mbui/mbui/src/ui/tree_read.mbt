@@ -4,6 +4,22 @@
 let view_read_tells : Array[() -> (() -> Unit)] = []
 
 ///|
+/// Follow state at its cause, including geometry published by an input's layout. `f` is an outside event: if the
+/// value is told during layout, deliver it after that layout and its cause, before the next input. A frame's layout
+/// delivers it after that frame's input snapshot. Unlike read_drawn, this does not wait for a display frame.
+pub fn[T : Eq] react_laid(owner : @view.View, read : () -> T, f : (T) -> Unit) -> Unit {
+  let live = Ref(true)
+  owner.owns(fn() { live.val = false }) |> ignore
+  owner.reacts(read, fn(value) {
+    owner.after_layout_event(fn(at) {
+      view_event_said_at(at, fn() { }, fn() {
+        if live.val { f(value) }
+      })
+    })
+  })
+}
+
+///|
 /// Follow `read` in `owner`, telling `f` its latest value once the frame showing it has been drawn. Intermediate
 /// values during layout are not observations of the screen. A value already told is not told again, and nothing
 /// is told after its owner is gone. Use View::reacts for actions caused by state, rather than observations of a frame.
