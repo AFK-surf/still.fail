@@ -3,9 +3,10 @@
 // takes from its quarter in the same write (the triggers below), whichever station writes it. A read takes only the
 // quarters it shows (read/usage.ts usageHistory), however long the station has been counting.
 //
-// Installed once without reading or rebuilding earlier statistics. An older station counts from installation; a new
-// one counts from its first call. Calls already recorded at installation remain in usage but are not counted here.
+// An older station takes over its existing quarterly and compact summaries in bounded batches, without reading the
+// raw call history. New stations count directly from their first call.
 import type { DatabaseSync } from "node:sqlite";
+import { historyTransferPending, historyTransferStep, installHistoryTransfer, transferScope } from "./usage-history-transfer.ts";
 
 /// A quarter hour (15 minutes) as a number: the ms since the epoch over 900 000, rounded down.
 const QUARTER_MS = 900_000;
@@ -35,29 +36,32 @@ CREATE TRIGGER usage_history_total_change AFTER UPDATE ON usage_history BEGIN
 END;
 CREATE TRIGGER usage_history_total_drop AFTER DELETE ON usage_history BEGIN
   UPDATE usage_history_total SET calls = calls - OLD.calls, tokens = tokens - OLD.tokens WHERE scope = OLD.scope;
-END;
-CREATE TRIGGER usage_history_add AFTER INSERT ON usage BEGIN
-  ${addTo(scopeOf("NEW"), quarterOf("NEW"), "NEW.calls", tokensOf("NEW"))}
-  -- An older writer may omit the marker; flag just this new row, never the records already in the table.
-  UPDATE usage SET history_counted = 1 WHERE id = NEW.id AND history_counted = 0;
-END;
+END;`;
+
+/// An incomplete old daily summary cannot tell which old calls it holds. Keep that summary as it was, and update it
+/// only for calls represented by the complete old quarters or by compact usage. New calls enter compact usage.
+const liveSchema = (transferred: boolean) => {
+  const scope = transferred ? transferScope : scopeOf;
+  const kept = (r: string) => transferred ? `(${r}.compact_counted = 1 OR (SELECT old_days FROM usage_compact_since WHERE id = 1) = 1)` : "1";
+  const change = (r: string, sign: string) => `INSERT INTO usage_history (scope, quarter, calls, tokens)
+    SELECT ${scope(r)}, ${quarterOf(r)}, ${sign}${r}.calls, ${sign}${tokensOf(r)} WHERE ${kept(r)}
+    ON CONFLICT (scope, quarter) DO UPDATE SET calls = calls + excluded.calls, tokens = tokens + excluded.tokens;`;
+  const columns = `at, session, calls, input, cache_read, cache_write, cache_write_long, output${transferred ? ", compact_counted" : ""}`;
+  return `
+CREATE TRIGGER usage_history_add AFTER INSERT ON usage BEGIN ${change("NEW", "")} END;
 -- A response grown (the common change): its own quarter, one row.
-CREATE TRIGGER usage_history_grow AFTER UPDATE OF at, session, calls, input, cache_read, cache_write, cache_write_long, output ON usage
-  WHEN OLD.history_counted = 1 AND OLD.session = NEW.session AND ${quarterOf("OLD")} = ${quarterOf("NEW")}
+CREATE TRIGGER usage_history_grow AFTER UPDATE OF ${columns} ON usage
+  WHEN ${kept("OLD")} AND ${kept("NEW")} AND OLD.session = NEW.session AND ${quarterOf("OLD")} = ${quarterOf("NEW")}
     AND (OLD.calls IS NOT NEW.calls OR ${tokensOf("OLD")} IS NOT ${tokensOf("NEW")}) BEGIN
   UPDATE usage_history SET calls = calls + NEW.calls - OLD.calls, tokens = tokens + ${tokensOf("NEW")} - ${tokensOf("OLD")}
-    WHERE scope = ${scopeOf("NEW")} AND quarter = ${quarterOf("NEW")};
+    WHERE scope = ${scope("NEW")} AND quarter = ${quarterOf("NEW")};
 END;
-CREATE TRIGGER usage_history_move AFTER UPDATE OF at, session ON usage
-  WHEN OLD.history_counted = 1 AND (OLD.session IS NOT NEW.session OR ${quarterOf("OLD")} IS NOT ${quarterOf("NEW")}) BEGIN
-  UPDATE usage_history SET calls = calls - OLD.calls, tokens = tokens - ${tokensOf("OLD")}
-    WHERE scope = ${scopeOf("OLD")} AND quarter = ${quarterOf("OLD")};
-  ${addTo(scopeOf("NEW"), quarterOf("NEW"), "NEW.calls", tokensOf("NEW"))}
+CREATE TRIGGER usage_history_move AFTER UPDATE OF ${columns} ON usage
+  WHEN OLD.session IS NOT NEW.session OR ${quarterOf("OLD")} IS NOT ${quarterOf("NEW")} OR ${kept("OLD")} IS NOT ${kept("NEW")} BEGIN
+  ${change("OLD", "-")} ${change("NEW", "")}
 END;
-CREATE TRIGGER usage_history_drop AFTER DELETE ON usage WHEN OLD.history_counted = 1 BEGIN
-  UPDATE usage_history SET calls = calls - OLD.calls, tokens = tokens - ${tokensOf("OLD")}
-    WHERE scope = ${scopeOf("OLD")} AND quarter = ${quarterOf("OLD")};
-END;`;
+CREATE TRIGGER usage_history_drop AFTER DELETE ON usage BEGIN ${change("OLD", "-")} END;`;
+};
 
 const has = (db: DatabaseSync, table: string) =>
   db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table) !== undefined;
@@ -69,21 +73,30 @@ export function installEmptyUsageHistory(db: DatabaseSync): void {
   if (!hasUsageHistory(db) && db.prepare("SELECT 1 FROM usage LIMIT 1").get() === undefined) installUsageHistory(db, 0);
 }
 
-/// Installs the history without reading old calls or quarters. The column's constant default marks existing rows
-/// without rewriting them; insertions after the installation are marked by the trigger in their own writes.
-/// On an older station the page says the days before `now` are incomplete.
+/// Installs empty tables and the bounded transfer. It does not scan old calls or summaries under the installation lock.
 export function installUsageHistory(db: DatabaseSync, now: number): void {
   if (hasUsageHistory(db)) return;
   db.exec("BEGIN IMMEDIATE");
   try {
     if (hasUsageHistory(db)) { db.exec("COMMIT"); return; }
     const empty = db.prepare("SELECT 1 FROM usage LIMIT 1").get() === undefined;
-    db.exec("ALTER TABLE usage ADD COLUMN history_counted INTEGER NOT NULL DEFAULT 0");
+    const compact = has(db, "usage_compact_since")
+      ? db.prepare("SELECT since, old_days FROM usage_compact_since WHERE id = 1").get() as { since: number; old_days: number } : undefined;
+    if (!empty && compact === undefined) throw new Error("compact usage statistics are not installed");
     db.exec(SCHEMA);
-    db.prepare("INSERT INTO usage_history_since VALUES (1, ?)").run(empty ? null : now);
+    db.prepare("INSERT INTO usage_history_since VALUES (1, ?)").run(empty || compact?.old_days === 1 ? null : compact?.since ?? now);
+    if (empty) db.exec(liveSchema(false));
+    else installHistoryTransfer(db);
     db.exec("COMMIT");
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
+
+/// Conversion can be interrupted between any two batches; live writes are accounted for by the transfer triggers.
+export function convertUsageHistoryStep(db: DatabaseSync, batch = 64): boolean {
+  return historyTransferStep(db, () => db.exec(liveSchema(true)), batch);
+}
+
+export { historyTransferPending };
 
 /// The calls of workspace `from` ('' the home one) are `to`'s from now on: when the station's home workspace changes,
 /// all its sessions go together (store.ts setSessionsWs), and so do their quarters. In the caller's write.
@@ -93,6 +106,7 @@ export function moveUsageHistory(db: DatabaseSync, from: string, to: string): vo
     ON CONFLICT (scope, quarter) DO UPDATE SET calls = calls + excluded.calls, tokens = tokens + excluded.tokens`).run(from, to);
   db.prepare("DELETE FROM usage_history WHERE scope = ?").run(from);
   db.prepare("DELETE FROM usage_history_total WHERE scope = ?").run(from);
+  if (has(db, "usage_history_orphans")) db.prepare("UPDATE usage_history_orphans SET scope = ? WHERE scope = ?").run(to, from);
 }
 
 /// One workspace's quarters from `from` until `to` (quarters, `to` not included), added up by day `offset` minutes east

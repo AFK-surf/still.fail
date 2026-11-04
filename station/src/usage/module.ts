@@ -17,7 +17,7 @@ import type { InWorkspace } from "../store/rows.ts";
 import { giveBackfill, releaseStoppedBackfill, takeBackfill } from "../store/backfill.ts";
 import { retireUsageIndexes, stopUsageIndexes } from "../store/usage-retire.ts";
 import { hasCompactUsage, installCompactUsage, installUsageSummaryChanges } from "../store/usage-compact.ts";
-import { installUsageHistory } from "../store/usage-history.ts";
+import { convertUsageHistoryStep, historyTransferPending, installUsageHistory } from "../store/usage-history.ts";
 import { UsageCounter } from "./counter.ts";
 
 /// A session's usage as its summary says it (store.ts `setSessionUsage`): as recorded now (read/usage.ts `usageNow`).
@@ -91,7 +91,13 @@ export function retireAfterPrevious(store: StationStore, exited: Promise<void>, 
       store.usageChanged([], undefined, true);
     }
     const path = store.db.location();
-    if (path === null) { retireUsageIndexes(store.db); return; }
+    if (path === null) {
+      const converting = historyTransferPending(store.db);
+      while (!convertUsageHistoryStep(store.db)) { /* In-memory stores have no worker. */ }
+      if (converting) store.usageChanged([], undefined, true);
+      retireUsageIndexes(store.db);
+      return;
+    }
     const file = workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./retire-worker.ts" : "./usage/retire-worker.js", import.meta.url);
     yield* Effect.tryPromise({ try: async () => {
       const worker = new Worker(file, { workerData: { path, priority: store.backfillPriority } });
@@ -100,7 +106,10 @@ export function retireAfterPrevious(store: StationStore, exited: Promise<void>, 
       await new Promise<void>((resolve, reject) => {
         let failure: Error | null = null;
         let complete = false;
-        worker.on("message", (answer: { complete?: boolean }) => { complete ||= answer.complete === true; });
+        worker.on("message", (answer: { complete?: boolean; historyReady?: boolean }) => {
+          complete ||= answer.complete === true;
+          if (answer.historyReady) store.usageChanged([], undefined, true);
+        });
         worker.once("error", (error) => { failure = error; });
         worker.once("exit", (code) => {
           releaseStoppedBackfill(store.backfillPriority, owner);

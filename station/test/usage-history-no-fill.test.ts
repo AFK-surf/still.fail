@@ -10,8 +10,7 @@ import { retireAfterPrevious } from "../src/usage/module.ts";
 
 function beforeHistory(store: Store): void {
   store.db.exec(`DROP TRIGGER usage_history_add; DROP TRIGGER usage_history_grow; DROP TRIGGER usage_history_move; DROP TRIGGER usage_history_drop;
-    DROP TABLE usage_history; DROP TABLE usage_history_total; DROP TABLE usage_history_since;
-    ALTER TABLE usage DROP COLUMN history_counted;`);
+    DROP TABLE usage_history; DROP TABLE usage_history_total; DROP TABLE usage_history_since;`);
 }
 
 test("handover preserves the old quarterly and compact summaries in the usage history", async () => {
