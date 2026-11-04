@@ -166,7 +166,7 @@ export class StationTopics implements Owner {
       const entries = entriesOf(station, id);
       if (evicted || this.summary(station, id) === null) this.#sync.channels.bring(entries, Priority.shown);
       // Its latest not on the device yet: that page alone, at once. What is before it comes with the station's history,
-      // in batches behind (sync.ts #history), or as it is scrolled back to.
+      // in batches behind (sync.ts #history), or a page ahead of the reader going back (`#ahead`).
       else if (this.#sync.channels.latestMissing(entries)) this.#sync.channels.bring(entries, Priority.shown, "latest");
       this.#moveOldPlace(station, id);
       // Used now: its agents' histories are brought whole, behind the rest (channel-kinds.ts `whole`).
@@ -535,6 +535,19 @@ export class StationTopics implements Owner {
     this.#places.set(key, place);
     if (place) this.#core.data.put("place", `${station}/${thread}`, { at: place.at, offset: place.offset });
     else this.#core.data.forgetRecord("place", `${station}/${thread}`);
+    // The reader in its window's first page: the page before it brought now, before it is gone back to.
+    const found = this.#window(station, thread);
+    if (place && found && place.at < found[1].first + PAGE) this.#ahead(station, thread);
+  }
+
+  /// The page before a chat's window onto the device, in the background, unless it is held: what `chat.older` shows next
+  /// is read from the device, the list never waiting on its station as it is gone back through (2026-11-04: each page
+  /// back held a phone's list still 0.2-0.5 s, its read on the way).
+  #ahead(station: string, id: number): void {
+    const found = this.#window(station, id);
+    if (!found || found[1].first <= 1) return;
+    const before = found[1].first;
+    this.#core.runner.fork(Effect.ignore(this.#sync.ask(station, `older/${id}/${before}`, this.#sync.channels.older(entriesOf(station, id), before, { quiet: true }))), { log: "Unhandled", message: "older read ahead" });
   }
 
   /// How far a thread is known to go: its summary's last, or what is held past it.
@@ -714,6 +727,7 @@ export class StationTopics implements Owner {
       const end = this.#shownTo(station, id, first, window.last ?? this.#latest(station, id));
       if (end !== null) window.last = end;
       this.#core.store.invalidate({ topic: "thread", station, thread: id });
+      this.#ahead(station, id);
       return first > 1;
     });
   }

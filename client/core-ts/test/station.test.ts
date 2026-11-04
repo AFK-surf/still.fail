@@ -465,3 +465,33 @@ test("a_chat_is_looked_in_whole_and_its_window_goes_about_a_message_found", asyn
   assert.deepEqual([v(values, 1).first, v(values, 1).last, v(values, 1).end], [220, 300, true]);
   core.close();
 });
+
+test("a_chat_gone_back_through_has_the_page_before_its_window_on_the_device_before_it_is_asked", async () => {
+  // The station's history sweep (POST /batch) not answered yet, as on a device with many chats: the reader resting in
+  // its window's first page, and each page gone back to, bring the page before it in the background, so `chat.older`
+  // shows what is held at once (2026-11-04: each page back held a phone's list still 0.2-0.5 s, its read on the way).
+  const answers = base();
+  answers["GET /threads"] = [threadView(7, 300)];
+  answers["GET /threads/7/entries?limit=50"] = { last: 300, entries: entries(251, 300) };
+  for (let before = 51; before <= 251; before += 50) answers[`GET /threads/7/entries?before=${before}&limit=50`] = { last: 300, entries: entries(before - 50, before - 1) };
+  const { host, core } = await started(answers, 0, undefined, (s) => stationLater(s.host, (req) => (req.method === "POST" && req.url.endsWith("/admin/api/batch") ? new Promise(() => {}) : undefined)));
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "thread", station: "ws/st", thread: 7 });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual([v(values, 1).first, v(values, 1).last], [251, 300]);
+  const heldFrom = () => core.inner.data.logSpan("entry", "ws/st", "7")?.min ?? Infinity;
+  // (the list come to rest with its top in the window's first page, as the UI tells it)
+  call(core, ui, 2, "chat.place", { station: "ws/st", thread: 7, seq: 255, offset: 0 });
+  await host.settle();
+  for (let id = 3; v(values, 1).first > 1 && id < 12; id++) {
+    const first = v(values, 1).first;
+    assert.ok(heldFrom() <= Math.max(1, first - 50), `the page before ${first} held before it is asked (held from ${heldFrom()})`);
+    call(core, ui, id, "chat.older", { station: "ws/st", thread: 7 });
+    await host.settle();
+    apply(host, values);
+  }
+  assert.equal(v(values, 1).first, 1);
+  core.close();
+});

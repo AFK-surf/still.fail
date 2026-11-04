@@ -2004,7 +2004,8 @@ test("a_thread_opens_from_what_is_kept_and_asks_only_for_what_came_after", async
   assert.equal(await run(third.core.inner.stationTopics.older(ST, 7)), true);
   await third.read();
   assert.deepEqual(nums(third.values), Array.from({ length: 100 }, (_, i) => 203 + i), "two pages, both from what is kept");
-  assert.equal(entryReads(s.host, before).filter((p) => p.includes("before=")).length, 0);
+  // (nothing read for what was shown: the page before it alone, ahead of the reader going back)
+  assert.deepEqual(entryReads(s.host, before).filter((p) => p.includes("before=")), ["/threads/7/entries?before=203&limit=50"]);
   assert.equal(texts(third.values).at(-1), "m302");
   third.core.close();
 });
