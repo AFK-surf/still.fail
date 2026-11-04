@@ -872,6 +872,8 @@ pub fn marks_finger(@ui.Ctx, Int32, Double, Double, (Double, Double, Double, Dou
 
 pub fn marks_finger_off() -> Unit
 
+pub fn marks_foot_over() -> Double
+
 pub fn marks_json(Double, Double) -> String
 
 pub let marks_keyboard_gap : Double

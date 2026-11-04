@@ -191,12 +191,13 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
       let (w, h) = stage()
       // (a film's or a song's picture sized by its player alone, Viewer::video_natural: nothing of a picture's asked
       // for it here, its thumbnail none)
-      ((w, h + @ui.current().ime_inset()), if vw.played() { (0.0, 0.0) } else { vw.natural_size(src) })
+      ((w, h + @ui.current().ime_inset()), if vw.played() { (0.0, 0.0) } else { vw.natural_size(src) }, vw.bar_over(w), marks_foot_over())
     },
     fn(told) {
-      let ((bw, bh), (nw, nh)) = told
+      let ((bw, bh), (nw, nh), bar, foot) = told
       let at = n.cause_at()
       vw.zoom.boxed(bw, bh, at~)
+      vw.zoom.under_bars(bar, foot, at~)
       vw.zoom.natural(nw, nh, at~)
     },
   )
@@ -447,7 +448,7 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
               Some(n) => {
                 let (w0, h0) = n.natural_size(src)
                 let (bw, bh) = stage()
-                match (fitted_rect(w0, h0, bw, bh), n.picture_shown(src)) {
+                match (fitted_rect(w0, h0, bw, bh, bar=vw.bar_over(bw)), n.picture_shown(src)) {
                   (Some((x, y, w, h)), Some(shown)) => Some((x + sx + side * (bw + slide_gap), y, w, h, shown))
                   _ => None
                 }
@@ -1137,6 +1138,17 @@ pub fn head_as_nodes(v : Viewer, w : Double) -> Bool {
 pub fn bar_as_nodes(v : Viewer, w : Double) -> Bool {
   marks_said()
   v.in_tree && v.own_bar() && !@sf.viewer_bar_floats(w)
+}
+
+///|
+/// How much of the window's top its own bar takes, `w` wide, its picture fitted clear of it (none where it has no bar of
+/// its own). As each is told.
+fn Viewer::bar_over(self : Viewer, w : Double) -> Double {
+  if head_as_nodes(self, w) || bar_as_nodes(self, w) {
+    @sf.viewer_bar_clear(w)
+  } else {
+    0.0
+  }
 }
 
 ///|
