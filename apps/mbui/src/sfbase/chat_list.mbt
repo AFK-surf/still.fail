@@ -1279,7 +1279,9 @@ fn shown_rows(
 ///|
 /// The newest row (a message, an outbox entry; not an agent's line, which folds away) come while the list follows its
 /// end: followed from its top, its top follow_margin under the bar (Chat.kt newestKey, Follow.kt anchor), not past its
-/// end; the row kept by its key as rows come and go round it.
+/// end; the row kept by its key as rows come and go round it. The viewer's own (an outbox entry, a message of theirs)
+/// is not read from its start: they wrote it, and the list follows on to its end, its pictures and the agent's line
+/// under it (the web's Chat.tsx: what comes with its agent's activity after it goes on to the end).
 pub fn follow_newest(c : @ui.Ctx, rd : Reading, list : Array[Entry], keys : Array[String], key : String, top~ : Double) -> Unit {
   // (the last that is not one of those: looked for from the end)
   let mut at = -1
@@ -1293,12 +1295,17 @@ pub fn follow_newest(c : @ui.Ctx, rd : Reading, list : Array[Entry], keys : Arra
     }
   }
   let newest = if at >= 0 { keys[at] } else { "" }
-  let following = match c.list_info_as(key, follows) {
+  let info = c.list_info_as(key, follows)
+  let following = match info {
     Some(i) => i.at_end || i.gliding || i.following_row
     None => false
   }
   let came = rd.placed && rd.newest != "" && newest != rd.newest && following
-  if came {
+  let at_end = info is Some(i) && i.at_end
+  if came && at >= 0 && own_row(list[at]) && at_end {
+    rd.follow_key = ""
+    c.list_follow_from(key, -1)
+  } else if came {
     rd.follow_key = newest
   }
   rd.newest = newest
@@ -1307,10 +1314,27 @@ pub fn follow_newest(c : @ui.Ctx, rd : Reading, list : Array[Entry], keys : Arra
     // (looked for from the end, where the newest are)
     for i = keys.length() - 1; i >= 0; i = i - 1 {
       if keys[i] == rd.follow_key {
-        c.list_follow_from(key, i, margin=top + follow_margin)
+        // the viewer's own, sent from up the list: glided to as a row followed is (its words flying there), then on
+        // to the end from there
+        if own_row(list[i]) && at_end && !came {
+          rd.follow_key = ""
+          c.list_to_end(key)
+        } else {
+          c.list_follow_from(key, i, margin=top + follow_margin)
+        }
         break
       }
     }
+  }
+}
+
+///|
+/// Whether entry `e` is the viewer's own words: an outbox entry, or a message of theirs.
+fn own_row(e : Entry) -> Bool {
+  match e {
+    Out(_) => true
+    Said(m) => m.mine
+    _ => false
   }
 }
 
