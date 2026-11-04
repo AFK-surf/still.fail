@@ -11,6 +11,10 @@ test "an anchored list's bar held and dragged from where it is counted otherwise
   }, time=fn() { 0.0 })
   t.frame(390.0, 844.0, now=0.0) |> ignore
   // (at its end as counted: 3900, its rows 40 where 80 was said; the hand's place 0 till it comes to it)
+  let counted = s.at(t)
+  // (its bar out: the pointer along its edge)
+  t.pointer_is(296.0, 50.0)
+  t.frame(390.0, 844.0, now=60.0) |> ignore
   let start = s.at(t)
   let thumb = match t.thumbs.values().collect() {
     [id] => id
@@ -27,7 +31,7 @@ test "an anchored list's bar held and dragged from where it is counted otherwise
   t.frame(390.0, 844.0, now=120.0) |> ignore
   let two = s.at(t)
   t.drag_at(thumb, Up, x, y - 2.0, 130.0) |> ignore
-  assert_eq(start, 3900.0)
+  assert_eq((counted, start), (3900.0, 3900.0))
   // (each point the thumb moves the same way on: the first as the second, nothing of where the hand had it)
   assert_true(one < start && two < one, msg="\{start} \{one} \{two}")
   assert_true(((start - one) - (one - two)).abs() < 0.001, msg="\{start} \{one} \{two}")
