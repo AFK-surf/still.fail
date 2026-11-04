@@ -1,4 +1,4 @@
-// What a search finds on this station (docs/search.md): GET /search?q=&kinds=&limit=&offset=, as the asker may see it
+// What a search finds on this station (docs/search.md): GET /search?q=&kinds=&limit=&offset=&archived=, as the asker may see it
 // (their workspace's, and what only a member who may write reaches). `{groups: [{kind, hits, more}], building}`
 // (`building` always false). People find chats, messages, services and tasks, files: the execution history, skills and
 // memory, the profiles are the agents' to search (search/tool.ts).
@@ -51,7 +51,7 @@ export const routes = ({ search, config, events }: { search: Search; config: Con
       const kinds = asked.length > 0 ? asked.filter((k) => PEOPLE.includes(k)) : PEOPLE;
       if (kinds.length === 0) return json(200, JSON.stringify({ groups: [], building: false }));
       try {
-        const found = await search.query(q, { ...askerOf(r.viewer), ...(r.viewer.device ? { typist: r.viewer.device } : {}), ...(param(r, "again") === "1" ? { again: true } : {}) }, { kinds, limit: count(param(r, "limit"), 8), offset: count(param(r, "offset"), 0) });
+        const found = await search.query(q, { ...askerOf(r.viewer), ...(r.viewer.device ? { typist: r.viewer.device } : {}), ...(param(r, "again") === "1" ? { again: true } : {}) }, { ...(param(r, "archived") === "1" ? { archived: true } : {}), kinds, limit: count(param(r, "limit"), 8), offset: count(param(r, "offset"), 0) });
         return json(200, JSON.stringify(found));
       } catch (e) {
         return error(503, (e as Error).message);

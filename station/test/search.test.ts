@@ -8,7 +8,7 @@ import { after, test } from "node:test";
 import { Store, newMessage } from "../src/store/store.ts";
 import { openStore } from "../src/read/store.ts";
 import { type Asker, excerpt, pick, terms } from "../src/search/match.ts";
-import { historyHits, profileDocs, profilesOf, stationDocs, threadDocs } from "../src/search/sources.ts";
+import { historyHits, profileDocs, profilesOf, stationDocSteps, stationDocs, threadDocs } from "../src/search/sources.ts";
 
 const dirs: string[] = [];
 const closing: { close(): void }[] = [];
@@ -93,6 +93,20 @@ test("a chat's messages are found by any part of their words, in any script, cas
   s.store.setArchived("k1", true, "a@x");
   const read = s.read();
   assert.ok(threadDocs(read, t).every((d) => d.ref.archived === true));
+  read.db.close();
+});
+
+test("the archive's search looks through archived chats alone", () => {
+  const s = station();
+  const put = chat(s.store, "k1", null);
+  const live = chat(s.store, "k2", null);
+  say(s.store, put, "1", "the needle went away");
+  say(s.store, live, "1", "the needle is here");
+  s.store.setArchived("k1", true, "a@x");
+  const read = s.read();
+  const found = (only: boolean) => [...stationDocSteps(read, ".", {}, new Set(["message"]), home, only)].flatMap((d) => (d === undefined ? [] : [d.key]));
+  assert.deepEqual(found(false), [`m:${put}:1`, `m:${live}:1`]);
+  assert.deepEqual(found(true), [`m:${put}:1`]);
   read.db.close();
 });
 
