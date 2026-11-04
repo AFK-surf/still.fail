@@ -2674,6 +2674,7 @@ pub fn Tester::marks_answer(Self, Int32) -> Unit
 pub fn Tester::marks_by_hand(Self) -> Unit
 pub fn Tester::marks_drawn(Self) -> Array[String]
 pub fn Tester::marks_make(Self, Bytes) -> Unit
+pub fn Tester::measure_as_host(Self) -> Unit
 pub fn Tester::messages_taken(Self) -> Int32
 pub fn Tester::mixed_corners(Self, lit? : Bool) -> Array[String]
 pub fn Tester::move(Self, Double, Double) -> Unit
