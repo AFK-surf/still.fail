@@ -287,9 +287,10 @@ function station(w: ReturnType<typeof lock> | null) {
   const viewers = ["alice", "bob", "carol"].map((sub) => viewer(sub));
   const events = { tell: (event: string, data: unknown, _of: string, to: To) => told.push({ event, data, to: viewers.filter((viewer) => isFor(to, { viewer, lang: "en" })).map((v) => v.sub) }) };
   const all = routes({ vaults: new VaultStore(new DatabaseSync(":memory:")), lock: (ws) => (w !== null && ws === WS ? w.state : null), events: events as any });
-  const ask = async (method: string, path: string, sub: string, body?: unknown) => {
+  /// `device`: the lock device it comes from (by the endpoint an older client connects with), none by default.
+  const ask = async (method: string, path: string, sub: string, body?: unknown, device?: string) => {
     const [p, q] = path.split("?");
-    const r: Request = { method, path: p!, query: q ? (q.split("&").map((kv) => kv.split("=")) as [string, string][]) : [], headers: {}, body: Buffer.from(body === undefined ? "" : JSON.stringify(body)), viewer: viewer(sub), lang: "en" };
+    const r: Request = { method, path: p!, query: q ? (q.split("&").map((kv) => kv.split("=")) as [string, string][]) : [], headers: {}, body: Buffer.from(body === undefined ? "" : JSON.stringify(body)), viewer: viewer(sub, device), lang: "en" };
     for (const route of all) {
       const m = method === route.method ? route.pattern.exec(r.path) : null;
       if (m) {
@@ -302,7 +303,7 @@ function station(w: ReturnType<typeof lock> | null) {
   return { ask, told };
 }
 
-const viewer = (sub: string): Viewer => ({ sub, email: `${sub}@x`, name: sub, role: "member", workspace: WS, device: "e".repeat(64) });
+const viewer = (sub: string, device = "e".repeat(64)): Viewer => ({ sub, email: `${sub}@x`, name: sub, role: "member", workspace: WS, device });
 
 test("routes: no lock pinned, no vault", async () => {
   const s = station(null);
@@ -440,18 +441,46 @@ test("routes: a copy brought from another station is kept where later, the one h
 test("routes: box certificates, published by the lock's app devices, the latest of each", async () => {
   const w = lock();
   const s = station(w);
+  const bobs = w.bob.base.hex;
   const c1 = certOf(w.bob.signer, w.bob.base.hex, newBoxPair().pub, 1000);
-  assert.equal((await s.ask("PUT", "/vault/boxes", "bob", c1)).status, 200);
+  assert.equal((await s.ask("PUT", "/vault/boxes", "bob", c1, bobs)).status, 200);
   assert.deepEqual(s.told.pop(), { event: "vault-box", data: c1, to: ["alice", "bob", "carol"] });
   // Another device's key, a device not in the lock: refused.
-  assert.match((await s.ask("PUT", "/vault/boxes", "bob", certOf(w.bob.signer, w.alice.base.hex, newBoxPair().pub))).body.error, /own device's key/);
-  assert.match((await s.ask("PUT", "/vault/boxes", "bob", certOf(w.bob.signer, ed().hex, newBoxPair().pub))).body.error, /not an app device/);
+  assert.match((await s.ask("PUT", "/vault/boxes", "bob", certOf(w.bob.signer, w.alice.base.hex, newBoxPair().pub), bobs)).body.error, /own device's key/);
+  assert.match((await s.ask("PUT", "/vault/boxes", "bob", certOf(w.bob.signer, ed().hex, newBoxPair().pub), bobs)).body.error, /not an app device/);
+  // Brought by anyone but the device itself (alice, or bob from another connection): refused, signed as it is.
+  assert.equal((await s.ask("PUT", "/vault/boxes", "alice", certOf(w.bob.signer, w.bob.base.hex, newBoxPair().pub, 1050), w.alice.base.hex)).body.code, "vault_not_device");
+  assert.equal((await s.ask("PUT", "/vault/boxes", "bob", certOf(w.bob.signer, w.bob.base.hex, newBoxPair().pub, 1050))).body.code, "vault_not_device");
   // An older one changes nothing; a newer one takes its place.
-  await s.ask("PUT", "/vault/boxes", "bob", certOf(w.bob.signer, w.bob.base.hex, newBoxPair().pub, 900));
+  await s.ask("PUT", "/vault/boxes", "bob", certOf(w.bob.signer, w.bob.base.hex, newBoxPair().pub, 900), bobs);
   assert.deepEqual((await s.ask("GET", "/vault/boxes", "carol")).body.boxes, [c1]);
   const c2 = certOf(w.bob.signer, w.bob.base.hex, newBoxPair().pub, 1100);
-  await s.ask("PUT", "/vault/boxes", "bob", c2);
+  await s.ask("PUT", "/vault/boxes", "bob", c2, bobs);
   assert.deepEqual((await s.ask("GET", "/vault/boxes", "alice")).body.boxes, [c2]);
+});
+
+test("a device an admin put in under someone else's name is not theirs: no box certificate of it is taken, and it signs no vault or item of theirs", async () => {
+  const w = lock();
+  // alice (the owner) puts a device of her making in under bob's name: bob has his own already.
+  const fake = { sub: "bob", signer: ed(), base: ed() };
+  const body = { id: fake.base.hex, sub: "bob", kind: "app", label: "bob's?", sign_key: fake.signer.id };
+  const e = { v: 1, ws: WS, seq: 1, prev: w.state.head, at: 1100, kind: "device", body } as Omit<Entry, "sig">;
+  const state = apply(w.state, { ...e, sig: { key: w.alice.signer.id, alg: "Ed25519" as const, sig: w.alice.signer.sign(lockBytes(entryHash(e as Entry))) } } as Entry, null);
+  assert.equal(state.devices.get(fake.base.hex)?.own, false);
+  assert.equal(state.devices.get(w.bob.base.hex)?.own, true);
+  const theirs = { ...w, state };
+  // Its certificate: not one a secret is sealed to, published from that very device or not.
+  assert.match(certOk(state, boxOf(fake))!, /put in the lock by someone else/);
+  const s = station(theirs);
+  assert.equal((await s.ask("PUT", "/vault/boxes", "bob", boxOf(fake), fake.base.hex)).body.code, "vault_invalid");
+  // A version of bob's vault it signs (deleting it), an item it writes there: neither counts as bob's.
+  const bobs = vaultOf(theirs, { owner: "bob", members: [w.bob], by: w.bob, id: `v_${ulid(7)}` });
+  assert.equal(vaultOk(state, null, bobs), null);
+  const { sig: _, ...rest } = bobs;
+  assert.match(vaultOk(state, bobs, signed({ ...rest, seq: 1, epoch: 1, keys: [], deleted: true as const }, TAG.vault, fake.signer))!, /owner's devices/);
+  assert.match(itemOk(state, bobs, null, itemOf({ by: fake, vault: bobs.id }))!, /member's device/);
+  assert.equal(itemOk(state, bobs, null, itemOf({ by: w.bob, vault: bobs.id })), null);
+  assert.equal(signerOf(state, fake.signer.id), null);
 });
 
 test("routes: the plain library (no security mode) is each person's own, version after version, told to them alone; locked, it only empties", async () => {

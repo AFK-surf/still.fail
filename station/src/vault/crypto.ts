@@ -187,10 +187,11 @@ export function recoveryPair(entropy: Uint8Array): { pub: string; priv: Uint8Arr
   return { pub: boxPublic(priv), priv };
 }
 
-/// The member and lock device whose app `sign_key` is `keyId`; null when no app device in the lock signs with it.
+/// The member and lock device whose app `sign_key` is `keyId`; null when no app device in the lock signs with it, or
+/// the one that does is not its person's own (one an admin put in under their name: cloud/lock.ts Device `own`).
 export function signerOf(lock: LockState, keyId: string): { sub: string; device: string } | null {
   for (const d of lock.devices.values()) {
-    if (d.kind === "app" && d.sign_key === keyId && lock.members.has(d.sub)) return { sub: d.sub, device: d.id };
+    if (d.kind === "app" && d.own && d.sign_key === keyId && lock.members.has(d.sub)) return { sub: d.sub, device: d.id };
   }
   return null;
 }
@@ -210,14 +211,17 @@ const b64 = (v: unknown, max: number): v is string => typeof v === "string" && v
 const sigShape = (s: any): s is Sig => s !== null && typeof s === "object" && typeof s.key === "string" && typeof s.sig === "string" && (s.alg === "Ed25519" || s.alg === "ES256");
 const unique = (a: string[]) => new Set(a).size === a.length;
 
-/// Why a box certificate is not a lock app device's for `ws`, or null when it is. `ever`: signed by any signing key
-/// that device has had in the lock, not only its current one (a vault's keys: a device back in the lock under a new
-/// key, the app installed anew, keeps the key sealed to it under its certificate from before; 2026-11-03).
+/// Why a box certificate is not a lock app device's for `ws`, or null when it is: one of its person's own (an admin's
+/// put in under their name is sealed nothing). `ever`: a vault's keys, signed by any signing key that device has had
+/// in the lock, not only its current one (a device back in the lock under a new key, the app installed anew, keeps the
+/// key sealed to it under its certificate from before; 2026-11-03); and a device that is no longer its person's own
+/// keeps the key it was given, which the owner's own device signed into the vault (its new versions keep it).
 export function certOk(lock: LockState, cert: BoxCert, ever = false): string | null {
   if (cert === null || typeof cert !== "object" || cert.v !== 1 || cert.ws !== lock.ws) return "a box certificate is {v: 1, ws, device, box, at, sig} of this workspace";
   if (!HEX32.test(cert.device) || !BOX.test(cert.box) || !int(cert.at) || !sigShape(cert.sig)) return "a box certificate is {v: 1, ws, device, box, at, sig} of this workspace";
   const d = lock.devices.get(cert.device);
   if (d === undefined || d.kind !== "app" || !lock.members.has(d.sub)) return "the box certificate's device is not an app device in the lock";
+  if (!d.own && !ever) return "the box certificate's device was put in the lock by someone else, not its person";
   if (d.sign_key !== cert.sig.key && !(ever && (lock.signKeys.get(cert.device) ?? []).includes(cert.sig.key))) return "a box certificate is signed by its own device's key";
   if (!signedOk(cert, TAG.box)) return "the box certificate's signature is invalid";
   return null;

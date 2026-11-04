@@ -1692,7 +1692,6 @@ let zh : Map[String, String] = {
   "web-pages.vault.personal": "个人",
   "web-pages.vault.private": "仅自己可见",
   "web-pages.vault.promptBody": "这台设备已在安全模式的锁里，{at}申请「{vault}」的钥匙。授权后它就能用这个库里的密钥。",
-  "web-pages.vault.promptBy": "这台设备是 {by} 加进锁里的，不是你自己配对的；确认是你的设备再授权",
   "web-pages.vault.promptGive": "授权",
   "web-pages.vault.promptLater": "稍后",
   "web-pages.vault.promptTitle": "{device} 申请密钥库的钥匙",

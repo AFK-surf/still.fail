@@ -10,11 +10,15 @@ import { fromB64url } from "./crypto.ts";
 import { ed25519Ok, p256Ok } from "./verified.ts";
 
 /// `by`: whose signature put it in the lock (the entry's signer, a passkey's or a device's; the genesis's devices the
-/// owner's): a person's own device is one they added themselves, face to face (views/pair.ts); an admin may add one
-/// under any member's name, which a vault trusts with no key (views/vault.ts `certs` `own`).
-export type Device = { id: string; sub: string; kind: "app" | "web"; sign_key?: string; exp?: number; by?: string };
-/// `cloudKeys`: the keys the cloud signs member credentials with, as the lock names them (a JWKS).
-export type Checked = { ws: string; head: string; genesis: string; members: Map<string, string>; devices: Map<string, Device>; passkeys: Map<string, string>; origins: string[]; rp_id: string; disabled: boolean; cloudKeys: unknown };
+/// owner's). `own`: the person's own, which alone signs anything (station/src/cloud/lock.ts Device `own`): named in the
+/// genesis, put in by an own device or passkey of theirs (face to face, views/pair.ts), or by an owner or admin while
+/// they had never had an own one that signs (their first). An admin may put a device in under any member's name: it
+/// connects, and its signature counts for nothing, in the lock or a vault (views/vault.ts `certs`).
+export type Device = { id: string; sub: string; kind: "app" | "web"; sign_key?: string; exp?: number; by?: string; own: boolean };
+/// `cloudKeys`: the keys the cloud signs member credentials with, as the lock names them (a JWKS). `passkeys`: whose
+/// each is, by its key, and whether their own. `signed`: the members who have had an own device that signs or an own
+/// passkey since they were last made members.
+export type Checked = { ws: string; head: string; genesis: string; members: Map<string, string>; devices: Map<string, Device>; passkeys: Map<string, { sub: string; own: boolean }>; signed: Set<string>; origins: string[]; rp_id: string; disabled: boolean; cloudKeys: unknown };
 
 const ROLES = ["viewer", "member", "admin", "owner"];
 const rank = (r: string) => ROLES.indexOf(r);
@@ -61,27 +65,42 @@ function sigValid(sig: any, hash: string, s: Checked, passkey: boolean): boolean
 }
 
 /// Who signs with `key` in the lock (a member's passkey, or an app device of theirs not run out): what a station takes
-/// an entry signed with it from; null for none.
+/// an entry signed with it from (one that changes something only where `own`); null for none.
 export const signerIn = (s: Checked, key: string, now: number | null) => signer(s, { key }, now);
 
-function signer(s: Checked, sig: any, now: number | null): { sub: string; role: string; passkey: boolean } | null {
+function signer(s: Checked, sig: any, now: number | null): { sub: string; role: string; passkey: boolean; own: boolean } | null {
   const key = sig?.key;
-  for (const [k, sub] of s.passkeys) if (k === key && s.members.has(sub)) return { sub, role: s.members.get(sub)!, passkey: true };
+  // (an own one first, as a station picks it)
+  let found: { sub: string; role: string; passkey: boolean; own: boolean } | null = null;
+  for (const [k, p] of s.passkeys) if (k === key && s.members.has(p.sub)) found = { sub: p.sub, role: s.members.get(p.sub)!, passkey: true, own: p.own };
   for (const d of s.devices.values()) {
-    if (d.sign_key === key && d.kind === "app" && (d.exp === undefined || now === null || d.exp > now) && s.members.has(d.sub)) return { sub: d.sub, role: s.members.get(d.sub)!, passkey: false };
+    if (d.sign_key === key && d.kind === "app" && (d.exp === undefined || now === null || d.exp > now) && s.members.has(d.sub) && !found?.own) found = { sub: d.sub, role: s.members.get(d.sub)!, passkey: false, own: d.own };
   }
-  return null;
+  return found;
+}
+
+/// Whether a device or passkey of `sub` that `by` puts in is the person's own (station/src/cloud/lock.ts `ownOf`).
+function ownOf(s: Checked, sub: string, by: { sub: string; role: string }, was?: Device, key?: string): boolean {
+  if (by.sub === sub) return true;
+  if (was?.own && was.sign_key === key) return true;
+  return rank(by.role) >= rank("admin") && !s.signed.has(sub);
 }
 
 function device(v: any): Device {
   if (!HEX32.test(v?.id ?? "") || typeof v?.sub !== "string" || (v.kind !== "app" && v.kind !== "web")) refuse("a device is {id, sub, kind}");
   if (v.sign_key !== undefined && v.kind !== "app") refuse("only an app's device signs");
-  return { id: v.id, sub: v.sub, kind: v.kind, ...(typeof v.sign_key === "string" ? { sign_key: v.sign_key } : {}), ...(Number.isSafeInteger(v.exp) ? { exp: v.exp } : {}) };
+  return { id: v.id, sub: v.sub, kind: v.kind, ...(typeof v.sign_key === "string" ? { sign_key: v.sign_key } : {}), ...(Number.isSafeInteger(v.exp) ? { exp: v.exp } : {}), own: false };
 }
 
 const addDevice = (s: Checked, d: Device) => {
   if (!s.members.has(d.sub)) refuse("a device is a member's");
   s.devices.set(d.id, d);
+  if (d.own && d.sign_key !== undefined) s.signed.add(d.sub);
+};
+
+const addPasskey = (s: Checked, key: string, sub: string, own: boolean) => {
+  s.passkeys.set(key, { sub, own });
+  if (own) s.signed.add(sub);
 };
 
 /// The lock its entries make, each checked as a station checks it; throws why not. `now` (unix seconds): signing
@@ -91,10 +110,10 @@ export function checkLock(entries: Entry[], now: number): Checked {
   if (!first || first.kind !== "genesis" || first.seq !== 0 || first.prev !== null) return refuse("it starts with its genesis");
   const b = (first.body ?? {}) as any;
   const head = entryHash(first);
-  let s: Checked = { ws: first.ws, head, genesis: head, members: new Map(), devices: new Map(), passkeys: new Map(), origins: arr(b.origins).filter((o) => typeof o === "string"), rp_id: typeof b.rp_id === "string" ? b.rp_id : "", disabled: false, cloudKeys: b.cloud_keys ?? null };
+  let s: Checked = { ws: first.ws, head, genesis: head, members: new Map(), devices: new Map(), passkeys: new Map(), signed: new Set(), origins: arr(b.origins).filter((o) => typeof o === "string"), rp_id: typeof b.rp_id === "string" ? b.rp_id : "", disabled: false, cloudKeys: b.cloud_keys ?? null };
   for (const m of arr(b.members)) if (typeof m?.sub === "string" && rank(m.role) >= 0) s.members.set(m.sub, m.role);
-  for (const d of arr(b.devices)) addDevice(s, { ...device(d), by: typeof b.owner === "string" ? b.owner : undefined });
-  for (const p of arr(b.passkeys)) if (typeof p?.key === "string" && typeof p?.sub === "string") s.passkeys.set(p.key, p.sub);
+  for (const d of arr(b.devices)) addDevice(s, { ...device(d), by: typeof b.owner === "string" ? b.owner : undefined, own: true });
+  for (const p of arr(b.passkeys)) if (typeof p?.key === "string" && typeof p?.sub === "string") addPasskey(s, p.key, p.sub, true);
   if (s.members.get(b.owner) !== "owner") refuse("the genesis names its owner");
   const by = signer(s, first.sig, first.at);
   if (by === null || by.sub !== b.owner || !sigValid(first.sig, head, s, by.passkey)) refuse("the genesis is not signed by its owner");
@@ -108,7 +127,7 @@ function apply(prev: Checked, e: Entry, now: number): Checked {
   const hash = entryHash(e);
   const by = signer(prev, e.sig, now);
   if (by === null || !sigValid(e.sig, hash, prev, by.passkey)) refuse(`entry ${e.seq} is not signed by a device or passkey in it`);
-  const s: Checked = { ...prev, head: hash, members: new Map(prev.members), devices: new Map(prev.devices), passkeys: new Map(prev.passkeys) };
+  const s: Checked = { ...prev, head: hash, members: new Map(prev.members), devices: new Map(prev.devices), passkeys: new Map(prev.passkeys), signed: new Set(prev.signed) };
   const b = (e.body ?? {}) as any;
   const managing = rank(by.role) >= rank("admin");
   const owning = by.role === "owner";
@@ -125,12 +144,13 @@ function apply(prev: Checked, e: Entry, now: number): Checked {
       s.members.delete(b.sub);
       need(owners());
       for (const [k, d] of s.devices) if (d.sub === b.sub) s.devices.delete(k);
-      for (const [k, sub] of s.passkeys) if (sub === b.sub) s.passkeys.delete(k);
+      for (const [k, p] of s.passkeys) if (p.sub === b.sub) s.passkeys.delete(k);
+      s.signed.delete(b.sub);
       break;
     case "device": {
       const d = device(b);
       need(managing || d.sub === by.sub);
-      addDevice(s, { ...d, by: by.sub });
+      addDevice(s, { ...d, by: by.sub, own: ownOf(prev, d.sub, by, prev.devices.get(d.id), d.sign_key) });
       break;
     }
     case "device.remove": {
@@ -141,10 +161,10 @@ function apply(prev: Checked, e: Entry, now: number): Checked {
     }
     case "passkey":
       need(typeof b.key === "string" && s.members.has(b.sub) && (managing || b.sub === by.sub));
-      s.passkeys.set(b.key, b.sub);
+      addPasskey(s, b.key, b.sub, ownOf(prev, b.sub, by));
       break;
     case "passkey.remove": {
-      const sub = s.passkeys.get(b.key);
+      const sub = s.passkeys.get(b.key)?.sub;
       need(sub !== undefined && (managing || sub === by.sub));
       s.passkeys.delete(b.key);
       break;
@@ -166,5 +186,6 @@ function apply(prev: Checked, e: Entry, now: number): Checked {
     default:
       refuse(`entry ${e.seq} is of an unknown kind`);
   }
-  return s;
+  // (signed with one someone else put in under the signer's name: in the chain, changing nothing)
+  return by.own ? s : { ...prev, head: hash };
 }

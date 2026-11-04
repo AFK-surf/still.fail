@@ -194,41 +194,42 @@ function lockOf(inner: Inner, ws: string): Checked | CoreError {
   return lock;
 }
 
-/// Whether a certificate is of an app device in the lock, signed by its own key; whose device it is.
+/// Whether a certificate is of an app device in the lock that is its person's own (lock-check.ts Device `own`: one an
+/// admin put in under their name is given no key, by itself or asked), signed by its own key; whose device it is.
 function certOwner(lock: Checked, cert: BoxCert): string | null {
   const d = lock.devices.get(cert?.device);
-  if (!d || d.kind !== "app" || !lock.members.has(d.sub) || d.sign_key !== cert.sig?.key || cert.ws !== lock.ws || !signedOk(cert, TAG.box)) return null;
+  if (!d || d.kind !== "app" || !d.own || !lock.members.has(d.sub) || d.sign_key !== cert.sig?.key || cert.ws !== lock.ws || !signedOk(cert, TAG.box)) return null;
   return d.sub;
 }
 
-/// Whether a vault's version is its owner's (signed by one of their app devices in the lock).
+/// The app device of the lock that signs with `key`, where it is its person's own (no other's signature counts).
+const ownSigner = (lock: Checked, key: unknown) => [...lock.devices.values()].find((x) => x.kind === "app" && x.own && x.sign_key === key);
+
+/// Whether a vault's version is its owner's (signed by one of their own app devices in the lock).
 function trusted(lock: Checked, v: Vault): boolean {
   if (v?.ws !== lock.ws || !Array.isArray(v.members) || !signedOk(v, TAG.vault)) return false;
-  const d = [...lock.devices.values()].find((x) => x.kind === "app" && x.sign_key === v.sig.key);
-  return d !== undefined && d.sub === v.owner;
+  return ownSigner(lock, v.sig.key)?.sub === v.owner;
 }
 
-/// This device in the lock: the one whose signing key is this app's.
+/// This device in the lock: the one whose signing key is this app's, where it is its person's own (one an admin put
+/// in under their name signs nothing, so keeps no vault).
 function me(lock: Checked, signer: string | null | undefined): { device: string; sub: string } | null {
   if (!signer) return null;
-  const d = [...lock.devices.values()].find((x) => x.kind === "app" && x.sign_key === signer);
+  const d = ownSigner(lock, signer);
   return d ? { device: d.id, sub: d.sub } : null;
 }
 
-/// The certificates the lock vouches for, latest by device, each with whose it is (`sub`) and whether its person put
-/// the device in the lock themselves (`own`: the lock entry signed by a device of theirs; lock-check.ts Device `by`).
-/// One an admin put in under their name (no code typed; or approved for them face to face, which the lock does not
-/// tell apart) is given a key only as the person asks (授权 on its prompt, which says who put it in; 授权新设备), never
-/// by itself as its certificate comes: an admin's could carry the key off (2026-11-03 review). `bare`: the certificate
-/// alone, as it was signed (what is sealed to, and what a vault's keys carry: a field more breaks its signature).
-type Vouched = BoxCert & { sub: string; own: boolean };
+/// The certificates the lock vouches for, latest by device, each with whose it is (`sub`): those of the members' own
+/// devices only. `bare`: the certificate alone, as it was signed (what is sealed to, and what a vault's keys carry: a
+/// field more breaks its signature).
+type Vouched = BoxCert & { sub: string };
 function certs(inner: Inner, ws: string, lock: Checked): Vouched[] {
   return Object.values(held(inner, ws).boxes).flatMap((c) => {
     const sub = certOwner(lock, c);
-    return sub === null ? [] : [{ ...c, sub, own: lock.devices.get(c.device)?.by === sub }];
+    return sub === null ? [] : [{ ...c, sub }];
   });
 }
-const bare = ({ sub: _s, own: _o, ...c }: Vouched): BoxCert => c;
+const bare = ({ sub: _s, ...c }: Vouched): BoxCert => c;
 
 export function install(inner: Inner): void {
   handlers.vault = (core, call, _progress, _at, ctx) => run(core, call as Of, ctx);
@@ -606,8 +607,6 @@ export function vaultAsks(inner: Inner): J[] {
     if (self === null) continue;
     const h = held(inner, ws);
     const vouched = certs(inner, ws, lock);
-    const people = new Map<string, J>(arr(get(view(inner, ws), "members")).map((p) => [p.sub, p]));
-    const nameOf = (s: string) => str(get(people.get(s), "name")) || str(get(people.get(s), "email")) || s;
     const mine = vouched.find((c) => c.device === self.device);
     if (mine === undefined) continue;
     const folded = fold(lockHeld(inner, ws)?.entries ?? []);
@@ -618,12 +617,9 @@ export function vaultAsks(inner: Inner): J[] {
       for (const c of vouched) {
         if (!v.members.includes(c.sub) || keyed.get(c.device) === c.box || (h.hidden[c.device] ?? -1) >= c.at) continue;
         const d = folded.devices.get(c.device);
-        const by = lock.devices.get(c.device)?.by;
         asks.push({
           workspace: ws, workspaceName: workspaceName(inner, ws), vault: v.id, vaultName: v.name, device: c.device,
           deviceText: deviceText({ kind: str(d?.kind) ?? "app", label: str(d?.label) ?? "" }), at: c.at, atText: str(stamp(c.at * 1000, now).ago) ?? "",
-          // (put in the lock by someone else: said, by name, so the person knows what they give the key to)
-          own: c.own, ...(c.own || by === undefined ? {} : { byText: nameOf(by) }),
         });
       }
     }
@@ -924,6 +920,8 @@ class Vaults {
       if (lock instanceof CoreError) return yield* Effect.fail(lock);
       const signer = yield* Signer.load(inner.host);
       const who = signer ? me(lock, signer.id) : null;
+      // (in the lock, signing with this app's key, but put in under this person's name by someone else)
+      if (signer && !who && [...lock.devices.values()].some((d) => d.kind === "app" && d.sign_key === signer.id)) return yield* fail("vault_not_own", t("core-misc.vault.notOwn"));
       if (!signer || !who) return yield* fail("vault_not_signer", t("core-misc.vault.notSigner"));
       return { lock, signer, self: who };
     });
@@ -970,15 +968,15 @@ class Vaults {
   }
 
   /// The members' devices set up (their box certificates the lock vouches for) that vault `v` has no key for (or
-  /// `device` alone); `ownOnly`: those their person put in the lock themselves (given by itself: `giveKept`).
-  #missing(lock: Checked, v: Vault, device: string | null, ownOnly = false): Vouched[] {
+  /// `device` alone).
+  #missing(lock: Checked, v: Vault, device: string | null): Vouched[] {
     const keyed = new Map(v.keys.map((k) => [k.cert.device, k.cert.box]));
-    return certs(this.#inner, this.ws, lock).filter((c) => (c.own || !ownOnly) && v.members.includes(c.sub) && keyed.get(c.device) !== c.box && (device === null || c.device === device));
+    return certs(this.#inner, this.ws, lock).filter((c) => v.members.includes(c.sub) && keyed.get(c.device) !== c.box && (device === null || c.device === device));
   }
 
   /// Vault `id`'s key (of `epoch`, unsealed here) sealed for the members' devices set up since it was keyed (or
   /// `device` alone): its next version, which its owner signs (another member's device gives none). How many it gave.
-  #give(id: string, epoch: number, key: Uint8Array, device: string | null, ownOnly = false): Effect.Effect<number, CoreError> {
+  #give(id: string, epoch: number, key: Uint8Array, device: string | null): Effect.Effect<number, CoreError> {
     const self = this;
     // One giving of a vault at a time (two would write the same seq, the second refused), each after the one before,
     // reading the vault and the certificates anew: a certificate heard while a version is written is given to next,
@@ -992,7 +990,7 @@ class Vaults {
         const { lock, signer, self: who } = yield* self.#ready();
         const v = yield* self.#vault(lock, id);
         if (v.owner !== who.sub || v.epoch !== epoch) return 0;
-        const add = self.#missing(lock, v, device, ownOnly);
+        const add = self.#missing(lock, v, device);
         const { keys: kept, freshened } = self.#freshened(lock, v);
         if (add.length === 0 && !freshened) return 0;
         const devices = new Set(add.map((c) => c.device));
@@ -1048,8 +1046,8 @@ class Vaults {
         if (v.deleted || !trusted(lock, v) || v.owner !== who.sub || mem(inner).refused.get(v.id) === v.seq) continue;
         const kept = mem(inner).keys.get(keyOf(v));
         if (!kept || kept.until <= inner.host.nowMs()) continue;
-        if (self.#missing(lock, v, null, true).length === 0 && !self.#freshened(lock, v).freshened) continue;
-        yield* Effect.ignore(self.#give(v.id, v.epoch, kept.key, null, true), { log: "Unhandled", message: "vault key given" });
+        if (self.#missing(lock, v, null).length === 0 && !self.#freshened(lock, v).freshened) continue;
+        yield* Effect.ignore(self.#give(v.id, v.epoch, kept.key, null), { log: "Unhandled", message: "vault key given" });
       }
     });
   }
@@ -1325,9 +1323,9 @@ class Vaults {
     return fail("vault_unknown", t("core-misc.vault.unknownItem"));
   }
 
-  /// What an item holds: written by a member's device in the lock, opened with its vault's key.
+  /// What an item holds: written by a member's own device in the lock, opened with its vault's key.
   #plain(lock: Checked, v: Vault, item: Item, key: Uint8Array): Effect.Effect<Uint8Array, CoreError> {
-    const by = [...lock.devices.values()].find((d) => d.kind === "app" && d.sign_key === item.sig?.key);
+    const by = ownSigner(lock, item.sig?.key);
     if (!by || !v.members.includes(by.sub) || item.vault !== v.id || item.epoch !== v.epoch || !signedOk(item, TAG.item)) return fail("vault_untrusted", t("core-misc.vault.untrusted"));
     return Effect.try({ try: () => decrypt(key, item.ct, itemContext(this.ws, v.id, item.id, item.version, item.epoch)), catch: asCoreError });
   }

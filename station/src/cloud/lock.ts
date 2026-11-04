@@ -15,11 +15,13 @@ export type Role = "owner" | "admin" | "member" | "viewer";
 export type Member = { sub: string; email: string; role: Role };
 /// A device: its base iroh key (`id`), whose person, the client it is, the key it signs with (an app's only), the
 /// endpoint ids an older client connects with (it proves none), until when (a web page's).
-/// `by`: whose signature put it in the lock (the genesis's devices the owner's): a person's own device is one they
-/// added themselves; an admin may add one under any member's name (the core gives a vault's key by itself to a
-/// person's own devices only, views/vault.ts `certs`).
-export type Device = { id: string; sub: string; kind: "app" | "web"; label: string; sign_key?: string; endpoints?: string[]; exp?: number; by?: string };
-export type Passkey = { id: string; sub: string; key: string; label: string };
+/// `by`: whose signature put it in the lock (the genesis's devices the owner's). `own`: the person's own, which alone
+/// signs anything (docs/workspace-lock.md 本人的设备): named in the genesis, put in by an own device or passkey of the
+/// same person, or put in by an owner or admin while the person had never had an own one that signs (their first,
+/// approved face to face). An admin may put a device or passkey in under anyone's name: that one connects, but its
+/// signature counts for nothing, in the lock or the vault, so it can neither act as the person nor be given their keys.
+export type Device = { id: string; sub: string; kind: "app" | "web"; label: string; sign_key?: string; endpoints?: string[]; exp?: number; by?: string; own: boolean };
+export type Passkey = { id: string; sub: string; key: string; label: string; own: boolean };
 export type Station = { key: string; name: string };
 
 export type LockState = {
@@ -41,6 +43,9 @@ export type LockState = {
   /// `certOk` `ever`).
   signKeys: Map<string, string[]>;
   passkeys: Map<string, Passkey>;
+  /// The members who have had an own device that signs, or an own passkey, since they were last made members: an owner
+  /// or admin puts in only the first of a person's, which is then their own; any later one the person puts in.
+  signed: Set<string>;
   stations: Map<string, Station>;
   gateways: Set<string>;
   disabled: boolean;
@@ -142,7 +147,7 @@ function member(v: any): Member {
 function device(v: any, at: number): Device {
   const id = v?.id, sub = str(v?.sub), label = str(v?.label) ?? "", kind = v?.kind;
   if (!isId(id) || !sub || (kind !== "app" && kind !== "web")) throw new Error("a device is {id, sub, kind, label}");
-  const d: Device = { id, sub, kind, label };
+  const d: Device = { id, sub, kind, label, own: false };
   if (v.sign_key !== undefined) {
     if (kind !== "app" || !validKeyId(v.sign_key)) throw new Error("only an app's device signs, with an ed25519 or p256 key");
     d.sign_key = v.sign_key;
@@ -162,7 +167,7 @@ function device(v: any, at: number): Device {
 function passkey(v: any): Passkey {
   const id = str(v?.id, 1400), sub = str(v?.sub), key = v?.key, label = str(v?.label) ?? "";
   if (!id || !sub || typeof key !== "string" || !key.startsWith("p256:") || !validKeyId(key)) throw new Error("a passkey is {id, sub, key: p256:…}");
-  return { id, sub, key, label };
+  return { id, sub, key, label, own: false };
 }
 
 function station(v: any): Station {
@@ -170,18 +175,29 @@ function station(v: any): Station {
   return { key: v.key, name: str(v?.name) ?? "" };
 }
 
-/// Who signed: the member whose app device or passkey holds the key, with their role now.
-function signer(s: LockState, sig: Sig, now: number | null): { sub: string; role: Role; passkey: boolean } | null {
-  for (const p of s.passkeys.values()) if (p.key === sig.key) return withRole(s, p.sub, true);
+/// Who signed: the member whose app device or passkey holds the key, with their role now, and whether it is their own
+/// (an own one first: a key put in again under another device, someone else's, does not take its signatures away).
+export function signer(s: LockState, sig: Pick<Sig, "key">, now: number | null): { sub: string; role: Role; passkey: boolean; own: boolean } | null {
+  let found: { sub: string; role: Role; passkey: boolean; own: boolean } | null = null;
+  for (const p of s.passkeys.values()) if (p.key === sig.key) found = withRole(s, p.sub, true, p.own) ?? found;
   for (const d of s.devices.values()) {
-    if (d.sign_key === sig.key && d.kind === "app" && (d.exp === undefined || now === null || d.exp > now)) return withRole(s, d.sub, false);
+    if (d.sign_key === sig.key && d.kind === "app" && (d.exp === undefined || now === null || d.exp > now) && !found?.own) found = withRole(s, d.sub, false, d.own) ?? found;
   }
-  return null;
+  return found;
 }
 
-function withRole(s: LockState, sub: string, passkey: boolean) {
+function withRole(s: LockState, sub: string, passkey: boolean, own: boolean) {
   const m = s.members.get(sub);
-  return m ? { sub, role: m.role, passkey } : null;
+  return m ? { sub, role: m.role, passkey, own } : null;
+}
+
+/// Whether a device or passkey of `sub` an entry signed by `by` puts in is the person's own: put in by an own one of
+/// theirs, or by an owner or admin while they have had none that signs (`was`: the same device as it stood, which
+/// stays own as long as it keeps its signing key, as a web page's renewed does).
+function ownOf(s: LockState, sub: string, by: { sub: string; role: Role }, was?: { own: boolean; sign_key?: string }, key?: string): boolean {
+  if (by.sub === sub) return true;
+  if (was?.own && was.sign_key === key) return true;
+  return manager(by.role) && !s.signed.has(sub);
 }
 
 const owners = (s: LockState) => [...s.members.values()].filter((m) => m.role === "owner").length;
@@ -193,11 +209,12 @@ export function genesis(e: Entry): LockState {
   const origins = Array.isArray(b.origins) ? b.origins.filter((o: unknown) => typeof o === "string") : [];
   const s: LockState = {
     ws: e.ws, seq: 0, head: entryHash(e), genesis: entryHash(e), origins, rp_id: str(b.rp_id) ?? "", cloud_keys: b.cloud_keys ?? null,
-    members: new Map(), devices: new Map(), signKeys: new Map(), passkeys: new Map(), stations: new Map(), gateways: new Set(), disabled: false,
+    members: new Map(), devices: new Map(), signKeys: new Map(), passkeys: new Map(), signed: new Set(), stations: new Map(), gateways: new Set(), disabled: false,
   };
   for (const m of arr(b.members)) s.members.set(member(m).sub, member(m));
-  for (const d of arr(b.devices)) add(s, { ...device(d, 0), ...(str(b.owner) !== null ? { by: str(b.owner)! } : {}) });
-  for (const p of arr(b.passkeys)) s.passkeys.set(passkey(p).key, passkey(p));
+  // (the genesis's devices and passkeys are the ones the owner found each person had: all their own)
+  for (const d of arr(b.devices)) add(s, { ...device(d, 0), own: true, ...(str(b.owner) !== null ? { by: str(b.owner)! } : {}) });
+  for (const p of arr(b.passkeys)) addPasskey(s, { ...passkey(p), own: true });
   for (const st of arr(b.stations)) s.stations.set(station(st).key, station(st));
   for (const g of arr(b.gateways)) if (isId(g)) s.gateways.add(g);
   if (s.members.get(b.owner)?.role !== "owner") throw new Error("the genesis names its owner among its members");
@@ -214,7 +231,13 @@ function add(s: LockState, d: Device) {
   if (d.sign_key !== undefined) {
     const had = s.signKeys.get(d.id) ?? [];
     if (!had.includes(d.sign_key)) s.signKeys.set(d.id, [...had, d.sign_key]);
+    if (d.own) s.signed.add(d.sub);
   }
+}
+
+function addPasskey(s: LockState, p: Passkey) {
+  s.passkeys.set(p.key, p);
+  if (p.own) s.signed.add(p.sub);
 }
 
 /// The lock with one more entry; throws why the entry does not follow. `now`: the station's time (unix seconds), for
@@ -228,7 +251,10 @@ export function apply(prev: LockState, e: Entry, now: number | null): LockState 
   const by = signer(prev, e.sig, now);
   if (by === null) throw new Error("not signed by a device or passkey in the lock");
   if (!sigValid(e.sig, hash, prev.origins, prev.rp_id, by.passkey)) throw new Error("signature invalid");
-  const s: LockState = { ...prev, seq: e.seq, head: hash, members: new Map(prev.members), devices: new Map(prev.devices), signKeys: new Map(prev.signKeys), passkeys: new Map(prev.passkeys), stations: new Map(prev.stations), gateways: new Set(prev.gateways) };
+  const s: LockState = { ...prev, seq: e.seq, head: hash, members: new Map(prev.members), devices: new Map(prev.devices), signKeys: new Map(prev.signKeys), passkeys: new Map(prev.passkeys), signed: new Set(prev.signed), stations: new Map(prev.stations), gateways: new Set(prev.gateways) };
+  // Signed with a device or passkey someone else put in under the signer's name: it stays in the chain, as the rules
+  // let its signer's role make it (so a lock with one from before keeps folding), and changes nothing.
+  const followed = (): LockState => ({ ...prev, seq: e.seq, head: hash });
   const b = e.body ?? {};
   const managing = manager(by.role);
   const owning = by.role === "owner";
@@ -253,12 +279,14 @@ export function apply(prev: LockState, e: Entry, now: number | null): LockState 
       need(owners(s) > 0, "a lock keeps an owner");
       for (const [k, d] of s.devices) if (d.sub === sub) s.devices.delete(k);
       for (const [k, p] of s.passkeys) if (p.sub === sub) s.passkeys.delete(k);
+      // (made a member again, their first device is put in by an owner or admin as anyone's first is)
+      s.signed.delete(sub!);
       break;
     }
     case "device": {
       const d = device(b, e.at);
       need(managing || d.sub === by.sub, "members add only their own devices");
-      add(s, { ...d, by: by.sub });
+      add(s, { ...d, by: by.sub, own: ownOf(prev, d.sub, by, prev.devices.get(d.id), d.sign_key) });
       break;
     }
     case "device.remove": {
@@ -272,7 +300,7 @@ export function apply(prev: LockState, e: Entry, now: number | null): LockState 
       const p = passkey(b);
       need(s.members.has(p.sub), "a passkey is a member's");
       need(managing || p.sub === by.sub, "members add only their own passkeys");
-      s.passkeys.set(p.key, p);
+      addPasskey(s, { ...p, own: ownOf(prev, p.sub, by) });
       break;
     }
     case "passkey.remove": {
@@ -309,7 +337,7 @@ export function apply(prev: LockState, e: Entry, now: number | null): LockState 
     default:
       throw new Error(`unknown entry kind ${String(e.kind)}`);
   }
-  return s;
+  return by.own ? s : followed();
 }
 
 /// A whole chain, from its genesis. Throws at the first entry that does not follow.

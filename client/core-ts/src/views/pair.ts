@@ -35,7 +35,7 @@ import * as format from "../format.ts";
 import * as prefs from "../prefs.ts";
 import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
-import { checkLock } from "../vault/lock-check.ts";
+import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { Lock, baseOf, deviceText, fold, held, live, nameOf, pairs, read, signerKnown, signerOf, view } from "./lock.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -148,11 +148,13 @@ function placesFor(inner: Inner, hello: J, peer: string, me: string): { places: 
     const had = live(lock.devices.get(peer), now);
     const key = str(get(hello, "sign_key"));
     const upgrade = had !== undefined && had.kind === "app" && get(hello, "kind") === "app" && key !== null && had.sign_key !== key;
-    if (lock.disabled || mine?.sign_key !== signer || (had !== undefined && !upgrade)) continue;
+    if (lock.disabled || mine?.sign_key !== signer || !mine.own || (had !== undefined && !upgrade)) continue;
     const c = credentialOf(str(get(w, "credential")) ?? "", lock.cloudKeys, ws, peer, now);
     if (c === null || !lock.members.has(c.sub) || (had !== undefined && c.sub !== had.sub)) continue;
+    // Another person's: only their first device that signs, by an owner or admin (any later one they approve from a
+    // device of their own: one approved for them would be no one's, signing nothing; lock-check.ts Device `own`).
     const role = lock.members.get(mine.sub);
-    if (role !== "owner" && role !== "admin" && c.sub !== mine.sub) continue;
+    if (c.sub !== mine.sub && ((role !== "owner" && role !== "admin") || lock.signed.has(c.sub))) continue;
     who ??= c;
     if (c.sub !== who.sub) continue;
     places.push({ ws, sub: c.sub, account });
@@ -310,7 +312,8 @@ function drop(y: Trying): void {
 }
 
 /// The workspaces this device waits in (a lock without it, or, an app, one where it does not sign with its key), and
-/// the devices that may approve it in them: its person's own that sign, and the owners' and admins'.
+/// the devices that may approve it in them: its person's own that sign, and the owners' and admins' while the person
+/// has none that signs (their first; as the checked lock says, where it checks out: views/pair.ts `placesFor`).
 function waitingIn(inner: Inner, base: string): { workspaces: string[]; trusted: string[] } {
   const workspaces: string[] = [];
   const trusted = new Set<string>();
@@ -323,9 +326,15 @@ function waitingIn(inner: Inner, base: string): { workspaces: string[]; trusted:
     const unsigned = had !== undefined && had.kind === "app" && inner.host.appKeys === true && (signer === null || had.sign_key !== signer);
     if (f.disabled || (had !== undefined && !unsigned)) continue;
     workspaces.push(ws);
+    let checked: Checked | null = null;
+    try {
+      checked = checkLock(h.entries, Math.floor(inner.host.nowMs() / 1000));
+    } catch {}
+    const first = checked === null || !checked.signed.has(sub);
     for (const d of f.devices.values()) {
       const role = f.members.get(d.sub)?.role;
-      if (d.id !== base && typeof d.sign_key === "string" && d.kind === "app" && (d.sub === sub || role === "owner" || role === "admin")) trusted.add(d.id);
+      const own = checked === null || checked.devices.get(d.id)?.own === true;
+      if (d.id !== base && own && typeof d.sign_key === "string" && d.kind === "app" && (d.sub === sub || (first && (role === "owner" || role === "admin")))) trusted.add(d.id);
     }
   }
   return { workspaces, trusted: [...trusted] };
