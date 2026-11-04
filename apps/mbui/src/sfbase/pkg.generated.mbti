@@ -2106,6 +2106,7 @@ pub(all) struct ChatItem {
   reconnecting : String?
   connect : Bool
   origin_text : String
+  origin_kind : String
   people_text : String
   pending : Bool
   settled : Bool
