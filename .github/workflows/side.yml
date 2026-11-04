@@ -24,7 +24,7 @@ jobs:
       matrix:
         part: [core-ts, station, rust]
     runs-on: [self-hosted, macos-ci]
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-mac
@@ -35,6 +35,12 @@ jobs:
         run: pnpm install --frozen-lockfile && cd station && pnpm install --frozen-lockfile
       - name: side (${{ matrix.part }})
         run: sh scripts/side.sh ${{ matrix.part }}
+      # A job stopped at its timeout leaves its simulators booted, each slowing the next run and holding this Mac's little disk.
+      - if: always() && matrix.part == 'station'
+        name: simulators left
+        run: |
+          S=/Library/Developer/PrivateFrameworks/CoreSimulator.framework/Versions/A/Resources/bin/simctl
+          for u in $($S list devices | grep "still.fail side" | grep -oE "[0-9A-F-]{36}"); do $S shutdown "$u" 2>/dev/null; $S delete "$u"; done
         # (the simulators' pictures as the tests took them, kept when one fails: a tap on the Duo's inner panel that opened
         # nothing for a minute could not be told from its log alone, 41636490524)
         env: { SIM_OUT: "${{ runner.temp }}/sim" }

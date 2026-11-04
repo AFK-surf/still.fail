@@ -13,8 +13,8 @@ import { X11Desktop } from "../src/screens/x11-desktop.ts";
 const run = promisify(execFile);
 const enabled = process.env.STILLFAIL_TEST_X11 === "1" && process.env.STILLFAIL_TEST_X11_BROWSER === "1";
 
-async function until<T>(get: () => T | null | Promise<T | null>, what: string): Promise<T> {
-  const end = performance.now() + 10_000;
+async function until<T>(get: () => T | null | Promise<T | null>, what: string, ms = 10_000): Promise<T> {
+  const end = performance.now() + ms;
   while (performance.now() < end) {
     const value = await get();
     if (value !== null) return value;
@@ -56,12 +56,15 @@ test("the web ScreenFrames decoder draws X11 H.264 across encoder restarts", { s
     const html = join(dir, "viewer.html");
     writeFileSync(html, "<!doctype html><canvas width=640 height=400></canvas>");
     const binary = process.env.STILLFAIL_TEST_CHROME ?? "google-chrome";
-    chrome = spawn(binary, ["--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", "--remote-allow-origins=*", "--remote-debugging-port=0", `--user-data-dir=${join(dir, "profile")}`, `file://${html}`], { stdio: "ignore" });
+    chrome = spawn(binary, ["--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", "--remote-allow-origins=*", "--remote-debugging-port=0", `--user-data-dir=${join(dir, "profile")}`, `file://${html}`], { stdio: ["ignore", "ignore", "pipe"] });
+    let said = "";
+    chrome.stderr!.on("data", (data) => { said = (said + data).slice(-2000); });
     const port = await until(() => {
       if (chrome!.exitCode !== null) throw new Error("Chrome exited before opening a page");
       try { return Number(readFileSync(join(dir, "profile", "DevToolsActivePort"), "utf8").split("\n")[0]) || null; }
       catch { return null; }
-    }, "Chrome's DevTools port");
+      // (a shared runner's Chrome, 1.8 s most runs, had not opened it in 10 s in 2 of 21 side runs, 41772592005: what it said is told)
+    }, "Chrome's DevTools port", 60_000).catch((error) => { throw new Error(`${error.message}; Chrome said: ${said}`); });
     const target = await until(async () => {
       try {
         const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json() as { type: string; url: string; webSocketDebuggerUrl: string }[];
