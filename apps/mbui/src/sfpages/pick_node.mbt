@@ -97,7 +97,10 @@ let pick_tree : Ref[@view.Tree?] = Ref(None)
 fn pick_row_of(id : @view.NodeId) -> PickRow? {
   pick_rows_told.get() |> ignore
   guard pick_tree.val is Some(tree) else { return None }
-  let mut at = tree.view_of(id)
+  // (a windowed row's name survives its slot: containment is by the node that has that name now)
+  guard tree.view_of(id) is Some(held) else { return None }
+  let current = held.id()
+  let mut at = Some(held)
   while at is Some(v) {
     match pick_rows.get(v.id()) {
       Some(row) => return row()
@@ -109,7 +112,7 @@ fn pick_row_of(id : @view.NodeId) -> PickRow? {
   for e in pick_rows {
     let mut up = tree.view_of(e.0)
     while up is Some(v) {
-      if v.id() == id {
+      if v.id() == current {
         return (e.1)()
       }
       up = v.parent()
