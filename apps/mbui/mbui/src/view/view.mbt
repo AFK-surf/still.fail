@@ -444,6 +444,8 @@ struct Node {
   mut drag_end : (() -> Unit)?
   /// a slot (show, pick, each): no box of its own, what it holds laid out as its holder's own
   mut slot : Bool
+  /// a boundary's (View::boundary): told of a fault under it
+  mut fault_to : ((String) -> Unit)?
   /// drawn by what hosts the tree (View::hosted)
   mut hosted : Bool
   /// what it says it is, read out (View::says); None nothing
@@ -974,6 +976,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.parent = parent
       n.allow_ellipsis = false
       n.slot = false
+      n.fault_to = None
       n.hosted = false
       n.on_press = None
       n.top_row = false
@@ -1122,6 +1125,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         takes_ver: None,
         drag_end: None,
         slot: false,
+        fault_to: None,
         hosted: false,
         said: None,
         said_hidden: false,

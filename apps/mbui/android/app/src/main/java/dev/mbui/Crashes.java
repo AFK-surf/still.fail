@@ -194,6 +194,13 @@ final class Crashes {
         handled(context, "CoreFailed", take(reason, 1000), "core_failed", null);
     }
 
+    /** What the UI was asked that it could not do as asked (mbui's fault, view/boundary.mbt): the app went on, the
+     *  boundary round it showing that part could not be shown; what was asked is the only trace of the bug. Once a
+     *  process for each thing said (the UI tells each once), sent at once. */
+    static void uiFault(Context context, String said) {
+        handled(context, "UiFault", take(said, 1000), "ui_fault", null);
+    }
+
     /** The native heap past MemoryWatch's limit, with what was under way then (MemoryWatch.java). */
     static void memoryRunaway(Context context, String value, JSONObject facts) {
         handled(context, "MemoryRunaway", value, "memory_runaway", facts);

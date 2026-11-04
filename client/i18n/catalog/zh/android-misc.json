@@ -616,5 +616,6 @@
   "android-misc.updates.retry": "重试更新到 {version}",
   "android-misc.updates.updated": "{app} 已更新到 {version}，点按打开",
   "android-misc.updates.waitWifi": "连接 Wi‑Fi 后自动下载 · {size}",
-  "android-misc.adb.manage": "在设置里管理"
+  "android-misc.adb.manage": "在设置里管理",
+  "android-misc.fault.shown": "这部分显示出错了"
 }

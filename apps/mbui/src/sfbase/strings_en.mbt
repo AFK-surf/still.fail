@@ -456,6 +456,7 @@ let en : Map[String, String] = {
   "android-misc.drive.upload.going": "{sent} / {size}",
   "android-misc.drive.view": "View",
   "android-misc.failed": "Failed",
+  "android-misc.fault.shown": "This part couldn't be shown",
   "android-misc.files.lendOn": "Choose the station to pick a folder from",
   "android-misc.invite.byLink": "Join with invite link",
   "android-misc.invite.code": "Invite code",

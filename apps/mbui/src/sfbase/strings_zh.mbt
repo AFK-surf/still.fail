@@ -450,6 +450,7 @@ let zh : Map[String, String] = {
   "android-misc.drive.upload.going": "{sent} / {size}",
   "android-misc.drive.view": "显示方式",
   "android-misc.failed": "失败",
+  "android-misc.fault.shown": "这部分显示出错了",
   "android-misc.files.lendOn": "选择文件夹所在的 station",
   "android-misc.invite.byLink": "用邀请链接加入",
   "android-misc.invite.code": "邀请码",

@@ -64,6 +64,8 @@ struct Bench {
 /// old frame around the old views it holds, put where `view` says: old_views_here), else `view` its one old view
 /// (view_host.mbt).
 pub fn run(title : String, view : (Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
+  // (an app's run on a host: what faults is told and its boundary shows it, the app going on: @view's boundary.mbt)
+  @view.faults_stop.val = false
   match tree {
     Some(make) => set_view_app(make, around=view)
     None => set_view_app(fn(root) { old(root, view).grow(Is(1.0)) |> ignore })

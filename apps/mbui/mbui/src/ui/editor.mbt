@@ -759,7 +759,31 @@ pub fn Ctx::editor(
   if self.down && (self.active == id || self.word_drag == id || self.handle_drag == id) {
     hand.pointer.get() |> ignore
   }
+  // (one Field, one editor: two editors over one Field would lay each other's lines and scroll over each other (by id:
+  // the same key in two scopes, a list's rows, is two editors); nor a Field a field of the window's tree holds still
+  // (ui's field). Given so, a fault (old_fault: the old view's boundary shows it), this one an editor of its own)
+  let taken = match field {
+    Some(f) if f.st.built_frame == self.build_no && f.st.built_id != id => {
+      old_fault(
+        "Ctx::editor: one Field given to two editors in one build (\{f.st.built_key} id \{f.st.built_id} and \{key} id \{id}): a Field is one editor's",
+      )
+      true
+    }
+    Some(f) if f.st.tree_node is Some(n) && tree_fields.contains(n) => {
+      old_fault("Ctx::editor: a Field given to \{key} that a field of the window's tree holds: a Field is one editor's")
+      true
+    }
+    _ => false
+  }
+  let given = field
+  let field = if taken { None } else { field }
   let st = match (self.editors.get(id), field) {
+    // given a Field another holds: one of its own, never the Field's
+    (Some(s), None) if taken && given is Some(f) && physical_equal(f.st, s) => {
+      let s = EditorState::fresh("", self.clock)
+      self.editors[id] = s
+      s
+    }
     // what the app keeps (Field): this editor shows it from now on
     (Some(s), Some(f)) if physical_equal(s, f.st) => s
     (had, Some(f)) => {
@@ -788,19 +812,6 @@ pub fn Ctx::editor(
   st.look = look
   // (what the look makes of the words worked out again, once, for this build: it may say other colours now)
   st.looked = None
-  // one Field, one editor: two editors over one Field would lay each other's lines and scroll over each other
-  // (by id: the same key in two scopes, a list's rows, is two editors)
-  if field is Some(_) && st.built_frame == self.build_no && st.built_id != id {
-    abort(
-      "Ctx::editor: one Field given to two editors in one build (\{st.built_key} id \{st.built_id} and \{key} id \{id}): a Field is one editor's",
-    )
-  }
-  // (nor a Field a field of the window's tree holds still: ui's field)
-  match st.tree_node {
-    Some(n) if field is Some(_) && tree_fields.contains(n) =>
-      abort("Ctx::editor: a Field given to \{key} that a field of the window's tree holds: a Field is one editor's")
-    _ => ()
-  }
   // (the focus asked for it before anything held it (Ctx::focus_field): given now this editor holds it, where the old
   // view it is being built in takes input (that one: its node not made yet, nothing found of it by its id))
   if field is Some(_) && st.focus_asked {

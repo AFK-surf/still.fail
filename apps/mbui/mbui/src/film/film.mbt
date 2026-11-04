@@ -237,6 +237,9 @@ fn host_frame(t : @ui.Tester, buf : Ref[FixedArray[Double]]) -> (Int, (Double, D
 /// A film made of the process's arguments (the head of this file says which), `view` the app's: the process ends
 /// with 0 when it was made and the script passed, 1 when not, 2 when it was not asked for rightly.
 pub fn run(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
+  // (the app as it runs on a host: what faults shown by its boundary, as there, and said on the log)
+  @view.faults_stop.val = false
+  @view.fault_told.val = Some(fn(said) { println("fault: " + said) })
   if arg("MBUI_MEDIA_PREVIEW") == "1" {
     // The very same scene and window tree as the offscreen export, hosted in an interactive native window.
     let platform = number(arg("MBUI_FILM_PLATFORM")).unwrap_or(0.0).to_int()
