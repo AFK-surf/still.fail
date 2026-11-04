@@ -12,7 +12,7 @@ import { peerHttpBase } from "../tools/http.ts";
 import { AcpDriver, AcpSession, KeptTranscript, type AcpStart } from "./acp.ts";
 import type { Events } from "./own-process.ts";
 import { expandRoute, profileEnv, profileModel } from "./profiles.ts";
-import { cleanEnv, failureOf, uuid, type FailureReason, type OpenOptions, type Profile } from "./runtime.ts";
+import { TOOL_SERVERS, cleanEnv, failureOf, uuid, type FailureReason, type OpenOptions, type Profile } from "./runtime.ts";
 
 type Json = any;
 
@@ -22,6 +22,17 @@ const SCRUBBED = ["GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENAI_USE_VERTEXAI
 /// `--gemini-dir`.
 export const agyHome = (home: string) => join(home, "agy");
 export const geminiDir = (home: string) => join(agyHome(home), ".gemini");
+/// Where its sign-in to a Google account lands in that home (its TUI's, `agy` with the profile's agy/ as its HOME:
+/// accounts/login.ts), which the ACP server reads from `--gemini-dir`: a file, `id_token_email` whose account it is.
+export const agyToken = (home: string) => join(geminiDir(home), "antigravity-cli", "antigravity-oauth-token");
+export function agyEmailIn(text: string): string | null {
+  try {
+    const email = JSON.parse(text)?.id_token_email;
+    return typeof email === "string" && email !== "" ? email : null;
+  } catch {
+    return null;
+  }
+}
 /// Where the station keeps its sessions' transcripts.
 export const SESSIONS = "sessions";
 
@@ -46,6 +57,18 @@ export function agyEnv(options: OpenOptions): Record<string, string> {
 /// What session/new and session/load are given besides the working directory and the station's tools: its instructions,
 /// after its own system prompt.
 export const agyOpening = (instructions: string): Json => (instructions === "" ? {} : { _meta: { antigravity: { systemPrompt: { append: instructions } } } });
+
+/// A call's update as the station reads it: an MCP tool's title is `Run mcp_<server>_<tool>` (1.4.12), the station's
+/// named as the other runtimes name them (mcp__stillfail__chat_post), so that its live steps, history and lost tools
+/// know it.
+export function agyUpdate(update: Json): Json {
+  if (update?.sessionUpdate !== "tool_call" || typeof update.title !== "string") return update;
+  for (const server of TOOL_SERVERS) {
+    const prefix = `Run mcp_${server}_`;
+    if (update.title.startsWith(prefix)) return { ...update, title: `mcp__${server}__${update.title.slice(prefix.length)}` };
+  }
+  return update;
+}
 
 /// The models session/new or session/load lists (ACP's `models`), the current first.
 export function agyModels(result: Json): string[] {
@@ -134,6 +157,10 @@ export class AgySession extends AcpSession {
   named(id: string) {
     if (!SESSION_ID.test(id)) throw new Error("invalid Antigravity conversation id");
     super.named(id);
+  }
+
+  protected normalized(update: Json) {
+    return agyUpdate(update);
   }
 
   opened(result: Json) {

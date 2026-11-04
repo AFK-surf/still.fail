@@ -4,12 +4,16 @@ import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { after, test } from "node:test";
-import { AgyDriver, agyEnv, classifyFailure, geminiDir } from "../src/agents/agy.ts";
+import { AgyDriver, agyEnv, agyHome, agyToken, classifyFailure, geminiDir } from "../src/agents/agy.ts";
 import type { OpenOptions, RuntimeEvent } from "../src/agents/runtime.ts";
 import { allLeft } from "../src/agents/runner.ts";
 import { profileRuntimes } from "../src/agents/profiles.ts";
-import { accessKinds } from "../src/accounts/profiles.ts";
-import { transcriptPath, readTimeline } from "../src/read/transcript.ts";
+import { accessKinds, checkProfile, loginCommand } from "../src/accounts/profiles.ts";
+import { LoginManager, type LoginState } from "../src/accounts/login.ts";
+import { checkQuota } from "../src/accounts/quota.ts";
+import { tr } from "../src/ops/i18n.ts";
+import { platform } from "../src/platform/index.ts";
+import { transcriptPath, readTimeline, isPosting } from "../src/read/transcript.ts";
 import { callsOf } from "../src/usage/counter.ts";
 import { CHAT_CREATE } from "../src/tools/chat.ts";
 
@@ -65,6 +69,8 @@ test("a Gemini key runs the Antigravity CLI in its profile's files, with the sta
   const lines = readFileSync(path, "utf8").trim().split("\n").map((s) => JSON.parse(s));
   assert.equal(lines.find((m) => m.type === "assistant").text, "first hello");
   assert.equal(lines.find((m) => m.type === "tool").result, "file contents");
+  // The station's tool named as the others name it, from the title the CLI gives an MCP tool's call.
+  assert.ok(isPosting(lines.filter((m) => m.type === "tool").at(-1).name));
   assert.ok(readTimeline("agy", path).length > 0);
   // The turn's counts, input apart from the cache's, thoughts with the output; the context it ended with.
   const calls = callsOf("agy", readFileSync(path, "utf8"), false, { model: null, codexId: null });
@@ -144,7 +150,7 @@ test("a handover keeps the running turn, ended once by the next station", async 
 
 test("which profiles run it, and none of the machine's Google accounts", (t) => {
   const { options } = setup();
-  assert.deepEqual(accessKinds("agy"), ["api-provider", "env"]);
+  assert.deepEqual(accessKinds("agy"), ["subscription", "api-provider", "env"]);
   assert.ok(profileRuntimes({ id: "g", runtime: "dsh", home: "", access: { kind: "api-provider", provider: "google", key: "k" } }).includes("agy"));
   assert.ok(!profileRuntimes({ id: "x", runtime: "dsh", home: "", access: { kind: "api-provider", provider: "xai", key: "k" } }).includes("agy"));
   assert.ok(CHAT_CREATE.inputSchema.properties.runtime.enum.includes("agy"));
@@ -159,4 +165,54 @@ test("which profiles run it, and none of the machine's Google accounts", (t) => 
   assert.equal(env.GOOGLE_APPLICATION_CREDENTIALS, undefined);
   const own = agyEnv({ ...options, profile: { ...options.profile, access: { kind: "env" }, env: {} } });
   assert.equal(own.GEMINI_API_KEY, undefined);
+});
+
+test("a Google account: signed in in its terminal interface (the way chosen, Google's page relayed, the code pasted back), in the profile's files; then checked, and its sessions run on it", { skip: process.platform === "win32" && "no terminal to sign in in" }, async () => {
+  const home = join(data, "google");
+  const dump = join(data, "google-dump");
+  const env = { ...process.env, PATH: fake, FAKE_DUMP: dump, GEMINI_API_KEY: "machine-key", SSH_CONNECTION: "10.0.0.1 22 10.0.0.2 22" } as Record<string, string>;
+  const logins = new LoginManager(data, { claude: "claude", codex: "codex", agy: "agy" }, () => env);
+  const wait = async (state: LoginState) => until(() => logins.get("g")?.state === state);
+  const check = () => checkProfile({ runtime: "agy", kind: "subscription", key: "", via: {}, home, env, machine: false, lang: "en" });
+  try {
+    assert.equal((await check()).state, "login");
+    await logins.start({ id: "g", runtime: "agy", home }, "en");
+    await wait("needs_code");
+    assert.match(logins.get("g")!.url ?? "", /^https:\/\/accounts\.google\.com\/o\/oauth2\/auth\?.*redirect_uri=https%3A%2F%2Fantigravity\.google%2Foauth-callback/);
+    const run = JSON.parse(readFileSync(dump, "utf8").trim().split("\n").at(-1)!);
+    // Its HOME the profile's agy/ (so the sign-in lands in the ACP server's --gemini-dir), not a remote session's, none of
+    // the machine's keys.
+    assert.deepEqual([run.args, run.home, run.remote, run.key], [[], agyHome(home), null, null]);
+    await logins.submitCode("g", " 4/0Ab-code ", "en");
+    await wait("done");
+    assert.equal(JSON.parse(readFileSync(agyToken(home), "utf8")).token.access_token, "ya29.4/0Ab-code");
+    assert.equal(agyToken(home), join(geminiDir(home), "antigravity-cli", "antigravity-oauth-token"));
+    const signedIn = await check();
+    assert.equal(signedIn.state, "ok");
+    assert.match(signedIn.detail ?? "", /someone@gmail\.com/);
+  } finally {
+    await logins.close();
+  }
+  // A subscription profile's sessions are given no key: the sign-in in its files is what they run on.
+  const { options, driver } = setup();
+  const signed = { ...options, profile: { ...options.profile, home, access: { kind: "subscription" } } };
+  assert.equal(agyEnv(signed).GEMINI_API_KEY, undefined);
+  const s = await driver.open(signed, () => {});
+  await s.dispose();
+});
+
+test("a Google account's sign-in: refused at once where there is no terminal; its allowance not said; its login command", async () => {
+  const terminal = platform.terminal;
+  platform.terminal = () => null;
+  const logins = new LoginManager(data, { claude: "claude", codex: "codex", agy: "agy" });
+  try {
+    const job = await logins.start({ id: "nt", runtime: "agy", home: join(data, "no-terminal") }, "en");
+    assert.deepEqual([job.state, job.error], ["failed", tr("en", "station.login.agyNoTerminal")]);
+  } finally {
+    platform.terminal = terminal;
+    await logins.close();
+  }
+  const q = await checkQuota({ id: "p", runtime: "agy", home: "/h", access: { kind: "subscription" } } as never, {}, undefined, undefined, "en");
+  assert.deepEqual([q.state, q.detail], ["unsupported", tr("en", "station.quota.agyUnsupported")]);
+  assert.equal(loginCommand("agy", "/h"), "HOME=/h/agy agy");
 });

@@ -815,7 +815,7 @@ function withoutPart(line: string, part: string): string {
 }
 
 /// Who a runtime's subscription signs in to.
-const SIGN_IN: Record<string, string> = { claude: "Claude", grok: "Grok", cursor: "Cursor", devin: "Devin" };
+const SIGN_IN: Record<string, string> = { claude: "Claude", grok: "Grok", cursor: "Cursor", devin: "Devin", agy: "Google" };
 
 /// A kind of account in words.
 function accessLabel(kind: string): string {

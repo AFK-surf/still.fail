@@ -16,6 +16,7 @@ import { claudeOAuthToken, claudeToken as tokenOf } from "./oauth.ts";
 import { CONSOLE, RenewRefused } from "./console.ts";
 import { CURSOR, type CursorUrls, cursorMe, cursorModels, readCursor } from "./cursor.ts";
 import { devinCatalog, devinData } from "../agents/devin.ts";
+import { agyEmailIn, agyHome, agyToken } from "../agents/agy.ts";
 import { platform } from "../platform/index.ts";
 import { profileFetch } from "../ops/agent-env.ts";
 import { withShellCommand } from "../ops/shell-path.ts";
@@ -95,8 +96,8 @@ export const URLS: Urls = {
 /// The access kinds each runtime can use.
 export function accessKinds(runtime: Runtime): AccessKind[] {
   if (runtime === "hermes") return ["env"];
-  // Antigravity CLI: a Gemini key, or its own variables. (Its Google account sign-in is not offered yet: docs/agy.md.)
-  if (runtime === "agy") return ["api-provider", "env"];
+  // Antigravity CLI: a Google account signed in to (its plan: Google AI Pro / Ultra), a Gemini key, or its own variables.
+  if (runtime === "agy") return ["subscription", "api-provider", "env"];
   if (runtime === "claude") return ["subscription", "opencode-go", "anthropic-api", "api-provider", "env"];
   // DeepSeek Harness has no subscription to sign in to here: an account of its own is set up by variables.
   if (runtime === "dsh") return ["opencode-go", "anthropic-api", "api-provider", "env"];
@@ -139,6 +140,7 @@ export const loginCommand = (runtime: Runtime, home: string, machine = false) =>
   : runtime === "codex" ? `CODEX_HOME=${home} codex login`
   : runtime === "grok" ? `GROK_HOME=${join(home, "grok")} grok login --device-auth`
   : runtime === "devin" ? `XDG_DATA_HOME=${devinData(home)} devin auth login --force-manual-token-flow`
+  : runtime === "agy" ? `HOME=${agyHome(home)} agy`
   : "";
 
 /// What a check is given: the account and where it lives.
@@ -320,6 +322,17 @@ async function checkInner(o: CheckOptions, lang: Lang): Promise<ProfileCheck> {
     const done = check("ok", [t("station.profile.signedIn"), email ?? ""].filter((s) => s !== "").join(t("station.list.comma")), catalog !== null && catalog.models.length > 0 ? catalog.models : null);
     if (catalog !== null) done.modelEfforts = { devin: catalog.efforts };
     return done;
+  }
+  if (o.kind === "subscription" && o.runtime === "agy") {
+    // Signed in when its sign-in's file is in the profile's (agents/agy.ts), whose account it says; whether it works,
+    // and its models, a session opened only to ask says (index.ts).
+    let text: string;
+    try {
+      text = readFileSync(agyToken(o.home), "utf8");
+    } catch {
+      return check("login", t("station.profile.signedOut"), null);
+    }
+    return check("ok", [t("station.profile.signedIn"), agyEmailIn(text) ?? ""].filter((s) => s !== "").join(t("station.list.comma")), null);
   }
   return check("unknown", t("station.profile.envUnchecked"), null);
 }
