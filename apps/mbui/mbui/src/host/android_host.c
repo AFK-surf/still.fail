@@ -1681,6 +1681,7 @@ int32_t mb_host_window_snap_state(void) { return 0; }
 // A window of the app's own beside this one (@hostapi.window_opens, window_open): a desktop's; none here.
 int32_t mb_host_window_opens(void) { return 0; }
 int32_t mb_host_window_open(moonbit_string_t what) { (void)what; return 0; }
+int32_t mb_host_window_front(moonbit_string_t what) { (void)what; return 0; }
 void mb_host_set_cursor(int32_t kind) { (void)kind; }
 void mb_host_set_badge(int32_t n) { (void)n; }
 // The menu bar (@hostapi.menu_setup): none here.

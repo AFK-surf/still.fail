@@ -96,6 +96,11 @@ impl @hostapi.Host for Native with window_open(_, what) {
 }
 
 ///|
+impl @hostapi.Host for Native with window_front(_, what) {
+  window_front(what)
+}
+
+///|
 impl @hostapi.Host for Native with set_cursor(_, kind) {
   set_cursor(kind)
 }

@@ -285,6 +285,24 @@ test "a screen beside a chat goes to a window of its own from the panel's bar (a
   assert_eq(side_now(r).1, "drive:[\"ws1/st1\"]")
   t.frame()
   assert_true(cancelled.contains(7001))
+  // while that window is open, a way to the screen again (a chat's link, its title another) brings it to the front:
+  // no second window, no tab here
+  @sfbase.open_page(Screen({ station: "ws1/st1", screen: "desktop", title: "", until_gone: false }))
+  @sfbase.open_page_over(Screen({ station: "ws1/st1", screen: "desktop", title: "", until_gone: true }))
+  t.frame()
+  assert_eq(t.windows_fronted(), [opened[0], opened[0]])
+  assert_eq(t.windows_opened().length(), 1)
+  assert_true(!side_now(r).0.contains("screen:[\"ws1/st1\",\"desktop\"]"))
+  // another screen is its own: that window not asked for
+  @sfbase.open_page(Screen({ station: "ws1/st1", screen: "browser:tab-1", title: "", until_gone: false }))
+  t.frame()
+  assert_eq(t.windows_fronted().length(), 2)
+  // that window closed: the screen opens here again, as before
+  t.close_window(opened[0])
+  @sfbase.open_page(Screen({ station: "ws1/st1", screen: "desktop", title: "Willow 的屏幕", until_gone: false }))
+  t.frame()
+  assert_eq(side_now(r).1, "screen:[\"ws1/st1\",\"desktop\"]")
+  assert_eq(t.windows_fronted().length(), 2)
 }
 
 ///|

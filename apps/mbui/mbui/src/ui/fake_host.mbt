@@ -434,6 +434,11 @@ impl @hostapi.Host for FakeHost with window_open(_, what) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with window_front(_, what) {
+  h_window_front(what)
+}
+
+///|
 impl @hostapi.Host for FakeHost with shared_in(_) {
   shared_in()
 }

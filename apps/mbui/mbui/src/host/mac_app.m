@@ -1503,6 +1503,7 @@ static BOOL window_run(void) {
 // Another window of the app's (@hostapi.window_open): the program run again (the bundle's executable, or this
 // program's own path run bare), its environment this one's with MBUI_WINDOW=<what>. It is an app of its own beside
 // this one (its own tile in the Dock, the same bundle's), ending as its window closes (windowShouldClose).
+static NSMutableDictionary<NSString *, NSTask *> *window_tasks;  // what each was started for, the last for each
 int32_t mb_host_window_opens(void) { return 1; }
 int32_t mb_host_window_open(moonbit_string_t what_s) {
   NSString *what = mb_ns_from_string(what_s);
@@ -1519,6 +1520,30 @@ int32_t mb_host_window_open(moonbit_string_t what_s) {
     fflush(stdout);
     return 0;
   }
+  if (!window_tasks) window_tasks = [NSMutableDictionary new];
+  window_tasks[what] = t;
+  return 1;
+}
+
+// The notice by which a window of the app's own is told to come out (its pid the notice's object): only it can take
+// its window out of the Dock (window_front_heard); this run can only make that app the active one.
+static NSString *const window_front_notice = @"fail.still.mbui.window.front";
+
+// The window opened for `what` to the front, while it runs (@hostapi.window_front).
+int32_t mb_host_window_front(moonbit_string_t what_s) {
+  NSString *what = mb_ns_from_string(what_s);
+  NSTask *t = what.length ? window_tasks[what] : nil;
+  if (!t) return 0;
+  if (!t.running) {
+    [window_tasks removeObjectForKey:what];
+    return 0;
+  }
+  pid_t pid = t.processIdentifier;
+  [NSDistributedNotificationCenter.defaultCenter postNotificationName:window_front_notice
+                                                                object:@(pid).stringValue
+                                                              userInfo:nil
+                                                    deliverImmediately:YES];
+  [[NSRunningApplication runningApplicationWithProcessIdentifier:pid] activateWithOptions:NSApplicationActivateAllWindows];
   return 1;
 }
 
@@ -1545,6 +1570,10 @@ static void bring_back(void) {
 @interface MBAppDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate>
 @end
 @implementation MBAppDelegate
+// (a window of the app's own, told by the run that opened it: mb_host_window_front)
+- (void)windowFrontHeard:(NSNotification *)n {
+  bring_back();
+}
 - (BOOL)windowShouldClose:(NSWindow *)w {
   if (!in_bundle() || window_run()) return YES;
   [w orderOut:nil];
@@ -1762,6 +1791,12 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
     // the app's life (put away as its window closes, back from the Dock) and its menu bar's items: MBAppDelegate
     if (!app_delegate) app_delegate = [MBAppDelegate new];
     NSApp.delegate = app_delegate;
+    if (window_run()) {
+      [NSDistributedNotificationCenter.defaultCenter addObserver:app_delegate
+                                                        selector:@selector(windowFrontHeard:)
+                                                            name:window_front_notice
+                                                          object:@(getpid()).stringValue];
+    }
     notice_start();
     // MBUI_WIN=<w>x<h>: the window's size (a phone's, for the narrow layouts)
     // (else the app's own, @hostapi.window_setup; else 900×720)

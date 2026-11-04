@@ -1782,6 +1782,8 @@ pub let viz_way : @ui.Style
 
 pub let viz_ways : @ui.Style
 
+pub fn window_front(Page) -> Bool
+
 pub fn window_opens_for(Page) -> Bool
 
 pub fn window_page(String) -> Page?

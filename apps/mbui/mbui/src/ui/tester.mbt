@@ -355,6 +355,8 @@ pub fn Tester::new(
     snap_state: 0,
     window_opens: false,
     windows_opened: [],
+    windows_closed: [],
+    windows_fronted: [],
     opened: [],
     dark,
     inset: window_inset,
@@ -2510,6 +2512,18 @@ pub fn Tester::set_window_opens(self : Tester, can : Bool) -> Unit {
 /// What the app opened windows of its own for, oldest first (@hostapi.window_open).
 pub fn Tester::windows_opened(self : Tester) -> Array[String] {
   self.fake.windows_opened.copy()
+}
+
+///|
+/// A window the app opened for `what` closed, by the person (@hostapi.window_front finds it no more).
+pub fn Tester::close_window(self : Tester, what : String) -> Unit {
+  self.fake.windows_closed.push(what)
+}
+
+///|
+/// What the app brought its windows to the front for, oldest first (@hostapi.window_front).
+pub fn Tester::windows_fronted(self : Tester) -> Array[String] {
+  self.fake.windows_fronted.copy()
 }
 
 ///|

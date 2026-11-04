@@ -28,6 +28,7 @@ pub(open) trait Host {
   window_snap_state(Self) -> Int = _
   window_opens(Self) -> Bool = _
   window_open(Self, String) -> Bool = _
+  window_front(Self, String) -> Bool = _
   set_cursor(Self, Int) -> Unit = _
   set_badge(Self, Int) -> Unit = _
   menu_setup(Self, String) -> Unit = _
@@ -318,6 +319,11 @@ impl Host with window_opens(_) {
 
 ///|
 impl Host with window_open(_, _) {
+  false
+}
+
+///|
+impl Host with window_front(_, _) {
   false
 }
 
@@ -1461,6 +1467,14 @@ pub fn window_opens() -> Bool {
 /// it was started (false where window_opens is not).
 pub fn window_open(what : String) -> Bool {
   current.val.window_open(what)
+}
+
+///|
+/// The window this run opened for exactly `what` (window_open) brought to the front, out of the Dock or the taskbar
+/// where it was minimized: whether there is one still open (false once it has closed, and where window_opens is not).
+/// A window opened by an earlier run of the app is not known here.
+pub fn window_front(what : String) -> Bool {
+  current.val.window_front(what)
 }
 
 ///|

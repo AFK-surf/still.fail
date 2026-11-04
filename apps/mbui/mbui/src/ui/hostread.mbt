@@ -293,6 +293,12 @@ pub fn window_open(what : String) -> Bool {
 }
 
 ///|
+/// The window opened for `what` brought to the front (@hostapi.window_front): whether there is one still open.
+pub fn window_front(what : String) -> Bool {
+  h_window_front(what)
+}
+
+///|
 /// Where the app draws the window's maximize button this frame, in points (w 0: none): the host's there
 /// (@hostapi.window_snap).
 pub fn window_snap(x : Double, y : Double, w : Double, h : Double) -> Unit {

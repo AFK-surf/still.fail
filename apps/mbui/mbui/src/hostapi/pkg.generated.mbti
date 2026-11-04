@@ -507,6 +507,8 @@ pub fn window_hold() -> Unit
 
 pub fn window_inset() -> Bool
 
+pub fn window_front(String) -> Bool
+
 pub fn window_open(String) -> Bool
 
 pub fn window_opens() -> Bool
@@ -760,6 +762,7 @@ pub(open) trait Host {
   fn window_snap_state(Self) -> Int32 = _
   fn window_opens(Self) -> Bool = _
   fn window_open(Self, String) -> Bool = _
+  fn window_front(Self, String) -> Bool = _
   fn set_cursor(Self, Int32) -> Unit = _
   fn set_badge(Self, Int32) -> Unit = _
   fn menu_setup(Self, String) -> Unit = _

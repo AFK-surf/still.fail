@@ -701,6 +701,8 @@ pub fn window_keys_own() -> Bool
 
 pub fn window_keys_own_now() -> Bool
 
+pub fn window_front(String) -> Bool
+
 pub fn window_open(String) -> Bool
 
 pub fn window_opens() -> Bool
@@ -2433,6 +2435,7 @@ pub fn Tester::clipboard_label(Self) -> String
 pub fn Tester::clipboard_png(Self) -> Bytes?
 pub fn Tester::clipboard_reads(Self) -> Int32
 pub fn Tester::clipboard_secret(Self) -> Double?
+pub fn Tester::close_window(Self, String) -> Unit
 pub fn Tester::compose(Self, String) -> Unit
 pub fn Tester::contrast_faults(Self, marks? : Double) -> Array[String]
 pub fn Tester::corner_faults(Self) -> Array[String]
@@ -2701,6 +2704,7 @@ pub fn Tester::window_acts(Self) -> Array[Int32]
 pub fn Tester::window_drags(Self) -> Int32
 pub fn Tester::window_shows(Self) -> Int32
 pub fn Tester::window_snap_rect(Self) -> (Double, Double, Double, Double)
+pub fn Tester::windows_fronted(Self) -> Array[String]
 pub fn Tester::windows_opened(Self) -> Array[String]
 pub fn Tester::words(Self) -> Array[(String, Double, Double, Double, Double, Double)]
 pub fn Tester::words_over_frames(Self) -> Array[WordsOverAt]
