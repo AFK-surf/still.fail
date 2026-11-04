@@ -324,24 +324,25 @@ export async function historyHits(s: Store, profiles: Profiles, words: string[],
     else if (options.now() > until) expired = true;
     return !cancelled && !expired;
   };
-  const partial = (): HistoryFound => {
+  const partial = (current: string): HistoryFound => {
     if (cancelled) throw new Error("the search took too long");
+    checkVisible(current);
     return finish({ hits: found.slice(options.offset, options.offset + options.limit), more: true, left: sessions.length - looked });
   };
   for (const session of sessions) {
     if (found.length >= want) break;
-    if (!keep()) return partial();
+    if (!keep()) return partial(session.key);
     // Let through: a search asked meanwhile is answered between sessions.
     await new Promise<void>((resolve) => setImmediate(resolve));
-    if (!keep()) return partial();
+    if (!keep()) return partial(session.key);
     checkVisible(session.key);
     const files = transcriptFiles(s, session, profiles);
-    if (!keep()) return partial();
+    if (!keep()) return partial(session.key);
     if (files === null) { looked++; continue; }
     let any = false;
     for (const p of files.paths) {
       if (await mentions(p.path, words, keep)) any = true;
-      if (!keep()) return partial();
+      if (!keep()) return partial(session.key);
       checkVisible(session.key);
       if (any) break;
     }
@@ -363,7 +364,7 @@ export async function historyHits(s: Store, profiles: Profiles, words: string[],
         }
         i++;
       }, keep);
-      if (!keep()) return partial();
+      if (!keep()) return partial(session.key);
       checkVisible(session.key);
     }
     const thread = store.sessionThreads(s, session.key).find((t) => t.surface === STILLFAIL_SURFACE) ?? null;

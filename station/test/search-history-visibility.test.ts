@@ -43,6 +43,16 @@ test("a history search stops if a session is deleted before its history is read"
   } finally { f.close(); }
 });
 
+test("a timed-out history search checks the session it was about to read", async () => {
+  const f = fixture(["moving"]);
+  try {
+    let moved = false;
+    setImmediate(() => { f.store.setSessionsWs("mine", "other"); moved = true; });
+    await assert.rejects(historyHits(f.read, f.profiles, ["needle"],
+      { workspace: "mine", home: false, scopes: [] }, { limit: 5, offset: 0, ms: 10, now: () => moved ? 100 : 0 }), /session changed while searching/);
+  } finally { f.close(); }
+});
+
 for (const timeout of [false, true]) test(`a ${timeout ? "timed-out" : "completed"} history search does not return a hit whose session moved while another was searched`, async () => {
   const f = fixture(["moving", "other"]);
   try {
