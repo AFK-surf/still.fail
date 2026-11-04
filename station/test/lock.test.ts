@@ -332,6 +332,29 @@ test("an unlocked station pins no lock the control plane offers, but the one its
   assert.equal(cloud.locked()?.state?.genesis, entryHash(w.first));
 });
 
+test("a workspace that turned its lock on after this station joined it, the station not in it then: pinned once the lock names it", async () => {
+  const B = "01HBBBBBBBBBBBBBBBBBBBBBBB";
+  const w = workspace();
+  const b = workspace(B);
+  const me = w.stations[0]!.hex;
+  const cloud = stationData(w, me);
+  const sent: any[] = [];
+  const frame = (lock: unknown) => JSON.stringify({ type: "state", workspace: WS, workspace_name: "Team", name: "s0", peers: w.stations.map((s) => ({ id: s.hex })), grant_keys: { keys: [w.grant.jwk] }, revocations: [], lock: null, workspaces: [{ workspace: B, workspace_name: "B", name: "s0", peers: [{ id: me }], revocations: [], lock, locked: true }] });
+  applyState(cloud, frame({ seq: 0, hash: entryHash(b.first), genesis: entryHash(b.first) }), (f) => sent.push(f));
+  assert.deepEqual(cloud.memberships().map((m) => m.workspace), [WS], "B's members turned away");
+  assert.equal(cloud.leftOut(B), "unpinned");
+  // Its owner puts this station in B's lock (lock.joinStation, signed on a trusted device): the plane says so, the
+  // station asks for it and pins it.
+  const named = signed({ ...after(b.state, "station", { key: me, name: "s0" }, 2000), ws: B }, b.alice.signer);
+  sent.length = 0;
+  applyState(cloud, frame({ seq: 1, hash: entryHash(named), genesis: entryHash(b.first) }), (f) => sent.push(f));
+  assert.deepEqual(sent, [{ type: "lock.get", after: -1, workspace: B }]);
+  applyState(cloud, JSON.stringify({ type: "lock", workspace: B, entries: [b.first, named] }));
+  assert.equal(cloud.locked(B)?.state?.seq, 1);
+  assert.equal(cloud.leftOut(B), null);
+  assert.deepEqual(cloud.memberships().map((m) => m.workspace), [WS, B], "B's members taken, as its lock says");
+});
+
 test("a station in a second workspace pins that one's lock there: none of its members until then, then only those it names", async () => {
   const { joinedPendingPath, joinedLockPath } = await import("../src/cloud/state.ts");
   const { mkdirSync, writeFileSync, existsSync } = await import("node:fs");
@@ -348,10 +371,13 @@ test("a station in a second workspace pins that one's lock there: none of its me
   const frame = (joined: unknown[], lock: unknown = null) => JSON.stringify({ type: "state", workspace: WS, workspace_name: "Team", name: "s0", peers: w.stations.map((s) => ({ id: s.hex })), grant_keys: { keys: [w.grant.jwk] }, revocations: [], lock, workspaces: joined });
   const inB = { workspace: B, workspace_name: "B", name: "s0", peers: [{ id: b.stations[0]!.hex }, { id: intruder }], revocations: [], lock: { seq: 0, hash: entryHash(b.first) }, locked: true };
   const ws = () => cloud.memberships().map((m) => m.workspace);
-  // In security mode, as the plane says, its lock not pinned here: none of B's members are taken, nor its lock asked.
+  // In security mode, as the plane says, its lock not pinned here: none of B's members are taken. Its lock is asked
+  // for, and not pinned, as it does not name this station.
   applyState(cloud, frame([inB]), (f) => sent.push(f));
   assert.deepEqual(ws(), [WS]);
-  assert.equal(sent.length, 0);
+  assert.deepEqual(sent.splice(0), [{ type: "lock.get", after: -1, workspace: B }]);
+  applyState(cloud, JSON.stringify({ type: "lock", workspace: B, entries: [b.first] }));
+  assert.equal(cloud.locked(B), null);
   // Joined naming B's lock: asked for it, pinned once the plane brings that one.
   mkdirSync(dirname(joinedPendingPath(cloud.data, B)), { recursive: true });
   writeFileSync(joinedPendingPath(cloud.data, B), JSON.stringify({ hash: entryHash(b.first) }));
@@ -455,9 +481,9 @@ test("joining a locked workspace: the plane's frame comes before the join's answ
   const forged = { credential: credential(new GrantKey("k9"), B, endpoint, "member") };
   const refused = (h: unknown) => refusalOf(cloud, h, endpoint, new Error("credential is for another workspace"));
   // The plane tells the station it is in B as it takes the join, before the join is answered: which lock to pin is not
-  // written yet, and nothing is asked for.
+  // written yet. B's lock is asked for (pinned only once it names this station, which this one does not).
   applyState(cloud, frame([inB]), (f) => sent.push(f));
-  assert.equal(sent.length, 0);
+  assert.deepEqual(sent.splice(0), [{ type: "lock.get", after: -1, workspace: B }]);
   assert.equal(cloud.leftOut(B), "unpinned");
   assert.deepEqual(pendingAsks(cloud, asked), []);
   assert.deepEqual(refused(hello), { error: refused(hello).error, code: "lock_station", why: "unpinned" });

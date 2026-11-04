@@ -7,7 +7,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Effect } from "effect";
 import { hooks } from "../src/core/execute.ts";
-import { HostError } from "../src/error.ts";
+import { CoreError, HostError } from "../src/error.ts";
+import { t } from "../src/i18n.ts";
 import { type Entry, Signer, entryHash, next, shortCode } from "../src/lock.ts";
 import { utf8 } from "../src/util.ts";
 import { BEHIND_MS, BEHIND_TRIES, read, signerKnown } from "../src/views/lock.ts";
@@ -148,6 +149,17 @@ test("a web page whose approval ran out waits to be approved again, and a statio
   assert.ok(said!.message.includes(shortCode(ME)), said!.message);
   await r.host.time.pass(BEHIND_MS * 3);
   assert.deepEqual(woke, [], "not tried again as a station behind");
+});
+
+test("a station that takes none of the workspace's members, the lock turned on after it joined: protected all the same, the station pinning it from the cloud", async () => {
+  const r = await rig((me) => ({ ws: genesis("ws", me, true) }));
+  await r.watch({ topic: "lock", workspace: "ws" });
+  // (as the mesh says such a station's refusal)
+  const call = r.core.inner.stations.requests.call.bind(r.core.inner.stations.requests);
+  r.core.inner.stations.requests.call = ((addr: { station: string }, method: string, path: string, ...rest: unknown[]) =>
+    addr.station === "st" && method === "GET" && path.startsWith("/lock") ? Effect.fail(new CoreError("lock_station", t("core-logic.mesh.lock_station.unpinned"))) : (call as any)(addr, method, path, ...rest)) as never;
+  await r.ask("lock.joinStation", { workspace: "ws", station: "st" });
+  assert.deepEqual(r.cloud.chains.get("ws")!.slice(1).map((e) => [e.kind, (e.body as { key: string }).key]), [["station", "st"]]);
 });
 
 test("a station that refuses this device though the lock names it has not heard yet: tried again shortly, not held", async () => {

@@ -439,7 +439,7 @@
   "core-logic.mesh.credential_refused_why": "station 拒绝了授权：{reason}",
   "core-logic.mesh.lock_unconfirmed": "此设备尚未在 workspace 的安全模式中获批：{reason}",
   "core-logic.mesh.lock_station.pending": "此 station 尚未接入此 workspace 的安全模式，稍后会自动重试；如果一直如此，请将它更新到最新版本",
-  "core-logic.mesh.lock_station.unpinned": "此 workspace 在此 station 加入后才开启安全模式，它不再接受此 workspace 的成员：请将它从此 workspace 移除后重新添加",
+  "core-logic.mesh.lock_station.unpinned": "此 workspace 在此 station 加入后才开启安全模式，它暂不接受此 workspace 的成员：请 owner 在受信任设备上打开「设置 › 安全」，点它旁边的「保护」",
   "core-logic.mesh.lock_station.home": "此 station 所在的 workspace 已开启安全模式，只接受同样开启安全模式的 workspace：请在此 workspace 开启安全模式，再将它移除后重新添加",
   "core-logic.mesh.credential_revoked": "授权已被撤销",
   "core-logic.mesh.cut": "与此 station 的连接中断",
