@@ -291,7 +291,7 @@ export const SHAPES: Record<string, Shape> = {
     ["type", "String", { doc: "options | text | login" }],
     ["options", opt(vec("DecisionOption"))],
     ["placeholder", opt("String"), { said: true }],
-    ["vault", opt("String"), { doc: "An agent's request to use a vault item (docs/vault.md): the request's id. An app shows approving it (the options,\nthen the person confirms: `vault.approve` with the option's scope, `vault.deny`) rather than answering in the chat;\na web page says to approve it in the app." }],
+    ["vault", opt("String"), { doc: "An agent's request to use a vault item (docs/vault.md): the request's id. An app shows approving it (the options,\nthen the person confirms: `vault.approve` with the option's scope, `vault.deny`) rather than answering in the chat;\na web page says to approve it in the app. Absent where a later post of the chat asks the same request again (its card\nalone)." }],
     ["phoneAsk", opt("PhoneAsk"), { doc: "An agent's request for its person's phone (station/src/adb/grants.ts): drawn in place of the post's words, answered with `adb.decide` (the chat's station)." }],
     ["vaultAsk", opt("VaultAsk"), { doc: "With `vault`: the request as the card says it, drawn in place of the post's words. Absent on a card\nfrom before it did (the words say it)." }],
     ["signinAsk", opt("SignInAsk"), { doc: "An agent's ask to sign in to a site (station/src/vault/signin.ts): drawn in place of the post's words, answered\nwith `signin.fill` (from this device's password manager), `signin.self`, `signin.deny` (the chat's station)." }],
