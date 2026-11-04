@@ -416,6 +416,12 @@ pub fn fixture_page(mode : String) -> String {
     }
     // the page's 设置 (its variables' sheet up over it), its 软件与设备
     "settings-station-env" => station_parts["ws1/st1"] = "settings"
+    // its 设置 with data outflow's cards all there: the link, on, a program asking and one granted
+    "settings-station-outflow" => {
+      station_parts["ws1/st1"] = "settings"
+      fx.outflow = true
+      fx.outflow_link = Some({ "on": true, "state": "running", "address": "tcADDRESS", "port": 7480 })
+    }
     // its 设置 while it is away: only what can be changed then
     "settings-station-away" => {
       fx.willow_away = true
@@ -523,7 +529,7 @@ pub fn fixture_page(mode : String) -> String {
   }
   match m {
     "settings" => "home"
-    "settings-station-mark" | "settings-station-gpu" | "settings-station-gpu-many" | "settings-station-env" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-network" | "settings-station-away" =>
+    "settings-station-mark" | "settings-station-gpu" | "settings-station-gpu-many" | "settings-station-env" | "settings-station-outflow" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-network" | "settings-station-away" =>
       "station:ws1/st1"
     "settings-stations-add" | "settings-stations-existing" | "settings-stations-command" | "settings-first-station" =>
       "stations"

@@ -891,6 +891,29 @@ pub fn group(c : @ui.Ctx, body : () -> Unit, card? : Bool = false) -> Unit {
 }
 
 ///|
+/// Several groups of a section, one under another: narrow, each its own 10 under it; wide, where a group has none, 12
+/// apart.
+pub fn groups(c : @ui.Ctx, body : () -> Unit) -> Unit {
+  match look() {
+    Narrow => body()
+    Wide => c.box(style=groups_wide, body) |> ignore
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let groups_wide : @ui.Style = @ui.css("w=Full gap=S3")
+
+///|
+/// What is no group among `groups` (a command to copy): as far from what follows as a group is.
+pub fn among_groups(c : @ui.Ctx, body : () -> Unit) -> Unit {
+  match look() {
+    Narrow => c.box(style=pg_card_room, body) |> ignore
+    Wide => body()
+  }
+}
+
+///|
 /// A group's rows while they are read the first time (docs/ui-panels.md 等待: a list's first read, a section's as
 /// well): its card with `rows` in it (its own rows, drawn by what draws them, of made-up words) in their bones,
 /// breathing, `text` what it waits on said to a screen reader. Its card as it will be, its rows where they will be:

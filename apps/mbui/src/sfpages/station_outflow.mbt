@@ -16,19 +16,21 @@ fn station_outflow(c : @ui.Ctx, core : Core, station : String, answers : Bool, a
     return
   }
   st_section(c, @sf.t("web-main.outflow.title"), description=@sf.t("web-main.outflow.lead"), fn() {
-    if link is Some(_) {
-      outflow_link(c, core, station, link)
-    }
-    for q in requests {
-      outflow_request(c, core, station, Some(q), answers)
-    }
-    if grants.length() > 0 {
-      @sf.group(c, fn() {
-        for g in grants {
-          outflow_grant(c, core, station, Some(g))
-        }
-      })
-    }
+    @sf.groups(c, fn() {
+      if link is Some(_) {
+        outflow_link(c, core, station, link)
+      }
+      for q in requests {
+        outflow_request(c, core, station, Some(q), answers)
+      }
+      if grants.length() > 0 {
+        @sf.group(c, fn() {
+          for g in grants {
+            outflow_grant(c, core, station, Some(g))
+          }
+        })
+      }
+    })
   })
 }
 
@@ -141,7 +143,7 @@ fn outflow_grant(c : @ui.Ctx, core : Core, station : String, gv : Json?) -> Unit
     note=join([text(gv, "signedText"), kinds, text(gv, "reachText"), text(gv, "grantedText"), text(gv, "lastReadText")], " · "),
     goes=false,
     lead=fn() { st_row_mark(c, "key") },
-    tail=fn() {
+    control=fn() {
       if @sf.button(c, @sf.t("web-main.outflow.revoke"), key="outflow-revoke/" + station + "/" + id, tone=Ghost) {
         @sf.confirm(
           @sf.t("web-main.outflow.revokeConfirm", args=[("program", program)]),
@@ -207,12 +209,14 @@ fn outflow_link(c : @ui.Ctx, core : Core, station : String, link : Json?) -> Uni
       Some(Number(n, ..)) => n.to_int().to_string()
       _ => ""
     }
-    @sf.copy_command(
-      c,
-      "outflow-link-address/" + station,
-      "tailcat " + text(link, "address") + " " + port,
-      copy=@sf.t("common.copy"),
-      copied=@sf.t("common.copied"),
-    )
+    @sf.among_groups(c, fn() {
+      @sf.copy_command(
+        c,
+        "outflow-link-address/" + station,
+        "tailcat " + text(link, "address") + " " + port,
+        copy=@sf.t("common.copy"),
+        copied=@sf.t("common.copied"),
+      )
+    })
   }
 }
