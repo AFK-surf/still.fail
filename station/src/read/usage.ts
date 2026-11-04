@@ -14,7 +14,7 @@ import type { UsageSqlTimings } from "./usage-batched.ts";
 import { type InWorkspace, sees } from "../store/rows.ts";
 import { usageDetailSince } from "../store/usage-detail.ts";
 import { hasCompactUsage } from "../store/usage-compact.ts";
-import { HISTORY_AFTER, HISTORY_DAYS, HISTORY_SCOPES, HISTORY_TOTAL, hasUsageHistory, quarter, usageHistorySince } from "../store/usage-history.ts";
+import { HISTORY_AFTER, HISTORY_DAYS, HISTORY_SCOPES, HISTORY_TOTAL, hasUsageHistory, historyTransferPending, quarter, usageHistorySince } from "../store/usage-history.ts";
 import { titleOf } from "./views.ts";
 import { profileRuntimes } from "../agents/profiles.ts";
 import { facts } from "../accounts/catalog.ts";
@@ -327,7 +327,9 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     // workspace their key names (`remote:<workspace>:…`)
     ...(remoteRuns !== undefined ? { remoteRuns } : {}),
     ...(historyResult !== null ? { history: historyResult } : {}),
-    ...(history && historyResult === null ? { historyUnavailable: true } : {}),
+    // This station installs and retries history after the previous process exits, then transfers old summaries.
+    // Keep the older flag for clients that only know unavailable, and say preparation to newer clients throughout.
+    ...(history && historyResult === null ? { historyUnavailable: true, historyPreparing: true } : {}),
   };
   mark("other");
   const ms = Math.round(performance.now() - started);
@@ -367,7 +369,7 @@ export function validHistoryRange(requested: { from: bigint; to: bigint } | unde
 
 export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null, mark: (stage: string) => void = () => {},
   requested?: { from: bigint; to: bigint }): Json | null {
-  if (!hasUsageHistory(s.db)) return null;
+  if (!hasUsageHistory(s.db) || historyTransferPending(s.db)) return null;
   const range = validHistoryRange(requested, utcOffsetMin) ? requested! : undefined;
   // Whose quarters the viewer sees (rows.ts `sees`): their workspace's, and the home one's ('') where it is theirs.
   const scopes = viewer === null ? (s.db.prepare(HISTORY_SCOPES).all() as Json[]).map((r) => String(r.scope))

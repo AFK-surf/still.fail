@@ -121,6 +121,37 @@ fn usage_sample() -> Json {
 }
 
 ///|
+/// The year's summary while a station prepares its history, in the same card's bones.
+fn usage_summary_sample() -> Json {
+  let w = fn(n : Int) { Json::string(@sf.sample_words(n)) }
+  let named = fn() {
+    Json::object({
+      "title": w(5),
+      "items": Json::array(Array::makei(3, fn(_) { Json::object({ "name": w(4), "value": w(5) }) })),
+    })
+  }
+  {
+    "summary": {
+      "title": w(5),
+      "figures": Json::array(Array::makei(5, fn(_) { Json::object({ "label": w(4), "value": w(4) }) })),
+      "activity": {
+        "title": w(5),
+        "sub": w(4),
+        "views": [w(3), w(3), w(3)],
+        "weekdays": Json::array(Array::makei(7, fn(_) { w(1) })),
+        "months": Json::array(Array::makei(12, fn(i) { Json::object({ "week": Json::number((i * 4).to_double()), "label": w(2) }) })),
+        "cells": Json::array(Array::makei(52 * 7, fn(_) { Json::number(0.0) })),
+        "less": w(1),
+        "more": w(1),
+      },
+      "stations": named(),
+      "places": named(),
+      "asOf": w(6),
+    },
+  }
+}
+
+///|
 /// A list of numbers of `v`'s at `key` (none where it is not one).
 fn numbers(v : Json?, key : String) -> Array[Double] {
   match field(v, key) {

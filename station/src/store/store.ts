@@ -36,7 +36,7 @@ import { installIncrementalUsageTotals, installUsageDetail, usageTotalsComplete 
 import { installUsageSpan } from "./usage-span.ts";
 import { installUsageChatStats } from "./usage-chat-stats.ts";
 import { retireDuplicateUsage } from "./usage-unified.ts";
-import { installEmptyUsageHistory, moveUsageHistory } from "./usage-history.ts";
+import { ensureHistoryOwners, installEmptyUsageHistory, installHistoryOwnersAtOpen, moveUsageHistory } from "./usage-history.ts";
 import { compactRecentlyCompacted, hasCompactUsage, savedCompactContext } from "./usage-compact.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
 import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from "./watch-jobs.ts";
@@ -386,6 +386,7 @@ export class Store {
       addCardOutcomes(db);
       installUsageChatStats(db);
       installEmptyUsageHistory(db);
+      installHistoryOwnersAtOpen(db);
       addSessionTurns(db);
       addSessionWork(db, clock.currentTimeMillisUnsafe());
       addPendingCards(db);
@@ -593,14 +594,18 @@ export class Store {
   /// Says the sessions of workspace `from` (null: those that say none, the home one's) are `to`'s (null: the home
   /// one's): when the station's home workspace changes (docs/multi-workspace.md).
   setSessionsWs(from: string | null, to: string | null): void {
+    if (from === to) return;
     this.#with((changes) => {
-      const keys = (from === null ? this.#all("SELECT key FROM sessions WHERE ws IS NULL") : this.#all("SELECT key FROM sessions WHERE ws = ?", from)).map((r) => r.key as string);
-      if (from === null) this.#run("UPDATE sessions SET ws = ? WHERE ws IS NULL", to);
-      else this.#run("UPDATE sessions SET ws = ? WHERE ws = ?", to, from);
-      // The calls of the sessions gone before them were `from`'s as well: the whole workspace's go.
-      moveUsageHistory(this.db, from ?? "", to ?? "");
+      const keys = this.#tx(() => {
+        const found = (from === null ? this.#all("SELECT key FROM sessions WHERE ws IS NULL") : this.#all("SELECT key FROM sessions WHERE ws = ?", from)).map((r) => r.key as string);
+        if (from === null) this.#run("UPDATE sessions SET ws = ? WHERE ws IS NULL", to);
+        else this.#run("UPDATE sessions SET ws = ? WHERE ws = ?", to, from);
+        // The calls of the sessions gone before them were `from`'s as well: the whole workspace's go.
+        moveUsageHistory(this.db, from ?? "", to ?? "");
+        return found;
+      });
       for (const key of keys) changes.push({ type: "session", key });
-      if (keys.length > 0 && from !== to) this.#sessionWorkspaceChanged();
+      if (keys.length > 0) this.#sessionWorkspaceChanged();
     });
   }
 
@@ -1092,6 +1097,7 @@ export class Store {
       const removed: number[] = [];
       const unpublished: string[] = [];
       this.#tx(() => {
+        ensureHistoryOwners(this.db);
         const threads: number[] = this.#all("SELECT thread FROM thread_sessions WHERE session = ?", key).map((r) => r.thread);
         this.#run("DELETE FROM thread_sessions WHERE session = ?", key);
         this.#run("DELETE FROM slack_stops WHERE session = ?", key);

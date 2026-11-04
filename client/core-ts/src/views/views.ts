@@ -1273,7 +1273,8 @@ export class Views implements Owner {
         const accounts = listed !== undefined && "ok" in listed ? arr(get(listed.ok, "items")) : [];
         const offset = this.#core.host.utcOffsetMin(now);
         const summary = usageSummary(sources, now, offset, String(get(this.ok({ topic: "workspace", workspace: scope }), "name") ?? ""));
-        return { ok: { ...usageView(sources, typeof view.days === "number" ? view.days : 7, now, offset, this.me(scope), members_, { split: view.split, only: view.only, day: view.day }, accounts), ...(summary !== null ? { summary } : {}) } };
+        const summaryPreparing = summary === null && sources.some((s) => s.value && "ok" in s.value && get(s.value.ok, "historyPreparing") === true);
+        return { ok: { ...usageView(sources, typeof view.days === "number" ? view.days : 7, now, offset, this.me(scope), members_, { split: view.split, only: view.only, day: view.day }, accounts), ...(summary !== null ? { summary } : {}), ...(summaryPreparing ? { summaryPreparing: true } : {}) } };
       }
       case "fleet": {
         const scope = view.scope as string;

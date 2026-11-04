@@ -20,7 +20,8 @@ import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../src/store/remote-runs.ts";
 import { RUNNING_WAIT_JOBS } from "../src/store/active-jobs.ts";
 import { HAS_SESSION_ACTIVE_WATCH } from "../src/store/watch-jobs.ts";
 import * as read from "../src/read/store.ts";
-import { HISTORY_AFTER, HISTORY_DAYS, HISTORY_SCOPES, HISTORY_SEED_CALLS, HISTORY_TOTAL } from "../src/store/usage-history.ts";
+import { HISTORY_AFTER, HISTORY_DAYS, HISTORY_SCOPES, HISTORY_TOTAL } from "../src/store/usage-history.ts";
+import { historyOwnerSources } from "../src/store/usage-history-transfer.ts";
 import { type CardEnd, cardsEnded } from "../src/connects/card-ends.ts";
 import { fileAway } from "./archived-before.ts";
 import { testClock } from "./hub-fakes.ts";
@@ -1290,6 +1291,10 @@ test("what the station asks again and again is planned by an index, never a scan
   const detail = detailQuery(1n, 1_000_001n, 1n, { workspace: "ws", home: false })!;
   const compact = memory();
   installCompactUsage(compact.db, () => 0);
+  for (const db of [store.db, compact.db]) for (const sql of historyOwnerSources(db)) {
+    const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all("a") as { detail: string }[]).map((r) => r.detail);
+    assert.ok(plan.some((d) => d.startsWith("SEARCH ")) && plan.every((d) => !d.startsWith("SCAN ")), `${sql}\n  ${plan.join(" | ")}`);
+  }
   const usageBatch = read.batchedUsageQueries({ workspace: "ws", home: false });
   const usagePlans = [
     [usageBatch.selected, [0n, 100n, "Wws"]], [usageBatch.owner, ["a"]],
@@ -1311,7 +1316,7 @@ test("what the station asks again and again is planned by an index, never a scan
     [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]], [SESSION_OF_RUNTIME, ["claude", "r1"]], [SAID_SINCE, [1, 0]],
     [HEARD_IN, ["a", 1]], [MODELS_USED_BY, ["a@x", 0]], [REMOTE_RUNS_OF, ["ws", 0]], [REMOTE_RUNS_ALL, [0]],
     [detail.sql, detail.args], [HISTORY_DAYS, ["ws", 0n, 100n, 480n]], [HISTORY_AFTER, ["ws", 100n]], [HISTORY_TOTAL, ["ws"]],
-    [HISTORY_SCOPES, []], [HISTORY_SEED_CALLS, [0]], [read.SAID_LATEST, [1]], [read.SAID_SCAN, [1, 100, 64]], [read.SAID_STATE, [1]],
+    [HISTORY_SCOPES, []], [read.SAID_LATEST, [1]], [read.SAID_SCAN, [1, 100, 64]], [read.SAID_STATE, [1]],
     [POST_BLOCKS_READY, [1, 0]], [POST_AFTER_FIRST, [1, 0]], [POST_AFTER_INDEXED, [1, "a", 0, 0]],
   ];
   const scans = /^SCAN (?!CONSTANT ROW$|parts$|\(subquery-\d+\)$|\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect|entries_login_cards)\b)/;
@@ -1344,10 +1349,9 @@ test("what the station asks again and again is planned by an index, never a scan
   assert.ok(plans.get(REMOTE_RUNS_OF)!.some((d) => d.includes("PRIMARY KEY (ws=? AND at>?)")), plans.get(REMOTE_RUNS_OF)!.join(" | "));
   assert.ok(plans.get(REMOTE_RUNS_ALL)!.some((d) => d.includes("PRIMARY KEY (at>?)")), plans.get(REMOTE_RUNS_ALL)!.join(" | "));
   assert.ok(plans.get(detail.sql)!.some((d) => d.includes("usage_detail_lookup_scope (scope=? AND level=? AND bucket>? AND bucket<?)")), plans.get(detail.sql)!.join(" | "));
-  // The usage page's year: its own workspace's quarters of those days alone; installing it, the calls from a time on.
+  // The usage page's year: its own workspace's quarters of those days alone.
   assert.ok(plans.get(HISTORY_DAYS)!.some((d) => d.includes("PRIMARY KEY (scope=? AND quarter>? AND quarter<?)")), plans.get(HISTORY_DAYS)!.join(" | "));
   assert.ok(plans.get(HISTORY_AFTER)!.some((d) => d.includes("PRIMARY KEY (scope=? AND quarter>?)")), plans.get(HISTORY_AFTER)!.join(" | "));
-  assert.ok(plans.get(HISTORY_SEED_CALLS)!.some((d) => d.includes("INDEX usage_at (at>?)")), plans.get(HISTORY_SEED_CALLS)!.join(" | "));
   // The latest card before a message: by the index of cards, not by going back over the thread to it.
   assert.ok(plans.get(CARD_BEFORE)!.some((d) => d.includes("entries_cards")), plans.get(CARD_BEFORE)!.join(" | "));
   assert.ok(plans.get(OPTIONS_BEFORE)!.some((d) => d.includes("entries_options")), plans.get(OPTIONS_BEFORE)!.join(" | "));
@@ -1651,7 +1655,10 @@ test("usage: a row is the calls it says, and a database from before says each wa
   const before = new DatabaseSync(path);
   const detailObjects = before.prepare("SELECT type, name FROM sqlite_master WHERE (name LIKE 'usage_detail_%' OR name = 'usage_detail') AND type IN ('trigger', 'table') ORDER BY type DESC").all() as { type: string; name: string }[];
   for (const object of detailObjects) before.exec(`DROP ${object.type.toUpperCase()} "${object.name}"`);
-  before.exec(`DROP TRIGGER usage_totals_add; DROP TRIGGER usage_totals_drop; DROP TRIGGER usage_compactions_add;
+  before.exec(`DROP TRIGGER IF EXISTS usage_history_owner; DROP TABLE IF EXISTS usage_history_orphans;
+    DROP TABLE IF EXISTS usage_history_owner_scopes; DROP TABLE IF EXISTS usage_history_owner_groups;
+    DROP TABLE IF EXISTS usage_history_fresh_owners;
+    DROP TRIGGER usage_totals_add; DROP TRIGGER usage_totals_drop; DROP TRIGGER usage_compactions_add;
     DROP TRIGGER usage_main_calls_usage_drop; DROP TRIGGER usage_main_calls_usage_change; DROP TRIGGER usage_main_calls_add; DROP TRIGGER usage_main_calls_drop;
     DROP TABLE usage_main_calls; DROP TABLE usage_compaction_events; DROP TABLE usage_compaction_backfill;
     DROP TRIGGER usage_quarters_add; DROP TRIGGER usage_quarters_drop; DROP TRIGGER usage_quarters_grow; DROP TABLE usage_quarters;

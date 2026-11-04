@@ -17,7 +17,7 @@ import type { InWorkspace } from "../store/rows.ts";
 import { giveBackfill, releaseStoppedBackfill, takeBackfill } from "../store/backfill.ts";
 import { retireUsageIndexes, stopUsageIndexes } from "../store/usage-retire.ts";
 import { hasCompactUsage, installCompactUsage, installUsageSummaryChanges } from "../store/usage-compact.ts";
-import { installUsageHistory } from "../store/usage-history.ts";
+import { convertUsageHistoryStep, hasUsageHistory, historyTransferPending, installUsageHistory } from "../store/usage-history.ts";
 import { UsageCounter } from "./counter.ts";
 
 /// A session's usage as its summary says it (store.ts `setSessionUsage`): as recorded now (read/usage.ts `usageNow`).
@@ -91,7 +91,13 @@ export function retireAfterPrevious(store: StationStore, exited: Promise<void>, 
       store.usageChanged([], undefined, true);
     }
     const path = store.db.location();
-    if (path === null) { retireUsageIndexes(store.db); return; }
+    if (path === null) {
+      const converting = historyTransferPending(store.db);
+      while (!convertUsageHistoryStep(store.db)) { /* In-memory stores have no worker. */ }
+      if (converting) store.usageChanged([], undefined, true);
+      retireUsageIndexes(store.db);
+      return hasCompactUsage(store.db) && hasUsageHistory(store.db);
+    }
     const file = workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./retire-worker.ts" : "./usage/retire-worker.js", import.meta.url);
     yield* Effect.tryPromise({ try: async () => {
       const worker = new Worker(file, { workerData: { path, priority: store.backfillPriority } });
@@ -100,7 +106,10 @@ export function retireAfterPrevious(store: StationStore, exited: Promise<void>, 
       await new Promise<void>((resolve, reject) => {
         let failure: Error | null = null;
         let complete = false;
-        worker.on("message", (answer: { complete?: boolean }) => { complete ||= answer.complete === true; });
+        worker.on("message", (answer: { complete?: boolean; historyReady?: boolean }) => {
+          complete ||= answer.complete === true;
+          if (answer.historyReady) store.usageChanged([], undefined, true);
+        });
         worker.once("error", (error) => { failure = error; });
         worker.once("exit", (code) => {
           releaseStoppedBackfill(store.backfillPriority, owner);
@@ -109,9 +118,22 @@ export function retireAfterPrevious(store: StationStore, exited: Promise<void>, 
         });
       });
     }, catch: (error) => error });
+    return hasCompactUsage(store.db) && hasUsageHistory(store.db) && !historyTransferPending(store.db);
   }).pipe(Effect.catch((error) => Effect.sync(() => {
     log.warn("usage", stopped ? "usage indexes could not be removed" : "usage index writers could not be stopped", { error: (error as Error).message });
+    return false;
   })));
+}
+
+/// Keep the handover alive until its statistics and cleanup have finished.
+export function retireUntilComplete(store: StationStore, exited: Promise<void>, workerFile?: URL, installed: () => void = () => {}) {
+  return Effect.gen(function* () {
+    let retryMs = 250;
+    while (!(yield* retireAfterPrevious(store, exited, workerFile, installed))) {
+      yield* Effect.sleep(retryMs);
+      retryMs = Math.min(retryMs * 2, 30_000);
+    }
+  });
 }
 
 /// A worker moves changed ownership and accounts a workspace's totals when that workspace asks for them.
@@ -248,7 +270,7 @@ export const UsageLive = Layer.effectDiscard(
       Effect.sync(() => watchCompactMoves(store, previous.exited)),
       (m) => Effect.promise(() => m.close()),
     );
-    yield* Effect.forkScoped(retireAfterPrevious(store, previous.exited, undefined, mover.wake).pipe(Effect.provideService(Clock.Clock, hub.clock)));
+    yield* Effect.forkScoped(retireUntilComplete(store, previous.exited, undefined, mover.wake).pipe(Effect.provideService(Clock.Clock, hub.clock)));
     const usage = yield* Effect.acquireRelease(
       Effect.sync(() => new UsageCounter({ store, config: () => ({ dataDir: data, profiles: hubConfig(config.raw(), data).profiles }), clock: hub.clock })),
       (u) => Effect.promise(() => u.stop()),
