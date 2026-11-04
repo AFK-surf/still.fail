@@ -802,16 +802,28 @@ export function addUsageCompactions(db: DatabaseSync): void {
 /// usage_totals), after the letters were marked (addLetterColumn).
 // The first row of each thread is a seek in (session, thread, rowid); a session's earliest is the smallest of those.
 // In particular, do not sort all of its deliveries when the first is removed. This visits its threads, not its messages.
-export const firstDelivery = (session: string) => `WITH RECURSIVE first_threads(thread) AS (
+const firstDeliveryRowid = (session: string) => `WITH RECURSIVE first_threads(thread) AS (
   VALUES ((SELECT thread FROM deliveries INDEXED BY deliveries_session WHERE session = ${session} ORDER BY thread LIMIT 1))
   UNION ALL
   SELECT (SELECT thread FROM deliveries INDEXED BY deliveries_session WHERE session = ${session} AND thread > first_threads.thread ORDER BY thread LIMIT 1)
     FROM first_threads WHERE thread IS NOT NULL
 )
-SELECT thread, n FROM deliveries WHERE rowid = (
-  SELECT MIN((SELECT rowid FROM deliveries INDEXED BY deliveries_session WHERE session = ${session} AND thread = first_threads.thread ORDER BY rowid LIMIT 1))
-  FROM first_threads WHERE thread IS NOT NULL
-)`;
+SELECT MIN((SELECT rowid FROM deliveries INDEXED BY deliveries_session WHERE session = ${session} AND thread = first_threads.thread ORDER BY rowid LIMIT 1))
+FROM first_threads WHERE thread IS NOT NULL`;
+export const firstDelivery = (session: string) => `SELECT thread, n FROM deliveries WHERE rowid = (${firstDeliveryRowid(session)})`;
+
+// An old station can have many deliveries per thread. Visit each session and its threads by the existing index, then
+// select the least first rowid across them, as the original MIN(rowid) did, without grouping every delivery.
+export const SESSION_FIRST_INITIAL = `WITH RECURSIVE first_sessions(session) AS (
+  VALUES ((SELECT session FROM deliveries INDEXED BY deliveries_session ORDER BY session LIMIT 1))
+  UNION ALL
+  SELECT (SELECT session FROM deliveries INDEXED BY deliveries_session WHERE session > first_sessions.session ORDER BY session LIMIT 1)
+    FROM first_sessions WHERE session IS NOT NULL
+)
+INSERT INTO session_first (session, thread, n)
+SELECT s.session, d.thread, d.n FROM first_sessions s
+CROSS JOIN deliveries d ON d.rowid = (${firstDeliveryRowid("s.session")})
+WHERE s.session IS NOT NULL`;
 
 // An outer INSERT OR REPLACE / OR ABORT overrides OR IGNORE in a trigger. Do not attempt an insert if this session
 // already has a first delivery: the caller's conflict policy must neither replace the summary nor reject a new message.
@@ -855,8 +867,7 @@ INSERT INTO thread_state
   FROM entries GROUP BY thread;
 INSERT INTO thread_people
   SELECT thread, author, MIN(n) FROM entries WHERE kind = 'message' AND author_kind = 'person' GROUP BY thread, author;
-INSERT INTO session_first
-  SELECT session, thread, n FROM (SELECT session, thread, n, MIN(rowid) FROM deliveries GROUP BY session);
+${SESSION_FIRST_INITIAL};
 CREATE TRIGGER thread_state_add AFTER INSERT ON entries BEGIN
   INSERT INTO thread_state VALUES (NEW.thread, NEW.n,
       CASE WHEN NEW.kind = 'message' AND NEW.letter IS NULL THEN NEW.n END,
