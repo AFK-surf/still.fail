@@ -42,6 +42,27 @@ test "a row swiped left a little: what it uncovers past its end on the chip's gr
 }
 
 ///|
+test "a row swiped left less than 归档 is wide: of 归档 only what the row has uncovered shows, none over the row" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
+  let (_, y) = t.find("首页的列表改成按天分组").unwrap()
+  // across 20, less than 归档 and the room at its end take
+  t.hold_drag(300.0, y, 280.0, y)
+  // (归档's glyphs: at the slot's end across its middle, where the row's own words are not; what of each shows, cut as
+  // it is drawn)
+  let (_, wy) = t.find("归档").unwrap()
+  let words = t
+    .glyph_clips()
+    .filter(fn(e) { (e.0.0 + e.0.2) / 2.0 > 320.0 && e.0.1 < wy && e.0.3 > wy })
+  assert_true(
+    words.iter().all(fn(e) { dmin(e.0.2, e.1.2) <= dmax(e.0.0, e.1.0) || dmax(e.0.0, e.1.0) >= 390.0 - 20.0 - 0.5 }),
+    msg="of 归档 only what is past where the row ends shows: \{words}",
+  )
+  t.release(280.0, y)
+  t.run_for(@ui.move_most_ms)
+}
+
+///|
 test "a row swiped left past the line letting go archives at: what it uncovers in ink" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
