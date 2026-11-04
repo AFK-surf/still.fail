@@ -301,7 +301,8 @@ fn Scroll::where_at(self : Scroll, t : Double) -> Double {
 ///|
 /// How far it is scrolled at the logic's moment of `tree` (the one it is in: what an event, a step or a test reads).
 pub fn Scroll::at(self : Scroll, tree : Tree) -> Double {
-  @signals.untracked(fn() { self.where_at(tree.logic_at()) })
+  // (a list that keeps itself: where it is counted to be among all it holds, as its bar shows it)
+  @signals.untracked(fn() { self.where_at(tree.logic_at()) }) + (self.bar_off)()
 }
 
 ///|
@@ -925,7 +926,7 @@ pub fn View::scrolls(
     } else if foot > vh {
       s.sent(t, x + dmin(top, foot - vh))
     }
-    s.at(self.tree) - x
+    @signals.untracked(fn() { s.where_at(t) }) - x
   }, across~)
 }
 
