@@ -2,6 +2,7 @@
 // `makeScreens`), and who is on each now. What members are told of them (GET /admin/api/screens, `screens` on the
 // event stream, the agents' `screen` tool) is said here; the views themselves go over the member link (mesh/screens.ts).
 import { type Lang, tr } from "../ops/i18n.ts";
+import { type ChromePictures, picturesOf, toldOf } from "./sim-chrome.ts";
 import type { SimDebug } from "./sim-debug.ts";
 import { type ScreenAccess, type ScreenSource, type ScreenView, type Screens, type ViewOptions, makeScreens } from "./source.ts";
 
@@ -174,8 +175,17 @@ export class ScreenHub implements Screens {
     return source.debug;
   }
 
+  /// A simulator's case, one panel's turned as it asks (`GET …/chrome/<panel>/<turn>`); refused for what has none.
+  chromeOf(id: string, panel: number, turn: number): Promise<ChromePictures> {
+    const source = this.get(id);
+    if (source === undefined) throw new ScreenRefused(404, "station.screen.notFound");
+    const chrome = source.chrome?.[panel];
+    if (chrome === undefined || !Number.isInteger(turn) || turn < 0 || turn > 3) throw new ScreenRefused(404, "station.screen.notFound");
+    return picturesOf(chrome, turn);
+  }
+
   /// GET /admin/api/screens, in `lang`: `{screens: [{id, kind, title, width, height, viewers, controlledBy, access?,
-  /// clipboard?, peek?, drop?, closable?, debug?, poses?, panels?, openedBy?}]}`: `clipboard`, the types a view that drives it carries both ways;
+  /// clipboard?, peek?, drop?, closable?, debug?, poses?, panels?, chrome?, openedBy?}]}`: `clipboard`, the types a view that drives it carries both ways;
   /// `peek`, it can be previewed (ViewOptions.peek); `drop`, where a file
   /// dropped into a view is put (`folder`) and whether the view can show it in the machine's file manager (`reveal`);
   /// `closable`, a person may close it (POST …/close); `debug`, its apps' logs and restart are had, `install` where a file to
@@ -196,6 +206,7 @@ export class ScreenHub implements Screens {
           ...(s.debug ? { debug: true, install: s.debug.installFolder() } : {}),
           ...(s.poses ? { poses: true } : {}),
           ...(s.panels?.length ? { panels: s.panels } : {}),
+          ...(s.chrome?.length ? { chrome: s.chrome.map(toldOf) } : {}),
           ...(by ? { openedBy: by } : {}),
           ...(folder !== null ? { drop: { folder, reveal: s.reveal === true } } : {}),
         };

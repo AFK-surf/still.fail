@@ -2347,7 +2347,9 @@ web-pages.screen.debug.appearance
 web-pages.screen.debug.device
 web-pages.screen.device
 web-pages.screen.device.appSwitcher
+web-pages.screen.device.action
 web-pages.screen.device.home
+web-pages.screen.device.mute
 web-pages.screen.device.pose
 web-pages.screen.device.pose.book
 web-pages.screen.device.pose.closed

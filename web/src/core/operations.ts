@@ -98,6 +98,7 @@ export interface OperationParams {
   "screen.settings": { screen: string };
   "screen.setSetting": { screen: string; name: string; value: string };
   "screen.screenshot": { screen: string };
+  "screen.chrome": { screen: string; panel: number; turn: number };
   "screen.install": { screen: string; path: string };
   "screen.biometrics": { screen: string; what: string };
   "screen.uninstall": { screen: string; app: string };
@@ -168,7 +169,7 @@ export interface OperationParams {
   "admin.feedbackStatus": { id: string; status?: string | null | undefined };
 }
 
-export const UNTRACKED_OPERATIONS = new Set(["admin.me", "chat.relayPeople", "chat.relayPlaces", "chats.archived", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "screen.apps", "screen.logs", "screen.settings", "session.transcript", "session.warm", "slack.createAppUrl", "slack.people", "station.modules", "tools.access", "widget.setState", "widget.state"]);
+export const UNTRACKED_OPERATIONS = new Set(["admin.me", "chat.relayPeople", "chat.relayPlaces", "chats.archived", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "screen.apps", "screen.chrome", "screen.logs", "screen.settings", "session.transcript", "session.warm", "slack.createAppUrl", "slack.people", "station.modules", "tools.access", "widget.setState", "widget.state"]);
 
 type Call = (name: string, params: Record<string, unknown>) => Promise<unknown>;
 
@@ -272,6 +273,7 @@ export function bindStationOperations(call: Call) {
     screenSettings: <T = unknown>(params: OperationParams["screen.settings"]) => call("screen.settings", params) as Promise<T>,
     screenSetSetting: <T = unknown>(params: OperationParams["screen.setSetting"]) => call("screen.setSetting", params) as Promise<T>,
     screenScreenshot: <T = unknown>(params: OperationParams["screen.screenshot"]) => call("screen.screenshot", params) as Promise<T>,
+    screenChrome: <T = unknown>(params: OperationParams["screen.chrome"]) => call("screen.chrome", params) as Promise<T>,
     screenInstall: <T = unknown>(params: OperationParams["screen.install"]) => call("screen.install", params) as Promise<T>,
     screenBiometrics: <T = unknown>(params: OperationParams["screen.biometrics"]) => call("screen.biometrics", params) as Promise<T>,
     screenUninstall: <T = unknown>(params: OperationParams["screen.uninstall"]) => call("screen.uninstall", params) as Promise<T>,

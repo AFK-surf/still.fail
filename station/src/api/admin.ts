@@ -206,6 +206,7 @@ export class Admin {
                   return d.settings();
                 }),
             },
+            { method: "GET", pattern: /^\/screens\/([^/]+)\/chrome\/(\d)\/(\d)$/, handle: async (r: Request, [raw, panel, turn]: string[]) => screenChrome(deps.screens!, r, raw!, Number(panel), Number(turn)) },
             { method: "POST", pattern: /^\/screens\/([^/]+)\/screenshot$/, handle: async (r: Request, [raw]: string[]) => screenDebug(deps.screens!, r, raw!, async (d) => ({ png: (await d.screenshot()).toString("base64") })) },
             ...simActions(deps.screens),
             // Its movie, the drive's way for the viewer to download (none: nothing was going on).
@@ -436,6 +437,22 @@ async function screenDebug(screens: ScreenHub, r: Request, raw: string, answer: 
     // (simctl's own last line: what is before it is the command it ran and how it came to that)
     const said = (e as Error).message.split("\n").map((l) => l.trim()).filter(Boolean).at(-1) ?? "";
     return error(502, tr(r.lang, "station.screen.debugFailed", { said }));
+  }
+}
+
+/// GET /screens/<id>/chrome/<panel>/<turn>: a simulator's case, its pictures made of what Xcode has on this Mac.
+async function screenChrome(screens: ScreenHub, r: Request, raw: string, panel: number, turn: number): Promise<Answer> {
+  let id: string;
+  try {
+    id = decodeURIComponent(raw);
+  } catch {
+    return error(404, tr(r.lang, "station.screen.notFound"));
+  }
+  try {
+    return json(200, JSON.stringify(await screens.chromeOf(id, panel, turn)));
+  } catch (e) {
+    if (e instanceof ScreenRefused) return error(e.status, tr(r.lang, e.key, e.args));
+    return error(502, tr(r.lang, "station.screen.debugFailed", { said: (e as Error).message.split("\n").at(-1) ?? "" }));
   }
 }
 
