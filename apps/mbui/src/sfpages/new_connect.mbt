@@ -203,6 +203,7 @@ fn nc_close(core : Core, f : NcFlow, shut : () -> Unit) -> Unit {
 fn nc_drop(core : Core, f : NcFlow) -> Unit {
   if !f.gone {
     f.gone = true
+    match f.look { Some(d) => sa_reading.remove(d.key); None => () }
     (core.call)("connect.flow.drop", obj([("station", str(f.station)), ("form", str(f.form))]), fn(_) {  })
     for k in slack_token_forms.keys().to_array() {
       if k.has_prefix("flow/" + f.form) {
@@ -369,7 +370,9 @@ fn nc_body(
         let d = match f.look {
           Some(d) => d
           None => {
-            let d = sa_draft("nc-look/" + f.form, field(v, "settings"))
+            let key = "nc-look/" + f.form
+            sa_reading.remove(key)
+            let d = sa_draft(key, field(v, "settings"))
             f.look = Some(d)
             f.look_sent = sa_settings(d, field(v, "settings")).stringify()
             d

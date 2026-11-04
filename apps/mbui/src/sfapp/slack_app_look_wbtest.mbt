@@ -5,7 +5,7 @@
 ///|
 /// A page of the settings' fixture (`mode` as MBUI_FIXTURE has it) at a phone's width with a finger, its calls kept in
 /// `calls` and answered.
-fn look_tester(route : @settings.Route, calls : Array[Made], mode? : String = "settings") -> @ui.Tester {
+fn look_tester(route : @settings.Route, calls : Array[Made], mode? : String = "settings", w? : Double = 390.0, readable? : Bool = true) -> @ui.Tester {
   new_run()
   if mode != "settings" {
     @settings.fixture_page(mode) |> ignore
@@ -18,14 +18,33 @@ fn look_tester(route : @settings.Route, calls : Array[Made], mode? : String = "s
       (base.call)(name, params, done)
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
-  t.add_pixels("https://app.still.fail/avatars/backend.webp", 2, 2, FixedArray::make(16, b'\xFF'))
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=844.0, platform=2)
+  if readable { t.add_pixels("https://app.still.fail/avatars/backend.webp", 2, 2, FixedArray::make(16, b'\xFF')) }
   t.draw()
   app.nav.push(Settings)
   app.nav.push(Setting(route))
   t.draw()
   t.run_for(@ui.move_most_ms)
   t
+}
+
+///|
+test "a new Slack app sends the avatar read on a medium screen" {
+  let calls : Array[Made] = []
+  let t = look_tester(@settings.Route::Connects(""), calls, mode="settings-new-connect-app", w=600.0)
+  t.draw()
+  assert_true(t.query(Button, label="后端接口").unwrap().selected == Some(true))
+  let edits = calls.filter(fn(m) { m.name == "connect.flow.edit" }).map(fn(m) { field(Some(m.params), "input") })
+  assert_true(edits.iter().any(fn(i) { text(i, "icon").has_prefix("data:image/jpeg") }), msg="the decoded avatar is sent")
+}
+
+///|
+test "a new Slack app sends an avatar read failure on a medium screen" {
+  let calls : Array[Made] = []
+  let t = look_tester(@settings.Route::Connects(""), calls, mode="settings-new-connect-app", w=600.0, readable=false)
+  t.draw()
+  let edits = calls.filter(fn(m) { m.name == "connect.flow.edit" }).map(fn(m) { field(Some(m.params), "input") })
+  assert_true(edits.iter().any(fn(i) { text(i, "iconError") == "无法生成头像" }), msg="the failed avatar is reported")
 }
 
 ///|

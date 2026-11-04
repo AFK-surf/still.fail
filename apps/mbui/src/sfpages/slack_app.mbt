@@ -113,13 +113,56 @@ let sa_approve : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 let sa_icons_made : Ref[Int] = Ref(0)
 
 ///|
+/// Images requested for drafts, processed as inputs before the next layout.
+// kept across runs: cleared as each read finishes or the drafts are reset
+let sa_reading : Map[String, (SaDraft, @sf.AppAvatar?)] = {}
+
+///|
 fn slack_app_reset() -> Unit {
   sa_drafts.clear()
   sa_open.clear()
   sa_started.clear()
   sa_approve.clear()
   sa_icons_made.val = 0
+  sa_reading.clear()
   @sf.app_icons_reset()
+}
+
+///|
+/// Complete an avatar read before layout so its result is an input to the same frame.
+fn sa_prepare_images(c : @ui.Ctx) -> Unit {
+  for key in sa_reading.keys().collect() {
+    guard sa_reading.get(key) is Some((d, avatar)) else { continue }
+    if d.reading == "" {
+      sa_reading.remove(key)
+      continue
+    }
+    match c.image_pixels(d.reading, d.reading_px) {
+      PixelsComing => ()
+      PixelsFailed => {
+        sa_reading.remove(key)
+        sa_icon_failed(d, @sf.t(if d.upload != "" { "web-pages.slackApp.readImageFailed" } else { "web-pages.slackApp.drawFailed" }))
+      }
+      PixelsRead(w, h, px) => {
+        sa_reading.remove(key)
+        d.reading = ""
+        if d.upload != "" {
+          let icon = @sf.app_own_icon(w, h, px)
+          d.upload_bg = @pixels.edge_colour(@sf.app_icon_px, @sf.app_icon_px, icon.pixels())
+          sa_icon_made(d, icon)
+          if !d.colour_set {
+            d.color = d.upload_bg
+            d.hex_field.set(d.upload_bg)
+          }
+        } else if avatar is Some(a) {
+          match @sf.app_avatar_icon(a, d.reading_bg, w, h, px) {
+            Some(icon) => sa_icon_made(d, icon)
+            None => sa_icon_failed(d, @sf.t("web-pages.slackApp.drawFailed"))
+          }
+        }
+      }
+    }
+  }
 }
 
 ///|
@@ -329,6 +372,7 @@ fn sa_form(c : @ui.Ctx, core : Core, station : String, id : String, settings : J
   let d = match sa_drafts.get(key) {
     Some(d) if sa_started.get(key) == Some(start) => d
     _ => {
+      sa_reading.remove(key)
       let d = sa_draft(key, settings)
       sa_drafts[key] = d
       sa_started[key] = start
@@ -360,6 +404,7 @@ fn sa_form(c : @ui.Ctx, core : Core, station : String, id : String, settings : J
     let dirty = changed || d.icon.get() != ""
     @sf.card_foot(c, at_end=true, fn() {
       if dirty && @sf.button(c, @sf.t("web-pages.slackApp.revert"), key=key + "/revert", tone=Ghost) {
+        sa_reading.remove(key)
         sa_drafts.remove(key)
       }
       if @sf.button(c, @sf.t("web-pages.slackApp.apply"), key=key + "/apply", tone=Primary, busy~, disabled=!dirty) {
@@ -417,6 +462,7 @@ fn app_fields(c : @ui.Ctx, core : Core, d : SaDraft, sections : Array[Json], fre
   // an avatar drawn on `bg`: a mark at once, a buddy once its picture is read
   let draw = fn(a : @sf.AppAvatar, bg : String) {
     if a.mark != "" {
+      sa_reading.remove(d.key)
       d.reading = ""
       match @sf.app_avatar_icon(a, bg, 0, 0, FixedArray::make(0, b'\x00')) {
         Some(icon) => sa_icon_made(d, icon)
@@ -426,6 +472,8 @@ fn app_fields(c : @ui.Ctx, core : Core, d : SaDraft, sections : Array[Json], fre
       d.reading = @sf.avatars_base() + "/avatars/" + a.id + ".webp"
       d.reading_px = @sf.app_icon_px
       d.reading_bg = bg
+      sa_reading[d.key] = (d, Some(a))
+      c.request_frame()
     }
   }
   let pick = fn(a : @sf.AppAvatar) {
@@ -441,30 +489,8 @@ fn app_fields(c : @ui.Ctx, core : Core, d : SaDraft, sections : Array[Json], fre
     pick(find("general-helper").unwrap_or(all[0]))
   }
   if d.reading != "" {
-    match c.image_pixels(d.reading, d.reading_px) {
-      PixelsComing => ()
-      PixelsFailed => sa_icon_failed(d, @sf.t(if d.upload != "" { "web-pages.slackApp.readImageFailed" } else { "web-pages.slackApp.drawFailed" }))
-      PixelsRead(w, h, px) => {
-        d.reading = ""
-        if d.upload != "" {
-          let icon = @sf.app_own_icon(w, h, px)
-          d.upload_bg = @pixels.edge_colour(@sf.app_icon_px, @sf.app_icon_px, icon.pixels())
-          sa_icon_made(d, icon)
-          if !d.colour_set {
-            colour(d.upload_bg)
-          }
-        } else {
-          match find(d.picked) {
-            Some(a) =>
-              match @sf.app_avatar_icon(a, d.reading_bg, w, h, px) {
-                Some(icon) => sa_icon_made(d, icon)
-                None => sa_icon_failed(d, @sf.t("web-pages.slackApp.drawFailed"))
-              }
-            None => ()
-          }
-        }
-      }
-    }
+    // Follow the host's answer; the frame input hook consumes it before layout.
+    @ui.image_state(d.reading) |> ignore
   }
   // a picture of their own, from the system's picker
   let upload = fn() {
@@ -481,6 +507,8 @@ fn app_fields(c : @ui.Ctx, core : Core, d : SaDraft, sections : Array[Json], fre
           d.picked = ""
           d.reading = d.upload
           d.reading_px = @sf.app_own_px
+          sa_reading[d.key] = (d, None)
+          c.request_frame()
         }
         None => ()
       }
