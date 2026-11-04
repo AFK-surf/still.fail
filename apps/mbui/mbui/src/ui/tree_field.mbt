@@ -74,7 +74,7 @@ fn view_words_found(d : @view.Drawn) -> String {
 /// colours, `enter_sends`, `leaves`, `ime_action`, `paste_limit`, `secret`, `words`, `look`: each as Ctx::editor takes
 /// it; `files`: what it is told files pasted into it, where it takes them, as Ctx::editor's `files` and
 /// Ctx::field_files), as tall as
-/// its words lay out between a line and `max_lines` (Field::laid), read out as a field of its words. `submitted`: what
+/// its words lay out between `min_lines` (one unless said) and `max_lines` (Field::laid), read out as a field of its words. `submitted`: what
 /// is told its words as they are given up (Enter, where it gives them up), once, at that key's moment; `pasted`, a
 /// paste of `paste_limit` characters or more, not put in, once, at that paste's. `placeholder_by`: its placeholder as it
 /// is now, followed (in place of `placeholder`). The node made.
@@ -84,6 +84,7 @@ pub fn field(
   placeholder? : String = "",
   font_size? : Double = 15.0,
   line? : Double = 0.0,
+  min_lines? : Int = 1,
   max_lines? : Int = 5,
   color? : Int64 = 0x1D1D1FFFL,
   placeholder_color? : Int64 = 0x8E8E93FFL,
@@ -192,7 +193,7 @@ pub fn field(
     // where only its look's colours change, a frame for them all the same)
     .measured(
       By(fn() {
-        let laid = field.laid(font_size=size(), line~, max_lines~, trim~)
+        let laid = field.laid(font_size=size(), line~, min_lines~, max_lines~, trim~)
         // (its words as written followed as well as with what is composed: what is composed put in as written shows
         // the same, its look's not, EditorState::look_shown)
         field.text() |> ignore
