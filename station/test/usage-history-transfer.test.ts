@@ -23,13 +23,33 @@ function oldStore(path = ":memory:") {
 }
 
 function sourceTotals(store: Store) {
-  const scope = (name: string) => `COALESCE((SELECT COALESCE(ws, '') FROM sessions WHERE key = ${name}.session),
-    (SELECT scope FROM usage_history_orphans WHERE session = ${name}.session), '')`;
-  return store.db.prepare(`SELECT scope, quarter, SUM(calls) AS calls, SUM(tokens) AS tokens FROM (
-    SELECT ${scope("q")} AS scope, q.quarter, q.calls, q.tokens FROM usage_day_quarters q
-    UNION ALL SELECT ${scope("c")}, CASE WHEN c.minute >= 0 THEN c.minute / 15 ELSE -1 - ((-1 - c.minute) / 15) END,
-      c.calls, c.input + c.cache_read + c.cache_write + c.cache_write_long + c.output FROM usage_compact c
-  ) GROUP BY scope, quarter HAVING calls != 0 OR tokens != 0 ORDER BY scope, quarter`).all().map((r) => ({ ...r }));
+  const db = store.db;
+  const rows = db.prepare(`SELECT session, quarter, calls, tokens FROM usage_day_quarters
+    UNION ALL SELECT session, CASE WHEN minute >= 0 THEN minute / 15 ELSE -1 - ((-1 - minute) / 15) END,
+      calls, input + cache_read + cache_write + cache_write_long + output FROM usage_compact`).all() as
+    { session: string; quarter: number; calls: number; tokens: number }[];
+  const session = db.prepare("SELECT ws FROM sessions WHERE key = ?");
+  const orphan = db.prepare("SELECT group_id FROM usage_history_orphans WHERE session = ?");
+  const group = db.prepare("SELECT parent, scope FROM usage_history_owner_groups WHERE id = ?");
+  const totals = new Map<string, { scope: string; quarter: number; calls: number; tokens: number }>();
+  for (const row of rows) {
+    const live = session.get(row.session) as { ws: string | null } | undefined;
+    let scope = live?.ws ?? "";
+    if (live === undefined) {
+      let id = (orphan.get(row.session) as { group_id: number } | undefined)?.group_id;
+      while (id !== undefined) {
+        const owner = group.get(id) as { parent: number | null; scope: string };
+        scope = owner.scope;
+        id = owner.parent ?? undefined;
+      }
+    }
+    const key = JSON.stringify([scope, row.quarter]);
+    const total = totals.get(key) ?? { scope, quarter: row.quarter, calls: 0, tokens: 0 };
+    total.calls += row.calls; total.tokens += row.tokens;
+    totals.set(key, total);
+  }
+  return [...totals.values()].filter((row) => row.calls !== 0 || row.tokens !== 0)
+    .sort((a, b) => a.scope.localeCompare(b.scope) || a.quarter - b.quarter);
 }
 
 for (const recursive of [false, true]) test(`old summaries transfer in batches while calls change (recursive triggers ${recursive})`, () => {

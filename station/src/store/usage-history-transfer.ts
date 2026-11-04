@@ -9,7 +9,10 @@ const qDone = (r: string) => `EXISTS (SELECT 1 FROM usage_history_transfer p WHE
 const cDone = (r: string) => `EXISTS (SELECT 1 FROM usage_history_transfer p WHERE p.id = 1 AND
   (p.phase > 1 OR (p.phase = 1 AND ${cKey(r)} <= (p.c_session, p.c_minute, p.c_thread, p.c_person, p.c_profile, p.c_runtime, p.c_model, p.c_fast))))`;
 export const transferScope = (r: string) => `COALESCE((SELECT COALESCE(ws, '') FROM sessions WHERE key = ${r}.session),
-  (SELECT scope FROM usage_history_orphans WHERE session = ${r}.session), '')`;
+  (WITH RECURSIVE owners(id) AS (
+    SELECT group_id FROM usage_history_orphans WHERE session = ${r}.session
+    UNION ALL SELECT g.parent FROM usage_history_owner_groups g JOIN owners o ON o.id = g.id WHERE g.parent IS NOT NULL
+  ) SELECT g.scope FROM owners o JOIN usage_history_owner_groups g ON g.id = o.id WHERE g.parent IS NULL), '')`;
 const compactQuarter = (r: string) => `(CASE WHEN ${r}.minute >= 0 THEN ${r}.minute / 15 ELSE -1 - ((-1 - ${r}.minute) / 15) END)`;
 const compactTokens = (r: string) => `(${r}.input + ${r}.cache_read + ${r}.cache_write + ${r}.cache_write_long + ${r}.output)`;
 const contribute = (r: string, period: string, calls: string, tokens: string, condition: string) => `
@@ -26,14 +29,18 @@ export function installHistoryTransfer(db: DatabaseSync): void {
       q_session TEXT, q_quarter INTEGER, q_runtime TEXT, q_model TEXT,
       c_session TEXT, c_minute INTEGER, c_thread INTEGER, c_person TEXT, c_profile TEXT, c_runtime TEXT, c_model TEXT, c_fast INTEGER);
     INSERT INTO usage_history_transfer (id, phase) VALUES (1, 0);
-    -- Remember a deleted session's owner so its old summaries and later changes stay in that workspace.
-    CREATE TABLE usage_history_orphans (session TEXT PRIMARY KEY, scope TEXT NOT NULL) WITHOUT ROWID;
-    CREATE INDEX usage_history_orphans_scope ON usage_history_orphans (scope, session);
+    -- A deleted session keeps its owner. Groups let a workspace move all its deleted sessions without rewriting them.
+    CREATE TABLE usage_history_owner_groups (id INTEGER PRIMARY KEY, parent INTEGER, rank INTEGER NOT NULL DEFAULT 0, scope TEXT NOT NULL);
+    CREATE TABLE usage_history_owner_scopes (scope TEXT PRIMARY KEY, group_id INTEGER NOT NULL) WITHOUT ROWID;
+    CREATE TABLE usage_history_orphans (session TEXT PRIMARY KEY, group_id INTEGER NOT NULL) WITHOUT ROWID;
     CREATE TRIGGER usage_history_owner BEFORE DELETE ON sessions
       WHEN EXISTS (SELECT 1 FROM usage_day_quarters WHERE session = OLD.key LIMIT 1)
         OR EXISTS (SELECT 1 FROM usage_compact WHERE session = OLD.key LIMIT 1) BEGIN
-      INSERT INTO usage_history_orphans VALUES (OLD.key, COALESCE(OLD.ws, ''))
-        ON CONFLICT (session) DO UPDATE SET scope = excluded.scope;
+      INSERT INTO usage_history_owner_groups (scope) SELECT COALESCE(OLD.ws, '')
+        WHERE NOT EXISTS (SELECT 1 FROM usage_history_owner_scopes WHERE scope = COALESCE(OLD.ws, ''));
+      INSERT OR IGNORE INTO usage_history_owner_scopes VALUES (COALESCE(OLD.ws, ''), last_insert_rowid());
+      INSERT INTO usage_history_orphans SELECT OLD.key, group_id FROM usage_history_owner_scopes WHERE scope = COALESCE(OLD.ws, '')
+        ON CONFLICT (session) DO UPDATE SET group_id = excluded.group_id;
     END;
     CREATE TRIGGER usage_history_transfer_q_add AFTER INSERT ON usage_day_quarters BEGIN ${qAdd("NEW", "")} END;
     CREATE TRIGGER usage_history_transfer_q_change AFTER UPDATE OF session, quarter, runtime, model, calls, tokens ON usage_day_quarters BEGIN
@@ -45,6 +52,38 @@ export function installHistoryTransfer(db: DatabaseSync): void {
       calls, input, cache_read, cache_write, cache_write_long, output ON usage_compact BEGIN ${cAdd("OLD", "-")} ${cAdd("NEW", "")} END;
     CREATE TRIGGER usage_history_transfer_c_drop AFTER DELETE ON usage_compact BEGIN ${cAdd("OLD", "-")} END;
   `);
+}
+
+/// Redirect the old workspace's deleted sessions before moving its history. Union by rank bounds owner lookups even
+/// when workspaces merge repeatedly; the savepoint also makes the fixed-size group change atomic on its own.
+export function moveHistoryOrphanScope(db: DatabaseSync, from: string, to: string): void {
+  db.exec("SAVEPOINT usage_history_owner_move");
+  try {
+    type Group = { id: number; rank: number };
+    const find = db.prepare(`SELECT g.id, g.rank FROM usage_history_owner_scopes s
+      JOIN usage_history_owner_groups g ON g.id = s.group_id WHERE s.scope = ?`);
+    const a = find.get(from) as Group | undefined;
+    const b = find.get(to) as Group | undefined;
+    if (a !== undefined) {
+      if (b === undefined) {
+        db.prepare("UPDATE usage_history_owner_groups SET scope = ? WHERE id = ?").run(to, a.id);
+        db.prepare("UPDATE usage_history_owner_scopes SET scope = ? WHERE scope = ?").run(to, from);
+      } else if (a.rank >= b.rank) {
+        db.prepare("UPDATE usage_history_owner_groups SET scope = ?, rank = rank + ? WHERE id = ?")
+          .run(to, a.rank === b.rank ? 1 : 0, a.id);
+        db.prepare("UPDATE usage_history_owner_groups SET parent = ? WHERE id = ?").run(a.id, b.id);
+        db.prepare("UPDATE usage_history_owner_scopes SET group_id = ? WHERE scope = ?").run(a.id, to);
+        db.prepare("DELETE FROM usage_history_owner_scopes WHERE scope = ?").run(from);
+      } else {
+        db.prepare("UPDATE usage_history_owner_groups SET parent = ? WHERE id = ?").run(b.id, a.id);
+        db.prepare("DELETE FROM usage_history_owner_scopes WHERE scope = ?").run(from);
+      }
+    }
+    db.exec("RELEASE usage_history_owner_move");
+  } catch (error) {
+    db.exec("ROLLBACK TO usage_history_owner_move; RELEASE usage_history_owner_move");
+    throw error;
+  }
 }
 
 export const historyTransferPending = (db: DatabaseSync): boolean => db.prepare(

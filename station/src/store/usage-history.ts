@@ -6,7 +6,7 @@
 // An older station takes over its existing quarterly and compact summaries in bounded batches, without reading the
 // raw call history. New stations count directly from their first call.
 import type { DatabaseSync } from "node:sqlite";
-import { historyTransferPending, historyTransferStep, installHistoryTransfer, transferScope } from "./usage-history-transfer.ts";
+import { historyTransferPending, historyTransferStep, installHistoryTransfer, moveHistoryOrphanScope, transferScope } from "./usage-history-transfer.ts";
 
 /// A quarter hour (15 minutes) as a number: the ms since the epoch over 900 000, rounded down.
 const QUARTER_MS = 900_000;
@@ -98,11 +98,11 @@ export { historyTransferPending };
 /// all its sessions go together (store.ts setSessionsWs), and so do their quarters. In the caller's write.
 export function moveUsageHistory(db: DatabaseSync, from: string, to: string): void {
   if (from === to || !hasUsageHistory(db)) return;
+  if (has(db, "usage_history_orphans")) moveHistoryOrphanScope(db, from, to);
   db.prepare(`INSERT INTO usage_history (scope, quarter, calls, tokens) SELECT ?2, quarter, calls, tokens FROM usage_history WHERE scope = ?1
     ON CONFLICT (scope, quarter) DO UPDATE SET calls = calls + excluded.calls, tokens = tokens + excluded.tokens`).run(from, to);
   db.prepare("DELETE FROM usage_history WHERE scope = ?").run(from);
   db.prepare("DELETE FROM usage_history_total WHERE scope = ?").run(from);
-  if (has(db, "usage_history_orphans")) db.prepare("UPDATE usage_history_orphans SET scope = ? WHERE scope = ?").run(to, from);
 }
 
 /// One workspace's quarters from `from` until `to` (quarters, `to` not included), added up by day `offset` minutes east
