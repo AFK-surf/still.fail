@@ -481,7 +481,7 @@ fn fake_view_said(f : FakeHost, line : String) -> Bool {
           }
           f.view_infos[id] = (state, at)
           // (as the host told it: how it stands changed, a frame asked for by the app as it hears it)
-          on_outside(outside_stood, id, 0)
+          on_outside(outside_stood, id, if state == 2 { 2 } else { 0 })
           true
         }
         _ => false

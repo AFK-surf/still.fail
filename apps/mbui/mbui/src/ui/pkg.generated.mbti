@@ -1919,6 +1919,7 @@ pub fn NativeView::buffered(Self) -> Double
 pub fn NativeView::buffering(Self) -> Bool
 pub fn NativeView::bytes(Self) -> Double
 pub fn NativeView::close(Self) -> Unit
+pub fn NativeView::decode_since(Self) -> Double
 pub fn NativeView::duration(Self) -> Double
 pub fn NativeView::ended(Self) -> Bool
 pub fn NativeView::frames(Self) -> Array[Double]?

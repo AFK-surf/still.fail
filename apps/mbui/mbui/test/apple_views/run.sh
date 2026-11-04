@@ -8,7 +8,7 @@ set -e
 D="$(cd "$(dirname "$0")" && pwd)"
 R="$(cd "$D/../.." && pwd)"
 . "$R/scripts/env.sh"
-export MBUI_OGV_DIR=${MBUI_OGV_DIR:-$R/src/host/ogv}
+node --test "$D/web-video.test.mjs"
 OUT=${1:-$R/out/views-test}
 rm -rf "$OUT"; mkdir -p "$OUT"
 # a big file (some 18 MB: many reads, cut at 4 MB, answered 1 MB at a time) with its index at the end, and a
@@ -27,7 +27,8 @@ ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=320x240:rate=10 -t 5 -c:v li
 ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=320x240:rate=10 -f lavfi -i sine=frequency=440:sample_rate=48000 \
   -t 5 -c:v libvpx-vp9 -c:a libopus -shortest "$OUT/test-vp9-opus.webm"
 ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=320x240:rate=10 -f lavfi -i sine=frequency=440:sample_rate=48000 \
-  -t 5 -c:v libvpx-vp9 -c:a aac -shortest "$OUT/test-vp9-aac.mp4"
+  -t 5 -vf "drawbox=x=120:y=80:w=80:h=80:color=red:t=fill:enable='lt(t,2)',drawbox=x=120:y=80:w=80:h=80:color=blue:t=fill:enable='gte(t,2)'" \
+  -c:v libvpx-vp9 -c:a aac -shortest "$OUT/test-vp9-aac.mp4"
 ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=320x240:rate=10 -t 5 \
   -c:v libx265 -preset ultrafast -x265-params log-level=error:pools=1 -tag:v hvc1 "$OUT/test-hevc.mp4"
 ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=320x240:rate=10 -t 5 \

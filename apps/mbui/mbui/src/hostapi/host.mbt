@@ -2344,7 +2344,7 @@ pub fn view_control(id : Int, op : Int, value : Double) -> Unit {
 
 ///|
 /// How the view stands: -1 failed, -2 a player's format unsupported, -3 its file not parseable, -4 unsupported or
-/// damaged, 0 opening, 1 ready.
+/// damaged, 0 opening, 1 ready, 2 all file bytes delivered but still waiting for its first frame.
 /// `out` (10): its length in ms (-1 not known), where it is (ms), playing (1; and while it seeks within what it has, if
 /// it is to play), the picture's own width and height (pixels), the bytes it has been given, whether a frame has been
 /// drawn (a page: loaded), buffering (1: to play and waiting on bytes still to come through the app, not a seek

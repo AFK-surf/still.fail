@@ -111,7 +111,7 @@ jobs:
       - name: "The native views' contract: one placed between pixels is put where it was told, on whole device pixels"
         if: (success() || failure()) && steps.f.outputs.host != 'false'
         run: scripts/host_contract.sh mac views
-      - name: "The players' contract: MP4, WebM and Ogg play and give a frame through the app"
+      - name: "The players' contract: MP4 and WebM play and give a frame through the app"
         if: (success() || failure()) && steps.f.outputs.host != 'false'
         run: scripts/host_contract.sh mac play
       - name: "The pages' contract: a page says to the app, runs its scripts, keeps cookies, takes an event stream as it is sent"

@@ -359,7 +359,8 @@ static int32_t player_failure(NSError *error) {
   self.stoodTold = YES;
   self.stoodState = st;
   memcpy(_stoodSaid, now, sizeof now);
-  mb_host_outside(MB_OUTSIDE_STOOD, self.vid, 0);
+  // State 2 says when the entire file has reached a decoder that has not shown a frame yet.
+  mb_host_outside(MB_OUTSIDE_STOOD, self.vid, st == 2 ? 2 : 0);
 }
 
 // To `ms`, exactly (or `near`: about there, the player's own choice of where it gets to at once), one seek at a time
@@ -1102,7 +1103,14 @@ static MBNative *open_video(int32_t vid, NSString *mime) {
 #if TARGET_OS_OSX
   NSString *type = [[[mime componentsSeparatedByString:@";"].firstObject
       stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet] lowercaseString];
-  if ([type isEqualToString:@"video/webm"] || [type isEqualToString:@"video/ogg"]) return open_web_video(vid, type);
+  if ([type isEqualToString:@"video/webm"]) return open_web_video(vid, type);
+  if ([type isEqualToString:@"video/ogg"]) {
+    MBNative *v = open_web_video(vid, type);
+    // Ogg is recognized, but macOS has no decoder for it. Report it after the view is registered.
+    __weak MBNative *weak = v;
+    dispatch_async(dispatch_get_main_queue(), ^{ [weak.webVideo failWithCode:-2]; });
+    return v;
+  }
 #endif
   MBNative *v = [MBNative new];
 #if TARGET_OS_OSX
@@ -1771,9 +1779,6 @@ int32_t mb_host_view_read_next(int32_t vid, double *out) {
 double mb_host_video_test_rate(int32_t vid) {
   MBNative *v = views[@(vid)];
   return v.webVideo ? [v.webVideo.state[@"rate"] doubleValue] : v.player.rate;
-}
-int32_t mb_host_video_test_software(int32_t vid) {
-  return views[@(vid)].webVideo.usedSoftware ? 1 : 0;
 }
 #endif
 

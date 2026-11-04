@@ -42,7 +42,7 @@ pub fn media_status(n : @ui.NativeView?) -> MediaStatus {
     Some(n) => {
       let (w, h) = n.natural()
       {
-        state: n.state(),
+        state: if n.state() == 2 { 0 } else { n.state() },
         duration: n.duration(),
         position: n.position(),
         buffered: n.buffered(),
@@ -120,6 +120,8 @@ pub struct Media {
   priv wait_ms : Double
   priv mut track : MediaTrack?
   priv mut view : @ui.NativeView?
+  /// Whether the current first-frame wait has expired.
+  priv mut decode_failed : Bool
   priv mut start_at : Double
   priv mut started : Bool
   /// the place it opens at, owed to the player once the frame's builds are over (Media::frame)
@@ -172,6 +174,28 @@ pub let media_wake_ms : Double = 120.0
 pub let media_sleep_ms : Double = 320.0
 
 ///|
+/// How long to give a system decoder after it has received the whole file but shown no first frame.
+pub let media_decode_wait_ms : Double = 20000.0
+
+///|
+/// Whether a player has waited for its first frame long enough after all bytes were delivered. The host reports when
+/// that happened; the app's clock schedules the decision, including when no frames were drawn in between.
+pub fn media_decode_stalled(c : @ui.Ctx, view : @ui.NativeView?) -> Bool {
+  match view {
+    Some(n) if n.state() == 2 && n.decode_since() >= 0.0 => {
+      let left = n.decode_since() + media_decode_wait_ms - c.moment()
+      if left <= 0.0 {
+        true
+      } else {
+        c.wake_in(left)
+        false
+      }
+    }
+    _ => false
+  }
+}
+
+///|
 /// A player with nothing in it yet. Its ways, as Player.kt's: the speeds a tap steps through, what a double tap on a
 /// side jumps, how long its controls stay left alone while it plays (0: they stay), a double tap's second tap's time,
 /// how long a note is said, how long its controls take to come and to go, how long it waits before it says it is
@@ -199,6 +223,7 @@ pub fn Media::new(
     wait_ms,
     track: None,
     view: None,
+    decode_failed: false,
     start_at: 0.0,
     started: false,
     seek_owed: false,
@@ -231,6 +256,7 @@ pub fn Media::new(
 /// `track` played from `start` ms in (0: its start), at the speed chosen; what played before stops.
 pub fn Media::open(self : Media, track : MediaTrack, start? : Double = 0.0) -> Unit {
   self.close_view()
+  self.decode_failed = false
   let n = @ui.NativeView::video(track.mime, track.read, direct=track.direct)
   if self.speed != 1.0 {
     n.rate(self.speed)
@@ -299,7 +325,14 @@ pub fn Media::pin(self : Media, s : MediaStatus) -> Unit {
 pub fn Media::status(self : Media) -> MediaStatus {
   match self.pinned {
     Some(s) => s
-    None => media_status(self.view)
+    None => {
+      let s = media_status(self.view)
+      if self.decode_failed && self.view is Some(n) && n.state() == 2 {
+        { ..s, state: -4 }
+      } else {
+        s
+      }
+    }
   }
 }
 
@@ -579,6 +612,9 @@ pub fn Media::toggle_sideways(self : Media) -> Unit {
 /// a tap left single after `double_tap_ms` bringing them or taking them away, a note said `note_ms`.
 pub fn Media::frame(self : Media, c : @ui.Ctx) -> MediaFrame {
   let p = self
+  if p.pinned is None && !p.decode_failed && media_decode_stalled(c, p.view) {
+    p.decode_failed = true
+  }
   let s = p.status()
   let name = match p.track {
     Some(t) => t.name

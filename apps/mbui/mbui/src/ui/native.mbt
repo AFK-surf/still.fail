@@ -39,6 +39,8 @@ pub struct NativeView {
   /// how it stands, as its host last said (view_info's numbers, its state: `stood`), each a signal of its own
   priv info : FixedArray[@signals.Signal[Double]]
   priv state : @signals.Signal[Int]
+  /// When the host said all file bytes had reached a player still awaiting its first frame; -1 otherwise.
+  priv mut decode_since : Double
   /// the frame it was last painted in, and where: content x y w h, clip x0 y0 x1 y1, its corners (top left, then round it)
   priv mut painted : Int
   /// where in that frame's paint it was (how many instances were before it): the views are stacked so
@@ -233,6 +235,7 @@ fn NativeView::make(
     told_page_scale: 1.0,
     info: FixedArray::makei(10, fn(_) { @signals.signal(0.0, same=fn(a, b) { a == b }) }),
     state: @signals.signal(0, same=fn(a, b) { a == b }),
+    decode_since: -1.0,
     painted: -1,
     seq: 0,
     at: FixedArray::make(12, 0.0),
@@ -603,9 +606,15 @@ pub fn NativeView::rate(self : NativeView, rate : Double) -> Unit {
 
 ///|
 /// -1 failed (or no such view here), -2 a player's format unsupported, -3 its file not parseable, -4 unsupported or
-/// damaged, 0 opening, 1 ready.
+/// damaged, 0 opening, 1 ready, 2 all file bytes delivered but still waiting for its first frame.
 pub fn NativeView::state(self : NativeView) -> Int {
   self.state.get()
+}
+
+///|
+/// When all file bytes were delivered while this player still awaited its first frame (-1 if not said).
+pub fn NativeView::decode_since(self : NativeView) -> Double {
+  self.decode_since
 }
 
 ///|
@@ -833,6 +842,12 @@ fn NativeView::stood(self : NativeView) -> Unit {
     return
   }
   let state = h_view_info(self.id, info_out)
+  if state == 2 && self.decode_since < 0.0 {
+    let at = view_moment()
+    self.decode_since = if at >= 0.0 { at } else { g().clock }
+  } else if state != 2 {
+    self.decode_since = -1.0
+  }
   @signals.start_batch()
   for k in 0..<self.info.length() {
     self.info[k].set(info_out[k])
@@ -843,7 +858,15 @@ fn NativeView::stood(self : NativeView) -> Unit {
 
 ///|
 /// Its host said how view `id` stands changed (hostcall.mbt's outside_stood): a frame, which reads it as it begins.
-fn view_stood(id : Int) -> Unit {
+fn view_stood(id : Int, state : Int) -> Unit {
+  if state == 2 {
+    let at = view_moment()
+    for v in open_views {
+      if v.id == id && v.decode_since < 0.0 {
+        v.decode_since = if at >= 0.0 { at } else { g().clock }
+      }
+    }
+  }
   if !views_stirred.contains(id) {
     views_stirred.push(id)
   }

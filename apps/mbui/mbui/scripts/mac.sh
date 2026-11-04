@@ -7,7 +7,6 @@ D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 # MBUI_APP_MOD: an app of a module outside this repository (its moon.work naming mbui; scripts/android.sh says more)
 ROOT=$(cd "$D/.." && pwd)
-export MBUI_OGV_DIR=${MBUI_OGV_DIR:-$ROOT/src/host/ogv}
 cd "${MBUI_APP_MOD:-$ROOT}"
 MODE=${MODE:-release}
 FLAG=""; [ "$MODE" = release ] && FLAG=--release

@@ -140,6 +140,10 @@ pub let loupe_w : Double
 
 pub let loupe_zoom : Double
 
+pub fn media_decode_stalled(@ui.Ctx, @ui.NativeView?) -> Bool
+
+pub let media_decode_wait_ms : Double
+
 pub let media_note_ms : Double
 
 pub let media_rest_ms : Double
