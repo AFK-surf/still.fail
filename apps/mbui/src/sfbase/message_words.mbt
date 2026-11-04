@@ -4,7 +4,7 @@
 ///|
 /// Whether times say when (pressed, every one in the app says the other: the web's ui.tsx useAbsoluteTime), not how
 /// long ago.
-pub let absolute_times : Ref[Bool] = { val: false }
+pub let absolute_times : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
 
 ///|
 /// A person's words in the runs the core read them in (a message's `words`: refLinks.ts personWords; what was sent from

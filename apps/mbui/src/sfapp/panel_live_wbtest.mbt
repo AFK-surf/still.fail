@@ -80,8 +80,10 @@ fn live_frames(t : @ui.Tester, n : Int) -> Unit {
 /// cut to (its clip and its outer one), as panel_reach_said reads them: the first and the last.
 fn rows_seen(t : @ui.Tester) -> (String?, String?) {
   let drawn = t.drawn_instances()
+  // A clipped row can have the title's glyphs inside its old bounds. First require that this row itself is drawn.
+  let runs = t.text_runs()
   let seen = t.words().filter(fn(x) {
-    x.0.has_prefix("第") && {
+    x.0.has_prefix("第") && runs.iter().any(fn(r) { r.text == x.0 }) && {
       let glyphs = drawn.filter(fn(d) {
         d[5] == 1.0 && d[11] > 0.0 && d[0] >= x.1 - 0.01 && d[0] < x.1 + x.3 && d[1] >= x.2 - 0.01 && d[1] < x.2 + x.4
       })
@@ -134,12 +136,12 @@ test "panel live in the middle, 大屏 keyboard and mouse, in a short window: it
   title.set("")
   live_frames(t, 30)
   let again = said()
-  // (as main has it: the same dialog and field, 甲 kept; the rows seen a few higher while its head is there, its body
-  // the shorter, back as it goes)
+  // (as the old panel draws it: the same dialog and field, 甲 kept; its title covers the rows behind its head,
+  // its body shorter by one whole visible row, back as it goes)
   let body_said = "填一下 第0行 第1行 第2行 第3行 第4行 第5行 第6行 第7行 第8行 第9行 第10行 第11行 第12行 第13行 第14行 第15行 第16行 第17行 第18行 第19行 第20行 第21行 第22行 第23行 第24行 第25行 第26行 第27行 第28行 第29行 面板里的话，长一些，好看它怎么折行 好的 关闭"
   assert_eq([before, titled, again], [
     (true, true, Some(body_said), "甲", (Some("第4行"), Some("第14行"))),
-    (true, true, Some("任务"), "甲", (Some("第2行"), Some("第13行"))),
+    (true, true, Some("任务"), "甲", (Some("第4行"), Some("第13行"))),
     (true, true, Some(body_said), "甲", (Some("第4行"), Some("第14行"))),
   ])
 }

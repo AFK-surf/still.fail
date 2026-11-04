@@ -57,13 +57,15 @@ pub fn PngRows::end(Self) -> Bytes
 pub fn PngRows::new(Int32, Int32) -> Self
 pub fn PngRows::rows(Self) -> Int32
 
+#derive(Eq, Show, @debug.Debug)
 pub(all) struct Vector {
   w : Double
   h : Double
   layers : Array[VectorPath]
-} derive(Eq, Show, @debug.Debug)
+}
 pub fn Vector::rgba(Self, Int32, Int32, tint? : Int64) -> FixedArray[Byte]
 
+#derive(Eq, Show, @debug.Debug)
 pub(all) struct VectorPath {
   d : String
   fill : Int64
@@ -74,7 +76,7 @@ pub(all) struct VectorPath {
   sy : Double
   tx : Double
   ty : Double
-} derive(Eq, Show, @debug.Debug)
+}
 pub fn VectorPath::outlines(Self, Double, Double) -> Array[(Array[Double], Bool)]
 
 // Type aliases

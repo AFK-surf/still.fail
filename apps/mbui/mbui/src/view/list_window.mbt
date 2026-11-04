@@ -6,15 +6,59 @@
 // or gone over it), the column is moved with it: what shows stays where it is.
 
 ///|
+/// A block's room in a windowed list, apart from its natural measured height: its height now and where its content
+/// lies inside it. A changing room may cut its content softly and scale/fade it, without changing what is measured.
+pub(all) struct ListRoom {
+  height : Double
+  offset : Double
+  clip : Bool
+  soft : Bool
+  scale : Double
+  alpha : Double
+  presses : Bool
+} derive(Eq)
+
+///|
+/// A block shown at its natural height, without a transition of its room.
+pub fn list_room(height : Double) -> ListRoom {
+  { height, offset: 0.0, clip: false, soft: false, scale: 1.0, alpha: 1.0, presses: true }
+}
+
+///|
+let windowed_room : Lent[() -> ListRoom] = Lent::new()
+
+///|
+/// The room allocated to the enclosing windowed block in this frame. Something carried into that block can use
+/// its opening displacement directly, rather than easing a second time toward its already moving content.
+pub fn View::list_room(self : View) -> ListRoom? {
+  self.lent(windowed_room).map(fn(f) { f() })
+}
+
+///|
 /// A page's list (`s`: Scroll::list, what it holds above moved with it as it grows: Scroll::grew_above) scrolling up and
 /// down in it (View::scrolls, `slop` and `bar` as there) holding the
 /// blocks `keys` names, in their order, one under another from its top, nothing else: each made by `make` in a node of
 /// its own as it comes to show (its room, from the column's top to its foot, met by any of it), let go as it no more
 /// does, as tall in the column meanwhile as it was last laid out (`est` where it never was). How tall each that does
 /// not show was is forgotten as the column is laid out at another width or all words are measured anew (what shows is
-/// laid out again as it is, its height told anew). `bar_clear`: the bar's ends kept clear (View::scrolls'). `foot_room`:
-/// room kept under the last block, as it is now (none of the blocks: it is never made or let go as the column scrolls,
-/// so it is laid out as it changes wherever the column is).
+/// laid out again as it is, its height told anew).
+/// `from_end` (a chat's, an old view's list's `from_end` and `stick_end`): shorter than the column, its blocks at its
+/// foot; first shown at its end; at its end, kept there as what it holds grows or what shows is laid out taller (at
+/// once, nothing glided after: an old view's list's `glide_on_growth` off), no longer once it is scrolled from there,
+/// again once it is back. `follows` says, followed, whether it is kept at its end so. `shown` is told the keys of the
+/// blocks in sight, in order, as they change (what is read, how far from its end). `put`, said, puts it at once where
+/// that block's top is that far under its top, as the blocks over it are counted (it follows its end no more), and
+/// is said none again. A block come at its end while it follows that `fresh` says is new to it (said while it
+/// shows, not caught up on) is glided after, not there at once; one come that is taller than what shows under `cover`
+/// (what lies over its top: a bar) is glided to only as far as its top under that, read from its top (Follow.kt), and
+/// it follows its end no more. `read_from_top` may say false for a block whose end should stay in view even when
+/// tall, such as the reader's own message. Shorter than the column, what was at its foot goes up as blocks come at its end (and
+/// as their heights are told) while it follows, glided from where it was drawn; not as the column is laid out shorter.
+/// `room`: a block's room as its measured height changes, where heights themselves follow a shared motion. The
+/// list follows those rooms directly, without another glide over their motion; natural heights remain cached.
+/// `kept`: a block needed outside the visible window too, such as a send's landing while the list glides towards it.
+/// It is laid out in its own slot, still cut by the list, and does not change which rows `shown` reports in sight.
+/// `bar_clear`: the scroll bar's ends kept clear; `foot_room`: room under the last block, laid out even while the last block is off screen.
 pub fn[K : Hash + Eq] View::scrolls_window(
   self : View,
   s : Scroll,
@@ -23,10 +67,30 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   est? : Double = 80.0,
   slop? : Double,
   bar? : ScrollBar,
+  from_end? : Bool = false,
+  follows? : @signals.Signal[Bool] = @signals.signal(true, same=fn(a, b) { a == b }),
+  shown? : @signals.Signal[Array[K]],
+  put? : @signals.Signal[(K, Double)?],
+  fresh? : (K) -> Bool = fn(_) { false },
+  read_from_top? : (K) -> Bool = fn(_) { true },
+  cover? : () -> Double = fn() { 0.0 },
+  room? : (K, Double) -> ListRoom,
+  kept? : (K) -> Bool = fn(_) { false },
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
   foot_room? : () -> Double = fn() { 0.0 },
 ) -> View {
   guard self.live() is Some(_) else { return self }
+  let put_at = put.unwrap_or(@signals.signal(None))
+  let measuring_anchor = Ref(false)
+  let release_put : Ref[() -> Unit] = Ref(fn() { })
+  // Stop following in the input's cause, before measuring what that input reveals. The new heights may offset
+  // the scroll by more than the hand moved it, so that direction cannot be recovered from layout coordinates.
+  s.on_hand = fn(d) {
+    measuring_anchor.val = false
+    (release_put.val)()
+    if from_end && d < 0.0 { follows.set(false) }
+  }
+  self.owns(fn() { s.on_hand = fn(_) { } }) |> ignore
   // (how tall each was laid out while it showed, by its key, told as each is laid out (`told` counting each change of
   // it); forgotten as the column is laid out at another width, or as all words are measured anew (the system's size of
   // words, how the theme shapes them: Tree::words_again))
@@ -35,6 +99,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   let tell = fn() { told.set(@signals.untracked(fn() { told.get() }) + 1) }
   // (those that show now: laid out again as they are, each told anew where it comes out otherwise; the rest forgotten)
   let showing : Map[K, Bool] = Map([])
+  let slots : Map[K, View] = Map([])
   self.reacts(fn() { (self.laid_size_told().map(fn(z) { z.0 }), self.words_redone()) }, fn(_) {
     let gone = heights.keys().filter(fn(k) { !showing.contains(k) }).collect()
     if gone.length() > 0 {
@@ -47,7 +112,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // (each block's top in the column and its height, in order: as tall as it was laid out, else est)
   let laid = @signals.computed(fn(_) {
     told.get() |> ignore
-    let out : Array[(K, Double, Double, Bool)] = []
+    let out : Array[(K, Double, Double, Bool, ListRoom)] = []
     let mut top = 0.0
     for k in keys() {
       let (h, known) = match heights.get(k) {
@@ -56,8 +121,12 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       }
       // (as tall as it is laid out in the column: on its host's pixels where it sets a page's list's rows on them,
       // Tree::rows_slot)
-      let h = self.tree.rows_slot(h)
-      out.push((k, top, h, known))
+      let r = match room {
+        Some(f) => f(k, h)
+        None => list_room(h)
+      }
+      let h = self.tree.rows_slot(dmax(0.0, r.height))
+      out.push((k, top, h, known, r))
       top = top + h
     }
     out
@@ -71,10 +140,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     let x = at()
     let out = []
     for b in laid.get() {
-      if b.1 >= x + vh {
+      if b.1 >= x + vh && !(room is Some(_) && b.2 == 0.0 && b.1 == x + vh) {
         break
       }
-      if b.1 + b.2 > x {
+      if b.1 + b.2 > x || (room is Some(_) && b.2 == 0.0 && b.1 >= x) {
         out.push(b.0)
         // (one never laid out shows as it is laid out, those under it only once it is: where they start is known then,
         // nothing made that turns out to be past the foot, as an old view's list lays a row and then the next)
@@ -85,9 +154,102 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     out
   })
+  // (its blocks in sight by their places, it put at one, and how far past the first in sight's top it is: what a test
+  // reads and asks, Tree::list_rows)
+  s.rows = Some((
+    fn() {
+      let all = keys()
+      let w = window.get()
+      match (w.get(0), w.last()) {
+        (Some(a), Some(b)) => (all.search(a).unwrap_or(-1), all.search(b).unwrap_or(-1))
+        _ => (-1, -1)
+      }
+    },
+    fn(i) {
+      match laid.get().get(i) {
+        Some(b) => {
+          // A requested row owns the new position through its first full measurement, just as a saved position
+          // does. Keeping the previous reading anchor here would move the request away as the row grows.
+          put_at.set(Some((b.0, 0.0)))
+        }
+        None => ()
+      }
+    },
+    fn() {
+      let x = at()
+      match laid.get().iter().find_first(fn(b) { b.1 + b.2 > x }) {
+        Some(b) => x - b.1
+        None => 0.0
+      }
+    },
+    fn(i) {
+      keys().get(i).bind(fn(k) {
+        if showing.contains(k) { slots.get(k).map(fn(v) { v.rect() }) } else { None }
+      })
+    },
+  ))
+  self.owns(fn() { s.rows = None }) |> ignore
+  match shown {
+    Some(sh) => self.reacts(fn() { window.get() }, fn(w) { sh.set(w) })
+    None => ()
+  }
+  // (put at a block and held there: it follows no end meanwhile, whatever it is clamped to as it is laid out)
+  let anchor : Ref[(K, Double)?] = Ref(None)
+  let putting = Ref(false)
+  let p = put_at
+  // (held there as the blocks over it and it are laid out, counted as they come to be, till all that shows is laid
+  // out as it is)
+  let held : Ref[(K, Double, Double)?] = Ref(None)
+  release_put.val = fn() { held.val = None; putting.val = false }
+  let hold = fn(all : Array[(K, Double, Double, Bool, ListRoom)]) {
+    match held.val {
+      Some((k, offset, _)) =>
+        match all.search_by(fn(b) { b.0 == k }) {
+          Some(i) => {
+            // (the block itself in sight first, laid out as it is, where it is not yet: how far into it it is put
+            // is of its own height)
+            // A first measurement may include only a row's heading, with its hosted content still to be
+            // measured. Keep part of that row in sight until the saved point fits inside it; otherwise the
+            // row would be let go before its island can report the rest of its height.
+            let past = if offset < 0.0 { dmin(-offset, dmax(0.0, all[i].2 - 0.5)) } else { -offset }
+            let to = if all[i].3 { all[i].1 + past } else { all[i].1 }
+            let to = if to < 0.0 { 0.0 } else { to }
+            // The requested row remains the reading anchor while what is above it finishes measuring,
+            // including a hosted view's later measurement. A provisional row above it cannot take over.
+            anchor.val = Some((k, all[i].1))
+            measuring_anchor.val = true
+            s.x.set(to)
+            // (let go once what shows is all laid out as it is: the blocks over it as counted no more matter)
+            let in_sight = @signals.untracked(fn() { window.get() })
+            let known = in_sight.iter().all(fn(w) { all.iter().any(fn(b) { b.0 == w && b.3 }) })
+            // (and once it can go there: not while how far it can go, as counted so far, falls short of it, unless all of it
+            // is laid out as it is)
+            let reached = to <= @signals.untracked(fn() { s.most_now() }) + 0.5 || all.iter().all(fn(b) { b.3 })
+            let inside = offset >= 0.0 || -offset < all[i].2
+            held.val = if all[i].3 && inside && known && reached && in_sight.length() > 0 { None } else { Some((k, offset, to)) }
+            putting.val = held.val is Some(_)
+          }
+          None => ()
+        }
+      None => ()
+    }
+  }
+  self.reacts(fn() { p.get() }, fn(now) {
+    match now {
+      Some((k, offset)) => {
+        follows.set(false)
+        putting.val = true
+        held.val = Some((k, offset, @signals.untracked(fn() { s.x.get() })))
+        hold(@signals.untracked(fn() { laid.get() }))
+        p.set(None)
+      }
+      None => ()
+    }
+  })
+  // (as the blocks are counted anew, and as how far it can go comes to be told: it may go there only then)
+  self.reacts(fn() { (laid.get(), s.most_now()) }, fn(now) { hold(now.0) })
   // (what shows held where it is as what is over it changes height: the first block that showed, its top as it was
   // then, the column moved by as far as that moved; as it is scrolled, the first that shows then)
-  let anchor : Ref[(K, Double)?] = Ref(None)
   self.reacts(fn() { (laid.get(), at()) }, fn(now) {
     let (all, x) = now
     let mut d = 0.0
@@ -102,16 +264,57 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     if d != 0.0 {
       s.grew_above(d)
     }
-    anchor.val = match all.search_by(fn(b) { b.1 + b.2 > x + d }) {
-      Some(i) => Some((all[i].0, all[i].1))
-      None => None
+    // When the hand brings unmeasured blocks in above words still in sight, those words keep their place while
+    // the estimates are replaced. An estimated first block cannot yet take over as the anchor: its measurement
+    // could push all the words that were being read out of the window in this same layout.
+    let vh = self.laid_size_told().map(fn(z) { z.1 }).unwrap_or(0.0)
+    let measuring = all.iter().any(fn(b) { !b.3 && b.1 < x + d + vh && b.1 + b.2 > x + d })
+    let known_in_sight = fn(b : (K, Double, Double, Bool, ListRoom)) {
+      b.3 && b.1 < x + d + vh && b.1 + b.2 > x + d
+    }
+    let held = match anchor.val.bind(fn(a) {
+      all.iter().find_first(fn(b) { b.0 == a.0 && known_in_sight(b) })
+    }) {
+      Some(b) => Some((b.0, b.1))
+      // The previous anchor can be an estimate from before the list followed its end, or no longer visible.
+      // Other measured words still in sight belong to the same reading window. Hold those before giving an
+      // unmeasured row the anchor: its first height can otherwise move every already visible row away.
+      None => all.iter().find_first(known_in_sight).map(fn(b) { (b.0, b.1) })
+    }
+    // A row's first measurement can still lack its island or a newly made child. Keep the already shown anchor
+    // through those measurements too, until the hand moves again or that anchor leaves the window.
+    measuring_anchor.val = (measuring || measuring_anchor.val) && held is Some(_) &&
+      (!from_end || !@signals.untracked(fn() { follows.get() }))
+    anchor.val = if measuring_anchor.val {
+      held
+    } else {
+      match all.search_by(fn(b) { b.1 + b.2 > x + d }) {
+        Some(i) => Some((all[i].0, all[i].1))
+        None => None
+      }
     }
   })
-  self.scrolls(s, slop?=slop, bar?=bar, bar_clear~, fn(held) {
+  // The anchor and the scroll range use the same heights. Reading the holder's previous layout here would clamp
+  // a compensated anchor to the old end, then mistake that clamp for the reader returning to the end.
+  let extent = fn() { laid.get().last().map(fn(b) { b.1 + b.2 }).unwrap_or(0.0) + foot_room() }
+  let out = self.scrolls(s, slop?=slop, bar?=bar, content_extent=extent, bar_clear~, fn(held) {
+    // (shorter than the column: at its foot)
+    if from_end {
+      held
+      .min_height(By(fn() { self.laid_size_told().map(fn(z) { z.1 }) }))
+      .lies_along(Is(End))
+      |> ignore
+    }
     held.padding(By(fn() { (0.0, 0.0, 0.0, foot_room()) })) |> ignore
     held.each(keys, fn(k) { k }, fn(slot, item) {
       let k = @signals.untracked(fn() { item.get() })
-      let shows = fn() { window.get().contains(k) }
+      slots[k] = slot
+      slot.owns(fn() { slots.remove(k) }) |> ignore
+      let shows = fn() { window.get().contains(k) || kept(k) }
+      let room_now = fn() {
+        laid.get().iter().find_first(fn(b) { b.0 == k }).map(fn(b) { b.4 }).unwrap_or(list_room(0.0))
+      }
+      slot.lends(windowed_room, room_now) |> ignore
       // (as tall as it is counted, showing or not: as what it holds was told laid out, est before; never as tall as
       // what it holds is while that is still to be laid out, the column's end gone up and back in one frame)
       slot
@@ -121,9 +324,20 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       }))
       .shrink(Is(0.0))
       |> ignore
+      if room is Some(_) {
+        slot.clips(By(fn() { room_now().clip }))
+        .cuts_softly(By(fn() { room_now().soft }))
+        .presses(By(fn() { room_now().presses }))
+        .hides(By(fn() { !room_now().presses })) |> ignore
+      }
       slot.show(shows, fn(v) {
         // (as tall as what it holds, whatever its slot is counted as till that is told)
         v.shrink(Is(0.0)) |> ignore
+        if room is Some(_) {
+          v.offset(By(fn() { (0.0, room_now().offset) }))
+          .scale(By(fn() { room_now().scale }), about=Drawn)
+          .alpha(By(fn() { room_now().alpha })) |> ignore
+        }
         showing[k] = true
         v.owns(fn() { showing.remove(k) }) |> ignore
         // (how tall it is told as it is laid out, kept by its key)
@@ -140,4 +354,163 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       })
     })
   })
+  // (after it scrolls: how far it can go is told from then, View::scrolls' room)
+  // (kept at its end while it follows: as how far it can go changes, there at once; scrolled from there by any other
+  // cause (the hand, the wheel, a fling, a glide), it follows no more, and again once that brings it back there)
+  if from_end {
+    let last_most = Ref(-1.0)
+    let last_x = Ref(0.0)
+    // (how many blocks it held: more come at its end while it follows, glided after, not there at once)
+    let last_count = Ref(-1)
+    let last_key : Ref[K?] = Ref(None)
+    // (the blocks it held, by key: those new to it among them told apart; the first new to it that `fresh` says is,
+    // till its top is counted)
+    let last_keys : Ref[Map[K, Bool]?] = Ref(None)
+    let newest : Ref[K?] = Ref(None)
+    // (shorter than the column, how far its first block's top is under the column's: the room over them at its foot)
+    let lead = fn() {
+      let total = laid.get().last().map(fn(b) { b.1 + b.2 }).unwrap_or(0.0)
+      match self.laid_size_told() {
+        Some((_, vh)) => if vh > total { vh - total } else { 0.0 }
+        None => 0.0
+      }
+    }
+    let last_lead = Ref(-1.0)
+    let last_vh = Ref(-1.0)
+    // (blocks come at its end, their heights not told yet: what they come to as told is theirs)
+    let awaiting : Map[K, Bool] = Map([])
+    self.reacts(fn() { (s.most_now(), s.drawn(self.tree), lead()) }, fn(now) {
+      let (most, x, lead_now) = now
+      let now_keys = @signals.untracked(keys)
+      let all = @signals.untracked(fn() { laid.get() })
+      // (what came now, and those of what came before whose heights are told now: the room at its foot falling for
+      // them alone, not for the column laid out shorter (the window, a keyboard) nor for anything else)
+      let came_now = match last_keys.val {
+        Some(was) => now_keys.filter(fn(k) { !was.contains(k) })
+        None => []
+      }
+      let ours = came_now.length() > 0
+      if ours {
+        for k in came_now {
+          awaiting[k] = true
+        }
+      }
+      let mut told_now = false
+      for b in all {
+        if b.3 && awaiting.contains(b.0) {
+          awaiting.remove(b.0)
+          told_now = true
+        }
+      }
+      for k in awaiting.keys().collect() {
+        if !now_keys.contains(k) {
+          awaiting.remove(k)
+        }
+      }
+      let vh = self.laid_size_told().map(fn(z) { z.1 }).unwrap_or(-1.0)
+      let same_room = last_vh.val < 0.0 || (vh - last_vh.val).abs() < 0.5
+      last_vh.val = vh
+      // (what was at its foot moves by the change in that room. A new block measured smaller than its estimate
+      // gives room back: undo that part of the displacement too, on the same arrival, before anything is drawn.)
+      let fell = if room is None && (ours || told_now) &&
+        same_room &&
+        last_lead.val >= 0.0 &&
+        (last_lead.val - lead_now).abs() > 0.5 {
+        last_lead.val - lead_now
+      } else {
+        0.0
+      }
+      last_lead.val = lead_now
+      let grew = most != last_most.val || fell != 0.0
+      // (moved up from where it was: scrolled from its end, whatever else changed with it; not while it glides by
+      // itself (a glide is stopped by the hand), as where a glide is drawn is read at more than one moment of a frame)
+      // (not where it is only kept within how far it can go now, that come to be less)
+      let up = s.glides_till() is None && x < (if most < last_x.val { most } else { last_x.val }) - 0.5
+      // (come at its end: more of them, the last another; not those come over them, a page before)
+      let count = now_keys.length()
+      let came = last_count.val >= 0 &&
+        count > last_count.val &&
+        now_keys.last() != last_key.val &&
+        now_keys.last().map(fresh).unwrap_or(false)
+      // (the first block new to it that `fresh` says is: where its top is, once it is counted)
+      match last_keys.val {
+        Some(was) =>
+          match now_keys.iter().find_first(fn(k) { !was.contains(k) && fresh(k) }) {
+            Some(k) => newest.val = Some(k)
+            None => ()
+          }
+        None => ()
+      }
+      last_keys.val = Some(Map::from_array(now_keys.map(fn(k) { (k, true) })))
+      let newest_top = match newest.val {
+        Some(k) if !read_from_top(k) => {
+          newest.val = None
+          None
+        }
+        Some(k) =>
+          match @signals.untracked(fn() { laid.get() }).iter().find_first(fn(b) { b.0 == k }) {
+            Some(b) if b.3 => {
+              // A retained row has been measured before its room has opened. Keep the arrival's target until
+              // enough of that room exists to put a tall answer's top under the cover.
+              if room is None || heights.get(k).unwrap_or(b.2) <= vh - cover() {
+                newest.val = None
+              }
+              Some(b.1)
+            }
+            Some(_) => None
+            // (gone before it was counted)
+            None => {
+              newest.val = None
+              None
+            }
+          }
+        None => None
+      }
+      last_count.val = count
+      last_key.val = now_keys.last()
+      last_most.val = most
+      last_x.val = x
+      if up {
+        if @signals.untracked(fn() { follows.get() }) {
+          follows.set(false)
+        }
+      } else if grew && @signals.untracked(fn() { follows.get() }) {
+        // (one come taller than what shows: as far as its top under what covers its top, no further)
+        let to = match newest_top {
+          // (its top where it is drawn: under the room over the blocks at its foot, where they are shorter than it)
+          Some(top) => { let t = top + lead_now - cover(); if t < most { t } else { most } }
+          None => most
+        }
+        // (come at its end while it was shorter than the column: from where what was at its foot was drawn, under its
+        // top as far as that went up, on the same way)
+        let glide = fn(to : Double) {
+          if fell != 0.0 {
+            s.glide_under(fell, to)
+          } else {
+            s.glide_to(to)
+          }
+        }
+        if to < most - 0.5 {
+          newest.val = None
+          glide(to)
+          follows.set(false)
+        } else if (room is None && (came || newest.val is Some(_) || s.glides_till() is Some(_))) || s.sent_to() is Some(_) {
+          // (blocks come at its end, one new to it not counted yet, or come while it glides after them: glided after, to
+          // where its end is now. A requested glide follows changing rooms too: setting x alone leaves its old target;
+          // a wheel's distance still belongs to the hand.)
+          glide(most)
+        } else if x != most {
+          s.x.set(most)
+          last_x.val = most
+        }
+      } else if !putting.val && most > 0.0 && s.glides_till() is None {
+        // (not while it is put somewhere and held there, nor before it can go anywhere)
+        let at_end = x >= most - 0.5
+        if at_end != @signals.untracked(fn() { follows.get() }) {
+          follows.set(at_end)
+        }
+      }
+    })
+  }
+  out
 }

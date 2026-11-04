@@ -4,7 +4,7 @@
 ///|
 /// The same words in pieces drawn by an old view (Ctx::rich) at (0, 0) and by a node 200 down, each `w` wide at most,
 /// both in `theme`; how wide and tall the node is laid out.
-fn runs_pair(pieces : Array[(String, Int, Int64)], w : Double, theme : Theme) -> (Tester, () -> (Double, Double)) {
+fn runs_pair(pieces : Array[(String, Int, Int64)], w : Double, theme : Theme, lines? : () -> Int = fn() { 0 }) -> (Tester, () -> (Double, Double)) {
   let t = Tester::new(fn(_c) {  }, w=400.0, h=400.0)
   t.check_looks(false)
   t.ctx().set_theme(theme)
@@ -14,7 +14,7 @@ fn runs_pair(pieces : Array[(String, Int, Int64)], w : Double, theme : Theme) ->
       h.width(Is(Some(w))).height(Is(Some(200.0))) |> ignore
       old(h, fn(c) {
         c.box(w=Px(w), fn() {
-          c.rich(pieces.map(fn(p) { span(p.0, weight=p.1, color=p.2) }), size=15.0, line=22.0, color=0x333333FFL)
+          c.rich(pieces.map(fn(p) { span(p.0, weight=p.1, color=p.2) }), size=15.0, line=22.0, color=0x333333FFL, max_lines=lines())
           |> ignore
         })
         |> ignore
@@ -34,6 +34,7 @@ fn runs_pair(pieces : Array[(String, Int, Int64)], w : Double, theme : Theme) ->
           wrap: true,
           tracking: @view.letters_own,
         })
+        .runs_look(By(fn() { { ..@view.runs_plain, max_lines: lines() } }))
         |> ignore
       })
       |> ignore
@@ -46,6 +47,26 @@ fn runs_pair(pieces : Array[(String, Int, Int64)], w : Double, theme : Theme) ->
     let d = tree.drawn_of(id.val.unwrap()).unwrap()
     (d.w, d.h)
   })
+}
+
+///|
+test "a retained quote's rich text ends after two lines as the old rich text does, and its line limit changes in place" {
+  let limit = @signals.signal(2)
+  let (t, laid) = runs_pair([("林：", 500, 0x111111FFL), ("这是一段会超过两行的引用，后面的文字应当省略，不能画到卡片外面。", 0, 0L)], 140.0, Theme::light(), lines=fn() { limit.get() })
+  let (old, new) = runs_drawn(t)
+  assert_true(old.length() > 10)
+  assert_eq(new, old)
+  assert_eq(laid().1, 44.0)
+  limit.set(1)
+  t.draw()
+  let (old, new) = runs_drawn(t)
+  assert_eq(new, old)
+  assert_eq(laid().1, 22.0)
+  limit.set(0)
+  t.draw()
+  let (old, new) = runs_drawn(t)
+  assert_eq(new, old)
+  assert_true(laid().1 > 44.0)
 }
 
 ///|

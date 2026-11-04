@@ -155,7 +155,8 @@ pub fn Tree::says_picture(self : Tree, id : NodeId) -> Bool {
 }
 
 ///|
-/// The nodes that say what they are, and those hosting an old view, in the tree's order (each before what it holds, what
+/// The nodes that say what they are, those hosting an old view, and words that say nothing of themselves in nothing
+/// named by them (read as Text, their words their label, as ui's old frame reads an old view's), in the tree's order (each before what it holds, what
 /// it holds in its order): what is read out of the window's tree (ui's semantics_tree splices each old
 /// view's in at its node), as it is now (what was told since the last frame said, no frame waited for).
 pub fn Tree::said_order(self : Tree) -> Array[SaidNode] {
@@ -163,7 +164,7 @@ pub fn Tree::said_order(self : Tree) -> Array[SaidNode] {
   // event, Tree::laid_now; no frame drawn for it)
   @signals.untracked(fn() { self.pull() })
   let out : Array[SaidNode] = []
-  fn walk(at : Int, parent : Int, depth : Int, hid : Bool) -> Unit {
+  fn walk(at : Int, parent : Int, depth : Int, hid : Bool, named : Bool) -> Unit {
     let n = self.nodes[at]
     // (left out of its row: none of it read out, Tree::out_at)
     if !n.live || n.out {
@@ -174,11 +175,13 @@ pub fn Tree::said_order(self : Tree) -> Array[SaidNode] {
     let id = { at, gen: n.gen }
     let mut up = parent
     let mut d = depth
+    let mut named = named
+    let place = fn() {
+      // A layout motion changes the painting alone. Accessibility actions use the same destination as a press.
+      let (x, y, scale) = self.placed(at)
+      (x, y, n.flex.width * scale, n.flex.height * scale)
+    }
     if n.said is Some(_) || n.hosted {
-      let rect = match self.drawn_of(id) {
-        Some(dr) => (dr.x, dr.y, dr.w, dr.h)
-        None => (0.0, 0.0, 0.0, 0.0)
-      }
       out.push({
         id,
         said: n.said,
@@ -186,7 +189,29 @@ pub fn Tree::said_order(self : Tree) -> Array[SaidNode] {
         allowed: self.allows(id),
         hidden: hid,
         disabled: self.pressless_at(at),
-        rect,
+        rect: place(),
+        parent,
+        depth,
+      })
+      up = out.length() - 1
+      d = depth + 1
+      // (named, by its label or else by the words it holds, what it holds read as its name: none of their words read
+      // again on their own; a group of things names none of them, as ui's old frame has it, Ctx::semantics_old)
+      match n.said {
+        Some(s) if !said_holds_named(s.role) =>
+          named = named || s.label != "" || self.words_within(id, fn(_) { "" }) != ""
+        _ => ()
+      }
+    } else if !named && n.look.words != "" {
+      // words saying nothing of themselves, in nothing named by them: read as words, as an old view's are
+      out.push({
+        id,
+        said: Some(said(Text, label=n.look.words)),
+        hosted: false,
+        allowed: self.allows(id),
+        hidden: hid,
+        disabled: false,
+        rect: place(),
         parent,
         depth,
       })
@@ -194,14 +219,22 @@ pub fn Tree::said_order(self : Tree) -> Array[SaidNode] {
       d = depth + 1
     }
     for k in self.kids_in_order(at) {
-      walk(k, up, d, hid)
+      walk(k, up, d, hid, named)
     }
   }
 
   if self.nodes.length() > 0 {
-    walk(0, -1, 0, false)
+    walk(0, -1, 0, false, false)
   }
   out
+}
+
+///|
+/// Whether a node of `role` holds what it holds as things of their own, not as its name (ui's old frame's: a group, a
+/// dialog, a menu, a list…; Ctx::semantics_old's `named`).
+fn said_holds_named(role : Role) -> Bool {
+  role is (Group | Dialog | AlertDialog | Menu | Toolbar | RadioGroup | TabList | TabPanel | Region | Form | MenuBar |
+    Listbox | ScrollArea | Navigation)
 }
 
 ///|

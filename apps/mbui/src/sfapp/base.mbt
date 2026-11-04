@@ -308,6 +308,7 @@ pub using @sfbase {
   emit_step,
   emit_clock,
   emit_flight,
+  emit_place,
   emit_out,
   type Turns,
   type TurnFor,

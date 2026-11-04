@@ -37,6 +37,21 @@ fn keep_text_runs(tl : TextLayout, ox : Double, oy : Double, dx : (Int) -> Doubl
   if !text_runs.on {
     return
   }
+  text_lines_into(text_runs.runs, tl, ox, oy, dx, cy0, cy1)
+}
+
+///|
+/// The lines of `tl` drawn at (`ox`, `oy`) (each moved right by `dx(line)`), those inside the clip [cy0, cy1], into
+/// `out` (keep_text_runs').
+fn text_lines_into(
+  out : Array[TextRun],
+  tl : TextLayout,
+  ox : Double,
+  oy : Double,
+  dx : (Int) -> Double,
+  cy0 : Double,
+  cy1 : Double,
+) -> Unit {
   let s = tl.shaped
   for l in 0..<tl.line_start.length() {
     let top = oy + l.to_double() * tl.line_h
@@ -59,7 +74,7 @@ fn keep_text_runs(tl : TextLayout, ox : Double, oy : Double, dx : (Int) -> Doubl
     let a = s.starts[first]
     let b = s.starts[last] + s.lens[last]
     let x = ox + dx(l) + s.pad
-    text_runs.runs.push({
+    out.push({
       text: tl.text.unsafe_substring(start=a, end=b),
       x0: x + tl.xs[first],
       x1: x + tl.xs[last] + s.adv[last] - 2.0 * s.pad,
@@ -76,6 +91,13 @@ fn keep_rich_runs(lay : RichLayout, ox : Double, oy : Double, cy0 : Double, cy1 
   if !text_runs.on {
     return
   }
+  rich_lines_into(text_runs.runs, lay, ox, oy, cy0, cy1)
+}
+
+///|
+/// The lines of the rich words `lay` drawn at (`ox`, `oy`), those inside the clip [cy0, cy1], into `out`
+/// (keep_rich_runs').
+fn rich_lines_into(out : Array[TextRun], lay : RichLayout, ox : Double, oy : Double, cy0 : Double, cy1 : Double) -> Unit {
   for l in 0..<lay.line_start.length() {
     let top = oy + lay.line_y[l]
     if top > cy1 || top + lay.line_h[l] < cy0 {
@@ -97,7 +119,7 @@ fn keep_rich_runs(lay : RichLayout, ox : Double, oy : Double, cy0 : Double, cy1 
     let a = lay.starts[first]
     let b = if last + 1 < lay.starts.length() { lay.starts[last + 1] } else { lay.len }
     let (x0, x1) = lay.span_x(first, last + 1)
-    text_runs.runs.push({
+    out.push({
       text: lay.text.unsafe_substring(start=a, end=b).trim(chars=" \t\n\r\u{3000}\u{a0}").to_string(),
       x0: ox + x0 + lay.pre[first],
       x1: ox + x1,
@@ -113,5 +135,11 @@ fn keep_rich_runs(lay : RichLayout, ox : Double, oy : Double, cy0 : Double, cy1 
 /// starts and its last ends, its baseline and its line's top and bottom.
 pub fn Tester::text_runs(self : Tester) -> Array[TextRun] {
   ignore(self)
-  text_runs.runs.copy()
+  let out = text_runs.runs.copy()
+  // (and the lines of the window's tree's words, where they are drawn, after them: tree_text_lines)
+  match view_tree() {
+    Some(tree) => tree_text_lines(tree, out)
+    None => ()
+  }
+  out
 }

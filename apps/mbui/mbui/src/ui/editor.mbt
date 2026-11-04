@@ -2176,6 +2176,7 @@ fn EditorState::can(self : EditorState) -> Int {
 /// A field right clicked since the last frame (a desktop's secondary button): its id and where, the focus given it (the
 /// edit menu the app puts up there acts on it: field_can, field_edit). None when none was.
 pub fn Ctx::field_right_clicked(self : Ctx) -> (Int, Double, Double)? {
+  hand_events_read()
   for m in desk.menus {
     for id in m.0 {
       if self.editors.contains(id) {

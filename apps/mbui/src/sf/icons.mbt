@@ -201,7 +201,7 @@ let video_capsule_ring : Double = 14.0
 ///|
 /// How far the capsule is from the picture's sides and foot where its corner is too square to lead it (a quote's
 /// picture's, quote_picture_corner).
-let video_capsule_alone_in : Double = 8.0
+pub let video_capsule_alone_in : Double = 8.0
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -526,6 +526,35 @@ pub fn segments(c : @ui.Ctx, size : Double, stroke : Double, color : Int64, grou
   let node = c.lines(lines, w=Px(size), h=Px(size))
   spoke_turn(c, node)
   node
+}
+
+///|
+/// The same ring of eight arcs (segments') as a node of the window's tree in `parent`: its lines said once, in
+/// `color` and over `ground` as they change, stepped round by the clock as each frame is drawn (View::cycle, on the
+/// spokes' steps, View::turn; held at the first with motion reduced): nothing made again for it while it turns. The
+/// node.
+pub fn segments_node(parent : @view.View, size : Double, stroke : Double, color : () -> Int64, ground : () -> Int64) -> @view.View {
+  let r = size / 2.0 - stroke / 2.0
+  let mid = size / 2.0
+  let pi = 3.141592653589793
+  let deg = pi / 180.0
+  let cap = stroke / 2.0 / r / deg
+  // (its arcs worked out once: only their colours change as it lives)
+  let arcs = Array::makei(8, fn(i) {
+    @ui.arc(mid, mid, r, from=(i.to_double() * 45.0 - 90.0 - 15.5 + cap) * deg, sweep=(31.0 - 2.0 * cap) * deg)
+  })
+  parent.box(fn(v) {
+    v
+    .width(Is(Some(size)))
+    .height(Is(Some(size)))
+    .lines(By(fn() {
+      let (c, g) = (color(), ground())
+      arcs.mapi(fn(i, a) { @ui.line(a, width=stroke, color=mix(c, spoke_alpha[(8 - i) % 8], g)) })
+    }))
+    // (a step of the eight at a time, as spoke_turn's resident cycle)
+    .turn(By(fn() { if @ui.reduced_motion() { 0.0 } else { (v.cycle(8.0 * spoke_step_ms) * 8.0).floor() / 8.0 * 2.0 * pi } }), drawn=true)
+    |> ignore
+  })
 }
 
 ///|

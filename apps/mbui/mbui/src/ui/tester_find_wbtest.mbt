@@ -35,3 +35,20 @@ test "find: an old view's text and the tree's words, made transparent, then show
 
 ///|
 let find_leave_ms : Double = 100.0
+
+///|
+test "find_last follows the tree's paint order through its old views, whichever draws the last matching words" {
+  for old_last in [true, false] {
+    let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
+    set_view_app(fn(root) {
+      let retained = fn() {
+        root.box(fn(v) { v.words(Is("shared tree")) |> ignore }).height(Is(Some(40.0))) |> ignore
+      }
+      if old_last { retained() }
+      old(root, fn(c) { c.text("shared island") |> ignore }).height(Is(Some(40.0))) |> ignore
+      if !old_last { retained() }
+    })
+    t.draw()
+    assert_eq(t.find_last("shared"), t.find(if old_last { "shared island" } else { "shared tree" }))
+  }
+}

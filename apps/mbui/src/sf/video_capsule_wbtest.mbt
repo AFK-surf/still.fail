@@ -2,6 +2,36 @@
 // when the system makes words larger. Looking up the original text alone does not tell what survived layout.
 
 ///|
+test "a retained video capsule keeps its duration and progress whole while changing on a fractional pixel screen" {
+  for duration in [5500.0, 3605000.0] {
+    for font in [1.0, 2.0] {
+      let coming : @signals.Signal[Double?] = @signals.signal(None)
+      let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=390.0, h=300.0, platform=2, scale=3.25)
+      @ui.set_view_app(fn(root) {
+        @ui.set_tree_theme(ui_theme_now)
+        root.box(fn(tile) {
+          tile.width(Is(Some(200.0))).height(Is(Some(160.0))) |> ignore
+          video_capsule_node(tile, fn() { duration }, coming=fn() { coming.get() })
+        }) |> ignore
+      })
+      t.set_font_scale(font)
+      t.draw()
+      assert_eq(t.lines_of(clock(duration)), [clock(duration)])
+      for on in [true, false] {
+        coming.set(if on { Some(0.99) } else { None })
+        t.frame()
+        for _ in 0..<10 {
+          t.run_for(dur_ms / 10.0)
+          assert_eq(t.squeeze_faults(), [], msg="duration=\{duration} font=\{font} coming=\{on} at=\{t.time()}")
+        }
+        let expected = if on { "99%" } else { clock(duration) }
+        assert_eq(t.lines_of(expected), [expected])
+      }
+    }
+  }
+}
+
+///|
 test "a video capsule shows the whole duration at the system's text and pixel scales" {
   for pixels in [1.0, 1.25, 2.0, 2.75, 3.0] {
     for font in [1.0, 1.15, 1.3, 1.5, 2.0] {

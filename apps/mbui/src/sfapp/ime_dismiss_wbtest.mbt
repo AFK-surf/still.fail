@@ -146,7 +146,7 @@ test "opening a draft picture for viewing puts the keyboard away" {
   t.tap_text("发消息")
   t.type_text("写到一半")
   assert_true(t.ime().0)
-  let id = text(Some(writing.files[0]), "id")
+  let id = text(Some(writing.files.get()[0]), "id")
   let tile = thumb_of(t.ctx(), "ws1/st1//draft:" + id).unwrap()
   t.tap(tile.x + tile.w / 2.0, tile.y + tile.h / 2.0)
   assert_true(viewer.get() is Some(_), msg="the picture viewer opened")

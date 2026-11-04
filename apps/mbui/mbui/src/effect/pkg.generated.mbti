@@ -39,17 +39,21 @@ pub fn trace(String) -> Unit
 pub async fn[X] uninterruptible(async () -> X) -> X
 
 // Errors
+#derive(Show)
 pub suberror BothFailed {
   BothFailed(Error, Error)
-} derive(Show)
+}
 
-pub suberror Interrupt derive(Show)
+#derive(Show)
+pub suberror Interrupt
 
+#derive(Show)
 pub suberror IoError {
   IoError(String)
-} derive(Show)
+}
 
-pub suberror QueueShutdown derive(Show)
+#derive(Show)
+pub suberror QueueShutdown
 
 // Types and methods
 pub struct Deferred[X] {
@@ -62,11 +66,12 @@ pub fn[X] Deferred::poll(Self[X]) -> X? raise
 pub fn[X] Deferred::succeed(Self[X], X) -> Bool
 pub async fn[X] Deferred::wait(Self[X]) -> X
 
+#derive(Show)
 pub(all) enum Exit[X] {
   Succeeded(X)
   Failed(Error)
   Interrupted
-} derive(Show)
+}
 
 pub struct Fiber[X] {
   // private fields
@@ -90,11 +95,12 @@ pub(all) struct Net {
   recv : async () -> Packet
 }
 
+#derive(Eq, Show)
 pub(all) struct Packet {
   from : String
   to : String
   body : String
-} derive(Eq, Show)
+}
 
 pub struct Queue[X] {
   // private fields
@@ -140,6 +146,7 @@ pub fn Runtime::next_due(Self) -> (Int64, String)?
 pub fn Runtime::next_timer(Self) -> Int64?
 pub fn Runtime::now(Self) -> Int64
 pub fn Runtime::on_defect(Self, (Error) -> Unit) -> Unit
+pub fn Runtime::on_timer(Self, (Int64) -> Unit) -> Unit
 pub fn Runtime::on_wake(Self, () -> Unit) -> Unit
 pub fn Runtime::outside_end(Self, Int32, wake? : Bool) -> Unit
 pub fn Runtime::outside_ended(Self) -> Int32

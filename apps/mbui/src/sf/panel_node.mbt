@@ -7,6 +7,31 @@
 // press outside close it (its gone told); what it holds closes it with what it was given (nothing told).
 
 ///|
+/// A control's panel whose open state belongs to the control. The same panel and entrance as the presenters',
+/// beside the live node made by `anchor`; its independent body may still be an old view. Closing by any route
+/// calls `close`. Like a control's popover, the page remains interactive; a press outside it closes it and reaches
+/// that page. A press on its trigger is the trigger's to toggle. No page is rebuilt to host it.
+pub fn panel_by_node(
+  parent : @view.View,
+  key : String,
+  open : () -> Bool,
+  anchor : (@view.View) -> @view.View,
+  body : (@ui.Ctx, () -> Unit) -> Unit,
+  close : () -> Unit,
+  w~ : Double,
+  side? : @ui.Side = Bottom,
+  along? : @ui.Along = End,
+) -> Unit {
+  let x : PanelOf = {
+    title: "", description: "", body, foot: None, w, fits: false, wide: false, live: None,
+    tall: 0.0, grows: false, focus: true, ruled: false, lists: false, fade_out_together: false,
+    form: false, field: "", stage: false, above: None, head_end: None, heads_itself: true,
+    side, along, offset: panel_offset, steps: false, on_back: None,
+  }
+  panel_node(parent, key, open, anchor, x, close, close, None, modal=false)
+}
+
+///|
 /// A panel `x` in `parent` while `open()` (going over pop_out_ms once not), beside what `anchor` makes in its layer;
 /// `key`: what its old views are named by (the presented's); `close`: what what it holds is given to close it; `cancel`
 /// as it is closed by Escape, back or a press outside. `shown`, `gone`: as dialog_layer_node's.
@@ -18,9 +43,10 @@ fn panel_node(
   x : PanelOf,
   close : () -> Unit,
   cancel : () -> Unit,
-  keyed : Presented,
+  keyed : Presented?,
   shown? : () -> Unit = fn() {  },
   gone? : () -> Unit = fn() {  },
+  modal? : Bool = true,
 ) -> Unit {
   parent.show(
     open,
@@ -60,7 +86,7 @@ fn panel_node(
       layer
       .over(Is(true))
       // (modal while open: closing, what is under it its own again as it begins to go)
-      .modal(By(live))
+      .modal(By(fn() { modal && live() }))
       // (going, nothing of it read out: as an old layer on its way out, inert, is hidden from what reads the screen)
       .hides(By(fn() { layer.leaving() }))
       .held_back_goes_on()
@@ -70,14 +96,13 @@ fn panel_node(
       if !x.focus {
         layer.leaves_typing() |> ignore
       }
-      layer
       // (a press outside its panel its own, nothing under it pressed: closing it as it goes down)
-      .presses(Is(true))
-      .on_drag(fn(d) {
-        if d.kind == Down && @signals.untracked(live) {
-          cancel()
-        }
-      })
+      if modal {
+        layer.presses(Is(true)).on_drag(fn(d) {
+          if d.kind == Down && @signals.untracked(live) { cancel() }
+        }) |> ignore
+      }
+      layer
       .on_key(fn(k) {
         if k.code == @ui.key_escape && @signals.untracked(live) {
           cancel()
@@ -130,6 +155,23 @@ fn panel_node(
         .presses(Is(true))
         .on_press(fn() {  })
         |> ignore
+        if !modal {
+          let first_down = @signals.untracked(fn() { p.window_downs() })
+          p.reacts(fn() { p.window_downs() }, fn(down) {
+            if down != first_down && !p.leaving() {
+              let inside = fn(v : @view.View) {
+                match v.window_down_here() {
+                  Some((x, y)) => {
+                    let (_, _, width, height) = v.placed_now()
+                    x >= 0.0 && y >= 0.0 && x < width && y < height
+                  }
+                  None => false
+                }
+              }
+              if !inside(at) && !inside(p) { cancel() }
+            }
+          })
+        }
         // (the side of what opened it it went on, as the tree placed it (View::went_told: flipped there for want of room,
         // told as it goes to the other): what its parts keep nearest what opened it is by that side (panel_opens_up), read
         // as each is built, so built again as it goes to the other side, never as it only moves; what was told before
@@ -199,7 +241,7 @@ fn panel_node(
                 small_panel_now.val = true
                 words_in_now.val = text_in
                 rule_over_now.val = if x.ruled && x.foot is Some(_) { panel_pad } else { 0.0 }
-                draw_panel_body(x, c, close, keyed~)
+                draw_panel_body(x, c, close, keyed?)
                 panel_sides_in.val = 0.0
                 small_panel_now.val = false
                 words_in_now.val = 0.0
@@ -235,7 +277,7 @@ fn panel_node(
                   small_panel_now.val = true
                   words_in_now.val = text_in
                   rule_over_now.val = if x.ruled && x.foot is Some(_) { panel_pad } else { 0.0 }
-                  draw_panel_body(x, c, close, keyed~)
+                  draw_panel_body(x, c, close, keyed?)
                   panel_sides_in.val = 0.0
                   small_panel_now.val = false
                   words_in_now.val = 0.0

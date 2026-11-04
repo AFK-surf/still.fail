@@ -173,9 +173,9 @@ test "panel live beside what opened it, 大屏 keyboard and mouse: held short of
   let (bx, by, bw, bh) = t.get(Button, label="好的").rect
   t.tap(bx + bw / 2.0, by + bh / 2.0)
   t.run_for(@ui.move_most_ms)
-  // (as main has it, 2f452a34)
+  // (the title clips rows 20 and 21; row 22 is the first whose own glyphs show whole)
   assert_eq([bottom, "said \{said} presenting \{@sf.presenting()}"], [
-    "seen (Some(第20行), Some(第39行)) title [(616, 20, 248, 20)] button Some((826.2, 458.2, 44, 24)) in window Some(true)",
+    "seen (Some(第22行), Some(第39行)) title [(616, 20, 248, 20)] button Some((826.2, 458.2, 44, 24)) in window Some(true)",
     "said [ok] presenting false",
   ])
 }

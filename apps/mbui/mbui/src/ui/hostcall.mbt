@@ -1198,6 +1198,12 @@ fn outside_end(kind : Int, id : Int, wake? : Bool = true) -> Unit {
 let answers_told : Array[@signals.Signal[Int]] = Array::makei(outside_native + 1, fn(_) { @signals.signal(0) })
 
 ///|
+/// A Tester's frames as its fake host's answers count them (answers_by_the_frame): an answer given in one is taken
+/// from the next.
+// kept across runs: it only counts on
+let answers_frames : Ref[Int] = Ref(0)
+
+///|
 /// The answers the host told of (outside_key) not taken yet.
 // kept across runs: emptied by each Tester (reset_globals)
 let answers_waiting : Map[Int64, Bool] = Map::new()
@@ -1239,6 +1245,9 @@ fn answers_by_the_frame() -> Unit {
   if fake.val is None {
     return
   }
+  // (the frames as its answers count them: this one begun before they are told, so what reads one as it is told
+  // takes it, the window's tree as the old views do as they are built after)
+  answers_frames.val += 1
   let kinds : Map[Int, Bool] = {}
   for k, _ in outside_tickets {
     kinds[(k >> 32).to_int()] = true

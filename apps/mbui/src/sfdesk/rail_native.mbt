@@ -218,12 +218,14 @@ fn bar_chat(
   if !@sf.native_on() {
     return false
   }
-  bar_chat_of.val = Some((src, r))
-  // (what was kept of the chat before it while it was read: its own in their place, none of the other's left)
-  if bar_chat_carried.length() > 0 {
-    nav_page.retain(fn(p) { !bar_chat_carried.contains(p.0.id) })
-    bar_chat_carried.clear()
+  if drawn_page.val is Some(p) && p != app.nav.top() {
+    return true
   }
+  bar_chat_of.val = Some((src, r))
+  // This is the chat's complete set, including absent optional actions. The previous view may have handed its
+  // actions itself while kept on screen, rather than through bar_chat_waiting; none of those may remain either.
+  nav_page.retain(fn(p) { !p.0.id.has_prefix("page/chat/") })
+  bar_chat_carried.clear()
   bar_action("chat/more", @sf.t("common.more"), "more", more, rows?=if rows.iter().any(fn(i) { i is Some(_) }) { Some(rows) } else { None }) |> ignore
   bar_action("chat/info", @sf.t("web-pages.chat.info"), "info", info) |> ignore
   let (tabs, _) = side_now(src, r)

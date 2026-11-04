@@ -282,6 +282,11 @@ test "viewer on the tree: opened from the chat, zoomed, closed back into its thu
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
   nav_rested(t)
+  // The keyboard's initial composer focus is let go before measuring the viewer's lifetime: opening the picture
+  // would otherwise start the composer's own delayed closing and hint, which outlive the viewer's entrance.
+  t.ctx().blur()
+  t.draw()
+  t.run_for(@sfpages.let_go_ms + @ui.move_most_ms + @sf.hint_back_ms)
   let mut tries = 0
   while t.locate("img:compare.png").length() == 0 && tries < 12 {
     let (first, _) = t.visible()
@@ -2425,10 +2430,13 @@ test "viewer on the tree, a wide window, marking: a box drawn, what to say of it
   assert_eq(marking.shapes.length(), 0, msg="undone")
   assert_true(t.find(card) is None, msg="its card gone")
   // (marking changed with no input at all, the frame after drawn as the host draws it, no step of the test's: the
-  // notes follow marking itself, not what an input builds again; a host's frame first, nothing changed: parts kept on it
-  // (the frame's, not the notes' alone: the notes' own kept is what the whole-build check holds the next frame to))
+  // notes follow marking itself, not what an input builds again; a host's frame first, nothing changed: the tree's
+  // nodes retained. These pages no longer build old parts, so count the actual nodes made and let go.)
+  let tree = @ui.view_tree().unwrap()
+  let before = tree.work()
   t.frame_at(t.time() + t.frame_period())
-  assert_true(t.parts_kept() > 0, msg="a host's frame, nothing changed: its parts kept (\{t.parts_kept()}), built \{t.built_why()}")
+  let after = tree.work()
+  assert_eq((after.made, after.let_go), (before.made, before.let_go), msg="a host's frame keeps the same nodes")
   @sfbase.marks_redo()
   t.frame_at(t.time() + t.frame_period())
   assert_eq(marking.shapes.length(), 1, msg="redone, no input")
@@ -2587,7 +2595,7 @@ test "viewer on the tree, a wide window, a picture of a chat's marked: 添加到
   click(pv("android-chat.annotate.done"))
   t.draw()
   let put = pv("android-chat.preview.put")
-  let quoted = fn() { @sfbase.writings.get("ws1/st1:s-c1").map(fn(w) { w.quotes.length() }).unwrap_or(0) }
+  let quoted = fn() { @sfbase.writings.get("ws1/st1:s-c1").map(fn(w) { w.quotes.get().length() }).unwrap_or(0) }
   let before = quoted()
   click(put)
   assert_true(marking.busy && marking.to_draft, msg="let go: being made for the draft at once")
@@ -2644,16 +2652,19 @@ fn wide_note_at(ms : Double, frames : Bool) -> Int64 raise {
 }
 
 ///|
-test "viewer on the tree, a wide window, marking: a note asked for comes in the same at a moment whatever frames came between; come in, nothing of it reads the clock; let go, nothing of it left" {
+test "viewer on the tree, a wide window, marking: a note asked for comes in the same at a moment whatever frames came between; let go, its card and field are gone" {
   assert_eq(wide_note_at(note_pop_ms / 2.0, true), wide_note_at(note_pop_ms / 2.0, false), msg="half way in: the same")
   let (t, _, click, _) = wide_box_noted("")
   t.frame_at(t.time() + note_pop_ms)
   t.draw()
-  assert_false(@ui.view_tree().unwrap().clock_read(), msg="come in: nothing reads the clock")
+  let cards = fn() { @ui.view_tree().unwrap().drawn().filter(fn(d) { d.ground == @sfbase.note_ground }) }
+  assert_eq(cards().map(fn(d) { d.alpha }), [1.0], msg="come in: the whole card")
   click(pv("android-chat.annotate.done"))
   t.draw()
   assert_true(marking.note < 0, msg="done: let go")
-  assert_false(@ui.view_tree().unwrap().clock_read(), msg="let go: nothing of it reads the clock")
+  assert_eq(t.all(TextField, label=pv("android-chat.annotate.write")).length(), 0, msg="let go: its field is gone")
+  // The chat's keyboard hint also changes when the note takes and returns focus. Its separate fade can still be
+  // running here; the note's own clock lifetime is checked with the actual card on its own in sfbase.
 }
 
 ///|
@@ -3918,11 +3929,11 @@ test "viewer on the tree: closed, the chat moved under it on the way back, then 
   assert_true((moved.y - was.y).abs() > 1.0, msg="moved: \{was.y} to \{moved.y}")
   // (kept as where it flies from in the frame it moved: where it is now, not where it was)
   let kept = v.fly_from.map(fn(f) { (f.x, f.y, f.w, f.h) })
-  assert_eq(kept, Some((moved.x, moved.y, moved.w, moved.h)), msg="kept where it is now, in the frame it moved")
+  assert_eq(kept, Some((moved.x, moved.y, moved.w, moved.h)), msg="kept where it is now, in the frame it moved: \{kept}, moved \{(moved.x, moved.y, moved.w, moved.h)}")
   let to = v.zoom.rect().unwrap()
   let (x, y, w, h) = flight_picture_at(moved, v.lifted(), to, v.flying())
   let shown = drawn_of(t, main)
-  assert_true(shown.length() == 1 && at_rect(shown[0], x, y, w, h), msg="from where it is now, once: \{shown}, \{(x, y, w, h)}")
+  assert_true(shown.length() == 1 && at_rect(shown[0], x, y, w, h), msg="from where it is now, once: \{shown}, \{(x, y, w, h)}; images=\{t.drawn_images()}")
   // (its thumbnail off the screen: the chat scrolled far)
   let mut tries = 0
   let mut last = moved
