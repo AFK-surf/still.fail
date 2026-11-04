@@ -20,6 +20,18 @@ test("lines before a place, whole, across parts and longer than a part, without 
     const from = Buffer.byteLength("a\nbé\r\n");
     for (const chunk of [1, 3, 7, 1 << 20]) assert.deepEqual([...linesWithin(file, from, end, chunk)], [{ text: long, at: from }, { text: "", at: from + 51 }, { text: "last", at: from + 52 }], `parts of ${chunk}`);
     assert.deepEqual([...linesWithin(file, end, end)], []);
+    // What the runner gave back reads as zeros: skipped, with the line it cut, the lines after it read on.
+    const holed = join(dir, "holed.out");
+    const after = "cut short\nnext\n";
+    const cut = "one\ntwo is cu";
+    writeFileSync(holed, Buffer.concat([Buffer.from(cut), Buffer.alloc(40), Buffer.from(after)]));
+    const holedEnd = cut.length + 40 + after.length;
+    for (const chunk of [8, 16, 1 << 20]) {
+      const got = [...linesWithin(holed, 0, holedEnd, chunk)];
+      assert.deepEqual([got[0], got.at(-1)], [{ text: "one", at: 0 }, { text: "next", at: holedEnd - "next\n".length }], `parts of ${chunk}`);
+      // Between them, at most what the hole cut (no JSON: passed over by whoever reads them).
+      assert.ok(got.slice(1, -1).every((l) => l.text.endsWith("cut short") && l.text.length <= cut.length + 40 + 9), `parts of ${chunk}`);
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

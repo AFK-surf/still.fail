@@ -320,8 +320,16 @@ export function* linesWithin(file: string, start: number, end: number, chunk = R
       const buf = Buffer.allocUnsafe(Math.min(chunk, end - at));
       const n = readSync(fd, buf, 0, buf.length, at);
       if (n <= 0) break;
+      // Where the runner gave the disk back (what was acknowledged long before: native/runner `punch`) it reads as
+      // zeros: skipped, with the line it cut (never carried on, a part at a time, as one line hundreds of MB long).
+      let skip = 0;
+      if (buf[0] === 0) {
+        while (skip < n && buf[skip] === 0) skip++;
+        carry = Buffer.alloc(0);
+        base = at + skip;
+      }
       at += n;
-      const bytes = carry.length === 0 ? buf.subarray(0, n) : Buffer.concat([carry, buf.subarray(0, n)]);
+      const bytes = carry.length === 0 ? buf.subarray(skip, n) : Buffer.concat([carry, buf.subarray(0, n)]);
       let from = 0;
       for (let i = bytes.indexOf(0x0a); i >= 0; i = bytes.indexOf(0x0a, from)) {
         const line = bytes.toString("utf8", from, i);
