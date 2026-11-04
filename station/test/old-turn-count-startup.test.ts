@@ -82,6 +82,44 @@ test("short old sessions answer exactly without writing; long counts stay unknow
   } finally { f.close(); }
 });
 
+test("the direct count stops at the boundary and never invents a count for the next turn", () => {
+  const f = fixture();
+  try {
+    const put = f.store.db.prepare("INSERT INTO turns(id,session_key,kind,started_at) VALUES (?,'short','input',?)");
+    for (let n = 5; n < 64; n++) put.run(`short-${n}`, n);
+    const r = read.makeStore(f.store.db, f.dir);
+    assert.equal(read.sessionStats(r, "short").get("short")?.turns, 64);
+    put.run("short-64", 64);
+    assert.throws(() => read.sessionStats(r, "short"), read.TurnCountUnavailable);
+    assert.equal(f.store.db.prepare("SELECT n FROM session_turns WHERE session='short'").get(), undefined);
+    finish(f.store.db, "short");
+    assert.equal(read.sessionStats(r, "short").get("short")?.turns, 65);
+  } finally { f.close(); }
+});
+
+test("a direct old count visits at most 65 turns and a prepared count visits none", () => {
+  const f = fixture();
+  try {
+    let visited = 0;
+    f.store.db.function("visit_old_count", () => { visited++; return 1; });
+    const instrumented = new Proxy(f.store.db, {
+      get(target, property) {
+        if (property === "prepare") return (sql: string) => target.prepare(sql.replace(
+          "WHERE old.session_key = s.key LIMIT", "WHERE old.session_key = s.key AND visit_old_count() LIMIT"));
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const r = read.makeStore(instrumented, f.dir);
+    assert.throws(() => read.sessionStats(r, "long"), read.TurnCountUnavailable);
+    assert.equal(visited, 65);
+    finish(f.store.db, "long");
+    visited = 0;
+    assert.equal(read.sessionStats(r, "long").get("long")?.turns, 150);
+    assert.equal(visited, 0);
+  } finally { f.close(); }
+});
+
 test("old turn count discards slices changed by another connection and keeps new counts exact", () => {
   const f = fixture();
   const other = new DatabaseSync(f.path);
@@ -162,6 +200,21 @@ test("catching up many new turns stays bounded and resumes correctly", () => {
   } finally { f.close(); }
 });
 
+test("a mutation after the last old slice cannot publish a stale count", () => {
+  const f = fixture();
+  try {
+    let step = turnCountStep(f.store.db, "long", null);
+    while (!step.scan?.finished) step = turnCountStep(f.store.db, "long", step.scan);
+    f.store.db.prepare("DELETE FROM turns WHERE id='old-0'").run();
+    step = turnCountStep(f.store.db, "long", step.scan);
+    assert.equal(step.done, false);
+    assert.equal(step.scan, null);
+    assert.equal(f.store.db.prepare("SELECT n FROM session_turns WHERE session='long'").get(), undefined);
+    finish(f.store.db, "long");
+    assert.equal(read.sessionStats(read.makeStore(f.store.db, f.dir), "long").get("long")?.turns, 149);
+  } finally { f.close(); }
+});
+
 for (const recursive of [false, true]) test(`replacing a turn cannot leave a stale old count (recursive triggers ${recursive})`, () => {
   const f = fixture();
   try {
@@ -184,6 +237,8 @@ test("a reader shares an old count after handover while short sessions remain im
     const two = readers.read("summary", { key: "long" }, "en");
     const short = JSON.parse(await readers.read("summary", { key: "short" }, "en"));
     assert.equal(short.turns, 5);
+    const sidebar = JSON.parse(await readers.read("sharedChats", { viewer: { sub: "me", email: "me", name: "Me", role: "owner", workspace: "w", device: "d" }, sessions: null, threads: null }, "en"));
+    assert.ok(sidebar.some((row: any) => row.id === "long"), "the sidebar does not need its turn count");
     assert.equal(f.store.db.prepare("SELECT COUNT(*) AS n FROM session_turns_guard").get()?.n, 0);
     previous.resolve();
     const [first, second] = await Promise.all([one, two]);
