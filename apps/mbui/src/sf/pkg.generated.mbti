@@ -192,6 +192,8 @@ pub fn bones(@ui.Ctx, () -> Unit, still? : Bool, fill? : Bool) -> Unit
 
 pub fn box_fit(Double, Double, Double) -> (Double, Double)
 
+pub fn branded(String) -> String
+
 pub let breath_ms : Double
 
 pub fn breathe(@ui.Ctx, Int32, failed? : Bool, low? : Double, resident? : Bool, share? : Double) -> Unit
@@ -1762,6 +1764,8 @@ pub fn prev_in(String, Array[String]) -> String?
 
 pub let preview_address_h : @ui.Len
 
+pub fn product() -> String
+
 pub fn progress(@ui.Ctx, String, Double?, w? : @ui.Size, color? : Int64) -> Unit
 
 pub fn progress_key(@ui.Ctx, String, Double, Double, String, String, Double?, failed~ : Bool) -> Bool
@@ -2005,6 +2009,8 @@ pub let select_w : Double
 pub fn set_dark(Bool?) -> Unit
 
 pub fn set_language(String?) -> Unit
+
+pub fn set_product(String) -> Unit
 
 pub fn set_shortcuts((String) -> String) -> Unit
 

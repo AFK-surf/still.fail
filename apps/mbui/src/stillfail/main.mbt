@@ -423,7 +423,7 @@ fn main {
   }
   if core_linked() == 0 || !@sfcore.start() {
     @sfapp.host_setup()
-    @ui.run("still.fail", fn(c) {
+    @ui.run(@sf.product(), fn(c) {
       @sf.begin(c) |> ignore
       c.box(w=Fill(1.0), h=Fill(1.0), align=ACenter, justify=JCenter, fn() {
         c.text("这个版本没有链接内核（APP=stillfail scripts/mac.sh build）", size=13.0, color=@sf.theme().p.muted)
@@ -479,7 +479,7 @@ fn main {
   @ui.perf_also("page", fn(_) { @sfbase.page_kind(@sfbase.app.nav.top()) })
   @ui.perf_also("screens", @sfpages.screens_perf)
   @ui.run(
-    "still.fail",
+    @sf.product(),
     fn(c) {
       // (what the core said since the last frame is handed to @core.receive as the frame begins, before this:
       // sfcore.start)

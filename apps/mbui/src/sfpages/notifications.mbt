@@ -326,7 +326,7 @@ fn notify_block_node(
             in_words=true,
           )
           if @ui.platform() == 0 {
-            @sf.words_node(k, fn() { @sf.t("web-pages.notifications.sound", args=[("name", "still.fail")]) }, fn() {
+            @sf.words_node(k, fn() { @sf.t("web-pages.notifications.sound", args=[("name", @sf.product())]) }, fn() {
               sound_words
             })
             |> ignore

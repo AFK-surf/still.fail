@@ -59,7 +59,7 @@ pub fn about_node(
               fn() { @sf.t("common.telemetry.title") },
               fn() { (core.reporting)().unwrap_or(false) },
               fn(on) { (core.set_reporting)(on) },
-              note=fn() { @sf.t("common.telemetry.note", args=[("name", "still.fail")]) },
+              note=fn() { @sf.t("common.telemetry.note", args=[("name", @sf.product())]) },
             )
           })
         })
@@ -124,7 +124,7 @@ fn version_rows_node(g : @view.View, core : Core) -> Unit {
   // (its name as the core's preferences say it, still.fail where they say none)
   @sf.link_row_node(g, fn() {
     let product = text((core.topic)("prefs", Map::new()).value, "productName")
-    (if product == "" { "still.fail" } else { product }) + " " + build_version()
+    (if product == "" { @sf.product() } else { product }) + " " + build_version()
   }, fn() {  }, goes=false)
   let v = fn() { (core.version_now)() }
   // (whether newer builds come by themselves, on unless turned off, under what it is about: off, one is said in the
@@ -140,7 +140,7 @@ fn version_rows_node(g : @view.View, core : Core) -> Unit {
           (core.update_auto_on)()
         }
       },
-      note=fn() { @sf.t("android-settings.version.auto.note", args=[("app", "still.fail")]) },
+      note=fn() { @sf.t("android-settings.version.auto.note", args=[("app", @sf.product())]) },
     )
   })
   // (what is done at once where it is, in the link's ink: checking, and the update's row under it)
