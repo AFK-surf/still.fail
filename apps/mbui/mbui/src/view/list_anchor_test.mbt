@@ -14,7 +14,7 @@ priv struct AnchoredCase {
 }
 
 ///|
-fn anchored_case(n : Int, ahead? : Double = 0.0, from_end? : Bool = true, kept? : () -> Array[Int] = fn() { [] }) -> AnchoredCase {
+fn anchored_case(n : Int, ahead? : Double = 0.0, from_end? : Bool = true, kept? : () -> Array[Int] = fn() { [] }, rooms? : () -> (Int, Double) -> @view.ListRoom) -> AnchoredCase {
   let scroll = @view.Scroll::list()
   let keys = @signals.signal(Array::makei(n, fn(i) { i }), same=fn(a, b) { physical_equal(a, b) })
   let heights : Map[Int, @signals.Signal[Double]] = Map([])
@@ -35,7 +35,7 @@ fn anchored_case(n : Int, ahead? : Double = 0.0, from_end? : Bool = true, kept? 
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(o) {
       o.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
-      o.scrolls_anchored(scroll, fn() { keys.get() }, est=80.0, ahead~, from_end~, follows~, shown~, put~, kept_keys=kept, fn(b, k) {
+      o.scrolls_anchored(scroll, fn() { keys.get() }, est=80.0, ahead~, from_end~, follows~, shown~, put~, rooms?=rooms, kept_keys=kept, fn(b, k) {
         live[k] = b
         b.owns(fn() { live.remove(k) }) |> ignore
         let h = tall(k)
@@ -47,6 +47,21 @@ fn anchored_case(n : Int, ahead? : Double = 0.0, from_end? : Bool = true, kept? 
   })
   tree.frame(390.0, 844.0, now=0.0) |> ignore
   { tree, scroll, keys, heights, live, follows, shown, put }
+}
+
+///|
+test "scrolls_anchored: a placement with moving rooms is consumed without relaying out, and later room changes still apply" {
+  let extra = @signals.signal(0)
+  let c = anchored_case(100, rooms=fn() {
+    let n = extra.get()
+    fn(_, h) { @view.list_room(h + n.to_double()) }
+  })
+  c.put.set(Some((50, 10.0)))
+  c.tree.frame(390.0, 844.0, now=10.0) |> ignore
+  assert_eq(c.top(50), Some(10.0))
+  extra.set(10)
+  c.tree.frame(390.0, 844.0, now=20.0) |> ignore
+  assert_eq(c.top(51).unwrap() - c.top(50).unwrap(), 50.0)
 }
 
 ///|

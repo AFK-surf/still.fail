@@ -130,6 +130,14 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   let rooms_laid : Map[K, ListRoom] = Map([])
   let laid_n : @signals.Signal[Int] = @signals.signal(0)
   let natural_room = fn(_k : K, h : Double) { list_room(h) }
+  // Keep the captured room function until one of its own inputs changes. Clearing a completed placement request
+  // must not make an otherwise identical room look new while the layout result is being published.
+  let current_rooms = @signals.computed(fn(_) {
+    match rooms {
+      Some(f) => f()
+      None => natural_room
+    }
+  })
   // (the hand scrolling it toward its start: no more at its end, from the hand's cause, before what it brings in is
   // measured)
   s.on_hand = fn(d) {
@@ -216,12 +224,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
             Some(f) => f()
             None => []
           },
-          rooms: {
-            v: match rooms {
-              Some(f) => f()
-              None => natural_room
-            },
-          },
+          rooms: { v: current_rooms.get() },
           fresh: {
             let ks = keys()
             let out = []
