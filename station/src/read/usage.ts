@@ -15,6 +15,7 @@ import { type InWorkspace, sees } from "../store/rows.ts";
 import { usageDetailSince } from "../store/usage-detail.ts";
 import { hasCompactUsage } from "../store/usage-compact.ts";
 import { HISTORY_AFTER, HISTORY_DAYS, HISTORY_SCOPES, HISTORY_TOTAL, hasUsageHistory, historyTransferPending, quarter, usageHistorySince } from "../store/usage-history.ts";
+import { historyMoveEpoch, historyMovesPending, physicalHistoryScope } from "../store/usage-history-moves.ts";
 import { titleOf } from "./views.ts";
 import { profileRuntimes } from "../agents/profiles.ts";
 import { facts } from "../accounts/catalog.ts";
@@ -370,10 +371,13 @@ export function validHistoryRange(requested: { from: bigint; to: bigint } | unde
 export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null, mark: (stage: string) => void = () => {},
   requested?: { from: bigint; to: bigint }): Json | null {
   if (!hasUsageHistory(s.db) || historyTransferPending(s.db)) return null;
+  const epoch = historyMoveEpoch(s.db);
   const range = validHistoryRange(requested, utcOffsetMin) ? requested! : undefined;
   // Whose quarters the viewer sees (rows.ts `sees`): their workspace's, and the home one's ('') where it is theirs.
-  const scopes = viewer === null ? (s.db.prepare(HISTORY_SCOPES).all() as Json[]).map((r) => String(r.scope))
-    : viewer.home !== false ? [viewer.workspace, ""] : [viewer.workspace];
+  const logical = viewer === null ? null : viewer.home !== false ? [viewer.workspace, ""] : [viewer.workspace];
+  if (historyMovesPending(s.db, logical)) return null;
+  const scopes = logical === null ? (s.db.prepare(HISTORY_SCOPES).all() as Json[]).map((r) => r.scope as string | Uint8Array)
+    : logical.map((scope) => physicalHistoryScope(s.db, scope));
   const from = range === undefined ? -(2n ** 62n) : quarter(range.from);
   const to = range === undefined ? 2n ** 62n : quarter(range.to);
   const days = new Map<string, { day: string; runtime: string; model: null; tokens: number; calls: number }>();
@@ -401,6 +405,8 @@ export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace
   try { remoteRuns = remoteRunCount(s, viewer); }
   catch (error) { if (!(error instanceof Error) || error.message !== REMOTE_RUNS_PENDING) throw error; }
   mark("historyRemoteRuns");
+  // A move could have committed between the queries above. Do not return an old workspace's partial snapshot.
+  if (historyMoveEpoch(s.db) !== epoch) return null;
   return {
     days: [...days.values()].sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0)),
     ...(range !== undefined ? { tokens, beforeDay: new Date(Number(range.to + utcOffsetMin * 60_000n)).toISOString().slice(0, 10) } : {}),

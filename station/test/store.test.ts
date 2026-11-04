@@ -22,6 +22,7 @@ import { HAS_SESSION_ACTIVE_WATCH } from "../src/store/watch-jobs.ts";
 import * as read from "../src/read/store.ts";
 import { HISTORY_AFTER, HISTORY_DAYS, HISTORY_SCOPES, HISTORY_TOTAL } from "../src/store/usage-history.ts";
 import { historyOwnerSources } from "../src/store/usage-history-transfer.ts";
+import { HISTORY_MOVE_PENDING_SCOPE, HISTORY_MOVE_ROWS, HISTORY_MOVE_SCOPE } from "../src/store/usage-history-moves.ts";
 import { type CardEnd, cardsEnded } from "../src/connects/card-ends.ts";
 import { fileAway } from "./archived-before.ts";
 import { testClock } from "./hub-fakes.ts";
@@ -1303,6 +1304,14 @@ test("what the station asks again and again is planned by an index, never a scan
   ] as [string, unknown[]][];
   for (const [sql, args] of usagePlans) {
     const plan = (compact.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
+    assert.ok(plan.every((d) => !d.startsWith("SCAN ")), `${sql}\n  ${plan.join(" | ")}`);
+  }
+  const moving = memory();
+  moving.db.prepare("INSERT INTO usage_history (scope, quarter, calls, tokens) VALUES ('old', 0, 1, 1)").run();
+  moving.setSessionsWs("old", "new");
+  for (const [sql, args] of [[HISTORY_MOVE_SCOPE, ["new"]], [HISTORY_MOVE_PENDING_SCOPE, ["new"]],
+    [HISTORY_MOVE_ROWS, ["old", 256]]] as [string, unknown[]][]) {
+    const plan = (moving.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
     assert.ok(plan.every((d) => !d.startsWith("SCAN ")), `${sql}\n  ${plan.join(" | ")}`);
   }
   // As the station's SQLite (node's) plans each: a scan only of an index that holds the sessions shown or running, the

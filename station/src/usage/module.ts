@@ -185,7 +185,7 @@ export function watchCompactMoves(store: StationStore, exited: Promise<void>): {
     const owner = current.threadId;
     worker = current;
     current.unref();
-    current.on("message", (answer: { done: boolean; session?: string; sessions?: string[]; from?: number; error?: string }) => {
+    current.on("message", (answer: { done: boolean; session?: string; sessions?: string[]; from?: number; historyReady?: boolean; error?: string }) => {
       if (closed) return;
       const work = held;
       held = null;
@@ -197,6 +197,7 @@ export function watchCompactMoves(store: StationStore, exited: Promise<void>): {
         return;
       }
       if (answer.session) store.usageChanged([answer.session], undefined, true);
+      if (answer.historyReady) store.usageChanged([], undefined, true);
       if (work.scope !== undefined) {
         if (answer.sessions?.length) {
           const prior = totals.get(work.scope);
