@@ -92,7 +92,7 @@ pub struct Scroll {
   priv mut rebase : () -> Unit
   /// a list that keeps itself: a node in it to be brought into sight (the focus come to it), told at that cause, its
   /// layout bringing it there as it lays it out
-  priv mut reveal : (NodeId) -> Unit
+  priv mut reveal : (NodeId, (Double, Double)?) -> Unit
   /// what a virtual list's counted extent is told by, read where how far it can go is followed (none: as it is laid
   /// out alone): View::scrolls_anchored's
   priv mut extent_told : () -> Unit
@@ -165,7 +165,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     bar_off: fn() { 0.0 },
     reads_free: false,
     rebase: fn() { },
-    reveal: fn(_) { },
+    reveal: fn(_, _) { },
     extent_told: fn() { },
     rows: None,
   }
