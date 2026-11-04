@@ -185,7 +185,7 @@ test("/releases/latest/<app> goes to the app's latest build, as its updater's fe
 test("a cloud of its own reads the station's releases from still.fail's when its bucket has none, never an app's", async () => {
   const asked: string[] = [];
   const h = await harness({
-    upstream: (file, request) => {
+    upstream: (file, request): { status: number; body?: string; headers?: Record<string, string> } => {
       asked.push(`${file} ${request.headers.range ?? ""}`.trim());
       if (file === "station.json") return { status: 200, body: '{"version":"0.1.9"}', headers: { "content-type": "application/json" } };
       if (file === "stillfail-station-linux-x64.tar.gz") return { status: 206, body: "tion", headers: { "content-range": "bytes 3-6/10", "content-type": "application/gzip" } };
