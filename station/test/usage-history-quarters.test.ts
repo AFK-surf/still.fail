@@ -171,7 +171,7 @@ test("installed on an older station, the history counts new calls without recons
       }
       assert.equal(history(store, 0, null).since, last + 20_000_000, `${state}: the older history is incomplete`);
       record(store, "a", [call("after", last + 30_000_000, 3)]);
-      assert.equal(history(store, 0, null).days.reduce((sum, day) => sum + day.tokens, 0), 4);
+      assert.deepEqual(days(history(store, 0, null)), [["1970-01-02", 1, 4]]);
     } finally { store.close(); }
   }
 });
