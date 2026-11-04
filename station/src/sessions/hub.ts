@@ -1120,7 +1120,10 @@ export class Hub {
   private sessionDeps(): SessionDeps {
     return {
       store: this.store,
-      preparePostsAfter: (messages, signal) => this.preparePostsAfter?.(messages, signal) ?? Promise.resolve(),
+      preparePostsAfter: (messages, signal) => {
+        if (!this.preparePostsAfter) throw new Error("post block builder unavailable");
+        return this.preparePostsAfter(messages, signal);
+      },
       chat: (connect) => this.chatOf(connect),
       driver: (runtime) => this.sessionDriver(runtime),
       runOn: (key, holding) => this.accounts.runOn(key, holding),

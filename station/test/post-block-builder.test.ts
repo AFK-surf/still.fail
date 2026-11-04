@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { pathToFileURL } from "node:url";
 import { test } from "node:test";
 import { PostBlockBuilder } from "../src/sessions/post-block-builder.ts";
@@ -9,8 +10,8 @@ import { installPostBlocks, postBlocksReady } from "../src/store/post-blocks.ts"
 import { Store } from "../src/store/store.ts";
 import { Rig } from "./hub-fakes.ts";
 
-function fromBefore(store: Store): number {
-  const thread = store.openThread("ember", "EMBER", "old", null, null).id;
+function fromBefore(store: Store, name = "old"): number {
+  const thread = store.openThread("ember", "EMBER", name, null, null).id;
   const put = store.db.prepare("INSERT INTO entries (thread,n,kind,author_kind,author,ts,at) VALUES (?,?,'message','agent',?,?,?)");
   store.db.exec("BEGIN");
   for (let n = 1; n <= 200; n++) put.run(thread, n, n === 180 ? "wanted" : "other", `m${n}`, n);
@@ -97,17 +98,84 @@ test("a delivery from an old thread waits for its indexed suffix before formatti
     const thread = fromBefore(rig.store);
     rig.store.joinThread(thread, "wanted", "ember");
     rig.store.db.prepare("INSERT INTO deliveries(thread,n,session) VALUES (?,170,'wanted')").run(thread);
-    rig.hub.preparePostsAfter = (positions, signal) => builder.ready(positions, signal);
-    const original = rig.store.postAfter.bind(rig.store);
-    rig.store.postAfter = (session, id, n) => {
-      assert.ok(postBlocksReady(rig.store.db, id, n), "formatting never scans an unindexed old suffix");
-      return original(session, id, n);
-    };
+    const prepared: { thread: number; n: number }[] = [];
+    rig.hub.preparePostsAfter = (positions, signal) => { prepared.push(...positions); return builder.ready(positions, signal); };
     const actor = rig.hub.actor(rig.session("wanted"));
     const [text] = await (actor as any).format(rig.store.pendingMessages("wanted")) as [string, unknown];
     assert.ok(text.includes('ts="m170" before="m180">'));
+    assert.deepEqual(prepared, [{ thread, n: 170 }]);
     assert.equal(postBlocksReady(rig.store.db, thread, 100), false);
   } finally { await builder.close(); await rig.close(); }
+});
+
+test("a delivery at the end of an old thread needs no history work", async () => {
+  const rig = new Rig();
+  try {
+    rig.store.insertSession({ key: "wanted", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/s", token: "wanted", createdAt: 1, lastActiveAt: 1 });
+    const thread = fromBefore(rig.store);
+    rig.store.joinThread(thread, "wanted", "ember");
+    rig.store.db.prepare("INSERT INTO deliveries(thread,n,session) VALUES (?,?,'wanted')").run(thread, 179);
+    rig.store.db.prepare("INSERT INTO deliveries(thread,n,session) VALUES (?,?,'wanted')").run(thread, 200);
+    rig.hub.preparePostsAfter = async () => { throw new Error("unneeded history work"); };
+    const actor = rig.hub.actor(rig.session("wanted"));
+    const [text] = await (actor as any).format(rig.store.pendingMessages("wanted")) as [string, unknown];
+    assert.ok(text.includes('ts="m179" before="m180">'));
+    assert.ok(text.includes('ts="m200">'));
+    assert.equal(postBlocksReady(rig.store.db, thread, 179), false);
+    assert.equal(rig.store.db.prepare("SELECT 1 FROM post_blocks_coverage WHERE thread = ?").get(thread), undefined);
+  } finally { await rig.close(); }
+});
+
+test("a batch prepares only the missing old suffixes and reads again after another post", async () => {
+  const rig = new Rig();
+  const builder = new PostBlockBuilder(rig.store, Promise.resolve());
+  try {
+    rig.store.insertSession({ key: "wanted", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/s", token: "wanted", createdAt: 1, lastActiveAt: 1 });
+    const first = fromBefore(rig.store, "first");
+    const second = fromBefore(rig.store, "second");
+    const last = fromBefore(rig.store, "last");
+    const deliver = rig.store.db.prepare("INSERT INTO deliveries(thread,n,session) VALUES (?,?,'wanted')");
+    for (const [thread, n] of [[first, 170], [second, 170], [last, 200]]) {
+      rig.store.joinThread(thread!, "wanted", "ember");
+      deliver.run(thread!, n!);
+    }
+    let calls = 0;
+    rig.hub.preparePostsAfter = (positions, signal) => {
+      calls++;
+      assert.deepEqual(positions, [{ thread: first, n: 170 }, { thread: second, n: 170 }]);
+      // The first snapshot saw the last message at the end; a new post arrives while the other suffixes are built.
+      rig.store.db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,ts,at) VALUES (?,201,'message','agent','wanted','m201',201)").run(last);
+      return builder.ready(positions, signal);
+    };
+    const actor = rig.hub.actor(rig.session("wanted"));
+    const [text] = await (actor as any).format(rig.store.pendingMessages("wanted")) as [string, unknown];
+    assert.equal(calls, 1);
+    assert.ok(text.includes('ts="m200" before="m201">'));
+    assert.equal(postBlocksReady(rig.store.db, last, 200), false);
+  } finally { await builder.close(); await rig.close(); }
+});
+
+test("unindexed quick answers still share one read snapshot", () => {
+  const dir = mkdtempSync(join(tmpdir(), "post-fast-snapshot-"));
+  const path = join(dir, "station.db");
+  const store = Store.open(path);
+  const other = new DatabaseSync(path);
+  try {
+    const thread = fromBefore(store);
+    const postAfter = store.postAfter.bind(store);
+    let wrote = false;
+    store.postAfter = (...args) => {
+      const found = postAfter(...args);
+      if (!wrote) {
+        wrote = true;
+        other.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,ts,at) VALUES (?,201,'message','agent','wanted','m201',201)").run(thread);
+      }
+      return found;
+    };
+    assert.deepEqual(store.postsAfter("wanted", [{ thread, n: 179 }, { thread, n: 200 }]), ["m180", null]);
+    assert.deepEqual(store.postsAfter("wanted", [{ thread, n: 200 }]), ["m201"]);
+    assert.equal(postBlocksReady(store.db, thread, 179), false);
+  } finally { other.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("closing an actor cancels its pending old-history work", async () => {

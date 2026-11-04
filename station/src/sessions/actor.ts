@@ -21,6 +21,7 @@ import { log } from "../ops/log.ts";
 import { Said, tr, stationLang } from "../ops/i18n.ts";
 import { failureOf, runtimeKind, runtimeLabel, type RuntimeKind } from "../agents/runtime.ts";
 import { type Handed, type MessageRow, type PendingMessage, handedOf } from "../store/rows.ts";
+import { PostBlocksUnavailable } from "../store/post-blocks.ts";
 
 /// How an agent ended its turn (chat_post / chat_state `kind`).
 export type DeclaredState = { kind: "all_done" } | { kind: "need_help" } | { kind: "waiting"; seconds: number };
@@ -1019,9 +1020,15 @@ export class SessionActor {
     const posts = new Map<PendingMessage, string>();
     const fromChat = (said as PendingMessage[]).filter((m) => m.message.apart !== true);
     const positions = fromChat.map((m) => ({ thread: m.message.thread, n: m.message.n }));
-    await this.deps.preparePostsAfter?.(positions, signal);
-    if (signal.aborted) throw new Error("delivery cancelled");
-    const laterPosts = store.postsAfter(this.key, positions);
+    let laterPosts: (string | null)[];
+    for (;;) {
+      if (signal.aborted) throw new Error("delivery cancelled");
+      try { laterPosts = store.postsAfter(this.key, positions); break; }
+      catch (error) {
+        if (!(error instanceof PostBlocksUnavailable) || !this.deps.preparePostsAfter) throw error;
+        await this.deps.preparePostsAfter(error.positions, signal);
+      }
+    }
     fromChat.forEach((m, i) => { const ts = laterPosts[i]; if (ts !== undefined && ts !== null) posts.set(m, ts); });
     const cards = new Map<PendingMessage, { ended: MessageRow; current: MessageRow | null; special: string | null }>();
     for (const m of said as PendingMessage[]) {

@@ -3,6 +3,17 @@ import type { DatabaseSync } from "node:sqlite";
 // A marker covers only one author's messages in a small range of entry numbers. Most consecutive messages from the
 // same agent share it, while a lookup can skip every range in which that agent said nothing.
 export const POST_BLOCK_SIZE = 64;
+export type PostPosition = { thread: number; n: number };
+
+/// A lookup needs an older suffix before it can answer without walking the thread's history.
+export class PostBlocksUnavailable extends Error {
+  readonly positions: readonly PostPosition[];
+  constructor(positions: readonly PostPosition[]) {
+    super("post block history not ready");
+    this.positions = positions;
+  }
+}
+
 const block = (n: string) => `(${n} / ${POST_BLOCK_SIZE} - CASE WHEN ${n} < 0 AND ${n} % ${POST_BLOCK_SIZE} != 0 THEN 1 ELSE 0 END)`;
 const isPost = (row: string) => `${row}.kind = 'message' AND ${row}.author_kind = 'agent'`;
 
