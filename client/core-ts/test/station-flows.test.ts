@@ -1242,6 +1242,23 @@ test("a_station_that_keeps_marks_has_its_sidebar_made_here_from_the_summaries_he
   core.close();
 });
 
+test("an_agent_whose_chat_is_not_held_waits_for_it_and_is_named_by_it", async () => {
+  // A row is a chat, named by it: an agent whose chat the device did not hold was made a row of its own, named by the
+  // agent (none): every chat a 新对话 on a Mac that had not read them all (2026-11-04). Its summary says the chats it is
+  // in: the one not held is read, and the row is that chat's.
+  const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [] };
+  const answers: J = { ...base(), "GET /chats?marks=1": marks, "GET /sessions": [{ ...session("k1"), chats: [7] }], "GET /threads": [], "GET /threads/7": { ...threadView(7, 3), autoTitle: "部署" } };
+  answers["GET /chats"] = [];
+  const { host, core, push, read } = await ui(answers);
+  await read();
+  push("made", { rows: true, marks: true });
+  await coalesce(host);
+  await host.settle();
+  const rows = () => (core.inner.data.get({ topic: "chatRows", station: ST }) as J[]).map((r: J) => [r.id, r.thread, r.title]);
+  assert.deepEqual(rows(), [["k1", 7, "部署"]]);
+  core.close();
+});
+
 test("a_gap_is_read_once_and_what_came_meanwhile_waits_for_it", async () => {
   const { host, core, push, values, read } = await ui({
     ...base(),

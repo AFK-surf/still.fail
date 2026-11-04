@@ -66,8 +66,26 @@ export function marksWith(held: Marks, read: Marks, scope: { sessions: string[];
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 
-/// The sidebar of the viewer whose email is `me`, as the station makes it (views.ts `chats`, not archived).
-export function rowsMade(sessions: readonly unknown[], threads: readonly unknown[], marks: Marks, me: string, words: Words): J[] {
+/// The station's own chats each shown agent is in (its summary's `chats`) that the device does not hold: not known yet,
+/// to be read. A row is a chat, named by the chat; an agent is a row of its own only when it is in none of the station's
+/// own chats, as its summary says, never because the chat it is in has not come yet (it was a 新对话 till then, every
+/// chat of a device that had not read them all, 2026-11-04).
+export function chatsMissing(sessions: readonly unknown[], threads: readonly unknown[]): number[] {
+  const held = new Set<number>();
+  for (const t of threads) if (isObject(t) && typeof get(t, "id") === "number") held.add(get(t, "id") as number);
+  const missing = new Set<number>();
+  for (const s of sessions) {
+    if (!isObject(s) || (get(s, "archivedAt") ?? null) !== null) continue;
+    const chats = get(s, "chats");
+    if (Array.isArray(chats)) for (const id of chats) if (typeof id === "number" && !held.has(id)) missing.add(id);
+  }
+  return [...missing];
+}
+
+/// The sidebar of the viewer whose email is `me`, as the station makes it (views.ts `chats`, not archived). `unknown`:
+/// chats an agent is in that the device does not hold and has not yet read (chatsMissing): such an agent has no row
+/// till its chat comes.
+export function rowsMade(sessions: readonly unknown[], threads: readonly unknown[], marks: Marks, me: string, words: Words, unknown: ReadonlySet<number> = new Set()): J[] {
   const email = me.toLowerCase();
   const slack = new Set(marks.selves);
   const mine = (p: unknown): boolean => {
@@ -171,6 +189,8 @@ export function rowsMade(sessions: readonly unknown[], threads: readonly unknown
   for (const key of order) {
     if (chatted.has(key)) continue;
     const x = shown.get(key)!;
+    // In a chat of the station's own not held yet: its row is that chat's, when it comes.
+    if (Array.isArray(x.chats) && x.chats.some((id: unknown) => typeof id === "number" && unknown.has(id))) continue;
     const from = origins.get(key) ?? null;
     const origin_ = from === null ? null : origin(from);
     const named = typeof x.title === "string" ? trim(x.title) : "";

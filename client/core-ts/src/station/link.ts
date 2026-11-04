@@ -143,6 +143,10 @@ export class Link {
   readonly lives = new Map<string, LiveView>();
   /// Threads whose summaries are read again once a burst of events is over.
   readonly dirty = new Set<number>();
+  /// Chats an agent is in that the device did not hold, asked for (rows-made.ts chatsMissing); and those whose read has
+  /// answered (found or not): an agent waits on its chat for its row only until then.
+  readonly chatsAsked = new Set<number>();
+  readonly chatsAnswered = new Set<number>();
   flushing = false;
   /// How far each thread went as its station last told its summary (a `thread-view`): told so, it is not read again.
   readonly viewed = new Map<number, number>();

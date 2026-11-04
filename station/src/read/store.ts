@@ -1186,6 +1186,15 @@ export function listBindings(s: Store): Map<string, string[]> {
 
 /// Store::participants: everyone who wrote in each session's threads (or one session's), as creator references,
 /// earliest first; a session no one wrote to has none.
+/// The station's own chats an agent is in, by id: what a device that makes its sidebar itself waits on before it gives
+/// the agent a row of its own (client/core-ts/src/station/rows-made.ts), not what it guesses from the chats it holds.
+export const SESSION_CHATS = `SELECT ts.thread AS id FROM thread_sessions ts INDEXED BY thread_sessions_session JOIN threads t ON t.id = ts.thread
+  WHERE ts.session = ?1 AND t.surface = '${STILLFAIL_SURFACE}' ORDER BY ts.thread`;
+
+export function sessionChats(s: Store, session: string): number[] {
+  return all(s, SESSION_CHATS, session).map((r) => r.id as number);
+}
+
 export function participants(s: Store, session: string | null): Map<string, string[]> {
   const sql = `SELECT ts.session, ts.connect, t.id, t.surface FROM thread_sessions ts JOIN threads t ON t.id = ts.thread ${session !== null ? "WHERE ts.session = ?" : ""}`;
   const rows = session !== null ? all(s, sql, session) : all(s, sql);

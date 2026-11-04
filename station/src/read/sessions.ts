@@ -123,6 +123,8 @@ function summaryWith(s: Store, key: string, l: Lists): Json {
   v.lastTurn = stat?.lastTurn ?? null;
   v.creator = creator(s, row.createdBy);
   v.participants = people(s, l.participants.get(key) ?? []);
+  // The station's own chats it is in: a device makes its row of what they say, and waits on one it does not hold yet.
+  v.chats = store.sessionChats(s, key);
   // What can be done to its context by hand (POST /sessions/:key/compact, /clear): its runtime's (agents/runtime.ts
   // `compact`). None from a station from before.
   v.contextActions = row.runtime === "claude" || row.runtime === "codex" ? ["compact", "clear"] : ["clear"];

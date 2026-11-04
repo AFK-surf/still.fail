@@ -39,7 +39,7 @@ import { Retold } from "./retold.ts";
 import { dayOf, holdsWhole, sameDetailCoverage, usageHistoryRange, withPart } from "./usage-part.ts";
 import { threadAfter, threadAfterLetters } from "./thread-after.ts";
 import { type After, rowAfterDismiss, rowAfterKept, rowAfterPin, rowAfterSaid, rowAfterSession } from "./rows-after.ts";
-import { type Marks, marksOf, marksWith, rowsMade } from "./rows-made.ts";
+import { type Marks, chatsMissing, marksOf, marksWith, rowsMade } from "./rows-made.ts";
 import { current, tr } from "../i18n.ts";
 import { timed } from "../spent.ts";
 
@@ -1690,7 +1690,15 @@ export class StationsSync {
     if (!Array.isArray(sessions) || !Array.isArray(threads)) return;
     const lang = current();
     const words = { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly") };
-    data.set({ topic: "chatRows", station: address }, rowsMade(sessions, threads, link.marks, me, words));
+    // An agent's chat not held: read (once), its row made when it comes.
+    const missing = chatsMissing(sessions, threads);
+    for (const id of missing) {
+      if (link.chatsAsked.has(id)) continue;
+      link.chatsAsked.add(id);
+      this.#markDirty(address, id);
+    }
+    const unknown = new Set(missing.filter((id) => !link.chatsAnswered.has(id)));
+    data.set({ topic: "chatRows", station: address }, rowsMade(sessions, threads, link.marks, me, words, unknown));
   }
 
   /// A row gone from the list, by its id.
@@ -1803,8 +1811,12 @@ export class StationsSync {
       const link = this.#links.get(address);
       if (!link) return;
       const view = yield* Effect.result(this.requests.call(link.addr, "GET", `/threads/${id}`, null, { quiet: true }));
+      if (view._tag === "Success" || view.failure.status === 404) link.chatsAnswered.add(id);
       if (view._tag === "Success") this.putThread(address, view.success);
-      else if (view.failure.status === 404) this.#core.data.unlistThread(address, id);
+      else if (view.failure.status === 404) {
+        this.#core.data.unlistThread(address, id);
+        this.#remake(address);
+      }
       this.#retell(address, read);
     }));
   }
