@@ -144,7 +144,7 @@ type Viewed = Kept & { latestDecisionsSince(since: number, viewer?: InWorkspace)
 /// A workspace's archive policy as the pages show it (accounts' `policyView`, for one workspace: docs/multi-workspace.md):
 /// its words, its options each with the chats of that workspace (`mine`) the checks of the last days put there (by
 /// their latest check), who changed it last, and how many checks failed.
-export function policyView(store: Viewed, ws: string | null, mine: (session: string) => boolean, title: (session: string) => string, viewer?: InWorkspace): any {
+export function policyView(store: Viewed, ws: string | null, mine: (session: string) => boolean, title: (session: string) => string, viewer: InWorkspace): any {
   const saved = store.archivePolicy(ws);
   const policy = policyFrom(saved);
   const latest = new Map<string, any>();
