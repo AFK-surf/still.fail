@@ -294,7 +294,7 @@ export async function chatList(hub: Hub, key: string, args: Args): Promise<strin
   const inWs = (k: string) => (sessions.get(k)?.ws ?? home) === ws;
   const ours = (t: { thread: ThreadRow; sessions: { session: string }[] }) =>
     ws === null || (t.thread.home !== null ? inWs(t.thread.home) : t.sessions.length === 0 ? home === ws : t.sessions.some((m) => inWs(m.session)));
-  const threads = (hub.threadList ? await hub.threadList() : hub.store.listThreads("", null, null)).filter(ours);
+  const threads = (hub.threadList ? await hub.threadList() : hub.store.listThreads("", null, null, "none")).filter(ours);
   const when = (t: (typeof threads)[number]) => t.lastMessage?.createdAt ?? t.thread.createdAt;
   threads.sort((a, b) => when(b) - when(a));
   const lines: string[] = [];

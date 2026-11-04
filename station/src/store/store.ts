@@ -1239,7 +1239,7 @@ export class Store {
     return { thread, firstText: thread.surface === STILLFAIL_SURFACE ? null : this.firstText(thread.id) };
   }
 
-  listThreads(viewer: string, session: string | null, thread: number | null): ThreadSummary[] {
+  listThreads(viewer: string, session: string | null, thread: number | null, unread: "count" | "none" = "count"): ThreadSummary[] {
     const base = "SELECT t.*, COALESCE(r.n, 0) AS read_n FROM threads t LEFT JOIN reads r ON r.thread = t.id AND r.viewer = ?1";
     const rows =
       thread !== null
@@ -1255,7 +1255,7 @@ export class Store {
         last: this.lastEntry(t.id),
         lastMessage: this.#lastSaid(t.id),
         read,
-        unread: this.#unreadCount(viewer, t.id, read),
+        unread: unread === "none" ? 0 : this.#unreadCount(viewer, t.id, read),
         people: this.#threadPeople(t.id, t.surface),
         firstText: this.firstText(t.id),
         letters: this.#letterCount(t.id),

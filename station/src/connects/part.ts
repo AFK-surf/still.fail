@@ -113,7 +113,7 @@ export const connectsPart = <P extends Connects>(make: (options: ConnectsOptions
             if (learned.has(c.id) || connects.state(c.id)?.state !== "connected") continue;
             learned.add(c.id);
             const prefix = `slack:${c.id}:`;
-            for (const t of store.listThreads("", null, null).slice(0, 200)) {
+            for (const t of store.listThreads("", null, null, "none").slice(0, 200)) {
               if (t.sessions.some((m) => m.connect === c.id)) learn(t.thread.id, t.people.flatMap((p) => (p.startsWith(prefix) ? [p.slice(prefix.length)] : [])));
             }
           }
