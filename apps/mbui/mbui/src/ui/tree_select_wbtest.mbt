@@ -16,7 +16,7 @@ test "a word picked by a still finger stays that word when its paragraph moves; 
           words_picked(p)
           p.offset(By(fn() { (0.0, 40.0 + shifted.get()) }))
           .width(Is(Some(300.0)))
-          .words_runs(Is(picked_runs), look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own }) |> ignore
+          .words_runs(Is(picked_runs), look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false }) |> ignore
         }) |> ignore
       } else {
         old(root, fn(c) {

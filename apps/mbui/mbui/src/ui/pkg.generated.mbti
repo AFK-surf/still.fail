@@ -1374,6 +1374,7 @@ pub fn Ctx::selected_text(Self) -> String
 pub fn Ctx::selection_box(Self) -> (Double, Double, Double, Double)?
 pub fn Ctx::selection_by_finger(Self) -> Bool
 pub fn Ctx::selection_clear(Self) -> Unit
+#callsite(autofill(loc))
 pub fn Ctx::selection_end(Self, loc~ : SourceLoc) -> (Double, Double, Double)?
 pub fn Ctx::selection_made(Self) -> Int32
 pub fn Ctx::semantics(Self, Int32, @view.Role, id? : Int32, label? : String, description? : String, value? : String, check? : @view.Check, expanded? : Bool, selected? : Bool, pressed? : Bool, disabled? : Bool, modal? : Bool, range? : (Double, Double, Double), actions? : Array[@view.Action]) -> Unit
@@ -2708,7 +2709,6 @@ pub fn Tester::run_for_exact(Self, Double) -> Unit
 pub fn Tester::run_rects(Self, String) -> Array[(Double, Double, Double, Double)]
 pub fn Tester::said(Self) -> String
 pub fn Tester::scroll_all_to_end(Self) -> Int32
-
 pub fn Tester::scroll_to(Self, Int32) -> Unit
 pub fn Tester::scroll_to_end(Self) -> Unit
 pub fn Tester::semantics(Self) -> Array[SemNode]

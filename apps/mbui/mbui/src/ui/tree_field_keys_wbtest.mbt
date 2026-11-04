@@ -8,7 +8,7 @@ test "picking the page's retained words keeps the field focused and copies the p
       words_picked(page)
       page.box(fn(words) {
         words.width(Is(Some(300.0))).words_runs(Is([plain("hello world")]), ink=0x333333FFL,
-          look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own }) |> ignore
+          look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false }) |> ignore
       }) |> ignore
     }) |> ignore
     field(root, draft).over(Is(true)).offset(Is((0.0, 40.0)))

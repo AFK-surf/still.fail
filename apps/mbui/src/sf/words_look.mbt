@@ -10,5 +10,5 @@ pub fn theme_words(size : @ui.TextSize, line? : @ui.Leading, weight? : Int = 400
     Some(l) => th.leading(l).unwrap_or(own)
     None => own
   }
-  { size: px, weight, line, wrap, tracking: @view.letters_own }
+  { size: px, weight, line, wrap, tracking: @view.letters_own, balance: false }
 }

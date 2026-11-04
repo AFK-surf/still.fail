@@ -136,13 +136,14 @@ test "panel live in the middle, 大屏 keyboard and mouse, in a short window: it
   title.set("")
   live_frames(t, 30)
   let again = said()
-  // (the same dialog and field, 甲 kept; the rows seen the same while its head is there and gone: untitled, what it
-  // holds starts under its close button, where a titled one's starts under its head)
+  // (the same dialog and field, 甲 kept; untitled, what it holds starts under its close button, where a titled one's
+  // starts under its head: row 2 cut by the top of what scrolls, row 3 the first whole; titled, its title covers the
+  // rows behind its head, back as it goes)
   let body_said = "填一下 第0行 第1行 第2行 第3行 第4行 第5行 第6行 第7行 第8行 第9行 第10行 第11行 第12行 第13行 第14行 第15行 第16行 第17行 第18行 第19行 第20行 第21行 第22行 第23行 第24行 第25行 第26行 第27行 第28行 第29行 面板里的话，长一些，好看它怎么折行 好的 关闭"
   assert_eq([before, titled, again], [
-    (true, true, Some(body_said), "甲", (Some("第2行"), Some("第13行"))),
-    (true, true, Some("任务"), "甲", (Some("第2行"), Some("第13行"))),
-    (true, true, Some(body_said), "甲", (Some("第2行"), Some("第13行"))),
+    (true, true, Some(body_said), "甲", (Some("第3行"), Some("第13行"))),
+    (true, true, Some("任务"), "甲", (Some("第4行"), Some("第13行"))),
+    (true, true, Some(body_said), "甲", (Some("第3行"), Some("第13行"))),
   ])
 }
 

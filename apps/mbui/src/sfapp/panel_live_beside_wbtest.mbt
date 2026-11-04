@@ -175,7 +175,7 @@ test "panel live beside what opened it, 大屏 keyboard and mouse: held short of
   t.run_for(@ui.move_most_ms)
   // (the title clips rows 20 and 21; row 22 is the first whose own glyphs show whole)
   assert_eq([bottom, "said \{said} presenting \{@sf.presenting()}"], [
-    "seen (Some(第20行), Some(第39行)) title [(616, 20, 264, 20)] button Some((840, 456, 44, 24)) in window Some(true)",
+    "seen (Some(第22行), Some(第39行)) title [(616, 20, 264, 20)] button Some((840, 456, 44, 24)) in window Some(true)",
     "said [ok] presenting false",
   ])
 }

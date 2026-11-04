@@ -110,7 +110,7 @@ test "locate: a colon in a paragraph and a word on a long line are found at that
     .height(Is(Some(60.0))) |> ignore
     root.box(fn(p) {
       p.width(Is(Some(900.0)))
-      .words_runs(Is([span(text)]), look={ size: 15.0, line: 22.0, weight: 400, wrap: false, tracking: @view.letters_own })
+      .words_runs(Is([span(text)]), look={ size: 15.0, line: 22.0, weight: 400, wrap: false, tracking: @view.letters_own, balance: false })
       |> ignore
     }) |> ignore
   })

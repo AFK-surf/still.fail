@@ -234,9 +234,9 @@ pub let card_across : @ui.Size
 
 pub fn card_block_out(top? : Bool, foot? : Bool) -> @ui.Style
 
-pub let card_corner : Double
-
 pub let card_control_end : Double
+
+pub let card_corner : Double
 
 pub let card_end_out : @ui.Style
 
@@ -245,6 +245,8 @@ pub fn card_foot(@ui.Ctx, () -> Unit, at_end? : Bool) -> Unit
 pub fn card_foot_in(Double) -> Double
 
 pub let card_foot_out : @ui.Style
+
+pub let card_foot_start_out : @ui.Style
 
 pub fn card_foot_words(() -> Unit, on? : Bool) -> Unit
 
@@ -265,6 +267,8 @@ pub fn card_rows_reach(Double, Double) -> @ui.Style
 pub fn card_text(@ui.Ctx, String, line? : String) -> Unit
 
 pub let card_title : @ui.TextStyle
+
+pub let card_top_end_out : @ui.Style
 
 pub let centered : @ui.TextStyle
 
@@ -452,9 +456,13 @@ pub let desk_lane_in : Double
 
 pub let desk_lane_most : Double
 
+pub fn desk_lane_now() -> @ui.Style
+
 pub fn desk_lanes(@ui.Ctx, String, Array[() -> Unit], foot? : Double, chrome? : Int32) -> Unit
 
 pub let desk_list : @ui.Style
+
+pub fn desk_list_card() -> @ui.Style
 
 pub let desk_list_out : Double
 
@@ -864,8 +872,6 @@ pub fn icon_path(String) -> String
 
 pub let identity_mark : Double
 
-pub fn in_card_pane() -> Bool
-
 pub fn in_line(Double) -> @ui.Style
 
 pub let in_lines : @ui.TextStyle
@@ -1001,6 +1007,8 @@ pub fn list_apart(@ui.Ctx) -> Unit
 pub let list_card_corner : Double
 
 pub let list_card_radius : @ui.Radius
+
+pub let list_control_end : Double
 
 pub fn list_foot_in(ListAt) -> Double
 
@@ -1476,6 +1484,8 @@ pub fn pane_foot_in_of(FixedArray[Double]?, holds? : Double) -> Double
 
 pub fn pane_foot_rest(holds? : Double) -> Double
 
+pub let pane_lent : @view.Lent[Bool]
+
 pub fn pane_radii() -> FixedArray[Double]?
 
 pub let pane_round : @ref.Ref[FixedArray[@paint.CornerOf]?]
@@ -1490,6 +1500,8 @@ pub fn panel_bleed() -> @ui.Style
 
 pub fn panel_button(@ui.Ctx, String, String, tone? : PanelTone, disabled? : Bool) -> Bool
 
+pub fn panel_by_node(@view.View, String, () -> Bool, (@view.View) -> @view.View, (@ui.Ctx, () -> Unit) -> Unit, () -> Unit, w~ : Double, side? : @view.Side, along? : @view.Along) -> Unit
+
 pub fn panel_card_foot() -> @ui.Style
 
 pub let panel_card_in : Double
@@ -1499,8 +1511,6 @@ pub fn panel_card_last() -> @ui.Style
 pub fn panel_card_out() -> @ui.Style
 
 pub fn panel_card_room(@ui.Ctx, @ui.Style, () -> Unit) -> Int32
-
-pub fn panel_by_node(@view.View, String, () -> Bool, (@view.View) -> @view.View, (@ui.Ctx, () -> Unit) -> Unit, () -> Unit, w~ : Double, side? : @view.Side, along? : @view.Along) -> Unit
 
 pub fn panel_column(@ui.Ctx, String, Double, @ui.Style, () -> Unit) -> Unit
 
@@ -1908,6 +1918,8 @@ pub let row_key_box : @ui.Style
 
 pub fn row_keys_room(Int32) -> Double
 
+pub fn row_lead_line(@ui.Ctx, at? : Look) -> Double
+
 pub fn row_lead_out() -> @ui.Style
 
 pub fn row_least() -> Double
@@ -1926,7 +1938,11 @@ pub fn row_tag_node(@view.View, () -> String) -> Unit
 
 pub let row_top_in_y : Double
 
+pub fn row_words_foot() -> Double
+
 pub fn rows_head(@ui.Ctx, () -> Unit, first? : Bool) -> Unit
+
+pub fn rows_held(() -> Unit) -> Unit
 
 pub fn rows_list(@ui.Ctx, String, Int32, Double, (Int32) -> Unit, sized? : @ui.RowCauses) -> Int32
 
@@ -2078,6 +2094,8 @@ pub fn sheet_column(@ui.Ctx, () -> Unit) -> Unit
 
 pub fn sheet_grab(@ui.Ctx) -> Unit
 
+pub let sheet_grab_h : Double
+
 pub let sheet_grabber : @ui.Style
 
 pub fn sheet_laid(() -> Unit) -> Unit
@@ -2102,11 +2120,13 @@ pub fn side_heading_node(@view.View, () -> String) -> Unit
 
 pub fn side_list() -> @ui.Style
 
+pub let side_list_top_in : Double
+
 pub let side_row_h : @ui.Len
 
 pub let side_row_radius : @ui.Radius
 
-pub fn side_scroll(@ui.Ctx, String, () -> Unit) -> Unit
+pub fn side_scroll(@ui.Ctx, String, top? : Double, () -> Unit) -> Unit
 
 pub fn side_scroll_node(@view.View, @view.Scroll, (@view.View) -> Unit) -> @view.View
 
@@ -2288,7 +2308,7 @@ pub fn theme() -> Theme
 
 pub fn theme_words(@ui.TextSize, line? : @ui.Leading, weight? : Int32, wrap? : Bool) -> @view.WordsLook
 
-pub fn tile_avatar(@ui.Ctx, String, String, String, Double) -> Unit
+pub fn tile_avatar(@ui.Ctx, String, String, String, Double, corner? : Double) -> Unit
 
 pub fn tile_whole() -> Bool
 
@@ -2308,7 +2328,7 @@ pub let title_card_narrow : Double
 
 pub let title_card_wide : Double
 
-pub let title_row_given : Ref[Bool]
+pub let title_row_given : @ref.Ref[Bool]
 
 pub fn to_fixed(Double, Int32) -> String
 
@@ -2637,6 +2657,8 @@ pub fn with_corner_remove_node(@view.View, () -> String, () -> Double, () -> Uni
 pub fn with_ground(@ui.Ctx, Int64, () -> Unit) -> Unit
 
 pub fn with_look(Look, () -> Unit) -> Unit
+
+pub fn[T] with_pane(FixedArray[@paint.CornerOf]?, () -> T) -> T
 
 pub fn within_room(@ui.Ctx, @kit.PopState, () -> Unit, inner? : @ui.Style, most? : Double) -> Unit
 
