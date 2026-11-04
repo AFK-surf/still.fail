@@ -78,6 +78,8 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 - **次数和时限**：一次连接最多试 `PAIR_TRIES`（3）次，码 `PAIR_WAIT_MS`（5 分钟）内有效；受信任设备上点「拒绝」（`lockPrompt.deny`），码立即作废；关掉弹窗（点旁边、Esc、返回，`lockPrompt.hide`）只是不再显示，码照样有效（人看完码顺手关掉弹窗是常事，以前关掉就作废，新设备上输对了也报「错误次数过多」，2026-10-25）；新设备连每台 `PAIR_DIAL_MS`（20 秒）为限，一台都没连上时页面说明要在已获批的设备上打开 still.fail。
 - **没批成时说原因**：受信任设备结束时回 `no {error}`（`tries` 次数用完、`denied` 被拒绝、`late` 码过期），新设备照它说（`core-misc.lock.pairTries` / `pairDenied` / `pairLate`），连接断了、对方没说原因就说连不上显示安全码的设备（`pairGone`），不再一律说错误次数过多。受信任设备核对通过、却一个 workspace 都没签进去（`approved` 的 `workspaces` 为空，原因在 `failed`）时，新设备不算获批，照 `failed` 说原因（`pairUnsigned`）；以前当成功，弹框一关回到等待页，什么也不说（2026-10-26）。
 - **几台受信任设备同时显示码**：输的码每台都核对；没一台批准、却有一台在这之前或这时断开（线断了、app 收起），等待页说「安全码不对，或显示它的设备已断开」（`me.pair.error`），不只说码不对：码多半是那台的（以前只说「安全码不对」，用户照着那台的码再输也没用）。
+- **只在一部分 workspace 获批**：新设备同时在几个 workspace 等，答应它的受信任设备只能在其中一些批准（它在别的 workspace 不签名、角色不够）。这次就算完成，其余 workspace 的等待页说「已在 X 获批，在这里还需要此 workspace 的管理员或你在这里的受信任设备批准」（`Trying.approvedIn`；以前那页停在输完码的样子，什么也不说，2026-11-04 网页版「输完不跳」）。
+- **批准了、回话丢了**：受信任设备签完、回 `approved` 前线断了（批完切走 app），新设备说失败之前先重读各 workspace 的锁，自己已经在里面就算批准了（以前等 51 秒后说码不对，2026-11-04）。
 - **状态**：新设备的进度在 `lock` topic 的 `me.pair`（`finding` / `code` / `checking` / `wrong` / `none` / `failed` / `done`），等待页按它显示输入框、剩余次数或重试。
 - 锁住的 station 拒绝不在锁里的设备时回 `{code: "lock_unconfirmed", lock}`，core 报 `lock_unconfirmed`，说明是哪个 workspace、去哪批和这台的安全码。
 - **没有点一下就批的路**（2026-11-02 用户：「为啥现在还能通过被申请设备之间点通过」）：以前留给旧客户端的经 cloud 申请、在 设置 › 安全「待你批准」里核对短码后点「批准」（`lock.request`/`lock.confirm`/`lock.deny`）已从 core 和各端界面删掉：受信任设备上看不到这类申请，也没有批准它们的调用，只能在新设备上输入受信任设备显示的码。cloud 的 `/v1/workspaces/:ws/lock/requests` 和 workspace 视图的 `lock_requests` 为兼容旧客户端还在，新客户端不读也不写。
