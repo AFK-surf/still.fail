@@ -117,16 +117,22 @@ export const LAST_KNOWN = `SELECT MAX(n) AS n FROM (${lastRead("n")} UNION ALL S
 
 // These marks are keyed by viewer first. For a large table seek once per viewer instead of scanning everybody's other
 // chats. On a small table a scan can be cheaper, especially when most viewers have one mark. A rowid span bounds the
-// number of rows without counting them; few is capped so choosing the plan itself does not scan a long history.
+// number of rows without counting them; the viewer probes are capped so choosing a plan does not scan a long history.
 function deleteViewerMarks(table: "reads" | "dismissed" | "kept_chats" | "pins", key: "thread" | "session") {
   const choice = `WITH RECURSIVE few(viewer, count) AS (
     SELECT (SELECT viewer FROM ${table} ORDER BY viewer LIMIT 1), 1
     UNION ALL SELECT (SELECT viewer FROM ${table} WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.count + 1
       FROM few v WHERE v.viewer IS NOT NULL AND v.count < 33
+  ), more(viewer, count) AS (
+    SELECT (SELECT viewer FROM ${table} ORDER BY viewer LIMIT 1), 1
+    UNION ALL SELECT (SELECT viewer FROM ${table} WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.count + 1
+      FROM more v WHERE v.viewer IS NOT NULL AND v.count < 257
   ), bounds(span) AS (SELECT (SELECT MAX(rowid) FROM ${table}) - (SELECT MIN(rowid) FROM ${table}))
   SELECT CASE WHEN COALESCE((SELECT span FROM bounds), 0) < 512 THEN 0
+    WHEN (SELECT span FROM bounds) >= 32768 THEN 1
     WHEN (SELECT COUNT(*) FROM few WHERE viewer IS NOT NULL) <= 32 THEN 1
-    WHEN (SELECT span FROM bounds) < 16384 THEN 0 ELSE 1 END AS seek`;
+    WHEN (SELECT span FROM bounds) < 16384 THEN 0
+    WHEN (SELECT COUNT(*) FROM more WHERE viewer IS NOT NULL) <= 256 THEN 1 ELSE 0 END AS seek`;
   // Materialize the viewers before deleting: a deletion can remove a viewer's last mark in the table.
   const indexed = `WITH RECURSIVE viewers(viewer) AS MATERIALIZED (
     SELECT (SELECT viewer FROM ${table} ORDER BY viewer LIMIT 1)

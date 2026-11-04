@@ -4,7 +4,7 @@ import { DELETE_DISMISSED_OF_THREAD, DELETE_KEPT_CHAT, DELETE_PINS_OF_SESSION, D
 
 for (const { viewers, chats, negative } of [
   { viewers: 1, chats: 5_000, negative: false }, { viewers: 40, chats: 1_000, negative: false },
-  { viewers: 40, chats: 1_000, negative: true },
+  { viewers: 40, chats: 1_000, negative: true }, { viewers: 300, chats: 150, negative: false },
 ])
   test(`deleting a session seeks its marks with ${viewers} viewer(s), negative rowids: ${negative}`, () => {
     const store = Store.open(":memory:");
@@ -77,7 +77,7 @@ for (const { viewers, chats, negative } of [
       }) });
       try {
         store.deleteSession("a");
-        assert.ok(Object.values(visited).every((count) => count > 0 && count <= 1_024),
+        assert.ok(Object.values(visited).every((count) => count > 0 && count <= Math.max(1_024, 6 * viewers + 50)),
           `records visited while deleting the session: ${JSON.stringify(visited)}`);
       } finally { Object.defineProperty(store, "db", { configurable: true, value: db }); }
       for (const [table, key] of Object.entries(tables)) {
@@ -116,6 +116,28 @@ test("deleting a session removes every viewer's last mark, including an empty vi
     store.deleteSession("a");
     for (const table of ["reads", "dismissed", "kept_chats", "pins"])
       assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get()?.n, 0, table);
+  } finally { store.close(); }
+});
+
+test("deleting one chat keeps a second read from each of many viewers", () => {
+  const store = Store.open(":memory:");
+  const db = store.db;
+  try {
+    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc",
+      workspace: "/w/a", token: "a", createdAt: 1, lastActiveAt: 1 });
+    const own = store.openThread("ember", "EMBER", "own", null, null).id;
+    const other = store.openThread("ember", "EMBER", "other", null, null).id;
+    store.joinThread(own, "a", "ember");
+    const put = db.prepare("INSERT INTO reads(viewer,thread,n,at) VALUES (?,?,1,1)");
+    db.exec("BEGIN");
+    for (let i = 0; i < 10_000; i++) {
+      put.run(`viewer-${i}`, own);
+      put.run(`viewer-${i}`, other);
+    }
+    db.exec("COMMIT");
+    store.deleteSession("a");
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM reads WHERE thread = ?").get(own)?.n, 0);
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM reads WHERE thread = ?").get(other)?.n, 10_000);
   } finally { store.close(); }
 });
 
