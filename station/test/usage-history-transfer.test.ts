@@ -10,14 +10,17 @@ import { makeStore } from "../src/read/store.ts";
 import { usage, usageHistory } from "../src/read/usage.ts";
 import { Store } from "../src/store/store.ts";
 import { installCompactUsage } from "../src/store/usage-compact.ts";
-import { convertUsageHistoryStep, hasUsageHistory, historyTransferPending, installUsageHistory } from "../src/store/usage-history.ts";
+import { convertUsageHistoryStep, hasUsageHistory, historyTransferPending, installHistoryOwnersAtOpen, installUsageHistory } from "../src/store/usage-history.ts";
 import { moveHistoryOrphanScope } from "../src/store/usage-history-transfer.ts";
 import { retireAfterPrevious, retireUntilComplete } from "../src/usage/module.ts";
 
 function oldStore(path = ":memory:") {
   const store = Store.open(path);
   store.db.exec(`DROP TRIGGER usage_history_add; DROP TRIGGER usage_history_grow; DROP TRIGGER usage_history_move; DROP TRIGGER usage_history_drop;
-    DROP TABLE usage_history; DROP TABLE usage_history_total; DROP TABLE usage_history_since;`);
+    DROP TABLE usage_history; DROP TABLE usage_history_total; DROP TABLE usage_history_since;
+    DROP TRIGGER IF EXISTS usage_history_owner; DROP TABLE IF EXISTS usage_history_orphans;
+    DROP TABLE IF EXISTS usage_history_owner_scopes; DROP TABLE IF EXISTS usage_history_owner_groups;
+    DROP TABLE IF EXISTS usage_history_fresh_owners;`);
   for (const [key, ws] of [["a", "A"], ["b", "B"]] as const)
     store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: `/w/${key}`, token: key, ws, createdAt: 0, lastActiveAt: 0 });
   return store;
@@ -137,6 +140,44 @@ test("an older station can delete and update a session's usage while an installe
     assert.ok(result);
     assert.deepEqual((result.days as { calls: number; tokens: number }[]).map(({ calls, tokens }) => [calls, tokens]), [[1, 10]]);
   } finally { previous.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("installing ownership at open reads no old usage and an unchanged reopen takes no write lock", () => {
+  const store = oldStore();
+  const db = store.db;
+  try {
+    const insert = db.prepare(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output, calls)
+      VALUES (?, ?, 'a', 'claude', 2, 0, 0, 0, 1, 1)`);
+    db.exec("BEGIN");
+    for (let n = 0; n < 1000; n++) insert.run(`old-${n}`, n * 900_000);
+    db.exec("COMMIT");
+    db.setAuthorizer((action, table) => action === constants.SQLITE_READ &&
+      ["usage", "usage_day_quarters", "usage_minute_scope", "usage_compact"].includes(table ?? "") ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    try { installHistoryOwnersAtOpen(db); }
+    finally { db.setAuthorizer(null); }
+    db.setAuthorizer((action) => action === constants.SQLITE_TRANSACTION ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    try { installHistoryOwnersAtOpen(db); }
+    finally { db.setAuthorizer(null); }
+    db.prepare("DELETE FROM sessions WHERE key = 'a'").run();
+    assert.ok(db.prepare("SELECT 1 FROM usage_history_orphans WHERE session = 'a'").get());
+  } finally { db.setAuthorizer(null); store.close(); }
+});
+
+test("a failed ownership setup rolls back and can be retried", () => {
+  const store = oldStore();
+  const db = store.db;
+  try {
+    db.prepare(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output, calls)
+      VALUES ('old', 0, 'a', 'claude', 2, 0, 0, 0, 1, 1)`).run();
+    db.setAuthorizer((action, name) => action === constants.SQLITE_CREATE_TRIGGER && name === "usage_history_owner"
+      ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    try { assert.throws(() => installHistoryOwnersAtOpen(db)); }
+    finally { db.setAuthorizer(null); }
+    assert.equal(db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'usage_history_orphans'").get(), undefined);
+    installHistoryOwnersAtOpen(db);
+    db.prepare("DELETE FROM sessions WHERE key = 'a'").run();
+    assert.ok(db.prepare("SELECT 1 FROM usage_history_orphans WHERE session = 'a'").get());
+  } finally { db.setAuthorizer(null); store.close(); }
 });
 
 test("a deleted session follows its workspace move before history installation", () => {

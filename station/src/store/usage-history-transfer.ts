@@ -29,6 +29,16 @@ export function historyOwnerSources(db: DatabaseSync): string[] {
     ...ownerSources.filter((name) => has.get(name) !== undefined).map((name) => `SELECT 1 FROM ${name} WHERE session = ?1 LIMIT 1`)];
 }
 
+/// The startup fast path only reads schema metadata. No write lock is needed when all present sources are covered.
+export function historyOwnersCurrent(db: DatabaseSync): boolean {
+  const has = (name: string) => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name) !== undefined;
+  if (!has("usage_history_orphans")) return false;
+  const existing = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'usage_history_owner'").get() as
+    { sql: string } | undefined;
+  return existing !== undefined && existing.sql.includes("FROM usage INDEXED BY usage_session") &&
+    ownerSources.every((name) => existing.sql.includes(`FROM ${name} `) === has(name));
+}
+
 /// Remember a deleted session's workspace, including while old summaries have not been installed yet. Each source is
 /// sought by session and stops at its first row. Refresh the trigger when a new source becomes available.
 export function installHistoryOwners(db: DatabaseSync, fresh: boolean): void {
@@ -39,12 +49,8 @@ export function installHistoryOwners(db: DatabaseSync, fresh: boolean): void {
     CREATE TABLE usage_history_orphans (session TEXT PRIMARY KEY, group_id INTEGER NOT NULL) WITHOUT ROWID;
     ${fresh ? "CREATE TABLE usage_history_fresh_owners (id INTEGER PRIMARY KEY);" : ""}
   `);
+  if (historyOwnersCurrent(db)) return;
   const sources = historyOwnerSources(db);
-  const available = ownerSources.filter(has);
-  const existing = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'usage_history_owner'").get() as
-    { sql: string } | undefined;
-  if (existing && ownerSources.every((name) => existing.sql.includes(`FROM ${name} `) === available.includes(name))
-    && existing.sql.includes("FROM usage INDEXED BY usage_session")) return;
   db.exec(`DROP TRIGGER IF EXISTS usage_history_owner;
     CREATE TRIGGER usage_history_owner BEFORE DELETE ON sessions
       WHEN ${sources.map((source) => `EXISTS (${source.replace("?1", "OLD.key")})`).join(" OR ")} BEGIN

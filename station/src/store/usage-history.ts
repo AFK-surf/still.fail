@@ -6,7 +6,7 @@
 // An older station takes over its existing quarterly and compact summaries in bounded batches, without reading the
 // raw call history. New stations count directly from their first call.
 import type { DatabaseSync } from "node:sqlite";
-import { historyTransferPending, historyTransferStep, installHistoryOwners, installHistoryTransfer, moveHistoryOrphanScope, transferScope } from "./usage-history-transfer.ts";
+import { historyOwnersCurrent, historyTransferPending, historyTransferStep, installHistoryOwners, installHistoryTransfer, moveHistoryOrphanScope, transferScope } from "./usage-history-transfer.ts";
 
 /// A quarter hour (15 minutes) as a number: the ms since the epoch over 900 000, rounded down.
 const QUARTER_MS = 900_000;
@@ -76,7 +76,7 @@ export function installEmptyUsageHistory(db: DatabaseSync): void {
   if (!hasUsageHistory(db) && !hasHistorySource(db)) installUsageHistory(db, 0);
 }
 
-/// Install ownership within the first deletion's transaction, even if history is still awaiting installation.
+/// Install ownership, even if history is still awaiting installation; the caller holds a write transaction.
 export function ensureHistoryOwners(db: DatabaseSync): void {
   const installed = has(db, "usage_history_orphans");
   const history = hasUsageHistory(db);
@@ -85,6 +85,17 @@ export function ensureHistoryOwners(db: DatabaseSync): void {
   db.exec(`DROP TRIGGER IF EXISTS usage_history_add; DROP TRIGGER IF EXISTS usage_history_grow;
     DROP TRIGGER IF EXISTS usage_history_move; DROP TRIGGER IF EXISTS usage_history_drop;`);
   db.exec(liveSchema(false, true));
+}
+
+/// The previous station can still delete a session during handover, so install its ownership trigger before returning
+/// from open. Both the initial setup and a source-list refresh read only schema metadata; subsequent opens do not write.
+export function installHistoryOwnersAtOpen(db: DatabaseSync): void {
+  if (historyOwnersCurrent(db)) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    ensureHistoryOwners(db);
+    db.exec("COMMIT");
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
 
 /// Installs empty tables and the bounded transfer. It does not scan old calls or summaries under the installation lock.
@@ -99,8 +110,11 @@ export function installUsageHistory(db: DatabaseSync, now: number): void {
     if (!empty && compact === undefined) throw new Error("compact usage statistics are not installed");
     db.exec(SCHEMA);
     db.prepare("INSERT INTO usage_history_since VALUES (1, ?)").run(empty || compact?.old_days === 1 ? null : compact?.since ?? now);
-    if (empty) db.exec(liveSchema(false, has(db, "usage_history_orphans")));
-    else installHistoryTransfer(db);
+    if (empty) {
+      const owners = has(db, "usage_history_orphans");
+      if (owners && !has(db, "usage_history_fresh_owners")) db.exec("CREATE TABLE usage_history_fresh_owners (id INTEGER PRIMARY KEY)");
+      db.exec(liveSchema(false, owners));
+    } else installHistoryTransfer(db);
     db.exec("COMMIT");
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }

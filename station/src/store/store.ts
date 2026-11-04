@@ -36,7 +36,7 @@ import { installIncrementalUsageTotals, installUsageDetail, usageTotalsComplete 
 import { installUsageSpan } from "./usage-span.ts";
 import { installUsageChatStats } from "./usage-chat-stats.ts";
 import { retireDuplicateUsage } from "./usage-unified.ts";
-import { ensureHistoryOwners, installEmptyUsageHistory, moveUsageHistory } from "./usage-history.ts";
+import { ensureHistoryOwners, installEmptyUsageHistory, installHistoryOwnersAtOpen, moveUsageHistory } from "./usage-history.ts";
 import { compactRecentlyCompacted, hasCompactUsage, savedCompactContext } from "./usage-compact.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
 import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from "./watch-jobs.ts";
@@ -385,6 +385,7 @@ export class Store {
       addCardOutcomes(db);
       installUsageChatStats(db);
       installEmptyUsageHistory(db);
+      installHistoryOwnersAtOpen(db);
       addSessionTurns(db);
       addSessionWork(db, clock.currentTimeMillisUnsafe());
       addPendingCards(db);

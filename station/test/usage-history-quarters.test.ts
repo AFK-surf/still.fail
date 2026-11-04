@@ -139,7 +139,10 @@ test("when the home workspace changes, its whole history goes with it, its sessi
 /// A station from before: its database without the history, as it was then.
 function before(store: Store) {
   store.db.exec(`DROP TRIGGER usage_history_add; DROP TRIGGER usage_history_grow; DROP TRIGGER usage_history_move; DROP TRIGGER usage_history_drop;
-    DROP TABLE usage_history; DROP TABLE usage_history_total; DROP TABLE usage_history_since;`);
+    DROP TABLE usage_history; DROP TABLE usage_history_total; DROP TABLE usage_history_since;
+    DROP TRIGGER IF EXISTS usage_history_owner; DROP TABLE IF EXISTS usage_history_orphans;
+    DROP TABLE IF EXISTS usage_history_owner_scopes; DROP TABLE IF EXISTS usage_history_owner_groups;
+    DROP TABLE IF EXISTS usage_history_fresh_owners;`);
 }
 
 test("installed on an older station, the history takes over known old summaries and counts new calls", () => {
