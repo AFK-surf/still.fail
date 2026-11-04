@@ -90,6 +90,9 @@ pub struct Scroll {
   /// a list that keeps itself: where the hand has it put where it is counted to be, as the hand comes to it again (its
   /// bounds, its ends' give, a fling's end: all as it is counted)
   priv mut rebase : () -> Unit
+  /// a list that keeps itself: a node in it to be brought into sight (the focus come to it), told at that cause, its
+  /// layout bringing it there as it lays it out
+  priv mut reveal : (NodeId) -> Unit
   /// what a virtual list's counted extent is told by, read where how far it can go is followed (none: as it is laid
   /// out alone): View::scrolls_anchored's
   priv mut extent_told : () -> Unit
@@ -162,6 +165,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     bar_off: fn() { 0.0 },
     reads_free: false,
     rebase: fn() { },
+    reveal: fn(_) { },
     extent_told: fn() { },
     rows: None,
   }
@@ -928,10 +932,15 @@ pub fn View::scrolls(
   // (a part of what it holds brought into sight: its top or its foot to its own, as little as that takes)
   .shows(fn(top, foot) {
     let t = self.logic_at()
-    // (where it is as counted, before what it is brought by is worked out from it)
-    (s.rebase)()
     // (across: its start and its end, as wide as it is)
     let vh = if across { self.tree.nodes[self.at].flex.width } else { self.tree.nodes[self.at].flex.height }
+    // (in sight already, as a list that keeps itself brought it there as it was laid out (Scroll's `reveal`): nothing
+    // moved, nothing of where it is put)
+    if top >= 0.0 && foot <= vh {
+      return 0.0
+    }
+    // (where it is as counted, before what it is brought by is worked out from it)
+    (s.rebase)()
     let x = s.stopped(t)
     if top < 0.0 {
       s.sent(t, x + top)

@@ -32,6 +32,8 @@ priv struct AnchoredIn[K] {
   fresh : Array[(K, Bool)]
   cover : Double
   tucked : K?
+  /// the row last asked to be brought into sight, and how often one was
+  reveal : (K?, Int)
 }
 
 ///|
@@ -46,7 +48,8 @@ impl[K : Eq] Eq for AnchoredIn[K] with equal(a, b) {
   a.rooms == b.rooms &&
   a.fresh == b.fresh &&
   a.cover == b.cover &&
-  a.tucked == b.tucked
+  a.tucked == b.tucked &&
+  a.reveal == b.reveal
 }
 
 ///|
@@ -101,6 +104,11 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   // (what each row is known by, whatever node it is made in, by its key: View::row_known_as)
   let row_ids : Map[K, NodeId] = Map([])
   let slots : Map[K, View] = Map([])
+  // (which row each of its rows' nodes is, by the node: what one in it to be brought into sight is found by)
+  let slot_keys : Map[Int, K] = Map([])
+  // (the row asked to be brought into sight at the cause that asked, and how many times; how many its layout did)
+  let reveal_said : @signals.Signal[(K?, Int)] = @signals.signal((None, 0))
+  let revealed = Ref(0)
   // (each key's name among its layout's children, as long as it is in it)
   let names : Map[K, String] = Map([])
   let named = Ref(0)
@@ -153,7 +161,25 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
       }
     }
   }
-  self.owns(fn() { s.bar_off = fn() { 0.0 }; s.rebase = fn() { }; s.reads_free = false }) |> ignore
+  // (one of its rows' nodes to be brought into sight: that row, laid out in sight as it is laid out next)
+  s.reveal = fn(id) {
+    let mut i = id.at
+    while i >= 0 {
+      match slot_keys.get(i) {
+        Some(k) => {
+          let (_, n) = @signals.untracked(fn() { reveal_said.get() })
+          reveal_said.set((Some(k), n + 1))
+          return
+        }
+        None => ()
+      }
+      i = self.tree.nodes[i].parent
+      if i == self.at {
+        return
+      }
+    }
+  }
+  self.owns(fn() { s.bar_off = fn() { 0.0 }; s.rebase = fn() { }; s.reveal = fn(_) { }; s.reads_free = false }) |> ignore
   // (how tall all it holds is counted, as its layout last counted it: what its bar reads once it is laid out, no signal
   // read then)
   let foot_laid = Ref(0.0)
@@ -195,6 +221,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
           },
           cover: cover(),
           tucked: tucked(),
+          reveal: reveal_said.get(),
         }
       }),
       fn(l, c) {
@@ -232,7 +259,13 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
             }
             slot.row_known_as(id)
             slots[k] = slot
-            slot.owns(fn() { slots.remove(k) }) |> ignore
+            slot_keys[slot.at] = k
+            let at = slot.at
+            slot.owns(fn() {
+              slots.remove(k)
+              slot_keys.remove(at)
+            })
+            |> ignore
             let room_now = fn() {
               laid_n.get() |> ignore
               rooms_laid.get(k).unwrap_or(list_room(naturals.get(k).unwrap_or(0.0)))
@@ -346,6 +379,38 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
           _ => ()
         }
         was_tail.val = all[dmax_i(0, n - anchored_tail):].to_array()
+        // (a row asked to be brought into sight since it was last laid out: put where as little brings it in, as it was
+        // last laid out; in sight already, as it is)
+        match c.reveal {
+          (Some(k), asked) if asked > revealed.val => {
+            revealed.val = asked
+            match (laid.val, find(k, anchor.val.map(fn(a) { a.near }).unwrap_or(n - 1))) {
+              (Some(was), Some(i)) => {
+                let mut q = -1
+                for j in 0..<was.keys.length() {
+                  if was.keys[j] == k {
+                    q = j
+                  }
+                }
+                let hk = measure(i)
+                let (top, foot) = if q >= 0 { (was.tops[q], was.tops[q] + was.heights[q]) } else { (-1.0, h + 1.0) }
+                let over = top < 0.0 && (q >= 0 || i < was.first)
+                let under_foot = foot > h && (q >= 0 || i > was.last)
+                if over || under_foot {
+                  // (its top at the window's, or its foot at the window's foot)
+                  let foot_at = if over { hk } else { h }
+                  anchor.val = Some({
+                    key: k,
+                    under: if from_end { foot_at - h } else { hk - foot_at },
+                    near: i,
+                  })
+                }
+              }
+              _ => ()
+            }
+          }
+          _ => ()
+        }
         let key_of = fn(i : Int) { all[i] }
         let known = fn(i : Int) { heights.get(all[i]) }
         let r = if from_end {

@@ -248,5 +248,5 @@ test "scrolls_anchored: glided from outside to where it is counted less 40, from
   let at = c.scroll.at(c.tree)
   c.tree.event(10.0, fn() { c.scroll.glide_to(at - 40.0) })
   c.tree.frame(390.0, 844.0, now=3000.0) |> ignore
-  assert_eq((at, c.scroll.at(c.tree), c.top(99)), (3900.0, 3860.0, Some(100.0)))
+  assert_eq((at, c.scroll.at(c.tree), c.top(98)), (3900.0, 3860.0, Some(60.0)))
 }
