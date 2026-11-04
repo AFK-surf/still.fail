@@ -27,6 +27,54 @@ test "the bar: a finger held still on it a moment has the ball a lens of liquid 
 }
 
 ///|
+test "the bar: holding a place hides 令 or ＋, moving keeps it hidden, and letting go brings it back" {
+  let held_frame_ms = 1000.0
+  let moved_frame_ms = 100.0
+  for action in ["ling", "plus"] {
+    let t = tester("home")
+    let place = if action == "ling" { "chats" } else { bar_place_with("plus") }
+    if action == "plus" {
+      assert_true(@sfbase.go_place(place))
+      t.run_for(@ui.move_most_ms)
+    }
+    assert_eq(m_face.val, action)
+    let (xs, y) = bar_places_at()
+    let told = bar.told.unwrap()
+    let j = told.sets[told.cur].search(place).unwrap()
+    let x = xs[j]
+    // The accent disc under the glass is part of the button, as are its glass and icon.
+    let disc_alpha = fn() {
+      let theme = @sf.theme()
+      let ink = @sf.over(theme.p.bg, @sf.alpha(theme.p.accent, action_ink))
+      t.drawn_rects()
+      .filter(fn(r) {
+        (r.2 - drop).abs() < 0.1 && (r.3 - drop).abs() < 0.1 &&
+        (r.0 - (195.0 - drop / 2.0)).abs() < 0.1 && r.1 > 600.0 && r.4 >> 8 == ink >> 8
+      })
+      .fold(init=0L, fn(a, r) { if (r.4 & 0xFFL) > a { r.4 & 0xFFL } else { a } })
+    }
+    assert_true(disc_alpha() > 0L, msg="\{action} before holding")
+    t.press_at(x, y)
+    t.run_for(bar_hold_ms / 2.0)
+    assert_true(disc_alpha() > 0L, msg="\{action} before the hold")
+    t.run_for(bar_hold_ms / 2.0)
+    t.frame()
+    t.run_for(held_frame_ms)
+    assert_eq(disc_alpha(), 0L, msg="\{action} held")
+    t.move(x + 12.0, y)
+    t.run_for(moved_frame_ms)
+    assert_eq(disc_alpha(), 0L, msg="\{action} moved")
+    t.release(x + 12.0, y)
+    t.run_for(held_frame_ms)
+    assert_true(disc_alpha() > 0L, msg="\{action} released")
+    if action == "ling" {
+      t.tap(195.0, y - 28.0 - 4.0)
+      assert_true(app.nav.risen(), msg="令 works after letting go")
+    }
+  }
+}
+
+///|
 test "the bar: 文件 tapped is its page in place of the chats', back is the chats again" {
   let t = tester("home")
   let (xs, y) = bar_places_at()
