@@ -1430,6 +1430,19 @@ fn layout_flex(
       let hi = if row { b.max_w } else { b.max_h }
       clamp_size(max_line_main + pb, lo, hi) - pb
     }
+    // A horizontal scroll's bar belongs to this same layout. Its overflow is now known from the resolved main
+    // sizes, before either the content's cross size or the container's intrinsic height is decided.
+    if row && s.overflow == Scroll && node.scroll_bar_space > 0.0 {
+      for k in 0..<count {
+        let i = k * ITEM
+        if f.unsafe_get(i + MAIN) > main_size + pbw + 0.5 {
+          let cb = item_box(flow.unsafe_get(at.unsafe_get(k)))
+          let extra = fmax(node.scroll_bar_space - cb.pad_b, 0.0)
+          f.unsafe_set(i + MARGIN_CROSS, f.unsafe_get(i + MARGIN_CROSS) + extra)
+          f.unsafe_set(i + MAR_CROSS_END, f.unsafe_get(i + MAR_CROSS_END) + extra)
+        }
+      }
+    }
     // hypothetical cross sizes
     for k in 0..<count {
       let i = k * ITEM
@@ -2460,6 +2473,21 @@ fn layout_static_absolute(cb : Node, node : Node, ox : Double, oy : Double) -> U
 fn place_absolute(cb : Node, parent : Node, c : Node, ox : Double, oy : Double) -> Unit {
   // An overlay returning from display:none participates again, just as a flex item given its line does.
   c.line = 0
+  match c.layout_overlay {
+    Some(bounds) => {
+      // The parent's normal-flow children already have their final sizes. The dependent overlay is measured
+      // once with the bounds they imply; a clean child reuses its layout only when these constraints match.
+      let (x, y, w, h) = bounds(parent.width, parent.height)
+      let rw = size_node(c, w, h, w, h, parent.width, parent.height, true)
+      let rh = out_h.val
+      c.width = rw
+      c.height = rh
+      c.left = on_grid(x)
+      c.top = on_grid(y)
+      return
+    }
+    None => ()
+  }
   let cbb = box_of(cb.style, undef, undef)
   let pb = box_of(parent.style, undef, undef)
   let ps = parent.style

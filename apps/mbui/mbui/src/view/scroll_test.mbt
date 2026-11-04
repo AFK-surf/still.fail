@@ -799,7 +799,7 @@ fn drawn_reader(seen : Array[(Double, Bool, Bool)], at : @signals.Signal[Double]
           let t = at.get()
           let a = v.drawn_past(t)
           let b = v.drawn_past(t + 100.0)
-          let now = if clock { v.drawn_at() } else { @signals.untracked(fn() { v.drawn_at() }) }
+          let now = if clock { v.paint_at() } else { @signals.untracked(fn() { v.paint_at() }) }
           seen.push((now, a, b))
           if a { 0.5 } else { 1.0 }
         }))
@@ -828,13 +828,16 @@ test "drawn past a moment: watched with the moment drawn, both told as one; the 
   let v = view.val.unwrap()
   let seen : Array[(Double, Bool, Bool)] = []
   let stop = @signals.effect(fn() {
-    let now = v.drawn_at()
+    let now = v.paint_at()
     let a = v.drawn_past(100.0)
     let b = if a { v.drawn_past(200.0) } else { false }
     seen.push((now, a, b))
   })
   tree.at(150.0)
+  assert_eq(seen.last(), Some((80.0, false, false)), msg="declaring presentation does not sample the tree")
+  tree.frame(390.0, 844.0, now=80.0) |> ignore
   tree.at(250.0)
+  tree.frame(390.0, 844.0, now=80.0) |> ignore
   stop()
   let torn = seen.iter().any(fn(e) { (e.0 >= 100.0 && !e.1) || (e.0 >= 200.0 && !e.2) })
   assert_eq(
