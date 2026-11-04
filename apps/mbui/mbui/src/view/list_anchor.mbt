@@ -342,6 +342,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
         let measure = fn(i : Int) -> Double {
           let k = key_at(i)
           let slot = slot_of(k)
+          self.tree.nodes[slot.at].row_index = Some(i)
           let natural = l.measure(slot, l.width).1
           naturals[k] = natural
           match heights.get(k) {

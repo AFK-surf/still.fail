@@ -168,7 +168,7 @@ fn tree_place(v : @view.View) -> Array[Int] {
   let up : Array[Int] = []
   let mut at = v
   while at.parent() is Some(p) {
-    let i = p.kids().search_by(fn(k) { k.id() == at.id() }).unwrap_or(0)
+    let i = at.order_in_parent()
     up.push(i)
     at = p
   }

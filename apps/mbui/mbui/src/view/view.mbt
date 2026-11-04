@@ -363,6 +363,8 @@ struct Node {
   /// what that row is known by where it is made anew for the same key (View::row_known_as: a windowed list's block,
   /// its slot let go as it leaves the window): what is picked in it found in it again as it comes back
   mut row_id : NodeId?
+  /// A virtual row's position among all its siblings, including those outside the window.
+  mut row_index : Int?
   /// whether it takes input now as what reads it reads it (View::takes_input): made as first read, let go with it
   mut input_cell : @signals.Signal[Bool]?
   /// whether it can take the keyboard's focus, which of Enter (1) and Space (2) press it as it has it (View::focusable;
@@ -1077,6 +1079,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.said_cell = None
       n.each_row = false
       n.row_id = None
+      n.row_index = None
       n.focusable = false
       n.focus_typing = false
       n.focus_keys = 0
@@ -1171,6 +1174,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         said_cell: None,
         each_row: false,
         row_id: None,
+        row_index: None,
         focusable: false,
         focus_typing: false,
         input_cell: None,
