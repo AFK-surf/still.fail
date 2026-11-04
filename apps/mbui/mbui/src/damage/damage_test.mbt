@@ -157,3 +157,29 @@ test "the work counted: each instance reached, each rect said" {
   inspect(p.work(), content="4")
   inspect(@damage.union((0.0, 0.0, 1.0, 1.0), @damage.nowhere), content="(0, 0, 1, 1)")
 }
+
+///|
+test "an old view's instances compared: what differs drawn again where it was and is, the rest not" {
+  let before = frame([(0.0, 0.0, 400.0, 300.0, 0), (10.0, 10.0, 20.0, 20.0, 0), (300.0, 200.0, 20.0, 20.0, 0)])
+  // the one in the middle moved: it alone
+  let moved = frame([(0.0, 0.0, 400.0, 300.0, 0), (40.0, 10.0, 20.0, 20.0, 0), (300.0, 200.0, 20.0, 20.0, 0)])
+  let p = @damage.Parts::new()
+  p.add_changed(before, 3, moved, 3)
+  let parts = p.take(400.0, 300.0, [])
+  assert_eq(parts.length(), 1)
+  let (x, _, w, _) = parts[0]
+  assert_true(x < 10.0 && x + w > 60.0 && w < 60.0, msg="\{parts}")
+  // nothing differs: nothing
+  p.add_changed(before, 3, before, 3)
+  assert_eq(p.take(400.0, 300.0, []), [])
+  // one more at its end: that one
+  let more = frame([(0.0, 0.0, 400.0, 300.0, 0), (10.0, 10.0, 20.0, 20.0, 0), (300.0, 200.0, 20.0, 20.0, 0), (100.0, 100.0, 10.0, 10.0, 0)])
+  p.add_changed(before, 3, more, 4)
+  let parts = p.take(400.0, 300.0, [])
+  assert_eq(parts.length(), 1)
+  assert_true(parts[0].2 < 20.0, msg="\{parts}")
+  // a shape's piece differs: all of it
+  let piece = frame([(0.0, 0.0, 400.0, 300.0, 0), (10.0, 10.0, 20.0, 20.0, 12), (300.0, 200.0, 20.0, 20.0, 0)])
+  p.add_changed(before, 3, piece, 3)
+  assert_eq(p.take(400.0, 300.0, []), [(0.0, 0.0, -1.0, -1.0)])
+}
