@@ -83,7 +83,7 @@ async function enrollStation(h: Harness, owner: ReturnType<Harness["as"]>, works
   return station;
 }
 
-test("every change reaches exactly the accounts it affects", { timeout: 30000 }, async () => {
+test("every change reaches exactly the accounts it affects", async () => {
   const h = await harness();
   try {
     const tokens = { alice: await h.login("alice"), bob: await h.login("bob"), carol: await h.login("carol"), dave: await h.login("dave") };
@@ -244,7 +244,7 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
   }
 });
 
-test("a reconnect replaces the old station socket; a silent one is dropped", { timeout: 20000 }, async () => {
+test("a reconnect replaces the old station socket; a silent one is dropped", async () => {
   const h = await harness();
   try {
     const tokens = await h.login("alice");
@@ -275,7 +275,7 @@ test("a reconnect replaces the old station socket; a silent one is dropped", { t
   }
 });
 
-test("sockets refuse bad credentials", { timeout: 20000 }, async () => {
+test("sockets refuse bad credentials", async () => {
   const h = await harness();
   try {
     const tokens = await h.login("alice");
@@ -328,7 +328,7 @@ test("station rosters stay workspace scoped and update when peers join or leave"
   } finally { await h.close(); }
 });
 
-test("a workspace's own relays: set by its managers, told to its stations and members after still.fail's, kept from others", { timeout: 20000 }, async () => {
+test("a workspace's own relays: set by its managers, told to its stations and members after still.fail's, kept from others", async () => {
   const h = await harness();
   try {
     const tokens = { alice: await h.login("alice"), bob: await h.login("bob") };

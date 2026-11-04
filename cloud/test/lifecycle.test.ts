@@ -8,6 +8,7 @@ import { TEST_CONNECTIONS } from "./relay-limit.ts";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 
 function auth(token: string) {
   return { authorization: "Bearer " + token, "content-type": "application/json" };
@@ -30,7 +31,7 @@ test("only an operator can retire the relay process during a cutover", async () 
   }
 });
 
-test("logout does not cancel a pending native relay upgrade", { timeout: 10000 }, async () => {
+test("logout does not cancel a pending native relay upgrade", async () => {
   const h = await harness();
   try {
     const session = await h.login();
@@ -66,7 +67,7 @@ test("logout does not cancel a pending native relay upgrade", { timeout: 10000 }
   }
 });
 
-test("the daily frame budget drops connections and refuses new ones even when frames carry no bytes", { timeout: 10000 }, async () => {
+test("the daily frame budget drops connections and refuses new ones even when frames carry no bytes", async () => {
   const h = await harness();
   try {
     const session = await h.login();
@@ -94,7 +95,46 @@ test("the daily frame budget drops connections and refuses new ones even when fr
   }
 });
 
-test("session rotations and revocations survive a Worker restart", { timeout: 20000 }, async () => {
+// What a test asserts is its result, never how long it took (the tests' only time limit is the run's own, a minute:
+// package.json's --test-timeout, a hang's guard): a CI runner stalled for seconds (2026-11-04, three tests of two
+// files ten times slower at once, those with limits of their own failed) leaves the result as it was. Here workerd
+// itself stopped for longer than such a limit was, in the middle of the budget dropping a connection.
+test("the frame budget's drop is the same with workerd stopped for eleven seconds midway", async () => {
+  const h = await harness();
+  try {
+    const session = await h.login();
+    const upgrade = (token: string) =>
+      h.fetch("/relay", {
+        headers: {
+          ...auth(token),
+          upgrade: "websocket",
+          "sec-websocket-protocol": "iroh-relay",
+        },
+      });
+    const response = await upgrade(session.access_token);
+    assert.equal(response.status, 101);
+    const socket = response.webSocket!;
+    socket.accept();
+    const budgets: any = await h.mf.getDurableObjectNamespace("RELAY_BUDGET", "relay");
+    await budgets.get(budgets.idFromName("primary")).exhaustBudget("frames");
+    const closed = new Promise<number>((resolve) => socket.addEventListener("close", (event) => resolve(event.code), { once: true }));
+    // (asked, then the workerd this file runs stopped as a starved runner stops it, and let go on)
+    const polled = budgets.get(budgets.idFromName("primary")).poll();
+    const workerd = execFileSync("pgrep", ["-P", String(process.pid), "workerd"]).toString().trim().split("\n").map(Number);
+    assert.ok(workerd.length > 0, "workerd is this file's child");
+    for (const pid of workerd) process.kill(pid, "SIGSTOP");
+    await new Promise((go) => setTimeout(go, 11_000));
+    for (const pid of workerd) process.kill(pid, "SIGCONT");
+    await polled;
+    assert.equal(await closed, 1012);
+    const anotherSession = await h.login();
+    assert.equal((await upgrade(anotherSession.access_token)).status, 429);
+  } finally {
+    await h.close();
+  }
+});
+
+test("session rotations and revocations survive a Worker restart", async () => {
   const persist = await fs.mkdtemp(path.join(os.tmpdir(), "zork-account-do-"));
   const signingKey = randomSecret();
   let h = await harness({ persist, signingKey });
@@ -138,7 +178,7 @@ test("session rotations and revocations survive a Worker restart", { timeout: 20
   }
 });
 
-test("real Worker login, rotation retries/reuse, session revocation and account isolation", { timeout: 20000 }, async () => {
+test("real Worker login, rotation retries/reuse, session revocation and account isolation", async () => {
   const h = await harness();
   try {
     const flow = await h.begin();
@@ -220,7 +260,7 @@ test("real Worker login, rotation retries/reuse, session revocation and account 
   }
 });
 
-test("Google identity validation rejects wrong nonce, audience and unverified email", { timeout: 20000 }, async () => {
+test("Google identity validation rejects wrong nonce, audience and unverified email", async () => {
   const h = await harness();
   try {
     for (const invalid of ["nonce", "aud", "email"]) {
@@ -234,7 +274,7 @@ test("Google identity validation rejects wrong nonce, audience and unverified em
   }
 });
 
-test("cloud logout, expired credentials and account blocking do not govern Mesh transport", { timeout: 15000 }, async () => {
+test("cloud logout, expired credentials and account blocking do not govern Mesh transport", async () => {
   const h = await harness();
   try {
     const session = await h.login();
@@ -265,7 +305,7 @@ test("cloud logout, expired credentials and account blocking do not govern Mesh 
   }
 });
 
-test("relay budgets span anonymous and account sessions; account idle expiry still prevents renewal", { timeout: 20000 }, async () => {
+test("relay budgets span anonymous and account sessions; account idle expiry still prevents renewal", async () => {
   const h = await harness();
   const sockets: Array<{ close(): void }> = [];
   try {
@@ -314,7 +354,7 @@ test("relay budgets span anonymous and account sessions; account idle expiry sti
   }
 });
 
-test("a session in use never reaches an end: each refresh gives it its whole lifetime again", { timeout: 20000 }, async () => {
+test("a session in use never reaches an end: each refresh gives it its whole lifetime again", async () => {
   const h = await harness();
   try {
     const session = await h.login("every-day");
@@ -334,7 +374,7 @@ test("a session in use never reaches an end: each refresh gives it its whole lif
   }
 });
 
-test("a refresh answered after its retry window: the same credentials while the new ones are unused, a fresh access", { timeout: 20000 }, async () => {
+test("a refresh answered after its retry window: the same credentials while the new ones are unused, a fresh access", async () => {
   const h = await harness();
   try {
     const session = await h.login("sleepy-phone");

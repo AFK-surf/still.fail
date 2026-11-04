@@ -65,7 +65,7 @@ async function googleLogin(h: H, address: string, sub: string): Promise<Tokens> 
   return b.exchange(callback);
 }
 
-test("an email signs up with a code sent to it, and signs in to the same account again", { timeout: 30000 }, async () => {
+test("an email signs up with a code sent to it, and signs in to the same account again", async () => {
   const h = await harness({ mail: true });
   try {
     const b = await browser(h, "10.1.0.1");
@@ -96,7 +96,7 @@ test("an email signs up with a code sent to it, and signs in to the same account
   }
 });
 
-test("an app signs in with an email's code: the code page lets its form send the browser back to the app", { timeout: 30000 }, async () => {
+test("an app signs in with an email's code: the code page lets its form send the browser back to the app", async () => {
   const h = await harness({ mail: true });
   try {
     const b = await browser(h, "10.7.0.1", "stillfail://auth/callback");
@@ -111,7 +111,7 @@ test("an app signs in with an email's code: the code page lets its form send the
   }
 });
 
-test("an email and Google with the same address are one account, whichever came first", { timeout: 30000 }, async () => {
+test("an email and Google with the same address are one account, whichever came first", async () => {
   const h = await harness({ mail: true });
   try {
     const google = await googleLogin(h, "10.2.0.1", "carol");
@@ -130,7 +130,7 @@ test("an email and Google with the same address are one account, whichever came 
   }
 });
 
-test("five wrong codes end a sign-in, an email gets five codes an hour, and only the browser that asked can use them", { timeout: 30000 }, async () => {
+test("five wrong codes end a sign-in, an email gets five codes an hour, and only the browser that asked can use them", async () => {
   const h = await harness({ mail: true });
   try {
     const b = await browser(h, "10.3.0.1");
@@ -175,7 +175,7 @@ test("five wrong codes end a sign-in, an email gets five codes an hour, and only
   }
 });
 
-test("a code that cannot be sent says so and leaves Google", { timeout: 30000 }, async () => {
+test("a code that cannot be sent says so and leaves Google", async () => {
   const h = await harness({ mail: () => "E_SENDER_NOT_VERIFIED" });
   try {
     const b = await browser(h, "10.4.0.1");
@@ -188,7 +188,7 @@ test("a code that cannot be sent says so and leaves Google", { timeout: 30000 },
   }
 });
 
-test("a device signs in with an email's code: the mail names it", { timeout: 30000 }, async () => {
+test("a device signs in with an email's code: the mail names it", async () => {
   const h = await harness({ mail: true });
   try {
     const id = randomSecret(),
@@ -217,7 +217,7 @@ test("a device signs in with an email's code: the mail names it", { timeout: 300
   }
 });
 
-test("an app's browser sign-in ends on a page saying it is signed in, an Android app's with a link back to it", { timeout: 30000 }, async () => {
+test("an app's browser sign-in ends on a page saying it is signed in, an Android app's with a link back to it", async () => {
   const h = await harness();
   try {
     const page = await h.fetch("/v1/auth/done", { headers: { "accept-language": "zh-CN" } });
@@ -235,7 +235,7 @@ test("an app's browser sign-in ends on a page saying it is signed in, an Android
   }
 });
 
-test("the sign-in page signs an account set up for it in with its password, a wrong one said so on the page", { timeout: 30000 }, async () => {
+test("the sign-in page signs an account set up for it in with its password, a wrong one said so on the page", async () => {
   const h = await harness({ mail: true, reviewAccounts: JSON.stringify([{ email: "Review@Example.test", password: "correct horse battery", name: "App Review" }]) });
   try {
     const b = await browser(h, "10.9.0.1");
@@ -258,7 +258,7 @@ test("the sign-in page signs an account set up for it in with its password, a wr
   }
 });
 
-test("without a way to send mail, signing in goes straight to Google as before", { timeout: 30000 }, async () => {
+test("without a way to send mail, signing in goes straight to Google as before", async () => {
   const h = await harness();
   try {
     const flow = await h.begin("jill");
@@ -272,7 +272,7 @@ test("without a way to send mail, signing in goes straight to Google as before",
   }
 });
 
-test("monoid's cloud names monoid on its pages and in its mails, still.fail's hosts kept", { timeout: 30000 }, async () => {
+test("monoid's cloud names monoid on its pages and in its mails, still.fail's hosts kept", async () => {
   const h = await harness({ mail: true, origin: "https://app.monoid.build" });
   try {
     const b = await browser(h, "10.1.0.9");
