@@ -768,6 +768,8 @@ pub struct Zoom {
   mut nh : Double
   mut bw : Double
   mut bh : Double
+  mut bar : Double
+  mut foot_bar : Double
   mut scale : Double
   mut x : Double
   mut y : Double
@@ -807,6 +809,7 @@ pub fn Zoom::stop_fling(Self, at? : Double) -> Bool
 pub fn Zoom::stop_glide(Self, at? : Double) -> Unit
 pub fn Zoom::told(Self) -> Unit
 pub fn Zoom::transform(Self, Double, Double, Double, Double, Double, at? : Double) -> Unit
+pub fn Zoom::under_bars(Self, Double, Double, at? : Double) -> Unit
 pub fn Zoom::zoom_to(Self, Double, Double, Double, Bool, at? : Double) -> Unit
 pub fn Zoom::zoomed(Self) -> Bool
 pub fn Zoom::zoomed_at(Self, Double) -> Bool

@@ -47,6 +47,22 @@ pub fn viewer_bar_floats(w : Double) -> Bool {
 }
 
 ///|
+/// How far down from the window's top what a file opened `w` wide has for a bar reaches: the bar floating at its top, or
+/// the one across it (viewer_bar_under).
+pub fn viewer_bar_clear(w : Double) -> Double {
+  if viewer_bar_floats(w) {
+    let top = (viewer_host().room)().0
+    dmax(top, if w <= viewer_small_w { vfr_head_top_small } else { vfr_head_top }) + vfr_head_h
+  } else {
+    viewer_bar_under()
+  }
+}
+
+///|
+/// The floating bar's height (vfr_head_box's S11).
+let vfr_head_h : Double = 44.0
+
+///|
 /// The bar floating at the top (fpHead): page glass, its corner 14, 44 high, the room's top or 16 down (8 under 640),
 /// 16 in from the window's sides at most (8 under 640) and 1080 wide at most; the name first (its kind and size after
 /// it, not under 640), cut short before the tools give way, the tools and × at its end.

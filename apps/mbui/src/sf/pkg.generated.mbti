@@ -2334,6 +2334,8 @@ pub fn viewer_bar(@ui.Ctx, String, String, String, String, Bool, ViewerInk, () -
 
 pub let viewer_bar_blur : Double
 
+pub fn viewer_bar_clear(Double) -> Double
+
 pub fn viewer_bar_floats(Double) -> Bool
 
 pub let viewer_bar_h : Double

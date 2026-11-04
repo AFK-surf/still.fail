@@ -441,6 +441,8 @@ test "viewer on the tree, marking: a box's corner handle taken: the box stretche
   told_by(t, t.time(), [(0, 0, x + 20.0, y + 20.0, 10.0), (2, 0, x + 20.0, y + 20.0, 20.0)], At([]))
   display_frame(t)
   assert_eq(marking.note, -1)
+  // (its note's card under the picture now: the picture moved up clear of it)
+  let (x, y, _, _) = z.rect().unwrap()
   // picked by its left edge (a tap: nothing to undo), then its foot right handle (drawn half a reach out of the
   // corner) taken 40, 30 further
   pressed(t, Button, pv("android-chat.marks.tool.select"))
@@ -1629,14 +1631,16 @@ fn wheel_centre(moved_after : Bool) -> ((Double, Double), (Double, Double), (Dou
   // (4 times: e^(693 × 0.002), at the stage's middle (the window's: 1280 by 844), the pointer there too: round the
   // middle whichever way the wheel is read)
   let (mx, my) = (z.bw / 2.0, z.bh / 2.0)
+  // (fitted, its middle under the stage's by half what the bar over it takes: as far again as it is zoomed)
+  let (_, fy, _, fh) = z.rect_at(t.time()).unwrap()
   t.move(mx, my)
   t.wheel_with(mx, my, 0.0, -693.0, @ui.wheel_mod_cmd)
   t.draw()
   let (rx, ry, rw, rh) = z.rect_at(t.time()).unwrap()
   assert_true(rw > z.bw * 1.5 && rh > z.bh * 1.5, msg="larger than the stage both ways: \{rw} by \{rh}")
   assert_true(
-    (rx + rw / 2.0 - z.bw / 2.0).abs() < 0.001 && (ry + rh / 2.0 - z.bh / 2.0).abs() < 0.001,
-    msg="its middle the stage's: \{(rx, ry, rw, rh)}",
+    (rx + rw / 2.0 - z.bw / 2.0).abs() < 0.001 && (ry + rh / 2.0 - z.bh / 2.0 - (fy + fh / 2.0 - z.bh / 2.0) * rh / fh).abs() < 0.001,
+    msg="round the stage's middle: \{(rx, ry, rw, rh)}",
   )
   t.move(100.0, 700.0)
   let (bx, by) = (400.0, 300.0)
@@ -3349,8 +3353,8 @@ test "viewer on the tree, marking: the marks drawn where the picture is as each 
   // (words begun low on the picture, the keyboard up, the window laid out above it, as a host does)
   marking.tool = Words
   let (x, y, w, h) = v.zoom.rect().unwrap()
-  t.touch(0, x + w / 2.0, y + h * 0.9)
-  t.touch(2, x + w / 2.0, y + h * 0.9)
+  t.touch(0, x + w / 2.0, y + h * 0.99)
+  t.touch(2, x + w / 2.0, y + h * 0.99)
   assert_true(marking.writing is Some(_), msg="words begun")
   t.set_ime_inset(300.0)
   t.resize_next(390.0, 844.0 - 300.0)
@@ -3487,7 +3491,7 @@ test "viewer on the tree: the strip put aside and still (no way going): the pict
   let shown = drawn_of(t, main)
   assert_true(shown.length() == 1 && at_rect(shown[0], x - 50.0, y, w, h), msg="drawn 50 aside, once: \{shown}")
   // (the one after: fitted to the stage, 390 + 24 to the right of it, 50 aside)
-  let (nx, ny, nw, nh) = @sfbase.fitted_rect(400.0, 560.0, 390.0, 844.0).unwrap()
+  let (nx, ny, nw, nh) = @sfbase.fitted_rect(400.0, 560.0, 390.0, 844.0, bar=@sf.viewer_bar_clear(390.0)).unwrap()
   let nx = nx - 50.0 + 390.0 + @sfbase.slide_gap
   assert_true(nodes_of(next).length() == 1 && at_rect(nodes_of(next)[0], nx, ny, nw, nh), msg="the one beside it a node's: \{nodes_of(next)}")
   let beside = drawn_of(t, next)
@@ -4336,4 +4340,33 @@ test "viewer on the tree, marking on a phone and on a wide window, words being w
     let closed = hosted()
     assert_eq((with_note - closed, marking_now - closed), (0, 0), msg="\{wide}: of an old view's while it marks, its note open, words being written: none")
   }
+}
+
+///|
+test "viewer on the tree, wide: a tall picture fitted whole under the bar across the top; marking it, clear of its tools too" {
+  let t = preview_tester("image", w=1400.0, platform=0)
+  let v = viewer.get().unwrap()
+  v.zoom.natural(880.0, 1280.0)
+  t.draw()
+  let (_, y, _, h) = v.zoom.rect().unwrap()
+  assert_true(y >= @sf.viewer_bar_h, msg="clear of the bar: \{y}")
+  assert_true(y + h <= 844.0, msg="whole: \{y + h}")
+  pressed(t, Button, @sf.t("web-main.annotate.image"))
+  assert_true(marking.on)
+  t.draw()
+  let foot = @sfbase.marks_foot_over()
+  assert_true(foot >= 44.0, msg="the tools' room: \{foot}")
+  let (_, y, _, h) = v.zoom.rect().unwrap()
+  assert_true(y >= @sf.viewer_bar_h, msg="marking, clear of the bar: \{y}")
+  assert_true(y + h <= 844.0 - foot, msg="marking, clear of the tools: \{y + h} over \{844.0 - foot}")
+}
+
+///|
+test "viewer on the tree, narrow: a phone's tall picture fitted clear of the bar floating over it" {
+  let t = preview_tester("image", platform=1)
+  let v = viewer.get().unwrap()
+  v.zoom.natural(390.0, 844.0)
+  t.draw()
+  let (_, y, _, _) = v.zoom.rect().unwrap()
+  assert_true(y >= @sf.viewer_bar_clear(390.0), msg="clear of the bar: \{y}")
 }

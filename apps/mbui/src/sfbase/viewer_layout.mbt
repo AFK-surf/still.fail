@@ -61,14 +61,10 @@ pub let desk_page_top : Double = 76.0
 pub let desk_table_top : Double = 68.0
 
 ///|
-/// How far the system's status bar reaches over the window (a tablet's), where the bar is across the top (not laid
-/// out Small, whose bar floats: @sf.viewer_frame_bar): what a document under it starts that much lower for.
-fn viewer_top(c : @ui.Ctx) -> Double {
-  if @sf.layout(c.width) is Small {
-    0.0
-  } else {
-    (@sf.viewer_host().room)().0
-  }
+/// How far the system's status bar reaches over the window: what a document under the bar, across the top or floating
+/// (@sf.viewer_frame_bar), starts that much lower for.
+fn viewer_top(_c : @ui.Ctx) -> Double {
+  (@sf.viewer_host().room)().0
 }
 
 ///|

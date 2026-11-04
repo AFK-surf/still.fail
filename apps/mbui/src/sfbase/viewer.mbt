@@ -2285,9 +2285,16 @@ pub fn Viewer::read_near(self : Viewer, src : Source, before : Viewer?, after : 
 ///|
 /// Where a picture of (nw, nh) shows fitted on a stage of (bw, bh) (the viewer's fit: a margin round it, never
 /// enlarged).
-pub fn fitted_rect(nw : Double, nh : Double, bw : Double, bh : Double) -> (Double, Double, Double, Double)? {
+pub fn fitted_rect(
+  nw : Double,
+  nh : Double,
+  bw : Double,
+  bh : Double,
+  bar? : Double = 0.0,
+) -> (Double, Double, Double, Double)? {
   let z = @kit.Zoom::new()
   z.boxed(bw, bh)
+  z.under_bars(bar, 0.0)
   z.natural(nw, nh)
   z.rect()
 }
@@ -2714,7 +2721,7 @@ pub fn Viewer::pdf_stage(self : Viewer, c : @ui.Ctx, b : Bytes, stage : Int) -> 
   let w = if small { c.width - 2.0 * pdf_small_in } else { desk_pdf_width(c.width) }
   let side = (c.width - w) / 2.0
   let gap = if small { pdf_small_in } else { desk_pdf_gap }
-  let top = if small { page_small_top } else { viewer_top(c) + desk_page_top }
+  let top = if small { viewer_top(c) + page_small_top } else { viewer_top(c) + desk_page_top }
   let foot = if small { pdf_small_in } else { viewer_foot(c) + desk_pdf_foot }
   let none = 0.0
   c.list("preview/pdf/" + v.file.path, pdf.pages + 2, 400.0, fn(i) {
@@ -2773,7 +2780,7 @@ pub fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, s
       }
     }
     // under the bar: 60 under the status bar, a desktop's 76 (FilePreview.css.ts fpPageFrame)
-    let top = if c.width <= @sf.viewer_small_w { page_small_top } else { viewer_top(c) + desk_page_top }
+    let top = if c.width <= @sf.viewer_small_w { viewer_top(c) + page_small_top } else { viewer_top(c) + desk_page_top }
     c.box(w=Fill(1.0), h=Fill(1.0), pt=top, fn() {
       if page.here() && !v.closing {
         c.native(page) |> ignore
@@ -2858,7 +2865,7 @@ pub fn Viewer::lines_stage(
   // on 1.65; under 640, 60 down, 16 in, 48 under)
   let small = c.width <= @sf.viewer_small_w && !code && markdown is None
   let top = if small {
-    page_small_top
+    viewer_top(c) + page_small_top
   } else {
     viewer_top(c) + (if markdown is Some(_) { 64.0 } else if code { 80.0 } else { desk_page_top })
   }
@@ -3063,6 +3070,7 @@ pub fn file_viewer_reset() -> Unit {
   pv_frames_n.val = 0
   pv_first.clear()
   pv_hidden.set("")
+  marks_foot_taken.set(0.0)
   pv_read.clear()
   pv_strip.leaving = None
   pv_strip.way.put(0.0)
