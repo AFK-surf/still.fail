@@ -123,6 +123,9 @@ export interface Host {
   /// file given to the system by its path, not carried whole). Null while none is kept; none on a host whose values are
   /// not files (a web page).
   storagePath?(key: string): string | null;
+  /// Where a person's or a bot's picture at `url` is fetched from: a browser's, through still.fail cloud for one its
+  /// server keeps from other pages (picture-relay.ts). None: from `url`.
+  pictureVia?(url: string): string;
   /// Bytes `start` to `end` of a file the app saved where the person keeps files (`at`, as the system named it once it
   /// was saved: a path, a content address); null when it is no longer there or cannot be read. A host without one (the
   /// web: what the browser saved is out of the page's reach) keeps the device's copy of a download in its cache.
