@@ -161,6 +161,8 @@ fn media_reveal_node(
   let first = @signals.untracked(fn() { ready() || picture().held })
   let came : @signals.Signal[Double?] = @signals.signal(if first { Some(-1.0e18) } else { None }, same=fn(a, b) { a == b })
   let moving = @signals.signal(false, same=fn(a, b) { a == b })
+  // (where it is laid out told from its making on, read as it is decoded: out_of_window)
+  @signals.untracked(fn() { s.laid_window_told() }) |> ignore
   s.reacts(fn() { (ready(), picture().held) }, fn(now) {
     let (decoded, held) = now
     if @signals.untracked(fn() { came.get() }) is None {
@@ -275,11 +277,11 @@ fn media_reveal_node(
 }
 
 ///|
-/// Whether `s` is laid out wholly out of its window (over its top or under its foot), or laid out nowhere (in a row
-/// made ahead of what shows, not laid out yet).
+/// Whether `s` is laid out wholly out of its window (over its top or under its foot), as last told (where it is told
+/// from its making: media_reveal_node).
 fn out_of_window(s : @view.View) -> Bool {
   match @signals.untracked(fn() { s.laid_window_told() }) {
     Some((_, y, _, h)) => y + h <= 0.0 || y >= s.window().1
-    None => s.shown_nowhere()
+    None => false
   }
 }
