@@ -62,3 +62,28 @@ pub fn unexpired(lasts : Bool, exp : Int64, now : Int64) -> Bool where {
 } {
   !lasts || exp > now
 }
+
+///|
+/// Which of two versions of one record every station and device keeps, whatever order they came in (two written at
+/// once, on two stations): whether `a` is kept over `b`. The later one; of one number, the one that deletes it, then
+/// the one under the later key (a member or device taken out stays out), then the one whose text is the greater
+/// (`text`: how `a`'s compares with `b`'s, as `compare` says it).
+pub fn supersedes(seq_a : Int64, deleted_a : Bool, epoch_a : Int64, seq_b : Int64, deleted_b : Bool, epoch_b : Int64, text : Int) -> Bool where {
+  proof_ensure: result => supersedes_post(seq_a, deleted_a, epoch_a, seq_b, deleted_b, epoch_b, text, result),
+} {
+  if seq_a > seq_b {
+    true
+  } else if seq_a < seq_b {
+    false
+  } else if deleted_a && !deleted_b {
+    true
+  } else if deleted_b && !deleted_a {
+    false
+  } else if epoch_a > epoch_b {
+    true
+  } else if epoch_a < epoch_b {
+    false
+  } else {
+    text > 0
+  }
+}

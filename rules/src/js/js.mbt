@@ -468,3 +468,34 @@ pub fn signer_of_js(lock : JsValue, key : String) -> JsValue {
     None => js_null()
   }
 }
+
+///|
+fn supersedes_of(a : JsValue, b : JsValue, number : String) -> Bool {
+  let (a, b) = try (json_of(a), json_of(b)) catch { _ => return false }
+  let n = fn(v : Json, k : String) -> Int64 {
+    match v {
+      Object(m) =>
+        match m.get(k) {
+          Some(Number(x, ..)) => x.to_int64()
+          _ => 0L
+        }
+      _ => 0L
+    }
+  }
+  let deleted = fn(v : Json) { v is Object(m) && m.get("deleted") is Some(True) }
+  let text = try @form.canonical(a).compare(@form.canonical(b)) catch { _ => return false }
+  @history.supersedes(n(a, number), deleted(a), n(a, "epoch"), n(b, number), deleted(b), n(b, "epoch"), text)
+}
+
+///|
+/// Whether vault version `a` is kept over `b`, by every station and device alike (rules/src/history `supersedes`):
+/// the later; of one seq, the one that deletes it, then the one under the later key, then the greater text.
+pub fn vault_supersedes_js(a : JsValue, b : JsValue) -> Bool {
+  supersedes_of(a, b, "seq")
+}
+
+///|
+/// Whether item version `a` is kept over `b`, as `vault_supersedes_js` has it of vaults (by `version`).
+pub fn item_supersedes_js(a : JsValue, b : JsValue) -> Bool {
+  supersedes_of(a, b, "version")
+}
