@@ -86,6 +86,33 @@ export const WORK_OF_SESSION = `SELECT
     THEN 1 ELSE EXISTS (SELECT 1 FROM letter_deliveries d INDEXED BY letter_deliveries_pending WHERE d.session = s.key AND d.delivered_at IS NULL) END AS pending,
   ${SESSION_TURN_COLUMNS} ${SESSION_TURN_JOIN}`;
 
+// `reads` is keyed by viewer, then chat. A small table is cheap to scan; a large one is sought once per viewer.
+// Its rowid range gives an upper bound on its size with two B-tree seeks, even after deletions or explicit rowids.
+export const LAST_READ_AT = `WITH RECURSIVE few(viewer, count) AS (
+  SELECT (SELECT viewer FROM reads ORDER BY viewer LIMIT 1), 1
+  UNION ALL SELECT (SELECT viewer FROM reads WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.count + 1
+    FROM few v WHERE v.viewer IS NOT NULL AND v.count < 33
+), more(viewer, count) AS (
+  SELECT (SELECT viewer FROM reads ORDER BY viewer LIMIT 1), 1
+  UNION ALL SELECT (SELECT viewer FROM reads WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.count + 1
+    FROM more v WHERE v.viewer IS NOT NULL AND v.count < 257
+), all_viewers(viewer) AS (
+  SELECT (SELECT viewer FROM reads ORDER BY viewer LIMIT 1)
+  UNION ALL SELECT (SELECT viewer FROM reads WHERE viewer > v.viewer ORDER BY viewer LIMIT 1)
+    FROM all_viewers v WHERE v.viewer IS NOT NULL
+), bounds(span) AS (
+  SELECT (SELECT MAX(rowid) FROM reads) - (SELECT MIN(rowid) FROM reads)
+)
+SELECT CASE WHEN (SELECT COUNT(*) FROM few WHERE viewer IS NOT NULL) <= 32
+  THEN (SELECT MAX((SELECT at FROM reads WHERE viewer = v.viewer AND thread = ?1)) FROM few v WHERE v.viewer IS NOT NULL)
+  WHEN (SELECT span FROM bounds) < 512
+  THEN (SELECT MAX(at) FROM reads WHERE thread = ?1)
+  WHEN (SELECT COUNT(*) FROM more WHERE viewer IS NOT NULL) <= 256
+  THEN (SELECT MAX((SELECT at FROM reads WHERE viewer = v.viewer AND thread = ?1)) FROM more v WHERE v.viewer IS NOT NULL)
+  WHEN (SELECT span FROM bounds) < 16384
+  THEN (SELECT MAX(at) FROM reads WHERE thread = ?1)
+  ELSE (SELECT MAX((SELECT at FROM reads WHERE viewer = v.viewer AND thread = ?1)) FROM all_viewers v WHERE v.viewer IS NOT NULL) END AS at`;
+
 // Each session's latest check of the last days (the archive policy's view) and a login's end (closeLoginCards), each by
 // an index of its own (and rows.ts CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE: each list of chats', the readers' too).
 // The checks are grouped by `+session`: by `session`, the station's SQLite went over every check in order of session.
@@ -951,18 +978,7 @@ export class Store {
 
   /// When anyone last read a thread (moved their read position), in ms; null if nobody has.
   lastReadAt(thread: number): number | null {
-    // Reads are keyed by (viewer, thread). For a few viewers, seek this chat once per viewer instead of walking
-    // their other chats. With many viewers, a table scan is cheaper than thousands of separate index seeks.
-    return this.#one(`WITH RECURSIVE viewers(viewer, count) AS (
-      SELECT (SELECT viewer FROM reads ORDER BY viewer LIMIT 1), 1
-      UNION ALL
-      SELECT (SELECT viewer FROM reads WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.count + 1
-        FROM viewers v WHERE v.viewer IS NOT NULL AND v.count < 33
-    )
-    SELECT CASE WHEN (SELECT COUNT(*) FROM viewers WHERE viewer IS NOT NULL) <= 32
-      THEN (SELECT MAX((SELECT at FROM reads WHERE viewer = v.viewer AND thread = ?))
-        FROM viewers v WHERE v.viewer IS NOT NULL)
-      ELSE (SELECT MAX(at) FROM reads WHERE thread = ?) END AS at`, thread, thread).at;
+    return this.#one(LAST_READ_AT, thread).at;
   }
 
   /// A session's own chat on the page (ThreadRow.home), if it has one.
