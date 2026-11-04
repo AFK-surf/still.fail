@@ -228,15 +228,7 @@ fn new_chat_beside() -> Unit {
   if app.nav.top() is NewChat {
     return
   }
-  while app.nav.depth() > 1 {
-    if !app.nav.pop() {
-      break
-    }
-  }
-  if app.nav.top() != Home {
-    app.nav.replace(Home)
-  }
-  app.nav.push(NewChat)
+  nav_over_home([NewChat])
 }
 
 ///|
@@ -265,15 +257,7 @@ fn open_chat_beside(r : ChatRef) -> Unit {
       }
     }
   }
-  while app.nav.depth() > 1 {
-    if !app.nav.pop() {
-      break
-    }
-  }
-  if app.nav.top() != Home {
-    app.nav.replace(Home)
-  }
-  app.nav.push(Chat(r))
+  nav_over_home([Chat(r)])
 }
 
 ///|

@@ -156,12 +156,7 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       // (a row's page in place of the one open; on the tape brought over to show it)
       @sfpages.settings_side_rows(c, core, here, lit, fn(r) {
         @sfbase.history_push()
-        while app.nav.depth() > 1 {
-          if !app.nav.pop() {
-            break
-          }
-        }
-        app.nav.push(Setting(r))
+        app.nav.replace_above(1, [Setting(r)])
         @sfbase.show_chosen()
       })
     })
@@ -185,14 +180,7 @@ fn settings_back(c : @ui.Ctx, band : Bool) -> Unit {
   if pressed {
     @sfpages.settings_search_reset()
     @sfbase.history_push()
-    while app.nav.depth() > 1 {
-      if !app.nav.pop() {
-        break
-      }
-    }
-    if app.nav.top() != Home {
-      app.nav.replace(Home)
-    }
+    @sfbase.nav_over_home([])
     wide.landed.set("")
   }
 }

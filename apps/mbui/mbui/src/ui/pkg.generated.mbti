@@ -1901,6 +1901,7 @@ pub fn[P] Nav::pop_to(Self[P], Int32) -> Bool
 pub fn[P] Nav::push(Self[P], P) -> Unit
 pub fn[P] Nav::push_over(Self[P], P) -> Unit
 pub fn[P] Nav::replace(Self[P], P) -> Unit
+pub fn[P] Nav::replace_above(Self[P], Int32, Array[P]) -> Unit
 pub fn[P] Nav::rest(Self[P]) -> Double
 pub fn[P] Nav::rise(Self[P], P) -> Unit
 pub fn[P] Nav::risen(Self[P]) -> Bool

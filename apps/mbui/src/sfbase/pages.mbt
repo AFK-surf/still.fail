@@ -201,6 +201,17 @@ pub fn nav_home() -> Unit {
 }
 
 ///|
+/// The stack made Home and `pages` over it, in place, as one change (Nav::replace_above): Home kept where it is the
+/// root, else put in place of the root.
+pub fn nav_over_home(pages : Array[Page]) -> Unit {
+  if app.nav.pages()[0] == Home {
+    app.nav.replace_above(1, pages)
+  } else {
+    app.nav.replace_above(0, [Home, ..pages])
+  }
+}
+
+///|
 /// A chat opened over Home from the start (a link, a scripted run).
 pub fn open_chat(r : ChatRef) -> Unit {
   open_page(Chat(r))

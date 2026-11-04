@@ -932,6 +932,8 @@ pub fn named_params(Viewer) -> Map[String, Json]
 
 pub fn nav_home() -> Unit
 
+pub fn nav_over_home(Array[Page]) -> Unit
+
 pub let nav_tapped : Array[String]
 
 pub let nav_tapped_said : @signals.Signal[Int32]
