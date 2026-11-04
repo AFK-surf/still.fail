@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { sessions } from "../src/read/sessions.ts";
-import { makeStore, watching } from "../src/read/store.ts";
+import { makeStore, sessionUsages, transcriptLengths, watching } from "../src/read/store.ts";
 import { PEOPLE_AT } from "../src/store/rows.ts";
 import { Store } from "../src/store/store.ts";
 
@@ -67,6 +67,17 @@ test("a workspace's session list reads details only for the sessions it shows", 
     assert.match(plan(queries.lengths!), /SEARCH transcript_lengths USING INDEX .* \(session=\?\)/);
     assert.match(plan(queries.usage!), /SEARCH u USING INDEX .* \(session=\?\)/);
     assert.match(plan(queries.watches!), /SEARCH w USING (?:COVERING )?INDEX active_watch_jobs_session \(session=\?\)/);
+
+    // A station with incomplete old usage still shows only totals known to be complete.
+    db.exec(`CREATE TABLE usage_totals_incremental (id INTEGER PRIMARY KEY);
+      CREATE TABLE usage_totals_source_sessions (session TEXT PRIMARY KEY, done INTEGER NOT NULL);
+      INSERT INTO usage_totals_source_sessions VALUES ('session-0', 1), ('session-1', 0)`);
+    const limited = sessionUsages(makeStore(instrumented, "/no-station-config"), ["session-0", "session-1", "session-2"]);
+    assert.deepEqual([...limited], [["session-0", { input: 0 }]]);
+    assert.match(plan(queries.usage!), /SEARCH u USING INDEX .* \(session=\?\)/);
+    assert.match(plan(queries.usage!), /SEARCH c USING INDEX .* \(session=\?\)/);
+    const manyKeys = Array.from({ length: 2000 }, (_, n) => `absent-${n}`).concat("session-0");
+    assert.deepEqual([...transcriptLengths(makeStore(db, "/no-station-config"), manyKeys)], [["session-0", 10]]);
 
     db.prepare("UPDATE sessions SET archived_at=99 WHERE key='session-1'").run();
     db.prepare("UPDATE sessions SET connect='other' WHERE key='session-0'").run();
