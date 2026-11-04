@@ -33,6 +33,11 @@ runs:
         find "$HOME/stillfail-ci" -mindepth 1 -maxdepth 1 -type d \( -name 'target*' -o -name 'check-*' -o -name 'linux*' \) -mmin +240 -exec rm -rf {} + 2>/dev/null || true
         # Rust's tests a few at a time: three runners share the machine, and the core's timing tests fail under load.
         echo "RUST_TEST_THREADS=4" >> "$GITHUB_ENV"
+        # The station's test files a few at a time as well (scripts/check.sh): Node's own way, as many as the machine has
+        # cores, had each check on it run nine files side by side, three or four checks at once; the machine's load
+        # went past 300 on its ten cores and the station's tests timed out (station-card-answer-window, sim-rotate,
+        # 2026-11-04).
+        echo "STILLFAIL_NODE_TEST_JOBS=3" >> "$GITHUB_ENV"
         # The Node the station runs on (.node-version), ahead of ~/.local/bin's: what it is checked and built with.
         echo "$(sh scripts/node-here.sh)" >> "$GITHUB_PATH"
         # The actions' archives the runners take instead of downloading them (.github/action-archives.sh): those of
