@@ -200,7 +200,7 @@ export function applySettings(manifest: Json, edit: SlackAppEdit): Json {
   object(object(next, "settings"), "event_subscriptions").bot_events = events;
   // Cards' buttons come over Socket Mode (an app made before them gets them on its next save).
   if (next.settings.socket_mode_enabled === true) object(next.settings, "interactivity").is_enabled = true;
-  return next;
+  return withCommand(next);
 }
 
 /// The events of the groups on (base always).
@@ -225,6 +225,30 @@ export function withStopEvent(manifest: Json): Json | null {
   return next;
 }
 
+/// The slash command that opens a new chat with a model picked (surface.ts `newChat`): over Socket Mode, so no url.
+export const NEW_CHAT_COMMAND = "/sf";
+
+/// A manifest with `/sf` when its bot may take slash commands (the `commands` scope: Slack refuses a command without
+/// it), without it otherwise. Other commands stay as they are.
+export function withCommand(manifest: Json): Json {
+  const next = structuredClone(manifest);
+  const features = object(next, "features");
+  const others = (Array.isArray(features.slash_commands) ? features.slash_commands : []).filter((c: Json) => c?.command !== NEW_CHAT_COMMAND);
+  const on = at(next, ["settings", "socket_mode_enabled"]) === true && strings(at(next, ["oauth_config", "scopes", "bot"])).includes("commands");
+  const commands = on ? [...others, { command: NEW_CHAT_COMMAND, description: "Start a chat with a model you pick", usage_hint: "[what to say]", should_escape: false }] : others;
+  if (commands.length > 0) features.slash_commands = commands;
+  else delete features.slash_commands;
+  return next;
+}
+
+/// An existing app brought up to date as the station maintains it (index.ts): the native stop event and agent view
+/// (withStopEvent), and `/sf` (withCommand). Null: nothing to change.
+export function upgraded(manifest: Json): Json | null {
+  const stopped = withStopEvent(manifest) ?? manifest;
+  const next = withCommand(stopped);
+  return JSON.stringify(next) === JSON.stringify(manifest) ? null : next;
+}
+
 /// A manifest with Socket Mode off or on. Off, it has no events or interactivity either (Slack asks those of an app
 /// without Socket Mode to go to a URL): an app made so lets its maker turn Socket Mode on in Slack, which is where Slack
 /// makes the app-level token with its scope already picked. On, its events are those of the groups it has on, and its
@@ -236,14 +260,14 @@ export function withSocketMode(manifest: Json, on: boolean): Json {
   if (!on) {
     delete settings.event_subscriptions;
     settings.interactivity = { is_enabled: false };
-    return next;
+    return withCommand(next);
   }
   object(settings, "interactivity").is_enabled = true;
   const events = eventsOn(settingsOf(manifest).groups);
   const known = knownEvents();
   const others = strings(at(settings, ["event_subscriptions", "bot_events"])).filter((e) => !known.includes(e));
   object(settings, "event_subscriptions").bot_events = unique([...others, ...events]);
-  return next;
+  return withCommand(next);
 }
 
 /// Every bot scope of every permission group.
@@ -256,7 +280,7 @@ export const botScopes = (): string[] => unique(knownScopes());
 export function slackManifest(name: string, description: string | null = null, redirectUrl: string | null = null): Json {
   const oauth: Json = { scopes: { bot: botScopes() } };
   if (redirectUrl !== null) oauth.redirect_urls = [redirectUrl];
-  return {
+  return withCommand({
     display_information: { name, description: description ?? "Coding agent in your threads (still.fail)", background_color: "#7a2e0e" },
     // The Messages tab lets people message the bot directly; without it Slack says messaging the app is turned off.
     features: {
@@ -272,7 +296,7 @@ export function slackManifest(name: string, description: string | null = null, r
       socket_mode_enabled: true,
       token_rotation_enabled: false,
     },
-  };
+  });
 }
 
 export const createAppUrl = (name: string) => `https://api.slack.com/apps?new_app=1&manifest_json=${encodeURIComponent(JSON.stringify(slackManifest(name)))}`;

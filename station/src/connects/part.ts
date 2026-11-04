@@ -56,7 +56,7 @@ export const connectsPart = <P extends Connects>(make: (options: ConnectsOptions
     const connects = yield* Effect.acquireRelease(
       Effect.sync(() =>
         make({
-          data, store, config, receive: (connect, event) => hub.receive(connect, event), bound: () => agents.taken() && agents.bound(),
+          data, store, config, receive: (connect, event) => hub.receive(connect, event), models: (connect) => hub.modelsFor(connect), bound: () => agents.taken() && agents.bound(),
           inWorkspace: (ws) => ws === null || cloud.membership(ws) !== null,
         }),
       ),
