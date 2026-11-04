@@ -41,3 +41,66 @@ pub fn set_language(said : String?) -> Unit {
     },
   )
 }
+
+///|
+/// The product the core's cloud is (its prefs' `product`: still.fail, or monoid on monoid's cloud; "" before it has
+/// said), as it changes: the words read it (branded).
+let product_said : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
+
+///|
+/// The core's `product` (its prefs'): its name in the words from now on.
+pub fn set_product(said : String) -> Unit {
+  product_said.set(said)
+}
+
+///|
+/// The product's name: the core's; until it says, the build's (its variant's MBUI_PRODUCT: monoid's apps), else
+/// still.fail.
+pub fn product() -> String {
+  match (product_said.get(), @ui.env("MBUI_PRODUCT")) {
+    ("", "") => "still.fail"
+    ("", built) => built
+    (p, _) => p
+  }
+}
+
+///|
+fn name_char(c : Char) -> Bool {
+  (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-'
+}
+
+///|
+/// `text` with still.fail's name standing alone the product's (client/i18n/brand.ts branded): not a host's part or an
+/// address (app.still.fail, https://still.fail, noreply@still.fail, still.fail.app).
+pub fn branded(text : String) -> String {
+  let name = product()
+  if name == "still.fail" || !text.contains("still.fail") {
+    return text
+  }
+  let chars = text.to_array()
+  let word = "still.fail".to_array()
+  let out = StringBuilder::new()
+  let mut i = 0
+  while i < chars.length() {
+    let at = i + word.length() <= chars.length() &&
+      (for k = 0; k < word.length(); k = k + 1 {
+        if chars[i + k] != word[k] {
+          break false
+        }
+      } else {
+        true
+      })
+    let before_ok = i == 0 || !(name_char(chars[i - 1]) || chars[i - 1] == '.' || chars[i - 1] == '/' || chars[i - 1] == '@')
+    let j = i + word.length()
+    let after_ok = j >= chars.length() ||
+      !(name_char(chars[j]) || (chars[j] == '.' && j + 1 < chars.length() && name_char(chars[j + 1]) && chars[j + 1] != '-'))
+    if at && before_ok && after_ok {
+      out.write_string(name)
+      i = j
+    } else {
+      out.write_char(chars[i])
+      i += 1
+    }
+  }
+  out.to_string()
+}
