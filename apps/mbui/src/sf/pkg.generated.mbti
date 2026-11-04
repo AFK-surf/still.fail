@@ -34,6 +34,8 @@ pub let agent_station_most : @ui.Len
 
 pub fn alpha(Int64, Double) -> Int64
 
+pub fn among_groups(@ui.Ctx, () -> Unit) -> Unit
+
 pub fn apart(@ui.Ctx, () -> Unit) -> Unit
 
 pub fn app_avatar_icon(AppAvatar, String, Int32, Int32, FixedArray[Byte]) -> @pixels.Canvas?
@@ -725,6 +727,8 @@ pub fn group_rows_reset() -> Unit
 pub fn group_waiting(@ui.Ctx, () -> Unit, text? : String) -> Unit
 
 pub fn grouped(Double) -> String
+
+pub fn groups(@ui.Ctx, () -> Unit) -> Unit
 
 pub let grow : @ui.Len
 
