@@ -43,6 +43,7 @@ import { RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiv
 import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
 import { installPostBlocks, PostBlocksUnavailable, POST_BLOCK_SIZE, type PostPosition } from "./post-blocks.ts";
 import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
+import { type RecentChatList, recentChatIds } from "./chat-list.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
 // (and rows.ts JOBS_RUNNING and SESSION_JOBS, the readers' too).
@@ -1285,6 +1286,15 @@ export class Store {
     const prefix = `slack:${connect}:`;
     return rows.map((r) => ({ thread: r.id, people: this.#threadPeople(r.id, r.surface)
       .flatMap((person) => person.startsWith(prefix) ? [person.slice(prefix.length)] : []) }));
+  }
+
+  /// The unfiltered chat_list, with full details only for the selected chats.
+  recentChatList(ws: string | null, home: string | null, limit: number): RecentChatList {
+    const { ids, total } = recentChatIds(this.db, ws, home, limit);
+    const threads = ids.flatMap((id) => this.listThreads("", null, id, "none"));
+    const keys = new Set(threads.flatMap((t) => t.sessions.map((m) => m.session)));
+    const sessions = [...keys].flatMap((key) => { const s = this.getSession(key); return s === null ? [] : [s]; });
+    return { threads, sessions, total };
   }
 
   /// The thread's latest message as merged, for lists.

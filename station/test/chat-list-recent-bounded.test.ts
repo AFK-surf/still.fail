@@ -49,3 +49,46 @@ for (const reader of [false, true]) test(`a recent chat list reads details only 
     store.close();
   }
 });
+
+test("recent chat selection keeps workspace rules, ordering and the number left out", async () => {
+  const store = Store.open(":memory:");
+  const db = store.db;
+  try {
+    for (const [key, ws] of [["agent", "here"], ["other", "elsewhere"], ["legacy", null]] as const) {
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: `token-${key}`, createdAt: 1, lastActiveAt: 1, ws });
+    }
+    const put = db.prepare("INSERT INTO entries(thread,n,kind,target,author_kind,author,text,at) VALUES (?,?,?,?,?,?,?,?)");
+    const make = (name: string, home: string | null, members: string[], created: number, said: number | null) => {
+      const thread = store.openThread("ember", "EMBER", name, name, null).id;
+      db.prepare("UPDATE threads SET home = ?, created_at = ? WHERE id = ?").run(home, created, thread);
+      for (const member of members) store.joinThread(thread, member, "ember");
+      if (said !== null) put.run(thread, 1, "message", null, "person", "person", `words ${name}`, said);
+      return thread;
+    };
+    make("own", "agent", ["other"], 100, 20);
+    make("foreign-home", "other", ["agent"], 101, 99);
+    make("shared-membership", null, ["other", "agent"], 102, 30);
+    make("empty", null, ["agent"], 30, null);
+    make("legacy-home", "missing", ["agent"], 103, 50);
+    make("legacy-member", null, ["legacy"], 104, 60);
+    make("no-members", null, [], 105, 70);
+    const edited = make("edited", null, ["agent"], 99, 30);
+    put.run(edited, 2, "edit", 1, "person", "person", "edited words", 500);
+    make("negative", null, ["agent"], 200, -1);
+    const unreadable = make("missing-state", null, ["agent"], 30, 4);
+    db.prepare("DELETE FROM thread_state WHERE thread = ?").run(unreadable);
+
+    const read = makeStore(db, "/no-station-config");
+    const common = { store, workspaces: () => ["workspace"], wsOf: (key: string | null) => key === null ? "home" : "here",
+      outsideChats: () => [], link: (key: string) => `https://example.test/${key}` };
+    const old = { ...common, threadList: async () => sessionOps.threadList!(read, {}) } as unknown as Hub;
+    const recent = { ...common, threadList: async () => sessionOps.threadList!(read, {}),
+      recentChatList: async (ws: string | null, home: string | null, limit: number) => sessionOps.recentChatList!(read, { ws, home, limit }),
+    } as unknown as Hub;
+    for (const limit of [1, 2, 5, 100, "not-a-number"]) {
+      assert.equal(await chatList(recent, "agent", { limit }), await chatList(old, "agent", { limit }), `limit ${limit}`);
+    }
+    assert.equal(await chatList(recent, "agent", { query: "edited" }), await chatList(old, "agent", { query: "edited" }));
+  } finally { store.close(); }
+});
