@@ -46,6 +46,7 @@ pub fn[K : Eq] list_laid_from_end(
   h : Double,
   by? : Double = 0.0,
   ahead? : Double = 0.0,
+  known? : (Int) -> Double? = fn(_) { None },
 ) -> ListLaid[K] {
   if n == 0 {
     return { first: 0, last: -1, keys: [], tops: [], heights: [], anchor: None, at_start: true, at_end: true }
@@ -71,19 +72,30 @@ pub fn[K : Eq] list_laid_from_end(
       }
     }
   }
+  // (a row only gone past on the way to the anchor, as tall as it was last measured: not made again for it)
+  let passed = fn(i : Int) {
+    match measured.get(i) {
+      Some(v) => v
+      None =>
+        match known(i) {
+          Some(v) => v
+          None => height_of(i)
+        }
+    }
+  }
   let mut i = start_i
   // (scrolled toward its end, the anchor's foot over the window's: the newer rows under it come into the window, the
   // newest's foot held at the foot)
   while under < 0.0 && i < n - 1 {
     i = i + 1
-    under = under + height_of(i)
+    under = under + passed(i)
   }
   if under < 0.0 {
     under = 0.0
   }
   // (scrolled toward its start: a row wholly under the foot is no more the anchor, the one over it is)
-  while i > 0 && under >= height_of(i) {
-    under = under - height_of(i)
+  while i > 0 && under >= passed(i) {
+    under = under - passed(i)
     i = i - 1
   }
   // (from the anchor's foot up, each row over the one before, till the window's top and `ahead` over it)

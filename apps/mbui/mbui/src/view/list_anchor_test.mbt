@@ -133,3 +133,4 @@ test "scrolls_anchored: what a frame does is the same with 30 rows and with 3000
   }
   assert_eq(work(30), work(3000))
 }
+

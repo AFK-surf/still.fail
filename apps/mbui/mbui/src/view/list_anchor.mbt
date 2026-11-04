@@ -23,8 +23,9 @@ priv struct AnchoredIn[K] {
   keys : Same[Array[K]]
   x : Double
   foot : Double
-  put : Int
-  moving : Int
+  put : (K, Double)?
+  put_n : Int
+  kept : Array[K]
 } derive(Eq)
 
 ///|
@@ -82,13 +83,6 @@ pub fn[K : Hash + Eq + Show] View::scrolls_anchored(
     put_at.get() |> ignore
     was.unwrap_or(0) + 1
   })
-  let room_n = @signals.computed(fn(was : Int?) {
-    match moving {
-      Some(f) => if f().length() > 0 { self.drawn_at() |> ignore }
-      None => ()
-    }
-    was.unwrap_or(0) + 1
-  })
   let extent = fn() { count.val.to_double() * mean() + @signals.untracked(foot_room) }
   let out = self.scrolls(s, slop?=slop, bar?=bar, content_extent=extent, bar_clear~, fn(held) {
     held.height_share(Is(1.0)) |> ignore
@@ -98,8 +92,12 @@ pub fn[K : Hash + Eq + Show] View::scrolls_anchored(
           keys: { v: keys() },
           x: s.drawn(self.tree),
           foot: foot_room(),
-          put: put_n.get(),
-          moving: room_n.get(),
+          put: put_at.get(),
+          put_n: put_n.get(),
+          kept: match kept_keys {
+            Some(f) => f()
+            None => []
+          },
         }
       }),
       fn(l, c) {
@@ -179,17 +177,10 @@ pub fn[K : Hash + Eq + Show] View::scrolls_anchored(
             None => known_sum.val = known_sum.val + natural
           }
           heights[k] = natural
-          let r = match room {
-            Some(f) => f(k, natural)
-            None => list_room(natural)
-          }
-          if (r.height - natural).abs() > 0.001 {
-            l.measure(slot, l.width, height=r.height) |> ignore
-          }
-          r.height
+          natural
         }
         // (put at a row, its top that far under the window's top)
-        match @signals.untracked(fn() { put_at.get() }) {
+        match c.put {
           Some((k, off)) =>
             match find(k, anchor.val.map(fn(a) { a.near }).unwrap_or(n - 1)) {
               Some(i) => anchor.val = Some({ key: k, under: off + measure(i) - h, near: i })
@@ -202,16 +193,18 @@ pub fn[K : Hash + Eq + Show] View::scrolls_anchored(
           None => 0.0
         }
         seen_x.val = Some(c.x)
-        let r = list_laid_from_end(n, fn(i) { all[i] }, find, measure, anchor.val, h, by~, ahead~)
+        let r = list_laid_from_end(n, fn(i) { all[i] }, find, measure, anchor.val, h, by~, ahead~, known=fn(i) {
+          heights.get(all[i])
+        })
         anchor.val = r.anchor
         // (placed where they are in the window: the column holds them moved by how far it is scrolled)
         for q in 0..<r.keys.length() {
           l.place(slot_of(r.keys[q]), 0.0, r.tops[q] + c.x)
         }
         // (and those kept out of sight, as far off as they are counted to be)
-        match kept_keys {
-          Some(f) =>
-            for k in @signals.untracked(f) {
+        match Some(c.kept) {
+          Some(kept) =>
+            for k in kept {
               match find(k, r.first) {
                 Some(i) if i < r.first || i > r.last => {
                   let slot = slot_of(k)
