@@ -137,7 +137,10 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   // (how far what it holds was moved as where it is was counted again for the bar: the hand's moves are what its
   // layout reads, not that)
   let rebased = Ref(0.0)
-  let extent = fn() { count.val.to_double() * mean() + @signals.untracked(foot_room) }
+  // (how tall all it holds is counted, as its layout last counted it: what its bar reads once it is laid out, no signal
+  // read then)
+  let foot_laid = Ref(0.0)
+  let extent = fn() { count.val.to_double() * mean() + foot_laid.val }
   let out = self.scrolls(s, slop?=slop, bar?=bar, content_extent=extent, bar_clear~, fn(held) {
     held.height_share(Is(1.0)) |> ignore
     held.layout_box(
@@ -176,6 +179,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
         let all = c.keys.v
         let n = all.length()
         count.val = n
+        foot_laid.val = c.foot
         let h = l.height - c.foot
         window_h.val = h
         // (the row a key is, looked for from where it was, out both ways)
