@@ -59,8 +59,10 @@ test "an anchored list publishes changing extent in a fixed viewport without a s
   for from_end in [false, true] {
     let keys = @signals.signal([0, 1], same=fn(a, b) { a == b })
     let s = Scroll::list()
+    let column : Ref[NodeId?] = Ref(None)
     let t = Tree::new(fn(root) {
       root.box(fn(v) {
+        column.val = Some(v.id())
         v.width(Is(Some(300.0))).height(Is(Some(100.0)))
         .scrolls_anchored(s, fn() { keys.get() }, est=40.0, from_end~, bar=phase_bar(), fn(row, _) {
           row.height(Is(Some(40.0))) |> ignore
@@ -68,6 +70,7 @@ test "an anchored list publishes changing extent in a fixed viewport without a s
       }) |> ignore
     })
     t.frame(390.0, 844.0, now=0.0) |> ignore
+    assert_false(t.scrolls_now(column.val.unwrap()), msg="a short virtual list cannot scroll")
     let ranges : Array[Double] = []
     let stop = @signals.effect(fn() { ranges.push(s.most_now()) })
     assert_eq(ranges, [0.0])
@@ -76,6 +79,8 @@ test "an anchored list publishes changing extent in a fixed viewport without a s
     t.frame(390.0, 844.0, now=20.0) |> ignore
     assert_true(t.work.computes - before <= 1, msg="the host frame does not repeat layout")
     assert_eq(ranges.last(), Some(100.0))
+    assert_true(t.scrolls_now(column.val.unwrap()),
+      msg="the content, not the viewport-sized holder, determines whether a virtual list scrolls")
     t.wheel_at(100.0, 50.0, 0.0, if from_end { -30.0 } else { 30.0 }, 0, 30.0) |> ignore
     t.frame(390.0, 844.0, now=300.0) |> ignore
     assert_true(t.drawn().iter().any(fn(d) { d.ground == 0x2468acffL && d.alpha > 0.0 }))
@@ -84,6 +89,7 @@ test "an anchored list publishes changing extent in a fixed viewport without a s
     t.frame(390.0, 844.0, now=320.0) |> ignore
     assert_true(t.work.computes - before <= 1)
     assert_eq(ranges.last(), Some(0.0))
+    assert_false(t.scrolls_now(column.val.unwrap()), msg="a virtual list shortened again cannot scroll")
     assert_eq(s.at(t), 0.0)
     assert_false(t.drawn().iter().any(fn(d) { d.ground == 0x2468acffL && d.alpha > 0.0 }))
     stop()
@@ -126,4 +132,26 @@ test "an anchored list keeps its end when its viewport shrinks and grows without
     result
   }
   assert_eq(run(false), run(true))
+}
+
+///|
+test "an anchored list changing its measured extent does not change the hand's layout input" {
+  let height = @signals.signal(40.0, same=fn(a, b) { a == b })
+  let s = Scroll::list()
+  let t = Tree::new(fn(root) {
+    root.box(fn(v) {
+      v.width(Is(Some(300.0))).height(Is(Some(100.0)))
+      .scrolls_anchored(s, fn() { [0, 1, 2] }, est=40.0, rooms=fn() {
+        let snapshot = Ref(0)
+        fn(_, natural) { snapshot.val += 1; list_room(natural) }
+      }, fn(row, _) { row.height(By(fn() { Some(height.get()) })) |> ignore }) |> ignore
+    }) |> ignore
+  })
+  t.frame(390.0, 844.0, now=0.0) |> ignore
+  t.event(10.0, fn() { height.set(80.0) })
+  let before = t.work.computes
+  t.frame(390.0, 844.0, now=10.0) |> ignore
+  assert_eq(t.work.computes - before, 1)
+  assert_eq(s.most(), 140.0)
+  t.dispose()
 }
