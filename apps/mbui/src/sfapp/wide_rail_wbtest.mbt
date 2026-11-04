@@ -842,7 +842,7 @@ test "wide: a downloading update shows its progress where restart will be offere
 }
 
 ///|
-test "wide: the update changes from download to a restart on a filled accent circle in each sidebar, in both themes" {
+test "wide: the update retains a full accent ring around the restart mark in each sidebar, in both themes" {
   for dark in [false, true] {
     for mode in ["chat", "files", "settings-about"] {
       let t = screen_in(mode, ("wide", 1280.0, 800.0, 0, ""), "zh", dark~)
@@ -856,29 +856,26 @@ test "wide: the update changes from download to a restart on a filled accent cir
       @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
       t.run_for(@ui.move_most_ms)
       assert_eq(t.query(Button, label="重启更新").unwrap().rect, (x, y, w, h))
-      let grounds = t.drawn_rect_corners().filter(fn(r) { inside(r.0, r.1) && r.4 == p.accent })
-      assert_true(grounds.iter().any(fn(r) {
-        r.2 == 32.0 && r.3 == 32.0 && r.5.0 >= 16.0 && r.5.1 >= 16.0 && r.5.2 >= 16.0 && r.5.3 >= 16.0
-      }), msg="\{mode}, dark=\{dark}: a filled circle at the key: \{grounds}")
+      assert_false(t.drawn_rects().iter().any(fn(r) { inside(r.0, r.1) && r.4 == p.accent }), msg="\{mode}, dark=\{dark}: no accent ground")
       let marks = t.shape_boxes().filter(fn(b) { inside(b.1, b.2) })
-      assert_true(marks.iter().any(fn(b) { b.0.contains("icon/refresh") }), msg="\{mode}, dark=\{dark}: \{marks}")
-      assert_true(@ui.contrast_ratio(p.on_primary, p.accent) >= @ui.contrast_icon_least)
+      assert_true(marks.iter().any(fn(b) { b.0.contains("icon/restart-ring") }), msg="\{mode}, dark=\{dark}: \{marks}")
+      let ring = t.drawn_lines().filter(fn(l) { inside(l.0, l.1) && inside(l.2, l.3) && l.5 == p.accent })
+      assert_true(ring.length() >= 8, msg="\{mode}, dark=\{dark}: the completed accent ring is present")
     }
   }
 }
 
 ///|
-/// The ready circle in the update key: its drawn width and opacity, or zero before it appears.
-fn ready_disk(t : @ui.Tester, key : (Double, Double, Double, Double), accent : Int64) -> (Double, Int64) {
+/// The colours and opacities of the marks drawn inside the key, in drawing order.
+fn update_mark_inks(t : @ui.Tester, key : (Double, Double, Double, Double)) -> Array[Int64] {
   let (x, y, w, h) = key
-  let disks = t.drawn_rects().filter(fn(r) {
-    r.0 >= x && r.1 >= y && r.0 + r.2 <= x + w && r.1 + r.3 <= y + h && r.4 >> 8 == accent >> 8
-  })
-  if disks.is_empty() { (0.0, 0L) } else { (disks[0].2, disks[0].4 & 0xFFL) }
+  t.drawn_shapes().filter(fn(r) {
+    r.0 >= x && r.1 >= y && r.0 + r.2 <= x + w && r.1 + r.3 <= y + h
+  }).map(fn(r) { r.5 })
 }
 
 ///|
-test "wide: a completed download grows and fades in its restart circle without moving the key" {
+test "wide: a completed download changes the mark inside its ring without moving the key" {
   // The chats' sidebar is made of nodes; the files' sidebar is an old view. Both follow the same transition.
   for files in [false, true] {
     let t = wide_tester([], mode="chat")
@@ -891,23 +888,22 @@ test "wide: a completed download grows and fades in its restart circle without m
     @sffixture.fixture_update_goes("0.1.9999", "downloading", percent=90, away=false)
     t.run_for(@ui.move_most_ms)
     let key = t.query(Button, label="正在下载 0.1.9999").unwrap().rect
-    let accent = @sf.theme().p.accent
-    assert_eq(ready_disk(t, key, accent), (0.0, 0L))
+    let initial = update_mark_inks(t, key)
     @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
     t.frame()
-    let first = ready_disk(t, key, accent)
+    let first = update_mark_inks(t, key)
     t.run_for(@kit.progress_ms / 2.0)
-    let middle = ready_disk(t, key, accent)
-    assert_true(middle.0 > first.0 && middle.0 < 32.0, msg="files=\{files}: first \{first}, middle \{middle}")
-    assert_true(middle.1 > first.1 && middle.1 < 255L, msg="files=\{files}: first \{first}, middle \{middle}")
+    let middle = update_mark_inks(t, key)
+    assert_true(middle != initial && middle != first, msg="files=\{files}: the marks change during the transition")
+    assert_true(middle.iter().any(fn(ink) { let a = ink & 0xFFL; a > 0L && a < 255L }), msg="files=\{files}: the marks fade")
     assert_eq(t.query(Button, label="重启更新").unwrap().rect, key)
     t.run_for(@kit.progress_ms)
-    assert_eq(ready_disk(t, key, accent), (32.0, 255L))
+    assert_true(t.shape_boxes().iter().any(fn(b) { b.0.contains("icon/restart-ring") }))
   }
 }
 
 ///|
-fn ready_disk_after(files : Bool, steps : Array[Double]) -> (Double, Int64) {
+fn ready_mark_after(files : Bool, steps : Array[Double]) -> Array[Int64] {
   let t = wide_tester([], mode="chat")
   if files {
     app.nav.replace(Files)
@@ -921,14 +917,14 @@ fn ready_disk_after(files : Bool, steps : Array[Double]) -> (Double, Int64) {
   @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
   t.frame()
   for step in steps { t.run_for(step) }
-  ready_disk(t, key, @sf.theme().p.accent)
+  update_mark_inks(t, key)
 }
 
 ///|
 test "wide: a restart transition at a declared moment is the same with or without intermediate frames" {
   for files in [false, true] {
-    let one = ready_disk_after(files, [100.0])
-    let many = ready_disk_after(files, [25.0, 25.0, 25.0, 25.0])
+    let one = ready_mark_after(files, [100.0])
+    let many = ready_mark_after(files, [25.0, 25.0, 25.0, 25.0])
     assert_eq(one, many, msg="files=\{files}: one jump \{one}, intermediate frames \{many}")
   }
 }

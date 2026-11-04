@@ -183,9 +183,9 @@ let nav_cut : @ui.TextStyle = @ui.text_style(w=Cut)
 ///|
 /// An update in a bar as a node (update_key's, the settings' sidebar's band): `side` across, round, the pointer's ground
 /// on it while it can be pressed; its mark `mark` across: offered (`offered()`), a download mark; ready (`ready()`), a
-/// restart mark on an accent circle; being put in place (`busy()`), the update arrow going up (updating_node); while it
+/// restart mark inside the completed accent ring; being put in place (`busy()`), the update arrow going up; while it
 /// comes (`coming()`: Some of a known part or of None for an unknown one), its progress in the mark's place. As it
-/// becomes ready, the circle grows from the ring as the marks fade, on the progress control's ease without moving the
+/// becomes ready, the ring completes as its mark changes, on the progress control's ease without moving the
 /// key. Read out a button named `label()`, unable to be pressed while busy; `why()` its tip where it says one (in
 /// `tips`); pressed while not busy, `press`.
 pub fn update_key_node(
@@ -211,7 +211,7 @@ pub fn update_key_node(
       .height(Is(Some(side)))
       // (round as its ground is while there is one, as an old view's key's hovered{} look: at rest none, nothing
       // standing in a corner)
-      .radius(By(fn() { if ready() || (lit_node(k) && !busy()) { side / 2.0 } else { 0.0 } }))
+      .radius(By(fn() { if lit_node(k) && !busy() { side / 2.0 } else { 0.0 } }))
       // (its mark in its middle both ways, as update_key_box's: a box lays what it holds down from its top)
       .lines_up(Is(Some(Middle)))
       .lies_along(Is(Middle))
@@ -230,12 +230,6 @@ pub fn update_key_node(
         drag=fn(d) { if d.kind == Up && @ui.pointing() is Mouse && on_it(d) && able() { press() } },
       )
       |> ignore
-      k.show(ready, fn(disk) {
-        let arrived = fn() { 1.0 - progress.shown(disk) }
-        disk.over(Is(true)).width(Is(Some(side))).height(Is(Some(side))).radius(Is(side / 2.0))
-        .ground(By(fn() { update_ready_ground(lit_node(k) && !busy()) }))
-        .scale(By(fn() { update_ready_scale(arrived(), mark, side) })).alpha(By(arrived)) |> ignore
-      })
       k.box(fn(m) {
         m.width(Is(Some(mark))).height(Is(Some(mark))) |> ignore
         // (offered: a download mark; ready: restart; busy, the update arrow going up)
@@ -245,14 +239,13 @@ pub fn update_key_node(
             if b {
               updating_node(r, mark, fn() { theme().p.text })
             } else {
-              icon_node(
-                r,
-                "update",
-                mark,
-                By(fn() { let p = theme().p; if ready() { p.on_primary } else { p.text } }),
-                name_now=fn() { if ready() { "refresh" } else if offered() { "download" } else { "update" } },
-              )
-              |> ignore
+              r.pick(ready, fn(r1, is_ready) {
+                if is_ready {
+                  update_ready_node(r1, mark, fn() { theme().p.text })
+                } else {
+                  icon_node(r1, "update", mark, By(fn() { theme().p.text }), name_now=fn() { if offered() { "download" } else { "update" } }) |> ignore
+                }
+              })
             }
           })
         })
@@ -269,6 +262,21 @@ pub fn update_key_node(
     ignore(tip_node(tips, o, why, within=true))
   })
   |> ignore
+}
+
+///|
+/// The completed progress ring with its restart mark in the middle, as update_ready_mark.
+fn update_ready_node(parent : @view.View, size : Double, color : () -> Int64) -> Unit {
+  let stroke = size * icon_stroke / 24.0
+  let ring = size * coming_ring / 24.0 + stroke
+  parent.box(fn(b) {
+    b.width(Is(Some(size))).height(Is(Some(size))).lines_up(Is(Some(Middle))).lies_along(Is(Middle)) |> ignore
+    progress_spinner_node(b, fn() { Some(1.0) }, size=ring, stroke~) |> ignore
+    b.box(fn(i) {
+      i.over(Is(true)).lines_up(Is(Some(Middle))).lies_along(Is(Middle)) |> ignore
+      icon_node(i, "restart-ring", size, By(color)) |> ignore
+    }) |> ignore
+  }) |> ignore
 }
 
 ///|

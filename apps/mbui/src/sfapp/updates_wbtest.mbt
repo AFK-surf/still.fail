@@ -209,9 +209,9 @@ fn update_key_marks(busy : Bool) -> (@ui.Tester, Array[String]) {
 }
 
 ///|
-test "the update key, a build here already waiting on its press: a restart mark on the accent circle" {
+test "the update key, a build here already waiting on its press: a restart mark in the completed ring" {
   let (_, marks) = update_key_marks(false)
-  assert_true(marks.iter().any(fn(m) { m.contains("icon/refresh") }), msg="\{marks}")
+  assert_true(marks.iter().any(fn(m) { m.contains("icon/restart-ring") }), msg="\{marks}")
   assert_true(!marks.iter().any(fn(m) { m.contains("icon/download") }), msg="\{marks}")
 }
 

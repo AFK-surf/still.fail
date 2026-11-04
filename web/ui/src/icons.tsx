@@ -437,6 +437,10 @@ export function Refresh(props: IconProps) {
   return <Svg {...props}><path d="M20 9Q18.5 3.5 12 3.5Q7.5 3.5 5 7 M20 4V9H15 M4 15Q5.5 20.5 12 20.5Q16.5 20.5 19 17 M4 20V15H9" /></Svg>;
 }
 
+export function RestartRing(props: IconProps) {
+  return <Svg {...props}><path d="M15.8 10A4.5 4.5 0 1 0 16.2 13 M15.8 7.2V10.2H12.8" /></Svg>;
+}
+
 export function Retry(props: IconProps) {
   return <Svg {...props}><path d="M4 9H12Q20.5 9 20.5 15Q20.5 20.5 14 20.5H10 M9 3.5L3.5 9L9 14.5" /></Svg>;
 }
@@ -717,6 +721,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "received": Received,
   "redo": Redo,
   "refresh": Refresh,
+  "restart-ring": RestartRing,
   "retry": Retry,
   "said": Said,
   "screen-rotate": ScreenRotate,
