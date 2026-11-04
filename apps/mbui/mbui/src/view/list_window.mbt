@@ -190,19 +190,27 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   let made = @signals.computed(fn(_) {
     let all = laid.get()
     let index = laid_at.get()
-    let at : Map[Int, Bool] = {}
+    let with_slot : Map[Int, Bool] = {}
     for k in window.get() {
       match index.get(k) {
-        Some(i) => at[i] = true
+        Some(i) => with_slot[i] = true
         None => ()
       }
     }
+    // (and every block whose room meets the column's as it is counted, those under one not laid out yet too: their
+    // slots kept as that one is laid out, not let go for a frame and made again, nothing made in them meanwhile)
+    let room_now = self.laid_size_told().map(fn(z) { z.1 })
+    let x = at()
     for i, b in all {
-      if kept(b.0) {
-        at[i] = true
+      let near = match room_now {
+        Some(vh) => b.1 < x + vh && b.1 + b.2 > x
+        None => false
+      }
+      if near || kept(b.0) {
+        with_slot[i] = true
       }
     }
-    let ix = at.keys().collect()
+    let ix = with_slot.keys().collect()
     ix.sort()
     let out : Array[Made[K]] = []
     let mut last = -1
@@ -384,6 +392,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       let k = match @signals.untracked(fn() { item.get() }) {
         Slot(k) => k
         Gap(_, _) => {
+          // (not a row of what it holds: nothing is made in it, nothing in it is picked)
+          self.tree.nodes[slot.at].each_row = false
           slot.height(By(fn() {
             match item.get() {
               Gap(from, to) => Some(gap_height(from, to))
