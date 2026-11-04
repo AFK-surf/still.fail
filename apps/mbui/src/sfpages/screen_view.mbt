@@ -715,14 +715,15 @@ fn keyboard_toggled(c : @ui.Ctx, catcher : String, typing : Bool) -> Unit {
 // ── the bar, the rail, the folded tools ──────────────────────────────────
 
 ///|
-/// A round button with an icon (40, its icon 20), its name for those who cannot see it; `on`: pressed (the keyboard
-/// up, 控制). True when tapped.
+/// A round button with an icon (40, its icon 20), its name for those who cannot see it and as its tip; `on`: pressed
+/// (the keyboard up, 控制). True when tapped.
 fn round_button(c : @ui.Ctx, key : String, icon : String, label : String, on? : Bool = false) -> Bool {
   let id = c.id(key)
   let i = c.box(style=round_button_box, selected=on, id~, fn() {
     @sf.icon(c, icon, size=round_icon, color=c.color(Fg)) |> ignore
   })
   c.semantics(i, Button, id~, label~, pressed=on, actions=[Activate])
+  @sf.tip(c, key, id, label)
   c.clicked(id)
 }
 

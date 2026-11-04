@@ -293,3 +293,18 @@ test "what a window of its own is started with: a station's screen and its title
   assert_true(@sfbase.window_page("{\"screen\":{\"station\":\"\",\"screen\":\"desktop\"}}") is None)
   assert_true(@sfbase.window_page("{\"drive\":{}}") is None)
 }
+
+///|
+test "a round button says its name when the pointer has rested on it: a device's buttons show only icons" {
+  let r = mouse_rig()
+  simulator_live(r)
+  r.t.draw()
+  let home = tr("web-pages.screen.device.home")
+  assert_true(r.t.find(home) is None)
+  let (x, y) = r.labelled(home).unwrap()
+  r.t.move(x, y)
+  r.t.run_for(@kit.tooltip_delay_ms)
+  r.t.draw()
+  assert_true(r.t.find(home) is Some(_))
+  mouse_done(r)
+}
