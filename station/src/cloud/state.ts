@@ -151,13 +151,15 @@ export class Cloud {
   private watcher: FSWatcher | undefined;
   readonly data: string;
 
-  constructor(data: string) {
+  /// `watchFiles`: whether the files are watched for others' changes (tests that start and stop many stations leave it out:
+  /// macOS takes a good while to end each watch).
+  constructor(data: string, watchFiles = true) {
     this.data = data;
     this.state = readState(data);
     this.peersCurrent = this.state !== null && !this.removed();
     this.lock = readLock(data);
     // `enroll` from another process, or an older tool editing the file; `lock reset` taking the lock away.
-    try {
+    if (watchFiles) try {
       this.watcher = watch(meshDir(data), { persistent: false }, (_, name) => {
         if (name === "cloud.json" && !this.writing) this.reload();
         if (name === "lock.json" && !this.writing) this.reloadLock();
