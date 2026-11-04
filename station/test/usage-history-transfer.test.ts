@@ -1,16 +1,17 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { constants } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 import { Effect } from "effect";
 import { makeStore } from "../src/read/store.ts";
 import { usageHistory } from "../src/read/usage.ts";
 import { Store } from "../src/store/store.ts";
 import { installCompactUsage } from "../src/store/usage-compact.ts";
-import { convertUsageHistoryStep, historyTransferPending, installUsageHistory } from "../src/store/usage-history.ts";
-import { retireAfterPrevious } from "../src/usage/module.ts";
+import { convertUsageHistoryStep, hasUsageHistory, historyTransferPending, installUsageHistory } from "../src/store/usage-history.ts";
+import { retireAfterPrevious, retireUntilComplete } from "../src/usage/module.ts";
 
 function oldStore(path = ":memory:") {
   const store = Store.open(path);
@@ -138,15 +139,58 @@ test("a stopped station resumes conversion and tells a waiting usage page", asyn
     store = Store.open(path);
     assert.equal(historyTransferPending(store.db), true);
     store.db.prepare("UPDATE usage SET output = 5 WHERE id = 'one'").run();
-    const told: unknown[] = [];
-    const stop = store.subscribe((change) => { if (change.type === "usage") told.push(change); });
+    const told: boolean[] = [];
+    const stop = store.subscribe((change) => { if (change.type === "usage") told.push(!historyTransferPending(store.db)); });
     try { await Effect.runPromise(retireAfterPrevious(store, Promise.resolve())); }
     finally { stop(); }
     assert.equal(historyTransferPending(store.db), false);
-    assert.ok(told.length >= 1, "the page is notified when the history becomes available");
+    assert.ok(told.includes(true), "the page is notified after the history becomes available");
     assert.deepEqual(store.db.prepare("SELECT scope, quarter, calls, tokens FROM usage_history ORDER BY scope, quarter")
       .all().map((r) => ({ ...r })), sourceTotals(store));
   } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a stopped conversion worker is retried without restarting the station", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "usage-history-retry-worker-"));
+  const store = oldStore(join(dir, "station.db"));
+  try {
+    store.db.prepare(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output, calls)
+      VALUES ('old', 0, 'a', 'claude', 2, 0, 0, 0, 1, 1)`).run();
+    installCompactUsage(store.db, () => 900_000);
+    installUsageHistory(store.db, 900_000);
+    const worker = join(dir, "fail-once.mjs");
+    const actual = new URL("../src/usage/retire-worker.ts", import.meta.url).href;
+    writeFileSync(worker, `import { existsSync, writeFileSync } from "node:fs";\nimport { workerData } from "node:worker_threads";\n` +
+      `const marker = workerData.path + ".failed-once";\nif (!existsSync(marker)) { writeFileSync(marker, ""); process.exit(1); }\n` +
+      `await import(${JSON.stringify(actual)});\n`);
+    await Effect.runPromise(retireUntilComplete(store, Promise.resolve(), pathToFileURL(worker)));
+    assert.equal(historyTransferPending(store.db), false, "the pending conversion resumed after the worker failed");
+    assert.deepEqual(store.db.prepare("SELECT scope, quarter, calls, tokens FROM usage_history ORDER BY scope, quarter")
+      .all().map((r) => ({ ...r })), sourceTotals(store));
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a temporarily failed statistics installation is retried without restarting the station", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "usage-history-retry-install-"));
+  const store = oldStore(join(dir, "station.db"));
+  try {
+    store.db.prepare(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output, calls)
+      VALUES ('old', 0, 'a', 'claude', 2, 0, 0, 0, 1, 1)`).run();
+    let denied = false;
+    store.db.setAuthorizer((action, name) => {
+      if (!denied && action === constants.SQLITE_CREATE_TABLE && name === "usage_compact") {
+        denied = true;
+        return constants.SQLITE_DENY;
+      }
+      return constants.SQLITE_OK;
+    });
+    await Effect.runPromise(retireUntilComplete(store, Promise.resolve()));
+    assert.equal(denied, true);
+    assert.equal(hasUsageHistory(store.db), true, "statistics became available after the transient failure");
+    assert.equal(historyTransferPending(store.db), false);
+    assert.deepEqual(store.db.prepare("SELECT scope, quarter, calls, tokens FROM usage_history ORDER BY scope, quarter")
+      .all().map((r) => ({ ...r })), sourceTotals(store));
+  } finally { store.db.setAuthorizer(null); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("a session deleted after conversion keeps its later usage changes in its workspace", () => {

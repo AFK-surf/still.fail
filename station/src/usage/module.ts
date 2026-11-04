@@ -123,6 +123,11 @@ export function retireAfterPrevious(store: StationStore, exited: Promise<void>, 
   })));
 }
 
+/// Keep the handover alive until its statistics and cleanup have finished.
+export function retireUntilComplete(store: StationStore, exited: Promise<void>, workerFile?: URL, installed: () => void = () => {}) {
+  return retireAfterPrevious(store, exited, workerFile, installed);
+}
+
 /// A worker moves changed ownership and accounts a workspace's totals when that workspace asks for them.
 export function watchCompactMoves(store: StationStore, exited: Promise<void>): {
   wake: () => void; read: (viewer: InWorkspace | null) => void; close: () => Promise<void>;
@@ -257,7 +262,7 @@ export const UsageLive = Layer.effectDiscard(
       Effect.sync(() => watchCompactMoves(store, previous.exited)),
       (m) => Effect.promise(() => m.close()),
     );
-    yield* Effect.forkScoped(retireAfterPrevious(store, previous.exited, undefined, mover.wake).pipe(Effect.provideService(Clock.Clock, hub.clock)));
+    yield* Effect.forkScoped(retireUntilComplete(store, previous.exited, undefined, mover.wake).pipe(Effect.provideService(Clock.Clock, hub.clock)));
     const usage = yield* Effect.acquireRelease(
       Effect.sync(() => new UsageCounter({ store, config: () => ({ dataDir: data, profiles: hubConfig(config.raw(), data).profiles }), clock: hub.clock })),
       (u) => Effect.promise(() => u.stop()),
