@@ -1202,7 +1202,8 @@ fn gone_up(v : Json?) -> Double? {
 
 ///|
 /// A picture's tile (56): darkened while it goes up, a ring over it filling as it goes (`part`: turning until it says),
-/// ↻ over it when it failed (`again` what a tap there is). Its node; `id` what a tap on it is.
+/// ↻ over it when it failed (`again` what a tap there is); a video's still its play capsule in its foot's start corner,
+/// as its message's has (told apart from an image's while it waits). Its node; `id` what a tap on it is.
 fn picture_tile(
   c : @ui.Ctx,
   picture : MediaPicture,
@@ -1229,6 +1230,9 @@ fn picture_tile(
         |> ignore
       })
       |> ignore
+    }
+    if picture.kind == "video" {
+      @sf.video_capsule(c, "composer/video/" + picture.key, 0.0, corner=@sf.composer_inner())
     }
   })
 }

@@ -1230,6 +1230,13 @@ pub fn seeded_draft(mode : String, key : String) -> Json {
         "quotes": [],
         "files": [file("compare.png", 1600, 900, 402000), file("build.log", 0, 0, 18432)],
       }
+    // chat-attach-video: a picture and a video waiting side by side, each drawn from its picture (seeded_pictures)
+    "chat-attach-video" =>
+      {
+        "text": "截图和构建日志都在这里，帮我看看第二屏",
+        "quotes": [],
+        "files": [file("compare.png", 1600, 900, 402000), file("演示录屏.mp4", 1920, 1080, 3200000)],
+      }
     // chat-uploading: another picture going up meanwhile, how much of it the station has (`sent`: seeded_files)
     "chat-uploading" =>
       match file("compare.png", 1600, 900, 402000) {

@@ -5,10 +5,11 @@
 
 ///|
 /// The pictures of a mode's seeded draft drawn from them in its tiles, as a picture picked here is (the composer's
-/// `writing_pictures`): newchat-attach's and chat-attach-pic's (the films of sending them: scripts/motion), and
-/// chat-uploading's going up.
+/// `writing_pictures`): newchat-attach's and chat-attach-pic's (the films of sending them: scripts/motion),
+/// chat-attach-video's picture and video, and chat-uploading's going up.
 pub fn seeded_pictures(mode : String, files : Array[Json]) -> Unit {
-  if mode != "newchat-attach" && mode != "chat-attach-pic" && mode != "chat-uploading" {
+  if mode != "newchat-attach" && mode != "chat-attach-pic" && mode != "chat-attach-video" &&
+    mode != "chat-uploading" {
     return
   }
   for i, a in files {
