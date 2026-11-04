@@ -107,8 +107,8 @@ fn chat_talk_node(
   }
   let latest : Ref[() -> Unit] = Ref(fn() {  })
   let landing : Ref[(String) -> @sfpages.MineLanding?] = Ref(fn(_) { None })
-  let room : @signals.Signal[(() -> Double)?] = @signals.signal(None, same=fn(a, b) { a is None && b is None })
-  let room_now = fn() { room.get().map(fn(f) { f() }).unwrap_or(0.0) }
+  let room : @signals.Signal[@sfpages.ChatComposerNode?] = @signals.signal(None, same=fn(a, b) { a is None && b is None })
+  let room_now = fn() { room.get().map(fn(n) { (n.room)() }).unwrap_or(0.0) }
   // (its view not read yet: its messages to come in their bones, the first where the list's first row will be, or why
   // it cannot be read. A chat just made from a new chat already has fresh_view's view, so it shows no sample.)
   talk.show(fn() { view() is None }, fn(b) {
@@ -117,40 +117,38 @@ fn chat_talk_node(
     |> ignore
     @sfpages.chat_waiting_node(b, src, r, fn() { chat_bar_room() + list_head_gap }, fn() { @sf.under_bar_room().px() })
   })
-  talk.box(fn(l) {
-    l.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
-    let list = @sfpages.chat_list_node(l, src, r, view, entries, fn() { chat_bar_room() + list_head_gap }, room_now, settings_core(src, w), foot_gap=list_foot_gap)
-    latest.val = list.to_latest
-    landing.val = list.landing_of
-  })
-  |> ignore
-  talk.box(fn(f) {
-    f
-    .over(Is(true))
-    .lies_along(Is(End))
-    |> ignore
-    // (made while its page is the one seen in the stack's top's place (the top, or the one kept there while the top
-    // waits): the draft's field is one editor's, and the same chat may be under it (its history asked as a page, a
-    // service beside it))
-    @sfpages.composer_on_page(f, fn() { app.nav.drawn_stay().0 == k }, fn(f) {
-    let made = @sfpages.chat_composer_node(
-      f,
-      src,
-      r,
-      view,
-      fn() { geometry().0 },
-      height,
-      fn() { geometry().1 },
-      fn() { geometry().2 },
-      fn(_key) { (latest.val)() },
-      active=fn() { app.nav.drawn_stay().0 == k },
-      drops=talk,
-    )
-    room.set(Some(made.room))
-    f.owns(fn() { room.set(None) }) |> ignore
+  talk.box(fn(body) {
+    body.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
+    let list = body.box(fn(l) {
+      l.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
+      let list = @sfpages.chat_list_node(l, src, r, view, entries, fn() { chat_bar_room() + list_head_gap }, fn() { 0.0 }, settings_core(src, w), foot_gap=list_foot_gap)
+      latest.val = list.to_latest
+      landing.val = list.landing_of
     })
-  })
-  |> ignore
+    let composer = body.box(fn(f) {
+      // (made while its page is the one seen in the stack's top's place (the top, or the one kept there while the top
+      // waits): the draft's field is one editor's, and the same chat may be under it (its history asked as a page, a
+      // service beside it))
+      @sfpages.composer_on_page(f, fn() { app.nav.drawn_stay().0 == k }, fn(f) {
+        let made = @sfpages.chat_composer_node(
+          f,
+          src,
+          r,
+          view,
+          fn() { geometry().0 },
+          height,
+          fn() { geometry().1 },
+          fn() { geometry().2 },
+          fn(_key) { (latest.val)() },
+          active=fn() { app.nav.drawn_stay().0 == k },
+          drops=talk,
+        )
+        room.set(Some(made))
+        f.owns(fn() { room.set(None) }) |> ignore
+      })
+    })
+    @sfpages.chat_body_layout(body, list, composer, fn() { room.get() })
+  }) |> ignore
   talk.box(fn(fl) {
     fl
     .over(Is(true))
@@ -185,8 +183,7 @@ fn chat_talk_node(
     o.show(fn() { app.nav.shows(k) }, fn(s) {
       // (all of the chat's room: what opens over it opens in it)
       s
-      .width(By(fn() { o.laid_size_told().map(fn(z) { z.0 }) }))
-      .height(By(fn() { o.laid_size_told().map(fn(z) { z.1 }) }))
+      .grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0)))
       |> ignore
       @ui.old(s, fn(c) {
         app.nav.page_old(c, k, fn(c) {
