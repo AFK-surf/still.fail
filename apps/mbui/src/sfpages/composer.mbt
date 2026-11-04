@@ -1490,7 +1490,12 @@ let text_own : @ui.Style = @ui.css("w=Full")
 /// and its words' room's sides: text_open's px=S2): where what the viewer sent breaks its lines too (its bubble's,
 /// message.mbt mine_most).
 pub fn composer_words_width(pane : Double) -> Double {
-  composer_width(pane) - 2.0 * @sf.composer_pad - 2.0 * 8.0
+  composer_words_width_given(pane, composer_side(), @sf.native_on())
+}
+
+///|
+fn composer_words_width_given(pane : Double, side : Double, native : Bool) -> Double {
+  composer_width_given(pane, side, native) - 2.0 * @sf.composer_pad - 2.0 * 8.0
 }
 
 ///|

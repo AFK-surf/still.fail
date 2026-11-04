@@ -541,11 +541,11 @@ fn mine_row_node(col : @view.View, src : Source, here : () -> MessageHere, row :
   // (its words in their bubble, where it has any)
   col.show(fn() { (row.text)() != "" }, fn(b) {
     b
-    .max_width(By(fn() { Some(composer_words_width(width()) + 2.0 * bubble_side) }))
     .padding(Is((bubble_side, bubble_in_y, bubble_side, bubble_in_y)))
     .radius(By(fn() { @ui.tree_theme().corner(Xl2) }))
     .ground(By(fn() { @ui.tree_theme().color(Neutral) }))
     |> ignore
+    chat_bubble_width(b, width)
     // (picked as the chat's, said before its words are made: pick_node.mbt; the viewer's own, by its name in the chat)
     pick_row_node(col, b, fn() {
       let h = here()
@@ -858,7 +858,7 @@ fn quotes_node(
   col.box(fn(qs) {
     qs.gap(Is(4.0)).lines_up(Is(Some(if mine { End } else { Start }))) |> ignore
     if mine {
-      qs.max_width(By(fn() { Some(composer_words_width(width()) + 2.0 * bubble_side) })) |> ignore
+      chat_bubble_width(qs, width)
     }
     qs.each(fn() { quotes().mapi(fn(i, _) { i }) }, fn(i) { i }, fn(slot, i) {
       let i = @signals.untracked(fn() { i.get() })
