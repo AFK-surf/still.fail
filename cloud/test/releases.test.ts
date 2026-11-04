@@ -181,3 +181,36 @@ test("/releases/latest/<app> goes to the app's latest build, as its updater's fe
     await h.close();
   }
 });
+
+test("a cloud of its own reads the station's releases from still.fail's when its bucket has none, never an app's", async () => {
+  const asked: string[] = [];
+  const h = await harness({
+    upstream: (file, request) => {
+      asked.push(`${file} ${request.headers.range ?? ""}`.trim());
+      if (file === "station.json") return { status: 200, body: '{"version":"0.1.9"}', headers: { "content-type": "application/json" } };
+      if (file === "stillfail-station-linux-x64.tar.gz") return { status: 206, body: "tion", headers: { "content-range": "bytes 3-6/10", "content-type": "application/gzip" } };
+      return { status: 404 };
+    },
+  });
+  try {
+    const bucket = (await h.mf.getR2Bucket("RELEASES", "api")) as unknown as { put(key: string, value: string): Promise<unknown> };
+    await bucket.put("modules/mesh/mesh.json", '{"own":true}');
+
+    const feed = await h.fetch("/releases/station.json");
+    assert.equal(feed.status, 200);
+    assert.equal(await feed.text(), '{"version":"0.1.9"}');
+    const part = await h.fetch("/releases/stillfail-station-linux-x64.tar.gz", { headers: { range: "bytes=3-6" } });
+    assert.equal(part.status, 206);
+    assert.equal(part.headers.get("content-range"), "bytes 3-6/10");
+    assert.equal(await part.text(), "tion");
+    // its own bucket's first
+    assert.equal(await (await h.fetch("/releases/modules/mesh/mesh.json")).text(), '{"own":true}');
+    // none there either: none
+    assert.equal((await h.fetch("/releases/station-beta.json")).status, 404);
+    // an app's feed is its own alone, even when it has none
+    assert.equal((await h.fetch("/releases/android/latest.json")).status, 404);
+    assert.deepEqual(asked, ["station.json", "stillfail-station-linux-x64.tar.gz bytes=3-6", "station-beta.json"]);
+  } finally {
+    await h.close();
+  }
+});
