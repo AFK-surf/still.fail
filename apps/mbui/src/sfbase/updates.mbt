@@ -207,8 +207,15 @@ pub fn update_check(src : Source, now : Bool, done? : (String) -> Unit = fn(_) {
           // A slower check answered with an older build than the one already waiting.
           ()
         } else if (how.phase == "downloading" || how.phase == "retrying") && how.file != update_file_name(v) {
-          // Hosts take one download at a time. Keep showing the one in flight and give them the newest after it ends.
-          update_pending.set(Some(v))
+          // Hosts take one download at a time. Keep showing the one in flight and give them the newest after it ends
+          // (自动更新 off: the person's next word takes it).
+          if update_auto(src) {
+            update_pending.set(Some(v))
+          }
+        } else if !update_auto(src) {
+          // 自动更新 off: the newer build said, downloaded only at the person's word (update_go)
+          update_pending.set(None)
+          update.available.set(Some(v))
         } else {
           update_pending.set(None)
           update.available.set(Some(v))
@@ -232,6 +239,23 @@ pub fn update_check(src : Source, now : Bool, done? : (String) -> Unit = fn(_) {
       }
     }
   })
+}
+
+///|
+/// Whether newer builds are downloaded by themselves here (the prefs' `appUpdate`: 自动更新, on unless turned off),
+/// else only at the person's word.
+pub fn update_auto(src : Source) -> Bool {
+  text((src.topic)("prefs", {}).value, "appUpdate") != "off"
+}
+
+///|
+/// 自动更新 turned on (关于; the prefs keep it): the newer build known and not asked for yet handed to the host as one
+/// found by itself is.
+pub fn update_auto_on() -> Unit {
+  match update_known() {
+    Offered(v, waiting=false) => update_fetch_found(v, false)
+    _ => ()
+  }
 }
 
 ///|

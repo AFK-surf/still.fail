@@ -950,6 +950,8 @@ let en : Map[String, String] = {
   "android-settings.vault.wordsOnce": "These words are shown only this once",
   "android-settings.vault.wordsTitle": "Write down these 24 words",
   "android-settings.vault.wordsWhy": "If every device is lost, only these bring your secrets back. still.fail keeps no copy and can't recover them for you",
+  "android-settings.version.auto": "Automatic updates",
+  "android-settings.version.auto.note": "Downloads new versions by itself and installs them while you are not using {app}",
   "android-settings.version.check": "Check for updates",
   "android-settings.version.checking": "Checking",
   "android-settings.waiting.continue": "Continue",

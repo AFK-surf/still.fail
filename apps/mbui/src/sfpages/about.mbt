@@ -111,9 +111,9 @@ pub fn about_node(
 ///|
 /// This build and the way to a newer one as nodes, a row each on every screen: its name and version, a row going
 /// nowhere, words of a length known, the row's alone; then, where newer builds are asked for here (not on iOS, nor run
-/// from the sources), 检查更新, a row of its own always (pressed, the update dialog asks still.fail cloud and says what
-/// it answered), apart from installing one (2026-11-03 the user: 「检查更新和安装更新应该分开」); and under it, while a
-/// newer build is known, the update's row in its three stages (updates.mbt update_stands: 有新版本 <version>, 正在下载
+/// from the sources), 自动更新 (its switch), then 检查更新, a row of its own always, in the link's ink as the update's
+/// row (pressed, the update dialog asks still.fail cloud and says what it answered), apart from installing one
+/// (2026-11-03 the user: 「检查更新和安装更新应该分开」); and under it, while a newer build is known, the update's row in its three stages (updates.mbt update_stands: 有新版本 <version>, 正在下载
 /// <version>, 重启以更新到 <version>; 允许安装更新, 重试… beside them) and the line under them, pressed to do what is the
 /// person's to do (else the update dialog opens and says how it goes); under them the bar while something is under
 /// way, its room opening and closing as that begins and ends (a move as far as the bar's room, from where it is then).
@@ -127,8 +127,25 @@ fn version_rows_node(g : @view.View, core : Core) -> Unit {
     (if product == "" { "still.fail" } else { product }) + " " + build_version()
   }, fn() {  }, goes=false)
   let v = fn() { (core.version_now)() }
+  // (whether newer builds come by themselves, on unless turned off, under what it is about: off, one is said in the
+  // update's row and comes only as the person presses it, 2026-11-04 the user「自动更新应该有个设置，默认打开可以关闭」)
   g.show(fn() { v().asks }, fn(r) {
-    @sf.link_row_node(r, fn() { @sf.t("android-settings.version.check") }, fn() { (core.version_check)() }, chevron=false)
+    @sf.switch_row_node(
+      r,
+      fn() { @sf.t("android-settings.version.auto") },
+      fn() { @settings.pref(core, "appUpdate") != "off" },
+      fn(on) {
+        @settings.set_pref(core, "appUpdate", if on { "" } else { "off" })
+        if on {
+          (core.update_auto_on)()
+        }
+      },
+      note=fn() { @sf.t("android-settings.version.auto.note", args=[("app", "still.fail")]) },
+    )
+  })
+  // (what is done at once where it is, in the link's ink: checking, and the update's row under it)
+  g.show(fn() { v().asks }, fn(r) {
+    @sf.link_row_node(r, fn() { @sf.t("android-settings.version.check") }, fn() { (core.version_check)() }, acts=true)
   })
   g.show(fn() { v().asks && v().newer }, fn(r) {
     let open = @motion.Way::new(if @signals.untracked(fn() { v().going }) { 1.0 } else { 0.0 })
@@ -146,7 +163,7 @@ fn version_rows_node(g : @view.View, core : Core) -> Unit {
       fn() { v().label },
       fn() { (core.version_tap)() },
       note=fn() { v().note },
-      chevron=false,
+      acts=true,
       below=fn(b) {
         b.box(fn(bar) {
           bar.grow(Is(1.0)) |> ignore

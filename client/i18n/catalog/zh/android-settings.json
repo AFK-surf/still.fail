@@ -555,6 +555,8 @@
   "android-settings.tokens.saved": "已保存 token，正在连接",
   "android-settings.tokens.verified": "已连接到「{team}」，bot 为 @{bot}",
   "android-settings.tokens.verify": "校验 token",
+  "android-settings.version.auto": "自动更新",
+  "android-settings.version.auto.note": "自动下载新版本，在你不用 {app} 时安装",
   "android-settings.version.check": "检查更新",
   "android-settings.version.checking": "正在检查",
   "android-settings.version.update": "更新到 {version}",

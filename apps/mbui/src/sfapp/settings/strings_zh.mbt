@@ -928,6 +928,8 @@ let zh : Map[String, String] = {
   "android-settings.vault.wordsOnce": "仅显示一次",
   "android-settings.vault.wordsTitle": "抄写恢复码",
   "android-settings.vault.wordsWhy": "所有设备丢失时，仅能用恢复码找回密钥库。still.fail 不保存恢复码",
+  "android-settings.version.auto": "自动更新",
+  "android-settings.version.auto.note": "自动下载新版本，在你不用 {app} 时安装",
   "android-settings.version.check": "检查更新",
   "android-settings.version.checking": "正在检查",
   "android-settings.waiting.continue": "继续",

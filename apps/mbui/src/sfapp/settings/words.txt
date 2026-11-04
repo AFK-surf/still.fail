@@ -921,6 +921,8 @@ android-settings.vault.wordsDone
 android-settings.vault.wordsOnce
 android-settings.vault.wordsTitle
 android-settings.vault.wordsWhy
+android-settings.version.auto
+android-settings.version.auto.note
 android-settings.version.check
 android-settings.version.checking
 android-settings.waiting.continue
