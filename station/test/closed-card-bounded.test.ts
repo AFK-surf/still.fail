@@ -34,6 +34,9 @@ test("a card closed after many ordinary messages does not read the intervening h
       assert.ok(visited <= 16, `checking the closed card visited ${visited} later entries`);
       const plan = (db.prepare(`EXPLAIN QUERY PLAN ${CLOSED_CARD_AFTER}`).all(thread, 1) as { detail: string }[]).map((row) => row.detail).join(" | ");
       for (const index of ["entries_people_by_n", "entries_cards", "entries_options"]) assert.ok(plan.includes(index), plan);
+      visited = 0;
+      assert.equal(store.closedCard(thread, 2), null);
+      assert.equal(visited, 0, "a post with no close does not look at its later entries");
     } finally { Object.defineProperty(store, "db", { configurable: true, value: db }); }
   } finally { store.close(); }
 });
