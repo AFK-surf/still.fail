@@ -56,6 +56,8 @@ export type HubConfig = {
   profiles: Profile[];
   /// How many times a turn that ended without a state is nudged before giving up.
   maxNudges: number;
+  /// Whether an agent whose turn ends with its chat untitled is asked once to name it.
+  askToName: boolean;
   automaticDecisions: { completion: DecisionRule };
   /// Idle claude processes kept alive at most this long before they may be evicted.
   warmMs: number;
@@ -143,6 +145,7 @@ export function hubConfig(raw: any, dataDir: string, found: (id: string) => read
     connects,
     profiles,
     maxNudges: typeof raw?.maxNudges === "number" ? raw.maxNudges : 2,
+    askToName: raw?.askToName !== false,
     automaticDecisions: { completion: { enabled: completion.enabled === true, model: str(completion.model) ?? null } },
     warmMs: Math.trunc((typeof raw?.warmMinutes === "number" ? raw.warmMinutes : 30) * 60_000),
     maxWarmClaude: typeof raw?.maxWarmClaude === "number" ? raw.maxWarmClaude : 4,
