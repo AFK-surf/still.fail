@@ -40,7 +40,7 @@ pub fn chat_screen_first(r : ChatRef, screens : Array[ChatScreen]) -> Unit {
 
 ///|
 /// The chat's screens from what was pressed (`from`): the one alone opened, else a menu of them.
-pub fn chat_screens_open(r : ChatRef, screens : Array[ChatScreen], from~ : @sf.Beside) -> Unit {
+pub fn chat_screens_open(r : ChatRef, screens : Array[ChatScreen], from~ : @sf.Beside, along? : @ui.Along = Start) -> Unit {
   match screens {
     [] => ()
     [s] => open_screen(r.station, s.id, Some(s.title))
@@ -51,6 +51,7 @@ pub fn chat_screens_open(r : ChatRef, screens : Array[ChatScreen], from~ : @sf.B
         }),
         from~,
         title=@sf.t("web-pages.chat.screen"),
+        along~,
       )
   }
 }

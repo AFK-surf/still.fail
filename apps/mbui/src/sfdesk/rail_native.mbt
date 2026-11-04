@@ -197,8 +197,10 @@ fn bar_action(
 ///|
 /// A chat's actions in the system's bars, each its own button there being room (the user, 2026-10-28): its "…" (a
 /// menu of the system's own: `rows` its items, `more` what opens with none of them), its info, its side panel's
-/// switch (opening the first agent's history, or closing all its tabs), its station's screens where it has them
-/// (`screen`: what opens them, with a dot while an agent drives one; the user 2026-11-03, 共享屏幕没放到侧边栏),
+/// switch (opening the first agent's history, or closing all its tabs), its services and jobs where it has them
+/// (`jobs`: what opens them, with a dot while one is in trouble; the user 2026-11-04, 地球图标收进「…」), its station's
+/// screens where it has them (`screen`: what opens them, with a dot while an agent drives one; the user 2026-11-03,
+/// 共享屏幕没放到侧边栏),
 /// archiving it where it may be.
 /// In place of its buttons (who is in it and where it runs stay by its
 /// title, as the desktop's); false where there are no system's bars (the page draws its own).
@@ -209,6 +211,7 @@ fn bar_chat(
   info : () -> Unit,
   rows : Array[@sf.MenuItem?],
   more : () -> Unit,
+  jobs : (() -> Unit, Bool)?,
   screen : (() -> Unit, Bool)?,
   archive : (() -> Unit)?,
 ) -> Bool {
@@ -236,6 +239,10 @@ fn bar_chat(
         side_change(src, r, "open", Some(key))
       }
     }) |> ignore
+  }
+  match jobs {
+    Some((act, alarm)) => bar_action("chat/jobs", @sf.t("web-pages.chat.services"), "web", act, dot=alarm) |> ignore
+    None => ()
   }
   match screen {
     Some((act, driven)) => bar_action("chat/screen", @sf.t("web-pages.chat.screen"), "monitor", act, dot=driven) |> ignore
@@ -326,6 +333,22 @@ fn bar_anchor(id : Int, side : @ui.Side, along : @ui.Along) -> (Int, @ui.Side, @
     (native_mark.val, Left, Start)
   } else {
     (native_mark.val, Bottom, End)
+  }
+}
+
+///|
+/// What opens from one of the page's actions as a menu of the page's (a station's screens): as bar_anchor's. A menu goes
+/// under what opened it, so beside the column down the side it opens from the point left of the item, ending there,
+/// not under the item and over the column (the user, 2026-11-04); `id` where the page has its own.
+fn bar_menu_from(c : @ui.Ctx, id : Int) -> (@sf.Beside, @ui.Along) {
+  if !@sf.native_on() || native_mark.val == 0 {
+    return (Of(id), End)
+  }
+  if @sf.native_side() {
+    let (x, y, _) = native_mark_at(c)
+    (@sf.at_point(x - @sf.panel_offset, y), End)
+  } else {
+    (Of(native_mark.val), End)
   }
 }
 
@@ -497,17 +520,24 @@ fn rail_native_marks(c : @ui.Ctx) -> Unit {
     // (at the bell where the system says it is; else where the column has it: moved there as an item is chosen,
     // @sfbase.nav_tapped_said)
     @sfbase.nav_tapped_said.get() |> ignore
-    let at = @hostapi.nav_tapped_at
-    let (tx, ty, th) = if at[2] > 0.0 {
-      (at[0], at[1], at[3])
-    } else {
-      (dmax(0.0, c.width - @sf.native_clear() - 1.0), dmax(0.0, c.height - native_bell_up), 40.0)
-    }
+    let (tx, ty, th) = native_mark_at(c)
     let id = c.id("rail/attention")
     native_mark.val = id
     c.box(style=@ui.style(w=Fixed(native_mark_w), h=Fixed(th)), tx~, ty~, id~, fn() {  }) |> ignore
   })
   |> ignore
+}
+
+///|
+/// Where the mark is: at the item last chosen, else where the column has the bell (its x, y and height).
+fn native_mark_at(c : @ui.Ctx) -> (Double, Double, Double) {
+  let at = @hostapi.nav_tapped_at
+  if at[2] > 0.0 {
+    (at[0], at[1], at[3])
+  } else {
+    let (ww, wh) = c.window_size()
+    (dmax(0.0, ww - @sf.native_clear() - 1.0), dmax(0.0, wh - native_bell_up), 40.0)
+  }
 }
 
 ///|

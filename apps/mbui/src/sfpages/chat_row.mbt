@@ -1118,8 +1118,9 @@ pub fn open_chat_menu(
   r : ChatRef,
   extra : Array[@sf.MenuItem?],
   from~ : @sf.Beside,
+  along? : @ui.Along = Start,
 ) -> Unit {
-  @sf.menu(chat_menu_of(src, scope, r, extra), from~)
+  @sf.menu(chat_menu_of(src, scope, r, extra), from~, along~)
 }
 
 ///|

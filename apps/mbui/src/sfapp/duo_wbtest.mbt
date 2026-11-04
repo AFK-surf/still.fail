@@ -1227,3 +1227,43 @@ test "an iPhone Duo: the chat's station's screens a button of the system's bars,
   let s = native_chat(466.0, 678.0, true, side=70.0, mode="chat-agent-screens")
   assert_false(s.nav_said().contains("page/chat/screen"))
 }
+
+///|
+test "Duo chat's services go in the system's column, opening beside it" {
+  let t = native_chat(951.0, 669.0, true, side=84.0, mode="chat-jobs")
+  assert_eq(nav_icon_of(t, "page/chat/jobs"), Some(@sf.icon_path("web")))
+  let services = @sf.t("web-pages.chat.services")
+  assert_false(t.semantics().iter().any(fn(s) { s.label == services }), msg="the page's own button left in the title bar")
+  t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/jobs\",\"at\":[867,120,84,44]}")
+  t.frames_owed()
+  assert_true(@sfdesk.chat_pops_open().1)
+  guard t.semantics().iter().find_first(fn(s) { s.role == @ui.Role::Dialog }) is Some(d) else {
+    fail("no popover in the semantics")
+  }
+  assert_true(d.rect.0 + d.rect.2 <= 867.0, msg="its right edge at \{d.rect.0 + d.rect.2}")
+}
+
+///|
+test "Duo's short column keeps the chat's services in the page" {
+  let t = native_chat(469.0, 681.0, true, side=84.0, mode="chat-jobs")
+  @sfdesk.wide.tape_ask.set(Some(@sfdesk.TapePane::Page))
+  t.frame()
+  t.run_for(@ui.move_most_ms)
+  assert_true(nav_icon_of(t, "page/chat/jobs") is None)
+  let services = @sf.t("web-pages.chat.services")
+  assert_true(t.semantics().iter().any(fn(s) { s.label == services }))
+}
+
+///|
+test "Duo chat's screens menu opens beside the column, not over it" {
+  let t = native_chat(951.0, 669.0, true, side=84.0, mode="chat-station-screens")
+  assert_true(nav_icon_of(t, "page/chat/screen") is Some(_), msg=t.nav_said())
+  t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/screen\",\"at\":[867,120,84,44]}")
+  t.frames_owed()
+  t.run_for(@ui.move_most_ms)
+  guard t.semantics().iter().find_first(fn(s) { s.role == @ui.Role::Menu }) is Some(m) else {
+    fail("no menu in the semantics")
+  }
+  assert_true(m.rect.0 + m.rect.2 <= 867.0, msg="its right edge at \{m.rect.0 + m.rect.2}")
+  assert_true(m.rect.1 >= 120.0, msg="its top at \{m.rect.1}")
+}

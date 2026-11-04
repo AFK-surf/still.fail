@@ -372,7 +372,7 @@ pub fn notify_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Un
 
 pub fn offered_image() -> String
 
-pub fn open_chat_menu(@sfbase.Source, String, @sfbase.ChatRef, Array[@sf.MenuItem?], from~ : @sf.Beside) -> Unit
+pub fn open_chat_menu(@sfbase.Source, String, @sfbase.ChatRef, Array[@sf.MenuItem?], from~ : @sf.Beside, along? : @ui.Along) -> Unit
 
 pub fn open_context_actions(@sfbase.Source, String, String, @json.Json?, @sf.Beside) -> Unit
 
