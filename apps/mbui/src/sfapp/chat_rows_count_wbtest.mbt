@@ -42,7 +42,7 @@ fn one_come_costs(n : Int) -> (Int, Int, Int, Int) raise {
   // (its rows as the list reads them: one for each message, Top over them, Foot under)
   let chat_rows : Ref[@sfbase.ChatRows?] = Ref(None)
   let t = @ui.Tester::new(fn(_) {
-    seen.val = match view_of_chat(src, r).0 {
+    seen.val = match @sfbase.chat_view_now(src, r) {
       Some(v) => {
         let cr = match chat_rows.val {
           Some(cr) => cr
@@ -103,4 +103,40 @@ test "one message come costs the chat page the same with 30 messages and with 30
   assert_eq(made30, 1)
   // (the list: the one put in, nothing gone through, nothing put together whole)
   assert_eq(work3000, work30)
+}
+
+///|
+test "reading a chat's view without its list does not make its messages" {
+  new_run()
+  let count = 3000
+  let all : Json = { "messages": Json::array(Array::makei(count, fn(i) { said_json(i + 1) })) }
+  let rows = @rows.TopicList::new(["messages"], ["seq", "outgoing"], Some(all))
+  let rest : Json = { "title": Json::string("对话"), "messages": Json::null() }
+  let base = fixture("home")
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      if name == "chat" { { value: Some(rest), error: None, version: 1 } }
+      else { (base.topic)(name, params) }
+    },
+    list: fn(name, _, _, _) { if name == "chat" { Some(rows) } else { None } },
+  }
+  let r : ChatRef = { station: "ws1/st1", session: "s-view-only", title: "", station_name: "" }
+  let made = @sfbase.messages_made()
+  let work = rows.work()
+  let view = @sfbase.chat_view_now(src, r).unwrap()
+  assert_eq(view.messages.length(), count)
+  assert_eq(@sfbase.messages_made() - made, 0, msg="the view did not make the history")
+  assert_eq(rows.work() - work, 0, msg="the view did not copy or search the history")
+  let entries = view_of_chat(src, r).1
+  assert_eq(entries.length(), count + 2)
+  assert_true(physical_equal(entries, view_of_chat(src, r).1), msg="the requested entries are kept for this view")
+  rows.take({
+    "path": Json::array([Json::string("messages")]),
+    "key": Json::array([Json::string("seq"), Json::string("outgoing")]),
+    "why": Json::string("came"),
+    "put": said_json(count + 1),
+  }) |> ignore
+  rows.come_in()
+  assert_eq(view_of_chat(src, r).1.length(), count + 3, msg="a later request sees the new message")
 }

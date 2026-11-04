@@ -249,7 +249,7 @@ fn agent_status(c : @ui.Ctx, src : Source, a : Json?) -> Unit {
 fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) -> Unit {
   let t = @sf.theme()
   let chat = (src.topic)("chat", chat_params(r)).value
-  let (view, _, _) = view_of_chat(src, r)
+  let view = @sfbase.chat_view_now(src, r)
   let agents = items(chat, "agents")
   let (archived, offline) = match view {
     Some(v) => (v.archived, v.offline)
@@ -557,7 +557,7 @@ fn open_info(src : Source, r : ChatRef) -> Unit {
     from=Unanchored,
     title_row=fn(c) {
       let chat = (src.topic)("chat", chat_params(r)).value
-      let (view, _, _) = view_of_chat(src, r)
+      let view = @sfbase.chat_view_now(src, r)
       let open = match view {
         Some(v) => !v.archived && !v.offline
         None => false
@@ -626,7 +626,7 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
     })
     |> ignore
     c.box(style=info_card_under, fn() {  }) |> ignore
-    let screens = match view_of_chat(src, r).0 {
+    let screens = match @sfbase.chat_view_now(src, r) {
       Some(v) => v.screens
       None => []
     }
@@ -1701,7 +1701,7 @@ fn jobs_sample(c : @ui.Ctx, r : ChatRef) -> Unit {
 /// chats written with, or the one opened.
 fn letters_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit {
   let topic = (src.topic)("chatLetters", letters_params(r, thread))
-  let (chat, _, _) = view_of_chat(src, r)
+  let chat = @sfbase.chat_view_now(src, r)
   let view = match topic.value {
     Some(Object(_)) as v => v
     _ => {

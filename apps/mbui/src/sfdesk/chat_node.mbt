@@ -22,7 +22,7 @@ fn chat_root_node(
   p.pick(fn() { @sfbase.workspace_in_view(src).0.map(fn(w) { w.id }) }, fn(page, _id) {
     page.grow(Is(1.0)).min_height(Is(Some(0.0))).row(Is(true)).ground(By(fn() { ground(page) })) |> ignore
     guard @signals.untracked(fn() { @sfbase.workspace_in_view(src).0 }) is Some(w) else { return }
-    let view = fn() { view_of_chat(src, r).0 }
+    let view = fn() { @sfbase.chat_view_now(src, r) }
     let entries = fn() { view_of_chat(src, r).1 }
     // (its side panel's tabs, as the core says them: open while it has any)
     let open = fn() { view().map(fn(v) { side_of(v).0.length() > 0 }).unwrap_or(false) }
@@ -224,7 +224,7 @@ fn chat_over(
   // (what a menu's choice in its messages left: menus.mbt)
   @sfpages.chat_menus_frame(c)
   let chat = (src.topic)("chat", chat_params(r)).value
-  let view = view_of_chat(src, r).0
+  let view = @sfbase.chat_view_now(src, r)
   let key = chat_key(r)
   let list = chat_find_list(r)
   if find_chat() != "" && find_chat() != key {
