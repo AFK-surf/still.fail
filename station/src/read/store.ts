@@ -138,6 +138,20 @@ export function listSessions(s: Store): SessionRow[] {
   return all(s, "SELECT * FROM sessions ORDER BY last_active_at DESC").map(toSession);
 }
 
+/// The session list's active or archived rows: do not bring the other kind out of the database just to discard it.
+/// The old whole-table order put equal timestamps in rowid order; retain that when using either partial index.
+export function listedSessions(s: Store, connect: string | null, archived: boolean, viewer: InWorkspace | null): SessionRow[] {
+  const where = [archived ? "archived_at IS NOT NULL" : "archived_at IS NULL"];
+  const args: Json[] = [];
+  if (connect !== null) { where.push("connect = ?"); args.push(connect); }
+  if (viewer !== null) {
+    where.push(viewer.home === false ? "ws = ?" : "(ws = ? OR ws IS NULL)");
+    args.push(viewer.workspace);
+  }
+  const sql = `SELECT * FROM sessions INDEXED BY ${archived ? "sessions_put_away" : "sessions_live"} WHERE ${where.join(" AND ")} ORDER BY last_active_at DESC, rowid ASC`;
+  return all(s, sql, ...args).map(toSession);
+}
+
 /// The sessions not archived (the sidebar's), the latest active first, by the index of those alone (schema.ts
 /// sessions_live): each read of the sidebar went over every session the station ever had (many on a station, many of them
 /// archived) to pick out its 107 (2026-11-03).
