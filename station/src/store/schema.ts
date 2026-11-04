@@ -822,10 +822,9 @@ export const SESSION_FIRST_INITIAL = `WITH RECURSIVE first_sessions(session) AS 
 )
 INSERT INTO session_first (session, thread, n)
 SELECT s.session, d.thread, d.n FROM first_sessions s
-CROSS JOIN deliveries d ON d.rowid = (CASE WHEN
-  (SELECT COUNT(*) FROM (SELECT 1 FROM deliveries INDEXED BY deliveries_session WHERE session = s.session LIMIT 65)) <= 64
-  THEN (SELECT MIN(rowid) FROM deliveries INDEXED BY deliveries_session WHERE session = s.session)
-  ELSE (${firstDeliveryRowid("s.session")}) END)
+CROSS JOIN deliveries d ON d.rowid = COALESCE(
+  (SELECT MIN(seq) FROM (SELECT rowid AS seq FROM deliveries INDEXED BY deliveries_session WHERE session = s.session LIMIT 65) HAVING COUNT(*) <= 64),
+  (${firstDeliveryRowid("s.session")}))
 WHERE s.session IS NOT NULL`;
 
 // An outer INSERT OR REPLACE / OR ABORT overrides OR IGNORE in a trigger. Do not attempt an insert if this session

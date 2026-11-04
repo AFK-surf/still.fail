@@ -25,8 +25,7 @@ test("installing first deliveries seeks each session's threads without reading t
       get(target, property) {
         if (property === "exec") return (sql: string) => target.exec(sql
           .replace("FROM deliveries GROUP BY session", "FROM deliveries WHERE visit_first_delivery() GROUP BY session")
-          .replaceAll("SELECT 1 FROM deliveries INDEXED BY deliveries_session WHERE session = s.session LIMIT 65", "SELECT 1 FROM deliveries INDEXED BY deliveries_session WHERE session = s.session AND visit_first_delivery() LIMIT 65")
-          .replaceAll("WHERE session = s.session)\n  ELSE", "WHERE session = s.session AND visit_first_delivery())\n  ELSE")
+          .replaceAll("SELECT rowid AS seq FROM deliveries INDEXED BY deliveries_session WHERE session = s.session LIMIT 65", "SELECT rowid AS seq FROM deliveries INDEXED BY deliveries_session WHERE session = s.session AND visit_first_delivery() LIMIT 65")
           .replaceAll("AND thread = first_threads.thread ORDER BY rowid LIMIT 1", "AND thread = first_threads.thread AND visit_first_delivery() ORDER BY rowid LIMIT 1"));
         const value = Reflect.get(target, property, target);
         return typeof value === "function" ? value.bind(target) : value;
