@@ -861,7 +861,7 @@ pub fn sheet_column(c : @ui.Ctx, body : () -> Unit) -> Unit {
   // (in a panel that says its words' line, that far in: a dialog's; else a sheet's; its rows reaching out across it)
   let sides = if words_in_now.val > 0.0 { words_in_now.val } else { sheet_panel_sides }
   panel_sides_in.val = sides
-  rows_out.val = sides
+  rows_out.val = dmax(0.0, sides - panel_card_in)
   words_in_now.val = 0.0
   c.box(style=sheet_column_box.then(@ui.style(px=room(sides))), body) |> ignore
   panel_sides_in.val = was
@@ -933,10 +933,76 @@ pub fn panel_words_in() -> @ui.Style {
 }
 
 ///|
+/// A card a page lays out itself in a panel's body: out across the room the panel leaves at its sides as its rows'
+/// grounds are (rows_out), `panel_card_in` (16) in from its sides, concentric with its corners (the user, 2026-11-03:
+/// 面板里可以放卡片; 第二套感觉还行); none outside a panel.
+pub fn panel_card_out() -> @ui.Style {
+  // (none in a small panel: what it holds stands at its padding already)
+  if small_panel_now.val {
+    return no_card_out
+  }
+  // (from the column it stands in, `panel_sides_in` from the panel's sides (a list's in a dialog nearer them, the
+  // list out across the room its rows reach), out or in to `panel_card_in` from them)
+  if panel_sides_in.val <= 0.0 && words_in_now.val <= 0.0 {
+    return no_card_out
+  }
+  @ui.style(mx=room(panel_card_in - panel_sides_in.val))
+}
+
+///|
+/// What a page lays out itself in a panel's body that clips or scrolls what it holds, where that holds cards: out
+/// at the cards' line as a card is (panel_card_out), so what clips them is no nearer the panel's sides than they are;
+/// in it the panel's sides that near (its cards at its sides) and its words' line as far in as before (as a list's room
+/// is: panel_list). `style` its own (a clip, its height).
+pub fn panel_card_room(c : @ui.Ctx, style : @ui.Style, body : () -> Unit) -> Int {
+  let out = panel_card_out()
+  if physical_equal(out, no_card_out) {
+    return c.box(style~, body)
+  }
+  let (sides, words) = (panel_sides_in.val, words_in_now.val)
+  c.box(style=style.then(out), fn() {
+    panel_sides_in.val = panel_card_in
+    words_in_now.val = words + (sides - panel_card_in)
+    body()
+    panel_sides_in.val = sides
+    words_in_now.val = words
+  })
+}
+
+///|
+/// Under the last of what a dialog with no buttons holds where that is a card: the room its foot leaves less what a
+/// card at its foot stands in (`panel_card_in`, concentric with its foot corners as with its sides: panel_card_out);
+/// none elsewhere (a sheet's foot is the screen's).
+pub fn panel_card_foot() -> @ui.Style {
+  if column_given.val && !small_panel_now.val {
+    @ui.style(mt=room(-(dialog_pad - panel_card_in)))
+  } else {
+    no_card_out
+  }
+}
+
+///|
+/// The same on the last of what a dialog holds itself, where that is a card (or holds one at its foot): its margin under
+/// it, what follows it in a column with a gap between not pushed further down by that gap.
+pub fn panel_card_last() -> @ui.Style {
+  if column_given.val && !small_panel_now.val {
+    @ui.style(mb=room(-(dialog_pad - panel_card_in)))
+  } else {
+    no_card_out
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let no_card_out : @ui.Style = @ui.css("")
+
+///|
 /// Something standing `by` out of a panel's words' line at its start (a round button whose mark is on the line): its
-/// margin the line less `by`.
+/// margin the line less `by`, no further out than the panel's rows reach (rows_out: `panel_card_in` from its sides, the
+/// room of a list it is in): a mark is no button's words, its ground no nearer the sides than a row's (the user,
+/// 2026-11-03: 只有按钮的字考虑跟卡片/面板的字对齐).
 pub fn panel_words_out_by(by : Double) -> @ui.Style {
-  @ui.style(ml=room(words_in_now.val - by))
+  @ui.style(ml=room(dmax(words_in_now.val - by, -rows_out.val)))
 }
 
 ///|
@@ -1384,8 +1450,10 @@ pub let pick_search_from : Int = 8
 pub let panel_offset : Double = 6.0
 
 ///|
-/// A small panel's width beside what opened it, by default (parts.css.ts popover: 280).
-pub let panel_w : Double = 280.0
+/// A small panel's width beside what opened it, by default (parts.css.ts popover: 280, and what its rows' words came
+/// further in by from their grounds when that went from 8 to text_in's 16, so they keep the room they had: a station's
+/// row its tags, 2026-11-03).
+pub let panel_w : Double = 280.0 + 2.0 * (text_in - corner_inset)
 
 ///|
 /// What a pick's list holds at most before it scrolls in a small panel (the web's chooser: 320).
@@ -1675,7 +1743,7 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
   // padding in, and its words that are not a row's as far in, its title's and what it says too, panel_words_in, as a
   // small panel's)
   let words_were = words_in_now.val
-  words_in_now.val = card_pad - corner_inset
+  words_in_now.val = panel_words - dialog_pad
   let still = dialog(
     c,
     key,
@@ -1688,7 +1756,7 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
       let words = words_in_now.val
       let (was, rows_were, given_was, in_was) = (panel_sides_in.val, rows_out.val, column_given.val, column_in_now.val)
       panel_sides_in.val = dialog_pad + words
-      rows_out.val = words
+      rows_out.val = panel_words - panel_card_in
       words_in_now.val = 0.0
       column_given.val = true
       column_in_now.val = words
@@ -1728,7 +1796,7 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
     wide=x.wide,
     close_label=t("common.close"),
     step~,
-    column_in=card_pad - corner_inset,
+    column_in=panel_words - dialog_pad,
     scrim?=scrim_of(p, false),
     veil=p.recede.get(),
   )
@@ -1749,7 +1817,7 @@ fn steps_centred(
   close : () -> Unit,
 ) -> (Bool, Bool) {
   let words_were = words_in_now.val
-  let column = card_pad - corner_inset
+  let column = panel_words - dialog_pad
   words_in_now.val = column
   let still = dialog(
     c,
@@ -1797,7 +1865,7 @@ fn dialog_page(
     let (was, rows_were, given_was, in_was) = (panel_sides_in.val, rows_out.val, column_given.val, column_in_now.val)
     let words = words_in_now.val
     panel_sides_in.val = dialog_pad + words
-    rows_out.val = words
+    rows_out.val = panel_words - panel_card_in
     words_in_now.val = 0.0
     column_given.val = true
     column_in_now.val = words
@@ -2399,7 +2467,7 @@ fn sheet_step(
   let body = fn() {
     // (filling its share, it lays out its own sides: its words as far in as a sheet's, panel_words_in)
     panel_sides_in.val = if x.tall > 0.0 { 0.0 } else if pressed { sheet_row_sides } else { sheet_panel_sides }
-    rows_out.val = panel_sides_in.val
+    rows_out.val = dmax(0.0, panel_sides_in.val - panel_card_in)
     words_in_now.val = if x.tall > 0.0 {
       sheet_panel_sides
     } else if pressed {
@@ -2711,11 +2779,11 @@ let sheet_title_words : @ui.TextStyle = @ui.text_style(size=Title, weight=Bold, 
 ///|
 /// A sheet's rows: 12 in at its sides, 24 under the last.
 // kept across runs: a value (no field of it changes)
-let sheet_rows : @ui.Style = @ui.css("w=Full px=S3 pb=S6")
+let sheet_rows : @ui.Style = @ui.style(w=Full, px=room(sheet_row_sides), pb=S6)
 
 ///|
 /// How far in from a sheet's sides its rows are (sheet_rows' px).
-let sheet_row_sides : Double = 12.0
+let sheet_row_sides : Double = panel_card_in
 
 ///|
 /// A line between a sheet's rows (a menu's None): the line's colour, 8 in from the rows' ground, 4 over and under.
@@ -2746,7 +2814,7 @@ let sheet_row_note : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 ///|
 /// A long pick's search: 20 in, 10 under.
 // kept across runs: a value (no field of it changes)
-let sheet_search_at : @ui.Style = @ui.css("w=Full px=S5 pb=S2_5")
+let sheet_search_at : @ui.Style = @ui.style(w=Full, px=room(sheet_row_sides), pb=S2_5)
 
 ///|
 /// What a panel holds in a sheet: 20 in from its sides as the phone's sheets' words are (PageParts.kt confirm, ask;
@@ -2766,21 +2834,21 @@ let sheet_capped_room : @ui.Style = sheet_grows.then(@ui.style(pb=room(sheet_pan
 ///|
 /// What a panel opened by a press holds in a sheet: as far in as a pick's rows (sheet_rows), 24 under.
 // kept across runs: a value (no field of it changes)
-let sheet_held : @ui.Style = @ui.css("w=Full px=S3 pb=S6")
+let sheet_held : @ui.Style = @ui.style(w=Full, px=room(sheet_row_sides), pb=S6)
 
 ///|
 /// The same with a foot under it (the foot's room under it, not its own).
 // kept across runs: a value (no field of it changes)
-let sheet_held_sides : @ui.Style = @ui.css("w=Full px=S3")
+let sheet_held_sides : @ui.Style = @ui.style(w=Full, px=room(sheet_row_sides))
 
 ///|
 /// How far in from a sheet's sides what a panel opened by nothing holds is (sheet_panel's px).
-let sheet_panel_sides : Double = 20.0
+let sheet_panel_sides : Double = panel_words
 
 ///|
 /// A confirm's and a question's words (PageParts.kt confirm, ask): 20 in, 10 apart.
 // kept across runs: a value (no field of it changes)
-let sheet_words_at : @ui.Style = @ui.css("w=Full px=S5 gap=S2_5")
+let sheet_words_at : @ui.Style = @ui.style(w=Full, px=room(sheet_panel_sides), gap=S2_5)
 
 ///|
 // kept across runs: a value (no field of it changes)

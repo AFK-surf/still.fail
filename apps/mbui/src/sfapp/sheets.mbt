@@ -24,7 +24,7 @@ fn state_of_badge(badge : String) -> String {
 /// the ladder's small block's 10 round (Parts.kt's 11: concentric so in a row's corner, 10 in, all four alike; 6 under
 /// 30), and its state's badge over the corner (Badge: solid accent waiting on someone, an accent ring
 /// at work, red failed) ringed in `around`.
-fn model_mark_big(c : @ui.Ctx, maker : String, runtime : String, size : Double, state : String, around : Int64) -> Unit {
+fn model_mark_big(c : @ui.Ctx, maker : String, runtime : String, size : Double, state : String, around : Int64, plain? : Bool = false) -> Unit {
   let t = @sf.theme()
   let xs = size < 30.0
   c.box(w=Px(size), h=Px(size), fn() {
@@ -32,8 +32,8 @@ fn model_mark_big(c : @ui.Ctx, maker : String, runtime : String, size : Double, 
       w=Px(size),
       h=Px(size),
       radius=if xs { 6.0 } else { @sf.small_corner },
-      bg=t.p.card,
-      border=1.0,
+      bg=if plain { 0L } else { t.p.card },
+      border=if plain { 0.0 } else { 1.0 },
       border_color=t.p.line,
       align=ACenter,
       justify=JCenter,
@@ -87,30 +87,31 @@ fn model_mark_big(c : @ui.Ctx, maker : String, runtime : String, size : Double, 
 let info_row_radius : Double = @sf.row_corner
 
 ///|
-/// An info card round its rows: a list card's, its rows list_pad in.
-let info_list_radius : Double = @sf.list_card_corner
+/// An info card round its rows: a card of the ladder's (what it holds is content: a model's tile, its words, its
+/// allowance; the user, 2026-11-03), its rows the ladder's inset in, so their words and tiles 16 in from its edges.
+let info_list_radius : Double = @sf.card_corner
 
 ///|
-/// Rows on one quiet card (Android ChatInfo.kt InfoList): its rows list_pad in (a list card's), the ink at 5%.
+/// Rows on one quiet card (Android ChatInfo.kt InfoList): its rows the ladder's inset in, the ink at 5%.
 // kept across runs: a value (no field of it changes)
-let info_list_style : @ui.Style = @ui.css("w=Full bg=A(Fg,O5) clip").then(@ui.style(p=@sf.list_room))
+let info_list_style : @ui.Style = @ui.css("w=Full bg=A(Fg,O5) clip").then(@ui.style(p=@sf.room_of(@sf.corner_inset)))
 
 ///|
 fn info_list(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=info_list_style, radius=info_list_radius, body) |> ignore
+  c.box(style=info_list_style.then(@sf.panel_card_out()), radius=info_list_radius, body) |> ignore
 }
 
 ///|
-/// A row of it (Android InfoRow): 44 high at least, its words INFO_TEXT (10) in from its sides and INFO_IN (4) from
+/// A row of it (Android InfoRow): 44 high at least, its words the ladder's inset (8) in from its sides and INFO_IN (4) from
 /// top and bottom, what it holds 12 apart.
 // kept across runs: a value (no field of it changes)
-let info_row_style : @ui.Style = @ui.css("row w=Full min_h=S11 px=S2_5 py=S1 gap=S3")
+let info_row_style : @ui.Style = @ui.css("row w=Full min_h=S11 py=S1 gap=S3").then(@ui.style(px=@sf.room_of(@sf.text_in)))
 
 ///|
 /// A row that leads with a tile (a model's mark, 36): its tile the ladder's inset in from the row's top and start, so
-/// in the card's corner that and list_pad in, round by the ladder's small step (mbui works it out: 10.2 in 23, 16 in).
+/// round by the ladder's next step in the row's corner (mbui works it out: 18 less 8, 10).
 // kept across runs: a value (no field of it changes)
-let info_row_tile : @ui.Style = @ui.css("p=S2_5 align=AStart")
+let info_row_tile : @ui.Style = @ui.style(p=@sf.room_of(@sf.corner_inset), align=AStart)
 
 ///|
 /// An agent's tile leading its row (a model's mark): as tall as its row's two lines (15 and 12 on the app's 1.4).
@@ -121,8 +122,8 @@ let info_tile : Double = 38.0
 /// its edges as makes it concentric with it (@sf.capsule_in), its words on the dot's line.
 // kept across runs: a value (no field of it changes)
 let info_row_dot : @ui.Style = @ui.style(
-  pl=@sf.capsule_room(info_list_radius, job_dot_side, less=@sf.list_pad),
-  pt=@sf.capsule_room(info_list_radius, job_dot_side, less=@sf.list_pad + job_dot_over),
+  pl=@sf.capsule_room(info_list_radius, job_dot_side, less=@sf.corner_inset),
+  pt=@sf.capsule_room(info_list_radius, job_dot_side, less=@sf.corner_inset + job_dot_over),
 )
 
 ///|
@@ -260,9 +261,11 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
   let title = text(chat, "title")
   c.box(w=Fill(1.0), fn() {
     // (clear of an untitled dialog's close button over its end: @sf.untitled_clear)
-    c.box(style=@sf.untitled_clear(), dir=Row, w=Fill(1.0), pt=4.0, gap=12.0, align=AStart, fn() {
+    // (its rename right after its name, on the name's first line, not in the corner over the close button: the user,
+    // 2026-11-03, 那个改名的图标显然不能放那)
+    c.box(style=@sf.untitled_clear(), dir=Row, w=Fill(1.0), gap=8.0, align=AStart, fn() {
       // (two lines at most, the last ending in an ellipsis: not a third cut off below them)
-      c.box(w=Fill(1.0), fn() { c.text(title, size=t.t.title, weight=700, color=t.p.text, line=24.0, max_lines=2) |> ignore })
+      c.box(w=Cut, pt=4.0, fn() { c.text(title, size=t.t.title, weight=700, color=t.p.text, line=24.0, max_lines=2) |> ignore })
       |> ignore
       if open {
         let id = c.id("info/rename")
@@ -495,13 +498,17 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
           _ => ()
         }
       })
-      c.box(style=info_lists_gap, fn() {  }) |> ignore
     }
     // the public links it has (making one is the menu's: 分享图片), a card of its own (publish.mbt)
     match shown_publish(chat) {
-      Some(_) as p if items(p, "links").length() > 0 => publish_list(c, src, r, number(thread, "id"), p, close)
+      Some(_) as p if items(p, "links").length() > 0 => {
+        c.box(style=info_lists_gap, fn() {  }) |> ignore
+        publish_list(c, src, r, number(thread, "id"), p, close)
+      }
       _ => ()
     }
+    // (its last card at a dialog's foot, as far from it as from its sides)
+    c.box(style=@sf.panel_card_foot(), fn() {  }) |> ignore
   })
   |> ignore
 }
@@ -556,8 +563,11 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
   let station = stations.iter().find_first(fn(s) { s.address == r.station })
   let s = field(a, "session")
   let status = text(a, "status")
+  let entry = context_entry(c, src, r, key, s)
   c.box(w=Fill(1.0), fn() {
-    c.box(style=@sf.untitled_clear(), dir=Row, w=Fill(1.0), pt=4.0, gap=12.0, align=ACenter, fn() {
+    // (its head the panel's, on its words' line as chat_info_body's title: its mark the maker's alone, no tile in the
+    // panel's corner; what it did a card of the panel's under it, 16 in: the user, 2026-11-03, 面板里可以放卡片)
+    c.box(style=@sf.untitled_clear(), dir=Row, w=Fill(1.0), pt=4.0, pb=@sf.panel_card_in, gap=12.0, align=ACenter, fn() {
       model_mark_big(
         c,
         text(field(s, "maker"), "id"),
@@ -565,6 +575,7 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
         40.0,
         state_of_badge(text(a, "badge")),
         @sf.over(t.p.bg, @sf.alpha(t.p.card, 0.8)),
+        plain=true,
       )
       c.box(w=Fill(1.0), gap=1.0, fn() {
         c.text(text(s, "agentText"), size=t.t.title, weight=700, color=t.p.text, wrap=false) |> ignore
@@ -576,11 +587,14 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
       }
     })
     |> ignore
+    // (its words on the card's 24, its figures blocks at its foot 8 in, a row's corner)
+    c.box(style=info_list_style.then(@sf.panel_card_out()), radius=info_list_radius, fn() {
     agent_lines(c, card)
-    let entry = context_entry(c, src, r, key, s)
-    agent_tiles(c, card, 14.0, entry~)
     agent_notes(c, card, 10.0)
-    c.box(h=Px(12.0), fn() {  }) |> ignore
+    agent_tiles(c, card, 14.0, entry~)
+    })
+    |> ignore
+    c.box(style=info_card_under, fn() {  }) |> ignore
     let screens = match view_of_chat(src, r).0 {
       Some(v) => v.screens
       None => []
@@ -690,6 +704,8 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
         open_chat_jobs(src, r)
       }
     })
+    // (its last card at a dialog's foot, as far from it as from its sides)
+    c.box(style=@sf.panel_card_foot(), fn() {  }) |> ignore
   })
   |> ignore
 }
@@ -813,7 +829,7 @@ fn agent_lines(c : @ui.Ctx, card : Json?) -> Unit {
     return
   }
   let t = @sf.theme()
-  c.box(w=Fill(1.0), pt=12.0, gap=3.0, fn() {
+  c.box(w=Fill(1.0), pt=8.0, pb=8.0, padx=@sf.text_in, gap=3.0, fn() {
     for l in latest {
       c.text(
         text(Some(l), "text"),
@@ -846,10 +862,11 @@ fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double, entry? : ContextTile? = 
     c.box(
       id~,
       w=Fill(1.0),
-      radius=14.0,
+      // (blocks at the card's foot, the ladder's inset in: a row's corner, their words on the card's line)
+      radius=@sf.row_corner,
       bg=@sf.alpha(t.p.text, 0.05),
-      pl=12.0,
-      pr=12.0,
+      pl=@sf.text_in,
+      pr=@sf.text_in,
       pt=9.0,
       pb=8.0,
       // (AgentTiles: 「name figure」 to a screen reader)
@@ -913,7 +930,7 @@ fn agent_notes(c : @ui.Ctx, card : Json?, top : Double) -> Unit {
     return
   }
   let t = @sf.theme()
-  c.box(w=Fill(1.0), pt=top, gap=2.0, fn() {
+  c.box(w=Fill(1.0), pt=top, pb=8.0, padx=@sf.text_in, gap=2.0, fn() {
     for n in notes {
       c.text(
         text(Some(n), "text"),
@@ -1001,7 +1018,7 @@ fn job_row(c : @ui.Ctx, key : String, job : Json?) -> Bool {
 ///|
 /// A group's label (Controls.kt GroupLabel): 13, muted, 14 above it and 4 under.
 fn group_label(c : @ui.Ctx, label : String) -> Unit {
-  c.box(pt=14.0, pb=4.0, fn() {
+  c.box(style=@sf.panel_words_in(), pt=14.0, pb=4.0, fn() {
     c.text(label, size=@sf.theme().t.meta, color=@sf.theme().p.muted, wrap=false) |> ignore
   })
   |> ignore
@@ -1085,7 +1102,7 @@ fn jobs_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) -> Unit
   let rows : Array[() -> Unit] = []
   if jobs.length() == 0 {
     rows.push(fn() {
-      c.box(padx=2.0, pady=12.0, gap=4.0, fn() {
+      c.box(style=@sf.panel_words_in(), pady=12.0, gap=4.0, fn() {
         c.text(tr("android-misc.jobs.none"), size=t.t.ui, weight=600, color=t.p.text) |> ignore
         c.text(tr("android-misc.jobs.none.text"), size=t.t.meta, color=t.p.muted) |> ignore
       })
@@ -1101,9 +1118,15 @@ fn jobs_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) -> Unit
     "jobs-sheet/" + r.station + "/" + r.session,
     rows.length(),
     60.0,
-    fn(i) { c.box(style=@sf.panel_words_in(), w=Fill(1.0), fn() { (rows[i])() }) |> ignore },
+    // (each row in the list's column: what is words stands on the panel's words' line itself, its cards
+    // panel_card_in from the panel's sides: @sf.panel_card_out)
+    fn(i) { c.box(w=Fill(1.0), fn() { (rows[i])() }) |> ignore },
   )
   |> ignore
+  // (its last card at a dialog's foot, as far from it as from its sides)
+  if jobs.length() > 0 {
+    c.box(style=@sf.panel_card_foot(), fn() {  }) |> ignore
+  }
 }
 
 ///|
@@ -1481,9 +1504,10 @@ fn open_things(src : Source, r : ChatRef, thread : Double) -> Unit {
 let info_pulls_most : Int = 3
 
 ///|
-/// What is between the info's lists (its pull requests', its agents'): 10, as under its agents'.
+/// What is between the info's lists (its pull requests', its agents'): as far as they stand from its sides (the user,
+/// 2026-11-03: 这个间距又是什么意思).
 // kept across runs: a value (no field of it changes)
-let info_lists_gap : @ui.Style = @ui.css("h=S2_5")
+let info_lists_gap : @ui.Style = @ui.style(h=Fixed(@sf.panel_card_in))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1704,3 +1728,8 @@ let info_opener_words : @ui.TextStyle = @ui.text_style(size=Body, color=AccentTe
 /// The row of the chats its agent made, in the chat's sheet (chat_info_body): how many, its words a row's.
 // kept across runs: a value (no field of it changes)
 let info_opened_title : @ui.TextStyle = @ui.text_style(size=Body, color=Fg, wrap=false, w=Full)
+
+///|
+/// The room under a panel's last card: as far as its sides are in (panel_card_in).
+// kept across runs: a value (no field of it changes)
+let info_card_under : @ui.Style = @ui.style(h=Fixed(@sf.panel_card_in))

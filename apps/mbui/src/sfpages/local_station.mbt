@@ -308,12 +308,12 @@ let ls_card : @ui.Style = @sf.desk_card.then(@ui.css("gap=S2_5"))
 let ls_head : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
 
 ///|
-/// Its ⋯ (an icon button: 32, a block: in the card's top right corner on its words' line, 20 in, concentric with the
-/// card's there: a small block's corner of the ladder's, all four alike).
+/// Its ⋯ (an icon button: 32, a block: in the card's top right corner, out past its words to 16 in, concentric with
+/// the card's there: a small block's corner of the ladder's, all four alike).
 // kept across runs: a value (no field of it changes)
-let ls_more : @ui.Style = @ui.css("w=S8 h=S8 align=ACenter justify=JCenter hovered{bg=Hover}").then(
-  @ui.style(radius=@sf.small_radius),
-)
+let ls_more : @ui.Style = @ui.css("w=S8 h=S8 align=ACenter justify=JCenter hovered{bg=Hover}")
+  .then(@ui.style(radius=@sf.small_radius))
+  .then(@sf.card_top_end_out)
 
 ///|
 /// (cardTitle: its name and how it is on a line, 10 apart)

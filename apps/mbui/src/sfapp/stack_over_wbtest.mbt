@@ -153,7 +153,8 @@ fn over_tape(src : Source) -> (@ui.Tester, @view.Tree, Double) raise {
 /// Where the chat titled `title` is drawn across, its title in its bar (-1: not drawn; not where the page under it says
 /// it, as a link in a message, nor the sidebar's row of it).
 fn over_x(t : @ui.Tester, title : String) -> Double {
-  match t.locate(title).iter().filter(fn(p) { p.1 < @sf.wide_bar_h }).collect() {
+  // (in its bar: the tape's, as far down as its keys stand concentric in the panel's corner, tape_bar_over)
+  match t.locate(title).iter().filter(fn(p) { p.1 < @sf.wide_bar_h + @sf.tape_bar_over() }).collect() {
     [p, ..] => p.0
     [] => -1.0
   }

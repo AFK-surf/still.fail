@@ -314,8 +314,9 @@ test "a face pointed at tried in the chat above them: the chat held at its talle
     t.draw()
     assert_eq(t.find("Inter"), Some(moved))
   }
-  // along the faces (a narrower one tried, the gaps between rows): still held
-  let (x2, y2) = t.find("霞鹜文楷").unwrap()
+  // along the faces (a narrower one tried, the gaps between rows): still held (Inter's: the last rows, 霞鹜文楷's, below
+  // the window's foot once the chat is held taller)
+  let (x2, y2) = moved
   t.move(x2 + 4.0, y2 + 4.0)
   t.draw()
   t.draw()

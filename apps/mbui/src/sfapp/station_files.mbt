@@ -356,8 +356,10 @@ fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit 
       if c.clicked(id) {
         set_drops_as_files(src, key, !chat)
       }
-      c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=14.0, fn() {
-        c.box(dir=Row, w=Fill(1.0), padx=14.0, pady=10.0, gap=12.0, radius=14.0, bg=t.p.chip, align=ACenter, id~, fn() {
+      // (a card in the sheet: `panel_card_in` from its sides, concentric with its corners, its words a card's padding in
+      // from its edge: the user, 2026-11-03, 卡片里的字跟面板的字不需要对齐)
+      c.box(w=Fill(1.0), padx=@sf.panel_card_in, pb=14.0, fn() {
+        c.box(dir=Row, w=Fill(1.0), padx=@sf.card_pad, pady=10.0, gap=12.0, radius=@sf.card_corner, bg=t.p.chip, align=ACenter, id~, fn() {
           c.text(tr("web-main.file.chatAsFiles"), size=t.t.ui, weight=600, color=t.p.text, w=Fill(1.0)) |> ignore
           // the settings' switch (PageParts.kt Switch)
           @settings.switch(c, "ref/chat-files", chat)

@@ -198,7 +198,7 @@ pub fn seg_node(
                 let size = theme().t.ui * smaller()
                 // (its line so many times its size as drawn, at the system's size of words: an old view's words' as
                 // Ctx::text has them, where none is said (a negative line: view_line's))
-                { size, weight: if on() { 500 } else { 400 }, line: -@ui.tree_theme().text_line, wrap: false, tracking: @view.letters_own }
+                { size, weight: if on() { 500 } else { 400 }, line: -@ui.tree_theme().text_line, wrap: false, tracking: @view.letters_own, balance: false }
               }))
               .ink(By(fn() {
                 if on() || o.pointed() {
@@ -264,7 +264,7 @@ pub fn seg_node(
           .words(By(words))
           .words_look(By(fn() {
             let size = theme().t.ui
-            { size, weight: 500, line: @ui.tree_theme().text_line * size, wrap: false, tracking: @view.letters_own }
+            { size, weight: 500, line: @ui.tree_theme().text_line * size, wrap: false, tracking: @view.letters_own, balance: false }
           }))
           .ink(By(ink))
           |> ignore
@@ -569,7 +569,7 @@ pub fn seg_fill_node(
               let k = smaller()
               let c = @ui.current()
               let (size, line) = if k == 1.0 { (size, line) } else { (c.sp_of(c.sp(size) * k), c.sp_of(c.sp(line) * k)) }
-              { size, weight: 400, line, wrap: false, tracking: @view.letters_own }
+              { size, weight: 400, line, wrap: false, tracking: @view.letters_own, balance: false }
             }))
             .ink(By(fn() { if on() { theme().p.text } else { theme().p.muted } }))
             |> ignore

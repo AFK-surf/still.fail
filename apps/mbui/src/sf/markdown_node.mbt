@@ -564,7 +564,7 @@ fn md_words_node(
   }
   let look = fn() -> @view.WordsLook {
     let size = size()
-    { size, weight: if weight > 0 { weight } else { 400 }, line: md_line(md, size), wrap, tracking: @view.letters_own }
+    { size, weight: if weight > 0 { weight } else { 400 }, line: md_line(md, size), wrap, tracking: @view.letters_own, balance: false }
   }
   p.box(fn(w) {
     w.words_runs(By(runs)).words_look(By(look)).runs_look(By(table_runs_look)).ink(By(md.ink)) |> ignore
@@ -760,8 +760,8 @@ fn md_task_node(t : @view.View, done : () -> Bool, line : () -> Double) -> Unit 
 
 ///|
 /// A code block (code_block's) in `p`: on the code ground, row_corner round, cut to it; its language and its copy key
-/// (a capsule, concentric with the block's corner) on a row of their own over the code with a finger, laid over its
-/// top right corner with a mouse; the code in the code face, in the colours the core said (`colours`), 12 on 18 (on a
+/// (a capsule, concentric with the block's corner) on a row of their own over the code with either input (code_block's);
+/// the code in the code face, in the colours the core said (`colours`), 12 on 18 (on a
 /// desktop's width 12 on 1.6), scrolled across rather than wrapped. Pressed, the key copies the code and says so
 /// copied_ms.
 fn code_block_node(p : @view.View, code : () -> String, lang : () -> String, colours : () -> String?) -> Unit {
@@ -820,9 +820,7 @@ fn code_block_node(p : @view.View, code : () -> String, lang : () -> String, col
     })
     |> ignore
   }
-  if !over {
-    p.box(bar) |> ignore
-  }
+  p.box(bar) |> ignore
   // (its code in a box of its own that scrolls across: what is over it stays)
   p.box(fn(sc) {
     sc.scrolls(@view.Scroll::across(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(held) {
@@ -840,6 +838,7 @@ fn code_block_node(p : @view.View, code : () -> String, lang : () -> String, col
           line: if over { code_line_wide } else { 18.0 },
           wrap: false,
           tracking: @view.letters_own,
+          balance: false,
         }
         w.words_runs(By(runs), look~).ink(By(fn() { theme().p.text })) |> ignore
       })
@@ -848,14 +847,6 @@ fn code_block_node(p : @view.View, code : () -> String, lang : () -> String, col
     |> ignore
   })
   |> ignore
-  if over {
-    p.box(fn(o) {
-      // (over its top, as wide as the block: its keys at its end)
-      o.over(Is(true)).lines_up(Is(None)) |> ignore
-      o.box(bar) |> ignore
-    })
-    |> ignore
-  }
 }
 
 ///|
@@ -891,7 +882,7 @@ let md_task_check : Double = 11.0
 ///|
 /// Words of `size` on one line, in 400, on lines `line` high (0: the theme's line for that size, as old text's with none said).
 fn md_plain_look(size : Double, line : Double) -> @view.WordsLook {
-  { size, weight: 400, line: if line > 0.0 { line } else { @ui.tree_theme().text_line * size }, wrap: false, tracking: @view.letters_own }
+  { size, weight: 400, line: if line > 0.0 { line } else { @ui.tree_theme().text_line * size }, wrap: false, tracking: @view.letters_own, balance: false }
 }
 
 ///|

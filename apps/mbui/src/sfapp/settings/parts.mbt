@@ -48,9 +48,26 @@ pub let wide : Ref[Bool] = Ref(false)
 pub let wide_deep : Ref[Bool] = Ref(false)
 
 ///|
-/// What a page's blocks stand in from the pane's sides in the wide frame (their own 16 inside it).
+/// What a page's blocks stand in from the pane's sides in the wide frame (their own 16 inside it): in a panel of its
+/// own none, so its cards stand `panel_card_in` (their 16) from the panel's sides (the user, 2026-11-03: 面板里可以放
+/// 卡片), the column in its middle where the panel is wider than it.
 fn wide_side(c : @ui.Ctx) -> Double {
-  dmax(24.0, (c.width - 792.0) / 2.0)
+  if @sf.in_pane() {
+    dmax(0.0, (c.width - 792.0) / 2.0)
+  } else {
+    dmax(24.0, (c.width - 792.0) / 2.0)
+  }
+}
+
+///|
+/// How far in from a page's blocks its head's words stand: their cards' 16, in a panel of its own on the panel's words'
+/// line (panel_words).
+fn wide_head_in() -> Double {
+  if @sf.in_pane() {
+    @sf.panel_words
+  } else {
+    16.0
+  }
 }
 
 ///|
@@ -126,9 +143,11 @@ fn scroll_page(
     }
     return
   }
+  // (its rows built as the list lays them out, in the panel the page is: @sf.with_pane)
+  let pane = @sf.pane_round.val
   if wide.val {
     let side = wide_side(c)
-    c.list("settings/" + key, blocks.length() + 1, 80.0, fn(i) {
+    c.list("settings/" + key, blocks.length() + 1, 80.0, fn(i) { @sf.with_pane(pane, fn() {
       if i == blocks.length() {
         gap(c, 80.0)
       } else {
@@ -136,7 +155,7 @@ fn scroll_page(
         block(i, fn() { c.box(style=@sf.full_width, pl=side, pr=side, fn() { (blocks[i])() }) |> ignore })
         block_at.val = -1
       }
-    }, sized?)
+    }) }, sized?)
     |> ignore
     return
   }
@@ -144,10 +163,12 @@ fn scroll_page(
   // place's top, over the bottom bar too (Stations.kt BarRoom); there it starts under the app's top bar, scrolling
   // under it (PlacePage.kt: `padding(top = top)` inside what scrolls)
   let foot = nav_foot.val + (if at_root.val { bar_room.val } else { 0.0 })
+  // (in a panel of its own, its last card as far from the panel's foot as from its sides: its card's 10 under it and this)
+  let foot = if @sf.in_pane() { dmax(foot, @sf.panel_card_in - 10.0) } else { foot }
   let top = top_room()
   let head = if top > 0.0 { 1 } else { 0 }
   let n = head + blocks.length() + (if foot > 0.0 { 1 } else { 0 })
-  c.list("settings/" + key, n, 80.0, fn(i) {
+  c.list("settings/" + key, n, 80.0, fn(i) { @sf.with_pane(pane, fn() {
     if i < head {
       gap(c, top)
     } else if i - head == blocks.length() {
@@ -155,7 +176,7 @@ fn scroll_page(
     } else {
       block(i - head, blocks[i - head])
     }
-  }, sized?)
+  }) }, sized?)
   |> ignore
   fixture_scroll(c, "settings/" + key)
 }
@@ -179,7 +200,7 @@ pub fn wide_head(
   let t = @sf.theme()
   head_block.val = block_at.val
   // (inside a block of the page, which stands in already)
-  let side = if inside { 16.0 } else { wide_side(c) + 16.0 }
+  let side = if inside { wide_head_in() } else { wide_side(c) + wide_head_in() }
   c.box(style=if deep { wide_head_deep } else { wide_head_top }, pl=side, pr=side, fn() {
     if deep {
       let id = c.id("settings-back")
@@ -575,6 +596,25 @@ fn large_title(
 let large_title_box : @ui.Style = @ui.css("w=Full px=S4 pb=S1_5")
 
 ///|
+/// A wide page's own words over its cards (a section's heading, its large title) in a panel of its own: on the panel's
+/// words' line (panel_words), its cards 16 in; their 16 elsewhere.
+fn wide_words_in_pane() -> @ui.Style {
+  if @sf.in_pane() {
+    wide_words_pane
+  } else {
+    no_wide_words
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_words_pane : @ui.Style = @ui.style(px=@sf.room_of(@sf.panel_words))
+
+///|
+// kept across runs: a value (no field of it changes)
+let no_wide_words : @ui.Style = @ui.css("")
+
+///|
 /// A section's heading (Parts.kt SectionHeader): its title, what it holds at its end; `start` its room at its start
 /// (20; the settings pages' say 24, S6, as their SectionHeaders do).
 fn section_header(
@@ -593,12 +633,14 @@ fn section_header(
     // (with what it holds said here, 10 under that, as the web's head is over its section)
     let said = trailing != ""
     c.box(
-      style=match (first, said) {
-        (true, true) => wide_section_first_said
-        (true, false) => wide_section_first
-        (false, true) => wide_section_said
-        (false, false) => wide_section_box
-      },
+      style=(
+        match (first, said) {
+          (true, true) => wide_section_first_said
+          (true, false) => wide_section_first
+          (false, true) => wide_section_said
+          (false, false) => wide_section_box
+        }
+      ).then(wide_words_in_pane()),
       fn() {
         c.box(style=wide_section_line, fn() {
           match mark {
@@ -769,7 +811,7 @@ fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "", foot? : Foot = Words
     UiCapsule => card_ui_foot_ground
     Block => card_block_ground
   }
-  c.box(style=if wide.val { wide_card_room } else { card_room }, fn() {
+  c.box(style=if wide.val { wide_card_room } else { card_room_now() }, fn() {
     c.box(style=ground, id~, fn() {
       body()
       // Parts.kt Card: clickable over its clip (Smooth: its corner)
@@ -796,7 +838,7 @@ let wide_card_room : @ui.Style = @ui.css("w=Full px=S4 pb=S2_5")
 ///|
 /// A card: 20 in (CARD_PAD), round by the ladder's card corner; rippled where it is tapped (an id).
 // kept across runs: a value (no field of it changes)
-let card_ground : @ui.Style = @ui.css("w=Full p=S5 radius=Xl3 bg=Card clip")
+let card_ground : @ui.Style = @ui.css("w=Full radius=Xl3 bg=Card clip").then(@ui.style(p=@sf.room_of(@sf.card_pad)))
 
 ///|
 ///|
@@ -844,11 +886,13 @@ let card_ui_foot_ground : @ui.Style = card_ground.then(@sf.foot_pad(@sf.button_h
 /// a list card wide too; `boxed`, said where a page asked for the card in the wide frame before it was always one).
 fn list_card(c : @ui.Ctx, body : () -> Unit, boxed? : Bool = false) -> Unit {
   ignore(boxed)
-  c.box(style=if wide.val { wide_card_room } else { card_room }, fn() {
-    c.box(style=list_ground, fn() {
+  c.box(style=if wide.val { wide_card_room } else { card_room_now() }, fn() {
+    c.box(style=list_ground_now(), fn() {
       let was = on_card.val
       on_card.val = true
-      body()
+      // (its rows the ladder's inset from its top and foot, grounds of their own: a pressed one's reaching past it
+      // none, @sf.link_reach)
+      @sf.rows_held(body)
       on_card.val = was
     })
     |> ignore
@@ -859,10 +903,10 @@ fn list_card(c : @ui.Ctx, body : () -> Unit, boxed? : Bool = false) -> Unit {
 ///|
 /// The rows' card itself, where its page puts it (Parts.kt RowsCard): its rows LIST_PAD in, knowing they are on one.
 fn rows_card(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=list_ground, fn() {
+  c.box(style=list_ground_now(), fn() {
     let was = on_card.val
     on_card.val = true
-    body()
+    @sf.rows_held(body)
     on_card.val = was
   })
   |> ignore
@@ -877,6 +921,35 @@ let on_card : Ref[Bool] = Ref(false)
 /// A list card: its rows list_pad in (as a menu's in its panel), round by the ladder's row corner, concentric with it.
 // kept across runs: a value (no field of it changes)
 let list_ground : @ui.Style = @ui.style(w=Full, p=@sf.list_room, radius=@sf.list_card_radius, bg=Card, clip=true)
+
+///|
+/// A page's cards in a panel of its own (the tape's, laid out Medium: @sf.in_pane): cards of the panel's,
+/// `panel_card_in` from its sides, a card's corner, their rows the ladder's inset in (the user, 2026-11-03: 面板里可以放
+/// 卡片; 第二套感觉还行); on a phone's screen, at its edges, as they were.
+fn card_room_now() -> @ui.Style {
+  if @sf.in_pane() {
+    card_room_in_pane
+  } else {
+    card_room
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let card_room_in_pane : @ui.Style = @ui.style(w=Full, px=@sf.room_of(@sf.panel_card_in), pb=S2_5)
+
+///|
+fn list_ground_now() -> @ui.Style {
+  if @sf.in_pane() {
+    list_ground_in_pane
+  } else {
+    list_ground
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let list_ground_in_pane : @ui.Style = @ui.style(w=Full, p=@sf.room_of(@sf.corner_inset), radius=@sf.card_radius, bg=Card, clip=true)
 
 ///|
 /// A row of a list card (Parts.kt ListRow): its ground concentric with the card's (LIST_ROW_CORNER), what it holds
@@ -911,7 +984,7 @@ fn list_row(c : @ui.Ctx, body : () -> Unit, key? : String = "", piece? : (Bool, 
 fn card_piece(c : @ui.Ctx, first : Bool, last : Bool, body : () -> Unit) -> Unit {
   c.box(style=match (last, wide.val) {
     (true, true) => wide_card_room
-    (true, false) => card_room
+    (true, false) => card_room_now()
     (false, true) => wide_card_piece_room
     (false, false) => card_piece_room
   }, fn() {
@@ -1028,7 +1101,7 @@ let wide_row_sub : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wra
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_row_sub_lines : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, w=Full)
+let wide_row_sub_lines : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, w=Full, balance=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1112,9 +1185,10 @@ fn row_lines(
 let row_head_line : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
 
 ///|
-/// The line under a row's title: one, or in lines.
+/// The line under a row's title: one, or in lines, as even as they may be (no letter or two left on the last beside
+/// a switch: balance).
 // kept across runs: a value (no field of it changes)
-let row_sub_lines : @ui.TextStyle = @sf.secondary.then(@sf.full_words)
+let row_sub_lines : @ui.TextStyle = @sf.secondary.then(@sf.full_words).then(@ui.text_style(balance=true))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1776,3 +1850,4 @@ fn head_pill(c : @ui.Ctx, key : String, label : String) -> Bool {
 /// between them, none under the last (its panel's own over its foot).
 // kept across runs: a value (no field of it changes)
 let sheet_block : @ui.Style = @ui.css("w=Full pt=S2_5")
+

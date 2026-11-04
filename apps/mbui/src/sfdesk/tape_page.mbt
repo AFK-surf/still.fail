@@ -311,6 +311,8 @@ fn tape_made(
                 let core = settings_core(src, w)
                 let here = fn() { @settings.here_of(core, w.id, w.name) }
                 @settings.frame(core, @signals.untracked(here))
+                // (made in a panel of its own: lent to all it makes, however late, its cards the panel's: @sf.pane_lent)
+                p.lends(@sf.pane_lent, true) |> ignore
                 f(p, core, here, stint, told, acts)
               }
               None => ()

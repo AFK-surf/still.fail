@@ -48,8 +48,9 @@ pub(all) struct ChatList {
   face_ring : @ui.Style
   /// the room over its first row and under its last, past what the frame gives (navScroll's padding; none on a touch
   /// device, across the whole screen its rows' grounds reaching its edges); under its last in a side column
-  /// (list_foot_in): navScroll's with keyboard and mouse, touch's as far as its rows stand in from the column's sides
-  /// (band_in), its last row's ground as clear of its foot, in a panel's foot corners as in its sides
+  /// (list_foot_in): navScroll's with keyboard and mouse, touch's a panel's corner (its rows 16
+  /// in from its sides, band_in, round by a row's 18, not a card's 26: its last row's ground clear of the arc of a
+  /// panel's foot corners, the corner rule)
   top_in : Double
   foot_in : Double
   side_foot_in : Double
@@ -143,8 +144,8 @@ pub let mouse_chat_list : ChatList = {
   band_h: 32.0,
   band_words: @ui.text_style(size=Ui, color=Fg, leading=L6, wrap=false, w=Full),
   side_list: @ui.css("w=Full h=Full px=S2"),
-  side_row: @ui.css("row w=Full min_h=S8 px=S2_5 py=S1_5 gap=S2").then(@ui.style(radius=side_row_radius)),
-  side_hint: @ui.css("row w=Full px=S2_5 py=S1_5 gap=S2 align=ACenter"),
+  side_row: @ui.css("row w=Full min_h=S8 py=S1_5 gap=S2").then(@ui.style(px=room(mouse_band_pad), radius=side_row_radius)),
+  side_hint: @ui.css("row w=Full py=S1_5 gap=S2 align=ACenter").then(@ui.style(px=room(mouse_band_pad))),
   side_drop: @ui.css("w=Full").then(@ui.style(radius=side_row_radius)),
   heading: @ui.css("w=Full pt=S3_5 pb=S1"),
   heading_in: 8.0,
@@ -191,7 +192,7 @@ pub let touch_chat_list : ChatList = {
   face_ring: @ui.style(w=touch_face_ring, h=touch_face_ring, radius=Full, border=B1, border_color=Fg),
   top_in: 0.0,
   foot_in: 0.0,
-  side_foot_in: touch_band_in,
+  side_foot_in: pane_corner,
   band_in: touch_band_in,
   band_pad: touch_band_pad,
   band_icon: 17.0,
@@ -214,17 +215,18 @@ pub let touch_chat_list : ChatList = {
 }
 
 ///|
-/// What stands over a sidebar's list: how far in its ground is and its words from it (band_in, band_pad).
+/// What stands over a sidebar's list: how far in its ground is and its words from it (band_in, band_pad: a row's
+/// words the ladder's inset in, what stands on them round by its small step, 18 less 8).
 let mouse_band_in : Double = 8.0
 
 ///|
-let mouse_band_pad : Double = 10.0
+let mouse_band_pad : Double = corner_inset
 
 ///|
 let touch_band_in : Double = 16.0
 
 ///|
-let touch_band_pad : Double = 12.0
+let touch_band_pad : Double = corner_inset
 
 ///|
 /// Where a list stands: in a side column beside a page (the wide frame's sidebar, on the tape or keyboard and mouse's) or a

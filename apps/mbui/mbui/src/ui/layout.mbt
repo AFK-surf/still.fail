@@ -23,27 +23,99 @@ let cut_kept_ems : Double = 4.0
 /// after frame while the text stays (Ctx::flex_tree forgets it when not).
 fn Node::text_layout(self : Node, max_w : Double) -> TextLayout {
   match self.full {
+    // (balanced: laid out narrower than the width it had, for that width alone)
     Some(tl) if !self.wrap ||
-      (tl.w <= max_w + 0.01 && max_w <= self.full_max) => return tl
+      (if self.balance {
+        (max_w - self.full_max).abs() <= 0.01
+      } else {
+        tl.w <= max_w + 0.01 && max_w <= self.full_max
+      }) => return tl
     _ => ()
   }
-  let tl = layout_text(
-    self.text,
-    self.font_size,
-    self.weight,
-    max_w,
-    self.wrap,
-    line=self.line_h,
-    trim=self.line_trim,
-    spacing=self.spacing,
-    style=self.words_style(),
-  )
+  let laid = fn(w : Double) {
+    layout_text(
+      self.text,
+      self.font_size,
+      self.weight,
+      w,
+      self.wrap,
+      line=self.line_h,
+      trim=self.line_trim,
+      spacing=self.spacing,
+      style=self.words_style(),
+    )
+  }
+  let tl = laid(max_w)
   self.full_cut = self.wrap && self.max_lines > 0 && tl.line_start.length() > self.max_lines
-  let tl = if self.full_cut { cut_to_lines(self, tl, max_w) } else { tl }
+  let tl = if self.full_cut {
+    cut_to_lines(self, tl, max_w)
+  } else if self.balance && self.wrap {
+    balanced(tl, laid)
+  } else {
+    tl
+  }
   self.full = Some(tl)
   self.full_max = max_w
   tl
 }
+
+///|
+/// Words `tl` laid out greedily (`laid`: them in a width) laid out again in the narrowest width found that keeps as many
+/// lines (CSS's text-wrap: balance): halving the range between a low bound (the widest line now over the number of
+/// lines, no wider than any width that many lines need) and the widest line now, to within half a pixel, `balance_steps`
+/// at most. Their lines come out more even, a short last one drawn in toward the others; a word longer than a line or a
+/// line break said in the words may still leave one short. On one line, as they are.
+fn balanced(tl : TextLayout, laid : (Double) -> TextLayout) -> TextLayout {
+  let lines = tl.line_start.length()
+  if lines < 2 {
+    return tl
+  }
+  let mut lo = tl.w / lines.to_double()
+  let mut hi = tl.w
+  let mut best = tl
+  for _ in 0..<balance_steps {
+    let mid = (lo + hi) / 2.0
+    let t = laid(mid)
+    if t.line_start.length() == lines {
+      hi = mid
+      best = t
+    } else {
+      lo = mid
+    }
+    if hi - lo < 0.5 {
+      break
+    }
+  }
+  best
+}
+
+///|
+/// Words laid out in `w` as a node's are, the old tree's (Node::text_layout) and the window's tree's (measured,
+/// drawn, their bones): wrapped where `wrap`, broken by balanced where `balance` says, else as layout_text breaks them.
+fn layout_words(
+  text : String,
+  size : Double,
+  weight : Int,
+  w : Double,
+  wrap : Bool,
+  balance~ : Bool,
+  line~ : Double,
+  trim? : Bool = false,
+  spacing~ : Double,
+  style~ : Int,
+) -> TextLayout {
+  let laid = fn(w : Double) { layout_text(text, size, weight, w, wrap, line~, trim~, spacing~, style~) }
+  let tl = laid(w)
+  if balance && wrap {
+    balanced(tl, laid)
+  } else {
+    tl
+  }
+}
+
+///|
+/// How many times balanced lays words out at most: halving the width's range each time, to within half a pixel.
+let balance_steps : Int = 12
 
 ///|
 /// The style bits a text's words are shaped in: its digits all one width where it says so (Ctx::text `tabular`).
@@ -702,6 +774,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         n.lk_wrap != n.wrap ||
         n.lk_spacing != n.spacing ||
         n.lk_tabular != n.tabular ||
+        n.lk_balance != n.balance ||
         n.lk_max_lines != n.max_lines ||
         n.lk_shaped != words_shaped_in.val {
         n.lk_text = n.text
@@ -713,6 +786,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         n.lk_wrap = n.wrap
         n.lk_spacing = n.spacing
         n.lk_tabular = n.tabular
+        n.lk_balance = n.balance
         n.lk_max_lines = n.max_lines
         n.lk_shaped = words_shaped_in.val
         n.full = None

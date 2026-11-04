@@ -58,7 +58,7 @@ fn button_pair(
         o.box(fn(b) {
           b.row(Is(true)).height(Is(Some(36.0))).padding(Is((16.0, 0.0, 16.0, 0.0))).ground(Is(0x3366CCFFL)).radius(Is(18.0)).lines_up(Is(Some(Middle))) |> ignore
           let words_at = b.box(fn(k) {
-            k.words(By(fn() { words.get() }), ink=0xFFFFFFFFL, look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own }) |> ignore
+            k.words(By(fn() { words.get() }), ink=0xFFFFFFFFL, look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore
           })
           let g = moves_together(b, fn() { words.get() })
           g.add(b, reshapes=true)
@@ -280,7 +280,7 @@ test "a button's words let go of while it goes: from that moment no more of it, 
       let g = moves_together(b, fn() { words.get() })
       g.add(b, reshapes=true)
       b.show(fn() { shown.get() }, fn(k) {
-        k.words(By(fn() { words.get() }), look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own }) |> ignore
+        k.words(By(fn() { words.get() }), look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore
         g.add(k)
       })
       group.val = Some(g)
@@ -340,7 +340,7 @@ fn nested_pair(room : @signals.Signal[Double], node : Bool, box_first? : Bool = 
           row.box(fn(sp) { sp.width(By(fn() { Some(room.get()) })).height(Is(Some(4.0))) |> ignore }) |> ignore
           let inner = row.box(fn(b) {
             b.pad(Is(2.7)).ground(Is(0x3366CCFFL)) |> ignore
-            b.box(fn(k) { k.words(Is("Hi"), ink=0xFFFFFFFFL, look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own }) |> ignore }) |> ignore
+            b.box(fn(k) { k.words(Is("Hi"), ink=0xFFFFFFFFL, look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore }) |> ignore
           })
           row.box(fn(d) { d.width(Is(Some(10.5))).height(Is(Some(10.5))).ground(Is(0xCC3333FFL)) |> ignore }) |> ignore
           let g = moves_together(row, fn() { room.get() })
@@ -533,7 +533,7 @@ fn two_buttons(words : @signals.Signal[String], second_first : Bool) -> @ui.Test
           b.row(Is(true)).height(Is(Some(36.0))).padding(Is((16.0, 0.0, 16.0, 0.0))).ground(Is(ground)).radius(Is(18.0)).lines_up(Is(Some(Middle))) |> ignore
         })
         let k = b.box(fn(k) {
-          k.words(By(fn() { words.get() }), ink=0xFFFFFFFFL, look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own }) |> ignore
+          k.words(By(fn() { words.get() }), ink=0xFFFFFFFFL, look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore
         })
         (b, k)
       }
@@ -604,7 +604,7 @@ fn room_and_button(open : @signals.Signal[Bool], words : @signals.Signal[String]
       o.width(Is(Some(400.0))).lines_up(Is(Some(Middle))) |> ignore
       let room = fn() {
         reveal_node(o, fn() { open.get() }, fn(h) {
-          h.width(Is(Some(300.0))).words(Is("Waiting for the browser to finish"), look={ size: 13.0, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own }) |> ignore
+          h.width(Is(Some(300.0))).words(Is("Waiting for the browser to finish"), look={ size: 13.0, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false }) |> ignore
         })
         |> ignore
       }
@@ -613,7 +613,7 @@ fn room_and_button(open : @signals.Signal[Bool], words : @signals.Signal[String]
           b.row(Is(true)).height(Is(Some(36.0))).padding(Is((16.0, 0.0, 16.0, 0.0))).ground(Is(0x3366CCFFL)).radius(Is(18.0)).lines_up(Is(Some(Middle))) |> ignore
         })
         let k = b.box(fn(k) {
-          k.words(By(fn() { words.get() }), ink=0xFFFFFFFFL, look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own }) |> ignore
+          k.words(By(fn() { words.get() }), ink=0xFFFFFFFFL, look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore
         })
         let g = moves_together(b, fn() { words.get() })
         g.add(b, reshapes=true)
@@ -703,7 +703,7 @@ test "a button that goes for its words given another colour, then its words chan
   @ui.set_view_app(fn(root) {
     root.box(fn(b) {
       b.row(Is(true)).height(Is(Some(36.0))).ground(By(fn() { ground.get() })) |> ignore
-      let k = b.box(fn(k) { k.words(By(fn() { words.get() }), look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own }) |> ignore })
+      let k = b.box(fn(k) { k.words(By(fn() { words.get() }), look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore })
       let g = moves_together(b, fn() { words.get() })
       g.add(b, reshapes=true)
       g.add(k)

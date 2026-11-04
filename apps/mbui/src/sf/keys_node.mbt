@@ -33,8 +33,9 @@ let text_toggle_hot : @ui.TextStyle = text_toggle_words.then(@ui.text_style(colo
 ///|
 /// The rows of keys of a group (Shortcuts.css.ts list), made by `rows` in it, 2 apart: wide, on the page as they are;
 /// narrow, on a page's card, reaching into its room over the first and under the last by as much as a row's keys stand
-/// in from its top and foot (card_rows_reach), so the first's and the last's keys stand in the card's corners as far
-/// from both its edges, concentric there.
+/// in from its top and foot, less what holds the first's and the last's keys out of the card's corners: on the card's
+/// words' line at its end (card_pad in), as far down as its corner is round (the user's 第 3 版, 2026-11-03: a control
+/// in a card's corner stays out of it, its row's spacing as it was).
 pub fn keys_rows_node(parent : @view.View, rows : (@view.View) -> Unit) -> Unit {
   let list = fn(p : @view.View, reach : Double) {
     p.box(fn(l) {
@@ -45,7 +46,7 @@ pub fn keys_rows_node(parent : @view.View, rows : (@view.View) -> Unit) -> Unit 
   }
   match part_of(parent).look {
     Wide => list(parent, 0.0)
-    Narrow => page_card_node(parent, fn(k) { list(k, (keys_record_h - keys_row_h) / 2.0) })
+    Narrow => page_card_node(parent, fn(k) { list(k, (keys_record_h - keys_row_h) / 2.0 + (card_corner - card_pad)) })
   }
 }
 

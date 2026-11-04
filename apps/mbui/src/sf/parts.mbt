@@ -800,18 +800,31 @@ pub fn menu_item(
   // top or foot where it is the first (`at_top`) or the last (`at_foot`) in it: menu_row_reach)
   let reach = menu_row_reach(t.rows.pick)
   let (over, under_by) = ends_reach(reach, at_top, at_foot)
+  // (in a large panel's column (a sheet's, a dialog's) as its rows are: its ground out across the room the panel
+  // leaves (rows_out, `panel_card_in` from its sides), its words on the panel's line, a card's corner there; a menu's
+  // row in a small panel, as above)
+  // (at a dialog's foot (dialog_foot_rows) as its rows there: a capsule out to where it is concentric with its foot
+  // corners, its words on the dialog's line: row_line)
+  let (out, words_at, corner) = if foot_rows_now.val {
+    (foot_rows_out(), foot_rows_out(), None)
+  } else if !in_small_panel() && rows_out.val > 0.0 {
+    (rows_out.val, rows_out.val, Some(card_corner))
+  } else {
+    (reach, text_in + reach, Some(small_panel_inner(r_menu)))
+  }
   c.box(
     dir=Row,
     min_h=t.rows.pick,
-    mx=-reach,
+    mx=-out,
     mt=over,
     mb=under_by,
-    padx=text_in + reach,
+    padx=words_at,
     pady=menu_row_over,
     gap=if panel { panel_row_gap } else { menu_row_gap },
     align=ACenter,
     bg=if c.lit(id) { t.p.hover } else { 0L },
-    radius=small_panel_inner(r_menu),
+    style?=if corner is None { Some(menu_row_capsule) } else { None },
+    radius?=corner,
     id~,
     fn() {
       let paneled = panel && (icon != "" || mark is Some(_))
@@ -1008,6 +1021,11 @@ let sheet_grab_inner : @ui.Style = @ui.css("w=Full py=S1 align=ACenter")
 pub fn sheet_laid(body : () -> Unit) -> Unit {
   with_look(Narrow, body)
 }
+
+///|
+/// How tall a sheet's grabber stands at its top, all round it (sheet_grab: 8 and 4 over its 5, 4 and 4 under): where
+/// what the sheet holds begins.
+pub let sheet_grab_h : Double = 8.0 + 4.0 + 5.0 + 4.0 + 4.0
 
 ///|
 /// The grabber at a sheet's top (Sheet.kt SheetGrab): 38 × 5 in the line's colour, 12 above it and 8 under.
@@ -1953,7 +1971,7 @@ fn wide_section(
   title_after? : () -> Unit,
 ) -> Unit {
   c.box(style=section_box, fn() {
-    c.box(style=section_head, fn() {
+    c.box(style=section_head.then(section_head_in_pane()), fn() {
       c.box(style=section_words, fn() {
         // what the title holds after its words (its title a node: a count, a mark), 8 after them in a line
         match title_after {
@@ -2010,6 +2028,25 @@ let section_box : @ui.Style = @ui.css("w=Full mb=S7")
 let section_head : @ui.Style = @ui.css("row w=Full justify=JBetween align=ACenter gap=S3").then(
   @ui.style(mb=room(title_card_wide)),
 )
+
+///|
+/// A section's head in a panel of its own (the tape's): its words on the panel's words' line, its cards' 16 and the
+/// rest in (the user, 2026-11-03: 面板自己的字在 24); none elsewhere.
+fn section_head_in_pane() -> @ui.Style {
+  if in_pane() {
+    section_head_pane
+  } else {
+    no_section_head
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let section_head_pane : @ui.Style = @ui.style(px=room(panel_words - panel_card_in))
+
+///|
+// kept across runs: a value (no field of it changes)
+let no_section_head : @ui.Style = @ui.css("")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2545,7 +2582,8 @@ pub fn dialog_rows(row_h : Double) -> (@ui.Style, @ui.Style) {
 let no_style : @ui.Style = @ui.css("")
 
 ///|
-/// With no buttons, its body down to its foot, 24 under what it holds.
+/// With no buttons, its body down to its foot, 24 under what it holds (a card there comes down to `corner_inset` over
+/// it: panel_card_foot).
 // kept across runs: a value (no field of it changes)
 let dialog_body_end : @ui.Style = dialog_body.then(@ui.css("pb=S6"))
 
@@ -2969,12 +3007,17 @@ pub fn choices(
       let at = options.search_by(fn(o) { o.1 == s.label })
       let v = at.map(fn(i) { options[i].0 }).unwrap_or("")
       let note = at.map(fn(i) { options[i].2 }).unwrap_or("")
-      c.box(style=if s.on { choice_card_on } else if s.hovered { choice_card_hot } else { choice_card }, disabled=s.disabled, fn() {
+      // (in a panel's body: a card of the panel's, `panel_card_in` from its sides, concentric with it, its words on
+      // the panel's line: the user, 2026-11-03, 面板里可以放卡片)
+      let in_panel = in_panel() && !in_small_panel()
+      let card_look = if s.on { choice_card_on } else if s.hovered { choice_card_hot } else { choice_card }
+      c.box(style=if in_panel { card_look.then(choice_in_panel()) } else { card_look }, disabled=s.disabled, fn() {
           // (its icon by its title's line's middle, not the whole's: lead_by_first_line)
           let by_title = fn(f : () -> Unit) {
             c.box(style=@ui.style(min_h=Fixed(c.sp(choice_title_line(c))), justify=JCenter), f) |> ignore
           }
-          c.box(style=if note == "" && note_of is None { choice_hit } else { choice_hit_top }, fn() {
+          let hit = if note == "" && note_of is None { choice_hit } else { choice_hit_top }
+          c.box(style=if in_panel { hit.then(choice_hit_in_panel) } else { hit }, fn() {
             match icon {
               Some(f) => by_title(fn() { f(v) })
               None => ()
@@ -3032,6 +3075,17 @@ pub fn choices(
 let choice_card : @ui.Style = @ui.css("w=Full bg=Surface border=B1 border_color=Border disabled{opacity=O55}").then(
   @ui.style(radius=row_radius),
 )
+
+///|
+/// A choice in a panel's body: out to `panel_card_in` from its sides, a card's corner.
+fn choice_in_panel() -> @ui.Style {
+  panel_card_out().then(@ui.style(radius=rounded(card_corner)))
+}
+
+///|
+/// Its words a card's padding in from its edge, as a card's are (not on the panel's line: 卡片里的字跟面板的字不需要对齐).
+// kept across runs: a value (no field of it changes)
+let choice_hit_in_panel : @ui.Style = @ui.style(px=room(card_pad), py=S4)
 
 ///|
 /// Pointed at: the field's hover grey round it; chosen: edged twice in the ink (its line and a ring of 1).
@@ -5024,3 +5078,8 @@ let update_dot_rim : Double = 2.0
 ///|
 // kept across runs: a value (no field of it changes)
 let update_dot_bad : @ui.Style = @ui.css("w=Full h=Full radius=Full bg=Danger")
+
+///|
+/// A menu's row at a dialog's foot: a capsule (row_line's there).
+// kept across runs: a value (no field of it changes)
+let menu_row_capsule : @ui.Style = @ui.css("radius=Full")

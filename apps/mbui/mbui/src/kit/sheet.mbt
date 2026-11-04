@@ -227,8 +227,10 @@ pub fn sheet(
   let bx = s.below.value_at(c)
   let scrim_t = s.fade.get()
   // (logic on a motion's end, to be told at once instead: shown is false only once it has sunk away and its scrim
-  // faded, the sheet drawn until then from what it is)
-  if !now && bx >= dmax(hx + raised, sinks) - 0.5 && !s.fade.moving() {
+  // faded, the sheet drawn until then from what it is; sunk as far as it was told to go, not less: one closing with it
+  // gone first, the furthest they went no more what it sinks to, it still goes on to where it set out for, not ending
+  // where the others' going leaves it)
+  if !now && bx >= dmax(dmax(hx + raised, sinks), s.below.target()) - 0.5 && !s.fade.moving() {
     // sunk away
     s.shown = false
     s.fade.snap(0.0)

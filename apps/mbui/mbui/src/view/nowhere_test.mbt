@@ -23,7 +23,7 @@ test "laid nowhere: a box holding a coloured box, words and a button: none of it
           |> ignore
           v.box(fn(w) {
             ids["words"] = w.id()
-            w.words(Is("Join"), look={ size: 15.0, weight: 400, line: 20.0, wrap: false, tracking: @view.letters_own }) |> ignore
+            w.words(Is("Join"), look={ size: 15.0, weight: 400, line: 20.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore
           })
           |> ignore
           v.box(fn(b) {

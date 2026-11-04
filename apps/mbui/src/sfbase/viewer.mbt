@@ -2610,6 +2610,9 @@ pub fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : In
     // (the chat's still where its picture will be, until its first frame shows)
     still~,
     flying~,
+    // (closed by its fade: its controls away at once, the page showing through as it goes; flown back into its
+    // thumbnail they go with it as it shrinks, its ground whole till they are gone: bars_share)
+    going=v.closing && !v.flies,
   )
 }
 

@@ -376,7 +376,9 @@ fn Patch::lit_by(self : Patch, o : Patch) -> Patch {
 /// What words look like, every property optional. `wrap=false`: one line, cut with an ellipsis; `max_lines`: wrapped
 /// words cut after that many lines, the last ending in an ellipsis; `tracking`: letter spacing; `leading`: the line's
 /// height in place of the size's own; `tabular`: digits all one width, for a number that changes where it stands (a
-/// percentage, a time running: CSS's font-variant-numeric tabular-nums).
+/// percentage, a time running: CSS's font-variant-numeric tabular-nums). `balance`: wrapped words broken where their
+/// lines come out more even on as many lines as they would take (CSS's text-wrap: balance): a note's, its short last
+/// line drawn in toward the others.
 pub(all) struct TextPatch {
   size : TextSize?
   weight : Weight?
@@ -388,6 +390,7 @@ pub(all) struct TextPatch {
   max_lines : Int?
   leading : Leading?
   tabular : Bool?
+  balance : Bool?
 }
 
 ///|
@@ -410,8 +413,9 @@ pub fn text_patch(
   max_lines? : Int,
   leading? : Leading,
   tabular? : Bool,
+  balance? : Bool,
 ) -> TextPatch {
-  { size, weight, color, w, center, wrap, tracking, max_lines, leading, tabular }
+  { size, weight, color, w, center, wrap, tracking, max_lines, leading, tabular, balance }
 }
 
 ///|
@@ -426,10 +430,11 @@ pub fn text_style(
   max_lines? : Int,
   leading? : Leading,
   tabular? : Bool,
+  balance? : Bool,
   narrow? : TextPatch,
   dark? : TextPatch,
 ) -> TextStyle {
-  { base: { size, weight, color, w, center, wrap, tracking, max_lines, leading, tabular }, narrow, dark }
+  { base: { size, weight, color, w, center, wrap, tracking, max_lines, leading, tabular, balance }, narrow, dark }
 }
 
 ///|
@@ -445,6 +450,7 @@ pub fn TextPatch::then(self : TextPatch, o : TextPatch) -> TextPatch {
     max_lines: or_else(o.max_lines, self.max_lines),
     leading: or_else(o.leading, self.leading),
     tabular: or_else(o.tabular, self.tabular),
+    balance: or_else(o.balance, self.balance),
   }
 }
 

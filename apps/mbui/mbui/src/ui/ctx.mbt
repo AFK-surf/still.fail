@@ -1883,6 +1883,8 @@ pub fn Ctx::spacer(self : Ctx) -> Unit {
 /// the theme; what is said here besides wins over the style's same property (a size said here keeps the style's line).
 /// `tracking`: letter spacing in pixels; `max_lines`: wrapped words cut after that many lines, ending in an ellipsis;
 /// `tabular`: digits all one width, a number keeping its width as it changes (the theme's `tabular` where unsaid).
+/// `balance`: wrapped words broken where their lines come out even, on as many lines as they would take (CSS's
+/// text-wrap: balance).
 /// `trim`: a font taller than the line not padded beyond its own reach where a host sets lines on whole pixels (as
 /// Compose sets words in a TextStyle of their own; else as a theme's words: set_line).
 /// `keep`: words cut short (`w=Cut`) in a row that may leave a part of it out (Ctx::box `drop`) kept whole till all
@@ -1908,6 +1910,7 @@ pub fn Ctx::text(
   tracking? : Double,
   max_lines? : Int,
   tabular? : Bool,
+  balance? : Bool,
   keep? : Bool = false,
   breaks? : Bool = false,
   shorter? : Array[String] = no_words,
@@ -1978,6 +1981,10 @@ pub fn Ctx::text(
   n.tabular = match tabular {
     Some(b) => b
     None => st.tabular.unwrap_or(self.theme.tabular)
+  }
+  n.balance = match balance {
+    Some(b) => b
+    None => st.balance.unwrap_or(false)
   }
   n.keep = keep
   n.allow_ellipsis = allow_ellipsis

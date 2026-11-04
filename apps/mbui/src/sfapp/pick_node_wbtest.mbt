@@ -192,16 +192,16 @@ test "pick, long, 大屏 keyboard and mouse: the message field focused, opened: 
 }
 
 ///|
-test "pick, long, 大屏 keyboard and mouse: at a point, its panel 6 under it; 9 choices fitting, 12 scrolling: as tall as main has it (349.6, 364.8)" {
+test "pick, long, 大屏 keyboard and mouse: at a point, its panel 6 under it; 8 choices fitting, 12 scrolling (rows 36, its list 320 at most: 336, 368)" {
   let out = []
-  for n in [9, 12] {
+  for n in [8, 12] {
     let t = menu_tester(1280.0, 800.0, 0)
     @sf.pick("选一个", Array::makei(n, fn(i) { @sf.choice("c\{i}", "第\{i + 1}项") }), "c1", fn(_) {  }, from=@sf.at_point(600.0, 300.0))
     t.run_for(@ui.move_most_ms)
     let (x, y, w, h) = t.get(Dialog, label="选一个").rect
     out.push((x, y, w, (h * 10.0).round() / 10.0))
   }
-  assert_eq(out, [(600.0, 306.0, 220.0, 349.6), (600.0, 306.0, 220.0, 364.8)])
+  assert_eq(out, [(600.0, 306.0, 220.0, 336.0), (600.0, 306.0, 220.0, 368.0)])
 }
 
 ///|
@@ -225,55 +225,54 @@ test "pick, long, 大屏 keyboard and mouse: 9 found in a window just tall enoug
 }
 
 ///|
-test "pick, long, 大屏 keyboard and mouse: its last row's reach past its list, into the panel's foot, pressed: as main has it, with 9 single-line choices fitting, 12 scrolling" {
+test "pick, long, 大屏 keyboard and mouse: its last row whole at its list's foot, pressed there: with 8 single-line choices fitting (rows 36: 9 take more than its list holds, 320), 12 scrolling" {
   let open = fn(n : Int, chosen : Ref[String]) {
     let t = menu_tester(1280.0, 800.0, 0)
     @sf.pick("选一个", Array::makei(n, fn(i) { @sf.choice("c\{i + 1}", "第\{i + 1}项") }), "c1", fn(k) { chosen.val = k }, from=@sf.at_point(600.0, 300.0))
     t.run_for(@ui.move_most_ms)
     t
   }
-  // (9 fitting: the whole of its last row drawn, reaching past the list's foot (the panel's less its padding) by a
-  // row's reach)
+  // (8 fitting: its last row's foot the list's (the panel's less its padding, concentric with its foot corners), the
+  // whole of it drawn and pressed by its last line)
   let chosen = Ref("")
-  let t = open(9, chosen)
+  let t = open(8, chosen)
   let (dx, dy, dw, dh) = t.get(Dialog, label="选一个").rect
-  let (_, ry, _, rh) = t.get(Button, label="第9项").rect
+  let (_, ry, _, rh) = t.get(Button, label="第8项").rect
   let list_foot = dy + dh - @sf.panel_pad
-  let reach = ry + rh - list_foot
-  let fits = (dh, reach > 0.5 && reach < 2.0)
-  t.tap(dx + dw / 2.0, list_foot + reach / 2.0)
+  let fits = (ry + rh - list_foot).abs() < 0.5
+  t.tap(dx + dw / 2.0, list_foot - 1.0)
   t.run_for(@ui.move_most_ms)
   let fit_pressed = (chosen.val, @sf.presenting())
-  // (12 scrolling, at its top: the same band under its list's foot)
+  // (12 scrolling, at its top: under its list's foot, the panel's padding, nothing of it pressed)
   let chosen2 = Ref("")
   let t2 = open(12, chosen2)
   let (dx2, dy2, dw2, dh2) = t2.get(Dialog, label="选一个").rect
   let foot2 = dy2 + dh2 - @sf.panel_pad
-  t2.tap(dx2 + dw2 / 2.0, foot2 + reach / 2.0)
+  t2.tap(dx2 + dw2 / 2.0, foot2 + @sf.panel_pad / 2.0)
   t2.run_for(@ui.move_most_ms)
-  assert_eq((fits.1, fit_pressed, (chosen2.val, @sf.presenting())), (true, ("c9", false), ("", true)))
+  assert_eq((fits, fit_pressed, (chosen2.val, @sf.presenting())), (true, ("c8", false), ("", true)))
 }
 
 ///|
-test "pick, long, 大屏 keyboard and mouse: a choice's words 20 a line, where main has them (第2项 79.8 under the panel's top, 16 in)" {
+test "pick, long, 大屏 keyboard and mouse: a choice's words 20 a line (第2项 86 under the panel's top, 22 in: the panel's 6 and a row's words' 16, rows 36 high)" {
   let t = menu_tester(1280.0, 800.0, 0)
   @sf.pick("选一个", Array::makei(12, fn(i) { @sf.choice("c\{i}", "第\{i + 1}项") }), "c0", fn(_) {  }, from=@sf.at_point(600.0, 300.0))
   t.run_for(@ui.move_most_ms)
   let (dx, dy, _, _) = t.get(Dialog, label="选一个").rect
   let tree = @ui.view_tree().unwrap()
   let at = tree.drawn().filter(fn(d) { d.words == "第2项" }).map(fn(d) { (d.x - dx, ((d.y - dy) * 10.0).round() / 10.0, d.h) })
-  assert_eq(at, [(16.0, 79.8, 20.0)])
+  assert_eq(at, [(22.0, 86.0, 20.0)])
 }
 
 ///|
-test "pick, long, 大屏 keyboard and mouse: a choice's value at its row's end, where main has it (3 条新消息, 144 in, 115.4 under the panel's top, 16.8 high)" {
+test "pick, long, 大屏 keyboard and mouse: a choice's value at its row's end (3 条新消息, 138 in, 123.6 under the panel's top, 16.8 high: its words 16 in from its row's end, rows 36 high)" {
   let t = menu_tester(1280.0, 800.0, 0)
   @sf.pick("选一个", Array::makei(12, fn(i) { @sf.choice("c\{i}", "第\{i + 1}项", value=if i == 2 { "3 条新消息" } else { "" }) }), "c0", fn(_) {  }, from=@sf.at_point(600.0, 300.0))
   t.run_for(@ui.move_most_ms)
   let (dx, dy, _, _) = t.get(Dialog, label="选一个").rect
   let tree = @ui.view_tree().unwrap()
   let at = tree.drawn().filter(fn(d) { d.words == "3 条新消息" }).map(fn(d) { (d.x - dx, ((d.y - dy) * 10.0).round() / 10.0, (d.h * 10.0).round() / 10.0) })
-  assert_eq(at, [(144.0, 115.4, 16.8)])
+  assert_eq(at, [(138.0, 123.6, 16.8)])
 }
 
 ///|

@@ -494,7 +494,7 @@ test "style: radius=InnerOr: alone its own corner; in a panel's corner the panel
   assert_eq(drawn4(c.nodes[button]), (16.0, 16.0, 16.0, 16.0))
   let faults = t.corner_faults()
   assert_true(
-    faults.length() == 2 && faults.iter().all(fn(f) { f.contains("wants corner 35.5") }),
+    faults.length() == 2 && faults.iter().all(fn(f) { f.contains("wants corner 34") }),
     msg=faults.join("\n"),
   )
   // nearer the panel's foot than its sides: its own corner kept, and said
@@ -793,11 +793,11 @@ test "corners: a capsule in a container's corner keeps its shape, and is concent
 ///|
 test "corners: with a ladder, a container with something in its corner and what is there are round by its steps" {
   let ladder = [34.0, 26.0, 18.0, 10.0]
-  // 10 in: 18, the next step
-  let t = Tester::new(corner_card(10.0, 18.0, 40.0, ladder~))
+  // 8 in: 18, the next step
+  let t = Tester::new(corner_card(8.0, 18.0, 40.0, ladder~))
   t.draw()
   assert_eq(t.corner_faults(), [])
-  // 14 in: concentric, but 14.8, no step (drawn so on purpose: not held to it as it is drawn)
+  // 14 in: concentric, but 12, no step (drawn so on purpose: not held to it as it is drawn)
   let t = Tester::new(corner_card(14.0, concentric(26.0, 14.0), 40.0, ladder~), corners_held=false)
   t.draw()
   assert_eq(t.corner_faults().length(), 1)
@@ -945,11 +945,11 @@ test "corners: a mark smaller than the gap it would leave in a corner stands by 
 
 ///|
 test "corners: a panel beside the window's, past its side, follows the window's corner as it will when it comes over" {
-  // two panels on a strip as a Mac's 16 window lays them (6 from its top and foot), the second past the window's right
-  // edge: its right corners, at the window's right edge when it comes over, as round as the first's, 11.2, its left
-  // ones (never at the window's) the ladder's 34; what lies in its corners 6.5 in concentric with each (6 and 28.8:
+  // two panels on a strip as a window 22 round lays them (6 from its top and foot), the second past the window's right
+  // edge: its right corners, at the window's right edge when it comes over, as round as the first's, 16, its left
+  // ones (never at the window's) the ladder's 34; what lies in its corners 6 in concentric with each (10 and 28:
   // where its right ones have it, off the ladder there)
-  let follow = concentric(16.0, 6.0)
+  let follow = concentric(22.0, 6.0)
   let tape = fn(c : Ctx) {
     c.with_theme({ ..Theme::light(), corner_ladder: [34.0, 26.0, 18.0, 10.0], corner_fit: Some(fit_ranges) }, fn() {
       c.box(w=Fill(1.0), h=Fill(1.0), fn() {
@@ -961,16 +961,16 @@ test "corners: a panel beside the window's, past its side, follows the window's 
           left=602.0,
           top=6.0,
           bg=0x333333FFL,
-          pad=6.5,
+          pad=6.0,
           fn() {
-          c.box(w=Fill(1.0), h=Fill(1.0), radius=concentric(follow, 6.5), bg=0xEEEEEEFFL, fn() {  }) |> ignore
+          c.box(w=Fill(1.0), h=Fill(1.0), radius=concentric(follow, 6.0), bg=0xEEEEEEFFL, fn() {  }) |> ignore
         })
         |> ignore
       })
       |> ignore
     })
   }
-  let t = Tester::new(tape, w=600.0, h=400.0, window_corner=16.0)
+  let t = Tester::new(tape, w=600.0, h=400.0, window_corner=22.0)
   t.draw()
   assert_eq(t.corner_faults(), [])
   // in a square window (no corner to follow) the same panel is one round off the ladder, said

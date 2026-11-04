@@ -482,8 +482,10 @@ test "corners of the window's tree: an old view's box at the top of a card whose
 /// (only `rows` told, the next frame drawn by the clock).
 fn scrolled_rows(hosted : Bool, scale? : Double = 1.0) -> (Array[String], Array[String]) {
   let rows = @signals.signal(8)
+  // (holding more than it shows, its first row in the card's top corners at its top, as far from the card's top as
+  // from its sides, concentric there; holding no more, 4 further down: off, said)
   let body = fn(c : Ctx) {
-    c.box(w=Fill(1.0), pt=4.0, fn() {
+    c.box(w=Fill(1.0), pt=if rows.get() > 3 { 0.0 } else { 4.0 }, fn() {
       for _ in 0..<rows.get() {
         c.box(w=Fill(1.0), h=Px(30.0), radius=concentric(20.0, 6.0), bg=0xEEEEEEFFL, fn() {  }) |> ignore
       }
@@ -554,4 +556,100 @@ test "corners of the window's tree: in a card said to be a picture (Role Image: 
   let plain = tree_card(picture(false), corners_held=false).corner_faults()
   let said = tree_card(picture(true), corners_held=false).corner_faults()
   assert_eq((wants(plain, follow), said), (true, []), msg=plain.join("\n") + "\n--\n" + said.join("\n"))
+}
+
+///|
+/// What is in the card's top corners: a node's (`tree`) or an old view's box across its top, 60 high, 20 round, filled as
+/// the card (`fill`) or not, a line 1 wide round it (an old view's: in the top corners alone, so not made concentric as
+/// it is laid out, tree_old_top).
+fn tree_edged(tree : Bool, fill : Bool) -> (@view.View) -> Unit {
+  let bg = if fill { 0x333333FFL } else { 0L }
+  fn(v) {
+    if tree {
+      v.box(fn(b) {
+        b.height(Is(Some(60.0))).ground(Is(bg)).edge(Is((1.0, 0xEEEEEEFFL))).radius(Is(20.0)) |> ignore
+      })
+      |> ignore
+    } else {
+      old(v, fn(c) {
+        c.box(w=Fill(1.0), h=Px(60.0), radius=20.0, bg~, border=1.0, border_color=0xEEEEEEFFL, fn() {  }) |> ignore
+      })
+      .grow(Is(1.0))
+      |> ignore
+    }
+  }
+}
+
+///|
+test "corners of the window's tree: a box 20 round across the top of a node's 20, 6 in, filled as the card or not filled, a line round it: said as an old view's is (it wants 14), its line its ground" {
+  let follow = concentric(20.0, 6.0)
+  let got = []
+  for fill in [true, false] {
+    for tree in [false, true] {
+      let t = tree_card(tree_edged(tree, fill), corners_held=false)
+      // (drawn 20 round as it says, not made concentric as it is laid out: what the rule is asked of)
+      let drawn_20 = t.drawn_instances().iter().any(fn(a) { a[5] == 0.0 && a[3] == 60.0 && a[4] == 20.0 })
+      got.push((drawn_20, wants(t.corner_faults(), follow)))
+    }
+  }
+  assert_eq(got, [(true, true), (true, true), (true, true), (true, true)])
+}
+
+///|
+/// A panel 42 round, 300 high, a list scrolling up and down across it: eight cards `inset` from its sides, `corner`
+/// round, 80 high, 8 apart, `ends` of room over the first and under the last.
+fn scrolled_cards(inset : Double, corner : Double, ends : Double, foot_right? : Double = 42.0) -> (Ctx) -> Unit {
+  fn(c) {
+    c.with_theme({ ..Theme::light(), corner_fit: Some(fit_ranges) }, fn() { c.box(pad=20.0, align=AStart, fn() {
+      c.box(style=style(radius=Corners(42.0, 42.0, foot_right, 42.0)), w=Px(400.0), h=Px(300.0), bg=0xFFFFFFFFL, fn() {
+        c.list("cards", 10, 88.0, fn(k) {
+          if k == 0 || k == 9 {
+            c.box(w=Fill(1.0), h=Px(ends), fn() {  }) |> ignore
+          } else {
+            c.box(w=Fill(1.0), padx=inset, pt=if k == 1 { 0.0 } else { 8.0 }, fn() {
+              c.box(w=Fill(1.0), h=Px(80.0), radius=corner, bg=0xEEEEEEFFL, fn() {  }) |> ignore
+            })
+            |> ignore
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+    })
+  }
+}
+
+///|
+/// The faults of cards in what scrolls, with the list at its top, scrolled to its middle and to its end.
+fn scrolled_faults(view : (Ctx) -> Unit) -> (Int, Int, Int) {
+  let t = Tester::new(view, corners_held=false)
+  t.draw()
+  let n = fn() { t.corner_faults().filter(fn(f) { f.contains("in what scrolls there") }).length() }
+  let top = n()
+  t.scroll_to(4)
+  t.draw()
+  t.draw()
+  let middle = n()
+  t.scroll_to_end()
+  t.draw()
+  t.draw()
+  (top, middle, n())
+}
+
+///|
+test "corners: cards in a list in a panel, scrolled to its top, its middle and its end: near a corner only at its ends, concentric there (16 in a 42, 26); 12 in with a 24 said at its ends; 40 in, none; in the middle, none" {
+  assert_eq(scrolled_faults(scrolled_cards(16.0, 26.0, 16.0)), (0, 0, 0))
+  let (top, middle, end) = scrolled_faults(scrolled_cards(12.0, 24.0, 12.0))
+  assert_true(top > 0 && end > 0, msg="\{(top, middle, end)}")
+  assert_eq(middle, 0)
+  assert_eq(scrolled_faults(scrolled_cards(40.0, 24.0, 16.0)), (0, 0, 0))
+  // (as far in from its sides as a 26 follows a 42 from, but 10 from its top and foot: said at its ends)
+  let (top, middle, end) = scrolled_faults(scrolled_cards(16.0, 26.0, 10.0))
+  assert_true(top > 0 && end > 0, msg="\{(top, middle, end)}")
+  assert_eq(middle, 0)
+  // (corners unlike: its foot's right one 10, too square for a card 16 in to follow: that corner alone, the others
+  // judged each by their own)
+  assert_eq(scrolled_faults(scrolled_cards(16.0, 26.0, 16.0, foot_right=10.0)), (0, 0, 0))
 }

@@ -1081,8 +1081,9 @@ test "desk composer: where 抄送 copies to is said just before send in either s
   let (px, py) = t.locate("icon:plus")[0]
   t.tap(px + 200.0, py)
   watch(2.0 * @ui.move_most_ms)
-  // (going with send, which stands a pixel further in on one line)
-  let moved = xs.filter(fn(x) { (x - xs[0]).abs() > 1.5 })
+  // (going with send, which stands 2 further in on one line: each concentric with its own corner, 8 in the capsule's
+  // 24 and 10 in the box's 26, a card's)
+  let moved = xs.filter(fn(x) { (x - xs[0]).abs() > 2.5 })
   assert_true(moved.is_empty(), msg="went across: \{xs}")
 }
 

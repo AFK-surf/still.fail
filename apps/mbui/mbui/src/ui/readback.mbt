@@ -245,6 +245,18 @@ fn Ctx::reads_after_layout(self : Ctx) -> Unit {
     }
   }
   let moved : Array[String] = []
+  // where what is picked ends as its words are laid out now (Ctx::selection_end), against what the build read
+  sel_moved.val = self.selection_moved_now()
+  match sel_read.val {
+    Some((v, loc)) => {
+      let now = selection_end_drawn().map(fn(e) { (e.1 + sel_moved.val.0, e.2 + sel_moved.val.1, e.3) })
+      if now != v {
+        moved.push("selection_end, read at \{loc}")
+      }
+      sel_read.val = None
+    }
+    None => ()
+  }
   self.laid_reads.each(fn(id, r) {
     if self.laid_rects.get(id) != r.0 {
       moved.push("laid_rect of box \{id}, read at \{r.1}")

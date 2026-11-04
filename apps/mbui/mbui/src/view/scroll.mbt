@@ -897,6 +897,21 @@ pub fn Tree::scrolls_now(self : Tree, id : NodeId) -> Bool {
 }
 
 ///|
+/// Whether node `id` scrolls what it holds up and down (View::scrolls) and that is shorter than it, as last laid out:
+/// what it holds ends above its foot, where its words end, so where its last part is from its container's foot corners
+/// is what it holds, not a place it stands (ui's corner rule: compared with them only as it scrolls to its end; the
+/// user, 2026-11-04: 滚到底才查底角).
+pub fn Tree::scroll_short(self : Tree, id : NodeId) -> Bool {
+  guard self.alive_id(id) else { return false }
+  let n = self.nodes[id.at]
+  n.scroll_held >= 0 &&
+  n.scroll_held < self.nodes.length() &&
+  self.nodes[n.scroll_held].live &&
+  !n.scroll_across &&
+  self.nodes[n.scroll_held].flex.height < n.flex.height - 0.5
+}
+
+///|
 /// Whether node `id` is in what one that scrolls moves (View::scrolls: its held), however far that can go now: where it
 /// is moves with that, as what an old view's box that scrolls (its capped, a sideways one) holds does. Not what stands
 /// beside that in the one that scrolls (its bar, what is put over it), which stays.

@@ -16,6 +16,9 @@ pub(all) struct WordsLook {
   wrap : Bool
   /// how far apart its letters are set besides their own spacing (a large title's tighter)
   tracking : Spacing
+  /// wrapped, broken where its lines come out as even as they may on as many lines (ui's TextPatch `balance`: a
+  /// note's under a title)
+  balance : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -35,7 +38,7 @@ pub let letters_own : Spacing = Ems(0.0)
 
 ///|
 /// Words as a node set them till they were said to be otherwise: 15 points, regular, 22 a line, wrapped.
-pub let words_plain : WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: letters_own }
+pub let words_plain : WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: letters_own, balance: false }
 
 ///|
 /// How a node's words in pieces (View::words_runs) are set where a piece says nothing of it itself, as an old view's

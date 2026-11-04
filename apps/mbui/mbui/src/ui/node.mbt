@@ -95,6 +95,9 @@ struct Node {
   /// a node of the window's tree's, put among the frame's for the corner rule (corners.mbt with_tree_nodes), that
   /// scrolls what it holds up and down (Tree::scrolls_now): as a list does, what is in it lies under its top and foot
   mut tree_scrolls : Bool
+  /// a node of the window's tree's that scrolls up and down what is shorter than it (Tree::scroll_short): what it holds
+  /// ends above its foot, so what is last in it is no nearer its container's foot corners than its words make it
+  mut tree_short : Bool
   /// it floats over what scrolls under it (Ctx::floats_over): the frame's `floating` are found from the nodes
   mut floats : Bool
   /// it scrolls what it holds, as the scrolling box `scroller` is (sideways.mbt: its id, 0 none), what it holds its
@@ -223,6 +226,8 @@ struct Node {
   mut spacing : Double
   // digits all one width (@hostapi.style_tabular: Ctx::text `tabular`, the theme's where it says nothing)
   mut tabular : Bool
+  // wrapped words broken where their lines come out even, on as many lines (Ctx::text `balance`: Node::text_layout)
+  mut balance : Bool
   // wrapped words cut after this many lines, the last ending in an ellipsis (0: no limit)
   mut max_lines : Int
   mut fit : Fit
@@ -384,6 +389,7 @@ struct Node {
   mut lk_wrap : Bool
   mut lk_spacing : Double
   mut lk_tabular : Bool
+  mut lk_balance : Bool
   mut lk_max_lines : Int
   // the faces as they were given when its words were laid out (faces.mbt words_shaped_in)
   mut lk_shaped : Int
@@ -416,6 +422,7 @@ fn Node::new() -> Node {
     sem_hid: false,
     island: None,
     tree_scrolls: false,
+    tree_short: false,
     floats: false,
     scroller: 0,
     scroller_inner: false,
@@ -489,6 +496,7 @@ fn Node::new() -> Node {
     line_trim: false,
     spacing: 0.0,
     tabular: false,
+    balance: false,
     max_lines: 0,
     fit: FitCover,
     fade: true,
@@ -573,6 +581,7 @@ fn Node::new() -> Node {
     lk_wrap: false,
     lk_spacing: 0.0,
     lk_tabular: false,
+    lk_balance: false,
     lk_max_lines: 0,
     lk_shaped: -1,
     lk_rich: None,
@@ -603,6 +612,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.sem_hid = false
   self.island = None
   self.tree_scrolls = false
+  self.tree_short = false
   self.floats = false
   self.scroller = 0
   self.scroller_inner = false
@@ -752,6 +762,7 @@ fn Node::reset_words(self : Node) -> Unit {
   self.line_trim = false
   self.spacing = 0.0
   self.tabular = false
+  self.balance = false
   self.max_lines = 0
 }
 

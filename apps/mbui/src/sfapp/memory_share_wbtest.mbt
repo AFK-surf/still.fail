@@ -21,11 +21,12 @@ test "a skill's sharing: the row switches it off and on, the memory read again e
 }
 
 ///|
-test "a skill's sharing: under the words, its row reaches 8 from the card's sides, its words 20 in" {
+test "a skill's sharing: under the words, its row reaches 8 from the card's sides, its words the card's (24) in" {
   let t = settings_tester("memory-doc:ws1/st1#发布流程")
   let (wx, _, _, _) = t.rect_of("发布新版本时").unwrap()
   let (sx, _, _, _) = t.rect_of("分享给其他 station").unwrap()
-  // (the card 12 from the page's side, its words 20 in: both at 32)
-  assert_true((wx - 32.0).abs() < 0.5, msg="when at \{wx}")
-  assert_true((sx - 32.0).abs() < 0.5, msg="the row's words at \{sx}")
+  // (the card 12 from the page's side, its words card_pad (24) in: both at 36)
+  let at = 12.0 + @sf.card_pad
+  assert_true((wx - at).abs() < 0.5, msg="when at \{wx}")
+  assert_true((sx - at).abs() < 0.5, msg="the row's words at \{sx}")
 }

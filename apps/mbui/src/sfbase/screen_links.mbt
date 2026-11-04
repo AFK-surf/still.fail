@@ -61,21 +61,23 @@ pub let link_card : @ui.Style = @ui.style(
 
 ///|
 /// A screen's card with its preview: a column 280 wide, rounded as what a message carries is (@sf.message_file_radius),
-/// the preview 4 in from its top and sides.
+/// the preview the ladder's inset in from its top and sides (@sf.peek_card_in_px).
 // kept across runs: a value (no field of it changes)
 pub let peek_card : @ui.Style = @ui.style(
   w=@sf.peek_card_w,
-  pt=S1,
-  px=S1,
+  pt=@sf.room_of(@sf.peek_card_in_px),
+  px=@sf.room_of(@sf.peek_card_in_px),
   radius=@sf.message_file_radius,
   bg=Neutral,
 )
 
 ///|
-/// The words under a preview: a card's words' 20 in from its sides (the card's 4 and 16 of their own), 12 under the
+/// The words under a preview: a card's words' in from its sides (card_pad: the card's inset and their own), 12 under the
 /// preview, 16 over the card's foot.
 // kept across runs: a value (no field of it changes)
-pub let peek_card_words : @ui.Style = @ui.css("w=Full px=S4 pt=S3 pb=S4")
+pub let peek_card_words : @ui.Style = @ui.css("w=Full pt=S3 pb=S4").then(
+  @ui.style(px=@sf.room_of(@sf.card_pad - @sf.peek_card_in_px)),
+)
 
 ///|
 /// The preview: on its ground, its corners concentric with the card's, its mark in its middle until a picture comes.

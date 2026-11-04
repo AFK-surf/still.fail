@@ -220,7 +220,10 @@ test "window zoom: the panel at the window edge keeps following its corner when 
     let zoom = @ui.window_zoom()
     assert_true(@sfdesk.wide.tape, msg="\{zoom}: expected the panel layout")
     guard composer_and_panel(t) is Some((_, page)) else { fail("\{zoom}: no chat panel") }
-    let edge = @ui.concentric(16.0 / zoom, @sf.window_in)
+    // (concentric with the window's where that is as round on the screen as the ranges let, 6 (at 1.75: 5.5); a
+    // window too square for it (at 2: 4, as Windows 11's 8 is) stands alone, the tape's)
+    let follows = @ui.concentric(16.0 / zoom, @sf.window_in)
+    let edge = if (follows * zoom * 1.0e6).round() / 1.0e6 >= @sf.corner_fit.least - 0.5 { follows } else { @sf.tape_corner }
     assert_true(
       (page.radii.1 - edge).abs() < 0.01 && (page.radii.2 - edge).abs() < 0.01,
       msg="\{zoom}: the panel's right corners \{page.radii} should follow the window at \{edge}",

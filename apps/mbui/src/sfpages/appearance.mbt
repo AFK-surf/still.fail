@@ -64,7 +64,7 @@ pub fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
       }
     },
     fn() {
-      @sf.setting(c, @sf.t("common.language"), note=@sf.t("web-pages.appearance.language.description"), fn() {
+      @sf.setting(c, @sf.t("common.language"), fn() {
         choice("language", [("", "common.language.system"), ("zh", "common.language.zh"), ("en", "common.language.en")], @settings.pref(core, "language"))
       })
     },

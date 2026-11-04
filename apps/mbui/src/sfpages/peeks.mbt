@@ -958,12 +958,17 @@ fn chat_card_sample(c : @ui.Ctx) -> Unit {
 let peek_tile : @ui.Style = @ui.css("row w=Full gap=S2_5 align=AStart")
 
 ///|
-/// Its thumb: 36 square on the hover's ground, what it shows in its middle (20); in the card's corner 16 in, concentric
-/// with its 23 there (Hover.css.ts's 9).
+/// Its thumb: 36 square on the hover's ground, what it shows in its middle (20); in the card's corner as far in as makes
+/// the small block's corner concentric with the card's there (24 less 10: 14), out past the card's words to there
+/// (Hover.css.ts's 9).
 // kept across runs: a value (no field of it changes)
 let peek_thumb : @ui.Style = @ui.css("w=S9 h=S9 bg=Hover align=ACenter justify=JCenter clip=true").then(
-  @ui.style(radius=@sf.small_radius),
+  @ui.style(radius=@sf.small_radius, ml=@sf.room_of(peek_thumb_out), mt=@sf.room_of(peek_thumb_out)),
 )
+
+///|
+/// How far the thumb stands out of the card's words (the panel's padding and hover_words_in) to be concentric there.
+let peek_thumb_out : Double = @sf.r_menu - @sf.small_corner - @sf.panel_pad - hover_words_in
 
 ///|
 let peek_thumb_mark : Double = 20.0
@@ -1021,7 +1026,7 @@ let peek_change_meta : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter").th
 ///|
 /// How far a capsule 20 high in a card's corner (a state's pill, a fact's, a face) stands from where its words start,
 /// out past them: concentric with the card's corner.
-let peek_capsule_in : Double = @sf.capsule_in(@sf.r_menu, peek_capsule_h) - @sf.panel_pad - @sf.text_in
+let peek_capsule_in : Double = @sf.capsule_in(@sf.r_menu, peek_capsule_h) - @sf.panel_pad - hover_words_in
 
 ///|
 /// A capsule's height: a state's, a fact's, a face.
@@ -1209,5 +1214,5 @@ let peek_file_foot : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter").then
 )
 
 ///|
-let peek_button_in : Double = @sf.capsule_in(@sf.r_menu, 24.0) - @sf.panel_pad - @sf.text_in
+let peek_button_in : Double = @sf.capsule_in(@sf.r_menu, 24.0) - @sf.panel_pad - hover_words_in
 

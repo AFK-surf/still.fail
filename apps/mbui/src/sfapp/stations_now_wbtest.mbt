@@ -364,10 +364,10 @@ test "stage, 大屏 keyboard and mouse in a tall and a short window, touch in a 
   // strip as wide as the picture is laid out, from its start, scrolled, the stage as wide; in sets since, their names
   // over the strip: the stage a line taller where the window has the room, 840 by 1100)
   assert_eq(out, [
-    "(1440, 1000, 0): dialog Some((分享卡片, (540, 24, 360, 952))) line [(560, 757.6, 320, 21)] look Some((540, 797.2, 78, 124.8)) close Some((635.8, 942, 58, 34)) copy Some((701.8, 942, 102.5, 34)) save None squeeze 0",
-    "(1280, 640, 0): dialog Some((分享卡片, (460, 24, 360, 592))) line [(480, 757.6, 320, 21)] look Some((460, 437.2, 78, 124.8)) close Some((555.8, 582, 58, 34)) copy Some((621.8, 582, 102.5, 34)) save None squeeze 0",
-    "(840, 1100, 1): dialog Some((分享卡片, (240, 46.2, 360, 1007.6))) line [(260, 779.8, 320, 21)] look Some((240, 875, 78, 124.8)) close Some((321.9, 1019.8, 62, 34)) copy None save Some((391.9, 1019.8, 126.2, 34)) squeeze 0",
-    "(390, 844, 2): dialog Some((分享卡片, (24, 24, 342, 796))) line [(35, 757.6, 320, 21)] look Some((15, 641.2, 78, 124.8)) close Some((96.9, 786, 62, 34)) copy None save Some((166.9, 786, 126.2, 34)) squeeze 0",
+    "(1440, 1000, 0): dialog Some((分享卡片, (540, 24, 360, 952))) line [(564, 761.6, 312, 21)] look Some((540, 795.2, 78, 124.8)) close Some((635.8, 940, 58, 36)) copy Some((701.8, 940, 102.5, 36)) save None squeeze 0",
+    "(1280, 640, 0): dialog Some((分享卡片, (460, 24, 360, 592))) line [(484, 761.6, 312, 21)] look Some((460, 435.2, 78, 124.8)) close Some((555.8, 580, 58, 36)) copy Some((621.8, 580, 102.5, 36)) save None squeeze 0",
+    "(840, 1100, 1): dialog Some((分享卡片, (240, 41.2, 360, 1017.6))) line [(264, 778.8, 312, 21)] look Some((240, 878, 78, 124.8)) close Some((321.9, 1022.8, 62, 36)) copy None save Some((391.9, 1022.8, 126.2, 36)) squeeze 0",
+    "(390, 844, 2): dialog Some((分享卡片, (24, 24, 342, 796))) line [(39, 761.6, 312, 21)] look Some((15, 639.2, 78, 124.8)) close Some((96.9, 784, 62, 36)) copy None save Some((166.9, 784, 126.2, 36)) squeeze 0",
   ])
   assert_eq(drawn, [true, true, true, true])
 }
@@ -390,18 +390,18 @@ test "stage, 大屏 keyboard and mouse: the window made shorter and taller again
   // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02; 34 of them since 千恋＊万花's: their
   // strip as wide as the picture is laid out, from its start, scrolled, the stage as wide)
   assert_eq(out, [
-    "800: dialog Some((分享卡片, (460, 24, 360, 752))) line [(480, 757.6, 320, 21)] look Some((460, 597.2, 78, 124.8)) close Some((555.8, 742, 58, 34)) copy Some((621.8, 742, 102.5, 34)) save None squeeze 0",
-    "560: dialog Some((分享卡片, (460, 24, 360, 512))) line [(480, 757.6, 320, 21)] look Some((460, 357.2, 78, 124.8)) close Some((555.8, 502, 58, 34)) copy Some((621.8, 502, 102.5, 34)) save None squeeze 0",
-    "800: dialog Some((分享卡片, (460, 24, 360, 752))) line [(480, 757.6, 320, 21)] look Some((460, 597.2, 78, 124.8)) close Some((555.8, 742, 58, 34)) copy Some((621.8, 742, 102.5, 34)) save None squeeze 0",
+    "800: dialog Some((分享卡片, (460, 24, 360, 752))) line [(484, 761.6, 312, 21)] look Some((460, 595.2, 78, 124.8)) close Some((555.8, 740, 58, 36)) copy Some((621.8, 740, 102.5, 36)) save None squeeze 0",
+    "560: dialog Some((分享卡片, (460, 24, 360, 512))) line [(484, 761.6, 312, 21)] look Some((460, 355.2, 78, 124.8)) close Some((555.8, 500, 58, 36)) copy Some((621.8, 500, 102.5, 36)) save None squeeze 0",
+    "800: dialog Some((分享卡片, (460, 24, 360, 752))) line [(484, 761.6, 312, 21)] look Some((460, 595.2, 78, 124.8)) close Some((555.8, 740, 58, 36)) copy Some((621.8, 740, 102.5, 36)) save None squeeze 0",
   ])
   // (what it paints: its night over the window, the picture as large as it is drawn)
   // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02; the stage's own words alone since
   // the looks are in sets (main counted the page's under the picture too: 360 and 336, the stage's 327 both): the
   // picture a line smaller for the sets' names, all of its words in it)
   assert_eq(ink, [
-    "800: night [0.92] picture Some((519.4, 24, 241.2, 519)) words in 327 lowest 525.5 out under 0",
-    "560: night [0.92] picture Some((575.2, 24, 129.7, 279)) words in 327 lowest 293.6 out under 0",
-    "800: night [0.92] picture Some((519.4, 24, 241.2, 519)) words in 327 lowest 525.5 out under 0",
+    "800: night [0.92] picture Some((521.1, 24, 237.8, 517)) words in 327 lowest 521.1 out under 0",
+    "560: night [0.92] picture Some((576.3, 24, 127.4, 277)) words in 327 lowest 290.3 out under 0",
+    "800: night [0.92] picture Some((521.1, 24, 237.8, 517)) words in 327 lowest 521.1 out under 0",
   ])
 }
 

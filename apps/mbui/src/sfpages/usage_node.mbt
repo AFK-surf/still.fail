@@ -572,7 +572,9 @@ fn usage_narrowed_node(parent : @view.View, v : () -> Json?, tips? : @sf.TipLaye
   let day = fn() { text(v(), "day") != "" }
   parent.show(fn() { only() || day() }, fn(at) {
     at.box(fn(chips) {
-      chips.row(Is(true)).gap(Is(8.0)).wraps(Is(Some(8.0))) |> ignore
+      // (the last of the card, at its foot's start: its chips concentric with its corner there, as usage_narrowed's)
+      let out = @sf.card_corner - @sf.small_corner - @sf.card_pad
+      chips.row(Is(true)).gap(Is(8.0)).wraps(Is(Some(8.0))).margin(Is((out, 0.0, 0.0, out))) |> ignore
       chips.show(only, fn(s) {
         let name = fn() { text(field(v(), "only"), "title") }
         @sf.chip_node(

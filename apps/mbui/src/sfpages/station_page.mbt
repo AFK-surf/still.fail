@@ -627,7 +627,7 @@ fn station_profile_row(c : @ui.Ctx, core : Core, address : String, p : Json?, st
       text(p, "name"),
       note=join(facts, " · "),
       lead=fn() {
-        c.box(style=st_profile_mark, fn() { @sf.provider_logo(c, text(p, "runtime"), text(field(p, "access"), "kind"), st_profile_glyph, text(p, "providerMark")) })
+        c.box(style=st_profile_mark.then(@sf.row_lead_out()), fn() { @sf.provider_logo(c, text(p, "runtime"), text(field(p, "access"), "kind"), st_profile_glyph, text(p, "providerMark")) })
         |> ignore
       },
       below?=if text(field(p, "quota"), "state") == "ok" {
@@ -956,8 +956,13 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
   }
   let saving = is_doing(core, ["agentEnv.form.save"], [("station", address), ("form", form)])
   c.box(style=st_editor, fn() {
-    // (first in its card, in its corners on the words' inset: the ladder's small block's corner there)
-    let typed = @sf.textarea(c, "env/" + address, rows=6, field=field_, placeholder=env_placeholder, corner=@sf.small_corner)
+    // (first in its card, a block in its corners: `corner_inset` in, a row's corner, its words on the card's line:
+    // @sf.card_block_out)
+    let mut typed = ""
+    c.box(style=@sf.card_block_out(top=true), fn() {
+      typed = @sf.textarea(c, "env/" + address, rows=6, field=field_, placeholder=env_placeholder, corner=@sf.row_corner)
+    })
+    |> ignore
     if source is Some(words) && typed != words {
       c.tell("env-edit/" + form, fn() {
         draft.pending.set(Some(typed))

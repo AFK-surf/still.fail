@@ -69,7 +69,8 @@ pub fn ask_node(
       // (its title's row: dialog_head's, 1 under its padding's top, as tall as a close button's room at least)
       d.box(fn(h) {
         h
-        .padding(Is((dialog_pad, dialog_head_over, dialog_head_end + dialog_pad, 0.0)))
+        // (its title on the panel's words' line, as every dialog's: panel_words)
+        .padding(Is((panel_words, dialog_head_over, dialog_head_end + dialog_pad, 0.0)))
         .min_height(Is(Some(dialog_close)))
         .lines_up(Is(Some(Middle)))
         .row(Is(true))
@@ -91,7 +92,7 @@ pub fn ask_node(
       d.box(fn(body) {
         body.alpha(By(words_in)) |> ignore
         body.scrolls(@view.Scroll::new(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(b) {
-        b.padding(Is((dialog_pad, @ui.Space::px(S4_5), dialog_pad, 0.0))).gap(Is(@ui.Space::px(S4))) |> ignore
+        b.padding(Is((panel_words, @ui.Space::px(S4_5), panel_words, 0.0))).gap(Is(@ui.Space::px(S4))) |> ignore
         // (its field the library's line, as wide as what it holds: Enter says it, at that key's moment)
         field.val = Some(input_node(b, line, placeholder~, secret~, submitted=fn(_) { go() }))
         if hint != "" {

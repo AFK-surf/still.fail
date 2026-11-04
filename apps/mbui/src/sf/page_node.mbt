@@ -225,6 +225,19 @@ priv struct PartAt {
 let part_at : @view.Lent[PartAt] = @view.Lent::new()
 
 ///|
+/// Whether a page made once is in a panel of its own (the tape's, laid out Medium): lent by what holds it (the tape's
+/// tape_made) to all of it, so what it makes reads it however late it is made (a block scrolled to, made then):
+/// group_node, page_block. None lent, in a window's whole (a phone's). How wide the page is is another matter (look).
+// kept across runs: what a tape's panel lends the page made in it, let go with it
+pub let pane_lent : @view.Lent[Bool] = @view.Lent::new()
+
+///|
+/// Whether node `v` of a page made once is in a panel of its own (pane_lent).
+fn in_pane_node(v : @view.View) -> Bool {
+  v.lent(pane_lent).unwrap_or(false)
+}
+
+///|
 /// Where node `v` of a page made once is (page_node's: lent it); narrow, in nothing, outside one.
 fn part_of(v : @view.View) -> PartAt {
   v.lent(part_at).unwrap_or({ look: Narrow, section: false, list: false })
@@ -371,8 +384,9 @@ fn narrow_page_node(
             })
           // what it holds, each block in the page's room
           Block(k) => page_block(s, fn(room) { block(room, k) })
-          // 30 under the last, then the frame's room
-          Foot => s.height(By(fn() { Some(pg_foot + frame().foot) })) |> ignore
+          // 30 under the last (in a panel of its own, its last card as far from its foot as from its sides: page_foot),
+          // then the frame's room
+          Foot => s.height(By(fn() { Some(page_foot(s) + frame().foot) })) |> ignore
         }
       })
     })
@@ -393,6 +407,19 @@ let pg_back_x : Double = 10.0
 
 ///|
 let pg_back_top : Double = 6.0
+
+///|
+/// The room at a page's foot under its last block (pg_foot). In a panel of its own (pane_lent), narrow, what puts its
+/// last card as far from the panel's foot as from its sides (panel_card_in), its own room under it (page_card_node's)
+/// counted: at its end the card's foot corners concentric with the panel's, as its sides are (the user, 2026-11-04:
+/// 「一个是面板一个是卡片，正好对上」); wide, a section's room under it already clear of the panel's corners.
+fn page_foot(foot : @view.View) -> Double {
+  if in_pane_node(foot) && look_node(foot) is Narrow {
+    panel_card_in - page_card_foot
+  } else {
+    pg_foot
+  }
+}
 
 ///|
 let pg_back_foot : Double = 4.0
@@ -472,12 +499,14 @@ pub fn group_node(parent : @view.View, rows : (@view.View) -> Unit, card? : Bool
     wide_group_node(parent, at, rows, card)
     return
   }
+  // (in a panel of its own: a card of the panel's, its rows the ladder's inset in, a card's corner)
+  let (pad, corner) = if in_pane_node(parent) { (corner_inset, card_corner) } else { (list_pad, list_card_corner) }
   parent.box(fn(room) {
     room.padding(Is((0.0, 0.0, 0.0, 10.0))) |> ignore
     room.box(fn(card) {
       card
-      .padding(Is((list_pad, list_pad, list_pad, list_pad)))
-      .radius(Is(list_card_corner))
+      .padding(Is((pad, pad, pad, pad)))
+      .radius(Is(corner))
       .ground(By(fn() { @ui.tree_theme().color(Card) }))
       .clips(Is(true))
       |> ignore
@@ -986,8 +1015,10 @@ pub fn block_width(look : Look, w : Double) -> Double {
 /// A block of a page made once (page_node's `content`), in the page's room: 12 from its sides (pg_room), `make` making
 /// what it holds.
 pub fn page_block(parent : @view.View, make : (@view.View) -> Unit) -> Unit {
+  // (in a panel of its own (pane_lent): its cards the panel's, `panel_card_in` from its sides, as pg_room_now has them)
+  let side = if in_pane_node(parent) { panel_card_in } else { pg_room_in }
   parent.box(fn(room) {
-    room.padding(Is((pg_room_in, 0.0, pg_room_in, 0.0))) |> ignore
+    room.padding(Is((side, 0.0, side, 0.0))) |> ignore
     make(room)
   })
   |> ignore
@@ -1102,7 +1133,7 @@ pub fn tap_text_node(parent : @view.View, label : () -> String, press : () -> Un
     b.box(fn(w) {
       w
       .words(By(label))
-      .words_look(Is({ size, weight: 400, line: size * 1.4, wrap: false, tracking: @view.letters_own }))
+      .words_look(Is({ size, weight: 400, line: size * 1.4, wrap: false, tracking: @view.letters_own, balance: false }))
       .ink(By(fn() { link_ink() }))
       |> ignore
     })

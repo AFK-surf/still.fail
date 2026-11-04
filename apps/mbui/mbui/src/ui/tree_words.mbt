@@ -35,6 +35,7 @@ pub fn style_words(style : TextStyle) -> @view.WordsLook {
       Some(t) => Ems(t.px(1.0))
       None => @view.letters_own
     },
+    balance: st.balance.unwrap_or(false),
   }
 }
 

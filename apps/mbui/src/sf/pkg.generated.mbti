@@ -208,17 +208,25 @@ pub fn card(@ui.Ctx, gap? : Double, fill? : Bool, ground? : Int64, () -> Unit) -
 
 pub let card_across : @ui.Size
 
+pub fn card_block_out(top? : Bool, foot? : Bool) -> @ui.Style
+
 pub let card_corner : Double
+
+pub let card_end_out : @ui.Style
 
 pub fn card_foot(@ui.Ctx, () -> Unit, at_end? : Bool) -> Unit
 
 pub fn card_foot_in(Double) -> Double
+
+pub let card_foot_out : @ui.Style
 
 pub fn card_foot_words(() -> Unit, on? : Bool) -> Unit
 
 pub let card_line : @ui.TextStyle
 
 pub fn card_lines(@ui.Ctx, String, words? : String, note? : String, bad? : String, title_after? : () -> Unit) -> Unit
+
+pub let card_mark_out : @ui.Style
 
 pub let card_pad : Double
 
@@ -799,6 +807,8 @@ pub fn icon_parts_node(@view.View, String, Array[Int32], Double, @view.Live[Int6
 pub fn icon_path(String) -> String
 
 pub let identity_mark : Double
+
+pub fn in_card_pane() -> Bool
 
 pub fn in_line(Double) -> @ui.Style
 
@@ -1404,6 +1414,16 @@ pub fn panel_bleed() -> @ui.Style
 
 pub fn panel_button(@ui.Ctx, String, String, tone? : PanelTone, disabled? : Bool) -> Bool
 
+pub fn panel_card_foot() -> @ui.Style
+
+pub let panel_card_in : Double
+
+pub fn panel_card_last() -> @ui.Style
+
+pub fn panel_card_out() -> @ui.Style
+
+pub fn panel_card_room(@ui.Ctx, @ui.Style, () -> Unit) -> Int32
+
 pub fn panel_column(@ui.Ctx, String, Double, @ui.Style, () -> Unit) -> Unit
 
 pub fn panel_corner_foot() -> @ui.Style
@@ -1460,6 +1480,8 @@ pub let panel_w : Double
 
 pub fn panel_whole() -> Bool
 
+pub let panel_words : Double
+
 pub fn panel_words_in() -> @ui.Style
 
 pub fn panel_words_out_by(Double) -> @ui.Style
@@ -1501,6 +1523,8 @@ pub let pg_note_bad : @ui.TextStyle
 pub let pg_note_box : @ui.Style
 
 pub let pg_room : @ui.Style
+
+pub fn pg_room_now() -> @ui.Style
 
 pub let pg_row : @ui.Style
 
@@ -1588,7 +1612,7 @@ pub let player_speeds : Array[Double]
 
 pub let player_track_inset : Double
 
-pub fn player_view(@ui.Ctx, @kit.Media, ViewerFile, Array[String], back_label~ : String, on_back~ : () -> Unit, on_go~ : (String) -> Unit, still? : String, flying? : Bool) -> Unit
+pub fn player_view(@ui.Ctx, @kit.Media, ViewerFile, Array[String], back_label~ : String, on_back~ : () -> Unit, on_go~ : (String) -> Unit, still? : String, flying? : Bool, going? : Bool) -> Unit
 
 pub fn player_view_let_go(String) -> Unit
 
@@ -1791,6 +1815,8 @@ pub let row_key : @ui.Len
 pub let row_key_box : @ui.Style
 
 pub fn row_keys_room(Int32) -> Double
+
+pub fn row_lead_out() -> @ui.Style
 
 pub fn row_least() -> Double
 
@@ -2019,8 +2045,6 @@ pub fn small_panel(@ui.Ctx, w? : @ui.Size, h? : @ui.Size, min_w? : Double, max_w
 pub fn small_panel_inner(Double) -> Double
 
 pub let small_radius : @ui.Radius
-
-pub let smooth_scale : Double
 
 pub fn soft_keyboard() -> Bool
 

@@ -437,12 +437,13 @@ fn view_forget() -> Unit {
 /// system's size of words, as an old view's are (Ctx::sp: the look's size and line said at 1).
 fn view_words_measure(words : String, look : @view.WordsLook, width : Double) -> (Double, Double) {
   let c = g()
-  let tl = layout_text(
+  let tl = layout_words(
     view_words_set(words, look),
     c.sp(look.size),
     look.weight,
     if width < 0.0 { 1.0e9 } else { width },
     look.wrap,
+    balance=look.balance,
     line=view_line(c, look),
     spacing=view_spacing(c, look),
     style=view_words_style(),
@@ -1421,7 +1422,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
       let k = c.words_look
       let (size, line, style, spacing) = (self.sp(k.size), view_line(self, k), view_words_style(), view_spacing(self, k))
       let words = view_words_set(shown, k)
-      let tl = layout_text(words, size, k.weight, if k.wrap { c.w } else { 1.0e9 }, k.wrap, line~, style~, spacing~)
+      let tl = layout_words(words, size, k.weight, if k.wrap { c.w } else { 1.0e9 }, k.wrap, balance=k.balance, line~, style~, spacing~)
       let tl = if !k.wrap && tl.w > c.w + 0.5 {
         ellipsized(words, tl, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~, spacing~) })
       } else {
@@ -1495,7 +1496,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
     let (size, line, style, spacing) = (self.sp(k.size), view_line(self, k), view_words_style(), view_spacing(self, k))
     // (wrapped in its width as laid out, as an old view's words are where they are placed: Node::text_layout's)
     let words = view_words_set(shown, k)
-    let tl = layout_text(words, size, k.weight, if k.wrap { c.w } else { 1.0e9 }, k.wrap, line~, style~, spacing~)
+    let tl = layout_words(words, size, k.weight, if k.wrap { c.w } else { 1.0e9 }, k.wrap, balance=k.balance, line~, style~, spacing~)
     let tl = if !k.wrap && tl.w > c.w + 0.5 {
       ellipsized(words, tl, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~, spacing~) })
     } else {

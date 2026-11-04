@@ -1283,7 +1283,7 @@
   "web-main.rail.filesNone": "No folders to browse yet",
   "web-main.rail.lendsNone": "No lent folders yet",
   "web-main.rail.title": "Rail",
-  "web-main.rail.lead": "Choose what the left column shows and in what order; this device only",
+  "web-main.rail.lead": "What the left column shows, and in what order",
   "web-main.rail.reset": "Reset the rail",
   "web-main.rail.customize": "Customize rail",
   "web-main.rail.customizeLead": "Drag to reorder, click − to remove, click elsewhere when done",
