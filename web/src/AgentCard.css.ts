@@ -89,8 +89,8 @@ export const workMark = style({
 });
 export const workMarkLead = style({ whiteSpace: "pre" });
 /** At work's spokes before it while something runs in the background: the chats' marks' yellow, 10 on a line of 12. */
-export const workSpokes = style({ flex: "none", width: 10, height: 10, ...spokesBox("#f2b01e") });
-spokesTurn(workSpokes);
+export const workSpokes = style({ flex: "none", width: 10, height: 10, ...spokesBox("#e09b00") });
+spokesTurn(workSpokes, 22.5);
 export const workMarkWrap = style({ position: "relative", display: "inline-flex", alignItems: "baseline", flex: "none" });
 export const workMarkMeasure = style({ position: "absolute", top: "0", left: "0", visibility: "hidden", pointerEvents: "none", display: "flex", width: "max-content" });
 /** The quiet line it ends: one line, its own words cut at their end only once the mark has given way. */

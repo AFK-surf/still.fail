@@ -484,8 +484,8 @@ fn via_dot(c : @ui.Ctx, via : String, size : Double, ring : Double) -> Unit {
 }
 
 ///|
-/// At work, as a row says it (Spokes.kt): yellow spokes 10 across stepping round in 12, no disc round them (it showed as
-/// a dark rim).
+/// At work, as a row says it: a yellow disc 10 across with white blades turning on it, in 12, no disc of the ground
+/// round it (it showed as a dark rim).
 fn at_work_mark(c : @ui.Ctx) -> Unit {
   @sf.spokes(c, 10.0, mark_yellow, box=12.0) |> ignore
 }

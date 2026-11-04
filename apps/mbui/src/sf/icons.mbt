@@ -455,48 +455,47 @@ fn icon_shapes(data : Array[Double], k : Double, color : Int64) -> Array[@ui.Sha
 
 
 ///|
-/// What is at work steps round (Spokes.kt, the web's spokes.ts): eight, the brightest a step further every 100 ms,
-/// the others fading behind it. It steps, it does not turn: a frame for each step, none between, on the clock every
-/// resident decoration steps on (@ui.cycle_step_ms).
+/// What is at work steps round (the web's spokes.ts): a step every 100 ms, a frame for each step, none between, on
+/// the clock every resident decoration steps on (@ui.cycle_step_ms).
 pub let spoke_step_ms : Double = @ui.cycle_step_ms
 
 ///|
-/// The eight drawn as at the first step, turned an eighth of a turn each step (the brightest a step further: they are
-/// alike but for how strong each is), worked out as each frame is drawn, never built anew for it (Ctx::cycle_look);
-/// with motion reduced, held at the first.
-fn spoke_turn(c : @ui.Ctx, node : Int) -> Unit {
-  c.cycle_look(node, 8.0 * spoke_step_ms, fn(f) { @ui.look(rot=f * 2.0 * 3.141592653589793) }, resident=true, held=true)
+/// What is drawn as at the first step, turned `turn` (a part of a whole turn) each step for eight steps, worked out as
+/// each frame is drawn, never built anew for it (Ctx::cycle_look); with motion reduced, held at the first.
+fn spoke_turn(c : @ui.Ctx, node : Int, turn~ : Double = 0.125) -> Unit {
+  c.cycle_look(
+    node,
+    8.0 * spoke_step_ms,
+    fn(f) { @ui.look(rot=f * 8.0 * turn * 2.0 * 3.141592653589793) },
+    resident=true,
+    held=true,
+  )
 }
 
 ///|
-/// The spokes' strength from the brightest back (Spokes.kt SPOKE_ALPHA).
+/// The segments' strength from the brightest back (Spokes.kt SPOKE_ALPHA).
 // kept across runs: a table, never written
 let spoke_alpha : Array[Double] = [1.0, 0.75, 0.55, 0.42, 0.32, 0.25, 0.2, 0.2]
 
 ///|
-/// The eight spokes in a box `size` across (Spokes.kt drawSpokes, the web's 24-unit drawing): each from 4.8 to 9.6
-/// out, 2.9 thick with round ends, the first straight up and the rest clockwise, in a box `box` across about its
-/// middle (`size` by default).
+/// What is at work (the web's spokes.ts spokes): a disc `size` across in `color` with two white blades round its middle
+/// on the 24-unit drawing, each a quarter of a circle 7 out, 3.4 thick with round ends, across from each other, the
+/// first from straight up; turned a sixteenth each step: alike every half turn, they go round in eight steps. White on
+/// a solid dot, as the other marks are dots: a light ink of fading spokes was not seen at 10 (2026-11-02). In a box
+/// `box` across about its middle (`size` by default).
 pub fn spokes(c : @ui.Ctx, size : Double, color : Int64, box? : Double) -> Int {
   let box = box.unwrap_or(size)
   let u = size / 24.0
   let mid = box / 2.0
   let pi = 3.141592653589793
-  let lines = []
-  for i in 0..<8 {
-    let a = i.to_double() * pi / 4.0
-    let dx = @dmath.sin(a) * u
-    let dy = -@dmath.cos(a) * u
-    lines.push(
-      @ui.line(
-        [(mid + dx * 4.8, mid + dy * 4.8), (mid + dx * 9.6, mid + dy * 9.6)],
-        width=2.9 * u,
-        color=alpha(color, spoke_alpha[(8 - i) % 8]),
-      ),
-    )
+  // (the disc: a circle half its radius out, as thick as that radius, so it is filled to its edge)
+  let lines = [@ui.line(@ui.arc(mid, mid, size / 4.0, from=0.0, sweep=2.0 * pi), width=size / 2.0, color~)]
+  for i in 0..<2 {
+    let from = (i.to_double() - 0.5) * pi
+    lines.push(@ui.line(@ui.arc(mid, mid, 7.0 * u, from~, sweep=pi / 2.0), width=3.4 * u, color=0xFFFFFFFFL))
   }
   let node = c.lines(lines, w=Px(box), h=Px(box))
-  spoke_turn(c, node)
+  spoke_turn(c, node, turn=0.0625)
   node
 }
 
