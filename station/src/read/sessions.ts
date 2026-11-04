@@ -149,7 +149,7 @@ export function summary(s: Store, key: string): Json {
 /// those of the viewer's workspace (all of them for a read made for no one).
 export function sessions(s: Store, connect: string | null, archived: boolean, lang: Lang, viewer: InWorkspace | null = null): Json[] {
   setLang(lang);
-  const rows = store.listSessions(s).filter((x) => (connect === null || x.connect === connect) && (x.archivedAt !== null) === archived && (viewer === null || sees(viewer, x.ws)));
+  const rows = store.listedSessions(s, connect, archived, viewer);
   const keys = rows.map((row) => row.key);
   const l: Lists = { stats: store.sessionStats(s, keys), bindings: store.listBindings(s), participants: store.participants(s, keys), watches: watching(s, keys), lengths: store.transcriptLengths(s, keys), usages: store.sessionUsages(s, keys) };
   return rows.map((x) => summaryWith(s, x.key, l));
