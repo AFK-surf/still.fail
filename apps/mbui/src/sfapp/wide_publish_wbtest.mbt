@@ -110,6 +110,7 @@ test "wide: right click copies the whole message for its author and the viewer, 
     t.right_click(x + 8.0, y + 8.0)
     t.frame()
     t.frame()
+    assert_true(t.find("复制消息") is Some(_), msg="mine=\{mine}: \{t.words().map(fn(w) { w.0 })}")
     t.tap_text("复制消息")
     t.frame()
     assert_eq(t.clipboard(), words)

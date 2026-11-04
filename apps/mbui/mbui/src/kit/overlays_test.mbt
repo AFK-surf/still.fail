@@ -357,7 +357,7 @@ test "tooltip: by its trigger from the first frame it is drawn, the trigger come
       tooltip(c, "tip", trigger.val, "Bold (⌘B)") |> ignore
     })
     |> ignore
-  })
+  }, w=800.0)
   // where the tip's words are drawn, if anywhere: never by the window's corner (the trigger is 200 in)
   let by_trigger = fn() raise {
     match t.drawn_of("Bold (⌘B)") {
@@ -369,6 +369,8 @@ test "tooltip: by its trigger from the first frame it is drawn, the trigger come
   t.draw()
   by_trigger()
   t.draw()
+  assert_true(t.ctx().rect_of(trigger.val) is Some((_, _, w, h)) && w > 0.0 && h > 0.0,
+    msg="the focused trigger has room inside the column's 200 padding")
   assert_true(t.drawn_of("Bold (⌘B)") is Some(_))
   by_trigger()
   // the trigger gone, its focus with it: the tip goes out where it was

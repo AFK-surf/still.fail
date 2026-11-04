@@ -50,86 +50,6 @@ pub fn spokes_node(parent : @view.View, size : Double, color : () -> Int64, box?
 }
 
 ///|
-/// Of icon `name`, only its parts `parts` (icon_parts'), `size` across, in `tint` as it changes. The node.
-pub fn icon_parts_node(
-  parent : @view.View,
-  name : String,
-  parts : Array[Int],
-  size : Double,
-  tint : @view.Live[Int64],
-) -> @view.View {
-  let made : Ref[@view.View?] = Ref(None)
-  parent.box(fn(v) {
-    made.val = Some(v)
-    v
-    .width(Is(Some(size)))
-    .height(Is(Some(size)))
-    .shapes(Is(
-      match icon_numbers(name) {
-        Some(d) => icon_shapes(icon_data_parts(d, parts), size / 24.0, 0x000000FFL)
-        None => []
-      },
-    ))
-    .tint(tint)
-    |> ignore
-  })
-  |> ignore
-  made.val.unwrap()
-}
-
-///|
-/// Picture `name` of the app's (drawable's) `w` wide, as tall as it is for that, in its own colours or all in `tint` as
-/// it says now (None: its own). The node.
-pub fn drawable_node(parent : @view.View, name : String, w : Double, tint? : () -> Int64?) -> @view.View {
-  let made : Ref[@view.View?] = Ref(None)
-  parent.box(fn(v) {
-    made.val = Some(v)
-    match drawables.get(name) {
-      Some(d) => {
-        let tinted = match tint {
-          Some(f) => @signals.untracked(f) is Some(_)
-          None => false
-        }
-        v.width(Is(Some(w))).height(Is(Some(w * d.h / d.w))) |> ignore
-        if tinted {
-          // (in one ink, the page's: its shapes in that ink as it is now)
-          v
-          .shapes(Is(@ui.vector_shapes(d, w, @ui.current().drawn_scale(), tint=0x000000FFL)))
-          .tint(By(fn() {
-            match tint {
-              Some(f) => f().unwrap_or(0L)
-              None => 0L
-            }
-          }))
-          |> ignore
-        } else {
-          // (in its own colours: a picture, its colours its owner's, as an old view's own_colours are)
-          v.picture(Is(Some(d))) |> ignore
-        }
-      }
-      None => v.width(Is(Some(w))).height(Is(Some(w))) |> ignore
-    }
-  })
-  |> ignore
-  made.val.unwrap()
-}
-
-///|
-/// The mark of the company that made a model (maker_mark's) as a node, `size` across: the core's `maker` where there
-/// is a mark for it, else its runtime's maker's; the one-colour ones in the page's ink as it is now. The node.
-pub fn maker_mark_node(parent : @view.View, maker : String, runtime : String, size : Double) -> @view.View {
-  let id = maker_of(maker, runtime)
-  let mono = mono_makers.contains(id)
-  drawable_node(parent, "maker_" + id.replace_all(old="-", new="_"), size, tint=fn() {
-    if mono {
-      Some(theme().p.text)
-    } else {
-      None
-    }
-  })
-}
-
-///|
 /// Which maker's mark `maker` (the core's) and `runtime` (its maker's where there is none for it) come to (maker_mark's).
 fn maker_of(maker : String, runtime : String) -> String {
   if maker != "" && drawables.contains("maker_" + maker.replace_all(old="-", new="_")) {
@@ -151,7 +71,7 @@ fn maker_of(maker : String, runtime : String) -> String {
 ///|
 /// Slack's mark (slack_mark's) as a node, `size` across. The node.
 pub fn slack_mark_node(parent : @view.View, size : Double) -> @view.View {
-  drawable_node(parent, "slack", size)
+  drawable_node(parent, fn() { "slack" }, size)
 }
 
 ///|

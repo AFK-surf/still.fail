@@ -36,6 +36,11 @@ let ftab : FChatTab = {
 }
 
 ///|
+/// A row let go off the tab, told: what takes it (tab_take_drop) reads it, built again as one is.
+// kept across runs: a count, only told on
+let tab_let_go_told : @signals.Signal[Int] = @signals.signal(0, same=fn(a, b) { a == b })
+
+///|
 fn tab_reset() -> Unit {
   panel_screens.clear()
   panel_screen_pages.clear()
@@ -116,6 +121,8 @@ pub fn tab_go(at : DriveAt) -> Unit {
 /// A row let go off the tab, where (x, y in the window), taken once, in the frame it was let go or the next: for the
 /// chat's composer, when let go over it, to put it into the message.
 pub fn tab_take_drop(c : @ui.Ctx) -> (Dragged, Double, Double)? {
+  // (told as one is let go: what takes it, built once, built again for it, whatever was built before the tab)
+  tab_let_go_told.get() |> ignore
   match ftab.let_go {
     Some((item, x, y, frame)) if c.frame_number() - frame <= 1 => {
       ftab.let_go = None
@@ -143,6 +150,7 @@ pub fn files_tab(c : @ui.Ctx, src : Source, ws : String, chat : String, station 
     Some(i) if dragged() is None => {
       let (px, py, _) = c.pointer()
       ftab.let_go = Some((i, px, py, c.frame_number()))
+      tab_let_go_told.set(@signals.untracked(fn() { tab_let_go_told.get() }) + 1)
     }
     _ => ()
   }

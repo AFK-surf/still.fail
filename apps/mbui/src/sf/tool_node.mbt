@@ -204,6 +204,24 @@ pub fn icon_node(
 }
 
 ///|
+/// Parts `parts` of icon `name` alone (icon_parts'), `size` square in `parent`, in `tint` (each part of an icon that
+/// moves part by part: its own node, its own look). The node.
+pub fn icon_parts_node(parent : @view.View, name : String, parts : Array[Int], size : Double, tint : @view.Live[Int64]) -> @view.View {
+  parent.box(fn(i) {
+    i
+    .width(Is(Some(size)))
+    .height(Is(Some(size)))
+    .shapes(Is(match icon_numbers(name) {
+      Some(d) => icon_shapes(icon_data_parts(d, parts), size / 24.0, 0x000000FFL)
+      None => []
+    }))
+    .drawn_as(Is("/icon/" + name + "/\{parts}/"))
+    .tint(tint)
+    |> ignore
+  })
+}
+
+///|
 /// Icon `name`'s shapes as a tool draws it (viewer_tool_icon across), in no colour of their own (the node's tint).
 fn tool_shapes(name : String) -> Array[@ui.Shape] {
   match icon_numbers(name) {

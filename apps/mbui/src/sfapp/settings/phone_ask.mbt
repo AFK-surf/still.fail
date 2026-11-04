@@ -156,7 +156,7 @@ pub fn phone_outcome(
 
 ///|
 /// How a granted phone is held by its station's adb, in words (phone_outcome's).
-fn phone_link_words(link : String) -> String {
+pub fn phone_link_words(link : String) -> String {
   match link {
     "connected" | "unpaired" | "gone" | "off" | "unauthorized" | "failed" | "missing" => tr("android-misc.adb.ask.link." + link)
     _ => tr("android-misc.adb.attaching")

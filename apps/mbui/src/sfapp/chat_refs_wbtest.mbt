@@ -50,8 +50,8 @@ test "`@` and words: the chats they find over the composer; one picked goes in a
   t.draw()
   let (_, words, _, _) = t.ime()
   assert_eq(words, "看 @[首页的列表改成按天分组] ")
-  // the menu closed for this `@`
-  assert_true(t.find("引用对话") is None)
+  // Closed for this `@`: no menu offered to input or a screen reader, even while its last drawing fades out.
+  assert_true(t.query(Group, label="引用对话") is None)
   t.backspace()
   let (_, words, _, _) = t.ime()
   assert_eq(words, "看 @[首页的列表改成按天分组]")
@@ -71,8 +71,11 @@ test "`@` and words: the workspace's other stations' chats too, each with its st
   // (then when it was last active)
   assert_true(after_on_its_row(t, "夜里的构建又失败了") == ["Maple", "15 分钟前"], msg=about_its_row(t, "夜里的构建又失败了"))
   assert_true(after_on_its_row(t, "首页的列表改成按天分组") == ["8 分钟前"], msg=about_its_row(t, "首页的列表改成按天分组"))
-  // a finger's row: 44 high at least (Theme::rows pick)
-  let (_, _, _, high) = t.get(Button, label="夜里的构建又失败了").rect
+  // A finger's row is laid out at least 44 high (Theme::rows pick). Its pop-in scales the drawing, and therefore
+  // the semantics rectangle, on this first frame; that is not the room the row asks for.
+  let tree = @ui.view_tree().unwrap()
+  let row = tree.said_order().iter().find_first(fn(n) { n.said is Some({ label, .. }) && label == "夜里的构建又失败了" }).unwrap()
+  let high = tree.view_of(row.id).unwrap().laid_size().1
   assert_true(high >= 44.0, msg="\{high}")
   t.tap_text("夜里的构建又失败了")
   t.draw()
@@ -305,7 +308,7 @@ test "a chat picked the core cannot make a mark of: a toast says why, the `@word
   let (_, words, _, _) = t.ime()
   assert_eq(words, "@首页")
   // closed for this `@` until its words are gone
-  assert_true(t.find("引用对话") is None)
+  assert_true(t.query(Group, label="引用对话") is None)
   t.clear()
   t.type_text("@")
   assert_true(t.find("引用对话") is Some(_))

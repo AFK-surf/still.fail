@@ -67,6 +67,7 @@ let dropping : Dropping = { held: None, drops: [], words: None, paths: None }
 
 ///|
 fn drop_reset() -> Unit {
+  tree_drop_fields.clear()
   dropping.held = None
   dropping.drops.clear()
   dropping.words = None
@@ -95,6 +96,10 @@ fn words_let_go(x : Double, y : Double, words : String) -> Unit {
   old_input_brought()
   let c = g()
   dropping.words = None
+  if tree_words_let_go(x, y, words) {
+    hand_event()
+    return
+  }
   let target = hit_in(c.hit_ids, c.hit_rects, x, y)
   match c.editors.get(target) {
     Some(st) => {
@@ -117,6 +122,11 @@ fn words_let_go(x : Double, y : Double, words : String) -> Unit {
 fn paths_let_go(x : Double, y : Double, paths : Array[DroppedPath], pick : Int) -> Unit {
   old_input_brought()
   let c = g()
+  if tree_paths_let_go(x, y, paths) {
+    drop_taken(pick)
+    hand_event()
+    return
+  }
   let target = hit_in(c.hit_ids, c.hit_rects, x, y)
   dropping.paths = Some({ within: drop_within(c, x, y), target, x, y, paths, frame: c.frame_no, pick })
   hand_event()

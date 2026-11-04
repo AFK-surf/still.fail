@@ -1868,7 +1868,7 @@ fn fit_needs(flow : Array[Node], cb_w : Double, cb_h : Double) -> (Array[Double]
     }
     let b = box_for(c, cb_w, cb_h)
     let least = if known(b.min_w) { b.min_w } else { 0.0 }
-    let w = if c.style.drop != 0 || (c.style.shrink == 0.0 && !known(b.w)) {
+    let w = if c.style.drop != 0 || c.style.fit_held || (c.style.shrink == 0.0 && !known(b.w)) {
       size_node(c, undef, undef, undef, undef, cb_w, cb_h, false)
     } else if known(b.w) {
       b.w
@@ -2425,6 +2425,8 @@ fn layout_static_absolute(cb : Node, node : Node, ox : Double, oy : Double) -> U
 
 ///|
 fn place_absolute(cb : Node, parent : Node, c : Node, ox : Double, oy : Double) -> Unit {
+  // An overlay returning from display:none participates again, just as a flex item given its line does.
+  c.line = 0
   let cbb = box_of(cb.style, undef, undef)
   let pb = box_of(parent.style, undef, undef)
   let ps = parent.style

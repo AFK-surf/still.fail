@@ -138,7 +138,7 @@ pub fn Tree::view_of(self : Tree, id : NodeId) -> View? {
 ///|
 /// What of the window node `id` can be seen in as what holds it cuts it (View::clips: each that does, as it was last
 /// placed, its scale with it): x0, y0, x1, y1 in the window, its own box not cut by itself.
-pub fn Tree::seen_bounds(self : Tree, id : NodeId) -> (Double, Double, Double, Double) {
+pub fn Tree::seen_bounds(self : Tree, id : NodeId, drawing? : Bool = false) -> (Double, Double, Double, Double) {
   let mut b = (-1.0e9, -1.0e9, 1.0e9, 1.0e9)
   if id.at < 0 || id.at >= self.nodes.length() {
     return b
@@ -147,7 +147,7 @@ pub fn Tree::seen_bounds(self : Tree, id : NodeId) -> (Double, Double, Double, D
   while i >= 0 {
     let n = self.nodes[i]
     if n.look.clips {
-      let (x, y, sc) = self.placed(i)
+      let (x, y, _, sc) = self.projected(i, drawing~)
       let (x1, y1) = (x + n.flex.width * sc, y + n.flex.height * sc)
       b = (dmax(b.0, x), dmax(b.1, y), dmin(b.2, x1), dmin(b.3, y1))
     }

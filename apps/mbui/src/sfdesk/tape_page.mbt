@@ -32,6 +32,7 @@ fn tape_page_pane(v : @view.View, src : Source) -> Unit {
     panel
     .grow(Is(1.0))
     .clips(Is(true))
+    .hides(By(fn() { wide.tape_at.get() != Page }))
     .ground(By(fn() { tape_page_ground(panel) }))
     .edge(By(fn() { (1.0, @sf.theme().p.line) }))
     .padding(By(fn() { (0.0, 0.0, if tape_shown_side() is None { tape_room_now().under } else { 0.0 }, 0.0) }))
@@ -113,6 +114,22 @@ fn tape_page_one(c : @ui.Ctx, src : Source, page : Page) -> Unit {
 }
 
 ///|
+/// What of a chat made once in the page's panel is its old view's over it (chat_root_node's `old_over`), built as the
+/// panel's pages are (tape_page_one): its corners the panel's, what it says of its bar told the tape's.
+fn tape_chat_over(c : @ui.Ctx, build : () -> Unit) -> Unit {
+  @sf.pane_round.val = tape_chat_corners()
+  tape_bar_collected(c, build)
+  @sf.pane_round.val = None
+}
+
+///|
+fn tape_chat_corners() -> FixedArray[@ui.CornerOf]? {
+  let side = tape_shown_side()
+  let under = if side is None { tape_room_now().under } else { 0.0 }
+  Some(beside_column(tape_pane_corners(Page, side is Some(_)), under))
+}
+
+///|
 /// A page's bar on the tape as its page said it the last time it was built (tape_bar_collected), and what its back
 /// does then; or what a page made once said of itself (tape_made); the node of the tree's that shows it reads it
 /// (tape_bar_head).
@@ -185,6 +202,8 @@ fn tape_bar_head(b : @view.View, k : Int, made : Bool, tips : @sf.TipLayer) -> U
       return tb.said.get()
     }
     match app.nav.page_of(k) {
+      // (a chat's: as its old view said it over it (tape_chat_over), its bar its own where it has actions)
+      Some(((Chat(_) | History(_, _, _)), _)) => return tb.said.get()
       Some((p, u)) => {
         under.val = u
         place.val = p is Place(_)
@@ -321,6 +340,31 @@ fn tape_made(
     )
   }
   match page {
+    // (a chat, kept by its chat: its root made once, as the page pane's (chat_node.mbt), its bar its own)
+    Chat(r) =>
+      Some(
+        (
+          "chat/" + r.station + ":" + r.session,
+          fn(v : @view.View, _page, _under, _stint, k : Int) {
+            v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+            context_node(v)
+            chat_root_node(v, src, r, k, old_over=tape_chat_over, corners=tape_chat_corners, side=false, ground=tape_page_ground)
+          },
+        ),
+      )
+    // (an agent's history asked as a page: its chat, the history opened beside it at the entry asked, once as it is made)
+    History(r, key, entry) =>
+      Some(
+        (
+          "chat/" + r.station + ":" + r.session,
+          fn(v : @view.View, _page, _under, _stint, k : Int) {
+            v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+            context_node(v)
+            history_beside(src, r, key, entry)
+            chat_root_node(v, src, r, k, old_over=tape_chat_over, corners=tape_chat_corners, side=false, ground=tape_page_ground)
+          },
+        ),
+      )
     // (laid out by the page's width, narrow or wide: page_node's)
     Setting(About) if pane_makes.val =>
       made("about", fn(p, core, _here, _stint, told, _acts) {

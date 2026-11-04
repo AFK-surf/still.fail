@@ -353,16 +353,24 @@ test "a new chat's first words hold its composer as tall as it was while they ar
   t.tap_text("做任何事")
   t.type_text("第一行\n第二行\n第三行")
   t.run_for(@ui.move_most_ms)
-  let box = fn() { @motion.measured(t.ctx(), "composer/content").unwrap() }
+  let box = fn() {
+    let glasses = t.drawn_glass_corners().filter(fn(g) { g.2 > 250.0 && g.3 > 40.0 })
+    let mut lowest = (0.0, 0.0)
+    for g in glasses { if g.1 > lowest.0 { lowest = (g.1, g.3) } }
+    lowest.1
+  }
   let tall = box()
   tap_send(t)
   t.draw()
   assert_true(app.nav.top() is Chat(_))
   assert_eq(box(), tall)
   // let go of as they set out, the core's answers kept the while
-  let go = t.rest_of("composer/held-box/")
+  let flight = send_flight.get().unwrap()
+  let go = flight.set_out + flight.after
   assert_true(go > t.time() && go < @double.infinity, msg="\{go} \{t.time()}")
   t.run_for(go - t.time())
+  // Its layout lets go then; the visible ground shrinks on its declared reshape.
+  t.run_for(@sfbase.sent_down_ms)
   assert_true(box() < tall, msg="\{box()} \{tall}")
   ignore((held, unread))
 }
@@ -411,6 +419,7 @@ test "a new chat's first words not sent (the chat not made): the page the new ch
   t.draw()
   assert_true(send_flight.get() is None)
   assert_true(app.nav.top() is NewChat)
+  assert_eq(@sfbase.writing(src, "new:ws1").field.text(), words)
   let (_, back, _, _) = t.ime()
   assert_eq(back, words)
   // its scene, gone as they were sent, back as it was

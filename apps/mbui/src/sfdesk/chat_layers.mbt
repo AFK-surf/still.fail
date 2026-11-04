@@ -24,7 +24,12 @@ fn layers_reset() -> Unit {
 fn chat_layers(c : @ui.Ctx, src : Source, r : ChatRef, draft : String, pane : Int, room : Double) -> Unit {
   if layers_own.focus {
     layers_own.focus = false
-    c.focus_editor(@sfpages.composer_field_key)
+    // (the composer's field, an old view's editor or a field of the tree's: its draft's)
+    if @sfpages.chat_flight_layer(r) is Some(_) {
+      writing(src, draft).field.focus()
+    } else {
+      c.focus_editor(@sfpages.composer_field_key)
+    }
   }
   @sfbase.pick_layer(c, list_key(r), bar_foot, room, @sfbase.mouse_picks(), fn(author, words, ts, role) {
     c.tell("pick/quote", fn() {

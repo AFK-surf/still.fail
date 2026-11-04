@@ -10,6 +10,8 @@
 /// moves onto one and off it.
 pub struct RunsLinks {
   pointed : @signals.Signal[Int]
+  /// where the piece of line the pointer is on is drawn (in the window: x, y, w, h), as it moves onto one; None off them
+  pointed_at : @signals.Signal[(Double, Double, Double, Double)?]
 }
 
 ///|
@@ -25,6 +27,7 @@ pub fn runs_links(
   shown? : (Array[(String, String, Int)]) -> Unit,
 ) -> RunsLinks {
   let pointed = @signals.signal(-1)
+  let pointed_at : @signals.Signal[(Double, Double, Double, Double)?] = @signals.signal(None, same=fn(a, b) { a == b })
   let held = @signals.signal(-1)
   v.runs_pressed(By(fn() { held.get() })) |> ignore
   // (where its links' pieces are as it is laid out now, in its own terms: its words and how they are set as it holds
@@ -131,17 +134,30 @@ pub fn runs_links(
   }
   // (the pointer onto a link and off it, as it moves)
   let point = fn() {
-    let k = match v.pointer_here() {
+    let (k, at) = match v.pointer_here() {
       Some((x, y)) =>
         match piece_at(x, y) {
-          Some(p) => p.0
-          None => -1
+          Some(p) => (p.0, Some(in_window(p)))
+          None => (-1, None)
         }
-      None => -1
+      None => (-1, None)
     }
     pointed.set(k)
+    pointed_at.set(at)
   }
   v.on_pointer_moved(point) |> ignore
+  // (the pointer's shape over it: the hand over a link, the I-beam over the rest of its words where they are picked with
+  // the pointer (words_picked), as an old view's paragraph's (Ctx::rich))
+  v.cursor(By(fn() {
+    if pointed.get() >= 0 {
+      Some(Hand)
+    } else if v.lent(words_picks) == Some(true) {
+      Some(IBeam)
+    } else {
+      None
+    }
+  }))
+  |> ignore
   // (what changes which piece is under a pointer that stays where it is: what lies over it come or gone (whether it is
   // pointed at), where the pointer is in it as it or what holds it moves or grows (View::pointer_here_told), how its
   // words are set and how big it is laid out; worked out again as each is told, at the change's end)
@@ -161,6 +177,7 @@ pub fn runs_links(
         point()
       } else {
         pointed.set(-1)
+        pointed_at.set(None)
       }
     },
   )
@@ -188,5 +205,5 @@ pub fn runs_links(
       )
     None => ()
   }
-  { pointed, }
+  { pointed, pointed_at }
 }

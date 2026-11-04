@@ -23,6 +23,7 @@ pub fn avatar_node(
       p != "" && @ui.current().image_ready(p, px())
     }
     d
+    .bone_whole(Is(true))
     .width(Is(Some(size)))
     .height(Is(Some(size)))
     .radius(Is(1.0e6))

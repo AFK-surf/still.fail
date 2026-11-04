@@ -3,6 +3,7 @@ package "stillfail/sfcore"
 
 import {
   "mbui/signals",
+  "moonbitlang/core/json",
   "stillfail/core",
 }
 
@@ -25,7 +26,7 @@ pub let started_by : Array[String]
 
 pub let state : SignIn
 
-pub fn str(Json?, String) -> String
+pub fn str(@json.Json?, String) -> String
 
 // Errors
 
