@@ -306,13 +306,11 @@ pub fn signer(s : LockState, key : String, now : Double?) -> Signer? {
 /// Whether a device or passkey of `sub` an entry signed by `by` puts in is the person's own: put in by an own one of
 /// theirs, or by an owner or admin while they have had none that signs (`was`: the same device as it stood).
 fn own_of(s : LockState, sub : String, by : Signer, was : Device?, key : String?) -> Bool {
-  if by.sub == sub {
-    return true
+  let kept = match was {
+    Some(w) => w.own && w.sign_key == key
+    None => false
   }
-  if was is Some(w) && w.own && w.sign_key == key {
-    return true
-  }
-  managing(by.role) && !s.signed.contains(sub)
+  @role.own_device(by.sub == sub, kept, role_named(by.role), s.signed.contains(sub))
 }
 
 ///|

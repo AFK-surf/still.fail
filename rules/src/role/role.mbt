@@ -66,3 +66,22 @@ pub fn may(who : Role, c : Change) -> Bool where {
     Disable => owning
   }
 }
+
+///|
+/// Whether a device or passkey put in the lock under a person's name is their own (station/src/cloud/lock.ts
+/// `ownOf`), the one whose signatures count: put in by them (`by_them`), or the same device as it stood, own and with
+/// its signing key (`kept`), or put in by an owner or admin (`who`) while the person had none of their own (`had_own`:
+/// their first, approved face to face). Proved: an owner or admin cannot make one of their own for someone who has one.
+pub fn own_device(by_them : Bool, kept : Bool, who : Role, had_own : Bool) -> Bool where {
+  proof_ensure: result => own_post(by_them, kept, who, had_own, result),
+} {
+  if by_them {
+    true
+  } else if kept {
+    true
+  } else if had_own {
+    false
+  } else {
+    rank(who) >= 2
+  }
+}
