@@ -159,6 +159,8 @@ export class Hub {
   readonly actors = new Map<string, SessionActor>();
   /// Installed by the agents' side: older stores finish indexing active keys without holding the station thread.
   waitForWorkspaceActivity: (() => Promise<boolean>) | null = null;
+  /// An old thread's requested message suffix is indexed off the station thread before delivery.
+  preparePostsAfter: ((messages: readonly { thread: number; n: number }[], signal?: AbortSignal) => Promise<void>) | null = null;
   private awaitingWorkspaceActivity = new Set<string>();
   /// When each idle process is next looked at for eviction.
   private deadlines = new Map<string, Fiber.Fiber<void>>();
@@ -1118,6 +1120,10 @@ export class Hub {
   private sessionDeps(): SessionDeps {
     return {
       store: this.store,
+      preparePostsAfter: (messages, signal) => {
+        if (!this.preparePostsAfter) throw new Error("post block builder unavailable");
+        return this.preparePostsAfter(messages, signal);
+      },
       chat: (connect) => this.chatOf(connect),
       driver: (runtime) => this.sessionDriver(runtime),
       runOn: (key, holding) => this.accounts.runOn(key, holding),

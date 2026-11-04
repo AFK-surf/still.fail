@@ -41,6 +41,7 @@ import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts"
 import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from "./watch-jobs.ts";
 import { RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiveJobs } from "./active-jobs.ts";
 import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
+import { installPostBlocks, PostBlocksUnavailable, POST_BLOCK_SIZE, type PostPosition } from "./post-blocks.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
 // (and rows.ts JOBS_RUNNING and SESSION_JOBS, the readers' too).
@@ -129,6 +130,28 @@ export const LOGIN_CARDS =
   "SELECT thread, n, author FROM entries INDEXED BY entries_login_cards WHERE kind = 'message' AND author_kind = 'agent' AND card LIKE '%\"login\"%' AND card LIKE ? AND NOT EXISTS (SELECT 1 FROM closed_cards c WHERE c.thread = entries.thread AND c.n = entries.n)";
 export const PEOPLE_SAID_AFTER =
   "SELECT COUNT(*) AS c FROM (SELECT n FROM entries INDEXED BY entries_people_by_n WHERE thread = ? AND n > ? AND kind = 'message' AND author_kind = 'person' ORDER BY n LIMIT ?)";
+export const POST_BLOCKS_READY = `SELECT fresh OR EXISTS (SELECT 1 FROM post_blocks_coverage
+  WHERE thread = ?1 AND (complete = 1 OR cursor <= ?2 + 1)) AS ready FROM post_blocks_meta WHERE id = 1`;
+export const POST_AFTER_FIRST = "SELECT n, ts, kind, author_kind, author FROM entries WHERE thread = ? AND n > ? ORDER BY n LIMIT 1";
+// +e.n keeps the after-position as a filter: otherwise SQLite picks it as the lower index bound and reads the entire
+// gap before the candidate block, even though both block boundaries are also present.
+export const POST_AFTER_INDEXED = `WITH first(bucket) AS MATERIALIZED (
+  SELECT bucket FROM post_blocks WHERE thread = ?1 AND author = ?2 AND bucket >= ?3 ORDER BY bucket LIMIT 1
+), second(bucket) AS MATERIALIZED (
+  SELECT bucket FROM post_blocks WHERE thread = ?1 AND author = ?2 AND bucket > (SELECT bucket FROM first) ORDER BY bucket LIMIT 1
+)
+SELECT n, ts FROM (
+  SELECT e.n, e.ts FROM entries e
+  WHERE e.thread = ?1 AND +e.n > ?4 AND e.n >= (SELECT bucket FROM first) * ${POST_BLOCK_SIZE}
+    AND e.n <= (SELECT bucket FROM first) * ${POST_BLOCK_SIZE} + ${POST_BLOCK_SIZE - 1}
+    AND e.kind = 'message' AND e.author_kind = 'agent' AND e.author = ?2 ORDER BY e.n LIMIT 1
+)
+UNION ALL SELECT n, ts FROM (
+  SELECT e.n, e.ts FROM entries e
+  WHERE e.thread = ?1 AND +e.n > ?4 AND e.n >= (SELECT bucket FROM second) * ${POST_BLOCK_SIZE}
+    AND e.n <= (SELECT bucket FROM second) * ${POST_BLOCK_SIZE} + ${POST_BLOCK_SIZE - 1}
+    AND e.kind = 'message' AND e.author_kind = 'agent' AND e.author = ?2 ORDER BY e.n LIMIT 1
+) LIMIT 1`;
 
 export * from "./rows.ts";
 export { SCHEMA_VERSION } from "./schema.ts";
@@ -250,6 +273,7 @@ export class Store {
       installRemoteRuns(db);
       addListState(db);
       addLetters(db);
+      installPostBlocks(db);
       installWorkspaceActivity(db);
       addCardOutcomes(db);
       installUsageChatStats(db);
@@ -874,7 +898,17 @@ export class Store {
 
   /// The session's first post in a thread after entry `n`, including its entry number even if it has no ts.
   postAfter(session: string, thread: number, n: number): { n: number; ts: string | null } | null {
-    const row = this.#one("SELECT n, ts FROM entries WHERE thread = ? AND n > ? AND kind = 'message' AND author_kind = 'agent' AND author = ? ORDER BY n LIMIT 1", thread, n, session);
+    if (this.#one(POST_BLOCKS_READY, thread, n)?.ready !== 1) {
+      // The usual old-thread delivery is at the end, or just before this session's own post. Both answers are one
+      // primary-key seek and need no historical markers. This read shares the batch's snapshot with every answer.
+      const first = this.#one(POST_AFTER_FIRST, thread, n);
+      if (!first) return null;
+      if (first.kind === "message" && first.author_kind === "agent" && first.author === session) {
+        return { n: first.n, ts: first.ts ?? null };
+      }
+      throw new PostBlocksUnavailable([{ thread, n }]);
+    }
+    const row = this.#one(POST_AFTER_INDEXED, thread, session, Math.floor(n / POST_BLOCK_SIZE), n);
     return row ? { n: row.n, ts: row.ts ?? null } : null;
   }
 
@@ -882,6 +916,7 @@ export class Store {
   /// batch sees one snapshot even if another station is still writing during a handover.
   postsAfter(session: string, messages: readonly { thread: number; n: number }[]): (string | null)[] {
     const out: (string | null)[] = messages.map(() => null);
+    const missing: PostPosition[] = [];
     if (messages.length === 0) return out;
     const ordered = messages.map((m, index) => ({ ...m, index })).sort((a, b) => a.thread - b.thread || a.n - b.n);
     this.db.exec("SAVEPOINT posts_after");
@@ -889,10 +924,18 @@ export class Store {
       let thread: number | undefined;
       let next: { n: number; ts: string | null } | null = null;
       let searched = false;
+      let skip = false;
       for (const m of ordered) {
-        if (thread !== m.thread) { thread = m.thread; searched = false; }
+        if (thread !== m.thread) { thread = m.thread; searched = false; skip = false; }
+        if (skip) continue;
         if (!searched || (next !== null && m.n >= next.n)) {
-          next = this.postAfter(session, m.thread, m.n);
+          try { next = this.postAfter(session, m.thread, m.n); }
+          catch (error) {
+            if (!(error instanceof PostBlocksUnavailable)) throw error;
+            missing.push({ thread: m.thread, n: m.n });
+            skip = true;
+            continue;
+          }
           searched = true;
         }
         if (next !== null) out[m.index] = next.ts;
@@ -900,6 +943,7 @@ export class Store {
     } finally {
       this.db.exec("RELEASE posts_after");
     }
+    if (missing.length !== 0) throw new PostBlocksUnavailable(missing);
     return out;
   }
 

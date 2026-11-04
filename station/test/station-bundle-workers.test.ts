@@ -27,8 +27,12 @@ test("the workers in a station release start and process a batch", { skip: !proc
     store.db.exec(`CREATE TABLE signin_asks (id TEXT PRIMARY KEY, session TEXT NOT NULL, owner TEXT NOT NULL, status TEXT NOT NULL, body TEXT NOT NULL);
       CREATE INDEX signin_asks_by_session ON signin_asks (session, status);`);
     installSigninSaveIndex(store.db);
+    const thread = store.openThread("ember", "EMBER", "old", null, null).id;
+    store.db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,ts,at) VALUES (?,1,'message','agent','s','post',1)").run(thread);
+    store.db.exec("UPDATE post_blocks_meta SET fresh = 0; DELETE FROM post_blocks");
     for (const [file, message] of [
       ["sessions/workspace-activity-worker.js", {}],
+      ["sessions/post-block-worker.js", { thread, after: 0 }],
       ["outflow/chat-index-worker.js", "H"],
       ["vault/signin-save-worker.js", "s"],
     ] as const) {
@@ -44,5 +48,6 @@ test("the workers in a station release start and process a batch", { skip: !proc
         assert.equal(answer.done, true, file);
       } finally { await worker.terminate(); }
     }
+    assert.deepEqual(store.postAfter("s", thread, 0), { n: 1, ts: "post" });
   } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
 });
