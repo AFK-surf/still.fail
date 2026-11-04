@@ -209,6 +209,49 @@ test("a session deleted after conversion keeps its later usage changes in its wo
   } finally { store.close(); }
 });
 
+test("a deleted session's usage change during a workspace move stays with the moved history", () => {
+  const store = oldStore();
+  const db = store.db;
+  try {
+    db.prepare(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output, calls)
+      VALUES ('old', 0, 'a', 'claude', 2, 0, 0, 0, 1, 1)`).run();
+    installCompactUsage(db, () => 900_000);
+    installUsageHistory(db, 900_000);
+    while (!convertUsageHistoryStep(db, 1)) { /* Convert old summaries. */ }
+    store.deleteSession("a");
+    // The callback stands for a later write arriving between copying and removing the old workspace's history.
+    db.exec(`CREATE TEMP TRIGGER move_usage_during_history_copy AFTER INSERT ON main.usage_history
+      WHEN NEW.scope = 'C' BEGIN UPDATE usage SET output = 8 WHERE id = 'old'; END`);
+    store.setSessionsWs("A", "C");
+    db.exec("DROP TRIGGER move_usage_during_history_copy");
+    assert.deepEqual(db.prepare("SELECT scope, calls, tokens FROM usage_history WHERE calls != 0 OR tokens != 0").all().map((r) => ({ ...r })),
+      [{ scope: "C", calls: 1, tokens: 10 }]);
+  } finally { store.close(); }
+});
+
+test("moving a workspace does not rewrite each deleted session's owner", () => {
+  const store = oldStore();
+  const db = store.db;
+  try {
+    const put = db.prepare(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output, calls)
+      VALUES (?, 0, ?, 'claude', 2, 0, 0, 0, 1, 1)`);
+    for (let n = 0; n < 300; n++) {
+      const key = `deleted-${n}`;
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, ws: "A", createdAt: 0, lastActiveAt: 0 });
+      put.run(key, key);
+    }
+    installCompactUsage(db, () => 900_000);
+    installUsageHistory(db, 900_000);
+    while (!convertUsageHistoryStep(db)) { /* Convert old summaries. */ }
+    for (let n = 0; n < 300; n++) store.deleteSession(`deleted-${n}`);
+    db.exec(`CREATE TEMP TABLE moved_owners (n INTEGER);
+      CREATE TEMP TRIGGER count_moved_owner AFTER UPDATE ON main.usage_history_orphans BEGIN INSERT INTO moved_owners VALUES (1); END`);
+    store.setSessionsWs("A", "C");
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM moved_owners").get() as { n: number }).n, 0);
+    assert.deepEqual({ ...db.prepare("SELECT calls, tokens FROM usage_history WHERE scope = 'C'").get() }, { calls: 300, tokens: 900 });
+  } finally { store.close(); }
+});
+
 test("an incomplete old summary stays unchanged when an old raw call changes", () => {
   const store = oldStore();
   const db = store.db;
