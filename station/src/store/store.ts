@@ -41,6 +41,7 @@ import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts"
 import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from "./watch-jobs.ts";
 import { RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiveJobs } from "./active-jobs.ts";
 import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
+import { installPostBlocks, POST_BLOCK_SIZE } from "./post-blocks.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
 // (and rows.ts JOBS_RUNNING and SESSION_JOBS, the readers' too).
@@ -129,6 +130,15 @@ export const LOGIN_CARDS =
   "SELECT thread, n, author FROM entries INDEXED BY entries_login_cards WHERE kind = 'message' AND author_kind = 'agent' AND card LIKE '%\"login\"%' AND card LIKE ? AND NOT EXISTS (SELECT 1 FROM closed_cards c WHERE c.thread = entries.thread AND c.n = entries.n)";
 export const PEOPLE_SAID_AFTER =
   "SELECT COUNT(*) AS c FROM (SELECT n FROM entries INDEXED BY entries_people_by_n WHERE thread = ? AND n > ? AND kind = 'message' AND author_kind = 'person' ORDER BY n LIMIT ?)";
+const POST_BLOCKS_READY = `SELECT fresh OR EXISTS (SELECT 1 FROM post_blocks_coverage
+  WHERE thread = ?1 AND (complete = 1 OR cursor <= ?2)) AS ready FROM post_blocks_meta WHERE id = 1`;
+export const POST_AFTER_INDEXED = `WITH blocks AS (
+  SELECT bucket FROM post_blocks WHERE thread = ?1 AND author = ?2 AND bucket >= ?3 ORDER BY bucket LIMIT 2
+)
+SELECT e.n, e.ts FROM blocks b CROSS JOIN entries e
+WHERE e.thread = ?1 AND +e.n > ?4 AND e.n >= b.bucket * ${POST_BLOCK_SIZE} AND e.n <= b.bucket * ${POST_BLOCK_SIZE} + ${POST_BLOCK_SIZE - 1}
+  AND e.kind = 'message' AND e.author_kind = 'agent' AND e.author = ?2
+ORDER BY e.n LIMIT 1`;
 
 export * from "./rows.ts";
 export { SCHEMA_VERSION } from "./schema.ts";
@@ -250,6 +260,7 @@ export class Store {
       installRemoteRuns(db);
       addListState(db);
       addLetters(db);
+      installPostBlocks(db);
       installWorkspaceActivity(db);
       addCardOutcomes(db);
       installUsageChatStats(db);
@@ -874,7 +885,8 @@ export class Store {
 
   /// The session's first post in a thread after entry `n`, including its entry number even if it has no ts.
   postAfter(session: string, thread: number, n: number): { n: number; ts: string | null } | null {
-    const row = this.#one("SELECT n, ts FROM entries WHERE thread = ? AND n > ? AND kind = 'message' AND author_kind = 'agent' AND author = ? ORDER BY n LIMIT 1", thread, n, session);
+    if (this.#one(POST_BLOCKS_READY, thread, n)?.ready !== 1) throw new Error("post block history not ready");
+    const row = this.#one(POST_AFTER_INDEXED, thread, session, Math.floor(n / POST_BLOCK_SIZE), n);
     return row ? { n: row.n, ts: row.ts ?? null } : null;
   }
 

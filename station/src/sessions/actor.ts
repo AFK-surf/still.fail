@@ -112,6 +112,8 @@ export type Surface = {
 /// What a session needs of the station; the hub gives it.
 export type SessionDeps = {
   store: SessionStore;
+  /// An older store brings forward only the message ranges this delivery needs.
+  preparePostsAfter?(messages: readonly { thread: number; n: number }[]): Promise<void>;
   chat(connect: string): Surface | undefined;
   driver(runtime: RuntimeKind): AgentDriver;
   /// The profile a session's runtime starts on now: its own while usable, else another that can take it on (`holding`:
@@ -1005,7 +1007,9 @@ export class SessionActor {
     // What it posted in a thread after a message there was said: the message was written without seeing that post.
     const posts = new Map<PendingMessage, string>();
     const fromChat = (said as PendingMessage[]).filter((m) => m.message.apart !== true);
-    const laterPosts = store.postsAfter(this.key, fromChat.map((m) => ({ thread: m.message.thread, n: m.message.n })));
+    const positions = fromChat.map((m) => ({ thread: m.message.thread, n: m.message.n }));
+    await this.deps.preparePostsAfter?.(positions);
+    const laterPosts = store.postsAfter(this.key, positions);
     fromChat.forEach((m, i) => { const ts = laterPosts[i]; if (ts !== undefined && ts !== null) posts.set(m, ts); });
     const cards = new Map<PendingMessage, { ended: MessageRow; current: MessageRow | null; special: string | null }>();
     for (const m of said as PendingMessage[]) {

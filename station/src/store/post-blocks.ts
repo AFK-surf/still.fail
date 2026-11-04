@@ -77,12 +77,19 @@ export function postBlocksReady(db: DatabaseSync, thread: number, after: number)
   return fresh(db) || covers(coverage(db, thread), after);
 }
 
+/// One coverage read can release all of a thread's waiting deliveries after a batch.
+export function postBlocksCoverage(db: DatabaseSync, thread: number): { complete: boolean; cursor: number | null } {
+  if (fresh(db)) return { complete: true, cursor: null };
+  const row = coverage(db, thread);
+  return { complete: row?.complete === 1, cursor: row?.cursor ?? null };
+}
+
 type Entry = { n: number; kind: string; author_kind: string; author: string };
 
 /// Index one requested suffix, newest first. The potentially cold history is read outside the write transaction. Once
 /// the write lock is held, only the selected posts are rechecked by primary key; intervening writes have their own
 /// triggers, so neither a concurrent change nor an interrupted batch can make coverage claim a missing marker.
-export function postBlocksStep(db: DatabaseSync, thread: number, after: number, limit = POST_BLOCK_SIZE): { done: boolean; visited: number } {
+export function postBlocksStep(db: DatabaseSync, thread: number, after: number, limit = POST_BLOCK_SIZE, mayWrite?: () => boolean): { done: boolean; visited: number } {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > POST_BLOCK_SIZE) throw new RangeError("post block batch must be between 1 and 64");
   if (fresh(db)) return { done: true, visited: 0 };
   const before = coverage(db, thread);
@@ -90,6 +97,8 @@ export function postBlocksStep(db: DatabaseSync, thread: number, after: number, 
   const rows = (before?.cursor === null || before?.cursor === undefined
     ? db.prepare("SELECT n, kind, author_kind, author FROM entries WHERE thread = ? ORDER BY n DESC LIMIT ?").all(thread, limit)
     : db.prepare("SELECT n, kind, author_kind, author FROM entries WHERE thread = ? AND n < ? ORDER BY n DESC LIMIT ?").all(thread, before.cursor, limit)) as Entry[];
+  // A foreground writer may have arrived while those pages were read. Do not try to take SQLite's writer then.
+  if (mayWrite && !mayWrite()) return { done: false, visited: rows.length };
   db.exec("BEGIN IMMEDIATE");
   try {
     const current = coverage(db, thread);
