@@ -85,6 +85,17 @@ for (const viewers of [2, 40, 300]) {
       const expectedPins = store.pinnedSessions();
       const expectedKept = store.keptChats(null);
       const { pinned, kept } = store.archiveMarks();
+      if (viewers === 300) {
+        Object.defineProperty(store, "pinnedSessions", { configurable: true, value: () => { throw new Error("read all pins"); } });
+        Object.defineProperty(store, "keptChats", { configurable: true, value: () => { throw new Error("read all kept chats"); } });
+        try {
+          assert.equal(pinned("visible-299"), true);
+          assert.equal(kept(299), true);
+        } finally {
+          delete (store as any).pinnedSessions;
+          delete (store as any).keptChats;
+        }
+      }
       for (let i = 0; i < viewers + 20; i++) {
         assert.equal(pinned(`visible-${i}`), expectedPins.has(`visible-${i}`));
         assert.equal(kept(i), expectedKept.has(i));
