@@ -18,6 +18,23 @@ const MAX_READS = 40;
 /** A file named by its version (a build's zip or installer and its blockmap, an apk, a Node, a module's package, a face's, the site's film) never changes; the rest do (the feeds, the station's). */
 const VERSIONED = /^fonts\/|-[0-9.]+-(arm64-mac\.zip|x64-win\.exe)(\.blockmap)?$|^desktop\/web\/stillfail-beta-web-[0-9.]+\.tar\.gz$|-[0-9]+\.apk$|^node\/node-v[0-9.]+-[a-z0-9-]+\.tar\.gz(\.sha256)?$|^modules\/[a-z][a-z0-9]*\/[a-z][a-z0-9]*-0\.1\.[0-9]+(-[a-z0-9-]+)?\.tar\.gz$|^site\/film-[a-z]+-[0-9]+\.mp4$/;
 
+/** What the response of another cloud's releases (RELEASES_UPSTREAM) says that is passed on. */
+const PASSED = ["content-type", "content-length", "content-range", "accept-ranges", "etag", "cache-control"];
+
+/** `file` from another cloud's releases (`upstream`, its /releases), the range asked for passed on; its 404 when it has none. */
+export async function upstreamRelease(request: Request, upstream: string, file: string): Promise<Response> {
+  const range = request.headers.get("range");
+  const answer = await fetch(`${upstream.replace(/\/+$/, "")}/${file}`, { headers: range ? { range } : {} });
+  if (answer.status !== 200 && answer.status !== 206 && answer.status !== 416) return notFound();
+  const headers = new Headers();
+  for (const name of PASSED) {
+    const value = answer.headers.get(name);
+    if (value !== null) headers.set(name, value);
+  }
+  if (file.startsWith("fonts/")) headers.set("access-control-allow-origin", "*");
+  return new Response(answer.body, { status: answer.status, headers });
+}
+
 export async function serveRelease(request: Request, bucket: ReleaseBucket | undefined, file: string, type: string): Promise<Response> {
   const headers: Record<string, string> = {
     "content-type": type,

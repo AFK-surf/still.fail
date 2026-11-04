@@ -84,6 +84,8 @@ export async function harness(
     mail?: true | ((message: MailMessage) => boolean | string);
     /** Cloudflare Access in front of the console's host (ACCESS_TEAM_DOMAIN, ACCESS_AUD): `accessToken` makes its tokens. */
     access?: true;
+    /** Another cloud's releases its own bucket lacks some of (RELEASES_UPSTREAM, https://upstream.test/releases): its answer to each file asked there. */
+    upstream?: (file: string, request: OutboundRequest) => { status: number; body?: string; headers?: Record<string, string> };
     /** Push services, FCM and its token endpoint: a stand-in answering every other outbound request. */
     push?: (request: OutboundRequest) => Promise<{ status: number; body?: string }> | { status: number; body?: string };
   } = {},
@@ -168,6 +170,7 @@ export async function harness(
         ADMIN_TOKEN: adminToken,
         ADMIN_EMAIL: options.adminEmail ?? "alice@example.test",
         ...(options.access ? { ACCESS_TEAM_DOMAIN: ACCESS_TEAM, ACCESS_AUD: "test-access-aud" } : {}),
+        ...(options.upstream ? { RELEASES_UPSTREAM: "https://upstream.test/releases" } : {}),
         GRANT_SIGNING_JWK: JSON.stringify(grantJwk),
         ...(options.relayUrl ? { RELAY_URL: options.relayUrl } : {}),
         ...(options.relayUrls ? { RELAY_URLS: options.relayUrls } : {}),
@@ -188,6 +191,10 @@ export async function harness(
         const url = new URL(request.url);
         if (options.access && url.href === `${ACCESS_TEAM}/cdn-cgi/access/certs`) {
           return MFResponse.json({ keys: [{ ...publicJwk, kid: "test-access" }] });
+        }
+        if (options.upstream && url.href.startsWith("https://upstream.test/releases/")) {
+          const answer = options.upstream(url.pathname.slice("/releases/".length), { url: url.href, method: request.method, headers: Object.fromEntries(request.headers), body: new Uint8Array() });
+          return new MFResponse(answer.body ?? null, { status: answer.status, headers: answer.headers ?? {} });
         }
         if (url.href === "https://www.googleapis.com/oauth2/v3/certs") {
           return MFResponse.json({ keys: [publicJwk] }, { headers: { "cache-control": "max-age=3600" } });

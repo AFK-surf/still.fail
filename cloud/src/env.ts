@@ -11,6 +11,9 @@ export interface Env {
   DIRECTORY: DurableObjectNamespace<Directory>;
   /** The stations' releases (scripts/release.sh). */
   RELEASES?: R2Bucket;
+  /** Where the station's releases are read when the bucket has none of a file (releases.ts upstream): still.fail's
+   * (https://app.still.fail/releases) for monoid's cloud, whose bucket holds its own apps' builds alone. */
+  RELEASES_UPSTREAM?: string;
   LOGINS: DurableObjectNamespace<LoginAttempt>;
   LOGIN_LIMITS: DurableObjectNamespace<LoginLimiter>;
   TELEMETRY_LIMITS: DurableObjectNamespace<TelemetryLimiter>;

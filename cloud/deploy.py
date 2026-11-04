@@ -134,7 +134,13 @@ CLOUDS = {
         "dropped": ["3720.org"],
         # The API's own: Cloudflare Access in front of the console (src/admin.ts), its application "monoid admin" on
         # admin.monoid.build letting in the AFK-surf GitHub organization's members.
-        "api_vars": {"ACCESS_TEAM_DOMAIN": "https://afksurf.cloudflareaccess.com", "ACCESS_AUD": "53ffdc9eaf8c6827ad4081e898f4019d440e0de828643b995759a222c35f86e5"},
+        # Its bucket holds its own apps' builds alone: the station's releases, the same code's, read from still.fail's
+        # (src/install.ts sharedRelease).
+        "api_vars": {
+            "ACCESS_TEAM_DOMAIN": "https://afksurf.cloudflareaccess.com",
+            "ACCESS_AUD": "53ffdc9eaf8c6827ad4081e898f4019d440e0de828643b995759a222c35f86e5",
+            "RELEASES_UPSTREAM": "https://app.still.fail/releases",
+        },
     },
 }
 CLOUD = env_var("CLOUD") or ""

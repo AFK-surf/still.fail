@@ -128,6 +128,16 @@ const APP_FILES: [RegExp, string][] = [
   [/^natives\/[a-z][a-z0-9-]{0,31}-(darwin-arm64|linux-x64|linux-arm64|win32-x64|wasm32|android-arm64)-[0-9a-f]{24}\.tar\.gz$/, "application/gzip"],
 ];
 
+/**
+ * The files every cloud made of this code serves alike, its stations' and not its apps': the station's releases and
+ * feeds, their Node, the modules, the faces, the prebuilt native parts and the relay. A cloud whose bucket holds its
+ * own apps' builds alone (monoid's: RELEASES_UPSTREAM) reads these from still.fail's when it has none (releases.ts
+ * upstreamRelease); never an app's feed or build, which would update its apps to another product's.
+ */
+export function sharedRelease(file: string): boolean {
+  return RELEASE_FILE.test(file) || BETA_RELEASE_FILE.test(file) || NODE_FILE.test(file) || /^station(-beta)?\.json$|^(modules|fonts|natives|relay)\//.test(file);
+}
+
 /** The content type a file of the releases bucket is served with; null for a name that is not one of its files. */
 export function releaseType(file: string): string | null {
   const archive = file.endsWith(".zip") ? "application/zip" : "application/gzip";
