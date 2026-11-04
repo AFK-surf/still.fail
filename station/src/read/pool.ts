@@ -217,6 +217,13 @@ export class Readers {
     return this.saidRead(op, args, lang, told, background || filling(op, args), signal);
   }
 
+  /// Prepare the same old-chat boundary for a sidebar read or the auto-archive check; concurrent requests share work.
+  prepareSaid(threads: readonly number[], signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.said ??= new SaidBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.said.ready(threads, signal), signal);
+  }
+
   private async saidRead(op: string, args: unknown, lang: Ask["lang"], told: boolean, background: boolean, signal?: AbortSignal): Promise<string> {
     while (!this.closed) {
       try { return await this.enqueue(op, args, lang, told, op === CHECKPOINT, background, signal); }
@@ -225,8 +232,7 @@ export class Readers {
         let threads: unknown;
         try { threads = JSON.parse(error.message.slice(SAID_PENDING.length)); } catch { throw error; }
         if (!Array.isArray(threads) || threads.length === 0 || !threads.every(Number.isSafeInteger)) throw error;
-        this.said ??= new SaidBuilder(join(this.data, "stillfail.db"), this.backfill);
-        await this.covered(this.said.ready(threads, signal), signal);
+        await this.prepareSaid(threads, signal);
       }
     }
     throw new HttpError(502, "station stopping");

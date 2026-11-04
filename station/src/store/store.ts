@@ -42,7 +42,7 @@ import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from
 import { RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiveJobs } from "./active-jobs.ts";
 import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
 import { installPostBlocks, PostBlocksUnavailable, POST_BLOCK_SIZE, type PostPosition } from "./post-blocks.ts";
-import { installSaidState } from "./said-state.ts";
+import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
 // (and rows.ts JOBS_RUNNING and SESSION_JOBS, the readers' too).
@@ -1250,6 +1250,24 @@ export class Store {
   /// letters (rows.ts isLetter).
   unreadCount(viewer: string, thread: number): number {
     return this.#unreadCount(viewer, thread, this.readPosition(viewer, thread));
+  }
+
+  /// Whether a still.fail chat's starter has anything unread. Null asks the sidebar state worker to finish an old run.
+  unreadForArchive(viewer: string, thread: number): boolean | null {
+    // The read position, last message and its boundary must describe the same snapshot while other stations write.
+    this.db.exec("SAVEPOINT archive_unread");
+    try {
+      const read = this.readPosition(viewer, thread);
+      const latest = this.#one(SAID_LATEST, thread);
+      if (!latest || latest.n <= read) return false;
+      if (latest.author_kind !== "person" || latest.author !== viewer) return true;
+      const boundary = saidBoundary(this.#one(SAID_STATE, thread), latest);
+      if (boundary.known) return boundary.other !== null && boundary.other > read;
+      const previous = this.#all(SAID_SCAN, thread, latest.n, SAID_BATCH_SIZE);
+      if (previous.some((p) => p.n > read && (p.author_kind !== "person" || p.author !== viewer))) return true;
+      if (previous.length < SAID_BATCH_SIZE || previous.at(-1)!.n <= read) return false;
+      return null;
+    } finally { this.db.exec("RELEASE archive_unread"); }
   }
 
   // ── entries ──

@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { autoArchive } from "../src/sessions/lifecycle.ts";
+import { autoArchive, startAutoArchiveTimer } from "../src/sessions/lifecycle.ts";
 import { saidScanStep, type SaidScan } from "../src/store/said-state.ts";
+import { Store } from "../src/store/store.ts";
 import { Rig } from "./hub-fakes.ts";
 
 const later = () => Date.now() + 3 * 86_400_000;
@@ -36,6 +41,21 @@ function track(r: Rig) {
   return { visited: () => visited, restore: () => Object.defineProperty(r.store, "db", { configurable: true, value: db }) };
 }
 
+function timers() {
+  let next: { ms: number; run: () => void } | null = null;
+  return {
+    after(ms: number, run: () => void) {
+      const task = { ms, run }; next = task;
+      return () => { if (next === task) next = null; };
+    },
+    fire(ms: number) {
+      const task = next; assert.ok(task); assert.equal(task.ms, ms);
+      next = null; task.run();
+    },
+    pending: () => next?.ms ?? null,
+  };
+}
+
 test("auto-archive does not count a long run of unread messages", async () => {
   const r = new Rig();
   try {
@@ -63,6 +83,51 @@ test("auto-archive does not scan a long run of the starter's messages", async ()
   } finally { await r.close(); }
 });
 
+test("the archive check ignores letters and the starter's messages", async () => {
+  const r = new Rig();
+  try {
+    const thread = r.store.openThread("ember", "EMBER", "mixed", null, "me").id;
+    const put = r.store.db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at,letter) VALUES (?,?,?,?,?,?,?,?)");
+    put.run(thread, 1, "message", "person", "someone", "other", 1, null);
+    put.run(thread, 2, "message", "person", "me", "mine", 2, null);
+    put.run(thread, 3, "message", "person", "someone", "letter", 3, "{}");
+    assert.equal(r.store.unreadForArchive("me", thread), true);
+    r.store.setRead("me", thread, 1);
+    assert.equal(r.store.unreadForArchive("me", thread), false);
+    put.run(thread, 4, "message", "agent", "a", "answer", 4, null);
+    assert.equal(r.store.unreadForArchive("me", thread), true);
+    r.store.setRead("me", thread, 4);
+    assert.equal(r.store.unreadForArchive("me", thread), false);
+  } finally { await r.close(); }
+});
+
+test("the archive's unread decision reads one snapshot while another station writes", () => {
+  const dir = mkdtempSync(join(tmpdir(), "archive-unread-"));
+  const path = join(dir, "stillfail.db");
+  const store = Store.open(path);
+  const other = new DatabaseSync(path);
+  try {
+    const thread = store.openThread("ember", "EMBER", "chat", null, "me").id;
+    const put = "INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,?,'message',?,?,?,?)";
+    store.db.prepare(put).run(thread, 1, "person", "me", "mine", 1);
+    const read = store.readPosition.bind(store);
+    let wrote = false;
+    store.readPosition = (...args) => {
+      const position = read(...args);
+      if (!wrote) {
+        wrote = true;
+        other.prepare(put).run(thread, 2, "agent", "a", "new", 2);
+      }
+      return position;
+    };
+    assert.equal(store.unreadForArchive("me", thread), false);
+    assert.equal(store.unreadForArchive("me", thread), true);
+    store.readPosition = () => { throw new Error("read failed"); };
+    assert.throws(() => store.unreadForArchive("me", thread), /read failed/);
+    assert.doesNotThrow(() => store.db.exec("BEGIN; ROLLBACK"));
+  } finally { other.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("an old unknown boundary is prepared before archiving", async () => {
   const r = new Rig();
   try {
@@ -88,4 +153,58 @@ test("an old unknown boundary is prepared before archiving", async () => {
     autoArchive(r.hub, later());
     assert.notEqual(r.store.getThread(thread)?.hiddenAt, null, "once known, the read chat can be archived");
   } finally { await r.close(); }
+});
+
+test("the archive timer retries when the old boundary is ready", async () => {
+  const r = new Rig();
+  const time = timers();
+  const ready = Promise.withResolvers<void>();
+  const calls: number[][] = [];
+  let stop = () => {};
+  try {
+    const thread = chat(r, "timer", "person", true);
+    r.store.setRead("me", thread, 1);
+    r.store.db.prepare("UPDATE threads SET created_at=0 WHERE id=?").run(thread);
+    r.store.db.prepare("UPDATE thread_state SET said_other_known=0 WHERE thread=?").run(thread);
+    stop = startAutoArchiveTimer(r.hub, time, { prepareSaid: (ids) => { calls.push([...ids]); return ready.promise; } });
+    time.fire(60_000);
+    assert.equal(r.store.getThread(thread)?.hiddenAt, null);
+    assert.deepEqual(calls, [[thread]]);
+    time.fire(600_000);
+    assert.deepEqual(calls, [[thread]], "a slow worker is not started twice");
+    let scan: SaidScan | null = null;
+    for (;;) {
+      const step = saidScanStep(r.store.db, thread, scan);
+      if (step.done) break;
+      scan = step.scan;
+    }
+    ready.resolve();
+    await ready.promise;
+    await Promise.resolve();
+    time.fire(0);
+    assert.notEqual(r.store.getThread(thread)?.hiddenAt, null);
+  } finally { stop(); ready.resolve(); await r.close(); }
+});
+
+test("stopping the archive timer cancels its pending old-chat work", async () => {
+  const r = new Rig();
+  const time = timers();
+  const ready = Promise.withResolvers<void>();
+  let signal: AbortSignal | undefined;
+  let stop = () => {};
+  try {
+    const thread = chat(r, "handover", "person", true);
+    r.store.setRead("me", thread, 1);
+    r.store.db.prepare("UPDATE threads SET created_at=0 WHERE id=?").run(thread);
+    r.store.db.prepare("UPDATE thread_state SET said_other_known=0 WHERE thread=?").run(thread);
+    stop = startAutoArchiveTimer(r.hub, time, { prepareSaid: (_ids, s) => { signal = s; return ready.promise; } });
+    time.fire(60_000);
+    stop();
+    assert.equal(signal?.aborted, true);
+    ready.resolve();
+    await ready.promise;
+    await Promise.resolve();
+    assert.equal(time.pending(), null);
+    assert.equal(r.store.getThread(thread)?.hiddenAt, null);
+  } finally { stop(); ready.resolve(); await r.close(); }
 });

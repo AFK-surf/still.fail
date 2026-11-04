@@ -67,7 +67,7 @@ import { buildWorkspaceActivity } from "./workspace-activity-builder.ts";
 import { PostBlockBuilder } from "./post-block-builder.ts";
 import { roomOf } from "./footprint.ts";
 import { InternalChat } from "./internal.ts";
-import { autoArchive, expireArchived, relieveArchived } from "./lifecycle.ts";
+import { expireArchived, relieveArchived, startAutoArchiveTimer } from "./lifecycle.ts";
 import { fromPeer, sender } from "./messages.ts";
 import { CREATE, NOTICE, createForPeer, noticeForPeer } from "./opened.ts";
 import { chatsTouched, forPeer, READ } from "./others.ts";
@@ -690,16 +690,7 @@ export const AgentsLive = (control: Control) =>
 
       // Chats idle long enough go to the archive: looked at when the next one comes due, and every ten minutes for what
       // was idle but not done (a job up, unread, at a block) and is done since, or the setting changed.
-      const archiving = () => {
-        let next: number | null = null;
-        try {
-          next = autoArchive(hub, hub.now());
-        } catch (error) {
-          log.warn("hub", "auto-archiving failed", { error: (error as Error).message });
-        }
-        time.after(Math.min(600_000, next === null ? Infinity : next - hub.now()), archiving);
-      };
-      time.after(60_000, archiving);
+      const stopArchiving = startAutoArchiveTimer(hub, time, readers);
 
       // Chats archived long enough keep only their history and the files sent in them: looked at when the next one
       // comes due, and every hour for the setting changed.
@@ -766,6 +757,7 @@ export const AgentsLive = (control: Control) =>
         Effect.promise(async () => {
           if (handing) return;
           handing = true;
+          stopArchiving();
           await postBlocks.close();
           await workspaceActivity.close();
           await time.close();
