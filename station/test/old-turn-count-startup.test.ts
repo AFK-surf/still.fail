@@ -134,6 +134,29 @@ test("a workspace session list does not prepare another workspace's old counts",
   } finally { f.close(); }
 });
 
+test("an already upgraded station keeps its counts and old triggers", () => {
+  const f = fixture();
+  f.store.db.exec(`DROP TRIGGER session_turns_add; DROP TRIGGER session_turns_drop;
+    DROP TRIGGER session_turns_before_insert; DROP TRIGGER session_turns_move; DROP TABLE session_turns_guard;
+    INSERT INTO session_turns SELECT session_key, COUNT(*) FROM turns GROUP BY session_key;
+    CREATE TRIGGER session_turns_add AFTER INSERT ON turns BEGIN
+      INSERT INTO session_turns VALUES (NEW.session_key,1) ON CONFLICT(session) DO UPDATE SET n=n+1;
+    END;
+    CREATE TRIGGER session_turns_drop AFTER DELETE ON turns BEGIN
+      UPDATE session_turns SET n=n-1 WHERE session=OLD.session_key;
+      DELETE FROM session_turns WHERE session=OLD.session_key AND n<=0;
+    END;`);
+  f.store.close();
+  const reopened = Store.open(f.path);
+  try {
+    const r = read.makeStore(reopened.db, f.dir);
+    assert.equal(read.sessionStats(r, "long").get("long")?.turns, 150);
+    reopened.startTurn("after-upgrade", "long", "input");
+    assert.equal(read.sessionStats(r, "long").get("long")?.turns, 151);
+    assert.equal(reopened.db.prepare("SELECT name FROM sqlite_master WHERE name='session_turns_guard'").get(), undefined);
+  } finally { reopened.close(); rmSync(f.dir, { recursive: true, force: true }); }
+});
+
 test("old turn count discards slices changed by another connection and keeps new counts exact", () => {
   const f = fixture();
   const other = new DatabaseSync(f.path);

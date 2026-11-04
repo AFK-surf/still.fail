@@ -1394,7 +1394,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
   // as it was read every message of a chat, every turn or delivery of a session, or every row of its table: a notice of
   // a chat of many messages read many pages, 3 to 16 s on a station short of memory (2026-11-02), every telling after it waiting.
   const planned: [string, unknown[]][] = [
-    [read.UNREAD, [1, 0, "[]"]], [read.ASKED_DURING, [1, 0, 9]], [`${read.SESSION_STATS} WHERE s.key = ?`, ["a"]], [read.LAST_TURN, ["a"]], [read.LATEST_TURNS, ["a", 1]], [CC_THREADS_SQL, [1]],
+    [read.UNREAD, [1, 0, "[]"]], [read.ASKED_DURING, [1, 0, 9]], [`${read.SESSION_STATS} WHERE s.key = ?`, ["a"]], [`${read.SESSION_ACTIVITY} WHERE s.key = ?`, ["a"]], [read.LAST_TURN, ["a"]], [read.LATEST_TURNS, ["a", 1]], [CC_THREADS_SQL, [1]],
     [read.SHARES_OF, ['["a"]']], [read.OPENERS_OF, ['["a"]']], [read.OPENED_OF, ['["a"]']], [read.PUBLISHED_OF, ["[1]"]], [read.PINS_OF, ["a@x", '["a"]']],
     [`${read.SEEN_OF} WHERE key IN (SELECT value FROM json_each(?))`, ['["a"]']], [read.TOLD_BLOCKED, ["a", 0, 9]], [read.RUNNING_OF, ['["a"]']],
   ];
@@ -1417,6 +1417,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
   has(stats, "deliveries_pending (session=?)");
   // An uncounted old session checks at most 65 of its own turns before asking for bounded preparation.
   has(stats, "old USING COVERING INDEX turns_by_session (session_key=?)");
+  lacks(`${read.SESSION_ACTIVITY} WHERE s.key = ?`, "session_turns");
   lacks(stats, "deliveries_session");
   has(read.LAST_TURN, "turns_by_session (session_key=?)");
   // A session's latest turns by the index of its turns, from its end: not every turn read and sorted.
