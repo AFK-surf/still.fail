@@ -2398,6 +2398,7 @@ let en : Map[String, String] = {
   "web-pages.screen.device.pose.book": "Half open",
   "web-pages.screen.device.pose.closed": "Closed",
   "web-pages.screen.device.pose.open": "Open",
+  "web-pages.screen.device.rotate": "Rotate",
   "web-pages.screen.device.lock": "Lock",
   "web-pages.screen.device.softKeyboard": "Keyboard",
   "web-pages.screen.toGrants": "Go to permissions",

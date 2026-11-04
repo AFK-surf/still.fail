@@ -86,6 +86,8 @@ test("keys: keycode and meta state; the app's device buttons press the device's"
   assert.deepEqual(keycodes(0, "Nothing"), []);
   assert.deepEqual(input.messages({ t: "device", name: "volume_up" }, size).map((m) => m.readInt32BE(2)), [24, 24]);
   assert.deepEqual(input.messages({ t: "device", name: "memory_warning" }, size), []);
+  // (not a control message: AndroidView turns it by adb)
+  assert.deepEqual(input.messages({ t: "device", name: "rotate" }, size), []);
   assert.deepEqual(input.messages({ t: "pose", name: "open" }, size), []);
 });
 

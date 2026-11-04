@@ -11,6 +11,7 @@ export type SimOp =
   | { op: "button"; name: "home" | "app_switcher" | "lock" | "keyboard" }
   | { op: "paste"; text: string }
   | { op: "pose"; name: string }
+  | { op: "rotate" }
   | { op: "button"; name: "volume_up" | "volume_down" }
   | { op: "memory_warning" };
 
@@ -84,7 +85,7 @@ export class SimInput {
       case "pose":
         return [{ op: "pose", name: e.name }];
       case "device":
-        return e.name === "memory_warning" ? [{ op: "memory_warning" }] : [{ op: "button", name: e.name }];
+        return e.name === "memory_warning" ? [{ op: "memory_warning" }] : e.name === "rotate" ? [{ op: "rotate" }] : [{ op: "button", name: e.name }];
     }
   }
 

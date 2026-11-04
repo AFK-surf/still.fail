@@ -46,6 +46,8 @@ const TOUCH_DOWN = 0, TOUCH_UP = 1, TOUCH_MOVE = 2;
 /// scrcpy's POINTER_ID_GENERIC_FINGER: a finger, not its mouse.
 const FINGER = -2n;
 const TEXT_MOST = 300;
+/// The display turned between its two sides (out of following the sensor, as a person's own lock does).
+const ROTATE = `case "$(wm user-rotation)" in "lock 1") wm user-rotation lock 0;; *) wm user-rotation lock 1;; esac`;
 
 const KEY_HOME = 3, KEY_BACK = 4, KEY_VOLUME_UP = 24, KEY_VOLUME_DOWN = 25, KEY_POWER = 26, KEY_APP_SWITCH = 187;
 
@@ -451,6 +453,12 @@ export class AndroidView implements ScreenView {
   }
 
   async input(event: ScreenInput) {
+    // Turned by the window manager, the picture's new shape following from scrcpy (its own ROTATE_DEVICE does nothing on an
+    // Android 16 emulator).
+    if (event.t === "device" && event.name === "rotate") {
+      await this.#adb.run(["shell", ROTATE]).catch(() => {});
+      return;
+    }
     if (this.#size.width === 0) return;
     for (const message of this.#input.messages(event, this.#size)) this.#control?.write(message);
   }

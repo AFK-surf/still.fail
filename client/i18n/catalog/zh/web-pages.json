@@ -1535,6 +1535,7 @@
   "web-pages.screen.device.back": "返回",
   "web-pages.screen.device.home": "主屏幕",
   "web-pages.screen.device.appSwitcher": "多任务",
+  "web-pages.screen.device.rotate": "旋转",
   "web-pages.screen.device.lock": "锁屏",
   "web-pages.screen.device.keyboard": "显示或隐藏软键盘",
   "web-pages.screen.device.shot": "截图",

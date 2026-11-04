@@ -1610,6 +1610,7 @@
   "web-pages.screen.device.back": "Back",
   "web-pages.screen.device.home": "Home",
   "web-pages.screen.device.appSwitcher": "App switcher",
+  "web-pages.screen.device.rotate": "Rotate",
   "web-pages.screen.device.lock": "Lock",
   "web-pages.screen.device.keyboard": "Show or hide the software keyboard",
   "web-pages.screen.device.shot": "Screenshot",

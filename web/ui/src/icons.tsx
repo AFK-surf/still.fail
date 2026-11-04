@@ -445,6 +445,10 @@ export function Said(props: IconProps) {
   return <Svg {...props}><path d="M8 4H16Q20.5 4 20.5 8.5V14Q20.5 18 16.5 18H10L5 20.5V17.5Q3.5 16.5 3.5 14V8.5Q3.5 4 8 4Z M8 9H16 M8 13H13" /></Svg>;
 }
 
+export function ScreenRotate(props: IconProps) {
+  return <Svg {...props}><rect x="8" y="6.5" width="8" height="11" rx="1.75" /><path d="M3.5 12a8.5 8.5 0 0 1 5-7.75" /><path d="M5.75 3.5l2.75 .75-.75 2.75" /><path d="M20.5 12a8.5 8.5 0 0 1-5 7.75" /><path d="M18.25 20.5l-2.75-.75.75-2.75" /></Svg>;
+}
+
 export function Scribble(props: IconProps) {
   return <Svg {...props}><path d="M3.5 17.5Q6 11 9 8Q12 5 12.5 7.5Q13 10 9.5 14.5Q7 18.5 10 18.5Q13 18.5 16.5 12.5Q18.5 9.5 20.5 11" /></Svg>;
 }
@@ -715,6 +719,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "refresh": Refresh,
   "retry": Retry,
   "said": Said,
+  "screen-rotate": ScreenRotate,
   "scribble": Scribble,
   "search": Search,
   "send": Send,

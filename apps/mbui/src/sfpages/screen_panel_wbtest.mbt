@@ -638,6 +638,23 @@ test "a device wider than tall: what it has itself in a row under it, App first;
 }
 
 ///|
+test "旋转 by the device: told to the device, whose picture says what it did" {
+  let r = screen_rig()
+  r.t.resize(1280.0, 600.0)
+  simulator_live(r)
+  r.t.draw()
+  r.tap_label(tr("web-pages.screen.device.rotate"))
+  r.t.draw()
+  let ins = r.inputs()
+  assert_eq(text(Some(ins[ins.length() - 1]), "t"), "device")
+  assert_eq(text(Some(ins[ins.length() - 1]), "name"), "rotate")
+  r.t.resize(390.0, 844.0)
+  r.ui().logs.tab = 0
+  r.t.run_for(@sf.toast_ms)
+  screen_done(r.t)
+}
+
+///|
 test "a device taller than wide: as large as the window's height leaves it, what it has itself right beside it" {
   let r = screen_rig(w=1280.0, h=800.0)
   r.state("live", more={ "kind": Json::string("simulator"), "debug": Json::boolean(true) })
