@@ -160,14 +160,14 @@ test("maintained chat totals agree with visible records through membership and c
       const thread = threads[next(threads.length)]!, session = `s${next(6)}`, n = 1 + next(4);
       const operation = next(10);
       switch (operation) {
-        case 0: db.prepare("INSERT OR IGNORE INTO thread_sessions VALUES (?, ?, 'connect', 1)").run(thread, session); break;
+        case 0: db.prepare("INSERT OR IGNORE INTO thread_sessions (thread, session, connect, joined_at) VALUES (?, ?, 'connect', 1)").run(thread, session); break;
         case 1: db.prepare("DELETE FROM thread_sessions WHERE thread = ? AND session = ?").run(thread, session); break;
         case 2: db.prepare("UPDATE sessions SET ws = ? WHERE key = ?").run(["A", "B", null][next(3)]!, session); break;
         case 3: db.prepare("UPDATE threads SET hidden_at = ? WHERE id = ?").run(next(2) ? 1 : null, thread); break;
         case 4: db.prepare("INSERT OR REPLACE INTO card_outcomes VALUES (?, ?, 'agent', '[]', 1, ?)").run(thread, n, next(2)); break;
         case 5: db.prepare("DELETE FROM card_outcomes WHERE thread = ? AND n = ?").run(thread, n); break;
         case 6: db.prepare("INSERT OR REPLACE INTO closed_cards VALUES (?, ?, ?, 1)").run(thread, n, next(2) ? "agent" : "person"); break;
-        case 7: db.prepare("INSERT OR REPLACE INTO thread_sessions VALUES (?, ?, 'connect', 1)").run(thread, session); break;
+        case 7: db.prepare("INSERT OR REPLACE INTO thread_sessions (thread, session, connect, joined_at) VALUES (?, ?, 'connect', 1)").run(thread, session); break;
         case 8: db.prepare("UPDATE threads SET surface = ? WHERE id = ?").run(next(2) ? "slack:w" : "ember", thread); break;
         case 9: db.prepare("DELETE FROM closed_cards WHERE thread = ? AND n = ?").run(thread, n); break;
       }
@@ -176,7 +176,7 @@ test("maintained chat totals agree with visible records through membership and c
         `change ${i}, operation ${operation}, thread ${thread}, viewer ${JSON.stringify(viewer)}`);
     }
     // A membership can outlive its session; the home view only owns it once the missing session actually has no workspace.
-    db.prepare("INSERT OR IGNORE INTO thread_sessions VALUES (?, 'missing', 'connect', 1)").run(threads[0]!);
+    db.prepare("INSERT OR IGNORE INTO thread_sessions (thread, session, connect, joined_at) VALUES (?, 'missing', 'connect', 1)").run(threads[0]!);
     for (const viewer of viewers) assert.deepEqual(usageChatTotals(makeStore(db, "."), viewer), expected(store, viewer));
     addSession("missing", null);
     while (!backfillUsageChatStats(db, 4).done) {}
