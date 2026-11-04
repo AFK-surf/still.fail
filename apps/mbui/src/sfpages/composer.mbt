@@ -1381,6 +1381,32 @@ pub(all) struct ComposerPlace {
   capsule_in : (Double, Double, Double)
   capsule_pad : Double
   corner : Double
+} derive(Eq)
+
+///|
+/// The parts of a composer's geometry that do not depend on the pane's width. Capture these before layout and
+/// resolve the width-dependent choice with the width supplied by the parent in that same layout.
+pub struct ComposerLimits {
+  priv side : Double
+  priv native : Bool
+  priv across : (Double, ComposerPlace)
+  priv apart : (Double, ComposerPlace)
+} derive(Eq)
+
+///|
+pub fn composer_limits(radii : FixedArray[Double]?) -> ComposerLimits {
+  let side = @sf.pane_foot_in_of(radii, holds=@sf.theme().round.side)
+  let (_, near_foot, near_place) = composer_geometry(0.0, radii)
+  let (_, far_foot, far_place) = composer_geometry(1.0e9, radii)
+  { side, native: @sf.native_on(), across: (near_foot, near_place), apart: (far_foot, far_place) }
+}
+
+///|
+pub fn ComposerLimits::in_width(self : ComposerLimits, pane : Double) -> (Double, Double, ComposerPlace) {
+  let room = pane - 2.0 * self.side
+  let width = if self.native { room } else { dmin(room, composer_most) }
+  let (foot, place) = if width >= room - 0.5 { self.across } else { self.apart }
+  (width, foot, place)
 }
 
 ///|

@@ -28,24 +28,32 @@ fn composer_box_node(
     cap.row(Is(true)).wraps(By(fn() { if opened() { Some(10.0) } else { None } }))
     .gap(By(fn() { if opened() { 4.0 } else { 2.0 } }))
     .lines_up(Is(Some(Middle)))
-    .padding(By(fn() {
-      let pad = if opened() { @sf.composer_pad } else { place().capsule_pad }
-      let x = if opened() { pad } else { pad + extra() }
-      (x, pad, x, pad)
-    }))
-    .margin(By(fn() {
-      if opened() { (0.0, 0.0, 0.0, 0.0) } else {
-        let (l, r, b) = place().capsule_in
-        (l, 0.0, r, b)
-      }
-    }))
-    .radius(By(fn() {
-      if opened() { place().corner } else {
-        (dmax(@sf.theme().round.side, line()) + 2.0 * place().capsule_pad) / 2.0
-      }
-    }))
     .glass(By(fn() { Some(@sf.glass_floating()) }))
     |> ignore
+    if !composer_place_layout(cap, fn() { (opened(), extra(), @sf.theme().round.side, line()) }, fn(p, state) {
+      let (open, extra, side, line) = state
+      let pad = if open { @sf.composer_pad } else { p.capsule_pad }
+      let x = if open { pad } else { pad + extra }
+      let (l, r, b) = p.capsule_in
+      cap.padding(Is((x, pad, x, pad)))
+      .margin(Is(if open { (0.0, 0.0, 0.0, 0.0) } else { (l, 0.0, r, b) }))
+      .radius(Is(if open { p.corner } else { (dmax(side, line) + 2.0 * pad) / 2.0 })) |> ignore
+    }) {
+      cap.padding(By(fn() {
+        let pad = if opened() { @sf.composer_pad } else { place().capsule_pad }
+        let x = if opened() { pad } else { pad + extra() }
+        (x, pad, x, pad)
+      })).margin(By(fn() {
+        if opened() { (0.0, 0.0, 0.0, 0.0) } else {
+          let (l, r, b) = place().capsule_in
+          (l, 0.0, r, b)
+        }
+      })).radius(By(fn() {
+        if opened() { place().corner } else {
+          (dmax(@sf.theme().round.side, line()) + 2.0 * place().capsule_pad) / 2.0
+        }
+      })) |> ignore
+    }
     let moving = @motion.moves_together(cap, by, spec=composer_open_spec())
     let named : Map[String, @view.View] = { "box": cap }
     moving.add(cap, reshapes=true)
@@ -112,7 +120,12 @@ fn composer_box_node(
             named["words"] = field
           }
           "plus" => {
-            part.margin(By(fn() { if opened() { (tools_in(), 0.0, 0.0, tools_in()) } else { (0.0, 0.0, 0.0, 0.0) } })) |> ignore
+            if !composer_place_layout(part, fn() { (opened(), @sf.theme().round.side) }, fn(p, state) {
+              let inset = @sf.capsule_in(p.corner, state.1) - @sf.composer_pad
+              part.margin(Is(if state.0 { (inset, 0.0, 0.0, inset) } else { (0.0, 0.0, 0.0, 0.0) })) |> ignore
+            }) {
+              part.margin(By(fn() { if opened() { (tools_in(), 0.0, 0.0, tools_in()) } else { (0.0, 0.0, 0.0, 0.0) } })) |> ignore
+            }
             plus(part)
             moving.add(part)
             named["plus"] = part
@@ -120,14 +133,25 @@ fn composer_box_node(
           "choices" => {
             part.row(Is(true)).grow(Is(1.0)).min_width(Is(Some(0.0)))
             .laid_nowhere(By(fn() { !opened() }))
-            .margin(By(fn() { (0.0, 0.0, 0.0, tools_in()) })) |> ignore
+            |> ignore
+            if !composer_place_layout(part, fn() { @sf.theme().round.side }, fn(p, side) {
+              part.margin(Is((0.0, 0.0, 0.0, @sf.capsule_in(p.corner, side) - @sf.composer_pad))) |> ignore
+            }) {
+              part.margin(By(fn() { (0.0, 0.0, 0.0, tools_in()) })) |> ignore
+            }
             choices(part)
             moving.add(part)
             named["choices"] = part
           }
           "tail" => {
             part.row(Is(true)).gap(Is(4.0)).lines_up(Is(Some(Middle)))
-            .margin(By(fn() { if opened() { (0.0, 0.0, tools_in(), tools_in()) } else { (0.0, 0.0, 0.0, 0.0) } })) |> ignore
+            |> ignore
+            if !composer_place_layout(part, fn() { (opened(), @sf.theme().round.side) }, fn(p, state) {
+              let inset = @sf.capsule_in(p.corner, state.1) - @sf.composer_pad
+              part.margin(Is(if state.0 { (0.0, 0.0, inset, inset) } else { (0.0, 0.0, 0.0, 0.0) })) |> ignore
+            }) {
+              part.margin(By(fn() { if opened() { (0.0, 0.0, tools_in(), tools_in()) } else { (0.0, 0.0, 0.0, 0.0) } })) |> ignore
+            }
             // The chooser can come and go before the note and send button. Each keeps its own place through
             // that change; moving their shared row would carry them across by the chooser's changing width.
             for i, control in tail(part) {

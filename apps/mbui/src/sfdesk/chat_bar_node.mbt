@@ -44,9 +44,8 @@ fn jobs_toggle() -> Unit {
 
 ///|
 fn chat_bar_node(parent : @view.View, src : Source, w : Workspace, r : ChatRef, stint : Int,
-  view : () -> ChatView?, corners : () -> FixedArray[@ui.CornerOf]?,
+  view : () -> ChatView?, pane_width : @view.WidthContext, corners : () -> FixedArray[@ui.CornerOf]?,
   ground : (@view.View) -> Int64) -> Unit {
-  let pane_width = parent.width_context()
   let chat = fn() { (src.topic)("chat", chat_params(r)).value }
   let station = fn() {
     stations_of((src.topic)("stations", { "scope": Json::string(w.id) }).value)
