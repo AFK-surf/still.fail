@@ -29,6 +29,43 @@ let host_typed : Array[String] = ["看", "一", "下", "第", "三", "项", "的
 let host_erased : Int = 5
 
 ///|
+/// `base` with its chats' messages as a core gives them (Source.list: a list followed, @rows.TopicList), not made
+/// again of the topic's whole value each time it is read (the made-up source's way, ChatMessages::of_value): told
+/// whole only where the messages are another value, as a core's subscription is. What a key typed costs is the
+/// page's, not the made-up source's.
+fn core_lists(base : Source) -> Source {
+  let kept : Map[String, (Json, @rows.TopicList)] = {}
+  {
+    ..base,
+    list: fn(name, params, path, fields) {
+      if name != "chat" {
+        return (base.list)(name, params, path, fields)
+      }
+      let v = (base.topic)(name, params).value
+      let messages = match v {
+        Some(Object(o)) => o.get("messages").unwrap_or(Json::null())
+        _ => Json::null()
+      }
+      let key = Json::object(params).stringify()
+      match kept.get(key) {
+        Some((was, l)) => {
+          if !physical_equal(was, messages) {
+            l.given(v)
+            kept[key] = (messages, l)
+          }
+          Some(l)
+        }
+        None => {
+          let l = @rows.TopicList::new(path, fields, v)
+          kept[key] = (messages, l)
+          Some(l)
+        }
+      }
+    },
+  }
+}
+
+///|
 /// The frames of one step of the walk, and the composer's room as it stood (x0, y0, x1, y1: where a key draws).
 struct HostStep {
   what : String
@@ -40,7 +77,7 @@ struct HostStep {
 /// step's frames, and the composer's room once focused.
 fn host_walk(mode : String, w : Double, h : Double, platform : Int) -> (Array[HostStep], (Double, Double, Double, Double)) {
   let calls : Array[Made] = []
-  let t = wide_tester(calls, mode~, w~, h~, platform~)
+  let t = wide_tester(calls, mode~, w~, h~, platform~, wrap=core_lists)
   t.set_frame_period(if platform == 0 { host_desk_period } else { host_phone_period })
   t.run_for(@ui.move_most_ms)
   if w > 600.0 && w < 840.0 {
@@ -244,7 +281,19 @@ test "each frame of a chat of 3000 messages costs what it costs a chat of 30, on
     for i, s in a {
       match b.get(i) {
         Some(o) if o == s => ()
-        Some(o) => out.push("\{s.0} at \{w}: 3000 \{s.1}, 30 \{o.1}")
+        Some(o) => {
+          // (the first frame they part at, each side's: what of it costs more with the history)
+          let n = if s.1.length() < o.1.length() { s.1.length() } else { o.1.length() }
+          let mut k = 0
+          while k < n && s.1[k] == o.1[k] {
+            k = k + 1
+          }
+          let side = fn(f : Array[(Bool, Int, Int, Int, Int, Bool)]) { f.get(k).map(fn(x) { "\{x}" }).unwrap_or("none") }
+          let drawn = fn(steps : Array[HostStep]) {
+            steps.search_by(fn(x) { x.what == s.0 }).map(fn(j) { steps[j].frames.get(k).map(host_said).unwrap_or("") }).unwrap_or("")
+          }
+          out.push("\{s.0} at \{w}, frame \{k} of \{s.1.length()} (30: \{o.1.length()}): 3000 \{side(s.1)}, 30 \{side(o.1)}; 3000 \{drawn(long)}; 30 \{drawn(short)}")
+        }
         None => out.push("\{s.0} at \{w}: none at 30")
       }
     }

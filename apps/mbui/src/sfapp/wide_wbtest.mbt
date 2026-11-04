@@ -11,9 +11,10 @@ fn wide_tester(
   window_corner? : Double = 0.0,
   window_inset? : Bool = false,
   before? : (Source) -> Unit = fn(_) {  },
+  wrap? : (Source) -> Source = fn(s) { s },
 ) -> @ui.Tester {
   new_run()
-  let base = fixture(mode)
+  let base = wrap(fixture(mode))
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
