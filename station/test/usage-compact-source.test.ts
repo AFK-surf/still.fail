@@ -10,7 +10,7 @@ import { usageRoutes } from "../src/api/routes/usage.ts";
 import { makeStore, USAGE_CALLS_EARLIER, USAGE_CALLS_SAME, usageByDay, usageCallsPage, usageGroups, usageSince } from "../src/read/store.ts";
 import { usage, usageNow } from "../src/read/usage.ts";
 import { Store } from "../src/store/store.ts";
-import { compactHistory, compactQuery, compactScopeReady, compactTotal, installCompactUsage, moveCompactStep } from "../src/store/usage-compact.ts";
+import { compactHistory, compactQuery, compactScopeReady, compactTotal, compactTotalsStep, installCompactUsage, moveCompactStep } from "../src/store/usage-compact.ts";
 import { retireUsageIndexes } from "../src/store/usage-retire.ts";
 import { keepUsage, retireAfterPrevious, watchCompactMoves } from "../src/usage/module.ts";
 import { testClock } from "./hub-fakes.ts";
@@ -784,6 +784,39 @@ test("a station with incomplete old totals can report its new history without cl
         assert.equal(answer.historyUnavailable, true);
         assert.deepEqual(answer.partialHistory.days.map((d: { calls: number; tokens: number }) => [d.calls, d.tokens]), [[1, 3]]);
       }
+    } finally { store.db.setAuthorizer(null); }
+  } finally { store.close(); }
+});
+
+test("missing old decisions and old usage keep their separate incomplete coverage", () => {
+  const store = Store.open(":memory:");
+  try {
+    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A", createdAt: 0, lastActiveAt: 0 });
+    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
+    const call = { id: "old", at: 60_000, model: "m", subagent: false, fast: false, input: 100, cacheRead: 0,
+      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+    store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [[call, owner]]);
+    store.db.exec("CREATE TABLE usage_retired_detail (id INTEGER PRIMARY KEY); INSERT INTO usage_retired_detail VALUES (1)");
+    compactUsage(store);
+    store.recordUsage("/a", { session: "a", offset: 2, model: "m" }, "claude", [[{ ...call, id: "new", at: 120_000, input: 2 }, owner]]);
+    store.db.exec("CREATE TABLE card_outcomes_incomplete (id INTEGER PRIMARY KEY)");
+    store.db.setAuthorizer((action, name) => action === constants.SQLITE_READ && name === "usage" ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    try {
+      for (const offset of [0n, 1n]) {
+        const answer = usage(makeStore(store.db, "."), "en", 0n, 180_000n, offset, false, { workspace: "A", home: false }, true);
+        assert.equal(answer.history, undefined);
+        assert.equal(answer.historyUnavailable, true);
+        assert.equal(answer.partialHistory.tokensComplete, undefined);
+        assert.equal(answer.partialHistory.cardsIncomplete, true);
+        assert.equal(answer.partialHistory.cards, undefined);
+        assert.deepEqual(answer.partialHistory.days.map((d: { tokens: number }) => d.tokens), [3]);
+      }
+      while (!compactTotalsStep(store.db, 64).done) { /* Account the new statistics, never the old usage rows. */ }
+      const bounded = usage(makeStore(store.db, "."), "en", 0n, 180_000n, 0n, false, { workspace: "A", home: false }, true,
+        { historyRange: { from: 0n, to: 86_400_000n } });
+      assert.equal(bounded.partialHistory.tokensComplete, undefined);
+      assert.equal(bounded.partialHistory.cardsIncomplete, true);
+      assert.equal(bounded.partialHistory.tokens, 3);
     } finally { store.db.setAuthorizer(null); }
   } finally { store.close(); }
 });

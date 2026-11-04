@@ -79,3 +79,30 @@ test("a reader preserves an unbounded history as earlier usage arrives", async (
     assert.deepEqual(JSON.parse(await workers.read("usage", args, "en")), expected());
   } finally { workers?.close(); writer.close(); rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("a reader returns available usage when only old decisions are missing", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "usage-missing-decisions-"));
+  const writer = Store.open(join(dir, "stillfail.db"));
+  let workers: Readers | null = null;
+  try {
+    writer.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A", createdAt: 0, lastActiveAt: 0 });
+    const thread = writer.openThread("ember", "EMBER", "chat", null, null).id;
+    writer.joinThread(thread, "a", "ember");
+    const owner = { turn: null, thread, person: "p", profile: "cc" };
+    const call = { id: "one", at: 60_000, model: "m", subagent: false, fast: false,
+      input: 2, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
+    writer.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [[call, owner]]);
+    writer.db.exec("CREATE TABLE card_outcomes_incomplete (id INTEGER PRIMARY KEY)");
+    const before = writer.db.prepare("SELECT * FROM usage_chat_progress").get();
+    workers = new Readers(dir, 1);
+    const args = { from: "0", to: "180000", tz: "0", reading: false, viewer: { workspace: "A", home: false }, history: true };
+    const answer = JSON.parse(await workers.read("usage", args, "en"));
+    assert.equal(answer.history, undefined);
+    assert.equal(answer.historyUnavailable, true);
+    assert.equal(answer.partialHistory.cardsIncomplete, true);
+    assert.equal(answer.partialHistory.tokensComplete, true);
+    assert.deepEqual(answer.partialHistory.places, { ember: 1 });
+    assert.deepEqual(answer.partialHistory.days.map((day: { tokens: number }) => day.tokens), [3]);
+    assert.deepEqual(writer.db.prepare("SELECT * FROM usage_chat_progress").get(), before);
+  } finally { workers?.close(); writer.close(); rmSync(dir, { recursive: true, force: true }); }
+});
