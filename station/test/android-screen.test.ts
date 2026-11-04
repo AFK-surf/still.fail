@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -159,6 +159,44 @@ esac
     const [s] = screens.list();
     assert.deepEqual([s!.id, s!.title(), s!.size()], ["android:emulator-5554", "pixel · Android 16", { width: 1080, height: 2400 }]);
   } finally {
+    androids.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("adb's devices are followed as the screens are asked for, and let go of a while after with none there", { skip: process.platform === "win32" }, async () => {
+  const { wall } = await import("../src/ops/fibers.ts");
+  const after = wall.after;
+  const due: [number, () => void][] = [];
+  wall.after = (ms, f) => (due.push([ms, f]), () => {});
+  const dir = mkdtempSync(join(tmpdir(), "android-rest-"));
+  const adb = join(dir, "adb");
+  const started = join(dir, "started");
+  writeFileSync(adb, `#!/bin/sh
+case "$*" in
+  track-devices*) echo x >> "${started}"; printf '0000'; exec sleep 60 ;;
+esac
+`);
+  chmodSync(adb, 0o755);
+  const androids = new AndroidScreens({ screens: makeScreens(), adb: () => adb, file: adb });
+  const runs = () => (existsSync(started) ? readFileSync(started, "utf8").split("\n").filter(Boolean).length : 0);
+  try {
+    await new Promise((r) => setTimeout(r, 200));
+    assert.equal(runs(), 0, "not from the start");
+    void androids.refresh();
+    for (let i = 0; i < 100 && runs() === 0; i++) await new Promise((r) => setTimeout(r, 10));
+    assert.equal(runs(), 1, "followed as asked for");
+    // The while after it, none there: let go of, and not followed again by itself.
+    for (const [ms, f] of due.splice(0)) if (ms >= 60_000) f();
+    await new Promise((r) => setTimeout(r, 300));
+    for (const [, f] of due.splice(0)) f();
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(runs(), 1);
+    void androids.refresh();
+    for (let i = 0; i < 100 && runs() === 1; i++) await new Promise((r) => setTimeout(r, 10));
+    assert.equal(runs(), 2, "followed again as asked for again");
+  } finally {
+    wall.after = after;
     androids.close();
     rmSync(dir, { recursive: true, force: true });
   }
