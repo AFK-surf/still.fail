@@ -19,7 +19,7 @@
 
 ## 构建和证明
 - `sh rules/build.sh`（`MBUI_TOOLS` 同 mbui 的脚本）：编成 JS，复制到 `rules/js/rules.js`。改了 `rules/src` 要重编并提交 `rules/js`；CI 的 `rules` 工作流核对两者一致。
-- `moon prove`（在 `rules/` 里）：要 Why3 1.7.2（opam 装）和一个求解器（z3 即可）。
+- `moon prove`（在 `rules/` 里）：要 Why3 1.7.2（opam 装）和一个求解器（z3 即可）。CI 的 `rules` 工作流每次改到 `rules/` 都跑一遍，证不出来就红：`tools` 每个 MoonBit 版本做一次证明工具（moonc-prove 和 opam 装的 Why3 1.7.2，放进 Actions 缓存；各 job 共用的 MoonBit 里删掉了 moonc-prove），`proved` 取出来跑。
 
 ## 写证明的坑
 - MoonBit 翻成 WhyML 时**不加括号**：`a && (b || c)` 翻出来是 `a /\ b \/ c`，意思变了。每个公式只用一种连接词，其余拆成具名的 `predicate`。
