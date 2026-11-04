@@ -431,20 +431,39 @@ test("a session watched again, or by the next station process, reads its transcr
   await settle();
   assert.deepEqual(nextAsked, [], "where its reading stood carried over too");
   assert.deepEqual(plan(nextGot), ["读日志 completed", "修 in_progress"]);
-  // Carried over once it is watched already (its readers slow to say): gone on from there at once.
-  let release = () => {};
+  // Watched before the process before has handed over (the sessions at work, as the station starts): the readers are
+  // not asked, what it carries over says where the reading stands. Asked, a busy transcript they last marked long
+  // before was read on by a reader for 2.3 s, every device's reads waiting behind it, at each update (ccvm 2026-11-04).
+  let handedOver = () => {};
   const late = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
-  late.history = { ...historyOf(path), state: () => new Promise((resolve) => (release = () => resolve(stateOf("claude", [path], null)))) };
+  const lateAsked: string[] = [];
+  late.history = historyOf(path, lateAsked);
+  late.handover = new Promise((resolve) => (handedOver = resolve));
   const lateGot: LiveMessage[] = [];
   late.subscribe("s", 5, null, (m) => void lateGot.push(m));
   await settle();
-  assert.equal(lateGot.length, 0, "waiting on the readers");
+  assert.equal(lateGot.length, 0, "waiting on the process before");
   late.takePlans(JSON.parse(JSON.stringify(hub.carriedPlans())));
   late.takeTails(JSON.parse(JSON.stringify(hub.carriedTails())));
   await settle();
   assert.deepEqual(lateGot.map((m) => m.type).slice(0, 1), ["timeline"], "joined without the readers");
-  release();
+  handedOver();
   await settle();
+  assert.deepEqual(lateAsked, [], "the readers never asked");
+  // The process before gone without carrying it over (or none was there): the readers are asked then.
+  let gone = () => {};
+  const lone = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
+  const loneAsked: string[] = [];
+  lone.history = historyOf(path, loneAsked);
+  lone.handover = new Promise((resolve) => (gone = resolve));
+  const loneGot: LiveMessage[] = [];
+  lone.subscribe("s", 5, null, (m) => void loneGot.push(m));
+  await settle();
+  assert.deepEqual(loneAsked, []);
+  gone();
+  await settle();
+  assert.deepEqual([loneAsked[0], loneGot.map((m) => m.type).includes("timeline")], ["state", true], "asked once it is gone");
+  lone.close();
   late.close();
   hub.close();
   next.close();

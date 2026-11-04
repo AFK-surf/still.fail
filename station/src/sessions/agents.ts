@@ -518,6 +518,8 @@ export const AgentsLive = (control: Control) =>
         state: async (key) => (JSON.parse(await readers.read("transcriptState", { key }, "zh")) as { states: TailState[] | null }).states,
         page: async (key, before, limit, brief) => JSON.parse(await readers.read("timeline", { key, before: String(before), limit: String(limit), lang: "zh", ...(brief ? { brief: "1" } : {}) }, "zh")),
       };
+      // Not asked of them before the process before has handed over: what it carries says where each reading stands.
+      hub.live.handover = previous;
       // Where each checklist was read to, for the next process to read on from (not back, at each update).
       parts.carry("live.plans", () => hub.live.carriedPlans(), (what) => hub.live.takePlans(what));
       // And where each transcript's reading stood, for it to read on from there (not ask the readers, at each update).
