@@ -25,10 +25,7 @@ fn composer_box_node(
     }
     let extra = fn() { dmax(0.0, (line() - @sf.theme().round.side) / 2.0) }
     let tools_in = fn() { @sf.capsule_in(place().corner, @sf.theme().round.side) - @sf.composer_pad }
-    // (opened, the words a line of their own and ＋, the choices and send one line under them, never two: a line breaks
-    // only where its parts have not the room at their least, so the tail gives way, the names it is copied to cut,
-    // rather than going on to a line of its own at the box's left; its row did not wrap before the retained tree)
-    cap.row(Is(true)).wraps(By(fn() { if opened() { Some(10.0) } else { None } })).wraps_at_least(Is(true))
+    cap.row(Is(true)).wraps(By(fn() { if opened() { Some(10.0) } else { None } }))
     .gap(By(fn() { if opened() { 4.0 } else { 2.0 } }))
     .lines_up(Is(Some(Middle)))
     .padding(By(fn() {
@@ -121,7 +118,7 @@ fn composer_box_node(
             named["plus"] = part
           }
           "choices" => {
-            part.row(Is(true)).grow(Is(1.0)).min_width(Is(Some(0.0)))
+            part.row(Is(true)).min_width(Is(Some(0.0)))
             .laid_nowhere(By(fn() { !opened() }))
             .margin(By(fn() { (0.0, 0.0, 0.0, tools_in()) })) |> ignore
             choices(part)
@@ -129,7 +126,11 @@ fn composer_box_node(
             named["choices"] = part
           }
           "tail" => {
-            part.row(Is(true)).gap(Is(4.0)).lines_up(Is(Some(Middle))).shrink(Is(1.0)).min_width(Is(Some(0.0)))
+            // Opened, it takes what ＋ and the choices leave of their line, from nothing, its controls at its end: never
+            // wider than that line, so it never goes on to a line of its own at the box's left (send there, past its
+            // edge, the names it is copied to long). What it holds gives way there by leaving those names out.
+            part.row(Is(true)).gap(Is(4.0)).lines_up(Is(Some(Middle))).lies_along(Is(End))
+            .width(By(fn() { if opened() { Some(0.0) } else { None } })).grow(By(fn() { if opened() { 1.0 } else { 0.0 } }))
             .margin(By(fn() { if opened() { (0.0, 0.0, tools_in(), tools_in()) } else { (0.0, 0.0, 0.0, 0.0) } })) |> ignore
             // The chooser can come and go before the note and send button. Each keeps its own place through
             // that change; moving their shared row would carry them across by the chooser's changing width.
