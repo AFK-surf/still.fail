@@ -300,3 +300,4 @@ test "a kept row under what shows, part of it asked into sight: that part's foot
   d.tree.frame(390.0, 844.0, now=20.0) |> ignore
   assert_eq(d.top(99), Some(-30.0))
 }
+
