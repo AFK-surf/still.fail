@@ -47,6 +47,7 @@ pub fn[K : Eq] list_laid_from_end(
   by? : Double = 0.0,
   ahead? : Double = 0.0,
   known? : (Int) -> Double? = fn(_) { None },
+  slack? : Double = 0.0,
 ) -> ListLaid[K] {
   if n == 0 {
     return { first: 0, last: -1, keys: [], tops: [], heights: [], anchor: None, at_start: true, at_end: true }
@@ -111,14 +112,15 @@ pub fn[K : Eq] list_laid_from_end(
   // (its start come in the window under its top: held at the top, the rows under the anchor drawn up under it as far
   // as there are any; all it holds shorter than the window, at the foot, at its end)
   let mut shift = 0.0
-  if first == 0 && foot > 0.0 {
+  // (`slack` of it may show past its start: room kept there for a row tucked out of sight, list_laid_from_top's)
+  if first == 0 && foot > slack {
     let mut past = under
     let mut k = i
-    while past < foot && k < n - 1 {
+    while past < foot - slack && k < n - 1 {
       k = k + 1
       past = past + height_of(k)
     }
-    shift = dmin(foot, past)
+    shift = dmin(foot - slack, past)
   }
   under = under - shift
   let keys : Array[K] = []
@@ -185,6 +187,7 @@ pub fn[K : Eq] list_laid_from_top(
   by? : Double = 0.0,
   ahead? : Double = 0.0,
   known? : (Int) -> Double? = fn(_) { None },
+  slack? : Double = 0.0,
 ) -> ListLaid[K] {
   // (the same list turned over: its last row its first, its foot its top)
   let m = fn(i : Int) { n - 1 - i }
@@ -198,6 +201,7 @@ pub fn[K : Eq] list_laid_from_top(
     by~,
     ahead~,
     known=fn(i) { known(m(i)) },
+    slack~,
   )
   let count = r.keys.length()
   let keys = []

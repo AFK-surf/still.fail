@@ -31,7 +31,22 @@ priv struct AnchoredIn[K] {
   /// is read from its top; what covers its top
   fresh : Array[(K, Bool)]
   cover : Double
-} derive(Eq)
+  tucked : K?
+}
+
+///|
+impl[K : Eq] Eq for AnchoredIn[K] with equal(a, b) {
+  let d = [
+    ("keys", a.keys == b.keys), ("x", a.x == b.x), ("foot", a.foot == b.foot), ("put", a.put == b.put),
+    ("put_n", a.put_n == b.put_n), ("kept", a.kept == b.kept), ("rooms", a.rooms == b.rooms), ("fresh", a.fresh == b.fresh),
+    ("cover", a.cover == b.cover), ("tucked", a.tucked == b.tucked),
+  ]
+  let diff = d.filter(fn(p) { !p.1 }).map(fn(p) { p.0 })
+  if diff.length() > 0 {
+    println("ZZDIFF \{diff} x \{a.x}->\{b.x} foot \{a.foot}->\{b.foot} cover \{a.cover}->\{b.cover}")
+  }
+  diff.length() == 0
+}
 
 ///|
 /// How many of the rows it ends with are looked at for one come new among them.
@@ -61,6 +76,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   fresh? : (K) -> Bool = fn(_) { false },
   read_from_top? : (K) -> Bool = fn(_) { true },
   cover? : () -> Double = fn() { 0.0 },
+  tucked? : () -> K? = fn() { None },
   kept_keys? : () -> Array[K],
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
   foot_room? : () -> Double = fn() { 0.0 },
@@ -79,6 +95,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   let laid : Ref[ListLaid[K]?] = Ref(None)
   // (the rows it ended with as last laid out)
   let was_tail : Ref[Array[K]] = Ref([])
+  let tuck_done = Ref(false)
   let window_h = Ref(0.0)
   // (what each row is known by, whatever node it is made in, by its key: View::row_known_as)
   let row_ids : Map[K, NodeId] = Map([])
@@ -147,6 +164,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
             out
           },
           cover: cover(),
+          tucked: tucked(),
         }
       }),
       fn(l, c) {
@@ -234,14 +252,39 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
         match c.put {
           Some((k, off)) =>
             match find(k, anchor.val.map(fn(a) { a.near }).unwrap_or(n - 1)) {
-              Some(i) => anchor.val = Some({ key: k, under: off + measure(i) - h, near: i })
+              Some(i) =>
+                anchor.val = Some({ key: k, under: if from_end { off + measure(i) - h } else { -off }, near: i })
               None => ()
             }
           None => ()
         }
         let by = match seen_x.val {
           Some(x) => if from_end { x - c.x } else { c.x - x }
-          None => 0.0
+          // (from its start, first laid out: as far down as it was scrolled, as its rows are counted)
+          None => if from_end { 0.0 } else { c.x }
+        }
+        // (a row kept out of sight over its top (the chats' search), its foot under what covers the top, as it is first
+        // laid out unscrolled; room kept under its last row for that however few there are)
+        let mut slack = 0.0
+        match (from_end, c.tucked) {
+          (false, Some(k)) =>
+            match find(k, 0) {
+              Some(i) => {
+                let own = measure(i)
+                let mut over = 0.0
+                for j in 0..<i {
+                  over = over + measure(j)
+                }
+                // (all that is over its foot out of sight, however few rows there are under it)
+                slack = dmax(0.0, over + own - c.cover)
+                if !tuck_done.val && c.x <= 0.5 && seen_x.val is None {
+                  anchor.val = Some({ key: k, under: own - c.cover, near: i })
+                }
+                tuck_done.val = true
+              }
+              None => ()
+            }
+          _ => ()
         }
         seen_x.val = Some(c.x)
         // (one new to it come among the rows it ends with while it is at its end, that `fresh` says is: what showed kept
@@ -277,7 +320,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
         let r = if from_end {
           list_laid_from_end(n, key_of, find, measure, anchor.val, h, by~, ahead~, known~)
         } else {
-          list_laid_from_top(n, key_of, find, measure, anchor.val, h, by~, ahead~, known~)
+          list_laid_from_top(n, key_of, find, measure, anchor.val, h, by~, ahead~, known~, slack~)
         }
         anchor.val = r.anchor
         // (placed where they are in the window: the column holds them moved by how far it is scrolled)
