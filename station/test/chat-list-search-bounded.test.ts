@@ -4,6 +4,7 @@ import { sessionOps } from "../src/read/ops-sessions.ts";
 import { makeStore } from "../src/read/store.ts";
 import type { Hub } from "../src/sessions/hub.ts";
 import { chatList } from "../src/sessions/others.ts";
+import { RECENT_CHAT_LIST, SEARCH_CHAT_LIST } from "../src/store/chat-list.ts";
 import { Store } from "../src/store/store.ts";
 
 for (const reader of [false, true]) test(`searching chats does not read people or other unused details (reader ${reader})`, async () => {
@@ -48,4 +49,16 @@ for (const reader of [false, true]) test(`searching chats does not read people o
     Object.defineProperty(store, "db", { value: db, configurable: true });
     store.close();
   }
+});
+
+test("chat selection seeks each chat's messages and edits by their existing indexes", () => {
+  const store = Store.open(":memory:");
+  try {
+    for (const [sql, args] of [[RECENT_CHAT_LIST, [null, null, 5]], [SEARCH_CHAT_LIST, [null, null]]] as const) {
+      const plan = store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args).map((r) => String(r.detail));
+      assert.ok(plan.some((p) => /SEARCH e USING INDEX .*entries.*thread=\? AND n=\?/.test(p)), plan.join("\n"));
+      assert.ok(!plan.some((p) => /^SCAN [me](?:\s|$)/.test(p)), plan.join("\n"));
+      if (sql === SEARCH_CHAT_LIST) assert.ok(plan.some((p) => /SEARCH x USING COVERING INDEX entries_edits \(thread=\? AND target=\?\)/.test(p)), plan.join("\n"));
+    }
+  } finally { store.close(); }
 });
