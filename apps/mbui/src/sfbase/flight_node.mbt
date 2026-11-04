@@ -290,9 +290,10 @@ fn flight_waiting_node(parent : @view.View, f : SendFlight, origin : () -> (Doub
     .offset(By(fn() { let o = origin(); (f.field_x - o.0, f.field_y - o.1) })).clips(Is(true)) |> ignore
     room.box(fn(w) {
       w.width(Is(Some(f.field_w))).offset(Is((f.from_x - f.field_x, f.from_y - f.field_y)))
-      .words_runs(By(fn() { refs_runs(f.text, f.marks, @sf.theme().p.accent) }))
+      .words_runs(By(fn() { person_runs(f.text, f.runs, @sf.theme().p.accent) }))
       .words_look(By(fn() { @ui.style_words(@sf.theme().t.words) }))
-      .ink(By(fn() { @ui.style_ink(@sf.theme().t.words) })) |> ignore
+      .ink(By(fn() { @ui.style_ink(@sf.theme().t.words) }))
+      .runs_look(By(fn() { { ..@view.runs_plain, link: @sf.theme().p.blue, words: true } })) |> ignore
     }) |> ignore
   }) |> ignore
 }

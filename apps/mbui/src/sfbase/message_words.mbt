@@ -7,6 +7,10 @@
 pub let absolute_times : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
 
 ///|
+/// How much of `accent` a reference's `@` has.
+let ref_at_alpha : Double = 0.7
+
+///|
 /// A person's words in the runs the core read them in (a message's `words`: refLinks.ts personWords; what was sent from
 /// here, its outbox row's, or before the core has it its `ref.words`: draftWords): a reference to a chat `@` a little
 /// lighter and its title in `accent` (one written bare reading as `chat_title` says; a composer's mark its title), a web
@@ -19,11 +23,25 @@ pub fn words_runs(parts : Array[Json], accent : Int64, chat_title? : (String) ->
     match field(Some(p), "ref") {
       Some(True) => {
         let title = if words == link { chat_title(link).unwrap_or(link) } else { words }
-        out.push(@ui.span("@", link~, color=@sf.alpha(accent, 0.7)))
+        out.push(@ui.span("@", link~, color=@sf.alpha(accent, ref_at_alpha)))
         out.push(@ui.span(title, link~, color=accent))
       }
       _ => out.push(if link != "" { @ui.link(words, link) } else { @ui.plain(words) })
     }
   }
   out
+}
+
+///|
+/// What a person wrote as every place draws it, in a message, on its way there: the core's runs of it (`runs`, words_runs),
+/// else the runs kept as it was sent, else the words as they are.
+pub fn person_runs(words : String, runs : Json?, accent : Int64, chat_title? : (String) -> String? = fn(_) { None }) -> Array[@ui.Run] {
+  match runs {
+    Some(Array(parts)) => words_runs(parts, accent, chat_title~)
+    _ =>
+      match @sf.kept_words(words) {
+        Some(Array(parts)) => words_runs(parts, accent, chat_title~)
+        _ => [@ui.plain(words)]
+      }
+  }
 }

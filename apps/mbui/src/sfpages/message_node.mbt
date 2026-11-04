@@ -117,16 +117,7 @@ fn person_words_node(
   peeks? : (@view.View, @ui.RunsLinks, () -> Array[@ui.Run]) -> Unit = fn(_, _, _) {  },
 ) -> @view.View {
   let shown = fn() {
-    let p = @sf.theme().p
-    let all = match runs() {
-      Some(Array(parts)) => words_runs(parts, p.accent, chat_title~)
-      _ =>
-        match @sf.kept_words(words()) {
-          Some(Array(parts)) => words_runs(parts, p.accent, chat_title~)
-          _ => [@ui.plain(words())]
-        }
-    }
-    @sf.found_weight(all, found())
+    @sf.found_weight(@sfbase.person_runs(words(), runs(), @sf.theme().p.accent, chat_title~), found())
   }
   parent.box(fn(w) {
     w
