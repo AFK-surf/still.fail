@@ -98,6 +98,7 @@ pub(open) trait Host {
   perf_where(Self) -> String = _
   perf_size(Self) -> Double = _
   perf_read(Self) -> Bytes = _
+  perf_open(Self, Bool) -> Bool = _
   shared_in(Self) -> String = _
   shared_in_file(Self, Int) -> Bytes = _
   app_version(Self) -> Int = _
@@ -665,6 +666,11 @@ impl Host with perf_where(_) {
 ///|
 impl Host with perf_size(_) {
   0.0
+}
+
+///|
+impl Host with perf_open(_, _) {
+  false
 }
 
 ///|
@@ -2030,7 +2036,7 @@ let turnable_now : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) 
 /// across launches (a setting of this device's, not synced) and starts recording as the app starts when it is on. Every
 /// 5 s while on, the host writes a line of what the process takes (its share of a CPU, by thread, the device's thermal
 /// state, …) to a file of the app's own, and the app's frames their summary (perf_line): nothing leaves the device.
-/// iOS keeps one; elsewhere -1.
+/// iOS and Windows keep one; elsewhere -1.
 pub fn perf_state() -> Int {
   current.val.perf_state()
 }
@@ -2081,6 +2087,20 @@ pub fn perf_size() -> Double {
 /// where none is kept.
 pub fn perf_read() -> Bytes {
   current.val.perf_read()
+}
+
+///|
+/// Whether the device can show the performance record's folder, and the logs beside it (perf_open), where it has no
+/// share sheet to hand them on through (Windows).
+pub fn perf_opens() -> Bool {
+  current.val.perf_open(false)
+}
+
+///|
+/// The performance record's folder, and the logs beside it, shown in the system's own file manager; false where it
+/// cannot be (perf_opens). Asked off the thread that draws: nothing waits for the file manager.
+pub fn perf_open() -> Bool {
+  current.val.perf_open(true)
 }
 
 ///|

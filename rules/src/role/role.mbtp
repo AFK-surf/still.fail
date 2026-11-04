@@ -43,3 +43,31 @@ predicate may_post(who : Role, c : Change, result : Bool) {
     Disable => result → owning(who)
   }
 }
+
+predicate first_by_manager(who : Role, had_own : Bool) {
+  managing(who) && !had_own
+}
+
+predicate own_rule(by_them : Bool, kept : Bool, who : Role, had_own : Bool) {
+  by_them || kept || first_by_manager(who, had_own)
+}
+
+predicate own_sound(by_them : Bool, kept : Bool, who : Role, had_own : Bool, result : Bool) {
+  result → own_rule(by_them, kept, who, had_own)
+}
+
+predicate own_complete(by_them : Bool, kept : Bool, who : Role, had_own : Bool, result : Bool) {
+  own_rule(by_them, kept, who, had_own) → result
+}
+
+predicate put_in_by_another(by_them : Bool, kept : Bool, result : Bool) {
+  result && !by_them && !kept
+}
+
+predicate no_impersonation(by_them : Bool, kept : Bool, had_own : Bool, result : Bool) {
+  put_in_by_another(by_them, kept, result) → !had_own
+}
+
+predicate own_post(by_them : Bool, kept : Bool, who : Role, had_own : Bool, result : Bool) {
+  own_sound(by_them, kept, who, had_own, result) && own_complete(by_them, kept, who, had_own, result) && no_impersonation(by_them, kept, had_own, result)
+}

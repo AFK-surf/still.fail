@@ -10,7 +10,7 @@ import { relays } from "../src/relays.ts";
 
 const upgrade = { upgrade: "websocket", "sec-websocket-protocol": "iroh-relay" };
 
-test("native relay works without Google configuration or credentials", { timeout: 10000 }, async () => {
+test("native relay works without Google configuration or credentials", async () => {
   const h = await harness({ noGoogle: true });
   try {
     assert.equal((await h.fetch("/v1/auth/session")).status, 503);
@@ -31,7 +31,7 @@ test("native relay works without Google configuration or credentials", { timeout
   }
 });
 
-test("pending upgrades consume capacity before the backend replies", { timeout: 10000 }, async () => {
+test("pending upgrades consume capacity before the backend replies", async () => {
   const h = await harness({ noGoogle: true });
   try {
     const relays: any = await h.mf.getDurableObjectNamespace("RELAY", "relay");
@@ -53,7 +53,7 @@ test("pending upgrades consume capacity before the backend replies", { timeout: 
   }
 });
 
-test("closed connections free capacity, counted by the relay process", { timeout: 10000 }, async () => {
+test("closed connections free capacity, counted by the relay process", async () => {
   const h = await harness({ noGoogle: true });
   try {
     const sockets: NonNullable<Awaited<ReturnType<typeof h.fetch>>["webSocket"]>[] = [];
@@ -82,7 +82,7 @@ test("the relay parses iroh-relay's counters", () => {
   assert.deepEqual(relayCounters(text), { bytes: 15, frames: 4, accepts: 7, disconnects: 2 });
 });
 
-test("a Worker restart cannot reset the anonymous relay byte budget", { timeout: 10000 }, async () => {
+test("a Worker restart cannot reset the anonymous relay byte budget", async () => {
   const persist = await fs.mkdtemp(path.join(os.tmpdir(), "zork-relay-budget-"));
   let h = await harness({ noGoogle: true, persist });
   try {
@@ -97,7 +97,7 @@ test("a Worker restart cannot reset the anonymous relay byte budget", { timeout:
   }
 });
 
-test("a read of the relay's counters that fails does not count its traffic twice", { timeout: 10000 }, async () => {
+test("a read of the relay's counters that fails does not count its traffic twice", async () => {
   const h = await harness({ noGoogle: true });
   try {
     const relays: any = await h.mf.getDurableObjectNamespace("RELAY", "relay");
@@ -122,7 +122,7 @@ test("a read of the relay's counters that fails does not count its traffic twice
 /// refused every connect after. Connects read the counters at once, the relay answering them in any order: an answer
 /// older than one already counted looked like a process started again (its counters below those last seen), and all it
 /// had counted since it started was added once more. One read at a time: those asked meanwhile take its answer.
-test("a read of the relay's counters answered after a later one counts nothing twice", { timeout: 10000 }, async () => {
+test("a read of the relay's counters answered after a later one counts nothing twice", async () => {
   const h = await harness({ noGoogle: true });
   try {
     const relays: any = await h.mf.getDurableObjectNamespace("RELAY", "relay");
@@ -154,7 +154,7 @@ test("a read of the relay's counters answered after a later one counts nothing t
 /// 2026-10-30: the relay's process, up for days, had counted 14.8 GB and 78.5M frames in all; a day's count begun with
 /// nothing seen yet (its counting changed, or a read taken for a process started again) added all of it, and every
 /// connect was refused for the day. What the process counted before the budget first read it is not today's.
-test("a budget that never read a relay up for days counts none of what it carried before", { timeout: 10000 }, async () => {
+test("a budget that never read a relay up for days counts none of what it carried before", async () => {
   const h = await harness({ noGoogle: true });
   try {
     const relays: any = await h.mf.getDurableObjectNamespace("RELAY", "relay");
@@ -174,7 +174,7 @@ test("a budget that never read a relay up for days counts none of what it carrie
   }
 });
 
-test("a day's budget counted before reads kept their place starts over", { timeout: 10000 }, async () => {
+test("a day's budget counted before reads kept their place starts over", async () => {
   const h = await harness({ noGoogle: true });
   try {
     const budgets: any = await h.mf.getDurableObjectNamespace("RELAY_BUDGET", "relay");

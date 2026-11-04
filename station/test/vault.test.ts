@@ -15,7 +15,7 @@ import { PlainStore } from "../src/vault/plain.ts";
 import type { Request } from "../src/api/request.ts";
 import {
   type BoxCert, type Grant, type Item, type Sig, type Vault, TAG, boxPublic, decrypt, encryptWith, grantContext, itemContext, itemOk,
-  certOk, keyContext, newBoxPair, openSeal, recoveryPair, seal, sealWith, signedBytes, signedOk, signerOf, vaultOk,
+  certOk, itemSupersedes, keyContext, newBoxPair, openSeal, recoveryPair, seal, sealWith, signedBytes, signedOk, signerOf, vaultOk, vaultSupersedes,
 } from "../src/vault/crypto.ts";
 import { VaultStore } from "../src/vault/store.ts";
 
@@ -436,6 +436,54 @@ test("routes: a copy brought from another station is kept where later, the one h
   assert.deepEqual((await s.ask("GET", `/vault/items?vault=${VAULT}`, "bob")).body.items.map((i: Item) => i.version), [4]);
   // An item of a vault not held here: none to copy it into.
   assert.equal((await s.ask("PUT", "/vault/items?copy=1", "alice", itemOf({ by: w.alice, vault: `v_${ulid(3)}` }))).body.code, "vault_unknown");
+});
+
+test("routes: two versions of one seq written on two stations at once: each brought the other's, both keep the same one", async () => {
+  const w = lock();
+  const both = async (a: Vault, b: Vault) => {
+    const s1 = station(w), s2 = station(w);
+    const v0 = vaultOf(w, { members: [w.alice, w.bob] });
+    for (const s of [s1, s2]) assert.equal((await s.ask("PUT", "/vault/vaults", "alice", v0)).status, 200);
+    assert.equal((await s1.ask("PUT", "/vault/vaults", "alice", a)).status, 200);
+    assert.equal((await s2.ask("PUT", "/vault/vaults", "alice", b)).status, 200);
+    // (as the devices bring each station what it lacks)
+    await s1.ask("PUT", "/vault/vaults?copy=1", "alice", b);
+    await s2.ask("PUT", "/vault/vaults?copy=1", "alice", a);
+    const held = await Promise.all([s1, s2].map(async (s) => (await s.ask("GET", "/vault/vaults", "alice")).body.vaults[0] as Vault));
+    assert.deepEqual(held[0], held[1], "the same one on both");
+    return held[0]!;
+  };
+  // One takes bob out under a new key, the other adds carol under the old: the one under the new key, bob stays out.
+  const out = vaultOf(w, { seq: 1, epoch: 1 });
+  const added = vaultOf(w, { seq: 1, members: [w.alice, w.bob, w.carol] });
+  assert.deepEqual(await both(added, out), out);
+  assert.deepEqual(await both(out, added), out);
+  // Under one key: the same one, whichever station was given which.
+  const x = vaultOf(w, { seq: 1, members: [w.alice, w.bob] }), y = vaultOf(w, { seq: 1, members: [w.alice, w.bob, w.carol] });
+  const kept = await both(x, y);
+  assert.deepEqual(await both(y, x), kept);
+  assert.equal(vaultSupersedes(kept, kept === x ? y : x), true);
+  // Deleted on one: deleted on both.
+  const gone = vaultOf(w, { seq: 1, epoch: 1, deleted: true });
+  assert.equal((await both(gone, x)).deleted, true);
+  assert.equal((await both(x, gone)).deleted, true);
+});
+
+test("routes: two versions of one item written on two stations at once: both keep the same one", async () => {
+  const w = lock();
+  const s1 = station(w), s2 = station(w);
+  for (const s of [s1, s2]) {
+    assert.equal((await s.ask("PUT", "/vault/vaults", "alice", vaultOf(w, { members: [w.alice, w.bob] }))).status, 200);
+    assert.equal((await s.ask("PUT", "/vault/items", "alice", itemOf({ by: w.alice }))).status, 200);
+  }
+  const a = itemOf({ by: w.alice, version: 1 }), b = itemOf({ by: w.bob, version: 1 });
+  await s1.ask("PUT", "/vault/items", "alice", a);
+  await s2.ask("PUT", "/vault/items", "bob", b);
+  await s1.ask("PUT", "/vault/items?copy=1", "alice", b);
+  await s2.ask("PUT", "/vault/items?copy=1", "bob", a);
+  const held = await Promise.all([s1, s2].map(async (s) => (await s.ask("GET", `/vault/items?vault=${VAULT}`, "alice")).body.items[0] as Item));
+  assert.deepEqual(held[0], held[1]);
+  assert.deepEqual(held[0], itemSupersedes(a, b) ? a : b);
 });
 
 test("routes: box certificates, published by the lock's app devices, the latest of each", async () => {

@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { doing, epochMs, tasksOf, told } from "../src/activity.ts";
 import { activity as present } from "../src/history.ts";
-import { name, setOwnApp, setTestChannel, STABLE, TEST, testApp } from "../src/brand.ts";
+import { clientName, name, setCloud, setOwnApp, setTestChannel, STABLE, TEST, testApp } from "../src/brand.ts";
 import { Core } from "../src/core.ts";
+import { tr } from "../src/i18n.ts";
+import { branded, productOf } from "../../i18n/brand.ts";
 import { Doing } from "../src/doing.ts";
 import { conformTy } from "../src/conform.ts";
 import { merge } from "../src/entries.ts";
@@ -136,6 +138,41 @@ test("an_app_of_its_own_on_the_test_channel_calls_it_still_fail", () => {
   setOwnApp(true);
   assert.deepEqual([name(), testApp()], ["youdid.wtf", true]);
   setTestChannel(false);
+});
+
+test("the_name_is_its_clouds", () => {
+  setCloud("https://app.monoid.build");
+  assert.equal(name(), "monoid");
+  setTestChannel(true);
+  assert.equal(name(), "monoid.zone");
+  setOwnApp(false);
+  assert.deepEqual([name(), clientName("still.fail mbui")], ["monoid", "monoid"]);
+  setOwnApp(true);
+  setTestChannel(false);
+  // its words say its name, hosts kept
+  assert.equal(tr("zh", "common.report.title"), "上报给 monoid 团队？");
+  setCloud("https://app.still.fail");
+  assert.equal(tr("zh", "common.report.title"), "上报给 still.fail 团队？");
+  for (const origin of ["https://app.still.fail", "http://127.0.0.1:8787", "https://notmonoid.build", ""]) {
+    setCloud(origin);
+    assert.equal(name(), "still.fail", origin);
+  }
+});
+
+test("another_products_words_keep_still_fails_hosts", () => {
+  const monoid = productOf("app.monoid.build");
+  assert.equal(branded("still.fail cloud 在 app.still.fail，装 still.fail.app 或 https://still.fail/en；用 still.fail。", monoid), "monoid cloud 在 app.still.fail，装 still.fail.app 或 https://still.fail/en；用 monoid。");
+  assert.equal(productOf("https://admin.monoid.zone").name, "monoid");
+  assert.equal(branded("still.fail", productOf("https://app.still.fail")), "still.fail");
+});
+
+test("a_core_takes_its_name_from_its_hosts_cloud", async () => {
+  const host = new FakeHost();
+  host.origin = "https://app.monoid.build";
+  const core = await Core.create(host, { clock: host.time.clock });
+  assert.equal(name(), "monoid");
+  core.close();
+  setCloud("https://app.still.fail");
 });
 
 test("a_core_takes_its_channel_from_its_host", async () => {

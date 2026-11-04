@@ -8,6 +8,9 @@
 pub struct NodeRows[T] {
   read : () -> (Array[T], Array[String])
   room : (String, Double) -> @view.ListRoom
+  /// the keys whose rooms are on their way now (those with a cause, those leaving, those moved on the same curve by
+  /// their contents while anything is): what a windowed list asks `room` of again as it moves, the rest as they were
+  moving : () -> Array[String]
   lend : (@view.View, String) -> Unit
   opening : () -> Bool
 }
@@ -121,6 +124,12 @@ pub fn[T] ListRows::in_node(
     let (items, _) = all.get()
     let c = self.causes
     c.read()
+    // (nothing of the list on its way, nothing leaving: each row as tall as it is, its height kept for a way that may
+    // start from it; nothing more asked of each of a long chat's three thousand as their list is laid out, 2026-11-04)
+    if c.by.is_empty() && self.going.is_empty() {
+      shown[k] = natural
+      return @view.list_room(natural)
+    }
     let i = key_at.get().get(k).unwrap_or(-1)
     guard i >= 0 else { return @view.list_room(natural) }
     let going = self.going.contains(k)
@@ -172,5 +181,32 @@ pub fn[T] ListRows::in_node(
     self.causes.read()
     self.causes.end > v.logic_at() && self.causes.by.values().any(fn(cm) { cm.0 is Comes(_) })
   }
-  { read: fn() { all.get() }, room, lend, opening }
+  // (those moved by their contents, by the rows as they are now)
+  let own_keys = @signals.computed(fn(_) {
+    let (items, keys) = all.get()
+    let out = []
+    for i, it in items {
+      if own(it) && i < keys.length() {
+        out.push(keys[i])
+      }
+    }
+    out
+  })
+  let moving = fn() -> Array[String] {
+    all.get() |> ignore
+    let c = self.causes
+    c.read()
+    if c.by.is_empty() && self.going.is_empty() {
+      return []
+    }
+    let out : Array[String] = c.by.keys().collect()
+    for k, _ in self.going {
+      out.push(k)
+    }
+    // (and those whose content went on the way itself as it was laid out, row_way: clipped while it goes)
+    c.own.each(fn(k) { out.push(k) })
+    out.append(own_keys.get())
+    out
+  }
+  { read: fn() { all.get() }, room, moving, lend, opening }
 }

@@ -69,9 +69,10 @@ fn maker_of(maker : String, runtime : String) -> String {
 }
 
 ///|
-/// Slack's mark (slack_mark's) as a node, `size` across. The node.
-pub fn slack_mark_node(parent : @view.View, size : Double) -> @view.View {
-  drawable_node(parent, fn() { "slack" }, size)
+/// The mark of the platform a chat came from (slack_mark's, feishu_mark's), `kind` as it changes (the core's
+/// originKind), as a node, `size` across: Feishu's for Feishu, else Slack's. The node.
+pub fn origin_mark_node(parent : @view.View, kind : () -> String, size : Double) -> @view.View {
+  drawable_node(parent, fn() { if kind() == "feishu" { "feishu" } else { "slack" } }, size)
 }
 
 ///|

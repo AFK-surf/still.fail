@@ -85,7 +85,8 @@ export function sandboxName(key: string): string {
 /// The key a runner's id was made from (agents/process.ts `runnerId`: `<kind>-<clean>[-<hash>]`): the session's for a
 /// session's process, the profile's for a process its sessions share (Codex's host).
 export function keyOfRunner(id: string): string {
-  return id.replace(/^[a-z]+-/, "");
+  // A Codex app-server started while one of its key was being replaced has `.<n>` after it (codex.ts `runnerFor`).
+  return id.replace(/^[a-z]+-/, "").replace(/\.[0-9a-z]+$/, "");
 }
 
 /// A station's key (a session's) as a runner's id has it after its kind (agents/process.ts `runnerId`): safe as a file

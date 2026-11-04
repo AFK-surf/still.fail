@@ -72,7 +72,7 @@ fn error_text(e : Json, what : String) -> String {
 fn video_library() -> Result[@videos.Library, String]? {
   guard media_station() is Some(station) else { return None }
   let s = @core.subscribe("media.videos", params={ "station": Json::string(station) })
-  match (s.value, s.error) {
+  match (s.value(), s.error) {
     (Some(Object(m)), _) =>
       Some(
         Ok({
@@ -94,7 +94,7 @@ fn video_detail(id : String) -> Result[@videos.Detail, String]? {
     "station": Json::string(station),
     "id": Json::string(id),
   })
-  match (s.value, s.error) {
+  match (s.value(), s.error) {
     (Some(Object(m) as v), _) => {
       let strings = fn(key : String) -> Array[String] {
         match m.get(key) {

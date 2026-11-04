@@ -43,6 +43,10 @@ pub(all) struct Source {
   /// derived.mbt), followed: the computed is worked out again as the topic changes, a signal of its changes set as
   /// they come (the core client's Sub.changes; a made-up core's own as its state changes)
   topic : (String, Map[String, Json]) -> Topic
+  /// the keyed list at a path of topic `name`'s value (`path`, by the key its `fields` make: stillfail/rows'
+  /// TopicList, the core's ops done to it alone), its place in `topic`'s value left null; none where the source keeps
+  /// none (a made-up core's: the list made of `topic`'s value as it is, chat_messages)
+  list : (String, Map[String, Json], Array[String], Array[String]) -> @rows.TopicList?
   /// whether the core said that topic, which has no value yet, waits on a station for it: none of what it shows is on
   /// the device (a chat whose messages are still to come), not the core still reading what is. Read as `topic` is.
   waits : (String, Map[String, Json]) -> Bool
@@ -152,6 +156,7 @@ pub fn made_source(
       }
     },
     waits: fn(_, _) { false },
+    list: fn(_, _, _, _) { None },
     call,
     call_bytes: fn(name, params, _, done) { call(name, params, done) },
     read_bytes: fn(name, _, done) { done(Err({ "code": "unknown_call", "message": Json::string("no " + name) })) },

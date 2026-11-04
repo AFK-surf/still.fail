@@ -1094,6 +1094,8 @@ web-mobile.settings.securityWaiting
 web-pages.about.legal
 web-pages.about.diagnostics
 web-pages.about.perf.note
+web-pages.about.perf.noteFolder
+web-pages.about.perf.open
 web-pages.about.perf.share
 web-pages.about.perf.title
 web-pages.about.privacy

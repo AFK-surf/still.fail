@@ -66,8 +66,10 @@ import type { SpanContext } from "../trace.ts";
 import { get, isObject, utf8 } from "../util.ts";
 import {
   type BoxCert, type Deny, type Grant, type Item, type Listing, type Plain, type Request, type Save, type Scope, type Vault,
-  SCOPES, TAG, allows, boxPublic, decrypt, encryptWith, fromWords, grantContext, itemContext, keyContext, openSeal, recoveryPair, saveContext, sealWith, sign, signedOk, toWords,
+  SCOPES, TAG, allows, boxPublic, decrypt, encryptWith, fromWords, grantContext, itemContext, keyContext, openSeal, recoveryPair, saveContext, rulesCrypto, sealWith, sign, toWords,
 } from "../vault/crypto.ts";
+// @ts-ignore: the MoonBit build's JS, untyped
+import * as rules from "../../../../rules/js/rules.js";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { ofAddress } from "../workspace.ts";
 import { stamp } from "../present.ts";
@@ -107,8 +109,9 @@ type Held = {
   hidden: Record<string, number>;
 };
 
-/// A vault's version a station holds, and its items' versions.
-type Holding = { seq: number; items: Record<string, number> };
+/// A vault's version a station holds, and its items' versions; the signatures of those (`sig`, `sigs`): which of two of
+/// one number it holds (written on two stations at once), so the one every station keeps is brought where it is not.
+type Holding = { seq: number; items: Record<string, number>; sig?: string; sigs?: Record<string, string> };
 
 /// An item of the plain library as a station lists it (vault/plain.ts `shown`), and where it is.
 type PlainRow = { id: string; owner: string; version: number; kind: string; name: string; notes: string; listing?: Listing; at: number; deleted?: true; station: string };
@@ -197,18 +200,22 @@ function lockOf(inner: Inner, ws: string): Checked | CoreError {
 /// Whether a certificate is of an app device in the lock that is its person's own (lock-check.ts Device `own`: one an
 /// admin put in under their name is given no key, by itself or asked), signed by its own key; whose device it is.
 function certOwner(lock: Checked, cert: BoxCert): string | null {
-  const d = lock.devices.get(cert?.device);
-  if (!d || d.kind !== "app" || !d.own || !lock.members.has(d.sub) || d.sign_key !== cert.sig?.key || cert.ws !== lock.ws || !signedOk(cert, TAG.box)) return null;
-  return d.sub;
+  return rules.cert_ok_js(lock, cert, false, rulesCrypto) === null ? lock.devices.get(cert.device)!.sub : null;
 }
 
 /// The app device of the lock that signs with `key`, where it is its person's own (no other's signature counts).
 const ownSigner = (lock: Checked, key: unknown) => [...lock.devices.values()].find((x) => x.kind === "app" && x.own && x.sign_key === key);
 
-/// Whether a vault's version is its owner's (signed by one of their own app devices in the lock).
+/// Whether a vault's version is one the stations take (rules/, as station/src/vault/crypto.ts `vaultOk` checks a copy
+/// brought from another station): signed by one of its owner's own app devices in the lock, its members in the lock,
+/// each of its keys for a member's own device. Found once for each lock and version.
+const trust = new WeakMap<Checked, WeakMap<Vault, boolean>>();
 function trusted(lock: Checked, v: Vault): boolean {
-  if (v?.ws !== lock.ws || !Array.isArray(v.members) || !signedOk(v, TAG.vault)) return false;
-  return ownSigner(lock, v.sig.key)?.sub === v.owner;
+  let of = trust.get(lock);
+  if (!of) trust.set(lock, (of = new WeakMap()));
+  let ok = of.get(v);
+  if (ok === undefined) of.set(v, (ok = rules.vault_ok_js(lock, null, v, true, rulesCrypto) === null));
+  return ok;
 }
 
 /// This device in the lock: the one whose signing key is this app's, where it is its person's own (one an admin put
@@ -309,7 +316,7 @@ function readStation(inner: Inner, address: string): Effect.Effect<void, CoreErr
           if (!ids.has(id) && (h.on[id]?.[station] !== undefined || (h.on[id] === undefined && h.at[id] === station))) letGo(h, id, station);
         }
         for (const v of list) {
-          holds(h, v, station, Object.fromEntries(all.filter((i) => i.vault === v.id).map((i) => [i.id, i.version])));
+          holds(h, v, station, all.filter((i) => i.vault === v.id));
         }
       }
       for (const c of boxes) if (!h.boxes[c.device] || h.boxes[c.device]!.at <= c.at) h.boxes[c.device] = c;
@@ -343,18 +350,31 @@ function readStation(inner: Inner, address: string): Effect.Effect<void, CoreErr
   });
 }
 
-/// Whether item `i` is a later version than `had` (none: it is).
-const newer = (i: Item, had: Item | undefined) => had === undefined || i.version > had.version;
+/// Whether item `i` is kept over `had` (none: it is): the later version, or of one version the one every station keeps
+/// (rules/ `item_supersedes_js`).
+const newer = (i: Item, had: Item | undefined) => had === undefined || i.version > had.version || (i.version === had.version && rules.item_supersedes_js(i, had));
 
-/// `station` holds vault `v` (and its items at these versions): the latest version held anywhere is the one shown; its
-/// host is the station it was on first, until that one no longer holds it.
-function holds(h: Held, v: Vault, station: string, items: Record<string, number> | null): void {
+/// That `at` (a station's holding) holds item `i` at its version.
+function holdsItem(at: Holding, i: Item): void {
+  at.items[i.id] = i.version;
+  if (typeof i.sig?.sig === "string") (at.sigs ??= {})[i.id] = i.sig.sig;
+}
+
+/// `station` holds vault `v` (and these items, when said): the version kept of those held anywhere is the one shown.
+function holds(h: Held, v: Vault, station: string, items: Item[] | null): void {
   const on = (h.on[v.id] ??= {});
-  on[station] = { seq: v.seq, items: items ?? on[station]?.items ?? {} };
-  if (h.at[v.id] === undefined || on[h.at[v.id]!] === undefined) h.at[v.id] = station;
-  // Two versions of one seq (written on two stations at once): the host's.
+  const was = on[station];
+  on[station] = { seq: v.seq, items: was?.items ?? {}, sig: v.sig?.sig, ...(was?.sigs ? { sigs: was.sigs } : {}) };
+  if (items !== null) {
+    on[station] = { seq: v.seq, items: {}, sig: v.sig?.sig };
+    for (const i of items) holdsItem(on[station]!, i);
+  }
+  // Its host the first of the stations holding it by id, the same on every device: what each writes there follows on
+  // from the same version (one written to another meanwhile is refused, not a second of its seq).
+  h.at[v.id] = Object.keys(on).sort()[0]!;
+  // Two versions of one seq (written on two stations at once): the one every station and device keeps.
   const had = h.vaults[v.id];
-  if (had === undefined || v.seq > had.seq || (v.seq === had.seq && station === h.at[v.id])) h.vaults[v.id] = v;
+  if (had === undefined || rules.vault_supersedes_js(v, had)) h.vaults[v.id] = v;
 }
 
 /// `station` no longer holds vault `id`: gone where no station holds it; its host another that does.
@@ -375,8 +395,13 @@ function letGo(h: Held, id: string, station: string): void {
 function lacks(h: Pick<Held, "vaults" | "on">, items: (vault: string) => Record<string, Item>, station: string): { id: string; vault: Vault | null; items: Item[] }[] {
   return Object.values(h.vaults).flatMap((v) => {
     const have = h.on[v.id]?.[station];
-    const behind = have === undefined || have.seq < v.seq;
-    const missing = v.deleted ? [] : Object.values(items(v.id)).filter((i) => (have?.items[i.id] ?? -1) < i.version);
+    // (or the other one of its seq, or of an item's version: brought the one kept)
+    const other = (held: string | undefined, sig: unknown) => held !== undefined && typeof sig === "string" && held !== sig;
+    const behind = have === undefined || have.seq < v.seq || (have.seq === v.seq && other(have.sig, v.sig?.sig));
+    const missing = v.deleted ? [] : Object.values(items(v.id)).filter((i) => {
+      const at = have?.items[i.id] ?? -1;
+      return at < i.version || (at === i.version && other(have?.sigs?.[i.id], i.sig?.sig));
+    });
     return behind || missing.length > 0 ? [{ id: v.id, vault: behind ? v : null, items: missing }] : [];
   });
 }
@@ -410,7 +435,7 @@ function spread(inner: Inner, address: string): Effect.Effect<void> {
         const kept = (get(said.success, "item") as Item | undefined) ?? i;
         change(inner, ws, (h) => {
           const at = h.on[want.id]?.[station];
-          if (at !== undefined) at.items[kept.id] = kept.version;
+          if (at !== undefined) holdsItem(at, kept);
         });
       }
     }
@@ -443,7 +468,7 @@ function heard(inner: Inner, address: string, name: string, data: unknown): void
         changeItems(inner, ws, d.vault, (all) => { if (newer(d as Item, all[d.id])) all[d.id] = d; });
         change(inner, ws, (h) => {
           const at = h.on[d.vault]?.[station];
-          if (at !== undefined) at.items[d.id] = d.version;
+          if (at !== undefined) holdsItem(at, d as Item);
         });
         spreadAll(inner, ws);
       }
@@ -499,7 +524,11 @@ function readItems(inner: Inner, address: string, vault: string): Effect.Effect<
     });
     change(inner, ws, (h) => {
       const at = h.on[vault]?.[station];
-      if (at !== undefined) at.items = Object.fromEntries(all.map((i) => [i.id, i.version]));
+      if (at !== undefined) {
+        at.items = {};
+        delete at.sigs;
+        for (const i of all) holdsItem(at, i);
+      }
     });
     spreadAll(inner, ws);
   });
@@ -1076,10 +1105,7 @@ class Vaults {
     return Effect.gen(function* () {
       const said = yield* self.#station(station, "PUT", "/vault/vaults", next);
       const v = (get(said, "vault") as Vault | undefined) ?? next;
-      change(self.#inner, self.ws, (h) => {
-        holds(h, v, station, null);
-        h.at[v.id] = station;
-      });
+      change(self.#inner, self.ws, (h) => holds(h, v, station, null));
       spreadAll(self.#inner, self.ws);
       return v;
     });
@@ -1303,10 +1329,10 @@ class Vaults {
         e.code === "vault_conflict" ? Effect.ignore(readItems(self.#inner, `${self.ws}/${station}`, v.id), { log: "Unhandled", message: "vault items read" }) : Effect.void,
       );
       const item = (get(said, "item") as Item | undefined) ?? next;
-      changeItems(self.#inner, self.ws, v.id, (all) => void (all[item.id] = item));
+      changeItems(self.#inner, self.ws, v.id, (all) => { if (newer(item, all[item.id])) all[item.id] = item; });
       change(self.#inner, self.ws, (h) => {
         const at = h.on[v.id]?.[station];
-        if (at !== undefined) at.items[item.id] = item.version;
+        if (at !== undefined) holdsItem(at, item);
       });
       spreadAll(self.#inner, self.ws);
       return { id: item.id, version: item.version };
@@ -1325,8 +1351,8 @@ class Vaults {
 
   /// What an item holds: written by a member's own device in the lock, opened with its vault's key.
   #plain(lock: Checked, v: Vault, item: Item, key: Uint8Array): Effect.Effect<Uint8Array, CoreError> {
-    const by = ownSigner(lock, item.sig?.key);
-    if (!by || !v.members.includes(by.sub) || item.vault !== v.id || item.epoch !== v.epoch || !signedOk(item, TAG.item)) return fail("vault_untrusted", t("core-misc.vault.untrusted"));
+    // (as the stations take it, rules/ `itemOk`, and written under the key it is opened with)
+    if (rules.item_ok_js(lock, v, null, item, true, rulesCrypto) !== null || item.epoch !== v.epoch) return fail("vault_untrusted", t("core-misc.vault.untrusted"));
     return Effect.try({ try: () => decrypt(key, item.ct, itemContext(this.ws, v.id, item.id, item.version, item.epoch)), catch: asCoreError });
   }
 

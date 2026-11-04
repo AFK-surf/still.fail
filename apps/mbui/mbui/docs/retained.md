@@ -188,6 +188,67 @@ is tracked, and layout, paint and composition kept by node. Neither another engi
    ended by then settled first; what a component made then reads the state as it was then. A frame settles what ends
    by its own moment and draws; layout, words and paint wait for it and are merged. Nothing is made right by one frame
    more, by reading the time where a value is worked out, or by waiting for things to settle.
+10. **A frame goes one way: events, bindings, layout, paint.** The events due by its moment are committed first, each at
+   its own; then the bindings told are worked out; then layout runs once, measuring and placing; then what changed is
+   painted. Layout is of one moment, the frame's; a frame drawn ahead of it (for when it is shown) samples only paint's
+   properties there (a place moved, a look), as a compositor's motions are, never a size. Nothing goes back within the frame (Compose's phases: "no way to go backwards while in the same frame").
+   Sizes and places worked out by layout are read by paint, by hit tests and by the next event; no binding, `computed`
+   or `reacts` reads them to change the structure, a property layout reads, or where a list is scrolled to. Where one
+   thing's size decides another's (the composer's height and the room the messages leave under them), their nearest
+   common holder lays both out (a layout of its own: Compose's "the minimal shared parent serves as the source of
+   truth"), not a size told back and set on the other. The one structure made in layout is a lazy container's
+   (rule 11): it makes and lets go of nodes in its own subtree as it lays them out. `Tree::laid_out` does not call
+   itself; a node marked during layout fails a test (the browser's ResizeObserver defers what it cannot deliver and
+   says so; here what a frame cannot settle in its one pass is a fault, rule 9).
+11. **A long list is laid out from its anchor.** Its scroll state is an anchor: a row's key and how far its edge is from
+   the list's (Compose's LazyListState: the first visible item and its offset, kept by key across changes of the
+   rows). Each layout measures rows out from the anchor until the window (and a little more, made ahead) is filled,
+   and makes, keeps and lets go of rows by that; no row off the window is measured or gone through. A chat's list is
+   laid out from its end (reversed: Flutter's `reverse`, Compose's `reverseLayout`): at its end is the anchor at the
+   newest row, 0 from the foot; a row come at the end while it is there is at the end; history come over it moves
+   nothing in sight; going to a message is its key put as the anchor. Heights measured are kept by key for the scroll
+   bar's estimate of the whole, and only for that. A row coming, going or moving is drawn moved (an offset, a cut, a
+   fade, in paint) from its cause: the list is laid out where its rows end up, each of their changes of place drawn
+   on the way there; a row whose own height moves is laid out again alone, as what it holds changes.
+12. **A list is read by its index, its changes told with their cause.** What a list shows is given as how many rows,
+   the key and the value of row i, and the changes since (inserted, removed, moved, one row's value set), each with
+   what caused it (a message come, one sent, history fetched): a row's coming or going moves by that cause, never by
+   comparing the rows before and after. Where a key is is looked up from where it was last (Compose's nearest range),
+   not from a map of the whole. What a row shows is worked out of its value for the rows made, by key and version;
+   nothing worked out for one row goes through all of them (`keys().search`, `find_first`, a map of the whole array in a
+   binding). A list given whole (a topic's first value) is gone through once, as it is given.
+13. **The hand and the keys go one way down the tree.** Drawing and hit testing walk what is drawn, a subtree wholly
+   outside its clip skipped; there is no order of every node kept and made again as one comes or goes. A key goes to
+   the node with the focus and up through what holds it (the DOM's bubbling); back goes to the topmost layer (a menu, a
+   sheet, the page stack's top). Nothing is found by going through the whole tree.
+14. **What a frame costs is what shows and what changed.** A frame scrolled, a row laid out another height, a motion
+   stepping, one message come: each costs what is on screen and what changed, never the list's length. Held by
+   counting: the same scene with 30 and with 3000 rows does the same work a frame (bindings worked out, rows gone
+   through, measures), a check in CI; and in milliseconds (matklad's "Benchmark In Milliseconds") against the build
+   before a page moved into the tree: opening, scrolling and a send's motion each faster, on a native build.
+
+Where mbui is not yet so (2026-11-04):
+
+- The windowed list (view's `scrolls_window`, ui's `ListRows::in_node`) works the rows' tops out from the first and
+  goes through them as it is scrolled; its end is followed and what is read held by reactions reading layout's
+  results. It is made again as rule 11 says, its motions as paint's.
+- Layout's results are signals (`laid_size_told`, `laid_window_told`, `sizes_told`) read where they change what is
+  made, and `Tree::laid_out` calls itself again where what they told marked more (rule 10); a change settled as of its
+  logical moment turns the clock there and back in the middle of layout. Each reader goes to paint's, the next event's,
+  or into the layout of the holder of both; laid_out runs once, at the frame's moment.
+- The core's topics give a list whole each time, and pages work out maps and positions of the whole (rule 12).
+- What is drawn is gone through down the tree as it is (`Tree::walk_drawn`), no order of every node kept; a point is
+  found going down only into what may take it there (`Tree::walk_taken`: what bounds its input to itself, a column
+  that scrolls, gone into only where the point is in it; what takes no press skipped whole); a key goes to what has
+  the focus and up through what holds it, then to the rest said to take keys, topmost first, as a window's own
+  listeners; back to the topmost said to take it, by the window's stack of layers first (rule 13, counted:
+  `walk_cost_test.mbt`, the same with 30 rows and 3000). Not yet: a node's box does not bound what it holds (what is
+  placed absolutely may lie past it), so a subtree is skipped only where something cuts input to it, and the host is
+  still given the whole scene each frame to draw (rule 4).
+- The old frame is built beside the tree every frame (ui's `frame_drawn` after `view_frame`), back and focus each kept
+  twice; a page moved into the tree lets its old way go in the same change.
+- `Tree` holds events, the clock, layout, focus, back and the scroll bars together, whether a step may run said by
+  nineteen flags of its own; it is taken apart by the phases of rule 10, one phase at a time.
 
 Shown by counting, on the real path, apart: bindings worked out, nodes made and let go, measures, drawing made, what is
 composed again, the scene gone through, and what is handed to the host. A colour changed touches no other component; a

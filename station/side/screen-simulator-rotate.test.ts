@@ -120,7 +120,10 @@ test("a simulator turned from its view, all the way round", { skip: !hasSimctl &
     debug.logs(0);
     await sleep(1500);
     assert.equal(await debug.relaunch(APP), true);
-    assert.ok((await said(6000)).includes("side-ready"), "the app came up");
+    // Waited for, not a fixed 6 s (side run 41810080693): how long a device just booted takes is not this test's.
+    let up = false;
+    for (const asked = Date.now(); !up && Date.now() - asked < 60_000;) up = (await said(500)).includes("side-ready");
+    assert.ok(up, "the app came up");
 
     await simulators.start();
     for (let i = 0; i < 10 && !hub.get(`simulator:${udid}`); i++) await simulators.refresh();
@@ -162,7 +165,9 @@ test("a simulator turned from its view, all the way round", { skip: !hasSimctl &
     };
     await v.input({ t: "device", name: "rotate" });
     await settled(!wideFirst);
-    const turned = await said(1000);
+    // (the app's log a moment behind its picture)
+    const turned: string[] = [];
+    for (const asked = Date.now(); !turned.some((t) => t.startsWith("side-shape")) && Date.now() - asked < 60_000;) turned.push(...(await said(500)));
     console.log(`turned: ${JSON.stringify(turned)}`);
     const side = await shot("2-turned");
     assert.notEqual(side.w > side.h, wideFirst, "the picture turned");
@@ -171,7 +176,8 @@ test("a simulator turned from its view, all the way round", { skip: !hasSimctl &
     await v.input({ t: "pointer", kind: "down", x: 0.25, y: 0.75, buttons: 1 });
     await sleep(80);
     await v.input({ t: "pointer", kind: "up", x: 0.25, y: 0.75, buttons: 0 });
-    const touched = (await said(1500)).find((t) => t.startsWith("side-touch:"));
+    let touched: string | undefined;
+    for (const asked = Date.now(); !touched && Date.now() - asked < 60_000;) touched = (await said(500)).find((t) => t.startsWith("side-touch:"));
     console.log(`touched: ${touched}`);
     assert.ok(touched, "the finger came");
     const [tx, ty] = touched.slice("side-touch:".length).split(",").map(Number);

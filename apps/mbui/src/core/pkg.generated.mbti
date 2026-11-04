@@ -5,11 +5,10 @@ import {
   "mbui/signals",
   "moonbitlang/core/json",
   "moonbitlang/core/ref",
+  "stillfail/rows",
 }
 
 // Values
-pub fn apply_delta(@json.Json, Array[@json.Json]) -> @json.Json
-
 pub fn call(String, params? : @json.Json, bytes? : Bytes?, on_done? : (Result[@json.Json, @json.Json]) -> Unit) -> Unit
 
 pub fn call_bytes(String, params? : @json.Json, on_done~ : (Result[(@json.Json, Bytes?), @json.Json]) -> Unit) -> Unit
@@ -164,7 +163,6 @@ pub fn Replay::waiting(Self) -> String?
 pub struct Sub {
   id : Int32
   topic : @json.Json
-  mut value : @json.Json?
   mut error : @json.Json?
   mut version : Int32
   mut waiting : Bool
@@ -172,6 +170,9 @@ pub struct Sub {
   // private fields
 }
 pub fn Sub::followed(Self) -> Self
+pub fn Sub::list(Self, Array[String], Array[String]) -> @rows.TopicList
+pub fn Sub::rest(Self) -> @json.Json?
+pub fn Sub::value(Self) -> @json.Json?
 
 // Type aliases
 

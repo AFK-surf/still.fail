@@ -40,9 +40,13 @@ export function isWatch(job: J): boolean {
   return get(job, "watch") === true;
 }
 
+/// Whether a job still matters to the person: a service that is up, restarting or died within the day (it was there for
+/// them to use), a task while it runs. A task that ended is over however it ended: its exit went to its agent, which
+/// acts on it (a watch exits non-zero when what it watched failed).
 function isCurrent(job: J, now: number): boolean {
   const tn = tone(job);
   if (tn === "off") return false;
+  if (!isService(job) && tn !== "live") return false;
   if (tn === "fail") return now - (msOf(job, "endedAt") ?? msOf(job, "startedAt") ?? 0) < NEWS;
   return true;
 }
@@ -196,7 +200,7 @@ export function chatJobs(chat: J, c: Clock, summary = false): [J, number] {
     }
     return [{ jobs: [], hasJobs, alarm, servicesNote: "", jobsNote: "", allText: "" }, next];
   }
-  // Only what matters now: a job that is over (stopped, done, died over a day ago) is not shown at all.
+  // Only what matters now (`isCurrent`): a job that is over is not shown at all.
   const all: J[] = arr(get(chat, "agents")).flatMap((a) => arr(get(a, "jobs")));
   const next = all.reduce((m, j) => Math.min(m, jobChanges(j, c.now)), Infinity);
   const jobs = all.filter((j) => isCurrent(j, c.now));

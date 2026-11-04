@@ -50,7 +50,11 @@ final class DuoHIDBridge {
             }
             guard let input else { return false }
             try input.write(contentsOf: Data((command + "\n").utf8))
-            if try line(within: 3) == "OK" { return true }
+            // As long as its start: a sweep is 0.8 s of the guest's own, and took 2.7 s on a busy Mac. A guest not answering in
+            // 3 s was killed, the hinge left partway and the pose lost.
+            let answer = try line(within: 60)
+            if answer == "OK" { return true }
+            print("[hid] Duo guest said \(answer ?? "nothing") to \(command)")
         } catch {
             print("[hid] Duo guest command failed: \(error)")
         }

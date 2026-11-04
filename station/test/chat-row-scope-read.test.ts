@@ -15,7 +15,10 @@ test("a scoped chat update reads marks and answers only for those chats", () => 
   db.exec(`CREATE TABLE dismissed (viewer TEXT, thread INTEGER, n INTEGER, at INTEGER, PRIMARY KEY (viewer, thread, n));
     CREATE TABLE kept_chats (viewer TEXT, thread INTEGER, PRIMARY KEY (viewer, thread));
     CREATE TABLE closed_cards (thread INTEGER, n INTEGER, viewer TEXT, at INTEGER, PRIMARY KEY (thread, n));
-    CREATE TABLE entries (thread INTEGER, n INTEGER, kind TEXT, author_kind TEXT, at INTEGER, card TEXT, options TEXT);`);
+    CREATE TABLE entries (thread INTEGER, n INTEGER, kind TEXT, author_kind TEXT, at INTEGER, card TEXT, options TEXT);
+    CREATE INDEX entries_people_since ON entries (thread, at) WHERE author_kind = 'person' AND kind = 'message';
+    CREATE INDEX entries_cards ON entries (thread, n) WHERE card IS NOT NULL;
+    CREATE INDEX entries_options ON entries (thread, n) WHERE options IS NOT NULL;`);
   const mark = db.prepare("INSERT INTO dismissed VALUES ('person', ?, 1, 100)");
   const keep = db.prepare("INSERT INTO kept_chats VALUES ('person', ?)");
   const close = db.prepare("INSERT INTO closed_cards VALUES (?, 1, 'person', 100)");

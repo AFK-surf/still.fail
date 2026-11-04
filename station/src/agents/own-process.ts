@@ -121,7 +121,7 @@ export abstract class OwnProcessDriver<S extends OwnProcessSession = OwnProcessS
       session = this.handedOver(options, handed, info, events);
     } else {
       const out = outFile(this.data, id);
-      const at = await ackedOffset(info, out);
+      const { at } = await ackedOffset(info, out);
       session = this.crashed(options, linesBefore(out, at), info, events);
       log.info(`agents::${kind}`, `taking up a ${kind} process after a crash`, { session: session.id(), pgid: info.pgid, busy: session.busy(), from: at });
       // A turn is running that this station did not start.

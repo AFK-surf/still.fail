@@ -18,7 +18,7 @@ import { digest, nowSeconds, randomSecret, type Identity } from "./auth";
 import { header } from "./compat";
 import type { Env } from "./env";
 import { grantKeys } from "./grants";
-import { langOf, type Lang } from "./i18n.ts";
+import { langOf, setCloud, type Lang } from "./i18n.ts";
 import { isIconUrl } from "./icons";
 import { showsOf, type Shows } from "./noticeText";
 import { MAX_RELAYS, parseRelays, relays, relayUrls, sameUrl, waysOf } from "./relays";
@@ -92,6 +92,8 @@ export type PushRegistration = PushDevice & { id: string; lang: Lang; shows: Sho
 export class Directory extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
+    // (its pushes' words name its product)
+    setCloud(env.PUBLIC_ORIGIN);
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
     ctx.storage.sql.exec(`
       CREATE TABLE IF NOT EXISTS users (sub TEXT PRIMARY KEY, email TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', picture TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, last_seen INTEGER, admitted TEXT, beta INTEGER);

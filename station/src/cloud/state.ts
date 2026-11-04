@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { nowSecs, writePrivate } from "../ops/files.ts";
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
+import { setStationCloud } from "../ops/i18n.ts";
 import { type Entry, type LockState, apply, asEntry, entryHash, fold } from "./lock.ts";
 import { type Provider, providerOf } from "./provider.ts";
 
@@ -168,6 +169,7 @@ export class Cloud {
   constructor(data: string, watchFiles = true) {
     this.data = data;
     this.state = readState(data);
+    setStationCloud(this.state?.origin);
     this.peersCurrent = this.state !== null && !this.removed();
     this.lock = readLock(data);
     // `enroll` from another process, or an older tool editing the file; `lock reset` taking the lock away.
@@ -198,6 +200,7 @@ export class Cloud {
     const next = readState(this.data);
     if (tell || JSON.stringify(next) !== JSON.stringify(this.state)) {
       this.state = next;
+      setStationCloud(next?.origin);
       this.tell();
     }
   }
@@ -385,6 +388,7 @@ export class Cloud {
   update(change: (s: CloudState) => void) {
     if (!this.state) return;
     change(this.state);
+    setStationCloud(this.state.origin);
     this.writing = true;
     try {
       writeState(this.data, this.state);

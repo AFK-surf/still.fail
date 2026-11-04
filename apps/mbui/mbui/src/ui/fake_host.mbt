@@ -190,6 +190,19 @@ impl @hostapi.Host for FakeHost with perf_where(_) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with perf_open(_, go) {
+  match fake.val {
+    Some(f) if f.perf_opens => {
+      if go {
+        f.perf_opened += 1
+      }
+      true
+    }
+    _ => false
+  }
+}
+
+///|
 impl @hostapi.Host for FakeHost with perf_size(_) {
   // (what the lines weigh is the real host's, whose times are not a test's: as the test says, Tester::set_perf_size)
   match fake.val {
