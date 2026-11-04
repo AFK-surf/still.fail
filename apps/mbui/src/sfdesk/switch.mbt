@@ -6,22 +6,20 @@
 // Between two chats nothing moves; a new chat become its chat has its own (newchat.mbt new_chat_after).
 
 ///|
-/// The page the pane showed as the last frame was built (what a switch is from) and the frame it came on top in,
-/// whether the switch is away from a new chat, and that new chat's view as it last showed (what leaves as it is left).
+/// The page the pane showed as the last frame was built (what a switch is from), whether the switch is away from a new
+/// chat, and that new chat's view as it last showed (what leaves as it is left).
 priv struct WideSwitch {
   mut was : Page?
-  mut was_from : Int
   mut from_new : Bool
   mut new_view : Json?
 }
 
 ///|
-let page_switch : WideSwitch = { was: None, was_from: 0, from_new: false, new_view: None }
+let page_switch : WideSwitch = { was: None, from_new: false, new_view: None }
 
 ///|
 fn page_switch_reset() -> Unit {
   page_switch.was = None
-  page_switch.was_from = 0
   page_switch.from_new = false
   page_switch.new_view = None
 }
@@ -32,18 +30,13 @@ fn page_switch_reset() -> Unit {
 /// as measured then: what was drawn, not what is to be). Once for each page come on top, none for the one it was
 /// already; a new chat become its chat in place (fresh.became) none of it, its own way.
 fn page_switch_to(top : Page) -> Unit {
-  // (a page on top only within the frame it came in, gone again before it was drawn, is no page a switch is from: none
-  // of it was seen, so nothing of it leaves. A chat opened as the app starts goes through the new chat in its first
-  // frame, whose scene would otherwise leave over the chat, composer_capsule_words_wbtest)
-  let frame = @ui.current().frame_number()
-  let shown = page_switch.was_from < frame
   let switched = match (page_switch.was, top) {
-    (Some(NewChat), Chat(r)) if shown =>
+    (Some(NewChat), Chat(r)) =>
       match @signals.untracked(fn() { fresh.became.get() }) {
         Some(b) if b == r => false
         _ => true
       }
-    (Some(Chat(_)), NewChat) if shown => true
+    (Some(Chat(_)), NewChat) => true
     _ => false
   }
   if switched && !@ui.reduced_motion() {
@@ -62,9 +55,6 @@ fn page_switch_to(top : Page) -> Unit {
   // a new chat come to: nothing made for it yet (NewChat.tsx useEnsureChat: once a page)
   if top == NewChat && page_switch.was != Some(NewChat) {
     fresh_reset()
-  }
-  if page_switch.was != Some(top) {
-    page_switch.was_from = frame
   }
   page_switch.was = Some(top)
 }
