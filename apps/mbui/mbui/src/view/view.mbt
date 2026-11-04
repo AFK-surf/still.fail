@@ -5101,6 +5101,9 @@ fn View::boxes_again(self : View) -> Unit {
   }
   self.tree.layout_marked_at(at)
   self.tree.order_marked()
+  // (what it holds drawn in another order: all of it drawn again where the scene keeps it, as the root's layers are,
+  // Tree::top_last; nothing of what it holds changed of its own)
+  self.tree.placed_pending.push({ at, gen: n.gen })
   // (what is drawn over what, among what holds it, changed: whether a modal layer is over what is held)
   self.tree.modals_told()
 }

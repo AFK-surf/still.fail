@@ -150,6 +150,10 @@ pub fn[T] ListRows::in_node_indexed(
       c.leads.clear()
     }
     let mut began = false
+    // (what came and what went in this one batch: as ListRows::rows_at has it of the rows before and after it, one come
+    // and gone in it never was, one gone and come again in it is there still, neither coming nor going)
+    let came_now : Set[String] = Set::new()
+    let went_now : Map[String, (RowSize, Double)?] = {}
     for change in changes() {
       match change {
         Came(k) => {
@@ -160,19 +164,37 @@ pub fn[T] ListRows::in_node_indexed(
             }
             None => ()
           }
-          if watching {
-            let it = (rows.find)(k, (rows.snapshot)().1 - 1).map(item)
-            if it is Some(x) && comes(x) {
-              c.by[k] = (Comes(from(k).unwrap_or(now)), ms(k).unwrap_or(row_size_ms))
-              began = true
+          match went_now.get(k) {
+            // (gone and come again in it: what moved it before, as it was)
+            Some(was) => {
+              went_now.remove(k)
+              match was {
+                Some(cause) => c.by[k] = cause
+                None => c.by.remove(k) |> ignore
+              }
+            }
+            None => {
+              came_now.add(k)
+              if watching {
+                let it = (rows.find)(k, (rows.snapshot)().1 - 1).map(item)
+                if it is Some(x) && comes(x) {
+                  c.by[k] = (Comes(from(k).unwrap_or(now)), ms(k).unwrap_or(row_size_ms))
+                  began = true
+                }
+              }
             }
           }
         }
         Went(k, it, after) =>
-          if watching {
+          if came_now.contains(k) {
+            // (come and gone in it: never among them)
+            came_now.remove(k)
+            c.by.remove(k) |> ignore
+          } else if watching {
             let at = from(k).unwrap_or(now)
             let after = after.unwrap_or("")
             let near = if after == "" { 0 } else { (rows.find)(after, (rows.snapshot)().1 - 1).map(fn(i) { i + 1 }).unwrap_or(0) }
+            went_now[k] = c.by.get(k)
             goings.push({ key: k, item: it, at, after, near })
             c.by[k] = (Goes(at), ms(k).unwrap_or(row_size_ms))
             began = true

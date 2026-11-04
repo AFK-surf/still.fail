@@ -155,3 +155,29 @@ test "an indexed list given whole shows its rows as they are, nothing coming" {
   assert_eq((rows.moving)(), [])
   assert_eq(t.row(30).map(fn(r) { r.3 }), Some(60.0))
 }
+
+///|
+test "an indexed list's row come and gone in one change never was: nothing leaving, nothing moving" {
+  let (t, src, rows) = indexed_list(30)
+  // (said and held back at once: it comes and goes as one change)
+  src.pending.push(Came("brief"))
+  src.pending.push(Went("brief", ("brief", 60.0), Some("m29")))
+  src.rev.set(src.rev.get() + 1)
+  t.draw()
+  assert_eq((rows.source.snapshot)().1, 30, msg="nothing among them leaving")
+  assert_true((rows.source.find)("brief", 29) is None)
+  assert_eq((rows.moving)(), [])
+}
+
+///|
+test "an indexed list's row gone and come again in one change is there still, not leaving nor coming" {
+  let (t, src, rows) = indexed_list(30)
+  src.pending.push(Went("m29", ("m29", 60.0), Some("m28")))
+  src.pending.push(Came("m29"))
+  src.rev.set(src.rev.get() + 1)
+  t.draw()
+  assert_eq((rows.source.snapshot)().1, 30)
+  assert_eq((rows.source.find)("m29", 29), Some(29))
+  assert_eq((rows.moving)(), [])
+  assert_eq(t.row(29).map(fn(r) { r.3 }), Some(60.0))
+}
