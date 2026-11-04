@@ -237,8 +237,14 @@ Where mbui is not yet so (2026-11-04):
   logical moment turns the clock there and back in the middle of layout. Each reader goes to paint's, the next event's,
   or into the layout of the holder of both; laid_out runs once, at the frame's moment.
 - The core's topics give a list whole each time, and pages work out maps and positions of the whole (rule 12).
-- The order of every node is made again as any one comes or goes (`Tree::ordered`), and back and keys are found by
-  going through the whole tree (`topmost_from`) (rule 13).
+- What is drawn is gone through down the tree as it is (`Tree::walk_drawn`), no order of every node kept; a point is
+  found going down only into what may take it there (`Tree::walk_taken`: what bounds its input to itself, a column
+  that scrolls, gone into only where the point is in it; what takes no press skipped whole); a key goes to what has
+  the focus and up through what holds it, then to the rest said to take keys, topmost first, as a window's own
+  listeners; back to the topmost said to take it, by the window's stack of layers first (rule 13, counted:
+  `walk_cost_test.mbt`, the same with 30 rows and 3000). Not yet: a node's box does not bound what it holds (what is
+  placed absolutely may lie past it), so a subtree is skipped only where something cuts input to it, and the host is
+  still given the whole scene each frame to draw (rule 4).
 - The old frame is built beside the tree every frame (ui's `frame_drawn` after `view_frame`), back and focus each kept
   twice; a page moved into the tree lets its old way go in the same change.
 - `Tree` holds events, the clock, layout, focus, back and the scroll bars together, whether a step may run said by
