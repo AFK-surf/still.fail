@@ -65,6 +65,15 @@ export function answeredCard(text: string, who: string, said: string, lang: Lang
   return card(elements);
 }
 
+/// A question's card that stopped waiting other than by its buttons (connects/card-ends.ts): its text, and why it is
+/// closed; nothing to press any more.
+export function endedCard(text: string, words: string): Json {
+  const elements: Json[] = [];
+  if (text.trim() !== "") elements.push(markdown(text));
+  elements.push(note(words));
+  return card(elements);
+}
+
 /// How long a turn took, in words.
 export function took(ms: number, lang: Lang): string {
   const s = Math.max(1, Math.round(ms / 1000));

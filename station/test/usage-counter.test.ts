@@ -3,6 +3,8 @@
 import type { Clock } from "effect";
 import assert from "node:assert/strict";
 import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { monitorEventLoopDelay } from "node:perf_hooks";
@@ -12,8 +14,10 @@ import { zstdCompressSync, zstdDecompressSync } from "node:zlib";
 import { SEGMENT } from "../src/read/packed.ts";
 import { cost, price, priceTable, sessionUsage, usageNow } from "../src/read/usage.ts";
 import { packFile } from "../src/sessions/archive.ts";
-import { iso, parseIso } from "../src/read/transcript.ts";
+import { iso, parseIso, rememberCodexRollout } from "../src/read/transcript.ts";
 import { type StoreChange, type UsageGroup, Store, newMessage } from "../src/store/store.ts";
+import { installCompactUsage } from "../src/store/usage-compact.ts";
+import { retireUsageIndexes } from "../src/store/usage-retire.ts";
 import { type CallState, UsageCounter, callsOf, claudeFiles, claudeProject, readFrom } from "../src/usage/counter.ts";
 import type { UsageCall, UsageFor } from "../src/store/usage.ts";
 import { keepUsage } from "../src/usage/module.ts";
@@ -189,6 +193,329 @@ async function today() {
   return time;
 }
 
+test("starting the counter skips idle history and counts only new calls in an active old transcript", async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const now = r.store.now();
+  const idle = join(r.data, "old-idle");
+  const active = join(r.data, "old-active");
+  session(r.store, "idle", idle, now - 120_000);
+  session(r.store, "active", active, now - 120_000);
+  const path = (where: string) => join(r.data, "transcripts/claude", claudeProject(where), "r.jsonl");
+  append(path(idle), [claudeLine("idle-old", now - 60_000, "claude-opus-5-5", usage(10, 0, 0, 0, 1))]);
+  append(path(active), [claudeLine("active-old", now - 60_000, "claude-opus-5-5", usage(20, 0, 0, 0, 1)),
+    claudeLine("active-new", now + 1, "claude-opus-5-5", usage(3, 0, 0, 0, 1))]);
+  r.store.startTurn("active-turn", "active", "input");
+  r.store.listSessions = () => { throw new Error("counter enumerated old sessions"); };
+  assert.equal(await r.usage.read(), 1);
+  assert.deepEqual(r.store.db.prepare("SELECT id FROM usage ORDER BY id").all().map((row) => row.id), ["active-new"]);
+  assert.equal(r.store.usageFiles().has(path(idle)), false);
+  await time.adjust(10);
+  r.store.endTurn("active-turn", "completed", null, null, null);
+  append(path(active), [claudeLine("after", now + 11, "claude-opus-5-5", usage(4, 0, 0, 0, 1))]);
+  const again = new UsageCounter({ store: r.store, config: () => ({ dataDir: r.data, profiles: [{ home: join(r.data, "homes/cc") }] }), clock: time.clock });
+  counters.push(again);
+  assert.equal(await again.read(), 1, "a known transcript resumes after reopening the counter");
+  assert.deepEqual(r.store.db.prepare("SELECT id FROM usage ORDER BY id").all().map((row) => row.id), ["active-new", "after"]);
+});
+
+for (const delay of [0, 1_000]) test(`a new session's first call is counted when its runtime clock is slightly behind the station (created ${delay} ms after cutover)`, async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const since = r.store.now();
+  if (delay > 0) await time.adjust(delay);
+  const workspace = join(r.data, "new-skewed-session");
+  session(r.store, "new-skewed", workspace, r.store.now());
+  r.store.startTurn("new-turn", "new-skewed", "input");
+  append(join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl"),
+    [claudeLine("old-call", since - 60_000, "claude-opus-5-5", usage(9, 0, 0, 0, 1)),
+      claudeLine("new-skewed-call", since - 1_000, "claude-opus-5-5", usage(2, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(), 1);
+  assert.deepEqual(r.store.db.prepare("SELECT id FROM usage ORDER BY id").all().map((row) => row.id), ["new-skewed-call"]);
+});
+
+test("an already counted response can grow after the counter's starting time", async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const now = r.store.now();
+  const workspace = join(r.data, "working");
+  session(r.store, "active", workspace, now - 120_000);
+  const path = join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl");
+  const first = claudeLine("continued", now - 10_000, "claude-opus-5-5", usage(4, 0, 0, 0, 1));
+  append(path, [first]);
+  const recorded = callsOf("claude", first, false, fresh())[0]!;
+  r.store.recordUsage(path, { session: "active", offset: Buffer.byteLength(first + "\n"), model: null }, "claude",
+    [[recorded, { turn: null, person: null, thread: null, profile: "cc" }]]);
+  const grown = claudeLine("continued", now - 10_000, "claude-opus-5-5", usage(4, 0, 0, 0, 9));
+  const changes: StoreChange[] = [];
+  const unsubscribe = r.store.subscribe((change) => { if (change.type === "usage") changes.push(change); });
+  append(path, [grown]);
+  await r.usage.read(new Set(["active"]));
+  assert.equal((r.store.db.prepare("SELECT output FROM usage WHERE id = 'continued'").get() as { output: number }).output, 9);
+  assert.equal(changes.length, 1, "the updated saved summary is told to readers");
+  append(path, [grown]);
+  await r.usage.read(new Set(["active"]));
+  assert.equal(changes.length, 1, "a repeated unchanged response is not told again");
+  unsubscribe();
+});
+
+test("the compact counter grows known calls and counts new ones without filling an old transcript", async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const now = r.store.now();
+  const workspace = join(r.data, "compact-counter");
+  session(r.store, "active", workspace, now - 120_000);
+  const path = join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl");
+  const old = claudeLine("old-known", now - 60_000, "claude-opus-5-5", usage(4, 0, 0, 0, 1));
+  const previous = callsOf("claude", old, false, fresh())[0]!;
+  r.store.recordUsage(path, { session: "active", offset: 0, model: null }, "claude",
+    [[previous, { turn: null, person: null, thread: null, profile: "cc" }]]);
+  installCompactUsage(r.store.db, () => now);
+  retireUsageIndexes(r.store.db);
+  r.store.startTurn("compact-turn", "active", "input");
+  append(path, [claudeLine("old-known", now - 60_000, "claude-opus-5-5", usage(4, 0, 0, 0, 5)),
+    claudeLine("old-unseen", now - 30_000, "claude-opus-5-5", usage(10, 0, 0, 0, 1)),
+    claudeLine("new", now + 1, "claude-opus-5-5", usage(2, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(), 1);
+  assert.deepEqual(r.store.db.prepare("SELECT id, output FROM usage ORDER BY id").all().map((row) => [row.id, row.output]),
+    [["new", 1], ["old-known", 5]]);
+  const compact = r.store.db.prepare("SELECT SUM(calls) AS calls, SUM(input) AS input FROM usage_compact").get() as { calls: number; input: number };
+  assert.deepEqual([compact.calls, compact.input], [1, 2]);
+});
+
+test("new usage is counted when its transcript was put away before the counter read it", async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const now = r.store.now();
+  const workspace = join(r.data, "packed-before-reading");
+  session(r.store, "active", workspace, now - 120_000);
+  const path = join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl");
+  append(path, [claudeLine("old", now - 1, "claude-opus-5-5", usage(2, 0, 0, 0, 1)),
+    claudeLine("new", now + 1, "claude-opus-5-5", usage(3, 0, 0, 0, 1))]);
+  pack(path);
+  assert.equal(await r.usage.read(new Set(["active"])), 1);
+  assert.deepEqual(r.store.db.prepare("SELECT id FROM usage ORDER BY id").all().map((row) => row.id), ["new"]);
+});
+
+for (const segmented of [false, true]) test(`a tracked ${segmented ? "segmented" : "single-frame"} archive counts a new call despite clock skew`, async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const now = r.store.now();
+  const workspace = join(r.data, "packed-tracked");
+  session(r.store, "active", workspace, now - 120_000);
+  const path = join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl");
+  append(path, [claudeLine("first", now + 1, "claude-opus-5-5", usage(1, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(new Set(["active"])), 1);
+  append(path, [claudeLine("second", now - 1, "claude-opus-5-5", usage(2, 0, 0, 0, 1))]);
+  if (segmented) await packFile(path);
+  else pack(path);
+  const again = new UsageCounter({ store: r.store, config: () => ({ dataDir: r.data, profiles: [{ home: join(r.data, "homes/cc") }] }), clock: time.clock });
+  counters.push(again);
+  assert.equal(await again.read(new Set(["active"])), 1);
+  assert.deepEqual(r.store.db.prepare("SELECT id FROM usage ORDER BY id").all().map((row) => row.id), ["first", "second"]);
+});
+
+test("a new call in a tracked transcript is counted despite clock skew", async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const now = r.store.now();
+  const workspace = join(r.data, "skewed");
+  session(r.store, "active", workspace, now - 120_000);
+  const path = join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl");
+  append(path, [claudeLine("first", now + 1, "claude-opus-5-5", usage(1, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(new Set(["active"])), 1);
+  const again = new UsageCounter({ store: r.store, config: () => ({ dataDir: r.data, profiles: [{ home: join(r.data, "homes/cc") }] }), clock: time.clock });
+  counters.push(again);
+  append(path, [claudeLine("second", now - 1, "claude-opus-5-5", usage(2, 0, 0, 0, 1))]);
+  assert.equal(await again.read(new Set(["active"])), 1);
+  assert.deepEqual(r.store.db.prepare("SELECT id FROM usage ORDER BY id").all().map((row) => row.id), ["first", "second"]);
+});
+
+test("a shortened tracked transcript does not bring old calls into the count", async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const now = r.store.now();
+  const workspace = join(r.data, "shortened");
+  session(r.store, "active", workspace, now - 120_000);
+  const path = join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl");
+  const first = "first-" + "x".repeat(500);
+  append(path, [claudeLine(first, now + 1, "claude-opus-5-5", usage(1, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(new Set(["active"])), 1);
+  writeFileSync(path, claudeLine("old", now - 1, "claude-opus-5-5", usage(2, 0, 0, 0, 1)) + "\n");
+  assert.equal(await r.usage.read(new Set(["active"])), 0);
+  append(path, [claudeLine("new", now - 1, "claude-opus-5-5", usage(3, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(new Set(["active"])), 1);
+  assert.deepEqual(r.store.db.prepare("SELECT id FROM usage ORDER BY id").all().map((row) => row.id), [first, "new"]);
+});
+
+for (const format of ["raw", "single-frame", "segmented"] as const) test(`a replaced tracked ${format} transcript does not count its older calls after restart`, async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const now = r.store.now();
+  const workspace = join(r.data, "replaced");
+  session(r.store, "active", workspace, now - 120_000);
+  const path = join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl");
+  append(path, [claudeLine("first", now + 1, "claude-opus-5-5", usage(1, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(new Set(["active"])), 1);
+  const replacement = [0, 1, 2].map((i) => claudeLine(`old-${i}`, now - 1, "claude-opus-5-5", usage(2, 0, 0, 0, 1)));
+  replacement.push(claudeLine("new", now + 2, "claude-opus-5-5", usage(3, 0, 0, 0, 1)));
+  writeFileSync(path, replacement.join("\n") + "\n");
+  if (format === "single-frame") pack(path);
+  if (format === "segmented") await packFile(path);
+  const again = new UsageCounter({ store: r.store, config: () => ({ dataDir: r.data, profiles: [{ home: join(r.data, "homes/cc") }] }), clock: time.clock });
+  counters.push(again);
+  assert.equal(await again.read(new Set(["active"])), 1);
+  assert.deepEqual(r.store.db.prepare("SELECT id FROM usage ORDER BY id").all().map((row) => row.id), ["first", "new"]);
+});
+
+test("a replacement checkpoint resumes from the new file after an interrupted read", async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const now = r.store.now();
+  const workspace = join(r.data, "replaced-interrupted");
+  session(r.store, "active", workspace, now - 120_000);
+  const path = join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl");
+  append(path, [claudeLine("first", now + 1, "claude-opus-5-5", usage(1, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(new Set(["active"])), 1);
+  const replacement = [0, 1, 2].map((i) => claudeLine(`old-${i}`, now - 1, "claude-opus-5-5", usage(2, 0, 0, 0, 1)));
+  replacement.push(claudeLine("new", now + 2, "claude-opus-5-5", usage(3, 0, 0, 0, 1)));
+  writeFileSync(path, replacement.join("\n") + "\n");
+  const record = r.store.recordUsage.bind(r.store);
+  r.store.recordUsage = () => { throw new Error("interrupted"); };
+  await assert.rejects(r.usage.read(new Set(["active"])), /interrupted/);
+  r.store.recordUsage = record;
+  const again = new UsageCounter({ store: r.store, config: () => ({ dataDir: r.data, profiles: [{ home: join(r.data, "homes/cc") }] }), clock: time.clock });
+  counters.push(again);
+  assert.equal(await again.read(new Set(["active"])), 1);
+  assert.deepEqual(r.store.db.prepare("SELECT id FROM usage ORDER BY id").all().map((row) => row.id), ["first", "new"]);
+});
+
+test("a line already started at the tracking boundary is not mistaken for a new call", async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const now = r.store.now();
+  const workspace = join(r.data, "partial-at-cutoff");
+  session(r.store, "active", workspace, now - 120_000);
+  const path = join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl");
+  append(path, [claudeLine("first", now + 1, "claude-opus-5-5", usage(1, 0, 0, 0, 1))]);
+  const old = claudeLine("old", now - 1, "claude-opus-5-5", usage(2, 0, 0, 0, 1));
+  const split = Math.floor(old.length / 2);
+  appendFileSync(path, old.slice(0, split));
+  assert.equal(await r.usage.read(new Set(["active"])), 1);
+  appendFileSync(path, old.slice(split) + "\n" + claudeLine("new", now - 1, "claude-opus-5-5", usage(3, 0, 0, 0, 1)) + "\n");
+  assert.equal(await r.usage.read(new Set(["active"])), 1);
+  assert.deepEqual(r.store.db.prepare("SELECT id FROM usage ORDER BY id").all().map((row) => row.id), ["first", "new"]);
+});
+
+test("an idle counter does not write a sweep checkpoint", async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  r.store.advanceUsageCounter = () => { throw new Error("idle sweep wrote a checkpoint"); };
+  assert.equal(await r.usage.read(), 0);
+});
+
+test("counting one active transcript does not enumerate every saved transcript", async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const now = r.store.now();
+  const workspace = join(r.data, "active-only");
+  session(r.store, "active", workspace, now);
+  append(join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl"),
+    [claudeLine("new", now + 1, "claude-opus-5-5", usage(1, 0, 0, 0, 1))]);
+  r.store.usageFiles = () => { throw new Error("counter enumerated saved transcripts"); };
+  assert.equal(await r.usage.read(new Set(["active"])), 1);
+});
+
+test("a turn ended before the counter began is not revisited within the safety margin", async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const now = r.store.now();
+  const workspace = join(r.data, "recent-idle");
+  session(r.store, "idle", workspace, now - 1_000);
+  r.store.startTurn("ended", "idle", "input");
+  r.store.endTurn("ended", "completed", null, null, null);
+  append(join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl"),
+    [claudeLine("old", now, "claude-opus-5-5", usage(1, 0, 0, 0, 1))]);
+  r.store.db.prepare("UPDATE usage_counter SET since = ?, through = ? WHERE id = 1").run(now + 1, now + 1);
+  r.store.recordUsage = () => { throw new Error("an old idle transcript was read"); };
+  assert.equal(await r.usage.read(), 0);
+});
+
+test("a running Codex call with a known path does not search old rollouts while its file has yet to appear", async () => {
+  const r = rig();
+  const key = "ember:c-pending-rollout";
+  const id = "pending-rollout";
+  const workspace = join(r.data, "workspace");
+  const home = join(r.data, "homes/cc");
+  const older = join(r.data, "transcripts/codex");
+  session(r.store, key, workspace, r.store.now());
+  r.store.setSessionRuntime(key, "codex", "cc", false, null, null, null, null);
+  r.store.setRuntimeSessionId(key, id);
+  r.store.ranIn(key, id, "cc");
+  r.store.setRunning(key, true);
+  for (let i = 0; i < 100; i++) mkdirSync(join(older, String(i)), { recursive: true });
+  const expected = join(home, "sessions/2026/11/03", `rollout-${id}.jsonl`);
+  assert.equal(rememberCodexRollout(home, id, expected), expected);
+  const listed: string[] = [];
+  const real = fs.readdirSync;
+  fs.readdirSync = ((dir: fs.PathLike, ...args: unknown[]) => (listed.push(String(dir)), (real as (...xs: unknown[]) => unknown)(dir, ...args))) as typeof real;
+  syncBuiltinESMExports();
+  try {
+    assert.equal(await r.usage.read(new Set([key])), 0);
+    const at = iso(r.store.now());
+    append(expected, [
+      JSON.stringify({ timestamp: at, type: "session_meta", payload: { id, cwd: workspace } }),
+      JSON.stringify({ timestamp: at, type: "turn_context", payload: { model: "gpt-6" } }),
+      JSON.stringify({ timestamp: at, type: "event_msg", payload: { type: "token_count", info: {
+        total_token_usage: { total_tokens: 3 }, last_token_usage: { input_tokens: 2, cached_input_tokens: 0, output_tokens: 1 },
+      } } }),
+    ]);
+    assert.equal(await r.usage.read(new Set([key])), 1, "the call is counted when the file appears");
+    assert.deepEqual(listed.filter((path) => path === older || path.startsWith(`${older}/`)), []);
+  } finally {
+    fs.readdirSync = real;
+    syncBuiltinESMExports();
+  }
+});
+
+test("a turn finishing after its chat switches runtime is counted on its original account", async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const workspace = join(r.data, "sessions/ember/c-switch/workspace");
+  const key = "ember:c-switch";
+  session(r.store, key, workspace, r.store.now());
+  r.store.startTurnFor("t1", key, "input", { profile: "cc", person: "a@x", thread: null });
+  r.store.setRuntimeSessionId(key, "r1");
+  r.store.ranIn(key, "r1", "cc");
+  r.store.setSessionRuntime(key, "codex", "cx", false, null, null, null, null);
+  const path = join(r.data, "transcripts/claude", claudeProject(workspace), "r1.jsonl");
+  append(path, [claudeLine("m1", r.store.now(), "claude-opus-5-5", usage(10, 0, 0, 0, 1))]);
+  r.store.endTurn("t1", "completed", null, null, null);
+  assert.equal(await r.usage.read(), 1);
+  const rows = r.store.usageGroups(0, MAX, 0);
+  assert.deepEqual(rows.map((g) => [g.input, g.profile]), [[10, "cc"]]);
+  assert.equal(await r.usage.read(), 0);
+});
+
+test("a switched runtime counts new calls without filling older calls from its transcript", async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
+  const now = r.store.now();
+  const workspace = join(r.data, "sessions/ember/c-switch-old/workspace");
+  const key = "ember:c-switch-old";
+  session(r.store, key, workspace, now - 120_000);
+  r.store.startTurnFor("t1", key, "input", { profile: "cc", person: "a@x", thread: null });
+  r.store.setRuntimeSessionId(key, "r1");
+  r.store.ranIn(key, "r1", "cc");
+  r.store.setSessionRuntime(key, "codex", "cx", false, null, null, null, null);
+  const path = join(r.data, "transcripts/claude", claudeProject(workspace), "r1.jsonl");
+  append(path, [claudeLine("old", now - 60_000, "claude-opus-5-5", usage(10, 0, 0, 0, 1)),
+    claudeLine("new", now + 1, "claude-opus-5-5", usage(2, 0, 0, 0, 1))]);
+  r.store.endTurn("t1", "completed", null, null, null);
+  assert.equal(await r.usage.read(), 1);
+  assert.deepEqual(r.store.db.prepare("SELECT id FROM usage ORDER BY id").all().map((row) => row.id), ["new"]);
+});
+
 test("each call is counted once, for whom its turn worked, where and on what", async () => {
   const time = await today();
   const pause = () => time.adjust(15);
@@ -287,13 +614,14 @@ test("each part's calls are put to the turns they were made in, those turns alon
 });
 
 test("days are the asker's own", async () => {
-  const r = rig();
+  const time = testClock();
+  const r = rig({ clock: time.clock });
   const workspace = join(r.data, "w");
   session(r.store, "k", workspace, 0);
   // 2026-10-01T23:30Z: still the 1st in UTC, the 2nd in UTC+8.
   const at = parseIso("2026-10-01T23:30:00.000Z")!;
   append(join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl"), [claudeLine("m", at, "claude-opus-5-5", usage(1, 0, 0, 0, 1))]);
-  await r.usage.read();
+  await r.usage.read(new Set(["k"]));
   assert.equal(r.store.usageGroups(0, MAX, 0)[0]!.day, "2026-10-01");
   assert.equal(r.store.usageGroups(0, MAX, 480)[0]!.day, "2026-10-02");
   assert.deepEqual(r.store.usageGroups(at + 1, MAX, 0), []);
@@ -338,26 +666,30 @@ test("compressed history keeps usage offsets and sub-agent discovery", async () 
   assert.deepEqual(await readAll(main, 13), ["third\n", 19]);
 });
 
-test("as the station starts, a transcript put away after it was read is not read again; one never read is", async () => {
-  const r = rig();
+test("starting the counter leaves idle compressed transcripts alone, whether counted before or not", async () => {
+  const time = await today();
+  const r = rig({ clock: time.clock });
   const read = join(r.data, "w1");
   const never = join(r.data, "w2");
   session(r.store, "k1", read, 0);
   session(r.store, "k2", never, 0);
   const first = join(r.data, "transcripts/claude", claudeProject(read), "r1.jsonl");
-  append(first, [claudeLine("m1", 1000, "claude-opus-5-5", usage(1, 0, 0, 0, 1))]);
-  assert.equal(await r.usage.read(), 1);
-  // Put away with a call the count never saw: a station starting again reads it no more (were it decompressed, it would
-  // be counted).
+  const line = claudeLine("m1", 1000, "claude-opus-5-5", usage(1, 0, 0, 0, 1));
+  append(first, [line]);
+  // This was counted by an earlier station before the new counter's starting time.
+  r.store.recordUsage(first, { session: "k1", offset: Buffer.byteLength(line + "\n"), model: null }, "claude",
+    [[callsOf("claude", line, false, fresh())[0]!, { turn: null, person: null, thread: null, profile: "cc" }]]);
+  // A call the older station never counted was put away with that transcript.
   append(first, [claudeLine("m2", 2000, "claude-opus-5-5", usage(2, 0, 0, 0, 2))]);
   pack(first);
   const second = join(r.data, "transcripts/claude", claudeProject(never), "r2.jsonl");
   append(second, [claudeLine("m3", 3000, "claude-opus-5-5", usage(3, 0, 0, 0, 3))]);
   pack(second);
-  const again = new UsageCounter({ store: r.store, config: () => ({ dataDir: r.data, profiles: [{ home: join(r.data, "homes/cc") }] }) });
+  const again = new UsageCounter({ store: r.store, config: () => ({ dataDir: r.data, profiles: [{ home: join(r.data, "homes/cc") }] }), clock: time.clock });
   counters.push(again);
-  assert.equal(await again.read(), 1);
-  assert.deepEqual(r.store.usageGroups(0, MAX, 0).map((g) => g.input).sort(), [1, 3]);
+  assert.equal(await again.read(), 0);
+  assert.equal(r.store.usageFiles().has(second), false);
+  assert.deepEqual(r.store.usageGroups(0, MAX, 0).map((g) => g.input), [1]);
 });
 
 test("a large compressed file is read in parts from its offset, and from its start once shorter than that", async () => {
@@ -412,12 +744,13 @@ test("a file read in parts records each part's whole lines and leaves a partial 
 });
 
 for (const truncated of [false, true]) test(`a dense transcript yields between writes and resumes ${truncated ? "after it was shortened" : "from its last completed part"}`, async () => {
-  const r = rig();
+  const time = testClock();
+  const r = rig({ clock: time.clock });
   const workspace = join(r.data, "dense");
   session(r.store, "k", workspace, 0);
   const path = join(r.data, "transcripts/claude", claudeProject(workspace), "r.jsonl");
   append(path, [claudeLine("before", 1000, "claude-opus-5-5", usage(1, 0, 0, 0, 1)), " ".repeat(200_000)]);
-  assert.equal(await r.usage.read(), 1);
+  assert.equal(await r.usage.read(new Set(["k"])), 1);
   const previous = r.store.usageFiles().get(path)!;
   if (truncated) writeFileSync(path, "");
   const count = 350;
@@ -441,9 +774,9 @@ for (const truncated of [false, true]) test(`a dense transcript yields between w
   assert.ok(recorded > 1 && recorded < count + 1, "the stop ran between writes");
   assert.equal(r.store.usageFiles().get(path)?.offset, truncated ? 0 : previous.offset);
 
-  const again = new UsageCounter({ store: r.store, config: () => ({ dataDir: r.data, profiles: [{ home: join(r.data, "homes/cc") }] }) });
+  const again = new UsageCounter({ store: r.store, config: () => ({ dataDir: r.data, profiles: [{ home: join(r.data, "homes/cc") }] }), clock: time.clock });
   counters.push(again);
-  await again.read();
+  await again.read(new Set(["k"]));
   assert.equal((r.store.db.prepare("SELECT COUNT(*) AS n FROM usage").get() as { n: number }).n, count + 1);
   assert.equal(r.store.usageFiles().get(path)?.offset, readFileSync(path).length);
 });

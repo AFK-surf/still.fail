@@ -235,6 +235,13 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
       }
     }
   }
+  let repair = fn(label : String) {
+    if manager && flag(v, "repairable") {
+      if @sf.button(c, label, key="software/" + station + "/" + id, tone=Primary, disabled=busy) {
+        software_call(core, station, "software.update", [("id", str(id)), ("repair", Json::boolean(true))])
+      }
+    }
+  }
   let own = id == "station"
   let switches = own && manager && ((beta && has(v, "channel")) || has(v, "auto"))
   @sf.item_row(c, fn() {
@@ -269,7 +276,13 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
           if text(v, "message") != "" {
             @sf.tip(c, "software-failed-tip/" + station + "/" + id, fid, text(v, "message"))
           }
-          button(@sf.t("common.retry"), false)
+          if flag(v, "repairable") {
+            repair(@sf.t("common.retry"))
+          } else {
+            button(@sf.t("common.retry"), false)
+          }
+        } else if flag(v, "repairable") {
+          repair(@sf.t("web-main.versions.repairNpm"))
         } else if !installed {
           button(@sf.t("web-main.versions.install"), false)
         } else if flag(v, "newer") && latest != "" {
@@ -339,15 +352,16 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
 /// A station page's 登录 (LoginsSection): only the logins done there through still.fail; one under way its card (as in
 /// its chat), those ended a row per program (用户定 2026-10-31: a row per try buried the page in 已取消; the core's
 /// `tools`) naming it (devin, not its command line), who last logged in to it, from which chat, and how many tries,
-/// pressed open to them. Nothing when there are none.
-fn station_logins(c : @ui.Ctx, core : Core, station : String) -> Unit {
+/// pressed open to them. Nothing when there are none. Away (`online` false), no card of one under way: it can be
+/// neither done nor cancelled until it is back.
+fn station_logins(c : @ui.Ctx, core : Core, station : String, online? : Bool = true) -> Unit {
   let view = (core.topic)("machineLogins", { "station": str(station) }).value
   let logins = items(view, "logins")
-  if !flag(view, "supported") || logins.length() == 0 {
+  let active = if online { logins.filter(fn(l) { flag(Some(l), "active") }) } else { [] }
+  let tools = items(view, "tools")
+  if !flag(view, "supported") || active.length() + tools.length() == 0 {
     return
   }
-  let active = logins.filter(fn(l) { flag(Some(l), "active") })
-  let tools = items(view, "tools")
   st_section(c, @sf.t("web-main.logins.title"), description=@sf.t("web-main.logins.lead"), fn() {
     if active.length() > 0 {
       c.box(style=lg_cards, fn() {

@@ -12,6 +12,8 @@
 //   [MBUI_FILM_FPS=60: the rate both the app and the video are drawn at]
 //   [MBUI_FILM_PREPARE=<script>: actions and named resource requirements before filming begins]
 //   [MBUI_FILM_ALLOW_INCOMPLETE=1: intentionally film the parts mbui can draw when other content is missing]
+//   [MBUI_FILM_ALLOW_CORNER_FAULTS=1: draw a scene that breaks the theme's corner rule (a change's before), each fault
+//   still named]
 //   [MBUI_NATIVE_INPUT=finger|mouse: the input the scene was started for; otherwise the platform's]
 //   MBUI_PICTURE=<out.png> selects a still image from the same scene instead; MBUI_PICTURE_AT is milliseconds after
 //   the supplied preparation and drive, or MBUI_PICTURE_FRAME selects a zero-based frame of the drive. Set
@@ -63,6 +65,7 @@ pub fn film(
   last? : String = "",
   copied? : String = "",
   allow_incomplete? : Bool = false,
+  corners_held? : Bool = true,
 ) -> Bool {
   if !supported {
     say("film: this host has no film")
@@ -83,10 +86,13 @@ pub fn film(
     dark~,
     inset~,
     window_corner~,
-    corners_held=true,
+    corners_held~,
     words_over_held=false,
   )
   defer { t.end_run(host) }
+  if !corners_held {
+    say("film: the corner rule not held (MBUI_FILM_ALLOW_CORNER_FAULTS)")
+  }
   // The application's clock must advance at the film's rate too. Merely giving the encoder a higher rate would
   // duplicate frames of a run still drawn at the Tester's default 60 Hz.
   t.set_frame_period(1000.0 / fps.to_double())
@@ -231,6 +237,9 @@ fn host_frame(t : @ui.Tester, buf : Ref[FixedArray[Double]]) -> (Int, (Double, D
 /// A film made of the process's arguments (the head of this file says which), `view` the app's: the process ends
 /// with 0 when it was made and the script passed, 1 when not, 2 when it was not asked for rightly.
 pub fn run(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
+  // (the app as it runs on a host: what faults shown by its boundary, as there, and said on the log)
+  @view.faults_stop.val = false
+  @view.fault_told.val = Some(fn(said) { println("fault: " + said) })
   if arg("MBUI_MEDIA_PREVIEW") == "1" {
     // The very same scene and window tree as the offscreen export, hosted in an interactive native window.
     let platform = number(arg("MBUI_FILM_PLATFORM")).unwrap_or(0.0).to_int()
@@ -309,6 +318,7 @@ pub fn run(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
     last=arg("MBUI_FILM_LAST"),
     copied=arg("MBUI_FILM_COPIED"),
     allow_incomplete=arg("MBUI_FILM_ALLOW_INCOMPLETE") == "1",
+    corners_held=arg("MBUI_FILM_ALLOW_CORNER_FAULTS") != "1",
   )
   exit(if ok { 0 } else { 1 })
 }

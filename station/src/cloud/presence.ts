@@ -22,10 +22,9 @@ const PING_MS = 30_000;
 const CLOSE_REMOVED = 4004;
 const REMOVED_RETRY_MS = 600_000;
 const CONNECT_TIMEOUT_MS = 20_000;
-/// How long the roster the cloud said last stays current once its socket ended. A socket the cloud closes is back
-/// within seconds (ccvm's about every 20 minutes, 2026-10-29), and every request between the workspace's stations in
-/// those seconds was refused as `roster is not current`: a share not told, a task not started. Past this, or when the
-/// station is removed, calls fail closed until a fresh roster comes.
+/// How long the roster the cloud said last counts as reached once its socket ended. A socket the cloud closes is back
+/// within seconds (one station's about every 20 minutes, 2026-10-29): those seconds are not shown as cut off. The roster itself
+/// is taken on past this (cloud/state.ts `peersCurrent`), until the station is removed.
 export const ROSTER_GRACE_MS = 60_000;
 
 /// REMOVED_RETRY, or STILLFAIL_REMOVED_RETRY_SECS (tests against a dev cloud).
@@ -73,7 +72,7 @@ export const presence = ({ cloud, key, up, spec }: PresenceParts) => Effect.gen(
     // The socket, until it ends or the station stops answering (then it is closed: offline at the cloud).
     const ended = yield* Effect.result(Effect.raceFirst(connect(s, key, plane), Effect.as(until(false), `station not answering; went offline at ${plane.name}`)));
     lapse(s);
-    const why = ended._tag === "Success" ? ended.success : ended.failure.message;
+    const why = ended._tag === "Success" ? ended.success : failureText(ended.failure);
     writePresence(s.data, false, why);
     if (ended._tag === "Success") log.info("presence", why);
     else log.warn("presence", `no presence socket to ${plane.name}`, { error: why });
@@ -84,16 +83,23 @@ export const presence = ({ cloud, key, up, spec }: PresenceParts) => Effect.gen(
   }
 });
 
-/// The roster said last, no longer current once ROSTER_GRACE_MS passed with no fresh one (at once when the station
-/// was removed).
+/// What a failed socket says: every address's own error when they all failed (Node's AggregateError, whose message is
+/// empty: the log said only `error=`).
+export function failureText(error: Error): string {
+  const each = error instanceof AggregateError ? error.errors.map((e) => (e instanceof Error ? e.message : String(e))).filter((m) => m.length > 0) : [];
+  return each.length > 0 ? each.join("; ") : error.message || error.name;
+}
+
+/// The roster said last, no longer reached once ROSTER_GRACE_MS passed with no fresh one; not taken at all at once when
+/// the station was removed.
 export function lapse(s: CloudState, after: (ms: number, f: () => void) => unknown = wall.after) {
   if (s.removed()) {
-    s.peersCurrent = false;
+    s.lapsed();
     return;
   }
   const said = s.rostersSaid;
   after(ROSTER_GRACE_MS, () => {
-    if (s.rostersSaid === said) s.peersCurrent = false;
+    if (s.rostersSaid === said) s.lapsed();
   });
 }
 
@@ -108,29 +114,7 @@ const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
     const socket = new WebSocket(`${state.origin.replace("http", "ws")}${plane.connectPath}`, { headers, handshakeTimeout: CONNECT_TIMEOUT_MS });
     let ping: (() => void) | undefined;
     let answered = true;
-    // Entries this station took from devices and other stations, given to the plane too (it keeps the lock for whoever
-    // asks it next): the home workspace's, and each joined one's (`workspace` says which).
-    const told = new Map<string, number>();
-    const tell = () => {
-      for (const m of s.memberships()) {
-        const ws = m.home ? null : m.workspace;
-        const seq = s.locked(ws)?.state?.seq;
-        const plane = ws === null ? s.planeLockSeq : (s.planeLockSeqs.get(ws) ?? null);
-        const was = told.get(m.workspace) ?? (s.locked(ws)?.state?.seq ?? -1);
-        if (!told.has(m.workspace)) told.set(m.workspace, was);
-        if (seq === undefined || seq <= was || socket.readyState !== WebSocket.OPEN || plane === null) continue;
-        const entries = s.lockAfter(Math.max(plane, -1), ws);
-        if (entries.length > 0) socket.send(JSON.stringify({ type: "lock.put", entries, ...(ws === null ? {} : { workspace: ws }) }));
-        told.set(m.workspace, seq);
-      }
-      askPending();
-    };
-    // The lock joining a workspace named, asked for (pendingAsks) as the station hears it joined and at each ping.
-    const asked = new Set<string>();
-    const askPending = () => {
-      if (socket.readyState !== WebSocket.OPEN) return;
-      for (const ws of pendingAsks(s, asked)) socket.send(JSON.stringify({ type: "lock.get", after: -1, workspace: ws }));
-    };
+    const { tell, askPending } = planeTeller(s, (frame) => socket.send(JSON.stringify(frame)), () => socket.readyState === WebSocket.OPEN);
     tell();
     const unlisten = s.listen(tell);
     let failed: Error | null = null;
@@ -181,6 +165,34 @@ const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
       socket.close();
     });
   });
+
+/// What a station tells the plane of its locks on one socket (`send`, while `open`): the entries it took from devices
+/// and other stations since the socket opened (the plane keeps the lock for whoever asks it next): the home
+/// workspace's, and each joined one's (`workspace` says which); and the locks joining named, asked for (pendingAsks).
+/// `tell` as cloud.json changes, `askPending` as the station hears it joined and at each ping.
+export function planeTeller(s: CloudState, send: (frame: unknown) => void, open: () => boolean) {
+  const told = new Map<string, number>();
+  const asked = new Set<string>();
+  const askPending = () => {
+    if (!open()) return;
+    for (const ws of pendingAsks(s, asked)) send({ type: "lock.get", after: -1, workspace: ws });
+  };
+  const tell = () => {
+    for (const m of s.memberships()) {
+      const ws = m.home ? null : m.workspace;
+      const seq = s.locked(ws)?.state?.seq;
+      const plane = ws === null ? s.planeLockSeq : (s.planeLockSeqs.get(ws) ?? null);
+      const was = told.get(m.workspace) ?? (s.locked(ws)?.state?.seq ?? -1);
+      if (!told.has(m.workspace)) told.set(m.workspace, was);
+      if (seq === undefined || seq <= was || !open() || plane === null) continue;
+      const entries = s.lockAfter(Math.max(plane, -1), ws);
+      if (entries.length > 0) send({ type: "lock.put", entries, ...(ws === null ? {} : { workspace: ws }) });
+      told.set(m.workspace, seq);
+    }
+    askPending();
+  };
+  return { tell, askPending };
+}
 
 /// A device tool request pushed on the socket (`{type: "tool", id, request}`, contract §8 presence transport): run
 /// by the mesh's tools and answered `{type: "tool_result", id, response}`. Only a provider with device tools pushes
@@ -248,6 +260,7 @@ export function applyState(s: CloudState, text: string, send: (frame: unknown) =
     s.setPlaneLists(Array.isArray(body.peers) ? body.peers : [], Array.isArray(body.gateway_keys) ? body.gateway_keys.filter((k: unknown): k is string => typeof k === "string") : undefined);
     // Current before it is told, so whoever hears of the new roster reads it as current.
     s.peersCurrent = Array.isArray(body.peers);
+    s.reached = s.peersCurrent;
     s.rostersSaid = (s.rostersSaid ?? 0) + 1;
     s.update((st) => {
       for (const k of ["workspace", "workspace_name", "name", "origin", "relay_url"] as const) {

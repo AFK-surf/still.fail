@@ -20,12 +20,7 @@ pub fn files_go(at : DriveAt) -> Unit {
     }
     return
   }
-  while app.nav.depth() > 1 {
-    if !app.nav.pop() {
-      break
-    }
-  }
-  app.nav.push(Drive(at))
+  app.nav.replace_above(1, [Drive(at)])
 }
 
 ///|

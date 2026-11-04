@@ -265,7 +265,7 @@ test("a_chat_opening_is_one_trace_its_requests_carry_and_ember_cloud_gets", asyn
   const said = host.takeEmitted().map(([, m]) => m as J);
   assert.ok(said.some((m) => m.id === 1 && "value" in m), JSON.stringify(said).slice(0, 500));
   assert.equal(host.requests.length, before, "opening a chat asks nothing");
-  const reads = ["/events?running=1&views=1&rows=1", "/overview", "/sessions", "/threads", "/chats", "/jobs"].map((p) => host.requests.find((r) => r.url === `https://stillfail.test/admin/api${p}`)!);
+  const reads = ["/events?running=1&views=1&rows=1&shared=1", "/overview", "/sessions", "/threads", "/chats", "/jobs?chats=0"].map((p) => host.requests.find((r) => r.url === `https://stillfail.test/admin/api${p}`)!);
   const parents = reads.map((r) => header(r, "traceparent")!);
   const trace = parents[0].slice(3, 35);
   assert.ok(parents.every((p) => p.slice(3, 35) === trace && p.endsWith("-01")), JSON.stringify(parents));
@@ -931,12 +931,13 @@ test("the profiles topic gives the app each station once when it has two copies"
 
 /// A core whose station has three profiles: p1 (unchecked) and p2 run Claude Code, p3 Codex (core/tests.rs
 /// `choosing_core`); `speed`: its session on Codex with `fast` as given, p3 offering `fast` as `profileFast`.
-async function choosing(speed = false, profileFast = false, sessionFast: boolean | null = null) {
+async function choosing(speed = false, profileFast = false, sessionFast: boolean | null = null, switchRuntime = false) {
   const s = (key: string) => (speed ? { ...session(key), runtime: "codex", model: "gpt-6-astra", profile: "p3", fast: sessionFast } : session(key));
   return started({
     ...base(),
     "GET /overview": {
       ...overview,
+      sessionRuntimeChange: switchRuntime,
       profiles: [
         profile("p1", "claude", ["claude-opus-5-5", "claude-sonnet-5"], false, 10),
         profile("p2", "claude", ["claude-opus-5-5"], true, 80),
@@ -1169,6 +1170,23 @@ test("a_new_chat_runs_on_what_was_last_picked_there_as_far_as_the_station_still_
   await assert.rejects(ask(host, again, ui, 9, "newChat.pick", { model: "x" }));
   await assert.rejects(ask(host, again, ui, 10, "pick.set", { station: "ws/st", of: "nothing" }));
   again.close();
+});
+
+test("a chat can switch runtime through its model control when its station supports it", async () => {
+  const { host, core } = await choosing(false, false, null, true);
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "session:k1" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.equal(v(values, 1).runtimeFixed, false);
+  assert.ok(v(values, 1).efforts.includes("high"), "the current runtime's default model keeps its effort choices");
+  await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "session:k1", model: "gpt-6-astra", runtime: "codex" });
+  apply(host, values);
+  assert.equal(v(values, 1).draft.runtime, "codex");
+  await ask(host, core, ui, 3, "pick.save", { station: "ws/st", of: "session:k1" });
+  assert.deepEqual(stationPosted(host, "/sessions/k1/settings"), [{ runtime: "codex", model: "gpt-6-astra", effort: null, profile: null }]);
+  core.close();
 });
 
 test("a_sessions_model_control_says_what_changes_and_saves_it_on_the_station", async () => {
@@ -2476,7 +2494,7 @@ test("lends_the_phone_s_adb_through_its_calls_and_topic", async () => {
   await host.settle();
   apply(host, values);
   // Off again, every field of the offer gone (the clients' shape takes their absence).
-  assert.deepEqual(v(values, 1), { sharing: false, phase: "off", on: false, tunnels: 0, grants: [], wanted: [], known: true, lasts: "chat", lends: [] });
+  assert.deepEqual(v(values, 1), { sharing: false, phase: "off", on: false, tunnels: 0, grants: [], wanted: [], known: true, lasts: "chat", lends: [], screens: [] });
   core.close();
 });
 

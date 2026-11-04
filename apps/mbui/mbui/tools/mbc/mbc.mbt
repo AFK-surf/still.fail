@@ -137,9 +137,8 @@ fn compiler_kind(cc : Array[Bytes]) -> (Int, Bool) {
 
 ///|
 /// ThinLTO, or MSVC's /GL and /LTCG, only when asked (MBC_LTO=thin): the inlining across units the split loses,
-/// brought back at the link. Not by default: mbui's bench (scripts/bench.sh, Studio) drew its scenes in the same time
-/// with it and without (process CPU 107-111 µs a frame either way), while its link was most of a build of a changed
-/// app: 57 s of Android's, 66 s of Windows' (LTCG made 28% of the functions again for a 116-line change), 2026-10-24.
+/// brought back at the link. Not by default: link-time optimization can make a changed app substantially slower to
+/// build even where its frame time is unchanged (scripts/bench.sh).
 /// The link's flags, or None.
 fn lto_for(cc : Array[Bytes], j : Int) -> Array[Bytes]? {
   match getenv("MBC_LTO") {
@@ -1962,8 +1961,7 @@ fn cmd_wrap(args : Array[String]) -> Unit {
     gnu_compile_flags(wargs[:])
   }
   // a test program of a few tests compiled less optimised (MBC_LIGHT_TESTS: "pkg/name.kind …", its level
-  // MBC_LIGHT_OPT, -O0 by default, apps/mbui/scripts/test.sh): what it tests is the code, not how fast it runs. (The
-  // library's and the settings' three, against -O2 on Studio: compiled in 9 s for 13, run as fast, 2026-10-25; -O1 12 s)
+  // MBC_LIGHT_OPT, -O0 by default, apps/mbui/scripts/test.sh): what it tests is the code, not how fast it runs.
   let mut light = false
   match getenv("MBC_LIGHT_TESTS") {
     Some(list) if !msvc =>

@@ -224,7 +224,7 @@ pub fn Ctx::every(
 /// clock, the spokes' (still.fail's: 「进行中」逐格走), drawn once a step, together, never on each of the display's
 /// frames. (Drawn as the display refreshed, one shown redrew the whole window 60 to 120 times a second for as long as
 /// it showed: minutes, hours, over Home with an agent at work.)
-pub let cycle_step_ms : Double = 100.0
+pub let cycle_step_ms : Double = @view.resident_step_ms
 
 ///|
 /// Where a cycle of `period` ms is now, from 0 to 1 (a spinner's turn, a breath), read by what shows it while it is

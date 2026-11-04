@@ -216,8 +216,9 @@ test("keys and text on a simulator, with and without its Device Hub window", { s
     // The settings a person changes from the device's panel, and its picture, as simctl does them.
     await debug.setSetting("appearance", "dark");
     await debug.setSetting("textSize", "extra-large");
-    const settings = await debug.settings();
-    assert.deepEqual(settings, { appearance: "dark", textSize: "extra-large" });
+    // (whether Face ID is enrolled is the device's own, not set here)
+    const { enrolled: _, ...settings } = await debug.settings();
+    assert.deepEqual(settings, { appearance: "dark", textSize: "extra-large", recording: false });
     await debug.setSetting("appearance", "light");
     await debug.setSetting("textSize", "large");
     const picture = await source.debug!.screenshot();

@@ -1,5 +1,8 @@
 # 密钥库（设计稿）
 
+> 下面例子和测量中的机器名经过匿名化，不是对读者环境的要求。
+
+
 > 状态：第 0–2 期在做（分支 vault）；个人库为默认、先不接 1Password/Bitwarden、agent 写入要批准（2026-10-17 用户定）。chat EMBER/1792192607.305000（2026-10-17：「能做一个基于 still.fail 基础设施的 1password 吗」）。
 
 ## 要解决的事
@@ -64,7 +67,7 @@ chat EMBER/1792240320.234000。凭据都放在「密钥」这一个库里；库�
 - **设备箱钥匙**：不改锁。每台 app 设备给自己的箱钥匙出一张「箱钥匙证书」，用锁里自己的 `sign_key` 签名，跟着库一起存（格式见「实现约定」）。验证的人拿锁里这台设备的 `sign_key` 验，所以 station 和 cloud 塞不进自己的箱钥匙。网页版设备没有 `sign_key`，也就没有箱钥匙。
 - **存放**：安卓放 Android Keystore（有 StrongBox 就用），要求生物识别或屏幕锁解锁；macOS 放钥匙串，用 Touch ID 解锁；Windows 用 DPAPI，Linux 用 Secret Service（libsecret）。现在锁的签名钥匙（`lock-signer`）是 app 数据目录里的普通文件，`workspace-lock.md` 的「还没做」里已经记着要挪进钥匙串，这件事和箱钥匙一起做。
 - **不用主密码**：1Password 用「主密码 + Secret Key」，因为它的新设备要能自己登录、不依赖旧设备。still.fail 加新设备本来就要旧设备核对短码（`lock.confirm`），确认的同时把库钥匙包给新设备的箱钥匙就行，不用多记一个密码。所有设备都丢了，就用恢复码。
-- **一人一个自己的库，新设备拿钥匙不另建**（2026-10-26，chat EMBER/1792949811.536000：一个人因此有了三个库，两个空的）：`setup` 发完证书后重读各 station，这个人一个自己的库都没有时才顺手建「个人」库（回 `made`），界面不再自己调 `create`。之后设置的设备没有那个库的钥匙，由已有钥匙的设备给：owner 的设备只要手上有库钥匙（解开或还在 5 分钟里），就把钥匙封给成员新设置、还没有钥匙的设备，签一个新版本（`#give`），不用人去点；「设备」一栏的「授权新设备」只用在那之后还没解开过的时候。没钥匙的设备批准存入时，这个人已经有自己的库就回 `vault_no_key`（在问指纹之前），不另建一个。
+- **一人一个自己的库，新设备拿钥匙不另建**（2026-10-26，chat EMBER/1792949811.536000：一个人因此有了三个库，两个空的）：`setup` 发完证书后重读各 station，这个人一个自己的库都没有时才顺手建「个人」库（回 `made`），界面不再自己调 `create`。之后设置的设备没有那个库的钥匙，由已有钥匙的设备给：owner 的设备只要手上有库钥匙（解开或还在 5 分钟里），就把钥匙封给成员新设置、还没有钥匙的设备，签一个新版本（`#give`），不用人去点；新设备的证书到达时（`vault-box` 事件、重读 station、锁里新确认了设备）钥匙还在内存里也直接给（`giveKept`，2026-11-03）。手上没钥匙时，有钥匙的 owner 设备在任何页面上弹一张「X 申请密钥库的钥匙」（放在每个页面都订着的 `lockPrompts` topic 里的 `asks`，和锁配对的 prompt 一路；不另开 topic：app 的回放录像里没有新 topic 的订阅，开了 84 条回放全挂）：「授权」= `vault.addDevice {vault, device}`（过一次指纹），「稍后」= `vault.hidePrompt {device}`，按证书的 `at` 记住，那台设备再申请才再弹；「设备」一栏的「授权新设备」照旧。没钥匙的设备自己有入口：「此设备未获此库授权」卡片上的「申请授权」（`vault.ask`）把自己的证书换个新的 `at` 重发一遍，有钥匙的设备要么直接给、要么重新弹提示（2026-11-03，chat EMBER/1793689252.095000：用户在锁里批准了手机，以为就是授权了库，手机上又没有任何能主动做的事）。没钥匙的设备批准存入时，这个人已经有自己的库就回 `vault_no_key`（在问指纹之前），不另建一个。 **自动给只给本人自己加进锁的设备**（锁里那条 `device` 记录是本人的设备签的；lock-check.ts / station `Device.by`）：admin 可以往任何成员名下加设备、不核对短码，但锁分不清这和「admin 面对面核对短码替成员批准」（成员的第一台设备只能这样进锁，genesis 里的设备也都是 owner 签的），所以不是本人签进来的设备照旧算成员的设备（`missing`、station 封存入密文都和以前一样），只是不会在证书一到时就自动给，提示上写明「由 X 加进锁里」，由人点「授权」（2026-11-03 review）。core 读每台 station 时，发现它没有本机的证书（这台 station 是设备设置之后才加进 workspace 的）就补发一份，station 收到会把等批准的申请重新封一遍（`boxed`），否则那台 station 发的存入卡片在这台设备上批不了（「此申请提出时此设备尚未开启密钥库」，2026-11-03）。
 - **passkey**：passkey 有 PRF 扩展时，可以多包一份库钥匙给 PRF 派生出的钥匙，用来在新设备上恢复。先不做，等锁的 passkey 签名做完再加。
 - **算法**：只用 Node 自带 `node:crypto` 也有的几样（station 不加依赖，core 用 `@noble/*`）：X25519、HKDF-SHA256、ChaCha20-Poly1305（96 位随机 nonce）、Ed25519/P-256 验签。附加数据里写清 `ws/vault/item/version/epoch`，一条密文挪不到别处冒充。
 
@@ -183,11 +186,11 @@ chat EMBER/1792782824.926000（「当然是 agent 申请添加我来审批」）
 
 ## 在另一台 station 上用（2026-10-24）
 
-有些凭据只在别的 station 上用得上：路由器只有家里的 Studio 连得到，1Password 只在 Studio 的桌面 app 里登录着。`secret_run` 原来只在 agent 自己那台 station 上跑，这些就用不上。
+有些凭据只在别的 station 上用得上：例如某个服务只能从另一台机器访问，或者登录态只保存在那台机器上。`secret_run` 原来只在 agent 自己那台 station 上跑，这些就用不上。
 
-- `secret_use {…, station}`：这次授权的命令在那台 station 上跑。申请里记 `runOn: {id, name}`，卡片多一行「运行在：Studio」（`vault.station`）；批准的人知道值会送到哪台机器。
+- `secret_use {…, station}`：这次授权的命令在那台 station 上跑。申请里记 `runOn: {id, name}`，卡片多一行「运行在：test-a」（`vault.station`）；批准的人知道值会送到哪台机器。
 - `secret_run {grant, command, station?}`：授权带 `runOn` 的，命令到那台跑，在这个 chat 在那台的目录里（和 station_task 同一个，`remote/sessions/<id>/work`，`cwd` 是它下面的路径）；`station` 只能不写或写同一台，写别的就拒绝。没带 `runOn` 的授权不能拿去别处跑。
-- `secret_save {…, command, station}`：在那台跑 `command` 取值（比如 Studio 上的 `op read`），值回到 agent 所在的 station 再封给人的设备；卡片的「来源」写在哪台跑的。
+- `secret_save {…, command, station}`：在那台跑 `command` 取值（比如 test-a 上的 `op read`），值回到 agent 所在的 station 再封给人的设备；卡片的「来源」写在哪台跑的。
 - **传法**：走 station 之间的连接（iroh，端到端加密），请求 `vault.run` / `vault.capture`，带 `secret`（这条的 fields）、方式、域名、命令；对方立刻回 `{started: true}`，跑完再反过来问一次 `vault.done {id, result}`（连接上一次请求只等 30 秒，命令可能跑几分钟）。对方用自己的代理、ssh-agent 或环境变量跑，输出照样按原值遮掉；值只在那条命令跑着的时候在对方进程里，不写盘。
 - **信任**：对方是同一个 workspace 的 station，本来就能替这个 chat 跑任意命令（station_task），多给的只是这一次的值，卡片上写明了是哪台。旧 station 不认 `vault.*`，回错，agent 被告知要先更新那台。
 
@@ -260,7 +263,7 @@ Vault = {v: 1, ws, id: "v_<ULID>", seq, owner: <sub>, name, members: [<sub>],
 ```
 
 - `sig.key` 是锁里 `owner` 的某台 app 设备的 `sign_key`。`owner` 不能变；`seq` 每版加一，station 只收 `seq` 恰好大一的（第一次是 0）。
-- `keys` 里每张证书都要验：签名对、设备在锁里、设备属于 `members` 里的人；一台设备一把。`members` 都要在锁里，`owner` 在 `members` 里。
+- `keys` 里每张证书都要验：签名对、设备在锁里、设备属于 `members` 里的人；一台设备一把。`members` 都要在锁里，`owner` 在 `members` 里。`keys` 里的证书，签名钥匙可以是锁里这台设备**用过的任何一把** `sign_key`（station 的 `LockState.signKeys` 按设备 id 记下历次 `device` 记录的 `sign_key`，`certOk` 的 `ever`）：一台 iOS 设备重装后用同一个 id、新的 `sign_key` 重新进锁，它旧证书本来验不过，整个库写不进新版本，谁都拿不到钥匙（2026-11-03）。按锁的历史验而不是按接收端存没存过上一版验，各台 station 折同一把锁、判断一致，副本到新 station 也收得下。`PUT vault/boxes` 发布证书仍只认当前的 `sign_key`。 设备从锁里删掉再用同一个 id 加回来，`signKeys` 里旧钥匙还在，旧证书照样认（同一台设备）。core 签新版本时也顺手把带过来的证书换成该设备最新的有效证书（箱钥匙没变时，`#freshened`）。
 - 比上一版少了人或少了设备，`epoch` 必须变大（station 检查）；`epoch` 不往回走。加设备、加人不换 `epoch`。
 - core 也不信 station 给的库：用库钥匙之前验这一版是 owner 的设备签的，封钥匙给证书之前验证书；锁本身由 core 逐条验签和权限（`client/core-ts/src/vault/lock-check.ts`，和 station 的 `apply` 同一套规则），不信 cloud 和 station 拼出来的锁。
 - 恢复码：24 个词（BIP-39 英文词表）= 32 字节熵，`恢复私钥 = HKDF-SHA256(熵, info="stillfail-vault-recovery/1")` 当 X25519 私钥用。

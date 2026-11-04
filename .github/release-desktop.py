@@ -31,7 +31,7 @@ def run(args, **kwargs):
     return result
 
 # The signing keychain (mac_signing.py: AFK's Developer ID and notary profile) is on the user's search list, which
-# mini1's jobs share, only under the lock it holds until the keychain is gone.
+# macos-ci's jobs share, only under the lock it holds until the keychain is gone.
 with mac_signing.keychain() as opened, \
         tempfile.TemporaryDirectory(prefix='stillfail-release-', dir=os.environ.get('RUNNER_TEMP')) as directory:
     if not args.out and not os.environ.get('CLOUDFLARE_API_TOKEN'):

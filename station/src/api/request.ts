@@ -18,6 +18,8 @@ export type Request = {
   /// Read in the background (a part of POST /batch: the history a client brings onto its device): after every other read
   /// waiting, one at a time (read/pool.ts).
   background?: boolean;
+  /// The device no longer waits for this request (only reads use it).
+  signal?: AbortSignal;
 };
 
 export type Answer = {

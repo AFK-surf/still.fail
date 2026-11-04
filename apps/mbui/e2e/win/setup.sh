@@ -35,6 +35,9 @@ running() { powershell.exe -NoProfile -Command "@(Get-Process | Where-Object { \
 check "nothing opened (/S, no --force-run)" '[ "$(running)" = 0 ]'
 check "its program, engine, shell and core in the folder" '[ -f "$INTO/$EXE.exe" ] && [ -f "$INTO/stillfail_engine.dll" ] && [ -f "$INTO/stillfail_shell.dll" ] && [ -f "$INTO/core.hbc" ]'
 check "its uninstaller beside them, the program alone" '[ -f "$INTO/Uninstall $NAME.exe" ] && [ $(wc -c < "$INTO/Uninstall $NAME.exe") -lt 2000000 ]'
+# (正在安装 as UTF-16 in the program: its source's UTF-8 read in another code page compiles to other words)
+zh_words=$'\x63\x6b\x28\x57\x89\x5b\xc5\x88'
+check "its Chinese words compiled as written" 'LC_ALL=C grep -qaF "$zh_words" "$INTO/Uninstall $NAME.exe"'
 check "its uninstall entry, at the folder ($(entry DisplayName))" '[ "$(entry InstallLocation)" = "$(w "$INTO")" ]'
 check "the start menu's shortcut" '[ -f "$(cygpath -u "$menu")/$NAME.lnk" ]'
 

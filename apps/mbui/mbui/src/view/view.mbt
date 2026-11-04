@@ -358,6 +358,11 @@ struct Node {
   mut beside : Beside?
   /// the side it went on beside its anchor, as it was last placed there (none: not placed beside one yet)
   mut went : Side?
+  /// where it was last placed beside its anchor (its place in what holds it, and the point it is drawn bigger or
+  /// smaller about): where it stays once it is leaving or its anchor is drawn nowhere (View::beside)
+  mut beside_last : (Double, Double, Double, Double)?
+  /// the point of its anchor the pointer was last at, in the anchor's own terms (View::beside's `at_pointer`)
+  mut beside_point : (Double, Double)?
   mut focus_keys : Int
   /// whether Tab stops on it as it takes the focus (View::focusable's `tab`)
   mut focus_tab : Bool
@@ -439,6 +444,8 @@ struct Node {
   mut drag_end : (() -> Unit)?
   /// a slot (show, pick, each): no box of its own, what it holds laid out as its holder's own
   mut slot : Bool
+  /// a boundary's (View::boundary): told of a fault under it
+  mut fault_to : ((String) -> Unit)?
   /// drawn by what hosts the tree (View::hosted)
   mut hosted : Bool
   /// what it says it is, read out (View::says); None nothing
@@ -510,6 +517,13 @@ pub struct Tree {
   clock : @signals.Signal[Double]
   /// the same moment, for what draws a wait by it (a cycle: View::cycle): what never ends, read apart from what moves
   beat : @signals.Signal[Double]
+  /// the same moment on the resident clock's steps (resident_step_ms): for an endless decoration drawn by it
+  /// (View::cycle_resident), told only as a step is passed
+  resident : @signals.Signal[Double]
+  /// the nodes that read it (View::cycle_resident), each with its making and the step it last read: one reading it now
+  /// has read the step it is on (each reading it is worked out again as it passes a step); its steps woken for only
+  /// while one such is drawn
+  resident_readers : Map[Int, (Int, Double)]
   /// told each time what the root holds is put at another place in the window's stack of layers (View::stacked,
   /// View::over_all): what orders things by those places as it is built (an old frame's layers opened in its nodes:
   /// Tree::places_read) built again
@@ -655,6 +669,9 @@ pub struct Tree {
   mut backing : (NodeId, Int)?
   mut focused : NodeId?
   mut focus_visible : Bool
+  /// the node that had the focus as it was laid out nowhere (and whether it showed), given it back as it is laid out again
+  /// where nothing has taken it meanwhile (Tree::outs_told), as an old view's focus waits for its node
+  mut focus_parked : (NodeId, Bool)?
   mut on_focus_lost : (NodeId) -> Unit
   /// what hosts it gives a node of its asking for the focus (Tree::on_focus_asked: its own focus moved there, told
   /// back), none where nothing hosts it (View::ask_focus: the tree's alone)
@@ -717,6 +734,9 @@ pub struct Tree {
   mut rows_grid : Double
   /// the nodes holding such a list's rows (Node's list_rows), let go or not
   rows_lists : Array[Int]
+  /// the thumbs of its columns' bars (View::scroll_bar), by their places: what a node over one yields to (ui's
+  /// yield_thumbs, Tree::thumb_at)
+  thumbs : Map[Int, NodeId]
   /// rows_grid, followed (Tree::rows_slot)
   rows_grid_said : @signals.Signal[Double]
   work : Work
@@ -764,6 +784,8 @@ pub fn Tree::new(
   let t : Tree = {
     clock: @signals.signal(start, same=fn(a, b) { a == b }),
     beat: @signals.signal(start, same=fn(a, b) { a == b }),
+    resident: @signals.signal(resident_of(start), same=fn(a, b) { a == b }),
+    resident_readers: {},
     places: @signals.signal(0),
     room: @signals.signal((0.0, 0.0), same=fn(a, b) { a == b }),
     pressed_anywhere: @signals.signal(0, same=fn(a, b) { a == b }),
@@ -832,6 +854,7 @@ pub fn Tree::new(
     bars_due: false,
     backing: None,
     focused: None,
+    focus_parked: None,
     focus_visible: false,
     on_focus_lost: fn(_) {  },
     on_focus_asked: None,
@@ -862,6 +885,7 @@ pub fn Tree::new(
     pixel_grid: 0.0,
     rows_grid: 0.0,
     rows_lists: [],
+    thumbs: {},
     rows_grid_said: @signals.signal(0.0),
     on_due: fn() {  },
     on_modals: fn() {  },
@@ -969,6 +993,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.parent = parent
       n.allow_ellipsis = false
       n.slot = false
+      n.fault_to = None
       n.hosted = false
       n.on_press = None
       n.top_row = false
@@ -993,6 +1018,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.input_cell = None
       n.cursor = None
       n.beside = None
+      n.beside_last = None
+      n.beside_point = None
       n.focused_cell = None
       n.size_cell = None
       n.went_cell = None
@@ -1077,6 +1104,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         cursor: None,
         beside: None,
         went: None,
+        beside_last: None,
+        beside_point: None,
         focus_keys: 0,
         focus_tab: true,
         tab_by_stop: false,
@@ -1113,6 +1142,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         takes_ver: None,
         drag_end: None,
         slot: false,
+        fault_to: None,
         hosted: false,
         said: None,
         said_hidden: false,
@@ -1238,6 +1268,78 @@ pub fn View::cycle(self : View, period : Double) -> Double {
 }
 
 ///|
+/// How far apart the resident clock's steps are (an old view's cycle_step_ms): an endless decoration drawn by it
+/// (View::cycle_resident) is drawn anew at each, never between.
+pub let resident_step_ms : Double = 100.0
+
+///|
+/// Moment `ms` on the resident clock: the step it is in.
+fn resident_of(ms : Double) -> Double {
+  (ms / resident_step_ms).floor() * resident_step_ms
+}
+
+///|
+/// A frame's moment told (beat's), and on the resident clock's steps (resident's): a frame's alone, never the moment an
+/// input or the logic is worked out at for a while (what is drawn at the resident clock's step is what the frames show).
+fn Tree::beat_set(self : Tree, ms : Double) -> Unit {
+  self.beat.set(ms)
+  self.resident.set(resident_of(ms))
+}
+
+///|
+/// Where a cycle of `period` ms is on the resident clock's steps (0 to 1, from moment 0 on), followed: for an endless
+/// decoration (a working mark's spokes, a waiting mark's breath) drawn anew only at each step, as an old view's resident
+/// cycle is (Ctx::cycle's `resident`): what hosts the tree wakes for its next step, said `later` (Tree::resident_next),
+/// not a frame after each frame.
+pub fn View::cycle_resident(self : View, period : Double) -> Double {
+  let t = self.tree.resident.get()
+  self.tree.resident_readers[self.at] = (self.gen, t)
+  if period <= 0.0 {
+    return 0.0
+  }
+  let p = t / period
+  p - p.floor()
+}
+
+///|
+/// Whether an endless decoration reads the resident clock (View::cycle_resident) where it is drawn now (one under a page
+/// over it, or left out, draws no step: none woken for it): what hosts the tree wakes for its next step then.
+pub fn Tree::resident_read(self : Tree) -> Bool {
+  if !self.resident.watched() {
+    return false
+  }
+  // (those let go, or no longer reading it (the step they last read not this one: a mark that stopped), dropped)
+  let now = @signals.untracked(fn() { self.resident.get() })
+  let gone = []
+  for at, r in self.resident_readers {
+    let (gen, read) = r
+    if !self.alive_id(({ at, gen } : NodeId)) || read != now {
+      gone.push(at)
+    }
+  }
+  for at in gone {
+    self.resident_readers.remove(at)
+  }
+  let mut seen = false
+  self.each_drawn_scaled(fn(c, _, _, _, _) {
+    let mut i = c.id.at
+    while !seen && i >= 0 {
+      if self.resident_readers.contains(i) {
+        seen = true
+      }
+      i = self.nodes[i].parent
+    }
+  })
+  seen
+}
+
+///|
+/// The resident clock's next step after the moment drawn now (Tree::drawn_at's).
+pub fn Tree::resident_next(self : Tree) -> Double {
+  resident_of(@signals.untracked(fn() { self.clock.get() })) + resident_step_ms
+}
+
+///|
 /// Whether a wait reads the clock (View::cycle): what hosts the tree draws its frames one after another as an old view's
 /// cycle has them drawn, a wait, not a motion (Tree::clock_read).
 pub fn Tree::cycle_read(self : Tree) -> Bool {
@@ -1248,7 +1350,7 @@ pub fn Tree::cycle_read(self : Tree) -> Bool {
 /// The clock set to `ms` (a frame's time).
 pub fn Tree::at(self : Tree, ms : Double) -> Unit {
   self.clock_to(ms)
-  self.beat.set(ms)
+  self.beat_set(ms)
 }
 
 ///|
@@ -1305,6 +1407,10 @@ pub fn Tree::work(self : Tree) -> Work {
 ///|
 /// How many nodes live.
 pub fn Tree::alive(self : Tree) -> Int {
+  // (let go: none, its root kept to answer none)
+  if self.gone {
+    return 0
+  }
   self.nodes.length() - self.free.length()
 }
 
@@ -1330,6 +1436,22 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.composed.clear()
   self.hosting = -1
   self.modals.clear()
+  // (its nodes but the root and what they keep dropped, their room given back: the tree itself may never be let go of,
+  // held by what its arrays were emptied of (moonc's native backend, moonbitlang/core#4611), each Tester's left with
+  // all it held; its root kept, holding nothing and let go, for what is asked of it after: it answers none)
+  self.nodes.truncate(1)
+  self.nodes.shrink_to_fit()
+  if self.nodes.length() > 0 {
+    self.nodes[0].kids.clear()
+  }
+  self.free.clear()
+  self.free.shrink_to_fit()
+  self.scrolls_at.clear()
+  self.shows_due.clear()
+  self.laid_waits.clear()
+  self.afters.clear()
+  self.held_tracks.clear()
+  self.thumbs.clear()
 }
 
 ///|
@@ -2586,6 +2708,19 @@ pub fn Tree::set_pixel_grid(self : Tree, g : Double) -> Unit {
 }
 
 ///|
+/// The thumbs of its columns' bars living now (View::scroll_bar's), for a test: where each takes the pointer is
+/// Tree::input_bounds'.
+pub fn Tree::thumbs_now(self : Tree) -> Array[NodeId] {
+  self.thumbs.values().filter(fn(id) { self.is_thumb(id) }).collect()
+}
+
+///|
+/// Whether node `id` is the thumb of one of its columns' bars (View::scroll_bar's), living.
+pub fn Tree::is_thumb(self : Tree, id : NodeId) -> Bool {
+  self.thumbs.get(id.at) == Some(id) && self.nodes[id.at].live
+}
+
+///|
 /// How many device pixels a point its host sets a page's list's rows on (0: anywhere: a Tester's, unless it says
 /// otherwise; ui's Ctx::rows_on_grid), said as each frame begins, before anything of it is laid out: each such list's
 /// rows (View::scrolls with Scroll::list, up and down) laid out as tall as whole pixels (@flex.Style's rows_grid: what
@@ -3132,15 +3267,43 @@ fn Tree::modals_settled(self : Tree) -> Unit {
 /// (Tree::laid_now: what it told pulled in, laid out, placed; what is under the pointer told then, laid_out's), so what
 /// reads it has it as the change left it, no frame waited for. Nothing laid out where nothing reads it.
 fn Tree::withins_settled(self : Tree) -> Unit {
+  // A clock reaction can commit another structure while an immediate layout is standing. That layout will finish
+  // the work; entering it again here can alternate the drawn clock and exhaust the stack.
   if self.committing == 0 &&
+    !self.standing &&
     !self.withins_passing &&
     (!self.withins_at.is_empty() || !self.bar_cols.is_empty()) &&
     (self.layout_due || !self.places_due.is_empty() || !self.bindings_due.is_empty() || !self.pulls_marked.is_empty()) {
     self.laid_now()
+    self.withins_restored()
   }
   // (what takes input changed with nothing else to lay out: which column's bar the pointer is along told now, at the
   // change's end)
-  if self.committing == 0 && !self.withins_passing && self.bars_due {
+  if self.committing == 0 && !self.standing && !self.withins_passing && self.bars_due {
+    self.withins_passing = true
+    self.bars_near_told() |> ignore
+    self.withins_passing = false
+  }
+}
+
+///|
+/// Finish pointer work told as an immediate layout restored the drawn clock. The original layout was needed at the
+/// change's moment; this pass uses the restored clock without switching it back and recursively entering that layout.
+fn Tree::withins_restored(self : Tree) -> Unit {
+  if self.committing != 0 || self.withins_passing || self.last_w <= 0.0 {
+    return
+  }
+  if (!self.withins_at.is_empty() || !self.bar_cols.is_empty()) &&
+    (self.layout_due || !self.places_due.is_empty() || !self.bindings_due.is_empty() || !self.pulls_marked.is_empty()) {
+    let was_standing = self.standing
+    self.standing = true
+    @signals.untracked(fn() {
+      self.pull()
+      self.laid_out(self.clock.get())
+    })
+    self.standing = was_standing
+  }
+  if !self.withins_passing && self.bars_due {
     self.withins_passing = true
     self.bars_near_told() |> ignore
     self.withins_passing = false
@@ -4667,6 +4830,8 @@ fn View::let_go(self : View) -> Unit {
   n.input_cell = None
   n.cursor = None
   n.beside = None
+  n.beside_last = None
+  n.beside_point = None
   n.focused_cell = None
   n.focus_shown_cell = None
   n.size_cell = None
@@ -4998,6 +5163,10 @@ fn View::come_back(self : View, v : View) -> Unit {
   n.back_at = now
   n.left_at = -1.0
   told_going(n)
+  // (beside its anchor again, where that is now: View::beside)
+  if n.beside is Some(_) {
+    self.tree.place_marked_at(v.at)
+  }
   // (a modal layer back: over what is held again)
   self.tree.modals_told()
   self.tree.marked()
@@ -5303,6 +5472,7 @@ fn Tree::settle_now(self : Tree, at : Double) -> Unit {
     })
   }
   self.standing = false
+  self.withins_restored()
 }
 
 ///|
@@ -5922,10 +6092,33 @@ fn Tree::outs_told(self : Tree) -> Unit {
   @signals.start_batch()
   for at in gone {
     if self.nodes[at].live && self.nodes[at].out {
+      match self.focused {
+        Some(f) => {
+          let mut q = f.at
+          while q >= 0 && q != at {
+            q = self.nodes[q].parent
+          }
+          if q == at {
+            self.focus_parked = Some((f, self.focus_visible))
+          }
+        }
+        None => ()
+      }
       self.hold_lost_in(at)
       self.focus_lost_in(at)
       self.back_lost_in(at)
     }
+  }
+  // (laid out again, what had the focus as it went nowhere, where nothing took it meanwhile: given it back)
+  match self.focus_parked {
+    Some((p, v)) if self.focused is None && self.alive_id(p) && !self.out_at(p.at) && self.can_focus(p) => {
+      self.focus_parked = None
+      match self.on_focus_asked {
+        Some(f) => f(p, v)
+        None => self.focus_set(Some(p), v)
+      }
+    }
+    _ => ()
   }
   self.modals_told()
   self.outs_said.set(@signals.untracked(fn() { self.outs_said.get() }) + 1)

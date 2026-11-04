@@ -43,7 +43,7 @@ pub fn looks_file(src : Source, file : String, here : (Bytes) -> Unit) -> LooksF
 ///|
 fn looks_file_ask(src : Source, file : String) -> Unit {
   looks_files[file] = LooksComing
-  (src.read_bytes)("fonts.share", Json::object({ "file": file.to_json() }), fn(r) {
+  (src.read_bytes)("fonts.share", Json::object({ "file": ToJson::to_json(file) }), fn(r) {
     match r {
       Ok((_, bytes)) => {
         match looks_files_here.get(file) {

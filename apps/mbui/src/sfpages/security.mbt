@@ -104,11 +104,18 @@ fn sec_point(c : @ui.Ctx, icon : String, words : String, rest : String) -> Unit 
 }
 
 ///|
-/// A section's rows together: narrow, on a rounded card (ListCard); wide, on the web's card, 12 apart.
-fn sec_group(c : @ui.Ctx, look : Look, body : () -> Unit) -> Unit {
+/// A section's rows together: narrow, on a rounded card (ListCard); wide, on the web's card, 12 apart. A button in
+/// the first or last row sits in the card's corner, concentric with it.
+fn sec_group(c : @ui.Ctx, look : Look, body : () -> Unit, top_button? : Bool = false, bottom_button? : Bool = false) -> Unit {
   match look {
     Narrow => @sf.group(c, body)
-    Wide => c.box(style=@sf.desk_card, fn() { c.box(style=sec_rows, body) |> ignore }) |> ignore
+    Wide => {
+      let inset = @sf.room_of(@sf.card_foot_in(@sf.button_height()))
+      let card = @sf.desk_card
+      let card = if top_button { card.then(@ui.style(pt=inset)) } else { card }
+      let card = if bottom_button { card.then(@ui.style(pb=inset)) } else { card }
+      c.box(style=card, fn() { c.box(style=sec_rows, body) |> ignore }) |> ignore
+    }
   }
 }
 
@@ -327,9 +334,10 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, look : Look, lock : Json?) -> 
       if stations.length() == 0 {
         @sf.page_card(c, fn() { c.text(@sf.t("web-pages.security.noStations"), style=sec_said) |> ignore })
       } else {
-        sec_group(c, look, fn() {
+        let can = flag(lock, "owner") && signs
+        sec_group(c, look, top_button=can && !flag(Some(stations[0]), "protected"), bottom_button=can && !flag(Some(stations[stations.length() - 1]), "protected"), fn() {
           for st in stations {
-            sec_station_row(c, core, look, ws, Some(st), flag(lock, "owner") && signs)
+            sec_station_row(c, core, look, ws, Some(st), can)
           }
         })
       }
@@ -468,10 +476,13 @@ fn sec_station_row(c : @ui.Ctx, core : Core, look : Look, ws : String, sv : Json
   let id = text(sv, "id")
   let guarded = flag(sv, "protected")
   let joining = is_doing(core, ["lock.joinStation"], [("workspace", ws), ("station", id)])
-  let name = if look == Wide && @sf.has_station_mark(text(sv, "emoji"), text(sv, "icon")) {
-    ""
+  let (name, reach) = if look == Wide {
+    (
+      if @sf.has_station_mark(text(sv, "emoji"), text(sv, "icon")) { "" } else { text(sv, "name") },
+      @ui.style(mr=@sf.room_of(@sf.card_foot_in(@sf.button_height()) - @ui.Space::px(S5))),
+    )
   } else {
-    text(sv, "name")
+    (text(sv, "name"), @ui.style())
   }
   sec_line(
     c,
@@ -493,7 +504,8 @@ fn sec_station_row(c : @ui.Ctx, core : Core, look : Look, ws : String, sv : Json
       if guarded {
         sec_end_words(c, look, @sf.t("web-pages.security.protected"))
       } else if can {
-        if sec_do(c, look, "lock-station/" + id, @sf.t("web-pages.security.join"), busy=joining) {
+        // Keep the action recognisable as a button while its spinner is turning, at either page width.
+        if @sf.button(c, @sf.t("web-pages.security.join"), key="lock-station/" + id, tone=Ghost, busy=joining, reach~) {
           join_dialog(core, ws, id, text(sv, "name"))
         }
       } else {

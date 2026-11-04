@@ -145,7 +145,7 @@ export class Asks {
             kept !== null
               ? Effect.succeed(kept)
               : Effect.flatMap(
-                  Effect.mapError(this.#host.fetch({ method: "GET", url, headers: [], body: null }), (e) => CoreError.plainly("picture", e, t("core-misc.ask.picture_failed", { error: CoreError.host(e).message }))),
+                  Effect.mapError(this.#host.fetch({ method: "GET", url: this.#host.pictureVia?.(url) ?? url, headers: [], body: null }), (e) => CoreError.plainly("picture", e, t("core-misc.ask.picture_failed", { error: CoreError.host(e).message }))),
                   (r) => (r.status !== 200 ? Effect.fail(new CoreError("picture", t("core-misc.ask.picture_failed", { error: r.status }))) : Effect.as(this.#keep(url, header(r, "content-type") ?? "", r.body), [header(r, "content-type") ?? "", r.body] as [string, Uint8Array])),
                 ),
           ),

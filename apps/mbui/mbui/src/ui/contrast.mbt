@@ -678,6 +678,15 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
         if !is_words && mark == 0 {
           continue
         }
+        // (a picture in its own colours (View::picture: a maker's mark, a logo), its owner's, as an old view's own_colours
+        // are: asked nothing)
+        if !is_words &&
+          (match view_app.val {
+            Some(tree) => tree.drawn_of(id).map(fn(d) { d.picture is Some(_) }).unwrap_or(false)
+            None => false
+          }) {
+          continue
+        }
         let px = a[b] + a[b + 2] / 2.0
         let py = a[b + 1] + a[b + 3] / 2.0
         if px < 0.0 || py < 0.0 || px > self.window_w || py > self.window_h || !in_inst_clip(a, b, px, py) {

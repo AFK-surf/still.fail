@@ -18,6 +18,10 @@ These patched crates come from the corresponding crates.io releases. The iroh an
 
 still.fail Helper (the station's macOS app) builds in the simulator capture and input of [serve-sim](https://github.com/EvanBacon/serve-sim) (Evan Bacon, `packages/serve-sim/Sources` at `0193e65c481fc9b64a62427f32fcf143dbc3d2c0`), under its [Apache-2.0 license](vendor/serve-sim/LICENSE); the files taken and the local changes are listed in [vendor/README.md](vendor/README.md).
 
+## scrcpy's server in the station's release
+
+The station puts [scrcpy](https://github.com/Genymobile/scrcpy)'s server, the unmodified `scrcpy-server-v5.0.1` of its release (Genymobile and contributors, Apache-2.0), on an Android device for as long as a person views it (`station/src/screens/scrcpy-server`, docs/remote-screens.md "Android").
+
 ## agent-desktop in the station's release
 
 still.fail Helper (macOS) carries `agent-desktop` and `agent-desktop-macos-helper` beside its executable, and the Windows station `agent-desktop.exe` beside `stillfail-screen.exe`: the unmodified binaries of [agent-desktop](https://github.com/vercel-labs/agent-desktop) 1.0.2 (Vercel, Inc.) from its GitHub release, each archive checked against the SHA-256 in that release's `checksums.txt` (`AGENT_DESKTOP` in `scripts/native.ts`), under its [Apache-2.0 license](https://github.com/vercel-labs/agent-desktop/blob/v1.0.2/LICENSE). The station runs them to read and act on the desktop's apps by their accessibility trees.

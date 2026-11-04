@@ -15,7 +15,7 @@ test("a scoped chat update reads marks and answers only for those chats", () => 
   db.exec(`CREATE TABLE dismissed (viewer TEXT, thread INTEGER, n INTEGER, at INTEGER, PRIMARY KEY (viewer, thread, n));
     CREATE TABLE kept_chats (viewer TEXT, thread INTEGER, PRIMARY KEY (viewer, thread));
     CREATE TABLE closed_cards (thread INTEGER, n INTEGER, viewer TEXT, at INTEGER, PRIMARY KEY (thread, n));
-    CREATE TABLE entries (thread INTEGER, n INTEGER, kind TEXT, author_kind TEXT, at INTEGER);`);
+    CREATE TABLE entries (thread INTEGER, n INTEGER, kind TEXT, author_kind TEXT, at INTEGER, card TEXT, options TEXT);`);
   const mark = db.prepare("INSERT INTO dismissed VALUES ('person', ?, 1, 100)");
   const keep = db.prepare("INSERT INTO kept_chats VALUES ('person', ?)");
   const close = db.prepare("INSERT INTO closed_cards VALUES (?, 1, 'person', 100)");
@@ -127,7 +127,7 @@ test("a change's sidebar items and a chat's view read their own shares, openers 
 
 test("the jobs up are listed with their own chats, not every job and chat the station ever had", () => {
   // Read with every job ever run, the whole sidebar and, for a job whose session had no listed chat of its own, the
-  // whole archive: 56 s a read on ccvm short of memory (2026-11-02), read again by every device that read the station.
+  // whole archive: 56 s a read on a station short of memory (2026-11-02), read again by every device that read the station.
   const dir = mkdtempSync(join(tmpdir(), "chat-row-scope-"));
   const store = Store.open(join(dir, "stillfail.db"), join(dir, "archive"));
   try {

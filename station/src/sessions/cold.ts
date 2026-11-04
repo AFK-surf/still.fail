@@ -4,9 +4,13 @@
 // keeps in station storage are packed (archive.ts); they are restored before its runtime starts again, or when it is
 // shown again. The hub calls it (ColdStorage) from the session's queue, so no turn starts halfway through.
 import { existsSync, realpathSync, statSync } from "node:fs";
-import { access, readdir, unlink, writeFile } from "node:fs/promises";
+import { access, readdir, realpath, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { log } from "../ops/log.ts";
+import { platform } from "../platform/index.ts";
+import { wall } from "../ops/fibers.ts";
 import { realOutside } from "../ops/places.ts";
 import { homesFirst, sessionPlaces, transcriptPaths } from "../read/transcript.ts";
 import * as archive from "./archive.ts";
@@ -15,7 +19,18 @@ import { measureRoom, roomOf, roomOfSoon, safeToRemove, within } from "./footpri
 import type { ColdStorage, Hub } from "./hub.ts";
 
 /// Links followed, never into a folder macOS protects (a session continued there, a job's directory: ops/places.ts).
-const canonical = (path: string): string | null => realOutside(path);
+/// Each path is kept for 15 minutes so repeated archive rounds do not follow the same folders on the station's thread.
+const followed = new Map<string, { at: number; real: string | null }>();
+const FOLLOWED_MS = 15 * 60_000;
+const canonical = (path: string): string | null => {
+  const now = wall.now();
+  const kept = followed.get(path);
+  if (kept !== undefined && now - kept.at < FOLLOWED_MS) return kept.real;
+  const real = realOutside(path);
+  followed.set(path, { at: now, real });
+  if (followed.size > 1024) followed.delete(followed.keys().next().value!);
+  return real;
+};
 
 export class ColdRooms implements ColdStorage {
   /// The hub it works for (made after it).
@@ -95,28 +110,23 @@ export class ColdRooms implements ColdStorage {
     const hub = this.hub();
     const row = hub.store.getSession(key);
     if (!row) throw new Error(`unknown session ${key}`);
-    const id = row.runtimeSessionId;
-    if (hub.store.runtimeSessions(key).length === 0) return [];
-    if (
-      packing &&
-      id !== null &&
-      hub.store.sessionsInUse().some((s) => s.key !== key && s.runtime === row.runtime && s.runtimeSessionId === id)
-    )
+    const sources = hub.store.runtimeSessionSources(key);
+    if (sources.length === 0) return [];
+    if (packing && sources.some((source) => hub.store.transcriptInUse(source.runtime, source.id, key)))
       return [];
     const config = hub.config();
-    const runtime = runtimeNamed(row.runtime);
-    if (!runtime) return [];
     const root = realpathSync(config.dataDir);
     const files: string[] = [];
-    const homes = homesFirst(config.profiles, row.profile);
     // With those of the runtime sessions it ran in before (sessions/afresh.ts), each found as its history finds it.
-    for (const each of hub.store.runtimeSessions(key)) {
-      const path = transcriptPaths(runtime, config.dataDir, homes, [each], sessionPlaces(row)).paths[0];
+    for (const each of sources) {
+      const segmentRuntime = runtimeNamed(each.runtime);
+      if (!segmentRuntime) continue;
+      const path = transcriptPaths(segmentRuntime, config.dataDir, homesFirst(config.profiles, each.profile), [each.id], sessionPlaces(row)).paths[0];
       if (path === undefined) continue;
       const parent = realpathSync(dirname(path));
       if (!within(parent, root)) continue;
       files.push(join(parent, basename(path)));
-      if (runtime === "claude") archive.jsonlFiles(join(parent, each), files);
+      if (segmentRuntime === "claude") archive.jsonlFiles(join(parent, each.id), files);
     }
     return files;
   }
@@ -165,7 +175,7 @@ export class ColdRooms implements ColdStorage {
   }
 
   /// Whether an archived session's directory holds more than its chat's files. Asked of every archived session in turn
-  /// (lifecycle.ts expireArchived, relieveArchived): its paths followed off the main thread, where on ccvm short of
+  /// (lifecycle.ts expireArchived, relieveArchived): its paths followed off the main thread, where on a station short of
   /// memory (2026-11-02) they held every device for seconds at a time, 47 s in six hours.
   async holdsMore(key: string): Promise<boolean> {
     const row = this.hub().store.getSession(key);
@@ -179,6 +189,8 @@ export class ColdRooms implements ColdStorage {
     const ready = () => this.archiveRoom(key) !== null;
     await archive.withLock(room, async () => {
       if (!ready()) return;
+      await this.stopStrays(key, join(room, "workspace"));
+      if (!ready()) return;
       await this.cleanRebuildable(key);
       if (!ready()) return;
       await writeFile(join(room, "cold"), "workspace and history may be compressed\n");
@@ -186,6 +198,29 @@ export class ColdRooms implements ColdStorage {
       if (!ready()) return;
       await this.packHistory(key, ready);
     });
+  }
+
+  /// What still runs in an archived session's workspace, its agent's and its jobs' processes gone: what they left
+  /// behind running on its own (an adb server its `adb` started, a daemon), stopped even after the workspace is removed.
+  private async stopStrays(key: string, workspace: string): Promise<void> {
+    if (platform.os === "windows") return;
+    let pids: number[];
+    try {
+      const { stdout } = await promisify(execFile)("ps", ["-U", String(process.getuid?.() ?? ""), "-o", "pid="]);
+      pids = stdout.split("\n").map((l) => Number(l.trim())).filter((p) => Number.isSafeInteger(p) && p > 1 && p !== process.pid);
+    } catch {
+      return;
+    }
+    const real = await realpath(workspace).catch(() => workspace);
+    let stopped = 0;
+    for (const [pid, cwd] of await platform.cwds(pids).catch(() => new Map<number, string>())) {
+      if (cwd !== real && cwd !== workspace && !within(cwd, real) && !within(cwd, workspace)) continue;
+      try {
+        process.kill(pid, "SIGTERM");
+        stopped++;
+      } catch {}
+    }
+    if (stopped > 0) log.info("hub", "what was left running in an archived session's workspace stopped", { session: key, n: stopped });
   }
 
   /// Packs an archived session's transcripts in place (its room locked, `ready` while it may), then lets go of the
@@ -205,7 +240,7 @@ export class ColdRooms implements ColdStorage {
   }
 
   /// What the Rust station's archiving left (2026-09 and early 10): each archived session's transcript copied into
-  /// `archive/transcripts/`, its own left as it was, so both were on the disk (1.4 GB on ccvm). Each such session's
+  /// `archive/transcripts/`, its own left as it was, so both were on the disk (1.4 GB on a station). Each such session's
   /// transcripts are packed now as archiving packs them, and the copy let go; nothing makes copies any more, so this
   /// comes to an end. Its workspace is left as it is: only the transcripts are touched. A copy whose session is back
   /// in the lists or at work stays until its session is archived again.
@@ -240,28 +275,48 @@ export class ColdRooms implements ColdStorage {
   }
 
   /// Transcripts put away before they were in segments (read/packed.ts), each read whole for every page of its history
-  /// (150 MB for one): put away again in segments, one after another. Once all are, this finds none to do.
+  /// (150 MB for one): put away again in segments, one after another. Once every one is, said so on disk (SEGMENTED),
+  /// and none looked for again: each station start went through every archived session's
+  /// transcripts again, finding them on the station's thread (a Codex one by its sessions' tree), 1.2 s held at a time
+  /// on a station short of memory (2026-11-03), every 10 min that evening.
   async segmentHistories(): Promise<void> {
+    const said = join(this.dataDir(), SEGMENTED);
+    if (await access(said).then(() => true, () => false)) return;
     let done = 0;
-    for (const row of this.hub().store.listSessions()) {
-      if (row.archivedAt === null) continue;
-      let files: string[];
-      try {
-        files = this.historyFiles(row.key, false);
-      } catch {
-        continue;
-      }
-      for (const path of files) {
+    let failed = false;
+    const store = this.hub().store;
+    // Do not load every session before yielding. The upper bound also keeps newly archived sessions from extending
+    // this sweep; archives made now are already put away in segments.
+    const through = store.lastArchivedSession();
+    let after: typeof through = null;
+    while (through !== null) {
+      const page = store.archivedSessions(after, through);
+      if (page.length === 0) break;
+      for (const row of page) {
+        let files: string[] = [];
         try {
-          if (await archive.segmentFile(path)) done++;
-        } catch (error) {
-          log.warn("hub", "a put-away transcript not put in segments", { session: row.key, error: (error as Error).message });
+          files = this.historyFiles(row.key, false);
+        } catch {}
+        for (const path of files) {
+          try {
+            if (await archive.segmentFile(path)) done++;
+          } catch (error) {
+            failed = true;
+            log.warn("hub", "a put-away transcript not put in segments", { session: row.key, error: (error as Error).message });
+          }
         }
+        // Between sessions, including one whose files could not be found, the station's other work.
+        await new Promise<void>((resolve) => setImmediate(resolve));
       }
+      after = page[page.length - 1]!;
     }
     if (done > 0) log.info("hub", "put-away transcripts put in segments", { n: done });
+    if (!failed) await writeFile(said, "").catch(() => undefined);
   }
 }
+
+/// Said in the station's data once every transcript put away is in segments (`segmentHistories`).
+const SEGMENTED = "transcripts-segmented";
 
 /// The Rust station's copy of an archived session's transcript.
 const LEGACY = ".jsonl.zst";

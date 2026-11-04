@@ -48,6 +48,8 @@
   "android-misc.adb.notify.chats": "正在将调试共享给 {n} 个对话",
   "android-misc.adb.notify.idle": "暂无对话在使用",
   "android-misc.adb.notify.on": "共享调试已开启",
+  "android-misc.adb.notify.screen": "「{title}」正在后台使用虚拟屏",
+  "android-misc.adb.notify.screens": "{n} 个对话正在后台使用虚拟屏",
   "android-misc.adb.notify.title": "正在将调试共享给 {name}",
   "android-misc.adb.off": "手机上的无线调试未开启",
   "android-misc.adb.on": "已打开",
@@ -527,6 +529,7 @@
   "android-misc.screen.fill.none": "1Password 里没有 {host} 的登录",
   "android-misc.screen.fill.noOp": "要先装 1Password 命令行工具，并在 1Password › 设置 › 开发者 里打开「与 1Password CLI 集成」",
   "android-misc.screen.fill.failed": "1Password 没有给出：{why}",
+  "android-misc.screen.fill.unreached": "1Password 没连上它的服务器，再试一次",
   "android-misc.screen.fill.empty": "这条登录里没有账号和密码",
   "android-misc.screen.fill.offerAuto": "用密码管理器填入",
   "android-misc.screen.fill.autoPick": "在密码管理器里选一个 {host} 的登录",
@@ -610,10 +613,11 @@
   "android-misc.updates.downloadingVersion": "正在下载 {version}",
   "android-misc.updates.installingVersion": "正在安装 {version}",
   "android-misc.updates.ready": "重启以更新到 {version}",
-  "android-misc.updates.readyAway": "离开 {app} 一段时间后自动安装",
-  "android-misc.updates.readyQuit": "退出 {app} 时自动安装",
+  "android-misc.updates.readyAway": "{from} → {to} 已下载，离开 {app} 一段时间后自动安装",
+  "android-misc.updates.readyQuit": "{from} → {to} 已下载，退出 {app} 时自动安装",
   "android-misc.updates.retry": "重试更新到 {version}",
   "android-misc.updates.updated": "{app} 已更新到 {version}，点按打开",
   "android-misc.updates.waitWifi": "连接 Wi‑Fi 后自动下载 · {size}",
-  "android-misc.adb.manage": "在设置里管理"
+  "android-misc.adb.manage": "在设置里管理",
+  "android-misc.fault.shown": "这部分显示出错了"
 }

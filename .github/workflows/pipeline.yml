@@ -3,12 +3,12 @@
 #             bundled (deploy.py --dry-run): evidence for its merge; nothing deployed, no secrets.
 #   main:     the full check of what changed since the last deploy (the tag deployed/beta), then what changed of it goes
 #             out, the API first: api, then the test channel's web app (app.youdid.wtf), admin, preview, share and youdid.wtf,
-#             its station release (then studio's station updates to it), its Android app and its desktop app (built
+#             its station release (then the configured test station updates to it), its Android app and its desktop app (built
 #             and signed on GitHub's macOS runner with the existing certificate).
 #             Nothing goes out after a step that fails; the tag moves to the commit once all of it is out.
 # The native parts (scripts/native.ts: the station's mesh addon, launcher and runner, the web's iroh, Android's shell
 # and engine, the media service's ffmpeg) are prebuilt: the natives job builds those whose key the release
-# native-artifacts lacks, on mini1, and on main publishes them there; every other job gets them from the release (a
+# native-artifacts lacks, on macos-ci, and on main publishes them there; every other job gets them from the release (a
 # branch's: from its natives job's run artifact), so a change that is not to a native part compiles no Rust. The mbui
 # app's Windows shell and engine are prebuilt on a development Mac instead (node scripts/native.ts prebuild: cross-built,
 # put in the releases bucket by their keys) and never built here: windows-natives fetches them and runs the shell's tests.
@@ -33,7 +33,7 @@ env:
   # (shell-apple), the macOS one, on a branch that changed it (#1365 went to main untried and failed there).
   BRANCH_NATIVES: mesh:darwin-arm64 launcher:darwin-arm64 runner:darwin-arm64 archive-rs:darwin-arm64 iroh-wasm shell shell-apple:darwin-arm64 engine mesh:linux-x64 mesh:win32-x64 launcher:win32-x64 runner:win32-x64 screen:win32-x64 helper:darwin-arm64 ffmpeg:darwin-arm64 ffmpeg:linux-x64 ffmpeg:linux-arm64
 jobs:
-  # What can runs on mini1; what needs Linux (the Linux check) and the small jobs (plan, the API's deploy, put, the
+  # What can runs on macos-ci; what needs Linux (the Linux check) and the small jobs (plan, the API's deploy, put, the
   # changelog, timing) on GitHub's own runners, free for a public repository, not on Blacksmith's (2026-10-15, as asked).
   # GitHub's runners were short once (Actions degraded, 2026-10-05): a job waiting for one held each run 15 minutes and
   # was cancelled, nothing released.
@@ -65,7 +65,7 @@ jobs:
       - uses: actions/setup-node@v5
         with: { node-version-file: .node-version, package-manager-cache: false }
       # Whether the natives job has anything to do: a part this run uses that the release native-artifacts lacks (the
-      # keys are the sources' hashes: scripts/native.ts). None, and it is skipped (~25 s on mini1 that everything
+      # keys are the sources' hashes: scripts/native.ts). None, and it is skipped (~25 s on macos-ci that everything
       # building waited for).
       - id: natives
         env:
@@ -155,7 +155,7 @@ jobs:
           echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station modules=$modules android_beta=$android_beta mac_beta=$mac_beta win_beta=$win_beta relay=$relay mbui=$mbui browser=$browser"
 
   # The native parts for this commit (scripts/native.ts): each one whose key the release native-artifacts lacks is
-  # built here (once per key and machine: mini1's cache is shared by its runners and the checks beside this job wait
+  # built here (once per key and machine: macos-ci's cache is shared by its runners and the checks beside this job wait
   # for a build under way rather than doing it again). main publishes them, and keeps the newest 20 of each; a branch
   # publishes nothing, and passes what it built to its other jobs as a run artifact. Seconds when none changed.
   natives:
@@ -188,19 +188,19 @@ jobs:
         uses: actions/upload-artifact@v4
         with: { name: "natives-${{ github.sha }}", path: "${{ runner.temp }}/natives", if-no-files-found: ignore, retention-days: 7 }
 
-  # A branch's the rest of what main builds (scripts/native.ts ensure, all of mini1's), into mini1's cache, which main's
+  # A branch's the rest of what main builds (scripts/native.ts ensure, all of macos-ci's), into macos-ci's cache, which main's
   # natives job takes them from: not built there, every job of main's run waiting on them. Beside the branch's checks,
   # which need none of them (BRANCH_NATIVES). main a4967d00 built four, one after another, its natives job 197 s of a
   # 566 s run (mesh linux-arm64 40 s, station-load 27, shell-apple ios 21 and ios-sim 18), 2026-11-01.
   natives-main:
     needs: [plan, natives]
     if: needs.plan.outputs.natives == 'needed' && github.ref != 'refs/heads/main' && needs.natives.result == 'success'
-    runs-on: [self-hosted, mini1]
+    runs-on: [self-hosted, macos-ci]
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-mac
-      - name: Build what main builds besides the branch's (into mini1's cache)
+      - name: Build what main builds besides the branch's (into macos-ci's cache)
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/native.ts ensure
@@ -288,21 +288,21 @@ jobs:
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           node scripts/native.ts store-sync
 
-  # mini1-5 (label quick, on mini1 too) takes only the short jobs everything else waits on: natives (what a run's
-  # builds and checks need), and main's done and station-update. Behind the builds in mini1's four, natives waited
+  # quick runner (label quick, on macos-ci too) takes only the short jobs everything else waits on: natives (what a run's
+  # builds and checks need), and main's done and station-update. Behind the builds in macos-ci's four, natives waited
   # 4-5 minutes, and with it every job of the run, GitHub's too (2026-10-16).
   # No job may take over 5 minutes (2026-10-31, as asked: the aim is 3; 10 since 2026-10-16): one that does is stuck,
-  # and on mini1 it holds one of four runners every run waits on.
+  # and on macos-ci it holds one of four runners every run waits on.
   # The full check (scripts/check.sh) in two jobs: the parts that need a Mac (the station with its native parts' own
-  # tests, client/'s Rust) here on mini1, the rest beside it on Linux (check-linux). In each, the steps run side by
+  # tests, client/'s Rust) here on macos-ci, the rest beside it on Linux (check-linux). In each, the steps run side by
   # side, so a part the range leaves alone costs nothing. Rust builds in targets under the job's own (setup-mac,
-  # check.sh), through sccache. The native parts come from mini1's cache, the release or the natives job running beside
+  # check.sh), through sccache. The native parts come from macos-ci's cache, the release or the natives job running beside
   # it (scripts/native.ts).
   check:
     needs: plan
-    runs-on: [self-hosted, mini1]
+    runs-on: [self-hosted, macos-ci]
     # Usually under 2 minutes, all of it with Rust built anew a few: a test that hangs (one waiting on what never comes,
-    # up to its 10 minutes each) held one of mini1's four runners for most of an hour, and every run behind it waited
+    # up to its 10 minutes each) held one of macos-ci's four runners for most of an hour, and every run behind it waited
     # (2026-10-16, station/test/mesh-handover.test.ts on branches whose mesh needed a service it did not give).
     timeout-minutes: 5
     env:
@@ -342,7 +342,7 @@ jobs:
           exit $status
 
   # The part of the full check that needs no Mac (ts) on a Linux runner of its own,
-  # so it never waits for one of mini1's (2026-10-04: a run's jobs there queued up to 4 minutes behind one
+  # so it never waits for one of macos-ci's (2026-10-04: a run's jobs there queued up to 4 minutes behind one
   # another) nor for each other (in one job, Gradle waited for the real-time tests before it). The native parts they
   # use come from the release or this run's natives job (mesh and iroh's relay for linux-x64, Android's shell and
   # engine); what passed before at the same inputs is kept in the Actions cache (scripts/check.sh, `remembered`).
@@ -415,7 +415,7 @@ jobs:
   bundle:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && (needs.plan.outputs.api == 'true' || needs.plan.outputs.static == 'true') }}
-    # On GitHub's runners, not mini1: a dry run of half a minute that queued there behind the builds (2026-10-16).
+    # On GitHub's runners, not macos-ci: a dry run of half a minute that queued there behind the builds (2026-10-16).
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -428,7 +428,7 @@ jobs:
         run: sh .github/deploy.sh --dry-run $([ '${{ needs.plan.outputs.api }}' = true ] && echo api) ${{ needs.plan.outputs.parts }}
 
   # A branch: the TypeScript station's bundle main would release, built with the prebuilt native parts (unsigned,
-  # nothing sent). On GitHub's macos-15 (free for a public repository): unsigned, it needs nothing of Mini1's (main's
+  # nothing sent). On GitHub's macos-15 (free for a public repository): unsigned, it needs nothing of macos-ci's (main's
   # signed builds stay there, with its keychain). (The apps are mbui's: their builds are this workflow's desktop job's, preview.yml's and mbui-host-mac's.)
   mac-build:
     needs: [plan, natives]
@@ -445,6 +445,7 @@ jobs:
           pnpm install --frozen-lockfile --prefer-offline > /dev/null
           (cd station && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           sh scripts/station-bundle.sh "$RUNNER_TEMP/station" darwin-arm64
+          STATION_BUNDLE="$RUNNER_TEMP/station/stillfail/station" node --disable-warning=ExperimentalWarning --import ./station/test/setup-env.mjs --test --test-timeout=30000 station/test/station-bundle-workers.test.ts
           du -sh "$RUNNER_TEMP/station/stillfail"
 
   # A branch: the one check main's protection requires (2026-10-20, asked: "main 开保护"; an admin may merge past it,
@@ -482,6 +483,7 @@ jobs:
       - name: Deploy api
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          STILLFAIL_ADMIN_EMAIL: ${{ secrets.STILLFAIL_ADMIN_EMAIL }}
           DEPLOY_KEYS_JSON: ${{ secrets.DEPLOY_KEYS_JSON }}
           GOOGLE_OAUTH_JSON: ${{ secrets.GOOGLE_OAUTH_JSON }}
           AXIOM_JSON: ${{ secrets.AXIOM_JSON }}
@@ -494,7 +496,7 @@ jobs:
         run: sh .github/deploy.sh api
 
   # The app for the browser (each of the web's pages: apps/mbui/scripts/web-app.sh), built where MoonBit's cache is
-  # (GitHub's runners: Mini1's runners each have a tool cache of their own, the static job's none of it, run
+  # (GitHub's runners: macos-ci's runners each have a tool cache of their own, the static job's none of it, run
   # 41173786825) and handed to the static job.
   mbui-web:
     needs: [plan]
@@ -522,7 +524,7 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/natives
       # (the app's page, each of the web app's pages: the app as mbui-web built it, which deploy.py takes as it is. Asked again once when
-      # GitHub's artifact service is not reached: mini1's connection to it reset, the web's deploy failed with the page
+      # GitHub's artifact service is not reached: macos-ci's connection to it reset, the web's deploy failed with the page
       # there, 2026-10-31, 41207363758)
       - id: page
         uses: actions/download-artifact@v4
@@ -553,7 +555,7 @@ jobs:
   station:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.station == 'true' }}
-    runs-on: [self-hosted, mini1]
+    runs-on: [self-hosted, macos-ci]
     outputs:
       hand: ${{ steps.hand.outputs.key }}
     environment: production
@@ -574,7 +576,7 @@ jobs:
           RELEASE_DIR: ${{ runner.temp }}/release
         run: sh .github/release.sh station
       # Its files into the bucket from here, staged (scripts/release-put.sh --stage): put takes them back. In the run
-      # artifact they went up through the proxy mini1's DNS sends GitHub to, 40 MB a release (2026-10-23).
+      # artifact they went up through the proxy macos-ci's DNS sends GitHub to, 40 MB a release (2026-10-23).
       - name: Stage its files in the bucket
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -592,7 +594,7 @@ jobs:
   android:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.android_beta == 'true' }}
-    runs-on: [self-hosted, mini1]
+    runs-on: [self-hosted, macos-ci]
     outputs:
       hand: ${{ steps.hand.outputs.key }}
     environment: production
@@ -866,8 +868,8 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: actions/download-artifact@v4
         with: { pattern: "release-*-${{ github.sha }}", path: "${{ runner.temp }}/release", merge-multiple: true }
-      # what mini1's jobs handed through the bucket (scripts/release-put.sh --hand)
-      - name: What mini1's jobs handed over
+      # what macos-ci's jobs handed through the bucket (scripts/release-put.sh --hand)
+      - name: What macos-ci's jobs handed over
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           HANDED: ${{ needs.station.outputs.hand }} ${{ needs.android.outputs.hand }} ${{ needs.desktop.outputs.hand }}
@@ -879,9 +881,12 @@ jobs:
       - name: Put the releases (their files, then their feeds)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          HANDED: ${{ needs.station.outputs.hand }} ${{ needs.android.outputs.hand }} ${{ needs.desktop.outputs.hand }}
         run: |
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           sh scripts/release-put.sh "$RUNNER_TEMP/release"
+          # shellcheck disable=SC2086 # names, one word each
+          [ -z "$(echo $HANDED)" ] || sh scripts/release-put.sh --drop $HANDED
       - name: Put changelog.json
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -897,8 +902,12 @@ jobs:
     runs-on: [self-hosted, quick]
     timeout-minutes: 5
     steps:
-      - name: studio's station takes the published release
-        run: ssh -o BatchMode=yes studio 'env -u EMBER_DATA -u STILLFAIL_DATA STILLFAIL_CHANNEL=beta ~/.local/bin/stillfail update --beta > /tmp/ember-station-update.log 2>&1 && tail -2 /tmp/ember-station-update.log'
+      - name: Update the configured test station
+        run: |
+          target=$(cat "$HOME/.stillfail/agent/skills/stillfail/station-update-host")
+          test -n "$target"
+          printf '::add-mask::%s\n' "$target"
+          ssh -o BatchMode=yes "$target" 'env -u EMBER_DATA -u STILLFAIL_DATA STILLFAIL_CHANNEL=beta ~/.local/bin/stillfail update --beta > /tmp/ember-station-update.log 2>&1 && tail -2 /tmp/ember-station-update.log'
 
   # The changelog, when nothing was released (put, which puts it after the releases, did not run): a fix in still.fail
   # cloud counts as out as soon as it is listed, not before the API carrying it is deployed.
@@ -931,16 +940,16 @@ jobs:
       - run: |
           git tag -f deployed/beta "$GITHUB_SHA"
           # Not the repository's pre-push check (the runner's checkout has the hooks on): this run checked it all.
-          # As mini1's own GitHub login, not the run's token: GitHub refuses that token a ref to a commit that changes a
+          # As macos-ci's own GitHub login, not the run's token: GitHub refuses that token a ref to a commit that changes a
           # workflow (no `workflows` permission), and a tag stuck behind such a commit stays stuck (2026-10-02, e3ae7c10).
-          # (again on a dropped connection: one from mini1 to github.com failed the tag's push alone, the beta out, main
+          # (again on a dropped connection: one from macos-ci to github.com failed the tag's push alone, the beta out, main
           # 30f68adc 41249459343, 2026-11-01)
           for i in 1 2 3; do
             git push --no-verify -f "https://github.com/$GITHUB_REPOSITORY" refs/tags/deployed/beta && break
             [ $i = 3 ] && exit 1; sleep 10
           done
       - if: needs.plan.outputs.relay == 'true'
-        run: echo "::warning::the relay changed and is not deployed here, as that drops every connection. Run ~/bin/ember-deploy on studio."
+        run: echo "::warning::the relay changed and is not deployed here, as that drops every connection. Deploy it separately using the configured deployment environment."
 
   # How long this run took against its budget (scripts/ci-time.ts): in the run's summary, and a warning when over. A
   # station's watch reads the same of every run and has an agent find why one went over.

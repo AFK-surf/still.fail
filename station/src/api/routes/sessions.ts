@@ -27,7 +27,7 @@ type Found = { contentType: string; file: string } | { contentType: string; arch
 
 /// The file `name` of session `key`'s chat, as `Found`; else the answer to give. Found here, as it is asked, with no
 /// read in line before it: its session's workspace is the store's (this thread's own connection, the row in its
-/// memory), the rest is the disk's, asked off this thread. Asked of the readers, on ccvm (2026-11-02) an image waited
+/// memory), the rest is the disk's, asked off this thread. Asked of the readers, on a station (2026-11-02) an image waited
 /// 26 s in line for a lookup of 5 ms.
 async function uploaded(tools: Tools, r: Request, key: string, name: string): Promise<Found | Answer> {
   const row = tools.store?.getSession(key) ?? null;
@@ -285,7 +285,8 @@ export const routes = (tools: Tools): Route[] => {
         return noRoute(r);
       },
     },
-    { method: "GET", pattern: /^\/jobs$/, handle: (r) => read(r, "openJobs", { viewer: r.viewer, lang: r.lang }) },
+    // `chats=0`: without the chat each is in, for a device that names it from the sidebar it holds.
+    { method: "GET", pattern: /^\/jobs$/, handle: (r) => read(r, "openJobs", { viewer: r.viewer, lang: r.lang, chats: param(r, "chats") !== "0" }) },
     {
       method: "GET",
       pattern: /^\/*jobs\/+([^/]+)(?:\/+([^/]+))?(?:\/.*)?$/,

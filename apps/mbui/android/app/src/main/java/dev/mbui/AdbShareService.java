@@ -155,7 +155,7 @@ public final class AdbShareService extends Service {
     private void say() {
         NotificationManager manager = getSystemService(NotificationManager.class);
         manager.notify(AdbShare.ID, AdbShare.GRANTS.equals(station)
-                ? AdbShare.notificationTitled(this, view, name, note != null ? note : idle ? AdbShare.t("android-misc.adb.notify.idle") : null, AdbShare.t("android-misc.adb.turnOff"))
+                ? AdbShare.notificationTitled(this, view, name, note != null ? note : idle ? AdbShare.t("android-misc.adb.notify.idle") : AdbShare.screens(view), AdbShare.t("android-misc.adb.turnOff"))
                 : AdbShare.notification(this, view, name, note));
         boolean pairing = AdbShare.pairing(view);
         int port = view == null ? -1 : view.optInt("pairPort", -1);

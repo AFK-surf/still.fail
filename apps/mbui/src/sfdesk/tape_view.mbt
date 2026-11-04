@@ -767,6 +767,19 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       side.width(By(fn() { Some(tape_col_at(tape_drawn_at(side))) })) |> ignore
       tape_swipes(side, Side)
       @ui.old(side, fn(c) { tape_side_built(c, src) }, key=tape_island_key).over(Is(true)) |> ignore
+      // (the sidebar made once, the tree's, over the panel where it lays its sidebar out; nothing of it read out while
+      // the panel is behind the one in use: tape_behind's)
+      side.box(fn(sides) {
+        sides.over(Is(true)).hides(By(fn() { wide.tape_at.get() != Side })) |> ignore
+        side_node(sides, src, @sf.TipLayer::new(fn() { tape_goes.node }), fn() { tape_side_at(side) })
+      })
+      |> ignore
+      // (the block's line over all it holds: dock_edge_node)
+      side.box(fn(line) {
+        line.over(Is(true)) |> ignore
+        dock_edge_node(line, fn() { tape_side_at(side) })
+      })
+      |> ignore
       tape_cover(side, Side, fn() {
         let r = tape_room_now()
         let (_, wh) = side.window()
@@ -1108,6 +1121,23 @@ fn tape_side_built(c : @ui.Ctx, src : Source) -> Unit {
 }
 
 ///|
+/// Where the sidebar's panel on the tape lays its sidebar out as node `side` (its column) is drawn: as tape_side_built
+/// lays it out (dock_side_at, the tape's look), in the column's own room.
+fn tape_side_at(side : @view.View) -> SideAt {
+  let r = tape_room_now()
+  let col = tape_col_at(tape_drawn_at(side))
+  let s = dmax(0.0, col - rail_left() - bar_in_now() - bar_gap_now() - rail_more())
+  let top = if side_full_height(false) { 0.0 } else { r.top }
+  // (its top row the tape's, its band the bar's, as tape_under says them: side_brand_h)
+  {
+    ..dock_side_at(false, false, s, col, top, r.foot, 0.0, side.window().1, None),
+    brand: side_brand_h(false, r.top),
+    band: 1.0,
+    tape: true,
+  }
+}
+
+///|
 /// A chat's side panel on the tape (its island, 6 in from the bars, 8 from the page's), closed while in use as it was
 /// as the tape moves off it.
 fn tape_panel_built(c : @ui.Ctx, src : Source) -> Unit {
@@ -1304,7 +1334,10 @@ pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
   wide.bar_ml = 0.0
   wide.bar_mr = 0.0
   wide.brand_h = side_brand_h(false, r.top)
+  wide.list_top = wide.brand_h
+  wide.list_band = 1.0
   wide.band = 1.0
+  list_room_told()
   wide.mark = 0.0
   land(src, w)
   // (beside the system's action at the column's foot, the cards' foot corners the one the composer stands concentric in

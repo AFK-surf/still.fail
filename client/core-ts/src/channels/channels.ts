@@ -307,10 +307,27 @@ export class Channels {
 
   /// Items `from ..= to` onto the device (a window moved there): read now, unless they are all held.
   range(c: Channel, from: number, to: number, options: { quiet: boolean; ctx?: SpanContext | null }): Effect.Effect<void, CoreError> {
-    return Effect.suspend(() => {
-      if (to < from || this.#held.count(c, from, to) === to - from + 1) return Effect.void;
-      return Effect.flatMap(this.read(c, { from, to }, options), () =>
-        this.#held.count(c, from, to) === to - from + 1 ? Effect.void : this.#incomplete());
+    return Effect.gen({ self: this }, function* () {
+      if (to < from || this.#held.count(c, from, to) === to - from + 1) return;
+      // A chat opens around an unread or saved position with a page on either side. Keep that bounded opening in one
+      // answer, so its first half cannot open the window before the position itself has arrived.
+      if (to - from + 1 <= c.kind.page * 2) {
+        yield* this.read(c, { from, to }, options);
+        if (this.#held.count(c, from, to) !== to - from + 1) return yield* this.#incomplete();
+        return;
+      }
+      for (let first = from; first <= to;) {
+        const last = Math.min(to, first + c.kind.page - 1);
+        if (this.#held.count(c, first, last) !== last - first + 1) {
+          yield* this.read(c, { from: first, to: last }, options);
+          if (this.#held.count(c, first, last) !== last - first + 1) return yield* this.#incomplete();
+        }
+        if (last === to) break;
+        const next = last + 1;
+        if (!(next > first)) return yield* this.#incomplete();
+        first = next;
+      }
+      if (this.#held.count(c, from, to) !== to - from + 1) return yield* this.#incomplete();
     });
   }
 }

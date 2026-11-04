@@ -13,7 +13,7 @@ test "a login's link: the station's page, its card brought into view" {
   t.draw()
   t.run_for(@ui.move_most_ms)
   // the page under it, scrolled to the card: well inside the window
-  match t.find("在 Studio 上登录 codex") {
+  match t.find("在 Willow 上登录 codex") {
     Some((_, y)) => assert_true(y > 0.0 && y < 844.0, msg="the card in view at \{y}")
     None => fail("no login card on the station's page")
   }

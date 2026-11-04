@@ -6,7 +6,7 @@ fn search_tester() -> @ui.Tester {
   new_run()
   let src = fixture("home")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
-  t.scroll_to(0)
+  list_up_to_top(t)
   t.draw()
   t.tap_text("搜索全部内容")
   t.run_for(@ui.move_most_ms)
@@ -29,7 +29,7 @@ test "Home's list starts at its first row, the search above it out of view under
 ///|
 test "the field tapped: the search opens over Home, its field focused, the bars away; 取消 puts it back" {
   let t = tester("home")
-  t.scroll_to(0)
+  list_up_to_top(t)
   t.draw()
   let (_, from) = t.find("搜索全部内容").unwrap()
   t.tap_text("搜索全部内容")
@@ -157,7 +157,7 @@ test "a chat opened from the search, read a while, back: the search as it was le
   // its field still up with 取消 beside it, not back in the list with the words left in it (the list under the page
   // then, the page taking its touches)
   assert_eq(t.shown_of("取消"), cancel_at)
-  assert_eq(t.look_of("取消").map(fn(l) { l.2 }), Some(1.0))
+  assert_eq(t.words().filter(fn(w) { w.0 == "取消" }).map(fn(w) { w.5 }), [1.0])
 }
 
 ///|
@@ -190,7 +190,7 @@ test "nothing found; still being looked for, what could not be, what the core sa
   }
   t.type_text("等等")
   assert_true(t.find("未找到结果") is None)
-  assert_true(t.find("MBA 无法搜索：它的版本太旧") is Some(_))
+  assert_true(t.find("Maple 无法搜索：它的版本太旧") is Some(_))
   assert_true(t.find("还有 1 台 station 离线，没有搜它上面的内容") is Some(_))
 }
 
@@ -285,7 +285,7 @@ test "as the Android app's SearchResultsTest: each kind, 查看更多 only where
   assert_true(t.find("Safari 17 上点了登录没有任何反应") is Some(_))
   // two stations: each found thing says which it is on, with when
   // (which, a part of the line under it that leaves it before what was found is cut short; when)
-  assert_true(t.find("studio ·") is Some(_) && t.find("10 分钟前") is Some(_))
+  assert_true(t.find("willow ·") is Some(_) && t.find("10 分钟前") is Some(_))
   assert_true(t.find("mac ·") is Some(_) && t.find("80 分钟前") is Some(_))
   // a member: no station
   assert_true(t.find("登录组 · 王五") is Some(_))

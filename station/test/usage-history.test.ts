@@ -2,12 +2,35 @@ import assert from "node:assert/strict";
 import { constants } from "node:sqlite";
 import { test } from "node:test";
 import { makeStore, USAGE_DAY_SCOPED, USAGE_QUARTERS_SCOPED, VISIBLE_USAGE_CARDS } from "../src/read/store.ts";
-import { usageHistory } from "../src/read/usage.ts";
+import { usage, usageHistory } from "../src/read/usage.ts";
 import { Store } from "../src/store/store.ts";
 
 function session(store: Store, key: string, ws: string | null) {
   store.insertSession({ key, connect: key, runtime: "claude", profile: "cc", workspace: `/w/${key}`, token: key, ws, createdAt: 1, lastActiveAt: 1 });
 }
+
+test("missing old decision results leave the available usage and chat totals visible", () => {
+  const store = Store.open(":memory:");
+  try {
+    session(store, "a", "workspace-a");
+    const thread = store.openThread("ember", "EMBER", "chat", null, null).id;
+    store.joinThread(thread, "a", "ember");
+    store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [[{
+      id: "call", at: 60_000, model: "m", subagent: false, fast: false, input: 2, cacheRead: 0,
+      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null,
+    }, { turn: null, thread, person: null, profile: "cc" }]]);
+    store.db.exec("CREATE TABLE card_outcomes_incomplete (id INTEGER PRIMARY KEY)");
+    const result = usage(makeStore(store.db, "."), "en", 0n, 180_000n, 0n, false, null, true);
+    assert.equal(result.history, undefined);
+    assert.equal(result.historyUnavailable, true);
+    assert.equal(result.partialHistory.cardsIncomplete, true);
+    assert.equal(result.partialHistory.tokensComplete, true);
+    assert.equal(result.partialHistory.cards, undefined);
+    assert.equal(result.partialHistory.picked, undefined);
+    assert.deepEqual(result.partialHistory.places, { ember: 1 });
+    assert.deepEqual(result.partialHistory.days.map((day: { tokens: number }) => day.tokens), [3]);
+  } finally { store.close(); }
+});
 
 test("usage history counts only the chats and cards visible in the viewer's workspace", () => {
   const store = Store.open(":memory:");

@@ -189,6 +189,7 @@ export type NewMessage = {
   thread: number; ts: string; authorKind: AuthorKind; author: string; text: string; attachments?: Attachment[];
   quotes?: Quote[]; declared?: string | null; client?: string | null; profile?: string | null; runtime?: string | null; card?: Json | null;
   options?: Json | null; at?: number | null; letter?: Letter;
+  agentIdentity?: Json;
 };
 
 export const newMessage = (thread: number, ts: string, authorKind: AuthorKind, author: string, text: string): NewMessage => ({
@@ -223,12 +224,13 @@ export type TurnFor = { profile: string | null; person: string | null; thread: n
 
 /// What the store says changed, for whoever follows it (the admin API's /events, the hub).
 export type StoreChange =
-  /// Anything about that session changed.
-  | { type: "session"; key: string }
+  /// Anything about that session changed; `pending`: how many messages it has yet to take, as it took some.
+  | { type: "session"; key: string; pending?: number }
   /// It was deleted; `ws` the workspace its chat was in (null: the home one).
   | { type: "sessionRemoved"; key: string; ws?: string | null }
-  /// Entries were appended there (contiguous, in order), or its sessions changed (none).
-  | { type: "thread"; id: number; entries: EntryRow[] }
+  /// Entries were appended there (contiguous, in order), or its sessions changed (none); `closed`: the post (its n)
+  /// whose card was closed or withdrawn without a message (closed_cards).
+  | { type: "thread"; id: number; entries: EntryRow[]; closed?: number }
   /// Letters were kept in its own log of them (schema.ts LETTERS; contiguous, in order).
   | { type: "letters"; id: number; letters: EntryRow[] }
   /// It went, with every entry it had; `ws` as its session's.
@@ -256,7 +258,7 @@ export type StoreChange =
   | { type: "chatMark"; thread: number | null; session: string; archive?: { suggested?: number | null; verdict?: Json }; share?: { to: { workspace: string; name: string }[]; write: boolean }; opened?: Json }
   /// Model calls were recorded (store/usage.ts), of these sessions; `from`, when the earliest of them was made (ms):
   /// what a page holding the usage reads again of it, from that day on.
-  | { type: "usage"; sessions: string[]; from?: number }
+  | { type: "usage"; sessions: string[]; from?: number; statisticsOnly?: boolean }
   /// A session went on in another runtime session, or in none (its context cleared): where its context stands changed.
   | { type: "conversation"; key: string };
 
@@ -575,6 +577,14 @@ export const JOBS_RUNNING = "SELECT * FROM jobs WHERE state = 'running' ORDER BY
 /// first, by the same index: what a session has up (store.ts `jobsUp`), and the readers' list of them (GET /jobs).
 export const JOBS_UP = "SELECT * FROM (SELECT * FROM jobs WHERE state = 'running' UNION ALL SELECT * FROM jobs WHERE state = 'exited' AND port IS NOT NULL) ORDER BY started_at DESC";
 
+/// The latest running service, or one waiting to restart, holding a port. The two state-and-port seeks do not read
+/// other services or commands (jobs.ts startId).
+export const JOB_AT_PORT = `SELECT id, name, port FROM (
+  SELECT id, name, port, started_at FROM jobs INDEXED BY jobs_up WHERE state = 'running' AND port = ?1
+  UNION ALL
+  SELECT id, name, port, started_at FROM jobs INDEXED BY jobs_up WHERE state = 'exited' AND port = ?1
+) ORDER BY started_at DESC LIMIT 1`;
+
 /// A session's jobs, the latest first, by the index on their session (schema.ts jobs_by_session): the main thread's and
 /// the readers'.
 export const SESSION_JOBS = "SELECT * FROM jobs WHERE session_key = ? ORDER BY started_at DESC";
@@ -583,8 +593,9 @@ export const SESSION_JOBS = "SELECT * FROM jobs WHERE session_key = ? ORDER BY s
 /// active first: by the indexes on them (schema.ts sessions_by_runtime_id, runtime_sessions_by_id), not by asking every
 /// session in turn which it ran in.
 export const SESSION_OF_RUNTIME = `SELECT key FROM (
-    SELECT key, last_active_at FROM sessions WHERE runtime_session_id = ?2 AND runtime = ?1
-    UNION ALL SELECT s.key, s.last_active_at FROM runtime_sessions r JOIN sessions s ON s.key = r.session_key WHERE r.id = ?2 AND s.runtime = ?1
+    SELECT key, last_active_at FROM sessions s WHERE runtime_session_id = ?2 AND runtime = ?1
+      AND NOT EXISTS (SELECT 1 FROM runtime_sessions r WHERE r.session_key = s.key AND r.id = ?2 AND COALESCE(r.runtime, s.original_runtime, s.runtime) != ?1)
+    UNION ALL SELECT s.key, s.last_active_at FROM runtime_sessions r JOIN sessions s ON s.key = r.session_key WHERE r.id = ?2 AND COALESCE(r.runtime, s.original_runtime, s.runtime) = ?1
   ) ORDER BY last_active_at DESC LIMIT 1`;
 
 /// What each list of chats asks of the cards answered lately (answersSince, the main thread's and the readers'): the

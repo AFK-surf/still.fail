@@ -39,7 +39,7 @@ const goingOf = new WeakMap<Inner, Map<string, Going>>();
 /// `read` once for every asker of the same file at once: one asked again while it is coming (its preview closed and
 /// opened again, its image put up anew) waits for the read going, told how far it has come, not brought again beside
 /// it. A whole file's read runs to its end whoever waits; each asked anew began another, and on a desktop app six images
-/// were coming fifteen times at once, each at a fifteenth of the line, until the app was restarted (ccvm, 2026-10-28).
+/// were coming fifteen times at once, each at a fifteenth of the line, until the app was restarted (a station, 2026-10-28).
 function once(inner: Inner, key: string, progress: Progress, read: (progress: Progress) => Effect.Effect<Beside, CoreError>): Effect.Effect<Beside, CoreError> {
   return Effect.suspend(() => {
     let all = goingOf.get(inner);

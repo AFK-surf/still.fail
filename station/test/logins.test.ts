@@ -237,13 +237,15 @@ echo "You are now logged in as [a@x.com]."
 test("Devin's sign-in (env and its variables before it, a page longer than the terminal is wide, then a masked field read key by key): named devin, the whole page given, and a field on the card once its agent says so", { skip: skipped }, async () => {
   const m = machine();
   // As Devin draws it: the line broken at the terminal's width by the program, the code read in raw mode with no echo,
-  // a dot drawn for each key.
+  // a dot drawn for each key. Raw before the field is drawn, as a program reading keys is: switched after, the code
+  // typed once the field showed could reach the terminal still in line mode, its Enter turned into a newline the field
+  // never ends on (a station run waited minutes on it).
   script(join(m.bin, "fakedevin"), `#!/usr/bin/env node
 const out = (s) => process.stdout.write(s);
 const line = ${JSON.stringify(`Visit ${DEVIN_PAGE} to sign in, then copy the code and paste it below.`)};
 const cols = Number(process.env.COLUMNS) || 80;
-out(line.slice(0, cols) + "\\r\\n" + line.slice(cols) + "\\r\\n\\r\\n Code:\\r\\n ❭ " + "•".repeat(42) + "\\r\\n ↵ submit · esc cancel\\u001b[1A\\r\\u001b[3C");
 process.stdin.setRawMode(true);
+out(line.slice(0, cols) + "\\r\\n" + line.slice(cols) + "\\r\\n\\r\\n Code:\\r\\n ❭ " + "•".repeat(42) + "\\r\\n ↵ submit · esc cancel\\u001b[1A\\r\\u001b[3C");
 let code = "";
 process.stdin.on("data", (d) => {
   for (const c of d.toString()) {
@@ -337,14 +339,14 @@ echo "! First copy your one-time code: 1A2B-C3D4"
 echo "Waiting for the browser"
 read ok < '${approved.path}'
 `);
-  const here = { station: "b".repeat(64), name: "Mini1" };
+  const here = { station: "b".repeat(64), name: "TestStation" };
   const peer = (station: string) => ({ starter: () => ({ ...m.by, chat: null, chatTitle: "部署", peer: { station, session: "ember:c-a" } }), link: (id: string) => `https://still.fail/w/w1/s/${here.station}/login/${id}`, where: here, mine: (id: string) => m.logins.starterOf(id)?.peer?.station === station });
   // The agent's tool hands a call naming a station to the station transport (logins/module.ts), as it was given.
   const asked: unknown[] = [];
   const [tool] = loginTools({ logins: () => m.logins, starter: () => ({ ...m.by, chat: "ember:c-1" }), link: () => null, remote: async (station, session, args) => (asked.push({ station, session, args }), "told there") });
   try {
-    assert.equal(await tool!.run("ember:c-1", { station: "Mini1", command: "gh auth login" }), "told there");
-    assert.deepEqual(asked, [{ station: "Mini1", session: "ember:c-1", args: { station: "Mini1", command: "gh auth login" } }]);
+    assert.equal(await tool!.run("ember:c-1", { station: "TestStation", command: "gh auth login" }), "told there");
+    assert.deepEqual(asked, [{ station: "TestStation", session: "ember:c-1", args: { station: "TestStation", command: "gh auth login" } }]);
     // On the station it runs on: started for the other station's agent, its chat none here.
     const starting = act(m.logins, { command: "fakegh auth login" }, peer("a".repeat(64)));
     const id = await upon((w) => m.logins.changes(w), () => m.logins.logins()[0]?.id, "started");
@@ -353,17 +355,17 @@ read ok < '${approved.path}'
     await m.time.adjust(QUIET_MS);
     const ready = await starting;
     assert.ok(ready.includes(`card {"type": "login", "login": "${id}", "station": "${here.station}"}`), ready);
-    assert.match(ready, /who should log in to what on Mini1 and why/);
-    assert.match(ready, /"stationName": "Mini1"/);
+    assert.match(ready, /who should log in to what on TestStation and why/);
+    assert.match(ready, /"stationName": "TestStation"/);
     assert.equal(m.logins.get(id)!.chat, undefined, "no chat of this station's");
     assert.deepEqual(m.logins.starterOf(id)!.peer, { station: "a".repeat(64), session: "ember:c-a" });
     // Another station acts only on the logins it started.
     await assert.rejects(act(m.logins, { id }, peer("c".repeat(64))), /no login/);
     assert.match(await act(m.logins, { id }, peer("a".repeat(64))), /The person's browser step is ready/);
-    assert.match(promptNotice(m.logins, m.logins.get(id)!, null, here), /^The login on Mini1 you started/);
+    assert.match(promptNotice(m.logins, m.logins.get(id)!, null, here), /^The login on TestStation you started/);
     await approved.approve();
     const done = await m.until(id, (l) => l.state === "done", "done");
-    assert.match(endedNotice(done, null, here), /^The login on Mini1 you started or posted a card for, fakegh auth login/);
+    assert.match(endedNotice(done, null, here), /^The login on TestStation you started or posted a card for, fakegh auth login/);
   } finally {
     await m.logins.close();
   }

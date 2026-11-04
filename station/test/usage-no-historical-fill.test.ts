@@ -70,6 +70,9 @@ test("startup leaves saved session summaries alone and live reads use those summ
     store.usageChanged(["s"]);
     assert.equal((told.at(-1) as { outputTokens: number }).outputTokens, 9,
       "a change is told after its new summary is saved");
+    const count = told.length;
+    store.usageChanged(["s"], 0, true);
+    assert.equal(told.length, count, "a finished statistics batch does not recompute an unchanged session summary");
   } finally { stop(); store.close(); }
 });
 

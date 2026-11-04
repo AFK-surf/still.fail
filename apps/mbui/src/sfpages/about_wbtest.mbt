@@ -70,7 +70,7 @@ test "关于's 性能记录 where the device keeps one, at each width and with e
 }
 
 ///|
-test "关于's version rows, at each width and with either hand: this build alone on its row; under it a row saying how the update stands by its own words (检查更新, 下载 …, 正在下载 …, 重启以更新到 …), the line under its words and the bar under them while it comes, the row as tall all the way it comes" {
+test "关于's version rows, at each width and with either hand: this build alone on its row; under it a row saying how the update stands by its own words (检查更新 a row of its own; 有新版本 …, 正在下载 …, 重启以更新到 …), the line under its words and the bar under them while it comes, the row as tall all the way it comes" {
   for case in page_cases {
     let (w, platform) = case
     // (newer builds asked for as the app starts: the page made once with them)
@@ -79,13 +79,16 @@ test "关于's version rows, at each width and with either hand: this build alon
     assert_true(t.query(Link, label="检查更新") is Some(_), msg=at)
     @sfbase.update.available.set(Some({ "versionCode": 2, "versionName": "0.1.1", "file": "android/stillfail-2.apk", "size": 23515867 }))
     t.draw()
-    // known, not handed to the host yet: offered; waiting for Wi‑Fi, said with its size
-    assert_true(t.query(Link, label="下载 0.1.1") is Some(_), msg=at)
+    // known, not handed to the host yet: offered, a row of its own under 检查更新 (still there); waiting for Wi‑Fi,
+    // said with its size
+    assert_true(t.query(Link, label="有新版本 0.1.1") is Some(_), msg=at)
+    let (_, cy, _, _) = t.query(Link, label="检查更新").unwrap().rect
+    assert_true(t.query(Link, label="有新版本 0.1.1").unwrap().rect.1 > cy, msg=at)
     t.tells_update("{\"phase\":\"waiting\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-2.apk\"}")
     t.draw()
     assert_true(t.find("连接 Wi‑Fi 后自动下载 · 22.4 MB") is Some(_), msg=at)
     // pressed: still.fail cloud asked now (the newest), then downloaded now, on any network
-    t.click(Link, label="下载 0.1.1")
+    t.click(Link, label="有新版本 0.1.1")
     assert_eq(t.update_asked(), ["fetch stillfail-2.apk false", "fetch stillfail-2.apk true"], msg=at)
     // coming: how far under its words, nothing beside them, the row as tall each way (what is under it where it was)
     let mut under = -1.0
@@ -106,7 +109,7 @@ test "关于's version rows, at each width and with either hand: this build alon
     // ready, put in place by itself while away (Android's): said so; pressed, put in place now
     t.tells_update("{\"phase\":\"ready\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-2.apk\",\"away\":true}")
     t.draw()
-    assert_true(t.find("离开 still.fail 一段时间后自动安装") is Some(_), msg=at)
+    assert_true(t.find("0.1.1300 → 0.1.1 已下载，离开 still.fail 一段时间后自动安装") is Some(_), msg=at)
     t.click(Link, label="重启以更新到 0.1.1")
     assert_eq(
       t.update_asked(),
@@ -116,6 +119,26 @@ test "关于's version rows, at each width and with either hand: this build alon
     t.tells_update("")
     @sfbase.update.available.set(None)
   }
+}
+
+///|
+test "关于's update row stays usable with the pointer over it as a download becomes ready between frames" {
+  let t = setting_tester(About, 1280.0, platform=0, host=fn(_) { @sffixture.fixture_updates() })
+  @sfbase.update.available.set(Some({ "versionCode": 2, "versionName": "0.1.1", "file": "android/stillfail-2.apk", "size": 23515867 }))
+  t.draw()
+  t.tells_update("{\"phase\":\"downloading\",\"percent\":40,\"error\":\"\",\"file\":\"stillfail-2.apk\"}")
+  t.draw()
+  let (x, y, w, h) = t.query(Link, label="正在下载 0.1.1").unwrap().rect
+  t.move(x + w / 2.0, y + h / 2.0)
+  let now = t.time()
+  t.frame_shown_at(now + 20.0, now + 36.0)
+  t.tells_update("{\"phase\":\"ready\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-2.apk\",\"away\":false}")
+  t.draw()
+  let now = t.time()
+  t.frame_shown_at(now, now + 16.0)
+  t.click(Link, label="重启以更新到 0.1.1")
+  assert_true(t.update_asked().contains("apply"), msg="the update was handed to the host")
+  @sfbase.update_reset()
 }
 
 ///|
@@ -274,4 +297,43 @@ test "关于's 性能记录 turned on stays on: its first line written (the 分�
     assert_eq(t.perf_said().0, [true], msg=at)
     assert_eq(@hostapi.perf_state(), 1, msg=at)
   }
+}
+
+///|
+test "自动更新 in 关于, on unless turned off: off, a newer build is said but downloaded only at the person's word; on again, the one known downloaded by itself" {
+  let kept : Ref[Source?] = Ref(None)
+  let newer : Json = { "versionCode": 3, "versionName": "0.1.3", "file": "android/stillfail-3.apk", "sha256": "ab", "size": 1000 }
+  let t = setting_tester(
+    About,
+    390.0,
+    platform=2,
+    over=fn(s) {
+      kept.val = Some(s)
+      s
+    },
+    ready=fn() {
+      @sfbase.update_version.val = 2
+      @sfbase.set_update_source(Some({ check: fn(_, _, done) { done(Ok(newer)) }, url: fn(f) { f } }))
+    },
+  )
+  let src = kept.val.unwrap()
+  t.click(Switch, label="自动更新")
+  t.frame()
+  t.frame()
+  assert_false(@sfbase.update_auto(src))
+  @sfbase.update_check(src, false)
+  assert_eq(t.update_asked(), [])
+  assert_eq(@sfbase.update_stands().label, "有新版本 0.1.3")
+  @sfbase.update_go(src)
+  assert_eq(t.update_asked(), ["fetch stillfail-3.apk true"])
+  // (the update's row come in meanwhile: pressed once all is at rest)
+  t.run_for(@ui.move_most_ms)
+  t.click(Switch, label="自动更新")
+  t.frame()
+  t.frame()
+  assert_true(@sfbase.update_auto(src))
+  assert_eq(t.update_asked(), ["fetch stillfail-3.apk true", "fetch stillfail-3.apk false"])
+  @sfbase.update_check(src, false)
+  assert_eq(t.update_asked().length(), 3)
+  @sfbase.update_reset()
 }

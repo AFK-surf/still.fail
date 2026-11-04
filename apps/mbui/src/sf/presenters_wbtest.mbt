@@ -98,6 +98,31 @@ test "a panel's long list draws its rows in the panel's arrangement" {
 }
 
 ///|
+test "a capped sheet measures lists that arrive after it opens" {
+  let shown = Ref(false)
+  let t = presenting_tester(phone, fn(from) {
+    panel("内容", from~, tall=0.8, fn(c, _) {
+      if button(c, "显示列表") {
+        shown.val = true
+      }
+      if shown.val {
+        panel_list(c, "late-a", 1, 20.0, fn(_) {
+          c.box(style=@ui.style(w=Full, h=Fixed(96.0)), fn() { c.text("第一组") |> ignore }) |> ignore
+        }) |> ignore
+        panel_list(c, "late-b", 1, 20.0, fn(_) {
+          c.box(style=@ui.style(w=Full, h=Fixed(80.0)), fn() { c.text("第二组") |> ignore }) |> ignore
+        }) |> ignore
+      }
+    })
+  })
+  open_it(t)
+  t.tap_text("显示列表")
+  t.draw()
+  assert_true(t.find("第一组") is Some(_))
+  assert_true(t.find("第二组") is Some(_))
+}
+
+///|
 /// Where `words` are drawn, or a failure.
 fn where_is(t : @ui.Tester, words : String) -> (Double, Double) raise {
   match t.find(words) {

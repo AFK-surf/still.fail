@@ -83,7 +83,7 @@ test("an iPhone Duo's poses, its picture following", { skip: !hasSimctl && "no X
     // Settings opened by a finger on its icon: a picture of the app's own, then back to the home screen (⇧⌘H).
     const opens = async (x: number, y: number, name: string) => {
       const home = await picture(name + "-home");
-      // Waited for by its picture, not a fixed 5 s: Settings had not shown in 5 s on mini1 once (side run 41554130845);
+      // Waited for by its picture, not a fixed 5 s: Settings had not shown in 5 s once (side run 41554130845);
       // how long it took is said, and one not shown in a minute fails as before.
       const asked = Date.now();
       await tap(x, y);
@@ -117,7 +117,7 @@ test("an iPhone Duo's poses, its picture following", { skip: !hasSimctl && "no X
       return n / (a.length / 3);
     };
     await opens(0.12, 0.13, "cover");
-    // Each pose waited for by its picture, not a fixed time: the first unfolding on mini1 had not shown in 5 s (side run
+    // Each pose waited for by its picture, not a fixed time: the first unfolding had not shown in 5 s (side run
     // 41517988497); how long each took is said, and one not shown in a minute fails with the shape it was left at.
     for (const [name, want] of [["open", inner], ["closed", cover], ["book", inner], ["open", inner], ["closed", cover]] as const) {
       const asked = Date.now();
@@ -136,9 +136,19 @@ test("an iPhone Duo's poses, its picture following", { skip: !hasSimctl && "no X
     // Opened again on the inner panel, after all those folds: the picture its shape from the first, not back through them.
     const unfolding = await hub.get(`simulator:${udid}`)!.open({ maxWidth: 1000, maxHeight: 1400, codecs: ["jpeg"] });
     view = unfolding;
+    // Waited for by its picture, as the poses above: a new view's first pose took 6.2 s, and a fixed 5 s closed
+    // the view before it had unfolded (side run 41635377489).
+    let unfolded = 0;
+    const following = (async () => {
+      for (let f = await unfolding.next(); f !== null; f = await unfolding.next()) unfolded = shape(f.data);
+    })();
+    const asked = Date.now();
     await unfolding.input({ t: "pose", name: "open" });
-    await sleep(5000);
+    while (Math.abs(unfolded - inner) >= 0.006 && Date.now() - asked < 60_000) await sleep(500);
+    console.log("unfolded in", Date.now() - asked, "ms");
+    near(unfolded, inner, "unfolded");
     unfolding.close();
+    await following;
     await sleep(1000);
     const again = await hub.get(`simulator:${udid}`)!.open({ maxWidth: 1000, maxHeight: 1400, codecs: ["jpeg"] });
     view = again;

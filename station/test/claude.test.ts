@@ -160,6 +160,22 @@ test("a command a turn waited on and was never told ended does not outlive the t
 });
 
 describe("the Claude Code driver", { concurrency: true }, () => {
+  test("a text-only request disables built-in and configured MCP tools", async () => {
+    const d = driver();
+    const o = options({ textOnly: true });
+    const session = await d.open(o, listen().push);
+    // Opening starts the runner; the fake writes its invocation when its process actually begins.
+    await eventually(() => existsSync(o.dump) && readFileSync(o.dump, "utf8").endsWith("\n"));
+    const started = JSON.parse(readFileSync(o.dump, "utf8").trim());
+    const args = started.argv as string[];
+    assert.equal(args[args.indexOf("--tools") + 1], "");
+    assert.ok(args.includes("--strict-mcp-config"));
+    assert.ok(args.includes("--no-session-persistence"));
+    assert.ok(!args.includes("--dangerously-skip-permissions"));
+    assert.deepEqual(JSON.parse(args[args.indexOf("--mcp-config") + 1]!), { mcpServers: {} });
+    await session.dispose();
+  });
+
   test("a turn completes, from a process started with the flags and environment of claude.rs", async () => {
     const d = driver();
     const o = options({ model: "m1", effort: "high" });

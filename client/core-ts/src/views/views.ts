@@ -106,7 +106,7 @@ const stationOnline = (v: Value | undefined): boolean => !down(linkValue(v));
 const profileOverview = (v: Value | undefined): J => v && "ok" in v ? v.ok : undefined;
 const sameProfileOverview = (a: J, b: J): boolean => {
   if (!isObject(a) || !isObject(b)) return equal(a, b);
-  return equal(get(a, "profiles"), get(b, "profiles")) && equal(get(a, "sharing"), get(b, "sharing")) && equal(get(a, "modelMakers"), get(b, "modelMakers"));
+  return equal(get(a, "profiles"), get(b, "profiles")) && equal(get(a, "sharing"), get(b, "sharing")) && equal(get(a, "modelMakers"), get(b, "modelMakers")) && get(get(a, "mesh"), "reached") === get(get(b, "mesh"), "reached");
 };
 
 /// A station taken for down, in words, as its link says why (link.ts DownCause): the device's network, the station, or
@@ -266,11 +266,13 @@ export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: str
     } else {
       // Before its session is read: the model and runtime the station gave with the message.
       const said = str(m.authorModel);
+      const runtime = str(get(identity, "runtime")) ?? str(m.authorRuntime) ?? get(session, "runtime") ?? null;
+      const otherRuntime = session !== undefined && str(m.authorRuntime) !== null && str(m.authorRuntime) !== str(get(session, "runtime"));
       m.by = {
-        name: model !== null ? format.agentLabel(model, str(get(identity, "effort"))) : (str(get(session, "agentText")) ?? saidName ?? "agent"),
+        name: identity !== null ? format.agentLabel(model, str(get(identity, "effort"))) : otherRuntime ? (saidName ?? (said !== null ? format.agentLabel(said, null) : format.runtimeLabel(runtime))) : (str(get(session, "agentText")) ?? saidName ?? "agent"),
         agent: agent ? author : null,
-        maker: model !== null ? present.maker(model) : session !== undefined ? (session.maker ?? null) : present.maker(said),
-        runtime: get(session, "runtime") ?? str(m.authorRuntime) ?? null,
+        maker: identity !== null ? present.maker(model) : otherRuntime || session === undefined ? present.maker(said) : (session.maker ?? null),
+        runtime,
       };
     }
   } else if (kind === "ember" || kind === "stillfail") {
@@ -1347,7 +1349,14 @@ export class Views implements Owner {
         const stations = this.#stationsOr(view.scope as string);
         if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
         const several = stations.length > 1;
-        const open = stations.filter((s) => s.online).map((s) => [s.address, several ? s.name : null, arr(this.ok({ topic: "jobs", station: s.address }))] as [string, string | null, J[]]);
+        // Each in the chat its session's row is, from the sidebar held, listed or archived (the station names it no more).
+        const named = (address: string, j: J): J => {
+          if (get(j, "chat") !== undefined && get(j, "chat") !== null) return j;
+          const session = str(get(j, "session"));
+          const found = session === null ? undefined : this.#core.data.chatNamed(address, session);
+          return found === undefined ? j : { ...j, chat: { id: get(found.row, "id") ?? null, title: get(found.row, "title") ?? null, archived: found.archived } };
+        };
+        const open = stations.filter((s) => s.online).map((s) => [s.address, several ? s.name : null, arr(this.ok({ topic: "jobs", station: s.address })).map((j) => named(s.address, j as J))] as [string, string | null, J[]]);
         const prefs = this.ok({ topic: "prefs" }) ?? null;
         const bell = { on: badgeKindsOf(prefs).services, seen: jobsSeenOf(prefs, view.scope as string) };
         return { ok: jobs.longJobs(open, this.#clock(), (session) => this.#ranFrom(stations, session), bell) };
@@ -1627,7 +1636,11 @@ export class Views implements Owner {
     }
     // A swipe is the viewer's own choice: every made chat can be archived this way while its station is there,
     // regardless of the chat's state or whether it is recommended for archiving.
-    if (row.offline === undefined && row.pending !== true) row.swipeArchive = true;
+    if (row.offline === undefined && row.pending !== true) {
+      row.swipeArchive = true;
+      const ask = present.swipeAsk(agents);
+      if (ask !== null) row.swipeAsk = ask;
+    }
     const line = present.rowStateLine(row);
     if (line !== null) {
       row.stateText = line[0];

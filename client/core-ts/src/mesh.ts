@@ -71,7 +71,7 @@ export const REDIAL_MAIN_MS = 30_000;
 export const DIRECT_RECALL_MS = 10 * 60_000;
 /// The `pinned` of a link on the endpoint that dials a station by its LAN addresses alone (docs/mesh-lan.md): no relay,
 /// no hole punching. A path iroh punched through to a station on the LAN stopped answering seconds after it opened, and
-/// requests on it waited out iroh's 15 s before going back to a relay (studio and a phone, 2026-10-17); a connection
+/// requests on it waited out iroh's timeout before going back to a relay; a connection
 /// dialled by address kept working.
 export const LAN = "lan";
 /// The `pinned` of a link on the endpoint that dials a station at its Tailscale addresses alone (docs/mesh-lan.md,
@@ -89,8 +89,8 @@ export const DIRECT = "direct";
 export const SAID_KEY = "station-addresses";
 /// A way direct (on the LAN endpoint, or the main endpoint's punched path) lost within MIN_STAY_MS of the requests moving
 /// to it, FLAKY_LOSSES times in a row: no way direct is moved to for DIRECT_HOLD_MS, twice as long each time it happens
-/// again, up to DIRECT_HOLD_MAX_MS, unless no other way is up. A phone on studio's LAN moved to it and back to a relay
-/// every minute or so, each time its requests waiting out DEAD_PINGS pings on the way gone quiet (2026-10-18).
+/// again, up to DIRECT_HOLD_MAX_MS, unless no other way is up. This avoids repeatedly moving requests to a flaky way and
+/// waiting out DEAD_PINGS pings on it before returning to a relay.
 const FLAKY_LOSSES = 2;
 export const DIRECT_HOLD_MS = 2 * 60_000;
 export const DIRECT_HOLD_MAX_MS = 30 * 60_000;
@@ -701,6 +701,8 @@ export class Mesh {
   readonly #tried = new Map<string, string>();
   readonly #atDialledAt = new Map<string, number>();
   readonly #atDialling = new Set<string>();
+  /// By address: the addresses a dial on the main endpoint was given when it went unanswered (`#dialAll`).
+  readonly #unansweredAt = new Map<string, string>();
   /// Dials under way on pinned endpoints (their endpoints are not let go meanwhile).
   #dialing = 0;
   /// By address: the relay requests last moved to (its host), and how many times they moved.
@@ -901,7 +903,7 @@ export class Mesh {
   /// A reply's body, timed as it is read: once it has brought SPEED_MIN_BYTES, and again as it ends, how fast its way
   /// brought bytes meanwhile is noted for the relay it came through: all that came through it from the station since
   /// this one began coming, not this one's alone. Replies side by side share the line, and each alone said a part of how
-  /// fast it is: a phone's way to ccvm through Beijing's relay, held at a third of its speed, lost to ways never tried,
+  /// fast it is: a phone's way to a station through a relay, held at a third of its speed, lost to ways never tried,
   /// each bringing its videos at 35 KB/s (2026-10-28). Told as it is under way, not after: a way found slow by a reply of
   /// megabytes is left at once (`noteSpeed`), not after it took minutes to come.
   timed(addr: string, relay: string, body: Pull<Uint8Array>): Pull<Uint8Array> {
@@ -1211,12 +1213,16 @@ export class Mesh {
           // spans saying nothing of either.
           const straight = self.#straightAt(addr);
           if (straight.length > 0) span.set("stillfail.ips", straight.join(", "));
+          if (unanswered && straight.length > 0 && self.#mainOn(addr)) self.#unansweredAt.set(addr, straight.join(" "));
           const beside = self.#besideOf(addr);
           if (beside !== "") span.set("stillfail.beside", beside);
         }
         span.end();
         opening.result = link._tag === "Success" ? { ok: link.success } : { err: link.failure, unanswered };
-        if (link._tag === "Success") self.#adopt(addr, link.success);
+        if (link._tag === "Success") {
+          if (link.success.pinned === null) self.#unansweredAt.delete(addr);
+          self.#adopt(addr, link.success);
+        }
         Deferred.doneUnsafe(opening.done, link._tag === "Success" ? Effect.succeed(link.success) : Effect.fail(link.failure));
       });
       this.#env.runner.fork(run);
@@ -1302,7 +1308,7 @@ export class Mesh {
   /// Dials the station every way at once: on the main endpoint (through any relay, or direct), and on each relay's own
   /// endpoint through that relay alone. The first through is the link; the others, as they come through, are ways to it
   /// as well (`#adopt`). Fails once all have, as the main endpoint's dial failed. A phone whose own relay could not
-  /// reach the station (Beijing's, bft in Tokyo, 2026-10-08) waited out CONNECT_TIMEOUT_MS on it time after time.
+  /// reach the station (2026-10-08) waited out CONNECT_TIMEOUT_MS on it time after time.
   #dialAll(addr: string, endpoint: IrohEndpoint, credentials: CredentialSource, fresh: boolean, ctx: SpanContext | undefined): Effect.Effect<Link, CoreError> {
     return Effect.suspend(() => {
       this.#exploredAt.set(addr, this.now());
@@ -1311,12 +1317,26 @@ export class Mesh {
       // all of them), to the addresses it said it is reached straight at, and those iroh punches through; iroh moves
       // its packets between them, and nothing on it ends as they change. The other endpoints only while its workspace
       // turned the main endpoint's ways off (`#mainOn`).
-      if (this.#mainOn(addr)) return open(this.#env, endpoint, relays, stationId(addr), credentials, fresh, null, ctx, this.#straightAt(addr));
       const main: Effect.Effect<Link, CoreError>[] = [];
-      const pinned = this.#pinnable(addr).map((r) => this.#dialPinned(addr, r, credentials, fresh, ctx));
-      // Where the station said (in a run before, perhaps) it is reached straight: dialled beside the relays, not after
-      // one of them brought its answer again.
-      const at = AT_ADDRESSES.flatMap((kind) => this.#dialAt(addr, kind, credentials, fresh) ?? []);
+      let pinned: Effect.Effect<Link, CoreError>[];
+      let at: Effect.Effect<Link, CoreError>[] = [];
+      if (this.#mainOn(addr)) {
+        const straight = this.#straightAt(addr);
+        const dial = open(this.#env, endpoint, relays, stationId(addr), credentials, fresh, null, ctx, straight);
+        // Given those addresses, its last dial went unanswered: each relay's own endpoint (on that relay alone, at no
+        // address) dialled beside it. An address can reach the station one way only, and iroh's handshake goes on the
+        // way the station heard first: a station in WSL with mirrored networking says the Windows machine's own
+        // addresses, its answers to the Windows app there going back into WSL; that app's dials waited out
+        // CONNECT_TIMEOUT_MS on them for hours while the phone came through a relay (2026-11-03).
+        if (straight.length === 0 || this.#unansweredAt.get(addr) !== straight.join(" ")) return dial;
+        main.push(dial);
+        pinned = this.#waysFor(addr).map((r) => this.#dialPinned(addr, r, credentials, fresh, ctx));
+      } else {
+        pinned = this.#pinnable(addr).map((r) => this.#dialPinned(addr, r, credentials, fresh, ctx));
+        // Where the station said (in a run before, perhaps) it is reached straight: dialled beside the relays, not
+        // after one of them brought its answer again.
+        at = AT_ADDRESSES.flatMap((kind) => this.#dialAt(addr, kind, credentials, fresh) ?? []);
+      }
       const all = [...main, ...pinned, ...at];
       if (all.length === 0) return Effect.fail(meshError(t("core-logic.mesh.all_off")));
       const self = this;

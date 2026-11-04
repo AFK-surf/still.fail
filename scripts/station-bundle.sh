@@ -10,7 +10,7 @@
 #   stillfail/mesh/target/release/stillfail-station       (the launcher, with the Rust station's command line and path,
 #                                                          ember-station beside it: what the installer, bin/stillfail,
 #                                                          the desktop app and services written by older releases run)
-#   stillfail/station/{main.js, read/worker.js, search/worker.js, skills/, mesh.node, stillfail-runner, package.json}
+#   stillfail/station/{main.js, built workers and assets, mesh.node, stillfail-runner, package.json}
 #                                                         (and on darwin-arm64 "still.fail Helper.app": the station's
 #                                                          macOS app for what macOS grants, docs/station-ts-native.md §4;
 #                                                          on win32-x64 stillfail-screen.exe: the desktop's screen,
@@ -44,10 +44,12 @@ runner="$(native runner)"
 helper=; [ "$platform" = darwin-arm64 ] && helper="$(native helper)"
 screen=; [ "$platform" = win32-x64 ] && screen="$(native screen)"
 tree=; [ "$platform" = win32-x64 ] && tree="$(native agent-desktop)"
+# The build's output is the complete set of station files for this release, not a previous build's leftover workers.
+rm -rf "$root/station/dist"
 (cd "$root/station" && pnpm run build >&2)
 app="$out/stillfail"
 rm -rf "$app"
-mkdir -p "$app/bin" "$app/mesh/target/release" "$app/dist" "$app/station/read" "$app/station/search" "$app/station/vault" "$app/station/usage"
+mkdir -p "$app/bin" "$app/mesh/target/release" "$app/dist" "$app/station"
 if [ "$platform" = win32-x64 ]; then
   cp "$root/bin/stillfail.cmd" "$root/bin/stillfail.ps1" "$app/bin/"
 else
@@ -80,14 +82,10 @@ if [ "$platform" = darwin-arm64 ] && [ -n "${STILLFAIL_SIGN_STATION:-}" ]; then
       rm -rf "$app/station/still.fail Helper.app"; cp -R "$helper" "$app/station/"; }
 fi
 [ "$platform" = win32-x64 ] || ln -s stillfail-station "$app/mesh/target/release/ember-station"
-cp "$root/station/dist/main.js" "$app/station/"
-cp "$root/station/dist/read/worker.js" "$app/station/read/"
-cp "$root/station/dist/search/worker.js" "$app/station/search/"
-cp "$root/station/dist/vault/use-index-worker.js" "$app/station/vault/"
-cp "$root/station/dist/usage/minute-worker.js" "$app/station/usage/"
-cp -R "$root/station/dist/skills" "$app/station/skills"
-# DeepSeek Harness loads the station's driver from here (agents/dsh.ts); Cursor's runs from here (agents/cursor.ts).
-cp "$root/station/dist/dsh-bridge.mjs" "$root/station/dist/cursor-bridge.mjs" "$root/station/dist/sandbox-bridge.mjs" "$app/station/"
+# Copy all files produced by the station build, including workers in new directories. Naming individual workers here
+# left workspace activity, chat export and sign-in recovery without their programs in released stations.
+cp -R "$root/station/dist/." "$app/station/"
+case "$platform" in linux-*) ;; *) rm -f "$app/station/linux-portal.py" "$app/station/linux-x11.py" ;; esac
 # The bundle is an ES module: said, so Node neither guesses nor takes the type of a package.json above the release
 # (the Electron app had one around the station it carried: every command warned).
 printf '{"type":"module"}\n' > "$app/station/package.json"

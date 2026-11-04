@@ -230,6 +230,10 @@ pub fn View::ask_focus(self : View, visible? : Bool = false) -> Bool {
 
 ///|
 fn Tree::focus_set(self : Tree, id : NodeId?, visible : Bool) -> Unit {
+  // (come to another: what waited for its node no longer does)
+  if id is Some(_) {
+    self.focus_parked = None
+  }
   let was = self.focused
   let shown_was = self.focus_visible
   self.focused = id
@@ -493,4 +497,11 @@ pub fn View::tab_stop(self : View, on : Live[Bool]) -> View {
       })
   }
   self
+}
+
+///|
+/// What waited for its node to come back for the focus (laid out nowhere as it had it: Tree::outs_told) waits no more:
+/// the focus come to something of what hosts the tree (an old view's field or button) meanwhile, that keeps it.
+pub fn Tree::focus_parked_drop(self : Tree) -> Unit {
+  self.focus_parked = None
 }

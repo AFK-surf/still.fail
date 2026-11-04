@@ -39,17 +39,19 @@ let table_shot_in : Double = @ui.Space::S4.px()
 let table_shot_scale : Double = 2.0
 
 ///|
-/// The shot (Ctx::shot) of the table `key` names.
-fn table_shot(key : String) -> String {
-  key + "/picture"
+/// The shot (Ctx::shot) of the table whose id (in its message's scope) is `id`: a shot's key is the window's, not its
+/// message's, and every message's first table has the same key (two of them drawn, the one built last was taken
+/// whichever's key was pressed).
+fn table_shot(id : Int) -> String {
+  "sf-md/table-picture/" + id.to_string()
 }
 
 ///|
-/// The copy key of the table `key` names (`table`, as the core wrote it to copy), table_key_gap past it and before what
+/// The copy key of the table `key` names (`table`, as the core wrote it to copy; `shot` its picture), table_key_gap past it and before what
 /// follows, its middle on the head's row's (as the frame measured it: `key`/head; at its top till then). Pressed, its
 /// menu (table_menu); once one is copied, a check a moment (copied_ms). Faded in as the table is pointed at (`key`/beside,
 /// it and its key), out as the pointer leaves it, its menu gone and its check said; not pressed while not seen.
-fn Md::table_key(self : Md, key : String, table : MdTable) -> Unit {
+fn Md::table_key(self : Md, key : String, shot : String, table : MdTable) -> Unit {
   let c = self.c
   let id = c.id(key + "/copy")
   let y = match @motion.measured(c, key + "/head") {
@@ -58,7 +60,7 @@ fn Md::table_key(self : Md, key : String, table : MdTable) -> Unit {
     None => 0.0
   }
   let copied = c.within(id, copied_ms)
-  let pointed = c.hovered(c.id(key + "/beside")) || c.lit(id) || table_menus.contains(key) || copied
+  let pointed = c.hovered(c.id(key + "/beside")) || c.lit(id) || table_menus.contains(shot) || copied
   let seen = @kit.animate(
     c,
     key + "/copy-seen",
@@ -85,24 +87,25 @@ fn Md::table_key(self : Md, key : String, table : MdTable) -> Unit {
         ink=alpha(th.p.text, seen),
         quiet=alpha(th.p.muted, seen),
       ) {
-      self.table_menu(key, table, id)
+      self.table_menu(shot, table, id)
     }
   })
   |> ignore
 }
 
 ///|
-/// The tables whose key's menu is open, by their key: their key shown till it closes.
+/// The tables whose key's menu is open, by their picture's shot (table_shot: the window's, not a message's): their key
+/// shown till it closes.
 let table_menus : LiveMap[String, Bool] = LiveMap::new()
 
 ///|
-/// The menu of the table `key` names (`table`, as the core wrote it to copy), opened by its key (`id`), along its end:
+/// The menu of the table whose picture is `shot` (`table`, as the core wrote it to copy), opened by its key (`id`), along its end:
 /// copy it as Markdown, as CSV, as a picture (or on a phone save that); once one is copied, the key says so a moment.
 /// Open, it is in table_menus.
-fn Md::table_menu(self : Md, key : String, table : MdTable, id : Int) -> Unit {
+fn Md::table_menu(self : Md, shot : String, table : MdTable, id : Int) -> Unit {
   let c = self.c
-  table_menus[key] = true
-  let closed = fn() { table_menus.remove(key) }
+  table_menus[shot] = true
+  let closed = fn() { table_menus.remove(shot) }
   let said = fn() {
     c.mark(id)
     c.wake_in(copied_ms, later=true)
@@ -124,7 +127,7 @@ fn Md::table_menu(self : Md, key : String, table : MdTable, id : Int) -> Unit {
   let picture = fn() {
     closed()
     c.take_shot(
-      table_shot(key),
+      shot,
       fn(png) { if (picture_out_by.val)(c, png, !album) && !album { said() } },
       scale=dmax(c.drawn_scale(), table_shot_scale),
     )

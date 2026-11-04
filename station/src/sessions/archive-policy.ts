@@ -110,7 +110,11 @@ type Kept = { archivePolicy(ws?: string | null): { policy: unknown; change: any 
 /// The policy in force in a workspace (docs/multi-workspace.md: one each; null, or absent, the station's home one): the
 /// last one saved there, else the default.
 export function currentPolicy(store: Kept, ws: string | null = null): ArchivePolicy {
-  const saved = store.archivePolicy(ws);
+  return policyFrom(store.archivePolicy(ws));
+}
+
+/// Resolve a policy already read with its change information.
+export function policyFrom(saved: { policy: unknown } | null): ArchivePolicy {
   if (saved) {
     try {
       return checkedPolicy(saved.policy);
@@ -140,8 +144,8 @@ type Viewed = Kept & { latestDecisionsSince(since: number): any[]; now(): number
 /// its words, its options each with the chats of that workspace (`mine`) the checks of the last days put there (by
 /// their latest check), who changed it last, and how many checks failed.
 export function policyView(store: Viewed, ws: string | null, mine: (session: string) => boolean, title: (session: string) => string): any {
-  const policy = currentPolicy(store, ws);
   const saved = store.archivePolicy(ws);
+  const policy = policyFrom(saved);
   const latest = new Map<string, any>();
   for (const row of store.latestDecisionsSince(store.now() - VIEW_DAYS * 86_400_000)) if (typeof row.session === "string" && mine(row.session)) latest.set(row.session, row);
   const byOption = new Map<string, any[]>();
@@ -161,7 +165,7 @@ export function policyView(store: Viewed, ws: string | null, mine: (session: str
     text: policy.policy,
     options: policy.options.map((o) => {
       const chats = byOption.get(o.id) ?? [];
-      // Named only as shown: each name is a lookup of the chat's (a week's checks came to 210 chats on ccvm).
+      // Named only as shown: each name is a lookup of the chat's (a week's checks came to many chats on a station).
       return { ...o, count: chats.length, chats: chats.slice(0, VIEW_CHATS).map(({ session, ...c }) => ({ session, title: title(session), ...c })) };
     }),
     days: VIEW_DAYS,

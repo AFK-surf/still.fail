@@ -162,7 +162,7 @@ try {
     // What the story before it kept in the browser gone (its storage, its cookies, the pointer over it, a finger's
     // emulation, motion reduced): only what the context's cache holds stays. Opened in the page the one before was in
     // (a document of its own), the app's scripts compiled once a page rather than once a story: a story opened in 266 ms
-    // in a page of its own, 67 ms so (Studio, 2026-10-23); in a context of its own, a page 30% sooner. The clock is the
+    // in a page of its own, 67 ms so (2026-10-23); in a context of its own, a page 30% sooner. The clock is the
     // context's, each document's from the same moment.
     await page.evaluate(() => sessionStorage.clear()).catch(() => {});
     await page.context().clearCookies();

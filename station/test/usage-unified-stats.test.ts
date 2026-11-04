@@ -4,10 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { constants } from "node:sqlite";
 import { test } from "node:test";
-import { Effect, Fiber } from "effect";
 import { makeStore, usageByDay, USAGE_DETAIL_DAY_SCOPED } from "../src/read/store.ts";
 import { Store } from "../src/store/store.ts";
-import { retireAfterPrevious } from "../src/usage/module.ts";
 
 test("daily history keeps its compact quarter totals as later calls arrive", () => {
   const store = Store.open(":memory:");
@@ -28,7 +26,7 @@ test("daily history keeps its compact quarter totals as later calls arrive", () 
   } finally { store.close(); }
 });
 
-test("daily history keeps compact quarters and uses detail minutes after handover", async () => {
+test("daily history keeps compact quarters and uses detail minutes before index retirement", () => {
   const store = Store.open(":memory:");
   try {
     for (const [key, ws] of [["a", "A"], ["b", "B"]]) store.insertSession({ key: key!, connect: "ember", runtime: "claude",
@@ -39,16 +37,12 @@ test("daily history keeps compact quarters and uses detail minutes after handove
     const midnight = Date.UTC(2026, 0, 2) - 60_000;
     store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [call("old", midnight - 1, 10)] as never);
     store.recordUsage("/b", { session: "b", offset: 1, model: "m" }, "claude", [call("other", midnight, 100)] as never);
-    let handover!: () => void;
-    const previous = new Promise<void>((resolve) => { handover = resolve; });
-    const fiber = Effect.runFork(retireAfterPrevious(store, previous));
     assert.ok(store.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'trigger' AND name = 'usage_minute_add'").get(),
       "the previous process can still read its summaries while handing over");
     store.recordUsage("/a", { session: "a", offset: 2, model: "m" }, "claude", [call("during", midnight - 2, 4)] as never);
     assert.deepEqual(usageByDay(makeStore(store.db, "."), 1n, { workspace: "A", home: false }).map((r) => [r.calls, r.tokens]), [[2, 20]],
       "the previous process's daily summary still follows writes during handover");
-    handover();
-    await Effect.runPromise(Fiber.join(fiber));
+    assert.equal(store.retireDuplicateUsage(), true);
     const obsolete = new Set(["usage_quarters", "usage_minute"]);
     store.db.setAuthorizer((action, table) => obsolete.has(table ?? "") &&
       [constants.SQLITE_INSERT, constants.SQLITE_UPDATE, constants.SQLITE_DELETE].includes(action)

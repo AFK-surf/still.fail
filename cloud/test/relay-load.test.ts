@@ -140,10 +140,9 @@ test("what a relay did between two of its samples goes to Axiom as a log line", 
   }
 });
 
-// The last stretch to each client, which the relay's counters do not see (relay-load.sh `node_conn`): 2026-10-30 a phone
-// on 衡阳移动 got 8-19 KB/s through Beijing while the relay counted nothing wrong. Each connection that sent in the
-// minute goes to Axiom as a `relay conn` line beside the minute's, whatever the minute says; lines that do not read are
-// left out.
+// The last stretch to each client, which the relay's counters do not see (relay-load.sh `node_conn`): the connection
+// counters show its round trips and retransmissions. Each connection that sent in the minute goes to Axiom as a `relay
+// conn` line beside the minute's, whatever the minute says; lines that do not read are left out.
 test("each client connection a relay's kernel saw goes to Axiom beside its minute", async () => {
   const conn = "node_conn 58.216.63.0 39879 25.878 25.228 3646482 126655 2816728 1322 1";
   assert.deepEqual(relayConns(`${METRICS}\n${conn}\nnode_conn 1.2.3.0 x\nnode_conn <b> 1 1 1 1 1 1 1 0\nnode_conn 2409:8a1e:6c20:: 5555 40 30 900 0 8000 10 0\n`), [

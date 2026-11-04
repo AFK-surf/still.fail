@@ -195,7 +195,7 @@ export function ensureFilesKept(sql: Sql): void {
 }
 
 /// The trees of what agents said (markdown.ts), as read here: a chat's page shows its Markdown read, and reading it is
-/// the most of opening a chat (in Hermes ~0.3 s a page of agents' replies on a Mac Studio), so it is read once on the
+/// a substantial part of opening a chat, so it is read once on the
 /// device, not again each time the app starts. By the text's key (markdown.ts mdKey: the reading that made it, so a
 /// core that reads otherwise reads afresh); `of`, the chat (`t:<thread>`) or agent (`s:<session>`) it was read for,
 /// let go with it; `size` and `used` as file_kept's (the least lately shown let go first past MD_KEPT, account.ts).

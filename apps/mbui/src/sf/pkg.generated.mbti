@@ -11,6 +11,7 @@ import {
   "mbui/ui",
   "mbui/view",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "moonbitlang/core/ref",
 }
 
@@ -37,7 +38,7 @@ pub fn apart(@ui.Ctx, () -> Unit) -> Unit
 
 pub fn app_avatar_icon(AppAvatar, String, Int32, Int32, FixedArray[Byte]) -> @pixels.Canvas?
 
-pub fn app_buddies(@ui.Ctx, ((Result[Json, Json]) -> Unit) -> Unit) -> Array[AppAvatar]
+pub fn app_buddies(@ui.Ctx, ((Result[@json.Json, @json.Json]) -> Unit) -> Unit) -> Array[AppAvatar]
 
 pub fn app_icon_jpeg(@pixels.Canvas) -> (Bytes, String)
 
@@ -122,6 +123,8 @@ pub fn band_mark(@ui.Ctx, String, Int64) -> Unit
 pub fn band_row(@ui.Ctx, String, Bool, () -> Unit) -> Bool
 
 pub fn band_row_h() -> Double
+
+pub fn band_row_node(@view.View, () -> Bool, () -> String, () -> Unit, (@view.View) -> Unit) -> Unit
 
 pub fn band_words(@ui.Ctx, String) -> Unit
 
@@ -491,6 +494,8 @@ pub fn drawable_height(String, Double) -> Double
 
 pub fn drawable_icon(String) -> String
 
+pub fn drawable_node(@view.View, String, Double, tint? : () -> Int64?) -> @view.View
+
 pub fn drawable_pixels(String, Int32, tint? : Int64) -> (Int32, Int32, FixedArray[Byte])?
 
 pub fn drawable_vector(String) -> @pixels.Vector?
@@ -576,6 +581,8 @@ pub fn figure_words(@ui.Ctx, () -> Unit, () -> Unit) -> Unit
 pub fn figures(@ui.Ctx, Array[(String, String, String)]) -> Unit
 
 pub let file_capsule_h : @ui.Len
+
+pub let file_capsule_words_end : Double
 
 pub fn file_card(@ui.Ctx, String, String, Double, path? : String, dir? : Bool, named? : Bool, pending? : Bool, sent? : Double?, error? : String, download? : (Double, String)?, remove? : Bool, retry? : Bool, slot? : Bool, open? : Bool, title? : String, meta? : String, restore? : Bool, remove_label? : String, retry_label? : String, composer? : Bool) -> FileCardDone
 
@@ -735,7 +742,7 @@ pub fn has_drawable(String) -> Bool
 
 pub fn has_icon(String) -> Bool
 
-pub fn has_quota(Json?) -> Bool
+pub fn has_quota(@json.Json?) -> Bool
 
 pub fn has_station_mark(String, String) -> Bool
 
@@ -763,6 +770,8 @@ pub let history_rail_in : @ui.Space
 
 pub fn holds_least(Double) -> Double
 
+pub let home_workspace_title_look : @view.WordsLook
+
 pub let hover_card_w : @ui.Len
 
 pub let hover_tile_least : @ui.Len
@@ -784,6 +793,8 @@ pub let icon_fallback : Int64
 pub fn icon_node(@view.View, String, Double, @view.Live[Int64], name_now? : () -> String) -> @view.View
 
 pub fn icon_parts(@ui.Ctx, String, Array[Int32], size? : Double, color? : Int64) -> Int32
+
+pub fn icon_parts_node(@view.View, String, Array[Int32], Double, @view.Live[Int64]) -> @view.View
 
 pub fn icon_path(String) -> String
 
@@ -829,9 +840,9 @@ pub let jobs_row_h : @ui.Len
 
 pub fn join_meta(Array[String]) -> String
 
-pub let kept_call : @ref.Ref[((String, Json, Bytes?) -> Result[(Json, Bytes?), Json]?)?]
+pub let kept_call : @ref.Ref[((String, @json.Json, Bytes?) -> Result[(@json.Json, Bytes?), @json.Json]?)?]
 
-pub fn kept_words(String) -> Json?
+pub fn kept_words(String) -> @json.Json?
 
 pub fn keys_apart(size? : Double, least? : Double) -> Double
 
@@ -840,6 +851,10 @@ pub fn keys_at_foot(Double) -> Bool
 pub fn keys_gap(size? : Double, least? : Double) -> @ui.Space
 
 pub fn keys_row(size? : Double) -> @ui.Style
+
+pub fn keys_row_node(@view.View, () -> String, () -> String, () -> Bool, () -> Bool, () -> Unit, () -> Bool, () -> Unit, () -> String, () -> String) -> Unit
+
+pub fn keys_rows_node(@view.View, (@view.View) -> Unit) -> Unit
 
 pub fn kind_icon(String) -> String
 
@@ -909,7 +924,7 @@ pub fn link_row(@ui.Ctx, String, String, value? : String, value_lit? : Bool, val
 
 pub fn link_row_node(@view.View, () -> String, () -> Unit, value? : () -> String, value_bad? : () -> Bool, value_dot? : () -> Bool, note? : () -> String, wide_note? : () -> String, trouble? : () -> String, strong? : Bool, lead? : RowLead, goes? : Bool, chevron? : Bool, out? : Bool, acts? : Bool, below? : (@view.View) -> Unit, below_open? : () -> Double, note_cut? : Bool, title_after? : (@view.View) -> Unit, title_after_shown? : () -> Bool, folds? : () -> Bool) -> Unit
 
-pub fn link_to_of(Json, text? : String, bare? : Bool) -> LinkTo
+pub fn link_to_of(@json.Json, text? : String, bare? : Bool) -> LinkTo
 
 pub fn list_apart(@ui.Ctx) -> Unit
 
@@ -922,6 +937,8 @@ pub fn list_foot_in(ListAt) -> Double
 pub fn list_heading(@ui.Ctx, String, ListAt) -> Unit
 
 pub fn list_heading_in(ListAt) -> @ui.Style
+
+pub fn list_heading_node(@view.View, () -> String, ListAt) -> Unit
 
 pub fn list_line(ListAt) -> @ui.Style
 
@@ -938,6 +955,10 @@ pub fn list_row(@ui.Ctx, Int32, ListAt, Int64, () -> Unit, () -> Unit, mark? : (
 pub fn list_row_in(ListAt) -> @ui.Style
 
 pub fn list_row_line(@ui.Ctx, () -> Unit) -> Unit
+
+pub fn list_row_line_node(@view.View, (@view.View) -> Unit) -> Unit
+
+pub fn list_row_node(@view.View, ListAt, (@view.View) -> Unit, (@view.View) -> Unit, ground? : () -> Int64, mark? : (@view.View) -> Unit, high? : Bool, end_room? : () -> Double, corner? : (@view.View) -> Unit, corner_shown? : () -> Bool, corner_w? : () -> Double, after? : (@view.View) -> Unit, slotted? : Bool, end_slot? : Double, corner_end? : () -> Double) -> Unit
 
 pub fn list_row_slot(ListAt) -> @ui.Style
 
@@ -973,6 +994,8 @@ pub fn maker_icon(String, String) -> String
 
 pub fn maker_mark(@ui.Ctx, String, String, Double) -> Int32
 
+pub fn maker_mark_node(@view.View, String, String, Double) -> @view.View
+
 pub let mark_bar_end : @ui.Space
 
 pub let mark_bar_h : @ui.Len
@@ -1003,19 +1026,19 @@ pub let mark_said_h : @ui.Len
 
 pub let mark_yellow : Int64
 
-pub fn markdown(@ui.Ctx, String, key? : String, tree? : Json?, size? : Double, line? : Double, one_line? : Bool, ink? : Int64, on_link? : (String) -> Unit, on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)?, on_link_shown? : ((String, String, Int32) -> Unit)?, files? : (String) -> Placed?, found? : Array[String], code? : (String, String) -> (() -> Unit)?, screens? : Screens?, chat_title? : (String) -> String?, document? : Bool, bleed? : Double, copy? : Bool, fit_tables? : Bool, paths? : Bool, text_face? : Int32?, code_face? : Int32?) -> Int32
+pub fn markdown(@ui.Ctx, String, key? : String, tree? : @json.Json?, size? : Double, line? : Double, one_line? : Bool, ink? : Int64, on_link? : (String) -> Unit, on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)?, on_link_shown? : ((String, String, Int32) -> Unit)?, files? : (String) -> Placed?, found? : Array[String], code? : (String, String) -> (() -> Unit)?, screens? : Screens?, chat_title? : (String) -> String?, document? : Bool, bleed? : Double, copy? : Bool, fit_tables? : Bool, paths? : Bool, text_face? : Int32?, code_face? : Int32?) -> Int32
 
-pub fn markdown_part(@ui.Ctx, String, Array[Json], String, apart? : Bool, size? : Double, ink? : Int64, line? : Double, serif? : Bool, document? : Bool, found? : Array[String], on_link? : (String) -> Unit) -> Unit
+pub fn markdown_part(@ui.Ctx, String, Array[@json.Json], String, apart? : Bool, size? : Double, ink? : Int64, line? : Double, serif? : Bool, document? : Bool, found? : Array[String], on_link? : (String) -> Unit) -> Unit
 
-pub let markdown_read : @ref.Ref[((String, (Json?) -> Unit) -> Unit)?]
+pub let markdown_read : @ref.Ref[((String, (@json.Json?) -> Unit) -> Unit)?]
 
 pub fn marks_actions_node(@view.View, () -> MarksActionsSaid, () -> ViewerInk, @view.Live[Double], () -> Unit, () -> Unit, () -> Unit, tip? : TipLayer) -> @view.View
 
-pub fn md_links_to(String, Json?) -> Map[String, LinkTo]
+pub fn md_links_to(String, @json.Json?) -> Map[String, LinkTo]
 
-pub fn md_node_at(Json) -> Int32
+pub fn md_node_at(@json.Json) -> Int32
 
-pub fn md_node_depth(Json) -> Int32?
+pub fn md_node_depth(@json.Json) -> Int32?
 
 pub fn media_bar_box() -> @ui.Style
 
@@ -1139,9 +1162,9 @@ pub let message_stroke : StrokeShape
 
 pub let meta : @ui.TextStyle
 
-pub fn meter_chip(@ui.Ctx, Json?, brief? : Bool, drop? : Int32, keep? : Bool, key? : String) -> Unit
+pub fn meter_chip(@ui.Ctx, @json.Json?, brief? : Bool, drop? : Int32, keep? : Bool, key? : String) -> Unit
 
-pub fn meter_chips(@ui.Ctx, Array[Json], brief? : Bool, key? : String) -> Unit
+pub fn meter_chips(@ui.Ctx, Array[@json.Json], brief? : Bool, key? : String) -> Unit
 
 pub fn mix(Int64, Double, Int64) -> Int64
 
@@ -1217,6 +1240,8 @@ pub fn nav_ground(@ui.Ctx, String, Bool, Bool, lit? : Int64) -> Int64
 
 pub fn nav_ground_by(@ui.Ctx, String, Bool, Bool, lit? : Int64) -> () -> Int64
 
+pub fn nav_ground_node(@view.View, () -> Bool, lit? : Int64) -> Unit
+
 pub fn nav_ground_on(@ui.Ctx, Int32, String, Bool, Bool, lit? : Int64) -> Unit
 
 pub fn nav_item(@ui.Ctx, String, Bool, () -> Unit, () -> Unit, end? : () -> Unit, lines? : () -> Unit, keep_lines? : Int32, more? : Bool, foot? : () -> Unit, foot_capsule? : Double) -> Bool
@@ -1227,9 +1252,11 @@ pub fn nav_meta() -> @ui.TextStyle
 
 pub fn nav_new() -> @ui.Style
 
-pub fn nav_quota_chips(@ui.Ctx, Json?, key? : String) -> Unit
+pub fn nav_quota_chips(@ui.Ctx, @json.Json?, key? : String) -> Unit
 
 pub fn nav_row(@ui.Ctx, String, Bool, () -> Unit, align? : @ui.Align, more? : Bool) -> Bool
+
+pub fn nav_row_node(@view.View, () -> Bool, () -> String, () -> Unit, (@view.View) -> Unit, more? : Bool, across? : Bool) -> @view.View
 
 pub let nav_sub_gap : @ui.Space
 
@@ -1238,6 +1265,8 @@ pub fn nav_title(@ui.Ctx, String, away? : Bool) -> Unit
 pub let nav_title_clear : @ui.Space
 
 pub fn nav_words(@ui.Ctx, String, color? : Int64) -> Unit
+
+pub fn nav_words_node(@view.View, () -> String) -> Unit
 
 pub fn neg(Double) -> Double
 
@@ -1605,6 +1634,8 @@ pub fn presenting() -> Bool
 
 pub fn press_ripple(@ui.Ctx, Int32, Double) -> Unit
 
+pub fn presses_held_node(@view.View, () -> Unit, Double, (@view.Drag) -> Unit, down? : () -> Unit, up? : () -> Unit) -> Unit
+
 pub fn presses_node(@view.View, () -> Unit, on? : () -> Bool) -> Unit
 
 pub fn prev_in(String, Array[String]) -> String?
@@ -1623,17 +1654,17 @@ pub fn progress_spinner(@ui.Ctx, String, Double?, size? : Double, stroke? : Doub
 
 pub fn provider_logo(@ui.Ctx, String, String, Double, String) -> Unit
 
-pub fn qr_code(@ui.Ctx, Json?, Double, String) -> Unit
+pub fn qr_code(@ui.Ctx, @json.Json?, Double, String) -> Unit
 
 pub let quiet : @ui.TextStyle
 
 pub let quieter : @ui.TextStyle
 
-pub fn quota_chip(@ui.Ctx, Json?, small? : Bool, compact? : Bool, marked? : Bool, key? : String, said? : String) -> Unit
+pub fn quota_chip(@ui.Ctx, @json.Json?, small? : Bool, compact? : Bool, marked? : Bool, key? : String, said? : String) -> Unit
 
-pub fn quota_chips(@ui.Ctx, Json?, small? : Bool, marked? : Bool, worded? : Bool, gap? : Double, key? : String) -> Unit
+pub fn quota_chips(@ui.Ctx, @json.Json?, small? : Bool, marked? : Bool, worded? : Bool, gap? : Double, key? : String) -> Unit
 
-pub fn quota_said(Json?) -> String
+pub fn quota_said(@json.Json?) -> String
 
 pub fn quote_card(@ui.Ctx, String, String, String, role? : String, comment? : String, composer? : Bool, jump? : Bool, remove? : Bool, picture? : () -> Unit, comment_field? : () -> Unit, words_width? : Double, words_key? : String) -> QuoteCardDone
 
@@ -1797,7 +1828,7 @@ pub let secondary : @ui.TextStyle
 
 pub fn section(@ui.Ctx, String, () -> Unit, heads? : Bool, note? : String, actions? : () -> Unit, title_after? : () -> Unit) -> Unit
 
-pub fn section_node(@view.View, () -> String, (@view.View) -> Unit, heads? : Bool, note? : () -> String, about? : () -> String) -> Unit
+pub fn section_node(@view.View, () -> String, (@view.View) -> Unit, heads? : Bool, note? : () -> String, about? : () -> String, actions? : (() -> Bool, (@view.View) -> Unit)) -> Unit
 
 pub fn section_none_node(@view.View, () -> String) -> Unit
 
@@ -1847,6 +1878,8 @@ pub fn setting(@ui.Ctx, String, () -> Unit, note? : String) -> Unit
 
 pub fn setting_link(@ui.Ctx, String, String, String, note? : String) -> Bool
 
+pub fn setting_switch(@ui.Ctx, String, String, Bool, note? : String) -> Bool
+
 pub fn settings(@ui.Ctx, Array[() -> Unit]) -> Array[() -> Unit]
 
 pub let share_bar : Int64
@@ -1866,6 +1899,8 @@ pub let share_look_in : @ui.Space
 pub let share_look_ring : @ui.Radius
 
 pub let share_look_tile : @ui.Style
+
+pub let share_look_tile_h : Double
 
 pub let share_look_tile_w : Double
 
@@ -1939,7 +1974,11 @@ pub let sheet_scrim : Int64
 
 pub fn shortcut_keys(String) -> String
 
+pub fn side_apart_node(@view.View) -> Unit
+
 pub let side_face_step : @ui.Len
+
+pub fn side_heading_node(@view.View, () -> String) -> Unit
 
 pub fn side_list() -> @ui.Style
 
@@ -1948,6 +1987,8 @@ pub let side_row_h : @ui.Len
 pub let side_row_radius : @ui.Radius
 
 pub fn side_scroll(@ui.Ctx, String, () -> Unit) -> Unit
+
+pub fn side_scroll_node(@view.View, @view.Scroll, (@view.View) -> Unit) -> @view.View
 
 pub fn side_subtitle(String, Array[String]) -> String?
 
@@ -1962,6 +2003,8 @@ pub let sign_in_side : @ui.Space
 pub let sign_in_title_size : @ui.TextSize
 
 pub fn slack_mark(@ui.Ctx, Double) -> Int32
+
+pub fn slack_mark_node(@view.View, Double) -> @view.View
 
 pub let sleep_ms : Double
 
@@ -1998,6 +2041,8 @@ pub let spinner_turn_ms : Double
 pub let spoke_step_ms : Double
 
 pub fn spokes(@ui.Ctx, Double, Int64, box? : Double) -> Int32
+
+pub fn spokes_node(@view.View, Double, () -> Int64, box? : Double) -> @view.View
 
 pub let stage_edge : Int64
 
@@ -2043,6 +2088,8 @@ pub fn strokes_ms(Int32) -> Double
 
 pub let strong : @ui.TextStyle
 
+pub fn style_node(@view.View, () -> @ui.Style, in_row? : Bool) -> Unit
+
 pub fn submenu_row(@ui.Ctx, String, String, Array[MenuItem?], icon? : String, side? : @view.Side) -> Unit
 
 pub fn surface(Double, Double) -> Surface
@@ -2077,7 +2124,7 @@ pub fn t(String, args? : Array[(String, String)]) -> String
 
 pub fn t_around(String, String, args? : Array[(String, String)]) -> (String, String)
 
-pub fn table_node(@view.View, () -> String, bleed? : Double, tree? : () -> Json?, copy? : Bool, on_link? : (String) -> Unit, on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)?) -> Unit
+pub fn table_node(@view.View, () -> String, bleed? : Double, tree? : () -> @json.Json?, copy? : Bool, on_link? : (String) -> Unit, on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)?) -> Unit
 
 pub let tag_max : @ui.Len
 
@@ -2112,6 +2159,8 @@ pub fn tape_side_corners() -> FixedArray[@paint.CornerOf]
 pub let text_in : Double
 
 pub let text_scale : @ui.TextScale
+
+pub fn text_toggle_node(@view.View, () -> String, () -> Unit) -> Unit
 
 pub fn textarea(@ui.Ctx, String, rows? : Int32, most? : Int32, placeholder? : String, field? : @ui.Field, corner? : Double, solid? : Bool) -> String
 
@@ -2199,7 +2248,7 @@ pub fn top_bar_actions_lent(@view.View) -> Unit
 
 pub let top_bar_title_look : @view.WordsLook
 
-pub fn top_bar_title_node(@view.View, () -> String) -> @view.View
+pub fn top_bar_title_node(@view.View, () -> String, look? : @view.WordsLook) -> @view.View
 
 pub let touch_chat_list : ChatList
 
@@ -2223,11 +2272,15 @@ pub let under_card_words : @ui.Style
 
 pub fn untitled_clear() -> @ui.Style
 
-pub fn update_key(@ui.Ctx, String, Double, Double, String, String, Bool, coming? : Double??) -> Bool
+pub fn update_key(@ui.Ctx, String, Double, Double, String, String, Bool, coming? : Double??, offered? : Bool) -> Bool
+
+pub fn update_key_node(@view.View, TipLayer, Double, Double, () -> String, () -> String, () -> Bool, () -> Double??, () -> Unit, offered? : () -> Bool) -> Unit
 
 pub let update_raised : Raised
 
 pub fn updating_mark(@ui.Ctx, Double, Int64) -> Int32
+
+pub fn updating_mark_node(@view.View, Double, () -> Int64) -> Unit
 
 pub let updating_rise_ms : Double
 
@@ -2466,11 +2519,12 @@ pub let workspace_tile_mark : Double
 // Errors
 
 // Types and methods
+#derive(Eq)
 pub(all) enum Anchor {
   Of(Int32)
   At(Double, Double, Double, Double)
   Unanchored
-} derive(Eq)
+}
 
 pub(all) struct AppAvatar {
   id : String
@@ -2493,10 +2547,11 @@ pub(all) struct Bars {
   field : Double
 }
 
+#derive(Eq)
 pub(all) enum Beside {
   Of(Int32)
   At(Double, Double, Double, Double)
-} derive(Eq)
+}
 pub fn Beside::anchor(Self) -> Anchor
 
 pub struct Book {
@@ -2505,7 +2560,7 @@ pub struct Book {
   text : String
   chunks : Array[String]
   starts : Array[Int32]
-  parts : Array[Array[Json]]
+  parts : Array[Array[@json.Json]]
   length : Int32
   chapters : Array[(String, Int32, Int32)]
   heads : Map[Int32, Bool]
@@ -2516,11 +2571,12 @@ pub struct Book {
 pub fn Book::at(Self, Int32) -> (Int32, Int32)
 pub fn Book::offset_of(Self, Int32, Double) -> Int32
 
+#derive(Eq)
 pub(all) struct ChangeLine {
   label : String
   text : String
   fresh : Bool
-} derive(Eq)
+}
 
 pub(all) struct Chapter {
   title : String
@@ -2608,6 +2664,13 @@ pub(all) struct Dial {
 
 type DrawnShapes
 
+type EdgeWay
+pub fn EdgeWay::go(Self, @view.View, Double, Double, ease? : @ui.Ease) -> Unit
+pub fn EdgeWay::go_by(Self, @view.View, Double, @motion.Spec) -> Unit
+pub fn EdgeWay::go_from(Self, @view.View, Double, Double, @motion.Spec) -> Unit
+pub fn EdgeWay::new(Double) -> Self
+pub fn EdgeWay::shown(Self, @view.View) -> Double
+
 pub(all) struct FileCardDone {
   removed : Bool
   retried : Bool
@@ -2650,6 +2713,7 @@ pub(all) struct Found {
   said_words : @ui.TextStyle
 }
 
+#derive(Eq)
 pub(all) struct GlyphCounts {
   online : Int32
   dim : Int32
@@ -2657,7 +2721,7 @@ pub(all) struct GlyphCounts {
   working : Int32
   asleep : Bool
   connecting : Int32
-} derive(Eq)
+}
 
 pub(all) struct Got {
   loaded : Double
@@ -2672,12 +2736,14 @@ pub(all) struct Items {
   mark_line : @ui.Leading
 }
 
+#derive(Eq, Show, @debug.Debug)
 pub(all) enum Layout {
   Small
   Medium
   Large
-} derive(Eq, Show, @debug.Debug)
+}
 
+#derive(Eq)
 pub(all) struct LinkTo {
   chat : Bool
   card : String
@@ -2686,13 +2752,14 @@ pub(all) struct LinkTo {
   job : String
   peek : String
   bare : Bool
-} derive(Eq)
+}
 pub fn LinkTo::is_card(Self) -> Bool
 
+#derive(Eq)
 pub(all) enum ListAt {
   Side
   Whole
-} derive(Eq)
+}
 
 pub struct LiveArray[T] {
   // private fields
@@ -2769,11 +2836,13 @@ pub fn[K : Hash + Eq, V] LiveMap::set(Self[K, V], K, V, loc~ : SourceLoc) -> Uni
 pub fn[K, V] LiveMap::touched(Self[K, V], loc~ : SourceLoc) -> Unit
 pub fn[K, V] LiveMap::values(Self[K, V]) -> Iter[V]
 
+#derive(Eq, Show)
 pub(all) enum Look {
   Narrow
   Wide
-} derive(Eq, Show)
+}
 
+#derive(Eq, Show, @debug.Debug)
 pub(all) struct MarksActionsSaid {
   error : String
   ready : Bool
@@ -2783,7 +2852,7 @@ pub(all) struct MarksActionsSaid {
   download : String
   put : String
   making : String
-} derive(Eq, Show, @debug.Debug)
+}
 
 pub(all) struct MediaInk {
   text : Int64
@@ -2840,10 +2909,11 @@ pub(all) struct PageFrame {
   named : Bool
 }
 
+#derive(Eq)
 pub(all) struct PageSaid {
   title : String
   about : String
-} derive(Eq)
+}
 
 pub(all) struct Palette {
   bg : Int64
@@ -2885,13 +2955,15 @@ pub(all) struct Palette {
   code_ground : Int64
 }
 
+#derive(Eq)
 pub(all) enum PanelTone {
   Plainly
   Accent
   Quiet
   Filled
-} derive(Eq)
+}
 
+#derive(Eq)
 pub(all) enum PillTone {
   Neutral
   Green
@@ -2899,7 +2971,7 @@ pub(all) enum PillTone {
   Amber
   Red
   Accented
-} derive(Eq)
+}
 
 pub(all) enum PlaceNow {
   NotKnown
@@ -2939,15 +3011,16 @@ pub(all) struct ReadBook {
   wrapped : Int32
   chapters : Array[Chapter]
   heads : Array[Int32]
-  md : Array[Json]
+  md : Array[@json.Json]
 }
 
+#derive(Eq)
 pub(all) enum ReaderPanel {
   NoPanel
   Contents
   Find
   Layout
-} derive(Eq)
+}
 
 pub(all) struct ReaderPaper {
   ground : Int64
@@ -2959,6 +3032,7 @@ pub(all) struct ReaderPaper {
   dark : Bool
 }
 
+#derive(Eq)
 pub(all) struct ReaderStyle {
   size : Int32
   line : Double
@@ -2966,7 +3040,7 @@ pub(all) struct ReaderStyle {
   face : String
   indent : Bool
   paper : String
-} derive(Eq)
+}
 pub fn ReaderStyle::changed(Self, ReaderStyleChange) -> Self
 
 pub(all) enum ReaderStyleChange {
@@ -3008,13 +3082,14 @@ pub(all) struct Reading {
   drafts : Map[String, Double]
 }
 
+#derive(Eq, Show, @debug.Debug)
 pub(all) enum Resized {
   Untouched
   Dragging(Double)
   Dropped(Double)
   Pressed
   Twice
-} derive(Eq, Show, @debug.Debug)
+}
 
 pub(all) struct Round {
   side : Double
@@ -3051,10 +3126,11 @@ pub(all) struct StrokeShape {
   width : Double
 }
 
+#derive(Eq, Show)
 pub(all) struct Surface {
   pad : Double
   inner : Double
-} derive(Eq, Show)
+}
 pub fn Surface::corner(Self) -> Double
 pub fn Surface::inner_radius(Self) -> @ui.Radius
 pub fn Surface::radius(Self) -> @ui.Radius
@@ -3062,11 +3138,12 @@ pub fn Surface::style(Self) -> @ui.Style
 
 type SyncRest
 
+#derive(Eq, @debug.Debug)
 pub(all) struct TextMatch {
   chunk : Int32
   start : Int32
   length : Int32
-} derive(Eq, @debug.Debug)
+}
 
 pub(all) struct Theme {
   dark : Bool
@@ -3091,7 +3168,8 @@ pub struct TipHand {
   opened : () -> Bool
 }
 
-type TipHeld derive(Eq)
+#derive(Eq)
+type TipHeld
 
 pub struct TipLayer {
   layer : () -> @view.View?
@@ -3099,6 +3177,7 @@ pub struct TipLayer {
 }
 pub fn TipLayer::new(() -> @view.View?) -> Self
 
+#derive(Eq)
 pub(all) enum Tone {
   Plain
   Primary
@@ -3106,7 +3185,7 @@ pub(all) enum Tone {
   Danger
   DangerSolid
   GhostDanger
-} derive(Eq)
+}
 
 pub(all) struct Tool {
   key : String
@@ -3115,12 +3194,13 @@ pub(all) struct Tool {
   instead : Array[MenuItem]
 }
 
+#derive(Eq, Show, @debug.Debug)
 pub(all) struct ToolSaid {
   icon : String
   label : String
   on : Bool
   disabled : Bool
-} derive(Eq, Show, @debug.Debug)
+}
 
 pub(all) struct Type {
   caption : Double

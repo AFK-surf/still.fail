@@ -91,13 +91,13 @@ on its first call, as the example does.
 ## Capture an application scene
 
 The same program that films the application can capture its current scene, using the same view tree, fixture,
-window size, scale and drive scripts. For example, after `APP=sffilm MODE=release bash scripts/mac.sh build`:
+window size, scale and drive scripts. In development, take it through `scripts/media.sh`, which builds the scene in
+Wasm incrementally (no C compiled; a few seconds per picture once built) and records its inputs (`docs/media.md`):
 
 ```sh
 printf 'until 整理发布清单\nexit\n' > out/scene.drive
 MBUI_FIXTURE=home MBUI_WIN=320x560 MBUI_FILM_SCALE=1 \
-  MBUI_FILM_DRIVE=out/scene.drive MBUI_PICTURE=out/scene.png \
-  ./_build/native/release/build/stillfail/sffilm/sffilm.exe
+  bash scripts/media.sh picture out/scene.png out/scene.drive
 ```
 
 `MBUI_FILM_PREPARE` is an optional drive file applied first, before the recorded actions. `MBUI_PICTURE_AT` advances

@@ -690,6 +690,9 @@ fn EditorState::text_set(self : EditorState, s : String, a : Int, b : Int) -> Un
   let grown = n - self.display().length()
   if self.limit > 0 && grown >= self.limit && sa == sb && sa >= grown {
     self.pasted = Some(sub(s, sa - grown, sa))
+    // (the host's words now hold it, the field's do not: unless told the field's again, each word typed after it
+    // comes with it, the whole of it a paste again and nothing typed taken)
+    self.retell = true
     return
   }
   if ca >= 0 && cb > ca && cb <= n && sa == sb && sa >= ca && sa <= cb {
@@ -756,7 +759,31 @@ pub fn Ctx::editor(
   if self.down && (self.active == id || self.word_drag == id || self.handle_drag == id) {
     hand.pointer.get() |> ignore
   }
+  // (one Field, one editor: two editors over one Field would lay each other's lines and scroll over each other (by id:
+  // the same key in two scopes, a list's rows, is two editors); nor a Field a field of the window's tree holds still
+  // (ui's field). Given so, a fault (old_fault: the old view's boundary shows it), this one an editor of its own)
+  let taken = match field {
+    Some(f) if f.st.built_frame == self.build_no && f.st.built_id != id => {
+      old_fault(
+        "Ctx::editor: one Field given to two editors in one build (\{f.st.built_key} id \{f.st.built_id} and \{key} id \{id}): a Field is one editor's",
+      )
+      true
+    }
+    Some(f) if f.st.tree_node is Some(n) && tree_fields.contains(n) => {
+      old_fault("Ctx::editor: a Field given to \{key} that a field of the window's tree holds: a Field is one editor's")
+      true
+    }
+    _ => false
+  }
+  let given = field
+  let field = if taken { None } else { field }
   let st = match (self.editors.get(id), field) {
+    // given a Field another holds: one of its own, never the Field's
+    (Some(s), None) if taken && given is Some(f) && physical_equal(f.st, s) => {
+      let s = EditorState::fresh("", self.clock)
+      self.editors[id] = s
+      s
+    }
     // what the app keeps (Field): this editor shows it from now on
     (Some(s), Some(f)) if physical_equal(s, f.st) => s
     (had, Some(f)) => {
@@ -785,19 +812,6 @@ pub fn Ctx::editor(
   st.look = look
   // (what the look makes of the words worked out again, once, for this build: it may say other colours now)
   st.looked = None
-  // one Field, one editor: two editors over one Field would lay each other's lines and scroll over each other
-  // (by id: the same key in two scopes, a list's rows, is two editors)
-  if field is Some(_) && st.built_frame == self.build_no && st.built_id != id {
-    abort(
-      "Ctx::editor: one Field given to two editors in one build (\{st.built_key} id \{st.built_id} and \{key} id \{id}): a Field is one editor's",
-    )
-  }
-  // (nor a Field a field of the window's tree holds still: ui's field)
-  match st.tree_node {
-    Some(n) if field is Some(_) && tree_fields.contains(n) =>
-      abort("Ctx::editor: a Field given to \{key} that a field of the window's tree holds: a Field is one editor's")
-    _ => ()
-  }
   // (the focus asked for it before anything held it (Ctx::focus_field): given now this editor holds it, where the old
   // view it is being built in takes input (that one: its node not made yet, nothing found of it by its id))
   if field is Some(_) && st.focus_asked {
@@ -1141,6 +1155,172 @@ fn EditorState::caret_box(
 }
 
 ///|
+/// The keyboard's trackpad (iOS's floating cursor) moving a field's caret, as iOS's own fields move theirs (Flutter's
+/// copy of them: EditableTextState.updateFloatingCursor, RenderEditable.calculateBoundedFloatingCursorOffset,
+/// _CaretPainter): a caret of its own follows the finger's way, not stopping between letters, a little bigger than the
+/// caret and see-through; the field's caret put where it would land, drawn grey there; let go, the one it draws slides
+/// there (float_caret_back_ms) and is the caret again.
+struct FloatCaret {
+  /// where in the window the host said the finger began, and where the caret stood then in the field's words (from
+  /// their top left: where it stands, its line's middle)
+  fx : Double
+  fy : Double
+  cx : Double
+  cy : Double
+  /// how far the finger's way is taken off from where it began, set as it comes back from past an edge (Flutter's
+  /// _relativeOrigin): back from an edge, the caret turns at once, none of the way it went past it to undo first
+  mut rx : Double
+  mut ry : Double
+  /// where the finger's way had it at its last move, and the edges it went past since (-1 its start's or top, 1 its
+  /// end's or foot, 0 none)
+  mut px : Double
+  mut py : Double
+  mut past_x : Int
+  mut past_y : Int
+  /// where the caret it draws stands in the field's words (its x, its line's middle), kept in them
+  mut x : Double
+  mut y : Double
+  /// when it was let go (the frames' clock), -1 while it is held
+  mut let_go : Double
+  mover : Mover
+}
+
+///|
+/// How long the caret the keyboard's trackpad drew slides back to the caret once let go (Flutter's
+/// _floatingCursorResetTime, as iOS's).
+let float_caret_back_ms : Double = 125.0
+
+///|
+/// How much bigger than the caret the keyboard's trackpad's is, across and up and down (Flutter's
+/// _kFloatingCursorSizeIncrease, each side's twice), and how far from it the caret where it lands is drawn at all
+/// (_kShortestDistanceSquaredWithFloatingAndRegularCursors: under it, the two are seen as one).
+let float_caret_grow_w : Double = 1.0
+
+///|
+let float_caret_grow_h : Double = 2.0
+
+///|
+let float_caret_apart : Double = 15.0
+
+///|
+/// The keyboard's trackpad beginning at (`x`, `y`) in the window, the caret standing at (`cx`, `cy`) of the words.
+fn FloatCaret::new(x : Double, y : Double, cx : Double, cy : Double) -> FloatCaret {
+  {
+    fx: x,
+    fy: y,
+    cx,
+    cy,
+    rx: 0.0,
+    ry: 0.0,
+    px: cx,
+    py: cy,
+    past_x: 0,
+    past_y: 0,
+    x: cx,
+    y: cy,
+    let_go: -1.0,
+    mover: Mover::new(),
+  }
+}
+
+///|
+/// The finger at (`x`, `y`) in the window: the caret it draws as far from where the caret stood as that is from where
+/// the finger began, kept in words laid out as `tl` (as far as their widest line and a little more each way: Flutter's
+/// floatingCursorAddedMargin), turning at once back from an edge it went past.
+fn FloatCaret::follow(self : FloatCaret, tl : TextLayout, x : Double, y : Double) -> Unit {
+  let raw_x = self.cx + x - self.fx
+  let raw_y = self.cy + y - self.fy
+  let half = tl.line_h / 2.0
+  let (l, r) = (-4.0, tl.w + 4.0)
+  let (top, foot) = (half - 4.0, dmax(tl.h, tl.line_h) - half + 5.0)
+  let dx = raw_x - self.px
+  let dy = raw_y - self.py
+  if self.past_x == -1 && dx > 0.0 {
+    self.rx = raw_x - l
+    self.past_x = 0
+  } else if self.past_x == 1 && dx < 0.0 {
+    self.rx = raw_x - r
+    self.past_x = 0
+  }
+  if self.past_y == -1 && dy > 0.0 {
+    self.ry = raw_y - top
+    self.past_y = 0
+  } else if self.past_y == 1 && dy < 0.0 {
+    self.ry = raw_y - foot
+    self.past_y = 0
+  }
+  let at_x = raw_x - self.rx
+  let at_y = raw_y - self.ry
+  self.x = dmax(l, dmin(at_x, r))
+  self.y = dmax(top, dmin(at_y, foot))
+  if at_x < l && dx < 0.0 {
+    self.past_x = -1
+  } else if at_x > r && dx > 0.0 {
+    self.past_x = 1
+  }
+  if at_y < top && dy < 0.0 {
+    self.past_y = -1
+  } else if at_y > foot && dy > 0.0 {
+    self.past_y = 1
+  }
+  self.px = raw_x
+  self.py = raw_y
+}
+
+///|
+/// Let go, it is at rest once it has slid back to the caret; held, it is not said to move (it goes with the finger).
+impl Moving for FloatCaret with rest_at(self, now, frame) {
+  ignore(now)
+  ignore(frame)
+  if self.let_go < 0.0 {
+    -1.0
+  } else {
+    self.let_go + float_caret_back_ms
+  }
+}
+
+///|
+/// The caret of field `st` placed as `fb`, laid out as `tl`, while the keyboard's trackpad moves it (`f`), at `alpha`;
+/// whether `f` is still drawn (false: it has slid back, the caret drawn as ever from now).
+fn Ctx::paint_float_caret(
+  self : Ctx,
+  st : EditorState,
+  f : FloatCaret,
+  tl : TextLayout,
+  fb : FieldBox,
+  alpha : Double,
+) -> Bool {
+  let k = if f.let_go < 0.0 {
+    0.0
+  } else {
+    Ease::Out.at(dmin(1.0, dmax(0.0, (self.clock - f.let_go) / float_caret_back_ms)))
+  }
+  if k >= 1.0 {
+    return false
+  }
+  // where it lands: the caret where the field has it
+  let (gx, gy, gw, gh) = st.caret_box(tl, fb, st.caret)
+  let lx = gx + gw / 2.0
+  let ly = gy + gh / 2.0
+  let fx = st.ox + f.x
+  let fy = st.oy + f.y
+  if f.let_go < 0.0 {
+    let (ax, ay) = (fx - lx, fy - ly)
+    if ax * ax + ay * ay >= float_caret_apart * float_caret_apart {
+      let grey = if (st.ph_color & 0xFFL) != 0L { st.ph_color } else { (st.color & 0xFFFFFF00L) | 0x66L }
+      self.emit_rect(gx, gy, gw, gh, gw / 2.0, grey, 0.0, 0L, alpha)
+    }
+  }
+  // (sliding back: to the caret's place, size and ink)
+  let x = fx + (lx - fx) * k
+  let y = fy + (ly - fy) * k
+  let w = gw + float_caret_grow_w * (1.0 - k)
+  let h = gh + float_caret_grow_h * (1.0 - k)
+  self.emit_rect(x - w / 2.0, y - h / 2.0, w, h, w / 2.0, st.caret_color, 0.0, 0L, alpha * (0.75 + 0.25 * k))
+  true
+}
+
+///|
 /// What the field `n` shows while nothing is typed in it, laid out on its line as its words are (FieldBox's line_h, the
 /// system's size of words applied): its placeholder on one line, as words that do not wrap, said the longest way that fits the room its words have (Ctx::editor `shorter`), the
 /// shortest cut with an ellipsis where none does; never cut by the field's edge.
@@ -1315,8 +1495,18 @@ fn Ctx::paint_field(
       )
     }
   }
-  // caret
-  if focused {
+  // caret (the keyboard's trackpad's while it moves it)
+  let floating = match st.floating {
+    Some(f) if focused && ml == 0 =>
+      if self.paint_float_caret(st, f, tl, fb, alpha) {
+        true
+      } else {
+        st.floating = None
+        false
+      }
+    _ => false
+  }
+  if focused && !floating {
     let since = self.clock - st.blink0
     let (phase, next) = periods_at(self.clock, st.blink0, caret_blink())
     // blinking till caret_blinks_for_ms, then shown at rest
@@ -1422,10 +1612,11 @@ fn Ctx::sync_ime(self : Ctx) -> Unit {
     }
   }
   if catching {
-    let sig = "catch \{focus}"
+    let (x, y, h) = self.dev.catchers.get(focus).unwrap().place.unwrap_or((0.0, self.height, 1.0))
+    let sig = "catch \{focus} \{x} \{y} \{h}"
     if sig != self.ime_sig {
       self.ime_sig = sig
-      h_set_ime(true, 0.0, self.height, 1.0, 1.0, "", 0, 0)
+      h_set_ime(true, x, y, 1.0, h, "", 0, 0)
     }
     return
   }
@@ -1446,8 +1637,9 @@ fn Ctx::sync_ime(self : Ctx) -> Unit {
           let (x, y, w, h) = st.drawn_box(x, y, 2.0, tl.line_h)
           let (a, b) = st.sel()
           let sig = "\{x.to_int()},\{y.to_int()},\{w},\{h},\{a},\{b},\{st.text.length()},\{stable_hash(st.text)}"
-          if sig != self.ime_sig {
+          if sig != self.ime_sig || st.retell {
             self.ime_sig = sig
+            st.retell = false
             h_set_ime(true, x, y, w, h, st.text, a, b)
           }
         }
@@ -1500,6 +1692,7 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     scroll_x: 0.0,
     followed: (-1, -1, -1),
     pasted: None,
+    retell: false,
     limit: 0,
     enter_sends: true,
     leaves: [],
@@ -2058,7 +2251,8 @@ fn Ctx::sync_text_menu(self : Ctx) -> Unit {
         }
         None => None
       }
-    _ => None
+    // (words a finger picked with the pointer, let go of: finger_select.mbt)
+    _ => finger_menu()
   }
   let sig = match want {
     Some((x, y, w, h, can)) => "\{x.to_int()},\{y.to_int()},\{w.to_int()},\{h.to_int()},\{can}"

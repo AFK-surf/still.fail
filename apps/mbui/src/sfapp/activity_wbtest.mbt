@@ -7,7 +7,7 @@ test "activity: its ring steps round" {
   let clock : Ref[Double] = { val: 0.0 }
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
@@ -51,7 +51,7 @@ fn activity_card_tester(w : Double, h : Double, platform : Int) -> @ui.Tester {
       }
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
   t.run_for(@ui.move_most_ms)
   t
@@ -90,7 +90,7 @@ test "activity: the picture opens its agent's card under the pointer, and still 
     assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is None)
     t.tap(x, y)
     t.frame()
-    let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+    let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
     if w >= 600.0 {
       assert_eq(side_now(r).1, "s-c1", msg="pressing the picture opens this agent's history")
     } else {
@@ -124,7 +124,7 @@ test "activity: its line coming in at the list's end is followed, the list glidi
   let clock : Ref[Double] = { val: 0.0 }
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   // (its line's first frame laid out twice, its room not opened yet at the first: a glide that set out then is under
   // way at the second, not over with the line still to open under the composer)

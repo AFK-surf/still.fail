@@ -9,7 +9,7 @@ test "a chat 700 wide on a Mac, its composer let go of (its capsule), the system
   let src = fixture("chat")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=700.0, h=844.0, platform=0, window_corner=16.0)
   t.set_window_inset(true)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.draw()
   t.run_for(@ui.move_most_ms)
   t.ctx().blur()

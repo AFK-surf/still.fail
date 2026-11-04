@@ -2,11 +2,12 @@
 // sessions' summaries (`sessions`), the threads' summaries as the viewer has them (`threads`), and what the station keeps
 // beside them that no summary says (`marks`, GET /chats?marks=1: the cards and needs waiting, the review's marks, pins,
 // shares…). Made by the station, every change read every row it could touch again for every viewer, from the disk while
-// its machine was short of memory (3 to 10 s each on ccvm, 2026-11-03); the station keeps what is said and its
+// its machine was short of memory (3 to 10 s each on a station, 2026-11-03); the station keeps what is said and its
 // statistics, a device makes what its pages show of them.
 import { get, isObject } from "../util.ts";
 import * as titles from "../titles.ts";
 import { trim } from "../whitespace.ts";
+import { type Own, rowFor } from "../chat-row.ts";
 
 type J = Record<string, any>;
 
@@ -31,6 +32,9 @@ export type Marks = {
   clientKeys: Record<string, string>;
   teams: Record<string, string>;
   selves: string[];
+  /// The cards and needs the viewer let go (`<thread>:<seq>`), and where they read each chat to (chat-row.ts).
+  dismissed: string[];
+  reads: Record<string, number>;
 };
 
 /// The words a row says in the viewer's language.
@@ -45,6 +49,8 @@ export function marksOf(answer: unknown): Marks | null {
     card: o("card"), need: o("need"), answered: o("answered"), suggested: a("suggested"), verdicts: o("verdicts"), reviews: get(answer, "reviews") === true,
     kept: a("kept"), pins: o("pins"), openers: o("openers"), opened: o("opened"), shares: o("shares"), clientKeys: o("clientKeys"), teams: o("teams"),
     selves: a("selves").filter((s): s is string => typeof s === "string"),
+    dismissed: a("dismissed").filter((s): s is string => typeof s === "string"),
+    reads: o("reads"),
   };
 }
 
@@ -60,22 +66,41 @@ export function marksWith(held: Marks, read: Marks, scope: { sessions: string[];
     suggested: ids(held.suggested, read.suggested), kept: ids(held.kept, read.kept), reviews: read.reviews,
     pins: bySession(held.pins, read.pins), openers: bySession(held.openers, read.openers), opened: bySession(held.opened, read.opened), shares: bySession(held.shares, read.shares),
     clientKeys: bySession(held.clientKeys, read.clientKeys), teams: { ...held.teams, ...read.teams }, selves: read.selves,
+    dismissed: [...held.dismissed.filter((d) => !threads.has(d.slice(0, d.indexOf(":")))), ...read.dismissed], reads: byThread(held.reads, read.reads),
   };
 }
 
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 
-/// The sidebar of the viewer whose email is `me`, as the station makes it (views.ts `chats`, not archived).
-export function rowsMade(sessions: readonly unknown[], threads: readonly unknown[], marks: Marks, me: string, words: Words): J[] {
+/// Whether a person (a creator reference) is the viewer whose email is `me`, or a Slack user they are (`selves`).
+export function mineFor(me: string, selves: readonly string[]): (p: unknown) => boolean {
   const email = me.toLowerCase();
-  const slack = new Set(marks.selves);
-  const mine = (p: unknown): boolean => {
+  const slack = new Set(selves);
+  return (p: unknown): boolean => {
     if (!isObject(p)) return false;
     const pid = str(get(p, "id")) ?? "";
     const pe = str(get(p, "email"));
     return pid === me || (pe !== null && pe.toLowerCase() === email) || (get(p, "via") === "slack" && slack.has(pid.slice(pid.lastIndexOf(":") + 1)));
   };
+}
+
+/// The viewer's sidebar of the chat list its station made for everyone (`shared`, by row id) and the marks that are
+/// theirs (chat-row.ts), the latest first.
+export function rowsShared(shared: Iterable<J>, marks: Marks, me: string, words: Words): J[] {
+  const own: Own = {
+    mine: mineFor(me, marks.selves),
+    reads: new Map(Object.entries(marks.reads).map(([k, n]) => [Number(k), num(n)])),
+    dismissed: new Set(marks.dismissed),
+    kept: new Set(marks.kept),
+    pins: new Map(Object.entries(marks.pins).map(([k, at]) => [k, num(at)])),
+  };
+  return [...shared].map((row) => rowFor(row, own, words)).sort((a, b) => num(b.lastActiveAt) - num(a.lastActiveAt));
+}
+
+/// The sidebar of the viewer whose email is `me`, as the station makes it (views.ts `chats`, not archived).
+export function rowsMade(sessions: readonly unknown[], threads: readonly unknown[], marks: Marks, me: string, words: Words): J[] {
+  const mine = mineFor(me, marks.selves);
   // The sessions in lists, the latest active first.
   const shown = new Map<string, J>();
   for (const s of sessions) if (isObject(s) && typeof get(s, "key") === "string" && (get(s, "archivedAt") ?? null) === null) shown.set(get(s, "key") as string, s as J);
@@ -132,6 +157,9 @@ export function rowsMade(sessions: readonly unknown[], threads: readonly unknown
       const text = text0 === "" && Array.isArray(m.quotes) && m.quotes.length > 0 ? words.quotedOnly : text0;
       last = { seq: m.seq, authorKind: m.authorKind, author: m.author, authorName: m.authorName ?? null, text: typeof m.text === "string" ? [...text].slice(0, LAST_CHARS).join("") : null, createdAt: m.createdAt };
       if (m.authorPicture !== undefined) last.authorPicture = m.authorPicture;
+      if (m.agentIdentity != null) last.agentIdentity = m.agentIdentity;
+      if (m.authorModel !== undefined) last.authorModel = m.authorModel;
+      if (m.authorRuntime !== undefined) last.authorRuntime = m.authorRuntime;
     }
     const creator = t.creator ?? null;
     const people = Array.isArray(t.people) ? t.people : [];

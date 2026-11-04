@@ -171,13 +171,20 @@ fn screen_rig(
 ///|
 fn ScreenRig::sess(self : ScreenRig) -> ScreenSess {
   ignore(self)
-  screens_open.get(screen_key("ws-1/st-1", "browser:tab-1")).unwrap()
+  // (the one this rig opened, whichever screen it was asked for)
+  for _, sess in screens_open {
+    return sess
+  }
+  abort("no screen open")
 }
 
 ///|
 fn ScreenRig::ui(self : ScreenRig) -> ScreenUi {
   ignore(self)
-  screen_uis.get(screen_key("ws-1/st-1", "browser:tab-1")).unwrap()
+  for _, ui in screen_uis {
+    return ui
+  }
+  abort("no screen open")
 }
 
 ///|
@@ -880,7 +887,25 @@ test "a Linux desktop failure offers reopening without a macOS permissions butto
   r.finish()
   assert_true(r.t.find("重新打开") is Some(_))
   assert_true(r.t.find("前往权限设置") is None)
+  assert_true(r.t.find("安装说明") is None)
   screen_done(r.t)
+}
+
+///|
+test "a Linux component failure offers the installation guide at either page width" {
+  for w in [390.0, 1200.0] {
+    let r = screen_rig(w~, os="Linux 6.8")
+    r.state(
+      "denied",
+      message="无法连接 Wayland 桌面。",
+      access={ "capture": false, "control": false, "message": "无法连接 Wayland 桌面。", "help": "linux-desktop" },
+    )
+    r.finish()
+    assert_true(r.t.find("重新打开") is Some(_))
+    r.t.tap_text("安装说明")
+    assert_true(r.t.opened().contains("https://github.com/AFK-surf/still.fail/blob/main/docs/linux-desktop-setup.md"))
+    screen_done(r.t)
+  }
 }
 
 ///|
@@ -974,15 +999,15 @@ test "a login field in focus while driving a tab: 用 1Password 填入; its logi
   assert_eq(@ui.fake_op_runs[0], ["item", "list", "--categories", "Login", "--format", "json"])
   assert_true(r.t.find("选一个 github.com 的登录") is Some(_))
   assert_true(r.labelled("GitLab") is None)
-  r.tap_label("GitHub 工作 · zzj-work")
+  r.tap_label("GitHub 工作 · demo-work")
   r.t.draw()
   r.t.draw()
   assert_eq(@ui.fake_op_runs[1], ["item", "get", "gh2", "--fields", "label=username,label=password", "--reveal", "--format", "json"])
   let fill = r.inputs().filter(fn(i) { text(Some(i), "t") == "fill" })
   assert_eq(fill.length(), 1)
   assert_eq(text(Some(fill[0]), "host"), "github.com")
-  assert_eq(text(Some(fill[0]), "username"), "zzj-work")
-  assert_eq(text(Some(fill[0]), "password"), "pw-zzj-work")
+  assert_eq(text(Some(fill[0]), "username"), "demo-work")
+  assert_eq(text(Some(fill[0]), "password"), "pw-demo-work")
   // the focus left the login: nothing offered
   r.state("live", others=[])
   r.t.draw()
@@ -1012,18 +1037,18 @@ test "no 1Password tool but the system's autofill: 用密码管理器填入 asks
   assert_eq(@ui.fake_autofill_asks, ["github.com"])
   assert_true(r.t.find("在密码管理器里选一个 github.com 的登录") is Some(_))
   // a login for another site than the one asked for: not filled
-  @ui.fake_autofill_picks("evil.example", "zzj", "pw-evil")
+  @ui.fake_autofill_picks("evil.example", "demo-user", "pw-evil")
   r.t.draw()
   r.t.draw()
   assert_eq(r.inputs().filter(fn(i) { text(Some(i), "t") == "fill" }).length(), 0)
-  @ui.fake_autofill_picks("github.com", "zzj-work", "pw-zzj-work")
+  @ui.fake_autofill_picks("github.com", "demo-work", "pw-demo-work")
   r.t.draw()
   r.t.draw()
   let fill = r.inputs().filter(fn(i) { text(Some(i), "t") == "fill" })
   assert_eq(fill.length(), 1)
   assert_eq(text(Some(fill[0]), "host"), "github.com")
-  assert_eq(text(Some(fill[0]), "username"), "zzj-work")
-  assert_eq(text(Some(fill[0]), "password"), "pw-zzj-work")
+  assert_eq(text(Some(fill[0]), "username"), "demo-work")
+  assert_eq(text(Some(fill[0]), "password"), "pw-demo-work")
   assert_eq(@ui.fake_autofill_asks, ["github.com", ""])
   assert_true(r.t.find("用密码管理器填入") is Some(_))
   // asked again, and the page's focus leaves the login while the service is asked (as the station says it as the app
@@ -1038,12 +1063,12 @@ test "no 1Password tool but the system's autofill: 用密码管理器填入 asks
   r.t.draw()
   assert_eq(@ui.fake_autofill_asks, ["github.com", "", "github.com"])
   assert_true(r.t.find("在密码管理器里选一个 github.com 的登录") is Some(_))
-  @ui.fake_autofill_picks("github.com", "zzj", "pw-zzj")
+  @ui.fake_autofill_picks("github.com", "demo-user", "pw-demo-user")
   r.t.draw()
   r.t.draw()
   let fill = r.inputs().filter(fn(i) { text(Some(i), "t") == "fill" })
   assert_eq(fill.length(), 2)
-  assert_eq(text(Some(fill[1]), "username"), "zzj")
+  assert_eq(text(Some(fill[1]), "username"), "demo-user")
   assert_eq(@ui.fake_autofill_asks, ["github.com", "", "github.com", ""])
   assert_true(r.t.find("在密码管理器里选一个 github.com 的登录") is None)
   screen_done(r.t)
@@ -1061,7 +1086,7 @@ test "the autofill service's sign-in takes the app out of sight: the login picke
   // 1Password asks for a fingerprint in a screen of its own: the app goes out of sight, the view is let go of
   r.t.app_state(false, false)
   r.t.draw()
-  @ui.fake_autofill_picks("github.com", "zzj-work", "pw-zzj-work")
+  @ui.fake_autofill_picks("github.com", "demo-work", "pw-demo-work")
   r.t.draw()
   r.t.draw()
   let fills = fn() { r.inputs().filter(fn(i) { text(Some(i), "t") == "fill" }) }
@@ -1077,7 +1102,7 @@ test "the autofill service's sign-in takes the app out of sight: the login picke
   r.t.draw()
   assert_eq(fills().length(), 1)
   assert_eq(text(Some(fills()[0]), "host"), "github.com")
-  assert_eq(text(Some(fills()[0]), "username"), "zzj-work")
+  assert_eq(text(Some(fills()[0]), "username"), "demo-work")
   r.t.draw()
   assert_eq(fills().length(), 1)
   screen_done(r.t)

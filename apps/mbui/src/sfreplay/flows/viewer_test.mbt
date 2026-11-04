@@ -4,32 +4,9 @@
 // phone's photo album), then 添加到对话: the marked picture and the note's quote in the composer, sent with words.
 
 ///|
-/// The recorded run requested the neighbour before the first picture came. Replay the same answers with that request
-/// after the first picture's answer, as the viewer now does. The recording itself stays intact until it is rerecorded.
-fn viewer_first_trace() -> String {
-  let lines : Array[String] = []
-  let mut neighbour = ""
-  let mut placed = false
-  for line in @sfreplay.trace("viewer").split("\n") {
-    if line.has_prefix("{\"out\":{\"id\":46,\"call\":\"station.file\"") {
-      neighbour = line.to_owned()
-      continue
-    }
-    lines.push(line.to_owned())
-    if line.has_prefix("{\"in\":{\"id\":43,\"ok\"") {
-      guard neighbour != "" else { abort("viewer trace: no neighbour request") }
-      lines.push(neighbour)
-      placed = true
-    }
-  }
-  guard placed else { abort("viewer trace: no first picture answer") }
-  lines.join("\n")
-}
-
-///|
 test "96-viewer" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(viewer_first_trace(), seed~, env=[("MBUI_VIEWER_AWAKE", "1")])
+    let f = @sfreplay.Flow::start(@sfreplay.trace("viewer"), seed~, env=[("MBUI_VIEWER_AWAKE", "1")])
     // (what the host drew of the marks, as the run's gave it: the PNG it sent up)
     // (handed to the core whole: composer.add; a run from before, its parts: station.upload.part)
     let handed = match f.r.sent_bytes_from("composer.add", "name", "e2e-photo-标注-") {
@@ -45,9 +22,13 @@ test "96-viewer" {
     f.peer("peer createfiles 两张图片 201493 post:收到两张图片 201493 -- e2e-photo.jpg e2e-photo2.png")
     f.see("两张图片 201493")
     // The new row is moving into place; tap it after the list has made room for it.
-    f.run_to_rest("a list's rows' heights")
+    // (where the run's pace had the row come with the list's first rows, nothing of the list moved: where it rests)
+    let rows_end = @sfpages.rows_rest()
+    if rows_end >= 0.0 {
+      f.run_to(rows_end)
+    }
     f.tap("两张图片 201493")
-    f.see("=studio")
+    f.see("=willow")
     f.see("img:e2e-photo.jpg")
     f.tap("img:e2e-photo.jpg")
     // flown open from its thumbnail, its bars on once it is in

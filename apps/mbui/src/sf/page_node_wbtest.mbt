@@ -141,13 +141,13 @@ test "a row with words under it as a node: its title and what it says in a line,
     let old = page_part_drawn(false, scale, fn(c) {
       group(c, fn() {
         link_row(c, "a", "判断是否完成", note="标记完成后判断是否推荐归档", value="1 台 station 已启用") |> ignore
-        link_row(c, "b", "Studio", value="全局记忆 · 项目记忆") |> ignore
+        link_row(c, "b", "Willow", value="全局记忆 · 项目记忆") |> ignore
       })
     }, fn(room) { () })
     let made = page_part_drawn(true, scale, fn(_) { () }, fn(room) {
       group_node(room, fn(g) {
         link_row_node(g, fn() { "判断是否完成" }, fn() {  }, note=fn() { "标记完成后判断是否推荐归档" }, value=fn() { "1 台 station 已启用" })
-        link_row_node(g, fn() { "Studio" }, fn() {  }, value=fn() { "全局记忆 · 项目记忆" })
+        link_row_node(g, fn() { "Willow" }, fn() {  }, value=fn() { "全局记忆 · 项目记忆" })
       })
     })
     assert_true(old.length() > 0)
@@ -161,14 +161,14 @@ test "a page's card as a node: its words 20 in and 14 apart, round, on the card'
     for scale in [1.0, 2.0] {
       let old = page_part_drawn(false, scale, fn(c) {
         page_card(c, footed~, fn() {
-          c.text("Studio", style=pg_heading) |> ignore
+          c.text("Willow", style=pg_heading) |> ignore
           c.text("空闲超过下面的天数就归档。只看状态，不读内容。", style=pg_note) |> ignore
         })
         c.box(style=@ui.css("w=Full h=S5 bg=Card"), fn() {  }) |> ignore
       }, fn(_) { () })
       let made = page_part_drawn(true, scale, fn(_) { () }, fn(room) {
         page_card_node(room, footed~, fn(k) {
-          k.box(fn(w) { styled_words(w, fn() { "Studio" }, fn() { pg_heading }) |> ignore }) |> ignore
+          k.box(fn(w) { styled_words(w, fn() { "Willow" }, fn() { pg_heading }) |> ignore }) |> ignore
           k.box(fn(w) { styled_words(w, fn() { "空闲超过下面的天数就归档。只看状态，不读内容。" }, fn() { pg_note }) |> ignore }) |> ignore
         })
         room.box(fn(f) {

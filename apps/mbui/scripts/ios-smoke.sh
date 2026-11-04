@@ -1,10 +1,9 @@
 #!/bin/bash
-# still.fail mbui's iOS smoke flows (e2e/run.sh ios: 01-signin, 03-send-text, 05-agent-reply), by hand: on Mini1 (gate,
-# build, take, run, done), or on a fresh Mac as CI ran them until 2026-10-22 (take, boot, prepare, build, run, done; no
+# still.fail mbui's iOS smoke flows (e2e/run.sh ios: 01-signin, 03-send-text, 05-agent-reply), by hand (gate, build,
+# take, run, done), or on a fresh Mac as CI ran them until 2026-10-22 (take, boot, prepare, build, run, done; no
 # workflow runs them now, as asked):
-#   scripts/ios-smoke.sh gate   whether Mini1 can take it, asked once (a load is no event to wait for): too little disk
-#                               (3 GB free), it fails; the load high (IOS_LOAD_MAX, the 5 minutes' average: 20, twice
-#                               Mini1's 10 cores; the simulator's SimLaunchHost crashed above it on 2026-10-20), it runs
+#   scripts/ios-smoke.sh gate   whether the host can take it, asked once (a load is no event to wait for): too little disk
+#                               (3 GB free), it fails; the load high (IOS_LOAD_MAX, the 5 minutes' average: 20), it runs
 #                               all the same with a warning saying the load, which a failure's log then shows
 #   scripts/ios-smoke.sh build  the app for the simulator (scripts/ios.sh build: the Rust shell for aarch64-apple-ios-sim
 #                               in a Cargo target kept in ~/stillfail-ci/mbui, Hermes's xcframework from its cache)
@@ -66,7 +65,7 @@ quiet() {  # $1 the simulator's id
 # The local still.fail (its cloud, relay, station: each a process group, scripts/e2e-local.sh) ahead of the simulator's
 # own processes for the CPU, where the runner lets us (CI's passwordless sudo): with the simulator's load in the
 # hundreds on a 3-core runner its cloud stopped answering and the app's mesh to the station went unanswered
-# (2026-10-21). By hand on Mini1 nothing is changed.
+# (2026-10-21). By hand nothing is changed.
 ahead() {
   [ -n "${CI:-}" ] && sudo -n true 2>/dev/null || return 0
   local p pid
@@ -79,7 +78,7 @@ apps() {  # the apps running on simulator $1, the system's own left out (as mbui
   xcrun simctl spawn "$1" launchctl list 2>/dev/null \
     | awk '$1 != "-" && index($3, "UIKitApplication:") == 1 && index($3, "UIKitApplication:com.apple.") != 1 { print $3 }'
 }
-# what keeps Mini1 from taking it now, "" when nothing does
+# what keeps the host from taking it now, "" when nothing does
 busy() {
   local free load
   free=$(df -k /System/Volumes/Data | tail -1 | awk '{print $4}')
@@ -120,13 +119,13 @@ take_lock() {
   done
   printf '%s\npid %s\n' "$ME" "$holder" > "$LOCK/owner"
 }
-gate() {  # gate CHECK: Mini1 asked once; a load is no event to wait for (2026-10-20: not waited out, said)
+gate() {  # gate CHECK: ask once; a load is no event to wait for (2026-10-20: not waited out, said)
   local why
   why=$($1)
   case $why in
     "") ;;
     # (the load high: run all the same, the load said where a failure's log shows it; too little disk is no run)
-    load*) echo "::warning title=mbui-ios ran on a loaded Mini1::$why" ;;
+    load*) echo "::warning title=mbui-ios ran on a loaded host::$why" ;;
     *) echo "ios-smoke: not run: $why"; exit 1 ;;
   esac
 }
@@ -134,7 +133,7 @@ gate() {  # gate CHECK: Mini1 asked once; a load is no event to wait for (2026-1
 case "${1:-}" in
   gate)
     gate busy
-    echo "ios-smoke: Mini1's load $(sysctl -n vm.loadavg | awk '{print $3}') as it runs" ;;
+    echo "ios-smoke: host load $(sysctl -n vm.loadavg | awk '{print $3}') as it runs" ;;
   build)
     # (its library there is enough: CI's cache puts it back without rustup's record of it)
     [ -d "$(rustc --print sysroot)/lib/rustlib/aarch64-apple-ios-sim/lib" ] || rustup target list --installed | grep -qx aarch64-apple-ios-sim \

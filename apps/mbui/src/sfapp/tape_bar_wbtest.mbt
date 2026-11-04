@@ -124,6 +124,8 @@ test "on the tape 用量 made once: its bar the tree's, its title where a chat's
   // (the workspaces as `listed` says: none while it says so)
   let listed = @signals.signal(true)
   let shared : Array[String] = []
+  let share_card_before = @sfbase.share_card_of.val
+  defer { @sfbase.share_card_of.val = share_card_before }
   @sfbase.share_card_of.val = fn(_, w) { shared.push(w.id) }
   let src : Ref[Source?] = Ref(None)
   let t = tape_bar_in("settings-usage", Ref(""), wrap=fn(base) {
@@ -167,7 +169,6 @@ test "on the tape 用量 made once: its bar the tree's, its title where a chat's
   t.run_for(@ui.move_most_ms)
   assert_eq(share().length(), 0, msg="its share left over")
   assert_eq(bar_words_drawn(t, "7 天").length(), 0, msg="its days left over")
-  @sfbase.share_card_of.val = fn(_, _) {  }
 }
 
 ///|
@@ -272,12 +273,12 @@ fn tape_station_memory(platform? : Int = 0, said? : Bool = false, font? : Double
   t.run_for(@ui.move_most_ms)
   page_over(t, w)
   // (the station's row: its name as it wrote it, the first line of it)
-  match t.words().search_by(fn(w) { w.0.has_prefix("Studio") }) {
+  match t.words().search_by(fn(w) { w.0.has_prefix("Willow") }) {
     Some(i) => {
       let w = t.words()[i]
       t.tap(w.1 + 4.0, w.2 + 4.0)
     }
-    None => fail("no Studio")
+    None => fail("no Willow")
   }
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
@@ -358,7 +359,7 @@ test "on the tape a page's bar with a long title in words twice as large: the ti
   // (the title cut between them: begun after back, ended before the mark)
   match @ui.view_tree() {
     Some(tree) => {
-      let titles = tree.drawn().filter(fn(d) { !d.hosted && d.words.has_prefix("Studio") && d.y < p.y + 60.0 })
+      let titles = tree.drawn().filter(fn(d) { !d.hosted && d.words.has_prefix("Willow") && d.y < p.y + 60.0 })
       assert_eq(titles.length(), 1)
       assert_true(titles[0].x >= bx + bw && titles[0].x + titles[0].w <= mx, msg="the title \{titles[0].x} to \{titles[0].x + titles[0].w}")
     }
@@ -450,7 +451,7 @@ test "on the tape 关于 made once scrolled: what it holds goes under nothing of
 }
 
 ///|
-/// `base` with the station Studio (ws1/st1) named `name` in what the core says of the stations, as that is set ("" as
+/// `base` with the station Willow (ws1/st1) named `name` in what the core says of the stations, as that is set ("" as
 /// it is): told as it changes, as the core tells it.
 fn station_named(base : Source, name : @signals.Signal[String]) -> Source {
   {
@@ -492,7 +493,7 @@ fn tape_station_archiving(
   name? : @signals.Signal[String] = @signals.signal(""),
 ) -> @ui.Tester raise {
   let t = tape_bar_in("settings-archiving", lang, platform~, w=600.0, h=900.0, wrap=fn(s) { station_named(s, name) })
-  t.tap_text("Studio")
+  t.tap_text("Willow")
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == Setting(@settings.Route::StationArchiving("ws1/st1")), msg="on top \{@sfbase.page_kind(app.nav.top())}")
@@ -505,14 +506,14 @@ test "on the tape a station's own archiving made once under the tape's bar: its 
   let lang = Ref("")
   let t = tape_station_archiving(lang)
   assert_eq(page_words_made(t, @sf.t("web-pages.archiving.mode")), 1, msg="its rows the tree's")
-  let zh = bar_words_drawn(t, "自动归档 · Studio")
+  let zh = bar_words_drawn(t, "自动归档 · Willow")
   assert_eq(zh.length(), 1, msg="the bar's title")
-  assert_eq(bar_words_old(t, "自动归档 · Studio").length(), 0)
+  assert_eq(bar_words_old(t, "自动归档 · Willow").length(), 0)
   let backs = t.semantics().filter(fn(s) { s.role == @ui.Role::Button && s.label == "归档" && !s.hidden })
   assert_eq(backs.length(), 1, msg="back to 归档")
   lang.val = "en"
   t.run_for(@ui.move_most_ms)
-  let en = bar_words_drawn(t, "Automatic archiving · Studio")
+  let en = bar_words_drawn(t, "Automatic archiving · Willow")
   assert_eq(en.length(), 1, msg="the bar's title in English")
   assert_eq(en[0].id, zh[0].id)
 }
@@ -521,7 +522,7 @@ test "on the tape a station's own archiving made once under the tape's bar: its 
 test "on the tape a station's own archiving made once, its station renamed as the core tells it: its title anew in the same bar, the page and the bar not made again" {
   let name = @signals.signal("")
   let t = tape_station_archiving(Ref(""), name~)
-  let title = bar_words_drawn(t, "自动归档 · Studio")
+  let title = bar_words_drawn(t, "自动归档 · Willow")
   assert_eq(title.length(), 1)
   let rows = @ui.view_tree().unwrap().drawn().filter(fn(d) { !d.hosted && d.words == @sf.t("web-pages.archiving.mode") }).map(fn(d) { d.id })
   assert_eq(rows.length(), 1)
@@ -561,8 +562,8 @@ test "on the tape a station's own archiving become another station's in its plac
   t.run_for(@ui.move_most_ms)
   let now = @ui.view_tree().unwrap().drawn().filter(fn(d) { !d.hosted && d.words == @sf.t("web-pages.archiving.mode") }).map(fn(d) { d.id })
   assert_true(now.length() <= 1 && now != rows, msg="\{rows.length()} → \{now.length()}")
-  assert_eq(bar_words_drawn(t, "自动归档 · Studio").length(), 0)
-  assert_eq(bar_words_drawn(t, "自动归档 · MBA").length(), 1, msg="that station's title")
+  assert_eq(bar_words_drawn(t, "自动归档 · Willow").length(), 0)
+  assert_eq(bar_words_drawn(t, "自动归档 · Maple").length(), 1, msg="that station's title")
   // (what that page shows under its bar, the tree's: something of its own)
   guard tape_page_panel(t) is Some(p) else { fail("no page") }
   let shown = @ui.view_tree().unwrap().drawn().filter(fn(d) { !d.hosted && d.words != "" && d.x >= p.x && d.y >= p.y + 56.0 && d.alpha > 0.5 })

@@ -68,7 +68,7 @@ the app's builds, layout and drawing are not in a trace. A flow whose script did
 what the app did meanwhile is as real (with rows kept, most of the Medium and desktop flows do not pass: the rows'
 words are not found while they are drawn again).
 
-2026-10-26, Mini1 (M4), 18 flows in a phone's window, a fold's (Medium) and a desktop's:
+2026-10-26, an M4 Mac, 18 flows in a phone's window, a fold's (Medium) and a desktop's:
 
 | | frames | reads | getters run | sets | lends | µs a frame |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |

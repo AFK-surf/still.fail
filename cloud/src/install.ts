@@ -383,6 +383,22 @@ inside_station() {
   return 1
 }
 
+# One install at a time: two at once (the station updating itself as CI's \`stillfail update\` ran, both to a release
+# that could not start, 2026-11-04) each put aside the app the other had just put in, and the one whose handover failed
+# put back the release that could not start. The next waits for the one before (its handover is over within 180 s),
+# then finds what it left; one whose holder is gone is taken over, as is one held past 300 s.
+lock_dir="$cur/run/install.lock"
+mkdir -p "$cur/run"
+waited=0
+until mkdir "$lock_dir" 2>/dev/null; do
+  holder=$(cat "$lock_dir/pid" 2>/dev/null || true)
+  if { [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; } || [ "$waited" -ge 300 ]; then rm -rf "$lock_dir"; continue; fi
+  sleep 1
+  waited=$((waited + 1))
+done
+echo $$ > "$lock_dir/pid"
+trap 'rm -rf "$tmp" "$lock_dir"' EXIT
+
 # Already on this release, and running as its service would: nothing to do.
 if [ -n "$pid" ] && [ -z "$migrate" ] && [ -f "$app/VERSION" ] && cmp -s "$tmp/stillfail/VERSION" "$app/VERSION" && same_service; then
   cp "$tmp/stillfail/CHANNEL" "$app/CHANNEL" 2>/dev/null || true
@@ -577,7 +593,9 @@ if [ -z "$handed" ] && [ -n "$pid" ] && inside_station; then
   echo "  ${say("cloud.install.insideLog", { log: "$data/run/update.log" })}"
   trap - EXIT
   set -m
-  ( trap '' HUP; restart_and_finish; rm -rf "$tmp" ) > "$cur/run/update.log" 2>&1 < /dev/null &
+  # (the lock held on by what goes on, its pid in it)
+  ( trap '' HUP; restart_and_finish; rm -rf "$tmp" "$lock_dir" ) > "$cur/run/update.log" 2>&1 < /dev/null &
+  echo $! > "$lock_dir/pid"
   exit 0
 fi
 restart_and_finish

@@ -1,12 +1,13 @@
 // The workspace lock's tests' rig (lock-prompts.test.ts, lock-pair.test.ts): a core on an app's host, its locks at a cloud
 // that keeps chains and requests, its device's base key ME.
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { Effect } from "effect";
+import { Effect, Queue } from "effect";
 import { apply as applyOps } from "../src/delta.ts";
 import type { HttpRequest } from "../src/host.ts";
 import { type Entry, Signer, entryHash, next, shortCode } from "../src/lock.ts";
 import type { FakeHost } from "../src/testing.ts";
-import { hex, utf8 } from "../src/util.ts";
+import { base64url as toB64url, hex, utf8 } from "../src/util.ts";
+import type { Duplex } from "../src/views/pair.ts";
 import { call, subscribe } from "./helpers.ts";
 import { started, stationReplies } from "./station-fixture.ts";
 
@@ -133,3 +134,26 @@ export async function rig(locks: (signer: Signer) => Record<string, Entry>, befo
   return { ...s, cloud, ask, watch };
 }
 
+/// The cloud's grant key, as the lock names it, and credentials it signs.
+export function grant() {
+  const seed = new Uint8Array(32).fill(7);
+  const jwk = { kty: "OKP", crv: "Ed25519", kid: "k1", x: toB64url(ed25519.getPublicKey(seed)) };
+  const credential = (ws: string, device: string, sub: string, exp = 4102444800) => {
+    const head = toB64url(utf8(JSON.stringify({ alg: "EdDSA", typ: "stillfail-member+jwt", kid: "k1" })));
+    const body = toB64url(utf8(JSON.stringify({ iss: "stillfail-cloud", sub, email: `${sub}@x.com`, name: sub === "s2" ? "李二" : sub, ws, role: "member", device, exp })));
+    return `${head}.${body}.${toB64url(ed25519.sign(utf8(`${head}.${body}`), seed))}`;
+  };
+  return { keys: { keys: [jwk] }, credential };
+}
+
+/// Two ends of a stream of lines.
+export async function pipe(): Promise<[Duplex, Duplex]> {
+  const a = await Effect.runPromise(Queue.unbounded<unknown>());
+  const b = await Effect.runPromise(Queue.unbounded<unknown>());
+  const end = (mine: Queue.Queue<unknown>, theirs: Queue.Queue<unknown>): Duplex => ({
+    send: (m) => Effect.sync(() => void Queue.offerUnsafe(theirs, JSON.parse(JSON.stringify(m)))),
+    next: () => Queue.take(mine) as Effect.Effect<any>,
+    close: () => void Queue.offerUnsafe(theirs, null),
+  });
+  return [end(a, b), end(b, a)];
+}

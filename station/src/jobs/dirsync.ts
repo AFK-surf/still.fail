@@ -20,7 +20,7 @@ import {
   chmodSync, closeSync, copyFileSync, createReadStream, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readlinkSync,
   renameSync, rmSync, rmdirSync, statSync, symlinkSync, writeFileSync, writeSync,
 } from "node:fs";
-import { lstat, open, readdir, readlink, stat } from "node:fs/promises";
+import { chmod, lstat, mkdir, open, readFile, readdir, readlink, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { zstdCompress, zstdDecompress } from "node:zlib";
@@ -182,7 +182,7 @@ export async function listLocal(dir: string): Promise<Listing> {
       if (clean.length > MAX_FILES) throw new Error(`${dir} has more than ${MAX_FILES} files to sync`);
     }
     // Each one's size, off the station's main thread: one at a time there, a repository's thousands of files held every
-    // device for seconds on ccvm short of memory (2026-11-02, 24 s in six hours).
+    // device for seconds on a station short of memory (2026-11-02, 24 s in six hours).
     await pool(clean, async ({ path, id, mode }) => {
       const st = await lstat(join(dir, ...path.split("/"))).catch(() => null);
       if (st === null) return;
@@ -225,7 +225,7 @@ export type Ask = (method: string, more: Json) => Promise<Json>;
 /// The station's bulk requests to other stations (a sync's contents, a file's chunks), one at a time, in the order
 /// they came. What a station sends another waits in one queue with everything else it sends on the way (a relay's,
 /// iroh's: first in, first out): with several syncs pushing at once that queue grew to ten seconds, and members'
-/// devices, whose handshakes waited in it behind them, gave up connecting (2026-10-19, ccvm). One request at a time
+/// devices, whose handshakes waited in it behind them, gave up connecting (2026-10-19, a station). One request at a time
 /// keeps at most one request's worth (under 1 MiB) ahead of them.
 export class Bulk {
   private last: Promise<unknown> = Promise.resolve();
@@ -668,18 +668,20 @@ export async function patchOf(
     return null;
   }
   const missing: string[] = [];
-  mkdirSync(scratch, { recursive: true });
+  // Every file of it off the station's thread: written and read there one by one, a task's 23 files brought back held
+  // the station 3 s on a station short of memory (2026-11-03), a message sent meanwhile waiting.
+  await mkdir(scratch, { recursive: true });
   try {
     const g = (args: string[]) => run("git", ["-C", scratch, "-c", "core.autocrlf=false", "-c", "core.symlinks=true", "-c", "core.filemode=true", ...args], { maxBuffer: 1 << 30 });
     await g(["init", "-q"]);
-    const put = (path: string, content: Buffer, mode: string) => {
+    const put = async (path: string, content: Buffer, mode: string) => {
       const abs = join(scratch, ...path.split("/"));
-      mkdirSync(dirname(abs), { recursive: true });
-      rmSync(abs, { force: true });
-      if (mode === LINK) symlinkSync(content.toString(), abs);
+      await mkdir(dirname(abs), { recursive: true });
+      await rm(abs, { force: true });
+      if (mode === LINK) await symlink(content.toString(), abs);
       else {
-        writeFileSync(abs, content);
-        chmodSync(abs, mode === EXEC ? 0o755 : 0o644);
+        await writeFile(abs, content);
+        await chmod(abs, mode === EXEC ? 0o755 : 0o644);
       }
     };
     const kept = [];
@@ -687,8 +689,8 @@ export async function patchOf(
       let before: Buffer | null = null;
       const abs = join(dir, ...c.path.split("/"));
       try {
-        const st = lstatSync(abs);
-        const local = st.isSymbolicLink() ? Buffer.from(readlinkSync(abs)) : st.isFile() ? readFileSync(abs) : null;
+        const st = await lstat(abs);
+        const local = st.isSymbolicLink() ? Buffer.from(await readlink(abs)) : st.isFile() ? await readFile(abs) : null;
         if (local !== null && blobId(local) === c.old) before = local;
       } catch {}
       if (before === null) {
@@ -701,17 +703,17 @@ export async function patchOf(
         missing.push(c.path);
         continue;
       }
-      put(c.path, before, c.mode);
+      await put(c.path, before, c.mode);
       kept.push(c);
     }
     await g(["add", "-A"]);
     for (const c of kept) {
-      if (c.after === null) rmSync(join(scratch, ...c.path.split("/")), { force: true });
-      else put(c.path, c.after, c.afterMode ?? c.mode);
+      if (c.after === null) await rm(join(scratch, ...c.path.split("/")), { force: true });
+      else await put(c.path, c.after, c.afterMode ?? c.mode);
     }
     const { stdout } = await g(["diff", "--binary", `--src-prefix=a/${prefix}`, `--dst-prefix=b/${prefix}`]);
     return { patch: stdout, missing };
   } finally {
-    rmSync(scratch, { recursive: true, force: true });
+    await rm(scratch, { recursive: true, force: true });
   }
 }

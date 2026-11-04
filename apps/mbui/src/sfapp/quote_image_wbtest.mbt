@@ -8,7 +8,7 @@
 fn image_in_chat(name : String, platform? : Int = 2, w? : Double = 390.0) -> (@ui.Tester, Double, Double) {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=844.0, platform~)
   nav_rested(t)
   let mut tries = 0
@@ -154,7 +154,7 @@ test "a quoted image sent while reading above the end does not jump the chat to 
 fn quoted_preview_places(platform : Int, width : Double, count : Int) -> Unit raise {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   // Both the original and the new message fit in the chat at once.
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=width, h=6000.0, platform~)
   nav_rested(t)
@@ -351,7 +351,7 @@ fn local_quote_visible(name : String) -> Unit raise {
   let station = "ws1/st1"
   let path = "/w/uploads/" + name
   let picture = "mem:test/quoted-local"
-  open_chat({ station, session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station, session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   @ui.add_image(picture, png_head())
   @sfbase.sent_pictures[@sfbase.sent_key(station, path)] = picture
@@ -414,7 +414,7 @@ fn local_quote_uncovered(name : String) -> Unit raise {
   let station = "ws1/st1"
   let path = "/w/uploads/" + name
   let picture = "mem:test/uncovered-quote"
-  open_chat({ station, session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station, session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   @ui.add_image(picture, png_head())
   @sfbase.sent_pictures[@sfbase.sent_key(station, path)] = picture
@@ -508,7 +508,7 @@ test "a quoted video cover that arrives during the flight is shown on that same 
     },
   }
   let station = "ws1/st1"
-  open_chat({ station, session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station, session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   let file : Json = {
     "name": Json::string(name), "path": "/w/uploads/late-quote.mp4", "size": 120,

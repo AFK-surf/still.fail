@@ -252,11 +252,11 @@ test("a station added on the test channel installs its release: on its host, or 
     const home = (await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as { id: string };
     type Made = { token: string; install: string; installWindows: string; command: string };
     const add = async (on: "main" | "beta") => {
-      const made = await h.as(aliceTokens, on)("POST", `/v1/workspaces/${home.id}/enrollments`, { name: "studio" });
+      const made = await h.as(aliceTokens, on)("POST", `/v1/workspaces/${home.id}/enrollments`, { name: "willow" });
       return (await made.json()) as Made;
     };
     const fromApp = async () => {
-      const made = await h.fetch(`/v1/workspaces/${home.id}/enrollments`, { method: "POST", headers: { authorization: `Bearer ${aliceTokens.access_token}`, "content-type": "application/json", "x-stillfail-channel": "beta" }, body: JSON.stringify({ name: "studio" }) });
+      const made = await h.fetch(`/v1/workspaces/${home.id}/enrollments`, { method: "POST", headers: { authorization: `Bearer ${aliceTokens.access_token}`, "content-type": "application/json", "x-stillfail-channel": "beta" }, body: JSON.stringify({ name: "willow" }) });
       return (await made.json()) as Made;
     };
 

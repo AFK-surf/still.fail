@@ -22,7 +22,7 @@ pub fn fixture_share_topic(params : Map[String, Json]) -> Json? {
       "station": "ws1/st1",
       "session": Json::string(id),
       "title": Json::string(title),
-      "stationName": "Studio",
+      "stationName": "Willow",
       "last": { "preview": Json::string(preview) },
       "time": { "lastActiveAt": { "ago": Json::string(ago) } },
       "agents": [{ "maker": { "id": Json::string(maker), "name": Json::string(maker) }, "runtime": Json::string(runtime) }],
@@ -38,7 +38,7 @@ pub fn fixture_share_topic(params : Map[String, Json]) -> Json? {
     "site": "youtube.com",
     "items": Json::array(items),
     "kept": { "station": "ws1/st1", "id": "s-c4", "text": "youtube.com 的链接上次发到这里" },
-    "stations": [{ "station": "ws1/st1", "name": "Studio" }, { "station": "ws1/st2", "name": "MBA" }],
+    "stations": [{ "station": "ws1/st1", "name": "Willow" }, { "station": "ws1/st2", "name": "Maple" }],
     "newOn": "ws1/st1",
     "loading": false,
   })

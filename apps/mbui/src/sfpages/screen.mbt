@@ -16,6 +16,8 @@
 priv struct DropTo {
   folder : String
   reveal : Bool
+  /// the file is an app to install on the device once it is there (`screen.install`)
+  install : Bool
 } derive(Eq)
 
 ///|
@@ -463,7 +465,7 @@ fn ScreenSess::drops_to(self : ScreenSess) -> DropTo? {
       if folder == "" {
         None
       } else {
-        Some({ folder, reveal: flag(Some(d), "reveal") })
+        Some({ folder, reveal: flag(Some(d), "reveal"), install: false })
       }
     }
     _ => None

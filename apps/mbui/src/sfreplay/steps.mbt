@@ -401,6 +401,9 @@ pub fn Flow::field(self : Flow, words : String) -> Unit {
 /// The lowest `what` on screen (`top`: the highest) tapped, and what the core answers to it given.
 pub fn Flow::tap(self : Flow, what : String, top? : Bool = false) -> Unit {
   emit((if top { "tap1 " } else { "tap " }) + what)
+  // Messages posted as the last frame ended are taken in the next frame. Show them before locating the target, so a
+  // response that reorders the rows cannot move it between choosing its coordinates and taking the tap.
+  self.core()
   // (as a scripted run's tap waits for what it taps to show, where a finger reaches it, not under a sheet or a scrim:
   // what came for it given first, Flow::until)
   self.until(fn() { self.reach_spots(what).length() > 0 })

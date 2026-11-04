@@ -616,6 +616,20 @@ fn send_asked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 }
 
 ///|
+/// 安装 App tapped: the system's picker, what it gives going up to be installed on the device.
+fn install_asked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
+  let folder = text(s.state, "install")
+  guard folder != "" else { return }
+  match @ui.pick(Files) {
+    Some(p) => {
+      u.picking = Some(p)
+      u.drop_to = Some({ folder, reveal: false, install: true })
+    }
+    None => say(c, @sf.t("android-chat.composer.noFiles"))
+  }
+}
+
+///|
 /// The files picked, once the system has answered: each going onto the machine, one after another.
 fn screen_picked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   guard u.picking is Some(p) else { return }
@@ -658,7 +672,13 @@ fn screen_keys_in(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, keys : Array[@ui.Ke
   let send = fn(j : Json) { sent.push(j) }
   for k in keys {
     match k {
-      Text(words) => type_words(send, u.held, words)
+      Text(words) => {
+        type_words(send, u.held, words)
+        // (no paste on Xcode 27's yet: docs/remote-screens.md, the keys; said when it is what was just typed)
+        if s.simulator() && text(s.state, "title").contains("iOS 27") && words.iter().any(fn(ch) { ch.to_int() > 0x7e }) {
+          u.logs.relaunch_said = @sf.t("web-pages.screen.debug.keysNote")
+        }
+      }
       // ⌘V (Ctrl+V): this device's clipboard onto the screen's and pasted there, where it carries one, as a paste is
       // on the web's page (its keys are not sent)
       Key(down~, code="KeyV", mods~, ..) if (mods & (mod_meta | mod_ctrl)) != 0 &&
@@ -695,14 +715,15 @@ fn keyboard_toggled(c : @ui.Ctx, catcher : String, typing : Bool) -> Unit {
 // ── the bar, the rail, the folded tools ──────────────────────────────────
 
 ///|
-/// A round button with an icon (40, its icon 20), its name for those who cannot see it; `on`: pressed (the keyboard
-/// up, 控制). True when tapped.
+/// A round button with an icon (40, its icon 20), its name for those who cannot see it and as its tip; `on`: pressed
+/// (the keyboard up, 控制). True when tapped.
 fn round_button(c : @ui.Ctx, key : String, icon : String, label : String, on? : Bool = false) -> Bool {
   let id = c.id(key)
   let i = c.box(style=round_button_box, selected=on, id~, fn() {
     @sf.icon(c, icon, size=round_icon, color=c.color(Fg)) |> ignore
   })
   c.semantics(i, Button, id~, label~, pressed=on, actions=[Activate])
+  @sf.tip(c, key, id, label)
   c.clicked(id)
 }
 

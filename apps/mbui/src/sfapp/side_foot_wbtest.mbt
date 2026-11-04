@@ -26,7 +26,7 @@ fn side_panel(t : @ui.Tester) -> @ui.Laid? {
 fn settings_at_end(h : Double, locale? : String = "", newer? : String = "") -> @ui.Tester raise {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=690.0, h~, platform=2, env=[("MBUI_LOCALE", locale)])
   say_room(t, "medium", "medium")
   t.run_for(@ui.move_most_ms)

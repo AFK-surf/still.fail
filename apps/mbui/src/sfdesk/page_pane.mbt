@@ -15,7 +15,6 @@ fn page_one(
   main_w : Double,
   ph : Double,
   aside : Double,
-  finger : Bool,
 ) -> Unit {
   let top = page == app.nav.top()
   if @ui.window_inset() {
@@ -35,11 +34,7 @@ fn page_one(
       })
       @motion.scope(c, moved, bottom=true)
     }
-    if finger {
-      body()
-    } else {
-      c.selectable(color=@sf.alpha(@sf.theme().p.blue, 0.28), body)
-    }
+    c.selectable(color=@sf.alpha(@sf.theme().p.blue, 0.28), body)
   })
 }
 
@@ -64,7 +59,7 @@ fn pane_page_one(c : @ui.Ctx, src : Source, page : Page) -> Unit {
   // a right click in it: what is picked copied (context_menu.mbt)
   context_page(c, page_id)
   let pane = c.box(style=frame_main.then(@ui.style(w=Fixed(c.width))), id=page_id, fn() {
-    page_one(c, src, w, page, c.width, c.height, f.aside, pane_finger())
+    page_one(c, src, w, page, c.width, c.height, f.aside)
   })
   // (what moves in the page of its own takes its place from the page's foot: a keyboard, the block moving the page
   // aside, move none of it)
@@ -235,7 +230,7 @@ fn pane_made(
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_)) =>
+        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion) =>
           pane_made(src, Setting(r), tips).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
@@ -257,6 +252,20 @@ fn pane_made(
     Setting(StationArchiving(st)) =>
       made("station-archiving/" + st, fn(a, core, here, _stint, frame, width) {
         @sfpages.station_archiving_node(a, core, here, st, on_back=core.pop, frame~, width~)
+      })
+    Setting(Shortcuts) =>
+      // (recording while it is the one on top of the stack: its stay there, stint's)
+      made("shortcuts", fn(a, core, _here, stint, frame, width) {
+        @sfpages.shortcuts_node(a, core, on_back=core.pop, frame~, active=fn() { app.nav.top_stay().1 == stint() }, width~)
+      })
+    Setting(Notifications) =>
+      // (a workspace's picture asked for again each time it is come back to: nav_flat_view's stint)
+      made("notifications", fn(a, core, here, stint, frame, width) {
+        @sfpages.notify_node(a, core, here, on_back=core.pop, frame~, stint~, width~)
+      })
+    Setting(AutoCompletion) =>
+      made("auto-completion", fn(a, core, here, _stint, frame, width) {
+        @sfpages.completion_node(a, core, here, on_back=core.pop, frame~, width~, tips~)
       })
     Setting(Usage) =>
       made("usage", fn(a, core, here, _stint, frame, width) {

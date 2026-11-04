@@ -148,7 +148,7 @@ pub fn chat_screen_label(ChatScreen) -> String
 
 pub fn chat_screens_driven(Array[ChatScreen]) -> Bool
 
-pub fn chat_screens_open(ChatRef, Array[ChatScreen], from~ : @sf.Beside) -> Unit
+pub fn chat_screens_open(ChatRef, Array[ChatScreen], from~ : @sf.Beside, along? : @ui.Along) -> Unit
 
 pub fn chat_tick(@ui.Ctx, String, Reading, ChatView, shown~ : Bool, in_front~ : Bool) -> Unit
 
@@ -931,6 +931,8 @@ pub fn mouse_picks() -> Bool
 pub fn named_params(Viewer) -> Map[String, Json]
 
 pub fn nav_home() -> Unit
+
+pub fn nav_over_home(Array[Page]) -> Unit
 
 pub let nav_tapped : Array[String]
 
@@ -1996,6 +1998,7 @@ pub(all) struct ChatItem {
   settled : Bool
   swipe_archive : Bool
   watch_ask : String?
+  swipe_ask : String?
   ago : String
   full : String
   agents : Array[RowAgent]

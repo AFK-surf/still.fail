@@ -3,7 +3,7 @@
 fn chat_tester(mode : String) -> @ui.Tester {
   new_run()
   let src = fixture(mode)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t
@@ -24,8 +24,8 @@ test "a chat opens at its end: its bar, its last messages, the composer's room u
   assert_true(t.find("发消息") is Some(_))
   // an options card, a login card, a failing notice
   assert_true(t.find("一起换") is Some(_))
-  assert_true(t.find("在 Studio 上登录 gh") is Some(_))
-  assert_true(t.find("Studio 上 codex 的登录已失效") is Some(_))
+  assert_true(t.find("在 Willow 上登录 gh") is Some(_))
+  assert_true(t.find("Willow 上 codex 的登录已失效") is Some(_))
   // no way to the newest at the newest
   assert_true(!readings.get("ws1/st1\u{1}s-c1").unwrap().jump)
   t.assert_idle()
@@ -92,16 +92,16 @@ test "near the top the page before comes in, and what is in view stays where it 
   t.move(195.0, 400.0)
   // up to the first message: the page before is asked for there, and comes in above it
   let mut tries = 0
-  while t.find("Studio 上的 claude 已启动") is None && tries < 40 {
+  while t.find("Willow 上的 claude 已启动") is None && tries < 40 {
     t.wheel(195.0, 400.0, -300.0)
     tries = tries + 1
   }
-  let (_, y0) = t.find("Studio 上的 claude 已启动").unwrap()
+  let (_, y0) = t.find("Willow 上的 claude 已启动").unwrap()
   // from here on it moves by what is scrolled, never more (the pages coming in above do not push it)
   let mut y = y0
   for _ in 0..<3 {
     t.wheel(195.0, 400.0, -100.0)
-    let (_, y1) = t.find("Studio 上的 claude 已启动").unwrap()
+    let (_, y1) = t.find("Willow 上的 claude 已启动").unwrap()
     assert_true(y1 - y <= 100.5)
     y = y1
   }
@@ -117,7 +117,7 @@ test "a chat whose latest page is all letters to other chats: the page before co
   let src = fixture("chat-letters")
   let empty = @sf.t("web-main.chat.empty")
   let said_empty = Ref(false)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.each_frame(Some(fn() { if t.find(empty) is Some(_) { said_empty.val = true } }))
   t.run_for(@ui.move_most_ms)
@@ -227,7 +227,7 @@ test "a file card in the chat opens its preview" {
   new_run()
   let src = fixture("chat")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   // (the chat opened drawn at its moment, its push from there)
   t.draw()
   t.run_for(@ui.move_most_ms)
@@ -398,7 +398,7 @@ test "a chat left lets go of all that holds its thread at the core: its view and
     },
     leave: fn(name, params) { left.push((name, Json::object(params).stringify())) },
   }
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
@@ -435,7 +435,7 @@ test "left short of its end, a chat opens again where it was left, though the co
       (base.call)(name, params, done)
     },
   }
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.draw()
   open_chat(r)
@@ -543,7 +543,7 @@ test "a table wider than the message on a phone: at rest in line with the words,
 test "a table on a wide list, slid sideways: out over the margin, not cut at the words' column" {
   new_run()
   let src = fixture("chat-md")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   // (a window whose list is wide, its table wider than its words with its key past it)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=760.0, h=800.0, platform=2)
   t.run_for(@ui.move_most_ms)
@@ -571,7 +571,7 @@ test "a message said just after the chat opened comes in with the list gliding a
   let clock : Ref[Double] = { val: 0.0 }
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   // a moment on (well within the half second the list once waited), someone says something in it (said while it
@@ -610,7 +610,7 @@ test "what was said while the app was away, brought after its chat opened at its
   let clock : Ref[Double] = { val: 0.0 }
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   // a moment on, three come at once, more than a screen of them, said before it opened: caught up on, the unread line
@@ -639,4 +639,20 @@ test "a login card in a chat on a phone: as tall as what it holds, the next mess
   let (_, by, _, bh) = t.rect_of("在浏览器里登录").unwrap()
   let (_, ny, _, _) = t.rect_of("5 分钟前").unwrap()
   assert_true(ny - (by + bh) < 60.0, msg="room between the card's key and the next message: \{ny - (by + bh)}")
+}
+
+///|
+test "a notice opened keeps the size of its words" {
+  // (the user, 2026-11-03: a failing notice tapped, its words grew to a message's size)
+  let t = chat_tester("chat")
+  let words = "Willow 上 codex 的登录已失效"
+  let before = t.run_rects("Willow")
+  assert_true(before.length() > 0)
+  let (x, y) = t.find(words).unwrap()
+  t.tap(x, y)
+  t.run_for(@ui.move_most_ms)
+  let after = t.run_rects("Willow")
+  assert_true(after.length() > 0)
+  assert_true((after[0].2 - before[0].2).abs() < 0.5)
+  assert_true((after[0].3 - before[0].3).abs() < 0.5)
 }

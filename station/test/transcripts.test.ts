@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { zstdCompressSync } from "node:zlib";
-import { SEGMENT, framesOf, seekTable, segmented, unpackedWhole } from "../src/read/packed.ts";
+import { SEGMENT, framesOf, seekTable, segmented, segmentedSoon, unpackedWhole } from "../src/read/packed.ts";
 import { ChainTail, MARK_EVERY, PIECE, TranscriptTail } from "../src/read/tail.ts";
 import { READING, brief, readTimeline } from "../src/read/transcript.ts";
 import { chainOf, entriesOf, forgetKept, lengthOf } from "../src/read/transcripts.ts";
@@ -48,6 +48,24 @@ const page = (paths: string[], dir: string | null, from: number, to: number, inB
   const chain = chainOf(runtime, paths, dir);
   return { entries: entriesOf(runtime, chain, from, to, inBrief), end: lengthOf(chain) };
 };
+
+test("a history spanning runtimes keeps both transcripts readable, including after its live reader resumes", () => {
+  forgetKept();
+  const dir = temp();
+  const a = join(dir, "claude.jsonl");
+  const b = join(dir, "codex.jsonl");
+  writeFileSync(a, said("before", "a"));
+  const codex = (text: string) => `${JSON.stringify({ type: "response_item", timestamp: "2026-10-24T00:00:00Z", payload: { type: "message", role: "assistant", content: [{ type: "output_text", text }] } })}\n`;
+  writeFileSync(b, codex("after"));
+  const refs = [{ path: a, runtime: "claude" as const }, { path: b, runtime: "codex" as const }];
+  const chain = chainOf("codex", refs, null);
+  assert.deepEqual(entriesOf("codex", chain, 0, 2, false).map((e) => e.text), ["before", "after"]);
+  const live = ChainTail.from("codex", chain.map((m) => m.state));
+  appendFileSync(b, codex("later"));
+  assert.deepEqual(live.read()[1].map((e) => e.text), ["later"]);
+  forgetKept();
+  rmSync(dir, { recursive: true, force: true });
+});
 
 test("a page of a history is what a read of it whole gives, from anywhere in it, in brief or whole, as it grows", () => {
   forgetKept();
@@ -132,7 +150,7 @@ test("what a reader writes down of a reading goes on as the transcript grows: on
 test("a reading is written down as it goes on past what is written, not at its marks alone: one that starts again reads little", () => {
   // At its marks alone (every MARK_EVERY entries or MARK_BYTES), a reading kept on disk was up to MB behind: every
   // reader starting again (each start of the station) read and parsed it again, 27 MB of the transcripts at work on
-  // ccvm (2026-11-02), the first reads of their histories taking seconds after every update.
+  // a station (2026-11-02), the first reads of their histories taking seconds after every update.
   forgetKept();
   const dir = temp();
   const marks = join(dir, "marks");
@@ -239,9 +257,11 @@ test("a transcript put away with its last segment stored as it is (0.1.6800 to 0
   const frame = Buffer.concat([head, block, text]);
   writeFileSync(`${path}.zst`, Buffer.concat([frame, seekTable([{ packed: frame.length, size: text.length }])]));
   assert.ok(!segmented(`${path}.zst`));
+  assert.equal(await segmentedSoon(`${path}.zst`), false, "off the thread, the same");
   assert.deepEqual(unpackedWhole(`${path}.zst`), text);
   assert.equal(await segmentFile(path), true);
   assert.ok(segmented(`${path}.zst`));
+  assert.equal(await segmentedSoon(`${path}.zst`), true);
   assert.ok(statSync(`${path}.zst`).size < 1024);
   assert.deepEqual(unpackedWhole(`${path}.zst`), text);
   assert.equal(await segmentFile(path), false);
@@ -258,8 +278,10 @@ test("a transcript put away before there were segments is put away again in them
   writeFileSync(`${path}.zst`, zstdCompressSync(readFileSync(path)));
   rmSync(path);
   assert.ok(!segmented(`${path}.zst`));
+  assert.equal(await segmentedSoon(`${path}.zst`), false);
   assert.equal(await segmentFile(path), true);
   assert.ok(segmented(`${path}.zst`));
+  assert.equal(await segmentedSoon(`${path}.zst`), true);
   assert.equal(await segmentFile(path), false);
   assert.deepEqual(unpackedWhole(`${path}.zst`), Buffer.from(lines.join("")));
   for (const at of [3, MARK_EVERY + 1, whole.length - 4]) assert.deepEqual(page([path], null, at, at + 4).entries, whole.slice(at, at + 4));

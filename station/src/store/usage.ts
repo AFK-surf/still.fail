@@ -4,6 +4,8 @@ import type { DatabaseSync } from "node:sqlite";
 import { type Json, STILLFAIL_SURFACE } from "./rows.ts";
 import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailSince, usageTotalsComplete, USAGE_DETAIL_PENDING } from "./usage-detail.ts";
 import { usageCompactionsReady } from "./usage-compactions.ts";
+import { compactQuery, compactScopeReady, compactUsageSince, hasCompactUsage, noteCompactContexts, compactContexts, seedCompactContext } from "./usage-compact.ts";
+import { retiredUsage } from "./usage-retire.ts";
 
 /// A model call read from a transcript (or a turn's calls, told at once: `calls` of them). Tokens as the provider bills
 /// them. `context`: of a main-thread call, what its session's context held after it (null: not told); `window`: the
@@ -32,36 +34,104 @@ export type UsageGroup = {
 /// Stands for i64::MIN as a turn's start: before every call.
 const EARLIEST = Number.MIN_SAFE_INTEGER;
 
+/// The counter starts recording at installation. Its last completed sweep lets a restart find only turns which may
+/// have produced new usage while it was stopped, without walking the station's older sessions.
+export function installUsageCounter(db: DatabaseSync, now: number): void {
+  const has = (name: string) => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name) !== undefined;
+  const columnsOf = () => new Set((db.prepare("PRAGMA table_info(usage_files)").all() as { name: string }[]).map((row) => row.name));
+  const columns = columnsOf();
+  if (has("usage_counter") && columns.has("counter_cutoff") && columns.has("counter_anchor")) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.exec("CREATE TABLE IF NOT EXISTS usage_counter (id INTEGER PRIMARY KEY CHECK (id = 1), since INTEGER NOT NULL, through INTEGER NOT NULL)");
+    db.prepare("INSERT OR IGNORE INTO usage_counter VALUES (1, ?, ?)").run(now, now);
+    const current = columnsOf();
+    if (!current.has("counter_cutoff")) db.exec("ALTER TABLE usage_files ADD COLUMN counter_cutoff INTEGER");
+    if (!current.has("counter_anchor")) db.exec("ALTER TABLE usage_files ADD COLUMN counter_anchor TEXT");
+    db.exec("COMMIT");
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+}
+
+export type CounterFile = { cutoff: number; anchor: string | null };
+
+/// The boundary at which a file began being followed, and the bytes immediately before its saved offset.
+export function usageCounterFile(db: DatabaseSync, path: string): CounterFile | null {
+  const row = db.prepare("SELECT counter_cutoff AS cutoff, counter_anchor AS anchor FROM usage_files WHERE path = ?").get(path) as { cutoff: number | null; anchor: string | null } | undefined;
+  return row?.cutoff == null ? null : { cutoff: row.cutoff, anchor: row.anchor };
+}
+
+/// Save the boundary and position together before reading. A replaced file must not inherit the old position after a crash.
+export function beginUsageCounterFile(db: DatabaseSync, path: string, file: UsageFile, counter: CounterFile, reset: boolean): CounterFile {
+  db.prepare(`INSERT INTO usage_files (path, session, offset, model, counter_cutoff, counter_anchor)
+    VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+    ON CONFLICT(path) DO UPDATE SET
+      session = CASE WHEN ?7 THEN excluded.session ELSE usage_files.session END,
+      offset = CASE WHEN ?7 THEN excluded.offset ELSE usage_files.offset END,
+      model = CASE WHEN ?7 THEN excluded.model ELSE usage_files.model END,
+      counter_cutoff = CASE WHEN ?7 THEN excluded.counter_cutoff ELSE COALESCE(usage_files.counter_cutoff, excluded.counter_cutoff) END,
+      counter_anchor = CASE WHEN ?7 THEN excluded.counter_anchor ELSE COALESCE(usage_files.counter_anchor, excluded.counter_anchor) END`)
+    .run(path, file.session, file.offset, file.model, counter.cutoff, counter.anchor, reset ? 1 : 0);
+  return usageCounterFile(db, path)!;
+}
+
 /// usage_files: every transcript read for usage so far, by path.
 export function usageFiles(db: DatabaseSync): Map<string, UsageFile> {
   const rows = db.prepare("SELECT path, session, offset, model FROM usage_files").all() as Json[];
   return new Map(rows.map((r) => [r.path, { session: r.session, offset: r.offset, model: r.model }]));
 }
 
+/// One transcript's saved position, by its path's primary key.
+export function usageFile(db: DatabaseSync, path: string): UsageFile | undefined {
+  return db.prepare("SELECT session, offset, model FROM usage_files WHERE path = ?").get(path) as UsageFile | undefined;
+}
+
+export type UsageWriteOptions = { minNewAt?: number; changed?: { from: number }; counter?: CounterFile };
+
 /// record_usage: a transcript's calls read up to `file.offset`, each with what it was for; a call recorded before keeps
 /// its row (its output grown). How many were new. Run in a transaction by the caller.
-export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, runtime: string, calls: [UsageCall, UsageFor][]): number {
+export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, runtime: string, calls: [UsageCall, UsageFor][], options?: UsageWriteOptions): number {
   let added = 0;
+  const compact = hasCompactUsage(db);
+  const recent: [UsageCall, UsageFor][] = [];
   if (file.session !== null) {
+    let seeded = false;
     const insert = db.prepare(
-      `INSERT INTO usage (id, at, session, turn, thread, person, profile, runtime, model, subagent, fast, input, cache_read, cache_write, cache_write_long, output, calls, context, context_window)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
-       ON CONFLICT (id) DO UPDATE SET output = MAX(output, excluded.output)`,
+      `INSERT INTO usage (id, at, session, turn, thread, person, profile, runtime, model, subagent, fast, input, cache_read, cache_write, cache_write_long, output, calls, context, context_window${compact ? ", compact_counted" : ""})
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19${compact ? ", 1" : ""})
+       ${compact ? "" : "ON CONFLICT (id) DO UPDATE SET output = MAX(output, excluded.output)"}`,
     );
-    const known = db.prepare("SELECT 1 FROM usage WHERE id = ?");
+    const known = db.prepare("SELECT output FROM usage WHERE id = ?");
+    const grow = compact ? db.prepare("UPDATE usage SET output = ?1 WHERE id = ?2 AND output < ?1") : null;
     for (const [c, of] of calls) {
-      const was = known.get(c.id) !== undefined;
-      insert.run(
+      const was = known.get(c.id) as { output: number } | undefined;
+      // An old call may grow after the cutover, but an unseen old call is not historical work to fill in.
+      if (was === undefined && options?.minNewAt !== undefined && c.at < options.minNewAt) continue;
+      // The same response can occur in several transcript lines or be replayed after an interrupted read.
+      if (was !== undefined && c.output <= was.output) continue;
+      // Seed from the saved summary before the first real change, including a subagent's. A replay that changes no
+      // call must neither read nor write the context, and seeding after a write could mistake the saved total for stale.
+      if (compact && !seeded) {
+        seeded = true;
+        if (usageTotalsComplete(db, file.session)) seedCompactContext(db, file.session);
+      }
+      if (was !== undefined && grow !== null) grow.run(c.output, c.id);
+      else insert.run(
         c.id, c.at, file.session, of.turn, of.thread, of.person, of.profile, runtime, c.model, c.subagent ? 1 : 0, c.fast ? 1 : 0,
         c.input, c.cacheRead, c.cacheWrite, c.cacheWriteLong, c.output, c.calls, c.context, c.window,
       );
-      if (!was) added++;
+      if (was === undefined) { added++; if (compact && !c.subagent) recent.push([c, of]); }
+      if (options?.changed !== undefined) options.changed.from = Math.min(options.changed.from, c.at);
     }
+    if (recent.length > 0) noteCompactContexts(db, file.session, runtime, recent);
   }
   db.prepare(
-    `INSERT INTO usage_files (path, session, offset, model) VALUES (?1, ?2, ?3, ?4)
-     ON CONFLICT (path) DO UPDATE SET session = excluded.session, offset = excluded.offset, model = excluded.model`,
-  ).run(path, file.session, file.offset, file.model);
+    `INSERT INTO usage_files (path, session, offset, model, counter_cutoff, counter_anchor) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+     ON CONFLICT (path) DO UPDATE SET session = excluded.session, offset = excluded.offset, model = excluded.model,
+       counter_cutoff = COALESCE(excluded.counter_cutoff, usage_files.counter_cutoff),
+       counter_anchor = CASE WHEN excluded.counter_cutoff IS NULL THEN usage_files.counter_anchor ELSE excluded.counter_anchor END
+     WHERE usage_files.session IS NOT excluded.session OR usage_files.offset IS NOT excluded.offset OR usage_files.model IS NOT excluded.model
+       OR (excluded.counter_cutoff IS NOT NULL AND (usage_files.counter_cutoff IS NOT excluded.counter_cutoff OR usage_files.counter_anchor IS NOT excluded.counter_anchor))`,
+  ).run(path, file.session, file.offset, file.model, options?.counter?.cutoff ?? null, options?.counter?.anchor ?? null);
   return added;
 }
 
@@ -72,7 +142,7 @@ export const ACTIVE_SESSIONS = "SELECT session_key FROM turns WHERE ended_at IS 
 export function usageActiveSessions(db: DatabaseSync, since: number): string[] {
   // Each half by the index on when turns ended, the sessions made distinct here: asked as one OR, or as a UNION or a
   // DISTINCT, the station's SQLite (node's, 3.53; not the sqlite3 command's) answers it in order of session by reading
-  // every turn of the station's, 33 s on ccvm with its pages put out (2026-10-25).
+  // every turn of the station's, 33 s on a station with its pages put out (2026-10-25).
   const rows = db.prepare(ACTIVE_SESSIONS).all(since) as Json[];
   return [...new Set(rows.map((r) => r.session_key as string))];
 }
@@ -138,6 +208,7 @@ export type ContextCall = {
 export const LAST_CONTEXTS = `SELECT u.turn, u.profile, u.model, u.context, u.context_window, u.at, u.fast, u.cache_write, u.cache_write_long
   FROM usage_main_calls m JOIN usage u ON u.id = m.id WHERE m.session = ?1 ORDER BY m.at DESC, m.id DESC LIMIT ?2`;
 export function lastContexts(db: DatabaseSync, session: string, limit: number): ContextCall[] {
+  if (hasCompactUsage(db)) return compactContexts(db, session, limit);
   // A partially built index cannot prove which call was last. Do not scan the raw history or present an older call as
   // current; the context is unavailable until it can be maintained independently of the old index.
   if (!usageCompactionsReady(db)) return [];
@@ -169,6 +240,12 @@ export function usageGroupOf(r: Json): UsageGroup {
 /// usage_groups: the calls from `from` until `to` (ms), added up by day in the asker's time zone (`utcOffsetMin`) and
 /// by thread, person, profile and model.
 export function usageGroups(db: DatabaseSync, from: number, to: number, utcOffsetMin: number): UsageGroup[] {
+  if (hasCompactUsage(db)) {
+    if (!compactScopeReady(db, null)) throw new Error("usage statistics are moving between workspaces");
+    const query = compactQuery(BigInt(Math.trunc(from)), BigInt(Math.trunc(to)), BigInt(Math.trunc(utcOffsetMin)), null);
+    return (db.prepare(query.sql).all(...query.args) as Json[]).map(usageGroupOf);
+  }
+  if (retiredUsage(db)) throw new Error("usage detail statistics are unavailable");
   const generation = usageDetailGeneration(db);
   if (!usageDetailReady(db, null, generation)) throw new Error(USAGE_DETAIL_PENDING);
   const query = detailQuery(BigInt(Math.trunc(from)), BigInt(Math.trunc(to)), BigInt(Math.trunc(utcOffsetMin)), null, generation);
@@ -192,6 +269,7 @@ export function usageOfSession(db: DatabaseSync, session: string): UsageGroup[] 
 
 /// usage_since: when the earliest call recorded was made.
 export function usageSince(db: DatabaseSync): number | null {
+  if (hasCompactUsage(db)) return compactUsageSince(db);
   const first = (db.prepare("SELECT first_at FROM usage_span WHERE id = 1").get() as Json).first_at as number | null;
   const cutover = usageDetailSince(db);
   return cutover === null ? first : Math.max(first ?? cutover, cutover);

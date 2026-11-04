@@ -15,6 +15,7 @@ import { DshDriver } from "../agents/dsh.ts";
 import { GrokDriver } from "../agents/grok.ts";
 import { CursorDriver } from "../agents/cursor.ts";
 import { HermesDriver } from "../agents/hermes.ts";
+import { AgyDriver } from "../agents/agy.ts";
 import { DevinDriver } from "../agents/devin.ts";
 import { Jobs, notifyEndpoint, screenEndpoint } from "../jobs/jobs.ts";
 import { liveMemory } from "../jobs/memory.ts";
@@ -63,9 +64,11 @@ import { hubConfig } from "./config.ts";
 import type { TailState } from "../read/tail.ts";
 import { ColdRooms } from "./cold.ts";
 import { Hub } from "./hub.ts";
+import { buildWorkspaceActivity } from "./workspace-activity-builder.ts";
+import { PostBlockBuilder } from "./post-block-builder.ts";
 import { roomOf } from "./footprint.ts";
 import { InternalChat } from "./internal.ts";
-import { autoArchive, expireArchived, relieveArchived } from "./lifecycle.ts";
+import { expireArchived, relieveArchived, startAutoArchiveTimer } from "./lifecycle.ts";
 import { fromPeer, sender } from "./messages.ts";
 import { CREATE, NOTICE, createForPeer, noticeForPeer } from "./opened.ts";
 import { chatsTouched, forPeer, READ } from "./others.ts";
@@ -78,9 +81,6 @@ const encode = encodeURIComponent;
 
 /// How often the sandboxes nothing runs in are looked for (hub.ts `sweepSandboxes`).
 const SWEEP_MS = 3 * 60_000;
-/// How many threads archived to files are brought back into the database at a time, a second apart (store.ts
-/// `bringInArchived`): each a file read and its entries written, the main thread's.
-const BRING_IN = 20;
 
 export type AgentsParts = {
   /// The agents' predecessor-exit wait, also used before binding the mesh socket.
@@ -188,16 +188,19 @@ export const AgentsLive = (control: Control) =>
       // subscription's is (agents/sandbox.ts).
       const lentToSandbox = (p: any) => !borrowed(p) && p?.access?.kind === "subscription" && sandboxed(data);
       const hermes = new HermesDriver({ data });
+      const agy = new AgyDriver({ data });
       // What the station before this one left, taken up (`start`): until then the codex app-servers its runners keep are
       // the sessions' that ran on them (agents/codex.ts `takenUp`).
       const takenUp = Promise.withResolvers<void>();
+      let codexIncomplete = () => {};
       const codex = new CodexDriver({
         data,
+        incompleteInstallation: () => codexIncomplete(),
         takenUp: takenUp.promise,
         currentProfile: (id) => settings().profiles.find((p) => p.id === id),
         lent: {
           borrowed: (p) => borrowed(p) || lentToSandbox(p),
-          write: (p) => (borrowed(p) ? sharing!.lendCodex(p) : sharing!.lendOwnCodex(p, lentFile(data, p.home))),
+          write: (p) => (borrowed(p) ? sharing!.lendCodex(p, false, sandboxed(data) ? lentFile(data, p.home) : undefined) : sharing!.lendOwnCodex(p, lentFile(data, p.home))),
         },
       });
       // What the parts of the agents' side add (slack/module.ts): the connects' chats, their overview, and what they do
@@ -232,6 +235,7 @@ export const AgentsLive = (control: Control) =>
           new CursorDriver({ data }),
           new DevinDriver({ data }),
           hermes,
+          agy,
         ],
         mcpUrl: () => door?.url ?? "",
         internal: new InternalChat(),
@@ -240,6 +244,16 @@ export const AgentsLive = (control: Control) =>
         cold,
         places,
       });
+      const workspaceActivity = yield* Effect.acquireRelease(
+        Effect.sync(() => buildWorkspaceActivity(store, previous)),
+        (builder) => Effect.promise(() => builder.close()),
+      );
+      hub.waitForWorkspaceActivity = () => workspaceActivity.ready;
+      const postBlocks = yield* Effect.acquireRelease(
+        Effect.sync(() => new PostBlockBuilder(store, previous)),
+        (builder) => Effect.promise(() => builder.close()),
+      );
+      hub.preparePostsAfter = (messages, signal) => postBlocks.ready(messages, signal);
       // No turn until the agents' door is open: a runtime started before has no MCP endpoint, and Codex does not
       // connect to it again for that thread.
       hub.hold("starting");
@@ -263,8 +277,8 @@ export const AgentsLive = (control: Control) =>
       const remote = new Remote({ data, store, jobs, notify: (session, text) => hub.notify(session, text), places: hub.places, bus: yield* Peers });
       // Measure only working chats, and only station-owned workspaces. A chat's remote workspaces are measured on the
       // machines that hold them; an offline or older station supplies no reading until it can answer.
-      const workingRow = (row: NonNullable<ReturnType<typeof store.getSession>>, jobsRunning: Set<string>): boolean =>
-        row.archivedAt === null && (row.running || hub.processState(row.key) === "running" || jobsRunning.has(row.key) || store.lastTurn(row.key)?.declared === "waiting");
+      const workingRow = (row: NonNullable<ReturnType<typeof store.getSession>>, jobsRunning: Set<string>, waiting?: Set<string>): boolean =>
+        row.archivedAt === null && (row.running || hub.processState(row.key) === "running" || jobsRunning.has(row.key) || (waiting ? waiting.has(row.key) : store.lastTurn(row.key)?.declared === "waiting"));
       const working = (key: string): boolean => {
         const row = store.getSession(key);
         return row !== null && workingRow(row, new Set(store.jobsRunning().map((j) => j.sessionKey)));
@@ -276,7 +290,10 @@ export const AgentsLive = (control: Control) =>
         notify: (session, text) => hub.notify(session, text),
         readings: async () => {
           const jobsRunning = new Set(store.jobsRunning().map((j) => j.sessionKey));
-          return (await Promise.all(store.liveSessions().filter((s) => workingRow(s, jobsRunning)).map(async (s) => {
+          const live = store.liveSessions();
+          // Whether each waits, of those not at work otherwise, in one statement.
+          const waiting = store.waitingOf(live.filter((s) => s.archivedAt === null && !s.running && hub.processState(s.key) !== "running" && !jobsRunning.has(s.key)).map((s) => s.key));
+          return (await Promise.all(live.filter((s) => workingRow(s, jobsRunning, waiting)).map(async (s) => {
             const found: WorkspaceReading[] = [];
             if (roomOf(data, s.workspace) !== null) {
               const size = remote.workspaceReader.size(s.workspace, workspaceWatch.limit(s.key, ""));
@@ -442,6 +459,7 @@ export const AgentsLive = (control: Control) =>
         origin: () => plane.releaseBase(),
         running: () => hub.running(),
       });
+      codexIncomplete = () => { void updates.check().catch((error) => log.warn("updates", "Codex installation not checked", { error: String(error) })); };
       // The packages of the modules the station installs itself, read and updated with the rest (a line each).
       updates.add(yield* ModulePackages);
       updates.start();
@@ -466,9 +484,9 @@ export const AgentsLive = (control: Control) =>
         return cloud.memberships().flatMap((m) => m.peers).find((x) => x?.id === host)?.name ?? host ?? null;
       };
       const accounts: Accounts = makeAccounts({
-        data, store, config, hub, reviewUndecided: () => startReview(hub), codex: () => codex as any, hermes: () => hermes, following: () => events.inUse() || hub.anyRunning(), checkOnStart: true,
+        data, store, config, hub, reviewUndecided: () => startReview(hub), codex: () => codex as any, hermes: () => hermes, agy: () => agy, following: () => events.inUse() || hub.anyRunning(), checkOnStart: true,
         workspaces: () => hub.workspaces(),
-        shared: { status: (p) => sharing!.status(p), lendCodex: (p, rejected) => sharing!.lendCodex(p, rejected), view: (p) => sharing?.profileView(p) ?? null, hostName },
+        shared: { status: (p) => sharing!.status(p), lendCodex: (p, rejected) => sharing!.lendCodex(p, rejected), quotaReset: (p, key) => sharing!.quotaReset(p.id, key), loginUpdated: () => { void sharing?.reconcile(); }, view: (p) => sharing?.profileView(p) ?? null, hostName },
       });
       found = accounts.found;
       accounts.start();
@@ -483,6 +501,8 @@ export const AgentsLive = (control: Control) =>
         status: async (id) => { const h = await accounts.lentHealth(id); return { check: h.check ?? null, quota: h.quota ?? null }; },
         changed: () => events.overviewChanged(),
         recheck: () => accounts.recheckBorrowed(),
+        profileChanged: (id, reset) => accounts.sharedChanged(id, reset),
+        quotaReset: (id) => accounts.sharedQuotaReset(id),
       });
       remote.setShares((peer, request, workspace) => sharing!.handle(peer, request, workspace));
       sharing.start();
@@ -498,7 +518,15 @@ export const AgentsLive = (control: Control) =>
         state: async (key) => (JSON.parse(await readers.read("transcriptState", { key }, "zh")) as { states: TailState[] | null }).states,
         page: async (key, before, limit, brief) => JSON.parse(await readers.read("timeline", { key, before: String(before), limit: String(limit), lang: "zh", ...(brief ? { brief: "1" } : {}) }, "zh")),
       };
+      // Not asked of them before the process before has handed over: what it carries says where each reading stands.
+      hub.live.handover = previous;
+      // Where each checklist was read to, for the next process to read on from (not back, at each update).
+      parts.carry("live.plans", () => hub.live.carriedPlans(), (what) => hub.live.takePlans(what));
+      // And where each transcript's reading stood, for it to read on from there (not ask the readers, at each update).
+      parts.carry("live.tails", () => hub.live.carriedTails(), (what) => hub.live.takeTails(what));
       hub.threadList = async () => JSON.parse(await readers.read("threadList", {}, "zh"));
+      hub.recentChatList = async (ws, home, limit) => JSON.parse(await readers.read("recentChatList", { ws, home, limit }, "zh"));
+      hub.searchChatList = async (ws, home, limit, query) => JSON.parse(await readers.read("searchChatList", { ws, home, limit, query }, "zh"));
       hub.latestMessages = async (thread, limit) => JSON.parse(await readers.read("latestMessages", { thread, limit }, "zh"));
       hub.followRunning();
       // The readers say what runs, and which chats clients made: the hub's.
@@ -517,12 +545,12 @@ export const AgentsLive = (control: Control) =>
         followed: () => accounts.followed(),
       });
       // A runtime installed or updated from the pages: the machine's logins read again.
-      updates.onRuntimeChanged((kind, installed) => {
+      updates.onRuntimeChanged((kind, installed, replaced) => {
         void accounts.machine?.refresh();
         // Installed: the sessions whose start found it missing take what waits.
         if (installed) hub.installed(kind);
         // Codex updated: its app-servers of the old version are replaced (their files are gone).
-        void codex.runtimeChanged().catch((error) => log.warn("agents::codex", "codex app-servers not checked after an update", { error: String(error) }));
+        void codex.runtimeChanged(kind === "codex" && replaced).catch((error) => log.warn("agents::codex", "codex app-servers not checked after an update", { error: String(error) }));
       });
       // A session found its runtime not installed: the pages read it again (removed since they last did).
       hub.onRuntimeMissing((runtime) => updates.missing(runtime));
@@ -669,16 +697,7 @@ export const AgentsLive = (control: Control) =>
 
       // Chats idle long enough go to the archive: looked at when the next one comes due, and every ten minutes for what
       // was idle but not done (a job up, unread, at a block) and is done since, or the setting changed.
-      const archiving = () => {
-        let next: number | null = null;
-        try {
-          next = autoArchive(hub, hub.now());
-        } catch (error) {
-          log.warn("hub", "auto-archiving failed", { error: (error as Error).message });
-        }
-        time.after(Math.min(600_000, next === null ? Infinity : next - hub.now()), archiving);
-      };
-      time.after(60_000, archiving);
+      const stopArchiving = startAutoArchiveTimer(hub, time, readers);
 
       // Chats archived long enough keep only their history and the files sent in them: looked at when the next one
       // comes due, and every hour for the setting changed.
@@ -715,24 +734,6 @@ export const AgentsLive = (control: Control) =>
       };
       time.after(DISK_EVERY_MS, relieving);
 
-      // The threads a station before wrote out to their archive files, back into the database a few at a time
-      // (store.ts `bringInArchived`), once the devices have come back from the start.
-      let broughtIn = 0;
-      const bringingIn = () => {
-        let left: number;
-        try {
-          const step = store.bringInArchived(BRING_IN);
-          broughtIn += step.brought;
-          left = step.left;
-        } catch (error) {
-          log.warn("store", "archived threads not brought back into the database", { error: (error as Error).message });
-          return;
-        }
-        if (left > 0) time.after(1_000, bringingIn);
-        else if (broughtIn > 0) log.info("store", "the threads archived to files are back in the database", { n: broughtIn });
-      };
-      time.after(120_000, bringingIn);
-
       // What the Rust station's archiving left (the transcripts kept twice): once, when the devices have come back.
       time.after(180_000, () => cold.finishLegacyCopies().then(() => cold.segmentHistories()));
 
@@ -763,6 +764,9 @@ export const AgentsLive = (control: Control) =>
         Effect.promise(async () => {
           if (handing) return;
           handing = true;
+          stopArchiving();
+          await postBlocks.close();
+          await workspaceActivity.close();
           await time.close();
           await sharing?.close();
           await xshare.close();

@@ -232,7 +232,11 @@ let section_none_foot : Double = 8.0
 /// (`note`); wide, wide_section's whatever it `heads` (its title, 14 on 22, 600; `note` under it, the meta's muted, 3
 /// under, 624 at most; 10 over what it holds, 28 under all of it), what is made in it a section's (part_of). `body`
 /// makes what it holds. `about`: what it is for, as the web's pages say it: wide under its title (`note`'s, where it
-/// says none), narrow under what it holds (the mobile pages' note at a section's foot).
+/// says none), narrow under what it holds (the mobile pages' note at a section's foot). `actions`: what is done to all
+/// it holds (all of them back as they were), made while it says so: wide at its title's end, 8 apart (wide_section's
+/// section_actions); narrow at the section's foot after what it is for, in a page's note's room (pg_note_box: 快捷键's
+/// 全部恢复默认 as its old view put it). Not the old view's section's narrow `actions`, which stand on its heading's line
+/// (heading's): a section whose actions belong there says its title's own.
 pub fn section_node(
   parent : @view.View,
   title : () -> String,
@@ -240,6 +244,7 @@ pub fn section_node(
   heads? : Bool = true,
   note? : () -> String = fn() { "" },
   about? : () -> String = fn() { "" },
+  actions? : (() -> Bool, (@view.View) -> Unit),
 ) -> Unit {
   let at = part_of(parent)
   match at.look {
@@ -252,24 +257,55 @@ pub fn section_node(
       }
       body(parent)
       parent.show(fn() { about() != "" }, fn(n) { page_note_node(n, about) })
+      match actions {
+        Some((shown, make)) =>
+          parent.show(shown, fn(a) {
+            a.box(fn(r) {
+              r.row(Is(true)).padding(Is((pg_note_x, pg_note_top, pg_note_x, pg_note_foot))) |> ignore
+              make(r)
+            })
+            |> ignore
+          })
+        None => ()
+      }
     }
     Wide =>
       parent.box(fn(sec) {
         sec.padding(Is((0.0, 0.0, 0.0, section_foot))) |> ignore
-        sec.box(fn(head) {
-          head.padding(Is((0.0, 0.0, 0.0, title_card_wide))) |> ignore
-          words_node(head, title, fn() { section_title }) |> ignore
-          // (what it holds said, and what it is for: under its title)
-          let said = fn() {
-            match (note(), about()) {
-              ("", a) => a
-              (n, _) => n
+        sec.box(fn(line) {
+          line
+          .row(Is(true))
+          .padding(Is((0.0, 0.0, 0.0, title_card_wide)))
+          .gap(Is(section_actions_apart))
+          .lines_up(Is(Some(Middle)))
+          |> ignore
+          line.box(fn(head) {
+            head.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
+            words_node(head, title, fn() { section_title }) |> ignore
+            // (what it holds said, and what it is for: under its title)
+            let said = fn() {
+              match (note(), about()) {
+                ("", a) => a
+                (n, _) => n
+              }
             }
-          }
-          head.show(fn() { said() != "" }, fn(n) {
-            n.padding(Is((0.0, section_note_gap, 0.0, 0.0))).max_width(Is(Some(section_note_w))) |> ignore
-            words_node(n, said, fn() { section_note }) |> ignore
+            head.show(fn() { said() != "" }, fn(n) {
+              n.padding(Is((0.0, section_note_gap, 0.0, 0.0))).max_width(Is(Some(section_note_w))) |> ignore
+              words_node(n, said, fn() { section_note }) |> ignore
+            })
           })
+          |> ignore
+          match actions {
+            Some((shown, make)) =>
+              line.show(shown, fn(a) {
+                a.box(fn(r) {
+                  r.row(Is(true)).gap(Is(section_actions_gap)).lines_up(Is(Some(Middle))) |> ignore
+                  make(r)
+                })
+                |> ignore
+              })
+            None => ()
+          }
         })
         |> ignore
         sec.box(fn(b) {
@@ -281,6 +317,13 @@ pub fn section_node(
       |> ignore
   }
 }
+
+///|
+/// section_head's room between its words and what is done at its end (gap=S3), section_actions' between those (gap=S2).
+let section_actions_apart : Double = 12.0
+
+///|
+let section_actions_gap : Double = 8.0
 
 ///|
 /// section_box's room under it (mb=S7), its note's widest (section_note_most).
@@ -353,6 +396,8 @@ fn wide_link_row_node(
   title_after : ((@view.View) -> Unit)?,
   title_after_shown : () -> Bool,
   folds : (() -> Bool)?,
+  tail : ((@view.View) -> Unit)?,
+  tail_shown : () -> Bool,
 ) -> Unit {
   let at = part_of(parent)
   let under = fn() { note() != "" || trouble() != "" || below is Some(_) }
@@ -430,6 +475,7 @@ fn wide_link_row_node(
           said.box(fn(w) { styled_words(w, value, fn() { if value_bad() { wide_value.then(bad) } else { wide_value } }) |> ignore })
           |> ignore
         })
+        row_tail_node(first, tail, tail_shown)
         if ends {
           icon_node(first, mark(), desk_chevron, By(fn() { theme().p.muted }), name_now=mark) |> ignore
         }
@@ -453,24 +499,31 @@ fn wide_link_row_node(
 /// A switch's row on a wide page (switch_row's, wide): its title, `note` quieter under it (the theme's rows'), the
 /// switch at its end across their middle, 16 apart; on a list's card (part_of) a row of it (wide_in_list: as far in as
 /// its rows' words, 10 over and under, as high as one at least, its corner concentric with the card's), its title as
-/// strong as the list's other rows' (setting_title). The switch alone answers.
+/// strong as the list's other rows' (setting_title); its words' looks `looks` where given. The switch alone answers.
 fn wide_switch_row_node(
   parent : @view.View,
   title : () -> String,
   on : () -> Bool,
   turn : (Bool) -> Unit,
   note : () -> String,
+  disabled : () -> Bool,
+  lead : ((@view.View) -> Unit)?,
+  looks? : (() -> @ui.TextStyle, () -> @ui.TextStyle),
 ) -> Unit {
   let at = part_of(parent)
+  let (title_look, note_look) = match looks {
+    Some(l) => l
+    None => (fn() { if at.list { setting_title() } else { theme().rows.title } }, fn() { theme().rows.note })
+  }
   let row = fn(r : @view.View) {
     r.row(Is(true)).gap(Is(16.0)).lines_up(Is(Some(Middle))) |> ignore
     r.box(fn(words) {
       words.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))).gap(Is(desk_list_gap)) |> ignore
-      words_node(words, title, fn() { if at.list { setting_title() } else { theme().rows.title } }) |> ignore
-      words.show(fn() { note() != "" }, fn(n) { styled_words(n, note, fn() { theme().rows.note }) |> ignore })
+      led_title_node(words, title, title_look, lead)
+      words.show(fn() { note() != "" }, fn(n) { styled_words(n, note, note_look) |> ignore })
     })
     |> ignore
-    switch_node(r, on, turn, title)
+    switch_node(r, on, turn, title, disabled~)
   }
   if at.list {
     parent.box(fn(cell) {

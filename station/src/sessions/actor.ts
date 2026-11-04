@@ -10,7 +10,7 @@ import { sessionSkills } from "./agent-home.ts";
 import { dirname, join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, BackgroundTask, FailureReason, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
-import { GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatInbound, formatWidgetModels, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
+import { GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatInbound, formatWidgetModels, nameUntitled, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
 import { CONNECTION_LOST } from "../agents/sandbox.ts";
 import { chars } from "../agents/live.ts";
 import { CommandMissing } from "../agents/runner.ts";
@@ -21,6 +21,7 @@ import { log } from "../ops/log.ts";
 import { Said, tr, stationLang } from "../ops/i18n.ts";
 import { failureOf, runtimeKind, runtimeLabel, type RuntimeKind } from "../agents/runtime.ts";
 import { type Handed, type MessageRow, type PendingMessage, handedOf } from "../store/rows.ts";
+import { PostBlocksUnavailable } from "../store/post-blocks.ts";
 
 /// How an agent ended its turn (chat_post / chat_state `kind`).
 export type DeclaredState = { kind: "all_done" } | { kind: "need_help" } | { kind: "waiting"; seconds: number };
@@ -67,7 +68,7 @@ export type SessionStore = {
   untoldWidgetModels(key: string): any[];
   markWidgetModelsTold(key: string, pairs: [string, string][]): void;
   heardThreads(key: string, threads: number[]): Set<number> | number[];
-  postAfter(key: string, thread: number, n: number): string | null;
+  postsAfter(key: string, messages: readonly { thread: number; n: number }[]): (string | null)[];
   cardEndedByMessage(thread: number, n: number): [MessageRow, any] | null;
   pendingCard(thread: number): [MessageRow, any] | null;
   threadSessions(thread: number): { session: string; connect: string }[];
@@ -82,15 +83,16 @@ export type SessionStore = {
   setRuntimeSessionId(key: string, id: string | null): void;
   /// The runtime sessions it ran in, the first first (optional: none known without it).
   runtimeSessions?(key: string): string[];
+  runtimeSessionSources?(key: string): { id: string; runtime: string; profile: string | null }[];
   setWaitFor(turn: string, what: string, watch: boolean): void;
   setNeed(turn: string, what: string): void;
   setAbout(turn: string, about: [number, number, string] | null): void;
   lastTurn(key: string): any | null;
   slackStop(session: string, connect: string, channel: string, threadTs: string): { ts: string; turn: string | null } | null;
   rememberSlackStop(session: string, connect: string, channel: string, threadTs: string, ts: string, turn: string | null): void;
-  stopWait(key: string): void;
+  stopWait(key: string, refill?: boolean): void;
   forgetWait(key: string): void;
-  listJobs(session: string | null): any[];
+  hasSessionActiveWatch(session: string): boolean;
   latestThread(key: string): any | null;
   entriesBefore(thread: number, n: number | null, limit: number): any[];
   insertMessage(message: any): [number, boolean];
@@ -111,6 +113,8 @@ export type Surface = {
 /// What a session needs of the station; the hub gives it.
 export type SessionDeps = {
   store: SessionStore;
+  /// An older store brings forward only the message ranges this delivery needs.
+  preparePostsAfter?(messages: readonly { thread: number; n: number }[], signal?: AbortSignal): Promise<void>;
   chat(connect: string): Surface | undefined;
   driver(runtime: RuntimeKind): AgentDriver;
   /// The profile a session's runtime starts on now: its own while usable, else another that can take it on (`holding`:
@@ -131,6 +135,8 @@ export type SessionDeps = {
   /// Session `key`'s MEMORY.md: its workspace's (agent-home.ts `workspaceAgentHome`).
   memoryPath(key: string): string;
   maxNudges(): number;
+  /// The chat session `key` last heard from (its address), when it has no title and nobody is at work in it.
+  untitled?(key: string): string | null;
   backgroundOnMessage(key: string): boolean;
   /// Where the runtime's live steps go, for whoever watches the session (and that it went on in a new runtime session).
   live?: { event(key: string, event: LiveEvent): void; turnEnded(key: string): void; moved?(key: string): void };
@@ -209,6 +215,7 @@ export type Snapshot = {
   restart?: boolean;
   /// Its context was being compacted by hand (optional: a station from before it does not say).
   compacting?: boolean;
+  identity?: { model: string | null; effort: string | null; runtime: RuntimeKind } | null;
 };
 
 const t = (key: string, args?: Record<string, unknown>) => tr(stationLang(), key, args);
@@ -223,7 +230,7 @@ const FALLBACK_MOST = 4000;
 
 export class SessionActor {
   readonly key: string;
-  readonly runtime: RuntimeKind;
+  runtime: RuntimeKind;
   private deps: SessionDeps;
   private lock = Semaphore.makeUnsafe(1);
   /// Runs an effect as a fiber of this actor's (its tasks, its wait's timer): they end when it closes.
@@ -247,12 +254,20 @@ export class SessionActor {
   /// What changed is not a model or an effort (the station's variables for its agents): no taking it in place.
   private restart = false;
   private profile: string | null = null;
+  private runningIdentity: { model: string | null; effort: string | null; runtime: RuntimeKind } | null = null;
+
+  /// What the process writing a message actually runs, even while its next settings have already been saved.
+  messageIdentity() {
+    return this.agent ? this.runningIdentity : null;
+  }
   /// Its context cleared to go on afresh (`clear`'s `readBack`): its next runtime session told to read back its work.
   private readBack = false;
   private generation = 0;
   private phase: Phase = "idle";
   private turn: Turn | null = null;
   private nudges = 0;
+  /// The chats it was asked to name as a turn ended with them untitled: asked once each.
+  private askedToName = new Set<string>();
   /// Its turns the provider had no room for, in a row: each is tried again after longer (`retryAfter`).
   private overloads = 0;
   /// Its process lost the station's tools during the running turn (why): at the turn's end it starts again.
@@ -302,6 +317,7 @@ export class SessionActor {
   /// Messages given to the running turn since its model was last asked: what it writes now was written without them.
   private unread: PendingMessage[] = [];
   private queued = 0;
+  private formatAbort: AbortController | null = null;
 
   constructor(key: string, runtime: RuntimeKind, deps: SessionDeps) {
     this.key = key;
@@ -363,9 +379,11 @@ export class SessionActor {
     return this.agent ? "warm" : "cold";
   }
 
-  /// How long the runtime process has sat idle, or null if there is none or it is working.
+  /// How long its process has had nothing to do (null: none, or it does). One waiting is idle all the same: what it waits
+  /// for is the station's (its timer is this actor's, its jobs and tasks the station's); what it has going in its own
+  /// process (`holding`) keeps that from being ended.
   idleMs(now: number): number | null {
-    return this.agent && !this.agent.session.busy() && !this.turn && this.waiting === null ? now - this.idleSince : null;
+    return this.agent && !this.agent.session.busy() && !this.turn ? now - this.idleSince : null;
   }
 
   holdsState(): boolean {
@@ -457,6 +475,7 @@ export class SessionActor {
 
   /// Stops what it is doing: the running turn; or, while it waits on work it started, that work and the wait.
   stop(): Promise<void> {
+    this.formatAbort?.abort();
     return this.enqueue(async () => {
       if (this.agent?.session.busy()) {
         this.stopRequested = true;
@@ -535,6 +554,20 @@ export class SessionActor {
     });
   }
 
+  /// An allowance this session was waiting for was reset by hand.
+  allowanceReset(): Promise<void> {
+    return this.enqueue(async () => {
+      if (this.refill === null || this.archived() || this.turn || this.agent?.session.busy()) return;
+      if (this.deps.held(this.key)) {
+        this.refillAt = this.now();
+        return;
+      }
+      this.refill = null;
+      if (this.deps.store.hasPending(this.key)) return this.pump();
+      await this.startTurn("resume", GO_ON_AFTER_REFILL);
+    });
+  }
+
   /// After a station stopped with this session's turn running and no runner kept it: the turn was cut off; resume it.
   recover(): Promise<void> {
     return this.enqueue(async () => {
@@ -564,10 +597,21 @@ export class SessionActor {
     });
   }
 
+  /// After an unclean restart, take up the allowance wait recorded by the failed turn.
+  takeRefill(): Promise<void> {
+    return this.enqueue(async () => {
+      if (this.refill !== null || this.turn || this.agent?.session.busy() || this.archived()) return;
+      const last = this.deps.store.lastTurn(this.key);
+      if (last?.outcome !== "failed" || !last.detail?.startsWith("rate_limit:") || last.endedAt === null) return;
+      this.awaitRefill(this.deps.refillsAt?.(this.key) ?? this.now() + REFILL_FALLBACK_MS);
+    });
+  }
+
   /// Turns were held and are no longer: what waited meanwhile goes on.
   release(): Promise<void> {
     return this.enqueue(async () => {
       if (this.waiting !== null && this.waitingUntil <= this.now()) this.waitMs(this.waitingSeconds, 0);
+      if (this.refill !== null && this.refillAt <= this.now()) this.awaitRefill(this.now());
       await this.pump();
       if (this.notices.length > 0) await this.giveNotices();
     });
@@ -599,8 +643,9 @@ export class SessionActor {
   evict(): Promise<void> {
     return this.enqueue(async () => {
       const agent = this.agent;
-      // Work it has going in the background would end with it.
-      if (!agent || agent.session.busy() || this.turn || this.waiting !== null || this.holding()) return;
+      // Work it has going in the background would end with it. A wait goes on without it: the station asks again in a
+      // new one, so waiting chats need not keep a process resident.
+      if (!agent || agent.session.busy() || this.turn || this.holding()) return;
       this.agent = null;
       log.info("session", "evicting idle session process", { session: this.key });
       await agent.session.dispose();
@@ -723,6 +768,7 @@ export class SessionActor {
   /// given (session.rs `suspend`): a turn under way stays marked running (to resume once back), unless it had already
   /// said a settled state; messages given to it while it ran are pending again.
   suspend(): Promise<void> {
+    this.formatAbort?.abort();
     return this.enqueue(async () => {
       const agent = this.agent;
       this.agent = null;
@@ -757,6 +803,7 @@ export class SessionActor {
     const snap: Snapshot = {
       key: this.key,
       runtime: this.runtime,
+      identity: this.runningIdentity,
       agent: agent?.snapshot() ?? null,
       turn: this.turn && {
         id: this.turn.id,
@@ -787,6 +834,9 @@ export class SessionActor {
   /// as the generation the caller opened it as (`nextGeneration`, whose `listener` the driver was given), running on
   /// `profile`, the one its process was started on.
   adopt(snap: Snapshot, agent: AgentSession | null, profile: string) {
+    if (agent) this.runtime = snap.runtime;
+    const row = this.deps.store.getSession(this.key);
+    this.runningIdentity = agent ? (snap.identity ?? { runtime: snap.runtime, model: row?.model ?? null, effort: row?.effort ?? null }) : null;
     this.agent = agent ? { generation: this.generation, session: agent } : null;
     this.profile = agent ? profile : null;
     this.turn = snap.turn && {
@@ -803,8 +853,9 @@ export class SessionActor {
     this.notices = [...snap.notices, ...this.notices];
     this.nudges = snap.nudges;
     this.stopRequested = snap.stopRequested;
-    this.stale = snap.stale ?? false;
-    this.restart = snap.restart ?? false;
+    const runtimeChanged = agent !== null && this.deps.store.getSession(this.key)?.runtime !== snap.runtime;
+    this.stale = runtimeChanged || (snap.stale ?? false);
+    this.restart = runtimeChanged || (snap.restart ?? false);
     this.compacting = snap.compacting === true;
     this.idleSince = this.now() - (typeof snap.idleMs === "number" ? snap.idleMs : 0);
     if (snap.waitingMs !== null) this.waitMs(snap.waitingSeconds, snap.waitingMs);
@@ -823,6 +874,7 @@ export class SessionActor {
   /// For shutdown or handover: queued and later tasks are skipped, timers end. A running turn stays marked running.
   close() {
     this.phase = "closed";
+    this.formatAbort?.abort();
     Effect.runFork(Scope.close(this.scope, Exit.void));
   }
 
@@ -934,6 +986,13 @@ export class SessionActor {
 
   /// The messages as the agent reads them, made now so edits count (session.rs `format`).
   private async format(said: any[]): Promise<[string, [string, string][]]> {
+    const abort = new AbortController();
+    this.formatAbort = abort;
+    try { return await this.formatWithSignal(said, abort.signal); }
+    finally { if (this.formatAbort === abort) this.formatAbort = null; }
+  }
+
+  private async formatWithSignal(said: any[], signal: AbortSignal): Promise<[string, [string, string][]]> {
     const store = this.deps.store;
     const threads: number[] = said.map((m) => m.message.thread);
     const heard = new Set(store.heardThreads(this.key, threads));
@@ -959,11 +1018,18 @@ export class SessionActor {
     }
     // What it posted in a thread after a message there was said: the message was written without seeing that post.
     const posts = new Map<PendingMessage, string>();
-    for (const m of said) {
-      if (m.message.apart === true) continue;
-      const ts = store.postAfter(this.key, m.message.thread, m.message.n);
-      if (ts !== null) posts.set(m, ts);
+    const fromChat = (said as PendingMessage[]).filter((m) => m.message.apart !== true);
+    const positions = fromChat.map((m) => ({ thread: m.message.thread, n: m.message.n }));
+    let laterPosts: (string | null)[];
+    for (;;) {
+      if (signal.aborted) throw new Error("delivery cancelled");
+      try { laterPosts = store.postsAfter(this.key, positions); break; }
+      catch (error) {
+        if (!(error instanceof PostBlocksUnavailable) || !this.deps.preparePostsAfter) throw error;
+        await this.deps.preparePostsAfter(error.positions, signal);
+      }
     }
+    fromChat.forEach((m, i) => { const ts = laterPosts[i]; if (ts !== undefined && ts !== null) posts.set(m, ts); });
     const cards = new Map<PendingMessage, { ended: MessageRow; current: MessageRow | null; special: string | null }>();
     for (const m of said as PendingMessage[]) {
       if (m.message.apart === true || m.message.authorKind !== "person") continue;
@@ -1118,6 +1184,7 @@ export class SessionActor {
     } catch {}
     if (!this.restart && row && profile && profile.id === this.profile && agent.session.retune?.(openOptions(row, profile, this.deps))) {
       this.stale = false;
+      this.runningIdentity = { runtime: this.runtime, model: row.model ?? null, effort: row.effort ?? null };
       log.info("session", "session process takes the change in place", { session: this.key, model: row.model ?? "", effort: row.effort ?? "" });
       return;
     }
@@ -1158,6 +1225,9 @@ export class SessionActor {
     const store = this.deps.store;
     const row = store.getSession(this.key);
     if (!row) throw new Error(`session ${this.key} disappeared`);
+    const runtime = runtimeKind(row.runtime);
+    if (!runtime) throw new Error(`session ${this.key} runs an unknown runtime ${row.runtime}`);
+    this.runtime = runtime;
     const driver = this.deps.driver(this.runtime);
     const profile = this.deps.runOn(this.key);
     const base = openOptions(row, profile, this.deps);
@@ -1185,7 +1255,8 @@ export class SessionActor {
       log.info("session", "going on in a new runtime session on another account", { session: this.key, left: row.runtimeSessionId, profile: profile.id });
       agent = await driver.open(base, this.listener(generation));
       this.afresh = afresh;
-      resumable = this.deps.carrySubagents?.(row.runtimeSessionId!, agent.id(), profile, subagents) ?? [];
+      const from = store.runtimeSessionSources?.(this.key).find((s) => s.id === row.runtimeSessionId);
+      if (from === undefined || from.runtime === row.runtime) resumable = this.deps.carrySubagents?.(row.runtimeSessionId!, agent.id(), profile, subagents) ?? [];
     } else if (row.runtimeSessionId) {
       try {
         agent = await driver.open({ ...base, resume: row.runtimeSessionId }, this.listener(generation));
@@ -1209,6 +1280,7 @@ export class SessionActor {
     this.stopped = [];
     if (stopped.length > 0) this.stoppedNote = backgroundStopped(stopped, resumable);
     this.agent = { generation, session: agent };
+    this.runningIdentity = { runtime: this.runtime, model: row.model ?? null, effort: row.effort ?? null };
     this.stale = false;
     this.restart = false;
     this.profile = profile.id;
@@ -1433,6 +1505,13 @@ export class SessionActor {
     this.deps.idle(this.key);
     if (outcome.kind !== "completed" || declared) {
       this.nudges = 0;
+      // Done or asking, and its chat still has no title with nobody at work there: asked once to name it.
+      const untitled = outcome.kind === "completed" && !this.deps.held(this.key) ? this.deps.untitled?.(this.key) ?? null : null;
+      if (untitled !== null && !this.askedToName.has(untitled)) {
+        this.askedToName.add(untitled);
+        log.info("session", "its chat has no title; asking it to name it", { session: this.key, chat: untitled });
+        return this.startTurn("title", nameUntitled(untitled));
+      }
       return;
     }
     if (this.deps.held(this.key)) return;
@@ -1472,8 +1551,10 @@ export class SessionActor {
   /// Stopped while it waits: the wait ends, and so does the work that would bring it back (session.rs `stop_waiting`).
   private async stopWaiting(say = true) {
     const store = this.deps.store;
-    const waited = this.waiting !== null;
+    const refill = this.refill !== null;
+    const waited = this.waiting !== null || refill;
     this.waiting = null;
+    this.refill = null;
     if (this.phase === "waiting") this.phase = "idle";
     // Its wait may be on record only (an earlier station had it).
     const last = store.lastTurn(this.key);
@@ -1487,7 +1568,7 @@ export class SessionActor {
     const agent = this.agent;
     this.agent = null;
     await agent?.session.dispose();
-    store.stopWait(this.key);
+    store.stopWait(this.key, refill);
     if (say) await this.notice(t("station.notice.stopped"));
   }
 
@@ -1556,7 +1637,7 @@ export class SessionActor {
                 log.info("session", "trying again a turn the provider had no room for", { session: this.key, seconds });
                 return this.startTurn("resume", GO_ON_AFTER_OVERLOADED);
               }
-              if (last?.waitWatch !== false && this.deps.store.listJobs(this.key).some((j) => j.watch && j.state === "running")) return this.wait(seconds);
+              if (last?.waitWatch !== false && this.deps.store.hasSessionActiveWatch(this.key)) return this.wait(seconds);
               log.info("session", "the wait is over without word; asking again", { session: this.key, seconds });
               await this.startTurn("nudge", waitOver(seconds));
             }),
@@ -1584,9 +1665,10 @@ export class SessionActor {
           Effect.promise(() =>
             this.enqueue(async () => {
               if (this.refill !== refill) return;
+              // Held: keep the wait so release can run it.
+              if (this.deps.held(this.key)) return;
               this.refill = null;
-              // Held, it goes on when released (its notices); a running turn ends as it will.
-              if (this.deps.held(this.key) || this.archived() || this.turn || this.agent?.session.busy()) return;
+              if (this.archived() || this.turn || this.agent?.session.busy()) return;
               log.info("session", "its allowance should have refilled; going on", { session: this.key });
               if (this.deps.store.hasPending(this.key)) return this.pump();
               await this.startTurn("resume", GO_ON_AFTER_REFILL);

@@ -7,7 +7,7 @@ let composer_sample_ms : Double = 50.0
 test "a quote already in the composer moves with its ground as another is added" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
@@ -44,7 +44,7 @@ test "on a small screen a waiting quote moves with the composer when another arr
 test "a quote without a visible source comes in within the growing composer" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   @sfbase.writing_quote(src, @sfbase.writing(src, "ws1/st1:s-c1"), {
@@ -64,7 +64,7 @@ test "a quote without a visible source comes in within the growing composer" {
 test "a file without a visible source comes in within the growing composer" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   @sfbase.writing_add(src, @sfbase.writing(src, "ws1/st1:s-c1"), "ws1/st1", "新文件.txt", b"test")
@@ -78,7 +78,7 @@ test "a file without a visible source comes in within the growing composer" {
 test "a newly added picture appears within the growing composer" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
@@ -99,7 +99,7 @@ test "a newly added picture appears within the growing composer" {
 test "a newly added picture comes in whole, never cut or faded across as the composer opens" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
@@ -129,7 +129,7 @@ test "a newly added picture comes in whole, never cut or faded across as the com
 test "a quote sent while the composer opens leaves from where it was seen" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.tap_text("发消息")
   t.type_text("先上屏")
@@ -148,7 +148,7 @@ test "a quote sent while the composer opens leaves from where it was seen" {
 test "a picture sent while the composer opens leaves from where it was seen" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.tap_text("发消息")
   t.type_text("看这张")
@@ -196,7 +196,7 @@ test "an image's marks come into the room the composer opens" {
 test "an existing file stays in place when a quote is added above it" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
@@ -241,7 +241,7 @@ test "the composer follows a waiting video's picture becoming available" {
 test "a quote appears in place when motion is reduced" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.set_reduce_motion(true)
   t.draw()

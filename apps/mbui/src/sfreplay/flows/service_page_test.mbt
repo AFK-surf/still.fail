@@ -11,7 +11,7 @@ test "47-service-page" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("service-page"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
-    f.see("=studio")
+    f.see("=willow")
     f.tap("发消息")
     f.type_text("开个网页 201409 serve:e2e-web|19107|网页开好了 201409")
     f.tap("icon:arrow-up")

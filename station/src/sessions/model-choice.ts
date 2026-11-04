@@ -1,7 +1,6 @@
 // The model a chat an agent opens runs when its agent names none (chat_create): the one the person it goes to (its
 // starter) has opened most chats with on the station it is opened on, of those a profile there runs for its
-// workspace. Not its opener's: the opener runs on another station, or on a model the person does not use here (2026-10-19:
-// chats opened on Studio took the opener's Opus, which no profile there runs, and failed on their first turn). The most
+// workspace. Not its opener's: the opener can run on another station or a model no profile runs here. The most
 // used one has to lead clearly, used at least twice as often as any other; when another is close to it (or none was
 // used, and the profiles lead with more than one), nobody guesses: the agent is told them, to ask (the user's rule: 差距不大就要问).
 import { type Runtime, type Profile, sameModel } from "./config.ts";

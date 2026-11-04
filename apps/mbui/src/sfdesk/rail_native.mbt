@@ -90,6 +90,10 @@ let nav_page : Array[(@hostapi.NavItem, () -> Unit)] = []
 let nav_page_was : Map[String, () -> Unit] = {}
 
 ///|
+/// What each row of a page's action's menu does (bar_action rows), by the row's id, for what is chosen between frames.
+let nav_rows_was : Map[String, () -> Unit] = {}
+
+///|
 /// What is up over the whole window handed the bars the frame before (@sf.native_over_act), by id, for what is chosen
 /// between frames.
 let nav_over_was : Map[String, () -> Unit] = {}
@@ -131,9 +135,20 @@ pub fn on_cards() -> Bool {
 
 ///|
 /// One of the page's actions (`id`, its words and icon: an icon's name, or `raw`, an icon as the host's bars take it)
-/// in the system's bars; `act` what it does chosen. A page on its way out (a stack's move) hands none: the one on top
-/// does.
-fn bar_action(id : String, title : String, icon : String, act : () -> Unit, raw? : String) -> Bool {
+/// in the system's bars; `act` what it does chosen. With `rows`, a menu of the system's own opened from it instead (a
+/// chat's "…": its items as the page's menu has them, None a line between groups; each chosen runs its own), which
+/// the system keeps as a menu where it folds the column's actions into one of its own, short of room (a "…" of its
+/// own among them, its rows a press away, not a "…" beside the system's and not a row opening a sheet of the page's:
+/// the user, 2026-11-03). A page on its way out (a stack's move) hands none: the one on top does.
+fn bar_action(
+  id : String,
+  title : String,
+  icon : String,
+  act : () -> Unit,
+  raw? : String,
+  rows? : Array[@sf.MenuItem?],
+  dot? : Bool = false,
+) -> Bool {
   if drawn_page.val is Some(p) && p != app.nav.top() {
     return false
   }
@@ -152,13 +167,41 @@ fn bar_action(id : String, title : String, icon : String, act : () -> Unit, raw?
     Some(d) => d
     None => @sf.icon_path(icon)
   }
-  nav_page.push(({ id: key, title, icon: data, dot: false, prominent: false, menu: [] }, act))
+  let menu : Array[(String, String, Bool, String)] = []
+  match rows {
+    Some(rows) => {
+      let mut n = 0
+      for row in rows {
+        match row {
+          Some(item) => {
+            let rid = key + "/" + n.to_string()
+            n += 1
+            menu.push((rid, item.label, item.chosen == Some(true), @sf.icon_path(item.icon)))
+            nav_rows_was[rid] = item.select
+          }
+          // (a line between groups: after a row only, as the page's menu draws it)
+          None => if menu.length() > 0 && menu[menu.length() - 1].0 != "-" { menu.push(("-", "", false, "")) }
+        }
+      }
+      // (no line closing the menu)
+      if menu.length() > 0 && menu[menu.length() - 1].0 == "-" {
+        menu.pop() |> ignore
+      }
+    }
+    None => ()
+  }
+  nav_page.push(({ id: key, title, icon: data, dot, prominent: false, menu }, act))
   true
 }
 
 ///|
-/// A chat's actions in the system's bars, each its own button there being room (the user, 2026-10-28): its info, its
-/// side panel's switch (opening the first agent's history, or closing all its tabs), archiving it where it may be.
+/// A chat's actions in the system's bars, each its own button there being room (the user, 2026-10-28): its "…" (a
+/// menu of the system's own: `rows` its items, `more` what opens with none of them), its info, its side panel's
+/// switch (opening the first agent's history, or closing all its tabs), its services and jobs where it has them
+/// (`jobs`: what opens them, with a dot while one is in trouble; the user 2026-11-04, 地球图标收进「…」), its station's
+/// screens where it has them (`screen`: what opens them, with a dot while an agent drives one; the user 2026-11-03,
+/// 共享屏幕没放到侧边栏),
+/// archiving it where it may be.
 /// In place of its buttons (who is in it and where it runs stay by its
 /// title, as the desktop's); false where there are no system's bars (the page draws its own).
 fn bar_chat(
@@ -166,7 +209,10 @@ fn bar_chat(
   r : ChatRef,
   agents : Array[Agent],
   info : () -> Unit,
+  rows : Array[@sf.MenuItem?],
   more : () -> Unit,
+  jobs : (() -> Unit, Bool)?,
+  screen : (() -> Unit, Bool)?,
   archive : (() -> Unit)?,
 ) -> Bool {
   if !@sf.native_on() {
@@ -178,7 +224,7 @@ fn bar_chat(
     nav_page.retain(fn(p) { !bar_chat_carried.contains(p.0.id) })
     bar_chat_carried.clear()
   }
-  bar_action("chat/more", @sf.t("common.more"), "more", more) |> ignore
+  bar_action("chat/more", @sf.t("common.more"), "more", more, rows?=if rows.iter().any(fn(i) { i is Some(_) }) { Some(rows) } else { None }) |> ignore
   bar_action("chat/info", @sf.t("web-pages.chat.info"), "info", info) |> ignore
   let (tabs, _) = side_now(src, r)
   let icon = if tabs.length() > 0 { "panel-close" } else { "panel-open" }
@@ -193,6 +239,14 @@ fn bar_chat(
         side_change(src, r, "open", Some(key))
       }
     }) |> ignore
+  }
+  match jobs {
+    Some((act, alarm)) => bar_action("chat/jobs", @sf.t("web-pages.chat.services"), "web", act, dot=alarm) |> ignore
+    None => ()
+  }
+  match screen {
+    Some((act, driven)) => bar_action("chat/screen", @sf.t("web-pages.chat.screen"), "monitor", act, dot=driven) |> ignore
+    None => ()
   }
   match archive {
     Some(act) => bar_action("chat/archive", @sf.t("web-pages.chat.archive"), "archive", act) |> ignore
@@ -221,6 +275,10 @@ fn bar_chat_waiting() -> Bool {
     if !nav_page.iter().any(fn(p) { p.0.id == item.id }) {
       nav_page.push((item, fn() {  }))
       bar_chat_carried.push(item.id)
+      // (its menu's rows kept as they were, the other chat's: pressed meanwhile, nothing)
+      for m in item.menu {
+        nav_rows_was.remove(m.0)
+      }
     }
   }
   true
@@ -275,6 +333,22 @@ fn bar_anchor(id : Int, side : @ui.Side, along : @ui.Along) -> (Int, @ui.Side, @
     (native_mark.val, Left, Start)
   } else {
     (native_mark.val, Bottom, End)
+  }
+}
+
+///|
+/// What opens from one of the page's actions as a menu of the page's (a station's screens): as bar_anchor's. A menu goes
+/// under what opened it, so beside the column down the side it opens from the point left of the item, ending there,
+/// not under the item and over the column (the user, 2026-11-04); `id` where the page has its own.
+fn bar_menu_from(c : @ui.Ctx, id : Int) -> (@sf.Beside, @ui.Along) {
+  if !@sf.native_on() || native_mark.val == 0 {
+    return (Of(id), End)
+  }
+  if @sf.native_side() {
+    let (x, y, _) = native_mark_at(c)
+    (@sf.at_point(x - @sf.panel_offset, y), End)
+  } else {
+    (Of(native_mark.val), End)
   }
 }
 
@@ -446,17 +520,24 @@ fn rail_native_marks(c : @ui.Ctx) -> Unit {
     // (at the bell where the system says it is; else where the column has it: moved there as an item is chosen,
     // @sfbase.nav_tapped_said)
     @sfbase.nav_tapped_said.get() |> ignore
-    let at = @hostapi.nav_tapped_at
-    let (tx, ty, th) = if at[2] > 0.0 {
-      (at[0], at[1], at[3])
-    } else {
-      (dmax(0.0, c.width - @sf.native_clear() - 1.0), dmax(0.0, c.height - native_bell_up), 40.0)
-    }
+    let (tx, ty, th) = native_mark_at(c)
     let id = c.id("rail/attention")
     native_mark.val = id
     c.box(style=@ui.style(w=Fixed(native_mark_w), h=Fixed(th)), tx~, ty~, id~, fn() {  }) |> ignore
   })
   |> ignore
+}
+
+///|
+/// Where the mark is: at the item last chosen, else where the column has the bell (its x, y and height).
+fn native_mark_at(c : @ui.Ctx) -> (Double, Double, Double) {
+  let at = @hostapi.nav_tapped_at
+  if at[2] > 0.0 {
+    (at[0], at[1], at[3])
+  } else {
+    let (ww, wh) = c.window_size()
+    (dmax(0.0, ww - @sf.native_clear() - 1.0), dmax(0.0, wh - native_bell_up), 40.0)
+  }
 }
 
 ///|
@@ -649,7 +730,12 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     } else if id.has_prefix("page/") {
       match nav_page_was.get(id) {
         Some(act) => act()
-        None => ()
+        // (a row of an action's menu: bar_action rows)
+        None =>
+          match nav_rows_was.get(id) {
+            Some(act) => act()
+            None => ()
+          }
       }
     } else if id == "act/attention" || id == "lead/attention" {
       rail_go(c, src, w, "attention")
@@ -730,6 +816,7 @@ fn rail_native_reset() -> Unit {
   nav_page.clear()
   bar_chat_of.val = None
   nav_page_was.clear()
+  nav_rows_was.clear()
   nav_over_was.clear()
   drawn_page.val = None
   nav_page_of.val = None

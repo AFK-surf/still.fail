@@ -1,10 +1,9 @@
 #!/bin/sh
 # Puts another iroh-relay on one of still.fail's relays on machines of their own (Beijing's, Hong Kong's, Shenzhen's), run there as
 # root, given the zzj3720/iroh commit station/native/mesh/Cargo.toml pins (its build is in the releases bucket:
-# .github/workflows/relay.yml). From Studio, the one machine that reaches them:
-#   ssh root@39.105.157.122 sh -s <commit> < cloud/relay-update.sh
-# It is fetched there, not copied over: from the home network the upload stalls, and Hong Kong gets ~25 KB/s from
-# anywhere, so the download goes on from where it stopped. The relay is restarted on it only when nothing else has
+# .github/workflows/relay.yml). From a machine that can reach the relay:
+#   ssh root@<relay-host> sh -s <commit> < cloud/relay-update.sh
+# It is fetched there, not copied over, and the download goes on from where it stopped. The relay is restarted only when nothing else has
 # the file open (a fetch left running once made systemd fail "Text file busy" for 14 minutes, 2026-10-29), and put back
 # as it was when its HTTPS does not answer within 20 s. A `udp_bind_addr` left in relay.toml from when stations could
 # ask for the relay's UDP way (2026-10-29/30) is taken out: none asks any more.

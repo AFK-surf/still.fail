@@ -11,7 +11,7 @@ test "记忆, at each width and with either hand: a row a station (one offline s
     assert_true(t.find("全局记忆 · 项目记忆") is Some(_), msg=at)
     assert_true(t.find("离线，上线后再查看") is Some(_), msg=at)
     assert_true(t.find("发布流程") is None, msg=at)
-    t.tap_text("Studio")
+    t.tap_text("Willow")
     t.run_for(@ui.move_most_ms)
     assert_true(app.nav.top() == Setting(Memory("ws1/st1")), msg=at)
     // back to 记忆 over it

@@ -11,7 +11,7 @@ For a macOS VM whose outbound traffic is blocked by PF, permit incoming LAN traf
 For example, adapt the interface, subnet and port to the machine, within its existing firewall anchor:
 
 ```pf
-pass in quick on en0 inet proto udp from 192.168.20.0/24 to (en0) port 4770 keep state
+pass in quick on en0 inet proto udp from 192.0.2.0/24 to (en0) port 4770 keep state
 ```
 
 If clients discover the station through mDNS, also allow its announcements and responses. Place these exceptions
@@ -19,7 +19,7 @@ after the existing outbound block rule (which must not be `quick`), or otherwise
 
 ```pf
 pass out quick on en0 inet proto udp from (en0) port 5353 to 224.0.0.251 port 5353 keep state
-pass out quick on en0 inet proto udp from (en0) port 5353 to 192.168.20.0/24 port 5353 keep state
+pass out quick on en0 inet proto udp from (en0) port 5353 to 192.0.2.0/24 port 5353 keep state
 ```
 
 These are packet restrictions, not process authentication. Any process able to bind these local ports can use their

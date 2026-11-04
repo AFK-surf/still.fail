@@ -1,5 +1,8 @@
 # The core's database
 
+> Machine names in examples and measurements are anonymized; they are not requirements for the reader’s environment.
+
+
 Status: built (2026-10-04, branch `core-ts`). The TS core (docs/core-ts.md) keeps everything it reads in **one SQLite
 database per signed-in account**: `client/core-ts/src/db/schema.ts` (tables, migrations), `src/db/account.ts` (one
 account's database: its writer, reads, caches), `src/data.ts` (which database keeps what, the device's own values),
@@ -201,7 +204,7 @@ no network. `client/shell` (`cargo test -p stillfail-shell`) and `test/bridge.te
 
 ## Measurements
 
-2026-10-04, studio (Mac Studio, M-series), against the core before this (1f4100b2: records loaded whole at start), on
+2026-10-04, test-a (Mac test-a, M-series), against the core before this (1f4100b2: records loaded whole at start), on
 the same dataset: one account, one workspace of 20 stations × 2 000 chats, sessions and threads, 100 000 entries
 (`bench/first-view.ts seed` writes it as the former records store; the core before reads it, this one imports it
 once, then the runs below are on what it imported). Offline: what shows is what the device holds. "First" is the
@@ -233,7 +236,7 @@ chat list's first value with rows, "whole" when it held all 40 000; three runs e
 
 ### A chat opened (2026-10-25)
 
-Studio, the core in Hermes as the apps run it (`apps/mbui/scripts/core.sh chat-open`: core/chatopen.m on the engine of
+test-a, the core in Hermes as the apps run it (`apps/mbui/scripts/core.sh chat-open`: core/chatopen.m on the engine of
 src/host/apple_core.mm), offline, over `bench/chat-open.ts seed`: one station of 300 chats, 20 of them with 120
 entries, the agents' replies parts of this repository's docs (a chat's page ~80 000 characters, its view 140–220 KB of
 JSON). From `subscribe` to the chat's first value, the first ten chats, the app started anew over what an earlier run
@@ -247,7 +250,7 @@ kept (the core's own memory empty):
 Reading the agents' Markdown was the most of it (micromark in Hermes, which has no JIT: some 300 KB/s here, a phone
 slower); the rest is the view made and sent. Opened again within the minute the core keeps a view: ~2 ms either way.
 
-Markdown is read by markdown-it since (mdRead.ts; `apps/mbui/scripts/core.sh md-parse`, Hermes on Studio, the bench's
+Markdown is read by markdown-it since (mdRead.ts; `apps/mbui/scripts/core.sh md-parse`, Hermes on test-a, the bench's
 59 replies, 186 466 characters): `parse` whole 2.11 M characters a second, a chat's page of 80 000 in 38 ms, where
 micromark read 0.35 M a second, 228 ms. Over this station's 2 098 agents' replies, the trees with their words read
 out are the same as micromark's; what differs, in the docs' hard-wrapped lines only: a code span broken over lines

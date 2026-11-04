@@ -202,7 +202,7 @@ fn rail(
     rail_open_tape()
   } else {
     let inset = rail_window_in()
-    rail_open.then(@ui.style(w=Fixed(rail_shown_w + inset - rail_in_px), pl=@sf.room_of(inset), pb=@sf.room_of(inset)))
+    rail_open.then(@ui.style(w=Fixed(rail_box_w(false, None)), pl=@sf.room_of(inset), pb=@sf.room_of(inset)))
   }
   // (where the block's move has got: its width and padding, its top row's, between closed and open: pane_view.mbt)
   let (look, top_h) = match moving {
@@ -333,7 +333,25 @@ let rail_ground_in : Double = (rail_item_side - rail_sq_side) / 2.0
 /// The rail open in a panel of the tape (laid out Medium): its places in the panel's corners concentric with it
 /// (@sf.rail_in_tape, as round as the panel is this frame), what it shows beside the sidebar as much wider.
 fn rail_open_tape() -> @ui.Style {
-  rail_open.then(@ui.style(w=Fixed(rail_shown_w + rail_tape_more()), pl=@sf.rail_in_tape_room(), pb=@sf.rail_in_tape_room()))
+  rail_open.then(@ui.style(w=Fixed(rail_box_w(false, None)), pl=@sf.rail_in_tape_room(), pb=@sf.rail_in_tape_room()))
+}
+
+///|
+/// How wide the rail is drawn in the block (its look's width, its padding in it), what the sidebar stands beside: where
+/// the block's move has got (`moving`: pane_view.mbt's FoldLook, as rail draws it then); else closed, the bar's; on the
+/// tape, its panel's (rail_open_tape); open, as far in from the window's corner as its places stand (rail_window_in).
+fn rail_box_w(bar : Bool, moving : FoldLook?) -> Double {
+  match moving {
+    Some(f) => f.rail_w
+    None =>
+      if bar {
+        rail_closed_w
+      } else if wide.tape {
+        rail_shown_w + rail_tape_more()
+      } else {
+        rail_shown_w + rail_window_in() - rail_in_px
+      }
+  }
 }
 
 ///|
@@ -693,6 +711,13 @@ fn desk_home() -> Unit {
 /// A place gone to, from the rail or its menu (Rail.tsx `drawn`'s presses and `go`): 待处理 its panel; a list of chats
 /// its list in the sidebar, the chat last open beside it; 已归档 the archive; the others their page.
 pub fn rail_go(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
+  rail_go_told(src, w, place, fn(key, f) { c.tell(key, f) })
+}
+
+///|
+/// rail_go's, what it keeps in the prefs done by `tell` (an old view's build: once, whichever build asked; a node's
+/// press: at once).
+fn rail_go_told(src : Source, w : Workspace, place : String, tell : (String, () -> Unit) -> Unit) -> Unit {
   match place {
     "attention" => {
       attention_set(!wide.attention_open.get())
@@ -703,7 +728,7 @@ pub fn rail_go(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit
       if filter_of(src, w.id) != f {
         app.filters[w.id] = f
         // (kept once, whichever build asked: Ctx::tell)
-        c.tell("rail/list-filter", fn() {
+        tell("rail/list-filter", fn() {
           (src.call)("prefs.set", Json::object({ "listFilter": Json::object(Map::from_array([(w.id, Json::string(f))])) }), fn(_) {  })
         })
       }
@@ -717,13 +742,8 @@ pub fn rail_go(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit
     }
     "archive" => {
       @sfbase.history_push()
-      while app.nav.depth() > 1 {
-        if !app.nav.pop() {
-          break
-        }
-      }
       archive_side.landed = false
-      app.nav.push(Archived)
+      app.nav.replace_above(1, [Archived])
     }
     p => @sfbase.go_place(p) |> ignore
   }
@@ -950,12 +970,7 @@ pub fn open_settings_at(route : @settings.Route) -> Unit {
 pub fn settings_beside(route : @settings.Route) -> Unit {
   @sfbase.history_push()
   app.menu = false
-  while app.nav.depth() > 1 {
-    if !app.nav.pop() {
-      break
-    }
-  }
-  app.nav.push(Setting(route))
+  app.nav.replace_above(1, [Setting(route)])
 }
 
 ///|

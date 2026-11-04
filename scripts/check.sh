@@ -3,7 +3,7 @@
 #   quick: what a commit or push touches, in seconds (icons, TypeScript); the git hooks (.githooks) run it, on
 #          whoever commits or pushes, so merging stays quick.
 #   full:  that, the tests, cloud's tests, the core's tests, the web against the real iroh wasm, Rust:
-#          minutes. Run before a deploy (~/bin/ember-deploy on studio runs it on what the deploy carries).
+#          minutes. Run before a deploy on what the deploy carries.
 #
 #   sh scripts/check.sh commit        quick, on what is staged (pre-commit)
 #   sh scripts/check.sh push <range>  quick, on what a push carries (pre-push), e.g. origin/main..HEAD
@@ -113,8 +113,21 @@ running() {
 # the one that hung never does (the station's tests stopped at 5 minutes, feat/outflow-tailcat, 41570711413).
 below() { for c in $(pgrep -P "$1" 2>/dev/null); do echo "$c"; below "$c"; done; }
 open_tests() {
-  for p in $(below $$); do ps -o etime= -o args= -p "$p" 2>/dev/null; done | awk 'gsub(/\.test\.(ts|mts|mjs|js)/, "&") == 1' | cut -c1-200 | sed 's/^/  ◦ /'
+  for p in $(below $$); do ps -o etime= -o args= -p "$p" 2>/dev/null; done | awk 'gsub(/\.test\.(ts|mts|mjs|js)/, "&") == 1 { for (i = 2; i <= NF; i++) if ($i ~ /\.test\.(ts|mts|mjs|js)$/) print "  ◦ " $1 " " $i }'
+  # Each of them asked which of its tests runs, or what it still has open (station/test/setup-env.mjs), and the
+  # processes under it: the file alone did not say which test hung (41597210040, test/sandbox.test.ts).
+  hung=""
+  # (One file each: the runner above them names them all.)
+  for p in $(below $$); do ps -o args= -p "$p" 2>/dev/null | awk 'gsub(/\.test\.(ts|mts|mjs|js)/, "&") != 1 { exit 1 }' && kill -USR2 "$p" 2>/dev/null && hung="$hung $p"; done
+  [ -n "$hung" ] || return 0
+  sleep 1
+  for p in $hung; do
+    sed 's/^/    /' "$STILLFAIL_TEST_HUNG/$p" 2>/dev/null
+    for c in $(below "$p"); do ps -o pid= -o etime= -o args= -p "$c" 2>/dev/null | cut -c1-200 | sed 's/^/      under it: /'; done
+  done
 }
+export STILLFAIL_TEST_HUNG="$tmp/hung"
+mkdir -p "$STILLFAIL_TEST_HUNG"
 trap 'echo "stopped; still running:"; running tail; open_tests; exit 1' INT TERM
 # Says each step, in order, as it is done; every minute spent waiting, the ones still running.
 report() {
@@ -238,6 +251,10 @@ if part ts; then
   fi
   # The UIs never make a request of a station or still.fail cloud themselves: they name what they want done
   # (client/core-ts/src/ops.ts), and the core, which knows what it changes, brings every topic that shows it up to date.
+  # the Wasm side of the native host's calls (x_wasm.mbt beside each x_native.mbt) as their declarations make it
+  if touches '^apps/mbui/(mbui/src/host|src/(core|stillfail|pinyin|sfreplay))/.*native\.mbt$|^apps/mbui/mbui/tools/wasmhost/'; then
+    step "wasm host calls" bash apps/mbui/scripts/wasm-app.sh check
+  fi
   if touches '^(web/src|web/ui|apps/mbui/src)/'; then
     step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src web/ui apps/mbui/src'
   fi

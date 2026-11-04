@@ -43,7 +43,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// (关于, 更新日志, 记忆, 一台 station 的记忆, 用量, 价目表: pane_made, tape_made, narrow_made), and for one whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (Home | Appearance | Fonts | BarSettings | Permissions | Notifications | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) | LocalStation | MemoryDoc(_, _, _) | AutoCompletion | AutoPolicy(_))) {
+  if !(route is (Home | Appearance | Fonts | BarSettings | Permissions | Me | Workspace | Security | SecurityOpen | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) | LocalStation | MemoryDoc(_, _, _) | AutoPolicy(_))) {
     return false
   }
   let core = settings_core(src, w)
@@ -54,15 +54,13 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     // the settings' list as a page of its own (a small screen's: sfpages' settings_list.mbt), a row pressed its page
     // pushed
     Home =>
-      @sf.page(c, on_back=core.pop, frame~, "home", @sf.t("android-settings.title"), @sfpages.settings_blocks(c, core, here, fn(r) {
+      @sf.page(c, on_back=fn() { @sfpages.settings_search_reset(); (core.pop)() }, frame~, "home", @sf.t("android-settings.title"), @sfpages.settings_blocks(c, core, here, fn(r) {
         (core.push)(r)
       }))
     Appearance => @sfpages.appearance_page(c, core, frame)
     Fonts => @sfpages.fonts_page(c, core, frame)
     BarSettings => @sfpages.bars_page(c, core, frame)
     Permissions => @sfpages.permissions_page(c, core, frame)
-    Notifications => @sfpages.notify_page(c, core, here, frame)
-    Shortcuts => @sfpages.shortcuts_page(c, core, frame)
     Me => @sfpages.me_page(c, core, here, frame)
     Workspace => @sfpages.workspace_page(c, core, here, frame)
     Security => @sfpages.security_page(c, core, here, frame)
@@ -76,7 +74,6 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     Profile(a, id) => @sfpages.profile_page(c, core, here, frame, a, id)
     LocalStation => @sfpages.local_station_page(c, core, frame)
     MemoryDoc(a, skill, at) => @sfpages.memory_doc_page(c, core, here, frame, a, skill, at)
-    AutoCompletion => @sfpages.completion_page(c, core, here, frame)
     AutoPolicy(s) => @sfpages.policy_page(c, core, here, frame, s)
     _ => ()
   }
@@ -95,7 +92,7 @@ fn settings_fixture(src : Source, core : Core) -> Unit {
   match @settings.fixture_desk() {
     "policy-text" => @sfpages.fx_policy_up.val = "text"
     "policy-option" => @sfpages.fx_policy_up.val = "option"
-    "lock-join" => join_dialog(core, "ws1", "st2", "MBA")
+    "lock-join" => join_dialog(core, "ws1", "st2", "Maple")
     "lock-off" => turn_off_dialog(core, "ws1", "星火工作室")
     "local-fonts" => @sfpages.local_open.val = true
     "connect-mode" =>
@@ -123,7 +120,7 @@ fn settings_reset() -> Unit {
 /// it, in place of the one there.
 fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let lit = match app.nav.top() {
-    Setting(r) => Some(@sfpages.settings_row_of(r))
+    Setting(r) => Some(r)
     // (the settings come to: their first row's page, settings_landing)
     Settings => Some(settings_landing)
     _ => None
@@ -152,16 +149,14 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     } else if !@sf.native_on() {
       c.box(style=@sf.side_list().then(settings_back_band), fn() { settings_back(c, false) }) |> ignore
     }
+    // Without the back row, keep the field below the sidebar's upper corners.
+    let search_band = if @sf.native_on() { settings_search_native_band } else { settings_search_band }
+    c.box(style=@sf.side_list().then(search_band), fn() { @sfpages.settings_search(c) }) |> ignore
     side_scroll(c, "settings-nav", fn() {
       // (a row's page in place of the one open; on the tape brought over to show it)
       @sfpages.settings_side_rows(c, core, here, lit, fn(r) {
         @sfbase.history_push()
-        while app.nav.depth() > 1 {
-          if !app.nav.pop() {
-            break
-          }
-        }
-        app.nav.push(Setting(r))
+        app.nav.replace_above(1, [Setting(r)])
         @sfbase.show_chosen()
       })
     })
@@ -183,15 +178,9 @@ fn settings_back(c : @ui.Ctx, band : Bool) -> Unit {
     nav_row(c, "settings-nav/back", false, body)
   }
   if pressed {
+    @sfpages.settings_search_reset()
     @sfbase.history_push()
-    while app.nav.depth() > 1 {
-      if !app.nav.pop() {
-        break
-      }
-    }
-    if app.nav.top() != Home {
-      app.nav.replace(Home)
-    }
+    @sfbase.nav_over_home([])
     wide.landed.set("")
   }
 }
@@ -213,3 +202,11 @@ let settings_side_fill : @ui.Style = @ui.css("w=Full h=Full")
 /// The list supplies four points of its own top room; with the band's ten the groups remain fourteen apart.
 // kept across runs: a value (no field of it changes)
 let settings_back_band : @ui.Style = @ui.css("h=Hug pb=S2_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let settings_search_band : @ui.Style = @ui.css("w=Full h=Hug pt=S0 pb=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let settings_search_native_band : @ui.Style = @ui.css("w=Full h=Hug pt=S5 pb=S2")

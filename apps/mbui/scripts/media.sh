@@ -71,8 +71,15 @@ cp "$drive" "$work/drive"
 if [ -n "$prepare" ]; then cp "$prepare" "$work/prepare"; else : > "$work/prepare"; fi
 
 if [ "$portable" = 0 ]; then
-  APP="$app" MODE=release bash "$D/mac.sh" build
-  exe="./_build/native/release/build/stillfail/$app/$app.exe"
+  if [ "$app" = sffilm ]; then
+    # (the scene in Wasm and the Mac's renderer and writer, as a prepared job's: no C of the app compiled, the user
+    # 2026-11-03; scripts/wasm-film-build.sh)
+    bash "$D/wasm-film-build.sh" "$A/out/wasm-film" >&2
+    exe="$A/out/wasm-film/sffilm"
+  else
+    APP="$app" MODE=release bash "$D/mac.sh" build
+    exe="./_build/native/release/build/stillfail/$app/$app.exe"
+  fi
 fi
 [ -x "$exe" ] || { echo "media: no executable for $app" >&2; exit 1; }
 if [ "$kind" = picture ]; then
@@ -124,7 +131,7 @@ jq -n --rawfile drive "$work/drive" --rawfile prepare "$work/prepare" \
   --arg corner "${MBUI_FILM_WINDOW_CORNER:-}" --arg nav "${MBUI_FILM_NAV_ABLE:-}" \
   --arg max "${MBUI_FILM_FRAMES:-3000}" --arg at "${MBUI_PICTURE_AT:-}" \
   --arg frame "${MBUI_PICTURE_FRAME:-}" --arg transparent "${MBUI_PICTURE_TRANSPARENT:-}" \
-  --arg allow_incomplete "${MBUI_FILM_ALLOW_INCOMPLETE:-}" \
+  --arg allow_incomplete "${MBUI_FILM_ALLOW_INCOMPLETE:-}" --arg allow_corner_faults "${MBUI_FILM_ALLOW_CORNER_FAULTS:-}" \
   --arg station_sha "$local_station_hash" --arg hold "${MBUI_HOLD:-}" --arg failed "${MBUI_FAILED:-}" \
   --arg failed_why "${MBUI_FAILED_WHY:-}" --arg window "${MBUI_WINDOW:-}" --arg said "${MBUI_SAID:-}" \
   --arg core_ms "${MBUI_CORE_MS:-}" --arg update "${MBUI_UPDATE:-}" --arg updates_ms "${MBUI_UPDATES_MS:-}" \
@@ -138,7 +145,7 @@ jq -n --rawfile drive "$work/drive" --rawfile prepare "$work/prepare" \
     settings: {window: $size, scale: $scale, fps: $fps, platform: $platform, fixture: $fixture, dark: $dark,
       locale: $locale, native_input: $native, pointing: $pointing, keyboard: $keyboard, font_scale: $font_scale,
       inset: $inset, window_corner: $corner, nav_able: $nav, max_frames: $max, at_ms: $at, frame: $frame,
-      transparent: $transparent, allow_incomplete: $allow_incomplete, local_station_sha256: $station_sha,
+      transparent: $transparent, allow_incomplete: $allow_incomplete, allow_corner_faults: $allow_corner_faults, local_station_sha256: $station_sha,
       fixture_options: {hold: $hold, failed: $failed, failed_why: $failed_why, window: $window, said: $said,
         core_ms: $core_ms, update: $update, updates_ms: $updates_ms, autofill: $autofill}}, extra: $extra}' > "$work/scene.json"
 

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { constants } from "node:sqlite";
 import { test } from "node:test";
+import { Effect } from "effect";
 import * as stores from "../src/store/store.ts";
 import { Rig } from "./hub-fakes.ts";
 
@@ -109,13 +110,128 @@ test("pending session enumeration merges messages and letters in the same order,
 
 test("rejoining one workspace does not enumerate every workspace's pending sessions", async () => {
   const rig = new Rig();
+  const list = rig.store.listSessions;
   try {
     for (let i = 0; i < 8; i++) rig.store.insertSession({ key: `s${i}`, connect: "ember", runtime: "claude", profile: "cc", workspace: `/w/${i}`, token: `s${i}`, createdAt: 1, lastActiveAt: 1, ws: "W2" });
     const all = rig.store.sessionsWithPending;
     rig.store.sessionsWithPending = () => { throw new Error("enumerated other workspaces"); };
+    rig.store.listSessions = () => { throw new Error("read all session history"); };
     try { assert.doesNotThrow(() => rig.hub.backIn("W2")); }
     finally { rig.store.sessionsWithPending = all; }
+  } finally { rig.store.listSessions = list; await rig.close(); }
+});
+
+for (const stillJoined of [false, true]) test(`a workspace rejoining during index setup resumes only if still joined (${stillJoined})`, async () => {
+  const rig = new Rig({ workspaces: ["home", "W2"] });
+  try {
+    rig.store.insertSession({ key: "waiting", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "waiting", createdAt: 1, lastActiveAt: 1, ws: "W2" });
+    const thread = rig.store.openThread("ember", "ember", "chat", null, null).id;
+    rig.store.joinThread(thread, "waiting", "ember");
+    rig.store.db.prepare("INSERT INTO entries (thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','a','body',1)").run(thread);
+    rig.store.db.prepare("INSERT INTO deliveries (thread,n,session) VALUES (?,1,'waiting')").run(thread);
+    const actor = rig.hub.actor(rig.store.getSession("waiting")!);
+    let kicks = 0;
+    actor.kick = async () => { kicks++; };
+    rig.store.db.prepare("UPDATE workspace_activity_meta SET complete=0 WHERE id=1").run();
+    const completed = Promise.withResolvers<boolean>();
+    let requests = 0;
+    rig.hub.waitForWorkspaceActivity = () => { requests++; return completed.promise; };
+    rig.hub.backIn("W2"); rig.hub.backIn("W2");
+    assert.equal(requests, 1);
+    assert.equal(kicks, 0);
+    if (!stillJoined) rig.workspaces = ["home"];
+    rig.store.db.prepare("UPDATE workspace_activity_meta SET complete=1 WHERE id=1").run();
+    completed.resolve(true);
+    await Promise.resolve();
+    assert.equal(kicks, stillJoined ? 1 : 0);
   } finally { await rig.close(); }
+});
+
+test("rejoining resumes its running sessions and pending messages and letters only", async () => {
+  const rig = new Rig();
+  try {
+    for (const [key, ws, connect, at] of [["running", "W2", "cl", 9], ["message", "W2", "cl", 8], ["letter", "W2", "cl", 7],
+      ["orphan", "W2", "cl", 6], ["offline", "W2", "offline", 5], ["other", "W1", "cl", 4]] as const) {
+      rig.store.insertSession({ key, connect, runtime: "claude", profile: "cc", workspace: `/w/${key}`, token: key, createdAt: 1, lastActiveAt: at, ws });
+    }
+    const db = rig.store.db;
+    const thread = rig.store.openThread("cl", "cl", "chat", null, null).id;
+    for (const key of ["running", "message", "letter", "orphan", "other"]) rig.store.joinThread(thread, key, "cl");
+    const offlineThread = rig.store.openThread("offline", "offline", "chat", null, null).id;
+    rig.store.joinThread(offlineThread, "offline", "offline");
+    db.prepare("UPDATE sessions SET running = 1 WHERE key IN ('running', 'offline', 'other')").run();
+    db.prepare("INSERT INTO entries (thread, n, kind, author_kind, author, text, at) VALUES (?, 1, 'message', 'person', 'a', 'body', 1)").run(thread);
+    db.prepare("INSERT INTO letters (thread, n, ts, author_kind, author, text, at, letter) VALUES (?, 2, 'l', 'agent', 'a', 'letter', 1, '{}')").run(thread);
+    db.prepare("INSERT INTO deliveries (thread, n, session) VALUES (?, 1, 'message'), (?, 1, 'running'), (?, 999, 'orphan')").run(thread, thread, thread);
+    db.prepare("INSERT INTO letter_deliveries (thread, n, session) VALUES (?, 2, 'letter')").run(thread);
+    const resumed: string[] = [];
+    for (const row of rig.store.listSessions()) {
+      const actor = rig.hub.actor(row);
+      actor.recover = async () => { resumed.push(`recover:${row.key}`); };
+      actor.kick = async () => { resumed.push(`kick:${row.key}`); };
+    }
+    rig.hub.backIn("W2");
+    assert.deepEqual(resumed, ["recover:running", "kick:message", "kick:letter"]);
+  } finally { await rig.close(); }
+});
+
+test("leaving a workspace checks its live actors without reading session history", async () => {
+  const rig = new Rig();
+  const list = rig.store.listSessions;
+  const get = rig.store.getSession;
+  try {
+    for (let i = 0; i < 200; i++) rig.store.insertSession({ key: `old${i}`, connect: "ember", runtime: "claude", profile: "cc", workspace: `/w/${i}`,
+      token: `old${i}`, createdAt: 1, lastActiveAt: 1, ws: "W1" });
+    for (const [key, ws] of [["here", "W2"], ["elsewhere", "W1"], ["timer-here", "W2"], ["timer-elsewhere", "W1"]] as const) rig.store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: `/w/${key}`,
+      token: key, createdAt: 1, lastActiveAt: 1, ws });
+    const suspended: string[] = [];
+    for (const key of ["here", "elsewhere"]) {
+      const actor = rig.hub.actor(rig.store.getSession(key)!);
+      actor.suspend = async () => { suspended.push(key); };
+    }
+    const deadlines = (rig.hub as any).deadlines as Map<string, unknown>;
+    deadlines.set("here", Effect.runFork(Effect.never));
+    deadlines.set("elsewhere", Effect.runFork(Effect.never));
+    deadlines.set("timer-here", Effect.runFork(Effect.never));
+    deadlines.set("timer-elsewhere", Effect.runFork(Effect.never));
+    const checked: string[] = [];
+    rig.store.listSessions = () => { throw new Error("session history was read"); };
+    rig.store.getSession = function (key) { checked.push(key); return get.call(this, key); };
+    await rig.hub.leftWorkspace("W2");
+    assert.deepEqual(suspended, ["here"]);
+    assert.equal(deadlines.has("here"), false);
+    assert.equal(deadlines.has("elsewhere"), true);
+    assert.equal(deadlines.has("timer-here"), false, "a deadline can outlive its actor");
+    assert.equal(deadlines.has("timer-elsewhere"), true);
+    assert.deepEqual([...new Set(checked)].sort(), ["elsewhere", "here", "timer-elsewhere", "timer-here"]);
+  } finally {
+    rig.store.listSessions = list;
+    rig.store.getSession = get;
+    await rig.close();
+  }
+});
+
+test("a restart with only a shared runtime host reads only running sessions", async () => {
+  for (const runners of [[], ["codex-cx"]]) {
+    const rig = new Rig();
+    const list = rig.store.listSessions;
+    const hub = rig.newHub({ chats: () => undefined, runners });
+    try {
+      for (let i = 0; i < 200; i++) rig.store.insertSession({ key: `old${i}`, connect: "ember", runtime: "claude", profile: "cc", workspace: `/w/${i}`,
+        token: `old${i}`, createdAt: 1, lastActiveAt: 1 });
+      rig.store.insertSession({ key: "running-codex", connect: "ember", runtime: "codex", profile: "cx", workspace: rig.dir,
+        token: "running-codex", runtimeSessionId: "running-runtime", createdAt: 1, lastActiveAt: 1 });
+      rig.store.db.prepare("UPDATE sessions SET running = 1 WHERE key = ?").run("running-codex");
+      rig.codex.left = { id: "running-runtime", busy: true };
+      rig.store.listSessions = () => { throw new Error("session history was read"); };
+      await hub.takeUp();
+      assert.equal(rig.codex.last().sessionId, "running-runtime", "the running shared-host session is still taken up");
+    } finally {
+      rig.store.listSessions = list;
+      await hub.shutdown();
+      await rig.close();
+    }
+  }
 });
 
 test("resuming an idle session checks for pending work without loading its messages", async () => {

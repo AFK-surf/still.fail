@@ -3,9 +3,9 @@ timeout 20000
 until 想让 agent 做什么？
 wait 600
 wait 1200
-tap Studio
+tap Willow
 wait 1500
-tap MBA
+tap Maple
 wait 1200
 tap Opus 5.5
 wait 1800

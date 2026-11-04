@@ -24,7 +24,7 @@ fn draw_icon(c : @ui.Ctx, name : String, size : Double, color : Int64, by_ink? :
 ///|
 /// What a button is (controls.css.ts): `Plain` lined, on the canvas;
 /// `Primary` the one thing to do, solid; `Ghost` words alone, a ground
-/// under the pointer; `Danger` lined, its words red; `DangerSolid` solid red.
+/// under the pointer or while busy; `Danger` lined, its words red; `DangerSolid` solid red.
 pub(all) enum Tone {
   Plain
   Primary
@@ -79,7 +79,9 @@ fn button_part(
   let p = t.p
   let id = c.id(if key == "" { "sf-btn/" + label } else { key })
   let live = !disabled && !busy
-  let h = ease_to(c, "sf-btn-h/\{id}", live && (c.lit(id) || c.pressed(id) || active))
+  // Quiet actions keep their usual look at rest, and show their own ground while doing what was pressed.
+  let quiet_busy = busy && (tone == Ghost || tone == GhostDanger)
+  let h = ease_to(c, "sf-btn-h/\{id}", quiet_busy || (live && (c.lit(id) || c.pressed(id) || active)))
   // (turning and greyed as a control answers: over dur_ms, never at once. With an icon, the spinner in its place, the
   // icon fading out under it as it fades in, nothing moved; with none, the spinner coming in before its words, which
   // stay: they are what it does, said on as it does it. At work is not greyed: it is the button pressed, at full
@@ -4635,6 +4637,7 @@ pub fn update_key(
   why : String,
   busy : Bool,
   coming? : Double?? = None,
+  offered? : Bool = false,
 ) -> Bool {
   let t = theme()
   let id = c.id(key)
@@ -4649,7 +4652,7 @@ pub fn update_key(
           if busy {
             updating_mark(c, mark, t.p.text) |> ignore
           } else {
-            icon(c, "update", size=mark, color=t.p.text) |> ignore
+            icon(c, if offered { "download" } else { "update" }, size=mark, color=t.p.text) |> ignore
           }
         })
         c.look(ready, @ui.look(alpha=1.0 - progress))

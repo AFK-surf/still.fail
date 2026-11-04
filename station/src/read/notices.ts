@@ -48,7 +48,7 @@ function emailsOf(s: Store, creator: string | null, said: string[], sessions: st
 }
 
 /// A notice of a chat: its name and whom to tell, each looked up alone. As lists have the chat, its every message was
-/// counted besides (unread, for no one): 479 pages of a chat of 534 messages, 3 to 16 s each time on ccvm short of
+/// counted besides (unread, for no one): many pages of a chat of many messages, 3 to 16 s each time on a station short of
 /// memory (2026-11-02), every telling after it waiting.
 function notice(s: Store, thread: number, seq: number | null, session: string, kind: string, by: string, text: string, except: string | null): Notice | null {
   const t = store.getThread(s, thread);

@@ -58,7 +58,7 @@ test "文件's places in every tier: favorites and stations; a favorite opens it
     app.nav.replace(Files)
     t.run_for(@ui.move_most_ms)
     let at = "\{w} \{platform}"
-    for label in ["个人收藏", "Station", "Studio"] {
+    for label in ["个人收藏", "Station", "Willow"] {
       assert_true(t.find(label) is Some(_), msg=at + ": " + label)
     }
     // a station away: its name faint, 离线 beside it
@@ -104,7 +104,7 @@ test "文件 at the phone's stack's root: a station's row opened shows its place
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   app.nav.replace(Files)
   t.run_for(@ui.move_most_ms)
-  t.click(Button, label="展开 Studio")
+  t.click(Button, label="展开 Willow")
   t.frame()
   assert_eq(named(calls, "drive.folders").length(), 1)
   assert_true(t.find("外接硬盘") is Some(_))

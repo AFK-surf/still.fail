@@ -285,11 +285,40 @@ test "no 在新窗口打开 where the app opens no window of its own (a phone's,
 
 ///|
 test "what a window of its own is started with: a station's screen and its title, read back; nothing else names a page" {
-  let at : @sfbase.Page = Screen({ station: "ws-1/st-1", screen: "desktop", title: "Studio 的屏幕", until_gone: false })
+  let at : @sfbase.Page = Screen({ station: "ws-1/st-1", screen: "desktop", title: "Willow 的屏幕", until_gone: false })
   let text = @sfbase.window_text(at).unwrap()
   assert_true(@sfbase.window_page(text) == Some(at))
   assert_eq(@sfbase.window_text(Files), None)
   assert_true(@sfbase.window_page("") is None)
   assert_true(@sfbase.window_page("{\"screen\":{\"station\":\"\",\"screen\":\"desktop\"}}") is None)
   assert_true(@sfbase.window_page("{\"drive\":{}}") is None)
+}
+
+///|
+test "a round button says its name when the pointer has rested on it: a device's buttons show only icons" {
+  let r = mouse_rig()
+  simulator_live(r)
+  r.t.draw()
+  let home = tr("web-pages.screen.device.home")
+  assert_true(r.t.find(home) is None)
+  let (x, y) = r.labelled(home).unwrap()
+  r.t.move(x, y)
+  r.t.run_for(@kit.tooltip_delay_ms)
+  r.t.draw()
+  assert_true(r.t.find(home) is Some(_))
+  mouse_done(r)
+}
+
+///|
+test "this device's input method by the press on the screen being driven, not at the window's foot" {
+  let r = mouse_rig()
+  r.live()
+  let (x, y) = r.at(0.5, 0.5)
+  r.tap_at(0.5, 0.5)
+  r.t.draw()
+  assert_true(r.t.key_catching())
+  let (ix, iy, _, _) = r.t.ime_rect()
+  assert_eq(ix, x)
+  assert_eq(iy, y)
+  mouse_done(r)
 }

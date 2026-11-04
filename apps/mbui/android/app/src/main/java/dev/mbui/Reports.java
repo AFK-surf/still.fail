@@ -2,7 +2,7 @@ package dev.mbui;
 
 /**
  * What the MoonBit app tells still.fail's own host (src/stillfail/reports.mbt, through src/host/android_reports.c), on
- * the UI's (GL) thread: the account signed in, the core failing, the bar's switches and the topics their pages subscribe.
+ * the UI's (GL) thread: the account signed in, the core failing, what the UI could not do as asked, the bar's switches and the topics their pages subscribe.
  */
 final class Reports {
     private Reports() {}
@@ -31,6 +31,10 @@ final class Reports {
             // the core failed, its reason (Crashes.coreFailed: StillFailCore.onFailed's)
             case "core_failed":
                 Crashes.coreFailed(app, a);
+                return 0;
+            // what the UI was asked that it could not do as asked (Crashes.uiFault: @view's fault_told)
+            case "ui_fault":
+                Crashes.uiFault(app, a);
                 return 0;
             // a place's page put on the stack: the place left ("" none), the place
             case "placed":

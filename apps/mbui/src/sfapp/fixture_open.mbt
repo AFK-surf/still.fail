@@ -73,9 +73,9 @@ pub fn open_cards_fixture(mode : String) -> Unit {
       @sf.pick(
         "切换工作站",
         [
-          @sf.choice("st1", "Studio", note="这台 Mac", mark=fn(c, size) { @sf.station_icon(c, "", "", size, @sf.theme().p.muted, here=true) }),
-          @sf.choice("st2", "Mini1", value="离线", mark=fn(c, size) { @sf.station_icon(c, "", "", size, @sf.theme().p.muted) }),
-          @sf.choice("st3", "ccvm", value="2 个任务"),
+          @sf.choice("st1", "Willow", note="这台 Mac", mark=fn(c, size) { @sf.station_icon(c, "", "", size, @sf.theme().p.muted, here=true) }),
+          @sf.choice("st2", "Cedar", value="离线", mark=fn(c, size) { @sf.station_icon(c, "", "", size, @sf.theme().p.muted) }),
+          @sf.choice("st3", "Birch", value="2 个任务"),
         ],
         "st1",
         fn(_) {  },
@@ -94,7 +94,7 @@ pub fn open_cards_fixture(mode : String) -> Unit {
 ///|
 /// What a fixture mode of this slice opens over Home (sffix's main, as the app starts).
 pub fn open_fixture(mode : String) -> Unit {
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   match mode {
     "history" | "history-reading" | "history-details" => {
       app.nav.push(Chat(r))
@@ -135,7 +135,7 @@ pub fn open_fixture(mode : String) -> Unit {
 /// What a fixture mode of this slice puts up over the chat once its source is made (open_fixture_src): the chat's
 /// sheet, its letters (one opened), an agent's card, its jobs, a job.
 fn open_decide_panels(mode : String, src : Source) -> Unit {
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   match mode {
     "chat-info" | "chat-letters-info" | "chat-info-pulls" | "chat-opener-info" | "chat-opened-info" => open_info(src, r)
     // what is done with it, from its "…": the menu a row of the list has, the page's own among it
@@ -265,7 +265,7 @@ pub fn open_fixture_mode(mode : String) -> Unit {
     station: "ws1/st1",
     session: "s-c1",
     title: "整理发布清单",
-    station_name: "Studio",
+    station_name: "Willow",
   }
   if mode == "chat-flash" || mode == "chat-flash-mine" {
     // opened from a notification at a message (Ana's, or yours), its flash held at its peak (slice 10's)
@@ -291,6 +291,14 @@ pub fn open_fixture_mode(mode : String) -> Unit {
   if mode == "home-update-ready" {
     @sffixture.fixture_update("0.1.5640")
     @sffixture.fixture_update_goes("0.1.5640", "ready", away=false)
+  }
+  // the same build's first two stages there: offered (有新版本), coming (40%)
+  if mode == "home-update-offered" {
+    @sffixture.fixture_update("0.1.5640")
+  }
+  if mode == "home-update-coming" {
+    @sffixture.fixture_update("0.1.5640")
+    @sffixture.fixture_update_goes("0.1.5640", "downloading", percent=40)
   }
   if mode == "home-transfers" || mode == "home-transfers-update" || mode == "home-update-list" {
     @sfdesk.open_transfers()
@@ -391,7 +399,7 @@ pub fn open_fixture_src(mode : String, src : Source) -> Unit {
   if mode == "chat-station-files" {
     fixture_station_files(src)
   }
-  // the sessions Studio's machine kept, their list open over the new chat
+  // the sessions Willow's machine kept, their list open over the new chat
   if mode == "newchat-machine" {
     @settings.fixture_machine_sessions(settings_core(src, { id: "ws1", name: "星火工作室", emoji: "", icon: "", email: "lin@example.com" }))
   }
@@ -404,10 +412,10 @@ pub fn open_fixture_src(mode : String, src : Source) -> Unit {
 /// The first row's chat (opened by sffix for chat… modes): ＋'s Station 文件 in 文档, a file ticked.
 fn fixture_station_files(src : Source) -> Unit {
   @sfdesk.station_files_pick(src, "ws1/st1:s-c1")
-  @sfdesk.station_pick_set({ station: "ws1/st1", station_name: "Studio", root: @sffixture.fix_docs, root_name: "文档", path: "" }, [
+  @sfdesk.station_pick_set({ station: "ws1/st1", station_name: "Willow", root: @sffixture.fix_docs, root_name: "文档", path: "" }, [
     {
       station: "ws1/st1",
-      station_name: "Studio",
+      station_name: "Willow",
       root: @sffixture.fix_docs,
       path: "发布清单.md",
       abs: @sffixture.fix_docs + "/发布清单.md",
@@ -538,7 +546,7 @@ pub fn open_mode(mode : String) -> Unit {
     // place-usage
     app.nav.replace(Place(mode.view(start_offset=6).to_string()))
   } else if mode.has_prefix("files-") {
-    // the files' page in the wide frame (wide_files.mbt) at Studio's 文档: files-columns (设计稿 open beside it, chosen),
+    // the files' page in the wide frame (wide_files.mbt) at Willow's 文档: files-columns (设计稿 open beside it, chosen),
     // files-tree (设计稿 opened in place), files-list, files-preview (发布清单.md previewed beside it), files-split (two
     // tabs, the one shown split)
     let docs : DriveAt = { station: "ws1/st1", root: Some(@sffixture.fix_docs), path: "" }
@@ -583,7 +591,7 @@ pub fn open_mode(mode : String) -> Unit {
               name: "说明.txt",
               dir: false,
               size: 2048.0,
-              station: "MBA",
+              station: "Maple",
               there: dv_entry(@sffixture.fix_entry("说明.txt", false, 320, "10/01")),
             },
           ],
@@ -591,7 +599,7 @@ pub fn open_mode(mode : String) -> Unit {
           all: false,
           done: fn(_) {  },
         })
-      // what comes and goes open (the rail's key, transfers.mbt): a copy to MBA going (as the core says it)
+      // what comes and goes open (the rail's key, transfers.mbt): a copy to Maple going (as the core says it)
       "files-transfers" => {
         @sffixture.fix_transfer({
           "from": { "station": "ws1/st1", "root": Json::string(@sffixture.fix_docs), "path": "", "names": ["演示录屏.mp4"] },
@@ -643,7 +651,7 @@ fn open_play_fixture(mode : String) -> Unit {
 fn open_service_fixture(mode : String) -> Unit {
   match mode {
     "service" | "service-sized" | "service-restart" | "service-stopped" => {
-      app.nav.push(Chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }))
+      app.nav.push(Chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }))
       app.nav.push(Service("ws1/st1", "j-web"))
       if mode == "service-sized" {
         svc_viewports[service_key("ws1/st1", "j-web")] = Some({ width: 390, height: Some(844) })

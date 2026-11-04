@@ -17,6 +17,9 @@ import type { Hub } from "./hub.ts";
 /// What a session going on on `to` is told when it starts afresh rather than take up runtime session `id`, last run on
 /// `was` (when the store has no record of it); null when it takes it up: on the account it ran on, or one not known.
 export function startsAfresh(hub: Hub, key: string, id: string, to: Profile, was: string | null): string | null {
+  const row = hub.store.getSession(key);
+  const source = hub.store.runtimeSessionSources(key).find((s) => s.id === id);
+  if (row && source && source.runtime !== row.runtime) return afresh(key, hub.store.sessionThreads(key).map((t) => threadAddress(t.thread.channel, t.thread.threadTs)));
   const from = hub.store.ranOn(key, id) ?? was;
   if (from === null || from === to.id) return null;
   return afresh(key, hub.store.sessionThreads(key).map((t) => threadAddress(t.thread.channel, t.thread.threadTs)));

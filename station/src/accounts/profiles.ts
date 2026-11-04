@@ -95,6 +95,8 @@ export const URLS: Urls = {
 /// The access kinds each runtime can use.
 export function accessKinds(runtime: Runtime): AccessKind[] {
   if (runtime === "hermes") return ["env"];
+  // Antigravity CLI: a Gemini key, or its own variables. (Its Google account sign-in is not offered yet: docs/agy.md.)
+  if (runtime === "agy") return ["api-provider", "env"];
   if (runtime === "claude") return ["subscription", "opencode-go", "anthropic-api", "api-provider", "env"];
   // DeepSeek Harness has no subscription to sign in to here: an account of its own is set up by variables.
   if (runtime === "dsh") return ["opencode-go", "anthropic-api", "api-provider", "env"];

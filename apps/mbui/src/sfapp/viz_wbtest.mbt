@@ -252,7 +252,7 @@ test "under the page: the whole screen, its name and a close over it; back close
 test "the whole window with the window's buttons in the app's top row (a Mac's): the bar every file opened has, clear of them; its way back closes it" {
   new_run()
   let src = fixture("chat-viz")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.set_window_inset(true)
   t.run_for(@ui.move_most_ms)
@@ -354,7 +354,7 @@ test "a visualization's document: a fragment in the stylesheet with its tokens a
 test "on the tape what shows of a visualization's page beside the sidebar in use takes the presses there, not the page" {
   new_run()
   let src = fixture("chat-viz")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   // an opened fold's inner screen upright, a finger: laid out Medium
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=690.0, h=840.0, platform=2)
   say_room(t, "medium", "medium")
@@ -387,7 +387,7 @@ test "on the tape what shows of a visualization's page beside the sidebar in use
 test "a page opened over the chat on a wide window shows over the chat's visualization still painted under it, not under it" {
   new_run()
   let src = fixture("chat-viz")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   t.frame()
@@ -435,7 +435,7 @@ fn view_covered(t : @ui.Tester, id : Int) -> Bool {
 test "a page that said its height stays covered till its host has drawn it (its first frame on the screen)" {
   new_run()
   let src = fixture("chat-viz")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2, finish=false)
   t.run_for(@ui.move_most_ms)
   let (page, _) = viz_views(t)
@@ -502,7 +502,7 @@ test "inline HTML is set in the faces the app is set in, a face still.fail keeps
 test "an inline page not drawn yet holds its place with a placeholder, gone once it is drawn" {
   new_run()
   let src = fixture("chat-viz")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2, finish=false)
   t.run_for(@ui.move_most_ms)
   let (page, _) = viz_views(t)

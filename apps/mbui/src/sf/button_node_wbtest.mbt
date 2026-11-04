@@ -108,6 +108,29 @@ test "the button as a node idle: nothing turning; at work, its spinner turning; 
 }
 
 ///|
+test "quiet buttons show their ground while busy, then return to words alone" {
+  for tone in [Ghost, GhostDanger] {
+    for node in [false, true] {
+      let busy = @signals.signal(false, same=fn(a, b) { a == b })
+      let t = button_case(@signals.signal("Join"), busy, node, tone~)
+      assert_true(t.drawn_rects().is_empty())
+      busy.set(true)
+      t.frame()
+      t.run_for(past_button_ms)
+      assert_true(t.drawn_rects().iter().any(fn(r) { r.4 == theme().p.hover }))
+      assert_true(t.find("Join") is Some(_))
+      assert_true(t.drawn_instances().iter().any(fn(i) { i[5] == 10.0 }))
+      busy.set(false)
+      t.frame()
+      t.run_for(past_button_ms)
+      assert_true(t.drawn_rects().is_empty())
+      let already_busy = button_case(@signals.signal("Join"), @signals.signal(true), node, tone~)
+      assert_true(already_busy.drawn_rects().iter().any(fn(r) { r.4 == theme().p.hover }))
+    }
+  }
+}
+
+///|
 test "the button as a node let go at work, its spinner's room opening: none of it left, drawn or turning" {
   let busy = @signals.signal(false, same=fn(a, b) { a == b })
   let there = @signals.signal(true, same=fn(a, b) { a == b })

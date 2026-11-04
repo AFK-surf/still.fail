@@ -2,7 +2,7 @@
 // what the station's stream says changed: what was said in a chat, a session's summary, what the viewer pinned or
 // dismissed. The station tells what it writes as it writes it, and leaves what a row makes of that to the device
 // (`rows=1`, docs/core-ts.md, sync). Made by the station, each change read every row it could touch again for every
-// viewer, from the disk while its machine was short of memory: 3 to 5 s each on ccvm (2026-11-03).
+// viewer, from the disk while its machine was short of memory: 3 to 5 s each on a station (2026-11-03).
 //
 // What only the station can say (a card waiting and the messages before it, what an agent's need asks with, a chat
 // new to the list or gone from it, the review's marks) is read from it, the rows that change alone (`"read"`).
@@ -34,6 +34,9 @@ function lastOf(e: J): J {
   const text = typeof e.text === "string" ? [...trim(e.text)].slice(0, LAST_CHARS).join("") : null;
   const last: J = { seq: e.n, authorKind: e.authorKind, author: e.author, authorName: e.authorName ?? null, text, createdAt: e.at };
   if (e.authorPicture !== undefined) last.authorPicture = e.authorPicture;
+  if (e.agentIdentity != null) last.agentIdentity = e.agentIdentity;
+  if (e.authorModel !== undefined) last.authorModel = e.authorModel;
+  if (e.authorRuntime !== undefined) last.authorRuntime = e.authorRuntime;
   return last;
 }
 

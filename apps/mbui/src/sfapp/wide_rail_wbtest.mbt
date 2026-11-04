@@ -99,12 +99,18 @@ test "wide on a Mac: the closed bar, shown a while, one corner all round, the wi
       let (fx, fy, fw, fh) = t.query(Button, label=named).unwrap().rect
       t.move(fx + fw / 2.0, fy + fh / 2.0)
       t.run_for(@ui.move_most_ms)
-      let filter = t
-        .boxes()
-        .iter()
-        .find_first(fn(b) { b.kind != "text" && b.w == fw && b.h == fh && b.x == fx && b.y == fy && b.bg != 0L })
+      // (the band's filter a node of the window's tree: its ground as the tree draws it)
+      let filter = @ui.view_tree()
         .unwrap()
-      assert_eq(filter.radii, (inner, inner, inner, inner))
+        .drawn()
+        .iter()
+        .find_first(fn(d) { d.w == fw && d.h == fh && d.x == fx && d.y == fy && d.ground != 0L })
+        .unwrap()
+      let radii = match filter.corners {
+        Some(k) => k
+        None => (filter.radius, filter.radius, filter.radius, filter.radius)
+      }
+      assert_eq(radii, (inner, inner, inner, inner))
       assert_eq((bar.x + bar.w - (filter.x + filter.w), filter.y - bar.y), (6.0, 6.0))
       assert_eq(t.corner_faults(), [])
     }
@@ -421,7 +427,7 @@ fn chats_in_trouble() -> Json {
   match (fixture("home").topic)("chats", { "scope": Json::string("ws1"), "mine": Json::boolean(false) }).value {
     Some(Object(m)) => {
       let v = m.copy()
-      v["trouble"] = { "text": "MBA 连不上了", "state": "error" }
+      v["trouble"] = { "text": "Maple 连不上了", "state": "error" }
       Json::object(v)
     }
     _ => Json::null()
@@ -433,14 +439,14 @@ test "wide: with the bell in the rail, the stations' trouble is in 待处理's p
   let calls : Array[Made] = []
   let t = wide_with(calls, { "chats": chats_in_trouble() })
   t.frame()
-  assert_true(t.find("MBA 连不上了") is None, msg="not in the lists' foot")
+  assert_true(t.find("Maple 连不上了") is None, msg="not in the lists' foot")
   let (bx, by, bw, bh) = t.query(Button, label="待处理").unwrap().rect
   t.tap(bx + bw / 2.0, by + bh / 2.0)
   t.frame()
-  let (x, y) = t.find("MBA 连不上了").unwrap()
+  let (x, y) = t.find("Maple 连不上了").unwrap()
   // 10 past the bell
   assert_true(x >= bx + bw + 10.0, msg=x.to_string())
-  assert_eq(trouble_said(calls, "ws1\nseen"), Some(Json::string("MBA 连不上了")))
+  assert_eq(trouble_said(calls, "ws1\nseen"), Some(Json::string("Maple 连不上了")))
   // nothing to let it go with: looked at, it goes by itself
   t.move(x, y)
   t.frame()
@@ -449,7 +455,7 @@ test "wide: with the bell in the rail, the stations' trouble is in 待处理's p
   t.frame()
   t.tap(bx + bw / 2.0, by + bh / 2.0)
   t.frame()
-  assert_true(t.find("MBA 连不上了") is None, msg="looked at")
+  assert_true(t.find("Maple 连不上了") is None, msg="looked at")
   assert_true(t.find("暂无待处理") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
 }
 
@@ -839,6 +845,33 @@ test "wide: a download of unknown length is still shown" {
 }
 
 ///|
+test "wide: a downloading update's ring sits in the middle of its key, as the filter's mark does" {
+  let t = wide_tester([], mode="chat")
+  @sffixture.fixture_update("0.1.9999")
+  @sffixture.fixture_update_goes("0.1.9999", "downloading", percent=40, away=false)
+  t.run_for(@ui.move_most_ms)
+  let (x, y, w, h) = t.query(Button, label="正在下载 0.1.9999").unwrap().rect
+  // the ring's pieces drawn within the key: as far from its middle on every side
+  let ring = t.drawn_lines().filter(fn(l) { l.0 >= x && l.0 <= x + w && l.1 >= y && l.1 <= y + h })
+  assert_true(ring.length() > 0, msg="the ring drawn in the key")
+  let mut left = x + w
+  let mut top = y + h
+  let mut right = x
+  let mut bottom = y
+  for l in ring {
+    left = dmin(left, dmin(l.0, l.2))
+    right = dmax(right, dmax(l.0, l.2))
+    top = dmin(top, dmin(l.1, l.3))
+    bottom = dmax(bottom, dmax(l.1, l.3))
+  }
+  let (mx, my) = ((left + right) / 2.0, (top + bottom) / 2.0)
+  assert_true(
+    (mx - (x + w / 2.0)).abs() < 0.5 && (my - (y + h / 2.0)).abs() < 0.5,
+    msg="the ring's middle \{(mx, my)}, the key's \{(x + w / 2.0, y + h / 2.0)}",
+  )
+}
+
+///|
 test "wide: a newer build of the desktop app ready: 重启更新 the update key in the sidebar's first row before the filter, as large as it; folded, past the rail, the page bar's start clear of it" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
@@ -1024,7 +1057,7 @@ test "wide: Station's page picked in one workspace: in another, that one's first
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0)
   @sfbase.go_place("stations") |> ignore
   t.run_for(@ui.move_most_ms)
-  t.tap_text("MBA")
+  t.tap_text("Maple")
   t.run_for(@ui.move_most_ms)
   @sfpages.switch_workspace(src, "ws2")
   t.run_for(@ui.move_most_ms)
@@ -1035,6 +1068,26 @@ test "wide: Station's page picked in one workspace: in another, that one's first
   // back in the first: the one picked there still
   @sfpages.switch_workspace(src, "ws1")
   t.run_for(@ui.move_most_ms)
-  let picked = t.words().filter(fn(w) { w.0 == "MBA" }).length()
+  let picked = t.words().filter(fn(w) { w.0 == "Maple" }).length()
   assert_true(picked >= 2, msg=t.words().map(fn(w) { w.0 }).join("|"))
+}
+
+///|
+test "wide: the update's three stages in the sidebar, the same key in the same place: 有新版本 (pressed, downloaded now), 正在下载, 重启更新" {
+  let t = wide_tester([], mode="chat")
+  @sffixture.fixture_updates()
+  @sffixture.fixture_update("0.1.9999")
+  t.run_for(@ui.move_most_ms)
+  let offered = t.query(Button, label="有新版本 0.1.9999")
+  assert_true(offered is Some(_), msg="the offered update in the sidebar")
+  let at = offered.unwrap().rect
+  t.click(Button, label="有新版本 0.1.9999")
+  assert_eq(t.update_asked().filter(fn(a) { a.has_suffix(" true") }).length(), 1)
+  @sffixture.fixture_update_goes("0.1.9999", "downloading", percent=40)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.query(Button, label="正在下载 0.1.9999").unwrap().rect, at)
+  @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.query(Button, label="重启更新").unwrap().rect, at)
+  update_reset()
 }

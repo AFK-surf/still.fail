@@ -44,9 +44,14 @@ let lift : Double = 4.0
 let fillet : Double = 8.0
 
 ///|
-/// How far the bar and its panel are drawn up while a finger has the bar (BarModel::up), clear of the finger: a
-/// fingertip's width. Only drawn so: where a finger is taken stays where the bar is laid out.
-let bar_raise : Double = 44.0
+/// How far the bar and its panel are drawn up while a finger has them. Give a taller window a little more room above
+/// the finger, but limit the rise to the room the fully opened panel has below the system's top inset. Only drawn so:
+/// where a finger is taken stays where the bar is laid out.
+fn bar_raise(height : Double, foot : Double, panel : Double, top : Double) -> Double {
+  let desired = dclamp(height * 0.07, 48.0, 64.0)
+  let room = dmax(0.0, height - foot - panel + over - top - 8.0)
+  dmin(desired, room)
+}
 
 ///|
 let bar_row : Double = 56.0
@@ -1952,8 +1957,10 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   // going down out of the way and back up: drawn so, laid out where it rests; going, it takes nothing
   // (worked out as each frame is painted, on its way: a frame of its looks alone draws it where it is then)
   // drawn up out from under a finger that has the bar: drawn so, a finger taken where it is laid out
-  let raised = bar_raise * m.up.x
-  if m.vis.value < 1.0 || m.vis.target < 1.0 {
+  let raised = bar_raise(c.height, foot, panel, status_top()) * m.up.x
+  // Keep the painted look until its declared end, when the build is scheduled again. The sampled value can round
+  // to 1 a fraction before then; dropping the look at that instant would make a kept build differ from a fresh one.
+  if now < m.vis.end() || m.vis.target < 1.0 {
     let vis = m.vis
     c.look_by(holder, fn() {
       let v = vis.painted(@ui.current())

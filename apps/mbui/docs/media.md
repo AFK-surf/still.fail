@@ -35,7 +35,10 @@ Rendering uses the Mac offscreen host. System keyboards, dialogs and native web 
 use a real system capture for a scene that needs them. Films fail when a frame needs an image that cannot be decoded or
 a native view is visible, instead of silently omitting it. A failed image no longer in the frame does not stop export.
 When deliberately filming only the parts mbui draws, set
-`MBUI_FILM_ALLOW_INCOMPLETE=1`; this choice is recorded in the scene metadata. Images that are still loading can be
+`MBUI_FILM_ALLOW_INCOMPLETE=1`; this choice is recorded in the scene metadata. A scene that breaks the theme's corner
+rule fails with each fault named; to show such a frame anyway (the before of a change to the rule or to a corner), set
+`MBUI_FILM_ALLOW_CORNER_FAULTS=1`, which still names every fault and is recorded too, rather than patching the checks
+and building another renderer. Images that are still loading can be
 filmed as loading; use the preparation script and `image_ready SRC` if they must be ready before filming begins.
 `docs/figures.md` describes building reusable graphics.
 
@@ -88,8 +91,10 @@ PNG or film to inspect those settings and frame-accurate timing.
 
 ## Prebuilt scene renderer
 
-For development stills, use the Wasm scene renderer on macOS Apple Silicon. It runs the actual application and the
-same offscreen text, image and Metal host as the native renderer; it does not open a window. To prepare a small job
+For development stills and films, use the Wasm scene renderer on macOS Apple Silicon. It runs the actual application
+and the same offscreen text, image and Metal host and the same film writer as the native renderer; it does not open a
+window. `scripts/media.sh picture|film` from a checkout builds it too (`scripts/wasm-film-build.sh`, into
+`out/wasm-film`): no C of the application is compiled. To prepare a small job
 from a source checkout, without synchronizing the checkout or building on the machine drawing the picture:
 
 ```sh
@@ -104,9 +109,9 @@ scene settings still apply. The job obtains its exact prebuilt renderer by the s
 it does not build one. Each new source state needs a newly prepared job: the job always uses the key it was created
 with, even if the original checkout changes. Missing versions fail rather than showing an old component.
 
-The Wasm part is for stills. For a video, prepare a `film` job instead and set `MBUI_MEDIA_KIND=film` when running it;
-return `result.mp4`, `result.mp4.last.png`, `result.mp4.textrec` and `result.mp4.scene.json`. The `film` job uses the
-native renderer. A Wasm scene that needs a native view or reads pixels back from the renderer fails instead of omitting
+For a video, prepare a `film` job instead and set `MBUI_MEDIA_KIND=film` when running it; return `result.mp4`,
+`result.mp4.last.png`, `result.mp4.textrec` and `result.mp4.scene.json`. The film is mbui's own (src/film) run in the
+Wasm scene: its frames and text are the native renderer's, byte for byte (2026-11-03). A Wasm scene that needs a native view or reads pixels back from the renderer fails instead of omitting
 content. The scene record includes hashes of the Wasm module, its host and loader as well as the launcher.
 
 A single prepared job can capture different fixtures, sizes and action scripts without building or preparing another

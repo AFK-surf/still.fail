@@ -1,5 +1,5 @@
 // Waits for an event, not a time (detlint's script-wait): a line of a log another process writes, or a process's end
-// (kqueue's on macOS, inotify's and a pidfd's on Linux: events.c).
+// (kqueue's on macOS, inotify's and a pidfd's on Linux: events.c; on Wasm, the host's: scripts/wasmrun.mjs).
 //
 //     chk logwait [--log FILE --line REGEX] [--pid PID] [--gone PATH] [--fail-log FILE --fail-line REGEX]
 //                 [--deadline S]
@@ -11,33 +11,6 @@
 // line of another FILE (as it is written) that says the event will not come (a launch refused): that line printed on
 // stderr, exit 1. --deadline: how long at most (s, default 600; what a run that hangs is given before it fails, not
 // what it is expected to take): exit 2.
-
-///|
-extern "C" fn ev_init() -> Int = "chk_ev_init"
-
-///|
-#borrow(path)
-extern "C" fn ev_open(k : Int, path : Bytes) -> Int = "chk_ev_open"
-
-///|
-#borrow(path)
-extern "C" fn ev_open_path(k : Int, path : Bytes) -> Int = "chk_ev_open_path"
-
-///|
-extern "C" fn ev_read(k : Int) -> Bytes = "chk_ev_read"
-
-///|
-extern "C" fn ev_file(k : Int) -> Int = "chk_ev_file"
-
-///|
-#borrow(path)
-extern "C" fn ev_dir(path : Bytes) -> Int = "chk_ev_dir"
-
-///|
-extern "C" fn ev_pid(pid : Int) -> Int = "chk_ev_pid"
-
-///|
-extern "C" fn ev_wait(ms : Int) -> Int = "chk_ev_wait"
 
 ///|
 fn path_bytes(p : String) -> Bytes {

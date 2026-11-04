@@ -297,13 +297,7 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
               title,
               station_name: text(v, "stationName"),
             }
-            while app.nav.depth() > 1 {
-              if !app.nav.pop() {
-                break
-              }
-            }
-            app.nav.replace(Home)
-            app.nav.push(Chat(chat))
+            @sfbase.nav_over_home([Chat(chat)])
             @sfbase.show_chosen()
           },
         )

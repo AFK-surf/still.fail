@@ -11,6 +11,13 @@ holdLanguage();
 type J = any;
 const GIB = 1024 ** 3;
 
+test("an incomplete Codex is not labelled up to date", () => {
+  const raw = { id: "codex", name: "Codex", installed: true, version: "0.166.0", latest: "0.166.0", newer: false, downgrade: false, updatable: false, repairable: true, state: "idle" };
+  const shown = p.software(raw) as J;
+  assert.equal(shown.tipText, "");
+  assert.equal((conform("SoftwareVersion", shown) as J).ok.repairable, true);
+});
+
 test("reset credits show the expiries known for each available card", () => {
   const now = 1_900_000_000_000;
   const day = 86_400_000;
@@ -279,9 +286,19 @@ test("the_last_speaker_is_named_and_an_agents_state_rides_on_it", () => {
   });
   const agent = p.lastBy(row("agent", "k"), me, [], members);
   assert.deepEqual([agent.name, agent.state], ["DeepSeek Flash", "block"]);
+  const switched = row("agent", "k");
+  switched.last.agentIdentity = { model: "claude-opus-5-5", runtime: "claude" };
+  const old = p.lastBy(switched, me, [], members);
+  assert.deepEqual([old.name, old.runtime], ["Opus 5.5", "claude"]);
+  switched.last.agentIdentity = { model: null, runtime: "claude" };
+  const defaultModel = p.lastBy(switched, me, [], members);
+  assert.deepEqual([defaultModel.model, defaultModel.runtime], [null, "claude"]);
   const legacy = row("agent", "k");
   delete legacy.last.agentIdentity;
   assert.equal(p.lastBy(legacy, me, [], members).name, "GPT-6 Astra");
+  legacy.last.authorRuntime = "claude";
+  legacy.last.authorModel = "claude-opus-5-5";
+  assert.deepEqual([p.lastBy(legacy, me, [], members).name, p.lastBy(legacy, me, [], members).runtime], ["Opus 5.5", "claude"]);
   const other = p.lastBy(row("person", "b@x.com"), me, [], members);
   assert.deepEqual([other.name, other.picture, other.mine], ["阿二", "https://p/b", false]);
   assert.equal(p.lastBy(row("person", "A@x.com"), me, [], members).name, "你");
@@ -578,7 +595,7 @@ test("what_the_clients_show_is_put_in_here", () => {
   const fromSlack = p.person({ id: "slack:c:U1", name: "A", email: "a@x.com", via: "slack", picture: "https://avatars.slack-edge.com/a_72.png" }, me, members);
   assert.equal(fromSlack.shown.picture, "https://avatars.slack-edge.com/a_72.png", "a Slack person's own picture, over their account's");
   let h: J = {
-    hostname: "studio", os: "macOS 26", arch: "arm64", cpus: 8, load: 0.5, uptimeSec: 90_000,
+    hostname: "willow", os: "macOS 26", arch: "arm64", cpus: 8, load: 0.5, uptimeSec: 90_000,
     memory: { usedBytes: 8 * GIB, totalBytes: 32 * GIB, swapUsedBytes: null },
     disk: { totalBytes: 1000 * GIB, freeBytes: 50 * GIB }, emberRssBytes: 100 * 1024 ** 2,
   };
@@ -587,14 +604,14 @@ test("what_the_clients_show_is_put_in_here", () => {
   assert.deepEqual([h.summary, h.facts[3]], ["8 核 · 32 GB", "已运行 1 天 1 小时"]);
   assert.deepEqual([h.meters[0].label, h.meters[0].value], ["CPU 负载", "50%"]);
   h.cpuBusy = 0.93;
-  h.cpuModel = "Apple M2 Max";
+  h.cpuModel = "Apple M1 Pro";
   h = p.host(h);
   const cpu = h.meters[0];
-  assert.deepEqual([cpu.label, cpu.percent, cpu.level, cpu.value, cpu.note], ["CPU", 93, "red", "93%", "负载 4.0 · Apple M2 Max"]);
+  assert.deepEqual([cpu.label, cpu.percent, cpu.level, cpu.value, cpu.note], ["CPU", 93, "red", "93%", "负载 4.0 · Apple M1 Pro"]);
   assert.deepEqual([h.meters[2].level, h.meters[2].value, h.emberText], ["red", "剩余 50.0 GB / 1000 GB", "still.fail 100 MB"]);
   assert.match(h.usage, /^内存 .+ · 磁盘 剩余 50\.0 GB \/ 1000 GB$/);
-  assert.equal(h.identity, "Apple M2 Max · 32 GB · macOS 26");
-  assert.deepEqual(h.details.map((d: J) => `${d.label} ${d.value}`), ["主机名 studio", "芯片 Apple M2 Max · 8 核 · arm64", "已运行 1 天 1 小时", "still.fail 进程占用 100 MB"]);
+  assert.equal(h.identity, "Apple M1 Pro · 32 GB · macOS 26");
+  assert.deepEqual(h.details.map((d: J) => `${d.label} ${d.value}`), ["主机名 willow", "芯片 Apple M1 Pro · 8 核 · arm64", "已运行 1 天 1 小时", "still.fail 进程占用 100 MB"]);
   assert.deepEqual([cpu.left, cpu.remaining, cpu.big, cpu.unit, cpu.title, cpu.total], [7, "空闲 7%", "7", "%", "CPU 空闲", "负载 4.0"]);
   const left = h.meters[2];
   assert.deepEqual([left.left, left.big, left.unit, left.title, left.total], [5, "50.0", "GB", "磁盘剩", "共 1000 GB"]);
@@ -620,8 +637,8 @@ test("a_meter_is_drawn_as_an_allowance_to_what_is_left", () => {
 });
 
 test("a station's GPUs are shown separately with only measurements that are known", () => {
-  const one = p.host({ gpus: [{ name: "Apple M2 Max", cores: 30, busy: 0.21 }] });
-  assert.deepEqual(one.gpus, [{ big: "79", unit: "%", left: 79, level: "ok", title: "GPU 空闲", total: "30 核", model: "Apple M2 Max" }]);
+  const one = p.host({ gpus: [{ name: "Apple M1 Pro", cores: 16, busy: 0.21 }] });
+  assert.deepEqual(one.gpus, [{ big: "79", unit: "%", left: 79, level: "ok", title: "GPU 空闲", total: "16 核", model: "Apple M1 Pro" }]);
   const several = p.host({ gpus: [
     { name: "NVIDIA RTX 4090", busy: 0.37, memoryUsedBytes: 4 * GIB, memoryTotalBytes: 24 * GIB },
     { name: "Tesla T4", busy: 0, memoryTotalBytes: 16 * GIB },

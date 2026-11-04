@@ -210,6 +210,28 @@ test("cards_in_a_chat_say_whether_they_wait_and_who_answered_how", () => {
   assert.deepEqual(messages[0].decision, { resolved: true, answeredBy: "林晓", text: "林晓 回复了" });
 });
 
+test("a_login_asked_for_again_is_the_later_posts_card_alone", () => {
+  // An agent asking again for the login its earlier post asked for: two cards of one login would be two code fields
+  // of one login on screen (the Android app closed as such a chat opened, 2026-11-04).
+  const login = (seq: number, ts: string, station?: string): J => ({
+    seq,
+    ts,
+    authorKind: "agent",
+    text: "授权后把授权码填进卡片",
+    card: { type: "login", login: "mw1g340d1ylnm", ...(station ? { station } : {}) },
+  });
+  let messages: J[] = d.inMessages([login(2, "9.000002"), said(3, "person", "我没有号"), login(4, "9.000004")], [4, false]);
+  assert.deepEqual(messages[0].card, { type: "login" });
+  assert.deepEqual(messages[0].decision, { resolved: true, answeredBy: "林晓", text: "林晓 回复了" });
+  assert.deepEqual(messages[2].card, { type: "login", login: "mw1g340d1ylnm" });
+  assert.deepEqual(messages[2].decision, { resolved: false });
+  shape("MessageCard", messages[0].card);
+  // Another station's login of the same id is another login: both keep their cards.
+  messages = d.inMessages([login(2, "9.000002"), login(4, "9.000004", "willow")], [4, false]);
+  assert.equal(messages[0].card.login, "mw1g340d1ylnm");
+  assert.equal(messages[1].card.login, "mw1g340d1ylnm");
+});
+
 test("what_the_viewer_sent_answers_the_last_card_before_the_station_has_it", () => {
   // Written in the composer instead of picking: settled at once, as the viewer's reply.
   let messages: J[] = [askedMsg(2)];

@@ -1,10 +1,10 @@
-// The files' page for the stories (docs/drive.md "The files' page"): the demo's Studio and a second station of the
+// The files' page for the stories (docs/drive.md "The files' page"): the demo's Willow and a second station of the
 // workspace, MBA (its disk nearly full), each with its folders; the person's favourites; copies between them under way,
 // done and failed (the `driveTransfers` topic as the core puts it together: client/core-ts/src/views/transfers.ts); and
 // what a copy asked answers.
 import type { DemoExtension } from "../src/demo/mount.tsx";
 import { opensOf } from "../../client/core-ts/src/drive-kind.ts";
-import { driveFolder as studioFolder } from "../src/demo/station.ts";
+import { driveFolder as willowFolder } from "../src/demo/station.ts";
 import type { DriveEntry, DriveFolder, DriveKind, DriveTransferShown, StationView } from "../src/core/shapes.ts";
 
 const MBA = "demo/mba";
@@ -31,7 +31,7 @@ function folder(path: string): DriveFolder {
 }
 
 const transfer = (over: Partial<DriveTransferShown>): DriveTransferShown => ({
-  id: "t1", station: MBA, stationName: "MBA", fromStation: "demo/local", fromStationName: "Studio", fromRoot: "/Users/lin", fromPath: "Downloads",
+  id: "t1", station: MBA, stationName: "MBA", fromStation: "demo/local", fromStationName: "Willow", fromRoot: "/Users/lin", fromPath: "Downloads",
   names: ["发版录屏 1014.mp4"], toRoot: "/Users/mei", toPath: "项目", toText: "MBA › 项目", title: "发版录屏 1014.mp4", move: false, state: "copying",
   active: true, progress: 0.38, total: 50_541_773, copied: 19_205_873, count: 1, files: 1, current: "发版录屏 1014.mp4", statusText: "18.3 MB / 48.2 MB",
   createdAt: NOW - 60_000, ...over,
@@ -41,11 +41,11 @@ const transfer = (over: Partial<DriveTransferShown>): DriveTransferShown => ({
 export const TRANSFERS: DriveTransferShown[] = [
   transfer({}),
   transfer({ id: "t2", names: ["设计稿"], title: "设计稿", state: "queued", progress: 0, copied: 0, total: 0, statusText: "排队中", createdAt: NOW - 30_000, toText: "MBA › Documents", toPath: "Documents" }),
-  transfer({ id: "t3", station: "demo/local", stationName: "Studio", fromStation: MBA, fromStationName: "MBA", names: ["备份.tar"], title: "备份.tar", state: "failed", active: false, progress: 0.4, statusText: "失败：station is not reachable", error: "station is not reachable", toText: "Studio › Downloads", createdAt: NOW - 600_000 }),
+  transfer({ id: "t3", station: "demo/local", stationName: "Willow", fromStation: MBA, fromStationName: "MBA", names: ["备份.tar"], title: "备份.tar", state: "failed", active: false, progress: 0.4, statusText: "失败：station is not reachable", error: "station is not reachable", toText: "Willow › Downloads", createdAt: NOW - 600_000 }),
   transfer({ id: "t4", names: ["login-375.png", "export-1013.csv"], title: "login-375.png 等 2 项", state: "done", active: false, progress: 1, total: 544_768, copied: 544_768, files: 2, count: 2, statusText: "已完成 · 532 KB", toText: "MBA › 照片", toPath: "照片", createdAt: NOW - 1_200_000, endedAt: NOW - 1_180_000 }),
 ];
 
-/** Studio and MBA; `transfers`: copies under way and ended. */
+/** Willow and MBA; `transfers`: copies under way and ended. */
 export function filesDemo(transfers: DriveTransferShown[] = []): DemoExtension {
   return {
     topic: (t) => {
@@ -58,16 +58,16 @@ export function filesDemo(transfers: DriveTransferShown[] = []): DemoExtension {
     },
     then: (t, value) => {
       if (t.topic !== "stations" || !Array.isArray(value)) return undefined;
-      const studio = value[0] as StationView;
+      const willow = value[0] as StationView;
       const mba: StationView = {
-        ...studio, station: MBA, id: "mba", name: "MBA", summary: "Apple M3 · 在线",
+        ...willow, station: MBA, id: "mba", name: "MBA", summary: "Apple M3 · 在线",
       };
-      if (studio.overview) mba.overview = {
-          ...studio.overview,
+      if (willow.overview) mba.overview = {
+          ...willow.overview,
           disk: { freeBytes: 21_474_836_480, totalBytes: 245_107_195_904 },
           drive: { anywhere: true, home: "/Users/mei", roots: [{ path: "/Users/mei/照片", name: "照片", state: "ok" }], watch: true, transfers: true },
       };
-      const withTransfers = studio.overview?.drive ? { ...studio, overview: { ...studio.overview, drive: { ...studio.overview.drive, transfers: true } } } : studio;
+      const withTransfers = willow.overview?.drive ? { ...willow, overview: { ...willow.overview, drive: { ...willow.overview.drive, transfers: true } } } : willow;
       return [withTransfers, mba];
     },
     call: (name, params) => {
@@ -76,7 +76,7 @@ export function filesDemo(transfers: DriveTransferShown[] = []): DemoExtension {
       // A folder's folders (where a copy goes, a path typed): each station's as its folders are here.
       if (typeof params.path === "string" && params.path !== "") {
         const at = params.path.replace(/\/$/, "");
-        const listed = params.station === MBA ? folder(at) : studioFolder(at, "");
+        const listed = params.station === MBA ? folder(at) : willowFolder(at, "");
         const entries = listed.entries.filter((e) => e.dir).map((e) => ({ name: e.name, path: `${at}/${e.name}`, unreadable: false }));
         const parts = at.split("/").filter(Boolean);
         return { path: at, parent: parts.length ? `/${parts.slice(0, -1).join("/")}` : null, home: params.station === MBA ? "/Users/mei" : "/Users/lin", entries, unreadable: false,

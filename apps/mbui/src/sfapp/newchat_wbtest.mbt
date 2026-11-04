@@ -153,7 +153,7 @@ test "the panel drawn up by a finger: the bar and the panel drawn up clear of th
   t.release(xs[0], 844.0 - 22.0 - 132.0 + 20.0 + 28.0)
   // (the test's end: all of the bar at rest, the bar chosen landed)
   t.run_for(bar.rest() - t.time())
-  assert_eq(((rest - held).round(), (rest - foot()).round()), (bar_raise, 0.0))
+  assert_eq(((rest - held).round(), (rest - foot()).round()), (59.0, 0.0))
   assert_true(app.nav.top() == Place("archive"))
 }
 
@@ -215,11 +215,13 @@ test "the workspaces' sheet: drawn up to 94%, dragged down past 30% it closes" {
 ///|
 test "a sheet takes the drags on it: the list under it does not scroll" {
   let t = tester("home")
-  let before = t.list_offset()
+  // (where the list is, by a row of it)
+  let row = fn() { t.locate("=把旧的截图都换成新的").map(fn(p) { p.1 }) }
+  let before = row()
   t.tap_text("星火工作室")
   sheet_rested(t, "sf-present")
   t.drag(195.0, 700.0, 195.0, 400.0)
-  assert_eq(t.list_offset(), before)
+  assert_eq(row(), before)
   assert_true(@sf.presenting())
 }
 
@@ -287,17 +289,17 @@ test "a new chat: its station picked in the sheet, its model in the model's pane
   // (the page opened drawn at its moment, its rise from there)
   t.draw()
   t.run_for(@ui.move_most_ms)
-  assert_true(t.find("它会在 Studio 上") is Some(_))
+  assert_true(t.find("它会在 Willow 上") is Some(_))
   // the station's control, after the preset's, beside the model's
-  let (sx, sy) = t.find_last("Studio").unwrap()
+  let (sx, sy) = t.find_last("Willow").unwrap()
   t.tap(sx, sy)
   assert_true(t.find("选择运行的 station") is Some(_))
   run_to_sheet_rest(t)
-  let (mx, my) = t.find_last("MBA").unwrap()
+  let (mx, my) = t.find_last("Maple").unwrap()
   t.tap(mx, my)
   assert_true(!@sf.presented_open_of(@sf.last_presented()))
   assert_eq(new_fix.station, "st2")
-  assert_true(t.find("它会在 MBA 上") is Some(_))
+  assert_true(t.find("它会在 Maple 上") is Some(_))
   t.tap_text("Opus 5.5")
   assert_true(t.find("思考深度") is Some(_))
   run_to_sheet_rest(t)
@@ -463,5 +465,43 @@ test "the bar drawn up clear of a finger as long as it has it: drawn up, further
   let sliding = raised()
   t.release(xs[1], y)
   t.run_for(bar.rest() - t.time())
-  assert_eq((up, further, back, along, sliding, (rest - foot()).round()), (bar_raise, bar_raise, bar_raise, bar_raise, bar_raise, 0.0))
+  assert_eq((up, further, back, along, sliding, (rest - foot()).round()), (59.0, 59.0, 59.0, 59.0, 59.0, 0.0))
+}
+
+///|
+test "the bar held: more room above the finger in a taller window, bounded by the top of a short window" {
+  let measure = fn(h : Double, open : Bool) {
+    new_run()
+    let src = fixture("home")
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h~, platform=2)
+    // The bar is 346 wide here; the page's full-width top bar is not the panel.
+    let glass = fn() { t.drawn_glass_corners().filter(fn(g) { g.2 > 300.0 && g.2 < 360.0 }) }
+    let foot = fn() { glass().fold(init=0.0, fn(a, g) { dmax(a, g.1 + g.3) }) }
+    let rest = foot()
+    let (xs, _) = bar_places_at()
+    let y = h - 22.0 - 28.0
+    t.press_at(xs[0], y)
+    if open {
+      for i in 1..=20 {
+        t.move(xs[0], y - 64.0 * i.to_double() / 20.0)
+      }
+    } else {
+      t.run_for(bar_hold_ms)
+      t.frame()
+    }
+    t.run_for(@ui.move_most_ms)
+    let raised = rest - foot()
+    let top = glass().fold(init=h, fn(a, g) { dmin(a, g.1) })
+    t.release(xs[0], y)
+    (raised, top)
+  }
+  let short = measure(550.0, false).0
+  let regular = measure(844.0, false).0
+  let tall = measure(1200.0, false).0
+  // More than the former 44 points, increasing with available height but never an excessive displacement.
+  assert_true(short > 44.0 && short < regular && regular < tall && tall <= 64.1)
+  // The panel can still open in a very short window without its glass crossing the top margin.
+  let (limited, top) = measure(180.0, true)
+  assert_true(limited > 0.0 && limited < short)
+  assert_true(top >= 7.5, msg="panel top: \{top}")
 }
