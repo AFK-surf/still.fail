@@ -143,6 +143,16 @@ pub fn chat_list_node(
   }
   // (`lead` the room over the first of them, the row's (the line's, else the message's); `ground` the message's, lit
   // as a row is (its menu open, gone to) over the room over it and it alone, as the row it was)
+  // (in from the pane's sides to the column, `top` over it: a row's room, row_width's bind below; a message's parts
+  // each their own, the band of its own part across the whole of it as the row's was)
+  let row_room = fn(node : @view.View, top : () -> Double) {
+    row_width.bind(node, By(fn() { (@sf.native_on(), native_row_inset(), top()) }), fn(w, c) {
+      let (native, native_inset, top) = c
+      let side = if w <= chat_narrow_w { if native { native_inset } else { row_side_narrow } }
+        else if native { dense_row_side } else { dmax(row_side_least, (w - chat_column_w) / 2.0) }
+      node.padding(Is((side, top, side, 0.0))) |> ignore
+    })
+  }
   let said_parts = fn(
     row : @view.View,
     m : () -> Message,
@@ -153,11 +163,12 @@ pub fn chat_list_node(
   ) {
     let lined = fn() { line_seq.get() == Some(m().seq) }
     row.show(lined, fn(l) {
-      l.padding(By(fn() { (0.0, lead(), 0.0, 0.0) })) |> ignore
+      row_room(l, lead)
       l.box(fn(b) { unread_line_node(b) }) |> ignore
     })
     row.box(fn(said) {
-      said.padding(By(fn() { (0.0, if lined() { gap_of(m().joined) } else { lead() }, 0.0, 0.0) })).ground(By(ground)) |> ignore
+      row_room(said, fn() { if lined() { gap_of(m().joined) } else { lead() } })
+      said.ground(By(ground)) |> ignore
       said.box(body) |> ignore
     })
     |> ignore
@@ -165,7 +176,7 @@ pub fn chat_list_node(
       for i in 0..<n {
         // (the gap over it its own box's: what it draws in its margin (its picture) placed from its top, as a row's)
         sent.box(fn(g) {
-          g.padding(By(fn() { (0.0, gap_of(false), 0.0, 0.0) })) |> ignore
+          row_room(g, fn() { gap_of(false) })
           g.box(fn(b) {
             sent_elsewhere_node(b, src, here, fn() { m().elsewhere.get(i).unwrap_or_else(fn() { m().elsewhere[0] }) })
           })
@@ -343,10 +354,14 @@ pub fn chat_list_node(
         // composer under the last)
         row_width.bind(slot, By(fn() {
           // (a message's row: the room over it its parts', said_parts')
-          let kind = match row_of(k) { Some((Said(_), _)) => 0; Some((e, i)) => gap_kind(e, i); None => 0 }
+          let kind = match row_of(k) { Some((Said(_), _)) => -1; Some((e, i)) => gap_kind(e, i); None => 0 }
           (@sf.native_on(), native_row_inset(), kind)
         }), fn(w, c) {
           let (native, native_inset, kind) = c
+          if kind < 0 {
+            slot.padding(Is((0.0, 0.0, 0.0, 0.0))) |> ignore
+            return
+          }
           let narrow = w <= chat_narrow_w
           let side = if narrow { if native { native_inset } else { row_side_narrow } }
             else if native { dense_row_side } else { dmax(row_side_least, (w - chat_column_w) / 2.0) }
