@@ -212,6 +212,8 @@ pub fn card_block_out(top? : Bool, foot? : Bool) -> @ui.Style
 
 pub let card_corner : Double
 
+pub let card_control_end : Double
+
 pub let card_end_out : @ui.Style
 
 pub fn card_foot(@ui.Ctx, () -> Unit, at_end? : Bool) -> Unit

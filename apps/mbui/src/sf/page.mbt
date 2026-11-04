@@ -2910,7 +2910,21 @@ fn wide_list_row() -> @ui.Style {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_list_row_bare : @ui.Style = @ui.style(row=true, w=Full, px=list_words_room, py=S2_5, gap=S3, align=ACenter)
+let wide_list_row_bare : @ui.Style = @ui.style(
+  row=true,
+  w=Full,
+  pl=list_words_room,
+  pr=room(card_control_end),
+  py=S2_5,
+  gap=S3,
+  align=ACenter,
+)
+
+///|
+/// How far in from its end a row on a panel's card has what it holds at its end (a model's picker, 更新): its words'
+/// room, or as far as holds it out of the card's corner where that is more (the card's 26 round, its words 24 in: 2
+/// more; the user's 第 3 版, 2026-11-03: a control stays out of its card's corner, its row's spacing as it was).
+pub let card_control_end : Double = text_in + dmax(0.0, card_corner - panel_words)
 
 
 ///|
