@@ -20,6 +20,16 @@ own source, not from what the port seems to want.
   after the part's build): `Computed::reading` (what a function reads, read by the computed as well, as though its
   run read it last) and `Computed::lend` (what one computed read, read by another as well). Let go as the computed's
   run reads anew, as what it read is.
+- Added, not alien-signals': `after_flush(f)`, `f` done once the change being told now is told whole (the outermost
+  flush of the batch or the set under way over, every effect it set going run; none under way, at once), in the order
+  asked, one at a time, what one of them sets told whole before the next; and `after_all_flushed(f)`, the same but
+  after every `after_flush` of that change is done too, those they asked included. The order: the change's effects,
+  then each `after_flush` in turn (what each sets flushed and its own `after_flush`es after it), then each
+  `after_all_flushed`. Use `after_all_flushed` only for what must see where the whole change left things, after what
+  waits for it by `after_flush` has worked from it too, whatever order the change's effects ran in: the view tree's
+  settling a change (where things stand laid out and placed, `Tree::settle_after_change`), which a group moving together
+  (`moves_together`) measures from in its own `after_flush` and then changes again. It is not a later `after_flush`
+  for anything that merely runs too early: such a thing reads what it waits for, or is told by it.
 
 ## Under reference counting
 

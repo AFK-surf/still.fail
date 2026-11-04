@@ -37,6 +37,9 @@ pub(all) struct FramePerf {
   looks : Bool
   /// a frame painted alone, from the last build's tree (frame_watch.mbt): nothing built or laid out
   painted : Bool
+  /// a frame of the window's tree alone, what of its scene changed drawn again where it is (scene_layers.mbt): nothing
+  /// of the old frame built, laid out or painted
+  alone : Bool
   /// the lists' rows it kept as their nodes and those it built (kept_nodes.mbt)
   kept : Int
   rows : Int
@@ -78,6 +81,7 @@ fn frame_perf() -> FramePerf {
     insts: c.ninst,
     looks: looks_drawn.val,
     painted: painted_alone.val,
+    alone: tree_alone_drawn.val,
     kept: if looks_drawn.val || painted_alone.val { 0 } else { nodes_run.kept },
     rows: if looks_drawn.val || painted_alone.val { 0 } else { nodes_run.built },
     build_ms: c.t_build,

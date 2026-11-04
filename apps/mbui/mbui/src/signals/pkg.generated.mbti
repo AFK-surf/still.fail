@@ -18,6 +18,8 @@ pub const WATCHING : Int32 = 2
 
 pub fn active_sub() -> ReactiveNode?
 
+pub fn after_all_flushed(() -> Unit) -> Unit
+
 pub fn after_flush(() -> Unit) -> Unit
 
 pub fn batch_depth() -> Int32

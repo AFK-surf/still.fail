@@ -804,19 +804,16 @@ fn h_atlas_generation() -> Int {
 
 ///|
 fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
+  let c = g()
+  // where the frame changed, as the scene was told it at its causes: the parts a host that keeps its picture draws
+  // again (docs/partial-redraw.md, scene_layers.mbt)
+  let t0 = h_now()
+  let parts = c.scene_parts_taken()
+  presented_ms.val = h_now() - t0
   match fake.val {
     Some(f) => f.instances = count
     None => {
-      let c = g()
       let (r, gg, b) = c.clear
-      // what of it differs from the frame presented before, the part a host that keeps its picture draws again
-      // (docs/partial-redraw.md)
-      let t0 = h_now()
-      let parts = presented.next(buf, count, c.window_w, c.window_h, c.scale, r, gg, b)
-      presented_ms.val = h_now() - t0
-      if presented.telling() && presented.why() == 5 {
-        h_log("DAMAGE whole, the part more than half: \{presented.told()}")
-      }
       let mut area = 0.0
       for p in parts {
         let (x, y, w, h) = p
@@ -833,20 +830,23 @@ fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
       } else {
         0.0
       }
+      // (the frame handed over whole: every renderer uploads all of it. An adapter, said to be one: the parts are what
+      // changed, the upload is not, and nothing is done because of it, docs/retained.md rule 4)
       @hostapi.present(buf, count, r, gg, b)
     }
   }
 }
 
 ///|
-/// The frames presented, the next compared with the last (h_present).
-// kept across runs: a host's, whose picture is the last frame it was given
-let presented : @damage.Damage = @damage.Damage::new()
-
-///|
 /// How much of the window the frame presented last drew again (1 all of it, 0 none), for the probe (app.mbt).
 // kept across runs: the probe's (MBUI_PROBE), set by each frame presented before it is read
 let presented_share : Ref[Double] = { val: 1.0 }
+
+///|
+/// How long taking where the last frame presented changed took (its scene's parts settled: h_present), for a bench.
+pub fn parts_ms() -> Double {
+  presented_ms.val
+}
 
 ///|
 /// How long working out the part took, for the probe.

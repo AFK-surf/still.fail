@@ -189,7 +189,8 @@ test "the avatar going home draws its movement without laying out the chat again
     t.frame_at(t.next_frame_time())
     let perf = t.frame_perf()
     assert_true(em.trace.0 > before, msg="the avatar did not move")
-    assert_true(perf.painted, msg="its move laid out the chat again: \{t.built_why()}; \{perf}")
+    // (painted alone from the last build, or the window's tree alone drawing what of it changed: nothing laid out)
+    assert_true(perf.painted || perf.alone, msg="its move laid out the chat again: \{t.built_why()}; \{perf}")
   }
   emit_restore()
 }

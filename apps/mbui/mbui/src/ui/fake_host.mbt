@@ -536,8 +536,11 @@ impl @hostapi.Host for FakeHost with clipboard_set_image(_, data) {
 }
 
 ///|
-impl @hostapi.Host for FakeHost with present(_, buf, count, _, _, _) {
-  h_present(buf, count)
+impl @hostapi.Host for FakeHost with present(_, _, count, _, _, _) {
+  match fake.val {
+    Some(f) => f.instances = count
+    None => ()
+  }
 }
 
 ///|
