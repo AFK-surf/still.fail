@@ -1595,6 +1595,8 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
     "chats" => [("Willow/1", "整理发布清单"), ("Willow/4", "给设置页加一个深色模式开关"), ("", "其他")]
     _ => [("lin@example.com", "林"), ("ana@example.com", "Ana"), ("", "其他")]
   }
+  // The core ranks the filtered rows too: the selected split then contains only the chosen part.
+  let series = if only != "" && series.iter().any(fn(s) { s.0 == only }) { series.filter(fn(s) { s.0 == only }) } else { series }
   let lists = [
     ("people", "按人", [("lin@example.com", "林", "", "$80", 0.68), ("ana@example.com", "Ana", "", "$31", 0.26), ("wu@example.com", "吴", "", "$7.20", 0.06)]),
     (
