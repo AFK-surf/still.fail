@@ -962,13 +962,15 @@ fn words_in_page(t : @ui.Tester, words : String) -> (Double, Double, Double)? {
 ///|
 /// The middle of the first words `words` drawn, across (their line's).
 fn words_middle(t : @ui.Tester, words : String) -> Double? {
+  // (the line as drawn, its top and its bottom: a node of the window's tree's words is held with no height, so its box
+  // would say only where it starts, words of two lines' heights told apart by that alone)
   let mut first : (Double, Double)? = None
-  for b in t.boxes_held() {
-    if (b.kind == "text" || b.kind == "rich") && b.text == words {
-      if first is None || b.y < first.unwrap().0 { first = Some((b.y, b.h)) }
+  for r in t.text_runs() {
+    if r.text == words {
+      if first is None || r.top < first.unwrap().0 { first = Some((r.top, r.bottom)) }
     }
   }
-  first.map(fn(r) { r.0 + r.1 / 2.0 })
+  first.map(fn(r) { (r.0 + r.1) / 2.0 })
 }
 
 ///|

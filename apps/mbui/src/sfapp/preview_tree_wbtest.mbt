@@ -3361,14 +3361,15 @@ test "viewer on the tree, marking: the box picked, its dashed frame and handles 
 test "viewer on the tree, marking: the marks drawn where the picture is as each frame draws it while the keyboard lifts it (words being written low on it), and where the lift leaves it" {
   let t = shaped()
   let v = viewer.get().unwrap()
-  // (words begun low on the picture, the keyboard up, the window laid out above it, as a host does)
+  // (words begun low on the picture, the keyboard up, the window laid out above it, as a host does: a keyboard tall
+  // enough to cover them wherever the bars leave the picture, not one they clear by a fraction of a point)
   marking.tool = Words
   let (x, y, w, h) = v.zoom.rect().unwrap()
   t.touch(0, x + w / 2.0, y + h * 0.99)
   t.touch(2, x + w / 2.0, y + h * 0.99)
   assert_true(marking.writing is Some(_), msg="words begun")
-  t.set_ime_inset(300.0)
-  t.resize_next(390.0, 844.0 - 300.0)
+  t.set_ime_inset(340.0)
+  t.resize_next(390.0, 844.0 - 340.0)
   t.draw()
   t.run_for(pin_glide_mid_ms)
   assert_true(v.lift.goes_at(t.time()), msg="the lift under way")
