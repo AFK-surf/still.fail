@@ -7,7 +7,7 @@ import { test } from "node:test";
 import { pathToFileURL } from "node:url";
 import { Effect } from "effect";
 import { makeStore } from "../src/read/store.ts";
-import { usageHistory } from "../src/read/usage.ts";
+import { usage, usageHistory } from "../src/read/usage.ts";
 import { Store } from "../src/store/store.ts";
 import { installCompactUsage } from "../src/store/usage-compact.ts";
 import { convertUsageHistoryStep, hasUsageHistory, historyTransferPending, installUsageHistory } from "../src/store/usage-history.ts";
@@ -52,6 +52,23 @@ function sourceTotals(store: Store) {
   return [...totals.values()].filter((row) => row.calls !== 0 || row.tokens !== 0)
     .sort((a, b) => a.scope.localeCompare(b.scope) || a.quarter - b.quarter);
 }
+
+test("the usage page can tell a pending history from one that is unavailable", () => {
+  const store = oldStore();
+  const db = store.db;
+  try {
+    db.prepare(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output, calls)
+      VALUES ('old', 0, 'a', 'claude', 2, 0, 0, 0, 1, 1)`).run();
+    installCompactUsage(db, () => 900_000);
+    installUsageHistory(db, 900_000);
+    const read = () => usage(makeStore(db, "."), "en", 0n, 900_000n, 0n, false, null, true);
+    assert.equal(read().historyPreparing, true);
+    while (!convertUsageHistoryStep(db)) { /* Transfer the old summaries. */ }
+    const ready = read();
+    assert.equal(ready.historyPreparing, undefined);
+    assert.ok(ready.history);
+  } finally { store.close(); }
+});
 
 for (const recursive of [false, true]) test(`old summaries transfer in batches while calls change (recursive triggers ${recursive})`, () => {
   const store = oldStore();

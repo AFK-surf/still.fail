@@ -244,6 +244,32 @@ test("usage_keeps_its_spending_and_account_allowance_current", async () => {
   assert.ok(u.value.notes.some((s: string) => s.includes("studio")));
 });
 
+test("usage shows its history as loading until a station finishes preparing it", async () => {
+  const t = setup();
+  const u = ui();
+  const topic = { topic: "stationUsage", station: "ws/st" } as const;
+  t.set(workspace(), oneStation());
+  t.set(link("ws/st"), { state: "online" });
+  t.set(overview("ws/st"), overviewOf([], []));
+  t.set(topic, { rows: [], since: 0, reading: false, historyUnavailable: true, historyPreparing: true });
+  t.subscribe(1, { topic: "usage", scope: "ws", days: 7 });
+  await t.read(u, 1);
+  assert.equal(u.value.summaryPreparing, true);
+  assert.equal(u.value.summary, undefined);
+
+  t.set(topic, { rows: [], since: 0, reading: false,
+    history: { days: [], places: {}, archived: 0, remoteRuns: 0, cards: 0, picked: 0 } });
+  await t.read(u, 1);
+  assert.ok(u.value.summary);
+  assert.notEqual(u.value.summaryPreparing, true);
+
+  // An older station that cannot provide a history is not presented as loading forever.
+  t.set(topic, { rows: [], since: 0, reading: false, historyUnavailable: true });
+  await t.read(u, 1);
+  assert.equal(u.value.summary, undefined);
+  assert.notEqual(u.value.summaryPreparing, true);
+});
+
 test("profiles_keep_their_names_and_online_state_current", async () => {
   const t = setup();
   const u = ui();
