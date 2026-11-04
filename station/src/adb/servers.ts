@@ -3,6 +3,7 @@
 // from those servers' processes alone (`allowed`). An agent of another chat, though it knows the ports, reaches neither:
 // the phone is not in the station's own server (5037), and a connection of its to the phone's port is turned away.
 import { type ChildProcess, spawn } from "node:child_process";
+import { readFile, rename, writeFile } from "node:fs/promises";
 import net from "node:net";
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
@@ -22,12 +23,52 @@ function freePort(): Promise<number> {
   });
 }
 
+/// A server started here, as written down (`record`): its process, and when that started (another process given its pid
+/// later is not it).
+type Kept = { pid: number; port: number; started: number | null };
+
 export class GrantServers {
   readonly #adb: () => string | null;
   readonly #servers = new Map<string, Promise<Server | null>>();
+  /// Where the servers started are written down (null: nowhere, as in tests), for the next station process to stop what
+  /// this one left: they are this process's children, and one that ends without stopping them (killed, a handover that
+  /// did not finish) left them running, 14 of them on ccvm over 5 days (2026-11-04).
+  readonly #record: string | null;
+  readonly #kept = new Map<number, Kept>();
 
-  constructor(adb: () => string | null) {
+  constructor(adb: () => string | null, record: string | null = null) {
     this.#adb = adb;
+    this.#record = record;
+  }
+
+  /// Stops the servers a station process before left running (once it is gone: `previousGone`), as written down.
+  async reap(previousGone: Promise<void> = Promise.resolve()): Promise<number> {
+    if (this.#record === null) return 0;
+    await previousGone;
+    let left: Kept[] = [];
+    try {
+      left = JSON.parse(await readFile(this.#record, "utf8"));
+    } catch {}
+    let stopped = 0;
+    for (const k of Array.isArray(left) ? left : []) {
+      if (!Number.isSafeInteger(k?.pid) || this.#kept.has(k.pid)) continue;
+      const started = platform.startTimeOf(k.pid);
+      // Not that process any more (gone, or its pid another's).
+      if (started === null || (k.started !== null && Math.abs(started - k.started) > 2000)) continue;
+      try {
+        process.kill(k.pid, "SIGTERM");
+        stopped++;
+      } catch {}
+    }
+    if (stopped > 0) log.info("adb", "the grants' adb servers a station before left stopped", { n: stopped });
+    await this.#write();
+    return stopped;
+  }
+
+  async #write(): Promise<void> {
+    if (this.#record === null) return;
+    const temp = `${this.#record}.${process.pid}.tmp`;
+    await writeFile(temp, JSON.stringify([...this.#kept.values()])).then(() => rename(temp, this.#record!), () => undefined);
   }
 
   /// Grant `id`'s server, started if it is not running (`adb -P <port> server nodaemon`: its own process, held here).
@@ -66,7 +107,13 @@ export class GrantServers {
         poke();
       });
       if (up) {
+        const pid = child.pid;
+        if (pid !== undefined) {
+          this.#kept.set(pid, { pid, port, started: platform.startTimeOf(pid) });
+          void this.#write();
+        }
         child.once("exit", () => {
+          if (pid !== undefined && this.#kept.delete(pid)) void this.#write();
           // Gone (killed, crashed): started anew when next wanted.
           if (this.#servers.get(id) !== undefined) this.#servers.delete(id);
         });

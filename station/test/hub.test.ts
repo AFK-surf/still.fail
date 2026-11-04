@@ -235,7 +235,7 @@ test("a turn ending done in a chat its agent named is not asked to name it", asy
   await r.close();
 });
 
-test("a turn ending waiting is not nudged nor evicted, and is asked again when the wait is over", async (t) => {
+test("a turn ending waiting is not nudged, its process let go with nothing of its own going, and is asked again in a new one when the wait is over", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: Date.now() });
   const r = new Rig({ maxWarmClaude: 0, warmMinutes: 0 });
   const m = message();
@@ -249,17 +249,32 @@ test("a turn ending waiting is not nudged nor evicted, and is asked again when t
   const last = r.store.sessionStats(null).get(key)!.lastTurn!;
   assert.deepEqual([last.declared, last.waitFor], ["waiting", "CI 跑完"], "what it waits for is kept with the turn");
   assert.equal(r.claude.last().prompts.length, 1, "not nudged");
-  assert.ok(!r.claude.last().disposed, "its background work may run in its process");
+  assert.ok(r.claude.last().disposed, "nothing of its own going in its process: let go, the wait the station's");
   assert.deepEqual(r.chat.texts(), []);
   t.mock.timers.tick(11_000);
   await settle();
   const prompts = r.claude.last().prompts;
-  assert.equal(prompts.length, 2);
-  assert.ok(prompts[1]!.includes("waiting on work you started (10 seconds)"), prompts[1]);
+  assert.equal(prompts.length, 1, "a new process");
+  assert.ok(prompts[0]!.includes("waiting on work you started (10 seconds)"), prompts[0]);
   assert.deepEqual(
     r.store.listTurns(key).flatMap((t) => t.summary.declared ?? []),
     ["waiting"],
   );
+  await r.close();
+});
+
+test("a turn ending waiting with work going in its own process keeps it", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: Date.now() });
+  const r = new Rig({ maxWarmClaude: 0, warmMinutes: 0 });
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  await r.call(key, "chat_state", { kind: "waiting", seconds: 60, for: "CI 跑完" });
+  r.claude.last().tasks = [{ id: "b1", kind: "shell", description: "ci-wait", startedAt: Date.now() } as any];
+  r.claude.last().complete();
+  await settle();
+  assert.ok(!r.claude.last().disposed, "its background work runs in its process");
   await r.close();
 });
 

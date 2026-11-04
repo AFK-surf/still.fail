@@ -376,8 +376,11 @@ export class SessionActor {
   }
 
   /// How long the runtime process has sat idle, or null if there is none or it is working.
+  /// How long its process has had nothing to do (null: none, or it does). One waiting is idle all the same: what it waits
+  /// for is the station's (its timer is this actor's, its jobs and tasks the station's); what it has going in its own
+  /// process (`holding`) keeps that from being ended.
   idleMs(now: number): number | null {
-    return this.agent && !this.agent.session.busy() && !this.turn && this.waiting === null ? now - this.idleSince : null;
+    return this.agent && !this.agent.session.busy() && !this.turn ? now - this.idleSince : null;
   }
 
   holdsState(): boolean {
@@ -636,8 +639,9 @@ export class SessionActor {
   evict(): Promise<void> {
     return this.enqueue(async () => {
       const agent = this.agent;
-      // Work it has going in the background would end with it.
-      if (!agent || agent.session.busy() || this.turn || this.waiting !== null || this.holding()) return;
+      // Work it has going in the background would end with it. A wait goes on without it: the station asks again in a
+      // new one (each waiting chat's kept its process, 11 of them on ccvm's 8 GB, 2026-11-04).
+      if (!agent || agent.session.busy() || this.turn || this.holding()) return;
       this.agent = null;
       log.info("session", "evicting idle session process", { session: this.key });
       await agent.session.dispose();
