@@ -196,6 +196,12 @@ ORDER BY d.created_at, d.id`;
 /// Whether a session has read something from a thread (`heardThreads`): by its deliveries there, named (SQLite took the
 /// index of all it was given by when, from the first).
 export const HEARD_IN = "SELECT 1 FROM deliveries INDEXED BY deliveries_session WHERE session = ? AND thread = ? AND delivered_at IS NOT NULL LIMIT 1";
+// The three ways a closed card's wait can have ended after it: each found in its own existing index, without reading
+// ordinary agent messages between the card and the close (closedCard).
+export const CLOSED_CARD_AFTER = `SELECT
+  EXISTS (SELECT 1 FROM entries INDEXED BY entries_people_by_n WHERE thread = ?1 AND n > ?2 AND kind = 'message' AND author_kind = 'person')
+  OR EXISTS (SELECT 1 FROM entries INDEXED BY entries_cards WHERE thread = ?1 AND n > ?2 AND kind = 'message' AND card IS NOT NULL)
+  OR EXISTS (SELECT 1 FROM entries INDEXED BY entries_options WHERE thread = ?1 AND n > ?2 AND kind = 'message' AND options IS NOT NULL) AS ended`;
 /// Whether a pending delivery can actually be read by the session, without loading the message's text or edits.
 export const HAS_PENDING_MESSAGE = `SELECT 1 FROM deliveries d INDEXED BY deliveries_pending
   JOIN entries m ON m.thread = d.thread AND m.n = d.n AND m.kind = 'message'
@@ -1932,11 +1938,8 @@ export class Store {
   /// agent withdrawing it, or a person's choice).
   closedCard(thread: number, n: number): [MessageRow, Json, string] | null {
     const by = this.#one("SELECT viewer FROM closed_cards WHERE thread = ? AND n = ?", thread, n);
-    const after = this.#one(
-      "SELECT 1 FROM entries WHERE thread = ? AND n > ? AND kind = 'message' AND (author_kind = 'person' OR card IS NOT NULL OR options IS NOT NULL) LIMIT 1",
-      thread, n,
-    );
-    const found = by === undefined || after !== undefined ? null : this.#cardPost(thread, n);
+    if (by === undefined || this.#one(CLOSED_CARD_AFTER, thread, n)!.ended !== 0) return null;
+    const found = this.#cardPost(thread, n);
     return found === null ? null : [...found, by.viewer as string];
   }
 
