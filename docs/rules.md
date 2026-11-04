@@ -5,7 +5,7 @@
 ## 包
 - `rules/src/form`：记录的规范化 JSON（键按 UTF-16 码元排序、无空白、只收安全整数，字符串照 `JSON.stringify` 写）和条目哈希的原文。和 `client/core-ts/src/lock-form.ts` 逐字节一致。
 - `rules/src/role`：角色取低、谁能签哪类记录。`proof_enabled`：`role.mbtp` 写着要证的性质（取低不会提权；只有 owner/admin 管成员、名单；只有 owner 动 owner、cloud 的钥匙和关锁；成员只能动自己的设备和 passkey），`moon prove` 证明。
-- `rules/src/history`：记录的版本怎么接（锁的条目、密钥库和条目的版本都用它）。`proof_enabled`：`history.mbtp` 证明下一版正好是已存的加一，别的 station 带来的副本只收更晚的；去掉成员或设备一定换新的密钥（epoch 变大），epoch 不倒退；删掉的密钥库一直是删掉的；条目写在密钥库当前的 epoch 下（删除和副本除外）；过期的设备不放行。每条都证了「检查通过 ⇔ 规则成立」两个方向；故意改错一条（去成员不换钥匙）证明就失败。
+- `rules/src/history`：记录的版本怎么接（锁的条目、密钥库和条目的版本都用它）。`proof_enabled`：`history.mbtp` 证明下一版正好是已存的加一，别的 station 带来的副本只收更晚的；去掉成员或设备一定换新的密钥（epoch 变大），epoch 不倒退；删掉的密钥库一直是删掉的；条目写在密钥库当前的 epoch 下（删除和副本除外）；过期的设备不放行；同号的两版（两台 station 同时各写了一版）大家留同一版：删除的优先，其次 epoch 大的，最后全文大的。每条都证了「检查通过 ⇔ 规则成立」两个方向；故意改错一条（去成员不换钥匙）证明就失败。
 - `rules/src/lock`：`station/src/cloud/lock.ts` 的 `genesis`/`apply`/`fold`/`signer`/`admit`，同样的结果、同样的报错文字。哈希和签名由调用方给（`Crypto`：station 用 node 的，设备用 @noble 的）。
 - `rules/src/vault`：`station/src/vault/crypto.ts` 的 `certOk`/`vaultOk`/`itemOk`/`browserListingOk`/`signerOf`：哪张 box 证书算锁里本人的 app 设备、密钥库和条目的新版本能不能接在已存的后面（含别的 station 带来的副本），同样的报错文字。锁只读成员、设备（谁的、哪类、签名钥匙、是不是本人的）和每台设备有过的签名钥匙；签名由调用方验。
 - `rules/src/js`：给 JS 调用的入口（`canonical_of`、`entry_text_of`、`lower_role`、`fold_js`、`admit_js`；`genesis_js`、`apply_js`、`fold_held_js`、`signer_js`、`admit_one_js` 把规则自己的状态交给 JS 收着，下一条记录再交回来，JS 那边拿到的状态只是读的副本），直接读 JS 的值，不再自己解析 JSON（MoonBit 的 JSON 解析不收落单的代理对转义，`JSON.parse` 收）。

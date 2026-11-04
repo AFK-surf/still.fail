@@ -239,3 +239,9 @@ export function browserListingOk(l: { kind: Kind; modes: Mode[]; hosts: string[]
 export function itemOk(lock: LockState, vault: Vault, prev: Item | null, next: Item, copy = false): string | null {
   return rules.item_ok_js(lock, vault, prev, next, copy, rulesCrypto);
 }
+
+/// Which of two versions of a vault every station and device keeps (two written on two stations at once): the later; of
+/// one seq, the one that deletes it, then the one under the later key, then the greater text (rules/src/history
+/// `supersedes`, proved). `itemSupersedes`: an item's, by its version.
+export const vaultSupersedes = (a: Vault, b: Vault): boolean => rules.vault_supersedes_js(a, b);
+export const itemSupersedes = (a: Item, b: Item): boolean => rules.item_supersedes_js(a, b);

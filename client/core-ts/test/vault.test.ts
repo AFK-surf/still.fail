@@ -27,6 +27,8 @@ import { BOX_KEY, BOX_PUB, UNLOCK_MS } from "../src/views/vault.ts";
 import { read as readLock } from "../src/views/lock.ts";
 import { subscribe, call } from "./helpers.ts";
 import { type Answers, base, entry, started, stationReplies, status } from "./station-fixture.ts";
+// @ts-ignore: the MoonBit build's JS, untyped
+import * as rules from "../../../rules/js/rules.js";
 
 const V = JSON.parse(readFileSync(new URL("../../../station/test/fixtures/vault-vectors.json", import.meta.url), "utf8"));
 const unhex = (h: string) => Uint8Array.from(h.match(/../g) ?? [], (b) => parseInt(b, 16));
@@ -208,7 +210,8 @@ function fakeStation() {
         const prev = vaults.get(body.id);
         // A copy from another station: any later version; one no later answered with the one held.
         const copy = query === "copy=1";
-        if (copy && prev && body.seq <= prev.seq) return { vault: prev };
+        // (of one seq, the one every station keeps: station/src/api/routes/vault.ts)
+        if (copy && prev && body.seq <= prev.seq && !(body.seq === prev.seq && rules.vault_supersedes_js(body, prev))) return { vault: prev };
         if (!copy && body.seq !== (prev ? prev.seq + 1 : 0)) return status(409, { error: "seq", code: "vault_conflict", vault: prev ?? null });
         if (!signedOk(body, TAG.vault)) return status(400, { error: "signature", code: "vault_invalid" });
         // (each key's certificate as its device signed it, as the station checks: a field added breaks it; the
@@ -223,7 +226,7 @@ function fakeStation() {
         const prev = items.get(body.id);
         const copy = query === "copy=1";
         if (!vaults.has(body.vault)) return status(404, { error: "no vault", code: "vault_unknown" });
-        if (copy && prev && body.version <= prev.version) return { item: prev };
+        if (copy && prev && body.version <= prev.version && !(body.version === prev.version && rules.item_supersedes_js(body, prev))) return { item: prev };
         if (!copy && body.version !== (prev ? prev.version + 1 : 0)) return status(409, { error: "version", code: "vault_conflict", item: prev ?? null });
         if (!signedOk(body, TAG.item)) return status(400, { error: "signature", code: "vault_invalid" });
         items.set(body.id, body);
@@ -1076,6 +1079,27 @@ test("a vault made on one station is copied to the workspace's others, so an age
   assert.deepEqual([r.st.grants.length, r.st2.grants.length], [0, 1]);
   const grant = r.st2.grants[0] as any;
   assert.equal(JSON.parse(new TextDecoder().decode(openSeal(keeper, grant.secret, grantContext("ws", "r_9")))).fields.value, "xoxp-2");
+  r.core.close();
+});
+
+test("two versions of one seq, written on two stations at once: the one every station keeps is shown here and brought to the other", async () => {
+  const r = await rig(false, true);
+  r.putLock();
+  const { made: id } = await r.ask("vault.setup", {});
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  await r.host.time.pass(1000);
+  const { sig: _, ...rest } = r.st.vaults.get(id)!;
+  const a = sign({ ...rest, seq: 1, lasts: "hour" as const, at: rest.at + 1 }, TAG.vault, r.me.signer!);
+  const b = sign({ ...rest, seq: 1, lasts: "once" as const, at: rest.at + 1 }, TAG.vault, r.me.signer!);
+  const kept = rules.vault_supersedes_js(a, b) ? a : b;
+  r.st.vaults.set(id, a);
+  r.st2.vaults.set(id, b);
+  // (a page shown has the stations read again)
+  await r.watch(2, { topic: "vaultItems", workspace: "ws", vault: id });
+  await r.host.time.pass(2000);
+  r.take();
+  assert.deepEqual([r.st.vaults.get(id), r.st2.vaults.get(id)], [kept, kept], "both stations hold the one kept");
+  assert.equal(vaults().vaults.length, 1);
   r.core.close();
 });
 
