@@ -150,7 +150,8 @@ export function summary(s: Store, key: string): Json {
 export function sessions(s: Store, connect: string | null, archived: boolean, lang: Lang, viewer: InWorkspace | null = null): Json[] {
   setLang(lang);
   const rows = store.listSessions(s).filter((x) => (connect === null || x.connect === connect) && (x.archivedAt !== null) === archived && (viewer === null || sees(viewer, x.ws)));
-  const l: Lists = { stats: store.sessionStats(s, rows.map((row) => row.key)), bindings: store.listBindings(s), participants: store.participants(s, null), watches: watching(s), lengths: store.transcriptLengths(s, null), usages: store.sessionUsages(s, null) };
+  const keys = rows.map((row) => row.key);
+  const l: Lists = { stats: store.sessionStats(s, keys), bindings: store.listBindings(s), participants: store.participants(s, keys), watches: watching(s, keys), lengths: store.transcriptLengths(s, keys), usages: store.sessionUsages(s, keys) };
   return rows.map((x) => summaryWith(s, x.key, l));
 }
 

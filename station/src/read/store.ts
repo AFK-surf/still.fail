@@ -235,25 +235,28 @@ export function originalRuntime(s: Store, key: string): string | null {
   }
 }
 
-/// How many entries sessions' transcripts have, as the station last read them while they were at work (one, or every
-/// one known when `key` is null): none for a session not read since (or a database no station of this version opened).
-export function transcriptLengths(s: Store, key: string | null): Map<string, number> {
+/// How many entries sessions' transcripts have, as the station last read them while they were at work (one, those
+/// named, or every one when `key` is null): none for a session not read since.
+export function transcriptLengths(s: Store, key: string | string[] | null): Map<string, number> {
+  if (Array.isArray(key) && key.length === 0) return new Map();
   try {
-    const rows = key !== null ? all(s, "SELECT session, n FROM transcript_lengths WHERE session = ?", key) : all(s, "SELECT session, n FROM transcript_lengths");
+    const sql = `SELECT session, n FROM transcript_lengths ${Array.isArray(key) ? "WHERE session IN (SELECT value FROM json_each(?))" : key !== null ? "WHERE session = ?" : ""}`;
+    const rows = Array.isArray(key) ? all(s, sql, JSON.stringify(key)) : key !== null ? all(s, sql, key) : all(s, sql);
     return new Map(rows.map((r) => [r.session as string, Number(r.n)]));
   } catch {
     return new Map();
   }
 }
 
-/// What sessions' calls used, as the station keeps it (store.ts `setSessionUsage`; one, or every one known when `key` is
-/// null): none for a session that has made no call (or a database no station of this version opened).
-export function sessionUsages(s: Store, key: string | null): Map<string, Json> {
+/// What sessions' calls used, as the station keeps it (store.ts `setSessionUsage`; one, those named, or every one
+/// known when `key` is null): none for a session that has made no call.
+export function sessionUsages(s: Store, key: string | string[] | null): Map<string, Json> {
+  if (Array.isArray(key) && key.length === 0) return new Map();
   try {
     const incremental = s.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_totals_incremental'").get() !== undefined;
     const source = incremental ? "session_usage u JOIN usage_totals_source_sessions c ON c.session = u.session AND c.done = 1" : "session_usage u";
-    const rows = key !== null ? all(s, `SELECT u.session, u.usage FROM ${source} WHERE u.session = ?`, key)
-      : all(s, `SELECT u.session, u.usage FROM ${source}`);
+    const sql = `SELECT u.session, u.usage FROM ${source} ${Array.isArray(key) ? "WHERE u.session IN (SELECT value FROM json_each(?))" : key !== null ? "WHERE u.session = ?" : ""}`;
+    const rows = Array.isArray(key) ? all(s, sql, JSON.stringify(key)) : key !== null ? all(s, sql, key) : all(s, sql);
     return new Map(rows.map((r) => [r.session as string, JSON.parse(r.usage as string)]));
   } catch {
     return new Map();
@@ -948,13 +951,27 @@ export function jobNotices(s: Store, id: string, limit: number): { at: number; t
 /// The jobs running of some sessions (`?`: a JSON list of their keys), the latest first, by an index (of the jobs running).
 export const RUNNING_OF = "SELECT * FROM jobs WHERE session_key IN (SELECT value FROM json_each(?)) AND state = 'running' ORDER BY started_at DESC";
 
+/// Active watches of the named sessions, using their lookup instead of reading every running job or a session's old jobs.
+export const WATCHING_OF = `SELECT j.* FROM active_watch_jobs w INDEXED BY active_watch_jobs_session
+  CROSS JOIN jobs j ON j.id = w.job WHERE w.session IN (SELECT value FROM json_each(?)) ORDER BY j.started_at DESC, j.rowid`;
+
 /// jobs.rs `watching`: the sessions keeping watch (a watch job running), each with its watches' names, since when, and
 /// when one last said something: of `sessions` alone (a session's summary, the sidebar items a change touched), or of
 /// all. Of all, each summary and sidebar change read every job running and the notices of every watch.
 export function watching(s: Store, sessions: string[] | null = null): Map<string, Json> {
+  if (sessions !== null && sessions.length === 0) return new Map();
   const by = new Map<string, JobRow[]>();
   // (The jobs running, by their state's index: every summary and list asks this, not every job ever.)
-  const running = sessions === null ? all(s, JOBS_RUNNING) : all(s, RUNNING_OF, JSON.stringify(sessions));
+  let running: Json[];
+  if (sessions === null) running = all(s, JOBS_RUNNING);
+  else {
+    try { running = all(s, WATCHING_OF, JSON.stringify(sessions)); }
+    catch (error) {
+      // A reader can also open a database from before active watches were kept.
+      if (!(error instanceof Error) || !error.message.includes("no such table: active_watch_jobs")) throw error;
+      running = all(s, RUNNING_OF, JSON.stringify(sessions));
+    }
+  }
   for (const job of running.map(toJob).filter((j) => j.watch)) {
     by.set(job.sessionKey, [...(by.get(job.sessionKey) ?? []), job]);
   }
@@ -1244,11 +1261,12 @@ export function listBindings(s: Store): Map<string, string[]> {
   return out;
 }
 
-/// Store::participants: everyone who wrote in each session's threads (or one session's), as creator references,
+/// Store::participants: everyone who wrote in each session's threads (one, those named, or all), as creator references,
 /// earliest first; a session no one wrote to has none.
-export function participants(s: Store, session: string | null): Map<string, string[]> {
-  const sql = `SELECT ts.session, ts.connect, t.id, t.surface FROM thread_sessions ts JOIN threads t ON t.id = ts.thread ${session !== null ? "WHERE ts.session = ?" : ""}`;
-  const rows = session !== null ? all(s, sql, session) : all(s, sql);
+export function participants(s: Store, session: string | string[] | null): Map<string, string[]> {
+  if (Array.isArray(session) && session.length === 0) return new Map();
+  const sql = `SELECT ts.session, ts.connect, t.id, t.surface FROM thread_sessions ts JOIN threads t ON t.id = ts.thread ${Array.isArray(session) ? "WHERE ts.session IN (SELECT value FROM json_each(?))" : session !== null ? "WHERE ts.session = ?" : ""}`;
+  const rows = Array.isArray(session) ? all(s, sql, JSON.stringify(session)) : session !== null ? all(s, sql, session) : all(s, sql);
   // Each person once per session, at the first time they wrote in any of its threads.
   const firsts = new Map<string, Map<string, number>>();
   for (const r of rows) {
