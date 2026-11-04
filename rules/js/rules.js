@@ -423,6 +423,7 @@ function _M0DTPC16result6ResultGRPB5ArrayGRPC14json4JsonERP39stillfail5rules4for
   this._0 = param0;
 }
 _M0DTPC16result6ResultGRPB5ArrayGRPC14json4JsonERP39stillfail5rules4form7InvalidE2Ok.prototype.$tag = 1;
+const _M0FP39stillfail5rules2js6handle = (s) => s;
 const _M0FP077stillfail_2frules_2fjs_2fJsCrypto_24as_24_40stillfail_2frules_2flock_2eCrypto = { method_0: _M0IP39stillfail5rules2js8JsCryptoP39stillfail5rules4lock6Crypto11sha256__hex, method_1: _M0IP39stillfail5rules2js8JsCryptoP39stillfail5rules4lock6Crypto10sig__valid, method_2: _M0IP39stillfail5rules2js8JsCryptoP39stillfail5rules4lock6Crypto14valid__key__id, method_3: _M0IP39stillfail5rules2js8JsCryptoP39stillfail5rules4lock6Crypto15endpoint__proof };
 function _M0FP15Error10to__string(_e) {
   const _f = _M0FP15Error10_2amethods[_e.$tag]._1;
@@ -440,7 +441,8 @@ const _M0FP39stillfail5rules4lock8role__ofN6constrS1448 = 3;
 const _M0FP39stillfail5rules4lock8role__ofN6constrS1449 = 2;
 const _M0FP39stillfail5rules4lock8role__ofN6constrS1450 = 1;
 const _M0FP39stillfail5rules4lock8role__ofN6constrS1451 = 0;
-const _M0FPB4seed = _M0FPB12random__seed();
+let _M0FPB4seed__held;
+const _M0FPB4seed__drawn = () => (_M0FPB4seed__held === undefined ? (_M0FPB4seed__held = _M0FPB12random__seed()) : _M0FPB4seed__held);
 const _M0FP39stillfail5rules4lock7passkeyN6recordS1506 = new _M0TPC16string10StringView("p256:", 0, 5);
 const _M0FP39stillfail5rules4lock5applyN6constrS1751 = new _M0DTPC16option6OptionGdE4Some(1);
 const _M0FP39stillfail5rules4lock7genesisN6constrS1659 = "genesis";
@@ -2174,7 +2176,7 @@ function _M0MPB5Iter24nextGsRPB5ArrayGsEE(self) {
   return _M0MPB4Iter4nextGUsRPB5ArrayGsEEE(self);
 }
 function _M0IPC16string6StringPB4Hash4hash(self) {
-  let acc = (_M0FPB4seed >>> 0) + (374761393 >>> 0) | 0;
+  let acc = (_M0FPB4seed__drawn() >>> 0) + (374761393 >>> 0) | 0;
   const _bind = self.length;
   let _tmp = 0;
   while (true) {
@@ -4975,7 +4977,7 @@ function _M0FP39stillfail5rules2js11state__json(s) {
     const _p$16 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind, 0, 5), undefined);
     return { _0: _tmp$13, _1: new _M0DTPC14json4Json6Object(_p$16) };
   }))) };
-  const _p$11 = _M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB4Iter3mapGsRPC14json4JsonE(_M0MPB3Map4keysGsuE(s.signed), (_hole51) => new _M0DTPC14json4Json6String(_hole51)));
+  const _p$11 = _M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB4Iter3mapGsRPC14json4JsonE(_M0MPB3Map4keysGsuE(s.signed), (_hole83) => new _M0DTPC14json4Json6String(_hole83)));
   const _tmp$13 = { _0: "signed", _1: new _M0DTPC14json4Json5Array(_p$11) };
   const _tmp$14 = { _0: "stations", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS1922(_M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB4Iter3mapGsRPC14json4JsonE(_M0MPB3Map4iterGsRPC14json4JsonE(s.stations), (p) => {
     const _tmp$15 = p._0;
@@ -4986,7 +4988,7 @@ function _M0FP39stillfail5rules2js11state__json(s) {
     const _p$14 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind, 0, 2), undefined);
     return { _0: _tmp$15, _1: new _M0DTPC14json4Json6Object(_p$14) };
   }))) };
-  const _p$12 = _M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB4Iter3mapGsRPC14json4JsonE(_M0MPB3Map4keysGsuE(s.gateways), (_hole54) => new _M0DTPC14json4Json6String(_hole54)));
+  const _p$12 = _M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB4Iter3mapGsRPC14json4JsonE(_M0MPB3Map4keysGsuE(s.gateways), (_hole86) => new _M0DTPC14json4Json6String(_hole86)));
   const _tmp$15 = { _0: "gateways", _1: new _M0DTPC14json4Json5Array(_p$12) };
   const _p$13 = s.disabled;
   const _bind = [_tmp, _tmp$2, _tmp$3, _tmp$4, _tmp$6, _tmp$7, _tmp$8, _tmp$9, _tmp$10, _tmp$11, _tmp$12, _tmp$13, _tmp$14, _tmp$15, { _0: "disabled", _1: _p$13 ? _M0DTPC14json4Json4True__ : _M0DTPC14json4Json5False__ }];
@@ -5203,4 +5205,181 @@ function _M0FP39stillfail5rules2js9admit__js(entries, fold_now, queries, crypto)
   }
   return _M0FP39stillfail5rules2js6to__js(new _M0DTPC14json4Json5Array(out));
 }
-export { _M0FP39stillfail5rules2js13canonical__of as canonical_of, _M0FP39stillfail5rules2js15entry__text__of as entry_text_of, _M0FP39stillfail5rules2js11lower__role as lower_role, _M0FP39stillfail5rules2js8fold__js as fold_js, _M0FP39stillfail5rules2js9admit__js as admit_js }
+function _M0FP39stillfail5rules2js4held(s) {
+  const o = _M0FP39stillfail5rules2js15js__new__object();
+  _M0FP39stillfail5rules2js7js__put(o, "state", _M0FP39stillfail5rules2js6to__js(_M0FP39stillfail5rules2js11state__json(s)));
+  _M0FP39stillfail5rules2js7js__put(o, "rules", _M0FP39stillfail5rules2js6handle(s));
+  return o;
+}
+function _M0FP39stillfail5rules2js7refused(why) {
+  const o = _M0FP39stillfail5rules2js15js__new__object();
+  _M0FP39stillfail5rules2js7js__put(o, "error", _M0FP39stillfail5rules2js11js__of__str(why));
+  return o;
+}
+function _M0FP39stillfail5rules2js11genesis__js(entry, crypto) {
+  let _try_err;
+  _L: {
+    const _bind = _M0FP39stillfail5rules2js8json__of(entry);
+    let _tmp;
+    if (_bind.$tag === 1) {
+      const _ok = _bind;
+      _tmp = _ok._0;
+    } else {
+      const _err = _bind;
+      _try_err = _err._0;
+      break _L;
+    }
+    const _bind$2 = _M0FP39stillfail5rules4lock7genesis(_tmp, { self: crypto, method_table: _M0FP077stillfail_2frules_2fjs_2fJsCrypto_24as_24_40stillfail_2frules_2flock_2eCrypto });
+    let _tmp$2;
+    if (_bind$2.$tag === 1) {
+      const _ok = _bind$2;
+      _tmp$2 = _ok._0;
+    } else {
+      const _err = _bind$2;
+      _try_err = _err._0;
+      break _L;
+    }
+    return _M0FP39stillfail5rules2js4held(_tmp$2);
+  }
+  let why;
+  _L$2: {
+    switch (_try_err.$tag) {
+      case 2: {
+        const _Refused = _try_err;
+        const _why = _Refused._0;
+        why = _why;
+        break _L$2;
+      }
+      case 1: {
+        const _Refusal = _try_err;
+        const _why$2 = _Refusal._0;
+        why = _why$2;
+        break _L$2;
+      }
+      case 0: {
+        const _Invalid = _try_err;
+        const _why$3 = _Invalid._0;
+        return _M0FP39stillfail5rules2js7refused(_why$3);
+      }
+      default: {
+        return _M0FP39stillfail5rules2js7refused(_M0FP15Error10to__string(_try_err));
+      }
+    }
+  }
+  return _M0FP39stillfail5rules2js7refused(why);
+}
+function _M0FP39stillfail5rules2js9apply__js(prev, entry, now, crypto) {
+  let _try_err;
+  _L: {
+    const _bind = _M0FP39stillfail5rules2js8json__of(entry);
+    let _tmp;
+    if (_bind.$tag === 1) {
+      const _ok = _bind;
+      _tmp = _ok._0;
+    } else {
+      const _err = _bind;
+      _try_err = _err._0;
+      break _L;
+    }
+    const _bind$2 = _M0FP39stillfail5rules4lock5apply(prev, _tmp, _M0FP39stillfail5rules2js8opt__num(now), { self: crypto, method_table: _M0FP077stillfail_2frules_2fjs_2fJsCrypto_24as_24_40stillfail_2frules_2flock_2eCrypto });
+    let _tmp$2;
+    if (_bind$2.$tag === 1) {
+      const _ok = _bind$2;
+      _tmp$2 = _ok._0;
+    } else {
+      const _err = _bind$2;
+      _try_err = _err._0;
+      break _L;
+    }
+    return _M0FP39stillfail5rules2js4held(_tmp$2);
+  }
+  let why;
+  _L$2: {
+    switch (_try_err.$tag) {
+      case 2: {
+        const _Refused = _try_err;
+        const _why = _Refused._0;
+        why = _why;
+        break _L$2;
+      }
+      case 1: {
+        const _Refusal = _try_err;
+        const _why$2 = _Refusal._0;
+        why = _why$2;
+        break _L$2;
+      }
+      case 0: {
+        const _Invalid = _try_err;
+        const _why$3 = _Invalid._0;
+        return _M0FP39stillfail5rules2js7refused(_why$3);
+      }
+      default: {
+        return _M0FP39stillfail5rules2js7refused(_M0FP15Error10to__string(_try_err));
+      }
+    }
+  }
+  return _M0FP39stillfail5rules2js7refused(why);
+}
+function _M0FP39stillfail5rules2js10signer__js(s, key, now) {
+  const _bind = _M0FP39stillfail5rules4lock6signer(s, key, _M0FP39stillfail5rules2js8opt__num(now));
+  if (_bind === undefined) {
+    return _M0FP39stillfail5rules2js8js__null();
+  } else {
+    const _Some = _bind;
+    const _w = _Some;
+    const _p = _w.sub;
+    const _tmp = { _0: "sub", _1: new _M0DTPC14json4Json6String(_p) };
+    const _p$2 = _w.role;
+    const _tmp$2 = { _0: "role", _1: new _M0DTPC14json4Json6String(_p$2) };
+    const _p$3 = _w.passkey;
+    const _tmp$3 = { _0: "passkey", _1: _p$3 ? _M0DTPC14json4Json4True__ : _M0DTPC14json4Json5False__ };
+    const _p$4 = _w.own;
+    const _bind$2 = [_tmp, _tmp$2, _tmp$3, { _0: "own", _1: _p$4 ? _M0DTPC14json4Json4True__ : _M0DTPC14json4Json5False__ }];
+    const _p$5 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind$2, 0, 4), undefined);
+    return _M0FP39stillfail5rules2js6to__js(new _M0DTPC14json4Json6Object(_p$5));
+  }
+}
+function _M0FP39stillfail5rules2js14admit__one__js(s, who, now, crypto) {
+  let answer;
+  let _try_err;
+  _L: {
+    _L$2: {
+      const _bind = _M0FP39stillfail5rules4lock5admit(s, _M0FP39stillfail5rules2js7js__str(_M0FP39stillfail5rules2js7js__get(who, "sub")), _M0FP39stillfail5rules2js7js__str(_M0FP39stillfail5rules2js7js__get(who, "endpoint")), _M0FP39stillfail5rules2js8opt__str(_M0FP39stillfail5rules2js7js__get(who, "base")), _M0FP39stillfail5rules2js8opt__str(_M0FP39stillfail5rules2js7js__get(who, "proof")), now, { self: crypto, method_table: _M0FP077stillfail_2frules_2fjs_2fJsCrypto_24as_24_40stillfail_2frules_2flock_2eCrypto });
+      let _bind$2;
+      if (_bind.$tag === 1) {
+        const _ok = _bind;
+        _bind$2 = _ok._0;
+      } else {
+        const _err = _bind;
+        _try_err = _err._0;
+        break _L$2;
+      }
+      const _d = _bind$2._0;
+      const _role = _bind$2._1;
+      const _p = _d.id;
+      const _bind$3 = [{ _0: "device", _1: new _M0DTPC14json4Json6String(_p) }, { _0: "role", _1: new _M0DTPC14json4Json6String(_role) }];
+      const _p$2 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind$3, 0, 2), undefined);
+      answer = new _M0DTPC14json4Json6Object(_p$2);
+      break _L;
+    }
+    let why;
+    _L$3: {
+      if (_try_err.$tag === 1) {
+        const _Refusal = _try_err;
+        const _why = _Refusal._0;
+        why = _why;
+        break _L$3;
+      } else {
+        const _Refused = _try_err;
+        const _why = _Refused._0;
+        why = _why;
+        break _L$3;
+      }
+    }
+    const _bind = [{ _0: "refusal", _1: new _M0DTPC14json4Json6String(why) }];
+    const _p = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind, 0, 1), undefined);
+    answer = new _M0DTPC14json4Json6Object(_p);
+  }
+  return _M0FP39stillfail5rules2js6to__js(answer);
+}
+export { _M0FP39stillfail5rules2js13canonical__of as canonical_of, _M0FP39stillfail5rules2js15entry__text__of as entry_text_of, _M0FP39stillfail5rules2js11lower__role as lower_role, _M0FP39stillfail5rules2js8fold__js as fold_js, _M0FP39stillfail5rules2js9admit__js as admit_js, _M0FP39stillfail5rules2js11genesis__js as genesis_js, _M0FP39stillfail5rules2js9apply__js as apply_js, _M0FP39stillfail5rules2js10signer__js as signer_js, _M0FP39stillfail5rules2js14admit__one__js as admit_one_js }
