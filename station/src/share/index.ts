@@ -85,6 +85,8 @@ export type SharingDeps = {
   agentHome: () => string;
   /// The station's environment (the machine's own logins are found in it).
   env: Env;
+  /// The account of a profile on the machine's login, as read by Accounts.
+  machineEmail?: (runtime: string) => string | null;
   /// A Claude profile's current access token, renewed when about to run out (the accounts module's).
   /// `rejected`: the token a borrower was refused with, renewed first if it is still the current one.
   claudeToken: (profile: Json, rejected?: string) => Promise<MachineToken>;
@@ -310,7 +312,10 @@ export class Sharing {
     if (p.runtime === "codex" && p.access?.kind === "subscription") {
       try { login = hashOf(readFileSync(this.codexFile(p), "utf8")); } catch {}
     }
-    return hashOf({ ...portable(p), workspaces: this.sharedIn(p), ...(login === null ? {} : { login }) });
+    // A machine login is read outside the profile's home. Include its account so existing copies receive it after an
+    // upgrade and again after a different account is signed in.
+    const email = p.machine === true && p.access?.kind === "subscription" ? { email: this.emailOf(p) } : {};
+    return hashOf({ ...portable(p), workspaces: this.sharedIn(p), ...email, ...(login === null ? {} : { login }) });
   }
 
   private codexFile(p: Json): string {
@@ -951,6 +956,7 @@ export class Sharing {
 
   private emailOf(p: Json): string | null {
     if (typeof p.share?.email === "string") return p.share.email;
+    if (p.machine === true) return this.deps.machineEmail?.(p.runtime) ?? null;
     const home = this.home(p);
     if (p.runtime === "grok") return grokEmail(home);
     if (p.runtime === "cursor") return cursorEmail(home);

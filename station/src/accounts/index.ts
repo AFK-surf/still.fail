@@ -319,6 +319,8 @@ export class Accounts {
           this.changed();
           const before = last;
           last = new Map(["claude", "codex"].map((r) => [r, said(r)]));
+          // The first reading can arrive after sharing starts; its identity and later sign-ins must reach borrowers.
+          if (before === null || [...last].some(([runtime, value]) => before.get(runtime) !== value)) this.deps.shared?.loginUpdated?.();
           if (before === null) {
             // The first reading can finish after a start-up check. If it knows a more specific tier, recheck that
             // profile so its view and any borrowed copy get the machine login's tier.
