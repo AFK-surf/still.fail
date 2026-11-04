@@ -72,7 +72,7 @@ export const presence = ({ cloud, key, up, spec }: PresenceParts) => Effect.gen(
     // The socket, until it ends or the station stops answering (then it is closed: offline at the cloud).
     const ended = yield* Effect.result(Effect.raceFirst(connect(s, key, plane), Effect.as(until(false), `station not answering; went offline at ${plane.name}`)));
     lapse(s);
-    const why = ended._tag === "Success" ? ended.success : ended.failure.message;
+    const why = ended._tag === "Success" ? ended.success : failureText(ended.failure);
     writePresence(s.data, false, why);
     if (ended._tag === "Success") log.info("presence", why);
     else log.warn("presence", `no presence socket to ${plane.name}`, { error: why });
@@ -82,6 +82,13 @@ export const presence = ({ cloud, key, up, spec }: PresenceParts) => Effect.gen(
     backoff = Math.min(backoff * 2, 60_000);
   }
 });
+
+/// What a failed socket says: every address's own error when they all failed (Node's AggregateError, whose message is
+/// empty: the log said only `error=`).
+export function failureText(error: Error): string {
+  const each = error instanceof AggregateError ? error.errors.map((e) => (e instanceof Error ? e.message : String(e))).filter((m) => m.length > 0) : [];
+  return each.length > 0 ? each.join("; ") : error.message || error.name;
+}
 
 /// The roster said last, no longer reached once ROSTER_GRACE_MS passed with no fresh one; not taken at all at once when
 /// the station was removed.
