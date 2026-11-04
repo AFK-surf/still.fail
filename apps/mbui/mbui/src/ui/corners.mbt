@@ -1873,7 +1873,7 @@ fn Ctx::scrolled_side_fault(self : Ctx, i : Int, ct : Container) -> String? {
   for k in 0..<4 {
     let dx = sides[if corner_left(k) { 0 } else { 1 }]
     let dy = ends[if k < 2 { 0 } else { 1 }]
-    if dx < 0.5 || dy < -0.5 || dx > far + 0.5 || dy > far + 0.5 || self.corner_cut_off(i, p, k) || self.corner_scrolled_off(i, p, k) ||
+    if dx < 0.5 || dy < -0.5 || dx > far + 0.5 || dy > far + 0.5 || self.corner_cut_off(i, k) || self.corner_scrolled_off(i, p, k) ||
       !(if k < 2 { at_top } else { at_end }) {
       continue
     }
