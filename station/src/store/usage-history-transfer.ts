@@ -1,6 +1,7 @@
 // Convert existing usage summaries to the year view in small transactions. The cursors and source-table triggers
 // advance in the same database transaction, so a write is counted either by a trigger or when its row is visited.
 import type { DatabaseSync } from "node:sqlite";
+import { hasHistoryMoves, historyPhysical } from "./usage-history-moves.ts";
 
 const qKey = (r: string) => `(${r}.session, ${r}.quarter, ${r}.runtime, ${r}.model)`;
 const cKey = (r: string) => `(${r}.session, ${r}.minute, ${r}.thread, ${r}.person, ${r}.profile, ${r}.runtime, ${r}.model, ${r}.fast)`;
@@ -8,19 +9,38 @@ const qDone = (r: string) => `EXISTS (SELECT 1 FROM usage_history_transfer p WHE
   (p.phase > 0 OR (p.phase = 0 AND ${qKey(r)} <= (p.q_session, p.q_quarter, p.q_runtime, p.q_model))))`;
 const cDone = (r: string) => `EXISTS (SELECT 1 FROM usage_history_transfer p WHERE p.id = 1 AND
   (p.phase > 1 OR (p.phase = 1 AND ${cKey(r)} <= (p.c_session, p.c_minute, p.c_thread, p.c_person, p.c_profile, p.c_runtime, p.c_model, p.c_fast))))`;
-export const transferScope = (r: string) => `COALESCE((SELECT COALESCE(ws, '') FROM sessions WHERE key = ${r}.session),
+export const transferScope = (r: string, routed = false) => {
+  const scope = `COALESCE((SELECT COALESCE(ws, '') FROM sessions WHERE key = ${r}.session),
   (WITH RECURSIVE owners(id) AS (
     SELECT group_id FROM usage_history_orphans WHERE session = ${r}.session
     UNION ALL SELECT g.parent FROM usage_history_owner_groups g JOIN owners o ON o.id = g.id WHERE g.parent IS NOT NULL
   ) SELECT g.scope FROM owners o JOIN usage_history_owner_groups g ON g.id = o.id WHERE g.parent IS NULL), '')`;
+  return routed ? historyPhysical(scope) : scope;
+};
 const compactQuarter = (r: string) => `(CASE WHEN ${r}.minute >= 0 THEN ${r}.minute / 15 ELSE -1 - ((-1 - ${r}.minute) / 15) END)`;
 const compactTokens = (r: string) => `(${r}.input + ${r}.cache_read + ${r}.cache_write + ${r}.cache_write_long + ${r}.output)`;
-const contribute = (r: string, period: string, calls: string, tokens: string, condition: string) => `
+const contribute = (r: string, period: string, calls: string, tokens: string, condition: string, routed: boolean) => `
   INSERT INTO usage_history (scope, quarter, calls, tokens)
-    SELECT ${transferScope(r)}, ${period}, ${calls}, ${tokens} WHERE ${condition}
+    SELECT ${transferScope(r, routed)}, ${period}, ${calls}, ${tokens} WHERE ${condition}
     ON CONFLICT (scope, quarter) DO UPDATE SET calls = calls + excluded.calls, tokens = tokens + excluded.tokens;`;
-const qAdd = (r: string, sign: string) => contribute(r, `${r}.quarter`, `${sign}${r}.calls`, `${sign}${r}.tokens`, qDone(r));
-const cAdd = (r: string, sign: string) => contribute(r, compactQuarter(r), `${sign}${r}.calls`, `${sign}${compactTokens(r)}`, cDone(r));
+const qAdd = (r: string, sign: string, routed: boolean) => contribute(r, `${r}.quarter`, `${sign}${r}.calls`, `${sign}${r}.tokens`, qDone(r), routed);
+const cAdd = (r: string, sign: string, routed: boolean) => contribute(r, compactQuarter(r), `${sign}${r}.calls`, `${sign}${compactTokens(r)}`, cDone(r), routed);
+
+/// Replacing these triggers changes only future writes; the old summary rows are not read.
+export function historyTransferTriggers(db: DatabaseSync, routed: boolean): void {
+  db.exec(`DROP TRIGGER IF EXISTS usage_history_transfer_q_add; DROP TRIGGER IF EXISTS usage_history_transfer_q_change;
+    DROP TRIGGER IF EXISTS usage_history_transfer_q_drop; DROP TRIGGER IF EXISTS usage_history_transfer_c_add;
+    DROP TRIGGER IF EXISTS usage_history_transfer_c_change; DROP TRIGGER IF EXISTS usage_history_transfer_c_drop;
+    CREATE TRIGGER usage_history_transfer_q_add AFTER INSERT ON usage_day_quarters BEGIN ${qAdd("NEW", "", routed)} END;
+    CREATE TRIGGER usage_history_transfer_q_change AFTER UPDATE OF session, quarter, runtime, model, calls, tokens ON usage_day_quarters BEGIN
+      ${qAdd("OLD", "-", routed)} ${qAdd("NEW", "", routed)}
+    END;
+    CREATE TRIGGER usage_history_transfer_q_drop AFTER DELETE ON usage_day_quarters BEGIN ${qAdd("OLD", "-", routed)} END;
+    CREATE TRIGGER usage_history_transfer_c_add AFTER INSERT ON usage_compact BEGIN ${cAdd("NEW", "", routed)} END;
+    CREATE TRIGGER usage_history_transfer_c_change AFTER UPDATE OF session, minute, thread, person, profile, runtime, model, fast,
+      calls, input, cache_read, cache_write, cache_write_long, output ON usage_compact BEGIN ${cAdd("OLD", "-", routed)} ${cAdd("NEW", "", routed)} END;
+    CREATE TRIGGER usage_history_transfer_c_drop AFTER DELETE ON usage_compact BEGIN ${cAdd("OLD", "-", routed)} END;`);
+}
 
 const ownerSources = ["usage_minute_scope", "usage_day_quarters", "usage_compact"];
 export function historyOwnerSources(db: DatabaseSync): string[] {
@@ -65,21 +85,15 @@ export function installHistoryOwners(db: DatabaseSync, fresh: boolean): void {
 /// Called inside installation's write transaction, after compact usage has taken over the old writers.
 export function installHistoryTransfer(db: DatabaseSync): void {
   installHistoryOwners(db, false);
-  db.exec(`DROP TABLE IF EXISTS usage_history_fresh_owners;
+  // If history is rebuilt from old summaries, use their coverage rules for subsequent writes.
+  db.exec("DROP TABLE IF EXISTS usage_history_fresh_owners");
+  db.exec(`
     CREATE TABLE usage_history_transfer (id INTEGER PRIMARY KEY CHECK (id = 1), phase INTEGER NOT NULL,
       q_session TEXT, q_quarter INTEGER, q_runtime TEXT, q_model TEXT,
       c_session TEXT, c_minute INTEGER, c_thread INTEGER, c_person TEXT, c_profile TEXT, c_runtime TEXT, c_model TEXT, c_fast INTEGER);
     INSERT INTO usage_history_transfer (id, phase) VALUES (1, 0);
-    CREATE TRIGGER usage_history_transfer_q_add AFTER INSERT ON usage_day_quarters BEGIN ${qAdd("NEW", "")} END;
-    CREATE TRIGGER usage_history_transfer_q_change AFTER UPDATE OF session, quarter, runtime, model, calls, tokens ON usage_day_quarters BEGIN
-      ${qAdd("OLD", "-")} ${qAdd("NEW", "")}
-    END;
-    CREATE TRIGGER usage_history_transfer_q_drop AFTER DELETE ON usage_day_quarters BEGIN ${qAdd("OLD", "-")} END;
-    CREATE TRIGGER usage_history_transfer_c_add AFTER INSERT ON usage_compact BEGIN ${cAdd("NEW", "")} END;
-    CREATE TRIGGER usage_history_transfer_c_change AFTER UPDATE OF session, minute, thread, person, profile, runtime, model, fast,
-      calls, input, cache_read, cache_write, cache_write_long, output ON usage_compact BEGIN ${cAdd("OLD", "-")} ${cAdd("NEW", "")} END;
-    CREATE TRIGGER usage_history_transfer_c_drop AFTER DELETE ON usage_compact BEGIN ${cAdd("OLD", "-")} END;
   `);
+  historyTransferTriggers(db, false);
 }
 
 /// Redirect the old workspace's deleted sessions before moving its history. Union by rank bounds owner lookups even
@@ -121,9 +135,9 @@ export const historyTransferPending = (db: DatabaseSync): boolean => db.prepare(
 type Progress = { phase: number; q_session: string | null; q_quarter: number; q_runtime: string; q_model: string;
   c_session: string | null; c_minute: number; c_thread: number; c_person: string; c_profile: string;
   c_runtime: string; c_model: string; c_fast: number };
-type Quarter = { session: string; quarter: number; runtime: string; model: string; calls: number; tokens: number; scope: string };
+type Quarter = { session: string; quarter: number; runtime: string; model: string; calls: number; tokens: number; scope: string | Uint8Array };
 type Compact = { session: string; minute: number; thread: number; person: string; profile: string; runtime: string; model: string;
-  fast: number; quarter: number; calls: number; tokens: number; scope: string };
+  fast: number; quarter: number; calls: number; tokens: number; scope: string | Uint8Array };
 
 /// At most `batch` old summary rows are visited and written under one lock. `finish` installs the live usage triggers.
 export function historyTransferStep(db: DatabaseSync, finish: () => void, batch = 256): boolean {
@@ -133,12 +147,13 @@ export function historyTransferStep(db: DatabaseSync, finish: () => void, batch 
   db.exec("BEGIN IMMEDIATE");
   try {
     const p = db.prepare("SELECT * FROM usage_history_transfer WHERE id = 1").get() as Progress;
+    const routed = hasHistoryMoves(db);
     const add = db.prepare(`INSERT INTO usage_history (scope, quarter, calls, tokens) VALUES (?, ?, ?, ?)
       ON CONFLICT (scope, quarter) DO UPDATE SET calls = calls + excluded.calls, tokens = tokens + excluded.tokens`);
     if (p.phase === 0) {
       const after = p.q_session === null ? "" : `WHERE ${qKey("q")} > (?, ?, ?, ?)`;
       const args = p.q_session === null ? [batch] : [p.q_session, p.q_quarter, p.q_runtime, p.q_model, batch];
-      const rows = db.prepare(`SELECT q.*, ${transferScope("q")} AS scope FROM usage_day_quarters q ${after}
+      const rows = db.prepare(`SELECT q.*, ${transferScope("q", routed)} AS scope FROM usage_day_quarters q ${after}
         ORDER BY q.session, q.quarter, q.runtime, q.model LIMIT ?`).all(...args) as Quarter[];
       for (const row of rows) add.run(row.scope, row.quarter, row.calls, row.tokens);
       if (rows.length < batch) db.prepare("UPDATE usage_history_transfer SET phase = 1 WHERE id = 1").run();
@@ -154,7 +169,7 @@ export function historyTransferStep(db: DatabaseSync, finish: () => void, batch 
     const args = p.c_session === null ? [batch] : [p.c_session, p.c_minute, p.c_thread, p.c_person, p.c_profile,
       p.c_runtime, p.c_model, p.c_fast, batch];
     const rows = db.prepare(`SELECT c.session, c.minute, c.thread, c.person, c.profile, c.runtime, c.model, c.fast,
-      ${compactQuarter("c")} AS quarter, c.calls, ${compactTokens("c")} AS tokens, ${transferScope("c")} AS scope
+      ${compactQuarter("c")} AS quarter, c.calls, ${compactTokens("c")} AS tokens, ${transferScope("c", routed)} AS scope
       FROM usage_compact c ${after} ORDER BY c.session, c.minute, c.thread, c.person, c.profile, c.runtime, c.model, c.fast LIMIT ?`)
       .all(...args) as Compact[];
     for (const row of rows) add.run(row.scope, row.quarter, row.calls, row.tokens);

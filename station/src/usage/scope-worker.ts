@@ -4,6 +4,7 @@ import { parentPort, threadId, workerData } from "node:worker_threads";
 import { wall } from "../ops/fibers.ts";
 import { giveBackfill, takeBackfill } from "../store/backfill.ts";
 import { compactTotalsStep, hasCompactUsage, moveCompactStep } from "../store/usage-compact.ts";
+import { historyMovesPending, moveHistoryStep } from "../store/usage-history-moves.ts";
 
 const db = new DatabaseSync(workerData.path as string);
 const priority = new Int32Array(workerData.priority as SharedArrayBuffer);
@@ -12,9 +13,21 @@ db.exec("PRAGMA busy_timeout = 250; PRAGMA synchronous = NORMAL");
 parentPort!.on("message", async (message: { wake?: boolean; scope?: string }) => {
   if (!message.wake) return;
   const scope = message.scope;
-  let result: { done: boolean; session?: string; sessions?: string[]; from?: number; error?: string } = { done: true };
+  let result: { done: boolean; session?: string; sessions?: string[]; from?: number; historyReady?: boolean; error?: string } = { done: true };
   try {
-    if (hasCompactUsage(db)) {
+    if (scope === undefined && historyMovesPending(db)) {
+      if (!takeBackfill(priority, threadId)) result = { done: false };
+      else {
+        try {
+          const step = moveHistoryStep(db, 256);
+          result = { done: step.done, historyReady: step.ready };
+        } catch (error) {
+          const code = (error as { errcode?: number }).errcode;
+          if (code === undefined || ![5, 6].includes(code & 255)) throw error;
+          result = { done: false };
+        } finally { giveBackfill(priority, threadId); }
+      }
+    } else if (hasCompactUsage(db)) {
       const all = scope === undefined || scope === "G";
       const moving = all ? db.prepare("SELECT 1 FROM usage_compact_moving LIMIT 1").get()
         : db.prepare("SELECT 1 FROM usage_compact_moving_scope WHERE scope = ? LIMIT 1").get(scope);

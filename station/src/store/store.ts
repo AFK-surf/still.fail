@@ -604,7 +604,8 @@ export class Store {
         return found;
       });
       for (const key of keys) changes.push({ type: "session", key });
-      if (keys.length > 0) this.#sessionWorkspaceChanged();
+      changes.push({ type: "usage", sessions: [], statisticsOnly: true });
+      this.#sessionWorkspaceChanged();
     });
   }
 

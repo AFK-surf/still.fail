@@ -11,6 +11,7 @@ import { usage, usageHistory } from "../src/read/usage.ts";
 import { Store } from "../src/store/store.ts";
 import { installCompactUsage } from "../src/store/usage-compact.ts";
 import { convertUsageHistoryStep, hasUsageHistory, historyTransferPending, installHistoryOwnersAtOpen, installUsageHistory } from "../src/store/usage-history.ts";
+import { physicalHistoryScope } from "../src/store/usage-history-moves.ts";
 import { moveHistoryOrphanScope } from "../src/store/usage-history-transfer.ts";
 import { retireAfterPrevious, retireUntilComplete } from "../src/usage/module.ts";
 
@@ -541,7 +542,13 @@ test("deleted sessions follow repeated workspace merges, including reused worksp
     store.setSessionsWs("S16", "S0");
     db.prepare("UPDATE usage SET output = 8 WHERE id = 'owner-0'").run();
     assert.deepEqual(db.prepare("SELECT scope, quarter, calls, tokens FROM usage_history WHERE calls != 0 OR tokens != 0 ORDER BY scope, quarter")
-      .all().map((r) => ({ ...r })), [{ scope: "S0", quarter: 0, calls: 18, tokens: 61 }]);
+      .all().map((r) => ({ ...r })), [{ scope: physicalHistoryScope(db, "S0"), quarter: 0, calls: 18, tokens: 61 }]);
+    const destination = usageHistory(makeStore(db, "."), 0n, { workspace: "S0", home: false });
+    const former = usageHistory(makeStore(db, "."), 0n, { workspace: "S15", home: false });
+    assert.ok(destination);
+    assert.ok(former);
+    assert.deepEqual((destination.days as { calls: number; tokens: number }[]).map(({ calls, tokens }) => [calls, tokens]), [[18, 61]]);
+    assert.deepEqual(former.days, [], "the former workspace cannot see history that moved away");
     const depth = db.prepare(`WITH RECURSIVE chain(id, parent, depth) AS (
       SELECT id, parent, 0 FROM usage_history_owner_groups
       UNION ALL SELECT chain.id, g.parent, chain.depth + 1 FROM chain JOIN usage_history_owner_groups g ON g.id = chain.parent
