@@ -4,9 +4,12 @@
 // keeps in station storage are packed (archive.ts); they are restored before its runtime starts again, or when it is
 // shown again. The hub calls it (ColdStorage) from the session's queue, so no turn starts halfway through.
 import { existsSync, realpathSync, statSync } from "node:fs";
-import { access, readdir, unlink, writeFile } from "node:fs/promises";
+import { access, readdir, realpath, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { log } from "../ops/log.ts";
+import { platform } from "../platform/index.ts";
 import { wall } from "../ops/fibers.ts";
 import { realOutside } from "../ops/places.ts";
 import { homesFirst, sessionPlaces, transcriptPaths } from "../read/transcript.ts";
@@ -188,6 +191,8 @@ export class ColdRooms implements ColdStorage {
     const ready = () => this.archiveRoom(key) !== null;
     await archive.withLock(room, async () => {
       if (!ready()) return;
+      await this.stopStrays(key, join(room, "workspace"));
+      if (!ready()) return;
       await this.cleanRebuildable(key);
       if (!ready()) return;
       await writeFile(join(room, "cold"), "workspace and history may be compressed\n");
@@ -195,6 +200,30 @@ export class ColdRooms implements ColdStorage {
       if (!ready()) return;
       await this.packHistory(key, ready);
     });
+  }
+
+  /// What still runs in an archived session's workspace, its agent's and its jobs' processes gone: what they left
+  /// behind running on its own (an adb server its `adb` started, a daemon), stopped. 13 adb servers ran on ccvm in
+  /// workspaces long archived and removed (2026-11-04).
+  private async stopStrays(key: string, workspace: string): Promise<void> {
+    if (platform.os === "windows") return;
+    let pids: number[];
+    try {
+      const { stdout } = await promisify(execFile)("ps", ["-U", String(process.getuid?.() ?? ""), "-o", "pid="]);
+      pids = stdout.split("\n").map((l) => Number(l.trim())).filter((p) => Number.isSafeInteger(p) && p > 1 && p !== process.pid);
+    } catch {
+      return;
+    }
+    const real = await realpath(workspace).catch(() => workspace);
+    let stopped = 0;
+    for (const [pid, cwd] of await platform.cwds(pids).catch(() => new Map<number, string>())) {
+      if (cwd !== real && cwd !== workspace && !within(cwd, real) && !within(cwd, workspace)) continue;
+      try {
+        process.kill(pid, "SIGTERM");
+        stopped++;
+      } catch {}
+    }
+    if (stopped > 0) log.info("hub", "what was left running in an archived session's workspace stopped", { session: key, n: stopped });
   }
 
   /// Packs an archived session's transcripts in place (its room locked, `ready` while it may), then lets go of the

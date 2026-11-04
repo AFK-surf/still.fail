@@ -3,6 +3,7 @@
 // a session archived long enough, or before its time while the disk is low, keeps only its history and the files sent in
 // its chat).
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -108,6 +109,34 @@ test("archiving a session cleans what can be made again from its directory", asy
   await archive(r.hub, key, false);
   assert.equal(readFileSync(join(workspace, "notes.md"), "utf8"), "kept");
   await r.close();
+});
+
+test("what was left running in an archived session's workspace is stopped as it is packed", { skip: process.platform === "win32" }, async () => {
+  const [r, cold] = coldRig();
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const workspace = r.session(key).workspace;
+  mkdirSync(join(workspace, "sub"), { recursive: true });
+  // As adb's server its `adb` started: on its own, in the workspace.
+  const left = spawn("sleep", ["60"], { cwd: join(workspace, "sub"), stdio: "ignore", detached: true });
+  const elsewhere = spawn("sleep", ["60"], { cwd: dirname(workspace), stdio: "ignore", detached: true });
+  const gone = new Promise<string | null>((resolve) => left.once("exit", (_c, signal) => resolve(signal)));
+  try {
+    await r.call(key, "chat_state", { kind: "final" });
+    r.claude.last().complete();
+    await settle();
+    await archive(r.hub, key, true);
+    await finishArchive(r, key);
+    await cold.pack(key);
+    assert.equal(await gone, "SIGTERM");
+    assert.equal(elsewhere.exitCode, null, "one elsewhere runs on");
+  } finally {
+    left.kill("SIGKILL");
+    elsewhere.kill("SIGKILL");
+    await r.close();
+  }
 });
 
 test("archive cleanup keeps running jobs and shared projects", async () => {
