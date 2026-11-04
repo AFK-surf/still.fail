@@ -98,27 +98,27 @@ test("a failed summary batch rolls back its cursor and can be retried", () => {
   } finally { db.setAuthorizer(null); store.close(); }
 });
 
-test("each conversion transaction reads and writes at most 64 old summary rows", () => {
+test("each conversion transaction reads and writes at most 256 old summary rows", () => {
   const store = oldStore();
   const db = store.db;
   try {
     const put = db.prepare(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output, calls)
       VALUES (?, ?, 'a', 'claude', 2, 0, 0, 0, 1, 1)`);
     db.exec("BEGIN");
-    for (let n = 0; n < 200; n++) put.run(`old-${n}`, n * 900_000);
+    for (let n = 0; n < 600; n++) put.run(`old-${n}`, n * 900_000);
     db.exec("COMMIT");
-    installCompactUsage(db, () => 200 * 900_000);
-    installUsageHistory(db, 200 * 900_000);
+    installCompactUsage(db, () => 600 * 900_000);
+    installUsageHistory(db, 600 * 900_000);
     const plan = db.prepare(`EXPLAIN QUERY PLAN SELECT * FROM usage_day_quarters
       WHERE (session, quarter, runtime, model) > (?, ?, ?, ?) ORDER BY session, quarter, runtime, model LIMIT ?`)
-      .all("a", 0, "claude", "", 64) as { detail: string }[];
+      .all("a", 0, "claude", "", 256) as { detail: string }[];
     assert.ok(plan.some((row) => /SEARCH usage_day_quarters USING PRIMARY KEY/.test(row.detail)), JSON.stringify(plan));
     assert.equal(convertUsageHistoryStep(db, 10_000), false);
-    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM usage_history").get() as { n: number }).n, 64);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM usage_history").get() as { n: number }).n, 256);
     assert.deepEqual({ ...db.prepare("SELECT phase, q_session, q_quarter FROM usage_history_transfer").get() },
-      { phase: 0, q_session: "a", q_quarter: 63 });
+      { phase: 0, q_session: "a", q_quarter: 255 });
     assert.equal(convertUsageHistoryStep(db, 10_000), false);
-    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM usage_history").get() as { n: number }).n, 128);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM usage_history").get() as { n: number }).n, 512);
   } finally { store.close(); }
 });
 

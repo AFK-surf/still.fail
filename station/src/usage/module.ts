@@ -17,7 +17,7 @@ import type { InWorkspace } from "../store/rows.ts";
 import { giveBackfill, releaseStoppedBackfill, takeBackfill } from "../store/backfill.ts";
 import { retireUsageIndexes, stopUsageIndexes } from "../store/usage-retire.ts";
 import { hasCompactUsage, installCompactUsage, installUsageSummaryChanges } from "../store/usage-compact.ts";
-import { convertUsageHistoryStep, historyTransferPending, installUsageHistory } from "../store/usage-history.ts";
+import { convertUsageHistoryStep, hasUsageHistory, historyTransferPending, installUsageHistory } from "../store/usage-history.ts";
 import { UsageCounter } from "./counter.ts";
 
 /// A session's usage as its summary says it (store.ts `setSessionUsage`): as recorded now (read/usage.ts `usageNow`).
@@ -96,7 +96,7 @@ export function retireAfterPrevious(store: StationStore, exited: Promise<void>, 
       while (!convertUsageHistoryStep(store.db)) { /* In-memory stores have no worker. */ }
       if (converting) store.usageChanged([], undefined, true);
       retireUsageIndexes(store.db);
-      return;
+      return hasCompactUsage(store.db) && hasUsageHistory(store.db);
     }
     const file = workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./retire-worker.ts" : "./usage/retire-worker.js", import.meta.url);
     yield* Effect.tryPromise({ try: async () => {
@@ -118,14 +118,22 @@ export function retireAfterPrevious(store: StationStore, exited: Promise<void>, 
         });
       });
     }, catch: (error) => error });
+    return hasCompactUsage(store.db) && hasUsageHistory(store.db) && !historyTransferPending(store.db);
   }).pipe(Effect.catch((error) => Effect.sync(() => {
     log.warn("usage", stopped ? "usage indexes could not be removed" : "usage index writers could not be stopped", { error: (error as Error).message });
+    return false;
   })));
 }
 
 /// Keep the handover alive until its statistics and cleanup have finished.
 export function retireUntilComplete(store: StationStore, exited: Promise<void>, workerFile?: URL, installed: () => void = () => {}) {
-  return retireAfterPrevious(store, exited, workerFile, installed);
+  return Effect.gen(function* () {
+    let retryMs = 250;
+    while (!(yield* retireAfterPrevious(store, exited, workerFile, installed))) {
+      yield* Effect.sleep(retryMs);
+      retryMs = Math.min(retryMs * 2, 30_000);
+    }
+  });
 }
 
 /// A worker moves changed ownership and accounts a workspace's totals when that workspace asks for them.

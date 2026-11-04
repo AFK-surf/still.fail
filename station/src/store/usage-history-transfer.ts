@@ -59,10 +59,10 @@ type Compact = { session: string; minute: number; thread: number; person: string
   fast: number; quarter: number; calls: number; tokens: number; scope: string };
 
 /// At most `batch` old summary rows are visited and written under one lock. `finish` installs the live usage triggers.
-export function historyTransferStep(db: DatabaseSync, finish: () => void, batch = 64): boolean {
+export function historyTransferStep(db: DatabaseSync, finish: () => void, batch = 256): boolean {
   if (!historyTransferPending(db)) return true;
   if (!Number.isSafeInteger(batch) || batch < 1) throw new RangeError("history conversion batch must be positive");
-  batch = Math.min(batch, 64);
+  batch = Math.min(batch, 256);
   db.exec("BEGIN IMMEDIATE");
   try {
     const p = db.prepare("SELECT * FROM usage_history_transfer WHERE id = 1").get() as Progress;

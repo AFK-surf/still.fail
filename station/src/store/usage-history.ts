@@ -88,7 +88,7 @@ export function installUsageHistory(db: DatabaseSync, now: number): void {
 }
 
 /// Conversion can be interrupted between any two batches; live writes are accounted for by the transfer triggers.
-export function convertUsageHistoryStep(db: DatabaseSync, batch = 64): boolean {
+export function convertUsageHistoryStep(db: DatabaseSync, batch = 256): boolean {
   return historyTransferStep(db, () => db.exec(liveSchema(true)), batch);
 }
 
