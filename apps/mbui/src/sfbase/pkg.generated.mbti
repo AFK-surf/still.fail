@@ -148,7 +148,7 @@ pub fn chat_screen_label(ChatScreen) -> String
 
 pub fn chat_screens_driven(Array[ChatScreen]) -> Bool
 
-pub fn chat_screens_open(ChatRef, Array[ChatScreen], from~ : @sf.Beside) -> Unit
+pub fn chat_screens_open(ChatRef, Array[ChatScreen], from~ : @sf.Beside, along? : @ui.Along) -> Unit
 
 pub fn chat_tick(@ui.Ctx, String, Reading, ChatView, shown~ : Bool, in_front~ : Bool) -> Unit
 

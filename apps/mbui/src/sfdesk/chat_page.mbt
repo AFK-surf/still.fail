@@ -326,8 +326,8 @@ fn chat_bar(
             // system's bars, rail_native.mbt bar_anchor)
             let extra = @sfpages.chat_extra_items(src, r, chat)
             let more = fn() {
-              let (at, _, _) = bar_anchor(c.id("chat-more"), Bottom, End)
-              @sfpages.open_chat_menu(src, w.id, r, extra, from=Of(at))
+              let (from, along) = bar_menu_from(c, c.id("chat-more"))
+              @sfpages.open_chat_menu(src, w.id, r, extra, from~, along~)
             }
             // (each its own in the system's bars where it has them, the "…" a menu of the system's: rail_native.mbt
             // bar_chat)
@@ -337,8 +337,8 @@ fn chat_bar(
               Some(
                 (
                   fn() {
-                    let (at, _, _) = bar_anchor(c.id("chat-screen"), Bottom, End)
-                    chat_screens_open(r, screens, from=Of(at))
+                    let (from, along) = bar_menu_from(c, c.id("chat-screen"))
+                    chat_screens_open(r, screens, from~, along~)
                   },
                   chat_screens_driven(screens),
                 ),
@@ -346,15 +346,21 @@ fn chat_bar(
             } else {
               None
             }
-            let in_bars = bar_chat(src, r, view.agents, info, rows, more, screen, if archivable { Some(archive) } else { None })
+            let jobs_view = (src.topic)("chatJobs", chat_jobs_summary_params(r)).value
+            let jobs = if flag(jobs_view, "hasJobs") || items(jobs_view, "jobs").length() > 0 {
+              Some((jobs_toggle, text(jobs_view, "alarm") != ""))
+            } else {
+              None
+            }
+            let in_bars = bar_chat(src, r, view.agents, info, rows, more, jobs, screen, if archivable { Some(archive) } else { None })
             if !in_bars &&
               archivable &&
               @sf.icon_button(c, "archive", key="chat-archive", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.archive"), shortcut="chat.archive") {
               archive()
             }
-            jobs_trigger(c, src, r)
             // (in the system's bars where the chat's actions are, the column not short: bar_chat)
             if !in_bars || column_short.get() {
+              jobs_trigger(c, jobs_view)
               screen_trigger(c, r, view)
             }
             if !in_bars {
@@ -641,15 +647,14 @@ fn agent_tile(c : @ui.Ctx, src : Source, r : ChatRef, a : Agent, marked : Bool, 
 ///|
 /// The chat's services and jobs' button (JobsPanel): none, nothing in the bar; a dot on it red while one died lately,
 /// amber while a service restarts.
-fn jobs_trigger(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
-  let view = (src.topic)("chatJobs", chat_jobs_summary_params(r)).value
+fn jobs_trigger(c : @ui.Ctx, view : Json?) -> Unit {
   if !flag(view, "hasJobs") && items(view, "jobs").length() == 0 {
     return
   }
   @sf.icon_button(c, "web", key="chat-jobs", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.services"), shortcut="chat.jobs")
   |> ignore
   // (pressed: opened or closed as it is let go, as it is then)
-  c.on_press(c.id("chat-jobs"), fn() { chat_own.jobs_open.set(!@signals.untracked(fn() { chat_own.jobs_open.get() })) })
+  c.on_press(c.id("chat-jobs"), jobs_toggle)
   match text(view, "alarm") {
     "" => ()
     alarm =>
@@ -661,6 +666,12 @@ fn jobs_trigger(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
       })
       |> ignore
   }
+}
+
+///|
+/// The chat's services' popover opened or closed by its button.
+fn jobs_toggle() -> Unit {
+  chat_own.jobs_open.set(!@signals.untracked(fn() { chat_own.jobs_open.get() }))
 }
 
 ///|
@@ -722,13 +733,15 @@ fn bar_popovers(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatV
 ///|
 /// The chat's services' popover (JobsPanel), by its button.
 fn chat_jobs_pop(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
+  // (its button in the system's bars: from the mark where it was chosen, rail_native.mbt)
+  let (at, side, along) = bar_anchor(c.id("chat-jobs"), Bottom, End)
   @kit.popover(
     c,
     "chat-jobs-pop",
     chat_own.jobs_open.get(),
-    c.id("chat-jobs"),
-    side=Bottom,
-    along=End,
+    at,
+    side~,
+    along~,
     look=@sf.beside_look(@ui.Size::Px(jobs_pop_w)),
     fn() {
       let open = fn(id : String) {

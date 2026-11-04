@@ -110,7 +110,7 @@ pub fn chat_ref_of(@sfbase.ChatItem) -> @sfbase.ChatRef
 
 pub fn chat_screens_driven(Array[@sfbase.ChatScreen]) -> Bool
 
-pub fn chat_screens_open(@sfbase.ChatRef, Array[@sfbase.ChatScreen], from~ : @sf.Beside) -> Unit
+pub fn chat_screens_open(@sfbase.ChatRef, Array[@sfbase.ChatScreen], from~ : @sf.Beside, along? : @ui.Along) -> Unit
 
 pub fn chat_tick(@ui.Ctx, String, @sfbase.Reading, @sfbase.ChatView, shown~ : Bool, in_front~ : Bool) -> Unit
 
