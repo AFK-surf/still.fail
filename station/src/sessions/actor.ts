@@ -67,7 +67,7 @@ export type SessionStore = {
   untoldWidgetModels(key: string): any[];
   markWidgetModelsTold(key: string, pairs: [string, string][]): void;
   heardThreads(key: string, threads: number[]): Set<number> | number[];
-  postAfter(key: string, thread: number, n: number): string | null;
+  postsAfter(key: string, messages: readonly { thread: number; n: number }[]): (string | null)[];
   cardEndedByMessage(thread: number, n: number): [MessageRow, any] | null;
   pendingCard(thread: number): [MessageRow, any] | null;
   threadSessions(thread: number): { session: string; connect: string }[];
@@ -1005,11 +1005,9 @@ export class SessionActor {
     }
     // What it posted in a thread after a message there was said: the message was written without seeing that post.
     const posts = new Map<PendingMessage, string>();
-    for (const m of said) {
-      if (m.message.apart === true) continue;
-      const ts = store.postAfter(this.key, m.message.thread, m.message.n);
-      if (ts !== null) posts.set(m, ts);
-    }
+    const fromChat = (said as PendingMessage[]).filter((m) => m.message.apart !== true);
+    const laterPosts = store.postsAfter(this.key, fromChat.map((m) => ({ thread: m.message.thread, n: m.message.n })));
+    fromChat.forEach((m, i) => { const ts = laterPosts[i]; if (ts !== undefined && ts !== null) posts.set(m, ts); });
     const cards = new Map<PendingMessage, { ended: MessageRow; current: MessageRow | null; special: string | null }>();
     for (const m of said as PendingMessage[]) {
       if (m.message.apart === true || m.message.authorKind !== "person") continue;

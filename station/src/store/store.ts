@@ -872,9 +872,35 @@ export class Store {
     return this.#one(PEOPLE_SAID_AFTER, thread, n, Math.max(0, Math.trunc(limit))).c;
   }
 
-  /// The session's first post in a thread after entry `n`: its ts, null when it has posted none since.
-  postAfter(session: string, thread: number, n: number): string | null {
-    return this.#all("SELECT ts FROM entries WHERE thread = ? AND n > ? AND kind = 'message' AND author_kind = 'agent' AND author = ? ORDER BY n LIMIT 1", thread, n, session)[0]?.ts ?? null;
+  /// The session's first post in a thread after entry `n`, including its entry number even if it has no ts.
+  postAfter(session: string, thread: number, n: number): { n: number; ts: string | null } | null {
+    const row = this.#one("SELECT n, ts FROM entries WHERE thread = ? AND n > ? AND kind = 'message' AND author_kind = 'agent' AND author = ? ORDER BY n LIMIT 1", thread, n, session);
+    return row ? { n: row.n, ts: row.ts ?? null } : null;
+  }
+
+  /// First later posts for a batch, in its delivery order. Messages between the same two posts share an answer. The
+  /// batch sees one snapshot even if another station is still writing during a handover.
+  postsAfter(session: string, messages: readonly { thread: number; n: number }[]): (string | null)[] {
+    const out: (string | null)[] = messages.map(() => null);
+    if (messages.length === 0) return out;
+    const ordered = messages.map((m, index) => ({ ...m, index })).sort((a, b) => a.thread - b.thread || a.n - b.n);
+    this.db.exec("SAVEPOINT posts_after");
+    try {
+      let thread: number | undefined;
+      let next: { n: number; ts: string | null } | null = null;
+      let searched = false;
+      for (const m of ordered) {
+        if (thread !== m.thread) { thread = m.thread; searched = false; }
+        if (!searched || (next !== null && m.n >= next.n)) {
+          next = this.postAfter(session, m.thread, m.n);
+          searched = true;
+        }
+        if (next !== null) out[m.index] = next.ts;
+      }
+    } finally {
+      this.db.exec("RELEASE posts_after");
+    }
+    return out;
   }
 
   /// When anyone last read a thread (moved their read position), in ms; null if nobody has.
