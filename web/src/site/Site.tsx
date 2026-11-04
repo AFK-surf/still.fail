@@ -23,13 +23,18 @@ const RELEASE = typeof __SITE_RELEASE__ !== "undefined" ? __SITE_RELEASE__ : nul
  * web app, its downloads the beta apps (named youdid.wtf, beside the released ones). The rest is the same page.
  */
 const BETA = typeof __SITE_BETA__ !== "undefined" && __SITE_BETA__;
-export const APP = BETA ? "https://app.youdid.wtf" : "https://app.still.fail";
-const NAME = BETA ? { head: "youdid", tail: ".wtf" } : { head: "still", tail: ".fail" };
+declare const __SITE_MONOID__: boolean;
+/** Built as monoid's site (monoid.build, monoid.zone: cloud/deploy.py, STILLFAIL_PRODUCT=monoid): the same page on its
+ * cloud, named monoid (client/i18n/brand.ts). */
+export const MONOID = typeof __SITE_MONOID__ !== "undefined" && __SITE_MONOID__;
+const CLOUD = MONOID ? "https://app.monoid.build" : "https://app.still.fail";
+export const APP = MONOID ? (BETA ? "https://app.monoid.zone" : CLOUD) : BETA ? "https://app.youdid.wtf" : CLOUD;
+const NAME = MONOID ? (BETA ? { head: "monoid", tail: ".zone" } : { head: "monoid", tail: "" }) : BETA ? { head: "youdid", tail: ".wtf" } : { head: "still", tail: ".fail" };
 /** The apps' latest builds (cloud's /releases/latest/<app> goes to the one released last; -beta: the beta apps'). */
-const MAC = `https://app.still.fail/releases/latest/${BETA ? "mac-beta" : "mac"}`;
-const WINDOWS = `https://app.still.fail/releases/latest/${BETA ? "win-beta" : "win"}`;
-const ANDROID = `https://app.still.fail/releases/latest/${BETA ? "android-beta" : "android"}`;
-const INSTALL = "curl -fsSL https://app.still.fail/install.sh | sh -s -- <token>";
+const MAC = `${CLOUD}/releases/latest/${BETA ? "mac-beta" : "mac"}`;
+const WINDOWS = `${CLOUD}/releases/latest/${BETA ? "win-beta" : "win"}`;
+const ANDROID = `${CLOUD}/releases/latest/${BETA ? "android-beta" : "android"}`;
+const INSTALL = `curl -fsSL ${CLOUD}/install.sh | sh -s -- <token>`;
 /** Its code. */
 const GITHUB = "https://github.com/AFK-surf/still.fail";
 
@@ -223,7 +228,7 @@ function Page({ mountDemo, demo }: DemoProps) {
     <div className={css.page}>
       <nav className={css.nav}>
         <div className={`${css.wrap} ${css.navRow}`}>
-          <a href={lang === "en" ? "/en/" : "/"} className={css.brand} aria-label={NAME.head + NAME.tail}><span>{NAME.head}<span className={css.brandDot}>.</span>{NAME.tail.slice(1)}</span></a>
+          <a href={lang === "en" ? "/en/" : "/"} className={css.brand} aria-label={NAME.head + NAME.tail}><span>{NAME.head}{NAME.tail && <><span className={css.brandDot}>.</span>{NAME.tail.slice(1)}</>}</span></a>
           {/* The apps: their section, on every device. */}
           <a className={css.navLink} href="#download">{say.download}</a>
           {/* The page in the other language (on a phone, in the footer: the bar has no room). */}

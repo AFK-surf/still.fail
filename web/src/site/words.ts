@@ -1,6 +1,7 @@
 // What the site says, in Chinese (its page at /) and in English (its page at /en/: site/en/index.html). The page is
 // built to HTML in each (prerender.tsx); the browser takes over the one it is on (main.tsx, by the root's lang).
 import { createContext, useContext } from "react";
+import { branded, productOf } from "../../../client/i18n/brand.ts";
 
 export type SiteLang = "zh" | "en";
 
@@ -126,9 +127,23 @@ export const featurePage = (at: string) => `phone-${at.replaceAll("/", "-")}`;
 
 export const SiteLangContext = createContext<SiteLang>("zh");
 
+declare const __SITE_MONOID__: boolean;
+/** `words` with monoid's name for still.fail's (monoid's site: client/i18n/brand.ts branded), what says them kept. */
+function monoids<T>(words: T): T {
+  if (typeof words === "string") return branded(words, MONOID_PRODUCT) as T;
+  if (typeof words === "function") return ((...args: unknown[]) => monoids((words as (...a: unknown[]) => unknown)(...args))) as T;
+  if (Array.isArray(words)) return words.map(monoids) as T;
+  if (words && typeof words === "object") return Object.fromEntries(Object.entries(words).map(([k, v]) => [k, monoids(v)])) as T;
+  return words;
+}
+const MONOID_PRODUCT = productOf("monoid.build");
+/** The product's name on this site: still.fail, or monoid on monoid's. */
+export const PRODUCT_NAME = typeof __SITE_MONOID__ !== "undefined" && __SITE_MONOID__ ? MONOID_PRODUCT.name : "still.fail";
+const SAID: Record<SiteLang, typeof ZH> = typeof __SITE_MONOID__ !== "undefined" && __SITE_MONOID__ ? { zh: monoids(ZH), en: monoids(EN) } : WORDS;
+
 /** The site's words in the page's language. */
 export function useSay(): typeof ZH {
-  return WORDS[useContext(SiteLangContext)];
+  return SAID[useContext(SiteLangContext)];
 }
 
 /** The page's language. */

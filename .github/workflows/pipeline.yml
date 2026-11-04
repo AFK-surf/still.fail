@@ -584,7 +584,8 @@ jobs:
     steps:
       - id: parts
         run: |
-          parts=$(printf '%s\n' ${{ needs.plan.outputs.parts }} | { grep -vE '^site(-beta)?$' || true; } | tr '\n' ' ')
+          # (its site's stable one with the stable release, stable.yml; its test channel's, monoid.zone, here)
+          parts=$(printf '%s\n' ${{ needs.plan.outputs.parts }} | { grep -vE '^site$' || true; } | tr '\n' ' ')
           echo "parts=$parts" >> "$GITHUB_OUTPUT"
       - if: steps.parts.outputs.parts != ''
         uses: actions/checkout@v5
