@@ -40,8 +40,6 @@ pub fn video_capsule_node(
       capsule_fit(corner, video_capsule_h, video_capsule_alone_in)
     }
     foot.over(Is(true))
-    .width(By(fn() { parent.laid_size_told().map(fn(z) { z.0 }) }))
-    .height(By(fn() { parent.laid_size_told().map(fn(z) { z.1 }) }))
     .lies_along(Is(End)).lines_up(Is(Some(Start)))
     .padding(Is((inset, inset, inset, inset))) |> ignore
     foot.box(fn(cap) {
