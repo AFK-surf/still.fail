@@ -8,7 +8,7 @@ import { join } from "node:path";
 import type { Roots } from "../src/read/machine.ts";
 import { CommandMissing } from "../src/agents/runner.ts";
 import type { AgentDriver, AgentSession, BackgroundTask, OpenOptions, RuntimeEvent, TurnOutcome } from "../src/agents/runtime.ts";
-import type { ChatMessage, ChatSurface, InboundFile, InboundMessage, Json, ThreadRef } from "../src/sessions/chat.ts";
+import type { ChatMessage, ChatSurface, InboundFile, InboundMessage, ThreadRef } from "../src/sessions/chat.ts";
 import { type HubConfig, hubConfig } from "../src/sessions/config.ts";
 import { type ColdStorage, Hub } from "../src/sessions/hub.ts";
 import { InternalChat } from "../src/sessions/internal.ts";
