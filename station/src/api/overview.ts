@@ -259,7 +259,7 @@ function madeDecisionsView(d: OverviewDeps, viewer: Viewer): unknown {
   const view = d.accounts!.automaticDecisionsView(viewer, { includePolicy: false, visible: mine, title });
   const manages = viewer.role === "owner" || viewer.role === "admin";
   if (manages) {
-    view.policy = policyView(d.store, viewer.home === false ? viewer.workspace : null, mine, title);
+    view.policy = policyView(d.store, viewer.home === false ? viewer.workspace : null, mine, title, viewer);
     view.canEditPolicy = manages;
   }
   return view;
