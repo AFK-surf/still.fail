@@ -1011,6 +1011,9 @@ pub(all) struct Node {
   style : Style
   children : Array[Node]
   mut measure : MeasureFn?
+  // A bounded holder may resolve descendant layout against its current content width before measuring them.
+  // The callback says whether those descendants changed, so this holder's cached measures can be discarded.
+  mut width_context : ((Double) -> Bool)?
   // A bounded container that measures and places its own children. Called only for the final layout, with its
   // content width/height and content origin; intrinsic size probes never build children.
   mut layout_children : ((Double, Double, Double, Double) -> Unit)?
@@ -1078,6 +1081,7 @@ pub fn Node::new() -> Node {
     style: Style::new(),
     children: [],
     measure: None,
+    width_context: None,
     layout_children: None,
     layout_overlay: None,
     scroll_bar_space: 0.0,

@@ -69,6 +69,7 @@ pub fn[T] ListRows::in_node(
   middle? : (T) -> Bool = fn(_) { true },
   grown? : (T) -> Bool = fn(_) { true },
   lead? : (T, Int) -> Double = fn(_, _) { 0.0 },
+  lead_in_layout? : (T, Int) -> (() -> Double),
   own? : (T) -> Bool = fn(_) { false },
 ) -> NodeRows[T] {
   let ended = @signals.signal(0)
@@ -207,10 +208,22 @@ pub fn[T] ListRows::in_node(
     let now = if v.logic_at() < c.end { v.drawn_at() } else { v.logic_at() }
     let index = key_at.get()
     // (what each row on its way is worked out by, read now; the rest still, their content's own way theirs alone)
-    let pre : Map[String, (Bool, Double, Bool, Bool)] = {}
+    // Capture a row's data now. A lead that depends on a holder's current constraint is evaluated only when
+    // this row is measured, using that constraint; it must not read signals in the layout callback.
+    let pre : Map[String, (Bool, () -> Double, Bool, Bool)] = {}
     let note = fn(k : String) {
       match index.get(k) {
-        Some(i) if !pre.contains(k) => pre[k] = row_of(items, i)
+        Some(i) if !pre.contains(k) => {
+          let it = items[i]
+          let over = match lead_in_layout {
+            Some(f) => f(it, i)
+            None => {
+              let value = lead(it, i)
+              fn() { value }
+            }
+          }
+          pre[k] = (middle(it), over, grown(it), own(it))
+        }
         _ => ()
       }
     }
@@ -222,7 +235,7 @@ pub fn[T] ListRows::in_node(
     fn(k, natural) {
       room_with(index, now, k, natural, fn(k, _) {
         match pre.get(k) {
-          Some(r) => r
+          Some((in_middle, over, grows, owns)) => (in_middle, over(), grows, owns)
           None => (false, 0.0, false, owned.contains(k))
         }
       })

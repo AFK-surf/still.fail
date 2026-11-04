@@ -52,9 +52,11 @@ fn activity_node(row : @view.View, src : Source, here : () -> MessageHere, a : (
     .gap(Is(8.0))
     .radius(By(fn() { @ui.tree_theme().corner(Md) }))
     .lines_up(Is(Some(Middle)))
-    .margin(By(fn() { (if inline() { 0.0 } else { -@sf.message_avatar_reach }, 0.0, 0.0, 0.0) }))
     .says(By(fn() { Some(@view.said(Button, label=a().who + "：" + said().1)) }))
     |> ignore
+    chat_inline_layout(line, inline, fn(on) {
+      line.margin(Is((if on { 0.0 } else { -@sf.message_avatar_reach }, 0.0, 0.0, 0.0))) |> ignore
+    })
     @sf.presses_node(line, fn() {
       let h = here()
       open_detail(src, here_ref(h), key)

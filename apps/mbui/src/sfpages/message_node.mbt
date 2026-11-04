@@ -178,10 +178,12 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
     .min_height(Is(Some(head_line_h)))
     .gap(Is(6.0))
     .lines_up(Is(Some(Middle)))
-    .padding(By(fn() { (if inline() { 25.0 } else { 0.0 }, 0.0, 0.0, 0.0) }))
     .alpha(By(fn() { out().unwrap_or(1.0) }))
     .offset(By(fn() { (-@sfbase.emit_head_slide * (1.0 - out().unwrap_or(1.0)), 0.0) }))
     |> ignore
+    chat_inline_layout(head, inline, fn(on) {
+      head.padding(Is((if on { 25.0 } else { 0.0 }, 0.0, 0.0, 0.0))) |> ignore
+    })
     // (one of the chat's agents' to its history beside the chat; another chat's agent's to that chat: message_name's)
     let now = @signals.untracked(m)
     let press = if now.by.agent != "" {
@@ -245,7 +247,6 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
   row.box(fn(a) {
     a
     .over(Is(true))
-    .offset(By(fn() { (if inline() { 0.0 } else { -29.0 }, 3.0) }))
     .alpha(By(fn() {
       match emits_here(here(), m()) {
         Some((em, _)) if emit_emitting(em, m().seq) || emit_awaited(em, m().seq) => 0.0
@@ -253,6 +254,7 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
       }
     }))
     |> ignore
+    chat_inline_layout(a, inline, fn(on) { a.offset(Is((if on { 0.0 } else { -29.0 }, 3.0))) |> ignore })
     // (said as the old view's box round it was, 3 over it: emit_flight puts the face 3 down it)
     emit_place_node(a, fn() { emits_here(here(), m()).map(fn(e) { "emit-landing/" + e.1 + "/" + seq_s(m().seq) }) }, dy=-3.0)
     a.pick(fn() { m().author_kind }, fn(slot, kind) {

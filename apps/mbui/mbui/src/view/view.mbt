@@ -1677,7 +1677,12 @@ fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
     // A layout callback is building its own children before measuring them. Nothing outside that layout is dirty.
     let mut i = at
     while i >= 0 && i != self.layout_owner {
-      self.nodes[i].flex.dirty = true
+      let flex = self.nodes[i].flex
+      flex.dirty = true
+      // The child may already have been probed in this compute. Its previous measurements no longer describe
+      // the style the owning layout has just assigned, even though it was touched in the current generation.
+      flex.cache_n = 0
+      flex.p_ok = false
       i = self.nodes[i].parent
     }
     return
