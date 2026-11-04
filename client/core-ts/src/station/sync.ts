@@ -1402,7 +1402,10 @@ export class StationsSync {
         const pending = u64(get(data, "pending"));
         const held = key === null ? undefined : this.#core.data.of(address)?.summary(address, key);
         if (key === null || pending === null || !isObject(held) || get(held, "pending") === pending) return;
-        const now = { ...held, pending };
+        // Fewer: taken by its agent, into the turn it runs (begun, or steered), which the summary told after says. Its
+        // last turn held may be one that ended asking a person: not standing asking again until then.
+        const taken = pending < (u64(get(held, "pending")) ?? 0);
+        const now = taken ? { ...held, pending, process: "running" } : { ...held, pending };
         this.#rowsAfterSession(address, key, held, now);
         this.#core.data.putSummary(address, now);
         return;
