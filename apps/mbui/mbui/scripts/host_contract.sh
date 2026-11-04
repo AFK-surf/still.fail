@@ -74,6 +74,7 @@ set -e
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
+export MBUI_OGV_DIR=${MBUI_OGV_DIR:-$PWD/src/host/ogv}
 H=${1:?host}
 CMD=${2:-record}
 O=out/host/$H
@@ -679,15 +680,21 @@ INSTALL
     fi
     echo "play contract ($H): $have"
     if [ "$H" = mac ]; then
-      # The same contract with VP9 in WebM: WebKit, not AVPlayer, reads it through the app on the Mac.
-      vars="MBUI_PLAYCHECK_WEBM=1 MBUI_PLAYCHECK=$(base64 < test/host/playcheck.webm | tr -d '\n\r')"
-      run "$vars" $O/play-webm.log || true
-      have=$(grep -a "PLAYCHECK" $O/play-webm.log | sed 's/.*PLAYCHECK/PLAYCHECK/' | tr -d '\r' | paste -sd'|' -)
-      want="PLAYCHECK ready 1000 64x48|PLAYCHECK ended|PLAYCHECK grabbed"
-      if [ "$have" != "$want" ]; then
-        echo "WebM play contract ($H): the host said \"$have\", not \"$want\""; tail -30 $O/play-webm.log; exit 1
-      fi
-      echo "WebM play contract ($H): $have"
+      # Native WebM and the software decoder both read through the app, play to the end and give it a frame.
+      play_mac_format() {
+        local name=$1 file=$2 kind=$3 log=$O/play-$1.log
+        local vars="$kind=1 MBUI_PLAYCHECK=$(base64 < "$file" | tr -d '\n\r')" have
+        local want="PLAYCHECK ready 1000 64x48|PLAYCHECK ended|PLAYCHECK grabbed"
+        run "$vars" "$log" || true
+        have=$(grep -a "PLAYCHECK" "$log" | sed 's/.*PLAYCHECK/PLAYCHECK/' | tr -d '\r' | paste -sd'|' -)
+        if [ "$have" != "$want" ]; then
+          echo "$name play contract ($H): the host said \"$have\", not \"$want\""; tail -30 "$log"; return 1
+        fi
+        echo "$name play contract ($H): $have"
+      }
+      play_mac_format WebM test/host/playcheck.webm MBUI_PLAYCHECK_WEBM
+      play_mac_format AV1 test/host/playcheck-av1-short.webm MBUI_PLAYCHECK_WEBM
+      play_mac_format Ogg test/host/playcheck-theora-short.ogv MBUI_PLAYCHECK_OGG
     fi
     if [ "$H" = android ]; then
       # (sent behind as it plays, at a tenth of its speed, and brought back: paused as the app went, not played on

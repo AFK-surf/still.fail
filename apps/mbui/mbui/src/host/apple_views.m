@@ -194,8 +194,11 @@ id mb_views_root(CGRect frame) {
 @property(nonatomic, strong) AVPlayerItem *item;
 @property(nonatomic, strong) AVPlayerLayer *playerLayer;
 @property(nonatomic, strong) AVPlayerItemVideoOutput *output;
-// WebM on the Mac is decoded by WebKit, whose support is wider than AVPlayer's.
+// WebM and some MP4 video on the Mac are decoded by WebKit, whose support is wider than AVPlayer's.
 @property(nonatomic, strong) MBWebVideo *webVideo;
+// MP4 can contain a video track AVPlayer silently ignores. Choose its decoder before telling the app it is ready.
+@property(nonatomic) BOOL decidingCodec, avDetached, readFailed;
+@property(nonatomic, strong) NSMutableArray<NSArray<NSNumber *> *> *codecControls;
 // a stream's (kind 4): the stream whose frames its layer shows
 @property(nonatomic) int32_t streamSid;
 @property(nonatomic, strong) MBLoader *loader;
@@ -305,7 +308,7 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
   __weak MBNative *wv = self.view;
   dispatch_async(dispatch_get_main_queue(), ^{
     MBNative *v = wv;
-    if (!v || v.closed) return;
+    if (!v || v.closed || v.avDetached) return;
     l.next = off;
     l.end = toEnd ? -1 : off + len;
     l.hasData = data;
@@ -650,7 +653,7 @@ static int32_t player_failure(NSError *error) {
   MBLoad *l = r.load;
   if (total == -2) {
     vlog(@"view %d: read at %lld failed", self.vid, r.off);
-    self.failed = YES;
+    self.failed = YES; self.readFailed = YES;
     [self tell:-1];
     for (MBLoad *x in [self.loads copy]) [self end:x error:YES];
     [self.pending removeAllObjects];
@@ -720,8 +723,13 @@ static int32_t player_failure(NSError *error) {
     return;
   }
   dispatch_async(dispatch_get_main_queue(), ^{
-    if (self.closed) return;
+    if (self.closed || self.webVideo || !self.observing) return;
     [self logState];
+    if (self.decidingCodec) {
+      [self stood];
+      mb_host_request_frame();
+      return;
+    }
     // a seek asked before it was ready (where it was left, opened again): taken up now
     if (self.chasing && !self.seeking && self.item.status == AVPlayerItemStatusReadyToPlay) {
       self.chasing = NO;
@@ -968,6 +976,91 @@ static int32_t player_failure(NSError *error) {
 
 #import "apple_webm.h"
 
+#if TARGET_OS_OSX
+void mb_host_view_control(int32_t vid, int32_t op, double value);
+
+// Switch an MP4's VP9 track to WebKit without changing the view's id, placement, pending controls, or read contract.
+// Old read ids are cancelled first and never reused; late answers cannot be mistaken for the WebKit player's reads.
+static void mp4_use_webkit(MBNative *v) {
+  v.avDetached = YES;
+  [v stopObserving];
+  [v.player pause];
+  for (MBLoad *load in [v.loads copy]) { [v end:load error:YES]; [v drop:load]; }
+  if (!v.lettingGo) v.lettingGo = [NSMutableArray new];
+  [v.lettingGo addObjectsFromArray:v.taken.allKeys];
+  [v.taken removeAllObjects];
+  [v.pending removeAllObjects];
+  [v.player replaceCurrentItemWithPlayerItem:nil];
+  v.playerLayer.player = nil;
+  v.loader.view = nil;
+  PView *old = v.content;
+  CGRect frame = old.frame;
+  CALayer *mask = old.layer.mask;
+  old.layer.mask = nil;
+  [old removeFromSuperview];
+  v.failed = NO; v.playerFailure = 0;
+  set_up_web_video(v, @"video/mp4");
+  v.webVideo.nextRid = v.nextRid;
+  v.webVideo.lettingGo = v.lettingGo;
+  v.content.frame = frame;
+  if (mask) { v.content.wantsLayer = YES; v.content.layer.mask = mask; }
+  [v.box addSubview:v.content];
+  views_moved = 1;
+}
+
+// `track.playable` distinguishes a track the system would silently skip from one it will actually display. VP9 in
+// MP4 is handed to WebKit where needed; another unplayable video is reported, rather than played as sound/black.
+static void mp4_decided(MBNative *v, BOOL vp9, BOOL unplayable) {
+  if (!v || v.closed || !v.decidingCodec) return;
+  NSArray<NSArray<NSNumber *> *> *controls = [v.codecControls copy];
+  v.codecControls = nil;
+  v.decidingCodec = NO;
+  if (!v.readFailed && unplayable && vp9) {
+    mp4_use_webkit(v);
+  } else if (!v.readFailed && unplayable) {
+    v.failed = YES; v.playerFailure = -2;
+    [v.player pause];
+    for (MBLoad *load in [v.loads copy]) { [v end:load error:YES]; [v drop:load]; }
+  }
+  if (v.failed) {
+    if (v.stillState == 1) {
+      v.stillState = -1;
+      mb_host_outside(MB_OUTSIDE_GRAB, v.vid, -1);
+    }
+    [v tell:-1];
+  } else {
+    for (NSArray<NSNumber *> *control in controls) mb_host_view_control(v.vid, control[0].intValue, control[1].doubleValue);
+    if (!v.webVideo) {
+      CGSize size = v.item.presentationSize;
+      if (v.playerLayer.readyForDisplay || (v.item.status == AVPlayerItemStatusReadyToPlay && size.width == 0 && size.height == 0))
+        [v tell:1];
+    }
+  }
+  [v stood];
+  mb_host_request_frame();
+}
+
+static void mp4_choose_decoder(MBNative *v, AVAsset *asset) {
+  __weak MBNative *weak = v;
+  [asset loadTracksWithMediaType:AVMediaTypeVideo completionHandler:^(NSArray<AVAssetTrack *> *tracks, NSError *error) {
+    AVAssetTrack *track = tracks.firstObject;
+    if (!track) {
+      dispatch_async(dispatch_get_main_queue(), ^{ mp4_decided(weak, NO, NO); });
+      return;
+    }
+    [track loadValuesAsynchronouslyForKeys:@[@"formatDescriptions", @"playable"] completionHandler:^{
+      BOOL known = [track statusOfValueForKey:@"formatDescriptions" error:nil] == AVKeyValueStatusLoaded &&
+                   [track statusOfValueForKey:@"playable" error:nil] == AVKeyValueStatusLoaded;
+      BOOL vp9 = NO;
+      if (known) for (id desc in track.formatDescriptions)
+        if (CMFormatDescriptionGetMediaSubType((__bridge CMFormatDescriptionRef)desc) == 0x76703039) vp9 = YES; // 'vp09'
+      BOOL unplayable = known && !track.playable;
+      dispatch_async(dispatch_get_main_queue(), ^{ mp4_decided(weak, vp9, unplayable); });
+    }];
+  }];
+}
+#endif
+
 // ---------------------------------------------------------------------------
 // The host API MoonBit calls
 
@@ -1009,9 +1102,13 @@ static MBNative *open_video(int32_t vid, NSString *mime) {
 #if TARGET_OS_OSX
   NSString *type = [[[mime componentsSeparatedByString:@";"].firstObject
       stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet] lowercaseString];
-  if ([type isEqualToString:@"video/webm"]) return open_webm_video(vid);
+  if ([type isEqualToString:@"video/webm"] || [type isEqualToString:@"video/ogg"]) return open_web_video(vid, type);
 #endif
   MBNative *v = [MBNative new];
+#if TARGET_OS_OSX
+  v.decidingCodec = [type isEqualToString:@"video/mp4"];
+  if (v.decidingCodec) v.codecControls = [NSMutableArray new];
+#endif
   NSString *ext;
   v.uti = uti_for(mime, &ext);
   v.total = -1;
@@ -1057,6 +1154,9 @@ static MBNative *open_video(int32_t vid, NSString *mime) {
                                                 [wt stood];
                                               }];
   v.observing = YES;
+#if TARGET_OS_OSX
+  if (v.decidingCodec) mp4_choose_decoder(v, asset);
+#endif
   vlog(@"view %d: open video (%@, %@)", vid, mime, v.uti);
   return v;
 }
@@ -1529,6 +1629,11 @@ void mb_host_view_control(int32_t vid, int32_t op, double value) {
     return;
   }
   if (!v || v.kind != 1) return;
+  if (v.decidingCodec) {
+    [v.codecControls addObject:@[@(op), @(value)]];
+    if (op == 21 || op == 22) { v.still = nil; v.stillState = 1; }
+    return;
+  }
   if (v.webVideo) {
     if (op == 21) prime_webm_grab(v);
     [v.webVideo control:op value:value];
@@ -1605,6 +1710,10 @@ int32_t mb_host_view_info(int32_t vid, double *out) {
     return v.failed ? -1 : v.loaded ? 1 : 0;
   }
   if (v.webVideo) return [v.webVideo info:out];
+  if (v.decidingCodec) {
+    out[5] = v.answered;
+    return v.readFailed ? -1 : 0;
+  }
   [v logState];
   AVPlayerItem *it = v.item;
   out[0] = [v durationMs];
@@ -1659,9 +1768,12 @@ int32_t mb_host_view_read_next(int32_t vid, double *out) {
 }
 
 #if defined(MBUI_HOST_SELFTEST)
-// The host self-test declares the decoder deadline instead of waiting for wall time.
-void mb_host_webm_test_deadline(int32_t vid) {
-  [views[@(vid)].webVideo decodeDeadline];
+double mb_host_video_test_rate(int32_t vid) {
+  MBNative *v = views[@(vid)];
+  return v.webVideo ? [v.webVideo.state[@"rate"] doubleValue] : v.player.rate;
+}
+int32_t mb_host_video_test_software(int32_t vid) {
+  return views[@(vid)].webVideo.usedSoftware ? 1 : 0;
 }
 #endif
 

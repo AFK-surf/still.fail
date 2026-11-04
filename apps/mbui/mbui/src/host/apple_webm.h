@@ -1,4 +1,4 @@
-// WebM on macOS: WebKit supports VP8/VP9 in WebM where AVPlayer does not. The web view is only the picture and decoder;
+// WebM and VP9 in MP4 on macOS: WebKit supports formats where AVPlayer does not. The web view is only the picture and decoder;
 // the app still owns the player controls and supplies all file bytes through the same bounded read API as AVPlayer.
 // Included by apple_views.m after MBNative, so it shares that host's lifetime and snapshot machinery.
 
@@ -11,10 +11,18 @@
 @implementation MBWebLoad
 @end
 
+@interface MBWebCache : NSObject
+@property(nonatomic) long long off;
+@property(nonatomic, strong) NSMutableData *bytes;
+@end
+@implementation MBWebCache
+@end
+
 @interface MBWebRead : NSObject
 @property(nonatomic) int32_t rid;
 @property(nonatomic) long long off, len, got;
 @property(nonatomic, strong) MBWebLoad *load;
+@property(nonatomic, strong) MBWebCache *cache;
 @end
 @implementation MBWebRead
 @end
@@ -35,19 +43,24 @@
 @property(nonatomic, strong) NSMutableDictionary<NSNumber *, MBWebRead *> *taken;
 @property(nonatomic, strong) NSMutableArray<NSNumber *> *lettingGo;
 @property(nonatomic, strong) NSMutableArray<NSString *> *commands;
+@property(nonatomic, strong) NSMutableArray<MBWebCache *> *cache;
 @property(nonatomic, strong) NSDictionary *state;
+@property(nonatomic, copy) NSString *mime;
+@property(nonatomic, copy) NSString *html, *softwareDir;
 @property(nonatomic) long long total;
 @property(nonatomic) int32_t nextRid;
-@property(nonatomic) BOOL pageReady, closed, primed, ready, decodeTimer;
+@property(nonatomic) uint32_t firstBytes;
+@property(nonatomic) unsigned firstMask;
+@property(nonatomic) BOOL pageReady, closed, primed, ready, possibleWebM, usedSoftware, fallbackRequested;
 @property(nonatomic) BOOL grabbing, grabPNG;
 @property(nonatomic) double grabSide;
 - (void)control:(int32_t)op value:(double)value;
 - (int32_t)info:(double *)out;
 - (int32_t)readNext:(double *)out;
 - (void)readAnswer:(int32_t)rid data:(const uint8_t *)bytes length:(long long)n total:(double)total more:(BOOL)more;
+- (void)send:(NSString *)command;
 - (void)grab;
 - (void)finishGrab:(NSData *)data;
-- (void)decodeDeadline;
 - (void)refreshSnap;
 - (void)close;
 @end
@@ -55,45 +68,130 @@
 // This page contains no user content. The file never gets a network URL or any script from the file. WebKit takes a
 // native snapshot when the app asks for a frame; a canvas cannot read media served from a custom scheme.
 static NSString *const kWebVideoHTML =
-    @"<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'>"
-     "<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}"
-     "video{width:100%;height:100%;object-fit:fill;display:block}</style>"
-     "<video id='v' playsinline preload='auto' src='mbvideo://local/file.webm'></video>"
-     "<script>"
-     "const v=document.getElementById('v');let waiting=false,ticking=false,changes=0,grabRestore=null;"
-     "const post=o=>window.webkit.messageHandlers.mbvideo.postMessage(o);"
-     "function status(){let b=0;for(let i=0;i<v.buffered.length;i++){"
-     "if(v.buffered.start(i)<=v.currentTime+.001)b=Math.max(b,v.buffered.end(i));}"
-     "post({type:'state',duration:Number.isFinite(v.duration)?v.duration*1000:-1,"
-     "position:Number.isFinite(v.currentTime)?v.currentTime*1000:0,playing:!v.paused&&!v.ended,"
-     "width:v.videoWidth,height:v.videoHeight,shown:v.readyState>=2,ready:v.readyState>=2,"
-     "waiting:waiting,buffered:b*1000,ended:v.ended,error:v.error?v.error.code:0});}"
-     "function tick(){if(v.paused||v.ended){ticking=false;return}status();requestAnimationFrame(tick)}"
-     "function startTick(){if(!ticking){ticking=true;requestAnimationFrame(tick)}}"
-     "for(const e of ['loadedmetadata','loadeddata','durationchange','progress','timeupdate','pause','seeked','ended','ratechange','volumechange'])"
-     "v.addEventListener(e,status);"
-     "v.addEventListener('waiting',()=>{waiting=true;status()});"
-     "v.addEventListener('playing',()=>{waiting=false;status();startTick()});"
-     "v.addEventListener('canplay',()=>{waiting=false;status()});"
-     "v.addEventListener('error',status);"
-     "function grab(ms){"
-     "if(v.error){post({type:'grabFailed'});return}"
-     "if(v.readyState<2){"
-     "const clear=()=>{for(const e of ['loadeddata','canplay','seeked'])v.removeEventListener(e,loaded);v.removeEventListener('error',failed)};"
-     "const loaded=()=>{clear();grab(ms)};"
-     "const failed=()=>{clear();post({type:'grabFailed'})};"
-     "for(const e of ['loadeddata','canplay','seeked'])v.addEventListener(e,loaded,{once:true});"
-     "v.addEventListener('error',failed,{once:true});return;}"
-     "const ready=()=>post({type:'grabReady'});"
-     "if(ms>=0&&Math.abs(v.currentTime*1000-ms)>=1){"
-     "grabRestore={time:v.currentTime,changes};"
-     "v.addEventListener('seeked',ready,{once:true});v.currentTime=ms/1000;}"
-     "else if(v.seeking)v.addEventListener('seeked',ready,{once:true});else ready();}"
-     "function endGrab(){if(grabRestore&&grabRestore.changes===changes&&!v.error)v.currentTime=grabRestore.time;grabRestore=null;}"
-     "window.mbPlayer={play(){changes++;if(v.ended)v.currentTime=0;v.play().catch(()=>status())},"
-     "pause(){changes++;v.pause();status()},seek(ms){changes++;v.currentTime=Math.max(0,Math.min(Number.isFinite(v.duration)?v.duration:Infinity,ms/1000));status()},"
-     "rate(r){v.playbackRate=r;status()},volume(n){v.volume=n;status()},grab,endGrab};status();"
-     "</script>";
+    @"<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'>\n"
+     "<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}#v{width:100%;height:100%;object-fit:fill;display:block}</style>\n"
+     "<video id='v' playsinline preload='none' src='mbvideo://local/file.media'></video>\n"
+     "<script>\n"
+     "let v = document.getElementById('v');\n"
+     "let soft = false, switching = false, frameReady = false, drawn = false, softwareError = 0;\n"
+     "let waiting = false, ticking = false, changes = 0, grabRestore = null, pendingGrab = null;\n"
+     "let grabPosition = null, restoringGrab = false;\n"
+     "let wantPlay = false, wantRate = 1, wantVolume = 1, wantSeek = null;\n"
+     "const mediaURL = 'mbvideo://local/file.media';\n"
+     "const post = o => window.webkit.messageHandlers.mbvideo.postMessage(o);\n"
+     "function ready() { return !switching && v.readyState >= 2; }\n"
+     "function status() {\n"
+     "  let b = 0;\n"
+     "  try { for (let i = 0; i < v.buffered.length; i++) if (v.buffered.start(i) <= v.currentTime + .001) b = Math.max(b, v.buffered.end(i)); } catch (_) {}\n"
+     "  const error = softwareError || (!switching && v.error ? (v.error.code || 4) : 0);\n"
+     "  post({type:'state', duration:Number.isFinite(v.duration) ? v.duration * 1000 : -1,\n"
+     "    position:grabPosition !== null ? grabPosition * 1000 : Number.isFinite(v.currentTime) ? v.currentTime * 1000 : 0,\n"
+     "    playing:!switching && !v.paused && !v.ended, rate:v.playbackRate || wantRate,\n"
+     "    width:v.videoWidth || 0, height:v.videoHeight || 0, shown:ready(), ready:ready(),\n"
+     "    waiting:waiting || switching, buffered:b * 1000, ended:!!v.ended, error});\n"
+     "}\n"
+     "function tick() { if (switching || v.paused || v.ended) { ticking = false; return; } status(); requestAnimationFrame(tick); }\n"
+     "function startTick() { if (!ticking) { ticking = true; requestAnimationFrame(tick); } }\n"
+     "function playNow() {\n"
+     "  if (switching) return;\n"
+     "  try { const promise = v.play(); if (promise && promise.catch) promise.catch(() => status()); }\n"
+     "  catch (_) { softwareError = 4; status(); }\n"
+     "}\n"
+     "function wire(el) {\n"
+     "  for (const event of ['loadedmetadata','durationchange','progress','timeupdate','pause','seeked','ended','ratechange','volumechange']) {\n"
+     "    el.addEventListener(event, () => {\n"
+     "      if (el !== v) return;\n"
+     "      if (soft && (event === 'timeupdate' || event === 'seeked')) drawn = true;\n"
+     "      if (event === 'seeked') {\n"
+     "        wantSeek = null;\n"
+     "        if (restoringGrab) { restoringGrab = false; if (wantPlay) grabPosition = null; }\n"
+     "      }\n"
+     "      if (soft && event === 'loadedmetadata') {\n"
+     "        try {\n"
+     "          v.playbackRate = wantRate; v.volume = wantVolume;\n"
+     "          if (wantSeek !== null) v.currentTime = wantSeek;\n"
+     "          if (wantPlay) playNow();\n"
+     "        } catch (_) { softwareError = 4; }\n"
+     "      }\n"
+     "      status();\n"
+     "    });\n"
+     "  }\n"
+     "  el.addEventListener('loadeddata', () => {\n"
+     "    if (el !== v) return;\n"
+     "    frameReady = true; status();\n"
+     "    if (pendingGrab !== null) { const ms = pendingGrab; pendingGrab = null; grab(ms); }\n"
+     "  });\n"
+     "  el.addEventListener('waiting', () => { if (el === v) { waiting = true; status(); } });\n"
+     "  el.addEventListener('playing', () => { if (el === v) { waiting = false; status(); startTick(); } });\n"
+     "  el.addEventListener('canplay', () => { if (el === v) { waiting = false; status(); } });\n"
+     "  el.addEventListener('error', () => { if (el === v) status(); });\n"
+     "}\n"
+     "function fallback() {\n"
+     "  if (soft || switching) return;\n"
+     "  if (!window.mbCanSoft) { softwareError = 4; status(); return; }\n"
+     "  const old = v;\n"
+     "  if (Number.isFinite(old.currentTime) && wantSeek === null) wantSeek = old.currentTime;\n"
+     "  switching = true; frameReady = false; drawn = false; post({type:'soft'});\n"
+     "  old.pause(); status();\n"
+     "  const script = document.createElement('script');\n"
+     "  script.src = 'mbvideo://local/ogv/ogv.js';\n"
+     "  script.onerror = () => { switching = false; softwareError = 4; status(); };\n"
+     "  script.onload = () => {\n"
+     "    try {\n"
+     "      OGVLoader.base = 'mbvideo://local/ogv';\n"
+     "      const player = new OGVPlayer({worker:false, threading:false, simd:false});\n"
+     "      player.id = 'v'; player.style.width = '100%'; player.style.height = '100%';\n"
+     "      old.replaceWith(player); v = player; soft = true; switching = false; waiting = true;\n"
+     "      wire(player); player.src = mediaURL; player.load(); status();\n"
+     "    } catch (_) { switching = false; softwareError = 4; status(); }\n"
+     "  };\n"
+     "  document.head.appendChild(script);\n"
+     "}\n"
+     "window.addEventListener('error', () => { if (soft || switching) { switching = false; softwareError = 4; status(); } });\n"
+     "window.addEventListener('unhandledrejection', () => { if (soft || switching) { switching = false; softwareError = 4; status(); } });\n"
+     "function grab(ms) {\n"
+     "  if (switching) { pendingGrab = ms; return; }\n"
+     "  if (v.error) { if (!soft && window.mbCanSoft) pendingGrab = ms; else post({type:'grabFailed'}); return; }\n"
+     "  if (!ready()) {\n"
+     "    const target = v;\n"
+     "    const clear = () => { for (const e of ['loadedmetadata','loadeddata','canplay','seeked']) target.removeEventListener(e, loaded); target.removeEventListener('error', failed); };\n"
+     "    const loaded = () => { clear(); grab(ms); };\n"
+     "    const failed = () => { clear(); if (!soft && window.mbCanSoft) pendingGrab = ms; else post({type:'grabFailed'}); };\n"
+     "    for (const e of ['loadedmetadata','loadeddata','canplay','seeked']) target.addEventListener(e, loaded, {once:true});\n"
+     "    target.addEventListener('error', failed, {once:true}); return;\n"
+     "  }\n"
+     "  if (v.seeking) { v.addEventListener('seeked', () => grab(ms), {once:true}); return; }\n"
+     "  const target = ms >= 0 ? ms : v.currentTime * 1000;\n"
+     "  const readyGrab = () => { drawn = true; post({type:'grabReady'}); };\n"
+     "  if ((soft && !drawn) || Math.abs(v.currentTime * 1000 - target) >= 1) {\n"
+     "    if (Math.abs(v.currentTime * 1000 - target) >= 1) {\n"
+     "      if (soft && grabPosition === null) grabPosition = v.currentTime;\n"
+     "      grabRestore = {time:soft ? grabPosition : v.currentTime, changes};\n"
+     "    }\n"
+     "    v.addEventListener('seeked', readyGrab, {once:true});\n"
+     "    try { v.currentTime = target / 1000; } catch (_) { post({type:'grabFailed'}); }\n"
+     "  } else if (v.seeking) v.addEventListener('seeked', readyGrab, {once:true}); else readyGrab();\n"
+     "}\n"
+     "function endGrab() {\n"
+     "  if (grabRestore) {\n"
+     "    if (grabRestore.changes === changes && !v.error) {\n"
+     "      restoringGrab = soft; v.currentTime = grabRestore.time;\n"
+     "    } else { grabPosition = null; restoringGrab = false; }\n"
+     "  }\n"
+     "  grabRestore = null;\n"
+     "}\n"
+     "window.mbPlayer = {\n"
+     "  play() { changes++; grabPosition = null; restoringGrab = false; wantPlay = true; if (v.ended) v.currentTime = 0; playNow(); },\n"
+     "  pause() { changes++; grabPosition = null; restoringGrab = false; wantPlay = false; if (!switching) v.pause(); status(); },\n"
+     "  seek(ms) { changes++; grabPosition = null; restoringGrab = false; wantSeek = Math.max(0, Math.min(Number.isFinite(v.duration) ? v.duration : Infinity, ms / 1000)); if (!switching) v.currentTime = wantSeek; status(); },\n"
+     "  rate(r) { wantRate = r; if (!switching) v.playbackRate = r; status(); },\n"
+     "  volume(n) { wantVolume = n; if (!switching) v.volume = n; status(); },\n"
+     "  grab, endGrab, fallback,\n"
+     "  fallbackIfNeeded() { if (!ready() || v.error) fallback(); else { post({type:'nativeReady'}); status(); } }\n"
+     "};\n"
+     "wire(v);\n"
+     "if (window.mbStartSoft) fallback(); else { v.preload = 'auto'; status(); }\n"
+     "</script>\n";
 
 // One byte range, with an exclusive end. Only single ranges are used by a media element; malformed or unsatisfiable
 // requests get 416 rather than accidentally returning another user's bytes or reading past the file.
@@ -138,6 +236,14 @@ static BOOL webm_range(NSString *header, long long size, long long *start, long 
   if (self.closed || l.gone) return;
   MBWebRead *r = [MBWebRead new];
   r.rid = ++self.nextRid; r.off = off; r.len = len; r.load = l;
+  // WebKit's MP4 demuxer often asks for a few bytes at a time. Keep a few bounded parts so those requests do not
+  // each make another round trip to a remote station.
+  if (!l.probe && [self.mime isEqualToString:@"video/mp4"] && len <= (128 << 10)) {
+    MBWebCache *cached = [MBWebCache new];
+    cached.off = off; cached.bytes = [NSMutableData new]; r.cache = cached;
+    [self.cache addObject:cached];
+    if (self.cache.count > 4) [self.cache removeObjectAtIndex:0];
+  }
   [self.pending addObject:r];
   mb_host_outside(MB_OUTSIDE_VIEW, self.owner.vid, 0);
   [self notify];
@@ -182,37 +288,44 @@ static BOOL webm_range(NSString *header, long long size, long long *start, long 
 - (void)fail { [self failWithCode:-1]; }
 
 // Some WebKit versions fully buffer an unsupported VP9 profile but never report a decoder error or a first frame.
-// Only start this deadline after a finite video has been buffered to its end; time spent reading the file never counts.
+// Once the finite video has arrived, ask the page to switch if WebKit is still unable to show a frame. The page checks
+// again when it receives the request, so a native decoder that became ready meanwhile keeps playing normally.
 - (BOOL)fullyBuffered {
   double duration = [self.state[@"duration"] doubleValue], buffered = [self.state[@"buffered"] doubleValue];
   return duration > 0 && buffered > 0 && buffered + fmin(50, duration * 0.01) >= duration;
 }
 
-- (void)decodeDeadline {
-  self.decodeTimer = NO;
-  if (!self.closed && !self.ready && !self.owner.failed && [self fullyBuffered]) [self failWithCode:-4];
-}
-
 - (void)watchDecode {
-  if (self.closed || self.ready || self.owner.failed || self.decodeTimer || ![self fullyBuffered]) return;
-  self.decodeTimer = YES;
-  __weak MBWebVideo *weak = self;
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 20 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{ // det-ok(host-delay): WebKit says nothing of a VP9 profile it cannot decode; a deadline once fully buffered is the only word
-    [weak decodeDeadline];
-  });
+  if (self.closed || self.ready || self.owner.failed || self.usedSoftware || self.fallbackRequested ||
+      !self.softwareDir || !self.possibleWebM || ![self fullyBuffered]) return;
+  self.fallbackRequested = YES;
+  [self send:@"mbPlayer.fallbackIfNeeded()"];
 }
 
 - (void)advance:(MBWebLoad *)l {
   if (l.gone || self.closed) return;
+  for (MBWebCache *cached in [self.cache reverseObjectEnumerator]) {
+    long long end = cached.off + (long long)cached.bytes.length;
+    if (l.next < cached.off || l.next >= end) continue;
+    long long n = MIN(l.end - l.next, end - l.next);
+    NSData *data = [cached.bytes subdataWithRange:NSMakeRange((NSUInteger)(l.next - cached.off), (NSUInteger)n)];
+    l.next += n;
+    [l.task didReceiveData:data];
+    if (l.gone) return;
+    break;
+  }
   if (l.next >= l.end) { [self end:l error:NO]; return; }
-  [self ask:l off:l.next len:MIN(l.end - l.next, kMaxRead)];
+  long long len = MIN(l.end - l.next, kMaxRead);
+  if ([self.mime isEqualToString:@"video/mp4"] && len < (128 << 10))
+    len = MIN((long long)(128 << 10), self.total - l.next);
+  [self ask:l off:l.next len:len];
 }
 
 - (void)head:(MBWebLoad *)l {
   if (l.gone || self.closed) return;
   long long start, end;
   BOOL valid = webm_range(l.range, self.total, &start, &end);
-  NSMutableDictionary *h = [@{@"Content-Type": @"video/webm", @"Accept-Ranges": @"bytes"} mutableCopy];
+  NSMutableDictionary *h = [@{@"Content-Type": self.mime, @"Accept-Ranges": @"bytes", @"Access-Control-Allow-Origin": @"*"} mutableCopy];
   int status = valid ? (l.range.length ? 206 : 200) : 416;
   if (valid) {
     h[@"Content-Length"] = [NSString stringWithFormat:@"%lld", end - start];
@@ -230,7 +343,39 @@ static BOOL webm_range(NSString *header, long long size, long long *start, long 
 }
 
 - (void)webView:(WKWebView *)web startURLSchemeTask:(id<WKURLSchemeTask>)task {
-  if (self.closed || ![task.request.URL.path isEqualToString:@"/file.webm"]) {
+  NSString *path = task.request.URL.path;
+  if (!self.closed && [path isEqualToString:@"/"]) {
+    NSData *data = [self.html dataUsingEncoding:NSUTF8StringEncoding];
+    NSDictionary *headers = @{@"Content-Type": @"text/html; charset=utf-8", @"Content-Length": [NSString stringWithFormat:@"%lu", (unsigned long)data.length], @"Access-Control-Allow-Origin": @"*"};
+    [task didReceiveResponse:[[NSHTTPURLResponse alloc] initWithURL:task.request.URL statusCode:200 HTTPVersion:@"HTTP/1.1" headerFields:headers]];
+    [task didReceiveData:data]; [task didFinish];
+    return;
+  }
+  if (!self.closed && [path hasPrefix:@"/ogv/"] && self.softwareDir) {
+    NSString *name = path.lastPathComponent;
+    // Only the bundled decoder files may be read through this scheme; a video cannot name another app file.
+    static NSSet<NSString *> *allowed;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+      NSMutableSet *files = [NSMutableSet setWithObject:@"ogv.js"];
+      for (NSString *base in @[@"ogv-demuxer-ogg", @"ogv-demuxer-webm", @"ogv-decoder-audio-opus",
+                               @"ogv-decoder-audio-vorbis", @"ogv-decoder-video-theora", @"ogv-decoder-video-vp8",
+                               @"ogv-decoder-video-vp9", @"ogv-decoder-video-av1"]) {
+        [files addObject:[base stringByAppendingString:@"-wasm.js"]];
+        [files addObject:[base stringByAppendingString:@"-wasm.wasm"]];
+      }
+      allowed = [files copy];
+    });
+    NSData *data = [allowed containsObject:name] ? [NSData dataWithContentsOfFile:[self.softwareDir stringByAppendingPathComponent:name]] : nil;
+    if (data) {
+      NSString *type = [name hasSuffix:@".wasm"] ? @"application/wasm" : @"text/javascript";
+      NSDictionary *headers = @{@"Content-Type": type, @"Content-Length": [NSString stringWithFormat:@"%lu", (unsigned long)data.length], @"Access-Control-Allow-Origin": @"*"};
+      [task didReceiveResponse:[[NSHTTPURLResponse alloc] initWithURL:task.request.URL statusCode:200 HTTPVersion:@"HTTP/1.1" headerFields:headers]];
+      [task didReceiveData:data]; [task didFinish];
+      return;
+    }
+  }
+  if (self.closed || ![task.request.URL.path isEqualToString:@"/file.media"]) {
     [task didFailWithError:[NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorFileDoesNotExist userInfo:nil]];
     return;
   }
@@ -271,12 +416,23 @@ static BOOL webm_range(NSString *header, long long size, long long *start, long 
   if (total == -2 || n < 0 || n > r.len - r.got ||
       (total >= 0 && self.total >= 0 && (long long)total != self.total)) { [self fail]; return; }
   if (total >= 0) self.total = (long long)total;
+  long long at = r.off + r.got;
   r.got += n;
   self.owner.answered += n;
   if (l.gone) return;
+  for (long long i = 0; i < n && at + i < 4; i++) {
+    unsigned shift = (unsigned)(3 - at - i) * 8;
+    self.firstBytes = (self.firstBytes & ~(0xffU << shift)) | ((uint32_t)bytes[i] << shift);
+    self.firstMask |= 1U << (unsigned)(at + i);
+  }
+  if (self.firstMask == 15 && self.firstBytes == 0x1a45dfa3) self.possibleWebM = YES;
+  if (r.cache && n) [r.cache.bytes appendBytes:bytes length:(NSUInteger)n];
   if (!l.probe && n) {
-    [l.task didReceiveData:[NSData dataWithBytes:bytes length:(NSUInteger)n]];
-    l.next += n;
+    long long start = MAX(l.next, at), end = MIN(l.end, at + n);
+    if (end > start) {
+      l.next = end;
+      [l.task didReceiveData:[NSData dataWithBytes:bytes + (start - at) length:(NSUInteger)(end - start)]];
+    }
   }
   if (!more) {
     if (l.probe) {
@@ -290,6 +446,7 @@ static BOOL webm_range(NSString *header, long long size, long long *start, long 
       [self advance:l];
     }
   }
+  [self watchDecode];
   [self notify];
 }
 
@@ -318,13 +475,26 @@ static BOOL webm_range(NSString *header, long long size, long long *start, long 
     [self grab];
   } else if ([s[@"type"] isEqual:@"grabFailed"]) {
     [self finishGrab:nil];
+  } else if ([s[@"type"] isEqual:@"soft"]) {
+    self.usedSoftware = YES; self.ready = NO; self.fallbackRequested = NO;
+    [self notify];
+  } else if ([s[@"type"] isEqual:@"nativeReady"]) {
+    self.fallbackRequested = NO;
+    [self notify];
   } else if ([s[@"type"] isEqual:@"state"]) {
     self.state = s;
     if (!v.placed && [s[@"width"] doubleValue] > 0 && [s[@"height"] doubleValue] > 0)
       v.web.frame = CGRectMake(0, 0, [s[@"width"] doubleValue], [s[@"height"] doubleValue]);
     int error = [s[@"error"] intValue];
     if (error && !v.failed) {
-      [self failWithCode:error == 4 ? -4 : error == 3 ? -3 : -1];
+      if (!self.usedSoftware && self.softwareDir && self.possibleWebM && [self.mime isEqualToString:@"video/webm"]) {
+        if (!self.fallbackRequested) {
+          self.fallbackRequested = YES;
+          [self send:@"mbPlayer.fallback()"];
+        }
+      } else {
+        [self failWithCode:error == 4 ? -4 : error == 3 ? -3 : -1];
+      }
     } else if ([s[@"ready"] boolValue] && !v.failed) {
       self.ready = YES;
       [v tell:1];
@@ -451,13 +621,22 @@ static BOOL webm_range(NSString *header, long long size, long long *start, long 
 
 @end
 
-static MBNative *open_webm_video(int32_t vid) {
-  MBNative *v = [MBNative new];
-  v.vid = vid; v.kind = 1;
+static void set_up_web_video(MBNative *v, NSString *mime) {
   MBWebVideo *video = [MBWebVideo new];
-  video.owner = v; video.total = -1;
+  video.owner = v; video.total = v.total; video.mime = mime;
+  NSString *bundled = [NSBundle.mainBundle.resourcePath stringByAppendingPathComponent:@"ogv"];
+  NSString *fromEnv = NSProcessInfo.processInfo.environment[@"MBUI_OGV_DIR"];
+  NSString *dir = fromEnv.length ? fromEnv : bundled;
+  if (dir.length && [[NSFileManager defaultManager] fileExistsAtPath:[dir stringByAppendingPathComponent:@"ogv.js"]]) video.softwareDir = dir;
+  BOOL softStart = [mime isEqualToString:@"video/ogg"];
+  BOOL softPossible = video.softwareDir && (softStart || [mime isEqualToString:@"video/webm"]);
+  video.usedSoftware = softStart;
+  NSString *prefix = [NSString stringWithFormat:@"<script>window.mbStartSoft=%@;window.mbCanSoft=%@</script>",
+                                                softStart ? @"true" : @"false", softPossible ? @"true" : @"false"];
+  video.html = [kWebVideoHTML stringByReplacingOccurrencesOfString:@"<script>\n" withString:[prefix stringByAppendingString:@"<script>\n"]];
   video.loads = [NSMutableArray new]; video.pending = [NSMutableArray new];
   video.taken = [NSMutableDictionary new]; video.lettingGo = [NSMutableArray new]; video.commands = [NSMutableArray new];
+  video.cache = [NSMutableArray new];
   v.webVideo = video;
   WKWebViewConfiguration *c = [WKWebViewConfiguration new];
   c.websiteDataStore = [WKWebsiteDataStore nonPersistentDataStore];
@@ -479,7 +658,13 @@ static MBNative *open_webm_video(int32_t vid) {
   web.userInteractionEnabled = NO;
 #endif
   v.web = web; v.content = web;
-  [web loadHTMLString:kWebVideoHTML baseURL:[NSURL URLWithString:@"mbvideo://local/"]];
-  vlog(@"view %d: open WebM with WebKit", vid);
+  [web loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"mbvideo://local/"]]];
+  vlog(@"view %d: open %@ with WebKit", v.vid, mime);
+}
+
+static MBNative *open_web_video(int32_t vid, NSString *mime) {
+  MBNative *v = [MBNative new];
+  v.vid = vid; v.kind = 1; v.total = -1;
+  set_up_web_video(v, mime);
   return v;
 }

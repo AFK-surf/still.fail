@@ -847,6 +847,8 @@ fn player_format(mime : String) -> String? {
     "video/webm" | "audio/webm" => Some("WebM")
     "video/mp4" | "audio/mp4" => Some("MP4")
     "video/quicktime" => Some("MOV")
+    "video/3gpp" => Some("3GP")
+    "video/3gpp2" => Some("3G2")
     "video/x-matroska" => Some("MKV")
     "video/x-msvideo" => Some("AVI")
     "video/ogg" | "audio/ogg" => Some("Ogg")

@@ -229,14 +229,9 @@ fn open_named(src : Source, station : String, agent : String, path : String) -> 
 ///|
 /// What a file is by its name (FilePreview.tsx kindOf, as the chat tells them apart): image, video, or anything else.
 pub fn file_kind(name : String) -> String {
-  let lower = @sf.lower(name)
-  let ext = match lower.rev_find(".") {
-    Some(i) if i > 0 => lower.view(start_offset=i + 1).to_string()
-    _ => ""
-  }
-  match ext {
-    "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "avif" | "bmp" | "ico" => "image"
-    "mp4" | "m4v" | "webm" | "mov" | "ogv" => "video"
+  match @sfbase.preview_kind(name).0 {
+    Some(@sfbase.KImage) => "image"
+    Some(@sfbase.KVideo) => "video"
     _ => ""
   }
 }

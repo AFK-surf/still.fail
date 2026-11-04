@@ -36,6 +36,23 @@ test "kinds by name, as the Android app's kindOf" {
 }
 
 ///|
+test "a video's name has the same type when sent, in the chat, and when opened" {
+  let videos = [
+    ("clip.mp4", "video/mp4"), ("clip.M4V", "video/mp4"), ("clip.mov", "video/quicktime"),
+    ("clip.webm", "video/webm"), ("clip.ogv", "video/ogg"), ("clip.3GP", "video/3gpp"),
+    ("clip.3g2", "video/3gpp2"),
+  ]
+  for (name, mime) in videos {
+    assert_true(preview_kind(name).0 == Some(KVideo))
+    assert_eq(preview_kind(name).1, mime)
+    assert_eq(@sfbase.file_type(name), mime)
+    assert_eq(@sfpages.file_kind(name), "video")
+  }
+  assert_true(preview_kind("song.ogg").0 == Some(KAudio))
+  assert_eq(@sfpages.file_kind("song.ogg"), "")
+}
+
+///|
 test "an image opens fitted, its bar over it; a double tap zooms in, another back" {
   let t = preview_tester("image")
   assert_true(t.find("界面草图.png") is Some(_))

@@ -4,6 +4,8 @@
 ///|
 test "a media type names a known format but does not guess an unknown one" {
   assert_eq(player_format(" VIDEO/WEBM; codecs=vp9 "), Some("WebM"))
+  assert_eq(player_format("video/3gpp"), Some("3GP"))
+  assert_eq(player_format("video/3gpp2"), Some("3G2"))
   assert_true(player_format("application/octet-stream") is None)
 }
 

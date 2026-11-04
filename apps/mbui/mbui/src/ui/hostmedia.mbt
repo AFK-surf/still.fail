@@ -175,10 +175,18 @@ fn mime_of(name : String) -> String {
     "image/heic"
   } else if ends(".pdf") {
     "application/pdf"
-  } else if ends(".mp4") {
+  } else if ends(".mp4") || ends(".m4v") {
     "video/mp4"
   } else if ends(".mov") {
     "video/quicktime"
+  } else if ends(".webm") {
+    "video/webm"
+  } else if ends(".ogv") {
+    "video/ogg"
+  } else if ends(".3gp") {
+    "video/3gpp"
+  } else if ends(".3g2") {
+    "video/3gpp2"
   } else if ends(".mp3") {
     "audio/mpeg"
   } else if ends(".txt") || ends(".md") {

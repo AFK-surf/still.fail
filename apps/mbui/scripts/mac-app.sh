@@ -155,6 +155,7 @@ if [ -n "$OWN" ]; then
   ln -s Versions/Current/Resources "$SQUIRREL/Resources"
 fi
 cp out/core/core.hbc "$APPDIR/Contents/Resources/core.hbc"
+cp -R "$MBUI_DIR/src/host/ogv" "$APPDIR/Contents/Resources/ogv"
 cp "$ICON.icns" "$APPDIR/Contents/Resources/AppIcon.icns"
 cp "$ICON.assets/Assets.car" "$APPDIR/Contents/Resources/Assets.car"
 # the oldest macOS the program runs on, as it was linked: the one asked for

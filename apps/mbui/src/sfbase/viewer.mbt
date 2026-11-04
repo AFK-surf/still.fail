@@ -77,6 +77,8 @@ pub fn preview_kind(name : String) -> (PKind?, String, String) {
     "webm" => Some((KVideo, "video/webm"))
     "mov" => Some((KVideo, "video/quicktime"))
     "ogv" => Some((KVideo, "video/ogg"))
+    "3gp" => Some((KVideo, "video/3gpp"))
+    "3g2" => Some((KVideo, "video/3gpp2"))
     "mp3" => Some((KAudio, "audio/mpeg"))
     "m4a" => Some((KAudio, "audio/mp4"))
     "aac" => Some((KAudio, "audio/aac"))

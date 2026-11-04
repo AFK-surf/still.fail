@@ -5,7 +5,15 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { apply, subscribe, v } from "./helpers.ts";
 import { base, started, threadView } from "./station-fixture.ts";
-import { linksOf, pullOf, siteOf } from "../src/things.ts";
+import { isMedia, isVideo, linksOf, pullOf, siteOf } from "../src/things.ts";
+
+test("3GPP videos appear among a chat's media", () => {
+  for (const file of ["clip.3gp", "clip.3G2"]) {
+    assert.equal(isMedia(file), true);
+    assert.equal(isVideo(file), true);
+  }
+  assert.equal(isVideo("song.ogg"), false);
+});
 
 // deno-lint-ignore no-explicit-any
 type J = any;

@@ -19,6 +19,7 @@ D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$A"
 H=mbui/src/host
+if [ "${PLATFORM:-mac}" = mac ]; then export MBUI_OGV_DIR=${MBUI_OGV_DIR:-$A/$H/ogv}; fi
 # The files whose `extern "C"` calls the shell answers: mbui's host, the core's engine, the app's own.
 decls="$H/host_native.mbt $H/device_native.mbt $H/stream_native.mbt $H/textref_native.mbt $H/native_native.mbt
   src/core/native.mbt src/stillfail/link_native.mbt src/pinyin/load_native.mbt src/sfreplay/emit_native.mbt
