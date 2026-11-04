@@ -26,7 +26,7 @@ export const AdbLive = Layer.effectDiscard(
     yield* Effect.acquireRelease(
       Effect.sync(() => {
         const androids = new AndroidScreens({ screens, adb: adbPath });
-        androids.start();
+        // Followed as the screens are asked for (`refresh`), not from the start.
         const unrefresh = screens.refresher(() => androids.refresh());
         return () => (unrefresh(), androids.close());
       }),
