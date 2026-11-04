@@ -45,7 +45,7 @@ test "关于's 性能记录 where the device keeps one, at each width and with e
   for case in page_cases {
     let (w, platform) = case
     let at = "\{w} platform \{platform}"
-    // (a Tester's host keeps none, as Android's, a Mac's, Windows')
+    // (a Tester's host keeps none, as Android's, a Mac's)
     assert_true(setting_tester(About, w, platform~).find("性能记录") is None, msg=at)
     // (one kept, as iOS's)
     let t = setting_tester(About, w, platform~, host=fn(t) { t.set_perf(0) })
@@ -296,6 +296,30 @@ test "关于's 性能记录 turned on stays on: its first line written (the 分�
     assert_true(t.get(Switch, label="性能记录").check is Some(On), msg=at)
     assert_eq(t.perf_said().0, [true], msg=at)
     assert_eq(@hostapi.perf_state(), 1, msg=at)
+  }
+}
+
+///|
+test "关于's 性能记录 where the host has no share sheet (Windows): the way to its folder always, the logs being there whether it is kept or not, its own note, no 分享记录 whatever it holds; pressed, the folder opened" {
+  for case in page_cases {
+    let (w, platform) = case
+    let at = "\{w} platform \{platform}"
+    let t = setting_tester(About, w, platform~, host=fn(t) {
+      t.set_perf(0)
+      t.set_perf_opens(true)
+    })
+    t.wheel(w / 2.0, 450.0, 5000.0)
+    t.run_for(@ui.move_most_ms)
+    t.draw()
+    assert_true(t.find("每 5 秒把 CPU、内存和帧数记在本机 Documents/perf（现有 0 B），不会上传。报错不论开没开都记在这个文件夹。") is Some(_), msg=at)
+    t.set_perf_size(666.0)
+    t.run_for(@ui.move_most_ms)
+    t.draw()
+    assert_true(t.find("分享记录") is None, msg=at)
+    assert_eq(t.perf_opened(), 0, msg=at)
+    t.click(Link, label="打开日志文件夹")
+    assert_eq(t.perf_opened(), 1, msg=at)
+    assert_eq(t.perf_said().0, [], msg=at)
   }
 }
 

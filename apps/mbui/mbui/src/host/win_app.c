@@ -316,6 +316,8 @@ static int mods_now(void) {
 #include "win_files.h"
 // the device beyond the window (device.mbt): a key catcher's keys, the clipboard, awake
 #include "win_device.h"
+// its log files: what it says on stderr, its performance record
+#include "win_logs.h"
 // the app's life: once for its person, put away to the notification area, links, in front or not, light or dark
 #include "win_life.h"
 // this machine's station: what it is, started, stopped, installed
@@ -1121,6 +1123,7 @@ void mb_host_log(moonbit_string_t s) {
   fprintf(stdout, "%s\n", u);
   fflush(stdout);
   free(u);
+  logs_line_wide(LOGS_LOG, (const WCHAR *)s, n);
 }
 
 // The app over another app done (@hostapi.over_done): it never is here.
@@ -1274,13 +1277,24 @@ void mb_host_set_sideways(int32_t on) { (void)on; }
 // Let turn as held (@hostapi.set_turnable): a window does not turn, and is not held upright.
 int32_t mb_host_set_turnable(int32_t on) { (void)on; return 0; }
 
-// The performance record (@hostapi.perf_state): none kept here (iOS keeps one, ios_app.m).
-int32_t mb_host_perf_state(void) { return -1; }
-void mb_host_set_perf(int32_t on) { (void)on; }
-void mb_host_perf_line(moonbit_string_t line) { (void)line; }
-moonbit_string_t mb_host_perf_where(void) { return moonbit_make_string_raw(0); }
-double mb_host_perf_size(void) { return 0; }
+// The performance record (@hostapi.perf_state), kept as iOS's is (win_logs.h), in the app's log folder with its other
+// log files. No program with no id of its own (a demo) keeps one.
+int32_t mb_host_perf_state(void) { return logs_perf_state(); }
+void mb_host_set_perf(int32_t on) { logs_set_perf(on); }
+void mb_host_perf_line(moonbit_string_t line) {
+  if (logs_perf_on) logs_line_wide(LOGS_PERF, (const WCHAR *)line, Moonbit_array_length(line));
+}
+moonbit_string_t mb_host_perf_where(void) {
+  int running = logs_perf_state() >= 0, n = running ? (int)wcslen(logs_dir) : 0;
+  moonbit_string_t out = moonbit_make_string_raw(n);
+  if (n) memcpy(out, logs_dir, (size_t)n * sizeof(WCHAR));
+  return out;
+}
+double mb_host_perf_size(void) { return logs_perf_bytes; }
+// (nothing shares it here, no share sheet: its folder is opened instead, mb_host_perf_open)
 moonbit_bytes_t mb_host_perf_read(void) { return moonbit_make_bytes(0, 0); }
+// Whether the record's folder can be opened here (go 0), or opened (go 1) (@hostapi.perf_open).
+int32_t mb_host_perf_open(int32_t go) { return go ? logs_open() : logs_perf_state() >= 0; }
 
 // Notifications (notify.mbt): the system's toasts, win_notify.cpp.
 
