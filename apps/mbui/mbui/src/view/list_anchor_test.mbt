@@ -230,3 +230,14 @@ test "scrolls_anchored on iOS: pulled past its end, drawn past it, and back at i
   assert_true(pulled.abs() > 1.0, msg="drawn past its end as it is pulled: \{pulled}")
   assert_eq((c.scroll.past(c.tree), c.top(99), c.follows.get()), (0.0, Some(60.0), true))
 }
+
+///|
+test "scrolls_anchored: a row half out over its top brought into sight (the focus come to it), from where it was counted otherwise than the hand had it: by as much as it was out, no more" {
+  let c = anchored_case(100)
+  // (at its end: row 97 from -20 to 20, half out over the top; it at 3900 as counted, the hand's place 0)
+  assert_eq((c.top(97), c.scroll.at(c.tree)), (Some(-20.0), 3900.0))
+  c.tree.show_in_sight(c.live[97].id())
+  c.tree.frame(390.0, 844.0, now=100.0) |> ignore
+  c.tree.frame(390.0, 844.0, now=2000.0) |> ignore
+  assert_eq((c.top(97), c.top(98), c.scroll.at(c.tree)), (Some(0.0), Some(40.0), 3880.0))
+}
