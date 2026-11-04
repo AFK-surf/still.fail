@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { constants } from "node:sqlite";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { constants, DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { RECENT_CHAT_LIST } from "../src/store/chat-list.ts";
 import { installRecentChatIndex, readGlobalRecentChatIndex, stepRecentChatIndex } from "../src/store/chat-list-index.ts";
@@ -257,4 +260,56 @@ for (const recursive of [false, true]) test(`recent ordering matches the origina
     while (!stepRecentChatIndex(db, 3).done) { /* Finish the interleaved batches. */ }
     check(300);
   } finally { store.close(); }
+});
+
+test("a recent page keeps its count and ordering on one snapshot while another connection updates them", () => {
+  const dir = mkdtempSync(join(tmpdir(), "recent-chat-snapshot-"));
+  const path = join(dir, "station.db");
+  const store = Store.open(path);
+  const db = store.db;
+  let reader: DatabaseSync | undefined;
+  try {
+    const first = store.openThread("ember", "EMBER", "first", "First", null).id;
+    const second = store.openThread("ember", "EMBER", "second", "Second", null).id;
+    db.prepare("UPDATE threads SET created_at = 1 WHERE id IN (?, ?)").run(first, second);
+    const message = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',?)");
+    message.run(first, 10);
+    message.run(second, 20);
+    installRecentChatIndex(db);
+    while (!stepRecentChatIndex(db, 3).done) { /* Prepare before a second connection reads. */ }
+    reader = new DatabaseSync(path, { readOnly: true });
+    let added: number | null = null;
+    const observed = new Proxy(reader, {
+      get(target, property) {
+        if (property === "prepare") return (sql: string) => {
+          const statement = target.prepare(sql);
+          if (sql !== "SELECT total, complete FROM recent_chat_meta WHERE id = 1") return statement;
+          return new Proxy(statement, {
+            get(row, member) {
+              if (member === "get") return (...args: Parameters<typeof row.get>) => {
+                const result = row.get(...args);
+                if (added === null) {
+                  added = store.openThread("ember", "EMBER", "added", "Added", null).id;
+                  message.run(added, 30);
+                  while (!stepRecentChatIndex(db, 3).done) { /* The writer finishes between the two reads. */ }
+                }
+                return result;
+              };
+              const value = Reflect.get(row, member, row);
+              return typeof value === "function" ? value.bind(row) : value;
+            },
+          });
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    assert.deepEqual(readGlobalRecentChatIndex(observed, 5), { ids: [second, first], total: 2 });
+    assert.ok(added !== null);
+    assert.deepEqual(readGlobalRecentChatIndex(reader, 5), { ids: [added, second, first], total: 3 });
+  } finally {
+    reader?.close();
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
