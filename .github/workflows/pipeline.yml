@@ -550,9 +550,10 @@ jobs:
   # the same API and static parts, after still.fail's, as their own jobs (each fits its 5 minutes on its own). Its
   # secrets are its own token and keys.json; the Google client, the push keys, PostHog and Axiom are still.fail's (one
   # app). Not its sites (still.fail's words and downloads, until monoid has its own) nor its relay (by hand, as ours).
+  # monoid's jobs (monoid-*) run only while the repository's variable MONOID_CI is on (turned off 2026-11-04, as asked).
   monoid-api:
     needs: [plan, api]
-    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.plan.outputs.api == 'true' && needs.api.result == 'success' }}
+    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.api == 'true' && needs.api.result == 'success' }}
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 5
@@ -577,7 +578,7 @@ jobs:
 
   monoid-static:
     needs: [plan, static, monoid-api]
-    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.static.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.monoid-api.result) }}
+    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.static.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.monoid-api.result) }}
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 5
@@ -696,7 +697,7 @@ jobs:
   # still.fail's beta is, its files and then its feed put once the check passed.
   monoid-android:
     needs: [plan, natives, check, check-linux]
-    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.plan.outputs.android_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.natives.result) }}
+    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.android_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.natives.result) }}
     runs-on: [self-hosted, macos-ci]
     environment: production
     timeout-minutes: 5
@@ -727,7 +728,7 @@ jobs:
   # and put whole in monoid's bucket once the check passed (.github/release-desktop.sh --product monoid).
   monoid-desktop:
     needs: [plan, natives, check, check-linux]
-    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.plan.outputs.mac_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.natives.result) }}
+    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.mac_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.natives.result) }}
     runs-on: macos-26
     environment: production
     timeout-minutes: 5
@@ -992,7 +993,7 @@ jobs:
   # desktop-win's and put whole in monoid's bucket once the check passed (scripts/release.sh --product monoid).
   monoid-desktop-win:
     needs: [plan, check, check-linux]
-    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.plan.outputs.win_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' }}
+    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.win_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' }}
     runs-on: windows-2025
     environment: production
     timeout-minutes: 5
