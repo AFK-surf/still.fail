@@ -25,6 +25,8 @@ export type RunnerInfo = {
   program: string;
   args: string[];
   socket: string;
+  /// It gives back stdout's disk only up to an ack's `keep` (one from before gives back up to the ack).
+  keeps?: boolean;
 };
 
 export type Exit = { code: number | null; signal: string | null };

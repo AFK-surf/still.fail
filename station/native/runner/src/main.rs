@@ -216,6 +216,8 @@ fn start(args: &Args) -> Result<(Arc<Shared>, Listener), String> {
             "socket": text(&paths.sock),
             "out": text(&paths.out),
             "err": text(&paths.err),
+            // It gives back stdout's disk only up to what the station keeps (an ack's `keep`).
+            "keeps": true,
         });
         if let Err(e) = write_atomic(&paths.json, &format!("{info}\n")) {
             agent.abandon();

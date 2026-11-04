@@ -230,6 +230,9 @@ class Host {
   /// Where in its output each turn running began, and where what a station reads after a crash begins (`keep` keeps it):
   /// the earliest of them, else just past the line that ended the last one.
   private turnFrom = new Map<string, number>();
+  /// A turn that ended, let go of from the next line on: the line that ended it may not be acknowledged yet, and what a
+  /// crash reads again never begins past what was (a crash in between would lose that the turn ran).
+  private ended: { thread: string; to: number } | null = null;
   private keptFrom = -1;
   keep: ((from: number) => void) | null = null;
   /// Where the station before kept, handed over (Host.adopt `from`).
@@ -321,9 +324,10 @@ class Host {
   }
 
   private noteTurn(thread: string, started: boolean, from: number, to: number) {
-    if (started) this.running(thread, from);
-    else this.turnFrom.delete(thread);
-    this.reckon(to);
+    if (started) {
+      this.running(thread, from);
+      this.reckon(from);
+    } else this.ended = { thread, to };
   }
 
   reckon(to: number) {
@@ -334,6 +338,13 @@ class Host {
   }
 
   private onLine(line: string, from = 0, to = 0) {
+    // The line before has been acknowledged (lines are handled one after another, each acknowledged once handled).
+    if (this.ended !== null) {
+      const { thread, to: past } = this.ended;
+      this.ended = null;
+      this.turnFrom.delete(thread);
+      this.reckon(past);
+    }
     let msg: Json;
     try {
       msg = JSON.parse(line);
@@ -574,10 +585,12 @@ export class CodexDriver implements AgentDriver {
   }
 
   /// An app-server whose output has grown past the limit (OUTPUT_LIMIT).
+  /// A runner from before it kept what the station keeps (`keeps`) is replaced the same way: it gives back the disk under
+  /// a turn still running (read again after a crash, that turn is lost), or none at all.
   private outgrown(host: Host): number | null {
     try {
       const size = statSync(outFile(this.data, host.proc.info.id)).size;
-      return size > (this.options.outputLimit ?? OUTPUT_LIMIT) ? size : null;
+      return size > (this.options.outputLimit ?? OUTPUT_LIMIT) || host.proc.info.keeps !== true ? size : null;
     } catch {
       return null;
     }
@@ -595,7 +608,7 @@ export class CodexDriver implements AgentDriver {
     } else {
       const output = this.outgrown(host);
       if (output === null) return;
-      log.info("agents::codex", "its app-server's output has grown long; restarting it", { profile: host.profile, key, bytes: output });
+      log.info("agents::codex", "its app-server's output has grown long, or its runner is from before; restarting it", { profile: host.profile, key, bytes: output, keeps: host.proc.info.keeps === true });
     }
     this.hosts.delete(key);
     await host.proc.kill(5000);

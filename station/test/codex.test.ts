@@ -693,6 +693,23 @@ describe("the Codex driver", { concurrency: true }, () => {
     const two = await first.open(options(p), a2.push);
     await one.prompt("say:before");
     await a.until(ended(1));
+    const info = existingRunners(data).find((r) => r.id === runnerId("codex", p.id))!;
+    // Where the last turn of a thread began in the output as it is now.
+    const began = (thread: string) => {
+      const out = readFileSync(join(data, "run", "runners", `${info.id}.out`));
+      let at = 0;
+      let found = -1;
+      for (let i = out.indexOf(10); i >= 0; at = i + 1, i = out.indexOf(10, at)) {
+        if (out[at] !== 0x7b || out.subarray(at, i).indexOf("turn/started") < 0) continue;
+        const msg = JSON.parse(out.toString("utf8", at, i));
+        if (msg?.params?.threadId === thread) found = at;
+      }
+      return found;
+    };
+    // That turn ended, and nothing has come since: the line that ended it may not be acknowledged yet, so a crash
+    // still reads from where that turn began (from past that line, it would not know the turn ran).
+    await eventually(() => readFrom(data, info) > 0);
+    assert.equal(readFrom(data, info), began(one.id()));
     const gate = gates(p.dump, "kept");
     await two.prompt("gate:6:3:kept");
     await a2.until((e) => deltas(e).length >= 3);
@@ -700,18 +717,8 @@ describe("the Codex driver", { concurrency: true }, () => {
     // `punch`): reading again still begins where that one began, and the runner keeps it.
     await one.prompt(`say:${"x".repeat(34 * 1024 * 1024)}`);
     await a.until(ended(2));
-    const info = existingRunners(data).find((r) => r.id === runnerId("codex", p.id))!;
-    const out = readFileSync(join(data, "run", "runners", `${info.id}.out`));
-    const began = (thread: string) => {
-      let at = 0;
-      let found = -1;
-      for (let i = out.indexOf(10); i >= 0; at = i + 1, i = out.indexOf(10, at)) {
-        const msg = JSON.parse(out.toString("utf8", at, i) || "null");
-        if (msg?.method === "turn/started" && msg.params?.threadId === thread) found = at;
-      }
-      return found;
-    };
     assert.ok(began(two.id()) > 0);
+    assert.equal(info.keeps, true, "the runner says it keeps what the station keeps");
     assert.equal(readFrom(data, info), began(two.id()), "from where the turn running began");
     first.detach();
     await allLeft();
@@ -721,7 +728,7 @@ describe("the Codex driver", { concurrency: true }, () => {
     const b = listen();
     const b2 = listen();
     await next.adopt(options(p, { resume: one.id() }), null, b.push);
-    await next.adopt(options(p, { resume: two.id() }), null, b2.push);
+    const takenTwo = await next.adopt(options(p, { resume: two.id() }), null, b2.push);
     await gate.open("b");
     await b2.until(ended(1));
     const all = [...a2.events, ...b2.events];
@@ -729,8 +736,11 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.deepEqual(deltas(all), Array.from({ length: 6 }, (_, i) => `d${i} `), "every delta once, in order");
     assert.equal(b2.events.filter((e) => e.type === "turnStarted").length, 1, "read again as running");
     assert.equal(b.events.filter((e) => e.type === "turnStarted").length, 0, "the one whose turns had ended, idle");
-    // None running now: reading again would begin past the end of the last.
-    await eventually(() => readFrom(data, info) > began(two.id()));
+    // None running now (and a line since its end): reading again begins past it.
+    const twoBegan = began(two.id());
+    await takenTwo.prompt("say:after");
+    await b2.until(ended(2));
+    await eventually(() => readFrom(data, info) > twoBegan);
   });
 
   // On a station (2026-11-02) a next station asked a profile's quota as it started: it took the app-server up as after a
