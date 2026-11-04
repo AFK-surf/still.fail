@@ -105,6 +105,29 @@ test "an away station's 设置 shows none of what only it can change, a line say
 }
 
 ///|
+test "data outflow's cards stand apart, and a grant's lines are as close as a request's though it ends in a button" {
+  for (w, platform) in page_cases {
+    let t = setting_tester(Station("ws1/st1"), w, platform~, mode="settings-station-outflow", h=3600.0)
+    t.run_for(@ui.move_most_ms)
+    let at = "\{w} platform \{platform}"
+    assert_true(t.find("Comma for Teams") is Some(_), msg=at)
+    let meet = t.gap_faults().filter(fn(f) { f.contains("rule 3:") })
+    assert_eq(meet, [], msg=at)
+    let lines = fn(title : String, note : String) {
+      let boxes = t.boxes()
+      let name = boxes.iter().find_first(fn(b) { b.text == title }).unwrap()
+      let said = boxes.iter().find_first(fn(b) { b.text.contains(note) }).unwrap()
+      said.y - (name.y + name.h)
+    }
+    assert_eq(
+      lines("Comma", "昨天 14:02 授权"),
+      lines("Comma for Teams", "今天 10:12 申请"),
+      msg=at,
+    )
+  }
+}
+
+///|
 test "a station's profiles are grouped by account kind and open their own page" {
   for (w, platform) in page_cases {
     let t = setting_tester(Station("ws1/st1"), w, platform~, h=2400.0)

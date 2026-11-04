@@ -7,7 +7,8 @@
 /// who allowed it and when, and when it last read, 取消授权 at its end, asked first. For an admin (`link`, the
 /// overview's), first the switch letting programs of other machines ask through Tailcat, and on, the address to give
 /// them. Nothing when there are none and no link (or the station is from before them); the grants are read only when
-/// the overview says there are some (`any`).
+/// the overview says there are some (`any`). Its cards 12 apart at either width, as the logins' over it (narrow: a
+/// group's own 10 under it, which a wide one has not).
 fn station_outflow(c : @ui.Ctx, core : Core, station : String, answers : Bool, any : Bool, link : Json?) -> Unit {
   let view = if any { outflow_view(core, station) } else { None }
   let requests = items(view, "requests")
@@ -16,21 +17,32 @@ fn station_outflow(c : @ui.Ctx, core : Core, station : String, answers : Bool, a
     return
   }
   st_section(c, @sf.t("web-main.outflow.title"), description=@sf.t("web-main.outflow.lead"), fn() {
-    if link is Some(_) {
-      outflow_link(c, core, station, link)
-    }
-    for q in requests {
-      outflow_request(c, core, station, Some(q), answers)
-    }
-    if grants.length() > 0 {
-      @sf.group(c, fn() {
-        for g in grants {
-          outflow_grant(c, core, station, Some(g))
-        }
-      })
-    }
+    c.box(style=if @sf.look() == Wide { outflow_cards } else { outflow_cards_narrow }, fn() {
+      if link is Some(_) {
+        outflow_link(c, core, station, link)
+      }
+      for q in requests {
+        outflow_request(c, core, station, Some(q), answers)
+      }
+      if grants.length() > 0 {
+        @sf.group(c, fn() {
+          for g in grants {
+            outflow_grant(c, core, station, Some(g))
+          }
+        })
+      }
+    })
+    |> ignore
   })
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let outflow_cards : @ui.Style = @ui.css("w=Full gap=S3")
+
+///|
+// kept across runs: a value (no field of it changes)
+let outflow_cards_narrow : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// The kinds an admin took out of a request, and its whole workspace (`<station>/<request>/<kind>`, `…/workspace`):
@@ -141,7 +153,7 @@ fn outflow_grant(c : @ui.Ctx, core : Core, station : String, gv : Json?) -> Unit
     note=join([text(gv, "signedText"), kinds, text(gv, "reachText"), text(gv, "grantedText"), text(gv, "lastReadText")], " · "),
     goes=false,
     lead=fn() { st_row_mark(c, "key") },
-    tail=fn() {
+    control=fn() {
       if @sf.button(c, @sf.t("web-main.outflow.revoke"), key="outflow-revoke/" + station + "/" + id, tone=Ghost) {
         @sf.confirm(
           @sf.t("web-main.outflow.revokeConfirm", args=[("program", program)]),
@@ -207,12 +219,16 @@ fn outflow_link(c : @ui.Ctx, core : Core, station : String, link : Json?) -> Uni
       Some(Number(n, ..)) => n.to_int().to_string()
       _ => ""
     }
-    @sf.copy_command(
-      c,
-      "outflow-link-address/" + station,
-      "tailcat " + text(link, "address") + " " + port,
-      copy=@sf.t("common.copy"),
-      copied=@sf.t("common.copied"),
-    )
+    // (narrow, a group's room under it, as far from a card that follows)
+    c.box(style=if @sf.look() == Wide { outflow_cards } else { @sf.pg_card_room }, fn() {
+      @sf.copy_command(
+        c,
+        "outflow-link-address/" + station,
+        "tailcat " + text(link, "address") + " " + port,
+        copy=@sf.t("common.copy"),
+        copied=@sf.t("common.copied"),
+      )
+    })
+    |> ignore
   }
 }
