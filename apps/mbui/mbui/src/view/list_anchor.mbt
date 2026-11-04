@@ -441,10 +441,10 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
               let to_top = top - c.cover
               let to_end = most - counted
               if from_top && to_top < to_end - 0.5 {
-                s.glide_to(c.x + to_top, kept=false)
+                s.glide_where(c.x + to_top, kept=false)
                 follows.set(false)
               } else {
-                s.glide_to(c.x + to_end, kept=false)
+                s.glide_where(c.x + to_end, kept=false)
               }
             }
             _ => ()

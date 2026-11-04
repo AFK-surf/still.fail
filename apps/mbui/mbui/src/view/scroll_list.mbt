@@ -472,7 +472,7 @@ fn Scroll::wheel_stops(self : Scroll, v : View, t : Double) -> Unit {
     // (met its end by now: at rest there, what it brought going on back, at rest as it said)
     Some({ hit: Some(p), .. }) if t >= f.end_t => {
       self.fling.set(None)
-      self.x.set(self.bounded(f.end_x, 0.0, self.most()))
+      self.x.set(dclamp(f.end_x, 0.0, self.most()))
       self.past.set(Some(p))
     }
     Some(w) => {
@@ -497,7 +497,7 @@ fn Scroll::notched(self : Scroll, v : View, t : Double, d : Double) -> Bool {
   let (x0, total, v0) = match @signals.untracked(fn() { self.notch.get() }) {
     Some(n) => {
       let (came, speed) = ease_state(n.total, n.v0, t - n.t0)
-      (self.bounded(n.x0 + came, 0.0, self.most()), n.total - came + d, speed)
+      (dclamp(n.x0 + came, 0.0, self.most()), n.total - came + d, speed)
     }
     None => {
       let x = self.stopped(t)
@@ -537,8 +537,8 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
     self.past.set(None)
     self.notch.set(None)
     match (flung, notch) {
-      (Some(f), _) => self.x.set(self.bounded(f.end_x, 0.0, self.most()))
-      (_, Some(n)) => self.x.set(self.bounded(n.x0 + n.total, 0.0, self.most()))
+      (Some(f), _) => self.x.set(dclamp(f.end_x, 0.0, self.most()))
+      (_, Some(n)) => self.x.set(dclamp(n.x0 + n.total, 0.0, self.most()))
       _ => ()
     }
   })
@@ -599,15 +599,23 @@ fn met_now(f : Fling, w : ListWay, t : Double, bound : Double, density : Double)
 /// A page's list (Scroll::list) sent to `to` (as far as it can go) from where it is at the logic's moment, eased there as
 /// a wheel's notch of that length is (ease_come), what it was doing by itself stopped; at once where `glide` is false.
 /// Not where it scrolls in nothing.
-pub fn Scroll::glide_to(self : Scroll, to : Double, glide? : Bool = true, kept? : Bool = true) -> Unit {
+pub fn Scroll::glide_to(self : Scroll, to : Double, glide? : Bool = true) -> Unit {
+  // (where it is said: as it is counted, a list that keeps itself's put there first)
+  (self.rebase)()
+  self.glide_where(to, glide~)
+}
+
+///|
+/// Glided to `to` where the hand has it, as glide_to: `kept` false, as far as said (a list that keeps itself holding
+/// itself at its ends), and nothing put where it is counted to be first (what its layout said it to do, after it).
+fn Scroll::glide_where(self : Scroll, to : Double, glide? : Bool = true, kept? : Bool = true) -> Unit {
   guard self.host is Some(v) else { return }
   @signals.untracked(fn() {
     let t = v.logic_at()
-    // (`kept` false: as far as said, a list that keeps itself holding itself at its ends)
-    let to = if kept { self.bounded(to, 0.0, self.most()) } else { to }
+    let to = if kept { dclamp(to, 0.0, self.most()) } else { to }
     // (there already, or gliding there already: as it is)
     let goes_to = match self.notch.get() {
-      Some(n) => Some(self.bounded(n.x0 + n.total, 0.0, self.most()))
+      Some(n) => Some(dclamp(n.x0 + n.total, 0.0, self.most()))
       None => None
     }
     if goes_to == Some(to) || (goes_to is None && self.where_at(t) == to) {
@@ -632,9 +640,10 @@ pub fn Scroll::glide_to(self : Scroll, to : Double, glide? : Bool = true, kept? 
 /// it was shorter than its column, at its foot: what was there drawn where it was), on one way from there.
 pub fn Scroll::glide_under(self : Scroll, under : Double, to : Double) -> Unit {
   guard self.host is Some(v) else { return }
+  (self.rebase)()
   @signals.untracked(fn() {
     let t = v.logic_at()
-    let to = self.bounded(to, 0.0, self.most())
+    let to = dclamp(to, 0.0, self.most())
     let x = self.stopped(t) - under
     self.x.set(to)
     self.notch.set(Some({ x0: x, total: to - x, v0: 0.0, t0: t, sent: true }))
