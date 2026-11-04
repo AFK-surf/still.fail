@@ -96,10 +96,13 @@ test("/sf is in the manifest while the bot may take slash commands; other comman
   const next = upgraded(old);
   assert.deepEqual(next.features.slash_commands.map((c: any) => c.command), ["/mine", "/sf"]);
   assert.equal(upgraded(next), null);
-  // The group with the `commands` scope off: the command goes with it (Slack refuses a command without the scope).
-  const off = applySettings(made, { groups: { more: false } });
-  assert.equal(off.features.slash_commands, undefined);
-  assert.equal(sf(applySettings(off, { groups: { more: true } })), 1);
+  // An app whose bot lacks the `commands` scope (made before it joined the base group): no command until a save puts
+  // the scope back (Slack refuses a command without it).
+  const bare = structuredClone(made);
+  bare.oauth_config.scopes.bot = bare.oauth_config.scopes.bot.filter((s: string) => s !== "commands");
+  delete bare.features.slash_commands;
+  assert.equal(upgraded(bare), null);
+  assert.equal(sf(applySettings(bare, { groups: { more: false } })), 1);
   assert.equal(sf(withSocketMode(made, false)), 0, "nothing comes without Socket Mode");
 });
 

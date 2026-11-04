@@ -19,7 +19,7 @@ export const SLACK_GROUPS: SlackGroup[] = [
   {
     id: "base",
     label: "读取和回复消息",
-    description: "被 @ 时收到消息，读取所在频道、私信和群聊的消息并回复，干活时在 thread 里显示进度。",
+    description: "被 @ 或用 /sf 时收到消息，读取所在频道、私信和群聊的消息并回复，干活时在 thread 里显示进度。",
     scopes: [
       "app_mentions:read",
       "chat:write",
@@ -33,6 +33,8 @@ export const SLACK_GROUPS: SlackGroup[] = [
       "mpim:read",
       "users:read",
       "assistant:write",
+      // `/sf` (NEW_CHAT_COMMAND): Slack takes no slash command without it.
+      "commands",
     ],
     events: ["agent_session_stopped", "app_mention", "message.channels", "message.groups", "message.im", "message.mpim"],
   },
@@ -101,9 +103,9 @@ export const SLACK_GROUPS: SlackGroup[] = [
   },
   {
     id: "more",
-    label: "状态、元数据和斜杠命令",
-    description: "设置自己的在线状态，读取消息元数据和工作区设置，嵌入视频链接，响应斜杠命令。",
-    scopes: ["users:write", "metadata.message:read", "team.preferences:read", "links.embed:write", "commands"],
+    label: "状态和元数据",
+    description: "设置自己的在线状态，读取消息元数据和工作区设置，嵌入视频链接。",
+    scopes: ["users:write", "metadata.message:read", "team.preferences:read", "links.embed:write"],
     events: [],
   },
 ];
