@@ -2,7 +2,7 @@
 // stable id, and the delta that changes them item by item. A row that changed is one `patch` of that row, wherever it
 // is; a row that moved is a `move`; a new one a `put` before its neighbour; one gone a `drop`. The rest of the value
 // changes by the old ops (delta.ts). A list whose keys are not each once there (or not all there) goes the old way.
-import { type Op, type Segment, largerThan } from "./delta.ts";
+import { type Op, type Segment, diffAt, largerThan } from "./delta.ts";
 import type { Topic } from "./protocol.ts";
 import { compareKeys, equal, isObject } from "./util.ts";
 
@@ -75,6 +75,8 @@ export function diffKeyed(old: unknown, next: unknown, spec: Spec | null): AnyOp
 
 function at(path: Segment[], old: unknown, next: unknown, spec: Spec | null, ops: AnyOp[]): void {
   if (old === next) return;
+  // Nothing keyed below: delta.ts's own.
+  if (spec === null) return diffAt([...path], old, next, ops as Op[]);
   if (spec?.key && Array.isArray(old) && Array.isArray(next) && list(path, old, next, spec, ops)) return;
   if (isObject(old) && isObject(next)) {
     // Only the keys that may differ are put in order, as delta.ts diffAt.

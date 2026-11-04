@@ -24,9 +24,10 @@ import { fileCredentials, takeBack } from "./no-keychain.ts";
 import { type Events, OwnProcessDriver, OwnProcessSession, parseLine } from "./own-process.ts";
 import { bothNames, expandRoute, isMachine, keyFile, profileEnv, profileModel } from "./profiles.ts";
 import type { RunnerInfo } from "./runner.ts";
-import { OVERLOADED, TOOL_SERVERS, cleanEnv, unreachable, uuid, type BackgroundTask, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
+import { OVERLOADED, TOOL_SERVERS, cleanEnv, failureRest, unreachable, uuid, type BackgroundTask, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import { wall } from "../ops/fibers.ts";
 import { peerHttpBase } from "../tools/http.ts";
+import { Said, stationLang, tr } from "../ops/i18n.ts";
 
 type Json = any;
 
@@ -77,7 +78,7 @@ export function toolsLostIn(frame: Json, calls: Set<string>): string | null {
 export const userMessage = (text: string) => JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "text", text }] } });
 
 /// Claude keeps a session at $CLAUDE_CONFIG_DIR/projects/<encoded cwd>/<id>.jsonl: looked for in the directory of `cwd`
-/// (where it runs on), then in every project's (it ran elsewhere before: 923 directories on ccvm, each looked at).
+/// (where it runs on), then in every project's (it ran elsewhere before: many directories on a station, each looked at).
 export function transcriptExists(home: string, sessionId: string, cwd: string): boolean {
   const project = claudeProject(cwd);
   if (project !== null && existsSync(join(home, "projects", project, `${sessionId}.jsonl`))) return true;
@@ -119,7 +120,7 @@ export function classifyResult(text: string): FailureReason {
     return "rate_limit";
   }
   if (word("529") || OVERLOADED.some((s) => lower.includes(s))) return "overloaded";
-  return "model";
+  return failureRest(text);
 }
 
 /// `renews`: its token is handed over and renewed while it runs (RENEWED): a first 401 is left to that.
@@ -284,9 +285,10 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
       throw new Error(`no claude transcript for session ${options.resume}`);
     }
     const sessionId = options.resume ?? uuid();
-    const mcpConfig = { mcpServers: { stillfail: { type: "http", url: options.mcpUrl, headers: { Authorization: `Bearer \${${MCP_TOKEN_VAR}}` } } } };
+    const mcpConfig = options.textOnly ? { mcpServers: {} } : { mcpServers: { stillfail: { type: "http", url: options.mcpUrl, headers: { Authorization: `Bearer \${${MCP_TOKEN_VAR}}` } } } };
     const model = options.model ?? profileModel(options.profile);
-    const args = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--dangerously-skip-permissions"];
+    const args = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages"];
+    if (!options.textOnly) args.push("--dangerously-skip-permissions");
     if (options.resume !== undefined) args.push("--resume", sessionId);
     else args.push("--session-id", sessionId);
     if (model !== undefined) args.push("--model", model);
@@ -295,11 +297,17 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
     const ours = options.instructions !== "";
     if (ours) args.push("--append-system-prompt", options.instructions);
     args.push("--mcp-config", JSON.stringify(mcpConfig));
+    if (options.textOnly) args.push("--strict-mcp-config", "--tools", "", "--setting-sources", "", "--no-session-persistence", "--disable-slash-commands", "--no-chrome");
     if (ours) args.push("--disallowedTools", DISALLOWED.join(","));
     // A key the station renews in a file (a Kimi sign-in's token, minutes long): Claude Code's key helper reads it,
     // again every minute and after a 401 (Claude Code runs it in a POSIX shell, Git Bash on Windows).
     const file = keyFile(options.profile);
-    const settings = { ...(ours ? SETTINGS : {}), ...(file === undefined ? {} : { apiKeyHelper: `cat '${file.replaceAll("'", `'\\''`)}'` }) };
+    const settings = {
+      ...(ours ? SETTINGS : {}),
+      ...(file === undefined ? {} : { apiKeyHelper: `cat '${file.replaceAll("'", `'\\''`)}'` }),
+      // The most context it runs with: it compacts on its own at it (its window for the model, clamped to the model's).
+      ...(options.context === undefined ? {} : { autoCompactWindow: options.context }),
+    };
     if (Object.keys(settings).length > 0) args.push("--settings", JSON.stringify(settings));
 
     const env: Record<string, string> = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(options.profile, "claude"), options.route) };
@@ -449,7 +457,7 @@ export class ClaudeSession extends OwnProcessSession<Turn> {
     this.startable();
     // Taken up without knowing whether it renews its token (RENEWED): about to run out, it is started again (resuming)
     // with a current one.
-    if (this.machineExpires !== null && this.machineExpires - wall.now() < CLAUDE_TOKEN_MARGIN_MS) throw new Error("the machine login's token runs out");
+    if (this.machineExpires !== null && this.machineExpires - wall.now() < CLAUDE_TOKEN_MARGIN_MS) throw new Said(tr(stationLang(), "station.claudeAuth.machineRunsOut"));
     this.turn.renewed = false;
     this.turn.busy = true;
   }

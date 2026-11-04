@@ -28,9 +28,10 @@ pub(all) struct Look {
   rot : Double
   /// drawn cut to a circle this far about (ox, oy), moved with it (0: not cut; a change of theme spreading: reveal.mbt)
   circle : Double
-  /// the opacity of the words it holds over its own (`alpha`): a panel coming in whole under its words before they
-  /// show (motion's Trans `ground_first`), so that what it is put over is hidden under it before its own words are
-  /// over that's (docs/motion.md rule 4)
+  /// the opacity of all it holds over its own (`alpha`), past its own ground, edge and shadow: its words, its drawing,
+  /// every box in it and what they draw, as one (words_alpha). A panel coming in whole under what it holds before that
+  /// shows (motion's Trans `ground_first`), so that what it is put over is hidden under it before its own words are
+  /// over that's (docs/motion.md rule 4); then all it holds at once, never its words after its icons and pictures
   words : Double
 } derive(Show, Eq, Debug)
 
@@ -208,12 +209,12 @@ priv struct DrawState {
   /// layer opened over the page) or once its layer is painted: its node, how faded, and the moves of what held it
   /// drawn moved by a look of its own (outermost first: Move), made on it as they would have been in its place. Never
   /// painted in its place: nothing that records what is painted (a kept part, a list's row) holds any of it.
-  overlay : Array[(Int, Double, Array[Move])]
+  overlay : Array[(Int, Double, Array[Move], Double, Double)]
   /// the moves of what is being painted moved by a look of its own, outermost first (what flies in it takes them)
   moves : Array[Move]
   /// what is over the scrim of the modal layer up (Stratum's OverScrim), painted once that scrim is (Ctx::paint_raised); the
   /// scrims built this frame (overlay.mbt), and whether those are being painted
-  raised : Array[(Int, Double)]
+  raised : Array[(Int, Double, Double, Double)]
   scrims : Array[Int]
   mut raising : Bool
   /// what is painted over everything of its layer wherever it is painted (an editor's handles: on Android windows of
@@ -225,11 +226,11 @@ priv struct DrawState {
   /// the page's covers built this frame (Ctx::stratum's Cover), what is over them (OverCover) waiting for one to be
   /// painted, and whether that is being painted
   covers : Array[Int]
-  over_cover : Array[(Int, Double)]
+  over_cover : Array[(Int, Double, Double, Double)]
   mut covering : Bool
   /// what is over everything, the layers over the page too (OverLayers), waiting for the rest to be painted, and
   /// whether it is being painted
-  over_layers : Array[(Int, Double)]
+  over_layers : Array[(Int, Double, Double, Double)]
   mut over_all : Bool
   /// by node: the build something in it was last drawn moved in (Ctx::draw_carries)
   carry : Array[Int]
@@ -340,6 +341,7 @@ fn reset_drawing() -> Unit {
   dr.carry.clear()
   dr.cycling = -1
   list_counts.clear()
+  list_keys_seen.clear()
   for f in reset_hooks {
     f()
   }
@@ -483,8 +485,19 @@ fn Ctx::drawn_found(self : Ctx) -> Unit {
 }
 
 ///|
+/// Box `i` the surface of the look it is in, said by what draws it: the panel a dialog, a popover or a card that comes in
+/// first draws (Look's `words`, ground first): its own ground, edge and shadow as faint as the look, all it holds as that
+/// look's `words` says, as everything else the look holds is. Where nothing in a look is said to be, the box it is on is
+/// its surface.
+pub fn Ctx::surface(self : Ctx, i : Int) -> Unit {
+  self.nodes[i].surface = true
+}
+
+///|
 /// Node `i` (built this frame) drawn with `look` over how it is laid out, after any look it has already.
 pub fn Ctx::look(self : Ctx, i : Int, look : Look) -> Unit {
+  // (a look of its own, still now or not: what it holds a scope of its own, what its surface is, scene.mbt look_surface)
+  self.nodes[i].look_scope = true
   if look.is_still() {
     return
   }
@@ -574,6 +587,7 @@ fn node_drawn(n : Node) -> Drawn? {
 /// for the same state and time, painted once or more. What is built and asks where the node is drawn (Ctx::drawn_at,
 /// drawn_rect) reads it then, as it is built.
 pub fn Ctx::look_by(self : Ctx, i : Int, f : () -> Look) -> Unit {
+  self.nodes[i].look_scope = true
   let e = self.drawn_of(i)
   e.look_by = match e.look_by {
     Some(g) => Some(fn() { g().then(f()) })
@@ -594,6 +608,7 @@ fn Drawn::look_now(self : Drawn) -> Look {
 /// Node `i` drawn with `look` and no other as built (what the motion package works out after layout, the app's look in
 /// it; what is worked out as it is painted, Ctx::look_by, still after it).
 pub fn Ctx::set_look(self : Ctx, i : Int, look : Look) -> Unit {
+  self.nodes[i].look_scope = true
   match self.drawn_entry(i) {
     Some(e) => e.look = look
     None => if !look.is_still() { self.drawn_of(i).look = look }
@@ -985,26 +1000,26 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
       glass_paint.run_len = run_len
     }
     if e.z == z_flying && !dr.overlaying {
-      dr.overlay.push((i, alpha, dr.moves.copy()))
+      dr.overlay.push((i, alpha, dr.moves.copy(), words_alpha.val, look_surface.val.0))
       return true
     }
     if e.z == z_over_scrim && !dr.raising {
-      dr.raised.push((i, alpha))
+      dr.raised.push((i, alpha, words_alpha.val, look_surface.val.0))
       return true
     }
     if e.z == z_over_cover && !dr.covering {
-      dr.over_cover.push((i, alpha))
+      dr.over_cover.push((i, alpha, words_alpha.val, look_surface.val.0))
       return true
     }
     if e.z == z_over_layers && !dr.over_all {
-      dr.over_layers.push((i, alpha))
+      dr.over_layers.push((i, alpha, words_alpha.val, look_surface.val.0))
       return true
     }
   }
   // what flies in what is drawn moved by a look of its own (tapped as that is: not at all): put off all the same, with
   // the moves of what holds it, never painted in its place
   if e.z == z_flying && !dr.overlaying && dr.mode == mode_draw && !dr.raising && !dr.covering && !dr.over_all {
-    dr.overlay.push((i, alpha, dr.moves.copy()))
+    dr.overlay.push((i, alpha, dr.moves.copy(), words_alpha.val, look_surface.val.0))
     return true
   }
   let alpha = alpha * look.alpha
@@ -1014,8 +1029,14 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   if cut_empty && !keep {
     return true
   }
-  // (the words in it as much fainter again: Look's `words`, push_inst)
+  // (all it holds as much fainter again, its surface as it is come to: Look's `words`, words_alpha), where a look is said
+  // on it (whatever it comes to now: still, it is a scope all the same); drawn here only for its stratum, its cut or as
+  // kept alone, what its surface is stays as it was
   let words_was = words_alpha.val
+  let surface_was = look_surface.val
+  if self.nodes[i].look_scope {
+    look_surface.val = (words_was, i)
+  }
   words_alpha.val = words_was * look.words
   let n = self.nodes[i]
   let (outer, outer_r, outer_s) = clip_at(clip_top())
@@ -1081,6 +1102,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     dr.moves.pop() |> ignore
   }
   words_alpha.val = words_was
+  look_surface.val = surface_was
   dr.mode = was
   if cutting {
     pop_clip()
@@ -1448,14 +1470,14 @@ fn Ctx::paint_overlays(self : Ctx) -> Unit {
   dr.overlay.clear()
   let (outer, outer_r, outer_s) = clip_at(clip_top())
   for p in todo {
-    let (i, alpha, moves) = p
+    let (i, alpha, moves, words, surface) = p
     // (not in what holds where it is drawn now: put off again, to where it is)
     if !moves_under(moves, base) {
       dr.overlay.push(p)
       continue
     }
     let i0 = self.ninst
-    self.paint(i, alpha)
+    self.paint_put_off(i, alpha, words, surface)
     // moved as what held it moved what it painted in its place: the innermost first
     for k = moves.length() - 1; k >= base; k = k - 1 {
       let m = moves[k]
@@ -1484,8 +1506,8 @@ fn Ctx::paint_raised(self : Ctx) -> Unit {
   let todo = dr.raised.copy()
   dr.raised.clear()
   for p in todo {
-    let (i, alpha) = p
-    self.paint(i, alpha)
+    let (i, alpha, words, surface) = p
+    self.paint_put_off(i, alpha, words, surface)
   }
   dr.mode = was
   dr.raising = false
@@ -1952,4 +1974,17 @@ pub fn Ctx::field_lines(self : Ctx, key : String) -> FieldLines? {
 /// The frame being made's context (the one the app runs in).
 pub fn current() -> Ctx {
   g()
+}
+
+///|
+/// What was put off (Flying, OverScrim, OverCover, OverLayers) painted now, as faint as what held it was where it was
+/// put off (`words`: words_alpha there; `surface`: its look's surface there, a surface said in it as faint), whatever is
+/// being painted now: not the looks painted round it here.
+fn Ctx::paint_put_off(self : Ctx, i : Int, alpha : Double, words : Double, surface : Double) -> Unit {
+  let (words_was, surface_was) = (words_alpha.val, look_surface.val)
+  words_alpha.val = words
+  look_surface.val = (surface, -1)
+  self.paint(i, alpha)
+  words_alpha.val = words_was
+  look_surface.val = surface_was
 }

@@ -316,6 +316,8 @@ export class Data {
   /// The most a database may take (KEPT); the logs a UI shows now, with how many show each; when room was last looked at.
   readonly #kept: number;
   readonly #shown = new Map<string, number>();
+  /// A room check already running for an account; writes during it do not start another one.
+  readonly #keeping = new Set<AccountDb>();
   #keptAt = -Infinity;
 
   constructor(host: Host, runner: Runner, options: DataOptions) {
@@ -951,7 +953,7 @@ export class Data {
       const ws = ofAddress(key);
       return [this.#ofWorkspace(ws) ?? null, [ws, `vaultItems:${key.slice(ws.length + 1)}`]];
     }
-    if (table === "place" || table === "link" || table === "heard" || table === "memberships") {
+    if (table === "place" || table === "link" || table === "heard" || table === "memberships" || table === "keepsMarks") {
       // A station's own, kept by its address (`<workspace>/<station>…`), in its workspace's: where a chat was left
       // (`place`, `<address>/<thread>`), how its link was last time (`link`), the last event its stream told (`heard`,
       // written with what it told), the workspaces it is in (`memberships`, views/memberships.ts). Read with what shows
@@ -1047,6 +1049,11 @@ export class Data {
     return this.of(station)?.chatOfThread(station, thread);
   }
 
+  /// The sidebar rows a thread's or a session's changes touch (account.ts `chatsOf`), for what the station's stream tells.
+  chatsOf(station: string, of: { thread: number } | { session: string }): unknown[] {
+    return this.of(station)?.chatsOf(station, of) ?? [];
+  }
+
   chatOfSession(station: string, session: string): unknown {
     void this.listed(station, "chats");
     this.#readQuery({ topic: "$chat-session", station, session });
@@ -1132,23 +1139,39 @@ export class Data {
     return db !== undefined && !db.readOnly ? db.opened(kind, station, id, this.#host.nowMs()) && open : false;
   }
 
-  /// Past its room: the agents' transcripts not shown, least recently used first, let go down to KEPT_TO.
+  /// Past its room: the agents' transcripts not shown, least recently used first, let go down to KEPT_TO. Each
+  /// transcript is a separate turn, so the app and the other accounts can be answered while room is being made.
   #keepWithin(db: AccountDb): void {
-    if (db.readOnly || db.used() <= this.#kept) return;
-    const to = this.#kept * KEPT_TO;
-    const gone = new Set<string>();
-    for (;;) {
-      const logs = db.transcriptsByUse(50).filter((l) => {
-        const key = `transcript\u0001${l.station}\u0001${l.id}`;
-        return !this.#shown.has(key) && !gone.has(key);
-      });
-      if (logs.length === 0) return;
-      for (const l of logs) {
-        gone.add(`transcript\u0001${l.station}\u0001${l.id}`);
-        db.evict(l.station, l.id);
-        if (db.used() <= to) return;
+    if (db.readOnly || this.#keeping.has(db)) return;
+    this.#keeping.add(db);
+    this.#runner.fork(Effect.gen({ self: this }, function* () {
+      try {
+        // Do not make the account's first values or a committed change wait for maintenance.
+        yield* Effect.yieldNow;
+        if (this.#dbs.get(db.sub) !== db || db.used() <= this.#kept) return;
+        const to = this.#kept * KEPT_TO;
+        const gone = new Set<string>();
+        for (;;) {
+          const logs = db.transcriptsByUse(50).filter((l) => {
+            const key = `transcript\u0001${l.station}\u0001${l.id}`;
+            return !this.#shown.has(key) && !gone.has(key);
+          });
+          if (logs.length === 0) return;
+          for (const l of logs) {
+            if (this.#dbs.get(db.sub) !== db) return;
+            const key = `transcript\u0001${l.station}\u0001${l.id}`;
+            // A chat may have opened since this list was read.
+            if (this.#shown.has(key)) continue;
+            gone.add(key);
+            db.evict(l.station, l.id);
+            if (db.used() <= to) return;
+            yield* Effect.yieldNow;
+          }
+        }
+      } finally {
+        this.#keeping.delete(db);
       }
-    }
+    }));
   }
 
   running(station: string): unknown[] {
@@ -1203,8 +1226,12 @@ export class Data {
     this.of(station)?.patchDetail(station, key, change);
   }
 
-  sessionsToRead(station: string): [string, boolean][] {
-    return this.of(station)?.sessionsToRead(station) ?? [];
+  sessionKeys(station: string): string[] {
+    return this.of(station)?.sessionKeys(station) ?? [];
+  }
+
+  sessionsToRead(station: string, keys?: readonly string[]): [string, boolean][] {
+    return this.of(station)?.sessionsToRead(station, keys) ?? [];
   }
 
   listedThread(station: string, id: number): any {

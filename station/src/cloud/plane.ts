@@ -61,7 +61,7 @@ export function makeControlPlane({ state, changes, key, up, provider }: PlanePar
         const headers = { "content-type": "application/json", ...signedHeaders(plane.telemetry.prefixes, s.station, ts, (prefix) => key.sign(`${prefix}-station-telemetry-v1:${s.origin}:${s.station}:${ts}:${digest}`)) };
         const response = await fetch(`${s.origin}${to}`, { method: "POST", headers, body, signal: AbortSignal.timeout(30_000) });
         await response.body?.cancel();
-        if (!response.ok) throw new Error(`${plane.name} answered ${response.status}`);
+        if (!response.ok) throw Object.assign(new Error(`${plane.name} answered ${response.status}`), { status: response.status });
       },
       catch: (e) => e as Error,
     });

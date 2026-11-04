@@ -56,7 +56,7 @@ const ZH = {
   ],
   soon: "即将支持",
   /** The demo's machines as it names them (demo/station.ts; demo/english.ts in English). */
-  machines: ["笔记本", "Studio", "Mini", "服务器"],
+  machines: ["笔记本", "Willow", "Mini", "服务器"],
   phoneTitle: "still.fail 手机版",
   install: ["一条命令", "加入一台电脑"],
   installSteps: ["→ 下载 still.fail station · 加入 workspace「Acme」", "→ 注册为登录启动的服务", "✓ station 已上线"],
@@ -107,7 +107,7 @@ const EN: typeof ZH = {
     { title: "IoT", text: "Cameras, sensors and things at home, joined in too", soon: true, at: "" },
   ],
   soon: "Coming",
-  machines: ["Laptop", "Studio", "Mini", "Server"],
+  machines: ["Laptop", "Willow", "Mini", "Server"],
   phoneTitle: "still.fail on a phone",
   install: ["One command", "adds a computer"],
   installSteps: ["→ Downloading still.fail station · joining workspace “Acme”", "→ Registering it to start at login", "✓ Station online"],

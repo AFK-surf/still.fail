@@ -3,6 +3,7 @@
 // connect, with what role, which stations are peers, which gateways and grant keys count, all come from here. Pure:
 // what is kept and when it is told is cloud/state.ts's.
 import { createHash, createPublicKey, verify } from "node:crypto";
+import * as form from "../../../client/core-ts/src/lock-form.ts";
 
 export type Sig =
   | { key: string; alg: "Ed25519" | "ES256"; sig: string }
@@ -14,7 +15,10 @@ export type Role = "owner" | "admin" | "member" | "viewer";
 export type Member = { sub: string; email: string; role: Role };
 /// A device: its base iroh key (`id`), whose person, the client it is, the key it signs with (an app's only), the
 /// endpoint ids an older client connects with (it proves none), until when (a web page's).
-export type Device = { id: string; sub: string; kind: "app" | "web"; label: string; sign_key?: string; endpoints?: string[]; exp?: number };
+/// `by`: whose signature put it in the lock (the genesis's devices the owner's): a person's own device is one they
+/// added themselves; an admin may add one under any member's name (the core gives a vault's key by itself to a
+/// person's own devices only, views/vault.ts `certs`).
+export type Device = { id: string; sub: string; kind: "app" | "web"; label: string; sign_key?: string; endpoints?: string[]; exp?: number; by?: string };
 export type Passkey = { id: string; sub: string; key: string; label: string };
 export type Station = { key: string; name: string };
 
@@ -32,6 +36,10 @@ export type LockState = {
   cloud_keys: any;
   members: Map<string, Member>;
   devices: Map<string, Device>;
+  /// The signing keys each device id has had in the lock, in order: a device back in the lock under a new one (an app
+  /// installed anew) signed its box certificate with the old one, which a vault's keys may still carry (vault/crypto.ts
+  /// `certOk` `ever`).
+  signKeys: Map<string, string[]>;
   passkeys: Map<string, Passkey>;
   stations: Map<string, Station>;
   gateways: Set<string>;
@@ -53,25 +61,14 @@ const str = (v: unknown, max = 200) => (typeof v === "string" && v.length <= max
 
 /// JSON with object keys sorted, no space: what is hashed. Only integers, strings, booleans, null, arrays, objects.
 export function canonical(v: unknown): string {
-  if (v === null || typeof v === "boolean" || typeof v === "string") return JSON.stringify(v);
-  if (typeof v === "number") {
-    if (!Number.isSafeInteger(v)) throw new Error("lock entries hold integers only");
-    return String(v);
-  }
-  if (Array.isArray(v)) return `[${v.map(canonical).join(",")}]`;
-  if (typeof v === "object") {
-    const keys = Object.keys(v as object).filter((k) => (v as any)[k] !== undefined).sort();
-    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonical((v as any)[k])}`).join(",")}}`;
-  }
-  throw new Error("not a lock value");
+  return form.canonical(v);
 }
 
 const sha256 = (b: Uint8Array | string) => createHash("sha256").update(b).digest();
 
 /// An entry's hash (hex): of everything but its signature.
 export function entryHash(e: Entry): string {
-  const { v, ws, seq, prev, at, kind, body } = e;
-  return sha256(`stillfail-lock/1\n${canonical({ v, ws, seq, prev, at, kind, body })}`).toString("hex");
+  return sha256(form.entryText(e)).toString("hex");
 }
 
 /// What a device or app key signs for an entry: a tag, then the hash's bytes. (A passkey signs the hash as its
@@ -196,10 +193,10 @@ export function genesis(e: Entry): LockState {
   const origins = Array.isArray(b.origins) ? b.origins.filter((o: unknown) => typeof o === "string") : [];
   const s: LockState = {
     ws: e.ws, seq: 0, head: entryHash(e), genesis: entryHash(e), origins, rp_id: str(b.rp_id) ?? "", cloud_keys: b.cloud_keys ?? null,
-    members: new Map(), devices: new Map(), passkeys: new Map(), stations: new Map(), gateways: new Set(), disabled: false,
+    members: new Map(), devices: new Map(), signKeys: new Map(), passkeys: new Map(), stations: new Map(), gateways: new Set(), disabled: false,
   };
   for (const m of arr(b.members)) s.members.set(member(m).sub, member(m));
-  for (const d of arr(b.devices)) add(s, device(d, 0));
+  for (const d of arr(b.devices)) add(s, { ...device(d, 0), ...(str(b.owner) !== null ? { by: str(b.owner)! } : {}) });
   for (const p of arr(b.passkeys)) s.passkeys.set(passkey(p).key, passkey(p));
   for (const st of arr(b.stations)) s.stations.set(station(st).key, station(st));
   for (const g of arr(b.gateways)) if (isId(g)) s.gateways.add(g);
@@ -214,6 +211,10 @@ const arr = (v: unknown): any[] => (Array.isArray(v) ? v : []);
 function add(s: LockState, d: Device) {
   if (!s.members.has(d.sub)) throw new Error("a device is a member's");
   s.devices.set(d.id, d);
+  if (d.sign_key !== undefined) {
+    const had = s.signKeys.get(d.id) ?? [];
+    if (!had.includes(d.sign_key)) s.signKeys.set(d.id, [...had, d.sign_key]);
+  }
 }
 
 /// The lock with one more entry; throws why the entry does not follow. `now`: the station's time (unix seconds), for
@@ -227,7 +228,7 @@ export function apply(prev: LockState, e: Entry, now: number | null): LockState 
   const by = signer(prev, e.sig, now);
   if (by === null) throw new Error("not signed by a device or passkey in the lock");
   if (!sigValid(e.sig, hash, prev.origins, prev.rp_id, by.passkey)) throw new Error("signature invalid");
-  const s: LockState = { ...prev, seq: e.seq, head: hash, members: new Map(prev.members), devices: new Map(prev.devices), passkeys: new Map(prev.passkeys), stations: new Map(prev.stations), gateways: new Set(prev.gateways) };
+  const s: LockState = { ...prev, seq: e.seq, head: hash, members: new Map(prev.members), devices: new Map(prev.devices), signKeys: new Map(prev.signKeys), passkeys: new Map(prev.passkeys), stations: new Map(prev.stations), gateways: new Set(prev.gateways) };
   const b = e.body ?? {};
   const managing = manager(by.role);
   const owning = by.role === "owner";
@@ -257,7 +258,7 @@ export function apply(prev: LockState, e: Entry, now: number | null): LockState 
     case "device": {
       const d = device(b, e.at);
       need(managing || d.sub === by.sub, "members add only their own devices");
-      add(s, d);
+      add(s, { ...d, by: by.sub });
       break;
     }
     case "device.remove": {
@@ -340,11 +341,7 @@ export class LockRefusal extends Error {
 
 /// A short code for a device, both sides work it out from its base key: what a person compares before confirming it.
 export function shortCode(base: string): string {
-  const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
-  const h = sha256(`stillfail-lock-code/1\0${base}`);
-  let out = "";
-  for (let i = 0; i < 6; i++) out += alphabet[h[i]! % 32];
-  return `${out.slice(0, 3)}-${out.slice(3)}`;
+  return form.shortCodeOf(sha256(form.codeText(base)));
 }
 
 /// An entry as it may have come over the wire: its shape checked (not its signature).

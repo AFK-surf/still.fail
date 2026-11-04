@@ -159,7 +159,7 @@ fn ride_then_sent(ahead : Bool) -> (Double, Double, Double) {
   let s = spr(0.0, 300.0, ball_damping(300.0), "test/ride")
   let at0 = t.time()
   let swap : Swap = { i: 0, n: 0, from: 1.0, key: None, sets: [[]], cur: 0, alpha: 1.0, drop: 0.0, lit: {}, ends: 0.0 }
-  let from : RideFrom = { swap, j: 0, w: 346.0, row_top: 0.0, o_to: 0.0, o_end: 0.0, k_to: 0.0, k_end: 0.0 }
+  let from : RideFrom = { swap, j: 0, w: 346.0, row_top: 0.0, o_to: 0.0, o_end: 0.0, k_to: 0.0, k_end: 0.0, up_to: 0.0, up_end: 0.0 }
   s.ride_on(300.0, fn(_t) { 100.0 }, at0, from, at=at0)
   let end = s.end()
   if ahead {

@@ -2,6 +2,7 @@
 // it, gathered from src/api/routes (one module a part of the API). Reads go to the readers (off the main thread); what
 // is not here answers 404 as an unknown route does.
 import { runtimeCompatible } from "./runtime-compat.ts";
+import { BUILD_HEADER, stationBuild } from "./oldest.ts";
 import { join } from "node:path";
 import type { ConfigFile } from "../ops/config.ts";
 import type { Cloud } from "../cloud/state.ts";
@@ -80,6 +81,8 @@ export type Tools = {
   sessionExists(key: string): boolean;
   /// The station's store, for what is written (on this thread); none while the station starts.
   store?: Store;
+  /// The station's data directory (stillfail.db, sessions/, thumbs/).
+  data?: string;
   /// The hub, the jobs and the rest of the agents' side, for what needs a session run, stopped or changed; none where
   /// there are no agents (tests of reads).
   agents?: AgentsParts;
@@ -139,7 +142,8 @@ export class Admin {
     const tools: Tools = {
       read: async (r, op, args) => {
         try {
-          return json(200, await this.readers.read(op, args, r.lang));
+          const signal = r.method === "GET" || (r.method === "POST" && READS.test(r.path)) ? r.signal : undefined;
+          return json(200, await this.readers.read(op, args, r.lang, { background: r.background === true, signal }));
         } catch (e) {
           return error(e instanceof HttpError ? e.status : 500, (e as Error).message);
         }
@@ -148,6 +152,7 @@ export class Admin {
       events: deps.events,
       sessionExists: (key) => deps.store?.getSession(key) != null,
       store: deps.store,
+      data: data ?? readers.data,
       get agents() {
         return agentsNow();
       },
@@ -202,6 +207,20 @@ export class Admin {
                 }),
             },
             { method: "POST", pattern: /^\/screens\/([^/]+)\/screenshot$/, handle: async (r: Request, [raw]: string[]) => screenDebug(deps.screens!, r, raw!, async (d) => ({ png: (await d.screenshot()).toString("base64") })) },
+            ...simActions(deps.screens),
+            // Its movie, the drive's way for the viewer to download (none: nothing was going on).
+            { method: "POST", pattern: /^\/screens\/([^/]+)\/record\/stop$/, handle: async (r: Request, [raw]: string[]) => screenDebug(deps.screens!, r, raw!, async (d) => (await d.recordStop()) ?? {}) },
+            {
+              method: "POST",
+              pattern: /^\/screens\/([^/]+)\/install$/,
+              handle: async (r: Request, [raw]: string[]) =>
+                screenDebug(deps.screens!, r, raw!, async (d) => {
+                  const path = (JSON.parse(r.body.toString("utf8") || "{}") as { path?: unknown }).path;
+                  const app = typeof path === "string" ? await d.install(path) : null;
+                  if (app === null) throw new ScreenRefused(400, "station.screen.notAnApp");
+                  return { app };
+                }),
+            },
             {
               method: "POST",
               pattern: /^\/screens\/([^/]+)\/relaunch$/,
@@ -226,8 +245,9 @@ export class Admin {
     const key = Object.entries(r.headers).find(([k]) => k.toLowerCase() === ONCE_KEY)?.[1];
     const keyed = key !== undefined && key !== "" && key.length <= 200 && r.method !== "GET" && r.method !== "HEAD";
     const answer = keyed ? await this.once(`${r.viewer.email}\0${r.path}\0${key}`, () => this.answer(r)) : await this.answer(r);
-    // Every answer says this station keeps writes to once.
+    // Every answer says this station keeps writes to once, and its build (api/oldest.ts).
     answer.headers["stillfail-idempotent"] = "1";
+    answer.headers[BUILD_HEADER] = stationBuild();
     return runtimeCompatible(r, answer);
   }
 
@@ -315,10 +335,11 @@ export class Admin {
     let next = 0;
     const work = async () => {
       for (let i = next++; i < paths.length; i = next++) {
+        if (r.signal?.aborted) return;
         const at = paths[i]!.indexOf("?");
         const path = at < 0 ? paths[i]! : paths[i]!.slice(0, at);
         const a = BATCHED.some((p) => p.test(path))
-          ? await this.answer({ ...r, method: "GET", path, query: at < 0 ? [] : queryPairs(paths[i]!.slice(at + 1)), search: at < 0 ? "" : paths[i]!.slice(at), body: Buffer.alloc(0) })
+          ? await this.answer({ ...r, background: true, method: "GET", path, query: at < 0 ? [] : queryPairs(paths[i]!.slice(at + 1)), search: at < 0 ? "" : paths[i]!.slice(at), body: Buffer.alloc(0) })
           : error(400, `not read in a batch: ${path}`);
         const text = Buffer.isBuffer(a.body) ? a.body.toString("utf8") : "";
         const isJson = Buffer.isBuffer(a.body) && (a.headers["content-type"] ?? "").startsWith("application/json") && text !== "";
@@ -326,6 +347,8 @@ export class Admin {
       }
     };
     await Promise.all(Array.from({ length: Math.min(BATCH_AT_ONCE, paths.length) }, work));
+    // A cancelled batch has no answer to keep under an idempotency key; a retry must read its pages again.
+    if (r.signal?.aborted) return error(503, "read cancelled");
     return json(200, `{"answers":[${answers.join(",")}]}`);
   }
 }
@@ -366,6 +389,38 @@ export function agentsRoutes(agents: AgentsParts, deps: { store?: Store; events?
 
 /// A simulator's logs, apps and restart: only for those who may drive it (what apps log may be private; a read-only
 /// member only sees the screen). 404 no such screen, 405 nothing to debug on it, 502 simctl failed.
+/// What a person does of a device as Device Hub would (docs/remote-screens.md "Simulators"), each with what it is told.
+function simActions(screens: ScreenHub) {
+  const route = (path: string, act: (d: SimDebug, said: Record<string, unknown>) => Promise<void>) => ({
+    method: "POST",
+    pattern: new RegExp(`^/screens/([^/]+)/${path}$`),
+    handle: async (r: Request, [raw]: string[]) =>
+      screenDebug(screens, r, raw!, async (d) => {
+        await act(d, JSON.parse(r.body.toString("utf8") || "{}"));
+        return {};
+      }),
+  });
+  return [
+    route("open-url", async (d, { url }) => {
+      if (typeof url !== "string" || !(await d.openUrl(url))) throw new ScreenRefused(400, "station.screen.badUrl");
+    }),
+    route("location", async (d, { at }) => {
+      if ((at !== undefined && typeof at !== "string") || !(await d.location((at as string | undefined) ?? null))) throw new ScreenRefused(400, "station.screen.badPlace");
+    }),
+    route("status-bar", async (d, { tidy }) => d.statusBar(tidy === true)),
+    route("biometrics", async (d, { what }) => {
+      if (typeof what !== "string" || !(await d.biometrics(what))) throw new ScreenRefused(400, "station.screen.noSetting");
+    }),
+    route("uninstall", async (d, { app }) => {
+      if (typeof app !== "string" || !(await d.uninstall(app))) throw new ScreenRefused(404, "station.screen.noApp");
+    }),
+    route("record", async (d, { panel }) => d.recordStart(panel === "inner" || panel === "cover" ? panel : null)),
+    route("push", async (d, { app, text }) => {
+      if (typeof app !== "string" || typeof text !== "string" || !(await d.push(app, text))) throw new ScreenRefused(404, "station.screen.noApp");
+    }),
+  ];
+}
+
 async function screenDebug(screens: ScreenHub, r: Request, raw: string, answer: (debug: SimDebug) => Promise<unknown>): Promise<Answer> {
   if (readOnly(r.viewer)) return error(403, "a read-only member does not read an app's logs");
   let id: string;
@@ -378,7 +433,9 @@ async function screenDebug(screens: ScreenHub, r: Request, raw: string, answer: 
     return json(200, JSON.stringify(await answer(screens.debugOf(id))));
   } catch (e) {
     if (e instanceof ScreenRefused) return error(e.status, tr(r.lang, e.key, e.args));
-    return error(502, tr(r.lang, "station.screen.failed", { said: (e as Error).message }));
+    // (simctl's own last line: what is before it is the command it ran and how it came to that)
+    const said = (e as Error).message.split("\n").map((l) => l.trim()).filter(Boolean).at(-1) ?? "";
+    return error(502, tr(r.lang, "station.screen.debugFailed", { said }));
   }
 }
 

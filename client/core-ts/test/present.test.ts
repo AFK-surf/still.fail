@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { conform } from "../src/conform.ts";
-import { holdLanguage } from "../src/i18n.ts";
+import { holdLanguage, setCurrent } from "../src/i18n.ts";
 import * as p from "../src/present.ts";
 import { packetsSince } from "../src/station/topics.ts";
 
@@ -10,6 +10,47 @@ holdLanguage();
 // deno-lint-ignore no-explicit-any
 type J = any;
 const GIB = 1024 ** 3;
+
+test("an incomplete Codex is not labelled up to date", () => {
+  const raw = { id: "codex", name: "Codex", installed: true, version: "0.166.0", latest: "0.166.0", newer: false, downgrade: false, updatable: false, repairable: true, state: "idle" };
+  const shown = p.software(raw) as J;
+  assert.equal(shown.tipText, "");
+  assert.equal((conform("SoftwareVersion", shown) as J).ok.repairable, true);
+});
+
+test("reset credits show the expiries known for each available card", () => {
+  const now = 1_900_000_000_000;
+  const day = 86_400_000;
+  const c = { now, offsetMin: 0 };
+  const raw = { state: "ok", windows: [], detail: null, checkedAt: now, resetCount: 3, resetExpiries: [now + 8 * day, now + 3 * day, now + 3 * day] };
+  let shown = p.times(raw, c) as J;
+  assert.equal(shown.resetText, "剩余 3 次 · 3 天后、3 天后、8 天后到期");
+  const shaped = conform("Quota", shown) as J;
+  assert.deepEqual(shaped.ok.resetExpiries, raw.resetExpiries);
+  assert.equal(shaped.ok.resetText, shown.resetText);
+  assert.equal((p.times({ ...raw, resetExpiries: [now + day + 19 * 3_600_000] }, c) as J).resetText, "剩余 3 次 · 1 天 19 小时后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + day] }, c) as J).resetText, "剩余 3 次 · 1 天后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + day - 1] }, c) as J).resetText, "剩余 3 次 · 23 小时 59 分钟后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + 6 * 3_600_000 + 35 * 60_000] }, c) as J).resetText, "剩余 3 次 · 6 小时 35 分钟后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + 3_600_000] }, c) as J).resetText, "剩余 3 次 · 1 小时后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + 5 * 60_000] }, c) as J).resetText, "剩余 3 次 · 5 分钟后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + 1] }, c) as J).resetText, "剩余 3 次 · 1 分钟内到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + 60_000 - 1] }, c) as J).resetText, "剩余 3 次 · 1 分钟内到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + 60_000] }, c) as J).resetText, "剩余 3 次 · 1 分钟后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + 90_000] }, c) as J).resetText, "剩余 3 次 · 1 分钟后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now - 1] }, c) as J).resetText, "剩余 3 次 · 已到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now - 1, now + day] }, c) as J).resetText, "剩余 3 次 · 已到期 · 1 天后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: undefined }, c) as J).resetText, "剩余 3 次");
+  assert.equal((p.times({ ...raw, resetCount: 0 }, c) as J).resetText, "剩余 0 次");
+  try {
+    setCurrent("en");
+    shown = p.times(raw, c) as J;
+    assert.equal(shown.resetText, "3 left · Expiry: in 3 days, in 3 days, in 8 days");
+    assert.equal((p.times({ ...raw, resetExpiries: [now + 1] }, c) as J).resetText, "3 left · Expiry: in 1 min");
+  } finally {
+    setCurrent("zh");
+  }
+});
 
 test("a_connection_is_said_in_words_and_only_what_is_off_is_coloured", () => {
   const unnamed = () => null;
@@ -245,9 +286,19 @@ test("the_last_speaker_is_named_and_an_agents_state_rides_on_it", () => {
   });
   const agent = p.lastBy(row("agent", "k"), me, [], members);
   assert.deepEqual([agent.name, agent.state], ["DeepSeek Flash", "block"]);
+  const switched = row("agent", "k");
+  switched.last.agentIdentity = { model: "claude-opus-5-5", runtime: "claude" };
+  const old = p.lastBy(switched, me, [], members);
+  assert.deepEqual([old.name, old.runtime], ["Opus 5.5", "claude"]);
+  switched.last.agentIdentity = { model: null, runtime: "claude" };
+  const defaultModel = p.lastBy(switched, me, [], members);
+  assert.deepEqual([defaultModel.model, defaultModel.runtime], [null, "claude"]);
   const legacy = row("agent", "k");
   delete legacy.last.agentIdentity;
   assert.equal(p.lastBy(legacy, me, [], members).name, "GPT-6 Astra");
+  legacy.last.authorRuntime = "claude";
+  legacy.last.authorModel = "claude-opus-5-5";
+  assert.deepEqual([p.lastBy(legacy, me, [], members).name, p.lastBy(legacy, me, [], members).runtime], ["Opus 5.5", "claude"]);
   const other = p.lastBy(row("person", "b@x.com"), me, [], members);
   assert.deepEqual([other.name, other.picture, other.mine], ["阿二", "https://p/b", false]);
   assert.equal(p.lastBy(row("person", "A@x.com"), me, [], members).name, "你");
@@ -280,16 +331,19 @@ test("how_a_turn_ended_says_itself_in_words", () => {
   assert.equal(words({ declared: "block", outcome: "completed" }), "需要你处理");
   assert.equal(words({ declared: "block", ending: "need_decision", outcome: "completed" }), "需要你处理");
   assert.equal(words({ outcome: "failed", detail: "rate_limit: You've hit your limit" }), "出错：额度已用完");
-  assert.equal(words({ outcome: "failed", detail: "auth: 401" }), "出错：登录失效");
-  assert.equal(words({ outcome: "aborted" }), "出错：被停止");
+  assert.equal(words({ outcome: "failed", detail: "auth: 401" }), "出错：账号认证失败");
+  assert.equal(words({ outcome: "aborted" }), "已停止");
   assert.equal(words({ outcome: "completed" }), "出错：意外停止");
   // Without its lead (the 待处理 list's line, its dot says that much): what it needs, why it stopped.
   const what = (turn: J) => p.rowStateLine({ agents: [p.session({ process: "warm", lastTurn: turn })] })?.[2];
   assert.equal(what({ declared: "block", ending: "need_help", need: "要 Stripe 的测试 key", outcome: "completed" }), "要 Stripe 的测试 key");
   assert.equal(what({ declared: "block", outcome: "completed" }), "需要你处理");
-  assert.equal(what({ outcome: "failed", detail: "auth: 401" }), "登录失效");
+  assert.equal(what({ outcome: "failed", detail: "auth: 401" }), "账号认证失败");
   assert.equal(what({ outcome: "aborted" }), "被停止");
   assert.equal(what({ outcome: "completed" }), "意外停止");
+  const stopped = p.session({ process: "warm", lastTurn: { outcome: "aborted" } });
+  const failed = p.session({ process: "warm", lastTurn: { outcome: "failed", detail: "auth: 401" } });
+  assert.equal(p.rowStateLine({ agents: [stopped, failed] }, false, (a) => a === stopped)?.[0], "出错：账号认证失败");
   let decided: J = { process: "warm", lastTurn: { declared: "block", ending: "need_decision", outcome: "completed" } };
   decided = p.session(decided);
   assert.equal(decided.mark, "block");
@@ -376,7 +430,7 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   asked.agents = [helped];
   assert.deepEqual(p.rowStateLine(asked), ["需要你处理：要 key", null, "要 key", { kind: "need", rest: "要 key" }]);
   asked.agents = [agent({ outcome: "failed", detail: "auth: 401" }, "warm")];
-  assert.equal(p.rowStateText(asked), "出错：登录失效");
+  assert.equal(p.rowStateText(asked), "出错：账号认证失败");
   asked.agents = [agent({ declared: "block", ending: "need_decision", outcome: "completed" }, "warm")];
   assert.equal(p.rowStateText(asked), "待处理 · 域名用哪个？");
   // Let go by the viewer: the row says nothing of it, its agent asking still.
@@ -404,7 +458,7 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   assert.deepEqual([waits.statusText, waits.statusLead, waits.statusRest], ["等待：CI 跑完", "wait", "CI 跑完"]);
   assert.deepEqual([works.statusLead, works.statusRest], [undefined, undefined]);
   const failed = agent({ outcome: "failed", detail: "auth: 401" }, "warm");
-  assert.deepEqual([failed.statusText, failed.statusLead], ["出错：登录失效", undefined]);
+  assert.deepEqual([failed.statusText, failed.statusLead], ["出错：账号认证失败", undefined]);
   const watching = p.session({ key: "w", process: "warm", pending: 0, lastTurn: { declared: "waiting", ending: "waiting", outcome: "completed", endedAt: 5 }, watch: { every: 60 } });
   assert.deepEqual([watching.statusText, watching.statusLead, watching.statusRest], ["监控中", "watch", "监控中"]);
 });
@@ -541,7 +595,7 @@ test("what_the_clients_show_is_put_in_here", () => {
   const fromSlack = p.person({ id: "slack:c:U1", name: "A", email: "a@x.com", via: "slack", picture: "https://avatars.slack-edge.com/a_72.png" }, me, members);
   assert.equal(fromSlack.shown.picture, "https://avatars.slack-edge.com/a_72.png", "a Slack person's own picture, over their account's");
   let h: J = {
-    hostname: "studio", os: "macOS 26", arch: "arm64", cpus: 8, load: 0.5, uptimeSec: 90_000,
+    hostname: "willow", os: "macOS 26", arch: "arm64", cpus: 8, load: 0.5, uptimeSec: 90_000,
     memory: { usedBytes: 8 * GIB, totalBytes: 32 * GIB, swapUsedBytes: null },
     disk: { totalBytes: 1000 * GIB, freeBytes: 50 * GIB }, emberRssBytes: 100 * 1024 ** 2,
   };
@@ -550,14 +604,14 @@ test("what_the_clients_show_is_put_in_here", () => {
   assert.deepEqual([h.summary, h.facts[3]], ["8 核 · 32 GB", "已运行 1 天 1 小时"]);
   assert.deepEqual([h.meters[0].label, h.meters[0].value], ["CPU 负载", "50%"]);
   h.cpuBusy = 0.93;
-  h.cpuModel = "Apple M2 Max";
+  h.cpuModel = "Apple M1 Pro";
   h = p.host(h);
   const cpu = h.meters[0];
-  assert.deepEqual([cpu.label, cpu.percent, cpu.level, cpu.value, cpu.note], ["CPU", 93, "red", "93%", "负载 4.0 · Apple M2 Max"]);
+  assert.deepEqual([cpu.label, cpu.percent, cpu.level, cpu.value, cpu.note], ["CPU", 93, "red", "93%", "负载 4.0 · Apple M1 Pro"]);
   assert.deepEqual([h.meters[2].level, h.meters[2].value, h.emberText], ["red", "剩余 50.0 GB / 1000 GB", "still.fail 100 MB"]);
   assert.match(h.usage, /^内存 .+ · 磁盘 剩余 50\.0 GB \/ 1000 GB$/);
-  assert.equal(h.identity, "Apple M2 Max · 32 GB · macOS 26");
-  assert.deepEqual(h.details.map((d: J) => `${d.label} ${d.value}`), ["主机名 studio", "芯片 Apple M2 Max · 8 核 · arm64", "已运行 1 天 1 小时", "still.fail 进程占用 100 MB"]);
+  assert.equal(h.identity, "Apple M1 Pro · 32 GB · macOS 26");
+  assert.deepEqual(h.details.map((d: J) => `${d.label} ${d.value}`), ["主机名 willow", "芯片 Apple M1 Pro · 8 核 · arm64", "已运行 1 天 1 小时", "still.fail 进程占用 100 MB"]);
   assert.deepEqual([cpu.left, cpu.remaining, cpu.big, cpu.unit, cpu.title, cpu.total], [7, "空闲 7%", "7", "%", "CPU 空闲", "负载 4.0"]);
   const left = h.meters[2];
   assert.deepEqual([left.left, left.big, left.unit, left.title, left.total], [5, "50.0", "GB", "磁盘剩", "共 1000 GB"]);
@@ -580,6 +634,29 @@ test("a_meter_is_drawn_as_an_allowance_to_what_is_left", () => {
   h.memory.usedBytes = 7 * GIB;
   h = p.host(h);
   assert.equal(h.meters[1].remaining, "剩 0.0 G");
+});
+
+test("a station's GPUs are shown separately with only measurements that are known", () => {
+  const one = p.host({ gpus: [{ name: "Apple M1 Pro", cores: 16, busy: 0.21 }] });
+  assert.deepEqual(one.gpus, [{ big: "79", unit: "%", left: 79, level: "ok", title: "GPU 空闲", total: "16 核", model: "Apple M1 Pro" }]);
+  const several = p.host({ gpus: [
+    { name: "NVIDIA RTX 4090", busy: 0.37, memoryUsedBytes: 4 * GIB, memoryTotalBytes: 24 * GIB },
+    { name: "Tesla T4", busy: 0, memoryTotalBytes: 16 * GIB },
+    { name: "GPU without metrics" },
+  ] });
+  assert.deepEqual(several.gpus, [
+    { big: "63", unit: "%", left: 63, level: "ok", title: "GPU 1 空闲", total: "显存剩 20/24G", model: "NVIDIA RTX 4090" },
+    { big: "100", unit: "%", left: 100, level: "ok", title: "GPU 2 空闲", total: "显存 16G", model: "Tesla T4" },
+    { big: "—", unit: "", left: 100, level: "ok", title: "GPU 3 空闲", total: "", model: "GPU without metrics" },
+  ]);
+  assert.deepEqual(p.host({}).gpus, [], "older stations do not say GPUs");
+  assert.deepEqual(p.host({ gpus: null }).gpus, [], "none detected");
+  assert.deepEqual(p.host({ gpus: [{ name: "GPU", busy: -1, memoryUsedBytes: 2 * GIB }] }).gpus,
+    [{ big: "—", unit: "", left: 100, level: "ok", title: "GPU 空闲", total: "显存已用 2G", model: "" }]);
+  assert.deepEqual(p.host({ gpus: [{ name: "AMD Radeon", memoryUsedBytes: 4 * GIB, memoryTotalBytes: 16 * GIB }] }).gpus,
+    [{ big: "12.0", unit: "GB", left: 75, level: "ok", title: "GPU 显存剩", total: "共 16 GB", model: "AMD Radeon" }]);
+  assert.deepEqual(p.host({ gpus: [{ name: "AMD Radeon", memoryUsedBytes: 17 * GIB, memoryTotalBytes: 16 * GIB }] }).gpus,
+    [{ big: "—", unit: "", left: 100, level: "ok", title: "GPU 空闲", total: "显存 16G", model: "AMD Radeon" }]);
 });
 
 test("loss_is_counted_on_the_way_in_use_and_not_across_a_change_of_it", () => {

@@ -89,6 +89,9 @@ export class Share {
   /// How the station's adb holds the phone, as the offer's stream is told; `version` counts its changes.
   state: AdbState;
   version = 0;
+  /// The titles of the chats whose own screens are up on the phone (displays.ts): said with the state, for its
+  /// notification.
+  screens: string[] = [];
   /// Told each time `state` is set (Shares' `stated`).
   onSet: ((state: AdbState) => void) | null = null;
   /// Why the phone last turned a tunnel down (its adbd not there, say): what adb not getting in is put down to.
@@ -155,6 +158,21 @@ export class Share {
     const waiters = this.waiters;
     this.waiters = [];
     for (const f of waiters) f();
+  }
+
+  /// The chats whose screens are up changed: said to the phone with the state.
+  setScreens(titles: string[]) {
+    if (titles.length === this.screens.length && titles.every((t, i) => t === this.screens[i])) return;
+    this.screens = titles;
+    this.version++;
+    const waiters = this.waiters;
+    this.waiters = [];
+    for (const f of waiters) f();
+  }
+
+  /// What the offer's stream is told: the state, and the chats whose screens are up (none: not said).
+  line(): Json {
+    return this.screens.length === 0 ? this.state : { ...this.state, screens: this.screens };
   }
 
   /// The phone turned a tunnel down, saying why.
@@ -238,6 +256,11 @@ export class Shares {
 
   get isStopping() {
     return this.stopping;
+  }
+
+  /// The chats whose own screens are up on `email`'s phone (displays.ts), told to it.
+  screens(email: string, titles: string[]) {
+    for (const share of this.byKey.values()) if (share.owner.email.toLowerCase() === email.toLowerCase()) share.setScreens(titles);
   }
 
   /// `email`'s grants changed: their phones connected anew in the servers they are to be in now.
@@ -334,7 +357,10 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
   log.info("adb", "adb offer", { offer: number, ...about(conn), main: conn.remoteId() === ask.phone, adbd: info.adbd, pair: info.pair, connect: info.connect });
   // adbd's port changing (Wireless debugging turned off and on) is said by phones from 2026-10-26 on.
   const moved = before !== undefined && before.connect !== null && info.connect !== null && before.connect !== info.connect;
-  if (before === undefined || before.adbd !== info.adbd || moved || share.state.adb === "failed" || share.state.adb === "missing") {
+  // A phone paired with its own adbd offers again without changing its ports. Retry if it was unpaired, and remember
+  // the offer if the previous connection is still under way (its unpaired refusal may arrive after the new offer).
+  const waitingForPhone = share.state.adb === "unpaired" || (share.state.adb === "connecting" && share.connecting !== null);
+  if (before === undefined || before.adbd !== info.adbd || moved || share.state.adb === "failed" || share.state.adb === "missing" || waitingForPhone) {
     share.failures = 0;
     void connect(shares, share).catch(() => {});
   }
@@ -359,7 +385,7 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
     if (share.version !== seen) {
       seen = share.version;
       try {
-        await writeLine(stream, share.state);
+        await writeLine(stream, share.line());
       } catch {
         ended = "stream";
         break;

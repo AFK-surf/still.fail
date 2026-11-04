@@ -1,4 +1,4 @@
-// 29-glass (e2e/traces/glass.trace: Mini1 against the local still.fail, 92 messages): the chat under its frosted
+// 29-glass (e2e/traces/glass.trace: a local still.fail, 92 messages): the chat under its frosted
 // glass, the top bar and the composer glass over the messages. Four long messages sent from the composer, enough that
 // the first runs on under the top bar's glass; scrolled up, the last runs under the composer's. (The end-to-end run's
 // pictures had the glass's rows not flat; here, the frame's own frosted glass over the words.)
@@ -71,6 +71,18 @@ test "29-glass" {
     }
     // the first scrolled to run on under the top bar's glass (how far it went up past it the layout's: the composer's
     // room under the list, the words' lines)
+    // The list virtualizes messages above the viewport. Bring the first one into the tree before measuring it.
+    for _ in 0..<12 {
+      match f.t.rect_of(glass_words[0]) {
+        Some(_) => break
+        None => ()
+      }
+      f.wheel(-300.0)
+      let eased = f.t.rest_of("wheel ease")
+      if eased > f.t.time() && eased < @double.infinity {
+        f.run_to(eased)
+      }
+    }
     let (_, top_y, _, top_h, _, _) = f.t.drawn_glass().filter(fn(g) { g.4 == 5 && g.1 < 100.0 })[0]
     match f.t.rect_of(glass_words[0]) {
       Some((_, y, _, h)) => {
@@ -94,6 +106,21 @@ test "29-glass" {
       f.run_to(eased)
     }
     // scrolled up: what was above runs under the composer's
+    // Align a visible message with the composer's pane; fixed scrolling can stop between messages.
+    let (_, bottom_y, _, bottom_h, _, _) = f.t.drawn_glass().filter(fn(g) { g.4 == 5 && g.1 > 350.0 })[0]
+    match f.t.rect_of(glass_words[2]) {
+      Some((_, y, _, h)) => {
+        let down = (bottom_y + bottom_h / 2.0 - (y + h / 2.0)).to_int().to_double()
+        if down.abs() >= 1.0 {
+          f.wheel(-down)
+          let rest = f.t.rest_of("wheel ease")
+          if rest > f.t.time() && rest < @double.infinity {
+            f.run_to(rest)
+          }
+        }
+      }
+      None => ()
+    }
     assert_true(under_glass(f, top=false))
     f.end()
   })

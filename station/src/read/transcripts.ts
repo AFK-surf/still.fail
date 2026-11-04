@@ -14,7 +14,9 @@ import { join } from "node:path";
 import { threadId } from "node:worker_threads";
 import { zstdDecompressSync } from "node:zlib";
 import type { RuntimeKind } from "../agents/runtime.ts";
-import { type Mark, type TailState, TranscriptTail, recordOf } from "./tail.ts";
+import { log } from "../ops/log.ts";
+import { readSegments } from "./packed.ts";
+import { type Mark, type TailState, type TranscriptRef, TranscriptTail, recordOf } from "./tail.ts";
 import { READING, type ReadState, type TimelineEntry, brief, storage, timelineOf, utf8 } from "./transcript.ts";
 
 /// The transcripts whose reading is kept in memory, the most recently read last (a reader's heap is small: one's reading
@@ -26,8 +28,17 @@ export type Marked = { reading: number; state: TailState; marks: Mark[] };
 
 const kept = new Map<string, Marked>();
 
-/// The transcript put away whose history is being read, decompressed (one is hundreds of MB): its pages are read one
-/// after another. Let go once another history is read (`chainOf`), and with the reader.
+/// How far a transcript's reading may go on past what is kept of it on disk: a reader starting again (every one at each
+/// start of the station, some 30 a day on a station) reads on from there, each line parsed again. Written down at each mark
+/// alone, a reading was up to MARK_BYTES behind: 27 MB over the transcripts written to in the last hours on a station
+/// (2026-11-02), read again after every update, the first reads of each session's history taking 3 to 7 s.
+const KEPT_BYTES = 256 << 10;
+
+/// Where each transcript's reading kept on disk stands (its offset), as this reader last read or wrote it.
+const onDisk = new Map<string, number>();
+
+/// The transcript put away before there were segments (read/packed.ts) whose history is being read, decompressed (one is
+/// hundreds of MB): its pages are read one after another. Let go once another history is read (`chainOf`), and with the reader.
 let unpacked: { path: string; stamp: string | null; bytes: Buffer } | null = null;
 
 /// Where the readings of transcripts are kept on disk.
@@ -44,22 +55,38 @@ export function forgetMarks(dir: string, paths: string[]): void {
 /// A transcript's reading, read on to where it is written now: from what is kept, else from disk, else from its start.
 /// `dir`: where readings are kept on disk (null: nowhere, as in tests).
 function markedOf(runtime: RuntimeKind, path: string, dir: string | null): Marked {
+  // What a slow one read, and from where: 2 to 6 s for a chat opened on a station (2026-11-03), unsaid of which.
+  const started = performance.now();
   let had = kept.get(path) ?? null;
+  const from = had !== null ? "memory" : "disk";
   kept.delete(path);
   if (had === null && dir !== null) {
     try {
       const v = JSON.parse(readFileSync(fileOf(dir, path), "utf8")) as Marked;
-      if (v.reading === READING && v.state.path === path) had = v;
+      if (v.reading === READING && v.state.path === path && (v.state.runtime ?? runtime) === runtime) {
+        had = v;
+        onDisk.set(path, v.state.offset);
+      }
     } catch {}
   }
+  if (had !== null && (had.state.runtime ?? runtime) !== runtime) had = null;
   const tail = had === null ? new TranscriptTail(runtime, path, null, false, true) : TranscriptTail.from(runtime, had.state, had.marks);
+  const marked = performance.now();
   tail.read();
   const now: Marked = { reading: READING, state: tail.snapshot(), marks: tail.marks };
+  const ms = Math.round(performance.now() - started);
+  if (ms >= 1_000) {
+    log.warn("readers", "a transcript's reading went slowly", {
+      ms, markedMs: Math.round(marked - started), from: had === null ? "start" : from, bytes: now.state.offset - (had?.state.offset ?? 0),
+      entries: now.state.count - (had?.state.count ?? 0), anew: tail.anew, packed: now.state.packedStamp !== null, path,
+    });
+  }
   kept.set(path, now);
   if (kept.size > KEPT) kept.delete(kept.keys().next().value!);
-  // Written down when there is a mark more (or it was written anew, or put away or back): what a reader starting again
-  // reads on from there is less than MARK_EVERY entries and MARK_BYTES.
-  const changed = had === null || tail.anew || now.marks.length !== had.marks.length || now.state.packedStamp !== had.state.packedStamp;
+  // Written down when there is a mark more (or it was written anew, or put away or back), or it read on KEPT_BYTES past
+  // what is written down: what a reader starting again reads on from there is less than that.
+  const behind = now.state.offset - (onDisk.get(path) ?? -Infinity);
+  const changed = had === null || tail.anew || now.marks.length !== had.marks.length || now.state.packedStamp !== had.state.packedStamp || behind >= KEPT_BYTES;
   if (dir !== null && changed) {
     try {
       mkdirSync(dir, { recursive: true });
@@ -68,6 +95,7 @@ function markedOf(runtime: RuntimeKind, path: string, dir: string | null): Marke
       const tmp = `${file}.${process.pid}.${threadId}.tmp`;
       writeFileSync(tmp, JSON.stringify(now));
       renameSync(tmp, file);
+      onDisk.set(path, now.state.offset);
     } catch {}
   }
   return now;
@@ -75,9 +103,9 @@ function markedOf(runtime: RuntimeKind, path: string, dir: string | null): Marke
 
 /// A session's transcripts read as one (those of the runtime sessions it ran in before first): each one's reading, read
 /// on to where it is written now.
-export function chainOf(runtime: RuntimeKind, paths: string[], dir: string | null): Marked[] {
-  if (unpacked !== null && !paths.includes(unpacked.path)) unpacked = null;
-  return paths.map((path) => markedOf(runtime, path, dir));
+export function chainOf(runtime: RuntimeKind, paths: TranscriptRef[], dir: string | null): Marked[] {
+  if (unpacked !== null && !paths.some((ref) => (typeof ref === "string" ? ref : ref.path) === unpacked!.path)) unpacked = null;
+  return paths.map((ref) => typeof ref === "string" ? markedOf(runtime, ref, dir) : markedOf(ref.runtime, ref.path, dir));
 }
 
 /// How many entries a chain of transcripts has.
@@ -85,22 +113,25 @@ export const lengthOf = (chain: Marked[]): number => chain.reduce((n, m) => n + 
 
 /// Where the reading of a chain of transcripts stands now (read/tail.ts `snapshot`): what the live view of a session
 /// goes on from on the main thread, which then reads none of what came before (sessions/live.ts).
-export function stateOf(runtime: RuntimeKind, paths: string[], dir: string | null): TailState[] {
+export function stateOf(runtime: RuntimeKind, paths: TranscriptRef[], dir: string | null): TailState[] {
   return chainOf(runtime, paths, dir).map((m) => m.state);
 }
 
 /// Entries `from ..< to` of a chain of transcripts as `chainOf` read it (fewer where it has fewer, or where one could not
 /// be read: none after it, which would be given as others), whole or in brief (transcript.ts `brief`): each read from
 /// the mark before it.
-export function entriesOf(runtime: RuntimeKind, chain: Marked[], from: number, to: number, inBrief: boolean): TimelineEntry[] {
+/// `read`: what was read for them, added to (bytes from the marks on, lines parsed, whether of a transcript put away).
+export type Read = { bytes: number; lines: number; packed: number };
+
+export function entriesOf(runtime: RuntimeKind, chain: Marked[], from: number, to: number, inBrief: boolean, read: Read = { bytes: 0, lines: 0, packed: 0 }): TimelineEntry[] {
   const entries: TimelineEntry[] = [];
   let first = 0;
   for (const m of chain) {
     const [a, b] = [Math.max(from, first), Math.min(to, first + m.state.count)];
     if (a < b) {
-      const read = readBetween(runtime, m, a - first, b - first);
-      for (const e of read) entries.push(inBrief ? brief(e) : e);
-      if (read.length < b - a) break;
+      const got = readBetween(m.state.runtime ?? runtime, m, a - first, b - first, read);
+      for (const e of got) entries.push(inBrief ? brief(e) : e);
+      if (got.length < b - a) break;
     }
     first += m.state.count;
   }
@@ -108,7 +139,7 @@ export function entriesOf(runtime: RuntimeKind, chain: Marked[], from: number, t
 }
 
 /// Entries `from ..< to` of one transcript, read from the last mark at or before `from` up to where its reading stands.
-function readBetween(runtime: RuntimeKind, m: Marked, from: number, to: number): TimelineEntry[] {
+function readBetween(runtime: RuntimeKind, m: Marked, from: number, to: number, read: Read): TimelineEntry[] {
   let mark: Mark = { offset: 0, index: 0, inner: [] };
   for (const each of m.marks) {
     if (each.index > from) break;
@@ -122,6 +153,8 @@ function readBetween(runtime: RuntimeKind, m: Marked, from: number, to: number):
   let index = mark.index;
   /// A line read: whether more are wanted.
   const line = (bytes: Buffer): boolean => {
+    read.bytes += bytes.length + 1;
+    read.lines++;
     const record = recordOf(utf8.decode(bytes));
     if (record === undefined) return true;
     const entries: TimelineEntry[] = [];
@@ -143,8 +176,18 @@ function readBetween(runtime: RuntimeKind, m: Marked, from: number, to: number):
   };
   const disk = storage(path);
   if (disk !== path) {
-    // Put away: decompressed once while its history is read.
+    read.packed++;
+    // Put away: the segments from the mark on, while more are wanted (read/packed.ts); one put away before there were
+    // segments decompressed once while its history is read.
     try {
+      let carry: Buffer = Buffer.alloc(0);
+      const segmented = readSegments(disk, mark.offset, end, (piece) => {
+        const left = lines(carry.length > 0 ? Buffer.concat([carry, piece]) : piece);
+        if (left === null) return false;
+        carry = Buffer.from(left);
+        return true;
+      });
+      if (segmented) return out;
       const stamp = m.state.packedStamp;
       if (unpacked?.path !== path || unpacked.stamp !== stamp) unpacked = { path, stamp, bytes: zstdDecompressSync(readFileSync(disk)) };
       lines(unpacked.bytes.subarray(mark.offset, end));
@@ -182,6 +225,7 @@ const PIECE_READ = 1 << 20;
 /// Lets go of the readings kept in memory (for tests: a reader started again), and of those on disk in `dir`.
 export function forgetKept(dir: string | null = null): void {
   kept.clear();
+  onDisk.clear();
   unpacked = null;
   if (dir !== null) rmSync(dir, { recursive: true, force: true });
 }

@@ -15,6 +15,7 @@ import { fromBase64, get, hex, isObject, parseJson, toJsonBytes } from "../util.
 import type { StationAddr } from "./addr.ts";
 import { concat, readAll, replyHeader, type RequestHead, type ScreenAsk, type StationWire, type WireReply, type WireSocket } from "./wire.ts";
 import { timed } from "../spent.ts";
+import { BUILD_HEADER, ownBuild, stationTooOld } from "./oldest.ts";
 
 export const IDEMPOTENCY_KEY = "idempotency-key";
 /// A request that only reads though it is no GET (POST /changed/<list>, what is held in its body): asked again on
@@ -63,6 +64,9 @@ export function answered(span: Span, reply: WireReply): void {
 const empty = new Uint8Array();
 /// How often a part on its way says how much of it has come (a part is 4 MB).
 const PART_STEP = 64 * 1024;
+/// A player's bytes go on in smaller pieces: at 32 KB/s, holding 64 KB made it wait two seconds for each piece,
+/// including the first one. Keep some batching across the app's boundary without making a slow link wait that long.
+const STREAM_STEP = 4 * 1024;
 
 /// A reply's body as the station wrote it: decompressed as it comes when it came compressed, each piece as soon as it
 /// is whole (an event stream's, event by event); by the host where it has a way of its own (a native app's shell:
@@ -95,7 +99,7 @@ function plainHere(reply: WireReply, partial: boolean): Pull<Uint8Array> {
       } catch (error) {
         // Live streams can end between flushed blocks; a finite JSON reply must end its frame.
         if (ended && partial) continue;
-        return yield* Effect.fail(new HostError(t("core-logic.mesh.read_failed", { error: (error as Error).message })));
+        return yield* Effect.fail(Object.assign(HostError.said(t("core-logic.mesh.read_failed")), { cause: (error as Error).message }));
       }
     }
   });
@@ -113,7 +117,7 @@ function plainBy(z: Unzstd, reply: WireReply, partial: boolean): Pull<Uint8Array
       if (chunk === null) {
         ended = true;
         // Live streams can end between flushed blocks; a finite JSON reply must end its frame.
-        if (!whole && !partial) return yield* Effect.fail(new HostError(t("core-logic.mesh.cut")));
+        if (!whole && !partial) return yield* Effect.fail(HostError.said(t("core-logic.mesh.cut")));
         return null;
       }
       if (chunk.length === 0) continue;
@@ -165,6 +169,7 @@ export class Requests {
     span.set("stillfail.station", station.station);
     if (bodySize > 0) span.set("http.request.body.size", bodySize);
     const h: [string, string][] = [...headers, ["traceparent", span.context.traceparent()], [LANG_HEADER, current()]];
+    if (ownBuild() !== "") h.push([BUILD_HEADER, ownBuild()]);
     if (!path.startsWith("/preview/")) h.push(["stillfail-runtimes", RUNTIMES.join(",")]);
     if (!path.startsWith("/preview/") && !headers.some(([k]) => k.toLowerCase() === "accept-encoding")) h.push(["accept-encoding", ZSTD]);
     // A write carries a key of its own: a station that keeps writes to once does it once however often it arrives.
@@ -180,7 +185,7 @@ export class Requests {
   /// One whole request: its status, its reply's head, its body. `quiet`: in the background, not said to be waited on.
   /// `heard`: how much of the body has come, now and then as it comes (every PART_STEP); `wrote`: how much of what is
   /// sent has gone, as it goes (a wire that sends it whole says nothing); `sink`: a 2xx answer's body handed over as it
-  /// comes, in pieces of PART_STEP (the last smaller), not kept (the body given is empty); `onHead`: the reply's status
+  /// comes, in pieces of at least STREAM_STEP (the last smaller), not kept (the body given is empty); `onHead`: the reply's status
   /// and head as they come, before its body. `json`: validate finite compression/JSON and bound each idle wait.
   exchange(station: StationAddr, method: string, path: string, headers: [string, string][], body: Uint8Array, quiet: boolean, ctx: SpanContext | null, heard?: (loaded: number) => void, wrote?: (sent: number) => void, sink?: (piece: Uint8Array) => void, onHead?: (status: number, headers: [string, string][]) => void, json = false): Effect.Effect<{ status: number; headers: [string, string][]; body: Uint8Array; json?: unknown }, CoreError> {
     const idleMs = json ? JSON_IDLE_MS : 0;
@@ -193,6 +198,8 @@ export class Requests {
           Effect.gen({ self: this }, function* () {
             const reply = yield* within(this.wire.request(station, head, body, wrote), idleMs);
             answered(span, reply);
+            const tooOld = stationTooOld(reply.headers);
+            if (tooOld !== null) return yield* Effect.fail(tooOld);
             onHead?.(reply.status, reply.headers);
             // What came over the link is counted (and said in the span); what it says, decompressed.
             let came = 0;
@@ -213,7 +220,7 @@ export class Requests {
               if (heard && loaded - told >= PART_STEP) heard((told = loaded));
               if (give) {
                 held.push(chunk);
-                if ((heldBytes += chunk.length) >= PART_STEP) hand();
+                if ((heldBytes += chunk.length) >= STREAM_STEP) hand();
               }
             }, give === undefined);
             hand();
@@ -276,6 +283,8 @@ export class Requests {
       const reply = opened.success;
       answered(span, reply);
       span.end();
+      const tooOld = stationTooOld(reply.headers);
+      if (tooOld !== null) return yield* Effect.fail(tooOld);
       if (reply.status < 200 || reply.status >= 300) {
         const bytes = yield* Effect.orElseSucceed(readAll(yield* plain(this.#core.host, reply)), () => empty);
         const data = parseJson(bytes);

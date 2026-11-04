@@ -112,9 +112,7 @@ export interface Host {
   ed25519Sign?(seed: Uint8Array, message: Uint8Array): { publicKey: Uint8Array; signature: Uint8Array } | null;
 
   /// A zstd stream taken apart by the host, open while the scope is, where it has a way of its own (a native app's
-  /// shell: libzstd). None: the core's own, fzstd, in JS, which Hermes (no JIT) runs at some 10 MB of what it makes a
-  /// second on an M2 Max, a tenth of V8's and far under native (bench/zstd-read.ts): what a station sends, compressed,
-  /// is taken apart on the core's thread, slower again on a phone holding back its clock.
+  /// shell: libzstd). None: the core's own, fzstd, in JS. Host decompression keeps this work off the core's thread.
   unzstd?(): Effect.Effect<Unzstd, HostError, Scope.Scope>;
 
   /// Small persistent values by key: accounts, the device key, preferences.
@@ -125,6 +123,9 @@ export interface Host {
   /// file given to the system by its path, not carried whole). Null while none is kept; none on a host whose values are
   /// not files (a web page).
   storagePath?(key: string): string | null;
+  /// Where a person's or a bot's picture at `url` is fetched from: a browser's, through still.fail cloud for one its
+  /// server keeps from other pages (picture-relay.ts). None: from `url`.
+  pictureVia?(url: string): string;
   /// Bytes `start` to `end` of a file the app saved where the person keeps files (`at`, as the system named it once it
   /// was saved: a path, a content address); null when it is no longer there or cannot be read. A host without one (the
   /// web: what the browser saved is out of the page's reach) keeps the device's copy of a download in its cache.
@@ -141,6 +142,10 @@ export interface Host {
   secureGet?(key: string, opts: { user: boolean; reason?: string }): Effect.Effect<Uint8Array | null, HostError>;
   secureSet?(key: string, value: Uint8Array, opts: { user: boolean }): Effect.Effect<void, HostError>;
   secureDelete?(key: string): Effect.Effect<void, HostError>;
+  /// The `user: false` values this app kept under `key` where `secureGet` no longer finds them, newest first: an iOS
+  /// app's Keychain items named by its whole home, which iOS moves (…/Data/Application/<UUID>) as it updates the app.
+  /// What `secureGet` reads is one of them; the core picks another that is the one it needs (the lock's signing key).
+  securePast?(key: string): Effect.Effect<Uint8Array[], HostError>;
   /// The person asked to say yes, as reading a `user: true` value asks them, `reason` in the prompt: before what they
   /// should mean (turning the workspace lock off). Succeeds at once where nothing can ask (Windows, Linux, the
   /// Electron app on a Mac without Touch ID); fails as `secureGet` does (`user_cancelled`, `no_device_lock`, `not_in_front`).

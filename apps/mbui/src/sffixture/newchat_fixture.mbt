@@ -17,6 +17,8 @@ pub(all) struct NewFix {
   mut d_runtime : String
   mut d_effort : String
   mut d_profile : String
+  /// The most context it runs with, in tokens ("" its model's whole window)
+  mut context : String
   mut made : Int
   /// MBUI_FIXTURE=stations-slow: its stations not asked for yet (0), being read (1), read (2)
   mut reading : Int
@@ -46,13 +48,14 @@ pub let new_fix : NewFix = {
   d_runtime: "claude",
   d_effort: "high",
   d_profile: "",
+  context: "",
   made: 0,
   reading: 0,
   crowded: false,
   tall: false,
   preset: "",
   presets_late: false,
-  presets: [fix_preset_design(), fix_preset("p-tc", "tstst + iroh", ["tstst", "iroh"], "")],
+  presets: [fix_preset_design(), fix_preset("p-tc", "web-app + backend", ["web-app", "backend"], "")],
   liked: [],
   providers: false,
 }
@@ -63,7 +66,7 @@ pub fn fix_preset(id : String, name : String, dirs : Array[String], instructions
   {
     "id": Json::string(id),
     "name": Json::string(name),
-    "dirs": Json::array(dirs.map(fn(d) { { "path": Json::string(if d == "still.fail" { "/Users/me/WebstormProjects/still.fail" } else { "/Users/me/code/" + d }), "repo": Json::string(fix_repo(d)) } })),
+    "dirs": Json::array(dirs.map(fn(d) { { "path": Json::string(if d == "still.fail" { "/Users/me/projects/still.fail" } else { "/Users/me/code/" + d }), "repo": Json::string(fix_repo(d)) } })),
     "instructions": Json::string(instructions),
     "createdBy": "me@example.com",
     "createdAt": 1793500000000.0,
@@ -76,7 +79,7 @@ fn fix_repo(name : String) -> String {
   match name {
     "still.fail" => "github.com/AFK-surf/still.fail"
     "mbui" => "github.com/AFK-surf/mbui"
-    _ => "github.com/zzj3720/" + name
+    _ => "github.com/acme/" + name
   }
 }
 
@@ -94,16 +97,16 @@ pub fn fix_presets_say() -> Unit {
 }
 
 ///|
-/// still.fail 开发: still.fail on the first station, its design folder on MBA.
+/// still.fail 开发: still.fail on the first station, its design folder on Maple.
 fn fix_preset_design() -> Json {
-  match fix_preset("p-sf", "still.fail 开发", ["still.fail"], "改界面先发改前改后对比图。") {
+  match fix_preset("p-sf", "still.fail 开发", ["still.fail"], "先检查页面布局。") {
     Object(m) => {
       let p = m.copy()
       let dirs = match p.get("dirs") {
         Some(Array(a)) => a.copy()
         _ => []
       }
-      dirs.push({ "path": "/Users/me/Design/still.fail 设计稿", "repo": Json::null(), "station": "ws1/st2", "stationName": "MBA" })
+      dirs.push({ "path": "/Users/me/Design/still.fail 设计稿", "repo": Json::null(), "station": "ws1/st2", "stationName": "Maple" })
       p["dirs"] = Json::array(dirs)
       Json::object(p)
     }
@@ -112,8 +115,8 @@ fn fix_preset_design() -> Json {
 }
 
 ///|
-/// A made-up station's presets and the folders it offers (the `presets` topic): MBA's a design folder and a clone of
-/// still.fail of its own (offered under MBA too), the first station's the rest.
+/// A made-up station's presets and the folders it offers (the `presets` topic): Maple's a design folder and a clone of
+/// still.fail of its own (offered under Maple too), the first station's the rest.
 pub fn fix_presets_of(station : String) -> Json {
   if station.has_suffix("st2") {
     {
@@ -147,10 +150,10 @@ pub fn fix_presets_of(station : String) -> Json {
 pub fn fix_candidates() -> Json {
   Json::array(
     [
-      ("still.fail", "~/WebstormProjects/still.fail", "github.com/AFK-surf/still.fail", 41, false),
-      ("tstst", "~/code/tstst", "github.com/zzj3720/tstst", 9, false),
-      ("iroh", "github.com/zzj3720/iroh", "github.com/zzj3720/iroh", 3, true),
-      ("riff", "~/code/riff", "github.com/zzj3720/riff", 0, false),
+      ("still.fail", "~/projects/still.fail", "github.com/AFK-surf/still.fail", 12, false),
+      ("web-app", "~/code/web-app", "github.com/acme/web-app", 9, false),
+      ("backend", "github.com/acme/backend", "github.com/acme/backend", 3, true),
+      ("notes", "~/code/notes", "github.com/acme/notes", 0, false),
     ].map(fn(x) {
       let (name, at, repo, chats, cached) = x
       let path = if cached { "/Users/me/.stillfail/repos/" + name } else { "/Users/me" + at.unsafe_substring(start=1, end=at.length()) }
@@ -177,16 +180,16 @@ pub fn fix_candidates() -> Json {
 ///|
 /// A station a new chat can start on, as the core's `newChat` lists it (StationView): what it is, its agents at work
 /// (`overview`) and what is left of its machine (`host`); how this device reaches it is the `stationNet` view's (the
-/// made-up stations' `net`: Studio's, none of MBA's).
+/// made-up stations' `net`: Willow's, none of Maple's).
 pub fn fix_station(id : String) -> Json {
   match id {
     "st2" =>
       {
         "station": "ws1/st2",
         "id": "st2",
-        "name": "MBA",
+        "name": "Maple",
         "icon": "glyph:laptop",
-        "summary": "空闲 · Apple M4 · 16 GB · macOS 27.0.1",
+        "summary": "空闲 · Apple M4 · 16 GB · macOS 26",
         "online": true,
         "host": {
           "meters": [
@@ -203,14 +206,14 @@ pub fn fix_station(id : String) -> Json {
       {
         "station": "ws1/st1",
         "id": "st1",
-        "name": "Studio",
+        "name": "Willow",
         "icon": "glyph:desktop",
-        "summary": "2 个 agent 正在运行 · Apple M2 Max · 64 GB · macOS 27.0.1",
+        "summary": "2 个 agent 正在运行 · Apple M1 Pro · 32 GB · macOS 26",
         "online": true,
         "host": {
           "meters": [
             fix_meter("CPU", 72, "ok", "72", "%"),
-            fix_meter("内存", 18, "amber", "11.5", "GB"),
+            fix_meter("内存", 18, "amber", "5.8", "GB"),
             fix_meter("磁盘", 41, "ok", "380", "GB"),
           ],
         },
@@ -436,6 +439,16 @@ pub fn fix_pick() -> Json {
       ["low", "medium", "high"]
     },
     "fastAvailable": n.tall,
+    // (how much context Claude Code can be kept to under the model's 1M)
+    "contexts": if n.d_runtime == "claude" {
+      [("", "完整 · 1M"), ("500000", "500K"), ("300000", "300K"), ("200000", "200K")].map(fn(c) {
+        Json::object({ "id": Json::string(c.0), "text": Json::string(c.1) })
+      })
+      |> Json::array
+    } else {
+      []
+    },
+    "contextNow": Json::string(n.context),
     "accounts": [
       {
         "id": "p1",
@@ -609,7 +622,7 @@ fn fix_new_chat_of(f : Fixture) -> Json {
       "accounts": [],
       "pickAccount": false,
       "waiting": true,
-      "problem": "正在读取 Studio 的 Profile",
+      "problem": "正在读取 Willow 的 Profile",
       "pick": Json::null(),
       "frequent": [],
     }
@@ -852,6 +865,7 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
       take("runtime", fn(s) { n.d_runtime = s })
       take("effort", fn(s) { n.d_effort = s })
       take("profile", fn(s) { n.d_profile = s })
+      take("context", fn(s) { n.context = s })
       n.model = n.d_model
       n.runtime = n.d_runtime
       n.effort = n.d_effort
@@ -878,7 +892,7 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
 
 ///|
 /// The files' page's tabs of files-split, as the core keeps them: two, the one shown split, 文档 in front and the home
-/// beside it; 照片 of MBA the other.
+/// beside it; 照片 of Maple the other.
 pub fn fix_split_tabs() -> Json {
   {
     "tabs": [

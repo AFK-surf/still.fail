@@ -7,138 +7,259 @@
 // controls at its end, its options a table) are gone.
 
 ///|
-/// 自动决策 (AutomaticDecisions; the narrow app's AutomaticDecisionsScreen): the point a decision is made at (the
-/// completion of a turn), what it does, how many stations have it on (the core's `settings`), a row to its page.
-pub fn decisions_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
-  let look = look_of(c)
-  let said = (core.topic)("settings", { "scope": Json::string(here.workspace) }).value
-  @sf.page(c, on_back=core.pop, frame~, "auto-decisions", @sf.t("web-pages.automaticDecisions.title"), about=@sf.t("web-pages.automaticDecisions.choosePoint"), [
-    fn() {
-      @sf.group(c, fn() {
-        if @sf.link_row(c, "auto-completion",
-            @sf.t("web-pages.automaticDecisions.completion"),
-            note=@sf.t(if look == Narrow { "web-pages.automaticDecisions.completionShort" } else { "web-pages.automaticDecisions.completionNote" }),
-            value=text(said, "decisionsText"),
-          ) {
-          (core.push)(AutoCompletion)
-        }
+/// 自动决策 (AutomaticDecisions; the narrow app's AutomaticDecisionsScreen) as nodes, laid out by the `width` its frame
+/// gives it (page_node; what it is for a wide page's mark beside its title, its tips over the window from `tips`): its
+/// one decision on a card: whether a chat is done, how it is decided now (the core's), short where narrow and whole where
+/// wide; pressed, that decision's page.
+pub fn decisions_node(
+  v : @view.View,
+  core : Core,
+  here : () -> Here,
+  on_back~ : () -> Unit,
+  frame~ : () -> PageFrame,
+  said? : (@sf.PageSaid) -> Unit,
+  width? : () -> Double,
+  tips? : @sf.TipLayer,
+) -> Unit {
+  // (what it says of itself to a frame's bar that names it, what it is for with it: its `about`)
+  let told = said
+  let said = fn() { (core.topic)("settings", { "scope": Json::string(here().workspace) }).value }
+  @sf.page_node(
+    v,
+    fn() { @sf.t("web-pages.automaticDecisions.title") },
+    fn() { ["decisions"] },
+    fn(b, _) {
+      @sf.group_node(b, fn(g) {
+        @sf.link_row_node(
+          g,
+          fn() { @sf.t("web-pages.automaticDecisions.completion") },
+          fn() { (core.push)(AutoCompletion) },
+          note=fn() { @sf.t("web-pages.automaticDecisions.completionShort") },
+          wide_note=fn() { @sf.t("web-pages.automaticDecisions.completionNote") },
+          value=fn() { text(said(), "decisionsText") },
+        )
       })
     },
-  ])
-}
-
-///|
-/// The completion rule's page (AutomaticDecisionCompletion, the narrow app's AutomaticDecisionCompletionScreen): a
-/// section a station, its rule where it can be set (completion_station), else why not (offline, older, connecting); a
-/// wait while the stations are read; 重新发现模型 at its title's end.
-pub fn completion_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
-  let topic = @settings.stations_of(core, here)
-  let body : Array[() -> Unit] = []
-  match topic.value {
-    Some(Array(a)) => {
-      if a.length() == 0 {
-        body.push(fn() { @sf.page_note(c, @sf.t("web-pages.automaticDecisions.addStation")) })
-      }
-      for st in a {
-        let s = Some(st)
-        let view = field(field(s, "overview"), "automaticDecisions")
-        body.push(fn() {
-          @sf.section(c, text(s, "name"), fn() {
-            if flag(s, "online") && view is Some(Object(_)) {
-              completion_station(c, core, s, view)
-            } else {
-              @sf.page_note(c, @sf.t(
-                if !flag(s, "online") {
-                  "web-pages.automaticDecisions.offlineNote"
-                } else if !(field(s, "overview") is Some(Object(_))) {
-                  "common.connecting"
-                } else {
-                  "web-pages.automaticDecisions.upgrade"
-                },
-              ))
-            }
-          })
-        })
-      }
-    }
-    _ =>
-      body.push(fn() {
-        match topic.error {
-          Some(e) => @sf.page_note(c, error_text(e), bad=true)
-          // (read the first time: rows' shapes where the stations' will be, AutomaticDecisions.tsx's Waiting, 2)
-          None =>
-            @sf.waiting(c, text=@sf.t("common.readingStations"), fn() {
-              for st in [4, 6] {
-                @sf.section(c, @sf.sample_words(st), fn() {
-                  form_rows(c, core.quiet(), "sample", "sample", Some(form_view_sample()), Some({ "enabled": true }))
-                })
-              }
-            })
-        }
-      })
-  }
-  @sf.page(
-    c,
-    on_back=core.pop,
+    on_back~,
     frame~,
-    "auto-completion",
-    @sf.t("web-pages.automaticDecisions.completion"),
-    about=@sf.t("web-pages.automaticDecisions.completionNote"),
-    // 重新发现模型: every online station's models read again
-    actions=fn() {
-      if @sf.button(c, @sf.t("web-pages.automaticDecisions.refresh"), key="auto-refresh", tone=Ghost, icon="refresh") {
-        c.tell("auto-refresh", fn() {
-          match topic.value {
-            Some(Array(a)) =>
-              for st in a {
-                if flag(Some(st), "online") {
-                  @settings.act(
-                    core,
-                    @sf.t("web-pages.automaticDecisions.refreshAction"),
-                    "automaticDecisions.refresh",
-                    obj([("station", str(text(Some(st), "station")))]),
-                    done=@sf.t("web-pages.automaticDecisions.refreshed"),
-                  )
-                }
-              }
-            _ => ()
-          }
-        })
-      }
-    },
-    body,
+    about=fn() { @sf.t("web-pages.automaticDecisions.choosePoint") },
+    said?=told,
+    width?,
+    tips?,
   )
 }
 
 ///|
-/// A station's rule (AutomaticDecisionPanel, the narrow app's DecisionPanel), in the core's draft (`decisionForm`), a
-/// group of its rows: 启用, the model it checks with (picked from the core's choices), 检查未决策的 chat where the station
-/// can, its archive policy (to its page); 保存修改 under them once changed, what went wrong under that.
-fn completion_station(c : @ui.Ctx, core : Core, s : Json?, view : Json?) -> Unit {
-  let station = text(s, "station")
-  if !flag(view, "canEdit") {
-    @sf.page_note(c, @sf.t("web-pages.automaticDecisions.adminOnly"))
-    return
-  }
-  let form = decision_form(c, core, station)
-  let topic = (core.topic)("decisionForm", { "station": str(station), "form": str(form) })
-  let d = topic.value
-  guard d is Some(Object(_)) else {
-    match topic.error {
-      Some(e) => @sf.page_note(c, error_text(e), bad=true)
-      None =>
-        @sf.waiting(c, text=@sf.t("web-pages.automaticDecisions.readingConfig"), fn() {
-          form_rows(c, core.quiet(), station, form, view, Some({ "enabled": true }))
-        })
+/// The completion rule's page (AutomaticDecisionCompletion, the narrow app's AutomaticDecisionCompletionScreen) made
+/// once as nodes (page_node, laid out by the `width` its frame gives it, narrow where none is given): a section a
+/// station, its rule where it can be set (completion_station_node), else why not (offline, older, connecting); while
+/// the stations are read the first time, their sections in their bones, what could not be read said instead; 重新发现模型
+/// at its title's end (where a frame's bar names it, in that bar: `bar_actions`). All as the core says it. What it
+/// says of itself told `said`; what is said of what the pointer rests on, in `tips`.
+pub fn completion_node(
+  v : @view.View,
+  core : Core,
+  here : () -> Here,
+  on_back~ : () -> Unit,
+  frame~ : () -> PageFrame,
+  said? : (@sf.PageSaid) -> Unit,
+  width? : () -> Double,
+  tips? : @sf.TipLayer,
+  bar_actions? : ((@view.View) -> Unit, (@sf.Look) -> Double) -> Unit,
+) -> Unit {
+  let topic = fn() { @settings.stations_of(core, here()) }
+  // (the stations' drafts the page's own, as the old frame kept them by station: each opened as its rows first come,
+  // kept while the station goes offline and comes back, all dropped as the page is let go)
+  let forms : Map[String, String] = {}
+  let form_of = fn(station : String) -> String {
+    match forms.get(station) {
+      Some(f) => f
+      None => {
+        let f = @settings.decision_form_open(core, station)
+        forms[station] = f
+        f
+      }
     }
   }
-  form_rows(c, core, station, form, view, d)
+  v.owns(fn() {
+    for station, form in forms {
+      @settings.decision_form_drop(core, station, form)
+    }
+    forms.clear()
+  })
+  |> ignore
+  let stations = fn() {
+    match topic().value {
+      Some(Array(a)) => a
+      _ => []
+    }
+  }
+  // 重新发现模型: every online station's models read again
+  let actions = fn(l : @view.View) {
+    @sf.button_node(l, fn() { @sf.t("web-pages.automaticDecisions.refresh") }, fn() {
+      for st in @signals.untracked(stations) {
+        if flag(Some(st), "online") {
+          @settings.act(
+            core,
+            @sf.t("web-pages.automaticDecisions.refreshAction"),
+            "automaticDecisions.refresh",
+            obj([("station", str(text(Some(st), "station")))]),
+            done=@sf.t("web-pages.automaticDecisions.refreshed"),
+          )
+        }
+      }
+    }, tone=Ghost, icon="refresh")
+    |> ignore
+  }
+  match bar_actions {
+    Some(f) => f(actions, fn(_) { @sf.button_height() })
+    None => ()
+  }
+  @sf.page_node(
+    v,
+    fn() { @sf.t("web-pages.automaticDecisions.completion") },
+    fn() {
+      match topic().value {
+        Some(Array(a)) => if a.length() == 0 { ["none"] } else { a.map(fn(st) { "station/" + text(Some(st), "station") }) }
+        _ => ["waiting"]
+      }
+    },
+    fn(b, key) {
+      match key {
+        "none" => @sf.page_note_node(b, fn() { @sf.t("web-pages.automaticDecisions.addStation") })
+        "waiting" =>
+          b.pick(fn() { topic().error is Some(_) }, fn(p, failed) {
+            if failed {
+              @sf.page_note_node(p, fn() {
+                match topic().error {
+                  Some(e) => error_text(e)
+                  None => ""
+                }
+              }, bad=fn() { true })
+            } else {
+              // (read the first time: rows' shapes where the stations' will be, AutomaticDecisions.tsx's Waiting, 2)
+              @sf.waiting_node(
+                p,
+                fn(s) {
+                  for n in [4, 6] {
+                    @sf.section_node(s, fn() { @sf.sample_words(n) }, fn(sec) {
+                      form_rows_node(sec, core.quiet(), "sample", "sample", fn() { Some(form_view_sample()) }, fn() {
+                        Some({ "enabled": true })
+                      })
+                    })
+                  }
+                },
+                note=fn() { { reading: true, text: @sf.t("common.readingStations"), failing: [] } },
+              )
+            }
+          })
+        _ => {
+          let station = key.unsafe_substring(start=8, end=key.length())
+          let s = fn() {
+            match stations().search_by(fn(st) { text(Some(st), "station") == station }) {
+              Some(i) => Some(stations()[i])
+              None => None
+            }
+          }
+          let view = fn() { field(field(s(), "overview"), "automaticDecisions") }
+          @sf.section_node(b, fn() { text(s(), "name") }, fn(sec) {
+            sec.pick(
+              fn() {
+                if flag(s(), "online") && view() is Some(Object(_)) {
+                  ""
+                } else if !flag(s(), "online") {
+                  "web-pages.automaticDecisions.offlineNote"
+                } else if !(field(s(), "overview") is Some(Object(_))) {
+                  "common.connecting"
+                } else {
+                  "web-pages.automaticDecisions.upgrade"
+                }
+              },
+              fn(p, why) {
+                if why == "" {
+                  completion_station_node(p, core, station, form_of, view, tips?)
+                } else {
+                  @sf.page_note_node(p, fn() { @sf.t(why) })
+                }
+              },
+            )
+          })
+        }
+      }
+    },
+    on_back~,
+    frame~,
+    about=fn() { @sf.t("web-pages.automaticDecisions.completionNote") },
+    actions~,
+    said?,
+    width?,
+    tips?,
+  )
 }
 
 ///|
-/// A station's rule as its draft (`d`, the core's `decisionForm`) says it, a group of its rows; 保存修改 under them
-/// once changed, what went wrong under that.
-fn form_rows(c : @ui.Ctx, core : Core, station : String, form : String, view : Json?, d : Json?) -> Unit {
+/// A station's rule (AutomaticDecisionPanel, the narrow app's DecisionPanel) as nodes: only its managers' (else said
+/// so); its draft (`decisionForm`, the page's: `form_of` opens it the first time it is asked for) read as the core says
+/// it (its rows in their bones while it is read the first time, what could not be read said instead).
+fn completion_station_node(
+  v : @view.View,
+  core : Core,
+  station : String,
+  form_of : (String) -> String,
+  view : () -> Json?,
+  tips? : @sf.TipLayer,
+) -> Unit {
+  v.pick(fn() { flag(view(), "canEdit") }, fn(p, can) {
+    if !can {
+      @sf.page_note_node(p, fn() { @sf.t("web-pages.automaticDecisions.adminOnly") })
+      return
+    }
+    let form = form_of(station)
+    let topic = fn() { (core.topic)("decisionForm", { "station": str(station), "form": str(form) }) }
+    p.pick(
+      fn() {
+        match (topic().value, topic().error) {
+          (Some(Object(_)), _) => 0
+          (_, Some(_)) => 1
+          _ => 2
+        }
+      },
+      fn(q, state) {
+        match state {
+          0 => form_rows_node(q, core, station, form, view, fn() { topic().value }, tips?)
+          1 =>
+            @sf.page_note_node(q, fn() {
+              match topic().error {
+                Some(e) => error_text(e)
+                None => ""
+              }
+            }, bad=fn() { true })
+          _ =>
+            @sf.waiting_node(
+              q,
+              fn(s) { form_rows_node(s, core.quiet(), station, form, view, fn() { Some({ "enabled": true }) }) },
+              note=fn() { { reading: true, text: @sf.t("web-pages.automaticDecisions.readingConfig"), failing: [] } },
+            )
+        }
+      },
+    )
+  })
+}
+
+///|
+/// A station's rule as its draft (`d`, the core's `decisionForm`) says it, as nodes: a group of its rows (启用, the model
+/// it checks with picked from the core's choices beside its row, 检查未决策的 chat where the station can, a spinner at
+/// its end while asked and a mark while it failed, why said under the pointer; its archive policy, to its page);
+/// 保存修改 under them once changed, what went wrong under that. None of it changed while a change of it is on its way.
+fn form_rows_node(
+  v : @view.View,
+  core : Core,
+  station : String,
+  form : String,
+  view : () -> Json?,
+  d : () -> Json?,
+  tips? : @sf.TipLayer,
+) -> Unit {
   let call = fn(action : String, input : Array[(String, Json)]) {
     @settings.act(
       core,
@@ -148,86 +269,140 @@ fn form_rows(c : @ui.Ctx, core : Core, station : String, form : String, view : J
       done=if action == "save" { @sf.t("web-pages.automaticDecisions.saved") } else { "" },
     )
   }
-  let saving = is_doing(core, ["automaticDecisions.form.save"], [("station", station), ("form", form)])
-  let reviewing = is_doing(core, ["automaticDecisions.review"], [("station", station)])
-  let busy = flag(d, "pending") || saving
-  let model_id = text(d, "model")
-  let chosen = match items(view, "models").iter().find_first(fn(m) { text(Some(m), "id") == model_id }) {
-    Some(m) => text(Some(m), "name")
-    None =>
-      if model_id == "" {
-        @sf.t("web-pages.automaticDecisions.pickModel")
-      } else {
-        @sf.t("web-pages.automaticDecisions.unavailable", args=[("model", model_id)])
-      }
-  }
-  let can_review = flag(view, "canReview") && flag(field(field(view, "settings"), "completion"), "enabled") && !flag(d, "dirty")
-  @sf.group(c, fn() {
-    let on = flag(d, "enabled")
-    if @sf.switch_row(c, "auto-enabled/" + station, @sf.t("web-pages.automaticDecisions.enabled"), on, disabled=busy) != on {
-      c.tell("auto-enabled/" + station, fn() { call("edit", [("enabled", Json::boolean(!on))]) })
-    }
-    let mkey = "auto-model/" + station
-    if @sf.link_row(c, mkey, @sf.t("web-pages.automaticDecisions.model"), value=chosen) && !busy {
-      let choices = items(field(d, "pick"), "options").map(fn(o) { @sf.choice(text(Some(o), "model"), text(Some(o), "name")) })
-      @sf.pick(@sf.t("web-pages.automaticDecisions.model"), choices, model_id, fn(now) {
-        if now != model_id {
-          call("edit", [("model", str(now))])
+  let on_form = [("station", station), ("form", form)]
+  let saving = fn() { is_doing(core, ["automaticDecisions.form.save"], on_form) }
+  let reviewing = fn() { is_doing(core, ["automaticDecisions.review"], [("station", station)]) }
+  let review_failed = fn() { failed_of(core, ["automaticDecisions.review"], [("station", station)]) }
+  let busy = fn() { flag(d(), "pending") || saving() }
+  let model_id = fn() { text(d(), "model") }
+  let chosen = fn() {
+    match items(view(), "models").iter().find_first(fn(m) { text(Some(m), "id") == model_id() }) {
+      Some(m) => text(Some(m), "name")
+      None =>
+        if model_id() == "" {
+          @sf.t("web-pages.automaticDecisions.pickModel")
+        } else {
+          @sf.t("web-pages.automaticDecisions.unavailable", args=[("model", model_id())])
         }
-      }, from=Of(c.id(mkey)))
     }
-    if can_review &&
-      @sf.link_row(
-        c,
-        "auto-review/" + station,
-        @sf.t("web-pages.automaticDecisions.review"),
+  }
+  let can_review = fn() {
+    flag(view(), "canReview") && flag(field(field(view(), "settings"), "completion"), "enabled") && !flag(d(), "dirty")
+  }
+  let policy = fn() {
+    match field(view(), "policy") {
+      Some(Object(_)) as p => p
+      _ => None
+    }
+  }
+  let policy_line = fn() {
+    let summary = text(policy(), "summaryText")
+    @sf.t("web-pages.archivePolicy.optionCount", args=[("n", items(policy(), "options").length().to_string())]) +
+    (if summary == "" { "" } else { " · " + summary })
+  }
+  let policy_failed = fn() { count(policy(), "failed") > 0 }
+  @sf.group_node(v, fn(g) {
+    @sf.switch_row_node(
+      g,
+      fn() { @sf.t("web-pages.automaticDecisions.enabled") },
+      fn() { flag(d(), "enabled") },
+      fn(now) { call("edit", [("enabled", Json::boolean(now))]) },
+      disabled=busy,
+    )
+    // (its choices beside its row, as what opened them)
+    g.box(fn(at) {
+      @sf.link_row_node(
+        at,
+        fn() { @sf.t("web-pages.automaticDecisions.model") },
+        fn() {
+          if !@signals.untracked(busy) {
+            let now = @signals.untracked(model_id)
+            let choices = @signals.untracked(fn() { items(field(d(), "pick"), "options") }).map(fn(o) {
+              @sf.choice(text(Some(o), "model"), text(Some(o), "name"))
+            })
+            let (x, y, w, h) = at.rect()
+            @sf.pick(@sf.t("web-pages.automaticDecisions.model"), choices, now, fn(picked) {
+              if picked != now {
+                call("edit", [("model", str(picked))])
+              }
+            }, from=At(x, y, w, h))
+          }
+        },
+        value=chosen,
+      )
+    })
+    |> ignore
+    g.show(can_review, fn(r) {
+      @sf.link_row_node(
+        r,
+        fn() { @sf.t("web-pages.automaticDecisions.review") },
+        fn() {
+          if !@signals.untracked(reviewing) && !@signals.untracked(busy) {
+            @settings.act(
+              core,
+              @sf.t("web-pages.automaticDecisions.reviewAction"),
+              "automaticDecisions.review",
+              obj([("station", str(station))]),
+              done=@sf.t("web-pages.automaticDecisions.reviewStarted"),
+            )
+          }
+        },
         acts=true,
         // (asked: a spinner at its end; failed: a mark there, why under the pointer)
-        tail=fn() {
-          @settings.doing_mark(c, reviewing, failed_of(core, ["automaticDecisions.review"], [("station", station)]), inline=true)
-        },
-      ) &&
-      !reviewing &&
-      !busy {
-      @settings.act(
-        core,
-        @sf.t("web-pages.automaticDecisions.reviewAction"),
-        "automaticDecisions.review",
-        obj([("station", str(station))]),
-        done=@sf.t("web-pages.automaticDecisions.reviewStarted"),
+        tail=fn(e) { doing_mark_node(e, reviewing, review_failed, tips?) },
+        tail_shown=fn() { reviewing() || review_failed() is Some(_) },
       )
-    }
-    match field(view, "policy") {
-      Some(Object(_)) as policy => {
-        let summary = text(policy, "summaryText")
-        let line = @sf.t("web-pages.archivePolicy.optionCount", args=[("n", items(policy, "options").length().to_string())]) +
-          (if summary == "" { "" } else { " · " + summary })
-        let failed = count(policy, "failed") > 0
-        if @sf.link_row(
-            c,
-            "auto-policy/" + station,
-            @sf.t("web-pages.archivePolicy.title"),
-            note=if failed { "" } else { line },
-            trouble=if failed { line } else { "" },
-          ) {
-          (core.push)(AutoPolicy(station))
+    })
+    g.show(fn() { policy() is Some(_) }, fn(r) {
+      @sf.link_row_node(
+        r,
+        fn() { @sf.t("web-pages.archivePolicy.title") },
+        fn() { (core.push)(AutoPolicy(station)) },
+        note=fn() { if policy_failed() { "" } else { policy_line() } },
+        trouble=fn() { if policy_failed() { policy_line() } else { "" } },
+      )
+    })
+  })
+  v.show(fn() { flag(d(), "dirty") }, fn(s) {
+    @sf.block_node(s, fn(b) {
+      @sf.button_node(b, fn() { @sf.t("web-pages.automaticDecisions.save") }, fn() { call("save", []) }, tone=Primary, busy=saving, disabled=busy)
+      |> ignore
+    })
+  })
+  v.show(fn() { failed_of(core, ["automaticDecisions.form.save"], on_form) is Some(_) }, fn(n) {
+    @sf.page_note_node(n, fn() { failed_of(core, ["automaticDecisions.form.save"], on_form).unwrap_or("") }, bad=fn() { true })
+  })
+}
+
+///|
+/// Where what someone set going shows how it is (doing_mark's) as nodes: a spinner while it is under way, a small red
+/// mark while it failed a moment ago, why said under the pointer (in `tips`, where given).
+fn doing_mark_node(v : @view.View, running : () -> Bool, failed : () -> String?, tips? : @sf.TipLayer) -> Unit {
+  v.pick(fn() { if running() { 1 } else if failed() is Some(_) { 2 } else { 0 } }, fn(p, what) {
+    match what {
+      1 => @sf.spinner_node(p, size=@sf.spinner_inline) |> ignore
+      2 => {
+        let mark = @sf.icon_node(p, "info", doing_mark_inline, By(fn() { @sf.theme().p.red }))
+        match tips {
+          Some(t) =>
+            @sf.tip_node(t, mark, fn() {
+              match failed() {
+                Some("") | None => @sf.t("web-main.doing.failed")
+                Some(why) => why
+              }
+            })
+            |> ignore
+          None => ()
         }
       }
       _ => ()
     }
   })
-  if flag(d, "dirty") {
-    @sf.block(c, fn() {
-      if @sf.button(c, @sf.t("web-pages.automaticDecisions.save"), key="auto-save/" + station, tone=Primary, busy=saving, disabled=busy) {
-        c.tell("auto-save/" + station, fn() { call("save", []) })
-      }
-    })
-  }
-  match failed_of(core, ["automaticDecisions.form.save"], [("station", station), ("form", form)]) {
-    Some(why) => @sf.page_note(c, why, bad=true)
-    None => ()
-  }
 }
+
+///|
+/// doing_mark's mark beside a row's words (inline: 12).
+let doing_mark_inline : Double = 12.0
 
 ///|
 /// What a station says of its rule, made up, for what is shown while it is read (form_rows in its bones): it may be

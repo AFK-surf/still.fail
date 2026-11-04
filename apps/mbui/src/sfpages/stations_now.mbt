@@ -26,16 +26,44 @@ pub fn share_card_open(src : Source, w : Workspace) -> Unit {
     // (as large as the picture while the window has the room; past it, the picture drawn smaller: @sf.whole_fitted)
     stage=true,
     // the looks it can be drawn in, over its buttons (share_looks.mbt)
-    above=fn(c) { share_looks_pick(c, src) },
+    above=fn(c) { share_looks_pick(c, src, w) },
     // (its title said as it is drawn, in the language then)
     live=fn() { (@sf.t("web-main.stations.shareCard"), "", "") },
+    // what is handed out only once all the look draws is here (its pictures, its face: share_stand), how far they are
+    // said on the button meanwhile (2026-11-03 用户：「在没有准备好资源的时候不让保存」「每张独立下载并提供进度」); one not had,
+    // 下载失败，重试 in its place
     foot=fn(c, _) {
       let (label, icon) = @sf.picture_out_way()
-      if @sf.button(c, label, key="share-card/copy", tone=Primary, icon~) {
-        c.take_shot(share_shot, fn(png) { picture_out(c, png) |> ignore }, scale=share_scale)
+      match share_stand(src) {
+        LooksReady =>
+          if @sf.button(c, label, key="share-card/copy", tone=Primary, icon~) {
+            c.take_shot(share_shot, fn(png) { picture_out(c, png) |> ignore }, scale=share_scale)
+          }
+        LooksGoing(part) => {
+          let going = match part {
+            Some(p) => @sf.t("web-main.stations.shareFetching", args=[("percent", (p * 100.0).to_int().to_string())])
+            None => @sf.t("web-main.stations.shareFetchingSoon")
+          }
+          @sf.button(c, going, key="share-card/copy", tone=Primary, busy=true, disabled=true) |> ignore
+        }
+        LooksNotHad(_) =>
+          if @sf.button(c, @sf.t("web-main.stations.shareFetchFailed"), key="share-card/copy", tone=Primary, icon="retry") {
+            share_fetch_again(src)
+          }
       }
     },
   )
+}
+
+///|
+/// The files of the chosen look not had asked for again.
+fn share_fetch_again(src : Source) -> Unit {
+  let look = share_look(src)
+  let all = look_needs.get(look.key).unwrap_or([]).copy()
+  for f in @sfbase.share_face_whole_files(senren_drawn) {
+    all.push(f.0)
+  }
+  @sfbase.looks_files_again(src, all)
 }
 
 ///|
@@ -77,13 +105,48 @@ fn share_picture(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 /// The poster (share_picture) as box `id`: round as a card, or `flat` (handed out: its ground to its edges), in the look
 /// chosen under it (share_look: the night's here, the others' share_looks.mbt).
 fn share_poster(c : @ui.Ctx, src : Source, w : Workspace, id : Int, flat? : Bool = false) -> Int {
-  let fleet = (src.topic)("fleet", { "scope": Json::string(w.id) }).value
-  match share_look(src) {
-    "poster" => poster_look(c, fleet, id, flat)
-    "receipt" => receipt_look(c, fleet, id, flat)
-    "terminal" => terminal_look(c, fleet, id, flat)
-    _ => night_look(c, fleet, id, flat)
+  let look = share_look(src)
+  // (千恋＊万花's words in a face the app does not carry: had from the site as their pictures are, share_senren.mbt)
+  if look.key.has_prefix(senren_prefix) {
+    @sfbase.share_face_whole(src, senren_drawn)
   }
+  let (b, files) = senren_drawing(src, fn() { (look.draw)(c, share_fleet(src, w), id, flat) })
+  if look_needs.get(look.key) != Some(files) {
+    look_needs[look.key] = files
+  }
+  b
+}
+
+///|
+/// The files of the looks (@sfbase.looks_file) each look drew its card with as it was last drawn, by its key: those it
+/// is handed out only once they are here (share_stand). None for a look of the app's own alone.
+// kept across runs: what a look draws its card with is the same in every run
+let look_needs : @sf.LiveMap[String, Array[String]] = @sf.LiveMap::new()
+
+///|
+/// How the files the chosen look needs stand (@sfbase.looks_stand): its pictures as it drew them, and the whole share
+/// face for 千恋＊万花's; a look not drawn yet is on its way.
+fn share_stand(src : Source) -> @sfbase.LooksStand {
+  let look = share_look(src)
+  if !look.key.has_prefix(senren_prefix) {
+    return LooksReady
+  }
+  match look_needs.get(look.key) {
+    Some(files) => {
+      let all = files.copy()
+      for f in @sfbase.share_face_whole_files(senren_drawn) {
+        all.push(f.0)
+      }
+      @sfbase.looks_stand(src, all)
+    }
+    None => LooksGoing(None)
+  }
+}
+
+///|
+/// What the card to share of workspace `w` says (the core's `fleet` view), whatever look draws it.
+fn share_fleet(src : Source, w : Workspace) -> Json? {
+  (src.topic)("fleet", { "scope": Json::string(w.id) }).value
 }
 
 ///|

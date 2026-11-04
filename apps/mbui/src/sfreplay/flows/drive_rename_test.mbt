@@ -1,6 +1,7 @@
-// 19-drive-rename (e2e/traces/drive-rename.trace: Studio against the local still.fail): in the lent folder the photo
+// 19-drive-rename (e2e/traces/drive-rename.trace: Mac against the local still.fail): in the lent folder the photo
 // the run's 18 put up right clicked: 重命名, its new name typed in its row (⏎) (drive.check, then drive.rename from the
 // old name to the new: Flow::end has it asked as the run asked it).
+// before it: 15-drive-lend
 
 ///|
 test "19-drive-rename" {

@@ -159,7 +159,7 @@ fn quoting(calls : Array[Made]) -> @ui.Tester {
 fn quote_media_departure(name : String, width : Double, height : Double, platform : Int) -> Unit raise {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=width, h=height, platform~)
   let file : Json = {
     "name": Json::string(name), "path": Json::string("/w/uploads/" + name), "size": 120,
@@ -200,7 +200,7 @@ test "a quoted video cover's card and empty comment do not blink as it is sent" 
 test "a long quoted picture's words do not rewrap as the card sets out" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   let passage = quote_passage + "，然后把表格中的每一项逐一检查，确保发送前后文字不会在这里突然换行"
   let file : Json = {

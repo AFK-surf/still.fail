@@ -1,5 +1,8 @@
 # still.fail client core
 
+> Machine names in examples and measurements are anonymized; they are not requirements for the reader’s environment.
+
+
 The logic of a still.fail client — accounts, still.fail cloud, the mesh links to
 stations, requests and live streams, everything read kept on the device — lives
 in one TypeScript core, `client/core-ts` (on Effect; docs/core-ts.md for how it
@@ -40,10 +43,7 @@ compressed (`accept-encoding: zstd`; an event stream flushed event by event and
 compressed against its last megabyte, station/src/mesh/compress.ts), and it is
 decompressed as it comes; a station from before sends it as it is. The native
 apps' shell takes it apart (libzstd, `zstd.*`: `Host.unzstd`), off the core's
-thread: Hermes has no JIT, and fzstd in it made some 10 MB a second of what it
-decompresses on an M2 Max, a tenth of V8's (`apps/mbui/scripts/core.sh
-zstd-read`), slower again on a phone holding back its clock. The browser,
-with no zstd of its own, uses fzstd.
+thread; the browser, with no zstd of its own, uses fzstd.
 A station's history — every chat's entries (the latest chats first, a page of
 each in turn), each listed session's detail where its turns changed and the
 latest page of its transcript — is brought onto the device in the background
@@ -234,7 +234,7 @@ viewer is not in with its name before its title (attend.ts).
 | `archivedRows` | `station` | `/chats?archived=1`: the station's archived chats. Read only while a page shows it (every chat ever archived: read with each snapshot and archiving, it was a large part of what a slow link carried): again after `chat.archive`, `session.delete` while shown, else marked to be read as it is next shown |
 | `threads` | `station` | `/threads`: every thread (`ThreadView`: its sessions, people, first person message, `last` entry, `lastMessage`, the viewer's `read` and `unread`), latest message first |
 | `chatRows` | `station` | `/chats`: the viewer's sidebar rows as the station puts them together (`ChatRow`; docs/station-storage.md, The sidebar) |
-| `session` | `station`, `key` | `/sessions/:key`: `{ session, threads, turns, jobs }` (no messages, no transcript) |
+| `session` | `station`, `key` | `/sessions/:key?turns=0&jobs=now`: `{ session, threads, turns, jobs }` (no messages, no transcript; its jobs that may matter now, its latest 50 and those still up; no turns: its summary says how many it had, how long they ran and its latest, `turns`, `workMs` (null: one with turns from before its station kept it, shown with how many alone) and `lastTurn`, so it is read once and not again as each turn goes; a station from before lists every turn, read again when its turns change) |
 | `jobs` | `station` | `/jobs`: its background jobs still up (running, or a service being started again), newest first, each with the `chat` it is in as the viewer's sidebar has it |
 | `stationUsage` | `station` | `/usage?from=&tz=`: what its agents spent from this device's midnight 29 days ago, days as its clock has them (`rows` added up by day, thread, person, profile and model, each with `cost` at the model's API prices; the `threads`, `people` and `profiles` they name; `since`, the earliest call recorded; `reading` while the transcripts are read for the first time). Read only while a page shows it (some 200 KB, changing with every model call): on its `usage` event (it recorded more; told at most once a minute) while shown, else marked to be read as it is next shown; a station from before it answers 404 |
 | `job` | `station`, `id` | `/jobs/:id` as it is now, with what the clients show of it (jobs.ts): kept current by its events, read again each half minute (every 4 s from a station too old to say whose it is) |
@@ -243,6 +243,7 @@ viewer is not in with its name before its title (attend.ts).
 | `outflowGrants` | `station` | the programs of the station's machine granted its data (docs/data-outflow.md): `{supported, grants}`, each grant its `id`, `program`, `signed` and `signer` (who signed it as the system said; `signedText` in words), `teamId`, `identifier`, `path`, `said` (what it said of itself), `scopes` (`{id, text}`), `grantedAt`/`grantedText`, `lastReadAt`/`lastReadText` and its latest `reads` (newest first: `at`, `atText`, `scope`, `scopeText`, `rows`). Read (`GET /outflow/grants`) each time it is shown, then as the station tells (`outflow-grants`); kept and shown meanwhile; read again after `outflow.revoke`. A station from before: `supported` false |
 | `linkPreview` | `station`, `url` | what a web link in a message is, for its card (`LinkPreview`, as `link.preview` answers it: a page's title, site, icon and picture; a GitHub pull request's or issue's state, author, size, checks), with `time.updatedAt` in words: read (`GET /link-preview`) each time a card shows it (a pull request's state moves; the station keeps what it found a while), what was read last kept (the latest 30, station/memory.ts) and shown meanwhile, the app opened again too. Never read: an error once the station is down or refuses |
 | `filePeek` | `station`, `key` (the session whose message names it), `path`, `line?` | what a file a message names by its path is, for its card (`FilePeek`, as `file.peek` answers it: its path, size and when it changed, a few of its lines around `line`, an image's thumbnail, a directory's first entries), with `time.mtime` in words: read (`GET /sessions/:key/peek`) each time a card shows it, what was read last kept (the latest 30) and shown meanwhile, as `linkPreview`. The Markdown tree marks what names a file (`path`, `line`, `shown` on an inline code or a link: paths.ts) |
+| `messagePeek` | `station`, `thread`, `seq` | one message of a chat a link names (`?message=<seq>`), for the link's card (`MessagePeek`: its `author`, its words as a chat's row has them, `time.at`), or null for no such message: read (`GET /threads/:id/entries?from=<seq>&to=<seq>`) each time the card shows it, what was read last shown meanwhile. As first said: an edit made since on Slack or Feishu is not in it. |
 | `downloads` | — | `{ downloads }`: this device's downloads (`download.start`), newest first, each `{ id, station, key? (a chat's), root?, path?, zip? (a drive's), name, size, loaded, progress (0–1), state (going / waiting / ready / saving / failed), active (not failed: shown as under way, can be called off), statusText, error? }`, told again as one moves on a whole percent; a chat's on its message's card and its preview, a drive's on its row and in the files page's transfers; and `keeping`: what was opened and let go being brought after everything else (src/fill.ts), the one coming first, each `{ id, station, key? (a chat's), root?, path? (a drive's), name, title, size, loaded, progress, state (going, yielding: given way to what is waited on, waiting: its station not reached, queued), statusText, wanted? (loaded: `fill.want`), from? }`; a download's and a file's `from` is where it was opened, as what opened it said (KeptFrom: a chat's `thread`, `session`, `file` as its message has it; a drive's `root`, `path`), so the list opens it again there |
 | `thread` | `station`, `thread` (id) | `{ first, last, caught, end, entries, thread }`: a window of the thread's entries `first ..= last` (`EntryView`s, never changed once read), holding at most 150 (`WINDOW`) of what its chat shows: its messages, not letters nor edits (counted by entries, a chat mostly of letters showed less than a screen of a whole window, and its two ends took turns dropping each other). It opens where the chat is to be read — the page before the first entry not read and the page from it while something is unread, else where it was left (`chat.place`), else the latest page — and its first value is what is kept of it there, at once: from where it opens or, that not on the device yet (what came while the app was away), from what is held just before it; what is not held joins it as it is read (the station's `threads` say how far each goes). Only with nothing of it kept up to there is it read first. `chat.older` / `chat.newer` bring in the page before / after (a page is kept ahead either way), what shows past those 150 going at the other end; `end`: it reaches the thread's latest entry, so what is said joins it; short of it, what is said waits on the device. `caught`: its last entry read rather than told as it was said. `thread` is its summary |
 | `live` | `station`, `key` | the session as it runs (below) |
@@ -344,7 +345,11 @@ that only notifications change it:
   the last entry (else the thread is read again), and turns off `unread` of
   that thread's `chatRows` row when it covers the row's last message; `chat`
   puts a row into `chatRows` (replacing the one with its `id`), `chat-removed`
-  takes one out; `job` (a job as `GET /jobs/:id` answers it, whenever it
+  takes one out — a station that says `made` (the stream asks `rows=1`) tells
+  none for what is said, a session's summary, a read or what the viewer pinned,
+  dismissed or kept: those go into the rows here (station/rows-after.ts), and
+  what only it can say (a card, a need, a row new or gone) is read for those
+  rows alone, `GET /chats?session=&thread=`; `job` (a job as `GET /jobs/:id` answers it, whenever it
   starts, starts again, ends or says something) replaces it in its session's
   `jobs` (or goes in front), and in `jobs` while it is up (one not listed there
   yet reads `jobs` again, for its chat; one no longer up leaves); `overview`
@@ -468,13 +473,13 @@ together from its `live`: each item the transcript entries it draws, what it is 
 // chats
 {
   "me": { "id": "a@b.c", "email": "a@b.c" },
-  "stations": [{ "station": "ws/st", "id": "st", "name": "studio", "state": "online", "message": null }],
+  "stations": [{ "station": "ws/st", "id": "st", "name": "test-a", "state": "online", "message": null }],
   //   state: "online" | "connecting" | "offline" (not connected to still.fail cloud) | "error" (message says why)
   //   error: its rows could not be read, or its link failed; connecting: rows not read yet, or the link
   //   is reconnecting (rows already read stay listed).
   "loading": false,                                // an online station has not answered its rows yet
   "days": [{ "daysAgo": 0, "at": 1790000000000, "items": [{
-    "station": "ws/st", "stationName": "studio",   // added here; the rest is the station's row as it is
+    "station": "ws/st", "stationName": "test-a",   // added here; the rest is the station's row as it is
     "id": "7", "session": "ds:C1:1790000000.000100", "thread": 7, "title": "部署挂了", "agents": [ … ], "last": { … } | null,
     "unread": true, "mine": true, "lastActiveAt": 1790000000000, "connect": "ds" | null, "origin": { … } | null
   }] }]
@@ -502,7 +507,7 @@ thread is called by the first line of the first thing a person said in it
 ```jsonc
 // stations
 [{
-  "station": "ws/st", "id": "st", "name": "studio",
+  "station": "ws/st", "id": "st", "name": "test-a",
   "online": true, "lastSeen": 1790000000, "version": "0.4.0",   // from the workspace
   "link": { "state": "online", "message": null },
   "overview": { … } | null,                                      // null while offline or not yet read

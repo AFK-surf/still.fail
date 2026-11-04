@@ -52,7 +52,8 @@ test("a failure notice reported: the turn, the agent, versions, variables' names
 
     assert.deepEqual(await ask(admin, member, `/threads/${chat.id}/report`, { n: notice }), [200, { number: 12 }]);
     const report = sent[0];
-    assert.equal(report.title, "本轮出错：workspace routing discovery timed out");
+    // Titled by what the runtime said: the notice says only what it means.
+    assert.equal(report.title, "other: workspace routing discovery timed out");
     assert.equal(report.area, "station");
     assert.equal(report.reporter, "Ada (ada@x.com), from the chat");
     assert.match(report.body, /> 本轮出错：workspace routing discovery timed out\n> more/);

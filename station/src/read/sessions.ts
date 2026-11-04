@@ -1,6 +1,7 @@
 // Sessions and threads as the pages read them, ported from the Rust station's admin/views.rs (`summary`, `sessions`, `session`,
-// `threads`, `thread`, `thread_view`), admin/mod.rs (GET /sessions/:key/timeline, /widget-state) and admin/files.rs
-// (`session_file`), with the same JSON, field for field and in serde_json's order.
+// `threads`, `thread`, `thread_view`) and admin/mod.rs (GET /sessions/:key/timeline, /widget-state), with the same JSON,
+// field for field and in serde_json's order. A file sent in a chat is found by its route, not read here
+// (api/routes/sessions.ts `uploaded`).
 //
 // What the Rust station keeps outside the database is taken as views.ts takes it (a station with none of it):
 // - the hub: no session has a runtime process (`process` "cold"); no transcript is watched, so a timeline is read from
@@ -8,22 +9,22 @@
 // - Slack names: as the names book has them (slack-known.ts), never waiting on Slack (a Slack user
 //   goes by their id, with no email);
 // - the cloud's names: those of the members who asked since the station started (`Store.names`).
-import { knownChannel, knownPerson, slackCreator } from "./slack-known.ts";
+import { knownChannel } from "./slack-known.ts";
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { basename, dirname, join, isAbsolute } from "node:path";
-import { clean, cleanPosix, fileName, samePath, segments, within } from "../ops/paths.ts";
+import { basename, join, isAbsolute } from "node:path";
+import { clean, cleanPosix, within } from "../ops/paths.ts";
 import type { Viewer } from "../mesh/credential.ts";
 import type { Lang } from "../ops/i18n.ts";
 import { type InWorkspace, sees } from "../store/rows.ts";
 import { watching } from "./store.ts";
 import * as store from "./store.ts";
-import type { AuthorKind, Json, SessionRow, Store, ThreadRow, ThreadSummary } from "./store.ts";
+import type { Json, SessionRow, Store, ThreadRow, ThreadSummary } from "./store.ts";
 import { setLang, tr } from "./spoken.ts";
-import { homesFirst, sessionPlaces, transcriptPaths } from "./transcript.ts";
-import { chainOf, entriesOf, lengthOf, marksDir, stateOf } from "./transcripts.ts";
-import { HttpError, messageView } from "./views.ts";
-import { type Thumbnail, SMALL, dir as thumbsDir, idOf, kept, wanted as thumbWanted } from "../drive/thumbs.ts";
+import { sessionPlaces, transcriptSources } from "./transcript.ts";
+import { type Read, chainOf, entriesOf, lengthOf, marksDir, stateOf } from "./transcripts.ts";
+import { log } from "../ops/log.ts";
+import { HttpError, apiOf, authorNames as authorNamesOf, creator as creatorOf, messageView, people as peopleOf, useNames } from "./views.ts";
 import { parseUsize } from "./jobs.ts";
 import { agentHomeOf } from "./memory.ts";
 import { shown } from "./jobs.ts";
@@ -70,61 +71,16 @@ function configOf(s: Store): Config {
   return config;
 }
 
-// ---- people (views.rs `creator`, `people`; as views.ts has them) ----
+// ---- people: views.ts's own, for this store ----
 
 /// A creator reference in words: who, and their email where known.
-function creator(s: Store, reference: string | null): Json | null {
-  if (reference === null) return null;
-  if (reference === "local") return { id: "local", name: tr("station.creator.localPage"), email: null, via: "local" };
-  const slack = slackCreator(s, reference);
-  if (slack !== null) return slack;
-  return { id: reference, name: s.names.get(reference) ?? reference, email: reference, via: "cloud" };
-}
+const creator = (s: Store, reference: string | null): Json | null => (useNames(s), creatorOf(reference));
 
 /// Several people, once each (by email, else id).
-function people(s: Store, refs: string[]): Json[] {
-  const seen = new Set<string>();
-  return refs
-    .map((r) => creator(s, r))
-    .filter((p): p is Json => p !== null)
-    .filter((p) => {
-      const key = typeof p.email === "string" ? p.email : typeof p.id === "string" ? p.id : "";
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-}
+const people = (s: Store, refs: string[]): Json[] => (useNames(s), peopleOf(refs));
 
-/// views.rs `author_names`: who wrote in a thread, in words, each author asked once.
-function authorNames(s: Store, thread: number): (kind: AuthorKind, author: string) => string | null {
-  const th = store.getThread(s, thread);
-  const members = store.threadSessions(s, thread);
-  const connects = configOf(s).connects;
-  const names = new Map<string, string | null>();
-  return (kind, author) => {
-    const key = `${kind}:${author}`;
-    if (names.has(key)) return names.get(key)!;
-    let name: string | null;
-    if (kind === "ember") name = "still.fail";
-    else if (kind === "agent") {
-      // An agent goes by the name of the connect it posts through (on the page, of the connect that started it).
-      const session = store.getSession(s, author);
-      const via = members.find((m) => m.session === author)?.connect;
-      const connect = via !== undefined && via !== INTERNAL_CONNECT ? via : (session?.connect ?? null);
-      const c = connects.find((c) => c.id === connect);
-      name = c ? c.name : (session?.title ?? null);
-    } else if (th !== null && th.surface === store.STILLFAIL_SURFACE) {
-      name = author === "local" ? tr("station.author.admin") : (s.names.get(author) ?? author);
-    } else {
-      // A Slack person: by the name their connect's Slack gives them, as far as known.
-      const connect = members.map((m) => m.connect).find((c) => c !== INTERNAL_CONNECT) ?? null;
-      const person = connect === null ? null : knownPerson(s, connect, author);
-      name = person?.name ? person.name : null;
-    }
-    names.set(key, name);
-    return name;
-  };
-}
+/// Who wrote in a thread, in words, each author asked once.
+const authorNames = (s: Store, thread: number) => (useNames(s), authorNamesOf(apiOf(s), thread));
 
 // ---- sessions ----
 
@@ -135,6 +91,8 @@ function sessionJson(r: SessionRow): Json {
     profilePinned: r.profilePinned, model: r.model, effort: r.effort, fast: r.fast, afresh: r.afresh, runtimeSessionId: r.runtimeSessionId, workspace: r.workspace,
   };
   if (r.cwd !== null) v.cwd = r.cwd;
+  // The most context it runs with (sessions/context-cap.ts): none, the model's whole window.
+  if (r.context !== null) v.context = r.context;
   Object.assign(v, { running: r.running, createdAt: r.createdAt, lastActiveAt: r.lastActiveAt, archivedAt: r.archivedAt, archivedBy: r.archivedBy, shownAt: r.shownAt });
   return v;
 }
@@ -157,6 +115,9 @@ function summaryWith(s: Store, key: string, l: Lists): Json {
   v.process = s.processes.get(key) ?? "cold";
   const stat = l.stats.get(key);
   v.turns = stat?.turns ?? 0;
+  // How long its ended turns ran, all added up: the work a device shows with how many turns, without reading them; null
+  // for a session with turns that ended before that was kept (it shows its turns alone).
+  v.workMs = stat === undefined ? null : stat.workMs;
   v.pending = stat?.pending ?? 0;
   v.firstText = stat?.firstText ?? null;
   v.lastTurn = stat?.lastTurn ?? null;
@@ -181,29 +142,31 @@ function summaryWith(s: Store, key: string, l: Lists): Json {
 
 /// views.rs `summary`: one session's.
 export function summary(s: Store, key: string): Json {
-  return summaryWith(s, key, { stats: store.sessionStats(s, key), bindings: store.listBindings(s), participants: store.participants(s, key), watches: watching(s), lengths: store.transcriptLengths(s, key), usages: store.sessionUsages(s, key) });
+  return summaryWith(s, key, { stats: store.sessionStats(s, key), bindings: store.listBindings(s), participants: store.participants(s, key), watches: watching(s, [key]), lengths: store.transcriptLengths(s, key), usages: store.sessionUsages(s, key) });
 }
 
 /// GET /sessions (views.rs `sessions`): the sessions shown in lists, or only the archived ones; those of one connect;
 /// those of the viewer's workspace (all of them for a read made for no one).
 export function sessions(s: Store, connect: string | null, archived: boolean, lang: Lang, viewer: InWorkspace | null = null): Json[] {
   setLang(lang);
-  const l: Lists = { stats: store.sessionStats(s, null), bindings: store.listBindings(s), participants: store.participants(s, null), watches: watching(s), lengths: store.transcriptLengths(s, null), usages: store.sessionUsages(s, null) };
-  return store
-    .listSessions(s)
-    .filter((x) => (connect === null || x.connect === connect) && (x.archivedAt !== null) === archived && (viewer === null || sees(viewer, x.ws)))
-    .map((x) => summaryWith(s, x.key, l));
+  const rows = store.listedSessions(s, connect, archived, viewer);
+  const keys = rows.map((row) => row.key);
+  const l: Lists = { stats: store.sessionStats(s, keys), bindings: store.listBindings(s), participants: store.participants(s, keys), watches: watching(s, keys), lengths: store.transcriptLengths(s, keys), usages: store.sessionUsages(s, keys) };
+  return rows.map((x) => summaryWith(s, x.key, l));
 }
 
-/// GET /sessions/:key (views.rs `session`): the session, its threads, turns and jobs (newest first).
-export function session(s: Store, key: string, viewer: Viewer, lang: Lang): Json {
+/// GET /sessions/:key (views.rs `session`): the session, its threads, turns and jobs (newest first). `turns`: only that
+/// many of its latest turns (`?turns=`), for a device that knows how many it had and how long they ran from its summary
+/// (`turns`, `workMs`): all of them were read for that, many of one session in 25 s on a station (2026-11-03).
+/// `now`: only its jobs that may matter now (`jobsNow`, `?jobs=now`), not its every one.
+export function session(s: Store, key: string, viewer: Viewer, lang: Lang, turns: number | null = null, now = false): Json {
   setLang(lang);
   // One of another workspace is none (docs/multi-workspace.md).
   const row = store.getSession(s, key);
   if (row !== null && !sees(viewer, row.ws)) throw new HttpError(404, `unknown session ${key}`);
-  const turns = store.listTurns(s, key);
-  const jobs = store.listJobs(s, key).map((j) => shown(s, j));
-  return { session: summary(s, key), threads: threadViews(s, viewer, key), turns, jobs };
+  const listed = store.listTurns(s, key, turns);
+  const jobs = (now ? store.jobsNow(s, key) : store.listJobs(s, key)).map((j) => shown(s, j));
+  return { session: summary(s, key), threads: threadViews(s, viewer, key), turns: listed, jobs };
 }
 
 // ---- threads ----
@@ -221,13 +184,19 @@ function threadJson(t: ThreadRow): Json {
   return v;
 }
 
-/// views.rs `thread_view`: a thread with its sessions, last entry and message, what the viewer read, who wrote.
-function threadView(s: Store, t: ThreadSummary, shares: ReturnType<typeof store.chatShares> = store.chatShares(s), published: ReturnType<typeof store.publishedByThread> = store.publishedByThread(s)): Json {
+/// views.rs `thread_view`: a thread with its sessions, last entry and message, what the viewer read, who wrote. Of one
+/// thread (what is told of it as it changes, for each viewer), its own shares and snapshots alone.
+function threadView(
+  s: Store,
+  t: ThreadSummary,
+  shares: ReturnType<typeof store.chatShares> = store.chatShares(s, [t.thread.home ?? t.sessions[0]?.session ?? ""]),
+  published: ReturnType<typeof store.publishedByThread> = store.publishedByThread(s, [t.thread.id]),
+): Json {
   const names = authorNames(s, t.thread.id);
   const v = threadJson(t.thread);
   v.sessions = t.sessions.map((m) => ({ thread: m.thread, session: m.session, connect: m.connect, joinedAt: m.joinedAt }));
   v.last = t.last;
-  v.lastMessage = t.lastMessage === null ? null : messageView(t.lastMessage, names);
+  v.lastMessage = t.lastMessage === null ? null : messageView(t.lastMessage, names, s);
   v.read = t.read;
   v.unread = t.unread;
   v.people = people(s, t.people);
@@ -256,13 +225,12 @@ function threadView(s: Store, t: ThreadSummary, shares: ReturnType<typeof store.
 
 /// The threads of the viewer's workspace (of one session).
 function threadViews(s: Store, viewer: Viewer, session: string | null): Json[] {
-  const shares = store.chatShares(s);
-  const published = store.publishedByThread(s);
-  const seen = store.seenBy(s, viewer);
-  return store
-    .listThreads(s, viewer.email, session, null)
-    .filter((t) => t.sessions.some((m) => seen(m.session)))
-    .map((t) => threadView(s, t, shares, published));
+  const summaries = store.listThreads(s, viewer.email, session, null);
+  const seen = store.seenBy(s, viewer, summaries.flatMap((t) => t.sessions.map((m) => m.session)));
+  const visible = summaries.filter((t) => t.sessions.some((m) => seen(m.session)));
+  const shares = store.chatShares(s, visible.map((t) => t.thread.home ?? t.sessions[0]?.session ?? ""));
+  const published = store.publishedByThread(s, visible.map((t) => t.thread.id));
+  return visible.map((t) => threadView(s, t, shares, published));
 }
 
 /// GET /threads?session= (views.rs `threads`): the threads (of one session).
@@ -300,13 +268,24 @@ export function timeline(s: Store, key: string, beforeParam: string | undefined,
   setLang(lang);
   const before = parseUsize(beforeParam) ?? 0;
   const limit = Math.min(Math.max(parseUsize(limitParam) ?? 200, 1), 1000);
+  const started = performance.now();
   const found = transcriptsOf(s, key);
   if (found === null) return { start: 0, entries: [], end: 0 };
   const { runtime, paths } = found;
+  const looked = performance.now();
   // Read on to where they are written now, each stretch from the mark before it (read/transcripts.ts).
   const chain = chainOf(runtime, paths, marksDir(s.dataDir));
   const end = lengthOf(chain);
-  const between = (a: number, b: number) => entriesOf(runtime, chain, a, b, briefParam === "1");
+  const readOnAt = performance.now();
+  // What a slow one spent where, and read how much: the pages of a history took 2 to 4 s each on a station (2026-11-03),
+  // unsaid where.
+  const read: Read = { bytes: 0, lines: 0, packed: 0 };
+  const between = (a: number, b: number) => {
+    const entries = entriesOf(runtime, chain, a, b, briefParam === "1", read);
+    const ms = Math.round(performance.now() - started);
+    if (ms >= 1_000) log.warn("readers", "a timeline read's stages", { ms, found: Math.round(looked - started), readOn: Math.round(readOnAt - looked), runtime, transcripts: paths.length, end, from: a, to: b, entries: entries.length, ...read });
+    return entries;
+  };
   const from = parseUsize(fromParam);
   const to = parseUsize(toParam);
   if (from !== null && to !== null) return { start: from, entries: between(from, Math.min(to, from + 999) + 1), end };
@@ -323,11 +302,12 @@ export function timeline(s: Store, key: string, beforeParam: string | undefined,
 /// A session's transcripts (hub.rs `locate`): those of the runtime sessions it ran in before first (sessions/afresh.ts),
 /// and none now (its context cleared) still reads those it ran in; found whatever profile it is on now, if any. Null:
 /// none found.
-function transcriptsOf(s: Store, key: string): { runtime: RuntimeKind; paths: string[] } | null {
+function transcriptsOf(s: Store, key: string): { runtime: RuntimeKind; paths: { path: string; runtime: RuntimeKind }[] } | null {
   const row = sessionRow(s, key);
   const runtime = runtimeKind(row.runtime) ?? null;
-  if (runtime === null || store.runtimeSessions(s, key).length === 0) return null;
-  return { runtime, paths: transcriptPaths(runtime, s.dataDir, homesFirst(configOf(s).profiles, row.profile), store.runtimeSessions(s, key), sessionPlaces(row)).paths };
+  const sources = store.runtimeSessionSources(s, key);
+  if (runtime === null || sources.length === 0) return null;
+  return { runtime, paths: transcriptSources(s.dataDir, configOf(s).profiles, sources, sessionPlaces(row)).paths };
 }
 
 /// Where the reading of a session's transcripts stands (read/transcripts.ts `stateOf`), for its live view to go on from
@@ -342,10 +322,11 @@ export function transcriptState(s: Store, key: string): Json {
 export function transcriptFile(s: Store, key: string, lang: Lang): Json {
   setLang(lang);
   const row = sessionRow(s, key);
-  const runtime = runtimeKind(row.runtime) ?? null;
-  if (runtime === null || row.runtimeSessionId === null) return { path: null };
-  const { paths, current } = transcriptPaths(runtime, s.dataDir, homesFirst(configOf(s).profiles, row.profile), store.runtimeSessions(s, key), sessionPlaces(row));
-  return { path: current ? paths.at(-1)! : null };
+  if (row.runtimeSessionId === null) return { path: null };
+  const source = store.runtimeSessionSources(s, key).find((s) => s.id === row.runtimeSessionId);
+  if (!source) return { path: null };
+  const { paths, current } = transcriptSources(s.dataDir, configOf(s).profiles, [source], sessionPlaces(row));
+  return { path: current ? paths.at(-1)!.path : null };
 }
 
 /// GET /sessions/:key/widget-state?path: what a widget in one of the session's messages holds, null when nothing or
@@ -380,13 +361,6 @@ export function mime(path: string): string {
   return (ext !== null && Object.hasOwn(kinds, ext) ? kinds[ext] : undefined) ?? "application/octet-stream";
 }
 
-const isFile = (path: string) => {
-  try {
-    return statSync(path).isFile();
-  } catch {
-    return false;
-  }
-};
 const canonical = (path: string): string | null => {
   try {
     return realpathSync(path);
@@ -394,39 +368,6 @@ const canonical = (path: string): string | null => {
     return null;
   }
 };
-/// footprint.rs `room_of`: a session's own directory, the one its workspace is in when the station made it
-/// (<data>/sessions/<connect>/<session>/workspace), else none.
-function roomOf(dataDir: string, workspace: string): string | null {
-  const sessions = canonical(join(dataDir, "sessions"));
-  if (sessions === null) return null;
-  let path = canonical(workspace);
-  if (path === null) {
-    if (fileName(workspace) !== "workspace") return null;
-    const parent = canonical(dirname(workspace));
-    if (parent === null) return null;
-    path = join(parent, "workspace");
-  }
-  if (!within(path, sessions) || samePath(path, sessions)) return null;
-  const relative = segments(path.slice(sessions.length)).filter((p) => p !== "");
-  if (relative.length !== 3 || fileName(path) !== "workspace") return null;
-  return dirname(path);
-}
-
-/// thumbs.rs `thumbnail`, as far as a reader goes: the image's thumbnail as kept; else whether one is to be made (an
-/// image by its name, over 24 KiB), which the route asks the image codecs for (drive/thumbs.ts: the addon is not
-/// loaded in the readers, and a reader is not held up decoding); else null, the image shown itself.
-function thumbnail(image: string, dataDir: string): Thumbnail | "make" | null {
-  const name = fileName(image);
-  if (name === null || !thumbWanted(name)) return null;
-  let len: number;
-  try {
-    len = statSync(image).size;
-  } catch {
-    return null;
-  }
-  if (len <= SMALL) return null;
-  return kept(thumbsDir(dataDir), idOf(image)) ?? "make";
-}
 
 /// std::io::Error as anyhow shows it.
 export function ioMessage(e: NodeJS.ErrnoException): string {
@@ -536,29 +477,4 @@ function touched(repo: string): number {
     }
   }
   return at;
-}
-
-/// GET /sessions/:key/files?name&thumb=1 (files.rs `session_file`): a file sent to the session, for previews: only from
-/// its upload directory, else from its archived workspace. `thumb`: an image as a chat shows it. Its path and its type,
-/// for the route to answer with (cache-control `private, max-age=3600`); or, for a thumbnail not made yet,
-/// `{contentType, image, thumbs}`: the route has it made (else answers the image itself, of that type).
-export function sessionFile(s: Store, key: string, name: string, thumb: boolean, lang: Lang): Json {
-  setLang(lang);
-  const row = sessionRow(s, key);
-  const room = roomOf(s.dataDir, row.workspace);
-  const uploads = clean(join(row.workspace, "uploads"));
-  const base = name.split(/[/\\]/).at(-1) ?? "";
-  const path = clean(`${uploads}/${base}`);
-  const notFound = () => new HttpError(404, tr("station.files.notFound"));
-  if (base === "" || !within(path, uploads) || samePath(path, uploads)) throw notFound();
-  if (!isFile(path)) {
-    // Packed with its archived workspace: the route reads it out of the archive (sessions/archive.ts), under its lock.
-    if (room === null || !existsSync(join(room, "workspace.tar.zst"))) throw notFound();
-    return { contentType: mime(path), archived: { room, path, relative: `uploads/${base}` }, notFound: tr("station.files.notFound") };
-  }
-  const small = thumb ? thumbnail(path, s.dataDir) : null;
-  if (small === "make") return { contentType: mime(path), image: path, thumbs: thumbsDir(s.dataDir) };
-  const [file, kind] = small !== null ? [small.path, small.type] : [path, mime(path)];
-  // Read by the route, as it goes out: a big file is never all in memory here, nor sent across as base64.
-  return { contentType: kind, file };
 }

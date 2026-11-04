@@ -3,6 +3,7 @@ package "stillfail/sfapp/settings"
 
 import {
   "mbui/signals",
+  "mbui/text",
   "mbui/ui",
   "moonbitlang/core/ref",
   "stillfail/sf",
@@ -33,7 +34,7 @@ pub let all_places : Array[String]
 
 pub let answered_fade_ms : Double
 
-pub fn answered_in_place(@ui.Ctx, String, (Bool, Array[@ui.Run])?, () -> Unit) -> Unit
+pub fn answered_in_place(@ui.Ctx, String, (Bool, Array[@text.Run])?, () -> Unit) -> Unit
 
 pub fn appearance(Json?) -> String
 
@@ -41,7 +42,7 @@ pub fn ask(String, String, String, String, (String) -> Unit, hint? : String, sec
 
 pub fn ask_action(String) -> Unit
 
-pub fn ask_outcome(@ui.Ctx, Bool, Array[@ui.Run], inline? : Bool, history? : (String, (Int32) -> Unit)?) -> Unit
+pub fn ask_outcome(@ui.Ctx, Bool, Array[@text.Run], inline? : Bool, history? : (String, (Int32) -> Unit)?) -> Unit
 
 pub fn avatar(@ui.Ctx, Core, String, String, Double, picture? : String) -> Unit
 
@@ -57,6 +58,10 @@ pub fn bars_value(Core) -> String
 
 pub fn binding_of(Int32, Int32) -> String?
 
+pub fn builtin_open_of(String) -> Bool
+
+pub fn builtin_turn(String) -> Unit
+
 pub fn build_version() -> String
 
 pub let builtin_open : Map[String, Bool]
@@ -71,7 +76,9 @@ pub let connects_mine : @ref.Ref[Bool]
 
 pub fn dark(Json?, Bool) -> Bool
 
-pub fn decision_form(@ui.Ctx, Core, String) -> String
+pub fn decision_form_drop(Core, String, String) -> Unit
+
+pub fn decision_form_open(Core, String) -> String
 
 #callsite(autofill(loc))
 pub fn doing_mark(@ui.Ctx, Bool, String?, inline? : Bool, loc~ : SourceLoc) -> Unit
@@ -110,6 +117,10 @@ pub fn fixture_outflow(Bool) -> Unit
 
 pub fn fixture_outflow_answer() -> Json?
 
+pub fn fixture_outflow_link(Json?) -> Unit
+
+pub fn fixture_outflow_link_set() -> Bool?
+
 pub fn fixture_page(String) -> String
 
 pub fn fixture_pair_ended() -> String
@@ -144,7 +155,13 @@ pub fn item_opening(String) -> Bool
 
 pub fn join(Array[String], String) -> String
 
+pub fn kept_ask(@ui.Ctx, Core) -> Unit
+
+pub fn kept_asked() -> Int32
+
 pub fn kept_said(@ui.Ctx, Core) -> String
+
+pub fn kept_told() -> String
 
 pub fn key_actions(Json?) -> Array[Json]
 
@@ -156,7 +173,7 @@ pub fn keys_changeable(Json?) -> Bool
 
 pub fn keys_of(Json?, String) -> Array[String]
 
-pub let keys_recording : @ref.Ref[String]
+pub let keys_recording : @signals.Signal[String]
 
 pub fn keys_text(Json?, String) -> String
 
@@ -344,7 +361,7 @@ pub fn vault_menu_open() -> String
 
 pub fn vault_outcome(@ui.Ctx, Asked, String, String, inline? : Bool, history? : (String, (Int32) -> Unit)?) -> Unit
 
-pub fn vault_outcome_words(Asked, String, String) -> Array[@ui.Run]
+pub fn vault_outcome_words(Asked, String, String) -> Array[@text.Run]
 
 pub fn vault_problem(String, Map[String, String], Bool, String) -> String
 

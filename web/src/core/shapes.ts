@@ -130,6 +130,8 @@ export interface AdbShareView {
 	lasts?: string;
 	/** This phone lent to each station a grant wants it on (`adb.ports` given): how each stands. */
 	lends?: AdbLend[];
+	/** The titles of the chats whose own screens (virtual displays) are up on this phone now, every station's: its notification names them. */
+	screens?: string[];
 }
 
 export interface AgentCardLine {
@@ -240,8 +242,8 @@ export interface AgentEnvDraft {
 	pending: boolean;
 }
 
-/** A runtime: Claude Code, Codex, DeepSeek Harness, Grok Build, Cursor or Devin. */
-export type RuntimeKind = "claude" | "codex" | "dsh" | "grok" | "cursor" | "devin" | "hermes";
+/** A runtime: Claude Code, Codex, DeepSeek Harness, Grok Build, Cursor, Devin, Hermes Agent or Antigravity CLI. */
+export type RuntimeKind = "claude" | "codex" | "dsh" | "grok" | "cursor" | "devin" | "hermes" | "agy";
 
 export interface AgentProcess {
 	pgid: number;
@@ -440,7 +442,7 @@ export interface StationFailing {
  */
 export interface ListNote {
 	reading: boolean;
-	/** While reading, what it waits on (正在连接 Studio, 正在读取会话); absent from a core before it. */
+	/** While reading, what it waits on (正在连接 Willow, 正在读取会话); absent from a core before it. */
 	text?: string;
 	failing: StationFailing[];
 	empty: boolean;
@@ -603,6 +605,8 @@ export interface Quota {
 	/** The subscription tier, when reported with the allowance. */
 	plan?: string;
 	resetCount?: number;
+	/** Expiry times of the available reset credits whose details are known, in milliseconds. */
+	resetExpiries?: number[];
 	creditsText?: string;
 	resetText?: string;
 	/** ok | unsupported | unavailable | blocked (the provider refuses the account) */
@@ -669,6 +673,7 @@ export interface ModelUsual {
 	runtime?: RuntimeKind;
 	effort?: string;
 	fast?: boolean;
+	context?: number;
 }
 
 /** A model a station can run: its maker, the runtimes it runs on, and for each how hard it can think and who runs it. */
@@ -684,6 +689,10 @@ export interface ModelOption {
 	maker?: Maker;
 	runtimes: RuntimeKind[];
 	efforts: Record<string, string[]>;
+	/** By runtime, how much less context than its whole window it can be kept to, in tokens, the most first. */
+	contexts?: Record<string, number[]>;
+	/** Its whole context window, as its station's model catalog says it. */
+	contextWindow?: number;
 	accounts: Record<string, RunnableProfile[]>;
 	spent?: Spent;
 	/**
@@ -692,7 +701,7 @@ export interface ModelOption {
 	 */
 	availability?: string;
 	/**
-	 * Where it comes from, in words (借自 Studio, 在 Studio 上: what its mark is said as); none for one of this
+	 * Where it comes from, in words (借自 Willow, 在 Willow 上: what its mark is said as); none for one of this
 	 * station's own.
 	 */
 	fromText?: string;
@@ -725,6 +734,8 @@ export interface Picked {
 	runtime: RuntimeKind;
 	effort?: string;
 	fast?: boolean;
+	/** The most context it runs with, in tokens; none its model's whole window. */
+	context?: number;
 	profile?: string;
 }
 
@@ -734,6 +745,14 @@ export interface PickAccount {
 	auto: boolean;
 	level?: Level;
 	profile?: RunnableProfile;
+}
+
+/** How much context a model control offers to keep a chat to. */
+export interface ContextLevel {
+	/** Its tokens in digits; "" the model's whole window. */
+	id: string;
+	/** In words: 完整 · 1M, 500K. */
+	text: string;
 }
 
 /** A model control's picked model that another station has: borrowing it, confirmed first. */
@@ -784,6 +803,13 @@ export interface PickView {
 	/** The runtimes offered for it (none: not asked), how hard it can think there, who can run it. */
 	runtimes: RuntimeKind[];
 	efforts: string[];
+	/**
+	 * How much context it can be kept to (a new chat's or a chat's), its whole window first; none: not
+	 * offered (a runtime that cannot, a model whose window is not known, a station from before).
+	 */
+	contexts?: ContextLevel[];
+	/** The one of `contexts` picked, by its `id`. */
+	contextNow?: string;
 	accounts: RunnableProfile[];
 	dropped?: string;
 	/**
@@ -939,8 +965,12 @@ export interface ChangelogItem {
 	mine: boolean;
 }
 
-/** A day's changes, under its heading (今天, 昨天, 9月20日). */
+/**
+ * A day's changes, under its heading (今天, 昨天, 9月20日): which day it is where the device is (`day`: days since
+ * 1970 there, the same day whatever else it lists or the list leaves off; its heading only says it).
+ */
 export interface ChangelogDay {
+	day: number;
 	label: string;
 	entries: ChangelogItem[];
 }
@@ -1096,6 +1126,11 @@ export interface Session {
 	 * absent: as its station is set (`StationContext::afreshWhenCold`).
 	 */
 	afresh?: boolean;
+	/**
+	 * The most context it runs with, in tokens: its runtime compacts at it (`session.settings`); absent, the
+	 * model's whole window.
+	 */
+	context?: number;
 	runtimeSessionId?: string;
 	/** What its station can do to its context by hand: compact, clear (one from before says none). */
 	contextActions?: string[];
@@ -1608,7 +1643,7 @@ export interface Job {
 	age?: string;
 	/**
 	 * Among the open ones (`longJobs`): its station, that station's name when there are several, the chat it is in as
-	 * the viewer's sidebar has it, and all that in a line (studio · 修登录 · 已归档).
+	 * the viewer's sidebar has it, and all that in a line (willow · 修登录 · 已归档).
 	 */
 	station?: string;
 	stationName?: string;
@@ -1845,7 +1880,7 @@ export interface VaultAsk {
 	/**
 	 * How it is answered on this device, from the vault as the core holds it (views/vault.ts askAnswers): approve
 	 * (允许 / 存入), setUp (a secret to keep while this device's vault is not on: 开启密钥库 first), elsewhere (approved only in an
-	 * app that keeps keys). The chat's cards; absent on a core from before.
+	 * app that keeps keys), notHere (a secret to keep not sealed to this device: approved on another, VaultRequest `notHere`). The chat's cards; absent on a core from before.
 	 */
 	answer?: string;
 	/** With answer approve, a use: the longest it may be given for (once | hour | chat). */
@@ -1913,7 +1948,10 @@ export interface MessageCard {
 	 * with `signin.fill` (from this device's password manager), `signin.self`, `signin.deny` (the chat's station).
 	 */
 	signinAsk?: SignInAsk;
-	/** A login card: the login's id on its station (the `machineLogin` topic has the rest). */
+	/**
+	 * A login card: the login's id on its station (the `machineLogin` topic has the rest); absent where a later post of the chat
+	 * asks for the same login (its card alone).
+	 */
 	login?: string;
 	/** A login card for a login on another station than the chat's: that station's key. */
 	station?: string;
@@ -1992,12 +2030,12 @@ export interface ChatItem {
 	originText?: string;
 	/** slack | feishu: the kind of connect it came from (its mark). */
 	originKind?: string;
-	/** Its station is offline, in words ("Studio 离线"): the row is shown greyed and marked. Absent while online. */
+	/** Its station is offline, in words ("Willow 离线"): the row is shown greyed and marked. Absent while online. */
 	offline?: string;
 	/** Its station gone for its update: marked with the update's mark in place of the unplugged one. Absent otherwise. */
 	updating?: boolean;
 	/**
-	 * Its station's link coming back, or failing and retried, in words ("正在重连 Studio…"): the row is marked with a
+	 * Its station's link coming back, or failing and retried, in words ("正在重连 Willow…"): the row is marked with a
 	 * turning ring. Absent while linked (and while offline).
 	 */
 	reconnecting?: string;
@@ -2041,6 +2079,11 @@ export interface ChatItem {
 	 * unread, pinned, kept or not recommended by its station's archive review alike. Absent otherwise.
 	 */
 	swipeArchive?: boolean;
+	/**
+	 * Swiped away, asked first in these words (only the swipe asks so): its watch's while one of its agents keeps
+	 * watch, else while one is at work or waits on work it started. Absent otherwise.
+	 */
+	swipeAsk?: string;
 	/** The viewer kept it (`chat.keep`): never offered for archiving, nor archived on its own; `chat.keep {kept: false}` lets it go. Absent otherwise. */
 	kept?: boolean;
 	/**
@@ -2166,6 +2209,8 @@ export interface LinkedChat {
 	archived?: boolean;
 	/** Where it stands in words, where its list's row is not there to say it: 已归档. Absent otherwise. */
 	note?: string;
+	/** Its thread, for a link to one of its messages (`messagePeek`). Absent for a chat with none. */
+	thread?: number;
 }
 
 /** still.fail's notice as a chat shows it (core views.ts noticeOf). */
@@ -2181,6 +2226,11 @@ export interface NoticeShown {
 	 * profile's page. Absent otherwise.
 	 */
 	linkAt?: number;
+	/**
+	 * A failure's own words, as what failed said them (a provider's, a process's): shown when the notice is
+	 * opened, under `words`. Absent otherwise.
+	 */
+	detail?: string;
 	/**
 	 * `words` read as Markdown (markdown.ts), its runs of words in `words`: what the clients draw (a chat it opened is
 	 * a link to it). Absent where a view reads none of its messages' words (a decision's).
@@ -2300,6 +2350,11 @@ export interface ChatMessage {
 	 * person's, drawn as they wrote it, and for still.fail's notice (its `notice` has its words').
 	 */
 	md?: unknown;
+	/**
+	 * A person's words in runs (refLinks.ts personWords: as written, a bare web address `link`, a reference to a chat
+	 * `ref`): what the clients draw. Absent for others' and from a core from before.
+	 */
+	words?: unknown;
 	attachments: Attachment[];
 	quotes: Quote[];
 	/** An agent's post that ended its turn: final, block (the words from before; `ending` has today's). */
@@ -2835,7 +2890,7 @@ export interface OpenedChat {
 
 /** An item's page: its chat (with the viewer's read position), or its agent before it has one. */
 export interface ChatView {
-	/** Archived chats must be restored before composing another message. */
+	/** The chat is archived; sending a message restores it. */
 	archived?: boolean;
 	/** Pinned to the top of the viewer's list. Absent when its station does not know pins (it cannot be pinned). */
 	pinned?: boolean;
@@ -3070,7 +3125,7 @@ export interface ChatsView {
 	loading: boolean;
 	days: ChatDay[];
 	/**
-	 * The stations not working as they should, in a line ("MBA 离线", "正在重连 Studio", "2 台 station 异常"), for a
+	 * The stations not working as they should, in a line ("Maple 离线", "正在重连 Willow", "2 台 station 异常"), for a
 	 * corner of the list; absent while all are (a station first connecting is not one).
 	 */
 	trouble?: StationTrouble;
@@ -3705,7 +3760,7 @@ export interface DriveTransferShown {
 	names: string[];
 	toRoot: string;
 	toPath: string;
-	/** Where they go, in words: MBA › 照片. */
+	/** Where they go, in words: Maple › 照片. */
 	toText: string;
 	/** What is copied, in words: 首页截图.png, or 首页截图.png 等 2 项. */
 	title: string;
@@ -3883,6 +3938,8 @@ export interface FleetView {
 	 * today), and those that ran their tasks today: 今天用了 3 台设备.
 	 */
 	where: string;
+	/** That as a number: 3 (a look of the card says it alone, 千恋＊万花's). */
+	devices: number;
 	/** The chats archived and what was spent today; absent while it is read, or with nothing spent nor archived. */
 	today?: FleetToday;
 	/** The same over the last 7 days, each day's chats archived; absent with it. */
@@ -3892,6 +3949,8 @@ export interface FleetView {
 	 * absent with none, or with the days.
 	 */
 	tasksText?: string;
+	/** That as a number: 312; absent with it. */
+	tasks?: number;
 	/** How many each chat that ran any did, on average: 平均每个对话 5.2 个. */
 	tasksPer?: string;
 }
@@ -4344,7 +4403,18 @@ export interface Meter {
 	note?: string;
 }
 
-/** A fact of a machine, a row of its details: 主机名 studio. */
+/** One GPU's resource dial and model on the station's overview. */
+export interface HostGpu {
+	big: string;
+	unit: string;
+	left: number;
+	level: Level;
+	title: string;
+	total: string;
+	model: string;
+}
+
+/** A fact of a machine, a row of its details: 主机名 willow. */
 export interface HostDetail {
 	label: string;
 	value: string;
@@ -4370,7 +4440,9 @@ export interface Host {
 	line: string;
 	facts: string[];
 	meters: Meter[];
-	/** What the machine is, the same line wherever it is named: Apple M2 Max · 64 GB · macOS 26. */
+	/** The machine's GPUs, each with the figures it can report. */
+	gpus?: HostGpu[];
+	/** What the machine is, the same line wherever it is named: Apple M1 Pro · 32 GB · macOS 26. */
 	identity: string;
 	/** The rest, a row each, where the machine is looked at closely: its hostname, chip, uptime, the process. */
 	details: HostDetail[];
@@ -4851,10 +4923,33 @@ export interface LockPerson {
 	groups: LockGroup[];
 }
 
-/** What waits on this device to approve new ones face to face (the `lockPrompts` topic; views/pair.ts). */
+/** A member's device set up that waits on this one for a vault's key (views/vault.ts `vaultAsks`, LockPromptsView `asks`). */
+export interface VaultKeyAsk {
+	workspace: string;
+	workspaceName: string;
+	/** The vault whose key it lacks, one of the viewer's own that this device holds the key to. */
+	vault: string;
+	vaultName: string;
+	/** The device set up without the key (its id in the lock): what `vault.addDevice {vault, device}` gives it to, and `vault.hidePrompt {device}` puts away. */
+	device: string;
+	/** Its name as people know it (LockDevice `fullText`). */
+	deviceText: string;
+	/** When it was set up, or last asked (its certificate's date, unix seconds). */
+	at: number;
+	/** That, in words (3 分钟前). */
+	atText: string;
+	/** Its person put it in the lock themselves (a device of theirs signed its entry). Else an admin did, under their name: it is given the key only as the person asks here (not by itself as its certificate comes), and the prompt says who put it in. */
+	own: boolean;
+	/** Not `own`: who put it in the lock, by name. */
+	byText?: string;
+}
+
+/** What waits on this device from new devices: to approve them face to face (views/pair.ts), to give them a vault's key (the `lockPrompts` topic). */
 export interface LockPromptsView {
 	/** The new devices showing this one's code now, wherever the person is. */
 	pairing: LockPairing[];
+	/** The members' devices set up that wait on this one for a vault's key, the latest asking first, wherever the person is; none put away (views/vault.ts `vaultAsks`; none from a core of before). */
+	asks?: VaultKeyAsk[];
 }
 
 /** A station of the workspace and whether the lock protects it. */
@@ -4955,7 +5050,7 @@ export interface MachineLoginShown {
 	stationName: string;
 	/** Its command's program (gh, gcloud). */
 	name: string;
-	/** 在 studio 上登录 gh. */
+	/** 在 willow 上登录 gh. */
 	title: string;
 	/** The command it runs, as one line. */
 	command: string;
@@ -5021,8 +5116,8 @@ export interface MachineLoginShown {
 	 */
 	doneByText?: string;
 	/**
-	 * Ended: how, in a line, as its card shows it then: 已在 studio 上登录 gh, 张三 取消了在 studio 上登录 gh,
-	 * 在 studio 上登录 gh 失败：<why>, …超时了.
+	 * Ended: how, in a line, as its card shows it then: 已在 willow 上登录 gh, 张三 取消了在 willow 上登录 gh,
+	 * 在 willow 上登录 gh 失败：<why>, …超时了.
 	 */
 	endedText?: string;
 	/** When it started, in words: 14:05 today, 10/16 14:05 before. */
@@ -5181,6 +5276,24 @@ export interface MeshStatus {
 	workspace?: string;
 	workspaceId?: string;
 	name?: string;
+	/**
+	 * Whether it knows the workspace's stations now, from still.fail cloud (false: cut off from it, it takes no shared
+	 * Profile's copy). Absent from stations before it.
+	 */
+	reached?: boolean;
+}
+
+/**
+ * One message of a chat a link names, for the link's card (the `messagePeek` topic, GET /threads/:id/entries of
+ * that entry alone): as first said, an edit made since on Slack or Feishu not in it.
+ */
+export interface MessagePeek {
+	/** Who said it. */
+	author: string;
+	/** Its words as a chat's row has them; a file's word for one without any. */
+	text: string;
+	/** When it was said, in words (`at`). */
+	time?: Record<string, Stamp>;
 }
 
 /** A figure in words, and how bad it is. */
@@ -5296,6 +5409,8 @@ export interface SoftwareVersion {
 	idleOnly?: boolean;
 	/** The pages can update it (or install it, when it is not installed). */
 	updatable: boolean;
+	/** An incomplete Codex can be repaired with npm after a person chooses it; the existing command is backed up. */
+	repairable?: boolean;
 	/** Why it cannot be updated from here (the desktop app's station, a runtime installed another way…). */
 	note?: string;
 	/** idle | updating | failed */
@@ -5416,6 +5531,20 @@ export interface StationElevation {
 	canChange: boolean;
 }
 
+/** A station's Tailcat link of data outflow (`Overview.outflowTailcat`). */
+export interface OutflowTailcat {
+	/** An admin turned it on (`outflow.tailcat`). */
+	on: boolean;
+	/** off | starting (getting tailcat, its key or its address) | running | failed (why in `error`) */
+	state: string;
+	/** Running: the Tailcat address to give the program on the other machine. */
+	address?: string;
+	/** Running: the port to ask at, at that address. */
+	port?: number;
+	/** Failed: why. */
+	error?: string;
+}
+
 /** A station's overview, with what the clients show of its connects and profiles. */
 export interface Overview {
 	automaticDecisions?: AutomaticDecisionView;
@@ -5498,6 +5627,30 @@ export interface Overview {
 	 * that.
 	 */
 	outflowAnswers?: boolean;
+	/**
+	 * Its Tailcat link, which lets programs of other machines ask for its data (docs/data-outflow.md): for an
+	 * admin of its home workspace only. None for others, or from a station older than it.
+	 */
+	outflowTailcat?: OutflowTailcat;
+}
+
+export interface StationProfileGroup {
+	/** The account kind used by the workspace's profile list. */
+	group: string;
+	/** The account kind in the viewer's language. */
+	title: string;
+	/** The station's profile ids in this kind, those needing a look first. */
+	profiles: string[];
+	/** How many of these profiles need a look. */
+	attention: number;
+}
+
+/** How a profile of the workspace's list is, in a few words and their tone. */
+export interface ProfileState {
+	/** willow 离线; 需要登录; 额度查询失败; 未检查. */
+	text: string;
+	/** red or amber: it needs a look; neutral: it does not (a check not made yet). */
+	tone: Tone;
 }
 
 /** How a connection to a station goes: straight there, through a relay, or still being chosen. */
@@ -5554,6 +5707,10 @@ export interface StationView {
 	runtimes: RuntimeModels[];
 	models: ModelOption[];
 	overview?: Overview;
+	/** Its profiles by account kind, those needing a look first. */
+	profileGroups?: StationProfileGroup[];
+	/** Each of its profile rows' state, keyed by profile id, using the profiles list's rule. */
+	profileStates?: Record<string, ProfileState>;
 	/**
 	 * Its versions offer the 测试版 switch: it can be put on a channel (its station's version says one), and the
 	 * account that reaches it is in the beta or it is on the test channel already (to be switched back).
@@ -5836,6 +5993,11 @@ export interface PrefsView {
 	 * chat open in front coming to need the viewer).
 	 */
 	haptics?: string;
+	/**
+	 * This app keeping itself current on this device: `off` (a newer build is said, and downloaded and put in
+	 * place only at the person's word), or none for on (downloaded by itself, put in place while the app is not in use).
+	 */
+	appUpdate?: string;
 	rowPicture?: RowPictureSetting;
 	/** Times are shown as dates rather than "3 分钟前". */
 	absoluteTime?: boolean;
@@ -5887,8 +6049,8 @@ export interface PrefsView {
 	 */
 	driveFavoritesHidden?: Record<string, string>;
 	/**
-	 * The look the card shared of the agents at work is drawn in, as last chosen under it on this device:
-	 * `poster`, `receipt`, `terminal`, or (none) `night`.
+	 * The look the card shared of the agents at work is drawn in, as last chosen under it on this device: the app's
+	 * key for it (`night`, `poster`, …; none or one the app does not know: its first).
 	 */
 	shareLook?: string;
 	/** How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path. */
@@ -6100,7 +6262,7 @@ export interface ProfileMember {
 	station: string;
 	stationId: string;
 	stationName: string;
-	/** What its row is called: its station's name, and its profile's (studio · 工作) where that station has two copies. */
+	/** What its row is called: its station's name, and its profile's (willow · 工作) where that station has two copies. */
 	title: string;
 	online: boolean;
 	/** Its id on that station (its page there). */
@@ -6109,21 +6271,13 @@ export interface ProfileMember {
 	profileName: string;
 	/** host: has it and lends it; user: borrows it (or a copy of a key); own: signed in there on its own. */
 	role: string;
-	/** What it is there, in words: 借给 mini / 向 studio 借 / 自己登录. */
+	/** What it is there, in words: 借给 birch / 向 willow 借 / 自己登录. */
 	about: string;
 	usable: boolean;
 	checkText: string;
 	checkTone: string;
 	/** How many connects use it there. */
 	usedBy: number;
-}
-
-/** How a profile of the workspace's list is, in a few words and their tone. */
-export interface ProfileState {
-	/** studio 离线; 需要登录; 额度查询失败; 未检查. */
-	text: string;
-	/** red or amber: it needs a look; neutral: it does not (a check not made yet). */
-	tone: Tone;
 }
 
 /** One station where an account is available, even when several profiles there have it. */
@@ -6178,7 +6332,7 @@ export interface WorkspaceProfile {
 	 * entered (`attention`), first in its kind, its state in colour.
 	 */
 	look: boolean;
-	/** Where it can be used, in words: every station that has it, signed in or borrowing: studio、mini 可用. */
+	/** Where it can be used, in words: every station that has it, signed in or borrowing: willow、birch 可用. */
 	where: string;
 	/** The stations that may use a shared one; absent: every one. */
 	allow?: string[];
@@ -6251,7 +6405,7 @@ export interface PublishMessage {
 	time?: Record<string, Stamp>;
 }
 
-/** What a snapshot of a chat would hold now (`chat.publishPreview`): nothing is kept until it is published. */
+/** What a picture of a chat holds now (`chat.publishPreview`), made of what the device holds of it: nothing is asked of its station or kept. */
 export interface PublishPreview {
 	/** The last message it holds: `chat.publish` takes it, so what is kept is what was seen. */
 	upto: number;
@@ -6489,6 +6643,16 @@ export interface ScreenDrop {
 	reveal: boolean;
 }
 
+/** One panel of a simulator's device, as its device type's mask draws it. */
+export interface ScreenPanel {
+	/** As wide as its mask, whose height says which panel a picture is of. */
+	width: number;
+	/** As high. */
+	height: number;
+	/** Its corners' radii as shares of its width: top left, then round it. */
+	corners: number[];
+}
+
 /** A screen of a station a person can see and drive (docs/remote-screens.md). */
 export interface ScreenItem {
 	/** The station's: `desktop`, `browser:<targetId>`. */
@@ -6516,6 +6680,12 @@ export interface ScreenItem {
 	closable?: boolean;
 	/** The viewer may read its apps' logs and restart them (`screen.logs`, `screen.apps`, `screen.relaunch`): a simulator's, for a member who may drive it. */
 	debug?: boolean;
+	/** Where a file to install on it goes up to (`screen.install`). */
+	install?: string;
+	/** It folds (an iPhone Duo's simulator): `screen.input` `{t: "pose", name}`, for a member who may drive it. */
+	poses?: boolean;
+	/** A simulator's panels (an iPhone Duo's two), for the device body drawn round its picture. */
+	panels?: ScreenPanel[];
 	/** The chat that opened it (an agent's tab), when it is one of the viewer's chats of the station. */
 	chat?: ScreenChat;
 	/**
@@ -6608,6 +6778,12 @@ export interface ScreenViewState {
 	kind?: string;
 	/** May read its apps' logs and restart them (`ScreenItem.debug`). */
 	debug?: boolean;
+	/** Its `ScreenItem.install`, empty for none. */
+	install?: string;
+	/** May fold it (`ScreenItem.poses`). */
+	poses?: boolean;
+	/** Its panels (`ScreenItem.panels`). */
+	panels?: ScreenPanel[];
 	/** Driving it now: input goes to the station (else only seen). */
 	control: boolean;
 	/** May drive it (not a read-only member). */
@@ -6988,6 +7164,11 @@ export interface StatusView {
 	state?: string;
 	text?: string;
 	items: StatusItem[];
+	/**
+	 * What a page still loading says under its words, a line each: what lasts and is why it is slow (the device's
+	 * data not opened, still.fail cloud down); what is read is not said.
+	 */
+	lines?: string[];
 }
 
 /** A subscription on the usage page: its allowance as its profile shows it, what its copies spent in the days. */
@@ -7346,6 +7527,8 @@ export interface VaultRequest {
 	at: number;
 	/** A request to keep a secret rather than use one: `vault.approve` keeps it (its scope unused). */
 	save?: VaultSave;
+	/** A secret to keep its station sealed to the person's devices set up then, this device not among them: approved on one of those, or here once the station has this device's certificate (the core brings it as the station is read) and seals it again. */
+	notHere?: boolean;
 	/** How it would be given, in a line (代理 · 限 api.github.com). */
 	howText?: string;
 }

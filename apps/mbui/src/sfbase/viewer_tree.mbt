@@ -153,9 +153,9 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   n.reacts(fn() { (vw.sniffed.get(), vw.bytes.get() is Some(_), vw.error.get() is Some(_), vw.fetching.get(), vw.asked_told.get()) }, fn(_) {
     vw.fetch(@ui.current(), src)
   })
-  // the images beside it read ahead as what is beside it is said (the core's imageNear, its folder), at that change:
-  // what draws it reads only what came of them
-  n.reacts(fn() { vw.near_ids(src) }, fn(_) {
+  // Read the neighbours ahead once the open picture has come (or failed). Revisit both when imageNear changes and
+  // when this picture finishes, even if no frame was drawn in between.
+  n.reacts(fn() { (vw.near_ids(src), vw.bytes.get() is Some(_), vw.error.get() is Some(_)) }, fn(_) {
     let (before, after) = vw.near(src)
     vw.read_near(src, before, after)
   })
@@ -501,7 +501,7 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
           .words_look(By(fn() {
             // (a size alone said, its line the theme's text_line times it, as Ctx::text has it)
             let size = @sf.theme().t.body
-            { size, weight: 400, line: @ui.tree_theme().text_line * size, wrap: true }
+            { size, weight: 400, line: @ui.tree_theme().text_line * size, wrap: true, tracking: @view.letters_own }
           }))
           .ink(By(fn() { @sf.theme().p.muted }))
           |> ignore
@@ -1477,7 +1477,7 @@ pub fn file_progress_node(
       }))
       .words_look(By(fn() {
         let (size, line) = @ui.tree_theme().text_size(Body)
-        { size, weight: 400, line, wrap: true }
+        { size, weight: 400, line, wrap: true, tracking: @view.letters_own }
       }))
       .ink(By(fn() { @ui.tree_theme().color(Muted) }))
       |> ignore
@@ -1608,7 +1608,10 @@ fn viewer_hosted(n : @view.View, src : Source, vw : Viewer) -> Unit {
         // (a ground: a click round what it shows closes it, the bars come and go on a tap)
         c.cursor(stage, Arrow)
         @ui.capture(c, stage)
-        c.box(style=stage_whole, id=stage, fn() { vw.content(c, src, stage) }) |> ignore
+        // (its words picked with the pointer, a mouse's drag or a finger's hold, as a page's are)
+        c.selectable(color=@sf.alpha(@sf.theme().p.blue, 0.28), fn() {
+          c.box(style=stage_whole, id=stage, fn() { vw.content(c, src, stage) }) |> ignore
+        })
       })
       .over(Is(true))
       |> ignore
@@ -1633,7 +1636,7 @@ fn viewer_hosted(n : @view.View, src : Source, vw : Viewer) -> Unit {
           .words(By(fn() { pv_fill("android-chat.file.loadFailed", [("error", vw.error.get().unwrap_or(""))]) }))
           .words_look(By(fn() {
             let size = @sf.theme().t.body
-            { size, weight: 400, line: @ui.tree_theme().text_line * size, wrap: true }
+            { size, weight: 400, line: @ui.tree_theme().text_line * size, wrap: true, tracking: @view.letters_own }
           }))
           .ink(By(fn() { @sf.theme().p.muted }))
           |> ignore
@@ -1865,7 +1868,7 @@ fn viewer_facts_node(f : @view.View, src : Source, vw : Viewer) -> Unit {
       .words_centered(Is(true))
       .words_look(By(fn() {
         let s = size()
-        { size: s, weight, line: @ui.tree_theme().text_line * s, wrap: true }
+        { size: s, weight, line: @ui.tree_theme().text_line * s, wrap: true, tracking: @view.letters_own }
       }))
       .ink(By(ink))
       |> ignore

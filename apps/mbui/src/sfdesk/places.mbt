@@ -118,7 +118,7 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let picked = place_route(src, w, "stations")
   c.box(style=place_side, fn() {
     side_top(c)
-    nav_action(c, "stations/add", @sf.t("web-pages.settings.stations.add"), @settings.place_action(core, here, "stations"))
+    nav_action(c, "stations/add", @sf.t("web-pages.settings.stations.add"), @settings.place_action(core, here, "stations"), trailing?=update_trailing(c, src), band=update_band())
     side_scroll(c, "stations-nav/" + w.id, fn() {
       let listed = stations_listed(src, w)
       for i, s in listed {
@@ -169,7 +169,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let list = items((src.topic)("profiles", { "scope": Json::string(w.id) }).value, "items")
   c.box(style=place_side, fn() {
     side_top(c)
-    nav_action(c, "profiles/add", @sf.t("web-pages.settings.profiles.add"), @settings.place_action(core, here, "profiles"))
+    nav_action(c, "profiles/add", @sf.t("web-pages.settings.profiles.add"), @settings.place_action(core, here, "profiles"), trailing?=update_trailing(c, src), band=update_band())
     side_scroll(c, "profiles-nav/" + w.id, fn() {
       let mut group = ""
       for i, e in list {

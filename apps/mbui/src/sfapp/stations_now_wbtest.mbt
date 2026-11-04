@@ -78,7 +78,7 @@ test "the card to share's looks: each chosen under it draws the picture in it at
     let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=at.0, h=at.1, platform=at.2)
     t.run_for(@kit.presence_in_ms)
     // the night's, none kept: its rings' lead
-    assert_true(t.find("用 6 个 Claude 订阅账号消耗了") is Some(_))
+    assert_true(picture_says(t, "用 6 个 Claude 订阅账号消耗了"))
     // each its own picture, saying what serves it (「信息甚至都不用一样」): what each says that another does not, and
     // what it leaves out
     for look in [
@@ -89,8 +89,8 @@ test "the card to share's looks: each chosen under it draws the picture in it at
     ] {
       t.click(Button, label=look.0)
       t.run_for(@kit.presence_in_ms)
-      assert_true(t.find(look.1) is Some(_), msg="\{(at, look)}")
-      assert_true(t.find(look.2) is None, msg="\{(at, look)}")
+      assert_true(picture_says(t, look.1), msg="\{(at, look)}")
+      assert_true(!picture_says(t, look.2), msg="\{(at, look)}")
       assert_eq(t.squeeze_faults(), [])
       assert_eq(t.corner_faults(), [])
       assert_eq(t.contrast_faults(), [])
@@ -111,6 +111,19 @@ test "the card to share's looks: each chosen under it draws the picture in it at
 }
 
 ///|
+/// The words drawn now in the picture, seen (not the looks' small pictures under it: each stands for itself, its words
+/// not read out).
+fn picture_words(t : @ui.Tester) -> Array[(String, Double, Double, Double, Double, Double)] {
+  t.words_said().filter(fn(w) { w.5 > 0.5 })
+}
+
+///|
+/// Whether the picture says `s` (in words of its own, or a part of them).
+fn picture_says(t : @ui.Tester, s : String) -> Bool {
+  picture_words(t).iter().any(fn(w) { w.0.contains(s) })
+}
+
+///|
 /// The words of the picture whose places say how it is laid out (each said alone, not a part of a line of several).
 // kept across runs: a table, never written
 let picture_part_words : Array[String] = [
@@ -122,7 +135,7 @@ let picture_part_words : Array[String] = [
 /// Where each of picture_part_words is in the picture `t` shows, from what leads its share (用 6 个 Claude 订阅账号消耗了),
 /// rounded to the point.
 fn picture_parts(t : @ui.Tester) -> Array[(String, Int, Int)] {
-  let words = t.words().filter(fn(w) { w.5 > 0.5 })
+  let words = picture_words(t)
   let lead = words.filter(fn(w) { w.0 == "用 6 个 Claude 订阅账号消耗了" })
   if lead.length() != 1 {
     return []
@@ -159,10 +172,26 @@ test "the card to share on a phone: the picture as wide as its sheet lets it, no
 }
 
 ///|
+test "the card to share in a 千恋＊万花 look, kept on a phone: the whole card, as tall as it is laid out, not its tile in the looks' strip" {
+  // (the picture kept is drawn as box 0, as each look's tile in the strip is: the look's whole card is kept, not its
+  // picture alone in a tile's ground, 2026-11-03 用户「保存至相册，存下来之后只有蓝色背景，啥都没有」)
+  let src = fixture_app("share-card-senren-ledger")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@kit.presence_in_ms)
+  t.click(Button, label="保存到相册")
+  t.run_for(@kit.presence_in_ms)
+  match png_size(t.kept()[0].2) {
+    // (a tile's is 360 by 480: 1080 by 1440; the ledger's card is taller, its every day's row under its picture)
+    Some((pw, ph)) => assert_true(pw == 1080 && ph > 2000, msg="\{(pw, ph)}")
+    None => fail("not a PNG")
+  }
+}
+
+///|
 /// The card to share as `t` shows it: laid out the one way.
 fn share_card_laid(t : @ui.Tester) -> Unit raise {
   t.run_for(@kit.presence_in_ms)
-  let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
+  let word = fn(s : String) { picture_words(t).filter(fn(w) { w.0 == s }) }
   // the first kind's said round its first model's tokens, read down: what leads it over the rings and the tokens, the
   // tokens large, the model and what they would cost under them; each other kind a line of its own, its ring's key: its
   // name, its accounts; each other model a line, its tokens and cost at the line's end (2026-10-30 用户「按模型分开写
@@ -204,8 +233,8 @@ fn share_card_laid(t : @ui.Tester) -> Unit raise {
   let days = ["10/20", "10/26"].map(fn(d) { word(d) })
   assert_true(days.iter().all(fn(d) { d.length() == 1 }) && days[0][0].1 < days[1][0].1, msg="\{days}")
   // the chats at work now, the tasks run across devices, and still.fail's line
-  assert_true(t.find("9 个对话正在运行") is Some(_) && t.find("今天用了 3 台设备") is Some(_))
-  assert_true(t.find("近 7 天 agent 跨设备执行了 312 个任务") is Some(_) && t.find("平均每个对话 5.2 个") is Some(_))
+  assert_true(picture_says(t, "9 个对话正在运行") && picture_says(t, "今天用了 3 台设备"))
+  assert_true(picture_says(t, "近 7 天 agent 跨设备执行了 312 个任务") && picture_says(t, "平均每个对话 5.2 个"))
   // the picture all in its sheet or dialog, over its button
   let line = word("一生万物，万物归一")
   let button = match t.query(Button, label="保存到相册") {
@@ -225,7 +254,7 @@ fn share_card_laid(t : @ui.Tester) -> Unit raise {
   let tasks = word("近 7 天 agent 跨设备执行了 312 个任务")
   let more = word("平均每个对话 5.2 个")
   assert_true(tasks.length() == 1 && more.length() == 1 && tasks[0].4 == more[0].4 && more[0].2 > tasks[0].2, msg="\{(tasks, more)}")
-  assert_true(t.find("一生万物，万物归一") is Some(_))
+  assert_true(picture_says(t, "一生万物，万物归一"))
   assert_eq(t.squeeze_faults(), [])
   assert_eq(t.corner_faults(), [])
   assert_eq(t.contrast_faults(), [])
@@ -246,7 +275,7 @@ test "the 用量 page: 分享卡片 beside its days once something was spent (no
 /// are drawn), the first look and 关闭 and the stage's own button (复制图片, 保存到相册 on a phone).
 fn stage_said(t : @ui.Tester) -> String {
   let dialog = t.query(Dialog).map(fn(s) { (s.label, tenth4(s.rect)) })
-  let line = t.words().filter(fn(w) { w.0 == "一生万物，万物归一" && w.5 > 0.5 }).map(fn(w) { tenth4((w.1, w.2, w.3, w.4)) })
+  let line = picture_words(t).filter(fn(w) { w.0 == "一生万物，万物归一" }).map(fn(w) { tenth4((w.1, w.2, w.3, w.4)) })
   let b = fn(label : String) { t.query(Button, label~).map(fn(s) { tenth4(s.rect) }) }
   "dialog \{dialog} line \{line} look \{b("夜色")} close \{b("关闭")} copy \{b("复制图片")} save \{b("保存到相册")} squeeze \{t.squeeze_faults().length()}"
 }
@@ -273,15 +302,32 @@ fn stage_ink(t : @ui.Tester, w : Double, h : Double) -> String {
       }
     }
   }
-  // (its words as drawn (glyphs, kind 1, seen): how many lie whole in the picture and how low the lowest reaches; and
-  // how many reach out of it down into what is under it, over the looks)
+  // (its words as drawn (glyphs, kind 1, seen, the stage's): how many lie whole in the picture and how low the lowest
+  // reaches; and how many reach out of it down into what is under it, over the looks; the names of the sets they are in
+  // not of it)
   let looks_top = t.query(Button, label="夜色").map(fn(s) { s.rect.1 }).unwrap_or(h)
-  let glyphs = drawn.filter(fn(a) { a[5] == 1.0 && a[11] > 0.0 })
+  let sets = t.all(Tab).map(fn(s) { s.rect })
+  let in_sets = fn(a : Array[Double]) {
+    sets.iter().any(fn(r) { a[0] + a[2] > r.0 && a[0] < r.0 + r.2 && a[1] + a[3] > r.1 - 0.5 && a[1] < r.1 + r.3 + 0.5 })
+  }
+  // (the stage's own: drawn after its night, not the page's under it, which the night dims and the picture covers)
+  let mut after_night = drawn.length()
+  for i, a in drawn {
+    if a[5] == 0.0 && a[0] <= 0.5 && a[1] <= 0.5 && a[2] >= w - 0.5 && a[3] >= h - 0.5 && near(a, @sf.stage_scrim) {
+      after_night = i + 1
+    }
+  }
+  let glyphs : Array[Array[Double]] = []
+  for i, a in drawn {
+    if i >= after_night && a[5] == 1.0 && a[11] > 0.0 {
+      glyphs.push(a)
+    }
+  }
   let words = match ground {
     Some((gx, gy, gw, gh)) => {
       let inside = glyphs.filter(fn(a) { a[0] >= gx - 0.5 && a[0] + a[2] <= gx + gw + 0.5 && a[1] >= gy - 0.5 && a[1] + a[3] <= gy + gh + 0.5 })
       let lowest = inside.iter().fold(init=0.0, fn(m, a) { dmax(m, a[1] + a[3]) })
-      let out = glyphs.filter(fn(a) { a[0] >= gx && a[0] < gx + gw && a[1] + a[3] > gy + gh + 0.5 && a[1] < looks_top })
+      let out = glyphs.filter(fn(a) { a[0] >= gx && a[0] < gx + gw && a[1] + a[3] > gy + gh + 0.5 && a[1] < looks_top && !in_sets(a) })
       "words in \{inside.length()} lowest \{(lowest * 10.0).round() / 10.0} out under \{out.length()}"
     }
     None => "words none"
@@ -314,12 +360,14 @@ test "stage, 大屏 keyboard and mouse in a tall and a short window, touch in a 
     out.push("\{at}: \{stage_said(t)}")
     drawn.push(stage_drawn())
   }
-  // (as main has it, 435d3ba8)
+  // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02; 34 of them since 千恋＊万花's: their
+  // strip as wide as the picture is laid out, from its start, scrolled, the stage as wide; in sets since, their names
+  // over the strip: the stage a line taller where the window has the room, 840 by 1100)
   assert_eq(out, [
-    "(1440, 1000, 0): dialog Some((分享卡片, (540, 37.3, 360, 925.4))) line [(560, 770.9, 320, 21)] look Some((618, 831.9, 42, 76.8)) close Some((635.8, 928.7, 58, 34)) copy Some((701.8, 928.7, 102.5, 34)) save None squeeze 0",
-    "(1280, 640, 0): dialog Some((分享卡片, (537.5, 24, 205.1, 592))) line [(480, 757.6, 320, 21)] look Some((538, 485.2, 42, 76.8)) close Some((555.8, 582, 58, 34)) copy Some((621.8, 582, 102.5, 34)) save None squeeze 0",
-    "(840, 1100, 1): dialog Some((分享卡片, (240, 87.3, 360, 925.4))) line [(260, 820.9, 320, 21)] look Some((318, 881.9, 42, 76.8)) close Some((321.9, 978.7, 62, 34)) copy None save Some((391.9, 978.7, 126.2, 34)) squeeze 0",
-    "(390, 844, 2): dialog Some((分享卡片, (45.1, 24, 299.9, 796))) line [(35, 757.6, 320, 21)] look Some((93, 689.2, 42, 76.8)) close Some((96.9, 786, 62, 34)) copy None save Some((166.9, 786, 126.2, 34)) squeeze 0",
+    "(1440, 1000, 0): dialog Some((分享卡片, (540, 24, 360, 952))) line [(560, 757.6, 320, 21)] look Some((540, 797.2, 78, 124.8)) close Some((635.8, 942, 58, 34)) copy Some((701.8, 942, 102.5, 34)) save None squeeze 0",
+    "(1280, 640, 0): dialog Some((分享卡片, (460, 24, 360, 592))) line [(480, 757.6, 320, 21)] look Some((460, 437.2, 78, 124.8)) close Some((555.8, 582, 58, 34)) copy Some((621.8, 582, 102.5, 34)) save None squeeze 0",
+    "(840, 1100, 1): dialog Some((分享卡片, (240, 46.2, 360, 1007.6))) line [(260, 779.8, 320, 21)] look Some((240, 875, 78, 124.8)) close Some((321.9, 1019.8, 62, 34)) copy None save Some((391.9, 1019.8, 126.2, 34)) squeeze 0",
+    "(390, 844, 2): dialog Some((分享卡片, (24, 24, 342, 796))) line [(35, 757.6, 320, 21)] look Some((15, 641.2, 78, 124.8)) close Some((96.9, 786, 62, 34)) copy None save Some((166.9, 786, 126.2, 34)) squeeze 0",
   ])
   assert_eq(drawn, [true, true, true, true])
 }
@@ -339,18 +387,21 @@ test "stage, 大屏 keyboard and mouse: the window made shorter and taller again
     out.push("\{h}: \{stage_said(t)}")
     ink.push("\{h}: \{stage_ink(t, 1280.0, h)}")
   }
-  // (as main has it, 435d3ba8)
+  // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02; 34 of them since 千恋＊万花's: their
+  // strip as wide as the picture is laid out, from its start, scrolled, the stage as wide)
   assert_eq(out, [
-    "800: dialog Some((分享卡片, (500.3, 24, 279.4, 752))) line [(480, 757.6, 320, 21)] look Some((538, 645.2, 42, 76.8)) close Some((555.8, 742, 58, 34)) copy Some((621.8, 742, 102.5, 34)) save None squeeze 0",
-    "560: dialog Some((分享卡片, (538, 24, 204, 512))) line [(480, 757.6, 320, 21)] look Some((538, 405.2, 42, 76.8)) close Some((555.8, 502, 58, 34)) copy Some((621.8, 502, 102.5, 34)) save None squeeze 0",
-    "800: dialog Some((分享卡片, (500.3, 24, 279.4, 752))) line [(480, 757.6, 320, 21)] look Some((538, 645.2, 42, 76.8)) close Some((555.8, 742, 58, 34)) copy Some((621.8, 742, 102.5, 34)) save None squeeze 0",
+    "800: dialog Some((分享卡片, (460, 24, 360, 752))) line [(480, 757.6, 320, 21)] look Some((460, 597.2, 78, 124.8)) close Some((555.8, 742, 58, 34)) copy Some((621.8, 742, 102.5, 34)) save None squeeze 0",
+    "560: dialog Some((分享卡片, (460, 24, 360, 512))) line [(480, 757.6, 320, 21)] look Some((460, 357.2, 78, 124.8)) close Some((555.8, 502, 58, 34)) copy Some((621.8, 502, 102.5, 34)) save None squeeze 0",
+    "800: dialog Some((分享卡片, (460, 24, 360, 752))) line [(480, 757.6, 320, 21)] look Some((460, 597.2, 78, 124.8)) close Some((555.8, 742, 58, 34)) copy Some((621.8, 742, 102.5, 34)) save None squeeze 0",
   ])
   // (what it paints: its night over the window, the picture as large as it is drawn)
-  // (as main has it, 435d3ba8)
+  // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02; the stage's own words alone since
+  // the looks are in sets (main counted the page's under the picture too: 360 and 336, the stage's 327 both): the
+  // picture a line smaller for the sets' names, all of its words in it)
   assert_eq(ink, [
-    "800: night [0.92] picture Some((500.3, 24, 279.4, 601.2)) words in 366 lowest 604.9 out under 0",
-    "560: night [0.92] picture Some((556.1, 24, 167.9, 361.2)) words in 337 lowest 373 out under 0",
-    "800: night [0.92] picture Some((500.3, 24, 279.4, 601.2)) words in 366 lowest 604.9 out under 0",
+    "800: night [0.92] picture Some((519.4, 24, 241.2, 519)) words in 327 lowest 525.5 out under 0",
+    "560: night [0.92] picture Some((575.2, 24, 129.7, 279)) words in 327 lowest 293.6 out under 0",
+    "800: night [0.92] picture Some((519.4, 24, 241.2, 519)) words in 327 lowest 525.5 out under 0",
   ])
 }
 
@@ -380,7 +431,7 @@ test "stage, 大屏 keyboard and mouse: closed by Escape, by back, by 关闭, by
     let selected = t.all(Button).filter(fn(s) { s.selected == Some(true) }).map(fn(s) { s.label })
     out.push("\{how}: at once {\{at_once}} after {presenting \{@sf.presenting()} dialog \{t.query(Dialog).map(fn(s) { s.label })} selected \{selected}}")
   }
-  // (as main has it, 435d3ba8)
+  // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02)
   assert_eq(out, [
   "escape: at once {presenting false dialog None} after {presenting false dialog None selected []}",
   "back: at once {presenting false dialog None} after {presenting false dialog None selected []}",
@@ -402,4 +453,55 @@ test "stage, 大屏 keyboard and mouse: the focus as it opens and after a Tab: a
   let tabbed = focused()
   // (as main has it, 435d3ba8: nothing of it given the focus, nor by a Tab)
   assert_eq(["open \{open}", "tab \{tabbed}"], ["open None", "tab None"])
+}
+
+
+///|
+test "a look with files of its own (千恋＊万花's): handed out only once its pictures and its face are here, each had on its own, how far on the button; one not had, 下载失败，重试 asks it again" {
+  let held : Array[(String, (Result[(Json, Bytes), Json]) -> Unit)] = []
+  @sffixture.fixture_looks_held.val = Some(held)
+  let src = fixture_app("share-card-senren-adv")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@kit.presence_in_ms)
+  // each asked on its own: the look's picture, its tile's small one, the face's two weights
+  let asked = held.map(fn(h) { h.0 })
+  for file in ["1/a1-murasame-adv.webp", "1/a1-murasame-adv.small.webp", "1/face-400.gz", "1/face-600.gz"] {
+    assert_true(asked.contains(file), msg="\{asked}")
+  }
+  // nothing to save while they come: the button says so, and does nothing
+  assert_true(t.query(Button, label="保存到相册") is None)
+  t.click(Button, label="正在下载")
+  t.run_for(@kit.presence_in_ms)
+  assert_eq(t.kept().length(), 0)
+  // the picture here, the face not had: 下载失败，重试
+  let answer = fn(file : String, r : Result[(Json, Bytes), Json]) {
+    for h in held {
+      if h.0 == file {
+        (h.1)(r)
+      }
+    }
+  }
+  for file in asked {
+    if file.has_suffix(".webp") {
+      answer(file, @sffixture.fixture_looks_answer(file))
+    }
+  }
+  answer("1/face-400.gz", Err({ "code": "fonts", "message": "下载到的文件不对" }))
+  answer("1/face-600.gz", @sffixture.fixture_looks_answer("1/face-600.gz"))
+  t.run_for(@kit.presence_in_ms)
+  assert_true(t.query(Button, label="保存到相册") is None)
+  held.clear()
+  t.click(Button, label="下载失败，重试")
+  t.run_for(@kit.presence_in_ms)
+  // only what failed asked again
+  assert_eq(held.map(fn(h) { h.0 }), ["1/face-400.gz"])
+  answer("1/face-400.gz", @sffixture.fixture_looks_answer("1/face-400.gz"))
+  t.run_for(@kit.presence_in_ms)
+  @sffixture.fixture_looks_held.val = None
+  t.click(Button, label="保存到相册")
+  t.run_for(@kit.presence_in_ms)
+  match png_size(t.kept()[0].2) {
+    Some((pw, _)) => assert_eq(pw, 1080)
+    None => fail("not a PNG")
+  }
 }

@@ -1,8 +1,7 @@
 // What agents said, read ahead (markdown.ts): the Markdown of a chat's latest page read in the background as it comes,
 // one reply at a time, and kept on the device, so the chat opens with it read. Reading it as the chat opened was the
-// most of opening one: a page of agents' replies, ~80 000 characters, took ~0.3 s in Hermes on a Mac Studio
-// (bench/chat-open.ts), the messages to come breathing on a phone each time a chat was opened the first time since the
-// app started. Read is what comes, whenever it was said (a chat opens by looking up what it shows: an old chat's
+// most of opening one (bench/chat-open.ts), leaving the messages to come breathing on a phone when a chat was first
+// opened since the app started. Read is what comes, whenever it was said (a chat opens by looking up what it shows: an old chat's
 // replies came to the device read as the sync brought them, test/chat-open-lookup.test.ts), and as the core starts
 // what the chats spoken in lately (AHEAD_MS, AHEAD_CHATS a station) said.
 import { Effect } from "effect";

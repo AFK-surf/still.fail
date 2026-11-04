@@ -10,16 +10,19 @@ import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, rea
 import { join } from "node:path";
 import { agentEnv } from "../ops/agent-env.ts";
 import { log } from "../ops/log.ts";
+import { rememberCodexRollout } from "../read/transcript.ts";
 import { LiveFromCodex, chars, type CodexLiveState } from "./live.ts";
 import { linkCodexAuth, type Env } from "./machine-logins.ts";
 import { keyOfRunner, lentFile, sandboxed, syncNow } from "./sandbox.ts";
 import { AgentProcess, ackedOffset, debug, findRunner, linesBefore, outFile, runnerId } from "./process.ts";
 import { accessKind, codexOverrides, expandRoute, isMachine, profileEnv, profileFast, profileModel, profileVia } from "./profiles.ts";
-import { TOOL_SERVERS, cleanEnv, unreachable, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
+import { TOOL_SERVERS, cleanEnv, failureOf, unreachable, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import type { RunnerInfo } from "./runner.ts";
 import { wall } from "../ops/fibers.ts";
+import { Said, stationLang, tr } from "../ops/i18n.ts";
 import { run } from "../updates/runtimes.ts";
 import { versionIn } from "../updates/versions.ts";
+import { findMissingCodexHost } from "../updates/codex-repair.ts";
 
 type Json = any;
 
@@ -85,14 +88,22 @@ export function hostSkillsOff(root: string): { path: string; enabled: false }[] 
   return found.sort(comparePaths).map((path) => ({ path, enabled: false as const }));
 }
 
+/// Why a Codex turn failed, from its error's `codexErrorInfo` (a code, or a code with the HTTP status it came with) and
+/// message: the code first, then the status, then what the message says (`failureOf`).
 export function classifyCodexError(info: unknown, message = ""): FailureReason {
   const code = typeof info === "string" ? info : info && typeof info === "object" && !Array.isArray(info) ? Object.keys(info)[0] : undefined;
   if (code === "unauthorized") return "auth";
   if (code === "usageLimitExceeded" || code === "rateLimitExceeded") return "rate_limit";
   if (code === "serverOverloaded") return "overloaded";
+  if (code === "contextWindowExceeded") return "context";
+  const held = code !== undefined && info && typeof info === "object" ? (info as Record<string, unknown>)[code] : undefined;
+  const status = held && typeof held === "object" ? (held as { httpStatusCode?: unknown }).httpStatusCode : undefined;
+  if (typeof status === "number" && [401, 403, 429, 529].includes(status)) return failureOf(`${status} ${message}`);
   // Some versions report the HTTP refusal in the message without an unauthorized codexErrorInfo.
   if (/\b(?:401|unauthorized|token_revoked)\b|invalidated oauth token/i.test(message)) return "auth";
-  return "model";
+  // The request not made, or its answer cut off, with no status that says more: the way to the provider.
+  if (["httpConnectionFailed", "responseStreamConnectionFailed", "responseStreamDisconnected"].includes(code ?? "") && (typeof status !== "number" || status >= 500)) return "network";
+  return failureOf(message);
 }
 
 /// Keeps capabilities alongside model ids; an old runtime may omit them.
@@ -191,6 +202,8 @@ class Host {
   readonly turns = new Set<string>();
   /// A sign-in replaced the credentials this process loaded. Existing turns may finish on it.
   loginStale = false;
+  /// Its installation was replaced here, even if the replacement has the same version.
+  runtimeStale = false;
   private idleWaiters = new Set<() => void>();
 
   whenIdle(): Promise<void> {
@@ -373,12 +386,12 @@ class Host {
   }
 
   snapshot(): CodexHostSnapshot {
-    return { runner: this.proc.info.id, signature: this.signature, nextId: this.nextId, ready: this.ready, ...(this.key !== this.profile ? { key: this.key } : {}), ...(this.loginStale ? { loginStale: true } : {}) };
+    return { runner: this.proc.info.id, signature: this.signature, nextId: this.nextId, ready: this.ready, ...(this.key !== this.profile ? { key: this.key } : {}), ...(this.loginStale ? { loginStale: true } : {}), ...(this.runtimeStale ? { runtimeStale: true } : {}) };
   }
 }
 
 /// `key`: the driver's key for it when not its profile's (`hostKey`); none from a station before it.
-export type CodexHostSnapshot = { runner: string; signature: string; nextId: number; ready: boolean; key?: string; loginStale?: boolean };
+export type CodexHostSnapshot = { runner: string; signature: string; nextId: number; ready: boolean; key?: string; loginStale?: boolean; runtimeStale?: boolean };
 
 /// A thread as a next station takes it up (codex.rs HandedThread), with what its app-server needs (HandedHost).
 export type CodexSnapshot = {
@@ -393,6 +406,8 @@ export type CodexSnapshot = {
   tuned?: { model: string; effort: string } | null;
   /// The address of the station's tools its thread was given (optional: a station from before it does not say).
   mcpUrl?: string | null;
+  /// Where this thread writes its rollout (optional for snapshots from an older station).
+  transcriptPath?: string | null;
 };
 
 export type CodexDriverOptions = {
@@ -415,8 +430,17 @@ export type CodexDriverOptions = {
   lent?: { borrowed(profile: Profile): boolean; write(profile: Profile): Promise<number> };
   /// The version of Codex `codex` on the PATH is now (null: not known); `codex --version` by default.
   installedVersion?: () => Promise<string | null>;
+  /// A missing code-mode host (tests can supply a probe); told so the station refreshes its software status.
+  missingHost?: typeof findMissingCodexHost;
+  incompleteInstallation?: () => void;
   /// Bytes of output an app-server may have before it is replaced (OUTPUT_LIMIT).
   outputLimit?: number;
+  /// Settled once what the station before this one left is taken up (sessions/agents.ts `start`). Until then an
+  /// app-server a runner keeps is that station's, to be taken up with its snapshot by the session that ran on it. Asked
+  /// for before (a profile's quota or the model catalog, as the station starts), one was taken up as after a crash, all
+  /// it ever wrote read again on the main thread (131 MB on a station, 2026-11-02: held 4.8 s as devices came back after an
+  /// update), and taken from the station still handing over, which let go of the turns running on it.
+  takenUp?: Promise<unknown>;
 };
 
 /// An app-server's runner keeps all it wrote (every diff and command output of every thread on it, hundreds of MB in a
@@ -508,7 +532,7 @@ export class CodexDriver implements AgentDriver {
   /// An app-server running a Codex other than the one installed now: updated under it.
   private stale(host: Host): boolean {
     const installed = this.installed?.version ?? null;
-    return host.version !== null && installed !== null && host.version !== installed;
+    return host.runtimeStale || (host.version !== null && installed !== null && host.version !== installed);
   }
 
   /// An app-server whose output has grown past the limit (OUTPUT_LIMIT).
@@ -540,7 +564,9 @@ export class CodexDriver implements AgentDriver {
   }
 
   /// Codex installed or updated (from the station's pages): app-servers of the old one are replaced once idle.
-  async runtimeChanged() {
+  async runtimeChanged(replaced = false) {
+    // Mark the old hosts before probing the new version, so a concurrent turn cannot join one during the probe.
+    if (replaced) await this.serial(async () => { for (const host of this.hosts.values()) host.runtimeStale = true; });
     const installed = await this.installedVersion(true);
     await this.serial(async () => {
       for (const id of [...this.hosts.keys()]) await this.retireStale(id, installed);
@@ -586,6 +612,7 @@ export class CodexDriver implements AgentDriver {
   }
 
   private async host(profile: Profile, session?: string, cwd?: string): Promise<Host> {
+    await this.options.takenUp;
     const installed = await this.installedVersion();
     const key = this.hostKey(profile.id, session);
     for (;;) {
@@ -593,7 +620,7 @@ export class CodexDriver implements AgentDriver {
         await this.retireStale(key, installed);
         const current = this.hosts.get(key);
         // A new caller waits for old turns, rather than joining the process with the previous login.
-        if (current && current.alive() && current.loginStale) return { waiting: current };
+        if (current && current.alive() && (current.loginStale || current.runtimeStale)) return { waiting: current };
         if (current && current.alive()) await this.renewLent(current, profile);
         if (current && current.alive() && current.signature !== hostSignature(profile)) {
           // The profile (or the station's variables for its agents) changed. Replace the process once no turn runs on it,
@@ -692,16 +719,56 @@ export class CodexDriver implements AgentDriver {
   }
 
   async open(options: OpenOptions, events: (event: RuntimeEvent) => void): Promise<AgentSession> {
+    // A text-only request uses no tools; in a sandbox the command belongs to that environment, not this filesystem.
+    if (!options.textOnly && !sandboxed(this.data)) {
+      const env = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(options.profile, "codex"), options.profile.id), CODEX_HOME: options.profile.home };
+      const missing = await (this.options.missingHost ?? findMissingCodexHost)(this.command, env);
+      if (missing) {
+        this.options.incompleteInstallation?.();
+        throw new Said(tr(stationLang(), "station.updates.codexMissingHostChat"));
+      }
+    }
     const host = await this.host(options.profile, options.key, options.cwd);
     const model = options.model ?? profileModel(options.profile);
     const skillsOff = hostSkillsOff(this.hostSkills);
-    const config: Json = {
+    const config: Json = options.textOnly ? {
+      "features.shell_tool": false,
+      "features.unified_exec": false,
+      "features.multi_agent": false,
+      "features.apps": false,
+      "features.plugins": false,
+      "features.browser_use": false,
+      "features.computer_use": false,
+      "features.image_generation": false,
+      "features.view_image": false,
+      "features.goals": false,
+      "web_search": "disabled",
+      "mcp_servers": {},
+    } : {
       "mcp_servers.stillfail.url": options.mcpUrl,
       "mcp_servers.stillfail.http_headers": { Authorization: `Bearer ${options.mcpToken}` },
     };
+    if (options.textOnly) {
+      // An empty table is merged with the profile's configured servers. Read their names without config/read, whose
+      // reply can contain credentials and would be kept in the runner's output. The thread's inventory is checked too,
+      // since its working directory may add servers absent from this host-level inventory.
+      try {
+        const servers = await mcpInventory(host);
+        config.mcp_servers = Object.fromEntries(servers.map((s) => [s.name, { enabled: false }]));
+      } catch {
+        throw new Error("cannot open a text-only Codex session");
+      }
+    }
     if (options.effort !== undefined) config.model_reasoning_effort = options.effort;
+    // The most context it runs with: it compacts on its own at it.
+    if (options.context !== undefined) config.model_auto_compact_token_limit = options.context;
     if (skillsOff.length > 0) config["skills.config"] = skillsOff;
     const common: Json = { cwd: options.cwd, approvalPolicy: "never", sandbox: "danger-full-access", developerInstructions: options.instructions, config };
+    if (options.textOnly) {
+      common.sandbox = "read-only";
+      common.ephemeral = true;
+      common.environments = [];
+    }
     if (model !== undefined) common.model = model;
     // None for a thread continued from a terminal: it keeps its own, so its cache holds.
     if (options.instructions === "") delete common.developerInstructions;
@@ -719,9 +786,29 @@ export class CodexDriver implements AgentDriver {
     } else {
       opened = await host.request("thread/start", common);
     }
-    const threadId = opened?.thread?.id;
+    let threadId = opened?.thread?.id;
     if (typeof threadId !== "string") throw new Error("codex gave no thread id");
+    if (options.textOnly) {
+      // A directory can add servers that were absent from the host's inventory. Open another thread with those
+      // disabled too; neither thread gets any conversation text until its effective inventory is entirely disabled.
+      try {
+        const servers = await mcpInventory(host, threadId);
+        if (servers.some((s) => s.runtimeStatus !== "disabled")) {
+          if (options.resume !== undefined) throw new Error("cannot disable a resumed thread's MCP servers");
+          await host.request("thread/unsubscribe", { threadId });
+          config.mcp_servers = { ...config.mcp_servers, ...Object.fromEntries(servers.map((s) => [s.name, { enabled: false }])) };
+          opened = await host.request("thread/start", common);
+          threadId = opened?.thread?.id;
+          if (typeof threadId !== "string") throw new Error("codex gave no thread id");
+          if ((await mcpInventory(host, threadId)).some((s) => s.runtimeStatus !== "disabled")) throw new Error("MCP servers are enabled");
+        }
+      } catch {
+        if (typeof threadId === "string") await host.request("thread/unsubscribe", { threadId }).catch(() => {});
+        throw new Error("cannot open a text-only Codex session");
+      }
+    }
     const session = new CodexSession(this, threadId, host, options.profile, { busy: false, turnId: null, closed: false }, new LiveFromCodex(), events);
+    session.rememberTranscript(opened?.thread?.path);
     session.running = { model, effort: options.effort };
     session.toolsUrl = options.mcpUrl;
     host.addThread(threadId, session.sink());
@@ -737,6 +824,7 @@ export class CodexDriver implements AgentDriver {
       const current = this.hosts.get(key);
       if (current && current.alive()) {
         if (handed?.host.loginStale) current.loginStale = true;
+        if (handed?.host.runtimeStale) current.runtimeStale = true;
         return current;
       }
       if (current) await current.proc.released();
@@ -747,6 +835,7 @@ export class CodexDriver implements AgentDriver {
         ? Host.adopt(profileId, info, handed.host.signature, handed.host.nextId, handed.host.ready, undefined, key)
         : await this.takeUp(options.profile, info, key);
       if (handed?.host.loginStale) host.loginStale = true;
+      if (handed?.host.runtimeStale) host.runtimeStale = true;
       if (handed) host.version = versionInOutput(outFile(this.data, info.id));
       this.hosts.set(key, host);
       return host;
@@ -757,6 +846,7 @@ export class CodexDriver implements AgentDriver {
       session.tuned = handed.tuned ?? null;
       session.running = session.tuned;
       session.toolsUrl = handed.mcpUrl ?? null;
+      session.rememberTranscript(handed.transcriptPath);
     } else {
       const threadId = options.resume;
       if (threadId === undefined) throw new Error("a codex thread is taken up by its id (resume)");
@@ -767,6 +857,7 @@ export class CodexDriver implements AgentDriver {
       if (r?.busy) events({ type: "turnStarted" });
     }
     host.addThread(session.id(), session.sink());
+    session.recoverTranscript();
     if (session.busy()) host.turns.add(session.id());
     // Left running by a station from before Codex was updated: replaced once the sessions on it are taken up and idle.
     wall.after(ORPHANS_MS, () => this.hostIdle(host));
@@ -796,6 +887,7 @@ export class CodexDriver implements AgentDriver {
   /// station's variables for its agents) said before.
   async outdated(host: Host, profile: Profile | undefined): Promise<boolean> {
     if (profile !== undefined && host.signature !== hostSignature(profile)) return true;
+    if (host.runtimeStale) return true;
     if (host.version === null) return false;
     await this.installedVersion();
     return this.stale(host);
@@ -811,6 +903,19 @@ export class CodexDriver implements AgentDriver {
     for (const host of this.hosts.values()) host.detach();
     this.hosts.clear();
   }
+}
+
+/// Names and runtime states only: unlike config/read this does not return configured MCP credentials.
+async function mcpInventory(host: Host, threadId?: string): Promise<{ name: string; runtimeStatus: unknown }[]> {
+  const servers: { name: string; runtimeStatus: unknown }[] = [];
+  let cursor: string | null = null;
+  do {
+    const inventory = await host.request("mcpServerStatus/list", { ...(threadId === undefined ? {} : { threadId }), cursor, detail: "toolsAndAuthOnly" });
+    if (!Array.isArray(inventory?.data) || inventory.data.some((s: Json) => typeof s?.name !== "string")) throw new Error("invalid MCP inventory");
+    servers.push(...inventory.data.map((s: Json) => ({ name: s.name, runtimeStatus: s.runtimeStatus })));
+    cursor = typeof inventory.nextCursor === "string" ? inventory.nextCursor : null;
+  } while (cursor !== null);
+  return servers;
 }
 
 /// Whether thread `threadId`'s connection to the station's MCP endpoint failed, as its app-server says (once its startup
@@ -851,6 +956,7 @@ export class CodexSession implements AgentSession {
   running: { model: string | undefined; effort: string | undefined } | null = null;
   /// The address of the station's tools its thread was given; null when not known (taken up after a crash).
   toolsUrl: string | null = null;
+  private transcriptPath: string | null = null;
 
   constructor(driver: CodexDriver, threadId: string, host: Host, profile: Profile, state: ThreadState, live: LiveFromCodex, events: (event: RuntimeEvent) => void) {
     this.driver = driver;
@@ -914,6 +1020,19 @@ export class CodexSession implements AgentSession {
     return this.threadId;
   }
 
+  rememberTranscript(path: unknown) {
+    this.transcriptPath = rememberCodexRollout(this.profile.home, this.threadId, path);
+  }
+
+  /// A snapshot from an older station (or recovery after a crash) has no path. Ask the running app-server without
+  /// holding up the handover; if it cannot say, the ordinary transcript lookup still works.
+  recoverTranscript() {
+    if (this.transcriptPath !== null) return;
+    void this.host.request("thread/read", { threadId: this.threadId, includeTurns: false })
+      .then((answer) => { if (!this.state.closed) this.rememberTranscript(answer?.thread?.path); })
+      .catch(() => {});
+  }
+
   mcpUrl() {
     return this.toolsUrl;
   }
@@ -927,11 +1046,15 @@ export class CodexSession implements AgentSession {
     const p = this.driver.options.currentProfile ? this.driver.options.currentProfile(this.host.profile) : this.profile;
     // Codex was updated under its app-server, whose tools would all fail, or it runs with what its profile said before:
     // opened again on a new one, unless another turn runs on it yet.
-    const outdated = this.host.loginStale || (this.host.turns.size === 0 && (await this.driver.outdated(this.host, p)));
+    const outdated = this.host.loginStale || this.host.runtimeStale || (this.host.turns.size === 0 && (await this.driver.outdated(this.host, p)));
     await this.driver.renewLent(this.host, this.profile);
     if (this.state.closed) throw new Error("codex session is closed");
     if (this.state.busy) throw new Error("a turn is already running");
     if (outdated) throw new Error("codex was updated, or its profile changed, under its app-server");
+    // Its thread could not connect to the station's tools (the door was closed or slow as it was opened, or as it was
+    // taken up): its turn would have no chat_post or chat_state, and nothing it called would say so. Opened again,
+    // resuming, the thread is loaded with them.
+    if (await stationToolsFailed(this.host, this.threadId)) throw new Error("codex thread's connection to the station's tools failed");
     this.state.busy = true;
     this.host.turns.add(this.threadId);
     const params: Json = { threadId: this.threadId, input: input(text) };
@@ -1033,6 +1156,7 @@ export class CodexSession implements AgentSession {
       host: this.host.snapshot(),
       tuned: this.tuned,
       mcpUrl: this.toolsUrl,
+      ...(this.transcriptPath !== null ? { transcriptPath: this.transcriptPath } : {}),
     };
   }
 

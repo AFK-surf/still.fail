@@ -138,7 +138,7 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
     await aliceAdmin("POST", `/v1/admin/users/${bobSub}/beta`, { on: false });
     await expect(on, { bob: [list] }, "beta off");
 
-    const station = await enrollStation(h, alice, w, "studio");
+    const station = await enrollStation(h, alice, w, "willow");
     await expect(on, { alice: [list, ws], bob: [list, ws] }, "enroll");
 
     // A station's socket is what still.fail cloud tells it: whether it is up, devices find out over the mesh, so connecting
@@ -147,21 +147,21 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
     assert.equal(first.status, 101);
     await expect(on, {}, "a station connecting tells no one");
     await first.ping!();
-    assert.deepEqual(first.frames![0], { type: "state", peers: [{ id: station.id, name: "studio", version: "0.2.0" }], workspace: w, workspace_name: "House", name: "studio", origin: first.frames![0].origin, relay_url: first.frames![0].relay_url, relay_urls: first.frames![0].relay_urls, relay_names: first.frames![0].relay_names, grant_keys: first.frames![0].grant_keys, revocations: first.frames![0].revocations, lock: null, workspaces: [] });
+    assert.deepEqual(first.frames![0], { type: "state", peers: [{ id: station.id, name: "willow", version: "0.2.0" }], workspace: w, workspace_name: "House", name: "willow", origin: first.frames![0].origin, relay_url: first.frames![0].relay_url, relay_urls: first.frames![0].relay_urls, relay_names: first.frames![0].relay_names, grant_keys: first.frames![0].grant_keys, revocations: first.frames![0].revocations, lock: null, workspaces: [] });
     // bob's role changed above: the credentials he held then are refused, as the station hears at once on connecting.
     assert.deepEqual(first.frames![0].revocations.map((r: any) => [r.kind, r.id]), [["sub", bobSub]]);
     let seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
     assert.deepEqual([seen.version, "online" in seen], ["0.2.0", false]);
 
-    await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { name: "big studio" });
+    await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { name: "big willow" });
     await expect(on, { alice: [ws], bob: [ws] }, "rename station");
     await first.ping!();
-    assert.equal(first.frames!.at(-1).name, "big studio", "the station learns its new name");
+    assert.equal(first.frames!.at(-1).name, "big willow", "the station learns its new name");
     // Its emoji: one, kept with it for everyone; "" takes it away; anything not an emoji is refused.
     await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { emoji: "🍎🍊" });
     await expect(on, { alice: [ws], bob: [ws] }, "station emoji");
     seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
-    assert.deepEqual([seen.name, seen.emoji], ["big studio", "🍎"]);
+    assert.deepEqual([seen.name, seen.emoji], ["big willow", "🍎"]);
     assert.equal((await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { emoji: "ab" })).status, 400);
     await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { emoji: "" });
     await expect(on, { alice: [ws], bob: [ws] }, "station emoji cleared");
@@ -251,7 +251,7 @@ test("a reconnect replaces the old station socket; a silent one is dropped", { t
     const alice = h.as(tokens);
     const events = await listen(h, tokens.access_token);
     const w = ((await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as any).id as string;
-    const station = await enrollStation(h, alice, w, "studio");
+    const station = await enrollStation(h, alice, w, "willow");
     await events.take();
 
     const first = await connectStation(h, station);
@@ -291,7 +291,7 @@ test("sockets refuse bad credentials", { timeout: 20000 }, async () => {
 
     const alice = h.as(await h.login("alice"));
     const w = ((await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as any).id as string;
-    const station = await enrollStation(h, alice, w, "studio");
+    const station = await enrollStation(h, alice, w, "willow");
     const forged = await key();
     assert.equal((await connectStation(h, station, { signer: forged })).status, 401);
     assert.equal((await connectStation(h, station, { ts: h.now() - 600 })).status, 400);
@@ -336,7 +336,7 @@ test("a workspace's own relays: set by its managers, told to its stations and me
     const w = ((await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as any).id as string;
     const other = ((await (await alice("POST", "/v1/workspaces", { name: "Lab" })).json()) as any).id as string;
     await alice("POST", `/v1/workspaces/${w}/members`, { role: "member", emails: ["bob@example.test"] });
-    const station = await enrollStation(h, alice, w, "studio");
+    const station = await enrollStation(h, alice, w, "willow");
     const socket = await connectStation(h, station);
     await socket.ping!();
     const ours = socket.frames![0].relay_urls as string[];

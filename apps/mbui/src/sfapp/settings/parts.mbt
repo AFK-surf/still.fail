@@ -6,7 +6,7 @@
 ///|
 /// Each page's blocks as given and as its list made of them, by the page's key (scroll_page's `keys`).
 // kept across runs: put back by settings' reset (parts_reset)
-let page_rows : Map[String, @ui.ListRows[() -> Unit]] = {}
+let page_rows : Map[String, @ui.ListRows[(String, () -> Unit)]] = {}
 
 ///|
 /// Each page's keys that can make its list continuous, as last given.
@@ -14,7 +14,7 @@ let page_rows : Map[String, @ui.ListRows[() -> Unit]] = {}
 let page_keys : Map[String, Array[String]] = {}
 
 ///|
-fn page_rows_of(key : String) -> @ui.ListRows[() -> Unit] {
+fn page_rows_of(key : String) -> @ui.ListRows[(String, () -> Unit)] {
   match page_rows.get(key) {
     Some(l) => l
     None => {
@@ -22,6 +22,15 @@ fn page_rows_of(key : String) -> @ui.ListRows[() -> Unit] {
       page_rows[key] = l
       l
     }
+  }
+}
+
+///|
+/// What a block of a page shows, said as its data (its version on its page's list: scroll_page's `versions`).
+fn json_sign(v : Json?) -> String {
+  match v {
+    Some(j) => j.stringify()
+    None => ""
   }
 }
 
@@ -57,6 +66,7 @@ fn scroll_page(
   key : String,
   blocks : Array[() -> Unit],
   keys? : Array[String],
+  versions? : Array[String],
   moves? : Bool = false,
   continuity? : (String) -> Bool = fn(_) { true },
 ) -> Unit {
@@ -65,13 +75,24 @@ fn scroll_page(
   let blocks = blocks.map(fn(b) { fn() { @sf.with_look(l, b) } })
   // (by their keys: those going still among them while they close, each keyed as it was)
   let (blocks, keys, rows) = match keys {
-    Some(ks) if ks.length() == blocks.length() && !@sf.in_panel() => {
+    Some(ks) if ks.length() == blocks.length() && !(@sf.in_panel() && @sf.panel_whole()) => {
       let lr = page_rows_of(key)
       let was = page_keys.get(key).unwrap_or([])
       let present = ks.filter(continuity)
       page_keys[key] = present
       let watched = present.iter().any(fn(k) { was.contains(k) })
-      let (b, k) = lr.rows(c, ks, blocks, fn(_) { "" }, watched~, moves=fn(_) { moves })
+      // (what each shows, by its key: one showing another thing goes to its new height)
+      let shows : Map[String, String] = {}
+      match versions {
+        Some(vs) if vs.length() == ks.length() =>
+          for i, k in ks {
+            shows[k] = vs[i]
+          }
+        _ => ()
+      }
+      let made = blocks.mapi(fn(i, b) { (ks[i], b) })
+      let (m, k) = lr.rows(c, ks, made, fn(it) { shows.get(it.0).unwrap_or("") }, watched~, moves=fn(_) { moves })
+      let b = m.map(fn(it) { it.1 })
       (b, k, Some(lr))
     }
     _ => (blocks, [], None)
@@ -101,7 +122,7 @@ fn scroll_page(
       |> ignore
     } else {
       // (its blocks drawn as the list lays them out, as the panel has what it holds)
-      @sf.panel_list(c, "settings/" + key, blocks.length(), 80.0, fn(i) { (blocks[i])() }) |> ignore
+      @sf.panel_list(c, "settings/" + key, blocks.length(), 80.0, fn(i) { block(i, blocks[i]) }, rows?=sized) |> ignore
     }
     return
   }

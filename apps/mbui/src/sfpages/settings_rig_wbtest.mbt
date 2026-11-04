@@ -12,7 +12,8 @@ let rig_workspace : Workspace = { id: "ws1", name: "星火工作室", emoji: "",
 /// The settings' page `route` over the made-up core's `mode` (as `over` has it), `w` wide, pointed at as `platform`
 /// says (2 a phone's finger, 0 a Mac's mouse), `h` high: opened under settings, drawn alone while it is the stack's top
 /// (another of them opened from it, that one), back over it to settings, the presenters over it. `ready`: what the test
-/// sets before it is first drawn (the settings' own state: a station's part shown, a login marked).
+/// sets before it is first drawn (the settings' own state: a station's part shown, a login marked); `host`, what the
+/// device's host says from the start, its Tester made (a performance record kept, newer builds asked for).
 fn setting_tester(
   route : @settings.Route,
   w : Double,
@@ -21,6 +22,7 @@ fn setting_tester(
   over? : (Source) -> Source = fn(s) { s },
   h? : Double = 900.0,
   ready? : () -> Unit = fn() {  },
+  host? : (@ui.Tester) -> Unit = fn(_) {  },
 ) -> @ui.Tester {
   @sfbase.reset()
   reset()
@@ -36,8 +38,11 @@ fn setting_tester(
   ready()
   app.nav.push(Settings)
   app.nav.push(Setting(route))
+  let made = route is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion)
   let t = @ui.Tester::new(
     fn(c) {
+      // (made once: the presenters around the tree's page, set_view_app's)
+      guard !made else { return }
       @sf.begin(c) |> ignore
       c.with_theme(@sf.ui_theme(), fn() {
         match app.nav.top() {
@@ -51,8 +56,74 @@ fn setting_tester(
     h~,
     platform~,
   )
+  // (what the device's host says from the start: a performance record kept)
+  host(t)
+  // (the pages every frame makes once (setting_made's), as they make them: the page on top made in the window's tree, `w`
+  // wide, the presenters around it)
+  if made {
+    @ui.set_view_app(
+      fn(root) {
+        // (its nodes drawn in still.fail's theme, as the app's are: app_tree's; told as the tree is made, set_view_app
+        // having forgotten what was told before it)
+        @ui.set_tree_theme(@sf.ui_theme_now)
+        root.pick(fn() { app.nav.top() }, fn(p, page) {
+          @ui.words_picked(p)
+          match page {
+            Setting(r) => setting_made(p, src, r, fn() { w })
+            _ => ()
+          }
+        })
+      },
+      around=fn(c) {
+        @sf.begin(c) |> ignore
+        c.with_theme(@sf.ui_theme(), fn() {
+          // (the old views it holds, where it puts them: the pages opened from them not made once yet)
+          @ui.old_views_here(c)
+          @sf.presented(c)
+        })
+      },
+    )
+  }
   t.draw()
   t
+}
+
+///|
+/// The page of `route` made once in node `p` (关于, 更新日志, 记忆, 一台 station 的记忆, 归档, 一台 station 的归档, 自动决策:
+/// as the frames make them; another, its old view), `width`
+/// wide, in the frame a page under another is given.
+fn setting_made(p : @view.View, src : Source, route : @settings.Route, width : () -> Double) -> Unit {
+  let core = @sfbase.settings_core(src, rig_workspace)
+  let here = fn() { @settings.here_of(core, rig_workspace.id, rig_workspace.name) }
+  @settings.frame(core, here())
+  let frame = fn() -> PageFrame { { back: app.nav.under().map(@sfbase.back_label), top: 0.0, foot: 0.0, named: false } }
+  p.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+  match route {
+    About => about_node(p, core, on_back=core.pop, frame~, width~)
+    Changelog => changelog_node(p, core, on_back=core.pop, frame~, width~)
+    Memories => memories_node(p, core, here, on_back=core.pop, frame~, width~)
+    Memory(a) => memory_node(p, core, here, a, on_back=core.pop, frame~, width~)
+    Archiving => archiving_node(p, core, here, on_back=core.pop, frame~, stint=fn() { 0 }, width~)
+    StationArchiving(st) => station_archiving_node(p, core, here, st, on_back=core.pop, frame~, width~)
+    AutoDecisions => decisions_node(p, core, here, on_back=core.pop, frame~, width~)
+    AutoCompletion => completion_node(p, core, here, on_back=core.pop, frame~, width~)
+    Usage => usage_node(p, core, here, on_back=core.pop, frame~, width~)
+    Shortcuts => {
+      // (recording while it is the one on top, as every frame says it: its stay there as it is made)
+      let stay = @signals.untracked(fn() { app.nav.top_stay().1 })
+      shortcuts_node(p, core, on_back=core.pop, frame~, active=fn() { app.nav.top_stay().1 == stay }, width~)
+    }
+    Notifications => notify_node(p, core, here, on_back=core.pop, frame~, stint=fn() { 0 }, width~)
+    UsagePrices(days) => usage_prices_node(p, core, here, days, on_back=core.pop, frame~, width~)
+    // (the pages opened from them not made once yet: their old view, hosted)
+    _ =>
+      @ui.old(p, fn(c) {
+        @sf.begin(c) |> ignore
+        c.with_theme(@sf.ui_theme(), fn() { setting_alone(c, src, route) })
+      })
+      .grow(Is(1.0))
+      |> ignore
+  }
 }
 
 ///|
@@ -63,16 +134,10 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
   @settings.frame(core, here)
   let frame : PageFrame = { back: app.nav.under().map(@sfbase.back_label), top: 0.0, foot: 0.0, named: false }
   match route {
-    About => about_page(c, core, frame)
-    Changelog => changelog_page(c, core, frame)
     Appearance => appearance_page(c, core, frame)
     Fonts => fonts_page(c, core, frame)
     BarSettings => bars_page(c, core, frame)
     Permissions => permissions_page(c, core, frame)
-    Archiving => archiving_page(c, core, here, frame)
-    StationArchiving(s) => station_archiving_page(c, core, here, frame, s)
-    Notifications => notify_page(c, core, here, frame)
-    Shortcuts => shortcuts_page(c, core, frame)
     Me => me_page(c, core, here, frame)
     Workspace => workspace_page(c, core, here, frame)
     Security => security_page(c, core, here, frame)
@@ -86,13 +151,7 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
     Profile(a, id) => profile_page(c, core, here, frame, a, id)
     LocalStation => local_station_page(c, core, frame)
     MemoryDoc(a, skill, at) => memory_doc_page(c, core, here, frame, a, skill, at)
-    AutoCompletion => completion_page(c, core, here, frame)
     AutoPolicy(st) => policy_page(c, core, here, frame, st)
-    Memories => memories_page(c, core, here, frame)
-    Memory(a) => memory_page(c, core, here, frame, a)
-    AutoDecisions => decisions_page(c, core, here, frame)
-    Usage => usage_page(c, core, here, frame)
-    UsagePrices(days) => usage_prices_page(c, core, here, frame, days)
     _ => ()
   }
 }

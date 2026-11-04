@@ -91,6 +91,8 @@ src/sfreplay/emit.mbt: `tap` a `tap`, `see` an `until`, `peer` what alice's othe
 local still.fail of its own under the old trace's mark and station directory, makes the run's conversation the trace
 again, says which of the app's asks are more or fewer (scripts/trace diff), and runs the test over it. The app
 asking one more thing (a subscription the page now makes) is one command, not a flow fetched back from history.
+Set `E2E_PRIVATE_TERMS_FILE` to a private file with one local identifier per line to reject recordings containing
+those identifiers as well; keep the file outside the repository. An unreadable file makes the check fail.
 Only a few flows stay end to end, as smoke (the whole chain: sign-in, send and
 the agent's answer; parts going up; the preview's native views reading through the core; the system's notice; a
 download kept on the device).
@@ -142,7 +144,7 @@ while the card moved the list):
 | 18 drive-upload | ＋ → 上传文件: a photo and a 9 MB file, each a row going up in parts, then entries | both files in the station's folder, byte for byte; several drive.upload.part |
 | 19 drive-rename | the photo held: 已选 1 项, ⋯ → 重命名, a new name typed, 保存 | the station has it under the new name, the same bytes; the old name gone; Tester 重放（src/sfreplay/flows/drive_rename_test.mbt） |
 | 20 drive-delete | the renamed file held, ⋯ → 删除, asked (the test station has no trash), 删除 | gone from the station's folder, the others there; Tester 重放（src/sfreplay/flows/drive_delete_test.mbt） |
-| 21 station-files | in the chat, ＋ → Station 文件: the lent folder, a file ticked, 添加 1 个: its card; sent with words | the station's entry: the words and studio 上的文件：<path> under them; no attachment · Tester 重放（src/sfreplay/flows/station_files_test.mbt） |
+| 21 station-files | in the chat, ＋ → Station 文件: the lent folder, a file ticked, 添加 1 个: its card; sent with words | the station's entry: the words and willow 上的文件：<path> under them; no attachment · Tester 重放（src/sfreplay/flows/station_files_test.mbt） |
 | 22 answer-option | the agent posts an options card (e2e/fake: `card:`), the recommended one marked; one tapped (decision.answer); 你 选择了「…」 under it | alice's message with the option's words, quoting the post; the card as posted, `recommended` on the one；暂留端到端：Tester 和真机对「列表是否在末尾」的判断不一样（client.focus end:false/true 发不发、发几次），已交确定性负责人查 |
 | 23 dismiss | another card; 忽略 tapped: it and the options go at once (decision.dismiss) | `dismissed` has alice's row for the post; nothing answered；Tester 重放（src/sfreplay/flows/dismiss_test.mbt） |
 | 24 close-option | a card with an option made to close it (action=close) tapped | `closed_cards` has the post; no message sent for it；Tester 重放（src/sfreplay/flows/close_option_test.mbt） |
@@ -206,7 +208,7 @@ while the card moved the list):
 | 97 video-frames | a video from the other device: 120 帧 read from the file (wherever it has played to), ‹ ‹ ›, 保存此帧 | 120 frames read; ‹ then › one frame apart; the kept frame a PNG of 640 × 360 named by that frame |
 | 98 reader | a novel in GB18030 (drive-gb) opened: its words; 排版 → 宋体; 下载 in the top bar | drive.read through the core; the serif face kept in the core's prefs; the kept file byte for byte · Tester 重放（src/sfreplay/flows/reader_test.mbt） |
 
-Flows 70–75 (branch mbui-chat-complete, 2026-10-20, Studio): the whole suite on macOS 63 of 67 at first, then the four
+Flows 70–75 (branch mbui-chat-complete, 2026-10-20): the whole suite on macOS 63 of 67 at first, then the four
 again: 70 and 73 had checks macOS's grep and pbpaste read wrongly (fixed), 29 passed again (its composer row was 0.10,
 the bar at 0.1), 47's fixed service port 18978 was another run's server; on Android (the emulator) 11 and 70–73 passed,
 74 passed once run again (the app was gone once after its sideways drag), 75 hands the link over and so now ends at the
@@ -222,7 +224,7 @@ Found by it and fixed: the app never told the core it was shown (`client.focus {
 never marked a chat read (the station's reads stayed empty: every chat opened at its first unread message however
 often it had been read) and held back no notice for the chat on screen; it now does, as Home shows a workspace and as
 the system says the app came to the front or left it (@hostapi.set_app_state). A scripted run counts as in front: on
-Studio, whose screen is locked, the window is reported covered. Also corrected on Android: while a composition was under way the field
+a locked screen, the window is reported covered. Also corrected on Android: while a composition was under way the field
 told the input method its words without it and no composing region (`updateSelection(…, -1, -1)`), against
 InputMethodManager's contract; Host.setIme now gives it the words with the composition in, the selection after it and
 its region (MBInput keeps what it composes; MBUI_IME_LOG=1 logs what passes). On the emulator Gboard ends any

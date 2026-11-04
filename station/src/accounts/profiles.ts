@@ -18,6 +18,7 @@ import { CURSOR, type CursorUrls, cursorMe, cursorModels, readCursor } from "./c
 import { devinCatalog, devinData } from "../agents/devin.ts";
 import { platform } from "../platform/index.ts";
 import { profileFetch } from "../ops/agent-env.ts";
+import { withShellCommand } from "../ops/shell-path.ts";
 import { claudePlan, codexClaims } from "./machine.ts";
 
 type Json = any;
@@ -53,6 +54,8 @@ export type ProfileQuota = {
   windows: QuotaWindow[];
   credits?: QuotaCredits;
   resetCount?: number;
+  /// Expiries of available reset credits for which the provider returned details, in epoch milliseconds.
+  resetExpiries?: number[];
   /// The subscription tier, when the provider reports it with the allowance.
   plan?: string;
   detail: string | null;
@@ -92,6 +95,8 @@ export const URLS: Urls = {
 /// The access kinds each runtime can use.
 export function accessKinds(runtime: Runtime): AccessKind[] {
   if (runtime === "hermes") return ["env"];
+  // Antigravity CLI: a Gemini key, or its own variables. (Its Google account sign-in is not offered yet: docs/agy.md.)
+  if (runtime === "agy") return ["api-provider", "env"];
   if (runtime === "claude") return ["subscription", "opencode-go", "anthropic-api", "api-provider", "env"];
   // DeepSeek Harness has no subscription to sign in to here: an account of its own is set up by variables.
   if (runtime === "dsh") return ["opencode-go", "anthropic-api", "api-provider", "env"];
@@ -174,7 +179,8 @@ async function modelIds(response: Response): Promise<string[]> {
 const sorted = (list: string[]) => list.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
 /// Runs a runtime's own status command, in `env` only; what it said and how it ended.
-function statusOf(command: string, args: string[], env: Env): Promise<{ code: number | null; stdout: string; stderr: string }> {
+async function statusOf(command: string, args: string[], env: Env): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  env = await withShellCommand(command, env);
   return new Promise((resolve, reject) => {
     const r = platform.runnable(command, args, env as NodeJS.ProcessEnv);
     execFile(r.file, r.args, { env: env as NodeJS.ProcessEnv, timeout: 20_000, killSignal: "SIGKILL", windowsVerbatimArguments: r.windowsVerbatimArguments }, (error, stdout, stderr) => {

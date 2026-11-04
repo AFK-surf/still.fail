@@ -79,6 +79,8 @@ export function accessEnv(runtime: Runtime, kind: AccessKind, key: string, model
   if ((kind === "opencode-go" || kind === "anthropic-api") && runtime === "dsh") return { [DSH_KEY]: key };
   // Grok Build on SuperGrok signs in in its own home (grok.ts); on an xAI key, it is given it.
   if (runtime === "grok") return kind === "api-provider" && via.provider === "xai" ? { XAI_API_KEY: key } : {};
+  // The Antigravity CLI signed in to a Google account keeps it in its own home (agy.ts); on a Gemini key, it is given it.
+  if (runtime === "agy") return kind === "api-provider" && via.provider === "google" ? { GEMINI_API_KEY: key } : {};
   if (kind === "anthropic-api") return { ANTHROPIC_API_KEY: key };
   if (kind === "api-provider") return apiEnv(runtime, key, model, via);
   return {};
@@ -187,7 +189,8 @@ export function profileRuntimes(p: Profile): Runtime[] {
     // xAI's key runs Grok Build too (its own API, not one of the protocols). A Kimi sign-in runs Claude Code alone: only
     // it reads its key again as the token is renewed (`keyFile`).
     if (kimiSignedIn(p)) return ["claude"];
-    return found[0].id === "xai" ? [...runtimesOf(found[1]), "grok"] : runtimesOf(found[1]);
+    // A Gemini key runs the Antigravity CLI too.
+    return found[0].id === "xai" ? [...runtimesOf(found[1]), "grok"] : found[0].id === "google" ? [...runtimesOf(found[1]), "agy"] : runtimesOf(found[1]);
   }
   if (kind === "opencode-go") return ["claude", "codex", "dsh"];
   if (kind === "anthropic-api") return ["claude", "dsh"];

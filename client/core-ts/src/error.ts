@@ -31,11 +31,26 @@ export class CoreError extends Error {
     return new CoreError("invalid_params", message);
   }
 
-  /// What a host said went wrong (`From<HostError>`): what wake.rs gives up with is said in the person's language.
+  /// What a host said went wrong (`From<HostError>`): what wake.rs gives up with, and what the core said itself
+  /// (`HostError.said`), in the person's language; anything else (a system's, the network's, in its own words) as what
+  /// kind of failure it was (`plainly`).
   static host(error: HostError | string): CoreError {
     const text = typeof error === "string" ? error : error.message;
-    const message = text === DROPPED ? t("core-misc.wake.dropped") : text === GONE ? t("core-misc.wake.gone") : text === NETWORK ? t("core-misc.wake.network") : text;
-    return new CoreError("host", message);
+    if (text === DROPPED) return new CoreError("host", t("core-misc.wake.dropped"));
+    if (text === GONE) return new CoreError("host", t("core-misc.wake.gone"));
+    if (text === NETWORK) return new CoreError("host", t("core-misc.wake.network"));
+    if (error instanceof HostError && error.said === true) return new CoreError("host", text);
+    return CoreError.plainly("host", text);
+  }
+
+  /// A failure under the core (a host's, the network's, a library's) said to people: in their words, as what kind of
+  /// failure it was; what it said itself kept as its `cause`, which telemetry has (`failedIn`), never shown. `words`:
+  /// what failed, where the caller can say it better.
+  static plainly(code: string, said: unknown, words?: string): CoreError {
+    const text = said instanceof Error ? said.message : String(said);
+    const error = new CoreError(code, words ?? t(NETWORKISH.test(text) ? "core-misc.host.network" : "core-misc.host.failed"));
+    error.cause = text;
+    return error;
   }
 
   /// What the system's secure storage or its prompt said no with (host.ts `secureGet`, `secureAsk`): the host's word
@@ -58,12 +73,12 @@ export class CoreError extends Error {
     return this.status === undefined ? { code: this.code, message: this.message } : { code: this.code, message: this.message, status: this.status };
   }
 
-  /// Gone wrong past what people did or can mend (the network, a host, a station's own fault): said with the local
-  /// date and time it failed at, to the second, by which an agent finds its spans (docs/telemetry.md). The first
-  /// time, the deepest span's: the one that has what the transport said.
+  /// Gone wrong past what people did or can mend (the network, a host, a station's own fault, anything said `plainly`):
+  /// said with the local date and time it failed at, to the second, by which an agent finds its spans
+  /// (docs/telemetry.md). The first time, the deepest span's: the one that has what the transport said.
   stamped(atMs: number, offsetMin: number): void {
     if (this.at !== undefined) return;
-    if (!(this.code === "mesh" || this.code === "host" || this.code === "timeout" || (this.status ?? 0) >= 500)) return;
+    if (!(this.code === "mesh" || this.code === "host" || this.code === "timeout" || (this.status ?? 0) >= 500 || typeof this.cause === "string")) return;
     this.at = atMs;
     this.message = t("core-misc.error.at", { message: this.message, time: dateClockSeconds(atMs, offsetMin) });
   }
@@ -73,8 +88,23 @@ export class CoreError extends Error {
   }
 }
 
-/// What a host says when what it was asked failed (host.rs `HostError`).
-export class HostError extends Error {}
+/// What a host says when what it was asked failed (host.rs `HostError`): in its own words, or (`said`) in the person's,
+/// as the core says it to them.
+export class HostError extends Error {
+  readonly said?: true;
+  constructor(message: string, said = false) {
+    super(message);
+    if (said) this.said = true;
+  }
+
+  /// A failure the core words for people itself (with `t`): said as it is.
+  static said(message: string): HostError {
+    return new HostError(message, true);
+  }
+}
+
+/// What a network failure says, in any host's words (Rust's reqwest and quinn, undici, a browser's fetch, the OS).
+const NETWORKISH = /network|connect|connection|dns|resolve|timed? ?out|timeout|socket|reset|refused|unreachable|tls|certificate|fetch failed|load failed|offline|ECONN|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|EHOSTUNREACH|ENETUNREACH/i;
 
 /// Any failure as the core's error: a CoreError as it is, a host's as `host`.
 export function asCoreError(error: unknown): CoreError {

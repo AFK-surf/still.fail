@@ -299,6 +299,11 @@ priv struct FoldGoes {
   /// its row, the column, the page's pane, as made (for what is asked of them: pane_seen)
   parts : Array[@view.View]
   mut page_id : Int
+  /// the pages made once in the pane (pane_made: nodes of the tree's, not old views), by their entries, while they are;
+  /// and the entries that show, as the stack told them whole (nav_flat_view's `shown`): what the one shown shows across
+  /// read of it (fold_peek_shift), what it hands the system's bars (none)
+  made : Map[Int, @view.View]
+  mut shown : Array[Int]
   /// whether the core has given what the page shows of a page (sfapp's pane_ready), waited for that long at most
   mut ready : (Page) -> Bool
   mut most : Double
@@ -317,6 +322,8 @@ let fold_goes : FoldGoes = {
   node: None,
   parts: [],
   page_id: 0,
+  made: {},
+  shown: [],
   ready: fn(_) { true },
   most: 0.0,
 }
@@ -332,6 +339,8 @@ fn fold_goes_reset() -> Unit {
   fold_goes.left_tape = None
   fold_goes.node = None
   fold_goes.page_id = 0
+  fold_goes.made.clear()
+  fold_goes.shown = []
 }
 
 ///|
@@ -443,6 +452,8 @@ fn fold_built(c : @ui.Ctx, now : FoldLook) -> FoldLook {
 /// in view (its file's head).
 pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : Double) -> Unit {
   wide.tape = false
+  // (its tips over all of the window, as the old frame's are: none cut by the pane, the sidebar's edge's and its pages')
+  let tips = @sf.TipLayer::new(fn() { Some(v) })
   fold_goes.node = Some(v)
   fold_goes.ready = ready
   fold_goes.most = most
@@ -453,7 +464,9 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   fold_goes.was = None
   fold_goes.shift = 0.0
   fold_goes.way.put(1.0)
+  nav_hold(src)
   v.owns(fn() {
+    nav_held.val = fn() { None }
     fold_goes.node = None
     fold_goes.parts.clear()
     fold_goes.from = None
@@ -569,8 +582,9 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       .padding(By(fn() { (0.0, @ui.system_bars().top, 0.0, 0.0) }))
       |> ignore
       pane.box(fn(page) {
-        page.grow(Is(1.0)) |> ignore
-        @ui.old(page, fn(c) { pane_page_built(c, src) }, key=tape_island_key).over(Is(true)) |> ignore
+        page.grow(Is(1.0)).over(Is(true)) |> ignore
+        // (the stack the tree's, each page its island: page_pane.mbt)
+        pane_pages(page, src, tips)
       })
       |> ignore
     })
@@ -579,14 +593,62 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   |> ignore
   // the block over them (reaching over the page shown a while), 更新: taking presses where they draw them
   let block = @ui.old(v, fn(c) { pane_block_built(c, src) }, key=tape_island_key).over(Is(true)) |> @ui.old_takes_own
+  // the sidebar made once, the tree's, over the block where it lays its sidebar out (side_node)
+  v.box(fn(sides) {
+    sides.over(Is(true)) |> ignore
+    side_node(sides, src, tips, fn() { pane_side_at(src, sides) })
+  })
+  |> ignore
+  // the block's line over all it holds (dock_edge_node)
+  v.box(fn(line) {
+    line.over(Is(true)) |> ignore
+    dock_edge_node(line, fn() { pane_side_at(src, line) })
+  })
+  |> ignore
   // the sidebar's edge, the tree's, over the block (its rows under its strip), but where a list's thumb of the block's
   // is shown there: the thumb's (@ui.yield_thumbs)
-  let tips = @sf.TipLayer::new(fn() { Some(v) })
   v.box(fn(edges) {
     edges.over(Is(true)) |> ignore
     edges.show(fn() { pane_edge_stands(src, edges) }, fn(n) { pane_edge(n, edges, src, tips, block) })
   })
   |> ignore
+}
+
+///|
+/// Where the block off the tape lays its sidebar out as node `n` (over all of the window) is drawn, in the workspace in
+/// view: as pane_block_built lays the block out, where its move has got then (fold_along at what `n` is drawn at:
+/// dock_side_at).
+fn pane_side_at(src : Source, n : @view.View) -> SideAt {
+  match @sfbase.workspace_in_view(src).0 {
+    Some(w) => {
+      let (ww, wh) = n.window()
+      let (r, now) = fold_target(src, w, ww)
+      let t = fold_drawn_at(n)
+      let f = fold_along(t, now)
+      let top = if side_full_height(r.bar) { 0.0 } else { r.top }
+      dock_side_at(r.bar, r.peek, r.s, f.col, top, r.foot, 0.0, wh, Some((f, fold_going(t))))
+    }
+    None =>
+      {
+        box: (0.0, 0.0, 0.0, 0.0),
+        block: (0.0, 0.0, 0.0, 0.0),
+        links: None,
+        round: 0.0,
+        edge: (0.0, 0L),
+        shown: false,
+        brand: 0.0,
+        band: 0.0,
+        bar: false,
+        tape: false,
+      }
+  }
+}
+
+///|
+/// Who the page shown in the pane off the tape is among the old views' (its island's: pane_page_one), for a test: what it
+/// shows across is read by it (fold_peek_shift).
+pub fn pane_page_id() -> Int {
+  fold_goes.page_id
 }
 
 ///|
@@ -649,11 +711,34 @@ pub fn pane_node() -> @view.View? {
 }
 
 ///|
+/// The page made once in the pane that shows (an entry the stack told shown: fold_goes' `shown`), if one is.
+fn pane_made_shown() -> @view.View? {
+  for k in fold_goes.shown {
+    match fold_goes.made.get(k) {
+      Some(v) if v.alive() => return Some(v)
+      _ => ()
+    }
+  }
+  None
+}
+
+///|
+/// The page made once in the pane that shows, for a test: who it is (None: none shows).
+pub fn pane_made_seen() -> @view.NodeId? {
+  pane_made_shown().map(fn(v) { v.id() })
+}
+
+///|
 /// How far the page moves aside for the folded sidebar shown a while, worked out once as it is shown (frame.mbt
-/// peek_shift: what the page showed across as the last frame laid it out), the block where it is (`at`).
+/// peek_shift: what the page showed across as the last frame laid it out: an old view's page, or one made once of the
+/// tree's), the block where it is (`at`).
 fn fold_peek_shift(at : FoldLook) -> Double {
   let c = @ui.current()
-  let shown = c.shown_across(fold_goes.page_id, but="page-bar")
+  // (a page made once: what its tree's parts show across; else the old view's page)
+  let shown = match pane_made_shown() {
+    Some(p) => p.shown_across()
+    None => c.shown_across(fold_goes.page_id, but="page-bar")
+  }
   match fold_goes.node {
     Some(v) => {
       let s = wide.side_w.get()
@@ -673,31 +758,17 @@ fn fold_peek_shift(at : FoldLook) -> Double {
 }
 
 ///|
-/// The page's pane off the tape (its island, the room the tree leaves it beside the block's column): the page's bars'
-/// room where the block's move has got (page_bar_room), the page moved aside as the block is shown a while.
-fn pane_page_built(c : @ui.Ctx, src : Source) -> Unit {
-  let (now, _, _, _) = @sfbase.workspace_in_view(src)
-  guard now is Some(w) else { return }
-  let (r, target) = fold_target(src, w, c.window_size().0)
-  let f = fold_built(c, target)
-  fold_bars(f)
-  // (said by this build: image_item, video_item)
-  @sfbase.held_pictures_waiting.val = false
-  // a page opened in the pane shows once the core has given what it shows, the one before staying till then (`most` ms
-  // at most): as pane_page_wait says, at its causes
-  let page_id = c.id("main-page")
-  fold_goes.page_id = page_id
-  // (what the page shows across as it is laid out, its bars left out: where the page moves aside to as the folded sidebar
-  // is shown a while, taken as that starts: fold_peek_shift; the old view's layout read so, while the page is one)
-  c.shown_across(page_id, but="page-bar") |> ignore
-  // a right click in it: what is picked copied (context_menu.mbt)
-  context_page(c, page_id)
-  let pane = c.box(style=frame_main.then(@ui.style(w=Fixed(c.width))), id=page_id, fn() {
-    page_in(c, src, w, r.gated, c.width, c.height, f.aside, pane_finger())
-  })
-  // (what moves in the page of its own takes its place from the page's foot: a keyboard, the block moving the page
-  // aside, move none of it)
-  @motion.scope(c, pane, bottom=true)
+/// The sidebar's top row's room for its lists, its box's width and how far the band over its lists is to the closed bar's
+/// (`f` where its move has got): on the way between two
+/// looks the larger end's all the way, what is in the sidebar not laid out again each frame for the little they differ
+/// (it goes under what cuts the block as it goes).
+fn fold_held(f : FoldLook) -> (Double, Double, Double) {
+  match (fold_goes.from, fold_goes.to) {
+    // (not between two looks that both show it, open and shown a while: what it holds would jump as the way ends)
+    (Some(a), Some(b)) if fold_going(@ui.current().moment()) && (a.showing <= 0.0 || b.showing <= 0.0) =>
+      (dmax(a.brand, b.brand), dmax(a.side_w, b.side_w), dmin(a.band, b.band))
+    _ => (f.brand, f.side_w, f.band)
+  }
 }
 
 ///|
@@ -708,9 +779,19 @@ fn fold_bars(f : FoldLook) -> Unit {
   wide.bar_ml = f.bar_ml
   wide.bar_mr = f.bar_mr
   wide.brand_h = f.brand
+  let (list_top, _, list_band) = fold_held(f)
+  wide.list_top = list_top
+  wide.list_band = list_band
   wide.band = f.band
+  list_room_told()
   wide.mark = f.mark
   wide.page_from = f.col
+  // (the page's width on the block's way: where the block's column goes, the window's less it)
+  match (fold_goes.to, fold_goes.node) {
+    (Some(b), Some(v)) if fold_going(@ui.current().moment()) =>
+      @sfbase.page_way_said(fold_goes.way.starts_at().to_string(), v.window().0 - b.col)
+    _ => @sfbase.page_way_said("", 0.0)
+  }
 }
 
 ///|
@@ -723,6 +804,7 @@ fn pane_block_built(c : @ui.Ctx, src : Source) -> Unit {
   let (r, target) = fold_target(src, w, c.width)
   let f = fold_built(c, target)
   fold_bars(f)
+  let f = { ..f, side_w: fold_held(f).1 }
   wide.closed.set(r.bar)
   wide.crowded = r.crowded
   let moving = fold_going(c.moment())

@@ -138,7 +138,7 @@ fn fonts_blocks(c : @ui.Ctx, core : Core) -> Array[() -> Unit] {
                 (@sf.t("android-settings.fonts.failed", args=[("error", failed)]), true)
               } else if damaged != "" {
                 (@sf.t("android-settings.fonts.failed", args=[("error", damaged)]), true)
-              } else if (core.face_here)(id) || kept.contains(id.to_json()) {
+              } else if (core.face_here)(id) || kept.contains(ToJson::to_json(id)) {
                 ("", false)
               } else {
                 (face_size(number(fv, "bytes")), false)

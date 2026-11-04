@@ -455,10 +455,20 @@ fn push_round_clip(n : Node) -> Unit {
   } else {
     0.0
   }
-  let x = n.x + bw
-  let y = n.y + bw
-  let w = n.fw - 2.0 * bw
-  let h = n.fh - 2.0 * bw
+  push_inset_clip(n.x, n.y, n.fw, n.fh, fn(j) { n.radius_at(j) }, bw)
+}
+
+///|
+/// A clip pushed for what a box `w` by `h` at (x, y) holds, its corners `radius_at` each (top left, then round it),
+/// cut `bw` in from its edges where its line is drawn over what it holds (the line's inside, as CSS's overflow cuts at
+/// the padding box), its corners concentric with the box's there; within the clip it is in. An old view's box's
+/// (push_round_clip) and a node's of the window's tree (view_host.mbt), the same.
+fn push_inset_clip(x : Double, y : Double, w : Double, h : Double, radius_at : (Int) -> Double, bw : Double) -> Unit {
+  let bw = dmax(0.0, dmin(bw, dmin(w, h) / 2.0))
+  let x = x + bw
+  let y = y + bw
+  let w = w - 2.0 * bw
+  let h = h - 2.0 * bw
   let k = clip_top()
   let s = clip_stack
   let x0 = dmax(x, s[k])
@@ -472,7 +482,7 @@ fn push_round_clip(n : Node) -> Unit {
   // where a corner is both's, the rounder
   let corner = fn(j : Int, cx : Double, cy : Double, ox : Double, oy : Double) {
     let (pr, ps) = clip_corner_r(k, j, cx, cy)
-    let r = dmax(dmin(concentric(n.radius_at(j), bw), room), 0.0)
+    let r = dmax(dmin(concentric(radius_at(j), bw), room), 0.0)
     if r > 0.0 && cx == ox && cy == oy && r >= pr {
       (r, smoothness(r, room))
     } else {
@@ -601,9 +611,20 @@ fn glyph_y(y : Double, sc : Double) -> Double {
 }
 
 ///|
-/// How much fainter the words painted now are than what holds them (the looks being painted: Look's `words`).
+/// How much fainter what is painted now is than the looks it is in (Look's `words`): all a look holds, as one (its
+/// drawing, its words, every box in it and their grounds, a picture), but for its surface's own ground, edge and shadow:
+/// the box the look is on, and what is said to be its surface in it (Ctx::surface: the panel a dialog or a popover draws
+/// as its look). Said by what draws them, never worked out from how a box looks: a button's ground or a card in a
+/// panel is what it holds, coming with its words (2026-11-02 用户「很多淡入都没做到同时淡入」: a menu's icons before their
+/// words, a card's rings and bars before its figures, a share card empty before what is on it).
 // kept across runs: 1 between frames, each look that changes it putting it back as it is painted (draw.mbt)
 let words_alpha : Ref[Double] = Ref(1.0)
+
+///|
+/// How faint the surface of the look being painted is (words_alpha as the look was come to), and the box the look is
+/// on (its surface where nothing in it is said to be: draw.mbt).
+// kept across runs: 1 and none between frames, set as a look is painted and put back as it is done
+let look_surface : Ref[(Double, Int)] = Ref((1.0, -1))
 
 ///|
 fn Ctx::push_inst(
@@ -648,8 +669,9 @@ fn Ctx::push_inst(
   a[b + 8] = ((color >> 24) & 0xFFL).to_double() / 255.0
   a[b + 9] = ((color >> 16) & 0xFFL).to_double() / 255.0
   a[b + 10] = ((color >> 8) & 0xFFL).to_double() / 255.0
-  // (words fainter by the looks they are in: words_alpha)
-  let alpha = if kind == 1.0 || kind == 3.0 || kind == 7.0 { alpha * words_alpha.val } else { alpha }
+  // (what the looks it is in hold, fainter by them: words_alpha; a box's edge as its ground, glyph_look's way)
+  let alpha = alpha * words_alpha.val
+  let c2d = if kind == 0.0 { c2d * words_alpha.val } else { c2d }
   a[b + 11] = (color & 0xFFL).to_double() / 255.0 * alpha
   a[b + 12] = c2a
   a[b + 13] = c2b
@@ -1035,7 +1057,11 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   // whenever and from wherever it is painted: glyphs_carried)
   let carried_was = glyphs_carried.val
   glyphs_carried.val = self.glyphs_carried_of(i)
+  // (what comes after it as faint as before it: its own ground may have been drawn as its look's surface)
+  let (words_was, surface_was) = (words_alpha.val, look_surface.val)
   self.paint_node(i, alpha_in)
+  words_alpha.val = words_was
+  look_surface.val = surface_was
   glyphs_carried.val = carried_was
   match glyphs_was {
     Some((f, n, cut)) => {
@@ -1085,6 +1111,15 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   if alpha <= 0.002 {
     return
   }
+  // (its own ground, edge and shadow as faint as its look's surface where it is that, else as what it is in: what it
+  // holds as that, words_alpha)
+  let held_faint = words_alpha.val
+  // (a look said on it, still now (nothing drawn by it): the scope of its own all the same, its surface itself)
+  if n.look_scope && look_surface.val.1 != i {
+    look_surface.val = (held_faint, i)
+  }
+  let own_faint = if n.surface || look_surface.val.1 == i { look_surface.val.0 } else { held_faint }
+  words_alpha.val = own_faint
   let k = clip_top()
   let cx0 = clip_stack[k]
   let cy0 = clip_stack[k + 1]
@@ -1096,15 +1131,14 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   if (n.x > cx1 || n.y > cy1 || n.x + n.fw < cx0 || n.y + n.fh < cy0) &&
     !(dr.any && dr.mode != mode_hits && self.draw_carries(i)) {
     if !n.clip && (n.kind == kind_box || n.kind == kind_scroll) {
+      words_alpha.val = held_faint
       self.paint_held(n, alpha)
     }
     return
   }
   // built in a page's bones and drawn whole: one piece of its own box, nothing in it (bones.mbt)
   if n.bones != 0L && n.bone_whole {
-    // (in its own corners; with none, round at its ends: a control's)
-    let r = if n.radius > 0.0 { n.radius } else { dmin(n.fw, n.fh) / 2.0 }
-    self.emit_bone(n.x, n.y, n.fw, n.fh, r, n.bones, alpha)
+    self.emit_bone(n.x, n.y, n.fw, n.fh, bone_whole_r(n.radius, n.fw, n.fh), n.bones, alpha)
     self.corners_last(n)
     return
   }
@@ -1197,6 +1231,8 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     n.radius = laid.4
     n.radii = laid.5
   }
+  // (its own ground drawn: what it holds, and what it draws itself, as faint as the looks it is in say: words_alpha)
+  words_alpha.val = held_faint
   // (nothing in a page's bones is pressed or pointed at: it is not there yet)
   if (n.hit || n.points) && n.id != 0 && n.bones == 0L {
     if self.push_hit(n.id, dmax(n.x, cx0), dmax(n.y, cy0), dmin(n.x + n.fw, cx1), dmin(n.y + n.fh, cy1), marks=n.marks) &&
@@ -1343,6 +1379,8 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   if clipped {
     pop_clip()
   }
+  let inside_faint = words_alpha.val
+  words_alpha.val = own_faint
   if border_over && n.dashed {
     match ground {
       Some((bx, by, bw, bh, (r0, r1, r2, r3))) =>
@@ -1364,6 +1402,7 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
       }
     }
   }
+  words_alpha.val = inside_faint
 }
 
 ///|
@@ -1447,3 +1486,4 @@ fn Ctx::point_said(self : Ctx, id : Int) -> Unit {
   self.next_points[id] = true
   self.next_point_hits.push(self.next_hit_ids.length() - 1)
 }
+

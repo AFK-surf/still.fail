@@ -3,7 +3,7 @@
 ///|
 test "a Windows folder is named by its final path component" {
   assert_eq(@sfbase.dv_name("C:\\Users\\Lin\\项目"), "项目")
-  assert_eq(@sfbase.dv_name("\\\\Studio\\Files\\项目"), "项目")
+  assert_eq(@sfbase.dv_name("\\\\Willow\\Files\\项目"), "项目")
   assert_eq(@sfbase.dv_name("/Users/lin/a\\b"), "a\\b")
 }
 

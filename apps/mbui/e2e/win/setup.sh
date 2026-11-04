@@ -1,10 +1,10 @@
 #!/bin/bash
-# The installer (apps/mbui/windows/setup.c, scripts/win.sh setup) end to end on Windows (mbui.yml's windows job): put
+# The installer (apps/mbui/windows/setup.c, scripts/win.sh setup) end to end on Windows (preview.yml's windows job): put
 # into a folder of this run's (/D=), as the desktop app's updater runs it (/S --updated); its files there, its uninstall
 # entry, its start menu's shortcut; then run again over what it put there (an update); then the uninstaller's copy
 # taking it all away (--uninstall-from, as the uninstaller in the folder starts it from the temporary folder). Says what
 # it checked in out/setup/result.txt; fails on the first that does not hold.
-#   apps/mbui/e2e/win/setup.sh SETUP.exe      (MBUI_VARIANT's words: the mbui variant's by default)
+#   apps/mbui/e2e/win/setup.sh SETUP.exe      (MBUI_VARIANT's words: the preview variant's by default)
 set -u
 # (its switches given as written: Git Bash takes /S for a path, S:/, and the installer, hearing none, showed its window,
 # opened the app and its uninstaller asked whether to go on, a question nobody answers here)
@@ -35,6 +35,9 @@ running() { powershell.exe -NoProfile -Command "@(Get-Process | Where-Object { \
 check "nothing opened (/S, no --force-run)" '[ "$(running)" = 0 ]'
 check "its program, engine, shell and core in the folder" '[ -f "$INTO/$EXE.exe" ] && [ -f "$INTO/stillfail_engine.dll" ] && [ -f "$INTO/stillfail_shell.dll" ] && [ -f "$INTO/core.hbc" ]'
 check "its uninstaller beside them, the program alone" '[ -f "$INTO/Uninstall $NAME.exe" ] && [ $(wc -c < "$INTO/Uninstall $NAME.exe") -lt 2000000 ]'
+# (正在安装 as UTF-16 in the program: its source's UTF-8 read in another code page compiles to other words)
+zh_words=$'\x63\x6b\x28\x57\x89\x5b\xc5\x88'
+check "its Chinese words compiled as written" 'LC_ALL=C grep -qaF "$zh_words" "$INTO/Uninstall $NAME.exe"'
 check "its uninstall entry, at the folder ($(entry DisplayName))" '[ "$(entry InstallLocation)" = "$(w "$INTO")" ]'
 check "the start menu's shortcut" '[ -f "$(cygpath -u "$menu")/$NAME.lnk" ]'
 

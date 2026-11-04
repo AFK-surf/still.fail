@@ -237,7 +237,7 @@ hermes_fw() {
 # The core's engine for TARGET: src/host/apple_core.mm (Objective-C++: the core's thread and loop, Hermes and its JSI,
 # the shell's C ABI, secure.* and listen.*) as out/core/<target>/libmbui_core.a, which the apps with the core link
 # beside the shell's .a and Hermes's framework (src/stillfail/moon.pkg; the iOS build's hook). Made again only when its
-# sources (or this script) are newer: 1-2 s (mini1, 2026-10-24), not worth a native part of its own as the shell is.
+# sources (or this script) are newer: 1-2 s in the measured build, not worth a native part of its own as the shell is.
 engine() {
   local target=${1:-aarch64-apple-darwin} cc
   hermes_apple || return 1

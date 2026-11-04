@@ -12,7 +12,7 @@
 let host_start : Double = -16.0
 
 ///|
-/// The screenshots' window (scripts/shots.sh: MBUI_WIN=390x844), at the scale the Mac recorded its text in (Mini1's
+/// The screenshots' window (scripts/shots.sh: MBUI_WIN=390x844), at the scale the Mac recorded its text in (the host's
 /// display, 1 pixel a point; the goldens' 390 × 844).
 let window_w : Double = 390.0
 
@@ -72,6 +72,21 @@ fn mac_frame_times(section : String) -> Array[Double] {
 /// no sooner than `opening`: the declared length of what the screen opens with), then idle. Fails if the Mac's text
 /// lacks what it asked of it.
 fn screen(mode : String, opening : Double) -> @ui.Tester raise {
+  let t = screen_played(mode, opening)
+  let missing = t.text_missing()
+  if missing.length() > 0 {
+    fail(
+      "\{mode}: the Mac's text lacks \{missing.length()} (on a Mac: bash apps/mbui/scripts/screens.sh rec \{mode}): " +
+      missing[:5].to_array().join(", "),
+    )
+  }
+  t
+}
+
+///|
+/// `mode` as sffix opens it over the Mac's text for it, drawn when the Mac drew (screen's, what the Mac's text lacks not
+/// asked): by the window's tree, or (not `tree`) by the old frame alone.
+fn screen_played(mode : String, opening : Double, tree? : Bool = true) -> @ui.Tester raise {
   let text = match text_mac(mode) {
     Some((text, _)) => text
     None => fail("\{mode}: no text of the Mac's recorded (scripts/screens.sh rec \{mode})")
@@ -92,7 +107,7 @@ fn screen(mode : String, opening : Double) -> @ui.Tester raise {
   }
   let t = @ui.Tester::new(
     fn(c) { view(c, made()) },
-    tree=fn(root) { app_tree(made())(root) },
+    tree?=if tree { Some(fn(root) { app_tree(made())(root) }) } else { None },
     w=window_w,
     h=window_h,
     // (a phone's screens, on the phone's system the Mac's run played: screens.sh rec's MBUI_PLATFORM)
@@ -134,13 +149,6 @@ fn screen(mode : String, opening : Double) -> @ui.Tester raise {
   }
   // (compared at the Mac's last frame, nothing drawn after it: that nothing goes on asking for frames is checked once
   // it is compared, screen_check)
-  let missing = t.text_missing()
-  if missing.length() > 0 {
-    fail(
-      "\{mode}: the Mac's text lacks \{missing.length()} (on Mini1: bash apps/mbui/scripts/screens.sh rec \{mode}): " +
-      missing[:5].to_array().join(", "),
-    )
-  }
   t
 }
 
@@ -468,7 +476,7 @@ test "chat-station-ref" {
   screen_check(t, "chat-station-ref")
   // the station's file in the draft its card in the composer: its name, the station it is on and how it goes
   assert_true(t.locate("=发布清单").length() > 0, msg="no card of the draft's station file in the composer")
-  assert_true(t.locate("=Studio · 路径").length() > 0, msg="the card says not where the file is and how it goes")
+  assert_true(t.locate("=Willow · 路径").length() > 0, msg="the card says not where the file is and how it goes")
 }
 
 ///|

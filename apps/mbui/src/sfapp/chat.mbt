@@ -64,12 +64,11 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   // (named to know where it is, not pressed: what is pressed in it is what holds it's)
   let page = c.id("chat/page")
   // words dragged in from another app and let go anywhere on it but a field (a field takes them where they were let
-  // go): into the composer's field at its caret, as a paste's; not an archived chat's, whose composer a press does not
-  // open either
+  // go): into the composer's field at its caret, as a paste's
   // files from this machine's Finder let go anywhere on it but another field, where it is a station: into the draft by
   // their station and path, as a row of the 文件 tab put there (its composer takes them, files_taken); elsewhere as
   // words, as above
-  if !(view is Some({ archived: true, .. })) && @sfbase.finder_by_station() {
+  if @sfbase.finder_by_station() {
     match c.paths_into(page, @sfpages.composer_field_key) {
       Some(paths) =>
         for d in @sfbase.finder_dragged(src, paths) {
@@ -78,9 +77,7 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
       None => ()
     }
   }
-  if !(view is Some({ archived: true, .. })) {
-    c.words_into(page, @sfpages.composer_field_key)
-  }
+  c.words_into(page, @sfpages.composer_field_key)
   // over the navigation bar (ChatHost.kt: windowInsetsPadding(keyboard.union(navigationBars)))
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, pb=nav_foot(), id=page, taps=false, points=true, fn() {
     match view {
@@ -283,8 +280,6 @@ fn bar_frame(
 /// Frosted glass over the messages, no line under it (the frost alone sets it off).
 fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
   let t = @sf.theme()
-  // (what its menu left to do, the list not being drawn beside it)
-  @sfpages.rows_frame(c, src)
   let stations = stations_of((src.topic)("stations", { "scope": Json::string(w.id) }).value)
   let station = stations.iter().find_first(fn(s) { s.address == r.station })
   let jobs = (src.topic)("chatJobs", chat_jobs_summary_params(r))

@@ -470,7 +470,7 @@ public actor FrameCapture {
         return photocopier.copy(pb)
     }
 
-    func setPreferredScreenSize(width: Int, height: Int) {
+    public func setPreferredScreenSize(width: Int, height: Int) {
         if width > 0, height > 0 {
             preferredScreenSize = FramebufferSurfaceSize(width: width, height: height)
         } else {

@@ -201,8 +201,9 @@ settings page, each place, sign-in, the landing. There is no phone copy and desk
   comes (src/core `Sub.changes`), and reading a topic reads it, so a computed follows every topic it read, through
   other computeds too, and is worked out again only as one changes. It is given what it made last: what the core's
   deltas did not touch is the same JSON, and what was made of it is kept (`made_again`: a chat's messages, the chats'
-  rows), so one message come is one message read. A made-up core says its changes too (the fixture's
-  `@settings.fixture_changed`; a test's topic worked out as it is read, `topic_as_read`). Never a loop over a topic in
+  rows), so one message come is one message read. A made-up core says its changes too, where it makes them
+  (the fixture's `@settings.fixture_changed`, its station's later work as it comes: `fix_later`, `fix_clock_set`; what
+  a test makes over it, a signal it sets), never as a topic is read. Never a loop over a topic in
   the frame (the user, 2026-10-26: 「不应该有个跟 preact signals 一样的机制来保证只计算一次吗」「实现可以抄一下
   alien-signals」「让这套 signals 机制从 core 到 ui 能完整连上」). The chat's and the chats' list's converters are sfbase's
   own: a page has their views only from `view_of_chat` and `chats_of`. What a frame does with what was worked out goes

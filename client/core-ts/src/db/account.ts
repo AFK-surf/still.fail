@@ -822,6 +822,16 @@ export class AccountDb {
     return r ? this.#chatRow(station, 0, String(r[0]), r[1], r[2]) : undefined;
   }
 
+  /// The sidebar rows a thread's or an agent's session's changes touch: the thread's chat's; the rows the session is
+  /// among the agents of (its own, and the chats it takes part in).
+  chatsOf(station: string, of: { thread: number } | { session: string }): J[] {
+    const rows = "thread" in of
+      ? this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = 0 AND thread = ?", [station, of.thread])
+      : this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = 0 AND (session = ? OR instr(json, ?) > 0)", [station, of.session, JSON.stringify(of.session)]);
+    const out = rows.map((r) => this.#chatRow(station, 0, String(r[0]), r[1], r[2]));
+    return "thread" in of ? out : out.filter((row) => Array.isArray(get(row, "agents")) && (get(row, "agents") as J[]).some((a) => get(a, "key") === of.session));
+  }
+
   /// The sidebar row of an agent's session.
   chatOfSession(station: string, session: string): J {
     const r = this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = 0 AND session = ? ORDER BY ord LIMIT 1", [station, session])[0];
@@ -898,7 +908,9 @@ export class AccountDb {
   setSessions(station: string, list: J[], confirmed: number | null): void {
     this.#write(() => {
       const was = new Map<string, SqlRow>();
-      for (const r of this.sql.all("SELECT key, ord, summary, listed, detail FROM session WHERE station = ?", [station])) was.set(String(r[0]), r);
+      // Only listed sessions need comparing with the list. Unlisted ones keep their details but cannot be removed from
+      // this list, and the details of listed ones are not needed to compare their summaries either.
+      for (const r of this.sql.all("SELECT key, ord, summary, listed FROM session WHERE station = ? AND listed = 1", [station])) was.set(String(r[0]), r);
       const items: [string, J][] = [];
       const seen = new Set<string>();
       for (const s of list) {
@@ -914,7 +926,7 @@ export class AccountDb {
         const json = JSON.stringify(s);
         if (r && r[3] === 1 && r[1] === places[i] && r[2] === json) return;
         changed = true;
-        this.#putSummary(station, key, s, json, 1, places[i], r !== undefined);
+        this.#putSummary(station, key, s, json, 1, places[i]);
       });
       for (const [key, r] of was) {
         if (seen.has(key) || r[3] !== 1) continue;
@@ -928,10 +940,17 @@ export class AccountDb {
     });
   }
 
-  #putSummary(station: string, key: string, summary: J, json: string, listed: number, ord: number, exists: boolean): void {
+  #putSummary(station: string, key: string, summary: J, json: string, listed: number, ord: number): void {
     const cols = this.#sessionCols(summary);
-    if (exists) this.#run("UPDATE session SET summary = ?, listed = ?, ord = ?, last_active = ?, process = ?, connect = ?, archived_at = ?, turns = ? WHERE station = ? AND key = ?", [json, listed, ord, ...cols, station, key]);
-    else this.#run("INSERT INTO session (station, key, listed, ord, last_active, process, connect, archived_at, turns, summary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [station, key, listed, ord, ...cols, json]);
+    // A newly listed session may already be held unlisted. Update the summary in place without replacing its detail.
+    this.#run(
+      `INSERT INTO session (station, key, listed, ord, last_active, process, connect, archived_at, turns, summary)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (station, key) DO UPDATE SET listed = excluded.listed, ord = excluded.ord,
+       last_active = excluded.last_active, process = excluded.process, connect = excluded.connect,
+       archived_at = excluded.archived_at, turns = excluded.turns, summary = excluded.summary`,
+      [station, key, listed, ord, ...cols, json],
+    );
     const kept = frozen(JSON.parse(json));
     this.#cache.set(K("sum", station, key), kept);
     const list = this.#loadedList(station, "sessions");
@@ -961,7 +980,7 @@ export class AccountDb {
       if (listed === 1 && r?.[2] !== 1) ord = ((this.sql.all("SELECT min(ord) FROM session WHERE station = ? AND listed = 1", [station])[0]?.[0] as number | null) ?? 1) - 1;
       const json = JSON.stringify(summary);
       const detail = r && r[3] !== null ? parse(r[3]) : undefined;
-      again = detail === undefined || !sameTurns(get(detail, "turns"), summary);
+      again = detail === undefined || (!counted(summary) && !sameTurns(get(detail, "turns"), summary));
       // One more turn, or the last one gone on, as the summary says it: put in place, not all its turns read again.
       const placed = again && detail !== undefined && placeTurn(detail, summary);
       if (placed) {
@@ -971,7 +990,7 @@ export class AccountDb {
       }
       if (r && r[1] === json && r[2] === listed) return;
       // Its detail shows it as it is now too (`detail`).
-      this.#putSummary(station, key, summary, json, listed, ord, r !== undefined);
+      this.#putSummary(station, key, summary, json, listed, ord);
     });
     return again;
   }
@@ -1077,11 +1096,26 @@ export class AccountDb {
     });
   }
 
+  /// The listed session keys, in order, so a sweep can inspect their details in bounded groups.
+  sessionKeys(station: string): string[] {
+    return this.sql.all("SELECT key FROM session WHERE station = ? AND listed = 1 ORDER BY ord", [station]).map((r) => String(r[0]));
+  }
+
   /// A station's sessions with whether each one's detail is to be read again (none held, or its turns changed).
-  sessionsToRead(station: string): [string, boolean][] {
-    return this.sql.all("SELECT key, summary, detail FROM session WHERE station = ? AND listed = 1 ORDER BY ord", [station]).map((r) => {
-      const detail = r[2] === null ? undefined : parse(r[2]);
-      return [String(r[0]), detail === undefined || !sameTurns(get(detail, "turns"), parse(r[1]))];
+  /// Only the last turn matters; earlier turns and the rest of each detail stay in the database.
+  sessionsToRead(station: string, keys?: readonly string[]): [string, boolean][] {
+    if (keys?.length === 0) return [];
+    const only = keys === undefined ? "" : ` AND key IN (${keys.map(() => "?").join(", ")})`;
+    return this.sql.all(
+      `SELECT key, summary, detail IS NOT NULL,
+         CASE WHEN json_type(detail, '$.turns') = 'array' THEN json_array_length(detail, '$.turns') ELSE 0 END,
+         CASE WHEN json_type(detail, '$.turns') = 'array' AND json_array_length(detail, '$.turns') > 0
+              THEN json_quote(json_extract(detail, '$.turns[#-1]')) END
+       FROM session WHERE station = ? AND listed = 1${only} ORDER BY ord`,
+      [station, ...(keys ?? [])],
+    ).map((r) => {
+      const summary = parse(r[1]);
+      return [String(r[0]), r[2] !== 1 || (!counted(summary) && !sameTurnEnd(Number(r[3]), r[4] === null ? null : parse(r[4]), summary))];
     });
   }
 
@@ -1309,7 +1343,8 @@ export class AccountDb {
   setJobs(station: string, list: J[], confirmed: number | null): void {
     this.#write(() => {
       const was = new Map<string, SqlRow>();
-      for (const r of this.sql.all("SELECT id, ord, json, chat, open FROM job WHERE station = ?", [station])) was.set(String(r[0]), r);
+      // Only open jobs can be retained or need closing. An incoming closed job is written anew either way.
+      for (const r of this.sql.all("SELECT id, ord, json, chat, open FROM job WHERE station = ? AND open = 1", [station])) was.set(String(r[0]), r);
       const items: [string, J][] = [];
       const seen = new Set<string>();
       for (const j of list) {
@@ -1423,9 +1458,23 @@ export class AccountDb {
   /// The agents' transcripts held, least recently used first: by when their history was last opened here or their agent
   /// last active, whichever is later. (A chat's messages are never let go: they are the chat, and small.)
   transcriptsByUse(limit: number): { station: string; id: string }[] {
+    // Seek to each next session in the transcript primary key; DISTINCT would scan every item of every transcript.
     return this.sql
       .all(
-        `SELECT x.station, x.session FROM (SELECT DISTINCT station, session FROM transcript) x
+        `WITH RECURSIVE x(station, session) AS (
+           SELECT station, session FROM (SELECT station, session FROM transcript ORDER BY station, session LIMIT 1)
+           UNION ALL
+           SELECT t.station, t.session FROM x JOIN transcript t ON (t.station, t.session, t.i) = (
+             SELECT z.station, z.session, z.i FROM transcript z WHERE z.station = x.station AND z.session > x.session
+             ORDER BY z.station, z.session, z.i LIMIT 1
+           )
+           UNION ALL
+           SELECT t.station, t.session FROM x JOIN transcript t ON (t.station, t.session, t.i) = (
+             SELECT z.station, z.session, z.i FROM transcript z WHERE z.station > x.station
+             ORDER BY z.station, z.session, z.i LIMIT 1
+           ) WHERE NOT EXISTS (SELECT 1 FROM transcript z WHERE z.station = x.station AND z.session > x.session)
+         )
+         SELECT x.station, x.session FROM x
          LEFT JOIN log_use u ON u.kind = 'transcript' AND u.station = x.station AND u.id = x.session
          LEFT JOIN session s ON s.station = x.station AND s.key = x.session
          ORDER BY max(coalesce(u.opened, 0), coalesce(s.last_active, 0)), x.station, x.session LIMIT ?`,
@@ -1942,12 +1991,24 @@ export function placeTurn(detail: J, summary: unknown): boolean {
   return true;
 }
 
+/// Whether a session's summary says what is shown of its turns (how many, how long they ran: `turns`, `workMs`, none for
+/// one with turns from before that was kept, which shows how many alone), so
+/// that its detail, read once, needs no reading again as they start and end: a detail listed every turn for that, read
+/// again after each one, many of one session in 25 s on a station (2026-11-03). A station from before says none.
+export function counted(summary: unknown): boolean {
+  if (!isObject(summary) || !("workMs" in summary)) return false;
+  return (typeof summary.workMs === "number" || summary.workMs === null) && typeof summary.turns === "number";
+}
+
 /// Whether the turns a session detail lists still end as its summary says.
 export function sameTurns(turns: unknown, summary: unknown): boolean {
   const list = Array.isArray(turns) ? turns : [];
-  if (get(summary, "turns") !== list.length) return false;
+  return sameTurnEnd(list.length, list.length > 0 ? list[list.length - 1] : null, summary);
+}
+
+function sameTurnEnd(length: number, record: unknown, summary: unknown): boolean {
+  if (get(summary, "turns") !== length) return false;
   const lastTurn = get(summary, "lastTurn") ?? null;
-  const record = list.length > 0 ? list[list.length - 1] : null;
   if (record === null && lastTurn === null) return true;
   if (record === null || lastTurn === null) return false;
   return ["kind", "outcome", "declared", "detail", "startedAt", "endedAt"].every((k) => equal(get(record, k), get(lastTurn, k)));

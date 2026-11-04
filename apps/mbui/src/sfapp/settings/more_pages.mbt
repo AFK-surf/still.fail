@@ -8,10 +8,6 @@
 // 自动决策
 
 ///|
-/// The drafts of the stations' rules open on the page (`decisionForm`), by station.
-let decision_forms : Map[String, String] = Map([])
-
-///|
 /// The drafts of the stations' archive policies open (`policyForm`), by station.
 pub let policy_forms : Map[String, String] = Map([])
 
@@ -19,12 +15,6 @@ pub let policy_forms : Map[String, String] = Map([])
 /// The drafts a decisions' page opened, dropped as it is left.
 fn decisions_left(core : Core, route : Route) -> Unit {
   match route {
-    AutoCompletion => {
-      for station, form in decision_forms {
-        act(core, tr("web-pages.automaticDecisions.configAction"), "automaticDecisions.form.drop", obj([("station", str(station)), ("form", str(form)), ("input", obj([]))]))
-      }
-      decision_forms.clear()
-    }
     AutoPolicy(station) =>
       match policy_forms.get(station) {
         Some(form) => {
@@ -141,10 +131,30 @@ fn kept_read(c : @ui.Ctx, core : Core) -> Unit {
 /// until then).
 pub fn kept_said(c : @ui.Ctx, core : Core) -> String {
   kept_read(c, core)
+  kept_told()
+}
+
+///|
+/// What 本机缓存's row says as the core last said it (kept_said's, nothing asked of it: kept_ask asks as kept_asked
+/// changes).
+pub fn kept_told() -> String {
   match kept.chats.get() {
     Some(chats) => size_words(kept_total(chats))
     None => ""
   }
+}
+
+///|
+/// How many times what is kept was asked to be read again (a page of it changed it): what a node asking for it follows.
+pub fn kept_asked() -> Int {
+  kept.asked.get()
+}
+
+///|
+/// What is kept asked of the core where it is not read as last asked (kept_said's ask, at the moment of what reads it:
+/// a node's reaction to kept_asked).
+pub fn kept_ask(c : @ui.Ctx, core : Core) -> Unit {
+  kept_read(c, core)
 }
 
 ///|
@@ -713,20 +723,18 @@ fn kept_chat_page(c : @ui.Ctx, core : Core, station : String, thread : Int) -> U
 }
 
 ///|
-/// A station's rule's draft (`decisionForm`), opened once (by the frame's builds' end) and kept by station (src/sfpages
-/// automatic_decisions.mbt).
-pub fn decision_form(c : @ui.Ctx, core : Core, station : String) -> String {
-  match decision_forms.get(station) {
-    Some(f) => f
-    None => {
-      profile_forms.val += 1
-      let f = "mbui-decision-" + profile_forms.val.to_string()
-      decision_forms[station] = f
-      // (opened once the frame's builds are over: the build that first comes to it alone)
-      c.tell("decision-open/" + f, fn() {
-        act(core, tr("web-pages.automaticDecisions.configAction"), "automaticDecisions.form.open", obj([("station", str(station)), ("form", str(f)), ("input", obj([]))]))
-      })
-      f
-    }
-  }
+/// A station's rule's draft (`decisionForm`) opened for what shows it (its rows made once, src/sfpages
+/// automatic_decisions.mbt), by the name it is then known by; dropped by decision_form_drop as they are let go.
+pub fn decision_form_open(core : Core, station : String) -> String {
+  profile_forms.val += 1
+  let f = "mbui-decision-" + profile_forms.val.to_string()
+  act(core, tr("web-pages.automaticDecisions.configAction"), "automaticDecisions.form.open", obj([("station", str(station)), ("form", str(f)), ("input", obj([]))]))
+  f
 }
+
+///|
+/// A station's rule's draft `form` (decision_form_open's) dropped: what showed it let go.
+pub fn decision_form_drop(core : Core, station : String, form : String) -> Unit {
+  act(core, tr("web-pages.automaticDecisions.configAction"), "automaticDecisions.form.drop", obj([("station", str(station)), ("form", str(form)), ("input", obj([]))]))
+}
+

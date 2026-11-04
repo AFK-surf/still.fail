@@ -322,14 +322,23 @@ key), text as Unicode. Opening a view wakes a display gone to sleep (a pointer n
 (`SetThreadExecutionState`). What Windows keeps from any app in the session is not had: the sign-in and UAC's secure
 desktop are not captured, and windows of apps run as administrator take no input.
 
-On Linux, `station/src/screens/x11-desktop.ts` can share an X11 session the station's own user can access. It needs
-`ffmpeg` (with the `x11grab` input) and `xdotool` in the station's `PATH`, as well as the session's `DISPLAY` and, when
-used, `XAUTHORITY`. A station started outside the graphical session must be given that session's environment by its
-operator; a station running as another user cannot use the session without that user's own authorization. A Wayland
-session is reported as unsupported instead of sharing only its Xwayland windows. The list says when the display or
-tools are missing.
+On Linux, the desktop source looks for an active graphical login belonging to the station's user, preferring a local
+login, and otherwise uses the environment inherited by the station. A station running as another user does not borrow
+the login or X11 credentials. An active graphical session is needed; a headless browser tab can still be opened through
+the browser source. The desktop list reports missing access and preparation failures. Distribution-specific packages
+and setup instructions are in [Linux desktop setup](linux-desktop-setup.md).
 
-Each view captures the X11 root display (including its cursor) at at most 15 fps. For a client taking H.264, an ffmpeg
+On X11, `station/src/screens/x11-desktop.ts` uses `ffmpeg` (with `x11grab`) and `xdotool` from the station's `PATH`.
+When either is missing, on Debian and Ubuntu the station can prepare a pair on the first opening
+(`screens/linux-tools.ts`): APT downloads packages and missing dependencies from the configured repositories, and
+`dpkg-deb` extracts them into `<data>/screen-tools/apt`. No system package is installed, no maintainer script is run,
+and no administrator password is needed. The private libraries are added only to those processes' environment.
+Concurrent openings share preparation, the directory appears after both commands have been checked, and a later opening
+retries a failure. Where this APT preparation is unavailable, the station can instead use the installed desktop's
+Python GI, GStreamer `ximagesrc`/JPEG plugins, X11 and XTest libraries (`screens/linux-x11.py`); it reports when that
+fallback is unavailable. This path has been exercised on CentOS Stream 9 and 10.
+
+Each X11 view captures the root display (including its cursor) at at most 15 fps. For a client taking H.264, an ffmpeg
 with libx264 captures raw pictures up to 3840×2160, keeps the latest, and sends it to a second ffmpeg for encoding only
 when the pace asks for a frame. That way an encoded delta frame is never silently dropped. The encoder restarts with a
 new key frame and configuration when the requested bit rate changes substantially or a client asks for a key frame;
@@ -338,10 +347,23 @@ a still screen is encoded again.
 When H.264 is unavailable or the client asks only for JPEG, one ffmpeg sends JPEG frames at the viewer's bounds and
 keeps its latest frame. The JPEG stream has no adaptive bitrate and can be slow on a narrow or lossy link.
 
-`xdotool` sends pointer, wheel and keyboard events to the same session; keys or buttons held by a view are released as
-it closes. Keyboard positions use Xorg's evdev keycodes; X servers with a different physical keycode map have not been
-tested. This version does not carry system audio or the clipboard, select individual monitors, or resize an open view.
-The encoders run in software; Wayland needs a portal-backed source of its own.
+`xdotool`, or XTest in the GStreamer fallback, sends pointer, wheel and keyboard events to the same session; keys or
+buttons held by a view are released as it closes. Keyboard positions use Xorg's evdev keycodes; X servers with a
+different physical keycode map have not been tested. The GStreamer fallback sends JPEG, using software encoding.
+
+On Wayland, `screens/linux-portal.py` uses the desktop's XDG RemoteDesktop and ScreenCast portals, PipeWire and
+GStreamer to capture a selected monitor as JPEG and send pointer and keyboard events. The target desktop user must
+allow screen sharing and remote interaction in the system dialog; the desktop may ask again for a later session.
+The portal backend and its Python GI and GStreamer components must be installed. A Wayland Xwayland-only screenshot
+would omit native windows, so it is not used as an entire desktop. Committed text uses the focused accessible text
+field. For a focused terminal that does not expose one, the helper can instead send keys when GDK 3 can map every
+character unambiguously in the desktop's keyboard layout and lock state. If it cannot do so, or the accessible field has a
+selection, the view reports that it cannot safely insert the text. A web page may also be opened through the browser
+source. The GNOME Wayland path has been exercised on Ubuntu 22.04 and CentOS Stream 9; other desktops and versions
+need their own portal implementation and validation.
+
+Linux desktop views do not carry system audio or the clipboard, resize an open view, or select individual X11 monitors.
+Their encoders run in software.
 
 The display's scale (Settings › Display › Scale) is a person's to change from the view, as UU Remote has it: on a phone
 the desktop's windows and text are made larger, readable at the phone's size. `stillfail-screen scale [percent]` reads
@@ -389,7 +411,9 @@ it), typed text a US keyboard's keys and anything else pasted (the device's past
 ⌘V). Simulator.app's shortcuts press its buttons: ⌘⇧H home, ⌃⌘⇧H the app switcher, ⌘L lock, ⌘K the software
 keyboard. The web viewer has them as buttons too (a column beside the device with a mouse, a row over the foot on a
 phone), and one more that saves the picture shown as a PNG (as large as the view is, not the device's own pixels).
-The device is not turned: SimulatorKit takes an orientation only through Simulator.app. The web client touches
+A device is turned a quarter by `{t:"device", name:"rotate"}` (a GSEvent through its
+PurpleWorkspacePort, or an iPhone Duo's guest HID: HIDInjector.sendOrientation), its picture and fingers following what `simctl
+io enumerate` says of its UI; a screen that stays upright (an iPhone's Home Screen, an app that only stands so) does not turn (Android: `wm user-rotation` by adb, the display out of following its sensor from then on). The web client touches
 a simulator directly on a phone (no trackpad to choose), a finger held being the device's long press; the mbui app
 drives it as any screen for now (its 触控板 switched off for direct touch). No clipboard,
 cursor or dropped files yet. `station/side/screen-simulator.test.ts` makes and boots a simulator of its own, views it
@@ -407,11 +431,35 @@ says `debug: true` of a simulator; only those who may drive it read or do this (
   2000 lines held. So it has what goes to the unified log (`Logger`, `os_log`, `NSLog`), not an app's stdout (`print`).
 - **Apps**: `GET /admin/api/screens/<id>/apps` → `{apps: [{id, name, running}]}`, those a person installed (`simctl
   listapps`), running ones first (`launchctl list` inside the device, which does not say which is in front).
+- **What Device Hub does of a device**: `POST /admin/api/screens/<id>/open-url` `{url}` (`simctl openurl`), `.../location` `{at?}`
+  ("latitude,longitude"; none: clears it), `.../status-bar` `{tidy}` (`simctl status_bar`: 9:41, full bars and battery, or as
+  it is), `.../push` `{app, text}` (`simctl push`, to an app a person installed), each → `{}`, 400 for what is no such thing.
+- **Install**: the list says `install` of a simulator, a folder among the machine's temporary files (not Downloads, which macOS
+  may keep simctl from). The app puts a file picked there with the drive's upload, then `POST /admin/api/screens/<id>/install`
+  `{path}` → `{app}`: an .ipa, or a .zip with a .app in it, unpacked, `simctl install`ed and started, the file let go of. 400 when
+  there is no app in it; 502 what simctl said (built for a device, not a simulator).
+- **The rest of Device Hub's**: `.../biometrics` `{what}` (`enrol`, `unenrol`, `match`, `nomatch`: what BiometricKit listens for inside
+  the device, Face ID's or Touch ID's alike; the first asking waits on the system's own question), `.../uninstall` `{app}`;
+  `screen.input` `{t:"device", name}`: `volume_up`, `volume_down` (dtuhidd's buttons), `memory_warning` (SimDevice's), `rotate` (turned a quarter).
+- **Record**: `POST /admin/api/screens/<id>/record` `{panel?}` starts `simctl io recordVideo` (an iPhone Duo must be told which
+  display, `cover` 1 or `inner` 3; the panel in use when it starts is the one recorded, folding on goes unseen), ended by
+  `.../record/stop` → `{root, path}`, which the app downloads as any file of the drive (ten minutes at most, some 20 to
+  80 MB a minute; the next one's start removes it). An inner panel's framebuffer is upright with its UI on its side, so its
+  movie is said to be turned (its track's matrix, nothing encoded again). `settings` says `recording`.
 - **Restart**: `POST /admin/api/screens/<id>/relaunch` `{app}` → `{}` (`simctl launch --terminate-running-process`), 404
   for what is not an app a person installed there. Building it again is the agent's: the station does not know the project.
 
 - **Settings**: `GET /admin/api/screens/<id>/settings` → `{appearance, textSize}`; `POST` `{name, value}` sets one and says
   them again (`simctl ui`: `appearance` light or dark, `textSize` a `content_size`), 400 for any other.
+- **Fold** (an iPhone Duo's, the item's `poses`): `{t: "pose", name: "closed"|"book"|"open"}` as input. The helper runs its bundled
+  `stillfail-duo-hid` inside the simulator (upstream's SimDuoHID), which turns the hinge; which panel the picture is of
+  follows SpringBoard's log, so one folded from Device Hub is followed as well.
+  Its inner panel's framebuffer is upright with its UI on its side, so the helper turns the picture (and each finger, wheel and
+  part asked for, back) as `simctl io enumerate` says the panel stands; a picture so turned has no edge gestures from here (home
+  and the rest by their buttons). Where the guest has `dtuhidd`, fingers go through it as keys do (`DTUHIDKeys`): an Indigo touch
+  there could take the guest's backboardd down (seen on an iPhone Duo, 2026-11-02). Its panel is by display number, 1 and 3.
+- **The device's body**: the item's `panels` (`sim-mask.ts`: its type's framebuffer masks read for each panel's corners). The app paints
+  the body round the picture and the page's ground over what its curve leaves of the picture's corners, square on its layer.
 - **Screenshot**: `POST /admin/api/screens/<id>/screenshot` → `{png}` (base64), in the device's own pixels: a view's own
   picture, not `simctl io`'s, which of a foldable's screens it picks is not the one in use (an iPhone Duo's: black).
 
@@ -436,6 +484,28 @@ buttons), and its page is about the device and the app rather than the link: its
 重启 App (the app last chosen at one press; another from 设备) over the picture on a wide page, under it on a narrow one, and 日志
 and 设备 beside the device on a wide page, put away with their button, in a panel on a narrow one. 控制中心 has only what the view
 does (画质, 帧率, 全屏, 断开).
+
+### Android (station/src/screens/android.ts, scrcpy-server)
+
+The emulators and phones on this machine's adb (the station's own server, `adb track-devices`), each a screen while it
+is there, on any station that has adb: `android:<ro.serialno>`, or `android:emulator-<port>` as emulators share theirs.
+Who may see and drive one is who may the desktop's. A phone lent to a chat is in its grant's server alone
+(docs/adb-share.md), not among these. Nor is one adb found on the network by itself (`adb-<serial>._adb-tls-connect._tcp`,
+any phone paired with this machine's key on the same network; 2026-11-03: nobody asked it to show): a phone over Wi-Fi
+shows once it is connected to by its address (`adb connect <host>:<port>`). A server the station starts for this has
+`ADB_MDNS_AUTO_CONNECT=0`: with it on, the default server takes a lent phone too (seen 2026-11-03: the same key).
+
+It is listed as kind `simulator`, a touchscreen with no trackpad, so every released app draws it so: its body from the
+`panels` of `dumpsys display`'s rounded corners, the device's buttons as Simulator.app's shortcuts (`KeyH` home, `KeyL`
+power; Escape is back). The apps' `debug`, `poses` are not said of it yet.
+
+A view is a run of scrcpy's server on the device (`stillfail-scrcpy-<id>.jar` in /data/local/tmp, removed once it runs,
+over an `adb forward` of its own): H.264 only, its protocol pinned to the file's version (scrcpy keeps no compatibility
+between releases: the version goes up only with the file). Its encoder takes no new size or rate while running, so a
+view has neither `bounds` nor `rate`: it opens at the larger of its bounds and 1280 on its long side; a slow link drops
+what it could not fetch up to a new key frame (`keyframe` starts a new capture). A preview does not turn the screen on,
+a view does; with the screen off no frame comes. Measured on 2026-11-03 at 1280 on the long side: first frame 180-240 ms,
+a finger to the picture changing 66-103 ms on an emulator on the same Mac, 88 ms once on a phone through its member link.
 
 ### Grants (station/src/helper/grants.ts, api/routes/permissions.ts)
 

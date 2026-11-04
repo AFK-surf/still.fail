@@ -48,7 +48,7 @@ test("each host's old name serves the same: static sites, the API, the relay, th
     const w = ((await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as { id: string }).id;
     const invite = await (await h.fetchOld("main", `/v1/workspaces/${w}/invitations`, { method: "POST", headers: { ...json, authorization: `Bearer ${tokens.access_token}` }, body: JSON.stringify({ role: "member", email: "bob@example.test" }) })).json() as { url: string };
     assert.ok(invite.url?.startsWith(`${h.origin}/invite#`), JSON.stringify(invite));
-    const enrollment = await (await alice("POST", `/v1/workspaces/${w}/enrollments`, { name: "studio" })).json() as { install: string; command: string };
+    const enrollment = await (await alice("POST", `/v1/workspaces/${w}/enrollments`, { name: "willow" })).json() as { install: string; command: string };
     assert.ok(enrollment.install.startsWith(`curl -fsSL ${h.origin}/install.sh | sh -s -- `));
 
     // Both apps' App Links, on both hosts.
@@ -124,7 +124,7 @@ test("new tokens use stillfail while tokens issued for the old origin stay good"
 async function enroll(h: Harness, fetch: Harness["fetch"], origin: string, prefix: "ember" | "stillfail") {
   const alice = h.as(await h.login("alice"));
   const w = ((await (await alice("POST", "/v1/workspaces", { name: `Home ${prefix} ${origin}` })).json()) as { id: string }).id;
-  const enrollment = (await (await alice("POST", `/v1/workspaces/${w}/enrollments`, { name: "studio" })).json()) as { token: string };
+  const enrollment = (await (await alice("POST", `/v1/workspaces/${w}/enrollments`, { name: "willow" })).json()) as { token: string };
   const station = await key();
   const response = await fetch("/v1/stations/enroll", {
     method: "POST",

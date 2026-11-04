@@ -2,6 +2,38 @@
 // markPasted): what the field holds read as the core reads it (its answers kept, src/sfkept).
 
 ///|
+test "a finger scrolls the @ menu while the composer and its keyboard keep focus" {
+  let rows : Array[Json] = []
+  for i in 0..<8 {
+    rows.push(row("ref-\{i}", "候选对话 \{i}", "ws1/st1", "刚才", {}))
+  }
+  let calls : Array[Made] = []
+  let t = fake_core(calls, over=fn(name, topic) {
+    if name == "chatSearch" {
+      { ..topic, value: Some({ "items": Json::array(rows) }) }
+    } else {
+      topic
+    }
+  })
+  t.tap_text("发消息")
+  t.type_text("@")
+  t.frame()
+  let (x, y, w, h) = t.get(Button, label="候选对话 2").rect
+  let (_, before_y, _, _) = t.rect_of("候选对话 7").unwrap()
+  assert_true(t.ctx().field_focused(), msg="the composer starts focused")
+  t.drag(x + w / 2.0, y + h / 2.0, x + w / 2.0, y + h / 2.0 - 120.0)
+  assert_true(t.ctx().field_focused(), msg="the composer keeps its focus")
+  assert_true(t.ime().0, msg="the keyboard stays open")
+  let (_, after_y, _, _) = t.rect_of("候选对话 7").unwrap()
+  assert_true(after_y < before_y, msg="the results moved up")
+  t.tap_text("候选对话 7")
+  t.draw()
+  let picked = named(calls, "chat.ref")
+  assert_eq(picked.length(), 1)
+  assert_eq(text(Some(picked[0].params), "id"), "ref-7")
+}
+
+///|
 test "`@` and words: the chats they find over the composer; one picked goes in as its mark, a backspace takes it whole" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
@@ -34,10 +66,10 @@ test "`@` and words: the workspace's other stations' chats too, each with its st
   let calls : Array[Made] = []
   let t = fake_core(calls)
   t.tap_text("发消息")
-  // written in a chat of Studio's (ws1/st1); 夜里的构建又失败了 is MBA's (ws1/st2)
+  // written in a chat of Willow's (ws1/st1); 夜里的构建又失败了 is Maple's (ws1/st2)
   t.type_text("@的")
   // (then when it was last active)
-  assert_true(after_on_its_row(t, "夜里的构建又失败了") == ["MBA", "15 分钟前"], msg=about_its_row(t, "夜里的构建又失败了"))
+  assert_true(after_on_its_row(t, "夜里的构建又失败了") == ["Maple", "15 分钟前"], msg=about_its_row(t, "夜里的构建又失败了"))
   assert_true(after_on_its_row(t, "首页的列表改成按天分组") == ["8 分钟前"], msg=about_its_row(t, "首页的列表改成按天分组"))
   // a finger's row: 44 high at least (Theme::rows pick)
   let (_, _, _, high) = t.get(Button, label="夜里的构建又失败了").rect
@@ -149,7 +181,7 @@ test "words sent with a mark draw it as the field did, as their message will: ne
   assert_eq(named(calls, "chat.send").length(), 1)
   assert_eq(text(Some(named(calls, "chat.send")[0].params), "text"), "@[首页] 吧")
   match sending_of("ws1/st1\u{1}s-c1") {
-    [l] => assert_eq(sent_marks(l.row), [(0, 5)])
+    [l] => assert_true(l.row.words is Some(_))
     _ => fail("not in the list")
   }
   t.draw()

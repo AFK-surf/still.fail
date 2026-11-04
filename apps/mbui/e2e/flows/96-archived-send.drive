@@ -1,0 +1,15 @@
+# A chat archived on another device can be continued here. The station check verifies both the message and that its
+# session is back in the list, rather than just the composer's optimistic message.
+#before peer archive 归档发送测试 {T} post:归档前的回复 {T}
+timeout 90000
+until 端到端测试
+tap icon:filter
+until =已归档
+tap =已归档
+until 归档发送测试 {T}
+tap 归档发送测试 {T}
+until 已归档，发送消息将还原
+tap 发消息
+type 继续处理 {T}
+tap icon:arrow-up
+answered chat.send

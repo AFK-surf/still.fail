@@ -125,9 +125,11 @@ pub(all) struct Beside {
 /// Placed beside node `anchor` (place_beside: on `side`, `offset` away, lined up `along` it, kept `padding` inside the
 /// window, to the other side where it has not the room on its own), by where the anchor is and how big both are as the
 /// tree is placed, each time it is: what it holds with it. Out of its holder's flow, as big as what it holds says (its
-/// width, its words). Where the anchor is gone, where it is laid out. `at_pointer`: beside the point in the window the
-/// pointer is at while it is on the anchor (Tree::point_at, placed again as it moves), as the anchor were that point (a
-/// tip by the pointer along a tall thin thing); elsewhere beside all of it.
+/// width, its words). Leaving, or its anchor gone or drawn nowhere (let go, left out of its row, leaving), where it
+/// last went beside it: it follows its anchor while both are there, and never goes anywhere else. `at_pointer`: beside
+/// the point in the window the pointer is at while it is on the anchor (Tree::point_at, placed again as it moves), as
+/// the anchor were that point (a tip by the pointer along a tall thin thing); the pointer gone off it, by the point of
+/// it the pointer was last at (following the anchor still); never on it, beside all of it.
 pub fn View::beside(
   self : View,
   anchor : NodeId,
@@ -189,11 +191,34 @@ fn Tree::besides_placed(self : Tree) -> Unit {
     }
     state[at] = 1
     let n = self.nodes[at]
-    guard n.beside is Some(b) && self.alive_id(b.anchor) else {
-      // (beside nothing now, its anchor gone: on no side of it)
-      n.went = None
+    // (where it was last beside its anchor, kept: placed again by what changed of its own (its fading, its size), it
+    // stays there, never where it is laid out)
+    let stay = fn() {
+      match n.beside_last {
+        Some((lx, ly, px, py)) =>
+          if lx != n.lx || ly != n.ly || px != n.lpx || py != n.lpy {
+            n.lx = lx
+            n.ly = ly
+            n.lpx = px
+            n.lpy = py
+            self.work.composed = self.work.composed + 1
+            self.composed.push({ at, gen: n.gen })
+            self.hits = self.hits + 1
+          }
+        None => ()
+      }
       state[at] = 2
-      return true
+      true
+    }
+    guard n.beside is Some(b) && self.alive_id(b.anchor) else {
+      // (beside nothing now, its anchor gone: on no side of it, where it last was beside it)
+      n.went = None
+      return stay()
+    }
+    // (leaving, or its anchor drawn nowhere (left out of its row, leaving): where it last was beside it, following
+    // nothing on its way out)
+    if self.leaving_at(at) || self.out_at(b.anchor.at) || self.leaving_at(b.anchor.at) {
+      return stay()
     }
     // (beside itself or what it holds: refused)
     let mut i = b.anchor.at
@@ -219,10 +244,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
     self.work.besides = self.work.besides + 1
     // (where its anchor is drawn and how big, where what holds it is: in the window's terms as the scene is composed,
     // Tree::projected; it goes there as big as what holds it draws it, its own scale about where it went after)
-    guard self.window_place(b.anchor.at) is Some((ax, ay, ascale)) else {
-      state[at] = 2
-      return true
-    }
+    guard self.window_place(b.anchor.at) is Some((ax, ay, ascale)) else { return stay() }
     let a = self.nodes[b.anchor.at]
     let (hx, hy, hs) = match self.window_place(n.parent) {
       Some(p) => p
@@ -231,10 +253,16 @@ fn Tree::besides_placed(self : Tree) -> Unit {
     // (where it is beside: all of its anchor as drawn now; by the pointer, the point it is at, while it is on it)
     let (aw, ah) = (a.lw * ascale, a.lh * ascale)
     let (px, py) = self.pointer_xy
+    // (the pointer gone off it: by the point of it the pointer was last at, as the anchor is now, never jumping to all of
+    // it; never on it (shown by the keyboard's focus), beside all of it)
     let rect = if b.at_pointer && px >= ax && py >= ay && px < ax + aw && py < ay + ah {
+      n.beside_point = Some(((px - ax) / ascale, (py - ay) / ascale))
       (px, py, 0.0, 0.0)
     } else {
-      (ax, ay, aw, ah)
+      match (b.at_pointer, n.beside_point) {
+        (true, Some((ox, oy))) => (ax + ox * ascale, ay + oy * ascale, 0.0, 0.0)
+        _ => (ax, ay, aw, ah)
+      }
     }
     let (x, y, went) = place_beside(
       rect,
@@ -251,6 +279,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
     n.went = Some(went)
     let (px, py) = self.pivot_of(at, n.lw, n.lh)
     let (lx, ly) = ((x - hx) / hs, (y - hy) / hs)
+    n.beside_last = Some((lx, ly, px, py))
     if lx != n.lx || ly != n.ly || px != n.lpx || py != n.lpy {
       n.lx = lx
       n.ly = ly
@@ -361,6 +390,31 @@ pub fn Tree::went_down(self : Tree, at : Double) -> Unit {
 /// the next press, wherever it lands (a tip a finger held open, once let go).
 pub fn View::window_downs(self : View) -> Int {
   self.tree.pressed_anywhere.get()
+}
+
+///|
+/// A tap in the window at `at`, wherever it landed (the host's, as the old frame's Ctx::tapped_anywhere has one: a
+/// press let go without dragging, not taken by what it went down on), told after what it landed on took it: one change
+/// at that moment, told to what follows the window's taps (View::window_taps).
+pub fn Tree::tapped(self : Tree, at : Double) -> Unit {
+  self.event(at, fn() { self.tapped_anywhere.set(@signals.untracked(fn() { self.tapped_anywhere.get() }) + 1) })
+}
+
+///|
+/// Whether a gesture's finger let go since this was last asked was its tap (View::gesture's: not moved past its slop,
+/// not held, not called off), as what took it said it; asked, none since: the host's, to tell the window's taps by
+/// (Tree::tapped).
+pub fn Tree::gesture_tap_taken(self : Tree) -> Bool {
+  let was = self.gesture_tapped
+  self.gesture_tapped = false
+  was
+}
+
+///|
+/// How many taps there have been anywhere in the window (Tree::tapped), followed: what a tap anywhere lets go of (a tip
+/// a finger tapped open).
+pub fn View::window_taps(self : View) -> Int {
+  self.tree.tapped_anywhere.get()
 }
 
 

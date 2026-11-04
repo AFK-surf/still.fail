@@ -17,7 +17,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<"
 const people = { me: { name: "王一", short: "王", color: "#5B7BB2" }, bob: { name: "Bob", short: "B", color: "#2F8F5B" }, lin: { name: "林", short: "林", color: "#B9471F" } };
 const peopleStack = (ids, size = 18) => `<span class="pstack">${ids.map((id) => `<span class="pav" style="width:${size}px;height:${size}px;font-size:${Math.round(size * .5)}px;background:${people[id].color}">${people[id].short}</span>`).join("")}</span>`;
 const workspaces = [
-  { id: "3720", name: "3720", account: "wangyi@example.com", stations: 3 },
+  { id: "demo", name: "示例工作区", account: "wangyi@example.com", stations: 3 },
   { id: "acme", name: "产品团队", account: "wangyi@example.com", stations: 1 },
   { id: "dev", name: "Dev 测试", account: "alice@example.test", stations: 2 },
 ];
@@ -28,25 +28,25 @@ const starter = (s) => s.people?.[0] ?? "me";
 const byOther = (s) => starter(s) !== "me" ? `<span class="starter" title="${people[starter(s)].name} 发起">${peopleStack([starter(s)], 16)}</span>` : "";
 
 const stations = [
-  { id: "studio", name: "studio", host: "Mac Studio · M2 Max", online: true, cpu: 38, mem: 47, disk: 34, agents: 2, profiles: [
+  { id: "willow", name: "willow", host: "示例主机", online: true, cpu: 38, mem: 47, disk: 34, agents: 2, profiles: [
     { name: "OpenCode Go · Claude Code", models: ["deepseek-flash", "deepseek-v4-pro", "glm-5.2"], on: ["deepseek-flash", "deepseek-v4-pro"], quota: 32 },
     { name: "OpenCode Go · Codex", models: ["deepseek-flash", "gpt-6-astra"], on: ["gpt-6-astra"], quota: 61 },
   ] },
-  { id: "mac-mini", name: "mac-mini", host: "Mac mini · M4", online: true, cpu: 12, mem: 58, disk: 71, agents: 0, profiles: [
+  { id: "birch", name: "birch", host: "示例工作站", online: true, cpu: 12, mem: 58, disk: 71, agents: 0, profiles: [
     { name: "团队 Claude 订阅", models: ["claude-opus-5-5", "claude-sonnet-5"], on: ["claude-sonnet-5"], quota: 84 },
   ] },
-  { id: "mba", name: "mba", host: "MacBook Air", online: false, cpu: 0, mem: 0, disk: 0, agents: 0, profiles: [] },
+  { id: "maple", name: "maple", host: "示例笔记本", online: false, cpu: 0, mem: 0, disk: 0, agents: 0, profiles: [] },
 ];
 
 const sessions = [
-  { id: "staging", title: "staging 早上发不出通知", station: "studio", source: "slack", model: "deepseek-flash", models: ["deepseek-flash", "gpt-6-astra"], people: ["me", "bob"], effort: "high", state: "block", when: "3 分钟前",
+  { id: "staging", title: "staging 早上发不出通知", station: "willow", source: "slack", model: "deepseek-flash", models: ["deepseek-flash", "gpt-6-astra"], people: ["me", "bob"], effort: "high", state: "block", when: "3 分钟前",
     question: "要我把告警规则改成 UTC 并重启 notifier 吗？重启会让推送中断大约 1 分钟。",
     quick: ["改吧，现在重启", "先别重启", "我来看看"],
     messages: [
       { mine: true, text: "帮我看一下 staging 为什么今天早上发不出通知，日志在 backroom" },
       { agent: true, model: "deepseek-flash", html: "<p>找到原因了：通知服务的日志时间戳是 <code>UTC</code>，但告警规则按北京时间配置，所以早上 8 点前的通知全被过滤掉了。</p><pre>rule: quiet_hours 00:00–08:00 (Asia/Shanghai)\nlog:  2026-09-26T00:12:04Z  suppressed</pre>" },
-      { person: "bob", text: "mac-mini 上那套也是一样的配置，顺便一起看看？" },
-      { agent: true, model: "gpt-6-astra", html: "<p>我看了 mac-mini：同一份规则文件，改一处两边都会生效。</p>" },
+      { person: "bob", text: "birch 上那套也是一样的配置，顺便一起看看？" },
+      { agent: true, model: "gpt-6-astra", html: "<p>我看了 birch：同一份规则文件，改一处两边都会生效。</p>" },
       { agent: true, model: "deepseek-flash", block: true, html: "<p>要我把告警规则改成 UTC 并重启 notifier 吗？重启会让推送中断大约 1 分钟。</p>" },
     ],
     history: [
@@ -56,17 +56,17 @@ const sessions = [
       ["post", "发出回复", "找到原因了：通知服务的日志时间戳是 UTC…"],
       ["post", "进入 block 状态", "要我把告警规则改成 UTC 并重启 notifier 吗？"],
     ] },
-  { id: "zork", title: "跑一下 zork 的 android 测试，失败的话看看是哪个", station: "studio", source: "ember", model: "gpt-6-astra", models: ["gpt-6-astra"], people: ["me"], effort: "medium", state: "running", when: "进行中",
-    steps: ["构建 debug 包", "启动 emulator-5580", "安装 ing.zork.android.test", "运行 42 个测试 · 9/42", "运行 42 个测试 · 23/42", "运行 42 个测试 · 36/42", "整理失败用例"],
-    messages: [{ mine: true, text: "跑一下 zork 的 android 测试，失败的话看看是哪个" }],
-    history: [["recv", "收到来自 你 的消息", "跑一下 zork 的 android 测试…"], ["group", "构建 debug 包 · 共 3 项"]] },
-  { id: "weekly", title: "整理 bridge 值班周报", station: "mac-mini", source: "slack", model: "claude-sonnet-5", models: ["claude-sonnet-5", "deepseek-flash"], people: ["lin", "bob", "me"], effort: "", state: "running", when: "进行中",
+  { id: "sample-app", title: "跑一下 sample-app 的 android 测试，失败的话看看是哪个", station: "willow", source: "ember", model: "gpt-6-astra", models: ["gpt-6-astra"], people: ["me"], effort: "medium", state: "running", when: "进行中",
+    steps: ["构建 debug 包", "启动 emulator-5580", "安装 example.sample.android.test", "运行 42 个测试 · 9/42", "运行 42 个测试 · 23/42", "运行 42 个测试 · 36/42", "整理失败用例"],
+    messages: [{ mine: true, text: "跑一下 sample-app 的 android 测试，失败的话看看是哪个" }],
+    history: [["recv", "收到来自 你 的消息", "跑一下 sample-app 的 android 测试…"], ["group", "构建 debug 包 · 共 3 项"]] },
+  { id: "weekly", title: "整理 bridge 值班周报", station: "birch", source: "slack", model: "claude-sonnet-5", models: ["claude-sonnet-5", "deepseek-flash"], people: ["lin", "bob", "me"], effort: "", state: "running", when: "进行中",
     steps: ["读取值班频道 7 天的消息", "汇总 12 起告警", "写周报"], messages: [{ mine: true, text: "整理一下这周 bridge 值班的周报" }], history: [] },
-  { id: "rebase", title: "rebase 和 squash 各自适用的场景", station: "studio", source: "slack", model: "deepseek-flash", models: ["deepseek-flash"], people: ["bob"], effort: "", state: "done", when: "10:38",
+  { id: "rebase", title: "rebase 和 squash 各自适用的场景", station: "willow", source: "slack", model: "deepseek-flash", models: ["deepseek-flash"], people: ["bob"], effort: "", state: "done", when: "10:38",
     messages: [{ mine: true, text: "用一句话总结 rebase 和 squash 各自适用的场景" }, { agent: true, html: "<p><b>rebase</b>：想保留每个提交、把分支接到最新主干上时用；<b>squash</b>：一个功能的零碎提交想合成一个干净提交时用。</p>" }], history: [] },
-  { id: "png", title: "生成一张 300×200 的纯色 PNG", station: "studio", source: "ember", model: "deepseek-flash", models: ["deepseek-flash"], people: ["me"], effort: "", state: "done", when: "09:29",
+  { id: "png", title: "生成一张 300×200 的纯色 PNG", station: "willow", source: "ember", model: "deepseek-flash", models: ["deepseek-flash"], people: ["me"], effort: "", state: "done", when: "09:29",
     messages: [{ mine: true, text: "用 python3 生成一张 300×200 的纯色 PNG，发给我" }, { agent: true, html: "<p>好了，纯 Python 手写的 PNG 编码器，没依赖 Pillow。</p>", image: true }], history: [] },
-  { id: "deploy", title: "部署 ember cloud 到生产", station: "studio", source: "slack", model: "deepseek-v4-pro", models: ["deepseek-v4-pro", "claude-sonnet-5"], people: ["me", "lin"], effort: "high", state: "failed", when: "昨天",
+  { id: "deploy", title: "部署 ember cloud 到生产", station: "willow", source: "slack", model: "deepseek-v4-pro", models: ["deepseek-v4-pro", "claude-sonnet-5"], people: ["me", "lin"], effort: "high", state: "failed", when: "昨天",
     messages: [{ mine: true, text: "部署一下 ember cloud" }, { agent: true, html: "<p>部署失败：wrangler 需要重新登录（<code>Authentication error [code: 10000]</code>）。</p>" }], history: [] },
 ];
 const byId = (id) => sessions.find((s) => s.id === id);
@@ -247,7 +247,7 @@ render.newchat = (el) => {
     <div class="scroll">
       <div class="nc-hero"><img src="assets/illus-new-chat.svg" alt=""><h2>想让 agent 做什么？</h2><p>选好在哪台机器、用什么模型，然后说就行。</p></div>
       <div class="nc-suggest">
-        <button data-s="跑一下测试，失败的话看看是哪个">跑一下测试，失败的话看看是哪个<small>常用 · studio</small></button>
+        <button data-s="跑一下测试，失败的话看看是哪个">跑一下测试，失败的话看看是哪个<small>常用 · willow</small></button>
         <button data-s="看看这台机器的磁盘和内存">看看这台机器的磁盘和内存<small>常用 · 任意 station</small></button>
         <button data-s="帮我 review 最近一个 PR">帮我 review 最近一个 PR<small>最近用过</small></button>
       </div></div>
@@ -273,7 +273,7 @@ render.newchat = (el) => {
     const s = { id: "new" + Date.now(), title: input.textContent.trim(), station: pick.station.name, source: "ember", model: pick.model, models: [pick.model], people: ["me"], effort: pick.effort === "默认" ? "" : pick.effort, state: "running", when: "进行中",
       messages: [{ mine: true, text: input.textContent.trim() }], history: [["recv", "收到来自 你 的消息", input.textContent.trim()]] };
     sessions.unshift(s);
-    startRun(s, ["启动 Claude Code", "思考", "查看工作区", "运行命令", "写回复"], "看了一下：studio 的磁盘还剩 311 GB，内存用了 30 GB / 64 GB，都很宽裕。");
+    startRun(s, ["启动 Claude Code", "思考", "查看工作区", "运行命令", "写回复"], "看了一下：willow 的磁盘剩余充足，内存使用正常。");
     stack.pop(); el.remove(); setRoot("home"); push("chat", s.id);
   };
 };
@@ -326,11 +326,11 @@ render.me = (el) => {
 
 render.lock = (el) => {
   showTabbar(false);
-  const s = byId("zork");
+  const s = byId("sample-app");
   el.innerHTML = `<div class="lock"><div class="lock-date">9 月 26 日 星期五</div><div class="lock-time">9:41</div>
-    <div class="la"><div class="la-head">${modelLogo(s.model, "la-logo")}<div class="t"><b>${esc(s.title)}</b><small data-la-step>正在${esc(s.steps[s.step ?? 0])}</small></div><small style="opacity:.8">studio</small></div>
+    <div class="la"><div class="la-head">${modelLogo(s.model, "la-logo")}<div class="t"><b>${esc(s.title)}</b><small data-la-step>正在${esc(s.steps[s.step ?? 0])}</small></div><small style="opacity:.8">willow</small></div>
       <div class="la-bar"><div data-la-bar style="width:${((s.step ?? 0) + 1) / s.steps.length * 100}%"></div></div><div class="la-foot"><span>gpt-6-astra · medium</span><span>已运行 2 分 14 秒</span></div></div>
-    <div class="lock-note"><div class="banner-head"><img src="assets/blocked.svg" alt="">ember · studio<span>3 分钟前</span></div><b>staging 告警：需要你决定</b><p>要我把告警规则改成 UTC 并重启 notifier 吗？</p>
+    <div class="lock-note"><div class="banner-head"><img src="assets/blocked.svg" alt="">ember · willow<span>3 分钟前</span></div><b>staging 告警：需要你决定</b><p>要我把告警规则改成 UTC 并重启 notifier 吗？</p>
       <div class="quick"><button>改吧</button><button>先别</button><button>打开</button></div></div>
     <div class="lock-hint">长按通知可以直接回复 · 上滑解锁</div></div>`;
   el.querySelectorAll(".lock-note .quick button").forEach((b, i) => (b.onclick = () => { if (i === 2) go("chat:staging"); else { answerBlock(byId("staging"), i === 0 ? "改吧，现在重启" : "先别重启"); b.closest(".lock-note").innerHTML = `<p>已回复：${i === 0 ? "改吧，现在重启" : "先别重启"}</p>`; } }));
@@ -410,7 +410,7 @@ function openWorkspaces() {
 
 /** The chat's own page: who takes part (each agent leads to its history), notifications, actions. */
 function openChatInfo(s) {
-  const agents = s.models.map((m, i) => ({ m, state: i === 0 ? s.state : "done", station: i === 0 ? s.station : "mac-mini" }));
+  const agents = s.models.map((m, i) => ({ m, state: i === 0 ? s.state : "done", station: i === 0 ? s.station : "birch" }));
   const label = { block: "在 block", running: "进行中", done: "空闲", failed: "失败" };
   const sh = sheet(`<div class="sheet-grab"><i></i></div><div class="sheet-head"><b>对话信息</b></div><div class="scroll">
     <div class="group-label">参与的 agent · 点开看它的执行历史</div>
@@ -477,7 +477,7 @@ setInterval(() => {
   const top = stack.at(-1);
   if (top?.name === "chat" && top.el._session) drawChat(top.el, top.el._session);
   if (top?.name === "home") document.querySelectorAll("[data-live]").forEach((n) => { const s = byId(n.dataset.live); if (s?.state === "running") n.textContent = s.steps[s.step ?? 0]; else refreshHome(); });
-  if (top?.name === "lock") { const s = byId("zork"); const st = $("[data-la-step]", top.el); if (st) { st.textContent = "正在" + s.steps[s.step ?? 0]; $("[data-la-bar]", top.el).style.width = ((s.step ?? 0) + 1) / s.steps.length * 100 + "%"; } }
+  if (top?.name === "lock") { const s = byId("sample-app"); const st = $("[data-la-step]", top.el); if (st) { st.textContent = "正在" + s.steps[s.step ?? 0]; $("[data-la-bar]", top.el).style.width = ((s.step ?? 0) + 1) / s.steps.length * 100 + "%"; } }
 }, 2000);
 
 // ── push & theme ─────────────────────────────────────────────────
@@ -485,7 +485,7 @@ $("#sim-push").onclick = () => {
   const s = byId("staging");
   if (s.state !== "block") Object.assign(s, { state: "block", when: "刚刚" });
   const b = $("#banner");
-  b.innerHTML = `<div class="banner-head"><img src="assets/blocked.svg" alt="">ember · studio<span>现在</span></div><b>staging 告警：需要你决定</b><p>要我把告警规则改成 UTC 并重启 notifier 吗？</p>`;
+  b.innerHTML = `<div class="banner-head"><img src="assets/blocked.svg" alt="">ember · willow<span>现在</span></div><b>staging 告警：需要你决定</b><p>要我把告警规则改成 UTC 并重启 notifier 吗？</p>`;
   b.hidden = false; requestAnimationFrame(() => b.classList.add("show"));
   b.onclick = () => { b.classList.remove("show"); go("chat:staging"); };
   setTimeout(() => b.classList.remove("show"), 5000);
@@ -499,7 +499,7 @@ function toggleTheme() {
 }
 $("#sim-theme").onclick = toggleTheme;
 
-// Keep the zork demo session moving from the start.
-Object.assign(byId("zork"), { step: 3, elapsed: 134 });
+// Keep the sample-app demo session moving from the start.
+Object.assign(byId("sample-app"), { step: 3, elapsed: 134 });
 Object.assign(byId("weekly"), { step: 1, elapsed: 40 });
 setRoot("home");

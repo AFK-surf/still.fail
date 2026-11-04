@@ -1,5 +1,8 @@
 # Station 之间分享东西（设计稿）
 
+> 下面例子和测量中的机器名经过匿名化，不是对读者环境的要求。
+
+
 > 状态：已实现（分支 station-share）。cloud 不参与分享（见「cloud：什么都不记」）；实现跟下面设计的其他出入见文末。chat EMBER/1791121239.467000。
 
 ## 要解决的事
@@ -67,7 +70,7 @@
 Claude Code 已经有现成的路子。`machine` profile 就是靠 `CLAUDE_CODE_OAUTH_TOKEN` 把 access token 交给进程，进程自己不刷新，token 快过期时 station 带着新 token 重启这个进程（resume）。见 `agents/machine-logins.ts`，以及 `agents/claude.ts` 里的 `machineToken` / `machineExpires`。
 
 - `agents/claude.ts`：`isMachine(profile)` 那一支扩成「profile 的 token 由别处给」：本机登录给 `machineToken`，分享来的给 `share.lend`。过期前重启的逻辑不变；借不到就跟本机登录读不到一样，开不了这一轮。
-- `agents/codex.ts`：Codex 用 `auth.json`，会自己用 refresh token 刷新。**要先在 studio 上验证**：给 Codex 一个只有 access token、没有可用 refresh token 的 `auth.json`，它会不会一直用到过期，过期时是不是干净地报错（station 再借一个、写回、重启）。如果不行，备选方案是让借用方的 Codex 走 station 本地的一个转发：用 `codexOverrides` 把 ChatGPT 后端的地址指到本机，由 station 换上借来的 token。
+- `agents/codex.ts`：Codex 用 `auth.json`，会自己用 refresh token 刷新。**要先用隔离的测试账号验证**：给 Codex 一个只有 access token、没有可用 refresh token 的 `auth.json`，它会不会一直用到过期，过期时是不是干净地报错（station 再借一个、写回、重启）。如果不行，备选方案是让借用方的 Codex 走 station 本地的一个转发：用 `codexOverrides` 把 ChatGPT 后端的地址指到本机，由 station 换上借来的 token。
 - host 一侧：`accounts/oauth.ts` 照旧在本机的锁下刷新。整个 workspace 只有 host 拿着 refresh token，所以刷新时不需要再问 cloud。
 - 配额：只有 host 读（`accounts/quota.ts`），通过 `share.watch` 推给使用方。使用方的 `sessions/accounts.ts`（`setHealth`、`spent`）用推来的值；本地撞到额度时发 `share.spent`。
 - 检查（`profile.check`）：使用方不去直接调 provider，而是问 host；联系不上 host 时，状态显示「host 不在线」，pool 不选它。
@@ -132,10 +135,10 @@ core（`client/core-ts`）：
 
 界面（web 的 `cloud/settings.tsx` 里的 `RuntimeSettings`、`pages/Accounts.tsx`、`ProfileCard.tsx`、记忆页、`mobile/Profiles.tsx`，安卓的 `screens/Profiles.kt`、`data/Accounts.kt`）：
 
-- **Profile 列表**：一条平的列表，不再按 station 分组。副标题：没分享的写「只在 ● office-linux」；分享出去的订阅写「登录在 ● studio」；可用范围不是全部时写「只给 studio、mac-mini」。只在出问题时上色：订阅登录的那台离线时，整行变淡，标红「macbook 离线」。
+- **Profile 列表**：一条平的列表，不再按 station 分组。副标题：没分享的写「只在 ● office-linux」；分享出去的订阅写「登录在 ● test-a」；可用范围不是全部时写「只给 test-a、mac-mini」。只在出问题时上色：订阅登录的那台离线时，整行变淡，标红「macbook 离线」。
 - **详情页**多一个开关「分享给其他 station」（关着时副标题「现在只在 office-linux 上用」）。打开后再出现两行：
   - 「登录在」（只有订阅才有）+「换」。那台离线时按钮不可用，并写明「macbook 上线后才能换」。点「换」弹出 station 列表，点一台就开始交接，那一行转圈，离线的灰掉。
-  - 「可用的 station：全部 / studio、mac-mini」+「改」。弹出勾选列表；订阅登录的那台锁定勾着。下面一行小字说明以后新加的 station 会不会自动加进来。
+  - 「可用的 station：全部 / test-a、mac-mini」+「改」。弹出勾选列表；订阅登录的那台锁定勾着。下面一行小字说明以后新加的 station 会不会自动加进来。
 - **添加 Profile**：流程不变，加好后只在那台用，要分享就去详情页打开开关。
 - **记忆**：一个列表，每个 skill 跟 Profile 一样有分享开关和「可用的 station」。两台同时改了同一个文件时，标黄「两台同时改了，agent 在合并」。开关下面一行灰字说哪几台在用（「使用中：B」）；哪台该有却没用上，各一行标黄说原因（对方拒收名字、对方有同名的 skill 优先用自己的、被拒收），内容超过限制停了同步也标黄一行。拒收照样按退避重试，对方升级后自动补上：host 在 `state.json` 的 `hosted[id].missing`/`unread` 记着，使用方每次运行问 `share.version` 时带上 `hidden`（有没有因同名没链进去）。
 
@@ -169,10 +172,10 @@ core（`client/core-ts`）：
 - **使用方怎么知道 host 不在**：借 token、问状态失败就记下联系不上（overview 的 `share.reachable`），之后按上面的退避再试，通了就把借来的订阅重新检查一遍。客户端把「cloud 说它离线」和「借用方联系不上它」都当作 host 不在。
 - **换 host 只能由原 host 交出**（订阅和 key 一样），没有做「原 host 不在时把 key、skill 交给别台」。
 - **`MEMORY.md` 不分享**，只分享 skills；记忆页仍按 station 分组，每个 skill 展开后有分享开关，分享来的标「来自 X」。同名时本台自己的 skill 优先，分享来的不链接进去。
-- **Codex 订阅**：在 studio 上验证过（codex-cli 0.160.0），`auth.json` 里只有 access token、refresh token 是假的、`last_refresh` 是现在时，Codex 照常用到过期，不会自己去刷新；token 坏了干净地报 401 退出。ChatGPT 的 access token 约 10 天有效，借用方的 app-server 在离过期 6 小时内、没有会话在跑时重启并重新借。host 只在自己没有 Codex 进程用这个登录时才替它续期（续期会换掉 refresh token，正在跑的 Codex 手里还是旧的）。
+- **Codex 订阅**：在 test-a 上验证过（codex-cli 0.160.0），`auth.json` 里只有 access token、refresh token 是假的、`last_refresh` 是现在时，Codex 照常用到过期，不会自己去刷新；token 坏了干净地报 401 退出。ChatGPT 的 access token 约 10 天有效，借用方的 app-server 在离过期 6 小时内、没有会话在跑时重启并重新借。host 只在自己没有 Codex 进程用这个登录时才替它续期（续期会换掉 refresh token，正在跑的 Codex 手里还是旧的）。
 
 ## 测试
 
 - `station/test/share.test.ts`：两台 station、一个只给成员名单的假 cloud，验证 key 的复制与同步、host 离线时副本还在、停止分享后删掉、按名单拒绝、借订阅 token（host 不在时借不到）、交出订阅（登录搬过去，原 host 留副本、id 不变）、skill 的复制、链接、改动回传、旧版本上的改动存成冲突文件。
 - `client/core-ts/test/profiles-view.test.ts`：workspace 的 Profile 列表去重、「登录在 / 只给 / 只在」、host 不在时不可用且排在前面。
-- 端到端：studio 上 dev cloud 加两台临时 TS station，在网页上分享订阅和 key、改可用的 station、分享 skill、把订阅换到另一台、关掉 host 后列表变灰，都是真的走 iroh 的站间请求。
+- 端到端：test-a 上 dev cloud 加两台临时 TS station，在网页上分享订阅和 key、改可用的 station、分享 skill、把订阅换到另一台、关掉 host 后列表变灰，都是真的走 iroh 的站间请求。

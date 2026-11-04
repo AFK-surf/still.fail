@@ -9,4 +9,5 @@ import {
 
 options(
   "is-main": true,
+  link: { "wasm-gc": { "use-js-builtin-string": true } },
 )

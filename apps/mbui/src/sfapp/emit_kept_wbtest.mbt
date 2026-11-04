@@ -113,7 +113,7 @@ fn emit_window(w : Double) -> @ui.Tester {
   } else {
     new_run()
     let src = fixture("chat")
-    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
     let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
     t.run_for(@ui.move_most_ms)
     t
@@ -174,7 +174,7 @@ test "the avatar going home draws its movement without laying out the chat again
   // A focused editor keeps its page live for its caret. Put the keyboard away to test the avatar's work alone.
   t.keyboard_gone()
   t.frames_owed()
-  clock.val = clock.val + fix_answer_ms
+  fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   let em = emits_of(emit_chat)
   let until = t.time() + Pose::Fold.ms() + Pose::Float.ms() + Pose::Spit.ms() + Pose::Return.ms() / 4.0

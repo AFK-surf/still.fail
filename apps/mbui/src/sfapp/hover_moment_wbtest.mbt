@@ -5,7 +5,7 @@
 /// A mouse's, a chat with no agent yet on 大屏: where its station's tag is in the chat's bar.
 fn hover_tag_tester() -> (@ui.Tester, Double, Double) raise {
   let t = decide_core([], "chat-station-tag", wide=true)
-  let tag = t.locate("Studio").filter(fn(p) { p.1 < 40.0 })
+  let tag = t.locate("Willow").filter(fn(p) { p.1 < 40.0 })
   guard tag.length() > 0 else { fail("no station's tag") }
   (t, tag[0].0, tag[0].1)
 }

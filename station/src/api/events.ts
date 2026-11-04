@@ -23,7 +23,7 @@
 // telling for all their streams, kept like the rest), and the one that comes back is told how they stand now. Its answer
 // says it was (`stillfail-resumed: 1`). Past KEPT_MS with nobody, nothing more is made, and nothing before can be resumed.
 //
-// The same again when the station process is replaced (an update: on ccvm 32 a day, each with every device's streams
+// The same again when the station process is replaced (an update: on a station 32 a day, each with every device's streams
 // cut): what is kept, and what each viewer's streams were told of their sidebar and overview, go over to the next
 // process (`handOver`, `takeUp`), which goes on with the same run and numbers, made and kept as while nobody follows,
 // so a stream that comes back to it is resumed as the old one would have. What it is to tell before then waits, and is
@@ -33,13 +33,18 @@
 //
 // Where the Rust re-read a job's log every second, a log is watched (fs.watch); the sidebar rows of a viewer are read
 // once per round for all their streams, off the main thread (the readers).
+//
+// What is said in a thread is told as the store wrote it: its entries come with the change, and are made into what the
+// pages show here (`said`), with nothing read first. What else a change touches (each viewer's thread, their sidebar,
+// a session's summary, a job) is read by the station's own reader (`told`: read/pool.ts), which nothing a device asks
+// takes: on a station (2026-11-02) both shared two readers, and a message just said was told 50 s late.
 import { type FSWatcher, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { type Viewer, readOnly } from "../mesh/credential.ts";
 import type { Lang } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { Readers } from "../read/pool.ts";
-import { type StoreChange, sees } from "../store/rows.ts";
+import { type EntryRow, type StoreChange, sees } from "../store/rows.ts";
 import type { Answer } from "./request.ts";
 import type { Clock } from "effect";
 import { Fibers } from "../ops/fibers.ts";
@@ -48,11 +53,12 @@ import { EventLog, KEPT_MS, type Kept } from "./event-log.ts";
 const PING_MS = 25_000;
 const HOST_MS = 10_000;
 /// What the agents spent is told at most this often (the first change at once, the last at the end of the while): it
-/// changes with every model call, some seconds apart while agents work, and each telling has a page showing usage, and every
-/// client from before it is read only so, read all of it again (some 200 KB).
+/// changes with every model call, some seconds apart while agents work, and each telling has a page showing usage read
+/// again what changed (every client from before it, all of it: some 200 KB).
 const USAGE_EVERY_MS = 60_000;
-/// What the streams tell is read before the pages a device asked (read/pool.ts): a message just said is not held up
-/// behind a heavy read.
+/// The most sidebar items a viewer away is remembered to read as they come back (`remember`): past it, all of it.
+const AWAY_MOST = 200;
+/// What the streams tell is read by the station's own reader (read/pool.ts), never behind what a device asked.
 const TOLD = { told: true };
 /// A stream's answer when it was told first what came after `since` (the client then reads nothing again).
 export const RESUMED = "stillfail-resumed";
@@ -68,6 +74,9 @@ export const eventsHandoverFile = (dataDir: string) => join(dataDir, "run", "eve
 /// What the events need of the rest of the station.
 export type EventsDeps = {
   readers: Readers;
+  /// What was just said in a thread (its entries, or its letters, as the store wrote them), as the pages show it (read/
+  /// views.ts `entryViews`: with its authors' names), in `lang`: made on this thread, nothing waited on.
+  said(thread: number, entries: EntryRow[], lang: Lang): unknown[];
   /// Its time (a TestClock in tests).
   clock?: Clock.Clock;
   subscribe(listener: (change: StoreChange) => void): () => void;
@@ -145,9 +154,17 @@ export const isFor = (to: To, { viewer, lang }: { viewer: Viewer; lang: Lang }, 
   (to.sees === undefined || ("ws" in to.sees ? sees(viewer, to.sees.ws) : (whose.seen?.(viewer, to.sees) ?? true)));
 
 /// What goes over to the next process (`eventsHandoverFile`), by whom (`pid`) and when it was written: what the log
-/// keeps, what each viewer's streams were told last of their sidebar (row id → JSON) and overview, by `viewerKey`, and
-/// who followed last.
-type Handed = { pid: number; at: number; log: Kept<To>; rows: [string, [string, string][]][]; overviews: [string, string][]; last: { viewer: Viewer; lang: Lang } | null };
+/// keeps, what each viewer's streams were told last of their sidebar (row id → JSON) and overview, by `viewerKey`, who
+/// followed last, and what changed of the sidebars of viewers with no stream (`away`; none from a process before it: all
+/// of each of theirs read again as they come back).
+type Handed = {
+  pid: number; at: number; log: Kept<To>; rows: [string, [string, string][]][]; overviews: [string, string][]; last: { viewer: Viewer; lang: Lang } | null;
+  away?: [string, Away][];
+};
+
+/// What changed of the sidebar of a viewer none of whose streams is here (in one language), while it is kept for one
+/// coming back: the items those sessions and threads make (read/views.ts `scopeOf`), or all of it (`whole`).
+type Away = { whole: boolean; sessions: string[]; threads: number[] };
 
 /// Removes what was handed over (taken up, or not to be): never a throw, as a stream waits on the taking up.
 function removeHanded(file: string) {
@@ -165,6 +182,15 @@ type Client = {
   host: boolean;
   /// Told what every session at work its viewer sees does (`running=1`, FOLLOWS).
   running: boolean;
+  /// Its client makes a thread's summary from what is said in it itself (`views=1`, client/core-ts/src/station/
+  /// thread-after.ts): none is read and told for it.
+  views: boolean;
+  /// Its client makes its sidebar's rows from what it is told itself (`rows=1`, client/core-ts/src/station/
+  /// rows-after.ts): what said, a session's summary, what its viewer pinned or dismissed reads no rows for it.
+  rows: boolean;
+  /// Its client makes its sidebar of the chat list the station makes once for everyone (`shared=1`, read/views.ts
+  /// `sharedChats`) and what is its viewer's own (client/core-ts/src/chat-row.ts): told each row as it changes.
+  shared: boolean;
   send(event: string, data: unknown): void;
   raw(text: string): void;
   /// What it follows besides (live sessions, job logs): ended with it.
@@ -186,7 +212,15 @@ export class Events {
   /// What each viewer's streams were last told of their sidebar (row id → JSON) and their overview (JSON), by viewer and
   /// language (`viewerKey`): what changes is told against it.
   private rowsTold = new Map<string, Map<string, string>>();
+  /// The chat list as it was told last to every stream that makes its sidebar of it (row id → JSON); null until it is
+  /// read whole (a process that took over tells nothing of it until then: a stream reads it whole as it opens).
+  private sharedTold: Map<string, string> | null = null;
   private overviewTold = new Map<string, string>();
+  /// For each viewer whose streams all went (by `viewerKey`), what changed of their sidebar since (`Away`): as one comes
+  /// back, only that is read (`cameBack`). Read whole at each, every device that came back (each link that moved, every
+  /// station update) had its viewer's whole sidebar read: 42 to 46 s a read on a station short of memory (2026-11-02), its
+  /// devices' every other read waiting behind it, up to 99 s.
+  private away = new Map<string, Away>();
   private deps: EventsDeps;
   /// What changed since the last round: sessions (their events), whose sidebars to read whole (`rowsAll`, `rows`), and the
   /// sessions and threads whose items alone to read again, for everyone (`items`) or one viewer (`viewerItems`).
@@ -195,6 +229,10 @@ export class Events {
     return {
       sessions: new Set<string>(), rowsAll: false, rows: new Set<string>(), overview: false,
       items: { sessions: new Set<string>(), threads: new Set<number>() }, viewerItems: new Map<string, Set<number>>(),
+      /// What a device that makes its rows itself puts in place from what it is told (`rows=1`): read for the others alone.
+      made: { sessions: new Set<string>(), threads: new Set<number>() }, madeViewerItems: new Map<string, Set<number>>(), madeRows: new Set<string>(),
+      /// By `viewerKey`: what changed of the sidebar of one come back while it was away (`cameBack`), read for it alone.
+      back: new Map<string, { sessions: Set<string>; threads: Set<number> }>(),
     };
   }
   /// The process state last told per session.
@@ -203,9 +241,11 @@ export class Events {
   private time: Fibers;
   private timers: (() => void)[] = [];
   private lastHost = "";
-  /// When usage was last told, and the telling waiting for the end of the while (USAGE_EVERY_MS).
+  /// When usage was last told, the telling waiting for the end of the while (USAGE_EVERY_MS), and when the earliest of
+  /// the calls recorded since it was told was made (null: one was recorded without saying when).
   private usageTold = -Infinity;
   private usageLater: (() => void) | null = null;
+  private usageFrom: number | null | undefined = undefined;
   /// What is read to be told once read (a thread's entries, a job): waited for before what is told goes over.
   private reading = new Set<Promise<void>>();
   /// Until what the process before this one handed over is taken up (`takeUp`): no stream is answered before, and what
@@ -255,6 +295,9 @@ export class Events {
           this.rowsTold = rows;
           this.overviewTold = overviews;
           this.last = handed.last;
+          // What changed of each viewer's sidebar meanwhile is what the process before kept; one that kept none (from
+          // before it): all of each of theirs, as they come back.
+          this.away = new Map(handed.away ?? [...rows.keys()].map((k): [string, Away] => [k, { whole: true, sessions: [], threads: [] }]));
           this.linger();
           log.info("events", "what the process before told goes on here", { ...this.log.state(), viewers: rows.size });
         }
@@ -279,7 +322,7 @@ export class Events {
     if (this.usageLater !== null) {
       this.usageLater();
       this.usageLater = null;
-      this.emit("usage", {}, {}, "usage");
+      this.tellUsage();
     }
     for (;;) {
       const telling = [...this.reading, ...(this.flushing ? [this.flushing] : [])];
@@ -296,7 +339,11 @@ export class Events {
     if (!listening) return removeHanded(file);
     // Who followed last, to read a thread's entries with: not their device's lock proof.
     const last = this.last && { viewer: { ...this.last.viewer, lockDevice: undefined }, lang: this.last.lang };
-    const handed: Handed = { pid: process.pid, at, log: this.log.kept(), rows: [...this.rowsTold].map(([k, told]) => [k, [...told]]), overviews: [...this.overviewTold], last };
+    // Viewers whose streams are here now are away from the next process until theirs come back: what changes of their
+    // sidebars from now is the next one's to remember.
+    const away = new Map(this.away);
+    for (const k of this.rowsTold.keys()) if (!away.has(k)) away.set(k, { whole: false, sessions: [], threads: [] });
+    const handed: Handed = { pid: process.pid, at, log: this.log.kept(), rows: [...this.rowsTold].map(([k, told]) => [k, [...told]]), overviews: [...this.overviewTold], last, away: [...away] };
     try {
       mkdirSync(dirname(file), { recursive: true });
       const tmp = `${file}.tmp-${process.pid}`;
@@ -368,26 +415,58 @@ export class Events {
       this.log.clear();
       this.rowsTold.clear();
       this.overviewTold.clear();
+      this.away.clear();
     });
   }
 
-  /// The sidebar rows of `viewer` (everyone's when null) may have changed.
-  rowsChanged(viewer: string | null) {
+  /// What a round (`dirty`) changes of the sidebar of viewer `k` (`viewerKey`), none of whose streams is here, added to
+  /// what changed of it since they all went (`away`); past AWAY_MOST items, all of it.
+  private remember(k: string, dirty: ReturnType<typeof Events.clean>) {
+    const email = k.split("\0")[0]!;
+    const was = this.away.get(k);
+    if (was?.whole) return;
+    const back = dirty.back.get(k);
+    const sessions = new Set([...(was?.sessions ?? []), ...dirty.items.sessions, ...dirty.made.sessions, ...(back?.sessions ?? [])]);
+    const threads = new Set([...(was?.threads ?? []), ...dirty.items.threads, ...dirty.made.threads, ...(dirty.viewerItems.get(email) ?? []), ...(dirty.madeViewerItems.get(email) ?? []), ...(back?.threads ?? [])]);
+    if (dirty.rowsAll || dirty.rows.has(email) || dirty.madeRows.has(email) || sessions.size + threads.size > AWAY_MOST) this.away.set(k, { whole: true, sessions: [], threads: [] });
+    else if (was !== undefined || sessions.size + threads.size > 0) this.away.set(k, { whole: false, sessions: [...sessions], threads: [...threads] });
+  }
+
+  /// A stream of viewer `k` (`viewerKey`) came back: what changed of their sidebar while none of theirs was here is read
+  /// for them, all of it where that was said (or the process before kept none: `takeUp`); nothing changed, nothing read.
+  private cameBack(k: string) {
+    const away = this.away.get(k);
+    this.away.delete(k);
+    if (away === undefined) return;
+    if (away.whole) return this.rowsChanged(k.split("\0")[0]!);
+    if (away.sessions.length === 0 && away.threads.length === 0) return;
+    this.dirty.back.set(k, { sessions: new Set(away.sessions), threads: new Set(away.threads) });
+    this.wake();
+  }
+
+  /// The sidebar rows of `viewer` (everyone's when null) may have changed; `made`: by what a device that makes its rows
+  /// itself is told (`rows=1`): theirs are not read for it.
+  rowsChanged(viewer: string | null, made = false) {
+    // Nothing of what may have changed is told: a device that makes its rows reads them whole (`chat-changed`).
+    if (!made) this.emit("chat-changed", {}, viewer === null ? {} : { email: viewer });
     if (viewer === null) this.dirty.rowsAll = true;
-    else this.dirty.rows.add(viewer);
+    else (made ? this.dirty.madeRows : this.dirty.rows).add(viewer);
     this.wake();
   }
 
   /// The sidebar items a change of these sessions and threads can touch may have changed (read/views.ts `scopeOf`), for
   /// everyone or one viewer: only those are read again.
-  private itemsChanged(of: { sessions?: string[]; threads?: number[] }, viewer: string | null = null) {
+  /// `made`: by what a device that makes its rows itself is told (`rows=1`): read for the others alone.
+  private itemsChanged(of: { sessions?: string[]; threads?: number[] }, viewer: string | null = null, made = false) {
+    const items = made ? this.dirty.made : this.dirty.items;
+    const byViewer = made ? this.dirty.madeViewerItems : this.dirty.viewerItems;
     if (viewer === null) {
-      for (const key of of.sessions ?? []) this.dirty.items.sessions.add(key);
-      for (const id of of.threads ?? []) this.dirty.items.threads.add(id);
+      for (const key of of.sessions ?? []) items.sessions.add(key);
+      for (const id of of.threads ?? []) items.threads.add(id);
     } else {
-      const threads = this.dirty.viewerItems.get(viewer) ?? new Set<number>();
+      const threads = byViewer.get(viewer) ?? new Set<number>();
       for (const id of of.threads ?? []) threads.add(id);
-      this.dirty.viewerItems.set(viewer, threads);
+      byViewer.set(viewer, threads);
     }
     this.wake();
   }
@@ -397,7 +476,7 @@ export class Events {
   /// told after it is told first, and their sidebar and overview as they are now (RESUMED says so), or `missed`.
   /// `brief`: the sessions followed have their transcript entries in brief (read/transcript.ts `brief`).
   /// `logins`: those logins' terminals, each a `login-screen` event (all its rows first, then the rows that changed).
-  async open(viewer: Viewer, lang: Lang, host: boolean, live: [string, number, number | null][], logs: [string, number][], since: string | null = null, brief = false, logins: string[] = [], running = false): Promise<Answer> {
+  async open(viewer: Viewer, lang: Lang, host: boolean, live: [string, number, number | null][], logs: [string, number][], since: string | null = null, brief = false, logins: string[] = [], running = false, views = false, rows = false, shared = false): Promise<Answer> {
     // Following the sessions at work itself, it follows none by name: a client that asks both is one that does not know
     // yet whether this station does (an older one follows those it names).
     const follows = running && this.deps.held !== undefined;
@@ -418,6 +497,9 @@ export class Events {
       lang,
       host,
       running: follows,
+      views,
+      rows,
+      shared: rows && shared,
       // Its own (a session's steps, a log, a host sample, `missed`): not of the log, and without an id (event-log.ts).
       send: (event, data) => push(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
       raw: push,
@@ -425,9 +507,12 @@ export class Events {
       end: () => remove(),
     };
     push("retry: 3000\n\n");
-    // Coming back where all that was told since is kept (their sidebar told on this run too).
+    // Said first: it makes its rows from here on, and reads from this station what only the station can say of them.
+    if (rows) client.send("made", { rows: true, marks: true, ...(shared ? { shared: true } : {}) });
+    // Coming back where all that was told since is kept (their sidebar told on this run too, or one that makes its rows
+    // itself from what was told).
     const k = viewerKey(viewer, lang);
-    const resumes = since !== null && this.rowsTold.has(k) && this.log.has(since);
+    const resumes = since !== null && (rows || this.rowsTold.has(k)) && this.log.has(since);
     if (since !== null && !resumes) {
       // Why, for the log: a station whose streams are never resumed has every client read it again each time.
       log.info("events", "a stream is not resumed", { since, ...this.log.state(), rows: this.rowsTold.has(k) });
@@ -437,11 +522,14 @@ export class Events {
       // Afresh: their sidebar as it is now is what its changes are told against from now (read before the stream
       // answers, so the client's own reading of it comes after); where it changed while none of their streams was
       // there, their other streams are told, and it is kept for one coming back. Their overview is told as it next is.
-      try {
+      // Not for one that makes its rows itself: it reads them as it opens, and nothing of them is told against for it
+      // (read here too, every stream read the whole sidebar twice, once of it for nothing).
+      if (!rows) try {
         this.tellRows(viewer, lang, JSON.parse(await this.deps.readers.read("chats", { viewer, archived: false }, lang)) as any[]);
       } catch (error) {
         log.warn("events", "sidebar rows not read", { error: (error as Error).message });
       }
+      this.away.delete(k);
       this.overviewTold.delete(k);
     }
     // The sessions at work its viewer sees, as each is now: from here on what each does comes as it does it (heldTold).
@@ -475,7 +563,7 @@ export class Events {
     // Read afresh: where the log is as it joins, an id alone (no event), so the next stream goes on from here even when
     // nothing is told meanwhile. On a quiet station a stream without it had no id to go on from, and each that a weak
     // link cut read the whole station again (a dozen reads). Clients from before skip a block without data.
-    if (!resumes && this.rowsTold.has(k)) client.raw(`id: ${this.log.at()}\n\n`);
+    if (!resumes && (rows || this.rowsTold.has(k))) client.raw(`id: ${this.log.at()}\n\n`);
     this.clients.push(client);
     this.last = { viewer, lang };
     this.lingering?.();
@@ -483,9 +571,9 @@ export class Events {
     // In the same turn as it joins: what was told since is told again, and what is told from now comes as to the rest.
     if (resumes) for (const told of this.log.after(since!)) if (this.reaches(client, told.to)) client.raw(told.text);
     // Coming back: their sidebar and overview as they are now, against what their streams were told of them last (what
-    // changed while none of theirs was there to be told).
+    // changed while none of theirs was there to be told): of the sidebar, what changed of it meanwhile alone.
     if (resumes) {
-      this.rowsChanged(viewer.email);
+      this.cameBack(k);
       this.overviewChanged();
     }
     if (this.clients.length === 1) {
@@ -629,8 +717,12 @@ export class Events {
     if (this.taking !== null) return void this.early.push(() => this.storeChanged(change));
     switch (change.type) {
       case "session":
+        // Its messages taken: how many it has yet to take, told now (its summary, read after, says it too): read
+        // behind the station's other tells can leave a person's message showing that it waits for its agent.
+        if (change.pending !== undefined) this.emit("session-pending", { key: change.key, pending: change.pending }, { sees: { session: change.key } });
         this.dirty.sessions.add(change.key);
-        this.itemsChanged({ sessions: [change.key] });
+        // Its summary is told (`session`): a device that makes its rows puts it in them.
+        this.itemsChanged({ sessions: [change.key] }, null, true);
         break;
       case "sessionRemoved":
         this.dirty.sessions.delete(change.key);
@@ -640,25 +732,17 @@ export class Events {
         this.itemsChanged({ sessions: [change.key] });
         break;
       case "thread": {
-        // Read as one who follows (or did last) would have it.
+        // Told as one who follows (or did last) would have it.
         const who = this.clients[0] ?? this.last;
         if (this.listening() && who && change.entries.length > 0) {
-          const first = change.entries[0].n;
-          const last = change.entries.at(-1)!.n;
-          // Entries as the pages show them (with their authors' names), read off the main thread.
-          this.whenRead(
-            this.deps.readers
-              .read("entries", { viewer: who.viewer, thread: change.id, params: [["from", String(first)], ["to", String(last)]] }, who.lang, TOLD)
-              .then((text) => this.emit("thread", { id: change.id, entries: JSON.parse(text).entries }, { sees: { thread: change.id } }), (e) => log.warn("events", "thread event not sent", { error: (e as Error).message })),
-          );
-          // And to each viewer, the thread as GET /threads/:id has it for them (their read position, their unread count):
-          // a client puts it in place rather than read it again after every message (a phone did some two a minute).
-          for (const { viewer, lang } of this.viewers(who).filter((v) => this.deps.seen?.(v.viewer, { thread: change.id }) ?? true)) {
-            const k = viewerKey(viewer, lang);
-            this.whenRead(this.deps.readers.read("thread", { viewer, id: change.id, lang }, lang, TOLD).then((text) => this.emit("thread-view", JSON.parse(text), { viewer: k }, `thread-view\0${change.id}\0${k}`), () => {}));
-          }
+          // What was said, as GET /threads/:id/entries has it, at once.
+          this.tellSaid("thread", change.id, change.entries, who.lang);
+          this.tellThreadViews(change.id, who);
         }
-        this.itemsChanged({ threads: [change.id] });
+        // What was said is told (`thread`): a device that makes its rows puts it in them. Its sessions changing is not
+        // (nor what else changes which rows there are and what they say): told so (`chat-changed`), it reads its rows.
+        if (change.entries.length === 0) this.emit("chat-changed", { thread: change.id }, { sees: { thread: change.id } });
+        this.itemsChanged({ threads: [change.id] }, null, change.entries.length > 0);
         break;
       }
       case "letters": {
@@ -666,27 +750,19 @@ export class Events {
         // the thread as each viewer has it (how many letters, how far their log goes).
         const who = this.clients[0] ?? this.last;
         if (this.listening() && who && change.letters.length > 0) {
-          const first = change.letters[0]!.n;
-          const last = change.letters.at(-1)!.n;
-          this.whenRead(
-            this.deps.readers
-              .read("letters", { viewer: who.viewer, thread: change.id, params: [["from", String(first)], ["to", String(last)]] }, who.lang, TOLD)
-              .then((text) => this.emit("letters", { id: change.id, letters: JSON.parse(text).letters }, { sees: { thread: change.id } }), (e) => log.warn("events", "letters event not sent", { error: (e as Error).message })),
-          );
-          for (const { viewer, lang } of this.viewers(who).filter((v) => this.deps.seen?.(v.viewer, { thread: change.id }) ?? true)) {
-            const k = viewerKey(viewer, lang);
-            this.whenRead(this.deps.readers.read("thread", { viewer, id: change.id, lang }, lang, TOLD).then((text) => this.emit("thread-view", JSON.parse(text), { viewer: k }, `thread-view\0${change.id}\0${k}`), () => {}));
-          }
+          this.tellSaid("letters", change.id, change.letters, who.lang);
+          this.tellThreadViews(change.id, who);
         }
         break;
       }
       case "threadRemoved":
         this.emit("thread-removed", { id: change.id }, { sees: { ws: change.ws ?? null } });
-        this.rowsChanged(null);
+        // Told so: a device that makes its rows takes its own out.
+        this.rowsChanged(null, true);
         break;
       case "read":
         this.emit("read", { viewer: change.viewer, thread: change.thread, n: change.n }, { email: change.viewer, sees: { thread: change.thread } });
-        this.itemsChanged({ threads: [change.thread] }, change.viewer);
+        this.itemsChanged({ threads: [change.thread] }, change.viewer, true);
         break;
       case "identities":
         // Who the viewer is on Slack: their overview says it, and their rows count it.
@@ -695,7 +771,12 @@ export class Events {
         break;
       case "pins":
       case "dismissed":
-        this.rowsChanged(change.viewer);
+        // What the viewer wrote, as written, to their own streams: a device that makes its sidebar rows itself puts it in
+        // place (`pin`, `dismiss`, `kept`); those that do not read their rows again.
+        if (change.type === "pins" && change.session !== undefined) this.emit("pin", { session: change.session, at: change.at ?? null }, { email: change.viewer });
+        if (change.type === "dismissed" && change.card !== undefined) this.emit("dismiss", change.card, { email: change.viewer, sees: { thread: change.card.thread } });
+        if (change.type === "dismissed" && change.kept !== undefined) this.emit("kept", change.kept, { email: change.viewer, sees: { thread: change.kept.thread } });
+        this.rowsChanged(change.viewer, (change.type === "pins" && change.session !== undefined) || (change.type === "dismissed" && (change.card !== undefined || change.kept !== undefined)));
         break;
       case "job":
         // A job as GET /jobs/:id answers it, so a client holding it puts it in place without reading anything again.
@@ -705,9 +786,17 @@ export class Events {
         this.emit("job-removed", { id: change.id, session: change.session }, { sees: { session: change.session } }, `job\0${change.id}`);
         break;
       case "usage":
-        // Model calls were recorded: a page showing usage reads it again (it is too big to send to everyone).
+        // Model calls were recorded: a page showing usage reads again what they changed, from the day of the earliest
+        // (it is too big to send to everyone).
+        this.usageFrom = this.usageFrom === null || change.from === undefined ? null : Math.min(this.usageFrom ?? Infinity, change.from);
         this.usageChanged();
         break;
+      case "chatMark": {
+        // As written, to those who see the chat (`chat-mark`): a device that makes its sidebar itself puts it in place.
+        const { type: _, ...mark } = change;
+        this.emit("chat-mark", mark, { sees: change.thread !== null ? { thread: change.thread } : { session: change.session } });
+        break;
+      }
       case "processes":
       case "decisionChecks":
         this.overviewChanged();
@@ -715,17 +804,77 @@ export class Events {
     }
   }
 
+  /// What was said in a thread (`entries` of `thread`, or its letters), told to every stream whose viewer sees it as the
+  /// pages show it (`said`): made from what the store wrote, never waiting on a read.
+  private tellSaid(event: "thread" | "letters", id: number, entries: EntryRow[], lang: Lang) {
+    let views: unknown[];
+    try {
+      views = this.deps.said(id, entries, lang);
+    } catch (error) {
+      return log.warn("events", `${event} event not sent`, { error: (error as Error).message });
+    }
+    this.emit(event, event === "thread" ? { id, entries: views } : { id, letters: views }, { sees: { thread: id } });
+  }
+
+  /// The thread as GET /threads/:id has it for each viewer (their read position, their unread count): a client puts it in
+  /// place rather than read it again after every message (a phone did some two a minute). Every viewer's in one read
+  /// (read/ops-sessions.ts `threadViews`): one a viewer, one person's devices in two languages or workspaces read the
+  /// same thread again each, after every message.
+  private tellThreadViews(id: number, who: { viewer: Viewer; lang: Lang }) {
+    const viewers = this.viewers(who).filter((v) => (this.deps.seen?.(v.viewer, { thread: id }) ?? true) && !this.makesViews(v));
+    if (viewers.length === 0) return;
+    const asked = { id, viewers: viewers.map(({ viewer, lang }) => ({ viewer, lang })) };
+    this.whenRead(
+      this.deps.readers.read("threadViews", asked, viewers[0]!.lang, TOLD).then(
+        (text) => {
+          const views = JSON.parse(text) as unknown[];
+          viewers.forEach(({ viewer, lang }, i) => {
+            if (views[i] === null || views[i] === undefined) return;
+            const k = viewerKey(viewer, lang);
+            this.emit("thread-view", views[i], { viewer: k }, `thread-view\0${id}\0${k}`);
+          });
+        },
+        () => {},
+      ),
+    );
+  }
+
+  /// Whether every stream here of a viewer makes a thread's summary from what is said in it itself (`views=1`): then
+  /// none is read and told for them. The station tells what it writes as it writes it, and leaves what that makes of
+  /// a thread to the device: read for each viewer after every message, it was read from the disk while memory was short.
+  private makesViews(v: { viewer: Viewer; lang: Lang }): boolean {
+    const k = viewerKey(v.viewer, v.lang);
+    const theirs = this.clients.filter((c) => viewerKey(c.viewer, c.lang) === k);
+    return theirs.length > 0 && theirs.every((c) => c.views);
+  }
+
+  /// Whether every stream here of a viewer makes its sidebar's rows from what it is told itself (`rows=1`).
+  private makesRows(v: { viewer: Viewer; lang: Lang }): boolean {
+    const k = viewerKey(v.viewer, v.lang);
+    const theirs = this.clients.filter((c) => viewerKey(c.viewer, c.lang) === k);
+    return theirs.length > 0 && theirs.every((c) => c.rows);
+  }
+
   /// Usage told, at most once a USAGE_EVERY_MS.
   private usageChanged() {
     if (this.usageLater !== null) return;
     const tell = () => {
       this.usageLater = null;
-      this.usageTold = this.time.now();
-      this.emit("usage", {}, {}, "usage");
+      this.tellUsage();
     };
     const wait = this.usageTold + USAGE_EVERY_MS - this.time.now();
     if (wait <= 0) tell();
     else this.usageLater = this.time.after(wait, tell);
+  }
+
+  /// That usage changed, with when the earliest of the calls recorded since it was told last was made (`from`: what a
+  /// page holding it reads again, from that day on; none: all of it). Each telling is kept on its own, not as the
+  /// latest of them alone: one who comes back is told each it missed, and reads again from the earliest.
+  private tellUsage() {
+    const from = this.usageFrom;
+    this.usageFrom = undefined;
+    this.usageTold = this.time.now();
+    this.emit("usage", typeof from === "number" ? { from } : {});
   }
 
   /// Each viewer and language streams are followed in (who followed last, while none is), once.
@@ -740,7 +889,7 @@ export class Events {
     this.flushing = new Promise<void>((resolve) => setImmediate(resolve)).then(() => this.flush()).finally(() => {
       this.flushing = null;
       const d = this.dirty;
-      if (d.sessions.size > 0 || d.rowsAll || d.rows.size > 0 || d.overview || d.items.sessions.size > 0 || d.items.threads.size > 0 || d.viewerItems.size > 0) this.wake();
+      if (d.sessions.size > 0 || d.rowsAll || d.rows.size > 0 || d.overview || d.items.sessions.size > 0 || d.items.threads.size > 0 || d.viewerItems.size > 0 || d.back.size > 0) this.wake();
     });
   }
 
@@ -788,28 +937,45 @@ export class Events {
         }),
       );
     }
+    await this.tellShared(dirty);
     // Each viewer's sidebar: read whole where it may all have changed, or nothing of it is told against yet (it could
     // not be read); else only the items the changes can touch.
     const seen = new Set<string>();
-    const everyone = this.clients.filter((c) => !seen.has(viewerKey(c.viewer, c.lang)) && seen.add(viewerKey(c.viewer, c.lang)));
-    const itemsOf = (viewer: Viewer) => new Set([...dirty.items.threads, ...(dirty.viewerItems.get(viewer.email) ?? [])]);
-    const touched = (viewer: Viewer) => dirty.items.sessions.size > 0 || itemsOf(viewer).size > 0;
-    const whole = (v: { viewer: Viewer; lang: Lang }) => dirty.rowsAll || dirty.rows.has(v.viewer.email) || (touched(v.viewer) && !this.rowsTold.has(viewerKey(v.viewer, v.lang)));
+    // Those whose streams all make their rows themselves are told nothing of them: what changed of them they read.
+    const everyone = this.clients.filter((c) => !seen.has(viewerKey(c.viewer, c.lang)) && seen.add(viewerKey(c.viewer, c.lang))).filter((v) => !this.makesRows(v));
+    // Viewers kept for, none of whose streams is here: what this round changes of their sidebar is remembered, for one
+    // coming back to read that alone (`cameBack`).
+    for (const k of this.rowsTold.keys()) if (!seen.has(k)) this.remember(k, dirty);
+    const back = (v: { viewer: Viewer; lang: Lang }) => dirty.back.get(viewerKey(v.viewer, v.lang));
+    // A device that makes its rows itself is told what it makes them of: none of that is read for it.
+    const readsMade = (v: { viewer: Viewer; lang: Lang }) => !this.makesRows(v);
+    const itemsOf = (v: { viewer: Viewer; lang: Lang }) => new Set([...dirty.items.threads, ...(dirty.viewerItems.get(v.viewer.email) ?? []), ...(back(v)?.threads ?? []), ...(readsMade(v) ? [...dirty.made.threads, ...(dirty.madeViewerItems.get(v.viewer.email) ?? [])] : [])]);
+    const sessionsOf = (v: { viewer: Viewer; lang: Lang }) => new Set([...dirty.items.sessions, ...(back(v)?.sessions ?? []), ...(readsMade(v) ? dirty.made.sessions : [])]);
+    const touched = (v: { viewer: Viewer; lang: Lang }) => sessionsOf(v).size > 0 || itemsOf(v).size > 0;
+    const whole = (v: { viewer: Viewer; lang: Lang }) => dirty.rowsAll || dirty.rows.has(v.viewer.email) || (readsMade(v) && dirty.madeRows.has(v.viewer.email)) || (touched(v) && !this.rowsTold.has(viewerKey(v.viewer, v.lang)));
+    // The viewers the same changes touch alike are read together (read/ops.ts `chatRowsOf`): one read, what the first
+    // read in serving the others. One a viewer, one person's devices in two languages or workspaces read the same chats
+    // again each (four of them on a station, 2026-11-02), each from the disk while memory was short.
+    const alike = new Map<string, { sessions: string[]; threads: number[]; viewers: { viewer: Viewer; lang: Lang }[] }>();
+    for (const v of everyone.filter((v) => !whole(v) && touched(v))) {
+      const sessions = [...sessionsOf(v)].sort();
+      const threads = [...itemsOf(v)].sort((a, b) => a - b);
+      const of = JSON.stringify([sessions, threads]);
+      const group = alike.get(of) ?? { sessions, threads, viewers: [] };
+      group.viewers.push(v);
+      alike.set(of, group);
+    }
     await Promise.all(
-      everyone
-        .filter((v) => !whole(v))
-        .map(async ({ viewer, lang }) => {
-          const threads = itemsOf(viewer);
-          if (!touched(viewer)) return;
-          let read: { rows: any[]; scope: string[] };
-          try {
-            read = JSON.parse(await this.deps.readers.read("chatRows", { viewer, sessions: [...dirty.items.sessions], threads: [...threads] }, lang, TOLD));
-          } catch (error) {
-            log.warn("events", "sidebar rows not read", { error: (error as Error).message });
-            return;
-          }
-          this.tellSomeRows(viewer, lang, read.rows, read.scope);
-        }),
+      [...alike.values()].map(async ({ sessions, threads, viewers }) => {
+        let read: { rows: any[]; scope: string[] }[];
+        try {
+          read = JSON.parse(await this.deps.readers.read("chatRowsOf", { viewers: viewers.map(({ viewer, lang }) => ({ viewer, lang })), sessions, threads }, viewers[0]!.lang, TOLD));
+        } catch (error) {
+          log.warn("events", "sidebar rows not read", { error: (error as Error).message });
+          return;
+        }
+        viewers.forEach(({ viewer, lang }, i) => this.tellSomeRows(viewer, lang, read[i]!.rows, read[i]!.scope));
+      }),
     );
     const viewers = everyone.filter(whole);
     if (viewers.length === 0) return;
@@ -835,6 +1001,37 @@ export class Events {
         this.tellRows(viewer, lang, rows);
       }),
     );
+  }
+
+  /// The chat list's rows a round's changes touch, made once for everyone (read/views.ts `sharedChats`), each told to
+  /// the streams that see it as it changed (`chat-shared`; gone: `chat-shared-removed`). None while no stream makes its
+  /// sidebar of it.
+  private async tellShared(dirty: ReturnType<typeof Events.clean>) {
+    if (!this.clients.some((c) => c.shared)) return;
+    const sessions = [...new Set([...dirty.items.sessions, ...dirty.made.sessions])];
+    const threads = [...new Set([...dirty.items.threads, ...dirty.made.threads])];
+    const whole = this.sharedTold === null || dirty.rowsAll;
+    if (!whole && sessions.length === 0 && threads.length === 0) return;
+    let read: { rows: any[]; scope: string[] | null };
+    try {
+      read = JSON.parse(await this.deps.readers.read("sharedOf", whole ? { sessions: null, threads: null } : { sessions, threads }, "zh", TOLD));
+    } catch (error) {
+      return log.warn("events", "the chat list not read", { error: (error as Error).message });
+    }
+    const told = this.sharedTold;
+    const now = new Map(read.rows.map((r) => [String(r.id ?? ""), JSON.stringify(r)]));
+    if (told === null) return void (this.sharedTold = now);
+    for (const row of read.rows) {
+      const id = String(row.id ?? "");
+      if (told.get(id) === now.get(id)) continue;
+      told.set(id, now.get(id)!);
+      this.emit("chat-shared", row, { sees: { ws: row.ws ?? null } }, `chat-shared\0${id}`);
+    }
+    const gone = read.scope === null ? [...told.keys()].filter((id) => !now.has(id)) : read.scope.filter((id) => !now.has(id) && told.has(id));
+    for (const id of gone) {
+      told.delete(id);
+      this.emit("chat-shared-removed", { id }, {}, `chat-shared\0${id}`);
+    }
   }
 
   /// Some of a viewer's sidebar items as they are now (`rows`, of those `scope` names: one named and not among them is gone

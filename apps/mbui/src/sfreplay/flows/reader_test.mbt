@@ -1,6 +1,7 @@
-// 98-reader (e2e/traces/reader.trace: Mini1 against the local still.fail, 47 messages): the reader's rest. A novel in
+// 98-reader (e2e/traces/reader.trace: a local still.fail, 47 messages): the reader's rest. A novel in
 // GB18030 read as the Android app reads it (its words, not replacement marks); 下载 in its top bar (the bars shown by a
 // tap): the whole file kept on the device.
+// before it: 15-drive-lend
 
 ///|
 test "98-reader" {

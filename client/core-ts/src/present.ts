@@ -113,7 +113,15 @@ export function times(value: unknown, c: Clock): unknown {
     }
     const count = u64(map.resetCount);
     if (count !== undefined) {
-      map.resetText = t("core-views.present.resets_left", { n: count });
+      const expiry: string[] = [];
+      if (count > 0 && Array.isArray(map.resetExpiries)) {
+        const expiries = map.resetExpiries.filter((at: unknown): at is number => typeof at === "number" && Number.isSafeInteger(at) && at > 0)
+          .sort((a: number, b: number) => a - b).slice(0, count);
+        if (expiries.some((at: number) => at <= c.now)) expiry.push(t("core-views.present.resets_expired"));
+        const future = expiries.filter((at: number) => at > c.now).map((at: number) => format.preciseTimeUntil(at, c.now));
+        if (future.length) expiry.push(t("core-views.present.resets_expire", { when: future.join(t("core-views.present.resets_separator")) }));
+      }
+      map.resetText = [t("core-views.present.resets_left", { n: count }), ...expiry].join(" · ");
       changed = true;
     }
   }
@@ -226,6 +234,15 @@ export function rowWatch(agents: J[]): J {
   return { text: t("core-views.present.watching_names", { names: names.join(separator) }), ask: t("core-views.present.watch_ask", { names: named }) };
 }
 
+/// What a finger's swipe asks before archiving a chat (only the swipe: its menu's and its key's 归档 ask only for a watch):
+/// its watch's words while one of its agents keeps watch, else while one is at work or waits on work it started (an
+/// archived one finishes its turn and waits on nothing after); null otherwise.
+export function swipeAsk(agents: J[]): string | null {
+  const watch = rowWatch(agents);
+  if (watch !== null) return watch.ask;
+  return agents.some((a) => markOf(a) === "run") ? t("core-views.present.run_ask") : null;
+}
+
 /// Waiting on its watch: one runs and the agent said its wait is that (`waitWatch`; said before it, taken so). Waiting on
 /// anything else, a watch running or not, it waits as any.
 export function watching(s: J): boolean {
@@ -300,7 +317,7 @@ export type Lead = { kind: "need" | "done" | "wait" | "watch" | "decision"; text
 /// not say); what leads it, if anything does. A line that asks for a decision (待处理 · …, 要你帮忙：…) is about none: the
 /// line only says so, and the chat leads to what it asks (`ChatView.asks`). `cards` false: a card waiting is not said
 /// (the chat's page, which shows the card itself).
-export function rowStateLine(row: J, cards = true): [string, number | null, string, Lead | null] | null {
+export function rowStateLine(row: J, cards = true, alreadySaid: (agent: J) => boolean = () => false): [string, number | null, string, Lead | null] | null {
   const thread = u64(get(row, "thread")) ?? null;
   const p = cards ? decisions.pending(row) : null;
   const lead = t("core-logic.decisions.line", { text: "" });
@@ -334,8 +351,11 @@ export function rowStateLine(row: J, cards = true): [string, number | null, stri
       if (card && !need) return card;
       return said(blocked, null);
     }
-    const failed = agents.find((a) => ["failed", "unexpected", "aborted"].includes(shownStatus(a)));
-    if (failed) return said(failed, stateAbout(failed, thread));
+    const failures = agents.filter((a) => ["failed", "unexpected", "aborted"].includes(shownStatus(a)));
+    if (failures.length > 0) {
+      const unsaid = failures.find((a) => !alreadySaid(a));
+      return unsaid ? said(unsaid, stateAbout(unsaid, thread)) : null;
+    }
   }
   if (card) return card;
   if (atWork) return null;
@@ -481,12 +501,15 @@ export function lastBy(row: J, me: J, slackUsers: string[], members: J[]): J {
   const saidName = str(last.authorName) || null;
   if (kind === "agent") {
     const agent = (arr(get(row, "agents")) ?? []).find((a) => get(a, "key") === author);
-    const m = str(get(last.agentIdentity, "model")) ?? str(get(agent, "model")) ?? null;
+    const identity = isObject(last.agentIdentity) ? last.agentIdentity : null;
+    const runtime = str(get(identity, "runtime")) ?? str(get(last, "authorRuntime")) ?? get(agent, "runtime") ?? "claude";
+    const otherRuntime = str(get(last, "authorRuntime")) !== undefined && get(agent, "runtime") !== undefined && runtime !== get(agent, "runtime");
+    const m = (identity !== null ? str(get(identity, "model")) : otherRuntime ? str(get(last, "authorModel")) : str(get(agent, "model"))) ?? null;
     return {
       kind: "agent",
-      name: m !== null ? model.name(m) : (saidName ?? "agent"),
+      name: m !== null ? model.name(m) : identity !== null ? format.agentLabel(null, str(get(identity, "effort"))) : otherRuntime ? format.runtimeLabel(runtime) : (saidName ?? "agent"),
       model: m,
-      runtime: get(agent, "runtime") ?? "claude",
+      runtime,
       mine: false,
       state: agent ? markOf(agent) : null,
     };
@@ -937,6 +960,36 @@ export function host(h: J): J {
   const disk = meter(t("core-views.present.host.disk"), t("core-views.present.host.disk_short"), diskTotal > 0 ? ((diskTotal - diskFree) / diskTotal) * 100 : 0, t("core-views.present.host.disk_value", { free: format.gb1(diskFree), total: format.gb1(diskTotal) }), null, {
     remaining: remaining(diskFree), big: big(diskFree), unit: "GB", title: t("core-views.present.host.disk_left"), total: t("core-views.present.host.out_of", { size: format.gb(diskTotal) }),
   });
+  // Each GPU is an ordinary resource dial: free capacity in its figure, used capacity in its cells.
+  const gpus = (arr(src.gpus) ?? []).filter(isObject);
+  o.gpus = gpus.map((gpu: J, i: number) => {
+    const label = gpus.length === 1 ? "GPU" : `GPU ${i + 1}`;
+    const name = str(gpu.name)?.trim() || "GPU";
+    const busy = typeof gpu.busy === "number" && Number.isFinite(gpu.busy) && gpu.busy >= 0 && gpu.busy <= 1 ? gpu.busy : null;
+    const total = typeof gpu.memoryTotalBytes === "number" && Number.isFinite(gpu.memoryTotalBytes) && gpu.memoryTotalBytes > 0 ? gpu.memoryTotalBytes : null;
+    const used = typeof gpu.memoryUsedBytes === "number" && Number.isFinite(gpu.memoryUsedBytes) && gpu.memoryUsedBytes >= 0 && (total === null || gpu.memoryUsedBytes <= total) ? gpu.memoryUsedBytes : null;
+    const size = (bytes: number) => {
+      const g = Math.max(bytes, 0) / GIB;
+      return Number.isInteger(g) ? String(g) : format.fixed1(g);
+    };
+    const cores = typeof gpu.cores === "number" && Number.isFinite(gpu.cores) && gpu.cores > 0 ? t("core-views.present.host.cores", { n: gpu.cores }) : "";
+    const memoryNote = used !== null && total !== null ? t("core-views.present.host.gpu_memory_free", { free: size(total - used), total: size(total) })
+      : used !== null ? t("core-views.present.host.gpu_memory_used", { used: size(used) })
+      : total !== null ? t("core-views.present.host.gpu_memory_total", { total: size(total) }) : cores;
+    const title = t("core-views.present.host.gpu_idle", { gpu: label });
+    if (busy !== null) {
+      const m = meter(label, label, busy * 100, "", null, { remaining: "", big: String(format.round(100 - busy * 100)), unit: "%", title, total: memoryNote });
+      return { big: m.big, unit: m.unit, left: m.left, level: m.level, title: m.title, total: m.total, model: name === "GPU" ? "" : name };
+    }
+    if (total !== null && used !== null) {
+      const m = meter(label, label, used / total * 100, "", null, {
+        remaining: "", big: big(total - used), unit: "GB", title: t("core-views.present.host.gpu_memory_left", { gpu: label }),
+        total: t("core-views.present.host.out_of", { size: format.gb(total) }),
+      });
+      return { big: m.big, unit: m.unit, left: m.left, level: m.level, title: m.title, total: m.total, model: name === "GPU" ? "" : name };
+    }
+    return { big: "—", unit: "", left: 100, level: "ok", title, total: memoryNote, model: name === "GPU" ? "" : name };
+  });
   // What the machine is, the same line wherever it is named: its chip, its memory, its system.
   o.identity = [cpuModel, memTotal > 0 ? format.gb(memTotal) : null, os || null].filter((x) => x !== null).join(" · ");
   // The rest, a row each, only where the machine is looked at closely.
@@ -1107,10 +1160,22 @@ export function decorate(topic: Topic, value: unknown, c: Clock): unknown {
     case "filePeek":
       if (isObject(v) && typeof v.mtime === "number" && v.mtime > 0) value = { ...v, time: { mtime: stamp(v.mtime, c) } };
       break;
+    // One message's card: who said it, when, and its words as a chat's row has them. No such message: nothing.
+    case "messagePeek":
+      value = messagePeek(v, c);
+      break;
   }
   const own = DECORATORS[topic.topic];
   if (own) value = own(value, c);
   return times(value, c);
+}
+
+function messagePeek(answer: J, c: Clock): J | null {
+  const entry = arr(answer.entries)?.find((e: J) => e.kind === "message");
+  if (entry === undefined) return null;
+  const text = format.cleanText(format.plainText(str(entry.text) ?? ""));
+  const at = entry.at;
+  return { author: str(entry.authorName) ?? "", text: text === "" ? t("core-views.file") : text, ...(typeof at === "number" && at > 0 ? { time: { at: stamp(at, c) } } : {}) };
 }
 
 function overview(value: J, c: Clock, station: string | null): J {
@@ -1319,7 +1384,7 @@ export function software(u: J): J {
   const latest = typeof get(u, "latest") === "string" ? (get(u, "latest") as string) : null;
   const shownText = installed ? (version ?? t(get(u, "id") === "station" ? "core-views.software.dev" : "core-views.software.unknown")) : t("core-views.software.not_installed");
   const tips = [
-    installed && get(u, "newer") !== true && get(u, "downgrade") !== true && latest !== null ? t("core-views.software.latest") : null,
+    installed && get(u, "repairable") !== true && get(u, "newer") !== true && get(u, "downgrade") !== true && latest !== null ? t("core-views.software.latest") : null,
     installed && latest === null && typeof get(u, "checkedAt") === "number" ? t("core-views.software.check_failed_retry") : null,
   ].filter((x): x is string => x !== null);
   const progress = get(u, "progress");

@@ -31,15 +31,17 @@ import { runnerId } from "../agents/process.ts";
 import { allLeft, existingRunners } from "../agents/runner.ts";
 import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
-import { homesFirst, iso, sessionPlaces, transcriptPaths } from "../read/transcript.ts";
+import { iso, sessionPlaces, transcriptSources } from "../read/transcript.ts";
 import { type Attachment, MANUAL, type SessionRow, type Store, STILLFAIL_SURFACE, feishuSurface, slackSurface, type MessageRow, type ThreadRow, type ThreadSummary } from "../store/store.ts";
+import type { RecentChatList } from "../store/chat-list.ts";
 import { Accounts } from "./accounts.ts";
 import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
 import { Places } from "../ops/places.ts";
 import { threadCommand } from "./args.ts";
-import type { ChatEvent, ChatSurface, InboundFile, InboundMessage, ThreadRef } from "./chat.ts";
+import type { ChatEvent, ChatSurface, InboundFile, InboundMessage, ModelChoice, Person, ThreadRef } from "./chat.ts";
 import { toolStatus } from "./chat.ts";
-import { type Connect, type HubConfig, type Profile, allowedIn, profilesFor, runtimeNamed, runtimeTitle } from "./config.ts";
+import { type Connect, type HubConfig, type Profile, allowedIn, profilesFor, runtimeNamed, runtimeTitle, sameModel } from "./config.ts";
+import { candidates as modelsRun } from "./model-choice.ts";
 import { INTERNAL_CONNECT, type InternalChat, nextTsAt } from "./internal.ts";
 import { LiveHub } from "./live.ts";
 import type { Jobs } from "./neighbours.ts";
@@ -49,6 +51,7 @@ import { type Roots, roots as machineRoots } from "../read/machine.ts";
 import { carrySubagents, goesAfresh, startsAfresh, toldCleared, toldResumeLost } from "./afresh.ts";
 import { serves } from "./pool.ts";
 import { settled } from "./opened.ts";
+import { untitledChat } from "./titles.ts";
 import { shownFacts } from "./image-size.ts";
 
 type Json = any;
@@ -145,14 +148,26 @@ export class Hub {
   /// What running turns are doing, for the pages' live view.
   readonly live: LiveHub;
   /// Every thread as lists have it, read by the readers (agents.ts sets it): chat_list's, not read on the main thread
-  /// (some 15 queries a thread, 1,200 threads on ccvm: 10 seconds held while memory was short). Unset (tests): the store.
+  /// (some 15 queries a thread, 1,200 threads on a station: 10 seconds held while memory was short). Unset (tests): the store.
   threadList: (() => Promise<ThreadSummary[]>) | null = null;
+  /// A recent, unfiltered chat_list, with details for its page alone.
+  recentChatList: ((ws: string | null, home: string | null, limit: number) => Promise<RecentChatList>) | null = null;
+  /// The matching chats and count for a chat_list search.
+  searchChatList: ((ws: string | null, home: string | null, limit: number, query: string) => Promise<RecentChatList>) | null = null;
   /// A thread's latest `limit` messages, oldest first, read by the readers (agents.ts sets it): the archive review's
-  /// (review.ts), up to 400 of them through the merged view, 3 seconds held on ccvm. Unset (tests): the store.
+  /// (review.ts), up to 400 of them through the merged view, 3 seconds held on a station. Unset (tests): the store.
   latestMessages: ((thread: number, limit: number) => Promise<MessageRow[]>) | null = null;
+  /// The station's logins (logins/module.ts sets it): whether one waits for a code from its page (a Slack login card
+  /// takes one only then), and that code handed to it, entered by `by` on its card. Unset: no logins here.
+  logins: { pastes(id: string): boolean; answer(id: string, code: string, by?: Person): void } | null = null;
   /// Stops following the store's sessions starting and stopping (live.ts `running`).
   private unlistenRunning: () => void = () => {};
   readonly actors = new Map<string, SessionActor>();
+  /// Installed by the agents' side: older stores finish indexing active keys without holding the station thread.
+  waitForWorkspaceActivity: (() => Promise<boolean>) | null = null;
+  /// An old thread's requested message suffix is indexed off the station thread before delivery.
+  preparePostsAfter: ((messages: readonly { thread: number; n: number }[], signal?: AbortSignal) => Promise<void>) | null = null;
+  private awaitingWorkspaceActivity = new Set<string>();
   /// When each idle process is next looked at for eviction.
   private deadlines = new Map<string, Fiber.Fiber<void>>();
   /// Fibers of the hub's own (title waits, archive reviews): interrupted at shutdown.
@@ -204,9 +219,10 @@ export class Hub {
       (key) => {
         const row = this.store.getSession(key);
         const runtime = row && runtimeNamed(row.runtime);
-        if (!row || !runtime || this.store.runtimeSessions(key).length === 0) return null;
+        if (!row || !runtime || this.store.runtimeSessionSources(key).length === 0) return null;
         const { dataDir, profiles } = this.config();
-        const { paths, current } = transcriptPaths(runtime, dataDir, homesFirst(profiles, row.profile), this.store.runtimeSessions(key), sessionPlaces(row));
+        // In its places alone: this is the main thread (read/transcript.ts `anywhere`).
+        const { paths, current } = transcriptSources(dataDir, profiles, this.store.runtimeSessionSources(key), sessionPlaces(row), { anywhere: false });
         return paths.length === 0 ? null : { runtime, paths, current };
       },
       this.clock,
@@ -293,16 +309,39 @@ export class Hub {
   /// The station left one of its workspaces but is still in others (docs/multi-workspace.md): that workspace's
   /// sessions end their processes as `suspendAll` ends everyone's; `backIn` resumes them once it is back.
   async leftWorkspace(ws: string) {
-    const keys = new Set(this.store.listSessions().filter((s) => s.ws === ws).map((s) => s.key));
+    // Only actors and their eviction deadlines have anything to suspend. Historical sessions have neither.
+    const candidates = new Set([...this.deadlines.keys(), ...this.actors.keys()]);
+    const keys = new Set([...candidates].filter((key) => this.store.getSession(key)?.ws === ws));
     for (const [key, fiber] of this.deadlines) if (keys.has(key)) (this.interrupt(fiber), this.deadlines.delete(key));
     await Promise.all([...this.actors.values()].filter((a) => keys.has(a.key)).map((a) => a.suspend()));
   }
 
   /// The station is in a workspace again: its sessions' cut-off turns resume, and what waited goes on.
   backIn(ws: string) {
-    for (const row of this.store.listSessions().filter((s) => s.ws === ws)) {
-      if (row.running && this.online(row)) void this.actor(row).recover();
-      else if (this.store.sessionsWithPending().includes(row.key) && this.online(row)) void this.actor(row).kick();
+    let rows = this.store.returningSessionsIn(ws);
+    if (rows === null && this.waitForWorkspaceActivity !== null) {
+      if (!this.awaitingWorkspaceActivity.has(ws)) {
+        this.awaitingWorkspaceActivity.add(ws);
+        void this.waitForWorkspaceActivity().then((ready) => {
+          this.awaitingWorkspaceActivity.delete(ws);
+          if (ready && this.workspaces().includes(ws)) this.backIn(ws);
+        }).catch((error) => {
+          this.awaitingWorkspaceActivity.delete(ws);
+          log.warn("hub", "could not find a rejoined workspace's active sessions", { error: (error as Error).message });
+        });
+      }
+      return;
+    }
+    // A standalone hub without the agents' worker can still open an older store.
+    if (rows === null) {
+      const keys = new Set([...this.store.runningSessions().map((row) => row.key), ...this.store.sessionsWithPending()]);
+      rows = [...keys].map((key) => this.store.getSession(key)).filter((row): row is SessionRow =>
+        row !== null && row.ws === ws && (row.running || this.store.hasPending(row.key))).sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+    }
+    for (const row of rows) {
+      if (!this.online(row)) continue;
+      if (row.running) void this.actor(row).recover();
+      else void this.actor(row).kick();
     }
   }
 
@@ -376,13 +415,18 @@ export class Hub {
     // A crash left runners without a snapshot: what they keep is taken up as it stands.
     const runners = new Set(this.options.runners ? this.options.runners() : existingRunners(this.config().dataDir).map((r) => r.id));
     const taken = new Set(handed.sessions.map((s) => s.key));
-    for (const row of this.store.listSessions()) {
+    // A shared Codex host can only have a session to recover when that session was marked running. Without a
+    // session-owned runner there is no reason to load the station's idle and archived sessions.
+    const ownRunners = [...runners].some((id) => !id.startsWith("codex-"));
+    const candidates = ownRunners ? this.store.listSessions() : this.store.runningSessions();
+    for (const row of candidates) {
       if (taken.has(row.key)) continue;
       const runtime = runtimeNamed(row.runtime);
       // Claude's and dsh's runner is the session's own (an idle one is taken up too); codex sessions share their
       // profile's host, which its driver finds, for a turn that was running.
       if (!runtime || (runtime !== "codex" ? !runners.has(runnerId(runtime, row.key)) : !row.running)) continue;
-      const turn = row.running ? this.store.listTurns(row.key).at(-1) : undefined;
+      // Its latest turn alone: every one it had read for it, the main thread took 254 ms for many on a station (2026-11-03).
+      const turn = row.running ? (this.store.latestTurn(row.key) ?? undefined) : undefined;
       const snap: Snapshot = {
         key: row.key,
         runtime,
@@ -448,6 +492,7 @@ export class Hub {
   /// Takes one event from a connect's platform. Resolves once it is durably recorded (or deliberately ignored).
   async receive(connectId: string, event: ChatEvent) {
     if (event.type === "message") return this.accept(connectId, event.message);
+    if (event.type === "loginCode") return this.enterCode(connectId, event);
     if (event.type === "stop") {
       const thread = this.store.threadAt(this.surface(connectId), event.channel, event.threadTs);
       if (!thread) return;
@@ -459,6 +504,19 @@ export class Hub {
       return;
     }
     this.store.editMessage(this.surface(connectId), event.channel, event.threadTs, event.ts, event.text);
+  }
+
+  /// A login card's field answered on a platform (Slack): the code goes to the login that card is of, and only if the
+  /// message is one of the thread's with that card. Never recorded as a message. Throws what refused it.
+  private async enterCode(connectId: string, event: Extract<ChatEvent, { type: "loginCode" }>) {
+    const thread = this.store.threadAt(this.surface(connectId), event.channel, event.threadTs);
+    const card = thread ? this.store.cardAt(thread.id, event.ts) : null;
+    if (card?.type !== "login" || typeof card.login !== "string" || card.station !== undefined) throw new Error("this message is no login card");
+    if (!this.logins) throw new Error("this station has no logins");
+    const chat = this.chatOf(connectId);
+    const email = (await chat?.userEmail?.(event.user).catch(() => null)) ?? null;
+    const name = (await chat?.userName?.(event.user).catch(() => null)) ?? null;
+    this.logins.answer(card.login, event.code, email ? { name: name ?? email, email } : undefined);
   }
 
   /// Accepts one message seen by a connect, one at a time per thread. Resolves once it is durably recorded (or
@@ -556,7 +614,7 @@ export class Hub {
 
   /// A message's text and its shared files, fetched into the session's uploads (as files sent in the station's own
   /// chats are). A file that cannot be fetched is named in the text with why, so its reader knows one was there.
-  private async fetched(chat: ChatSurface, key: string, text: string, files: InboundFile[] | undefined): Promise<{ text: string; attachments: Attachment[] }> {
+  async fetched(chat: ChatSurface, key: string, text: string, files: InboundFile[] | undefined): Promise<{ text: string; attachments: Attachment[] }> {
     const row = files && files.length > 0 ? this.store.getSession(key) : null;
     if (!files || !row) return { text, attachments: [] };
     const dir = join(row.workspace, "uploads");
@@ -645,10 +703,12 @@ export class Hub {
     // again when it would have (or put right, SessionActor.takeWait). Over the sessions shown: an archived one waits on
     // nothing.
     const live = this.store.liveSessions();
-    const stats = this.store.statsOf(live.map((s) => s.key));
+    const turns = this.store.lastTurnsOf(live.map((s) => s.key));
     for (const row of live) {
-      const last = stats.get(row.key)?.lastTurn;
-      if (last?.declared === "waiting" && last.endedAt !== null && this.online(row)) void this.actor(row).takeWait();
+      const last = turns.get(row.key);
+      if (!this.online(row) || row.running || last?.endedAt === null) continue;
+      if (last?.outcome === "failed" && last.detail?.startsWith("rate_limit:")) void this.actor(row).takeRefill();
+      else if (last?.declared === "waiting") void this.actor(row).takeWait();
     }
   }
 
@@ -763,9 +823,22 @@ export class Hub {
     await this.actors.get(key)?.evict();
   }
 
-  /// How a session runs changed: its process ends now if idle, else before its next turn (SessionActor.changed).
-  async changed(key: string) {
-    await this.actors.get(key)?.changed();
+  /// How a session runs changed: its process ends now if idle, else before its next turn (SessionActor.changed); `restart`:
+  /// what changed is what its process started with, which only a new one takes.
+  async changed(key: string, restart = false) {
+    await this.actors.get(key)?.changed(restart);
+  }
+
+  /// A manual allowance reset lets every waiting session on the same account go on now.
+  allowanceReset(profile: string) {
+    this.accounts.resetAllowance(profile);
+    const waiting = [...this.actors.values()].filter((actor) => {
+      const row = this.store.getSession(actor.key);
+      return row !== null && this.accounts.sameAccount(profile, row.profile);
+    });
+    for (const actor of waiting) void actor.allowanceReset().catch((error) => {
+      log.warn("hub", "could not resume a session after its allowance was reset", { session: actor.key, error: (error as Error).message });
+    });
   }
 
   /// What every runtime process starts with changed (the station's variables for its agents, ops/agent-env.ts): each
@@ -986,13 +1059,30 @@ export class Hub {
     return s !== null && s !== undefined && this.wsOf(s) === workspace;
   }
 
+  /// The models a person can pick for a new chat with a connect (Slack's `/sf`): those its workspace's profiles run, its
+  /// own first (what a chat with it runs unless told otherwise).
+  modelsFor(connectId: string): ModelChoice[] {
+    const config = this.config();
+    const connect = connectOf(config, connectId);
+    const own: ModelChoice = { runtime: connect.bind.runtime, model: connect.bind.model ?? null };
+    const profiles = config.profiles.filter((p) => allowedIn(p, connect.workspace ?? null, this.workspaces()[0] ?? null));
+    const same = (c: ModelChoice) => c.runtime === own.runtime && (c.model === null || own.model === null ? c.model === own.model : sameModel(c.model, own.model));
+    return [own, ...modelsRun(profiles, null).filter((c) => !same(c))];
+  }
+
   /// A session for a connect: the connect's own profile when it keeps to one (and it still can run it); else any of its
-  /// runtime, the model's first (pool.ts).
+  /// runtime, the model's first (pool.ts). A message sent to a model (`model`) starts one on that model instead, on any
+  /// profile of the connect's workspace that runs it.
   createSession(config: HubConfig, key: string, connect: Connect, scope: "thread" | "all", message: InboundMessage | null, title: string | null, createdBy: string | null) {
-    const fits = profilesFor(config, connect, this.workspaces()[0] ?? null);
+    const home = this.workspaces()[0] ?? null;
+    const chosen = message?.model ?? null;
+    const runtime = chosen === null ? connect.bind.runtime : runtimeNamed(chosen.runtime);
+    if (runtime === null) throw new Error(`unknown runtime ${chosen?.runtime}`);
+    const model = chosen === null ? (connect.bind.model ?? null) : chosen.model;
+    const fits = chosen === null ? profilesFor(config, connect, home) : config.profiles.filter((p) => p.runtimes.includes(runtime) && allowedIn(p, connect.workspace ?? null, home) && serves(p, model));
+    if (fits.length === 0 && chosen !== null) throw new Error(tr(stationLang(), "station.session.noProfileForModel", { model: model ?? runtimeTitle(runtime), runtime: runtimeTitle(runtime) }));
     if (fits.length === 0 && profilesFor(config, connect).length > 0) throw new Error(tr(stationLang(), "station.session.noProfileHere", { runtime: runtimeTitle(connect.bind.runtime) }));
-    const model = connect.bind.model ?? null;
-    const kept = connect.bind.profile !== undefined ? fits.find((p) => p.id === connect.bind.profile && serves(p, model)) : undefined;
+    const kept = chosen === null && connect.bind.profile !== undefined ? fits.find((p) => p.id === connect.bind.profile && serves(p, model)) : undefined;
     const profile = kept ?? this.accounts.pick(fits, model, false);
     const dir = scope === "thread" && message ? `${message.channel}-${message.threadTs.replace(".", "-")}` : key.slice(connect.id.length + 1);
     const workspace = join(config.dataDir, "sessions", connect.id, dir, "workspace");
@@ -1005,11 +1095,11 @@ export class Hub {
       scope,
       title,
       createdBy,
-      runtime: connect.bind.runtime,
+      runtime,
       profile: profile.id,
       profilePinned: kept !== undefined,
-      model: connect.bind.model ?? null,
-      effort: connect.bind.effort ?? null,
+      model,
+      effort: chosen === null ? (connect.bind.effort ?? null) : null,
       fast: null,
       workspace,
       cwd: null,
@@ -1019,7 +1109,7 @@ export class Hub {
       lastActiveAt: now,
       ws: connect.workspace ?? null,
     });
-    log.info("hub", "session created", { session: key, connect: connect.id, scope, runtime: connect.bind.runtime, profile: profile.id });
+    log.info("hub", "session created", { session: key, connect: connect.id, scope, runtime, model: model ?? "", profile: profile.id });
   }
 
   /// The session's actor, made on first use.
@@ -1053,6 +1143,10 @@ export class Hub {
   private sessionDeps(): SessionDeps {
     return {
       store: this.store,
+      preparePostsAfter: (messages, signal) => {
+        if (!this.preparePostsAfter) throw new Error("post block builder unavailable");
+        return this.preparePostsAfter(messages, signal);
+      },
       chat: (connect) => this.chatOf(connect),
       driver: (runtime) => this.sessionDriver(runtime),
       runOn: (key, holding) => this.accounts.runOn(key, holding),
@@ -1068,6 +1162,7 @@ export class Hub {
       reposDir: () => this.reposDir(),
       memoryPath: (key) => agentHomePaths(workspaceAgentHome(this.config().agentHome, this.wsOf(key), this.workspaces()[0] ?? null))[0],
       maxNudges: () => this.config().maxNudges,
+      untitled: (key) => (this.config().askToName ? untitledChat(this, key) : null),
       backgroundOnMessage: (key) => {
         const row = this.store.getSession(key);
         if (!row) return true;
@@ -1087,26 +1182,25 @@ export class Hub {
       held: (key) => this.holdsNow.size > 0 || !this.inAWorkspace(key),
       stopJobs: async (key) => {
         const jobs = this.jobs;
-        const running = this.store.listJobs(key).filter((j) => j.state === "running" && (j.watch || j.port === null));
         if (!jobs) return;
-        for (const job of running) {
+        for (const id of this.store.runningWaitJobIds(key)) {
           try {
-            await jobs.stop(job.id);
-            log.info("hub", "job stopped with its session's wait", { session: key, job: job.id });
+            await jobs.stop(id);
+            log.info("hub", "job stopped with its session's wait", { session: key, job: id });
           } catch (error) {
-            log.warn("hub", "job not stopped", { session: key, job: job.id, error: (error as Error).message });
+            log.warn("hub", "job not stopped", { session: key, job: id, error: (error as Error).message });
           }
         }
       },
       endJobs: async (key) => {
         const jobs = this.jobs;
         if (!jobs) return;
-        for (const job of this.store.listJobs(key).filter((j) => j.state === "running" || (j.state === "exited" && j.port !== null))) {
+        for (const id of this.store.upJobIds(key)) {
           try {
-            await jobs.stop(job.id);
-            log.info("hub", "job stopped with its session archived", { session: key, job: job.id });
+            await jobs.stop(id);
+            log.info("hub", "job stopped with its session archived", { session: key, job: id });
           } catch (error) {
-            log.warn("hub", "job not stopped", { session: key, job: job.id, error: (error as Error).message });
+            log.warn("hub", "job not stopped", { session: key, job: id, error: (error as Error).message });
           }
         }
       },

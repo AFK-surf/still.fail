@@ -164,6 +164,10 @@ fn ink_keep(key : String, ink : String?) -> Unit {
 /// What each piece of `code` in `lang` is (the core's `code.ink`), once the core has said: None while it is asked;
 /// Some(None) for code shown as it is (plain text, Markdown, too long). Asked once by the language and the code.
 pub fn code_ink(c : @ui.Ctx, code : String, lang : String) -> String?? {
+  // (made-up code in a page's bones: shown as it is, nothing asked of the core or read of what it said, Ctx::in_bones)
+  if c.in_bones() {
+    return Some(None)
+  }
   let key = lang + "\u{1}" + code
   match inks.get(key) {
     Some(ink) => return Some(ink)

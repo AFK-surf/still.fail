@@ -1,13 +1,6 @@
-# Sourced by the scripts: a toolchain of its own when there is one (MBUI_TOOLS, by default where the development
-# machine keeps it), else (Windows, CI, anyone else) the toolchain on PATH as it is.
-# In CI, only what the job set up itself (the repository's .github/actions/mbui-moonbit; MBUI_TOOLS where a job says so): never the
-# development machine's toolchain, which a self-hosted runner on that machine (Mini1) would otherwise pick up from
-# another's session (2026-10-19: another's moonc).
-if [ -n "${GITHUB_ACTIONS:-}" ]; then
-  TOOLS=${MBUI_TOOLS:-}
-else
-  TOOLS=${MBUI_TOOLS:-$HOME/.stillfail/remote/sessions/df5e90815f47b3e730078057bed8feea81b11db927ea4ae88c9346fdc9260bb1/work/tools}
-fi
+# Sourced by the scripts: use an explicitly selected toolchain, or leave the toolchain on PATH as it is.
+# CI sets up its own toolchain with .github/actions/mbui-moonbit; it must not pick up another session's tools.
+TOOLS=${MBUI_TOOLS:-}
 if [ -n "$TOOLS" ] && [ -d "$TOOLS" ]; then
   export MOON_HOME=$TOOLS/moon
   export PATH=$MOON_HOME/bin:$TOOLS/go/bin:$HOME/.local/bin:$PATH
@@ -50,6 +43,14 @@ native_tests() {
 # (in a subshell: nothing else of the script's environment changed).
 moon_test_native() { ( native_tests "$PWD"; moon test $NATIVE "$@" ); }
 
+# `moon_tests ARGS…`: `moon test ARGS…` as development runs it, on wasm-gc (--release, as native's: no C compiled, the
+# user 2026-11-03; wasm-gc rather than classic Wasm, whose memory, freed by counting alone, never frees what holds
+# itself), and in CI (GITHUB_ACTIONS) or with MBUI_NATIVE_TESTS=1 on native as moon_test_native does.
+moon_tests() {
+  if [ -n "${GITHUB_ACTIONS:-}" ] || [ "${MBUI_NATIVE_TESTS:-}" = 1 ]; then moon_test_native "$@"
+  else moon test --target wasm-gc --release "$@"; fi
+}
+
 # `on_screen COMMAND…`: a command that opens a window (an app run on the host: a shot, a recording, a scripted run)
 # run with the machine's screen. Run as a job of a still.fail station (a task another station sent, an agent's job),
 # it waits while another task has the screen and gives it back once the command ends (`stillfail-job screen`), so the
@@ -57,4 +58,29 @@ moon_test_native() { ( native_tests "$PWD"; moon test $NATIVE "$@" ); }
 # a film, the Tester) needs no screen.
 on_screen() {
   if [ -n "${STILLFAIL_JOB_SCREEN:-}" ] && command -v stillfail-job > /dev/null; then stillfail-job screen "$@"; else "$@"; fi
+}
+
+# The objects of an app's Wasm shell (scripts/android.sh, ios.sh with MBUI_WASM_THUNKS: no C of moonc's to split),
+# each source its own, compiled side by side, kept while the command, the source and what its depfile says it included
+# are as they were. `shell_objs DIR CC CFLAGS OBJC_FLAGS FILE…` prints the objects.
+shell_objs() {
+  local dir=$1 cc=$2 cflags=$3 objc=$4 f o flags pids=()
+  shift 4
+  mkdir -p "$dir"
+  for f in "$@"; do
+    o=$dir/$(echo "$f" | tr '/' '_').o
+    echo "$o"
+    flags=$cflags
+    case $f in *.m) flags="$flags $objc" ;; esac
+    [ -f "$o" ] && [ "$(cat "$o.sum" 2>/dev/null)" = "$(shell_obj_sum "$cc $flags" "$f" "$o")" ] && continue
+    (rm -f "$o.sum"; $cc $flags -MD -MF "$o.d" -c "$f" -o "$o" >&2 && shell_obj_sum "$cc $flags" "$f" "$o" > "$o.sum") &
+    pids+=($!)
+  done
+  for p in ${pids[@]+"${pids[@]}"}; do wait "$p" || return 1; done
+}
+
+# (what object $3 of source $2 is made of: command $1, the source and what its depfile says it included)
+shell_obj_sum() {
+  (echo "$1"; cat "$2" $(sed -e '1d' -e 's/\\$//' "$3.d" 2>/dev/null | tr ' ' '\n' | grep -v '^$' | sort -u) 2>/dev/null) |
+    shasum | cut -c1-40
 }

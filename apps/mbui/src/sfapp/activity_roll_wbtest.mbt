@@ -5,7 +5,7 @@
 
 ///|
 /// The step the chat-working agent goes on to, as long as the one it was on.
-let next_step : String = "再在 Studio 上把三种宽度下的截图逐张拼成对比图，标出每处和上一版不一样的地方，发到对话里给人看"
+let next_step : String = "再在 Willow 上把三种宽度下的截图逐张拼成对比图，标出每处和上一版不一样的地方，发到对话里给人看"
 
 ///|
 /// The words drawn on the line of `step`'s words that reach past `right` (their words, where they end).
@@ -23,8 +23,7 @@ test "activity: changing from one long step to the next, its line no wider than 
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=360.0, h=740.0, platform=2)
   t.run_for(squeeze_opening)
   assert_eq(past_edge(t, @sffixture.working_step, 360.0), [])
-  @sffixture.fix_due.push(fn() { @sffixture.fix_working_now.val = ("call:2", next_step) })
-  @settings.fixture_changed()
+  @sffixture.fix_now(fn() { @sffixture.fix_working_now.val = ("call:2", next_step) })
   t.draw()
   t.run_for(@sfbase.glyph_change_in_ms)
   // a quarter of the shortest a Move can take at a time, three of them, and at its end

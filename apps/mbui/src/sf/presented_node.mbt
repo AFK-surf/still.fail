@@ -131,7 +131,6 @@ pub fn presented_nodes(root : @view.View) -> Unit {
         Ask(title, value, placeholder, action, hint, secret, empty, run) =>
           ask_node(
             row,
-            "sf-present/\{serial}",
             open,
             title,
             p.line,
@@ -223,7 +222,6 @@ pub fn presented_nodes(root : @view.View) -> Unit {
           let offset = panel_offset
           pick_node(
             row,
-            "sf-present/\{serial}",
             open,
             anchor,
             title,

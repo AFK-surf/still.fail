@@ -18,8 +18,8 @@
 # (windows/AppIcon-<mac-icon.swift's hash>.ico: that script draws it on a Mac, `--ico`), its version (0.1.<MBUI_BUILD>,
 # else the commits in still.fail's history), its name, and its own environment (RCDATA MBUI_ENV, which mbui's host
 # reads as what the process's environment does not say: src/host/win_life.h): MBUI_APP_ID, MBUI_APP_NAME,
-# MBUI_SCHEMES, MBUI_OWN, MBUI_BETA. MBUI_VARIANT, which app it is built as (as mac-app.sh's): mbui (the default) still.fail
-# mbui, an app beside still.fail's desktop app (fail.still.mbui, the test channel's, no links of that app's); stable and
+# MBUI_SCHEMES, MBUI_OWN, MBUI_BETA. MBUI_VARIANT, which app it is built as (as mac-app.sh's): preview (the default) still.fail
+# preview, an app beside still.fail's desktop app (fail.still.mbui, the test channel's, no links of that app's); stable and
 # beta still.fail's desktop app itself, to take its place (apps/desktop/package.json, build.sh): its id
 # (fail.still.desktop, .beta: its AppUserModelID, its pinned shortcuts'), its name (still.fail, youdid.wtf: its
 # userData, %APPDATA%\<name>, whose data, sign-in and sealed keys it takes: src/host/win_core.c), its links (stillfail
@@ -41,11 +41,11 @@ core() { HERMESC=$(cygpath -m "$engine/hermesc.exe") bash "$D/core.sh" hermes; }
 # own program's in its place), the folder it is put in (%LOCALAPPDATA%\Programs\<dir>: the desktop app's installer's,
 # its package name), and its own environment beyond those
 variant() {
-  case "${MBUI_VARIANT:-mbui}" in
-    mbui) id=fail.still.mbui name="still.fail preview" exe=stillfail dir=stillfail-mbui schemes= extra='MBUI_BETA=1\nMBUI_UPDATE_FEED=win/mbui' ;;
+  case "${MBUI_VARIANT:-preview}" in
+    preview) id=fail.still.mbui name="still.fail preview" exe=stillfail dir=stillfail-mbui schemes= extra='MBUI_BETA=1\nMBUI_UPDATE_FEED=win/mbui' ;;
     stable) id=fail.still.desktop name=still.fail exe=still.fail dir=stillfail schemes=stillfail,ember extra='MBUI_OWN=1\nMBUI_UPDATE_FEED=win' ;;
     beta) id=fail.still.desktop.beta name=youdid.wtf exe=youdid.wtf dir=stillfail-beta schemes=stillfail-beta extra='MBUI_OWN=1\nMBUI_BETA=1\nMBUI_UPDATE_FEED=win' ;;
-    *) echo "win.sh: MBUI_VARIANT is mbui, stable or beta, not $MBUI_VARIANT" >&2; return 1 ;;
+    *) echo "win.sh: MBUI_VARIANT is preview, stable or beta, not $MBUI_VARIANT" >&2; return 1 ;;
   esac
 }
 # res: the app's resources (out/win-res/app.res), for mbui's win.sh to link into it (MBUI_WIN_RES)
@@ -131,13 +131,13 @@ sealed() {
 # stillfail-setup-0.1.<n>.exe)
 # the installer's own program (windows/setup.c), bare: made once for its source, apart from the app (CI makes it while
 # the app compiles: made in the installer's step, beside the e2e flow's app, it was 4 s alone and 15-56 s there,
-# 2026-10-28)
+# 2026-10-28). -utf-8: its Chinese words, read in the build machine's code page without it, were garbled in the program
 setup_bare() {
   local out=$A/out/setup-bare
   [ "$out/setup-bare.exe" -nt "$A/windows/setup.c" ] && return 0
   mkdir -p "$out"
   local t0=$SECONDS
-  (cd "$A" && cl.exe -nologo -O2 -W3 windows/setup.c -Fe"$(cygpath -w "$out/setup-bare.exe.tmp.exe")" -Fo"$(cygpath -w "$out/")" > "$out/build.log") ||
+  (cd "$A" && cl.exe -nologo -O2 -W3 -utf-8 windows/setup.c -Fe"$(cygpath -w "$out/setup-bare.exe.tmp.exe")" -Fo"$(cygpath -w "$out/")" > "$out/build.log") ||
     { cat "$out/build.log"; return 1; }
   mv -f "$out/setup-bare.exe.tmp.exe" "$out/setup-bare.exe"
   echo "win.sh: setup.c compiled in $((SECONDS - t0)) s"

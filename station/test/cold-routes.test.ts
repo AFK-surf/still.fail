@@ -128,3 +128,38 @@ test("a big file in parts, a whole one streamed, a video's poster or none", asyn
     rmSync(data, { recursive: true, force: true });
   }
 });
+
+// On a station (2026-11-02) an image waited 26 s in the readers' line for a lookup of 5 ms: a file sent in a chat is found
+// without them.
+test("a chat's file is given though no reader answers", async () => {
+  const data = mkdtempSync(join(tmpdir(), "file-readers-"));
+  const config = hubConfig({ profiles: [{ id: "cc", runtime: "claude", home: "homes/cc", models: ["opus"] }] }, data);
+  const store = Store.open(join(data, "stillfail.db"), join(data, "archive"));
+  const hub = new Hub({ config: () => config, store, chats: () => undefined, drivers: [new FakeDriver("claude")], mcpUrl: "http://127.0.0.1:1/mcp", internal: new InternalChat(), runners: () => [] });
+  const jobs = new Jobs({ store, data, notify: () => {}, link: () => null });
+  hub.setJobs(jobs);
+  const readers = new Readers(data, 1);
+  const ask = async (admin: Admin, method: string, path: string, body?: unknown, query: [string, string][] = []) =>
+    admin.handle({ method, path, query, headers: {}, body: Buffer.from(body === undefined ? "" : JSON.stringify(body)), viewer, lang: "en" });
+  try {
+    const made = JSON.parse(String((await ask(new Admin(readers, { store, agents: { hub, jobs } as any }), "POST", "/sessions", { runtime: "claude" })).body));
+    const workspace = store.getSession(made.key)!.workspace;
+    mkdirSync(join(workspace, "uploads"), { recursive: true });
+    writeFileSync(join(workspace, "uploads/note.txt"), "here");
+    const refusing: any = { read: async () => Promise.reject(new Error("no reader")), names: new Map(), data };
+    const admin = new Admin(refusing, { store, agents: { hub, jobs } as any });
+    const shown = await ask(admin, "GET", `/sessions/${made.key}/files`, undefined, [["name", "note.txt"], ["thumb", "1"]]);
+    assert.equal(shown.status, 200, String(shown.body));
+    assert.equal(String(shown.body), "here");
+    const part = await ask(admin, "GET", `/sessions/${made.key}/parts`, undefined, [["name", "note.txt"], ["offset", "1"], ["length", "2"]]);
+    assert.equal(String(part.body), "er");
+    assert.equal((await ask(admin, "GET", `/sessions/${made.key}/files`, undefined, [["name", "none.txt"]])).status, 404);
+    assert.equal((await ask(admin, "GET", `/sessions/nobody/files`, undefined, [["name", "note.txt"]])).status, 404);
+  } finally {
+    await hub.shutdown();
+    await jobs.shutdown();
+    readers.close();
+    store.close();
+    rmSync(data, { recursive: true, force: true });
+  }
+});

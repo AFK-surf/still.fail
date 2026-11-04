@@ -90,6 +90,7 @@ fn station_sample() -> Json {
     "version": w(4),
     "host": { "identity": w(10), "meters": [meter(70), meter(40), meter(60)] },
     "overview": { "profiles": [profile(0, 7), profile(1, 9), profile(2, 6)] },
+    "profileGroups": [{ "group": "claude", "title": w(6), "profiles": ["sample0", "sample1", "sample2"], "attention": 0 }],
   }
 }
 
@@ -376,7 +377,7 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
       st_section(c, @sf.t("web-pages.stations.page.resources"), fn() {
         @sf.group(c, fn() {
           @sf.block(c, fn() {
-            meter_dials(c, items(host, "meters"))
+            station_resource_dials(c, items(host, "meters"), items(host, "gpus"))
             match (core.topic)("stationNet", { "station": str(address) }).value {
               Some(Object(_)) as net => station_net(c, net)
               _ => ()
@@ -432,13 +433,31 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
     }
     _ => ()
   }
-  let profiles = items(o, "profiles")
-  if profiles.length() > 0 {
+  let profile_groups = items(s, "profileGroups")
+  if profile_groups.length() > 0 {
     out.push(fn() {
-      st_section(c, "Profile", count=profiles.length(), fn() {
+      st_section(c, @sf.t("android-misc.bar.place.profiles"), fn() {
         @sf.group(c, fn() {
-          for p in profiles {
-            station_profile_row(c, core, address, Some(p))
+          for group in profile_groups {
+            let gv = Some(group)
+            let kind = text(gv, "group")
+            let name = text(gv, "title")
+            let ids = strings(gv, "profiles")
+            let attention = match field(gv, "attention") {
+              Some(Number(n, ..)) => n.to_int()
+              _ => 0
+            }
+            let row = "station-profiles/" + address + "/" + kind
+            if @sf.link_row(
+              c,
+              row,
+              name,
+              value=@sf.t("web-mobile.settings.profilesCount", args=[("n", ids.length().to_string())]),
+              trouble=if attention > 0 { @sf.t("web-mobile.settings.profilesShort", args=[("n", attention.to_string())]) } else { "" },
+              lead=fn() { @settings.group_mark(c, kind) },
+            ) {
+              station_profiles_panel(core, here, address, kind, name, c.id(row), ids.length() >= @sf.pick_search_from)
+            }
           }
         })
       })
@@ -543,9 +562,60 @@ fn st_row_mark(c : @ui.Ctx, icon : String) -> Unit {
 let st_row_glyph : Double = 16.0
 
 ///|
-/// A profile of it (ProfileCard, as the Profile page lists it): its maker's mark, its name and its check where not
-/// well, its models and who uses it under them, its allowance under that; the whole of it its page.
-fn station_profile_row(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit {
+/// One account kind, with its live profiles and their allowances. A long kind can be searched without leaving it.
+fn station_profiles_panel(core : Core, here : Here, address : String, kind : String, title : String, from : Int, many : Bool) -> Unit {
+  let search_key = "station-profiles-search/" + address + "/" + kind
+  let query = @ui.Field::new()
+  @sf.panel(
+    title,
+    fn(c, close) {
+      let now = @settings.station_of(core, here, address)
+      let group = items(now, "profileGroups").iter().find_first(fn(g) { text(Some(g), "group") == kind })
+      let ids = strings(group, "profiles")
+      let profiles = items(field(now, "overview"), "profiles")
+      let mut words = ""
+      if ids.length() >= @sf.pick_search_from || query.text() != "" {
+        c.box(style=@sf.panel_words_in().then(st_profiles_search), fn() {
+          words = @sf.input(c, search_key, placeholder=@sf.t("common.search"), small=true, field=query).text.trim().to_owned().to_lower()
+        }) |> ignore
+      }
+      let found : Array[Json] = []
+      for id in ids {
+        match profiles.iter().find_first(fn(p) { text(Some(p), "id") == id }) {
+          Some(p) => {
+            let hay = (text(Some(p), "name") + "\n" + text(Some(p), "email")).to_lower()
+            if words == "" || hay.contains(words) {
+              found.push(p)
+            }
+          }
+          None => ()
+        }
+      }
+      if found.is_empty() {
+        @sf.panel_note(c, @sf.t("common.noMatch"))
+      } else if many {
+        @sf.panel_list(c, "station-profiles-list/" + address + "/" + kind, found.length(), st_profile_row_est, fn(i) {
+          let p = found[i]
+          station_profile_row(c, core, address, Some(p), field(field(now, "profileStates"), text(Some(p), "id")), close)
+        }) |> ignore
+      } else {
+        c.box(style=st_profiles_rows, fn() {
+          for p in found {
+            station_profile_row(c, core, address, Some(p), field(field(now, "profileStates"), text(Some(p), "id")), close)
+          }
+        }) |> ignore
+      }
+    },
+    from=Of(from),
+    field=if many { search_key } else { "" },
+    tall=if many { 0.85 } else { 0.0 },
+    grows=many,
+  )
+}
+
+///|
+/// An account's name, models, use, allowance and state; its row opens its profile.
+fn station_profile_row(c : @ui.Ctx, core : Core, address : String, p : Json?, state : Json?, close : () -> Unit) -> Unit {
   let used = items(p, "usedBy").length()
   let facts = [text(p, "modelsText")]
   if used > 0 {
@@ -560,18 +630,19 @@ fn station_profile_row(c : @ui.Ctx, core : Core, address : String, p : Json?) ->
         c.box(style=st_profile_mark, fn() { @sf.provider_logo(c, text(p, "runtime"), text(field(p, "access"), "kind"), st_profile_glyph, text(p, "providerMark")) })
         |> ignore
       },
-      // (its allowance under what it is, a line of its own: as the profiles' page lists it)
       below?=if text(field(p, "quota"), "state") == "ok" {
         Some(fn() { @sf.quota_chips(c, field(p, "quota"), small=true, key="station-profile/" + address + "/" + text(p, "id")) })
       } else {
         None
       },
       tail=fn() {
-        if text(p, "checkTone") != "green" && text(p, "checkText") != "" {
+        let status = if text(state, "text") != "" { text(state, "text") } else { text(p, "checkText") }
+        let tone = if text(state, "text") != "" { text(state, "tone") } else { text(p, "checkTone") }
+        if tone != "green" && status != "" {
           @sf.pill(
             c,
-            text(p, "checkText"),
-            tone=match text(p, "checkTone") {
+            status,
+            tone=match tone {
               "red" => Red
               "amber" => Amber
               "blue" => Blue
@@ -581,28 +652,58 @@ fn station_profile_row(c : @ui.Ctx, core : Core, address : String, p : Json?) ->
         }
       },
     ) {
+    close()
     (core.push)(Profile(address, text(p, "id")))
   }
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let st_profiles_rows : @ui.Style = @ui.css("w=Full gap=SPx")
+
+///|
+// kept across runs: a value (no field of it changes)
+let st_profiles_search : @ui.Style = @ui.css("w=Full pt=S1 pb=S2_5")
+
+///|
+/// A long list's first estimate; its rows say their actual heights as they are laid out.
+let st_profile_row_est : Double = 84.0
 
 // ── Settings ────────────────────────────────────────────────────────────
 
 ///|
 /// What it is let do and set to (Settings): the grants macOS gives it, the tools logged in on it, the programs of its
-/// machine granted its data, its agents' variables, what its search finds, the workspaces it is in.
+/// machine granted its data, its agents' variables, what its search finds, the workspaces it is in. Away, none of what
+/// only it can change (用户定 2026-11-04: what cannot be changed while it is offline is not shown then), a line saying
+/// so in their place (a login under way too: it goes on there only); what it has logged in and the workspaces it
+/// is in stay, nothing there to change.
 fn station_settings(c : @ui.Ctx, core : Core, s : Json?, manager : Bool) -> Array[() -> Unit] {
   let address = text(s, "station")
   let o = field(s, "overview")
-  let online = flag(s, "online")
   let out : Array[() -> Unit] = []
+  if !flag(s, "online") {
+    out.push(fn() {
+      @sf.group(c, fn() { @sf.said_row(c, @sf.t("web-pages.stations.settingsOffline"), "") })
+    })
+    out.push(fn() { station_logins(c, core, address, online=false) })
+    if manager {
+      out.push(fn() { station_workspaces(c, core, address) })
+    }
+    return out
+  }
   match field(o, "permissions") {
-    Some(Object(_)) as p if online => out.push(fn() { station_permissions(c, core, address, p) })
+    Some(Object(_)) as p => out.push(fn() { station_permissions(c, core, address, p) })
     _ => ()
   }
   out.push(fn() { station_logins(c, core, address) })
   // (asked for only when the station's overview says there are some)
-  match field(o, "outflowGrants") {
-    Some(Number(n, ..)) if n > 0.0 => out.push(fn() { station_outflow(c, core, address, flag(o, "outflowAnswers")) })
+  let grants = match field(o, "outflowGrants") {
+    Some(Number(n, ..)) => n > 0.0
+    _ => false
+  }
+  match field(o, "outflowTailcat") {
+    Some(Object(_)) as link => out.push(fn() { station_outflow(c, core, address, flag(o, "outflowAnswers"), grants, link) })
+    _ if grants => out.push(fn() { station_outflow(c, core, address, flag(o, "outflowAnswers"), grants, None) })
     _ => ()
   }
   match field(o, "agentEnv") {
@@ -610,7 +711,7 @@ fn station_settings(c : @ui.Ctx, core : Core, s : Json?, manager : Bool) -> Arra
     _ => ()
   }
   match field(o, "search") {
-    Some(Object(_)) as search if online && text(search, "files") == "spotlight" =>
+    Some(Object(_)) as search if text(search, "files") == "spotlight" =>
       out.push(fn() { station_search(c, core, address, search, manager) })
     _ => ()
   }
@@ -623,7 +724,7 @@ fn station_settings(c : @ui.Ctx, core : Core, s : Json?, manager : Bool) -> Arra
     _ => ()
   }
   match field(o, "elevation") {
-    Some(Object(_)) as elevation if online => out.push(fn() { station_elevation(c, core, address, elevation) })
+    Some(Object(_)) as elevation => out.push(fn() { station_elevation(c, core, address, elevation) })
     _ => ()
   }
   if manager {
@@ -1155,8 +1256,12 @@ fn station_workspaces(c : @ui.Ctx, core : Core, address : String) -> Unit {
       for w in ws {
         let wv = Some(w)
         let name = text(wv, "name")
-        @sf.said_row(c, name, text(wv, "line"), lead=fn(c) {
-          @sf.workspace_badge(c, name, text(wv, "emoji"), text(wv, "icon"), st_ws_mark)
+        let emoji = text(wv, "emoji")
+        let icon = text(wv, "icon")
+        @sf.said_row(c, name, text(wv, "line"), lead?=if @sf.has_station_mark(emoji, icon) {
+          Some(fn(c) { @sf.workspace_badge(c, name, emoji, icon, st_ws_mark) })
+        } else {
+          None
         })
       }
     })
@@ -1266,8 +1371,7 @@ let st_count : @ui.TextStyle = @ui.text_style(size=Meta, leading=L7, weight=Medi
 let st_memory : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, w=Full)
 
 ///|
-/// A profile's maker's mark leading its row: a tile in the row's corner the ladder's inset in, concentric with it (the
-/// small block's 10), not a circle, which no row's corner there could hold concentric (the user, 2026-10-25: 不用圆形就行了).
+/// A profile's maker's mark, concentric with its row's corner.
 // kept across runs: a value (no field of it changes)
 let st_profile_mark : @ui.Style = @ui.css("w=S9 h=S9 bg=Neutral align=ACenter justify=JCenter").then(
   @ui.style(radius=@sf.small_radius),

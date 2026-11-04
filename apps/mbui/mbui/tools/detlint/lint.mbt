@@ -662,7 +662,44 @@ fn lint_style(f : MbtFile, cfg : Config, out : Array[Finding]) -> Unit {
     out.push(finding(rule, f.rel, toks[k].line, what))
   }
 
-  // an Exact(…) made (not the enum's own declaration, nor a match arm's pattern)
+  // each closing bracket's opening one (a pattern's groups stepped over whole, either way)
+  let opened : Map[Int, Int] = Map::new()
+  for i, t in toks {
+    if t.end >= 0 {
+      opened[t.end] = i
+    }
+  }
+  // the bracket that holds token `i` (-1: none)
+  fn holder(i : Int) -> Int {
+    let mut j = i - 1
+    while j >= 0 {
+      if toks[j].end > i {
+        return j
+      }
+      j = match opened.get(j) {
+        Some(o) => o - 1
+        None => j - 1
+      }
+    }
+    -1
+  }
+
+  // what a pattern is made of besides its groups: names (a constructor's, a binding's, `_`, a package's), literals, an
+  // or-pattern's |, a tuple's or a constructor's commas
+  fn in_pattern(t : Tok) -> Bool {
+    (t.kind == "ident" && t.text != "if" && t.text != "return") ||
+    t.kind == "at" ||
+    t.kind == "num" ||
+    t.kind == "str" ||
+    t.text == "|" ||
+    t.text == "," ||
+    t.text == "." ||
+    t.text == "::" ||
+    t.text == "-"
+  }
+
+  // an Exact(…) made (not the enum's own declaration, nor a match arm's pattern: what is left of an arm's =>, before its
+  // guard's if, the groups it is in included; one in a guard or in what the arm gives is made)
   fn exact_at(k : Int) -> Bool {
     if !(
         toks[k].kind == "ident" &&
@@ -676,12 +713,64 @@ fn lint_style(f : MbtFile, cfg : Config, out : Array[Finding]) -> Unit {
     if it >= 0 && f.items[it].kind == "enum" {
       return false
     }
-    let end = toks[k + 1].end
-    !(
-      end >= 0 &&
-      end + 1 < toks.length() &&
-      (toks[end + 1].text == "=>" || toks[end + 1].text == "|")
-    )
+    // (the whole of what it is in, up to the braces it is said in: Some(Exact(v)), (S4, Exact(v)))
+    let mut s = k
+    let mut e = toks[k + 1].end
+    while true {
+      let h = holder(s)
+      if h < 0 || !(toks[h].text == "(" || toks[h].text == "[") {
+        break
+      }
+      s = h
+      e = toks[h].end
+      // (its constructor's name before it, on its line: not what ends the arm before)
+      while s > 0 &&
+            toks[s - 1].line == toks[s].line &&
+            (toks[s - 1].kind == "ident" || toks[s - 1].kind == "at" || toks[s - 1].text == ".") {
+        s = s - 1
+      }
+    }
+    guard e >= 0 else { return true }
+    // (back to where its arm begins: a line begun, or the braces opened, over nothing but a pattern's)
+    let mut j = s - 1
+    let mut head = false
+    while j >= 0 {
+      let t = toks[j]
+      let broken = toks[j + 1].line > t.line && t.text != "|" && t.text != ","
+      if broken || t.text == "{" {
+        head = true
+        break
+      }
+      match opened.get(j) {
+        Some(o) => j = o - 1
+        None => {
+          if !in_pattern(t) {
+            break
+          }
+          j = j - 1
+        }
+      }
+    }
+    guard head || j < 0 else { return true }
+    // (on to the arm's => or its guard's if, over nothing but a pattern's, a line broken only after | or ,)
+    let mut n = e + 1
+    while n < toks.length() {
+      let t = toks[n]
+      if t.text == "=>" || (t.kind == "ident" && t.text == "if") {
+        return false
+      }
+      if t.line > toks[n - 1].line && toks[n - 1].text != "|" && toks[n - 1].text != "," {
+        return true
+      }
+      if t.end >= 0 {
+        n = t.end + 1
+      } else if in_pattern(t) {
+        n = n + 1
+      } else {
+        return true
+      }
+    }
+    true
   }
 
   for k in 0..<toks.length() {

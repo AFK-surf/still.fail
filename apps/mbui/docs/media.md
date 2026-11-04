@@ -35,7 +35,10 @@ Rendering uses the Mac offscreen host. System keyboards, dialogs and native web 
 use a real system capture for a scene that needs them. Films fail when a frame needs an image that cannot be decoded or
 a native view is visible, instead of silently omitting it. A failed image no longer in the frame does not stop export.
 When deliberately filming only the parts mbui draws, set
-`MBUI_FILM_ALLOW_INCOMPLETE=1`; this choice is recorded in the scene metadata. Images that are still loading can be
+`MBUI_FILM_ALLOW_INCOMPLETE=1`; this choice is recorded in the scene metadata. A scene that breaks the theme's corner
+rule fails with each fault named; to show such a frame anyway (the before of a change to the rule or to a corner), set
+`MBUI_FILM_ALLOW_CORNER_FAULTS=1`, which still names every fault and is recorded too, rather than patching the checks
+and building another renderer. Images that are still loading can be
 filmed as loading; use the preparation script and `image_ready SRC` if they must be ready before filming begins.
 `docs/figures.md` describes building reusable graphics.
 
@@ -88,16 +91,65 @@ PNG or film to inspect those settings and frame-accurate timing.
 
 ## Prebuilt scene renderer
 
-The macOS Apple Silicon offscreen application renderer is also available as the `mbui-film` native part. To prepare a
-small remote job from a source checkout, without synchronizing the checkout or building it on the remote station:
+For development stills and films, use the Wasm scene renderer on macOS Apple Silicon. It runs the actual application
+and the same offscreen text, image and Metal host and the same film writer as the native renderer; it does not open a
+window. `scripts/media.sh picture|film` from a checkout builds it too (`scripts/wasm-film-build.sh`, into
+`out/wasm-film`): no C of the application is compiled. To prepare a small job
+from a source checkout, without synchronizing the checkout or building on the machine drawing the picture:
 
 ```sh
-bash scripts/media-job.sh film out/scene.drive /absolute/path/to/a-new-job [out/prepare.drive]
+job=/absolute/path/to/a-new-job
+bash scripts/media-job.sh picture out/scene.drive "$job"
+# Optionally add a preparation drive as the fourth argument.
 ```
 
-Use that directory as `station_task`'s `dir`. Run `MBUI_FIXTURE=home MBUI_WIN=320x560 bash run.sh` and return
-`result.png` and `result.png.scene.json`; set `MBUI_MEDIA_KIND=film` to return `result.mp4`,
-`result.mp4.last.png`, `result.mp4.textrec` and `result.mp4.scene.json`. The ordinary `MBUI_*` scene settings still
-apply. The job obtains its exact prebuilt renderer by the source key, with the station's shared native-part cache;
-it does not build one. If the component sources have changed and that version has not been published, it fails rather
-than showing an old component. Build that changed checkout with `scripts/media.sh` instead.
+Run `MBUI_FIXTURE=home MBUI_WIN=320x560 bash /absolute/path/to/a-new-job/run.sh` locally, or use that directory as
+`station_task`'s `dir` and run `bash run.sh`. Return `result.png` and `result.png.scene.json`. The ordinary `MBUI_*`
+scene settings still apply. The job obtains its exact prebuilt renderer by the source key, with the station's shared cache;
+it does not build one. Each new source state needs a newly prepared job: the job always uses the key it was created
+with, even if the original checkout changes. Missing versions fail rather than showing an old component.
+
+For a video, prepare a `film` job instead and set `MBUI_MEDIA_KIND=film` when running it; return `result.mp4`,
+`result.mp4.last.png`, `result.mp4.textrec` and `result.mp4.scene.json`. The film is mbui's own (src/film) run in the
+Wasm scene: its frames and text are the native renderer's, byte for byte (2026-11-03). A Wasm scene that needs a native view or reads pixels back from the renderer fails instead of omitting
+content. The scene record includes hashes of the Wasm module, its host and loader as well as the launcher.
+
+A single prepared job can capture different fixtures, sizes and action scripts without building or preparing another
+renderer for each picture. The first argument selects a distinct output; the second and third optionally replace the
+action and preparation scripts (an empty third argument omits preparation):
+
+```sh
+MBUI_FIXTURE=home MBUI_WIN=390x844 bash "$job/run.sh" out/home-small.png
+MBUI_FIXTURE=chat-info MBUI_WIN=800x900 bash "$job/run.sh" out/info.png out/info.drive ''
+```
+
+Each picture still gets its own scene record. Capture before and after with jobs prepared from the two corresponding
+source states; use the same scene, settings and host for the comparison. Return an early picture separately from long
+test or batch tasks. A single prebuilt, offscreen picture can run on a small station or as `station_task small: true`;
+builds, videos and substantial batches are ordinary tasks.
+
+When a development version is missing from the cache, build it once on an Apple Silicon build station. Sync the same
+working tree there and pass the prepared job's `runtime.key` and the original checkout's base commit. Put the values
+in the submitted station command; local shell variables do not automatically carry over:
+
+```sh
+# In the original checkout, before submitting the station task:
+key=$(cat "$job/runtime.key")
+part=$(cat "$job/runtime.part")
+base=$(git rev-parse HEAD)
+# In the synced repository on the build station:
+bash apps/mbui/scripts/media-dev-build.sh "$key" apps/mbui/out/media-inbox "$base" "$part"
+```
+
+It checks the synced sources against the requested key before and after the build, reuses an existing matching
+artifact, writes `<part>-darwin-arm64-<key>.tar.gz` to the inbox, and installs it in the build station's shared
+cache. A station mirror without Git metadata gets
+a temporary snapshot for the source-key calculation; that snapshot is removed afterwards. Retrieve the archive and
+set `STILLFAIL_NATIVE_INBOX` to its directory for the first run of the prepared job. The native-part client validates
+the manifest and puts it in the machine's shared cache for subsequent runs. The base commit identifies the starting
+revision; the source key also identifies uncommitted component changes. Do not substitute a different key or use a
+previous binary after a source change.
+
+Building the Wasm part needs MoonBit, Node with its headers, Xcode's command-line tools and the macOS frameworks.
+The loader reuses non-overlapping local variables in MoonBit's generated start function before instantiating it;
+unsupported module instructions fail instead of drawing from a partially interpreted module.

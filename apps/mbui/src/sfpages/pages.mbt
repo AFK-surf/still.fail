@@ -10,7 +10,21 @@ fn init {
   @sfbase.share_card_of.val = share_card_open
   @sfbase.screen_made_stream.val = screen_fixture_stream
   @sf.picture_out_by.val = fn(c, png, said) { picture_out(c, png, copy_said=said) }
+  // (a part of a page whose build faulted, in its place: as a list with nothing in it says so; a page's own bar and
+  // back went with it, so back is under the words where there is somewhere to go)
+  @ui.old_fault_shown.val = fn(c, _) {
+    @sf.empty(c, fn() {
+      c.text(@sf.t("android-misc.fault.shown"), style=fault_words) |> ignore
+      if @sfbase.back_step() is Some(_) && @sf.button(c, @sf.t("common.back"), key="fault-back") {
+        @sfbase.go_back() |> ignore
+      }
+    })
+  }
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let fault_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 
 ///|
 /// What this package keeps put back as the app begins anew (its reset).
@@ -21,6 +35,7 @@ pub fn reset() -> Unit {
   screen_uis.clear()
   screens_made.val = 0
   hover_reset()
+  hovered_file.val = None
   message_reset()
   rows_reset()
   login_cards_reset()
@@ -38,6 +53,7 @@ pub fn reset() -> Unit {
   sidebar_reset()
   finder_reset()
   search_reset()
+  settings_search_reset()
   marks_reset()
   news_reset()
   landing_reset()
@@ -45,6 +61,7 @@ pub fn reset() -> Unit {
   outside_reset()
   new_chat_reset()
   changelog_reset()
+  share_looks_reset()
   font_setting_reset()
   notify_page_reset()
   usage_reset()

@@ -38,7 +38,7 @@ fn menu_height(n : Int) -> Double {
 /// menu_pad in, its corner concentric round theirs (concentricOut(MENU_ROW, MENU_PAD)).
 fn phone_menu(c : @ui.Ctx, tx? : Double = 0.0, ty? : Double = 0.0, body : () -> Unit) -> Int {
   let t = @sf.theme()
-  c.box(
+  let menu = c.box(
     w=Px(180.0),
     tx~,
     ty~,
@@ -51,6 +51,9 @@ fn phone_menu(c : @ui.Ctx, tx? : Double = 0.0, ty? : Double = 0.0, body : () -> 
     clip=true,
     body,
   )
+  // (the menu: the surface of the look it comes in by: Ctx::surface)
+  c.surface(menu)
+  menu
 }
 
 ///|

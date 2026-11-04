@@ -1,6 +1,7 @@
 // 92-drive-zip (e2e/traces/drive-zip.trace: against the local still.fail): a folder of the lent folder downloaded as a
 // zip: right clicked, 下载为 zip: the station zips it (drive.zip), the zip read through the core (drive.read) and kept
 // with the downloads (@ui.keep_begin), said as it starts and once kept.
+// before it: 15-drive-lend
 
 ///|
 test "92-drive-zip" {

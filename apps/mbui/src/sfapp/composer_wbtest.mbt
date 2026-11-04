@@ -51,7 +51,7 @@ fn fake_core(
         // what still.fail's links open, as the core reads them (links_wbtest.mbt)
         "link.parse" => done(Ok(fixture_link_parse(text(Some(params), "url"))))
         // what is written, read as the core reads it (refLinks.ts, pasted.ts: its answers kept)
-        "ref.at" | "ref.before" | "ref.marks" | "ref.pasted" | "paste.info" => (base.call)(name, params, done)
+        "ref.at" | "ref.before" | "ref.marks" | "ref.words" | "ref.pasted" | "paste.info" => (base.call)(name, params, done)
         // the chat's draft, as the core keeps it (the composer's: sfpages, its fixture compose_fixture.mbt)
         _ if name.has_prefix("composer.") => (base.call)(name, params, done)
         _ => ()
@@ -69,17 +69,17 @@ fn fake_core(
       0
     },
     // the draft's files in the core's composer, as the test moves them on (`ups`: going_up, upped)
+    // (what the test makes over the made-up core's: what `over` reads of the test's own is a signal it sets, so what
+    // reads the topic follows it as it follows the core's)
     topic: fn(name, params) {
       ignore(ups)
-      // (what the test makes over the made-up core's, made up as it is read: followed by its version, as the core's
-      // by what it says)
-      topic_as_read(name, params, over(name, (base.topic)(name, params)))
+      over(name, (base.topic)(name, params))
     },
     now: fn() { now },
     read_only,
   }
   made.val = Some(src)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform~)
   // the chat pushed in over Home
   t.run_for(@ui.move_most_ms)
@@ -316,7 +316,7 @@ test "a message held: its words quoted into the draft, with a line for a comment
 test "a message going up says how far it has gone" {
   new_run()
   let src = fixture("chat-uploading")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("第二屏的截图，帮我看看") is Some(_))
@@ -326,12 +326,45 @@ test "a message going up says how far it has gone" {
 }
 
 ///|
+/// A video waiting in the composer looked like a picture waiting (2026-11-04): its tile has a solid play mark in its
+/// middle; a picture's none.
+test "a video waiting is told apart from a picture waiting by its play mark" {
+  new_run()
+  let src = fixture("chat-attach-video")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.image_fade_ms)
+  let tiles = t.drawn_images().filter(fn(i) { (i[2] - 56.0).abs() < 0.5 && (i[3] - 56.0).abs() < 0.5 })
+  tiles.sort_by(fn(a, b) { a[0].compare(b[0]) })
+  assert_eq(tiles.length(), 2)
+  // white shapes in a tile's middle half (its ✕ is on its corner): the video's play mark; none in the picture's
+  let over = fn(i : Array[Double]) {
+    t.drawn_shapes().filter(fn(s) {
+      s.5 == 0xFFFFFFFFL && s.0 > i[0] + 14.0 && s.0 + s.2 < i[0] + 42.0 && s.1 > i[1] + 14.0 && s.1 + s.3 < i[1] + 42.0
+    })
+  }
+  assert_eq(over(tiles[0]).length(), 0)
+  let marks = over(tiles[1])
+  assert_true(marks.length() > 0)
+  // (its bands, one box)
+  let mut top = 1.0e9
+  let mut foot = -1.0e9
+  for m in marks {
+    top = if m.1 < top { m.1 } else { top }
+    foot = if m.1 + m.3 > foot { m.1 + m.3 } else { foot }
+  }
+  assert_true(((top + foot) / 2.0 - (tiles[1][1] + 28.0)).abs() < 3.0, msg="\{marks} \{tiles[1]}")
+  assert_eq(t.squeeze_faults(), [])
+}
+
+///|
 test "the fixture's station: sending, then the message, then an answer; a failure, then 重试" {
   new_run()
   let clock : Ref[Double] = { val: 0.0 }
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   // the chat pushed in over Home
   t.run_for(@ui.move_most_ms)
@@ -341,14 +374,14 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   assert_true(t.find("测试一下") is Some(_))
   assert_true(t.find("正在发送") is Some(_))
   // the station's clock on past its deliveries, its answers, a frame drawn for each
-  clock.val = clock.val + fix_deliver_ms
+  fix_clock_set(clock, clock.val + fix_deliver_ms)
   t.draw()
   assert_true(t.find("正在发送") is None)
   assert_true(t.find("测试一下") is Some(_))
   // (the station answers fix_answer_ms later: that time passes on the page too, the words landed and the agent's line
   // come in their turns meanwhile)
   t.run_for(fix_answer_ms)
-  clock.val = clock.val + fix_answer_ms
+  fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   // said while its agent's activity shows: out of its avatar once it has folded and hopped (emit.mbt)
   t.run_for(Pose::Fold.ms() + Pose::Float.ms())
@@ -360,13 +393,13 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   t.tap_text("发消息")
   t.type_text("这条会失败")
   tap_send(t)
-  clock.val = clock.val + fix_deliver_ms
+  fix_clock_set(clock, clock.val + fix_deliver_ms)
   t.draw()
   assert_true(t.find("未发送") is Some(_))
   // (its 重试 shown as its room opens to it: Ctx::row_size)
   t.run_for(@ui.move_most_ms)
   t.tap_text("重试")
-  clock.val = clock.val + fix_deliver_ms
+  fix_clock_set(clock, clock.val + fix_deliver_ms)
   t.draw()
   // (what failed leaves the list as its room closes)
   t.run_for(@ui.move_most_ms)
@@ -376,7 +409,7 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   t.tap_text("发消息")
   t.type_text("这条失败了也重发不了")
   tap_send(t)
-  clock.val = clock.val + fix_deliver_ms
+  fix_clock_set(clock, clock.val + fix_deliver_ms)
   t.draw()
   t.run_for(@ui.move_most_ms)
   t.tap_text("重试")
@@ -391,7 +424,7 @@ test "a picture sent from here is drawn in its message as it was picked, up befo
   let made : Ref[Source?] = Ref(None)
   let t = fake_core(calls, made~)
   let src = made.val.unwrap()
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   // a PNG's header (IHDR 1600 × 900): a picture
   let png = Bytes::from_array([
     0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0x06, 0x40,
@@ -426,7 +459,7 @@ test "a video picked shows as the host's still of it in its tile and its message
   let made : Ref[Source?] = Ref(None)
   let _ = fake_core(calls, made~)
   let src = made.val.unwrap()
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   let w = @sfbase.writing(src, draft_key(r))
   let picked = fn(name : String, held : Int, src : String) -> @hostapi.Picked {
     { name, bytes: if held == 0 { b"\x00\x00\x00\x18ftypmp42" } else { b"" }, held, size: 12.0, src }
@@ -455,7 +488,7 @@ test "a video picked or pasted that the host has no picture of shows its first f
   let made : Ref[Source?] = Ref(None)
   let t = fake_core(calls, made~)
   let src = made.val.unwrap()
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   let w = @sfbase.writing(src, draft_key(r))
   // (macOS's pasteboard and pickers, Windows', iOS's say no address for a file: no still of the host's)
   let clip = b"\x00\x00\x00\x14ftypqt  \x00\x00\x00\x08wide"
@@ -527,6 +560,40 @@ test "the app tells the core it is shown and in front, in which workspace, and w
 }
 
 ///|
+test "words sent as the composer grows a line hold its room where it is drawn, the list's foot not ahead of it" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  t.tap_text("发消息")
+  t.type_text("第一行")
+  let foot = fn() {
+    let rows = t.rows()
+    rows[rows.length() - 1].2
+  }
+  let before = @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1")
+  let over = foot() - before
+  for line in ["第二行", "第三行", "第四行"] {
+    t.enter()
+    t.type_text(line)
+  }
+  // half way through its growing, sent: the composer held as tall as it shows, the rows over it where they were, with
+  // it, till the words let go of it
+  t.run_for(@ui.row_size_ms / 2.0)
+  let growing = @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1")
+  assert_true(growing > before)
+  assert_eq(foot(), growing + over)
+  tap_send(t)
+  assert_eq(named(calls, "chat.send").length(), 1)
+  // (a while on, the words still in it)
+  t.run_for(@ui.row_size_ms / 4.0)
+  assert_eq(foot(), @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") + over)
+  assert_eq(@sfpages.composer_room(t.ctx(), "ws1/st1:s-c1"), growing)
+  // (the words flown, the composer let go of)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(draft_keep_ms)
+  t.assert_idle()
+}
+
+///|
 test "the list keeps clear the room the composer takes in the very frame it grows, each frame of its morph" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
@@ -585,13 +652,13 @@ test "at its end, a row that comes at it: the core told the end is not in view w
       (base.call)(name, params, done)
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   assert_eq(ends, [true])
   // someone says something: it comes at the end, the list gliding to it (list_to_end, the frame it comes)
   said_by_ana(171, "我也来看看")
-  clock.val = clock.val + fix_said_ms
+  fix_clock_set(clock, clock.val + fix_said_ms)
   t.draw()
   assert_true(t.find("我也来看看") is Some(_))
   let rest = t.rest_of("a list")
@@ -607,11 +674,11 @@ test "at its end, a row that comes at it: the core told the end is not in view w
   t.tap_text("发消息")
   t.type_text("测试一下")
   tap_send(t)
-  clock.val = clock.val + fix_deliver_ms
+  fix_clock_set(clock, clock.val + fix_deliver_ms)
   t.draw()
   // (the station answers fix_answer_ms later: that time passes on the page too)
   t.run_for(fix_answer_ms)
-  clock.val = clock.val + fix_answer_ms
+  fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   t.run_for(Pose::Fold.ms() + Pose::Float.ms())
   assert_true(t.find("收到：「测试一下」") is Some(_))
@@ -700,7 +767,7 @@ test "words sent fly to their own row though an older page with the viewer's mes
       }
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
@@ -724,4 +791,32 @@ test "words sent fly to their own row though an older page with the viewer's mes
   t.draw()
   assert_true(t.find("刚发的这一句") is Some(_))
   fix_clock.val = None
+}
+
+///|
+test "lines typed while words sent let go of the composer: the list's foot goes where it comes to stand with them, not after" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  t.tap_text("发消息")
+  t.type_text("第一条")
+  t.enter()
+  t.type_text("两行")
+  tap_send(t)
+  // (as the words fly, two lines more: the composer comes to stand three lines tall, not one)
+  t.run_for(@ui.row_size_ms / 2.0)
+  t.type_text("接着写")
+  t.enter()
+  t.type_text("又一行")
+  t.enter()
+  let foot = fn() {
+    let rows = t.rows()
+    rows[rows.length() - 1].2
+  }
+  // every frame the rows steady (rows_steady.mbt: the foot's room opening at once, as the words' flight was over, put
+  // every row over it up by it in one frame), and the foot where the composer comes to stand
+  t.run_for(@ui.move_most_ms)
+  let over = foot() - @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1")
+  t.run_for(draft_keep_ms)
+  assert_eq(foot() - @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1"), over)
+  t.assert_idle()
 }

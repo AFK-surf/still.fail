@@ -18,7 +18,8 @@ priv struct TreeField {
   font_size : () -> Double
   line : Double
   max_lines : Int
-  hint : String
+  /// what it says it is while empty, as it is now (followed: its paint and what it says read it)
+  hint : () -> String
   shorter : Array[String]
   trim : Bool
   submitted : (String) -> Unit
@@ -58,6 +59,16 @@ priv struct TreeField {
 let tree_fields : Map[@view.NodeId, TreeField] = Map([])
 
 ///|
+/// The words by which a drawn node is found in tests and drives. An editor is found by its hint as an old editor's
+/// Node.text is; its glyphs are painted by the editor, so Drawn.words is deliberately empty.
+fn view_words_found(d : @view.Drawn) -> String {
+  match tree_fields.get(d.id) {
+    Some(tf) => (tf.hint)()
+    None => view_words_set(d.words, d.words_look)
+  }
+}
+
+///|
 /// A field of words in `parent`, showing and editing `field`: as Ctx::editor's plain one (no frame of its own: what
 /// holds it draws one) set so (`placeholder` and its `shorter` ways, `font_size`, `line`, `max_lines`, `trim`, its
 /// colours, `enter_sends`, `leaves`, `ime_action`, `paste_limit`, `secret`, `words`, `look`: each as Ctx::editor takes
@@ -65,7 +76,8 @@ let tree_fields : Map[@view.NodeId, TreeField] = Map([])
 /// Ctx::field_files), as tall as
 /// its words lay out between a line and `max_lines` (Field::laid), read out as a field of its words. `submitted`: what
 /// is told its words as they are given up (Enter, where it gives them up), once, at that key's moment; `pasted`, a
-/// paste of `paste_limit` characters or more, not put in, once, at that paste's. The node made.
+/// paste of `paste_limit` characters or more, not put in, once, at that paste's. `placeholder_by`: its placeholder as it
+/// is now, followed (in place of `placeholder`). The node made.
 pub fn field(
   parent : @view.View,
   field : Field,
@@ -90,6 +102,7 @@ pub fn field(
   files? : (Array[(String, Bytes)]) -> Unit,
   size_by? : () -> Double,
   colors_by? : () -> (Int64, Int64, Int64),
+  placeholder_by? : () -> String,
 ) -> @view.View {
   // (its size and its colours as said once, or followed as they change (`size_by`; `colors_by`: its words', its
   // placeholder's, its caret's): words written over a picture, as big as the picture is drawn, in the colour picked)
@@ -97,13 +110,20 @@ pub fn field(
     Some(f) => f
     None => fn() { font_size }
   }
+  // (what it says it is while empty as said once, or followed as it changes (`placeholder_by`: in the words as they
+  // are now), its node and its editor kept
+  let hint = match placeholder_by {
+    Some(f) => f
+    None => fn() { placeholder }
+  }
   parent.box(fn(f) {
     let id = f.id()
     let st = field.st
-    // (one Field, one editor: held by another node still, it is told; an old view's editor given it then, Ctx::editor)
+    // (one Field, one editor: held by another node still, it is told; an old view's editor given it then, Ctx::editor.
+    // Given so, a fault (the boundary round it shows it), this field taking it over meanwhile)
     match st.tree_node {
       Some(other) if other != id && tree_fields.contains(other) =>
-        abort("field: one Field given to two fields of the tree's: a Field is one editor's")
+        f.fault("field: one Field given to two fields of the tree's: a Field is one editor's")
       _ => ()
     }
     st.tree_node = Some(id)
@@ -137,7 +157,7 @@ pub fn field(
       font_size: size,
       line,
       max_lines,
-      hint: placeholder,
+      hint,
       shorter,
       trim,
       submitted,
@@ -183,10 +203,12 @@ pub fn field(
       fn(k, w) { k.0.size(w) },
     )
     .focusable(Is(true), keys=0)
+    // (the pointer an I-beam over it, as over an old view's editor: Ctx's pointer shape, desktop.mbt)
+    .cursor(Is(Some(IBeam)))
     // (its words read out, a secret's none: as an old view's editor says them)
     .says(By(fn() {
       let value = field.composed_said()
-      Some(@view.said(TextField, label=placeholder, value=if secret { "" } else { value }, actions=[SetText("")]))
+      Some(@view.said(TextField, label=hint(), value=if secret { "" } else { value }, actions=[SetText("")]))
     }))
     // (a press on it: taken as it goes down where the field takes it so, else a tap's as it is let go: tree_field_down)
     .on_press(fn() { tree_field_tapped(id) })
@@ -855,7 +877,7 @@ fn Ctx::paint_tree_field(
     line_h: z.line,
     wrap: z.wrap,
     trim: tf.trim,
-    hint: tf.hint,
+    hint: (tf.hint)(),
     shorter: tf.shorter,
   }
   let st = tf.st
@@ -919,4 +941,25 @@ fn Ctx::paint_tree_field(
   )
   pop_clip()
   self.transform_insts(i0, self.ninst, ux, uy, s, s, x - ux, y - uy, outer, outer_r, outer_s)
+}
+
+///|
+/// The window's tree's scene as Tree::drawn_held has it, each with the words it is found by (view_words_found: a field
+/// by its hint, its glyphs the editor's) and their size as drawn (a field's as its editor sets them, the system's size
+/// of words applied; another's its words' look's): what holds each as drawn (its index, -1 none) and whether it takes a
+/// press, as there. Drawn.words keeps what is drawn as words; nothing of a field made to look drawn.
+pub fn Tester::drawn_words_found(self : Tester) -> Array[(@view.Drawn, Int, Bool, String, Double)] {
+  ignore(self)
+  guard view_tree() is Some(tree) else { return [] }
+  let c = g()
+  tree
+  .drawn_held()
+  .map(fn(e) {
+    let (d, holder, presses) = e
+    let size = match tree_fields.get(d.id) {
+      Some(tf) => c.editor_sizing((tf.font_size)(), tf.line, tf.max_lines, true, tree_theme().text_line).font_size
+      None => d.words_look.size
+    }
+    (d, holder, presses, view_words_found(d), size)
+  })
 }

@@ -1,5 +1,8 @@
 # A station's machine shared by many agents
 
+> Machine names in examples and measurements are anonymized; they are not requirements for the reader’s environment.
+
+
 Many chats' agents send builds and tests to the same big machine (`station_task`), and the agents of the chats on that
 machine run commands of their own. Each agent looking at the load and starting when it sees room is how they trod on
 each other: several saw an idle machine at once and all started, and nobody knew how much a task would take (a Zig
@@ -60,7 +63,7 @@ waited 20 minutes and more in line, the CPUs a third busy, 2026-10-25.)
 - The screen is for a machine's work, done in minutes. A window put up for a person and left there (a virtual machine
   to try, a simulator or an app to look at) is no claim on it: `stillfail-job show <command>…` waits as `screen` does,
   so the window does not come up under another task's work, then gives the screen back at once and runs the command,
-  holding nothing. (A Mac VM for trying a new user's way in ran as a `screen` claim and held Studio's screen 23 hours,
+  holding nothing. (A Mac VM for trying a new user's way in ran as a `screen` claim and held test-a's screen 23 hours,
   every task with pictures to take in line behind it, 2026-10-27.)
 - While a person uses the screen (macOS: the machine's input, `ioreg`'s HIDIdleTime, idle less than a minute; someone
   at it, or working it through still.fail's view of it), nothing more is given it: no window comes up under their

@@ -5,6 +5,7 @@
 // "core" (the host's `post`), its bytes beside its JSON.
 import { BUILT_AT } from "../core/built.ts";
 import { BETA } from "../channel.ts";
+import { takeShare } from "./share.ts";
 // the app's words' face in a browser: the web's own Inter (its Latin, as the web's pages have it), not the whole face
 // the native hosts carry (apps/mbui src/sfbase/inter_face_js.mbt)
 import interLatin from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url";
@@ -143,6 +144,11 @@ const starting = fetchCarried("inter.woff2", interLatin);
 
 // (named by this build: a page of a newer build never runs an older app's script from the browser's cache)
 await load(`/mbui/host.js?b=${BUILT_AT}`);
+// what /share was given, for the app to take (share.ts), said before the app runs
+takeShare((channel, json) => host()?.post(channel, json), (open) => {
+  const h = host() as { openUrl?(url: string): boolean } | undefined;
+  if (h) h.openUrl = open;
+});
 await starting;
 await load(`/mbui/app.js?b=${BUILT_AT}`);
 for (const name of ["jetbrains_mono.ttf", "math_glyphs.gz", "share_400.gz", "share_600.gz"])
@@ -194,7 +200,7 @@ navigator.serviceWorker?.addEventListener("message", (event: MessageEvent) => {
 /// /w/…/chats/… or /o/… page, as the app takes one the system opens it with), as it loads and as the browser goes back
 /// or forward to another; the app's own page names nothing.
 function tellLink(): void {
-  if (location.pathname === "/" || location.pathname === "/mbui.html" || location.pathname === "/mbui") return;
+  if (location.pathname === "/" || location.pathname === "/mbui.html" || location.pathname === "/mbui" || location.pathname === "/share") return;
   host()?.post("system", JSON.stringify({ link: location.href }));
 }
 tellLink();

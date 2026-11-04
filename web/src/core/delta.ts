@@ -1,5 +1,7 @@
 // A topic's deltas applied (docs/client-core.md): the pages' (client.ts) and the desktop app's main process's.
 
+import { type AnyOp, applyKeyed } from "../../../client/core-ts/src/collections.ts";
+
 type Path = (string | number)[];
 
 /**
@@ -19,81 +21,11 @@ export type DeltaOp = { path: Path } & (
   | { key: string[]; move: unknown; before: unknown }
 );
 
-type KeyedOp = Extract<DeltaOp, { key: string[] }>;
-
 /**
- * A delta applied to a value without changing it: only the objects and arrays
- * along each op's path are copied, so unchanged parts keep their identity and
- * React skips them (a keyed op copies its list, never the items it does not change).
+ * A delta applied to a value without changing it: only the objects and arrays along each op's path are copied, so
+ * unchanged parts keep their identity and React skips them (a keyed op copies its list, never the items it does not
+ * change). The core's own applier (client/core-ts/src/collections.ts `applyKeyed`).
  */
 export function applyDelta(value: unknown, ops: DeltaOp[]): unknown {
-  return ops.reduce((current, op) => applyOp(current, op, 0), value);
-}
-
-function applyOp(node: unknown, op: DeltaOp, depth: number): unknown {
-  if (depth === op.path.length) {
-    if ("key" in op) return Array.isArray(node) ? applyKeyed(node, op) : node;
-    if ("set" in op) return op.set;
-    if ("append" in op) return Array.isArray(node) ? [...node, ...op.append] : node;
-    return node;
-  }
-  const key = op.path[depth]!;
-  if (Array.isArray(node)) {
-    if (typeof key !== "number" || key >= node.length) return node;
-    const copy = node.slice();
-    copy[key] = applyOp(node[key], op, depth + 1);
-    return copy;
-  }
-  if (typeof node !== "object" || node === null || typeof key !== "string") return node;
-  const object = node as Record<string, unknown>;
-  if ("remove" in op && depth === op.path.length - 1) {
-    const rest = { ...object };
-    delete rest[key];
-    return rest;
-  }
-  return { ...object, [key]: applyOp(object[key], op, depth + 1) };
-}
-
-/** An item's key as text, to compare. */
-function keyText(item: unknown, fields: string[]): string {
-  const field = (f: string) => {
-    const v = typeof item === "object" && item !== null ? (item as Record<string, unknown>)[f] : undefined;
-    return v === undefined ? null : v;
-  };
-  return JSON.stringify(fields.length === 1 ? field(fields[0]!) : fields.map(field));
-}
-
-function applyKeyed(list: unknown[], op: KeyedOp): unknown[] {
-  const out = list.slice();
-  const find = (key: unknown) => {
-    const want = JSON.stringify(key);
-    return out.findIndex((item) => keyText(item, op.key) === want);
-  };
-  const place = (item: unknown, before: unknown) => {
-    const at = before === null || before === undefined ? -1 : find(before);
-    if (at < 0) out.push(item);
-    else out.splice(at, 0, item);
-  };
-  if ("drop" in op) {
-    const i = find(op.drop);
-    if (i < 0) return list;
-    out.splice(i, 1);
-  } else if ("patch" in op) {
-    const i = find(op.patch);
-    if (i < 0) return list;
-    out[i] = applyDelta(out[i], op.ops);
-  } else if ("move" in op) {
-    const i = find(op.move);
-    if (i < 0) return list;
-    const [item] = out.splice(i, 1);
-    place(item, op.before);
-  } else {
-    const i = find(JSON.parse(keyText(op.put, op.key)));
-    if (i >= 0 && !("before" in op)) out[i] = op.put;
-    else {
-      if (i >= 0) out.splice(i, 1);
-      place(op.put, op.before);
-    }
-  }
-  return out;
+  return applyKeyed(value, ops as AnyOp[]);
 }

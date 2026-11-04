@@ -16,6 +16,8 @@
 pub(all) struct ChatPick {
   /// the message picked from ("" none)
   mut ts : String
+  /// the message to quote, when its picking identity is not its station timestamp ("" means not there yet)
+  mut source_ts : String?
   mut author : String
   mut role : String
   mut share : (() -> Unit)?
@@ -25,7 +27,7 @@ pub(all) struct ChatPick {
 }
 
 ///|
-pub let pk : ChatPick = { ts: "", author: "", role: "", share: None, link: "", sel: @kit.Pick::new(), taken_at: -1 }
+pub let pk : ChatPick = { ts: "", source_ts: None, author: "", role: "", share: None, link: "", sel: @kit.Pick::new(), taken_at: -1 }
 
 ///|
 /// What is picked as told (picked): one passage at a time, by an identity of its own (`serial`: a number each passage
@@ -183,6 +185,7 @@ pub fn pick_told_given() -> Unit {
 /// As at the start (tests): nothing picked, no press remembered.
 pub fn pick_reset() -> Unit {
   pick_clear()
+  pk.source_ts = None
   pk.author = ""
   pk.role = ""
   pk.share = None
@@ -227,6 +230,7 @@ pub fn pickable(
   share? : (() -> Unit)? = None,
   link? : String = "",
   lit? : (Int, Int, Int64)? = None,
+  source_ts? : String? = None,
 ) -> Unit {
   let key = "pick/" + ts
   let id = c.id(key)
@@ -249,6 +253,12 @@ pub fn pickable(
   // its words kept as laid out while a press is in it or a passage of it is picked (what the hold and the handles
   // ask), or what is marked in it asks
   if pk.ts == ts {
+    // The same outgoing row can acquire a station message while its words are picked.
+    if pk.source_ts != source_ts || pk.link != link {
+      pk.source_ts = source_ts
+      pk.share = share
+      pk.link = link
+    }
     c.words(box, key, a=pk.sel.a, b=pk.sel.b, color=@sf.alpha(@sf.theme().p.accent, picked_alpha))
   } else if lit is Some((a, b, color)) {
     // (round at the passage's two ends, square where it runs on to the next line)
@@ -268,6 +278,7 @@ pub fn pickable(
             let anew = pk.ts != ts || c.selection_made() != pick_mouse_made.val
             pick_mouse_made.val = c.selection_made()
             pk.ts = ts
+            pk.source_ts = source_ts
             pk.author = author
             pk.role = role
             pk.share = share
@@ -303,12 +314,15 @@ pub fn pickable(
     words.trim(chars=" \n\t") != ""
   if pk.sel.hold(c, key, id, may~) {
     pk.ts = ts
+    pk.source_ts = source_ts
     pk.author = author
     pk.role = role
     pk.share = share
     pk.link = link
-    // (picked anew, its metadata said first: told once)
+    // (picked anew, its metadata said first: told once); what a finger held elsewhere picked let go (@ui's: one thing
+    // picked at a time)
     pick_told_new(ts, pk.sel.a, pk.sel.b)
+    c.selection_clear()
     // the press is the pick's: the list holds still, lifting it taps nothing
     c.take_press()
     let at = press.frame
@@ -355,6 +369,11 @@ pub fn pick_layer(
   if pk.ts == "" {
     return
   }
+  // (words held elsewhere since, picked as @ui picks them: this let go, one thing picked at a time)
+  if c.selection_by_finger() {
+    pick_clear()
+    return
+  }
   let words = match c.words_of(pk.sel.key) {
     Some(w) => w
     // not laid out in this build: once the frame's builds are over (read back as it is laid out, words.mbt), still
@@ -381,7 +400,7 @@ pub fn pick_layer(
   if c.clicked(quote_id) {
     let text = words.slice(pk.sel.a, pk.sel.b).trim(chars=" \n\t").to_string()
     if text != "" {
-      quote(pk.author, text, pk.ts, pk.role)
+      quote(pk.author, text, pk.source_ts.unwrap_or(pk.ts), pk.role)
     }
     pick_clear()
     return
@@ -544,7 +563,7 @@ fn pick_pop(c : @ui.Ctx, quote : (String, String, String, String) -> Unit) -> Un
   if c.clicked(pop) {
     let text = c.selected_text().trim(chars=" \n\t").to_string()
     if text != "" {
-      quote(pk.author, text, pk.ts, pk.role)
+      quote(pk.author, text, pk.source_ts.unwrap_or(pk.ts), pk.role)
     }
     c.selection_clear()
     pk.ts = ""

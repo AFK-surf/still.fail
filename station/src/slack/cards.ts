@@ -1,7 +1,8 @@
 // A question in Slack, as Block Kit (docs/operations.md「在 Slack 里使用」): the agent's words, then the options as radio
 // buttons with the recommended one last and chosen already, and a button that sends the answer; or, for one to write,
-// the words marked as a question, answered by a reply in the thread. Pressed, a button comes over Socket Mode (an
-// `interactive` envelope) and the message is changed to say who answered what.
+// the words marked as a question, answered by a reply in the thread; or, for a login whose page gives a code, a field for
+// that code and a button that hands it to the login, never said in the thread. Pressed, a button comes over Socket Mode
+// (an `interactive` envelope) and the message is changed to say who answered what.
 import { type Lang, tr } from "../ops/i18n.ts";
 
 type Json = any;
@@ -17,6 +18,9 @@ const VALUE_CHARS = 2000;
 export const SEND = "sf_answer";
 const PICK = "sf_pick";
 const FIELD = "sf_text";
+/// A login card's field and its button.
+const CODE = "sf_code";
+export const LOGIN = "sf_login";
 type Sent = { l?: string[] };
 
 const plain = (text: string): Json => ({ type: "plain_text", text, emoji: true });
@@ -60,6 +64,31 @@ export function questionBlocks(text: string, question: Json, lang: Lang): Json[]
   return blocks.filter((b) => b !== null);
 }
 
+/// A login card (a login whose page gives a code to enter, docs/remote-login.md): the agent's words (with the page's
+/// link), a field for the code, and a button that hands it to the login's command; the code is never said in the thread.
+export function loginBlocks(text: string, lang: Lang): Json[] {
+  return [
+    markdownOf(text.trim() === "" ? [] : [text]),
+    { type: "input", block_id: CODE, dispatch_action: false, label: plain(tr(lang, "station.slack.loginCode")), element: { type: "plain_text_input", action_id: CODE, placeholder: plain(tr(lang, "station.slack.loginCodeHint")) } },
+    { type: "actions", elements: [{ type: "button", action_id: LOGIN, text: plain(tr(lang, "station.slack.loginSubmit")), style: "primary" }] },
+  ].filter((b) => b !== null);
+}
+
+/// A login card once its code was handed over: its words, and who entered it; no field any more.
+export function loginEnteredBlocks(text: string, who: string, lang: Lang): Json[] {
+  const entered = { type: "context", elements: [{ type: "mrkdwn", text: `✓ ${escape(tr(lang, "station.slack.loginEntered", { name: who }))}` }] };
+  return [markdownOf(text.trim() === "" ? [] : [text]), entered].filter((b) => b !== null);
+}
+
+/// What a press of a login card's button hands over: the field's words ("" when empty). Null for any other action.
+export function loginCodeOf(payload: Json): string | null {
+  const pressed = (Array.isArray(payload?.actions) ? payload.actions : []).some((a: Json) => a?.action_id === LOGIN);
+  if (!pressed) return null;
+  const values: Json[] = Object.values(payload?.state?.values ?? {});
+  const field = values.map((v) => v?.[CODE]).find((v) => v !== undefined);
+  return typeof field?.value === "string" ? field.value.trim() : "";
+}
+
 /// What a card says above its buttons, in one markdown block (none when it says nothing); the most Slack takes.
 const markdownOf = (parts: string[]): Json | null => (parts.length === 0 ? null : markdown(cut(parts.join("\n\n"), MARKDOWN_CHARS)));
 
@@ -67,6 +96,13 @@ const markdownOf = (parts: string[]): Json | null => (parts.length === 0 ? null 
 export function answeredBlocks(text: string, who: string, said: string, lang: Lang): Json[] {
   const answered = { type: "context", elements: [{ type: "mrkdwn", text: `✓ ${escape(tr(lang, "station.feishu.answered", { name: who, answer: said }))}` }] };
   return [markdownOf(text.trim() === "" ? [] : [text]), answered].filter((b) => b !== null);
+}
+
+/// A question that stopped waiting other than by its button (connects/card-ends.ts): its words, and why it is closed;
+/// nothing to press any more.
+export function endedBlocks(text: string, words: string): Json[] {
+  const ended = { type: "context", elements: [{ type: "mrkdwn", text: escape(words) }] };
+  return [markdownOf(text.trim() === "" ? [] : [text]), ended].filter((b) => b !== null);
 }
 
 /// Where a thread stands once its agent's turn ended (the line still.fail's chat shows at its end, and its row): done,

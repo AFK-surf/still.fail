@@ -28,6 +28,7 @@ pub(all) struct ComposerSpec {
   roomy : Bool
   locked : Bool
   offline : Bool
+  warm_agent : Bool
 }
 
 ///|
@@ -201,8 +202,9 @@ pub fn composer(
   composing.same_draft = whose == composing.draft_before
   if whose != composing.draft {
     composing.draft = whose
-    // (where the keyboard is at hand, typed into at once; not raising the screen's keyboard over the chat)
-    if !@sf.soft_keyboard() && !c.field_focused() {
+    // (where the keyboard is at hand, typed into at once; not raising the screen's keyboard over the chat; not taken from
+    // a field written in, but asked under a modal layer over it all the same: kept for that layer to give back)
+    if !@sf.soft_keyboard() && !c.field_focused_here() {
       c.focus_editor(composer_field_key)
       composing.taking.set(true)
       // (this frame's alone: what reads it built again the frame after, as it has the cursor)
@@ -753,7 +755,7 @@ fn space_hint(c : @ui.Ctx, prefs : Json?, locked : Bool) -> String {
 ///|
 /// Typing starts the agent's runtime, so a cold start overlaps the writing: the first time, then a minute after the last.
 fn warm(c : @ui.Ctx, src : Source, spec : ComposerSpec) -> Unit {
-  if spec.session == "" || spec.locked || spec.offline || src.read_only {
+  if spec.session == "" || spec.locked || spec.offline || !spec.warm_agent || src.read_only {
     return
   }
   let n = composing.warmed.get(spec.session).unwrap_or(0)
@@ -1200,7 +1202,8 @@ fn gone_up(v : Json?) -> Double? {
 
 ///|
 /// A picture's tile (56): darkened while it goes up, a ring over it filling as it goes (`part`: turning until it says),
-/// ↻ over it when it failed (`again` what a tap there is). Its node; `id` what a tap on it is.
+/// ↻ over it when it failed (`again` what a tap there is); a video's still a solid play mark in its middle otherwise
+/// (told apart from an image's while it waits). Its node; `id` what a tap on it is.
 fn picture_tile(
   c : @ui.Ctx,
   picture : MediaPicture,
@@ -1225,6 +1228,12 @@ fn picture_tile(
       c.layer(fn() {
         c.box(style=thumb_veil, id=again, fn() { @sf.icon(c, "refresh", size=retry_icon, color=on_veil) |> ignore })
         |> ignore
+      })
+      |> ignore
+    }
+    if picture.kind == "video" && !pending && error == "" {
+      c.layer(fn() {
+        c.box(style=thumb_play, fn() { @sf.icon(c, "play-mark", size=thumb_play_side, color=on_veil) |> ignore }) |> ignore
       })
       |> ignore
     }
@@ -1349,6 +1358,14 @@ let thumb_side : Double = 56.0
 
 ///|
 let on_veil : Int64 = 0xFFFFFFFFL
+
+///|
+/// A video waiting: its solid play mark, white, in its tile's middle.
+let thumb_play_side : Double = 24.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let thumb_play : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
 
 ///|
 /// The capsule (composerBox, one line): its parts on its centre line, 2 apart, its round buttons its padding in all round
@@ -1905,13 +1922,16 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   let words = w.text.get().trim(chars=" \n\t").to_string()
   let rk = r.station + "\u{1}" + r.session
   remember_sent_pictures(src, w, r.station)
-  // (its references as the field's marks till the core makes them links: drawn as the field drew them)
+  // (its references as the field's marks, which its flight takes off as; its row's runs as the core read its words)
   let marks = @sfbase.refs_sent_marks(w.key, words)
-  let row = sent_local(rk, Some(v), words, up_files(w), going=going_files(w), quotes=sent_quotes(w), marks~)
+  let runs = @sfbase.refs_sent_runs(w.key, words)
+  let row = sent_local(rk, Some(v), words, up_files(w), going=going_files(w), quotes=sent_quotes(w), runs~)
   // its words take off from the field as they are (before it is emptied), the composer (its box and its room) held as
-  // tall as it is till they let go of it
-  let room = @motion.measured(c, "composer/foot").unwrap_or(0.0)
-  let box = @motion.measured(c, "composer/content").unwrap_or(0.0)
+  // tall as it shows till they let go of it, as the list's foot over it is: sent on its way to a line more or less,
+  // where it is drawn then, not where that way ends (the rows over it went there at once, in the frame it was sent, or
+  // the composer grew on under them, held where they were)
+  let room = composer_room(c, w.key)
+  let box = @motion.measured(c, "composer/content").unwrap_or(0.0) + @motion.reshaped_over(c, "composer/box")
   // its quotes fly too, each from its card, and its files that are up, each from its tile (ChatHost.kt sending)
   let flying = flying_quotes(c, src, w, r.station) + flying_files(c, src, w)
   @sfbase.flight_start(
@@ -1926,6 +1946,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
     hold=fn(ms) { composer_hold(w.key, room, box, ms) },
     desk=true,
     marks~,
+    runs~,
   )
   // At the end, the new row and its neighbours move together with the flight. When reading above it, glide there
   // instead of putting the list at the end in a single frame.
@@ -2005,7 +2026,10 @@ fn composer_least(c : @ui.Ctx) -> Double {
 /// it is.
 pub fn composer_foot_room(c : @ui.Ctx, draft : String, room : Double, let_go~ : Bool) -> Double {
   if let_go {
-    dmax(room - dmax(composer_room(c, draft) - composer_least(c), 0.0), 0.0)
+    // (where it comes to stand: as tall as it is laid out once they let go of it, a line or more typed meanwhile
+    // with it; not a line always, its room opening on as the way was over)
+    ignore(room)
+    composer_room(c, draft, settled=true, held=false)
   } else {
     room
   }
@@ -2045,8 +2069,8 @@ fn composer_held_box(c : @ui.Ctx, draft : String) -> Double {
 /// tall as its place (chat_composer: its box, what it says under it, its margins) with its ground as drawn (a line
 /// more or less: the list's rows go with the ground as it reshapes, the frame it does), at least as tall as that opened
 /// with one line; let go by words sent from it (composer_hold), from as tall as it was then down to that, on its
-/// ground's curve.
-pub fn composer_room(c : @ui.Ctx, draft : String, settled? : Bool = false) -> Double {
+/// ground's curve (not `held`: where it comes to stand once let go, whatever was typed in it meanwhile).
+pub fn composer_room(c : @ui.Ctx, draft : String, settled? : Bool = false, held? : Bool = true) -> Double {
   // (not laid out yet: a capsule's)
   let foot = @motion.measured(c, "composer/foot").unwrap_or(capsule_room(c.width))
   // never less than it takes opened with one line where it is (its box that tall, what is round it as it is: the web's
@@ -2057,6 +2081,9 @@ pub fn composer_room(c : @ui.Ctx, draft : String, settled? : Bool = false) -> Do
   // coming down from the middle of the pane to its foot, the chat's rows standing over its foot from the first, not over
   // the middle of the pane where the new chat's scene still is)
   let now = dmax(foot + (if settled { 0.0 } else { @motion.reshaped_over(c, "composer/box") }), least)
+  if !held {
+    return now
+  }
   let held = @motion.anim(c, "composer/held/" + draft, 0.0, global=true).get()
   let share = @motion.anim(c, "composer/hold/" + draft, 0.0, global=true).get()
   if held > now {
@@ -2069,19 +2096,15 @@ pub fn composer_room(c : @ui.Ctx, draft : String, settled? : Bool = false) -> Do
 ///|
 /// A chat's composer at its pane's foot (dock.tsx's chat place; cloud.css.ts composerWrap: 12 over it, 16 under it;
 /// dock.css.ts: 12 clear of the pane's sides, the column and its curve wide at most, in the middle): the chat's draft
-/// (ChatPage.tsx chatKey), what it sends going into the chat (send_in_chat), locked while the chat is archived, no
-/// file taken in while its station is down. Its place measured (composer_room). `apart`: the page a panel of its own (the
+/// (ChatPage.tsx chatKey), what it sends going into the chat (send_in_chat), no file taken in while its station is down.
+/// Its place measured (composer_room). `apart`: the page a panel of its own (the
 /// frame's tape), the composer as far from its foot as from its sides.
 pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v : ChatView?, apart? : Bool = false) -> Unit {
   let spec : ComposerSpec = {
     station: r.station,
     draft: r.station + ":" + r.session,
     session: r.session,
-    placeholder: @sf.t(if v.map(fn(v) { v.archived }).unwrap_or(false) {
-      "web-main.chat.archivedPlaceholder"
-    } else {
-      "web-main.composer.placeholder"
-    }),
+    placeholder: @sf.t("web-main.composer.placeholder"),
     toolbar: None,
     note: match v {
       Some(v) => v.cc.filter(fn(o) { o.on }).map(fn(o) { (o.via, o.place) })
@@ -2092,14 +2115,12 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
       _ => None
     },
     roomy: false,
-    locked: match v {
-      Some(v) => v.archived
-      None => false
-    },
+    locked: false,
     offline: match v {
       Some(v) => v.offline
       None => false
     },
+    warm_agent: !v.map(fn(v) { v.archived }).unwrap_or(false),
   }
   let width = composer_width(c.width)
   let place = if apart { composer_place(c.width) } else { composer_alone }
@@ -2307,7 +2328,7 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, width : Do
       c,
       width,
       "archive",
-      @sf.t("web-main.archived.notice"),
+      @sf.t("web-main.archived.sendRestores"),
       Some((restore, if busy { "web-main.archived.restoring" } else { "web-main.archived.restore" }, "web-main.archived.restore", busy || v.offline)),
       failed=composing.restore_errors.get(key),
       chat=key,

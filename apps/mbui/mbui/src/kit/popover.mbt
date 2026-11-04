@@ -27,7 +27,7 @@ pub(all) struct PopState {
 /// (its padding, its lines, what stands over and under this) is taken off, each read back as it is laid out. `style`:
 /// what it holds laid out in (its room in from the sides, its gaps; across the panel); `reach`: the box it scrolls in
 /// (out across the panel's padding, so that what it holds scrolls to the panel's sides). `key`: its scroll's (by default
-/// the panel's). Whether it scrolls so.
+/// the panel's); `for_field`: the field its choices are for, whose keyboard stays as they scroll. Whether it scrolls so.
 pub fn in_room(
   c : @ui.Ctx,
   s : PopState,
@@ -36,12 +36,13 @@ pub fn in_room(
   most? : Double = 1.0e9,
   style? : @ui.Style = room_across,
   reach? : @ui.Style = room_across,
+  for_field? : Int = 0,
 ) -> Bool {
   let (key, view, whole, tall, held) = room_of(c, s, key, most)
   let what = fn() { c.box(style~, id=whole, taps=false, body) |> ignore }
   c.box(style=reach, id=view, taps=false, fn() {
     if held {
-      c.capped(key, tall, what) |> ignore
+      c.capped(key, tall, for_field~, what) |> ignore
     } else {
       what()
     }
@@ -505,7 +506,8 @@ pub fn popover_look_of(pad? : Double = 16.0, gap? : @ui.Space = S2) -> (@ui.Ctx,
   let apart = room_across.then(@ui.style(gap~))
   fn(c, s, body) {
     let t = c.theme()
-    c.box(
+    // (the popover: its look's surface, coming first, all on it after: Ctx::surface)
+    let panel = c.box(
       pad~,
       bg=t.surface,
       radius=t.radius_lg,
@@ -516,7 +518,7 @@ pub fn popover_look_of(pad? : Double = 16.0, gap? : @ui.Space = S2) -> (@ui.Ctx,
       shadow_y=12.0,
       fn() { in_room(c, s, body, style=apart) |> ignore },
     )
-    |> ignore
+    c.surface(panel)
   }
 }
 
@@ -528,8 +530,8 @@ pub let popover_look : (@ui.Ctx, PopState, () -> Unit) -> Unit = popover_look_of
 /// A tooltip's default look (still.fail's): small words on the primary ink, a corner of 8, a soft shadow.
 pub fn tooltip_look(c : @ui.Ctx, _s : PopState, text : String) -> Unit {
   let t = c.theme()
-  c.box(padx=10.0, pady=5.0, bg=t.primary, radius=8.0, max_w=300.0, shadow=12.0, shadow_color=t.shadow, shadow_y=4.0, fn() {
+  let tip = c.box(padx=10.0, pady=5.0, bg=t.primary, radius=8.0, max_w=300.0, shadow=12.0, shadow_color=t.shadow, shadow_y=4.0, fn() {
     c.text(text, size=t.font_sm, color=t.on_primary, line=t.font_sm * 1.4) |> ignore
   })
-  |> ignore
+  c.surface(tip)
 }

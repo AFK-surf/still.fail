@@ -16,14 +16,15 @@ import { type ControlPlaneShape, makeControlPlane } from "./cloud/plane.ts";
 import type { Provider } from "./cloud/provider.ts";
 import { type Mesh, loadMesh } from "./mesh/native.ts";
 import { Readers as ReaderPool } from "./read/pool.ts";
+import { makeStore } from "./read/store.ts";
+import { apiOf, entryViews, spokenIn } from "./read/views.ts";
 import type { AgentsParts } from "./sessions/agents.ts";
-import { log } from "./ops/log.ts";
 import { platform } from "./platform/index.ts";
 import { ScreenHub } from "./screens/hub.ts";
 import { Desktop } from "./screens/desktop.ts";
 import { Simulators } from "./screens/simulator.ts";
 import { WindowsDesktop, screenBinary } from "./screens/win-desktop.ts";
-import { X11Desktop } from "./screens/x11-desktop.ts";
+import { LinuxDesktop } from "./screens/linux-desktop.ts";
 import { uiBinary } from "./screens/ui.ts";
 import { type Drive, dropFolder, stationDrive } from "./drive/drive.ts";
 import { ModuleSet } from "./modules/modules.ts";
@@ -35,7 +36,7 @@ import { HelperGrants } from "./helper/grants.ts";
 import { HelperFiles } from "./helper/files.ts";
 import { ConfigFile } from "./ops/config.ts";
 import { Own as OwnPaths } from "./ops/own.ts";
-import { previousProcess } from "./ops/previous.ts";
+import { previousExited, previousProcess } from "./ops/previous.ts";
 import { PeerBus } from "./mesh/bus.ts";
 import type { Outside } from "./mesh/peer.ts";
 import { Net } from "./jobs/load.ts";
@@ -96,7 +97,14 @@ export class Readers extends Context.Service<Readers, ReaderPool>()("stillfail/R
     Readers,
     Effect.gen(function* () {
       const { data } = yield* Paths;
-      return yield* Effect.acquireRelease(Effect.sync(() => new ReaderPool(data)), (pool) => Effect.sync(() => pool.close()));
+      const store = yield* Store;
+      const previous = yield* Previous;
+      return yield* Effect.acquireRelease(Effect.sync(() => {
+        const pool = new ReaderPool(data, undefined, undefined, undefined, { previousGone: previous.exited, priority: store.backfillPriority });
+        pool.startUsageIndex();
+        pool.warm();
+        return pool;
+      }), (pool) => Effect.sync(() => pool.close()));
     }),
   );
 }
@@ -122,16 +130,16 @@ export class Store extends Context.Service<Store, StationStore>()("stillfail/Sto
       const { data } = yield* Paths;
       return yield* Effect.acquireRelease(
         Effect.sync(() => {
-          const store = StationStore.open(join(data, "stillfail.db"), join(data, "archive"));
-          const lost = store.lostArchives();
-          if (lost.length > 0) log.warn("store", "archived threads whose file is not there read as empty", { n: lost.length, threads: lost.join(" ") });
-          return store;
+          return StationStore.open(join(data, "stillfail.db"), join(data, "archive"));
         }),
         (store) => Effect.sync(() => store.close()),
       );
     }),
   );
 }
+
+/// Start the store before the usage-index worker, and keep the same store available to the station's other parts.
+export const ReadersAndStore = Readers.layer.pipe(Layer.provideMerge(Store.layer));
 
 /// still.fail Helper (macOS; docs/station-ts-native.md §4), installed and talked to under <data>/helper: this Mac's
 /// screen (the desktop's) and the drive's protected folders (helper/files.ts); null where there is none.
@@ -166,13 +174,15 @@ export class ScreenRegistry extends Context.Service<ScreenRegistry, ScreenHub>()
     Effect.gen(function* () {
       const hub = yield* Effect.acquireRelease(Effect.sync(() => new ScreenHub({ drop: () => dropFolder(homedir()) })), (hub) => Effect.sync(() => hub.close()));
       const helper = yield* Helper;
-      // Windows': stillfail-screen; macOS's: still.fail Helper; Linux's: the station user's X11 session.
-      const desktop: Desktop | WindowsDesktop | X11Desktop =
+      const { data } = yield* Paths;
+      const title = process.env.STILLFAIL_TEST_HOST === "1" ? () => "test-station" : undefined;
+      // Windows': stillfail-screen; macOS's: still.fail Helper; Linux's: the station user's desktop session.
+      const desktop: Desktop | WindowsDesktop | LinuxDesktop =
         platform.desktopScreen === "screen"
-          ? new WindowsDesktop({ binary: screenBinary(), ui: uiBinary(), changed: () => hub.changed() })
+          ? new WindowsDesktop({ binary: screenBinary(), ui: uiBinary(), changed: () => hub.changed(), title })
           : platform.desktopScreen === "x11"
-          ? new X11Desktop({ changed: () => hub.changed() })
-          : new Desktop({ supported: platform.desktopScreen === "helper", helper, grants: yield* Grants, changed: () => hub.changed() });
+          ? new LinuxDesktop({ data, changed: () => hub.changed(), title })
+          : new Desktop({ supported: platform.desktopScreen === "helper", helper, grants: yield* Grants, changed: () => hub.changed(), title });
       // Back after it ended by itself: the desktop asks again for a grant still missing.
       if (desktop instanceof Desktop) helper?.onBack(() => void desktop.helperBack());
       yield* Effect.acquireRelease(
@@ -211,8 +221,12 @@ export class Events extends Context.Service<Events, EventStreams>()("stillfail/E
       const screens = yield* ScreenRegistry;
       const { data } = yield* Paths;
       const previous = yield* Previous;
+      // What was just said, made as the pages show it on this thread: over the store's own connection (what it just
+      // wrote is in its memory), with the names the readers are given.
+      const view = Object.assign(makeStore(store.db, data), { names: readers.names });
       const events = new EventStreams({
         readers,
+        said: (thread, entries, lang) => spokenIn(lang, () => entryViews(apiOf(view), thread, entries)),
         subscribe: (listener) => store.subscribe(listener),
         host: () => admin.sample(),
         jobLog: (id) => store.getJob(id)?.log ?? null,
@@ -312,11 +326,12 @@ export class Own extends Context.Service<Own, OwnPaths>()("stillfail/Own") {
 /// The station process before this one (ops/previous.ts), and its end: what only one process may have waits on it, and
 /// what its event streams told is taken up from it alone (api/events.ts). Looked for as this process starts, before it
 /// writes its own run/hub.json.
-export class Previous extends Context.Service<Previous, { readonly pid: number | null; readonly gone: Promise<void> }>()("stillfail/Previous") {
+export class Previous extends Context.Service<Previous, { readonly pid: number | null; readonly gone: Promise<void>; readonly exited: Promise<void> }>()("stillfail/Previous") {
   static readonly layer = Layer.effect(
     Previous,
     Effect.gen(function* () {
-      return previousProcess(join((yield* Paths).data, "run"));
+      const previous = previousProcess(join((yield* Paths).data, "run"));
+      return { ...previous, exited: previousExited(previous) };
     }),
   );
 }

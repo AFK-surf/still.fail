@@ -17,7 +17,7 @@ const STATION = (station: string) => ({ station });
 import { FakeHost, jsonResponse } from "../src/testing.ts";
 import { account, apply, call, nowS, readsOf, subscribe, v } from "./helpers.ts";
 import { run } from "./run.ts";
-import { base, entry, overview, session, started, stationHost, stationLater, stationReplies, threadView } from "./station-fixture.ts";
+import { base, entry, overview, session, started, stationHost, stationLater, stationReplies, status, threadView } from "./station-fixture.ts";
 import { apply as applyOps } from "../src/delta.ts";
 import { conform } from "../src/conform.ts";
 import { CoreError } from "../src/error.ts";
@@ -265,7 +265,7 @@ test("a_chat_opening_is_one_trace_its_requests_carry_and_ember_cloud_gets", asyn
   const said = host.takeEmitted().map(([, m]) => m as J);
   assert.ok(said.some((m) => m.id === 1 && "value" in m), JSON.stringify(said).slice(0, 500));
   assert.equal(host.requests.length, before, "opening a chat asks nothing");
-  const reads = ["/events?running=1", "/overview", "/sessions", "/threads", "/chats", "/jobs"].map((p) => host.requests.find((r) => r.url === `https://stillfail.test/admin/api${p}`)!);
+  const reads = ["/events?running=1&views=1&rows=1&shared=1", "/overview", "/sessions", "/threads", "/chats", "/jobs?chats=0"].map((p) => host.requests.find((r) => r.url === `https://stillfail.test/admin/api${p}`)!);
   const parents = reads.map((r) => header(r, "traceparent")!);
   const trace = parents[0].slice(3, 35);
   assert.ok(parents.every((p) => p.slice(3, 35) === trace && p.endsWith("-01")), JSON.stringify(parents));
@@ -581,6 +581,166 @@ test("an_iphone_app_is_a_phone_named_by_its_model_and_its_messages_say_it", asyn
   core.close();
 });
 
+test("sending_to_an_archived_chat_restores_it_before_delivery_and_keeps_a_failed_restore_retryable", async () => {
+  const thread = { ...threadView(7, 0), hiddenAt: 42 };
+  const { host, core } = await started({
+    ...base(),
+    "GET /threads": [thread],
+    "GET /threads/7/entries?limit=50": { first: 1, last: 0, entries: [], thread },
+  });
+  let restored = false;
+  let fail = true;
+  const steps: string[] = [];
+  stationReplies(host, (req) => {
+    if (req.method === "DELETE" && req.url.endsWith("/threads/7/archive")) {
+      steps.push("restore");
+      if (fail) return status(400, { error: "restore failed" });
+      restored = true;
+      return { ok: true };
+    }
+    if (req.method === "POST" && req.url.endsWith("/threads/7/messages")) {
+      assert.ok(restored, "the message cannot go before the chat is restored");
+      steps.push("send");
+      return { n: 1 };
+    }
+    return undefined;
+  });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", session: "k1" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).archived, true);
+  call(core, ui, 2, "chat.send", { station: "ws/st", thread: 7, text: "继续" });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(steps, ["restore"]);
+  const pending = v(values, 1).outbox[0];
+  assert.equal(pending.text, "继续");
+  assert.equal(pending.state, "failed");
+  assert.notEqual(pending.final, true, "restoring can be retried even when the station refused it");
+  fail = false;
+  call(core, ui, 3, "chat.retry", { station: "ws/st", thread: 7, id: pending.id });
+  await host.settle();
+  assert.deepEqual(steps, ["restore", "restore", "send"]);
+  core.close();
+});
+
+test("two_messages_sent_during_a_restore_do_not_lose_the_second_if_the_first_restore_fails", async () => {
+  const thread: J = { ...threadView(7, 0), hiddenAt: 42 };
+  const { host, core } = await started({
+    ...base(),
+    "GET /threads": [thread],
+    "GET /threads/7/entries?limit=50": { first: 1, last: 0, entries: [], thread },
+  });
+  let attempts = 0;
+  const sent: string[] = [];
+  stationReplies(host, (req) => {
+    if (req.method === "DELETE" && req.url.endsWith("/threads/7/archive")) {
+      if (++attempts === 1) return status(400, { error: "restore failed" });
+      thread.hiddenAt = null;
+      return thread;
+    }
+    if (req.method === "POST" && req.url.endsWith("/threads/7/messages")) {
+      assert.equal(thread.hiddenAt, null);
+      sent.push(JSON.parse(new TextDecoder().decode(req.body!)).text);
+      return { n: sent.length };
+    }
+    return undefined;
+  });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", session: "k1" });
+  await host.settle();
+  const release = host.hold("/threads/7/archive");
+  call(core, ui, 2, "chat.send", { station: "ws/st", thread: 7, text: "第一条" });
+  await host.settle();
+  call(core, ui, 3, "chat.send", { station: "ws/st", thread: 7, text: "第二条" });
+  await host.settle();
+  release();
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(sent, ["第二条"]);
+  const first = v(values, 1).outbox.find((m: J) => m.text === "第一条");
+  assert.equal(first.state, "failed");
+  assert.notEqual(first.final, true);
+  call(core, ui, 4, "chat.retry", { station: "ws/st", thread: 7, id: first.id });
+  await host.settle();
+  assert.deepEqual(sent, ["第二条", "第一条"]);
+  core.close();
+});
+
+test("sending_to_an_archived_session_without_a_thread_restores_it_after_making_its_chat", async () => {
+  const archived = { ...session("k1"), archivedAt: 42 };
+  const { host, core } = await started({
+    ...base(),
+    "GET /sessions": [archived],
+    "GET /sessions/k1": { session: archived, threads: [], turns: [], jobs: [] },
+    "GET /threads": [],
+    "GET /chats": [],
+  });
+  const steps: string[] = [];
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (req.method === "POST" && path === "/threads") {
+      steps.push("make chat");
+      return threadView(7, 0);
+    }
+    if (req.method === "DELETE" && path === "/threads/7/archive") {
+      steps.push("restore");
+      return { ok: true };
+    }
+    if (req.method === "POST" && path === "/threads/7/messages") {
+      steps.push("send");
+      return { n: 1 };
+    }
+    return undefined;
+  });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", session: "k1" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).archived, true);
+  call(core, ui, 2, "chat.send", { station: "ws/st", session: "k1", text: "继续" });
+  await host.settle();
+  await host.settle();
+  assert.deepEqual(steps, ["make chat", "restore", "send"]);
+  core.close();
+});
+
+test("sending_to_an_archived_chat_uses_an_older_stations_session_restore_route", async () => {
+  const thread = { ...threadView(7, 0), hiddenAt: 42 };
+  const { host, core } = await started({
+    ...base(),
+    "GET /threads": [thread],
+    "GET /threads/7/entries?limit=50": { first: 1, last: 0, entries: [], thread },
+  });
+  const steps: string[] = [];
+  stationReplies(host, (req) => {
+    if (req.method === "DELETE" && req.url.endsWith("/threads/7/archive")) {
+      steps.push("thread route");
+      return status(404, { error: "no route" });
+    }
+    if (req.method === "DELETE" && req.url.endsWith("/sessions/k1/archive")) {
+      steps.push("session route");
+      return { ok: true };
+    }
+    if (req.method === "POST" && req.url.endsWith("/threads/7/messages")) {
+      steps.push("send");
+      return { n: 1 };
+    }
+    return undefined;
+  });
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", session: "k1" });
+  await host.settle();
+  call(core, ui, 2, "chat.send", { station: "ws/st", session: "k1", text: "继续" });
+  await host.settle();
+  assert.deepEqual(steps, ["thread route", "session route", "send"]);
+  core.close();
+});
+
 test("a_chat_whose_agent_is_in_slack_threads_copies_what_is_sent_to_those_ticked", async () => {
   const { host, core } = await started({
     ...base(),
@@ -771,12 +931,13 @@ test("the profiles topic gives the app each station once when it has two copies"
 
 /// A core whose station has three profiles: p1 (unchecked) and p2 run Claude Code, p3 Codex (core/tests.rs
 /// `choosing_core`); `speed`: its session on Codex with `fast` as given, p3 offering `fast` as `profileFast`.
-async function choosing(speed = false, profileFast = false, sessionFast: boolean | null = null) {
+async function choosing(speed = false, profileFast = false, sessionFast: boolean | null = null, switchRuntime = false) {
   const s = (key: string) => (speed ? { ...session(key), runtime: "codex", model: "gpt-6-astra", profile: "p3", fast: sessionFast } : session(key));
   return started({
     ...base(),
     "GET /overview": {
       ...overview,
+      sessionRuntimeChange: switchRuntime,
       profiles: [
         profile("p1", "claude", ["claude-opus-5-5", "claude-sonnet-5"], false, 10),
         profile("p2", "claude", ["claude-opus-5-5"], true, 80),
@@ -1009,6 +1170,23 @@ test("a_new_chat_runs_on_what_was_last_picked_there_as_far_as_the_station_still_
   await assert.rejects(ask(host, again, ui, 9, "newChat.pick", { model: "x" }));
   await assert.rejects(ask(host, again, ui, 10, "pick.set", { station: "ws/st", of: "nothing" }));
   again.close();
+});
+
+test("a chat can switch runtime through its model control when its station supports it", async () => {
+  const { host, core } = await choosing(false, false, null, true);
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "session:k1" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.equal(v(values, 1).runtimeFixed, false);
+  assert.ok(v(values, 1).efforts.includes("high"), "the current runtime's default model keeps its effort choices");
+  await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "session:k1", model: "gpt-6-astra", runtime: "codex" });
+  apply(host, values);
+  assert.equal(v(values, 1).draft.runtime, "codex");
+  await ask(host, core, ui, 3, "pick.save", { station: "ws/st", of: "session:k1" });
+  assert.deepEqual(stationPosted(host, "/sessions/k1/settings"), [{ runtime: "codex", model: "gpt-6-astra", effort: null, profile: null }]);
+  core.close();
 });
 
 test("a_sessions_model_control_says_what_changes_and_saves_it_on_the_station", async () => {
@@ -1496,7 +1674,7 @@ test("a_chats_jobs_are_shown_as_the_core_puts_them_and_a_jobs_output_says_when_i
   now = Math.round(s.host.nowMs());
   stationReplies(s.host, (req) => {
     const path = req.url.replace("https://stillfail.test/admin/api", "");
-    if (path === "/sessions/k1")
+    if (path === "/sessions/k1?turns=0&jobs=now")
       return {
         session: session("k1"), threads: [], turns: [],
         jobs: [job("w", { notices: [{ at: now - 120_000, text: "CI 还在跑" }] }), job("s", { port: 4817, state: "exited", restarts: 1 }), job("done", { state: "exited", exitCode: 0, endedAt: now - 30_000 })],
@@ -1742,7 +1920,7 @@ test("the_archive_is_its_stations_archived_chats_newest_first_by_day_and_one_res
   now = Math.round(s.host.nowMs());
   stationReplies(s.host, (req) => {
     const path = req.url.replace("https://stillfail.test/admin/api", "");
-    if (req.method === "GET" && path === "/chats?archived=1") return all();
+    if (req.method === "GET" && path.startsWith("/chats?archived=1")) return all();
     if (req.method === "DELETE" && path === "/threads/7/archive") {
       gone.push("k1");
       return { ok: true };
@@ -1777,6 +1955,8 @@ test("the_archive_is_its_stations_archived_chats_newest_first_by_day_and_one_res
   subscribe(core, ui, 5, { topic: "archive", scope: "ws", limit: 1 });
   subscribe(core, ui, 6, { topic: "archive", scope: "ws", q: "nothing like it" });
   await host.settle();
+  await host.time.pass(1_000);
+  await host.settle();
   answersOf(host, values);
   const ids = (n: number) => v(values, n).days.flatMap((d: J) => d.items.map((i: J) => i.id));
   assert.deepEqual([ids(4), v(values, 4).total, v(values, 4).more], [["k2"], 1, false]);
@@ -1793,6 +1973,50 @@ test("the_archive_is_its_stations_archived_chats_newest_first_by_day_and_one_res
   await host.settle();
   assert.ok("ok" in answersOf(host, values).get(3)!);
   assert.deepEqual([v(values, 1).days, v(values, 1).note], [[], "暂无已归档的对话"]);
+  core.close();
+});
+
+test("the_archive_is_looked_through_as_a_ui_asks_by_what_its_chats_said_each_once_and_a_page_not_answered_is_asked_again", async () => {
+  const chat = (id: string, at: number, last: string | null) => ({ id, session: id, thread: null, title: `聊 ${id}`, last: last === null ? null : { text: last }, lastActiveAt: at, archived: { at, by: "manual", alone: false } });
+  const searches: string[] = [];
+  let failures = 1;
+  const s = stationHost(base());
+  stationReplies(s.host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (path === "/chats?archived=1&page=") return { rows: [chat("k1", 30, "好了"), chat("k2", 20, null)], next: "20:k2" };
+    if (path === "/chats?archived=1&page=20%3Ak2") return { rows: [chat("k2", 20, null), chat("k3", 10, null)], next: null };
+    if (path.startsWith("/search?")) {
+      searches.push(path);
+      return { building: false, groups: [{ kind: "message", more: false, hits: [
+        { kind: "message", key: "m:3:1", title: "", text: "那次深埋的结论是回滚", at: 10, thread: 3, seq: 1, chat: "k3", archived: true },
+        { kind: "message", key: "m:4:1", title: "", text: "深埋在进行中的对话里", at: 11, thread: 4, seq: 1, chat: "live", archived: false },
+      ] }] };
+    }
+    return undefined;
+  });
+  stationLater(s.host, (req) => (req.url.endsWith("page=20%3Ak2") && failures-- > 0 ? Promise.resolve(jsonResponse(500, { error: "busy" })) : undefined));
+  const host = s.host;
+  const core = await Core.create(host, { clock: host.time.clock, sample: 0, wire: () => new HostWire(host) });
+  await host.time.pass(500);
+  const ui = core.connect();
+  const ask = (id: number, topic: J) => core.receiveRaw(ui, { id, subscribe: topic });
+  ask(1, { topic: "archive", scope: "ws", limit: 1 });
+  ask(2, { topic: "archive", scope: "ws", q: "深埋" });
+  ask(3, { topic: "archive", scope: "ws" });
+  await host.settle();
+  await host.time.pass(5_000);
+  await host.settle();
+  const values = new Map();
+  answersOf(host, values);
+  const ids = (n: number) => v(values, n).days.flatMap((d: J) => d.items.map((i: J) => i.id));
+  // `limit` as a UI says it: the newest; the rest said to be there.
+  assert.deepEqual([ids(1), v(values, 1).total, v(values, 1).more], [["k1"], 3, true]);
+  // `q` as a UI says it: found by a message of an archived chat, on a page read after one that was not answered.
+  assert.deepEqual(ids(2), ["k3"]);
+  assert.match(v(values, 2).days[0].items[0].last, /深埋/);
+  assert.ok(searches.every((path) => path.includes("kinds=chat%2Cmessage") && path.includes("limit=200") && path.includes("archived=1")), searches.join());
+  // A chat in two pages is one row.
+  assert.deepEqual(ids(3), ["k1", "k2", "k3"]);
   core.close();
 });
 
@@ -1820,6 +2044,9 @@ test("the_changelog_says_what_this_app_has_and_what_an_update_brought_until_seen
   assert.deepEqual(c.tabs.map((x: J) => [x.part, x.label]), [["android", "安卓"], ["desktop", "桌面"], ["web", "网页"], ["station", "Station"], ["cloud", "云端"]]);
   const notes = (part: string) => c.tabs.find((x: J) => x.part === part).days.flatMap((d: J) => d.entries.map((e: J) => e.note));
   assert.equal(c.tabs[0].days[0].label, "今天");
+  // Each day which it is where the device is (its label only says it): the same day for all of today's.
+  assert.equal(c.tabs[0].days.length, 1);
+  assert.equal(c.tabs[0].days[0].day, Math.floor((now * 1000 + host.utcOffsetMin(now * 1000) * 60_000) / 86_400_000));
   assert.deepEqual(notes("android"), ["未发布", "更新到 0.1.1330 后可用", ""]);
   // Another part's tab says what is not out of that part.
   assert.deepEqual(notes("desktop"), [""]);
@@ -2265,6 +2492,27 @@ test("speed_summary_only_shows_effective_fast_and_ignores_unsaved_drafts", async
   }
 });
 
+test("the_running_core_pairs_the_phone_with_its_own_adb", async () => {
+  const did: string[] = [];
+  const { host, core } = await started(base(), 0, undefined, ({ host }) => {
+    (host as J).adb = {
+      pair: (port: number, code: string) => Effect.sync(() => void did.push(`pair ${port} ${code}`)),
+      hold: (port: number) => Effect.sync(() => void did.push(`hold ${port}`)),
+      open: () => Effect.die("no station is opening a tunnel"),
+    };
+  });
+  try {
+    const ui = core.connect();
+    await ask(host, core, ui, 1, "client.device", { app: "android", build: "1" });
+    await ask(host, core, ui, 2, "adb.ports", { connect: 5555, pair: 37115, device: "Pixel" });
+    const result = await ask(host, core, ui, 3, "adb.pair", { code: "123 456" });
+    assert.deepEqual(result, { message: "已配对，以后连哪台 station 都不用再配" });
+    assert.deepEqual(did, ["pair 37115 123456", "hold 5555"]);
+  } finally {
+    core.close();
+  }
+});
+
 test("lends_the_phone_s_adb_through_its_calls_and_topic", async () => {
   const { host, core } = await started();
   const ui = core.connect();
@@ -2292,7 +2540,7 @@ test("lends_the_phone_s_adb_through_its_calls_and_topic", async () => {
   await host.settle();
   apply(host, values);
   // Off again, every field of the offer gone (the clients' shape takes their absence).
-  assert.deepEqual(v(values, 1), { sharing: false, phase: "off", on: false, tunnels: 0, grants: [], wanted: [], known: true, lasts: "chat", lends: [] });
+  assert.deepEqual(v(values, 1), { sharing: false, phase: "off", on: false, tunnels: 0, grants: [], wanted: [], known: true, lasts: "chat", lends: [], screens: [] });
   core.close();
 });
 

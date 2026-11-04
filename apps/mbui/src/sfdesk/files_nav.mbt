@@ -53,9 +53,8 @@ pub fn files_nav(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   c.box(style=nav_side, fn() {
     side_top(c)
     let stations = favorite_stations(src, ws)
-    if stations.length() > 0 {
-      nav_action(c, "files/pin", @sf.t("web-pages.files.addFavorite"), Some(fn(_) { add_favorite_folder(src, ws, stations) }))
-    }
+    let pin = if stations.length() > 0 { Some(fn(_) { add_favorite_folder(src, ws, stations) }) } else { None }
+    nav_action(c, "files/pin", @sf.t("web-pages.files.addFavorite"), pin, trailing?=update_trailing(c, src), band=update_band())
     // (a folder chosen there in the page, on the tape brought over to show it)
     files_places(c, src, ws, top=nav_top, foot=@sf.list_foot_in(Side), go=fn(at) {
       files_go(at)

@@ -180,7 +180,11 @@ export class Attend {
     return this.shown() ? Deferred.await(this.#hiddenNow) : Effect.void;
   }
 
+  /// Told whether a page is in view each time the UIs say where they are (the store's `inView`).
+  inView: (shown: boolean) => void = () => {};
+
   #told(): void {
+    this.inView(this.shown());
     if (!this.shown()) {
       Deferred.doneUnsafe(this.#hiddenNow, Effect.void);
       this.#hiddenNow = Deferred.makeUnsafe<void>();

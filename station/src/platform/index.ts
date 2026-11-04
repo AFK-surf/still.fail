@@ -17,6 +17,17 @@ export type How = { program: string; args: string[] };
 /// A process as the memory watch sees it (jobs/memory.ts).
 export type ProcessInfo = { pid: number; ppid: number; pgid: number; bytes: number; command: string };
 
+/// A process table as a tree: each process by its pid, and the pids of each one's children.
+export function treeOf(table: readonly ProcessInfo[]): { byPid: Map<number, ProcessInfo>; children: Map<number, number[]> } {
+  const children = new Map<number, number[]>();
+  const byPid = new Map<number, ProcessInfo>();
+  for (const p of table) {
+    byPid.set(p.pid, p);
+    if (p.pid !== p.ppid) children.set(p.ppid, [...(children.get(p.ppid) ?? []), p.pid]);
+  }
+  return { byPid, children };
+}
+
 /// How the host page says the machine (GET /host): memory, CPU, uptime, the OS.
 export type Host = {
   /// CPU time since boot, all CPUs together: (busy, total); none when it cannot be read.
@@ -54,6 +65,8 @@ export type Platform = {
   appendPath(env: Env, dir: string): void;
   /// A command on `env`'s PATH as a shell finds it (with PATHEXT's extensions on Windows).
   findCommand(name: string, env: Env): Found | null;
+  /// The user's interactive shell, when this machine has one to read a PATH from.
+  userShell(env: Env): string | null;
   /// How Node runs a command (a name on PATH, or a path) with `args`: on Windows a .cmd is run around cmd when it can
   /// be (npm's, Vite+'s), else through it, quoted.
   runnable(command: string, args: string[], env: NodeJS.ProcessEnv): { file: string; args: string[]; windowsVerbatimArguments?: true };

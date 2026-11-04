@@ -69,8 +69,6 @@
     // What they are called on a station's card (经中继北京).
     "RELAY_NAMES": { "https://app.still.fail": "Cloudflare", "https://39.105.157.122": "北京", "https://47.76.247.168": "香港", "https://120.24.233.158": "深圳", "https://39.105.157.122:8443": "北京转香港", "https://47.76.247.168:8443": "香港转北京" },
     "GOOGLE_CLIENT_ID": "",
-    // The operator console's one Google account (src/admin.ts); replace it when deploying your own.
-    "ADMIN_EMAIL": "zuozijian1994@gmail.com",
     // Where the sign-in codes come from (src/mail.ts).
     "EMAIL_FROM": "noreply@still.fail",
   },

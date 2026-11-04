@@ -29,17 +29,17 @@ cd "$A"
 now() { python3 -c 'import time;print(time.time())'; }
 secs() { python3 -c "print(f'{$(now)-$1:.1f}')"; }
 N=${MBUI_BUILD:-$(git -C "$EMBER" rev-list --count HEAD 2>/dev/null || echo 1)}
-# MBUI_VARIANT, which app it is built as (as Android's apk.json variants are): mbui (the default) still.fail preview, an app
+# MBUI_VARIANT, which app it is built as (as Android's apk.json variants are): preview (the default) still.fail preview, an app
 # beside still.fail's desktop app (fail.still.mbui, its feed mac/mbui); stable and beta still.fail's desktop app itself,
 # to take its place: Electron's ids, names and links (apps/desktop/package.json, build.sh), so that app's updater takes
 # it and it keeps that app's data, sign-in and sealed keys where they were (src/sfcore/apple_engine.m, src/host/
 # apple_core.mm electron_sealed); their feed mac (the beta's core asks mac/beta, as still.fail's beta builds do). The
 # beta's core and still.fail preview's are a beta's (MBUI_BETA): builds of every commit, the test channel's.
-case "${MBUI_VARIANT:-mbui}" in
-  mbui) ID=fail.still.mbui NAME="still.fail preview" FEED=mac/mbui OWN= BETA=1 SCHEMES=() ZIP_NAME=stillfail-mbui ;;
+case "${MBUI_VARIANT:-preview}" in
+  preview) ID=fail.still.mbui NAME="still.fail preview" FEED=mac/mbui OWN= BETA=1 SCHEMES=() ZIP_NAME=stillfail-mbui ;;
   stable) ID=fail.still.desktop NAME=still.fail FEED=mac OWN=1 BETA= SCHEMES=(stillfail ember) ZIP_NAME=stillfail ;;
   beta) ID=fail.still.desktop.beta NAME=youdid.wtf FEED=mac OWN=1 BETA=1 SCHEMES=(stillfail-beta) ZIP_NAME=stillfail-beta ;;
-  *) echo "mac-app.sh: MBUI_VARIANT is mbui, stable or beta, not $MBUI_VARIANT" >&2; exit 1 ;;
+  *) echo "mac-app.sh: MBUI_VARIANT is preview, stable or beta, not $MBUI_VARIANT" >&2; exit 1 ;;
 esac
 OUT=$A/out/mac
 APPDIR="$OUT/$NAME.app"
@@ -98,12 +98,12 @@ grep -E '^mbc: |^mac\.sh: |^core\.sh|hermes|^real|took|in [0-9.]+ s' "$OUT/build
 BIN=$A/_build/native/release/build/stillfail/stillfail/stillfail.exe
 t2=$(now)
 
-# the icon, the app's own (still.fail's face; youdid.wtf's under its tape; still.fail mbui's still.fail's), made once
+# the icon, the app's own (still.fail's face; youdid.wtf's under its tape; still.fail preview's still.fail's), made once
 # for each version of its script: an Icon Composer document whose tile and face are each appearance's own (the black
 # face, the white one on a dark system), compiled by actool into the app's Assets.car, which macOS 26 draws as the
 # system's appearance is, the app open or not; and the black face's .icns for the macOS before (CFBundleIconFile).
 # actool knows .icon from Xcode 26: the newest Xcode's that does, whichever is selected.
-VARIANT=${MBUI_VARIANT:-mbui}
+VARIANT=${MBUI_VARIANT:-preview}
 [ "$VARIANT" = beta ] && FACE=beta || FACE=stable
 ICON=$OUT/AppIcon-$(shasum -a 256 "$D/mac-icon.swift" | cut -c1-12)-$FACE
 [ -f "$ICON.icns" ] || swift "$D/mac-icon.swift" "$FACE" "$ICON.icns" > /dev/null

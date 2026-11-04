@@ -515,6 +515,18 @@ final class AdbShare {
                 .build();
     }
 
+    /**
+     * The chats whose own screens (virtual displays the stations made, docs/adb-share.md) are up on the phone, in a line;
+     * null with none, or with words from before it (kept from an older app's texts).
+     */
+    static String screens(JSONObject view) {
+        org.json.JSONArray titles = view == null ? null : view.optJSONArray("screens");
+        if (titles == null || titles.length() == 0) return null;
+        String key = titles.length() == 1 ? "android-misc.adb.notify.screen" : "android-misc.adb.notify.screens";
+        String said = t(key, "title", titles.optString(0), "n", String.valueOf(titles.length()));
+        return said.equals(key) ? null : said;
+    }
+
     /** Whether the pairing dialog is open (its port is announced) and its code still wanted. */
     static boolean pairing(JSONObject view) {
         return view != null && view.has("pairPort") && !view.isNull("pairPort") && !"connected".equals(view.optString("adb"));

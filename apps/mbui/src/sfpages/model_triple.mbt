@@ -409,11 +409,13 @@ fn triple_body(
       }
     }
   }
+  let all_contexts : Array[(String, String)] = items(v, "contexts").map(fn(o) { (text(Some(o), "id"), text(Some(o), "text")) })
   // (each made what it runs on at once, the panel staying open: kept for the model too, as it runs next time it is
   // picked)
   let pick_effort = fn(e : String) {
     pick_save(src, station, of, { "effort": if e == "" { Json::null() } else { Json::string(e) } })
   }
+
   // what each says of how it runs right after its name, on its line (2026-11-02 用户「常用模型的信息分两边很难读」,
   // 「移动端…跟在模型后面」; under it, two lines, rejected: 「到底为什么要两行」); as wide as the widest of it, the one
   // picked's at whatever it is picked to: the panel as wide whatever is picked in it (its widest kept: a depth picked
@@ -423,6 +425,10 @@ fn triple_body(
     .search_by(fn(o) { text(Some(o), "model") == picked })
     .map(fn(i) { items(Some(options[i]), "runtimes").length() > 1 && !flag(v, "runtimeFixed") })
     .unwrap_or(false)
+  // (the widest of the less context it can be kept to after them: 500K)
+  let context_said = all_contexts.fold(init="", fn(m, o) {
+    if o.0 != "" && o.1.length() > m.length() { o.1 } else { m }
+  })
   let said_as = fn(e : String, fast_on : Bool) {
     let parts = []
     if many {
@@ -434,12 +440,16 @@ fn triple_body(
     if fast_on {
       parts.push("Fast")
     }
+    if context_said != "" {
+      parts.push(context_said)
+    }
     parts.join(" · ")
   }
   let usual_w = options.fold(init=0.0, fn(m, o) { dmax(m, c.words_across(text(Some(o), "usualText"), triple_note)) })
   let usual_w = all_efforts.fold(init=usual_w, fn(m, e) {
     dmax(dmax(m, c.words_across(said_as(e.0, false), triple_note)), if fast { c.words_across(said_as(e.0, true), triple_note) } else { 0.0 })
   })
+  let usual_w = if all_efforts.is_empty() { dmax(usual_w, c.words_across(said_as("", fast), triple_note)) } else { usual_w }
   // each column's words as wide as the widest of them picked (the models' of all of them, whatever the filter leaves):
   // the panel, as wide as what it holds, as wide whichever is picked and whatever is typed (as a segmented choice's)
   let names_w = options.fold(init=0.0, fn(m, o) {
@@ -870,6 +880,33 @@ fn triple_speed(c : @ui.Ctx, src : Source, station : String, of : String, v : Js
 }
 
 ///|
+/// How much context it is kept to, at the foot after how fast (2026-11-03 用户「把 opus5.5 上下文长度限制在 500k 或者
+/// 300k」「直接放最下面跟速度一样吧」): its name and the step picked; pressed, the steps in a pick, its whole window first,
+/// as the core offers them (none where its runtime cannot).
+fn triple_context(c : @ui.Ctx, src : Source, station : String, of : String, v : Json?) -> Unit {
+  let head = @sf.t("web-main.model.context")
+  let now = text(v, "contextNow")
+  let choices = items(v, "contexts").map(fn(o) { @sf.choice(text(Some(o), "id"), text(Some(o), "text")) })
+  let id = c.id("triple/context")
+  if c.clicked(id) {
+    @sf.pick(
+      head,
+      choices,
+      now,
+      fn(k) { pick_save(src, station, of, { "context": if k == "" { Json::null() } else { Json::string(k) } }) },
+      from=Of(id),
+      search=false,
+    )
+  }
+  let words = choices.search_by(fn(ch) { ch.key == now }).map(fn(i) { choices[i].label }).unwrap_or("")
+  let b = c.box(style=triple_who(), id~, fn() {
+    c.text(head, style=triple_who_lead) |> ignore
+    c.text(words, style=triple_who_name) |> ignore
+  })
+  c.semantics(b, Button, id~, label=words)
+}
+
+///|
 /// Its foot (the presenter's, where every panel's foot stands): who runs it, and where the model picked is another
 /// station's, borrowing it (asked first). Nothing to confirm: each pick is made what it runs on as it is picked
 /// (2026-11-01 用户「从第一性原理出发重新思考这个组件的使用场景」).
@@ -891,6 +928,10 @@ fn triple_foot(c : @ui.Ctx, src : Source, station : String, of : String, content
     if flag(v, "fastAvailable") {
       apart()
       triple_speed(c, src, station, of, v)
+    }
+    if !items(v, "contexts").is_empty() {
+      apart()
+      triple_context(c, src, station, of, v)
     }
   })
   |> ignore
@@ -992,8 +1033,9 @@ fn triple_model_row(
           name()
         } else {
           c.box(style=triple_name_line, fn() {
-            // (the name as wide as its words, how it runs right after it rather than at the row's end)
-            c.box(name) |> ignore
+            // (the name as wide as its words, how it runs right after it rather than at the row's end; kept, so what
+            // is after it gives way first)
+            c.box(keep=true, name) |> ignore
             // (giving way to the name where the row is short: what the name leaves of it, cut short)
             c.box(style=triple_usual_room, fn() { c.text(usual, style=triple_usual) |> ignore }) |> ignore
           })
@@ -1028,7 +1070,7 @@ fn triple_model_row(
         let p : Map[String, Json] = { "model": Json::string(model) }
         match field(o, "usual") {
           Some(Object(u)) =>
-            for k in ["runtime", "effort", "fast"] {
+            for k in ["runtime", "effort", "fast", "context"] {
               p[k] = u.get(k).unwrap_or(Json::null())
             }
           _ => ()

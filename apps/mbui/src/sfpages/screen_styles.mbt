@@ -270,6 +270,11 @@ let take_over_button_words : @ui.TextStyle = @ui.text_style(
 let stage_box : @ui.Style = @ui.css("w=Full h=Full clip")
 
 ///|
+/// A device's at its whole size, its body round the picture being past this box.
+// kept across runs: a value (no field of it changes)
+let stage_box_body : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
 /// The frame as it was, faded while the view is on its way back (40%).
 // kept across runs: a value (no field of it changes)
 let frame_faded : @ui.Style = @ui.css("opacity=O40")
@@ -566,9 +571,13 @@ let debug_body : @ui.Style = @ui.css("w=Full px=S3 py=S2 gap=S1")
 let debug_line : @ui.TextStyle = @ui.text_style(size=Caption, color=Fg)
 
 ///|
-/// The picture's side of a simulator's page: what is left beside what debugs its app.
 // kept across runs: a value (no field of it changes)
-let debug_stage_side : @ui.Style = @ui.style(w=@sf.grow, h=@sf.grow)
+let debug_row_place : @ui.Style = @ui.css("row w=Full justify=JCenter")
+
+///|
+/// Where a device's picture is, with room round it for its body.
+// kept across runs: a value (no field of it changes)
+let debug_stage_body : @ui.Style = @ui.style(w=@sf.grow, h=@sf.grow, p=S3)
 
 ///|
 /// The device's buttons in a row over or under the picture, as near it as they can be.
@@ -577,7 +586,15 @@ let debug_tools_bar : @ui.Style = @ui.css("row w=Full py=S2 gap=S2 justify=JCent
 
 ///|
 // kept across runs: a value (no field of it changes)
+let debug_tools_column : @ui.Style = @ui.css("w=Full gap=S2 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
 let debug_pane_box : @ui.Style = @ui.css("bg=Surface px=S3 py=S3 gap=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let debug_device_box : @ui.Style = @ui.css("w=Full gap=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)

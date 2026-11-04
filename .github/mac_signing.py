@@ -7,7 +7,7 @@ The keychain is AFK's (cue.surf's), the one AFK-surf/Cue signs and notarizes its
 Application identity and its notarytool profile (Apple ID and app-specific password), in production's
 MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 and _2 (the file's base64 in two halves: one secret holds 48 KB at most), opened with
 KEYCHAIN_PASSWORD_AFK (both copied from Cue's; a rotation there is copied again). A copy of it is put on the user's
-search list for the command and taken off after (the list restored, the copy deleted), under the lock mini1's signing
+search list for the command and taken off after (the list restored, the copy deleted), under the lock macos-ci's signing
 jobs share: they run beside each other on its one search list.
 Without the keychain's secrets (a maintainer's own Mac), nothing is set up: the login keychain has the identity.
 

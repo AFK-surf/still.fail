@@ -19,6 +19,7 @@ import { relays, relayUrls } from "./relays";
 import { receiveLoad, relaysLoad } from "./relay-load";
 import { receiveLogs, receiveTraces } from "./tracing";
 import { ICON_URL_CHARS, keptIcon, serveIcon } from "./icons";
+import { servePicture } from "./pictures";
 
 /** Directory errors travel over RPC as their code; this gives each its status. */
 const STATUS: Record<string, number> = {
@@ -192,6 +193,9 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
 
   // ── the pictures put up as icons: to anyone with the address (icons.ts) ──
   if (path.startsWith("/v1/icons/") && method === "GET") return (await serveIcon(env, path.slice("/v1/icons/".length))) ?? reply({ error: "not_found" }, 404);
+
+  // ── Slack's pictures, for the app in a browser, which may not read them from Slack (pictures.ts) ──
+  if (path === "/v1/pictures" && method === "GET") return servePicture(request);
 
   // ── accounts ────────────────────────────────────────────────────────────
   const isAccountRoute = path === "/v1/me" || path.startsWith("/v1/workspaces") || path.startsWith("/v1/invitations/");

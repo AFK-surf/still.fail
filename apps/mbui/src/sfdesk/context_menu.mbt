@@ -118,6 +118,22 @@ pub fn context_page(c : @ui.Ctx, page : Int) -> Unit {
 }
 
 ///|
+/// A page made once (node `v`, the tree's), as an old view's page is in its frame (page_one's c.selectable and
+/// context_page): its words in pieces picked with the mouse (@ui.words_picked), and a right click in it the words
+/// picked's menu, where nothing in it that takes a press of its own was right clicked (Tree::menu_at: the topmost that
+/// does is asked), as the click's event, at its moment.
+pub fn context_node(v : @view.View) -> Unit {
+  @ui.words_picked(v)
+  v.on_menu(fn(m) {
+    let c = @ui.current()
+    if context.frame != c.frame_number() && c.selected_text().trim(chars=" \n\t") != "" {
+      context_asked(c, m.wx, m.wy)
+    }
+  })
+  |> ignore
+}
+
+///|
 /// The menu, while open: a link's items, an image's, the words'; chosen, done (what reads first, once read) and gone.
 pub fn context_menu(c : @ui.Ctx) -> Unit {
   // (built again as the menu is opened or a message's turn offered, wherever that was built)

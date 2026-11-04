@@ -117,7 +117,6 @@ using @sfbase {
   list_after,
   list_frame,
   local_sent,
-  message_runs,
   note_thumb,
   number,
   open_link,
@@ -151,7 +150,6 @@ using @sfbase {
   read_only_words,
   sent_local,
   sent_local_gone,
-  sent_marks,
   writing_add,
   writing_drop,
   writing_take,
@@ -180,6 +178,7 @@ using @sfbase {
   relay_go,
   relay_connect,
   type FlyingFile,
+  words_runs,
 }
 
 ///|
@@ -204,7 +203,6 @@ pub fn dmin(a : Double, b : Double) -> Double {
 ///|
 using @settings {
   binding_of,
-  decision_form,
   policy_forms,
   profile_forms,
   connects_mine,

@@ -152,6 +152,10 @@ export class WakingHost implements Host {
   get recorder(): Host["recorder"] {
     return this.inner.recorder;
   }
+  /// This device's own adb session is held independently of any station or UI wake.
+  get adb(): Host["adb"] {
+    return this.inner.adb;
+  }
   readonly tcp?: Host["tcp"];
   readonly appKeys?: boolean;
   readonly openDb?: Host["openDb"];
@@ -162,6 +166,7 @@ export class WakingHost implements Host {
   readonly secureGet?: Host["secureGet"];
   readonly secureSet?: Host["secureSet"];
   readonly secureDelete?: Host["secureDelete"];
+  readonly securePast?: Host["securePast"];
   readonly secureAsk?: Host["secureAsk"];
   readonly savedRead?: Host["savedRead"];
   readonly unzstd?: Host["unzstd"];
@@ -182,6 +187,7 @@ export class WakingHost implements Host {
     if (inner.secureGet) this.secureGet = (key, opts) => inner.secureGet!(key, opts);
     if (inner.secureSet) this.secureSet = (key, value, opts) => inner.secureSet!(key, value, opts);
     if (inner.secureDelete) this.secureDelete = (key) => inner.secureDelete!(key);
+    if (inner.securePast) this.securePast = (key) => inner.securePast!(key);
     if (inner.secureAsk) this.secureAsk = (reason) => inner.secureAsk!(reason);
     // A file the app saved on the device, read back: the device's too.
     if (inner.savedRead) this.savedRead = (at, start, end) => inner.savedRead!(at, start, end);
@@ -199,6 +205,11 @@ export class WakingHost implements Host {
   /// Where a value is kept as a file: the device's, at once.
   storagePath(key: string): string | null {
     return this.inner.storagePath?.(key) ?? null;
+  }
+
+  /// Where a picture is fetched from: the device's, at once.
+  pictureVia(url: string): string {
+    return this.inner.pictureVia?.(url) ?? url;
   }
 
   /// A loopback listener (a login's callback): the device's, nothing of a UI's to wait on.

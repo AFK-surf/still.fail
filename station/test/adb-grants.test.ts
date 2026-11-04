@@ -188,6 +188,36 @@ test("a grant until the chat is archived ends with it, and its owner takes one b
   assert.deepEqual(w.heard.map((r) => `${r.id} ${r.status}`), ["p1 pending", "p1 granted", "p2 pending", "p2 granted", "p1 ended", "p2 ended"]);
 });
 
+test("its agent hands the phone back when done: the grant ends, its card says so, and its comings and goings wake it no more", async () => {
+  const w = world();
+  const [tool] = phoneTools(w.grants, async () => "reached");
+  // Nothing held: nothing to hand back.
+  assert.match(await tool!.run("s1", { done: true }) as string, /nothing to hand back/);
+  await tool!.run("s1", { reason: "check the login screen" });
+  assert.equal(w.grants.decide("pat@example.com", "p1", "chat", "work-a"), null);
+  w.grants.linked("pat@example.com", { adb: "connected" });
+  const told = w.told.length;
+  assert.match(await tool!.run("s1", { done: true }) as string, /Handed back: p1/);
+  assert.equal(w.grants.get("p1")!.status, "ended");
+  assert.deepEqual(w.cards[0]!.card.adb.outcome, { status: "ended", scope: "chat", why: "agent 已交还" });
+  // Its owner's devices hear it (their phone stops being lent for it); the agent, who asked, is not told again.
+  assert.equal(w.heard.at(-1)!.status, "ended");
+  assert.deepEqual(w.grants.ofOwner("pat@example.com"), []);
+  w.grants.linked("pat@example.com", null);
+  w.grants.linked("pat@example.com", { adb: "unpaired" });
+  w.grants.linked("pat@example.com", { adb: "connected" });
+  assert.equal(w.told.length, told);
+  // A request not yet decided is withdrawn the same way; another chat's grant is not touched.
+  await tool!.run("s1", { reason: "again" });
+  await tool!.run("s2", { reason: "screenshots" });
+  assert.equal(w.grants.decide("pat@example.com", "p3", "hour", "work-b"), null);
+  await tool!.run("s1", { done: true });
+  assert.equal(w.grants.get("p2")!.status, "denied");
+  assert.equal(w.grants.get("p3")!.status, "granted");
+  // Asking needs a reason still.
+  await assert.rejects(tool!.run("s1", {}), /reason/);
+});
+
 test("a granted card says how its station's adb holds the phone, and its agent is told as it is reached", async () => {
   const w = world();
   await w.grants.ask("s1", "install the mod");
@@ -200,7 +230,7 @@ test("a granted card says how its station's adb holds the phone, and its agent i
   w.grants.linked("Pat@Example.com", { adb: "unpaired", message: "not paired" });
   assert.deepEqual(w.cards[0]!.card.adb.outcome, { status: "granted", scope: "chat", link: "unpaired" });
   assert.equal(w.told.length, told + 1);
-  assert.match(w.told.at(-1)!, /not paired with it yet.*这台 station 还没和你的手机配对/);
+  assert.match(w.told.at(-1)!, /pairing is still needed.*card under the phone request/);
   // Tried again and again while unpaired: said once.
   w.grants.linked("pat@example.com", { adb: "connecting" });
   w.grants.linked("pat@example.com", { adb: "unpaired" });

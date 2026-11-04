@@ -1,21 +1,19 @@
 // A long pick of the presenters' (pick_popover's long one: the web's chooser with its search) as nodes of the window's
 // tree: a modal layer over the window, nothing under it dimmed, its small panel beside what opened it (as menu_node's:
 // View::beside, grown out of that side as it comes, gone at once as it closes, as the old presenter lets it go), chooser
-// wide. Over its list its search, the library's field (input) in an old view hosted in it, the way there (no editor of
-// the tree's yet), the keyboard's as it opens; what is typed finds by the words (pick_found: a choice's label, note
-// and value), Enter in it picks the first found, none found said so (common.noMatch). Its list scrolls past
-// pick_list_most (View::scrolls), each choice a row of its own as menu_item draws it (its mark or icon in a column
-// before its words, its value after them, its note under them, the one chosen in the accent): pressed, chosen. Escape,
-// back and a press outside close it.
+// wide. Over its list its search, the library's line (input_node), the keyboard's as it opens; what is typed finds
+// by the words (pick_found: a choice's label, note and value), Enter in it picks the first found, none found said so
+// (common.noMatch). Its list scrolls past pick_list_most (View::scrolls), each choice a row of its own as menu_item
+// draws it (its mark or icon in a column before its words, its value after them, its note under them, the one chosen
+// in the accent): pressed, chosen. Escape, back and a press outside close it.
 
 ///|
 /// A long pick in `parent` while `open()` (let go of at once once not): `title` (what it is called), `choices`, the one
-/// `chosen`, its search's field `line`, named by `key` (the presented's); beside what `anchor` makes in its layer,
-/// `offset` off it, lined up `along` it. `choose` with a choice's key, once; `cancel` as it is closed unchosen.
+/// `chosen`, its search's field `line`; beside what `anchor` makes in its layer, `offset` off it, lined up `along`
+/// it. `choose` with a choice's key, once; `cancel` as it is closed unchosen.
 /// `shown`, `gone`: as dialog_layer_node's.
 pub fn pick_node(
   parent : @view.View,
-  key : String,
   open : () -> Bool,
   anchor : (@view.View) -> @view.View,
   title : String,
@@ -51,8 +49,6 @@ pub fn pick_node(
         choose(k)
       }
     }
-    // (its field given the keyboard's focus as it opens, once: then the person's; pick_popover's focus_once)
-    let focused = Ref(false)
     layer
     .over(Is(true))
     .modal(Is(true))
@@ -99,49 +95,38 @@ pub fn pick_node(
       .presses(Is(true))
       .on_press(fn() {  })
       |> ignore
-      // (its search, a capsule in its top corners, the library's field in an old view: Enter in it picks the first
-      // found)
-      @ui.old(p, fn(c) {
-        let fid = c.id(key + "/search")
-        let submitted = Ref(false)
-        let held = c.box(style=pick_search_at, fn() {
-          submitted.val = input(c, key + "/search", placeholder=t("common.search"), small=true, field=line).submitted
-        })
-        // (its words as far in as the panel's, its ground and edge with the panel: the old popover's look's words, as
-        // @kit.beside put them on what it holds)
-        let l = look()
-        c.look(held, { alpha: 1.0, dx: 0.0, dy: 0.0, sx: 1.0, sy: 1.0, ox: 0.5, oy: 0.5, rot: 0.0, circle: 0.0, words: l.words })
-        if !focused.val && @signals.untracked(open) {
-          if c.has_focus(fid) {
-            focused.val = true
-          } else {
-            c.focus_editor(key + "/search")
-          }
-        }
-        if submitted.val {
-          match @signals.untracked(found).get(0) {
-            Some(x) => c.tell(key + "/first", fn() { go(x.key) })
-            None => ()
-          }
-        }
+      // (its search, a capsule in its top corners, the library's line: Enter in it picks the first found)
+      let search : Ref[@view.View?] = Ref(None)
+      p.box(fn(s) {
+        // (as far in as all else it holds, past the panel's own ground: Look's `words`)
+        s.alpha(By(words_in)) |> ignore
+        search.val = Some(
+          input_node(s, line, placeholder_by=fn() { t("common.search") }, small=true, submitted=fn(_) {
+            match @signals.untracked(found).get(0) {
+              Some(x) => go(x.key)
+              None => ()
+            }
+          }),
+        )
       })
-      .height(Is(Some(menu_row_min)))
       |> ignore
       // (none found: said so)
       p.show(fn() { found().is_empty() }, fn(e) {
+        e.alpha(By(words_in)) |> ignore
         e.padding(Is((@ui.Space::px(S2_5) + reach, @ui.Space::px(S2), @ui.Space::px(S2_5) + reach, @ui.Space::px(S2)))) |> ignore
         e.box(fn(w) {
           w
           .words(Is(t("common.noMatch")), look=toast_words_look(Meta, L5, 400, true))
           .ink(By(fn() { @ui.tree_theme().color(Muted) }))
-          .alpha(By(words_in))
           |> ignore
         })
         |> ignore
       })
       // (its list, scrolling past its most)
       p.box(fn(l) {
-        l.max_height(Is(Some(pick_list_most))) |> ignore
+        // (all it holds as far in as its look says, past the panel's own ground, edge and shadow: its rows, their
+        // grounds, icons and words, the same, Look's `words` as a surface's are)
+        l.max_height(Is(Some(pick_list_most))).alpha(By(words_in)) |> ignore
         l.scrolls(list, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(b) {
           b.each(fn() { found().map(fn(x) { x.key }) }, fn(k) { k }, fn(cell, k) {
             let k = @signals.untracked(fn() { k.get() })
@@ -149,7 +134,7 @@ pub fn pick_node(
               Some(x) => {
                 // (the last found reaching into the panel's padding at its foot, as menu_item's at_foot)
                 let last = fn() { found().last().map(fn(l) { l.key }) == Some(x.key) }
-                pick_row_node(cell, x, x.key == chosen, fn() { go(x.key) }, words_in, last, reach)
+                pick_row_node(cell, x, x.key == chosen, fn() { go(x.key) }, last, reach)
               }
               None => ()
             }
@@ -163,8 +148,8 @@ pub fn pick_node(
         |> ignore
       })
       |> ignore
-      // (the focus its field's as it opens, given by the old view it is in; what had it given back as it goes)
-      layer.focus_returns() |> ignore
+      // (the focus its search's as it opens; what had it given back as it goes)
+      layer.focus_opens(search.val.unwrap()) |> ignore
     })
     |> ignore
   })
@@ -179,7 +164,6 @@ fn pick_row_node(
   x : Choice,
   on : Bool,
   go : () -> Unit,
-  words_in : () -> Double,
   last : () -> Bool,
   reach : Double,
 ) -> Unit {
@@ -205,7 +189,7 @@ fn pick_row_node(
     let first_line = fn(into : @view.View) {
       if panel {
         into.box(fn(col) {
-          col.width(Is(Some(panel_icon_col))).lines_up(Is(Some(Middle))).alpha(By(words_in)) |> ignore
+          col.width(Is(Some(panel_icon_col))).lines_up(Is(Some(Middle))) |> ignore
           match x.mark {
             Some(m) =>
               @ui.old(col, fn(c) { m(c, panel_icon) })
@@ -223,7 +207,6 @@ fn pick_row_node(
         // (20 a line, as menu_item sets its words)
         .words(Is(x.label), look={ ..toast_words_look(Ui, L5, if on { 500 } else { 400 }, false), line: pick_row_line })
         .ink(By(fn() { if on { library_theme().p.accent_text } else { library_theme().p.text } }))
-        .alpha(By(words_in))
         |> ignore
       })
       |> ignore
@@ -236,7 +219,6 @@ fn pick_row_node(
             { ..l, line: @ui.tree_theme().text_line * l.size }
           })
           .ink(By(fn() { library_theme().p.muted }))
-          .alpha(By(words_in))
           |> ignore
         })
         |> ignore
@@ -259,7 +241,6 @@ fn pick_row_node(
             w
             .words(Is(x.note), look=toast_words_look(Meta, L5, 400, true))
             .ink(By(fn() { library_theme().p.muted }))
-            .alpha(By(words_in))
             |> ignore
           })
           |> ignore
@@ -271,10 +252,6 @@ fn pick_row_node(
   })
   |> ignore
 }
-
-///|
-// kept across runs: a value (no field of it changes)
-let pick_search_at : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// A long pick's row's words' line (menu_item's: 20).

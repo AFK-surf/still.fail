@@ -28,7 +28,7 @@ function startup(t: TestContext, bindAddr: string | undefined, congestion?: "cub
   const cloud = { state: { workspace_name: "ws" }, relays: () => [], memberships: () => [], peersCurrent: false, listen: () => () => {}, toolCalls: null };
   const inputs = Layer.mergeAll(
     Layer.succeed(MeshSide)({ net: new Net(), peers: { route: null }, outside: null, forwarded: () => false, runtimes: () => [] }),
-    Layer.succeed(Previous)({ pid: null, gone: previous.promise }),
+    Layer.succeed(Previous)({ pid: null, gone: previous.promise, exited: previous.promise }),
     Layer.succeed(Own)({ paths: () => [] } as never),
     Layer.succeed(Peers)({ attach: () => {} } as never),
     Layer.succeed(Parts)(new StationParts()),

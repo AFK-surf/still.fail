@@ -303,6 +303,29 @@ test("surface: posts as cards in the chat, files after them; a question's button
   }
 });
 
+test("surface: a question that stops waiting otherwise says why, nothing left to press; one its own button answered is left as it shows", async () => {
+  const r = await surfaceRig();
+  try {
+    const here = { channel: "oc_g", threadTs: "om_a" };
+    const options = { type: "options", options: [{ label: "合并", recommended: true }] };
+    const asked = await r.surface.post(here, "合并吗", [], options);
+    await r.surface.cardEnded(here, asked, "合并吗", options, { why: "message", by: "ou_ada", byTs: "om_m" });
+    const patched = r.fake.calls("PATCH", `/open-apis/im/v1/messages/${asked}`);
+    assert.equal(patched.length, 1);
+    const card = JSON.parse(patched[0]!.body.content);
+    assert.equal(card.body.elements.some((el: Json) => el.tag === "button"), false, "nothing to press any more");
+    assert.match(JSON.stringify(card), /这张卡已关闭/);
+    await r.surface.cardEnded(here, asked, "合并吗", options, { why: "withdrawn" });
+    assert.equal(r.fake.calls("PATCH", `/open-apis/im/v1/messages/${asked}`).length, 1, "closed once");
+    // Its button's answer is a message of its own (card-…): the card shows that answer already.
+    const pressed = await r.surface.post(here, "再合并吗", [], options);
+    await r.surface.cardEnded(here, pressed, "再合并吗", options, { why: "message", by: "ou_ada", byTs: "card-ev-1" });
+    assert.equal(r.fake.calls("PATCH", `/open-apis/im/v1/messages/${pressed}`).length, 0);
+  } finally {
+    await r.close();
+  }
+});
+
 test("surface: the status card follows the agent's steps at most once a second and ends saying how long it took, with the history's link", async () => {
   const r = await surfaceRig();
   try {

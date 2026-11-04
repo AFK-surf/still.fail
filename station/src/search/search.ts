@@ -64,7 +64,7 @@ export class Search {
 
   /// What `query` finds for `asker`: by kind, at most `limit` of each (those of `kinds` only, when given; the execution
   /// history only when asked for by name), the machine's files beside the rest.
-  async query(query: string, asker: Asker, options: { kinds?: string[]; limit?: number; offset?: number } = {}): Promise<Found> {
+  async query(query: string, asker: Asker, options: { kinds?: string[]; limit?: number; offset?: number; archived?: boolean } = {}): Promise<Found> {
     const files = this.#files;
     const wantsFiles = files !== null && (!options.kinds || options.kinds.length === 0 || options.kinds.includes("file")) && (options.offset ?? 0) === 0;
     const rest = options.kinds?.filter((k) => k !== "file");
@@ -75,17 +75,19 @@ export class Search {
     return found === null ? looked : { ...looked, groups: [...looked.groups, found] };
   }
 
-  #looked(query: string, asker: Asker, options: { kinds?: string[]; limit?: number; offset?: number }): Promise<Found> {
+  #looked(query: string, asker: Asker, options: { kinds?: string[]; limit?: number; offset?: number; archived?: boolean }): Promise<Found> {
     const worker = this.#worker ?? this.#spawn();
     if (!worker) return Promise.reject(new Error("the search is stopped"));
     const id = this.#next++;
+    const cancel = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT);
     return new Promise<Found>((resolve, reject) => {
       const timer = wall.after(QUERY_MS, () => {
+        Atomics.store(new Int32Array(cancel), 0, 1);
         this.#waiting.delete(id);
         reject(new Error("the search took too long"));
       });
       this.#waiting.set(id, { resolve, reject, timer });
-      worker.postMessage({ type: "query", id, query, asker, ...options } satisfies Told);
+      worker.postMessage({ type: "query", id, query, asker, ...options, cancel } satisfies Told);
     });
   }
 

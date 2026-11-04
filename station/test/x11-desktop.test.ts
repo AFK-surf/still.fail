@@ -18,7 +18,7 @@ test("Linux desktop reports the reason when it cannot reach an X11 session", asy
   const desktop = new X11Desktop({ env, changed: () => {} });
   await desktop.refresh(true);
   assert.equal(desktop.access().reason, "linuxNoDisplay");
-  assert.match(accessShown(desktop.access(), "en")!.message, /no accessible X11 desktop/);
+  assert.match(accessShown(desktop.access(), "en")!.message, /no accessible desktop/);
   env.DISPLAY = ":99";
   env.WAYLAND_DISPLAY = "wayland-0";
   await desktop.refresh(true);
@@ -27,7 +27,7 @@ test("Linux desktop reports the reason when it cannot reach an X11 session", asy
   env.PATH = "";
   await desktop.refresh(true);
   assert.equal(desktop.access().reason, "linuxTools");
-  await assert.rejects(desktop.open({ maxWidth: 640, maxHeight: 480, codecs: ["jpeg"] }), /ffmpeg and xdotool/);
+  await assert.rejects(desktop.open({ maxWidth: 640, maxHeight: 480, codecs: ["jpeg"] }), /ffmpeg with X11 support and xdotool/);
 });
 
 /// This test is run on a disposable X11 display, not a person's desktop (docs/remote-screens.md).

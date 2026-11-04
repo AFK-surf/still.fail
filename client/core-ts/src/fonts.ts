@@ -46,10 +46,16 @@ const LOCAL = "local:";
 const LOCAL_MAX = 120;
 
 let origin = "";
+let looksOrigin = "";
 
-/// Where the faces are fetched from: the cloud's (its /releases/), set as the core starts.
-export function setOrigin(cloud: string): void {
+/// Where the faces are fetched from: the cloud's (its /releases/), set as the core starts; and the share card's looks'
+/// files (shareLooksFile), the site's whose build the app is of. still.fail's own app on the test channel
+/// (`testChannel`) is built from main before still.fail's site is (app.still.fail only with a release): its looks' files
+/// are on the test channel's site, which every build of main deploys (2026-11-03: a beta app's new looks asked
+/// app.still.fail for theirs and were given its page).
+export function setOrigin(cloud: string, testChannel = false): void {
   origin = cloud.replace(/\/+$/, "");
+  looksOrigin = testChannel && origin === "https://app.still.fail" ? "https://app.youdid.wtf" : origin;
 }
 
 /// Where this device keeps a face's file, by its hash, as a file the app's host reads there itself (font-files.ts):
@@ -101,6 +107,13 @@ function face(e: Entry): Record<string, unknown> {
     files: e.files.map((f) => ({ weight: f.weight, url: `${base}/${f.file}`, bytes: f.bytes, sha256: f.sha256 })),
     bytes: e.files.reduce((n, f) => n + f.bytes, 0),
   };
+}
+
+/// A file of the share card's looks that the app does not carry (`<drawing>/<name>`: web/public/share-looks/, a look's
+/// picture, 1/a1-murasame-adv.webp, or their face, 1/face-400.gz), where still.fail's site keeps it; null for anything
+/// else.
+export function shareLooksFile(file: string): string | null {
+  return /^[0-9]+\/[a-z0-9.-]+\.(gz|webp)$/.test(file) && !file.includes("..") ? `${looksOrigin}/share-looks/${file}` : null;
 }
 
 /// A face still.fail keeps, by its id, as a device fetches it: each file's address, size and hash, and its preview's.

@@ -25,12 +25,14 @@ fn page_switch_reset() -> Unit {
 }
 
 ///|
-/// As the pane's page is built: a switch between a chat and a new chat begins, from now.
-fn page_switch_frame(c : @ui.Ctx) -> Unit {
-  let top = app.nav.top()
+/// The page on top become `top` (as the stack is told it: page_switch_said, before any page of it is built): a switch
+/// between a chat and a new chat begins, from now, the new chat left as it was last laid out (its composer and its foot
+/// as measured then: what was drawn, not what is to be). Once for each page come on top, none for the one it was
+/// already; a new chat become its chat in place (fresh.became) none of it, its own way.
+fn page_switch_to(top : Page) -> Unit {
   let switched = match (page_switch.was, top) {
     (Some(NewChat), Chat(r)) =>
-      match fresh.became.get() {
+      match @signals.untracked(fn() { fresh.became.get() }) {
         Some(b) if b == r => false
         _ => true
       }
@@ -40,8 +42,12 @@ fn page_switch_frame(c : @ui.Ctx) -> Unit {
   if switched && !@ui.reduced_motion() {
     page_switch.from_new = page_switch.was == Some(NewChat)
     if page_switch.from_new {
-      fresh.room.set(@motion.measured(c, "new/composer").unwrap_or(0.0))
-      fresh.foot.set(@motion.measured(c, "new/foot").unwrap_or(0.0))
+      // (the new chat as it was laid out last: measured as the frame before drew it, read once, followed by nothing)
+      let measured = fn(key : String) {
+        @signals.untracked(fn() { @motion.measured(@ui.current(), key) }).unwrap_or(0.0)
+      }
+      fresh.room.set(measured("new/composer"))
+      fresh.foot.set(measured("new/foot"))
       // the new chat left: its scene leaves by its own way, from now
       became_starts(wide=true)
     }
@@ -51,6 +57,19 @@ fn page_switch_frame(c : @ui.Ctx) -> Unit {
     fresh_reset()
   }
   page_switch.was = Some(top)
+}
+
+///|
+/// The page on top followed in node `v` (the wide frame's page's panel, its pane) while `holds` says (the workspace in
+/// view, not waiting in its safe mode): each page come on top told page_switch_to as the stack is told it; none while
+/// it does not hold, the page on top as it holds again told then.
+fn page_switch_said(v : @view.View, holds : () -> Bool) -> Unit {
+  v.reacts(fn() { if holds() { Some(app.nav.top()) } else { None } }, fn(top) {
+    match top {
+      Some(p) => page_switch_to(p)
+      None => ()
+    }
+  })
 }
 
 ///|

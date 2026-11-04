@@ -11,7 +11,7 @@ const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
 /**
  * PostHog's project key (docs/telemetry.md), from the file $STILLFAIL_POSTHOG
- * ($EMBER_POSTHOG before the rename) names ({host, key}; ~/ember-deploy/posthog.json on studio), with this
+ * ($EMBER_POSTHOG before the rename) names ({host, key}), with this
  * build's commit as the release. Without it the build has no analytics. The station's own copy is written by
  * scripts/posthog-key.ts, the same way.
  */

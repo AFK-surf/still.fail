@@ -59,7 +59,7 @@ test "a picture waiting in the composer, tapped, opens in the viewer from the by
 fn waiting_picture_return(new_chat : Bool) -> Unit raise {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.keep_parts(true)
   t.drawn_again(true)
@@ -250,6 +250,34 @@ test "a waiting file's card stands off the composer's frosted ground by its own 
     assert_eq(tiles.length(), 1)
     assert_true(near(ch, tiles[0].h), msg="the card \{ch} high, the picture \{tiles[0].h} (platform \{platform})")
   }
+}
+
+///|
+test "an archived chat says sending restores it and accepts a message without first pressing restore" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls, over=fn(name, tp) {
+    if name != "chat" {
+      return tp
+    }
+    match tp.value {
+      Some(Object(o)) => {
+        let o2 = o.copy()
+        o2["archived"] = Json::boolean(true)
+        { ..tp, value: Some(Json::object(o2)) }
+      }
+      _ => tp
+    }
+  })
+  assert_true(t.find("已归档，发送消息将还原") is Some(_))
+  assert_true(t.find("还原对话") is Some(_))
+  t.tap_text("发消息")
+  t.type_text("再看一下")
+  assert_eq(named(calls, "session.warm").length(), 0)
+  tap_send(t)
+  let sent = named(calls, "chat.send")
+  assert_eq(sent.length(), 1)
+  assert_eq(text(Some(sent[0].params), "text"), "再看一下")
+  assert_eq(named(calls, "chat.archive").length(), 0)
 }
 
 ///|
@@ -540,7 +568,7 @@ test "a cache choice opened over a collapsed composer leaves it collapsed" {
 ///|
 test "a notice over the composer wrapped to lines: round as one line is, its mark on its first line" {
   let calls : Array[Made] = []
-  let said = "「ccvm」正在更新：当前显示的是之前读取的内容，更新完成后会自动重新连接，发出的消息届时送达"
+  let said = "「Birch」正在更新：当前显示的是之前读取的内容，更新完成后会自动重新连接，发出的消息届时送达"
   let t = fake_core(calls, over=fn(name, tp) {
     if name != "chat" {
       return tp
@@ -603,7 +631,7 @@ test "a notice over a phone's composer goes with its ground as it opens, as far 
       Some(Object(o)) => {
         let o2 = o.copy()
         o2["offline"] = Json::boolean(true)
-        o2["offlineNote"] = Json::string("「ccvm」离线")
+        o2["offlineNote"] = Json::string("「Birch」离线")
         { ..tp, value: Some(Json::object(o2)) }
       }
       _ => tp
@@ -689,7 +717,7 @@ test "a picture restored in the composer remains visible in the sending message"
       }
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms + @ui.image_fade_ms)
   assert_true(t.locate("img:mem:test/restored").length() > 0)
@@ -708,7 +736,7 @@ test "a picture restored in the composer remains visible in the sending message"
 test "a freshly picked picture remains visible throughout sending" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   @sfbase.writing_add(src, @sfbase.writing(src, "ws1/st1:s-c1"), "ws1/st1", "截图.png", png_head())
@@ -729,7 +757,7 @@ test "files sent fly from their tiles to their places in the message, then are i
   let clock : Ref[Double] = { val: 0.0 }
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   // a picture up at once (the fixture's station takes it), its tile in the composer

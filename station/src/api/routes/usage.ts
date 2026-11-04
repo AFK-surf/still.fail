@@ -1,12 +1,12 @@
 // What the agents spent, the machine's own sessions, the agents' memory, the machine itself, and the retired footprint
 // (admin/mod.rs: GET /usage, /machine-sessions, /machine-sessions/:runtime/:id, /memory, /host, /footprint), and what
 // still.fail uses of the machine (GET /resources, POST /resources/processes/:pid/end).
-import { type Request, type Answer, error, json, param, percentDecode } from "../request.ts";
+import { type Request, type Answer, error, json, param, Refused, segment } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
-import { memory } from "../../read/memory.ts";
 import { cpus, totalmem } from "node:os";
 import { NotEndable, type ResourceWatch } from "../../resources/watch.ts";
 import { log } from "../../ops/log.ts";
+import type { InWorkspace } from "../../store/rows.ts";
 
 const I64_MIN = -9223372036854775808n;
 const I64_MAX = 9223372036854775807n;
@@ -24,8 +24,17 @@ function number(r: Request, name: string): bigint | null {
   return BigInt(Math.trunc(x));
 }
 
+/// A page cursor is an exact SQLite i64. Going through a JavaScript number can skip rows above 2^53.
+function cursorInteger(r: Request, name: string): bigint | null {
+  const value = param(r, name);
+  if (value === undefined) return null;
+  if (!/^[+-]?\d{1,19}$/.test(value)) throw new Refused(400, `${name} must be an integer`);
+  const n = BigInt(value);
+  if (n < I64_MIN || n > I64_MAX) throw new Refused(400, `${name} is out of range`);
+  return n;
+}
+
 /// A path segment (admin/mod.rs segment_decode): `+` stays itself there.
-const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
 
 /// The Rust's `/footprint` for clients from before footprint statistics were retired (admin/footprint.rs `retired`).
 const RETIRED = JSON.stringify({
@@ -57,13 +66,9 @@ export const routes = (tools: Tools): Route[] => {
       pattern: /^\/memory$/,
       handle: async (r: Request): Promise<Answer> => {
         if (r.viewer.home !== false) return read(r, "memory", {});
-        const agents = tools.agents;
-        if (!agents) return error(503, "station starting");
-        try {
-          return json(200, JSON.stringify(memory(agents.config.data, r.viewer.workspace)));
-        } catch (e) {
-          return error(400, (e as Error).message);
-        }
+        if (!tools.agents) return error(503, "station starting");
+        if (typeof r.viewer.workspace !== "string") return error(400, "not a workspace id");
+        return read(r, "memory", { workspace: r.viewer.workspace });
       },
     },
     // The machine's state, at most ten seconds old.
@@ -84,7 +89,17 @@ export const routes = (tools: Tools): Route[] => {
 };
 
 /// GET /usage, the usage part's (usage/module.ts): `reading`, whether the counter is still reading what was spent.
-export const usageRoutes = ({ read }: Tools, reading: () => boolean): Route[] => [
+export const usageRoutes = ({ read }: Tools, reading: () => boolean, wakeTotals: (viewer: InWorkspace | null) => void = () => {}): Route[] => [
+  // A bounded page of one session's original calls; aggregates remain a separate, statistics-only read.
+  {
+    method: "GET",
+    pattern: /^\/usage\/calls\/([^/]+)\/?$/,
+    handle: (r: Request, [session]: string[]) => read(r, "usageCalls", {
+      session: segment(session!), from: String(cursorInteger(r, "from") ?? I64_MIN), to: String(cursorInteger(r, "to") ?? I64_MAX),
+      beforeAt: String(cursorInteger(r, "beforeAt") ?? I64_MAX), beforeSeq: String(cursorInteger(r, "beforeSeq") ?? I64_MAX),
+      limit: Number(number(r, "limit") ?? 100n), viewer: r.viewer,
+    }),
+  },
   // What the agents spent from `from` until `to` (ms), by day as the asker's clock has them (`tz`: minutes east of
   // UTC), with whom, where and on what; `history=1`, everything since counting began by day as well (a station from
   // before answers without it).
@@ -96,7 +111,25 @@ export const usageRoutes = ({ read }: Tools, reading: () => boolean): Route[] =>
       const from = number(r, "from") ?? 0n;
       const tz = number(r, "tz") ?? 0n;
       const clamped = tz < -1440n ? -1440n : tz > 1440n ? 1440n : tz;
-      return read(r, "usage", { lang: r.lang, from: String(from), to: String(to), tz: String(clamped), reading: reading(), viewer: r.viewer, history: param(r, "history") === "1" });
+      const historyFrom = cursorInteger(r, "historyFrom"), historyTo = cursorInteger(r, "historyTo");
+      if ((historyFrom === null) !== (historyTo === null)) throw new Refused(400, "history range needs both bounds");
+      if (historyFrom !== null && historyTo !== null) {
+        const localEnd = historyTo + clamped * 60_000n;
+        if (historyFrom > historyTo || historyTo - historyFrom > 370n * 86_400_000n || historyFrom % 60_000n !== 0n
+          || historyTo % 60_000n !== 0n || localEnd % 86_400_000n !== 0n
+          || localEnd < -8_640_000_000_000_000n || localEnd > 8_640_000_000_000_000n) throw new Refused(400, "invalid history range");
+        wakeTotals(r.viewer);
+      }
+      const history = param(r, "history") === "1";
+      const answer = read(r, "usage", { lang: r.lang, from: String(from), to: String(to), tz: String(clamped), reading: reading(), viewer: r.viewer, history,
+        ...(historyFrom !== null && historyTo !== null ? { historyRange: { from: String(historyFrom), to: String(historyTo) } } : {}) });
+      // Older clients request the whole history without its chart range. Their summary cache also needs the new
+      // pending buckets to be accounted; otherwise every later read revisits them. Let the current read finish first,
+      // then settle only this viewer's new statistics in the existing bounded background worker.
+      return history && historyFrom === null ? answer.then((result) => {
+        if (result.status === 200) wakeTotals(r.viewer);
+        return result;
+      }) : answer;
     },
   },
 ];

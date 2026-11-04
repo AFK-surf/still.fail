@@ -3,7 +3,8 @@
 // unseen; `@` and a few letters at the caret, what a menu of chats is opened by; a chat picked going in as its mark
 // (the core's `chat.ref`); a Backspace just after a mark taking it whole; a chat's link pasted as it is copied going in
 // as its mark; words pasted at once past the core's bound going as a file. What is written is read as the core reads
-// it (`ref.at`, `ref.marks`, `ref.pasted`, `paste.info`: refLinks.ts, pasted.ts), never here; a page draws the menu.
+// it (`ref.at`, `ref.marks`, `ref.words`, `ref.pasted`, `paste.info`: refLinks.ts, pasted.ts), never here; a page
+// draws the menu.
 
 ///|
 /// What a field of a draft was last seen as and what the core said of it: its words and selection (a change is told
@@ -22,6 +23,9 @@ priv struct RefField {
   marks : @sf.LiveArray[(Int, Int)]
   marks_of : @signals.Signal[String]
   mut marks_asked : String
+  mut runs : Json
+  mut runs_of : String
+  mut runs_asked : String
   mut found : Json?
 }
 
@@ -58,6 +62,9 @@ fn ref_field(key : String) -> RefField {
         marks: @sf.LiveArray::from([]),
         marks_of: @signals.signal("", same=fn(a, b) { a == b }),
         marks_asked: "",
+        runs: Json::null(),
+        runs_of: "",
+        runs_asked: "",
         found: None,
       }
       ref_fields[key] = f
@@ -100,6 +107,7 @@ pub fn refs_edits(c : @ui.Ctx, src : Source, key : String, input : @ui.Field, he
   if now == f.text && anchor == f.anchor && caret == f.caret {
     // (words the app put in itself: their marks)
     refs_ask_marks(c, src, key, now)
+    refs_ask_words(c, src, key, now)
     return
   }
   let was = f.text
@@ -138,6 +146,7 @@ pub fn refs_edits(c : @ui.Ctx, src : Source, key : String, input : @ui.Field, he
   f.anchor = anchor
   f.caret = caret
   refs_ask_marks(c, src, key, now)
+  refs_ask_words(c, src, key, now)
   if anchor == caret {
     let asked = ref_key(now, caret)
     c.tell("refs/at/" + key, fn() {
@@ -259,9 +268,61 @@ pub fn refs_look(key : String, accent : Int64) -> (String) -> (String, Array[(In
 }
 
 ///|
+/// Words `s` without the blanks at their ends, as they are sent.
+fn sent_words_of(s : String) -> String {
+  s.trim(chars=" \n\t").to_string()
+}
+
+///|
+/// The runs the words of draft `key`'s field `now` will be drawn in once sent (the core's `ref.words`: refLinks.ts
+/// draftWords), asked once for them (of words that may hold more than one: @sf.words_may_link).
+fn refs_ask_words(c : @ui.Ctx, src : Source, key : String, now : String) -> Unit {
+  let f = ref_field(key)
+  let words = sent_words_of(now)
+  if f.runs_of == words || f.runs_asked == words {
+    return
+  }
+  if !@sf.words_may_link(words) {
+    f.runs = Json::null()
+    f.runs_of = words
+    return
+  }
+  f.runs_asked = words
+  c.tell("refs/words/" + key, fn() {
+    (src.call)("ref.words", { "text": Json::string(words) }, fn(r) {
+      match r {
+        Ok(v) if sent_words_of(f.text) == words => {
+          f.runs = field(Some(v), "runs").unwrap_or(Json::null())
+          f.runs_of = words
+        }
+        _ => ()
+      }
+    })
+  })
+}
+
+///|
+/// The runs words sent from draft `key`'s field are drawn in (refs_ask_words; lines put after them, as they are) until
+/// the core's row has them: None where the core has not read the words the field holds yet.
+pub fn refs_sent_runs(key : String, words : String) -> Json? {
+  let f = ref_field(key)
+  let held = sent_words_of(f.text)
+  guard f.runs_of == held && words.has_prefix(held) else { return None }
+  let runs : Array[Json] = match f.runs {
+    Array(a) => a.copy()
+    _ => if held != "" { [{ "text": Json::string(held) }] } else { [] }
+  }
+  let rest = words.view(start_offset=held.length()).to_string()
+  if rest != "" {
+    runs.push({ "text": Json::string(rest) })
+  }
+  Some(Json::array(runs))
+}
+
+///|
 /// The marks draft `key`'s field holds, where they are in `words` sent from it (its words trimmed, lines maybe put after
-/// them): what was sent from here draws them as the field did until the core's row has them as links (sent_local,
-/// flight_start). None where the field holds other words.
+/// them): their flight takes off with them as the field drew them (flight_start). None where the field holds other
+/// words.
 pub fn refs_sent_marks(key : String, words : String) -> Array[(Int, Int)] {
   let f = ref_field(key)
   let s = f.text

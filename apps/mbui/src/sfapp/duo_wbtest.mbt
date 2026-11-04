@@ -35,7 +35,7 @@ fn native_chat(
 ) -> @ui.Tester {
   new_run()
   let src = fixture(mode)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~, window_corner=corner, window_corners?=corners, nav_able=able)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":\{side}}}")
   t.run_for(@ui.move_most_ms)
@@ -258,7 +258,7 @@ test "an iPhone Duo on its side, the soft keyboard rising: the cards end on it f
 /// The composer's box as drawn (the glass round its field) and the page it stands in (the roundest-cornered box round
 /// it, its foot left corner its own).
 fn composer_and_page(t : @ui.Tester) -> (@ui.Laid, @ui.Laid)? {
-  let bs = t.boxes()
+  let bs = t.boxes_held()
   guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
   let ed = bs[e]
   let round = fn(b : @ui.Laid) { b.x <= ed.x && ed.x + ed.w <= b.x + b.w && b.y <= ed.y && ed.y + ed.h <= b.y + b.h }
@@ -581,7 +581,7 @@ test "an iPhone Duo: the chat's info chosen in the system's column opens its pop
 ///|
 test "Duo side panel switch closes all tabs even when a job is in front of its history" {
   let t = native_chat(951.0, 669.0, true, side=84.0, mode="chat-tabs-side")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   assert_eq(side_now(r), (["s-c1", "jobs"], "jobs"))
   assert_eq(nav_icon_of(t, "page/chat/history", field="title"), Some(@sf.t("web-pages.chat.closePanel")))
   t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/history\"}")
@@ -624,7 +624,7 @@ test "an iPhone Duo: the workspace's button has a dot while another workspace ha
       }
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let q = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1)
   q.set_nav_able(true)
   q.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
@@ -690,16 +690,16 @@ test "an iPhone Duo: switching workspace from an open chat never restores the ol
     ..base,
     topic: fn(name, params) {
       if name == "workspaceMarks" {
-        topic_as_read(name, params, { value: Some({ "workspaces": {
+        { value: Some({ "workspaces": {
           "ws1": { "chat": { "station": "ws1/st1", "key": "s-c1" } },
           "ws2": {},
-        } }), error: None, version: 1 })
+        } }), error: None, version: 1 }
       } else {
         (base.topic)(name, params)
       }
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1)
   t.set_nav_able(true)
   t.keep_parts(true)
@@ -739,7 +739,7 @@ test "Duo HTML preview exposes close source and download in native bars" {
 test "Duo new chat with a long draft and attachment keeps send above the keyboard" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1)
   t.set_nav_able(true)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
@@ -991,7 +991,7 @@ test "an iPhone Duo on its side: another chat opened, its view read a while late
       (base.topic)(name, params)
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1, nav_able=true)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
   t.run_for(@ui.move_most_ms)
@@ -1117,7 +1117,7 @@ test "an iPhone Duo on its side: the sidebar's edge held by a finger that wander
 ///|
 test "a picture looked at on an iPhone Duo, the language changed while it is (the core's prefs saying another): its actions in the system's bars said in the new one, nothing else of it changed" {
   new_run()
-  let lang = Ref("zh")
+  let lang = @signals.signal("zh")
   let base = fixture("chat-preview-image")
   // (the core's prefs saying the language `lang` has, as they are read each frame)
   let src : Source = {
@@ -1127,21 +1127,21 @@ test "a picture looked at on an iPhone Duo, the language changed while it is (th
       match (name, got.value) {
         ("prefs", Some(Object(m))) => {
           let o = m.copy()
-          o["lang"] = Json::string(lang.val)
+          o["lang"] = Json::string(lang.get())
           { ..got, value: Some(Json::object(o)) }
         }
         _ => got
       }
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1, nav_able=true)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
   let before = nav_icon_of(t, "lead/over/close", field="title")
   assert_eq(before, Some(@sf.t("common.close")), msg="close, in the language it was")
-  lang.val = "en"
+  lang.set("en")
   // (the frame that shows what the test changed: the prefs read again as it is built, the language said from them)
   t.draw()
   let want = @sf.t("common.close")
@@ -1195,4 +1195,75 @@ test "an iPhone Duo on its side: a finger's swipe across the page, wherever on i
   t.drag(500.0, 400.0, 700.0, 400.0, steps=8)
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+}
+
+///|
+test "an iPhone Duo: the chat's … in the system's bars is a menu of the system's own, its rows the chat's menu's, a row chosen run" {
+  let t = native_chat(951.0, 669.0, true, side=84.0)
+  let said = t.nav_said()
+  // (its rows as the page's menu has them: the chat's own group, a line, where else it goes; no line closing it)
+  for s in ["\"id\":\"page/chat/more/0\",\"title\":\"" + @sf.t("web-main.chat.rename") + "\"", "\"id\":\"-\"", @sf.t("web-main.chat.copyLink")] {
+    if !said.contains(s) {
+      fail("the chat's … handed holds no \{s}: \{said}")
+    }
+  }
+  assert_false(said.contains("\"id\":\"-\",\"title\":\"\",\"checked\":false,\"icon\":\"\"}]"), msg=said)
+  // the first row chosen in the system's menu: 重命名 asked
+  t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/more/0\"}")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find(@sf.t("android-chat.rename.title")) is Some(_))
+}
+
+///|
+test "an iPhone Duo: the chat's station's screens a button of the system's bars, a dot on it while an agent drives one; the short column leaves it to the page" {
+  let t = native_chat(951.0, 669.0, true, side=84.0, mode="chat-agent-screens")
+  let said = t.nav_said()
+  assert_true(said.contains("page/chat/screen"), msg=said)
+  assert_eq(nav_icon_of(t, "page/chat/screen", field="title"), Some(@sf.t("web-pages.chat.screen")))
+  assert_true(said.contains("\"id\":\"page/chat/screen\",\"title\":\"" + @sf.t("web-pages.chat.screen") + "\",\"icon\":\"" + @sf.icon_path("monitor") + "\",\"dot\":true"), msg=said)
+  // (none of the page's own)
+  assert_true(said_at(t, @sf.t("web-pages.chat.screen")) is None)
+  // the short column (the chat narrow: its screens from its agent's sheet, sheets.mbt): none handed
+  let s = native_chat(466.0, 678.0, true, side=70.0, mode="chat-agent-screens")
+  assert_false(s.nav_said().contains("page/chat/screen"))
+}
+
+///|
+test "Duo chat's services go in the system's column, opening beside it" {
+  let t = native_chat(951.0, 669.0, true, side=84.0, mode="chat-jobs")
+  assert_eq(nav_icon_of(t, "page/chat/jobs"), Some(@sf.icon_path("web")))
+  let services = @sf.t("web-pages.chat.services")
+  assert_false(t.semantics().iter().any(fn(s) { s.label == services }), msg="the page's own button left in the title bar")
+  t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/jobs\",\"at\":[867,120,84,44]}")
+  t.frames_owed()
+  assert_true(@sfdesk.chat_pops_open().1)
+  guard t.semantics().iter().find_first(fn(s) { s.role == @ui.Role::Dialog }) is Some(d) else {
+    fail("no popover in the semantics")
+  }
+  assert_true(d.rect.0 + d.rect.2 <= 867.0, msg="its right edge at \{d.rect.0 + d.rect.2}")
+}
+
+///|
+test "Duo's short column keeps the chat's services in the page" {
+  let t = native_chat(469.0, 681.0, true, side=84.0, mode="chat-jobs")
+  @sfdesk.wide.tape_ask.set(Some(@sfdesk.TapePane::Page))
+  t.frame()
+  t.run_for(@ui.move_most_ms)
+  assert_true(nav_icon_of(t, "page/chat/jobs") is None)
+  let services = @sf.t("web-pages.chat.services")
+  assert_true(t.semantics().iter().any(fn(s) { s.label == services }))
+}
+
+///|
+test "Duo chat's screens menu opens beside the column, not over it" {
+  let t = native_chat(951.0, 669.0, true, side=84.0, mode="chat-station-screens")
+  assert_true(nav_icon_of(t, "page/chat/screen") is Some(_), msg=t.nav_said())
+  t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/screen\",\"at\":[867,120,84,44]}")
+  t.frames_owed()
+  t.run_for(@ui.move_most_ms)
+  guard t.semantics().iter().find_first(fn(s) { s.role == @ui.Role::Menu }) is Some(m) else {
+    fail("no menu in the semantics")
+  }
+  assert_true(m.rect.0 + m.rect.2 <= 867.0, msg="its right edge at \{m.rect.0 + m.rect.2}")
+  assert_true(m.rect.1 >= 120.0, msg="its top at \{m.rect.1}")
 }

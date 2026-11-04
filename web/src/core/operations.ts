@@ -18,10 +18,11 @@ export interface OperationParams {
   "session.compact": { key: string };
   "session.clear": { key: string; readBack?: boolean | null | undefined };
   "session.delete": { key: string };
-  "session.settings": { key: string; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined; fast?: boolean | null | undefined; repick?: boolean | null | undefined; afresh?: boolean | null | undefined };
+  "session.settings": { key: string; runtime?: string | null | undefined; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined; fast?: boolean | null | undefined; context?: number | null | undefined; repick?: boolean | null | undefined; afresh?: boolean | null | undefined };
   "chat.archive": { archived?: boolean | null | undefined; session: string; thread?: number | null | undefined };
   "chat.keep": { kept?: boolean | null | undefined; thread: number };
   "chat.rename": { session?: string | null | undefined; title?: string | null | undefined; thread?: number | null | undefined };
+  "chat.regenerateTitle": { thread: number };
   "chat.pin": { pinned?: boolean | null | undefined; session: string };
   "chat.relayPlaces": { thread: number };
   "chat.relay": { thread: number; connect?: string | null | undefined; channel?: string | null | undefined; link?: string | null | undefined; note?: string | null | undefined };
@@ -29,7 +30,7 @@ export interface OperationParams {
   "decision.dismiss": { thread: number; seq: number };
   "decision.close": { thread: number; seq: number; option: string };
   "chat.report": { thread: number; seq: number };
-  "session.new": { runtime?: string | null | undefined; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined; fast?: boolean | null | undefined; preset?: string | null | undefined };
+  "session.new": { runtime?: string | null | undefined; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined; fast?: boolean | null | undefined; context?: number | null | undefined; preset?: string | null | undefined };
   "preset.add": { name: string; dirs: unknown; instructions?: string | null | undefined };
   "preset.put": { id: string; name: string; dirs: unknown; instructions?: string | null | undefined };
   "preset.delete": { id: string };
@@ -97,18 +98,28 @@ export interface OperationParams {
   "screen.settings": { screen: string };
   "screen.setSetting": { screen: string; name: string; value: string };
   "screen.screenshot": { screen: string };
+  "screen.install": { screen: string; path: string };
+  "screen.biometrics": { screen: string; what: string };
+  "screen.uninstall": { screen: string; app: string };
+  "screen.recordStart": { screen: string; panel?: string | null | undefined };
+  "screen.recordStop": { screen: string };
+  "screen.openUrl": { screen: string; url: string };
+  "screen.location": { screen: string; at?: string | null | undefined };
+  "screen.statusBar": { screen: string; tidy: boolean };
+  "screen.push": { screen: string; app: string; text: string };
   "signin.fill": { id: string; login: unknown; keep?: boolean | null | undefined };
   "signin.self": { id: string; done?: boolean | null | undefined };
   "signin.deny": { id: string };
   "memory.get": {  };
   "outflow.revoke": { id: string };
   "outflow.answer": { id: string; allow: boolean; scopes?: string[] | null | undefined; workspace?: boolean | null | undefined };
+  "outflow.tailcat": { on: boolean };
   "process.end": { pid: number; session: string };
   "footprint.scan": {  };
   "footprint.rebuild": { keys?: string[] | null | undefined };
   "footprint.delete": { keys?: string[] | null | undefined };
   "footprint.evict": { keys?: string[] | null | undefined };
-  "software.update": { id?: string | null | undefined };
+  "software.update": { id?: string | null | undefined; repair?: boolean | null | undefined };
   "software.updateAll": {  };
   "software.check": {  };
   "software.channel": { channel?: string | null | undefined };
@@ -185,6 +196,7 @@ export function bindStationOperations(call: Call) {
     chatArchive: <T = unknown>(params: OperationParams["chat.archive"]) => call("chat.archive", params) as Promise<T>,
     chatKeep: <T = unknown>(params: OperationParams["chat.keep"]) => call("chat.keep", params) as Promise<T>,
     chatRename: <T = unknown>(params: OperationParams["chat.rename"] = {}) => call("chat.rename", params) as Promise<T>,
+    chatRegenerateTitle: <T = unknown>(params: OperationParams["chat.regenerateTitle"]) => call("chat.regenerateTitle", params) as Promise<T>,
     chatPin: <T = unknown>(params: OperationParams["chat.pin"]) => call("chat.pin", params) as Promise<T>,
     chatRelayPlaces: <T = unknown>(params: OperationParams["chat.relayPlaces"]) => call("chat.relayPlaces", params) as Promise<T>,
     chatRelay: <T = unknown>(params: OperationParams["chat.relay"]) => call("chat.relay", params) as Promise<T>,
@@ -260,12 +272,22 @@ export function bindStationOperations(call: Call) {
     screenSettings: <T = unknown>(params: OperationParams["screen.settings"]) => call("screen.settings", params) as Promise<T>,
     screenSetSetting: <T = unknown>(params: OperationParams["screen.setSetting"]) => call("screen.setSetting", params) as Promise<T>,
     screenScreenshot: <T = unknown>(params: OperationParams["screen.screenshot"]) => call("screen.screenshot", params) as Promise<T>,
+    screenInstall: <T = unknown>(params: OperationParams["screen.install"]) => call("screen.install", params) as Promise<T>,
+    screenBiometrics: <T = unknown>(params: OperationParams["screen.biometrics"]) => call("screen.biometrics", params) as Promise<T>,
+    screenUninstall: <T = unknown>(params: OperationParams["screen.uninstall"]) => call("screen.uninstall", params) as Promise<T>,
+    screenRecordStart: <T = unknown>(params: OperationParams["screen.recordStart"]) => call("screen.recordStart", params) as Promise<T>,
+    screenRecordStop: <T = unknown>(params: OperationParams["screen.recordStop"]) => call("screen.recordStop", params) as Promise<T>,
+    screenOpenUrl: <T = unknown>(params: OperationParams["screen.openUrl"]) => call("screen.openUrl", params) as Promise<T>,
+    screenLocation: <T = unknown>(params: OperationParams["screen.location"]) => call("screen.location", params) as Promise<T>,
+    screenStatusBar: <T = unknown>(params: OperationParams["screen.statusBar"]) => call("screen.statusBar", params) as Promise<T>,
+    screenPush: <T = unknown>(params: OperationParams["screen.push"]) => call("screen.push", params) as Promise<T>,
     signinFill: <T = unknown>(params: OperationParams["signin.fill"]) => call("signin.fill", params) as Promise<T>,
     signinSelf: <T = unknown>(params: OperationParams["signin.self"]) => call("signin.self", params) as Promise<T>,
     signinDeny: <T = unknown>(params: OperationParams["signin.deny"]) => call("signin.deny", params) as Promise<T>,
     memoryGet: <T = unknown>(params: OperationParams["memory.get"] = {}) => call("memory.get", params) as Promise<T>,
     outflowRevoke: <T = unknown>(params: OperationParams["outflow.revoke"]) => call("outflow.revoke", params) as Promise<T>,
     outflowAnswer: <T = unknown>(params: OperationParams["outflow.answer"]) => call("outflow.answer", params) as Promise<T>,
+    outflowTailcat: <T = unknown>(params: OperationParams["outflow.tailcat"]) => call("outflow.tailcat", params) as Promise<T>,
     processEnd: <T = unknown>(params: OperationParams["process.end"]) => call("process.end", params) as Promise<T>,
     footprintScan: <T = unknown>(params: OperationParams["footprint.scan"] = {}) => call("footprint.scan", params) as Promise<T>,
     footprintRebuild: <T = unknown>(params: OperationParams["footprint.rebuild"] = {}) => call("footprint.rebuild", params) as Promise<T>,

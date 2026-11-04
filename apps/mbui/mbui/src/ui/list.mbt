@@ -455,6 +455,7 @@ pub fn Ctx::list(
         stepped: -1,
         fresh: true,
         rows_read: false,
+        island: 0,
         glide_shows: false,
         named: "",
         made_at: None,
@@ -494,6 +495,7 @@ pub fn Ctx::list(
         sel: false,
         theme: self.theme,
         direction: self.direction,
+        stint: self.stint,
         layer: self.layer_cur,
         causes: None,
         sizes: {},
@@ -532,6 +534,7 @@ pub fn Ctx::list(
   st.sel = desk.selecting
   st.theme = self.theme
   st.direction = self.direction
+  st.stint = self.stint
   st.layer = self.layer_cur
   // (rows that show only what they read are kept however what builds them was built: their own watches say when
   // they change; only a build keeping none builds them anew)
@@ -545,13 +548,32 @@ pub fn Ctx::list(
     self.moving(st.ease_mover, st as &Moving, what="a list's wheel ease, glide and scroll bar")
   }
   // with `glide_on_growth`, rows come at the end while it is at its end: it glides after them from where it was
-  // (still.fail's Follow), rather than being put at its end at once; put there, it scrolled all the same
+  // (still.fail's Follow), rather than being put at its end at once; put there, it scrolled all the same: held at its
+  // end by the rows come where they come in with a way of their own (their room opening, ListRows' Comes), what is in
+  // view going with their heights; put there at once where none of them does (rows caught up on, there at once: what
+  // is in view moved by no row's way, rows_steady.mbt)
+  // (the keys new to it since it was last built: wherever they come in, not by where its count had got to)
+  let seen = list_keys_seen.get(id)
+  let new_keys = match (st.causes, seen) {
+    (Some(c), Some(was)) => c.keys.filter(fn(k) { !was.contains(k) })
+    _ => []
+  }
+  match st.causes {
+    Some(c) => list_keys_seen[id] = Set::from_array(c.keys)
+    None => ()
+  }
   if self.list_grew(id, count) && st.stick_end && st.at_end {
     if glide_on_growth && !self.still() {
       st.at_end = false
       self.glide_to_end(id, st)
     } else {
-      self.app_scrolled(id, st, put=false)
+      // (put there at once only where every row new to it is there at once: one of them coming, the list held by its
+      // way)
+      let comes = match st.causes {
+        Some(c) => new_keys.iter().any(fn(k) { c.by.get(k) is Some((Comes(_), _)) })
+        None => false
+      }
+      self.app_scrolled(id, st, put=!comes)
     }
   }
   let i = self.alloc_part(kind_list, true, false)
@@ -575,9 +597,11 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   let (saved_w, saved_h) = (self.width, self.height)
   let saved_sel = desk.selecting
   let (saved_theme, saved_dir, saved_layer) = (self.theme, self.direction, self.layer_cur)
+  let saved_stint = self.stint
   desk.selecting = st.sel
   self.theme = st.theme
   self.direction = st.direction
+  self.stint = st.stint
   self.layer_cur = st.layer
   self.cur = li
   self.id_seed = st.seed
@@ -607,6 +631,7 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   self.theme = saved_theme
   self.direction = saved_dir
   self.layer_cur = saved_layer
+  self.stint = saved_stint
   r
 }
 
@@ -1067,6 +1092,17 @@ fn Ctx::list_finds_field(self : Ctx, st : ListState, order : Array[Int], iy : Do
 /// they went off with them (#2325), and a list scrolled had its words crawl again.
 fn Ctx::rows_on_grid(self : Ctx) -> Bool {
   (fake.val is None || rows_grid_test.val) && !inst_owners.on && !self.lit_every
+}
+
+///|
+/// How many device pixels a point the window's tree sets a page's list's rows on (@view.Tree::set_rows_grid), at
+/// `scale` as this frame draws: as an old view's list's are (rows_on_grid), anywhere where they are not.
+fn Ctx::rows_grid_of(self : Ctx, scale : Double) -> Double {
+  if self.rows_on_grid() {
+    scale
+  } else {
+    0.0
+  }
 }
 
 ///|
@@ -1535,6 +1571,10 @@ pub fn Ctx::list_moving(self : Ctx, key : String) -> Bool {
 ///|
 /// How many rows each list had (Ctx::list_grew).
 let list_counts : Map[Int, Int] = {}
+
+///|
+/// The keys each list given its rows' causes (ListRows) had as it was last built: which are new to it.
+let list_keys_seen : Map[Int, Set[String]] = {}
 
 ///|
 /// Whether list `id` has more rows than when it was last built.

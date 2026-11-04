@@ -99,6 +99,8 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
         None => ""
       }
     },
+    // (the pages made once as nodes: narrow_made)
+    made=fn(page) { narrow_made(src, page) },
   )
   |> ignore
   // the bottom bar told what the app's state and the window say of it as that changes, at the moment of what changed it
@@ -136,6 +138,8 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
     }
   })
   .over(Is(true))
+  // (a press where it has nothing of its own its pages', a page made once as nodes among them: entry_tree's over's)
+  |> @ui.old_takes_own
   |> ignore
   // the bottom bar's glass, where the bar is laid out: a finger on it the bar's at each event's moment (drawn by the old
   // view over the pages; what the old frame puts over all of it at its root, its notch's key, menus and sheets, first)
@@ -181,11 +185,7 @@ fn narrow_page_held(c : @ui.Ctx, src : Source, w : Workspace, page : Page) -> Un
     })
     @motion.scope(c, whole, bottom=true)
   }
-  if stack_by_finger() {
-    built()
-  } else {
-    c.selectable(color=@sf.alpha(@sf.theme().p.blue, 0.28), built)
-  }
+  c.selectable(color=@sf.alpha(@sf.theme().p.blue, 0.28), built)
   // what is the page's own and takes back before it (said with it, in its island: what it reads is what the page
   // writes): the player sideways turned upright first; words picked in a chat, a link's menu, let go first (pick.mbt)
   play_back(c)
@@ -224,6 +224,7 @@ fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // the first page built as it opens, asking for all it shows, and shown once it has it (first_page_ms at most), as a
   // page opening is: under the splash till then (view_in), not its loading look and its list a frame or two later
   first_waiting.val = !first_page_shown(c, src, w)
+  first_hide(first_waiting.val)
 }
 
 ///|
@@ -329,8 +330,12 @@ fn signed_in_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // a new device waiting on this one's code, in any workspace of the person's, over whichever page is open
   // (App.kt LockPrompts): put up when no other sheet is
   @settings.lock_prompts(settings_core(src, w), !sheet_open())
+  // a device of the person's waiting on this one for a vault's key (settings/vault_prompts.mbt), the same way
+  @settings.vault_prompts(settings_core(src, w), !sheet_open())
   // (the core what the settings put up over a page draws with, put up by what has none at hand)
   @settings.panels_frame(settings_core(src, w))
+  // what another app shares, in the wide window's panel (share.mbt; a sheet on Small, as ShareSheet)
+  share_panel(c, src, w)
   // ⌘K's panel and ⌘/'s shortcuts, in every tier over the pages, under the presenters (sfdesk's switcher.mbt,
   // shortcuts.mbt)
   @sfdesk.switcher(c, src, w)
@@ -340,3 +345,359 @@ fn signed_in_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   toast(c)
   finger_loupe(c)
 }
+
+///|
+/// The pages of the stack made once as nodes of the tree's in the narrow shell (nav_view's `made`), by their kind, the
+/// rest old views (narrow_page_held): the settings' list (the gear's), 关于, 记忆, 一台 station 的记忆 and 归档. Each in the workspace in view, made
+/// again as that changes; its frame what the shell gives a page (back to the one under it, under the status bar, over
+/// the navigation bar: setting_page's) as that changes; under the status bar the page's ground over it, and a window's
+/// band its buttons are in dragging it, as page_view puts them over a page that has no top of its own.
+fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, Page?, () -> Int, Int) -> Unit)? {
+  match page {
+    // (a place of the bottom bar's whose page is one of those: that page under the place's top bar, place_page's, made
+    // under its own kind)
+    Place(name) =>
+      match @settings.route_of(name) {
+        // (those whose old view is gone: every frame makes them once, as a page or a place)
+        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion) =>
+          narrow_made_as(src, Setting(r), true).map(fn(m) { ("place/" + m.0, m.1) })
+        _ => None
+      }
+    _ => narrow_made_as(src, page, false)
+  }
+}
+
+///|
+/// narrow_made's page `page`, made as a place of the bottom bar's (`place`: named as the stack's entry is now, whichever
+/// of its names it is) or as a page of the stack.
+fn narrow_made_as(
+  src : Source,
+  page : Page,
+  place : Bool,
+) -> (String, (@view.View, () -> Page, Page?, () -> Int, Int) -> Unit)? {
+  let made_at = fn(
+    kind : String,
+    place : Bool,
+    f : (
+      @view.View,
+      @settings.Core,
+      () -> @settings.Here,
+      () -> PageFrame,
+      () -> Int,
+      ((@view.View) -> Unit, (@sf.Look) -> Double) -> Unit,
+    ) -> Unit,
+  ) {
+    Some(
+      (
+        kind,
+        fn(outer : @view.View, page : () -> Page, under : Page?, stint : () -> Int, _entry : Int) {
+          // (a place switched to on the bar: all of it but its ground coming in from the ball's side, page_view's)
+          let v = match place {
+            true if under is None => {
+              let mut inner : @view.View? = None
+              outer.box(fn(i) {
+                i.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+                place_comes_in(i)
+                bar_built_node(i, page)
+                inner = Some(i)
+              })
+              |> ignore
+              inner.unwrap()
+            }
+            _ => outer
+          }
+          // (what the page does, given its place's top bar as it is made: each making of it its own, let go with it
+          // where none since gave another)
+          let page_actions : @signals.Signal[((@view.View) -> Unit, Int)?] = @signals.signal(None, same=fn(a, b) {
+            match (a, b) {
+              (None, None) => true
+              (Some(x), Some(y)) => x.1 == y.1
+              _ => false
+            }
+          })
+          let frame = fn() -> PageFrame {
+            // (under the status bar as the window it is in is now: status_top_now, by its width as it changes; a place
+            // of the bottom bar's under the top bar, which names it, over the bottom bar: place_page's)
+            if place {
+              { back: None, top: status_top_now(v.window().0) + bar_h + 8.0, foot: nav_foot() + bar_room_now(), named: true }
+            } else {
+              { back: under.map(@sfbase.back_label), top: status_top_now(v.window().0), foot: nav_foot(), named: false }
+            }
+          }
+          v.pick(fn() { workspace_in_view(src).0.map(fn(w) { w.id }) }, fn(p, _id) {
+            let gen = next_place_actions_gen()
+            let acts = fn(make : (@view.View) -> Unit, _side : (@sf.Look) -> Double) {
+              page_actions.set(Some((make, gen)))
+            }
+            p.owns(fn() {
+              if @signals.untracked(fn() { page_actions.get() }) is Some((_, g)) && g == gen {
+                page_actions.set(None)
+              }
+            })
+            |> ignore
+            match @signals.untracked(fn() { workspace_in_view(src).0 }) {
+              Some(w) => {
+                let core = settings_core(src, w)
+                let here = fn() { @settings.here_of(core, w.id, w.name) }
+                @settings.frame(core, @signals.untracked(here))
+                // (its words in pieces picked with the mouse, as an old view's page's in this frame are (narrow_page's
+                // c.selectable), before what it holds is made)
+                @ui.words_picked(p)
+                f(p, core, here, frame, stint, acts)
+              }
+              None => ()
+            }
+          })
+          narrow_made_top(v)
+          // (a place of the bottom bar's: its top bar over it, the place's name as the entry is now (another of the same
+          // page's names it may become), what its page does at its end, settings at its end: place_page's)
+          if place {
+            v.box(fn(o) {
+              o.over(Is(true)) |> ignore
+              place_top_bar_node(
+                o,
+                fn() {
+                  match page() {
+                    Place(n) => n
+                    _ => ""
+                  }
+                },
+                fn() { page_actions.get() },
+              )
+              |> ignore
+            })
+            |> ignore
+          }
+        },
+      ),
+    )
+  }
+  let made = fn(
+    kind : String,
+    f : (
+      @view.View,
+      @settings.Core,
+      () -> @settings.Here,
+      () -> PageFrame,
+      () -> Int,
+      ((@view.View) -> Unit, (@sf.Look) -> Double) -> Unit,
+    ) -> Unit,
+  ) {
+    made_at(kind, place, f)
+  }
+  match page {
+    // the chats' lists under Home's top bar (home_node); a device waiting to be confirmed in the workspace's safe mode
+    // sees that instead (lock_gate, its old view)
+    Home =>
+      made("home", fn(p, core, _here, _frame, stint, _acts) {
+        let tips = @sf.TipLayer::new(fn() { None })
+        p.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+        // (the bar's first place: coming in as a place switched to does, all of it but its ground, told built then:
+        // page_view's, a place's made once, made_at's)
+        let p = p.box(fn(i) {
+          i.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+          place_comes_in(i)
+          bar_built_node(i, fn() { Home })
+        })
+        p.pick(fn() { workspace_in_view(src).0.map(fn(w) { @settings.lock_waiting(core, w.id) }).unwrap_or(false) }, fn(
+          q,
+          waiting,
+        ) {
+          // (all of the page's room, the lock's page and Home alike)
+          q.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+          if waiting {
+            @ui.old(q, fn(c) {
+              match workspace_in_view(src).0 {
+                Some(w) => lock_gate(c, src, w, bar=workspace_in_view(src).3) |> ignore
+                None => ()
+              }
+            })
+            .grow(Is(1.0))
+            |> ignore
+          } else {
+            home_node(q, src, tips, stint)
+          }
+        })
+      })
+    Settings =>
+      made("settings", fn(p, core, here, frame, stint, _acts) {
+        @sfpages.settings_home_node(p, core, here, fn(r) { (core.push)(r) }, on_back=core.pop, frame~, stint~, bars=fn() {
+          @sf.layout(p.window().0) is Small
+        })
+      })
+    Setting(About) => made("about", fn(p, core, _here, frame, _stint, _acts) { @sfpages.about_node(p, core, on_back=core.pop, frame~) })
+    Setting(Changelog) =>
+      made("changelog", fn(p, core, _here, frame, _stint, _acts) { @sfpages.changelog_node(p, core, on_back=core.pop, frame~) })
+    Setting(Archiving) =>
+      made("archiving", fn(p, core, here, frame, stint, _acts) {
+        @sfpages.archiving_node(p, core, here, on_back=core.pop, frame~, stint~)
+      })
+    Setting(StationArchiving(st)) =>
+      made("station-archiving/" + st, fn(p, core, here, frame, _stint, _acts) {
+        @sfpages.station_archiving_node(p, core, here, st, on_back=core.pop, frame~)
+      })
+    Setting(AutoDecisions) =>
+      made("auto-decisions", fn(p, core, here, frame, _stint, _acts) {
+        @sfpages.decisions_node(p, core, here, on_back=core.pop, frame~)
+      })
+    Setting(AutoCompletion) =>
+      // (what it does in its place's top bar as a place; at its head as a page of the stack)
+      made("auto-completion", fn(p, core, here, frame, _stint, acts) {
+        @sfpages.completion_node(p, core, here, on_back=core.pop, frame~, bar_actions?=if place { Some(acts) } else { None })
+      })
+    Setting(Usage) =>
+      // (what it does in its place's top bar as a place; at its head as a page of the stack)
+      made("usage", fn(p, core, here, frame, _stint, acts) {
+        @sfpages.usage_node(p, core, here, on_back=core.pop, frame~, bar_actions?=if place { Some(acts) } else { None })
+      })
+    Setting(Shortcuts) =>
+      // (recording while it is the one on top of the stack: its stay there, stint's)
+      made("shortcuts", fn(p, core, _here, frame, stint, _acts) {
+        @sfpages.shortcuts_node(p, core, on_back=core.pop, frame~, active=fn() { app.nav.top_stay().1 == stint() })
+      })
+    Setting(Notifications) =>
+      made("notifications", fn(p, core, here, frame, stint, _acts) {
+        @sfpages.notify_node(p, core, here, on_back=core.pop, frame~, stint~)
+      })
+    Setting(UsagePrices(days)) =>
+      made("usage-prices/" + days.to_string(), fn(p, core, here, frame, _stint, _acts) {
+        @sfpages.usage_prices_node(p, core, here, days, on_back=core.pop, frame~)
+      })
+    Setting(Memories) =>
+      made("memories", fn(p, core, here, frame, _stint, _acts) { @sfpages.memories_node(p, core, here, on_back=core.pop, frame~) })
+    Setting(Memory(address)) =>
+      made("memory/" + address, fn(p, core, here, frame, _stint, _acts) {
+        @sfpages.memory_node(p, core, here, address, on_back=core.pop, frame~)
+      })
+    _ => None
+  }
+}
+
+///|
+/// A page made once at the stack's root, at a place of the bottom bar's, coming in as page_view has a place's: as far
+/// as the switch to it has gone (place_switch, from the moment it was switched to, whenever it is made), from the side
+/// the ball goes to by switch_slide, fading in; all of it but its ground.
+fn place_comes_in(v : @view.View) -> Unit {
+  let w = place_switch
+  // (told at the way's end, as each way is said: read again then)
+  let ended : @signals.Signal[Int] = @signals.signal(0)
+  let due : Ref[() -> Unit] = Ref(fn() {  })
+  v.reacts(fn() { w.said(); w.ends_at() }, fn(end) {
+    (due.val)()
+    due.val = if end >= 0.0 {
+      v.at_moment(end, fn() { ended.set(@signals.untracked(fn() { ended.get() }) + 1) })
+    } else {
+      fn() {  }
+    }
+  })
+  let shown = fn() {
+    w.said()
+    ended.get() |> ignore
+    if w.goes_at(v.logic_at()) {
+      w.value_at(v.drawn_at())
+    } else {
+      w.target()
+    }
+  }
+  v.alpha(By(shown)).offset(By(fn() { (app.switch_way.to_double() * switch_slide * (1.0 - shown()), 0.0) })) |> ignore
+}
+
+///|
+/// Over a page made once that has no top of its own (narrow_made's): the page's ground under the status bar, and the
+/// band a window's buttons are in dragging it where it has them (page_view's, an old view's).
+fn narrow_made_top(v : @view.View) -> Unit {
+  v.box(fn(o) {
+    o.over(Is(true)) |> ignore
+    o.show(fn() { status_top_now(v.window().0) > 0.0 }, fn(paper) {
+      paper.height(By(fn() { Some(status_top_now(v.window().0)) })).ground(By(fn() { @sf.theme().p.bg })) |> ignore
+    })
+  })
+  |> ignore
+  v.box(fn(o) {
+    o.over(Is(true)) |> ignore
+    // (where the frame is not wide: is_wide, by the window as it is)
+    o.show(fn() { @ui.window_inset_now() && @sf.layout(v.window().0) is Small && !@sf.native_able() }, fn(band) {
+      band.height(By(fn() { Some(window_band_now()) })).moves_window(Is(true)) |> ignore
+    })
+  })
+  |> ignore
+}
+
+///|
+/// A place's top bar as nodes, over a page made once at a place of the bottom bar's (place_top_bar's): on the bar's
+/// glass, under the status bar, 16 in, 10 apart, as high as a top bar at least; the place's name (the page's entry as it
+/// is now, `place`), what its page does at its end where it gave the bar any (`actions`: made again as the page that
+/// gave them is, laid out narrow at a head's end: head_end's), settings at the right edge (as at Home's).
+fn place_top_bar_node(
+  v : @view.View,
+  place : () -> String,
+  actions : () -> ((@view.View) -> Unit, Int)?,
+) -> Unit {
+  // (over the page, as place_page draws it: nothing of it cut but its name)
+  place_top_bar_glass(v, place, actions)
+}
+
+///|
+/// place_top_bar_node's bar on its glass, in `v`.
+fn place_top_bar_glass(
+  v : @view.View,
+  place : () -> String,
+  actions : () -> ((@view.View) -> Unit, Int)?,
+) -> Unit {
+  v.box(fn(g) {
+    g.glass(By(fn() { Some(@sf.glass_bar()) })) |> ignore
+    g.box(fn(row) {
+      row
+      .row(Is(true))
+      .padding(By(fn() { (16.0, status_top(), 16.0, 0.0) }))
+      .min_height(By(fn() { Some(top_bar_h()) }))
+      .gap(Is(10.0))
+      .lines_up(Is(Some(Middle)))
+      |> ignore
+      // (its words whole: what the page does at its end gives way where the bar has not the room)
+      row.box(fn(t) {
+        t.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))).height(Is(Some(34.0))).row(Is(true)).lines_up(Is(Some(Middle)))
+        |> ignore
+        @sf.top_bar_title_node(t, fn() { place_label(place()) }) |> ignore
+      })
+      |> ignore
+      row.show(fn() { actions() is Some(_) }, fn(a) {
+        a.pick(
+          fn() {
+            match actions() {
+              Some((_, g)) => g
+              None => 0
+            }
+          },
+          fn(k, _) {
+            @sf.top_bar_actions_lent(k)
+            k.row(Is(true)).gap(Is(10.0)).lines_up(Is(Some(Middle))) |> ignore
+            match @signals.untracked(actions) {
+              Some((make, _)) => make(k)
+              None => ()
+            }
+          },
+        )
+      })
+      // settings at the right edge, as at Home's
+      @sf.round_key_node(row, "settings", fn() { tr("android-chat.home.settings") }, fn() {
+        @sfbase.history_push()
+        app.nav.push(Settings)
+      })
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// The makings of pages that give a place's top bar what they do, numbered.
+// kept across runs: a count
+let place_actions_made : Ref[Int] = Ref(0)
+
+///|
+fn next_place_actions_gen() -> Int {
+  place_actions_made.val += 1
+  place_actions_made.val
+}
+

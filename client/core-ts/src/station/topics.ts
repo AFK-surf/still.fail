@@ -21,7 +21,7 @@ import { type StationsSync, stepShown } from "./sync.ts";
 import type { LinkNet } from "./wire.ts";
 import { screenCard, screensChanged, screensView } from "../screens.ts";
 import { down, downWords, isLetter, members } from "../views/views.ts";
-import { type Link, MEMORY, OUTFLOW, filePeekKey, linkPreviewKey, logKey } from "./link.ts";
+import { type Link, MEMORY, OUTFLOW, filePeekKey, linkPreviewKey, logKey, messagePeekKey } from "./link.ts";
 import { grantsShown } from "./outflow.ts";
 import * as logins from "./machine-logins.ts";
 import { laterSleep } from "../runtime.ts";
@@ -43,7 +43,7 @@ export function packetsSince(was: LinkNet["packets"], now: LinkNet["packets"]): 
   return { sent: now.sent - was.sent, lost: now.lost - was.lost };
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory", "presets", "outflowGrants", "linkPreview", "filePeek"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory", "presets", "outflowGrants", "linkPreview", "filePeek", "messagePeek"]);
 
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 
@@ -215,6 +215,8 @@ export class StationTopics implements Owner {
     if (topic.topic === "linkPreview") this.#sync.linkPreviewShown(station, topic.url as string);
     // What a file a message names is: read each time its card shows (it is written as agents work), the same.
     if (topic.topic === "filePeek") this.#sync.filePeekShown(station, topic.key as string, topic.path as string, typeof topic.line === "number" ? topic.line : null);
+    // One message of a chat a link names: read each time its card shows, the same.
+    if (topic.topic === "messagePeek") this.#sync.messagePeekShown(station, topic.thread as number, topic.seq as number);
   }
 
   stop(topic: Topic): void {
@@ -257,7 +259,9 @@ export class StationTopics implements Owner {
       case "link":
         if (!link) return { ok: { state: "offline", message: t("core-views.station.not_listed") } };
         // While catching up on what was missed: how many chats are left to (-1 while that is not known yet).
-        return { ok: link.catching === null ? link.state : { ...link.state, catching: link.catching.tallied ? link.catching.behind.size : -1 } };
+        // And while the archive's pages are read, or why that stopped short (views/archive.ts).
+        if (link.catching === null && !link.archiveReading && link.archiveFailed === null) return { ok: link.state };
+        return { ok: { ...link.state, ...(link.catching === null ? {} : { catching: link.catching.tallied ? link.catching.behind.size : -1 }), ...(link.archiveReading ? { archiveReading: true } : {}), ...(link.archiveFailed !== null ? { archiveFailed: link.archiveFailed } : {}) } };
       case "host": {
         const v = link?.memory.get("host");
         return v === undefined ? undefined : { ok: v };
@@ -338,11 +342,14 @@ export class StationTopics implements Owner {
         return error ? { err: error } : undefined;
       }
       case "linkPreview":
-      case "filePeek": {
+      case "filePeek":
+      case "messagePeek": {
         // As the station said it last (kept: there as the app opens again; its times in words: present.ts); nothing read
         // yet, as `memory`.
         const kept = topic.topic === "linkPreview"
           ? linkPreviewKey(topic.url as string)
+          : topic.topic === "messagePeek"
+          ? messagePeekKey(topic.thread as number, topic.seq as number)
           : filePeekKey(topic.key as string, topic.path as string, typeof topic.line === "number" ? topic.line : null);
         const v = link?.memory.get(kept);
         if (v !== undefined) return { ok: v };

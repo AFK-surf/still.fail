@@ -1,0 +1,177 @@
+//! Low-level ADB (Android Debug Bridge) wire-protocol library.
+//!
+//! Talks to a device directly over TCP or USB — no `adbd` fork/exec,
+//! no `adb` binary, no platform-tools dependency.
+//!
+//! The core protocol layer is `no_std + alloc`. Any runtime feature
+//! (`tokio`, `smol`, `nusb`, `rusb`) implicitly enables `std` — the
+//! split Reader/Writer pair and USB backends rely on std sync
+//! primitives. For pure `no_std + alloc` builds, use the crate with
+//! `default-features = false` and bring your own `embedded_io_async`
+//! transport.
+//!
+//! For a C ABI, see the companion crate `libadb-ffi`.
+//!
+//! # Feature flags
+//!
+//! | Flag    | Enables                                                                    |
+//! |---------|----------------------------------------------------------------------------|
+//! | `tokio` | TCP transport over `tokio::net::TcpStream` (default)                       |
+//! | `smol`  | TCP transport over `smol::net::TcpStream`; may be combined with `tokio`    |
+//! | `nusb`  | USB transport via `nusb` (pure-Rust); may be combined with `rusb`          |
+//! | `rusb`  | USB transport via `rusb` (libusb); may be combined with `nusb`             |
+//! | `usb`   | Convenience alias enabling the default USB backend (`nusb`)                |
+//! | `split` | [`split`] Reader/Writer pair with no bundled runtime; pulls in `std`. Implied by every feature above |
+//! | `runtime` | Set by `tokio` and `smol`, not by hand: it lets the examples require one of the two |
+//! | `keys`  | Built-in RSA host key (`keys::AdbKey`): generation, PKCS#8/PKCS#1 load, PKCS#8 save, ADB public-key encoding. `no_std + alloc` |
+//! | `host-keys` | `keys::store` on top of `keys`: read `~/.android/adbkey`, or generate and persist one; pulls in `std` |
+//! | `tls`   | ADB over TLS — wireless debugging on Android 11+ (`STLS`): `tls::TlsIdentity`, `tls::TlsClientConfig`, `transport::tls::MaybeTls`, `Connection::connect_tls`. Implies `keys` and `split`; pulls in `std` |
+//! | `pairing` | `adb pair`: `pairing::pair` puts a key on a device that has never seen it. Implies `tls` |
+//!
+//! # Quick start
+//!
+//! ```ignore
+//! use libadb::shell::v2;
+//! use libadb::{Connection, Feature, TokioTcp};
+//!
+//! let tcp = tokio::net::TcpStream::connect("127.0.0.1:5555").await?;
+//! tcp.set_nodelay(true)?; // ADB is chatty; Nagle costs a round per exchange
+//! let transport = TokioTcp::new(tcp);
+//!
+//! // `auth` is any `libadb::auth::Authenticator`. With the `keys`
+//! // feature the crate ships one: `keys::AdbKey`, parsed from the
+//! // key `adb` keeps in `~/.android/adbkey` or generated on the spot.
+//! let mut conn = Connection::<_>::connect(transport, auth, &[Feature::ShellV2]).await?;
+//!
+//! let mut rx = [0u8; 64 * 1024];
+//! let out = v2::exec(&mut conn, "getprop ro.product.model", &mut rx).await?;
+//! println!("{}", core::str::from_utf8(&out.stdout)?);
+//! ```
+//!
+//! # Memory budget
+//!
+//! Every connection is opened with a [`ConnectionConfig`] that bounds
+//! what the library may allocate:
+//!
+//! * `max_payload` — advertised to the device in CNXN, so it caps the
+//!   size of any single inbound packet (and hence the receive buffer);
+//! * `initial_ack_bytes` — delayed-ACK credit granted per channel;
+//! * `max_rx_per_channel` — fuse on data buffered for a channel nobody
+//!   is reading.
+//!
+//! [`ConnectionConfig::new`] reproduces `adb`'s desktop behaviour (1 MiB
+//! packets, 32 MiB credit, unbounded buffering).
+//! [`ConnectionConfig::embedded`] fits a microcontroller:
+//!
+//! ```ignore
+//! let conn = Connection::<_>::connect_with_config(
+//!     transport, auth, &[Feature::ShellV2], ConnectionConfig::embedded(),
+//! ).await?;
+//! ```
+//!
+//! On a microcontroller-sized heap the default config is unusable: one
+//! 64 KiB WRTE can exhaust it, because the packet has to be buffered
+//! whole. `embedded()` caps packets at 8 KiB, and adbd honours the
+//! advertised limit.
+//!
+//! # Services
+//!
+//! * [`shell::v1`] — legacy `shell:` (interleaved stdout/stderr, no exit code)
+//! * [`shell::v2`] — framed stdout/stderr/exit, optional PTY
+//! * [`exec`]     — binary-clean `exec:` (no PTY, no exit code)
+//! * [`cmd`]      — `abb_exec` / `abb` / `shell:cmd` fallback chain
+//! * [`abb`]      — Android Binder Bridge (Android 10+)
+//! * [`logcat`]   — parsed binary logcat stream
+//! * [`sync`]     — file transfer (`STAT` / `LIST` / `SEND` / `RECV`, v1 + v2)
+//! * [`track_app`] — streaming debuggable/profileable process list
+//!
+//! # Transports
+//!
+//! `TokioTcp`, `SmolTcp`, `transport::nusb::UsbTransport`,
+//! `transport::rusb::UsbTransport`, or any user type implementing
+//! `embedded_io_async::{Read, Write}` plus [`Splittable`]. For concurrent
+//! read and write tasks on the same connection, see
+//! [`Connection::split`] and the resulting `Reader` / `Writer` pair.
+//!
+//! For Android 11+ wireless debugging (feature `tls`), wrap the TCP
+//! transport in `transport::tls::MaybeTls` and connect with
+//! `Connection::connect_tls`.
+//!
+//! # Status
+//!
+//! Pre-1.0. Public API is subject to semver-breaking changes before 1.0.
+
+#![no_std]
+#![deny(unsafe_code)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
+extern crate alloc;
+
+#[cfg(any(feature = "split", feature = "host-keys"))]
+extern crate std;
+
+pub mod abb;
+pub mod base;
+pub mod cmd;
+pub mod exec;
+#[cfg(feature = "keys")]
+pub mod keys;
+pub mod logcat;
+#[cfg(feature = "pairing")]
+pub mod pairing;
+pub mod reverse;
+pub mod shell;
+#[cfg(feature = "split")]
+pub mod split;
+pub mod sync;
+#[cfg(feature = "tls")]
+pub mod tls;
+pub mod track_app;
+pub mod transport;
+pub mod uri;
+
+// Structural: expose private `base::*` submodules as top-level modules.
+pub use base::{auth, channel, connection, device_banner, error, protocol, session};
+
+// Core types used in every non-trivial caller.
+pub use base::connection::{Connection, ConnectionConfig, Incoming};
+pub use base::error::{Error, ProtocolError};
+pub use base::protocol::features::{Feature, DEFAULT_HOST_FEATURES};
+pub use base::session::Session;
+pub use transport::Splittable;
+
+#[cfg(feature = "keys")]
+pub use keys::AdbKey;
+#[cfg(feature = "tls")]
+pub use tls::{TlsClientConfig, TlsIdentity};
+
+#[cfg(feature = "split")]
+pub use split::{IncomingListener, Reader, SplitIncoming, Writer};
+
+#[cfg(feature = "tokio")]
+pub use transport::tcp::TokioTcp;
+
+#[cfg(feature = "smol")]
+pub use transport::tcp::SmolTcp;
+
+pub use transport::{UsbBackend, ADB_CLASS, ADB_PROTOCOL, ADB_SUBCLASS};
+
+/// Common vocabulary for `use libadb::prelude::*;`.
+pub mod prelude {
+    pub use crate::{
+        Connection, ConnectionConfig, Error, Feature, ProtocolError, Session, Splittable,
+        DEFAULT_HOST_FEATURES,
+    };
+
+    #[cfg(feature = "keys")]
+    pub use crate::AdbKey;
+
+    #[cfg(feature = "split")]
+    pub use crate::{Reader, Writer};
+
+    #[cfg(feature = "tokio")]
+    pub use crate::TokioTcp;
+
+    #[cfg(feature = "smol")]
+    pub use crate::SmolTcp;
+}

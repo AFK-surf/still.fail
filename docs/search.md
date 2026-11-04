@@ -1,10 +1,16 @@
 # Search
 
+> Machine names in examples and measurements are anonymized; they are not requirements for the reader’s environment.
+
+
 One search for a workspace: ⌘K on a computer, the search at the top of the phones' lists, and the agents' `search`
 tool. People find chats, messages, files, services and tasks, stations and members (⌘K its commands and settings'
 pages too); agents find those on the stations and the execution histories, skills and memory, profiles besides. Each station answers for what is on it; the core asks every station of the workspace at once and puts
 what they find together with what the device holds. Nothing is gathered in still.fail cloud, and nothing is indexed:
 each station looks through its data as it is when asked.
+
+The archive's own field (core `views/archive.ts`) asks each station the same, of its archived chats alone
+(`/search?kinds=chat,message&archived=1&limit=200`), and lists the chats those are in.
 
 ## What is found, and where it comes from
 
@@ -60,12 +66,12 @@ Later: the cloud's own (feedback), Slack channels' history.
 - Nothing is indexed: a thread of the station's own (`search/worker.ts`), on a read-only connection to the store as a
   reader's, looks through the data as it is when asked (`search/sources.ts`): every chat and message (an archived
   chat's from its file), the jobs, the workspace's memory and skills, the profiles; every word must be in a thing's
-  title or text, any part of a word, any script, case aside. On ccvm (668 chats, 17k messages) that is about 0.2 s.
+  title or text, any part of a word, any script, case aside. On test-c (668 chats, 17k messages) that is about 0.2 s.
 - The execution history only when asked for by name (agents' `search`): the sessions most recently active first, each
   one's transcript files looked through as bytes (one put away decompressed as a stream) for every word, ASCII's case
   aside and as JSON writes it; a file that has them all is read and its steps numbered as its history page numbers them,
   its latest steps that have the words found. It stops at the hits asked for, or after 15 s (`left`: the sessions not
-  looked through). On ccvm a word found in the latest sessions takes 0.1 s; one found nowhere, every file (2.4 GB, and
+  looked through). On test-c a word found in the latest sessions takes 0.1 s; one found nowhere, every file (2.4 GB, and
   400 MB put away), about 4.5 s.
 - The station before kept an index (`search.db`): removed as the station starts.
 - `GET /search?q=&kinds=&limit=&offset=&again=` (`again=1`: asked again as the chats changed) → `{groups: [{kind, hits, more}], building}` (people's: chat, message, job,

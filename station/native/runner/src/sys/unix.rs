@@ -101,6 +101,26 @@ pub fn write_all_at(file: &File, buf: &[u8], at: u64) -> io::Result<()> {
     file.write_all_at(buf, at)
 }
 
+/// Gives back the disk under `len` bytes of `path` from `at`, the file keeping its length (what is there reads as
+/// zeros): macOS's F_PUNCHHOLE, Linux's FALLOC_FL_PUNCH_HOLE. `at` and `len` whole blocks.
+pub fn punch(path: &Path, at: u64, len: u64) -> io::Result<()> {
+    use std::os::fd::AsRawFd;
+    let file = std::fs::OpenOptions::new().write(true).open(path)?;
+    let fd = file.as_raw_fd();
+    #[cfg(target_os = "macos")]
+    let r = {
+        let hole = libc::fpunchhole_t { fp_flags: 0, reserved: 0, fp_offset: at as libc::off_t, fp_length: len as libc::off_t };
+        // SAFETY: fd is open for writing; `hole` lives across the call.
+        unsafe { libc::fcntl(fd, libc::F_PUNCHHOLE, &hole) }
+    };
+    #[cfg(target_os = "linux")]
+    // SAFETY: fd is open for writing.
+    let r = unsafe { libc::fallocate(fd, libc::FALLOC_FL_PUNCH_HOLE | libc::FALLOC_FL_KEEP_SIZE, at as libc::off_t, len as libc::off_t) };
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    let r = { let _ = (fd, at, len); 0 };
+    if r == 0 { Ok(()) } else { Err(io::Error::last_os_error()) }
+}
+
 pub fn read_exact_at(file: &File, buf: &mut [u8], at: u64) -> io::Result<()> {
     file.read_exact_at(buf, at)
 }

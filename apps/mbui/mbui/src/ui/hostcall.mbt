@@ -76,6 +76,9 @@ struct FakeHost {
   // what the app's words' face (face_ui), once given, adds to a cluster's advance in what is set in it, in ems (0 by
   // default: a face given measures as the system's)
   mut ui_face : Double
+  // its glyphs' generation (@hostapi.atlas_generation): moved on by Tester::glyphs_moved_on, as a host's is once a face
+  // it was given is in (a page's, loaded after it is asked for), its scale changes or its atlas is lost
+  mut generation : Int
   // what a digit set all one width (@hostapi.style_tabular) adds to its advance, in ems (0 by default: the same either way)
   mut tabular : Double
   // how big each glyph's picture is, in points (6 by 10 by default): what fills an atlas's plots, as large ones do
@@ -267,6 +270,9 @@ struct FakeHost {
   live_images : Map[Int, Int]
   /// the words of each shot taken (shot.mbt), in the order they were drawn in it: a test's (Tester::shots)
   shots : Array[Array[String]]
+  /// and each one's size in pixels and what it drew, each instance as a test compares them (Tester::shot_drawn)
+  shot_sizes : Array[(Int, Int)]
+  shot_drawn : Array[Array[String]]
 }
 
 ///|
@@ -784,7 +790,7 @@ fn h_face_clear(face : Int) -> Unit {
 fn h_atlas_generation() -> Int {
   match fake.val {
     Some({ live: Some(l), .. }) => l.host.atlas_generation()
-    Some(_) => 0
+    Some(f) => f.generation
     None => @hostapi.atlas_generation()
   }
 }
@@ -1124,6 +1130,12 @@ let outside_streamed = 12
 let outside_stood = 13
 
 ///|
+/// The host wrote to the performance record (@hostapi.perf_state, perf_size): told as what it has written is on the
+/// disk (iOS's, its writes gathered: one told for all written since the last it told), the app reading how much it
+/// holds then (perf_size, a signal: what shows it follows it), nothing else of the frame built again for it.
+let outside_perf = 14
+
+///|
 /// Every kind above, by its name: each its own number (outside_kinds_wbtest.mbt), the hosts' named the same
 /// (Native.java's OUTSIDE_*, apple.h's, win.h's and android_host.c's MB_OUTSIDE_*, web/host.js's OUTSIDE_*), every
 /// `outside_*` here in it: scripts/chk outside-kinds, host_contract.sh HOST kinds
@@ -1142,6 +1154,7 @@ fn outside_kinds() -> Array[(String, Int)] {
     ("posted", outside_posted),
     ("streamed", outside_streamed),
     ("stood", outside_stood),
+    ("perf", outside_perf),
   ]
 }
 
@@ -1259,6 +1272,12 @@ fn on_outside_now(kind : Int, id : Int, state : Int) -> Unit {
   }
   if kind == outside_stood {
     view_stood(id)
+    return
+  }
+  // (the performance record written: what shows how much it holds follows it, perf.mbt's perf_size; a frame only
+  // where something read it)
+  if kind == outside_perf {
+    perf_told()
     return
   }
   // (a ready view's player asking more of the app: nothing waited on ends, nothing built again for it)

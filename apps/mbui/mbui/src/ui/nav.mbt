@@ -652,8 +652,9 @@ pub fn[P] Nav::pop(self : Nav[P]) -> Bool {
     self.p = 0.0
     self.t0 = -1.0
     self.waited = false
-    self.told()
+    // (its time on top anew before the stack says it changed: what reads that reads this one, Nav::topped)
     self.topped()
+    self.told()
     match self.hosted {
       Some(h) => (h.went)()
       None => ()
@@ -668,8 +669,8 @@ pub fn[P] Nav::pop(self : Nav[P]) -> Bool {
     }
   }
   self.leaving = self.pages.pop()
-  self.told()
   self.topped()
+  self.told()
   self.go(2, 1.0, brings=true)
   true
 }
@@ -712,6 +713,31 @@ pub fn[P] Nav::replace(self : Nav[P], page : P) -> Unit {
 }
 
 ///|
+/// The pages over the stack's first `keep` replaced by `pages` (the first of them over the last kept; `keep` 0, the root
+/// too), in place (nothing slides), told once as it is so: never seen with those taken off and these not on yet (a
+/// list's row choosing the page beside it in place of whatever was open over the list). Never with no page: `pages`
+/// empty, `keep` 1 at least.
+pub fn[P] Nav::replace_above(self : Nav[P], keep : Int, pages : Array[P]) -> Unit {
+  let keep = if keep < 0 { 0 } else { keep }
+  if pages.is_empty() && (keep == 0 || self.pages.length() <= keep) {
+    return
+  }
+  self.settle()
+  while self.pages.length() > keep {
+    self.gone.push(self.pages.pop().unwrap())
+  }
+  for page in pages {
+    self.pages.push(nav_page(page, self.pages.last().map(fn(e) { e.page })))
+  }
+  // (none put on: the one now on top come back to, as a pop's is)
+  if pages.is_empty() {
+    self.topped()
+  }
+  self.told()
+  wake()
+}
+
+///|
 /// A stack changed: changed as the frame is built, built again from it in the frame (no frame shows the page it left
 /// as it was), all of it anew; between frames, the next frame (Ctx::read_changed), what builds a stack told
 /// (stacks_said: a part kept as its nodes that holds one, built again).
@@ -732,7 +758,8 @@ let stacks_said : @signals.Signal[Int] = @signals.signal(0)
 /// moved to x, 2 let go there (back if past a third or flung), 3 called
 /// off, 4 back (the system decided: from where a gesture had it, or a back
 /// with none); `t` the time; `progress` the system's (-1 none: mbui's own
-/// edge). Never past its floor (Ctx::nav's `floor`).
+/// edge). Never past its floor (Ctx::nav's `floor`; `floor`, where what tells it the steps says where that is now: the
+/// one it asked whether back is the stack's by, Nav::backs_over's).
 fn[P] Nav::gesture(
   self : Nav[P],
   kind : Int,
@@ -740,11 +767,13 @@ fn[P] Nav::gesture(
   w : Double,
   t : Double,
   progress? : Double = -1.0,
+  floor? : Int,
 ) -> Unit {
   let w = dmax(w, 1.0)
+  let floor = floor.unwrap_or(self.floor)
   match kind {
     0 =>
-      if self.mode == 0 && self.pages.length() > self.floor + 1 {
+      if self.mode == 0 && self.pages.length() > floor + 1 {
         self.mode = 3
         self.p = 0.0
         self.finger.set(0.0)
@@ -799,7 +828,7 @@ fn[P] Nav::gesture(
     _ =>
       if self.mode == 3 {
         self.let_go(0.0)
-      } else if self.pages.length() > self.floor + 1 {
+      } else if self.pages.length() > floor + 1 {
         let e = self.pages[self.pages.length() - 1]
         if self.pop() {
           (self.went_back)(e.page, e.over, e.rise, self.pages())
@@ -812,12 +841,12 @@ fn[P] Nav::gesture(
 /// Gone back from where a finger left the page: on from there, as fast as it let it go (`v`, its widths per ms).
 fn[P] Nav::let_go(self : Nav[P], v : Double) -> Unit {
   self.leaving = self.pages.pop()
+  self.topped()
   self.told()
   match self.leaving {
     Some(e) => (self.went_back)(e.page, e.over, e.rise, self.pages())
     None => ()
   }
-  self.topped()
   self.go(2, 1.0, v~)
 }
 

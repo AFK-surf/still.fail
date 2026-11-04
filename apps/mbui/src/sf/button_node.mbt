@@ -7,8 +7,9 @@
 ///|
 /// The button in `parent`: `label` its words, `tone` its look, `busy` while what it does is under way (not pressed
 /// again, a spinner before its words), `disabled` while it cannot be pressed (faded), `across` as wide as what holds it
-/// gives (its words in its middle); `press` done as it is pressed; `words_in`: how far its words are in over its ground
-/// (what holds it coming in its ground first). Its words changing go to their place for that cause.
+/// gives (its words in its middle); `press` done as it is pressed. In a panel coming in its surface first, all of it
+/// (its ground, its icon, its spinner, its words) with the rest of what the panel holds: the panel's content's. Its
+/// words changing go to their place for that cause.
 /// The node.
 pub fn button_node(
   parent : @view.View,
@@ -18,7 +19,6 @@ pub fn button_node(
   busy? : () -> Bool = fn() { false },
   disabled? : () -> Bool = fn() { false },
   across? : Bool = false,
-  words_in? : () -> Double = fn() { 1.0 },
   icon? : String = "",
 ) -> @view.View {
   let live = fn() { !disabled() && !busy() }
@@ -28,14 +28,15 @@ pub fn button_node(
     // (the hand on it, or pressing it: how far its ground has gone towards its lit one; at work, how far its spinner is
     // in and how far its room is open; how faded it is)
     let lit = fn() {
-      live() &&
+      (busy() && (tone == Ghost || tone == GhostDanger)) ||
+      (live() &&
       (v.focus_shown() ||
       (match @ui.pointing() {
         Mouse => v.pointed() || v.pressed()
         Finger => v.pressed()
-      }))
+      })))
     }
-    let hand = EdgeWay::new(0.0)
+    let hand = EdgeWay::new(if @signals.untracked(lit) { 1.0 } else { 0.0 })
     let turning = EdgeWay::new(if @signals.untracked(busy) { 1.0 } else { 0.0 })
     let open = EdgeWay::new(if @signals.untracked(busy) { 1.0 } else { 0.0 })
     let seen = EdgeWay::new(if @signals.untracked(disabled) { 0.45 } else { 1.0 })
@@ -120,15 +121,19 @@ pub fn button_node(
     })
     // (its icon before its words where it has one: button's `icon`)
     if icon != "" {
-      icon_node(v, icon, button_icon, By(fn() { looks().2 })) |> ignore
+      // (by its ink: as far in from the end as the words are from the other, the grid's room round its strokes taking
+      // none, so the two ends look alike: button's draw_icon by_ink)
+      let (ink_l, ink_r) = match icon_numbers(icon) {
+        Some(d) => @ui.shapes_ink_in(icon_shapes(d, button_icon / 24.0, 0x000000FFL), button_icon)
+        None => (0.0, 0.0)
+      }
+      icon_node(v, icon, button_icon, By(fn() { looks().2 })).margin(Is((-ink_l, 0.0, -ink_r, 0.0))) |> ignore
       v.box(fn(g) { g.width(By(fn() { Some(gap()) })) |> ignore }) |> ignore
     }
     let words = v.box(fn(w) {
       w
-      .words(By(label), look={ size: theme().t.ui, weight: if theme().touch { 600 } else { 500 }, line: theme().t.ui_line, wrap: false })
+      .words(By(label), look={ size: theme().t.ui, weight: if theme().touch { 600 } else { 500 }, line: theme().t.ui_line, wrap: false, tracking: @view.letters_own })
       .ink(By(fn() { looks().2 }))
-      // (as far in as its words are where what holds it comes in its ground first: a panel's, motion's ground_first)
-      .alpha(By(words_in))
       |> ignore
     })
     v.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore

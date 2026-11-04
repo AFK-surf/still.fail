@@ -38,6 +38,8 @@ export type SessionRow = {
   /// Whether it goes on afresh once its prompt cache is over, as chosen in its chat (null: as its station is set,
   /// `afreshWhenCold`).
   afresh: boolean | null;
+  /// The most context it runs with, in tokens: its runtime compacts at it (null: the model's whole window).
+  context: number | null;
   runtimeSessionId: string | null; workspace: string; cwd: string | null;
   /// Which of the station's workspaces its chat is in (docs/multi-workspace.md): null is its home workspace (sessions
   /// from before, and those made outside any workspace's request). Not the `workspace` above, its directory.
@@ -52,7 +54,7 @@ export type SessionRow = {
 export type NewSession = {
   key: string; connect: string; scope?: SessionScope | null; title?: string | null; createdBy?: string | null;
   runtime: string; profile: string; profilePinned?: boolean; model?: string | null; effort?: string | null;
-  fast?: boolean | null; workspace: string; cwd?: string | null; runtimeSessionId?: string | null; token: string;
+  fast?: boolean | null; context?: number | null; workspace: string; cwd?: string | null; runtimeSessionId?: string | null; token: string;
   createdAt: number; lastActiveAt: number; ws?: string | null;
 };
 
@@ -134,12 +136,13 @@ export const LETTER_SQL = "(letter IS NOT NULL)";
 
 /// The Slack and Feishu threads a still.fail chat can copy what people send to when they ask (`cc`, docs/relay.md
 /// "抄送"): every one its agents are in, the one said in last first, at most 20; with a connect that posts there. One
-/// `?`: the chat's thread id.
+/// `?`: the chat's thread id. When each was said in last is its last entry's time (schema.ts thread_state): as the
+/// latest of all its entries, each thread's every entry was read, at each telling of the chat.
 export const CC_THREADS_SQL = `SELECT t.*, o.connect FROM thread_sessions m
   JOIN thread_sessions o ON o.session = m.session JOIN threads t ON t.id = o.thread
   WHERE m.thread = ? AND t.surface != '${STILLFAIL_SURFACE}'
   GROUP BY t.id
-  ORDER BY (SELECT MAX(e.at) FROM entries e WHERE e.thread = t.id) DESC, t.created_at DESC, t.id DESC
+  ORDER BY (SELECT e.at FROM thread_state st JOIN entries e ON e.thread = st.thread AND e.n = st.last_n WHERE st.thread = t.id) DESC, t.created_at DESC, t.id DESC
   LIMIT 20`;
 
 /// The letter an entry's `letter` column (or an archive file's entry) holds (absent: none, or one not read).
@@ -172,7 +175,9 @@ export type TurnSummary = {
 
 export type TurnRow = { id: string; summary: TurnSummary };
 
-export type SessionStats = { turns: number; pending: number; firstText: string | null; lastTurn: TurnSummary | null };
+export type SessionStats = { turns: number; workMs: number | null; pending: number; firstText: string | null; lastTurn: TurnSummary | null };
+/// Whether a session has something going: its messages not delivered yet, and its latest turn (store.ts `statsOf`).
+export type SessionBusy = Pick<SessionStats, "pending" | "lastTurn">;
 
 /// A profile's last check and quota, kept across restarts.
 export type ProfileStatus = { check: Json | null; quota: Json | null };
@@ -184,6 +189,7 @@ export type NewMessage = {
   thread: number; ts: string; authorKind: AuthorKind; author: string; text: string; attachments?: Attachment[];
   quotes?: Quote[]; declared?: string | null; client?: string | null; profile?: string | null; runtime?: string | null; card?: Json | null;
   options?: Json | null; at?: number | null; letter?: Letter;
+  agentIdentity?: Json;
 };
 
 export const newMessage = (thread: number, ts: string, authorKind: AuthorKind, author: string, text: string): NewMessage => ({
@@ -218,12 +224,13 @@ export type TurnFor = { profile: string | null; person: string | null; thread: n
 
 /// What the store says changed, for whoever follows it (the admin API's /events, the hub).
 export type StoreChange =
-  /// Anything about that session changed.
-  | { type: "session"; key: string }
+  /// Anything about that session changed; `pending`: how many messages it has yet to take, as it took some.
+  | { type: "session"; key: string; pending?: number }
   /// It was deleted; `ws` the workspace its chat was in (null: the home one).
   | { type: "sessionRemoved"; key: string; ws?: string | null }
-  /// Entries were appended there (contiguous, in order), or its sessions changed (none).
-  | { type: "thread"; id: number; entries: EntryRow[] }
+  /// Entries were appended there (contiguous, in order), or its sessions changed (none); `closed`: the post (its n)
+  /// whose card was closed or withdrawn without a message (closed_cards).
+  | { type: "thread"; id: number; entries: EntryRow[]; closed?: number }
   /// Letters were kept in its own log of them (schema.ts LETTERS; contiguous, in order).
   | { type: "letters"; id: number; letters: EntryRow[] }
   /// It went, with every entry it had; `ws` as its session's.
@@ -233,9 +240,10 @@ export type StoreChange =
   /// The Slack users a viewer said are them changed.
   | { type: "identities"; viewer: string }
   /// The chats a viewer pinned changed.
-  | { type: "pins"; viewer: string }
+  | { type: "pins"; viewer: string; session?: string; at?: number | null }
   /// The decisions a viewer dismissed changed.
-  | { type: "dismissed"; viewer: string }
+  /// `card`: the card dismissed (its thread and entry); `kept`: a chat kept from archiving, or let go again.
+  | { type: "dismissed"; viewer: string; card?: { thread: number; n: number }; kept?: { thread: number; kept: boolean } }
   /// The recorded runtime processes changed.
   | { type: "processes" }
   | { type: "decisionChecks" }
@@ -243,8 +251,14 @@ export type StoreChange =
   | { type: "job"; id: string }
   /// A job that was over was taken off its session's record.
   | { type: "jobRemoved"; id: string; session: string }
-  /// Model calls were recorded (store/usage.ts), of these sessions.
-  | { type: "usage"; sessions: string[] }
+  /// What was written of a chat beside what is said in it, as written: a device that makes its sidebar itself puts it
+  /// in place (api/events.ts `chat-mark`). `archive`: the review's suggestion (the version it looked at; null: none
+  /// now) or what it found (`verdict`); `share`: who the chat is shared with now (none: no one); `opened`: a chat an
+  /// agent opened from it.
+  | { type: "chatMark"; thread: number | null; session: string; archive?: { suggested?: number | null; verdict?: Json }; share?: { to: { workspace: string; name: string }[]; write: boolean }; opened?: Json }
+  /// Model calls were recorded (store/usage.ts), of these sessions; `from`, when the earliest of them was made (ms):
+  /// what a page holding the usage reads again of it, from that day on.
+  | { type: "usage"; sessions: string[]; from?: number; statisticsOnly?: boolean }
   /// A session went on in another runtime session, or in none (its context cleared): where its context stands changed.
   | { type: "conversation"; key: string };
 
@@ -347,7 +361,8 @@ export function toSession(r: Json): SessionRow {
     key: r.key, connect: r.connect, scope: r.scope === "all" ? "all" : "thread", title: r.title, createdBy: r.created_by,
     runtime: r.runtime, profile: r.profile, profilePinned: r.profile_pinned === 1, model: r.model, effort: r.effort,
     fast: r.fast === null || r.fast === undefined ? null : r.fast !== 0,
-    afresh: r.afresh === null || r.afresh === undefined ? null : r.afresh !== 0, runtimeSessionId: r.runtime_session_id,
+    afresh: r.afresh === null || r.afresh === undefined ? null : r.afresh !== 0, context: typeof r.context === "number" ? r.context : null,
+    runtimeSessionId: r.runtime_session_id,
     workspace: r.workspace, cwd: r.cwd ?? null, ws: r.ws ?? null, token: r.token, running: r.running === 1, createdAt: r.created_at,
     lastActiveAt: r.last_active_at, archivedAt: r.archived_at, archivedBy: r.archived_by, shownAt: r.shown_at,
   };
@@ -419,6 +434,20 @@ export function toThread(r: Json): ThreadRow {
 export const toSessionThread = (r: Json): SessionThread => ({ thread: toThread(r), connect: r.connect });
 
 export const toMembership = (r: Json): Membership => ({ thread: r.thread, session: r.session, connect: r.connect, joinedAt: r.joined_at });
+
+/// An entry's columns as they are stored (store.ts `#insertEntry`).
+export function entryColumns(e: EntryRow): Json {
+  return {
+    thread: e.thread, n: e.n, kind: e.kind, target: e.target, ts: e.ts, author_kind: e.authorKind, author: e.author, text: e.text,
+    attachments: jsonList<Attachment>(e.attachments, attachment), quotes: jsonList<Quote>(e.quotes, quote), declared: e.declared,
+    client: e.client, profile: e.profile, runtime: e.runtime, options: e.options === undefined ? null : JSON.stringify(e.options),
+    card: e.card === undefined ? null : JSON.stringify(e.card), at: e.at,
+    agent_identity: e.agentIdentity === undefined ? null : JSON.stringify(e.agentIdentity), letter: e.letter === undefined ? null : JSON.stringify(e.letter),
+  };
+}
+
+/// An entry as a read of it gives it once it is stored: what is told of it as it is written is the same.
+export const stored = (e: EntryRow): EntryRow => toEntry(entryColumns(e));
 
 export function toEntry(r: Json): EntryRow {
   return {
@@ -544,6 +573,18 @@ export const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), 
 /// readers' (who keeps watch).
 export const JOBS_RUNNING = "SELECT * FROM jobs WHERE state = 'running' ORDER BY started_at DESC";
 
+/// The jobs running, and the services stopped on their own that hold their port (an exited one with a port), the latest
+/// first, by the same index: what a session has up (store.ts `jobsUp`), and the readers' list of them (GET /jobs).
+export const JOBS_UP = "SELECT * FROM (SELECT * FROM jobs WHERE state = 'running' UNION ALL SELECT * FROM jobs WHERE state = 'exited' AND port IS NOT NULL) ORDER BY started_at DESC";
+
+/// The latest running service, or one waiting to restart, holding a port. The two state-and-port seeks do not read
+/// other services or commands (jobs.ts startId).
+export const JOB_AT_PORT = `SELECT id, name, port FROM (
+  SELECT id, name, port, started_at FROM jobs INDEXED BY jobs_up WHERE state = 'running' AND port = ?1
+  UNION ALL
+  SELECT id, name, port, started_at FROM jobs INDEXED BY jobs_up WHERE state = 'exited' AND port = ?1
+) ORDER BY started_at DESC LIMIT 1`;
+
 /// A session's jobs, the latest first, by the index on their session (schema.ts jobs_by_session): the main thread's and
 /// the readers'.
 export const SESSION_JOBS = "SELECT * FROM jobs WHERE session_key = ? ORDER BY started_at DESC";
@@ -552,8 +593,9 @@ export const SESSION_JOBS = "SELECT * FROM jobs WHERE session_key = ? ORDER BY s
 /// active first: by the indexes on them (schema.ts sessions_by_runtime_id, runtime_sessions_by_id), not by asking every
 /// session in turn which it ran in.
 export const SESSION_OF_RUNTIME = `SELECT key FROM (
-    SELECT key, last_active_at FROM sessions WHERE runtime_session_id = ?2 AND runtime = ?1
-    UNION ALL SELECT s.key, s.last_active_at FROM runtime_sessions r JOIN sessions s ON s.key = r.session_key WHERE r.id = ?2 AND s.runtime = ?1
+    SELECT key, last_active_at FROM sessions s WHERE runtime_session_id = ?2 AND runtime = ?1
+      AND NOT EXISTS (SELECT 1 FROM runtime_sessions r WHERE r.session_key = s.key AND r.id = ?2 AND COALESCE(r.runtime, s.original_runtime, s.runtime) != ?1)
+    UNION ALL SELECT s.key, s.last_active_at FROM runtime_sessions r JOIN sessions s ON s.key = r.session_key WHERE r.id = ?2 AND COALESCE(r.runtime, s.original_runtime, s.runtime) = ?1
   ) ORDER BY last_active_at DESC LIMIT 1`;
 
 /// What each list of chats asks of the cards answered lately (answersSince, the main thread's and the readers'): the

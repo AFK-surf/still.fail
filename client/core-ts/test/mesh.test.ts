@@ -14,7 +14,7 @@ import { CoreError, HostError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import type { Iroh, IrohConnection } from "../src/iroh.ts";
-import { ALPN, clearlyBetter, cost, DEVICE_KEY, DIRECT_HOLD_MAX_MS, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MeshWire, MIN_STAY_MS, PING_TIMEOUT_MS, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_FRESH_MS, SPEED_MIN_BYTES, SPEED_SAID_MS, TAILNET, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
+import { ALPN, clearlyBetter, CONNECT_TIMEOUT_MS, cost, DEVICE_KEY, DIRECT_HOLD_MAX_MS, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MeshWire, MIN_STAY_MS, PING_TIMEOUT_MS, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_FRESH_MS, SPEED_MIN_BYTES, SPEED_SAID_MS, TAILNET, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -23,7 +23,7 @@ import { Status } from "../src/status.ts";
 import { FakeHost } from "../src/testing.ts";
 import { Tracer } from "../src/trace.ts";
 import { hex } from "../src/util.ts";
-import { Wake, Wakes } from "../src/wake.ts";
+import { Wake, WakingHost, Wakes } from "../src/wake.ts";
 import { Station } from "./mesh-station.ts";
 import { PATH_IDLE_MS, type RelaySpec, SimNet, SimTime } from "./sim-iroh.ts";
 import { seeds } from "./sim-seeds.ts";
@@ -950,7 +950,7 @@ sim("ways_as_good_as_each_other_are_not_swapped", async (s) => {
 });
 
 /// Two large replies through b side by side, each coming at half its speed: b is taken to be as fast as the two came
-/// together, not as either did. Each alone held Beijing's way to ccvm at a third of its speed, and it lost to ways
+/// together, not as either did. Each alone held a relay path to a station at a third of its speed, and it lost to ways
 /// never tried (2026-10-28).
 sim("replies_side_by_side_tell_how_fast_their_way_is_together", async (s) => {
   const b = s.relay("https://b.relay.test/", { device: { ms: 20, bps: 256 * 1024 } });
@@ -1129,6 +1129,27 @@ sim("a_station_said_tailnet_is_kept_and_reached_with_the_relays_down", async (s)
   const link = await s.run(next.link(id, grants("ok", { n: 0 })));
   assert.equal(link.path(), "direct");
   assert.ok(s.time.now() - started < 5_000, `reached ${s.time.now() - started} ms after it was asked`);
+  assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
+  await close(s, station, next);
+});
+
+/// 2026-11-03: a station in WSL with mirrored networking says the Windows machine's own addresses; the Windows app's
+/// packets to them reach it, its answers go back into WSL. Each dial given them went unanswered (CONNECT_TIMEOUT_MS,
+/// again and again for hours) while a phone came through a relay. After one such dial the next goes through the relays
+/// on their own endpoints too, and comes through.
+sim("a_station_said_addresses_that_answer_no_handshake_is_reached_through_a_relay", async (s) => {
+  const { station, mesh, id, a, b } = await onTailnet(s, 1);
+  s.net.oneWay = true;
+  station.tailnet = [];
+  station.lan = station.addr().ips;
+  await reach(s, mesh, id);
+  await s.run(mesh.close());
+  // The next run dials it at the addresses it said.
+  const next = await s.run(Mesh.make(env(s), [a, b]));
+  const started = s.time.now();
+  const link = await s.run(Effect.retry(next.link(id, grants("ok", { n: 0 })), { times: 3 }), 5 * 60_000);
+  assert.ok(s.time.now() - started <= 2 * CONNECT_TIMEOUT_MS + 5_000, `reached ${s.time.now() - started} ms after it was asked`);
+  assert.ok(s.net.tries.some((t) => t.to === id && t.ips), "the addresses it said were dialled");
   assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
   await close(s, station, next);
 });
@@ -1394,6 +1415,41 @@ sim("the_same_offer_again_is_not_made_anew", async (s) => {
   await s.settle(endpoint.close());
 });
 
+/// 2026-11-04: a chat's own screen up on the phone (the station's displays.ts) is said with how the station holds it, and
+/// the notification names its chat; said no longer, it is gone.
+sim("the_chats_with_screens_up_on_the_phone_are_said", async (s) => {
+  const endpoint = s.net.bindStation({ secretKey: s.net.key(), alpns: [ALPN], relayUrls: [], bindAddr: "127.0.0.1:0" });
+  let say: (line: J) => Promise<void> = async () => {};
+  void (async () => {
+    const conn = (await endpoint.accept())!;
+    const control = (await conn.acceptBi())!;
+    await Station.readLine(control, { bytes: Buffer.alloc(0) });
+    await control.write(Buffer.from(`${JSON.stringify({ ok: true, station: "测试" })}\n`));
+    const offer = (await conn.acceptBi())!;
+    await Station.readLine(offer, { bytes: Buffer.alloc(0) });
+    await offer.write(Buffer.from(`${JSON.stringify({ status: 200, headers: {} })}\n`));
+    say = async (line) => void (await offer.write(Buffer.from(`${JSON.stringify(line)}\n`)));
+    await say({ serial: "127.0.0.1:37001", adb: "connected", message: "" });
+  })().catch(() => {});
+  const mesh = await s.run(Mesh.make(env(s), []));
+  mesh.addAddr({ id: endpoint.id(), ips: endpoint.sockets() });
+  const store = new Store(s.host, s.runner);
+  const adb = new Adb({ host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  const offer = { station: `ws/${endpoint.id()}`, connect: 5555, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 };
+  await s.run(adb.run({ kind: "share", offer }));
+  await s.until(() => adb.value().adb === "connected");
+  assert.deepEqual(adb.value().screens, []);
+  await say({ serial: "127.0.0.1:37001", adb: "connected", message: "", screens: ["修登录页"] });
+  await s.until(() => adb.value().screens.length === 1);
+  assert.deepEqual(adb.value().screens, ["修登录页"]);
+  await say({ serial: "127.0.0.1:37001", adb: "connected", message: "" });
+  await s.until(() => adb.value().screens.length === 0);
+  await s.run(adb.run({ kind: "stop" }));
+  assert.deepEqual(adb.value().screens, []);
+  await s.run(mesh.close());
+  await s.settle(endpoint.close());
+});
+
 /// 2026-10-26, an OPPO: adbd gone from the port the app found (Wireless debugging turned off and on), every tunnel
 /// refused and the station's adb let go until the phone offered again, which it did only as DNS-SD said something new.
 /// The port refused is said (`refusedPort`), so that the app looks again; the station hears the port each offer has.
@@ -1487,7 +1543,8 @@ sim("a_phone_with_its_own_adb_session_carries_the_station_on_it_and_pairs_itself
   const mesh = await s.run(Mesh.make(env(s), []));
   mesh.addAddr({ id: endpoint.id(), ips: endpoint.sockets() });
   const store = new Store(s.host, s.runner);
-  const adb = new Adb({ host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  // Core.make gives the adb part a WakingHost, not the native host itself.
+  const adb = new Adb({ host: new WakingHost(s.host, s.wakes), runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
   const station = `ws/${endpoint.id()}`;
   await s.run(adb.run({ kind: "share", offer: { station, connect: 5555, pair: 37115, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 } }));
   await s.until(() => answers.length === 1);
@@ -1516,7 +1573,7 @@ async function tunnelOn(s: Sim, conn: J): Promise<J> {
   return s.settle(opened, 10_000).catch(() => null);
 }
 
-/// 2026-10-17, a phone on ccvm's LAN: every tunnel the station opened went unanswered ("the phone did not answer"), adb
+/// 2026-10-17, a phone on a station's LAN: every tunnel the station opened went unanswered ("the phone did not answer"), adb
 /// connect and pair alike, while the phone's requests went on its LAN way. The phone answers each tunnel on the link its
 /// latest offer went on, whichever way that is, for as long as it is offered.
 sim("tunnels_are_answered_on_the_lan_way", async (s) => {

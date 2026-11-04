@@ -255,6 +255,7 @@ fn runtime_tag(r : String) -> String {
     "cursor" => "Cursor"
     "devin" => "Devin"
     "hermes" => "Hermes"
+    "agy" => "AGY"
     _ => r
   }
 }
@@ -802,11 +803,13 @@ fn profile_stations(c : @ui.Ctx, core : Core, here_station : String, entry : Jso
         let pid = text(mv, "profileId")
         let state = field(mv, "state")
         let current = station == here_station
+        let opens = !current && pid != ""
         if @sf.link_row(
             c,
             "profile-station/" + station,
             text(mv, "stationName"),
-            goes=!current && pid != "",
+            goes=opens,
+            chevron_room=true,
             title_after=fn() {
               if current { @sf.pill(c, @sf.t("web-pages.connect.current")) }
             },
@@ -960,7 +963,7 @@ fn profile_models_panel(c : @ui.Ctx, core : Core, address : String, p : Json?) -
           }
         })
         |> ignore
-        @sf.tip(c, "profile-model-item/" + key + "/" + m + "/tip", item, m, repeats=name(m) == m)
+        @sf.tip(c, "profile-model-item/" + key + "/" + m + "/tip", item, m, side=Right, repeats=name(m) == m)
       }
     }
   })
@@ -1079,7 +1082,6 @@ fn profile_share(c : @ui.Ctx, core : Core, s : Json?, p : Json?, entry : Json?) 
           @sf.t("web-pages.profiles.share.copied")
         },
         busy=sharing,
-        strong=true,
       )
       if now != shared {
         let change = fn() {
@@ -1113,7 +1115,6 @@ fn profile_share(c : @ui.Ctx, core : Core, s : Json?, p : Json?, entry : Json?) 
       if !shared {
         return
       }
-      @sf.group_rule(c)
       let targets = stations.filter(fn(x) { text(Some(x), "id") != sid })
       if subscription && !flag(p, "machine") &&
         @sf.link_row(
@@ -1121,7 +1122,6 @@ fn profile_share(c : @ui.Ctx, core : Core, s : Json?, p : Json?, entry : Json?) 
           "profile-move/" + address + "/" + id,
           @sf.t("web-pages.profiles.share.signedIn"),
           value=text(s, "name"),
-          value_primary=true,
           goes=!moving && targets.length() > 0,
           tail=fn() { doing_mark(c, moving, failed_of(core, ["profile.move"], on)) },
         ) {
@@ -1150,7 +1150,6 @@ fn profile_share(c : @ui.Ctx, core : Core, s : Json?, p : Json?, entry : Json?) 
             ""
           },
           value=names,
-          value_primary=true,
           goes=!sharing,
         ) {
         pick_stations(core, address, id, stations, sid, allowed)
@@ -1273,16 +1272,22 @@ fn profile_workspaces(c : @ui.Ctx, core : Core, address : String, p : Json?) -> 
         let wv = Some(w)
         let ws = text(wv, "workspace")
         let name = text(wv, "name")
+        let emoji = text(wv, "emoji")
+        let icon = text(wv, "icon")
         let on = now.contains(ws)
         let next = @sf.switch_row(
           c,
           "profile-ws/" + address + "/" + id + "/" + ws,
-          @sf.t("web-pages.profiles.workspaces.for", args=[("name", name)]),
+          name,
           on,
           note=@sf.t(if on { "web-pages.profiles.workspaces.on" } else { "web-pages.profiles.workspaces.off" }, args=[("name", name)]),
           busy~,
-          // its mark before it, as the workspace is named everywhere
-          lead=fn(c) { @sf.workspace_badge(c, name, text(wv, "emoji"), text(wv, "icon"), profile_ws_mark) },
+          // With no mark of its own, the name is enough (a bare initial reads as another word: 「个 个人」).
+          lead?=if @sf.has_station_mark(emoji, icon) {
+            Some(fn(c) { @sf.workspace_badge(c, name, emoji, icon, profile_ws_mark) })
+          } else {
+            None
+          },
         )
         if next != on {
           let list = if next { now.copy() } else { now.filter(fn(x) { x != ws }) }
@@ -1704,7 +1709,7 @@ let pf_model_rows : @ui.Style = @ui.css("w=Full gap=SPx")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pf_model_row : @ui.Style = @ui.css("row w=Full px=S2_5 gap=S2 align=ACenter")
+let pf_model_row : @ui.Style = @ui.css("row w=Cut px=S2_5 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

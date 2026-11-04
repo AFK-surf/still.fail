@@ -7,7 +7,7 @@
 import { Effect, Layer } from "effect";
 import { readlink } from "node:fs/promises";
 import type { Socket } from "node:net";
-import { routes } from "../api/routes/outflow.ts";
+import { routes, tailcatRoutes } from "../api/routes/outflow.ts";
 import type { HelperApp } from "../helper/app.ts";
 import { bytesOf } from "../mesh/bus.ts";
 import { managesStation } from "../mesh/credential.ts";
@@ -16,10 +16,14 @@ import { platform } from "../platform/index.ts";
 import { wall } from "../ops/fibers.ts";
 import { stationLang } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
-import { ControlPlane, Events, Helper, Parts, Paths, Peers, Previous, Readers } from "../services.ts";
+import { AdminApi, ControlPlane, Events, Helper, Parts, Paths, Peers, Previous, Readers } from "../services.ts";
 import { type Identity, OutflowGrants } from "./grants.ts";
-import { READ, peerRead, textOf } from "./peer.ts";
-import { type Identify, OutflowServer, type StationEntry, fileHash, socketPath } from "./server.ts";
+import { OPERATE, READ, homeRead, peerOperate, peerRead, textOf } from "./peer.ts";
+import { type Identify, type Operate, OutflowServer, type StationEntry, fileHash, socketPath } from "./server.ts";
+import { TailcatLink } from "./tailcat.ts";
+
+/// An answer of the admin API a program takes whole, at most.
+const ANSWER_MOST = 32 * 1024 * 1024;
 
 type Peer = (fd: number) => { pid: number; auditToken: string | null } | null;
 
@@ -67,6 +71,7 @@ export const OutflowLive = Layer.effectDiscard(
     const bus = yield* Peers;
     const cloud = (yield* ControlPlane).state;
     const previous = yield* Previous;
+    const admin = yield* AdminApi;
     const grants = new OutflowGrants(data, wall.now);
     const tell = () => {
       events.tell("outflow-grants", { grants: grants.list(), requests: grants.asking() }, "outflow-grants", { sees: { ws: null } });
@@ -84,6 +89,33 @@ export const OutflowLive = Layer.effectDiscard(
     parts.overview("outflowAnswers", (viewer) => viewer.home !== false && managesStation(viewer));
     // Another station of the workspace reading this one's chats of it, for a program granted the workspace there.
     bus.on(READ, peerRead((op, args, lang) => readers.read(op, args, lang), () => cloud.home(), stationLang));
+    // A request of the admin API as a member, for a program granted `operate`: as the pages make it, one that streams
+    // not being one a program can take whole.
+    const asMember = (call: Parameters<Operate>[0]) => ({
+      method: call.method, path: call.path.split("?")[0]!, query: call.query, search: call.query.length === 0 ? "" : `?${new URLSearchParams(call.query)}`,
+      headers: call.headers, body: call.body, lang: stationLang(),
+      viewer: { sub: "", email: call.actor, name: "", role: call.role, workspace: cloud.home() ?? "", device: "outflow", home: true },
+    });
+    const operate: Operate = async (call) => {
+      if (call.station !== null) {
+        const got = await bus.ask(call.station, { method: OPERATE, workspace: cloud.home(), call: { ...call, station: null, body: call.body.toString("base64") }, whole: true });
+        const bytes = bytesOf(got);
+        if (bytes === null) throw new Error("that station answered without its data");
+        return { status: Number(got.status), headers: got.headers ?? {}, body: Buffer.from(await textOf(bytes, "base64"), "base64") };
+      }
+      const answer = await admin.handle(asMember(call));
+      if (Buffer.isBuffer(answer.body)) return { status: answer.status, headers: answer.headers, body: answer.body };
+      if (answer.headers["content-type"]?.startsWith("text/event-stream")) return { status: 406, headers: {}, body: Buffer.from('{"error":"a stream is not operated"}') };
+      const parts: Buffer[] = [];
+      let size = 0;
+      for await (const chunk of answer.body) {
+        size += chunk.length;
+        if (size > ANSWER_MOST) return { status: 413, headers: {}, body: Buffer.from('{"error":"the answer is too long"}') };
+        parts.push(chunk);
+      }
+      return { status: answer.status, headers: answer.headers, body: Buffer.concat(parts) };
+    };
+    bus.on(OPERATE, peerOperate(operate));
     const here = (): StationEntry => ({ id: cloud.state?.station ?? "", name: cloud.state?.name ?? "", here: true });
     const workspace = {
       here,
@@ -108,17 +140,25 @@ export const OutflowLive = Layer.effectDiscard(
     // the other end of a socket.
     const peer = loadMesh().peerProcess;
     const identify = peer === undefined ? null : helper !== null ? helperIdentify(helper, peer) : platform.os === "linux" ? procIdentify(peer) : null;
-    if (identify === null) return;
+    const server = new OutflowServer({
+      path: socketPath(data), grants, reads: homeRead((op, args, lang) => readers.read(op, args, lang), () => cloud.home()), operate, identify: identify ?? (async () => null), workspace, lang: stationLang,
+    });
+    // Programs of other machines, through Tailcat, when an admin turned it on (tailcat.ts): told to the admins' pages
+    // by the overview.
+    const link = new TailcatLink({ data, server, changed: () => events.overviewChanged() });
+    parts.routes(tailcatRoutes(link));
+    parts.overview("outflowTailcat", (viewer) => (viewer.home !== false && managesStation(viewer) ? link.view() : undefined));
     yield* Effect.acquireRelease(
       Effect.promise(async () => {
-        const server = new OutflowServer({
-          path: socketPath(data), grants, reads: (op, args, lang) => readers.read(op, args, lang), identify, workspace, lang: stationLang,
-        });
-        await server.listen().catch((e) => log.warn("outflow", "the outflow socket is not listened on", { error: (e as Error).message }));
-        void previous.gone.then(() => server.previousGone());
+        // The socket only where the station can say who a program of this machine is.
+        if (identify !== null) {
+          await server.listen().catch((e) => log.warn("outflow", "the outflow socket is not listened on", { error: (e as Error).message }));
+          void previous.gone.then(() => server.previousGone());
+        }
+        void previous.gone.then(() => link.start(), () => link.start());
         return server;
       }),
-      (server) => Effect.promise(() => server.close()),
+      (server) => Effect.promise(async () => (await link.close(), await server.close())),
     );
   }),
 );

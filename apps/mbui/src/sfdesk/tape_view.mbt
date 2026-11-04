@@ -22,10 +22,10 @@
 // window, an edge dragged or the keyboard does to where things go is no move: there at once. Its end is a moment of the
 // timeline: the panel closed while in use let go there (side_left).
 //
-// A page pushed over the page's own stack (Nav::push_over) slides in at its causes: the stack held by the tape's node
-// (Nav::held_over), what shows of it drawn by the page's island (Ctx::nav). Still the old frame's (the way there): what
-// the panels hold (their islands); which of the stack's pages take presses, and back, said as that island builds;
-// a passage picked bringing the page over (read as the page's island builds). The edges and back are nodes of the
+// A page pushed over the page's own stack (Nav::push_over) slides in at its causes: the stack held by the page's panel
+// (tape_page.mbt: @ui.nav_flat_view, Nav::held_by), each of its pages a node of its own. Still the old frame's (the way
+// there): what the side panels hold (their islands). A passage picked brings the page over as it is picked
+// (tape_page.mbt's tape_pick_said). The edges and back are nodes of the
 // tree's (tape_side_edge, tape_panel_edge; wide_takes_back, wide_back_step).
 
 ///|
@@ -85,6 +85,7 @@ let tape_goes : TapeGoes = {
 
 ///|
 fn tape_goes_reset() -> Unit {
+  tape_bars.clear()
   (tape_goes.end_due)()
   tape_goes.end_due = fn() {  }
   tape_page_wait.reset()
@@ -414,7 +415,7 @@ fn tape_to(p : TapePane, at : Double) -> Unit {
 ///|
 /// Whether the page's panel shows the page on top, as it does once the core has given what it shows or its wait is over:
 /// one put in place as tape_page_wait says, one pushed over the one in place as the stack says (Nav::top_waits: its
-/// wait the stack's, Nav::held_over), each at its causes.
+/// wait the stack's, Nav::held_by), each at its causes.
 fn tape_page_ready() -> Bool {
   tape_page_wait.shows_top() && !app.nav.top_waits()
 }
@@ -638,15 +639,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   }
   // (where the system lays out the app's tabs, its bars handed what the tape's frame has for them each frame it shows:
   // rail_native.mbt nav_frame)
-  nav_held.val = fn() {
-    if !@sf.native_able() {
-      return None
-    }
-    match @sfbase.workspace_in_view(src) {
-      (Some(w), all, _, _) => Some((src, w, all))
-      _ => None
-    }
-  }
+  nav_hold(src)
   // (at rest where it is in use as it is made: no move from wherever another frame left it)
   tape_goes.way.put(1.0)
   tape_goes.rest.set(true)
@@ -672,9 +665,6 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   |> ignore
   // what the page's panel shows as the page on top changes, at its cause's moment (page_wait.mbt)
   tape_page_wait.follow(v, fn(p) { (tape_goes.ready)(p) }, fn() { tape_goes.most })
-  // a page pushed over the page's own stack slides in as the core gives what it shows, at that answer's moment
-  // (tape_goes.most at most), its slides told at their causes: the stack held by this node (Nav::held_over)
-  app.nav.held_over(v, fn(p) { (tape_goes.ready)(p) }, tape_goes.most)
   // the side panel last open, kept while it closes (tape_shown_side); let go once the tape rests at the page
   v.reacts(fn() { (tape_goes.panel_of)() }, fn(side) {
     match side {
@@ -777,6 +767,19 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       side.width(By(fn() { Some(tape_col_at(tape_drawn_at(side))) })) |> ignore
       tape_swipes(side, Side)
       @ui.old(side, fn(c) { tape_side_built(c, src) }, key=tape_island_key).over(Is(true)) |> ignore
+      // (the sidebar made once, the tree's, over the panel where it lays its sidebar out; nothing of it read out while
+      // the panel is behind the one in use: tape_behind's)
+      side.box(fn(sides) {
+        sides.over(Is(true)).hides(By(fn() { wide.tape_at.get() != Side })) |> ignore
+        side_node(sides, src, @sf.TipLayer::new(fn() { tape_goes.node }), fn() { tape_side_at(side) })
+      })
+      |> ignore
+      // (the block's line over all it holds: dock_edge_node)
+      side.box(fn(line) {
+        line.over(Is(true)) |> ignore
+        dock_edge_node(line, fn() { tape_side_at(side) })
+      })
+      |> ignore
       tape_cover(side, Side, fn() {
         let r = tape_room_now()
         let (_, wh) = side.window()
@@ -795,9 +798,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       }))
       |> ignore
       tape_swipes(page, Page)
-      tape_panel_box(page, 0.0, fn(pane) {
-        @ui.old(pane, fn(c) { tape_page_built(c, src) }, key=tape_island_key).over(Is(true)) |> ignore
-      })
+      tape_panel_box(page, 0.0, fn(pane) { tape_page_pane(pane, src) })
       tape_cover(page, Page, fn() { tape_panel_room(page) })
     })
     |> ignore
@@ -1120,59 +1121,20 @@ fn tape_side_built(c : @ui.Ctx, src : Source) -> Unit {
 }
 
 ///|
-/// The page's panel on the tape (its island, as the tree lays it out: as wide as the tape's move has got, 6 in from the
-/// bars): the page's ground, its corners the tape's, a line round it; in it the stack's top drawn flat, a phone's
-/// screen (page_in); what moves in it of its own (the composer) taking its place from its foot. A passage picked in it
-/// while it is not in use brings it over.
-fn tape_page_built(c : @ui.Ctx, src : Source) -> Unit {
-  let (now, _, _, _) = @sfbase.workspace_in_view(src)
-  guard now is Some(w) else { return }
-  // (said by this build: image_item, video_item)
-  @sfbase.held_pictures_waiting.val = false
-  // a page pushed over the page's own stack slides in once the core has given what it shows (page_local_ms at most), as
-  // on a phone, at its causes as the tape's node says (Nav::held_over; Nav::comes_when's frames, the tape not held, as
-  // it is let go); one put in its place shows as tape_page_wait says, at its causes
-  app.nav.shows_when(fn() { (tape_goes.ready)(app.nav.top()) }, tape_goes.most)
+/// Where the sidebar's panel on the tape lays its sidebar out as node `side` (its column) is drawn: as tape_side_built
+/// lays it out (dock_side_at, the tape's look), in the column's own room.
+fn tape_side_at(side : @view.View) -> SideAt {
   let r = tape_room_now()
-  let side = tape_shown_side()
-  let under = if side is None { r.under } else { 0.0 }
-  let main_w = dmax(0.0, c.width - under)
-  let page_id = c.id("main-page")
-  let corners = tape_pane_corners(Page, side is Some(_))
-  tape_behind(c, Page, fn() {
-    // a right click in it: what is picked copied (context_menu.mbt)
-    context_page(c, page_id)
-    let pane = c.box(
-      style=page_apart.then(@ui.style(w=Fixed(c.width), h=Fixed(c.height), radius=@sf.corners_radius(corners))),
-      id=page_id,
-      fn() {
-        // (what is in it as wide as beside the system's column: `under` its ground alone, its right corners none of
-        // what is in it, which ends where the column begins: beside_column)
-        @sf.pane_round.val = Some(beside_column(corners, under))
-        c.box(style=@ui.style(w=Fixed(main_w), h=Full), fn() {
-          page_in(c, src, w, false, main_w, c.height, 0.0, pane_finger())
-        })
-        |> ignore
-        @sf.pane_round.val = None
-      },
-    )
-    // what moves in the page of its own (the composer) takes its place from the page's foot: the tape moving the page,
-    // a keyboard making it shorter, move none of it (it goes with the page, at once)
-    @motion.scope(c, pane, bottom=true)
-  })
-  // a passage of a message picked while the page is not in use (held where it shows beside the sidebar): the page comes
-  // over with it, its bar there to be pressed (pengxiao, 2026-10-25: 引用 pressed there went to what showed of the page
-  // and brought it over, quoting nothing). As it is picked, once: a passage left picked keeps nothing from being brought
-  // over after (pengxiao, 2026-10-25: the sidebar pressed or pulled over went straight back)
-  let pick = if @sfbase.pk.ts == "" { "" } else { "\{@sfbase.pk.ts}\u{1}\{@sfbase.pk.taken_at}" }
-  if pick != "" &&
-    pick != wide.tape_pick.get() &&
-    wide.tape_at.get() != Page &&
-    wide.tape_ask.get() is None &&
-    wide.tape_pull.get() is None {
-    wide.tape_ask.set(Some(Page))
+  let col = tape_col_at(tape_drawn_at(side))
+  let s = dmax(0.0, col - rail_left() - bar_in_now() - bar_gap_now() - rail_more())
+  let top = if side_full_height(false) { 0.0 } else { r.top }
+  // (its top row the tape's, its band the bar's, as tape_under says them: side_brand_h)
+  {
+    ..dock_side_at(false, false, s, col, top, r.foot, 0.0, side.window().1, None),
+    brand: side_brand_h(false, r.top),
+    band: 1.0,
+    tape: true,
   }
-  wide.tape_pick.set(pick)
 }
 
 ///|
@@ -1372,7 +1334,10 @@ pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
   wide.bar_ml = 0.0
   wide.bar_mr = 0.0
   wide.brand_h = side_brand_h(false, r.top)
+  wide.list_top = wide.brand_h
+  wide.list_band = 1.0
   wide.band = 1.0
+  list_room_told()
   wide.mark = 0.0
   land(src, w)
   // (beside the system's action at the column's foot, the cards' foot corners the one the composer stands concentric in

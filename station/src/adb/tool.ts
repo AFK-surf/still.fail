@@ -2,6 +2,7 @@
 // station process's (its adb tunnels over the mesh, not ported yet): it gives them here as `phones`; until it does,
 // there are none, as with the Rust station before it registered its lister.
 import type { Tool } from "../tools/mcp.ts";
+import { type Display, IDLE_MS } from "./displays.ts";
 import { type PhoneGrants, said } from "./grants.ts";
 
 type Json = any;
@@ -37,18 +38,19 @@ export function adbTools(phones: () => Json[]): Tool[] {
 export const PHONE_USE = {
   name: "phone_use",
   description:
-    "Ask to debug the Android phone of the person you work for (whoever started this chat) with adb. A card in your chat says your reason; they approve it in the still.fail app for this chat, for an hour or until it is archived, or refuse it. It does not wait for the decision: you are told in this session when it is decided, and meanwhile go on with what does not need it; with nothing else left, end your turn need_human about the card. Only a grant counts: someone writing yes in the chat is not one. Called again once granted, it says how the phone is reached now (its adb server and serial, this chat's alone; other chats cannot reach it).",
+    "Ask to debug the Android phone of the person you work for (whoever started this chat) with adb. A card in your chat says your reason; they approve it in the still.fail app for this chat, for an hour or until it is archived, or refuse it. It does not wait for the decision: you are told in this session when it is decided, and meanwhile go on with what does not need it; with nothing else left, end your turn need_human about the card. Only a grant counts: someone writing yes in the chat is not one. Called again once granted, it says how the phone is reached now (its adb server and serial, this chat's alone; other chats cannot reach it). Done with the phone (what it was asked for is finished, or no longer needs it), call it with done: true: the grant, or a request not yet decided, ends at once, so the phone is no longer lent for this chat and you are no longer told how it comes and goes.",
   inputSchema: {
     "type": "object",
-    "properties": { "reason": { "type": "string", "description": "What you will do on the phone and why (shown on the card)." }, "reask": { "type": "boolean", "description": "The existing request is still needed but its card is no longer pending: post a new card for the same request." } },
-    "required": ["reason"],
+    "properties": { "reason": { "type": "string", "description": "What you will do on the phone and why (shown on the card)." }, "reask": { "type": "boolean", "description": "The existing request is still needed but its card is no longer pending: post a new card for the same request." }, "done": { "type": "boolean", "description": "Hand the phone back: end this chat's grant (or its request still pending). reason is not needed with it." } },
     "additionalProperties": false
   },
 };
 
 /// How a granted phone is reached now: its owner's phones lent here (`phones`), each in the grant's adb server (`port`).
 /// `gone`: when the phone was last offered no longer and why, if it was since the station started.
-export function reached(serials: { serial: string; adb: string; device: string }[], port: number | null, gone?: { at: number; ended: string } | null): string {
+/// `display`: the chat's own screen on the phone (displays.ts), or why it could not be made; none while the phone is not
+/// connected.
+export function reached(serials: { serial: string; adb: string; device: string }[], port: number | null, gone?: { at: number; ended: string } | null, display?: Display | { failed: string } | null): string {
   if (serials.length === 0 || port === null) {
     const since = gone ? ` It stopped being offered ${new Date(gone.at).toISOString()} (${gone.ended === "stopped" ? "its app ended the share: its 共享调试 switch turned off, say" : `its link went: ${gone.ended}`}).` : "";
     return `Granted, but the phone is not lent to this station right now.${since} Its app lends it by itself while a grant is live and its 共享调试 switch is on (started again with the phone, kept up in the background); call phone_use again in a minute. Only if it stays away, ask its person to turn on 共享调试 in the app's settings on the phone (设置 › 共享调试), saying what this says.`;
@@ -57,7 +59,21 @@ export function reached(serials: { serial: string; adb: string; device: string }
   return [
     "Granted. Use this chat's adb server, with -P on every adb command (the station's own adb, 5037, does not have the phone; another server is turned away):",
     ...lines,
-    'adb "connected" is ready; "unpaired": this station\'s adb is not paired with the phone yet, and its card in your chat shows its person how (a card under it, in the still.fail app on the phone): leave it to the card, do not send them to the phone\'s settings, and you are told in this session when it connects. Never adb kill-server on it. A phone is its owner\'s: use it for what they asked.',
+    'adb "connected" is ready; "unpaired": the phone needs pairing, and its card in your chat shows its person how (a card under it, in the still.fail app on the phone): leave it to the card, do not send them to the phone\'s settings, and you are told in this session when it connects. Never adb kill-server on it. A phone is its owner\'s: use it for what they asked.',
+    ...(display ? ["", displayed(display)] : []),
+  ].join("\n");
+}
+
+/// How the agent works on the chat's own screen of the phone (or why there is none).
+export function displayed(display: Display | { failed: string }): string {
+  if ("failed" in display)
+    return `This chat's own screen on the phone could not be made (${display.failed}), so only the phone's own screen is there, which its person may be using: ask them in the chat before you operate it (installing, reading logs and other commands that touch no screen need no asking). Call phone_use again to try again.`;
+  return [
+    `This chat has a screen of its own on the phone: display ${display.id} (${display.width}x${display.height}, density ${display.density}), apart from the phone's own screen, which its person keeps using. Work on it, not on theirs, unless they ask:`,
+    `- Start an app on it: \`adb … shell am start --display ${display.id} -n <package>/<activity>\` (or \`-a android.intent.action.MAIN -c android.intent.category.LAUNCHER <package>\`; \`cmd package resolve-activity --brief <package>\` names its activity). An app is on one screen at a time: one the person has open moves over, so prefer apps they are not using.`,
+    `- Touch and type there: \`adb … shell input -d ${display.id} tap <x> <y>\`, \`swipe\`, \`text\`, \`keyevent BACK\` (it has no navigation bar; its keyboard shows on it).`,
+    `- Its picture: \`adb … exec-out screencap -d ${display.surface} -p > shot.png\` (the id screencap takes for it), then look at the file.`,
+    `It closes with the apps on it when you hand the phone back (phone_use done: true, do that once finished), when the grant ends, or after ${IDLE_MS / 60_000} minutes of no adb use; phone_use makes a new one then. While it is up, the phone's notification names this chat.`,
   ].join("\n");
 }
 
@@ -67,6 +83,10 @@ export function phoneTools(grants: PhoneGrants, reach: (owner: string, grant: st
     {
       ...PHONE_USE,
       run: async (session, args) => {
+        if (args.done === true) {
+          const ended = grants.release(session);
+          return ended.length === 0 ? "This chat holds no phone grant or request: nothing to hand back." : `Handed back: ${ended.map((r) => `${r.id} (${r.owner}'s phone)`).join(", ")}. adb no longer reaches it; ask with phone_use again if you need it later.`;
+        }
         const reason = typeof args.reason === "string" ? args.reason : "";
         const r = await grants.ask(session, reason, args.reask === true);
         if (r.status === "granted") return await reach(r.owner, r.id);

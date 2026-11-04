@@ -12,6 +12,10 @@ pub fn runtime_label(rt : String) -> String {
     "codex" => "Codex"
     "dsh" => "DeepSeek Harness"
     "grok" => "Grok Build"
+    "cursor" => "Cursor"
+    "devin" => "Devin"
+    "hermes" => "Hermes Agent"
+    "agy" => "Antigravity CLI"
     _ => rt
   }
 }

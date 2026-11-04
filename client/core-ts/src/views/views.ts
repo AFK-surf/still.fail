@@ -23,7 +23,7 @@ import * as present from "../present.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import * as refs from "../refs.ts";
 import { untracked } from "../reactive.ts";
-import { chatsLinked } from "../refLinks.ts";
+import { chatsLinked, personWords } from "../refLinks.ts";
 import { timed } from "../spent.ts";
 import type { Value, Watch } from "../store.ts";
 import { arr as arrU, deepFreeze, equal, get as getU, isObject, shaped, sharedValue } from "../util.ts";
@@ -35,7 +35,7 @@ import { withDrive } from "../drive-browse.ts";
 import { heardFiles } from "../elsewhere.ts";
 import { isImage, near, placeFiles } from "../placed.ts";
 import { KINDS as THING_KINDS, isVideo, mediaDays, thingsHaving, thingsOf } from "../things.ts";
-import { archive } from "./archive.ts";
+import { archive, archiveSearch } from "./archive.ts";
 import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
 import { askAnswers } from "./vault.ts";
 import * as marks from "./marks.ts";
@@ -44,7 +44,7 @@ import { usageSummary } from "./usage-summary.ts";
 import { fleetView } from "./fleet.ts";
 import { chatsCard, usageCard } from "./rail-cards.ts";
 import { resourcesView } from "./resources.ts";
-import { workspaceProfiles } from "./profiles.ts";
+import { stationProfileSummary, workspaceProfiles } from "./profiles.ts";
 import { settingsView } from "./settings.ts";
 import { waysView, type WaysView } from "./ways.ts";
 import { admin, sources as adminSources } from "./admin.ts";
@@ -106,7 +106,7 @@ const stationOnline = (v: Value | undefined): boolean => !down(linkValue(v));
 const profileOverview = (v: Value | undefined): J => v && "ok" in v ? v.ok : undefined;
 const sameProfileOverview = (a: J, b: J): boolean => {
   if (!isObject(a) || !isObject(b)) return equal(a, b);
-  return equal(get(a, "profiles"), get(b, "profiles")) && equal(get(a, "sharing"), get(b, "sharing")) && equal(get(a, "modelMakers"), get(b, "modelMakers"));
+  return equal(get(a, "profiles"), get(b, "profiles")) && equal(get(a, "sharing"), get(b, "sharing")) && equal(get(a, "modelMakers"), get(b, "modelMakers")) && get(get(a, "mesh"), "reached") === get(get(b, "mesh"), "reached");
 };
 
 /// A station taken for down, in words, as its link says why (link.ts DownCause): the device's network, the station, or
@@ -134,59 +134,6 @@ export function members(thread: J): string[] {
   return arr(get(thread, "sessions")).flatMap((m) => (typeof get(m, "session") === "string" ? [m.session] : []));
 }
 
-/// Text without Slack's `<@U123>` mentions.
-function withoutMentions(text: string): string {
-  let out = "";
-  let rest = text;
-  for (;;) {
-    const at = rest.indexOf("<@");
-    if (at < 0) break;
-    out += rest.slice(0, at);
-    const after = rest.slice(at + 2);
-    const end = after.indexOf(">");
-    if (end > 0 && /^[A-Z0-9]+$/.test(after.slice(0, end))) rest = after.slice(end + 1);
-    else {
-      out += "<@";
-      rest = after;
-    }
-  }
-  return out + rest;
-}
-
-/// What a chat is called, as its station calls it (read/views.ts titleOf): the name people gave it, else the one its
-/// agent gave it; a chat of still.fail's own is a new chat until it has one, the same all along; a Slack or Feishu
-/// thread the first line a person wrote in it, else its channel.
-/// Where a Slack or Feishu thread is, in words: #channel, 私信, the Feishu group; null for a still.fail chat.
-function placeName(surface: string, channel: string, channelName: string): string | null {
-  const feishu = surface.startsWith("feishu:") || format.isFeishuChat(channel);
-  if (feishu) return channelName || t("core-logic.format.thread.feishu");
-  if (surface === "ember" || surface === "stillfail" || surface === "") return null;
-  return channel.startsWith("D") ? t("core-views.direct_message") : `#${channelName || channel}`;
-}
-
-export function chatTitle(thread: J): string {
-  const text = (name: string): string | null => {
-    const v = get(thread, name);
-    return typeof v === "string" && v.trim() !== "" ? v.trim() : null;
-  };
-  const title = text("title") ?? text("autoTitle");
-  if (title !== null) return title;
-  const surface = get(thread, "surface");
-  if (surface === "ember" || surface === "stillfail") return t("core-views.new_chat");
-  const firstText = text("firstText");
-  if (firstText !== null) {
-    const first = withoutMentions(firstText)
-      .split("\n")
-      .map((l) => format.splitWhitespace(l).join(" "))
-      .find((l) => l !== "");
-    if (first !== undefined) return first;
-  }
-  const channel = text("channelName");
-  // A Feishu chat is named as it is there (no #).
-  if (channel !== null) return typeof surface === "string" && surface.startsWith("feishu:") ? channel : `#${channel}`;
-  if (text("channel")?.startsWith("D")) return t("core-views.direct_message");
-  return t("core-views.new_chat");
-}
 
 /// What a message another chat's agent sent (session_send, or the first of a chat it opened with chat_create) is headed
 /// with: its chat's title and link, and the message.
@@ -319,11 +266,13 @@ export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: str
     } else {
       // Before its session is read: the model and runtime the station gave with the message.
       const said = str(m.authorModel);
+      const runtime = str(get(identity, "runtime")) ?? str(m.authorRuntime) ?? get(session, "runtime") ?? null;
+      const otherRuntime = session !== undefined && str(m.authorRuntime) !== null && str(m.authorRuntime) !== str(get(session, "runtime"));
       m.by = {
-        name: model !== null ? format.agentLabel(model, str(get(identity, "effort"))) : (str(get(session, "agentText")) ?? saidName ?? "agent"),
+        name: identity !== null ? format.agentLabel(model, str(get(identity, "effort"))) : otherRuntime ? (saidName ?? (said !== null ? format.agentLabel(said, null) : format.runtimeLabel(runtime))) : (str(get(session, "agentText")) ?? saidName ?? "agent"),
         agent: agent ? author : null,
-        maker: model !== null ? present.maker(model) : session !== undefined ? (session.maker ?? null) : present.maker(said),
-        runtime: get(session, "runtime") ?? str(m.authorRuntime) ?? null,
+        maker: identity !== null ? present.maker(model) : otherRuntime || session === undefined ? present.maker(said) : (session.maker ?? null),
+        runtime,
       };
     }
   } else if (kind === "ember" || kind === "stillfail") {
@@ -595,7 +544,7 @@ export class Views implements Owner {
   /// Shown again while it was kept: a search asks its stations again (what they hold changes; station/sync.ts
   /// `searchShown`), what they found before shown meanwhile.
   resume(view: Topic): void {
-    if (view.topic !== "search") return;
+    if (view.topic !== "search" && view.topic !== "archive") return;
     const live = this.#views.get(topicKey(view));
     for (const key of live?.watches.keys() ?? []) {
       const topic = JSON.parse(key) as Topic;
@@ -609,7 +558,7 @@ export class Views implements Owner {
     if (this.#core.store.subscribed(topic)) return true;
     const key = topicKey(topic);
     for (const live of this.#views.values()) {
-      if (live.topic.topic === "search" && live.watches.has(key) && this.#core.store.subscribed(live.topic)) return true;
+      if ((live.topic.topic === "search" || live.topic.topic === "archive") && live.watches.has(key) && this.#core.store.subscribed(live.topic)) return true;
     }
     return false;
   }
@@ -825,7 +774,7 @@ export class Views implements Owner {
         break;
       case "archive":
         scope = view.scope as string;
-        perStation = (s) => [{ topic: "archivedRows", station: s }];
+        perStation = (s) => [{ topic: "archivedRows", station: s }, { topic: "link", station: s }, ...(typeof view.q === "string" && view.q.trim() !== "" ? [archiveSearch(s, view.q)] : [])];
         break;
       case "longJobs":
         scope = view.scope as string;
@@ -1053,7 +1002,8 @@ export class Views implements Owner {
       const found = this.#core.data.chatNamed(c.station, c.id);
       if (found === undefined || (found.archived && !isObject(get(found.row, "archived")))) return [];
       const row = found.row as J;
-      return [{ href: c.href, title: str(get(row, "title")) || t("core-views.new_chat"), ...(found.archived ? { archived: true, note: t("core-views.search.archived") } : {}) }];
+      const thread = u64(get(row, "thread"));
+      return [{ href: c.href, title: str(get(row, "title")) || t("core-views.new_chat"), ...(thread !== null ? { thread } : {}), ...(found.archived ? { archived: true, note: t("core-views.search.archived") } : {}) }];
     });
   }
 
@@ -1399,7 +1349,14 @@ export class Views implements Owner {
         const stations = this.#stationsOr(view.scope as string);
         if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
         const several = stations.length > 1;
-        const open = stations.filter((s) => s.online).map((s) => [s.address, several ? s.name : null, arr(this.ok({ topic: "jobs", station: s.address }))] as [string, string | null, J[]]);
+        // Each in the chat its session's row is, from the sidebar held, listed or archived (the station names it no more).
+        const named = (address: string, j: J): J => {
+          if (get(j, "chat") !== undefined && get(j, "chat") !== null) return j;
+          const session = str(get(j, "session"));
+          const found = session === null ? undefined : this.#core.data.chatNamed(address, session);
+          return found === undefined ? j : { ...j, chat: { id: get(found.row, "id") ?? null, title: get(found.row, "title") ?? null, archived: found.archived } };
+        };
+        const open = stations.filter((s) => s.online).map((s) => [s.address, several ? s.name : null, arr(this.ok({ topic: "jobs", station: s.address })).map((j) => named(s.address, j as J))] as [string, string | null, J[]]);
         const prefs = this.ok({ topic: "prefs" }) ?? null;
         const bell = { on: badgeKindsOf(prefs).services, seen: jobsSeenOf(prefs, view.scope as string) };
         return { ok: jobs.longJobs(open, this.#clock(), (session) => this.#ranFrom(stations, session), bell) };
@@ -1653,7 +1610,7 @@ export class Views implements Owner {
       const channelName = text("channelName");
       // A Feishu chat's: its group by name, no #.
       const feishu = text("surface")?.startsWith("feishu:") === true || format.isFeishuChat(text("channel") ?? "");
-      const place = feishu ? channelName : channelName !== null ? `#${channelName}` : text("channel")?.startsWith("D") ? t("core-views.direct_message") : null;
+      const place = text("channel") === null && channelName === null ? null : format.placeName(text("surface") ?? "slack", text("channel") ?? "", channelName ?? "");
       row.originKind = feishu ? "feishu" : "slack";
       row.originText = [feishu ? t("core-views.feishu") : "Slack", text("teamName"), place].filter((x) => x !== null).join(" · ");
     }
@@ -1679,7 +1636,11 @@ export class Views implements Owner {
     }
     // A swipe is the viewer's own choice: every made chat can be archived this way while its station is there,
     // regardless of the chat's state or whether it is recommended for archiving.
-    if (row.offline === undefined && row.pending !== true) row.swipeArchive = true;
+    if (row.offline === undefined && row.pending !== true) {
+      row.swipeArchive = true;
+      const ask = present.swipeAsk(agents);
+      if (ask !== null) row.swipeAsk = ask;
+    }
     const line = present.rowStateLine(row);
     if (line !== null) {
       row.stateText = line[0];
@@ -1821,6 +1782,7 @@ export class Views implements Owner {
     if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
     const c = this.#clock();
     let silentNext = Infinity;
+    const byId = new Map(stations.map((s) => [String(s.id), s]));
     const items = stations.map((s) => {
       const overview = this.ok({ topic: "overview", station: s.address });
       const hostRaw = this.ok({ topic: "host", station: s.address });
@@ -1874,6 +1836,7 @@ export class Views implements Owner {
         runtimes: runtimes(overview !== undefined ? servingIn(overview, scope, s.joined === true) : overview),
         models: models(overview !== undefined ? servingIn(overview, scope, s.joined === true) : overview, c.now),
         overview: shown,
+        ...stationProfileSummary(shown, s, byId),
         host,
         way: way === undefined ? null : present.way(way, (h) => this.relayName(h)),
         betaOffered: betaOffered(overview, () => this.#betaOf(scope)),
@@ -2053,7 +2016,7 @@ export class Views implements Owner {
     }
     messages.splice(0, messages.length, ...decisions.inMessages(messages, pendingCard, outbox.filter((m) => m.state !== "failed"), atWork));
     const elsewhere = timed("chat.elsewhere", () => this.#sentElsewhere(station, thread, agents, messages, u64(page.first) !== null && page.first > 1, page.end === false, { members: members_, bots }));
-    const title = row !== undefined && row.title !== undefined ? row.title : typeof page.title === "string" ? page.title : chatTitle(thread);
+    const title = row !== undefined && row.title !== undefined ? row.title : typeof page.title === "string" ? page.title : format.chatTitle(thread);
     const view: J = {
       me: this.me(scope),
       place,
@@ -2099,7 +2062,16 @@ export class Views implements Owner {
     // said at the end of its messages too. A card waiting is not: it shows in the chat itself; nor what an agent waits
     // on: its activity under the messages says it, with how long it has waited.
     const shown = row !== undefined && Array.isArray(row.agents) ? { ...row, agents: row.agents.map((a: J) => present.session(a)) } : null;
-    const line = shown !== null ? present.rowStateLine(shown, false) : null;
+    const line = shown !== null ? present.rowStateLine(shown, false, (agent) => {
+      const status = present.shownStatus(agent);
+      // A stop is already announced in the conversation; its status still remains on the list row.
+      if (status === "aborted") return true;
+      if (status !== "failed" && status !== "unexpected") return false;
+      // Only the notice explicitly recorded for this turn can replace its state. Do not mistake another agent's
+      // notice (or an earlier one) for it; when the notice isn't loaded the state remains visible.
+      const about = present.stateAbout(agent, u64(thread.id) ?? null);
+      return about !== null && messages.some((m: J) => u64(m.seq) === about && get(get(m, "notice"), "failed") === true);
+    }) : null;
     // What it needed of a person, let go by the viewer (忽略): kept, said as let go, in place of what its row says
     const letGo = shown !== null ? present.rowLetGoNeed(shown) : null;
     if (letGo !== null) {
@@ -2138,7 +2110,7 @@ export class Views implements Owner {
     // Its Slack and Feishu threads, where what is sent can be copied (`chat.cc`), each ticked or not.
     const ccTo = arr(get(thread, "cc")).flatMap((o) => {
       const to = u64(get(o, "thread"));
-      const place = placeName(strOf(o, "surface"), strOf(o, "channel"), strOf(o, "channelName"));
+      const place = format.placeName(strOf(o, "surface"), strOf(o, "channel"), strOf(o, "channelName"));
       if (to === null || place === null) return [];
       const via = strOf(o, "surface").startsWith("feishu:") || format.isFeishuChat(strOf(o, "channel")) ? "feishu" : "slack";
       return [{ thread: to, place, via, on: this.ccOn(station, id, to) }];
@@ -2362,11 +2334,10 @@ export class Views implements Owner {
         let place: J = s.to === "" ? null : format.place(threads, s.to, offsetMin, workspaces);
         if (place === null && s.to !== "") {
           // A message of its own in a channel, before its ts is known.
-          const named = threads.find((th) => get(th, "channel") === s.to && typeof get(th, "channelName") === "string");
           const channel = s.to.split("/")[0]!;
-          place = format.isFeishuChat(channel)
-            ? { name: named?.channelName ?? t("core-logic.format.thread.feishu"), surface: "feishu" }
-            : { name: s.to.startsWith("D") ? t("core-views.direct_message") : `#${named?.channelName ?? s.to}`, surface: "slack" };
+          const named = threads.find((th) => get(th, "channel") === channel && typeof get(th, "channelName") === "string");
+          const surface = str(get(named, "surface")) || "slack";
+          place = { name: format.placeName(surface, channel, str(get(named, "channelName")) ?? "") ?? `#${channel}`, surface: surface.startsWith("feishu:") || format.isFeishuChat(channel) ? "feishu" : "slack" };
         }
         // (a bot is said as its mention, `<@U…>`)
         const picture = s.out || s.user === null ? undefined : pictures.get(s.user.replace(/^<@(.+)>$/, "$1"));
@@ -2445,9 +2416,11 @@ export class Views implements Owner {
       account = { id: profile.id ?? null, name: profile.name ?? null, current: true, kind: get(profile.access, "kind") ?? null, runtime: profile.runtime ?? null, quota: profile.quota ?? null };
       if (typeof profile.providerMark === "string") account.mark = profile.providerMark;
     }
+    // Its latest turn as its summary has it (its detail may list only the latest turns, read before this one began);
+    // else the last its detail lists.
     const turns = arr(get(detail, "turns"));
-    const lastTurn = turns[turns.length - 1];
-    const since = lastTurn !== undefined && (lastTurn.endedAt === undefined || lastTurn.endedAt === null) ? (lastTurn.startedAt ?? null) : null;
+    const lastTurn = get(get(detail, "session"), "lastTurn") ?? turns[turns.length - 1];
+    const since = isObject(lastTurn) && (lastTurn.endedAt === undefined || lastTurn.endedAt === null) ? (lastTurn.startedAt ?? null) : null;
     return {
       status: present.shownStatus(session),
       badge: present.markOf(session),
@@ -2482,7 +2455,7 @@ export class Views implements Owner {
     const strOf = (v: J, k: string) => str(get(v, k)) ?? "";
     const feishu = surface.startsWith("feishu:") || format.isFeishuChat(channel);
     const slack = !(surface === "ember" || surface === "stillfail") && !feishu;
-    const place = placeName(surface, channel, channelName);
+    const place = format.placeName(surface, channel, channelName);
     // A Feishu chat opens in Feishu (Lark's own app for its connect's).
     const feishuConnect = arr(get(this.ok({ topic: "overview", station }), "connects")).find((c) => `feishu:${strOf(c, "id")}` === surface);
     const feishuUrl = feishu ? format.feishuChatUrl(format.feishuApplink(str(get(get(feishuConnect, "feishu"), "domain"))), channel) : null;
@@ -2667,7 +2640,8 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
     // Markdown, read here (once: markdown.ts keeps it by the words); still.fail's notice's are too, as its pill says
     // them (noticeOf: a chat it opened is a link to it).
     if (isObject(m.notice)) out.notice = { ...m.notice, md: markdown(str(m.notice.words) ?? "", md) };
-    else if (m.authorKind !== "person") {
+    else if (m.authorKind === "person") out.words = personWords(str(m.text) ?? "");
+    else {
       out.md = markdown(str(m.text) ?? "", md);
       if (Array.isArray(files) && files.length > 0) {
         const { placed } = placeFiles(str(m.text) ?? "", files as J[]);
@@ -2677,7 +2651,7 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
     return out;
   });
   view.messages = messages;
-  if (Array.isArray(view.outbox)) view.outbox = view.outbox.map((o: J) => (isObject(o) ? goingUp({ ...o, attachments: own(o.attachments) }) : o));
+  if (Array.isArray(view.outbox)) view.outbox = view.outbox.map((o: J) => (isObject(o) ? goingUp({ ...o, attachments: own(o.attachments), ...(typeof o.text === "string" && o.text !== "" ? { words: personWords(o.text) } : {}) }) : o));
   const elsewhere = arr(view.elsewhere);
   if (elsewhere.length > 0) {
     const bySeq = new Map(messages.map((m) => [u64(m.seq), m]));

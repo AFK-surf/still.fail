@@ -30,6 +30,13 @@ export function previousProcess(run: string): { pid: number | null; gone: Promis
   return { pid, gone: gone(pid) };
 }
 
+/// `gone` lets the station take up sessions after a timeout. Backfills have no such urgency: keep them from competing
+/// for the database until the old process actually exits, even if that timeout has passed.
+export async function previousExited(previous: { pid: number | null; gone: Promise<void> }, isAlive = alive, sleep = wall.sleep): Promise<void> {
+  await previous.gone;
+  while (previous.pid !== null && isAlive(previous.pid)) await sleep(100);
+}
+
 /// Waits for process `pid` to be gone, PREVIOUS_LIMIT_MS at most.
 async function gone(pid: number) {
   if (!alive(pid)) return;

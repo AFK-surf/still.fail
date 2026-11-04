@@ -30,7 +30,7 @@ fn paned_shell(v : @view.View, src : Source) -> Unit {
   // (on the page's ground, as the old frame's row was: what nothing covers shows it)
   v.ground(By(fn() { @sf.theme().p.bg })) |> ignore
   @ui.old(v, fn(c) { paned_under(c, src) }).over(Is(true)) |> ignore
-  // a page opened in the pane shows once the core has given what it shows (page_local_ms at most: pane_page_built)
+  // a page opened in the pane shows once the core has given what it shows (page_local_ms at most: pane_page_wait, pane_pages)
   @sfdesk.pane_view(v, src, ready=fn(p) { pane_ready(src, p) }, most=page_local_ms)
   @ui.old(v, fn(c) { taped_over(c, src) }).over(Is(true)) |> @ui.old_takes_own |> ignore
   wide_viewer(v, src)

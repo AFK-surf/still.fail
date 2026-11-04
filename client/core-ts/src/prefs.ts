@@ -11,8 +11,9 @@ import * as keymap from "./keymap.ts";
 import { SCREEN_FPS, type ScreenFps } from "./station/wire.ts";
 import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
+import { setOwnBuild } from "./station/oldest.ts";
 
-const FIELDS = ["onlyMine", "onlyWatching", "listFilter", "appearance", "windowZoom", "motion", "haptics", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenFps", "screenCodec", "screenMouse", "driveViews", "filesTabs", "driveFavorites", "driveFavoritesHidden", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone", "fillOff", "fillMax", "shareLook"];
+const FIELDS = ["onlyMine", "onlyWatching", "listFilter", "appearance", "windowZoom", "motion", "haptics", "appUpdate", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenFps", "screenCodec", "screenMouse", "driveViews", "filesTabs", "driveFavorites", "driveFavoritesHidden", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone", "fillOff", "fillMax", "shareLook"];
 const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "driveViews", "filesTabs", "driveFavorites", "driveFavoritesHidden", "resume", "lockNotice", "rails", "barsBy", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone"];
 const TABS_KEPT = 200;
 /// At most this many jobs kept as looked at in one workspace's bell.
@@ -72,8 +73,9 @@ export function failsGoneOf(prefs: unknown, workspace: string): Set<string> {
   return new Set(Array.isArray(by) ? by.filter((k): k is string => typeof k === "string") : []);
 }
 
-/// The looks the card shared can be drawn in (`shareLook`, chosen under it): none kept, night.
-export const SHARE_LOOKS = ["night", "poster", "receipt", "terminal"];
+/// A look the card shared is drawn in (`shareLook`, chosen under it): the app's own key for it (its table of looks is
+/// the app's, which draws the first while none is kept or one it does not know).
+const SHARE_LOOK = /^[a-z][a-z0-9-]{0,31}$/;
 
 export type ArchiveHint = "off" | "done" | "reviewed";
 
@@ -205,9 +207,10 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
   if ("badge" in prefs && !["decisions", "attention", "all"].includes(prefs.badge as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "badge" }));
   if ("motion" in prefs && prefs.motion !== "reduce" && prefs.motion !== "full") throw CoreError.invalid(t("core-misc.params.invalid", { error: "motion" }));
   if ("haptics" in prefs && prefs.haptics !== "off") throw CoreError.invalid(t("core-misc.params.invalid", { error: "haptics" }));
+  if ("appUpdate" in prefs && prefs.appUpdate !== "off") throw CoreError.invalid(t("core-misc.params.invalid", { error: "appUpdate" }));
   if ("windowZoom" in prefs && !["50", "67", "75", "80", "90", "110", "125", "150", "175", "200"].includes(prefs.windowZoom as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "windowZoom" }));
   if ("dropAs" in prefs && prefs.dropAs !== "file" && prefs.dropAs !== "path") throw CoreError.invalid(t("core-misc.params.invalid", { error: "dropAs" }));
-  if ("shareLook" in prefs && !SHARE_LOOKS.includes(prefs.shareLook as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "shareLook" }));
+  if ("shareLook" in prefs && !(typeof prefs.shareLook === "string" && SHARE_LOOK.test(prefs.shareLook))) throw CoreError.invalid(t("core-misc.params.invalid", { error: "shareLook" }));
   if ("archiveHint" in prefs && !["off", "done", "reviewed"].includes(prefs.archiveHint as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "archiveHint" }));
   if ("screenTouch" in prefs && prefs.screenTouch !== "direct" && prefs.screenTouch !== "pad") throw CoreError.invalid(t("core-misc.params.invalid", { error: "screenTouch" }));
   if ("screenQuality" in prefs && !["smooth", "hd", "original"].includes(prefs.screenQuality as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "screenQuality" }));
@@ -280,6 +283,7 @@ export function device(data: Data, facts: unknown): void {
   const app = said("app");
   if (!["web", "desktop", "android", "ios"].includes(app)) throw CoreError.invalid(t("core-misc.params.app"));
   const build = said("build");
+  setOwnBuild(build);
   const agent = said("userAgent");
   const model = said("model");
   const machine = said("machine").slice(0, 60);

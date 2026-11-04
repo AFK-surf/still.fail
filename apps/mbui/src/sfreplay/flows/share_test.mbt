@@ -1,4 +1,4 @@
-// 48-share (e2e/traces/share.trace: Mini1 against the local still.fail, 82 messages): sharing in and out
+// 48-share (e2e/traces/share.trace: a local still.fail, 82 messages): sharing in and out
 // (ShareActivity.kt, ShareSheet.kt; a drive's file's 分享). A link shared in from another app's share sheet opens the
 // sheet of chats (发到, shareIn.open); the test chat tapped: the link a card in its composer, sent as its words (its
 // title, then the link). Then a file of the drive right clicked, 分享: read through the core (drive.read) and handed to the
@@ -15,7 +15,7 @@ test "48-share" {
     f.run_to(@kit.sheet_rest("sf-present"))
     f.see("发到")
     f.see("列表视频105609")
-    f.see("新 chat")
+    f.see("新建对话")
     f.tap("端到端测试")
     // the sheet going down as the chat comes up: the sheet's the later
     f.run_to(@kit.sheet_rest("sf-present"))
@@ -38,6 +38,7 @@ test "48-share" {
     f.tap("分享")
     f.run_for(@kit.presence_out_ms)
     // the file, read through the core, handed to the system's share sheet as it is
+    f.until(fn() { f.t.shared_out().length() > 0 })
     let shared = f.t.shared_out()
     assert_eq(shared.length(), 1)
     assert_eq(shared[0].1, "说明.txt")

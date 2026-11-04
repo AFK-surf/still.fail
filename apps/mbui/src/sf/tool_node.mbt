@@ -175,18 +175,29 @@ pub fn tool_node(
 ///|
 /// Icon `name` as a node in `parent`, `size` across, drawn in `tint` as it changes (icon's: its shapes the same, in
 /// the node's tint), called as an old view's icon is by what finds it on screen. The node.
-pub fn icon_node(parent : @view.View, name : String, size : Double, tint : @view.Live[Int64]) -> @view.View {
+pub fn icon_node(
+  parent : @view.View,
+  name : String,
+  size : Double,
+  tint : @view.Live[Int64],
+  name_now? : () -> String,
+) -> @view.View {
+  // (the icon said as it changes where `name_now` says it: a key's copy turning to a check a moment)
+  let name = match name_now {
+    Some(f) => f
+    None => fn() { name }
+  }
   parent.box(fn(i) {
     i
     .width(Is(Some(size)))
     .height(Is(Some(size)))
-    .shapes(Is(
-      match icon_numbers(name) {
+    .shapes(By(fn() {
+      match icon_numbers(name()) {
         Some(d) => icon_shapes(d, size / 24.0, 0x000000FFL)
         None => []
-      },
-    ))
-    .drawn_as(Is("/icon/" + name + "/"))
+      }
+    }))
+    .drawn_as(By(fn() { "/icon/" + name() + "/" }))
     .tint(tint)
     |> ignore
   })

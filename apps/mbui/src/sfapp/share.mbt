@@ -71,6 +71,29 @@ let share_in : ShareIn = {
 
 
 ///|
+/// Whether what is shared is up in the wide window's panel (share_panel) rather than in a sheet: by the window, as the
+/// library's presenters are (a sheet on Small).
+// kept across runs: put back by the package's reset (app.mbt)
+let share_wide : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
+
+///|
+/// How tall the wide panel's rows may stand, as share_panel last worked it out.
+// kept across runs: told anew by each frame before it is read
+let share_list_most : Ref[Double] = Ref(400.0)
+
+///|
+/// Whether what is shared fills the window rather than a sheet: over another app in a browser, its window the browser
+/// extension's own (web/src/mbui/share.ts), with nothing of another app under it.
+fn share_inline() -> Bool {
+  share_over.get() && @ui.platform() == 4
+}
+
+///|
+/// That window: what a sheet holds, a sheet's 20 in, room over it as a sheet has under its grip.
+// kept across runs: a value (no field of it changes)
+let share_window : @ui.Style = @ui.css("w=Full h=Full px=S5 pt=S6 bg=Bg")
+
+///|
 /// Over another app, its sheet closed by hand: the app goes once it has sunk away (ShareScreen: onClose after its spring).
 let share_closing : Ref[Bool] = Ref(false)
 
@@ -87,6 +110,12 @@ let open_app_box : @ui.Style = @ui.css("px=S5 py=S2 pb=S6")
 /// Over another app (ShareActivity): what is shared taken, its sheet over that app and nothing else; the toasts.
 fn over_view(c : @ui.Ctx, src : Source) -> Unit {
   share_in_frame(c)
+  // a browser's window of its own (the extension's): nothing under the sheet to show, so what it holds is the window's
+  if share_inline() {
+    c.box(style=share_window, fn() { share_over_sheet(c, src) }) |> ignore
+    toast(c)
+    return
+  }
   sheet_contents(fn(kind) { if kind == ShareSheet { share_over_sheet(c, src) } })
   // (nothing of the app's under it: on the page's paper)
   @sf.presented(c, alone=true)
@@ -104,15 +133,15 @@ fn share_over_sheet(c : @ui.Ctx, src : Source) -> Unit {
   }
   let head = fn() {
     if share_in.files.get().length() > 0 {
-      shared_files_head(c, share_in.files.get(), source, title)
+      shared_files_head(c, share_in.files.get(), source, title, share_narrow)
     } else {
-      shared_head(c, source, title)
+      shared_head(c, source, title, share_narrow)
     }
   }
   match accounts.value {
     Some(Array(list)) if list.length() == 0 => {
       head()
-      share_note(c, sh("android-misc.shareIn.signIn"))
+      share_note(c, sh("android-misc.shareIn.signIn"), share_narrow)
       let id = c.id("share-in/open-app")
       if c.clicked(id) {
         @ui.over_done(open_app=true)
@@ -162,6 +191,17 @@ let searched_from : Int = 6
 ///|
 /// Each frame once signed in: what another app shared since, its sheet raised; let go once its sheet closed.
 fn share_in_frame(c : @ui.Ctx) -> Unit {
+  // up: in a sheet on a Small window (and over another app), else in the wide panel, as the window is now
+  if share_in.raised.get() && !share_over.get() {
+    let small = sheet_small(c)
+    if small && share_wide.get() {
+      share_wide.set(false)
+      raise_sheet(ShareSheet)
+    } else if !small && sheet_host.kind == ShareSheet {
+      share_wide.set(true)
+      lower_sheet()
+    }
+  }
   // (what the host says was shared, taken once: the same whichever build takes it)
   if share_in.shared.get() is None {
     let said = @ui.shared_in()
@@ -210,12 +250,10 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
         share_in.opening.set(None)
         share_in.error.set("")
         c.blur()
-        raise_sheet(ShareSheet)
-        share_in.raised.set(true)
       }
       _ => ()
     }
-  } else if share_in.raised.get() && sheet_host.kind != ShareSheet {
+  } else if share_in.raised.get() && sheet_host.kind != ShareSheet && !share_wide.get() && !share_inline() {
     // closed (the scrim, back, dragged down): let go; over another app, the app goes once the sheet has sunk away
     share_in.shared.set(None)
     share_in.files.set([])
@@ -224,6 +262,18 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
       share_closing.val = true
     }
   }
+  // put up once shared: in a sheet on a Small window or over another app, the wide panel otherwise; filling the window
+  // the browser extension opened
+  if share_in.shared.get() is Some(_) && !share_in.raised.get() {
+    if share_inline() {
+      ()
+    } else if !share_over.get() && !sheet_small(c) {
+      share_wide.set(true)
+    } else {
+      raise_sheet(ShareSheet)
+    }
+    share_in.raised.set(true)
+  }
   if share_closing.val && share_over.get() && !@sf.presented_drawn() {
     share_closing.val = false
     @ui.over_done(open_app=false)
@@ -231,17 +281,154 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// The sheet (ShareSheet.kt ShareSheetContent): what is shared, 发到 the chats, 新 chat.
+/// How the body is laid out: a phone's sheet (the web's mobile/ShareIn.tsx, its PickRows) or the wide frame's panel
+/// (the web's ShareIn.tsx, ⌘K's: Switcher.css.ts, ShareIn.css.ts).
+priv struct ShareLook {
+  wide : Bool
+  /// how far its words stand in from the body's sides
+  side : Double
+  /// the mark column's width, and the marks in it (what is shared, a row's picture)
+  col : Double
+  icon : Double
+  /// between a mark and its words
+  gap : Double
+  /// what is shared: room over and under it, its mark's box's height, its title's and its words' lines
+  head_pt : Double
+  head_pb : Double
+  head_mark_h : Double
+  head_words_pt : Double
+  title_line : Double
+  source_line : Double
+  /// 发到 (and 新 chat 开在): room over and under it
+  label_pt : Double
+  label_pb : Double
+  /// under the list, and a row's height as a list first guesses it
+  list_pb : Double
+  row_est : Double
+  /// a row: its least height, how far in its words stand, its corner, its title's line, between its title and line
+  row_h : Double
+  row_padx : Double
+  row_pady : Double
+  row_corner : Double
+  row_line : Double
+  row_gap : Double
+  /// a chat's model mark
+  model : Double
+  /// the whole width, its words `side` in
+  inset : @ui.Style
+  /// files shared: how far in their tiles and words stand (a tile's corner concentric in the panel's at the wide one)
+  files_in : Double
+  /// room over the pictures shared, and a picture's tile's corner: concentric in what holds it (the wide panel's, 20
+  /// in: one of the ladder's)
+  files_top : Double
+  tile_corner : Double
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let share_whole : @ui.Style = @ui.css("w=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let share_cut : @ui.Style = @ui.css("w=Full clip")
+
+///|
+/// 找 chat under 发到; 正在读取 where the rows will be; what went wrong.
+// kept across runs: a value (no field of it changes)
+let share_find_room : @ui.Style = @ui.css("pt=S1_5 pb=S1")
+
+///|
+// kept across runs: a value (no field of it changes)
+let share_wait_room : @ui.Style = @ui.css("pt=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let share_error_room : @ui.Style = @ui.css("pb=S4")
+
+///|
+/// (the sheet's own 20 in is where its words and its rows' marks stand: the web's 20, its PickRows 12 + 8)
+// kept across runs: a value (no field of it changes)
+let share_narrow : ShareLook = {
+  wide: false,
+  side: 0.0,
+  col: 36.0,
+  icon: 20.0,
+  gap: 12.0,
+  head_pt: 2.0,
+  head_pb: 10.0,
+  head_mark_h: 36.0,
+  head_words_pt: 1.0,
+  title_line: 22.0,
+  source_line: 17.0,
+  label_pt: 6.0,
+  label_pb: 2.0,
+  list_pb: 16.0,
+  row_est: 62.0,
+  row_h: 46.0,
+  row_padx: 0.0,
+  row_pady: 12.0,
+  row_corner: 0.0,
+  row_line: 21.0,
+  row_gap: 0.0,
+  model: 36.0,
+  inset: @ui.css("w=Full"),
+  files_in: 0.0,
+  files_top: 4.0,
+  tile_corner: 16.0,
+}
+
+///|
+/// (the panel's own 12 in, then a row's 12 more: a dialog's 24)
+// kept across runs: a value (no field of it changes)
+let share_wide_look : ShareLook = {
+  wide: true,
+  side: 12.0,
+  col: 20.0,
+  icon: 16.0,
+  gap: 10.0,
+  head_pt: 12.0,
+  head_pb: 6.0,
+  head_mark_h: 20.0,
+  head_words_pt: 0.0,
+  title_line: 20.0,
+  source_line: 18.0,
+  label_pt: 10.0,
+  label_pb: 4.0,
+  list_pb: 0.0,
+  row_est: 56.0,
+  row_h: 38.0,
+  row_padx: 12.0,
+  row_pady: 8.0,
+  row_corner: share_row_corner,
+  row_line: 20.0,
+  row_gap: 2.0,
+  model: 18.0,
+  inset: @ui.css("w=Full px=S3"),
+  files_in: 8.0,
+  files_top: 8.0,
+  tile_corner: @ui.concentric(@sf.pane_corner, 20.0),
+}
+
+///|
+/// The sheet (mobile/ShareIn.tsx Sheet), or with a wide window the panel (ShareIn.tsx ShareInPanel): what is shared, 发到
+/// the chats, 新 chat.
 fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  share_body(c, src, w, if sheet_small(c) { share_narrow } else { share_wide_look })
+}
+
+///|
+/// What is shared, 发到 (搜索 from six), the chats it can go to, 新 chat (then the stations, with several), in `look`.
+fn share_body(c : @ui.Ctx, src : Source, w : Workspace, look : ShareLook) -> Unit {
+  // (one column, its parts as close as they are drawn: not the panel's own gap between them)
+  c.box(style=share_whole, fn() { share_parts(c, src, w, look) }) |> ignore
+}
+
+///|
+fn share_parts(c : @ui.Ctx, src : Source, w : Workspace, look : ShareLook) -> Unit {
   let t = @sf.theme()
   let (source, title) = match share_in.shared.get() {
     Some(s) => s
     None => return
-  }
-  if share_in.files.get().length() > 0 {
-    shared_files_head(c, share_in.files.get(), source, title)
-  } else {
-    shared_head(c, source, title)
   }
   let query = share_in.query.get()
   let topic = (src.topic)("shareIn", {
@@ -251,11 +438,15 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   })
   let v = topic.value
   let rows = items(v, "items")
-  c.box(dir=Row, w=Fill(1.0), padx=20.0, align=ACenter, fn() {
-    c.box(w=Fill(1.0), pt=14.0, pb=4.0, fn() {
-      c.text(sh("android-misc.shareIn.to"), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
-    })
-    |> ignore
+  if share_in.files.get().length() > 0 {
+    shared_files_head(c, share_in.files.get(), source, title, look)
+  } else {
+    let site = text(v, "site")
+    shared_head(c, source, if title is Some(_) || site == "" { title } else { Some(site) }, look)
+  }
+  // 发到, and at its end 搜索 (取消 while searching)
+  c.box(dir=Row, w=Fill(1.0), padx=look.side, pt=look.label_pt, pb=look.label_pb, align=ACenter, fn() {
+    c.box(style=share_whole, fn() { c.text(sh("android-misc.shareIn.to"), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore }) |> ignore
     if share_in.searching.get() || rows.length() >= searched_from {
       let id = c.id("share-in/search")
       if c.clicked(id) {
@@ -265,11 +456,11 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           share_in.find.set("")
         }
       }
-      c.box(pt=14.0, pb=4.0, id~, fn() {
+      c.box(id~, fn() {
         c.text(
           if share_in.searching.get() { sh("common.cancel") } else { sh("android-misc.shareIn.search") },
           size=t.t.meta,
-          color=t.p.muted,
+          color=if c.lit(id) { t.p.text } else { t.p.muted },
           wrap=false,
         )
         |> ignore
@@ -279,8 +470,7 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   })
   |> ignore
   if share_in.searching.get() {
-    c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=4.0, fn() {
-      // (Controls.kt Field: the surface, a line round it, as the invitation's field)
+    c.box(style=look.inset.then(share_find_room), fn() {
       c.box(style=invite_field, h=Px(40.0), justify=JCenter, fn() {
         let r = c.editor(
           "share-in/find",
@@ -300,10 +490,14 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     |> ignore
   }
   let opening = share_in.opening.get()
-  c.box(w=Fill(1.0), h=Fill(1.0), pb=16.0, clip=true, fn() {
-    match v {
-      None =>
-        c.box(w=Fill(1.0), padx=20.0, pt=8.0, fn() {
+  let searching = share_in.searching.get() && query.trim() != ""
+  // the rows, as closures: in the wide panel a list of its own that scrolls (ShareIn.css.ts list), in a sheet one under
+  // the other
+  let lines : Array[() -> Unit] = []
+  match v {
+    None =>
+      lines.push(fn() {
+        c.box(style=look.inset.then(share_wait_room), fn() {
           @sf.wait_line(
             c,
             if topic.error is Some(_) { sh("android-misc.shareIn.update") } else { sh("common.reading") },
@@ -312,106 +506,95 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           )
         })
         |> ignore
-      Some(_) => {
-        let kept = field(v, "kept")
-        for item in rows {
-          let it = Some(item)
-          let station = text(it, "station")
-          let id = text(it, "id")
-          // (where things of a site went last: files have no site)
-          let kept_here = text(kept, "station") == station &&
-            text(kept, "id") == id &&
-            source.trim() != ""
-          let sub = if kept_here {
-            text(kept, "text")
-          } else {
-            match text(field(it, "last"), "preview") {
-              "" => line_of(it)
-              p => p
-            }
-          }
-          let agent = items(it, "agents").get(0)
+      })
+    Some(_) => {
+      match text(v, "note") {
+        "" => ()
+        n => lines.push(fn() { share_note(c, n, look) })
+      }
+      let kept = field(v, "kept")
+      for item in rows {
+        let it = Some(item)
+        let station = text(it, "station")
+        let id = text(it, "id")
+        // (where things of a site went last: files have no site)
+        let kept_here = text(kept, "station") == station && text(kept, "id") == id && source.trim() != ""
+        let sub = if kept_here { text(kept, "text") } else { text(field(it, "last"), "preview") }
+        let agent = items(it, "agents").get(0)
+        let ago = text(field(field(it, "time"), "lastActiveAt"), "ago")
+        lines.push(fn() {
           if share_row(
               c,
+              look,
               "share-in/row/" + station + "/" + id,
               text(it, "title"),
               sub,
-              false,
+              if look.wide { ago } else { "" },
               opening == Some((station, id)),
               opening is None,
               fn() {
                 match agent {
-                  Some(a) => @sf.maker_mark(c, text(field(Some(a), "maker"), "id"), text(Some(a), "runtime"), 14.0) |> ignore
-                  None => ()
+                  Some(a) => {
+                    let maker = text(field(Some(a), "maker"), "id")
+                    let runtime = text(Some(a), "runtime")
+                    if look.wide {
+                      @sf.maker_mark(c, maker, runtime, look.model) |> ignore
+                    } else {
+                      model_mark_big(c, maker, runtime, look.model, "", t.p.bg)
+                    }
+                  }
+                  // (no agent yet: still.fail's mark wide, the phone's 新建对话 mark)
+                  None if look.wide => @sf.drawable(c, if t.dark { "stillfail_mark_dark" } else { "stillfail_mark" }, 16.0) |> ignore
+                  None => @sf.icon(c, "compose", size=look.icon, color=t.p.muted) |> ignore
                 }
               },
             ) {
             share_open(c, src, w, station, Some(id), session=text(it, "session"))
           }
-        }
-        if rows.length() == 0 && share_in.searching.get() && query.trim() != "" {
-          share_note(c, sh("android-chat.ref.none.match"))
-        }
-        let stations = items(v, "stations")
-        let new_on = text(v, "newOn")
-        let on = match stations.iter().find_first(fn(s) { text(Some(s), "station") == new_on }) {
-          Some(s) => Some(s)
-          None => stations.get(0)
-        }
-        match on {
-          Some(s) if !share_in.searching.get() || query.trim() == "" => {
-            let many = stations.length() > 1
-            let on_station = text(Some(s), "station")
+        })
+      }
+      if rows.length() == 0 && searching {
+        lines.push(fn() { share_note(c, sh("android-chat.ref.none.match"), look) })
+      }
+      // 新建对话: on the station new chats start on, which its page lets be changed as any new chat's does
+      let stations = items(v, "stations")
+      let new_on = text(v, "newOn")
+      let on = match stations.iter().find_first(fn(s) { text(Some(s), "station") == new_on }) {
+        Some(s) => Some(s)
+        None => stations.get(0)
+      }
+      match on {
+        Some(s) if !searching => {
+          let on_station = text(Some(s), "station")
+          lines.push(fn() {
             if share_row(
                 c,
+                look,
                 "share-in/new",
-                sh("android-misc.shareIn.newChat"),
-                if many && share_in.choosing.get() {
-                  ""
-                } else {
-                  sh("android-misc.shareIn.on", args=[("name", text(Some(s), "name"))])
-                },
-                false,
-                !many && opening == Some((on_station, "")),
+                sh("web-main.sidebar.newChat"),
+                "",
+                "",
+                opening == Some((on_station, "")),
                 opening is None,
-                fn() { @sf.icon(c, "compose", size=16.0, color=t.p.muted) |> ignore },
+                fn() { @sf.icon(c, "compose", size=look.icon, color=t.p.muted) |> ignore },
               ) {
-              if many {
-                share_in.choosing.set(!share_in.choosing.get())
-              } else {
-                share_open(c, src, w, on_station, None)
-              }
+              share_open(c, src, w, on_station, None)
             }
-            if many && share_in.choosing.get() {
-              for st in stations {
-                let station = text(Some(st), "station")
-                if share_row(
-                    c,
-                    "share-in/on/" + station,
-                    text(Some(st), "name"),
-                    "",
-                    station == on_station,
-                    opening == Some((station, "")),
-                    opening is None,
-                    fn() {  },
-                  ) {
-                  share_open(c, src, w, station, None)
-                }
-              }
-            }
-          }
-          _ => ()
+          })
         }
-        match text(v, "note") {
-          "" => ()
-          n => share_note(c, n)
-        }
+        _ => ()
       }
     }
-  })
-  |> ignore
+  }
+  if look.wide {
+    // (as tall as its rows, the panel's room at most: share_panel's)
+    let est = lines.length().to_double() * look.row_est
+    c.list("share-in/list", lines.length(), look.row_est, fn(i) { lines[i]() }, h=Px(if est < share_list_most.val { est } else { share_list_most.val })) |> ignore
+  } else {
+    c.box(style=share_whole, pb=look.list_pb, fn() { for l in lines { l() } }) |> ignore
+  }
   if share_in.error.get() != "" {
-    c.box(w=Fill(1.0), padx=20.0, pb=16.0, fn() {
+    c.box(style=look.inset.then(share_error_room), fn() {
       c.text(share_in.error.get(), size=t.t.meta, color=t.p.red) |> ignore
     })
     |> ignore
@@ -419,103 +602,114 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 }
 
 ///|
-/// What is shared (ShareSheet.kt SharedHead): its mark (a link's or text's), its title (the app's subject, else its first
-/// line) bold, its first line under a subject.
-fn shared_head(c : @ui.Ctx, source : String, title : String?) -> Unit {
+/// What is shared (ShareIn.tsx What): a mark of what it is (a link, some text), its title (the app's subject, else the
+/// link's site) over what it is, two lines of it cut short (three, in the text's ink, when it is all there is).
+fn shared_head(c : @ui.Ctx, source : String, head : String?, look : ShareLook) -> Unit {
   let t = @sf.theme()
-  let mut first = ""
-  for l in source.split("\n") {
-    let x = l.to_owned().trim().to_owned()
-    if first == "" && x != "" {
-      first = x
-    }
-  }
-  let head = title.unwrap_or(first)
   let link = source.to_lower().contains("http://") || source.to_lower().contains("https://")
-  c.box(dir=Row, w=Fill(1.0), pl=20.0, pr=20.0, pt=4.0, pb=2.0, gap=12.0, fn() {
-    c.box(w=Px(16.0), pt=3.0, align=ACenter, fn() {
-      @sf.icon(c, if link { "web" } else { "text" }, size=16.0, color=t.p.muted) |> ignore
-    })
-    |> ignore
-    c.box(w=Fill(1.0), fn() {
-      // (two lines at most, the last ending in an ellipsis: not a third cut off below them)
-      c.text(head, size=t.t.title, weight=700, color=t.p.text, line=24.0, w=Fill(1.0), max_lines=2) |> ignore
-      if title is Some(_) {
-        c.box(w=Fill(1.0), clip=true, fn() {
-          c.text(first, size=t.t.meta, color=t.p.muted, wrap=false, allow_ellipsis=true) |> ignore
-        })
-        |> ignore
-      }
-    })
-    |> ignore
-  })
+  let alone = head is None
+  // (the title said once: what follows it in the words shared under it, a phone's app having put it first)
+  let source = match head {
+    Some(h) if source.trim().has_prefix(h) && source.trim().length() > h.length() =>
+      source.trim().view(start_offset=h.length()).to_string().trim().to_string()
+    _ => source
+  }
+  c.box(
+    dir=Row,
+    w=Fill(1.0),
+    pl=look.side,
+    pr=look.side,
+    pt=look.head_pt,
+    pb=look.head_pb,
+    gap=look.gap,
+    fn() {
+      c.box(w=Px(look.col), h=Px(look.head_mark_h), align=ACenter, justify=JCenter, fn() {
+        @sf.icon(c, if link { "web" } else { "text" }, size=look.icon, color=t.p.muted) |> ignore
+      })
+      |> ignore
+      c.box(w=Fill(1.0), gap=share_wide_look.row_gap, pt=look.head_words_pt, fn() {
+        match head {
+          Some(h) =>
+            c.box(style=share_cut, fn() {
+              c.text(h, size=if look.wide { t.t.ui } else { t.t.body }, weight=600, color=t.p.text, line=look.title_line, wrap=false, allow_ellipsis=true) |> ignore
+            })
+            |> ignore
+          None => ()
+        }
+        if alone {
+          c.box(w=Fill(1.0), pt=if look.wide { 0.0 } else { 7.0 }, fn() {
+            c.text(source, size=t.t.ui, color=t.p.text, line=20.0, w=Fill(1.0), max_lines=3) |> ignore
+          })
+          |> ignore
+        } else {
+          // (a link one line, cut short: it breaks nowhere)
+          c.box(style=share_cut, fn() {
+            c.text(source, size=if look.wide { t.t.meta } else { t.t.caption }, color=t.p.muted, line=look.source_line, wrap=false, allow_ellipsis=true) |> ignore
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+    },
+  )
   |> ignore
-}
-
-///|
-/// A row's second line without a last message: when it was last active, and on which station.
-fn line_of(it : Json?) -> String {
-  let parts = []
-  let ago = text(field(field(it, "time"), "lastActiveAt"), "ago")
-  if ago != "" {
-    parts.push(ago)
-  }
-  let name = text(it, "stationName")
-  if name != "" {
-    parts.push(name)
-  }
-  parts.join(" · ")
 }
 
 ///|
 /// A line in the rows' place: why there are none, or what to do first.
-fn share_note(c : @ui.Ctx, words : String) -> Unit {
-  c.box(w=Fill(1.0), padx=20.0, pady=12.0, fn() {
-    c.text(words, size=@sf.theme().t.body, color=@sf.theme().p.muted) |> ignore
+fn share_note(c : @ui.Ctx, words : String, look : ShareLook) -> Unit {
+  let t = @sf.theme()
+  c.box(w=Fill(1.0), padx=look.side, pady=8.0, fn() {
+    c.text(words, size=if look.wide { t.t.ui } else { t.t.meta }, color=if look.wide { t.p.muted } else { t.p.subtle }) |> ignore
   })
   |> ignore
 }
 
 ///|
-/// A row of the sheet (Controls.kt PickRow): its mark in a 16 column, its title, a line under it, checked, a spinner
-/// while it opens; faint while another opens. True on the frame it was tapped.
+/// A row: on a phone a PickRow (12 from the sheet's sides, 12 by 8 in, its mark a model's tile), in the wide panel ⌘K's
+/// (38 high at least, 8 by 12 in, its picture in a 20 column, lit under the pointer, `meta` at its end); its title, a line
+/// under it, a spinner while it opens; faint while another opens. True on the frame it was pressed.
 fn share_row(
   c : @ui.Ctx,
+  look : ShareLook,
   key : String,
   title : String,
   sub : String,
-  checked : Bool,
+  meta : String,
   busy : Bool,
   enabled : Bool,
   lead : () -> Unit,
 ) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
-  c.box(w=Fill(1.0), pl=12.0, pr=12.0, opacity=if enabled || busy { 1.0 } else { 0.5 }, fn() {
+  let lit = enabled && c.lit(id)
+  c.box(w=Fill(1.0), opacity=if enabled || busy { 1.0 } else { 0.5 }, fn() {
     c.box(
       dir=Row,
       w=Fill(1.0),
-      padx=8.0,
-      pady=12.0,
-      gap=12.0,
+      min_h=look.row_h,
+      padx=look.row_padx,
+      pady=look.row_pady,
+      gap=look.gap,
       align=ACenter,
+      radius=look.row_corner,
+      bg=if look.wide && lit { t.p.hover } else { 0L },
       id=if enabled { id } else { 0 },
       fn() {
-        c.box(w=Px(16.0), align=ACenter, fn() { lead() }) |> ignore
-        c.box(w=Fill(1.0), clip=true, fn() {
-          c.text(title, size=t.t.ui, color=t.p.text, wrap=false, line=21.0) |> ignore
+        c.box(w=Px(look.col), align=ACenter, justify=JCenter, fn() { lead() }) |> ignore
+        c.box(w=Fill(1.0), clip=true, gap=look.row_gap, fn() {
+          c.text(title, size=t.t.ui, color=t.p.text, wrap=false, line=look.row_line, allow_ellipsis=true) |> ignore
           if sub != "" {
-            c.text(sub, size=t.t.meta, color=t.p.muted, wrap=false, line=18.0) |> ignore
+            c.text(sub, size=t.t.meta, color=t.p.muted, wrap=false, line=18.0, allow_ellipsis=true) |> ignore
           }
         })
         |> ignore
         if busy {
           @sf.spinner(c, size=14.0) |> ignore
-        } else if checked {
-          @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
+        } else if meta != "" {
+          c.text(meta, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
         }
-        // a PickRow: clip(Smooth(LIST_ROW_CORNER)).clickable
-        if enabled {
+        if enabled && !look.wide {
           @motion.ripple(c, id, @sf.row_corner)
         }
       },
@@ -620,11 +814,19 @@ fn share_opened(
   share_in.shared.set(None)
   share_in.files.set([])
   share_in.raised.set(false)
+  share_wide.set(false)
   lower_sheet()
   @hostapi.log("share in: into \{key}, \{files.length()} files")
   @sfbase.history_push()
-  // over another app: the app opens at the chat (ShareActivity openApp: MainActivity's openItem, over Home)
+  // over another app: the app opens at the chat (ShareActivity openApp: MainActivity's openItem, over Home); a
+  // browser's window the extension shares from has the chat open in the browser's still.fail tab, and goes
+  // (web/src/mbui/share.ts)
   if share_over.get() {
+    if @ui.platform() == 4 {
+      let link = if session == "" { "" } else { chat_link(station, session) }
+      @ui.open_url(if link == "" { cloud_origin() } else { link }) |> ignore
+      return
+    }
     home()
     @ui.over_done(open_app=true)
   }
@@ -650,14 +852,14 @@ let share_files_made : Ref[Int] = { val: 0 }
 /// What is shared when it is files (the composer's own look: shared_head's place): their pictures as 56 tiles, then
 /// a file's mark with its name bold (n 个文件 for several) and under it its size (their names), the words shared with
 /// them, when any, under that.
-fn shared_files_head(c : @ui.Ctx, files : Array[SharedFile], words : String, title : String?) -> Unit {
+fn shared_files_head(c : @ui.Ctx, files : Array[SharedFile], words : String, title : String?, look : ShareLook) -> Unit {
   let t = @sf.theme()
   let pictures = files.filter(fn(f) { f.image != "" })
   if pictures.length() > 0 {
-    c.box(dir=Row, w=Fill(1.0), pl=20.0, pr=20.0, pt=4.0, pb=8.0, gap=8.0, clip=true, fn() {
+    c.box(dir=Row, w=Fill(1.0), pl=look.files_in, pr=look.files_in, pt=look.files_top, pb=8.0, gap=8.0, clip=true, fn() {
       for f in pictures {
-        c.box(w=Px(56.0), h=Px(56.0), radius=16.0, bg=t.p.chip, clip=true, fn() {
-          c.image(f.image, w=Px(56.0), h=Px(56.0), radius=16.0, fit=FitCover, bg=0L) |> ignore
+        c.box(w=Px(56.0), h=Px(56.0), radius=look.tile_corner, bg=t.p.chip, clip=true, fn() {
+          c.image(f.image, w=Px(56.0), h=Px(56.0), radius=look.tile_corner, fit=FitCover, bg=0L) |> ignore
         })
         |> ignore
       }
@@ -679,7 +881,7 @@ fn shared_files_head(c : @ui.Ctx, files : Array[SharedFile], words : String, tit
     Some(x) => x
     None => words.trim().to_owned()
   }
-  c.box(dir=Row, w=Fill(1.0), pl=20.0, pr=20.0, pt=4.0, pb=2.0, gap=12.0, fn() {
+  c.box(dir=Row, w=Fill(1.0), pl=look.side, pr=look.side, pt=4.0, pb=2.0, gap=12.0, fn() {
     c.box(w=Px(16.0), pt=3.0, align=ACenter, fn() {
       @sf.icon(c, if pictures.length() == files.length() { "photo" } else { "file" }, size=16.0, color=t.p.muted)
       |> ignore
@@ -687,16 +889,16 @@ fn shared_files_head(c : @ui.Ctx, files : Array[SharedFile], words : String, tit
     |> ignore
     c.box(w=Fill(1.0), fn() {
       c.box(w=Fill(1.0), clip=true, fn() {
-        c.text(head, size=t.t.title, weight=700, color=t.p.text, line=24.0, wrap=false) |> ignore
+        c.text(head, size=t.t.title, weight=700, color=t.p.text, line=24.0, wrap=false, allow_ellipsis=true) |> ignore
       })
       |> ignore
       c.box(w=Fill(1.0), clip=true, fn() {
-        c.text(under, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
+        c.text(under, size=t.t.meta, color=t.p.muted, wrap=false, allow_ellipsis=true) |> ignore
       })
       |> ignore
       if said != "" {
         c.box(w=Fill(1.0), clip=true, fn() {
-          c.text(said, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
+          c.text(said, size=t.t.meta, color=t.p.muted, wrap=false, allow_ellipsis=true) |> ignore
         })
         |> ignore
       }
@@ -706,3 +908,93 @@ fn shared_files_head(c : @ui.Ctx, files : Array[SharedFile], words : String, tit
   |> ignore
 }
 
+
+///|
+/// What another app shares, with a wide window (ShareIn.tsx ShareInPanel, ⌘K's: Switcher.css.ts, sfdesk's switcher.mbt):
+/// a panel over a scrim, 14% down the window, 520 wide at most (32 short of the window), 600 high at most (78% of it),
+/// 12 in, its corner from a row's; its rows scroll. Esc, back or a press outside let it go.
+fn share_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  let shows = @motion.presence(c, "\u{2}share-in", share_wide.get(), initial=true, enter=share_panel_in, exit=share_panel_gone)
+  if !share_wide.get() {
+    return
+  }
+  let t = @sf.theme()
+  let close = fn() {
+    share_wide.set(false)
+    c.blur()
+  }
+  // what is left for its rows: the panel's most, less what is over them (its head, 发到) and its 12 in
+  share_list_most.val = dmin2(share_panel_most_h, c.height * share_panel_most_share) - share_panel_rest
+  c.with_dismissed(fn(_) { close() }, fn() {
+    c.overlay("share-in-layer", modal=true, scrim=t.p.overlay, initial_focus=0, fn() {
+      let room = dmin2(share_panel_w, c.width - share_panel_side - share_panel_side)
+      let i = c.box(
+        style=share_panel_style.then(@ui.style(max_w=Fixed(room))),
+        bg=@sf.panel_ground(),
+        shadow=@sf.dialog_shadow,
+        shadow_y=@sf.dialog_shadow_y,
+        shadow_color=t.p.shadow,
+        id=c.id("share-in-panel"),
+        fn() { share_body(c, src, w, share_wide_look) },
+      )
+      c.place_by_size(i, fn(pw, _) { ((c.width - pw) / 2.0, c.height * share_panel_top_share) })
+      match shows {
+        Some(l) => c.look(i, l)
+        None => ()
+      }
+    })
+    |> ignore
+  })
+}
+
+///|
+fn dmin2(a : Double, b : Double) -> Double {
+  if a < b {
+    a
+  } else {
+    b
+  }
+}
+
+///|
+/// It comes in as ⌘K's: grown out of 97% from its top and faded in; it goes at once.
+// kept across runs: a value (no field of it changes)
+let share_panel_in : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, oy=0.0, spec=@motion.tween(@kit.pop_ms, ease=Out), ground_first=true)
+
+///|
+// kept across runs: a value (no field of it changes)
+let share_panel_gone : @motion.Trans = @motion.trans(fade=0.0, spec=@motion.Snap(0.0))
+
+///|
+/// The panel (ShareIn.css.ts panel, ⌘K's switcher): 12 in, its corner from a row's (a pill 38 high 12 in), a small
+/// panel's ground and line, 520 wide at most.
+// kept across runs: a value (no field of it changes)
+let share_panel_style : @ui.Style = share_panel_surface
+  .style()
+  .then(@ui.style(w=Full, max_w=Fixed(share_panel_w), border=B1, border_color=Line, clip=true))
+
+///|
+// kept across runs: a value (no field of it changes)
+let share_panel_surface : @sf.Surface = @sf.surface(12.0, share_row_corner)
+
+///|
+/// A wide row's corner, and what lies in the panel's corners: concentric 12 in, the panel's own then a pane's (34, one of
+/// the ladder's).
+let share_row_corner : Double = @ui.concentric(@sf.pane_corner, 12.0)
+
+///|
+let share_panel_top_share : Double = 0.14
+
+///|
+let share_panel_most_h : Double = 600.0
+
+///|
+let share_panel_most_share : Double = 0.78
+
+///|
+/// What is left of the window either side of it at least (the web's calc(100vw - 32px)).
+let share_panel_side : Double = 16.0
+
+///|
+/// What the panel holds over its rows, about: its 12 in at its top and foot, what is shared (two lines), 发到.
+let share_panel_rest : Double = 130.0

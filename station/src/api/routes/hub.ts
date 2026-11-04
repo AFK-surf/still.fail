@@ -7,13 +7,13 @@ import { createHash, randomBytes, type Hash } from "node:crypto";
 import { appendFileSync, constants as fsConstants, copyFileSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, statfsSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { clean, fileName as nameOf, inside } from "../../ops/paths.ts";
-import { type Answer, type Request, error, json, param, percentDecode } from "../request.ts";
+import { type Answer, type Request, error, json, param, segment, ok, Refused, input } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
 import { tr } from "../../ops/i18n.ts";
 import { log } from "../../ops/log.ts";
 import { find as findMachineSession, roots as machineRoots } from "../../read/machine.ts";
 import { STILLFAIL_SURFACE } from "../../store/rows.ts";
-import type { Attachment, Quote } from "../../store/rows.ts";
+import type { Attachment, Quote, SessionRow } from "../../store/rows.ts";
 import type { Store } from "../../store/store.ts";
 import type { AgentsParts } from "../../sessions/agents.ts";
 import type { SessionChange } from "../../sessions/accounts.ts";
@@ -38,16 +38,9 @@ import { shownFacts } from "../../sessions/image-size.ts";
 import { wall } from "../../ops/fibers.ts";
 import { sessionSeen } from "../seen.ts";
 import { runtimeKind } from "../../agents/runtime.ts";
+import { contextAsked } from "../../sessions/context-cap.ts";
+import { regenerateTitle, TitleError } from "../../sessions/regenerate-title.ts";
 
-const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
-const ok = (value: unknown, status = 200) => json(status, JSON.stringify(value));
-class Refused extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
 /// A hub error the Rust maps to a status (`map_err(|e| http_error(status, e.to_string()))`).
 async function as<T>(status: number, f: () => T | Promise<T>): Promise<T> {
   try {
@@ -69,18 +62,6 @@ const DISK_SPARE = 1024 * 1024 * 1024;
 const PART_PREFIX = ".part-";
 const STAGED_FOR_MS = 24 * 3600 * 1000;
 
-/// A request's JSON object (`read_json`): nothing is `{}`, as is anything not an object; more than a megabyte refused.
-function input(r: Request): Record<string, unknown> {
-  if (r.body.length > 1_000_000) throw new Refused(413, "request too large");
-  if (r.body.length === 0) return {};
-  let value: unknown;
-  try {
-    value = JSON.parse(r.body.toString("utf8"));
-  } catch {
-    throw new Refused(400, "invalid JSON");
-  }
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-}
 
 /// `Input::text`: JavaScript's String(x ?? "") as serde writes it.
 const text = (v: unknown): string => (v === undefined || v === null ? "" : typeof v === "string" ? v : JSON.stringify(v));
@@ -362,6 +343,23 @@ export const routes = (tools: Tools): Route[] => {
   /// A development station's (STILLFAIL_DEV=1, else EMBER_DEV=1): only there is /dev/inject a route.
   const dev = (process.env.STILLFAIL_DEV || process.env.EMBER_DEV) === "1";
   return [
+    {
+      method: "POST",
+      pattern: /^\/*threads\/+([^/]+)\/+regenerate-title\/*$/,
+      handle: (r, [raw]) => write(async (s, a) => {
+        const t = thread(s, segment(raw!));
+        if (t.surface !== STILLFAIL_SURFACE) throw new Refused(400, tr(r.lang, "station.admin.renameOnlyStillfail"));
+        const members = s.threadSessions(t.id).map((m) => s.getSession(m.session))
+          .filter((row): row is SessionRow => row !== null && sessionSeen(s, r.viewer, row.key));
+        try {
+          await regenerateTitle(a.hub, t.id, members);
+        } catch (e) {
+          if (e instanceof TitleError) throw new Refused(e.problem === "changed" ? 409 : 400, tr(r.lang, `station.title.${e.problem}`));
+          throw e;
+        }
+        return threadView(r, t.id);
+      }),
+    },
     // Hands the station a chat message as if the connect had received it (development stations, for those who manage
     // them; anyone else finds no such route).
     ...(dev
@@ -405,6 +403,7 @@ export const routes = (tools: Tools): Route[] => {
                 model: given("model"),
                 effort: given("effort"),
                 fast: typeof i.fast === "boolean" ? i.fast : null,
+                context: contextAsked(i.context, r.lang),
                 title: typeof i.title === "string" ? chars(i.title, 120) : null,
                 createdBy: r.viewer.email,
                 clientKey: given("clientKey"),
@@ -429,7 +428,7 @@ export const routes = (tools: Tools): Route[] => {
           const id = text(i.id);
           const roots = machineRoots();
           // Only Claude Code's and Codex's terminal sessions are read (read/machine.ts).
-          const found = kind === "dsh" || kind === "grok" || kind === "cursor" || kind === "devin" || kind === "hermes" ? null : findMachineSession(roots, kind, id);
+          const found = kind === "dsh" || kind === "grok" || kind === "cursor" || kind === "devin" || kind === "hermes" || kind === "agy" ? null : findMachineSession(roots, kind, id);
           if (found === null) throw new Refused(404, tr(r.lang, "station.admin.noLocalSession", { id }));
           const [key, chat] = await as(400, () => continueMachineSession(a.hub, roots, found, r.viewer.email, r.lang, r.viewer.home === false ? r.viewer.workspace : null));
           log.info("admin", "machine session continued from the admin page", { session: key, from: id, by: r.viewer.email });
@@ -554,6 +553,10 @@ export const routes = (tools: Tools): Route[] => {
               const i = input(r);
               const pick = (name: string): string | null | undefined => (!(name in i) ? undefined : i[name] === null ? null : text(i[name]));
               const change: SessionChange = {};
+              if ("runtime" in i) {
+                if (typeof i.runtime !== "string" || i.runtime === "") throw new Refused(400, "runtime must be a name");
+                change.runtime = i.runtime;
+              }
               const model = pick("model");
               const effort = pick("effort");
               if (model !== undefined) change.model = model;
@@ -571,6 +574,8 @@ export const routes = (tools: Tools): Route[] => {
                 if (i.fast !== null && typeof i.fast !== "boolean") throw new Refused(400, tr(r.lang, "station.admin.badFast"));
                 change.fast = i.fast;
               }
+              // The most context it runs with: null gives it the model's whole window.
+              if ("context" in i) change.context = await as(400, () => contextAsked(i.context, r.lang));
               await as(400, () => configure(a.hub, key, change, r.lang));
               // With the profile it runs on now (picked again: the one picked).
               return ok({ ok: true, profile: a.hub.store.getSession(key)?.profile ?? null });

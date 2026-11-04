@@ -1,0 +1,14 @@
+# This test runs the key store inside an Android app's sandbox, where hard links
+# are forbidden. It has its own workspace so it only builds libadb and its keys.
+[package]
+name = "adb-key-probe"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+libadb = { path = "../../../../vendor/libadb", default-features = false, features = ["host-keys"] }

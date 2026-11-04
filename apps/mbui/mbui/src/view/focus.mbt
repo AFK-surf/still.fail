@@ -230,6 +230,10 @@ pub fn View::ask_focus(self : View, visible? : Bool = false) -> Bool {
 
 ///|
 fn Tree::focus_set(self : Tree, id : NodeId?, visible : Bool) -> Unit {
+  // (come to another: what waited for its node no longer does)
+  if id is Some(_) {
+    self.focus_parked = None
+  }
   let was = self.focused
   let shown_was = self.focus_visible
   self.focused = id
@@ -254,11 +258,13 @@ fn Tree::focus_set(self : Tree, id : NodeId?, visible : Bool) -> Unit {
 
 ///|
 /// What brings a part of what it holds into its sight (Tree::show_in_sight: the focus come to it): `f` given where that
-/// is in its own terms (its top, its foot), answering how far it moved what it holds to (down: a column that scrolls,
-/// View::scrolls), all of it laid out, before it is drawn.
-pub fn View::shows(self : View, f : (Double, Double) -> Double) -> View {
+/// is in its own terms (its top, its foot; `across`, its start, its end), answering how far it moved what it holds to
+/// (down, or `across` along it: a column that scrolls, a row that scrolls sideways, View::scrolls), all of it laid out,
+/// before it is drawn.
+pub fn View::shows(self : View, f : (Double, Double) -> Double, across? : Bool = false) -> View {
   guard self.live() is Some(n) else { return self }
   n.shows = Some(f)
+  n.shows_across = across
   self
 }
 
@@ -491,4 +497,11 @@ pub fn View::tab_stop(self : View, on : Live[Bool]) -> View {
       })
   }
   self
+}
+
+///|
+/// What waited for its node to come back for the focus (laid out nowhere as it had it: Tree::outs_told) waits no more:
+/// the focus come to something of what hosts the tree (an old view's field or button) meanwhile, that keeps it.
+pub fn Tree::focus_parked_drop(self : Tree) -> Unit {
+  self.focus_parked = None
 }

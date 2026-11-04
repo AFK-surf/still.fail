@@ -24,7 +24,7 @@ fn draw_icon(c : @ui.Ctx, name : String, size : Double, color : Int64, by_ink? :
 ///|
 /// What a button is (controls.css.ts): `Plain` lined, on the canvas;
 /// `Primary` the one thing to do, solid; `Ghost` words alone, a ground
-/// under the pointer; `Danger` lined, its words red; `DangerSolid` solid red.
+/// under the pointer or while busy; `Danger` lined, its words red; `DangerSolid` solid red.
 pub(all) enum Tone {
   Plain
   Primary
@@ -79,7 +79,9 @@ fn button_part(
   let p = t.p
   let id = c.id(if key == "" { "sf-btn/" + label } else { key })
   let live = !disabled && !busy
-  let h = ease_to(c, "sf-btn-h/\{id}", live && (c.lit(id) || c.pressed(id) || active))
+  // Quiet actions keep their usual look at rest, and show their own ground while doing what was pressed.
+  let quiet_busy = busy && (tone == Ghost || tone == GhostDanger)
+  let h = ease_to(c, "sf-btn-h/\{id}", quiet_busy || (live && (c.lit(id) || c.pressed(id) || active)))
   // (turning and greyed as a control answers: over dur_ms, never at once. With an icon, the spinner in its place, the
   // icon fading out under it as it fades in, nothing moved; with none, the spinner coming in before its words, which
   // stay: they are what it does, said on as it does it. At work is not greyed: it is the button pressed, at full
@@ -723,7 +725,7 @@ pub fn small_panel(
   body : () -> Unit,
 ) -> Int {
   let t = theme()
-  c.box(
+  let panel = c.box(
     w~,
     h~,
     min_w?,
@@ -739,6 +741,9 @@ pub fn small_panel(
     clip=true,
     body,
   )
+  // (the panel: the surface of the look it comes in by, coming first, all on it after: Ctx::surface)
+  c.surface(panel)
+  panel
 }
 
 ///|
@@ -1049,7 +1054,8 @@ pub fn tip(
 /// A tip as the web draws it (parts.css.ts tooltip): small words on the primary ink, 5 by 10 in, 8 round, a soft
 /// shadow; the keys 8 after the words at 60% (tipKeys).
 pub fn tip_look(c : @ui.Ctx, words : String, keys : String) -> Unit {
-  c.box(style=tip_box, fn() {
+  // (the tip: the surface of the look it comes in by: Ctx::surface)
+  let tip = c.box(style=tip_box, fn() {
     c.box(style=tip_line, fn() {
       c.text(words, style=tip_words) |> ignore
       if keys != "" {
@@ -1058,7 +1064,7 @@ pub fn tip_look(c : @ui.Ctx, words : String, keys : String) -> Unit {
     })
     |> ignore
   })
-  |> ignore
+  c.surface(tip)
 }
 
 ///|
@@ -2297,7 +2303,8 @@ pub fn dialog(
     on_escape?,
     scrim?,
     look=fn(c, s, inner) {
-      c.box(
+      // (the dialog: the surface of the look it comes in by, coming first, all on it after: Ctx::surface)
+      let panel = c.box(
         style=dialog_box,
         id=c.id(key + "/frame"),
         w=Px(s.w),
@@ -2385,7 +2392,7 @@ pub fn dialog(
         dialog_veil(c, veil)
         },
       )
-      |> ignore
+      c.surface(panel)
     },
     body,
   )
@@ -3149,7 +3156,8 @@ pub fn confirm_dialog(
     close_label="",
     scrim?,
     look=fn(c, s, inner) {
-      c.box(
+      // (the dialog: the surface of the look it comes in by, coming first, all on it after: Ctx::surface)
+      let panel = c.box(
         style=confirm_box,
         w=Px(s.w),
         radius=dialog_r,
@@ -3167,7 +3175,7 @@ pub fn confirm_dialog(
           dialog_veil(c, veil)
         },
       )
-      |> ignore
+      c.surface(panel)
     },
     fn() {
       if error != "" {
@@ -4617,12 +4625,10 @@ let sign_in_many : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=f
 
 
 ///|
-/// A newer build ready for the person's word (Home.kt's update key; one look wherever a frame puts it, the size of the
-/// keys beside it: `side` across, its mark `mark`): in its middle the update's mark, an arrow up in a ring (what a
-/// newer version is, as a station's updating_mark; not download's: the build is here already, the key is there only
-/// while it waits on its press, no dot over it to say so); while it is `busy` (being put in place, the app starting
-/// again), its arrow going up as a station's does as it updates (updating_mark), no words. `why` its tip. Said to be
-/// `label`. True on the frame it is pressed, not while it is busy.
+/// An update in a bar: while it comes, its progress in the mark's place (`coming`: Some of a known part or None for an
+/// unknown part); ready, the update's arrow up in a ring; being put in place (`busy`), that arrow going up. The two
+/// marks fade between each other without moving the key. `why` is its tip, `label` what it is said to be. True on its
+/// press, not while it is busy.
 pub fn update_key(
   c : @ui.Ctx,
   key : String,
@@ -4631,19 +4637,39 @@ pub fn update_key(
   label : String,
   why : String,
   busy : Bool,
+  coming? : Double?? = None,
+  offered? : Bool = false,
 ) -> Bool {
   let t = theme()
   let id = c.id(key)
   let hot = c.lit(id) && !busy
+  let progress = ease_to(c, "update/coming/" + key, coming is Some(_))
   let b = c.box(
     style=(if hot { update_key_hot } else { update_key_box }).then(@ui.style(w=Fixed(side), h=Fixed(side))),
     id~,
     fn() {
-      if busy {
-        updating_mark(c, mark, t.p.text) |> ignore
-      } else {
-        icon(c, "update", size=mark, color=t.p.text) |> ignore
-      }
+      c.box(style=@ui.style(w=Fixed(mark), h=Fixed(mark)), fn() {
+        let ready = c.box(style=update_ring_at, fn() {
+          if busy {
+            updating_mark(c, mark, t.p.text) |> ignore
+          } else {
+            icon(c, if offered { "download" } else { "update" }, size=mark, color=t.p.text) |> ignore
+          }
+        })
+        c.look(ready, @ui.look(alpha=1.0 - progress))
+        if progress > 0.0 {
+          c.layer(fn() {
+            let part = match coming {
+              Some(part) => part
+              None => Some(1.0)
+            }
+            let downloading = c.box(style=update_ring_at, fn() { coming_mark(c, key, part, mark, t.p.text) })
+            c.look(downloading, @ui.look(alpha=progress))
+          })
+          |> ignore
+        }
+      })
+      |> ignore
       if !busy {
         press_ripple(c, id, side / 2.0)
       }

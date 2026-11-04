@@ -452,9 +452,12 @@ pub fn Tester::keyboard_gone(self : Tester) -> Unit {
 /// The keyboard's trackpad (iOS's floating cursor) begins at (`x`, `y`), moves to (`x1`, `y1`) and is let go; the
 /// frames it causes drawn.
 pub fn Tester::ime_trackpad(self : Tester, x : Int, y : Int, x1 : Int, y1 : Int) -> Unit {
-  on_text(text_float_begin, "", x, y)
+  let u = text_float_unit.to_int()
+  on_text(text_float_begin, "", x * u, y * u)
   self.draw()
-  on_text(text_float_move, "", x1, y1)
+  on_text(text_float_move, "", x1 * u, y1 * u)
+  self.draw()
+  on_text(text_float_end, "", 0, 0)
   self.draw()
 }
 
@@ -497,13 +500,22 @@ let text_paste = 8
 
 ///|
 /// The host's text event saying the keyboard's trackpad (iOS's floating cursor: a long press on the space bar) begins,
-/// at (`a`, `b`) in the window, in points.
+/// at (`a`, `b`) in the window, in text_float_unit of a point.
 let text_float_begin = 9
 
 ///|
-/// The host's text event saying the keyboard's trackpad moved to (`a`, `b`) in the window, in points: the caret goes as
-/// far from where it was when it began as that is from where it began.
+/// The host's text event saying the keyboard's trackpad moved to (`a`, `b`) in the window, in text_float_unit of a
+/// point: the caret goes as far from where it was when it began as that is from where it began.
 let text_float_move = 10
+
+///|
+/// The host's text event saying the keyboard's trackpad was let go: the caret stays where it went.
+let text_float_end = 11
+
+///|
+/// What the keyboard's trackpad's points are counted in (text_float_begin, text_float_move): a 64th of a point, the
+/// finger's way as finely as the host has it (whole points would step the caret it draws 3 pixels at a time).
+let text_float_unit : Double = 64.0
 
 ///|
 fn h_ime_action(kind : Int) -> Unit {
@@ -583,6 +595,8 @@ struct Catcher {
   /// the old view it was last built in (view_host.mbt's island_allows), none in a layer of its own: whether its focus
   /// may take input now (Ctx::focus_allowed)
   mut island : @view.NodeId?
+  /// where the input method's own windows go, in the window's points (x, y, h of a caret); none: the window's foot
+  mut place : (Double, Double, Double)?
 }
 
 ///|
@@ -590,7 +604,7 @@ fn Ctx::catcher_of(self : Ctx, id : Int) -> Catcher {
   match self.dev.catchers.get(id) {
     Some(st) => st
     None => {
-      let st = { composing: "", came: [], keys: [], frame: -1, island: None }
+      let st = { composing: "", came: [], keys: [], frame: -1, island: None, place: None }
       self.dev.catchers[id] = st
       st
     }
@@ -626,6 +640,13 @@ pub fn Ctx::catch_keys(self : Ctx, key : String, on : Bool) -> Unit {
   } else if self.focus == id {
     self.focus_on(0)
   }
+}
+
+///|
+/// Where key catcher `key` says its input goes on the window: a caret at x, y, h points tall, the input method's own
+/// windows put by it (the keys go on elsewhere; what the catcher knows of the caret there is the app's).
+pub fn Ctx::key_catcher_place(self : Ctx, key : String, x : Double, y : Double, h : Double) -> Unit {
+  self.catcher_of(self.id(key)).place = Some((x, y, h))
 }
 
 ///|

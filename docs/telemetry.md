@@ -47,8 +47,8 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 ```
 
 - 发什么：`stillfail.log` 里的每一行（INFO、WARN、ERROR），作为 OpenTelemetry 日志，每 5 秒一批（至多 500 行）发到 control plane 的 `/v1/telemetry/logs`（和 station 的 span 一样用 station 的 key 签名），still.fail cloud 转给 Axiom 的 `/v1/logs`，同一个数据集。资源属性 `service.name: stillfail-station`、`service.version`、`stillfail.station`；每行 `log.target`（`presence`、`share`…）和各字段 `log.<名字>`。
-- 脱敏：家目录下的路径换成 `~`；邮箱和用邮箱拼成的 profile id（`zzj3720-gmail-com`）换成 `<email>`；JWT、常见前缀的 API key/token、AWS access key 换成 `<secret>`；引号括起来的内容换成 `"…"`；可能是人写的字段（`text`、`name`、`title`、`command`、`args`、`prompt`、`body`、`question`、`content`）整个换成 `…`；`workspace` 字段不是 workspace id（是名字）时也换成 `…`；每个值最多 2000 字。
-- 发不出去（还没登记、mesh 还没起来）的先攒着，最多 5000 行，再多就丢最老的、下一批里说丢了几行；一批发失败就丢掉，不重发；失败每 10 分钟在 stderr 说一次。Comma 不收（`telemetry: null`）。
+- 脱敏：家目录下的路径换成 `~`；邮箱和用邮箱拼成的 profile id（`alice-example-com`）换成 `<email>`；JWT、常见前缀的 API key/token、AWS access key 换成 `<secret>`；引号括起来的内容换成 `"…"`；可能是人写的字段（`text`、`name`、`title`、`command`、`args`、`prompt`、`body`、`question`、`content`）整个换成 `…`；`workspace` 字段不是 workspace id（是名字）时也换成 `…`；每个值最多 2000 字。
+- 发不出去（还没登记、mesh 还没起来）的先攒着，最多 5000 行，再多就丢最老的、下一批里说丢了几行；一批没送到（网络断了、cloud 没回答、回 429 或 5xx）就放回去，下一轮最先发（同样受 5000 行的限制），被 cloud 拒收（其他 4xx）的才丢掉：station 和 cloud 之间断开时正是日志最要紧的时候；失败每 10 分钟在 stderr 说一次。Comma 不收（`telemetry: null`）。
 - 查：Axiom 里 `['ember'] | where ['service.name'] == "stillfail-station" and ['resource.stillfail.station'] startswith "<station id 前几位>"`，按 `_time` 看 `body` 和 `attributes.log.*`。
 - 设备的连接（`mesh` 那几行，src/mesh/serve.ts）：`client connected` 在凭据通过时写，`a device's connection ended` 在连接断开时写。两行都带 `device`（设备这个端点 id 的前 12 位）和 `trace`（设备拨号那次 `mesh.connect` 的 trace id，客户端随凭据那行发来的 `traceparent`；后台重拨的没有）；前一行带 `via`（握手走的中继，或 `direct`）和 `ways`，后一行带 `why`（断开的原因，iroh 的原话）、`lasted`（连了多少毫秒）、`ways`（断开时的各条路，没了就用最后一次收到请求时的）、`rx`/`tx`（字节）。`ways` 的写法和慢回复行一样：`*` 是选定的那条，中继或地址、来回、发出/丢掉的包数。把设备那边和 station 这边对起来：`attributes.log.trace == <mesh.connect 的 trace_id>`。
 
@@ -56,7 +56,7 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 
 北京、香港、深圳三台每分钟由 `cloud/relay-load.sh` 把计数发给 still.fail cloud，Cloudflare 那台由 cloud 的 cron 每分钟读（`cloud/src/relay-load.ts`）。cloud 存一份给后台的中继页，同时把这一分钟（跟上一次相比）做了什么作为一行日志发到 Axiom：`service.name` 是 `stillfail-relay`，资源属性 `stillfail.relay` 是中继的 host，`body` 是 `relay minute`，字段 `log.secs`（离上一次多少秒）、`log.open`（这时连着几个）、`log.accepts`、`log.disconnects`、`log.sent`/`log.recv`（字节）、`log.packets`（转出去的包）、`log.dropped`（丢掉的包：对方不在、队列满，或在队列里等了超过 200 ms，zzj3720/iroh#1）、`log.load1`（机器负载，Cloudflare 那台没有）。两次隔太久（超过 10 分钟）或中继刚开始报的第一次不写。Cloudflare 那台每分钟都写一行（进程没在跑时也写，预算用完它就被停掉），另带它的预算（`cloud/src/relay.ts`、`limits.ts`）离各上限多远：`log.running`（进程在不在跑）、`log.today_bytes`/`log.today_frames`（UTC 零点起转过的，按样本算，和预算的算法一样）、`log.open`、`log.limit_bytes`/`log.limit_frames`/`log.limit_connections`/`log.limit_connects`，`log.full` 是已经撞上的那几项（`bytes`、`frames`、`connections`、`connects`，没有是 `none`）：撞上任何一项，新连接都回 429。每台中继每个连接排队多久不在里面（iroh-relay 不数）。
 
-三台自己机器上的中继还把每个客户端连接在内核里的样子一起报上来（`relay-load.sh` 的 `node_conn` 行，`ss -ti`）：一分钟里发过东西的每条连接一行 `relay conn`，跟这一分钟的 `relay minute` 同一批，字段 `log.peer`（对方地址只留到 /24，IPv6 到 /48）、`log.port`、`log.rtt`/`log.minrtt`（毫秒）、`log.sent`（这条连接开起来以后发出的字节）、`log.again`（其中重发的）、`log.rate`（最近的实际送出速度，bit/s）、`log.limited`（那会儿中继没有更多要发的：速度是没东西可发，不是线路慢）。中继自己的计数看不到最后一段：2026-10-30 衡阳移动的手机经北京只有 8–19 KB/s，北京的计数一切正常，`ss` 上才看得出那段 TCP 的来回和重发。
+三台自己机器上的中继还把每个客户端连接在内核里的样子一起报上来（`relay-load.sh` 的 `node_conn` 行，`ss -ti`）：一分钟里发过东西的每条连接一行 `relay conn`，跟这一分钟的 `relay minute` 同一批，字段 `log.peer`（对方地址只留到 /24，IPv6 到 /48）、`log.port`、`log.rtt`/`log.minrtt`（毫秒）、`log.sent`（这条连接开起来以后发出的字节）、`log.again`（其中重发的）、`log.rate`（最近的实际送出速度，bit/s）、`log.limited`（那会儿中继没有更多要发的：速度是没东西可发，不是线路慢）。中继自己的计数看不到最后一段：`ss` 能显示那段 TCP 的往返和重发，帮助分析收方线路。
 
 每台中继（still.fail 的四台）每半小时还从国内各运营商的探针各测一遍（`cloud/src/probes.ts`，Globalping 的免费探针：移动、电信、联通各 5 个，国内机房 3 个，香港 2 个；后几台用第一台那次挑中的同一批探针，好比较）：对中继 443 的 TCP 握手 16 次，每个探针一行 `relay probe`，字段 `log.probe_country`/`log.probe_region`/`log.probe_city`/`log.probe_asn`/`log.probe_network`（探针在哪、哪家运营商）、`log.rtt_avg`/`log.rtt_min`/`log.rtt_max`（毫秒）、`log.loss`（没回的占比，%）、`log.status`。只测来回和丢包，不测能跑多快（那个看设备的 `mesh.speed`）。只在 `RELAY_PROBES` 是 `globalping` 时测（wrangler.jsonc）。各中继在各运营商的来回：
 
@@ -77,6 +77,7 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 - 每次启动、有账号登录后：读系统的进程退出记录（ApplicationExitInfo，Android 11 起），从上次报到的地方（`crashes.since`；第一次往回看 7 天）起，把闪退、native 崩溃（Hermes、JNI 的 abort）和 ANR 一批发到 `/batch/`。native 崩溃带系统给的 tombstone 解成的文字（崩溃线程的堆栈、abort message、进程最后 50 条 warning/error 日志），ANR 带线程 dump，都放在 `trace` 属性里；native 崩溃另带 `webview`（系统 WebView 的包名和版本，崩在 WebView 里时看是哪个 Chromium）和 `logcat`（报告时从系统日志里读到的那个进程最后 80 条 warning 及以上，有的手机 tombstone 里不带日志）；这两种没有 PostHog 认的帧，用 `$exception_fingerprint`（信号或 ANR 加栈顶几帧）归 issue。每条的 `uuid` 由时间和 pid 定，重发不会重复。在前台或可见时被系统杀掉（内存不足、信号、资源超用、OEM 的管控等，`reason` 是 `killed_low_memory`、`killed_signaled`…）也报一条 `Killed`：用户看到的是闪退回桌面，App 自己没机会报；值是原因、系统给的说明和当时的 PSS/RSS，带 `logcat`，按原因归 issue。在后台被杀是 Android 的常态，不报。
 - 原生堆超过 1.5 GB（`MemoryWatch.java`，每 30 秒看一次 `Debug.getNativeHeapAllocatedSize`）：每个进程报一次 `MemoryRunaway`（`$exception_level: error`，`reason: memory_runaway`）。报之前看 15 秒：Rust shell 这段时间里各操作被调了多少次（`shell_calls`，来自 client/shell 的 `sf_shell_stats`；核心和 shell 之间的死循环会是一个操作远远多于其他），进程启动以来各操作的总次数（`shell_calls_total`），没回的调用（`shell_unanswered`），shell 手里各类 handle 的数量（`shell_handles`；`gone` 是已关、已放掉的 iroh 连接），各线程占的 CPU（`threads`，百分之一核），核心 JS 的采样（`js`：不空闲的比例，最热的函数和调用栈，函数写成 `名字@行:列`，对照那个版本的 core.js），以及原生堆的大小和每分钟涨多少。起因是 2026-10 一台 OPPO PLP110 上原生堆每分钟涨约 300 MB，shell 线程在 app 空闲时一直转，模拟器复现不出来。
 - 核心死掉重启也当场报一条 `CoreFailed`（`$exception_level: error`，`reason: core_failed`，值是核心给的原因），和网页版的 CoreFailed 一样；用的是最近一次上报时的账号，还没有就是 `android-anonymous`。
+- 界面被要求做做不到的事（mbui 的 fault，`mbui/src/view/boundary.mbt`：比如一个输入框同时给了两处）当场报一条 `UiFault`（`reason: ui_fault`，值是框架说的原因，同一句一个进程只报一次）。app 不退出，出错的那块（旧写法岛整块）换成一行「这部分显示出错了」；测试里照旧直接失败。
 - 下方栏切换一次地方发一条 `bar_switch`（`BarTiming.java`；攒 20 条或一分钟一批发到 `/batch/`，`distinct_id` 同上，没有账号就不发）。设备上同时写一行 `adb logcat -s StillfailTiming`，没有 key 的构建也写。时间都从手指抬起算（`touched: false` 是不是点出来的，比如返回手势）：
 
   | 属性 | |
@@ -90,7 +91,7 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
   | `topics` | 页面新订阅的每个 topic：`topic`（名字，不带参数）、`core_ms`（订阅到第一条消息在 UI 线程解完）、`tap_shown_ms`、`bytes`（第一个值的 JSON 大小）、`failed` |
 
 - release 包关了 R8 的混淆（`android/app/proguard-rules.pro` 的 `-dontobfuscate`，保留行号），堆栈里是原名，不用上传 mapping。
-- 构建时由 `STILLFAIL_POSTHOG` 指向的文件给 key（`android/apk.json` 的 `strings`：`posthog_host`、`posthog_key`）；CI 的安卓构建从 `POSTHOG_JSON` 写这个文件（`.github/release.sh android`、`.github/workflows/mbui.yml` → `apps/mbui/scripts/beta.sh build`）。没有 key 的构建（本地、开发）什么都不发。
+- 构建时由 `STILLFAIL_POSTHOG` 指向的文件给 key（`android/apk.json` 的 `strings`：`posthog_host`、`posthog_key`）；CI 的安卓构建从 `POSTHOG_JSON` 写这个文件（`.github/release.sh android` → `scripts/release.sh` → `apps/mbui/scripts/beta.sh build`）。没有 key 的构建（本地、开发）什么都不发。
 - 设置 → 此设备里的「发送使用统计和错误报告」（默认开，只存在这台设备上，app prefs `stillfail` 的 `telemetry`，`Crashes.reporting`；没有 key 的构建不显示）关掉后，以上都不发：都经 `Crashes.send` 发出，它先看这个开关；关着时的闪退也不留到以后再报。
 - 采样 core：`adb shell am broadcast -n <包名>/dev.mbui.CoreProfileReceiver --ei seconds 60`（正式版 `fail.still.android`）。
 

@@ -145,6 +145,34 @@ pub let sheet_spring : Spec = motion_spring(0.32, threshold=0.5)
 pub let lift_spring : Spec = motion_spring(0.25, bounce=0.35)
 
 ///|
+/// A cover's spring (@ui.Ctx::cover's: a sliding thumb sent to another item), for what moves one otherwise: its way
+/// solved as the cover's is (@ui.cover_spring_at), at rest when the cover's is (@ui.cover_spring_end). Gone from 0 (where
+/// it set out from) to 1 (the item it goes to), the way a cover's is.
+// kept across runs: a constant: its fields are not mut, nothing changes it
+pub let cover_spring : Spec = Motion({
+  kind: "cover",
+  delay: 0.0,
+  make: fn(from, to, v) {
+    let d = from - to
+    let end = @ui.cover_spring_end(d, v)
+    {
+      next_: fn(t) {
+        if t >= end {
+          { done: true, value: to }
+        } else {
+          { done: false, value: to + @ui.cover_spring_at(d, v, t).0 }
+        }
+      },
+      velocity_: Some(fn(t) { if t >= end { 0.0 } else { @ui.cover_spring_at(d, v, t).1 } }),
+      retarget_: None,
+      duration_: Some(end),
+      calculated: Some(end),
+    }
+  },
+  said: None,
+})
+
+///|
 /// The long-press menu's scale: lifted by the hand (lift_spring).
 // kept across runs: a constant: its fields are not mut, nothing changes it
 pub let menu_spring : Spec = lift_spring

@@ -52,7 +52,7 @@ if [ -n "$pid" ]; then
   "$LW" logwait --pid $pid --deadline ${E2E_FLOW_TIMEOUT:-300} >/dev/null 2>&1
   [ $? = 2 ] && echo "the flow's time is up" >> $LOG
   kill $FOLLOW 2>/dev/null
-  # (pkill takes a regex: "+1" as it is matched no tail, and every flow left its tail behind, 235 on Mini1 by
+  # (pkill takes a regex: "+1" as it is matched no tail, and every flow left its tail behind, 235 on a test host by
   # 2026-10-20; [+] is the plus itself)
   pkill -f "tail -n [+]1 -f $RAW" 2>/dev/null
 fi

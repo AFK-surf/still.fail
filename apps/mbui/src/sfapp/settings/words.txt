@@ -89,6 +89,8 @@ android-misc.adb.notPaired
 android-misc.adb.notify.chats
 android-misc.adb.notify.idle
 android-misc.adb.notify.on
+android-misc.adb.notify.screen
+android-misc.adb.notify.screens
 android-misc.adb.notify.title
 android-misc.adb.off
 android-misc.adb.offValue
@@ -921,6 +923,8 @@ android-settings.vault.wordsDone
 android-settings.vault.wordsOnce
 android-settings.vault.wordsTitle
 android-settings.vault.wordsWhy
+android-settings.version.auto
+android-settings.version.auto.note
 android-settings.version.check
 android-settings.version.checking
 android-settings.waiting.continue
@@ -1564,6 +1568,7 @@ web-pages.stations.search.personal
 web-pages.stations.search.personalLine
 web-pages.stations.search.section
 web-pages.stations.search.what
+web-pages.stations.settingsOffline
 web-pages.stations.software
 web-pages.stations.softwareOffline
 web-pages.vault.accounts
@@ -1582,6 +1587,10 @@ web-pages.vault.addKind.title
 web-pages.vault.addKind.token
 web-pages.vault.addKind.tokenDetail
 web-pages.vault.addedDevice
+web-pages.vault.ask
+web-pages.vault.approve.notHere
+web-pages.vault.askWhat
+web-pages.vault.asked
 web-pages.vault.agentMay
 web-pages.vault.all
 web-pages.vault.content
@@ -1666,6 +1675,11 @@ web-pages.vault.openChat
 web-pages.vault.opened
 web-pages.vault.personal
 web-pages.vault.private
+web-pages.vault.promptBody
+web-pages.vault.promptBy
+web-pages.vault.promptGive
+web-pages.vault.promptLater
+web-pages.vault.promptTitle
 web-pages.vault.recover
 web-pages.vault.recoverGo
 web-pages.vault.recoverLead

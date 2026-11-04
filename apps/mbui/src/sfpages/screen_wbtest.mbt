@@ -16,9 +16,9 @@ priv struct ScreenRig {
   /// how the fake core answers a call (None: as the fixture does)
   answer : Ref[(String, Json) -> Result[Json, Json]?]
   /// the prefs' `screenTouch`, `screenQuality`, `screenFps` (0: none)
-  touch : Ref[String]
-  quality : Ref[String]
-  fps : Ref[Int]
+  touch : @signals.Signal[String]
+  quality : @signals.Signal[String]
+  fps : @signals.Signal[Int]
 }
 
 ///|
@@ -38,6 +38,7 @@ fn screen_rig(
   screen? : String = "browser:tab-1",
   here? : String = "",
   h264? : Bool = false,
+  os? : String = "",
 ) -> ScreenRig {
   @sfbase.reset()
   // this machine's station, as its host says (`here`); none by default
@@ -57,9 +58,9 @@ fn screen_rig(
   let views : Array[((Json, Bytes?) -> Unit, (Result[Json, Json]) -> Unit)] = []
   let cancelled : Array[Int] = []
   let answer : Ref[(String, Json) -> Result[Json, Json]?] = Ref(fn(_, _) { None })
-  let touch_ = Ref(touch)
-  let quality_ = Ref("")
-  let fps_ = Ref(0)
+  let touch_ = @signals.signal(touch)
+  let quality_ = @signals.signal("")
+  let fps_ = @signals.signal(0)
   let ask = fn(name : String, params : Json, bytes : Bytes?, done : (Result[Json, Json]) -> Unit, fallback : () -> Unit) {
     calls.push((name, params, bytes))
     match (answer.val)(name, params) {
@@ -76,19 +77,21 @@ fn screen_rig(
     ..base,
     topic: fn(name, params) {
       let tp = (base.topic)(name, params)
-      if name == "prefs" && (touch_.val != "" || quality_.val != "" || fps_.val != 0) {
+      if name == "stations" && os != "" {
+        { ..tp, value: Some([{ "station": "ws-1/st-1", "host": { "os": os } }]) }
+      } else if name == "prefs" && (touch_.get() != "" || quality_.get() != "" || fps_.get() != 0) {
         let m = match tp.value {
           Some(Object(m)) => m.copy()
           _ => {}
         }
-        if touch_.val != "" {
-          m["screenTouch"] = Json::string(touch_.val)
+        if touch_.get() != "" {
+          m["screenTouch"] = Json::string(touch_.get())
         }
-        if quality_.val != "" {
-          m["screenQuality"] = Json::string(quality_.val)
+        if quality_.get() != "" {
+          m["screenQuality"] = Json::string(quality_.get())
         }
-        if fps_.val != 0 {
-          m["screenFps"] = Json::number(fps_.val.to_double())
+        if fps_.get() != 0 {
+          m["screenFps"] = Json::number(fps_.get().to_double())
         }
         { ..tp, value: Some(Json::object(m)) }
       } else {
@@ -98,18 +101,18 @@ fn screen_rig(
     call: fn(name, params, done) {
       if name == "prefs.set" {
         match field(Some(params), "screenTouch") {
-          Some(String(v)) => touch_.val = v
-          Some(Null) => touch_.val = ""
+          Some(String(v)) => touch_.set(v)
+          Some(Null) => touch_.set("")
           _ => ()
         }
         match field(Some(params), "screenQuality") {
-          Some(String(v)) => quality_.val = v
-          Some(Null) => quality_.val = ""
+          Some(String(v)) => quality_.set(v)
+          Some(Null) => quality_.set("")
           _ => ()
         }
         match field(Some(params), "screenFps") {
-          Some(Number(n, ..)) => fps_.val = n.to_int()
-          Some(Null) => fps_.val = 0
+          Some(Number(n, ..)) => fps_.set(n.to_int())
+          Some(Null) => fps_.set(0)
           _ => ()
         }
       }
@@ -168,13 +171,20 @@ fn screen_rig(
 ///|
 fn ScreenRig::sess(self : ScreenRig) -> ScreenSess {
   ignore(self)
-  screens_open.get(screen_key("ws-1/st-1", "browser:tab-1")).unwrap()
+  // (the one this rig opened, whichever screen it was asked for)
+  for _, sess in screens_open {
+    return sess
+  }
+  abort("no screen open")
 }
 
 ///|
 fn ScreenRig::ui(self : ScreenRig) -> ScreenUi {
   ignore(self)
-  screen_uis.get(screen_key("ws-1/st-1", "browser:tab-1")).unwrap()
+  for _, ui in screen_uis {
+    return ui
+  }
+  abort("no screen open")
 }
 
 ///|
@@ -867,6 +877,38 @@ test "denied for a grant the station lacks: its station's 权限 a tap away (前
 }
 
 ///|
+test "a Linux desktop failure offers reopening without a macOS permissions button" {
+  let r = screen_rig(os="Linux 6.8")
+  r.state(
+    "denied",
+    message="正在为 Linux 屏幕控制准备所需组件，完成后请重新打开。",
+    access={ "capture": false, "control": false, "message": "正在为 Linux 屏幕控制准备所需组件，完成后请重新打开。" },
+  )
+  r.finish()
+  assert_true(r.t.find("重新打开") is Some(_))
+  assert_true(r.t.find("前往权限设置") is None)
+  assert_true(r.t.find("安装说明") is None)
+  screen_done(r.t)
+}
+
+///|
+test "a Linux component failure offers the installation guide at either page width" {
+  for w in [390.0, 1200.0] {
+    let r = screen_rig(w~, os="Linux 6.8")
+    r.state(
+      "denied",
+      message="无法连接 Wayland 桌面。",
+      access={ "capture": false, "control": false, "message": "无法连接 Wayland 桌面。", "help": "linux-desktop" },
+    )
+    r.finish()
+    assert_true(r.t.find("重新打开") is Some(_))
+    r.t.tap_text("安装说明")
+    assert_true(r.t.opened().contains("https://github.com/AFK-surf/still.fail/blob/main/docs/linux-desktop-setup.md"))
+    screen_done(r.t)
+  }
+}
+
+///|
 test "on a phone a page of the station's browser is laid out for the stage it is shown on, and a tap is where it is; one opened for a login goes back by itself once its tab is gone" {
   let r = screen_rig(until_gone=true)
   let u = r.ui()
@@ -957,15 +999,15 @@ test "a login field in focus while driving a tab: 用 1Password 填入; its logi
   assert_eq(@ui.fake_op_runs[0], ["item", "list", "--categories", "Login", "--format", "json"])
   assert_true(r.t.find("选一个 github.com 的登录") is Some(_))
   assert_true(r.labelled("GitLab") is None)
-  r.tap_label("GitHub 工作 · zzj-work")
+  r.tap_label("GitHub 工作 · demo-work")
   r.t.draw()
   r.t.draw()
   assert_eq(@ui.fake_op_runs[1], ["item", "get", "gh2", "--fields", "label=username,label=password", "--reveal", "--format", "json"])
   let fill = r.inputs().filter(fn(i) { text(Some(i), "t") == "fill" })
   assert_eq(fill.length(), 1)
   assert_eq(text(Some(fill[0]), "host"), "github.com")
-  assert_eq(text(Some(fill[0]), "username"), "zzj-work")
-  assert_eq(text(Some(fill[0]), "password"), "pw-zzj-work")
+  assert_eq(text(Some(fill[0]), "username"), "demo-work")
+  assert_eq(text(Some(fill[0]), "password"), "pw-demo-work")
   // the focus left the login: nothing offered
   r.state("live", others=[])
   r.t.draw()
@@ -995,18 +1037,18 @@ test "no 1Password tool but the system's autofill: 用密码管理器填入 asks
   assert_eq(@ui.fake_autofill_asks, ["github.com"])
   assert_true(r.t.find("在密码管理器里选一个 github.com 的登录") is Some(_))
   // a login for another site than the one asked for: not filled
-  @ui.fake_autofill_picks("evil.example", "zzj", "pw-evil")
+  @ui.fake_autofill_picks("evil.example", "demo-user", "pw-evil")
   r.t.draw()
   r.t.draw()
   assert_eq(r.inputs().filter(fn(i) { text(Some(i), "t") == "fill" }).length(), 0)
-  @ui.fake_autofill_picks("github.com", "zzj-work", "pw-zzj-work")
+  @ui.fake_autofill_picks("github.com", "demo-work", "pw-demo-work")
   r.t.draw()
   r.t.draw()
   let fill = r.inputs().filter(fn(i) { text(Some(i), "t") == "fill" })
   assert_eq(fill.length(), 1)
   assert_eq(text(Some(fill[0]), "host"), "github.com")
-  assert_eq(text(Some(fill[0]), "username"), "zzj-work")
-  assert_eq(text(Some(fill[0]), "password"), "pw-zzj-work")
+  assert_eq(text(Some(fill[0]), "username"), "demo-work")
+  assert_eq(text(Some(fill[0]), "password"), "pw-demo-work")
   assert_eq(@ui.fake_autofill_asks, ["github.com", ""])
   assert_true(r.t.find("用密码管理器填入") is Some(_))
   // asked again, and the page's focus leaves the login while the service is asked (as the station says it as the app
@@ -1021,12 +1063,12 @@ test "no 1Password tool but the system's autofill: 用密码管理器填入 asks
   r.t.draw()
   assert_eq(@ui.fake_autofill_asks, ["github.com", "", "github.com"])
   assert_true(r.t.find("在密码管理器里选一个 github.com 的登录") is Some(_))
-  @ui.fake_autofill_picks("github.com", "zzj", "pw-zzj")
+  @ui.fake_autofill_picks("github.com", "demo-user", "pw-demo-user")
   r.t.draw()
   r.t.draw()
   let fill = r.inputs().filter(fn(i) { text(Some(i), "t") == "fill" })
   assert_eq(fill.length(), 2)
-  assert_eq(text(Some(fill[1]), "username"), "zzj")
+  assert_eq(text(Some(fill[1]), "username"), "demo-user")
   assert_eq(@ui.fake_autofill_asks, ["github.com", "", "github.com", ""])
   assert_true(r.t.find("在密码管理器里选一个 github.com 的登录") is None)
   screen_done(r.t)
@@ -1044,7 +1086,7 @@ test "the autofill service's sign-in takes the app out of sight: the login picke
   // 1Password asks for a fingerprint in a screen of its own: the app goes out of sight, the view is let go of
   r.t.app_state(false, false)
   r.t.draw()
-  @ui.fake_autofill_picks("github.com", "zzj-work", "pw-zzj-work")
+  @ui.fake_autofill_picks("github.com", "demo-work", "pw-demo-work")
   r.t.draw()
   r.t.draw()
   let fills = fn() { r.inputs().filter(fn(i) { text(Some(i), "t") == "fill" }) }
@@ -1060,7 +1102,7 @@ test "the autofill service's sign-in takes the app out of sight: the login picke
   r.t.draw()
   assert_eq(fills().length(), 1)
   assert_eq(text(Some(fills()[0]), "host"), "github.com")
-  assert_eq(text(Some(fills()[0]), "username"), "zzj-work")
+  assert_eq(text(Some(fills()[0]), "username"), "demo-work")
   r.t.draw()
   assert_eq(fills().length(), 1)
   screen_done(r.t)

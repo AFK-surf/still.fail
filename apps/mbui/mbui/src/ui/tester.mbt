@@ -76,6 +76,7 @@ pub fn Tester::end_run(self : Tester, restore : &@hostapi.Host) -> Unit {
 fn reset_globals() -> Unit {
   window_zoom_reset()
   run_let_go()
+  the_ctx.val.let_go()
   the_ctx.val = Ctx::new()
   looks_reset()
   hand_reset()
@@ -113,6 +114,7 @@ fn reset_globals() -> Unit {
   drop_reset()
   fake_op.val = None
   fake_op_runs.clear()
+  fake_op_pending.val = false
   fake_autofill.val = false
   fake_autofill_asks.clear()
   fake_autofill_picked.val = ""
@@ -152,6 +154,7 @@ fn reset_globals() -> Unit {
   words_kept.clear()
   words_sel.clear()
   list_counts.clear()
+  list_keys_seen.clear()
   second_ptr[2] = 0.0
   bench.mode = 0
   g_view.val = fn(_c) { () }
@@ -185,7 +188,7 @@ fn leaked_state() -> Array[String] {
   check("desk.menus", desk.menus.length() + desk.mutable_menus.length())
   check("desk.keys", desk.keys.length() + desk.mutable_keys.length())
   check("desk.sels", desk.sels.length() + desk.next_sels.length())
-  check("picked", (if picked.from.base != 0 { 1 } else { 0 }) + picked.spans.length())
+  check("picked", (if picked.from.base != NoSel { 1 } else { 0 }) + picked.spans.length())
   check("image_cache", image_cache.length())
   check("image_data", image_data.length())
   check("image_vector_drawers", image_vector_drawers.length())
@@ -200,7 +203,7 @@ fn leaked_state() -> Array[String] {
   check("drags", drags.length())
   check("sideways", sideways.length())
   check("words", words_kept.length() + words_sel.length())
-  check("list_counts", list_counts.length())
+  check("list_counts", list_counts.length() + list_keys_seen.length())
   check("timers", helds.length() + marks_at.length())
   check("drawing", dr.entries.length() + dr.overlay.length() + dr.raised.length() + dr.carry.length())
   check("messages", fake_posted.length())
@@ -333,6 +336,7 @@ pub fn Tester::new(
     frame_failed_images: [],
     bold: 0.0,
     ui_face: 0.0,
+    generation: 0,
     tabular: 0.0,
     glyph_box: (6.0, 10.0),
     faces_wider: {},
@@ -429,6 +433,8 @@ pub fn Tester::new(
     live,
     live_images: {},
     shots: [],
+    shot_sizes: [],
+    shot_drawn: [],
   }
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)
@@ -900,7 +906,8 @@ pub fn Tester::find(self : Tester, s : String) -> (Double, Double)? {
   match view_tree() {
     Some(tree) =>
       for d in tree.drawn() {
-        if d.words.contains(s) {
+        // (none of a page's bones: View::bones)
+        if d.bones == 0L && view_words_found(d).contains(s) {
           return Some((d.x + d.w / 2.0, d.y + d.h / 2.0))
         }
       }
@@ -944,6 +951,14 @@ pub fn Tester::find_last(self : Tester, s : String) -> (Double, Double)? {
   while j < over.length() {
     walk(over[j], true)
     j += 1
+  }
+  match view_tree() {
+    Some(tree) => for d in tree.drawn() {
+      if d.bones == 0L && view_words_found(d).contains(s) {
+        found.val = Some((d.x + d.w / 2.0, d.y + d.h / 2.0))
+      }
+    }
+    None => ()
   }
   found.val
 }
@@ -1247,6 +1262,14 @@ pub fn Tester::image_nodes(self : Tester) -> Array[(String, Double, Double)] {
 /// text node's words, where its top left is drawn (moved by its own look and its ancestors': Ctx::drawn_at), its size
 /// as laid out, and how opaque it is drawn (its and its ancestors' opacities and looks' alphas, multiplied).
 pub fn Tester::words(self : Tester) -> Array[(String, Double, Double, Double, Double, Double)] {
+  self.words_marked().map(fn(w) { w.0 })
+}
+
+///|
+/// Tester::words' words, each with whether nothing of it is read out (an old view's made where nothing is,
+/// Ctx::hidden_from_semantics; a node of the window's tree under a modal layer it is not in, or kept from what is read
+/// out: Tree::reads_out): one list, so the two never part.
+fn Tester::words_marked(self : Tester) -> Array[((String, Double, Double, Double, Double, Double), Bool)] {
   ignore(self)
   let c = g()
   let out = []
@@ -1265,20 +1288,29 @@ pub fn Tester::words(self : Tester) -> Array[(String, Double, Double, Double, Do
         }
         p = c.nodes[p].parent
       }
-      out.push((n.text, x, y, n.fw, n.fh, alpha))
+      out.push(((n.text, x, y, n.fw, n.fh, alpha), n.sem_hid))
     }
   }
   // (and the words of the window's tree's nodes, where and as faded as they are drawn, as Tester::find finds them)
   match view_tree() {
     Some(tree) =>
       for d in tree.drawn() {
-        if d.words != "" {
-          out.push((d.words, d.x, d.y, d.w, d.h, d.alpha))
+        // (a field's placeholder too, its hint: view_words_found)
+        let words = view_words_found(d)
+        if words != "" && d.bones == 0L {
+          out.push(((words, d.x, d.y, d.w, d.h, d.alpha), !tree.reads_out(d.id)))
         }
       }
     None => ()
   }
   out
+}
+
+///|
+/// The words Tester::words has of the app's own nodes, but those made where nothing is read out (Ctx::hidden_from_semantics:
+/// a picture drawn small to stand for itself, say), as a person reading the screen out would have them.
+pub fn Tester::words_said(self : Tester) -> Array[(String, Double, Double, Double, Double, Double)] {
+  self.words_marked().filter(fn(w) { !w.1 }).map(fn(w) { w.0 })
 }
 
 ///|
@@ -1296,7 +1328,7 @@ pub fn Tester::rect_of(self : Tester, s : String) -> (Double, Double, Double, Do
   match view_tree() {
     Some(tree) =>
       for d in tree.drawn() {
-        if d.words.contains(s) && d.alpha > 0.0 {
+        if d.bones == 0L && view_words_found(d).contains(s) && d.alpha > 0.0 {
           return Some((d.x, d.y, d.w, d.h))
         }
       }
@@ -1655,9 +1687,11 @@ pub fn Tester::set_perf(self : Tester, state : Int) -> Unit {
 }
 
 ///|
-/// How many bytes the performance record's files have from now on (@hostapi.perf_size).
+/// How many bytes the performance record's files have from now on (@hostapi.perf_size), told as a host tells it wrote
+/// them (its event: hostcall.mbt's on_outside, outside_perf).
 pub fn Tester::set_perf_size(self : Tester, bytes : Double) -> Unit {
   self.fake.perf_bytes = bytes
+  on_outside(outside_perf, 0, 1)
 }
 
 ///|
@@ -1940,7 +1974,8 @@ pub fn Tester::rich_of(self : Tester, s : String) -> (RichLayout, Double, Double
 
 ///|
 /// Where the words `s` of a rich paragraph are drawn: one rectangle a line
-/// (x, y, w, h).
+/// (x, y, w, h). An old view's paragraph, else a node of the window's tree's words in pieces (View::words_runs: laid
+/// out as it draws them, view_runs_laid; as big as it is drawn), the first that holds them.
 pub fn Tester::run_rects(self : Tester, s : String) -> Array[(Double, Double, Double, Double)] {
   match self.rich_of(s) {
     Some((rl, x, y)) =>
@@ -1951,8 +1986,33 @@ pub fn Tester::run_rects(self : Tester, s : String) -> Array[(Double, Double, Do
           .map(fn(r) { (r.0 + x, r.1 + y, r.2, r.3) })
         None => []
       }
-    None => []
+    None => tree_run_rects(s)
   }
+}
+
+///|
+/// Where the words `s` of a node of the window's tree's words in pieces are drawn, as it lays them out now: one
+/// rectangle a line, in the window (its line in its middle where it says so: its start's room before it).
+fn tree_run_rects(s : String) -> Array[(Double, Double, Double, Double)] {
+  let out : Array[(Double, Double, Double, Double)] = []
+  guard view_app.val is Some(tree) else { return out }
+  tree.laid_as_now()
+  tree.each_drawn_scaled(fn(c, x, y, a, sc) {
+    if out.length() > 0 || c.runs.is_empty() || a <= 0.0 {
+      return
+    }
+    let (_, lay, _) = view_runs_laid(c.runs, c.words_look, c.runs_look, c.w)
+    match lay.text.find(s) {
+      Some(i) =>
+        for r in lay.rects(i, i + s.length()) {
+          // (each line where it is drawn: in the middle of the node where it says so, view_host's picked rects')
+          let dx = rich_shift_at(lay, r.1 + r.3 / 2.0, if c.words_center { c.w } else { -1.0 })
+          out.push((x + (r.0 + dx) * sc, y + r.1 * sc, r.2 * sc, r.3 * sc))
+        }
+      None => ()
+    }
+  })
+  out
 }
 
 ///|
@@ -2141,6 +2201,13 @@ pub fn Tester::ui_face_wider(self : Tester, em : Double) -> Unit {
 }
 
 ///|
+/// The host's glyphs moved on (@hostapi.atlas_generation), as a host's do once a face it was given is in (a page's,
+/// loaded after it was asked for), its scale changes or its atlas is lost: seen as the next frame begins.
+pub fn Tester::glyphs_moved_on(self : Tester) -> Unit {
+  self.fake.generation = self.fake.generation + 1
+}
+
+///|
 /// Digits set all one width (@hostapi.style_tabular) `em` ems wider than set otherwise, from now on (the fake host's
 /// shapes ignore it otherwise).
 pub fn Tester::tabular_wider(self : Tester, em : Double) -> Unit {
@@ -2171,6 +2238,16 @@ pub fn Tester::drawn_of(self : Tester, s : String) -> (Double, Double)? {
     if n.bones == 0L && (n.kind == kind_text || n.kind == kind_rich) && n.text.contains(s) {
       return Some(c.drawn_at(i))
     }
+  }
+  // (or the words of a node of the window's tree, where it is drawn, as Tester::rect_of finds them)
+  match view_tree() {
+    Some(tree) =>
+      for d in tree.drawn() {
+        if d.bones == 0L && view_words_set(d.words, d.words_look).contains(s) && d.alpha > 0.0 {
+          return Some((d.x, d.y))
+        }
+      }
+    None => ()
   }
   None
 }
@@ -2204,6 +2281,35 @@ pub fn Tester::shown_of(self : Tester, s : String) -> (Double, Double, Double, D
       }
       return Some((x0, y0, dmax(x1 - x0, 0.0), dmax(y1 - y0, 0.0)))
     }
+  }
+  // (or the words of a node of the window's tree, as much of them as is drawn: cut by what holds them that cuts what
+  // it holds (View::clips), as drawn)
+  match view_tree() {
+    Some(tree) => {
+      let drawn = tree.drawn_held()
+      for e in drawn {
+        let (d, holder, _) = e
+        if d.bones == 0L && view_words_set(d.words, d.words_look).contains(s) && d.alpha > 0.0 {
+          let mut x0 = d.x
+          let mut y0 = d.y
+          let mut x1 = d.x + d.w
+          let mut y1 = d.y + d.h
+          let mut h = holder
+          while h >= 0 {
+            let (a, up, _) = drawn[h]
+            if a.clips {
+              x0 = dmax(x0, a.x)
+              y0 = dmax(y0, a.y)
+              x1 = dmin(x1, a.x + a.w)
+              y1 = dmin(y1, a.y + a.h)
+            }
+            h = up
+          }
+          return Some((x0, y0, dmax(x1 - x0, 0.0), dmax(y1 - y0, 0.0)))
+        }
+      }
+    }
+    None => ()
   }
   None
 }
@@ -2518,6 +2624,17 @@ pub fn Tester::click(self : Tester, role : Role, label? : String = "") -> Unit r
 /// `action` asked of the node of `role` labelled `label` (as a screen reader asks it), settled.
 pub fn Tester::act(self : Tester, role : Role, action : Action, label? : String = "") -> Unit raise {
   let s = self.get(role, label~)
+  if s.id == 0 {
+    fail("\{s.describe()} takes no action")
+  }
+  g().ask_action(s.id, action)
+  self.draw()
+}
+
+///|
+/// Asks `s` (one of what the semantics tree says, Tester::all's: of several alike, the one a test means) to do `action`,
+/// as Tester::act asks the one of its role and label.
+pub fn Tester::act_on(self : Tester, s : SemNode, action : Action) -> Unit raise {
   if s.id == 0 {
     fail("\{s.describe()} takes no action")
   }

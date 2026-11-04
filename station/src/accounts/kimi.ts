@@ -12,8 +12,7 @@ import { arch, hostname, release, type } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { writePrivate } from "../ops/files.ts";
-import { profileFetch } from "../ops/agent-env.ts";
-import { type Device, type DeviceAnswer, RenewRefused } from "./console.ts";
+import { type Device, type DeviceAnswer, pollAnswer, postForm, renewAnswer } from "./console.ts";
 
 type Json = any;
 
@@ -65,20 +64,7 @@ export function writeKimi(home: string, login: KimiLogin) {
 /// Whether a sign-in's token is to be renewed now: less than half its life left (at least 5 minutes, as kimi-cli).
 export const kimiDue = (login: KimiLogin, now: number) => login.expiresAt - now < Math.max(5 * 60_000, login.lifeMs / 2);
 
-async function post(base: string, path: string, form: Record<string, string>, deviceId: string): Promise<{ status: number; body: Json }> {
-  const response = await profileFetch(`${base}${path}`, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json", ...kimiHeaders(deviceId) },
-    body: new URLSearchParams({ client_id: CLIENT_ID, ...form }).toString(),
-    signal: AbortSignal.timeout(20_000),
-  });
-  const text = await response.text();
-  let body: Json = null;
-  try {
-    body = JSON.parse(text);
-  } catch {}
-  return { status: response.status, body };
-}
+const post = (base: string, path: string, form: Record<string, string>, deviceId: string) => postForm(`${base}${path}`, { client_id: CLIENT_ID, ...form }, kimiHeaders(deviceId));
 
 const tokenOf = (body: Json): KimiToken | null =>
   typeof body?.access_token === "string" && typeof body?.refresh_token === "string"
@@ -101,18 +87,11 @@ export async function startKimiDevice(base: string, deviceId: string): Promise<D
 export async function kimiDeviceToken(base: string, deviceCode: string, deviceId: string): Promise<DeviceAnswer> {
   const { status, body } = await post(base, "/api/oauth/token", { device_code: deviceCode, grant_type: "urn:ietf:params:oauth:grant-type:device_code" }, deviceId);
   const token = status === 200 ? tokenOf(body) : null;
-  if (token) return { token: { ...token, org: null } };
-  const error = errorOf(status, body);
-  if (error === "authorization_pending" || error === "slow_down") return { pending: true, slowDown: error === "slow_down" };
-  return { error };
+  return pollAnswer(token && { ...token, org: null }, () => errorOf(status, body));
 }
 
 /// A new access token for a refresh token (which is spent: the one returned replaces it).
 export async function renewKimiToken(base: string, refresh: string, deviceId: string): Promise<KimiToken> {
   const { status, body } = await post(base, "/api/oauth/token", { grant_type: "refresh_token", refresh_token: refresh }, deviceId);
-  const token = status === 200 ? tokenOf(body) : null;
-  if (token) return token;
-  const error = errorOf(status, body);
-  if (status === 400 || status === 401 || status === 403) throw new RenewRefused(status, error);
-  throw new Error(error);
+  return renewAnswer(status, status === 200 ? tokenOf(body) : null, () => errorOf(status, body));
 }

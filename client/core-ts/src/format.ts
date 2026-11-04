@@ -1,10 +1,10 @@
 // Words and marks the clients show, decided here once (format.rs): numbers, times and durations in words, day
 // headings, a thread's name, an agent's label, a model's maker, a runtime's efforts, a connect's state. Times are the
 // viewer's local ones: `offsetMin` is their UTC offset at that moment (Host).
-import * as brand from "./brand.ts";
 import { current, tr, type Lang } from "./i18n.ts";
 import * as model from "./shapes/model.ts";
 import * as reasoning from "./shapes/reasoning.ts";
+import * as titles from "./titles.ts";
 import { get, str } from "./util.ts";
 
 const MINUTE = 60_000;
@@ -164,6 +164,20 @@ export function timeUntilIn(lang: Lang, ms: number, now: number): string {
   return tr(lang, "core-logic.format.until.days", { n: round(hours / 24) });
 }
 
+/// A deadline's remaining time, to the minute, without a unit that is zero: 3 天 5 小时后, 3 天后, 6 小时 35 分钟后,
+/// 1 小时后, 25 分钟后, 1 分钟内.
+export function preciseTimeUntil(ms: number, now: number): string {
+  const lang = current();
+  const remaining = Math.max(ms - now, 0);
+  const minutes = Math.floor(remaining / MINUTE);
+  if (remaining < MINUTE) return tr(lang, "core-logic.format.until.minute");
+  if (minutes < 60) return tr(lang, "core-logic.format.until.minutes", { n: minutes });
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return minutes % 60 === 0 ? tr(lang, "core-logic.format.until.hours", { n: hours }) : tr(lang, "core-logic.format.until.hours_minutes", { h: hours, m: minutes % 60 });
+  const days = Math.floor(hours / 24);
+  return hours % 24 === 0 ? tr(lang, "core-logic.format.until.days", { n: days }) : tr(lang, "core-logic.format.until.days_hours", { n: days, h: hours % 24 });
+}
+
 /// When a quota window refills, in words.
 export function refillsIn(ms: number, now: number): string {
   return refillsInLang(current(), ms, now);
@@ -247,22 +261,7 @@ export function dayLabelIn(lang: Lang, ms: number, now: number, offsetMin: numbe
 
 /// Slack mentions and spacing out, for a title.
 export function cleanText(text: string): string {
-  let out = "";
-  let rest = text;
-  for (;;) {
-    const at = rest.indexOf("<@");
-    if (at < 0) break;
-    out += rest.slice(0, at);
-    const tail = rest.slice(at + 2);
-    const m = /^[A-Z0-9]*/.exec(tail)![0].length;
-    if (m > 0 && tail.slice(m).startsWith(">")) rest = tail.slice(m + 1);
-    else {
-      out += "<@";
-      rest = tail;
-    }
-  }
-  out += rest;
-  return splitWhitespace(out).join(" ");
+  return titles.splitWhitespace(titles.withoutMentions(text)).join(" ");
 }
 
 /// A message's text as plain words on a line, for where it is shown in brief (a chat's row, a notice): Markdown's and
@@ -304,11 +303,24 @@ export function plainText(text: string): string {
 const IMAGE = /\.(png|jpe?g|gif|webp|svg|heic|avif)(\?[^)\s]*)?$/i;
 
 /// Rust's `split_whitespace`: Unicode white space.
-export function splitWhitespace(text: string): string[] {
-  return text.split(/[\s\u0085]+/u).filter((w) => w !== "");
+export const splitWhitespace = titles.splitWhitespace;
+
+
+/// Where a Slack or Feishu thread is, in words: #channel, 私信, the Feishu group; null for a still.fail chat.
+export function placeName(surface: string, channel: string, channelName: string): string | null {
+  return titles.placeName(surface, channel, channelName, { directMessage: tr(current(), "core-views.direct_message"), feishu: tr(current(), "core-logic.format.thread.feishu") });
 }
 
-/// A thread named for people: where (its channel by name, 私信, or a still.fail chat's title) and when it began.
+/// What a chat is called, as its station calls it (read/views.ts titleOf): the name people gave it, else the one its
+/// agent gave it; a chat of still.fail's own is a new chat until it has one, the same all along; a Slack or Feishu
+/// thread the first line a person wrote in it, else its channel.
+export function chatTitle(thread: unknown): string {
+  const words = { untitled: tr(current(), "core-views.new_chat"), directMessage: tr(current(), "core-views.direct_message") };
+  return titles.chatTitle(thread as titles.Titled, str(get(thread, "firstText")) ?? null, str(get(thread, "channelName")) ?? null, words);
+}
+
+/// A thread named for people: where (a still.fail chat by its title, chatTitle; a Slack or Feishu thread by its place,
+/// placeName) and when it began.
 export function threadName(threads: unknown[], channel: string, threadTs: string, offsetMin: number): [string, string] {
   const thread = threads.find((t) => str(get(t, "channel")) === channel && str(get(t, "threadTs")) === threadTs);
   const parsed = Number(threadTs);
@@ -317,29 +329,14 @@ export function threadName(threads: unknown[], channel: string, threadTs: string
   const started = Number.isFinite(parsed) && threadTs.trim() !== "" ? parsed * 1000 : typeof made === "number" ? made : 0;
   const [, month, day] = local(started, offsetMin);
   const when = tr(current(), "core-logic.format.date_time", { date: monthDay(current(), month, day), time: clock(started, offsetMin) });
-  const text = (k: string) => str(get(thread, k)) ?? "";
-  let where: string;
-  if (channel === "EMBER" || channel === "STILLFAIL") {
-    const title = text("title");
-    if (title !== "") where = title;
-    else {
-      const first = cleanText(text("firstText"));
-      where = first === "" ? tr(current(), "core-logic.format.thread.chat", { brand: brand.name() }) : first;
-    }
-  } else if (isFeishuChat(channel) || str(get(thread, "surface"))?.startsWith("feishu:")) {
-    // A Feishu chat (群, 私聊) by its name, as its station read it.
-    const n = text("channelName");
-    where = n === "" ? tr(current(), "core-logic.format.thread.feishu") : n;
-  } else if (channel.startsWith("D")) where = tr(current(), "core-logic.format.thread.dm");
-  else {
-    const n = text("channelName");
-    where = `#${n === "" ? channel : n}`;
-  }
+  const own = channel === "EMBER" || channel === "STILLFAIL";
+  // (a thread its station has not told of is a Slack one by its channel)
+  const where = own ? chatTitle({ ...(thread as object), surface: "ember" }) : placeName(str(get(thread, "surface")) || "slack", channel, str(get(thread, "channelName")) ?? "") ?? `#${channel}`;
   return [where, when];
 }
 
 /// A Feishu chat's id (`oc_…`, docs/feishu.md).
-export const isFeishuChat = (channel: string) => /^oc_[A-Za-z0-9_-]+$/.test(channel);
+export const isFeishuChat = titles.isFeishuChat;
 
 /// "C0OPS/1727.0001" → its channel and thread; a Feishu chat's "oc_…/om_…" (or a topic's "omt_…") too.
 export function splitThread(address: string): [string, string] | null {
@@ -472,10 +469,10 @@ export function efforts(runtime: string): string[] {
 }
 
 /// The runtimes a chat can run on, in the order they are offered.
-export const RUNTIMES = ["claude", "codex", "dsh", "grok", "cursor", "devin", "hermes"];
+export const RUNTIMES = ["claude", "codex", "dsh", "grok", "cursor", "devin", "hermes", "agy"];
 
 /// The runtimes by name, the same in every language.
-const RUNTIME_NAMES: Record<string, string> = { claude: "Claude Code", codex: "Codex", dsh: "DeepSeek Harness", grok: "Grok Build", cursor: "Cursor", devin: "Devin", hermes: "Hermes Agent" };
+const RUNTIME_NAMES: Record<string, string> = { claude: "Claude Code", codex: "Codex", dsh: "DeepSeek Harness", grok: "Grok Build", cursor: "Cursor", devin: "Devin", hermes: "Hermes Agent", agy: "Antigravity CLI" };
 
 export function runtimeLabel(runtime: string): string {
   return RUNTIME_NAMES[runtime] ?? "Claude Code";
@@ -514,10 +511,18 @@ export function failureText(detail: string): string {
       return said("core-logic.format.failure.rate_limit");
     case "overloaded":
       return said("core-logic.format.failure.overloaded");
+    case "network":
+      return said("core-logic.format.failure.network");
+    case "context":
+      return said("core-logic.format.failure.context");
     case "auth":
       return said("core-logic.format.failure.auth");
     case "refused":
       return said("core-logic.format.failure.refused");
+    case "blocked":
+      return said("core-logic.format.failure.blocked");
+    case "denied":
+      return said("core-logic.format.failure.denied");
     case "model":
       return said("core-logic.format.failure.model");
     case "exited":

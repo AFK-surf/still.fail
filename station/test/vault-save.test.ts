@@ -212,39 +212,39 @@ test("a secret to keep in a vault: sealed to its owner's devices, decided by the
     await assert.rejects(h.secrets.save("s1", { name: "UX7", kind: "login", reason: "x", value: "p", modes: ["ssh"], cwd: h.dir }), /SSH key is given by ssh/);
     await assert.rejects(h.secrets.save("s1", { name: "UX7", kind: "token", reason: "x", value: "p", modes: ["proxy"], cwd: h.dir }), /names its hosts/);
 
-    const asked = h.secrets.save("s1", { name: "UniFi UX7", kind: "login", reason: "log in to the router", value: PASSWORD, username: "zzj", env: "UX7_PASSWORD", cwd: h.dir });
+    const asked = h.secrets.save("s1", { name: "测试服务登录", kind: "login", reason: "log in to the test service", value: PASSWORD, username: "demo-user", env: "SERVICE_PASSWORD", cwd: h.dir });
     await tick();
     const [r] = pendingOf(h.secrets, w.state, "alice@x.com");
     assert.ok(r && r.save && r.vault === VAULT && r.owner === "alice@x.com" && r.box !== "");
-    assert.deepEqual(r.save, { kind: "login", name: "UniFi UX7", modes: ["env"], hosts: [], env: "UX7_PASSWORD", username: "zzj" });
+    assert.deepEqual(r.save, { kind: "login", name: "测试服务登录", modes: ["env"], hosts: [], env: "SERVICE_PASSWORD", username: "demo-user" });
     // Sealed to her device alone (bob's is his), nothing of it in the clear.
     assert.deepEqual(r.sealed!.map((s) => s.device), [w.alice.base.hex]);
-    assert.deepEqual(opened(r, w.alice), { username: "zzj", password: PASSWORD });
+    assert.deepEqual(opened(r, w.alice), { username: "demo-user", password: PASSWORD });
     assert.ok(!JSON.stringify(r).includes(PASSWORD));
     // The card: what it is and whose, to keep or turn down.
     const { text, card } = h.cards[0]!;
-    assert.equal(text, "申请将「UniFi UX7」存入密钥库（登录 · zzj）：log in to the router");
+    assert.equal(text, "申请将「测试服务登录」存入密钥库（登录 · demo-user）：log in to the test service");
     assert.equal(card.assignee, "alice@x.com");
     assert.deepEqual(card.options.map((o: { label: string }) => o.label), ["存入密钥库", "拒绝"]);
-    assert.deepEqual(card.vault.save, { kind: "login", username: "zzj" });
+    assert.deepEqual(card.vault.save, { kind: "login", username: "demo-user" });
 
     // bob neither sees nor decides it; alice's word comes only once the item is in her vault here.
     assert.deepEqual(pendingOf(h.secrets, w.state, "bob@x.com"), []);
     assert.match(h.secrets.saved(w.state, "bob", { request: r.id, vault: VAULT })!, /only the person it is kept for/);
     assert.match(h.secrets.grant(w.state, "alice", { request: r.id } as never)!, /POST vault\/saves/);
     assert.match(h.secrets.saved(w.state, "alice", { request: r.id, vault: VAULT })!, /not in that vault here/);
-    h.vaults.putItem(written(r, w.alice, { username: "zzj", password: PASSWORD }));
+    h.vaults.putItem(written(r, w.alice, { username: "demo-user", password: PASSWORD }));
     // Her app's grant to this chat comes with it, sealed to the request's box.
     const grant: Grant = signed(
-      { v: 1 as const, ws: WS, request: r.id, vault: VAULT, item: r.item, mode: "env" as const, hosts: [], scope: "chat" as const, exp: 1000 + 30 * 86400, secret: seal(r.box, Buffer.from(JSON.stringify({ kind: "login", name: "UniFi UX7", fields: { username: "zzj", password: PASSWORD } })), grantContext(WS, r.id)), at: 1000 },
+      { v: 1 as const, ws: WS, request: r.id, vault: VAULT, item: r.item, mode: "env" as const, hosts: [], scope: "chat" as const, exp: 1000 + 30 * 86400, secret: seal(r.box, Buffer.from(JSON.stringify({ kind: "login", name: "测试服务登录", fields: { username: "demo-user", password: PASSWORD } })), grantContext(WS, r.id)), at: 1000 },
       TAG.grant, w.alice.signer,
     );
     assert.equal(h.secrets.saved(w.state, "alice", { request: r.id, vault: VAULT, grant }), null);
-    assert.match(await decided(h, asked), /Kept: 「UniFi UX7」 is in alice@x.com's vault now \(item i_\w+\)\. This chat may use it now: secret_run \{grant: "r_/);
+    assert.match(await decided(h, asked), /Kept: 「测试服务登录」 is in alice@x.com's vault now \(item i_\w+\)\. This chat may use it now: secret_run \{grant: "r_/);
     assert.deepEqual(h.secrets.held("s1").map((x) => [x.request.id, x.grant.scope, x.secret.fields.password]), [[r.id, "chat", PASSWORD]]);
     // Now one agents may ask for; the save is no use of it.
-    assert.deepEqual(h.secrets.listings("s1").map((l) => l.listing.name), ["UniFi UX7"]);
-    assert.deepEqual(h.secrets.uses(WS, w.state, VAULT, { sub: "alice", email: "alice@x.com" }), []);
+    assert.deepEqual(h.secrets.listings("s1").map((l) => l.listing.name), ["测试服务登录"]);
+    assert.deepEqual(await h.secrets.uses(WS, w.state, VAULT, { sub: "alice", email: "alice@x.com" }), []);
     assert.match(h.secrets.saved(w.state, "alice", { request: r.id, vault: VAULT })!, /the request is granted/);
 
     // Turned down from one of her devices, signed; not by bob.
@@ -266,7 +266,7 @@ test("a secret to keep while the vault is not turned on: it waits, sealed to the
   const h = harness(() => w.state);
   try {
     assert.equal(h.secrets.status("s1"), "off");
-    const asked = h.secrets.save("s1", { name: "UniFi UX7", kind: "login", reason: "router", value: PASSWORD, cwd: h.dir });
+    const asked = h.secrets.save("s1", { name: "测试服务登录", kind: "login", reason: "test service", value: PASSWORD, cwd: h.dir });
     await tick();
     let [r] = pendingOf(h.secrets, w.state, "alice@x.com");
     assert.ok(r && r.vault === "" && r.sealed!.length === 0);
@@ -286,7 +286,7 @@ test("a secret to keep while the vault is not turned on: it waits, sealed to the
     h.vaults.putVault(w.vault);
     h.vaults.putItem(written(r!, w.alice, { password: PASSWORD }));
     assert.equal(h.secrets.saved(w.state, "alice", { request: r!.id, vault: VAULT }), null);
-    assert.match(await decided(h, asked), /Kept: 「UniFi UX7」.*When you need it, ask with secret_use/);
+    assert.match(await decided(h, asked), /Kept: 「测试服务登录」.*When you need it, ask with secret_use/);
 
     // One sealed to no device is gone with a restart; one sealed to a device stays.
     void h.secrets.save("s1", { name: "Lost", kind: "token", reason: "z", value: "tok", cwd: h.dir });
@@ -382,7 +382,7 @@ test("a secret its owner types in: nothing of it held or sealed here, the card a
 test("a secret its owner types in without security mode: written into their plain library with the fields their app sends, its secret not empty", async () => {
   const h = harness(() => null, "bob@x.com");
   try {
-    const asked = h.secrets.save("s1", { name: "Router", kind: "login", reason: "router", cwd: h.dir });
+    const asked = h.secrets.save("s1", { name: "Router", kind: "login", reason: "test service", cwd: h.dir });
     await tick();
     const [r] = pendingOf(h.secrets, null, "bob@x.com");
     assert.ok(r && r.vault === PLAIN && r.save?.typed === true);

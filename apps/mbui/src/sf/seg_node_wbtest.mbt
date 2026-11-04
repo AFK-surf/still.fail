@@ -215,3 +215,25 @@ test "a choice of a few as nodes short of room, its words made smaller to fit (t
   assert_eq(on.map(fn(s) { s.label }), ["源码"])
   assert_eq(thumb.map(fn(d) { (d.0, d.2) }), [(on[0].rect.0, on[0].rect.2)], msg="the thumb under 源码: \{thumb}")
 }
+
+///|
+test "a choice of a few as nodes: each option as wide as its words drawn, digits all one width where the tree's theme says so, whatever theme the old view was left in" {
+  let t = @ui.Tester::new(fn(_c) {  }, w=400.0, h=200.0, platform=0)
+  t.check_looks(false)
+  // (the old view's theme its own, digits as they come; the tree's words drawn with them all one width, set wider)
+  t.tabular_wider(0.25)
+  let labels = ["1 天", "30 天"]
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(fn() { { ..ui_theme_now(), tabular: true } })
+    root.row(Is(true)).padding(Is((20.0, 20.0, 20.0, 20.0))) |> ignore
+    seg_node(root, fn() { labels }, fn() { 1 }, fn(_) {  }) |> ignore
+  })
+  t.draw()
+  // (their words as they are drawn: digits all one width, in the tree's theme)
+  let c = @ui.current()
+  let size = c.sp(theme().t.ui)
+  let widest = labels.fold(init=0.0, fn(m, l) {
+    dmax(m, @ui.text_advance(l, size~, weight=500, style=@hostapi.style_tabular))
+  })
+  assert_eq(seg_shown(t, Radio).map(fn(s) { s.rect.2 }), [widest + 2.0 * segmented_in, widest + 2.0 * segmented_in])
+}

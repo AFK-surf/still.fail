@@ -39,7 +39,7 @@ test "words set as the tree's theme says: in the first frame at a narrow width, 
       .words(Is("ab cd ef gh ij"))
       .words_look(By(fn() {
         let (size, line) = tree_theme().text_size(Meta)
-        { size, weight: 400, line, wrap: true }
+        { size, weight: 400, line, wrap: true, tracking: @view.letters_own }
       }))
       |> ignore
     })

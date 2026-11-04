@@ -83,10 +83,11 @@ export const PARAMS: Record<string, string> = {
   "session.compact": "key:string",
   "session.clear": "key:string readBack?:boolean",
   "session.delete": "key:string",
-  "session.settings": "key:string profile?:string model?:string effort?:string fast?:boolean repick?:boolean afresh?:boolean",
+  "session.settings": "key:string runtime?:string profile?:string model?:string effort?:string fast?:boolean context?:number repick?:boolean afresh?:boolean",
   "chat.archive": "archived?:boolean session:string thread?:number",
   "chat.keep": "kept?:boolean thread:number",
   "chat.rename": "session?:string title?:string thread?:number",
+  "chat.regenerateTitle": "thread:number",
   "chat.pin": "pinned?:boolean session:string",
   "chat.relayPlaces": "thread:number",
   "chat.relay": "thread:number connect?:string channel?:string link?:string note?:string",
@@ -94,7 +95,7 @@ export const PARAMS: Record<string, string> = {
   "decision.dismiss": "thread:number seq:number",
   "decision.close": "thread:number seq:number option:string",
   "chat.report": "thread:number seq:number",
-  "session.new": "runtime?:string profile?:string model?:string effort?:string fast?:boolean preset?:string",
+  "session.new": "runtime?:string profile?:string model?:string effort?:string fast?:boolean context?:number preset?:string",
   "preset.add": "name:string dirs:json instructions?:string",
   "preset.put": "id:string name:string dirs:json instructions?:string",
   "preset.delete": "id:string",
@@ -162,18 +163,28 @@ export const PARAMS: Record<string, string> = {
   "screen.settings": "screen:string",
   "screen.setSetting": "screen:string name:string value:string",
   "screen.screenshot": "screen:string",
+  "screen.install": "screen:string path:string",
+  "screen.biometrics": "screen:string what:string",
+  "screen.uninstall": "screen:string app:string",
+  "screen.recordStart": "screen:string panel?:string",
+  "screen.recordStop": "screen:string",
+  "screen.openUrl": "screen:string url:string",
+  "screen.location": "screen:string at?:string",
+  "screen.statusBar": "screen:string tidy:boolean",
+  "screen.push": "screen:string app:string text:string",
   "signin.fill": "id:string login:json keep?:boolean",
   "signin.self": "id:string done?:boolean",
   "signin.deny": "id:string",
   "memory.get": "",
   "outflow.revoke": "id:string",
   "outflow.answer": "id:string allow:boolean scopes?:strings workspace?:boolean",
+  "outflow.tailcat": "on:boolean",
   "process.end": "pid:number session:string",
   "footprint.scan": "",
   "footprint.rebuild": "keys?:strings",
   "footprint.delete": "keys?:strings",
   "footprint.evict": "keys?:strings",
-  "software.update": "id?:string",
+  "software.update": "id?:string repair?:boolean",
   "software.updateAll": "",
   "software.check": "",
   "software.channel": "channel?:string",
@@ -360,7 +371,7 @@ function stationOp(name: string, params: unknown): Request | null {
     case "session.delete":
       return op("DELETE", () => `/sessions/${p.at("key")}`, null, session("key"));
     case "session.settings":
-      return op("POST", () => `/sessions/${p.at("key")}/settings`, p.pick(["profile", "model", "effort", "fast", "repick", "afresh"]), session("key"));
+      return op("POST", () => `/sessions/${p.at("key")}/settings`, p.pick(["runtime", "profile", "model", "effort", "fast", "context", "repick", "afresh"]), session("key"));
     case "chat.archive": {
       const method = p.bool("archived") ? "POST" : "DELETE";
       const fallback = op(method, () => `/sessions/${p.at("session")}/archive`, null, session("session"));
@@ -380,6 +391,10 @@ function stationOp(name: string, params: unknown): Request | null {
       const thread = optU64("thread");
       if (thread !== null) return op("PUT", () => `/threads/${thread}/title`, p.pick(["title"]), { kind: "thread", archived: false });
       return op("POST", () => `/sessions/${p.at("session")}/title`, p.pick(["title"]), session("session"));
+    }
+    case "chat.regenerateTitle": {
+      const thread = p.u64("thread");
+      return op("POST", () => `/threads/${thread}/regenerate-title`, null, { kind: "thread", archived: false });
     }
     case "chat.pin":
       return op(p.bool("pinned") ? "PUT" : "DELETE", () => `/sessions/${p.at("session")}/pin`, null, session("session"));
@@ -417,7 +432,7 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/threads/${thread}/report`, { n: p.u64("seq") }, NONE);
     }
     case "session.new":
-      return op("POST", () => "/sessions", p.pick(["runtime", "profile", "model", "effort", "fast", "preset"]), { kind: "session", key: null });
+      return op("POST", () => "/sessions", p.pick(["runtime", "profile", "model", "effort", "fast", "context", "preset"]), { kind: "session", key: null });
     // The workspace's presets on the station (docs/presets.md): what a chat starts knowing, chosen as it is opened.
     case "preset.add":
       return op("POST", () => "/presets", { name: p.str("name"), dirs: p.value("dirs"), instructions: p.word("instructions") ?? "" }, { kind: "presets" });
@@ -578,6 +593,27 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/screens/${p.at("screen")}/settings`, p.pick(["name", "value"]), NONE);
     case "screen.screenshot":
       return op("POST", () => `/screens/${p.at("screen")}/screenshot`, null, NONE);
+    // What Device Hub does of a device besides its keys: a link opened in it, where it is (`at`; none: nowhere), its status
+    // bar tidy, a notification to one of its apps.
+    // Its screen recorded (`panel`: `inner` or `cover`, where it has two); ended, its movie where the drive reads it (`{root, path}`).
+    case "screen.biometrics":
+      return op("POST", () => `/screens/${p.at("screen")}/biometrics`, p.pick(["what"]), NONE);
+    case "screen.uninstall":
+      return op("POST", () => `/screens/${p.at("screen")}/uninstall`, p.pick(["app"]), NONE);
+    case "screen.recordStart":
+      return op("POST", () => `/screens/${p.at("screen")}/record`, p.pick(["panel"]), NONE);
+    case "screen.recordStop":
+      return op("POST", () => `/screens/${p.at("screen")}/record/stop`, null, NONE);
+    case "screen.install":
+      return op("POST", () => `/screens/${p.at("screen")}/install`, p.pick(["path"]), NONE);
+    case "screen.openUrl":
+      return op("POST", () => `/screens/${p.at("screen")}/open-url`, p.pick(["url"]), NONE);
+    case "screen.location":
+      return op("POST", () => `/screens/${p.at("screen")}/location`, p.pick(["at"]), NONE);
+    case "screen.statusBar":
+      return op("POST", () => `/screens/${p.at("screen")}/status-bar`, p.pick(["tidy"]), NONE);
+    case "screen.push":
+      return op("POST", () => `/screens/${p.at("screen")}/push`, p.pick(["app", "text"]), NONE);
     // A sign-in its card asks of the person (station/src/vault/signin.ts, docs/vault.md 登录态): what their password
     // manager gave (`login`: username, password, code; an object, so `doing` keeps no copy of it), typed into the chat's
     // tab by the station; they sign in themselves on its screen (`signin.self`, `done` once they did); or they will not.
@@ -606,6 +642,10 @@ function stationOp(name: string, params: unknown): Request | null {
     // refused (docs/data-outflow.md). Its program takes the token the next time it asks.
     case "outflow.answer":
       return op("POST", () => `/outflow/requests/${p.at("id")}`, p.pick(["allow", "scopes", "workspace"]), { kind: "outflowGrants" });
+    // Programs of other machines let ask through Tailcat, or no longer (docs/data-outflow.md): an admin's switch; how
+    // it is, with the address to give, comes back in the overview (`outflowTailcat`).
+    case "outflow.tailcat":
+      return op("POST", () => "/outflow/tailcat", p.pick(["on"]), OVERVIEW);
     // A chat's process ended from its station's 进程 (resources/watch.ts `end`): the page reads it again in a moment.
     case "process.end":
       return op("POST", () => `/resources/processes/${p.u64("pid")}/end`, p.pick(["session"]), NONE);
@@ -618,7 +658,7 @@ function stationOp(name: string, params: unknown): Request | null {
     case "footprint.evict":
       return op("POST", () => "/footprint/evict", p.pick(["keys"]), FOOTPRINT);
     case "software.update":
-      return op("POST", () => "/updates", p.pick(["id"]), OVERVIEW);
+      return op("POST", () => "/updates", p.pick(["id", "repair"]), OVERVIEW);
     case "software.updateAll":
       return op("POST", () => "/updates/all", null, OVERVIEW);
     case "software.check":

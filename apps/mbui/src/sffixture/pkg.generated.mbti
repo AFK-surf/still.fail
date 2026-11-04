@@ -81,6 +81,8 @@ pub let fix_chats : Map[String, FixChat]
 
 pub let fix_clock : @ref.Ref[(() -> Double)?]
 
+pub fn fix_clock_set(@ref.Ref[Double], Double) -> Unit
+
 pub fn fix_compose_call(Fixture, String, Json) -> Result[Json, Json]?
 
 pub fn fix_compose_view(Fixture, String) -> Json
@@ -107,6 +109,8 @@ pub fn fix_detailed_chat(Json) -> Json
 
 pub let fix_docs : String
 
+pub let fix_done : @ref.Ref[Int32]
+
 pub fn fix_download_id(FixDownload) -> String
 
 pub fn fix_download_shown(FixDownload) -> Json
@@ -120,8 +124,6 @@ pub fn fix_draft_ref(String, String, Bool, Double, String, Bool) -> Unit
 pub let fix_drafts : Map[String, Json]
 
 pub fn fix_drive_downloads(String, String) -> Unit
-
-pub let fix_due : Array[() -> Unit]
 
 pub fn fix_entry(String, Bool, Int32, String) -> Json
 
@@ -183,6 +185,8 @@ pub fn fix_no_agent(Json) -> Json
 
 pub let fix_novel : @ref.Ref[String?]
 
+pub fn fix_now(() -> Unit) -> Unit
+
 pub let fix_outside : Array[(String, String, Bool)]
 
 pub fn fix_own(Array[Json]) -> Array[Json]
@@ -240,8 +244,6 @@ pub let fix_stream_ids : @ref.Ref[Int32]
 pub let fix_tall_models : Array[String]
 
 pub let fix_threads : Map[Int32, String]
-
-pub fn fix_tick(Fixture) -> Unit
 
 pub let fix_timers : Array[(Double, () -> Unit)]
 
@@ -356,6 +358,8 @@ pub fn fixture_log() -> Bytes
 pub fn fixture_markdown() -> String
 
 pub let fixture_md : String
+
+pub fn fixture_message_peek() -> Json
 
 pub fn fixture_named(String, Json?, (Result[(Json, Bytes), Json]) -> Unit) -> Unit
 
@@ -651,6 +655,7 @@ pub(all) struct Fixture {
   mut share_look : String
 }
 pub fn Fixture::changed(Self) -> Unit
+pub fn Fixture::changes(Self) -> Int32
 
 pub(all) struct NewFix {
   mut station : String
@@ -661,6 +666,7 @@ pub(all) struct NewFix {
   mut d_runtime : String
   mut d_effort : String
   mut d_profile : String
+  mut context : String
   mut made : Int32
   mut reading : Int32
   mut crowded : Bool

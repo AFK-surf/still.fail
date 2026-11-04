@@ -25,7 +25,7 @@ import { MAX_RELAYS, parseRelays, relays, relayUrls, sameUrl, waysOf } from "./r
 import type { Part } from "./changelog";
 import type { FeedbackInput } from "./feedback";
 import type { AccountEvent, AddedView, Admission, AdminFeedback, AdminPending, AdminUser, AdminWorkspace, DeviceView, FeedbackStatus, InvitationView, InviteCodeView, LockHead, LockRequestView, MeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
-import { apply, asEntry, entryHash, genesis, shortCode, type Entry, type LockEntry, type LockState } from "./lock";
+import { apply, asEntry, entryHash, extendLock, genesis, LockAppendRefused, shortCode, type Entry, type LockEntry, type LockState } from "./lock";
 export type { Role };
 
 export const ROLES: readonly Role[] = ["owner", "admin", "member"];
@@ -580,37 +580,19 @@ export class Directory extends DurableObject<Env> {
   async #appendLock(workspace: string, raw: unknown): Promise<LockHead | null> {
     const entries = (Array.isArray(raw) ? raw : []).map(asEntry);
     if (entries.length === 0 || entries.length > 256 || entries.some((e) => e === null || e.ws !== workspace)) fail(400, "invalid_lock_entries");
-    // Hashed before anything is read: nothing else runs on this object between the reads and the writes below (no
-    // await between them), so they are one step. What is refused throws before anything is written.
-    const hashed = await Promise.all((entries as LockEntry[]).map(async (e) => ({ e, hash: await entryHash(e) })));
-    let head = this.#lockHead(workspace);
-    let lastKind = head ? (JSON.parse(this.#one("SELECT entry FROM lock_entries WHERE workspace = ? AND seq = ?", workspace, head.seq)!.entry as string) as LockEntry).kind : null;
-    let restart = false;
-    const adding: { e: LockEntry; hash: string }[] = [];
-    for (const { e, hash } of hashed) {
-      if (e.kind === "genesis" && e.seq === 0 && e.prev === null) {
-        if (head?.genesis === hash) continue;
-        if (head && lastKind !== "disable") fail(409, "lock_exists");
-        restart = true;
-        adding.length = 0;
-      } else if (head && e.seq <= head.seq) {
-        const had = adding.find((a) => a.e.seq === e.seq)?.hash ?? (restart ? undefined : (this.#one("SELECT hash FROM lock_entries WHERE workspace = ? AND seq = ?", workspace, e.seq)?.hash as string | undefined));
-        if (had !== hash) fail(409, "lock_fork");
-        continue;
-      } else if (!head || e.seq !== head.seq + 1 || e.prev !== head.hash) fail(409, "lock_does_not_follow");
-      adding.push({ e, hash });
-      head = { seq: e.seq, hash, genesis: e.seq === 0 ? hash : head!.genesis };
-      lastKind = e.kind;
+    // Nothing else runs on this object between the reads and the writes below (no await between them), so they are
+    // one step. What is refused throws before anything is written.
+    this.#lockChecked(workspace);
+    const kept = this.#rows("SELECT entry FROM lock_entries WHERE workspace = ? ORDER BY seq", workspace).map((r) => JSON.parse(r.entry as string) as LockEntry);
+    let plan: ReturnType<typeof extendLock>;
+    try {
+      plan = extendLock(kept, entries as LockEntry[], nowSeconds());
+    } catch (e) {
+      if (e instanceof LockAppendRefused) fail(e.status, e.code);
+      throw e;
     }
+    const { restart, adding } = plan!;
     if (adding.length > 0) {
-      let state = restart ? null : this.#lockState(workspace);
-      for (const { e } of adding) {
-        try {
-          state = state === null ? genesis(e as Entry) : apply(state, e as Entry, nowSeconds());
-        } catch {
-          fail(409, "lock_refused");
-        }
-      }
       this.ctx.storage.transactionSync(() => {
         if (restart) this.#run("DELETE FROM lock_entries WHERE workspace = ?", workspace);
         for (const { e, hash } of adding) this.#run("INSERT INTO lock_entries (workspace, seq, hash, entry) VALUES (?, ?, ?, ?)", workspace, e.seq, hash, JSON.stringify(e));

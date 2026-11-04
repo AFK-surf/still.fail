@@ -68,7 +68,7 @@ const RELEASE = process.env.STILLFAIL_NATIVE_RELEASE ?? "native-artifacts";
 /// still.fail cloud (install.ts releaseType) to anyone, as the release is by GitHub.
 const STORE = process.env.STILLFAIL_NATIVE_STORE ?? "https://app.still.fail/releases/natives";
 
-/// Mini1's CI may resolve the release store directly, just as release-put.sh does for Cloudflare's API. Keep the
+/// the CI Mac's CI may resolve the release store directly, just as release-put.sh does for Cloudflare's API. Keep the
 /// original Host and TLS name, and leave GitHub and any other store or redirect to the machine's usual routing.
 export async function fetchNative(at: string, init: RequestInit = {}, redirects = 0): Promise<Response> {
   const url = new URL(at), dns = process.env.STILLFAIL_DIRECT_DNS;
@@ -239,10 +239,12 @@ function mbuiRenderer(app: string, launcher: string): Part {
     // Their own workflow tests and publishes them without holding up unrelated native parts.
     publish: [],
     rust: false,
+    // Generated interface summaries are not compiler inputs; `moon check` can rewrite them without changing a scene.
     inputs: ["apps/mbui/src", "apps/mbui/mbui/src", "apps/mbui/mbui/tools", "apps/mbui/mbui/scripts",
       "apps/mbui/moon.mod", "apps/mbui/moon.work", "apps/mbui/mbui/moon.mod",
       "apps/mbui/scripts/env.sh", "apps/mbui/scripts/mbui.sh", "apps/mbui/scripts/mac.sh", `apps/mbui/scripts/${launcher}`,
-      ":(exclude,glob)apps/mbui/**/*_test.mbt", ":(exclude,glob)apps/mbui/**/*_wbtest.mbt"],
+      ":(exclude,glob)apps/mbui/**/*_test.mbt", ":(exclude,glob)apps/mbui/**/*_wbtest.mbt",
+      ":(exclude,glob)apps/mbui/**/pkg.generated.mbti"],
     recipe: () => ({ app, target: "native", mode: "release", host: "macOS", scene: 1 }),
     build(t, out) {
       if (t !== "darwin-arm64" || osPlatform() !== "darwin" || osArch() !== "arm64") {
@@ -258,9 +260,29 @@ function mbuiRenderer(app: string, launcher: string): Part {
   };
 }
 
+/// The same scene in classic Wasm, with the Mac's offscreen text, pictures and Metal renderer. Stills only.
+function mbuiWasmFilm(): Part {
+  const base = mbuiRenderer("sffilm", "media.sh");
+  if (!Array.isArray(base.inputs)) throw new Error("mbui renderer inputs must be a list");
+  return {
+    ...base,
+    files: () => ["sffilm", "media.sh", "scene.wasm", "native.node", "run.mjs", "compact.mjs"],
+    inputs: [...base.inputs, "apps/mbui/tools/wasm-film", ":(exclude,glob)apps/mbui/tools/wasm-film/*test.mjs", "apps/mbui/scripts/wasm-film-build.sh"],
+    recipe: () => ({ app: "sfwasmfilm", target: "wasm", mode: "release", host: "macOS", scene: 1 }),
+    build(t, out) {
+      if (t !== "darwin-arm64" || osPlatform() !== "darwin" || osArch() !== "arm64") {
+        throw new Error("sfwasmfilm is built on an Apple Silicon Mac");
+      }
+      const module = join(ROOT, "apps/mbui");
+      run("bash", [join(module, "scripts/wasm-film-build.sh"), out], { cwd: module });
+    },
+  };
+}
+
 const PARTS: Record<string, Part> = {
   "mbui-figure": mbuiRenderer("sffigure", "figure-run.sh"),
   "mbui-film": mbuiRenderer("sffilm", "media.sh"),
+  "mbui-film-wasm": mbuiWasmFilm(),
   // The station's iroh and image codecs, a Node addon (docs/station-ts-native.md §3); the core on Node (its tests,
   // apps/mbui's e2e peer) uses it too.
   mesh: {
@@ -303,7 +325,7 @@ const PARTS: Record<string, Part> = {
     files: (t) => (t === "win32-x64" ? ["stillfail_shell.dll", "stillfail_shell.dll.lib", "tests"] : ["libstillfail_shell.so"]),
     targets: ["android-arm64", "win32-x64", "linux-x64", "linux-arm64"],
     msvc: true,
-    inputs: ["client/shell", "client/Cargo.toml", "client/Cargo.lock", ...VENDORED],
+    inputs: ["client/shell", "client/Cargo.toml", "client/Cargo.lock", "vendor/libadb", ...VENDORED],
     recipe: (t) =>
       t === "win32-x64" ? { cargo: SHELL_TESTS, xwin: XWIN }
       : LINUX(t) ? { cargo: shellLinux(t) }
@@ -323,14 +345,14 @@ const PARTS: Record<string, Part> = {
   "shell-apple": {
     files: () => ["libstillfail_shell.a", "libstillfail_shell.libs"],
     targets: ["darwin-arm64", "ios-arm64", "ios-sim-arm64"],
-    inputs: ["client/shell", "client/Cargo.toml", "client/Cargo.lock", ...VENDORED],
+    inputs: ["client/shell", "client/Cargo.toml", "client/Cargo.lock", "vendor/libadb", ...VENDORED],
     recipe: (t) => ({ cargo: shellApple(t), min: APPLE_MIN[t], c: appleCOldest(t) }),
     build(t, out) {
       const triple = APPLE_TRIPLES[t]!;
       const target = targetDir(join(ROOT, "client/target"), "shell-apple");
       rustTarget(triple);
       // (macOS's oldest is rustc's own, no MACOSX_DEPLOYMENT_TARGET: that is the host's too, and Xcode 27's ld links
-      // the build's proc-macros for 12.0 so that dyld refuses them, "mis-aligned LINKEDIT string pool": E0463 on mini1.
+      // the build's proc-macros for 12.0 so that dyld refuses them, "mis-aligned LINKEDIT string pool": E0463 on the CI Mac.
       // The C its crates build (ring's assembly, sqlite) is told the same oldest for the target alone: left to the
       // SDK's own, it was for macOS 27.0, below which the linker warned, 2026-10-24)
       const env = rustEnv({ CARGO_TARGET_DIR: target, ...appleCOldest(t) });
@@ -397,6 +419,14 @@ const PARTS: Record<string, Part> = {
       }
       mkdirSync(join(app, "Contents/Resources"), { recursive: true });
       run("iconutil", ["-c", "icns", iconset, "-o", join(app, "Contents/Resources/AppIcon.icns")]);
+      // An iPhone Duo's hinge, run inside the simulator (vendor/serve-sim SimDuoHID); a Mac without its SDK builds none, and
+      // its poses are not offered.
+      try {
+        const sdk = execFileSync("xcrun", ["--sdk", "iphonesimulator", "--show-sdk-path"], { encoding: "utf8" }).trim();
+        run("xcrun", ["--sdk", "iphonesimulator", "clang", "-arch", "arm64", "-mios-simulator-version-min=15.0", "-isysroot", sdk, "-fobjc-arc", "-framework", "Foundation", "-Wl,-adhoc_codesign", "-o", join(app, "Contents/Resources/stillfail-duo-hid"), join(ROOT, "vendor/serve-sim/Sources/SimDuoHID/main.m")], {});
+      } catch (error) {
+        console.error(`native: no iPhone Duo hinge in the helper: ${(error as Error).message}`);
+      }
       rmSync(iconset, { recursive: true });
       writeFileSync(join(app, "Contents/PkgInfo"), "APPL????");
       // agent-desktop beside its executable (Ui.swift): run by the app, it has the app's grants. Signed before the
@@ -580,7 +610,7 @@ function hermesSource(work: string): string {
   mkdirSync(work, { recursive: true });
   if (!existsSync(join(src, ".stillfail-tag")) || readFileSync(join(src, ".stillfail-tag"), "utf8") !== HERMES.tag) {
     rmSync(src, { recursive: true, force: true });
-    // the tag's tarball, tried again on the way (a clone over Studio's TLS broke off, 2026-10-19)
+    // the tag's tarball, tried again on the way (a clone over a test Mac's TLS broke off, 2026-10-19)
     mkdirSync(src, { recursive: true });
     const tgz = join(work, "hermes.tar.gz");
     run("curl", ["-fsSL", "--retry", "5", "--retry-all-errors", "--retry-delay", "5", "-o", tgz, `https://github.com/facebook/hermes/archive/refs/tags/${HERMES.tag}.tar.gz`]);
@@ -759,10 +789,11 @@ const CACHE = process.env.STILLFAIL_NATIVE_CACHE ??
 const cached = (part: string, target: Target, k: string) => join(CACHE, part, `${target}-${k}`);
 const log = (msg: string) => process.stderr.write(`native: ${msg}\n`);
 
-// A path handed to a caller may be used after native.ts exits. On mini1, CI sets a budget and only versions not
-// requested for a day may be evicted (its jobs finish within ten minutes). Older caches without a usage record are
-// first marked now, so jobs started before tracking was introduced get the same grace period. Records live outside
-// artifacts: they must not become part of the archives published to the native store.
+// A path handed to a caller may be used after native.ts exits. On the CI Mac, CI sets a budget and only versions not
+// requested for six hours may be evicted (the renderer jobs time out after five minutes). A day's grace let hundreds of
+// renderer versions fill the disk. Older caches without a usage record are first marked now, so jobs started before
+// tracking was introduced get the same grace period. Records live outside artifacts: they must not become part of
+// published archives.
 const accessRecord = (dir: string) => join(CACHE, ".access", basename(dirname(dir)), basename(dir));
 function noteUse(dir: string) {
   const record = accessRecord(dir);
@@ -828,7 +859,7 @@ function trimCache(limit: number) {
   // Serialize the accounting, so concurrent jobs do not each remove enough versions to reach the budget.
   const release = acquire(join(CACHE, ".prune"));
   try {
-    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - 6 * 60 * 60 * 1000;
     const entries: { dir: string; bytes: number; used: number }[] = [];
     for (const [part, spec] of Object.entries(PARTS)) {
       const parent = join(CACHE, part);
@@ -1087,6 +1118,20 @@ function gh(args: string[], options: { allowFail?: boolean } = {}): string {
   if (done.status !== 0 && !options.allowFail) throw new Error(`gh ${args.join(" ")}: ${done.stderr}`);
   return done.status === 0 ? done.stdout : "";
 }
+// A file put on the release, tried again twice when GitHub's answer does not get through (EOF from the CI Mac,
+// mbui-media-runtime 41766375019, 2026-11-04), over what a broken try left of it (--clobber: the same name, the same key).
+function upload(file: string): void {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      gh(["release", "upload", RELEASE, file, "-R", REPO, ...(attempt > 1 ? ["--clobber"] : [])]);
+      return;
+    } catch (e) {
+      if (attempt === 3) throw e;
+      console.error(`${basename(file)}: not uploaded (try ${attempt}), trying again: ${String(e).trim()}`);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10_000);
+    }
+  }
+}
 async function published(): Promise<Set<string> | null> {
   // (one request, by fetch with the job's token where there is one: the release's own answer lists every asset, 180 of
   // them as they are kept. Through gh it was 21-35 s of Windows mbui runs with nothing missing, its first call in the job
@@ -1231,9 +1276,17 @@ async function main(argv: string[]) {
       }
       // Default: all of ours that this kind of machine builds (--windows: what only Windows does).
       if (wanted.length === 0) for (const [p, t] of ours()) if (onWindows(p, t) === windows && !onLinux(p, t)) wanted.push([p, t]);
-      const remote = (await published()) ?? new Set<string>();
-      if (publish && !gh(["release", "view", RELEASE, "-R", REPO, "--json", "name"], { allowFail: true })) {
-        throw new Error(`the release ${RELEASE} is not on ${REPO}: make it once (docs/development.md, "Native parts")`);
+      const listed = await published();
+      const remote = listed ?? new Set<string>();
+      // Its assets listed: it is there. Else asked again, and said missing only when GitHub says so: a request that did
+      // not get through (EOF) was taken for a missing release (mbui-media-runtime 41457910309).
+      if (publish && listed === null) {
+        try {
+          gh(["release", "view", RELEASE, "-R", REPO, "--json", "name"]);
+        } catch (e) {
+          if (!/release not found/i.test(String(e))) throw e;
+          throw new Error(`the release ${RELEASE} is not on ${REPO}: make it once (docs/development.md, "Native parts")`);
+        }
       }
       const work = join(tmpdir(), `stillfail-native-${process.pid}`);
       mkdirSync(work, { recursive: true });
@@ -1251,7 +1304,7 @@ async function main(argv: string[]) {
         let note = "";
         if (!there && publish) {
           const file = pack(dir, name, work);
-          gh(["release", "upload", RELEASE, file, "-R", REPO]);
+          upload(file);
           note = " → published";
         } else if (!there && outbox) {
           pack(dir, name, outbox);
@@ -1283,7 +1336,7 @@ async function main(argv: string[]) {
         any = true;
       }
       try {
-        if (any && toRelease) for (const f of readdirSync(join(work, "natives"))) gh(["release", "upload", RELEASE, join(work, "natives", f), "-R", REPO]);
+        if (any && toRelease) for (const f of readdirSync(join(work, "natives"))) upload(join(work, "natives", f));
         else if (any) run("sh", [join(ROOT, "scripts/release-put.sh"), "--files", work], { stdio: "inherit" });
       } finally { rmSync(work, { recursive: true, force: true }); }
       return;
@@ -1318,7 +1371,11 @@ async function main(argv: string[]) {
       }
       for (const [, list] of groups) {
         list.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
-        for (const a of list.slice(keep)) { gh(["api", "-X", "DELETE", `repos/${REPO}/releases/assets/${a.id}`]); console.log(`deleted ${a.name}`); }
+        // (one GitHub dropped is left for the next prune: an EOF on one DELETE failed main's natives job, 6484574c, 2026-11-04)
+        for (const a of list.slice(keep)) {
+          const done = spawnSync("gh", ["api", "-X", "DELETE", `repos/${REPO}/releases/assets/${a.id}`], { encoding: "utf8" });
+          console.log(done.status === 0 ? `deleted ${a.name}` : `${a.name} not deleted (${done.stderr.trim()}): the next prune deletes it`);
+        }
       }
       return;
     }

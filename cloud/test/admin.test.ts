@@ -52,7 +52,7 @@ test("the admin sees every user, workspace and code", async () => {
     // A station, enrolled and never connected.
     const pair = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
     const station = hex((await crypto.subtle.exportKey("raw", pair.publicKey)) as ArrayBuffer);
-    const enrollment = await (await alice("POST", `/v1/workspaces/${home.id}/enrollments`, { name: "studio" })).json() as any;
+    const enrollment = await (await alice("POST", `/v1/workspaces/${home.id}/enrollments`, { name: "willow" })).json() as any;
     const signature = hex(await crypto.subtle.sign("Ed25519", pair.privateKey, new TextEncoder().encode(`stillfail-station-enroll-v1:${h.origin}:${enrollment.token}:${station}`)));
     assert.equal((await h.fetch("/v1/stations/enroll", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: enrollment.token, station, signature, version: "0.3.1" }) })).status, 200);
 
@@ -82,7 +82,7 @@ test("the admin sees every user, workspace and code", async () => {
     const seen = workspaces.find((w: any) => w.id === home.id);
     assert.equal(seen.created_by.email, "alice@example.test");
     assert.deepEqual(seen.members.map((m: any) => [m.email, m.role]), [["alice@example.test", "owner"], ["bob@example.test", "member"]]);
-    assert.deepEqual(seen.stations.map((s: any) => [s.id, s.name, s.version]), [[station, "studio", "0.3.1"]]);
+    assert.deepEqual(seen.stations.map((s: any) => [s.id, s.name, s.version]), [[station, "willow", "0.3.1"]]);
     assert.deepEqual(seen.invitations.map((i: any) => [i.email, i.role, i.inviter]), [["erin@example.test", "admin", "Name of alice"]]);
 
     const { codes } = await (await aliceAdmin("GET", "/v1/admin/invite-codes")).json() as any;

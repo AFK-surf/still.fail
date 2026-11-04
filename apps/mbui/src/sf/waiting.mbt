@@ -312,7 +312,7 @@ pub fn progress_spinner(
 
 ///|
 /// What a page or a list waits on (WaitNote), from the core's note (a list's ListNote) or the page's own words: still
-/// reading (its placeholders breathe), what it waits on (正在读取会话, 正在连接 Studio: said to a screen reader), what
+/// reading (its placeholders breathe), what it waits on (正在读取会话, 正在连接 Willow: said to a screen reader), what
 /// could not be read (each said in red).
 pub(all) struct WaitNote {
   reading : Bool
@@ -452,7 +452,7 @@ pub fn wait_line_node(parent : @view.View, words : () -> String) -> @view.View {
         .words_look(By(fn() {
           let th = @ui.tree_theme()
           let (size, own) = th.text_size(Ui)
-          { size, weight: 400, line: th.leading(L5).unwrap_or(own), wrap: false }
+          { size, weight: 400, line: th.leading(L5).unwrap_or(own), wrap: false, tracking: @view.letters_own }
         }))
         .ink(By(fn() { theme().p.muted }))
         |> ignore
@@ -460,4 +460,119 @@ pub fn wait_line_node(parent : @view.View, words : () -> String) -> @view.View {
       |> ignore
     })
   })
+}
+
+///|
+/// A page's or a list's content while it is read the first time, as nodes (waiting's): what will come in its bones
+/// (`sample`: what it will show, made of made-up words by the parts that draw it when it comes, in a node of its own
+/// drawn as its bones, View::bones), breathing as waiting's do (breathe's: whole to 0.5 and back in breath_ms, from
+/// moment 0 on); still and whole as what it waits on failed. Over them in red what could not be read (`error`, `note`'s
+/// failing), each in a pill, at once; what it waits on (`note`'s words, where it says any) said only to a screen reader,
+/// while it is read. `fill`: it takes the room left (a page's body). Made inside what is in its bones already: only its
+/// sample, breathing as that does (one breath).
+pub fn waiting_node(
+  parent : @view.View,
+  sample : (@view.View) -> Unit,
+  error? : () -> String = fn() { "" },
+  note? : () -> WaitNote = fn() { { reading: true, text: "", failing: [] } },
+  fill? : Bool = false,
+) -> Unit {
+  if parent.in_bones() {
+    sample(parent)
+    return
+  }
+  // (as waiting's: what failed, `error` first; still reading unless `error` says what failed or `note` that it is not)
+  let failing = fn() {
+    let out = if error() != "" { [error()] } else { [] }
+    out + note().failing
+  }
+  let reading = fn() { error() == "" && note().reading }
+  parent.box(fn(w) {
+    w.min_width(Is(Some(0.0))) |> ignore
+    if fill {
+      w.grow(Is(1.0)) |> ignore
+    }
+    w.says(By(fn() {
+      if reading() && note().text != "" {
+        Some(@view.said(Status, label=note().text))
+      } else {
+        None
+      }
+    }))
+    |> ignore
+    w.show(fn() { failing().length() > 0 }, fn(p) {
+      p
+      .padding(Is((wait_pills_x, wait_pills_top, wait_pills_x, wait_pills_foot)))
+      .gap(Is(wait_pills_gap))
+      .lines_up(Is(Some(Middle)))
+      |> ignore
+      p.each(failing, fn(f) { f }, fn(pill, f) { wait_pill_node(pill, fn() { f.get() }) })
+    })
+    w.box(fn(b) {
+      if fill {
+        b.grow(Is(1.0)) |> ignore
+      }
+      b
+      .bones(By(fn() { theme().p.line }))
+      .alpha(By(fn() {
+        if !reading() {
+          1.0
+        } else {
+          let f = b.cycle(breath_ms)
+          let way = if f < 0.5 { f * 2.0 } else { 2.0 - f * 2.0 }
+          1.0 - (1.0 - wait_low) * @ui.Ease::InOut.at(way)
+        }
+      }))
+      |> ignore
+      sample(b)
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A wait's placeholders at their faintest (breathe's `low`).
+let wait_low : Double = 0.5
+
+///|
+/// wait_pills' room (px=S5, pt=S3_5, pb=S1, gap=S2).
+let wait_pills_x : Double = 20.0
+
+///|
+let wait_pills_top : Double = 14.0
+
+///|
+let wait_pills_foot : Double = 4.0
+
+///|
+let wait_pills_gap : Double = 8.0
+
+///|
+/// What could not be read, in a grey capsule, in red at once (wait_pill's `error`, as a node): its words 12 on 18,
+/// 12 and 6 in.
+fn wait_pill_node(parent : @view.View, words : () -> String) -> Unit {
+  parent.box(fn(p) {
+    p
+    .row(Is(true))
+    .padding(Is((12.0, 6.0, 12.0, 6.0)))
+    .radius(Is(15.0))
+    .ground(By(fn() { theme().p.neutral_bg }))
+    .lines_up(Is(Some(Middle)))
+    |> ignore
+    p.box(fn(w) {
+      w
+      .words(By(words))
+      .words_look(By(fn() {
+        let th = @ui.tree_theme()
+        let (size, _) = th.text_size(Meta)
+        { size, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own }
+      }))
+      .ink(By(fn() { theme().p.red }))
+      .words_centered(Is(true))
+      |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
 }

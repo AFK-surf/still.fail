@@ -7,7 +7,7 @@ fn emit_core(clock : Ref[Double]) -> @ui.Tester {
   new_run()
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   // the chat pushed in over Home
   t.run_for(@ui.move_most_ms)
@@ -15,7 +15,7 @@ fn emit_core(clock : Ref[Double]) -> @ui.Tester {
   t.type_text("看一下列表")
   tap_send(t)
   // the station has it: in the chat, its agent at work
-  clock.val = clock.val + fix_deliver_ms
+  fix_clock_set(clock, clock.val + fix_deliver_ms)
   t.draw()
   // (the station answers fix_answer_ms after it took them: that time passes on the page too, the words sent landed
   // and the agent's line come in their turns meanwhile)
@@ -41,7 +41,7 @@ test "an answer said while its agent's activity shows waits, then comes out of i
   // at work: its activity
   assert_true(t.find("看一下列表") is Some(_))
   let em = emits_of("ws1/st1\u{1}s-c1")
-  clock.val = clock.val + fix_answer_ms
+  fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   // the answer is taken: it waits (folding, then the avatar on its way), not in the list yet
   assert_eq(em.queue.length() + (if em.current is Some(_) { 1 } else { 0 }), 1)
@@ -70,7 +70,7 @@ test "an answer taller than the window out of the avatar, the list at its end: r
       }),
     )
   })
-  clock.val = clock.val + 1.0
+  fix_clock_set(clock, clock.val + 1.0)
   t.draw()
   t.run_for(emit_all_ms() + 1000.0)
   // its top in view under the bar (Follow.kt), not the list at the end of it
@@ -97,7 +97,7 @@ fn landing_faces(t : @ui.Tester) -> (Double, Double) raise {
 test "an agent's picture in its line is where its answer's is, at the row's start: the flying one lands with no step aside" {
   let clock = Ref::new(0.0)
   let t = emit_core(clock)
-  clock.val = clock.val + fix_answer_ms
+  fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   t.run_for(Pose::Fold.ms() + Pose::Float.ms() + Pose::Spit.ms() / 2.0)
   let (face, lands) = landing_faces(t)
@@ -110,7 +110,7 @@ test "the flying avatar goes where its answer comes in: where it was aimed on it
   let clock = Ref::new(0.0)
   let t = emit_core(clock)
   let em = emits_of("ws1/st1\u{1}s-c1")
-  clock.val = clock.val + fix_answer_ms
+  fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   // every frame of its way: where it was aimed last on it, then where it lets the answer out
   let mut aimed : (Double, Double)? = None
@@ -135,7 +135,7 @@ test "with the reader scrolled up (not watched), an answer just appears" {
   let t = emit_core(clock)
   t.wheel(195.0, 400.0, -600.0)
   let em = emits_of("ws1/st1\u{1}s-c1")
-  clock.val = clock.val + fix_answer_ms
+  fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   assert_true(em.current is None)
   assert_eq(em.queue.length(), 0)
@@ -149,7 +149,7 @@ test "read up a little, the answer coming in under what is read comes where it i
   let t = emit_core(clock)
   t.wheel(195.0, 400.0, -120.0)
   t.run_for(@ui.move_most_ms)
-  clock.val = clock.val + fix_answer_ms
+  fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   t.frame()
   let answer = fn() { t.words().filter(fn(w) { w.0.has_prefix("收到") }) }
@@ -174,7 +174,7 @@ test "the answer coming in does not end its own motion: float, spit and return e
   let clock = Ref::new(0.0)
   let t = emit_core(clock)
   let em = emits_of("ws1/st1\u{1}s-c1")
-  clock.val = clock.val + fix_answer_ms
+  fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   let frames : Map[String, Int] = {}
   // frame by frame over its whole way out

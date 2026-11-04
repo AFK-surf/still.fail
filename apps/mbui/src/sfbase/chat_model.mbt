@@ -330,6 +330,7 @@ pub(all) struct LinkedChat {
   title : String
   archived : Bool
   note : String
+  thread : Double?
 }
 
 ///|
@@ -343,6 +344,8 @@ pub(all) struct Message {
   author : String
   text : String
   md : Json?
+  /// a person's words in runs, as the core reads them (refLinks.ts personWords: message_words.mbt words_runs)
+  words : Json?
   attachments : Array[Attachment]
   quotes : Array[Quote]
   created_at : Double
@@ -377,6 +380,8 @@ pub(all) struct Message {
   notice_md : Json?
   /// the agent whose capacity retry this notice can cancel, while that retry waits
   notice_retry_session : String
+  /// a failure's own words, as what failed said them, shown under its words when the notice is opened
+  notice_detail : String
   /// the chats its words link to that their lists have (archived ones too)
   chats : Array[LinkedChat]
 }
@@ -392,6 +397,7 @@ pub fn message_of(m : Json) -> Message {
     author: text(s, "author"),
     text: text(s, "text"),
     md: field(s, "md"),
+    words: field(s, "words"),
     attachments: items(s, "attachments").map(attachment_of),
     quotes: items(s, "quotes").map(quote_of),
     created_at: number(s, "createdAt"),
@@ -506,9 +512,10 @@ pub fn message_of(m : Json) -> Message {
     },
     notice_md: field(field(s, "notice"), "md"),
     notice_retry_session: text(field(s, "notice"), "retrySession"),
+    notice_detail: text(field(s, "notice"), "detail"),
     chats: items(s, "chats").map(fn(c) -> LinkedChat {
       let c = Some(c)
-      { href: text(c, "href"), title: text(c, "title"), archived: flag(c, "archived"), note: text(c, "note") }
+      { href: text(c, "href"), title: text(c, "title"), archived: flag(c, "archived"), note: text(c, "note"), thread: opt_number(c, "thread") }
     }),
   }
 }
@@ -524,6 +531,8 @@ pub fn Message::linked(self : Message, href : String) -> LinkedChat? {
 pub(all) struct Outgoing {
   id : String
   text : String
+  /// its words in runs, as the core read them (refLinks.ts personWords; one sent from here: draftWords)
+  words : Json?
   attachments : Array[Attachment]
   quotes : Array[Quote]
   /// sending | sent (the station has it: `seq`) | failed
@@ -726,6 +735,7 @@ fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
       {
         id: text(s, "id"),
         text: text(s, "text"),
+        words: field(s, "words"),
         attachments: items(s, "attachments").map(attachment_of),
         quotes: items(s, "quotes").map(quote_of),
         state: text(s, "state"),

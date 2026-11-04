@@ -1,6 +1,6 @@
 // What a message's link and file offer, held with a finger or right clicked with a mouse (c.menu_asked, the rich
 // text's held link): one menu for both, the presenters' (@sf.menu: a sheet with a finger short of Large, else a small
-// panel at the pointer). A link: open it, copy it; a file: quote it, a picture also copied (read whole, onto the
+// panel at the pointer). A link: open it, copy it; a file: quote or download it, a picture also copied (read whole, onto the
 // clipboard as a PNG).
 // What a choice does is done in the frame after it, by the list that offered it (menus_frame).
 
@@ -68,7 +68,7 @@ fn link_held(c : @ui.Ctx, href : String) -> Unit {
 ///|
 /// A file in a message (box `id`; a picture's image `src`, else "") held or right clicked: its menu there, as a
 /// passage's (pick.mbt): 引用 into the chat's draft (`quote`, where it is a message's), then what else it offers
-/// (`more`: a video's 加载), then a picture's copy.
+/// (`more`: 下载 and a video's 加载), then a picture's copy.
 fn file_menu(
   c : @ui.Ctx,
   id : Int,

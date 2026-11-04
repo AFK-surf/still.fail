@@ -141,7 +141,9 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
       if u.box_w > 0.0 && u.box_h > 0.0 && size == u.fit_for && size is Some(_) {
         // Turned, or a fitted view given a new width by the system column: fit again.
         // Height alone (the keyboard) keeps the picture and pointer as before.
-        if (u.box_w > u.box_h) != (bw > bh) || (bw != u.box_w && u.zoom.fitted) {
+        // (a device's page gives the stage's height to what comes as its state does, its poses: its picture fitted to what
+        // is left, or it would be taken for zoomed in, its body gone)
+        if (u.box_w > u.box_h) != (bw > bh) || (u.zoom.fitted && (bw != u.box_w || s.simulator())) {
           u.zoom.fit_now()
         } else {
           u.zoom.resize_keeping(bw, bh, pointer_now(s, u), screen_keep_margin)
@@ -158,7 +160,9 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
     Some((w, h)) => u.zoom.natural(w.to_double(), h.to_double())
     None => u.zoom.natural(0.0, 0.0)
   }
-  u.zoom.boxed(u.box_w, u.box_h)
+  // (a device's page keeps some of it for what the device has itself: debug_room)
+  let (room_w, room_h) = debug_room(u, size)
+  u.zoom.boxed(dmax(0.0, u.box_w - room_w), dmax(0.0, u.box_h - room_h))
   // where a double tap's glide has got to
   u.zoom.step()
   let fit = u.fit()
@@ -190,7 +194,8 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
   if u.mouse.over {
     c.cursor(stage, cursor_of_shape(text(field(s.state, "cursor"), "shape")))
   }
-  c.box(style=stage_box, id=stage, fn() {
+  let in_body = s.simulator() && !u.zoom.zoomed()
+  c.box(style=if in_body { stage_box_body } else { stage_box }, id=stage, fn() {
     if size is Some(_) && fit.w > 0.0 {
       let shown = u.shown()
       // on its way back, as it was, faded; over (ended, gone…), blurred under the dark it has gone to
@@ -231,6 +236,8 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
         |> ignore
       })
       |> ignore
+      device_round(c, s, u, shown)
+      debug_by_device(c, s, u, shown, size)
       if over {
         // the screen gone dark in its place (its last frame showing through, blurred), what happened said there
         c.layer(fn() {
@@ -286,7 +293,10 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
     c.layer(fn() {
       c.box(style=stage_foot, fn() {
         c.box(style=stage_foot_column, fn() {
-          drops(c, s)
+          // (beside the device they are at the foot of what is done with it: nothing over the app being debugged)
+          if !(u.logs.beside && u.logs.shown) {
+            drops(c, s)
+          }
           login_fill(c, s)
           passkey_sign(c, s)
           match s.undriven() {
@@ -348,8 +358,10 @@ fn screen_ended(c : @ui.Ctx, s : ScreenSess, phase : String) -> Unit {
     // denied for a grant the station lacks (macOS's): its station's page where it is asked for (设置's 权限), a tap
     // away rather than looked for
     let access = field(s.state, "access")
-    let granting = phase == "denied" &&
+    let os = screen_os(s.src, s.station).to_lower()
+    let granting = !os.has_prefix("linux") && phase == "denied" &&
       (field(access, "capture") == Some(Json::boolean(false)) || field(access, "control") == Some(Json::boolean(false)))
+    let linux_setup = os.has_prefix("linux") && text(access, "help") == "linux-desktop"
     // a light capsule on the dark either way: the solid one in the dark theme, the soft one in the light
     if phase == "ended" || phase == "denied" || phase == "failed" {
       c.box(style=ended_keys, flow=true, line_gap=@ui.Space::S2.px(), fn() {
@@ -361,6 +373,11 @@ fn screen_ended(c : @ui.Ctx, s : ScreenSess, phase : String) -> Unit {
           c.tell("screen-grants/" + s.view, fn() {
             @settings.station_parts[station] = "settings"
             open_page(Setting(@settings.Route::Station(station)))
+          })
+        }
+        if linux_setup && again_key(c, "screen-linux-setup/" + s.view, @sf.t("web-pages.screen.linuxSetup")) {
+          c.tell("screen-linux-setup/" + s.view, fn() {
+            @ui.open_url("https://github.com/AFK-surf/still.fail/blob/main/docs/linux-desktop-setup.md") |> ignore
           })
         }
       })
@@ -425,6 +442,9 @@ fn drop_row(c : @ui.Ctx, s : ScreenSess, d : ScreenDropItem) -> Unit {
       }
     }, fn() {
       match d.state.get() {
+        "done" if d.install =>
+          c.text(@sf.t("web-pages.screen.debug.installed", args=[("name", d.installed)]), style=drop_path_words) |> ignore
+        "installing" => c.text(@sf.t("web-pages.screen.debug.installGoing"), style=drop_going_words) |> ignore
         "done" => {
           c.text(d.path(), style=drop_path_words) |> ignore
           // what is done with it there goes through the view: while driving it
@@ -926,11 +946,17 @@ priv struct MouseDrive {
   mut mods : Int
   mut at : (Double, Double)?
   mut over : Bool
+  /// where it last pressed on the stage, in the window's points: where typing is likeliest to go
+  mut pressed : (Double, Double)?
 }
 
 ///|
+/// How tall the caret this device's input method is told of on a screen, in points.
+let screen_ime_h : Double = 20.0
+
+///|
 fn mouse_drive_new() -> MouseDrive {
-  { down: false, sent_down: false, mods: 0, at: None, over: false }
+  { down: false, sent_down: false, mods: 0, at: None, over: false, pressed: None }
 }
 
 ///|
@@ -970,6 +996,7 @@ fn screen_mouse(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, catcher 
         m.sent_down = false
         if driving {
           keys = true
+          m.pressed = Some((d.x0, d.y0))
           match on_frame(d.x0, d.y0, false) {
             Some(at) => {
               m.mods = mods_of_held(@ui.mods_held())
@@ -1041,6 +1068,9 @@ fn screen_mouse(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, catcher 
   if keys {
     c.catch_keys(catcher, true)
   }
+  // this device's input method by what is being typed on: where the mouse last pressed, the screen's own caret not being known here
+  let (ix, iy) = m.pressed.unwrap_or((ox + shown.x, oy + shown.y + shown.h))
+  c.key_catcher_place(catcher, ix, iy, screen_ime_h)
   if sent.length() > 0 {
     c.tell("screen-mouse/" + s.view + "/\{frame}", fn() {
       for j in sent {

@@ -50,6 +50,7 @@ export const VaultLive = Layer.effectDiscard(
       ask: (station, request) => remote.ask(station, request),
       workOf: (ws, peer, session) => remote.work(ws, peer, session),
       coming: () => coming,
+      backfill: { previousGone: previous.exited, priority: store.backfillPriority },
       // Sign-ins (kind browser) go into each chat's own context in the station's browser (docs/vault.md 登录态).
       browsers: {
         cookies: (session, sites, station) => browsers.cookies(session, sites, station), signIn: (session, d) => browsers.signIn(session, d), extendSignIn: (session, request, until) => browsers.extendSignIn(session, request, until),
@@ -65,6 +66,7 @@ export const VaultLive = Layer.effectDiscard(
     const covers = (hosts: string[], site: string) => ofSites(site, hosts) || hosts.some((h) => ofSites(h, [site]));
     const signIns = new SignIns({
       db: store.db, hub, now: () => wall.now(), after: (ms, f) => wall.after(ms, f),
+      backfill: { previousGone: previous.exited, priority: store.backfillPriority },
       workspace: (session) => store.getSession(session)?.ws ?? cloud.home(),
       screenLink: (tab) => {
         const s = cloud.state;
@@ -102,6 +104,7 @@ export const VaultLive = Layer.effectDiscard(
         },
       },
     });
+    yield* Effect.addFinalizer(() => Effect.promise(() => signIns.close()));
     secrets.listen((r) => signIns.heard(r));
     secrets.onPlainWritten((i) => events.tell("vault-plain", shown(i), `vault-plain\0${i.id}`, { workspace: i.ws, email: i.owner }));
     // The grants, the boxes of requests waiting and the secrets to keep, only in memory: over to the next process at a

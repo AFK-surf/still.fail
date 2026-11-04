@@ -1,5 +1,8 @@
 # A station's drive
 
+> Machine names in examples and measurements are anonymized; they are not requirements for the reader’s environment.
+
+
 A station shows its members the files of its machine: they browse them, read
 and play what is in them, upload, rename and remove, and put them into a chat's
 message. It is zdrive (`zzj3720/zdrive`) brought into still.fail: zdrive's ops
@@ -39,7 +42,7 @@ about and which holds the grants, so they open without the station restarting:
   name) goes through the helper; everything else, and every other system, is
   read directly, as before. The station does not touch those folders itself,
   not even to see whether it may: macOS can hold such a call on a prompt for
-  the station's launcher that nobody answers (macOS 27 on studio, 2026-10-17:
+  the station's launcher that nobody answers (macOS 27 on test-a, 2026-10-17:
   the station's main thread stayed in `opendir` on ~/Documents until killed).
   The station checks the path first as it does any (its root, `..`, links out
   for a viewer, its own data); the helper is told the root it may reach and

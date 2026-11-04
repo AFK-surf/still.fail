@@ -1810,9 +1810,26 @@ pub let share_terminal_palette : Array[Int64] = [
 pub let share_terminal_dot : Int64 = 0xE6E6E640L
 
 ///|
-/// The looks to choose under the card shared, each a small picture of it: a portrait 36 by 48 in its own ground (a
-/// small block's corner), a ring round the chosen one 3 out (concentric), its name under it.
-pub let share_look_tile : @ui.Style = @ui.style(w=Fixed(36.0), h=Fixed(48.0), radius=small_radius, clip=true)
+/// Letters set apart on a share card's look, as a title, a stamp or a game's menu sets them (千恋＊万花's looks): the
+/// theme's Wide, named here so a page's look says it by this name, not by the one a page's width is said by.
+pub let share_letters_apart : @ui.Tracking = Wide
+
+///|
+/// The looks to choose under the card shared, each its picture drawn small: a portrait 72 by 96 (three to four, the
+/// picture's top as wide as it), a small block's corner, a ring round the chosen one 3 out (concentric), its name under
+/// it.
+pub let share_look_tile_w : Double = 72.0
+
+///|
+pub let share_look_tile_h : Double = 96.0
+
+///|
+pub let share_look_tile : @ui.Style = @ui.style(
+  w=Fixed(share_look_tile_w),
+  h=Fixed(share_look_tile_h),
+  radius=small_radius,
+  clip=true,
+)
 
 ///|
 pub let share_look_in : @ui.Space = room(3.0)
@@ -2025,6 +2042,14 @@ pub let link_card_w : @ui.Len = Fixed(236.0)
 pub let file_capsule_h : @ui.Len = Fixed(52.0)
 
 ///|
+/// How far in from such a capsule's end its words end where they are the last thing in it: where its round end begins
+/// (its half, 26) less the 2 every capsule's words reach into one (a button's 16 in its 34, a toast's 18 in its 40), so
+/// that their corners keep as clear of the curve there as their top and foot of the capsule's (the user, 2026-11-03:
+/// 右边是不是边距不够; at 14, as far as its mark at the other end, a name's last tall letter came within 10 of the curve,
+/// the mark 15 from its own). Its mark (and a ✕ or a ↻ at this end) stands concentric with its end instead, 14 in.
+pub let file_capsule_words_end : Double = 24.0
+
+///|
 pub let peek_card_px : Double = 280.0
 
 ///|
@@ -2191,15 +2216,27 @@ let keys_row_look : @ui.Style = @ui.css("row align=ACenter")
 /// settings page's back) so in its top left one (`tape_bar_start`); `side` the last's height (a round button's 32:
 /// line_end_in; a capsule's of words, its own).
 pub fn tape_bar_end(alone : Double, side? : Double = bar_key_side) -> Double {
-  // (the panel at the window's right edge, the window's own buttons over its top right corner where they are the
-  // app's: its bar's last before them, alone: window_keys)
-  if pane_at_window_right() && @ui.window_keys_own() {
-    return window_keys_room_tape() - window_in + alone
-  }
-  match pane_top_right() {
-    Some(k) => line_end_in(k, alone, side~)
+  match pane_round.val {
+    Some(k) => tape_bar_end_of(k, @ui.corner_roots(), alone, side~)
     None => alone
   }
+}
+
+///|
+/// tape_bar_end in a panel whose corners are `k` (tape_corners', worked out from `roots`): what a node of the window's
+/// tree in it asks, the panel's corners told it, not the page's being built (pane_round).
+pub fn tape_bar_end_of(
+  k : FixedArray[@ui.CornerOf],
+  roots : @ui.CornerRoots,
+  alone : Double,
+  side? : Double = bar_key_side,
+) -> Double {
+  // (the panel at the window's right edge, the window's own buttons over its top right corner where they are the
+  // app's: its bar's last before them, alone: window_keys)
+  if k[1] == tape_edge && @ui.window_keys_own() {
+    return window_keys_room_tape() - window_in + alone
+  }
+  line_end_in(k[1].radius(roots), alone, side~)
 }
 
 ///|
@@ -2214,10 +2251,21 @@ pub fn pane_at_window_right() -> Bool {
 
 ///|
 pub fn tape_bar_start(alone : Double, side? : Double = bar_key_side) -> Double {
-  match pane_radii() {
-    Some(k) => line_end_in(k[0], alone, side~)
+  match pane_round.val {
+    Some(k) => tape_bar_start_of(k, @ui.corner_roots(), alone, side~)
     None => alone
   }
+}
+
+///|
+/// tape_bar_start in a panel whose corners are `k` (worked out from `roots`), as tape_bar_end_of.
+pub fn tape_bar_start_of(
+  k : FixedArray[@ui.CornerOf],
+  roots : @ui.CornerRoots,
+  alone : Double,
+  side? : Double = bar_key_side,
+) -> Double {
+  line_end_in(k[0].radius(roots), alone, side~)
 }
 
 ///|
@@ -2921,4 +2969,26 @@ pub let white : Int64 = 0xFFFFFFFFL
 /// set; what the app tells @ui its tree is drawn in (@ui.set_tree_theme).
 pub fn ui_theme_now() -> @ui.Theme {
   ui_theme()
+}
+
+///|
+/// A top bar's title (a place's name over its page, the phone's Home's workspace): 24 on 30, bold, one line, 0.4 of a
+/// point tighter at the system's size of words, made larger with it (PlacePage.kt TopBarTitle's letterSpacing, in sp).
+/// One spec: the old view's top_bar_title and top_bar_title_node both read it.
+pub let top_bar_title_look : @view.WordsLook = {
+  size: 24.0,
+  weight: 700,
+  line: 30.0,
+  wrap: false,
+  tracking: ScaledPoints(-0.4),
+}
+
+///|
+/// The workspace's name in Home's top bar: top_bar_title_look made smaller, 20 on 26, its mark's size (asked 2026-11-03).
+pub let home_workspace_title_look : @view.WordsLook = {
+  size: 20.0,
+  weight: 700,
+  line: 26.0,
+  wrap: false,
+  tracking: ScaledPoints(-0.4),
 }

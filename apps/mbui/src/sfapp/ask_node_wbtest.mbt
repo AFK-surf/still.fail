@@ -1,9 +1,8 @@
 // A question (@sf.ask) on 大屏 through the app's tree: its field the keyboard's as it opens; its action not to be
 // pressed while the line, trimmed, is as it was given or empty (unless an empty one says something, `empty`), able as
 // soon as one change makes it so; said by Enter or its action once, trimmed, after it has closed, what that opens open;
-// closed, the focus back where it was. Its title, words and buttons the window's tree's; its field an old view's
-// editor hosted in it (the way there: no editor of the tree's yet). What the test types, presses and acts on draws
-// frames of its own (Tester::type_text, key_named, act): what is asserted is after them, not with no frame between.
+// closed, the focus back where it was. Its title, words, buttons and field the window's tree's. What the test types,
+// presses and acts on draws frames of its own (Tester::type_text, key_named, act): what is asserted is after them, not with no frame between.
 
 ///|
 test "大屏: a question, its line given at first: its field has the focus as it opens; as it was, its action does nothing, Enter says nothing; one change, its action says it" {

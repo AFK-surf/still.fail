@@ -160,6 +160,22 @@ test("a command a turn waited on and was never told ended does not outlive the t
 });
 
 describe("the Claude Code driver", { concurrency: true }, () => {
+  test("a text-only request disables built-in and configured MCP tools", async () => {
+    const d = driver();
+    const o = options({ textOnly: true });
+    const session = await d.open(o, listen().push);
+    // Opening starts the runner; the fake writes its invocation when its process actually begins.
+    await eventually(() => existsSync(o.dump) && readFileSync(o.dump, "utf8").endsWith("\n"));
+    const started = JSON.parse(readFileSync(o.dump, "utf8").trim());
+    const args = started.argv as string[];
+    assert.equal(args[args.indexOf("--tools") + 1], "");
+    assert.ok(args.includes("--strict-mcp-config"));
+    assert.ok(args.includes("--no-session-persistence"));
+    assert.ok(!args.includes("--dangerously-skip-permissions"));
+    assert.deepEqual(JSON.parse(args[args.indexOf("--mcp-config") + 1]!), { mcpServers: {} });
+    await session.dispose();
+  });
+
   test("a turn completes, from a process started with the flags and environment of claude.rs", async () => {
     const d = driver();
     const o = options({ model: "m1", effort: "high" });
@@ -215,6 +231,20 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     await until((e) => e.some((x) => x.type === "closed"));
   });
 
+  test("a session kept to less context starts Claude Code compacting at it", async () => {
+    const d = driver();
+    const o = options({ context: 300_000 });
+    const { push, until } = listen();
+    const session = await d.open(o, push);
+    await session.prompt("say:hi");
+    await until(ended(1));
+    const started = JSON.parse(readFileSync(o.dump, "utf8").trim());
+    const settings = JSON.parse(started.argv[started.argv.indexOf("--settings") + 1]);
+    assert.equal(settings.autoCompactWindow, 300_000);
+    assert.equal(settings.disableClaudeAiConnectors, true, "with the station's own settings");
+    await session.dispose();
+  });
+
   test("a Kimi Code sign-in's key is read from its home by Claude Code's key helper, not given it", async () => {
     const d = driver();
     const base = options();
@@ -243,7 +273,7 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     }
     assert.deepEqual(outcome(events, 0), { kind: "failed", reason: "auth", message: "API Error: 401 invalid x-api-key" });
     assert.deepEqual(outcome(events, 1), { kind: "failed", reason: "rate_limit", message: "You've hit your weekly limit · resets Oct 8" });
-    assert.deepEqual(outcome(events, 2), { kind: "failed", reason: "model", message: "prompt is too long" });
+    assert.deepEqual(outcome(events, 2), { kind: "failed", reason: "context", message: "prompt is too long" });
     assert.deepEqual(outcome(events, 3), { kind: "completed" }, "a successful text saying a limit is no failure");
     assert.equal(classifyResult("Claude AI usage limit reached"), "rate_limit");
     assert.equal(classifyResult("session limit configuration is invalid"), "model");

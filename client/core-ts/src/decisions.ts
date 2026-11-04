@@ -307,6 +307,12 @@ export function inMessages(messages: J[], pendingOf: [number, boolean] | null | 
     const s = cardShown(card);
     const options: J[] = s.options ?? [];
     const replaced = at + 1 < cards.length;
+    // A login asked for again in a later post is that post's card alone: the login is one card on screen, its code
+    // typed in one field, and this post says how it went as any replaced card does.
+    if (s.login !== undefined && cards.slice(at + 1).some(([, c]) => { const l = cardShown(c); return l.login === s.login && l.station === s.station; })) {
+      delete s.login;
+      delete s.station;
+    }
     const answer = messages.slice(i + 1).find((m) => get(m, "authorKind") === "person")
       ?? (replaced || sending.length === 0 ? undefined : { ...sending[0], authorKind: "person", mine: true });
     let isWaiting: boolean;

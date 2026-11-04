@@ -99,7 +99,9 @@ export function noticeReport(store: Store, thread: ThreadRow, entry: EntryRow, v
   const found = failedTurnOf(store, thread.id, entry.at);
   const session = found?.session ?? null;
   const turn = found?.turn ?? null;
-  const first = text.split("\n").find((l) => l.trim() !== "")?.trim() ?? "";
+  // Titled by what failed as the runtime said it (the notice says only what it means, the same for many failures).
+  const said = turn?.detail ? turn.detail : text;
+  const first = said.split("\n").find((l) => l.trim() !== "")?.trim() ?? "";
   const title = [...first].slice(0, 200).join("");
   const key = createHash("sha256").update(`notice\n${session?.key ?? ""}\n${thread.id}\n${entry.n}`).digest().subarray(0, 16).toString("hex");
   const versions = deps.versions();

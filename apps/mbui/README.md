@@ -26,12 +26,13 @@ The same code is built as each of still.fail's apps, by its variant (`MBUI_VARIA
 |---|---|---|---|---|
 | `stable` | still.fail, `fail.still.android` | still.fail, `fail.still.desktop` | `android`, `mac`, `win` | `scripts/release.sh` (stable.yml) |
 | `beta` | youdid.wtf, `fail.still.android.beta` | youdid.wtf, `fail.still.desktop.beta` | `android/beta`, `mac/beta`, `win/beta` | `scripts/release.sh --beta` (pipeline.yml, main once checked) |
-| `mbui` (Android's `release`) | still.fail preview, `fail.still.mbui` | still.fail preview, `fail.still.mbui` | `android/mbui`, `mac/mbui`, `win/mbui`, `linux/mbui` | `.github/workflows/mbui.yml`, every push that changes it |
+| `preview` (Android's `release`) | still.fail preview, `fail.still.mbui` (not built in CI since 2026-11-03) | still.fail preview, `fail.still.mbui` (Windows, Linux; the Mac's not built in CI since 2026-11-03) | `win/mbui`, `linux/mbui` | `.github/workflows/preview.yml`, every push to main that changes it |
 | `debug` | still.fail dev, `fail.still.android.dev` | | none | `scripts/android.sh build` |
 
-`mbui` is the build of every push, out in minutes, an app beside the released ones to try a change on before it is
-checked (https://app.still.fail/releases/latest/android-mbui, `mac-mbui`, `win-mbui`, `linux-mbui`,
-`linux-arm64-mbui`). iOS: `scripts/ios.sh` (docs/ios.md), TestFlight by hand (docs/mbui-testflight.md in the
+`preview` is the build of every push to main, out in minutes, an app beside the released ones to try a change on
+before it is checked (https://app.still.fail/releases/latest/win-mbui, `linux-mbui`, `linux-arm64-mbui`); on Android
+and the Mac the beta is the channel for that. Its feeds and id keep the name mbui: installed preview apps update by
+them. iOS: `scripts/ios.sh` (docs/ios.md), TestFlight by hand (docs/mbui-testflight.md in the
 repository's docs).
 
 ## Building
@@ -45,7 +46,7 @@ apps/mbui/scripts/shots.sh home web-home            # screenshots to look at, in
 apps/mbui/scripts/android.sh build                  # the Android app, debug (APP=stillfail); VARIANT=release the mbui one
 apps/mbui/scripts/e2e-local.sh all                  # the end-to-end flows against a local still.fail (e2e/)
 apps/mbui/scripts/win.sh build                      # Windows (Git Bash, MSVC): APP=stillfail, the core in Hermes (engine/)
-apps/mbui/e2e/win.sh                                # Windows: signed in against a local cloud, then Home (CI: mbui.yml)
+apps/mbui/e2e/win.sh                                # Windows: signed in against a local cloud, then Home (CI: preview.yml)
 ```
 
 These are mbui's own scripts (`mbui/scripts/`) building this module (`MBUI_APP_MOD`), with what still.fail adds:

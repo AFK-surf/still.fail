@@ -81,15 +81,11 @@ long enough to).
 fields above in nanoui's format (`"fw": "mbui"`), plus `mem_mb`, the
 process's physical footprint after the scene.
 
-## Results (2026-10-19, Studio)
+## Results (2026-10-19)
 
-Apple M2 Max (12 cores), macOS 27.0.1; mbui release build (MoonBit native,
-moon 0.1.20261012), nanoui `8968958` with Zig 0.17.0 (`-Doptimize=ReleaseFast`,
-its default), mygo `a83f75f` (the commit nanoui's notes compare with; its
-`main` now has an `Offscreen` of its own that nanoui's twin clashes with).
-The three ran back to back; the machine was otherwise idle but for a
-malware scan (XProtect, about one core) and the usual background, load
-average 4.1-4.7. Times in ms.
+The three release builds ran back to back on one machine: mbui (MoonBit native,
+moon 0.1.20261012), nanoui `8968958` with Zig 0.17.0 (`-Doptimize=ReleaseFast`, its default), and mygo `a83f75f`.
+Times are in ms and depend on the machine and its load.
 
 | scene | metric | mbui before | mbui after | nanoui | mygo | after / nanoui |
 |---|---|---:|---:|---:|---:|---:|
@@ -216,7 +212,7 @@ its flex node was given last frame (exact, field by field, no hash):
 - **List sums**: the rows' heights kept in a Fenwick tree, so the scroll
   bar reads what is above the anchor and the whole in a few steps.
 
-Studio was busy throughout (an Android emulator and others' builds, load
+The machine was busy throughout (an Android emulator and other builds, load
 11-20), so the five builds ran interleaved, each round all five in a
 rotated order, 8 rounds, one run each, and these are medians (frame CPU,
 in brackets layout). They are about 1.3-1.5× the quiet-machine numbers
@@ -357,17 +353,14 @@ idle again. So the Flutter columns are:
 - **flutter-cold**: at vsync on an idle machine, as a Flutter app runs. The
   lowest median of three runs; the runs themselves spread up to 6× and sit
   up to 9× above the main column (dashboard 5.1–6.2 ms against 0.56).
-  Another agent built and benchmarked mbui on Studio at 08:02–08:03, during
-  this run's last scenes, which warmed the CPU the way `HEAT=1` does: the
+  Another build and benchmark ran during this run's last scenes, warming
+  the CPU the way `HEAT=1` does: the
   low runs of list (0.64 ms; its others 4.0 and 4.1), scroll_jump (1.99;
   10.7, 11.0) and list_jump (0.31; 0.57, 3.1) are from then.
 
-### Results with Flutter (2026-10-19, Studio)
+### Results with Flutter (2026-10-19)
 
-The four back to back, 07:55–08:03, after `bench_quiet.sh` each time:
-load average 2.6–4.2, the processes together 55–156% of a core (an iOS
-simulator and OrbStack idling in the background; an earlier session was
-thrown away because an Android emulator started in the middle of it).
+The four ran back to back, after `bench_quiet.sh` each time. Background work can affect the measurements.
 mbui as in the table above (main `b6ae2c3`), nanoui `8968958` and mygo
 `a83f75f` as before, Flutter 3.47.7 stable (Dart 3.13.5, engine
 `deb287481e`), release build, Impeller ("MetalSDF"). Times in ms, medians
@@ -474,7 +467,7 @@ does, 5–16× mbui's CPU per frame. mbui is ahead everywhere; nanoui more so.
 
 - mbui and nanoui draw offscreen into a texture, frame after frame, without
   vsync, at 2x (1800×1280 pixels). Flutter draws through its engine's
-  vsync-driven pipeline into a window, and Studio's only display is
+  vsync-driven pipeline into a window, and the display used was
   1920×1080 at 1x, so its window is 900×640 pixels: a quarter of the
   pixels to raster. The UI thread's work does not depend on that (glyphs
   aside); the raster times and the process CPU are, if anything,

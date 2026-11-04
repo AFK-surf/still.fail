@@ -8,7 +8,7 @@
 //   lock status|reset [--data DIR]
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
-import type { AddressInfo } from "node:net";
+import { type AddressInfo, setDefaultAutoSelectFamilyAttemptTimeout } from "node:net";
 import { PerformanceObserver, monitorEventLoopDelay } from "node:perf_hooks";
 import { join } from "node:path";
 import { Effect, Fiber, Layer, SubscriptionRef } from "effect";
@@ -30,7 +30,7 @@ import { ErrorReports, builtKey } from "./ops/telemetry.ts";
 import { answer, langOfBrowser } from "./ops/loopback.ts";
 import { ownPorts } from "./ops/own.ts";
 import { version } from "./ops/version.ts";
-import { AdminApi, AgentsSide, AdminHost, CheckpointsLive, ControlPlane, Events, Grants, Helper, HelperFolders, Key, MeshNative, MeshSide, ModulePackages, Modules, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, StationDrive, Store, Up } from "./services.ts";
+import { AdminApi, AgentsSide, AdminHost, CheckpointsLive, ControlPlane, Events, Grants, Helper, HelperFolders, Key, MeshNative, MeshSide, ModulePackages, Modules, Own, Parts, Paths, Peers, Previous, Readers, ReadersAndStore, ScreenRegistry, StationConfig, StationDrive, Up } from "./services.ts";
 import { ModulesLive } from "./modules/live.ts";
 import { VaultLive } from "./vault/module.ts";
 import { AdbLive } from "./adb/module.ts";
@@ -61,6 +61,18 @@ import { keepRunnerIn } from "./platform/processes.ts";
 // What reads HOME (the machine's logins, its transcripts) finds the user's home there, where the machine names it
 // otherwise (Windows: USERPROFILE).
 if (!process.env.HOME && platform.home(process.env)) process.env.HOME = platform.home(process.env);
+// An adb server anything here starts (a chat's grant's, one an agent's command brings up) connects by itself to no phone
+// it finds on the network: with this machine's key a phone lent to one chat would be in them all (docs/adb-share.md).
+process.env.ADB_MDNS_AUTO_CONNECT = "0";
+// The launcher's malloc setting (native/launcher/src/run.rs) is this process's: read by malloc as it started, it goes
+// no further, to the agents and their tools.
+delete process.env.MallocSpaceEfficient;
+// Node tries a host's addresses one after another and gives up on each after this long, not keeping it going while the
+// next is tried: its 250 ms is less than a connect over a slow line takes (a Tailscale exit across an ocean, IPv6 not
+// reached), so every address failed and the station never reached still.fail cloud (user's 128, 2026-11-03). A
+// family that is not there fails at once anyway; this only waits longer on one that says nothing. For the presence
+// socket and every fetch alike, which take this default.
+setDefaultAutoSelectFamilyAttemptTimeout(2_000);
 
 const args = process.argv.slice(2);
 const data = dataDir(args);
@@ -153,7 +165,7 @@ function run() {
   hearLines((line) => stationLog.add(line));
   const paths = Layer.succeed(Paths)({ data, app });
   // still.fail Helper, one for the screens and the drive, and one look at its grants.
-  const base = Layer.mergeAll(Key.layer, Readers.layer, Store.layer, MeshNative.layer, Up.layer, ScreenRegistry.layer.pipe(Layer.provideMerge(Grants.layer), Layer.provideMerge(Helper.layer))).pipe(Layer.provideMerge(paths));
+  const base = Layer.mergeAll(Key.layer, ReadersAndStore, MeshNative.layer, Up.layer, ScreenRegistry.layer.pipe(Layer.provideMerge(Grants.layer), Layer.provideMerge(Helper.layer))).pipe(Layer.provideMerge(Previous.layer), Layer.provideMerge(paths));
   const parts = ControlPlane.layer.pipe(Layer.provideMerge(base));
   const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive, ModulesLive, CheckpointsLive).pipe(
     // The station's parts in its own process (parts.ts), made before the mesh answers anyone: each says what it adds.
@@ -174,7 +186,6 @@ function run() {
     // config.json, what is the station's own, and the process before this one: the platform's, for every part.
     Layer.provideMerge(Own.layer),
     Layer.provideMerge(StationConfig.layer),
-    Layer.provideMerge(Previous.layer),
     // The requests between the stations of the workspace (mesh/bus.ts): the mesh attaches them, the parts answer.
     Layer.provideMerge(Peers.layer),
     // What the mesh and the agents' side share, each filling in its own (services.ts MeshSide).

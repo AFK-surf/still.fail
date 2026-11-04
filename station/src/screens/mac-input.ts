@@ -87,6 +87,9 @@ export class MacInput {
       }
       case "text":
         return e.text === "" ? [] : [{ op: "text", text: e.text }];
+      case "pose":
+      case "device":
+        return [];
     }
   }
 }

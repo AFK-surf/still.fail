@@ -402,11 +402,11 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
           }
         }
       })
-      c.box(h=Px(10.0), fn() {  }) |> ignore
+      c.box(style=info_lists_gap, fn() {  }) |> ignore
     }
     // the chats its agent made (after who works in it): one row, 创建了 N 个对话, each of them in the menu it opens
     match view {
-      Some({ opened: [_, ..] as opened, opened_text, .. }) =>
+      Some({ opened: [_, ..] as opened, opened_text, .. }) => {
         info_list(c, fn() {
           let key = "info/opened"
           let pressed = info_row(c, key, fn() {
@@ -418,6 +418,8 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
             @sf.menu(@sfpages.opened_items(opened, then=close), from=Of(c.id(key)), title=opened_text)
           }
         })
+        c.box(style=info_lists_gap, fn() {  }) |> ignore
+      }
       _ => ()
     }
     // then what is in it, one card (the user, 2026-10-30: who works in it before what it made, what it holds apart
@@ -436,7 +438,7 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
             close()
             go_to(r, seq)
           })
-          @sfpages.web_peek(c, src, r.station, text(pv, "url"), @sfpages.pull_title(pv), pid, side=Left)
+          @sfpages.web_peek(c, src, r.station, text(pv, "url"), @sfpages.pull_title(pv), pid, side=Left, peek=text(pv, "peek"))
           if info_row(c, "info/pull/" + text(pv, "key"), fn() {
               @sfpages.pull_mark(c, pv, 16.0)
               c.box(style=@sf.full_width, fn() { c.text(@sfpages.pull_title(pv), style=info_pull_title) |> ignore }) |> ignore

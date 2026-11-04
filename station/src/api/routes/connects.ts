@@ -4,7 +4,7 @@
 // What is a kind's own (its platform's part of a connect: Slack's tokens, Feishu's app) is said by that kind's part
 // (connects/connections.ts `ConnectKind`). Config edits go through config.json (ConfigFile.update); what answers with
 // the overview is given it (`overview`).
-import { type Answer, type Request, error, json, percentDecode } from "../request.ts";
+import { type Answer, type Request, error, Refused, input, ok, segment } from "../request.ts";
 import type { Route } from "../admin.ts";
 import type { Viewer } from "../../mesh/credential.ts";
 import type { ConfigFile } from "../../ops/config.ts";
@@ -19,29 +19,8 @@ import type { EntryEdit } from "../../connects/connections.ts";
 type Json = any;
 export type Input = Record<string, unknown>;
 
-/// A path segment as the pages send it (a + is a +).
-export const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
-export const ok = (value: unknown) => json(200, JSON.stringify(value));
-export class Refused extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
-
-/// A request's JSON object (`read_json`): nothing is `{}`, as is anything not an object; more than a megabyte refused.
-export function input(r: Request): Input {
-  if (r.body.length > 1_000_000) throw new Refused(413, "request too large");
-  if (r.body.length === 0) return {};
-  let value: unknown;
-  try {
-    value = JSON.parse(r.body.toString("utf8"));
-  } catch {
-    throw new Refused(400, "invalid JSON");
-  }
-  return isObject(value) ? (value as Input) : {};
-}
+// (the request helpers, as Slack's and Feishu's routes take them from here)
+export { Refused, input, ok, segment };
 
 export const isObject = (v: unknown): v is Record<string, Json> => v !== null && typeof v === "object" && !Array.isArray(v);
 /// `Input::str`: a string field, as given.

@@ -1,8 +1,8 @@
-# A settings sheet up and down on the sheet's spring, its scrim in and out: Station → Studio → "…" → 重命名, then
+# A settings sheet up and down on the sheet's spring, its scrim in and out: Station → Willow → "…" → 重命名, then
 # its scrim tapped.
 timeout 20000
-until Studio
-tap Studio
+until Willow
+tap Willow
 until 内存剩
 wait 800
 tapxy -33 22

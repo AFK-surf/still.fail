@@ -340,6 +340,19 @@ export class BridgeHost implements Host {
   secureDelete(key: string): Effect.Effect<void, HostError> {
     return Effect.asVoid(this.#bridge.call("secure.delete", { key }));
   }
+  /// A host from before `secure.past` (and every one but Apple's, whose Keychain items were named by a home that moves)
+  /// fails it: none.
+  securePast(key: string): Effect.Effect<Uint8Array[], HostError> {
+    return Effect.orElseSucceed(
+      Effect.map(this.#bridge.call("secure.past", { key }), (a) => {
+        const sizes = ((a.json as J)?.sizes ?? []) as number[];
+        const bytes = a.bytes ?? new Uint8Array(0);
+        let at = 0;
+        return sizes.map((n) => bytes.slice(at, (at += n)));
+      }),
+      () => [],
+    );
+  }
   secureAsk(reason: string): Effect.Effect<void, HostError> {
     return Effect.asVoid(this.#bridge.call("secure.ask", { reason }));
   }

@@ -4,7 +4,7 @@
 
 ///|
 /// The app over the fixture `w` by `h`, as `platform` plays it (2: a phone's system, a finger; 0: a Mac's, a mouse),
-/// at Studio's 文档.
+/// at Willow's 文档.
 fn files_page_tester(w : Double, h : Double, platform : Int) -> @ui.Tester {
   new_run()
   let src = fixture("home")
@@ -258,7 +258,7 @@ test "adding a favorite on a narrow screen chooses a station and folder without 
   sheet_rested(t, "sf-present")
   // (two stations it can be done on: which first)
   assert_true(t.find("选择一台 station，然后选择要收藏的文件夹") is Some(_), msg="which station")
-  t.click(Button, label="Studio")
+  t.click(Button, label="Willow")
   t.frame()
   sheet_rested(t, "sf-present")
   assert_eq(named(calls, "drive.folders").length(), 1)

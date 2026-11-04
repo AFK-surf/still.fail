@@ -9,69 +9,6 @@
 let bar_h : Double = 50.0
 
 ///|
-/// Home (Home.kt HomeScreen, mobile/Home.tsx Home): the chats' lists (sfpages' sidebar.mbt) under the top bar, what
-/// is left up long after their words; a finger's search over them (sfpages' search.mbt), the bar away under it.
-fn home_page(
-  c : @ui.Ctx,
-  src : Source,
-  w : Workspace,
-  all : Array[Workspace],
-  invited : Bool,
-) -> Unit {
-  ignore(all)
-  let filter = filter_of(src, w.id)
-  let (view, _) = chats_of(src, w.id, filter)
-  let frame : @sfpages.ListsFrame = {
-    // under the top bar, the status bar's height and its own (Home.kt padding: topBar + 8); over the bottom bar
-    top: status_top() + bar_h + 8.0,
-    // (the bar's foot: what is tucked over the rows goes under it)
-    under: top_bar_h(),
-    foot: nav_foot() + bar_room_now(),
-    // (the search's bar under the status bar: sfpages' search.mbt)
-    inset: status_top(),
-    ground: @sf.theme().p.bg,
-    // what the last update brought, until it is seen (sfpages' changelog.mbt; beside the wide frame's rail the web
-    // says it in a bubble of its own), even while the list is read
-    before: fn(_, _) {
-      let cards : Array[@sfpages.ListPart] = []
-      // what the update wants of the person (the leave to install apps), over what the last one brought
-      if @sfpages.update_card_shown() {
-        cards.push({ key: "update-card", draw: fn() { @sfpages.update_card(c, src) }, tucked: false })
-      }
-      if @sfpages.news_of(src) is Some(_) {
-        cards.push({ key: "changelog-news", draw: fn() { @sfpages.changelog_news(c, src) }, tucked: false })
-      }
-      cards
-    },
-    // what is left up a long while on the stations (OpenJobs.kt): nothing while there is none
-    after: fn(_, _) {
-      if items((src.topic)("longJobs", { "scope": Json::string(w.id) }).value, "groups").length() > 0 {
-        [{ key: "open-jobs", draw: fn() { open_jobs(c, src, w) }, tucked: false }]
-      } else {
-        []
-      }
-    },
-    others: [],
-    shown: @sfpages.filter_at(src, w),
-    at: Whole,
-  }
-  // under a finger's search (sfpages' search.mbt): the lists up and away, the bar faded (Home.kt `away`), the
-  // search over them
-  let away = @sfpages.search_away(c)
-  c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-    c.layer(fn() { @sfpages.chats_lists(c, src, w, frame) }) |> ignore
-    let bar = c.layer(fn() {
-      top_bar(c, src, w, view, filter, invited)
-    })
-    if away > 0.0 {
-      c.look(bar, { ..@ui.still_look, alpha: 1.0 - away })
-    }
-    @sfpages.chats_search(c, src, w, status_top(), Whole)
-  })
-  |> ignore
-}
-
-///|
 /// The top bar over the list: the filter at the left, the workspace's switcher and settings at the right. The
 /// switcher has a dot when another workspace has something waiting.
 fn top_bar(
@@ -136,7 +73,7 @@ fn top_bar(
             @sf.workspace_badge(c, w.name, w.emoji, w.icon, home_ws_mark, still=false)
           }
           // A long name gives way to the controls actually present, including the sync mark while it exits.
-          top_bar_title(c, w.name, cut=true) |> ignore
+          top_bar_title(c, w.name, look=@sf.home_workspace_title_look, cut=true) |> ignore
           let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
           match field(marks.value, "others") {
             // what the others have waiting, as their rows' marks (sfpages' chat_mark), said as the core says it; else an
@@ -163,12 +100,15 @@ fn top_bar(
 
 ///|
 /// The name in a top bar (PlacePage.kt TopBarTitle): 24 bold, its letters 0.4 closer, on one line.
-fn top_bar_title(c : @ui.Ctx, s : String, cut? : Bool = false) -> Int {
-  c.text(s, size=24.0, weight=700, color=@sf.theme().p.text, wrap=false, line=30.0, tracking=top_title_tracking, w=if cut { Cut } else { Auto })
+fn top_bar_title(c : @ui.Ctx, s : String, look? : @view.WordsLook = @sf.top_bar_title_look, cut? : Bool = false) -> Int {
+  // (said as it is: Ctx::text makes it larger at the system's size of words, as view_spacing does a ScaledPoints)
+  guard look.tracking is ScaledPoints(tracking) else { abort("top_bar_title_look's tracking: ScaledPoints") }
+  c.text(s, size=look.size, weight=look.weight, color=@sf.theme().p.text, wrap=look.wrap, line=look.line, tracking~, w=if cut {
+    Cut
+  } else {
+    Auto
+  })
 }
-
-///|
-let top_title_tracking : Double = -0.4
 
 ///|
 /// A bar's round key's side (nav_button's 34).

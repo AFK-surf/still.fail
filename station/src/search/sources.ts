@@ -5,24 +5,26 @@
 // - a session's transcript: its execution history (`h:<key>:<i>`, `i` as GET /sessions/:key/timeline numbers them),
 //   what the agent said and thought, the calls it made and what they gave, its files looked through newest first.
 // - a session's jobs (`j:<id>`), a workspace's memory and skills, the profiles.
-import { closeSync, createReadStream, existsSync, openSync, readSync, readdirSync } from "node:fs";
+import { createReadStream, existsSync, readdirSync } from "node:fs";
+import { open } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { createZstdDecompress } from "node:zlib";
+import { segmentsFrom } from "../read/packed.ts";
 import * as store from "../read/store.ts";
-import type { MessageRow, SessionRow, Store } from "../read/store.ts";
-import { homesFirst, type ReadState, sessionPlaces, timelineOf, transcriptPaths, type TimelineEntry } from "../read/transcript.ts";
+import type { JobRow, MessageRow, SessionRow, Store } from "../read/store.ts";
+import { type ReadState, sessionPlaces, timelineOf, transcriptSources, type TimelineEntry } from "../read/transcript.ts";
 import { readFrom } from "../usage/counter.ts";
 import { agentHomeOf, memory } from "../read/memory.ts";
 import { runtimeKind } from "../agents/runtime.ts";
 import { STILLFAIL_SURFACE } from "../read/store.ts";
-import { type Asker, type Doc, type Hit, has, hitOf, sees } from "./match.ts";
+import { given, titleOf } from "../read/views.ts";
+import { type Asker, type Doc, type Group, type Hit, excerpt, has, sees } from "./match.ts";
 
 /// The workspace documents of nothing in particular are in (`ws` null: the station's home one).
 type Ws = string | null;
 
 const all = (s: Store, sql: string, ...args: any[]): any[] => s.db.prepare(sql).all(...args);
 
-const firstChars = (text: string, n: number) => (text.length <= n ? text : Array.from(text).slice(0, n).join(""));
 
 // ── threads ──
 
@@ -36,44 +38,70 @@ export function chatOf(s: Store, thread: number): { ws: Ws; chat: string | null;
   return { ws: home?.ws ?? null, chat: sessions[0]?.key ?? null, sessions };
 }
 
-/// The words a chat is called by, as lists name it: its title, else what its agent called it, else the first thing said.
-function titleOf(row: store.ThreadRow, first: string | null): string {
-  const named = row.title?.trim() || row.autoTitle?.trim();
-  if (named) return named;
-  return first ? firstChars(first.replace(/\s+/gu, " ").trim(), 80) : "";
-}
 
-/// A thread's documents: its chat, and its messages (an archived one's read from its file).
-export function threadDocs(s: Store, id: number): Doc[] {
+const MESSAGE_BATCH = 256;
+
+/// A thread's documents, with a yield after each batch even when none of its messages is searchable.
+function* threadDocSteps(s: Store, id: number, asker?: Asker, kinds: Set<string> | null = null, onlyArchived = false): Generator<Doc | undefined> {
   const row = store.getThread(s, id);
-  if (row === null) return [];
+  if (row === null) return;
   const { ws, chat, sessions } = chatOf(s, id);
-  // Filed away (its entries in its archive file), or archived as people see it (by hand, or idle): out of the lists.
-  const filed = store.isArchived(s, id);
-  const archived = filed || row.hiddenAt !== null || (sessions.length > 0 && sessions.every((x) => x.archivedAt !== null));
+  if (asker && !sees({ ws }, asker)) return;
+  // Archived as people see it (by hand, or idle): out of the lists.
+  const archived = row.hiddenAt !== null || (sessions.length > 0 && sessions.every((x) => x.archivedAt !== null));
+  if (onlyArchived && !archived) return;
   const surface = row.surface === STILLFAIL_SURFACE ? "stillfail" : "slack";
-  const messages: MessageRow[] = filed ? store.messagesBefore(s, id, null, 1_000_000) : all(s, "SELECT * FROM merged WHERE thread = ? ORDER BY n", id).map(toMessage);
-  const title = titleOf(row, messages.find((m) => m.authorKind === "person")?.text ?? messages[0]?.text ?? null);
-  const lastAt = messages.length > 0 ? Math.max(...messages.map((m) => m.createdAt ?? 0)) : null;
+  const firstText = (s.db.prepare("SELECT m.text FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.person_n WHERE t.thread = ?").get(id) as { text: string | null } | undefined)?.text ?? null;
+  // As the chat list calls it (read/views.ts titleOf).
+  const title = titleOf(row, firstText, null);
   const ref = { thread: id, chat, surface, archived, ...(row.channel ? { channel: row.channel } : {}) };
-  const docs: Doc[] = [];
-  docs.push({
+  let lastAt: number | null = null;
+  const wantsMessages = kinds === null || kinds.has("message");
+  const wantsChat = kinds === null || kinds.has("chat");
+  const end = (s.db.prepare("SELECT MAX(n) AS n FROM entries WHERE thread = ?").get(id) as { n: number | null }).n;
+  let after: number | null = null;
+  const origins = new Map<string, string | null>();
+  for (;;) {
+    const messages: MessageRow[] = end === null ? [] : (after === null
+        ? all(s, "SELECT * FROM merged WHERE thread = ? AND n <= ? ORDER BY n LIMIT ?", id, end, MESSAGE_BATCH)
+        : all(s, "SELECT * FROM merged WHERE thread = ? AND n > ? AND n <= ? ORDER BY n LIMIT ?", id, after, end, MESSAGE_BATCH)).map(toMessage);
+    if (messages.length === 0) break;
+    for (const m of messages) {
+      const at = m.createdAt ?? 0;
+      lastAt = lastAt === null ? at : Math.max(lastAt, at);
+      if (!wantsMessages) continue;
+      const text = m.text ?? "";
+      const files = m.attachments.map((a: any) => (typeof a?.name === "string" ? a.name : "")).filter((n: string) => n !== "");
+      if (text.trim() === "" && files.length === 0) continue;
+      let identity = m.agentIdentity;
+      if (m.authorKind === "agent" && typeof identity?.runtime !== "string") {
+        if (!origins.has(m.author)) origins.set(m.author, store.originalRuntime(s, m.author) ?? sessions.find((x) => x.key === m.author)?.runtime ?? null);
+        const runtime = origins.get(m.author);
+        if (runtime) identity = { ...(identity ?? {}), runtime };
+      }
+      yield {
+        key: `m:${id}:${m.n}`, kind: "message", ws, title: "",
+        body: files.length > 0 ? `${text}\n${files.join("\n")}` : text,
+        at: m.createdAt ?? null,
+        ref: { thread: id, seq: m.n, chat, chatTitle: title, surface, archived, authorKind: m.authorKind, author: m.author, ...(identity ? { agentIdentity: identity } : {}) },
+      };
+    }
+    after = messages.at(-1)!.n;
+    yield undefined;
+    if (messages.length < MESSAGE_BATCH) break;
+  }
+  if (wantsChat) yield {
     key: `c:${id}`, kind: "chat", ws, title,
     body: [...sessions.map((x) => x.title ?? ""), ...sessions.map((x) => x.model ?? "")].filter((w) => w !== "").join("\n"),
     at: lastAt ?? row.createdAt ?? null, ref,
-  });
-  for (const m of messages) {
-    const text = m.text ?? "";
-    const files = m.attachments.map((a: any) => (typeof a?.name === "string" ? a.name : "")).filter((n: string) => n !== "");
-    if (text.trim() === "" && files.length === 0) continue;
-    docs.push({
-      key: `m:${id}:${m.n}`, kind: "message", ws, title: "",
-      body: files.length > 0 ? `${text}\n${files.join("\n")}` : text,
-      at: m.createdAt ?? null,
-      ref: { thread: id, seq: m.n, chat, chatTitle: title, surface, archived, authorKind: m.authorKind, author: m.author, ...(m.agentIdentity ? { agentIdentity: m.agentIdentity } : {}) },
-    });
-  }
-  return docs;
+  };
+}
+
+/// A thread's documents: its chat, then its messages (an archived one's read from its file).
+export function threadDocs(s: Store, id: number): Doc[] {
+  const docs = [...threadDocSteps(s, id)].filter((d): d is Doc => d !== undefined);
+  const chat = docs.pop();
+  return chat === undefined ? docs : [chat, ...docs];
 }
 
 /// A row of `merged` as the readers read it.
@@ -130,19 +158,19 @@ function historyText(e: TimelineEntry): string | null {
 }
 
 /// A session's transcript files, and the runtime that wrote them.
-export function transcriptFiles(s: Store, session: SessionRow, profiles: Profiles): { paths: string[]; runtime: NonNullable<ReturnType<typeof runtimeKind>> } | null {
-  const runtime = runtimeKind(session.runtime) ?? null;
-  if (runtime === null || store.runtimeSessions(s, session.key).length === 0) return null;
-  const { paths } = transcriptPaths(runtime, s.dataDir, homesFirst(profiles, session.profile), store.runtimeSessions(s, session.key), sessionPlaces(session));
-  return { paths, runtime };
+export function transcriptFiles(s: Store, session: SessionRow, profiles: Profiles): { paths: { path: string; runtime: NonNullable<ReturnType<typeof runtimeKind>> }[] } | null {
+  const sources = store.runtimeSessionSources(s, session.key);
+  if (sources.length === 0) return null;
+  return transcriptSources(s.dataDir, profiles, sources, sessionPlaces(session));
 }
 
 /// A transcript's entries, each given to `each` as it is read: in parts (a file put away decompressed as a stream), never
 /// the whole of it at once.
-async function entriesOf(runtime: NonNullable<ReturnType<typeof runtimeKind>>, path: string, state: ReadState, each: (e: TimelineEntry) => void): Promise<void> {
+async function entriesOf(runtime: NonNullable<ReturnType<typeof runtimeKind>>, path: string, state: ReadState, each: (e: TimelineEntry) => void, keep: () => boolean): Promise<void> {
   const out: TimelineEntry[] = [];
-  for await (const part of readFrom(path, 0)) {
+  for await (const part of readFrom(path, 0, keep)) {
     for (let line of part.text.split("\n")) {
+      if (!keep()) return;
       if (line.endsWith("\r")) line = line.slice(0, -1);
       if (line === "") continue;
       let record: unknown;
@@ -152,7 +180,10 @@ async function entriesOf(runtime: NonNullable<ReturnType<typeof runtimeKind>>, p
         continue;
       }
       timelineOf(runtime, record, state, out);
-      for (const e of out) each(e);
+      for (const e of out) {
+        if (!keep()) return;
+        each(e);
+      }
       out.length = 0;
     }
   }
@@ -178,101 +209,153 @@ function finder(word: string): (bytes: Buffer) => boolean {
 
 /// Whether a transcript file has every word anywhere in it (its entries are read only then): looked through as bytes,
 /// a file put away decompressed as a stream.
-export async function mentions(path: string, words: string[]): Promise<boolean> {
+export async function mentions(path: string, words: string[], keep: () => boolean = () => true): Promise<boolean> {
   const finds = words.map(finder);
   const left = new Set(finds);
   const look = (bytes: Buffer) => {
     for (const f of left) if (f(bytes)) left.delete(f);
     return left.size === 0;
   };
+  if (!keep()) return false;
   if (existsSync(path)) {
     const buf = Buffer.allocUnsafe(CHUNK + OVERLAP);
-    const fd = openSync(path, "r");
+    const file = await open(path, "r");
     try {
       let pos = 0;
       let kept = 0;
       for (;;) {
-        const n = readSync(fd, buf, kept, CHUNK, pos);
+        if (!keep()) return false;
+        const { bytesRead: n } = await file.read(buf, kept, CHUNK, pos);
+        if (!keep()) return false;
         if (n <= 0) return false;
         const view = buf.subarray(0, kept + n);
-        if (look(view)) return true;
+        const found = look(view);
+        if (!keep()) return false;
+        if (found) return true;
         pos += n;
         kept = Math.min(OVERLAP, view.length);
         view.copy(buf, 0, view.length - kept);
+        await new Promise<void>((resolve) => setImmediate(resolve));
       }
     } finally {
-      closeSync(fd);
+      await file.close();
     }
   }
   if (!existsSync(`${path}.zst`)) return false;
+  let tail: Buffer = Buffer.alloc(0);
+  const through = async (chunks: AsyncIterable<Buffer>): Promise<boolean> => {
+    for await (const chunk of chunks) {
+      if (!keep()) return false;
+      const view = tail.length > 0 ? Buffer.concat([tail, chunk]) : chunk;
+      const found = look(view);
+      if (!keep()) return false;
+      if (found) return true;
+      tail = Buffer.from(view.subarray(Math.max(0, view.length - OVERLAP)));
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    return false;
+  };
+  // In segments (read/packed.ts): each decompressed on its own.
+  const segments = await segmentsFrom(`${path}.zst`, 0).catch(() => null);
+  if (segments !== null) {
+    try {
+      return await through(segments);
+    } catch {
+      return false;
+    } finally {
+      await segments.return(undefined);
+    }
+  }
   const raw = createReadStream(`${path}.zst`, { highWaterMark: 1 << 20 });
   const stream = raw.pipe(createZstdDecompress({ chunkSize: 4 << 20 }));
   raw.on("error", (error) => stream.destroy(error));
-  let tail: Buffer = Buffer.alloc(0);
   try {
-    for await (const chunk of stream as AsyncIterable<Buffer>) {
-      const view = tail.length > 0 ? Buffer.concat([tail, chunk]) : chunk;
-      if (look(view)) return true;
-      tail = Buffer.from(view.subarray(Math.max(0, view.length - OVERLAP)));
-    }
+    return await through(stream as AsyncIterable<Buffer>);
   } catch {
     // Unreadable: not found there.
+    return false;
   } finally {
     raw.destroy();
     stream.destroy();
   }
-  return false;
 }
 
 export type HistoryFound = { hits: Hit[]; more: boolean; /** Sessions not looked through, the time being up. */ left: number };
+
+/// Even with no hits, a stopped search must tell its caller that some histories were not searched.
+export function historyGroup(found: HistoryFound): Group | null {
+  if (!found.hits.length && !found.left) return null;
+  return { kind: "history", hits: found.hits, more: found.more, ...(found.left > 0 ? { left: found.left } : {}) };
+}
 
 /**
  * What the words find in the execution histories `asker` may see, the most recently active sessions first and each one's
  * latest steps first, until `offset + limit` and one more are found or `ms` is up. A session's files are read (its
  * entries numbered as its history page numbers them) only when they have every word.
  */
-export async function historyHits(s: Store, profiles: Profiles, words: string[], asker: Asker, options: { limit: number; offset: number; ms: number; now: () => number }): Promise<HistoryFound> {
+export async function historyHits(s: Store, profiles: Profiles, words: string[], asker: Asker, options: { limit: number; offset: number; ms: number; now: () => number; cancelled?: () => boolean }): Promise<HistoryFound> {
   const want = options.offset + options.limit + 1;
   const until = options.now() + options.ms;
   const found: Hit[] = [];
   const sessions = store.listSessions(s).filter((x) => sees({ ws: x.ws }, asker));
   let looked = 0;
+  let cancelled = false;
+  let expired = false;
+  const keep = () => {
+    if (cancelled || expired) return false;
+    if (options.cancelled?.()) cancelled = true;
+    else if (options.now() > until) expired = true;
+    return !cancelled && !expired;
+  };
+  const partial = (): HistoryFound => {
+    if (cancelled) throw new Error("the search took too long");
+    return { hits: found.slice(options.offset, options.offset + options.limit), more: true, left: sessions.length - looked };
+  };
   for (const session of sessions) {
     if (found.length >= want) break;
-    if (options.now() > until) return { hits: found.slice(options.offset, options.offset + options.limit), more: true, left: sessions.length - looked };
-    looked++;
+    if (!keep()) return partial();
     // Let through: a search asked meanwhile is answered between sessions.
     await new Promise<void>((resolve) => setImmediate(resolve));
+    if (!keep()) return partial();
     const files = transcriptFiles(s, session, profiles);
-    if (files === null) continue;
+    if (!keep()) return partial();
+    if (files === null) { looked++; continue; }
     let any = false;
-    for (const p of files.paths) if (await mentions(p, words)) any = true;
-    if (!any) continue;
+    for (const p of files.paths) {
+      if (await mentions(p.path, words, keep)) any = true;
+      if (!keep()) return partial();
+      if (any) break;
+    }
+    if (!any) { looked++; continue; }
     // Its latest steps that have the words, as many as may still be wanted (numbered as they are read).
-    const state: ReadState = { inner: new Map() };
     const room = want - found.length;
-    const latest: { i: number; e: TimelineEntry; text: string }[] = [];
+    // Keep excerpts, not entire matching entries: one history step can itself contain a very large tool result.
+    const latest: { i: number; entry: TimelineEntry["kind"]; tool: TimelineEntry["tool"]; at: number | null; text: string }[] = [];
+    let oldest = 0;
     let i = 0;
     for (const p of files.paths) {
-      await entriesOf(files.runtime, p, state, (e) => {
+      await entriesOf(p.runtime, p.path, { inner: new Map() }, (e) => {
         const text = historyText(e);
         if (text !== null && has(text, words)) {
-          latest.push({ i, e, text });
-          if (latest.length > room) latest.shift();
+          const time = e.at === null ? null : Date.parse(e.at);
+          const item = { i, entry: e.kind, tool: e.tool, at: time !== null && Number.isFinite(time) ? time : null, text: excerpt(text, words) };
+          if (latest.length < room) latest.push(item);
+          else { latest[oldest] = item; oldest = (oldest + 1) % room; }
         }
         i++;
-      });
+      }, keep);
+      if (!keep()) return partial();
     }
     const thread = store.sessionThreads(s, session.key).find((t) => t.surface === STILLFAIL_SURFACE) ?? null;
-    const chatTitle = session.title ?? thread?.title ?? thread?.autoTitle ?? "";
-    for (const { i, e, text } of latest.reverse()) {
-      const at = e.at === null ? null : Date.parse(e.at);
-      found.push(hitOf({
-        key: `h:${session.key}:${i}`, kind: "history", ws: session.ws, title: "", body: text,
-        at: at !== null && Number.isFinite(at) ? at : null,
-        ref: { session: session.key, index: i, entry: e.kind, ...(e.tool ? { tool: e.tool } : {}), chat: session.key, chatTitle, ...(thread ? { thread: thread.id } : {}) },
-      }, words));
+    const chatTitle = (thread !== null ? given(thread) : null) ?? (session.title?.trim() || "");
+    const ordered = latest.length < room ? latest : [...latest.slice(oldest), ...latest.slice(0, oldest)];
+    for (const { i, entry, tool, at, text } of ordered.reverse()) {
+      found.push({
+        session: session.key, index: i, entry, ...(tool ? { tool } : {}), chat: session.key, chatTitle, ...(thread ? { thread: thread.id } : {}),
+        key: `h:${session.key}:${i}`, kind: "history", title: "", text, at,
+      });
     }
+    looked++;
   }
   return { hits: found.slice(options.offset, options.offset + options.limit), more: found.length > options.offset + options.limit, left: 0 };
 }
@@ -286,12 +369,42 @@ export function jobDocs(s: Store, key: string): Doc[] {
   const session = store.getSession(s, key);
   const jobs = store.listJobs(s, key);
   const thread = session ? (store.sessionThreads(s, key).find((t) => t.surface === STILLFAIL_SURFACE) ?? null) : null;
-  return jobs.map((j) => ({
+  return jobs.map((j) => jobDoc(j, key, session, thread));
+}
+
+function jobDoc(j: Pick<JobRow, "id" | "name" | "command" | "cwd" | "port" | "state" | "startedAt">,
+  key: string, session: SessionRow | null, thread: ReturnType<typeof store.sessionThreads>[number] | null): Doc {
+  return {
     key: `j:${j.id}`, kind: "job", ws: session?.ws ?? null, title: j.name,
     body: [j.command, j.cwd ?? "", j.port !== null && j.port !== undefined ? `:${j.port}` : ""].filter((w) => w !== "").join("\n"),
     at: j.startedAt ?? null,
     ref: { job: j.id, session: key, chat: key, state: j.state, ...(j.port !== null && j.port !== undefined ? { port: j.port } : {}), ...(thread ? { thread: thread.id } : {}) },
-  }));
+  };
+}
+
+/// Read a session's jobs by their rowid, which jobs_by_session orders after the session key. `pick` ranks by startedAt;
+/// rowid order preserves the old stable order for ties while avoiding a sort and an array of all the session's jobs.
+function* jobDocSteps(s: Store, key: string, session: SessionRow, asker?: Asker): Generator<Doc | undefined> {
+  const end = (s.db.prepare("SELECT MAX(rowid) AS n FROM jobs INDEXED BY jobs_by_session WHERE session_key = ?").get(key) as { n: number | null }).n;
+  if (end === null) return;
+  const thread = store.sessionThreads(s, key).find((t) => t.surface === STILLFAIL_SURFACE) ?? null;
+  let current = session;
+  let after: number | null = null;
+  for (;;) {
+    const rows = after === null
+      ? all(s, "SELECT rowid AS seq, id, name, command, cwd, port, state, started_at FROM jobs WHERE session_key = ? AND rowid <= ? ORDER BY rowid LIMIT ?", key, end, MESSAGE_BATCH)
+      : all(s, "SELECT rowid AS seq, id, name, command, cwd, port, state, started_at FROM jobs WHERE session_key = ? AND rowid > ? AND rowid <= ? ORDER BY rowid LIMIT ?", key, after, end, MESSAGE_BATCH);
+    if (rows.length === 0) return;
+    for (const r of rows) yield jobDoc({ id: r.id, name: r.name, command: r.command, cwd: r.cwd, port: r.port, state: r.state, startedAt: r.started_at }, key, current, thread);
+    after = rows.at(-1)!.seq as number;
+    yield undefined;
+    // A session can move or go while another search is running between batches. Never read its next batch for its old
+    // workspace, nor return an apparently complete result assembled before access changed.
+    const latest = store.getSession(s, key);
+    if (!latest || (asker && !sees({ ws: latest.ws }, asker))) throw new Error("the session changed while searching; search again");
+    if (rows.length < MESSAGE_BATCH) return;
+    current = latest;
+  }
 }
 
 // ── memory, skills, profiles ──
@@ -333,22 +446,57 @@ export function profileDocs(profiles: Profiles): Doc[] {
 
 // ── all of them ──
 
-/// The documents of the kinds asked for (all but the execution history's), as the station's data is now.
-export function* stationDocs(s: Store, data: string, config: unknown, kinds: Set<string> | null): Generator<Doc> {
+/// The documents of the kinds asked for; undefined gives the worker a chance to handle another request.
+export function* stationDocSteps(s: Store, data: string, config: unknown, kinds: Set<string> | null, asker?: Asker, onlyArchived = false): Generator<Doc | undefined> {
   const wants = (k: string) => kinds === null || kinds.has(k);
   if (wants("chat") || wants("message")) {
-    for (const id of threadIds(s)) {
-      try {
-        for (const d of threadDocs(s, id)) if (wants(d.kind)) yield d;
-      } catch (error) {
-        // A thread moved to the archive while it was read: found the next time.
-        if (!(error instanceof Error && /no such|archive|ENOENT/.test(error.message))) throw error;
+    const end = (s.db.prepare("SELECT MAX(id) AS id FROM threads").get() as { id: number | null }).id;
+    let after: number | null = null;
+    while (end !== null) {
+      const rows = after === null
+        ? all(s, "SELECT id FROM threads WHERE id <= ? ORDER BY id LIMIT ?", end, MESSAGE_BATCH)
+        : all(s, "SELECT id FROM threads WHERE id > ? AND id <= ? ORDER BY id LIMIT ?", after, end, MESSAGE_BATCH);
+      if (rows.length === 0) break;
+      for (const r of rows) {
+        try {
+          yield* threadDocSteps(s, r.id, asker, kinds, onlyArchived);
+        } catch (error) {
+          // A thread moved to the archive while it was read: found the next time.
+          if (!(error instanceof Error && /no such|archive|ENOENT/.test(error.message))) throw error;
+        }
       }
+      after = rows.at(-1)!.id as number;
+      yield undefined;
+      if (rows.length < MESSAGE_BATCH) break;
     }
   }
-  if (wants("job")) for (const key of sessionKeys(s)) yield* jobDocs(s, key);
+  if (wants("job")) {
+    // Seek to the next session in the jobs index, rather than visiting every session without a job or counting a
+    // session once for each of its jobs. The saved end keeps newly created sessions from extending a search forever.
+    const end = (s.db.prepare("SELECT MAX(session_key) AS key FROM jobs INDEXED BY jobs_by_session").get() as { key: string | null }).key;
+    let after: string | null = null;
+    while (end !== null) {
+      const row = (after === null
+        ? s.db.prepare("SELECT session_key FROM jobs INDEXED BY jobs_by_session WHERE session_key <= ? ORDER BY session_key LIMIT 1").get(end)
+        : s.db.prepare("SELECT session_key FROM jobs INDEXED BY jobs_by_session WHERE session_key > ? AND session_key <= ? ORDER BY session_key LIMIT 1").get(after, end)) as { session_key: string } | undefined;
+      if (!row) break;
+      const key = row.session_key;
+      after = key;
+      const session = store.getSession(s, key);
+      if (session && (!asker || sees({ ws: session.ws }, asker))) yield* jobDocSteps(s, key, session, asker);
+      yield undefined;
+    }
+  }
   if (wants("skill") || wants("memory")) {
-    for (const ws of [null, ...memoryWorkspaces(agentHomeOf(data))]) for (const d of memoryDocs(data, ws)) if (wants(d.kind)) yield d;
+    for (const ws of [null, ...memoryWorkspaces(agentHomeOf(data))]) {
+      if (!asker || sees({ ws }, asker)) for (const d of memoryDocs(data, ws)) if (wants(d.kind)) yield d;
+      yield undefined;
+    }
   }
   if (wants("profile")) yield* profileDocs(profilesOf(config, data));
+}
+
+/// The same documents for synchronous callers.
+export function* stationDocs(s: Store, data: string, config: unknown, kinds: Set<string> | null, asker?: Asker): Generator<Doc> {
+  for (const d of stationDocSteps(s, data, config, kinds, asker)) if (d !== undefined) yield d;
 }

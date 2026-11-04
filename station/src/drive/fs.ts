@@ -2,11 +2,23 @@
 // runs, through still.fail Helper (helper/files.ts), which holds the grants. The same few operations either way, on
 // paths the drive has already checked (the helper checks them again against the roots it is told).
 import { constants, lstatSync } from "node:fs";
-import { copyFile, lstat, mkdir, open, readdir, readFile, realpath, rename, rm, stat, unlink } from "node:fs/promises";
+import { type FileHandle, copyFile, lstat, mkdir, open, readdir, readFile, realpath, rename, rm, stat, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { platform } from "../platform/index.ts";
 import { toTrash } from "./trash.ts";
+
+/// Up to `length` bytes of an open file from `at`, as many reads as it takes (fewer at its end).
+export async function readAt(handle: FileHandle, at: number, length: number): Promise<Buffer> {
+  const bytes = Buffer.alloc(length);
+  let got = 0;
+  while (got < length) {
+    const { bytesRead } = await handle.read(bytes, got, length - got, at + got);
+    if (bytesRead === 0) break;
+    got += bytesRead;
+  }
+  return bytes.subarray(0, got);
+}
 
 export type Stat = { dir: boolean; file: boolean; link: boolean; size: number; mtimeMs: number };
 /// A folder's entry: whether it is a link, where it leads (links followed; itself when not a link), and what is there
@@ -91,15 +103,7 @@ export const direct: Fs = {
     try {
       const s = await handle.stat();
       if (s.isDirectory()) throw Object.assign(new Error("that is a folder"), { code: "EISDIR" });
-      const want = Math.max(0, Math.min(length, s.size - offset));
-      const bytes = Buffer.alloc(want);
-      let got = 0;
-      while (got < want) {
-        const { bytesRead } = await handle.read(bytes, got, want - got, offset + got);
-        if (bytesRead === 0) break;
-        got += bytesRead;
-      }
-      return { bytes: bytes.subarray(0, got), size: s.size, mtimeMs: s.mtimeMs };
+      return { bytes: await readAt(handle, offset, Math.max(0, Math.min(length, s.size - offset))), size: s.size, mtimeMs: s.mtimeMs };
     } finally {
       await handle.close();
     }
@@ -145,7 +149,7 @@ export function protectedTop(path: string, home = homedir(), mounts = platform.m
 /// null for any other path. The drive reaches the first through the helper; a directory the station is to work in
 /// (ops/places.ts) is never looked at by the station's own thread in any of them. A disk is one by where it is mounted
 /// (`mounts`, the platform's), not by its path's name alone: opening one mounted elsewhere waits on macOS asking the
-/// person as one in /Volumes does (2026-11-02, Studio's ~/OrbStack held the station for good).
+/// person as one in /Volumes does.
 export function protectedPlace(path: string, home = homedir(), mounts = platform.mounts()): { top: string; helper: boolean } | null {
   const lower = path.toLowerCase();
   const under = (top: string) => lower === top.toLowerCase() || lower.startsWith(`${top.toLowerCase()}/`);

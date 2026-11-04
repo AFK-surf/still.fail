@@ -98,11 +98,12 @@ export const TOPICS: Record<string, Spec> = {
   notify: { workspace: ["string", "skip"] },
   chatSearch: { scope: S, query: ["string", "def"], station: ["string", "skip"], exclude: ["string", "skip"], limit: ["u32", "skip"], messages: ["u32", "skip"], elsewhere: ["bool", "skipFalse"] },
   archivedRows: { station: S },
-  archive: { scope: S },
+  archive: { scope: S, q: ["string", "skip"], limit: ["u32", "skip"] },
   search: { scope: S, query: ["string", "def"], kind: ["string", "skip"], limit: ["u32", "skip"] },
-  stationSearch: { station: S, q: S, kind: ["string", "skip"], limit: ["u32", "skip"] },
+  stationSearch: { station: S, q: S, kind: ["string", "skip"], limit: ["u32", "skip"], archived: ["bool", "skipFalse"] },
   linkPreview: { station: S, url: S },
   filePeek: { station: S, key: S, path: S, line: ["u32", "skip"] },
+  messagePeek: { station: S, thread: ["u64", "req"], seq: ["u64", "req"] },
   newChat: { scope: S },
   shareIn: { scope: S, source: S, query: ["string", "def"] },
   pick: { station: S, of: S },
@@ -204,7 +205,7 @@ export function sameTopic(a: Topic, b: Topic): boolean {
   return topicKey(a) === topicKey(b);
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory", "presets", "outflowGrants", "linkPreview", "filePeek"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory", "presets", "outflowGrants", "linkPreview", "filePeek", "messagePeek"]);
 const VIEWS = new Set(["chats", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "chatSearch", "search", "archive", "chatJobs", "chatLetters", "chatThings", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
 
 /// The station a station topic belongs to; null for the account topics, the core's own and the views.

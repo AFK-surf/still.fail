@@ -139,9 +139,9 @@ pub let left_said : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 pub fn new_nav() -> @ui.Nav[Page] {
-  // Settings comes from its gear: at Home's right edge, or at the left edge of the other places' bars.
-  // what its own back comes to, back's in the history (app_history.mbt went_back)
-  @ui.Nav::new(Home, from_left=fn(p, under) { p is Settings && !(under is Some(Home)) }, went_back~, on_leave=fn(p) {
+  // what its own back comes to, back's in the history (app_history.mbt went_back); settings' gear is at the right of
+  // every top bar, so it comes in from the right like any page
+  @ui.Nav::new(Home, went_back~, on_leave=fn(p) {
     left_pages.push(p)
     left_said.set(@signals.untracked(fn() { left_said.get() }) + 1)
     match p {
@@ -197,6 +197,17 @@ pub fn nav_home() -> Unit {
     if !app.nav.pop() {
       break
     }
+  }
+}
+
+///|
+/// The stack made Home and `pages` over it, in place, as one change (Nav::replace_above): Home kept where it is the
+/// root, else put in place of the root.
+pub fn nav_over_home(pages : Array[Page]) -> Unit {
+  if app.nav.pages()[0] == Home {
+    app.nav.replace_above(1, pages)
+  } else {
+    app.nav.replace_above(0, [Home, ..pages])
   }
 }
 

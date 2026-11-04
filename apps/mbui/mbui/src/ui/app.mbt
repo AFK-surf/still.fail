@@ -64,6 +64,8 @@ struct Bench {
 /// old frame around the old views it holds, put where `view` says: old_views_here), else `view` its one old view
 /// (view_host.mbt).
 pub fn run(title : String, view : (Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
+  // (an app's run on a host: what faults is told and its boundary shows it, the app going on: @view's boundary.mbt)
+  @view.faults_stop.val = false
   match tree {
     Some(make) => set_view_app(make, around=view)
     None => set_view_app(fn(root) { old(root, view).grow(Is(1.0)) |> ignore })
@@ -118,7 +120,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // clock alone: frame_watch.mbt)
   // what is made once laid out, placed and drawn as its frame does; the old view in the room its node is given
   // (view_host.mbt)
-  view_frame(w, h, t)
+  view_frame(w, h, scale, t)
   let t0 = frame_drawn(c, w, h, scale, t)
   in_frame.val = false
   // inputs came before this frame: one more, for what they changed late in it (inputrec.mbt `took_input`), built where
@@ -144,6 +146,10 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   slow_probe(c, t, t3 - t0, t4 - t3)
   perf_log(c, t, t3 - t0, t4 - t3)
   drive_frame(c)
+  // (what the stacks the window's tree holds say of the frame, as it ends: built whole, painted alone or of its looks
+  // alone, and what came in as it was drawn taken (a scripted run's steps, drive_frame): a page one of them has in the
+  // hand moves with no clock read, nav_view.mbt)
+  nav_views_framed(c)
   // a motion said, not at its end; one read going (built or painted from where it is now: Ctx::shows_motion); a cycle
   // shown (motion_data.mbt)
   c.motion_left = c.motion_owed() || c.motion_read
@@ -254,7 +260,10 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.nav_rest = -1.0
   c.read_back_moved = false
   faces_from_env()
-  text_frame()
+  if text_frame() {
+    // (what the host measures changed: every layout made anew, kept rows' too)
+    c.epoch = c.epoch + 1
+  }
   if bench.mode > 0 && c.bench_list != 0 && bench.frames >= 30 {
     c.scroll_list(c.bench_list, bench.speed)
   }
@@ -436,6 +445,9 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   }
   // (what it laid out, said as one number: whether the next frame may paint it again alone, frame_watch.mbt)
   laid_kept(c, root)
+  // (a finger held on words to pick, its builds over and nothing of them having taken its press: picked as this frame
+  // paints, finger_select.mbt)
+  c.finger_hold()
   let t2 = work_now()
   // painted under a watch of its own: what only its paint reads (a look worked out as it is painted) paints the next
   // frame again, nothing built (frame_watch.mbt)
@@ -473,6 +485,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.segs.clear()
   text_runs.runs.clear()
   words_alpha.val = 1.0
+  look_surface.val = (1.0, -1)
   c.next_hit_ids.clear()
   c.next_hit_rects.clear()
   c.next_hit_clips.clear()
@@ -499,6 +512,8 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.raise_tops()
   // (what is over everything, the layers over the page too)
   c.paint_over_layers()
+  // (the handles of words a finger picked, over everything, as a field's: finger_select.mbt)
+  c.paint_finger_ends()
   // what was shaped and not drawn, for the host to draw ahead while it presents this frame (text.mbt)
   glyphs_ahead()
   c.emit_segs()
@@ -676,7 +691,11 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.nodes[root].w = Px(w)
   c.nodes[root].h = Px(h)
   // (under a change of theme spreading from where it was asked, while it does: reveal.mbt)
-  c.with_parent(root, fn() { c.revealed(w, h, fn() { (g_view.val)(c) }) })
+  c.with_parent(root, fn() {
+    c.revealed(w, h, fn() { (g_view.val)(c) })
+    // (and the pictures asked apart from any build: shot.mbt take_picture)
+    c.pictures_built()
+  })
   // what lies over the page over everything else (overlay.mbt)
   c.raise_layers()
   root
@@ -837,6 +856,9 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
     // (a hold of the old view's it has not made its own, moved: what of the tree's holds it may take it over)
     if kind == 1 {
       view_old_moved(x, y)
+      // (what the old view found under the pointer as it moved, by its own targets, told it again as the tree finds it
+      // there: nothing of its where something of the tree's is pointed at over it, View::points)
+      view_pointed()
     }
   }
   // (a finger or button down, wherever it went (a node of the tree's, the old view): a press of its own from here, a
@@ -935,7 +957,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     if !c.editors.contains(target) && !keeps_selection_on(target) {
       c.select_press(x, y, c.clicks)
       match c.editors.get(c.focus_allowed()) {
-        Some(st) if picked.from.base != 0 => st.anchor = st.caret
+        Some(st) if picked.from.base != NoSel => st.anchor = st.caret
         _ => ()
       }
     }
@@ -972,6 +994,19 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     c.editor_drag = false
     c.handle_drag = 0
     c.word_drag = 0
+    // a handle of words a finger picked with the pointer under it: that end follows the finger, nothing under it
+    // pressed or scrolled (finger_select.mbt)
+    if c.finger_handle_down(x, y) {
+      c.claimed = true
+      for other in c.press_chain {
+        drag_cancel(other)
+      }
+      c.active = 0
+      c.edge = 0
+      c.taken_at = c.press_at
+      h_request_frame()
+      return
+    }
     // a selection's handle under the finger (Android's): the finger moves that end, the menu away meanwhile
     // (the finger where it is in the field's words, as they are placed: EditorState::local)
     let in_words = match c.editors.get(c.focus_allowed()) {
@@ -1229,6 +1264,12 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     // a tap wherever it lands (Ctx::tapped_anywhere), not a drag, not a press the app took
     if !c.dragging && c.taken_at != c.press_at {
       c.tapped = Some((x, y))
+      // (the window's tree told it too: what of it a tap anywhere lets go of)
+      view_tapped_old()
+      // (words a finger picked elsewhere let go: finger_select.mbt)
+      if !c.press_strayed {
+        c.finger_tapped(target)
+      }
     }
     // taken by none: the innermost's tap (as a press on it alone); the others let it go
     for other in c.press_chain {
@@ -1330,6 +1371,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     c.editor_drag = false
     c.handle_drag = 0
     picked.dragging = false
+    finger_let_go()
     select_edge_stop()
     second_ptr[2] = 0.0
   } else {
@@ -1397,6 +1439,7 @@ fn Ctx::press_called_off(self : Ctx, x : Double, y : Double, t : Double) -> Unit
   }
   // (words being picked by it: picked as far as they are, no more, nothing scrolled on at an edge for it)
   picked.dragging = false
+  finger_let_go()
   select_edge_stop()
   c.down = false
   c.dragging = false
@@ -1872,6 +1915,16 @@ fn key_in(code : Int, mods : Int) -> Unit {
   // focus through a press on the page's words, which lets go of what it had picked: the press above)
   if code == key_copy && selected_words() != "" && !field_picks(c) {
     h_clipboard_set(selected_words())
+    // (a finger's, from the system's menu: let go of once copied, as a phone's text is)
+    if picked.finger {
+      select_none()
+      h_request_frame()
+    }
+    return
+  }
+  // the system's menu's select all over words a finger picked: all of what they are in (finger_select.mbt)
+  if code == key_select_all && picked.finger && !field_picks(c) {
+    c.finger_select_all()
     return
   }
   match (c.editors.get(focus), step) {
@@ -1953,8 +2006,8 @@ fn on_text_now(kind : Int, s : String, a : Int, b : Int) -> Unit {
     return
   }
   match c.editors.get(c.focus) {
-    Some(st) if kind == text_float_begin || kind == text_float_move => {
-      float_caret(st, kind, a.to_double(), b.to_double(), h_now())
+    Some(st) if kind == text_float_begin || kind == text_float_move || kind == text_float_end => {
+      float_caret(c, st, kind, a.to_double() / text_float_unit, b.to_double() / text_float_unit, h_now())
       h_request_frame()
     }
     Some(st) => {
@@ -1966,19 +2019,27 @@ fn on_text_now(kind : Int, s : String, a : Int, b : Int) -> Unit {
 }
 
 ///|
-/// The keyboard's trackpad in field `st` (on_text's text_float_begin, text_float_move, at (`x`, `y`) in the window):
-/// the caret put as a pointer would put it as far from where the caret was when it began as (`x`, `y`) is from where it
-/// began, as iOS's own fields move theirs (the host's point is the finger's way, not a place in the words); counted in
-/// the field's words, as the field scrolls under it to follow the caret.
-fn float_caret(st : EditorState, kind : Int, x : Double, y : Double, t : Double) -> Unit {
+/// The keyboard's trackpad in field `st` (on_text's text_float_begin, text_float_move, text_float_end, at (`x`, `y`) in
+/// the window): the caret it draws goes as far from where the caret was when it began as (`x`, `y`) is from where it
+/// began, as iOS's own fields move theirs (the host's point is the finger's way, not a place in the words), kept in the
+/// field's words (FloatCaret::follow); the field's caret put where it is, as a pointer there would put it, counted in
+/// the words as the field scrolls under it to follow the caret. Let go, the caret it draws slides back to the caret.
+fn float_caret(c : Ctx, st : EditorState, kind : Int, x : Double, y : Double, t : Double) -> Unit {
   guard st.tl is Some(tl) else { return }
   if kind == text_float_begin {
     let (cx, line) = st.place_of(tl, st.caret + st.marked.length())
-    st.floating = Some((x, y, cx, (line.to_double() + 0.5) * tl.line_h))
+    st.floating = Some(FloatCaret::new(x, y, cx, (line.to_double() + 0.5) * tl.line_h))
     return
   }
-  guard st.floating is Some((fx, fy, cx, cy)) else { return }
-  place_caret(st, st.ox + cx + x - fx, st.oy + cy + y - fy, t)
+  guard st.floating is Some(f) && f.let_go < 0.0 else { return }
+  if kind == text_float_end {
+    f.let_go = c.set_out(f.mover, f, what="the keyboard's trackpad's caret sliding back to the caret")
+    // (shown, not blinking, as it lands: blinking again from there)
+    st.blink0 = f.let_go + float_caret_back_ms
+    return
+  }
+  f.follow(tl, x, y)
+  place_caret(st, st.ox + f.x, st.oy + f.y, t)
 }
 
 ///|

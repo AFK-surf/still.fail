@@ -12,6 +12,7 @@ import { Refused } from "../src/mesh/bus.ts";
 import { memory } from "../src/read/memory.ts";
 import { Cloud } from "../src/cloud/state.ts";
 import { allowedIn } from "../src/sessions/config.ts";
+import { until } from "./accounts-fakes.ts";
 
 const A = "a".repeat(64);
 const B = "b".repeat(64);
@@ -55,7 +56,7 @@ class FakeCloud {
 
 type Station = { data: string; config: ConfigFile; sharing: Sharing; lent: string[] };
 
-function station(cloud: FakeCloud, id: string, others: () => Map<string, Station>, profiles: any[] = [], codexRenewRunning: (id: string) => Promise<boolean> = async () => false): Station {
+function station(cloud: FakeCloud, id: string, others: () => Map<string, Station>, profiles: any[] = [], codexRenewRunning: (id: string) => Promise<boolean> = async () => false, extra: { profileChanged?: (id: string, reset: boolean) => Promise<void>; quotaReset?: (id: string) => Promise<void> } = {}): Station {
   const data = mkdtempSync(join(tmpdir(), "share-"));
   writeFileSync(join(data, "config.json"), JSON.stringify({ profiles }));
   const config = new ConfigFile(data);
@@ -79,6 +80,7 @@ function station(cloud: FakeCloud, id: string, others: () => Map<string, Station
     codexRenewRunning,
     status: async (pid) => ({ check: { state: "ok", detail: `checked ${pid}`, models: null, checkedAt: 1 }, quota: null }),
     changed: () => {},
+    ...extra,
   });
   return { data, config, sharing, lent };
 }
@@ -250,7 +252,7 @@ test("a shared subscription: the other borrows tokens from its host, with no log
   all.delete(A);
   assert.equal((await b.sharing.lendClaude(copy)).token, "token-of-max", "the token lent before, while it lasts");
   assert.equal(b.sharing.profileView(copy)!.reachable, false);
-  await assert.rejects(b.sharing.lendClaude({ ...copy, id: "never-lent" }), /did not lend/);
+  await assert.rejects(b.sharing.lendClaude({ ...copy, id: "never-lent" }), /未能借出/);
 });
 
 test("a login wanted before the cloud has said the workspace's stations waits for them; one kept to go on with does not", async () => {
@@ -292,17 +294,133 @@ test("a borrowed Codex subscription's login is written in its home, the profile 
   const copy = b.config.raw().profiles[0];
   // As sessions/config.ts gives it to the runtime: its home absolute (C:\… on Windows; a doubled one was made there).
   const home = join(b.data, copy.home);
-  await b.sharing.lendCodex({ ...copy, home });
+  const sandboxFile = join(b.data, "run", "sandbox", "lent", "test", "auth.json");
+  await b.sharing.lendCodex({ ...copy, home }, false, sandboxFile);
   const auth = JSON.parse(readFileSync(join(home, "auth.json"), "utf8"));
   assert.equal(auth.tokens.account_id, "acct");
   assert.equal(auth.tokens.refresh_token, "lent-by-another-station");
+  assert.deepEqual(JSON.parse(readFileSync(sandboxFile, "utf8")), auth, "a sandbox gets the borrowed login, without the host's refresh token");
   // The host away: the login lent before is used while it has long enough, not once it runs out soon.
   all.delete(A);
-  assert.ok((await b.sharing.lendCodex({ ...copy, home })) > Date.now() + 23 * 3600_000);
-  await assert.rejects(b.sharing.lendCodex({ ...copy, home }, true), /did not lend/, "a refused token must not be reused while the host is offline");
+  rmSync(sandboxFile);
+  assert.ok((await b.sharing.lendCodex({ ...copy, home }, false, sandboxFile)) > Date.now() + 23 * 3600_000);
+  assert.deepEqual(JSON.parse(readFileSync(sandboxFile, "utf8")), auth, "the kept login is also copied when the host is away");
+  await assert.rejects(b.sharing.lendCodex({ ...copy, home }, true), /未能借出/, "a refused token must not be reused while the host is offline");
   auth.tokens.access_token = jwt({ exp: Math.floor(Date.now() / 1000) + 600 });
   writeFileSync(join(home, "auth.json"), JSON.stringify(auth));
-  await assert.rejects(b.sharing.lendCodex({ ...copy, home }), /did not lend/);
+  await assert.rejects(b.sharing.lendCodex({ ...copy, home }), /未能借出/);
+});
+
+test("a host's changed Codex login and resets reach borrowers, including one that was offline", { timeout: 45_000 }, async () => {
+  const cloud = new FakeCloud();
+  const all = new Map<string, Station>();
+  const CODEX = { id: "plus", name: "ChatGPT Plus", runtime: "codex", access: { kind: "subscription" }, home: "homes/plus", env: {} };
+  const expires = Math.floor(Date.now() / 1000) + 10 * 86400;
+  const jwt = (name: string) => ["{}", JSON.stringify({ exp: expires, name }), "s"].map((p) => Buffer.from(p).toString("base64url")).join(".");
+  const login = (name: string) => JSON.stringify({ tokens: { id_token: "id", access_token: jwt(name), account_id: "acct", refresh_token: "r" } });
+  let hostResets = 0;
+  const a = station(cloud, A, () => all, [CODEX], undefined, { quotaReset: async () => { hostResets++; } });
+  let b: Station;
+  const updates: { reset: boolean; token: string }[] = [];
+  b = station(cloud, B, () => all, [], undefined, { profileChanged: async (id, reset) => {
+    const profile = b.config.raw().profiles.find((p: any) => p.id === id);
+    await b.sharing.lendCodex(profile, true);
+    const auth = JSON.parse(readFileSync(join(b.data, profile.home, "auth.json"), "utf8"));
+    updates.push({ reset, token: auth.tokens.access_token });
+  } });
+  all.set(A, a).set(B, b);
+  const home = join(a.data, "homes", "plus");
+  mkdirSync(home, { recursive: true });
+  writeFileSync(join(home, "auth.json"), login("first"));
+  await a.sharing.shareProfile("plus", true, null);
+  await settle(a, b);
+  const copy = b.config.raw().profiles[0];
+  await b.sharing.lendCodex(copy);
+  // A replacement reaches borrowers even though the old access token has days left. (The host's next reconcile reads
+  // it: its directory is watched too, but a test cannot wait on that, as on the Mac runners and Studio fs.watch tells
+  // nothing, 2026-11-03.)
+  writeFileSync(join(home, "auth.new"), login("second"));
+  renameSync(join(home, "auth.new"), join(home, "auth.json"));
+  await a.sharing.reconcile();
+  await until(() => updates.some((u) => u.token === jwt("second")), "the changed login is lent");
+  assert.equal(updates.at(-1)!.reset, false);
+  // A borrower away at the change catches up by the host's version when it returns.
+  all.delete(B);
+  writeFileSync(join(home, "auth.json"), login("third"));
+  await a.sharing.reconcile();
+  all.set(B, b);
+  await settle(a, b);
+  assert.ok(updates.some((u) => u.token === jwt("third")));
+  await a.sharing.quotaReset("plus", "host-reset");
+  await settle(a, b);
+  assert.equal(updates.at(-1)!.reset, true);
+  // A reset made while the host is away is persisted and relayed on reconnect, once for the same key.
+  all.delete(A);
+  await b.sharing.quotaReset(copy.id, "borrowed-reset");
+  await b.sharing.reconcile();
+  assert.equal(hostResets, 0);
+  all.set(A, a);
+  await settle(b, a);
+  assert.equal(hostResets, 1);
+  await b.sharing.quotaReset(copy.id, "borrowed-reset");
+  await settle(b, a);
+  assert.equal(hostResets, 1);
+  // An older host does not know the reset notification yet; its ordinary profile changes still arrive meanwhile.
+  const deps = (b.sharing as any).deps;
+  const ask = deps.ask;
+  let oldHost = true;
+  deps.ask = async (to: string, ws: string | null, request: any) => {
+    if (oldHost && request.method === "share.quotaReset") throw new Error("unknown share request");
+    return ask(to, ws, request);
+  };
+  await b.sharing.quotaReset(copy.id, "later-reset");
+  await b.sharing.reconcile();
+  a.config.update((raw) => { raw.profiles[0].name = "Updated Plus"; });
+  await settle(a, b);
+  assert.equal(b.config.raw().profiles[0].name, "Updated Plus");
+  oldHost = false;
+  await settle(b, a);
+  assert.equal(hostResets, 2, "the notification is delivered once the host supports it");
+  await a.sharing.close();
+  await b.sharing.close();
+});
+
+test("a reset during an in-flight share notification is sent as a newer version", { timeout: 30_000 }, async () => {
+  const cloud = new FakeCloud();
+  const all = new Map<string, Station>();
+  const CODEX = { id: "plus", name: "ChatGPT Plus", runtime: "codex", access: { kind: "subscription" }, home: "homes/plus", env: {} };
+  const a = station(cloud, A, () => all, [CODEX]);
+  const b = station(cloud, B, () => all);
+  all.set(A, a).set(B, b);
+  await a.sharing.shareProfile("plus", true, null);
+  await settle(a, b);
+  const id = a.config.raw().profiles[0].share.id;
+  const deps = (a.sharing as any).deps;
+  const ask = deps.ask;
+  const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  let delayed = false;
+  deps.ask = async (to: string, ws: string | null, request: any) => {
+    const answer = await ask(to, ws, request);
+    if (!delayed && request.method === "share.changed" && to === B) {
+      delayed = true;
+      await b.sharing.reconcile();
+      entered.resolve();
+      await release.promise;
+    }
+    return answer;
+  };
+  await a.sharing.quotaReset("plus", "first");
+  await entered.promise;
+  await a.sharing.quotaReset("plus", "second");
+  release.resolve();
+  await settle(a, b);
+  const hosted = JSON.parse(readFileSync(join(a.data, "share", "state.json"), "utf8")).hosted[id];
+  const borrowed = JSON.parse(readFileSync(join(b.data, "share", "state.json"), "utf8")).borrowed[id];
+  assert.equal(hosted.quotaRevision, 2);
+  assert.equal(borrowed.quotaRevision, 2);
+  assert.equal(hosted.told[B], borrowed.version);
+  await a.sharing.close();
+  await b.sharing.close();
 });
 
 test("a shared Codex login about to run out while a Codex runs on it here: that Codex is asked to renew it, then it is lent", async () => {
@@ -376,6 +494,56 @@ test("a shared subscription moves to another station: login handed over, the old
   assert.equal((await a.sharing.lendClaude(left)).token, `token-of-${taken.id}`);
   // Only the station that has it can hand it over.
   await assert.rejects(a.sharing.moveProfile("max", A), /only a profile this station shares/);
+});
+
+test("quota reset notifications continue after a shared Codex account moves to a new host", { timeout: 45_000 }, async () => {
+  const C = "c".repeat(64);
+  const cloud = new FakeCloud();
+  cloud.peers = [...cloud.peers, { id: C, name: "third" }];
+  const all = new Map<string, Station>();
+  const CODEX = { id: "plus", name: "ChatGPT Plus", runtime: "codex", access: { kind: "subscription" }, home: "homes/plus", env: {} };
+  const received: boolean[] = [];
+  const a = station(cloud, A, () => all, [CODEX]);
+  const b = station(cloud, B, () => all);
+  const c = station(cloud, C, () => all, [], undefined, { profileChanged: async (_id, reset) => { received.push(reset); } });
+  all.set(A, a).set(B, b).set(C, c);
+  mkdirSync(join(a.data, "homes", "plus"), { recursive: true });
+  writeFileSync(join(a.data, "homes", "plus", "auth.json"), JSON.stringify({ tokens: { access_token: "a", refresh_token: "r" } }));
+  await a.sharing.shareProfile("plus", true, null);
+  await settle(a, b, c);
+  const shareId = a.config.raw().profiles[0].share.id;
+  for (const key of ["before-1", "before-2"]) {
+    await a.sharing.quotaReset("plus", key);
+    await settle(a, b, c);
+  }
+  assert.equal(received.filter(Boolean).length, 2);
+  const deps = (a.sharing as any).deps;
+  const ask = deps.ask;
+  const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  deps.ask = async (to: string, ws: string | null, request: any) => {
+    const answer = await ask(to, ws, request);
+    if (request.method === "share.take") { entered.resolve(); await release.promise; }
+    return answer;
+  };
+  const moving = a.sharing.moveProfile("plus", B);
+  await entered.promise;
+  const duringMove = a.sharing.quotaReset("plus", "during-move");
+  release.resolve();
+  await Promise.all([moving, duringMove]);
+  await settle(a, b, c);
+  const newHostProfile = b.config.raw().profiles.find((p: any) => p.share?.borrowed !== true);
+  const before = received.filter(Boolean).length;
+  assert.equal(before, 3, "a reset made during handover reaches the new host and its borrowers");
+  await b.sharing.quotaReset(newHostProfile.id, "after-move");
+  await settle(a, b, c);
+  assert.equal(received.filter(Boolean).length, before + 1);
+  await b.sharing.quotaReset(newHostProfile.id, "before-1");
+  await settle(a, b, c);
+  assert.equal(received.filter(Boolean).length, before + 1, "a key redeemed before the move is still deduplicated");
+  assert.equal(JSON.parse(readFileSync(join(a.data, "share", "state.json"), "utf8")).moved[shareId], undefined, "a late handover notice is acknowledged");
+  await a.sharing.close();
+  await b.sharing.close();
+  await c.sharing.close();
 });
 
 test("a shared skill: copied and linked under its name, edits go back to the host, one made on an older copy is kept beside it", async () => {

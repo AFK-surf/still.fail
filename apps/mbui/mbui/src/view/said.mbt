@@ -139,6 +139,22 @@ pub fn Tree::said_label(self : Tree, id : NodeId) -> String {
 }
 
 ///|
+/// What node `id` says it is (View::says; None: nothing, or no live node).
+pub fn Tree::said_of(self : Tree, id : NodeId) -> Said? {
+  if self.alive_id(id) {
+    self.nodes[id.at].said
+  } else {
+    None
+  }
+}
+
+///|
+/// Whether node `id` says it is a picture (View::says: Role Image; no live node, not).
+pub fn Tree::says_picture(self : Tree, id : NodeId) -> Bool {
+  self.alive_id(id) && self.nodes[id.at].said is Some({ role: Image, .. })
+}
+
+///|
 /// The nodes that say what they are, and those hosting an old view, in the tree's order (each before what it holds, what
 /// it holds in its order): what is read out of the window's tree (ui's semantics_tree splices each old
 /// view's in at its node), as it is now (what was told since the last frame said, no frame waited for).
@@ -153,7 +169,8 @@ pub fn Tree::said_order(self : Tree) -> Array[SaidNode] {
     if !n.live || n.out {
       return
     }
-    let hid = hid || n.said_hidden
+    // (in its bones: none of it there yet, View::bones)
+    let hid = hid || n.said_hidden || n.bones != 0L
     let id = { at, gen: n.gen }
     let mut up = parent
     let mut d = depth
@@ -200,8 +217,14 @@ pub fn View::hides(self : View, hidden : Live[Bool]) -> View {
 /// then what it holds's in order, each one that says a label of its own by that label alone (none of what is in it), one
 /// kept from what is read out (View::hides) by nothing, one hosting an old view by what `hosted` says that old view is
 /// called the same way, the rest by the same, all one line; as ui's old frame calls a box with no label of its own
-/// (Ctx::words_in).
-pub fn Tree::words_within(self : Tree, id : NodeId, hosted : (NodeId) -> String) -> String {
+/// (Ctx::words_in). Each node's words as `set` sets them for its look (the host's: on one line where they do not wrap,
+/// as they are drawn and an old view's are).
+pub fn Tree::words_within(
+  self : Tree,
+  id : NodeId,
+  hosted : (NodeId) -> String,
+  set? : (String, WordsLook) -> String = fn(w, _) { w },
+) -> String {
   guard self.alive_id(id) else { return "" }
   let sb = StringBuilder()
   let put = fn(s : String) {
@@ -216,12 +239,12 @@ pub fn Tree::words_within(self : Tree, id : NodeId, hosted : (NodeId) -> String)
     let n = self.nodes[at]
     let me = { at, gen: n.gen }
     match self.drawn_of(me) {
-      Some(d) => put(d.words)
+      Some(d) => put(set(d.words, d.words_look))
       None => ()
     }
     for k in self.kids_in_order(at) {
       let kn = self.nodes[k]
-      if !kn.live || kn.out || kn.said_hidden {
+      if !kn.live || kn.out || kn.said_hidden || kn.bones != 0L {
         continue
       }
       match kn.said {

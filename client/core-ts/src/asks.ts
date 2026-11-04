@@ -108,7 +108,7 @@ export class Asks {
       const url = `${this.#host.cloudOrigin()}/releases/${feed}/latest.json`;
       const response = yield* Effect.result(this.#host.fetch({ method: "GET", url, headers: [["cache-control", "no-cache"]], body: null }));
       if (response._tag === "Failure") {
-        if (now) return yield* Effect.fail(new CoreError("app_update", t("core-misc.ask.update_failed", { error: response.failure.message })));
+        if (now) return yield* Effect.fail(CoreError.plainly("app_update", response.failure, t("core-misc.ask.update_failed", { error: CoreError.host(response.failure).message })));
         return newer(this.#releases.get(feed)![1]);
       }
       const raw = response.success.status === 200 ? parseJson(response.success.body) : undefined;
@@ -145,7 +145,7 @@ export class Asks {
             kept !== null
               ? Effect.succeed(kept)
               : Effect.flatMap(
-                  Effect.mapError(this.#host.fetch({ method: "GET", url, headers: [], body: null }), (e) => new CoreError("picture", t("core-misc.ask.picture_failed", { error: e.message }))),
+                  Effect.mapError(this.#host.fetch({ method: "GET", url: this.#host.pictureVia?.(url) ?? url, headers: [], body: null }), (e) => CoreError.plainly("picture", e, t("core-misc.ask.picture_failed", { error: CoreError.host(e).message }))),
                   (r) => (r.status !== 200 ? Effect.fail(new CoreError("picture", t("core-misc.ask.picture_failed", { error: r.status }))) : Effect.as(this.#keep(url, header(r, "content-type") ?? "", r.body), [header(r, "content-type") ?? "", r.body] as [string, Uint8Array])),
                 ),
           ),

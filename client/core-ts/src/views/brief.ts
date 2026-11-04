@@ -19,17 +19,29 @@ const get = (v: unknown, k: string): J => getU(v, k);
 
 const MINUTE = 60_000;
 
-/// Its turns, and how long the finished ones took together: 8 轮 · 共 1 小时 12 分. None before its first turn.
-export function workText(turns: unknown): string | null {
-  const all = arr(turns);
-  if (all.length === 0) return null;
+/// Its turns, and how long the finished ones took together: 8 轮 · 共 1 小时 12 分. None before its first turn. As its
+/// summary (`session`) counts them where its station says so (`turns`, `workMs`; no work for a session with turns from
+/// before it was kept: 8 轮 alone): its detail lists no turns then. Else added up from the turns its detail lists (a station from before lists them all).
+export function workText(turns: unknown, session?: unknown): string | null {
+  const counted = get(session, "turns");
+  const worked = get(session, "workMs");
+  let n = 0;
   let ms = 0;
-  for (const turn of all) {
-    const from = get(turn, "startedAt");
-    const to = get(turn, "endedAt");
-    if (typeof from === "number" && typeof to === "number" && to > from) ms += to - from;
+  if (typeof counted === "number" && (typeof worked === "number" || worked === null)) {
+    n = counted;
+    // None for a session with turns from before its station kept the work: how many alone.
+    if (worked === null) return n === 0 ? null : t("core-views.agent.turns", { n });
+    ms = worked;
+  } else {
+    const all = arr(turns);
+    n = all.length;
+    for (const turn of all) {
+      const from = get(turn, "startedAt");
+      const to = get(turn, "endedAt");
+      if (typeof from === "number" && typeof to === "number" && to > from) ms += to - from;
+    }
   }
-  const n = all.length;
+  if (n === 0) return null;
   const minutes = Math.round(ms / MINUTE);
   if (minutes < 1) return t("core-views.agent.turns", { n });
   const time = minutes < 60
@@ -103,14 +115,19 @@ const CONTEXT_RED = 95;
 /// recorded them, the usage page's count too): while it works, as its station's stream tells it as more are recorded
 /// (`live`); at rest, as its summary says it, which the device holds of every session (told again as the count of its
 /// last turn comes in after it ended); either where the other says none (a station from before says it in no summary,
-/// and on its stream only of a session named there). None before a call.
+/// and on its stream only of a session named there). None before a call. Kept to less context than its model's window
+/// (its session's `context`), that is the window its context fills.
 export function usageNow(session: unknown, live: unknown): J {
   const told = get(live, "usage");
   const said = get(session, "usage");
   const has = (u: unknown) => u !== null && typeof u === "object" && !Array.isArray(u);
   const status = shownStatus(session);
   const [first, then] = status === "running" || status === "queued" ? [told, said] : [said, told];
-  return has(first) ? first : has(then) ? then : null;
+  const u = has(first) ? first : has(then) ? then : null;
+  const cap = get(session, "context");
+  if (u === null || typeof cap !== "number" || cap <= 0) return u;
+  const window = get(u, "contextWindow");
+  return typeof window === "number" && window > 0 && window <= cap ? u : { ...u, contextWindow: cap };
 }
 
 /// Of a chat's agents (ViewsInner `agent`), the one at rest whose prompt cache is over, with a context worth going on
@@ -211,7 +228,7 @@ export function workOf(live: unknown): J {
 /// The card of `agent` (a chat's agent, ViewsInner `agent`), with its live view (none before it is read): each part
 /// only when it has one. Its account and what is left of it the card takes from the agent as it is.
 export function card(agent: J, live: J, stations?: ReadonlyMap<string, string>): J {
-  const out: J = { work: workText(get(agent, "turns")), jobs: jobsText(get(agent, "jobs")), latest: latestOf(agent, live, stations), attention: [], ...workOf(live) };
+  const out: J = { work: workText(get(agent, "turns"), get(agent, "session")), jobs: jobsText(get(agent, "jobs")), latest: latestOf(agent, live, stations), attention: [], ...workOf(live) };
   const u = usageNow(get(agent, "session"), live);
   const n = (k: string): number => (typeof get(u, k) === "number" ? u[k] : 0);
   if (n("modelCalls") > 0) {

@@ -56,5 +56,32 @@ pub fn skill_tag(k : Json?, names : Map[String, String]) -> String {
 pub let memory_chevron : Double = 14.0
 
 ///|
-/// Whether the built-in skills are folded open, by station.
+/// Whether the built-in skills are folded open, by station: kept as one goes back and comes in again, the same for
+/// every page that shows that station's memory (builtin_open_of, builtin_turn).
+// kept across runs: put back as a run begins (on_reset)
 pub let builtin_open : Map[String, Bool] = Map::new()
+
+///|
+fn init {
+  // (a run begins with every station's folded)
+  @ui.on_reset(fn() { builtin_open.clear() })
+}
+
+///|
+/// How many times builtin_open was turned: what reads it by builtin_open_of follows it.
+// kept across runs: it goes on counting
+let builtin_turned : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+/// Whether station `address`'s built-in skills are folded open, followed.
+pub fn builtin_open_of(address : String) -> Bool {
+  builtin_turned.get() |> ignore
+  builtin_open.get(address).unwrap_or(false)
+}
+
+///|
+/// Station `address`'s built-in skills folded open, or shut where they were open: told what follows them.
+pub fn builtin_turn(address : String) -> Unit {
+  builtin_open[address] = !builtin_open.get(address).unwrap_or(false)
+  builtin_turned.set(@signals.untracked(fn() { builtin_turned.get() }) + 1)
+}

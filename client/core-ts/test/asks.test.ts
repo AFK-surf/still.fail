@@ -7,6 +7,7 @@ import { Accounts } from "../src/accounts.ts";
 import { keyIdOf } from "../src/app-release.ts";
 import { Asks, PICTURE_RETRY_MS, PICTURES_KEPT, buddies, devCloud, linkTarget } from "../src/asks.ts";
 import { parseAsk } from "../src/asks-parse.ts";
+import { pictureRelay, relayedPicture } from "../src/picture-relay.ts";
 import { setOwnApp, setTestChannel } from "../src/brand.ts";
 import { HostError } from "../src/error.ts";
 import { holdLanguage } from "../src/i18n.ts";
@@ -99,6 +100,23 @@ test("a_newer_app_is_asked_for_at_most_every_five_minutes_and_a_picture_once", a
   await assert.rejects(run(asks.picture("https://p.test/gone.png")));
   assert.equal(host.requests.filter((r) => r.url.endsWith("gone.png")).length, 2);
   await assert.rejects(run(asks.picture("file:///etc/passwd")));
+});
+
+test("a_picture_is_fetched_where_the_host_says_and_kept_under_its_own_address", async () => {
+  const slack = "https://avatars.slack-edge.com/2026-09-27/1_ab_72.jpg";
+  const via = pictureRelay("https://app.still.fail", slack);
+  const host = new FakeHost();
+  host.pictureVia = (url) => (relayedPicture(url) ? pictureRelay("https://app.still.fail", url) : url);
+  host.onFetch((req) => (req.url === via ? { status: 200, headers: [["content-type", "image/jpeg"]], body: new Uint8Array([9]) } : jsonResponse(404, {})));
+  const asks = new Asks(host, nothing);
+  assert.deepEqual([...(await run(asks.picture(slack)))[1]], [9]);
+  assert.deepEqual(host.requests.map((r) => r.url), [via]);
+  // Slack's alone: what any page may read is fetched from where it is.
+  assert.ok(relayedPicture(slack) && relayedPicture("https://ca.slack-edge.com/T1-U1-ab-72"));
+  for (const url of ["http://avatars.slack-edge.com/a.jpg", "https://slack-edge.com.example.com/a.jpg", "https://avatars.slack-edge.com:8443/a.jpg", "https://lh3.googleusercontent.com/a/x", "https://x@avatars.slack-edge.com/a.jpg", "not a url"]) {
+    assert.equal(relayedPicture(url), false, url);
+  }
+  assert.equal(via, "https://app.still.fail/v1/pictures?url=https%3A%2F%2Favatars.slack-edge.com%2F2026-09-27%2F1_ab_72.jpg");
 });
 
 test("a_picture_had_is_kept_on_the_device_and_answered_from_it_when_the_network_is_gone", async () => {

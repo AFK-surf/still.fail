@@ -5,6 +5,8 @@
 // JSON head line `{status, headers}` and the response body.
 import type { Admin } from "../api/admin.ts";
 import { type Answer, langOfCore, queryPairs } from "../api/request.ts";
+import { coreTooOld } from "../api/oldest.ts";
+import { tr } from "../ops/i18n.ts";
 import type { Cloud } from "../cloud/state.ts";
 import { log } from "../ops/log.ts";
 import { wall } from "../ops/fibers.ts";
@@ -456,6 +458,9 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
   if (!path.startsWith("/admin/api/") || path.includes("..")) {
     return answer(404, '{"error":"only the admin API is reachable over the mesh"}');
   }
+  // A core older than this station answers (api/oldest.ts): told to update, whatever it asks.
+  const asking: Record<string, unknown> = head.headers !== null && typeof head.headers === "object" ? head.headers : {};
+  if (coreTooOld(asking)) return answer(426, { error: tr(langOfCore(asking as Record<string, string>), "station.admin.updateApp"), update: true });
   // One a part answers itself (a phone lent to the agents, adb/link.ts): it says what the member may.
   const part = m.streams?.(head);
   if (part !== undefined) return part({ conn, viewer, head, stream, reader });
@@ -490,6 +495,12 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
     const [status, said] = lockRoute(m.cloud, method, at < 0 ? [] : queryPairs(rest.slice(at + 1)), body, viewer);
     return answer(status, said);
   }
+  // A device that stops reading or loses its connection no longer needs its pending reads. Do not cancel writes: their
+  // effects and idempotency answers must be finished even when their caller goes away.
+  const reads = method === "GET" || (method === "POST" && /^\/*(batch|changed\/(chats|threads|sessions))$/.test(at < 0 ? rest : rest.slice(0, at)));
+  const controller = reads ? new AbortController() : null;
+  let handling = true;
+  if (controller) void stream.stopped().then(() => { if (handling) controller.abort(); }, () => { if (handling) controller.abort(); });
   const handled = await m.admin.handle({
     method,
     path: at < 0 ? rest : rest.slice(0, at),
@@ -500,7 +511,8 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
     ...(streamed ? { upload: reader.chunks() } : {}),
     viewer,
     lang: langOfCore(headers),
-  });
+    ...(controller ? { signal: controller.signal } : {}),
+  }).finally(() => { handling = false; });
   // Compressed, for a client that asks so (compress.ts).
   const sent = await compressed(handled, headers, rest);
   const ready = wall.now();
@@ -514,7 +526,7 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
 /// packets sent and lost on it, and how much the station may send on it unacknowledged now and how often that was cut
 /// for loss), so a part of a video slow to come is seen here, the station's time apart from the way's. (Its stream told
 /// nothing as it was acknowledged until 2026-10-28, which this took for the device having stopped it: nothing was ever
-/// said, and a desktop app's images coming at 30 KB/s from ccvm for an hour left no word of how.) `ways` says every
+/// said, and a desktop app's images coming at 30 KB/s from a station for an hour left no word of how.) `ways` says every
 /// way the connection has, `*` the chosen one, with the packets sent on each while the reply went: a connection has a
 /// way through every relay (#2580), and with none chosen noq sends on all of them (2026-10-30: attachments at 11–50
 /// KB/s on a way of 70 ms, `way=?` on half of them, the chosen way alone not saying where the bytes went).

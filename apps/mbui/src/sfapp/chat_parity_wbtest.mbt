@@ -49,7 +49,7 @@ fn edited_core(
   mode : String,
   edit : (String, Json) -> Json,
   answer? : (String) -> Json = fn(_) { Json::object({}) },
-  epoch? : Ref[Int] = Ref::new(0),
+  epoch? : @signals.Signal[Int] = @signals.signal(0),
   platform? : Int = 2,
 ) -> @ui.Tester {
   new_run()
@@ -58,12 +58,12 @@ fn edited_core(
     ..base,
     topic: fn(name, params) {
       let t = (base.topic)(name, params)
-      // (a change the test makes is a new version of what the core says: made up as it is read, followed by its
-      // version, as the core's by what it says)
-      topic_as_read(name, params, match t.value {
-        Some(v) => { ..t, value: Some(edit(name, v)), version: t.version + epoch.val }
+      // (a change the test makes is a new version of what the core says: `epoch` set as it makes it, followed as the
+      // core's is)
+      match t.value {
+        Some(v) => { ..t, value: Some(edit(name, v)), version: t.version + epoch.get() }
         None => t
-      })
+      }
     },
     call: fn(name, params, done) {
       calls.push({ name, params, bytes: None, done, heard: None })
@@ -151,7 +151,7 @@ test "a failure the viewer may report: 上报 asks first, then reports it and sa
 test "an overload notice offers to cancel its retry at the notice" {
   let calls : Array[Made] = []
   let retrying = Ref::new(true)
-  let epoch = Ref::new(0)
+  let epoch = @signals.signal(0)
   let t = edited_core(
     calls,
     "chat",
@@ -183,7 +183,7 @@ test "an overload notice offers to cancel its retry at the notice" {
   assert_eq(number(Some(sent[0].params), "thread"), 7.0)
   assert_eq(number(Some(sent[0].params), "seq"), 9.0)
   retrying.val = false
-  epoch.val += 1
+  epoch.set(epoch.get() + 1)
   t.frame()
   t.run_for(@ui.row_size_ms)
   assert_true(t.find("取消") is None, msg="the action leaves once the retry is over")
@@ -195,8 +195,8 @@ test "a notice that a runtime is missing: its word installs it (software.update)
   let t = edited_core(calls, "chat", fn(name, v) {
     if name == "chat" {
       with_chat_message(v, 9.0, [
-        ("text", "Studio 上没有 codex。"),
-        ("notice", { "failed": false, "words": "Studio 上没有 codex" }),
+        ("text", "Willow 上没有 codex。"),
+        ("notice", { "failed": false, "words": "Willow 上没有 codex" }),
         ("install", { "runtime": "codex", "state": "missing", "title": "codex", "action": "安装" }),
       ])
     } else {
@@ -204,7 +204,7 @@ test "a notice that a runtime is missing: its word installs it (software.update)
     }
   })
   for _ in 0..<6 {
-    if t.find("Studio 上没有 codex") is Some(_) {
+    if t.find("Willow 上没有 codex") is Some(_) {
       break
     }
     t.wheel(195.0, 400.0, -300.0)
@@ -224,7 +224,7 @@ test "a notice about a profile: what went wrong (after its ：) leads to the pro
       // (the core says where the profile's link begins: after the ：)
       with_chat_message(v, 9.0, [
         ("profile", "p1"),
-        ("notice", { "failed": true, "words": "Studio 上 codex 的登录已失效：请在设置里重新登录", "linkAt": 22 }),
+        ("notice", { "failed": true, "words": "Willow 上 codex 的登录已失效：请在设置里重新登录", "linkAt": 22 }),
       ])
     } else {
       v
@@ -247,7 +247,8 @@ test "a notice about a profile: what went wrong (after its ：) leads to the pro
 test "a notice that a chat was opened: its line is its Markdown drawn, the chat's chip in it, and tapped it opens that chat" {
   let calls : Array[Made] = []
   let link = "https://app.still.fail/o/ws1/st1/s-c2"
-  // (as the station says it in a still.fail chat, sessions/opened.ts sayOpened, and the core's tree of its words)
+  // (as the station says it in a still.fail chat, sessions/opened.ts sayOpened, and the core's tree of its words: its
+  // link to a chat, as it says, refLinks.ts linkTo)
   let words = "已创建对话：[共享调试：配对后连不上](\{link})"
   let t = edited_core(
     calls,
@@ -261,7 +262,7 @@ test "a notice that a chat was opened: its line is its Markdown drawn, the chat'
             {
               "failed": false,
               "words": Json::string(words),
-              "md": [["p", [[0, 6], ["a", [[7, 18]], { "href": Json::string(link) }]]]],
+              "md": [["p", [[0, 6], ["a", [[7, 18]], { "href": Json::string(link), "to": { "chat": true } }]]]],
             },
           ),
         ])
@@ -300,7 +301,7 @@ test "an agent's link to an archived chat written bare: its title as the core sa
         // (the core's tree of its words, and the chats they link to as their lists have them: views.ts drawn)
         with_chat_message(v, 11.0, [
           ("text", Json::string(words)),
-          ("md", [["p", [[0, 2], ["a", [[2, 40]], { "href": Json::string(link) }]]]]),
+          ("md", [["p", [[0, 2], ["a", [[2, 40]], { "href": Json::string(link), "bare": true, "to": { "chat": true } }]]]]),
           ("chats", [{ "href": Json::string(link), "title": "旧的对话", "archived": true, "note": "已归档" }]),
         ])
       } else {
@@ -328,14 +329,13 @@ test "a link to one message of a chat written bare: the chat's title, not its ad
     if name == "chat" {
       with_chat_message(v, 11.0, [
         ("text", Json::string(words)),
-        ("md", [["p", [[0, 2], ["a", [[2, 50]], { "href": Json::string(link) }]]]]),
+        ("md", [["p", [[0, 2], ["a", [[2, 50]], { "href": Json::string(link), "bare": true, "to": { "chat": true } }]]]]),
         ("chats", [{ "href": Json::string(link), "title": "旧的对话" }]),
       ])
     } else {
       v
     }
   })
-  assert_true(@sf.is_chat_link(link))
   assert_true(t.find("看 @旧的对话") is Some(_), msg="its title, not its link")
   assert_true(t.find(link) is None)
 }
@@ -408,9 +408,9 @@ test "a station's failed update stays out of the chat bar even when its notice w
           "stationUpdate",
           {
             "tone": "trouble",
-            "text": "Studio 更新失败",
+            "text": "Willow 更新失败",
             "label": "更新失败",
-            "station": "Studio",
+            "station": "Willow",
             "detail": "更新时正在运行的 agent 会稍后继续。",
             "from": "1.2.0",
             "to": "1.3.0",

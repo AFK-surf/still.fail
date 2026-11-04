@@ -6,7 +6,7 @@
 // itself to the station while one is live.
 import type { DatabaseSync } from "node:sqlite";
 import { UNDECIDED, threadAddress } from "../agents/instructions.ts";
-import { CARD_OCCUPIED, cardPlace } from "../sessions/card-place.ts";
+import { CARD_OCCUPIED, cardPlace, postCard } from "../sessions/card-place.ts";
 import { STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
 
 export type Scope = "hour" | "chat";
@@ -279,12 +279,7 @@ export class PhoneGrants {
           adb: { request: r.id, reason: r.reason, lasts },
         }
       : null;
-    const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
-    const posted = await this.#d.hub.chat(thread.connect).post(here, text, []);
-    if (requireEmpty && this.#d.hub.store.pendingCard(thread.thread.id) !== null) throw new Refused(CARD_OCCUPIED);
-    const [n] = this.#d.hub.store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: session, text, attachments: [], declared: null, card });
-    this.#d.hub.shared(thread.thread.id, n!, session, text);
-    return card !== null ? posted : null;
+    return postCard(this.#d.hub, session, thread, text, card, requireEmpty ? (why) => new Refused(why) : null);
   }
 
   /// How the station's adb holds `owner`'s phone changed (null: offered here no longer): said on the cards of their
@@ -346,13 +341,22 @@ export class PhoneGrants {
     return null;
   }
 
-  #end(r: PhoneRequest, why: string, workspace?: string | null) {
-    if (r.status !== "granted" && r.status !== "pending") return;
-    r.why = why;
-    this.#settle(r, r.status === "pending" ? "denied" : "ended", workspace);
+  /// The chat's agent is done with the phone (`phone_use {done: true}`): its grant, or a request still asked, ends as
+  /// one taken back does, and its phone stops being lent for this chat. The ended requests; the agent is not told of
+  /// them again, the tool's answer says so.
+  release(session: string): PhoneRequest[] {
+    const ended = this.#bySession(session).filter((r) => this.#live(r));
+    for (const r of ended) this.#end(r, "agent 已交还", undefined, false);
+    return ended;
   }
 
-  #settle(r: PhoneRequest, status: Status, workspace?: string | null) {
+  #end(r: PhoneRequest, why: string, workspace?: string | null, notify = true) {
+    if (r.status !== "granted" && r.status !== "pending") return;
+    r.why = why;
+    this.#settle(r, r.status === "pending" ? "denied" : "ended", workspace, notify);
+  }
+
+  #settle(r: PhoneRequest, status: Status, workspace?: string | null, notify = true) {
     r.status = status;
     // Last use is only needed while the grant can appear in the person's list.
     if (status === "ended" || status === "denied") delete r.lastUsedAt;
@@ -361,7 +365,7 @@ export class PhoneGrants {
       this.#d.hub.store.withdrawCard(r.session, r.thread, r.cardTs);
       this.#restate(r);
     }
-    if (status !== "pending") {
+    if (status !== "pending" && notify) {
       try {
         this.#d.hub.notify(r.session, said(r));
       } catch {
@@ -382,7 +386,7 @@ export function linkSaid(r: PhoneRequest): string {
     case "connected":
       return `${r.owner}'s phone (your grant ${r.id}) is connected to this station's adb now: call phone_use for its adb server and serial.`;
     case "unpaired":
-      return `${r.owner}'s phone (your grant ${r.id}) is lent to this station, but this station's adb is not paired with it yet. Its card in your chat shows its person how to pair it (a card under it, 这台 station 还没和你的手机配对, in the still.fail app on the phone); you are told here when it connects. Do not send them to the phone's settings yourself.`;
+      return `${r.owner}'s phone (your grant ${r.id}) is lent to this station, but pairing is still needed. A card under the phone request in the still.fail app on the phone shows its person how; you are told here when it connects. Do not send them to the phone's settings yourself.`;
     case "gone":
       return `${r.owner}'s phone (your grant ${r.id}) is not offered to this station now; it offers itself again while its 共享调试 switch is on.`;
     default:

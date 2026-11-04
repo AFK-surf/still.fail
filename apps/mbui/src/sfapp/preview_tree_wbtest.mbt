@@ -279,7 +279,7 @@ fn tree_held() -> (Int, Int, Int, Bool) {
 test "viewer on the tree: opened from the chat, zoomed, closed back into its thumbnail: nothing of it left; opened again, the same way in" {
   new_run()
   let src = fixture("chat-preview-named")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
   nav_rested(t)
   let mut tries = 0
@@ -652,7 +652,7 @@ fn whole_answered_later(fails : Bool) -> (Int, Bool, Bool) {
       }
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
   nav_rested(t)
   let mut tries = 0
@@ -696,7 +696,7 @@ test "viewer on the tree: the one beside it read ahead, stepped to before its an
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.draw()
   t.run_for(@ui.move_most_ms)
   // (read ahead, its answer still to come)
@@ -708,6 +708,53 @@ test "viewer on the tree: the one beside it read ahead, stepped to before its an
   t.run_for(later)
   assert_eq(asked.get("第二版.png"), Some(1))
   assert_true(v.bytes.get() is Some(_))
+}
+
+///|
+/// A slow first picture has the connection to itself. Its neighbours become eligible after it succeeds or fails.
+fn neighbours_after_picture(fails : Bool) -> Unit raise {
+  new_run()
+  let base = fixture("chat-preview-step")
+  let opened = viewer.get().unwrap()
+  let (steps, a) = (opened.steps, opened.file)
+  @sfbase.close_now()
+  let asked : Array[String] = []
+  let answer : Ref[(() -> Unit)?] = Ref(None)
+  let src : Source = {
+    ..base,
+    read_going: fn(name, params, on_value, done) {
+      let file = text(Some(params), "name")
+      if name == "station.file" {
+        asked.push(file)
+      }
+      if name == "station.file" && file == a.name {
+        answer.val = Some(fn() {
+          if fails {
+            done(Err({ "code": "gone", "message": "没了" }))
+          } else {
+            (base.read_going)(name, params, on_value, done)
+          }
+        })
+      } else {
+        (base.read_going)(name, params, on_value, done)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  t.draw()
+  open_preview("ws1/st1", "s-c1", a, steps~)
+  t.draw()
+  assert_eq(asked, [a.name], msg="neighbours must not take bandwidth while the open picture is coming")
+  (answer.val.unwrap())()
+  t.draw()
+  assert_eq(asked, [a.name, "第二版.png"], msg="the neighbour should be read after the open picture finishes")
+}
+
+///|
+test "viewer on the tree: read the picture in front before its neighbours, whether it comes or fails" {
+  neighbours_after_picture(false)
+  neighbours_after_picture(true)
 }
 
 ///|
@@ -763,7 +810,7 @@ fn read_ahead_by(frames : Bool) -> (Array[String], Array[String], String, Bool) 
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.draw()
   t.run_for(@ui.move_most_ms)
   assert_true(asked.is_empty(), msg="\{asked}")
@@ -829,7 +876,7 @@ test "a run begun before its Tester: the window's tree of the run before follows
   new_run()
   let before = Ref(0)
   let old_src = counted(fixture("chat-preview-named"), before)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let old_t = @ui.Tester::new(fn(c) { view(c, old_src) }, tree=app_tree(old_src), w=390.0, h=844.0)
   old_t.draw()
   // the next begun: its made-up core opening a picture before its Tester is made
@@ -842,7 +889,7 @@ test "a run begun before its Tester: the window's tree of the run before follows
   let now = Ref(0)
   let src = counted(base, now)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.draw()
   t.run_for(@ui.move_most_ms)
   assert_eq(before.val, 0)
@@ -1010,7 +1057,7 @@ fn fading(at : Double, closing~ : Bool = false) -> (Array[Double], Double) {
   let src = fixture("chat-preview-image")
   preview_src.val = Some(src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   // (its first frame: set out as its node is made, then)
   t.draw()
   let v = viewer.get().unwrap()
@@ -1060,7 +1107,7 @@ test "viewer on the tree, a wide window: a picture as it comes says how much has
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.draw()
   t.run_for(@ui.move_most_ms)
   let v = viewer.get().unwrap()
@@ -1092,7 +1139,7 @@ test "viewer on the tree, a phone's screen: a picture as it comes, its floating 
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=1)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.draw()
   t.run_for(@ui.move_most_ms)
   let v = viewer.get().unwrap()
@@ -1150,7 +1197,7 @@ test "viewer on the tree, a phone's screen: a picture coming, its card shown: at
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=1)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.draw()
   t.run_for(@ui.move_most_ms)
   let v = viewer.get().unwrap()
@@ -1237,7 +1284,7 @@ test "viewer on the tree, a phone's screen: its floating bar's words as the core
   }
   preview_src.val = Some(src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=1)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.draw()
   t.run_for(@ui.move_most_ms)
   let zh = @sf.t("common.copy")
@@ -1418,7 +1465,7 @@ fn looked_preview(look : @signals.Signal[String], platform : Int) -> @ui.Tester 
   }
   preview_src.val = Some(src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform~)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.draw()
   t.run_for(@ui.move_most_ms)
   t
@@ -1450,7 +1497,7 @@ fn folded_preview(
   preview_src.val = Some(src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=626.0, platform=1)
   t.post(@hostapi.system_channel, "{\"fold\":{\"hinge\":\"half\",\"divisions\":[{\"x\":0,\"y\":300,\"w\":\{w},\"h\":30}]}}")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.draw()
   t.run_for(@ui.move_most_ms)
   t
@@ -1711,7 +1758,7 @@ fn held_wide_preview(
   }
   preview_src.val = Some(src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=844.0, platform~, window_corner=corner)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.draw()
   t.run_for(@ui.move_most_ms)
   t
@@ -1949,7 +1996,7 @@ fn wide_bar_room(what : String, w : Double, platform : Int, fs : Double, hold : 
   // buttons in it, draws a message over the field's hint for a frame (words_over), as on main: no part of the bar's)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=844.0, platform~, window_corner=if platform == 0 { 16.0 } else { 8.0 })
   t.set_window_inset(true)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.draw()
   t.run_for(@ui.move_most_ms)
   t.resize(w, 844.0)
@@ -3455,8 +3502,8 @@ test "viewer on the tree: the strip put aside and still (no way going): the pict
 ///|
 /// Stepped from `from` (a picture of the chat's, InChat) to the one after it by a swipe, the strip going: in a frame on
 /// the way, the one before it ends, and the one it ends in, the one going drawn by a node from where it lay, the stage's
-/// width and the gap out to its side, the one come in by its own node, each from its own decode, once; at the end, the
-/// one come in alone.
+/// width and the gap out to its side (drawn while any of it shows in the window), the one come in by its own node, each
+/// from its own decode, once; at the end, the one come in alone.
 fn stepped_through(from : String) -> Unit raise {
   let t = preview_tester("step")
   if from != "界面草图.png" {
@@ -3487,7 +3534,12 @@ fn stepped_through(from : String) -> Unit raise {
     let going = nodes_of(l.picture)
     assert_true(going.length() == 1 && at_rect(going[0], lx, l.y, l.w, l.h), msg="\{from} \{at}: the one going a node's: \{going}")
     let drawn = drawn_of(t, gone)
-    assert_true(drawn.length() == 1 && at_rect(drawn[0], lx, l.y, l.w, l.h), msg="\{from} \{at}: the one going drawn once: \{drawn}")
+    // (drawn once where any of it shows in the window; wholly out of it, not at all: what is drawn is what is seen)
+    if lx + l.w > 0.0 && lx < t.w {
+      assert_true(drawn.length() == 1 && at_rect(drawn[0], lx, l.y, l.w, l.h), msg="\{from} \{at}: the one going drawn once: \{drawn}")
+    } else {
+      assert_eq(drawn.length(), 0, msg="\{from} \{at}: the one going, out of the window, drawn: \{drawn}")
+    }
     let (x, y, w, h) = w2.zoom.rect().unwrap()
     assert_true(picture_node() == Some(come), msg="\{from} \{at}: the one come in its node's")
     let shown = drawn_of(t, come)
@@ -3718,7 +3770,7 @@ test "viewer on the tree: a picture whose size is not known yet (none said, noth
 fn opening(finish? : Bool = true) -> @ui.Tester raise {
   new_run()
   let src = fixture("chat-preview-named")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, finish~)
   nav_rested(t)
   let mut tries = 0

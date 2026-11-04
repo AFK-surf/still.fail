@@ -96,7 +96,7 @@ let reports : Array[String] = [
   // the core's pure calls a replay's app answers from what is kept (src/sfkept) when it has the answer, and asks the
   // tape for when not: a tape's that the app answered itself is not where the two went apart, nor one it asks of a tape
   // from before the call (sfreplay's source.mbt tells the tape of each it answered, as a report)
-  "markdown", "code.ink", "history.tool", "ref.at", "ref.before", "ref.marks", "ref.pasted", "paste.info", "drive.check",
+  "markdown", "code.ink", "history.tool", "ref.at", "ref.before", "ref.marks", "ref.words", "ref.pasted", "paste.info", "drive.check",
 ]
 
 ///|

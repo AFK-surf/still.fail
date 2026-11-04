@@ -273,6 +273,12 @@ struct Node {
   mut mark : Int
   // a shot's layer (shot.mbt): drawn not on the screen but into the shot's own instances
   mut shot : Bool
+  // the surface of the look it is in, said by what draws it (Ctx::surface: a panel's, a card's that comes first): its own
+  // ground, edge and shadow as faint as the look, what it holds as its look's `words` says (scene.mbt words_alpha)
+  mut surface : Bool
+  // a look is said on it (Ctx::look, look_by, set_look), whatever it comes to now: the scope of a look of its own, its
+  // surface (the one said in it, or itself) as faint as what holds it (scene.mbt look_surface)
+  mut look_scope : Bool
   /// what draws it as it is painted, under what it holds (its alpha): a frame drawn again (reveal.mbt), what the frame
   /// drew round a point larger (loupe.mbt)
   mut paints : ((Node, Double) -> Unit)?
@@ -385,6 +391,9 @@ struct Node {
   mut lk_iw : Double
   mut lk_ih : Double
   mut lk_epoch : Int
+  // who held it when it was last laid out (its parent's ident): moved under another, both are laid out anew (@flex's
+  // compute: a node moved under another parent dirties both)
+  mut lk_up : Int
   // its offsets (tx, ty) when last placed
   mut otx : Double
   mut oty : Double
@@ -507,6 +516,8 @@ fn Node::new() -> Node {
     stack_in: None,
     mark: 0,
     shot: false,
+    surface: false,
+    look_scope: false,
     paints: None,
     blocks: false,
     stops_wheel: false,
@@ -568,6 +579,7 @@ fn Node::new() -> Node {
     lk_iw: -1.0,
     lk_ih: -1.0,
     lk_epoch: -1,
+    lk_up: 0,
     otx: 0.0,
     oty: 0.0,
     same: false,
@@ -632,6 +644,8 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.stack_in = None
   self.mark = 0
   self.shot = false
+  self.surface = false
+  self.look_scope = false
   self.paints = None
   self.blocks = false
   self.stops_wheel = false

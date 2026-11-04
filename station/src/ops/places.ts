@@ -3,7 +3,7 @@
 // thread ever touching a folder macOS protects (drive/fs.ts `protectedPlace`, the drive's own classification;
 // docs/drive.md "Folders macOS protects"). A station launchd runs that opens ~/Documents, ~/Desktop, ~/Downloads, a disk
 // in /Volumes or iCloud Drive makes macOS put up a prompt for its launcher and hold the call until someone answers:
-// the station's main thread stopped in `opendir`, the whole station silent (seen on studio, macOS 27).
+// the station's main thread can stop in `opendir`, leaving the whole station silent.
 //
 // On macOS a path is walked here link by link with lstat, never stepping into such a folder: what is outside them is
 // looked at as before (there, a folder, listable); what is in one (by its name or through a link) is asked of still.fail
@@ -24,7 +24,7 @@ import { basename, join, resolve } from "node:path";
 import type { Fs, Grant } from "../drive/fs.ts";
 import { protectedPlace } from "../drive/fs.ts";
 import { platform } from "../platform/index.ts";
-import { type Lang, tr } from "./i18n.ts";
+import { type Lang, Said, tr } from "./i18n.ts";
 import { unreadableDir, unreadableDirMessage } from "./files.ts";
 import { log } from "./log.ts";
 
@@ -43,7 +43,7 @@ type Code = "gone" | "not_a_directory" | "not_a_file" | "too_large" | "denied" |
 
 /// Why a directory or file may not be used, in words for whoever asked (`code` for the callers that tell them apart;
 /// `grant` and `window` when still.fail Helper lacks the grant for it).
-export class PlaceRefused extends Error {
+export class PlaceRefused extends Said {
   readonly code: Code;
   readonly grant?: Grant;
   readonly window?: "up" | "closed" | "none";

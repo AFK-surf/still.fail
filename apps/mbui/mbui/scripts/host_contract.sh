@@ -6,7 +6,7 @@
 #        taps (MBUI_DRIVE) and its tape on the log (MBUI_DRAW_LOG=1 MBUI_TEXT_RECORD=1): out/host/HOST/run.log; made a
 #        Tester's test (scripts/chk textrec, as ci_HOST) and run there: every frame the same, or it fails.
 #        NAME=HOST_controls keeps the tape as the one committed (src/kitdemo/gallery/textrec_HOST_controls*.mbt)
-#   scripts/host_contract.sh HOST text [NAME]   the kept run NAME's text (HOST_controls by default; mac: mini1_controls) asked of the host's
+#   scripts/host_contract.sh HOST text [NAME]   the kept run NAME's text (HOST_controls by default; mac: mac_capture_controls) asked of the host's
 #        text system again (MBUI_TEXTCHECK, src/kitdemo/gallery/textcheck.mbt): each answer the same, or it fails
 #   scripts/host_contract.sh HOST marks         (mac, ios, android) test/marks/marks.json drawn by the host onto
 #        test/marks/base.png (@hostapi.draw_marks; kitdemo's MBUI_MARKS, src/kitdemo/gallery/markscheck.mbt), twice: the two PNGs
@@ -330,8 +330,8 @@ case $CMD in
     fi
     echo "host contract ($H): the Tester drew every frame the host drew" ;;
   text)
-    # (macOS: the run Mini1 kept, src/kitdemo/gallery/textrec_mini1_controls.mbt; the other hosts' are their CI's)
-    DEF=${H}_controls; [ $H = mac ] && DEF=mini1_controls
+    # (macOS: the run the Mac kept, src/kitdemo/gallery/textrec_mac_capture_controls.mbt; the other hosts' are their CI's)
+    DEF=${H}_controls; [ $H = mac ] && DEF=mac_capture_controls
     NAME=${3:-$DEF}
     code=0
     run "MBUI_TEXTCHECK=$NAME" $O/text.log || code=$?

@@ -203,7 +203,7 @@ fn wh_details(c : @ui.Ctx, src : Source, station : String, key : String, a : Jso
               h => h
             }
         }
-        c.text(name, style=wh_name) |> ignore
+        c.text(name, style=wh_name, allow_ellipsis=true) |> ignore
         match text(host, "identity") {
           "" => ()
           i => c.text(" · " + i, style=wh_words) |> ignore
@@ -438,8 +438,10 @@ let wh_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false
 let wh_dot : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
+/// The station's name: whole on its one line, what its machine is after it cut short first (itself only where it is
+/// longer than the line, as a last resort).
 // kept across runs: a value (no field of it changes)
-let wh_name : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg)
+let wh_name : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

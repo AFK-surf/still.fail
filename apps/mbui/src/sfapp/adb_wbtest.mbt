@@ -78,7 +78,7 @@ test "共享调试: the phone asked of its host as the page shows; the first thi
   assert_eq(started.length(), 1)
   guard started[0] is Object(m) else { fail("adb.start's params") }
   assert_eq(m.get("station"), Some(Json::string("ws1/st1")))
-  assert_eq(m.get("name"), Some(Json::string("Studio")))
+  assert_eq(m.get("name"), Some(Json::string("Willow")))
   guard m.get("texts") is Some(Object(words)) else { fail("adb.start's words") }
   assert_eq(words.get("android-misc.adb.notify.title"), Some(Json::string("正在将调试共享给 {name}")))
   adb_done(t)
@@ -187,23 +187,23 @@ fn phone_chat(mode : String, phone : Json) -> @ui.Tester {
 ///|
 test "an approved request whose station is not paired with the phone yet: not green, a card opening that station's 共享调试" {
   let t = phone_chat("chat-phone-linked-unpaired", adb_phone_of(wireless=true))
-  assert_true(t.find("已允许调试手机 · 本对话内 · 还差一步：这台手机还没和 station 配对") is Some(_))
+  assert_true(t.find("已允许调试手机 · 本对话内 · 还差一步：手机尚未完成配对") is Some(_))
   assert_true(t.find("已连上") is None)
   // (a login's card's look: no button of its own, the card the way there)
   assert_true(t.find("去配对") is None)
-  t.tap_text("这台 station 还没和你的手机配对")
+  t.tap_text("在手机上完成配对后即可共享调试")
   t.run_for(@ui.move_most_ms)
   // (the chat's station's own page, the one waiting on it: not settings' page, which has no station's pairing)
-  assert_true(t.find("Studio") is Some(_))
+  assert_true(t.find("Willow") is Some(_))
   assert_true(t.find("默认最长授权") is None)
   // on a computer, no adb of its own: where it is paired, said, nothing to tap
   let t = phone_chat("chat-phone-linked-unpaired-desk", adb_phone_of(supported=false))
   assert_true(t.find("在手机的 still.fail 里打开这条消息配对") is Some(_))
-  assert_true(t.find("这台 station 还没和你的手机配对") is None)
+  assert_true(t.find("在手机上完成配对后即可共享调试") is None)
   // connected: said, nothing more to do
   let t = phone_chat("chat-phone-linked-connected", adb_phone_of(wireless=true))
   assert_true(t.find("已允许调试手机 · 本对话内 · 已连上") is Some(_))
-  assert_true(t.find("这台 station 还没和你的手机配对") is None)
+  assert_true(t.find("在手机上完成配对后即可共享调试") is None)
   // offered there no longer
   let t = phone_chat("chat-phone-linked-gone", adb_phone_of(wireless=true))
   assert_true(t.find("已允许调试手机 · 本对话内 · 手机现在没有共享给这台 station") is Some(_))
@@ -213,7 +213,7 @@ test "an approved request whose station is not paired with the phone yet: not gr
 test "共享调试 of the second station a phone is lent to: its own lending, waiting to be paired, though the first's is connected" {
   // (the phone as the fixture's host said it: all it takes)
   let t = settings_tester("adb:ws1/st2", shows="settings-adb-second")
-  assert_true(t.find("此 station 尚未与本机配对") is Some(_))
+  assert_true(t.find("手机尚未完成配对") is Some(_))
   assert_true(t.find("agent 可以使用 adb") is None)
   // the next step: its code, paired with this station
   assert_true(t.find("输入配对码") is Some(_))
@@ -231,10 +231,10 @@ test "settings' 共享调试: the stations its grants lend it to, each as its ad
   t.draw()
   assert_true(t.find("共享给的 station") is Some(_))
   assert_true(t.find("agent 可以使用 adb") is Some(_))
-  assert_true(t.find("此 station 尚未与本机配对") is Some(_))
-  t.tap_text("此 station 尚未与本机配对")
+  assert_true(t.find("手机尚未完成配对") is Some(_))
+  t.tap_text("手机尚未完成配对")
   t.run_for(@ui.move_most_ms)
-  // (MBA's page: settings' page gone from view)
+  // (Maple's page: settings' page gone from view)
   assert_true(t.find("默认最长授权") is None)
 }
 
@@ -343,7 +343,7 @@ test "settings' 共享调试: the take back button acts on its own chat" {
 ///|
 test "settings' 共享调试: a station needing pairing precedes connected stations" {
   let t = settings_tester("adb:", shows="settings-adb-chats", platform=2)
-  guard t.find("MBA") is Some((_, unpaired_y)) else { fail("the unpaired station is shown") }
+  guard t.find("Maple") is Some((_, unpaired_y)) else { fail("the unpaired station is shown") }
   guard t.find("agent 可以使用 adb") is Some((_, connected_y)) else { fail("the connected station is shown") }
   assert_true(unpaired_y < connected_y)
 }
@@ -351,13 +351,13 @@ test "settings' 共享调试: a station needing pairing precedes connected stati
 ///|
 test "settings' 共享调试: a station moves in place when pairing finishes" {
   let t = settings_tester("adb:", shows="settings-adb-chats", platform=2)
-  let (_, before) = t.drawn_of("MBA").unwrap()
+  let (_, before) = t.drawn_of("Maple").unwrap()
   @settings.fixture_motion(1)
   t.draw()
   t.run_for(@ui.row_size_ms / 2.0)
-  let (_, halfway) = t.drawn_of("MBA").unwrap()
+  let (_, halfway) = t.drawn_of("Maple").unwrap()
   t.run_for(@ui.row_size_ms)
-  let (_, after) = t.drawn_of("MBA").unwrap()
+  let (_, after) = t.drawn_of("Maple").unwrap()
   assert_true(before < halfway && halfway < after, msg="\{before}, \{halfway}, \{after}")
 }
 

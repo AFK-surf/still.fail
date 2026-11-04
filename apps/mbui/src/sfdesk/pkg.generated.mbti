@@ -6,13 +6,15 @@ import {
   "mbui/ui",
   "mbui/view",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
+  "moonbitlang/core/ref",
   "stillfail/sf",
   "stillfail/sfapp/settings",
   "stillfail/sfbase",
 }
 
 // Values
-pub fn act_done(@ui.Ctx, String, done? : String) -> (Result[Json, Json]) -> Unit
+pub fn act_done(@ui.Ctx, String, done? : String) -> (Result[@json.Json, @json.Json]) -> Unit
 
 pub fn add_favorite_folder(@sfbase.Source, String, Array[@sfbase.DvStation], picked? : (Favorite) -> Unit) -> Unit
 
@@ -62,6 +64,8 @@ pub fn context_link(@ui.Ctx, String) -> Unit
 
 pub fn context_menu(@ui.Ctx) -> Unit
 
+pub fn context_node(@view.View) -> Unit
+
 pub fn context_page(@ui.Ctx, Int32) -> Unit
 
 pub fn copy_path(@ui.Ctx, String) -> Unit
@@ -72,7 +76,7 @@ pub fn drag_frame(@ui.Ctx, @sfbase.Source, String, outside? : Bool) -> Unit
 
 pub fn dragged() -> @sfbase.Dragged?
 
-pub fn drive_folder(@sfbase.Source, String, String, String) -> (Json?, String?)
+pub fn drive_folder(@sfbase.Source, String, String, String) -> (@json.Json?, String?)
 
 pub fn drive_pane(@ui.Ctx, @sfbase.Source, Previewed, String, () -> Unit, () -> Unit, (String) -> Unit, below? : Bool) -> Unit
 
@@ -136,9 +140,9 @@ pub fn goes_over(@sfbase.Page) -> Bool
 
 pub fn is_wide(@ui.Ctx) -> Bool
 
-pub fn jobs_popover(@ui.Ctx, @sfbase.Source, String, Json?, (String) -> Unit, (String) -> Unit) -> Unit
+pub fn jobs_popover(@ui.Ctx, @sfbase.Source, String, @json.Json?, (String) -> Unit, (String) -> Unit) -> Unit
 
-pub fn jobs_tab(@ui.Ctx, @sfbase.Source, String, String, Json?, (String) -> Unit) -> Unit
+pub fn jobs_tab(@ui.Ctx, @sfbase.Source, String, String, @json.Json?, (String) -> Unit) -> Unit
 
 pub fn keep_files_page(String, @sfbase.DriveAt) -> Unit
 
@@ -218,7 +222,13 @@ pub fn pane_fold_at(Double) -> (Double, Double)?
 
 pub fn pane_fold_from() -> (Double, Double)?
 
+pub fn pane_made_seen() -> @view.NodeId?
+
+pub let pane_makes : @ref.Ref[Bool]
+
 pub fn pane_node() -> @view.View?
+
+pub fn pane_page_id() -> Int32
 
 pub fn pane_parts(@sfbase.DriveAt, Array[@sfbase.DvStation]) -> (String, String)
 
@@ -450,7 +460,7 @@ pub fn with_side(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, @sfbase.ChatRef, @s
 pub(all) struct ArchiveSide {
   mut q : String
   mut limit : Int32
-  mut last : Json?
+  mut last : @json.Json?
   mut landed : Bool
 }
 
@@ -524,14 +534,17 @@ pub struct ContextMenu {
   mut copying : String
   mut share : (() -> Unit)?
   mut share_link : String
+  mut share_words : String
+  mut share_key : String
 }
 
+#derive(Eq)
 pub(all) struct Favorite {
   station : String
   root : String
   path : String
   name : String
-} derive(Eq)
+}
 
 pub(all) struct FolderOf {
   key : String
@@ -585,17 +598,19 @@ pub(all) struct Shown {
   transfers : Bool
 }
 
+#derive(Eq)
 pub(all) enum SideOf {
   ChatSide(@sfbase.ChatRef)
   NewSide(String)
-} derive(Eq)
+}
 pub fn SideOf::key(Self) -> String
 
+#derive(Eq, Show, @debug.Debug)
 pub(all) enum TapePane {
   Side
   Page
   Panel
-} derive(Eq, Show, @debug.Debug)
+}
 
 pub(all) struct Wide {
   side_w : @signals.Signal[Double]

@@ -212,8 +212,8 @@ test("a viewer's event streams carry only their workspace's changes", async () =
       read: async (op: string, args: any) => {
         if (op === "chats") return "[]";
         if (op === "summary") return JSON.stringify({ key: args.key });
-        if (op === "entries") return JSON.stringify({ entries: [{ n: 1 }] });
         if (op === "thread") return JSON.stringify({ id: args.id });
+        if (op === "threadViews") return JSON.stringify(args.viewers.map(() => ({ id: args.id })));
         if (op === "job") return JSON.stringify({ id: args.id });
         throw new Error(op);
       },
@@ -221,6 +221,7 @@ test("a viewer's event streams carry only their workspace's changes", async () =
     let listener: (c: any) => void = () => {};
     const events = new Events({
       readers,
+      said: (_thread, entries) => entries.map((e) => ({ n: e.n })),
       subscribe: (l) => ((listener = l), () => {}),
       host: async () => ({}),
       jobLog: () => null,
@@ -274,6 +275,21 @@ test("the overview says the viewer's workspace, its connects and its chats' coun
     assert.deepEqual(w.connects.map((c: any) => c.id), ["c-home", "c-w"]);
     assert.equal(w.counts.sessions, 2);
   } finally {
+    await r.close();
+  }
+});
+
+test("an isolated recording's overview uses fictional disk capacity", async () => {
+  const r = rig();
+  const before = process.env.STILLFAIL_TEST_HOST;
+  process.env.STILLFAIL_TEST_HOST = "1";
+  try {
+    const cloud: any = { state: null };
+    const result = await overview({ store: r.store, hub: r.hub, cloud, config: () => ({}) }, home, "en") as any;
+    assert.deepEqual(result.disk, { freeBytes: 50_000_000_000, totalBytes: 100_000_000_000 });
+  } finally {
+    if (before === undefined) delete process.env.STILLFAIL_TEST_HOST;
+    else process.env.STILLFAIL_TEST_HOST = before;
     await r.close();
   }
 });

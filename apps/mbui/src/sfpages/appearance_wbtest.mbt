@@ -38,6 +38,43 @@ test "外观, at each width on either screen: 主题, 字体, 动画, 语言; �
 }
 
 ///|
+test "外观's 震动 switch is at the end of its row and turns haptics off and on at each width" {
+  for (w, platform) in page_cases + [(390.0, 1)] {
+    let calls : Array[(String, Json)] = []
+    let t = setting_tester(Appearance, w, platform~, h=2400.0, over=fn(s) {
+      { ..s, call: fn(name, params, done) {
+          calls.push((name, params))
+          (s.call)(name, params, done)
+        } }
+    })
+    let at = "\{w} platform \{platform}"
+    let titles = t.boxes().filter(fn(b) { b.text == "震动" })
+    assert_eq(titles.length(), 1, msg=at)
+    let (x, y, _, sh) = t.get(Switch, label="震动").rect
+    assert_true(x >= titles[0].x + titles[0].w, msg="\{at}: switch follows its title")
+    if !laid_wide(w) {
+      let title_mid = titles[0].y + titles[0].h / 2.0
+      assert_true((y + sh / 2.0 - title_mid).abs() < 2.0, msg="\{at}: switch is on the title's line")
+    }
+    assert_eq(t.get(Switch, label="震动").check, Some(On), msg=at)
+    t.tap_text("震动")
+    t.draw()
+    assert_true(calls.filter(fn(call) { call.0 == "prefs.set" }).is_empty(), msg="\{at}: only the switch answers")
+    // A press just outside the small switch still reaches it.
+    t.tap(x - 4.0, y + sh / 2.0)
+    t.frame()
+    t.frame()
+    let off = calls.filter(fn(call) { call.0 == "prefs.set" })
+    assert_eq(text(Some(off[off.length() - 1].1), "haptics"), "off", msg=at)
+    t.click(Switch, label="震动")
+    t.frame()
+    t.frame()
+    let on = calls.filter(fn(call) { call.0 == "prefs.set" })
+    assert_true(field(Some(on[on.length() - 1].1), "haptics") is Some(Null), msg=at)
+  }
+}
+
+///|
 test "外观: wide setting titles have the same weight as the rows in 自动决策" {
   for platform in [0, 2] {
     let decision = @ui.Tester::new(fn(c) {
@@ -59,6 +96,44 @@ test "外观: wide setting titles have the same weight as the rows in 自动决�
     }, w=900.0, platform~)
     link.draw()
     assert_eq(link.census().weight, weight)
+    // a switch's row in a group (分享给其他 station over 可用的 station): its title no lighter than the rows by it
+    let switch = @ui.Tester::new(fn(c) {
+      @sf.begin(c) |> ignore
+      @sf.group(c, fn() { @sf.switch_row(c, "share", "分享给其他 station", true) |> ignore })
+    }, w=900.0, platform~)
+    switch.draw()
+    assert_eq(switch.census().weight, weight)
+  }
+}
+
+///|
+test "setting rows keep their title prominent at every width and with either input" {
+  for (w, platform) in page_cases {
+    let t = @ui.Tester::new(fn(c) {
+      @sf.begin(c) |> ignore
+      @sf.group(c, fn() {
+        @sf.link_row(c, "plain", "Plain title") |> ignore
+        @sf.link_row(c, "value", "Title with value", value="Current") |> ignore
+        @sf.link_row(c, "note", "Title with note", note="More detail") |> ignore
+        @sf.link_row(c, "summary", "Summary title", value="Selected", note="Explanation") |> ignore
+        @sf.link_row(c, "custom", "Custom title", title_style=@sf.desk_list_title.then(@ui.text_style(weight=Normal))) |> ignore
+        @sf.switch_row(c, "switch", "Switch title", false) |> ignore
+        @sf.link_row(c, "strong", "Strong title", strong=true) |> ignore
+        @sf.setting(c, "Setting title", fn() {  })
+      })
+      @sf.switch_row(c, "outside", "Standalone switch", false) |> ignore
+    }, w~, platform~)
+    t.draw()
+    let boxes = t.boxes()
+    let at = "\{w} platform \{platform}"
+    for title in ["Plain title", "Title with value", "Title with note", "Summary title", "Custom title", "Switch title", "Setting title", "Standalone switch"] {
+      let found = boxes.filter(fn(b) { b.text == title })
+      assert_eq(found.length(), 1, msg="\{at}: \{title}")
+      assert_eq(found[0].weight, 500, msg="\{at}: \{title}")
+      assert_eq(found[0].color, boxes.filter(fn(b) { b.text == "Strong title" })[0].color, msg="\{at}: \{title} ink")
+    }
+    assert_eq(boxes.filter(fn(b) { b.text == "Strong title" })[0].weight, 700, msg=at)
+    assert_eq(boxes.filter(fn(b) { b.text == "Explanation" })[0].weight, 400, msg=at)
   }
 }
 

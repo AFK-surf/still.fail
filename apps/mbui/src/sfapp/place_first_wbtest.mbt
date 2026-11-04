@@ -113,13 +113,13 @@ test "stations: the first list after a wait or an empty list appears in place" {
     t.run_for(@ui.move_most_ms)
     t.frame()
     assert_true(app.nav.top() == Place("stations"))
-    assert_true(t.find("Studio") is None)
+    assert_true(t.find("Willow") is None)
     ready.set(true)
     t.frame()
-    let first = (t.drawn_of("Studio").unwrap(), t.drawn_of("MBA").unwrap())
+    let first = (t.drawn_of("Willow").unwrap(), t.drawn_of("Maple").unwrap())
     assert_true(first.1.1 > first.0.1, msg="the stations overlap when their first list comes: \{first}")
     t.run_for(@ui.row_size_ms)
-    assert_eq((t.drawn_of("Studio").unwrap(), t.drawn_of("MBA").unwrap()), first)
+    assert_eq((t.drawn_of("Willow").unwrap(), t.drawn_of("Maple").unwrap()), first)
   }
 }
 
@@ -136,7 +136,7 @@ test "stations: a station added to a list already shown opens its place" {
         match answer.value {
           Some(Array(rows)) => {
             let rows = rows.copy()
-            rows.insert(0, { "station": "ws1/new", "name": "Mini1", "online": false })
+            rows.insert(0, { "station": "ws1/new", "name": "Cedar", "online": false })
             { ..answer, value: Some(Json::array(rows)), version: answer.version + 1 }
           }
           _ => answer
@@ -151,13 +151,13 @@ test "stations: a station added to a list already shown opens its place" {
   t.tap_once(xs[3], y)
   t.run_for(@ui.move_most_ms)
   t.frame()
-  let (_, before) = t.drawn_of("Studio").unwrap()
+  let (_, before) = t.drawn_of("Willow").unwrap()
   added.set(true)
   t.frame()
   t.run_for(@ui.row_size_ms / 2.0)
-  let (_, halfway) = t.drawn_of("Studio").unwrap()
+  let (_, halfway) = t.drawn_of("Willow").unwrap()
   t.run_for(@ui.row_size_ms / 2.0)
-  let (_, after) = t.drawn_of("Studio").unwrap()
+  let (_, after) = t.drawn_of("Willow").unwrap()
   assert_true(before < halfway && halfway < after, msg="\{before}, \{halfway}, \{after}")
 }
 
@@ -189,4 +189,61 @@ test "shared debugging: its first read shows its sections in place" {
   t.run_for(@ui.row_size_ms)
   let after = t.drawn_of("共享给的 station").unwrap()
   assert_eq(first, after)
+}
+
+///|
+/// 用量 switched to on the bar (the second of a bar of the chats and it), its name as drawn then (x, opacity) while it
+/// comes in; `rebuilt` at a quarter of the way in: made anew there (the window to the tape's width and back).
+fn usage_coming_in(rebuilt : Bool) -> Array[(Double, Double)] {
+  let t = tester("home")
+  bars_picked.set(Some(([["chats", "usage"]], 0)))
+  t.frame()
+  to_bar_rest(t)
+  let xs = bar_centres(390.0 - 44.0, bar.k.x, 2)
+  t.tap_once(xs[1] + 22.0, 844.0 - 22.0 - 28.0)
+  let at = t.time()
+  let duration = @ui.move_ms(switch_slide)
+  let name = fn() {
+    match t.words().filter(fn(w) { w.0 == place_label("usage") }) {
+      [w] => (w.1, w.5)
+      _ => (-1.0, -1.0)
+    }
+  }
+  t.frame_at(at + duration / 4.0)
+  let quarter = name()
+  if rebuilt {
+    t.resize(800.0, 844.0)
+    t.frame()
+    t.resize(390.0, 844.0)
+  }
+  t.frame_at(at + duration / 2.0)
+  [quarter, name()]
+}
+
+///|
+test "a place made once made anew while it comes in goes on coming in from where it was: not again from its side, not there at once" {
+  let kept = usage_coming_in(false)
+  let rebuilt = usage_coming_in(true)
+  assert_eq(rebuilt, kept)
+  assert_true(kept[0].1 < kept[1].1 && kept[1].1 < 1.0, msg="\{kept}")
+}
+
+///|
+test "a place made once, its place tapped again on the bar (no switch), then made anew: there as it was, not coming in again" {
+  let t = tester("home")
+  bars_picked.set(Some(([["chats", "usage"]], 0)))
+  t.frame()
+  to_bar_rest(t)
+  let xs = bar_centres(390.0 - 44.0, bar.k.x, 2)
+  t.tap_once(xs[1] + 22.0, 844.0 - 22.0 - 28.0)
+  t.run_for(@ui.move_most_ms)
+  to_bar_rest(t)
+  t.tap_once(xs[1] + 22.0, 844.0 - 22.0 - 28.0)
+  t.run_for(@ui.move_most_ms)
+  t.resize(800.0, 844.0)
+  t.frame()
+  t.resize(390.0, 844.0)
+  t.frame()
+  let name = t.words().filter(fn(w) { w.0 == place_label("usage") })
+  assert_true(name.length() == 1 && name[0].1 == 16.0 && name[0].5 == 1.0, msg="\{name}")
 }

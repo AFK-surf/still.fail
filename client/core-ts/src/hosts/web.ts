@@ -17,6 +17,7 @@ import { t } from "../i18n.ts";
 import type { ClientId, CoreMessage } from "../protocol.ts";
 import { service } from "../trace.ts";
 import { collate } from "./collate.ts";
+import { pictureRelay, relayedPicture } from "../picture-relay.ts";
 
 /// Shared values frozen where they are shared (util.ts `checkShared`): the web's development build turns it on.
 export { checkShared } from "../util.ts";
@@ -192,12 +193,12 @@ async function formerRows(): Promise<Rows> {
 }
 
 async function openDatabase(): Promise<IDBDatabase> {
-  if (typeof indexedDB === "undefined") throw new HostError(t("core-misc.host.idb.missing"));
+  if (typeof indexedDB === "undefined") throw HostError.said(t("core-misc.host.idb.missing"));
   // The first open under the new name fills it with what the former one has (read first: the upgrade that makes the
   // stores puts the rows in the same transaction, so no other tab sees it made and empty).
   let db = await openAt(DATABASE, VERSION, [], false);
   if (!db) db = await openAt(DATABASE, VERSION, await formerRows(), true);
-  if (!db) throw new HostError(t("core-misc.host.idb.unopened"));
+  if (!db) throw HostError.said(t("core-misc.host.idb.unopened"));
   // Another tab upgrading the schema later must not be blocked by us.
   const opened = db;
   opened.onversionchange = () => opened.close();
@@ -229,6 +230,10 @@ export class WebHost implements Host {
 
   cloudOrigin(): string {
     return (globalThis as { location?: { origin?: string } }).location?.origin ?? "";
+  }
+  /// Slack's pictures through still.fail cloud: the page may not read them from Slack.
+  pictureVia(url: string): string {
+    return relayedPicture(url) ? pictureRelay(this.cloudOrigin(), url) : url;
   }
   beta(): boolean {
     return false;

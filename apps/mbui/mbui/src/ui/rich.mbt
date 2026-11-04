@@ -12,126 +12,18 @@
 // and clicked as any widget.
 
 ///|
-/// A run of a paragraph's words in one style. `span` makes one with only
-/// what differs from the paragraph said.
-pub(all) struct Run {
-  text : String
-  /// 0: the paragraph's
-  weight : Int
-  italic : Bool
-  /// the paragraph's look for code: the code face at its code_scale, in its
-  /// code_color on its code_bg
-  code : Bool
-  /// the code face alone
-  mono : Bool
-  /// the serif face (a reader's words)
-  serif : Bool
-  /// None: the paragraph's face; Some(0): the app's face; Some(n): host face n.
-  face : Int?
-  /// of the paragraph's size
-  scale : Double
-  /// 0: the paragraph's (a link's own colour, a code run's)
-  color : Int64
-  /// a ground behind the words, rounded, a little room either side; 0 none
-  bg : Int64
-  /// its ground's shape (None: a code run's)
-  ground : Ground?
-  strike : Bool
-  underline : Bool
-  /// where it leads ("" nowhere): tapped, the paragraph's on_link hears it
-  link : String
-  /// A positioned inline drawing; text is still its copyable, accessible alternative.
-  drawing : InlineDrawing?
-} derive(Eq, Debug)
-
-///|
-/// A run's ground shaped as a label on its line rather than code's (CSS's inline-block: a tag before words), in ems of
-/// the run's size: `room` either side of its words on it, `height` (centred on its words' ink), its `corner`, and
-/// `after` it, off it, before what follows.
-pub(all) struct Ground {
-  room : Double
-  height : Double
-  corner : Double
-  after : Double
-} derive(Eq, Debug)
-
-///|
-/// A drawing within text, measured in em. Its paths are already laid out, from its top left, y down. Words outside
-/// its alphabet use the host's serif face: (words, x, baseline, size), also in em. It has no parser or markup.
-pub(all) struct InlineDrawing {
-  width : Double
-  height : Double
-  baseline : Double
-  paths : Array[Array[(Array[Double], Bool)]]
-  words : Array[(String, Double, Double, Double)]
-} derive(Eq, Debug)
-
-///|
-pub fn span(
-  text : String,
-  weight? : Int = 0,
-  bold? : Bool = false,
-  italic? : Bool = false,
-  code? : Bool = false,
-  mono? : Bool = false,
-  serif? : Bool = false,
-  face? : Int? = None,
-  scale? : Double = 1.0,
-  color? : Int64 = 0L,
-  bg? : Int64 = 0L,
-  ground? : Ground? = None,
-  strike? : Bool = false,
-  underline? : Bool = false,
-  link? : String = "",
-  drawing? : InlineDrawing? = None,
-) -> Run {
-  {
-    text,
-    weight: if bold && weight == 0 { 700 } else { weight },
-    italic,
-    code,
-    mono,
-    serif,
-    face,
-    scale,
-    color,
-    bg,
-    ground,
-    strike,
-    underline,
-    link,
-    drawing,
-  }
-}
-
-///|
-pub fn plain(text : String) -> Run {
-  span(text)
-}
-
-///|
-pub fn bold(text : String) -> Run {
-  span(text, bold=true)
-}
-
-///|
-pub fn italic(text : String) -> Run {
-  span(text, italic=true)
-}
-
-///|
-pub fn code(text : String) -> Run {
-  span(text, code=true)
-}
-
-///|
-pub fn strike(text : String) -> Run {
-  span(text, strike=true)
-}
-
-///|
-pub fn link(text : String, href : String) -> Run {
-  span(text, link=href)
+/// A paragraph's runs (mbui/text's: the same data a node of the window's tree holds), here by their names.
+pub using @text {
+  type Run,
+  type Ground,
+  type InlineDrawing,
+  span,
+  plain,
+  bold,
+  italic,
+  code,
+  strike,
+  link,
 }
 
 ///|
@@ -175,6 +67,62 @@ fn link_id(base : Int, runs : Array[Run], k : Int) -> Int {
     h = h - 1
   }
   mix(base, h + 1)
+}
+
+///|
+/// The first of the runs that lead where run `k` does one after another (its link's, as link_id has it).
+fn link_first(runs : Array[Run], k : Int) -> Int {
+  let mut h = k
+  while h > 0 && runs[h - 1].link == runs[k].link {
+    h = h - 1
+  }
+  h
+}
+
+///|
+/// How far the line of a paragraph laid out in `lay` at `y` (in its terms; the last where under all of them) is moved
+/// across where each line stands in the middle of `center_in` (rich_line_x's; none where not given).
+fn rich_shift_at(lay : RichLayout, y : Double, center_in : Double) -> Double {
+  if center_in < 0.0 || lay.line_y.length() == 0 {
+    return 0.0
+  }
+  let mut l = lay.line_y.length() - 1
+  for k in 0..<lay.line_y.length() {
+    if y < lay.line_y[k] + lay.line_h[k] {
+      l = k
+      break
+    }
+  }
+  rich_line_x(lay, l, 0.0, center_in)
+}
+
+///|
+/// The pieces of line a paragraph's links laid out in `lay` are drawn on, at (ox, oy) (each line in the middle of
+/// `center_in` where given): each by its link's first run (link_first) and where it is (x0, y0, x1, y1), as
+/// paint_run_grounds tells them: what a press on one of them presses, its words' own place on their line, not the
+/// line's room past them.
+fn rich_link_pieces(
+  r : Rich,
+  lay : RichLayout,
+  ox0 : Double,
+  oy : Double,
+  center_in? : Double = -1.0,
+) -> Array[(Int, Double, Double, Double, Double)] {
+  let out = []
+  for k, run in r.runs {
+    if run.link == "" {
+      continue
+    }
+    let first = link_first(r.runs, k)
+    for p in lay.pieces(k) {
+      let (l, c0, c1) = p
+      let ox = rich_line_x(lay, l, ox0, center_in)
+      let top = oy + lay.line_y[l]
+      let (sx0, sx1) = lay.span_x(c0, c1)
+      out.push((first, ox + sx0, top, ox + sx1, top + lay.line_h[l]))
+    }
+  }
+  out
 }
 
 ///|
@@ -404,13 +352,13 @@ fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
         run_c1.push(starts.length())
         sb.write_string(run.text)
         off = off + run.text.length()
-        drawings.push(Some({
+        drawings.push(Some(({
           width: d.width * size,
           height: d.height * size,
           baseline: d.baseline * size,
           paths: d.paths.map(fn(path) { path.map(fn(p) { (p.0.map(fn(v) { v * size }), p.1) }) }),
           words: d.words.map(fn(w) { (w.0, w.1 * size, w.2 * size, w.3 * size) }),
-        }))
+        } : InlineDrawing)))
         continue
       }
       None => drawings.push(None)
@@ -1129,35 +1077,83 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
   keep_rich_runs(lay, ox, oy, cy0, cy1)
   // its words picked with the pointer: where it is for the next press, what of it is picked under its words
   if r.select {
-    selectable_painted(r.base, self.layer_of(i), n.island, self.page_order(i), lay, n.text, ox, oy, dmax(n.x, cx0), dmax(n.y, cy0), dmin(n.x + n.fw, cx1), dmin(n.y + n.fh, cy1))
-    for rect in selected_rects(r.base, lay) {
+    selectable_painted(Para(r.base), OldLayer(self.layer_of(i)), n.island, self.page_order(i), lay, n.text, ox, oy, dmax(n.x, cx0), dmax(n.y, cy0), dmin(n.x + n.fw, cx1), dmin(n.y + n.fh, cy1))
+    for rect in selected_rects(Para(r.base), lay) {
       self.emit_rect(ox + rect.0, oy + rect.1, rect.2, rect.3, 0.0, desk.sel_color, 0.0, 0L, alpha)
     }
   }
-  let sc = self.scale
-  let colors = Array::makei(r.runs.length(), fn(k) {
-    let run = r.runs[k]
+  let colors = r.run_colors(n.color)
+  // grounds (code, a pressed link), then the words, then the lines through or under them; links' pieces are hit
+  // targets
+  self.paint_run_grounds(
+    r,
+    lay,
+    ox,
+    oy,
+    alpha,
+    fn(k) {
+      let run = r.runs[k]
+      run.link != "" && self.pressed(link_id(r.base, r.runs, k))
+    },
+    fn(k, x0, y0, x1, y1) { self.rich_link_target(link_id(r.base, r.runs, k), x0, y0, x1, y1, cx0, cy0, cx1, cy1) },
+  )
+  self.emit_rich_glyphs(r, lay, ox, oy, colors, alpha, cy0, cy1)
+  self.paint_run_lines(r, lay, ox, oy, colors, alpha)
+}
+
+///|
+/// The ink each of a paragraph's runs is drawn in: its own, else a link's, code's (where the paragraph says one), else
+/// `words` (the paragraph's).
+fn Rich::run_colors(self : Rich, words : Int64) -> Array[Int64] {
+  self.runs.map(fn(run) {
     if run.color != 0L {
       run.color
     } else if run.link != "" {
-      r.link_color
-    } else if run.code && r.code_color != 0L {
-      r.code_color
+      self.link_color
+    } else if run.code && self.code_color != 0L {
+      self.code_color
     } else {
-      n.color
+      words
     }
   })
-  // grounds (code, a pressed link), then the words, then the lines through
-  // or under them; links' pieces are hit targets
+}
+
+///|
+/// Where line `l` of a paragraph laid out in `lay` starts across from `ox`: there, or in the middle of `center_in`
+/// where given, by its width without the spaces it ends in (emit_rich_glyphs').
+fn rich_line_x(lay : RichLayout, l : Int, ox : Double, center_in : Double) -> Double {
+  if center_in >= 0.0 && l < lay.line_w.length() {
+    ox + dmax((center_in - lay.line_w[l]) / 2.0, 0.0)
+  } else {
+    ox
+  }
+}
+
+///|
+/// The grounds of a paragraph's runs laid out in `lay` at (ox, oy) (code's, a label's; a link's while `pressed(k)` says
+/// run `k` is held, its pressed ground), under its words; each piece of a link's line told `piece` (its run, where it
+/// is drawn: x0, y0, x1, y1), as drawn. A ground carried on to the next line, or from the last, torn there.
+fn Ctx::paint_run_grounds(
+  self : Ctx,
+  r : Rich,
+  lay : RichLayout,
+  ox0 : Double,
+  oy : Double,
+  alpha : Double,
+  pressed : (Int) -> Bool,
+  piece : (Int, Double, Double, Double, Double) -> Unit,
+  center_in? : Double = -1.0,
+) -> Unit {
   for k, run in r.runs {
-    let id = if run.link != "" { link_id(r.base, r.runs, k) } else { 0 }
-    let pressed = id != 0 && self.pressed(id)
+    let link = run.link != ""
+    let pressed = link && pressed(k)
     let bg = if pressed { r.pressed_bg } else { r.run_bg(run) }
-    if bg == 0L && id == 0 {
+    if bg == 0L && !link {
       continue
     }
     for p in lay.pieces(k) {
       let (l, c0, c1) = p
+      let ox = rich_line_x(lay, l, ox0, center_in)
       let top = oy + lay.line_y[l]
       let (sx0, sx1) = lay.span_x(c0, c1)
       let x0 = ox + sx0
@@ -1194,12 +1190,27 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
           self.emit_rect(bx0, by, bx1 - bx0, bh, corner, bg, 0.0, 0L, alpha)
         }
       }
-      if id != 0 {
-        self.rich_link_target(id, x0, top, x1, top + lay.line_h[l], cx0, cy0, cx1, cy1)
+      if link {
+        piece(k, x0, top, x1, top + lay.line_h[l])
       }
     }
   }
-  self.emit_rich_glyphs(r, lay, ox, oy, colors, alpha, cy0, cy1)
+}
+
+///|
+/// The lines through or under a paragraph's runs laid out in `lay` at (ox, oy) (strike, underline), in their inks
+/// (`colors`), over its words: a code run's room either side, a label's after it, not under them.
+fn Ctx::paint_run_lines(
+  self : Ctx,
+  r : Rich,
+  lay : RichLayout,
+  ox0 : Double,
+  oy : Double,
+  colors : Array[Int64],
+  alpha : Double,
+  center_in? : Double = -1.0,
+) -> Unit {
+  let sc = self.scale
   for k, run in r.runs {
     if !run.strike && !run.underline {
       continue
@@ -1214,6 +1225,7 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
     }
     for p in lay.pieces(k) {
       let (l, c0, c1) = p
+      let ox = rich_line_x(lay, l, ox0, center_in)
       let base = oy + lay.line_y[l] + lay.line_base[l]
       let (sx0, sx1) = lay.span_x(c0, c1)
       let x0 = ox + sx0 + (if c0 == lay.run_c0[k] { room } else { 0.0 })

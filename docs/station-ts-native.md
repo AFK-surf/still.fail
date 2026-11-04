@@ -1,5 +1,8 @@
 # TS station 的原生部分：启动器、runner、mesh 插件
 
+> 下面例子和测量中的机器名经过匿名化，不是对读者环境的要求。
+
+
 方案见 `docs/station-ts.md`（文中 `mesh/…` 指 2026-10-04 删除的 Rust station，代码在 git 历史里）。这三件用 Rust 写，各有版本号，预编译发布；TS 那边只按这里的约定用它们。预编译怎么做（按源码算 key、本机共享缓存、GitHub release `native-artifacts`、CI 在 main 上补发）见 `docs/development.md` 的「Native parts」：测试、打包都经 `scripts/native.ts` 拿它们，只有它们自己的源码变了才编。
 
 ## 1. runner（`station/native/runner`，可执行文件 `stillfail-runner`）
@@ -59,7 +62,7 @@ runner → 客户端：
 `run` 时：
 1. 解析 `--data`（缺省同 Rust：`$STILLFAIL_DATA`，否则 `$EMBER_DATA`，否则 `~/.stillfail`）。`flock` 住 `<data>/run/station.lock`；拿不到就退出码 3（桌面 app 靠它）。
 2. 自己先 bind 两个 TCP 监听：MCP 端口（`config.json` 的端口或 4750，被占用时规则同 `mesh/app/src/ports.rs`）和本机回环口（`--port` 或 4760，规则同 `mesh/station/src/local.rs`），把它们作为继承的 fd 传给 Node（fd 3、4），这样新旧 Node 交接时端口不空档。MCP 端口记在 `<data>/run/mcp.json`，下次启动（stop 之后重启、崩溃后重启）先绑它：留着没重启的 agent 只认得这个地址；绑不上时，Node 打开工具入口后让拿着旧地址的 agent 进程重启并 resume。数据目录不是 `~/.stillfail` 的 station（测试、开发用）不占 4750/4760，没指定端口就用随机端口。
-3. 起 Node：`node <app>/station/main.js run --app … --data … --launcher-fds 3,4,5 --launcher-carries`，fd 5 是控制管道（双向，一行一个 JSON）；`--launcher-carries` 说这个启动器会把交接时 Node 交出的内存转给新 Node（见下）。
+3. 起 Node：`node <app>/station/main.js run --app … --data … --launcher-fds 3,4,5 --launcher-carries`，fd 5 是控制管道（双向，一行一个 JSON）；`--launcher-carries` 说这个启动器会把交接时 Node 交出的内存转给新 Node（见下）。 macOS 上带环境变量 `MallocSpaceEfficient=1`：malloc 把释放的内存当场还给系统，不留着（默认留着的那些在内存紧时被压缩、换出，照样算 station 的；test-c 上 900 MB 里有约 300 MB 是这种）。Node 起来就把它从自己的环境里删掉，agent 和工具不继承。
 4. 写 `<data>/run/station.json`（一行、字段与 Rust 版相同：`{"pid":<启动器 pid>,"startedAt":<ms>,"version":…,"handoff":1,"drain":1,"channel":1}`，Unix 上末尾多一个 `"renew":1`（见下「启动器自己换新」）；version 由 Node 在控制管道上告诉启动器；安装器用 sed 读，格式不能变）。
 5. 信号：
    - SIGUSR2（交接）：起一个新 Node（同样的 fd），等它在控制管道上说 `{"ready":true}`（超时 60 秒算失败：杀掉新的，写 `run/handoff-failed`，旧的照常）；然后告诉旧的 `{"op":"handover"}`，等它退出（最多 30 秒，超时 SIGKILL）；新的**接管之后**（见下）才更新 `station.json` 的 `startedAt`（pid 不变——安装器靠这个判断交接成功）。
@@ -74,7 +77,7 @@ runner → 客户端：
 
 交接时旧 Node 收到 `{"op":"handover"}` 先说 `{"carry":{…}}`：各部分只放在内存里、要带到新进程的东西（密钥库的授权，`StationParts.carry`），启动器原样转给新 Node `{"op":"carried","carried":{…}}`，内存到内存，不写盘、不写日志。只有带 `--launcher-carries` 起的 Node 才说这一行（启动器是旧的就不认它，会把整行写进日志）。进程结束时启动器先读完它管道里剩下的行再处理退出，交出的东西不会因为先看到退出而丢。Windows 的启动器暂不传这个参数：它读管道和等进程退出在两个线程，退出可能先到，最后一行就丢了，要先让等退出的线程等读管道的线程读完。
 
-**启动器自己换新**（Unix，`run.rs` 的 `renew`）：更新带来的新启动器在新发布的 `<app>/mesh/target/release/stillfail-station`，可交接只换 Node，正在跑的启动器是开机时那个，不换的话启动器里的任何修改都要等到机器重启才生效（2026-10-30：#2850 的授权转交在 ccvm 上一直没生效，启动器是 10 月 17 日起的）。所以每次交接（SIGUSR2）先比一比：新发布里的启动器跟自己（启动时读自己可执行文件的内容算的哈希）不一样，并且它的 `handoff-version` ≥ 3，就先 `exec` 成它，再由它去交接。exec 不换 pid，锁、两个监听 socket、当前 Node 和它的控制 socket 都原样留着（exec 前去掉这几个 fd 的 close-on-exec），这些 fd 号和当前 Node 的 pid、版本、在哪些端口服务、控制 socket 里读了一半的行，用 `run … --resume <json>` 交给新启动器；新启动器把这个 Node 当作已接管的接过来（`Lifecycle::adopt`，不改 station.json），接着做这次交接。exec 前把处理的信号挡住（mask 跨 exec 保留），新启动器装好处理函数再放开，中间来的 SIGCHLD、SIGTERM 不丢。新发布里的启动器跟自己一样、说不了 3（回滚到更早的发布）、exec 失败，都照旧由自己交接。只有当前 Node 已接管、没有别的交接在进行时才换。
+**启动器自己换新**（Unix，`run.rs` 的 `renew`）：更新带来的新启动器在新发布的 `<app>/mesh/target/release/stillfail-station`，可交接只换 Node，正在跑的启动器是开机时那个，不换的话启动器里的任何修改都要等到机器重启才生效（2026-10-30：#2850 的授权转交在 test-c 上一直没生效，启动器是 10 月 17 日起的）。所以每次交接（SIGUSR2）先比一比：新发布里的启动器跟自己（启动时读自己可执行文件的内容算的哈希）不一样，并且它的 `handoff-version` ≥ 3，就先 `exec` 成它，再由它去交接。exec 不换 pid，锁、两个监听 socket、当前 Node 和它的控制 socket 都原样留着（exec 前去掉这几个 fd 的 close-on-exec），这些 fd 号和当前 Node 的 pid、版本、在哪些端口服务、控制 socket 里读了一半的行，用 `run … --resume <json>` 交给新启动器；新启动器把这个 Node 当作已接管的接过来（`Lifecycle::adopt`，不改 station.json），接着做这次交接。exec 前把处理的信号挡住（mask 跨 exec 保留），新启动器装好处理函数再放开，中间来的 SIGCHLD、SIGTERM 不丢。新发布里的启动器跟自己一样、说不了 3（回滚到更早的发布）、exec 失败，都照旧由自己交接。只有当前 Node 已接管、没有别的交接在进行时才换。
 
 `station.json` 的 `renew:1` 说这个启动器会自己换新。安装器只对说了它的启动器走交接；没说的（更早的启动器）更新时先 drain 再重启一次，换上新启动器，之后的更新就都是交接了。Windows 的启动器不换自己（没有 exec），安装器照旧（`install-windows.ts` 不看这个字段）。
 

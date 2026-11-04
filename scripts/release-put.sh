@@ -7,17 +7,17 @@
 # (nothing points at them yet: --files); the station's, named the same each time, and every feed, once the check
 # passed (.github/workflows/pipeline.yml, put). --files takes each file it put out of the directory, leaving the feeds
 # for the put after.
-# --stage (the station's job, on mini1): its files put in the bucket at once all the same, under staged/<when>-<commit>/,
-# not carried to the put in a run artifact (that went up through the proxy mini1's DNS sends GitHub to, 40 MB a release,
+# --stage (the station's job, on the CI Mac): its files put in the bucket at once all the same, under staged/<when>-<commit>/,
+# not carried to the put in a run artifact (that went up through the proxy the CI Mac's DNS sends GitHub to, 40 MB a release,
 # 2026-10-23): each left in the directory as <name>.staged, saying where it is. A put finding one takes the file back
 # from there first, and deletes it there once all is put (scripts/release-prune.ts deletes what stays after two days).
 #   release-put.sh [--files | --feeds | --stage] <dir>…
-#   release-put.sh --hand <dir> | --unhand <dir> <name>…
+#   release-put.sh --hand <dir> | --unhand <dir> <name>… | --drop <name>…
 #   release-put.sh --clean-uploaded <name> <local copy>
 set -eu
 root=${STILLFAIL_RELEASE_TOOLS_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}
 
-# STILLFAIL_DIRECT_DNS (mini1's CI jobs: .github/actions/setup-mac): Cloudflare's API reached directly, by the address
+# STILLFAIL_DIRECT_DNS (the CI Mac's CI jobs: .github/actions/setup-mac): Cloudflare's API reached directly, by the address
 # that DNS server gives, not through the machine's own (the proxy on the home network, whose line went down for hours twice on
 # 2026-10-21 and failed two releases' puts; directly the upload is ~4.5 MB/s against ~5.5). Unanswered: as before.
 direct=""
@@ -38,13 +38,24 @@ if [ -z "$account_id" ] && [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
     | grep -o '"id":"[0-9a-f]\{32\}"' | head -1 | cut -d'"' -f4) || account_id=""
 fi
 # The object put straight through Cloudflare's API, as wrangler does it, without its start-up and at the speed the line
-# has (a 148 MB zip took wrangler ~45 s from mini1, whose upload is ~5.5 MB/s): wrangler when that cannot be done.
+# has (a 148 MB zip took wrangler ~45 s from the CI Mac, whose upload is ~5.5 MB/s): wrangler when that cannot be done.
+# R2's answer names the object's MD5 as it was written (its etag, one request's upload): the same as the file's, it is
+# in the bucket as made, said where STILLFAIL_PUT_RECEIPTS names a directory (apps/mbui/scripts/beta.sh: then not
+# fetched back whole to be compared, 20-105 s of GitHub's runners now and then, main ae77ba19, 2a233edf, 2026-11-02).
 api_put() {
   [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -n "$account_id" ] || return 1
+  answer=$(mktemp)
   # shellcheck disable=SC2086 # direct is words
   curl $direct $limits -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: $3" -T "$2" \
-    "https://api.cloudflare.com/client/v4/accounts/$account_id/r2/buckets/stillfail-releases/objects/$1" > /dev/null
+    "https://api.cloudflare.com/client/v4/accounts/$account_id/r2/buckets/stillfail-releases/objects/$1" > "$answer" || { rm -f "$answer"; return 1; }
+  etag=$(grep -o '"etag":"[0-9a-f]\{32\}"' "$answer" | head -1 | cut -d'"' -f4) || etag=""
+  rm -f "$answer"
+  if [ -n "${STILLFAIL_PUT_RECEIPTS:-}" ] && [ -n "$etag" ] && [ "$etag" = "$(md5_of "$2")" ]; then
+    mkdir -p "$STILLFAIL_PUT_RECEIPTS" && printf '%s\n' "$etag" > "$STILLFAIL_PUT_RECEIPTS/$(printf %s "$1" | tr / _)"
+  fi
+  return 0
 }
+md5_of() { if command -v md5sum > /dev/null; then md5sum "$1" | cut -d' ' -f1; else md5 -q "$1"; fi; }
 # put <name in the bucket> <file> <content type>, tried again twice when Cloudflare's API fails on the way.
 put() {
   for try in 1 2 3; do
@@ -144,9 +155,11 @@ case "${1:-}" in
     done
     exit 0 ;;
   # --hand <dir>: what is left in a job's directory (its feeds, the .staged markers), as one tar, put under staged/
-  # as --stage puts files, its name said on stdout: what a job on mini1 hands the put, not in a run artifact (whose
-  # upload, through the proxy mini1's DNS sends GitHub to, broke off: ECONNRESET, main's android 09a022da and 5c89fdd1,
-  # 2026-10-29). --unhand <dir> <name>…: each taken back into <dir>, then deleted there.
+  # as --stage puts files, its name said on stdout: what a job on the CI Mac hands the put, not in a run artifact (whose
+  # upload, through the proxy the CI Mac's DNS sends GitHub to, broke off: ECONNRESET, main's android 09a022da and 5c89fdd1,
+  # 2026-10-29). --unhand <dir> <name>…: each taken back into <dir>, left there for a rerun of the put until --drop
+  # <name>… deletes it once all is put (deleted as soon as it was taken back, a put cancelled on the way left its rerun
+  # nothing to take back: 404, main 912c3551, 2026-11-03).
   --hand)
     dir=$2; [ -d "$dir" ] || { echo "no releases in $dir" >&2; exit 1; }
     key="staged/$(date -u +%s)-${GITHUB_SHA:-$(git -C "$root" rev-parse HEAD)}/hand-$(od -An -N6 -tx1 /dev/urandom | tr -d ' \n').tar"
@@ -159,8 +172,11 @@ case "${1:-}" in
     for key in "$@"; do
       tar_=$(mktemp); get "$key" "$tar_" || { echo "could not get $key back" >&2; exit 1; }
       tar -xf "$tar_" -C "$dir"; rm -f "$tar_"; echo "got $key back"
-      drop "$key" || echo "deleting $key failed: scripts/release-prune.ts deletes it in two days" >&2
     done
+    exit 0 ;;
+  --drop)
+    shift
+    for key in "$@"; do drop "$key" || echo "deleting $key failed: scripts/release-prune.ts deletes it in two days" >&2; done
     exit 0 ;;
 esac
 # The files staged before (--stage), taken back first (by a put of the files: --feeds leaves them).

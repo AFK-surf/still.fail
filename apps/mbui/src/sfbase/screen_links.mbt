@@ -44,14 +44,15 @@ pub let globe_mark : LinkMark = { name: "web" }
 
 ///|
 /// A card: a row 236 wide, a capsule as a file's card (a row high, 52), on the chat's bubble ground: its mark, 24,
-/// concentric with its round end (14 from its end, its top and its foot), 8 from its words, their end 14 from the
-/// other end.
+/// concentric with its round end (14 from its end, its top and its foot), 8 from its words, their end where the other
+/// round end begins (@sf.file_capsule_words_end).
 // kept across runs: a value (no field of it changes)
 pub let link_card : @ui.Style = @ui.style(
   row=true,
   w=@sf.link_card_w,
   h=@sf.file_capsule_h,
-  px=S3_5,
+  pl=S3_5,
+  pr=@sf.room_of(@sf.file_capsule_words_end),
   gap=S2,
   align=ACenter,
   radius=Full,
@@ -130,8 +131,9 @@ pub(all) struct ScreenCard {
 
 ///|
 /// The card of the screen `href` names, once the core has said (ScreenLinks.kt screenCardOf).
-pub fn screen_card_of(src : Source, href : String) -> ScreenCard? {
-  guard @sf.screen_of_link(href) is Some((station, screen)) else { return None }
+pub fn screen_card_of(src : Source, to : @sf.LinkTo) -> ScreenCard? {
+  guard to.card == "screen" else { return None }
+  let (station, screen) = (to.station, to.screen)
   let v = (src.topic)("screenCard", { "station": Json::string(station), "screen": Json::string(screen) }).value
   guard v is Some(Object(_)) else { return None }
   Some({
@@ -147,8 +149,9 @@ pub fn screen_card_of(src : Source, href : String) -> ScreenCard? {
 
 ///|
 /// The card of the 共享调试 `href` names, once the core has said (AdbLinks.kt adbCardOf: the `adbCard` topic).
-pub fn adb_card_of(src : Source, href : String) -> Json? {
-  guard @sf.adb_of_link(href) is Some(station) else { return None }
+pub fn adb_card_of(src : Source, to : @sf.LinkTo) -> Json? {
+  guard to.card == "adb" else { return None }
+  let station = to.station
   match (src.topic)("adbCard", { "station": Json::string(station) }).value {
     Some(Object(_)) as v => v
     _ => None
@@ -161,22 +164,20 @@ pub fn adb_card_of(src : Source, href : String) -> Json? {
 /// (a screen's preview is its card's own).
 pub fn screen_links(c : @ui.Ctx, src : Source, message : String) -> @sf.Screens {
   {
-    card: fn(href, words) {
-      if @sf.adb_of_link(href) is Some(_) {
-        adb_link_card(c, src, href, words)
-      } else if @sf.service_of_link(href) is Some(_) {
-        service_link_card(c, src, href, words)
-      } else {
-        screen_link_card(c, src, message + "\n" + href, href, words)
+    card: fn(href, to, words) {
+      match to.card {
+        "adb" => adb_link_card(c, src, href, to, words)
+        "service" => service_link_card(c, src, href, to, words)
+        _ => screen_link_card(c, src, message + "\n" + href, href, to, words)
       }
     },
-    title: fn(href) {
-      if @sf.adb_of_link(href) is Some(_) {
-        adb_title(src, href)
-      } else if @sf.service_of_link(href) is Some(_) {
-        service_card_of(src, href).0
+    title: fn(_href, to) {
+      if to.card == "adb" {
+        adb_title(src, to)
+      } else if to.card == "service" {
+        service_card_of(src, to).0
       } else {
-        match screen_card_of(src, href) {
+        match screen_card_of(src, to) {
           Some(card) => card.title
           None => @sf.t("android-misc.screen.title")
         }
@@ -189,8 +190,9 @@ pub fn screen_links(c : @ui.Ctx, src : Source, message : String) -> @sf.Screens 
 /// A link to a chat's web service as a card says it (the core's `job` topic, jobs.ts shown): its name (网页服务 until
 /// it is known), its station's name with its port, and how it stands (运行中, 已停止…); whether it is down (stopped or
 /// failed: its title quieter).
-pub fn service_card_of(src : Source, href : String) -> (String, String, Bool) {
-  guard @sf.service_of_link(href) is Some((station, job)) else { return ("", "", false) }
+pub fn service_card_of(src : Source, to : @sf.LinkTo) -> (String, String, Bool) {
+  guard to.card == "service" else { return ("", "", false) }
+  let (station, job) = (to.station, to.job)
   let j = (src.topic)("job", { "station": Json::string(station), "id": Json::string(job) }).value
   let name = match text(j, "name") {
     "" => @sf.t("android-chat.preview.service")
@@ -218,8 +220,8 @@ pub fn service_card_of(src : Source, href : String) -> (String, String, Bool) {
 /// A link to a chat's web service as a card (an agent's link to it alone in a paragraph): the web's mark, its title
 /// (the link's own words, when it has them) over its station and port and how it stands; one no longer up, its title
 /// quieter. A tap opens it, as the link does: the service over its chat (open_links.mbt).
-pub fn service_link_card(c : @ui.Ctx, src : Source, href : String, words : String?) -> Unit {
-  let (name, line, down) = service_card_of(src, href)
+pub fn service_link_card(c : @ui.Ctx, src : Source, href : String, to : @sf.LinkTo, words : String?) -> Unit {
+  let (name, line, down) = service_card_of(src, to)
   let open = c.id("service-link/" + href)
   if c.clicked(open) {
     open_link(href)
@@ -237,8 +239,8 @@ pub fn service_link_card(c : @ui.Ctx, src : Source, href : String, words : Strin
 
 ///|
 /// A bare link to a station's 共享调试: what it reads as within a sentence (AdbLinks.kt adbTitle).
-pub fn adb_title(src : Source, href : String) -> String {
-  match adb_card_of(src, href) {
+pub fn adb_title(src : Source, to : @sf.LinkTo) -> String {
+  match adb_card_of(src, to) {
     Some(_) as v => text(v, "title")
     None => @sf.t("android-misc.adb.title")
   }
@@ -279,8 +281,8 @@ pub fn link_card_words(c : @ui.Ctx, title : String, line : String, gone : Bool, 
 /// the core has not said, its lines empty. One its station previews (a tab of its browser) is the screen live across
 /// the card's top, the words under it. A tap opens it, as the link does. `key`: the card's own (its message's and its
 /// link's), its preview's.
-pub fn screen_link_card(c : @ui.Ctx, src : Source, key : String, href : String, words : String?) -> Unit {
-  let card = screen_card_of(src, href)
+pub fn screen_link_card(c : @ui.Ctx, src : Source, key : String, href : String, to : @sf.LinkTo, words : String?) -> Unit {
+  let card = screen_card_of(src, to)
   let open = c.id("screen-link/" + href)
   if c.clicked(open) {
     open_link(href)
@@ -298,7 +300,7 @@ pub fn screen_link_card(c : @ui.Ctx, src : Source, key : String, href : String, 
     Some(k) => k.line
     None => ""
   }
-  match (card, @sf.screen_of_link(href)) {
+  match (card, if to.card == "screen" { Some((to.station, to.screen)) } else { None }) {
     (Some(k), Some((station, screen))) if k.peek && !k.gone => {
       c.box(style=peek_card, id=open, fn() {
         screen_peek(c, key, station, screen, k, target=open)
@@ -328,10 +330,10 @@ pub fn screen_link_card(c : @ui.Ctx, src : Source, key : String, href : String, 
 /// says how; while it is lent there, how that stands (the core's line) with 详情 and 停止共享. A device with no adb to
 /// lend (the core's `lendable`; an Android before 11, as its host says) says so, with nothing to press. `words`, the
 /// link's own, are not its title: the card asks its own question.
-pub fn adb_link_card(c : @ui.Ctx, src : Source, href : String, words : String?) -> Unit {
+pub fn adb_link_card(c : @ui.Ctx, src : Source, href : String, to : @sf.LinkTo, words : String?) -> Unit {
   ignore(words)
-  let card = adb_card_of(src, href)
-  let station = @sf.adb_of_link(href).unwrap_or("")
+  let card = adb_card_of(src, to)
+  let station = to.station
   let sharing = flag(card, "sharing")
   let ready = if card is Some(_) && flag(card, "lendable") {
     @settings.adb_ready(c)
@@ -493,7 +495,7 @@ pub fn peek_for(key : String, station : String, screen : String) -> Peek {
 ///|
 /// The screen live in its card (ScreenLinks.kt Peek): only looking (not among those on it, its tab not brought
 /// forward), its mark until a picture comes (a tab behind another casts none). A browser's preview keeps its shape as
-/// its viewport adapts to a viewer; another screen's shape follows its listed size, within bounds. The newest picture
+/// its viewport adapts to a viewer; another screen's shape follows its picture, its listed size until one comes, within bounds. The newest picture
 /// decoded fills the preview, cropped from the top; a newer one is drawn over it once it is decoded.
 /// `target`: its card's (peeks_settle).
 pub fn screen_peek(
@@ -509,19 +511,26 @@ pub fn screen_peek(
   peeks_built[key] = true
   // (and each frame its row or part is put back as built, kept as its nodes: mbui's kept_nodes.mbt)
   @ui.built_used(fn() { peeks_built[key] = true })
+  let mut shown = -1
+  let mut natural = 0.0
+  for i, k in p.pictures {
+    match @ui.image_natural(k) {
+      Some((w, h)) => {
+        shown = i
+        natural = if h > 0.0 { w / h } else { 0.0 }
+      }
+      None => ()
+    }
+  }
   let listed = if card.width > 0.0 && card.height > 0.0 { card.width / card.height } else { 0.0 }
-  let ratio = if card.kind != "browser" && listed > 0.0 {
-    dclamp(listed, peek_ratio_least, peek_ratio_most)
+  // (a simulator's panel, and so its shape, may have changed since it was listed: as its picture has it)
+  let own = if natural > 0.0 { natural } else { listed }
+  let ratio = if card.kind != "browser" && own > 0.0 {
+    dclamp(own, peek_ratio_least, peek_ratio_most)
   } else {
     peek_ratio
   }
   c.box(style=peek_frame, aspect=ratio, fn() {
-    let mut shown = -1
-    for i, k in p.pictures {
-      if @ui.image_natural(k) is Some(_) {
-        shown = i
-      }
-    }
     if shown < 0 {
       link_mark(c, Some(if card.kind == "browser" { globe_mark } else { monitor_mark }), Muted)
     }

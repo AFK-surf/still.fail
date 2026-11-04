@@ -77,3 +77,38 @@ test "faces: words laid out before the app's face is given are laid out again in
   t.draw()
   assert_eq(t.rect_of("lin@example.com").unwrap().2, w0)
 }
+
+///|
+test "faces: words laid out while a face given is on its way are laid out again in it once the host has it" {
+  // (a page's face is loaded after it is given: given as the words are built (the share card's, share_face_given), they
+  // are laid out in the place's face till it is in; when it is (the host's glyphs moved on, before the next frame or
+  // later) they kept those widths, the face's letters drawn where the place's went: 「s till.fa il」)
+  let give = Ref(false)
+  let t = Tester::new(fn(c) {
+    if give.val && !face_given(@hostapi.face_ui) {
+      face_add(@hostapi.face_ui, "/fonts/ui.ttf") |> ignore
+    }
+    c.box(dir=Row, fn() {
+      c.text("lin@example.com", size=14.0, wrap=false) |> ignore
+      c.rich([span("still.fail")]) |> ignore
+    })
+    |> ignore
+  })
+  let w0 = t.rect_of("lin@example.com").unwrap().2
+  // given as it is built, on its way: measured as the system's
+  give.val = true
+  t.draw()
+  assert_true(face_given(@hostapi.face_ui))
+  assert_eq(t.rect_of("lin@example.com").unwrap().2, w0)
+  let shaped = words_shaped_in.val
+  // in before the next frame: a tenth of 14 wider a letter
+  t.ui_face_wider(0.1)
+  t.glyphs_moved_on()
+  t.draw()
+  assert_true((t.rect_of("lin@example.com").unwrap().2 - (w0 + 15.0 * 1.4)).abs() < 0.001)
+  // (a paragraph's kept layout too: its runs said with the faces as they are now)
+  assert_eq(words_shaped_in.val, shaped + 1)
+  // nothing moved on since: kept as laid out
+  t.draw()
+  assert_eq(words_shaped_in.val, shaped + 1)
+}

@@ -6,18 +6,13 @@
 import { request as httpRequest } from "node:http";
 import { platform } from "../platform/index.ts";
 import type { LoginRun } from "./run.ts";
+import { Refused } from "../api/request.ts";
 
 export type Callback = { method: string; path: string; headers: Record<string, string>; body?: string };
 export type Answered = { status: number; headers: Record<string, string>; body: string };
 
-/// Why a callback was not relayed: its words, and the status it is answered with.
-export class Refused extends Error {
-  readonly status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
+/// Why a callback was not relayed: its words, and the status it is answered with (the routes' own).
+export { Refused };
 
 /// Headers that are the connection's, not the request's.
 const HOP = new Set(["connection", "keep-alive", "transfer-encoding", "upgrade", "proxy-connection", "proxy-authorization", "te", "trailer", "content-length"]);

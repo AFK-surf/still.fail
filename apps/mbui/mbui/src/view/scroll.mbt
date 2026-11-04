@@ -8,7 +8,9 @@
 // where there is the room, it gives way (to nothing) where what holds it is short of room (a dialog no taller than the
 // window), how far it can go told as it is laid out (View::laid_size_told). Where it is, a function of the time while
 // flung, is the column's own (Scroll), let go with the node. One made as a page's list (Scroll::list) moves as an old
-// view's list does on the platform it is on instead (scroll_list.mbt).
+// view's list does on the platform it is on instead (scroll_list.mbt). One made to scroll across (Scroll::across) is a
+// row that scrolls sideways the same way (an old view's Ctx::sideways): along its width, the wheel and a hold across,
+// its bar along its foot, what holds it asked what goes up or down.
 
 ///|
 /// A fling under way: set out from `x0` at `v0` (points a ms, down the column) at `t0`, at rest at `end_x` at `end_t`;
@@ -22,6 +24,19 @@ priv struct Fling {
   /// the end it went toward as it set out: its top, or its foot as far as it could go then
   till : Double
   way : ListWay?
+}
+
+///|
+/// Brought on by the hand held past its edge (Scroll::edge_toward): from `x0` at `t0`, `v` points a ms, steady, as far
+/// as `bound` (how far it could go, or its top, as last laid out); at `end_t` there, after which `parked` (at `x0`,
+/// still said: what holds it laid out further, on again from there then).
+priv struct Edge {
+  x0 : Double
+  v : Double
+  t0 : Double
+  bound : Double
+  end_t : Double
+  parked : Bool
 }
 
 ///|
@@ -57,6 +72,11 @@ pub struct Scroll {
   priv mut tall : () -> Double
   /// the node it scrolls in, while it is (View::scrolls): what it is on by itself said on its timeline
   priv mut host : View?
+  /// it scrolls across, along its width (Scroll::across: a row that scrolls sideways), not up and down: what is said
+  /// down the column above said along the row, its start for its top
+  priv across : Bool
+  /// brought on by the hand held past its edge (Scroll::edge_toward), while it is said
+  priv edge : @signals.Signal[Edge?]
 }
 
 ///|
@@ -71,14 +91,21 @@ pub fn Scroll::new() -> Scroll {
 }
 
 ///|
+/// A row's scroll, at its start: across, as an old view's box scrolled sideways does (ui's Ctx::sideways).
+pub fn Scroll::across() -> Scroll {
+  Scroll::made(false, across=true)
+}
+
+///|
 /// A column's scroll, at its top: as a page's list on the platform it is on (scroll_list.mbt).
 pub fn Scroll::list() -> Scroll {
   Scroll::made(true)
 }
 
 ///|
-fn Scroll::made(as_list : Bool) -> Scroll {
+fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
   {
+    across,
     x: @signals.signal(0.0, same=fn(a, b) { a == b }),
     fling: @signals.signal(None, same=fn(a, b) { same_ref(a, b) }),
     room: fn() { None },
@@ -98,6 +125,7 @@ fn Scroll::made(as_list : Bool) -> Scroll {
     notch: @signals.signal(None, same=fn(a, b) { same_ref(a, b) }),
     tall: fn() { 0.0 },
     host: None,
+    edge: @signals.signal(None, same=fn(a, b) { same_ref(a, b) }),
   }
 }
 
@@ -122,6 +150,11 @@ pub fn Scroll::glides_till(self : Scroll) -> Double? {
 /// When what it is on by itself now ends (a fling, what it meets its end with going back; what shows past an end going
 /// back), followed: none at rest or held.
 fn Scroll::rest_now(self : Scroll) -> Double? {
+  // (the hand past its edge: at its end as said now; at rest there, parked)
+  match self.edge.get() {
+    Some(e) => return if e.parked { None } else { Some(e.end_t) }
+    None => ()
+  }
   match self.fling.get() {
     Some(f) =>
       match f.way {
@@ -196,6 +229,10 @@ fn dclamp(v : Double, lo : Double, hi : Double) -> Double {
 /// (where flung, the time: what reads it read again as it goes, till it is at rest).
 fn Scroll::where_at(self : Scroll, t : Double) -> Double {
   let most = self.most_now()
+  match self.edge.get() {
+    Some(e) => return dclamp(e.at(t), 0.0, most)
+    None => ()
+  }
   match self.fling.get() {
     Some(f) =>
       if t >= f.end_t {
@@ -248,6 +285,17 @@ pub fn Scroll::grew_above(self : Scroll, d : Double) -> Unit {
       None => 0.0
     }
     self.x.set(self.x.get() + d)
+    // (the hand past its edge: where it has it now as much further, its foot too where it goes down; on from there by
+    // its own way, its end then: what is laid out after worked out again as that is)
+    match (self.edge.get(), self.host) {
+      (Some(e), Some(v)) => {
+        let x0 = e.at(t) + d
+        let bound = if e.v > 0.0 { e.bound + d } else { 0.0 }
+        // (at its foot it is at its foot still; at its top, on to it again)
+        self.edge_planned(v, e, x0, t, bound)
+      }
+      _ => ()
+    }
     match self.fling.get() {
       Some({ way: Some(w), .. } as f) => self.fling_grew(f, w, t, d)
       _ => ()
@@ -258,6 +306,8 @@ pub fn Scroll::grew_above(self : Scroll, d : Double) -> Unit {
     }
     // (at rest when it now is: said again on its timeline)
     match self.host {
+      // (the hand past its edge: said on by its own way, above)
+      Some(_) if self.edge.get() is Some(_) => ()
       Some(v) => {
         self.list_settles(v, t)
         // (a fling down toward its foot: its foot where all of it is laid out as this change leaves it, worked out
@@ -285,6 +335,13 @@ pub fn Scroll::most(self : Scroll) -> Double {
 }
 
 ///|
+/// How far it can go, as it was last laid out, followed (0 before it first is): what keeps room at what it holds' foot
+/// by it (a list's room for what is tucked over its rows) reads it so.
+pub fn Scroll::reach(self : Scroll) -> Double {
+  self.most_now()
+}
+
+///|
 /// Whether what it holds is taller than it, as last laid out, followed (asked once it scrolls: View::scrolls): what is
 /// painted by that alone reads it (cut at its box only while it scrolls, as @kit.in_room's held list), never what lays
 /// it out.
@@ -305,6 +362,16 @@ fn Scroll::most_now(self : Scroll) -> Double {
 /// Stopped where it is at `t` (a fling under way stopped there): where that is.
 fn Scroll::stopped(self : Scroll, t : Double) -> Double {
   let x = @signals.untracked(fn() { self.where_at(t) })
+  // (brought on past its edge: as far as it came)
+  if @signals.untracked(fn() { self.edge.get() }) is Some(e) {
+    (self.settle_off)()
+    self.settle_off = fn() {  }
+    self.edge.set(None)
+    self.x.set(x)
+    if !e.parked {
+      (self.on_scrolled)(t)
+    }
+  }
   // (a page's list's notches easing in: as far as they came)
   if @signals.untracked(fn() { self.notch.get() }) is Some(_) {
     (self.settle_off)()
@@ -323,6 +390,18 @@ fn Scroll::stopped(self : Scroll, t : Double) -> Double {
   }
   self.x.set(x)
   x
+}
+
+///|
+/// Put at `to` (down the column) at the logic's moment of the tree it scrolls in, read as far as it can go as it is
+/// laid out (a list's first place, past what is tucked over its rows; its top again): what it was on by itself stopped
+/// there, no scroll of the hand's (nothing told as scrolled: its bar). Not scrolling in a node yet, there as it comes to.
+pub fn Scroll::put(self : Scroll, to : Double) -> Unit {
+  match self.host {
+    Some(v) if v.alive() => self.stopped(v.tree.logic_at()) |> ignore
+    _ => ()
+  }
+  self.x.set(dmax(to, 0.0))
 }
 
 ///|
@@ -390,18 +469,117 @@ fn Scroll::flung(self : Scroll, v : View, t : Double) -> Unit {
 }
 
 ///|
+/// Gone on by itself at `speed` (points a ms, down the column or along the row; less than 0 toward its top or its
+/// start) from where it is at the logic's moment, steady, till its end, as the hand held past its edge takes it (a
+/// selection dragged out of it: an old view's select_edge); 0 stopped where it is. Said anew as the hand moves, it goes
+/// on from where it is then at the new speed: where it is a function of the time, nothing stepped by frames. Not where
+/// it scrolls in nothing (View::scrolls not said, or let go).
+pub fn Scroll::edge_toward(self : Scroll, speed : Double) -> Unit {
+  guard self.host is Some(v) else { return }
+  @signals.untracked(fn() {
+    let t = v.logic_at()
+    let x0 = self.stopped(t)
+    if speed == 0.0 {
+      return
+    }
+    // (from where it is, as far as it can go that way now: worked out, its end said, by edge_due)
+    let bound = if speed > 0.0 { self.most() } else { 0.0 }
+    self.edge.set(Some({ x0, v: speed, t0: t, bound, end_t: t, parked: false }))
+    self.edge_due(v, t)
+  })
+}
+
+///|
+/// Where the hand past its edge has it at `t`, as far as its bound (as it was laid out as it was said).
+fn Edge::at(self : Edge, t : Double) -> Double {
+  if self.parked {
+    return self.x0
+  }
+  let x = self.x0 + self.v * (dmax(t, self.t0) - self.t0)
+  if self.v > 0.0 {
+    dmin(x, self.bound)
+  } else {
+    dmax(x, self.bound)
+  }
+}
+
+///|
+/// The hand past its edge said on from where it has it at `t`, as far as it can go as laid out now: its end then, said
+/// on the timeline (parked there); there already, parked now.
+fn Scroll::edge_due(self : Scroll, v : View, t : Double) -> Unit {
+  guard @signals.untracked(fn() { self.edge.get() }) is Some(e) else { return }
+  let most = self.most()
+  let x0 = dclamp(e.at(t), 0.0, most)
+  let bound = if e.v > 0.0 { most } else { 0.0 }
+  self.edge_planned(v, e, x0, t, bound)
+}
+
+///|
+/// The hand past its edge (`e`, as it was) said on from `x0` at `t` as far as `bound`: its end then said on the
+/// timeline, told what hosts the tree (Tree::on_glides), parked there; there already, parked now.
+fn Scroll::edge_planned(self : Scroll, v : View, e : Edge, x0 : Double, t : Double, bound : Double) -> Unit {
+  (self.settle_off)()
+  self.settle_off = fn() {  }
+  let end_t = t + dmax(0.0, (bound - x0) / e.v).ceil()
+  if end_t <= t {
+    // (at its end: nothing moving, nothing reading the time; told so as it is there no more since now)
+    self.edge.set(Some({ ..e, x0: bound, t0: t, bound, end_t: t, parked: true }))
+    if !e.parked {
+      (self.on_scrolled)(t)
+    }
+    return
+  }
+  self.edge.set(Some({ x0, v: e.v, t0: t, bound, end_t, parked: false }))
+  (self.on_scrolled)(t)
+  // (what hosts the tree told it goes on by itself, till when as it is asked: Tree::on_glides)
+  (v.tree.glides)(self.serial, fn() { self.glides_till() })
+  self.settle_off = v.at_moment(end_t, fn() {
+    self.settle_off = fn() {  }
+    (self.on_scrolled)(end_t)
+    match @signals.untracked(fn() { self.edge.get() }) {
+      Some(g) => self.edge.set(Some({ ..g, x0: g.bound, t0: end_t, end_t, parked: true }))
+      None => ()
+    }
+  })
+}
+
+///|
+/// What scrolls it or holds it nearest, up and down (`across` false) or across (Scroll::across): the column or the row
+/// a hand held past its edge brings on (Scroll::edge_toward); none where nothing round it does.
+pub fn View::scroll_holding(self : View, across? : Bool = false) -> Scroll? {
+  // (a node let go of: nothing, whatever is in its place now)
+  guard self.alive() else { return None }
+  let mut at = self.at
+  while at >= 0 {
+    match self.tree.scrolls_at.get(at) {
+      Some(s) if s.across == across && (s.host is Some(h) && h.alive()) => return Some(s)
+      _ => ()
+    }
+    at = self.tree.nodes[at].parent
+  }
+  None
+}
+
+///|
 /// A column that scrolls up and down in it (see the file's head), `s` saying how far it is scrolled, `build` making
 /// what it holds in the node that holds it all (laid out as tall as it is, drawn off by how far it is scrolled). It
 /// gives way to nothing where what holds it is short of room (View::shrink, View::min_height). A hold that began on
 /// what it holds is its own once it has moved `slop` (the window's points) up or down (View::claims; none: 8, a page's
 /// list's its platform's, list_slop). `bar`: its bar
-/// along its right, as that says (scroll_bar.mbt; none: none).
+/// along its right, as that says (scroll_bar.mbt; none: none). Scrolling across (Scroll::across): a row, what it holds
+/// laid out as wide as it is, given way to nothing across where what holds it is narrower; a hold its own once it moves
+/// across past the slop; its bar along its foot, `bar_in` in from either end (under what it is for, where what it holds
+/// reaches past that: Ctx::sideways's), room under what it holds for it while it can go (its bar never over what it
+/// holds' last line), none while it cannot. `bar_clear`: down a column, how much of its top and its foot its bar keeps
+/// clear of, as it is now (what lies over them: a bar the list runs under), as an old view's list's bar does.
 pub fn View::scrolls(
   self : View,
   s : Scroll,
   build : (View) -> Unit,
   slop? : Double,
   bar? : ScrollBar,
+  bar_in? : Double = 0.0,
+  bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
 ) -> View {
   guard self.live() is Some(_) else { return self }
   // (a page's list's as its platform's is as it is held: what hosts the tree may say it after it is made)
@@ -412,10 +590,19 @@ pub fn View::scrolls(
     }
   }
   s.host = Some(self)
-  // (how tall it is, as it is asked: what shows past its ends is in its heights)
-  s.tall = fn() { if self.live() is Some(n) { n.flex.height } else { 0.0 } }
+  // (found by what it holds: View::scroll_holding)
+  self.tree.scrolls_at[self.at] = s
+  let across = s.across
+  // (how tall it is, as it is asked: what shows past its ends is in its heights; across, how wide)
+  s.tall = fn() { if self.live() is Some(n) { if across { n.flex.width } else { n.flex.height } } else { 0.0 } }
   let inner : Ref[View?] = Ref(None)
-  self.clips(Is(true)).bounds_input(Is(true)).shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+  self.clips(Is(true)).bounds_input(Is(true)) |> ignore
+  // (across: a row, what it holds laid out along it as wide as it is; narrower than that where what holds it is)
+  if across {
+    self.row(Is(true)).min_width(Is(Some(0.0))) |> ignore
+  } else {
+    self.shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+  }
   // (what it holds laid out as tall as it is, whatever room it has: its content's own height, as CSS's overflow scroll
   // has it)
   self.tree.nodes[self.at].flex.style.overflow = @flex.Overflow::Scroll
@@ -425,7 +612,7 @@ pub fn View::scrolls(
     match inner.val {
       Some(held) =>
         match (held.laid_size_told(), self.laid_size_told()) {
-          (Some(h), Some(v)) => Some(h.1 - v.1)
+          (Some(h), Some(v)) => Some(if across { h.0 - v.0 } else { h.1 - v.1 })
           _ => None
         }
       None => None
@@ -434,14 +621,38 @@ pub fn View::scrolls(
   self.box(fn(held) {
     inner.val = Some(held)
     self.tree.nodes[self.at].scroll_held = held.at
+    self.tree.nodes[self.at].scroll_across = across
+    // (a page's list's rows set on its host's pixels as an old view's list's are: Tree::set_rows_grid)
+    if s.as_list && !across {
+      self.tree.rows_list(held.at)
+    }
     held
     .shrink(Is(0.0))
     .offset(By(fn() {
       let t = if s.goes_on() { held.drawn_at() } else { 0.0 }
       // (a page's list's on iOS moved past its end as far as its rubber band shows it)
-      (0.0, -s.where_at(t) + s.past_moved(t))
+      if across {
+        (-s.where_at(t), 0.0)
+      } else {
+        (0.0, -s.where_at(t) + s.past_moved(t))
+      }
     }))
     |> ignore
+    // (across with a bar: room at its foot for it while it can go, as laid out (none while it cannot), its bar never
+    // over what it holds' last line: Ctx::sideways's bar_room, from this layout's told reach, not a frame's before)
+    // (under what it holds, its own room at its foot counted, as Ctx::sideways' `foot` is the more of its padding there
+    // and the bar's room: what of the bar's room its padding there has not, under it)
+    match bar {
+      Some(b) if across =>
+        held.margin(By(fn() {
+          let room = if s.most_now() > 0.5 { b.size + 2.0 * b.inset } else { 0.0 }
+          let st = self.tree.nodes[held.at].flex.style
+          let pad = if st.padding_bottom_kind() == @flex.LEN_PT { st.padding_bottom_value() } else { 0.0 }
+          (0.0, 0.0, 0.0, if room > pad { room - pad } else { 0.0 })
+        }))
+        |> ignore
+      _ => ()
+    }
     build(held)
   })
   |> ignore
@@ -450,12 +661,14 @@ pub fn View::scrolls(
     Some(b) => {
       // (a fling under way: till its end, as it is now, none once stopped)
       let state = BarState::new(fn() {
-        match s.fling.get() {
-          Some(f) => f.end_t
-          None => -1.0e9
+        match (s.fling.get(), s.edge.get()) {
+          (Some(f), _) => f.end_t
+          // (the hand past its edge: till its end as said now)
+          (None, Some(e)) => e.end_t
+          (None, None) => -1.0e9
         }
       })
-      self.scroll_bar(s, b, state)
+      self.scroll_bar(s, b, state, bar_in~, bar_clear~)
       s.on_scrolled = fn(t) { state.woke(b, self, t, scrolled=true) }
     }
     None => ()
@@ -468,9 +681,16 @@ pub fn View::scrolls(
     self.stretches(By(fn() { s.stretch_drawn(if s.goes_on() { self.drawn_at() } else { 0.0 }) })) |> ignore
   } else {
     self.fades(By(fn() {
-      let x = s.where_at(if s.fling.get() is Some(_) { self.drawn_at() } else { 0.0 })
+      // (where it is as drawn, the time read while what it is on by itself has an end said: Scroll::rest_now)
+      let x = s.where_at(if s.rest_now() is Some(_) { self.drawn_at() } else { 0.0 })
       let most = s.most_now()
-      (0.0, dclamp(x, 0.0, scroll_soft_most), 0.0, dclamp(most - x, 0.0, scroll_soft_most))
+      let (a, b) = (dclamp(x, 0.0, scroll_soft_most), dclamp(most - x, 0.0, scroll_soft_most))
+      // (across: towards its start and its end)
+      if across {
+        (a, 0.0, b, 0.0)
+      } else {
+        (0.0, a, 0.0, b)
+      }
     }))
     |> ignore
   }
@@ -480,6 +700,12 @@ pub fn View::scrolls(
   self.reacts(fn() { (s.room)().map(fn(r) { dmax(r, 0.0) }) }, fn(known) {
     guard known is Some(most) else { return }
     let t = self.tree.logic_at()
+    // (the hand past its edge: on from where it has it now as far as it can go now, its end then; parked at its end, on
+    // again where it can go further)
+    match @signals.untracked(fn() { s.edge.get() }) {
+      Some(e) if e.bound != (if e.v > 0.0 { most } else { 0.0 }) || e.x0 > most => s.edge_due(self, t)
+      _ => ()
+    }
     // (a page's list's fling down toward its foot meets it where it is as laid out now: worked out again)
     if s.as_list {
       s.foot_moved(self, t, most)
@@ -497,6 +723,15 @@ pub fn View::scrolls(
   })
   // (let go with it: no fling of it settles after)
   self.owns(fn() {
+    // (the hand past its edge: at rest where it had it then, as far as it could go as it was said: how far it can go is
+    // gone with what it was laid out in, as a fling's below)
+    match @signals.untracked(fn() { s.edge.get() }) {
+      Some(e) => {
+        s.edge.set(None)
+        s.x.set(e.at(self.tree.logic_at()))
+      }
+      None => ()
+    }
     // (a fling under way at rest where it was then: nothing reads the time for it after)
     match @signals.untracked(fn() { s.fling.get() }) {
       Some(f) => {
@@ -527,6 +762,10 @@ pub fn View::scrolls(
     s.room = fn() { None }
     s.tall = fn() { 0.0 }
     s.host = None
+    match self.tree.scrolls_at.get(self.at) {
+      Some(o) if physical_equal(o, s) => self.tree.scrolls_at.remove(self.at)
+      _ => ()
+    }
     s.on_scrolled = fn(_) {  }
     // (no glide of it told any more: Tree::on_glides)
     (self.tree.glides_gone)(s.serial)
@@ -535,6 +774,12 @@ pub fn View::scrolls(
   self
   // (the wheel up or down more than across, as an old view's box kept to a height takes it: sideways_wheel_moves)
   .on_wheel_moves(fn(w) {
+    // (across: the wheel across more than up or down, as an old view's box scrolled sideways takes it, as far as it
+    // goes that way: sideways_wheel_moves)
+    if across {
+      guard w.dx != 0.0 && w.dx.abs() >= w.dy.abs() else { return false }
+      return s.moved(w.at, w.dx)
+    }
     guard w.dy != 0.0 && w.dy.abs() >= w.dx.abs() else { return false }
     // (a page's list's fling stopped as the wheel comes, what shows past an end going on back as it was)
     // (a wheel's notch eased in, as an old view's list's is: Ctx::ease_list)
@@ -550,15 +795,19 @@ pub fn View::scrolls(
   // it moves up or down past the slop, more than across, the way it can still go: else what holds it is asked)
   .claims(fn(dx, dy) {
     let x = s.at(self.tree)
+    // (across: along the row, what holds it asked what goes up or down)
+    let (along, other) = if across { (dx, dy) } else { (dy, dx) }
     // (a page's list's pulled past its end, where its platform's is)
-    let can = (if dy < 0.0 { x < s.most() } else { x > 0.0 }) ||
+    let can = (if along < 0.0 { x < s.most() } else { x > 0.0 }) ||
       (s.as_list && (self.tree.list_feel)().0 != Desktop)
-    let takes = dy.abs() > slop() && dy.abs() >= dx.abs() && can
+    let takes = along.abs() > slop() && along.abs() >= other.abs() && can
     s.claimed = takes
     takes
   }, scrolls=true)
   // (held, its own terms: what it holds moved as far as the hand, as big as it is drawn)
   .on_drag(fn(d) {
+    // (where the hand is along it, in its own terms and the window's, and how fast: across, along the row)
+    let (hy, hwy, hvy) = if across { (d.x, d.wx, d.vx) } else { (d.y, d.wy, d.vy) }
     match d.kind {
       Down => {
         // (what shows past an end of a page's list caught where it shows: held by the finger from there)
@@ -566,16 +815,16 @@ pub fn View::scrolls(
           s.past_held(d.at)
         }
         s.stopped(d.at) |> ignore
-        s.hand_y = d.y
-        s.hand_wy = d.wy
+        s.hand_y = hy
+        s.hand_wy = hwy
         s.hand_t = d.at
         s.hand_v = 0.0
       }
       Moved => {
         // (taken over: the first move from where it went down past the slop alone, in the window's points, as big
         // in its own terms as it is drawn)
-        let mut dy = d.y - s.hand_y
-        let dw = d.wy - s.hand_wy
+        let mut dy = hy - s.hand_y
+        let dw = hwy - s.hand_wy
         if s.claimed && dw != 0.0 {
           s.claimed = false
           let past = if dw > 0.0 { dmax(dw - slop(), 0.0) } else { dmin(dw + slop(), 0.0) }
@@ -586,15 +835,15 @@ pub fn View::scrolls(
         } else {
           s.moved(d.at, -dy) |> ignore
         }
-        s.hand_y = d.y
-        s.hand_wy = d.wy
+        s.hand_y = hy
+        s.hand_wy = hwy
         s.hand_t = d.at
       }
       // (let go: flung at the finger's speed as of then, by its own events (Drag's `vy`: a pause before it let go, none),
       // no faster than a fling goes in the window's points, then in its own terms)
       Up => {
         let (_, _, sc) = self.tree.placed(self.at)
-        s.hand_v = dclamp(-d.vy, -scroll_most_v, scroll_most_v) / (if sc > 0.0 { sc } else { 1.0 })
+        s.hand_v = dclamp(-hvy, -scroll_most_v, scroll_most_v) / (if sc > 0.0 { sc } else { 1.0 })
         if s.as_list {
           s.let_go(self, d.at)
         } else {
@@ -614,7 +863,8 @@ pub fn View::scrolls(
   // (a part of what it holds brought into sight: its top or its foot to its own, as little as that takes)
   .shows(fn(top, foot) {
     let t = self.logic_at()
-    let vh = self.tree.nodes[self.at].flex.height
+    // (across: its start and its end, as wide as it is)
+    let vh = if across { self.tree.nodes[self.at].flex.width } else { self.tree.nodes[self.at].flex.height }
     let x = s.stopped(t)
     if top < 0.0 {
       s.sent(t, x + top)
@@ -622,12 +872,12 @@ pub fn View::scrolls(
       s.sent(t, x + dmin(top, foot - vh))
     }
     s.at(self.tree) - x
-  })
+  }, across~)
 }
 
 ///|
-/// Whether node `id` scrolls what it holds up and down (View::scrolls) and it can go, as last laid out (Scroll::goes:
-/// what it holds taller than it, by more than half a point, as an old box kept to a height is, ui's scroll_still):
+/// Whether node `id` scrolls what it holds up and down or across (View::scrolls) and it can go that way, as last laid
+/// out (Scroll::goes: what it holds taller than it, or wider where it scrolls across, by more than half a point, as an old box kept to a height is, ui's scroll_still):
 /// what lies in it moves under its top and foot as it scrolls, never in its container's corners for good (ui's corner
 /// rule: a row of a list's as it scrolls).
 pub fn Tree::scrolls_now(self : Tree, id : NodeId) -> Bool {
@@ -637,7 +887,13 @@ pub fn Tree::scrolls_now(self : Tree, id : NodeId) -> Bool {
   n.scroll_held >= 0 &&
   n.scroll_held < self.nodes.length() &&
   self.nodes[n.scroll_held].live &&
-  self.nodes[n.scroll_held].flex.height - n.flex.height > 0.5
+  // (the way it scrolls alone: up and down, or across, Scroll::across)
+  (if n.scroll_across {
+    self.nodes[n.scroll_held].flex.width - n.flex.width
+  } else {
+    self.nodes[n.scroll_held].flex.height - n.flex.height
+  }) >
+  0.5
 }
 
 ///|

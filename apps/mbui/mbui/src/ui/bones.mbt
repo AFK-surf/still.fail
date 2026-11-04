@@ -82,8 +82,8 @@ fn Ctx::emit_bone_line(
 }
 
 ///|
-/// Node `n`'s words (`tl`, as laid out at `ox`, `oy`, each line moved right by `dx(line)`) as their bones: a bar on
-/// each line from its first letter to its last, inside the clip [cy0, cy1].
+/// Node `n`'s words (`tl`, as laid out at `ox`, `oy`, each line moved right by `dx(line)`) as their bones
+/// (Ctx::emit_bone_text).
 fn Ctx::paint_bone_text(
   self : Ctx,
   n : Node,
@@ -91,6 +91,23 @@ fn Ctx::paint_bone_text(
   ox : Double,
   oy : Double,
   dx : (Int) -> Double,
+  alpha : Double,
+) -> Unit {
+  self.emit_bone_text(tl, ox, oy, dx, n.font_size, n.bones, alpha)
+}
+
+///|
+/// Words `tl` (laid out at `ox`, `oy`, each line moved right by `dx(line)`, their size `size`) as their bones in
+/// `color`: a bar on each line from its first letter to its last, inside the clip [cy0, cy1]. An old view's words'
+/// (paint_bone_text) and a node of the window's tree's (view_host's view_made).
+fn Ctx::emit_bone_text(
+  self : Ctx,
+  tl : TextLayout,
+  ox : Double,
+  oy : Double,
+  dx : (Int) -> Double,
+  size : Double,
+  color : Int64,
   alpha : Double,
 ) -> Unit {
   let s = tl.shaped
@@ -121,16 +138,31 @@ fn Ctx::paint_bone_text(
       x + tl.xs[last] + s.adv[last] - 2.0 * s.pad,
       top,
       tl.line_h,
-      n.font_size,
-      n.bones,
+      size,
+      color,
       alpha,
     )
   }
 }
 
 ///|
-/// Rich words (`lay`, as laid out at `ox`, `oy`) as their bones: a bar on each line, its words' size its first run's.
+/// Rich words (`lay`, as laid out at `ox`, `oy`) as their bones (Ctx::emit_bone_rich).
 fn Ctx::paint_bone_rich(self : Ctx, n : Node, lay : RichLayout, ox : Double, oy : Double, alpha : Double) -> Unit {
+  self.emit_bone_rich(lay, ox, oy, n.font_size, n.bones, alpha)
+}
+
+///|
+/// Rich words `lay` (laid out at `ox`, `oy`) as their bones in `color`: a bar on each line, its words' size its first
+/// run's (`size` where it has none). An old view's (paint_bone_rich) and a node of the window's tree's (view_made).
+fn Ctx::emit_bone_rich(
+  self : Ctx,
+  lay : RichLayout,
+  ox : Double,
+  oy : Double,
+  size : Double,
+  color : Int64,
+  alpha : Double,
+) -> Unit {
   let k = clip_top()
   let cy0 = clip_stack[k + 1]
   let cy1 = clip_stack[k + 3]
@@ -154,8 +186,8 @@ fn Ctx::paint_bone_rich(self : Ctx, n : Node, lay : RichLayout, ox : Double, oy 
     }
     let (x0, x1) = lay.span_x(first, last + 1)
     let run = lay.run_of[first]
-    let size = if run >= 0 && run < lay.run_size.length() { lay.run_size[run] } else { n.font_size }
-    self.emit_bone_line(ox + x0 + lay.pre[first], ox + x1, top, lay.line_h[l], size, n.bones, alpha)
+    let size = if run >= 0 && run < lay.run_size.length() { lay.run_size[run] } else { size }
+    self.emit_bone_line(ox + x0 + lay.pre[first], ox + x1, top, lay.line_h[l], size, color, alpha)
   }
 }
 
@@ -171,16 +203,34 @@ let bone_drawing_r : Double = 8.0
 /// A picture, an icon or a drawing (node `n`) as its bone: its box in its own corners where it has them, else a dot (an
 /// icon) or a box with its corners a little round (a drawing).
 fn Ctx::paint_bone_shape(self : Ctx, n : Node, alpha : Double) -> Unit {
-  let short = dmin(n.fw, n.fh)
-  let r = if n.radius > 0.0 {
-    dmin(n.radius, short / 2.0)
-  } else if dmax(n.fw, n.fh) <= bone_icon_most {
+  self.emit_bone(n.x, n.y, n.fw, n.fh, bone_shape_r(n.radius, n.fw, n.fh), n.bones, alpha)
+  self.corners_last(n)
+}
+
+///|
+/// How round a picture's, an icon's or a drawing's bone is, `w` × `h`, its own corners `radius` (none: 0): its own,
+/// else a dot (an icon) or a little round (a drawing). An old view's (paint_bone_shape) and a node of the window's
+/// tree's (view_made).
+fn bone_shape_r(radius : Double, w : Double, h : Double) -> Double {
+  let short = dmin(w, h)
+  if radius > 0.0 {
+    dmin(radius, short / 2.0)
+  } else if dmax(w, h) <= bone_icon_most {
     short / 2.0
   } else {
     dmin(bone_drawing_r, short / 2.0)
   }
-  self.emit_bone(n.x, n.y, n.fw, n.fh, r, n.bones, alpha)
-  self.corners_last(n)
+}
+
+///|
+/// How round a bone drawn whole is (Ctx::bone_whole), `w` × `h`: in its own corners; with none, round at its ends (a
+/// control's). An old view's (scene.mbt's paint) and a node of the window's tree's (view_made).
+fn bone_whole_r(radius : Double, w : Double, h : Double) -> Double {
+  if radius > 0.0 {
+    radius
+  } else {
+    dmin(w, h) / 2.0
+  }
 }
 
 ///|

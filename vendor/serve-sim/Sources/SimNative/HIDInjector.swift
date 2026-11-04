@@ -209,11 +209,21 @@ public actor HIDInjector {
     /// Synchronously build + send a single touch. For use inside gesture blocks
     /// already running on `inputQueue`.
     private func rawSendTouch(type: String, x: Double, y: Double, edge: UInt32 = 0) {
+        if dtuhidTouch(type: type, x: x, y: y, edge: edge) { return }
         if let msg = touchMessage(type: type, x: x, y: y, edge: edge) { rawSend(msg) }
+    }
+
+    /// Where the guest has `dtuhidd` (DTUHIDKeys), a finger goes that way as its keys do. An Indigo touch on a foldable there
+    /// reached a digitizer not connected yet took the guest's backboardd down (an assertion in SimHIDVirtualService). A panel is
+    /// by its display's number there, without Indigo's mask (an iPhone Duo's inner panel, 3; 0x40000003 is dropped, silently).
+    private func dtuhidTouch(type: String, x: Double, y: Double, edge: UInt32) -> Bool {
+        guard type == "begin" || type == "move" || type == "end", let dtuhidKeys else { return false }
+        return dtuhidKeys.sendTouch(type: type, x: x, y: y, edge: edge, target: duoBridge == nil ? 0 : touchTarget & 0xFF)
     }
 
     public func sendTouch(type: String, x: Double, y: Double, screenWidth: Int, screenHeight: Int, edge: UInt32 = 0) {
         updateTouchTarget(width: screenWidth, height: screenHeight)
+        if dtuhidTouch(type: type, x: x, y: y, edge: edge) { return }
         guard let msg = touchMessage(type: type, x: x, y: y, edge: edge) else { return }
         hidLog("[hid] Sending \(type) at (\(String(format:"%.3f",x)),\(String(format:"%.3f",y)))\(edge > 0 ? " edge=\(edge)" : "")")
         rawSend(msg)
@@ -353,6 +363,8 @@ public actor HIDInjector {
     private static let scrollDragGain: Double = 1.0
     private static let scrollEdgeMargin: Double = 0.08   // re-anchor inside this margin
     private static let scrollGestureIdle: TimeInterval = 0.1
+    /// How far a wheel's drag first goes, in shares of the screen (some 13 points on a phone of 2000 pixels at 3×).
+    private static let scrollSlop: Double = 0.02
 
     private var scrollDragActive = false
     private var scrollFingerX = 0.5
@@ -397,6 +409,13 @@ public actor HIDInjector {
             scrollFingerY = aY
             beginDrag(x: scrollFingerX, y: scrollFingerY)
             scrollDragActive = true
+            // Past the distance that tells a drag from a tap at once (a scroll view takes none of it): a wheel's one notch,
+            // a drag too short for that, was a tap on whatever row lay under the pointer.
+            let length = (stepX * stepX + stepY * stepY).squareRoot()
+            scrollFingerX = clampFinger(aX + stepX / length * HIDInjector.scrollSlop)
+            scrollFingerY = clampFinger(aY + stepY / length * HIDInjector.scrollSlop)
+            rawSendTouch(type: "move", x: scrollFingerX, y: scrollFingerY)
+            usleep(8000)
         }
 
         var nextX = scrollFingerX + stepX
@@ -476,10 +495,16 @@ public actor HIDInjector {
         hidLog("[hid] Sending button: \(button)")
 
         // (HID's Consumer page: Menu, Power)
-        if let dtuhidKeys, let usage: UInt32 = ["home": 0x40, "lock": 0x30, "side_button": 0x30][button],
+        if let dtuhidKeys, let usage: UInt32 = ["home": 0x40, "lock": 0x30, "side_button": 0x30, "volume_up": 0xE9, "volume_down": 0xEA][button],
            dtuhidKeys.sendButton(page: 0x0C, usage: usage, down: true) {
             try? await Task.sleep(for: .seconds(0.05))
             _ = dtuhidKeys.sendButton(page: 0x0C, usage: usage, down: false)
+            return
+        }
+
+        // (where the guest has no dtuhidd)
+        if button == "volume_up" || button == "volume_down" {
+            await sendButtonHID(page: 0x0C, usage: button == "volume_up" ? 0xE9 : 0xEA, phase: "press")
             return
         }
 
@@ -560,7 +585,7 @@ public actor HIDInjector {
 
     // MARK: - Fold pose / hinge
 
-    func isFoldable() -> Bool { duoBridge != nil }
+    public func isFoldable() -> Bool { duoBridge != nil }
 
     public func close() { duoBridge = nil }
 
@@ -569,7 +594,7 @@ public actor HIDInjector {
         if let target = DevicePose.touchTarget(width: width, height: height) { touchTarget = target }
     }
 
-    func setPose(_ name: String, fromDegrees: Double) -> Bool {
+    public func setPose(_ name: String, fromDegrees: Double) -> Bool {
         guard let pose = DevicePose.preset(named: name), fromDegrees.isFinite,
               (0...180).contains(fromDegrees) else { return false }
         return duoBridge?.send("sweep \(fromDegrees) \(pose.hingeDegrees) 800") == true
@@ -596,7 +621,7 @@ public actor HIDInjector {
     /// Ask CoreSimulator to broadcast a memory warning to the simulated OS.
     /// Equivalent to Debug → Simulate Memory Warning and idb's
     /// FBSimulatorMemoryCommands.simulateMemoryWarning.
-    func simulateMemoryWarning() {
+    public func simulateMemoryWarning() {
         guard let device = simDevice else {
             fputs("[sim] simulateMemoryWarning: no SimDevice\n", stderr)
             return
@@ -639,18 +664,18 @@ public actor HIDInjector {
 
     private func launchSpringBoard(deviceUDID: String) {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-        process.arguments = ["simctl", "launch", deviceUDID, "com.apple.springboard"]
+        process.executableURL = URL(fileURLWithPath: "/Library/Developer/PrivateFrameworks/CoreSimulator.framework/Versions/A/Resources/bin/simctl")
+        process.arguments = ["launch", deviceUDID, "com.apple.springboard"]
         try? process.run()
     }
 
     // MARK: - Orientation (GSEvent via PurpleWorkspacePort)
 
     // UIDeviceOrientation values accepted by the guest's GraphicsServices.
-    static let orientationPortrait: UInt32 = 1
-    static let orientationPortraitUpsideDown: UInt32 = 2
-    static let orientationLandscapeRight: UInt32 = 3
-    static let orientationLandscapeLeft: UInt32 = 4
+    public static let orientationPortrait: UInt32 = 1
+    public static let orientationPortraitUpsideDown: UInt32 = 2
+    public static let orientationLandscapeRight: UInt32 = 3
+    public static let orientationLandscapeLeft: UInt32 = 4
 
     // GSEvent wire-format constants. Reverse-engineered by idb from
     // Simulator.app's ARM64 disassembly; see idb's SimulatorApp/GSEvent.h.
@@ -665,7 +690,7 @@ public actor HIDInjector {
     /// `GraphicsServices._PurpleEventCallback` → backboardd. This is how
     /// Simulator.app itself rotates the device, and how idb's
     /// `FBSimulatorPurpleHID.orientationEvent:` is delivered.
-    func sendOrientation(orientation: UInt32) -> Bool {
+    public func sendOrientation(orientation: UInt32) -> Bool {
         if let duoBridge {
             guard (1...4).contains(orientation) else { return false }
             return duoBridge.send("orientation \(orientation)")

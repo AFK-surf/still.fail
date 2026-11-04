@@ -69,7 +69,7 @@ let a_notice : Json = {
 fn notify_core(
   calls : Array[Made],
   sys : FakeSystem,
-  notify? : Ref[Json] = Ref({ "on": true, "asked": true, "push": true, "show": [] }),
+  notify? : @signals.Signal[Json] = @signals.signal({ "on": true, "asked": true, "push": true, "show": [] }),
   show? : Array[Json] = [],
   env? : Array[(String, String)] = [],
 ) -> @ui.Tester {
@@ -84,7 +84,7 @@ fn notify_core(
           if params.contains("workspace") {
             { value: Some({ "show": Json::array(show) }), error: None, version: show.length() }
           } else {
-            { value: Some(notify.val), error: None, version: 1 }
+            { value: Some(notify.get()), error: None, version: 1 }
           }
         _ => (base.topic)(name, params)
       }
@@ -287,7 +287,7 @@ test "the system told what it allows; asked once when it never was, with notific
   let calls : Array[Made] = []
   let sys = fake_system()
   sys.permission = "ask"
-  let t = notify_core(calls, sys, notify=Ref({ "on": true, "asked": false, "push": true, "show": [] }))
+  let t = notify_core(calls, sys, notify=@signals.signal({ "on": true, "asked": false, "push": true, "show": [] }))
   let told = named(calls, "notify.permission")
   assert_eq(told.length(), 1)
   assert_true(told[0].params.stringify().contains("\"default\""))
@@ -313,17 +313,17 @@ test "the system told what it allows; asked once when it never was, with notific
 test "pushes: none registered without a token, taken off while off; a token registered" {
   let calls : Array[Made] = []
   let sys = fake_system()
-  notify_core(calls, sys, notify=Ref({ "on": true, "asked": true, "push": true, "show": [] })) |> ignore
+  notify_core(calls, sys, notify=@signals.signal({ "on": true, "asked": true, "push": true, "show": [] })) |> ignore
   assert_eq(named(calls, "push.register").length(), 0)
   assert_eq(named(calls, "push.unregister").length(), 0)
   let calls2 : Array[Made] = []
   let sys2 = fake_system()
-  notify_core(calls2, sys2, notify=Ref({ "on": false, "asked": true, "push": false, "show": [] })) |> ignore
+  notify_core(calls2, sys2, notify=@signals.signal({ "on": false, "asked": true, "push": false, "show": [] })) |> ignore
   assert_eq(named(calls2, "push.unregister").length(), 1)
   let calls3 : Array[Made] = []
   let sys3 = fake_system()
   sys3.token = "tok-1"
-  notify_core(calls3, sys3, notify=Ref({ "on": true, "asked": true, "push": true, "show": [] })) |> ignore
+  notify_core(calls3, sys3, notify=@signals.signal({ "on": true, "asked": true, "push": true, "show": [] })) |> ignore
   let reg = named(calls3, "push.register")
   assert_eq(reg.length(), 1)
   assert_true(reg[0].params.stringify().contains("\"token\":\"tok-1\""))
@@ -333,7 +333,7 @@ test "pushes: none registered without a token, taken off while off; a token regi
   let sys4 = fake_system()
   sys4.token = "ab12"
   sys4.service = "apns-sandbox"
-  notify_core(calls4, sys4, notify=Ref({ "on": true, "asked": true, "push": true, "show": [] })) |> ignore
+  notify_core(calls4, sys4, notify=@signals.signal({ "on": true, "asked": true, "push": true, "show": [] })) |> ignore
   let reg = named(calls4, "push.register")
   assert_eq(reg.length(), 1)
   assert_eq(reg[0].params, { "kind": "apns", "token": "ab12", "sandbox": true })
@@ -342,7 +342,7 @@ test "pushes: none registered without a token, taken off while off; a token regi
   let sys5 = fake_system()
   sys5.token = "{\"endpoint\":\"https://push.example/e1\",\"expirationTime\":null,\"keys\":{\"p256dh\":\"pk\",\"auth\":\"au\"}}"
   sys5.service = "web"
-  notify_core(calls5, sys5, notify=Ref({ "on": true, "asked": true, "push": true, "show": [] })) |> ignore
+  notify_core(calls5, sys5, notify=@signals.signal({ "on": true, "asked": true, "push": true, "show": [] })) |> ignore
   let reg = named(calls5, "push.register")
   assert_eq(reg.length(), 1)
   assert_eq(reg[0].params, {
@@ -356,14 +356,15 @@ test "pushes: none registered without a token, taken off while off; a token regi
 test "settings: notifications switched off on 通知's page, the core keeps it; on again, the system asked" {
   let calls : Array[Made] = []
   let sys = fake_system()
-  let notify : Ref[Json] = Ref({ "on": true, "asked": true, "push": true, "show": [] })
+  let notify : @signals.Signal[Json] = @signals.signal({ "on": true, "asked": true, "push": true, "show": [] })
   let t = notify_core(calls, sys, notify~)
   open_setting("home")
   t.draw()
   t.run_for(@ui.move_most_ms)
-  // the list's row (below the fold on a 844 high screen: the page at its end) opens their page
-  t.scroll_to_end()
-  t.draw()
+  // the list's row (below the fold on a 844 high screen: the page at its end, the wheel turned down past it, as long as
+  // its notches take to come) opens their page
+  t.wheel(195.0, 400.0, 2000.0)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("通知")
   t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == Setting(@settings.Route::Notifications))
@@ -375,8 +376,8 @@ test "settings: notifications switched off on 通知's page, the core keeps it; 
   // switched at once, a spinner while the core has not answered: not switched again meanwhile
   t.tap_text("横幅")
   assert_eq(named(calls, "notify.set").length(), 1)
-  notify.val = { "on": false, "asked": true, "push": false, "show": [] }
-  (set[0].done)(Ok(notify.val))
+  notify.set({ "on": false, "asked": true, "push": false, "show": [] })
+  (set[0].done)(Ok(notify.get()))
   t.draw()
   assert_eq(named(calls, "push.unregister").length(), 1)
   let asks = sys.asks
@@ -399,22 +400,24 @@ test "settings: notifications switched off on 通知's page, the core keeps it; 
 test "settings: usage statistics and error reports switched off on this device, on again; no row where none are sent" {
   let calls : Array[Made] = []
   let sys = fake_system()
-  let notify : Ref[Json] = Ref({ "on": true, "asked": true, "push": true, "show": [] })
+  let notify : @signals.Signal[Json] = @signals.signal({ "on": true, "asked": true, "push": true, "show": [] })
   let t = notify_core(calls, sys, notify~)
   // (a host that sends none: a build without PostHog's key, macOS, the web)
   open_setting("about")
   t.draw()
   t.run_for(@ui.move_most_ms)
-  t.scroll_to_end()
-  t.draw()
+  // (关于's foot, the wheel turned down past it)
+  t.wheel(195.0, 400.0, 2000.0)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("发送使用统计和错误报告") is None)
   // Android's (Crashes.reporting, kept in the app's prefs): on until turned off
   let on = Ref(true)
   let told : Array[Bool] = []
   reporting_host.set(Some({ get: fn() { on.val }, set: fn(v) { told.push(v); on.val = v } }))
   t.draw()
-  t.scroll_to_end()
-  t.draw()
+  // (关于's foot, the wheel turned down past it)
+  t.wheel(195.0, 400.0, 2000.0)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("不会包含你的聊天内容") is Some(_))
   t.click(Switch, label="发送使用统计和错误报告")
   // off: what Crashes.send then sends is nothing (Crashes.java: !reporting, no batch goes)

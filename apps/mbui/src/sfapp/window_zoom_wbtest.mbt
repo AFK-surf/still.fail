@@ -140,11 +140,11 @@ test "window zoom: command plus works while recording a different shortcut only 
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
   let width = t.ctx().window_size().0
-  @settings.keys_recording.val = "chat.new"
+  @settings.keys_recording.set("chat.new")
   t.key(@ui.key_of_char('+'), mods=@ui.mod_cmd | @ui.mod_shift_key)
   t.frame()
   assert_true((t.ctx().window_size().0 - width).abs() < 0.01)
-  @settings.keys_recording.val = ""
+  @settings.keys_recording.set("")
   t.key(@ui.key_of_char('+'), mods=@ui.mod_cmd | @ui.mod_shift_key)
   t.frame()
   assert_true(t.ctx().window_size().0 < width)

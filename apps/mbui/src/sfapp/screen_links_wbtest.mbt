@@ -33,7 +33,7 @@ fn screen_links_core(
     cancel: fn(id) { cancelled.push(id) },
     topic: fn(name, params) { over(name, (base.topic)(name, params)) },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t
@@ -95,7 +95,7 @@ test "a link alone in a paragraph is its card, a bare one in a sentence reads as
   // 共享调试 bare in a sentence: its title, a link; alone: its card
   assert_true(t.run_rects("共享调试").length() > 0)
   assert_eq(t.run_rects("https://still.fail/w/ws1/s/st1/adb").length(), 0)
-  assert_true(t.find("允许 Studio 的 agent 调试此设备？") is Some(_))
+  assert_true(t.find("允许 Willow 的 agent 调试此设备？") is Some(_))
   // a link to anywhere else as it was
   assert_true(t.run_rects("https://example.com/login-v2").length() > 0)
   // the title in the sentence opens the link, the card too, as a tap on the link would
@@ -129,7 +129,7 @@ test "a link to the chat's web service alone in a paragraph is its card: its sta
   // (clear of the composer over the list's foot, where a tap is the composer's)
   middle_words(t, "打开定价页")
   // the link's own words its title, over the service's station with its port and how it stands, as the core says
-  assert_true(t.find("Studio :5173 · 在线") is Some(_))
+  assert_true(t.find("Willow :5173 · 在线") is Some(_))
   assert_eq(t.run_rects("打开定价页").length(), 0, msg="a card, not a link in the words")
   t.tap_text("打开定价页")
   t.frame()
@@ -203,7 +203,7 @@ test "共享调试's card: lent from the chat where the phone has all it takes; 
   assert_eq(started.length(), 1)
   guard started[0].1 is Object(m) else { fail("adb.start's params") }
   assert_eq(m.get("station"), Some(Json::string("ws1/st1")))
-  assert_eq(m.get("name"), Some(Json::string("Studio")))
+  assert_eq(m.get("name"), Some(Json::string("Willow")))
   assert_eq(t.opened(), [])
   for c in t.native_calls() {
     t.answer_native(c.0, {})
@@ -244,7 +244,7 @@ test "共享调试's card while it is lent there: how it stands, 停止共享 st
   })
   t.wheel(195.0, 400.0, 2000.0)
   t.run_for(@ui.move_most_ms)
-  assert_true(t.find("正在共享调试给 Studio") is Some(_))
+  assert_true(t.find("正在共享调试给 Willow") is Some(_))
   assert_true(t.find("共享中 · 剩余 58 分钟") is Some(_))
   guard adb_button_at(t, "停止共享") is Some((x, y)) else { fail("the card's 停止共享") }
   t.tap(x, y)
@@ -347,7 +347,7 @@ test "a tall browser picture fills its preview from the top of the page" {
 
 ///|
 test "a browser's card keeps its size as the browser is opened and closed on a small screen" {
-  let size = Ref((1280.0, 800.0))
+  let size = @signals.signal((1280.0, 800.0))
   let streams = []
   let cancelled = []
   let calls : Array[Made] = []
@@ -355,8 +355,8 @@ test "a browser's card keeps its size as the browser is opened and closed on a s
     guard name == "screenCard" && topic.value is Some(Object(card)) && text(topic.value, "kind") == "browser" &&
       !flag(topic.value, "gone") else { topic }
     let next = card.copy()
-    next["width"] = Json::number(size.val.0)
-    next["height"] = Json::number(size.val.1)
+    next["width"] = Json::number(size.get().0)
+    next["height"] = Json::number(size.get().1)
     { ..topic, value: Some(Json::object(next)) }
   })
   scroll_to_words(t, "发布清单预览")
@@ -369,7 +369,7 @@ test "a browser's card keeps its size as the browser is opened and closed on a s
   assert_eq(gap(), before, msg="the picture arriving does not change the card")
   // The browser is laid out for a small screen while its viewer is open. Its reported viewport changes in the
   // screen list, including while the chat is still visible; it goes back when the viewer closes.
-  size.val = (390.0, 760.0)
+  size.set((390.0, 760.0))
   t.frame()
   assert_eq(gap(), before, msg="the browser adapting to its viewer does not resize its card")
   // A new, portrait picture can arrive too; it replaces the old one inside the same card.
@@ -384,30 +384,30 @@ test "a browser's card keeps its size as the browser is opened and closed on a s
   t.back()
   t.run_for(@ui.move_most_ms)
   assert_eq(gap(), before, msg="the card has the same size on returning to the chat")
-  size.val = (1280.0, 800.0)
+  size.set((1280.0, 800.0))
   t.frame()
   assert_eq(gap(), before, msg="the browser returning to its former size does not resize its card")
-  size.val = (0.0, 0.0)
+  size.set((0.0, 0.0))
   t.frame()
   assert_eq(gap(), before, msg="the screen's size not yet known does not resize its card")
 }
 
 ///|
 test "a simulator's preview follows the simulated screen when it turns" {
-  let size = Ref((390.0, 844.0))
+  let size = @signals.signal((390.0, 844.0))
   let t = screen_links_core([], [], [], over=fn(name, topic) {
     guard name == "screenCard" && topic.value is Some(Object(card)) && text(topic.value, "kind") == "browser" &&
       !flag(topic.value, "gone") else { topic }
     let next = card.copy()
     next["kind"] = Json::string("simulator")
-    next["width"] = Json::number(size.val.0)
-    next["height"] = Json::number(size.val.1)
+    next["width"] = Json::number(size.get().0)
+    next["height"] = Json::number(size.get().1)
     { ..topic, value: Some(Json::object(next)) }
   })
   scroll_to_words(t, "发布清单预览")
   middle_words(t, "发布清单预览")
   let before = preview_gap(t)
-  size.val = (844.0, 390.0)
+  size.set((844.0, 390.0))
   t.frame()
   assert_true(preview_gap(t) < before, msg="the landscape simulator has a shorter preview")
 }

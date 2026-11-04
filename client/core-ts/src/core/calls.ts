@@ -145,7 +145,7 @@ export type Call =
   | { kind: "historyTool"; name: string; call: string; result: string | null; failed: boolean; said: boolean }
   /// Where a chat's find goes (chat-find.ts): what was found, where the reader is, which way, what the view shows.
   | { kind: "chatFindGo"; hits: FindHit[]; at: FindAt | null; by: -1 | 0 | 1; from: number | null; to: number | null; drawn: Record<string, number> }
-  | { kind: "words"; what: "ref.at" | "ref.before" | "ref.marks" | "ref.pasted" | "paste.info" | "drive.check"; text: string; caret: number; here: string }
+  | { kind: "words"; what: "ref.at" | "ref.before" | "ref.marks" | "ref.words" | "ref.pasted" | "paste.info" | "drive.check"; text: string; caret: number; here: string }
   /// A face's files on a device that keeps none of its own (font-files.ts): fetched, kept, given back.
   | { kind: "fonts"; call: FontsCall }
   /// A ```mermaid block's chart as SVG (mermaid.ts), in the app's colours, `width` wide where it fills its width.
@@ -295,7 +295,7 @@ const S = "string" as const;
 const FILE_OPEN_PART = 4 * 1024 * 1024;
 
 /// The vault's calls (views/vault.ts).
-export const VAULT_CALLS = ["state", "lock", "setup", "create", "delete", "addDevice", "putItem", "deleteItem", "open", "recover", "approve", "deny", "setLasts", "migrate"];
+export const VAULT_CALLS = ["state", "lock", "setup", "create", "delete", "addDevice", "ask", "hidePrompt", "prompts", "putItem", "deleteItem", "open", "recover", "approve", "deny", "setLasts", "migrate"];
 
 /// The workspace lock's calls (views/lock.ts).
 export const LOCK_CALLS = ["state", "open", "toggle", "dismiss", "addStation", "joinStation", "renew", "removeDevice", "disable", "pair", "pairCode", "pairCancel"];
@@ -797,6 +797,7 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
     case "ref.at":
     case "ref.before":
     case "ref.marks":
+    case "ref.words":
     case "ref.pasted":
     case "paste.info":
     case "drive.check": {
@@ -857,6 +858,8 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       ]);
       return { kind: "commandsFind", query: p.query as string, offered: p.offered as unknown[] };
     }
+    case "fonts.share":
+      return { kind: "fonts", call: { kind: "share", file: read(params, [["file", S, "req"]]).file as string } };
     case "fonts.fetch":
     case "fonts.preview": {
       const id = read(params, [["id", S, "req"]]).id as string;

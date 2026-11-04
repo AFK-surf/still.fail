@@ -55,10 +55,11 @@ static void mbf_discard_open(void) {
 }
 
 // A film begun for `path`, `w` × `h` pixels (to even numbers, as H.264's 4:2:0 has them),
-// `fps` frames a second: 1, or 0 with what went wrong said.
-int32_t mbf_open(moonbit_string_t path, int32_t w, int32_t h, int32_t fps) {
+// `fps` frames a second: 1, or 0 with what went wrong said. (mbf_open_path: the same for a host that is not MoonBit's,
+// the Wasm film's, tools/wasm-film/native_host.m)
+int32_t mbf_open_path(NSString *path, int32_t w, int32_t h, int32_t fps) {
   @autoreleasepool {
-    NSURL *url = [NSURL fileURLWithPath:ns(path)];
+    NSURL *url = [NSURL fileURLWithPath:path];
     film_destination = url;
     NSString *temporary = [NSString stringWithFormat:@".%@.%@.tmp.mp4", url.lastPathComponent, NSUUID.UUID.UUIDString];
     film_temporary = [[url URLByDeletingLastPathComponent] URLByAppendingPathComponent:temporary];
@@ -113,6 +114,10 @@ int32_t mbf_open(moonbit_string_t path, int32_t w, int32_t h, int32_t fps) {
     [writer startSessionAtSourceTime:kCMTimeZero];
     return 1;
   }
+}
+
+int32_t mbf_open(moonbit_string_t path, int32_t w, int32_t h, int32_t fps) {
+  @autoreleasepool { return mbf_open_path(ns(path), w, h, fps); }
 }
 
 // Publish a completed take by an atomic rename, or discard an unsuccessful one. The old destination is untouched on

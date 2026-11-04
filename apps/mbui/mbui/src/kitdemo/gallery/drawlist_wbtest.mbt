@@ -1,10 +1,10 @@
 ///|
-/// The controls page as kept from mini1 (textrec_mini1_controls_wbtest.mbt), its last frame drawn again.
+/// The controls page as kept on a Mac (textrec_mac_capture_controls_wbtest.mbt), its last frame drawn again.
 fn controls_kept() -> @ui.Tester {
   // (the page's own values as the run began: not those another test left)
   reset()
-  let t = @ui.Tester::new(fn(c) { gallery(c, "controls") }, w=960.0, h=720.0, text=run_mini1_controls, scale=1.0, time=7950001676.833502 - 16.0, stable=true)
-  t.replay_frames(run_mini1_controls) |> ignore
+  let t = @ui.Tester::new(fn(c) { gallery(c, "controls") }, w=960.0, h=720.0, text=run_mac_capture_controls, scale=1.0, time=7950001676.833502 - 16.0, stable=true)
+  t.replay_frames(run_mac_capture_controls) |> ignore
   t
 }
 
@@ -32,7 +32,7 @@ test "the controls page's last frame as a draw list: a line an instance, every g
 }
 
 ///|
-/// A page with words and a picture (`pic`: its source), and `extra` words above them when not "", on mini1's kept text.
+/// A page with words and a picture (`pic`: its source), and `extra` words above them when not "", over the Mac’s kept text.
 fn with_picture(pic : Ref[String], extra? : Ref[String] = Ref("")) -> @ui.Tester {
   @ui.Tester::new(
     fn(c) {
@@ -47,7 +47,7 @@ fn with_picture(pic : Ref[String], extra? : Ref[String] = Ref("")) -> @ui.Tester
     },
     w=200.0,
     h=200.0,
-    text=run_mini1_controls,
+    text=run_mac_capture_controls,
     scale=1.0,
     images=[("one.png", 80, 80), ("two.png", 80, 80)],
   )

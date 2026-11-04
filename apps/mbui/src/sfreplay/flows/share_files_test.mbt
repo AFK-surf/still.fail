@@ -12,7 +12,7 @@ test "93-share-files" {
     f.see("发到")
     f.run_to(@kit.sheet_rest("sf-present"))
     f.see("e2e-photo.jpg")
-    f.see("新 chat")
+    f.see("新建对话")
     // the sheet's own row, beside the list's under it
     f.see_n(2, "端到端测试")
     f.tap("端到端测试")

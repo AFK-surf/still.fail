@@ -185,7 +185,7 @@ export async function attach(hub: Hub, key: string, paths: string[], into: strin
   const dir = join(target.workspace, "uploads");
   mkdirSync(dir, { recursive: true });
   // Copied off the station's thread: a large file, or one read back from disk on a machine short of memory, held it
-  // for up to 10 seconds a post (ccvm, 2026-10-28).
+  // for up to 10 seconds a post (a station, 2026-10-28).
   const out: Attachment[] = [];
   for (const given of paths) {
     const path = isAbsolute(given) ? given : join(row.workspace, given);
@@ -212,6 +212,7 @@ export async function attach(hub: Hub, key: string, paths: string[], into: strin
 
 /// chat_post: a message to one of the session's conversations, maybe with files and a card, maybe ending its turn.
 export async function chatPost(hub: Hub, key: string, args: Args): Promise<string> {
+  const identity = actorOf(hub, key)?.messageIdentity() ?? undefined;
   const { store } = hub;
   if (args.withdraw !== undefined) {
     if (Object.keys(args).some((k) => k !== "to" && k !== "withdraw")) throw new Error("withdraw uses only to and withdraw; post updates and record your ending separately");
@@ -250,11 +251,15 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
   const thread = target(hub, key, args.to);
   if (store.manuallyArchived(thread.thread.id)) throw new Error(`${threadAddress(thread.thread.channel, thread.thread.threadTs)} was archived by hand: it takes no messages until someone restores it`);
   const chat = hub.chat(thread.connect);
-  if (card !== null && thread.thread.surface !== STILLFAIL_SURFACE && !(chat.cards === true && (card.type === "options" || card.type === "text"))) {
+  // A login card on a platform: a field for its page's code, so only for a login of this station that waits for one.
+  const loginHere = card?.type === "login" && chat.loginCards === true && card.station === undefined && hub.logins?.pastes(String(card.login)) === true;
+  if (card !== null && thread.thread.surface !== STILLFAIL_SURFACE && !(chat.cards === true && (card.type === "options" || card.type === "text")) && !loginHere) {
     throw new Error(
-      chat.cards === true
-        ? 'a login card is shown only in still.fail chats (EMBER/…); here post its link in the text and end with kind "need_human"'
-        : 'cards (options, a text field) are not shown here; write the choices or the question in the text and end with kind "need_human"',
+      card.type === "login" && chat.loginCards === true
+        ? 'a login card is shown here only for a login of this station that waits for a code from its page (paste: true); otherwise post its link in the text and end with kind "need_human"'
+        : chat.cards === true
+          ? 'a login card is shown only in still.fail chats (EMBER/…); here post its link in the text and end with kind "need_human"'
+          : 'cards (options, a text field) are not shown here; write the choices or the question in the text and end with kind "need_human"',
     );
   }
   if (card !== null && text === "") throw new Error("text is required with a card: what it asks and the facts it turns on, so it can be answered from this message alone");
@@ -301,7 +306,7 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
         text = kept;
       }
     } else posted = await chat.post(here, text, files, card);
-    [n] = store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: key, text, attachments: files, declared: kind ? declaredStr(kind) : null, card });
+    [n] = store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: key, text, attachments: files, declared: kind ? declaredStr(kind) : null, card, agentIdentity: identity });
   }
   const offered = card !== null ? `${cardSaid(card)} Card message ts: ${posted}.` : "";
   hub.shared(thread.thread.id, n, key, text);
@@ -390,7 +395,7 @@ export async function chatState(hub: Hub, key: string, args: Args): Promise<stri
     if (what === "") throw new Error("for is required for waiting: what you wait for, in a few words people read");
     if (args.watch !== undefined && typeof args.watch !== "boolean") throw new Error("watch must be true or false");
     watch = args.watch === true;
-    if (watch && !hub.store.listJobs(key).some((j) => j.watch && j.state === "running")) {
+    if (watch && !hub.store.hasSessionActiveWatch(key)) {
       throw new Error("watch: true is for waiting on a watch of yours that runs (job_start with watch); none does: leave it out, or start the watch first");
     }
     const whole = Number.isNaN(seconds) ? 0 : Math.trunc(Math.max(0, seconds));
@@ -491,8 +496,11 @@ export function slackConnectOf(hub: Hub, key: string, bot: string | null): strin
 
 /// slack_api: a Slack Web API call from session `key`, as the bot of `via` (else `slackConnectOf`). Writes keep to the
 /// threads rule: not in a thread another session of the same bot takes part in; one it writes in becomes its own.
-export async function slackApi(hub: Hub, key: string, method: string, params: Record<string, Json>, via: string | null, bot: string | null = null): Promise<string> {
+/// `saveFiles`: the files in its answer also go into the session's uploads, as a file sent to it does, and the answer
+/// starts with their paths: the addresses Slack gives open only with the bot's token, which no agent holds.
+export async function slackApi(hub: Hub, key: string, method: string, params: Record<string, Json>, via: string | null, bot: string | null = null, saveFiles = false): Promise<string> {
   const { store } = hub;
+  const identity = actorOf(hub, key)?.messageIdentity() ?? undefined;
   if (!isSlackMethod(method)) throw new Error(`not a Slack method: ${JSON.stringify(method)}`);
   if (["admin.", "apps.", "oauth."].some((p) => method.startsWith(p)) || method === "auth.revoke") throw new Error(`${method} is not for agents: it manages the Slack app itself`);
   const connect = via ?? slackConnectOf(hub, key, bot);
@@ -523,12 +531,13 @@ export async function slackApi(hub: Hub, key: string, method: string, params: Re
       const thread = store.openThread(surface, channel, root, null, key);
       if (store.joinThread(thread.id, key, connect)) log.info("hub", "session took part in a thread through slack_api", { session: key, channel, threadTs: root, method });
       if (resultTs !== null && method === "chat.postMessage") {
-        const [n] = store.insertMessage({ thread: thread.id, ts: resultTs, authorKind: "agent", author: key, text: postedText });
+        const [n] = store.insertMessage({ thread: thread.id, ts: resultTs, authorKind: "agent", author: key, text: postedText, agentIdentity: identity });
         hub.shared(thread.id, n, key, postedText);
       }
     }
   }
-  const text = JSON.stringify(result);
+  const saved = saveFiles ? await hub.fetched(chat, key, "", chat.answerFiles?.(result)) : null;
+  const text = JSON.stringify(saved === null ? result : { saved_files: saved.attachments.map(({ name, path, size }) => ({ name, path, size })), not_saved: saved.text, ...result });
   const chars = Array.from(text);
   return chars.length > 60_000 ? `${chars.slice(0, 60_000).join("")}… (cut at 60000 characters; ask for less, e.g. a smaller limit)` : text;
 }

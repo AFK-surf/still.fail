@@ -19,6 +19,7 @@ import { policyView } from "../sessions/archive-policy.ts";
 import { agentEnvView } from "./routes/agent-env.ts";
 import { networkView } from "../mesh/settings.ts";
 import { contextView } from "./routes/context.ts";
+import { CONTEXT_LEAST, CONTEXT_RUNTIMES } from "../sessions/context-cap.ts";
 import { diagnosticsView } from "./routes/diagnostics.ts";
 import type { ConnectKind } from "../connects/connections.ts";
 
@@ -54,6 +55,9 @@ export function meshStatus(cloud: Cloud, viewer?: Viewer): Record<string, unknow
     workspace: m?.workspace_name ?? s.workspace_name ?? null,
     workspaceId: m?.workspace ?? s.workspace ?? null,
     name: m?.name ?? s.name ?? null,
+    // Whether it hears still.fail cloud now: cut off from it, it goes on with the stations it was told last, and the
+    // pages say so.
+    reached: cloud.reached,
   };
   if (s.removed_at !== undefined) v.removedAt = s.removed_at;
   return v;
@@ -80,6 +84,7 @@ async function keptMemory(d: OverviewDeps, pgids: number[]): Promise<Map<number,
 
 /// The data disk's room: what clients warn of when it runs low.
 function diskRoom(path: string): unknown {
+  if (process.env.STILLFAIL_TEST_HOST === "1") return { freeBytes: 50_000_000_000, totalBytes: 100_000_000_000 };
   try {
     const s = statfsSync(path);
     return { freeBytes: s.bavail * s.bsize, totalBytes: s.blocks * s.bsize };
@@ -91,8 +96,8 @@ function diskRoom(path: string): unknown {
 export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Promise<unknown> {
   const raw = d.config() ?? {};
   // What is of the viewer's workspace (docs/multi-workspace.md): its chats, and the connects added in it.
-  // (Counted by connect from an index, not every session's row; the processes not cold are the hub's few.)
-  const counted = d.store.sessionCounts().filter((c) => sees(viewer, c.ws));
+  // (Counted by connect from the viewer's workspace in the index; the processes not cold are the hub's few.)
+  const counted = d.store.sessionCounts(viewer);
   const sessionsOf = (connect: string | null) => counted.reduce((n, c) => (connect === null || c.connect === connect ? n + c.n : n), 0);
   const states = [...d.hub.processes()].filter(([key]) => sees(viewer, d.store.getSession(key)?.ws ?? null)).map(([, state]) => state);
   // The agents' runtime processes; background jobs' groups are recorded too (to be reaped), but they are jobs.
@@ -132,9 +137,13 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     mesh: meshStatus(d.cloud, viewer),
     connects,
     profiles,
+    sessionRuntimeChange: true,
     // Who made each model its profiles run, and its series, as the model catalog says (accounts/catalog.ts): the
     // clients group and mark models by them, and by the names alone where it says none.
     modelMakers: modelMakers(profiles),
+    // What a chat can be kept to less context on (sessions/context-cap.ts): the runtimes that take it, and each model's
+    // whole window as the model catalog says it, the most it can be. A station from before says none: none offered.
+    contextCaps: { runtimes: CONTEXT_RUNTIMES, least: CONTEXT_LEAST, windows: modelWindows(profiles) },
     footprint: null,
     processes: processes.map((p) => {
       const kb = memory.get(p.pgid);
@@ -182,6 +191,17 @@ export function modelMakers(profiles: { models?: unknown }[]): Record<string, { 
   return out;
 }
 
+/// Each model its profiles run (as they spell it) with its context window, as the model catalog says it; those it does
+/// not say left out.
+export function modelWindows(profiles: { models?: unknown }[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const m of profiles.flatMap((p) => (Array.isArray(p.models) ? p.models : []))) {
+    const window = typeof m === "string" && !(m in out) ? facts(m)?.context : undefined;
+    if (window !== undefined && window > 0) out[m as string] = window;
+  }
+  return out;
+}
+
 function withModules(d: OverviewDeps): { modules?: { id: string; running: boolean }[] } {
   const modules = d.modules?.() ?? [];
   return modules.length === 0 ? {} : { modules };
@@ -223,12 +243,23 @@ const DECISIONS_KEPT_MS = 60_000;
 const decisionsKept = new WeakMap<object, Map<string, { at: number; stamp: string; view: unknown }>>();
 
 function madeDecisionsView(d: OverviewDeps, viewer: Viewer): unknown {
-  const view = d.accounts!.automaticDecisionsView(viewer);
-  const mine = (session: unknown) => typeof session === "string" && sees(viewer, d.store.getSession(session)?.ws ?? null);
+  const visible = new Map<string, boolean>();
+  const mine = (session: unknown) => {
+    if (typeof session !== "string") return false;
+    let isMine = visible.get(session);
+    if (isMine === undefined) visible.set(session, (isMine = sees(viewer, d.store.getSession(session)?.ws ?? null)));
+    return isMine;
+  };
+  const titles = new Map<string, string>();
+  const title = (session: string) => {
+    let named = titles.get(session);
+    if (named === undefined) titles.set(session, (named = chatTitleOf(d.store, session)));
+    return named;
+  };
+  const view = d.accounts!.automaticDecisionsView(viewer, { includePolicy: false, visible: mine, title });
   const manages = viewer.role === "owner" || viewer.role === "admin";
-  if (Array.isArray(view?.recent)) view.recent = view.recent.filter((row: any) => mine(row?.session));
-  if (view?.policy !== undefined || (manages && viewer.home === false)) {
-    view.policy = policyView(d.store, viewer.home === false ? viewer.workspace : null, mine, (session) => chatTitleOf(d.store, session));
+  if (manages) {
+    view.policy = policyView(d.store, viewer.home === false ? viewer.workspace : null, mine, title);
     view.canEditPolicy = manages;
   }
   return view;

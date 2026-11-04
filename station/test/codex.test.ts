@@ -5,7 +5,9 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import fs from "node:fs";
 import { writeFile } from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
@@ -14,6 +16,7 @@ import { CodexDriver, classifyCodexError, type CodexDriverOptions } from "../src
 import { allLeft, existingRunners } from "../src/agents/runner.ts";
 import type { OpenOptions, Profile, RuntimeEvent } from "../src/agents/runtime.ts";
 import { readAgentEnvFrom } from "../src/ops/agent-env.ts";
+import { transcriptPaths } from "../src/read/transcript.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
 process.env.PATH = `${fake}${delimiter}${process.env.PATH}`;
@@ -80,6 +83,135 @@ const stdin = (dump: string) => readFileSync(`${dump}.stdin`, "utf8").trim().spl
 
 // Each test has its own driver, profile and runners: they run side by side.
 describe("the Codex driver", { concurrency: true }, () => {
+  for (const resumed of [false, true]) test(`a ${resumed ? "resumed" : "new"} thread uses the transcript path Codex gave, before and after the file appears`, async () => {
+    const d = driver();
+    const p = profile();
+    p.env = { ...(p.env as Record<string, string>), FAKE_ROLLOUT: "1" };
+    const other = join(data, `unrelated-${p.id}`, "transcripts", "codex");
+    for (let i = 0; i < 100; i++) mkdirSync(join(other, String(i)), { recursive: true });
+    const session = await d.open(options(p, resumed ? { resume: "th-existing" } : {}), listen().push);
+    const path = join(p.home, "sessions", "2026", "11", "03", `rollout-${session.id()}.jsonl`);
+    const listed: string[] = [];
+    const real = fs.readdirSync;
+    fs.readdirSync = ((dir: fs.PathLike, ...args: unknown[]) => (listed.push(String(dir)), (real as (...xs: unknown[]) => unknown)(dir, ...args))) as typeof real;
+    syncBuiltinESMExports();
+    try {
+      assert.deepEqual(transcriptPaths("codex", join(data, `unrelated-${p.id}`), [p.home], [session.id()], [], { anywhere: false }), { paths: [], current: false });
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, "");
+      assert.deepEqual(transcriptPaths("codex", join(data, `unrelated-${p.id}`), [p.home], [session.id()], [], { anywhere: false }), { paths: [path], current: true });
+      assert.deepEqual(listed, [], "unrelated rollout directories are not read");
+    } finally {
+      fs.readdirSync = real;
+      syncBuiltinESMExports();
+      await session.dispose();
+    }
+  });
+
+  test("a thread taken up from an older station learns its transcript path", async () => {
+    const first = driver();
+    const p = profile();
+    p.env = { ...(p.env as Record<string, string>), FAKE_ROLLOUT_ON_READ: "1" };
+    const dataDir = join(data, `old-station-${p.id}`);
+    const other = join(dataDir, "transcripts", "codex");
+    for (let i = 0; i < 100; i++) mkdirSync(join(other, String(i)), { recursive: true });
+    const one = await first.open(options(p), () => {});
+    const path = join(p.home, "sessions", "2026", "11", "03", `rollout-${one.id()}.jsonl`);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, "");
+    const snapshot = JSON.parse(JSON.stringify(one.snapshot()));
+    assert.equal(snapshot.transcriptPath, undefined);
+    first.detach();
+    await allLeft();
+    const next = driver();
+    const events = listen();
+    const taken = await next.adopt(options(p, { resume: one.id() }), snapshot, events.push);
+    await taken.prompt("say:after");
+    await events.until(ended(1));
+    const listed: string[] = [];
+    const real = fs.readdirSync;
+    fs.readdirSync = ((dir: fs.PathLike, ...args: unknown[]) => (listed.push(String(dir)), (real as (...xs: unknown[]) => unknown)(dir, ...args))) as typeof real;
+    syncBuiltinESMExports();
+    try {
+      assert.deepEqual(transcriptPaths("codex", dataDir, [p.home], [one.id()], [], { anywhere: false }), { paths: [path], current: true });
+      assert.deepEqual(listed, [], "taking up an existing thread does not scan unrelated rollouts");
+    } finally {
+      fs.readdirSync = real;
+      syncBuiltinESMExports();
+      await taken.dispose();
+    }
+  });
+
+  test("a text-only request has no shell, MCP server or writable environment", async () => {
+    const d = driver();
+    const p = profile();
+    const session = await d.open(options(p, { textOnly: true }), listen().push);
+    const start = stdin(p.dump).find((m) => m.method === "thread/start");
+    assert.equal(start.params.sandbox, "read-only");
+    assert.equal(start.params.ephemeral, true);
+    assert.deepEqual(start.params.environments, []);
+    assert.equal(start.params.config["features.shell_tool"], false);
+    assert.equal(start.params.config["features.unified_exec"], false);
+    assert.equal(start.params.config["features.view_image"], false);
+    assert.equal(start.params.config["features.goals"], false);
+    assert.deepEqual(start.params.config.mcp_servers, {});
+    assert.ok(stdin(p.dump).some((m) => m.method === "mcpServerStatus/list"));
+    assert.ok(!stdin(p.dump).some((m) => m.method === "config/read"), "MCP credentials are not read into the runner log");
+    await session.dispose();
+  });
+
+  test("a text-only request refuses a server that still exposes MCP tools", async () => {
+    const d = driver();
+    const p = profile();
+    p.env = { ...(p.env as Record<string, string>), FAKE_MCP_UNAVOIDABLE: "1" };
+    await assert.rejects(d.open(options(p, { textOnly: true }), listen().push), /cannot open a text-only Codex session/);
+    assert.ok(!stdin(p.dump).some((m) => m.method === "turn/start"));
+  });
+
+  test("a text-only request disables configured MCP servers for its own thread", async () => {
+    const d = driver();
+    const p = profile();
+    p.env = { ...(p.env as Record<string, string>), FAKE_MCP_CONFIGURED: "1" };
+    const session = await d.open(options(p, { textOnly: true }), listen().push);
+    const start = stdin(p.dump).find((m) => m.method === "thread/start");
+    assert.deepEqual(start.params.config.mcp_servers, { configured: { enabled: false } });
+    await session.dispose();
+  });
+
+  test("a text-only request disables servers added by the working directory before sending any text", async () => {
+    const d = driver();
+    const p = profile();
+    p.env = { ...(p.env as Record<string, string>), FAKE_MCP_PROJECT: "1" };
+    const session = await d.open(options(p, { textOnly: true }), listen().push);
+    const requests = stdin(p.dump);
+    const starts = requests.filter((m) => m.method === "thread/start");
+    assert.equal(starts.length, 2);
+    assert.deepEqual(starts[1].params.config.mcp_servers, { configured: { enabled: false } });
+    assert.ok(requests.some((m) => m.method === "thread/unsubscribe"));
+    assert.ok(!requests.some((m) => m.method === "turn/start" || m.method === "config/read"));
+    await session.dispose();
+  });
+
+  test("an incomplete Codex is reported before it starts a turn and its status is refreshed", async () => {
+    let refreshed = 0;
+    const d = driver({
+      missingHost: async () => ({ binary: "/codex", helper: "/codex-code-mode-host" }),
+      incompleteInstallation: () => { refreshed++; },
+    });
+    const p = profile();
+    await assert.rejects(d.open(options(p), () => {}), /Codex.*缺少执行组件/);
+    assert.equal(refreshed, 1);
+    assert.equal(existsSync(p.dump), false, "the broken app-server is not started");
+  });
+
+  test("a text-only request does not need the code-mode host", async () => {
+    let probed = false;
+    const d = driver({ missingHost: async () => { probed = true; return { binary: "/codex", helper: "/codex-code-mode-host" }; } });
+    const session = await d.open(options(profile(), { textOnly: true }), listen().push);
+    assert.equal(probed, false);
+    await session.dispose();
+  });
+
   test("a new sign-in replaces the app-server after its running turn, and new requests wait for it", async () => {
     const d = driver();
     const p = profile();
@@ -182,10 +314,21 @@ describe("the Codex driver", { concurrency: true }, () => {
         model: "gpt-x",
       },
     });
+    // Its connection to the station's tools asked after first.
+    assert.deepEqual(sent[3], { id: 3, method: "mcpServerStatus/list", params: { threadId: session.id(), serverName: "stillfail", detail: "toolsAndAuthOnly" } });
     // Not a subscription: no service tier.
-    assert.deepEqual(sent[3], { id: 3, method: "turn/start", params: { threadId: session.id(), input: [{ type: "text", text: "cmd" }] } });
+    assert.deepEqual(sent[4], { id: 4, method: "turn/start", params: { threadId: session.id(), input: [{ type: "text", text: "cmd" }] } });
     await session.dispose();
     assert.equal(stdin(p.dump).at(-1).method, "thread/unsubscribe");
+  });
+
+  test("a session kept to less context starts its thread compacting at it", async () => {
+    const d = driver();
+    const p = profile();
+    const session = await d.open(options(p, { model: "gpt-x", context: 300_000 }), listen().push);
+    const start = stdin(p.dump).find((m) => m.method === "thread/start");
+    assert.equal(start.params.config.model_auto_compact_token_limit, 300_000);
+    await session.dispose();
   });
 
   test("another model and effort go with the next turn/start; back to a default takes a new start", async () => {
@@ -221,6 +364,15 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.equal(classifyCodexError({ usageLimitExceeded: null }), "rate_limit");
     assert.equal(classifyCodexError(null, "auth error: 401, auth error code: token_revoked"), "auth");
     assert.equal(classifyCodexError(null, "model not supported"), "model");
+    // Turned away with nothing said (2026-11-02, "unexpected status 403 Forbidden: "): refused, why not known; not the
+    // model's error. Its region said, or Cloudflare's page for a blocked address: where it comes from.
+    assert.equal(classifyCodexError({ responseStreamConnectionFailed: { httpStatusCode: 403 } }, "unexpected status 403 Forbidden: Unknown error"), "denied");
+    assert.equal(classifyCodexError("other", "unexpected status 403 Forbidden: "), "denied");
+    assert.equal(classifyCodexError({ responseStreamConnectionFailed: { httpStatusCode: 403 } }, "unexpected status 403 Forbidden: <!DOCTYPE html><title>Just a moment...</title>"), "blocked");
+    assert.equal(classifyCodexError({ responseStreamConnectionFailed: { httpStatusCode: 401 } }, "unexpected status 401 Unauthorized: "), "auth");
+    assert.equal(classifyCodexError({ responseStreamDisconnected: { httpStatusCode: null } }, "stream disconnected before completion"), "network");
+    assert.equal(classifyCodexError(null, "stream disconnected before completion: error sending request for url (https://chatgpt.com/backend-api/codex/responses)"), "network");
+    assert.equal(classifyCodexError("contextWindowExceeded", "Codex ran out of room in the model's context window"), "context");
   });
 
   test("abort interrupts the running turn by its id; steer adds to it, and is refused with nothing running", async () => {
@@ -288,6 +440,22 @@ describe("the Codex driver", { concurrency: true }, () => {
     const { events, push, until } = listen();
     const session = await d.open(options(p, { key: first.key, resume: before.id() }), push);
     assert.equal(session.id(), before.id());
+    await session.prompt("mcp");
+    await until(ended(1));
+    assert.deepEqual(deltas(events), ["connected"]);
+  });
+
+  test("a thread whose station tools failed starts no turn: opened again, resuming, it has them", async () => {
+    const d = driver();
+    const p = profile();
+    // Opened while the station's door was closed: its MCP connection failed, so its turns would have no station tools.
+    const first = options(p, { mcpUrl: "http://127.0.0.1:1/mcp" });
+    const { events, push, until } = listen();
+    const failed = await d.open(first, push);
+    await assert.rejects(failed.prompt("mcp"), /station's tools failed/);
+    assert.equal(failed.busy(), false);
+    await failed.dispose();
+    const session = await d.open(options(p, { key: first.key, resume: failed.id() }), push);
     await session.prompt("mcp");
     await until(ended(1));
     assert.deepEqual(deltas(events), ["connected"]);
@@ -370,6 +538,30 @@ describe("the Codex driver", { concurrency: true }, () => {
     await c.until(ended(1));
   });
 
+  test("a same-version replacement waits for its turn and starts a new app-server", async () => {
+    const d = driver({ installedVersion: async () => "1.0.0" });
+    const p = profile();
+    writeFileSync(`${p.dump}.version`, "1.0.0");
+    const a = listen();
+    const one = await d.open(options(p), a.push);
+    await one.prompt("hold:1");
+    await a.until((e) => deltas(e).length >= 1);
+
+    // A repaired installation can have the same version while its executable and helpers have changed.
+    await d.runtimeChanged(true);
+    const b = listen();
+    const next = d.open(options(p), b.push);
+    assert.equal(starts(p.dump).length, 1, "the running turn is not interrupted");
+    assert.equal(await one.steer("finish"), true);
+    await a.until(ended(1));
+    assert.equal(outcome(a.events).kind, "completed");
+    const two = await next;
+    assert.equal(starts(p.dump).length, 2);
+    await two.prompt("say:back");
+    await b.until(ended(1));
+    assert.equal(outcome(b.events).kind, "completed");
+  });
+
   test("an app-server whose output has grown long is replaced once its turn ends, its sessions opened again", async () => {
     // Every app-server has written more than this by its first turn's end.
     const d = driver({ outputLimit: 1 });
@@ -431,6 +623,7 @@ describe("the Codex driver", { concurrency: true }, () => {
     test(`a next driver takes the threads up ${crashed ? "after a crash (no snapshot)" : "from their snapshots"}: each turn ends once, no live event twice`, async () => {
       const first = driver();
       const p = profile();
+      p.env = { ...(p.env as Record<string, string>), FAKE_ROLLOUT: "1" };
       const a = listen();
       const a2 = listen();
       const one = await first.open(options(p), a.push);
@@ -443,7 +636,10 @@ describe("the Codex driver", { concurrency: true }, () => {
       // A request in flight as it lets go: its reply goes to the next driver, which drops it.
       const steering = one.steer("late");
       let snapshots: unknown[] = [null, null];
-      if (!crashed) snapshots = JSON.parse(JSON.stringify([one.snapshot(), two.snapshot()]));
+      if (!crashed) {
+        snapshots = JSON.parse(JSON.stringify([one.snapshot(), two.snapshot()]));
+        assert.equal((snapshots[0] as { transcriptPath: string }).transcriptPath, join(p.home, "sessions", "2026", "11", "03", `rollout-${one.id()}.jsonl`));
+      }
       first.detach();
       // (the station let go before the next takes up, as the hub waits: every line handled acknowledged)
       await allLeft();
@@ -483,6 +679,43 @@ describe("the Codex driver", { concurrency: true }, () => {
       assert.ok(!a.events.some((e) => e.type === "closed"));
     });
   }
+
+  // On a station (2026-11-02) a next station asked a profile's quota as it started: it took the app-server up as after a
+  // crash, from the station still handing over, which let go of the turn running on it.
+  test("a next driver takes no app-server up before the station before it is taken up: that one hears its turn to the end", { timeout: 60_000 }, async () => {
+    const first = driver();
+    const p = profile();
+    const a = listen();
+    const one = await first.open(options(p), a.push);
+    const gate = gates(p.dump, "early");
+    await one.prompt("gate:6:3:early");
+    await a.until((e) => deltas(e).length >= 3);
+    // The next station asks the profile's quota as it starts, before what the one before left is taken up: it does not
+    // so much as look for an app-server yet.
+    const taken = Promise.withResolvers<void>();
+    let looked = false;
+    const next = driver({ takenUp: taken.promise, installedVersion: async () => ((looked = true), null) });
+    const quota = next.rateLimits(p);
+    await new Promise((r) => setImmediate(r));
+    assert.equal(looked, false, "no app-server looked for before the station before is taken up");
+    await gate.open("a");
+    await eventually(gate.said);
+    await gate.open("b");
+    await a.until(ended(1));
+    assert.deepEqual(deltas(a.events), Array.from({ length: 6 }, (_, i) => `d${i} `), "all of its turn, to the station before");
+    // That one hands over: its snapshot, its runner let go; the next takes the session up from it, then the rest.
+    const snapshot = JSON.parse(JSON.stringify(one.snapshot()));
+    first.detach();
+    await allLeft();
+    const b = listen();
+    const again = await next.adopt(options(p, { resume: one.id() }), snapshot, b.push);
+    taken.resolve();
+    assert.deepEqual(await quota, { rateLimits: { primary: { usedPercent: 5 } } });
+    await again.prompt("say:after");
+    await b.until(ended(1));
+    assert.deepEqual(outcome(b.events), { kind: "completed" });
+    assert.equal(starts(p.dump).length, 1, "the same app-server");
+  });
 
   test("shutdown ends the app-servers and their runners", async () => {
     const d = new CodexDriver({ data, hostSkills: skills, caBundle: bundle });

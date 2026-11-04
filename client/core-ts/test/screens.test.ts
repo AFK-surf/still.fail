@@ -9,7 +9,7 @@ import { linkTarget } from "../src/asks.ts";
 import { parseCall } from "../src/core/calls.ts";
 import { CoreError } from "../src/error.ts";
 import { CLIP_PNG_MAX, CLIP_TEXT_MAX, FrameReader, ackFrame, clipboardFrame, configFrame, copiedFrame, inputFrame, keyframeFrame, lookFrame, readClientFrames, stateFrame, videoFrame, type ClientFrame, type StationFrame } from "../src/screen-frames.ts";
-import { LOOK_MS, checkInput, othersOf } from "../src/screens.ts";
+import { LOOK_MS, accessOf, checkInput, othersOf } from "../src/screens.ts";
 import { HostWire, type RequestHead, type ScreenAsk, type StationWire } from "../src/station/wire.ts";
 import type { FakeHost } from "../src/testing.ts";
 import { base64 } from "../src/util.ts";
@@ -19,6 +19,11 @@ import { base, started } from "./station-fixture.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
+
+test("desktop setup help crosses the screen state without accepting arbitrary links", () => {
+  assert.deepEqual(accessOf({ capture: false, control: false, help: "linux-desktop" }), { capture: false, control: false, help: "linux-desktop" });
+  assert.deepEqual(accessOf({ capture: false, control: false, help: "https://example.com" }), { capture: false, control: false });
+});
 
 /// Draws from a seed (xorshift): the same seed, the same cuts.
 function random(seed: number): () => number {
@@ -115,6 +120,7 @@ test("a_persons_input_is_checked_and_put_in_the_frame", () => {
   assert.deepEqual(checkInput({ t: "pointer", kind: "down", x: 1.5, y: -0.1, buttons: 1, extra: true }), { t: "pointer", kind: "down", x: 1, y: 0, buttons: 1 });
   assert.deepEqual(checkInput({ t: "key", kind: "up", key: "Enter", code: "Enter", mods: 9 }), { t: "key", kind: "up", key: "Enter", code: "Enter", mods: 9 });
   assert.deepEqual(checkInput({ t: "wheel", x: 0.5, y: 0.5, dx: 0, dy: -120 }), { t: "wheel", x: 0.5, y: 0.5, dx: 0, dy: -120 });
+  assert.deepEqual(checkInput({ t: "device", name: "rotate" }), { t: "device", name: "rotate" });
   for (const bad of [null, { t: "pointer", kind: "drag", x: 0, y: 0 }, { t: "pointer", kind: "down", x: Number.NaN, y: 0 }, { t: "key", kind: "down", key: "" }, { t: "text", text: "" }, { t: "paste" }]) {
     assert.throws(() => checkInput(bad), (e: J) => e.code === "invalid_params");
   }
@@ -306,7 +312,14 @@ test("a_simulators_apps_are_debugged_by_a_member_not_a_reader", async () => {
   call(core, ui, 2, "screen.logs", { station: "ws/st", screen: "simulator:U", after: 7 });
   call(core, ui, 3, "screen.apps", { station: "ws/st", screen: "simulator:U" });
   call(core, ui, 4, "screen.relaunch", { station: "ws/st", screen: "simulator:U", app: "fail.still.a" });
+  call(core, ui, 5, "screen.openUrl", { station: "ws/st", screen: "simulator:U", url: "myapp://x" });
+  call(core, ui, 6, "screen.location", { station: "ws/st", screen: "simulator:U", at: "1,2" });
+  call(core, ui, 7, "screen.location", { station: "ws/st", screen: "simulator:U" });
+  call(core, ui, 8, "screen.statusBar", { station: "ws/st", screen: "simulator:U", tidy: true });
+  call(core, ui, 9, "screen.push", { station: "ws/st", screen: "simulator:U", app: "fail.still.a", text: "hi" });
   await host.settle();
+  for (const path of ["open-url", "location", "status-bar", "push"])
+    assert.ok(host.requests.some((r: J) => r.method === "POST" && String(r.url).endsWith(`/screens/simulator%3AU/${path}`)), path);
   assert.ok(host.requests.some((r: J) => r.method === "GET" && String(r.url).endsWith("/screens/simulator%3AU/logs?after=7")));
   assert.ok(host.requests.some((r: J) => r.method === "GET" && String(r.url).endsWith("/screens/simulator%3AU/apps")));
   assert.ok(host.requests.some((r: J) => r.method === "POST" && String(r.url).endsWith("/screens/simulator%3AU/relaunch")));

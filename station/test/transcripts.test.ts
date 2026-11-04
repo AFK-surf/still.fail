@@ -2,14 +2,16 @@
 // (src/read/transcripts.ts).
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { appendFileSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync, writeSync, closeSync } from "node:fs";
+import { appendFileSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, writeSync, closeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { zstdCompressSync } from "node:zlib";
+import { SEGMENT, framesOf, seekTable, segmented, segmentedSoon, unpackedWhole } from "../src/read/packed.ts";
 import { ChainTail, MARK_EVERY, PIECE, TranscriptTail } from "../src/read/tail.ts";
 import { READING, brief, readTimeline } from "../src/read/transcript.ts";
 import { chainOf, entriesOf, forgetKept, lengthOf } from "../src/read/transcripts.ts";
+import { packFile, segmentFile } from "../src/sessions/archive.ts";
 
 const temp = () => mkdtempSync(join(tmpdir(), "transcripts-"));
 const said = (text: string, id: string) => `${JSON.stringify({ type: "assistant", timestamp: "2026-10-24T00:00:00Z", message: { id, content: [{ type: "text", text }], usage: { input_tokens: 1, output_tokens: 1 } } })}\n`;
@@ -46,6 +48,24 @@ const page = (paths: string[], dir: string | null, from: number, to: number, inB
   const chain = chainOf(runtime, paths, dir);
   return { entries: entriesOf(runtime, chain, from, to, inBrief), end: lengthOf(chain) };
 };
+
+test("a history spanning runtimes keeps both transcripts readable, including after its live reader resumes", () => {
+  forgetKept();
+  const dir = temp();
+  const a = join(dir, "claude.jsonl");
+  const b = join(dir, "codex.jsonl");
+  writeFileSync(a, said("before", "a"));
+  const codex = (text: string) => `${JSON.stringify({ type: "response_item", timestamp: "2026-10-24T00:00:00Z", payload: { type: "message", role: "assistant", content: [{ type: "output_text", text }] } })}\n`;
+  writeFileSync(b, codex("after"));
+  const refs = [{ path: a, runtime: "claude" as const }, { path: b, runtime: "codex" as const }];
+  const chain = chainOf("codex", refs, null);
+  assert.deepEqual(entriesOf("codex", chain, 0, 2, false).map((e) => e.text), ["before", "after"]);
+  const live = ChainTail.from("codex", chain.map((m) => m.state));
+  appendFileSync(b, codex("later"));
+  assert.deepEqual(live.read()[1].map((e) => e.text), ["later"]);
+  forgetKept();
+  rmSync(dir, { recursive: true, force: true });
+});
 
 test("a page of a history is what a read of it whole gives, from anywhere in it, in brief or whole, as it grows", () => {
   forgetKept();
@@ -127,6 +147,31 @@ test("what a reader writes down of a reading goes on as the transcript grows: on
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("a reading is written down as it goes on past what is written, not at its marks alone: one that starts again reads little", () => {
+  // At its marks alone (every MARK_EVERY entries or MARK_BYTES), a reading kept on disk was up to MB behind: every
+  // reader starting again (each start of the station) read and parsed it again, 27 MB of the transcripts at work on
+  // a station (2026-11-02), the first reads of their histories taking seconds after every update.
+  forgetKept();
+  const dir = temp();
+  const marks = join(dir, "marks");
+  const path = join(dir, "t.jsonl");
+  const lines = Array.from({ length: 10 }, (_, i) => said(`${i}`, `m${i}`));
+  writeFileSync(path, lines.join(""));
+  assert.equal(page([path], marks, 0, 0).end, 10);
+  // Some 400 KB more, far fewer entries than a mark's: read on past what is written down.
+  const more = Array.from({ length: 100 }, (_, i) => said(`${10 + i} ${"y".repeat(4000)}`, `m${10 + i}`));
+  appendFileSync(path, more.join(""));
+  lines.push(...more);
+  assert.ok(more.length < MARK_EVERY);
+  assert.equal(page([path], marks, 0, 0).end, lines.length);
+  // Spoilt before where it read to: one starting from what is written down does not read it again.
+  spoil(path, lines, 50);
+  forgetKept();
+  assert.equal(page([path], marks, 0, 0).end, lines.length);
+  forgetKept();
+  rmSync(dir, { recursive: true, force: true });
+});
+
 test("a transcript put away is read from a mark as one read whole reads it, decompressed once for its pages", () => {
   forgetKept();
   const dir = temp();
@@ -136,6 +181,109 @@ test("a transcript put away is read from a mark as one read whole reads it, deco
   const whole = readTimeline("claude", path);
   writeFileSync(`${path}.zst`, zstdCompressSync(readFileSync(path)));
   rmSync(path);
+  for (const at of [3, MARK_EVERY + 1, whole.length - 4]) assert.deepEqual(page([path], null, at, at + 4).entries, whole.slice(at, at + 4));
+  forgetKept();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a transcript put away is in segments: a page decompresses the segments it is in, the latest none", async () => {
+  forgetKept();
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  // More than two segments, of lines long enough that marks fall in each.
+  const lines: string[] = [];
+  let bytes = 0;
+  for (let i = 0; bytes < SEGMENT * 2 + 12345; i++) {
+    const line = i % 7 === 0 ? call(`c${i}`, `ls ${i}`) : said(`${i} ${"y".repeat(4000 + (i % 900))}`, `m${i}`);
+    lines.push(line);
+    bytes += Buffer.byteLength(line);
+  }
+  writeFileSync(path, lines.join(""));
+  const whole = readTimeline("claude", path);
+  const marks = join(dir, "marks");
+  assert.equal(page([path], marks, 0, 1).end, whole.length);
+  await packFile(path);
+  const disk = `${path}.zst`;
+  assert.ok(segmented(disk));
+  // Still one zstd stream to any reader.
+  assert.deepEqual(unpackedWhole(disk), Buffer.from(lines.join("")));
+  // The first segment made unreadable: what is after it is read all the same, from its marks, and so is how long it is.
+  const file = openSync(disk, "r+");
+  writeSync(file, Buffer.alloc(64, 0xff), 0, 64, 32);
+  closeSync(file);
+  forgetKept();
+  for (const at of [whole.length - 4, Math.floor(whole.length * 0.8)]) {
+    const read = page([path], marks, at, at + 4);
+    assert.deepEqual([read.end, read.entries], [whole.length, whole.slice(at, at + 4)]);
+  }
+  forgetKept();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("however long a transcript put away is, every segment of it is compressed and the last is not empty", async () => {
+  const dir = temp();
+  const line = `${"z".repeat(1023)}\n`;
+  for (const size of [0, 1024, SEGMENT - 1024, SEGMENT, SEGMENT + 1024, SEGMENT * 2]) {
+    const path = join(dir, `t${size}.jsonl`);
+    writeFileSync(path, line.repeat(size / 1024));
+    await packFile(path);
+    const file = openSync(`${path}.zst`, "r");
+    const frames = framesOf(file)!;
+    closeSync(file);
+    assert.equal(frames.reduce((n, f) => n + f.size, 0), size);
+    assert.ok(size === 0 || frames.at(-1)!.size > 0, `${size}: the last segment holds something`);
+    // Put away, none is kept as it is: one line over and over compresses to well under a hundredth.
+    assert.ok(frames.every((f) => f.packed < Math.max(512, f.size / 100)), `${size}: every segment compressed`);
+    assert.ok(segmented(`${path}.zst`));
+    assert.ok(frames.slice(0, -1).every((f) => f.size <= SEGMENT && f.size % 1024 === 0), `${size}: segments end at lines`);
+    assert.equal(frames.length, Math.max(1, Math.ceil(size / SEGMENT)));
+    assert.deepEqual(unpackedWhole(`${path}.zst`), Buffer.from(line.repeat(size / 1024)));
+  }
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a transcript put away with its last segment stored as it is (0.1.6800 to 0.1.6802) is put away again compressed", async () => {
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  const text = Buffer.from(`${"z".repeat(1023)}\n`.repeat(64));
+  // As those versions wrote it: one frame of raw blocks with its content size, then the table.
+  const head = Buffer.alloc(13);
+  head.writeUInt32LE(0xfd2fb528, 0);
+  head[4] = 0xe0;
+  head.writeBigUInt64LE(BigInt(text.length), 5);
+  const block = Buffer.alloc(3);
+  const word = (text.length << 3) | 1;
+  [block[0], block[1], block[2]] = [word & 0xff, (word >> 8) & 0xff, (word >> 16) & 0xff];
+  const frame = Buffer.concat([head, block, text]);
+  writeFileSync(`${path}.zst`, Buffer.concat([frame, seekTable([{ packed: frame.length, size: text.length }])]));
+  assert.ok(!segmented(`${path}.zst`));
+  assert.equal(await segmentedSoon(`${path}.zst`), false, "off the thread, the same");
+  assert.deepEqual(unpackedWhole(`${path}.zst`), text);
+  assert.equal(await segmentFile(path), true);
+  assert.ok(segmented(`${path}.zst`));
+  assert.equal(await segmentedSoon(`${path}.zst`), true);
+  assert.ok(statSync(`${path}.zst`).size < 1024);
+  assert.deepEqual(unpackedWhole(`${path}.zst`), text);
+  assert.equal(await segmentFile(path), false);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a transcript put away before there were segments is put away again in them, as it was", async () => {
+  forgetKept();
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  const lines = Array.from({ length: MARK_EVERY * 2 + 10 }, (_, i) => (i % 7 === 0 ? call(`c${i}`, `ls ${i}`) : said(`${i}`, `m${i}`)));
+  writeFileSync(path, lines.join(""));
+  const whole = readTimeline("claude", path);
+  writeFileSync(`${path}.zst`, zstdCompressSync(readFileSync(path)));
+  rmSync(path);
+  assert.ok(!segmented(`${path}.zst`));
+  assert.equal(await segmentedSoon(`${path}.zst`), false);
+  assert.equal(await segmentFile(path), true);
+  assert.ok(segmented(`${path}.zst`));
+  assert.equal(await segmentedSoon(`${path}.zst`), true);
+  assert.equal(await segmentFile(path), false);
+  assert.deepEqual(unpackedWhole(`${path}.zst`), Buffer.from(lines.join("")));
   for (const at of [3, MARK_EVERY + 1, whole.length - 4]) assert.deepEqual(page([path], null, at, at + 4).entries, whole.slice(at, at + 4));
   forgetKept();
   rmSync(dir, { recursive: true, force: true });
