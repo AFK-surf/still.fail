@@ -105,7 +105,7 @@ for (const recursive of [false, true]) for (const how of ["number", "timestamp",
   });
 }
 
-for (const recursive of [false, true]) for (const what of ["thread", "state"] as const) {
+for (const recursive of [false, true]) for (const what of ["thread", "thread update", "state"] as const) {
   test(`replacing a chat ${what} keeps the recent index exact (recursive triggers ${recursive})`, () => {
     const store = Store.open(":memory:");
     const db = store.db;
@@ -120,6 +120,7 @@ for (const recursive of [false, true]) for (const what of ["thread", "state"] as
       while (!stepRecentChatIndex(db, 3).done) { /* Prepare before an older writer replaces a row. */ }
       if (what === "thread")
         db.prepare("INSERT OR REPLACE INTO threads (id,surface,channel,thread_ts,created_at) VALUES (999,'ember','EMBER','chat',200)").run();
+      else if (what === "thread update") db.prepare("UPDATE OR REPLACE threads SET thread_ts = 'chat' WHERE id = ?").run(other);
       else db.prepare("INSERT OR REPLACE INTO thread_state(thread,last_n,said_n,person_n,letters) VALUES (?,1,NULL,NULL,0)").run(id);
       assert.equal(readGlobalRecentChatIndex(db, 5), null, "a replaced row must not leave a stale page");
       while (!stepRecentChatIndex(db, 3).done) { /* Account both the removed and new rows. */ }

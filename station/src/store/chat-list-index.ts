@@ -9,6 +9,12 @@ export type RecentChatPage = { ids: number[]; total: number };
 const dirty = (thread: string) => `INSERT INTO recent_chat_dirty (thread)
   SELECT ${thread} WHERE ${thread} IS NOT NULL AND NOT EXISTS
     (SELECT 1 FROM recent_chat_dirty WHERE thread = ${thread});`;
+const conflictingThread = `(SELECT t.id FROM threads t WHERE t.surface = NEW.surface AND t.channel = NEW.channel
+  AND t.thread_ts = NEW.thread_ts AND t.id IS NOT NEW.id)`;
+const replacedSaid = (exceptOld: boolean) => `EXISTS (SELECT 1 FROM thread_state s
+  JOIN entries e ON e.thread = s.thread AND e.n = s.said_n AND e.kind = 'message'
+  WHERE s.thread = NEW.thread AND (e.n = NEW.n OR (NEW.ts IS NOT NULL AND e.ts = NEW.ts))
+    ${exceptOld ? "AND (e.thread IS NOT OLD.thread OR e.n IS NOT OLD.n)" : ""})`;
 
 const SCHEMA = `
 CREATE TABLE recent_chat_rows (thread INTEGER PRIMARY KEY, at INTEGER NOT NULL, said_at INTEGER NOT NULL, created_at INTEGER NOT NULL);
@@ -19,13 +25,21 @@ CREATE TABLE recent_chat_meta (id INTEGER PRIMARY KEY CHECK (id = 1), cursor INT
 INSERT INTO recent_chat_meta SELECT 1, NULL, (SELECT MAX(id) FROM threads), 0,
   NOT EXISTS (SELECT 1 FROM threads LIMIT 1), 1;
 
+-- REPLACE can evict a different row without running that row's DELETE trigger. Remember the evicted id first.
+CREATE TRIGGER recent_chat_thread_before_add BEFORE INSERT ON threads BEGIN ${dirty(conflictingThread)} END;
+CREATE TRIGGER recent_chat_thread_before_change BEFORE UPDATE OF id, surface, channel, thread_ts ON threads
+  BEGIN ${dirty(conflictingThread)} END;
 CREATE TRIGGER recent_chat_thread_add AFTER INSERT ON threads BEGIN ${dirty("NEW.id")} END;
 CREATE TRIGGER recent_chat_thread_change AFTER UPDATE OF id, created_at ON threads BEGIN ${dirty("OLD.id")} ${dirty("NEW.id")} END;
 CREATE TRIGGER recent_chat_thread_drop AFTER DELETE ON threads BEGIN ${dirty("OLD.id")} END;
-CREATE TRIGGER recent_chat_state_add AFTER INSERT ON thread_state WHEN NEW.said_n IS NOT NULL BEGIN ${dirty("NEW.thread")} END;
+CREATE TRIGGER recent_chat_state_add AFTER INSERT ON thread_state BEGIN ${dirty("NEW.thread")} END;
 CREATE TRIGGER recent_chat_state_change AFTER UPDATE OF thread, said_n ON thread_state
   WHEN OLD.thread IS NOT NEW.thread OR OLD.said_n IS NOT NEW.said_n BEGIN ${dirty("OLD.thread")} ${dirty("NEW.thread")} END;
 CREATE TRIGGER recent_chat_state_drop AFTER DELETE ON thread_state WHEN OLD.said_n IS NOT NULL BEGIN ${dirty("OLD.thread")} END;
+CREATE TRIGGER recent_chat_entry_before_add BEFORE INSERT ON entries
+  WHEN (NEW.kind <> 'message' OR NEW.letter IS NOT NULL) AND ${replacedSaid(false)} BEGIN ${dirty("NEW.thread")} END;
+CREATE TRIGGER recent_chat_entry_before_change BEFORE UPDATE OF thread, n, ts ON entries
+  WHEN ${replacedSaid(true)} BEGIN ${dirty("NEW.thread")} END;
 CREATE TRIGGER recent_chat_entry_add AFTER INSERT ON entries WHEN NEW.kind = 'message' AND
   (NEW.letter IS NULL OR EXISTS (SELECT 1 FROM thread_state s WHERE s.thread = NEW.thread AND s.said_n = NEW.n))
   BEGIN ${dirty("NEW.thread")} END;
