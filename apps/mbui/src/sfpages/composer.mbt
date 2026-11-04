@@ -1202,7 +1202,8 @@ fn gone_up(v : Json?) -> Double? {
 
 ///|
 /// A picture's tile (56): darkened while it goes up, a ring over it filling as it goes (`part`: turning until it says),
-/// ↻ over it when it failed (`again` what a tap there is). Its node; `id` what a tap on it is.
+/// ↻ over it when it failed (`again` what a tap there is); a video's still a solid play mark in its middle otherwise
+/// (told apart from an image's while it waits). Its node; `id` what a tap on it is.
 fn picture_tile(
   c : @ui.Ctx,
   picture : MediaPicture,
@@ -1227,6 +1228,12 @@ fn picture_tile(
       c.layer(fn() {
         c.box(style=thumb_veil, id=again, fn() { @sf.icon(c, "refresh", size=retry_icon, color=on_veil) |> ignore })
         |> ignore
+      })
+      |> ignore
+    }
+    if picture.kind == "video" && !pending && error == "" {
+      c.layer(fn() {
+        c.box(style=thumb_play, fn() { @sf.icon(c, "play-mark", size=thumb_play_side, color=on_veil) |> ignore }) |> ignore
       })
       |> ignore
     }
@@ -1351,6 +1358,14 @@ let thumb_side : Double = 56.0
 
 ///|
 let on_veil : Int64 = 0xFFFFFFFFL
+
+///|
+/// A video waiting: its solid play mark, white, in its tile's middle.
+let thumb_play_side : Double = 24.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let thumb_play : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
 
 ///|
 /// The capsule (composerBox, one line): its parts on its centre line, 2 apart, its round buttons its padding in all round
