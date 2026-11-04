@@ -4,7 +4,7 @@
 import { parseThreadAddress, threadAddress } from "../agents/instructions.ts";
 import { iso, type TimelineEntry } from "../read/transcript.ts";
 import { LAPSED } from "../store/rows.ts";
-import { type Attachment, STILLFAIL_SURFACE, type SessionRow, type SessionThread, type ThreadRow } from "../store/store.ts";
+import { type Attachment, STILLFAIL_SURFACE, type SessionThread, type ThreadRow } from "../store/store.ts";
 import { type Args, jsNumber, jsString } from "./args.ts";
 import { threadHistory } from "./conversations.ts";
 import type { Hub } from "./hub.ts";
@@ -287,26 +287,32 @@ export async function chatList(hub: Hub, key: string, args: Args): Promise<strin
   const given = args.limit === undefined ? null : jsNumber(args.limit);
   const limit = given === null ? 20 : Number.isNaN(given) ? 0 : Math.trunc(Math.min(100, Math.max(1, given)));
   const query = (args.query === undefined ? "" : jsString(args.query)).trim().toLowerCase();
-  const sessions = new Map<string, SessionRow>(hub.store.listSessions().map((s) => [s.key, s]));
   // Its workspace's only (docs/multi-workspace.md): a thread is its own session's, else its agents'.
   const ws = scopeOf(hub, key);
   const home = hub.wsOf(null);
+  // The reader counts and selects before returning the page. A search still checks each scoped chat's titles and words.
+  const listed = query === ""
+    ? hub.recentChatList != null ? await hub.recentChatList(ws, home, limit)
+      : hub.threadList == null ? hub.store.recentChatList(ws, home, limit) : null
+    : hub.searchChatList != null ? await hub.searchChatList(ws, home, limit, query)
+      : hub.threadList == null ? hub.store.searchChatList(ws, home, limit, query) : null;
+  const sessions = new Map((listed?.sessions ?? hub.store.listSessions()).map((s) => [s.key, s]));
   const inWs = (k: string) => (sessions.get(k)?.ws ?? home) === ws;
   const ours = (t: { thread: ThreadRow; sessions: { session: string }[] }) =>
     ws === null || (t.thread.home !== null ? inWs(t.thread.home) : t.sessions.length === 0 ? home === ws : t.sessions.some((m) => inWs(m.session)));
-  const threads = (hub.threadList ? await hub.threadList() : hub.store.listThreads("", null, null)).filter(ours);
+  const threads = listed?.threads ?? (hub.threadList ? await hub.threadList() : hub.store.listThreads("", null, null, "none")).filter(ours);
   const when = (t: (typeof threads)[number]) => t.lastMessage?.createdAt ?? t.thread.createdAt;
   threads.sort((a, b) => when(b) - when(a));
   const lines: string[] = [];
-  let matched = 0;
+  let matched = listed?.total ?? 0;
   for (const t of threads) {
     const titles = [t.thread.title, t.thread.autoTitle, t.firstText, ...t.sessions.map((m) => sessions.get(m.session)?.title ?? null)].filter((x): x is string => x !== null);
     const last = t.lastMessage?.text ?? "";
-    if (query !== "") {
+    if (query !== "" && listed === null) {
       const haystack = `${titles.join(" ")} ${last} ${t.sessions.map((m) => m.session).join(" ")}`.toLowerCase();
       if (!haystack.includes(query)) continue;
     }
-    matched++;
+    if (listed === null) matched++;
     if (lines.length >= limit) continue;
     const address = threadAddress(t.thread.channel, t.thread.threadTs);
     const place = t.thread.surface === STILLFAIL_SURFACE ? "still.fail chat" : "Slack thread";

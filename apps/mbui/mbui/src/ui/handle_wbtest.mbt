@@ -203,3 +203,36 @@ test "Android: the caret's handle under a layer opened over its field" {
   assert_true(button >= 0 && handle >= 0 && layer >= 0)
   assert_true(button < handle && handle < layer)
 }
+
+///|
+test "Android: a paste too long for the field, not taken, is taken back from the host's words; typing goes on" {
+  let field = Field::new()
+  let pasted : Array[String] = []
+  let t = Tester::new(
+    fn(c) {
+      match c.editor("field", font_size=16.0, paste_limit=20, field~).pasted {
+        Some(s) => pasted.push(s)
+        None => ()
+      }
+    },
+    w=300.0,
+    h=200.0,
+    platform=2,
+  )
+  t.tap(40.0, 10.0)
+  t.ime_state("hi", 2, 2)
+  let long = "x".repeat(30)
+  // the input method's paste, made on the host's copy of the words (MBView.MBInput)
+  let told = fake.val.unwrap().ime_told
+  t.ime_state("hi" + long, 32, 32)
+  assert_eq(pasted, [long])
+  assert_eq(field.text(), "hi")
+  // the host told the field's words again, as its copy is to hold them
+  assert_true(fake.val.unwrap().ime_told > told)
+  assert_eq(t.ime(), (true, "hi", 2, 2))
+  // what is typed next, on that copy, is taken
+  let (_, host, _, _) = t.ime()
+  t.ime_state(host + "!", 3, 3)
+  assert_eq(field.text(), "hi!")
+  assert_eq(pasted, [long])
+}

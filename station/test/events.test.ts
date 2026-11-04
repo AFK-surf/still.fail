@@ -246,7 +246,7 @@ test("a stream that comes back after its link went is told what was told meanwhi
   await late.close();
 });
 
-// On ccvm (2026-11-02, 17:18-17:20) every device that came back had its viewer's whole sidebar read, 42 to 46 s a read
+// On a station (2026-11-02, 17:18-17:20) every device that came back had its viewer's whole sidebar read, 42 to 46 s a read
 // while memory was short, their other reads waiting behind it up to 99 s: a stream that comes back has read what
 // changed of its sidebar while none of its viewer's streams was here, and nothing more.
 test("a stream that comes back has read only what changed of its sidebar meanwhile, here and at the next process", async () => {
@@ -410,7 +410,7 @@ test("what the agents spent is told at most once a minute: the first change at o
 
 test("usage is told with when the earliest call recorded since was made, each telling kept for one who comes back", async () => {
   // A page holding the usage reads again only the days from then on (client/core-ts/src/station/usage-part.ts); read
-  // whole at each telling, it was 2 to 23 s of the station's time a read on ccvm (2026-11-02).
+  // whole at each telling, it was 2 to 23 s of the station's time a read on a station (2026-11-02).
   const time = testClock();
   const { events, change } = setup(time.clock);
   const s = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
@@ -455,7 +455,7 @@ test("after something is said in a thread, each viewer is told it as GET /thread
   await b.close();
 });
 
-// On ccvm (2026-11-02 15:41 UTC) what was told of two messages just said waited 50 s and 31 s: each was read back first,
+// On a station (2026-11-02 15:41 UTC) what was told of two messages just said waited 50 s and 31 s: each was read back first,
 // in line behind other reads. What is said is told as the store wrote it.
 test("what is said in a thread is told at once, though no read is ever answered", async () => {
   const { events, change, readers } = setup(testClock().clock);
@@ -573,7 +573,7 @@ test("a stream from before asked nothing new: the sessions it names, as before",
 
 test("one person's streams in two languages are read for together: once a change, the sidebar and the thread alike", async () => {
   // One a viewer, the same chats were read again for each language and workspace a person's devices follow in (four on
-  // ccvm, 2026-11-02), each from the disk while memory was short, after every message.
+  // a station, 2026-11-02), each from the disk while memory was short, after every message.
   const { events, change, reads } = setup(testClock().clock);
   const zh = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
   const en = reader((await events.open(viewer("a@x"), "en", false, [], [])).body as AsyncIterable<Buffer>);
@@ -589,7 +589,7 @@ test("one person's streams in two languages are read for together: once a change
 });
 
 test("the sidebar's rows are left to clients that make them from what they are told (rows=1): none read for what is said, a session's summary, a read, a pin", async () => {
-  // Every change read every row it could touch again for every viewer: 3 to 5 s each on ccvm short of memory (2026-11-03).
+  // Every change read every row it could touch again for every viewer: 3 to 5 s each on a station short of memory (2026-11-03).
   const { events, change, reads } = setup(testClock().clock);
   const sidebar = () => reads.filter((r) => r === "chats" || r === "chatRowsOf");
   const theirs = reader((await events.open(viewer("a@x"), "zh", false, [], [], null, false, [], false, true, true)).body as AsyncIterable<Buffer>);
@@ -629,7 +629,7 @@ test("the sidebar's rows are left to clients that make them from what they are t
 });
 
 test("a thread's summary is left to clients that make it from what is said (views=1): none read for a viewer all of whose streams do", async () => {
-  // Read for each viewer after every message, it was read from the disk while memory was short (ccvm, 2026-11-02).
+  // Read for each viewer after every message, it was read from the disk while memory was short (a station, 2026-11-02).
   const { events, change, reads } = setup(testClock().clock);
   const theirs = reader((await events.open(viewer("a@x"), "zh", false, [], [], null, false, [], false, true)).body as AsyncIterable<Buffer>);
   await settle();

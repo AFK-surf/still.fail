@@ -210,13 +210,15 @@ const b64 = (v: unknown, max: number): v is string => typeof v === "string" && v
 const sigShape = (s: any): s is Sig => s !== null && typeof s === "object" && typeof s.key === "string" && typeof s.sig === "string" && (s.alg === "Ed25519" || s.alg === "ES256");
 const unique = (a: string[]) => new Set(a).size === a.length;
 
-/// Why a box certificate is not a lock app device's for `ws`, or null when it is.
-export function certOk(lock: LockState, cert: BoxCert): string | null {
+/// Why a box certificate is not a lock app device's for `ws`, or null when it is. `ever`: signed by any signing key
+/// that device has had in the lock, not only its current one (a vault's keys: a device back in the lock under a new
+/// key, the app installed anew, keeps the key sealed to it under its certificate from before; 2026-11-03).
+export function certOk(lock: LockState, cert: BoxCert, ever = false): string | null {
   if (cert === null || typeof cert !== "object" || cert.v !== 1 || cert.ws !== lock.ws) return "a box certificate is {v: 1, ws, device, box, at, sig} of this workspace";
   if (!HEX32.test(cert.device) || !BOX.test(cert.box) || !int(cert.at) || !sigShape(cert.sig)) return "a box certificate is {v: 1, ws, device, box, at, sig} of this workspace";
   const d = lock.devices.get(cert.device);
   if (d === undefined || d.kind !== "app" || !lock.members.has(d.sub)) return "the box certificate's device is not an app device in the lock";
-  if (d.sign_key !== cert.sig.key) return "a box certificate is signed by its own device's key";
+  if (d.sign_key !== cert.sig.key && !(ever && (lock.signKeys.get(cert.device) ?? []).includes(cert.sig.key))) return "a box certificate is signed by its own device's key";
   if (!signedOk(cert, TAG.box)) return "the box certificate's signature is invalid";
   return null;
 }
@@ -251,9 +253,11 @@ export function vaultOk(lock: LockState, prev: Vault | null, next: Vault, copy =
   }
   for (const m of v.members) if (!lock.members.has(m)) return `member ${m} is not in the lock`;
   const seen = new Set<string>();
+  // (each key's certificate signed by a key its device has had in the lock, `ever`: the same on every station, whatever
+  // version each held before, so a copy is taken wherever the version was)
   for (const k of v.keys) {
     if (k === null || typeof k !== "object" || !b64(k.wrapped, 200)) return "a key is {cert, wrapped}";
-    const why = certOk(lock, k.cert);
+    const why = certOk(lock, k.cert, true);
     if (why) return why;
     if (seen.has(k.cert.device)) return "one key per device";
     seen.add(k.cert.device);

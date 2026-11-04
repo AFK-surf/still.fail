@@ -3,6 +3,6 @@
 timeout 20000
 until 提示归档
 wait 1200
-tap Studio
+tap Willow
 wait 1500
 exit

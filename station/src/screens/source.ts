@@ -29,7 +29,9 @@ export type ScreenInput =
   | { t: "key"; kind: "down" | "up"; key: string; code: string; mods: number }
   | { t: "text"; text: string }
   /// A foldable simulator's hinge (`ScreenSource.poses`).
-  | { t: "pose"; name: "closed" | "book" | "open" };
+  | { t: "pose"; name: "closed" | "book" | "open" }
+  // What Device Hub does of a device besides its keys and a finger
+  | { t: "device"; name: "volume_up" | "volume_down" | "memory_warning" | "rotate" };
 
 /// `peek`: a preview (a link's card in a chat): it brings nothing forward, wakes nothing and is not among those on it.
 /// `bitrate`: what to encode at first (bits a second; none: the source's own), until `ScreenView.rate` says otherwise.
@@ -157,10 +159,10 @@ export type ScreenResolution = { width: number; height: number; modes: { width: 
 /// Whether a source can be seen and driven now, for one that may not be (the desktop: macOS's grants, a machine it is
 /// not supported on). `app` and `path`: what a person turns on in System Settings for it; `asking`: a window on the
 /// machine asks for it now.
-export type ScreenAccess = { capture: boolean; control: boolean; unsupported?: "platform" | "helper"; reason?: "linuxNoDisplay" | "linuxWayland" | "linuxTools" | "linuxToolsPreparing" | "linuxToolsFailed" | "linuxUnavailable"; app?: string; path?: string; asking?: boolean };
+export type ScreenAccess = { capture: boolean; control: boolean; unsupported?: "platform" | "helper"; reason?: "linuxNoDisplay" | "linuxWayland" | "linuxTools" | "linuxToolsPreparing" | "linuxToolsFailed" | "linuxUnavailable" | "linuxPortalConsent" | "linuxPortalUnavailable" | "linuxDesktopStarting" | "linuxX11FallbackUnavailable"; app?: string; path?: string; asking?: boolean };
 
 export interface ScreenSource {
-  /// Stable while the source lasts: `desktop`, `browser:<targetId>`, `simulator:<udid>`.
+  /// Stable while the source lasts: `desktop`, `browser:<targetId>`, `simulator:<udid>`, `android:<id>`.
   readonly id: string;
   readonly kind: ScreenKind;
   title(): string;

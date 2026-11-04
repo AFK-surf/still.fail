@@ -149,6 +149,8 @@ pub fn fake_autofill_picks(String, String, String) -> Unit
 
 pub let fake_op : @ref.Ref[((Array[String]) -> (Int32, String, String))?]
 
+pub let fake_op_pending : @ref.Ref[Bool]
+
 pub let fake_op_runs : Array[Array[String]]
 
 pub let fake_passkey : @ref.Ref[((String, String, String, String) -> String)?]
@@ -383,6 +385,8 @@ pub fn old(@view.View, (Ctx) -> Unit, key? : () -> String, natural? : Bool, give
 
 pub fn old_anchor(@view.View, Int32, (Double, Double, Double, Double)) -> @view.View
 
+pub let old_fault_shown : @ref.Ref[(Ctx, String) -> Unit]
+
 pub fn old_islands_around() -> Bool
 
 pub fn old_takes_none(@view.View) -> @view.View
@@ -536,6 +540,8 @@ pub fn set_window_zoom(Double) -> Unit
 pub fn set_work_clock((() -> Double)?) -> Unit
 
 pub fn shape_of(Array[(Array[Double], Bool)], fill? : Int64, even_odd? : Bool, stroke? : Int64, width? : Double) -> @paint.Shape
+
+pub fn shapes_ink_in(Array[@paint.Shape], Double) -> (Double, Double)
 
 pub fn share(String, String, String, Bytes) -> Bool
 
@@ -1195,6 +1201,7 @@ pub fn Ctx::kept_as_nodes(Self, Int32, String, () -> Unit, read_out? : Bool, loc
 #callsite(autofill(loc))
 pub fn Ctx::kept_part(Self, Int32, String, () -> Unit, read_out? : Bool, own? : Bool, loc~ : SourceLoc) -> Unit
 pub fn Ctx::key_catcher(Self, String) -> KeyCatch
+pub fn Ctx::key_catcher_place(Self, String, Double, Double, Double) -> Unit
 pub fn Ctx::key_pressed(Self, Int32, mods? : Int32, in_field? : Bool) -> Bool
 pub fn Ctx::keyboard_in_overlay(Self, Int32) -> Bool
 pub fn Ctx::keyboard_in_overlay_since(Self, Int32) -> Double
@@ -1322,6 +1329,7 @@ pub fn Ctx::second_pointer(Self) -> (Double, Double)?
 pub fn Ctx::segmented(Self, String, Array[String], Int32, item_w? : Double) -> Int32
 pub fn Ctx::selectable(Self, () -> Unit, color? : Int64) -> Unit
 pub fn Ctx::selected_text(Self) -> String
+pub fn Ctx::selection_by_finger(Self) -> Bool
 pub fn Ctx::selection_box(Self) -> (Double, Double, Double, Double)?
 pub fn Ctx::selection_clear(Self) -> Unit
 pub fn Ctx::selection_end(Self) -> (Double, Double, Double)?
@@ -1894,6 +1902,7 @@ pub fn[P] Nav::pop_to(Self[P], Int32) -> Bool
 pub fn[P] Nav::push(Self[P], P) -> Unit
 pub fn[P] Nav::push_over(Self[P], P) -> Unit
 pub fn[P] Nav::replace(Self[P], P) -> Unit
+pub fn[P] Nav::replace_above(Self[P], Int32, Array[P]) -> Unit
 pub fn[P] Nav::rest(Self[P]) -> Double
 pub fn[P] Nav::rise(Self[P], P) -> Unit
 pub fn[P] Nav::risen(Self[P]) -> Bool

@@ -11,7 +11,14 @@ test("a real filesystem change wakes a folder watch", async () => {
   const watches = new FolderWatches();
   try {
     const waiting = watches.changed(dir, "client");
-    writeFileSync(join(dir, "new-file"), "content");
+    // Written again until told: the system's watch starts a moment after it is asked for (FSEvents on macOS), and a write
+    // before that is not one it sees (side run 41635377489). Told within the asking's hold, or it answers false.
+    let told = false;
+    void waiting.then(() => { told = true; });
+    for (let i = 0; !told && i < 40; i++) {
+      writeFileSync(join(dir, `new-file-${i}`), "content");
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
     assert.equal(await waiting, true);
   } finally {
     watches.close();

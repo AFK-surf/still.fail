@@ -24,6 +24,8 @@ fn place_bar_tester(
 test "用量 as a place on a phone: its days and its share in the place's top bar; 30 天 chosen there; another workspace, the share its; none, nothing of the one before" {
   let listed = @signals.signal(true)
   let shared : Array[String] = []
+  let share_card_before = @sfbase.share_card_of.val
+  defer { @sfbase.share_card_of.val = share_card_before }
   @sfbase.share_card_of.val = fn(_, w) { shared.push(w.id) }
   let src : Ref[Source?] = Ref(None)
   let days : Array[String] = []
@@ -65,7 +67,6 @@ test "用量 as a place on a phone: its days and its share in the place's top ba
   t.run_for(@ui.move_most_ms)
   assert_eq(share().length(), 0, msg="its share left over")
   assert_true(t.rect_of("30 天") is None, msg="its days left over")
-  @sfbase.share_card_of.val = fn(_, _) {  }
 }
 
 ///|

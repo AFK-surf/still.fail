@@ -45,7 +45,7 @@ final class DuoHIDBridge {
                 output = stdout.fileHandleForReading
                 // Its start (simctl spawn, the guest's HID services) waited for apart from any command's answer: on a busy
                 // Mac it took 1-27 s, and counted in a command's 3 s every command failed, each killing the guest that was
-                // still starting (mini1, the Duo side test, 2026-11-03).
+                // still starting (the Duo side test, 2026-11-03).
                 guard try line(within: 60) == "READY" else { stop(); return false }
             }
             guard let input else { return false }

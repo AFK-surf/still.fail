@@ -132,7 +132,7 @@ test "downloads: an image's menu downloads it and its picture shows the download
   let calls : Array[(String, Json)] = []
   let list : Array[Json] = []
   let src = downloads_src("chat", list, calls)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=844.0, platform=0)
   nav_rested(t)
   let mut tries = 0

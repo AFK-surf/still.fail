@@ -367,7 +367,15 @@ pub fn side_beside(c : @ui.Ctx, key : String, open : Bool, whole : Double, page 
   }
   let left = c.width - col
   c.box(style=panel_row, fn() {
+    // (the page on its way as the panel slides, or as what holds it goes: as wide as that leaves it beside the panel)
+    let (way, to) = (@sfbase.page_way.id, @sfbase.page_way.to)
+    let target = if open { whole } else { 0.0 }
+    let sliding = col != target
+    if sliding || way != "" {
+      @sfbase.page_way_said(way + "/" + name + "/" + open.to_string(), (if way != "" { to } else { c.width }) - target)
+    }
     c.box(style=@ui.style(w=Fixed(left), h=Full), fn() { c.sized(left, c.height, page) }) |> ignore
+    @sfbase.page_way_said(way, to)
     // (cut to its column only while it slides: at rest what it puts past its left edge, its edge's handle half over
     // the page, shows whole, as the web's sidePanel cuts nothing)
     c.box(style=@ui.style(w=Fixed(col), h=Full, clip=col < whole), fn() {

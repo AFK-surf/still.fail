@@ -108,21 +108,7 @@ pub fn maker_mark(
   runtime : String,
   size : Double,
 ) -> Int {
-  let known = maker != "" &&
-    drawables.contains("maker_" + maker.replace_all(old="-", new="_"))
-  let id = if known {
-    maker
-  } else {
-    match runtime {
-      "codex" => "openai"
-      "dsh" => "dsh"
-      "grok" => "xai"
-      "cursor" => "cursor"
-      "devin" => "devin"
-      "hermes" => "hermes"
-      _ => "anthropic"
-    }
-  }
+  let id = maker_of(maker, runtime)
   let tint = if mono_makers.contains(id) { Some(theme().p.text) } else { None }
   drawable(c, "maker_" + id.replace_all(old="-", new="_"), size, tint?=tint)
 }
@@ -511,6 +497,7 @@ pub fn provider_logo(c : @ui.Ctx, runtime : String, kind : String, size : Double
       "cursor" => "cursor"
       "devin" => "devin"
       "hermes" => "hermes"
+      "agy" => "gemini"
       _ => "openai"
     }
   }
@@ -693,6 +680,7 @@ pub fn maker_icon(maker : String, runtime : String) -> String {
       "cursor" => "cursor"
       "devin" => "devin"
       "hermes" => "hermes"
+      "agy" => "gemini"
       _ => "anthropic"
     }
   }

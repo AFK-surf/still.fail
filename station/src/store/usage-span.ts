@@ -24,6 +24,7 @@ END;
 
 /// Install under the same short write lock as the triggers so a concurrent old writer cannot fall between them.
 export function installUsageSpan(db: DatabaseSync): void {
+  if (db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_compact_since'").get()) return;
   const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_span'").get() !== undefined;
   if (installed()) return;
   db.exec("BEGIN IMMEDIATE");

@@ -1,10 +1,11 @@
-// 45-drive-play (e2e/traces/drive-play.trace: Mini1 against the local still.fail, 76 messages): a video of the drive
+// 45-drive-play (e2e/traces/drive-play.trace: a local still.fail, 76 messages): a video of the drive
 // played (the library's player, @sf.player): 影音 in the lent folder (drive-media), the first episode tapped: the
 // player, which of the folder's films it is (1 / 2: the song is not one of them), its subtitle read beside it
 // (drive.read), its picture read by the system's player through the core (drive.read, each part as it comes, as the
 // run's player asked: its trace's read lines); left where it was, told to the core (drive.place); opened again, on
 // from there; 15 s on twice takes it to its end (播放结束, kept as seen), the next one offered and played in its place
 // (2 / 2), left; the song (alone of its kind: no count), read the same way.
+// before it: 15-drive-lend
 
 ///|
 /// The system's player of view `v` opened: its reads come as the run's host asked them (the trace's `read` lines,
@@ -87,6 +88,9 @@ test "45-drive-play" {
     f.see("/ 0:04")
     f.back()
     f.run_to(@ui.nav_rest())
+    // A native player chooses its own read sizes; opening the song may cause a different number of reads live.
+    // The song's filename is still awaited below, and the three films must still be read to their ends.
+    f.incidental_calls(["drive.read"])
     f.tap("片尾曲.m4a")
     f.run_to(@ui.nav_rest())
     f.see("片尾曲.m4a")
@@ -94,6 +98,7 @@ test "45-drive-play" {
     player_opened(f, song)
     f.back()
     f.run_to(@ui.nav_rest())
+    f.incidental_calls([])
     f.see("片尾曲.m4a")
     // each film read through the core to its end, as the run's player had it (the song, left at once, is not)
     read_whole(f, first, 2276541)

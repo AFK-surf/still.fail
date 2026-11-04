@@ -3,6 +3,7 @@
 // a session archived long enough, or before its time while the disk is low, keeps only its history and the files sent in
 // its chat).
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -110,6 +111,34 @@ test("archiving a session cleans what can be made again from its directory", asy
   await r.close();
 });
 
+test("what was left running in an archived session's workspace is stopped as it is packed", { skip: process.platform === "win32" }, async () => {
+  const [r, cold] = coldRig();
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const workspace = r.session(key).workspace;
+  mkdirSync(join(workspace, "sub"), { recursive: true });
+  // As adb's server its `adb` started: on its own, in the workspace.
+  const left = spawn("sleep", ["60"], { cwd: join(workspace, "sub"), stdio: "ignore", detached: true });
+  const elsewhere = spawn("sleep", ["60"], { cwd: dirname(workspace), stdio: "ignore", detached: true });
+  const gone = new Promise<string | null>((resolve) => left.once("exit", (_c, signal) => resolve(signal)));
+  try {
+    await r.call(key, "chat_state", { kind: "final" });
+    r.claude.last().complete();
+    await settle();
+    await archive(r.hub, key, true);
+    await finishArchive(r, key);
+    await cold.pack(key);
+    assert.equal(await gone, "SIGTERM");
+    assert.equal(elsewhere.exitCode, null, "one elsewhere runs on");
+  } finally {
+    left.kill("SIGKILL");
+    elsewhere.kill("SIGKILL");
+    await r.close();
+  }
+});
+
 test("archive cleanup keeps running jobs and shared projects", async () => {
   const [r] = coldRig();
   const { key } = await idleSession(r);
@@ -147,6 +176,21 @@ test("archive cleanup keeps running jobs and shared projects", async () => {
   mkdirSync(join(workspace, "app/node_modules"), { recursive: true });
   await finishArchive(r, key);
   assert.ok(existsSync(join(workspace, "app/node_modules")), "restored sessions are left alone");
+  await r.close();
+});
+
+test("the auto-archive reads the state of sessions idle long enough alone", async () => {
+  // Read for every session shown and every member of their chats at each look, the station's thread was held 17 s on
+  // a station short of memory (2026-11-03).
+  const [r] = coldRig();
+  const { key } = await idleSession(r);
+  const read: string[] = [];
+  const workOf = r.store.workOf.bind(r.store);
+  r.store.workOf = (session: string) => (read.push(session), workOf(session));
+  autoArchive(r.hub, Date.now());
+  assert.deepEqual(read, [], "none idle long enough: no state read");
+  autoArchive(r.hub, Date.now() + 3 * 86_400_000);
+  assert.deepEqual(read, [key], "the one idle long enough, once");
   await r.close();
 });
 

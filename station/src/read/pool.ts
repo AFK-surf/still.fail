@@ -1,6 +1,6 @@
 // The readers: worker threads, each with its own read-only connection, in two lines that share none of them. What the
 // station tells as things change (the event streams, its notices: `told`) is read by a reader of its own; what devices
-// ask, by the others. Neither waits on the other: on ccvm (2026-11-02) one line served both, and what was told of a
+// ask, by the others. Neither waits on the other: on a station (2026-11-02) one line served both, and what was told of a
 // message just said waited 50 s behind a usage read and sidebar updates, a push notice 55 s. Among what devices ask,
 // bulk reads leave room for chat reads. None of these reads holds up writes.
 // A reader is a V8 of its own (tens of MB), so they are started when reads come and let go once none has come for a
@@ -12,8 +12,12 @@ import { Worker } from "node:worker_threads";
 import { log } from "../ops/log.ts";
 import type { InWorkspace } from "../store/rows.ts";
 import { MinuteReader } from "../usage/minute-reader.ts";
-import type { Answer, Ask } from "./worker.ts";
-import { REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING, USAGE_MINUTES_PENDING } from "./store.ts";
+import { OutflowChatIndex } from "../outflow/chat-index-builder.ts";
+import { SaidBuilder } from "./said-builder.ts";
+import { TurnBuilder } from "./turn-builder.ts";
+import { OUTFLOW_CHATS_PENDING } from "./outflow.ts";
+import type { Answer, Ask, Ready } from "./worker.ts";
+import { REMOTE_RUNS_PENDING, SAID_PENDING, TURN_COUNT_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING, USAGE_MINUTES_PENDING } from "./store.ts";
 import { HttpError } from "./views.ts";
 import { wall } from "../ops/fibers.ts";
 
@@ -23,7 +27,7 @@ const IDLE_MS = 60_000;
 const SLOW_MS = 2_000;
 
 /// `held`: the read it is answering, if any.
-type Slot = { worker: Worker; held: Asked | null; idle?: () => void };
+type Slot = { worker: Worker; held: Asked | null; idle?: () => void; retiring?: boolean };
 
 /// A read in line or being answered: when it was asked and when a reader took it, and the reader it is best read in (a
 /// session's history, where its reading stands in memory).
@@ -41,29 +45,31 @@ type Asked = {
 
 /// A line of reads and the readers that answer it, at most `size` of them, the first read first. `room`: bulk reads leave
 /// one of them for a chat read (what devices ask).
-type Line = { told: boolean; size: number; room: boolean; slots: Slot[]; waiting: Asked[] };
+/// `rested`: when a background read may be taken again (one just read rests as long as it took).
+/// `wake`: the line looked at again once it has rested (one at a time).
+type Line = { told: boolean; size: number; room: boolean; slots: Slot[]; waiting: Asked[]; rested?: number; wake?: () => void };
 
 /// How many sessions' readers are remembered (the most recently read).
 const HOMES = 4096;
 /// How long after the store changes its log is written into the database (`checkpointSoon`): at most this often.
 const CHECKPOINT_MS = 2_000;
 /// Writing the store's log into the database (worker.ts `checkpoint`) is no read and waits for no one: it has a reader
-/// of its own (`log`). In line behind reads, it waited up to 98 s on ccvm (2026-11-02) while the log grew, until the main
-/// connection wrote it itself at its next commit (store.ts WAL_PAGES), holding every device and agent as it reached the
-/// disk; going before them in their readers, it held the one left for a chat 53 s as it reached a disk short of memory
-/// (2026-11-03), devices' reads waiting 40 s and more behind it.
+/// of its own (`log`). In line behind reads, a checkpoint may wait as the log grows until the main connection writes it
+/// at its next commit (store.ts WAL_PAGES); on a device reader it can hold up interactive reads while reaching disk.
 const CHECKPOINT = "checkpoint";
+const cancelled = () => new HttpError(503, "read cancelled");
 /// The scoped reads on the path to showing a chat, and those a device's lists are made of, each of a few rows and the
 /// statistics kept of them (the sidebar, a session's detail and summary, a chat's latest messages). Other page reads,
 /// including new kinds not yet classified, leave room for these, and these go before them: a slow transcript or resource
-/// snapshot can block just as a slow aggregate can. Behind a usage read of 76 s and a history's pages, the sidebar
-/// waited 7 s and a session opened 9 s on ccvm (2026-11-03), their own reads 0.2 s.
-const INTERACTIVE = new Set(["thread", "chats", "chatMarks", "session", "summary", "latestMessages"]);
+/// snapshot can block just as a slow aggregate can. A machine sample (api/host.ts), one job, and the jobs up without
+/// their chats are interactive too; jobs with their chats (an older device's, the sidebar made for it) are a bulk read.
+const INTERACTIVE = new Set(["thread", "chats", "chatMarks", "session", "summary", "latestMessages", "host", "hostTicks", "job"]);
 
 /// One thread's current or older page is interactive. An `after` or explicit range can ask for an unbounded amount on
 /// older clients, so it remains in the background until that request is paged end to end.
 function interactive(a: Asked): boolean {
   if (INTERACTIVE.has(a.ask.op)) return true;
+  if (a.ask.op === "openJobs") return a.ask.args?.chats === false;
   if (a.ask.op !== "entries" && a.ask.op !== "letters") return false;
   const params = a.ask.args?.params;
   const keys = Array.isArray(params) ? params.map((p: unknown) => Array.isArray(p) ? p[0] : null) : Object.keys(params ?? {});
@@ -72,16 +78,25 @@ function interactive(a: Asked): boolean {
 
 /// A stretch of a session's history in brief (`from` and `to`): what a client fills in of it in the background, where its
 /// stream left a hole or it holds less than there is (client/core-ts/src/station/channel-kinds.ts TRANSCRIPT). Up to
-/// 1,000 items a read, 16 MB of a Codex transcript and 6 s on ccvm (2026-11-03), the sidebar waiting 9 s behind them.
+/// 1,000 items a read, 16 MB of a Codex transcript and 6 s on a station (2026-11-03), the sidebar waiting 9 s behind them.
 /// One read whole (a step opened) is someone's waiting on it.
 function filling(op: string, args: unknown): boolean {
   const a = args as { from?: unknown; to?: unknown; brief?: unknown } | null;
   return op === "timeline" && a !== null && typeof a.from === "string" && typeof a.to === "string" && a.brief === "1";
 }
 
+/// Reads by the pages' readers (`pages`): a history's pages, and the machine's own sessions (GET /machine-sessions, a walk
+/// of every Claude and Codex project there, 14 s on a station, 2026-11-03), each of the files on the disk rather than the
+/// database.
+const PAGES = new Set(["timeline", "machineSessions"]);
+
 export class Readers {
   /// What devices ask, and what the station tells (`told`), each answered by readers of its own.
   private asked: Line;
+  /// The pages of sessions' histories (`timeline`), by a reader of their own: a page is read from the mark before it
+  /// (read/transcripts.ts), megabytes of a long transcript, seconds from a disk short of memory; in line with what
+  /// devices ask, the sidebar and a chat opened waited 20 s and more behind them on a station (2026-11-03).
+  private pages: Line;
   private told: Line;
   /// The store's log written into the database (CHECKPOINT), by a reader of its own.
   private log: Line;
@@ -90,6 +105,9 @@ export class Readers {
   private next = 0;
   private closed = false;
   private minutes: MinuteReader | null = null;
+  private outflowChats: OutflowChatIndex | null = null;
+  private said: SaidBuilder | null = null;
+  private turns: TurnBuilder | null = null;
   /// A checkpoint is armed or running (`checkpointSoon`), and the store changed again since it was armed.
   private checkpointing = false;
   private again = false;
@@ -109,6 +127,8 @@ export class Readers {
     this.workerFile = workerFile;
     this.backfill = backfill;
     this.asked = { told: false, size, room: true, slots: [], waiting: [] };
+    // Two: one a background page (a history brought on, a stretch filled) may hold, one left for a page someone waits on.
+    this.pages = { told: false, size: 2, room: false, slots: [], waiting: [] };
     this.told = { told: true, size: tellers, room: false, slots: [], waiting: [] };
     this.log = { told: true, size: 1, room: false, slots: [], waiting: [] };
   }
@@ -126,12 +146,26 @@ export class Readers {
     // A reader's heap stays small: what it builds is answered and dropped.
     const worker = new Worker(file, { workerData: { data: this.data }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
     const slot: Slot = { worker, held: null };
-    worker.on("message", (answer: Answer) => {
+    const begun = wall.now();
+    worker.on("message", (answer: Answer | Ready) => {
+      // How long a reader took to start: a read given it as it starts waits on that (one read of 1.9 s took 18 s on
+      // a station short of memory, 2026-11-03, a reader started for it).
+      if ("ready" in answer) {
+        const ms = wall.now() - begun;
+        if (ms >= 1_000) log.warn("readers", "a reader started slowly", { ms, line: line === this.asked ? "asked" : line === this.pages ? "pages" : line === this.log ? "log" : "told", ...answer.ready });
+        return;
+      }
+      // An abandoned read may finish while its worker is being stopped. Do not give that worker another read until it exits.
+      if (slot.retiring) return;
       const asked = slot.held;
       slot.held = null;
       if (asked !== null && asked.ask.id === answer.id) {
         const now = wall.now();
         if (now - asked.at > SLOW_MS) log.warn("readers", "a read went slowly", { op: asked.ask.op, told: line.told, waitedMs: asked.took - asked.at, ms: now - asked.took });
+        // A background read rests its line as long as it took before the next: one after another, a history brought on
+        // read 40 MB of a transcript in 10 s on a station short of memory (2026-11-03), every write and read waiting on the
+        // disk meanwhile.
+        if (asked.background) line.rested = now + (now - asked.took);
         if (answer.text !== undefined) asked.resolve(answer.text);
         else asked.reject(new HttpError(answer.status ?? 500, answer.error ?? "read failed"));
       }
@@ -149,88 +183,177 @@ export class Readers {
     return slot;
   }
 
-  private letGoLater(slot: Slot) {
+  /// A reader with nothing to do goes after IDLE_MS, but not those of a line someone waits on (what devices ask, what
+  /// streams tell): one started for a read took 3 s on a station short of memory (2026-11-03, its code read in again), the
+  /// read itself 40 ms; the second of what devices ask, started as the first was busy, 16 s.
+  private letGoLater(slot: Slot, line: Line) {
     if (slot.idle) return;
     // A thread's resources: the machine's time.
     slot.idle = wall.after(IDLE_MS, () => {
       slot.idle = undefined;
-      if (slot.held === null) void slot.worker.terminate();
+      if (slot.held !== null) return;
+      if (this.kept(line)) return;
+      void slot.worker.terminate();
     });
+  }
+
+  private kept(line: Line): boolean {
+    return line === this.asked || line === this.told;
+  }
+
+  /// The readers of what devices ask and of what streams tell, started before either is asked anything: the first
+  /// reads after the station starts (an update), and one beside a slow one, need not wait on them.
+  warm() {
+    for (const line of [this.asked, this.told]) while (!this.closed && line.slots.length < line.size) this.start(line);
   }
 
   /// The answer, as JSON text. `told`: what an event stream or a notice tells, read by the station's own reader.
   /// `background`: what a client brings onto its device in the background (POST /batch: a session's history page after
   /// page): after every other read waiting, and one at a time. In line with the rest, a sweep's pages (1 to 4 s each on
-  /// ccvm, 2 to 7 MB of a Codex transcript read: 2026-11-03) held the sidebar, a session opened and the rest 10 s and
+  /// a station, 2 to 7 MB of a Codex transcript read: 2026-11-03) held the sidebar, a session opened and the rest 10 s and
   /// more behind them, four at once from each device.
-  read(op: string, args: unknown, lang: Ask["lang"], { told = false, background = false }: { told?: boolean; background?: boolean } = {}): Promise<string> {
-    if (op === "usage") return this.usageRead(args, lang, told);
-    if (op === "outflowUsage") return this.outflowUsageRead(args, lang, told);
-    return this.enqueue(op, args, lang, told, op === CHECKPOINT, background || filling(op, args));
+  read(op: string, args: unknown, lang: Ask["lang"], { told = false, background = false, signal }: { told?: boolean; background?: boolean; signal?: AbortSignal } = {}): Promise<string> {
+    if (op === "usage") return this.usageRead(args, lang, told, signal);
+    if (op === "outflowUsage") return this.outflowUsageRead(args, lang, told, signal);
+    if (op === "outflowChats") return this.outflowChatsRead(args, lang, told, signal);
+    return this.saidRead(op, args, lang, told, background || filling(op, args), signal);
   }
 
-  private async covered(check: Promise<void>): Promise<void> {
-    try { await check; }
+  /// Prepare the same old-chat boundary for a sidebar read or the auto-archive check; concurrent requests share work.
+  prepareSaid(threads: readonly number[], signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.said ??= new SaidBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.said.ready(threads, signal), signal);
+  }
+
+  private async saidRead(op: string, args: unknown, lang: Ask["lang"], told: boolean, background: boolean, signal?: AbortSignal): Promise<string> {
+    while (!this.closed) {
+      try { return await this.enqueue(op, args, lang, told, op === CHECKPOINT, background, signal); }
+      catch (error) {
+        if (!(error instanceof HttpError)) throw error;
+        if (error.message.startsWith(TURN_COUNT_PENDING)) {
+          let sessions: unknown;
+          try { sessions = JSON.parse(error.message.slice(TURN_COUNT_PENDING.length)); } catch { throw error; }
+          if (!Array.isArray(sessions) || sessions.length === 0 || !sessions.every((key) => typeof key === "string")) throw error;
+          this.turns ??= new TurnBuilder(join(this.data, "stillfail.db"), this.backfill);
+          await this.covered(this.turns.ready(sessions, signal), signal);
+          continue;
+        }
+        if (!error.message.startsWith(SAID_PENDING)) throw error;
+        let threads: unknown;
+        try { threads = JSON.parse(error.message.slice(SAID_PENDING.length)); } catch { throw error; }
+        if (!Array.isArray(threads) || threads.length === 0 || !threads.every(Number.isSafeInteger)) throw error;
+        await this.prepareSaid(threads, signal);
+      }
+    }
+    throw new HttpError(502, "station stopping");
+  }
+
+  private async covered(check: Promise<void>, signal?: AbortSignal): Promise<void> {
+    try {
+      if (!signal) await check;
+      else await new Promise<void>((resolve, reject) => {
+        const abort = () => { signal.removeEventListener("abort", abort); reject(cancelled()); };
+        if (signal.aborted) abort();
+        else signal.addEventListener("abort", abort, { once: true });
+        check.then(() => { signal.removeEventListener("abort", abort); resolve(); }, (error) => { signal.removeEventListener("abort", abort); reject(error); });
+      });
+    }
     catch (error) {
+      if (error instanceof HttpError && error.message === "read cancelled") throw error;
       if (this.closed) throw new HttpError(502, "station stopping");
       throw new HttpError(503, (error as Error).message);
     }
   }
 
-  private async usageRead(args: unknown, lang: Ask["lang"], told: boolean): Promise<string> {
+  private async usageRead(args: unknown, lang: Ask["lang"], told: boolean, signal?: AbortSignal): Promise<string> {
     const viewer = (args as { viewer?: InWorkspace | null } | null)?.viewer ?? null;
     const history = (args as { history?: unknown } | null)?.history === true;
     while (!this.closed) {
       try {
-        return await this.enqueue("usage", args, lang, told);
+        return await this.enqueue("usage", args, lang, told, false, false, signal);
       } catch (error) {
         // The reader checks its own snapshot: a session may have moved after the coverage check.
         if (error instanceof HttpError && error.message === USAGE_MINUTES_PENDING && history)
           throw new HttpError(503, "historical minute statistics are unavailable");
         if (error instanceof HttpError && error.message === USAGE_DETAIL_PENDING) {
           this.startUsageIndex();
-          await this.covered(this.minutes!.readyDetail(viewer));
+          await this.covered(this.minutes!.readyDetail(viewer), signal);
           continue;
         }
         if (error instanceof HttpError && error.message === USAGE_CHATS_PENDING && history) {
           this.startUsageIndex();
-          await this.covered(this.minutes!.readyChats(viewer));
+          await this.covered(this.minutes!.readyChats(viewer), signal);
           continue;
         }
         if (!(error instanceof HttpError) || error.message !== REMOTE_RUNS_PENDING) throw error;
         this.startUsageIndex();
-        await this.covered(this.minutes!.readyRemote());
+        await this.covered(this.minutes!.readyRemote(), signal);
       }
     }
     throw new HttpError(502, "station stopping");
   }
 
-  private async outflowUsageRead(args: unknown, lang: Ask["lang"], told: boolean): Promise<string> {
+  private async outflowUsageRead(args: unknown, lang: Ask["lang"], told: boolean, signal?: AbortSignal): Promise<string> {
     const ws = (args as { ws?: InWorkspace } | null)?.ws;
     const viewer: InWorkspace = ws !== null && typeof ws === "object" && typeof ws.workspace === "string"
       ? { workspace: ws.workspace, home: ws.home === true } : { workspace: "\u0000home", home: true };
     while (!this.closed) {
-      try { return await this.enqueue("outflowUsage", args, lang, told); }
+      try { return await this.enqueue("outflowUsage", args, lang, told, false, false, signal); }
       catch (error) {
         if (!(error instanceof HttpError) || error.message !== USAGE_DETAIL_PENDING) throw error;
         this.startUsageIndex();
-        await this.covered(this.minutes!.readyDetail(viewer));
+        await this.covered(this.minutes!.readyDetail(viewer), signal);
+      }
+    }
+    throw new HttpError(502, "station stopping");
+  }
+
+  private async outflowChatsRead(args: unknown, lang: Ask["lang"], told: boolean, signal?: AbortSignal): Promise<string> {
+    const ws = (args as { ws?: InWorkspace } | null)?.ws;
+    const viewer: InWorkspace = ws !== null && typeof ws === "object" && typeof ws.workspace === "string"
+      ? { workspace: ws.workspace, home: ws.home === true } : { workspace: "\u0000home", home: true };
+    while (!this.closed) {
+      try { return await this.enqueue("outflowChats", args, lang, told, false, false, signal); }
+      catch (error) {
+        if (!(error instanceof HttpError) || error.message !== OUTFLOW_CHATS_PENDING) throw error;
+        this.outflowChats ??= new OutflowChatIndex(join(this.data, "stillfail.db"), this.backfill);
+        await this.covered(this.outflowChats.ready(viewer, signal), signal);
       }
     }
     throw new HttpError(502, "station stopping");
   }
 
   /// `first`: before the reads waiting (CHECKPOINT).
-  private enqueue(op: string, args: unknown, lang: Ask["lang"], told: boolean, first = false, background = false): Promise<string> {
+  private enqueue(op: string, args: unknown, lang: Ask["lang"], told: boolean, first = false, background = false, signal?: AbortSignal): Promise<string> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
-    const line = op === CHECKPOINT ? this.log : told ? this.told : this.asked;
+    if (signal?.aborted) return Promise.reject(cancelled());
+    const line = op === CHECKPOINT ? this.log : told ? this.told : PAGES.has(op) ? this.pages : this.asked;
     // A session's history read where it was read before: that reader keeps where its reading stands in memory, another
     // reads it from disk (read/transcripts.ts).
     const session = (op === "timeline" || op === "transcriptState") && typeof (args as { key?: unknown })?.key === "string" ? (args as { key: string }).key : null;
     const home = session !== null ? this.homes.get(session) : undefined;
     const ask: Ask = { id: this.next++, op, args, lang, names: [], processes: [], clientKeys: [] };
     return new Promise((resolve, reject) => {
-      const asked = { ask, session, home: home !== undefined && line.slots.includes(home) ? home : null, background, at: wall.now(), took: 0, resolve, reject };
+      let finished = false;
+      const done = () => { finished = true; signal?.removeEventListener("abort", abort); };
+      const asked: Asked = {
+        ask, session, home: home !== undefined && line.slots.includes(home) ? home : null, background, at: wall.now(), took: 0,
+        resolve: (text) => { if (!finished) { done(); resolve(text); } },
+        reject: (error) => { if (!finished) { done(); reject(error); } },
+      };
+      const abort = () => {
+        if (finished) return;
+        const at = line.waiting.indexOf(asked);
+        if (at >= 0) line.waiting.splice(at, 1);
+        else {
+          const slot = line.slots.find((s) => s.held === asked);
+          if (slot) { slot.retiring = true; void slot.worker.terminate(); }
+        }
+        asked.reject(cancelled());
+        if (at >= 0) this.pump(line);
+      };
+      signal?.addEventListener("abort", abort, { once: true });
       if (first) line.waiting.unshift(asked);
       else line.waiting.push(asked);
       this.pump(line);
@@ -248,10 +371,22 @@ export class Readers {
       // A background read only when no other waits, none of its kind is being read, and a reader is left beside it.
       const foreground = line.waiting.findIndex((a) => !a.background);
       const free = line.slots.filter((s) => s.held === null).length + (line.size - line.slots.length);
-      const behind = line.slots.some((s) => s.held?.background === true) || (free < 2 && line.size > 1) ? -1 : line.waiting.findIndex((a) => a.background);
-      const first = line.waiting.findIndex((a) => interactive(a) || a.ask.op === CHECKPOINT);
+      const resting = line.rested !== undefined && wall.now() < line.rested;
+      const behind = resting || line.slots.some((s) => s.held?.background === true) || (free < 2 && line.size > 1) ? -1 : line.waiting.findIndex((a) => a.background);
+      // (a background read of a kind someone waits on, a batch's chat, is a background read: one at a time, after a rest)
+      const first = line.waiting.findIndex((a) => !a.background && (interactive(a) || a.ask.op === CHECKPOINT));
       const at = limited || first >= 0 ? first : foreground >= 0 ? foreground : behind;
-      if (at < 0) break;
+      if (at < 0) {
+        // A background read waiting while the line rests: looked at again once it has, however early a timer fires
+        // (one armed for as long as the read took woke a moment before it was over, the read left waiting for good).
+        if (resting && line.wake === undefined && line.waiting.some((a) => a.background)) {
+          line.wake = wall.after(Math.max(1, line.rested! - wall.now()), () => {
+            line.wake = undefined;
+            this.pump(line);
+          });
+        }
+        break;
+      }
       const asked = line.waiting[at]!;
       const home = asked.home !== null && asked.home.held === null && line.slots.includes(asked.home) ? asked.home : null;
       const slot = home ?? line.slots.find((s) => s.held === null) ?? (line.slots.length < line.size ? this.start(line) : null);
@@ -259,7 +394,7 @@ export class Readers {
       line.waiting.splice(at, 1);
       this.give(slot, asked);
     }
-    for (const slot of line.slots) if (slot.held === null) this.letGoLater(slot);
+    for (const slot of line.slots) if (slot.held === null) this.letGoLater(slot, line);
   }
 
   private give(slot: Slot, asked: Asked) {
@@ -300,13 +435,16 @@ export class Readers {
 
   /// Each running reader's JS heap in use, in bytes (for the memory log).
   heaps(): Promise<number[]> {
-    return Promise.all([...this.asked.slots, ...this.told.slots, ...this.log.slots].map((s) => s.worker.getHeapStatistics().then((h) => h.used_heap_size, () => 0)));
+    return Promise.all([...this.asked.slots, ...this.told.slots, ...this.log.slots, ...this.pages.slots].map((s) => s.worker.getHeapStatistics().then((h) => h.used_heap_size, () => 0)));
   }
 
   close() {
     this.closed = true;
     if (this.minutes !== null) void this.minutes.close();
-    for (const line of [this.asked, this.told, this.log]) {
+    if (this.outflowChats !== null) void this.outflowChats.close();
+    if (this.said !== null) void this.said.close();
+    if (this.turns !== null) void this.turns.close();
+    for (const line of [this.asked, this.told, this.log, this.pages]) {
       for (const asked of line.waiting.splice(0)) asked.reject(new HttpError(502, "station stopping"));
       for (const { worker } of line.slots) void worker.terminate();
     }

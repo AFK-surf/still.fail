@@ -1,7 +1,7 @@
 // still.fail's crash reports and timings, as its own Android app sends them (docs/telemetry.md → 安卓: Crashes.kt,
 // BarTiming.kt): the host's (android/app/src/main/java/dev/mbui: Crashes.java, BarTiming.java), told here what only
 // the app knows: the account signed in (the crashes kept since the last report go as it), the core failing and started
-// again (CoreFailed), the bottom bar's switches (src/sfapp/bar_timing.mbt) and the topics their pages subscribe. Where
+// again (CoreFailed), what the UI could not do as asked (UiFault), the bottom bar's switches (src/sfapp/bar_timing.mbt) and the topics their pages subscribe. Where
 // no host takes them (macOS, iOS, Windows, the web: host_tell answers 0) none of it is set.
 
 ///|
@@ -21,6 +21,8 @@ fn reports_start() -> Unit {
     return
   }
   @core.on_failed.val = Some(fn(reason) { host_tell("core_failed", reason, "", 0, 0) |> ignore })
+  // what the UI was asked that it could not do as asked, shown in its place by the boundary round it (UiFault)
+  @view.fault_told.val = Some(fn(said) { host_tell("ui_fault", said, "", 0, 0) |> ignore })
   // the settings' 发送使用统计和错误报告 (-1: a build that sends nothing, no row)
   if host_tell("reporting", "", "", 0, 0) >= 0 {
     @sfapp.reporting_host.set(

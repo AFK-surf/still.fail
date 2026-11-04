@@ -28,6 +28,10 @@ pub(all) struct ListsFrame {
   others : Array[() -> Unit]
   shown : Int
   at : @sf.ListAt
+  /// whether each list is kept as what it built (Ctx::kept_part's `own`) while this frame's fields are the same, however
+  /// what holds it is built again: what the block moves each frame (the sidebar on its way) leaves its rows as they are.
+  /// Only where `before` and `after` give nothing else.
+  kept : Bool
 }
 
 ///|
@@ -42,7 +46,19 @@ pub(all) struct ListPart {
 ///|
 /// A frame's lists with nothing of the frame's own in them, standing `at`.
 pub fn bare_lists(top : Double, foot : Double, inset : Double, ground : Int64, shown : Int, at : @sf.ListAt) -> ListsFrame {
-  { top, under: top, foot, inset, ground, before: fn(_, _) { [] }, after: fn(_, _) { [] }, others: [], shown, at }
+  { top, under: top, foot, inset, ground, before: fn(_, _) { [] }, after: fn(_, _) { [] }, others: [], shown, at, kept: false }
+}
+
+///|
+/// What a list kept on the page's way (ListsFrame's `kept`) is built from besides what it reads.
+fn lists_kept_key(frame : ListsFrame, w : Double, h : Double) -> String {
+  @sfbase.page_way.id +
+  " " +
+  [frame.top, frame.under, frame.foot, frame.inset, w, h].map(fn(x) { x.to_string() }).join(" ") +
+  " " +
+  frame.ground.to_string() +
+  " " +
+  frame.shown.to_string()
 }
 
 ///|
@@ -83,7 +99,19 @@ pub fn chats_lists(c : @ui.Ctx, src : Source, w : Workspace, frame : ListsFrame)
         c.layer(fn() {
           c.box(style=lists_fill, tx=(p.to_double() - x) * width, fn() {
             if p < list_filters.length() {
-              chats_pane(c, src, w, list_filters[p], frame, p == frame.shown)
+              let pane = fn() { chats_pane(c, src, w, list_filters[p], frame, p == frame.shown) }
+              // (on the page's way alone: at rest as any list, built whenever what holds it is)
+              if frame.kept && @sfbase.page_way.id != "" {
+                c.kept_part(
+                  c.id("chats-pane/" + w.id + "/" + list_filters[p]),
+                  lists_kept_key(frame, width, c.height),
+                  pane,
+                  read_out=true,
+                  rows_stay=true,
+                )
+              } else {
+                pane()
+              }
             } else {
               (frame.others[p - list_filters.length()])()
             }
@@ -146,7 +174,16 @@ fn line_key(line : Line) -> String {
 let placed : Map[String, Bool] = {}
 
 ///|
+/// How far each list made once is scrolled to tuck its search out of view, by its key, as it was first placed: the room
+/// its foot keeps so it goes that far with fewer rows than it is tall.
+// kept across runs: put back by sidebar_reset (reset)
+let tucked_by : Map[String, Double] = {}
+
+///|
 fn sidebar_reset() -> Unit {
+  list_scrolls.clear()
+  tucked_by.clear()
+  rows_rest_at.val = -1.0
   placed.clear()
   rows_laid.clear()
   list_rows.clear()
@@ -565,7 +602,14 @@ pub fn filter_menu(from : @sf.Beside, shown : String, go : (String) -> Unit) -> 
     along=End,
   )
   filter_menu_serial.val = @sf.last_presented()
+  filter_menu_opened.set(@signals.untracked(fn() { filter_menu_opened.get() }) + 1)
 }
+
+///|
+/// How many times the filter's menu has opened: what makes the lists it would show at once told as it does
+/// (chats_lists_node).
+// kept across runs: counted on as it opens (nothing reads its value, only its change)
+let filter_menu_opened : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 /// The list's filter in workspace `w` chosen (`all`, `mine`, `watching`): kept here at once, and in the prefs (the

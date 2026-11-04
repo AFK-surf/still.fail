@@ -317,11 +317,15 @@ fn tree_on_screen(c : Ctx, what : String) -> Array[(Double, Double, @view.NodeId
     // contentDescription, on_screen_nodes)
     let label = tree.said_label(d.id)
     // (its words as they are drawn: on one line where they do not wrap, as an old view's text is found: view_words_set)
-    let words = view_words_set(d.words, d.words_look)
+    let words = view_words_found(d)
     let by_words = !what.has_prefix("icon:") && words != "" &&
       (if what.has_prefix("=") { words == what.unsafe_substring(start=1, end=what.length()) } else { words.contains(what) })
     let hit = if what.has_prefix("icon:") {
       tree.drawn_name(d.id).contains("/icon/" + what.unsafe_substring(start=5, end=what.length()) + "/")
+    } else if what.has_prefix("switch:") {
+      // a switch by what it turns (its label, whole), as on_screen_nodes finds an old view's: the switch alone
+      let label = what.unsafe_substring(start=7, end=what.length())
+      tree.said_of(d.id) is Some({ role: Switch, label: l, .. }) && l == label
     } else if what.has_prefix("=") && what.length() > 1 {
       let exact = what.unsafe_substring(start=1, end=what.length())
       words == exact || (label != "" && label == exact)

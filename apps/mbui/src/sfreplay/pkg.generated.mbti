@@ -3,6 +3,7 @@ package "stillfail/sfreplay"
 
 import {
   "mbui/ui",
+  "moonbitlang/core/json",
   "stillfail/core",
   "stillfail/sfbase",
 }
@@ -57,8 +58,9 @@ pub fn Flow::field(Self, String) -> Unit
 pub fn Flow::gone(Self, String) -> Unit
 pub fn Flow::hold(Self, String, Double) -> Unit
 pub fn Flow::hover(Self, String) -> Unit
+pub fn Flow::incidental_calls(Self, Array[String]) -> Unit
 pub fn Flow::key(Self, String) -> Unit
-pub fn Flow::message_taken(Self, (Json) -> Bool) -> Double
+pub fn Flow::message_taken(Self, (@json.Json) -> Bool) -> Double
 pub fn Flow::no_notice(Self, String) -> Unit
 pub fn Flow::noticed(Self, String) -> Unit
 pub fn Flow::open_page(Self, @sfbase.Page) -> Unit

@@ -8,13 +8,13 @@
 let wide_step_ms : Double = 16.0
 
 ///|
-let chat_a : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+let chat_a : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
 
 ///|
-let chat_b : ChatRef = { station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" }
+let chat_b : ChatRef = { station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Willow" }
 
 ///|
-let chat_c : ChatRef = { station: "ws1/st1", session: "s-c3", title: "", station_name: "Studio" }
+let chat_c : ChatRef = { station: "ws1/st1", session: "s-c3", title: "", station_name: "Willow" }
 
 ///|
 /// The source of the last made (wide_backs).
@@ -136,7 +136,7 @@ fn screen_closed(framed : Bool) -> (Bool, Bool, @sfdesk.TapePane) {
   } else {
     t.advance(t0 - t.time())
   }
-  @sfbase.open_page(Screen({ station: "ws1/st1", screen: "desktop", title: "Studio 的桌面", until_gone: false }))
+  @sfbase.open_page(Screen({ station: "ws1/st1", screen: "desktop", title: "Willow 的桌面", until_gone: false }))
   let taken = t.takes_back()
   if framed {
     t.frame_at(t0 + wide_step_ms)

@@ -46,7 +46,7 @@ fn corner_cover(a : Array[Double], px : Double, py : Double, scale : Double) -> 
 fn chat_corners(w : Double, h : Double, scale : Double) -> Int raise {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform=2, scale~)
   t.run_for(@ui.move_most_ms)
   // over the chat's messages, wherever the screen puts the chat

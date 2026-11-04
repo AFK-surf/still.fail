@@ -28,7 +28,7 @@ jobs:
           - { os: ubuntu-24.04-arm, bin: moonbit-linux-aarch64.tar.gz, core: core-latest.tar.gz }
           - { os: macos-15, bin: moonbit-darwin-aarch64.tar.gz, core: core-latest.tar.gz }
           - { os: windows-latest, bin: moonbit-windows-x86_64.zip, core: core-latest.zip }
-          # (Mini1's own entry: a self-hosted runner's cache is not the same entry as macos-15's, its tar and
+          # (macos-ci's own entry: a self-hosted runner's cache is not the same entry as macos-15's, its tar and
           # compression another, so its jobs find none of macos-15's)
           - { os: [self-hosted, mbui-render], bin: moonbit-darwin-aarch64.tar.gz, core: core-latest.tar.gz }
     runs-on: ${{ matrix.os }}
@@ -39,7 +39,7 @@ jobs:
         shell: bash
         run: |
           base=https://cli.moonbitlang.com
-          # (--retry-all-errors: --retry alone does not ask again after a connection broken off, Mini1's
+          # (--retry-all-errors: --retry alone does not ask again after a connection broken off, macos-ci's
           # SSL_ERROR_SYSCALL failing the hour's run at once, 40997517041)
           tag=$( { curl -fsSI --retry 3 --retry-all-errors --max-time 20 $base/binaries/latest/${{ matrix.bin }}
                    curl -fsSI --retry 3 --retry-all-errors --max-time 20 $base/cores/${{ matrix.core }}; } \

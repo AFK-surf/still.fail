@@ -23,7 +23,7 @@
 // telling for all their streams, kept like the rest), and the one that comes back is told how they stand now. Its answer
 // says it was (`stillfail-resumed: 1`). Past KEPT_MS with nobody, nothing more is made, and nothing before can be resumed.
 //
-// The same again when the station process is replaced (an update: on ccvm 32 a day, each with every device's streams
+// The same again when the station process is replaced (an update: on a station 32 a day, each with every device's streams
 // cut): what is kept, and what each viewer's streams were told of their sidebar and overview, go over to the next
 // process (`handOver`, `takeUp`), which goes on with the same run and numbers, made and kept as while nobody follows,
 // so a stream that comes back to it is resumed as the old one would have. What it is to tell before then waits, and is
@@ -37,7 +37,7 @@
 // What is said in a thread is told as the store wrote it: its entries come with the change, and are made into what the
 // pages show here (`said`), with nothing read first. What else a change touches (each viewer's thread, their sidebar,
 // a session's summary, a job) is read by the station's own reader (`told`: read/pool.ts), which nothing a device asks
-// takes: on ccvm (2026-11-02) both shared two readers, and a message just said was told 50 s late.
+// takes: on a station (2026-11-02) both shared two readers, and a message just said was told 50 s late.
 import { type FSWatcher, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { type Viewer, readOnly } from "../mesh/credential.ts";
@@ -188,6 +188,9 @@ type Client = {
   /// Its client makes its sidebar's rows from what it is told itself (`rows=1`, client/core-ts/src/station/
   /// rows-after.ts): what said, a session's summary, what its viewer pinned or dismissed reads no rows for it.
   rows: boolean;
+  /// Its client makes its sidebar of the chat list the station makes once for everyone (`shared=1`, read/views.ts
+  /// `sharedChats`) and what is its viewer's own (client/core-ts/src/chat-row.ts): told each row as it changes.
+  shared: boolean;
   send(event: string, data: unknown): void;
   raw(text: string): void;
   /// What it follows besides (live sessions, job logs): ended with it.
@@ -209,10 +212,13 @@ export class Events {
   /// What each viewer's streams were last told of their sidebar (row id → JSON) and their overview (JSON), by viewer and
   /// language (`viewerKey`): what changes is told against it.
   private rowsTold = new Map<string, Map<string, string>>();
+  /// The chat list as it was told last to every stream that makes its sidebar of it (row id → JSON); null until it is
+  /// read whole (a process that took over tells nothing of it until then: a stream reads it whole as it opens).
+  private sharedTold: Map<string, string> | null = null;
   private overviewTold = new Map<string, string>();
   /// For each viewer whose streams all went (by `viewerKey`), what changed of their sidebar since (`Away`): as one comes
   /// back, only that is read (`cameBack`). Read whole at each, every device that came back (each link that moved, every
-  /// station update) had its viewer's whole sidebar read: 42 to 46 s a read on ccvm short of memory (2026-11-02), its
+  /// station update) had its viewer's whole sidebar read: 42 to 46 s a read on a station short of memory (2026-11-02), its
   /// devices' every other read waiting behind it, up to 99 s.
   private away = new Map<string, Away>();
   private deps: EventsDeps;
@@ -470,7 +476,7 @@ export class Events {
   /// told after it is told first, and their sidebar and overview as they are now (RESUMED says so), or `missed`.
   /// `brief`: the sessions followed have their transcript entries in brief (read/transcript.ts `brief`).
   /// `logins`: those logins' terminals, each a `login-screen` event (all its rows first, then the rows that changed).
-  async open(viewer: Viewer, lang: Lang, host: boolean, live: [string, number, number | null][], logs: [string, number][], since: string | null = null, brief = false, logins: string[] = [], running = false, views = false, rows = false): Promise<Answer> {
+  async open(viewer: Viewer, lang: Lang, host: boolean, live: [string, number, number | null][], logs: [string, number][], since: string | null = null, brief = false, logins: string[] = [], running = false, views = false, rows = false, shared = false): Promise<Answer> {
     // Following the sessions at work itself, it follows none by name: a client that asks both is one that does not know
     // yet whether this station does (an older one follows those it names).
     const follows = running && this.deps.held !== undefined;
@@ -493,6 +499,7 @@ export class Events {
       running: follows,
       views,
       rows,
+      shared: rows && shared,
       // Its own (a session's steps, a log, a host sample, `missed`): not of the log, and without an id (event-log.ts).
       send: (event, data) => push(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
       raw: push,
@@ -501,7 +508,7 @@ export class Events {
     };
     push("retry: 3000\n\n");
     // Said first: it makes its rows from here on, and reads from this station what only the station can say of them.
-    if (rows) client.send("made", { rows: true, marks: true });
+    if (rows) client.send("made", { rows: true, marks: true, ...(shared ? { shared: true } : {}) });
     // Coming back where all that was told since is kept (their sidebar told on this run too, or one that makes its rows
     // itself from what was told).
     const k = viewerKey(viewer, lang);
@@ -710,6 +717,9 @@ export class Events {
     if (this.taking !== null) return void this.early.push(() => this.storeChanged(change));
     switch (change.type) {
       case "session":
+        // Its messages taken: how many it has yet to take, told now (its summary, read after, says it too): read
+        // behind the station's other tells can leave a person's message showing that it waits for its agent.
+        if (change.pending !== undefined) this.emit("session-pending", { key: change.key, pending: change.pending }, { sees: { session: change.key } });
         this.dirty.sessions.add(change.key);
         // Its summary is told (`session`): a device that makes its rows puts it in them.
         this.itemsChanged({ sessions: [change.key] }, null, true);
@@ -927,6 +937,7 @@ export class Events {
         }),
       );
     }
+    await this.tellShared(dirty);
     // Each viewer's sidebar: read whole where it may all have changed, or nothing of it is told against yet (it could
     // not be read); else only the items the changes can touch.
     const seen = new Set<string>();
@@ -944,7 +955,7 @@ export class Events {
     const whole = (v: { viewer: Viewer; lang: Lang }) => dirty.rowsAll || dirty.rows.has(v.viewer.email) || (readsMade(v) && dirty.madeRows.has(v.viewer.email)) || (touched(v) && !this.rowsTold.has(viewerKey(v.viewer, v.lang)));
     // The viewers the same changes touch alike are read together (read/ops.ts `chatRowsOf`): one read, what the first
     // read in serving the others. One a viewer, one person's devices in two languages or workspaces read the same chats
-    // again each (four of them on ccvm, 2026-11-02), each from the disk while memory was short.
+    // again each (four of them on a station, 2026-11-02), each from the disk while memory was short.
     const alike = new Map<string, { sessions: string[]; threads: number[]; viewers: { viewer: Viewer; lang: Lang }[] }>();
     for (const v of everyone.filter((v) => !whole(v) && touched(v))) {
       const sessions = [...sessionsOf(v)].sort();
@@ -990,6 +1001,37 @@ export class Events {
         this.tellRows(viewer, lang, rows);
       }),
     );
+  }
+
+  /// The chat list's rows a round's changes touch, made once for everyone (read/views.ts `sharedChats`), each told to
+  /// the streams that see it as it changed (`chat-shared`; gone: `chat-shared-removed`). None while no stream makes its
+  /// sidebar of it.
+  private async tellShared(dirty: ReturnType<typeof Events.clean>) {
+    if (!this.clients.some((c) => c.shared)) return;
+    const sessions = [...new Set([...dirty.items.sessions, ...dirty.made.sessions])];
+    const threads = [...new Set([...dirty.items.threads, ...dirty.made.threads])];
+    const whole = this.sharedTold === null || dirty.rowsAll;
+    if (!whole && sessions.length === 0 && threads.length === 0) return;
+    let read: { rows: any[]; scope: string[] | null };
+    try {
+      read = JSON.parse(await this.deps.readers.read("sharedOf", whole ? { sessions: null, threads: null } : { sessions, threads }, "zh", TOLD));
+    } catch (error) {
+      return log.warn("events", "the chat list not read", { error: (error as Error).message });
+    }
+    const told = this.sharedTold;
+    const now = new Map(read.rows.map((r) => [String(r.id ?? ""), JSON.stringify(r)]));
+    if (told === null) return void (this.sharedTold = now);
+    for (const row of read.rows) {
+      const id = String(row.id ?? "");
+      if (told.get(id) === now.get(id)) continue;
+      told.set(id, now.get(id)!);
+      this.emit("chat-shared", row, { sees: { ws: row.ws ?? null } }, `chat-shared\0${id}`);
+    }
+    const gone = read.scope === null ? [...told.keys()].filter((id) => !now.has(id)) : read.scope.filter((id) => !now.has(id) && told.has(id));
+    for (const id of gone) {
+      told.delete(id);
+      this.emit("chat-shared-removed", { id }, {}, `chat-shared\0${id}`);
+    }
   }
 
   /// Some of a viewer's sidebar items as they are now (`rows`, of those `scope` names: one named and not among them is gone

@@ -64,6 +64,8 @@ struct Bench {
 /// old frame around the old views it holds, put where `view` says: old_views_here), else `view` its one old view
 /// (view_host.mbt).
 pub fn run(title : String, view : (Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
+  // (an app's run on a host: what faults is told and its boundary shows it, the app going on: @view's boundary.mbt)
+  @view.faults_stop.val = false
   match tree {
     Some(make) => set_view_app(make, around=view)
     None => set_view_app(fn(root) { old(root, view).grow(Is(1.0)) |> ignore })
@@ -443,6 +445,9 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   }
   // (what it laid out, said as one number: whether the next frame may paint it again alone, frame_watch.mbt)
   laid_kept(c, root)
+  // (a finger held on words to pick, its builds over and nothing of them having taken its press: picked as this frame
+  // paints, finger_select.mbt)
+  c.finger_hold()
   let t2 = work_now()
   // painted under a watch of its own: what only its paint reads (a look worked out as it is painted) paints the next
   // frame again, nothing built (frame_watch.mbt)
@@ -507,6 +512,8 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.raise_tops()
   // (what is over everything, the layers over the page too)
   c.paint_over_layers()
+  // (the handles of words a finger picked, over everything, as a field's: finger_select.mbt)
+  c.paint_finger_ends()
   // what was shaped and not drawn, for the host to draw ahead while it presents this frame (text.mbt)
   glyphs_ahead()
   c.emit_segs()
@@ -987,6 +994,19 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     c.editor_drag = false
     c.handle_drag = 0
     c.word_drag = 0
+    // a handle of words a finger picked with the pointer under it: that end follows the finger, nothing under it
+    // pressed or scrolled (finger_select.mbt)
+    if c.finger_handle_down(x, y) {
+      c.claimed = true
+      for other in c.press_chain {
+        drag_cancel(other)
+      }
+      c.active = 0
+      c.edge = 0
+      c.taken_at = c.press_at
+      h_request_frame()
+      return
+    }
     // a selection's handle under the finger (Android's): the finger moves that end, the menu away meanwhile
     // (the finger where it is in the field's words, as they are placed: EditorState::local)
     let in_words = match c.editors.get(c.focus_allowed()) {
@@ -1246,6 +1266,10 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
       c.tapped = Some((x, y))
       // (the window's tree told it too: what of it a tap anywhere lets go of)
       view_tapped_old()
+      // (words a finger picked elsewhere let go: finger_select.mbt)
+      if !c.press_strayed {
+        c.finger_tapped(target)
+      }
     }
     // taken by none: the innermost's tap (as a press on it alone); the others let it go
     for other in c.press_chain {
@@ -1347,6 +1371,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     c.editor_drag = false
     c.handle_drag = 0
     picked.dragging = false
+    finger_let_go()
     select_edge_stop()
     second_ptr[2] = 0.0
   } else {
@@ -1414,6 +1439,7 @@ fn Ctx::press_called_off(self : Ctx, x : Double, y : Double, t : Double) -> Unit
   }
   // (words being picked by it: picked as far as they are, no more, nothing scrolled on at an edge for it)
   picked.dragging = false
+  finger_let_go()
   select_edge_stop()
   c.down = false
   c.dragging = false
@@ -1889,6 +1915,16 @@ fn key_in(code : Int, mods : Int) -> Unit {
   // focus through a press on the page's words, which lets go of what it had picked: the press above)
   if code == key_copy && selected_words() != "" && !field_picks(c) {
     h_clipboard_set(selected_words())
+    // (a finger's, from the system's menu: let go of once copied, as a phone's text is)
+    if picked.finger {
+      select_none()
+      h_request_frame()
+    }
+    return
+  }
+  // the system's menu's select all over words a finger picked: all of what they are in (finger_select.mbt)
+  if code == key_select_all && picked.finger && !field_picks(c) {
+    c.finger_select_all()
     return
   }
   match (c.editors.get(focus), step) {

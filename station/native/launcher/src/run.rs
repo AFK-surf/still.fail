@@ -56,7 +56,7 @@ impl Process for Node {
 
     /// The line goes after what is not written yet. A line longer than the socket takes (what is carried over, some
     /// 8 KB) waits there for Node to read: given up on halfway, as before, its start stayed in the socket, and the
-    /// next line was read on from it as one that does not read. ccvm (2026-11-02): a Node starting up read nothing for
+    /// next line was read on from it as one that does not read. A station (2026-11-02): a Node starting up read nothing for
     /// 5 s, the next update's handover came after half a line, and the Node serving never heard it (killed 30 s on).
     fn send(&self, line: &Value) {
         self.outgoing.borrow_mut().extend_from_slice(format!("{line}\n").as_bytes());
@@ -197,7 +197,7 @@ impl Os for System {
             .stdin(Stdio::null())
             .process_group(0);
         // macOS's malloc keeps what is freed for the next allocation of its size, the pages still the process's: on a
-        // machine short of memory they are compressed or swapped out, and counted as its own. ccvm (8 GB), a station of
+        // machine short of memory they are compressed or swapped out, and counted as its own. A machine with 8 GB of memory, a station of
         // 900 MB footprint with 50 MB of JS: 280 MB of it freed large blocks (answers' zstd contexts, file reads) and
         // much of 280 MB of small. Set for space, malloc gives them back as they are freed; the Node takes it out of
         // its environment for what it starts (main.ts).
@@ -676,7 +676,7 @@ mod tests {
         assert_eq!(*kept.node.outgoing.borrow(), b"er\"}\n", "the rest of a line, written on as it was");
     }
 
-    // ccvm (2026-11-02): what was carried over to a Node starting up did not all fit in the socket, the rest was given
+    // A station (2026-11-02): what was carried over to a Node starting up did not all fit in the socket, the rest was given
     // up on after 5 s, and the next update's handover came after its start, as one line that does not read.
     #[test]
     fn what_a_node_is_told_reaches_it_whole_however_long_it_takes_to_read() {

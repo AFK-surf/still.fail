@@ -29,7 +29,7 @@ pub fn Ctx::image_pixels(self : Ctx, src : String, px : Int) -> ImagePixels {
     None => ()
   }
   let p = match self.image_for(src, px.to_double()) {
-    Some(e) if e.state == 1 && e.px >= want => {
+    Some(e) if e.state == 1 && e.px == want => {
       let w = e.w.to_int()
       let h = e.h.to_int()
       let out = FixedArray::make(w * h * 4, b'\x00')

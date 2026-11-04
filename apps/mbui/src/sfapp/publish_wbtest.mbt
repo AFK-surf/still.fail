@@ -9,7 +9,7 @@ let publish_src : Ref[Source?] = Ref(None)
 ///|
 /// The page that draws the chat as a picture opened, as 分享图片 in the chat's "…" does (the menu's own: wide_publish_wbtest).
 fn open_publish_page() -> Unit {
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   @sfpages.open_publish(publish_src.val.unwrap(), r, 7.0)
 }
 

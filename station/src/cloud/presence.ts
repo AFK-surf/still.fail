@@ -22,10 +22,9 @@ const PING_MS = 30_000;
 const CLOSE_REMOVED = 4004;
 const REMOVED_RETRY_MS = 600_000;
 const CONNECT_TIMEOUT_MS = 20_000;
-/// How long the roster the cloud said last stays current once its socket ended. A socket the cloud closes is back
-/// within seconds (ccvm's about every 20 minutes, 2026-10-29), and every request between the workspace's stations in
-/// those seconds was refused as `roster is not current`: a share not told, a task not started. Past this, or when the
-/// station is removed, calls fail closed until a fresh roster comes.
+/// How long the roster the cloud said last counts as reached once its socket ended. A socket the cloud closes is back
+/// within seconds (one station's about every 20 minutes, 2026-10-29): those seconds are not shown as cut off. The roster itself
+/// is taken on past this (cloud/state.ts `peersCurrent`), until the station is removed.
 export const ROSTER_GRACE_MS = 60_000;
 
 /// REMOVED_RETRY, or STILLFAIL_REMOVED_RETRY_SECS (tests against a dev cloud).
@@ -73,7 +72,7 @@ export const presence = ({ cloud, key, up, spec }: PresenceParts) => Effect.gen(
     // The socket, until it ends or the station stops answering (then it is closed: offline at the cloud).
     const ended = yield* Effect.result(Effect.raceFirst(connect(s, key, plane), Effect.as(until(false), `station not answering; went offline at ${plane.name}`)));
     lapse(s);
-    const why = ended._tag === "Success" ? ended.success : ended.failure.message;
+    const why = ended._tag === "Success" ? ended.success : failureText(ended.failure);
     writePresence(s.data, false, why);
     if (ended._tag === "Success") log.info("presence", why);
     else log.warn("presence", `no presence socket to ${plane.name}`, { error: why });
@@ -84,16 +83,23 @@ export const presence = ({ cloud, key, up, spec }: PresenceParts) => Effect.gen(
   }
 });
 
-/// The roster said last, no longer current once ROSTER_GRACE_MS passed with no fresh one (at once when the station
-/// was removed).
+/// What a failed socket says: every address's own error when they all failed (Node's AggregateError, whose message is
+/// empty: the log said only `error=`).
+export function failureText(error: Error): string {
+  const each = error instanceof AggregateError ? error.errors.map((e) => (e instanceof Error ? e.message : String(e))).filter((m) => m.length > 0) : [];
+  return each.length > 0 ? each.join("; ") : error.message || error.name;
+}
+
+/// The roster said last, no longer reached once ROSTER_GRACE_MS passed with no fresh one; not taken at all at once when
+/// the station was removed.
 export function lapse(s: CloudState, after: (ms: number, f: () => void) => unknown = wall.after) {
   if (s.removed()) {
-    s.peersCurrent = false;
+    s.lapsed();
     return;
   }
   const said = s.rostersSaid;
   after(ROSTER_GRACE_MS, () => {
-    if (s.rostersSaid === said) s.peersCurrent = false;
+    if (s.rostersSaid === said) s.lapsed();
   });
 }
 
@@ -248,6 +254,7 @@ export function applyState(s: CloudState, text: string, send: (frame: unknown) =
     s.setPlaneLists(Array.isArray(body.peers) ? body.peers : [], Array.isArray(body.gateway_keys) ? body.gateway_keys.filter((k: unknown): k is string => typeof k === "string") : undefined);
     // Current before it is told, so whoever hears of the new roster reads it as current.
     s.peersCurrent = Array.isArray(body.peers);
+    s.reached = s.peersCurrent;
     s.rostersSaid = (s.rostersSaid ?? 0) + 1;
     s.update((st) => {
       for (const k of ["workspace", "workspace_name", "name", "origin", "relay_url"] as const) {

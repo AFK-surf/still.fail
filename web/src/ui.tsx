@@ -141,7 +141,7 @@ export function ProviderLogo({ runtime, kind, mark, size = 16 }: { runtime: Runt
 }
 
 /** A runtime's name, short, for the tags after a profile's name. */
-const RUNTIME_TAG: Record<RuntimeKind, string> = { claude: "CC", codex: "Codex", dsh: "DSH", grok: "GROK", cursor: "Cursor", devin: "Devin", hermes: "Hermes" };
+const RUNTIME_TAG: Record<RuntimeKind, string> = { claude: "CC", codex: "Codex", dsh: "DSH", grok: "GROK", cursor: "Cursor", devin: "Devin", hermes: "Hermes", agy: "AGY" };
 
 /** The runtimes a profile runs, as small marks after its name (CC for Claude Code, Codex, DSH for DeepSeek Harness, GROK for Grok Build, Cursor, Devin), and 自动决策 where it serves the automatic decisions. */
 export function RuntimeTags({ runtimes, decision = false }: { runtimes: RuntimeKind[]; decision?: boolean | undefined }) {

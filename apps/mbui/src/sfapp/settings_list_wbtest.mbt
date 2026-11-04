@@ -32,6 +32,8 @@ test "the large settings sidebar keeps its way back visible and usable while its
       fail("platform \{platform}: no back in the settings sidebar")
     }
     assert_true(w > 0.0 && h > 0.0)
+    let search = t.find("搜索设置")
+    assert_true(search is Some(_), msg="the search is visible above the list")
     guard t.rect_of("本机缓存") is Some((_, before, _, _)) else {
       fail("platform \{platform}: no cache row in the settings sidebar")
     }
@@ -46,6 +48,7 @@ test "the large settings sidebar keeps its way back visible and usable while its
     assert_true(after < before && after + row_h <= 430.0, msg="the settings rows scrolled")
     let (sx, sy, sw, sh) = t.shown_of("返回会话").unwrap()
     assert_eq((sx, sy, sw, sh), (x, top, w, h), msg="back stays fully visible at the top")
+    assert_eq(t.find("搜索设置"), search, msg="search stays above the scrolling list")
     let (rx, ry, rw, rh) = t.shown_of("本机缓存").unwrap()
     assert_true(ry >= top + h && rw > 0.0 && rh > 0.0, msg="the scrolled row is visible below back")
     t.tap(rx + rw / 2.0, ry + rh / 2.0)

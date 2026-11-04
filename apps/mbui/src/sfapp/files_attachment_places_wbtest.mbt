@@ -6,7 +6,7 @@ test "the attachment picker uses the personal shortcuts" {
   let src = fixture("chat")
   @sfdesk.favorite_add(src, "ws1", { station: "ws1/st1", root: "/Users/lin", path: "项目", name: "项目" })
   @sfdesk.favorite_remove(src, "ws1", "ws1/st1", fix_docs, "")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   @sfdesk.station_files_pick(src, "ws1/st1:s-c1")
   sheet_rested(t, "sf-present")

@@ -16,7 +16,7 @@ import { Updates, type UpdatesOptions } from "../src/updates/updates.ts";
 import { WINDOWS, platform as machine } from "../src/platform/index.ts";
 import { windowsUpdateScript, wingetPackage } from "../src/platform/windows.ts";
 import {
-  channelOf, curlPercent, downloading, feed, INSTALLING, newer, offer, releaseChannel, say, stationDownloadPercent, stationVersion, stepOf, tail, versionIn,
+  channelOf, curlPercent, downloading, feed, INSTALLING, newer, offer, platform as npmPlatform, releaseChannel, say, stationDownloadPercent, stationVersion, stepOf, tail, versionIn,
 } from "../src/updates/versions.ts";
 import { setChannelIn } from "../src/updates/channel.ts";
 import { exe, launcher, script as stand_in } from "./accounts-fakes.ts";
@@ -594,6 +594,65 @@ describe("updates", { concurrency: true }, () => {
       assert.equal(updates.get("zh")[2]!.message, `${exe(join(bin, "npm"))} 已完成，但 station 的 PATH 中仍找不到 codex：可能安装到了其他位置`);
     });
   });
+
+  for (const complete of [true, false]) {
+    test(`repairing an incomplete Codex ${complete ? "switches to npm and keeps the old entry" : "keeps the old entry when npm is incomplete"}`, { skip: !machine.codexStandalone }, async (t) => {
+      const target = npmPlatform();
+      const triples: Record<string, string> = { "linux-x64": "x86_64-unknown-linux-musl", "linux-arm64": "aarch64-unknown-linux-musl", "darwin-x64": "x86_64-apple-darwin", "darwin-arm64": "aarch64-apple-darwin" };
+      if (!target || !triples[target]) return t.skip("no supported Codex npm package");
+      const dir = temp(), bin = join(dir, "bin"), original = join(dir, "original", "codex"), entry = join(bin, "codex");
+      script(original, "#!/bin/sh\necho 'codex-cli 0.166.0'\n");
+      mkdirSync(bin);
+      symlinkSync(original, entry);
+      const old = realpathSync(entry);
+      script(join(bin, "npm"), `#!/bin/sh
+if [ "$1" != install ]; then exit 0; fi
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = --prefix ]; then shift; prefix="$1"; fi
+  shift
+done
+root="$prefix/lib/node_modules/@openai/codex"
+pkg="$root/node_modules/@openai/codex-${target}"
+mkdir -p "$prefix/bin" "$root/bin" "$pkg/vendor/${triples[target]}/bin"
+printf '#!/bin/sh\\necho codex-cli 0.166.0\\n' > "$root/bin/codex.js"
+chmod +x "$root/bin/codex.js"
+printf '{}' > "$pkg/package.json"
+printf '\\177ELF1234' > "$pkg/vendor/${triples[target]}/bin/codex"
+chmod +x "$pkg/vendor/${triples[target]}/bin/codex"
+${complete ? `printf '#!/bin/sh\\nexit 0\\n' > "$pkg/vendor/${triples[target]}/bin/codex-code-mode-host"; chmod +x "$pkg/vendor/${triples[target]}/bin/codex-code-mode-host"` : ":"}
+ln -s ../lib/node_modules/@openai/codex/bin/codex.js "$prefix/bin/codex"
+echo 'added 2 packages'
+`);
+      const changed: unknown[][] = [];
+      const updates = installed(dir, "1300", null, {
+        env: { PATH: withSystem(bin), HOME: dir },
+        codexHostProbe: async (found) => found.real === old ? { binary: old, helper: join(dirname(old), "codex-code-mode-host") } : null,
+        runtimeChanged: (...args) => changed.push(args),
+      });
+      t.after(() => updates.close());
+      await updates.check();
+      assert.equal(updates.get("zh")[2]!.repairable, true);
+      await updates.repairCodex();
+      await until("repair ended", () => updates.get("zh")[2]!.state !== "updating");
+      const codex = updates.get("zh")[2]!;
+      if (complete) {
+        assert.equal(codex.state, "idle");
+        assert.equal(codex.version, "0.166.0");
+        assert.match(realpathSync(entry), /node_modules\/@openai\/codex\/bin\/codex\.js$/);
+        const backup = readdirSync(bin).find((name) => name.startsWith("codex.stillfail-backup-"));
+        assert.ok(backup);
+        assert.equal(readlinkSync(join(bin, backup)), original);
+        assert.match(codex.done ?? "", /已用 npm 修复/);
+        assert.deepEqual(changed, [["codex", true, true]]);
+      } else {
+        assert.equal(codex.state, "failed");
+        assert.match(codex.message ?? "", /安装不完整/);
+        assert.equal(readlinkSync(entry), original);
+        assert.equal(readdirSync(bin).some((name) => name.startsWith("codex.stillfail-backup-")), false);
+        assert.deepEqual(changed, [["codex", true, false]]);
+      }
+    });
+  }
 
   test("a runtime npm installs in its own Node's bin, off PATH, is linked beside the npm on PATH", { skip: WINDOWS && "npm's .cmd stays in its prefix (on PATH)" }, async (t) => {
     const [registry, server] = await serve((path) => (path === "/@xai-official/grok/latest" ? { body: JSON.stringify({ version: "1.0.62" }) } : null));

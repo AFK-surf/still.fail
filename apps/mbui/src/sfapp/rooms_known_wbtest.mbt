@@ -47,8 +47,9 @@
 /// page's two keys, which the other windows already count, come into the wide windows' views: 4 more, 219. The model
 /// panel's accounts open over it a screen of its own (chat-model-accounts), what chat-model-pop has under it: its bar's
 /// agent key in the wide windows, 4 more, 223. 千恋＊万花's thirty looks of the card to share swept as its others are
-/// (share-card-senren-…), each over a new chat's composer laid out Medium on a tablet: its three chips, 90 more, 313.)
-let rooms_known : Map[String, Int] = { "room": 313, "apart": 0, "hover": 0 }
+/// (share-card-senren-…), each over a new chat's composer laid out Medium on a tablet: its three chips, 90 more, 313.
+/// 归档建议 made once (2026-11-03): 4 fewer, 309. The chats' lists made once (2026-11-03): one fewer, 308.)
+let rooms_known : Map[String, Int] = { "room": 308, "apart": 0, "hover": 0 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.

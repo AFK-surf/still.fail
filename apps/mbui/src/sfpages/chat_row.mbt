@@ -39,6 +39,8 @@ let rows : Rows = {
 ///|
 fn chat_rows_reset() -> Unit {
   row_left.val = ("", false)
+  row_left_said.set("")
+  row_renaming.set("")
   rows.renaming = ""
   rows.rename_for = ""
   rows.rename_seen = false
@@ -669,7 +671,10 @@ fn chat_menu_items(src : Source, item : ChatItem, extra : Array[@sf.MenuItem?]) 
           @sf.t("android-chat.rename.title"),
           @sf.t("common.save"),
           fn(title) { rename(src, item, title) },
-          fn() { rows.renaming = @sfbase.row_name(item) },
+          fn() {
+            rows.renaming = @sfbase.row_name(item)
+            row_renaming.set(rows.renaming)
+          },
           value=item.title,
           placeholder=@sf.t("android-chat.rename.field"),
           hint=@sf.t("android-chat.rename.note"),
@@ -677,6 +682,27 @@ fn chat_menu_items(src : Source, item : ChatItem, extra : Array[@sf.MenuItem?]) 
       }),
     ),
   )
+  match item.thread {
+    Some(th) if !item.connect && item.agents.length() > 0 =>
+      items.push(
+        Some(
+          @sf.menu_item_of(@sf.t("web-main.chat.regenerateTitle"), icon="refresh", fn() {
+            if !src.read_only {
+              toast_later(@sf.t("web-main.chat.regenerateTitle.start"))
+            }
+            act(
+              src,
+              @sf.t("web-main.chat.regenerateTitle.verb"),
+              "",
+              "chat.regenerateTitle",
+              { "station": Json::string(item.station), "thread": Json::number(th) },
+              done=@sf.t("web-main.chat.regenerateTitle.done"),
+            )
+          }),
+        ),
+      )
+    _ => ()
+  }
   match item.thread {
     Some(th) if item.pinned != Some(true) =>
       items.push(
@@ -856,10 +882,16 @@ let listed : Ref[Array[ChatItem]] = Ref([])
 
 ///|
 /// Archives a row's chat (Sidebar.tsx useArchive, mobile/Home.tsx useRowArchive): its 归档 key, its menu's, its swipe;
-/// one keeping watch only once asked, in the core's words. Its chat in view goes to
+/// one keeping watch only once asked, in the core's words (its swipe also one at work: `ask`, the core's swipeAsk). Its chat in view goes to
 /// the chat after it in the list (else before it; else the list alone) at once. Said at once, by its title (the core's
 /// list has it gone); why not, when not (`failed` told then).
-fn archive_row(src : Source, item : ChatItem, then? : () -> Unit = fn() {  }, failed? : () -> Unit = fn() {  }) -> Unit {
+fn archive_row(
+  src : Source,
+  item : ChatItem,
+  ask? : String? = item.watch_ask,
+  then? : () -> Unit = fn() {  },
+  failed? : () -> Unit = fn() {  },
+) -> Unit {
   let params : Map[String, Json] = {
     "station": Json::string(item.station),
     "session": Json::string(item.session),
@@ -885,7 +917,7 @@ fn archive_row(src : Source, item : ChatItem, then? : () -> Unit = fn() {  }, fa
       failed~,
     )
   }
-  match item.watch_ask {
+  match ask {
     Some(ask) =>
       @sf.confirm(@sf.t("android-chat.archive.ask", args=[("title", item.title)]), ask, @sf.t("android-chat.archive"), run)
     None => run()
@@ -935,8 +967,8 @@ let swipe_fill_ms : Double = 140.0
 /// A finger's row (mobile/Home.tsx SwipeArchive), swiped left to archive it: it follows the finger in its
 /// slot (cut to its corners where its list stands, `at`), uncovering 归档 at the right edge (filled in ink once letting
 /// go would archive it); let go past `archive_at_share` of its width or flung left, it goes off to the left and is
-/// archived, else it springs back. Archiving refused, it comes back; one keeping watch springs back and asks first, as
-/// its menu's 归档. Across first it is the swipe (the row's tap and hold let go); up or down first it is the list's.
+/// archived, else it springs back. Archiving refused, it comes back; one the core asks about (keeping watch, at work)
+/// springs back and asks first. Across first it is the swipe (the row's tap and hold let go); up or down first it is the list's.
 /// `row` draws the row moved across by so much; `unghost` says whether it leaves the list without a copy (swiped off),
 /// or with one again (its archiving refused). Its answer is the box holding it all.
 fn swipe_to_archive(
@@ -969,9 +1001,9 @@ fn swipe_to_archive(
         if at < -width * archive_at_share || fling {
           if busy {
             back(v)
-          } else if item.watch_ask is Some(_) {
+          } else if item.swipe_ask is Some(_) {
             back(v)
-            archive_row(src, item)
+            archive_row(src, item, ask=item.swipe_ask)
           } else {
             // off to the left, then archived (no copy of it left behind as it leaves the list: it is out of sight)
             rows.swiped_off[key] = true
@@ -1079,15 +1111,23 @@ pub fn rename_escape(c : @ui.Ctx) -> Bool {
 
 
 ///|
-/// The chat in view's "…" (a menu from `from`): what a row's menu offers (chat_menu_items) for the row the core's list
-/// has of it, else (an archived one, one it does not list) its link alone; `extra` the page's own (chat_extra_items).
+/// The chat in view's "…" (a menu from `from`): its items (chat_menu_of) shown.
 pub fn open_chat_menu(
   src : Source,
   scope : String,
   r : ChatRef,
   extra : Array[@sf.MenuItem?],
   from~ : @sf.Beside,
+  along? : @ui.Along = Start,
 ) -> Unit {
+  @sf.menu(chat_menu_of(src, scope, r, extra), from~, along~)
+}
+
+///|
+/// What the chat in view's "…" offers: what a row's menu offers (chat_menu_items) for the row the core's list has of
+/// it, else (an archived one, one it does not list) its link alone; `extra` the page's own (chat_extra_items). Apart
+/// from showing them: the system's bars take them as a menu of their own (rail_native.mbt bar_chat).
+pub fn chat_menu_of(src : Source, scope : String, r : ChatRef, extra : Array[@sf.MenuItem?]) -> Array[@sf.MenuItem?] {
   let mut found : ChatItem? = None
   match @sfbase.chats_of(src, scope, "all").0 {
     Some(view) =>
@@ -1118,7 +1158,7 @@ pub fn open_chat_menu(
       items
     }
   }
-  @sf.menu(items, from~)
+  items
 }
 
 ///|

@@ -1,7 +1,7 @@
 // Where a device on the station's LAN can dial it straight (docs/mesh-lan.md): the station's private IPv4 addresses, each
 // at its mesh port. Told to a member as its credential checks out (serve.ts), the device dials them on an endpoint of its
-// own, by address alone: a path iroh punches through to a station on the LAN stopped answering seconds after it opened
-// (studio and a phone, 2026-10-17), one dialled by address kept working.
+// own, by address alone: a path iroh punches through to a station on the LAN stopped answering seconds after it opened,
+// while one dialled by address kept working.
 import { createSocket } from "node:dgram";
 import { networkInterfaces, type NetworkInterfaceInfo } from "node:os";
 
@@ -94,9 +94,8 @@ export function sendOne(ip: string): Promise<string | null> {
 
 /// Whether this process may reach the LAN it is on. macOS (15 on) refuses a process whose app was not let reach the
 /// local network anything on its own subnet, the router too, at once ("No route to host", EHOSTUNREACH), and lets
-/// through what goes past the router: on 2026-10-18 the desktop app on a MacBook on studio's Wi-Fi reached studio only at
-/// its other subnet's address through the router (12 ms, a fifth of the packets lost) and mini1 only over Tailscale, and
-/// its station could not ping the router. A firewall refusing the LAN (ccvm's) is told the same. `granted` once one of
+/// through what goes past the router: a peer may still be reachable through another subnet or a VPN even while the
+/// router on the local subnet is unreachable. A firewall refusing the LAN is told the same. `granted` once one of
 /// its LANs takes a byte, `denied` when each refused it so, null with no LAN (or none of either).
 export async function lanReach(neighbours = lanNeighbours(), send: (ip: string) => Promise<string | null> = sendOne): Promise<"granted" | "denied" | null> {
   const said = await Promise.all(neighbours.map(send));

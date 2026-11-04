@@ -36,8 +36,8 @@ test("the CPUs' recent business is an average over about the last minute, not th
 });
 
 test("GPUs: Apple's chip and cores once, NVIDIA's as nvidia-smi says them, kept ten seconds; none where there are none", async () => {
-  const ioreg = `+-o AGXAcceleratorG14X  <class AGXAcceleratorG14X>\n    {\n      "model" = "Apple M2 Max"\n      "gpu-core-count" = 30\n      "PerformanceStatistics" = {"Device Utilization %"=21}\n    }\n`;
-  assert.deepEqual(appleGpu(ioreg), { name: "Apple M2 Max", cores: 30, busy: 0.21 });
+  const ioreg = `+-o AGXAcceleratorG14X  <class AGXAcceleratorG14X>\n    {\n      "model" = "Apple M1 Pro"\n      "gpu-core-count" = 16\n      "PerformanceStatistics" = {"Device Utilization %"=21}\n    }\n`;
+  assert.deepEqual(appleGpu(ioreg), { name: "Apple M1 Pro", cores: 16, busy: 0.21 });
   assert.deepEqual(appleGpu('"model" = "Apple M2"\n"Device Utilization %"=101'), { name: "Apple M2" });
   assert.equal(appleGpu("nothing"), null);
   assert.deepEqual(nvidiaGpus("NVIDIA GeForce RTX 4090, 24564, 1024, 37\nTesla T4, 15360, [N/A], [N/A]\n"), [
@@ -57,7 +57,7 @@ test("GPUs: Apple's chip and cores once, NVIDIA's as nvidia-smi says them, kept 
     return smi;
   };
   const mac = new Gpus({ run, os: "macos", arch: "arm64", now: () => now });
-  assert.deepEqual(await mac.read(), [{ name: "Apple M2 Max", cores: 30, busy: 0.21 }, { name: "NVIDIA A10", memoryTotalBytes: 23028 * 1024 * 1024, memoryUsedBytes: 0, busy: 0 }]);
+  assert.deepEqual(await mac.read(), [{ name: "Apple M1 Pro", cores: 16, busy: 0.21 }, { name: "NVIDIA A10", memoryTotalBytes: 23028 * 1024 * 1024, memoryUsedBytes: 0, busy: 0 }]);
   now = 9_999;
   smi = "NVIDIA A10, 23028, 1024, 50";
   await mac.read();

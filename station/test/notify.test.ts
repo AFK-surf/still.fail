@@ -82,7 +82,7 @@ for (const blocked of ["need_help", "block"]) test(`a blocked turn's ask is told
 
 test("a notice reads its chat's name and whom to tell, nothing counted over the chat or the session", () => {
   // As lists have the chat, a notice counted all its messages (its unread, for no one) and all its session's turns:
-  // 479 pages of a chat of 534 messages on ccvm short of memory (2026-11-02), 3 to 16 s a notice, every other telling
+  // many pages of a chat of many messages on a station short of memory (2026-11-02), 3 to 16 s a notice, every other telling
   // waiting behind it.
   const dir = mkdtempSync(join(tmpdir(), "notify-"));
   let now = 1000;

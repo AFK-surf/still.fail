@@ -745,16 +745,16 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
             )
             |> ignore
           } else {
-            // its words as Markdown, as the core read them (a chat it opened: a link to it); closed, their first block
-            // on one line of the size it says
+            // its words as Markdown, as the core read them (a chat it opened: a link to it), of the notice's size open
+            // or closed (the pill's one size: Chat.css.ts msgSystemBox); closed, their first block on one line
             let (meta, _) = c.text_size(notice_size)
             @sf.markdown(
               c,
               said,
               key=(if open { "notice/" } else { "notice-line/" }) + m.ts,
               tree=m.notice_md,
-              size=if open { body_size } else { meta },
-              line=if open { 0.0 } else { c.theme().leading(notice_leading).unwrap_or(0.0) / meta },
+              size=meta,
+              line=c.theme().leading(notice_leading).unwrap_or(0.0) / meta,
               one_line=!open,
               ink=if failed { @sf.theme().p.red } else { 0L },
               on_link=fn(h) { open_link(h) },

@@ -106,16 +106,16 @@ test("it_says_the_call_it_runs_or_its_reply_or_where_the_turn_stands", () => {
   assert.equal(doing("Bash", '{"command":"cd x && ls\\necho'), "运行 cd x && ls");
   // A task on another station is said with where it runs, by the station's name; a task started by its key says what
   // its prepare (earlier in the transcript) runs: its name, else its command's first line that does something.
-  const studio = "d2e33e62a1f88dd30e759c734b6604599a6e4024dbb926b1cd81b99c42da4956";
-  const stations = new Map([[studio, "Studio"]]);
-  const prepare = JSON.stringify({ station: studio, action: "prepare", key: "check", command: "exec 2>&1\nset -e\npnpm test" });
+  const willow = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+  const stations = new Map([[willow, "Willow"]]);
+  const prepare = JSON.stringify({ station: willow, action: "prepare", key: "check", command: "exec 2>&1\nset -e\npnpm test" });
   const tasks = tasksOf([{ kind: "tool_call", tool: "mcp__stillfail__station_task", text: prepare }]);
-  assert.equal(doing("mcp__stillfail__station_task", prepare, { stations }), "在 Studio 上准备 pnpm test");
-  assert.equal(doing("mcp__stillfail__station_task", JSON.stringify({ station: studio, action: "start", key: "check" }), { stations, tasks }), "在 Studio 上运行 pnpm test");
-  assert.equal(doing("mcp__stillfail__station_task", JSON.stringify({ station: studio, action: "log", key: "check" }), { stations, tasks }), "读取 Studio 上 pnpm test 的输出");
-  assert.equal(doing("mcp__stillfail__station_task", JSON.stringify({ station: studio, action: "get", key: "lint" }), { stations }), "查看 Studio 上的 lint");
-  assert.equal(doing("mcp__stillfail__station_task", JSON.stringify({ station: studio, action: "list" })), "列出 另一台 station 上的任务");
-  assert.equal(doing("mcp__stillfail__station_file", JSON.stringify({ station: studio, key: "k", direction: "download", path: "out/shot.png", local: "/w/shot.png" }), { stations }), "从 Studio 下载 shot.png");
+  assert.equal(doing("mcp__stillfail__station_task", prepare, { stations }), "在 Willow 上准备 pnpm test");
+  assert.equal(doing("mcp__stillfail__station_task", JSON.stringify({ station: willow, action: "start", key: "check" }), { stations, tasks }), "在 Willow 上运行 pnpm test");
+  assert.equal(doing("mcp__stillfail__station_task", JSON.stringify({ station: willow, action: "log", key: "check" }), { stations, tasks }), "读取 Willow 上 pnpm test 的输出");
+  assert.equal(doing("mcp__stillfail__station_task", JSON.stringify({ station: willow, action: "get", key: "lint" }), { stations }), "查看 Willow 上的 lint");
+  assert.equal(doing("mcp__stillfail__station_task", JSON.stringify({ station: willow, action: "list" })), "列出 另一台 station 上的任务");
+  assert.equal(doing("mcp__stillfail__station_file", JSON.stringify({ station: willow, key: "k", direction: "download", path: "out/shot.png", local: "/w/shot.png" }), { stations }), "从 Willow 下载 shot.png");
   assert.equal(doing("ToolSearch", '{"query":"select:mcp__stillfail__secret_list,mcp__stillfail__station_task","max_results":2}'), "加载工具 secret_list、station_task");
   assert.equal(told("ToolSearch", '{"query":"notebook jupyter"}'), null);
   assert.equal(epochMs("1970-01-02T00:00:01.500Z"), 86_401_500);

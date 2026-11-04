@@ -1,27 +1,26 @@
-// The station's database as the admin API reads it, ported from the Rust station's store.rs: the same SQL over the same
-// file (opened read-only), and the same rows. A thread whose sessions are all archived lives in a zstd file under the
-// archive directory (`archive/threads/<id>.jsonl.zst` beside the database) and is read from there, as the Rust does.
+// The station's database as the admin API reads it (once ported from the Rust station's store.rs): the store's SQL over
+// the same file, opened read-only, and the same rows.
 //
 // serde's reading of a stored value is kept where it shows: a list of files or quotes that does not read is none, a
-// card or identity that does not parse is none, an archive file that does not read fails the request (one that is not
-// there is a thread with nothing left in it).
-import { readFileSync, statSync } from "node:fs";
+// card or identity that does not parse is none.
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
 import { Refused } from "../api/request.ts";
 import { retiredUsage } from "../store/usage-retire.ts";
-import { archiveEntries } from "../store/archive.ts";
 import { PENDING_MINUTE_SESSION } from "../store/usage-minutes.ts";
 import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailScopeBySession, usageDetailSince, USAGE_DETAIL_PENDING } from "../store/usage-detail.ts";
-import { usageChatStatsReady } from "../store/usage-chat-stats.ts";
+import { compactHistory, compactQuery, compactScopeReady, compactUsageSince, hasCompactUsage } from "../store/usage-compact.ts";
+import { type UsageChatCoverage, usageCardOutcomesComplete, usageChatStatsReady } from "../store/usage-chat-stats.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
+import { hasRuntimeOrderIndex } from "../store/schema.ts";
+import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
+import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import {
   CARD_BEFORE, CC_THREADS_SQL, CLOSED_SINCE, CLOSED_THREAD_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, type Membership, type MessageRow, OPTIONS_BEFORE,
-  PEOPLE_AT, SAID_SINCE, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, authorKind, cardOf, isLetter, liveShare, mergeEntries,
+  PEOPLE_AT, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, authorKind, cardOf, liveShare,
   ending, parsed, saidBefore, sees, takeChars, toChatShare, toEntry, letterEntry, toMembership, toMessage, toThread,
 } from "../store/rows.ts";
 
@@ -33,7 +32,6 @@ export { I64_MAX, MANUAL, STILLFAIL_SURFACE, ending, optionsCard, saidBefore, ta
 export type { AuthorKind, CardAnswer, EntryRow, Membership, MessageRow, ThreadRow } from "../store/rows.ts";
 
 /// Archived threads whose entries are kept decompressed, the most recently read last.
-const ARCHIVE_CACHE = 32;
 
 /// The readers' threads have no clock of their own: the machine's time.
 export const nowMs = () => wall.now();
@@ -73,12 +71,6 @@ export type Store = {
   db: DatabaseSync;
   /// The station's data directory: stillfail.db, archive/, config.json.
   dataDir: string;
-  /// Where archived threads are (`threads/`): `archive/` in the data directory, as Store::open has it by default.
-  archiveDir: string;
-  /// Entries of archived threads read lately, the most recent last, by thread and its file as it was (`fileVersion`).
-  archived: [number, string, EntryRow[]][];
-  /// What lists show of each archived thread, read from its file once (archivedSummary).
-  summaries: Map<number, ArchivedSummary>;
   /// People's names by email, as their credentials say them (the admin API's `deps.names`, filled as members ask).
   names: Map<string, string>;
   /// What only the hub knows, as it was when the read was asked: each session's process state (`process_state`;
@@ -89,7 +81,7 @@ export type Store = {
 
 /// The store over an open database, with the data directory its archive is in.
 export function makeStore(db: DatabaseSync, dataDir: string): Store {
-  return { db, dataDir, archiveDir: join(dataDir, "archive"), archived: [], summaries: new Map(), names: new Map(), processes: new Map(), clientKeys: new Map() };
+  return { db, dataDir, names: new Map(), processes: new Map(), clientKeys: new Map() };
 }
 
 /// A station's store: `<dataDir>/stillfail.db`, opened read-only.
@@ -146,8 +138,22 @@ export function listSessions(s: Store): SessionRow[] {
   return all(s, "SELECT * FROM sessions ORDER BY last_active_at DESC").map(toSession);
 }
 
+/// The session list's active or archived rows: do not bring the other kind out of the database just to discard it.
+/// The old whole-table order put equal timestamps in rowid order; retain that when using either partial index.
+export function listedSessions(s: Store, connect: string | null, archived: boolean, viewer: InWorkspace | null): SessionRow[] {
+  const where = [archived ? "archived_at IS NOT NULL" : "archived_at IS NULL"];
+  const args: Json[] = [];
+  if (connect !== null) { where.push("connect = ?"); args.push(connect); }
+  if (viewer !== null) {
+    where.push(viewer.home === false ? "ws = ?" : "(ws = ? OR ws IS NULL)");
+    args.push(viewer.workspace);
+  }
+  const sql = `SELECT * FROM sessions INDEXED BY ${archived ? "sessions_put_away" : "sessions_live"} WHERE ${where.join(" AND ")} ORDER BY last_active_at DESC, rowid ASC`;
+  return all(s, sql, ...args).map(toSession);
+}
+
 /// The sessions not archived (the sidebar's), the latest active first, by the index of those alone (schema.ts
-/// sessions_live): each read of the sidebar went over every session the station ever had (1,505 on ccvm, 1,398 of them
+/// sessions_live): each read of the sidebar went over every session the station ever had (many on a station, many of them
 /// archived) to pick out its 107 (2026-11-03).
 export const SHOWN_SESSIONS = "SELECT * FROM sessions INDEXED BY sessions_live WHERE archived_at IS NULL ORDER BY last_active_at DESC";
 export function shownSessions(s: Store): SessionRow[] {
@@ -167,7 +173,29 @@ export function archivedPage(s: Store, before: [number, string], limit: number):
 
 /// Store::sessionOfRuntime: the session that went on with `runtime`'s session `id`, the latest active if more did.
 export function sessionOfRuntime(s: Store, runtime: string, id: string): string | null {
-  return one(s, SESSION_OF_RUNTIME, runtime, id)?.key ?? null;
+  try {
+    return one(s, SESSION_OF_RUNTIME, runtime, id)?.key ?? null;
+  } catch {
+    try {
+      // A station with per-transcript runtimes may still be running while this version opens its database.
+      return one(s, `SELECT key FROM (
+        SELECT key, last_active_at FROM sessions s WHERE runtime_session_id = ?2 AND runtime = ?1
+          AND NOT EXISTS (SELECT 1 FROM runtime_sessions r WHERE r.session_key = s.key AND r.id = ?2 AND r.runtime IS NOT NULL AND r.runtime != ?1)
+        UNION ALL SELECT s.key, s.last_active_at FROM runtime_sessions r JOIN sessions s ON s.key = r.session_key WHERE r.id = ?2 AND COALESCE(r.runtime, s.runtime) = ?1
+      ) ORDER BY last_active_at DESC LIMIT 1`, runtime, id)?.key ?? null;
+    } catch {
+      try {
+        return one(s, `SELECT key FROM (
+          SELECT key, last_active_at FROM sessions WHERE runtime_session_id = ?2 AND runtime = ?1
+          UNION ALL SELECT s.key, s.last_active_at FROM runtime_sessions r JOIN sessions s ON s.key = r.session_key WHERE r.id = ?2 AND s.runtime = ?1
+        ) ORDER BY last_active_at DESC LIMIT 1`, runtime, id)?.key ?? null;
+      } catch (error) {
+        // An older store may not have kept previous runtime sessions at all; its current one is still readable.
+        if (!/no such table: runtime_sessions/.test((error as Error).message)) throw error;
+        return one(s, "SELECT key FROM sessions WHERE runtime_session_id = ?2 AND runtime = ?1 ORDER BY last_active_at DESC LIMIT 1", runtime, id)?.key ?? null;
+      }
+    }
+  }
 }
 
 /// Store::runtimeSessions: the runtime sessions a session has run in, the first first, ending with its current one.
@@ -180,25 +208,69 @@ export function runtimeSessions(s: Store, key: string): string[] {
   return current === null ? ids : [...ids.filter((id) => id !== current), current];
 }
 
-/// How many entries sessions' transcripts have, as the station last read them while they were at work (one, or every
-/// one known when `key` is null): none for a session not read since (or a database no station of this version opened).
-export function transcriptLengths(s: Store, key: string | null): Map<string, number> {
+/// The runtime and profile of each transcript, including those from before runtime changes were supported.
+export function runtimeSessionSources(s: Store, key: string): { id: string; runtime: string; profile: string | null }[] {
+  const row = getSession(s, key);
+  if (!row) return [];
+  let sources: { id: string; runtime: string; profile: string | null }[] = [];
   try {
-    const rows = key !== null ? all(s, "SELECT session, n FROM transcript_lengths WHERE session = ?", key) : all(s, "SELECT session, n FROM transcript_lengths");
+    sources = all(s, `SELECT r.id, COALESCE(r.runtime, s.original_runtime, s.runtime) AS runtime, r.profile
+      FROM sessions s CROSS JOIN runtime_sessions r ON r.session_key = s.key WHERE s.key = ? ORDER BY r.at, r.rowid`, key)
+      .map((r) => ({ id: r.id, runtime: r.runtime, profile: r.profile ?? null }));
+  } catch {
+    try {
+      sources = all(s, "SELECT id, runtime, profile FROM runtime_sessions WHERE session_key = ? ORDER BY at, rowid", key)
+        .map((r) => ({ id: r.id, runtime: r.runtime ?? row.runtime, profile: r.profile ?? null }));
+    } catch {
+      sources = runtimeSessions(s, key).map((id) => ({ id, runtime: row.runtime, profile: row.profile }));
+    }
+  }
+  if (row.runtimeSessionId === null) return sources;
+  const current = sources.find((x) => x.id === row.runtimeSessionId) ?? { id: row.runtimeSessionId, runtime: row.runtime, profile: row.profile };
+  return [...sources.filter((x) => x.id !== row.runtimeSessionId), current];
+}
+
+/// Before per-message runtime was recorded, every message belonged to the session's first runtime.
+export const ORIGINAL_RUNTIME = "SELECT COALESCE(original_runtime, runtime) AS runtime FROM sessions WHERE key = ?";
+export const ORIGINAL_RUNTIME_ORDERED = `SELECT COALESCE(s.original_runtime,
+  (SELECT r.runtime FROM runtime_sessions r INDEXED BY runtime_sessions_ordered WHERE r.session_key = s.key ORDER BY r.at, r.rowid LIMIT 1),
+  s.runtime) AS runtime FROM sessions s WHERE s.key = ?`;
+export function originalRuntime(s: Store, key: string): string | null {
+  try {
+    return one(s, hasRuntimeOrderIndex(s.db) ? ORIGINAL_RUNTIME_ORDERED : ORIGINAL_RUNTIME, key)?.runtime ?? null;
+  } catch {
+    if (hasRuntimeOrderIndex(s.db)) {
+      try {
+        return one(s, "SELECT runtime FROM runtime_sessions INDEXED BY runtime_sessions_ordered WHERE session_key = ? ORDER BY at, rowid LIMIT 1", key)?.runtime
+          ?? one(s, "SELECT runtime FROM sessions WHERE key = ?", key)?.runtime ?? null;
+      } catch {} // a database from before per-transcript runtimes
+    }
+    return one(s, "SELECT runtime FROM sessions WHERE key = ?", key)?.runtime ?? null;
+  }
+}
+
+/// How many entries sessions' transcripts have, as the station last read them while they were at work (one, those
+/// named, or every one when `key` is null): none for a session not read since.
+export function transcriptLengths(s: Store, key: string | string[] | null): Map<string, number> {
+  if (Array.isArray(key) && key.length === 0) return new Map();
+  try {
+    const sql = `SELECT session, n FROM transcript_lengths ${Array.isArray(key) ? "WHERE session IN (SELECT value FROM json_each(?))" : key !== null ? "WHERE session = ?" : ""}`;
+    const rows = Array.isArray(key) ? all(s, sql, JSON.stringify(key)) : key !== null ? all(s, sql, key) : all(s, sql);
     return new Map(rows.map((r) => [r.session as string, Number(r.n)]));
   } catch {
     return new Map();
   }
 }
 
-/// What sessions' calls used, as the station keeps it (store.ts `setSessionUsage`; one, or every one known when `key` is
-/// null): none for a session that has made no call (or a database no station of this version opened).
-export function sessionUsages(s: Store, key: string | null): Map<string, Json> {
+/// What sessions' calls used, as the station keeps it (store.ts `setSessionUsage`; one, those named, or every one
+/// known when `key` is null): none for a session that has made no call.
+export function sessionUsages(s: Store, key: string | string[] | null): Map<string, Json> {
+  if (Array.isArray(key) && key.length === 0) return new Map();
   try {
     const incremental = s.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_totals_incremental'").get() !== undefined;
     const source = incremental ? "session_usage u JOIN usage_totals_source_sessions c ON c.session = u.session AND c.done = 1" : "session_usage u";
-    const rows = key !== null ? all(s, `SELECT u.session, u.usage FROM ${source} WHERE u.session = ?`, key)
-      : all(s, `SELECT u.session, u.usage FROM ${source}`);
+    const sql = `SELECT u.session, u.usage FROM ${source} ${Array.isArray(key) ? "WHERE u.session IN (SELECT value FROM json_each(?))" : key !== null ? "WHERE u.session = ?" : ""}`;
+    const rows = Array.isArray(key) ? all(s, sql, JSON.stringify(key)) : key !== null ? all(s, sql, key) : all(s, sql);
     return new Map(rows.map((r) => [r.session as string, JSON.parse(r.usage as string)]));
   } catch {
     return new Map();
@@ -233,14 +305,13 @@ export function threadsOfSessions(s: Store, keys: string[]): number[] {
   return all(s, `SELECT DISTINCT thread FROM thread_sessions WHERE session IN (${keys.map(() => "?").join(", ")})`, ...keys).map((r) => r.thread as number);
 }
 
-/// Of `threads`, those with something new since `since` (ms): made, or a message said, then. An archived one's
-/// messages are in its archive: it stays among them, for its summary to tell.
+/// Of `threads`, those with something new since `since` (ms): made, or a message said, then.
 export function threadsActiveSince(s: Store, threads: number[], since: number): number[] {
   if (threads.length === 0 || since <= 0) return threads;
   return all(
     s,
     `SELECT t.id FROM threads t LEFT JOIN thread_state st ON st.thread = t.id LEFT JOIN entries e ON e.thread = t.id AND e.n = st.said_n
-     WHERE t.id IN (${threads.map(() => "?").join(", ")}) AND (t.archived_at IS NOT NULL OR t.created_at >= ? OR e.at >= ?)`,
+     WHERE t.id IN (${threads.map(() => "?").join(", ")}) AND (t.created_at >= ? OR e.at >= ?)`,
     ...threads, since, since,
   ).map((r) => r.id as number);
 }
@@ -267,8 +338,9 @@ export function threadsOfShown(s: Store): number[] {
 }
 
 /// Threads with their sessions, last entry, latest message and the viewer's unread count, most recently said in
-/// first: those of one session, one thread (or those named), or all.
-export function listThreads(s: Store, viewer: string, session: string | null, thread: number | number[] | null): ThreadSummary[] {
+/// first: those of one session, one thread (or those named), or all. A list that only needs to know whether there are
+/// unread messages can ask for existence instead of their exact count.
+export function listThreads(s: Store, viewer: string, session: string | null, thread: number | number[] | null, unread: "count" | "exists" | "none" = "count"): ThreadSummary[] {
   const base = "SELECT t.*, COALESCE(r.n, 0) AS read_n FROM threads t LEFT JOIN reads r ON r.thread = t.id AND r.viewer = ?1";
   const rows: Json[] =
     Array.isArray(thread)
@@ -285,16 +357,15 @@ export function listThreads(s: Store, viewer: string, session: string | null, th
   const summaries: ThreadSummary[] = rows.map((r) => {
     const t = toThread(r);
     const read: number = r.read_n;
-    const at: number | null = r.archived_at;
     return {
       sessions: threadSessions(s, t.id),
-      last: lastEntry(s, t.id, at),
-      lastMessage: lastSaid(s, t.id, at),
+      last: lastEntry(s, t.id),
+      lastMessage: lastSaid(s, t.id),
       read,
-      unread: unreadOf(s, t.id, read, t.surface !== STILLFAIL_SURFACE ? selves.slack : selves.own, at),
-      people: threadPeople(s, t.id, t.surface, at),
-      firstText: firstText(s, t.id, at),
-      letters: letterCount(s, t.id, at),
+      unread: unread === "none" ? 0 : unreadOf(s, t.id, read, t.surface !== STILLFAIL_SURFACE ? selves.slack : selves.own, unread),
+      people: threadPeople(s, t.id, t.surface),
+      firstText: firstText(s, t.id),
+      letters: letterCount(s, t.id),
       lettersLast: lastLetter(s, t.id),
       thread: t,
     };
@@ -304,68 +375,16 @@ export function listThreads(s: Store, viewer: string, session: string | null, th
   return summaries;
 }
 
-/// What lists show of a thread a station before wrote out to its archive file (its last entry, latest message, messages'
-/// authors, the first thing a person said), read from its file once: it does not change while there, and written out
-/// again it is another file (`fileVersion`). Such files are read until the station brings each back into the database
-/// (store.ts `bringInArchived`); archiving writes none any more.
-export type ArchivedSummary = {
-  version: string;
-  last: number;
-  lastMessage: MessageRow | null;
-  /// Its latest message that is not a letter (isLetter).
-  lastSaid: MessageRow | null;
-  messages: { n: number; authorKind: string; author: string; letter: boolean }[];
-  /// The people who wrote in it, in the order they first did, and with when they first did.
-  authors: string[];
-  firstAt: [string, number][];
-  firstText: string | null;
-};
-
-/// An archived thread's summary (null for one not archived); `at`: its archived_at, when the caller has it.
-function archivedSummary(s: Store, thread: number, at?: number | null): ArchivedSummary | null {
-  const when: number | null = at === undefined ? (one(s, "SELECT archived_at FROM threads WHERE id = ?", thread)?.archived_at ?? null) : at;
-  if (when === null) return null;
-  const version = fileVersion(threadFile(s, thread));
-  const kept = s.summaries.get(thread);
-  if (kept !== undefined && kept.version === version) return kept;
-  const entries = archivedEntries(s, thread);
-  const merged = mergeEntries(entries);
-  const firstAt = new Map<string, number>();
-  for (const e of entries) {
-    if (e.kind !== "message" || e.authorKind !== "person") continue;
-    const at = firstAt.get(e.author);
-    if (at === undefined || e.at < at) firstAt.set(e.author, e.at);
-  }
-  const first = merged.find((m) => m.authorKind === "person");
-  const keys = new Set(threadSessions(s, thread).map((m) => m.session));
-  const made: ArchivedSummary = {
-    version,
-    last: entries.at(-1)?.n ?? 0,
-    lastMessage: merged.at(-1) ?? null,
-    lastSaid: merged.findLast((m) => !isLetter(m, keys)) ?? null,
-    messages: merged.map((m) => ({ n: m.n, authorKind: m.authorKind, author: m.author, letter: isLetter(m, keys) })),
-    authors: [...firstAt.keys()],
-    firstAt: [...firstAt],
-    firstText: first ? takeChars(first.text, 300) : null,
-  };
-  s.summaries.set(thread, made);
-  return made;
-}
-
 /// The thread's latest message as merged, for lists.
-export function lastMessage(s: Store, thread: number, at?: number | null): MessageRow | null {
-  const archived = archivedSummary(s, thread, at);
-  if (archived !== null) return archived.lastMessage === null ? null : { ...archived.lastMessage };
+export function lastMessage(s: Store, thread: number): MessageRow | null {
   const r = one(s, "SELECT * FROM merged WHERE thread = ? ORDER BY n DESC LIMIT 1", thread);
   return r ? toMessage(r) : null;
 }
 
 /// How many letters the thread has (isLetter), in either way: those kept as entries before letters had their own log,
 /// and those of it.
-export function letterCount(s: Store, thread: number, at?: number | null): number {
+export function letterCount(s: Store, thread: number): number {
   const apart = lastLetter(s, thread);
-  const archived = archivedSummary(s, thread, at);
-  if (archived !== null) return apart + archived.messages.filter((m) => m.letter).length;
   return apart + (one(s, "SELECT letters FROM thread_state WHERE thread = ?", thread)?.letters ?? 0);
 }
 
@@ -386,11 +405,14 @@ export function lettersBefore(s: Store, thread: number, n: bigint | null, limit:
 }
 
 /// The thread's latest message that is not a letter (isLetter), for lists: what they show and sort by.
-export function lastSaid(s: Store, thread: number, at?: number | null): MessageRow | null {
-  const archived = archivedSummary(s, thread, at);
-  if (archived !== null) return archived.lastSaid === null ? null : { ...archived.lastSaid };
+export function lastSaid(s: Store, thread: number): MessageRow | null {
   const r = one(s, "SELECT m.* FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.said_n WHERE t.thread = ?", thread);
   return r ? toMessage(r) : null;
+}
+
+/// When the latest message was written, without loading its text or edits.
+export function lastSaidAt(s: Store, thread: number): number | null {
+  return one(s, "SELECT e.at FROM thread_state t JOIN entries e ON e.thread = t.thread AND e.n = t.said_n AND e.kind = 'message' WHERE t.thread = ?", thread)?.at ?? null;
 }
 
 /// Messages after the read position that are not the viewer's own (nor of a Slack user they are).
@@ -403,35 +425,62 @@ function unreadCount(s: Store, viewer: string, thread: number, read: number): nu
 }
 
 /// Messages after `read` that are not of `selves`, nor letters (isLetter).
-function unreadOf(s: Store, thread: number, read: number, selves: string[], at?: number | null): number {
-  const archived = archivedSummary(s, thread, at);
-  if (archived !== null) return archived.messages.filter((m) => m.n > read && !m.letter && !(m.authorKind === "person" && selves.includes(m.author))).length;
-  return one(s, UNREAD, thread, read, JSON.stringify(selves)).c;
+/// A chat's latest message that counts as unread (no letter) and the latest before it its author did not write (`other`:
+/// that one is what is unread for its author), by the index of its messages (store/schema.ts entries_said): what a
+/// viewer's unread is made of with where they read (client/core-ts/src/chat-row.ts), for everyone at once.
+export { SAID_LATEST, SAID_SCAN, SAID_STATE };
+export const SAID_PENDING = "sidebar said state pending: ";
+export class SaidUnavailable extends Refused {
+  readonly threads: number[];
+  constructor(threads: number[]) { super(503, SAID_PENDING + JSON.stringify(threads)); this.threads = threads; }
+}
+
+export function saidOf(s: Store, thread: number): { n: number; authorKind: string; author: string; other: number | null } | null {
+  const r = one(s, SAID_LATEST, thread);
+  if (!r) return null;
+  const state = r.author_kind === "person" ? one(s, SAID_STATE, thread) : null;
+  const boundary = saidBoundary(state, r);
+  let other = boundary.other;
+  if (!boundary.known) {
+    // Most old chats can answer from a few nearby messages without recording any history at all. For a longer run,
+    // leave the reader and prepare only this chat in bounded slices before trying the snapshot again.
+    const nearby = all(s, SAID_SCAN, thread, r.n, SAID_BATCH_SIZE);
+    const previous = nearby.find((p) => p.author_kind !== "person" || p.author !== r.author);
+    if (previous) other = previous.n;
+    else if (nearby.length === SAID_BATCH_SIZE) throw new SaidUnavailable([thread]);
+  }
+  return { n: r.n, authorKind: r.author_kind, author: r.author, other };
+}
+
+/// Where a viewer read each of these chats to (none: nothing of it).
+export function readsOf(s: Store, viewer: string, threads: number[]): Map<number, number> {
+  const out = new Map<number, number>();
+  if (threads.length === 0) return out;
+  for (const r of all(s, `SELECT thread, n FROM reads WHERE viewer = ?1 AND thread IN (SELECT value FROM json_each(?2))`, viewer, JSON.stringify(threads))) out.set(r.thread, r.n);
+  return out;
+}
+
+function unreadOf(s: Store, thread: number, read: number, selves: string[], mode: "count" | "exists" = "count"): number {
+  return one(s, mode === "exists" ? HAS_UNREAD : UNREAD, thread, read, JSON.stringify(selves)).c;
 }
 
 /// A chat's messages after where a viewer read (`?2`) but their own (`?3`, a JSON list) and letters, counted from the
 /// index of its messages alone (store/schema.ts entries_said): from the messages themselves, each was a page read.
-export const UNREAD = `SELECT COUNT(*) AS c FROM entries WHERE thread = ?1 AND n > ?2 AND kind = 'message' AND letter IS NULL
+const UNREAD_MESSAGES = `FROM entries WHERE thread = ?1 AND n > ?2 AND kind = 'message' AND letter IS NULL
   AND NOT (author_kind = 'person' AND author IN (SELECT value FROM json_each(?3)))`;
+export const UNREAD = `SELECT COUNT(*) AS c ${UNREAD_MESSAGES}`;
+export const HAS_UNREAD = `SELECT EXISTS (SELECT 1 ${UNREAD_MESSAGES}) AS c`;
 
 /// Everyone who wrote in a thread, as creator references (a Slack user through a connect in it), earliest first.
-export function threadPeople(s: Store, thread: number, surface: string, at?: number | null): string[] {
+export function threadPeople(s: Store, thread: number, surface: string): string[] {
   const connect: string | null = one(s, "SELECT MIN(connect) AS c FROM thread_sessions WHERE thread = ?", thread).c;
-  let authors: string[];
-  const archived = archivedSummary(s, thread, at);
-  if (archived !== null) {
-    authors = archived.authors;
-  } else {
-    authors = all(s, "SELECT author FROM thread_people WHERE thread = ? ORDER BY first_n", thread).map((r) => r.author);
-  }
+  const authors: string[] = all(s, "SELECT author FROM thread_people WHERE thread = ? ORDER BY first_n", thread).map((r) => r.author);
   if (surface === STILLFAIL_SURFACE) return authors;
   return connect === null ? [] : authors.map((a) => `slack:${connect}:${a}`);
 }
 
 /// The first thing a person said in it (up to 300 characters).
-export function firstText(s: Store, thread: number, at?: number | null): string | null {
-  const archived = archivedSummary(s, thread, at);
-  if (archived !== null) return archived.firstText;
+export function firstText(s: Store, thread: number): string | null {
   const r = one(s, "SELECT substr(m.text, 1, 300) AS t FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.person_n WHERE t.thread = ?", thread);
   return r ? r.t : null;
 }
@@ -439,9 +488,7 @@ export function firstText(s: Store, thread: number, at?: number | null): string 
 // ── entries ──
 
 /// The thread's last entry number, 0 before anything is said.
-export function lastEntry(s: Store, thread: number, at?: number | null): number {
-  const archived = archivedSummary(s, thread, at);
-  if (archived !== null) return archived.last;
+export function lastEntry(s: Store, thread: number): number {
   return one(s, "SELECT MAX(n) AS n FROM entries WHERE thread = ?", thread).n ?? 0;
 }
 
@@ -453,19 +500,11 @@ export function entriesAfter(s: Store, thread: number, n: bigint, limit?: number
 /// The latest `limit` entries before n (the latest of all without it), oldest first.
 export function entriesBefore(s: Store, thread: number, n: bigint | null, limit: number): EntryRow[] {
   const before = n ?? I64_MAX;
-  if (isArchived(s, thread)) {
-    const entries = archivedEntries(s, thread).filter((e) => e.n < before);
-    return entries.slice(Math.max(0, entries.length - limit));
-  }
   return all(s, "SELECT * FROM entries WHERE thread = ? AND n < ? ORDER BY n DESC LIMIT ?", thread, before, limit).map(toEntry).reverse();
 }
 
 /// Entries from n = `from` to n = `to`, both included: a gap, up to `limit` when given.
 export function entriesBetween(s: Store, thread: number, from: bigint, to: bigint, limit?: number): EntryRow[] {
-  if (isArchived(s, thread)) {
-    const entries = archivedEntries(s, thread).filter((e) => e.n >= from && e.n <= to);
-    return limit === undefined ? entries : entries.slice(0, limit);
-  }
   const sql = "SELECT * FROM entries WHERE thread = ? AND n >= ? AND n <= ? ORDER BY n";
   return (limit === undefined ? all(s, sql, thread, from, to) : all(s, `${sql} LIMIT ?`, thread, from, to, limit)).map(toEntry);
 }
@@ -473,16 +512,20 @@ export function entriesBetween(s: Store, thread: number, from: bigint, to: bigin
 /// The latest `limit` messages before n (the latest of all without it), as merged, oldest first.
 export function messagesBefore(s: Store, thread: number, n: number | null, limit: number): MessageRow[] {
   const before = n ?? I64_MAX;
-  if (isArchived(s, thread)) {
-    const messages = mergeEntries(archivedEntries(s, thread)).filter((m) => m.n < before);
-    return messages.slice(Math.max(0, messages.length - limit));
-  }
   return all(s, "SELECT * FROM merged WHERE thread = ? AND n < ? ORDER BY n DESC LIMIT ?", thread, before, limit).map(toMessage).reverse();
 }
 
 // ── the archive review ──
 
 /// Whether the decision recommended the thread for the archive as it stands now (its last entry then is its last now).
+/// Of `threads`, those the archive review suggested or judged (archive_suggestions, archive_verdicts): what
+/// `archiveSuggested` and `archiveVerdict` say anything of.
+export function reviewedThreads(s: Store, threads: number[]): number[] {
+  const list = JSON.stringify(threads);
+  return all(s, `SELECT thread FROM archive_suggestions WHERE thread IN (SELECT value FROM json_each(?1))
+    UNION SELECT thread FROM archive_verdicts WHERE thread IN (SELECT value FROM json_each(?1))`, list).map((r) => r.thread as number);
+}
+
 export function archiveSuggested(s: Store, thread: number): boolean {
   const version = one(s, "SELECT version FROM archive_suggestions WHERE thread = ?", thread)?.version ?? null;
   return version !== null && version === lastEntry(s, thread);
@@ -589,9 +632,12 @@ export function publishedByThread(s: Store, threads: number[] | null = null): Ma
 
 // ── pins, kept chats ──
 
-/// The chats a viewer pinned (by their session's key), with when.
-export function pins(s: Store, viewer: string): Map<string, number> {
-  return new Map(all(s, "SELECT session, at FROM pins WHERE viewer = ?", viewer).map((r) => [r.session, r.at]));
+/// The chats a viewer pinned (by their session's key), with when. For an incremental read, seek only its keys.
+export const PINS_OF = "SELECT session, at FROM pins WHERE viewer = ?1 AND session IN (SELECT value FROM json_each(?2))";
+export function pins(s: Store, viewer: string, sessions: string[] | null = null): Map<string, number> {
+  const found = sessions === null ? all(s, "SELECT session, at FROM pins WHERE viewer = ?", viewer)
+    : sessions.length === 0 ? [] : all(s, PINS_OF, viewer, JSON.stringify(sessions));
+  return new Map(found.map((r) => [r.session, r.at]));
 }
 
 /// Chats kept instead of offered for archiving. Null selects every viewer.
@@ -607,7 +653,6 @@ export function keptChats(s: Store, viewer: string | null, threads: number[] | n
 /// The thread's card still pending, if any: its latest post with a card, as long as no person has written in the
 /// thread since (nor was it closed). The post as merged, and its card.
 export function pendingCard(s: Store, thread: number): [MessageRow, Json] | null {
-  if (isArchived(s, thread)) return null;
   // The latest of each kind (cards, and options from before cards), each read by its own index.
   const latest = (column: string): Json | undefined =>
     one(s, `SELECT n, card, options FROM entries WHERE thread = ? AND kind = 'message' AND ${column} IS NOT NULL ORDER BY n DESC LIMIT 1`, thread);
@@ -625,6 +670,48 @@ export function pendingCard(s: Store, thread: number): [MessageRow, Json] | null
   return m ? [toMessage(m), card] : null;
 }
 
+/// The cards `threads` wait on as kept (store/schema.ts PENDING_CARDS): by thread, the post's entry (`at`); and those of
+/// them with a card posted before it was kept (`before`), whose card is read as `pendingCard` reads it. Null where a
+/// database from before keeps none.
+export function pendingCards(s: Store, threads: number[]): { at: Map<number, number>; before: Set<number> } | null {
+  let from: number;
+  try {
+    from = one(s, "SELECT entry FROM pending_cards_from WHERE id = 1")?.entry ?? 0;
+  } catch {
+    return null;
+  }
+  const list = JSON.stringify(threads);
+  const at = new Map<number, number>(all(s, "SELECT thread, n FROM pending_cards WHERE thread IN (SELECT value FROM json_each(?))", list).map((r) => [r.thread, r.n]));
+  // A card or options posted before the cards were kept, by their own indexes: the chat's first of each.
+  const before = new Set<number>(
+    threads.filter((t) => !at.has(t) && (
+      one(s, "SELECT rowid FROM entries INDEXED BY entries_cards WHERE thread = ? AND card IS NOT NULL ORDER BY n LIMIT 1", t)?.rowid <= from ||
+      one(s, "SELECT rowid FROM entries INDEXED BY entries_options WHERE thread = ? AND options IS NOT NULL ORDER BY n LIMIT 1", t)?.rowid <= from)),
+  );
+  return { at, before };
+}
+
+/// Of `threads`, those that ever had a card or options posted, each by their own indexes.
+export function threadsWithCards(s: Store, threads: number[]): number[] {
+  return threads.filter((t) =>
+    one(s, "SELECT 1 FROM entries INDEXED BY entries_cards WHERE thread = ? AND card IS NOT NULL LIMIT 1", t) !== undefined ||
+    one(s, "SELECT 1 FROM entries INDEXED BY entries_options WHERE thread = ? AND options IS NOT NULL LIMIT 1", t) !== undefined);
+}
+
+/// The card a thread waits on as kept (`n`, pendingCards), as `pendingCard` gives it; null where it no longer waits
+/// (closed, or a person wrote since).
+export function cardAt(s: Store, thread: number, n: number): [MessageRow, Json] | null {
+  const asked = one(s, "SELECT card, options FROM entries WHERE thread = ? AND n = ?", thread, n);
+  if (!asked) return null;
+  const answered = one(s, "SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? LIMIT 1", thread, n) !== undefined;
+  const closed = one(s, "SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, n) !== undefined;
+  if (answered || closed) return null;
+  const card = cardOf(asked.card, asked.options);
+  if (card === undefined) return null;
+  const m = one(s, "SELECT * FROM merged WHERE thread = ? AND n = ?", thread, n);
+  return m ? [toMessage(m), card] : null;
+}
+
 /// An agent's latest message in a chat during a turn (`?2` to `?3`, ms), by the index of agents' messages by time (store/
 /// schema.ts entries_agent_at): by the chat alone, all it had was read for it.
 export const ASKED_DURING = "SELECT max(n) AS n FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'agent' AND at >= ? AND at <= ?";
@@ -632,7 +719,6 @@ export const ASKED_DURING = "SELECT max(n) AS n FROM entries WHERE thread = ? AN
 /// The message an agent's need without a card asks with, while no person has written after it: the one its turn is
 /// about (`about`), else the agent's latest message during the turn; with the two messages before it.
 export function askingMessage(s: Store, thread: number, about: number | null, during: [number, number | bigint]): [MessageRow, MessageRow[]] | null {
-  if (isArchived(s, thread)) return null;
   const n: number | null = about ?? one(s, ASKED_DURING, thread, during[0], during[1]).n;
   if (n === null) return null;
   const answered = one(s, "SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? LIMIT 1", thread, n) !== undefined;
@@ -647,7 +733,7 @@ export function askingMessage(s: Store, thread: number, about: number | null, du
 /// A turn of a session that ended blocked between two times (ms), in any of the words a turn's end is kept in (today's,
 /// need_help and need_decision, and block from before: store/rows.ts `saidBefore`), by the index of its turns by their
 /// end. Asked as `block` alone, none of today's matched (each blocked ask was told again at every turn that ended on
-/// it), and by the session's turns from its first, every turn it had was read: 1,891 for one on ccvm (2026-11-02).
+/// it), and by the session's turns from its first, every turn it had was read: many for one on a station (2026-11-02).
 export const TOLD_BLOCKED =
   "SELECT 1 FROM turns WHERE session_key = ? AND ended_at >= ? AND ended_at < ? AND declared IN ('block', 'need_help', 'need_human', 'need_decision') LIMIT 1";
 
@@ -666,16 +752,33 @@ export function blockedAsk(s: Store, thread: number, key: string, turn: TurnSumm
   return { asked, fresh: !told };
 }
 
+/// The people's messages since `since` (ms) in a thread that each are the first after a card (the last before it), in
+/// order: by its cards, each with the first person's message after it (none between: a card after it is the one asked).
+function answersOf(s: Store, thread: number, since: number): { thread: number; n: number }[] {
+  const cards = [...new Set([
+    ...all(s, "SELECT n FROM entries WHERE thread = ? AND kind = 'message' AND card IS NOT NULL", thread),
+    ...all(s, "SELECT n FROM entries WHERE thread = ? AND kind = 'message' AND options IS NOT NULL", thread),
+  ].map((r) => r.n as number))].sort((a, b) => a - b);
+  const out: { thread: number; n: number }[] = [];
+  cards.forEach((card, i) => {
+    const next = one(s, "SELECT n, at FROM entries WHERE thread = ? AND author_kind = 'person' AND kind = 'message' AND n > ? ORDER BY n LIMIT 1", thread, card);
+    if (next === undefined || next.at < since) return;
+    if (i + 1 < cards.length && cards[i + 1]! < next.n) return;
+    out.push({ thread, n: next.n });
+  });
+  return out;
+}
+
 /// The cards answered since `since` (ms), whoever answered them: each a person's first message after a card, or a
 /// choice that closed it (closed_cards, by a person: not its agent withdrawing it).
 export function answersSince(s: Store, since: number, threads: number[] | null = null): CardAnswer[] {
   const out: CardAnswer[] = [];
-  // Of some threads alone (the items of a sidebar a change touched), each by the index of its people's messages: every
-  // person's message of the last day and a half on the station, each with a few lookups, was some 2,600 statements.
+  // Of some threads alone (the items of a sidebar a change touched), each by its cards (a few) and the first person's
+  // message after each: looking up every recent message in every thread would need work unrelated to the changed items.
   const said: Json[] =
     threads === null
       ? all(s, "SELECT thread, n FROM entries WHERE author_kind = 'person' AND kind = 'message' AND at >= ?", since)
-      : threads.flatMap((thread) => all(s, SAID_SINCE, thread, since));
+      : threads.flatMap((thread) => answersOf(s, thread, since));
   const of = threads === null ? null : new Set(threads);
   const askedBefore = (thread: number, n: number): number | null => {
     const card: number | null = one(s, CARD_BEFORE, thread, n).n;
@@ -758,37 +861,61 @@ function turnSummary(r: Json, startedAt: number): TurnSummary {
 /// Each session's counts and last turn (`sessionStats`), each by a lookup the size of what it finds: its turns as the
 /// database keeps them counted (store/schema.ts SESSION_TURNS), its messages not delivered yet by the index of those
 /// alone (as store.ts STATS_OF), its first words and its latest turn. Its every turn counted and its every delivery read
-/// (the deliveries by session and thread), each summary of a long session read some 65 pages, from the disk on ccvm
+/// (the deliveries by session and thread), each summary of a long session read some 65 pages, from the disk on a station
 /// short of memory (2026-11-02), as often as the session changed.
+const SESSION_PENDING = `((SELECT COUNT(*) FROM deliveries d INDEXED BY deliveries_pending WHERE d.session = s.key AND d.delivered_at IS NULL) +
+         (SELECT COUNT(*) FROM letter_deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL)) AS pending`;
+const SESSION_LAST_FIELDS = `l.id AS turn_id, l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.wait_watch, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at`;
+const SESSION_LAST_FROM = `FROM sessions s
+     LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)`;
+
 export const SESSION_STATS = `SELECT s.key,
-       COALESCE((SELECT c.n FROM session_turns c WHERE c.session = s.key), 0) AS turns,
+       COALESCE((SELECT c.n FROM session_turns c WHERE c.session = s.key),
+         (SELECT CASE WHEN COUNT(*) <= ${TURN_COUNT_BATCH} THEN COUNT(*) END FROM
+           (SELECT 1 FROM turns old INDEXED BY turns_by_session WHERE old.session_key = s.key LIMIT ${TURN_COUNT_BATCH + 1}))) AS turns,
        -- How long its turns ran, where every one ended since that was kept (schema.ts SESSION_WORK); else none.
        CASE WHEN NOT EXISTS (SELECT 1 FROM turns o INDEXED BY turns_by_end WHERE o.session_key = s.key AND o.ended_at <= (SELECT f.at FROM session_work_from f WHERE f.id = 1))
          THEN COALESCE((SELECT w.ms FROM session_work w WHERE w.session = s.key), 0) END AS work_ms,
-       ((SELECT COUNT(*) FROM deliveries d INDEXED BY deliveries_pending WHERE d.session = s.key AND d.delivered_at IS NULL) +
-         (SELECT COUNT(*) FROM letter_deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL)) AS pending,
+       ${SESSION_PENDING},
        (SELECT substr(m.text, 1, 300) FROM session_first f JOIN merged m ON m.thread = f.thread AND m.n = f.n WHERE f.session = s.key) AS first_text,
-       l.id AS turn_id, l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.wait_watch, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
-     FROM sessions s
-     LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)`;
+       ${SESSION_LAST_FIELDS}
+     ${SESSION_LAST_FROM}`;
+
+/// What the sidebar actually shows: the latest turn and pending deliveries, without asking for a count or first words.
+export const SESSION_ACTIVITY = `SELECT s.key, ${SESSION_PENDING}, ${SESSION_LAST_FIELDS} ${SESSION_LAST_FROM}`;
+export const TURN_COUNT_PENDING = "turn count pending: ";
+export class TurnCountUnavailable extends Refused {
+  readonly sessions: string[];
+  constructor(sessions: string[]) { super(503, TURN_COUNT_PENDING + JSON.stringify(sessions)); this.sessions = sessions; }
+}
 
 /// A session's latest turn, as `sessionStats` has it, by the index of its turns alone.
 export const LAST_TURN = "SELECT * FROM turns WHERE session_key = ? ORDER BY started_at DESC LIMIT 1";
+
+function sessionRows(s: Store, key: string | string[] | null, select: string): Json[] {
+  if (Array.isArray(key) && key.length === 0) return [];
+  const sql = `${select} ${Array.isArray(key) ? "WHERE s.key IN (SELECT value FROM json_each(?))" : key !== null ? "WHERE s.key = ?" : ""}`;
+  return Array.isArray(key) ? all(s, sql, JSON.stringify(key)) : key !== null ? all(s, sql, key) : all(s, sql);
+}
+const latestTurn = (r: Json): TurnSummary | null => r.started_at === null ? null : { ...turnSummary(r, r.started_at), id: r.turn_id };
 
 /// Per session (or for one): turn count and how long its ended turns ran, the latest turn (with its id: a client holding
 /// the turns puts it in place rather than read them all again), undelivered messages and the first one it heard.
 /// Each session's counts and last turn: one's, those named (`keys`), or all (null).
 export function sessionStats(s: Store, key: string | string[] | null): Map<string, SessionStats> {
-  if (Array.isArray(key) && key.length === 0) return new Map();
-  const sql = `${SESSION_STATS}
-     ${Array.isArray(key) ? `WHERE s.key IN (${key.map(() => "?").join(", ")})` : key !== null ? "WHERE s.key = ?" : ""}`;
-  const rows = Array.isArray(key) ? all(s, sql, ...key) : key !== null ? all(s, sql, key) : all(s, sql);
+  const rows = sessionRows(s, key, SESSION_STATS);
+  const unknown = rows.filter((r) => r.turns === null).map((r) => r.key as string);
+  if (unknown.length) throw new TurnCountUnavailable(unknown);
   return new Map(
     rows.map((r) => [
       r.key as string,
-      { turns: r.turns, workMs: r.work_ms, pending: r.pending, firstText: r.first_text, lastTurn: r.started_at === null ? null : { ...turnSummary(r, r.started_at), id: r.turn_id } },
+      { turns: r.turns, workMs: r.work_ms, pending: r.pending, firstText: r.first_text, lastTurn: latestTurn(r) },
     ]),
   );
+}
+
+export function sessionActivity(s: Store, key: string | string[] | null): Map<string, { pending: number; lastTurn: TurnSummary | null }> {
+  return new Map(sessionRows(s, key, SESSION_ACTIVITY).map((r) => [r.key as string, { pending: r.pending, lastTurn: latestTurn(r) }]));
 }
 
 /// A session's latest turn (as `sessionStats` has it, with its id), without the counts: what a notice of how it ended
@@ -816,7 +943,7 @@ export const JOBS_NOW = 50;
 /// A session's latest jobs by when they were made (the index on their session, from its end), and those of it still up
 /// (running, or a service being started again: by the index of those up): what a device's list of them shows, those
 /// that matter now (client/core-ts jobs.ts `isCurrent`). Its every job was read for it, with each one's notices and
-/// log: 378 of one session on ccvm (2026-11-03).
+/// log: 378 of one session on a station (2026-11-03).
 export const LATEST_JOBS = "SELECT * FROM jobs INDEXED BY jobs_by_session WHERE session_key = ? ORDER BY rowid DESC LIMIT ?";
 export const UP_JOBS_OF = "SELECT * FROM jobs INDEXED BY jobs_up WHERE state = 'running' AND session_key = ?1 UNION ALL SELECT * FROM jobs INDEXED BY jobs_up WHERE state = 'exited' AND port IS NOT NULL AND session_key = ?1";
 export function jobsNow(s: Store, session: string): JobRow[] {
@@ -838,13 +965,27 @@ export function jobNotices(s: Store, id: string, limit: number): { at: number; t
 /// The jobs running of some sessions (`?`: a JSON list of their keys), the latest first, by an index (of the jobs running).
 export const RUNNING_OF = "SELECT * FROM jobs WHERE session_key IN (SELECT value FROM json_each(?)) AND state = 'running' ORDER BY started_at DESC";
 
+/// Active watches of the named sessions, using their lookup instead of reading every running job or a session's old jobs.
+export const WATCHING_OF = `SELECT j.* FROM active_watch_jobs w INDEXED BY active_watch_jobs_session
+  CROSS JOIN jobs j ON j.id = w.job WHERE w.session IN (SELECT value FROM json_each(?)) ORDER BY j.started_at DESC, j.rowid`;
+
 /// jobs.rs `watching`: the sessions keeping watch (a watch job running), each with its watches' names, since when, and
 /// when one last said something: of `sessions` alone (a session's summary, the sidebar items a change touched), or of
 /// all. Of all, each summary and sidebar change read every job running and the notices of every watch.
 export function watching(s: Store, sessions: string[] | null = null): Map<string, Json> {
+  if (sessions !== null && sessions.length === 0) return new Map();
   const by = new Map<string, JobRow[]>();
   // (The jobs running, by their state's index: every summary and list asks this, not every job ever.)
-  const running = sessions === null ? all(s, JOBS_RUNNING) : all(s, RUNNING_OF, JSON.stringify(sessions));
+  let running: Json[];
+  if (sessions === null) running = all(s, JOBS_RUNNING);
+  else {
+    try { running = all(s, WATCHING_OF, JSON.stringify(sessions)); }
+    catch (error) {
+      // A reader can also open a database from before active watches were kept.
+      if (!(error instanceof Error) || !error.message.includes("no such table: active_watch_jobs")) throw error;
+      running = all(s, RUNNING_OF, JSON.stringify(sessions));
+    }
+  }
   for (const job of running.map(toJob).filter((j) => j.watch)) {
     by.set(job.sessionKey, [...(by.get(job.sessionKey) ?? []), job]);
   }
@@ -857,66 +998,62 @@ export function watching(s: Store, sessions: string[] | null = null): Map<string
   return out;
 }
 
-// ── archive ──
-
-export function isArchived(s: Store, thread: number): boolean {
-  const r = one(s, "SELECT archived_at FROM threads WHERE id = ?", thread);
-  return r !== undefined && r.archived_at !== null;
-}
-
-function threadFile(s: Store, thread: number): string {
-  return join(s.archiveDir, "threads", `${thread}.jsonl.zst`);
-}
-
-/// An archived thread's entries, from its file.
-export function archivedEntries(s: Store, thread: number): EntryRow[] {
-  const path = threadFile(s, thread);
-  const version = fileVersion(path);
-  const at = s.archived.findIndex(([id, v]) => id === thread && v === version);
-  if (at >= 0) {
-    const [cached] = s.archived.splice(at, 1);
-    s.archived.push(cached!);
-    return cached![2];
-  }
-  s.archived = s.archived.filter(([id]) => id !== thread);
-  const text = version === LOST ? "" : zstdDecompressSync(readFileSync(path)).toString("utf8");
-  const entries = archiveEntries(text);
-  if (s.archived.length >= ARCHIVE_CACHE) s.archived.shift();
-  s.archived.push([thread, version, entries]);
-  return entries;
-}
-
-/// An archive file as it is now (its size and when it was written): one written anew (the thread brought back and
-/// archived again) is another. Read from a reader, the writer's moving of threads to and from their files is only seen so.
-/// One that is not there (lost with the disk it was on) is LOST: its thread reads as one with no entries, so the
-/// lists it is in are still read.
-function fileVersion(path: string): string {
-  try {
-    const st = statSync(path);
-    return `${st.size}:${st.mtimeMs}`;
-  } catch {
-    return LOST;
-  }
-}
-
-/// The version of an archive file that is not there.
-const LOST = "lost";
-
 // ── usage (store/usage.rs) ──
 
 /// The calls of one day for one thread, person, profile and model, added up (store/usage.ts).
 export type { UsageGroup };
 
+/// A page of one session's original calls, newest first. Seek a timestamp tie by rowid before seeking older times:
+/// a tuple comparison alone can start at the range's end and revisit every call newer than the cursor.
+const USAGE_CALL_COLUMNS = `SELECT CAST(rowid AS TEXT) AS seq, id, CAST(at AS TEXT) AS at, session, turn, thread, person, profile, runtime, model, subagent, fast,
+  input, cache_read, cache_write, cache_write_long, output, calls, context, context_window FROM usage INDEXED BY usage_session`;
+export const USAGE_CALLS_SAME = `${USAGE_CALL_COLUMNS} WHERE session = ?1 AND at = ?2 AND rowid < ?3 ORDER BY rowid DESC LIMIT ?4`;
+export const USAGE_CALLS_EARLIER = `${USAGE_CALL_COLUMNS} WHERE session = ?1 AND at >= ?2 AND at < ?3 ORDER BY usage.at DESC, rowid DESC LIMIT ?4`;
+export function usageCallsPage(s: Store, session: string, from: bigint, to: bigint, before: [bigint, bigint], limit: number,
+  viewer: InWorkspace | null): { rows: Json[]; next: { at: string; seq: string } | null } {
+  const row = viewer === null ? undefined : one(s, "SELECT ws FROM sessions WHERE key = ?", session);
+  if (viewer !== null && (row === undefined || !sees(viewer, row.ws))) return { rows: [], next: null };
+  const size = Math.max(1, Math.min(limit, 200));
+  const page: Json[] = [];
+  if (before[0] >= from && before[0] < to) page.push(...all(s, USAGE_CALLS_SAME, session, before[0], before[1], size));
+  const end = before[0] < to ? before[0] : to;
+  if (page.length < size && end > from) page.push(...all(s, USAGE_CALLS_EARLIER, session, from, end, size - page.length));
+  const rows = page.map((r) => ({ id: r.id, at: Number(r.at), session: r.session, turn: r.turn, thread: r.thread,
+    person: r.person, profile: r.profile, runtime: r.runtime, model: r.model, subagent: r.subagent !== 0, fast: r.fast !== 0,
+    input: Number(r.input), cacheRead: Number(r.cache_read), cacheWrite: Number(r.cache_write), cacheWriteLong: Number(r.cache_write_long),
+    output: Number(r.output), calls: Number(r.calls), context: r.context, contextWindow: r.context_window }));
+  const last = page.at(-1);
+  return { rows, next: last === undefined || page.length < size ? null : { at: String(last.at), seq: String(last.seq) } };
+}
+
 /// usage_groups: the calls from `from` until `to` (ms), added up by day in the asker's time zone (`utcOffsetMin`) and by
 /// thread, person, profile and model. Bounds are i64s (bigint), bound as integers as rusqlite binds them.
 export { USAGE_DETAIL_PENDING };
-export function usageGroups(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null): UsageGroup[] {
+export function usageGroups(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null,
+  diagnostics?: { parts?: number; candidates?: number; selectedMs?: number }): UsageGroup[] {
+  if (hasCompactUsage(s.db)) {
+    if (!compactScopeReady(s.db, viewer)) throw new Refused(503, "usage statistics are moving between workspaces");
+    const query = compactQuery(from, to, utcOffsetMin, viewer, diagnostics !== undefined, diagnostics !== undefined);
+    if (diagnostics !== undefined && query.sql.includes("usage_summary_candidate()")) {
+      diagnostics.candidates = 0;
+      const started = performance.now();
+      s.db.function("usage_summary_candidate", () => { diagnostics.candidates!++; return 1; });
+      s.db.function("usage_summary_selected", () => { diagnostics.selectedMs = Math.round(performance.now() - started); return 1; });
+    }
+    const rows = all(s, query.sql, ...query.args);
+    // Count only rows already used by this read; asking the database for another count would repeat the slow work.
+    if (diagnostics !== undefined) diagnostics.parts = rows.reduce((n, row) => n + Number(row.source_parts), 0);
+    return rows.map(usageGroupOf);
+  }
   if (retiredUsage(s.db)) throw new Refused(503, "usage detail statistics are unavailable");
   const generation = usageDetailGeneration(s.db);
   if (!usageDetailReady(s.db, viewer, generation)) throw new Error(USAGE_DETAIL_PENDING);
   const query = detailQuery(from, to, utcOffsetMin, viewer, generation, usageDetailScopeBySession(s.db, viewer, generation));
   return query === null ? [] : all(s, query.sql, ...query.args).map(usageGroupOf);
 }
+
+export { batchedUsageQueries, usageGroupsBatched, UsageSummaryCache } from "./usage-batched.ts";
+export type { BatchedUsage } from "./usage-batched.ts";
 
 /// usage_threads: the threads usage names, each with the first thing a person said in it (for its title; none where
 /// its archive cannot be read). Those gone are left out.
@@ -1004,7 +1141,13 @@ export const USAGE_DETAIL_QUARTERS_SCOPED = quartersByDay(DETAIL_QUARTERS_SCOPED
 export const USAGE_DETAIL_QUARTERS_HOME = quartersByDay(DETAIL_QUARTERS_HOME, "1");
 
 /// Calls added up by local day and session without rereading the calls, including in non-quarter-hour time zones.
-export function usageByDay(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null = null): { day: string; session: string; runtime: string; model: string | null; tokens: number; calls: number }[] {
+export function usageByDay(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null = null, partial = false,
+  range?: { from: bigint; to: bigint }): { day: string; session: string; runtime: string; model: string | null; tokens: number; calls: number }[] {
+  if (hasCompactUsage(s.db)) {
+    const rows = compactHistory(s.db, utcOffsetMin, viewer, partial, range);
+    if (rows === null) throw new Error(USAGE_MINUTES_PENDING);
+    return rows;
+  }
   if (retiredUsage(s.db)) throw new Error(USAGE_MINUTES_PENDING);
   const fromDetail = one(s, "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_history_from_detail'") !== undefined;
   if (fromDetail) {
@@ -1058,6 +1201,7 @@ export function threadsByPlace(s: Store, viewer: InWorkspace | null = null): { s
 /// not (answered in their own words, or not yet): the usage page's 决策点击率. With the session its thread is at home in.
 /// As the database keeps them (store/schema.ts CARD_OUTCOMES): no entry is read.
 export function decisionCards(s: Store, viewer: InWorkspace | null = null): { home: string | null; picked: boolean }[] {
+  if (!usageCardOutcomesComplete(s.db)) throw new Error(USAGE_CHATS_PENDING);
   const found = viewer === null
     ? all(s, `SELECT t.home AS home, c.said OR EXISTS (SELECT 1 FROM closed_cards x WHERE x.thread = c.thread AND x.n = c.n AND x.viewer != c.author) AS picked
        FROM card_outcomes c LEFT JOIN threads t ON t.id = c.thread`)
@@ -1067,13 +1211,13 @@ export function decisionCards(s: Store, viewer: InWorkspace | null = null): { ho
 
 export const USAGE_CHATS_PENDING = "usage chat statistics are still being filled";
 
-export function usageChatsReady(s: Store, viewer: InWorkspace | null): void {
-  if (!usageChatStatsReady(s.db, viewer)) throw new Error(USAGE_CHATS_PENDING);
+export function usageChatsReady(s: Store, viewer: InWorkspace | null, options: UsageChatCoverage = {}): void {
+  if (!usageChatStatsReady(s.db, viewer, options)) throw new Error(USAGE_CHATS_PENDING);
 }
 
 /// The totals are kept by place and visibility, not gathered from every chat and card on each request.
-export function usageChatTotals(s: Store, viewer: InWorkspace | null): { places: Record<string, number>; archived: number; cards: number; picked: number } {
-  usageChatsReady(s, viewer);
+export function usageChatTotals(s: Store, viewer: InWorkspace | null, options: UsageChatCoverage = {}): { places: Record<string, number>; archived: number; cards: number; picked: number } {
+  usageChatsReady(s, viewer, options);
   const places: Record<string, number> = {};
   let archived = 0, cards = 0, picked = 0;
   const scopes: [number, string, number][] = viewer === null ? [[0, "", 1]] : viewer.home === false
@@ -1092,6 +1236,7 @@ export function usageChatTotals(s: Store, viewer: InWorkspace | null): { places:
 
 /// usage_since: when the earliest call recorded was made.
 export function usageSince(s: Store): number | null {
+  if (hasCompactUsage(s.db)) return compactUsageSince(s.db);
   const first = one(s, "SELECT first_at FROM usage_span WHERE id = 1").first_at as number | null;
   const cutover = usageDetailSince(s.db);
   return cutover === null ? first : Math.max(first ?? cutover, cutover);
@@ -1130,18 +1275,16 @@ export function listBindings(s: Store): Map<string, string[]> {
   return out;
 }
 
-/// Store::participants: everyone who wrote in each session's threads (or one session's), as creator references,
+/// Store::participants: everyone who wrote in each session's threads (one, those named, or all), as creator references,
 /// earliest first; a session no one wrote to has none.
-export function participants(s: Store, session: string | null): Map<string, string[]> {
-  const sql = `SELECT ts.session, ts.connect, t.id, t.surface, t.archived_at FROM thread_sessions ts JOIN threads t ON t.id = ts.thread ${session !== null ? "WHERE ts.session = ?" : ""}`;
-  const rows = session !== null ? all(s, sql, session) : all(s, sql);
+export function participants(s: Store, session: string | string[] | null): Map<string, string[]> {
+  if (Array.isArray(session) && session.length === 0) return new Map();
+  const sql = `SELECT ts.session, ts.connect, t.id, t.surface FROM thread_sessions ts JOIN threads t ON t.id = ts.thread ${Array.isArray(session) ? "WHERE ts.session IN (SELECT value FROM json_each(?))" : session !== null ? "WHERE ts.session = ?" : ""}`;
+  const rows = Array.isArray(session) ? all(s, sql, JSON.stringify(session)) : session !== null ? all(s, sql, session) : all(s, sql);
   // Each person once per session, at the first time they wrote in any of its threads.
   const firsts = new Map<string, Map<string, number>>();
   for (const r of rows) {
-    const authors: [string, number][] =
-      r.archived_at !== null
-        ? archivedSummary(s, r.id, r.archived_at)!.firstAt
-        : all(s, PEOPLE_AT, r.id).map((a) => [a.author, a.at]);
+    const authors: [string, number][] = all(s, PEOPLE_AT, r.id).map((a) => [a.author, a.at]);
     const refs = firsts.get(r.session) ?? new Map<string, number>();
     firsts.set(r.session, refs);
     for (const [author, at] of authors) {

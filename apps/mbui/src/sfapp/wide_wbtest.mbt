@@ -22,7 +22,7 @@ fn wide_tester(
     },
   }
   if mode.has_prefix("chat") {
-    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   }
   // (what the run is made with, said after it is begun and before the window is: a window of its own's page)
   before(src)
@@ -339,7 +339,7 @@ test "wide: where this machine is a station, files from the Finder let go on the
   t.frame()
   assert_eq(refs().length(), 2)
   assert_eq(text(field(refs().get(0), "ref"), "station"), "ws1/st1")
-  assert_eq(text(field(refs().get(0), "ref"), "stationName"), "Studio")
+  assert_eq(text(field(refs().get(0), "ref"), "stationName"), "Willow")
   assert_eq(text(field(refs().get(0), "ref"), "path"), "/Users/lin/报告.pdf")
   assert_eq(text(field(refs().get(0), "ref"), "mode"), "path")
   // (where the station reads it from, should it go as a file: its folder, its name there)
@@ -412,14 +412,14 @@ test "wide: a new chat as the web's: its scene and the composer in the pane's mi
   let (_, y) = t.find("做任何事").unwrap()
   assert_true(y < 600.0, msg="in the middle")
   // where it runs: its stations in a panel beside it (the presenters')
-  let station = t.query(Button, label="Studio")
+  let station = t.query(Button, label="Willow")
   assert_true(station is Some(_))
-  t.click(Button, label="Studio")
+  t.click(Button, label="Willow")
   t.run_for(@kit.presence_in_ms)
-  assert_true(t.query(Button, label="MBA") is Some(_))
+  assert_true(t.query(Button, label="Maple") is Some(_))
   t.key(@ui.key_escape)
   t.run_for(@kit.presence_in_ms)
-  assert_true(t.query(Button, label="MBA") is None)
+  assert_true(t.query(Button, label="Maple") is None)
 }
 
 ///|
@@ -464,7 +464,7 @@ test "wide: the machine's own sessions offered under the composer as its station
   t.frame()
   t.frame()
   assert_true(app.nav.top() == NewChat)
-  let offer = "继续 Studio 终端中的会话"
+  let offer = "继续 Willow 终端中的会话"
   assert_true(t.find(offer) is None)
   let (bx, by, _, bh) = composer_glass(t)
   // the station says what its machine kept, a while after the page asked
@@ -505,8 +505,8 @@ test "wide: the machine's own sessions offered under the composer as its station
 }
 
 ///|
-/// The fixture's app over its new chat as the core gives it station by station: on Studio, read whole, its machine's
-/// own session to go on with; on MBA none, but what is wrong for now and what it waits for.
+/// The fixture's app over its new chat as the core gives it station by station: on Willow, read whole, its machine's
+/// own session to go on with; on Maple none, but what is wrong for now and what it waits for.
 fn new_chat_by_station(h? : Double = 800.0) -> @ui.Tester {
   new_run()
   let base = fixture("home")
@@ -538,7 +538,7 @@ fn new_chat_by_station(h? : Double = 800.0) -> @ui.Tester {
           if text(v.get("station"), "id") == "st2" {
             m["frequent"] = Json::array([])
             m["spent"] = Json::string("Opus 5.5 的额度已用完，发出的消息会等它恢复")
-            m["problem"] = Json::string("MBA 上还没有选好要用的模型")
+            m["problem"] = Json::string("Maple 上还没有选好要用的模型")
           } else {
             match v.get("station") {
               Some(Object(o)) => {
@@ -564,8 +564,8 @@ test "wide: a new chat's composer stays where it is as another station is picked
   t.frame()
   t.frame()
   assert_true(app.nav.top() == NewChat)
-  let offer = "继续 Studio 终端中的会话"
-  assert_true(t.find(offer) is Some(_), msg="Studio's machine's session offered")
+  let offer = "继续 Willow 终端中的会话"
+  assert_true(t.find(offer) is Some(_), msg="Willow's machine's session offered")
   let (bx, by, _, _) = composer_glass(t)
   let pick = fn(from : String, to : String) raise {
     t.click(Button, label=from)
@@ -573,14 +573,14 @@ test "wide: a new chat's composer stays where it is as another station is picked
     t.click(Button, label=to)
     t.run_for(@kit.presence_in_ms)
   }
-  // MBA: no session of its own; what is wrong for now and what it waits for in its place
-  pick("Studio", "MBA")
-  assert_true(t.find("MBA 上还没有选好要用的模型") is Some(_))
+  // Maple: no session of its own; what is wrong for now and what it waits for in its place
+  pick("Willow", "Maple")
+  assert_true(t.find("Maple 上还没有选好要用的模型") is Some(_))
   assert_true(t.find("Opus 5.5 的额度已用完，发出的消息会等它恢复") is Some(_))
   assert_true(t.find(offer) is None)
   assert_at((bx, by), { let (x, y, _, _) = composer_glass(t); (x, y) })
-  // Studio again: as it was
-  pick("MBA", "Studio")
+  // Willow again: as it was
+  pick("Maple", "Willow")
   assert_true(t.find(offer) is Some(_))
   assert_at((bx, by), { let (x, y, _, _) = composer_glass(t); (x, y) })
 }
@@ -590,9 +590,9 @@ test "wide: the machine's sessions open in a dialog in the window's middle, not 
   let t = new_chat_by_station()
   t.frame()
   t.frame()
-  t.click(Button, label="继续 Studio 终端中的会话")
+  t.click(Button, label="继续 Willow 终端中的会话")
   t.run_for(@ui.move_most_ms)
-  let (tx, ty) = match t.find("继续 Studio 上的会话") {
+  let (tx, ty) = match t.find("继续 Willow 上的会话") {
     Some(at) => at
     None => fail("no dialog")
   }
@@ -613,7 +613,7 @@ test "wide: in a window as short as it goes, what is under a new chat's composer
   t.frame()
   t.frame()
   t.frame()
-  let (_, oy) = match t.find("继续 Studio 终端中的会话") {
+  let (_, oy) = match t.find("继续 Willow 终端中的会话") {
     Some(at) => at
     None => fail("no offer")
   }
@@ -792,7 +792,7 @@ test "wide: a new chat's first words, the hint gone under them, into their bubbl
   choices_in_ground(t)
   t.run_for(new_fade_ms + 1.0)
   let (gx, _, gw, _) = composer_glass(t)
-  assert_true(seen_words(t, "Studio").iter().all(fn(p) { p.0 < gx || p.0 > gx + gw }), msg="the choices gone")
+  assert_true(seen_words(t, "Willow").iter().all(fn(p) { p.0 < gx || p.0 > gx + gw }), msg="the choices gone")
   assert_false(hint_drawn(t), msg="the hint under the words sent, the composer gone to the chat's foot")
   // with the list, no frame where they are not, nor a jump
   let landed = one_way_till(t, words, sent + flight_carry_ms + 34.0, 120.0)
@@ -823,7 +823,7 @@ test "wide: a new chat's first words, the hint gone under them, into their bubbl
 /// The new chat's choices (its station's name) drawn within the composer's ground.
 fn choices_in_ground(t : @ui.Tester) -> Unit raise {
   let (gx, gy, gw, gh) = composer_glass(t)
-  let at = seen_words(t, "Studio").filter(fn(p) { p.0 > gx && p.0 < gx + gw })
+  let at = seen_words(t, "Willow").filter(fn(p) { p.0 > gx && p.0 < gx + gw })
   assert_true(
     at.length() > 0 && at.iter().all(fn(p) { p.1 >= gy && p.1 <= gy + gh }),
     msg="the choices at \{at}, the composer's ground \{(gx, gy, gw, gh)} at \{t.time()}",
@@ -1137,8 +1137,8 @@ test "wide: settings' pages as the web's: 通知 (提醒方式, each kind), 权�
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("提示归档") is Some(_))
   assert_true(t.find("自动归档") is Some(_))
-  assert_true(t.find("Studio") is Some(_))
-  // a station's own (the settings' fixture's Studio: idle a day, Slack's three)
+  assert_true(t.find("Willow") is Some(_))
+  // a station's own (the settings' fixture's Willow: idle a day, Slack's three)
   let t = wide_tester([], mode="settings")
   t.draw()
   app.nav.push(Setting(@settings.Route::StationArchiving("ws1/st1")))
@@ -1204,10 +1204,10 @@ test "wide: 文件 shows favorites and stations; files can be chosen, opened, an
   for label in ["个人收藏", "Station"] {
     assert_true(t.find(label) is Some(_), msg=label)
   }
-  // how full Studio's disk is, by its row (MBA away: none)
-  assert_true(t.query(Image, label="剩 380 GB · 已用 62%") is Some(_))
+  // how full Willow's disk is, by its row (Maple away: none)
+  assert_true(t.query(Image, label="剩 420 GB · 已用 58%") is Some(_))
   // a station opened: its places (drive.folders), read once
-  t.click(Button, label="展开 Studio")
+  t.click(Button, label="展开 Willow")
   t.frame()
   assert_eq(named(calls, "drive.folders").length(), 1)
   assert_true(t.find("外接硬盘") is Some(_))
@@ -1295,7 +1295,7 @@ test "wide: 文件's tabs as Finder's: ⌘T a new one, the bar's split shows two
   }
   // the side pressed in front, gone into; the other still 文档
   let shown = t.all(Tab).filter(fn(n) { n.selected == Some(true) })
-  assert_eq(shown.map(fn(n) { n.label }), ["Studio › 会议记录 | Studio › 文档"])
+  assert_eq(shown.map(fn(n) { n.label }), ["Willow › 会议记录 | Willow › 文档"])
   assert_true(t.find("长篇小说.txt") is Some(_))
   // one again: the side in front kept
   t.click(Button, label="取消分栏")
@@ -1410,7 +1410,7 @@ test "wide: ⌘⇧G goes to a folder by its path (~ the home: the core's files.g
   assert_true(t.find("前往文件夹…") is Some(_))
   t.type_text("~/项目")
   t.frame()
-  assert_true(t.find("Studio › /Users/lin/项目") is Some(_), msg="where it goes")
+  assert_true(t.find("Willow › /Users/lin/项目") is Some(_), msg="where it goes")
   // (worked out by the core)
   assert_true(named(calls, "files.go").length() > 0)
   t.enter()
@@ -1423,7 +1423,7 @@ test "wide: ⌘⇧G goes to a folder by its path (~ the home: the core's files.g
   // its station's button: the stations
   t.click(Button, label="换 station")
   t.frame()
-  assert_true(t.find("MBA") is Some(_))
+  assert_true(t.find("Maple") is Some(_))
 }
 
 ///|
@@ -1592,7 +1592,7 @@ test "wide: 文件's preview beside the list (⌘⇧P): the row chosen, its star
 }
 
 ///|
-/// A folder of the files' page's tree (at Studio's 文档) opened, as its disclosure opens it (the made-up core told).
+/// A folder of the files' page's tree (at Willow's 文档) opened, as its disclosure opens it (the made-up core told).
 fn files_tree_open(path : String) -> Unit {
   fix_browse_do(None, "", "drive.browse", {
     "act": "tree",
@@ -1607,7 +1607,7 @@ fn files_tree_open(path : String) -> Unit {
 }
 
 ///|
-/// The files' page at Studio's 文档 in a list (or as `view` says), its calls kept in `calls`.
+/// The files' page at Willow's 文档 in a list (or as `view` says), its calls kept in `calls`.
 fn files_dragging(calls : Array[Made], view? : String = "list") -> @ui.Tester {
   let t = wide_tester(calls)
   app.nav.replace(Files)
@@ -1889,8 +1889,8 @@ test "wide: 连接 as the web's: one list of every station's, each its station's
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("星火助手") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("林（你）") is Some(_), msg="who added it")
-  assert_true(t.find("Studio") is Some(_), msg="its station's tag")
-  assert_true(t.find("MBA · 离线") is None, msg="no station's heading")
+  assert_true(t.find("Willow") is Some(_), msg="its station's tag")
+  assert_true(t.find("Maple · 离线") is None, msg="no station's heading")
   assert_true(t.query(Button, label="说明") is Some(_), msg="what a connect is")
   assert_true(t.query(Button, label="添加连接") is Some(_))
   // the filter under the title (MineFilter): its menu, 我的 picked
@@ -1929,7 +1929,7 @@ test "wide: a connect's page: back to the connects, who it is and how it is, how
   t.run_for(@ui.move_most_ms)
   // its head: back over it, its name, how it is, where it is reached, its station, who owns it
   assert_true(t.query(Link, label="连接") is Some(_), msg="back: " + t.words().map(fn(w) { w.0 }).join("|"))
-  for w in ["星火助手", "在线", "星火", "Studio", "所属"] {
+  for w in ["星火助手", "在线", "星火", "Willow", "所属"] {
     assert_true(t.find(w) is Some(_), msg=w)
   }
   // how it runs, in the core's words; its latest sessions
@@ -2315,8 +2315,8 @@ test "wide: the station a chat's agent runs on, beside its mark in the bar, has 
   let t = wide_tester(calls, mode="chat-agent-card")
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   // its part of the tile: in the chat's bar, named for what it is
-  let part = t.locate("=Studio").filter(fn(p) { p.1 < 60.0 && p.0 > 400.0 })
-  assert_eq(part.length(), 1, msg="\{t.locate("=Studio")}")
+  let part = t.locate("=Willow").filter(fn(p) { p.1 < 60.0 && p.0 > 400.0 })
+  assert_eq(part.length(), 1, msg="\{t.locate("=Willow")}")
   assert_eq(word("机器详情").length(), 0)
   t.move(part[0].0, part[0].1)
   t.run_for(@sfpages.hover_open_ms * 2.0)
@@ -2367,7 +2367,7 @@ fn working_agent_card(stands? : String) -> @ui.Tester {
       }
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   let last = t
     .words()
@@ -2445,7 +2445,7 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
       }
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.0 }) }
   let last = word("Claude").iter().fold(init=None, fn(acc : (String, Double, Double, Double, Double, Double)?, w) {
@@ -2624,7 +2624,7 @@ test "wide: adding a favorite chooses a station and folder without changing its 
   t.frame()
   // (two stations it can be done on: which first)
   assert_true(t.find("选择一台 station，然后选择要收藏的文件夹") is Some(_), msg="which station")
-  t.click(Button, label="Studio")
+  t.click(Button, label="Willow")
   t.frame()
   t.frame()
   assert_true(t.find("从 station 的主目录进入要收藏的文件夹") is Some(_), msg="the picker")
@@ -2683,7 +2683,7 @@ test "wide: a row pressed on its state line while the core says which message th
       }
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.draw()
   let rd = readings.get("ws1/st1\u{1}s-c1").unwrap()
@@ -2758,4 +2758,31 @@ test "wide: a reference to a chat rested on in one run and again in the next: it
   let again = ref_rested()
   assert_true(first.0 <= 1 && first.1, msg="first: \{first}")
   assert_eq(again, (0, true))
+}
+
+///|
+test "大屏: a settings row pressed, its page opened as one change: the settings never put down on the way, the chats' sidebar never taken between" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  @sfdesk.open_settings()
+  t.run_for(@ui.move_most_ms)
+  // (what the stack is said to be at each change, as what follows it sees it)
+  let seen : Array[String] = []
+  let stop = @signals.effect(fn() {
+    app.nav.pages() |> ignore
+    seen.push(@sfdesk.side_place())
+  })
+  for row in ["密钥", "安全"] {
+    match t.find(row) {
+      Some((x, y)) => t.tap(x, y)
+      None => fail("no \{row} in " + t.words().map(fn(w) { w.0 }).join("|"))
+    }
+    t.run_for(@ui.move_most_ms)
+  }
+  stop()
+  match app.nav.top() {
+    Setting(@settings.Route::Security) => ()
+    _ => fail("not 安全 after its row")
+  }
+  assert_eq(seen.filter(fn(p) { p != "settings" }), [], msg="\{seen}")
 }

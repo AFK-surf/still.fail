@@ -34,15 +34,15 @@ test "a chat's 文件 tab (DriveTab.tsx): at the chat's station's home, the trai
   let calls : Array[Made] = []
   let t = tab_tester(calls)
   t.frame()
-  // the home: its trail (Studio › 主目录), its folders in a list
-  assert_true(t.query(Button, label="Studio") is Some(_))
+  // the home: its trail (Willow › 主目录), its folders in a list
+  assert_true(t.query(Button, label="Willow") is Some(_))
   assert_true(t.find("主目录") is Some(_))
   assert_true(t.find("文档") is Some(_))
   // the places: each station's home and its pinned folders
-  t.click(Button, label="Studio")
+  t.click(Button, label="Willow")
   t.frame()
-  assert_true(t.find("照片") is Some(_), msg="MBA's pinned folder")
-  assert_true(t.find("离线") is Some(_), msg="MBA away")
+  assert_true(t.find("照片") is Some(_), msg="Maple's pinned folder")
+  assert_true(t.find("离线") is Some(_), msg="Maple away")
   t.click(Link, label="文档")
   t.frame()
   // 文档 (pinned): its rows; a folder pressed: gone into
@@ -100,7 +100,7 @@ test "a chat's 文件 tab, the same on a touch device and on a computer: the pla
     @sfdesk.tab_place_set("ws1", None)
     t.frame()
     // the places: each station a section, its home and its pinned folders a row each
-    assert_true(t.find("照片") is Some(_), msg="MBA's pinned folder: \{platform}")
+    assert_true(t.find("照片") is Some(_), msg="Maple's pinned folder: \{platform}")
     t.tap_text("文档")
     t.frame()
     t.frame()

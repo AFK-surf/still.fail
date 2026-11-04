@@ -48,7 +48,7 @@ station's profiles), or anything the person said not to keep.
     password sent in a login form or JSON body, a database client, a CLI reading a variable. `ssh` for an SSH key.
     `file` for a file: each command gets it written out where only it reads it, removed when it ends, its path in
     `env` (`KUBECONFIG`, `GOOGLE_APPLICATION_CREDENTIALS`) and `$STILLFAIL_SECRET`.
-  - `name`: what the person will recognise (UniFi UX7 管理员, GitHub deploy token · AFK-surf/still.fail).
+  - `name`: what the person will recognise (测试服务登录, GitHub deploy token · AFK-surf/still.fail).
 - It does not wait for the person: you are told in your session when they decide. Meanwhile go on with what does not
   need it (answer the chat, other work); with nothing else left, end your turn need_human about the card. Only their
   approval in the app keeps it: a yes written in the chat does not.

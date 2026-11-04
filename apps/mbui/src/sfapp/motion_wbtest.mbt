@@ -89,7 +89,7 @@ test "Home: a new chat its station makes keeps its row (its clientKey): it neith
             "mine": true,
             "lastActiveAt": 0,
             "station": "ws1/st1",
-            "stationName": "Studio",
+            "stationName": "Willow",
           }
           if !made.get() {
             row["pending"] = Json::boolean(true)
@@ -130,7 +130,7 @@ test "Home: a new chat its station makes keeps its row (its clientKey): it neith
 ///|
 test "Home: a row swiped off is archived once it has gone, and leaves no copy of it behind" {
   let t = tester("home")
-  t.scroll_to(12)
+  list_down(t, 12)
   t.draw()
   let (x, y, _, h) = t.rect_of("把旧的截图都换成新的").unwrap()
   ignore(x)
@@ -152,7 +152,7 @@ test "words sent fly from the field into their bubble" {
   let clock = Ref::new(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   // the chat pushed in over Home
   t.run_for(@ui.move_most_ms)
@@ -194,7 +194,7 @@ test "words sent: the composer stays as it was while they are in it, and comes d
   let clock = Ref::new(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
@@ -235,7 +235,7 @@ test "words sent set out from where they were typed and land where their message
   let clock = Ref::new(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
@@ -274,7 +274,7 @@ test "words sent break their lines in their message where the composer broke the
   let clock = Ref::new(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")

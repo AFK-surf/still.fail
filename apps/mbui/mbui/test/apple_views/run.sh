@@ -2,7 +2,7 @@
 # The native views' self-test on macOS, without MoonBit: selftest.m drives
 # src/host/apple_views.m (video read through the read API, a web page),
 # apple_image.m's PDFs and apple_render.m's snapshots with holes, as the app
-# would. Makes its own media (ffmpeg, make_pdf.py). On Studio:
+# would. Makes its own media (ffmpeg, make_pdf.py):
 #   test/apple_views/run.sh [out dir]      (prints SELFTEST PASS or FAIL lines)
 set -e
 D="$(cd "$(dirname "$0")" && pwd)"

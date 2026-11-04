@@ -135,7 +135,7 @@ fn adb_ask(name : String, params : Json) -> Unit {
 pub fn adb_texts() -> Json {
   let m : Map[String, Json] = {}
   for k in [
-      "title", "notify.title", "notify.chats", "notify.on", "notify.idle", "stop", "turnOff", "pair.channel", "code", "pair.ask", "pair.auto", "typeCode", "enterCode", "connecting",
+      "title", "notify.title", "notify.chats", "notify.on", "notify.idle", "notify.screen", "notify.screens", "stop", "turnOff", "pair.channel", "code", "pair.ask", "pair.auto", "typeCode", "enterCode", "connecting",
       "connected", "connected.left", "notPaired", "pair.popped", "off", "attaching", "pairing", "paired", "pairFailed",
       "shareFailed",
     ] {

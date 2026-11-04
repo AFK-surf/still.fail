@@ -9,7 +9,7 @@ fn desk_tester(mode : String) -> @ui.Tester {
   let src = fixture(mode)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   if mode.has_prefix("chat-preview") {
-    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   }
   t.draw()
   if mode.has_prefix("reader") || mode.has_prefix("player") {
@@ -81,7 +81,7 @@ test "desk: Esc closes a chat's film as it flies in, before its player is up" {
   new_run()
   let src = fixture("chat-preview-video")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.draw()
   t.run_for(@ui.move_most_ms / 4.0)
   assert_true(viewer.get() is Some(_))

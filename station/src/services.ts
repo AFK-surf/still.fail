@@ -19,14 +19,12 @@ import { Readers as ReaderPool } from "./read/pool.ts";
 import { makeStore } from "./read/store.ts";
 import { apiOf, entryViews, spokenIn } from "./read/views.ts";
 import type { AgentsParts } from "./sessions/agents.ts";
-import { log } from "./ops/log.ts";
 import { platform } from "./platform/index.ts";
 import { ScreenHub } from "./screens/hub.ts";
 import { Desktop } from "./screens/desktop.ts";
 import { Simulators } from "./screens/simulator.ts";
 import { WindowsDesktop, screenBinary } from "./screens/win-desktop.ts";
-import { X11Desktop } from "./screens/x11-desktop.ts";
-import { LinuxScreenTools } from "./screens/linux-tools.ts";
+import { LinuxDesktop } from "./screens/linux-desktop.ts";
 import { uiBinary } from "./screens/ui.ts";
 import { type Drive, dropFolder, stationDrive } from "./drive/drive.ts";
 import { ModuleSet } from "./modules/modules.ts";
@@ -104,6 +102,7 @@ export class Readers extends Context.Service<Readers, ReaderPool>()("stillfail/R
       return yield* Effect.acquireRelease(Effect.sync(() => {
         const pool = new ReaderPool(data, undefined, undefined, undefined, { previousGone: previous.exited, priority: store.backfillPriority });
         pool.startUsageIndex();
+        pool.warm();
         return pool;
       }), (pool) => Effect.sync(() => pool.close()));
     }),
@@ -131,10 +130,7 @@ export class Store extends Context.Service<Store, StationStore>()("stillfail/Sto
       const { data } = yield* Paths;
       return yield* Effect.acquireRelease(
         Effect.sync(() => {
-          const store = StationStore.open(join(data, "stillfail.db"), join(data, "archive"));
-          const lost = store.lostArchives();
-          if (lost.length > 0) log.warn("store", "archived threads whose file is not there read as empty", { n: lost.length, threads: lost.join(" ") });
-          return store;
+          return StationStore.open(join(data, "stillfail.db"), join(data, "archive"));
         }),
         (store) => Effect.sync(() => store.close()),
       );
@@ -179,13 +175,14 @@ export class ScreenRegistry extends Context.Service<ScreenRegistry, ScreenHub>()
       const hub = yield* Effect.acquireRelease(Effect.sync(() => new ScreenHub({ drop: () => dropFolder(homedir()) })), (hub) => Effect.sync(() => hub.close()));
       const helper = yield* Helper;
       const { data } = yield* Paths;
-      // Windows': stillfail-screen; macOS's: still.fail Helper; Linux's: the station user's X11 session.
-      const desktop: Desktop | WindowsDesktop | X11Desktop =
+      const title = process.env.STILLFAIL_TEST_HOST === "1" ? () => "test-station" : undefined;
+      // Windows': stillfail-screen; macOS's: still.fail Helper; Linux's: the station user's desktop session.
+      const desktop: Desktop | WindowsDesktop | LinuxDesktop =
         platform.desktopScreen === "screen"
-          ? new WindowsDesktop({ binary: screenBinary(), ui: uiBinary(), changed: () => hub.changed() })
+          ? new WindowsDesktop({ binary: screenBinary(), ui: uiBinary(), changed: () => hub.changed(), title })
           : platform.desktopScreen === "x11"
-          ? new X11Desktop({ tools: new LinuxScreenTools(data), changed: () => hub.changed() })
-          : new Desktop({ supported: platform.desktopScreen === "helper", helper, grants: yield* Grants, changed: () => hub.changed() });
+          ? new LinuxDesktop({ data, changed: () => hub.changed(), title })
+          : new Desktop({ supported: platform.desktopScreen === "helper", helper, grants: yield* Grants, changed: () => hub.changed(), title });
       // Back after it ended by itself: the desktop asks again for a grant still missing.
       if (desktop instanceof Desktop) helper?.onBack(() => void desktop.helperBack());
       yield* Effect.acquireRelease(

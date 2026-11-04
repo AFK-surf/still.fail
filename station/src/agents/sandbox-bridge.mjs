@@ -31,8 +31,10 @@
 // PING_MS and takes the connection as lost after SILENT_MS without a frame: a connection broken without either end
 // being told (the front door does not notice its station gone) ends within that, not when TCP gives up.
 //
-// Lost after the program started (not its own end): `CONNECTION_LOST` on stderr, exit code `LOST_EXIT`, and `lostFile`
-// written; the station starts it again once (sessions/actor.ts, jobs/jobs.ts).
+// Lost once the far side answered (not the program's own end): `CONNECTION_LOST` on stderr, exit code `LOST_EXIT`, and
+// `lostFile` written; the station starts it again once (sessions/actor.ts, jobs/jobs.ts). Not only once the far side
+// said it started the program: the program ran (and wrote) while that word was on its way, and a connection lost then
+// was said never reached, the job not started again (its test waited on it past CI's time).
 import { spawn, spawnSync } from "node:child_process";
 import {
   closeSync, existsSync, ftruncateSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, readlinkSync, realpathSync,
@@ -45,7 +47,7 @@ import { fileURLToPath } from "node:url";
 
 const T = {
   init: 0, stdin: 1, stdinEnd: 2, signal: 3, ping: 4, data: 5, close: 6, prepare: 7, put: 8, want: 9, synced: 16,
-  stdout: 10, stderr: 11, exit: 12, open: 13, error: 14, started: 15, manifest: 17, file: 18,
+  stdout: 10, stderr: 11, exit: 12, open: 13, error: 14, manifest: 17, file: 18,
 };
 const PING_MS = 10_000;
 const SILENT_MS = 30_000;
@@ -315,20 +317,20 @@ function connect(spec) {
 
   const sockets = new Map();
   let exit = null;
-  let started = false;
+  let reached = false;
   let synced = false;
   ssh.stdout.on(
     "data",
     reader((type, stream, payload) => {
       heard = Date.now();
+      reached = true;
       if (type === T.stdout) process.stdout.write(payload);
       else if (type === T.manifest) exchange(JSON.parse(payload.toString()));
       else if (type === T.file) receive(...unpacked(payload));
       else if (type === T.synced) {
         synced = true;
         ssh.stdin.end();
-      } else if (type === T.started) started = true;
-      else if (type === T.stderr) process.stderr.write(payload);
+      } else if (type === T.stderr) process.stderr.write(payload);
       else if (type === T.exit) exit = JSON.parse(payload.toString());
       else if (type === T.error) process.stderr.write(`sandbox: ${payload.toString()}\n`);
       else if (type === T.open) {
@@ -360,7 +362,7 @@ function connect(spec) {
       process.stderr.write(`sandbox: the files were not copied (ssh exited ${code})\n`);
       process.exit(255);
     }
-    if (exit === null && started) {
+    if (exit === null && reached) {
       process.stderr.write(`${CONNECTION_LOST} (ssh exited ${code})\n`);
       if (spec.lostFile) writeFileSync(spec.lostFile, "");
       process.exit(LOST_EXIT);
@@ -622,7 +624,6 @@ function remote() {
     await Promise.all((spec.ports ?? []).map((port) => listen(typeof port === "number" ? port : port.sandbox)));
     child = spawn(program, spec.args, { cwd, env, stdio: ["pipe", "pipe", "pipe"], detached: true });
     if (spec.agent) keep(child.pid);
-    out(T.started, 0);
     for (const b of early.splice(0)) b === null ? child.stdin.end() : child.stdin.write(b);
     child.stdout.on("data", (b) => out(T.stdout, 0, b));
     child.stderr.on("data", (b) => out(T.stderr, 0, b));

@@ -1189,6 +1189,8 @@ static pid_t local_pid(NSString *data, NSString **version) {
   return [pid intValue];
 }
 moonbit_string_t mb_host_local_station(void) {
+  // An isolated end-to-end run must not inspect the person's installed station.
+  if (getenv("MBUI_ISOLATED_STATION")) return mb_string_from_ns(@"");
   NSString *data = local_data();
   NSString *service = local_service();
   BOOL there = [NSFileManager.defaultManager fileExistsAtPath:data];
@@ -1375,6 +1377,7 @@ static NSString *local_install(NSDictionary *ask) {
 }
 
 void mb_host_local_station_act(moonbit_string_t action) {
+  if (getenv("MBUI_ISOLATED_STATION")) return;
   NSString *a = mb_ns_from_string(action);
   NSString *data = local_data();
   // `install {…}`, `update {…}`: the installer (local_install), off the main thread, as the others
@@ -2662,6 +2665,8 @@ static NSString *update_download(NSString *dir, NSURL *url, NSString *sha256, lo
   for (;;) {
     long long before = (long long)[[fm attributesOfItemAtPath:part error:NULL] fileSize];
     BOOL retry = NO;
+    // (why an earlier try failed is not this one's: left, the build staged after it was thrown away as failed)
+    *why = nil;
     if (update_fetch(url, part, size, &retry, why)) break;
     if (!retry) return nil;
     if ((long long)[[fm attributesOfItemAtPath:part error:NULL] fileSize] > before) failures = 0;

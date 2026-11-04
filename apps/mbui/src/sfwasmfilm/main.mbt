@@ -180,11 +180,16 @@ fn scene_arg(name : String) -> String {
     "MBUI_FILM_AUTOFILL" => option(15)
     "MBUI_CORE_MS" => option(16)
     "MBUI_UPDATES_MS" => option(17)
+    // (1Password's answers in a scene: the native film's only)
+    "MBUI_FILM_OP" => ""
     _ => abort("picture: unsupported scene option \{name}")
   }
 }
 ///|
 pub fn draw() -> Int {
+  // (the app as it runs on a host: what faults shown by its boundary, as there, and said on the log)
+  @view.faults_stop.val = false
+  @view.fault_told.val = Some(fn(said) { println("fault: " + said) })
   let source = @sffilmscene.source(scene_arg)
   let view = fn(c : @ui.Ctx) { @sfapp.view(c, source()) }
   let t = @ui.Tester::new(view, tree=fn(root : @view.View) { @sfapp.app_tree(source())(root) },
@@ -230,8 +235,16 @@ pub fn draw() -> Int {
     println("picture: reading back drawn pixels is not supported by the Wasm host")
     return -1
   }
-  if !t.corner_faults().is_empty() || !t.pending().is_empty() || !t.failed_images_drawn().is_empty() || !t.holes().is_empty() {
-    println("picture: corner, image or native-view check failed")
+  // Each broken corner is named, so a picture of a known fault (a change's before) is taken by MBUI_FILM_ALLOW_CORNER_FAULTS
+  // with the prepared renderer, not a patched and rebuilt one.
+  let faults = t.corner_faults()
+  for fault in faults { println("picture: \{fault}") }
+  if !faults.is_empty() && option_number(13) != 1.0 {
+    println("picture: the corner rule is broken (MBUI_FILM_ALLOW_CORNER_FAULTS=1 draws it anyway)")
+    return -1
+  }
+  if !t.pending().is_empty() || !t.failed_images_drawn().is_empty() || !t.holes().is_empty() {
+    println("picture: an image is pending or failed, or a native view is visible")
     return -1
   }
   let (values, count, bg) = t.presented()
@@ -281,3 +294,28 @@ fn drive_passed(logs : Array[String]) -> Bool {
 
 ///|
 fn main { }
+
+///|
+/// A film of the scene (MBUI_FILM and the rest of mbui's film arguments, src/film/film.mbt, as the host's environment
+/// has them): mbui's own film over this host's text and pictures, drawn and written by the Mac host's renderer and
+/// writer (the Node host's). The process ends as the film's run ends it.
+pub fn film() -> Unit {
+  @hostapi.set_host(WasmHost::{})
+  let source = @sffilmscene.source(@film.arg)
+  @film.run(fn(c) { @sfapp.view(c, source()) }, tree=fn(root) { @sfapp.app_tree(source())(root) })
+}
+
+///|
+pub fn film_text_length() -> Int {
+  @film.wasm_text_length()
+}
+
+///|
+pub fn film_text_unit(i : Int) -> Int {
+  @film.wasm_text_unit(i)
+}
+
+///|
+pub fn film_item(i : Int) -> Double {
+  @film.wasm_item(i)
+}

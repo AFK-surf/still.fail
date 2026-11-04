@@ -11,10 +11,10 @@ test "35-station-rename" {
     f.run_for(@ui.move_most_ms)
     f.tap("=Station")
     f.run_for(@ui.move_most_ms)
-    f.tap("=studio")
+    f.tap("=willow")
     f.run_for(@ui.move_most_ms)
     f.see("概览")
-    for name in ["e2e-082939", "studio"] {
+    for name in ["e2e-082939", "willow"] {
       f.tap("icon:more")
       f.run_to(@kit.sheet_rest("sf-present"))
       // (the menu's 重命名, the higher: the rename sheet before may still be sinking under it, its title the same words;

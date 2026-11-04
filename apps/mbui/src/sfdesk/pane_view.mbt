@@ -593,6 +593,18 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   |> ignore
   // the block over them (reaching over the page shown a while), 更新: taking presses where they draw them
   let block = @ui.old(v, fn(c) { pane_block_built(c, src) }, key=tape_island_key).over(Is(true)) |> @ui.old_takes_own
+  // the sidebar made once, the tree's, over the block where it lays its sidebar out (side_node)
+  v.box(fn(sides) {
+    sides.over(Is(true)) |> ignore
+    side_node(sides, src, tips, fn() { pane_side_at(src, sides) })
+  })
+  |> ignore
+  // the block's line over all it holds (dock_edge_node)
+  v.box(fn(line) {
+    line.over(Is(true)) |> ignore
+    dock_edge_node(line, fn() { pane_side_at(src, line) })
+  })
+  |> ignore
   // the sidebar's edge, the tree's, over the block (its rows under its strip), but where a list's thumb of the block's
   // is shown there: the thumb's (@ui.yield_thumbs)
   v.box(fn(edges) {
@@ -600,6 +612,36 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
     edges.show(fn() { pane_edge_stands(src, edges) }, fn(n) { pane_edge(n, edges, src, tips, block) })
   })
   |> ignore
+}
+
+///|
+/// Where the block off the tape lays its sidebar out as node `n` (over all of the window) is drawn, in the workspace in
+/// view: as pane_block_built lays the block out, where its move has got then (fold_along at what `n` is drawn at:
+/// dock_side_at).
+fn pane_side_at(src : Source, n : @view.View) -> SideAt {
+  match @sfbase.workspace_in_view(src).0 {
+    Some(w) => {
+      let (ww, wh) = n.window()
+      let (r, now) = fold_target(src, w, ww)
+      let t = fold_drawn_at(n)
+      let f = fold_along(t, now)
+      let top = if side_full_height(r.bar) { 0.0 } else { r.top }
+      dock_side_at(r.bar, r.peek, r.s, f.col, top, r.foot, 0.0, wh, Some((f, fold_going(t))))
+    }
+    None =>
+      {
+        box: (0.0, 0.0, 0.0, 0.0),
+        block: (0.0, 0.0, 0.0, 0.0),
+        links: None,
+        round: 0.0,
+        edge: (0.0, 0L),
+        shown: false,
+        brand: 0.0,
+        band: 0.0,
+        bar: false,
+        tape: false,
+      }
+  }
 }
 
 ///|
@@ -716,6 +758,20 @@ fn fold_peek_shift(at : FoldLook) -> Double {
 }
 
 ///|
+/// The sidebar's top row's room for its lists, its box's width and how far the band over its lists is to the closed bar's
+/// (`f` where its move has got): on the way between two
+/// looks the larger end's all the way, what is in the sidebar not laid out again each frame for the little they differ
+/// (it goes under what cuts the block as it goes).
+fn fold_held(f : FoldLook) -> (Double, Double, Double) {
+  match (fold_goes.from, fold_goes.to) {
+    // (not between two looks that both show it, open and shown a while: what it holds would jump as the way ends)
+    (Some(a), Some(b)) if fold_going(@ui.current().moment()) && (a.showing <= 0.0 || b.showing <= 0.0) =>
+      (dmax(a.brand, b.brand), dmax(a.side_w, b.side_w), dmin(a.band, b.band))
+    _ => (f.brand, f.side_w, f.band)
+  }
+}
+
+///|
 /// What the page's bars and the sidebar's parts work out from, where the block's move has got (page_bar_room, side_top,
 /// the lists' bands, the rail's marks).
 fn fold_bars(f : FoldLook) -> Unit {
@@ -723,9 +779,19 @@ fn fold_bars(f : FoldLook) -> Unit {
   wide.bar_ml = f.bar_ml
   wide.bar_mr = f.bar_mr
   wide.brand_h = f.brand
+  let (list_top, _, list_band) = fold_held(f)
+  wide.list_top = list_top
+  wide.list_band = list_band
   wide.band = f.band
+  list_room_told()
   wide.mark = f.mark
   wide.page_from = f.col
+  // (the page's width on the block's way: where the block's column goes, the window's less it)
+  match (fold_goes.to, fold_goes.node) {
+    (Some(b), Some(v)) if fold_going(@ui.current().moment()) =>
+      @sfbase.page_way_said(fold_goes.way.starts_at().to_string(), v.window().0 - b.col)
+    _ => @sfbase.page_way_said("", 0.0)
+  }
 }
 
 ///|
@@ -738,6 +804,7 @@ fn pane_block_built(c : @ui.Ctx, src : Source) -> Unit {
   let (r, target) = fold_target(src, w, c.width)
   let f = fold_built(c, target)
   fold_bars(f)
+  let f = { ..f, side_w: fold_held(f).1 }
   wide.closed.set(r.bar)
   wide.crowded = r.crowded
   let moving = fold_going(c.moment())

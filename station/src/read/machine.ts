@@ -8,7 +8,7 @@
 import { type Dirent, closeSync, opendirSync, openSync, readSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
-import { type Json, type Store, listSessions, runtimeSessions, sessionOfRuntime } from "./store.ts";
+import { type Json, type Store, sessionOfRuntime } from "./store.ts";
 import { HttpError } from "./views.ts";
 import { parseIso } from "./transcript.ts";
 import { splitWhitespace, trim, trimStart } from "../../../client/core-ts/src/whitespace.ts";
@@ -501,12 +501,11 @@ function shown(s: MachineSession): Json {
 // ---- the routes' answers (admin/mod.rs) ----
 
 /// GET /machine-sessions: the machine's latest 100, each with the station's session already going on with it.
-export function machineSessions(s: Store): Json {
-  const found = list(roots(), 100);
-  // A HashMap collected from every session: of two going on with one, the last listed (least recently active) stands.
-  const going = new Map<string, string>();
-  for (const r of listSessions(s)) for (const id of runtimeSessions(s, r.key)) going.set(`${r.runtime}\0${id}`, r.key);
-  for (const m of found) m.session = going.get(`${m.runtime}\0${m.id}`) ?? null;
+export function machineSessions(s: Store, source: Roots = roots()): Json {
+  const found = list(source, 100);
+  // The session going on with each, by the index of runtime sessions (the latest active of two): every session the
+  // station ever had was read with its runtime sessions for it, 1,500 on a station, 14 s (2026-11-03).
+  for (const m of found) m.session = sessionOfRuntime(s, m.runtime, m.id);
   return { sessions: found.map(shown) };
 }
 

@@ -20,7 +20,7 @@ const APP_ID = "fail.still.desktop";
 
 /// Whether `command` runs from a bundle of the desktop app's: its Info.plist names the id (as text in an XML plist or a
 /// binary one alike). Each bundle read once, off the station's thread: one not read yet is none until it is (the next
-/// look). Read as each was asked, the first look after the station started read every app's running (53 on ccvm,
+/// look). Read as each was asked, the first look after the station started read every app's running (53 on a station,
 /// 2026-11-03) from a disk short of memory, and held the station 7.8 s, a message sent waiting on it.
 export function appBundles(read: (path: string) => Promise<Buffer> = (path) => readFile(path)): (command: string) => boolean {
   const known = new Map<string, boolean>();

@@ -6,6 +6,7 @@ import { type Request, error, json, percentDecode } from "../request.ts";
 import type { Route } from "../admin.ts";
 import { managesStation } from "../../mesh/credential.ts";
 import { type OutflowGrants, SCOPES, type Scope } from "../../outflow/grants.ts";
+import type { TailcatLink } from "../../outflow/tailcat.ts";
 
 const home = (r: Request) => r.viewer.home !== false;
 
@@ -36,7 +37,28 @@ export const routes = (grants: OutflowGrants): Route[] => [
       }
       const scopes: Scope[] = Array.isArray(given?.scopes) ? given.scopes.filter((s: unknown): s is Scope => SCOPES.includes(s as Scope)) : [];
       const answer = given?.allow === true ? { allow: true as const, scopes, reach: given?.workspace === true ? ("workspace" as const) : ("station" as const) } : { allow: false as const };
-      return grants.answer(percentDecode(id!), r.viewer.email, answer) ? json(200, JSON.stringify({ answered: true })) : error(404, "no such request waiting");
+      return grants.answer(percentDecode(id!), r.viewer.email, answer, r.viewer.role) ? json(200, JSON.stringify({ answered: true })) : error(404, "no such request waiting");
+    },
+  },
+];
+
+/// The Tailcat link of data outflow (outflow/tailcat.ts), for an admin of the station's home workspace: turned on or
+/// off (POST /outflow/tailcat, `{on}`); how it is, with the address to give, is in the overview (`outflowTailcat`).
+export const tailcatRoutes = (link: TailcatLink): Route[] => [
+  {
+    method: "POST",
+    pattern: /^\/outflow\/tailcat\/?$/,
+    handle: async (r: Request) => {
+      if (!home(r) || !managesStation(r.viewer)) return error(403, "only an admin of the station's own workspace turns the Tailcat link on or off");
+      let given: any;
+      try {
+        given = JSON.parse(r.body.toString("utf8"));
+      } catch {
+        return error(400, "not JSON");
+      }
+      if (typeof given?.on !== "boolean") return error(400, "on is true or false");
+      await link.set(given.on);
+      return json(200, JSON.stringify(link.view()));
     },
   },
 ];

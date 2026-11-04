@@ -21,7 +21,8 @@ fn reading_case(
         "workspaces" => ws.get()
         "status" => {
           let s = status.get()
-          { value: Some({ "text": Json::string(s) }), error: None, version: s.length() + 1 }
+          let lines = if s == "" { [] } else { [Json::string(s)] }
+          { value: Some({ "text": Json::string(s), "lines": Json::array(lines) }), error: None, version: s.length() + 1 }
         }
         _ => (base.topic)(name, params)
       }

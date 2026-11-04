@@ -1,12 +1,14 @@
 import {
+  "mbui/wasmrt",
   "moonbitlang/core/double",
   "mbui/codec",
   "mbui/hostapi",
   "mbui/signals",
   "moonbitlang/core/json",
+  "moonbitlang/core/env",
 }
 
 options(
-  targets: { "native.mbt": [ "native" ], "js.mbt": [ "js" ], "core_js_test.mbt": [ "js" ] },
+  targets: { "native.mbt": [ "native" ], "js.mbt": [ "js" ], "wasm.mbt": [ "wasm-gc" ], "native_wasm.mbt": [ "wasm" ], "core_js_test.mbt": [ "js" ] },
   "native-stub": [ "core_native.c" ],
 )

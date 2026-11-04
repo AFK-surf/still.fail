@@ -1,5 +1,8 @@
 # 客户端 core 用 TypeScript 重写：设计方案（草案）
 
+> 下面例子和测量中的机器名经过匿名化，不是对读者环境的要求。
+
+
 2026-10-03 用户定：「接着做 ts 化，把 rust core 换掉」。station 的 TS 化（docs/station-ts.md）之后，客户端的 core（`client/core`，约 3.4 万行 Rust、595 个测试）也换成 TS。做法和 station 一样：Rust 只留固定的壳（iroh），逻辑全部 TS。
 
 ## 目标与不做的事
@@ -139,7 +142,7 @@ core 这边怎么做到「一行变只算一行」：
 - 输出（`src/output.ts`）按集合逐项装饰（时间文字）和过 shape，项和上次是同一个对象（或相等）且在同一分钟内，就直接用上次
   发出去的那个对象；diff 遇到同一对象直接跳过。
 
-测量（studio，`node bench/keyed.ts`，2000 个 chat 分在 3 台 station，30 次取中位数；「整算」= 本分支 rule 7 之前的 TS core，
+测量（test-a，`node bench/keyed.ts`，2000 个 chat 分在 3 台 station，30 次取中位数；「整算」= 本分支 rule 7 之前的 TS core，
 即 Rust 的做法：整个视图重算、整值装饰和过 shape、按下标 diff）：
 
 | 变化 | 方式 | 发出字节 | core 耗时 | UI 解析+应用 | UI 拿到的新行对象 |
@@ -245,7 +248,7 @@ core 这边怎么做到「一行变只算一行」：
 
 代码在 `client/core-ts/`（pnpm 包，`node --test test/*.test.ts`，`npx tsgo --noEmit`），文件按 Rust 模块一一对应
 （`src/core.ts` + `src/core/{calls,execute,routing,account_state}.ts` 对应 `core.rs` + `core/*.rs`，其余同名）。
-在 studio 上跑：`rsync` 到 `~/ember-wt/core-ts/`，`cd client/core-ts && pnpm install && node --test test/*.test.ts`。
+在检出目录里运行：`cd client/core-ts && pnpm install && node --test test/*.test.ts`。
 
 写法：
 - 一切异步都是 Effect：Host 的每个操作返回 Effect，call、订阅、station 链路、cloud socket、同步都是 `Runner`
@@ -300,7 +303,7 @@ cloud 的端口、`doing` 的 `since`。
 - mesh（`src/mesh.ts`，对应 mesh.rs + station/wire.rs 的 MeshWire）：凭据握手和续期、共享 opening、UI 回来时 race/hedge、
   relay 测速和换路、当日流量；iroh 由 host 给（`src/iroh.ts`）。Node 用 station 的 napi 插件（`station/native/mesh`，
   已为客户端加了：不广播的 lookup、只走 relay 的 endpoint、附加 ALPN、paths/rtt/stats、单向流、关闭原因、网络变化、
-  relay 状态、已知地址）。`test/mesh.test.ts` 在 studio 上起本机 station 端点实测（10 个）。
+  relay 状态、已知地址）。`test/mesh.test.ts` 在 test-a 上起本机 station 端点实测（10 个）。
 - 移植的 Rust 测试：present、decisions、jobs、footprint、looks、refs、history、views（43）、usage、admin、notices、attend、
   pill、choose、changelog、asks、forms、preview_load、mesh 的大部分；合计 252 个测试通过（`node --test --test-force-exit`）。
 - adb 共享（`src/adb.ts`，host 给 TCP：Node 用 `net`）；Rust kept 分块的一次性导入（`src/kept.ts`，存储标记 `kept-read`，
@@ -308,7 +311,7 @@ cloud 的端口、`doing` 的 `since`。
 - 桌面：`apps/desktop` 的 utilityProcess 跑 TS core（`build.sh` 把 `src/hosts/node.ts` 打成 `build/app/core-ts.js`，iroh 用
   `station/native/mesh` 的插件，作 `mesh.node` 放进 Resources；`core.ts` 只换了加载方式，fatal/重启照旧）。Node host 的
   storage 改成异步、按顺序的文件操作；一个 fiber 出 bug 等同 Rust 的 panic：每个 client 收到 `{"fatal": …}`，桌面起新的。
-  验证（studio）：`DEV=1 SKIP_WEB=1 SKIP_STATION=1 sh apps/desktop/build.sh` 通过；Electron 44.4.5（Node 24.21）里
+  验证（test-a）：`DEV=1 SKIP_WEB=1 SKIP_STATION=1 sh apps/desktop/build.sh` 通过；Electron 44.4.5（Node 24.21）里
   utilityProcess + MessagePort 跑通订阅和调用、`core.db` 写入；`node harness/handover.ts <Rust addon>`：Rust 写的目录 TS
   打开、TS 写的目录 Rust 打开，账号/workspace/偏好/草稿都一样。
 - 网页：worker（`web/src/core/worker.ts`）跑 TS core（`src/hosts/web.ts`：fetch、WebSocket、IndexedDB 同库
@@ -317,8 +320,8 @@ cloud 的端口、`doing` 的 `since`。
   （只有 iroh，2.7 MB；整个 Rust core 的 wasm 同样的编法是 8.0 MB，见「测量」），在 mesh 第一次 bind 时才加载。web 的 tsconfig 更严，所以 worker
   经 `@stillfail/core-ts/web` 引用（vite alias 指到源码，类型见 `web/src/core/core-ts.d.ts`），core-ts 用自己的 tsconfig 检查。
   `pnpm build`/`build:cloud` 改编 iroh-wasm 并装 core-ts 的依赖；`scripts/check.sh` 的替身和测试步骤跟着换，加了 core-ts 的
-  typecheck 和测试。验证（studio）：`build:cloud`、`build:site` 通过；dev cloud（`cloud/test/dev.ts`）+ 本地 relay + 临时 station，
-  Chrome 打开登录 → 页面经 iroh-wasm 读到 station（「给 studio 添加一个 Profile」）→ 发新对话，消息立刻出现、station 建出
+  typecheck 和测试。验证（test-a）：`build:cloud`、`build:site` 通过；dev cloud（`cloud/test/dev.ts`）+ 本地 relay + 临时 station，
+  Chrome 打开登录 → 页面经 iroh-wasm 读到 station（「给 test-a 添加一个 Profile」）→ 发新对话，消息立刻出现、station 建出
   chat 并回 agent 的错误；刷新后 82 ms 内从 IndexedDB 出来。
 - 安卓：`Engine` 后面换成 Hermes（`apps/android/core/src/main/cpp/engine.cpp`：每个 core 一个线程跑 Hermes 0.81.4
   ——`com.facebook.react:hermes-android`，jsi 用同版本源码自编 libjsi.so——任务队列、CLOCK_BOOTTIME 定时器、每个任务后清
@@ -327,7 +330,7 @@ cloud 的端口、`doing` 的 `since`。
   入口 `src/hosts/hermes.ts` + `hermes-globals.ts`（定时器、TextEncoder/Decoder、structuredClone、AbortController、URL…）。
   `scripts/hermes-bundle.ts`：esbuild 到 ES2020，Babel 把 class 变函数（Hermes 0.81 的实验 class 会崩），hermesc
   `-block-scoping` 编成字节码 `core.hbc`（1.8 MB，放 assets）。`build.py` 编壳（带 SONAME）、打包 core，Gradle 用 CMake 编引擎。
-  uniffi/JNA 不再用。验证（studio）：`test/bridge.test.ts`（Node 里的 JS 壳：登录、cloud socket、mesh）、`cargo test -p
+  uniffi/JNA 不再用。验证（test-a）：`test/bridge.test.ts`（Node 里的 JS 壳：登录、cloud socket、mesh）、`cargo test -p
   stillfail-shell`、Hermes CLI 跑 bundle（`scripts/hermes-check*.js`）、模拟器上 `-PmotionTest` 包：开发账号登录 → 经 iroh
   读到 station 的 chat 列表 → 打开 chat 发消息，station 库里有这条 → 强杀重开，列表立刻从库里出来；PSS 约 144 MB。
 - 规则 7：按 key 的增量（`src/collections.ts`、`src/output.ts`、Data 冻结记录 + `shared()`、视图按记录复用行）、web 和安卓
@@ -343,7 +346,7 @@ cloud 的端口、`doing` 的 `since`。
   `client/i18n/catalog`）；客户端类型和操作 bindings 由 TS 生成（见「写法」）；check.sh、CI 的检查跟着改（构建步骤本来就
   走 `apps/desktop/build.sh`、`apps/android/build.py`、`build:cloud`，它们已是 TS core）；`docs/client-core.md` 重写。
 
-验证（studio，2026-10-03，d521cec8，独立 worktree `~/ember-wt/core-ts-final`）：
+验证（test-a，2026-10-03，d521cec8，独立 worktree）：
 - core-ts 测试 384 个，连跑 5 遍全绿（mesh 的 20 个要插件：`STILLFAIL_MESH_NATIVE=<station/native/mesh 编出的 dylib>`，
   没编到默认位置时它们跳过，check.sh 里就是这样）；`tsgo --noEmit` 通过。
 - `sh scripts/check.sh all` 16 步全过（类型和 bindings、图标、各处 typecheck、web/core-ts/cloud 测试、Rust station、
@@ -355,7 +358,7 @@ cloud 的端口、`doing` 的 `since`。
   报错（n=6）也回到 app。同一台设备上 TS → Rust（27992e3a 编的 Rust core 包覆盖安装）和 Rust → TS 都直接打开对方的数据，
   登录和列表都在。
 
-## 测量（2026-10-03，studio）
+## 测量（2026-10-03，test-a）
 
 桌面（Node，`harness/measure.ts`：假 cloud + 假 station 300 个 chat、每个 40 条，走 host wire；cloud/station 在另一个进程；
 各 3 次；Node 自己 44 MB）：
@@ -418,7 +421,7 @@ SharedWorker 时多个 core 一起写、各账号共用一个库（已读、未�
 - 旧数据一次导入（`src/db/import.ts`）：旧记录库（`core.db` 的 `records`、IndexedDB `records`）和 Rust 的 kept 分块，
   按当时的 owner 分给各账号，原样留着（可以退回），不设上限；entries/transcript 首屏之后后台导。
 
-验证（studio，2026-10-04，0283c609，独立 worktree）：`sh scripts/check.sh all` 16 步全过（6725974d）；core-ts 395 个测试
+验证（test-a，2026-10-04，0283c609，独立 worktree）：`sh scripts/check.sh all` 16 步全过（6725974d）；core-ts 395 个测试
 （`test/data.test.ts` 为新层重写，`kept.test.ts` 并入）连跑 5 遍全绿（含 mesh 的 20 个）；`cargo test -p
 stillfail-shell`；web 的 build:cloud；桌面 `UNSIGNED=1 sh apps/desktop/build.sh` 出了 `.app`，包里的 `core-ts.js` 在 Electron
 自带的 Node（24.21）里从库出首屏 152 ms；安卓 `build.py --release --tasks` + `assembleDebug -PmotionTest`；dev cloud

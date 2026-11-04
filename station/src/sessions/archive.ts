@@ -43,7 +43,7 @@ import { promisify } from "node:util";
 import { constants, createZstdCompress, createZstdDecompress, zstdCompress } from "node:zlib";
 import { createHash } from "node:crypto";
 import { platform } from "../platform/index.ts";
-import { SEGMENT, seekTable, segmented, segmentsFrom } from "../read/packed.ts";
+import { SEGMENT, seekTable, segmentedSoon, segmentsFrom } from "../read/packed.ts";
 import { readAt } from "../drive/fs.ts";
 
 // ── paths ──────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -377,7 +377,7 @@ export async function segmentFile(path: string): Promise<boolean> {
   const release = await fileLock(withExtension(path, "jsonl.archive-lock"));
   try {
     const source = packed(path);
-    if ((await exists(path)) || !(await exists(source)) || segmented(source)) return false;
+    if ((await exists(path)) || !(await exists(source)) || (await segmentedSoon(source))) return false;
     const temp = withExtension(source, "zst.writing");
     try {
       await segmentInto(temp, unzstd(source));

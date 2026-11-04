@@ -9,7 +9,7 @@ test "21-station-files" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("station-files"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
-    f.see("=studio")
+    f.see("=willow")
     f.tap("icon:plus")
     // ＋'s sheet up
     f.run_to(@kit.sheet_rest("sf-present"))
@@ -23,7 +23,7 @@ test "21-station-files" {
     f.tap("添加 1 个")
     f.run_to(@kit.sheet_rest("sf-present"))
     f.gone("所有位置")
-    f.see("studio · 路径")
+    f.see("willow · 路径")
     f.tap("发消息")
     f.type_text("看看这个文件 084051")
     f.tap("icon:arrow-up")

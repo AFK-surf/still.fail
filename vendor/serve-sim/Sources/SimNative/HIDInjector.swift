@@ -495,10 +495,16 @@ public actor HIDInjector {
         hidLog("[hid] Sending button: \(button)")
 
         // (HID's Consumer page: Menu, Power)
-        if let dtuhidKeys, let usage: UInt32 = ["home": 0x40, "lock": 0x30, "side_button": 0x30][button],
+        if let dtuhidKeys, let usage: UInt32 = ["home": 0x40, "lock": 0x30, "side_button": 0x30, "volume_up": 0xE9, "volume_down": 0xEA][button],
            dtuhidKeys.sendButton(page: 0x0C, usage: usage, down: true) {
             try? await Task.sleep(for: .seconds(0.05))
             _ = dtuhidKeys.sendButton(page: 0x0C, usage: usage, down: false)
+            return
+        }
+
+        // (where the guest has no dtuhidd)
+        if button == "volume_up" || button == "volume_down" {
+            await sendButtonHID(page: 0x0C, usage: button == "volume_up" ? 0xE9 : 0xEA, phase: "press")
             return
         }
 
@@ -615,7 +621,7 @@ public actor HIDInjector {
     /// Ask CoreSimulator to broadcast a memory warning to the simulated OS.
     /// Equivalent to Debug → Simulate Memory Warning and idb's
     /// FBSimulatorMemoryCommands.simulateMemoryWarning.
-    func simulateMemoryWarning() {
+    public func simulateMemoryWarning() {
         guard let device = simDevice else {
             fputs("[sim] simulateMemoryWarning: no SimDevice\n", stderr)
             return
@@ -666,10 +672,10 @@ public actor HIDInjector {
     // MARK: - Orientation (GSEvent via PurpleWorkspacePort)
 
     // UIDeviceOrientation values accepted by the guest's GraphicsServices.
-    static let orientationPortrait: UInt32 = 1
-    static let orientationPortraitUpsideDown: UInt32 = 2
-    static let orientationLandscapeRight: UInt32 = 3
-    static let orientationLandscapeLeft: UInt32 = 4
+    public static let orientationPortrait: UInt32 = 1
+    public static let orientationPortraitUpsideDown: UInt32 = 2
+    public static let orientationLandscapeRight: UInt32 = 3
+    public static let orientationLandscapeLeft: UInt32 = 4
 
     // GSEvent wire-format constants. Reverse-engineered by idb from
     // Simulator.app's ARM64 disassembly; see idb's SimulatorApp/GSEvent.h.
@@ -684,7 +690,7 @@ public actor HIDInjector {
     /// `GraphicsServices._PurpleEventCallback` → backboardd. This is how
     /// Simulator.app itself rotates the device, and how idb's
     /// `FBSimulatorPurpleHID.orientationEvent:` is delivered.
-    func sendOrientation(orientation: UInt32) -> Bool {
+    public func sendOrientation(orientation: UInt32) -> Bool {
         if let duoBridge {
             guard (1...4).contains(orientation) else { return false }
             return duoBridge.send("orientation \(orientation)")

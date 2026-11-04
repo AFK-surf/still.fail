@@ -300,7 +300,8 @@ pub fn file_card(
   } else {
     card_box
   }
-  // Keep an end control at the capsule's end even when pixel rounding leaves a fraction of a point after the words.
+  // An end control concentric with the capsule's end (its words end further in where they are last), kept at that end
+  // even when pixel rounding leaves a fraction of a point after the words.
   let ground = if !composer && (retry || restore || remove || slot) { ground.then(card_end_justified) } else { ground }
   let b = c.box(
     // (in the composer, pointed at: the hover's tint over its own ground, not in its place)
@@ -520,17 +521,20 @@ pub let file_card_w : Double = 236.0
 ///|
 /// A file's card's width in a message (card_box: as wide as what it says): its sheet and its name or what is said
 /// under it (its size; `meta` in its place: how far its download has come, why it failed), the wider, with its room
-/// round them, and `ends` buttons at its end (its ✕, its ↻, each in a room 24 past the gap); file_card_w at most.
+/// round them, and `ends` buttons at its end (its ✕, its ↻, each in a room 24 past the gap; the last concentric with
+/// the end, 14 in, as the mark is with the start; with none, the words' end further in: file_capsule_words_end);
+/// file_card_w at most.
 pub fn file_card_across(c : @ui.Ctx, name : String, size : Double, meta? : String = "", ends? : Int = 0) -> Double {
   let words = dmax(
     c.words_across(name, card_name),
     c.words_across(if meta != "" { meta } else { file_size(size) }, card_meta),
   )
-  let parts = [@ui.Space::px(S3_5), card_mark_size, @ui.Space::px(S2), @ui.Space::px(S3_5)]
+  let parts = [@ui.Space::px(S3_5), card_mark_size, @ui.Space::px(S2)]
   for _ in 0..<ends {
     parts.push(@ui.Space::px(S2))
     parts.push(@ui.Space::px(S6))
   }
+  parts.push(if ends > 0 { @ui.Space::px(S3_5) } else { file_capsule_words_end })
   dmin(file_card_w, c.fitting_width(words, parts))
 }
 
@@ -546,11 +550,12 @@ let card_box : @ui.Style = @ui.style(
   row=true,
   max_w=Fixed(file_card_w),
   // (a row high, a capsule, 52 (file_capsule_h): its mark, 24, concentric with its round end (14 from its
-  // end, its top and its foot), 8 from its words, their end 14 from the other end: file_card_across; as a screen's
-  // card, @sfbase's link_card. In the composer: card_waiting)
+  // end, its top and its foot), 8 from its words, their end where the other round end begins, 24 from that end
+  // (file_capsule_words_end; a button there concentric with it instead: card_end_justified): file_card_across; as a
+  // screen's card, @sfbase's link_card. In the composer: card_waiting)
   h=file_capsule_h,
   pl=S3_5,
-  pr=S3_5,
+  pr=room(file_capsule_words_end),
   gap=S2,
   bg=Neutral,
   // (in a corner of what holds it, a composer's box: as far in as from its edges, its corner concentric)
@@ -559,8 +564,11 @@ let card_box : @ui.Style = @ui.style(
 )
 
 ///|
+/// A message's file card with a button at its end (its ✕, its ↻, a slot for one laid over it): that end's room its
+/// start's (14), so that the button there (in card_end_room's 24) stands concentric with it as the mark does with the
+/// start.
 // kept across runs: a value (no field of it changes)
-let card_end_justified : @ui.Style = @ui.css("justify=JBetween")
+let card_end_justified : @ui.Style = @ui.css("pr=S3_5 justify=JBetween")
 
 ///|
 // kept across runs: a value (no field of it changes)

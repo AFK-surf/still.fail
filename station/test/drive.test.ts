@@ -13,7 +13,10 @@ import { checkConfig } from "../src/accounts/check.ts";
 import { platform } from "../src/platform/index.ts";
 
 function place() {
-  const base = realpathSync(mkdtempSync(join(tmpdir(), "drive-")));
+  // The home in a folder of its own: the picker's look above it lists that, not the machine's temporary directory
+  // (tens of thousands of folders on a CI machine, each opened to see whether it may be listed).
+  const base = join(realpathSync(mkdtempSync(join(tmpdir(), "drive-"))), "home");
+  mkdirSync(base);
   const root = join(base, "root");
   const data = join(root, ".stillfail");
   mkdirSync(join(root, "Season 1"), { recursive: true });

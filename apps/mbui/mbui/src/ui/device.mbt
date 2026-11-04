@@ -595,6 +595,8 @@ struct Catcher {
   /// the old view it was last built in (view_host.mbt's island_allows), none in a layer of its own: whether its focus
   /// may take input now (Ctx::focus_allowed)
   mut island : @view.NodeId?
+  /// where the input method's own windows go, in the window's points (x, y, h of a caret); none: the window's foot
+  mut place : (Double, Double, Double)?
 }
 
 ///|
@@ -602,7 +604,7 @@ fn Ctx::catcher_of(self : Ctx, id : Int) -> Catcher {
   match self.dev.catchers.get(id) {
     Some(st) => st
     None => {
-      let st = { composing: "", came: [], keys: [], frame: -1, island: None }
+      let st = { composing: "", came: [], keys: [], frame: -1, island: None, place: None }
       self.dev.catchers[id] = st
       st
     }
@@ -638,6 +640,13 @@ pub fn Ctx::catch_keys(self : Ctx, key : String, on : Bool) -> Unit {
   } else if self.focus == id {
     self.focus_on(0)
   }
+}
+
+///|
+/// Where key catcher `key` says its input goes on the window: a caret at x, y, h points tall, the input method's own
+/// windows put by it (the keys go on elsewhere; what the catcher knows of the caret there is the app's).
+pub fn Ctx::key_catcher_place(self : Ctx, key : String, x : Double, y : Double, h : Double) -> Unit {
+  self.catcher_of(self.id(key)).place = Some((x, y, h))
 }
 
 ///|

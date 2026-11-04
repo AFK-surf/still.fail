@@ -159,7 +159,14 @@ pub fn bar_track_of(
 /// The bar of column `v` (View::scrolls'), scrolled by `s`, as `b` says: a thumb along its right, its edge's strip
 /// bringing it out where the pointer is along it. Across (Scroll::across): along its foot, `bar_in` in from either end,
 /// the pointer along its foot bringing it out.
-fn View::scroll_bar(self : View, s : Scroll, b : ScrollBar, bar : BarState, bar_in? : Double = 0.0) -> Unit {
+fn View::scroll_bar(
+  self : View,
+  s : Scroll,
+  b : ScrollBar,
+  bar : BarState,
+  bar_in? : Double = 0.0,
+  bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
+) -> Unit {
   let across = s.across
   // (where its thumb runs and how long, how far the column goes for a point it moves: ui's bar_track over all of its
   // right, nothing over it kept clear; across, along its foot from `bar_in` to as far from its end)
@@ -171,7 +178,9 @@ fn View::scroll_bar(self : View, s : Scroll, b : ScrollBar, bar : BarState, bar_
       None => (0.0, 0.0)
     }
     let content = vh + s.most_now()
-    bar_track_of(ends, vh - 2.0 * ends, vh - 2.0 * ends, content - 2.0 * ends, x, 0.0, 0.0, b.least, b.inset)
+    // (down a column, what lies over its top and its foot kept clear: `bar_clear`, as ui's bar_track's start and end)
+    let (start, end) = if across { (0.0, 0.0) } else { bar_clear() }
+    bar_track_of(ends, vh - 2.0 * ends, vh - 2.0 * ends, content - 2.0 * ends, x, start, end, b.least, b.inset)
   }
   // (whether it has a bar at all: what it holds more than a point past what shows, as ui's bar_drawn has it; drawn,
   // come out along its edge and pressed by that alone)
@@ -217,6 +226,10 @@ fn View::scroll_bar(self : View, s : Scroll, b : ScrollBar, bar : BarState, bar_
     })
     // (its thumb, and as far round it as a press takes it: held, it moves the column as far as it goes for a point)
     over.box(fn(thumb) {
+      // (a thumb, for what over it yields to one: Tree::is_thumb)
+      let me = thumb.id()
+      self.tree.thumbs[me.at] = me
+      thumb.owns(fn() { if self.tree.thumbs.get(me.at) == Some(me) { self.tree.thumbs.remove(me.at) } }) |> ignore
       let held_y = Ref(0.0)
       let long = fn() { Some(track(s.where_at(0.0)).1 + b.grab * 2.0) }
       let thick = Is(Some(b.size + b.grab * 2.0))

@@ -102,24 +102,33 @@ pub fn Ctx::held(
         w.held = 0.0
       }
       w.last = since
+      w.due = -1.0
     } else if w.last < 0.0 && w.off >= 0.0 && since >= w.off {
       // (on since what made it so, between the frame that saw it off and this one: one that came as that frame was
       // drawn came after it, unseen by it, which saw it off)
       w.last = since
+      w.due = -1.0
     }
   }
   if w.last >= 0.0 {
     w.held = w.held + (self.clock - w.last)
   }
   w.last = self.clock
-  // (at its wake it has held: the time added up a frame at a time comes to `ms` short by a rounding at most, and that
-  // is not a frame more to wait)
-  if w.held >= ms - held_slack_ms {
+  // Held from its wake on, and not before: what asked it in a part kept (kept_part.mbt's dues, come at their moment)
+  // is built again in the frame it holds, never left as it was in a frame that, built whole, has it held (a frame drawn
+  // a rounding short of its wake). Its wake set once while it waits, from the time added up a frame at a time (short
+  // of `ms` by a rounding at most, and that is not a frame more to wait).
+  if (w.due >= 0.0 && self.clock >= w.due) || (w.due < 0.0 && w.held >= ms - held_slack_ms) {
     w.due = -1.0
     true
   } else {
-    w.due = self.clock + (ms - w.held)
-    self.wake_in(ms - w.held, later~, loc~)
+    if w.due < 0.0 {
+      w.due = self.clock + dmax(ms - w.held, 1.0)
+    }
+    if !later && self.wake_by is None {
+      self.wake_by = Some(loc)
+    }
+    self.wake_at_time(w.due, later~, loc~)
     false
   }
 }

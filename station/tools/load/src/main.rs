@@ -114,7 +114,7 @@ fn credential(data: &Path, device: &str) -> Result<String> {
     let bytes: [u8; 32] = std::fs::read(data.join("grant.key"))?.try_into().map_err(|_| anyhow::anyhow!("grant.key"))?;
     let grant = SigningKey::from_bytes(&bytes);
     let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
-    let email = std::env::var("VIEWER").unwrap_or_else(|_| "zuozijian1994@gmail.com".into());
+    let email = std::env::var("VIEWER").unwrap_or_else(|_| "viewer@example.test".into());
     let head = B64.encode(json!({ "alg": "EdDSA", "typ": "stillfail-member+jwt", "kid": "test" }).to_string());
     let body = B64.encode(json!({
         "iss": "stillfail-cloud", "ws": WORKSPACE, "device": device, "sub": "test-account", "email": email, "name": "测试",

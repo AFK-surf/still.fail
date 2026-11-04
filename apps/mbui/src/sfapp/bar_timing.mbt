@@ -20,12 +20,19 @@ pub let bar_timing : Ref[BarTiming?] = Ref(None)
 let bar_timed : Ref[String?] = Ref(None)
 
 ///|
+/// Told each time a place is put on the stack to be told built (bar_placed): what a page made once reacts to
+/// (bar_built_node), back to the chats too, where no switch of the bar's is said.
+// kept across runs: only counted on, what reads it reacting to its change, never to its value
+let bar_timed_said : @signals.Signal[Int] = @signals.signal(0)
+
+///|
 /// A place's page put on the stack in place of `from`'s ("" none), from the bar or back to the chats (AppState.place).
 fn bar_placed(from : String, place : String) -> Unit {
   match bar_timing.val {
     Some(t) => {
       (t.placed)(from, place)
       bar_timed.val = Some(place)
+      bar_timed_said.set(@signals.untracked(fn() { bar_timed_said.get() }) + 1)
     }
     None => ()
   }
@@ -44,4 +51,26 @@ fn bar_built(c : @ui.Ctx, page : Page) -> Unit {
       })
     _ => ()
   }
+}
+
+///|
+/// A page made once at the stack's root (narrow_made_as's place), its page `page`: told built as bar_built tells one,
+/// as it is made and as the place is switched to it again (place_switch said), at that change's moment.
+fn bar_built_node(v : @view.View, page : () -> Page) -> Unit {
+  v.reacts(fn() {
+    place_switch.said()
+    (place_switch.starts_at(), bar_timed_said.get())
+  }, fn(_) {
+    match (bar_timing.val, bar_timed.val, place_of(@signals.untracked(page))) {
+      (Some(t), Some(p), Some(q)) if p == q =>
+        v.at_moment(v.cause_at(), fn() {
+          if bar_timed.val == Some(p) {
+            bar_timed.val = None
+            (t.built)(p)
+          }
+        })
+        |> ignore
+      _ => ()
+    }
+  })
 }

@@ -23,6 +23,10 @@
 >   (`ANDROID_ADB_SERVER_PORT`); the phone's tunnel listener takes connections from that server's process alone (the
 >   peer of a loopback TCP connection, found by its ports in the processes' sockets). Another chat's agent, knowing the
 >   port, is not let in.
+> - **Nothing here connects by itself** (2026-11-03): on the phone's network, with its Wireless debugging on and this
+>   machine's key trusted, adb's server connects to it directly, not through the tunnel and whatever is granted (seen on
+>   the default server and in a grant's). The station runs with `ADB_MDNS_AUTO_CONNECT=0`, which what it starts inherits. A
+>   server started outside it (a person's terminal) still does: an agent's command then finds the phone on it.
 > - **The phone lends while a grant is live**, to the station of that chat (one offer per station, its grants listed):
 >   its foreground service and notification say which chats it is lent to, each with 停止. No per-station switch.
 > - **Lent with no one at it** (2026-10-30: granted once, the phone is the chat's without its person at it): the grants the phone is lent for are
@@ -175,6 +179,31 @@ Over the member link (ALPN `stillfail/admin/1`; station/src/mesh/serve.ts):
    takes tunnels on every link an offer of it went on until that link closes:
    the station hears of the offer on a new link only once it comes, and opens
    its tunnels on the old one meanwhile.
+
+## The chat's own screen (2026-11-04)
+
+User: 「会有一个虚拟屏跑 app 不影响我自己操作」, and of what it costs the phone: 「要有个提示，并且在不用时及时关掉」.
+A chat that holds a grant gets a screen of its own on the phone, a virtual display, so its agent does not work on the
+one its person is using (station/src/adb/displays.ts):
+
+- **Made as phone_use says how the phone is reached** (granted, the phone `connected` in the grant's adb server), not
+  as the grant is made. A run of scrcpy's server (the station's `screens/scrcpy-server`, `new_display=<the phone's
+  size>/<density>`, `display_ime_policy=local` from Android 13) makes and holds it; its pictures are encoded at 320 px,
+  1 a second, 100 kb/s and only read to keep it flowing. phone_use answers its id and how to work on it:
+  `am start --display <id>`, `input -d <id> …`, `screencap -d <surface>` (SurfaceFlinger's id of it, found by its
+  unique id in `dumpsys display` and `dumpsys SurfaceFlinger --display-id`; Android 12 lists none there and its
+  screencap takes Android's own id).
+- **Closed**, its apps with it (scrcpy destroys a display's content: they do not move onto the person's screen), as the
+  grant ends or is handed back (phone_use `done`), when nothing of the agent's used the phone for 10 minutes (the
+  grant's `lastUsedAt`: what holds the display up and the station's own looks at it are marked
+  `STILLFAIL_ADB_DISPLAY=1` and, with the pictures' `localabstract:scrcpy_<id>` socket, are not use, activity.ts), or
+  as the phone's link goes. phone_use makes a new one when asked again.
+- **Said on the phone**: the offer's lines carry `screens`, the titles of the chats whose screens are up (none: not
+  said); the core's `adbShare` has every station's (`screens`), and the notification says 「<chat>」正在后台使用虚拟屏
+  (or how many chats) while one is up.
+- Seen on emulators (2026-11-04): Android 16 and 12 both make it, start an app on it while the launcher stays on the
+  phone's own screen, and take its picture. Android 12 refuses the keyboard policy of a display that is not trusted (all
+  of the shell's are there): its keyboard shows on the phone's own screen.
 
 ## On the station
 

@@ -2,7 +2,7 @@
 #env MBUI_POINTING=finger
 timeout 60000
 tap 端到端测试
-until =studio
+until =willow
 until 发消息
 tap icon:plus
 until =文件

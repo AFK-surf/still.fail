@@ -278,3 +278,18 @@ test("the overview says the viewer's workspace, its connects and its chats' coun
     await r.close();
   }
 });
+
+test("an isolated recording's overview uses fictional disk capacity", async () => {
+  const r = rig();
+  const before = process.env.STILLFAIL_TEST_HOST;
+  process.env.STILLFAIL_TEST_HOST = "1";
+  try {
+    const cloud: any = { state: null };
+    const result = await overview({ store: r.store, hub: r.hub, cloud, config: () => ({}) }, home, "en") as any;
+    assert.deepEqual(result.disk, { freeBytes: 50_000_000_000, totalBytes: 100_000_000_000 });
+  } finally {
+    if (before === undefined) delete process.env.STILLFAIL_TEST_HOST;
+    else process.env.STILLFAIL_TEST_HOST = before;
+    await r.close();
+  }
+});

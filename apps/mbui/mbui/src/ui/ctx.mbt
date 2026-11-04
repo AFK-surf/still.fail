@@ -77,6 +77,9 @@ struct ListState {
   /// whether its rows show only what they read (Ctx::list's `rows_read`): kept as what builds it is built again,
   /// built again only where what they read changed
   mut rows_read : Bool
+  /// the part it is in whose lists' rows go on as it does (Ctx::kept_part's `rows_stay`, its id), 0 none: built from that
+  /// part's key and what it reads alone, whatever else the frame built anew
+  mut island : Int
   // gliding to its end where it showed as the glide set out: its scroll bar shows meanwhile (not where it is put)
   mut glide_shows : Bool
   // its key and where Ctx::list was said, as the last frame built it: what the performance record names a row of it by
@@ -219,6 +222,8 @@ struct EditorState {
   mut followed : (Int, Int, Int)
   /// what was put in at once that was `limit` characters or more, not put in (a long paste the app takes instead)
   mut pasted : String?
+  /// the host's copy of its words holds what it did not take (a long paste kept from it: text_set): told it again
+  mut retell : Bool
   mut limit : Int
   /// Enter sends (the words go to `submitted`, none too, and stay in it); else it is a new line
   mut enter_sends : Bool
@@ -914,6 +919,158 @@ fn Ctx::new() -> Ctx {
     t_present: 0.0,
     bench_list: 0,
   }
+}
+
+///|
+/// Let go of as the next run begins (reset_globals): all it holds dropped and its room given back. The Ctx itself may
+/// never be: once an array it holds is emptied of what reads it, moonc's native backend keeps it for good
+/// (moonbitlang/core#4611), so each Tester's would stay with all it held, its instances' room (2 MB) and every
+/// frame's nodes; what it holds goes here instead.
+fn Ctx::let_go(self : Ctx) -> Unit {
+  // (built into still by what kept it, nothing of that drawn: as a first frame's, from nothing, on as little room)
+  self.inst = FixedArray::make(inst_size, 0.0)
+  self.ninst = 0
+  self.count = 0
+  self.cur = -1
+  self.back = None
+  self.back_next = None
+  self.layer_hook = None
+  self.back_held = None
+  // (not its corner_ladder: its theme's own, Ctx::set_theme)
+  self.nodes.clear()
+  self.nodes.shrink_to_fit()
+  self.id_stack.clear()
+  self.id_stack.shrink_to_fit()
+  self.hit_ids.clear()
+  self.hit_ids.shrink_to_fit()
+  self.hit_rects.clear()
+  self.hit_rects.shrink_to_fit()
+  self.next_hit_ids.clear()
+  self.next_hit_ids.shrink_to_fit()
+  self.next_hit_rects.clear()
+  self.next_hit_rects.shrink_to_fit()
+  self.hit_clips.clear()
+  self.hit_clips.shrink_to_fit()
+  self.next_hit_clips.clear()
+  self.next_hit_clips.shrink_to_fit()
+  self.hit_ends.clear()
+  self.hit_ends.shrink_to_fit()
+  self.next_hit_ends.clear()
+  self.next_hit_ends.shrink_to_fit()
+  self.hit_marks.clear()
+  self.hit_marks.shrink_to_fit()
+  self.next_hit_marks.clear()
+  self.next_hit_marks.shrink_to_fit()
+  self.built_ids.clear()
+  self.marks_ahead.clear()
+  self.focus_ahead.clear()
+  self.points.clear()
+  self.passes.clear()
+  self.next_passes.clear()
+  self.next_points.clear()
+  self.next_point_hits.clear()
+  self.next_point_hits.shrink_to_fit()
+  self.scroll_ids.clear()
+  self.scroll_ids.shrink_to_fit()
+  self.scroll_rects.clear()
+  self.scroll_rects.shrink_to_fit()
+  self.next_scroll_ids.clear()
+  self.next_scroll_ids.shrink_to_fit()
+  self.next_scroll_rects.clear()
+  self.next_scroll_rects.shrink_to_fit()
+  self.bars.clear()
+  self.bars.shrink_to_fit()
+  self.next_bars.clear()
+  self.next_bars.shrink_to_fit()
+  self.across_seen.clear()
+  self.across_seen.shrink_to_fit()
+  self.floating.clear()
+  self.floating.shrink_to_fit()
+  self.hover_in.clear()
+  self.hover_in.shrink_to_fit()
+  self.press_on.clear()
+  self.press_on.shrink_to_fit()
+  self.clicked.clear()
+  self.clicked.shrink_to_fit()
+  self.double_clicked.clear()
+  self.double_clicked.shrink_to_fit()
+  self.press_chain.clear()
+  self.press_chain.shrink_to_fit()
+  self.lists.clear()
+  self.editors.clear()
+  self.springs.clear()
+  self.movers.clear()
+  self.movers.shrink_to_fit()
+  self.cycles.clear()
+  self.cycles.shrink_to_fit()
+  self.periodic.clear()
+  self.periodic.shrink_to_fit()
+  self.laid_reads.clear()
+  self.size_reads.clear()
+  self.place_reads.clear()
+  self.info_reads.clear()
+  self.info_reads.shrink_to_fit()
+  self.row_reads.clear()
+  self.words_reads.clear()
+  self.words_shape_reads.clear()
+  self.left_ids.clear()
+  self.left_reads.clear()
+  self.cut_ids.clear()
+  self.laid_watch.clear()
+  self.tallest_h.clear()
+  self.laid_rects.clear()
+  self.shown_watch.clear()
+  self.shown_spans.clear()
+  self.covers.clear()
+  self.cover_asks.clear()
+  self.cover_asks.shrink_to_fit()
+  self.owned.clear()
+  self.owned_releases.clear()
+  self.layer_gen.clear()
+  self.layer_on_dismiss.clear()
+  self.layer_retired.clear()
+  self.layers_gone.clear()
+  self.inners.clear()
+  self.inners.shrink_to_fit()
+  self.inners_or.clear()
+  self.inners_or.shrink_to_fit()
+  self.move_runs.clear()
+  self.move_runs.shrink_to_fit()
+  self.shown_now.clear()
+  self.shown_last.clear()
+  self.move_seen.clear()
+  self.arounds.clear()
+  self.arounds.shrink_to_fit()
+  self.inner_faults.clear()
+  self.inner_faults.shrink_to_fit()
+  self.lit_asked.clear()
+  self.hand_chooses.clear()
+  self.sems.clear()
+  self.sems.shrink_to_fit()
+  self.asked_actions.clear()
+  self.asked_actions.shrink_to_fit()
+  self.actions.clear()
+  self.actions.shrink_to_fit()
+  self.focusables.clear()
+  self.focusables.shrink_to_fit()
+  self.last_focusables.clear()
+  self.last_focusables.shrink_to_fit()
+  self.groups.clear()
+  self.layers.clear()
+  self.layers.shrink_to_fit()
+  self.last_layers.clear()
+  self.last_layers.shrink_to_fit()
+  self.layers_opened.clear()
+  self.layers_opened.shrink_to_fit()
+  self.tells.clear()
+  self.tells.shrink_to_fit()
+  self.told.clear()
+  self.told.shrink_to_fit()
+  self.shots.clear()
+  self.dismissals.clear()
+  self.layer_return.clear()
+  self.segs.clear()
+  self.segs.shrink_to_fit()
 }
 
 // ---------------------------------------------------------------------------
@@ -2905,5 +3062,8 @@ pub fn Ctx::wake_in(self : Ctx, ms : Double, later? : Bool = false, loc~ : Sourc
   if !later && self.wake_by is None {
     self.wake_by = Some(loc)
   }
-  self.wake_at_time(self.clock + dmax(ms, 1.0), later~, loc~)
+  // Keep a positive fractional delay at its requested moment. Only move a wake on when adding the delay cannot advance
+  // the clock (including zero or a negative delay), so it cannot ask for the same frame forever.
+  let at = self.clock + ms
+  self.wake_at_time(if at > self.clock { at } else { self.clock + 1.0 }, later~, loc~)
 }

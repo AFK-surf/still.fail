@@ -48,8 +48,13 @@ pub(all) struct Core {
   under : () -> String
   /// how this build's update stands (关于's version row, settings' 关于 row)
   version_now : () -> VersionNow
-  /// the version row pressed: a newer build installed, or still.fail cloud asked now; the update dialog saying how it goes
+  /// the update's row pressed (a newer build known): downloaded now, put in place now, or the update dialog saying how
+  /// it goes
   version_tap : () -> Unit
+  /// 检查更新 pressed: the update dialog, still.fail cloud asked now unless a newer build is known already
+  version_check : () -> Unit
+  /// 自动更新 turned on (the prefs' `appUpdate` kept by the page): the newer build known downloaded as one found by itself
+  update_auto_on : () -> Unit
   /// 本机 Station's installer run (the app's local_station.mbt): `true` a station downloaded and joined to this
   /// workspace (none here), `false` the one here brought up to the latest release and run as a service
   local_install : (Bool) -> Unit
@@ -169,11 +174,13 @@ pub(all) enum Route {
 } derive(Eq)
 
 ///|
-/// How this build's update stands, as 关于's version row says it (sfbase updates.mbt update_stands): what pressing it
-/// does (检查更新, 下载 …, 重启以更新到 …), the line under it ("" none), whether something is under way (a bar under
-/// them, how far as `part`: 0 to 1 where known), the newer build's version where one waits for the person's word ("":
-/// none), and whether newer builds are asked for here at all (not on iOS, nor run from the sources).
+/// How this build's update stands, as 关于's update row says it (sfbase updates.mbt update_stands): whether a newer
+/// build is known at all (the row shown only then, 检查更新 a row of its own), its stage in words (有新版本 …, 正在下载 …,
+/// 重启以更新到 …), the line under it ("" none), whether something is under way (a bar under them, how far as `part`: 0
+/// to 1 where known), the newer build's version where one waits for the person's word ("": none), and whether newer
+/// builds are asked for here at all (not on iOS, nor run from the sources).
 pub(all) struct VersionNow {
+  newer : Bool
   label : String
   note : String
   going : Bool
@@ -536,6 +543,7 @@ pub fn reset() -> Unit {
   station_parts.clear()
   station_network_open.clear()
   lock_prompts_reset()
+  vault_prompts_reset()
   fonts_at.set(0)
   adb_reset()
   keyed_fields.clear()
@@ -588,7 +596,6 @@ pub fn reset() -> Unit {
   vault_serial.val = 0
   // the drafts each page opened of the core (a form a station, a new connect's, a profile's, a Slack app's): a run
   // opens its own
-  decision_forms.clear()
   policy_forms.clear()
   // what this device keeps, asked of a run's own core
   kept.chats.set(None)

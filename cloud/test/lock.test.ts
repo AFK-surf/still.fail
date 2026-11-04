@@ -35,7 +35,7 @@ test("one chain per workspace: kept for members, carried to stations, healed by 
 
     // A station, its presence socket and what it is told.
     const station = await key();
-    const enrollment = await (await alice("POST", `/v1/workspaces/${ws}/enrollments`, { name: "studio" })).json() as any;
+    const enrollment = await (await alice("POST", `/v1/workspaces/${ws}/enrollments`, { name: "willow" })).json() as any;
     await h.fetch("/v1/stations/enroll", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: enrollment.token, station: station.id, signature: await station.sign(`stillfail-station-enroll-v1:${h.origin}:${enrollment.token}:${station.id}`), version: "0.1.0" }) });
     const ts = h.now();
     const socket = (await h.fetch("/v1/stations/connect", { headers: { upgrade: "websocket", "x-stillfail-station": station.id, "x-stillfail-ts": String(ts), "x-stillfail-signature": await station.sign(`stillfail-station-connect-v1:${h.origin}:${station.id}:${ts}`) } })).webSocket!;

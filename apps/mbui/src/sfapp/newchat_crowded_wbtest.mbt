@@ -59,7 +59,7 @@ test "narrow: the preset's, the station's and the model's controls side by side,
   let preset_words = runs_in(t, (preset.x, preset.y, preset.w, preset.h))
   assert_true(preset_words.iter().all(fn(r) { r.text == "预设" }), msg="\{preset_words.map(fn(r) { r.text })}")
   let station_words = runs_in(t, (station.x, station.y, station.w, station.h))
-  assert_true(station_words.iter().all(fn(r) { r.text == "Studio" }), msg="\{station_words.map(fn(r) { r.text })}")
+  assert_true(station_words.iter().all(fn(r) { r.text == "Willow" }), msg="\{station_words.map(fn(r) { r.text })}")
   // the model's: as wide as what it keeps (its padding past the last of it, no more)
   let kept = t
     .boxes()

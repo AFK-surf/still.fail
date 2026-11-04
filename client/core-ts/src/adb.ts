@@ -149,6 +149,8 @@ class Lend {
       connectPort: this.#offer?.connect ?? null,
       pairPort: this.#offer?.pair ?? null,
       refusedPort: this.#offer !== null && this.#refused === this.#offer.connect ? this.#refused : null,
+      // The chats whose own screens are up on the phone (the station's displays.ts), for the notification.
+      screens: this.#offer !== null && Array.isArray(this.#station?.screens) ? (this.#station.screens as unknown[]).filter((t): t is string => typeof t === "string") : [],
     };
   }
 
@@ -688,7 +690,9 @@ export class Adb {
       const v = l.value();
       return { station, phase: v.phase, adb: v.adb, serial: v.serial, message: v.message, tunnels: v.tunnels };
     });
-    return { ...first.value(), on: this.#on, grants: this.grants(), wanted: this.wanted(), known: this.#known, lends, lasts: this.#lasts };
+    // Every station's chats with screens up, not only the first lending's.
+    const screens = [...new Set([this.#legacy, ...this.#lends.values()].flatMap((l) => l.value().screens as string[]))];
+    return { ...first.value(), on: this.#on, grants: this.grants(), wanted: this.wanted(), known: this.#known, lends, lasts: this.#lasts, screens };
   }
 
   card(station: string): J {

@@ -1947,7 +1947,9 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   // (worked out as each frame is painted, on its way: a frame of its looks alone draws it where it is then)
   // drawn up out from under a finger that has the bar: drawn so, a finger taken where it is laid out
   let raised = bar_raise(c.height, foot, panel, status_top()) * m.up.x
-  if m.vis.value < 1.0 || m.vis.target < 1.0 {
+  // Keep the painted look until its declared end, when the build is scheduled again. The sampled value can round
+  // to 1 a fraction before then; dropping the look at that instant would make a kept build differ from a fresh one.
+  if now < m.vis.end() || m.vis.target < 1.0 {
     let vis = m.vis
     c.look_by(holder, fn() {
       let v = vis.painted(@ui.current())

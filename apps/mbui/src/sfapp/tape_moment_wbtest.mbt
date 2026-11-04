@@ -56,7 +56,7 @@ fn tape_turned(
 ) -> ((Double, Double), @sfdesk.TapePane, (Double, Double), (Double, Double)) {
   new_run()
   let src = fixture("chat")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=840.0, platform=0)
   t.run_for(@ui.move_most_ms)
@@ -117,14 +117,14 @@ test "on the tape a page come on top waits anew each time: one waited for before
   let late = 10000.0
   let late_now = Ref(setup_answer_ms)
   let src = round_trip_by(fixture("chat"), fn() { late_now.val })
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.draw()
   t.run_for(setup_answer_ms * 6.0 + @ui.move_most_ms)
   late_now.val = late
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
-  let a : ChatRef = { station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" }
-  let b : ChatRef = { station: "ws1/st2", session: "s-c3", title: "夜里的构建又失败了", station_name: "MBA" }
+  let a : ChatRef = { station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Willow" }
+  let b : ChatRef = { station: "ws1/st2", session: "s-c3", title: "夜里的构建又失败了", station_name: "Maple" }
   // a chat whose view is on its way: brought over once its wait is over (page_local_ms), its view not come
   open_chat(a)
   @sfdesk.bring_page()
@@ -150,12 +150,12 @@ test "on the tape a page waiting as the tape is made again (大屏 and back) wai
   let late = 10000.0
   let late_now = Ref(setup_answer_ms)
   let src = round_trip_by(fixture("chat"), fn() { late_now.val })
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.draw()
   t.run_for(setup_answer_ms * 6.0 + @ui.move_most_ms)
   late_now.val = late
-  open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Willow" })
   t.run_for(page_local_ms * 0.8)
   t.resize(1280.0, 800.0)
   t.run_for(@ui.move_most_ms)
@@ -289,7 +289,7 @@ fn page_draws(t : @ui.Tester, title : String) -> Bool {
 /// How late the core answers what a test's first chat asks (its six asks one after another): nearly at once, the chat
 /// shown in a few frames, the core then made `late` for what the test watches. (Answered `late` from the start, a 10 s
 /// view's setup ran the window through a minute of its clock: a frame at each step of the spokes shown meanwhile, each
-/// built whole again to be checked: most of this file's 18 s on Studio, 2026-10-31.)
+/// built whole again to be checked: most of this file's 18 s on Willow, 2026-10-31.)
 let setup_answer_ms : Double = 10.0
 
 ///|
@@ -300,14 +300,14 @@ fn page_waited(late : Double, frames : Array[Double], at : Double, w? : Double =
   new_run()
   let late_now = Ref(setup_answer_ms)
   let src = round_trip_by(fixture("chat"), fn() { late_now.val })
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=800.0, platform=0)
   t.draw()
   t.run_for(setup_answer_ms * 6.0 + @ui.move_most_ms)
   late_now.val = late
   let t0 = t.time() + between_frames_ms
   t.advance(t0 - t.time())
-  open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Willow" })
   for f in frames {
     t.frame_at(t0 + f)
   }
@@ -340,14 +340,14 @@ fn page_waited_seen(late : Double, at : Array[Double]) -> Array[(Bool, Bool)] {
   new_run()
   let late_now = Ref(setup_answer_ms)
   let src = round_trip_by(fixture("chat"), fn() { late_now.val })
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.draw()
   t.run_for(setup_answer_ms * 6.0 + @ui.move_most_ms)
   late_now.val = late
   let t0 = t.time() + between_frames_ms
   t.advance(t0 - t.time())
-  open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Willow" })
   at.map(fn(a) {
     t.frame_at(t0 + a)
     (page_draws(t, "整理发布清单"), page_draws(t, "首页的列表改成按天分组"))
@@ -401,14 +401,14 @@ fn page_across_shells(stepped : Bool) -> Array[@sfdesk.TapePane] {
   let late = 10000.0
   let late_now = Ref(setup_answer_ms)
   let src = round_trip_by(fixture("chat"), fn() { late_now.val })
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.draw()
   t.run_for(setup_answer_ms * 6.0 + @ui.move_most_ms)
   late_now.val = late
   let t0 = t.time() + between_frames_ms
   t.advance(t0 - t.time())
-  open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Willow" })
   let to = fn(at : Double) {
     if stepped {
       while t.time() + 16.0 < t0 + at {
@@ -633,7 +633,7 @@ fn back_changed_midway(framed : Bool) -> (@sfdesk.TapePane, Int, @sfdesk.TapePan
   let (t, t0, to) = tape_backs(framed)
   tap_page(t, t0, to, 0.0)
   to(back_tap_ms + @ui.move_most_ms)
-  let other : ChatRef = { station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" }
+  let other : ChatRef = { station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Willow" }
   let e = gesture(t, t0, to, back_tap_ms + @ui.move_most_ms + back_step_ms, between=fn() {
     @sfbase.open_page(Chat(other))
   })
@@ -812,7 +812,7 @@ test "on the tape a table with further to go takes a finger's swipe across it fi
   new_run()
   let src = fixture("chat-md")
   // (a window narrow enough for the table to go past the page's words, the side panel open beside it)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=600.0, h=840.0, platform=2)
   say_room(t, "medium", "medium")
   t.run_for(@ui.move_most_ms)
@@ -837,4 +837,44 @@ test "on the tape a table with further to go takes a finger's swipe across it fi
   t.drag(x + 50.0, y, x + 350.0, y, steps=8)
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+}
+
+///|
+test "on the tape a finger held on a message's words widens them as it slides across: the press the pick's, no panel brought over" {
+  let t = tape_chat(2, 720.0, 840.0, width="medium", height="medium")
+  page_over(t, 720.0)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
+  let (rx, ry, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
+  let (x, y) = (rx + 24.0, ry + 8.0)
+  t.press_at(x, y)
+  t.run_for(long_press_ms)
+  assert_true(pk.ts != "")
+  let first = (pk.sel.a, pk.sel.b)
+  slide(t, x, y, x + 60.0, y, 6)
+  assert_eq(@sfdesk.wide.tape_pull.get(), None)
+  assert_eq(pk.sel.a, first.0)
+  assert_true(pk.sel.b > first.1 + 2, msg="\{(first, pk.sel.a, pk.sel.b)}")
+  t.release(x + 60.0, y)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
+  assert_true(pk.ts != "", msg="still picked")
+}
+
+///|
+test "on the tape a picked passage's handle moved across moves its end, no panel brought over" {
+  let t = tape_chat(2, 720.0, 840.0, width="medium", height="medium")
+  page_over(t, 720.0)
+  hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
+  let first = (pk.sel.a, pk.sel.b)
+  let lines = t.ctx().words_of(pk.sel.key).unwrap().rects(pk.sel.a, pk.sel.b)
+  let last = lines[lines.length() - 1]
+  let (x, y) = (last.0 + last.2, last.1 + last.3 / 2.0)
+  t.press_at(x, y)
+  t.frame()
+  slide(t, x, y, x + 60.0, y, 6)
+  assert_eq(@sfdesk.wide.tape_pull.get(), None)
+  assert_true(pk.sel.b > first.1 + 2, msg="\{(first, pk.sel.a, pk.sel.b)}")
+  t.release(x + 60.0, y)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
 }

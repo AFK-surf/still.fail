@@ -64,17 +64,23 @@ let senren_small : Ref[Bool] = Ref(false)
 /// A line of share_looks for 千恋＊万花's look `key`, drawn by `draw`, its picture `art`. On the stage and handed out, the
 /// card said to be a picture (Role Image), named by its look and its figures: what it draws is the game's things in
 /// their own corners, grounds and inks, a drawing of something else, not the theme's (the corners', gaps' and
-/// contrast's rules leave it to itself, as they leave 终端's palette). Drawn small in the looks' strip (look_tile, as
-/// box 0), its picture alone as the card's top, small: not thirty cards laid out and drawn each frame for tiles 72 wide.
+/// contrast's rules leave it to itself, as they leave 终端's palette). Drawn small in the looks' strip (look_tile:
+/// look_tile_now), its picture alone as the card's top, small: not thirty cards laid out and drawn each frame for tiles
+/// 72 wide.
 fn senren(key : String, art : String, draw : (@ui.Ctx, Json?, Int, Bool) -> Int) -> ShareLook {
   {
     key,
     group: "senren",
     draw: fn(c, fleet, id, flat) {
-      if id == 0 {
-        return sr_box(c, 0, true, senren_tile_ground, fn() {
+      // (its tile in the strip: what is handed out, box 0 too (share_card_open's shot), is the card)
+      if look_tile_now.val {
+        let was = senren_small.val
+        senren_small.val = true
+        let b = sr_box(c, id, true, senren_tile_ground, fn() {
           sr_art(c, art, @sf.share_w_most, senren_tile_h, at=0.0) |> ignore
         })
+        senren_small.val = was
+        return b
       }
       let b = draw(c, fleet, id, flat)
       let args = sr_args(fleet)
@@ -103,14 +109,9 @@ fn sr_gahou_of(look : String) -> (@ui.Ctx, Json?, Int, Bool) -> Int {
 
 ///|
 /// The card as box `id` in `ground`, its parts laid out by `inner` from its very edges (a look pads its own: most lay a
-/// picture to the edges): round as a card on the stage, or `flat` (handed out: its ground to its edges); as box 0, drawn
-/// small in the looks' strip (its pictures' small ones).
+/// picture to the edges): round as a card on the stage, or `flat` (handed out: its ground to its edges).
 fn sr_box(c : @ui.Ctx, id : Int, flat : Bool, ground : Int64, inner : () -> Unit) -> Int {
-  let was = senren_small.val
-  senren_small.val = id == 0
-  let b = c.box(style=(if flat { sr_box_flat } else { sr_box_round }).then(@ui.style(bg=Data(ground))), id~, inner)
-  senren_small.val = was
-  b
+  c.box(style=(if flat { sr_box_flat } else { sr_box_round }).then(@ui.style(bg=Data(ground))), id~, inner)
 }
 
 ///|

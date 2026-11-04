@@ -412,7 +412,7 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
           "attention": [],
         }),
       )
-    "host" => Some(Some({ "identity": "Mac Studio · macOS 26 · M2 Max" }))
+    "host" => Some(Some({ "identity": "MacBook Pro · macOS 26 · M1 Pro" }))
     "chatJobs" =>
       if f.mode.has_prefix("chat-jobs") || f.mode == "chat-job" || f.mode == "chat-agent" {
         Some(Some(fix_chat_jobs()))
@@ -457,7 +457,7 @@ pub fn long_job() -> Json {
     _ => {}
   }
   m["station"] = Json::string("ws1/st1")
-  m["whereText"] = Json::string("Studio · 整理发布清单")
+  m["whereText"] = Json::string("Willow · 整理发布清单")
   m["age"] = Json::string("3 小时")
   m["chat"] = { "id": "s-c1", "title": "整理发布清单", "archived": false }
   Json::object(m)
@@ -660,10 +660,10 @@ pub fn fix_attention_marks() -> Json {
     }
     m
   }
-  let wait = item("wait", "整理发布清单", "选一个发布的时间", "ws1/st1", "Studio", 7.0)
+  let wait = item("wait", "整理发布清单", "选一个发布的时间", "ws1/st1", "Willow", 7.0)
   wait["session"] = Json::string("s-c1")
   wait["seq"] = Json::number(12.0)
-  let failed = item("alert", "夜里的备份", "备份没有跑完", "ws1/st2", "MBA", 9.0)
+  let failed = item("alert", "夜里的备份", "备份没有跑完", "ws1/st2", "Maple", 9.0)
   failed["seen"] = Json::boolean(true)
   {
     "workspaces": {
@@ -681,12 +681,12 @@ pub fn fix_attention_marks() -> Json {
 }
 
 ///|
-/// The chats' view of `ws1` with its stations' trouble (home-attention: MBA offline).
+/// The chats' view of `ws1` with its stations' trouble (home-attention: Maple offline).
 pub fn fix_with_trouble(v : Json, params : Map[String, Json]) -> Json {
   match (v, params.get("scope")) {
     (Object(m), Some(String("ws1"))) => {
       let o = m.copy()
-      o["trouble"] = { "text": "MBA 离线" }
+      o["trouble"] = { "text": "Maple 离线" }
       Json::object(o)
     }
     _ => v

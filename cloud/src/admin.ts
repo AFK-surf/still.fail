@@ -1,4 +1,4 @@
-// The operator's console: one Google account, the deployment's ADMIN_EMAIL (wrangler.jsonc), signs in to still.fail
+// The operator's console: one Google account, the deployment's ADMIN_EMAIL, signs in to still.fail
 // like anyone and may then list every user and workspace and hand out the
 // invite codes that let new people create a workspace. Everyone else gets 404
 // on these paths, so the console does not show that it exists. (The scripts'

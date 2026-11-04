@@ -18,6 +18,6 @@ test "用量 and 价目表 made once wide and on the tape: what each holds the t
     assert_true((share[0].rect.1 + share[0].rect.3 / 2.0 - (dy + dh / 2.0)).abs() < 4.0, msg="share and days on one line at \{at}")
     let _ = large_about_tester(true, platform, w~, mode="settings-prices")
     let own = tree_words_drawn()
-    assert_true(own.iter().any(fn(o) { o.contains("Studio") }), msg="价目表's card the tree's own at \{case}: \{own}")
+    assert_true(own.iter().any(fn(o) { o.contains("Willow") }), msg="价目表's card the tree's own at \{case}: \{own}")
   }
 }

@@ -16,6 +16,7 @@ import { CARD_OCCUPIED, cardPlace, postCard } from "../sessions/card-place.ts";
 import { STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
 import type { Driven, FormAsks, FormField, FormValues } from "../browser/signin-form.ts";
 import type { Request } from "./crypto.ts";
+import { SigninSaveBuilder } from "./signin-save-builder.ts";
 
 const SCHEMA = `CREATE TABLE IF NOT EXISTS signin_asks (
   id TEXT PRIMARY KEY,
@@ -85,6 +86,7 @@ export type SignInDeps = {
   /// `f` once, `ms` from now (the machine's time); the returned function calls it off.
   after(ms: number, f: () => void): () => void;
   id?(): string;
+  backfill?: { previousGone?: Promise<void>; priority?: SharedArrayBuffer };
 };
 
 export class Refused extends Error {}
@@ -112,10 +114,14 @@ export class SignIns {
   readonly #d: SignInDeps;
   /// What each ask's app gave (by ask), and what of it was typed: in memory only, until done or HELD_MS unused.
   readonly #held = new Map<string, Held>();
+  readonly #saveIndex: SigninSaveBuilder;
 
   constructor(d: SignInDeps) {
     this.#d = d;
     d.db.exec(SCHEMA);
+    this.#saveIndex = new SigninSaveBuilder(d.db, (pending, body) => {
+      if (body !== null) this.#heard(body, pending.status as Request["status"], true);
+    }, d.backfill);
     d.hub.store.subscribe((c) => {
       if ((c.type === "sessionRemoved" || c.type === "session") && typeof c.key === "string") {
         const row = d.hub.store.getSession(c.key);
@@ -134,7 +140,10 @@ export class SignIns {
   }
 
   #bySession(session: string): SignInAsk[] {
-    return (this.#d.db.prepare("SELECT body FROM signin_asks WHERE session = ? ORDER BY rowid").all(session) as { body: string }[]).map((r) => JSON.parse(r.body));
+    // Both callers need only sign-ins still under way; use the session/status index before reading their bodies.
+    const statuses = OPEN.map(() => "?").join(", ");
+    return (this.#d.db.prepare(`SELECT body FROM signin_asks WHERE session = ? AND status IN (${statuses}) ORDER BY rowid`)
+      .all(session, ...OPEN) as { body: string }[]).map((r) => JSON.parse(r.body));
   }
 
   #save(a: SignInAsk) {
@@ -421,13 +430,23 @@ export class SignIns {
   /// A request of the vault's decided (secrets.ts listen): a sign-in's keeping said on its card.
   heard(r: Request) {
     if (!r.save || r.status === "pending") return;
-    const row = this.#d.db.prepare("SELECT body FROM signin_asks WHERE session = ? AND json_extract(body, '$.save') = ?").get(r.session, r.id) as { body: string } | undefined;
-    if (row === undefined) return;
-    const x = JSON.parse(row.body) as SignInAsk;
-    if (x.kept === r.status) return;
-    x.kept = r.status;
-    this.#save(x);
+    const body = this.#saveIndex.lookup(r.session, r.id);
+    if (body !== null) {
+      this.#heard(body, r.status);
+      this.#saveIndex.forget(r.session, r.id, r.status);
+    } else if (r.save.kind === "browser") this.#saveIndex.wait(r.session, r.id, r.status);
+  }
+
+  #heard(body: string, status: Request["status"], replay = false) {
+    const x = JSON.parse(body) as SignInAsk;
+    if (x.kept !== status) {
+      x.kept = status;
+      this.#save(x);
+    } else if (!replay) return;
+    // A queued decision can have been saved just before the previous process stopped. Finish telling its card.
     this.#restate(x);
     if (x.thread !== undefined && x.cardTs !== undefined) this.#d.hub.store.withdrawCard(x.session, x.thread, x.cardTs);
   }
+
+  async close(): Promise<void> { await this.#saveIndex.close(); }
 }

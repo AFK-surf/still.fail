@@ -62,8 +62,11 @@ export const routes = ({ updates }: UpdatesDeps): Route[] => {
       method: "POST",
       pattern: /^\/updates$/,
       handle: answer(async (u, r) => {
-        const id = input(r).id;
-        await u.update(typeof id === "string" ? id : "", r.lang);
+        const asked = input(r);
+        const id = typeof asked.id === "string" ? asked.id : "";
+        if (asked.repair === true && id === "codex") await u.repairCodex(r.lang);
+        else if (asked.repair !== undefined && asked.repair !== false) throw new Refused(400, tr(r.lang, "station.updates.codexRepairUnavailable"));
+        else await u.update(id, r.lang);
       }),
     },
   ];

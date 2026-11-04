@@ -40,7 +40,7 @@ test("secrets by their shape are hidden, counted; plain words are not", () => {
     ["eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U", 1],
     // Not secrets: numbers called tokens, an author, a task's name, words.
     ["tokens: 12000 used, max_tokens = 4096", 0],
-    ["author: zuozijian, password reset page is broken", 0],
+    ["author: alice, password reset page is broken", 0],
     ["task-scheduler-for-the-nightly-build and risk-assessment-document", 0],
   ];
   for (const [text, count] of cases) {
@@ -115,6 +115,12 @@ test("a chat published: previewed, written out frozen with the attachments ticke
   const jobs = new Jobs({ store, data, notify: () => {}, link: () => null });
   hub.setJobs(jobs);
   const readers = new Readers(data, 1);
+  const draftReads: { includeViews?: boolean }[] = [];
+  const read = readers.read.bind(readers);
+  readers.read = (op, args, lang, options) => {
+    if (op === "publishDraft") draftReads.push(args as { includeViews?: boolean });
+    return read(op, args, lang, options);
+  };
   // The publish routes are a part of the station's (publish/module.ts), given to the admin API as main.ts does.
   const parts = new StationParts();
   parts.routes((tools) => publishRoutes(tools));
@@ -147,6 +153,7 @@ test("a chat published: previewed, written out frozen with the attachments ticke
 
     const preview = await ask(alice, "POST", `/threads/${thread}/publish/preview`, { names: { "alice@acme.dev": "Alice Liddell" } });
     assert.equal(preview.status, 200, JSON.stringify(preview.body));
+    assert.notEqual(draftReads.at(-1)?.includeViews, false, "the preview asks for its chat views");
     const p = preview.body;
     assert.deepEqual(p.entries.map((e: any) => e.author), ["Alice Liddell", "Opus 4.1", "carol"], "people by name, agents by model, never by address or key");
     // The members' preview draws them as the chat does: an agent by its maker's mark, a person by their address's picture.
@@ -166,10 +173,19 @@ test("a chat published: previewed, written out frozen with the attachments ticke
     assert.deepEqual(p.views.hidden, [{ n: p.entries[0].n, count: 1 }]);
     const upto: number = p.upto;
 
+    // A later runtime and model do not rename or redraw an earlier message in a published preview.
+    store.db.prepare("UPDATE sessions SET runtime = ?, model = ? WHERE key = ?").run("codex", "gpt-5", made.key);
+    store.insertMessage({ ...newMessage(thread, "1.35", "agent", made.key, "default model"), agentIdentity: { model: null, effort: null, runtime: "claude" } });
+    const switched = (await ask(alice, "POST", `/threads/${thread}/publish/preview`, {})).body;
+    assert.deepEqual([switched.entries[1].author, switched.entries[1].maker, switched.entries[1].runtime], ["Opus 4.1", "anthropic", "claude"]);
+    assert.deepEqual([switched.entries[3].author, switched.entries[3].model ?? null, switched.entries[3].maker ?? null, switched.entries[3].runtime], ["Claude Code", null, null, "claude"]);
+    store.db.prepare("UPDATE sessions SET runtime = ?, model = ? WHERE key = ?").run("claude", "claude-opus-4-1", made.key);
+
     // Said after the preview: not in what is published.
     store.insertMessage(newMessage(thread, "1.4", "person", "alice@acme.dev", "a later word"));
     const done = await ask(alice, "POST", `/threads/${thread}/publish`, { upto, files: ["f0"], names: {} });
     assert.equal(done.status, 200, JSON.stringify(done.body));
+    assert.equal(draftReads.at(-1)?.includeViews, false, "publishing does not ask the reader for preview-only views");
     const published = done.body.published;
     assert.match(published.id, /^[A-Za-z0-9_-]{16}$/);
     assert.match(published.key, /^[A-Za-z0-9_-]{43}$/);

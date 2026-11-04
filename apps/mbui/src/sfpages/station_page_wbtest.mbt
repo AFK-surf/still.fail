@@ -1,5 +1,5 @@
 // A station's page in its three parts (station_page.mbt, resources.mbt; the web's StationPage.tsx Body) alone over the
-// settings' fixture: Studio (ws1/st1), online. At a phone's width with a finger, in a box tall enough for all of a
+// settings' fixture: Willow (ws1/st1), online. At a phone's width with a finger, in a box tall enough for all of a
 // part.
 
 ///|
@@ -9,6 +9,50 @@ fn station_tester(address : String, part? : String = "overview", w? : Double = 3
   let t = setting_tester(Station(address), w, platform~, h=2400.0, ready=fn() { @settings.station_parts[address] = part })
   t.run_for(@ui.move_most_ms)
   t
+}
+
+///|
+test "an incomplete Codex offers its manager an explicit npm repair" {
+  for (w, platform) in page_cases {
+    @sfbase.reset()
+    reset()
+    @settings.reset()
+    @sffixture.fixture_reset()
+    @sf.presenters_reset()
+    @sf.set_words(@sfbase.fill)
+    let calls : Array[Json] = []
+    let base = @sffixture.fixture("settings")
+    let src : Source = {
+      ..base,
+      call: fn(name, params, done) {
+        if name == "software.update" { calls.push(params) }
+        done(Ok(Json::null()))
+      },
+    }
+    let codex : Json = {
+      "id": Json::string("codex"),
+      "name": Json::string("Codex"),
+      "installed": Json::boolean(true),
+      "repairable": Json::boolean(true),
+      "state": Json::string("idle"),
+      "shownText": Json::string("0.166.0"),
+      "note": Json::string("Codex 缺少执行组件"),
+    }
+    let t = @ui.Tester::new(fn(c) {
+      @sf.begin(c) |> ignore
+      c.with_theme(@sf.ui_theme(), fn() {
+        let core = @sfbase.settings_core(src, rig_workspace)
+        software_row(c, core, "ws1/st1", Some(codex), true, false, false)
+      })
+    }, w~, h=300.0, platform~)
+    t.draw()
+    assert_true(t.query(Button, label="用 npm 修复") is Some(_), msg="\{w} platform \{platform}")
+    t.click(Button, label="用 npm 修复")
+    t.frame()
+    assert_eq(calls.length(), 1)
+    assert_eq(text(Some(calls[0]), "id"), "codex")
+    assert_true(flag(Some(calls[0]), "repair"))
+  }
 }
 
 ///|
@@ -40,6 +84,24 @@ test "a station's page in three parts: 概览 what runs on it, 设置 what it is
   t.draw()
   assert_true(t.find("软件与更新") is Some(_))
   assert_true(t.find("设备信息") is Some(_), msg="the machine's rows")
+}
+
+///|
+test "an away station's 设置 shows none of what only it can change, a line saying so" {
+  for (w, platform) in page_cases {
+    let t = setting_tester(Station("ws1/st1"), w, platform~, mode="settings-station-away", h=2400.0)
+    t.run_for(@ui.move_most_ms)
+    let at = "\{w} platform \{platform}"
+    assert_true(t.find("station 离线，连接后可查看和修改设置") is Some(_), msg=at)
+    assert_true(t.find("Agent 环境变量") is None, msg="its variables: \{at}")
+    assert_true(t.find("高级网络设置") is None, msg="its network: \{at}")
+    assert_true(t.find("屏幕录制") is None, msg="its grants: \{at}")
+    // a login under way goes on there only; the logins done stay
+    assert_true(t.find("在浏览器里登录") is None, msg="its login under way: \{at}")
+    assert_true(t.find("gh") is Some(_), msg="its logins done: \{at}")
+    // the workspaces it is in, nothing there to change
+    assert_true(t.boxes().iter().any(fn(b) { b.text == "个人" }), msg="its workspaces: \{at}")
+  }
 }
 
 ///|
@@ -464,7 +526,7 @@ test "a login's link opens its station's page at 设置, where its card is" {
   })
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("更多") is None, msg="not the overview")
-  assert_true(t.find("在 Studio 上登录 codex") is Some(_))
+  assert_true(t.find("在 Willow 上登录 codex") is Some(_))
 }
 
 ///|
@@ -476,7 +538,7 @@ test "a station's page opened again begins at its overview" {
 }
 
 ///|
-/// MBA (ws1/st2, offline in the fixture) as this machine's station, as still.fail's desktop app left it on a Mac
+/// Maple (ws1/st2, offline in the fixture) as this machine's station, as still.fail's desktop app left it on a Mac
 /// (`local`: the host's words for it), its page open with a mouse at `w`.
 fn this_mba_tester(local : String, w? : Double = 390.0) -> @ui.Tester {
   let t = setting_tester(Station("ws1/st2"), w, platform=0, h=2400.0, ready=fn() {
@@ -491,7 +553,7 @@ fn this_mba_tester(local : String, w? : Double = 390.0) -> @ui.Tester {
 test "this machine's station not running here: its page says it stopped and offers 启动, not 重试; pressed, made a service" {
   for w in [390.0, 1100.0] {
     let t = this_mba_tester(
-      #|{"data":"~/.stillfail","runner":"none","workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"MBA","removed":false}}
+      #|{"data":"~/.stillfail","runner":"none","workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"Maple","removed":false}}
       ,
       w~,
     )
@@ -509,14 +571,14 @@ test "this machine's station not running here: its page says it stopped and offe
 ///|
 test "this machine's station being installed: its page says so, its 启动 busy; one running here, or another machine's, tried again" {
   let t = this_mba_tester(
-    #|{"data":"~/.stillfail","runner":"none","doing":"update","percent":42,"workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"MBA","removed":false}}
+    #|{"data":"~/.stillfail","runner":"none","doing":"update","percent":42,"workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"Maple","removed":false}}
     ,
   )
   assert_true(t.find("正在更新") is Some(_))
   assert_true(t.query(Button, label="重试") is None)
   // running here (the app not reaching it yet): tried again, as any
   let t = this_mba_tester(
-    #|{"data":"~/.stillfail","runner":"service","service":{"kind":"launchd","name":"fail.still.station"},"workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"MBA","removed":false}}
+    #|{"data":"~/.stillfail","runner":"service","service":{"kind":"launchd","name":"fail.still.station"},"workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"Maple","removed":false}}
     ,
   )
   assert_true(t.query(Button, label="重试") is Some(_))
@@ -526,7 +588,7 @@ test "this machine's station being installed: its page says so, its 启动 busy;
     @sfbase.machine_here.val = Some("ws1/st1")
   })
   t.set_local_station(
-    #|{"data":"~/.stillfail","runner":"none","workspace":{"id":"ws1","station":"st1","name":"星火工作室","stationName":"Studio","removed":false}}
+    #|{"data":"~/.stillfail","runner":"none","workspace":{"id":"ws1","station":"st1","name":"星火工作室","stationName":"Willow","removed":false}}
     ,
   )
   t.run_for(@ui.move_most_ms)
@@ -794,7 +856,7 @@ test "on this machine's own page its display says so and opens nothing; its brow
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("这是本机的屏幕") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("3024 × 1964 · 无人在看") is None)
-  t.tap_text("Studio 的屏幕")
+  t.tap_text("Willow 的屏幕")
   t.draw()
   assert_true(!(@sfbase.app.nav.top() is Screen(_)))
   t.tap_text("发布清单 - 文档")

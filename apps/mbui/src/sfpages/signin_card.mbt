@@ -151,17 +151,12 @@ fn signin_took(core : @settings.Core, station : String, ask : SignInAsk) -> Unit
     signin_send(core, station, ask, r.username, r.password, code)
     return
   }
-  if d.code != 0 {
-    let why = d.err.trim(chars=" \n").to_owned()
-    signin_said(
-      ask.id,
-      if d.code == -1 || why.contains("not found") || why.contains("not currently signed in") || why.contains("integration") {
-        @sf.t("android-misc.screen.fill.noOp")
-      } else {
-        @sf.t("android-misc.screen.fill.failed", args=[("why", why)])
-      },
-    )
-    return
+  match d.trouble() {
+    Some(t) => {
+      signin_said(ask.id, op_trouble_words(t))
+      return
+    }
+    None => ()
   }
   match step {
     "listing" => {
@@ -396,6 +391,9 @@ fn signin_foot(c : @ui.Ctx, core : @settings.Core, station : String, ask : SignI
     "said" => note(signin_notes.get(id).unwrap_or(""))
     "auto" => note(@sf.t("android-misc.screen.fill.autoPick", args=[("host", ask.site)]))
     "choosing" => note(@sf.t("android-misc.screen.fill.pick", args=[("host", ask.site)]))
+    // (1Password can take a while, a request of its to its servers slow: what it waits for said, and the screen
+    // still there to sign in on instead)
+    "listing" | "getting" | "otp" => note(@sf.t("android-misc.screen.fill.asking"))
     _ => ()
   }
   let asking = step == "listing" || step == "getting" || step == "otp" || step == "sending"
@@ -415,8 +413,12 @@ fn signin_foot(c : @ui.Ctx, core : @settings.Core, station : String, ask : SignI
       if @sf.button(c, label, key="signin/" + id + "/go", tone=Primary, busy=asking, disabled=asking) {
         c.tell("signin-start/" + id, fn() { signin_start(core, station, ask) })
       }
-      if @sf.button(c, @sf.t("android-misc.signin.onScreen"), key="signin/" + id + "/self", tone=Ghost, disabled=asking) {
-        c.tell("signin-self/" + id, fn() { signin_self(core, station, ask, false) })
+      // (while 1Password is asked too: it is let go of then)
+      if @sf.button(c, @sf.t("android-misc.signin.onScreen"), key="signin/" + id + "/self", tone=Ghost, disabled=step == "sending") {
+        c.tell("signin-self/" + id, fn() {
+          signin_stop(id)
+          signin_self(core, station, ask, false)
+        })
       }
     } else if @sf.button(c, @sf.t("android-misc.signin.onScreen"), key="signin/" + id + "/self", tone=Primary) {
       c.tell("signin-self/" + id, fn() { signin_self(core, station, ask, false) })

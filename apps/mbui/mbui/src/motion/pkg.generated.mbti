@@ -100,6 +100,8 @@ pub fn find_spring(Double, Double) -> (Double, Double, Double)
 
 pub fn fly(@ui.Ctx, Int32, Double, Double, scale? : Double, px~ : Double, py~ : Double, ps? : Double) -> Unit
 
+pub fn flying_placed(@ui.Ctx, Int32) -> Unit
+
 pub fn generator_duration(Generator) -> Double
 
 pub fn generator_easing((Double, Double, Double) -> Generator, Double, Double, velocity? : Double, scale? : Double) -> ((Double) -> Double, Double)

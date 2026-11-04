@@ -148,8 +148,8 @@ pub fn rich_chat(older : Int) -> Json {
     }
   }
   let messages : Array[Json] = [
-    msg(1, "ember", { "name": "still.fail" }, "Studio 上的 claude 已启动。", "3 小时前", {
-      "notice": { "failed": false, "words": "Studio 上的 claude 已启动" },
+    msg(1, "ember", { "name": "still.fail" }, "Willow 上的 claude 已启动。", "3 小时前", {
+      "notice": { "failed": false, "words": "Willow 上的 claude 已启动" },
     }),
     msg(2, "person", by_person("林"), "帮我把聊天页的列表做成虚拟列表，几千条消息也要滚得顺。", "3 小时前", {
       "mine": true,
@@ -217,8 +217,8 @@ pub fn rich_chat(older : Int) -> Json {
       "decision": { "resolved": false },
       "asked": true,
     }),
-    msg(9, "ember", { "name": "still.fail" }, "⚠️ Studio 上 codex 的登录已失效：请在设置里重新登录。", "20 分钟前", {
-      "notice": { "failed": true, "words": "Studio 上 codex 的登录已失效：请在设置里重新登录" },
+    msg(9, "ember", { "name": "still.fail" }, "⚠️ Willow 上 codex 的登录已失效：请在设置里重新登录。", "20 分钟前", {
+      "notice": { "failed": true, "words": "Willow 上 codex 的登录已失效：请在设置里重新登录" },
     }),
     msg(10, "agent", claude, "推送截图前要先登录 gh。", "15 分钟前", {
       "card": { "type": "login", "login": "login-1" },
@@ -503,9 +503,9 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
         {
           "station": "ws1/st1",
           "id": "st1",
-          "name": "Studio",
+          "name": "Willow",
           "icon": "glyph:desktop",
-          "summary": "Apple M2 Max · 2 个 agent 在工作",
+          "summary": "Apple M1 Pro · 2 个 agent 在工作",
           // how it is, as the core says it (StationView stateText, problems)
           "stateText": "2 个 agent 正在运行",
           "stateBusy": true,
@@ -515,7 +515,7 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
           // its machine and network as its card (settings/station_peek.mbt) and its page (src/sfdesk
           // station_page.mbt) show them
           "host": {
-            "identity": "Mac Studio · Apple M2 Max",
+            "identity": "MacBook Pro · Apple M1 Pro",
             "meters": [
               {
                 "short": "CPU",
@@ -531,25 +531,25 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
                 "short": "内存",
                 "left": 18,
                 "level": "amber",
-                "remaining": "剩 11.5 G",
-                "big": "11.5",
+                "remaining": "剩 5.8 G",
+                "big": "5.8",
                 "unit": "GB",
                 "title": "内存剩",
-                "total": "共 64 GB",
+                "total": "共 32 GB",
               },
               {
                 "short": "磁盘",
-                "left": 41,
+                "left": 42,
                 "level": "ok",
-                "remaining": "剩 380 G",
-                "big": "380",
+                "remaining": "剩 420 G",
+                "big": "420",
                 "unit": "GB",
                 "title": "磁盘剩",
                 "total": "共 1 TB",
               },
             ],
             "details": [
-              { "label": "主机名", "value": "studio.local" },
+              { "label": "主机名", "value": "willow.local" },
               { "label": "系统", "value": "macOS 26.1 · arm64" },
               { "label": "已运行", "value": "12 天" },
             ],
@@ -569,7 +569,7 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
         {
           "station": "ws1/st2",
           "id": "st2",
-          "name": "MBA",
+          "name": "Maple",
           "icon": "glyph:laptop:teal",
           "stateText": "3 小时前在线",
           "problems": [{ "key": "away", "level": "red", "text": "离线：在该机器上打开 still.fail 即可重新连接" }],
@@ -652,7 +652,7 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
     "machineLogin" if f.mode == "chat-login" || f.mode == "chat-login-station" => {
       let l : Map[String, Json] = {
         "id": "login-1",
-        "title": "在 Studio 上登录 gh",
+        "title": "在 Willow 上登录 gh",
         "state": "browser",
         "step": "open",
         "url": "https://github.com/login",
@@ -662,14 +662,14 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
       }
       if f.mode == "chat-login-station" {
         l["browser"] = Json::boolean(true)
-        l["browserText"] = Json::string("在 Studio 的浏览器中打开")
+        l["browserText"] = Json::string("在 Willow 的浏览器中打开")
       }
       Some(Json::object(l))
     }
     "machineLogin" =>
       Some({
         "id": "login-1",
-        "title": "在 Studio 上登录 gh",
+        "title": "在 Willow 上登录 gh",
         "state": "browser",
         "active": true,
         "statusText": "等你在浏览器里登录",
@@ -918,7 +918,7 @@ pub fn fix_deliver(session : String, id : String) -> Unit {
   let words = text(Some(params), "text")
   if words.contains("失败") && text(Some(params), "state") != "retried" {
     fc.outbox.retain(fn(o) { text(Some(o), "id") != id })
-    fc.outbox.push(outgoing_json(id, params, "failed", "Studio 没有回应（假数据：带「失败」的消息先发不出去）"))
+    fc.outbox.push(outgoing_json(id, params, "failed", "Willow 没有回应（假数据：带「失败」的消息先发不出去）"))
     return
   }
   fc.outbox.retain(fn(o) { text(Some(o), "id") != id })
@@ -1230,6 +1230,13 @@ pub fn seeded_draft(mode : String, key : String) -> Json {
         "quotes": [],
         "files": [file("compare.png", 1600, 900, 402000), file("build.log", 0, 0, 18432)],
       }
+    // chat-attach-video: a picture and a video waiting side by side, each drawn from its picture (seeded_pictures)
+    "chat-attach-video" =>
+      {
+        "text": "截图和构建日志都在这里，帮我看看第二屏",
+        "quotes": [],
+        "files": [file("compare.png", 1600, 900, 402000), file("演示录屏.mp4", 1920, 1080, 3200000)],
+      }
     // chat-uploading: another picture going up meanwhile, how much of it the station has (`sent`: seeded_files)
     "chat-uploading" =>
       match file("compare.png", 1600, 900, 402000) {
@@ -1276,7 +1283,7 @@ pub fn seeded_outbox(mode : String) -> Array[Json] {
         }
         o => [o]
       }
-    "chat-failed" => [outgoing_json("o-seed", words, "failed", "Studio 没有回应")]
+    "chat-failed" => [outgoing_json("o-seed", words, "failed", "Willow 没有回应")]
     _ => []
   }
 }
@@ -1316,7 +1323,7 @@ pub fn vault_post(typed : Bool, file? : Bool = false, use_secret? : Bool = false
   } else if typed {
     { "name": "OpenCode Go", "mode": "proxy", "hosts": ["opencode.ai"], "save": { "kind": "token", "typed": true }, "answer": "approve" }
   } else {
-    { "name": "UniFi UX7", "reason": "把路由器密码安全保存，方便以后排查网络", "mode": "env", "save": { "kind": "login", "username": "zzj" }, "answer": "approve" }
+    { "name": "测试服务登录", "reason": "把测试服务密码安全保存，方便以后登录", "mode": "env", "save": { "kind": "login", "username": "demo-user" }, "answer": "approve" }
   }
   if timed {
     ask["timeoutKind"] = "idle"
@@ -1325,8 +1332,8 @@ pub fn vault_post(typed : Bool, file? : Bool = false, use_secret? : Bool = false
   if fix_vault.val != "" {
     ask["status"] = Json::string(fix_vault.val)
   }
-  msg(60, "agent", by_agent("Anthropic", "claude", "s-c1"), if use_secret { "申请使用 Axiom 查询 token 查询日志" } else if file { "请选择生产集群的 kubeconfig" } else if typed { "请填入 OpenCode Go 的 API key" } else { "要存入 UniFi UX7 的密码" }, "刚刚", {
-    "card": { "type": "options", "vault": "r-ux7", "vaultAsk": Json::object(ask) },
+  msg(60, "agent", by_agent("Anthropic", "claude", "s-c1"), if use_secret { "申请使用 Axiom 查询 token 查询日志" } else if file { "请选择生产集群的 kubeconfig" } else if typed { "请填入 OpenCode Go 的 API key" } else { "要存入 测试服务登录 的密码" }, "刚刚", {
+    "card": { "type": "options", "vault": "r-demo", "vaultAsk": Json::object(ask) },
     "createdAt": Json::number(1.0e9),
   })
 }
@@ -1541,7 +1548,7 @@ pub fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Js
     "decision.answer" => {
       let label = text(p, "option")
       if label.contains("失败") {
-        return Some(Err({ "code": "unavailable", "message": "Studio 没有回应" }))
+        return Some(Err({ "code": "unavailable", "message": "Willow 没有回应" }))
       }
       fix_decided[seq] = decided_json(label)
       fix_replied[seq] = label
@@ -1564,7 +1571,7 @@ pub fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Js
       f.changed()
       Some(Ok(Json::object({})))
     }
-    "vault.approve" | "vault.deny" if text(p, "request") == "r-ux7" => {
+    "vault.approve" | "vault.deny" if text(p, "request") == "r-demo" => {
       fix_vault.val = if name == "vault.approve" { "granted" } else { "denied" }
       f.changed()
       Some(Ok(Json::object({})))
@@ -1824,7 +1831,7 @@ pub let need_state : (String, String, String) = ("要你帮忙：在手机上试
 
 ///|
 /// What the agent of the first row's chat does now, as long as an agent's step may say it (its call's description).
-pub let working_step : String = "在 Studio 上跑整套检查：先编译 mbui 的原生测试，再逐个对比手机、平板和桌面三种宽度下的截图"
+pub let working_step : String = "在 Willow 上跑整套检查：先编译 mbui 的原生测试，再逐个对比手机、平板和桌面三种宽度下的截图"
 
 ///|
 /// What that agent does now, by its call: that step until a test moves it on to another (fix_later, as its station
@@ -1876,15 +1883,15 @@ pub fn with_working(v : Json) -> Json {
 pub let peeks_answer : String = "改动在 https://github.com/acme/shop/pull/128 ，数据在 https://example.com/bench/list ，和 [首页的列表改成按天分组](https://app.still.fail/w/ws1/s/st1/chats/s-c2) 有关，入口在 `src/list/place.mbt:12`。"
 
 ///|
-/// An agent's answer with links to Studio's screens, its 共享调试 and a web service of the chat's (screen_links.mbt):
+/// An agent's answer with links to Willow's screens, its 共享调试 and a web service of the chat's (screen_links.mbt):
 /// the desktop's card, a tab's with its preview (the link's own words its title), a tab gone, 共享调试 bare in a
 /// sentence (its title) and alone (its card), a link to anywhere else; first, the service alone (its card).
 pub let screens_answer : String =
-  #|开发服务器在 Studio 上起来了：
+  #|开发服务器在 Willow 上起来了：
   #|
   #|[打开定价页](https://still.fail/o/ws1/st1/s-c1?service=j-web)
   #|
-  #|登录页改好了，Studio 的桌面开着：
+  #|登录页改好了，Willow 的桌面开着：
   #|
   #|https://still.fail/w/ws1/s/st1/screen/desktop
   #|
@@ -1901,7 +1908,7 @@ pub let screens_answer : String =
   #|https://still.fail/w/ws1/s/st1/adb
 
 ///|
-/// The core's cards of Studio's screens and its 共享调试 (`screenCard`, `adbCard`): the desktop someone looks at, a
+/// The core's cards of Willow's screens and its 共享调试 (`screenCard`, `adbCard`): the desktop someone looks at, a
 /// tab it previews (1280 × 800), a tab it no longer has; this phone's adb not shared.
 pub fn fixture_link_card(name : String, params : Map[String, Json]) -> Json? {
   if name == "adbCard" {
@@ -2010,7 +2017,7 @@ pub fn with_flag(v : Json, name : String) -> Json {
 /// chat-station-screen(s), chat-agent-screens: the screens of the station it runs on (ChatView's `screens`): its
 /// display alone, or with a tab of its browser an agent drives.
 pub fn with_chat_screens(v : Json, more : Bool) -> Json {
-  let desktop : Json = { "id": "desktop", "kind": "desktop", "title": "Studio 的桌面", "line": "桌面 · 3024×1964" }
+  let desktop : Json = { "id": "desktop", "kind": "desktop", "title": "Willow 的桌面", "line": "桌面 · 3024×1964" }
   let tab : Json = {
     "id": "browser:T1",
     "kind": "browser",
@@ -2059,9 +2066,9 @@ pub fn with_station_update(v : Json) -> Json {
       let o = m.copy()
       o["stationUpdate"] = {
         "tone": "update",
-        "text": "Studio 有新版本",
+        "text": "Willow 有新版本",
         "label": "可更新",
-        "station": "Studio",
+        "station": "Willow",
         "detail": "更新时正在运行的 agent 会在更新后继续。",
         "from": "0.24.1",
         "to": "0.25.0",
@@ -2077,7 +2084,7 @@ pub fn with_station_update(v : Json) -> Json {
 }
 
 ///|
-/// Studio's overview (fixture_station_drive's), with its software as the core says it (its versions, a newer Claude
+/// Willow's overview (fixture_station_drive's), with its software as the core says it (its versions, a newer Claude
 /// Code out) and what its agents' processes take.
 pub fn fixture_station_overview() -> Json {
   let o = match fixture_station_drive(true) {

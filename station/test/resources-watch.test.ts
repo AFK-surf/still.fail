@@ -338,7 +338,7 @@ test("GET /resources as events: a resources event, as GET /resources answers, ea
 
 test("which processes are the desktop app's is read off the station's thread, each bundle once", async () => {
   // Read as each was asked, the first look after a start read every app running from a disk short of memory: the
-  // station held 7.8 s on ccvm (2026-11-03), a message sent waiting on it.
+  // station held 7.8 s on a station (2026-11-03), a message sent waiting on it.
   const asked: string[] = [];
   let answer: (plist: Buffer) => void = () => {};
   const isApp = appBundles((path) => (asked.push(path), new Promise<Buffer>((resolve) => (answer = resolve))));

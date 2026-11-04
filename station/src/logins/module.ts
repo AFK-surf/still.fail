@@ -94,7 +94,18 @@ export const LoginsLive = Layer.effectDiscard(
         }
       }),
     ];
-    yield* Effect.addFinalizer(() => Effect.sync(() => unlisten.forEach((stop) => stop())));
+    // A Slack login card (a login whose page gives a code): shown only for such a login, its field handed to it.
+    hub.logins = {
+      pastes: (id) => {
+        const login = logins.get(id);
+        return login?.paste === true && login.endedAt === undefined;
+      },
+      answer: (id, code, by) => void logins.answer(id, code, by),
+    };
+    yield* Effect.addFinalizer(() => Effect.sync(() => {
+      unlisten.forEach((stop) => stop());
+      hub.logins = null;
+    }));
     // A login's screen, followed on the event streams (`login=`).
     events.follow({ loginScreen: (id, send) => logins.follow(id, send) });
     parts.routes(routes(() => logins));

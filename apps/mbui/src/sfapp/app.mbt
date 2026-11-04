@@ -85,6 +85,7 @@ fn reset() -> Unit {
   splash_owner.val = None
   first_shown.val = false
   first_waiting.val = false
+  @sfbase.first_page_waits.set(false)
   first_has.val = 0
   frame_bare.val = false
   window_shown.val = false
@@ -104,6 +105,7 @@ fn reset() -> Unit {
   decide_reset()
   @settings.reset()
   @sf.group_rows_reset()
+  @sf.page_rows_reset()
   @sfdesk.drive_rows_reset()
   found_marking.val = ("", [], 0.0)
   find_marking.val = []
@@ -226,15 +228,7 @@ fn new_chat_beside() -> Unit {
   if app.nav.top() is NewChat {
     return
   }
-  while app.nav.depth() > 1 {
-    if !app.nav.pop() {
-      break
-    }
-  }
-  if app.nav.top() != Home {
-    app.nav.replace(Home)
-  }
-  app.nav.push(NewChat)
+  nav_over_home([NewChat])
 }
 
 ///|
@@ -263,15 +257,7 @@ fn open_chat_beside(r : ChatRef) -> Unit {
       }
     }
   }
-  while app.nav.depth() > 1 {
-    if !app.nav.pop() {
-      break
-    }
-  }
-  if app.nav.top() != Home {
-    app.nav.replace(Home)
-  }
-  app.nav.push(Chat(r))
+  nav_over_home([Chat(r)])
 }
 
 ///|
@@ -413,6 +399,7 @@ fn view_in(c : @ui.Ctx, src : Source) -> Unit {
     first_shown.val = true
     first_waiting.val = false
   }
+  first_hide(first_waiting.val)
   // the first page built, waiting for what it shows (signed_in): not shown yet, the splash over the window's ground
   // (what the host clears to, the ground's colour) in its place, its words as while the workspaces are read
   if first_waiting.val {
@@ -705,18 +692,15 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         // most)
         app.nav.comes_when(fn() { page_ready(src, w, app.nav.top()) }, page_local_ms)
         narrow_lists(c)
-        let finger = stack_by_finger()
         let page_took = c.took_back(fn() {
           let pages = fn() {
             c.nav(app.nav, fn(page) { narrow_page(c, src, w, page) }, bg=t.p.bg) |> ignore
             // ⌘K's search over a page other than the lists (sfdesk's keys.mbt, sfpages' search.mbt), under the bars
             @sfpages.search_over(c, src, w, status_top())
           }
-          if finger {
-            pages()
-          } else {
-            c.selectable(color=@sf.alpha(t.p.blue, 0.28), pages)
-          }
+          // (words picked with a mouse's drag, or a finger's hold: @ui's selection; a chat's messages pick their own with
+          // a finger, pick.mbt)
+          c.selectable(color=@sf.alpha(t.p.blue, 0.28), pages)
         })
         if !page_took {
           narrow_root_back(c)
@@ -776,13 +760,16 @@ fn reading_tree(v : @view.View, src : Source) -> Unit {
 }
 
 ///|
-/// 正在读取你的 workspace, with what the core has been waiting on for a while under it (`status`).
+/// 正在读取你的 workspace, with what the core has been waiting on for a while under it, a line each (`status`'s
+/// lines: what is read and how far it has come, then what lasts).
 fn t_reading_workspaces(src : Source) -> String {
-  let status = (src.topic)("status", {})
-  match text(status.value, "text") {
-    "" => tr("android-misc.workspaces.loading")
-    s => tr("android-misc.workspaces.loading") + "\n" + s
-  }
+  let lines = items((src.topic)("status", {}).value, "lines").filter_map(fn(l) {
+    match l {
+      String(s) => Some(s)
+      _ => None
+    }
+  })
+  [tr("android-misc.workspaces.loading"), ..lines].join("\n")
 }
 
 ///|
@@ -811,10 +798,8 @@ fn page_view(
       match page {
         // a device waiting to be confirmed in the workspace's safe mode sees that instead of the chats (its
         // stations refuse it: Security.kt LockGate); its settings stay
-        Home =>
-          if lock_gate(c, src, w, bar=invited) {
-            home_page(c, src, w, all, invited)
-          }
+        // (made once: narrow_shell.mbt's Home)
+        Home => ()
         Chat(r) => {
           chat_page(c, src, w, r)
           new_chat_leaving(c, src, w, r)
@@ -1039,6 +1024,10 @@ fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
     justify=JCenter,
     fn() {
       @sf.drawable(c, if t.dark { "stillfail_mark_dark" } else { "stillfail_mark" }, 56.0) |> ignore
+      // (waiting, not failed: the bar going, how far not known)
+      if !now {
+        @sf.progress(c, "splash", None, w=Px(splash_bar_w))
+      }
       match label {
         Some(s) =>
           c.text(s, size=t.t.meta, color=t.p.muted, center=true, line=18.0)
@@ -1112,6 +1101,13 @@ fn splash_of_tree(v : @view.View, label : () -> String?, now : () -> Bool) -> Un
         |> ignore
       })
       |> ignore
+      m.show(fn() { !now() }, fn(p) {
+        p.box(fn(b) {
+          b.width(Is(Some(splash_bar_w))) |> ignore
+          @sf.progress_node(b, fn() { None }, fn() { @ui.tree_theme().line }, fn() { @sf.theme().p.accent }) |> ignore
+        })
+        |> ignore
+      })
       m.show(fn() { label() is Some(_) }, fn(w) {
         w
         .words(By(fn() { label().unwrap_or("") }))
@@ -1125,6 +1121,10 @@ fn splash_of_tree(v : @view.View, label : () -> String?, now : () -> Bool) -> Un
   })
   |> ignore
 }
+
+///|
+/// How wide the splash's bar is, under still.fail's mark while it waits.
+let splash_bar_w : Double = 120.0
 
 ///|
 /// How long the splash shows the ground alone before it says that it waits, and for what.
@@ -1251,6 +1251,14 @@ let first_shown : Ref[Bool] = Ref(false)
 ///|
 /// Whether this frame's first page is built and not shown yet (signed_in, view_in).
 let first_waiting : Ref[Bool] = Ref(false)
+
+///|
+/// The chats' lists made once drawn at none while `on` (sfbase's first_page_waits), told only as it changes.
+fn first_hide(on : Bool) -> Unit {
+  if @signals.untracked(fn() { @sfbase.first_page_waits.get() }) != on {
+    @sfbase.first_page_waits.set(on)
+  }
+}
 
 ///|
 /// Whether this frame drew the ground alone (splash), and whether the window held (host_setup) is shown (view_in).

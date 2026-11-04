@@ -88,7 +88,7 @@ export function LoginCard({ station, id, marked = false }: { station: string; id
   useEffect(() => { if (marked && login) box.current?.scrollIntoView({ block: "center" }); }, [marked, login === undefined]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!login) return null;
   const canLogin = logins?.canLogin ?? false;
-  // Ended: one quiet line, as an answered decision's (已在 studio 上登录 gh), failed in red; no card.
+  // Ended: one quiet line, as an answered decision's (已在 willow 上登录 gh), failed in red; no card.
   if (!login.active) {
     return (
       <div ref={box} className={login.state === "failed" ? css.endedFailed : css.ended} data-login-card="" data-login-ended={login.state}

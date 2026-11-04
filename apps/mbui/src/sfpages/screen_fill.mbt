@@ -112,23 +112,28 @@ fn ScreenSess::fill_stop(self : ScreenSess) -> Unit {
 }
 
 ///|
+/// Why 1Password did not give a login, in the person's words (a page's fill and a sign-in's card say it alike).
+fn op_trouble_words(t : @hostapi.OpTrouble) -> String {
+  match t {
+    NoTool => @sf.t("android-misc.screen.fill.noOp")
+    Unreached => @sf.t("android-misc.screen.fill.unreached")
+    Other(why) => @sf.t("android-misc.screen.fill.failed", args=[("why", why)])
+  }
+}
+
+///|
 /// The run under way ended: what it said taken (once).
 fn ScreenSess::fill_took(self : ScreenSess) -> Unit {
   guard self.fill_run is Some(r) else { return }
   guard r.done() is Some(d) else { return }
   r.end()
   self.fill_run = None
-  if d.code != 0 {
-    // (`op` missing, not signed in through the desktop app, or the person said no)
-    let why = d.err.trim(chars=" \n").to_owned()
-    self.fill_said(
-      if d.code == -1 || why.contains("not found") || why.contains("not currently signed in") || why.contains("integration") {
-        @sf.t("android-misc.screen.fill.noOp")
-      } else {
-        @sf.t("android-misc.screen.fill.failed", args=[("why", why)])
-      },
-    )
-    return
+  match d.trouble() {
+    Some(t) => {
+      self.fill_said(op_trouble_words(t))
+      return
+    }
+    None => ()
   }
   match self.fill_step.get() {
     "listing" => {

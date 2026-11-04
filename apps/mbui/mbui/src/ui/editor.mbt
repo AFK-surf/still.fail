@@ -690,6 +690,9 @@ fn EditorState::text_set(self : EditorState, s : String, a : Int, b : Int) -> Un
   let grown = n - self.display().length()
   if self.limit > 0 && grown >= self.limit && sa == sb && sa >= grown {
     self.pasted = Some(sub(s, sa - grown, sa))
+    // (the host's words now hold it, the field's do not: unless told the field's again, each word typed after it
+    // comes with it, the whole of it a paste again and nothing typed taken)
+    self.retell = true
     return
   }
   if ca >= 0 && cb > ca && cb <= n && sa == sb && sa >= ca && sa <= cb {
@@ -756,7 +759,31 @@ pub fn Ctx::editor(
   if self.down && (self.active == id || self.word_drag == id || self.handle_drag == id) {
     hand.pointer.get() |> ignore
   }
+  // (one Field, one editor: two editors over one Field would lay each other's lines and scroll over each other (by id:
+  // the same key in two scopes, a list's rows, is two editors); nor a Field a field of the window's tree holds still
+  // (ui's field). Given so, a fault (old_fault: the old view's boundary shows it), this one an editor of its own)
+  let taken = match field {
+    Some(f) if f.st.built_frame == self.build_no && f.st.built_id != id => {
+      old_fault(
+        "Ctx::editor: one Field given to two editors in one build (\{f.st.built_key} id \{f.st.built_id} and \{key} id \{id}): a Field is one editor's",
+      )
+      true
+    }
+    Some(f) if f.st.tree_node is Some(n) && tree_fields.contains(n) => {
+      old_fault("Ctx::editor: a Field given to \{key} that a field of the window's tree holds: a Field is one editor's")
+      true
+    }
+    _ => false
+  }
+  let given = field
+  let field = if taken { None } else { field }
   let st = match (self.editors.get(id), field) {
+    // given a Field another holds: one of its own, never the Field's
+    (Some(s), None) if taken && given is Some(f) && physical_equal(f.st, s) => {
+      let s = EditorState::fresh("", self.clock)
+      self.editors[id] = s
+      s
+    }
     // what the app keeps (Field): this editor shows it from now on
     (Some(s), Some(f)) if physical_equal(s, f.st) => s
     (had, Some(f)) => {
@@ -785,19 +812,6 @@ pub fn Ctx::editor(
   st.look = look
   // (what the look makes of the words worked out again, once, for this build: it may say other colours now)
   st.looked = None
-  // one Field, one editor: two editors over one Field would lay each other's lines and scroll over each other
-  // (by id: the same key in two scopes, a list's rows, is two editors)
-  if field is Some(_) && st.built_frame == self.build_no && st.built_id != id {
-    abort(
-      "Ctx::editor: one Field given to two editors in one build (\{st.built_key} id \{st.built_id} and \{key} id \{id}): a Field is one editor's",
-    )
-  }
-  // (nor a Field a field of the window's tree holds still: ui's field)
-  match st.tree_node {
-    Some(n) if field is Some(_) && tree_fields.contains(n) =>
-      abort("Ctx::editor: a Field given to \{key} that a field of the window's tree holds: a Field is one editor's")
-    _ => ()
-  }
   // (the focus asked for it before anything held it (Ctx::focus_field): given now this editor holds it, where the old
   // view it is being built in takes input (that one: its node not made yet, nothing found of it by its id))
   if field is Some(_) && st.focus_asked {
@@ -1598,10 +1612,11 @@ fn Ctx::sync_ime(self : Ctx) -> Unit {
     }
   }
   if catching {
-    let sig = "catch \{focus}"
+    let (x, y, h) = self.dev.catchers.get(focus).unwrap().place.unwrap_or((0.0, self.height, 1.0))
+    let sig = "catch \{focus} \{x} \{y} \{h}"
     if sig != self.ime_sig {
       self.ime_sig = sig
-      h_set_ime(true, 0.0, self.height, 1.0, 1.0, "", 0, 0)
+      h_set_ime(true, x, y, 1.0, h, "", 0, 0)
     }
     return
   }
@@ -1622,8 +1637,9 @@ fn Ctx::sync_ime(self : Ctx) -> Unit {
           let (x, y, w, h) = st.drawn_box(x, y, 2.0, tl.line_h)
           let (a, b) = st.sel()
           let sig = "\{x.to_int()},\{y.to_int()},\{w},\{h},\{a},\{b},\{st.text.length()},\{stable_hash(st.text)}"
-          if sig != self.ime_sig {
+          if sig != self.ime_sig || st.retell {
             self.ime_sig = sig
+            st.retell = false
             h_set_ime(true, x, y, w, h, st.text, a, b)
           }
         }
@@ -1676,6 +1692,7 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     scroll_x: 0.0,
     followed: (-1, -1, -1),
     pasted: None,
+    retell: false,
     limit: 0,
     enter_sends: true,
     leaves: [],
@@ -2234,7 +2251,8 @@ fn Ctx::sync_text_menu(self : Ctx) -> Unit {
         }
         None => None
       }
-    _ => None
+    // (words a finger picked with the pointer, let go of: finger_select.mbt)
+    _ => finger_menu()
   }
   let sig = match want {
     Some((x, y, w, h, can)) => "\{x.to_int()},\{y.to_int()},\{w.to_int()},\{h.to_int()},\{can}"

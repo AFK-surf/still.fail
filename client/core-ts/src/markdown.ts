@@ -38,7 +38,7 @@ export type MdStore = { has(key: string): boolean; get(key: string): string | nu
 
 /// How the trees kept are read: another number whenever what `parse` makes of a text changes (a test holds it to the
 /// trees of a set of texts: markdown.test.ts). A drawable older tree can be shown while it is read again in the background.
-export const MD_READING = 7;
+export const MD_READING = 9;
 
 /// Earlier readings whose tree format this core can still draw while they are read again. Raise this independently of
 /// MD_READING if a future change makes an old tree impossible to draw; a change in interpretation alone need not.
@@ -67,9 +67,8 @@ export function oldMdKey(store: MdStore, key: string, from = MD_DRAWABLE_FROM): 
 }
 
 /// The tree of `text`: read once while it is kept here (the latest texts, up to `KEPT_CHARS` of them), and, given
-/// `store`, once on the device: read from it where it was kept, else kept in it. In Hermes (the phones' engine) a
-/// chat's page of agents' Markdown took ~0.3 s to read on a Mac Studio's core, the most of opening the chat
-/// (bench/chat-open.ts): a chat opened the first time since the app started read it all again.
+/// `store`, once on the device: read from it where it was kept, else kept in it. Reading a chat's Markdown can dominate
+/// opening it (bench/chat-open.ts), so a chat opened after an app restart need not read it all again.
 export function markdown(text: string, store?: MdStore): Md {
   const hit = kept.get(text);
   if (hit) {

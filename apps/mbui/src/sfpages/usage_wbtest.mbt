@@ -246,7 +246,7 @@ test "用量, at each width and with either hand: the cost and its change, the d
     assert_true(t.find("$118") is Some(_) && t.find("↑18%") is Some(_) && t.find("比前 7 天") is Some(_), msg=at)
     assert_true(t.find("Ana") is Some(_) && t.find("按人") is Some(_) && t.find("按模型") is Some(_), msg=at)
     // the chats that cost the most, each with who and which model
-    assert_true(t.find("整理发布清单") is Some(_) && t.find("林 · Opus 5.5 · Studio") is Some(_), msg=at)
+    assert_true(t.find("整理发布清单") is Some(_) && t.find("林 · Opus 5.5 · Willow") is Some(_), msg=at)
     // not here: the allowances (the profiles' page), the calls and tokens, the accounts
     assert_true(t.find("lin@example.com") is None && t.find("1,416 次") is None && t.find("按账号") is None, msg=at)
     // split by model instead: each model named
