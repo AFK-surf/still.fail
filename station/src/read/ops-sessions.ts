@@ -8,8 +8,8 @@ import { session, sessionPlace, sessions, summary, thread, threads, timeline, tr
 const latest = (v: unknown): number | null => (typeof v === "string" && /^\d{1,6}$/.test(v) ? Number(v) : null);
 
 export const sessionOps: Record<string, ReadOp> = {
-  /// Every thread as lists have it, for no viewer: chat_list's (sessions/others.ts).
-  threadList: (s) => listThreads(s, "", null, null),
+  /// Every thread as chat_list has it; it does not use a viewer's unread count (sessions/others.ts).
+  threadList: (s) => listThreads(s, "", null, null, "none"),
   /// A thread's latest `limit` messages, oldest first: the archive review's (sessions/review.ts).
   latestMessages: (s, a) => messagesBefore(s, a.thread, null, a.limit),
   /// One session as lists and events have it (views.rs `summary`).

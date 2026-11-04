@@ -65,11 +65,16 @@ test("chat_list without a reader does not count messages it will not show", asyn
 test("a list that asks for no unread counts can still provide people and conversation order", () => {
   const f = fixture();
   try {
+    const other = f.store.openThread("slack:T", "C", "1.0", null, null).id;
+    f.store.joinThread(other, "agent", "ember");
+    f.db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','alice','hi',6000)").run(other);
     Object.defineProperty(f.store, "db", { configurable: true, value: f.instrumented });
     const rows = f.store.listThreads("", null, null, "none");
-    assert.equal(rows[0]?.thread.id, f.thread);
-    assert.equal(rows[0]?.lastMessage?.text, "findable");
+    assert.deepEqual(rows.map((row) => row.thread.id), [other, f.thread]);
+    assert.deepEqual(rows[0]?.people, ["slack:ember:alice"]);
+    assert.equal(rows[1]?.lastMessage?.text, "findable");
     assert.equal(f.visited(), 0, `the list visited ${f.visited()} unread messages`);
+    assert.equal(f.store.listThreads("", null, f.thread)[0]?.unread, 5_000, "the normal store list keeps its exact count");
   } finally {
     Object.defineProperty(f.store, "db", { configurable: true, value: f.db });
     f.store.close();
