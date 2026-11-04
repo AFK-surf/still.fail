@@ -133,7 +133,7 @@ CLOUDS = {
         "zones": {"still.fail": "monoid.build", "youdid.wtf": "monoid.zone"},
         "dropped": ["3720.org"],
         # The API's own: Cloudflare Access in front of the console (src/admin.ts), its application "monoid admin" on
-        # admin.monoid.build letting in cue.surf's and comma.surf's emails.
+        # admin.monoid.build letting in the AFK-surf GitHub organization's members.
         "api_vars": {"ACCESS_TEAM_DOMAIN": "https://afksurf.cloudflareaccess.com", "ACCESS_AUD": "53ffdc9eaf8c6827ad4081e898f4019d440e0de828643b995759a222c35f86e5"},
     },
 }
