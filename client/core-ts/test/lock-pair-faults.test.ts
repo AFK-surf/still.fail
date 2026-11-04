@@ -15,7 +15,7 @@ import { t } from "../src/i18n.ts";
 import { PAIR_TRIES } from "../src/pair.ts";
 import { pairs } from "../src/views/lock.ts";
 import { type Duplex, keep, PAIR_GRACE_MS, PAIR_WAIT_MS, serveTrusted, trying } from "../src/views/pair.ts";
-import { ME, PHONE, genesis, grant, pipe, rig } from "./lock-rig.ts";
+import { ME, PHONE, elsewhere, genesis, grant, pipe, rig } from "./lock-rig.ts";
 
 /// A seeded random (mulberry32): the same seed, the same draws.
 function rng(seed: number) {
@@ -208,6 +208,50 @@ test("two trusted devices show a code, the line to the one whose code is typed g
   const words = t("core-misc.lock.pairWrongOrGone", { n: PAIR_TRIES - 1 });
   assert.deepEqual([said?.code, said?.message], ["pair_wrong", words]);
   assert.deepEqual([pairs.mine(inner, "ws")?.state, pairs.mine(inner, "ws")?.error], ["wrong", words], "and its page says it");
+});
+
+/// A trusted device (this core) met by the new device over `l`, its hello answered; what the new device keeps of it.
+async function metOver(r: Awaited<ReturnType<typeof rig>>, g: ReturnType<typeof grant>, l: ReturnType<typeof line>, workspaces: string[]) {
+  const inner = r.core.inner;
+  const prompts = await r.watch({ topic: "lockPrompts" });
+  const [trusted, phone] = l.ends;
+  inner.runner.fork(Effect.ignore(serveTrusted(inner, PHONE, ME, trusted)));
+  const answer: unknown[] = [];
+  inner.runner.fork(Effect.ignore(Effect.andThen(phone.send({ t: "hello", v: 1, workspaces: workspaces.map((ws) => ({ ws, credential: g.credential(ws, PHONE, "s2") })), kind: "app", label: "Pixel 8", sign_key: "ed25519:" + "11".repeat(32) }), Effect.map(phone.next(), (m) => answer.push(m)))));
+  for (let i = 0; i < 100 && answer.length === 0; i++) await r.host.time.pass(100);
+  const code = (await prompts()).pairing[0].code as string;
+  const y = trying(inner, workspaces);
+  keep(inner, y, ME, phone, (answer[0] as { workspaces: string[] }).workspaces);
+  inner.mesh = () => Effect.succeed({ deviceId: () => PHONE } as never);
+  return { code, prompts };
+}
+
+test("signed in, its answer lost on the way back (the line gone as the trusted device answered): done, not said to have failed", async () => {
+  const g = grant();
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, ME) }));
+  await r.watch({ topic: "lock", workspace: "ws" });
+  // hello, code, pake, pake, confirm: the line goes once the confirm is there, before the approval comes back.
+  const l = line((e) => void r.core.inner.runner.fork(e), [0], 5);
+  const { code } = await metOver(r, g, l, ["ws"]);
+  const said = await r.ask("lock.pairCode", { workspace: "ws", code }).then(() => "approved", (e) => (e as { code: string }).code);
+  assert.deepEqual(r.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "device", PHONE]], "signed in");
+  assert.ok(l.cut(), "its answer lost");
+  assert.equal(said, "approved");
+  assert.equal(pairs.mine(r.core.inner, "ws")?.state, "done");
+});
+
+test("signed in in one workspace it waits in and not another: the other's page says so, not that nothing came of it", async () => {
+  const g = grant();
+  // The trusted device signs in ws only (w2's lock is someone else's, not this device's to sign).
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, ME), w2: genesis("w2", elsewhere(), false) }));
+  await r.watch({ topic: "lock", workspace: "ws" });
+  await r.watch({ topic: "lock", workspace: "w2" });
+  const l = line((e) => void r.core.inner.runner.fork(e), [0], null);
+  const { code } = await metOver(r, g, l, ["ws", "w2"]);
+  await r.ask("lock.pairCode", { workspace: "ws", code });
+  assert.deepEqual(r.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "device", PHONE]]);
+  assert.equal(pairs.mine(r.core.inner, "ws")?.state, "done");
+  assert.deepEqual(pairs.mine(r.core.inner, "w2"), { state: "failed", devices: 0, error: t("core-misc.lock.pairElsewhere", { names: "W" }) });
 });
 
 const RUNS = Number(process.env.PAIR_FAULT_RUNS ?? 40);

@@ -279,7 +279,8 @@ function hide(inner: Inner, device: string): void {
 export type Met = { id: string; d: Duplex; workspaces: string[]; until?: number };
 /// This device's try: how far it got, the trusted devices showing a code.
 /// `lost`: a trusted device that showed a code ended since, others still showing theirs (the code typed may be its).
-export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; workspaces: string[]; met: Map<string, Met>; run: number };
+/// `approvedIn`, once `done`: the workspaces it was signed in to (of those it waited in, the others still wait).
+export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number };
 
 const tryings = new WeakMap<Inner, Trying>();
 let runs = 0;
@@ -287,6 +288,12 @@ let runs = 0;
 function mine(inner: Inner, ws: string): J | null {
   const y = tryings.get(inner);
   if (!y || !y.workspaces.includes(ws)) return null;
+  // Signed in elsewhere, not here: no trusted device that answered approves it in this one (2026-11-04: a web page
+  // waiting in three workspaces, approved in two, showed this one's page as it was, its code typed, as though nothing
+  // had come of it).
+  if (y.state === "done" && y.approvedIn !== undefined && !y.approvedIn.includes(ws)) {
+    return { state: "failed", devices: 0, error: t("core-misc.lock.pairElsewhere", { names: y.approvedIn.map((w) => nameOf(inner, w)).join(t("core-misc.lock.listSep")) }) };
+  }
   const until = Math.max(0, ...[...y.met.values()].map((m) => m.until ?? 0));
   const typing = y.state === "code" || y.state === "wrong";
   return {
@@ -458,10 +465,23 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
         y.met.delete(m.id);
       }
     }
+    // Not approved as far as this device heard, a trusted device having ended as the code was proved to it: it may have
+    // signed it in all the same, its answer lost on the way back (its line gone, its app put away as it answered;
+    // 2026-11-04 a phone signed a web page in and the page said the code was wrong). The lock as the cloud keeps it says.
+    if (approved === null && ends.length > 0) {
+      const now = Math.floor(inner.host.nowMs() / 1000);
+      const inNow: string[] = [];
+      for (const ws of y.workspaces) {
+        yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "pairing workspace read" });
+        if (live(fold(held(inner, ws)?.entries ?? []).devices.get(base), now) !== undefined) inNow.push(ws);
+      }
+      if (inNow.length > 0) approved = { t: "approved", workspaces: inNow, failed: [] };
+    }
     if (approved !== null) {
       drop(y);
       y.state = "done";
-      for (const ws of arr(get(approved, "workspaces"))) if (typeof ws === "string") yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "pairing workspace read" });
+      y.approvedIn = arr(get(approved, "workspaces")).filter((w): w is string => typeof w === "string");
+      for (const ws of y.approvedIn) yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "pairing workspace read" });
     } else if (y.met.size > 0) {
       y.state = "wrong";
       y.left = left;

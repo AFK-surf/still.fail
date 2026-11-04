@@ -2836,7 +2836,7 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
 /// The lock as a device not confirmed in it has it (MBUI_FIXTURE=lock-waiting, lock-finding, lock-code, lock-wrong,
 /// lock-wrong-gone, lock-checking, lock-none, lock-failed, lock-nocode, lock-security, each also -dark: its waiting page
 /// asking, finding, the code being typed, typed wrong (or the device showing it gone), being checked, no device found,
-/// the pairing failed, this device without
+/// the pairing failed (lock-elsewhere: approved in another workspace, not this one), this device without
 /// its code yet; its security page): this device waiting, not a signer. lock-upgrade: in the lock but not signing (its key lost), the code being typed on its
 /// security page.
 fn waiting_lock(mode : String) -> Json {
@@ -2851,6 +2851,8 @@ fn waiting_lock(mode : String) -> Json {
     "lock-checking" => obj([("state", str("checking")), ("left", Json::number(3.0))])
     "lock-none" => obj([("state", str("none"))])
     "lock-failed" => obj([("state", str("failed")), ("error", str("配对超时"))])
+    "lock-elsewhere" =>
+      obj([("state", str("failed")), ("devices", Json::number(0.0)), ("error", str("此设备已在「日常」获批，在这里还需要此 workspace 的管理员或你在这里的受信任设备批准"))])
     _ => Json::null()
   }
   // in the lock, its key since lost (a phone moved to a new one): made one that signs on its security page
