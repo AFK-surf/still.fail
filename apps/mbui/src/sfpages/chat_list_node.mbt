@@ -149,9 +149,13 @@ pub fn chat_list_node(
     row.box(body) |> ignore
     row.pick(fn() { m().elsewhere.length() }, fn(sent, n) {
       for i in 0..<n {
-        sent.box(fn(b) {
-          b.padding(By(fn() { (0.0, gap_of(false), 0.0, 0.0) })) |> ignore
-          sent_elsewhere_node(b, src, here, fn() { m().elsewhere.get(i).unwrap_or_else(fn() { m().elsewhere[0] }) })
+        // (the gap over it its own box's: what it draws in its margin (its picture) placed from its top, as a row's)
+        sent.box(fn(g) {
+          g.padding(By(fn() { (0.0, gap_of(false), 0.0, 0.0) })) |> ignore
+          g.box(fn(b) {
+            sent_elsewhere_node(b, src, here, fn() { m().elsewhere.get(i).unwrap_or_else(fn() { m().elsewhere[0] }) })
+          })
+          |> ignore
         })
         |> ignore
       }
