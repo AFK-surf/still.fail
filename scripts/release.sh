@@ -221,11 +221,18 @@ for platform in $platforms; do
       # (monoid's: build.monoid.android, .beta, the same key)
       [ "$product" = stillfail ] || variant=$product${beta:+-beta}
       mbui_cache=${MBUI_CACHE:-$HOME/stillfail-ci/mbui-beta}
-      MBUI_CACHE=$mbui_cache bash "$root/apps/mbui/scripts/beta.sh" tools
-      node "$root/scripts/native.ts" fetch engine android-arm64 > /dev/null
-      node "$root/scripts/native.ts" fetch shell android-arm64 > /dev/null
-      MBUI_CACHE=$mbui_cache MBUI_TOOLS=$mbui_cache/tools MBUI_VARIANT=$variant RELEASE_DIR="$out/mbui" \
-        bash "$root/apps/mbui/scripts/beta.sh" build
+      # (one build in the cache at a time: still.fail's and monoid's Android apps are built on the same machine, often
+      # at once, and wrote each other's C over in its work/out (2026-11-04, "mbc: cannot write"); lockf's lock goes with
+      # the build that holds it, however it ends)
+      mkdir -p "$mbui_cache"
+      lockf -k "$mbui_cache/.build.lock" env MBUI_CACHE="$mbui_cache" MBUI_VARIANT="$variant" RELEASE_DIR="$out/mbui" \
+        root="$root" sh -c '
+          set -e
+          bash "$root/apps/mbui/scripts/beta.sh" tools
+          node "$root/scripts/native.ts" fetch engine android-arm64 > /dev/null
+          node "$root/scripts/native.ts" fetch shell android-arm64 > /dev/null
+          MBUI_TOOLS=$MBUI_CACHE/tools bash "$root/apps/mbui/scripts/beta.sh" build
+        '
       apk="$out/mbui/android/app-$variant.apk"
       # its signature verified before anything is uploaded: one that does not verify is not released (it was, printed
       # and passed over, until 2026-10-20)
