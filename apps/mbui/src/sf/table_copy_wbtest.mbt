@@ -178,3 +178,41 @@ test "a table's copy key with a mouse: its picture copied whole, the key not in 
   t.run_for(copied_ms)
   let _ = table_key_of(t)
 }
+
+///|
+test "two messages' tables: the picture copied is of the table whose key was pressed" {
+  // (each message's first table: the same key in its own message)
+  let long = "a long cell of words that would wrap to a word or two if squeezed into the message"
+  let other = "| 一 | 二 | 三 |\n|---|---|---|\n| one \{long} | two \{long} | three \{long} |\n"
+  presenters_reset()
+  let t = @ui.Tester::new(
+    fn(c) {
+      begin(c) |> ignore
+      c.with_theme(ui_theme(), fn() {
+        c.column(w=Fill(1.0), pad=16.0, fn() {
+          markdown(c, copy_table, key="message/1") |> ignore
+          markdown(c, other, key="message/2") |> ignore
+        })
+        |> ignore
+        presented(c)
+      })
+    },
+    w=1280.0,
+    h=800.0,
+    platform=0,
+  )
+  t.draw()
+  t.draw()
+  let (lx, ly, _, _) = t.rect_of("缓存读").unwrap()
+  t.move(lx, ly)
+  t.run_for(dur_ms)
+  t.click(Button, label="web-main.prose.copyTable")
+  t.run_for(@kit.presence_in_ms)
+  t.tap_text("desktop.contextMenu.copyImage")
+  t.frame()
+  t.frame()
+  let shots = t.shots()
+  assert_eq(shots.length(), 1)
+  assert_true(shots[0].iter().any(fn(w) { w.contains("缓存读") }), msg="\{shots[0]}")
+  assert_false(shots[0].iter().any(fn(w) { w.contains("three a long") }), msg="\{shots[0]}")
+}
