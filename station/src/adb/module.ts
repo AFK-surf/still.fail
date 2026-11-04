@@ -7,7 +7,8 @@ import { titleOf } from "../read/views.ts";
 import { Agents } from "../sessions/agents.ts";
 import { wall } from "../ops/fibers.ts";
 import { AndroidScreens } from "../screens/android.ts";
-import { ControlPlane, Events, Parts, ScreenRegistry, Store } from "../services.ts";
+import { ControlPlane, Events, Parts, Paths, Previous, ScreenRegistry, Store } from "../services.ts";
+import { join } from "node:path";
 import { type PhoneRequest, PhoneGrants, type Scope } from "./grants.ts";
 import { GrantServers } from "./servers.ts";
 import { adbTools, phoneTools, reached } from "./tool.ts";
@@ -31,7 +32,10 @@ export const AdbLive = Layer.effectDiscard(
       }),
       (stop) => Effect.sync(stop),
     );
-    const servers = yield* Effect.acquireRelease(Effect.sync(() => new GrantServers(adbPath)), (s) => Effect.promise(() => s.close()));
+    const { data } = yield* Paths;
+    const previous = yield* Previous;
+    const servers = yield* Effect.acquireRelease(Effect.sync(() => new GrantServers(adbPath, join(data, "run", "adb-servers.json"))), (s) => Effect.promise(() => s.close()));
+    void servers.reap(previous.gone).catch(() => undefined);
     // Chats' grants of people's phones (docs/adb-share.md): told to the owner's devices, their phones connected anew in
     // the grants' adb servers, a grant's server stopped as it ends.
     let shares: Shares | null = null;
