@@ -260,22 +260,19 @@ pub fn chat_list_node(
   v.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
   v.box(fn(col) {
     col.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
-    col.scrolls_window(
+    col.scrolls_anchored(
       scroll,
       keys,
       est=chat_row_est,
-      from_end=true,
       follows~,
       shown~,
       put~,
+      rooms=sized.room_now,
+      // The flying copy needs its real landing before the glide brings the row into sight.
+      kept_keys=fn() { @sfbase.flight_of(draft).map(fn(f) { [f.key] }).unwrap_or([]) },
       // (new to it: said while it shows, an agent starting, sent from here; not what is caught up on, at once)
       // (the bar over its top: what comes taller than what shows is read from its top under it)
       cover=top,
-      room=sized.room,
-      moving=sized.moving,
-      // The flying copy needs its real landing before the glide brings the row into sight.
-      kept=fn(k) { @sfbase.flight_takes(draft, k) },
-      kept_keys=fn() { @sfbase.flight_of(draft).map(fn(f) { [f.key] }).unwrap_or([]) },
       fresh=fn(k) {
         match row_of(k) {
           Some((Said(m), _)) => m.said

@@ -78,53 +78,60 @@ fn link_peeks_node(
   // (in the chat's flight layer, in a place of its own there let go with the words; nothing of it in the words: what
   // is laid out in them theirs alone)
   guard @signals.untracked(fn() { chat_flight_layer(here_ref(here())) }) is Some(l) else { return }
-  // (made again for another link, closed first: on_link's)
-  l.box(fn(place) {
-    place.over(Is(true)) |> ignore
-    place.show(fn() { open.get() is Some(_) }, fn(anchor) {
-    guard @signals.untracked(fn() { open.get() }) is Some((href, words, (px, py, _, ph))) else { return }
-    let scope = "link-peek-node/" + href
-    l.box(fn(card) {
-      card.owns(fn() {
-        card_on.val = None
-        @sfbase.let_go(src, scope)
-      })
-      |> ignore
-      // (under the piece of line it rests on, at its start; kept in the chat's room)
-      card
-      .offset(By(fn() {
-        match l.laid_window_told() {
-          Some((lx, ly, lw, _)) => {
-            let cw = card.laid_size_told().map(fn(size) { size.0 }).unwrap_or(0.0)
-            (dmax(0.0, dmin(px - lx, lw - cw - 8.0)), py + ph + hover_offset - ly)
+  // (its place there made as a card first opens, from the pointer's cause: nothing made in another layer as the
+  // words are made, which a list makes as it lays its rows out)
+  let placed = Ref(false)
+  w.reacts(fn() { open.get() is Some(_) }, fn(is_open) {
+    guard is_open && !placed.val else { return }
+    placed.val = true
+    // (made again for another link, closed first: on_link's)
+    l.box(fn(place) {
+      place.over(Is(true)) |> ignore
+      place.show(fn() { open.get() is Some(_) }, fn(anchor) {
+      guard @signals.untracked(fn() { open.get() }) is Some((href, words, (px, py, _, ph))) else { return }
+      let scope = "link-peek-node/" + href
+      l.box(fn(card) {
+        card.owns(fn() {
+          card_on.val = None
+          @sfbase.let_go(src, scope)
+        })
+        |> ignore
+        // (under the piece of line it rests on, at its start; kept in the chat's room)
+        card
+        .offset(By(fn() {
+          match l.laid_window_told() {
+            Some((lx, ly, lw, _)) => {
+              let cw = card.laid_size_told().map(fn(size) { size.0 }).unwrap_or(0.0)
+              (dmax(0.0, dmin(px - lx, lw - cw - 8.0)), py + ph + hover_offset - ly)
+            }
+            None => (0.0, 0.0)
           }
-          None => (0.0, 0.0)
-        }
-      }))
-      |> ignore
-      let tile = peek_tile_of(href, @signals.untracked(link_to))
-      @ui.old(card, fn(c) {
-        let h = here()
-        c.box(style=if tile { hover_tile } else { hover_card }, fn() {
-          @sf.small_panel(c, w=Fill(1.0), fn() {
-            c.box(style=hover_inner, fn() {
-              peek_body(c, src, h.station, scope, href, words, agent(), chats(), link_to())
+        }))
+        |> ignore
+        let tile = peek_tile_of(href, @signals.untracked(link_to))
+        @ui.old(card, fn(c) {
+          let h = here()
+          c.box(style=if tile { hover_tile } else { hover_card }, fn() {
+            @sf.small_panel(c, w=Fill(1.0), fn() {
+              c.box(style=hover_inner, fn() {
+                peek_body(c, src, h.station, scope, href, words, agent(), chats(), link_to())
+              })
+              |> ignore
             })
             |> ignore
           })
           |> ignore
-        })
-        |> ignore
-      }, natural=true, fits=if tile { link_peek_tile_most } else { link_peek_card_w })
-      // (as wide as the old frame lays what it holds out: it takes the pointer there, its own lighting by it)
-      |> fn(island) { card_on.val = Some(island) }
+        }, natural=true, fits=if tile { link_peek_tile_most } else { link_peek_card_w })
+        // (as wide as the old frame lays what it holds out: it takes the pointer there, its own lighting by it)
+        |> fn(island) { card_on.val = Some(island) }
+      })
+      .lives_with(anchor)
+      |> ignore
+      })
     })
-    .lives_with(anchor)
+    .lives_with(w)
     |> ignore
-    })
   })
-  .lives_with(w)
-  |> ignore
 }
 
 ///|
