@@ -1,0 +1,77 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "stillfail/sfvault"
+
+import {
+  "mbui/signals",
+  "mbui/ui",
+  "mbui/view",
+  "moonbitlang/core/json",
+  "stillfail/sfbase",
+}
+
+// Values
+pub fn app(@view.View, @sfbase.Source) -> Unit
+
+pub fn doing(String) -> Bool
+
+pub fn row_name(@json.Json) -> String
+
+// Errors
+
+// Types and methods
+#derive(Eq)
+pub(all) enum Pick {
+  Now
+  All
+  OfKind(String)
+  InVault(String)
+}
+
+#derive(Eq)
+pub(all) struct Row {
+  vault : String
+  row : @json.Json
+}
+
+pub(all) struct State {
+  src : @sfbase.Source
+  pick : @signals.Signal[Pick]
+  chosen : @signals.Signal[(String, String)]
+  opened : @signals.Signal[Bool]
+  editing : @signals.Signal[(String, String)?]
+  plain : @signals.Signal[(String, @json.Json)?]
+  clear : @signals.Signal[Array[String]]
+  deleting : @signals.Signal[Bool]
+  words : @signals.Signal[String]
+  search : @ui.Field
+}
+pub fn State::approve(Self, String, timeout? : (String, Int32)) -> Unit
+pub fn State::ask_keys(Self) -> Unit
+pub fn State::chosen_row(Self) -> @json.Json?
+pub fn State::copy(Self, String, String, Bool) -> Unit
+pub fn State::count(Self, Pick) -> Int32
+pub fn State::delete(Self) -> Unit
+pub fn State::deny(Self, String) -> Unit
+pub fn State::grants(Self) -> Array[@json.Json]
+pub fn State::item_uses(Self, String, String) -> Array[@json.Json]
+pub fn State::listed(Self) -> Array[Row]
+pub fn State::lock(Self) -> Unit
+pub fn State::new(@sfbase.Source) -> Self
+pub fn State::open(Self, then? : () -> Unit) -> Unit
+pub fn State::plain_library(Self) -> Bool
+pub fn State::recent(Self, most? : Int32) -> Array[@json.Json]
+pub fn State::requests(Self) -> Array[@json.Json]
+pub fn State::revoke(Self, String) -> Unit
+pub fn State::rows(Self) -> Array[Row]
+pub fn State::set_up(Self) -> Unit
+pub fn State::show(Self, String, String) -> Unit
+pub fn State::toggle_clear(Self, String) -> Unit
+pub fn State::unlock(Self, String) -> Unit
+pub fn State::vault(Self, String) -> @json.Json?
+pub fn State::vault_rows(Self) -> Array[@json.Json]
+pub fn State::vaults(Self) -> @json.Json?
+pub fn State::ws(Self) -> String
+
+// Type aliases
+
+// Traits

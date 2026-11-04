@@ -267,6 +267,7 @@
   "core-misc.vault.scopeTooLong": "这个密钥不给这么长的授权",
   "core-misc.vault.untrusted": "此条目并非由库成员签名写入",
   "core-misc.vault.noRequest": "此申请已处理",
+  "core-misc.vault.noGrant": "这条授权已经结束",
   "core-misc.vault.reason.open": "查看「{name}」",
   "core-misc.vault.reason.unlock": "解锁密钥库「{name}」",
   "core-misc.vault.reason.approve": "批准 agent 使用「{name}」",

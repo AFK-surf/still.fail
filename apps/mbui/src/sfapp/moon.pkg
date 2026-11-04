@@ -21,6 +21,7 @@ import {
   "stillfail/sfbase",
   "stillfail/sfdesk",
   "stillfail/sfpages",
+  "stillfail/sfvault",
   "stillfail/sffixture",
 }
 

@@ -53,6 +53,11 @@ priv struct SettingsFixture {
   mut vault_off : Bool
   /// secrets of lin's still in plain text from before security mode (settings-vault-plain), until encrypted
   mut plain_left : Int
+  /// the vault client's (fx_vault_app): lin's vault unlocked here (`vault.open`), the requests decided and the grants
+  /// taken back since the run started
+  mut vault_unlocked : Bool
+  vault_decided : Array[String]
+  vault_revoked : Array[String]
   /// the skills shared (true) or no longer (false) since the run started (`skill.share`), by name
   skills_shared : Map[String, Bool]
   /// the quota's resets used on ChatGPT 团队 (`profile.resetQuota`)
@@ -123,6 +128,9 @@ let fx : SettingsFixture = {
   trouble: "",
   vault_off: false,
   plain_left: 0,
+  vault_unlocked: false,
+  vault_decided: [],
+  vault_revoked: [],
   skills_shared: {},
   resets_used: 0,
   reset_expiry: false,
@@ -229,6 +237,10 @@ fn fixture_reset() -> Unit {
   fx.trouble = ""
   fx.vault_off = false
   fx.plain_left = 0
+  fx.vault_unlocked = false
+  fx.vault_decided.clear()
+  fx.vault_revoked.clear()
+  fx_vault_app.val = false
   fx.pairing = false
   fx.protecting = false
   fx.pair_ended = ""
@@ -2140,6 +2152,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("sections", fx_sections()),
         ]),
       )
+    "vaultUses" if fx_vault_app.val && text(Some(Json::object(params)), "item") == "" => Some(obj([("item", str("")), ("uses", fx_vault_uses())]))
     "vaultUses" =>
       Some(
         obj([
@@ -2385,46 +2398,27 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                 ("stationName", str("Willow")),
                 ("items", Json::number(3.0)),
                 ("devices", Json::number(2.0)),
-                ("open", Json::boolean(false)),
+                ("open", Json::boolean(fx.vault_unlocked)),
                 ("keyed", Json::boolean(true)),
                 ("missing", Json::number(0.0)),
                 ("recoverable", Json::boolean(true)),
               ]),
             ],
           ),
-          (
-            "requests",
-            [
-              obj([
-                ("id", str("r1")),
-                ("vault", str("v1")),
-                ("vaultName", str("林的库")),
-                ("item", str("it1")),
-                ("itemName", str("GitHub token")),
-                ("session", str("s-c1")),
-                ("station", str("st1")),
-                ("chat", str("c1")),
-                ("mode", str("proxy")),
-                ("reason", str("要把发布清单推到仓库")),
-                ("command", str("git push origin main")),
-                ("hosts", ["api.github.com"]),
-                ("howText", str("代理 · 限 api.github.com")),
-                ("at", Json::number(0.0)),
-              ]),
-            ],
-          ),
+          ("requests", fx_vault_requests()),
           ("refused", []),
           // (the core's words of it: its one request waits)
           ("statusText", str("1 个待批准")),
           ("statusBad", Json::boolean(true)),
         ]),
       )
+    "vaultHeld" => Some(obj([("grants", fx_vault_grants())]))
     "vaultItems" =>
       Some(
         fx_moved(obj([
           ("vault", str("v1")),
           ("name", str("林的库")),
-          ("open", Json::boolean(false)),
+          ("open", Json::boolean(fx.vault_unlocked)),
           (
             "items",
             [
@@ -2656,6 +2650,27 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
     }
     // this device asking for the keys it lacks: its other devices told
     "vault.ask" => Some(Ok(obj([("asked", Json::number(1.0))])))
+    // the vault client's: an item opened (the vault unlocked), a request decided, a grant taken back, locked again
+    "vault.open" if fx_vault_app.val => {
+      fx.vault_unlocked = true
+      fx_changed()
+      Some(Ok(fx_vault_opened(text(Some(params), "item"))))
+    }
+    "vault.approve" | "vault.deny" if fx_vault_app.val => {
+      fx.vault_decided.push(text(Some(params), "request"))
+      fx_changed()
+      Some(Ok(obj([("request", str(text(Some(params), "request")))])))
+    }
+    "vault.revoke" if fx_vault_app.val => {
+      fx.vault_revoked.push(text(Some(params), "request"))
+      fx_changed()
+      Some(Ok(obj([("request", str(text(Some(params), "request")))])))
+    }
+    "vault.lock" if fx_vault_app.val => {
+      fx.vault_unlocked = false
+      fx_changed()
+      Some(Ok(Json::null()))
+    }
     // the new device turned away, or its prompt closed: no longer shown
     "lockPrompt.deny" | "lockPrompt.hide" => {
       fx.pairing = false
@@ -3484,4 +3499,138 @@ pub fn fixture_machine_sessions(core : Core) -> Unit {
     s("m9", "codex", "把发票 PDF 按月份归档", "~/Documents/Codex/ledger", "10月20日", "09:31", ""),
   ]
   open_machine_sessions(core, "ws1/st1", "Willow")
+}
+
+///|
+/// The made-up core as the vault client has it (MBUI_APP=vault: sffilmscene): its requests' chats named, one more
+/// request (a secret to keep), the grants agents hold, every use of the vault; items opened.
+// put back as the fixture is (vault_off's reset)
+pub let fx_vault_app : Ref[Bool] = Ref(false)
+
+///|
+fn fx_vault_requests() -> Json {
+  let r1 = obj([
+    ("id", str("r1")),
+    ("vault", str("v1")),
+    ("vaultName", str("林的库")),
+    ("item", str("it1")),
+    ("itemName", str("GitHub token")),
+    ("session", str("s-c1")),
+    ("station", str("st1")),
+    ("chat", str("c1")),
+    ("chatTitle", str("整理发布清单")),
+    ("lasts", str("chat")),
+    ("mode", str("proxy")),
+    ("reason", str("要把发布清单推到仓库")),
+    ("command", str("git push origin main")),
+    ("hosts", ["api.github.com"]),
+    ("howText", str("代理 · 限 api.github.com")),
+    ("at", Json::number(0.0)),
+  ])
+  if !fx_vault_app.val {
+    return [r1]
+  }
+  let r2 = obj([
+    ("id", str("r2")),
+    ("vault", str("v1")),
+    ("vaultName", str("林的库")),
+    ("item", str("it9")),
+    ("itemName", str("Cloudflare token")),
+    ("session", str("s-c4")),
+    ("station", str("st1")),
+    ("chat", str("c4")),
+    ("chatTitle", str("迁移 DNS 到新账号")),
+    ("lasts", str("chat")),
+    ("mode", str("proxy")),
+    ("reason", str("刚在控制台建了只读 DNS 的 token，存起来以后跑同步用")),
+    ("hosts", ["api.cloudflare.com"]),
+    ("howText", str("代理 · 限 api.cloudflare.com")),
+    ("save", obj([("kind", str("token"))])),
+    ("at", Json::number(0.0)),
+  ])
+  Json::array([r1, r2].filter(fn(r) { !fx.vault_decided.contains(text(Some(r), "id")) }))
+}
+
+///|
+fn fx_vault_grants() -> Json {
+  let g = fn(request : String, item : String, name : String, chat : String, how : String, idle : Bool, until : String, uses : Int) {
+    obj([
+      ("request", str(request)),
+      ("vault", str("v1")),
+      ("vaultName", str("林的库")),
+      ("item", str(item)),
+      ("itemName", str(name)),
+      ("session", str("s-" + request)),
+      ("station", str("st1")),
+      ("chatTitle", str(chat)),
+      ("mode", str(if item == "it2" { "ssh" } else { "proxy" })),
+      ("hosts", []),
+      ("scope", str("chat")),
+      ("idle", Json::boolean(idle)),
+      ("at", stamp_of("1 小时前")),
+      ("until", stamp_of(until)),
+      ("uses", Json::number(uses.to_double())),
+      ("howText", str(how)),
+    ])
+  }
+  Json::array(
+    [
+      g("r7", "it1", "GitHub token", "修 CI", "gh run rerun · 代理", true, "45 分钟后", 6),
+      g("r8", "it2", "部署机", "上线 0.1.7260", "ssh-agent", false, "明天 18:00", 2),
+    ].filter(fn(x) { !fx.vault_revoked.contains(text(Some(x), "request")) }),
+  )
+}
+
+///|
+fn fx_vault_uses() -> Json {
+  let u = fn(item : String, name : String, chat : String, how : String, ago : String, denied : Bool) {
+    let pairs = [
+      ("item", str(item)),
+      ("itemName", str(name)),
+      ("at", stamp_of(ago)),
+      ("session", str("s")),
+      ("station", str("st1")),
+      ("chatTitle", str(chat)),
+      ("mode", str("proxy")),
+      ("hosts", []),
+      ("howText", str(how)),
+    ]
+    if denied {
+      pairs.push(("denied", Json::boolean(true)))
+    }
+    obj(pairs)
+  }
+  [
+    u("it1", "GitHub token", "修 CI", "gh run rerun 4112 · 代理", "12 分钟前", false),
+    u("it2", "部署机", "上线 0.1.7260", "git push deploy main · ssh-agent", "1 小时前", false),
+    u("it1", "GitHub token", "整理发布清单", "git push origin main · 代理", "昨天", false),
+    u("it4", "OpenAI key", "给设置页加一个深色模式开关", "代理", "3 天前", true),
+  ]
+}
+
+///|
+/// An item opened: what it holds, and its fields as its page shows them.
+fn fx_vault_opened(item : String) -> Json {
+  let f = fn(key : String, label : String, value : String, secret : Bool) {
+    obj([("key", str(key)), ("label", str(label)), ("value", str(value)), ("secret", Json::boolean(secret)), ("mono", Json::boolean(secret))])
+  }
+  let (kind, name, fields, shown) = match item {
+    "it2" =>
+      ("ssh_key", "部署机", [("private_key", "-----BEGIN OPENSSH PRIVATE KEY-----"), ("public_key", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 deploy")], [
+        f("private_key", "私钥", "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmU=\n-----END OPENSSH PRIVATE KEY-----", true),
+        f("public_key", "公钥", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 deploy", false),
+      ])
+    "it3" =>
+      ("login", "Figma", [("username", "design@cue.surf"), ("password", "fig-Ma77-oo!")], [
+        f("username", "用户名", "design@cue.surf", false),
+        f("password", "密码", "fig-Ma77-oo!", true),
+      ])
+    "it4" => ("token", "OpenAI key", [("value", "sk-proj-8fKq2LmZ0pW4nV7x")], [f("value", "值", "sk-proj-8fKq2LmZ0pW4nV7x", true)])
+    _ => ("token", "GitHub token", [("value", "ghp_7Rk2Lq9xZ4mN8vT1yW3s")], [f("value", "值", "ghp_7Rk2Lq9xZ4mN8vT1yW3s", true)])
+  }
+  obj([
+    ("plain", obj([("kind", str(kind)), ("name", str(name)), ("fields", obj(fields.map(fn(x) { (x.0, str(x.1)) }))), ("notes", str(""))])),
+    ("shown", Json::array(shown)),
+    ("kindText", str("")),
+  ])
 }

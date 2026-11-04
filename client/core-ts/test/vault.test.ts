@@ -167,6 +167,9 @@ function fakeStation() {
   const uses: unknown[] = [];
   const plainLock = { on: false };
   const plainLasts: { lasts?: string; at?: number } = {};
+  // The grants the keeper holds, as it lists them, and those taken back.
+  const held: any[] = [];
+  const revoked: unknown[] = [];
   const reply = (req: HttpRequest): unknown => {
     const path = req.url.replace("https://stillfail.test/admin/api", "");
     if (!path.startsWith("/vault/")) return undefined;
@@ -201,6 +204,15 @@ function fakeStation() {
         return { uses: query === "vault=plain" ? uses : [] };
       case "GET /vault/requests":
         return { requests };
+      case "GET /vault/held":
+        return { held };
+      case "POST /vault/revoke": {
+        const at = held.findIndex((g) => g.request === body.request);
+        if (at < 0) return status(409, { error: "no such grant held here", code: "vault_refused" });
+        held.splice(at, 1);
+        revoked.push(body);
+        return { ok: true };
+      }
     }
     if (!locked.on) return status(409, { error: "no lock", code: "vault_needs_lock" });
     switch (key) {
@@ -268,7 +280,7 @@ function fakeStation() {
     }
     return status(404, { error: `no route ${key}` });
   };
-  return { vaults, items, boxes, requests, grants, denials, keepers, locked, plain, plainGrants, plainLasts, uses, plainLock, saves, plainSaves, reply };
+  return { vaults, items, boxes, requests, grants, denials, keepers, locked, plain, plainGrants, plainLasts, uses, plainLock, saves, plainSaves, held, revoked, reply };
 }
 
 /// A core on an app's host (keys kept, secure storage), reaching `ws/st` (the fake station); its lock put in place.
@@ -1186,6 +1198,56 @@ test("the plain library: no security mode, items kept on the station as they are
   const moved = [...r.st.items.values()];
   assert.deepEqual(moved.map((i) => i.listing?.name), ["GitHub"]);
   assert.equal(vaults().plainLeft, undefined);
+  r.core.close();
+});
+
+test("the grants agents hold: listed with their item's name, until when, how; taken back on their station; told as they change; a whole vault's uses", async () => {
+  const r = await rig();
+  await r.watch(1, { topic: "vaults", workspace: "ws" });
+  await r.host.time.pass(500);
+  r.take();
+  const put = await r.ask("vault.putItem", { vault: "plain", plain: { kind: "token", name: "GitHub", fields: { value: "ghp_x" } }, listing: { name: "GitHub", kind: "token", modes: ["proxy"], hosts: ["api.github.com"], env: "GH_TOKEN" } });
+  const now = Math.floor(r.host.nowMs() / 1000);
+  const row = (request: string, o: Record<string, unknown> = {}) => ({
+    request, vault: "plain", item: put.id, session: "ember:s", chatTitle: "修 CI", mode: "proxy", hosts: ["api.github.com"], command: null,
+    scope: "hour", timeout: { kind: "idle", seconds: 3600 }, at: now, until: now + 3600, uses: 2, runOn: null, ...o,
+  });
+  r.st.held.push(row("r_1"), row("r_0", { at: now - 10, until: now + 60, timeout: null, scope: "chat", command: "gh pr list" }));
+  const grants = await r.watch(2, { topic: "vaultHeld", workspace: "ws" });
+  await r.host.time.pass(500);
+  r.take();
+  assert.deepEqual(grants().grants.map((g: any) => [g.request, g.itemName, g.vaultName, g.station, g.chatTitle, g.idle, g.uses, g.howText, typeof g.until.ago]), [
+    ["r_1", "GitHub", "个人", "st", "修 CI", true, 2, "代理 · 限 api.github.com", "string"],
+    ["r_0", "GitHub", "个人", "st", "修 CI", false, 2, "gh pr list · 代理", "string"],
+  ]);
+  // Told as it changes: used again (its time moved on), and gone.
+  r.push("vault-held", row("r_1", { uses: 3, until: now + 7200 }));
+  r.push("vault-held", { request: "r_0", gone: true });
+  await r.host.time.pass(100);
+  r.take();
+  assert.deepEqual(grants().grants.map((g: any) => [g.request, g.uses, g.until.at]), [["r_1", 3, (now + 7200) * 1000]]);
+  // Taken back on its station, gone here at once; one not held there, refused.
+  await r.ask("vault.revoke", { request: "r_1" });
+  assert.deepEqual(r.st.revoked, [{ request: "r_1" }]);
+  r.take();
+  assert.deepEqual(grants().grants, []);
+  await fails(r.ask("vault.revoke", { request: "r_1" }), "vault_unknown");
+  // Run out: no longer listed, whether or not its end was told.
+  r.push("vault-held", row("r_2", { until: now + 5 }));
+  await r.host.time.pass(100);
+  r.take();
+  assert.equal(grants().grants.length, 1);
+  await r.host.time.pass(6000);
+  r.push("vault-held", row("r_3", { until: now + 999 }));
+  await r.host.time.pass(100);
+  r.take();
+  assert.deepEqual(grants().grants.map((g: any) => g.request), ["r_3"]);
+  // A whole vault's uses: each with its item and the item's name.
+  r.st.uses.push({ item: put.id, at: now, session: "ember:s", chatTitle: "修 CI", mode: "proxy", command: "gh pr list", hosts: ["api.github.com"], denied: false });
+  const all = await r.watch(9, { topic: "vaultUses", workspace: "ws", vault: "plain", item: "" });
+  await r.host.time.pass(500);
+  r.take();
+  assert.deepEqual(all().uses.map((u: any) => [u.item, u.itemName, u.chatTitle, u.howText]), [[put.id, "GitHub", "修 CI", "gh pr list · 代理"]]);
   r.core.close();
 });
 

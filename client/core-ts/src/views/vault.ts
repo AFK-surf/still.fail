@@ -12,7 +12,9 @@
 // Topics:
 //   vaults {workspace}            the vaults this person is in, whether this device is set up, requests to approve
 //   vaultItems {workspace, vault} a vault's items: names once it is unlocked (the listed ones' always)
-//   vaultUses {workspace, vault, item}  an item's uses by agents (the requests decided), the latest first
+//   vaultUses {workspace, vault, item}  an item's uses by agents (the requests decided), the latest first; item "":
+//                                 the whole vault's, each with its item
+//   vaultHeld {workspace}         the grants agents hold now that this person may take back, the latest first
 //   (`lockPrompts` `asks`, views/lock.ts: members' devices set up that wait on this one for a vault's key, every
 //   workspace's, wherever the person is: `vault.addDevice {vault, device}` gives it, `vault.hidePrompt` puts one away
 //   until that device asks again; `vaultAsks` here)
@@ -45,6 +47,7 @@
 //   setLasts {vault, lasts}       the longest grant of the vault's items that say none (its owner signs; the plain
 //                                 library's told to each station keeping it)
 //   deny {request}                turned down, signed
+//   revoke {request}              a grant agents hold taken back now (its station's `vault/revoke`)
 //   migrate                       the plain library's items moved into one's own vault, encrypted (security mode on)
 //   lock                          the unlocked keys forgotten now
 //   state                         the `vaults` topic's value, as a call
@@ -104,6 +107,8 @@ type Held = {
   plain: Record<string, PlainRow>; plainOn: string[]; plainLasts?: { lasts: Scope; at: number };
   /// The uses of each vault's items (`<station>/<vault>`), as the station keeping it said them, the latest first.
   uses: Record<string, Use[]>;
+  /// The grants agents hold now that this person may take back, by request, each with the station holding it.
+  grants: Record<string, HeldGrant>;
   /// The devices whose prompt for a key was put away here (`vault.hidePrompt`), by device: the certificate's `at` it
   /// was put away at (one published since, asking again, is shown).
   hidden: Record<string, number>;
@@ -117,6 +122,11 @@ type Holding = { seq: number; items: Record<string, number>; sig?: string; sigs?
 type PlainRow = { id: string; owner: string; version: number; kind: string; name: string; notes: string; listing?: Listing; at: number; deleted?: true; station: string };
 /// A use as a station says it (vault/secrets.ts `Use`).
 type Use = { item: string; at: number; session: string; chatTitle: string | null; mode: string; command: string | null; hosts: string[]; denied: boolean };
+/// A grant held as a station says it (vault/secrets.ts `HeldRow`), and where.
+type HeldGrant = {
+  request: string; vault: string; item: string; session: string; chatTitle: string | null; mode: string; hosts: string[]; command: string | null;
+  scope: string; timeout: { kind: string; seconds: number } | null; at: number; until: number; uses: number; runOn: string | null; station: string;
+};
 
 /// The id the plain library goes by where a vault's would.
 export const PLAIN = "plain";
@@ -136,7 +146,7 @@ const mem = (inner: Inner): Mem => {
   return m;
 };
 
-const EMPTY: Held = { vaults: {}, at: {}, boxes: {}, requests: {}, asked: {}, refused: {}, on: {}, keeps: [], plain: {}, plainOn: [], uses: {}, hidden: {} };
+const EMPTY: Held = { vaults: {}, at: {}, boxes: {}, requests: {}, asked: {}, refused: {}, on: {}, keeps: [], plain: {}, plainOn: [], uses: {}, grants: {}, hidden: {} };
 const arr = (v: unknown): J[] => (Array.isArray(v) ? v : []);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 const nowS = (inner: Inner) => Math.floor(inner.host.nowMs() / 1000);
@@ -168,7 +178,7 @@ function changeItems(inner: Inner, ws: string, vault: string, f: (items: Record<
 }
 
 function invalidate(inner: Inner, ws: string): void {
-  inner.store.invalidateAll((t) => ((t.topic === "vaults" || t.topic === "vaultItems" || t.topic === "vaultUses") && t.workspace === ws) || t.topic === "lockPrompts");
+  inner.store.invalidateAll((t) => ((t.topic === "vaults" || t.topic === "vaultItems" || t.topic === "vaultUses" || t.topic === "vaultHeld") && t.workspace === ws) || t.topic === "lockPrompts");
   // (the requests' cards in the chats: shown again where how they are answered here changed)
   inner.views?.vaultChanged(ws);
 }
@@ -279,8 +289,16 @@ function readStation(inner: Inner, address: string): Effect.Effect<void, CoreErr
         if (lasts && typeof at === "number" && (h.plainLasts === undefined || h.plainLasts.at < at)) h.plainLasts = { lasts, at };
       });
     }
-    // The requests are the keeper's (a station without one answers 404: none).
+    // The requests are the keeper's (a station without one answers 404: none); so are the grants it holds (a station
+    // from before this lists none: null, what was held from it kept as it was).
     const requests = yield* Effect.orElseSucceed(Effect.map(ask(inner, address, "GET", "/vault/requests"), (r) => arr(get(r, "requests")) as Request[]), () => [] as Request[]);
+    const grants = yield* Effect.orElseSucceed(Effect.map(ask(inner, address, "GET", "/vault/held"), (r) => arr(get(r, "held")) as HeldGrant[]), () => null);
+    if (grants !== null) {
+      change(inner, ws, (h) => {
+        for (const [id, g] of Object.entries(h.grants)) if (g.station === station) delete h.grants[id];
+        for (const g of grants) if (typeof g?.request === "string") h.grants[g.request] = { ...g, station };
+      });
+    }
     const vaults = yield* Effect.result(ask(inner, address, "GET", "/vault/vaults"));
     let list: Vault[] | null = null;
     let all: Item[] = [];
@@ -485,6 +503,13 @@ function heard(inner: Inner, address: string, name: string, data: unknown): void
     case "vault-plain":
       if (typeof d?.id === "string") change(inner, ws, (h) => void (h.plain[d.id] = { ...d, station }));
       return;
+    case "vault-held":
+      if (typeof d?.request !== "string") return;
+      change(inner, ws, (h) => {
+        if (d.gone === true) delete h.grants[d.request];
+        else h.grants[d.request] = { ...(d as HeldGrant), station };
+      });
+      return;
     case "vault-request":
       if (typeof d?.id !== "string") return;
       // Decided: a use of its item, read again as its station says it (with its chat's title).
@@ -538,7 +563,7 @@ function readItems(inner: Inner, address: string, vault: string): Effect.Effect<
 
 function owner(inner: Inner): Owner {
   return {
-    owns: (t: Topic) => t.topic === "vaults" || t.topic === "vaultItems" || t.topic === "vaultUses",
+    owns: (t: Topic) => t.topic === "vaults" || t.topic === "vaultItems" || t.topic === "vaultUses" || t.topic === "vaultHeld",
     // Shown: the workspace's stations read again, what is held showing meanwhile.
     start: (t: Topic) => {
       const ws = t.workspace as string;
@@ -549,7 +574,12 @@ function owner(inner: Inner): Owner {
     },
     compute: (t: Topic) => {
       const ws = typeof t.workspace === "string" ? t.workspace : "";
-      return { ok: t.topic === "vaults" ? vaultsView(inner, ws) : t.topic === "vaultUses" ? usesView(inner, ws, String(t.vault), String(t.item)) : itemsView(inner, ws, String(t.vault)) };
+      return {
+        ok: t.topic === "vaults" ? vaultsView(inner, ws)
+          : t.topic === "vaultUses" ? usesView(inner, ws, String(t.vault), String(t.item))
+          : t.topic === "vaultHeld" ? heldView(inner, ws)
+          : itemsView(inner, ws, String(t.vault)),
+      };
     },
   };
 }
@@ -670,7 +700,7 @@ export function vaultsView(inner: Inner, ws: string): J {
   const plainItems = Object.values(h.plain).filter((i) => !i.deleted);
   const requestRow = (r: Request, itemName: string | null, vaultName: string, lasts: Scope) => ({
     id: r.id, vault: r.vault, vaultName, item: r.item, itemName, lasts,
-    session: r.session, chat: r.chat, station: h.asked[r.id] ?? null, mode: r.mode, reason: r.reason, command: r.command ?? null, hosts: r.hosts ?? [], at: r.at, ...(r.timeout ? { timeoutKind: r.timeout.kind, timeoutSeconds: r.timeout.seconds } : {}),
+    session: r.session, chat: r.chat, chatTitle: str((r as unknown as { chatTitle?: unknown }).chatTitle), station: h.asked[r.id] ?? null, mode: r.mode, reason: r.reason, command: r.command ?? null, hosts: r.hosts ?? [], at: r.at, ...(r.timeout ? { timeoutKind: r.timeout.kind, timeoutSeconds: r.timeout.seconds } : {}),
     howText: howText(r.mode, r.hosts ?? []),
     // A secret an agent asks to keep: what kind, the account it is for, whether the person types it in.
     ...(r.save ? { save: { kind: r.save.kind, ...(r.save.username ? { username: r.save.username } : {}), ...(r.save.filename ? { filename: r.save.filename } : {}), ...(r.save.typed ? { typed: true } : {}) } } : {}),
@@ -745,9 +775,44 @@ function usesOf(inner: Inner, ws: string, vault: string): J[] {
     }));
 }
 
-/// The `vaultUses` topic.
+/// The `vaultUses` topic: an item's uses; item "", the whole vault's, each with its item and the item's name.
 export function usesView(inner: Inner, ws: string, vault: string, item: string): J {
+  if (item === "") {
+    const names = itemNames(inner, ws, vault);
+    return { item, uses: usesOf(inner, ws, vault).map((u) => ({ ...u, itemName: names.get(u.item) ?? null })) };
+  }
   return { item, uses: usesOf(inner, ws, vault).filter((u) => u.item === item).map(({ item: _, ...u }) => u) };
+}
+
+/// The names of a vault's items as its page shows them (once it is unlocked here; the listed ones' always), by id.
+function itemNames(inner: Inner, ws: string, vault: string): Map<string, string> {
+  const names = new Map<string, string>();
+  for (const i of arr(get(itemsView(inner, ws, vault), "items"))) if (typeof i.id === "string" && typeof i.name === "string") names.set(i.id, i.name);
+  return names;
+}
+
+/// The `vaultHeld` topic: the grants agents hold now that this person may take back (`vault.revoke`), the latest first,
+/// each with its item's and vault's names, how it is given, and until when (an idle one's as last renewed).
+export function heldView(inner: Inner, ws: string): J {
+  const h = held(inner, ws);
+  const clock = clockOf(inner);
+  const now = Math.floor(clock.now / 1000);
+  const names = new Map<string, Map<string, string>>();
+  const nameOf = (vault: string, item: string) => {
+    if (!names.has(vault)) names.set(vault, itemNames(inner, ws, vault));
+    return names.get(vault)!.get(item) ?? null;
+  };
+  const personal = t("core-misc.vault.personal");
+  const grants = Object.values(h.grants)
+    .filter((g) => g.until > now)
+    .sort((a, b) => b.at - a.at || (a.request < b.request ? -1 : 1))
+    .map((g) => ({
+      request: g.request, vault: g.vault, vaultName: g.vault === PLAIN ? personal : (h.vaults[g.vault]?.name ?? ""), item: g.item, itemName: nameOf(g.vault, g.item),
+      session: g.session, station: g.station, chatTitle: g.chatTitle, mode: g.mode, hosts: g.hosts, command: g.command, runOn: g.runOn,
+      scope: g.scope, idle: g.timeout?.kind === "idle", at: stamp(g.at * 1000, clock), until: stamp(g.until * 1000, clock), uses: g.uses,
+      howText: typeof g.command === "string" && g.command !== "" ? `${g.command} · ${modeText(g.mode)}` : howText(g.mode, g.hosts ?? []),
+    }));
+  return { grants };
 }
 
 /// The last use of each item of a vault (granted ones only: a refusal is no use).
@@ -865,6 +930,8 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
       return v.approve(p("request"), (str(c.params.scope) ?? "once") as Scope, c.params.typed, c.params.timeout);
     case "deny":
       return v.deny(p("request"));
+    case "revoke":
+      return v.revoke(p("request"));
     case "setLasts":
       return v.setLasts(p("vault"), p("lasts"));
     default:
@@ -1610,6 +1677,19 @@ class Vaults {
       yield* self.#station(station, "POST", "/vault/denials", deny);
       self.#settled(r.id, { status: "denied" });
       return { request: r.id };
+    });
+  }
+
+  /// A grant an agent holds taken back now, on the station holding it (vault/revoke): no signature (taking a grant back
+  /// gives nothing away; the station checks the person may decide its requests).
+  revoke(id: string): Effect.Effect<unknown, CoreError> {
+    const self = this;
+    return Effect.gen(function* () {
+      const g = held(self.#inner, self.ws).grants[id];
+      if (g === undefined) return yield* fail("vault_unknown", t("core-misc.vault.noGrant"));
+      yield* self.#station(g.station, "POST", "/vault/revoke", { request: id });
+      change(self.#inner, self.ws, (h) => void delete h.grants[id]);
+      return { request: id };
     });
   }
 

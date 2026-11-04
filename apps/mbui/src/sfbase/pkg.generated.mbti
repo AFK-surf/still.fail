@@ -601,9 +601,10 @@ pub fn flight_quote_landing(@ui.Ctx, SendFlight, Int32, String, (Double, Double)
 
 pub fn flight_quote_words(@ui.Ctx, SendFlight, String) -> (String, Double?)
 
+pub fn flight_said(SendFlight) -> String
+
 pub let flight_settle : Double
 
-pub fn flight_said(SendFlight) -> String
 pub fn flight_settled(Double, Bool) -> Double
 
 pub fn flight_settled_of(@ui.Ctx, SendFlight) -> Double
@@ -1210,9 +1211,10 @@ pub let peeks_told : @signals.Signal[Int32]
 
 pub fn person_of(@json.Json) -> Person
 
+pub fn person_runs(String, @json.Json?, Int64, chat_title? : (String) -> String?) -> Array[@text.Run]
+
 pub let pick_bar_in_ms : Double
 
-pub fn person_runs(String, @json.Json?, Int64, chat_title? : (String) -> String?) -> Array[@text.Run]
 pub fn pick_clear() -> Unit
 
 pub fn pick_layer(@ui.Ctx, String, Double, Double, Bool, (String, String, String, String) -> Unit) -> Unit
@@ -1358,7 +1360,6 @@ pub fn refs_pick_now(Source, String, @ui.Field, String, String, String, String, 
 pub fn refs_put(String, @ui.Field, String, caret? : Int32) -> Unit
 
 pub fn refs_reset() -> Unit
-
 
 pub fn refs_search(Source, String, Map[String, @json.Json]) -> Topic
 
@@ -1733,6 +1734,8 @@ pub let ups : DriveUploads
 pub fn use_core_markdown(Source) -> Unit
 
 pub fn utf8_whole(Bytes) -> Int32
+
+pub let vault_app : @ref.Ref[Bool]
 
 pub fn vector_faces(Bytes) -> Array[Bytes]
 

@@ -677,7 +677,7 @@ let zh : Map[String, String] = {
   "android-settings.slack.group.extras": "链接预览、提醒和状态",
   "android-settings.slack.group.files": "读写文件",
   "android-settings.slack.group.lists": "读写列表",
-  "android-settings.slack.group.more": "状态、元数据和斜杠命令",
+  "android-settings.slack.group.more": "状态和元数据",
   "android-settings.slack.group.people": "查看成员资料",
   "android-settings.slack.group.public": "在未加入的公开频道发言",
   "android-settings.slack.group.reactions": "表情回应、置顶和书签",

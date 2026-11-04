@@ -118,6 +118,11 @@ export const VaultLive = Layer.effectDiscard(
       const to = secrets.tells(r);
       if (to !== null) events.tell("vault-request", r, `vault-request\0${r.id}`, to);
     });
+    // A grant taken, used, renewed or gone: told to whom its request was (`gone`: taken back, run out, its chat over).
+    secrets.listenHeld((h, gone) => {
+      const to = secrets.tells(h.request);
+      if (to !== null) events.tell("vault-held", gone ? { request: h.request.id, gone: true } : secrets.heldRow(h), `vault-held\0${h.request.id}`, to);
+    });
     events.follow({ inVault: (viewer, vault) => secrets.inVault(viewer, vault) });
     // Once nothing more comes, the requests still waiting whose boxes did not come (a restart) get new ones.
     function came() {

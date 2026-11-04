@@ -295,7 +295,7 @@ const S = "string" as const;
 const FILE_OPEN_PART = 4 * 1024 * 1024;
 
 /// The vault's calls (views/vault.ts).
-export const VAULT_CALLS = ["state", "lock", "setup", "create", "delete", "addDevice", "ask", "hidePrompt", "prompts", "putItem", "deleteItem", "open", "recover", "approve", "deny", "setLasts", "migrate"];
+export const VAULT_CALLS = ["state", "lock", "setup", "create", "delete", "addDevice", "ask", "hidePrompt", "prompts", "putItem", "deleteItem", "open", "recover", "approve", "deny", "revoke", "setLasts", "migrate"];
 
 /// The workspace lock's calls (views/lock.ts).
 export const LOCK_CALLS = ["state", "open", "toggle", "dismiss", "addStation", "joinStation", "renew", "removeDevice", "disable", "pair", "pairCode", "pairCancel"];

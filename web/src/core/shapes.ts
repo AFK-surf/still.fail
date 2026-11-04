@@ -7435,6 +7435,43 @@ export interface VaultField {
 	mono: boolean;
 }
 
+/** A grant an agent holds now (the keeper's), never its value. */
+export interface VaultGrant {
+	/** The request it answers: its id, what `vault.revoke` takes back. */
+	request: string;
+	vault: string;
+	vaultName: string;
+	item: string;
+	/** Its item's name, where known here. */
+	itemName?: string;
+	session: string;
+	/** The station holding it (its id). */
+	station: string;
+	chatTitle?: string;
+	mode: string;
+	hosts: string[];
+	command?: string;
+	/** The station its commands run on, when another. */
+	runOn?: string;
+	/** `once`, `hour` or `chat`: as granted. */
+	scope: string;
+	/** Lasting while it is used: `until` moves on with each use. */
+	idle: boolean;
+	/** When it was granted. */
+	at: Stamp;
+	/** When it ends (an idle one's as last renewed). */
+	until: Stamp;
+	/** How often it was used. */
+	uses: number;
+	/** How it is given, in a line. */
+	howText?: string;
+}
+
+/** The grants agents hold now that this person may take back, the latest first (the `vaultHeld` topic). */
+export interface VaultHeldView {
+	grants: VaultGrant[];
+}
+
 /** An agent's use of an item (the station's `vault_audit`): when, in which chat, how. */
 export interface VaultUse {
 	at: Stamp;
@@ -7450,6 +7487,10 @@ export interface VaultUse {
 	denied?: boolean;
 	/** How, in a line: the command it ran and its way, else how it was given. */
 	howText?: string;
+	/** Its item (a whole vault's uses, `item` ""). */
+	item?: string;
+	/** Its item's name, where known here (a whole vault's uses). */
+	itemName?: string;
 }
 
 /** An item of a vault. */
@@ -7518,6 +7559,8 @@ export interface VaultRequest {
 	lasts?: string;
 	session: string;
 	chat: string;
+	/** The asking chat's title, where its station says it. */
+	chatTitle?: string;
 	/** The station that asked (its id): the chat is its, `/w/<workspace>/s/<station>/chats/<session>`. */
 	station?: string;
 	/** `proxy`, `ssh` or `env`. */

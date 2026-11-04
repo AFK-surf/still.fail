@@ -436,6 +436,8 @@ fn main {
   // a window of its own (sfbase's window.mbt, MBUI_WINDOW: started by the app's run beside it, @ui.window_open): the
   // page it was started for alone, none of what follows (the app's run beside it has them)
   @sfbase.lone_page.val = @sfbase.window_page(@ui.env("MBUI_WINDOW"))
+  // started as the vault client (src/sfvault)
+  @sfbase.vault_app.val = @ui.env("MBUI_APP") == "vault"
   if @sfbase.lone_page.val is None {
     // scripted runs: a chat opened by words in its title once Home lists it (MBUI_OPEN_CHAT), or by its station and
     // session at once (MBUI_OPEN_SESSION=<workspace>/<station>|<session>)

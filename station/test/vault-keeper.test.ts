@@ -561,6 +561,54 @@ test("the plain library (no security mode): listed for its owner's chats, decide
   }
 });
 
+test("the grants held: listed to who may decide them, without their value; taken back now, the agent told, its next use refused, each change told", async () => {
+  const db = new DatabaseSync(":memory:");
+  const plain = new PlainStore(db);
+  const ws = "ws1";
+  const listing = { name: "GitHub", kind: "token" as const, modes: ["proxy" as const], hosts: ["api.github.com"] };
+  plain.put({ ws, id: "i_01JAPLAIN0000000000000000GH", owner: "bob@x.com", version: 0, kind: "token" as const, name: "GitHub", fields: { value: TOKEN }, notes: "", listing, at: 1000 });
+  const notified: [string, string][] = [];
+  const hub = {
+    store: { getSession: (k: string) => (k === "s1" ? { key: "s1", ws: null, workspace: "/tmp" } : null), starter: () => "bob@x.com", latestThread: () => null, withdrawCard: () => true, subscribe: () => () => {} },
+    notify: (k: string, text: string) => notified.push([k, text]),
+  };
+  const dir = mkdtempSync(join(tmpdir(), "vault-held-"));
+  const secrets = new Secrets({ db, vaults: new VaultStore(db), plain, home: () => ws, hub: hub as never, data: dir, lock: () => null, now: () => 1_000_000, title: () => "修 CI" });
+  const told: [string, boolean][] = [];
+  secrets.listenHeld((h, gone) => told.push([h.request.id, gone]));
+  const bob = { sub: "bob", email: "bob@x.com" };
+  const carol = { sub: "carol", email: "carol@x.com" };
+  try {
+    const asked = secrets.ask("s1", { item: "GitHub", reason: "rerun CI", command: "gh run rerun 1" });
+    await new Promise((r) => setImmediate(r));
+    const [request] = secrets.pending(ws, null, bob);
+    assert.equal(secrets.grantPlain(ws, null, bob.email, { request: request!.id, scope: "hour", timeout: { kind: "idle", seconds: 3600 } }), null);
+    await asked;
+    const [row] = secrets.heldBy(ws, null, bob);
+    assert.deepEqual(
+      [row!.request, row!.item, row!.chatTitle, row!.mode, row!.hosts, row!.command, row!.scope, row!.timeout, row!.until, row!.uses],
+      [request!.id, "i_01JAPLAIN0000000000000000GH", "修 CI", "proxy", ["api.github.com"], "gh run rerun 1", "hour", { kind: "idle", seconds: 3600 }, 1000 + 3600, 0],
+    );
+    assert.equal(JSON.stringify(secrets.heldBy(ws, null, bob)).includes(TOKEN), false, "never its value");
+    assert.deepEqual(secrets.heldBy(ws, null, carol), [], "not carol's to see");
+    assert.deepEqual(secrets.heldBy("ws2", null, bob), [], "another workspace's none");
+    // Used: its count told.
+    secrets.keeper.spend(request!.id);
+    assert.equal(secrets.heldBy(ws, null, bob)[0]!.uses, 1);
+    // Taken back: by carol, refused; by bob, gone at once, the agent told, its next use refused.
+    assert.match(secrets.revoke(ws, null, carol, request!.id)!, /who may decide/);
+    assert.match(secrets.revoke(ws, null, bob, "r_none")!, /no such grant/);
+    assert.equal(secrets.revoke(ws, null, bob, request!.id), null);
+    assert.deepEqual(secrets.heldBy(ws, null, bob), []);
+    assert.match(secrets.keeper.usable("s1", request!.id) as string, /no such grant/);
+    assert.match(notified.at(-1)![1], /taken back by bob@x.com/);
+    assert.deepEqual(told, [[request!.id, false], [request!.id, false], [request!.id, true]], "taken, used, gone");
+    assert.match(secrets.revoke(ws, null, bob, request!.id)!, /no such grant/, "once");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("a grant for the chat: offered as far as the item allows, kept across a restart (the plain library's), ended when the chat is archived", async () => {
   const db = new DatabaseSync(":memory:");
   const plain = new PlainStore(db);

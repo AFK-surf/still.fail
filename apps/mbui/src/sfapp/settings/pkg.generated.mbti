@@ -151,6 +151,8 @@ pub let foot_across : @ui.Style
 
 pub fn frame(Core, Here, root? : Bool, top? : Double) -> Unit
 
+pub let fx_vault_app : @ref.Ref[Bool]
+
 pub fn group_mark(@ui.Ctx, String) -> Unit
 
 pub fn has(@json.Json?, String) -> Bool
