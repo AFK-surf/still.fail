@@ -502,6 +502,48 @@ pub fn TopicList::given(self : TopicList, v : Json?) -> Unit {
 }
 
 ///|
+/// The list as `v` has it, whole, taken as what changed from what it holds (a made-up core's value, given whole each
+/// version): rows gone taken out, those come put in where they are, those moved put there, those another value set, each
+/// a change of its own as an op of its subscription's would be. Gone through once.
+pub fn TopicList::given_keyed(self : TopicList, v : Json?) -> Unit {
+  let items = match value_at(v, self.path) {
+    Some(Array(a)) => a
+    _ => []
+  }
+  let keys = items.map(fn(item) { item_key(item, self.fields) })
+  let want : Set[String] = Set::from_array(keys)
+  self.come_in()
+  let mut i = self.length_now() - 1
+  while i >= 0 {
+    self.work += 1
+    if !want.contains(self.key_now(i)) {
+      self.drop_at(i, Given)
+    }
+    i -= 1
+  }
+  for j, item in items {
+    let k = keys[j]
+    self.come_in()
+    if j < self.length_now() && self.key_now(j) == k {
+      self.work += 1
+      let was = self.value_now(j)
+      if !physical_equal(was, item) && was != item {
+        self.set_at(j, item, Given)
+      }
+    } else {
+      match self.find(k, near=j) {
+        Some(from) => {
+          self.drop_at(from, Given)
+          self.come(j, k, item, Given)
+        }
+        None => self.come(j, k, item, Given)
+      }
+    }
+  }
+  self.come_in()
+}
+
+///|
 /// The cause an op says (core-ts: `why`), Given where it says none (a core from before it said).
 fn cause_of(op : Map[String, Json]) -> Cause {
   match op.get("why") {
