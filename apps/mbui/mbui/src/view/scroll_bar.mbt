@@ -253,7 +253,7 @@ fn View::scroll_bar(
     // (along its right; across, along its foot)
     thumb.offset(By(fn() {
       let (w, h) = self.laid_size_told().unwrap_or((0.0, 0.0))
-      let x = s.where_at(if s.fling.get() is Some(_) { thumb.drawn_at() } else { 0.0 })
+      let x = s.where_at(if s.fling.get() is Some(_) { thumb.drawn_at() } else { 0.0 }) + (s.bar_off)()
       if across {
         (track(x).0 - b.grab, h - b.inset - b.size - b.grab)
       } else {

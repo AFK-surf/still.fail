@@ -81,6 +81,18 @@ pub struct Scroll {
   priv edge : @signals.Signal[Edge?]
   /// The editor these choices belong to, whose input method stays while they are scrolled.
   priv mut for_field : NodeId?
+  /// a list laid out from its anchor's (View::scrolls_anchored): how far where it is counted to be among all it holds
+  /// is from where the hand has it, as it was last laid out (what its bar and what reads where it is add)
+  priv mut bar_off : () -> Double
+  /// how far it is scrolled read as the hand last left it, not kept within how far it can go as that is counted now:
+  /// what such a list's layout reads changes only as the hand moves it, not as it is counted taller or shorter
+  priv mut reads_free : Bool
+  /// a list that keeps itself: where the hand has it put where it is counted to be, as the hand comes to it again (its
+  /// bounds, its ends' give, a fling's end: all as it is counted)
+  priv mut rebase : () -> Unit
+  /// a list that keeps itself: a node in it to be brought into sight (the focus come to it), told at that cause, its
+  /// layout bringing it there as it lays it out
+  priv mut reveal : (NodeId, (Double, Double)?) -> Unit
   /// what a virtual list's counted extent is told by, read where how far it can go is followed (none: as it is laid
   /// out alone): View::scrolls_anchored's
   priv mut extent_told : () -> Unit
@@ -150,6 +162,10 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     host: None,
     edge: @signals.signal(None, same=fn(a, b) { same_ref(a, b) }),
     for_field: None,
+    bar_off: fn() { 0.0 },
+    reads_free: false,
+    rebase: fn() { },
+    reveal: fn(_, _) { },
     extent_told: fn() { },
     rows: None,
   }
@@ -253,6 +269,12 @@ fn dmax(a : Double, b : Double) -> Double {
 }
 
 ///|
+/// `v` within `lo` and `hi` as where it is is read; as it is, where its reads are free (Scroll's `reads_free`).
+fn Scroll::read_kept(self : Scroll, v : Double, lo : Double, hi : Double) -> Double {
+  if self.reads_free { v } else { dclamp(v, lo, hi) }
+}
+
+///|
 fn dclamp(v : Double, lo : Double, hi : Double) -> Double {
   dmax(lo, dmin(v, hi))
 }
@@ -263,24 +285,24 @@ fn dclamp(v : Double, lo : Double, hi : Double) -> Double {
 fn Scroll::where_at(self : Scroll, t : Double) -> Double {
   let most = self.most_now()
   match self.edge.get() {
-    Some(e) => return dclamp(e.at(t), 0.0, most)
+    Some(e) => return self.read_kept(e.at(t), 0.0, most)
     None => ()
   }
   match self.fling.get() {
     Some(f) =>
       if t >= f.end_t {
-        dclamp(f.end_x, 0.0, most)
+        self.read_kept(f.end_x, 0.0, most)
       } else {
         match f.way {
-          Some(w) => dclamp(w.at(f, t), 0.0, most)
-          None => dclamp(scroll_fling_at(f.x0, f.v0, t - f.t0), 0.0, most)
+          Some(w) => self.read_kept(w.at(f, t), 0.0, most)
+          None => self.read_kept(scroll_fling_at(f.x0, f.v0, t - f.t0), 0.0, most)
         }
       }
     None =>
       match self.notch.get() {
         // (set out from under its top, what it holds shown lower than it lies (Scroll::glide_under): from there)
-        Some(n) => dclamp(n.x0 + ease_come(n.total, n.v0, t - n.t0), dmin(0.0, n.x0), most)
-        None => dclamp(self.x.get(), 0.0, most)
+        Some(n) => self.read_kept(n.x0 + ease_come(n.total, n.v0, t - n.t0), dmin(0.0, n.x0), most)
+        None => self.read_kept(self.x.get(), 0.0, most)
       }
   }
 }
@@ -288,7 +310,8 @@ fn Scroll::where_at(self : Scroll, t : Double) -> Double {
 ///|
 /// How far it is scrolled at the logic's moment of `tree` (the one it is in: what an event, a step or a test reads).
 pub fn Scroll::at(self : Scroll, tree : Tree) -> Double {
-  @signals.untracked(fn() { self.where_at(tree.logic_at()) })
+  // (a list that keeps itself: where it is counted to be among all it holds, as its bar shows it)
+  @signals.untracked(fn() { self.where_at(tree.logic_at()) }) + (self.bar_off)()
 }
 
 ///|
@@ -431,6 +454,7 @@ fn Scroll::stopped(self : Scroll, t : Double) -> Double {
 /// laid out (a list's first place, past what is tucked over its rows; its top again): what it was on by itself stopped
 /// there, no scroll of the hand's (nothing told as scrolled: its bar). Not scrolling in a node yet, there as it comes to.
 pub fn Scroll::put(self : Scroll, to : Double) -> Unit {
+  (self.rebase)()
   match self.host {
     Some(v) if v.alive() => self.stopped(v.tree.logic_at()) |> ignore
     _ => ()
@@ -441,6 +465,7 @@ pub fn Scroll::put(self : Scroll, to : Double) -> Unit {
 ///|
 /// Moved by `d` (down the column) at `t`, as far as it can go: whether it moved.
 fn Scroll::moved(self : Scroll, t : Double, d : Double) -> Bool {
+  (self.rebase)()
   let was = self.stopped(t)
   let to = dclamp(was + d, 0.0, self.most())
   if to != was { (self.on_hand)(to - was) }
@@ -454,6 +479,7 @@ fn Scroll::moved(self : Scroll, t : Double, d : Double) -> Bool {
 ///|
 /// Brought to `to` at `t`, as far as it can go (a part of it brought into sight).
 fn Scroll::sent(self : Scroll, t : Double, to : Double) -> Unit {
+  (self.rebase)()
   let was = self.stopped(t)
   let to = dclamp(to, 0.0, self.most())
   self.x.set(to)
@@ -466,6 +492,7 @@ fn Scroll::sent(self : Scroll, t : Double, to : Double) -> Unit {
 /// Let go of at `t` at the hand's speed: flung on (held by `v`, at rest at its end: then where it is, at rest), or at
 /// rest where it is.
 fn Scroll::flung(self : Scroll, v : View, t : Double) -> Unit {
+  (self.rebase)()
   let x0 = self.stopped(t)
   let v0 = self.hand_v
   let speed = v0.abs()
@@ -510,6 +537,7 @@ fn Scroll::flung(self : Scroll, v : View, t : Double) -> Unit {
 /// on from where it is then at the new speed: where it is a function of the time, nothing stepped by frames. Not where
 /// it scrolls in nothing (View::scrolls not said, or let go).
 pub fn Scroll::edge_toward(self : Scroll, speed : Double) -> Unit {
+  (self.rebase)()
   guard self.host is Some(v) else { return }
   @signals.untracked(fn() {
     let t = v.logic_at()
@@ -906,13 +934,20 @@ pub fn View::scrolls(
     let t = self.logic_at()
     // (across: its start and its end, as wide as it is)
     let vh = if across { self.tree.nodes[self.at].flex.width } else { self.tree.nodes[self.at].flex.height }
+    // (in sight already, as a list that keeps itself brought it there as it was laid out (Scroll's `reveal`): nothing
+    // moved, nothing of where it is put)
+    if top >= 0.0 && foot <= vh {
+      return 0.0
+    }
+    // (where it is as counted, before what it is brought by is worked out from it)
+    (s.rebase)()
     let x = s.stopped(t)
     if top < 0.0 {
       s.sent(t, x + top)
     } else if foot > vh {
       s.sent(t, x + dmin(top, foot - vh))
     }
-    s.at(self.tree) - x
+    @signals.untracked(fn() { s.where_at(t) }) - x
   }, across~)
 }
 
