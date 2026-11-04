@@ -70,6 +70,20 @@ fn name_char(c : Char) -> Bool {
 }
 
 ///|
+/// Whether `word` is in `chars` at `i`.
+fn word_at(chars : Array[Char], i : Int, word : Array[Char]) -> Bool {
+  if i + word.length() > chars.length() {
+    return false
+  }
+  for k in 0..<word.length() {
+    if chars[i + k] != word[k] {
+      return false
+    }
+  }
+  true
+}
+
+///|
 /// `text` with still.fail's name standing alone the product's (client/i18n/brand.ts branded): not a host's part or an
 /// address (app.still.fail, https://still.fail, noreply@still.fail, still.fail.app).
 pub fn branded(text : String) -> String {
@@ -82,19 +96,11 @@ pub fn branded(text : String) -> String {
   let out = StringBuilder::new()
   let mut i = 0
   while i < chars.length() {
-    let at = i + word.length() <= chars.length() &&
-      (for k = 0; k < word.length(); k = k + 1 {
-        if chars[i + k] != word[k] {
-          break false
-        }
-      } else {
-        true
-      })
-    let before_ok = i == 0 || !(name_char(chars[i - 1]) || chars[i - 1] == '.' || chars[i - 1] == '/' || chars[i - 1] == '@')
     let j = i + word.length()
-    let after_ok = j >= chars.length() ||
-      !(name_char(chars[j]) || (chars[j] == '.' && j + 1 < chars.length() && name_char(chars[j + 1]) && chars[j + 1] != '-'))
-    if at && before_ok && after_ok {
+    let alone = word_at(chars, i, word) &&
+      (i == 0 || !(name_char(chars[i - 1]) || chars[i - 1] == '.' || chars[i - 1] == '/' || chars[i - 1] == '@')) &&
+      (j >= chars.length() || !(name_char(chars[j]) || (chars[j] == '.' && j + 1 < chars.length() && name_char(chars[j + 1]) && chars[j + 1] != '-')))
+    if alone {
       out.write_string(name)
       i = j
     } else {
