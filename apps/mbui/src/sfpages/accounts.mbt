@@ -255,6 +255,7 @@ fn runtime_tag(r : String) -> String {
     "cursor" => "Cursor"
     "devin" => "Devin"
     "hermes" => "Hermes"
+    "agy" => "AGY"
     _ => r
   }
 }

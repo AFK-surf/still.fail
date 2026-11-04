@@ -248,7 +248,7 @@ export class Updates {
   private trusted: Map<string, string> | undefined;
   /// The channel the running release came from: as it says (CHANNEL), else the channel it started on.
   readonly installed: Channel;
-  private items: Record<Kind, Item> = { station: empty(), claude: empty(), codex: empty(), dsh: empty(), grok: empty(), cursor: empty(), devin: empty(), hermes: empty() };
+  private items: Record<Kind, Item> = { station: empty(), claude: empty(), codex: empty(), dsh: empty(), grok: empty(), cursor: empty(), devin: empty(), hermes: empty(), agy: empty() };
   private checkedAt: number | null = null;
   private checking: Promise<void> | null = null;
   private listeners = new Set<() => void>();
@@ -539,6 +539,8 @@ export class Updates {
     }
     let latest: string | null = null;
     if (kind === "hermes") return { ...empty(), installed: found !== null, version, latest: null, how: null, note: { key: "station.updates.hermesExternal" } };
+    // The Antigravity CLI says no latest version but to itself (`agy update`, which gets it).
+    if (kind === "agy") return { ...empty(), installed: found !== null, version, latest: null, how: found ? (howToUpdate(kind, found, env) as How) : null, ...(found ? {} : { note: { key: "station.updates.agyExternal" } }) };
     try {
       // Devin's builds are its installer's, said in its manifest; the others' npm packages.
       const said = await fetchJson(kind === "devin" ? this.devinManifest : `${this.registry}/${kindPackage(kind)}/latest`);

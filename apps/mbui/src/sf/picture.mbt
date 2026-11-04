@@ -497,6 +497,7 @@ pub fn provider_logo(c : @ui.Ctx, runtime : String, kind : String, size : Double
       "cursor" => "cursor"
       "devin" => "devin"
       "hermes" => "hermes"
+      "agy" => "gemini"
       _ => "openai"
     }
   }
@@ -679,6 +680,7 @@ pub fn maker_icon(maker : String, runtime : String) -> String {
       "cursor" => "cursor"
       "devin" => "devin"
       "hermes" => "hermes"
+      "agy" => "gemini"
       _ => "anthropic"
     }
   }

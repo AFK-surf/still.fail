@@ -240,8 +240,8 @@ export interface AgentEnvDraft {
 	pending: boolean;
 }
 
-/** A runtime: Claude Code, Codex, DeepSeek Harness, Grok Build, Cursor or Devin. */
-export type RuntimeKind = "claude" | "codex" | "dsh" | "grok" | "cursor" | "devin" | "hermes";
+/** A runtime: Claude Code, Codex, DeepSeek Harness, Grok Build, Cursor, Devin, Hermes Agent or Antigravity CLI. */
+export type RuntimeKind = "claude" | "codex" | "dsh" | "grok" | "cursor" | "devin" | "hermes" | "agy";
 
 export interface AgentProcess {
 	pgid: number;

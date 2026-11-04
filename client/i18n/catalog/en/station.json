@@ -614,5 +614,7 @@
   "station.notice.denied": "The provider refused the request (403) without saying why",
   "station.failure.denied": "The provider refused the request",
   "station.notice.blocked": "The provider's firewall blocked this station's network; retry from another one",
-  "station.failure.blocked": "Blocked by the provider's firewall"
+  "station.failure.blocked": "Blocked by the provider's firewall",
+  "station.updates.agyExternal": "Install the Antigravity CLI on this machine from antigravity.google/cli; the station then keeps it up to date.",
+  "station.profile.agyFailed": "Couldn’t start the Antigravity CLI: {error}"
 }
