@@ -464,6 +464,12 @@ fn perf_where() -> String {
 }
 
 ///|
+fn perf_open(go : Bool) -> Bool {
+  ignore(go)
+  false
+}
+
+///|
 fn perf_size() -> Double {
   0.0
 }

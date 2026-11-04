@@ -287,6 +287,10 @@ pub fn pdf_pages(Int32) -> Int32
 
 pub fn perf_line(String) -> Unit
 
+pub fn perf_open() -> Bool
+
+pub fn perf_opens() -> Bool
+
 pub fn perf_read() -> Bytes
 
 pub fn perf_recording() -> Bool
@@ -844,6 +848,7 @@ pub(open) trait Host {
   fn perf_where(Self) -> String = _
   fn perf_size(Self) -> Double = _
   fn perf_read(Self) -> Bytes = _
+  fn perf_open(Self, Bool) -> Bool = _
   fn shared_in(Self) -> String = _
   fn shared_in_file(Self, Int32) -> Bytes = _
   fn app_version(Self) -> Int32 = _

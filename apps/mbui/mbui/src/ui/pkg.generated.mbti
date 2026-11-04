@@ -2677,6 +2677,7 @@ pub fn Tester::painted_why(Self) -> String
 pub fn Tester::parts_kept(Self) -> Int32
 pub fn Tester::paste(Self, String) -> Unit
 pub fn Tester::pending(Self) -> Array[(Int32, Int32)]
+pub fn Tester::perf_opened(Self) -> Int32
 pub fn Tester::perf_said(Self) -> (Array[Bool], Array[String])
 pub fn Tester::periodic(Self) -> Array[String]
 pub fn Tester::pick_asks(Self) -> Array[@hostapi.PickKind]
@@ -2730,6 +2731,7 @@ pub fn Tester::set_nav_able(Self, Bool) -> Unit
 pub fn Tester::set_notice_permission(Self, String) -> Unit
 pub fn Tester::set_notice_reply(Self, Bool?) -> Unit
 pub fn Tester::set_perf(Self, Int32) -> Unit
+pub fn Tester::set_perf_opens(Self, Bool) -> Unit
 pub fn Tester::set_perf_size(Self, Double) -> Unit
 pub fn Tester::set_player(Self, Int32, duration? : Double, position? : Double, playing? : Bool, natural? : (Double, Double), shown? : Bool, buffering? : Bool, buffered? : Double, ended? : Bool) -> Unit
 pub fn Tester::set_reduce_motion(Self, Bool) -> Unit
