@@ -525,6 +525,8 @@ export const AgentsLive = (control: Control) =>
       // And where each transcript's reading stood, for it to read on from there (not ask the readers, at each update).
       parts.carry("live.tails", () => hub.live.carriedTails(), (what) => hub.live.takeTails(what));
       hub.threadList = async () => JSON.parse(await readers.read("threadList", {}, "zh"));
+      hub.recentChatList = async (ws, home, limit) => JSON.parse(await readers.read("recentChatList", { ws, home, limit }, "zh"));
+      hub.searchChatList = async (ws, home, limit, query) => JSON.parse(await readers.read("searchChatList", { ws, home, limit, query }, "zh"));
       hub.latestMessages = async (thread, limit) => JSON.parse(await readers.read("latestMessages", { thread, limit }, "zh"));
       hub.followRunning();
       // The readers say what runs, and which chats clients made: the hub's.
