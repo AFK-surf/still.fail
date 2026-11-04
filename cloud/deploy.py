@@ -171,7 +171,8 @@ def rebrand_static(cloud: str = CLOUD) -> None:
         for path in (REPO / "dist" / site).rglob("*"):
             if path.suffix in (".html", ".webmanifest") and path.is_file():
                 text = path.read_text()
-                path.write_text(STILLFAIL_NAME.sub(CLOUDS[cloud]["name"], rehost(text, cloud)))
+                # (the name first: rehost would take a bare still.fail for the domain it also is)
+                path.write_text(rehost(STILLFAIL_NAME.sub(CLOUDS[cloud]["name"], text), cloud))
 
 
 def dropped(text: str, cloud: str = CLOUD) -> bool:
