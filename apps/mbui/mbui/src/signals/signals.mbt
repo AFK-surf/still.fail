@@ -35,8 +35,6 @@ priv struct Run {
   afters : Array[() -> Unit]
   /// doing what waits for a change told whole (after_flush): one at a time, in order, whatever they set meanwhile
   mut draining : Bool
-  /// Explicit phases consuming a captured snapshot may not secretly read or write reactive state.
-  mut access_guard : String?
 }
 
 ///|
@@ -53,28 +51,6 @@ let run : Run = {
   flushing: 0,
   afters: [],
   draining: false,
-  access_guard: None,
-}
-
-///|
-/// Set a diagnostic boundary around work that must use its captured inputs. Component initialization can suspend
-/// this boundary while installing its own tracked bindings, then restore it. Returns the preceding boundary.
-pub fn set_access_guard(reason : String?) -> String? {
-  let was = run.access_guard
-  run.access_guard = reason
-  was
-}
-
-///|
-fn access_checked(kind : String, loc : SourceLoc) -> Unit {
-  match run.access_guard {
-    Some(reason) => {
-      // A failing contract must not leave the next independent test inside this boundary.
-      run.access_guard = None
-      abort("\{reason}: \{kind} at \{loc}; capture this input before entering the phase")
-    }
-    None => ()
-  }
 }
 
 ///|
@@ -524,9 +500,7 @@ pub fn after_flush(f : () -> Unit) -> Unit {
 
 ///|
 /// The computed's value, worked out again first if what it read changed since (computedOper).
-#callsite(autofill(loc))
-pub fn[T] Computed::get(self : Computed[T], loc~ : SourceLoc) -> T {
-  access_checked("computed read", loc)
+fn[T] Computed::read_value(self : Computed[T]) -> T {
   let node = self.0
   let state = self.1
   let flags = node.flags
@@ -562,9 +536,7 @@ pub fn[T] Computed::get(self : Computed[T], loc~ : SourceLoc) -> T {
 
 ///|
 /// The signal's value (signalOper read): what was set, once it is read after.
-#callsite(autofill(loc))
-pub fn[T] Signal::get(self : Signal[T], loc~ : SourceLoc) -> T {
-  access_checked("signal read", loc)
+fn[T] Signal::read_value(self : Signal[T]) -> T {
   let node = self.0
   let state = self.1
   if (node.flags & DIRTY) != 0 {
@@ -711,15 +683,6 @@ fn purge_deps(sub : ReactiveNode) -> Unit {
 }
 
 // ── not alien-signals': for what keeps computeds of its own, and lets them go ──────────────────────────────
-
-///|
-/// What the computed made last, not worked out again (none before it was first read).
-#callsite(autofill(loc))
-pub fn[T] Computed::peek(self : Computed[T], loc~ : SourceLoc) -> T? {
-  access_checked("computed peek", loc)
-  let state = self.1
-  state.value
-}
 
 ///|
 /// The computed let go of what it read (as unwatched does with a computed nothing reads any more): what it read no
