@@ -278,7 +278,8 @@ function hide(inner: Inner, device: string): void {
 /// (ms, as this device saw it come).
 export type Met = { id: string; d: Duplex; workspaces: string[]; until?: number };
 /// This device's try: how far it got, the trusted devices showing a code.
-export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; workspaces: string[]; met: Map<string, Met>; run: number };
+/// `lost`: a trusted device that showed a code ended since, others still showing theirs (the code typed may be its).
+export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; workspaces: string[]; met: Map<string, Met>; run: number };
 
 const tryings = new WeakMap<Inner, Trying>();
 let runs = 0;
@@ -402,7 +403,7 @@ export function keep(inner: Inner, y: Trying, id: string, raw: Duplex, workspace
       y.state = "failed";
       y.error = endedText([why]);
       delete y.left;
-    }
+    } else y.lost = true;
     changed(inner, y);
   };
   y.met.set(id, m);
@@ -464,12 +465,15 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
     } else if (y.met.size > 0) {
       y.state = "wrong";
       y.left = left;
+      // Wrong at those still showing a code, while another ended as it was proved to: the code may well have been that
+      // one's (its line gone, its app put away), not wrong at all.
+      y.error = t(ends.length > 0 || y.lost ? "core-misc.lock.pairWrongOrGone" : "core-misc.lock.pairWrong", { n: left });
     } else {
       y.state = "failed";
       y.error = endedText(ends);
     }
     changed(inner, y);
-    if (approved === null) return yield* Effect.fail(y.state === "wrong" ? new CoreError("pair_wrong", t("core-misc.lock.pairWrong", { n: left })) : new CoreError("pair_ended", y.error ?? ""));
+    if (approved === null) return yield* Effect.fail(y.state === "wrong" ? new CoreError("pair_wrong", y.error ?? "") : new CoreError("pair_ended", y.error ?? ""));
     return approved;
   });
 }

@@ -2834,8 +2834,9 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
 
 ///|
 /// The lock as a device not confirmed in it has it (MBUI_FIXTURE=lock-waiting, lock-finding, lock-code, lock-wrong,
-/// lock-checking, lock-none, lock-failed, lock-nocode, lock-security, each also -dark: its waiting page asking,
-/// finding, the code being typed, typed wrong, being checked, no device found, the pairing failed, this device without
+/// lock-wrong-gone, lock-checking, lock-none, lock-failed, lock-nocode, lock-security, each also -dark: its waiting page
+/// asking, finding, the code being typed, typed wrong (or the device showing it gone), being checked, no device found,
+/// the pairing failed, this device without
 /// its code yet; its security page): this device waiting, not a signer. lock-upgrade: in the lock but not signing (its key lost), the code being typed on its
 /// security page.
 fn waiting_lock(mode : String) -> Json {
@@ -2845,6 +2846,8 @@ fn waiting_lock(mode : String) -> Json {
     "lock-code" | "lock-upgrade" =>
       obj([("state", str("code")), ("left", Json::number(3.0)), ("untilText", str("14:05 前有效"))])
     "lock-wrong" => obj([("state", str("wrong")), ("left", Json::number(2.0)), ("untilText", str("14:05 前有效"))])
+    "lock-wrong-gone" =>
+      obj([("state", str("wrong")), ("left", Json::number(2.0)), ("error", str("安全码不对，或显示它的设备已断开，还可以试 2 次")), ("untilText", str("14:05 前有效"))])
     "lock-checking" => obj([("state", str("checking")), ("left", Json::number(3.0))])
     "lock-none" => obj([("state", str("none"))])
     "lock-failed" => obj([("state", str("failed")), ("error", str("配对超时"))])

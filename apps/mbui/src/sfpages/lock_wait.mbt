@@ -67,8 +67,12 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false
       note(@sf.t("web-pages.security.pairChecking"), true)
     } else {
       if state == "wrong" {
-        c.text(@sf.t("web-pages.security.pairWrong", args=[("n", count(pair, "left").to_string())]), style=lock_failed)
-        |> ignore
+        // what the core says of it (the device showing the code may be gone); a core of before says nothing
+        let said = match text(pair, "error") {
+          "" => @sf.t("web-pages.security.pairWrong", args=[("n", count(pair, "left").to_string())])
+          words => words
+        }
+        c.text(said, style=lock_failed) |> ignore
       }
       // how long the code holds (14:05 前有效), and a new one asked for at any time: the code gone or not read in time,
       // nothing to type before asking again (2026-10-30)
