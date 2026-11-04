@@ -267,34 +267,36 @@ test "a long chat's page changes nothing in a frame it did not ask for, all thro
 }
 
 ///|
-test "each frame of a chat of 3000 messages costs what it costs a chat of 30, on a phone and a desktop" {
+/// Whether frame `a` of the chat of 3000 costs no more than frame `b`, the same of the chat of its last 30: the old
+/// frame built only where it is there, no more parts built nor nodes laid out, no more builds, no more of the window
+/// drawn again.
+fn host_no_more(a : @ui.HostFrame, b : @ui.HostFrame) -> Bool {
+  (!a.old_built || b.old_built) && a.parts_built <= b.parts_built && a.laid <= b.laid && a.passes <= b.passes &&
+  a.damage_share <= b.damage_share + 1.0e-9
+}
+
+///|
+/// Each step's frames of the chat of 3000 against those of its last 30 alone (chat-long-30: what shows is the same),
+/// frame by frame: as many frames, none costing more. What a page costs as it opens is no history's: a chat's page
+/// opened (another chosen, the chats' list come back to) lays out the same at 30 as at 3000, its first frame most
+/// of all (991 nodes at 1280, 627 at 390 on 5dd057f64e, the same at both lengths). Where the two part they part by
+/// what the shorter one draws more (its scroll bar's thumb, longer; a row that fades in later), never by what the
+/// longer one does.
+test "each frame of a chat of 3000 messages costs no more than the same frame of its last 30, on a phone and a desktop" {
   let out : Array[String] = []
   for w in [390.0, 1280.0] {
     let (long, _) = host_walk_of("chat-long", w)
     let (short, _) = host_walk_of("chat-long-30", w)
-    let costs = fn(steps : Array[HostStep]) {
-      steps.map(fn(s) {
-        (s.what, s.frames.map(fn(f) { (f.old_built, f.parts_built, f.laid, f.passes, f.damage.length(), f.damage_share >= 1.0) }))
-      })
-    }
-    let (a, b) = (costs(long), costs(short))
-    for i, s in a {
-      match b.get(i) {
-        Some(o) if o == s => ()
-        Some(o) => {
-          // (the first frame they part at, each side's: what of it costs more with the history)
-          let n = if s.1.length() < o.1.length() { s.1.length() } else { o.1.length() }
-          let mut k = 0
-          while k < n && s.1[k] == o.1[k] {
-            k = k + 1
+    for i, s in long {
+      match short.get(i) {
+        Some(o) if o.what == s.what && o.frames.length() == s.frames.length() =>
+          for k, f in s.frames {
+            if !host_no_more(f, o.frames[k]) {
+              out.push("\{s.what} at \{w}, frame \{k}: 3000 " + host_said(f) + "; 30 " + host_said(o.frames[k]))
+            }
           }
-          let side = fn(f : Array[(Bool, Int, Int, Int, Int, Bool)]) { f.get(k).map(fn(x) { "\{x}" }).unwrap_or("none") }
-          let drawn = fn(steps : Array[HostStep]) {
-            steps.search_by(fn(x) { x.what == s.0 }).map(fn(j) { steps[j].frames.get(k).map(host_said).unwrap_or("") }).unwrap_or("")
-          }
-          out.push("\{s.0} at \{w}, frame \{k} of \{s.1.length()} (30: \{o.1.length()}): 3000 \{side(s.1)}, 30 \{side(o.1)}; 3000 \{drawn(long)}; 30 \{drawn(short)}")
-        }
-        None => out.push("\{s.0} at \{w}: none at 30")
+        Some(o) => out.push("\{s.what} at \{w}: \{s.frames.length()} frames at 3000, \{o.frames.length()} at 30")
+        None => out.push("\{s.what} at \{w}: none at 30")
       }
     }
   }
