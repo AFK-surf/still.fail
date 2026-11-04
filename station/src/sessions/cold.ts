@@ -210,8 +210,7 @@ export class ColdRooms implements ColdStorage {
     let pids: number[];
     try {
       const { stdout } = await promisify(execFile)("ps", ["-U", String(process.getuid?.() ?? ""), "-o", "pid="]);
-      pids = stdout.split("
-").map((l) => Number(l.trim())).filter((p) => Number.isSafeInteger(p) && p > 1 && p !== process.pid);
+      pids = stdout.split("\n").map((l) => Number(l.trim())).filter((p) => Number.isSafeInteger(p) && p > 1 && p !== process.pid);
     } catch {
       return;
     }
