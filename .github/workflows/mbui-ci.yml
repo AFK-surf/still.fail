@@ -158,7 +158,7 @@ jobs:
           [ ! -d $S ] || find $S -name '*.lock' -delete
           # (and only where this run took or made any: a run whose programs moon found built already, over its own
           # build, split no C and used none, and would have kept none)
-          used=$( [ -d $S ] && find $S -mindepth 2 -maxdepth 2 -type d -newer "$RUNNER_TEMP/start" | head -1)
+          used=$( [ ! -d $S ] || find $S -mindepth 2 -maxdepth 2 -type d -newer "$RUNNER_TEMP/start" -print -quit)
           [ -z "$used" ] || [ "${{ steps.tests.outcome }}" != success ] || find $S -mindepth 2 -maxdepth 2 -type d ! -newer "$RUNNER_TEMP/start" -exec rm -rf {} +
           c=$( (cd $S 2>/dev/null && find . -mindepth 2 -maxdepth 2 -type d | sort) | sha256sum | cut -c1-16)
           echo "BUILD_KEY=$CACHE_PREFIX$OWN$c" >> "$GITHUB_ENV"
