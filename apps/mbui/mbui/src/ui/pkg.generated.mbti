@@ -1402,7 +1402,8 @@ pub fn Ctx::show(Self, Int32) -> Unit
 pub fn Ctx::shown_across(Self, Int32, but? : String) -> (Double, Double)?
 pub fn Ctx::shows_cut(Self, Int32) -> Bool
 pub fn Ctx::shows_motion(Self, Mover, Bool) -> Unit
-pub fn Ctx::shows_until(Self, Double) -> Unit
+#callsite(autofill(loc))
+pub fn Ctx::shows_until(Self, Double, loc~ : SourceLoc) -> Unit
 pub fn Ctx::sideways(Self, String, w? : Size, pad? : Double, padx? : Double, pady? : Double, across? : Bool, to_end? : String, fill? : Bool, show? : Int32, bar_in? : Double, () -> Unit) -> Int32
 pub fn Ctx::sideways_at(Self, String, across? : Bool) -> Double
 pub fn Ctx::sideways_rest(Self, String, capped? : Bool) -> Double
@@ -2694,6 +2695,7 @@ pub fn Tester::opened(Self) -> Array[String]
 pub fn Tester::overs_done(Self) -> Array[Bool]
 pub fn Tester::painted_why(Self) -> String
 pub fn Tester::parts_kept(Self) -> Int32
+pub fn Tester::redrawn_parts(Self) -> (Array[(Double, Double, Double, Double)], Int32)
 pub fn Tester::paste(Self, String) -> Unit
 pub fn Tester::pending(Self) -> Array[(Int32, Int32)]
 pub fn Tester::perf_opened(Self) -> Int32

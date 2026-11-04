@@ -810,6 +810,7 @@ fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
   let t0 = h_now()
   let parts = c.scene_parts_taken()
   presented_ms.val = h_now() - t0
+  presented_parts.val = parts
   match fake.val {
     Some(f) => f.instances = count
     None => {
@@ -841,6 +842,21 @@ fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
 /// How much of the window the frame presented last drew again (1 all of it, 0 none), for the probe (app.mbt).
 // kept across runs: the probe's (MBUI_PROBE), set by each frame presented before it is read
 let presented_share : Ref[Double] = { val: 1.0 }
+
+///|
+/// The parts the frame presented last is drawn again in (h_present: one with w < 0 all of it), for the probe and a test
+/// (Tester::redrawn_parts).
+// kept across runs: set by each frame presented before it is read
+let presented_parts : Ref[Array[(Double, Double, Double, Double)]] = { val: [] }
+
+///|
+/// The parts the last frame presented is drawn again in (x, y, w, h; one with w < 0 all of it, none nothing), and why
+/// it was all of it (Parts::why: 0 it was not, 1 nothing drawn before, 3 another window, scale or ground, 4 the
+/// glyphs' atlas made anew, 5 its parts more than half the window, 6 said of nothing smaller).
+pub fn Tester::redrawn_parts(self : Tester) -> (Array[(Double, Double, Double, Double)], Int) {
+  ignore(self)
+  (presented_parts.val, scene.parts.why())
+}
 
 ///|
 /// How long taking where the last frame presented changed took (its scene's parts settled: h_present), for a bench.

@@ -1544,3 +1544,40 @@ test "a field written in: one in an old view, nothing over it, is a field focuse
   let covered = (t.focused().map(fn(s) { s.label }), seen.val)
   assert_eq((under_alone, covered), ((Some("底下"), (true, true)), (Some("上面"), (true, false))))
 }
+
+///|
+test "words typed into a field of the tree's: the field alone told, no old view built again for them, the words drawn" {
+  let f = Field::new(text="")
+  let builds = Ref(0)
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  set_view_app(fn(root) {
+    root.box(fn(h) {
+      h.width(Is(Some(200.0))).height(Is(Some(20.0))) |> ignore
+      field(h, f, font_size=10.0, max_lines=1) |> ignore
+    })
+    |> ignore
+    // (an old view beside it, as the chat's page holds the bar's: what it builds counted)
+    old(root, fn(c) {
+      builds.val = builds.val + 1
+      c.box(w=Px(100.0), h=Px(20.0), fn() { c.text("beside", size=10.0) |> ignore }) |> ignore
+    })
+    .height(Is(Some(20.0)))
+    |> ignore
+  })
+  t.draw()
+  t.tap(30.0, 10.0)
+  t.draw()
+  t.measure_as_host()
+  let was = builds.val
+  let mut at = t.time()
+  for k, ch in ["a", "b", "c", "d"] {
+    t.text_told(ch, at)
+    for _ in 0..<3 {
+      at = at + 1000.0 / 120.0
+      t.frame_at(at)
+    }
+    assert_eq(builds.val, was, msg="typed \{k + 1}: the old view built again for them: \{t.built_why()}")
+  }
+  assert_eq(f.text(), "abcd")
+  assert_true(t.text_runs().iter().any(fn(r) { r.text == "abcd" }), msg="its words drawn: \{t.text_runs().map(fn(r) { r.text })}")
+}

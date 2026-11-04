@@ -28,7 +28,9 @@ fn ref_menu_node(
   w : Writing,
   active : () -> Bool,
 ) -> (Int, Int) -> Bool {
-  let offer : @signals.Signal[RefOffer?] = @signals.signal(None, same=fn(_, _) { false })
+  // (none offered again is nothing new, what reads it not told: each edit works it out anew, mostly to none. One offered
+  // is told each time, what it holds no value to compare)
+  let offer : @signals.Signal[RefOffer?] = @signals.signal(None, same=fn(a, b) { a is None && b is None })
   // ref_found remembers search answers. That work belongs to this effect, never a property read during layout.
   owner.owns(@signals.effect(fn() {
     let found = ref_found(src, spec(), w, active() && field_node.focused())

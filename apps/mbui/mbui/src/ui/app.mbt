@@ -2002,8 +2002,13 @@ fn on_text(kind : Int, s : String, a : Int, b : Int) -> Unit {
 
 ///|
 fn on_text_now(kind : Int, s : String, a : Int, b : Int) -> Unit {
+  // (into a field of the window's tree: told it alone, typed_in_tree; no discrete event of the hand's for what reads
+  // them to be built again)
+  let typed = typed_in_tree(kind)
   took_input("text", h_now(), [kind.to_double(), a.to_double(), b.to_double()], text=s)
-  hand_event()
+  if !typed {
+    hand_event()
+  }
   let c = g()
   // (words for a focus a modal layer of the window's tree keeps from input: none's, island_allows; but a field it
   // leaves what is typed to, its: Ctx::typing_allowed)
@@ -2040,11 +2045,20 @@ fn on_text_now(kind : Int, s : String, a : Int, b : Int) -> Unit {
   match c.editors.get(c.focus) {
     Some(st) if kind == text_float_begin || kind == text_float_move || kind == text_float_end => {
       float_caret(c, st, kind, a.to_double() / text_float_unit, b.to_double() / text_float_unit, h_now())
-      h_request_frame()
+      if typed {
+        tree_field_redraw()
+      } else {
+        h_request_frame()
+      }
     }
     Some(st) => {
       st.text_input(kind, s, a, b, h_now())
-      h_request_frame()
+      // (a field of the tree's painted again for it, its words told as signals; an old view's editor, the frame)
+      if typed {
+        tree_field_redraw()
+      } else {
+        h_request_frame()
+      }
     }
     None => ()
   }

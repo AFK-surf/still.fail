@@ -21,6 +21,7 @@ pub struct Parts {
   // private fields
 }
 pub fn Parts::add(Self, (Double, Double, Double, Double)) -> Unit
+pub fn Parts::add_changed(Self, FixedArray[Double], Int32, FixedArray[Double], Int32) -> Unit
 pub fn Parts::any(Self) -> Bool
 pub fn Parts::new() -> Self
 pub fn Parts::reach_of(Self, FixedArray[Double], Int32, Int32) -> (Double, Double, Double, Double)

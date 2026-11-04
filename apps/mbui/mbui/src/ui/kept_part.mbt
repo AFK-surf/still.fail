@@ -138,6 +138,9 @@ priv struct KeptDue {
   at : Double
   mut later : Bool
   come : @signals.Signal[Bool]
+  /// where it was first asked for (a build's wake_at_time, shows_until): what a part built again as it comes says
+  /// changed what it read, not the clock's frame start that sets it
+  by : SourceLoc
 }
 
 ///|
@@ -155,7 +158,7 @@ fn part_live() -> Unit {
 ///|
 /// What is built now changes at `t` (`later`: what is shown does not wait for it): built again in the first frame at
 /// or past it, kept or not; one past already, the next frame's.
-fn part_wake(now : Double, t : Double, later : Bool) -> Unit {
+fn part_wake(now : Double, t : Double, later : Bool, loc : SourceLoc) -> Unit {
   if !part_building() || t == @double.infinity {
     return
   }
@@ -171,7 +174,7 @@ fn part_wake(now : Double, t : Double, later : Bool) -> Unit {
   let d = if i < dues.length() && dues[i].at == t {
     dues[i]
   } else {
-    let d = { at: t, later: true, come: @signals.signal(false) }
+    let d = { at: t, later: true, come: @signals.signal(false), by: loc }
     dues.insert(i, d)
     d
   }
@@ -213,11 +216,12 @@ pub fn Ctx::shows_motion(self : Ctx, who : Mover, going : Bool) -> Unit {
 /// What is being built changes at `t` (the frames' clock: a motion's declared end, read as whether it is over): built
 /// again in the first frame at or past it (painted again, where it is read as it is painted: frame_watch.mbt), kept as
 /// it was drawn or not.
-pub fn Ctx::shows_until(self : Ctx, t : Double) -> Unit {
+#callsite(autofill(loc))
+pub fn Ctx::shows_until(self : Ctx, t : Double, loc~ : SourceLoc) -> Unit {
   if t > self.clock && t < @double.infinity {
-    self.wake_at_time(t, later=true)
+    self.wake_at_time(t, later=true, loc~)
   } else {
-    part_wake(self.clock, t, true)
+    part_wake(self.clock, t, true, loc)
   }
 }
 
@@ -230,7 +234,7 @@ fn clock_frame_start(t : Double) -> Unit {
   let dues = kept_clock.dues
   let mut n = 0
   while n < dues.length() && dues[n].at <= t {
-    dues[n].come.set(true)
+    dues[n].come.set(true, loc=dues[n].by)
     n = n + 1
   }
   if n > 0 {

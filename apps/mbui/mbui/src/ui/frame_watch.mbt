@@ -356,9 +356,14 @@ pub fn Ctx::now_of(self : Ctx, who : Mover, loc~ : SourceLoc) -> Double {
 }
 
 ///|
-/// What came from outside and is no signal: what each frame's build reads (outside_said) built again.
-fn outside_counted() -> Unit {
-  outside_said.set(@signals.untracked(fn() { outside_said.get() }) + 1)
+/// What came from outside and is no signal: what each frame's build reads (outside_said) built again. `by`: the set
+/// that told it, where one did (an old view's read changed): said as where what the frame read was set, not here.
+fn outside_counted(by? : SourceLoc) -> Unit {
+  let n = @signals.untracked(fn() { outside_said.get() }) + 1
+  match by {
+    Some(loc) => outside_said.set(n, loc~)
+    None => outside_said.set(n)
+  }
 }
 
 ///|
@@ -575,8 +580,49 @@ fn looks_apply(c : Ctx) -> Unit {
 /// What of the host the frame is drawn by and its build reads (the window, its scale, the system's settings as
 /// envrec.mbt records them, the faces' atlas, whether something reads the widgets out, the layout's epoch), as one line.
 fn looks_env(c : Ctx, w : Double, h : Double, scale : Double) -> String {
-  "\{w} \{h} \{scale} \{whole_px_layout()} \{font_scale()} \{h_atlas_generation()} \{h_a11y_on()} \{reduced_motion()} \{h_reduce_transparency()} \{system_dark()} \{window_inset()} \{h_h264_here()} \{h_stream_feeds()} \{h_stream_layers()} \{copy_shown()} \{layout_reuse.val} \{c.epoch} \{view_island_said()}"
+  let terms = looks_env_terms(c, w, h, scale)
+  // (what of it changed since the frame before, named: the probe's why, frame_drawn)
+  let was = env_terms_before.val
+  env_changed.val = if was.length() == terms.length() {
+    terms.mapi(fn(i, t) { if t.1 != was[i].1 { t.0 } else { "" } }).filter(fn(n) { n != "" }).join(", ")
+  } else {
+    ""
+  }
+  env_terms_before.val = terms
+  terms.map(fn(t) { t.1 }).join(" ")
 }
+
+///|
+/// What the frame is built in besides what it reads (looks_env), each named.
+fn looks_env_terms(c : Ctx, w : Double, h : Double, scale : Double) -> Array[(String, String)] {
+  [
+    ("window", "\{w} \{h} \{scale}"),
+    ("whole pixels", whole_px_layout().to_string()),
+    ("font scale", font_scale().to_string()),
+    ("atlas", h_atlas_generation().to_string()),
+    ("a screen reader", h_a11y_on().to_string()),
+    ("reduced motion", reduced_motion().to_string()),
+    ("reduced transparency", h_reduce_transparency().to_string()),
+    ("dark", system_dark().to_string()),
+    ("inset", window_inset().to_string()),
+    ("h264", h_h264_here().to_string()),
+    ("stream feeds", h_stream_feeds().to_string()),
+    ("stream layers", h_stream_layers().to_string()),
+    ("copy shown", copy_shown().to_string()),
+    ("layout reuse", layout_reuse.val.to_string()),
+    ("epoch", c.epoch.to_string()),
+    ("old views", view_island_said().to_string()),
+  ]
+}
+
+///|
+/// looks_env's terms as the frame before had them, and the names of those that changed since (none: "").
+// kept across runs: written by each frame before it is read
+let env_terms_before : Ref[Array[(String, String)]] = Ref([])
+
+///|
+// kept across runs: written by each frame before it is read
+let env_changed : Ref[String] = Ref("")
 
 ///|
 /// The frame is built and laid out, `root` its tree (frame_body): what it laid out said as one number, and whether the
@@ -1002,7 +1048,9 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     if clock_read_at.val != "" {
       "the clock read at \{said_clock(clock_read_at.val, clock_read_who.val)}"
     } else {
-      "what it read changed" + (if frame_told_at.val != "" { ", set at \{frame_told_at.val}" } else { "" })
+      "what it read changed" +
+      (if frame_told_at.val != "" { ", set at \{frame_told_at.val}" } else { "" }) +
+      (if env_changed.val != "" { " (what it is built in: \{env_changed.val})" } else { "" })
     }
   } else if !looks_base.left {
     "it left more to come"
