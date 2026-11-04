@@ -129,7 +129,13 @@ KEEP_BUILDS = 10
 # never had, and those routes and aliases go. The Workers, their Durable Objects and the bucket keep their names (another
 # account's). The deploy directory is that cloud's (its keys.json: losing it logs out everyone of that cloud).
 CLOUDS = {
-    "monoid": {"zones": {"still.fail": "monoid.build", "youdid.wtf": "monoid.zone"}, "dropped": ["3720.org"]},
+    "monoid": {
+        "zones": {"still.fail": "monoid.build", "youdid.wtf": "monoid.zone"},
+        "dropped": ["3720.org"],
+        # The API's own: Cloudflare Access in front of the console (src/admin.ts), its application "monoid admin" on
+        # admin.monoid.build letting in cue.surf's and comma.surf's emails.
+        "api_vars": {"ACCESS_TEAM_DOMAIN": "https://afksurf.cloudflareaccess.com", "ACCESS_AUD": "53ffdc9eaf8c6827ad4081e898f4019d440e0de828643b995759a222c35f86e5"},
+    },
 }
 CLOUD = env_var("CLOUD") or ""
 if CLOUD and CLOUD not in CLOUDS:
@@ -165,6 +171,8 @@ def for_cloud(config: dict, cloud: str = CLOUD) -> dict:
         kept[key] = value
     if "vars" in config:
         config["vars"] = kept
+    if "ADMIN_ORIGIN" in kept:
+        config["vars"] |= CLOUDS[cloud].get("api_vars", {})
     return config
 
 
