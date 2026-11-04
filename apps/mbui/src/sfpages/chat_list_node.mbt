@@ -222,10 +222,26 @@ pub fn chat_list_node(
   )
   let rows = fn() { (sized.read)().0 }
   let keys = fn() { (sized.read)().1 }
+  // The visible rows read their content and position many times as they scroll. Index this version once instead
+  // of searching the complete history for each one. A departing row keeps its list key until its room closes.
+  let row_positions = @signals.computed(fn(_) {
+    let positions : Map[String, Int] = {}
+    for i, k in keys() { positions[k] = i }
+    positions
+  })
   let row_of = fn(k : String) -> (Entry, Int)? {
-    let (all, keys) = (sized.read)()
-    keys.search(k).map(fn(i) { (all[i], i) })
+    row_positions.get().get(k).map(fn(i) { (rows()[i], i) })
   }
+  // Reading and decision markers use the entry's current identity, which can differ from a departing list key
+  // when a sent message is taken over by the core. Keep the first match, as their history lookup did before.
+  let entries_by_key = @signals.computed(fn(_) {
+    let entries : Map[String, Entry] = {}
+    for e in rows() {
+      let k = id_of(e)
+      if !entries.contains(k) { entries[k] = e }
+    }
+    entries
+  })
   // (the rows made now, by their keys: where each is, what is read)
   let row_views : Map[String, @view.View] = {}
   let row_rects : @sf.LiveMap[String, (Double, Double, Double, Double)] = @sf.LiveMap::new()
@@ -727,9 +743,9 @@ pub fn chat_list_node(
   // the list's top its top is, the message at its foot; told the core as the list comes to rest (tell_place) and what
   // is read (tell_focus)
   @ui.read_drawn(v, fn() {
-    let all = rows()
+    let all = entries_by_key.get()
     let in_sight = shown.get().map(fn(k) {
-      let e = all.iter().find_first(fn(e) { id_of(e) == k })
+      let e = all.get(k)
       let seq = match e { Some(Said(m)) => m.seq; _ => -1.0 }
       (seq, row_rects.get(k), e is Some(State(_, _, _)))
     })
@@ -798,15 +814,11 @@ pub fn chat_list_node(
     if in_sight.length() == 0 {
       return false
     }
-    let all = rows()
+    let all = entries_by_key.get()
     !in_sight.iter().any(fn(k) {
-      match all.search_by(fn(e) { id_of(e) == k }) {
-        Some(i) =>
-          match all[i] {
-            Said(m) => asks.contains(m.seq)
-            _ => false
-          }
-        None => false
+      match all.get(k) {
+        Some(Said(m)) => asks.contains(m.seq)
+        _ => false
       }
     })
   }
