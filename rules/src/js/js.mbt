@@ -357,3 +357,14 @@ pub fn admit_one_js(s : @lock.LockState, who : JsValue, now : Double, crypto : J
   }
   to_js(answer)
 }
+
+///|
+/// A whole chain folded (station/src/cloud/lock.ts `fold`), as `genesis_js` and `apply_js` give it: `{state, rules}`
+/// or `{error}`; the state made into JS once, at the end.
+pub fn fold_held_js(entries : JsValue, now : JsValue, crypto : JsCrypto) -> JsValue {
+  try held(@lock.fold(entries_of(entries), opt_num(now), crypto)) catch {
+    @lock.Refused(why) | @lock.Refusal(why) => refused(why)
+    @form.Invalid(why) => refused(why)
+    e => refused(e.to_string())
+  }
+}

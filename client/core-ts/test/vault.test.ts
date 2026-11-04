@@ -136,10 +136,10 @@ test("the lock is checked entry by entry: a device only its signers could add", 
   const own = signed(next("ws", head, 1001, "device", { id: "cd".repeat(32), sub: "s2", kind: "app", label: "x", sign_key: key(fill(4)).id }), other);
   assert.equal(checkLock([g, own], 2000).devices.get("cd".repeat(32))?.sub, "s2");
   const theirs = signed(next("ws", head, 1001, "device", { id: "cd".repeat(32), sub: "s1", kind: "app", label: "x", sign_key: key(fill(4)).id }), other);
-  assert.throws(() => checkLock([g, theirs], 2000), /not its signer's/);
+  assert.throws(() => checkLock([g, theirs], 2000), /members add only their own devices/);
   // Signed by a key the lock does not name; changed after signing; not following the head.
   assert.throws(() => checkLock([g, signed(next("ws", head, 1001, "member", { sub: "s3", email: "c", role: "owner" }), key(fill(9)))], 2000), /not signed by a device/);
-  assert.throws(() => checkLock([g, { ...own, body: { ...(own.body as object), sub: "s1" } }], 2000), /not signed/);
+  assert.throws(() => checkLock([g, { ...own, body: { ...(own.body as object), sub: "s1" } }], 2000), /signature invalid/);
   assert.throws(() => checkLock([g, { ...own, prev: "00".repeat(32) }], 2000), /does not follow/);
   assert.throws(() => checkLock([{ ...g, body: { ...(g.body as object), owner: "s2" } }], 2000), /owner/);
 });
