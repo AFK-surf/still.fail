@@ -1,0 +1,28 @@
+# The workspace lock's rules in MoonBit (rules/, docs/rules.md): the JS committed in rules/js is what its source
+# builds to (station, cloud and the core take that JS as it is), and what is proved there still proves.
+name: rules
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "rules/**"
+      - ".github/workflows/rules.yml"
+      - ".github/actions/mbui-moonbit/**"
+  workflow_dispatch:
+concurrency:
+  group: rules-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+permissions:
+  contents: read
+jobs:
+  built:
+    if: github.repository == 'AFK-surf/still.fail'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/mbui-moonbit
+      - name: rules/js is what rules/src builds to
+        run: |
+          sh rules/build.sh
+          git diff --exit-code -- rules/js || { echo "rules/js is not what rules/src builds to: run rules/build.sh and commit it"; exit 1; }
