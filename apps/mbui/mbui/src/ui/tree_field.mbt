@@ -109,10 +109,11 @@ pub fn field(
   parent.box(fn(f) {
     let id = f.id()
     let st = field.st
-    // (one Field, one editor: held by another node still, it is told; an old view's editor given it then, Ctx::editor)
+    // (one Field, one editor: held by another node still, it is told; an old view's editor given it then, Ctx::editor.
+    // Given so, a fault (the boundary round it shows it), this field taking it over meanwhile)
     match st.tree_node {
       Some(other) if other != id && tree_fields.contains(other) =>
-        abort("field: one Field given to two fields of the tree's: a Field is one editor's")
+        f.fault("field: one Field given to two fields of the tree's: a Field is one editor's")
       _ => ()
     }
     st.tree_node = Some(id)

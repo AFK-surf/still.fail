@@ -643,5 +643,6 @@
   "android-misc.updates.retry": "Retry updating to {version}",
   "android-misc.updates.updated": "{app} updated to {version}. Tap to open",
   "android-misc.updates.waitWifi": "Downloads by itself on Wi‑Fi · {size}",
-  "android-misc.adb.manage": "Manage in Settings"
+  "android-misc.adb.manage": "Manage in Settings",
+  "android-misc.fault.shown": "This part couldn't be shown"
 }

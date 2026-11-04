@@ -1726,6 +1726,32 @@ fn Ctx::view_blit(
 let island_building : Ref[@view.NodeId?] = Ref(None)
 
 ///|
+/// What an old view's build asked that cannot be done as asked (@view.Tree::fault): told to the boundary round the old
+/// view being built (each old view is one: `old`), its build going on as what asked it says.
+fn old_fault(said : String) -> Unit {
+  match (island_building.val, view_app.val) {
+    (Some(id), Some(tree)) => tree.fault(id, said)
+    _ => @view.fault(said)
+  }
+}
+
+///|
+/// What an old view shows in place of what it builds once that faulted (old_fault): told what faulted. An app's own
+/// words said as it starts; till then a quiet line.
+// kept across runs: the app's, said once as it starts
+pub let old_fault_shown : Ref[(Ctx, String) -> Unit] = Ref(fn(c, _) {
+  c.box(style=old_fault_room, fn() { c.text("This part could not be shown", style=old_fault_words) |> ignore }) |> ignore
+})
+
+///|
+// kept across runs: a value (no field of it changes)
+let old_fault_room : Style = css("w=Full h=Full align=ACenter justify=JCenter p=S4")
+
+///|
+// kept across runs: a value (no field of it changes)
+let old_fault_words : TextStyle = text_style(size=Meta, color=Muted)
+
+///|
 /// Whether what the old view in node `island` builds may take input now (keys, a stop of Tab, the focus's words, a
 /// wheel, what is read out): no modal layer of the window's tree is on, or the topmost holds it (Tree::allows). None
 /// (built in no island, or in a layer it opened over everything: a menu, a sheet), always.
@@ -2322,11 +2348,17 @@ pub fn old(
         }),
       )
     })
+    // (a boundary: what its build asks that cannot be done as asked (old_fault) shown in its place from then on)
+    let faulted : @signals.Signal[String?] = @signals.signal(None)
+    n.faults_to(fn(said) { faulted.set(Some(said)) }) |> ignore
     // (what it builds marked with it, for what takes input to ask whether it may: island_allows)
     let held_build = fn(c : Ctx) {
       let was = island_building.val
       island_building.val = Some(id)
-      build(c)
+      match faulted.get() {
+        Some(said) => (old_fault_shown.val)(c, said)
+        None => build(c)
+      }
       island_building.val = was
     }
     // (made as the frame is built: as the old views are built (by what one of them builds: a dialog presented as a page

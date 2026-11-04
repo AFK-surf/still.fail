@@ -187,6 +187,9 @@ fn scene_arg(name : String) -> String {
 }
 ///|
 pub fn draw() -> Int {
+  // (the app as it runs on a host: what faults shown by its boundary, as there, and said on the log)
+  @view.faults_stop.val = false
+  @view.fault_told.val = Some(fn(said) { println("fault: " + said) })
   let source = @sffilmscene.source(scene_arg)
   let view = fn(c : @ui.Ctx) { @sfapp.view(c, source()) }
   let t = @ui.Tester::new(view, tree=fn(root : @view.View) { @sfapp.app_tree(source())(root) },
