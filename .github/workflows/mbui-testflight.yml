@@ -17,6 +17,10 @@ on:
         description: Fresh positive build number (existing 0.1.0 build 4 is already used)
         required: true
         type: string
+      external:
+        description: Also add this build to the external group and submit it to Beta App Review
+        default: false
+        type: boolean
 # All versions of this app share one upload lock. Other uploaders must coordinate manually.
 concurrency:
   group: mbui-testflight-6818750243
@@ -34,6 +38,7 @@ jobs:
           ref: ${{ github.sha }}
       - run: bash apps/mbui/scripts/testflight-guard-test.sh
       - run: bash apps/mbui/scripts/testflight-sign-test.sh
+      - run: bash scripts/testflight-distribute-test.sh
       - run: bash apps/mbui/scripts/testflight-guard.sh checkout
         env:
           RELEASE_SHA: ${{ inputs.sha }}
@@ -122,3 +127,18 @@ jobs:
             security delete-keychain "$dir/signing.keychain-db" >/dev/null 2>&1 || true
             rm -rf "$dir"
           done
+  # The build uploaded: mbui-testflight-distribute.yml waits for Apple to process it and adds it to its groups, apart from
+  # this run, so what fails there leaves the upload standing.
+  distribute:
+    needs: release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - run: gh workflow run mbui-testflight-distribute.yml --repo "$GITHUB_REPOSITORY" --ref main -f version="$RELEASE_VERSION" -f build="$RELEASE_BUILD" -f external="$RELEASE_EXTERNAL" -f round=1
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_BUILD: ${{ inputs.build }}
+          RELEASE_EXTERNAL: ${{ inputs.external }}

@@ -1,6 +1,7 @@
 #!/bin/bash
-# CI only. Read-only ASC identity/duplicate preflight; Apple altool alone performs upload.
-# Sourced by testflight.sh so no JWT/key is written to Actions outputs.
+# CI only. ASC identity/duplicate preflight, read-only; Apple altool alone performs upload. asc_post is for what follows
+# the upload alone (scripts/testflight-distribute.sh).
+# Sourced so no JWT/key is written to Actions outputs.
 asc_token() {
   local now header payload data sig r s
   now=$(date +%s)
@@ -19,6 +20,12 @@ b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
 asc_get() {
   curl --fail --silent --show-error --globoff --max-time 60 \
     -H "Authorization: Bearer $ASC_TOKEN" "https://api.appstoreconnect.apple.com/v1/$1"
+}
+# Its JSON body on stdin; what Apple says of a refusal printed, with no secret in it.
+asc_post() {
+  curl --fail-with-body --silent --show-error --globoff --max-time 60 -X POST \
+    -H "Authorization: Bearer $ASC_TOKEN" -H 'Content-Type: application/json' --data-binary @- \
+    "https://api.appstoreconnect.apple.com/v1/$1" >&2
 }
 asc_preflight() {
   asc_token
