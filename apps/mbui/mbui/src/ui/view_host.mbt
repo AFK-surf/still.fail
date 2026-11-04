@@ -359,6 +359,8 @@ pub fn view_painted() -> ViewPaintWork {
 /// As a run begins: no tree, its nodes let go. What took back by the old views no more held (what calls it and what it
 /// was said in): none takes back till a frame of the next says what does; nothing held of them.
 fn view_forget() -> Unit {
+  view_events.clear()
+  view_frame_committed.val = false
   view_read_tells.clear()
   view_shape_of.val = OfOld
   let c = g()
@@ -643,9 +645,9 @@ fn view_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // (a page's list's rows on the pixels as this frame draws them, as an old view's list's are, before anything of it is
   // laid out: Tree::set_rows_grid)
   tree.set_rows_grid(g().rows_grid_of(scale))
-  // (the logic's moment for all of this frame: what the host has come to as it began; brought again in the frame, the
-  // tree goes no further than that, whatever time its building takes)
-  view_logic_at.val = h_now()
+  // Inputs have been committed. This is the host frame's only call into the tree; later outside events belong to
+  // the next frame, with their own moments preserved.
+  view_frame_committed.val = true
   view_brought(tree)
   // (what a still pointer is over, the tree laid out as this frame has it, before anything is built or drawn of it:
   // view_pointed_again)
@@ -666,24 +668,7 @@ fn view_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
 let view_logic_at : Ref[Double] = Ref(0.0)
 
 ///|
-/// What the frame took as it began (messages, the host's answers, the hand) told the window's tree: brought, before the
-/// frame decides what of the old views it builds again (where they are placed is part of that: view_island_said).
-fn view_arrived() -> Unit {
-  match view_app.val {
-    Some(tree) if tree.told_since() => {
-      view_brought(tree)
-      // (what a still pointer is over, as what came moved it: view_pointed_again)
-      view_pointed_again()
-    }
-    _ => ()
-  }
-}
-
-///|
-/// The tree brought as the frame goes (its logic to the host's now, drawn at the frame's moment), what it marked done:
-/// the instances it changed to be made again, where each old view is placed now. As the frame begins, and again where
-/// something told it as the frame went (a message the frame took), before the old views are built and before it is
-/// painted: what a frame takes it draws.
+/// The input snapshot laid out once, at the host frame's actual time; only paint samples its presentation time.
 fn view_brought(tree : @view.Tree) -> Unit {
   let (w, h) = view_window.val
   @signals.untracked(fn() { tree.frame(w, h, now=view_logic_at.val) |> ignore })
@@ -754,14 +739,6 @@ fn view_island_said() -> String {
 /// The old frame's build where the window is a tree: the one old view's own where it is the whole window; else each
 /// old view in a box of its own where it is placed, cut to it, its subtree made once there by its own watch.
 fn old_frame(c : Ctx) -> Unit {
-  // (told since the frame began (what the frame took as it went: a core's answer, the system's bars), or old views made
-  // or let go: the tree brought and each placed as it is, so that the frame builds those there are where they are)
-  match view_app.val {
-    Some(tree) if tree.told_since() ||
-      old_islands.length() != old_placed.length() ||
-      old_islands.iter().any(fn(o) { !old_placed.iter().any(fn(p) { p.0 == o.id }) }) => view_brought(tree)
-    _ => ()
-  }
   // (none laid out yet in this pass: each placed says its own, none where the old frame is the one old view)
   for o in old_islands {
     o.held_box = -1
@@ -887,9 +864,6 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   // (read: told as the tree has something to do, this paint is done again; told as the frame was built, brought first:
   // what the frame took is what it paints)
   view_due.get() |> ignore
-  if tree.told_since() {
-    view_brought(tree)
-  }
   // (the frame's input targets, the old views' and what the old frame put over all of it, found before anything is
   // drawn (Ctx::view_targets); what a still pointer is over told as they say, the tree brought so: drawn as it is now)
   let layers_from = self.view_targets(root, tree)
@@ -918,9 +892,6 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       }
     }
     None => ()
-  }
-  if tree.told_since() {
-    view_brought(tree)
   }
   // (what the tree changed taken, whoever brought it to its moment, before anything of it is painted: by this frame's
   // bringing, or by an input's finding things meanwhile, Tree::bring_to, with nothing told after: what is painted is
@@ -2491,6 +2462,7 @@ fn view_tapped_old() -> Unit {
 /// As the frame ends: what reads the window's tree's clock keeps the frames coming as the clock goes (a look by the
 /// time, a node fading as it leaves); what only ends at a moment (a leaving nothing draws by) is woken for then.
 fn view_frame_end(c : Ctx) -> Unit {
+  if !view_events.is_empty() { c.wants_frame = true }
   let tree = match view_app.val {
     Some(t) => t
     None => return
@@ -2818,15 +2790,41 @@ fn view_event(f : () -> Unit) -> Unit {
 /// One event (view_event's) whose own facts (`said`: what the host says it came by) are so as of its moment, told
 /// before it is taken (Tree::event_said).
 fn view_event_said(said : () -> Unit, f : () -> Unit) -> Unit {
+  let at = h_event_time()
+  if frame_running.val && view_frame_committed.val {
+    view_events.push((at, said, f))
+    h_frame_owed()
+    return
+  }
+  view_event_at(at, said, f)
+}
+
+///|
+// The input cutoff is the start of retained layout. A callback during layout or paint retains its original time
+// and is committed before the next frame, without restarting the current one.
+let view_frame_committed : Ref[Bool] = Ref(false)
+
+///|
+let view_events : Array[(Double, () -> Unit, () -> Unit)] = []
+
+///|
+fn view_events_taken() -> Unit {
+  let pending = view_events.copy()
+  view_events.clear()
+  for (at, said, f) in pending { view_event_at(at, said, f) }
+}
+
+///|
+fn view_event_at(at : Double, said : () -> Unit, f : () -> Unit) -> Unit {
   match view_app.val {
-    Some(t) => t.event_said(h_event_time(), said, f)
+    Some(t) => t.event_said(at, said, f)
     None => {
       said()
       f()
     }
   }
   // (the hand as this event left it, whole, at its moment: hand_turns.mbt)
-  turns_said(g(), h_event_time())
+  turns_said(g(), at)
 }
 
 ///|

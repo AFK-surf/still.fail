@@ -116,6 +116,14 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // run's input: envrec.mbt)
   c.device_frame_start()
   env_at_frame()
+  view_logic_at.val = h_now()
+  c.width = w
+  c.height = h
+  c.window_w = w
+  c.window_h = h
+  c.clock = view_logic_at.val
+  view_frame_committed.val = false
+  frame_arrivals(c, w, h, scale, t)
   // (built whole where what it read changed, painted alone where only what its paint read did, or of its looks by the
   // clock alone: frame_watch.mbt)
   // what is made once laid out, placed and drawn as its frame does; the old view in the room its node is given
@@ -186,6 +194,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
     @hostapi.frame_awaiting(rt.awaiting(), what)
   }
   frame_running.val = false
+  view_frame_committed.val = false
   frame_built.val = false
 }
 
@@ -202,6 +211,9 @@ pub fn frame_offscreen(
   t : Double,
 ) -> Ctx {
   g_view.val = view
+  let c = g()
+  c.clock = t
+  frame_arrivals(c, w, h, scale, t)
   frame_body(g(), w, h, scale, t) |> ignore
   g()
 }
@@ -273,22 +285,11 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   perf_frame_start()
   rows_frame_start()
   let t0 = work_now()
-  // what was posted from outside since the last frame (a core's answers), all of it, handed to its handlers in the
-  // order it came, before anything reads it (messages.mbt)
-  take_messages()
-  // (the probe's: how long the messages took, slow_probe)
-  probe_msgs_ms.val = work_now() - t0
-  // the runtime's fibers run up to this frame's time (fx.mbt): the view reads what they left
-  fx_frame_start(c)
   // the parts kept (kept_part.mbt): another run's forgotten, what the runtime did since the last frame an event from outside
   parts_frame_start(c)
   // what came from outside and of the hand, taken: read, so that the next frame is built again as more comes
   // (frame_watch.mbt)
   frame_inputs_read()
-  // ⌘V's words for a field of the window's tree come with this frame (a Tester's answers by the frame: this one's from
-  // here, ClipboardRead::got), taken before the tree is brought for its paint: what it is laid out and drawn by
-  // (tree_field.mbt; a host's, at its answer's own moment: on_outside_now)
-  tree_fields_pasting(c.clock)
   // what is said to move, handed this frame's time, before the view reads where it is (motion_data.mbt)
   c.movers_sample()
   // what the boxes moved by a move_state were shown as in the last frame: where a move set out now starts (move_state.mbt)
