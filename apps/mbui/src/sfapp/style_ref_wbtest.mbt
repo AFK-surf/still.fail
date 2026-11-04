@@ -53,39 +53,40 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     }
   }
   inspect(out.to_string(), content=(
-    #|waiting narrow 28261:7a29608c
-    #|waiting wide 58401:7892ac5e
-    #|waiting-dark narrow 28177:1a6c853a
-    #|waiting-dark wide 58224:de7ec378
+    #|waiting narrow 28261:276919d4
+    #|waiting wide 58401:95c1ebd
+    #|waiting-dark narrow 28177:273f1828
+    #|waiting-dark wide 58224:d4684317
     #|finding narrow 33120:e0cb13d0
     #|finding wide 63930:9f4f7c0a
     #|finding-dark narrow 33233:7bd3d895
     #|finding-dark wide 63950:d3000bbf
-    #|code narrow 26964:bf1cebaa
-    #|code wide 57233:ac19855e
-    #|code-dark narrow 26856:5b9d9535
-    #|code-dark wide 57032:e8dda263
-    #|wrong narrow 28173:fc9291de
-    #|wrong wide 58462:785dc777
-    #|wrong-dark narrow 28275:16677d0b
-    #|wrong-dark wide 58471:9f4e9514
+    #|code narrow 26964:88a7f87b
+    #|code wide 57233:951cbac9
+    #|code-dark narrow 26856:ce8b5d5e
+    #|code-dark wide 57032:726c81e
+    #|wrong narrow 28173:7d27636f
+    #|wrong wide 58462:4eabfb38
+    #|wrong-dark narrow 28275:4b23cc12
+    #|wrong-dark wide 58471:fe8bb2bd
     #|checking narrow 35247:a55b4d68
     #|checking wide 66177:4541c7d2
     #|checking-dark narrow 35339:cf8b4c9d
     #|checking-dark wide 66176:8bf911b9
-    #|none narrow 27729:69771d7b
-    #|none wide 57877:947de3f4
-    #|none-dark narrow 27649:50d3e991
-    #|none-dark wide 57704:834ec27c
-    #|failed narrow 23488:4fd79e5b
-    #|failed wide 53629:375fb30
-    #|failed-dark narrow 23488:bacab635
-    #|failed-dark wide 53536:49a572b4
-    #|nocode narrow 28261:7a29608c
-    #|nocode wide 58401:7892ac5e
-    #|nocode-dark narrow 28177:1a6c853a
-    #|nocode-dark wide 58224:de7ec378
+    #|none narrow 27729:50cff18b
+    #|none wide 57877:338f011b
+    #|none-dark narrow 27649:92e439f
+    #|none-dark wide 57704:8b9e4363
+    #|failed narrow 23488:6a0bface
+    #|failed wide 53629:e800ce1f
+    #|failed-dark narrow 23488:d6aa537e
+    #|failed-dark wide 53536:3d95475b
+    #|nocode narrow 28261:276919d4
+    #|nocode wide 58401:95c1ebd
+    #|nocode-dark narrow 28177:273f1828
+    #|nocode-dark wide 58224:d4684317
     #|
+
 
 
 
