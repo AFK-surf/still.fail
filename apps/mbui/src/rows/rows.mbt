@@ -53,6 +53,10 @@ pub(all) enum Took {
 pub struct TopicList {
   priv path : Array[String]
   priv fields : Array[Json]
+  /// Older pages, stored in reverse so adding a page before the first item does not copy the rest.
+  priv mut front_keys : Array[String]
+  priv mut front_values : Array[Json]
+  priv mut front_versions : Array[Int]
   priv mut keys : Array[String]
   priv mut values : Array[Json]
   priv mut versions : Array[Int]
@@ -101,6 +105,9 @@ pub fn TopicList::new(path : Array[String], fields : Array[String], v : Json?) -
   let l : TopicList = {
     path,
     fields: fields.map(Json::string(_)),
+    front_keys: [],
+    front_values: [],
+    front_versions: [],
     keys: [],
     values: [],
     versions: [],
@@ -131,42 +138,73 @@ pub fn TopicList::path(self : TopicList) -> Array[String] {
 /// How many rows it has, followed: told of each change.
 pub fn TopicList::length(self : TopicList) -> Int {
   self.told.get() |> ignore
-  self.keys.length()
+  self.length_now()
+}
+
+///|
+fn TopicList::length_now(self : TopicList) -> Int {
+  self.front_keys.length() + self.keys.length()
+}
+
+///|
+fn TopicList::key_now(self : TopicList, i : Int) -> String {
+  let front = self.front_keys.length()
+  if i < front { self.front_keys[front - 1 - i] } else { self.keys[i - front] }
+}
+
+///|
+fn TopicList::value_now(self : TopicList, i : Int) -> Json {
+  let front = self.front_values.length()
+  if i < front { self.front_values[front - 1 - i] } else { self.values[i - front] }
+}
+
+///|
+fn TopicList::version_now(self : TopicList, i : Int) -> Int {
+  let front = self.front_versions.length()
+  if i < front { self.front_versions[front - 1 - i] } else { self.versions[i - front] }
 }
 
 ///|
 /// Row `i`'s key, followed by nothing (its changes are: a reader's).
 pub fn TopicList::key(self : TopicList, i : Int) -> String {
   self.work += 1
-  self.keys[i]
+  self.key_now(i)
 }
 
 ///|
 /// Row `i`'s value, followed by nothing.
 pub fn TopicList::value(self : TopicList, i : Int) -> Json {
-  self.values[i]
+  self.value_now(i)
 }
 
 ///|
 /// Row `i`'s version: one more each time its value is set. Followed by nothing.
 pub fn TopicList::version(self : TopicList, i : Int) -> Int {
-  self.versions[i]
+  self.version_now(i)
 }
 
 ///|
 /// Its rows' values as one array (its subscription's whole value as it is read): all of it gone through.
 pub fn TopicList::to_json(self : TopicList) -> Json {
-  self.work += self.values.length()
-  Json::array(self.values.copy())
+  let n = self.length_now()
+  self.work += n
+  Json::array(Array::makei(n, fn(i) { self.value_now(i) }))
 }
 
 ///|
 /// Where the row keyed `key` is, looked for from `near` outwards (rows looked at as many as it is away), None where
 /// it is not in it. Followed by nothing.
 pub fn TopicList::find(self : TopicList, key : String, near~ : Int) -> Int? {
-  let n = self.keys.length()
+  let n = self.length_now()
   if n == 0 || !self.holds.contains(key) {
     return None
+  }
+  // History is inserted before the first row, even if the last change was an arrival at the other end.
+  self.work += 1
+  if self.key_now(0) == key { return Some(0) }
+  if n > 1 {
+    self.work += 1
+    if self.key_now(n - 1) == key { return Some(n - 1) }
   }
   let from = if near < 0 { 0 } else if near >= n { n - 1 } else { near }
   let mut d = 0
@@ -174,14 +212,14 @@ pub fn TopicList::find(self : TopicList, key : String, near~ : Int) -> Int? {
     let a = from - d
     if a >= 0 {
       self.work += 1
-      if self.keys[a] == key {
+      if self.key_now(a) == key {
         return Some(a)
       }
     }
     let b = from + d
     if d > 0 && b < n {
       self.work += 1
-      if self.keys[b] == key {
+      if self.key_now(b) == key {
         return Some(b)
       }
     }
@@ -194,7 +232,7 @@ pub fn TopicList::find(self : TopicList, key : String, near~ : Int) -> Int? {
 /// The row keyed `key`'s value, followed by it alone: what reads it is told as that row is set, comes or goes.
 pub fn TopicList::value_of(self : TopicList, key : String) -> Json? {
   match self.key_read(key) {
-    Some(i) => Some(self.values[i])
+    Some(i) => Some(self.value_now(i))
     None => None
   }
 }
@@ -203,7 +241,7 @@ pub fn TopicList::value_of(self : TopicList, key : String) -> Json? {
 /// The row keyed `key`'s version, followed by it alone (value_of).
 pub fn TopicList::version_of(self : TopicList, key : String) -> Int? {
   match self.key_read(key) {
-    Some(i) => Some(self.versions[i])
+    Some(i) => Some(self.version_now(i))
     None => None
   }
 }
@@ -338,7 +376,7 @@ fn TopicList::tell(self : TopicList, c : ListChange) -> Unit {
   } else {
     self.log.push(c)
     // (a reader far behind: what it has not read let go of, it reads it whole)
-    if self.log.length() > 2 * self.keys.length() + 64 {
+    if self.log.length() > 2 * self.length_now() + 64 {
       self.base = self.count
       self.log.clear()
     }
@@ -435,6 +473,9 @@ pub fn TopicList::given(self : TopicList, v : Json?) -> Unit {
   self.keys = []
   self.values = []
   self.versions = []
+  self.front_keys = []
+  self.front_values = []
+  self.front_versions = []
   self.holds.clear()
   for item in items {
     self.work += 1
@@ -478,7 +519,7 @@ pub fn TopicList::come_in(self : TopicList) -> Unit {
     return
   }
   let at = self.coming_at
-  let old = self.keys.length()
+  let old = self.length_now()
   if at == old {
     // (at the end: put after what is there, nothing of it copied but as the arrays grow)
     self.work += n
@@ -498,38 +539,57 @@ pub fn TopicList::come_in(self : TopicList) -> Unit {
     }
     return
   }
+  if at == 0 {
+    // Each new page is stacked in reverse before the earlier pages; the existing messages stay where they are.
+    self.work += n
+    for (k, item) in self.coming {
+      self.front_keys.push(k)
+      self.front_values.push(item)
+      self.front_versions.push(0)
+    }
+    let came = self.coming.map(fn(p) { p.0 })
+    self.coming.clear()
+    self.coming_at = -1
+    self.near = 0
+    self.tell(Inserted(0, n, self.coming_why))
+    for k in came { self.said_of(k) }
+    return
+  }
   // (before what is there: all of it copied once, with them in their place)
   self.work += old + n
   let keys = Array::makei(old + n, fn(i) {
     if i < at {
-      self.keys[i]
+      self.key_now(i)
     } else if i < at + n {
       self.coming[n - 1 - (i - at)].0
     } else {
-      self.keys[i - n]
+      self.key_now(i - n)
     }
   })
   let values = Array::makei(old + n, fn(i) {
     if i < at {
-      self.values[i]
+      self.value_now(i)
     } else if i < at + n {
       self.coming[n - 1 - (i - at)].1
     } else {
-      self.values[i - n]
+      self.value_now(i - n)
     }
   })
   let versions = Array::makei(old + n, fn(i) {
     if i < at {
-      self.versions[i]
+      self.version_now(i)
     } else if i < at + n {
       0
     } else {
-      self.versions[i - n]
+      self.version_now(i - n)
     }
   })
   self.keys = keys
   self.values = values
   self.versions = versions
+  self.front_keys = []
+  self.front_values = []
+  self.front_versions = []
   let came = self.coming.map(fn(p) { p.0 })
   self.coming.clear()
   self.coming_at = -1
@@ -558,11 +618,19 @@ fn TopicList::come(self : TopicList, at : Int, key : String, item : Json, why : 
 ///|
 fn TopicList::set_at(self : TopicList, at : Int, item : Json, why : Cause) -> Unit {
   self.work += 1
-  self.values[at] = item
-  self.versions[at] = self.versions[at] + 1
+  let front = self.front_keys.length()
+  if at < front {
+    let i = front - 1 - at
+    self.front_values[i] = item
+    self.front_versions[i] += 1
+  } else {
+    let i = at - front
+    self.values[i] = item
+    self.versions[i] += 1
+  }
   self.near = at
   self.tell(Set(at, why))
-  self.said_of(self.keys[at])
+  self.said_of(self.key_now(at))
 }
 
 ///|
@@ -570,14 +638,14 @@ fn TopicList::set_at(self : TopicList, at : Int, item : Json, why : Cause) -> Un
 /// where it is null, absent or not there.
 fn TopicList::place_before(self : TopicList, before : Json?) -> Int {
   match before {
-    None | Some(Null) => self.keys.length()
+    None | Some(Null) => self.length_now()
     Some(b) => {
       let k = b.stringify()
       if self.coming.last() is Some((first, _)) && first == k {
         return self.coming_at
       }
       self.come_in()
-      self.find(k, near=self.near).unwrap_or(self.keys.length())
+      self.find(k, near=self.near).unwrap_or(self.length_now())
     }
   }
 }
@@ -599,12 +667,12 @@ pub fn TopicList::take(self : TopicList, op : Map[String, Json]) -> Took {
   if path.length() > n {
     // (in an item, by its place: that item set as the op leaves it)
     self.come_in()
-    guard index_of(path[n]) is Some(i) && i < self.keys.length() else { return Done }
+    guard index_of(path[n]) is Some(i) && i < self.length_now() else { return Done }
     let rest = path[n + 1:].to_owned()
     let inner = op.copy()
     inner["path"] = Json::array(rest)
-    let item = apply_delta(self.values[i], [Json::object(inner)])
-    if item_key(item, self.fields) == self.keys[i] {
+    let item = apply_delta(self.value_now(i), [Json::object(inner)])
+    if item_key(item, self.fields) == self.key_now(i) {
       self.set_at(i, item, why)
     } else {
       // (its key changed: taken out, and in again where it was)
@@ -624,7 +692,7 @@ pub fn TopicList::take(self : TopicList, op : Map[String, Json]) -> Took {
     (None, Some(k), _) => {
       self.come_in()
       match (self.find(k.stringify(), near=self.near), op.get("ops")) {
-        (Some(i), Some(Array(ops))) => self.set_at(i, apply_delta(self.values[i], ops), why)
+        (Some(i), Some(Array(ops))) => self.set_at(i, apply_delta(self.value_now(i), ops), why)
         _ => ()
       }
     }
@@ -661,12 +729,43 @@ pub fn TopicList::take(self : TopicList, op : Map[String, Json]) -> Took {
 }
 
 ///|
+/// Remove a row from the two parts without notifying readers.
+fn TopicList::remove_raw(self : TopicList, at : Int) -> (String, Json, Int) {
+  let front = self.front_keys.length()
+  if at < front {
+    let i = front - 1 - at
+    self.work += front - 1 - i
+    (self.front_keys.remove(i), self.front_values.remove(i), self.front_versions.remove(i))
+  } else {
+    let i = at - front
+    self.work += self.keys.length() - 1 - i
+    (self.keys.remove(i), self.values.remove(i), self.versions.remove(i))
+  }
+}
+
+///|
+/// Insert a row into the two parts without notifying readers.
+fn TopicList::insert_raw(self : TopicList, at : Int, key : String, item : Json, version : Int) -> Unit {
+  let front = self.front_keys.length()
+  if at <= front {
+    let i = front - at
+    self.work += front - i
+    self.front_keys.insert(i, key)
+    self.front_values.insert(i, item)
+    self.front_versions.insert(i, version)
+  } else {
+    let i = at - front
+    self.work += self.keys.length() - i
+    self.keys.insert(i, key)
+    self.values.insert(i, item)
+    self.versions.insert(i, version)
+  }
+}
+
+///|
 fn TopicList::drop_at(self : TopicList, i : Int, why : Cause) -> Unit {
-  let k = self.keys[i]
   self.work += 1
-  self.keys.remove(i) |> ignore
-  self.values.remove(i) |> ignore
-  self.versions.remove(i) |> ignore
+  let (k, _, _) = self.remove_raw(i)
   self.holds.remove(k)
   self.near = i
   self.tell(Removed(i, [k], why))
@@ -680,16 +779,12 @@ fn TopicList::moved(self : TopicList, k : String, from : Int, before : Json?, wh
     return
   }
   self.work += 1
-  let item = self.values.remove(from)
-  let version = self.versions.remove(from)
-  self.keys.remove(from) |> ignore
+  let (_, item, version) = self.remove_raw(from)
   let to = match before {
-    None | Some(Null) => self.keys.length()
-    Some(b) => self.find(b.stringify(), near=from).unwrap_or(self.keys.length())
+    None | Some(Null) => self.length_now()
+    Some(b) => self.find(b.stringify(), near=from).unwrap_or(self.length_now())
   }
-  self.keys.insert(to, k)
-  self.values.insert(to, item)
-  self.versions.insert(to, version)
+  self.insert_raw(to, k, item, version)
   self.near = to
   if to != from {
     self.tell(Moved(k, from, to, why))
