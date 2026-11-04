@@ -61,7 +61,8 @@ fn pane_bar_node(
       if now().back is Some(_) {
         @sf.tape_bar_start_of(corners(), @ui.tree_corner_roots_now(), bar_in)
       } else {
-        bar_in
+        // (its title on the panel's words' line, as a chat's on the tape: wide.bar_pl)
+        @sf.panel_words - chat_bar_title_in
       }
     })
     bar.box(fn(inner) {

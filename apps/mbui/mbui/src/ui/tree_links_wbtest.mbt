@@ -22,7 +22,7 @@ fn links_tester(
       b.box(fn(n) {
         id.val = Some(n.id())
         n
-        .words_runs(Is(runs), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own })
+        .words_runs(Is(runs), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false })
         |> ignore
         links.val = Some(runs_links(n, fn() { runs }, fn(h) { taps.push(h) }, hold=fn(h, _) { holds.push(h) }))
       })
@@ -139,7 +139,7 @@ fn links_made(
       b.width(Is(Some(160.0))).lines_up(Is(Some(Start))).offset(Is((40.0, 30.0))).scale(Is(scale)) |> ignore
       b.box(fn(n) {
         n
-        .words_runs(By(fn() { runs.get() }), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own })
+        .words_runs(By(fn() { runs.get() }), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false })
         |> ignore
         let hold = if holds { Some(fn(h : String, r : (Double, Double, Double, Double)) { held.push((h, r)) }) } else { None }
         links.val = Some(runs_links(n, fn() { runs.get() }, fn(h) { taps.push(h) }, hold?))
@@ -249,8 +249,8 @@ fn two_links(dx : @signals.Signal[Double], size : @signals.Signal[Double]) -> (T
         n
         .width(Is(Some(300.0)))
         .height(Is(Some(40.0)))
-        .words_runs(Is(runs), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own })
-        .words_look(By(fn() { { size: size.get(), weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own } }))
+        .words_runs(Is(runs), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false })
+        .words_look(By(fn() { { size: size.get(), weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false } }))
         |> ignore
         links.val = Some(runs_links(n, fn() { runs }, fn(h) { taps.push(h) }))
       })

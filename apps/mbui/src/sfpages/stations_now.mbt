@@ -366,7 +366,7 @@ fn pic_bars(c : @ui.Ctx, week : Json?) -> Unit {
 /// corners' rule asks nothing of them), its parts 12 apart, round as a card, on night (what is drawn on it seen against
 /// that), its edge a hairline (@sf.stage_edge: on the stage's night, where it ends).
 // kept across runs: a value (no field of it changes)
-let pic_box : @ui.Style = @ui.css("w=Full p=S5 gap=S3 radius=Xl3 clip border=B1").then(
+let pic_box : @ui.Style = @ui.css("w=Full gap=S3 radius=Xl3 clip border=B1").then(@ui.style(p=@sf.room_of(@sf.card_pad))).then(
   @ui.style(bg=Data(@sf.share_ground), border_color=Data(@sf.stage_edge)),
 )
 

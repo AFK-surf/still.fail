@@ -1395,7 +1395,7 @@ pub let composer_alone : ComposerPlace = {
 ///|
 /// Where the composer stands at a panel's foot (`pane` wide): in a panel of its own (@sf.pane_round) whose foot corners
 /// it reaches (as wide as the panel leaves it: composer_width), its capsule's ends each as far in as makes it
-/// concentric with the corner it is in, an end that cannot the ladder's inset in, as it stands alone
+/// concentric with the corner it is in, an end that cannot as far in as its side (composer_side), as it stands alone
 /// (@sf.foot_capsule); else as it stands alone (composer_alone).
 pub fn composer_place(pane : Double) -> ComposerPlace {
   composer_geometry(pane, @sf.pane_radii()).2
@@ -1415,7 +1415,10 @@ pub fn composer_geometry(pane : Double, radii : FixedArray[Double]?) -> (Double,
   }
   let extra = capsule_extra()
   let h = @sf.foot_capsule_h_of(radii, side + 2.0 * (capsule_pad_alone + extra), side)
-  let (l, r, b) = @sf.foot_capsule_of(radii, h, @sf.corner_inset, @sf.corner_inset)
+  // (an end that cannot follow its corner stands where the composer alone does, its side's `d` in, as its box does;
+  // with the ladder's inset there, 8 against its 16, the chat's rows over it moved as a chat came in over a page:
+  // stack_over_wbtest, 2026-11-03)
+  let (l, r, b) = @sf.foot_capsule_of(radii, h, d, d)
   (width, foot, {
     capsule_in: (l - d, r - d, b - d),
     capsule_pad: (h - side) / 2.0 - extra,

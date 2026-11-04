@@ -1188,9 +1188,9 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
       true
     })
   // the copy key in the block's top right corner: a capsule, as far from both edges as makes it concentric with the
-  // block (a block of the ladder's: row_corner); to a mouse over the code, to a finger on a row of its own over it (it
-  // hovers over nothing: `pointer: coarse`), whatever the layout. Whole: quiet at 55% until pointed at, its words were
-  // 2.2 to 1 (docs/ui-panels.md 对比度)
+  // block (a block of the ladder's: row_corner), on a row of its own over the code with either input (the web's over
+  // the code's first line to a mouse: a long first line ran under its words). Whole: quiet at 55% until pointed at, its
+  // words were 2.2 to 1 (docs/ui-panels.md 对比度)
   let block_radius = row_corner
   let key_inset = capsule_in(block_radius, code_key_h)
   let over = native_input() is Mouse
@@ -1248,9 +1248,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
     )
   }
   c.box(w=Fill(1.0), bg=t.p.code_ground, radius=block_radius, clip=true, fn() {
-    if !over {
-      bar() |> ignore
-    }
+    bar() |> ignore
     // in the colours the core said (ink.mbt), scrolled sideways rather than wrapped (12 on 1.6 on a desktop's width)
     c.sideways("sf-code/" + code, padx=14.0, pady=12.0, fn() {
       c.rich(
@@ -1269,9 +1267,6 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
       |> ignore
     })
     |> ignore
-    if over {
-      c.layer(fn() { bar() |> ignore }) |> ignore
-    }
   })
   |> ignore
 }

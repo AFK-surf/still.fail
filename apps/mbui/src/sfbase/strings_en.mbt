@@ -1158,7 +1158,7 @@ let en : Map[String, String] = {
   "web-main.rail.kind.lists": "Chat lists",
   "web-main.rail.kind.places": "Pages",
   "web-main.rail.label": "Main",
-  "web-main.rail.lead": "Choose what the left column shows and in what order; this device only",
+  "web-main.rail.lead": "What the left column shows, and in what order",
   "web-main.rail.remove": "Remove {name} from the rail",
   "web-main.rail.reset": "Reset the rail",
   "web-main.rail.title": "Rail",

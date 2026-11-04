@@ -440,12 +440,13 @@ fn view_forget() -> Unit {
 /// system's size of words, as an old view's are (Ctx::sp: the look's size and line said at 1).
 fn view_words_measure(words : String, look : @view.WordsLook, width : Double) -> (Double, Double) {
   let c = g()
-  let tl = layout_text(
+  let tl = layout_words(
     view_words_set(words, look),
     c.sp(look.size),
     look.weight,
     if width < 0.0 { 1.0e9 } else { width },
     look.wrap,
+    balance=look.balance,
     line=view_line(c, look),
     spacing=view_spacing(c, look),
     style=view_words_style(),
@@ -472,13 +473,11 @@ fn view_words_set(words : String, look : @view.WordsLook) -> String {
 fn view_plain_laid(shown : String, look : @view.WordsLook, width : Double) -> TextLayout {
   let c = g()
   let words = view_words_set(shown, look)
-  let lay = fn(s, w) {
-    layout_text(s, c.sp(look.size), look.weight, w, look.wrap,
-      line=view_line(c, look), style=view_words_style(), spacing=view_spacing(c, look))
-  }
-  let tl = lay(words, if look.wrap { width } else { 1.0e9 })
+  let (size, line, style, spacing) = (c.sp(look.size), view_line(c, look), view_words_style(), view_spacing(c, look))
+  // (wrapped in its width as laid out, its lines evened where it says so: as measured, view_words_measure)
+  let tl = layout_words(words, size, look.weight, if look.wrap { width } else { 1.0e9 }, look.wrap, balance=look.balance, line~, style~, spacing~)
   if !look.wrap && tl.w > width + 0.5 {
-    ellipsized(words, tl, width, fn(s) { lay(s, 1.0e9) })
+    ellipsized(words, tl, width, fn(s) { layout_text(s, size, look.weight, 1.0e9, false, line~, style~, spacing~) })
   } else { tl }
 }
 

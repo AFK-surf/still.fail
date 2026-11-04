@@ -73,14 +73,15 @@ pub fn avatar(c : @ui.Ctx, id : String, name : String, picture : String, size : 
 ///|
 /// A thing's mark (a repository, a project), a rounded square as an agent's tile is (agent_mark_corner): `picture` (a
 /// data URL of its own, its favicon or touch icon) once decoded at the size it is shown; else its initial on a colour
-/// of its own, by `id` (its repository's address), as a face's is.
-pub fn tile_avatar(c : @ui.Ctx, id : String, name : String, picture : String, size : Double) -> Unit {
+/// of its own, by `id` (its repository's address), as a face's is. `corner` its own where it stands in a row's corner
+/// (a step of the ladder in from it), not a tile's .3 of its side.
+pub fn tile_avatar(c : @ui.Ctx, id : String, name : String, picture : String, size : Double, corner? : Double) -> Unit {
   let key = data_image(picture)
   let decoded = key != "" && c.image_ready(key, size * c.scale)
   let half = size / 2.0
-  let corner = size * 0.3
+  let corner = corner.unwrap_or(size * 0.3)
   let ground = if decoded { transparent_ground } else { avatar_color(id) }
-  let round = agent_mark_corner(size)
+  let round = rounded(corner)
   let tile = avatar_disc.then(@ui.style(w=Fixed(size), h=Fixed(size), radius=round, bg=Data(ground)))
   let b = c.box(style=tile, fn() {
     if decoded {

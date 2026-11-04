@@ -587,6 +587,10 @@ fn chat_bar_row_tape() -> @ui.Style {
 let chat_bar_title_row : @ui.Style = @ui.style(row=true, w=@sf.grow, pl=S2, pr=S1, gap=S2_5, align=ACenter)
 
 ///|
+/// How far its title stands in from where its row starts (chat_bar_title_row's pl=S2).
+let chat_bar_title_in : Double = 8.0
+
+///|
 // kept across runs: a value (no field of it changes)
 let chat_title_room : @ui.Style = @ui.css("row")
 

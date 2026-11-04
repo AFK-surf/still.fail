@@ -37,8 +37,6 @@ pub let smooth_exponent : Double
 
 pub fn smooth_middle(Double) -> Double
 
-pub let smooth_round : Double
-
 pub let smooth_scale : Double
 
 pub fn smoothness(Double, Double) -> Double

@@ -170,7 +170,8 @@ fn dmin(a : Double, b : Double) -> Double {
 
 ///|
 /// The panel (Switcher.css.ts switcher): 14% down the window, 560 wide at most and 32 short of the window, 480 high at
-/// most and 72% of the window; 12 in (EDGE), its corner from a row's (a pill 38 high 12 in: pillInner), a small panel's
+/// most and 72% of the window; 12 in (EDGE), its corner a row's (18) and that (30: concentric with its rows where
+/// its list is scrolled to its end, not a pill's 19 the rows are not round by), a small panel's
 /// ground and line, a deep shadow (0 24px 64px); what its search takes of it (76).
 let switcher_top_share : Double = 0.14
 
@@ -184,11 +185,8 @@ let switcher_most_share : Double = 0.72
 let switcher_edge : Double = 12.0
 
 ///|
-let switcher_row_h : Double = 38.0
-
-///|
 // kept across runs: a value (no field of it changes)
-let switcher_surface : @sf.Surface = @sf.surface(switcher_edge, @sf.pill_inner(switcher_edge, switcher_row_h))
+let switcher_surface : @sf.Surface = @sf.surface(switcher_edge, @sf.row_corner)
 
 ///|
 // kept across runs: a value (no field of it changes)

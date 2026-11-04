@@ -28,7 +28,9 @@
 //
 // 7. A column of rows that light up under the hand (rule 1's) or are pressed whole, rounded (wider than tall, no ground
 //    with no hand on them, not capsules) in a box with a ground (as wide as most of it, from its top to its foot: a
-//    list's rows on its card, a menu's in its panel, a card's options) stand the theme's `lit_reach` in from its sides,
+//    list's rows on its card, a menu's in its panel, a card's options) stand concentric with it in from its sides (its
+//    drawn ground's corner less the row's: a menu's 24 round rows of 18, 6; a card's 26, 8; the user, 2026-11-03; the
+//    theme's `lit_reach` where its ground is not round or no rounder than the rows),
 //    the first from its top, the last from its foot: a row's ground is the row shown under the hand, not a block of its
 //    own the ladder's inset in, and further in it reads as floating off the edge (still.fail's user, 2026-10-26: a card
 //    of options' grounds 10 in, 「6px 就差不多了」, as a menu's are since 2026-10-25). Not rows flush with it (a list whose
@@ -404,7 +406,12 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
     }
     // (kept: its ground with no hand on it, and not where the hand moves the choice, the one chosen following the
     // pointer: one lit at a time)
-    let kept = lit.filter(fn(i) { self.nodes[i].grounded() && !self.hand_chooses.contains(self.nodes[i].id) })
+    // (nor one whose ground is the hand's now: the pointer resting on it, a frame drawn with a hand on it, a picture's
+    // hover, lights it as it would any of them, one at a time)
+    let kept = lit.filter(fn(i) {
+      let id = self.nodes[i].id
+      self.nodes[i].grounded() && !self.hand_chooses.contains(id) && (self.lit_every || !self.hand_at(id))
+    })
     // (what holds both, the nearest; one kept lit is of theirs where it parts from them there and is of their kind, in
     // their column as wide or in their line as high: a row of their list, not a tool or a filter kept on over it)
     let holder = fn(a : Int, b : Int) {
@@ -800,6 +807,7 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
     for entry in rows {
       let (q, list) = entry
       let a = self.nodes[q]
+      let reach_of = fn(i : Int) { self.lit_reach_in(ground_of(q).unwrap_or(q), i) }
       let top = fn(i : Int) { self.nodes[i].y - a.y }
       let foot = fn(i : Int) { a.y + a.fh - (self.nodes[i].y + self.nodes[i].fh) }
       let mut first = list[0]
@@ -830,13 +838,13 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
         for s in sides {
           let (name, d) = s
           // (flush with it: a list whose rows are as wide as it, their grounds its own edge to edge)
-          if d > gap_slack && (d - self.lit_reach).abs() > gap_slack {
+          if d > gap_slack && (d - reach_of(i)).abs() > gap_slack {
             off.push("\{d} from its \{name}")
           }
         }
         if off.length() > 0 {
           out.push(
-            "rule 7: \{self.named(i)} lights up in \{self.named(q)}, " + off.join(", ") + " (\{self.lit_reach} in)",
+            "rule 7: \{self.named(i)} lights up in \{self.named(q)}, " + off.join(", ") + " (\{reach_of(i)} in)",
           )
         }
       }
@@ -857,8 +865,8 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
       // beside its own rail; those rows do not set the alignment of the pane's other contents.
       let list = list.filter(fn(i) {
         let row = self.nodes[i]
-        (row.x - a.x - self.lit_reach).abs() <= gap_slack &&
-        (a.x + a.fw - row.x - row.fw - self.lit_reach).abs() <= gap_slack
+        let reach = self.lit_reach_in(ground, i)
+        (row.x - a.x - reach).abs() <= gap_slack && (a.x + a.fw - row.x - row.fw - reach).abs() <= gap_slack
       })
       if list.is_empty() {
         continue
@@ -1031,5 +1039,18 @@ fn Ctx::island_scrolls(self : Ctx, i : Int) -> Bool {
   match (old_box_owners.get(i), view_app.val) {
     (Some((_, id)), Some(tree)) => tree.in_scroller(id)
     _ => false
+  }
+}
+
+///|
+/// How far in from the sides of the box with a ground round them rule 7's row `i` stands: concentric with that drawn
+/// ground `ground` (its corner less the row's), the theme's `lit_reach` where it is not round or no rounder than the
+/// row (a list's square card).
+fn Ctx::lit_reach_in(self : Ctx, ground : Int, i : Int) -> Double {
+  let d = self.nodes[ground].corner() - self.nodes[i].corner()
+  if self.nodes[ground].corner() <= gap_slack || d <= gap_slack {
+    self.lit_reach
+  } else {
+    d
   }
 }

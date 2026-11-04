@@ -930,7 +930,9 @@ fn player_cover(c : @ui.Ctx, name : String, ink : MediaInk) -> Unit {
 /// the one playing among them), `on_go` another of them opened, back to `back_label`; `still` (an image's key) shown
 /// where its picture will be until its first frame is. A phone's or a desktop's, as the page is. `flying`: its picture
 /// flown in from a thumbnail or back into it by what opened it (the preview's, sfbase viewer.mbt), only its bars and
-/// controls drawn over that, on no ground of their own, answering nothing.
+/// controls drawn over that, on no ground of their own, answering nothing. `going`: closed and still drawn as it leaves
+/// (its fade), its controls away at once as when a finger takes it down, so that none of their words is seen over the
+/// page as that shows through.
 pub fn player_view(
   c : @ui.Ctx,
   p : @kit.Media,
@@ -941,6 +943,7 @@ pub fn player_view(
   on_go~ : (String) -> Unit,
   still? : String = "",
   flying? : Bool = false,
+  going? : Bool = false,
 ) -> Unit {
   // what the view holds of the file it shows (zoomed in, its end's card, a frame being saved) not held of the next one
   // played in its place; what it holds of the player (选集 open, its speeds' menu) stays
@@ -956,9 +959,9 @@ pub fn player_view(
   }
   // laid out Small: a phone's player, as the viewer's frame
   if layout(c.width) is Small {
-    phone_player(c, p, file, list, back_label, on_back, on_go, still, flying)
+    phone_player(c, p, file, list, back_label, on_back, on_go, still, flying, going)
   } else {
-    desk_player(c, p, file, list, back_label, on_back, on_go, still, flying)
+    desk_player(c, p, file, list, back_label, on_back, on_go, still, flying, going)
   }
 }
 
@@ -976,6 +979,7 @@ fn desk_player(
   on_go : (String) -> Unit,
   still : String,
   flying : Bool,
+  going : Bool,
 ) -> Unit {
   let f = p.frame(c)
   let s = f.status
@@ -1204,7 +1208,7 @@ fn desk_player(
             let n = c.box(style=media_bar_box().then(@ui.style(w=Fixed(most), pt=room(over), bg=Data(ink.ground))), id=c.id(key + "/desk-controls"), fn() {
               desk_play_controls(c, v, p, s, f, fr, many, prev, next, go, full, picture, ink)
             })
-            c.look(n, @ui.look(alpha=f.shown))
+            c.look(n, @ui.look(alpha=if going { desk_none } else { f.shown }))
           })
           |> ignore
           c.box(style=@ui.style(w=Fixed(panel)), fn() {  }) |> ignore
@@ -1583,6 +1587,7 @@ fn phone_player(
   on_go : (String) -> Unit,
   still : String,
   flying : Bool,
+  going : Bool,
 ) -> Unit {
   ignore(back_label)
   let f = p.frame(c)
@@ -1655,8 +1660,8 @@ fn phone_player(
       })
       |> ignore
     }
-    let shown = if v.drag == DownClose || v.taken_down { desk_none } else { f.shown }
-    let live = f.on && v.drag != DownClose && !v.taken_down && !flying
+    let shown = if v.drag == DownClose || v.taken_down || going { desk_none } else { f.shown }
+    let live = f.on && v.drag != DownClose && !v.taken_down && !flying && !going
     // the bar at the top: back, the name, which of the folder's it is, 选集 (beside the system's bars, an iPhone Duo's:
     // its actions in them, the viewer's vf_native_media)
     if !native_on() {

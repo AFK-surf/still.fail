@@ -106,13 +106,18 @@ test "the settings' list made once: every instance drawn as its old view's, with
   for case in [(2, 1.0), (0, 1.0), (2, 2.0)] {
     let (platform, scale) = case
     // (at twice the words main's old view of this list breaks the corner rule (its account card's row, 18 round in a
-    // card 22.8 round, too square to follow it): what this compares with, not held here, its fault said and kept
-    // known; every other case, and every other page at any size, held as ever)
+    // card 22.8 round, too square to follow it), and the workspace's row as well, its tile in its corner 8 in at its
+    // start, its words twice as tall holding it lower than 8 down its middle: what this compares with, not held here,
+    // its faults said and kept known, those two rows' alone; every other case, and every other page at any size, held
+    // as ever)
     let corners_held = scale < 2.0
     let (old, _) = settings_home_tester(false, platform, scale~, corners_held~)
     if !corners_held {
       let faults = old.corner_faults()
-      assert_true(faults.length() == 1 && faults[0].contains("lin@example.com"), msg="main's own fault at \{scale}: \{faults}")
+      assert_true(
+        faults.length() > 0 && faults.iter().all(fn(f) { f.contains("lin@example.com") || f.contains("星火工作室") }),
+        msg="main's own fault at \{scale}: \{faults}",
+      )
     }
     let old_drawn = instances_sorted(old)
     let old_words = words_where(old)
@@ -224,12 +229,14 @@ test "the settings' list made once: flung by a finger, it glides on as a list's 
 ///|
 test "the settings' list dragged on past its end by a finger, counted taller below than it is: held at its end as it really is while the finger is still on it, where it rests let go" {
   let (t, _) = settings_home_tester(true, 2, h=844.0)
-  let at = fn() { t.words().filter(fn(w) { w.0 == "外观" }).map(fn(w) { w.2 }) }
+  // (a row on its first screen and on its last: 外观 below the first since a card's rows are their words 24 in, 2026-11-04)
+  let at = fn() { t.words().filter(fn(w) { w.0 == "归档" }).map(fn(w) { w.2 }) }
   let before = at()
-  t.touch(0, 195.0, 600.0)
-  for k in 1..=10 {
+  // (from low on the screen, far past its end: its cards and their room as tall as the ladder makes them)
+  t.touch(0, 195.0, 800.0)
+  for k in 1..=15 {
     t.advance(@ui.drag_step_ms)
-    t.touch(1, 195.0, 600.0 - 40.0 * k.to_double())
+    t.touch(1, 195.0, 800.0 - 40.0 * k.to_double())
     t.draw()
   }
   let held = at()

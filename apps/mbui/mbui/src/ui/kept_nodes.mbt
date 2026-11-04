@@ -1497,6 +1497,8 @@ priv enum LaidRead {
   Rect(Int, (Double, Double, Double, Double)?, SourceLoc)
   Size(Int, (Double, Double)?, SourceLoc)
   Left(Int, Bool, SourceLoc)
+  /// where what is picked ends (Ctx::selection_end)
+  Sel((Double, Double, Double)?, SourceLoc)
 }
 
 ///|
@@ -1530,6 +1532,10 @@ fn Ctx::laid_said_again(self : Ctx, r : LaidRead) -> Unit {
         self.left_reads[id] = (v, loc)
       }
     }
+    Sel(v, loc) =>
+      if sel_read.val is None {
+        sel_read.val = Some((v, loc))
+      }
   }
 }
 

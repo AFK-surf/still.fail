@@ -43,7 +43,7 @@ fn edge_drawn(node : Bool, runs : Bool) -> (Array[(Double, Double)], Int, Double
       root.lines_up(Is(Some(Start))) |> ignore
       root.box(fn(b) {
         b.width(Is(Some(w))) |> ignore
-        let look : @view.WordsLook = { size: 16.0, weight: 400, line: 20.0, wrap: true, tracking: @view.letters_own }
+        let look : @view.WordsLook = { size: 16.0, weight: 400, line: 20.0, wrap: true, tracking: @view.letters_own, balance: false }
         if runs {
           b.words_runs(Is([@view.words_run(edge_words)]), look~) |> ignore
         } else {

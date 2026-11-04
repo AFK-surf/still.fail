@@ -2129,8 +2129,9 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
   // 288 wide, its words 16 in from the panel's edge (its padding, 6, and a row's 10): the quiet line as wide as it
   let left = quiet[0].1
   assert_eq(quiet[0].3, 288.0)
-  // the label after its 28 mark, 10 apart; where it stands and its lines 14 in, after the dot
-  assert_eq(label[0].1, left + 38.0)
+  // the label after its 28 mark, 10 apart, the mark the ladder's inset (8) in from its head's ground, 2 out of the
+  // words' line (hover.mbt agent_card_head_pad); where it stands and its lines 14 in, after the dot
+  assert_eq(label[0].1, left + 36.0)
   assert_eq(lines[0].1, left + 14.0)
   assert_true(status[0].1 >= left + 14.0 && status[0].1 < left + 15.0, msg="\{status[0].1 - left}")
   // the figures side by side on one line; each part under the one before

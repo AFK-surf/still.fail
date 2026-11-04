@@ -193,11 +193,12 @@ let rc_day_label : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wra
 let rc_day_today : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=Fg, wrap=false)
 
 ///|
-/// 分享卡片: a block across the card at its foot, round as its corners (login_card's lc_open).
+/// 分享卡片: a block across the card at its foot, out past its words to its padding (hover_words_in: the panel's 6 from
+/// its edges), 36 high, a small panel's row: a capsule concentric with its corners there (6 and 18, 24; login_card's lc_open).
 // kept across runs: a value (no field of it changes)
 let rc_share : @ui.Style = @ui.css(
-  "row w=Full h=S8 mt=S1 px=S3 gap=S1_5 radius=Inner bg=A(Fg,O5) align=ACenter justify=JCenter hovered{bg=Hover}",
-)
+  "row w=Full h=S9 mt=S1 px=S3 gap=S1_5 radius=Inner bg=A(Fg,O5) align=ACenter justify=JCenter hovered{bg=Hover}",
+).then(@ui.style(mx=@sf.room_of(-hover_words_in), mb=@sf.room_of(-hover_words_in)))
 
 ///|
 // kept across runs: a value (no field of it changes)

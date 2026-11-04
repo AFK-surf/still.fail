@@ -48,7 +48,7 @@ pub fn chooser_node(
     b.reacts(disabled, fn(off) { if off { set_open(false) } })
     b.box(fn(t) {
       if as_button {
-        t.words(By(words), look={ size: theme().t.ui, weight: if theme().touch { 600 } else { 500 }, line: theme().t.ui_line, wrap: false, tracking: @view.letters_own }) |> ignore
+        t.words(By(words), look={ size: theme().t.ui, weight: if theme().touch { 600 } else { 500 }, line: theme().t.ui_line, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore
       } else {
         t.words(By(words)).words_look(By(fn() { @ui.style_words(chooser_words) })) |> ignore
       }

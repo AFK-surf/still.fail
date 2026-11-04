@@ -78,7 +78,7 @@ pub fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame 
         Wide => {
           c.box(style=cn_quiet_room, fn() { c.text(@sf.t("web-pages.connects.waiting"), style=cn_quiet) |> ignore }) |> ignore
           c.box(style=cn_list_room, fn() {
-            c.box(style=@sf.desk_list, fn() {
+            c.box(style=@sf.desk_list_card(), fn() {
               for w in waiting {
                 cn_waiting_app(c, src, core, here, look, w.0, w.1)
               }
@@ -152,7 +152,7 @@ fn connects_list(
     Wide =>
       blocks.push(fn() {
         c.box(style=cn_list_room, fn() {
-          c.box(style=@sf.desk_list, fn() {
+          c.box(style=@sf.desk_list_card(), fn() {
             for x in shown {
               let xv = Some(x)
               let address = text(xv, "station")

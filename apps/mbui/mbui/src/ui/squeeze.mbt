@@ -13,6 +13,11 @@
 let squeeze_slack : Double = 1.0
 
 ///|
+/// The fewest characters a note's last line may hold where it goes on in lines beside a control (sub_lines_beside):
+/// fewer, a letter or two alone on a line, is said as the row squeezing it.
+let squeeze_last_chars : Int = 3
+
+///|
 /// How many characters of words cut short with an ellipsis must still show: fewer, and the words were squeezed out.
 let squeeze_kept_chars : Int = 2
 
@@ -517,7 +522,10 @@ fn Ctx::beside_faults(self : Ctx, seen : Array[Bool]) -> Array[String] {
       spacing=b.spacing,
       style=b.words_style(),
     )
-    if wrapped && tl.line_start.length() == 1 {
+    // (a note under a title beside a control across their middle takes the lines the row leaves it: sub_lines_beside;
+    // not a letter or two left on a line of its own)
+    let left = b.text.length() - shown.line_start[lines - 1]
+    if wrapped && tl.line_start.length() == 1 && !(left >= squeeze_last_chars && self.sub_lines_beside(i)) {
       out.push("\{self.named(i)}: \{lines} lines for what shares their row (alone there, one: \{tl.w.round()} of \{alone.round()})")
     } else if cut && tl.w <= alone + squeeze_slack {
       out.push("\{self.named(i)}: cut short for what shares their row (alone there, whole: \{tl.w.round()} of \{alone.round()})")
@@ -605,6 +613,74 @@ fn Ctx::shows_after(self : Ctx, k : Int) -> Bool {
       return true
     }
     ch = cn.next
+  }
+  false
+}
+
+///|
+/// Whether words `i` that go on in lines are a line under a title (in a column of words, after what stands over them)
+/// beside what keeps its width standing across the middle of the whole column, not on their line (a switch, a
+/// button at a row's end, across the middle of a title and its note: settings' rows, @sf.switch_row): there they
+/// may take the lines the row leaves them, as a note beside a control does. A title itself, words beside words that
+/// give way too, or what is on the line of its words are not.
+fn Ctx::sub_lines_beside(self : Ctx, i : Int) -> Bool {
+  let n = self.count
+  let mut k = i
+  let mut p = self.nodes[i].parent
+  let mut under = false
+  while p >= 0 && p < n {
+    let a = self.nodes[p]
+    if a.sideways || a.kind == kind_list || a.kind == kind_scroll || a.kind == kind_page {
+      return false
+    }
+    if a.dir == Row && !a.flow {
+      guard under else { return false }
+      let words = self.nodes[k]
+      let middle = words.y + words.fh / 2.0
+      let mut beside = false
+      let mut ch = words.next
+      while ch >= 0 {
+        let cn = self.nodes[ch]
+        if !cn.squeeze_aside() && cn.fw > squeeze_slack && cn.opacity > 0.01 && (cn.first >= 0 || cn.squeeze_shows()) {
+          // (what gives way too, or stands on a line of the words, not across their middle: as before)
+          if self.squeeze_gives(ch) || cn.fh + squeeze_slack >= words.fh ||
+            (cn.y + cn.fh / 2.0 - middle).abs() > squeeze_slack {
+            return false
+          }
+          beside = true
+        }
+        ch = cn.next
+      }
+      return beside
+    }
+    // (in a column of words after a title shown over them: words, not only room or what is hidden)
+    let mut over = a.first
+    while over >= 0 && over != k && !under {
+      under = self.shows_words(over)
+      over = self.nodes[over].next
+    }
+    k = p
+    p = a.parent
+  }
+  false
+}
+
+///|
+/// Whether node `k` shows words: words of its own or in what it holds, drawn, not apart from the flow.
+fn Ctx::shows_words(self : Ctx, k : Int) -> Bool {
+  let b = self.nodes[k]
+  if b.squeeze_aside() || b.opacity <= 0.01 || b.fw <= squeeze_slack || b.fh <= squeeze_slack {
+    return false
+  }
+  if b.kind == kind_text {
+    return b.text.trim().length() > 0
+  }
+  let mut ch = b.first
+  while ch >= 0 {
+    if self.shows_words(ch) {
+      return true
+    }
+    ch = self.nodes[ch].next
   }
   false
 }

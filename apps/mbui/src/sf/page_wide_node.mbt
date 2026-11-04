@@ -61,7 +61,7 @@ fn wide_page_node(
         // what it is for under the frame's bar that names it (barred_page's: desk_barred_lead, 16 in, 12 under)
         WideLead =>
           lane_node(s, fn(col) {
-            col.padding(Is((desk_column_in, 0.0, desk_column_in, desk_head_foot))) |> ignore
+            col.padding(Is((head_in(col), 0.0, head_in(col), desk_head_foot))) |> ignore
             words_node(col, lead, fn() { desk_muted }) |> ignore
           })
         // what it holds, at the column's edges, the first 28 under the head (its own 12 and these 16)
@@ -95,7 +95,9 @@ let desk_first_top : Double = 16.0
 /// most), `make` making what is in the column.
 fn lane_node(parent : @view.View, make : (@view.View) -> Unit) -> Unit {
   parent.box(fn(lane) {
-    lane.row(Is(true)).padding(Is((desk_lane_in, 0.0, desk_lane_in, 0.0))).lies_along(Is(Middle)) |> ignore
+    // (in a panel of its own none in from its sides, its blocks' own 16 there its cards' panel_card_in: desk_lane_now)
+    let side = if in_pane_node(parent) { 0.0 } else { desk_lane_in }
+    lane.row(Is(true)).padding(Is((side, 0.0, side, 0.0))).lies_along(Is(Middle)) |> ignore
     lane.box(fn(col) {
       col.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))).max_width(Is(Some(desk_lane_most))) |> ignore
       make(col)
@@ -121,7 +123,7 @@ fn wide_head_node(
 ) -> Unit {
   col
   .padding(By(fn() {
-    (desk_column_in, if frame().back is Some(_) { desk_head_deep_top } else { desk_head_top }, desk_column_in, desk_head_foot)
+    (head_in(col), if frame().back is Some(_) { desk_head_deep_top } else { desk_head_top }, head_in(col), desk_head_foot)
   }))
   .ground(By(fn() { @ui.tree_theme().color(Bg) }))
   |> ignore
@@ -273,9 +275,11 @@ pub fn section_node(
       parent.box(fn(sec) {
         sec.padding(Is((0.0, 0.0, 0.0, section_foot))) |> ignore
         sec.box(fn(line) {
+          // (in a panel of its own on the panel's words' line, its cards 16 in: section_head_in_pane)
+          let side = if in_pane_node(line) { panel_words - panel_card_in } else { 0.0 }
           line
           .row(Is(true))
-          .padding(Is((0.0, 0.0, 0.0, title_card_wide)))
+          .padding(Is((side, 0.0, side, title_card_wide)))
           .gap(Is(section_actions_apart))
           .lines_up(Is(Some(Middle)))
           |> ignore
@@ -346,7 +350,11 @@ fn wide_group_node(parent : @view.View, at : PartAt, rows : (@view.View) -> Unit
         .radius(By(fn() { @ui.tree_theme().corner(Xl3) }))
         |> ignore
       } else {
-        k.padding(Is((list_pad, list_pad, list_pad, list_pad))).gap(Is(desk_list_gap)).radius(Is(list_card_corner))
+        // (in a panel of its own a card of the panel's: its rows the ladder's inset in, a card's corner; desk_list_card)
+        let (pad, corner) = list_card_in(k)
+        // (in a panel's card its words 24 in from its edges, over and under too: desk_list_pane)
+        let ends = if in_pane_node(k) { card_pad - wide_row_over } else { pad }
+        k.padding(Is((pad, ends, pad, ends))).gap(Is(desk_list_gap)).radius(Is(corner))
         |> ignore
       }
       k.ground(By(fn() { @ui.tree_theme().color(Card) })).lends(part_at, { ..at, list: !card }) |> ignore
@@ -402,17 +410,31 @@ fn wide_link_row_node(
   let at = part_of(parent)
   let under = fn() { note() != "" || trouble() != "" || below is Some(_) }
   let titled = if strong { desk_list_title.then(row_strong) } else { desk_list_title }
-  parent.box(fn(r) {
+  // (in a panel's card, pressed: its ground reaching `link_pane_out` past the row over and under, to the card's rows'
+  // inset where it is first or last, the row itself where it stands, what is pressed: a press beside it its
+  // neighbour's, none of the two drawn over each other; desk_list_link)
+  let reach = at.list && goes && in_pane_node(parent)
+  parent.box(fn(o) {
+    if reach {
+      o
+      .margin(Is((0.0, -link_pane_out, 0.0, -link_pane_out)))
+      .padding(Is((0.0, link_pane_out, 0.0, link_pane_out)))
+      .radius(By(fn() { list_row_corner(o) }))
+      |> ignore
+    }
+    o.box(fn(r) {
     r
     .row(Is(true))
     .gap(Is(12.0))
-    .padding(Is((text_in, text_in, text_in, text_in)))
-    .radius(By(fn() { if at.list { inner_corner(list_card_corner, list_pad) } else { @ui.tree_theme().corner(Xl2) } }))
+    // (its words a row's room in at its sides, 10 over and under: the old view's wide_list_row_ground; in a panel's
+    // card none of its own where it is not pressed, none in the card's corners: wide_list_row)
+    .padding(Is((text_in, wide_row_over, text_in, wide_row_over)))
+    .radius(By(fn() { if at.list { if (in_pane_node(r) && !goes) || reach { 0.0 } else { list_row_corner(r) } } else { @ui.tree_theme().corner(Xl2) } }))
     .min_height(By(fn() { Some(theme().items.least) }))
     .lines_up(By(fn() { Some(if under() { Start } else { Middle }) }))
     |> ignore
     if goes {
-      r.ground(By(fn() { if lit_node(r) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
+      (if reach { o } else { r }).ground(By(fn() { if lit_node(r) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
       presses_node(r, press)
       r.says(By(fn() { Some(@view.said(Link, label=title(), expanded?=folds.map(fn(f) { f() }))) })) |> ignore
     }
@@ -491,6 +513,8 @@ fn wide_link_row_node(
       }
     })
     |> ignore
+    })
+    |> ignore
   })
   |> ignore
 }
@@ -528,9 +552,11 @@ fn wide_switch_row_node(
   if at.list {
     parent.box(fn(cell) {
       cell
-      .padding(Is((text_in, text_in, text_in, text_in)))
+      // (as wide_in_list's: a row's room in at its start, at its end what holds its switch out of the card's corner,
+      // 10 over and under)
+      .padding(Is((text_in, wide_row_over, if in_pane_node(parent) { text_in } else { list_control_end }, wide_row_over)))
       .lies_along(Is(Middle))
-      .radius(Is(inner_corner(list_card_corner, list_pad)))
+      .radius(Is(if in_pane_node(parent) { 0.0 } else { list_row_corner(cell) }))
       .min_height(By(fn() { Some(theme().items.least) }))
       |> ignore
       cell.box(row) |> ignore
@@ -540,3 +566,42 @@ fn wide_switch_row_node(
     parent.box(row) |> ignore
   }
 }
+
+///|
+/// How far a wide list's row's words stand under its top and over its foot (wide_list_row_ground's, wide_in_list's
+/// S2_5): 10, its sides a row's room (text_in).
+let wide_row_over : Double = @ui.Space::S2_5.px()
+
+///|
+/// How far in from its column a wide page's head stands (desk_head's 16): in a panel of its own on the panel's words'
+/// line (desk_head_in_pane: panel_words), its lane none in.
+fn head_in(col : @view.View) -> Double {
+  if in_pane_node(col) {
+    panel_words
+  } else {
+    desk_column_in
+  }
+}
+
+///|
+/// A wide list card's rows' room in it and its corner (desk_list_card): a list card's, `list_pad` in; in a panel of its
+/// own a card of the panel's, the ladder's inset in, a card's corner.
+fn list_card_in(v : @view.View) -> (Double, Double) {
+  if in_pane_node(v) {
+    (corner_inset, card_corner)
+  } else {
+    (list_pad, list_card_corner)
+  }
+}
+
+///|
+/// The corner of a row of a wide list card (list_card_in), concentric with it.
+fn list_row_corner(v : @view.View) -> Double {
+  let (pad, corner) = list_card_in(v)
+  inner_corner(corner, pad)
+}
+
+///|
+/// How far a pressed row's ground reaches past it over and under on a panel's card (desk_list_link's): to the card's
+/// rows' inset (corner_inset) from its edge where it is first or last, its words card_pad in.
+let link_pane_out : Double = card_pad - @ui.Space::S2_5.px() - corner_inset

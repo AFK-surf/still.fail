@@ -115,27 +115,27 @@ fn corners4(n : Node) -> (Double, Double, Double, Double) {
 ///|
 test "corners: a box across a panel's foot keeps one corner for all four: concentric where it can be, alone in a corner too square for it, never followed in some corners only" {
   let follow = concentric(16.0, 6.0)
-  // a Mac's window, 16 round: the panel's right corners in its, 6 in, 11.2 (linked); its left ones 34. The box 10 in:
-  // its left foot corner the card's 26 there (concentric, its own); its right in the 11.2, too square for a 26 (8 at
+  // a Mac's window, 16 round: the panel's right corners in its, 6 in, 10 (linked); its left ones 34. The box 8 in:
+  // its left foot corner the card's 26 there (concentric, its own); its right in the 10, too square for a 26 (6 at
   // the nearest it could stand): alone, as it is, nothing said
   for own in [Radius::Exact(26.0), InnerOr(Exact(26.0))] {
-    let t = Tester::new(foot_panel(10.0, own), w=400.0, h=200.0, window_corner=16.0)
+    let t = Tester::new(foot_panel(8.0, own), w=400.0, h=200.0, window_corner=16.0)
     t.draw()
     let (p, b) = foot_nodes()
     assert_eq(corners4(p), (34.0, follow, follow, 34.0))
     assert_true(b.radii is None && b.radius == 26.0, msg="\{corners4(b)}")
     assert_eq(t.corner_faults(), [])
   }
-  // 6.5 in: following each foot corner it lies in would make its corners unlike (28.8 at its left, 6 at its right, 26
+  // 4 in: following each foot corner it lies in would make its corners unlike (30 at its left, 6 at its right, 26
   // over): never worked out so; its own kept all round, and said where it is not concentric (its left foot corner)
-  let t = Tester::new(foot_panel(6.5, InnerOr(Exact(26.0))), w=400.0, h=200.0, window_corner=16.0, corners_held=false)
+  let t = Tester::new(foot_panel(4.0, InnerOr(Exact(26.0))), w=400.0, h=200.0, window_corner=16.0, corners_held=false)
   t.draw()
   let (_, b) = foot_nodes()
   assert_eq(corners4(b), (26.0, 26.0, 26.0, 26.0))
   let faults = t.corner_faults()
   assert_true(faults.length() == 1 && faults[0].contains("bottom left"), msg="\{faults}")
-  // a square window: the panel 34 all round, the box 10 in the card's 26 all round
-  let t = Tester::new(foot_panel(10.0, InnerOr(Exact(26.0))), w=400.0, h=200.0)
+  // a square window: the panel 34 all round, the box 8 in the card's 26 all round
+  let t = Tester::new(foot_panel(8.0, InnerOr(Exact(26.0))), w=400.0, h=200.0)
   t.draw()
   let (p, b) = foot_nodes()
   assert_true(p.radii is None && p.radius == 34.0)
@@ -200,4 +200,47 @@ test "corners: Tester::mixed_corners lists every box drawn with corners not alik
   assert_eq(mixed.length(), 2, msg=mixed.join("\n"))
   assert_true(mixed.iter().any(fn(m) { m.has_suffix("linked each") }), msg=mixed.join("\n"))
   assert_true(mixed.iter().any(fn(m) { m.has_suffix("(12, 12, 0, 0), said each") }), msg=mixed.join("\n"))
+}
+
+///|
+/// A panel (34 round all four corners, cutting what it holds to them as a pane does: `clips`) with a band in it on its
+/// left side, its top `top` down from the panel's, its
+/// foot 50 up from the panel's (in none of its foot corners), `left` in from its side: the band's own corners square but
+/// where they follow the panel's (InnerOr(Sharp)), glass as the new chat's band is.
+fn band_panel(top : Double, left : Double, clips? : Bool = true) -> (Ctx) -> Unit {
+  fn(c) {
+    c.with_theme({ ..Theme::light(), corner_ladder: [34.0, 26.0, 18.0, 10.0], corner_fit: Some(fit_ranges) }, fn() {
+      c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+        c.box(style=style(radius=Exact(34.0)), w=Px(300.0), h=Px(188.0), left=94.0, top=6.0, bg=0x333333FFL, clip=clips, fn() {
+          c.box(
+            style=style(w=Fixed(200.0), h=Fixed(188.0 - top - 50.0), radius=InnerOr(Sharp)),
+            glass=Glass::frosted(blur=12.0, tint=0xFFFFFF40L, solid=0xEEEEEEFFL),
+            left~,
+            top~,
+            fn() {  },
+          )
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+  }
+}
+
+///|
+test "a band grown up into its panel's top corner, its corner there cut off by the panel's: no edge it is near, square as it stands, said nothing" {
+  // its top left 28 down, on the panel's side: outside the panel's corner of 34 (that corner's curve is 0.5 in there),
+  // drawn as the panel's
+  let t = Tester::new(band_panel(28.0, 0.0), w=400.0, h=200.0)
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  // 10 in from the side: its top left well inside the panel's corner, at different distances: said
+  let t = Tester::new(band_panel(28.0, 10.0), w=400.0, h=200.0, corners_held=false)
+  t.draw()
+  assert_true(t.corner_faults().iter().any(fn(f) { f.contains("at different distances") }), msg="\{t.corner_faults()}")
+  // the panel cutting nothing: its square corner shows past the panel's curve, its own: said
+  let t = Tester::new(band_panel(28.0, 0.0, clips=false), w=400.0, h=200.0, corners_held=false)
+  t.draw()
+  assert_true(t.corner_faults().iter().any(fn(f) { f.contains("at different distances") }), msg="\{t.corner_faults()}")
 }

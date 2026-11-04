@@ -346,7 +346,7 @@ fn preset_add_step(c : @ui.Ctx, src : Source, address : String, stations : Array
     let b = c.box(style=preset_browse_row, id~, fn() {
       // (a tile as the folders' marks are, the folder in it)
       let m = preset_dir_mark
-      let tile = preset_browse_mark.then(@ui.style(w=Fixed(m), h=Fixed(m), radius=@sf.agent_mark_corner(m), bg=Data(@sf.theme().p.neutral_bg)))
+      let tile = preset_browse_mark.then(@ui.style(w=Fixed(m), h=Fixed(m), radius=@sf.small_radius, bg=Data(@sf.theme().p.neutral_bg)))
       c.box(style=tile, fn() { @sf.icon(c, "folder", size=preset_browse_icon, color=@sf.theme().p.muted) |> ignore }) |> ignore
       c.text(@sf.t("web-main.preset.browse"), style=preset_dir_name) |> ignore
     })
@@ -479,12 +479,12 @@ fn dir_note(o : Json?, chats : Bool) -> String {
 ///|
 /// A folder's mark: its own picture where the station found one, else its first letter on its repository's colour.
 fn repo_mark(c : @ui.Ctx, name : String, repo : String, icon : String, size : Double) -> Unit {
-  @sf.tile_avatar(c, if repo != "" { repo } else { name }, name, icon, size)
+  @sf.tile_avatar(c, if repo != "" { repo } else { name }, name, icon, size, corner=@sf.small_corner)
 }
 
 ///|
-/// A folder's mark in the preset's dialog: about as high as its two lines, its corner (a tile's, .3 of it) the
-/// ladder's 10, so a ground round it 10 out is the ladder's 18 (preset_offer_row).
+/// A folder's mark in the preset's dialog: about as high as its two lines, its corner the ladder's 10 (repo_mark), so a
+/// ground round it 8 out is the ladder's 18 (preset_offer_row).
 let preset_dir_mark : Double = 34.0
 
 
@@ -500,7 +500,7 @@ let preset_offered : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let preset_station_heading_box : @ui.Style = @ui.css("w=Full px=S2_5 pt=S2 pb=S0_5")
+let preset_station_heading_box : @ui.Style = @ui.css("w=Full px=S2 pt=S2 pb=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -527,15 +527,15 @@ let preset_dirs : @ui.Style = @ui.css("w=Full gap=S1 align=AStart")
 
 ///|
 /// A folder offered to add, pressed whole: as a folder of the preset stands (preset_dir_row), its ground under the
-/// hand rounded about its mark 10 from it each way (its two lines 4 higher than the mark: 8 over and under them),
-/// concentric with it (the ladder's 18).
+/// hand rounded about its mark 8 from it each way (its two lines 4 higher than the mark: 6 over and under them),
+/// concentric with it (the ladder's 18, as a row 24 in from a panel's 42 is).
 // kept across runs: a value (no field of it changes)
-let preset_offer_row : @ui.Style = @ui.css("row w=Full px=S2_5 py=S2 gap=S3 align=ACenter radius=Around hovered{bg=Hover}")
+let preset_offer_row : @ui.Style = @ui.css("row w=Full px=S2 py=S1_5 gap=S3 align=ACenter radius=Around hovered{bg=Hover}")
 
 ///|
-/// 浏览文件夹's row: one line, as high as its mark, so 10 over and under it as at its start.
+/// 浏览文件夹's row: one line, as high as its mark, so 8 over and under it as at its start.
 // kept across runs: a value (no field of it changes)
-let preset_browse_row : @ui.Style = @ui.css("row w=Full p=S2_5 gap=S3 align=ACenter radius=Around hovered{bg=Hover}")
+let preset_browse_row : @ui.Style = @ui.css("row w=Full p=S2 gap=S3 align=ACenter radius=Around hovered{bg=Hover}")
 
 ///|
 /// 浏览文件夹's folder, in a mark's room.

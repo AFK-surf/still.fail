@@ -20,7 +20,7 @@ fn chat_bar_node(parent : @view.View, src : Source, w : Workspace, r : ChatRef,
       .padding(Is((0.0, 0.0, 8.0, 0.0))).gap(Is(8.0)).lines_up(Is(Some(Middle))).fits(Is(true)) |> ignore
       middle.box(fn(title) {
         title.words(By(fn() { view().map(fn(v) { v.title }).unwrap_or(r.title) }))
-        .words_look(By(fn() { { size: @sf.theme().t.title, weight: 600, line: chat_title_line, wrap: false, tracking: @view.letters_own } }))
+        .words_look(By(fn() { { size: @sf.theme().t.title, weight: 600, line: chat_title_line, wrap: false, tracking: @view.letters_own, balance: false } }))
         .ink(By(fn() { @sf.theme().p.text })).cuts(Is(true), keep=true) |> ignore
       }) |> ignore
       middle.show(fn() { view().map_or(false, fn(v) { v.agents.length() == 0 }) && station() is Some(_) }, fn(s) {
@@ -124,7 +124,7 @@ fn chat_station_chip_node(parent : @view.View, address : String, station : () ->
     })
     chip.box(fn(name) {
       name.words(By(fn() { station().name })).words_look(By(fn() {
-        { size: @sf.theme().t.caption, weight: 400, line: 16.0, wrap: false, tracking: @view.letters_own }
+        { size: @sf.theme().t.caption, weight: 400, line: 16.0, wrap: false, tracking: @view.letters_own, balance: false }
       })).ink(By(fn() { @sf.theme().p.muted })) |> ignore
     }) |> ignore
   }) |> ignore
@@ -166,7 +166,7 @@ fn chat_agent_tile_node(parent : @view.View, agent : () -> Agent, station : () -
       })
       s.show(fn() { !mark() }, fn(name) {
         name.words(By(fn() { station().unwrap().name })).words_look(By(fn() {
-          { size: @sf.theme().t.caption, weight: 400, line, wrap: false, tracking: @view.letters_own }
+          { size: @sf.theme().t.caption, weight: 400, line, wrap: false, tracking: @view.letters_own, balance: false }
         })).ink(By(fn() { @sf.theme().p.muted })) |> ignore
       })
     })

@@ -351,7 +351,7 @@ let vi_risk_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=S
 ///|
 /// Its fields (fields: 14 apart; a field its name over its line, 4 apart).
 // kept across runs: a value (no field of it changes)
-let vi_fields : @ui.Style = @ui.css("w=Full gap=S3_5")
+let vi_fields : @ui.Style = @ui.css("w=Full gap=S3_5").then(@sf.card_foot_out)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -363,7 +363,7 @@ let vi_label : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medi
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vi_secret_line : @ui.Style = @ui.css("row w=Full gap=S1 align=ACenter")
+let vi_secret_line : @ui.Style = @ui.css("row w=Full gap=S1 align=ACenter").then(@sf.card_end_out)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -417,7 +417,7 @@ let vi_chat : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, wrap
 let vi_use_time : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
-/// A field's buttons (show, copy) at its end: in the card's corner on its words' inset, the ladder's small block's
-/// corner there (10), as a block in a card's corner on its 20 is.
+/// A field's buttons (show, copy) at its end: out to where the ladder's small block's corner (10) is concentric with
+/// the card's in its corner (@sf.card_end_out).
 // kept across runs: a value (no field of it changes)
 let vi_key_corner : Double = @sf.small_corner

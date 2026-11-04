@@ -479,7 +479,7 @@ fn sec_station_row(c : @ui.Ctx, core : Core, look : Look, ws : String, sv : Json
   let (name, reach) = if look == Wide {
     (
       if @sf.has_station_mark(text(sv, "emoji"), text(sv, "icon")) { "" } else { text(sv, "name") },
-      @ui.style(mr=@sf.room_of(@sf.card_foot_in(@sf.button_height()) - @ui.Space::px(S5))),
+      @ui.style(mr=@sf.room_of(@sf.card_foot_in(@sf.button_height()) - @sf.card_pad)),
     )
   } else {
     (text(sv, "name"), @ui.style())

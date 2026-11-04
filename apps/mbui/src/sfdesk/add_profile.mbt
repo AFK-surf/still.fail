@@ -629,7 +629,7 @@ let ap_offers : @ui.Style = @ui.css("w=Full pb=S7 gap=S1")
 /// A login of the machine's own (machineLogin): a card of the ladder's, its words 20 in, its mark in its top corner
 /// (round by the ladder's there: mbui works it out), its button across its foot corners (@sf.card_foot_in).
 // kept across runs: a value (no field of it changes)
-let ap_offer : @ui.Style = @ui.css("w=Full p=S5 gap=S3 radius=Xl3 bg=Card")
+let ap_offer : @ui.Style = @ui.css("w=Full gap=S3 radius=Xl3 bg=Card").then(@ui.style(p=@sf.room_of(@sf.card_pad)))
 
 ///|
 /// With its button: its foot as far in as makes the button concentric with its corner (the theme's button height).
@@ -642,12 +642,12 @@ fn ap_offer_footed_style() -> @ui.Style {
 let ap_offer_head : @ui.Style = @ui.css("row w=Full gap=S3 align=AStart")
 
 ///|
-/// An offer's mark: 32 on the neutral ground, on the card's words' inset in its corner, the ladder's small block's
-/// corner there (10).
+/// An offer's mark: 32 on the neutral ground in the card's corner, where the ladder's small block's corner (10) is
+/// concentric with the card's (@sf.card_mark_out).
 // kept across runs: a value (no field of it changes)
 let ap_offer_mark : @ui.Style = @ui.css("w=S8 h=S8 bg=Neutral align=ACenter justify=JCenter").then(
   @ui.style(radius=@sf.small_radius),
-)
+).then(@sf.card_mark_out)
 
 ///|
 /// What leaves a machine's login's line first, short of room: whether it is signed in, then its plan.

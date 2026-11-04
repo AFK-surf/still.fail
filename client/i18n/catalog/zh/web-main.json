@@ -1214,7 +1214,7 @@
   "web-main.rail.filesNone": "暂无可浏览的文件夹",
   "web-main.rail.lendsNone": "暂无借出的文件夹",
   "web-main.rail.title": "侧边条",
-  "web-main.rail.lead": "设置左侧栏显示的内容和顺序，仅对此设备生效",
+  "web-main.rail.lead": "侧栏显示什么、按什么顺序",
   "web-main.rail.reset": "侧边条恢复默认",
   "web-main.rail.customize": "自定义侧边条",
   "web-main.rail.customizeLead": "在侧边条上拖动调整位置，点击 − 移除，点击其他位置结束",

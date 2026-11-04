@@ -260,7 +260,7 @@ fn profile_list_blocks(c : @ui.Ctx, core : Core, list : Array[Json]) -> Array[()
                   if usable && text(field(p, "quota"), "state") == "ok" && items(field(p, "quota"), "windows").length() > 0 {
                     // (in its row's corner, 12 in: the row's corner concentric round its own, @sf.fill_chip_corner)
                     // (each window in words, 每周剩余 78%: a row has the room, and a touch has no tip to say what W is)
-                    c.box(style=quota_line, fn() {
+                    c.box(style=quota_line.then(quota_line_out()), fn() {
                       @sf.quota_chips(c, field(p, "quota"), worded=true, key="ws-profile/" + text(ev, "key"))
                     })
                     |> ignore
@@ -529,4 +529,13 @@ fn quota_dials(c : @ui.Ctx, windows : Array[Json]) -> Unit {
 /// A grouped profile's allowance, a line under its words (Profiles.kt: padding top 6).
 // kept across runs: a value (no field of it changes)
 let quota_line : @ui.Style = @ui.css("w=Full pt=S1_5")
+
+///|
+/// Its chips, small blocks in the row's foot start corner: out from its words to the ladder's inset (8) from the row's
+/// side and foot, concentric with its corner there (a row's 18 less 8, a chip's 10), their words back on the row's by
+/// their own room.
+fn quota_line_out() -> @ui.Style {
+  let foot = @sf.row_words_foot()
+  @ui.style(ml=@sf.room_of(@sf.corner_inset - @sf.text_in), mb=@sf.room_of(@sf.corner_inset - foot))
+}
 

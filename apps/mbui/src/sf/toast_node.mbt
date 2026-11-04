@@ -79,5 +79,5 @@ pub fn toast_look_node(b : @view.View, s : @kit.ToastNode) -> Unit {
 fn toast_words_look(size : @ui.TextSize, line : @ui.Leading, weight : Int, wrap : Bool) -> @view.WordsLook {
   let th = @ui.tree_theme()
   let (px, own) = th.text_size(size)
-  { size: px, weight, line: th.leading(line).unwrap_or(own), wrap, tracking: @view.letters_own }
+  { size: px, weight, line: th.leading(line).unwrap_or(own), wrap, tracking: @view.letters_own, balance: false }
 }

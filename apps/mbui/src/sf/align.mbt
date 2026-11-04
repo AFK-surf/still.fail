@@ -18,21 +18,16 @@
 //
 // still.fail's corner rule (docs/ui-panels.md, "所有带圆角的东西"): what lies in a rounded container's corner stands as
 // far from its two edges, and its own corner is concentric with the container's. Corners here are mbui's smooth ones
-// (the web's superellipse(1.5) with --corner-scale 1.25, Android's Corners.kt Smooth: drawn a quarter larger than they
-// are given), so the web's `calc(inner + pad)` is `inner + pad / 1.25` here and its `calc(outer - pad)` is
-// `@ui.concentric(outer, pad)`. A circle or a capsule in a corner is round and not smoothed: the container is drawn
-// round it (`around`).
+// (the web's superellipse(1.5), Android's Corners.kt Smooth), laid out by the radius they are given and smoothed only
+// as they are drawn (the user, 2026-11-03: 「平滑圆角只是在原有圆角的描述上做平滑」「边距应该是整数」): the web's
+// `calc(inner + pad)` is `inner + pad` here and its `calc(outer - pad)` is `@ui.concentric(outer, pad)`, `outer - pad`;
+// a circle or a capsule in a corner stands its half less than the corner in (`around`, `capsule_in`).
 
 ///|
-/// How much longer a smooth corner (Corners.kt Smooth, the web's superellipse(1.5): --corner-scale) is drawn than the
-/// radius it is given: Corners.kt SMOOTH_SCALE.
-pub let smooth_scale : Double = 1.25
-
-///|
-/// The corner of a smooth box round one of corner `inner`, `inset` in from its edges (align.ts surfaceCorner, Corners.kt
-/// concentricOut: the inset taken a quarter smaller, as Smooth draws a corner a quarter larger than it is given).
+/// The corner of a smooth box round one of corner `inner`, `inset` in from its edges (align.ts surfaceCorner): the two
+/// together.
 pub fn concentric_out(inner : Double, inset : Double) -> Double {
-  inner + inset / smooth_scale
+  @ui.concentric_out(inner, inset)
 }
 
 ///|
@@ -270,8 +265,9 @@ pub let panel_pad : Double = 6.0
 
 ///|
 /// Its words stand in by a row's own padding more (TEXT_IN), so a card's words and a menu's rows' words are on one
-/// line, panel_pad + text_in from its edge.
-pub let text_in : Double = 10.0
+/// line, panel_pad + text_in from its edge (the ladder's inset: what stands on a row's words round by its small step,
+/// 18 less 8, 10).
+pub let text_in : Double = 16.0
 
 ///|
 /// A small panel's buttons: pills this high, its icon buttons circles as wide (PANEL_PILL).

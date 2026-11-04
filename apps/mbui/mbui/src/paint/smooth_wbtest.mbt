@@ -114,48 +114,26 @@ test "a corner is as smooth as it has room for" {
 }
 
 ///|
-test "concentric: a curve moved in is drawn as much smaller, a corner drawn a quarter larger than it is given" {
-  assert_eq(concentric(26.0, 10.0), 18.0)
-  assert_eq(concentric_out(18.0, 10.0), 26.0)
+test "concentric: a corner moved in is as much smaller, whole numbers kept whole (the user, 2026-11-03: 边距应该是整数)" {
+  assert_eq(concentric(26.0, 10.0), 16.0)
+  assert_eq(concentric_out(16.0, 10.0), 26.0)
   assert_eq(concentric(6.0, 10.0), 0.0)
   // the middle of a corner of 20 (wholly smooth): on the curve, as far in from both edges
   let m = smooth_middle(20.0)
   assert_true(sd_corner(300.0 - m, 200.0 - m, 300.0, 200.0, 20.0, 1.0).abs() < 1.0e-3)
-  // the inner box's corner drawn about the outer's corner's own centre: the same curve, as much smaller as it is in
-  assert_eq(10.0 + concentric(26.0, 10.0) * smooth_scale, 26.0 * smooth_scale)
 }
 
-///|
-/// The most a circle `r` round, centred `centre` in from both edges of a wholly smooth corner of 28 (a 300 by 200 box's
-/// top right), is off an even gap from it (its distance from its edges, centre less r) anywhere along its quarter.
-fn circle_off_even(centre : Double, r : Double) -> Double {
-  let d = centre - r
-  let mut most = 0.0
-  for i in 0..=90 {
-    let a = i.to_double() * 1.5707963267948966 / 90.0
-    let x = centre - r * @dmath.cos(a)
-    let y = centre - r * @dmath.sin(a)
-    let gap = -sd_corner(300.0 - x, 200.0 - y, 300.0, 200.0, 28.0, 1.0)
-    most = dmax(most, (gap - d).abs())
-  }
-  most
-}
 
 ///|
-test "a circle in a smooth corner follows it as round_like's round corner: an even gap within 1.25% of its radius" {
-  // (the user, 2026-10-27: 中型屏的单行 composer 跟圆角还是对不上: a capsule 48 high 4 in from a corner of 28)
-  let k = round_like(28.0)
-  assert_true((k - 28.0 * smooth_round).abs() < 1.0e-12)
-  for r in [8.0, 16.0, 22.0] {
-    assert_true(circle_off_even(k, r) < 0.0125 * 28.0, msg="a circle \{r} round: \{circle_off_even(k, r)}")
-    // centred the corner's whole radius in, as in a round one: off by over twice as much at the curve's middle
-    assert_true(circle_off_even(28.0, r) > 0.025 * 28.0)
-  }
-  // a capsule's end (no room to be smooth) is round: itself; between, as smooth as its box has room for
+test "a circle in a corner stands its corner's whole radius in, as in a round one: the smoothing is the drawing's alone" {
+  // (the user, 2026-11-03: 平滑圆角没道理影响这个; 平滑圆角只是在原有圆角的描述上做平滑: what lies in a corner is laid out by
+  // the corner said, no smooth scale in the arithmetic)
+  assert_eq(round_like(28.0), 28.0)
+  // a capsule's end is itself; in a box short of the corner, its half
   assert_eq(round_like(20.0, room=20.0), 20.0)
-  assert_true(round_like(20.0, room=22.5) > round_like(20.0) && round_like(20.0, room=22.5) < 20.0)
+  assert_eq(round_like(28.0, room=20.0), 20.0)
   // and back
-  for c in [(28.0, 1.0e30), (20.0, 20.0), (20.0, 22.5), (34.0, 1.0e30)] {
+  for c in [(28.0, 1.0e30), (20.0, 20.0), (34.0, 1.0e30)] {
     let (r, room) = c
     assert_true((round_like_out(round_like(r, room~), room~) - r).abs() < 1.0e-9)
   }

@@ -24,7 +24,7 @@ export function AppearancePage({ back }: { back: string }) {
       <Section title={t("web-pages.appearance.motion.title")} description={t("web-pages.appearance.motion.description")}>
         <div className={chatCss.appearanceSetting}><MotionSetting /></div>
       </Section>
-      <Section title={t("common.language")} description={t("web-pages.appearance.language.description")}>
+      <Section title={t("common.language")}>
         <div className={chatCss.appearanceSetting}><LanguageSetting /></div>
       </Section>
       <Section title={t("web-pages.appearance.drop.title")} description={t("web-pages.appearance.drop.description")}>
