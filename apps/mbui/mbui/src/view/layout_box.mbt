@@ -54,7 +54,13 @@ pub fn Layout::child(self : Layout, key : String, make : (View) -> Unit) -> View
 /// reuses its measured layout; this never starts a second tree layout or tells a geometry signal.
 pub fn Layout::measure(self : Layout, child : View, width : Double, height? : Double) -> (Double, Double) {
   self.check(child)
-  @flex.layout_child(child.tree.nodes[child.at].flex, width, height?, containing_height=self.height)
+  // The child's own measuring code has the same inputs as when flex measures it normally (for example the host's
+  // font theme). The captured-input guard belongs to this parent's callback, not the child being measured. The
+  // tree's layout-owner guard still rejects any attempt by that child to change another branch.
+  let guard_before = @signals.set_access_guard(None)
+  let size = @flex.layout_child(child.tree.nodes[child.at].flex, width, height?, containing_height=self.height)
+  @signals.set_access_guard(guard_before) |> ignore
+  size
 }
 
 ///|

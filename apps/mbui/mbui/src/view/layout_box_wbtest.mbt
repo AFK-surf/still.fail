@@ -144,3 +144,21 @@ test "panic a lazily created component's first reaction cannot dirty a sibling" 
   })
   t.frame(200.0, 300.0) |> ignore
 }
+
+///|
+test "a custom parent measures a child's ordinary font inputs without treating them as its own" {
+  let theme = @signals.signal(20.0)
+  let sizes : Array[(Double, Double)] = []
+  let t = Tree::new(fn(root) {
+    let child = root.box(fn(n) {
+      n.measured(Is(0), fn(_, w) { (w.unwrap_or(10.0), theme.get()) }) |> ignore
+    })
+    root.layout_box(Is(0), fn(l, _) {
+      sizes.push(l.measure(child, l.width))
+      l.place(child, 0.0, 0.0)
+    }) |> ignore
+  })
+  t.frame(200.0, 300.0) |> ignore
+  assert_eq(sizes, [(200.0, 20.0)])
+  t.dispose()
+}
