@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Store } from "../src/store/store.ts";
 import { listThreads, makeStore } from "../src/read/store.ts";
-import { chats } from "../src/read/views.ts";
+import { chats, sharedChatRows } from "../src/read/views.ts";
 
 const viewer = { sub: "me", email: "me", name: "Me", role: "owner", workspace: "w", device: "d" } as const;
 
@@ -15,7 +15,7 @@ function fixture() {
   return { store, thread, read };
 }
 
-test("the sidebar only seeks the first unread message, while a thread still has its exact count", () => {
+test("the sidebar counts no unread message, while a thread still has its exact count", () => {
   const { store, thread, read } = fixture();
   const db = store.db;
   try {
@@ -40,7 +40,9 @@ test("the sidebar only seeks the first unread message, while a thread still has 
     });
     const row = chats(read, viewer, false).find((item) => item.thread === thread);
     assert.equal(row?.unread, true);
-    assert.ok(visited > 0 && visited <= 2, `only the first unread message is needed (visited ${visited})`);
+    // The chat list is made once for everyone: unread is where the viewer read against its latest message and the
+    // latest before that its author did not write (read/store.ts saidOf), none of what came after counted.
+    assert.equal(visited, 0, `no unread message is visited (visited ${visited})`);
   } finally { store.close(); }
 });
 
@@ -77,5 +79,26 @@ test("an unread existence check recognizes the viewer's Slack identity", () => {
     assert.equal(listThreads(read, viewer.email, null, thread)[0]?.unread, 2);
     store.setSlackIdentity(viewer.email, "U2", true);
     assert.equal(listThreads(read, viewer.email, null, thread, "exists")[0]?.unread, 0);
+  } finally { store.close(); }
+});
+
+test("the chat list is made once for everyone: a viewer's row is it with what is theirs", () => {
+  const { store, thread, read } = fixture();
+  try {
+    store.setAutoTitle(thread, "部署", false);
+    const put = store.db.prepare("INSERT INTO entries (thread, n, kind, author_kind, author, text, at) VALUES (?, ?, 'message', ?, ?, 'hello', ?)");
+    put.run(thread, 1, "person", "me", 1);
+    put.run(thread, 2, "agent", "s", 2);
+    store.setRead("me", thread, 2);
+    const other = { ...viewer, sub: "you", email: "you" };
+    // One list, the same for both: named by the chat itself, nothing of either viewer in it.
+    const shared = sharedChatRows(read, viewer, null, null);
+    assert.deepEqual(sharedChatRows(read, other, null, null), shared);
+    assert.deepEqual(shared.map((r: any) => [r.thread, r.named.thread.autoTitle, r.said]), [[thread, "部署", { n: 2, authorKind: "agent", author: "s", other: 2 }]]);
+    // Each viewer's: the same chat and name, their own unread and whether it is theirs.
+    const mine = chats(read, viewer, false)[0]!;
+    const yours = chats(read, other, false)[0]!;
+    assert.deepEqual([mine.title, mine.unread, mine.mine], ["部署", false, true]);
+    assert.deepEqual([yours.title, yours.unread, yours.mine], ["部署", true, false]);
   } finally { store.close(); }
 });
