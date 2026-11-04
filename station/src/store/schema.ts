@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS thread_sessions (
   session TEXT NOT NULL,
   connect TEXT NOT NULL,
   joined_at INTEGER NOT NULL,
+  left_at INTEGER,
   PRIMARY KEY (thread, session)
 );
 CREATE INDEX IF NOT EXISTS thread_sessions_session ON thread_sessions (session);
@@ -580,6 +581,11 @@ export function addWaitWatchColumn(db: DatabaseSync): void {
 /// it was called when it did; NULL before it.
 export function addOpenerTitle(db: DatabaseSync): void {
   if (!has(db, "opened_chats", "opener_title")) db.exec("ALTER TABLE opened_chats ADD COLUMN opener_title TEXT");
+}
+
+/// The column leaving a thread came with (thread_sessions.left_at, chat_leave): NULL for a session that hears it.
+export function addLeftColumn(db: DatabaseSync): void {
+  if (!has(db, "thread_sessions", "left_at")) db.exec("ALTER TABLE thread_sessions ADD COLUMN left_at INTEGER");
 }
 
 /// The column a job's sandbox size came with (jobs.size, agents/sandbox.ts).
