@@ -76,6 +76,7 @@ pub fn Tester::end_run(self : Tester, restore : &@hostapi.Host) -> Unit {
 fn reset_globals() -> Unit {
   window_zoom_reset()
   run_let_go()
+  the_ctx.val.let_go()
   the_ctx.val = Ctx::new()
   looks_reset()
   hand_reset()
@@ -153,6 +154,7 @@ fn reset_globals() -> Unit {
   words_kept.clear()
   words_sel.clear()
   list_counts.clear()
+  list_keys_seen.clear()
   second_ptr[2] = 0.0
   bench.mode = 0
   g_view.val = fn(_c) { () }
@@ -201,7 +203,7 @@ fn leaked_state() -> Array[String] {
   check("drags", drags.length())
   check("sideways", sideways.length())
   check("words", words_kept.length() + words_sel.length())
-  check("list_counts", list_counts.length())
+  check("list_counts", list_counts.length() + list_keys_seen.length())
   check("timers", helds.length() + marks_at.length())
   check("drawing", dr.entries.length() + dr.overlay.length() + dr.raised.length() + dr.carry.length())
   check("messages", fake_posted.length())
@@ -905,7 +907,7 @@ pub fn Tester::find(self : Tester, s : String) -> (Double, Double)? {
     Some(tree) =>
       for d in tree.drawn() {
         // (none of a page's bones: View::bones)
-        if d.bones == 0L && view_words_set(d.words, d.words_look).contains(s) {
+        if d.bones == 0L && view_words_found(d).contains(s) {
           return Some((d.x + d.w / 2.0, d.y + d.h / 2.0))
         }
       }
@@ -949,6 +951,14 @@ pub fn Tester::find_last(self : Tester, s : String) -> (Double, Double)? {
   while j < over.length() {
     walk(over[j], true)
     j += 1
+  }
+  match view_tree() {
+    Some(tree) => for d in tree.drawn() {
+      if d.bones == 0L && view_words_found(d).contains(s) {
+        found.val = Some((d.x + d.w / 2.0, d.y + d.h / 2.0))
+      }
+    }
+    None => ()
   }
   found.val
 }
@@ -1252,6 +1262,14 @@ pub fn Tester::image_nodes(self : Tester) -> Array[(String, Double, Double)] {
 /// text node's words, where its top left is drawn (moved by its own look and its ancestors': Ctx::drawn_at), its size
 /// as laid out, and how opaque it is drawn (its and its ancestors' opacities and looks' alphas, multiplied).
 pub fn Tester::words(self : Tester) -> Array[(String, Double, Double, Double, Double, Double)] {
+  self.words_marked().map(fn(w) { w.0 })
+}
+
+///|
+/// Tester::words' words, each with whether nothing of it is read out (an old view's made where nothing is,
+/// Ctx::hidden_from_semantics; a node of the window's tree under a modal layer it is not in, or kept from what is read
+/// out: Tree::reads_out): one list, so the two never part.
+fn Tester::words_marked(self : Tester) -> Array[((String, Double, Double, Double, Double, Double), Bool)] {
   ignore(self)
   let c = g()
   let out = []
@@ -1270,15 +1288,17 @@ pub fn Tester::words(self : Tester) -> Array[(String, Double, Double, Double, Do
         }
         p = c.nodes[p].parent
       }
-      out.push((n.text, x, y, n.fw, n.fh, alpha))
+      out.push(((n.text, x, y, n.fw, n.fh, alpha), n.sem_hid))
     }
   }
   // (and the words of the window's tree's nodes, where and as faded as they are drawn, as Tester::find finds them)
   match view_tree() {
     Some(tree) =>
       for d in tree.drawn() {
-        if d.words != "" && d.bones == 0L {
-          out.push((view_words_set(d.words, d.words_look), d.x, d.y, d.w, d.h, d.alpha))
+        // (a field's placeholder too, its hint: view_words_found)
+        let words = view_words_found(d)
+        if words != "" && d.bones == 0L {
+          out.push(((words, d.x, d.y, d.w, d.h, d.alpha), !tree.reads_out(d.id)))
         }
       }
     None => ()
@@ -1290,22 +1310,7 @@ pub fn Tester::words(self : Tester) -> Array[(String, Double, Double, Double, Do
 /// The words Tester::words has of the app's own nodes, but those made where nothing is read out (Ctx::hidden_from_semantics:
 /// a picture drawn small to stand for itself, say), as a person reading the screen out would have them.
 pub fn Tester::words_said(self : Tester) -> Array[(String, Double, Double, Double, Double, Double)] {
-  let c = g()
-  let hid = []
-  for i in 0..<c.count {
-    let n = c.nodes[i]
-    if n.bones == 0L && (n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor) && n.text != "" {
-      hid.push(n.sem_hid)
-    }
-  }
-  // (Tester::words has the nodes' words first, in the same order; the window's tree's after them)
-  let out = []
-  for i, w in self.words() {
-    if i >= hid.length() || !hid[i] {
-      out.push(w)
-    }
-  }
-  out
+  self.words_marked().filter(fn(w) { !w.1 }).map(fn(w) { w.0 })
 }
 
 ///|
@@ -1323,7 +1328,7 @@ pub fn Tester::rect_of(self : Tester, s : String) -> (Double, Double, Double, Do
   match view_tree() {
     Some(tree) =>
       for d in tree.drawn() {
-        if d.bones == 0L && view_words_set(d.words, d.words_look).contains(s) && d.alpha > 0.0 {
+        if d.bones == 0L && view_words_found(d).contains(s) && d.alpha > 0.0 {
           return Some((d.x, d.y, d.w, d.h))
         }
       }
@@ -2234,6 +2239,16 @@ pub fn Tester::drawn_of(self : Tester, s : String) -> (Double, Double)? {
       return Some(c.drawn_at(i))
     }
   }
+  // (or the words of a node of the window's tree, where it is drawn, as Tester::rect_of finds them)
+  match view_tree() {
+    Some(tree) =>
+      for d in tree.drawn() {
+        if d.bones == 0L && view_words_set(d.words, d.words_look).contains(s) && d.alpha > 0.0 {
+          return Some((d.x, d.y))
+        }
+      }
+    None => ()
+  }
   None
 }
 
@@ -2266,6 +2281,35 @@ pub fn Tester::shown_of(self : Tester, s : String) -> (Double, Double, Double, D
       }
       return Some((x0, y0, dmax(x1 - x0, 0.0), dmax(y1 - y0, 0.0)))
     }
+  }
+  // (or the words of a node of the window's tree, as much of them as is drawn: cut by what holds them that cuts what
+  // it holds (View::clips), as drawn)
+  match view_tree() {
+    Some(tree) => {
+      let drawn = tree.drawn_held()
+      for e in drawn {
+        let (d, holder, _) = e
+        if d.bones == 0L && view_words_set(d.words, d.words_look).contains(s) && d.alpha > 0.0 {
+          let mut x0 = d.x
+          let mut y0 = d.y
+          let mut x1 = d.x + d.w
+          let mut y1 = d.y + d.h
+          let mut h = holder
+          while h >= 0 {
+            let (a, up, _) = drawn[h]
+            if a.clips {
+              x0 = dmax(x0, a.x)
+              y0 = dmax(y0, a.y)
+              x1 = dmin(x1, a.x + a.w)
+              y1 = dmin(y1, a.y + a.h)
+            }
+            h = up
+          }
+          return Some((x0, y0, dmax(x1 - x0, 0.0), dmax(y1 - y0, 0.0)))
+        }
+      }
+    }
+    None => ()
   }
   None
 }

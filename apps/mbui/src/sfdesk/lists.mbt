@@ -15,51 +15,9 @@ fn sidebar(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
     "settings" => settings_side(c, src, w)
     "stations" => stations_side(c, src, w)
     "profiles" => profiles_side(c, src, w)
-    _ => lists_side(c, src, w, width)
+    // (the chats' lists: made once over the block, side_node.mbt)
+    _ => ignore(width)
   }
-}
-
-///|
-/// The chats' sidebar `width` wide: the band over the lists (sfpages' chats_lists: 全部, 我参与的, 监控中, then
-/// 已归档 on its track).
-fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
-  ignore(width)
-  let mode = list_mode(src, w)
-  if mode != 3 {
-    archive_side.landed = false
-  }
-  // (read now: the rows are made as the list is laid out, after the closed bar's drawing is over)
-  let band = list_band_h(src, w)
-  let t = @sf.theme()
-  let frame : @sfpages.ListsFrame = {
-    ..@sfpages.bare_lists(band, 0.0, list_top_h(), if side_folded() || wide.tape { apart_ground() } else { t.p.sidebar }, mode, Side),
-    others: [fn() { archive_pane(c, src, w) }],
-    kept: true,
-  }
-  // under a finger's search (sfpages' search.mbt): the band and the foot away with the lists, the search over them
-  let away = @sfpages.search_away(c)
-  c.box(style=lists_fill, fn() {
-    // (their room for the band held on the block's way: drawn where the band has them as it goes)
-    let drawn_off = band_h(src, w) - band
-    if drawn_off != 0.0 {
-      let lists = c.box(style=lists_fill, fn() { @sfpages.chats_lists(c, src, w, frame) })
-      c.look(lists, @ui.look(dy=drawn_off))
-    } else {
-      @sfpages.chats_lists(c, src, w, frame)
-    }
-    let b = c.layer(fn() { lists_band(c, src, w) })
-    // with no bell in the rail: the stations' trouble and the services up long, at the foot (the rail's bell has them
-    // where it is: cloud/workspace.tsx WorkspaceSidebarFooter)
-    let f = if !rail_items(src, w.id).contains("attention") { c.layer(fn() { lists_foot(c, src, w) }) } else { 0 }
-    if away > 0.0 {
-      c.look(b, { ..@ui.still_look, alpha: 1.0 - away })
-      if f != 0 {
-        c.look(f, { ..@ui.still_look, alpha: 1.0 - away })
-      }
-    }
-    @sfpages.chats_search(c, src, w, side_top_h(), Side)
-  })
-  |> ignore
 }
 
 ///|

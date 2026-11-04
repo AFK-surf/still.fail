@@ -14,6 +14,17 @@ pub fn side_top(c : @ui.Ctx) -> Unit {
 }
 
 ///|
+/// The band's first row (side_top's) as a node in `parent`: `brand()` tall (where the block's move has got: the frame's
+/// --brand), the window's buttons' row where they are in the app's top row, which drags the window while the sidebar is
+/// open.
+fn side_top_node(parent : @view.View, brand : () -> Double) -> Unit {
+  parent.box(fn(top) {
+    top.height(By(fn() { Some(brand()) })).moves_window(By(fn() { @ui.window_inset_now() && !side_folded() })) |> ignore
+  })
+  |> ignore
+}
+
+///|
 /// The band's first row's height (side_top).
 pub fn side_top_h() -> Double {
   wide.brand_h
@@ -24,6 +35,20 @@ pub fn side_top_h() -> Double {
 /// folded the taller end's all the way, so that their rows are not laid out again each frame (fold_bars).
 fn list_top_h() -> Double {
   wide.list_top
+}
+
+///|
+/// What the lists' room over them is worked out from, as the frame last said it (its top row's height, the room left for
+/// it, the band's held, whether on the tape, the band's where it is now: list_room_told): read by the lists' nodes,
+/// laid out again as it changes, not as they happen to be built again.
+let lists_room : @signals.Signal[(Double, Double, Double, Bool, Double)] = @signals.signal((0.0, 0.0, 0.0, false, 0.0), same=fn(a, b) {
+  a == b
+})
+
+///|
+/// The lists' room told as the frame has just worked it out (lists_room).
+fn list_room_told() -> Unit {
+  lists_room.set((wide.brand_h, wide.list_top, wide.list_band, wide.tape, wide.band))
 }
 
 ///|

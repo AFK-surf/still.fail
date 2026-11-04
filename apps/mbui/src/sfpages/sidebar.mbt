@@ -174,7 +174,16 @@ fn line_key(line : Line) -> String {
 let placed : Map[String, Bool] = {}
 
 ///|
+/// How far each list made once is scrolled to tuck its search out of view, by its key, as it was first placed: the room
+/// its foot keeps so it goes that far with fewer rows than it is tall.
+// kept across runs: put back by sidebar_reset (reset)
+let tucked_by : Map[String, Double] = {}
+
+///|
 fn sidebar_reset() -> Unit {
+  list_scrolls.clear()
+  tucked_by.clear()
+  rows_rest_at.val = -1.0
   placed.clear()
   rows_laid.clear()
   list_rows.clear()
@@ -593,7 +602,14 @@ pub fn filter_menu(from : @sf.Beside, shown : String, go : (String) -> Unit) -> 
     along=End,
   )
   filter_menu_serial.val = @sf.last_presented()
+  filter_menu_opened.set(@signals.untracked(fn() { filter_menu_opened.get() }) + 1)
 }
+
+///|
+/// How many times the filter's menu has opened: what makes the lists it would show at once told as it does
+/// (chats_lists_node).
+// kept across runs: counted on as it opens (nothing reads its value, only its change)
+let filter_menu_opened : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 /// The list's filter in workspace `w` chosen (`all`, `mine`, `watching`): kept here at once, and in the prefs (the

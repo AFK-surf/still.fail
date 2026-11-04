@@ -886,6 +886,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   let n0 = self.ninst
   // (what is drawn off where it is laid out drawn off by whole pixels of this frame's: View::drawn_off)
   tree.set_pixel_grid(self.scale)
+  old_cuts.clear()
   // (the nodes whose clips are pushed now, the innermost last: each popped as what is drawn next is no longer in it)
   let clipping : Array[@view.NodeId] = []
   // (the nodes whose edge is drawn after what they hold, still open, the innermost last: each edged as what is drawn
@@ -1069,6 +1070,18 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
           // (in a node that clips: cut by it, as what else it holds is; else by the window)
           Some(i) =>
             if clipping.length() > 0 {
+              // (what of it is drawn: within that clip, as the corner rule reads it, Ctx::corner_faults; said where its
+              // nodes are laid out, the island drawn at (px, py) as big as `s` from where it is laid out at (ox, oy))
+              let k = clip_top()
+              match old_placed.iter().find_first(fn(o) { o.0 == c.id }) {
+                Some((_, px, py, _, _, _, ox, oy, s)) if s > 0.0 => {
+                  let laid = fn(dx : Double, dy : Double) { (ox + (dx - px) / s, oy + (dy - py) / s) }
+                  let (x0, y0) = laid(clip_stack[k], clip_stack[k + 1])
+                  let (x1, y1) = laid(clip_stack[k + 2], clip_stack[k + 3])
+                  old_cuts[i] = (x0, y0, x1, y1)
+                }
+                _ => ()
+              }
               self.in_window_within(fn() { self.paint(i, a) })
             } else {
               self.in_window(fn() { self.paint(i, a) })
@@ -2283,6 +2296,7 @@ fn view_frame_end(c : Ctx) -> Unit {
   if tree.cycle_read() {
     c.cycling = true
   }
+
   match tree.wake() {
     Some(at) =>
       if c.wake_at <= 0.0 || at < c.wake_at {
@@ -2311,6 +2325,8 @@ fn view_frame_end(c : Ctx) -> Unit {
 /// in itself): its node held shorter than what it holds asks (its holder short of room), nothing of it cut off; what it
 /// asks never the height it was given. Not with `fits` (not yet: one that fits laid out as a `natural` one is,
 /// cut where its node is shorter).
+/// `unlaid`, a `natural` one's: how tall it is taken to be till first laid out (in a list: as tall as a screen, the rows
+/// after it made only as it is known to leave room for them).
 pub fn old(
   v : @view.View,
   build : (Ctx) -> Unit,
@@ -2318,12 +2334,23 @@ pub fn old(
   natural? : Bool = false,
   gives? : Bool = false,
   fits? : (Double, @signals.Signal[Double?]),
+  unlaid? : () -> Double,
 ) -> @view.View {
   v.hosted(make=fn(n) {
     // (as tall as what it holds at the width it is given, as the old frame last laid that out: old_natural_after_layout)
     let natural_h : @signals.Signal[Double?]? = if natural {
       let s = @signals.signal(None, same=fn(a, b) { a == b })
-      n.height(By(fn() { s.get() })) |> ignore
+      // (`unlaid`: how tall it is taken to be till the old frame has laid it out, in that frame's first pass (built
+      // again with it once known, never drawn so): what lays out by the room it leaves (a list making its rows as far
+      // as they show) making nothing for room it does not leave)
+      n.height(By(fn() {
+        match (s.get(), unlaid) {
+          (Some(h), _) => Some(h)
+          (None, Some(f)) => Some(f())
+          (None, None) => None
+        }
+      }))
+      |> ignore
       Some(s)
     } else {
       None
@@ -2710,6 +2737,13 @@ let old_hits_rects : Array[Double] = []
 ///|
 // kept across runs: put back as a run begins (view_forget)
 let old_hits_clips : Array[Double] = []
+
+///|
+/// The clip each old view hosted in a node of the window's tree that clips is drawn within this frame (left, top,
+/// right, foot), said where the old view's nodes are laid out (its place and size as drawn undone), by the old frame's
+/// node it is drawn from: what lies wholly outside it is not drawn.
+// kept across runs: made again each frame the tree is painted
+let old_cuts : Map[Int, (Double, Double, Double, Double)] = {}
 
 ///|
 /// What scrolls in an old view or stops the wheel there, as the last frame painted it: the frame's scroll targets'
@@ -4100,6 +4134,11 @@ fn focus_told_tree(c : Ctx) -> Unit {
         c.focus = 0
       }
       tree.focus_to(None) |> ignore
+      // (come to an old view's own: what of the tree waited for its node to come back for the focus waits no more,
+      // Tree::focus_parked_drop)
+      if c.focus != 0 {
+        tree.focus_parked_drop()
+      }
       // (come to an old view's stop hosted in it: that brought into sight by what of the tree holds it, once laid out)
       // (where it is in the old view found once that is laid out as it is next: old_show_after_layout)
       if c.focus != 0 && c.focus != old_focus_shown.val {
@@ -4427,8 +4466,9 @@ pub fn yield_thumbs(v : @view.View, island : @view.View) -> Unit {
 
 ///|
 /// What takes a finger at (x, y) of what the tree found (`picked`, the topmost of `found`): where it is a node that
-/// yields to an old view's thumbs (yield_thumbs), that old view found under it there and what of it takes it there a
-/// thumb shown for a mouse, the old view; else what was found.
+/// yields to thumbs (yield_thumbs) and the pointer a mouse's, a thumb of a column of the tree's found under it there
+/// (one taking a drag while it shows: Tree::is_thumb), the topmost; else that old view found under it there and what of
+/// it takes it there a thumb shown, the old view; else what was found.
 fn view_retarget(
   tree : @view.Tree,
   picked : @view.Target,
@@ -4442,7 +4482,16 @@ fn view_retarget(
   }
   guard thumbs_yielded.get(id.at) is Some((who, island)) && who == id else { return picked }
   // (a mouse's alone, as a thumb takes one: a finger takes none, whatever the frame before published)
-  guard pointing() is Mouse && found.contains(Hosted(island)) else { return picked }
+  guard pointing() is Mouse else { return picked }
+  // (a thumb of a column of the tree's own under it there, shown: the topmost of them)
+  // (found in the order they are drawn, the topmost last)
+  for i = found.length() - 1; i >= 0; i = i - 1 {
+    match found[i] {
+      Dragged(d) if d != id && tree.is_thumb(d) => return found[i]
+      _ => ()
+    }
+  }
+  guard found.contains(Hosted(island)) else { return picked }
   match old_taker_at(tree, island, x, y) {
     Some(token) if token % 2 == 0 && g().bars.iter().any(fn(b) { b.thumb == token / 2 }) => Hosted(island)
     _ => picked

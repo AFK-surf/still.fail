@@ -552,6 +552,12 @@ fn looks_apply(c : Ctx) -> Unit {
   looks_own.cycling = false
   in_looks.val = true
   c.cycle_looks()
+  // (the window's tree's endless decorations on the resident clock (View::cycle_resident): its next step woken for,
+  // said later, as a look's here is: nothing built for it; a step nobody can see waits)
+  match view_app.val {
+    Some(tree) if tree.resident_read() && app_visible() => c.wake_at_time(tree.resident_next(), later=true)
+    _ => ()
+  }
   in_looks.val = false
 }
 

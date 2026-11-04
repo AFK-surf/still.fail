@@ -85,6 +85,7 @@ fn reset() -> Unit {
   splash_owner.val = None
   first_shown.val = false
   first_waiting.val = false
+  @sfbase.first_page_waits.set(false)
   first_has.val = 0
   frame_bare.val = false
   window_shown.val = false
@@ -414,6 +415,7 @@ fn view_in(c : @ui.Ctx, src : Source) -> Unit {
     first_shown.val = true
     first_waiting.val = false
   }
+  first_hide(first_waiting.val)
   // the first page built, waiting for what it shows (signed_in): not shown yet, the splash over the window's ground
   // (what the host clears to, the ground's colour) in its place, its words as while the workspaces are read
   if first_waiting.val {
@@ -812,10 +814,8 @@ fn page_view(
       match page {
         // a device waiting to be confirmed in the workspace's safe mode sees that instead of the chats (its
         // stations refuse it: Security.kt LockGate); its settings stay
-        Home =>
-          if lock_gate(c, src, w, bar=invited) {
-            home_page(c, src, w, all, invited)
-          }
+        // (made once: narrow_shell.mbt's Home)
+        Home => ()
         Chat(r) => {
           chat_page(c, src, w, r)
           new_chat_leaving(c, src, w, r)
@@ -1267,6 +1267,14 @@ let first_shown : Ref[Bool] = Ref(false)
 ///|
 /// Whether this frame's first page is built and not shown yet (signed_in, view_in).
 let first_waiting : Ref[Bool] = Ref(false)
+
+///|
+/// The chats' lists made once drawn at none while `on` (sfbase's first_page_waits), told only as it changes.
+fn first_hide(on : Bool) -> Unit {
+  if @signals.untracked(fn() { @sfbase.first_page_waits.get() }) != on {
+    @sfbase.first_page_waits.set(on)
+  }
+}
 
 ///|
 /// Whether this frame drew the ground alone (splash), and whether the window held (host_setup) is shown (view_in).

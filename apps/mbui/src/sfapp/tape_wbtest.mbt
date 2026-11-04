@@ -962,7 +962,8 @@ fn words_middle(t : @ui.Tester, words : String) -> Double? {
       return Some(b.y + b.h / 2.0)
     }
   }
-  None
+  // (or a node of the window's tree's: the sidebar's band made once)
+  t.rect_of(words).map(fn(r) { r.1 + r.3 / 2.0 })
 }
 
 ///|

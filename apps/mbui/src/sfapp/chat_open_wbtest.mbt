@@ -37,7 +37,7 @@ fn chat_open_tester(slow : Ref[Bool], waiting : Ref[Bool]) -> @ui.Tester {
     },
     leave: fn(name, params) { asked.remove(key(name, params)) },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(first_page_ms + @ui.move_most_ms)
   slow.val = true
   t
@@ -72,7 +72,7 @@ fn chat_prefetch_tester(asked : Array[String], left : Array[String]) -> @ui.Test
       (base.leave)(name, params)
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(first_page_ms + @ui.move_most_ms)
   asked.clear()
   left.clear()
