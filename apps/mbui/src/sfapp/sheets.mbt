@@ -260,36 +260,11 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
   let thread = field(chat, "thread")
   let title = text(chat, "title")
   c.box(w=Fill(1.0), fn() {
-    // (clear of an untitled dialog's close button over its end: @sf.untitled_clear)
-    // (its rename right after its name, on the name's first line, not in the corner over the close button: the user,
-    // 2026-11-03, 那个改名的图标显然不能放那)
-    c.box(style=@sf.untitled_clear(), dir=Row, w=Fill(1.0), gap=8.0, align=AStart, fn() {
-      // (two lines at most, the last ending in an ellipsis: not a third cut off below them)
-      c.box(w=Cut, pt=4.0, fn() { c.text(title, size=t.t.title, weight=700, color=t.p.text, line=24.0, max_lines=2) |> ignore })
-      |> ignore
-      if open {
-        let id = c.id("info/rename")
-        if c.clicked(id) {
-          open_rename(src, r, opt_number(thread, "id"), title, from=Of(id))
-        }
-        c.box(
-          w=Px(32.0),
-          h=Px(32.0),
-          radius=16.0,
-          bg=@sf.alpha(t.p.text, 0.05),
-          align=ACenter,
-          justify=JCenter,
-          id~,
-          fn() {
-            @sf.icon(c, "edit", size=16.0, color=t.p.text) |> ignore
-            // ChatInfo.kt: clip(CircleShape).clickable
-            @motion.ripple(c, id, 16.0)
-          },
-        )
-        |> ignore
-      }
-    })
-    |> ignore
+    // its name and ✎: the panel's title row where it draws one (in the middle of the window: info_title_row), else
+    // here, clear of an untitled dialog's close button over its end (@sf.untitled_clear)
+    if !@sf.title_row_given.val {
+      c.box(style=@sf.untitled_clear(), w=Fill(1.0), fn() { info_title_row(c, src, r, title, open, thread) }) |> ignore
+    }
     // opened by another chat's agent: the way back there (由「…」创建), pressed as a row is
     match view {
       Some({ opener: Some(o), .. }) => {
@@ -514,10 +489,61 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
 }
 
 ///|
-/// The chat's own sheet (chat_info_body) from "…": the library's panel, as tall as what it shows, its head its own (its
-/// name with ✎ beside it).
+/// A chat's name in its sheet's head, two lines at most, its ✎ right after it where it can be renamed (`open`): the
+/// panel's title row in the middle of the window (open_info), else the first line of what it holds.
+fn info_title_row(c : @ui.Ctx, src : Source, r : ChatRef, title : String, open : Bool, thread : Json?) -> Unit {
+  let t = @sf.theme()
+  // (its rename right after its name, on the name's first line, not in the corner over the close button: the user,
+  // 2026-11-03, 那个改名的图标显然不能放那)
+  c.box(dir=Row, w=Fill(1.0), gap=8.0, align=AStart, fn() {
+    // (two lines at most, the last ending in an ellipsis: not a third cut off below them)
+    c.box(w=Cut, pt=4.0, fn() { c.text(title, size=t.t.title, weight=700, color=t.p.text, line=24.0, max_lines=2) |> ignore })
+    |> ignore
+    if open {
+      let id = c.id("info/rename")
+      if c.clicked(id) {
+        open_rename(src, r, opt_number(thread, "id"), title, from=Of(id))
+      }
+      c.box(
+        w=Px(32.0),
+        h=Px(32.0),
+        radius=16.0,
+        bg=@sf.alpha(t.p.text, 0.05),
+        align=ACenter,
+        justify=JCenter,
+        id~,
+        fn() {
+          @sf.icon(c, "edit", size=16.0, color=t.p.text) |> ignore
+          // ChatInfo.kt: clip(CircleShape).clickable
+          @motion.ripple(c, id, 16.0)
+        },
+      )
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// The chat's own sheet (chat_info_body) from "…": the library's panel, as tall as what it shows, its name with ✎ beside
+/// it its title row in the middle of the window, else its own head.
 fn open_info(src : Source, r : ChatRef) -> Unit {
-  @sf.panel("", from=Unanchored, fn(c, close) { chat_info_body(c, src, r, close) })
+  // (its name its title, with its ✎ after it, in the title's row in the middle of the window: the user, 2026-11-04,
+  // 为啥不做成标题; no title of words elsewhere, where what it holds draws its name itself)
+  @sf.panel(
+    "",
+    from=Unanchored,
+    title_row=fn(c) {
+      let chat = (src.topic)("chat", chat_params(r)).value
+      let (view, _, _) = view_of_chat(src, r)
+      let open = match view {
+        Some(v) => !v.archived && !v.offline
+        None => false
+      }
+      info_title_row(c, src, r, text(chat, "title"), open, field(chat, "thread"))
+    },
+    fn(c, close) { chat_info_body(c, src, r, close) },
+  )
 }
 
 ///|
@@ -565,28 +591,11 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
   let status = text(a, "status")
   let entry = context_entry(c, src, r, key, s)
   c.box(w=Fill(1.0), fn() {
-    // (its head the panel's, on its words' line as chat_info_body's title: its mark the maker's alone, no tile in the
-    // panel's corner; what it did a card of the panel's under it, 16 in: the user, 2026-11-03, 面板里可以放卡片)
-    c.box(style=@sf.untitled_clear(), dir=Row, w=Fill(1.0), pt=4.0, pb=@sf.panel_card_in, gap=12.0, align=ACenter, fn() {
-      model_mark_big(
-        c,
-        text(field(s, "maker"), "id"),
-        text(s, "runtime"),
-        40.0,
-        state_of_badge(text(a, "badge")),
-        @sf.over(t.p.bg, @sf.alpha(t.p.card, 0.8)),
-        plain=true,
-      )
-      c.box(w=Fill(1.0), gap=1.0, fn() {
-        c.text(text(s, "agentText"), size=t.t.title, weight=700, color=t.p.text, wrap=false) |> ignore
-        agent_status(c, src, a)
-      })
-      |> ignore
-      if status == "running" || status == "queued" {
-        stop_button(c, src, r.station, key)
-      }
-    })
-    |> ignore
+    // (its head: the panel's title row in the middle of the window (agent_title_row), else its own here, clear of an
+    // untitled dialog's close button over its end)
+    if !@sf.title_row_given.val {
+      c.box(style=@sf.untitled_clear(), w=Fill(1.0), pb=@sf.panel_card_in, fn() { agent_title_row(c, src, r, key) }) |> ignore
+    }
     // (its words on the card's 24, its figures blocks at its foot 8 in, a row's corner)
     c.box(style=info_list_style.then(@sf.panel_card_out()), radius=info_list_radius, fn() {
     agent_lines(c, card)
@@ -711,10 +720,48 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
 }
 
 ///|
+/// An agent's head in its card: its maker's mark alone, its name and where it stands, its stop where it runs: the panel's
+/// title row in the middle of the window (open_agent), else the first line of what it holds (agent_body). Its mark no tile
+/// in the panel's corner; what it did a card of the panel's under it, 16 in (the user, 2026-11-03, 面板里可以放卡片).
+fn agent_title_row(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> Unit {
+  let t = @sf.theme()
+  let chat = (src.topic)("chat", chat_params(r)).value
+  let a = agent_json(chat, key)
+  let s = field(a, "session")
+  let status = text(a, "status")
+  // (its head the panel's, on its words' line as chat_info_body's title: its mark the maker's alone, no tile in the
+  // panel's corner; what it did a card of the panel's under it, 16 in: the user, 2026-11-03, 面板里可以放卡片)
+  c.box(dir=Row, w=Fill(1.0), pt=4.0, gap=12.0, align=ACenter, fn() {
+    model_mark_big(
+      c,
+      text(field(s, "maker"), "id"),
+      text(s, "runtime"),
+      40.0,
+      state_of_badge(text(a, "badge")),
+      @sf.over(t.p.bg, @sf.alpha(t.p.card, 0.8)),
+      plain=true,
+    )
+    c.box(w=Fill(1.0), gap=1.0, fn() {
+      c.text(text(s, "agentText"), size=t.t.title, weight=700, color=t.p.text, wrap=false) |> ignore
+      agent_status(c, src, a)
+    })
+    |> ignore
+    if status == "running" || status == "queued" {
+      stop_button(c, src, r.station, key)
+    }
+  })
+  |> ignore
+}
+
+///|
 /// An agent's card (agent_body): the library's panel, as tall as what it shows, its head its own (its mark, name and
 /// where it stands).
 fn open_agent(src : Source, r : ChatRef, key : String) -> Unit {
-  @sf.panel("", from=Unanchored, fn(c, close) { agent_body(c, src, r, key, close) })
+  // (its mark, name and where it stands its title row in the middle of the window: the user, 2026-11-04, 这个是不是也可以
+  // 想办法做成标题)
+  @sf.panel("", from=Unanchored, title_row=fn(c) { agent_title_row(c, src, r, key) }, fn(c, close) {
+    agent_body(c, src, r, key, close)
+  })
 }
 
 ///|

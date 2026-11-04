@@ -112,6 +112,9 @@ priv struct PanelOf {
   above : ((@ui.Ctx) -> Unit)?
   /// beside what opened it, what stands at its head's end, beside its title (panel's `head_end`)
   head_end : ((@ui.Ctx) -> Unit)?
+  /// in the middle of the window, what its title's row holds in its title's place, its close button at its end (panel's
+  /// `title_row`)
+  title_row : ((@ui.Ctx) -> Unit)?
   /// beside what opened it, no head: what it holds draws its own (panel's `heads_itself`)
   heads_itself : Bool
   /// beside what opened it: on which side of it, along it where, how far from it (panel's `side`, `along`, `offset`)
@@ -370,6 +373,10 @@ pub fn pick(
 /// start at the start of it); what opens from a bar down the window's side (the rail) stands beside the bar, out of
 /// it, as everything opened from there does. `head_end`: beside what opened it, what stands at the end of its head's
 /// line, beside its title (the model panel's search: a sheet, its head the sheet's own, leaves it to what it holds).
+/// `title_row`: in the middle of the window, its title's row drawn by it in the title's place (a chat's name with its ✎
+/// after it, an agent's mark, name and where it stands), its close button at that row's end as a title's is; `title`
+/// still what it is called. What it holds asks Ctx-free `title_row_given` whether to draw that row itself (elsewhere:
+/// a sheet, a panel beside what opened it).
 /// `heads_itself`: beside what opened it, no head drawn for it: what it holds draws its title where it wants it (the
 /// model panel's, a title over each of its columns; a sheet's head is the sheet's own still).
 /// `fade_out_together`: its ground and contents leave as one instead of the usual staged fade; what is behind it may
@@ -396,6 +403,7 @@ pub fn panel(
   stage? : Bool = false,
   above? : (@ui.Ctx) -> Unit,
   head_end? : (@ui.Ctx) -> Unit,
+  title_row? : (@ui.Ctx) -> Unit,
   heads_itself? : Bool = false,
   side? : @ui.Side = Bottom,
   along? : @ui.Along = Start,
@@ -424,6 +432,7 @@ pub fn panel(
       stage,
       above,
       head_end,
+      title_row,
       heads_itself,
       side,
       along,

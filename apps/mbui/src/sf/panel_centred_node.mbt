@@ -42,7 +42,7 @@ fn panel_centred_node(
     let untitled = fn() {
       steps is Some(_) || {
         let (title, step, _) = now()
-        title == "" && step == ""
+        title == "" && step == "" && x.title_row is None
       }
     }
     let w = fn() { dmin(if x.wide { dialog_wide_w } else { dialog_w }, layer.window().0 - dialog_margin) }
@@ -129,7 +129,11 @@ fn panel_centred_node(
                     })
                     |> ignore
                   } else {
-                    c.text(title, style=dialog_title) |> ignore
+                    match x.title_row {
+                      // (what it draws in its title's place, as wide as the row leaves it: title_row)
+                      Some(f) => c.box(style=title_row_room, fn() { f(c) }) |> ignore
+                      None => c.text(title, style=dialog_title) |> ignore
+                    }
                   }
                   c.box(style=dialog_close_at(), fn() {
                     if icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=t("common.close")) {
@@ -178,7 +182,7 @@ fn panel_centred_node(
               untitled_clear_now.val = if untitled() { dialog_close_clear() } else { 0.0 }
               lists_sized_now.val = true
               // (what holds what it holds giving way to the height the dialog leaves it)
-              c.gives_way(measured_body(c, keyed.serial, id, whole, fn() { draw_panel_body(x, c, close, keyed~) }))
+              c.gives_way(measured_body(c, keyed.serial, id, whole, fn() { titled_by_row(x, fn() { draw_panel_body(x, c, close, keyed~) }) }))
               panel_sides_in.val = was.0
               rows_out.val = was.1
               words_in_now.val = was.2
@@ -240,7 +244,7 @@ fn panel_centred_node(
                     }
                     None => {
                       panel_whole_now.val += 1
-                      draw_panel_body(x, c, close, keyed~)
+                      titled_by_row(x, fn() { draw_panel_body(x, c, close, keyed~) })
                       panel_whole_now.val -= 1
                     }
                   }
@@ -318,3 +322,23 @@ fn centred_part_in(over : Double, under : Double) -> @ui.Style {
   @ui.style(w=Full, pl=room(dialog_pad), pt=room(over), pr=room(dialog_pad), pb=room(under))
 }
 
+///|
+/// What a panel's own title row (panel's `title_row`) stands in: as wide as its head's row leaves it before the close
+/// button.
+// kept across runs: a value (no field of it changes)
+let title_row_room : @ui.Style = @ui.style(w=grow)
+
+///|
+/// Whether what a panel holds is drawn under a title row the panel draws for it (panel's `title_row`, in the middle of
+/// the window): it draws no head of its own then; elsewhere (a sheet, beside what opened it) it does.
+// kept across runs: said round what such a panel holds as it is drawn
+pub let title_row_given : Ref[Bool] = { val: false }
+
+///|
+/// What `x` holds drawn by `body`, told whether its title row is the panel's (title_row_given).
+fn titled_by_row(x : PanelOf, body : () -> Unit) -> Unit {
+  let was = title_row_given.val
+  title_row_given.val = x.title_row is Some(_)
+  body()
+  title_row_given.val = was
+}
