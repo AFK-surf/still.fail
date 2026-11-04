@@ -16,6 +16,9 @@ test("installing first deliveries seeks each session's threads without reading t
     put.run(20_000, 100, 1, "orphan");
     put.run(20_001, -4, 1, "中");
     put.run(9_007_199_254_741_001n, 7, 2, "large-rowid");
+    for (let n = 0; n < 64; n++) put.run(50_000 + n, n, 0, "short");
+    // Its earliest rowid is beyond the first 65 rows of the (session, thread) index.
+    for (let n = 0; n < 66; n++) put.run(100_000 - n, n, 0, "long");
     db.exec("COMMIT");
     const expected = db.prepare(`SELECT session, thread, n FROM
       (SELECT session, thread, n, MIN(rowid) FROM deliveries GROUP BY session) ORDER BY session`).all();
@@ -26,6 +29,7 @@ test("installing first deliveries seeks each session's threads without reading t
         if (property === "exec") return (sql: string) => target.exec(sql
           .replace("FROM deliveries GROUP BY session", "FROM deliveries WHERE visit_first_delivery() GROUP BY session")
           .replaceAll("SELECT rowid AS seq FROM deliveries INDEXED BY deliveries_session WHERE session = s.session LIMIT 65", "SELECT rowid AS seq FROM deliveries INDEXED BY deliveries_session WHERE session = s.session AND visit_first_delivery() LIMIT 65")
+          .replaceAll("WHERE rowid = (SELECT MIN(rowid) FROM deliveries) AND session = s.session", "WHERE rowid = (SELECT MIN(rowid) FROM deliveries) AND session = s.session AND visit_first_delivery()")
           .replaceAll("AND thread = first_threads.thread ORDER BY rowid LIMIT 1", "AND thread = first_threads.thread AND visit_first_delivery() ORDER BY rowid LIMIT 1"));
         const value = Reflect.get(target, property, target);
         return typeof value === "function" ? value.bind(target) : value;
@@ -33,7 +37,7 @@ test("installing first deliveries seeks each session's threads without reading t
     });
     schema.addListState(traced);
     assert.deepEqual(db.prepare("SELECT session, thread, n FROM session_first ORDER BY session").all(), expected);
-    assert.ok(visited <= 150, `installing first deliveries examined ${visited} historical rows`);
+    assert.ok(visited <= 350, `installing first deliveries examined ${visited} historical rows`);
     const seed = (schema as any).SESSION_FIRST_INITIAL as string;
     const plan = db.prepare(`EXPLAIN QUERY PLAN ${seed}`).all().map((r: any) => r.detail).join("\n");
     assert.match(plan, /SEARCH deliveries USING COVERING INDEX deliveries_session \(session=\? AND thread=\?\)/);

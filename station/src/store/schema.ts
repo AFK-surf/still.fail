@@ -812,8 +812,8 @@ SELECT MIN((SELECT rowid FROM deliveries INDEXED BY deliveries_session WHERE ses
 FROM first_threads WHERE thread IS NOT NULL`;
 export const firstDelivery = (session: string) => `SELECT thread, n FROM deliveries WHERE rowid = (${firstDeliveryRowid(session)})`;
 
-// An old station can have many deliveries per thread. A session with at most 64 is small enough to scan; otherwise
-// visit its threads by the existing index and select the least first rowid, without grouping every delivery.
+// An old station can have many deliveries per thread. A session with at most 64 is small enough to scan; the station's
+// first delivery is also a session's first when it belongs to it. Otherwise seek each of the session's threads.
 export const SESSION_FIRST_INITIAL = `WITH RECURSIVE first_sessions(session) AS (
   VALUES ((SELECT session FROM deliveries INDEXED BY deliveries_session ORDER BY session LIMIT 1))
   UNION ALL
@@ -824,6 +824,7 @@ INSERT INTO session_first (session, thread, n)
 SELECT s.session, d.thread, d.n FROM first_sessions s
 CROSS JOIN deliveries d ON d.rowid = COALESCE(
   (SELECT MIN(seq) FROM (SELECT rowid AS seq FROM deliveries INDEXED BY deliveries_session WHERE session = s.session LIMIT 65) HAVING COUNT(*) <= 64),
+  (SELECT rowid FROM deliveries WHERE rowid = (SELECT MIN(rowid) FROM deliveries) AND session = s.session),
   (${firstDeliveryRowid("s.session")}))
 WHERE s.session IS NOT NULL`;
 
