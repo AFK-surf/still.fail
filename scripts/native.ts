@@ -1357,7 +1357,11 @@ async function main(argv: string[]) {
       }
       for (const [, list] of groups) {
         list.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
-        for (const a of list.slice(keep)) { gh(["api", "-X", "DELETE", `repos/${REPO}/releases/assets/${a.id}`]); console.log(`deleted ${a.name}`); }
+        // (one GitHub dropped is left for the next prune: an EOF on one DELETE failed main's natives job, 6484574c, 2026-11-04)
+        for (const a of list.slice(keep)) {
+          const done = spawnSync("gh", ["api", "-X", "DELETE", `repos/${REPO}/releases/assets/${a.id}`], { encoding: "utf8" });
+          console.log(done.status === 0 ? `deleted ${a.name}` : `${a.name} not deleted (${done.stderr.trim()}): the next prune deletes it`);
+        }
       }
       return;
     }
