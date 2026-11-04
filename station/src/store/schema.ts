@@ -845,7 +845,29 @@ const SESSION_FIRST_DROP = `CREATE TRIGGER session_first_drop AFTER DELETE ON de
     SELECT OLD.session, next.thread, next.n FROM (${firstDelivery("OLD.session")}) next
     WHERE NOT EXISTS (SELECT 1 FROM session_first WHERE session = OLD.session);
 END;`;
-const LIST_STATE = `
+const ENTRIES_SAID_INDEX = "CREATE INDEX IF NOT EXISTS entries_said ON entries (thread, n, author_kind, author, letter) WHERE kind = 'message' AND letter IS NULL";
+
+const THREAD_STATE_SCAN = `INSERT INTO thread_state
+  SELECT thread, MAX(n), MAX(CASE WHEN kind = 'message' AND letter IS NULL THEN n END),
+    MIN(CASE WHEN kind = 'message' AND author_kind = 'person' THEN n END), COUNT(CASE WHEN kind = 'message' AND letter IS NOT NULL THEN 1 END)
+  FROM entries GROUP BY thread;`;
+
+// Seek each thread's boundaries in the indexes already used by readers. Only its old letters need counting.
+export const THREAD_STATE_SEEK = `WITH RECURSIVE state_threads(thread) AS (
+  VALUES ((SELECT thread FROM entries ORDER BY thread LIMIT 1))
+  UNION ALL
+  SELECT (SELECT thread FROM entries WHERE thread > state_threads.thread ORDER BY thread LIMIT 1)
+    FROM state_threads WHERE thread IS NOT NULL
+)
+INSERT INTO thread_state (thread, last_n, said_n, person_n, letters)
+SELECT t.thread,
+  (SELECT e.n FROM entries AS e WHERE e.thread = t.thread ORDER BY e.n DESC LIMIT 1),
+  (SELECT e.n FROM entries AS e INDEXED BY entries_said WHERE e.thread = t.thread AND e.kind = 'message' AND e.letter IS NULL ORDER BY e.n DESC LIMIT 1),
+  (SELECT e.n FROM entries AS e INDEXED BY entries_people_by_n WHERE e.thread = t.thread AND e.kind = 'message' AND e.author_kind = 'person' ORDER BY e.n LIMIT 1),
+  (SELECT COUNT(*) FROM entries AS e INDEXED BY entries_letters WHERE e.thread = t.thread AND e.kind = 'message' AND e.letter IS NOT NULL)
+FROM state_threads t WHERE t.thread IS NOT NULL;`;
+
+const LIST_STATE = (threadState: string) => `
 CREATE TABLE thread_state (
   thread INTEGER PRIMARY KEY,
   last_n INTEGER NOT NULL,
@@ -864,10 +886,7 @@ CREATE TABLE session_first (
   thread INTEGER NOT NULL,
   n INTEGER NOT NULL
 ) WITHOUT ROWID;
-INSERT INTO thread_state
-  SELECT thread, MAX(n), MAX(CASE WHEN kind = 'message' AND letter IS NULL THEN n END),
-    MIN(CASE WHEN kind = 'message' AND author_kind = 'person' THEN n END), COUNT(CASE WHEN kind = 'message' AND letter IS NOT NULL THEN 1 END)
-  FROM entries GROUP BY thread;
+${threadState}
 INSERT INTO thread_people
   SELECT thread, author, MIN(n) FROM entries WHERE kind = 'message' AND author_kind = 'person' GROUP BY thread, author;
 ${SESSION_FIRST_INITIAL};
@@ -1191,7 +1210,7 @@ export function addPendingCards(db: DatabaseSync): void {
 ///   when they started, every turn the session had was read.
 /// - sessions_models: the chats someone started by when, with their runtime and model (store.ts MODELS_USED_BY).
 export function addTellIndexes(db: DatabaseSync): void {
-  db.exec("CREATE INDEX IF NOT EXISTS entries_said ON entries (thread, n, author_kind, author, letter) WHERE kind = 'message' AND letter IS NULL");
+  db.exec(ENTRIES_SAID_INDEX);
   db.exec("CREATE INDEX IF NOT EXISTS entries_agent_at ON entries (thread, at) WHERE kind = 'message' AND author_kind = 'agent'");
   db.exec("CREATE INDEX IF NOT EXISTS turns_by_end ON turns (session_key, ended_at)");
   // The archive's, a page at a time by
@@ -1207,9 +1226,13 @@ export function addListState(db: DatabaseSync): void {
   const firstSafe = (trigger: string) => ((db.prepare("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?").get(trigger) as { sql: string } | undefined)?.sql ?? "")
     .includes("WITH RECURSIVE first_threads");
   if (made() && firstSafe("session_first_add") && firstSafe("session_first_drop")) return;
+  // Store.open would build this index later in addTellIndexes. Make it first for this upgrade, after old letters are marked.
+  if (!made()) db.exec(ENTRIES_SAID_INDEX);
+  const hasIndex = (name: string) => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?").get(name) !== undefined;
   db.exec("BEGIN IMMEDIATE");
   try {
-    if (!made()) db.exec(LIST_STATE);
+    // A partially upgraded database may have the columns but not their indexes; preserve its original migration.
+    if (!made()) db.exec(LIST_STATE(hasIndex("entries_people_by_n") && hasIndex("entries_letters") ? THREAD_STATE_SEEK : THREAD_STATE_SCAN));
     else {
       if (!firstSafe("session_first_add")) db.exec(`DROP TRIGGER IF EXISTS session_first_add; ${SESSION_FIRST_ADD}`);
       if (!firstSafe("session_first_drop")) db.exec(`DROP TRIGGER IF EXISTS session_first_drop; ${SESSION_FIRST_DROP}`);
