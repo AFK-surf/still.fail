@@ -1,7 +1,6 @@
 ///|
 test "a custom parent measures the composer before laying out its list in one pass" {
   let composing = @signals.signal(40.0, same=fn(a, b) { a == b })
-  let room = Ref(0.0)
   let layouts = Ref(0)
   let footer : Ref[View?] = Ref(None)
   let row : Ref[View?] = Ref(None)
@@ -15,13 +14,12 @@ test "a custom parent measures the composer before laying out its list in one pa
         layouts.val += 1
         let last = l.child("last", fn(n) { row.val = Some(n); n.height(Is(Some(20.0))).ground(Is(0x223344ffL)) |> ignore })
         let size = l.measure(last, l.width)
-        l.place(last, 0.0, l.height - room.val - size.1)
+        l.place(last, 0.0, l.height - size.1)
       }) |> ignore
     })
     root.layout_box(Is(0), fn(l, _) {
       let size = l.measure(composer, l.width)
-      if room.val != size.1 { room.val = size.1; l.invalidate(list) }
-      l.measure(list, l.width, height=l.height) |> ignore
+      l.measure(list, l.width, height=l.height - size.1) |> ignore
       l.place(list, 0.0, 0.0)
       l.place(composer, 0.0, l.height - size.1)
     }) |> ignore
@@ -128,4 +126,39 @@ test "reordering lazy children changes their paint order without rebuilding eith
   assert_eq(t.root().kids().map(fn(n) { n.id() }), [before[1], before[0]])
   assert_eq(built.val, 2)
   t.dispose()
+}
+
+///|
+test "panic a custom layout cannot read a signal outside its captured content" {
+  let offset = @signals.signal(20.0)
+  let t = Tree::new(fn(root) {
+    root.layout_box(Is(0), fn(_, _) { offset.get() |> ignore }) |> ignore
+  })
+  t.frame(200.0, 300.0) |> ignore
+}
+
+///|
+test "panic a custom layout cannot write an unobserved signal" {
+  let offset = @signals.signal(20.0)
+  let t = Tree::new(fn(root) {
+    root.layout_box(Is(0), fn(_, _) { offset.set(30.0) }) |> ignore
+  })
+  t.frame(200.0, 300.0) |> ignore
+}
+
+///|
+test "panic a lazily created component's first reaction cannot dirty a sibling" {
+  let value = @signals.signal(30.0)
+  let t = Tree::new(fn(root) {
+    let sibling = root.box(fn(n) { n.height(Is(Some(20.0))) |> ignore })
+    root.box(fn(n) {
+      n.width(Is(Some(100.0))).height(Is(Some(100.0)))
+      .layout_box(Is(0), fn(l, _) {
+        l.child("a", fn(child) {
+          child.reacts(fn() { value.get() }, fn(v) { sibling.height(Is(Some(v))) |> ignore })
+        }) |> ignore
+      }) |> ignore
+    }) |> ignore
+  })
+  t.frame(200.0, 300.0) |> ignore
 }

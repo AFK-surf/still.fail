@@ -34,7 +34,9 @@ pub fn Layout::child(self : Layout, key : String, make : (View) -> Unit) -> View
   let child = match self.keyed.get(key) {
     Some(v) if v.alive() => v
     _ => {
+      let guard_before = @signals.set_access_guard(None)
       let v = self.owner.box(make)
+      @signals.set_access_guard(guard_before) |> ignore
       v.tree.nodes[v.at].flex.line = -1
       self.keyed[key] = v
       v
@@ -66,17 +68,6 @@ pub fn Layout::place(self : Layout, child : View, x : Double, y : Double) -> Uni
 }
 
 ///|
-/// A parent supplied different non-reactive layout parameters to this child (for example the height reserved by a
-/// composer it just measured). Invalidate that child's cached layout before measuring it with those parameters.
-pub fn Layout::invalidate(self : Layout, child : View) -> Unit {
-  self.check(child)
-  let n = child.tree.nodes[child.at].flex
-  n.dirty = true
-  n.cache_n = 0
-  n.p_ok = false
-}
-
-///|
 /// Own the layout of this bounded box's children. State and time are captured by `content` before layout; `place`
 /// reads that snapshot, measures children in dependency order and places them. It may subcompose keyed children
 /// with Layout::child, but may not mutate another branch or feed geometry into ordinary reactive state.
@@ -94,7 +85,11 @@ pub fn[K : Eq] View::layout_box(self : View, content : Live[K], place : (Layout,
     // Only the final state is published by Tree::walk, so a child kept hidden and then placed never disappears.
     for at in n.kids { self.tree.nodes[at].flex.line = -1 }
     match value.val {
-      Some(v) => @signals.untracked(fn() { place(ctx, v) })
+      Some(v) => {
+        let guard_before = @signals.set_access_guard(Some("layout_box node \{self.at} must use content and constraints"))
+        @signals.untracked(fn() { place(ctx, v) })
+        @signals.set_access_guard(guard_before) |> ignore
+      }
       None => ()
     }
     let gone = []

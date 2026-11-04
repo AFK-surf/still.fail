@@ -1661,6 +1661,7 @@ fn Tree::layout_change_allowed(self : Tree, at : Int) -> Unit {
       i = self.nodes[i].parent
     }
   }
+  @signals.set_access_guard(None) |> ignore
   abort("layout output changed layout at node \{at}; measure dependent children inside their parent's layout")
 }
 
