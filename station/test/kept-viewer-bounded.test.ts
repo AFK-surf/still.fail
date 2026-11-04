@@ -15,7 +15,7 @@ test("a viewer's kept chats use its index instead of reading everyone else's", (
     db.exec("COMMIT");
     let visited = 0;
     let query = "";
-    db.function("visit_kept", () => { visited++; return 1; });
+    db.function("visit_kept", (_viewer) => { visited++; return 1; });
     const observed = new Proxy(db, {
       get(target, property) {
         if (property === "prepare") return (sql: string) => {
