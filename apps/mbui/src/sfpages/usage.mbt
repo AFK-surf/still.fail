@@ -52,20 +52,27 @@ let usage_days_choices : Array[Int] = [7, 30]
 
 ///|
 /// What the page asks the core's `usage` view for: its workspace's `days`, split as picked, of the one picked alone, of
-/// the day picked.
-fn usage_args(here : Here, days : Int) -> Map[String, Json] {
+/// the day picked. The chart keeps the whole period and all its parts, so picks do not replace its legend or scale.
+fn usage_args(here : Here, days : Int, chart? : Bool = false) -> Map[String, Json] {
   let args : Map[String, Json] = { "scope": str(here.workspace), "days": Json::number(days.to_double()) }
   let (only_list, only_key) = usage_pick.only.get()
-  if only_list != "" {
+  if !chart && only_list != "" {
     args["only"] = { "list": str(only_list), "key": str(only_key) }
   }
   if usage_pick.split.get() != "" {
     args["split"] = str(usage_pick.split.get())
   }
-  if usage_pick.day.get() != "" {
+  if !chart && usage_pick.day.get() != "" {
     args["day"] = str(usage_pick.day.get())
   }
   args
+}
+
+///|
+/// The part picked in this chart, if the pick belongs to its split.
+fn usage_chart_only(v : Json?) -> String {
+  let (list, key) = usage_pick.only.get()
+  if list != "" && list == text(v, "split") { key } else { "" }
 }
 
 ///|

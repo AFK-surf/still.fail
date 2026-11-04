@@ -36,11 +36,31 @@ fn usage_week(parts : Array[Array[Double]]) -> Json {
   }
   {
     "daily": Json::array(daily),
+    "split": "models",
     "series": Json::array(series),
     "max": Json::number(max),
     "top": Json::number(100.0),
     "ticks": [{ "value": 50.0, "label": "50" }, { "value": 100.0, "label": "100" }],
   }
+}
+
+///|
+test "usage: the chosen series keeps its colour and shows its own peak on the whole period's scale" {
+  let t = days_tester(
+    usage_week([[80.0, 2.0], [1.0, 20.0], [0.0, 15.0], [4.0, 3.0], [3.0, 2.0], [2.0, 1.0], [1.0, 0.0]]),
+    filtered=Some(usage_week([[2.0], [20.0], [15.0], [3.0], [2.0], [1.0], [0.0]])),
+  )
+  let date = t.rect_of("10/18").unwrap()
+  usage_pick.only.set(("models", "b"))
+  t.draw()
+  assert_eq(t.rect_of("10/18"), Some(date))
+  assert_true(t.find("$20") is Some(_))
+  assert_true(t.find("$82") is None)
+  assert_true(t.drawn_rects().iter().any(fn(r) { r.2 == 24.0 && r.4 == @sf.usage_series(1) }))
+  assert_true(!t.drawn_rects().iter().any(fn(r) { r.2 == 24.0 && r.4 == @sf.usage_series(0) }))
+  t.tap_text("10/17")
+  t.draw()
+  assert_true(t.find("$2") is Some(_))
 }
 
 ///|
@@ -58,7 +78,7 @@ fn usage_faded_bars(t : @ui.Tester) -> Array[(Double, Double, Double, Double, In
 ///|
 /// usage_chart_node over `v` in a card's width (282: a phone's 346 less the page's 12 and the card's 20 each side), made
 /// once in the window's tree, the page's look narrow.
-fn days_tester(v : Json) -> @ui.Tester {
+fn days_tester(v : Json, filtered? : Json? = None) -> @ui.Tester {
   usage_reset()
   @sf.set_dark(Some(false))
   let t = @ui.Tester::new(fn(_c) {  }, platform=2)
@@ -70,7 +90,7 @@ fn days_tester(v : Json) -> @ui.Tester {
       root.box(fn(b) {
         b.width(Is(Some(282.0))) |> ignore
         @sf.look_lent(b, @sf.Look::Narrow)
-        usage_chart_node(b, fn() { Some(v) })
+        usage_chart_node(b, fn() { Some(v) }, fn() { if usage_pick.only.get().0 != "" { filtered } else { Some(v) } })
       })
       |> ignore
     },
@@ -269,6 +289,55 @@ test "用量, at each width and with either hand: the cost and its change, the d
     // 30 days: a date a week under the bars (the core's `tick`), today's among them
     assert_true(t.find("10/23") is Some(_), msg=at)
     assert_true(t.find("10/24") is None, msg=at)
+  }
+}
+
+///|
+test "用量: selecting a model keeps every legend and the chart in place while its filtered view is read and after it arrives" {
+  for case in page_cases {
+    let (w, platform) = case
+    let pending = @signals.signal(true, same=fn(a, b) { a == b })
+    let t = setting_tester(Usage, w, platform~, h=2400.0, over=fn(base) {
+      { ..base, topic: fn(name, params) {
+        let answer = (base.topic)(name, params)
+        if name != "usage" || params.get("only") is None {
+          answer
+        } else if pending.get() {
+          { ..answer, value: None }
+        } else {
+          answer
+        }
+      } }
+    })
+    let at = "\{w} platform \{platform}"
+    t.tap_text("按模型")
+    t.draw()
+    let opus = t.rect_of("Opus 5.5").unwrap()
+    let gpt = t.rect_of("GPT-6").unwrap()
+    let date = t.rect_of("10/3").unwrap()
+    t.tap_text("GPT-6")
+    t.draw()
+    assert_eq(usage_pick.only.get(), ("models", "gpt-6"), msg=at)
+    assert_eq(t.rect_of("Opus 5.5"), Some(opus), msg=at)
+    assert_eq(t.rect_of("GPT-6"), Some(gpt), msg=at)
+    assert_eq(t.rect_of("10/3"), Some(date), msg=at)
+    assert_true(t.drawn_rects().iter().any(fn(r) { r.2 == 24.0 && r.4 == @sf.usage_series(1) }), msg=at)
+    assert_true(!t.drawn_rects().iter().any(fn(r) { r.2 == 24.0 && r.4 == @sf.usage_series(0) }), msg=at)
+    pending.set(false)
+    t.draw()
+    assert_eq(t.rect_of("Opus 5.5"), Some(opus), msg=at)
+    assert_eq(t.rect_of("GPT-6"), Some(gpt), msg=at)
+    assert_eq(t.rect_of("10/3"), Some(date), msg=at)
+    assert_true(t.find("$50") is Some(_), msg=at)
+    // A different legend can be chosen directly; pressing it again restores all.
+    t.tap_text("Opus 5.5")
+    t.draw()
+    assert_eq(usage_pick.only.get(), ("models", "claude-opus-5-5"), msg=at)
+    t.tap_text("Opus 5.5")
+    t.draw()
+    assert_eq(usage_pick.only.get(), ("", ""), msg=at)
+    assert_eq(t.rect_of("GPT-6"), Some(gpt), msg=at)
+    assert_true(t.find("$118") is Some(_), msg=at)
   }
 }
 
