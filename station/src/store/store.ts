@@ -1776,6 +1776,56 @@ export class Store {
     return new Set(this.#all("SELECT DISTINCT session FROM pins").map((r) => r.session));
   }
 
+  /// The marks needed by one automatic archive pass. A large history is sought by viewer for each candidate; a small
+  /// table, many viewers, or many candidates is read once instead. Neither choice needs an index of its own.
+  archiveMarks(): { pinned: (session: string) => boolean; kept: (thread: number) => boolean } {
+    return {
+      pinned: this.#archiveMark("pins", "session", () => this.pinnedSessions()),
+      kept: this.#archiveMark("kept_chats", "thread", () => this.keptChats(null)),
+    };
+  }
+
+  #archiveMark<K extends string | number>(table: "pins" | "kept_chats", key: "session" | "thread", all: () => Set<K>): (key: K) => boolean {
+    let initialized = false;
+    let complete: Set<K> | null = null;
+    let viewers = "[]";
+    let viewerCount = 0;
+    let remaining = 0;
+    const answers = new Map<K, boolean>();
+    const collect = () => { complete = all(); };
+    return (value) => {
+      const answer = answers.get(value);
+      if (answer !== undefined) return answer;
+      if (!initialized) {
+        initialized = true;
+        // A rowid span bounds the number of rows, even if old rows were deleted or explicit rowids were used. Cap the
+        // budget in SQL so very large rowids never have to be represented as a JavaScript integer.
+        remaining = this.#one(`WITH bounds(span) AS (
+          SELECT (SELECT MAX(rowid) FROM ${table}) - (SELECT MIN(rowid) FROM ${table})
+        ) SELECT CASE WHEN COALESCE(span, 0) < 512 THEN 0
+          WHEN span >= 262144 THEN 32768 ELSE CAST(span / 8 AS INTEGER) END AS budget FROM bounds`)!.budget;
+        if (remaining > 0) {
+          const rows = this.#all(`WITH RECURSIVE viewers(viewer, n) AS (
+            SELECT (SELECT viewer FROM ${table} ORDER BY viewer LIMIT 1), 1
+            UNION ALL SELECT (SELECT viewer FROM ${table} WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.n + 1
+              FROM viewers v WHERE v.viewer IS NOT NULL AND v.n < 257
+          ) SELECT viewer FROM viewers WHERE viewer IS NOT NULL`);
+          viewerCount = rows.length;
+          viewers = JSON.stringify(rows.map((row) => row.viewer));
+          if (viewerCount >= 257) remaining = 0;
+        }
+      }
+      if (complete === null && remaining < viewerCount) collect();
+      if (complete === null && remaining === 0) collect();
+      const found = complete !== null ? complete.has(value) : this.#one(
+        `SELECT 1 FROM ${table} WHERE viewer IN (SELECT value FROM json_each(?2)) AND ${key} = ?1 LIMIT 1`, value, viewers,
+      ) !== undefined;
+      if (complete === null) remaining -= viewerCount;
+      answers.set(value, found);
+      return found;
+    };
+  }
+
   /// Pins a chat to the top of a viewer's list, or lets it go. Pinned again, it keeps when it was first pinned.
   setPin(viewer: string, session: string, pinned: boolean): void {
     this.#with((changes) => {
