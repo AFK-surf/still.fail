@@ -133,6 +133,30 @@ test("ownership also covers summaries installed after an earlier session was del
   } finally { store.close(); }
 });
 
+test("a failed owner move before installation rolls the live sessions back too", () => {
+  const store = oldStore();
+  const db = store.db;
+  try {
+    store.insertSession({ key: "live", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/live",
+      token: "live", ws: "A", createdAt: 0, lastActiveAt: 0 });
+    const put = db.prepare(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output, calls)
+      VALUES (?, 0, ?, 'claude', 2, 0, 0, 0, 1, 1)`);
+    put.run("a", "a");
+    put.run("b", "b");
+    store.deleteSession("a");
+    store.deleteSession("b");
+    const groups = db.prepare("SELECT * FROM usage_history_owner_groups ORDER BY id").all();
+    const scopes = db.prepare("SELECT * FROM usage_history_owner_scopes ORDER BY scope").all();
+    db.setAuthorizer((action, table, column) => action === constants.SQLITE_UPDATE && table === "usage_history_owner_groups" && column === "parent"
+      ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    assert.throws(() => store.setSessionsWs("A", "B"));
+    db.setAuthorizer(null);
+    assert.equal(store.getSession("live")?.ws, "A");
+    assert.deepEqual(db.prepare("SELECT * FROM usage_history_owner_groups ORDER BY id").all(), groups);
+    assert.deepEqual(db.prepare("SELECT * FROM usage_history_owner_scopes ORDER BY scope").all(), scopes);
+  } finally { db.setAuthorizer(null); store.close(); }
+});
+
 for (const moved of [false, true]) test(`a fresh station keeps later changes to a deleted session's usage (moved ${moved})`, () => {
   const store = Store.open(":memory:");
   const db = store.db;
