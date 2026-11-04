@@ -302,7 +302,9 @@ class World {
 
   fromStation(s: StationSim, frame: any, down: string) {
     if (frame?.type === "lock.get") {
-      const entries = this.plane.filter((e) => e.seq > (frame.after ?? -1));
+      // Of a chain turned off since, if it names one the plane kept (cloud/src/directory.ts lock_turned_off).
+      const off = typeof frame.genesis === "string" ? this.epochs.slice(0, -1).find((h) => entryHash(h[0]!) === frame.genesis) : undefined;
+      const entries = (off ?? this.plane).filter((e) => e.seq > (frame.after ?? -1));
       const text = JSON.stringify({ type: "lock", entries });
       this.send(`p${s.i}`, down, () => s.cloud && applyState(s.cloud, text, (f) => s.presence?.toPlane(f)));
     } else if (frame?.type === "lock.put") this.append(frame.entries);
@@ -590,9 +592,14 @@ class World {
     const named = end.stations;
     if (end.disabled) {
       for (const [i, s] of this.stations.entries()) {
-        if (named.has(s.key.hex) && !held[i]) assert.equal(s.cloud!.locked(), null, `s${i} keeps a lock turned off`);
+        if (!held[i]) assert.equal(s.cloud!.locked(), null, `s${i} keeps a lock turned off`);
       }
       return;
+    }
+    // None the plane reaches keeps a lock turned off since: it hears the rest of that chain, its end with it.
+    for (const [i, s] of this.stations.entries()) {
+      const g = s.cloud!.locked()?.state?.genesis;
+      if (!held[i] && g !== undefined) assert.equal(g, entryHash(this.plane[0]!), `s${i} keeps a lock turned off and on again since`);
     }
     const stations = all.slice(1).filter((_, i) => named.has(stationKeys[i]!.hex));
     const longest = stations.reduce((x, y) => (y.chain.length > x.chain.length ? y : x));
@@ -665,6 +672,27 @@ test("a station the plane holds back from is brought level by the others once th
     for (const line of ["m0-1", "m1-2"]) await w.setLine(line, true);
     await w.drain();
     assert.deepEqual(w.chains().map((c) => c.chain.length), [plane, plane, plane, plane]);
+    w.invariants();
+  } finally {
+    w.close();
+  }
+});
+
+test("a station away while the lock was turned off and on again lets the old one go once it is back, by the rest of it the plane kept", async () => {
+  const w = new World(2);
+  try {
+    w.stop(w.stations[2]!);
+    // alice turns it off, and on again with the two stations there.
+    w.sign(0, 2, 0);
+    await w.drain();
+    w.sign(0, 0, 0);
+    await w.drain();
+    assert.equal(w.epochs.length, 2, "turned on again");
+    assert.deepEqual([0, 1].map((i) => w.stations[i]!.cloud!.locked()?.state?.genesis), [0, 1].map(() => entryHash(w.plane[0]!)));
+    // s2 back: it held the first lock, which is off.
+    w.start(w.stations[2]!);
+    await w.drain();
+    assert.equal(w.stations[2]!.cloud!.locked(), null, "the old lock let go");
     w.invariants();
   } finally {
     w.close();

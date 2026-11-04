@@ -335,7 +335,11 @@ function syncLock(s: CloudState, head: any, send: (frame: unknown) => unknown, w
     if (theirs >= 0 && pending !== null) send({ type: "lock.get", after: -1, ...which });
     return;
   }
-  if (theirs > mine) send({ type: "lock.get", after: mine, ...which });
+  // The plane's lock another than the one pinned here: turned off and on again while this station was not there to hear
+  // it. Asked for the rest of its own (the plane keeps a chain turned off): its `disable` lets it go.
+  const genesis = s.locked(ws)?.state?.genesis;
+  if (head !== null && typeof head === "object" && typeof head.genesis === "string" && genesis !== undefined && head.genesis !== genesis) send({ type: "lock.get", after: mine, genesis, ...which });
+  else if (theirs > mine) send({ type: "lock.get", after: mine, ...which });
   else if (theirs < mine) send({ type: "lock.put", entries: s.lockAfter(theirs, ws), ...which });
 }
 

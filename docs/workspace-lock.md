@@ -55,6 +55,7 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 - station 之间：`stillfail/station/1` 上的 `lock.head` / `lock.get {after}` / `lock.put {entries}`，只和锁里的 station。锁变长、名单到了就互相拉平（`station/src/mesh/lock-sync.ts`）；和某台拉平失败（它离线、两台之间的线断了）就隔 5 秒、10 秒……最长 10 分钟再试，直到拉平：cloud 扣着条目不发时，只有这条路能把它们带过去。自己已不在锁里的 station 不再找别的 station（它们的 mesh 不收它）。
 - 设备签了条目交给 cloud 时没收到回答（网关 502、线断了）：先再读一次 cloud 的链，条目已在就算成了，不报失败（以前报失败，面对面批准时新设备会说「没能批准此设备」，其实已批准）。
 - 设备：`GET/POST /admin/api/lock`（station 自己的锁；POST 逐条校验）。hello 的回复多一个 `lock`（链头），设备发现 station 落后可以推。core 签任何条目前先用 `vault/lock-check.ts` 按 station 的规则把整条链加上新条目验一遍：此设备不是锁里的签名者（锁里有它但没有 `sign_key`，本机却有签名钥匙）、角色不够、cloud 上的链本身验不过，都不发，直接告诉用户原因。
+- **关掉又重开时 station 不在**：cloud 换新链时把关掉的那条留在 `lock_turned_off`。station 发现 state 帧里的链头 genesis 跟自己钉的不同，就发 `{type: "lock.get", after, genesis}`，cloud 回那条旧链剩下的条目（含 `disable`），station 逐条验过后自己解除钉住，不用再到那台电脑上 `lock reset`；之后它跟没开过锁的 station 一样，在「安全」里重新加入。旧 cloud 不认 `genesis`，照旧回当前的链，station 照旧拒收。
 - **station 钉着另一条锁**（重新开启时它没连上，或 cloud 收过它拒收的条目）：它拒绝设备时回的链头不在设备手里这条链上（genesis 不同，或同一序号哈希不同），core 不再当作「station 落后、稍后重试」，而是说这台 station 的记录和 workspace 不一致、要在那台电脑上 `stillfail lock reset` 后重新保护。打开「安全」时 core 问一遍锁里各 station 的 `GET /lock`：说自己没锁或钉着别的锁的不算受保护（可以重新加入）；开启时的核对页把钉着别的锁的 station 列为 `other`，不能勾选。
 - cloud 扣着条目不发只能拖慢，伪造不了。
 
