@@ -1,0 +1,44 @@
+# monoid's cloud (cloud/deploy.py CLOUDS: monoid.build, its test channel monoid.zone, in the company's Cloudflare
+# account), by hand: what the pipeline does not deploy there, the relay (deploying it drops every connection), its first
+# deploy, or any part again. The pipeline deploys its API and static parts after still.fail's on every main run.
+name: monoid
+on:
+  workflow_dispatch:
+    inputs:
+      parts:
+        description: "deploy.py's parts (relay api web web-beta admin preview share)"
+        required: true
+        default: "relay api web web-beta admin preview share"
+permissions:
+  contents: read
+jobs:
+  deploy:
+    if: github.repository == 'AFK-surf/still.fail' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 } # the web app's build number is the commits in the history
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/natives
+      # (the app's page, each of the web app's pages; contains: web and web-beta)
+      - if: contains(inputs.parts, 'web')
+        uses: ./.github/actions/mbui-moonbit
+      - if: contains(inputs.parts, 'web')
+        run: bash apps/mbui/scripts/web-app.sh
+      - name: Deploy ${{ inputs.parts }} to monoid
+        env:
+          STILLFAIL_CLOUD: monoid
+          CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
+          STILLFAIL_ADMIN_EMAIL: ${{ secrets.STILLFAIL_ADMIN_EMAIL }}
+          DEPLOY_KEYS_JSON: ${{ secrets.MONOID_DEPLOY_KEYS_JSON }}
+          GOOGLE_OAUTH_JSON: ${{ secrets.GOOGLE_OAUTH_JSON }}
+          AXIOM_JSON: ${{ secrets.AXIOM_JSON }}
+          VAPID_JSON: ${{ secrets.VAPID_JSON }}
+          FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
+          APNS_JSON: ${{ secrets.APNS_JSON }}
+          APPLE_JSON: ${{ secrets.APPLE_JSON }}
+          REVIEW_ACCOUNTS_JSON: ${{ secrets.REVIEW_ACCOUNTS_JSON }}
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+        run: sh .github/deploy.sh ${{ inputs.parts }}

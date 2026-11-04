@@ -4,6 +4,7 @@ Run on the deployment machine with gh authentication and the usual Cloudflare cr
 """
 import argparse
 import json
+import os
 import re
 import subprocess
 import tempfile
@@ -11,6 +12,9 @@ import urllib.request
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
+# Another cloud's (STILLFAIL_CLOUD, cloud/deploy.py CLOUDS) is a build of its own, its artifact named after it.
+CLOUD = os.environ.get('STILLFAIL_CLOUD', '')
+ARTIFACT = f'{CLOUD}-cloud-web' if CLOUD else 'cloud-web'
 
 def gh(*args):
     return json.loads(subprocess.check_output(['gh', *args], text=True))
@@ -33,10 +37,10 @@ for run in runs:
     if args.revision and run['conclusion'] != 'success':
         continue
     artifacts = gh('api', f"repos/AFK-surf/still.fail/actions/runs/{run['databaseId']}/artifacts")['artifacts']
-    if not any(a['name'] == f'cloud-web-{sha}' and not a['expired'] for a in artifacts):
+    if not any(a['name'] == f'{ARTIFACT}-{sha}' and not a['expired'] for a in artifacts):
         continue
     with tempfile.TemporaryDirectory(prefix='stillfail-promote-') as directory:
-        subprocess.run(['gh', 'run', 'download', str(run['databaseId']), '-R', 'AFK-surf/still.fail', '-n', f'cloud-web-{sha}', '-D', directory], check=True)
+        subprocess.run(['gh', 'run', 'download', str(run['databaseId']), '-R', 'AFK-surf/still.fail', '-n', f'{ARTIFACT}-{sha}', '-D', directory], check=True)
         metadata = json.loads((Path(directory) / 'build.json').read_text())
         if metadata.get('revision') != sha or (deployed is not None and metadata != deployed):
             raise SystemExit('Artifact metadata differs from the deployed beta build.')

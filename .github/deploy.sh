@@ -26,8 +26,10 @@ put posthog.json "${POSTHOG_JSON:-}"
 put apple.json "${APPLE_JSON:-}"
 put review-accounts.json "${REVIEW_ACCOUNTS_JSON:-}"
 umask 022
-mkdir -p "$HOME/stillfail-deploy/builds"
-ln -s "$HOME/stillfail-deploy/builds" "$dir/builds"
+# (another cloud's builds apart: STILLFAIL_CLOUD, cloud/deploy.py CLOUDS)
+builds="$HOME/${STILLFAIL_CLOUD:-stillfail}-deploy/builds"
+mkdir -p "$builds"
+ln -s "$builds" "$dir/builds"
 # The API without keys.json would make new ones: everyone logged out, every station's grant distrusted.
 case " $* " in *" --dry-run "*) ;; *" api "*) [ -s "$dir/keys.json" ] || { echo "DEPLOY_KEYS_JSON is not set: not deploying the API"; exit 1; } ;; esac
 [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || unset CLOUDFLARE_API_TOKEN
