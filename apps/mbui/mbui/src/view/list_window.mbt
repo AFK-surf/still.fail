@@ -100,6 +100,20 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // (those that show now: laid out again as they are, each told anew where it comes out otherwise; the rest forgotten)
   let showing : Map[K, Bool] = Map([])
   let slots : Map[K, View] = Map([])
+  // (what each block's row is known by, whatever slot it is made in: View::row_known_as; forgotten as its key goes, a
+  // block of the same key come again another row, nothing picked in the one before found in it)
+  let row_ids : Map[K, NodeId] = Map([])
+  self.reacts(keys, fn(now) {
+    let here : Map[K, Bool] = {}
+    for k in now {
+      here[k] = true
+    }
+    for k in row_ids.keys().collect() {
+      if !here.contains(k) {
+        row_ids.remove(k)
+      }
+    }
+  })
   self.reacts(fn() { (self.laid_size_told().map(fn(z) { z.0 }), self.words_redone()) }, fn(_) {
     let gone = heights.keys().filter(fn(k) { !showing.contains(k) }).collect()
     if gone.length() > 0 {
@@ -170,8 +184,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   })
   // (what the column holds: a slot for each block in sight or kept, in their order, and between them, over the first and
   // under the last, a gap as tall as the blocks there are counted. Not a slot for every block: a long chat's three
-  // thousand were laid out and gone through in every frame, at rest too, 3.2 ms a frame on wasm-gc against 0.4 for a
-  // short chat's, 2026-11-04; nor one for each between a kept block far from those in sight and them)
+  // thousand were gone through in drawing order and placed in every frame, at rest too (each_drawn_in_order,
+  // laid_origin: a native sample's most), 3.2 ms a frame on wasm-gc against 0.4 for a short chat's, 2026-11-04; nor one
+  // for each between a kept block far from those in sight and them)
   let made = @signals.computed(fn(_) {
     let all = laid.get()
     let index = laid_at.get()
@@ -382,6 +397,16 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       }
       slots[k] = slot
       slot.owns(fn() { slots.remove(k) }) |> ignore
+      // (the same row by its key however often its slot is made anew: what is picked in it found in it again)
+      let id = match row_ids.get(k) {
+        Some(id) => id
+        None => {
+          let id = self.tree.row_name()
+          row_ids[k] = id
+          id
+        }
+      }
+      slot.row_known_as(id)
       let shows = fn() { window.get().contains(k) || kept(k) }
       let room_now = fn() { laid_of(k).map(fn(b) { b.4 }).unwrap_or(list_room(0.0)) }
       slot.lends(windowed_room, room_now) |> ignore
