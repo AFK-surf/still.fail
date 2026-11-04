@@ -298,6 +298,10 @@ let bar_chat_last : Array[@hostapi.NavItem] = []
 let history_item : String = "chat/history"
 
 ///|
+/// The open side panel's close in the short column (histories_ticked).
+let side_close_item : String = "side/close"
+
+///|
 /// The chat whose actions bar_chat handed (kept with it while the page's part is kept), None as another page comes.
 // kept across runs: said by bar_chat, put back with the page's actions (nav_frame)
 let bar_chat_of : Ref[(Source, ChatRef)?] = Ref(None)
@@ -319,6 +323,22 @@ fn histories_ticked() -> Unit {
     if title != item.title || icon != item.icon {
       nav_page[i] = ({ ..item, icon, title }, act)
     }
+  }
+  // (the short column has no switch of its own: the open panel's close there in place of the panel's own (side_panel).
+  // Handed last, each frame: short of room the system keeps the last of them whatever its priority, and the page handing
+  // its own again puts them after it: the user, 2026-11-04)
+  let key = "page/" + side_close_item
+  nav_page.retain(fn(p) { p.0.id != key })
+  if column_short.get() && tabs.length() > 0 {
+    let item : @hostapi.NavItem = {
+      id: key,
+      title: @sf.t("web-pages.chat.closePanel"),
+      icon: @sf.icon_path("close"),
+      dot: false,
+      prominent: false,
+      menu: [],
+    }
+    nav_page.push((item, fn() { side_change(src, r, "clear", None) }))
   }
 }
 
@@ -593,7 +613,7 @@ fn rail_nav(src : Source, w : Workspace, _all : Array[Workspace], card : Array[@
       { items: card, foot: false, foldable: true },
       { items: tabs, foot: false, foldable: false },
       {
-        items: [{ ..item("new", @sf.t("web-main.sidebar.newChat"), "compose"), prominent: true }],
+        items: [{ ..item("new", @sf.t("web-main.sidebar.newChat"), "plus"), prominent: true }],
         foot: true,
         foldable: false,
       },

@@ -519,8 +519,9 @@ fn side_panel(
             }
           _ => ()
         }
-        // the panel's switch stays in its top right corner, open or closed
-        if @sf.icon_button(c, if alone { "close" } else { "panel-close" }, key="side/close", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.closePanel"), shortcut="panel.close") {
+        // the panel's switch stays in its top right corner, open or closed; in the short column, the column's
+        // (histories_ticked)
+        if !column_short.get() && @sf.icon_button(c, if alone { "close" } else { "panel-close" }, key="side/close", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.closePanel"), shortcut="panel.close") {
           side_change(src, r, "clear", None)
         }
       })
@@ -547,7 +548,7 @@ fn side_panel(
           None => ()
         }
       } else if tab_service(front) is Some(job) {
-        service_pane(c, src, r, job, close=if own_bar {
+        service_pane(c, src, r, job, close=if own_bar && !column_short.get() {
           Some(fn() { c.tell("side/close", fn() { side_change(src, r, "clear", None) }) })
         } else {
           None

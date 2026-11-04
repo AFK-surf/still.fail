@@ -920,6 +920,26 @@ test "Duo short system column keeps the complete chat menu reachable" {
 }
 
 ///|
+test "Duo's short column: the open side panel's close in the column, last of the page's, none of the panel's own" {
+  let t = native_chat(466.0, 678.0, true, side=70.0)
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
+  let close = @sf.t("web-pages.chat.closePanel")
+  assert_true(nav_icon_of(t, "page/side/close") is None)
+  side_change(r, "open", Some("s-c1"))
+  @sfdesk.wide.tape_ask.set(Some(@sfdesk.TapePane::Side))
+  t.frame()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(nav_icon_of(t, "page/side/close"), Some(@sf.icon_path("close")))
+  let said = t.nav_said()
+  assert_true(said.find("page/chat/info").unwrap() < said.find("page/side/close").unwrap(), msg=said)
+  assert_false(t.semantics().iter().any(fn(s) { s.label == close && !s.hidden }), msg="the panel's own left")
+  t.post(@hostapi.system_channel, "{\"nav\":\"page/side/close\"}")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(side_now(r).0.length(), 0)
+  assert_true(nav_icon_of(t, "page/side/close") is None, msg="gone with the panel")
+}
+
+///|
 test "Duo chat menu covers sidebar glass until its exit finishes" {
   let t = native_chat(669.0, 951.0, true)
   assert_true(t.nav_said().contains("workspace-switch"))
