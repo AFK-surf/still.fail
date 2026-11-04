@@ -44,13 +44,25 @@ export function densityOf(wm: string): number {
 }
 
 /// SurfaceFlinger's id of Android's display `id`: its unique id from `dumpsys display`, found in `dumpsys SurfaceFlinger
-/// --display-id`'s lines (`Display 11529215046400789845 (Virtual display): displayName="scrcpy" uniqueId="virtual:…"`).
-export function surfaceOf(displays: string, flinger: string, id: number): string | null {
+/// --display-id`'s lines (`Display 11529215046400789845 (Virtual display): displayName="scrcpy" uniqueId="virtual:…"`);
+/// where they name none (ColorOS 17, 2026-11-04: `Display 11529215049903610350 (Virtual display): displayName="scrcpy"`),
+/// by its layer stack in `dumpsys SurfaceFlinger` (`flinger()`: `Display 115… (virtual, "scrcpy")` then `layerFilter={layerStack=12 …`).
+export async function surfaceOf(displays: string, ids: string, id: number, flinger: () => Promise<string>): Promise<string | null> {
   const info = displays.split("\n").find((l) => l.includes("mBaseDisplayInfo=") && new RegExp(`\\bdisplayId ${id},`).test(l));
-  const unique = info === undefined ? null : /uniqueId "([^"]+)"/.exec(info)?.[1];
-  if (!unique) return null;
-  const line = flinger.split("\n").find((l) => l.includes(`uniqueId="${unique}"`));
-  return line === undefined ? null : (/^Display (\d+)/.exec(line.trim())?.[1] ?? null);
+  if (info === undefined) return null;
+  const unique = /uniqueId "([^"]+)"/.exec(info)?.[1];
+  const line = unique ? ids.split("\n").find((l) => l.includes(`uniqueId="${unique}"`)) : undefined;
+  if (line !== undefined) return /^Display (\d+)/.exec(line.trim())?.[1] ?? null;
+  const stack = /layerStack (\d+)/.exec(info)?.[1];
+  if (stack === undefined || !/\(Virtual display\)/.test(ids) || ids.includes("uniqueId=")) return null;
+  let at: string | null = null;
+  for (const l of (await flinger()).split("\n")) {
+    const display = /^Display (\d+) \(virtual\b/.exec(l.trim());
+    if (display) at = display[1]!;
+    else if (/^\S/.test(l)) at = null;
+    else if (at !== null && new RegExp(`layerFilter=\\{layerStack=${stack}\\b`).test(l)) return at;
+  }
+  return null;
 }
 
 type Held = {
@@ -175,7 +187,8 @@ export class PhoneDisplays {
       await wall.sleep(100);
       made = displayOf(said);
     }
-    const surface = surfaceOf(await shell("dumpsys display").catch(() => ""), await shell("dumpsys SurfaceFlinger --display-id").catch(() => ""), made.id);
+    const surface = await surfaceOf(await shell("dumpsys display").catch(() => ""), await shell("dumpsys SurfaceFlinger --display-id").catch(() => ""), made.id,
+      () => shell("dumpsys SurfaceFlinger").catch(() => ""));
     const display: Display = { ...made, surface: surface ?? String(made.id) };
     const held: Held = { grant, owner, title, display, opened: wall.now(), child, socket, forward, closing: false };
     this.#held.set(grant, held);

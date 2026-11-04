@@ -31,12 +31,42 @@ const FLINGER = [
   `Display 11529215049899194809 (Virtual display): displayName="scrcpy" uniqueId="virtual:com.android.shell,2000,scrcpy,1"`,
 ].join("\n");
 
-test("screencap's id of a display: SurfaceFlinger's, by its unique id, whatever other chats' are up", () => {
-  assert.equal(surfaceOf(DISPLAYS, FLINGER, 2), "11529215049899194809");
-  assert.equal(surfaceOf(DISPLAYS, FLINGER, 12), "11529215046400789845");
+test("screencap's id of a display: SurfaceFlinger's, by its unique id, whatever other chats' are up", async () => {
+  const none = async () => assert.fail("not needed");
+  assert.equal(await surfaceOf(DISPLAYS, FLINGER, 2, none), "11529215049899194809");
+  assert.equal(await surfaceOf(DISPLAYS, FLINGER, 12, none), "11529215046400789845");
   // (Android 12: SurfaceFlinger names no virtual display, screencap takes Android's id)
-  assert.equal(surfaceOf(DISPLAYS, FLINGER.split("\n")[0]!, 2), null);
-  assert.equal(surfaceOf(DISPLAYS, FLINGER, 3), null);
+  assert.equal(await surfaceOf(DISPLAYS, FLINGER.split("\n")[0]!, 2, none), null);
+  assert.equal(await surfaceOf(DISPLAYS, FLINGER, 3, none), null);
+});
+
+test("screencap's id of a display where SurfaceFlinger names no unique ids: by its layer stack", async () => {
+  // What an OPPO Find N on ColorOS 17 (Android 17) said (2026-11-04), shortened: screencap refused -d 12.
+  const displays = [
+    `    mBaseDisplayInfo=DisplayInfo{"内屏", displayId 0, displayGroupId 0, FLAG_SECURE, real 1140 x 2616, type INTERNAL, uniqueId "local:4630946165954792596", layerStack 0, app 1140 x 2616}`,
+    `    mBaseDisplayInfo=DisplayInfo{"scrcpy", displayId 12, displayGroupId 0, FLAG_SECURE, real 1140 x 2616, type VIRTUAL, uniqueId "virtual:com.android.shell,2000,scrcpy,1", layerStack 12, owner com.android.shell (uid 2000)}`,
+    `    mBaseDisplayInfo=DisplayInfo{"scrcpy", displayId 13, displayGroupId 0, FLAG_SECURE, real 1140 x 2616, type VIRTUAL, uniqueId "virtual:com.android.shell,2000,scrcpy,0", layerStack 13, owner com.android.shell (uid 2000)}`,
+  ].join("\n");
+  const ids = [
+    `Display 4630946317637160339 (HWC display 0): port=147 pnpId=QCM screenPartStatus=UNSUPPORTED displayName=""`,
+    `Display 11529215049903610350 (Virtual display): displayName="scrcpy"`,
+    `Display 11529215046400789845 (Virtual display): displayName="scrcpy"`,
+  ].join("\n");
+  const flinger = async () => [
+    `Display 4630946165954792596 (physical, "")`,
+    `   layerFilter={layerStack=0 toInternalDisplay=true skipScreenshot=false }`,
+    ``,
+    `Display 11529215046400789845 (virtual, "scrcpy")`,
+    `   Composition Display State:`,
+    `   layerFilter={layerStack=13 toInternalDisplay=false skipScreenshot=false }`,
+    `Display 11529215049903610350 (virtual, "scrcpy")`,
+    `   Composition Display State:`,
+    `   isEnabled=true isSecure=false usesDeviceComposition=false `,
+    `   layerFilter={layerStack=12 toInternalDisplay=false skipScreenshot=false }`,
+  ].join("\n");
+  assert.equal(await surfaceOf(displays, ids, 12, flinger), "11529215049903610350");
+  assert.equal(await surfaceOf(displays, ids, 13, flinger), "11529215046400789845");
+  assert.equal(await surfaceOf(displays, ids, 3, flinger), null);
 });
 
 function packet(name: string, id = 0, payload = ""): Buffer {
