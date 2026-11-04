@@ -2373,6 +2373,7 @@ let zh : Map[String, String] = {
   "web-pages.screen.device.pose.book": "半开",
   "web-pages.screen.device.pose.closed": "合上",
   "web-pages.screen.device.pose.open": "全开",
+  "web-pages.screen.device.rotate": "旋转",
   "web-pages.screen.device.lock": "锁屏",
   "web-pages.screen.device.softKeyboard": "软键盘",
   "web-pages.screen.toGrants": "前往权限设置",

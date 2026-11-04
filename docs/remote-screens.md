@@ -411,7 +411,9 @@ it), typed text a US keyboard's keys and anything else pasted (the device's past
 ⌘V). Simulator.app's shortcuts press its buttons: ⌘⇧H home, ⌃⌘⇧H the app switcher, ⌘L lock, ⌘K the software
 keyboard. The web viewer has them as buttons too (a column beside the device with a mouse, a row over the foot on a
 phone), and one more that saves the picture shown as a PNG (as large as the view is, not the device's own pixels).
-The device is not turned: SimulatorKit takes an orientation only through Simulator.app. The web client touches
+A device is turned between upright and on its side by `{t:"device", name:"rotate"}` (a GSEvent through its
+PurpleWorkspacePort, or an iPhone Duo's guest HID: HIDInjector.sendOrientation), its picture and fingers following what `simctl
+io enumerate` says of its UI; a screen that stays upright (an iPhone's Home Screen, an app that only stands so) does not turn (Android: `wm user-rotation` by adb, the display out of following its sensor from then on). The web client touches
 a simulator directly on a phone (no trackpad to choose), a finger held being the device's long press; the mbui app
 drives it as any screen for now (its 触控板 switched off for direct touch). No clipboard,
 cursor or dropped files yet. `station/side/screen-simulator.test.ts` makes and boots a simulator of its own, views it

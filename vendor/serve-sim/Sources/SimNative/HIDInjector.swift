@@ -672,9 +672,9 @@ public actor HIDInjector {
     // MARK: - Orientation (GSEvent via PurpleWorkspacePort)
 
     // UIDeviceOrientation values accepted by the guest's GraphicsServices.
-    static let orientationPortrait: UInt32 = 1
+    public static let orientationPortrait: UInt32 = 1
     static let orientationPortraitUpsideDown: UInt32 = 2
-    static let orientationLandscapeRight: UInt32 = 3
+    public static let orientationLandscapeRight: UInt32 = 3
     static let orientationLandscapeLeft: UInt32 = 4
 
     // GSEvent wire-format constants. Reverse-engineered by idb from
@@ -690,7 +690,7 @@ public actor HIDInjector {
     /// `GraphicsServices._PurpleEventCallback` → backboardd. This is how
     /// Simulator.app itself rotates the device, and how idb's
     /// `FBSimulatorPurpleHID.orientationEvent:` is delivered.
-    func sendOrientation(orientation: UInt32) -> Bool {
+    public func sendOrientation(orientation: UInt32) -> Bool {
         if let duoBridge {
             guard (1...4).contains(orientation) else { return false }
             return duoBridge.send("orientation \(orientation)")
