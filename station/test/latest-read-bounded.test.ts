@@ -68,3 +68,41 @@ test("finding a chat's latest read does not visit that viewer's other chats", ()
     } finally { Object.defineProperty(store, "db", { value: db, configurable: true }); }
   } finally { store.close(); }
 });
+
+for (const { viewers, chats, bound } of [{ viewers: 40, chats: 1_000, bound: 512 }, { viewers: 300, chats: 200, bound: 20_000 }])
+  test(`a chat's latest read does not scan all other chats with ${viewers} viewers`, () => {
+    const store = Store.open(":memory:");
+    const db = store.db;
+    try {
+      const put = db.prepare("INSERT INTO reads(viewer,thread,n,at) VALUES (?,?,1,?)");
+      db.exec("BEGIN");
+      for (let viewer = 0; viewer < viewers; viewer++)
+        for (let thread = 1; thread <= chats; thread++) put.run(`person-${viewer}`, thread, viewer * 1_000 + thread);
+      db.exec("COMMIT");
+      let visited = 0;
+      db.function("visit_read", (_viewer, _thread) => { visited++; return 1; });
+      const traced = new Proxy(db, {
+        get(target, property) {
+          if (property === "prepare") return (sql: string) => target.prepare(
+            sql.includes("FROM reads") && sql.includes("AS at")
+              ? sql.replaceAll("FROM reads WHERE thread = ?", "FROM reads WHERE visit_read(viewer, thread) AND thread = ?")
+                .replaceAll("SELECT viewer FROM reads ORDER BY viewer LIMIT 1", "SELECT viewer FROM reads WHERE visit_read(viewer, thread) ORDER BY viewer LIMIT 1")
+                .replaceAll("SELECT viewer FROM reads WHERE viewer >", "SELECT viewer FROM reads WHERE visit_read(viewer, thread) AND viewer >")
+                .replaceAll("SELECT at FROM reads WHERE viewer =", "SELECT at FROM reads WHERE visit_read(viewer, thread) AND viewer =")
+                .replaceAll("SELECT 1 FROM reads LIMIT", "SELECT 1 FROM reads WHERE visit_read(viewer, thread) LIMIT")
+              : sql,
+          );
+          const value = Reflect.get(target, property, target);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+      Object.defineProperty(store, "db", { value: traced, configurable: true });
+      try {
+        assert.equal(store.lastReadAt(chats), (viewers - 1) * 1_000 + chats);
+        assert.ok(visited > 0 && visited <= bound, `unrelated reads must be bounded (visited ${visited})`);
+        visited = 0;
+        assert.equal(store.lastReadAt(chats + 1), null);
+        assert.ok(visited > 0 && visited <= bound, `a missing chat must also be bounded (visited ${visited})`);
+      } finally { Object.defineProperty(store, "db", { value: db, configurable: true }); }
+    } finally { store.close(); }
+  });
