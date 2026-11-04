@@ -13,7 +13,6 @@ import type { ChatSurface } from "../sessions/chat.ts";
 import { INTERNAL_CONNECT } from "../sessions/internal.ts";
 import { ControlPlane, Events, Paths, StationConfig, Store } from "../services.ts";
 import { showEnded } from "./card-ends.ts";
-import { knownThreads } from "./known-threads.ts";
 import type { ConnectState, Connection, EntryEdit } from "./connections.ts";
 import type { ConnectsOptions } from "./connects.ts";
 
@@ -113,7 +112,7 @@ export const connectsPart = <P extends Connects>(make: (options: ConnectsOptions
           for (const c of connects.connects()) {
             if (learned.has(c.id) || connects.state(c.id)?.state !== "connected") continue;
             learned.add(c.id);
-            for (const t of knownThreads(store, c.id)) learn(t.thread, t.people);
+            for (const t of store.recentConnectPeople(c.id, 200)) learn(t.thread, t.people);
           }
         }),
       ),

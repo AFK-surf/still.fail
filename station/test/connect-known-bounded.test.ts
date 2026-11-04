@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { knownThreads } from "../src/connects/known-threads.ts";
 import { Store } from "../src/store/store.ts";
 
 test("a connect learns people of the 200 recent threads without reading older people's rows", () => {
@@ -28,7 +27,7 @@ test("a connect learns people of the 200 recent threads without reading older pe
       },
     }) });
     try {
-      const known = knownThreads(store, "team");
+      const known = store.recentConnectPeople("team", 200);
       assert.deepEqual(known.map((row) => row.thread), ids.slice(-200).reverse());
       assert.deepEqual(known[0]?.people, ["U249"]);
       assert.equal(visited, 200, `the connect read ${visited} authors`);
@@ -47,8 +46,38 @@ test("the recent limit is across all connects, before choosing one connect", () 
       put.run(id, `U${n}`, n + 1);
       ids.push(id);
     }
-    const known = knownThreads(store, "team");
+    const known = store.recentConnectPeople("team", 200);
     assert.deepEqual(known.map((row) => row.thread), ids.slice(5, 204).reverse());
     assert.equal(known.length, 199);
+  } finally { store.close(); }
+});
+
+test("recent connect people agree with the prior list for ties, edits, empty chats and shared connects", () => {
+  const store = Store.open(":memory:");
+  const db = store.db;
+  try {
+    const message = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person',?,'hi',?)");
+    const edit = db.prepare("INSERT INTO entries(thread,n,kind,target,author_kind,author,text,at) VALUES (?,2,'edit',1,'person','u','changed',?)");
+    db.exec("BEGIN");
+    for (let n = 0; n < 240; n++) {
+      const surface = n % 7 === 0 ? "ember" : "slack:T";
+      const id = store.openThread(surface, "C", String(n), null, null).id;
+      db.prepare("UPDATE threads SET created_at=? WHERE id=?").run(n % 7 - 3, id);
+      if (n % 11 !== 0) store.joinThread(id, "a", n % 5 === 0 ? "other" : "team");
+      if (n % 9 === 0) store.joinThread(id, "b", "other");
+      if (n % 13 !== 0) {
+        message.run(id, `U${n}`, n % 17 - 8);
+        if (n % 4 === 0) edit.run(id, n + 100);
+      }
+      if (n % 29 === 0) db.prepare("DELETE FROM thread_state WHERE thread=?").run(id);
+    }
+    db.exec("COMMIT");
+    for (const connect of ["team", "other", "missing"]) {
+      const prefix = `slack:${connect}:`;
+      const before = store.listThreads("", null, null, "none").slice(0, 200)
+        .filter((t) => t.sessions.some((m) => m.connect === connect))
+        .map((t) => ({ thread: t.thread.id, people: t.people.flatMap((p) => p.startsWith(prefix) ? [p.slice(prefix.length)] : []) }));
+      assert.deepEqual(store.recentConnectPeople(connect, 200), before, connect);
+    }
   } finally { store.close(); }
 });
