@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { addListState } from "../src/store/schema.ts";
+import { addListState, THREAD_STATE_SEEK } from "../src/store/schema.ts";
 
 test("installing old thread state seeks its boundaries instead of reading a long chat", () => {
   const db = new DatabaseSync(":memory:");
@@ -48,6 +48,35 @@ test("installing old thread state seeks its boundaries instead of reading a long
     addListState(traced);
     assert.deepEqual(db.prepare("SELECT * FROM thread_state ORDER BY thread").all(), expected);
     assert.deepEqual(db.prepare("SELECT * FROM thread_people ORDER BY thread, author").all(), people);
+    assert.ok(visited > 0, "the migration's entry reads were traced");
     assert.ok(visited <= 50, `installing thread state examined ${visited} historical entries`);
+    const plan = (db.prepare(`EXPLAIN QUERY PLAN ${THREAD_STATE_SEEK}`).all() as { detail: string }[]).map(r => r.detail).join("\n");
+    for (const index of ["entries_said", "entries_people_by_n", "entries_letters"]) assert.match(plan, new RegExp(`SEARCH e USING (?:COVERING )?INDEX ${index} \\(thread=\\?\\)`));
+
+    put.run(-5, 10_000, "message", "person", "new", null);
+    put.run(77, 2, "message", "agent", "a", "letter");
+    assert.deepEqual({ ...db.prepare("SELECT last_n, said_n, person_n, letters FROM thread_state WHERE thread = -5").get() },
+      { last_n: 10_000, said_n: 10_000, person_n: 10_000, letters: 0 });
+    assert.deepEqual({ ...db.prepare("SELECT last_n, said_n, person_n, letters FROM thread_state WHERE thread = 77").get() },
+      { last_n: 2, said_n: null, person_n: null, letters: 1 });
   } finally { db.close(); }
 });
+
+for (const missing of ["entries_letters", "entries_people_by_n"]) {
+  test(`an old thread-state upgrade still works without ${missing}`, () => {
+    const db = new DatabaseSync(":memory:");
+    try {
+      db.exec(`CREATE TABLE entries (thread INTEGER NOT NULL, n INTEGER NOT NULL, kind TEXT NOT NULL,
+          author_kind TEXT NOT NULL, author TEXT NOT NULL, letter TEXT, PRIMARY KEY (thread, n));
+        CREATE TABLE deliveries (thread INTEGER NOT NULL, n INTEGER NOT NULL, session TEXT NOT NULL,
+          delivered_at INTEGER, PRIMARY KEY (thread, n, session));
+        CREATE INDEX deliveries_session ON deliveries (session, thread);
+        INSERT INTO entries VALUES (1, 3, 'message', 'person', 'p', NULL), (1, 4, 'message', 'agent', 'a', 'letter');`);
+      if (missing !== "entries_letters") db.exec("CREATE INDEX entries_letters ON entries (thread, n) WHERE letter IS NOT NULL");
+      if (missing !== "entries_people_by_n") db.exec("CREATE INDEX entries_people_by_n ON entries (thread, n) WHERE author_kind = 'person' AND kind = 'message'");
+      addListState(db);
+      assert.deepEqual({ ...db.prepare("SELECT * FROM thread_state").get() }, { thread: 1, last_n: 4, said_n: 3, person_n: 3, letters: 1 });
+      assert.equal(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?").get(missing), undefined);
+    } finally { db.close(); }
+  });
+}
