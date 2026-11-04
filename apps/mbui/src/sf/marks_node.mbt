@@ -142,6 +142,7 @@ fn maker_of(maker : String, runtime : String) -> String {
       "cursor" => "cursor"
       "devin" => "devin"
       "hermes" => "hermes"
+      "agy" => "gemini"
       _ => "anthropic"
     }
   }

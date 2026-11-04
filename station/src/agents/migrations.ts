@@ -114,6 +114,7 @@ export const NOTES: [number, string][] = [
   [107, "For shared Android debugging, the current app pairs its own adb once and stations borrow that connection; older apps may still pair each station. An unpaired phone's card continues to guide its person through pairing."],
   [108, "What a remote task brought back (station-back/<key>/) is removed once nothing in it changed for 6 hours: move what you keep into your workspace."],
   [109, "When your turn ends done or asking and your chat still has no title, with nobody at work in it, the station asks you once to give it one: post only its title, then record the same state again."],
+  [110, "The Antigravity CLI (agy, Google's) runs on stations that have it, on a Gemini key or its own variables: chat_create takes runtime \"agy\"."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.
