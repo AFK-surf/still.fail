@@ -17,7 +17,7 @@ pub(all) enum ChatRowChange {
   Went(String, Entry, String?)
   Set(String)
   Whole
-} derive(Show)
+}
 
 ///|
 /// A chat's rows (see above).
@@ -624,4 +624,10 @@ pub fn ChatRows::message_from(self : ChatRows, seq : Double) -> Int {
 /// The key of the message at `i` among them (not its row's index: the head's rows before them).
 pub fn ChatRows::message_key(self : ChatRows, i : Int) -> String {
   (self.key_of)(self.messages[i])
+}
+
+///|
+/// The same rows only as the very same ones.
+pub impl Eq for ChatRows with equal(a, b) {
+  physical_equal(a, b)
 }
