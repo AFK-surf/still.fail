@@ -1,4 +1,29 @@
 ///|
+test "a chat's initial cursor is decided before layout, with touch waiting for a request" {
+  for (platform, wanted) in [(0, false), (2, false), (2, true)] {
+    @sfbase.reset()
+    composing_reset()
+    @sf.set_words(@sfbase.fill)
+    let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=390.0, h=900.0, platform~)
+    let n : Ref[ComposerNode?] = Ref(None)
+    let src = @sfbase.made_source(call=fn(_, _, done) { done(Ok({})) })
+    if wanted { composer_take_focus() }
+    @ui.set_view_app(fn(root) {
+      @ui.set_tree_theme(@sf.ui_theme_now)
+      n.val = Some(composer_node(root, src, "initial-focus-draft", fn() {
+        { station: "workspace/station", draft: "initial-focus-draft", session: "chat", placeholder: "Write",
+          toolbar: None, note: [], tail: None, roomy: false, locked: false, offline: false, warm_agent: true }
+      }, fn(_) { }, fn() { 900.0 }, fn(_, _, _, _) { }))
+    })
+    let focused = platform == 0 || wanted
+    assert_eq(n.val.unwrap().field.focused(), focused, msg="platform \{platform}, requested \{wanted}: before layout")
+    assert_false(composing.wanted.get())
+    t.frame(ms=16.0)
+    assert_eq(n.val.unwrap().field.focused(), focused)
+  }
+}
+
+///|
 test "only the active retained chat receives a requested cursor and its empty draft's arrow keys" {
   @sfbase.reset()
   composing_reset()
