@@ -57,3 +57,21 @@ for (const recursive of [false, true]) test(`a global recent page uses a maintai
     assert.deepEqual(readGlobalRecentChatIndex(db, 5), original(5));
   } finally { db.setAuthorizer(null); store.close(); }
 });
+
+for (const recursive of [false, true]) test(`an edit or a letter does not make the recent ordering wait (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:");
+  const db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    const id = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
+    db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',1)").run(id);
+    installRecentChatIndex(db);
+    while (!stepRecentChatIndex(db, 3).done) { /* Prepare the old chat. */ }
+    const page = readGlobalRecentChatIndex(db, 5);
+    assert.ok(page);
+    db.prepare("INSERT INTO entries(thread,n,kind,target,author_kind,author,text,at) VALUES (?,2,'edit',1,'person','p','changed',2)").run(id);
+    assert.deepEqual(readGlobalRecentChatIndex(db, 5), page, "an edit leaves the message's ordering untouched");
+    db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at,letter) VALUES (?,3,'message','agent','a','letter',3,'peer')").run(id);
+    assert.deepEqual(readGlobalRecentChatIndex(db, 5), page, "a letter does not become the latest visible message");
+  } finally { store.close(); }
+});
