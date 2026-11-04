@@ -137,6 +137,21 @@ export function listSessions(s: Store): SessionRow[] {
   return all(s, "SELECT * FROM sessions ORDER BY last_active_at DESC").map(toSession);
 }
 
+/// Histories visible in a search. The existing index is ordered by connect, then workspace, so first seek the distinct
+/// connects and then only the rows in the viewer's workspaces. The public workspace is included once even when asked
+/// for as the viewer's own. Preserve the old whole-table ordering when activity times tie.
+export const HISTORY_SESSIONS = `WITH RECURSIVE connects(connect) AS (
+  VALUES ((SELECT connect FROM sessions INDEXED BY sessions_by_connect ORDER BY connect LIMIT 1))
+  UNION ALL SELECT (SELECT connect FROM sessions INDEXED BY sessions_by_connect WHERE connect > c.connect ORDER BY connect LIMIT 1)
+    FROM connects c WHERE c.connect IS NOT NULL
+), workspaces(ws) AS (SELECT ?1 UNION SELECT '*' UNION SELECT NULL WHERE ?2)
+SELECT s.* FROM connects c CROSS JOIN workspaces w CROSS JOIN sessions s INDEXED BY sessions_by_connect
+WHERE c.connect IS NOT NULL AND s.connect = c.connect AND s.ws IS w.ws
+ORDER BY s.last_active_at DESC, s.rowid ASC`;
+export function historySessions(s: Store, viewer: { workspace: string; home: boolean }): SessionRow[] {
+  return all(s, HISTORY_SESSIONS, viewer.workspace, Number(viewer.home)).map(toSession);
+}
+
 /// The session list's active or archived rows: do not bring the other kind out of the database just to discard it.
 /// The old whole-table order put equal timestamps in rowid order; retain that when using either partial index.
 export function listedSessions(s: Store, connect: string | null, archived: boolean, viewer: InWorkspace | null): SessionRow[] {

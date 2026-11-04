@@ -297,7 +297,7 @@ export async function historyHits(s: Store, profiles: Profiles, words: string[],
   const want = options.offset + options.limit + 1;
   const until = options.now() + options.ms;
   const found: Hit[] = [];
-  const sessions = store.listSessions(s).filter((x) => sees({ ws: x.ws }, asker));
+  const sessions = store.historySessions(s, asker);
   let looked = 0;
   let cancelled = false;
   let expired = false;
