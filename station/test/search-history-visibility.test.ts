@@ -34,7 +34,16 @@ test("a history search stops if a session moves before its history is read", asy
   } finally { f.close(); }
 });
 
-test("a timed-out history search does not return a hit whose session moved while another was searched", async () => {
+test("a history search stops if a session is deleted before its history is read", async () => {
+  const f = fixture(["moving"]);
+  try {
+    setImmediate(() => f.store.deleteSession("moving"));
+    await assert.rejects(historyHits(f.read, f.profiles, ["needle"],
+      { workspace: "mine", home: false, scopes: [] }, { limit: 5, offset: 0, ms: 10_000, now: () => 0 }), /session changed while searching/);
+  } finally { f.close(); }
+});
+
+for (const timeout of [false, true]) test(`a ${timeout ? "timed-out" : "completed"} history search does not return a hit whose session moved while another was searched`, async () => {
   const f = fixture(["moving", "other"]);
   try {
     let moved = false;
@@ -54,7 +63,7 @@ test("a timed-out history search does not return a hit whose session moved while
       },
     });
     await assert.rejects(historyHits(makeStore(traced, f.data), f.profiles, ["needle"],
-      { workspace: "mine", home: false, scopes: [] }, { limit: 5, offset: 0, ms: 10, now: () => moved ? 100 : 0 })
+      { workspace: "mine", home: false, scopes: [] }, { limit: 5, offset: 0, ms: 10, now: () => moved && timeout ? 100 : 0 })
       .then((result) => assert.fail(`returned ${JSON.stringify(result)}`)), /session changed while searching/);
   } finally { f.close(); }
 });
