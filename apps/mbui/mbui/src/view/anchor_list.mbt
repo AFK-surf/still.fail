@@ -168,3 +168,55 @@ pub fn[K : Eq] list_laid_from_end(
     at_end: anchor is None,
   }
 }
+
+///|
+/// The same laid out from its start (a page's list, the chats'): its anchor the row whose top is the nearest over the
+/// window's top, or at it, and how far its top is over the window's (`under`); none at its start. What it holds lies
+/// at the window's top where it is shorter; `by` scrolls it toward its end (what it holds moves up). Its result as
+/// list_laid_from_end's, its rows from the oldest down: `at_end` there is at its start here (where it rests), and
+/// `at_start` at its end.
+pub fn[K : Eq] list_laid_from_top(
+  n : Int,
+  key : (Int) -> K,
+  find : (K, Int) -> Int?,
+  measure : (Int) -> Double,
+  anchor : ListAnchor[K]?,
+  h : Double,
+  by? : Double = 0.0,
+  ahead? : Double = 0.0,
+  known? : (Int) -> Double? = fn(_) { None },
+) -> ListLaid[K] {
+  // (the same list turned over: its last row its first, its foot its top)
+  let m = fn(i : Int) { n - 1 - i }
+  let r = list_laid_from_end(
+    n,
+    fn(i) { key(m(i)) },
+    fn(k, near) { find(k, m(near)).map(m) },
+    fn(i) { measure(m(i)) },
+    anchor.map(fn(a) { { ..a, near: m(a.near) } }),
+    h,
+    by~,
+    ahead~,
+    known=fn(i) { known(m(i)) },
+  )
+  let count = r.keys.length()
+  let keys = []
+  let tops = []
+  let heights = []
+  for q in 0..<count {
+    let p = count - 1 - q
+    keys.push(r.keys[p])
+    heights.push(r.heights[p])
+    tops.push(h - r.tops[p] - r.heights[p])
+  }
+  {
+    first: m(r.last),
+    last: m(r.first),
+    keys,
+    tops,
+    heights,
+    anchor: r.anchor.map(fn(a) { { ..a, near: m(a.near) } }),
+    at_start: r.at_start,
+    at_end: r.at_end,
+  }
+}

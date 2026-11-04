@@ -279,7 +279,8 @@ fn chats_pane_node(
   })
   v.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
   // (its bar along its right, clear of what is over its top and at its foot: the band, the bars)
-  v.scrolls_window(
+  v.scrolls_anchored(
+    from_end=false,
     scroll,
     keys,
     est=@signals.untracked(fn() { @sf.theme().chat_list.row_h }),

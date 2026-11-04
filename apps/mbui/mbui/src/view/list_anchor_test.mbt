@@ -13,7 +13,7 @@ priv struct AnchoredCase {
 }
 
 ///|
-fn anchored_case(n : Int, ahead? : Double = 0.0) -> AnchoredCase {
+fn anchored_case(n : Int, ahead? : Double = 0.0, from_end? : Bool = true) -> AnchoredCase {
   let scroll = @view.Scroll::list()
   let keys = @signals.signal(Array::makei(n, fn(i) { i }), same=fn(a, b) { physical_equal(a, b) })
   let heights : Map[Int, @signals.Signal[Double]] = Map([])
@@ -33,7 +33,7 @@ fn anchored_case(n : Int, ahead? : Double = 0.0) -> AnchoredCase {
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(o) {
       o.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
-      o.scrolls_anchored(scroll, fn() { keys.get() }, est=80.0, ahead~, follows~, shown~, fn(b, k) {
+      o.scrolls_anchored(scroll, fn() { keys.get() }, est=80.0, ahead~, from_end~, follows~, shown~, fn(b, k) {
         live[k] = b
         b.owns(fn() { live.remove(k) }) |> ignore
         let h = tall(k)
@@ -134,3 +134,16 @@ test "scrolls_anchored: what a frame does is the same with 30 rows and with 3000
   assert_eq(work(30), work(3000))
 }
 
+
+///|
+test "scrolls_anchored from its start: the rows that fill the window from the first; fewer, at its top; scrolled down by the wheel, the next come in" {
+  let c = anchored_case(3000, from_end=false)
+  assert_eq(c.made(), [0, 1, 2])
+  assert_eq((c.top(0), c.top(2)), (Some(0.0), Some(80.0)))
+  let short = anchored_case(2, from_end=false)
+  assert_eq((short.top(0), short.top(1)), (Some(0.0), Some(40.0)))
+  c.tree.wheel_at(150.0, 50.0, 0.0, 100.0, 0, 10.0) |> ignore
+  c.tree.frame(390.0, 844.0, now=1000.0) |> ignore
+  assert_eq((c.top(3), c.top(4)), (Some(20.0), Some(60.0)))
+  assert_true(!c.live.contains(0))
+}

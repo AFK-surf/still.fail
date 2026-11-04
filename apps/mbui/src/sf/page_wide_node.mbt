@@ -53,7 +53,7 @@ fn wide_page_node(
   }
   v.box(fn(sc) {
     sc.grow(Is(1.0)) |> ignore
-    sc.scrolls_window(scroll, items, bar=@ui.tree_scroll_bar(), est=pg_block_est, fn(s, item) {
+    sc.scrolls_anchored(scroll, items, from_end=false, bar=@ui.tree_scroll_bar(), est=pg_block_est, fn(s, item) {
       match item {
         // the room the frame keeps over it (a status bar's)
         WideTop => s.height(By(fn() { Some(frame().top) })) |> ignore
