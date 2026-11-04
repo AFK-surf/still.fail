@@ -421,6 +421,14 @@ fn ffi_window_open(what : String) -> Int {
 }
 
 ///|
+fn mbw_mb_host_window_front(what : Int) -> Int = "mbhost" "mb_host_window_front"
+
+///|
+fn ffi_window_front(what : String) -> Int {
+  mbw_mb_host_window_front(@wasmrt.string_addr(what))
+}
+
+///|
 fn ffi_set_cursor(kind : Int) = "mbhost" "mb_host_set_cursor"
 
 ///|
@@ -525,6 +533,12 @@ fn window_opens() -> Bool {
 /// Another run of the program, its window beside this one (@hostapi.window_open).
 fn window_open(what : String) -> Bool {
   ffi_window_open(what) != 0
+}
+
+///|
+/// The window opened for `what` to the front, while it is open (@hostapi.window_front).
+fn window_front(what : String) -> Bool {
+  ffi_window_front(what) != 0
 }
 
 ///|

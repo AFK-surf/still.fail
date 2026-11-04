@@ -839,6 +839,7 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   settings_watch();
 
   win = gtk_window_new();
+  window_front_listen();
   char *t = utf8(title);
   gtk_window_set_title(GTK_WINDOW(win), t);
   // an inset window: its decorations GTK's own (its shadow and the edges it is resized by), a title bar of nothing,

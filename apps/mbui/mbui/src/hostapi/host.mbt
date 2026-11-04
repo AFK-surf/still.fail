@@ -28,6 +28,7 @@ pub(open) trait Host {
   window_snap_state(Self) -> Int = _
   window_opens(Self) -> Bool = _
   window_open(Self, String) -> Bool = _
+  window_front(Self, String) -> Bool = _
   set_cursor(Self, Int) -> Unit = _
   set_badge(Self, Int) -> Unit = _
   menu_setup(Self, String) -> Unit = _
@@ -318,6 +319,11 @@ impl Host with window_opens(_) {
 
 ///|
 impl Host with window_open(_, _) {
+  false
+}
+
+///|
+impl Host with window_front(_, _) {
   false
 }
 
@@ -1457,10 +1463,17 @@ pub fn window_opens() -> Bool {
 ///|
 /// Another window of the app opened beside this one, for `what` (the app's words for what it shows there): another run
 /// of the same program, as the system starts it, with MBUI_WINDOW=`what` in its environment; it runs once, as many
-/// times as asked (not handed to the one running, as the app started again is), and ends as its window closes. Whether
-/// it was started (false where window_opens is not).
+/// times as asked (not handed to the one running, as the app started again is), and ends as its window closes or as
+/// this run ends, however it ends. Whether it was started (false where window_opens is not).
 pub fn window_open(what : String) -> Bool {
   current.val.window_open(what)
+}
+
+///|
+/// The window this run opened for exactly `what` (window_open) brought to the front, out of the Dock or the taskbar
+/// where it was minimized: whether there is one still open (false once it has closed, and where window_opens is not).
+pub fn window_front(what : String) -> Bool {
+  current.val.window_front(what)
 }
 
 ///|

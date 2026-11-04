@@ -395,8 +395,54 @@ __declspec(allocate(".CRT$XCU")) void(__cdecl *mb_win_life_begins)(void) = life_
 
 // ---- windows of its own ----
 
+static VOID CALLBACK window_opener_ended(PVOID data, BOOLEAN timed) {
+  (void)data;
+  (void)timed;
+  ExitProcess(0);
+}
+
+// A window of the app's own ends with the run that opened it, however that ends (a window run by hand, with no
+// MBUI_WINDOW_OF, is its own). Its opener gone before this looked: at once.
+static void window_ends_with_opener(void) {
+  const WCHAR *of = _wgetenv(L"MBUI_WINDOW_OF");
+  DWORD pid = of ? wcstoul(of, NULL, 10) : 0;
+  if (!pid) return;
+  HANDLE opener = OpenProcess(SYNCHRONIZE, FALSE, pid);
+  if (!opener) {
+    if (GetLastError() == ERROR_INVALID_PARAMETER) ExitProcess(0);
+    return;
+  }
+  HANDLE wait;
+  if (!RegisterWaitForSingleObject(&wait, opener, window_opener_ended, NULL, INFINITE, WT_EXECUTEONLYONCE)) CloseHandle(opener);
+}
+
 // Another window of the app's (@hostapi.window_open): the program run again, its environment this one's with
-// MBUI_WINDOW=<what>; a run of its own beside this one (window_run), ending as its window closes.
+// MBUI_WINDOW=<what>; a run of its own beside this one (window_run), ending as its window closes or as this run ends
+// (MBUI_WINDOW_OF, this run's pid: window_ends_with_opener).
+typedef struct WindowOpened {
+  WCHAR *what;
+  HANDLE process;
+  DWORD pid;
+  struct WindowOpened *next;
+} WindowOpened;
+static WindowOpened *windows_opened;  // what each was started for, the last for each
+
+static WindowOpened **window_opened_at(const WCHAR *what, int n) {
+  WindowOpened **at = &windows_opened;
+  for (; *at; at = &(*at)->next) {
+    if ((int)wcslen((*at)->what) == n && !wmemcmp((*at)->what, what, n)) return at;
+  }
+  return at;
+}
+
+static void window_opened_drop(WindowOpened **at) {
+  WindowOpened *w = *at;
+  *at = w->next;
+  CloseHandle(w->process);
+  free(w->what);
+  free(w);
+}
+
 int32_t mb_host_window_opens(void) { return 1; }
 int32_t mb_host_window_open(moonbit_string_t what) {
   int wn = Moonbit_array_length(what);
@@ -410,7 +456,7 @@ int32_t mb_host_window_open(moonbit_string_t what) {
   if (!env) return 0;
   size_t have = 0;
   for (const WCHAR *e = env; *e; e += wcslen(e) + 1) have += wcslen(e) + 1;
-  WCHAR *block = (WCHAR *)calloc(have + (size_t)wn + 16, sizeof(WCHAR));
+  WCHAR *block = (WCHAR *)calloc(have + (size_t)wn + 64, sizeof(WCHAR));
   if (!block) {
     FreeEnvironmentStringsW(env);
     return 0;
@@ -428,6 +474,7 @@ int32_t mb_host_window_open(moonbit_string_t what) {
   memcpy(at, what, (size_t)wn * sizeof(WCHAR));
   at += wn;
   *at++ = 0;
+  at += _snwprintf(at, 40, L"MBUI_WINDOW_OF=%lu", GetCurrentProcessId()) + 1;
   *at = 0;
   WCHAR command[MAX_PATH * 2 + 4];
   _snwprintf(command, MAX_PATH * 2 + 4, L"\"%ls\"", exe);
@@ -444,7 +491,53 @@ int32_t mb_host_window_open(moonbit_string_t what) {
   // (its window to the front once it is there: it may take the foreground from this one)
   AllowSetForegroundWindow(pi.dwProcessId);
   CloseHandle(pi.hThread);
-  CloseHandle(pi.hProcess);
+  WindowOpened **before = window_opened_at((const WCHAR *)what, wn);
+  if (*before) window_opened_drop(before);
+  WindowOpened *w = (WindowOpened *)calloc(1, sizeof *w);
+  WCHAR *words = (WCHAR *)calloc((size_t)wn + 1, sizeof(WCHAR));
+  if (!w || !words) {
+    free(w);
+    free(words);
+    CloseHandle(pi.hProcess);
+    return 1;
+  }
+  memcpy(words, what, (size_t)wn * sizeof(WCHAR));
+  *w = (WindowOpened){words, pi.hProcess, pi.dwProcessId, windows_opened};
+  windows_opened = w;
+  return 1;
+}
+
+// its top-level window, of the run asked for (a tool window of its own has an owner)
+typedef struct {
+  DWORD pid;
+  HWND found;
+} WindowOfRun;
+static BOOL CALLBACK window_of_run(HWND h, LPARAM find) {
+  WindowOfRun *of = (WindowOfRun *)find;
+  DWORD pid = 0;
+  GetWindowThreadProcessId(h, &pid);
+  if (pid != of->pid || !IsWindowVisible(h) || GetWindow(h, GW_OWNER)) return TRUE;
+  of->found = h;
+  return FALSE;
+}
+
+// The window opened for `what` to the front, while it runs (@hostapi.window_front). (Not there yet, as it starts: it
+// takes the foreground itself, AllowSetForegroundWindow above.)
+int32_t mb_host_window_front(moonbit_string_t what) {
+  int wn = Moonbit_array_length(what);
+  WindowOpened **at = window_opened_at((const WCHAR *)what, wn);
+  if (!*at) return 0;
+  if (WaitForSingleObject((*at)->process, 0) != WAIT_TIMEOUT) {
+    window_opened_drop(at);
+    return 0;
+  }
+  WindowOfRun of = {(*at)->pid, NULL};
+  EnumWindows(window_of_run, (LPARAM)&of);
+  if (of.found) {
+    if (IsIconic(of.found)) ShowWindow(of.found, SW_RESTORE);
+    AllowSetForegroundWindow(of.pid);
+    SetForegroundWindow(of.found);
+  }
   return 1;
 }
 
@@ -663,6 +756,7 @@ static void network_look(void) {
 // once the window is there: its icon in the notification area, the one started again told it may hand over, the
 // network watched, the link it was started with to the app, what it is now
 static void life_start(const WCHAR *title) {
+  window_ends_with_opener();
   window_title = _wcsdup(title);
   taskbar_created = RegisterWindowMessageW(L"TaskbarCreated");
   tray_put();

@@ -221,6 +221,9 @@ pub fn open_chat(r : ChatRef) -> Unit {
 /// Page `p` opened, where the layout has it (Shell's `open`: the pane table, docs/architecture.md): what pages, links
 /// and the app's own doings call, never the stack themselves.
 pub fn open_page(p : Page) -> Unit {
+  if window_front(p) {
+    return
+  }
   history_act(fn() { (shell.val.open)(p) })
 }
 
@@ -228,6 +231,9 @@ pub fn open_page(p : Page) -> Unit {
 /// Page `p` opened from the page in view (a chat's link in a message): over it, back coming to it again, where the
 /// layout has it (Shell's `open_over`).
 pub fn open_page_over(p : Page) -> Unit {
+  if window_front(p) {
+    return
+  }
   history_act(fn() { (shell.val.open_over)(p) })
 }
 
@@ -341,6 +347,7 @@ pub fn reset() -> Unit {
   shell.val = bare_shell()
   // the page shown alone in a window of its own (window.mbt)
   lone_page.val = None
+  windows_open.clear()
 }
 
 ///|

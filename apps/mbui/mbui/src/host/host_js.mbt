@@ -1258,6 +1258,12 @@ fn window_open(what : String) -> Bool {
 }
 
 ///|
+fn window_front(what : String) -> Bool {
+  ignore(what)
+  false
+}
+
+///|
 /// The pointer's shape (see host_native.mbt): the canvas's CSS cursor.
 fn set_cursor(kind : Int) -> Unit {
   js_set_cursor(kind)

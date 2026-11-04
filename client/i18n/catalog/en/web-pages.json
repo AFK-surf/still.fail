@@ -1707,6 +1707,7 @@
   "web-pages.screen.paste": "Paste",
   "web-pages.screen.sendFile": "Send files",
   "web-pages.screen.window": "Open in new window",
+  "web-pages.screen.windowOpen": "This screen is already open in its own window",
   "web-pages.screen.panel": "Controls",
   "web-pages.screen.quality": "Quality",
   "web-pages.screen.fps": "Frame rate",
