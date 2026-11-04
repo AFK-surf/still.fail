@@ -325,7 +325,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
             }
           None => ()
         }
-        let mut by = match seen_x.val {
+        let by = match seen_x.val {
           Some(x) => if from_end { x - c.x } else { c.x - x }
           // (from its start, first laid out: as far down as it was scrolled, as its rows are counted)
           None => if from_end { 0.0 } else { c.x }
@@ -382,67 +382,61 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
           _ => ()
         }
         was_tail.val = all[dmax_i(0, n - anchored_tail):].to_array()
-        // (a row asked to be brought into sight since it was last laid out: put where as little brings it in, as it was
-        // last laid out; in sight already, as it is)
+        let key_of = fn(i : Int) { all[i] }
+        let known = fn(i : Int) { heights.get(all[i]) }
+        let lay = fn(from : ListAnchor[K]?, by : Double) {
+          if from_end {
+            list_laid_from_end(n, key_of, find, measure, from, h, by~, ahead~, known~)
+          } else {
+            list_laid_from_top(n, key_of, find, measure, from, h, by~, ahead~, known~, slack~)
+          }
+        }
+        let from = anchor.val
+        let mut r = lay(from, by)
+        // (a row asked to be brought into sight since it was last laid out: where it is laid out now, measured as it is,
+        // moved as little as brings the part asked of it in (as shows has a column do), laid out again so; one not
+        // laid out now in sight or near it: its top at the window's top, or its foot at its foot)
         match c.reveal {
           (Some(k), asked) if asked > revealed.val => {
             revealed.val = asked
-            match (laid.val, find(k, anchor.val.map(fn(a) { a.near }).unwrap_or(n - 1))) {
-              (Some(was), Some(i)) => {
-                let mut q = -1
-                for j in 0..<was.keys.length() {
-                  if was.keys[j] == k {
-                    q = j
-                  }
-                }
-                let hk = measure(i)
-                // (laid out last in sight or near it: what part of the node is to be in sight, where it was laid out then,
-                // moved as little as brings it in, as shows has a column do)
-                let part = match (q >= 0, reveal_of.val) {
-                  (true, Some((id, within))) if self.tree.alive_id(id) => {
-                    let mut off = 0.0
-                    let mut j = id.at
-                    let slot_at = slots.get(k).map(fn(v) { v.at }).unwrap_or(-1)
-                    while j >= 0 && j != slot_at {
-                      off = off + self.tree.nodes[j].flex.top
-                      j = self.tree.nodes[j].parent
-                    }
-                    let (a, b) = within.unwrap_or((0.0, self.tree.nodes[id.at].flex.height))
-                    if j == slot_at { Some((was.tops[q] + off + a, was.tops[q] + off + b)) } else { None }
-                  }
-                  _ => None
-                }
-                match part {
-                  Some((top, foot)) => {
-                    let down = if top < 0.0 { -top } else if foot > h { -dmin(top, foot - h) } else { 0.0 }
-                    by = by + (if from_end { down } else { -down })
-                  }
-                  None => ()
-                }
-                let (top, foot) = if q >= 0 { (was.tops[q], was.tops[q] + was.heights[q]) } else { (-1.0, h + 1.0) }
-                let over = part is None && top < 0.0 && (q >= 0 || i < was.first)
-                let under_foot = part is None && foot > h && (q >= 0 || i > was.last)
-                if over || under_foot {
-                  // (its top at the window's, or its foot at the window's foot)
-                  let foot_at = if over { hk } else { h }
-                  anchor.val = Some({
-                    key: k,
-                    under: if from_end { foot_at - h } else { hk - foot_at },
-                    near: i,
-                  })
-                }
+            let mut q = -1
+            for j in 0..<r.keys.length() {
+              if r.keys[j] == k {
+                q = j
               }
-              _ => ()
+            }
+            if q >= 0 {
+              let row_top = r.tops[q]
+              let (top, foot) = match reveal_of.val {
+                Some((id, within)) if self.tree.alive_id(id) => {
+                  let mut off = 0.0
+                  let mut j = id.at
+                  let slot_at = slots.get(k).map(fn(v) { v.at }).unwrap_or(-1)
+                  while j >= 0 && j != slot_at {
+                    off = off + self.tree.nodes[j].flex.top
+                    j = self.tree.nodes[j].parent
+                  }
+                  let (a, b) = within.unwrap_or((0.0, self.tree.nodes[id.at].flex.height))
+                  if j == slot_at { (row_top + off + a, row_top + off + b) } else { (row_top, row_top + r.heights[q]) }
+                }
+                _ => (row_top, row_top + r.heights[q])
+              }
+              let down = if top < 0.0 { -top } else if foot > h { -dmin(top, foot - h) } else { 0.0 }
+              if down != 0.0 {
+                r = lay(from, by + (if from_end { down } else { -down }))
+              }
+            } else {
+              match find(k, r.first) {
+                Some(i) => {
+                  let hk = measure(i)
+                  let foot_at = if i < r.first { hk } else { h }
+                  r = lay(Some({ key: k, under: if from_end { foot_at - h } else { hk - foot_at }, near: i }), 0.0)
+                }
+                None => ()
+              }
             }
           }
           _ => ()
-        }
-        let key_of = fn(i : Int) { all[i] }
-        let known = fn(i : Int) { heights.get(all[i]) }
-        let r = if from_end {
-          list_laid_from_end(n, key_of, find, measure, anchor.val, h, by~, ahead~, known~)
-        } else {
-          list_laid_from_top(n, key_of, find, measure, anchor.val, h, by~, ahead~, known~, slack~)
         }
         anchor.val = r.anchor
         // (how far it is counted to be scrolled among all it holds, the bar's, as laid out now)
