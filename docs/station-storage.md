@@ -73,6 +73,7 @@ CREATE TABLE thread_sessions (
   session TEXT NOT NULL,
   connect TEXT NOT NULL,
   joined_at INTEGER NOT NULL,
+  left_at INTEGER,                    -- left with chat_leave: hears the thread again once someone mentions it there
   PRIMARY KEY (thread, session)
 );
 
@@ -149,7 +150,9 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
   `thread_sessions` row first when the message starts one), then ack Slack.
   Several connects in one channel share the thread row and its messages;
   whichever sees a message first delivers it to every session in the thread,
-  and a later connect only brings in its own session.
+  and a later connect only brings in its own session. A session that left the
+  thread (`chat_leave`, `left_at` set) gets no delivery, unless the message
+  mentions it: that clears `left_at` and it hears the thread again.
 - **Joining mid-thread**: when still.fail starts following a Slack thread at a
   reply, what Slack has before that reply is recorded first (no deliveries),
   so the thread is complete and its log keeps Slack's order.
