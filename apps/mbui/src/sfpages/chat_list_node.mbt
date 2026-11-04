@@ -193,18 +193,16 @@ pub fn chat_list_node(
   let sent_foot = Ref("")
   let row_sizes : @ui.ListRows[Entry] = @ui.ListRows::new()
   rd0.rows = row_sizes
-  let sized = rows_sized(row_sizes, v, fn() { rows_now.get() }, id_of, fn(e) {
-    match e {
-      Foot => {
-        match leaving() {
-          Some(f) if f.placed => sent_foot.val = f.key
-          _ => ()
-        }
-        "foot/\{view().map_or(false, @sfbase.ask_clears)}/\{sent_foot.val}"
-      }
-      _ => @sfbase.shown_sign(e)
+  // (the room under the last row: another as what it is kept clear of changes (the bell's, ask_clears), and as words
+  // sent let go of the composer, its version one more: list_size.mbt's Foot)
+  v.reacts(fn() {
+    match leaving() {
+      Some(f) if f.placed => sent_foot.val = f.key
+      _ => ()
     }
-  }, watched=fn() { !view().map_or(false, fn(cv) { cv.newer }) },
+    "foot/\{view().map_or(false, @sfbase.ask_clears)}/\{sent_foot.val}"
+  }, fn(_) { @signals.untracked(fn() { rows_now.get() }).said("foot") })
+  let sized = rows_sized(row_sizes, v, fn() { rows_now.get() }, watched=fn() { !view().map_or(false, fn(cv) { cv.newer }) },
     from=fn(_) {
       match leaving() {
         Some(f) if !f.carried => {

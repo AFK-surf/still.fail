@@ -322,8 +322,10 @@ fn ChatRows::length_now(self : ChatRows) -> Int {
 
 ///|
 /// The row keyed `key`'s readers told what it shows changed; one read by none let go.
-fn ChatRows::said_of(self : ChatRows, key : String) -> Unit {
-  self.told.push(Set(key))
+fn ChatRows::said_of(self : ChatRows, key : String, sized? : Bool = true) -> Unit {
+  if sized {
+    self.told.push(Set(key))
+  }
   match self.read.get(key) {
     Some(r) =>
       if r.said.watched() {
@@ -337,11 +339,30 @@ fn ChatRows::said_of(self : ChatRows, key : String) -> Unit {
 }
 
 ///|
-/// The row of message `at` (by its index among them) told it shows otherwise.
-fn ChatRows::said_at(self : ChatRows, at : Int) -> Unit {
+/// The row of message `at` (by its index among them) told it shows otherwise; its list told so (its room may be
+/// another) where it was drawn and `sized`, or what it shows differs in what makes its height (shown_sign).
+fn ChatRows::said_at(self : ChatRows, at : Int, sized? : Bool = false) -> Unit {
   if at >= 0 && at < self.all_count() && !self.hidden.contains(at) {
-    self.said_of((self.key_of)(self.messages[at]))
+    let tk = self.messages.rows.key(at)
+    let m = self.messages[at]
+    let sized = match self.drawn.get(tk) {
+      Some(was) => {
+        self.drawn[tk] = m
+        sized || shown_sign(Said(was)) != shown_sign(Said(m))
+      }
+      None => false
+    }
+    self.said_of((self.key_of)(m), sized~)
   }
+}
+
+///|
+/// The row keyed `key` shows otherwise in what makes its height (the room under the last row, Foot's, its sign at the
+/// page's): its readers and its list told at once.
+pub fn ChatRows::said(self : ChatRows, key : String) -> Unit {
+  self.said_of(key)
+  self.shapes += 1
+  self.shape.set(self.shapes)
 }
 
 ///|
@@ -478,7 +499,7 @@ pub fn ChatRows::take(
         self.hidden = []
         let keys = self.read.keys().collect()
         for k in keys {
-          self.said_of(k)
+          self.said_of(k, sized=false)
         }
       }
     }
@@ -539,7 +560,7 @@ pub fn ChatRows::take(
   if v.unread_line != self.line {
     for seq in [self.line, v.unread_line] {
       match seq {
-        Some(s) => self.said_at(self.message_at(s))
+        Some(s) => self.said_at(self.message_at(s), sized=true)
         None => ()
       }
     }
@@ -576,7 +597,8 @@ pub fn ChatRows::take(
     self.gone.clear()
     self.gone.push_iter(kept.iter())
   }
-  if shaped {
+  // (its list told of a row showing otherwise as of one come or gone: it reads what changed as they do)
+  if shaped || self.told.length() > told_from {
     self.shapes += 1
     self.shape.set(self.shapes)
   }
