@@ -79,6 +79,8 @@ test("recent chat selection keeps workspace rules, ordering and the number left 
     make("no-members", null, [], 105, 70);
     const edited = make("edited", null, ["agent"], 99, 30);
     put.run(edited, 2, "edit", 1, "person", "person", "edited words", 500);
+    const untitled = make("untitled", null, ["agent"], 98, 30);
+    db.prepare("UPDATE threads SET title = NULL, auto_title = NULL WHERE id = ?").run(untitled);
     make("negative", null, ["agent"], 200, -1);
     const unreadable = make("missing-state", null, ["agent"], 30, 4);
     db.prepare("DELETE FROM thread_state WHERE thread = ?").run(unreadable);
