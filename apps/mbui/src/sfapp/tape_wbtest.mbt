@@ -1177,6 +1177,32 @@ test "on the tape 重启更新 is in the sidebar's first row before the filter, 
 }
 
 ///|
+/// Whether what is past white lies where the key said `said` does.
+fn bright_at_key(t : @ui.Tester, said : String) -> Bool {
+  let (x, y, w, h) = said_at(t, said).unwrap()
+  let near = fn(a : Double, b : Double) { (a - b).abs() < 0.5 }
+  t.drawn_instances().iter().any(fn(i) { past_white(i) && near(i[0], x) && near(i[1], y) && near(i[2], w) && near(i[3], h) })
+}
+
+///|
+test "on the tape 有新版本 and 重启更新 stand on a ground past white, the key's own rect; none while it comes" {
+  let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":36,\"bottom\":24,\"left\":0,\"right\":0}}")
+  t.run_for(@ui.move_most_ms)
+  assert_true(!t.drawn_instances().iter().any(past_white))
+  @sffixture.fixture_update("0.1.9999")
+  t.run_for(@ui.move_most_ms)
+  assert_true(bright_at_key(t, "有新版本 0.1.9999"))
+  @sffixture.fixture_update_goes("0.1.9999", "downloading", percent=40)
+  t.run_for(@ui.move_most_ms)
+  assert_true(!t.drawn_instances().iter().any(past_white))
+  @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
+  t.run_for(@ui.move_most_ms)
+  assert_true(bright_at_key(t, "重启更新"))
+  update.available.set(None)
+}
+
+///|
 test "on the tape a passage left picked keeps nothing from coming over: the sidebar pulled over comes and stays" {
   let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore

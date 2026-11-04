@@ -4,6 +4,9 @@
 #include "contained.h"
 #import <ImageIO/ImageIO.h>
 #import <CoreGraphics/CoreGraphics.h>
+#if TARGET_OS_OSX
+#import <AppKit/AppKit.h>
+#endif
 
 // the numbers of an instance (src/ui/scene.mbt)
 #define MB_INST 60
@@ -14,6 +17,8 @@ static id<MTLRenderPipelineState> mpipe;
 static id<MTLRenderPipelineState> rpipe_off;
 // holes for native views (kind 9): written, not blended
 static id<MTLRenderPipelineState> hpipe;
+// the same for a window's canvas while its frame holds a colour past white (set_deep)
+static id<MTLRenderPipelineState> mpipe_deep, hpipe_deep;
 // the words' glyphs (R8) and colour glyphs (RGBA), square (apple.h)
 static id<MTLTexture> atlas, catlas;
 static CAMetalLayer *mlayer;
@@ -371,6 +376,8 @@ static void prepare_gpu(void) {
   if (!lib) NSLog(@"shader: %@", err);
   mpipe = make_pipe(lib, MTLPixelFormatBGRA8Unorm, YES);
   hpipe = make_pipe(lib, MTLPixelFormatBGRA8Unorm, NO);
+  mpipe_deep = make_pipe(lib, MTLPixelFormatRGBA16Float, YES);
+  hpipe_deep = make_pipe(lib, MTLPixelFormatRGBA16Float, NO);
   rpipe_off = mpipe;
   MTLRenderPipelineDescriptor *pd = [MTLRenderPipelineDescriptor new];
   pd.vertexFunction = [lib newFunctionWithName:@"vpost"];
@@ -445,12 +452,12 @@ static id<MTLTexture> level_tex(MTLPixelFormat format, int w, int h) {
 // the blur kept in the levels is of the last capture while it is (kept_ok, below)
 static int kept_ok;
 
-static void ensure_levels(int w, int h) {
-  if (lv_w >= w && lv_h >= h && lv[0]) return;
+static void ensure_levels(int w, int h, MTLPixelFormat format) {
+  if (lv_w >= w && lv_h >= h && lv[0] && lv[0].pixelFormat == format) return;
   lv_w = w > lv_w ? w : lv_w;
   lv_h = h > lv_h ? h : lv_h;
   for (int j = 0; j < 4; j++)
-    lv[j] = level_tex(j == 0 ? MTLPixelFormatBGRA8Unorm : MTLPixelFormatRGBA16Float, (lv_w + (1 << j) - 1) >> j,
+    lv[j] = level_tex(j == 0 ? format : MTLPixelFormatRGBA16Float, (lv_w + (1 << j) - 1) >> j,
                       (lv_h + (1 << j) - 1) >> j);
   ltmp = level_tex(MTLPixelFormatRGBA16Float, lv_w, lv_h);
   kept_ok = 0;
@@ -640,7 +647,7 @@ static void show_blur(const Grab *m) {
 // A grab of target blurred into the levels: what is drawn so far in its rectangle copied out, halved k times, the
 // Gaussian left (passes of their own, the target's pass ended before), then shown (show_blur).
 static void blur(id<MTLCommandBuffer> cb, id<MTLTexture> target, const Grab *m) {
-  ensure_levels(m->w, m->h);
+  ensure_levels(m->w, m->h, target.pixelFormat);
   id<MTLBlitCommandEncoder> bl = [cb blitCommandEncoder];
   [bl copyFromTexture:target sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(m->px0, m->py0, 0)
            sourceSize:MTLSizeMake(m->w, m->h, 1) toTexture:lv[0] destinationSlice:0 destinationLevel:0
@@ -714,6 +721,11 @@ static int32_t seg_base;
 // cut to the part (the pass's scissor, `sc`, while `sc_on`), the frame's ground drawn over the part first (the
 // instance after the frame's, upload's), then every instance (what falls outside is cut away).
 static id<MTLTexture> canvas;
+// A frame with a box's ground past white (@ui.bright; slots 8-10) draws the window in half floats, shown past the screen's
+// white where the display has room (EDR); on one that never has any it stays 8 bits, clipped to white. Back to 8 bits
+// with the frame after the last of them, half the memory. Blended as ever, in the colour's own encoding, in the display's own space as a layer
+// with no colour space of its own is: what else is drawn stays the colour it was as the mode changes. The Mac's alone.
+static int deep_on;
 // what the canvas holds is the last frame given (none lost: a frame not drawn into it, its size another)
 static int canvas_ok;
 // the parts of the next frame that differ (points: x, y, w, h), all of it (`dirty_whole`), and whether any was said
@@ -800,6 +812,9 @@ static id<MTLRenderCommandEncoder> begin_pass(id<MTLCommandBuffer> cb, id<MTLTex
 // the frame's, upload's); NULL, all of it, cleared to the ground.
 static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderPipelineState> p,
                    id<MTLBuffer> buf, int32_t count, double r, double g, double b, double alpha, const MTLScissorRect *part) {
+  int deep_target = target.pixelFormat == MTLPixelFormatRGBA16Float;
+  if (deep_target) p = mpipe_deep;
+  id<MTLRenderPipelineState> hole_pipe = deep_target ? hpipe_deep : hpipe;
   gtex = nil;
   memset(&gu, 0, sizeof gu);
   encode_missing = 0;
@@ -810,7 +825,7 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
   if (part) sc = *part;
   id<MTLRenderCommandEncoder> enc = begin_pass(cb, target, p, buf, part ? 0 : 1, r, g, b, alpha);
   if (part) {
-    [enc setRenderPipelineState:hpipe];
+    [enc setRenderPipelineState:hole_pipe];
     [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:1 baseInstance:count];
   }
   // one draw per run of instances showing the same image (slot 20; 0:
@@ -856,7 +871,7 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
       start = end;
       continue;
     }
-    [enc setRenderPipelineState:(hole ? hpipe : p)];
+    [enc setRenderPipelineState:(hole ? hole_pipe : p)];
     // (a hole's image is its view's, src/hostapi/host.mbt view_tex_base + its id: the view is under the canvas here)
     id<MTLTexture> t = hole ? nil : tid > MB_STREAM_TEX ? mb_stream_texture(tid - MB_STREAM_TEX) : tid ? mb_image_texture(tid) : nil;
     // (a stream with no frame of its own yet, or lost: nothing, not the atlas)
@@ -944,11 +959,12 @@ static int same_as_shown(const double *inst, int32_t count, double r, double g, 
 // The canvas a window's frames are drawn into (partial redraw, above), tw × th pixels: made again at another size,
 // what it held lost.
 static void ensure_canvas(int tw, int th) {
-  if (canvas && (int)canvas.width == tw && (int)canvas.height == th) return;
+  MTLPixelFormat format = deep_on ? MTLPixelFormatRGBA16Float : MTLPixelFormatBGRA8Unorm;
+  if (canvas && (int)canvas.width == tw && (int)canvas.height == th && canvas.pixelFormat == format) return;
   canvas = nil;
   canvas_ok = 0;
   if (tw <= 0 || th <= 0) return;
-  MTLTextureDescriptor *td = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+  MTLTextureDescriptor *td = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:format
                                                                                 width:(NSUInteger)tw
                                                                                height:(NSUInteger)th
                                                                             mipmapped:NO];
@@ -969,7 +985,7 @@ static void check_part(id<MTLCommandBuffer> cb, int parts) {
     const char *v = getenv("MBUI_PARTIAL_CHECK");
     partial_check = v && v[0] == '1';
   }
-  if (!partial_check) return;
+  if (!partial_check || deep_on) return;
   [cb waitUntilCompleted];
   int w, h, fw, fh;
   uint8_t *drawn = read_texture(canvas, &w, &h);
@@ -1050,6 +1066,34 @@ void mb_render_trim(void) {
   [CATransaction commit];
 }
 
+#if TARGET_OS_OSX
+static void set_deep(const double *inst, int32_t count) {
+  int want = 0;
+  for (int32_t i = 0; i < count && !want; i++) {
+    // (a box's ground alone: slots 8-10 are no colour in every kind, a shape's pieces (12) hold their geometry there)
+    const double *c = inst + i * MB_INST + 8;
+    want = c[-3] == 0.0 && (c[0] > 1.0 || c[1] > 1.0 || c[2] > 1.0);
+  }
+  // (a display with no room above its white ever: 8 bits clip it to the same white, at half the memory)
+  NSScreen *screen = NSApp.mainWindow.screen ?: NSScreen.mainScreen;
+  if (want && screen.maximumPotentialExtendedDynamicRangeColorComponentValue <= 1.0) want = 0;
+  if (want == deep_on) return;
+  deep_on = want;
+  mlayer.pixelFormat = want ? MTLPixelFormatRGBA16Float : MTLPixelFormatBGRA8Unorm;
+  CGColorSpaceRef cs = NULL;
+  if (want) {
+    cs = CGColorSpaceCreateExtended(screen.colorSpace.CGColorSpace);
+    if (!cs) cs = CGColorSpaceCreateWithName(kCGColorSpaceExtendedSRGB);
+  }
+  mlayer.colorspace = cs;
+  if (cs) CGColorSpaceRelease(cs);
+  mlayer.wantsExtendedDynamicRangeContent = want;
+  canvas_ok = 0;
+}
+#else
+static void set_deep(const double *inst, int32_t count) {}
+#endif
+
 void mb_render_present(const double *inst, int32_t count, double r, double g, double b) {
   // a frame that put a native view elsewhere (apple_views.m: a page in a message, as the list scrolls) presented in
   // the transaction that puts it there (the frame's: mac_app.m drawFrame, ios_app.m tick), so the view and the hole it
@@ -1065,6 +1109,7 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
     return;
   }
   if (with_views) mlayer.presentsWithTransaction = YES;
+  set_deep(inst, count);
   double p0 = CACurrentMediaTime();
   dispatch_semaphore_wait(inflight, DISPATCH_TIME_FOREVER);
   double p1 = CACurrentMediaTime();

@@ -216,6 +216,45 @@ test "the update key, a build here already waiting on its press: the update's ma
 }
 
 ///|
+/// The update key waiting on its press, asked to be `bright`, as it is `busy` or not: what it paints.
+fn update_key_painted(bright : Bool, busy? : Bool = false) -> Array[Array[Double]] {
+  new_run()
+  let t = @ui.Tester::new(
+    fn(c) { @sf.update_key(c, "k", 34.0, 20.0, "重启更新", "", busy, bright~) |> ignore },
+    w=120.0,
+    h=80.0,
+  )
+  t.run_for(@kit.progress_ms)
+  t.drawn_instances()
+}
+
+///|
+/// Whether an instance is a box whose ground is past white (@ui.bright), as a renderer looks for one (apple_render.m
+/// set_deep: a frame with none stays 8 bits).
+fn past_white(i : Array[Double]) -> Bool {
+  i[5] == 0.0 && (i[8] > 1.0 || i[9] > 1.0 || i[10] > 1.0)
+}
+
+///|
+test "the update key asked to be bright: a round ground past white as wide as the key, its mark after it; not while it goes in" {
+  let drawn = update_key_painted(true)
+  let at = drawn.search_by(past_white).unwrap()
+  assert_eq(drawn[at][2], 34.0)
+  assert_true(drawn[at][4] >= 17.0, msg="round")
+  assert_true(at < drawn.length() - 1, msg="the mark drawn after the ground, over it")
+  assert_true(!update_key_painted(false).iter().any(past_white))
+  assert_true(!update_key_painted(true, busy=true).iter().any(past_white))
+}
+
+///|
+test "@ui.bright: a gain of light in the encoding colours are blended in, the colour's own bits as they were" {
+  let c = @ui.bright(0xFFFFFFFFL, 3.0)
+  assert_eq(c & 0xFFFFFFFFL, 0xFFFFFFFFL)
+  // (3 in light is 1.61 encoded: sRGB's curve carried on past 1)
+  assert_eq(c >> 32, 1612L)
+}
+
+///|
 test "the update key while the build goes in: its arrow going up as a station's does (no download's mark), no words, no press" {
   let (t, marks) = update_key_marks(true)
   assert_true(!marks.iter().any(fn(m) { m.contains("icon/download") }), msg="\{marks}")

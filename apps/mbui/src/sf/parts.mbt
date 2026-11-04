@@ -4627,8 +4627,9 @@ let sign_in_many : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=f
 ///|
 /// An update in a bar: while it comes, its progress in the mark's place (`coming`: Some of a known part or None for an
 /// unknown part); ready, the update's arrow up in a ring; being put in place (`busy`), that arrow going up. The two
-/// marks fade between each other without moving the key. `why` is its tip, `label` what it is said to be. True on its
-/// press, not while it is busy.
+/// marks fade between each other without moving the key. `why` is its tip, `label` what it is said to be. `bright`: it
+/// wants a press, its mark dark on a disc past the screen's white (update_bright_ground; 2026-11-04 the user:
+/// 「给 app 的升级按钮加一下 hdr」). True on its press, not while it is busy.
 pub fn update_key(
   c : @ui.Ctx,
   key : String,
@@ -4639,13 +4640,22 @@ pub fn update_key(
   busy : Bool,
   coming? : Double?? = None,
   offered? : Bool = false,
+  bright? : Bool = false,
 ) -> Bool {
   let t = theme()
   let id = c.id(key)
   let hot = c.lit(id) && !busy
   let progress = ease_to(c, "update/coming/" + key, coming is Some(_))
+  let disc = bright && !busy && coming is None
+  let look = if disc {
+    update_key_box.then(@ui.style(bg=Data(update_bright_ground(hot))))
+  } else if hot {
+    update_key_hot
+  } else {
+    update_key_box
+  }
   let b = c.box(
-    style=(if hot { update_key_hot } else { update_key_box }).then(@ui.style(w=Fixed(side), h=Fixed(side))),
+    style=look.then(@ui.style(w=Fixed(side), h=Fixed(side))),
     id~,
     fn() {
       c.box(style=@ui.style(w=Fixed(mark), h=Fixed(mark)), fn() {
@@ -4653,7 +4663,7 @@ pub fn update_key(
           if busy {
             updating_mark(c, mark, t.p.text) |> ignore
           } else {
-            icon(c, if offered { "download" } else { "update" }, size=mark, color=t.p.text) |> ignore
+            icon(c, if offered { "download" } else { "update" }, size=mark, color=if disc { update_bright_ink } else { t.p.text }) |> ignore
           }
         })
         c.look(ready, @ui.look(alpha=1.0 - progress))
@@ -4681,6 +4691,27 @@ pub fn update_key(
   }
   !busy && c.clicked(id)
 }
+
+///|
+/// The update key's disc when it wants a press: white, as bright as the display can show now (2026-11-04 the user:
+/// 「把3倍调到最高亮度」; what it can show falls as its brightness setting rises, clipped there, white stays white), less
+/// under the pointer as a ground pointed at answers, still past white so that pointing at it changes no canvas's mode.
+fn update_bright_ground(hot : Bool) -> Int64 {
+  @ui.bright(0xFFFFFFFFL, if hot { update_bright_hot } else { update_bright_gain })
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let update_bright_gain : Double = 16.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let update_bright_hot : Double = 1.2
+
+///|
+/// The mark's ink on that disc, in either theme.
+// kept across runs: a value (no field of it changes)
+let update_bright_ink : Int64 = 0x1C1C1EFFL
 
 ///|
 /// The list catching up on what changed while away (the chats' `syncing`; docs/ui-panels.md 等待): beside the keys of

@@ -669,6 +669,14 @@ fn Ctx::push_inst(
   a[b + 8] = ((color >> 24) & 0xFFL).to_double() / 255.0
   a[b + 9] = ((color >> 16) & 0xFFL).to_double() / 255.0
   a[b + 10] = ((color >> 8) & 0xFFL).to_double() / 255.0
+  // (past white, @ui.bright: what it holds above its RRGGBBAA)
+  let past = color >> 32
+  if past != 0L {
+    let k = past.to_double() / bright_scale
+    a[b + 8] = a[b + 8] * k
+    a[b + 9] = a[b + 9] * k
+    a[b + 10] = a[b + 10] * k
+  }
   // (what the looks it is in hold, fainter by them: words_alpha; a box's edge as its ground, glyph_look's way)
   let alpha = alpha * words_alpha.val
   let c2d = if kind == 0.0 { c2d * words_alpha.val } else { c2d }

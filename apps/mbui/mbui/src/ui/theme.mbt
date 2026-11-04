@@ -776,6 +776,21 @@ pub fn alpha(c : Int64, a : Double) -> Int64 {
 }
 
 ///|
+/// `c` (RRGGBBAA) `gain` times as bright, past the screen's white where the renderer and the display can show it (a
+/// Mac's canvas, scene's slots 8-10 above 1), clipped to white where they cannot. For a box's ground, the one thing a
+/// renderer looks for it on;
+/// `gain` is of light (2.0: twice the light of white), kept above the colour's bits in the encoding colours are blended
+/// in. Not for `alpha` or `over`, which keep the colour alone.
+pub fn bright(c : Int64, gain : Double) -> Int64 {
+  let encoded = 1.055 * @dmath.pow(gain, 1.0 / 2.4) - 0.055
+  (c & 0xFFFFFFFFL) | ((encoded * bright_scale).round().to_int64() << 32)
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let bright_scale : Double = 1000.0
+
+///|
 /// `top` laid over `under` (both RRGGBBAA): the colour it shows as; over a tint (a ground pointed at laid over a
 /// translucent one: style.mbt Patch::lit_by), the two as one tint, as much of what is under them showing through.
 pub fn over(under : Int64, top : Int64) -> Int64 {

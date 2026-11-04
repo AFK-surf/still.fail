@@ -187,7 +187,8 @@ let nav_cut : @ui.TextStyle = @ui.text_style(w=Cut)
 /// (`busy()`), that arrow going up (updating_node); while it comes (`coming()`: Some of a known part or of None for an
 /// unknown one), its progress in the mark's place, the two marks faded between each other over a control's ease (dur_ms)
 /// without moving the key. Read out a button named `label()`, unable to be pressed while busy; `why()` its tip where it
-/// says one (in `tips`); pressed while not busy, `press`.
+/// says one (in `tips`); pressed while not busy, `press`. `bright()`: it wants a press, its mark dark on a disc past the
+/// screen's white (update_key's).
 pub fn update_key_node(
   parent : @view.View,
   tips : TipLayer,
@@ -199,7 +200,9 @@ pub fn update_key_node(
   coming : () -> Double??,
   press : () -> Unit,
   offered? : () -> Bool = fn() { false },
+  bright? : () -> Bool = fn() { false },
 ) -> Unit {
+  let disc = fn() { bright() && !busy() && coming() is None }
   // (its tip on what holds it: said while busy too, the key taking no press then, as the pointer rests on it)
   parent.box(fn(o) {
     o.box(fn(k) {
@@ -210,11 +213,19 @@ pub fn update_key_node(
       .height(Is(Some(side)))
       // (round as its ground is while there is one, as an old view's key's hovered{} look: at rest none, nothing
       // standing in a corner)
-      .radius(By(fn() { if lit_node(k) && !busy() { side / 2.0 } else { 0.0 } }))
+      .radius(By(fn() { if disc() || (lit_node(k) && !busy()) { side / 2.0 } else { 0.0 } }))
       // (its mark in its middle both ways, as update_key_box's: a box lays what it holds down from its top)
       .lines_up(Is(Some(Middle)))
       .lies_along(Is(Middle))
-      .ground(By(fn() { if lit_node(k) && !busy() { @ui.tree_theme().color(Hover) } else { 0L } }))
+      .ground(By(fn() {
+        if disc() {
+          update_bright_ground(lit_node(k))
+        } else if lit_node(k) && !busy() {
+          @ui.tree_theme().color(Hover)
+        } else {
+          0L
+        }
+      }))
       .says(By(fn() { Some(@view.said(Button, label=label())) }))
       |> ignore
       // (pressed while it is not busy: a press's ripple on it, its press then; read out unable to be pressed while busy)
@@ -239,7 +250,7 @@ pub fn update_key_node(
               updating_node(r, mark, fn() { theme().p.text })
             } else {
               r.pick(offered, fn(o, on) {
-                icon_node(o, if on { "download" } else { "update" }, mark, By(fn() { theme().p.text })) |> ignore
+                icon_node(o, if on { "download" } else { "update" }, mark, By(fn() { if disc() { update_bright_ink } else { theme().p.text } })) |> ignore
               })
             }
           })
