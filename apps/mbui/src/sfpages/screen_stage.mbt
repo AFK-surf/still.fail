@@ -946,11 +946,17 @@ priv struct MouseDrive {
   mut mods : Int
   mut at : (Double, Double)?
   mut over : Bool
+  /// where it last pressed on the stage, in the window's points: where typing is likeliest to go
+  mut pressed : (Double, Double)?
 }
 
 ///|
+/// How tall the caret this device's input method is told of on a screen, in points.
+let screen_ime_h : Double = 20.0
+
+///|
 fn mouse_drive_new() -> MouseDrive {
-  { down: false, sent_down: false, mods: 0, at: None, over: false }
+  { down: false, sent_down: false, mods: 0, at: None, over: false, pressed: None }
 }
 
 ///|
@@ -990,6 +996,7 @@ fn screen_mouse(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, catcher 
         m.sent_down = false
         if driving {
           keys = true
+          m.pressed = Some((d.x0, d.y0))
           match on_frame(d.x0, d.y0, false) {
             Some(at) => {
               m.mods = mods_of_held(@ui.mods_held())
@@ -1061,6 +1068,9 @@ fn screen_mouse(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, catcher 
   if keys {
     c.catch_keys(catcher, true)
   }
+  // this device's input method by what is being typed on: where the mouse last pressed, the screen's own caret not being known here
+  let (ix, iy) = m.pressed.unwrap_or((ox + shown.x, oy + shown.y + shown.h))
+  c.key_catcher_place(catcher, ix, iy, screen_ime_h)
   if sent.length() > 0 {
     c.tell("screen-mouse/" + s.view + "/\{frame}", fn() {
       for j in sent {
