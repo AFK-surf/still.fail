@@ -72,6 +72,9 @@ def env_var(name: str):
 def deploy_dir() -> Path:
     if env_var("DEPLOY_DIR"):
         return Path(env_var("DEPLOY_DIR")).expanduser()
+    # Another cloud's keys are never still.fail's (CLOUDS below).
+    if env_var("CLOUD"):
+        return Path.home() / f"{env_var('CLOUD')}-deploy"
     new, old = Path.home() / "stillfail-deploy", Path.home() / "ember-deploy"
     # The keys in it are what every session and station trusts: never start a fresh one next to the old.
     return old if old.exists() and not new.exists() else new
@@ -119,11 +122,57 @@ BUILDS = DEPLOY / "builds"
 KEEP_BUILDS = 10
 
 
+# Another cloud made of the same code (STILLFAIL_CLOUD=<name>), in a Cloudflare account of its own: monoid's, the
+# company's (monoid.build, its test channel on monoid.zone, as still.fail's is on youdid.wtf), beside still.fail's.
+# Its accounts are its own: nobody signed up on one is known to the other. Each of still.fail's hosts is that cloud's
+# host in the same place (app.still.fail: app.monoid.build); what still.fail keeps from before its rename (3720.org) it
+# never had, and those routes and aliases go. The Workers, their Durable Objects and the bucket keep their names (another
+# account's). The deploy directory is that cloud's (its keys.json: losing it logs out everyone of that cloud).
+CLOUDS = {
+    "monoid": {"zones": {"still.fail": "monoid.build", "youdid.wtf": "monoid.zone"}, "dropped": ["3720.org"]},
+}
+CLOUD = env_var("CLOUD") or ""
+if CLOUD and CLOUD not in CLOUDS:
+    sys.exit(f"no such cloud: {CLOUD} (of {', '.join(CLOUDS)})")
+
+
+def rehost(text: str, cloud: str = CLOUD) -> str:
+    """`text` with still.fail's hosts (and addresses: noreply@still.fail) the cloud's, each in its place."""
+    for zone, theirs in CLOUDS[cloud]["zones"].items() if cloud else []:
+        text = re.sub(rf"(?<![\w.-])((?:[\w-]+\.)*){re.escape(zone)}(?![\w-]|\.\w)", rf"\g<1>{theirs}", text)
+    return text
+
+
+def dropped(text: str, cloud: str = CLOUD) -> bool:
+    """Whether `text` names a host of a zone the cloud does not have."""
+    return cloud != "" and any(re.search(rf"(?<![\w-]){re.escape(zone)}(?![\w-]|\.\w)", text) for zone in CLOUDS[cloud]["dropped"])
+
+
+def for_cloud(config: dict, cloud: str = CLOUD) -> dict:
+    """A part's config as `cloud` has it: still.fail's own as it is."""
+    if not cloud:
+        return config
+    config = json.loads(rehost(json.dumps(config), cloud))
+    if "routes" in config:
+        config["routes"] = [r for r in config["routes"] if not dropped(json.dumps(r), cloud)]
+    # (the vars that list hosts, comma-separated: PUBLIC_ORIGIN_ALIASES, ADMIN_ORIGIN_ALIASES, of the old ones alone)
+    kept = {}
+    for key, value in config.get("vars", {}).items():
+        if isinstance(value, str) and dropped(value, cloud):
+            value = ",".join(v for v in value.split(",") if not dropped(v, cloud))
+            if not value:
+                continue
+        kept[key] = value
+    if "vars" in config:
+        config["vars"] = kept
+    return config
+
+
 def read_template(name: str = "wrangler.jsonc") -> dict:
     text = (ROOT / name).read_text()
     text = re.sub(r"^\s*//.*$", "", text, flags=re.M)
     text = re.sub(r",(\s*[}\]])", r"\1", text)
-    return json.loads(text)
+    return for_cloud(json.loads(text))
 
 
 # Cloudflare's own failures, not the request's: asked again (what is asked of it here is the same done twice). A
@@ -396,7 +445,14 @@ def main() -> None:
         # web/vite.config.ts reads the key from the file STILLFAIL_POSTHOG (EMBER_POSTHOG before the rename) names.
         if not POSTHOG.exists():
             print(f"note: no {POSTHOG}; building the web app without analytics")
-        env = {**os.environ, "STILLFAIL_POSTHOG": str(POSTHOG), "EMBER_POSTHOG": str(POSTHOG)} if POSTHOG.exists() else None
+        env = {**os.environ, "STILLFAIL_POSTHOG": str(POSTHOG), "EMBER_POSTHOG": str(POSTHOG)} if POSTHOG.exists() else dict(os.environ)
+        if CLOUD:
+            # What the builds read of still.fail's hosts themselves: the preview host the web app opens services on
+            # (web/vite.config.ts), the cloud and relays the share page asks (share-hosts.ts).
+            vars = template["vars"]
+            relays = [u.strip() for u in [vars.get("RELAY_URL") or origin, *vars.get("RELAY_URLS", "").split(",")] if u.strip()]
+            env |= {"STILLFAIL_PREVIEW_ORIGIN": rehost("https://preview.still.fail"), "STILLFAIL_SHARE_CLOUD": origin,
+                    "STILLFAIL_SHARE_RELAYS": ",".join(dict.fromkeys(relays))}
         # still.fail's app for the browser (apps/mbui/scripts/web-app.sh into web/public/mbui), the page of every one of
         # the web app's pages (web/vite.config.ts): as it is when it is there (CI's static job has it from mbui-web), else
         # built where MoonBit is (the bundle job's). Without it the web app would be a page with nothing to draw.
@@ -474,7 +530,7 @@ def main() -> None:
         "site-beta": [f"https://{beta_zone()}/"],
     }
     for part in [] if args.dry_run else parts:
-        for url in dict.fromkeys(checks[part]):
+        for url in dict.fromkeys(rehost(u) for u in checks[part] if not dropped(u)):
             request = urllib.request.Request(url, headers={"user-agent": "stillfail-deploy"})
             try:
                 with urllib.request.urlopen(request, timeout=30) as response:
