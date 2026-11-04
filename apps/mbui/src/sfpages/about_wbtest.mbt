@@ -326,7 +326,7 @@ test "自动更新 in 关于, on unless turned off: off, a newer build is said b
   assert_eq(@sfbase.update_stands().label, "有新版本 0.1.3")
   @sfbase.update_go(src)
   assert_eq(t.update_asked(), ["fetch stillfail-3.apk true"])
-  // (the update's row come in over it meanwhile: pressed where it has come to rest)
+  // (the update's row come in meanwhile: pressed once all is at rest)
   t.run_for(@ui.move_most_ms)
   t.click(Switch, label="自动更新")
   t.frame()
