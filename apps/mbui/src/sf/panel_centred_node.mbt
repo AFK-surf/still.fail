@@ -163,9 +163,7 @@ fn panel_centred_node(
           let share = dmax(0.0, x.tall * c.window_size().1 - dialog_frame_h)
           let column = @ui.style(px=room(words_in))
           let top = if untitled() { dialog_untitled_top } else { no_style }
-          // (its column's room inside what is capped, not round it: what reaches out of the column to the dialog's
-          // sides, a card of the panel's, is not cut by it)
-          let at = (if x.foot is None { dialog_body_end } else { dialog_body }).then(top)
+          let at = (if x.foot is None { dialog_body_end } else { dialog_body }).then(column).then(top)
           let whole = if says.get() { @ui.style(w=Full, max_h=Fixed(share)) } else { @ui.style(w=Full, h=Fixed(share)) }
           let id = c.id("sf-present/capped/\{keyed.serial}")
           let held = c.box(style=centred_part_in(0.0, 0.0).then(@ui.style(h=Full)), fn() {
@@ -180,11 +178,7 @@ fn panel_centred_node(
               untitled_clear_now.val = if untitled() { dialog_close_clear() } else { 0.0 }
               lists_sized_now.val = true
               // (what holds what it holds giving way to the height the dialog leaves it)
-              c.gives_way(
-                measured_body(c, keyed.serial, id, whole, fn() {
-                  c.box(style=column.then(column_fill), fn() { draw_panel_body(x, c, close, keyed~) }) |> ignore
-                }),
-              )
+              c.gives_way(measured_body(c, keyed.serial, id, whole, fn() { draw_panel_body(x, c, close, keyed~) }))
               panel_sides_in.val = was.0
               rows_out.val = was.1
               words_in_now.val = was.2
@@ -324,7 +318,3 @@ fn centred_part_in(over : Double, under : Double) -> @ui.Style {
   @ui.style(w=Full, pl=room(dialog_pad), pt=room(over), pr=room(dialog_pad), pb=room(under))
 }
 
-///|
-/// A dialog's column filling what is capped round it (panel_centred's, a share of the window tall).
-// kept across runs: a value (no field of it changes)
-let column_fill : @ui.Style = @ui.css("w=Full h=Full")
