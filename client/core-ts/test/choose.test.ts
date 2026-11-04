@@ -214,6 +214,16 @@ test("devin_is_offered_after_cursor_each_model_at_its_own_thinking_levels", () =
   assert.equal(machineMeta({ runtime: "devin", cwd: "/tmp/x" }, 0).meta, "Devin · /tmp/x");
 });
 
+test("an_account_that_has_reported_no_levels_does_not_hold_back_those_that_have", () => {
+  const levels = ["low", "medium", "high", "xhigh", "max", "ultra"];
+  const said = { id: "said", runtimes: ["codex"], models: ["gpt-6.1-terra"], check: { modelEfforts: { codex: { "gpt-6.1-terra": levels } } } };
+  const unknown = { id: "unknown", runtimes: ["codex"], models: ["gpt-6.1-terra"], check: {} };
+  assert.deepEqual(models({ profiles: [said, unknown] }, 0)[0].efforts.codex, levels);
+  assert.deepEqual(models({ profiles: [unknown] }, 0)[0].efforts.codex, ["minimal", "low", "medium", "high", "xhigh"], "none has said: the runtime's usual ones");
+  const pinned = resolve(models({ profiles: [said, unknown] }, 0), { runtime: "codex", model: "gpt-6.1-terra", profile: "unknown", effort: "ultra" });
+  assert.equal(pinned.effort, null, "kept to one account, its own levels");
+});
+
 test("model_efforts_follow_the_account_and_survive_resolving_saved_choices", () => {
   const overview = {
     profiles: [
