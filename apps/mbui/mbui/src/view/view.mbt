@@ -673,6 +673,9 @@ pub struct Tree {
   mut list_feel : () -> (ListFeel, Double)
   /// what waits on all of it laid out as it is next, whatever came out otherwise (Tree::once_laid_out)
   laid_waits : Array[() -> Unit]
+  /// Outside events made ready by a layout, handed to the host only after the layout and its cause have ended.
+  laid_events : Array[() -> Unit]
+  mut telling_laid_events : Bool
   /// the node a finger or the pointer is held on, and the one the pointer is over (of those that take a press): each
   /// node's own cell told as it comes or goes (View::pressed, View::pointed)
   mut pressing : NodeId?
@@ -893,6 +896,8 @@ pub fn Tree::new(
     glides_gone: fn(_) {  },
     list_feel: fn() { (Desktop, 1.0) },
     laid_waits: [],
+    laid_events: [],
+    telling_laid_events: false,
     pressing: None,
     pointed: None,
     lit_every: false,
@@ -5596,6 +5601,7 @@ pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> U
   if was < 0.0 {
     self.settle_now(at)
   }
+  self.laid_events_told()
 }
 
 ///|
@@ -5640,6 +5646,7 @@ fn Tree::settle_now(self : Tree, at : Double) -> Unit {
   self.cause_at = at
   @signals.untracked(fn() { self.bring_to(at) })
   self.cause_at = cause
+  self.laid_events_told()
 }
 
 ///|
@@ -5955,6 +5962,7 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
   self.clock_to(upto)
   self.laid_out(upto, paint_at=dmax(upto, self.presentation_at))
   self.standing = was_standing
+  self.laid_events_told()
   let drawn = self.drawn_due
   self.drawn_due = false
   if self.telling_due {
@@ -5978,6 +5986,7 @@ pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
   self.pull()
   if self.last_w >= 0.0 { self.laid_out(at) }
   self.standing = was_standing
+  self.laid_events_told()
 }
 
 ///|
@@ -7397,6 +7406,32 @@ pub fn Tree::on_target(self : Tree, f : (Target, Array[Target], Double, Double) 
 pub fn Tree::on_glides(self : Tree, glides : (Int, () -> Double?) -> Unit, gone : (Int) -> Unit) -> Unit {
   self.glides = glides
   self.glides_gone = gone
+}
+
+///|
+/// Hand an outside event made ready by this layout to its host when the layout and any input causing it are whole.
+/// The callback must only enqueue the event: a host drawing a frame takes that event after its input snapshot.
+pub fn View::after_layout_event(self : View, enqueue : (Double) -> Unit) -> Unit {
+  guard self.alive() else { return }
+  let at = self.tree.logic_at()
+  if self.tree.layout_locked {
+    self.tree.laid_events.push(fn() { if self.alive() { enqueue(at) } })
+  } else {
+    enqueue(at)
+  }
+}
+
+///|
+fn Tree::laid_events_told(self : Tree) -> Unit {
+  if self.layout_locked || self.standing || self.committing > 0 || self.cause_at >= 0.0 || self.telling_laid_events {
+    return
+  }
+  self.telling_laid_events = true
+  while !self.laid_events.is_empty() {
+    let enqueue = self.laid_events.remove(0)
+    @signals.untracked(enqueue)
+  }
+  self.telling_laid_events = false
 }
 
 ///|

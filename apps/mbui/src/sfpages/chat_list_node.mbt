@@ -565,27 +565,38 @@ pub fn chat_list_node(
   // page (by entries: a page of what the chat does not show moves it too); near the end of a window short of the
   // chat's, the page after; the chat's latest page come in place of a window short of its end, asked for: at its end
   // at once. Asked as what is in sight changes, from where it is laid out then.
-  v.reacts(fn() { (shown.get(), view().map(fn(cv) { (cv.more, cv.newer, cv.first_entry, cv.last_entry) })) }, fn(now) {
-    let (in_sight, _) = now
-    let rd = rd0
-    guard @signals.untracked(view) is Some(cv) else { return }
-    let keys = @signals.untracked(rows).map(id_of)
-    if cv.messages.length() > 0 || cv.more {
-      rd.placed = true
-    }
-    if rd.latest_asked && !cv.newer {
-      rd.latest_asked = false
+  v.reacts(fn() { view().map(fn(cv) { cv.newer }) }, fn(newer) {
+    if rd0.latest_asked && newer == Some(false) {
+      rd0.latest_asked = false
       follows.set(true)
       scroll.glide_to(scroll.most(), glide=false)
     }
-    guard cv.thread is Some(thread) else { return }
-    let first = in_sight.get(0).bind(fn(k) { keys.search(k) })
-    let last = in_sight.last().bind(fn(k) { keys.search(k) })
+  })
+  // A page may answer synchronously. Issue the request after the layout publishing `shown`, as an outside event,
+  // even when another input arrives before the next display frame.
+  @ui.react_laid(v, fn() {
+    let in_sight = shown.get()
+    let positions = row_positions.get()
+    let first = in_sight.get(0).bind(fn(k) { positions.get(k) })
+    let last = in_sight.last().bind(fn(k) { positions.get(k) })
+    let page = view().map(fn(cv) {
+      (cv.more, cv.newer, cv.first_entry, cv.last_entry, cv.thread, cv.messages.length(),
+        cv.messages.get(0).map(fn(m) { m.seq }), cv.messages.last().map(fn(m) { m.seq }))
+    })
+    (first, last, rows().length(), page)
+  }, fn(now) {
+    let (first, last, count, page) = now
+    let rd = rd0
+    guard page is Some((more, newer, first_entry, last_entry, thread, messages, first_seq, last_seq)) else { return }
+    if messages > 0 || more {
+      rd.placed = true
+    }
+    guard thread is Some(thread) else { return }
     match first {
-      Some(i) if cv.more && rd.placed && i <= 2 => {
-        let entry = match cv.first_entry {
+      Some(i) if more && rd.placed && i <= 2 => {
+        let entry = match first_entry {
           Some(f) => f
-          None => cv.messages.get(0).map(fn(m) { m.seq }).unwrap_or(-1.0)
+          None => first_seq.unwrap_or(-1.0)
         }
         if @signals.untracked(fn() { rd.asked.get() }) != entry {
           rd.asked.set(entry)
@@ -599,10 +610,10 @@ pub fn chat_list_node(
       _ => ()
     }
     match last {
-      Some(i) if cv.newer && rd.placed && i >= keys.length() - 3 => {
-        let entry = match cv.last_entry {
+      Some(i) if newer && rd.placed && i >= count - 3 => {
+        let entry = match last_entry {
           Some(l) => l
-          None => cv.messages.last().map(fn(m) { m.seq }).unwrap_or(-1.0)
+          None => last_seq.unwrap_or(-1.0)
         }
         if @signals.untracked(fn() { rd.asked_newer.get() }) != entry {
           rd.asked_newer.set(entry)
