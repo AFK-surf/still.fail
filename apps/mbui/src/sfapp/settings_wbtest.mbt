@@ -103,7 +103,12 @@ test "settings: the account, the workspace's rows and how each stands, this devi
   assert_true(t.find("星火工作室") is Some(_))
   assert_true(t.find("Owner · 3 人 · 2 人待加入") is Some(_))
   assert_true(t.find("1/2 在线") is Some(_))
+  // this device's, under the first screen since a card's rows are their words 24 in (2026-11-04): scrolled to, and back
+  t.wheel(195.0, 422.0, 3000.0)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("外观") is Some(_))
+  t.wheel(195.0, 422.0, -3000.0)
+  t.run_for(@ui.move_most_ms)
   // a tap on the account's card: the account
   t.tap_text("lin@example.com")
   t.run_for(@ui.move_most_ms)
