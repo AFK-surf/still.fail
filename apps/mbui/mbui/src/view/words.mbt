@@ -317,10 +317,14 @@ pub fn View::shadow(self : View, cast : Live[(Double, Double, Int64)]) -> View {
 
 ///|
 /// How wide it may grow at most (points; None: as wide as its holder lets it), as it changes: layout's.
-pub fn View::max_width(self : View, w : Live[Double?]) -> View {
+/// With `within`, no wider than its holder's content box either, resolved during this layout.
+pub fn View::max_width(self : View, w : Live[Double?], within? : Bool = false) -> View {
   self.bind(MaxWidth, w, Layout, fn(w) {
     // (said: as said, or, one line of words in a column, within the column's width: Tree::capped_applied)
-    self.tree.nodes[self.at].max_w_said = Some(w)
+    self.tree.nodes[self.at].max_w_said = Some(match w {
+      Some(w) => if within { Within(w) } else { Pt(w) }
+      None => Auto
+    })
     self.tree.capped_applied(self.at)
   })
   self
@@ -550,9 +554,13 @@ pub fn View::wraps(self : View, lines : Live[Double?]) -> View {
 
 ///|
 /// How wide it is at least (points; None: as what it holds makes it), as it changes: layout's.
-pub fn View::min_width(self : View, w : Live[Double?]) -> View {
+/// With `within`, this minimum is limited to its holder's content box, resolved during this layout.
+pub fn View::min_width(self : View, w : Live[Double?], within? : Bool = false) -> View {
   self.bind(MinWidth, w, Layout, fn(w) {
-    self.tree.nodes[self.at].min_w_said = Some(w)
+    self.tree.nodes[self.at].min_w_said = Some(match w {
+      Some(w) => if within { Within(w) } else { Pt(w) }
+      None => Auto
+    })
     self.tree.give_way_applied(self.at)
   })
   self

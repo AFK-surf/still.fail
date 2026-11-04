@@ -9,17 +9,9 @@
 pub fn ask_card_room_node(parent : @view.View, body : (@view.View) -> Unit, least? : Double = 320.0) -> @view.View {
   parent.box(fn(room) {
     room
-    .min_width(By(fn() {
-      let w = match parent.laid_size_told() {
-        Some((w, _)) => w
-        None => least
-      }
-      Some(dmin(least, w))
-    }))
+    .min_width(Is(Some(least)), within=true)
     // (never wider than what holds it)
-    .max_width(By(fn() {
-      Some(dmin(560.0, parent.laid_size_told().map(fn(z) { z.0 }).unwrap_or(560.0)))
-    }))
+    .max_width(Is(Some(560.0)), within=true)
     |> ignore
     body(room)
   })

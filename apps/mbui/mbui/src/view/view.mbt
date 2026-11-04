@@ -434,10 +434,10 @@ struct Node {
   /// how much it gives way and how narrow it may be as said of it (View::shrink, View::min_width; None: not said, as
   /// what it is makes them: Tree::give_way_applied)
   mut shrink_said : Double?
-  mut min_w_said : Double??
+  mut min_w_said : @flex.Dim?
   /// how wide it may be at most as said of it (View::max_width; None: not said, as what it is makes it:
   /// Tree::capped_applied)
-  mut max_w_said : Double??
+  mut max_w_said : @flex.Dim?
   /// what it takes over holds for is scrolling what it holds (View::claims' `scrolls`)
   mut claims_scroll : Bool
   /// where it scrolls what it holds up and down (View::scrolls): the node holding that, whose height less its own is how
@@ -6393,20 +6393,13 @@ fn Tree::capped_applied(self : Tree, at : Int) -> Unit {
   let in_column = p >= 0 && !(self.nodes[p].flex.style.direction is (Row | RowReverse))
   let st = n.flex.style
   let one_line = (n.look.words != "" || !n.look.runs.is_empty()) && !n.look.words_look.wrap
-  let said = match n.max_w_said {
-    Some(Some(w)) => Some(w)
-    _ => None
-  }
   let max : @flex.Dim = if one_line && in_column && st.width_kind() == @flex.LEN_AUTO {
-    match said {
-      Some(w) => Within(w)
-      None => Pct(100.0)
+    match n.max_w_said {
+      Some(Pt(w) | Within(w)) => Within(w)
+      _ => Pct(100.0)
     }
   } else {
-    match said {
-      Some(w) => Pt(w)
-      None => Auto
-    }
+    n.max_w_said.unwrap_or(Auto)
   }
   if st.get_max_width() != max {
     st.set_max_width(max)
@@ -6441,8 +6434,7 @@ fn Tree::give_way_applied(self : Tree, at : Int) -> Unit {
     }
   }
   let min : @flex.Dim = match n.min_w_said {
-    Some(Some(w)) => Pt(w)
-    Some(None) => Auto
+    Some(w) => w
     // (along a row alone, as an old view's least of one-line words is: in a column, cut to the column's width)
     None =>
       if shorter && along {
