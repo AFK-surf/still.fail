@@ -305,48 +305,23 @@ pub fn seg_fill_node(
   said? : String = "",
 ) -> @view.View {
   parent.box(fn(track) {
-    // how its options share the room its track was laid out in, as seg's: where their words with their sides come to
-    // more than it, fitted to it (seg's fitted); else none, the layout sharing it alike (none narrower than its words
-    // with their sides: Seg's flex)
-    let fit : () -> Fitted? = fn() {
-      match track.laid_size_told() {
-        Some((w, _)) => {
-          track.words_redone() |> ignore
-          let c = @ui.current()
-          let base = @ui.tree_theme().text_size(Base).0
-          let size = c.sp(base)
-          let room = w - 2.0 * seg_inset
-          let need = labels().fold(init=0.0, fn(s, l) { s + choice_words_w(c, l, size, tree=true) + 2.0 * seg_side })
-          if need > room + 0.5 {
-            Some(fitted(c, labels(), room, base, 400, seg_side, seg_least, tree=true))
-          } else {
-            None
-          }
-        }
-        None => None
-      }
-    }
-    let menu = fn() { fit() is Some({ fit: Menu, .. }) }
-    let widths = fn() {
-      match fit() {
-        Some({ widths, fit: Whole | Smaller(_) }) => widths
-        _ => []
-      }
-    }
-    let smaller = fn() {
-      match fit() {
-        Some({ fit: Smaller(k), .. }) => k
-        _ => 1.0
-      }
+    // Capture the words and their face before layout; their widths are fitted to this track's current room below.
+    let sizing = fn() {
+      track.words_redone() |> ignore
+      let c = @ui.current()
+      let theme = @ui.tree_theme()
+      let (size, line) = theme.text_size(Base)
+      (labels(), size, line, c.sp(size), c.sp(line), theme.tabular)
     }
     let options : Array[@view.View] = []
+    let words : Array[@view.View] = []
     track
     .row(Is(true))
     .padding(Is((seg_inset, seg_inset, seg_inset, seg_inset)))
     .height(Is(Some(segmented_narrow_h)))
     .radius(Is(seg_radius))
     .ground(By(fn() { alpha(theme().p.text, 0.06) }))
-    .says(By(fn() { if menu() { None } else { Some(@view.said(RadioGroup, label=said)) } }))
+    .says(Is(Some(@view.said(RadioGroup, label=said))))
     // (a roving group, as @kit.toggle_group's: Tab stops at the chosen one alone; ← and → go to the one before and after,
     // round from the ends, Home and End to the first and the last, each chosen and its focus as it is)
     .on_key(fn(k) {
@@ -382,8 +357,9 @@ pub fn seg_fill_node(
     })
     |> ignore
     // side by side: the thumb under the options' words, and the options
-    track.show(fn() { !menu() }, fn(strip) {
+    let make_strip = fn(strip : @view.View) {
       options.clear()
+      words.clear()
       strip.row(Is(true)).grow(Is(1.0)) |> ignore
       // (each option's width as laid out, told as it is: where the thumb goes while the layout shares the room; a cell
       // each, all made before anything reads them, with this strip, as many as there are options)
@@ -391,12 +367,7 @@ pub fn seg_fill_node(
         @signals.signal(0.0)
       })
       let w_of = fn(k : Int) {
-        let ws = widths()
-        if ws.length() > 0 {
-          ws.get(k).unwrap_or(0.0)
-        } else {
-          laid.get(k).map(fn(l) { l.get() }).unwrap_or(0.0)
-        }
+        laid.get(k).map(fn(l) { l.get() }).unwrap_or(0.0)
       }
       let x_of = fn(k : Int) {
         let mut x = seg_inset
@@ -467,12 +438,16 @@ pub fn seg_fill_node(
         }
       }
       // the thumb: where its cover has it, its corner concentric in the track's; faded under the lens
-      strip.show(fn() { w_of(cover.get().1) > 0.0 }, fn(th) {
+      strip.box(fn(th) {
+        // The option widths are this frame's layout output. The thumb is paint over those options: its
+        // changing rectangle must not create a node or feed its measured width back into layout.
+        let base = segmented_narrow_h - 2.0 * seg_inset
         th
         .over(Is(true))
         .offset(By(fn() { (rect().map(fn(r) { r.0 }).unwrap_or(seg_inset) - seg_inset, 0.0) }))
-        .width(By(fn() { rect().map(fn(r) { r.2 }) }))
-        .height(Is(Some(segmented_narrow_h - 2.0 * seg_inset)))
+        .width(Is(Some(base)))
+        .height(Is(Some(base)))
+        .ground_drawn(By(fn() { (0.0, 0.0, rect().map(fn(r) { r.2 }).unwrap_or(0.0) - base, 0.0) }))
         .radius(Is(inner_corner(seg_radius, seg_inset)))
         .corners(By(fn() {
           match rect() {
@@ -485,14 +460,16 @@ pub fn seg_fill_node(
         // (as the old thumb: faded only while the lens is out, not past 1 as the hand's spring comes back past 0)
         .alpha(By(fn() {
           let l = lens()
-          if l > 0.0 {
+          if rect() is None {
+            0.0
+          } else if l > 0.0 {
             1.0 - dmin(1.0, l)
           } else {
             1.0
           }
         }))
         |> ignore
-      })
+      }) |> ignore
       // its options: each its share (alike as laid out till the track's room is known), its words in its middle, the
       // chosen one's in the ink, the others muted, smaller as fitted
       for k, told in laid {
@@ -510,19 +487,7 @@ pub fn seg_fill_node(
         strip.box(fn(o) {
           o
           // (alike as the layout shares the room, none narrower than its words with their sides; else as fitted)
-          .grow(By(fn() { if widths().length() > 0 { 0.0 } else { 1.0 } }))
-          .min_width(By(fn() {
-            if widths().length() > 0 {
-              None
-            } else {
-              o.words_redone() |> ignore
-              let c = @ui.current()
-              Some(choice_words_w(c, label(), c.sp(@ui.tree_theme().text_size(Base).0), tree=true) + 2.0 * seg_side)
-            }
-          }))
-          // (a basis of none where its width is said: flex's basis would else be taken over it)
-          .basis(By(fn() { if widths().length() > 0 { None } else { Some(0.0) } }))
-          .width(By(fn() { if widths().length() > 0 { Some(w_of(k)) } else { None } }))
+          .grow(Is(0.0))
           .height(Is(Some(segmented_narrow_h - 2.0 * seg_inset)))
           .row(Is(true))
           .lines_up(Is(Some(Middle)))
@@ -558,23 +523,13 @@ pub fn seg_fill_node(
               None => ()
             }
           })
-          o.box(fn(w) {
+          let word = o.box(fn(w) {
             w
             .words(By(label))
-            .words_look(By(fn() {
-              // (Base, on its own line, as Seg's words: both that much smaller where fitted as drawn, after the system's size
-              // of words applies, as Ctx::words_smaller has them: said by the size that draws them so)
-              o.words_redone() |> ignore
-              let (size, line) = @ui.tree_theme().text_size(Base)
-              let k = smaller()
-              let c = @ui.current()
-              let (size, line) = if k == 1.0 { (size, line) } else { (c.sp_of(c.sp(size) * k), c.sp_of(c.sp(line) * k)) }
-              { size, weight: 400, line, wrap: false, tracking: @view.letters_own, balance: false }
-            }))
             .ink(By(fn() { if on() { theme().p.text } else { theme().p.muted } }))
             |> ignore
           })
-          |> ignore
+          words.push(word)
         })
         |> ignore
       }
@@ -582,23 +537,29 @@ pub fn seg_fill_node(
       // larger as it is held (past the track's edges), raised off it by a shadow as far as it is in the finger
       strip.show(fn() { lens() > 0.0 }, fn(l) {
         let full = fn() { dmin(1.0, lens()) }
+        let base = segmented_narrow_h - 2.0 * seg_inset
+        let scale = fn() { 1.0 + (seg_lens_grow - 1.0) * lens() }
         l
         .over(Is(true))
-        .offset(By(fn() { (rect().map(fn(r) { r.0 }).unwrap_or(seg_inset) - seg_inset, 0.0) }))
-        .width(By(fn() { rect().map(fn(r) { r.2 }) }))
-        .height(Is(Some(segmented_narrow_h - 2.0 * seg_inset)))
+        .offset(By(fn() {
+          let r = rect().unwrap_or((seg_inset, 0.0, base, base))
+          (r.0 - seg_inset + (1.0 - scale()) * (r.2 - base) / 2.0, 0.0)
+        }))
+        .width(Is(Some(base)))
+        .height(Is(Some(base)))
+        .ground_drawn(By(fn() { (0.0, 0.0, rect().map(fn(r) { r.2 }).unwrap_or(base) - base, 0.0) }))
         // (round as a pill is said to be, Full, as the old lens's capsule: as round as it can be)
         .radius(Is(1.0e6))
         .glass(Is(Some(glass_knob())))
         .shadow(By(fn() { (seg_lens_shadow * full(), seg_lens_shadow_y * full(), @ui.tree_theme().shadow) }))
         .alpha(By(full))
-        .scale(By(fn() { 1.0 + (seg_lens_grow - 1.0) * lens() }))
+        .scale(By(scale))
         |> ignore
       })
-    })
+    }
     // not side by side: the chosen one's words (cut short where they must be), a chevron at its end; pressed, a pick of
     // them all beside it, the chosen one marked
-    track.show(menu, fn(m) {
+    let make_menu = fn(m : @view.View) {
       let words = fn() { labels().get(chosen()).unwrap_or("") }
       let opened : @signals.Signal[Int] = @signals.signal(0)
       let open = fn() {
@@ -641,7 +602,34 @@ pub fn seg_fill_node(
       m.box(fn(w) { styled_words(w.grow(Is(1.0)), words, fn() { seg_menu_words }).ellipsis_past(Is(true)) |> ignore })
       |> ignore
       icon_node(m, "chevron-down", seg_chevron, By(fn() { theme().p.muted })) |> ignore
-    })
+    }
+    track.layout_box(By(sizing), fn(l, input) {
+      let (labels, size, line, scaled, scaled_line, tabular) = input
+      let fit = fitted_at(labels, l.width, size, scaled, 400, seg_side, seg_least, tabular)
+      if fit.fit is Menu {
+        options.clear()
+        words.clear()
+        track.says(Is(None)) |> ignore
+        let menu = l.child("menu", make_menu)
+        l.measure(menu, l.width, height=l.height) |> ignore
+        l.place(menu, 0.0, 0.0)
+      } else {
+        track.says(Is(Some(@view.said(RadioGroup, label=said)))) |> ignore
+        let strip = l.child("strip", make_strip)
+        let factor = match fit.fit { Smaller(k) => k; _ => 1.0 }
+        let c = @ui.current()
+        let (size, line) = if factor == 1.0 { (size, line) } else { (c.sp_of(scaled * factor), c.sp_of(scaled_line * factor)) }
+        for k, o in options {
+          o.width(Is(Some(fit.widths.get(k).unwrap_or(0.0)))) |> ignore
+          match words.get(k) {
+            Some(w) => w.words_look(Is({ size, weight: 400, line, wrap: false, tracking: @view.letters_own, balance: false })) |> ignore
+            None => ()
+          }
+        }
+        l.measure(strip, l.width, height=l.height) |> ignore
+        l.place(strip, 0.0, 0.0)
+      }
+    }) |> ignore
   })
 }
 
