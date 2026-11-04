@@ -845,6 +845,33 @@ test "wide: a download of unknown length is still shown" {
 }
 
 ///|
+test "wide: a downloading update's ring sits in the middle of its key, as the filter's mark does" {
+  let t = wide_tester([], mode="chat")
+  @sffixture.fixture_update("0.1.9999")
+  @sffixture.fixture_update_goes("0.1.9999", "downloading", percent=40, away=false)
+  t.run_for(@ui.move_most_ms)
+  let (x, y, w, h) = t.query(Button, label="正在下载 0.1.9999").unwrap().rect
+  // the ring's pieces drawn within the key: as far from its middle on every side
+  let ring = t.drawn_lines().filter(fn(l) { l.0 >= x && l.0 <= x + w && l.1 >= y && l.1 <= y + h })
+  assert_true(ring.length() > 0, msg="the ring drawn in the key")
+  let mut left = x + w
+  let mut top = y + h
+  let mut right = x
+  let mut bottom = y
+  for l in ring {
+    left = dmin(left, dmin(l.0, l.2))
+    right = dmax(right, dmax(l.0, l.2))
+    top = dmin(top, dmin(l.1, l.3))
+    bottom = dmax(bottom, dmax(l.1, l.3))
+  }
+  let (mx, my) = ((left + right) / 2.0, (top + bottom) / 2.0)
+  assert_true(
+    (mx - (x + w / 2.0)).abs() < 0.5 && (my - (y + h / 2.0)).abs() < 0.5,
+    msg="the ring's middle \{(mx, my)}, the key's \{(x + w / 2.0, y + h / 2.0)}",
+  )
+}
+
+///|
 test "wide: a newer build of the desktop app ready: 重启更新 the update key in the sidebar's first row before the filter, as large as it; folded, past the rail, the page bar's start clear of it" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
