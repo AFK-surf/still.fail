@@ -14,7 +14,7 @@ import { rememberCodexRollout } from "../read/transcript.ts";
 import { LiveFromCodex, chars, type CodexLiveState } from "./live.ts";
 import { linkCodexAuth, type Env } from "./machine-logins.ts";
 import { keyOfRunner, lentFile, sandboxed, syncNow } from "./sandbox.ts";
-import { AgentProcess, ackedOffset, debug, findRunner, linesWithin, outFile, readFrom, runnerId, writeFrom } from "./process.ts";
+import { AgentProcess, ackedOffset, debug, findRunner, linesWithin, outFile, runnerId } from "./process.ts";
 import { accessKind, codexOverrides, expandRoute, isMachine, profileEnv, profileFast, profileModel, profileVia } from "./profiles.ts";
 import { TOOL_SERVERS, cleanEnv, failureOf, unreachable, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import type { RunnerInfo } from "./runner.ts";
@@ -227,14 +227,11 @@ class Host {
   private orphans: Map<string, Notice[]> | null = null;
   /// After a crash: where each thread stood when the station that crashed stopped acknowledging.
   recovered = new Map<string, Recovered>();
-  /// Where in its output each turn running began, and where what a station reads after a crash begins (`keep` keeps it):
-  /// the earliest of them, else just past the line that ended the last one.
+  /// Where in its output each turn running began, and where what a station reads after a crash begins: the earliest of
+  /// them, else just past the line that ended the last one. Told to its runner with the ack of the line it changed on
+  /// (`keepFrom`), which keeps it with that ack: never ahead of what was acknowledged, whatever of the acks is lost.
   private turnFrom = new Map<string, number>();
-  /// A turn that ended, let go of from the next line on: the line that ended it may not be acknowledged yet, and what a
-  /// crash reads again never begins past what was (a crash in between would lose that the turn ran).
-  private ended: { thread: string; to: number } | null = null;
   private keptFrom = -1;
-  keep: ((from: number) => void) | null = null;
   /// Where the station before kept, handed over (Host.adopt `from`).
   handedFrom = 0;
   readonly profile: string;
@@ -275,7 +272,6 @@ class Host {
     // A profile's own app-server (its account's limits and models, no session's work) runs here; a session's in its
     // sandbox when the station runs things there.
     host.proc = await AgentProcess.start(data, runnerId("codex", key), command, hostArgs(profile), childEnv, cwd, { ...host.processOptions(label), local: key === profile.id });
-    host.keep = (from) => (writeFrom(data, host.proc.info, from), host.proc.keepFrom(from));
     return host;
   }
 
@@ -290,7 +286,6 @@ class Host {
     if (from !== undefined) {
       host.handedFrom = from;
       host.turnFrom.set(BEFORE, from);
-      host.keptFrom = from;
     }
     host.orphans = new Map();
     wall.after(ORPHANS_MS, () => {
@@ -300,7 +295,7 @@ class Host {
       host.orphans = null;
     });
     host.proc = AgentProcess.adopt(info, host.processOptions(`codex app-server ${profile}`));
-    if (from !== undefined) host.proc.keepFrom(from);
+    if (from !== undefined) host.reckon(from);
     return host;
   }
 
@@ -324,27 +319,19 @@ class Host {
   }
 
   private noteTurn(thread: string, started: boolean, from: number, to: number) {
-    if (started) {
-      this.running(thread, from);
-      this.reckon(from);
-    } else this.ended = { thread, to };
+    if (started) this.running(thread, from);
+    else this.turnFrom.delete(thread);
+    this.reckon(to);
   }
 
   reckon(to: number) {
     const at = this.turnFrom.size > 0 ? Math.min(...this.turnFrom.values()) : to;
     if (at === this.keptFrom) return;
     this.keptFrom = at;
-    this.keep?.(at);
+    this.proc.keepFrom(at);
   }
 
   private onLine(line: string, from = 0, to = 0) {
-    // The line before has been acknowledged (lines are handled one after another, each acknowledged once handled).
-    if (this.ended !== null) {
-      const { thread, to: past } = this.ended;
-      this.ended = null;
-      this.turnFrom.delete(thread);
-      this.reckon(past);
-    }
     let msg: Json;
     try {
       msg = JSON.parse(line);
@@ -435,12 +422,13 @@ class Host {
   }
 
   snapshot(): CodexHostSnapshot {
-    return { runner: this.proc.info.id, signature: this.signature, nextId: this.nextId, ready: this.ready, ...(this.key !== this.profile ? { key: this.key } : {}), ...(this.loginStale ? { loginStale: true } : {}), ...(this.runtimeStale ? { runtimeStale: true } : {}) };
+    return { runner: this.proc.info.id, signature: this.signature, nextId: this.nextId, ready: this.ready, ...(this.keptFrom >= 0 ? { keep: this.keptFrom } : {}), ...(this.key !== this.profile ? { key: this.key } : {}), ...(this.loginStale ? { loginStale: true } : {}), ...(this.runtimeStale ? { runtimeStale: true } : {}) };
   }
 }
 
 /// `key`: the driver's key for it when not its profile's (`hostKey`); none from a station before it.
-export type CodexHostSnapshot = { runner: string; signature: string; nextId: number; ready: boolean; key?: string; loginStale?: boolean; runtimeStale?: boolean };
+/// `keep`: where what is read again after a crash begins (Host `turnFrom`); none from a station before it.
+export type CodexHostSnapshot = { runner: string; signature: string; nextId: number; ready: boolean; key?: string; loginStale?: boolean; runtimeStale?: boolean; keep?: number };
 
 /// A thread as a next station takes it up (codex.rs HandedThread), with what its app-server needs (HandedHost).
 export type CodexSnapshot = {
@@ -707,13 +695,13 @@ export class CodexDriver implements AgentDriver {
   }
 
   /// An app-server a runner keeps, with no snapshot: what the previous station had handled of it is read again to know
-  /// where each thread stands, from where the earliest turn running then began (`readFrom`).
+  /// where each thread stands, from where the earliest turn running then began (its runner keeps it: `ackedOffset`).
   private async takeUp(profile: Profile, info: RunnerInfo, key = profile.id): Promise<Host> {
     const out = outFile(this.data, info.id);
-    const at = await ackedOffset(info, out);
+    const { at, keep } = await ackedOffset(info, out);
     const recovered = new Map<string, Recovered>();
     const began = new Map<string, number>();
-    for (const { text: line, at: lineAt } of linesWithin(out, readFrom(this.data, info), at)) {
+    for (const { text: line, at: lineAt } of linesWithin(out, keep ?? 0, at)) {
       if (UNTOLD.some((m) => line.startsWith(m))) continue;
       let msg: Json;
       try {
@@ -741,7 +729,6 @@ export class CodexDriver implements AgentDriver {
     // Ids above any the previous station can have sent.
     const host = Host.adopt(profile.id, info, same ? hostSignature(profile) : "unknown", wall.now(), true, recovered, key);
     host.version = versionInOutput(out);
-    host.keep = (from) => (writeFrom(this.data, info, from), host.proc.keepFrom(from));
     for (const [thread, r] of recovered) {
       if (!r.busy) continue;
       host.turns.add(thread);
@@ -892,14 +879,11 @@ export class CodexDriver implements AgentDriver {
       const info = findRunner(this.data, id);
       if (!info) throw new Error(`codex app-server ${key} was not taken up: no runner keeps it`);
       const host = handed
-        ? Host.adopt(profileId, info, handed.host.signature, handed.host.nextId, handed.host.ready, undefined, key, readFrom(this.data, info))
+        ? Host.adopt(profileId, info, handed.host.signature, handed.host.nextId, handed.host.ready, undefined, key, handed.host.keep ?? 0)
         : await this.takeUp(options.profile, info, key);
       if (handed?.host.loginStale) host.loginStale = true;
       if (handed?.host.runtimeStale) host.runtimeStale = true;
-      if (handed) {
-        host.version = versionInOutput(outFile(this.data, info.id));
-        host.keep = (from) => (writeFrom(this.data, info, from), host.proc.keepFrom(from));
-      }
+      if (handed) host.version = versionInOutput(outFile(this.data, info.id));
       this.hosts.set(key, host);
       return host;
     });

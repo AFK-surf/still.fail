@@ -13,7 +13,7 @@ import { delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { CodexDriver, classifyCodexError, type CodexDriverOptions } from "../src/agents/codex.ts";
-import { readFrom, runnerId } from "../src/agents/process.ts";
+import { ackedOffset, runnerId } from "../src/agents/process.ts";
 import { allLeft, existingRunners } from "../src/agents/runner.ts";
 import type { OpenOptions, Profile, RuntimeEvent } from "../src/agents/runtime.ts";
 import { readAgentEnvFrom } from "../src/ops/agent-env.ts";
@@ -706,10 +706,6 @@ describe("the Codex driver", { concurrency: true }, () => {
       }
       return found;
     };
-    // That turn ended, and nothing has come since: the line that ended it may not be acknowledged yet, so a crash
-    // still reads from where that turn began (from past that line, it would not know the turn ran).
-    await eventually(() => readFrom(data, info) > 0);
-    assert.equal(readFrom(data, info), began(one.id()));
     const gate = gates(p.dump, "kept");
     await two.prompt("gate:6:3:kept");
     await a2.until((e) => deltas(e).length >= 3);
@@ -719,9 +715,11 @@ describe("the Codex driver", { concurrency: true }, () => {
     await a.until(ended(2));
     assert.ok(began(two.id()) > 0);
     assert.equal(info.keeps, true, "the runner says it keeps what the station keeps");
-    assert.equal(readFrom(data, info), began(two.id()), "from where the turn running began");
     first.detach();
     await allLeft();
+    // The runner says what was acknowledged and kept, both from the last ack: from where the turn running began.
+    const out = join(data, "run", "runners", `${info.id}.out`);
+    assert.equal((await ackedOffset(info, out)).keep, began(two.id()), "from where the turn running began");
     await gate.open("a");
     await eventually(gate.said);
     const next = driver();
@@ -736,11 +734,16 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.deepEqual(deltas(all), Array.from({ length: 6 }, (_, i) => `d${i} `), "every delta once, in order");
     assert.equal(b2.events.filter((e) => e.type === "turnStarted").length, 1, "read again as running");
     assert.equal(b.events.filter((e) => e.type === "turnStarted").length, 0, "the one whose turns had ended, idle");
-    // None running now (and a line since its end): reading again begins past it.
+    // None running now: reading again begins past it.
     const twoBegan = began(two.id());
     await takenTwo.prompt("say:after");
     await b2.until(ended(2));
-    await eventually(() => readFrom(data, info) > twoBegan);
+    next.detach();
+    await allLeft();
+    const now = await ackedOffset(info, out);
+    assert.ok(now.keep !== null && now.keep > twoBegan && now.keep <= now.at, `${twoBegan} < ${now.keep} <= ${now.at}`);
+    // Taken up once more, so the driver's shutdown ends it.
+    await driver().adopt(options(p, { resume: two.id() }), null, () => {});
   });
 
   // On a station (2026-11-02) a next station asked a profile's quota as it started: it took the app-server up as after a

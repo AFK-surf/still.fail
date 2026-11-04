@@ -90,7 +90,7 @@ impl Runner {
 
     fn connect(&self) -> Client {
         let stream = UnixStream::connect(self.info["socket"].as_str().unwrap()).unwrap();
-        Client { reader: BufReader::new(stream.try_clone().unwrap()), writer: stream }
+        Client { reader: BufReader::new(stream.try_clone().unwrap()), writer: stream, said: None }
     }
 
     fn files(&self) -> Vec<String> {
@@ -134,6 +134,8 @@ fn ready_line(stdout: impl std::io::Read) -> Value {
 struct Client {
     reader: BufReader<UnixStream>,
     writer: UnixStream,
+    /// What the runner said as it was attached to (where it begins): kept aside, the rest read on past it.
+    said: Option<Value>,
 }
 
 impl Client {
@@ -143,13 +145,19 @@ impl Client {
 
     /// The next message, or None once the runner closed the connection.
     fn recv(&mut self) -> Option<Value> {
-        let mut line = String::new();
-        match self.reader.read_line(&mut line) {
-            Ok(0) => None,
-            Ok(_) => Some(serde_json::from_str(&line).unwrap()),
-            // A connection the runner shut down can also end in a reset.
-            Err(e) if e.kind() == std::io::ErrorKind::ConnectionReset => None,
-            Err(e) => panic!("reading from the runner: {e}"),
+        loop {
+            let mut line = String::new();
+            let message: Value = match self.reader.read_line(&mut line) {
+                Ok(0) => return None,
+                Ok(_) => serde_json::from_str(&line).unwrap(),
+                // A connection the runner shut down can also end in a reset.
+                Err(e) if e.kind() == std::io::ErrorKind::ConnectionReset => return None,
+                Err(e) => panic!("reading from the runner: {e}"),
+            };
+            if message["op"] != "attached" {
+                return Some(message);
+            }
+            self.said = Some(message);
         }
     }
 
@@ -356,6 +364,16 @@ fn what_the_station_keeps_is_not_given_back() {
     let after = fs::metadata(&out).unwrap();
     assert_eq!(after.len(), before.len());
     assert!(after.blocks() * 512 < before.blocks() * 512 / 2, "given back once no longer kept: {} then {}", before.blocks(), after.blocks());
+    assert_eq!(client.said, Some(json!({"op": "attached", "out": 0, "err": 0, "keep": null})), "where it began, said first");
+    // The next station, after a crash: told what was acknowledged and kept, both from the same ack.
+    client.send(json!({"op": "ack", "out": 41943040, "err": 0, "keep": 1000}));
+    client.leave();
+    let mut client = runner.connect();
+    client.send(json!({"op": "attach"}));
+    // The first it sends on an attach.
+    let mut line = String::new();
+    client.reader.read_line(&mut line).unwrap();
+    assert_eq!(serde_json::from_str::<Value>(&line).unwrap(), json!({"op": "attached", "out": 41943040, "err": 0, "keep": 1000}));
     client.write(b"go\n");
     let ([more, _], exit) = client.until_exit([41943040, 0]);
     assert_eq!(more, b"after\n");

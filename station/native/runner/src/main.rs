@@ -101,6 +101,9 @@ struct State {
     acked: [u64; 2],
     /// Up to where each stream's file was let go of (`PUNCH_EVERY`).
     punched: [u64; 2],
+    /// Where of stdout the station keeps what it reads again after a crash, as told with its last ack (`keep`): said to
+    /// each station that attaches, with what was acknowledged then, which came in the same message.
+    keep: Option<u64>,
     /// The current connection, by number; a new one closes the one before.
     conn: u64,
     current: Option<Conn>,
@@ -116,6 +119,8 @@ struct Push {
     epoch: u64,
     at: [u64; 2],
     exit_sent: bool,
+    /// Whether where it begins (what was acknowledged, and kept) was said first.
+    said: bool,
 }
 
 fn main() {
@@ -445,7 +450,7 @@ fn handle(shared: &Shared, line: &[u8]) -> Result<Next, String> {
         "attach" => {
             let mut st = shared.lock();
             st.epoch += 1;
-            st.push = Some(Push { epoch: st.epoch, at: st.acked, exit_sent: false });
+            st.push = Some(Push { epoch: st.epoch, at: st.acked, exit_sent: false, said: false });
             // A station that attaches wants it again.
             st.done = false;
             shared.changed.notify_all();
@@ -468,6 +473,7 @@ fn handle(shared: &Shared, line: &[u8]) -> Result<Next, String> {
                 Some(n) => Some(n.as_u64().ok_or("ack: keep is not a byte offset")?),
                 None => None,
             };
+            st.keep = keep;
             for (i, path) in [&shared.paths.out, &shared.paths.err].into_iter().enumerate() {
                 // What was acknowledged is never sent again: its blocks go, a whole block at a time.
                 let bound = if i == 0 { keep.map_or(acked[i], |k| k.min(acked[i])) } else { acked[i] };
@@ -515,6 +521,7 @@ fn handle(shared: &Shared, line: &[u8]) -> Result<Next, String> {
 /// Sends the attached connection what it has not had: each stream from its cursor, in order, then the exit.
 fn push(shared: &Shared, conn: u64, writer: &Mutex<Conn>) {
     enum Work {
+        Said(Value),
         Out { i: usize, at: u64, n: usize },
         Exit(Value),
     }
@@ -529,6 +536,9 @@ fn push(shared: &Shared, conn: u64, writer: &Mutex<Conn>) {
                     return;
                 }
                 if let Some(p) = &st.push {
+                    if !p.said {
+                        break (Work::Said(json!({"op": "attached", "out": p.at[0], "err": p.at[1], "keep": st.keep})), p.epoch);
+                    }
                     let next = [first, 1 - first].into_iter().find(|&i| p.at[i] < st.len[i]);
                     if let Some(i) = next {
                         let n = (st.len[i] - p.at[i]).min(CHUNK as u64) as usize;
@@ -549,7 +559,7 @@ fn push(shared: &Shared, conn: u64, writer: &Mutex<Conn>) {
                 }
                 send(writer, &json!({"op": "out", "stream": STREAMS[*i], "at": at, "data": B64.encode(&buf[..*n])}))
             }
-            Work::Exit(exit) => send(writer, exit),
+            Work::Said(said) | Work::Exit(said) => send(writer, said),
         };
         if sent.is_err() {
             return;
@@ -557,6 +567,7 @@ fn push(shared: &Shared, conn: u64, writer: &Mutex<Conn>) {
         let mut st = shared.lock();
         if let Some(p) = st.push.as_mut().filter(|p| p.epoch == epoch) {
             match work {
+                Work::Said(_) => p.said = true,
                 Work::Out { i, at, n } => p.at[i] = at + n as u64,
                 Work::Exit(_) => p.exit_sent = true,
             }

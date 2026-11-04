@@ -6,7 +6,7 @@
 // `freeze` stops handling lines (none more is acknowledged): what a snapshot says then matches where the next station
 // begins. After a crash there is no snapshot; `ackedOffset` and `linesBefore` let a driver read what the dead station
 // had handled (silently) to know where things stand before the rest comes.
-import { closeSync, openSync, readFileSync, readSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, openSync, readSync, statSync } from "node:fs";
 import { createConnection } from "node:net";
 import { join } from "node:path";
 import { keyPart } from "./sandbox.ts";
@@ -61,29 +61,6 @@ export const findRunner = (data: string, id: string): RunnerInfo | undefined => 
   return runner !== undefined && runner.id === id && listening(runner) ? runner : undefined;
 };
 export const outFile = (data: string, id: string) => join(runnersDir(data), `${id}.out`);
-
-/// Where in a runner's output what a station must read after a crash begins (`<id>.from`), as the driver keeps it: the
-/// output before it said nothing that still stands. Without it all of it is read: on ccvm a Codex app-server's had
-/// grown to 4.9 GB, and reading 157 MB of another's held the station's thread 10 s (2026-11-04).
-const fromFile = (data: string, id: string) => join(runnersDir(data), `${id}.from`);
-
-/// Where a runner's output is read from after a crash (`fromFile`): 0 when not kept for this runner.
-export function readFrom(data: string, info: RunnerInfo): number {
-  try {
-    const kept = JSON.parse(readFileSync(fromFile(data, info.id), "utf8"));
-    if (kept?.runner === info.runner && kept?.startedAt === info.startedAt && Number.isSafeInteger(kept?.from) && kept.from > 0) return kept.from;
-  } catch {}
-  return 0;
-}
-
-/// Keeps where a runner's output is read from after a crash (`fromFile`).
-export function writeFrom(data: string, info: RunnerInfo, from: number) {
-  try {
-    writeFileSync(fromFile(data, info.id), JSON.stringify({ runner: info.runner, startedAt: info.startedAt, from }));
-  } catch (error) {
-    debug("agents::process", "where a runner's output is read from was not kept", { id: info.id, error: String(error) });
-  }
-}
 
 /// The connection's socket, which runner.ts keeps to itself: its errors would otherwise go unhandled, and its closing
 /// (the runner gone, or another station attached) is how this one learns of it.
@@ -262,19 +239,21 @@ export async function endRunner(data: string, id: string, label: string) {
   for (let i = 0; i < 300 && pidAlive(info.runner); i++) await sleep(10);
 }
 
-/// Where the runner will start sending stdout from: the end of what the previous station acknowledged. Asked by
-/// attaching once without acknowledging anything (the runner sends from its acknowledged place on each attach).
-export function ackedOffset(info: RunnerInfo, out: string): Promise<number> {
+/// Where the runner will start sending stdout from: the end of what the previous station acknowledged; and where of
+/// stdout that station kept what is read again after a crash (`keep`, told with that same ack; null: a runner from
+/// before, or none told). Asked by attaching once without acknowledging anything (the runner sends from its
+/// acknowledged place on each attach, saying first where that is: one from before says nothing).
+export function ackedOffset(info: RunnerInfo, out: string): Promise<{ at: number; keep: number | null }> {
   return new Promise((resolve) => {
     const socket = createConnection(info.socket);
     let carry = "";
     let done = false;
-    const finish = (at: number) => {
+    const finish = (at: number, keep: number | null = null) => {
       if (done) return;
       done = true;
       quiet();
       socket.destroy();
-      resolve(at);
+      resolve({ at, keep });
     };
     const size = () => {
       try {
@@ -290,6 +269,7 @@ export function ackedOffset(info: RunnerInfo, out: string): Promise<number> {
       for (let i = carry.indexOf("\n"); i >= 0; i = carry.indexOf("\n")) {
         const message = JSON.parse(carry.slice(0, i));
         carry = carry.slice(i + 1);
+        if (message.op === "attached" && Number.isSafeInteger(message.out)) return finish(message.out, Number.isSafeInteger(message.keep) ? Math.min(message.keep, message.out) : null);
         if (message.op === "out" && message.stream === "out") return finish(message.at);
         // The exit comes after all output: nothing of stdout was left to send.
         if (message.op === "exit") return finish(size());
