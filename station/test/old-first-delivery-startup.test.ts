@@ -14,6 +14,8 @@ test("installing first deliveries seeks each session's threads without reading t
     db.exec("BEGIN");
     for (let n = 0; n < 10_000; n++) put.run(n - 5_000, n % 3, n, n % 2 === 0 ? "" : "中");
     put.run(20_000, 100, 1, "orphan");
+    put.run(20_001, -4, 1, "中");
+    put.run(9_007_199_254_741_001n, 7, 2, "large-rowid");
     db.exec("COMMIT");
     const expected = db.prepare(`SELECT session, thread, n FROM
       (SELECT session, thread, n, MIN(rowid) FROM deliveries GROUP BY session) ORDER BY session`).all();
