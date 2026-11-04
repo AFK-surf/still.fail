@@ -43,7 +43,7 @@ test "panel centred, 大屏 keyboard and mouse: plain, with what it says, a foot
     "says: dialog Some((面板, (380, 301.5, 520, 197))) title [(404, 327.5, 44, 30)] says [(404, 364.5, 472, 20)] words [(414, 402.5, 452, 22)] ok Some((826, 444.5, 44, 24)) close Some((842, 327.5, 32, 32)) focus None row0 []",
     "foot: dialog Some((面板, (380, 309.5, 520, 181))) title [(404, 335.5, 44, 30)] says [] words [(414, 384.5, 452, 22)] ok Some((818, 430.5, 58, 36)) close Some((842, 335.5, 32, 32)) focus None row0 []",
     "wide: dialog Some((面板, (320, 314.5, 640, 171))) title [(344, 340.5, 44, 30)] says [] words [(354, 389.5, 572, 22)] ok Some((886, 431.5, 44, 24)) close Some((902, 340.5, 32, 32)) focus None row0 []",
-    "untitled: dialog Some((关闭 面板里的话，长一些，好看它怎么折行 好的, (380, 340, 520, 120))) title [] says [] words [(414, 364, 452, 22)] ok Some((826, 406, 44, 24)) close Some((842, 366, 32, 32)) focus None row0 []",
+    "untitled: dialog Some((关闭 面板里的话，长一些，好看它怎么折行 好的, (380, 323, 520, 154))) title [] says [] words [(414, 381, 452, 22)] ok Some((826, 423, 44, 24)) close Some((842, 349, 32, 32)) focus None row0 []",
     "tall 800: dialog Some((面板, (380, 168.5, 520, 463))) title [(404, 194.5, 44, 30)] says [] words [] ok Some((818, 571.5, 58, 36)) close Some((842, 194.5, 32, 32)) focus None row0 [(414, 243.5, 452, 22)]",
     "tall 500: dialog Some((面板, (380, 93.5, 520, 313))) title [(404, 119.5, 44, 30)] says [] words [] ok Some((818, 346.5, 58, 36)) close Some((842, 119.5, 32, 32)) focus None row0 [(414, 168.5, 452, 22)]",
   ])
@@ -125,7 +125,7 @@ test "panel centred, 大屏 keyboard and mouse: untitled saying something; what 
   out.push("holds nothing: dialog \{dialog(t)} foot words \{w(t, "脚注")} ok \{t.query(Button, label="好的").map(fn(s) { tenth4(s.rect) })}")
   // (as main has it, a4c845604)
   assert_eq(out, [
-    "untitled says: dialog Some((关闭 说明的话 面板里的话，长一些，好看它怎么折行 好的, (380, 327, 520, 146))) title [] says [(404, 357, 472, 20)] words [(414, 377, 452, 22)] ok Some((826, 419, 44, 24)) close Some((842, 353, 32, 32)) focus None",
+    "untitled says: dialog Some((关闭 说明的话 面板里的话，长一些，好看它怎么折行 好的, (380, 310, 520, 180))) title [] says [(404, 340, 472, 20)] words [(414, 394, 452, 22)] ok Some((826, 436, 44, 24)) close Some((842, 336, 32, 32)) focus None",
     "holds: dialog Some((面板, (380, 309.5, 520, 181))) words [(414, 384.5, 452, 22)] foot words [(782, 437.5, 28, 22)] ok Some((818, 430.5, 58, 36))",
     "holds nothing: dialog Some((面板, (380, 329.5, 520, 141))) foot words [(782, 417.5, 28, 22)] ok Some((818, 410.5, 58, 36))",
   ])

@@ -89,7 +89,9 @@ fn panel_centred_node(
       // whose title is as it is now (`live`) built after what it holds and its foot, as the old frame builds it now (read
       // out last, drawn over them))
       let corner = fn() {
-        d.show(fn() { steps is None && untitled() }, fn(o) {
+        // (one titled by a row of its own (title_row): its close button in its corner as an untitled one's, not on that
+        // row's line: the user, 2026-11-04, x 不要跟着 title 走)
+        d.show(fn() { steps is None && (untitled() || x.title_row is Some(_)) }, fn(o) {
           o.over(Is(true)).width(By(fn() { Some(w()) })) |> ignore
           @ui.old(o, natural=true, key=fn() { key + "/close" }, fn(c) {
             let held = c.box(style=dialog_close_row, fn() {
@@ -130,19 +132,23 @@ fn panel_centred_node(
                     |> ignore
                   } else {
                     match x.title_row {
-                      // (what it draws in its title's place, as wide as the row leaves it: title_row)
-                      Some(f) => c.box(style=title_row_room, fn() { f(c) }) |> ignore
+                      // (what it draws in its title's place, as wide as the row leaves it clear of the close button in the
+                      // corner over its end: title_row)
+                      Some(f) =>
+                        c.box(style=title_row_room.then(@ui.style(pr=room(dialog_close_clear()))), fn() { f(c) }) |> ignore
                       None => c.text(title, style=dialog_title) |> ignore
                     }
                   }
-                  c.box(style=dialog_close_at(), fn() {
-                    if icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=t("common.close")) {
-                      // (its field let go of first, as the old frame has it: field_let_go)
-                      field_let_go(keyed)
-                      cancel()
-                    }
-                  })
-                  |> ignore
+                  if x.title_row is None {
+                    c.box(style=dialog_close_at(), fn() {
+                      if icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=t("common.close")) {
+                        // (its field let go of first, as the old frame has it: field_let_go)
+                        field_let_go(keyed)
+                        cancel()
+                      }
+                    })
+                    |> ignore
+                  }
                 })
                 |> ignore
               }
