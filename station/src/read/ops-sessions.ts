@@ -2,7 +2,7 @@
 import type { ReadOp } from "./ops.ts";
 import { job, jobLog, openJobs } from "./jobs.ts";
 import { firstText, getSession, getThread, lastSaid, listThreads, messagesBefore, threadSessions } from "./store.ts";
-import { recentChatIds } from "../store/chat-list.ts";
+import { recentChatIds, searchChats } from "../store/chat-list.ts";
 import { session, sessionPlace, sessions, summary, thread, threads, timeline, transcriptFile, transcriptState, widgetState } from "./sessions.ts";
 
 /// `?turns=`: how many of a session's latest turns; none (or not a count): all of them, as a device from before reads.
@@ -27,6 +27,10 @@ export const sessionOps: Record<string, ReadOp> = {
     });
     return { threads, sessions, total };
   },
+  searchChatList: (s, a) => searchChats(s.db, a.ws, a.home, a.limit, a.query, {
+    thread: (id) => getThread(s, id), sessions: (id) => threadSessions(s, id), last: (id) => lastSaid(s, id),
+    firstText: (id) => firstText(s, id), session: (key) => getSession(s, key),
+  }),
   /// A thread's latest `limit` messages, oldest first: the archive review's (sessions/review.ts).
   latestMessages: (s, a) => messagesBefore(s, a.thread, null, a.limit),
   /// One session as lists and events have it (views.rs `summary`).

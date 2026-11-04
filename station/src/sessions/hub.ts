@@ -152,6 +152,8 @@ export class Hub {
   threadList: (() => Promise<ThreadSummary[]>) | null = null;
   /// A recent, unfiltered chat_list, with details for its page alone.
   recentChatList: ((ws: string | null, home: string | null, limit: number) => Promise<RecentChatList>) | null = null;
+  /// The matching chats and count for a chat_list search.
+  searchChatList: ((ws: string | null, home: string | null, limit: number, query: string) => Promise<RecentChatList>) | null = null;
   /// A thread's latest `limit` messages, oldest first, read by the readers (agents.ts sets it): the archive review's
   /// (review.ts), up to 400 of them through the merged view, 3 seconds held on a station. Unset (tests): the store.
   latestMessages: ((thread: number, limit: number) => Promise<MessageRow[]>) | null = null;

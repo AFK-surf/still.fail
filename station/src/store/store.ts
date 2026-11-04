@@ -43,7 +43,7 @@ import { RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiv
 import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
 import { installPostBlocks, PostBlocksUnavailable, POST_BLOCK_SIZE, type PostPosition } from "./post-blocks.ts";
 import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
-import { type RecentChatList, recentChatIds } from "./chat-list.ts";
+import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
 // (and rows.ts JOBS_RUNNING and SESSION_JOBS, the readers' too).
@@ -1303,6 +1303,13 @@ export class Store {
       return s === null ? [] : [{ key: s.key, title: s.title, archivedAt: s.archivedAt, ws: s.ws }];
     });
     return { threads, sessions, total };
+  }
+
+  searchChatList(ws: string | null, home: string | null, limit: number, query: string): RecentChatList {
+    return searchChats(this.db, ws, home, limit, query, {
+      thread: (id) => this.getThread(id), sessions: (id) => this.threadSessions(id), last: (id) => this.#lastSaid(id),
+      firstText: (id) => this.firstText(id), session: (key) => this.getSession(key),
+    });
   }
 
   /// The thread's latest message as merged, for lists.

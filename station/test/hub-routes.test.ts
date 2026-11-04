@@ -175,6 +175,7 @@ test("another chat with a session, and a session brought into a chat", async () 
     // chat_list's threads, as the readers read them: what the store lists.
     assert.deepEqual(JSON.parse(await r.readers.read("threadList", {}, "en")), JSON.parse(JSON.stringify(r.store.listThreads("", null, null, "none"))));
     assert.deepEqual(JSON.parse(await r.readers.read("recentChatList", { ws: null, home: null, limit: 2 }, "en")), JSON.parse(JSON.stringify(r.store.recentChatList(null, null, 2))));
+    assert.deepEqual(JSON.parse(await r.readers.read("searchChatList", { ws: null, home: null, limit: 2, query: "side" }, "en")), JSON.parse(JSON.stringify(r.store.searchChatList(null, null, 2, "side"))));
     // The archive review's messages, as the readers read them: what the store has.
     assert.deepEqual(JSON.parse(await r.readers.read("latestMessages", { thread: chat.id, limit: 2 }, "en")), JSON.parse(JSON.stringify(r.store.messagesBefore(chat.id, null, 2))));
   } finally {

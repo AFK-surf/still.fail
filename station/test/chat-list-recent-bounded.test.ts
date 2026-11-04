@@ -81,6 +81,7 @@ test("recent chat selection keeps workspace rules, ordering and the number left 
     put.run(edited, 2, "edit", 1, "person", "person", "edited words", 500);
     const untitled = make("untitled", null, ["agent"], 98, 30);
     db.prepare("UPDATE threads SET title = NULL, auto_title = NULL WHERE id = ?").run(untitled);
+    make("İSTANBUL", null, ["agent"], 97, 30);
     make("negative", null, ["agent"], 200, -1);
     const unreadable = make("missing-state", null, ["agent"], 30, 4);
     db.prepare("DELETE FROM thread_state WHERE thread = ?").run(unreadable);
@@ -91,10 +92,15 @@ test("recent chat selection keeps workspace rules, ordering and the number left 
     const old = { ...common, threadList: async () => sessionOps.threadList!(read, {}) } as unknown as Hub;
     const recent = { ...common, threadList: async () => sessionOps.threadList!(read, {}),
       recentChatList: async (ws: string | null, home: string | null, limit: number) => sessionOps.recentChatList!(read, { ws, home, limit }),
+      searchChatList: async (ws: string | null, home: string | null, limit: number, query: string) => sessionOps.searchChatList!(read, { ws, home, limit, query }),
     } as unknown as Hub;
     for (const limit of [1, 2, 5, 100, "not-a-number"]) {
       assert.equal(await chatList(recent, "agent", { limit }), await chatList(old, "agent", { limit }), `limit ${limit}`);
     }
-    assert.equal(await chatList(recent, "agent", { query: "edited" }), await chatList(old, "agent", { query: "edited" }));
+    for (const query of ["edited", "WORDS", "agent", "i\u0307stanbul", "missing"]) {
+      for (const limit of [1, 5, 100, "not-a-number"]) {
+        assert.equal(await chatList(recent, "agent", { query, limit }), await chatList(old, "agent", { query, limit }), `${query}, limit ${limit}`);
+      }
+    }
   } finally { store.close(); }
 });
