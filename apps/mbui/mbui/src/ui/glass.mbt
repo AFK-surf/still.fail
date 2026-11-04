@@ -99,6 +99,20 @@ pub fn Ctx::glass_solid(self : Ctx) -> Bool {
 }
 
 ///|
+/// The frame's glass put back as `was` had it: what a try to draw a layer again that did not come to be drew of glass
+/// (its captures numbered) undone (scene_layers.mbt's scene_alone).
+fn glass_put_back(was : GlassPaint) -> Unit {
+  glass_paint.run = was.run
+  glass_paint.frost_run = was.frost_run
+  glass_paint.run_start = was.run_start
+  glass_paint.run_len = was.run_len
+  glass_paint.in_group = was.in_group
+  glass_paint.ink_x = was.ink_x
+  glass_paint.ink_y = was.ink_y
+  glass_paint.ink_r = was.ink_r
+}
+
+///|
 /// At the start of painting a frame: a new set of captures; what the system
 /// says about transparency, asked now and then (it is a setting, seldom
 /// changed).
@@ -182,6 +196,8 @@ fn Ctx::glass_inst(
 /// of its own. Told of each glass as it goes into the frame, whoever made it (a node of the old view's as it is painted,
 /// a node of the window's tree's as its instances are composed: never kept with them).
 fn Ctx::glass_capture(self : Ctx, k : Int, liquid : Bool, shares : Bool) -> Unit {
+  // (a capture's place among the frame's is the frame's: what draws it drawn as the old frame paints, scene_layers.mbt)
+  scene_own_only()
   let b = k * inst_size
   let a = self.inst
   let kind = a[b + 5]

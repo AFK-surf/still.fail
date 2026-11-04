@@ -226,6 +226,38 @@ is tracked, and layout, paint and composition kept by node. Neither another engi
    counting: the same scene with 30 and with 3000 rows does the same work a frame (bindings worked out, rows gone
    through, measures), a check in CI; and in milliseconds (matklad's "Benchmark In Milliseconds") against the build
    before a page moved into the tree: opening, scrolling and a send's motion each faster, on a native build.
+15. **The scene is kept by layer.** A layer begins at the window's root, at what the root holds (a page, what is over
+   it), at what a `show`, `pick` or `each` made (a page, a sheet, a row), at a list's rows, at an old view, at what is
+   over all or over the scrim, and at what moves as it is drawn (a place property bound: a spinner turning, a row
+   sliding, a fade): `Tree::starts_layer` (Flutter's repaint boundaries, Chromium's paint chunks). Each keeps what it
+   drew, where that is among the frame's instances, what it was cut, faded and stretched by as it began, the glyphs'
+   plots it draws from (said drawn from in each frame the old frame paints: `Atlas::drawn`) and the pictures it shows, and what its
+   drawing read, by a watch of its own (src/ui/scene_layers.mbt).
+16. **A frame draws again only the layers something of changed, and says it at its cause.** The tree tells what changed
+   as it changes (`Tree::take_changed`: content made again; `take_placed`: placed, faded, turned or cut otherwise;
+   `take_removed`: let go); a layer's watch tells what its drawing read changed (an image decoded, a field's words, the
+   clock while it reads it); a moment its drawing waits for comes. Each marks the layer it is in; one placed, or cutting,
+   fading or setting the glyphs of what it holds, draws all it holds again with it. Every other layer is the instances it
+   was: copied where it is put, as the old frame paints the frame, or left where it lies, a frame of the tree alone
+   (`alone_frame`: nothing of the old frame painted, each layer to draw again drawn in a buffer of its own from what it
+   began in and put where it was, where it comes to as many instances; else the old frame paints the frame, copying
+   what is kept).
+17. **Where the window changed is told by what changed, never found.** Each node the tree said changed is drawn again
+   where all it and what it holds reached as last drawn and where they reach once drawn (`@damage.Parts`: as far as any
+   pixel reaches, merged, at most four, glass a part reaches taken in whole); a layer whose drawing read what changed,
+   all of it; what the old frame paints again (what it read changed, nothing smaller said), each old view whole; the old
+   frame's cycles by the clock where they were and are; a stream's picture each frame. No frame is compared with the
+   one before it; `src/damage` keeps no frame.
+18. **The host is given the whole by an adapter that says so.** The renderers upload every instance each frame
+   (`@hostapi.present`): that is the adapter of rule 4, named where it is (`h_present`), no "only what changed", and
+   nothing is done because of it; what changed is the parts (`@hostapi.render_dirty`). A renderer taking the layers
+   that changed is its own step, not this one.
+19. **Held by the tests.** A frame that copied a layer kept is painted again with nothing kept, in every Tester
+   (`Ctx::scene_check`, with `looks_check`): instance for instance the same, or the test fails naming the layer; a frame
+   of the tree alone is built whole after it as well and compared (`looks_compare`). What a frame costs is counted
+   (`@ui.scene_done`: layers drawn, instances drawn and copied, frames of the tree alone, the work of saying where it
+   changed): a spinner turning over a chat's 3000 messages and over an empty page cost the same, as does a row of a
+   list of 3000 and of 30 changed (src/ui/scene_cost_wbtest.mbt, in CI).
 
 Where mbui is not yet so (2026-11-04):
 
@@ -410,7 +442,7 @@ squeeze and contrast checks; film's images before and after where a step touches
    outside a frame is no way there. It moves with the pages.
 5. **What goes**, as no island is left: the frame's watch, paint watch and layout watch (frame_watch.mbt), kept parts
    and rows (kept_part.mbt, kept_rows.mbt, kept_nodes.mbt), said.mbt's recorded lists, `frame_passes_most`'s passes
-   for a build, `rows_check` and `looks_check` as they are, `outside_said`, `Mover`, src/damage's comparing of
-   instances, the `old` island itself. Gone first, as nothing used it once islands were kept as their nodes: the
+   for a build, `rows_check` and `looks_check` as they are, `outside_said`, `Mover`, the `old` island itself. Gone
+   already: src/damage's comparing of instances (rules 15–17, 2026-11-04). Gone first, as nothing used it once islands were kept as their nodes: the
    replay of a part or a row from what its build and paint recorded (KeptPart, RowKept, their bands, on_drawn_again,
    off since #2325).

@@ -140,9 +140,9 @@ fn text_frame() -> Bool {
     let first = text_cache.generation < 0
     text_cache.generation = g
     glyphs_forget()
-    // (and the frame drawn whole: its glyphs drawn again where they were, the same numbers, other pixels: hostcall.mbt
-    // `presented`, docs/partial-redraw.md)
-    presented.forget()
+    // (and the frame drawn whole, nothing of the scene kept: its glyphs drawn again where they were, the same numbers,
+    // other pixels, docs/partial-redraw.md; the atlas the scene's layers held made anew)
+    scene_anew(true)
     if !first {
       clear_shapes()
       text_cache.fonts.clear()
@@ -191,7 +191,10 @@ fn glyphs_still(kept : Array[(Int, Double, Double)], sc : Double) -> Bool {
     let (key, u, v) = k
     match text_cache.glyphs.get(key) {
       Some(g) if g.u == u && g.v == v && !glyph_other_scale(g, sc) =>
-        if g.plot >= 0 { atlas_for(g.in_colour).0.drawn(g.plot) }
+        if g.plot >= 0 {
+          atlas_for(g.in_colour).0.drawn(g.plot)
+          scene_plot_drawn(g.in_colour, g.plot)
+        }
       _ => return false
     }
   }
@@ -951,6 +954,7 @@ fn glyph(key : Int, sc : Double) -> Glyph {
     Some(g) => {
       if g.plot >= 0 {
         atlas_for(g.in_colour).0.drawn(g.plot)
+        scene_plot_drawn(g.in_colour, g.plot)
       }
       glyph_kept(key, g)
       g
@@ -983,10 +987,13 @@ fn glyph(key : Int, sc : Double) -> Glyph {
           }
           text_cache.glyphs[key] = g
           glyph_kept(key, g)
+          scene_plot_drawn(g.in_colour, plot)
           g
         }
-        // (no room while this frame is drawn: what is made to be kept made again once there is, glyphs_still)
+        // (no room while this frame is drawn: what is made to be kept made again once there is, glyphs_still; the
+        // scene's layer drawing it drawn again, scene_layers.mbt)
         None => {
+          scene_glyph_wanted()
           glyph_kept(key, { ..no_glyph, u: -1.0, v: -1.0 })
           no_glyph
         }

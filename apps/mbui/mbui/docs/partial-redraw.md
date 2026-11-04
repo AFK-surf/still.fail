@@ -9,9 +9,9 @@ Impeller's damage, Zed GPUI's cached views, Chromium's damage tracking, Android'
 1. **The CPU: few frames, little built.** What stays up while something goes on steps on one clock, a frame a step
    (motion_data.mbt `cycle_step_ms`), not one each of the display's frames; parts kept across frames (kept_part.mbt,
    after GPUI's `AnyView::cached`) skip building what did not change.
-2. **What changed: worked out once, in MoonBit, for every host** (src/damage). The frame's instances are compared
-   with the last frame presented; the parts that differ are told to the host (`@hostapi.render_dirty`) before
-   `present`.
+2. **What changed: told by its causes, once, in MoonBit, for every host** (src/damage, src/ui/scene_layers.mbt).
+   The tree's scene says which of its layers changed and where; the parts are told to the host
+   (`@hostapi.render_dirty`) before `present`.
 3. **The GPU: only those parts drawn again.** Each renderer keeps its last picture in a canvas of its own (a texture
    the window's size), draws only the parts into it, cut to them by the scissor, and copies the canvas whole onto the
    window's surface. This is what Flutter's Impeller does on Metal (which has no buffer age) and what a WebGL page
@@ -21,47 +21,26 @@ Nothing the app or a test reads changes: the instance list is the same, a Tester
 renderer is asked for (a snapshot, a shot, a film's frame) is drawn whole as before. Only what a window shows is drawn
 in parts.
 
-## What changed (src/damage)
+## What changed (src/damage, src/ui/scene_layers.mbt)
 
-`Damage::next(inst, count, w, h, scale, r, g, b)` keeps a copy of each frame and answers the parts of the next that
-differ from it, in points, at most four; none (an empty list) where nothing did; `[(0, 0, -1, -1)]`, the whole frame,
-where:
+Where a frame changed is told by its causes (docs/retained.md rules 15–17), never found by comparing it with the frame
+before: nothing keeps a frame to compare with. The window's tree's scene is kept by layer; as the tree says what
+changed (a node's content made again, a node placed, faded, turned or cut otherwise, a node let go) and as a layer's
+own watch says what its drawing read changed, each such node is drawn again where all it and what it holds reached as
+last drawn and where it reaches once drawn (`@damage.Parts::reach_of`: its rect and 2 points round it for the edge's
+antialiasing and a pixel's rounding at any scale; a shadow 3σ + 2 more; turned, the circle about its point through its
+farthest corner; in its clip, unless it is turned and its clip turned with it). What the old frame paints again
+(its build or its paint read what changed) is drawn again whole, each old view as far as it reaches, before and now;
+the old frame's cycles by the clock (cycle_look.mbt) where they drew and draw; what of the tree is kept clear over the
+scrim where it was and is; an instance showing a stream's picture each frame (it changes under the same numbers). The
+whole frame (`[(0, 0, -1, -1)]`): the first, the window's size, scale or ground another, the atlas made anew or the
+glyphs forgotten (the same numbers over other pixels), a window with no tree whose old frame painted, or the parts
+together more than half the window.
 
-- it is the first frame, or `Damage::forget` was called: the app forgets as the host's glyphs go
-  (`@hostapi.atlas_generation` moves on: a face loaded, the scale changed), since they are drawn again into the
-  places they had, the same numbers over other pixels (text.mbt `text_frame`),
-- the window's size, its scale or the ground differ,
-- the parts together are more than half the window: one pass over all of it costs no more, and the copy onto the
-  surface none.
-
-Otherwise the frames' instances are matched: as many, each against the one at its place; another number (a caret
-shown or hidden, a row's actions under the pointer, a word typed), those the same from the start and from the end
-each against its own, and those between in order where their numbers are equal, the fewest left over. Those between
-with no equal one in the other (every instance of a list being scrolled) are in no match whatever the rest are: they
-count first, and the rest are matched by Myers's diff of their numbers over them alone (the same pairs as over all,
-its cost by how far apart those are, not by how many moved; up to 512 edits: past that, all between counts). Once the
-parts counted are more than half the window, nothing more is compared: the frame is drawn whole. Matched in order,
-what is drawn over what is the same, so a pixel no unmatched or changed instance reaches is as it was. Each instance
-that differs in any of its 52 numbers, or has no match, counts where it was and where it is now, each as far as any
-pixel of it reaches:
-
-- its rect, and 2 points round it for the edge's antialiasing and a pixel's rounding at any scale;
-- a shadow (kind 2): 3σ + 2 more, as the renderers' vertex grows it;
-- turned (32–35): the circle about its point through its farthest corner;
-- in its clip (16–19), unless it is turned and its clip turned with it (35 = 0).
-
-Two more things count though their numbers did not change:
-
-- a band of a shape (kind 11) whose pieces (kind 12, after every instance drawn) changed: its 12 is its first piece,
-  13 how many, six to a piece instance;
-- an instance showing a stream's picture (slot 20 from `stream_tex_base` to `view_tex_base`): its picture changes
-  under the same numbers, so it is drawn again every frame.
-
-A part is merged with any other it meets or comes within 16 points of (two passes over all the instances cost more
-than the pixels between); beyond four, the pair whose rect grows least is merged, and then any it comes near, so no
-two parts are left near each other. An instance's reach already inside a part adds nothing, and where it was and
-where it is, near each other, are one rect: a list scrolled changes every instance in it, and what is worked out for
-each is a few comparisons, no part made for it (it is a frame's work too, on the main thread, before it is drawn).
+A part is merged with any other it meets or comes within 16 points of; beyond four, the pair whose rect grows least is
+merged, and then any it comes near, so no two parts are left near each other. The work of it (instances reached, rects
+said) is counted (`Parts::work`), and is what changed: a spinner turning over 3000 rows reaches as much as over none
+(src/ui/scene_cost_wbtest.mbt).
 
 ### Glass
 
@@ -107,22 +86,24 @@ Without a window (mbui-render, the bench) the offscreen target is the canvas: it
 
 ## What checks it
 
-- **src/damage's tests**: the reach of each kind, clips, turning, shadows, bands whose pieces changed, streams, views,
-  glass taken in whole, parts merged, the whole frame's causes.
+- **src/damage's tests**: the reach of each kind, clips, turning, shadows, pieces, streams, views, glass taken in
+  whole, parts merged, the whole frame.
+- **Every Tester**: each frame that copied a layer kept painted again with nothing kept and compared instance for
+  instance (`Ctx::scene_check`); a frame of the tree alone built whole after it and compared.
 - **Each host's renderer, to the byte** (`mbui-render` with `MBUI_DL_FROM=<before.dl>`): a spinner's two moments
   (src/kitdemo/gallery/dl_print_wbtest.mbt `partial_shown`: the spinner under a bar of frosted glass whose capture
   it reaches, a box turned with it, and a dot far from it, two parts) drawn as a window's frames are, the first
   whole, the second only in its parts; the picture is what the target holds then, and it is the second drawn whole,
-  to the byte. Run by scripts/render_offscreen.sh and render_check.sh (macOS), render_linux.sh, render_windows.sh,
+  to the byte, its parts the ones its Tester's scene said (the draw list's `parts` lines). Run by scripts/render_offscreen.sh and render_check.sh (macOS), render_linux.sh, render_windows.sh,
   render_android.sh and render_web.sh. Taking the glass's capture out of the part makes them differ: the check sees
   it.
 - **On a device, by hand**: `MBUI_PARTIAL_CHECK=1` (Metal) reads back each frame drawn in parts and the same frame
   drawn whole, and says on the log where they differ (slow: for a run by hand, not for use).
 - `MBUI_PROBE=1` says every 2 s how many frames were drawn whole, in parts or not at all, why the whole ones were
-  (`whole_why`: none before, another window, more than half),
+  (`whole_why`, by @damage.Parts::why: 1 none before, 3 another window, 4 the atlas anew, 5 more than half, 6 an old
+  frame with no tree),
   how much of the window the parts were, the GPU's time, and (Metal) where `present`'s time goes: waiting for a
-  buffer of the ring, uploading, waiting for a drawable, encoding. `MBUI_PROBE_DAMAGE=1` says, for each frame drawn
-  whole because its parts were too large, which instances changed and how.
+  buffer of the ring, uploading, waiting for a drawable, encoding.
 
 ## Measured
 

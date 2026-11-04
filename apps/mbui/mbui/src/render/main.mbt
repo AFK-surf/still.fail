@@ -5,10 +5,10 @@
 //   MBUI_DL_FROM=<before.dl> MBUI_DL=<list.dl> MBUI_DL_PNG=<out.png> mbui-render
 //   MBUI_DL_BENCH=<n> MBUI_DL_FROM=<before.dl> MBUI_DL=<list.dl> MBUI_DL_PNG=<out.png> mbui-render
 //
-// With MBUI_DL_FROM, partial redraw (docs/partial-redraw.md): the list before drawn whole, then this one only where it
-// differs from it (@damage, @hostapi.render_dirty), as a window's frames are drawn, then this one again (nothing of it
-// differing); the picture is what the target holds then (<out.png>), and this list drawn whole again into it
-// (<out>.whole.png): the two the same to the byte.
+// With MBUI_DL_FROM, partial redraw (docs/partial-redraw.md): the list before drawn whole, then this one only in the
+// parts its `parts` lines say (where the Tester's scene said it changed: @hostapi.render_dirty), as a window's frames
+// are drawn, then this one again (nothing of it changed); the picture is what the target holds then (<out.png>), and
+// this list drawn whole again into it (<out>.whole.png): the two the same to the byte.
 //
 // With MBUI_DL_BENCH too, the two lists drawn one after the other n times each, whole and then only where they differ,
 // and the GPU's time of a frame said (the median: where the host measures it, Metal's), nothing written.
@@ -35,6 +35,10 @@ priv struct Dl {
   images : Map[Int, (Int, String, Int)]
   carried : Map[Int, String]
   inst : Array[Array[String]]
+  /// the parts it was drawn again in over the frame before, as its scene said them (`parts` lines: (x, y, w, h), w < 0
+  /// all of it); none said, all of it
+  parts : Array[(Double, Double, Double, Double)]
+  mut parts_said : Bool
   /// the format's version (the head's): this renderer draws mbui-dl 9 (and 8, nothing fading across; 7, nothing fading towards a cut; 6, no outer clip; 5, a box's corners one; 4, nothing turned;
   /// 3, its clips round)
   mut version : Int
@@ -75,6 +79,8 @@ fn parse(text : String) -> Dl {
     images: Map([]),
     carried: Map([]),
     inst: [],
+    parts: [],
+    parts_said: false,
     version: 0,
   }
   for v in text.split("\n") {
@@ -110,6 +116,15 @@ fn parse(text : String) -> Dl {
         dl.images[num(t[1]).to_int()] = (num(t[2]).to_int(), src, bytes)
       }
       "bytes" if t.length() >= 3 => dl.carried[num(t[1]).to_int()] = t[2]
+      // parts X Y W H | parts all | parts none
+      "parts" if t.length() >= 2 => {
+        dl.parts_said = true
+        if t[1] == "all" {
+          dl.parts.push((0.0, 0.0, -1.0, -1.0))
+        } else if t.length() >= 5 {
+          dl.parts.push((num(t[1]), num(t[2]), num(t[3]), num(t[4])))
+        }
+      }
       "mbui-dl" if t.length() >= 2 => dl.version = num(t[1]).to_int()
       // i N0 … N59 (mbui-dl 8: N0 … N55, nothing fading across; 7: N0 … N51, nothing fading; 6: N0 … N39, no outer clip; 5: N0 … N35, a box's corners one; 4: N0 … N31, nothing
       // turned; 3: N0 … N27, its clip's corners round)
@@ -174,23 +189,23 @@ fn main {
       let (inst, n, made) = instances(dl, path, atlas, colour_atlas)
       say("mbui-render: \{from_path}: \{made_a}")
       say("mbui-render: \{path}: \{made}")
-      let damage = @damage.Damage::new()
       let (ar, ag, ab) = a.clear
-      tell_parts(damage.next(ia, na, a.w, a.h, a.scale, ar, ag, ab))
+      tell_parts([(0.0, 0.0, -1.0, -1.0)])
       draw(ia, na, ar, ag, ab)
-      let parts = damage.next(inst, n, dl.w, dl.h, dl.scale, r, gg, b)
-      say("mbui-render: \{path}: drawn again where it differs from \{from_path}: \{parts}")
+      // (where it changed as its scene said it, the list's own: nothing compared here; none said, all of it)
+      let parts = if dl.parts_said { dl.parts } else { [(0.0, 0.0, -1.0, -1.0)] }
+      say("mbui-render: \{path}: drawn again where its scene said it changed from \{from_path}: \{parts}")
       let bench = arg("MBUI_DL_BENCH")
       if bench != "" {
         let times = num(bench).to_int()
         let time = fn(partial : Bool) -> Double {
-          let d = @damage.Damage::new()
           let gpus = []
           for k in 0..<(2 * times) {
             let (fi, fn_) = if k % 2 == 0 { (ia, na) } else { (inst, n) }
-            let ps = d.next(fi, fn_, dl.w, dl.h, dl.scale, r, gg, b)
-            if partial {
-              tell_parts(ps)
+            // (the first whole; each after it, one moment then the other: where they differ is where the spinner's two
+            // moments are, the parts the list says, either way)
+            if partial && k > 0 {
+              tell_parts(parts)
             } else {
               @hostapi.render_dirty(0.0, 0.0, -1.0, -1.0)
             }
@@ -209,8 +224,8 @@ fn main {
       }
       tell_parts(parts)
       draw(inst, n, r, gg, b)
-      // and again, nothing of it differing: what a frame that draws nothing new shows (its target's, as it was)
-      tell_parts(damage.next(inst, n, dl.w, dl.h, dl.scale, r, gg, b))
+      // and again, nothing of it changed: what a frame that draws nothing new shows (its target's, as it was)
+      tell_parts([])
       draw(inst, n, r, gg, b)
       let whole = (if out.has_suffix(".png") { out.view(end_offset=out.length() - 4).to_owned() } else { out }) +
         ".whole.png"
