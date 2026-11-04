@@ -49,6 +49,7 @@ import { type Roots, roots as machineRoots } from "../read/machine.ts";
 import { carrySubagents, goesAfresh, startsAfresh, toldCleared, toldResumeLost } from "./afresh.ts";
 import { serves } from "./pool.ts";
 import { settled } from "./opened.ts";
+import { untitledChat } from "./titles.ts";
 import { shownFacts } from "./image-size.ts";
 
 type Json = any;
@@ -1132,6 +1133,7 @@ export class Hub {
       reposDir: () => this.reposDir(),
       memoryPath: (key) => agentHomePaths(workspaceAgentHome(this.config().agentHome, this.wsOf(key), this.workspaces()[0] ?? null))[0],
       maxNudges: () => this.config().maxNudges,
+      untitled: (key) => (this.config().askToName ? untitledChat(this, key) : null),
       backgroundOnMessage: (key) => {
         const row = this.store.getSession(key);
         if (!row) return true;

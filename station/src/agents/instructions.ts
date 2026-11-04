@@ -93,6 +93,9 @@ export const NUDGE = `Your turn ended without a state, so nobody knows where the
 - waiting: only work you started that will bring you back on its own (a background command or agent, a job, a loop watching CI), with nothing asked of anyone, and nothing else you can do meanwhile: chat_state "waiting" with seconds, your estimate of how long until it does, and for, what you wait for. Waiting on a person is need_human.
 - Otherwise: continue the work.`;
 
+/// Its turn ended in a state and the chat `to` it was in still has no title.
+export const nameUntitled = (to: string) => `The chat ${to} still has no title, and nobody is at work in it now. Give it one: chat_post with only to "${to}" and title, a few words on what it is about in the language its people use. Post nothing else, then record again the state you just ended with (chat_state, with the same done or need).`;
+
 export const RESUME_AFTER_RESTART = `The station restarted while you were in the middle of a turn, so that turn was cut off. Check where you were (files, git state, anything you started), then continue. Post only if people need to know.`;
 
 export const GO_ON_AFTER_LOST = `Your last turn stopped because the station lost its connection to the sandbox your commands run in, and the station started you again there. Commands that were running then were ended. Continue the unfinished work from this conversation. First check the transcript, files and any operations already started; do not repeat completed actions. If an action's outcome is uncertain, verify it before retrying. Post only if people need to know.`;
