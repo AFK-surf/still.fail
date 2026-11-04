@@ -1,5 +1,5 @@
 #!/bin/sh
-# Puts releases made into a directory (scripts/release.sh or .github/release-desktop.py with RELEASE_DIR) in the
+# Puts releases made into a directory (scripts/release.sh or .github/release-desktop.sh with RELEASE_DIR) in the
 # cloud's releases bucket, under the same names: the files first, side by side, then the feeds that say they are out
 # (station*.json, …/latest.json, desktop/*.yml, modules/<id>/*.json), so nothing points at a
 # file not there yet.

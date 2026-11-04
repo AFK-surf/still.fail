@@ -1,0 +1,45 @@
+#!/bin/sh
+# Build and sign mbui's Mac app with the existing Developer ID and notary profile. The app's core installs its
+# own dependencies when it needs to build bytecode; the website's root packages are not part of this release.
+#   sh .github/release-desktop.sh [--stable] [--out DIR]
+set -eu
+cd "$(dirname "$0")/.."
+root=$PWD
+beta=--beta suffix=-beta channel=beta/ out=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --stable) beta= suffix= channel= ;;
+    --out) shift; out=${1:?--out needs a directory} ;;
+    *) echo "release-desktop: unknown argument $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+if [ -z "$out" ]; then
+  [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || { echo "CLOUDFLARE_API_TOKEN is required" >&2; exit 1; }
+  (cd cloud && pnpm install --frozen-lockfile --prefer-offline)
+fi
+dir=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/stillfail-release.XXXXXX")
+trap 'rm -rf "$dir"' EXIT
+if [ -n "${POSTHOG_JSON:-}" ]; then
+  (umask 077 && printf '%s' "$POSTHOG_JSON" > "$dir/posthog.json")
+  export STILLFAIL_POSTHOG="$dir/posthog.json"
+fi
+unset UNSIGNED
+export RELEASE_DIR="$dir/releases"
+# The signing helper removes its secrets from the child's environment. release.sh checks the signed archive's
+# identifier, team and build before making either the mbui or the older Electron updater's feed.
+python3 .github/mac_signing.py run -- sh scripts/release.sh ${beta:+$beta} desktop
+version=$(git rev-list --count HEAD)
+set -- "desktop/stillfail$suffix-0.1.$version-arm64-mac.zip" "mac/${channel}latest.json" "desktop/stillfail$suffix-mac.yml"
+for name do
+  [ -f "$RELEASE_DIR/$name" ] || { echo "Expected desktop artifact missing: $name" >&2; exit 1; }
+done
+for name do
+  if [ -n "$out" ]; then
+    mkdir -p "$out/$(dirname "$name")"
+    cp -p "$RELEASE_DIR/$name" "$out/$name"
+  fi
+done
+if [ -z "$out" ]; then
+  sh "$root/scripts/release-put.sh" "$RELEASE_DIR"
+fi

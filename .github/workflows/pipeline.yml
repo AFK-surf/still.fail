@@ -112,7 +112,7 @@ jobs:
           # Android one, for a change to what apps/mbui's Mac app is made of (its code, mbui's with its Mac host, the
           # client's, media's, vendor's) or to how it is built and released.
           mac_beta=false
-          if has '^(apps/mbui/(src|core|engine)/|apps/mbui/mbui/src/|apps/mbui/(mbui/)?moon\.(mod|work)$|client/|media/|vendor/|scripts/(release|mac-feeds)\.sh$|scripts/native\.ts$|\.github/(release-desktop|mac_signing)\.py$|apps/mbui/scripts/(beta|mac-app|mac|core)\.sh$|apps/mbui/scripts/mac-icon\.swift$)'; then mac_beta=true; fi
+          if has '^(apps/mbui/(src|core|engine)/|apps/mbui/mbui/src/|apps/mbui/(mbui/)?moon\.(mod|work)$|client/|media/|vendor/|scripts/(release|mac-feeds)\.sh$|scripts/native\.ts$|\.github/(release-desktop\.sh|mac_signing\.py)$|apps/mbui/scripts/(beta|mac-app|mac|core)\.sh$|apps/mbui/scripts/mac-icon\.swift$)'; then mac_beta=true; fi
           # The beta Windows app: mbui's in the Electron one's place (scripts/release.sh --beta desktop-win), released, as
           # the Mac one, for a change to what apps/mbui's Windows app is made of (its code, mbui's with its Windows host,
           # its installer, the client's, media's, vendor's) or to how it is built and released.
@@ -771,7 +771,14 @@ jobs:
           MACOS_DEVELOPER_ID_KEYCHAIN_B64_1: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 }}
           MACOS_DEVELOPER_ID_KEYCHAIN_B64_2: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_2 }}
           KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
-        run: python3 .github/release-desktop.py --out "$RUNNER_TEMP/release"
+        run: |
+          # The uploader's packages need none of the app's build; prepare them beside it.
+          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > "$RUNNER_TEMP/mac-put-deps.log" 2>&1) &
+          deps=$!
+          status=0
+          sh .github/release-desktop.sh --out "$RUNNER_TEMP/release" || status=$?
+          wait "$deps" || { cat "$RUNNER_TEMP/mac-put-deps.log"; status=1; }
+          exit "$status"
       - name: Build and verify the beta Mac app without publishing
         if: github.ref != 'refs/heads/main'
         env:
@@ -784,7 +791,6 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           build=$(git rev-list --count HEAD)
           cache=${MBUI_MAC_CACHE:-"$HOME/stillfail-ci/mbui-mac-beta"}
           work=${WORK:-"$cache/work"}

@@ -9,8 +9,10 @@ set -eu
 beta=--beta
 if [ "${1:-}" = --stable ]; then beta=""; shift; fi
 cd "$(dirname "$0")/.."
-pnpm install --frozen-lockfile --prefer-offline > /dev/null
-(cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+# An Android package needs the core's packages (installed by its build), not the website's. Its staging job
+# prepares the uploader after building. The station and modules still prepare their own uploader here.
+[ "${1:-}" = android ] || pnpm install --frozen-lockfile --prefer-offline > /dev/null
+{ [ "${1:-}" = android ] && [ -n "${RELEASE_DIR:-}" ]; } || (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
 dir=$(mktemp -d "${RUNNER_TEMP:-/tmp}/stillfail-release.XXXXXX")
 trap 'rm -rf "$dir"' EXIT
 [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || unset CLOUDFLARE_API_TOKEN

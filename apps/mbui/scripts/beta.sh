@@ -209,7 +209,7 @@ build() {
 
 # The macOS app, built in WORK (warm as the APK's: moon's outputs, the compiler's; the core's shell is
 # still.fail's natives, scripts/core.sh apple), signed under .github/mac_signing.py (still.fail's identity, its signing
-# lock held for the signing only; a caller holding it already, .github/release-desktop.py, signs in its keychain:
+# lock held for the signing only; a caller holding it already, .github/release-desktop.sh, signs in its keychain:
 # MAC_SIGN_IDENTITY set). MBUI_VARIANT=stable or beta: still.fail's Mac app itself, in the Electron app's place
 # (mac-app.sh's variants: fail.still.desktop(.beta)), for scripts/release.sh, which puts it on that app's feeds: the
 # signed app's zip alone, in $RELEASE_DIR/mac/app-<variant>.zip.
@@ -219,7 +219,7 @@ mac() {
   n=$(build_number)
   copy
   rm -rf "$RELEASE_DIR/mac" && mkdir -p "$RELEASE_DIR/mac"
-  env MBUI_BUILD=$n EMBER="$REPO" bash "$WORK/scripts/mac-app.sh" build 2>&1 \
+  env MBUI_BUILD=$n EMBER="$REPO" MBUI_SIGN_AFTER_BUILD=1 bash "$WORK/scripts/mac-app.sh" build 2>&1 \
     | tee "$C/mac-build.log"
   tb=$(secs $t0)
   sign=(python3 "$REPO/.github/mac_signing.py" run --)
