@@ -360,26 +360,24 @@ pub fn vault_ok(lock : LockView, prev : Json?, next : Json, copy : Bool, c : &Cr
         return Some("another vault")
       }
       let held = num(field(p, "seq"))
-      if copy && seq <= held {
-        return Some("a copy is later than seq " + whole(held))
-      }
-      if !copy && seq != held + 1.0 {
-        return Some("seq " + whole(held + 1.0) + " follows " + whole(held))
+      if !@history.follows(copy, held.to_int64(), seq.to_int64()) {
+        return Some(if copy { "a copy is later than seq " + whole(held) } else { "seq " + whole(held + 1.0) + " follows " + whole(held) })
       }
       if text_of(field(p, "owner")) != Some(owner) {
         return Some("a vault's owner does not change")
       }
-      if field(p, "deleted") is Some(True) && !deleted {
+      if !@history.deletion_ok(field(p, "deleted") is Some(True), deleted) {
         return Some("a deleted vault stays deleted")
       }
-      if epoch < num(field(p, "epoch")) {
+      let held_epoch = num(field(p, "epoch")).to_int64()
+      if !@history.epoch_ok(false, held_epoch, epoch.to_int64()) {
         return Some("the epoch does not go back")
       }
       let devices = keys.map(fn(k) { field(field(Some(k), "cert"), "device") })
       let kept = fn(d : Json?) { devices.iter().any(fn(x) { x == d }) }
       let gone = strings(field(p, "members")).iter().any(fn(m) { !(m is String(s) && members.contains(s)) }) ||
         strings(field(p, "keys")).iter().any(fn(k) { !kept(field(field(Some(k), "cert"), "device")) })
-      if gone && epoch == num(field(p, "epoch")) {
+      if !@history.epoch_ok(gone, held_epoch, epoch.to_int64()) {
         return Some("removing a member or device takes a new epoch (a new vault key)")
       }
     }
@@ -496,7 +494,7 @@ pub fn item_ok(lock : LockView, vault : Json, prev : Json?, next : Json, copy : 
   }
   let epoch = num(field(i, "epoch"))
   let vault_epoch = num(field(vault, "epoch"))
-  if epoch > vault_epoch || (!deleted && !copy && epoch != vault_epoch) {
+  if !@history.item_epoch_ok(deleted, copy, epoch.to_int64(), vault_epoch.to_int64()) {
     return Some("an item is written under the vault's epoch " + whole(vault_epoch))
   }
   let version = num(field(i, "version"))
@@ -510,11 +508,8 @@ pub fn item_ok(lock : LockView, vault : Json, prev : Json?, next : Json, copy : 
         return Some("the item was deleted")
       }
       let held = num(field(p, "version"))
-      if copy && version <= held {
-        return Some("a copy is later than version " + whole(held))
-      }
-      if !copy && version != held + 1.0 {
-        return Some("version " + whole(held + 1.0) + " follows " + whole(held))
+      if !@history.follows(copy, held.to_int64(), version.to_int64()) {
+        return Some(if copy { "a copy is later than version " + whole(held) } else { "version " + whole(held + 1.0) + " follows " + whole(held) })
       }
     }
   }

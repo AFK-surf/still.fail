@@ -478,7 +478,11 @@ pub fn apply(prev : LockState, e : Json, now : Double?, c : &Crypto) -> LockStat
   if safe_num(field(v, "v")) != Some(1.0) || text_of(field(v, "ws")) != Some(prev.ws) {
     refuse("an entry of another lock")
   }
-  if safe_num(field(v, "seq")) != Some(prev.seq + 1.0) || text_of(field(v, "prev")) != Some(prev.head) {
+  let follows = match safe_int(field(v, "seq")) {
+    Some(seq) => @history.follows(false, prev.seq.to_int64(), seq.to_int64())
+    None => false
+  }
+  if !follows || text_of(field(v, "prev")) != Some(prev.head) {
     refuse("the entry does not follow this lock's head")
   }
   if safe_int(field(v, "at")) is None {
@@ -663,7 +667,7 @@ pub fn admit(s : LockState, sub : String, endpoint : String, base : String?, pro
   if d.sub != sub {
     raise Refusal("this device is someone else's in the workspace's lock")
   }
-  if d.exp is Some(exp) && exp <= now {
+  if !@history.unexpired(d.exp is Some(_), d.exp.unwrap_or(0.0).to_int64(), now.to_int64()) {
     raise Refusal("this device's confirmation ran out")
   }
   guard s.members.get(d.sub) is Some(m) else { raise Refusal("not a member in the workspace's lock") }
