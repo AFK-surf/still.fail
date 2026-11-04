@@ -12,10 +12,13 @@ fn cc_mark_node(parent : @view.View, via : () -> String) -> Unit {
 ///|
 fn composer_note_node(parent : @view.View, note : () -> Array[(String, String)]) -> @view.View {
   parent.box(fn(p) {
+    // (where send's row has not the room for all of them, the names left out, the last first, each whole: each is in
+    // 抄送's menu, ticked; never cut nor a line of their own)
     p.row(Is(true)).gap(Is(8.0)).padding(Is((8.0, 0.0, 8.0, 0.0))).lines_up(Is(Some(Middle)))
+    .shrink(Is(1.0)).min_width(Is(Some(0.0))).fits(Is(true))
     .laid_nowhere(By(fn() { note().is_empty() })) |> ignore
     p.each(fn() { note().mapi(fn(i, n) { (i, n) }) }, fn(n) { n.0 }, fn(item, n) {
-      item.row(Is(true)).gap(Is(4.0)).lines_up(Is(Some(Middle))) |> ignore
+      item.row(Is(true)).gap(Is(4.0)).lines_up(Is(Some(Middle))).drops(Is(1)) |> ignore
       cc_mark_node(item, fn() { n.get().1.0 })
       item.box(fn(w) {
         w.words(By(fn() { n.get().1.1 })).words_look(By(fn() { @ui.style_words(cc_words) }))

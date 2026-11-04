@@ -118,7 +118,7 @@ fn composer_box_node(
             named["plus"] = part
           }
           "choices" => {
-            part.row(Is(true)).grow(Is(1.0)).min_width(Is(Some(0.0)))
+            part.row(Is(true)).min_width(Is(Some(0.0)))
             .laid_nowhere(By(fn() { !opened() }))
             .margin(By(fn() { (0.0, 0.0, 0.0, tools_in()) })) |> ignore
             choices(part)
@@ -126,7 +126,11 @@ fn composer_box_node(
             named["choices"] = part
           }
           "tail" => {
-            part.row(Is(true)).gap(Is(4.0)).lines_up(Is(Some(Middle)))
+            // Opened, it takes what ＋ and the choices leave of their line, from nothing, its controls at its end: never
+            // wider than that line, so it never goes on to a line of its own at the box's left (send there, past its
+            // edge, the names it is copied to long). What it holds gives way there by leaving those names out.
+            part.row(Is(true)).gap(Is(4.0)).lines_up(Is(Some(Middle))).lies_along(Is(End))
+            .width(By(fn() { if opened() { Some(0.0) } else { None } })).grow(By(fn() { if opened() { 1.0 } else { 0.0 } }))
             .margin(By(fn() { if opened() { (0.0, 0.0, tools_in(), tools_in()) } else { (0.0, 0.0, 0.0, 0.0) } })) |> ignore
             // The chooser can come and go before the note and send button. Each keeps its own place through
             // that change; moving their shared row would carry them across by the chooser's changing width.
