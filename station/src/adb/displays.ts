@@ -197,7 +197,7 @@ export class PhoneDisplays {
     const display: Display = { ...made, surface: surface ?? String(made.id) };
     const held: Held = { grant, owner, title, display, opened: wall.now(), child, socket, forward, closing: false };
     this.#held.set(grant, held);
-    const gone = () => this.#gone(held);
+    const gone = () => void this.#gone(held);
     child.on("close", gone);
     socket.on("close", gone);
     socket.on("error", gone);
@@ -212,8 +212,9 @@ export class PhoneDisplays {
     return display;
   }
 
-  #gone(held: Held) {
-    if (this.#held.get(held.grant) !== held) return;
+  /// Done once its apps are closed and scrcpy is ended (the grant's adb server is still needed till then).
+  #gone(held: Held): Promise<void> {
+    if (this.#held.get(held.grant) !== held) return Promise.resolve();
     this.#held.delete(held.grant);
     held.closing = true;
     const [adb, ...server] = held.forward.adb;
@@ -226,10 +227,10 @@ export class PhoneDisplays {
         return tasks.length === 0 ? "" : shell(tasks.map((t) => `am stack remove ${t}`).join("; "));
       })
       : Promise.resolve("");
-    void closing.catch(() => "").then(() => {
+    const ended = closing.catch(() => "").then(() => {
       held.socket.destroy();
       held.child.kill();
-      void adbRun(adb!, [...server, "forward", "--remove", `tcp:${held.forward.port}`]).catch(() => {});
+      return adbRun(adb!, [...server, "forward", "--remove", `tcp:${held.forward.port}`]).then(() => {}, () => {});
     });
     log.info("adb", "a chat's display closed", { grant: held.grant });
     this.#o.changed(held.owner);
@@ -237,12 +238,14 @@ export class PhoneDisplays {
       this.#check?.();
       this.#check = null;
     }
+    return ended;
   }
 
-  /// Grant `grant`'s display closed (the grant ended, handed back); its apps close with it.
-  close(grant: string) {
+  /// Grant `grant`'s display closed (the grant ended, handed back); its apps close with it. Done when the phone is
+  /// through with it: the grant's adb server is stopped only then.
+  close(grant: string): Promise<void> {
     const held = this.#held.get(grant);
-    if (held !== undefined) this.#gone(held);
+    return held === undefined ? Promise.resolve() : this.#gone(held);
   }
 
   #watch() {
@@ -260,13 +263,13 @@ export class PhoneDisplays {
     const most = this.#o.idleMs ?? IDLE_MS;
     for (const held of [...this.#held.values()]) {
       const used = this.#o.usedAt(held.grant);
-      if (used === null || now - Math.max(used, held.opened) >= most) this.#gone(held);
+      if (used === null || now - Math.max(used, held.opened) >= most) void this.#gone(held);
     }
   }
 
   closeAll() {
     this.#closed = true;
-    for (const held of [...this.#held.values()]) this.#gone(held);
+    for (const held of [...this.#held.values()]) void this.#gone(held);
   }
 }
 

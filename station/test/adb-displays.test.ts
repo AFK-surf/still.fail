@@ -179,10 +179,11 @@ esac
     await displays.open("g1", "p@x", "修登录页", 41000, "127.0.0.1:37001");
     assert.equal(readFileSync(calls, "utf8").split("\n").filter((l) => / push /.test(l)).length, 1);
     assert.equal(displays.has("g1"), true);
-    displays.close("g1");
+    const closed = displays.close("g1");
     assert.equal(displays.has("g1"), false);
-    // Its apps closed before it; the person's screen's left alone.
-    for (let i = 0; i < 100 && !readFileSync(calls, "utf8").includes("am stack remove 7"); i++) await new Promise((r) => setTimeout(r, 20));
+    // Its apps closed before it, the person's screen's left alone, and all that done when the close is (the grant's
+    // adb server is stopped only then: stopped at once, the apps were never closed).
+    await closed;
     assert.match(readFileSync(calls, "utf8"), /shell STILLFAIL_ADB_KEEP=1 STILLFAIL_ADB_DISPLAY=1 am stack remove 7\n/);
   } finally {
     displays.closeAll();
