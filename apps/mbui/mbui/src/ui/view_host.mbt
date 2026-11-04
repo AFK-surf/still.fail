@@ -270,6 +270,9 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   let made : Ref[@view.Tree?] = Ref(None)
   let t = @view.Tree::new(
     fn(root) {
+      // The host must receive focus and layer requests made by the page's construction too. Attach the empty
+      // tree first, then make its children; no geometry is needed to decide who has the initial focus.
+      view_attached(root.tree)
       make(root)
       // (its words shaped as the theme it is drawn in says (its digits all one width or not: the app's, set_tree_theme,
       // else the window's for its width): as that changes, every word measured and drawn again so at the change's
@@ -287,6 +290,17 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
     time=fn() { h_event_time() },
   )
   made.val = Some(t)
+  view_due.set(@signals.untracked(fn() { view_due.get() }) + 1)
+  // (the tree in place of the one before, whole: whether the app takes back, as it has it, told the host now, as a change
+  // to it is: what it takes it by said as it was made, before what tells of its changes was set)
+  g().back_told_host()
+}
+
+///|
+/// Connect the window's tree before constructing its page. Initial focus, modal and gesture notifications have
+/// the same receiver as subsequent changes, rather than being lost while Tree::new calls its builder.
+fn view_attached(t : @view.Tree) -> Unit {
+  view_app.val = Some(t)
   // (what the old frame's topmost modal layer holds under it, as it is as an input asks: one dismissed by it, at once;
   // Tree::held_under_by)
   t.held_under_by(fn() { g().old_modal_stack() })
@@ -341,12 +355,6 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
       h_frame_owed()
     }
   })
-  view_app.val = Some(t)
-  tree_fields_attached()
-  view_due.set(@signals.untracked(fn() { view_due.get() }) + 1)
-  // (the tree in place of the one before, whole: whether the app takes back, as it has it, told the host now, as a change
-  // to it is: what it takes it by said as it was made, before what tells of its changes was set)
-  g().back_told_host()
 }
 
 ///|
@@ -366,7 +374,6 @@ pub fn view_painted() -> ViewPaintWork {
 /// was said in): none takes back till a frame of the next says what does; nothing held of them.
 fn view_forget() -> Unit {
   view_events.clear()
-  tree_field_focus_pending.clear()
   view_frame_committed.val = false
   view_read_tells.clear()
   view_shape_of.val = OfOld
