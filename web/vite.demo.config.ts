@@ -10,6 +10,18 @@ const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 // STILLFAIL_SITE=beta (`pnpm build:site-beta`): the site of the test channel, youdid.wtf (into dist/site-beta): the
 // same page, named youdid.wtf, its downloads the beta apps' (src/site/Site.tsx).
 const beta = process.env.STILLFAIL_SITE === "beta";
+// STILLFAIL_PRODUCT=monoid (cloud/deploy.py, monoid's cloud): monoid's site (monoid.build, its test channel's monoid.zone),
+// the same page named monoid, its links and downloads its cloud's (client/i18n/brand.ts).
+const monoid = process.env.STILLFAIL_PRODUCT === "monoid";
+/** The page's head, named monoid (monoid.zone on the test channel), its link previews' image on its own host. */
+const monoidHead: Plugin = {
+  name: "stillfail-site-monoid",
+  transformIndexHtml: (html) => html
+    .replace(/(?<![\w./@-])still\.fail(?![\w-]|\.\w)/g, beta ? "monoid.zone" : "monoid")
+    .replace(/(?<![\w./@-])youdid\.wtf(?![\w-]|\.\w)/g, "monoid.zone")
+    .replaceAll("https://still.fail/", beta ? "https://monoid.zone/" : "https://monoid.build/")
+    .replaceAll("https://youdid.wtf/", "https://monoid.zone/"),
+};
 /** The page's head, named youdid.wtf for the test channel's site, its icons the beta apps' face. */
 const betaHead: Plugin = {
   name: "stillfail-site-beta",
@@ -73,9 +85,10 @@ export default defineConfig({
   root: here("../site"),
   publicDir: here("public"),
   base: "/",
-  plugins: [react(), vanillaExtractPlugin(), keptForGood, noFormulas, ...(beta ? [betaHead] : [])],
+  plugins: [react(), vanillaExtractPlugin(), keptForGood, noFormulas, ...(beta ? [betaHead] : []), ...(monoid ? [monoidHead] : [])],
   define: {
     __SITE_BETA__: JSON.stringify(beta),
+    __SITE_MONOID__: JSON.stringify(monoid),
     __SITE_RELEASE__: JSON.stringify(lastRelease()),
     __POSTHOG__: "null",
     __BUILT_AT__: JSON.stringify(Date.now()),
