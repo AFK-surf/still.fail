@@ -463,12 +463,13 @@ export class LoginManager {
   /// The Antigravity CLI goes on into its interface once signed in: done when it has written its sign-in since the code
   /// went in; failed when it has not in a while (a code it did not take: it says nothing a program can read of it).
   private awaitAgy(profile: string, running: Running) {
-    const since = Date.now() - 1000;
-    const until = since + AGY_WAIT_MS;
+    // (the file's time is the machine's: compared with the wall's; how long it is waited for, the station's clock)
+    const since = wall.now() - 1000;
+    const until = this.background.now() + AGY_WAIT_MS;
     const look = () => {
       if (this.jobs.get(profile) !== running) return;
       if (running.home !== undefined && writtenSince(agyToken(running.home), since)) return this.finish(profile, "done", null);
-      if (Date.now() > until) return this.finish(profile, "failed", tr(running.lang, "station.login.agyCodeRefused"));
+      if (this.background.now() > until) return this.finish(profile, "failed", tr(running.lang, "station.login.agyCodeRefused"));
       running.stop = this.background.after(AGY_POLL_MS, look);
     };
     look();
