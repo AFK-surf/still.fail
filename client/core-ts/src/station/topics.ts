@@ -547,7 +547,7 @@ export class StationTopics implements Owner {
     const found = this.#window(station, id);
     if (!found || found[1].first <= 1) return;
     const before = found[1].first;
-    this.#core.runner.fork(Effect.ignore(this.#sync.ask(station, `older/${id}/${before}`, this.#sync.channels.older(entriesOf(station, id), before, { quiet: true }))), { log: "Unhandled", message: "older read ahead" });
+    this.#core.runner.fork(Effect.ignore(this.#sync.ask(station, `older/${id}/${before}`, this.#sync.channels.older(entriesOf(station, id), before, { quiet: true }))));
   }
 
   /// How far a thread is known to go: its summary's last, or what is held past it.
