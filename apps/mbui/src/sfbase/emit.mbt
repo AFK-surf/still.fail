@@ -253,6 +253,23 @@ pub fn emit_held(e : Emits, seq : Double) -> Bool {
 }
 
 ///|
+/// The messages waiting their turn (emit_held), by their seqs: those queued and the one under way, a few.
+pub fn emit_held_seqs(e : Emits) -> Array[Double] {
+  e.read()
+  let out = []
+  for q in e.queue {
+    if emit_held(e, q.0) {
+      out.push(q.0)
+    }
+  }
+  match e.current {
+    Some(t) if emit_held(e, t.seq) && !out.contains(t.seq) => out.push(t.seq)
+    _ => ()
+  }
+  out
+}
+
+///|
 /// In the list where it comes in, its avatar on its way to it (Float): not drawn yet.
 pub fn emit_awaited(e : Emits, seq : Double) -> Bool {
   e.read()

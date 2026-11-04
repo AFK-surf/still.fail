@@ -6,7 +6,8 @@
 // for its kind of message, activity, card or list marker.
 
 ///|
-/// Chat `r`'s list in `v`: `view` and `entries` as the core says them now (none while it is read the first time),
+/// Chat `r`'s list in `v`: `view` as the core says it now (none while it is read the first time), its rows read by
+/// index (sfbase ChatRows: a message come is that row's change alone),
 /// `top` the room over its first row, `foot` under its last (the composer's), `core` the settings' over its workspace;
 /// `follows` said whether it is kept at its end, as that changes.
 pub fn chat_list_node(
@@ -14,7 +15,6 @@ pub fn chat_list_node(
   src : Source,
   r : ChatRef,
   view : () -> ChatView?,
-  entries : () -> Array[Entry],
   top : () -> Double,
   foot : () -> Double,
   core : Core,
@@ -79,30 +79,10 @@ pub fn chat_list_node(
   // (an agent's message waiting its turn to come out of its avatar not in it yet: emit.mbt's emit_held)
   let em = @sfbase.emits_of(rk)
   let rd0 = @sfbase.reading_of(rk)
-  // (what was sent from here in it from the frame it is sent, taken by the core's row once it has it: sent_rows_taken,
-  // as the old list's row_keys; an agent's line staying a moment after its turn, with_lingering; told as words set off,
-  // as the core's view changes and as a line stays or goes)
-  let listed : @signals.Signal[Array[Entry]] = @signals.signal([], same=fn(a, b) { physical_equal(a, b) })
-  v.reacts(fn() { ListedFrom::{ all: entries(), cv: view(), f: @sfbase.send_flight.get(), lingered: rd0.linger_said.get() } }, fn(now) {
-    let { all, cv, f } = now
-    match cv {
-      Some(cv) => {
-        @sfbase.chat_take(@ui.current(), rk, rd0, cv, shown=shown_by(), in_front=app_in_front())
-        let (rows, _, _) = @sfbase.sent_rows_taken(rd0, rk, cv, @sfbase.with_lingering(rd0, all), f)
-        listed.set(rows)
-      }
-      None => listed.set(@sfbase.with_lingering(rd0, all))
-    }
-  })
   // (a row's key: the core's, else the key it was sent as from here; Reading's sent and sent_as, row_keys's)
   let id_of = fn(e : Entry) -> String {
-    rd0.sent_as_told.get() |> ignore
     let k = match e {
-      Said(m) =>
-        match rd0.sent.get(m.seq) {
-          Some(o) => "o:" + o
-          None => e.id()
-        }
+      Said(m) => @sfbase.said_key(rd0, m)
       _ => e.id()
     }
     rd0.sent_as.get(k).unwrap_or(k)
@@ -116,28 +96,72 @@ pub fn chat_list_node(
     }
     rd0.sent_as.get(k).unwrap_or(k)
   }
-  let entries_now = fn() -> Array[Entry] {
-    let items = listed
-    .get()
-    .filter(fn(e) {
-      match e {
-        Top | Foot => false
-        Said(m) => !@sfbase.emit_held(em, m.seq)
-        _ => true
-      }
-    })
-    [Top] + items + [Foot]
-  }
+  // its rows, one for each message, read by index (ChatRows): the messages' changes taken as they come, the rows at
+  // its ends (what was sent from here, taken by the core's row once it has it: tail_taken, as the old list's row_keys;
+  // an agent's line staying a moment after its turn, with_lingering) made again as the core's view changes, as words
+  // set off and as a line stays or goes; an agent's message waiting its turn to come out of its avatar not in it yet
+  // (emit.mbt's emit_held)
+  let key_of = fn(m : Message) { id_of(Said(m)) }
+  let rows_now : @signals.Signal[@sfbase.ChatRows] = @signals.signal(
+    @sfbase.ChatRows::new(@sfbase.ChatMessages::of_value(None), key_of),
+    same=fn(a, b) { physical_equal(a, b) },
+  )
+  v.owns(fn() { @signals.untracked(fn() { rows_now.get() }).let_go() }) |> ignore
+  v.reacts(fn() {
+    em.read()
+    ListedFrom::{ cv: view(), f: @sfbase.send_flight.get(), lingered: rd0.linger_said.get(), emitted: em.said.get() }
+  }, fn(now) {
+    let { cv, f, .. } = now
+    guard cv is Some(cv) else { return }
+    @sfbase.chat_take(@ui.current(), rk, rd0, cv, shown=shown_by(), in_front=app_in_front())
+    // (those waiting their turn as what came is decided: emit_take's)
+    let held = @signals.untracked(fn() { @sfbase.emit_held_seqs(em) })
+    let tail = @sfbase.tail_taken(rd0, rk, cv, f)
+    let was = @signals.untracked(fn() { rows_now.get() })
+    let cr = if physical_equal(was.messages, cv.messages) {
+      was
+    } else {
+      was.let_go()
+      @sfbase.ChatRows::new(cv.messages, key_of)
+    }
+    cr.take(cv, tail, empty=@sfbase.fresh_view(r) is None, held~)
+    rows_now.set(cr)
+  })
   // (in from the pane's sides to the column (row_side's): 16 narrow (as wide as the composer's words beside the
   // system's bars), else the column 760 wide at most in its middle (48 in beside the system's bars))
   let side = fn() {
     let w = match row_width.now() { Some(w) => w; None => v.window().0 }
     row_side_in(w)
   }
+  // (the message the unread line is over, followed as that changes alone)
+  let line_seq = @signals.computed(fn(_) { view().bind(fn(cv) { cv.unread_line }) }, same=fn(a, b) { a == b })
+  // (a message's row: the unread line over it where it is over it, its own gap under the line (joined, 4; else the
+  // rows' gap), the message (`body`), where it was sent elsewhere under it, each the rows' gap under the one before:
+  // what were rows of their own, each its own)
+  let gap_of = fn(joined : Bool) {
+    if joined { joined_gap } else if narrow() { list_gap_narrow } else { list_gap }
+  }
+  let said_parts = fn(row : @view.View, m : () -> Message, here : () -> MessageHere, body : (@view.View) -> Unit) {
+    row.show(fn() { line_seq.get() == Some(m().seq) }, fn(l) {
+      l.padding(By(fn() { (0.0, 0.0, 0.0, gap_of(m().joined)) })) |> ignore
+      l.box(fn(b) { unread_line_node(b) }) |> ignore
+    })
+    row.box(body) |> ignore
+    row.pick(fn() { m().elsewhere.length() }, fn(sent, n) {
+      for i in 0..<n {
+        sent.box(fn(b) {
+          b.padding(By(fn() { (0.0, gap_of(false), 0.0, 0.0) })) |> ignore
+          sent_elsewhere_node(b, src, here, fn() { m().elsewhere.get(i).unwrap_or_else(fn() { m().elsewhere[0] }) })
+        })
+        |> ignore
+      }
+    })
+  }
   // (the room over row `e`, `i`th: none over the first, 4 over a message joined to the one before, else the gap)
   let gap_kind = fn(e : Entry, i : Int) -> Int {
     let joined = match e {
-      Said(m) => m.joined
+      // (the unread line over it: the gap over the line, then its own under it, said_parts')
+      Said(m) => m.joined && line_seq.get() != Some(m.seq)
       Out(o) => o.joined
       _ => false
     }
@@ -169,7 +193,7 @@ pub fn chat_list_node(
   let sent_foot = Ref("")
   let row_sizes : @ui.ListRows[Entry] = @ui.ListRows::new()
   rd0.rows = row_sizes
-  let sized = row_sizes.in_node(v, entries_now, id_of, fn(e) {
+  let sized = rows_sized(row_sizes, v, fn() { rows_now.get() }, id_of, fn(e) {
     match e {
       Foot => {
         match leaving() {
@@ -230,28 +254,12 @@ pub fn chat_list_node(
     },
     own=fn(e) { e is Foot },
   )
-  let rows = fn() { (sized.read)().0 }
-  let keys = fn() { (sized.read)().1 }
-  // The visible rows read their content and position many times as they scroll. Index this version once instead
-  // of searching the complete history for each one. A departing row keeps its list key until its room closes.
-  let row_positions = @signals.computed(fn(_) {
-    let positions : Map[String, Int] = {}
-    for i, k in keys() { positions[k] = i }
-    positions
-  })
+  // (the row keyed `k` and where it is among them (one going too), followed by what it shows and by which is the first
+  // under the bar (no gap over it))
   let row_of = fn(k : String) -> (Entry, Int)? {
-    row_positions.get().get(k).map(fn(i) { (rows()[i], i) })
+    rows_now.get().lead() |> ignore
+    (sized.item_of)(k)
   }
-  // Reading and decision markers use the entry's current identity, which can differ from a departing list key
-  // when a sent message is taken over by the core. Keep the first match, as their history lookup did before.
-  let entries_by_key = @signals.computed(fn(_) {
-    let entries : Map[String, Entry] = {}
-    for e in rows() {
-      let k = id_of(e)
-      if !entries.contains(k) { entries[k] = e }
-    }
-    entries
-  })
   // (the rows made now, by their keys: where each is, what is read)
   let row_views : Map[String, @view.View] = {}
   let row_rects : @sf.LiveMap[String, (Double, Double, Double, Double)] = @sf.LiveMap::new()
@@ -266,7 +274,8 @@ pub fn chat_list_node(
     col.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
     col.scrolls_anchored(
       scroll,
-      keys,
+      fn() { [] },
+      indexed=sized.source,
       est=chat_row_est,
       follows~,
       shown~,
@@ -417,7 +426,6 @@ pub fn chat_list_node(
             Some((Said(m), _)) => message_made_whole(m)
             Some((Out(_), _)) => 3
             Some((Working(_), _)) => 4
-            Some((Line, _)) => 6
             Some((Older, _)) => 7
             Some((Newer, _)) => 8
             Some((Empty, _)) => 9
@@ -441,9 +449,7 @@ pub fn chat_list_node(
                 _ => last.val.unwrap_or_else(fn() { @sfbase.message_of(Json::object({})) })
               }
             }
-            if whole == 6 {
-              unread_line_node(row)
-            } else if whole == 7 || whole == 8 {
+            if whole == 7 || whole == 8 {
               pages_coming_node(row, whole == 7)
             } else if whole == 9 {
               chat_empty_node(row)
@@ -471,7 +477,7 @@ pub fn chat_list_node(
                 }
               })
             } else if whole == 5 {
-              notice_node(row, src, here, m)
+              said_parts(row, m, here, fn(b) { notice_node(b, src, here, m) })
             } else if whole == 4 {
               // (an agent at work as it is now; as it last was while its row goes; new to the list as it is
               // watched, its first words coming in from then)
@@ -501,9 +507,9 @@ pub fn chat_list_node(
               }
               outbox_node(row, src, here, o, fn() { v.window().0 }, None, key=fn() { k })
             } else if whole == 2 {
-              mine_message_node(row, src, here, m, fn() { v.window().0 }, None, key=fn() { k })
+              said_parts(row, m, here, fn(b) { mine_message_node(b, src, here, m, fn() { v.window().0 }, None, key=fn() { k }) })
             } else {
-              others_message_node(row, src, here, m, None)
+              said_parts(row, m, here, fn(b) { others_message_node(b, src, here, m, None) })
             }
           }
         })
@@ -523,7 +529,9 @@ pub fn chat_list_node(
   // (the first of what was sent from here not in the chat yet, as the list has it: a message out of an avatar comes
   // in over it, emit.mbt; list_frame's out_key. The outbox lies at its end, before where it stands, its agents at work)
   v.reacts(fn() {
-    let all = rows()
+    let cr = rows_now.get()
+    cr.changed() |> ignore
+    let all = cr.tail()
     let mut at = ""
     let mut i = all.length() - 1
     while i >= 0 {
@@ -543,16 +551,16 @@ pub fn chat_list_node(
   })
   let to_end = fn() {
     // (further than list_glide_rows rows from its end, at once: an old view's list_to_end's glide_to_end)
-    let keys = @signals.untracked(rows).map(id_of)
-    let in_sight = @signals.untracked(fn() { shown.get() })
-    let far = match in_sight.last() {
-      Some(last) =>
-        match keys.search(last) {
-          Some(i) => keys.length() - 1 - i > chat_glide_rows
-          None => true
-        }
-      None => true
-    }
+    let far = @signals.untracked(fn() {
+      match shown.get().last() {
+        Some(last) =>
+          match row_of(last) {
+            Some((_, i)) => (sized.source.snapshot)().1 - 1 - i > chat_glide_rows
+            None => true
+          }
+        None => true
+      }
+    })
     follows.set(true)
     scroll.glide_to(scroll.most(), glide=!far)
   }
@@ -577,14 +585,13 @@ pub fn chat_list_node(
   // even when another input arrives before the next display frame.
   @ui.react_laid(v, fn() {
     let in_sight = shown.get()
-    let positions = row_positions.get()
-    let first = in_sight.get(0).bind(fn(k) { positions.get(k) })
-    let last = in_sight.last().bind(fn(k) { positions.get(k) })
+    let first = in_sight.get(0).bind(fn(k) { row_of(k).map(fn(r) { r.1 }) })
+    let last = in_sight.last().bind(fn(k) { row_of(k).map(fn(r) { r.1 }) })
     let page = view().map(fn(cv) {
       (cv.more, cv.newer, cv.first_entry, cv.last_entry, cv.thread, cv.messages.length(),
         cv.messages.get(0).map(fn(m) { m.seq }), cv.messages.last().map(fn(m) { m.seq }))
     })
-    (first, last, rows().length(), page)
+    (first, last, (sized.source.snapshot)().1, page)
   }, fn(now) {
     let (first, last, count, page) = now
     let rd = rd0
@@ -631,7 +638,7 @@ pub fn chat_list_node(
   // put in place once (list_after's): at the unread line, else where it was left here this run (unless at its end with
   // nothing new since), else where the core opened it (that message's top as far below the list's as it was, else
   // under the bar), else at its end, where it starts
-  v.reacts(fn() { (view().map(fn(cv) { cv.messages.length() }), rows().length()) }, fn(_) {
+  v.reacts(fn() { (view().map(fn(cv) { cv.messages.length() }), rows_now.get().length()) }, fn(_) {
     let rd = rd0
     guard !rd.put && !@sfbase.at_end_asked() else { return }
     guard @signals.untracked(view) is Some(cv) else { return }
@@ -639,7 +646,7 @@ pub fn chat_list_node(
     guard !cv.unread_above else { return }
     rd.placed = true
     rd.put = true
-    let all = @signals.untracked(rows)
+    let cr = @signals.untracked(fn() { rows_now.get() })
     let newest = cv.messages.last().map(fn(m) { m.seq }).unwrap_or(-1.0)
     let kept = @sfbase.kept_places.get(rk)
     let left_at_end = match kept {
@@ -647,24 +654,28 @@ pub fn chat_list_node(
       None => false
     }
     let opened_at = if left_at_end { None } else { cv.at }
-    let mut line = None
-    let mut at = None
-    let mut was = None
-    for e in all {
-      match e {
-        Line => line = Some(id_of(e))
-        Said(m) => {
-          match opened_at {
-            Some(a) if at is None && m.seq >= a => at = Some(id_of(e))
-            _ => ()
-          }
-          match kept {
-            Some(p) if !left_at_end && m.seq == p.top => was = Some(id_of(e))
-            _ => ()
-          }
-        }
-        _ => ()
+    // (each looked for among the messages by its seq, by halves: the unread line's over its message, in its row)
+    let n = cv.messages.length()
+    let line = match cv.unread_line {
+      Some(seq) => {
+        let i = cr.message_at(seq)
+        if i >= 0 { Some(cr.message_key(i)) } else { None }
       }
+      None => None
+    }
+    let at = match opened_at {
+      Some(a) => {
+        let i = cr.message_from(a)
+        if i < n { Some(cr.message_key(i)) } else { None }
+      }
+      None => None
+    }
+    let was = match kept {
+      Some(p) if !left_at_end => {
+        let i = cr.message_from(p.top)
+        if i < n && cv.messages[i].seq == p.top { Some(cr.message_key(i)) } else { None }
+      }
+      _ => None
     }
     rd.lined = line is Some(_)
     match (line, was, at) {
@@ -681,42 +692,41 @@ pub fn chat_list_node(
   // the unread line come after the list was put in place (what came while the app was away, read after the chat
   // opened, the list at its end as it came): put there, as at a chat opened with it, while the reader is still at its
   // end (Chat.tsx `lined`)
-  v.reacts(fn() { rows().map(id_of) }, fn(keys) {
+  v.reacts(fn() {
+    let cr = rows_now.get()
+    cr.changed() |> ignore
+    (cr, line_seq.get())
+  }, fn(now) {
+    let (cr, line_at) = now
     let rd = rd0
-    // (the rows it has had, Reading's known: what words sent go on to, what came new told by)
-    for k in keys {
-      rd.known[k] = true
+    // (the rows at its ends it has had, Reading's known: what words sent go on to)
+    for e in cr.tail() {
+      rd.known[id_of(e)] = true
     }
     rd.drawn = true
-    if rd.put && !rd.lined && keys.contains("line") {
+    guard rd.put && !rd.lined && line_at is Some(seq) else { return }
+    let i = cr.message_at(seq)
+    if i >= 0 {
       rd.lined = true
       if @signals.untracked(fn() { follows.get() }) {
-        put.set(Some(("line", @signals.untracked(top))))
+        put.set(Some((cr.message_key(i), @signals.untracked(top))))
       }
     }
   })
   // a message gone to (go_to: a notification's, a quote's, the bell's), once the list is in place: there, its top under
   // the bar, flashing (only the passage a quote quoted, where its words have it); the pages before brought in until
   // it is (none left, or it is gone)
-  v.reacts(fn() { (@sfbase.go_to_said.get(), rows().map(id_of)) }, fn(_) {
+  v.reacts(fn() { (@sfbase.go_to_said.get(), rows_now.get().changed()) }, fn(_) {
     let rd = rd0
     guard rd.placed && @sfbase.go_tos.get(rk) is Some(target) else { return }
     guard @signals.untracked(view) is Some(cv) else { return }
-    let all = @signals.untracked(rows)
-    let mut first = -1.0
-    let mut found : (String, Message)? = None
-    for e in all {
-      match e {
-        Said(m) => {
-          if first < 0.0 {
-            first = m.seq
-          }
-          if m.seq == target && found is None {
-            found = Some((id_of(e), m))
-          }
-        }
-        _ => ()
-      }
+    let cr = @signals.untracked(fn() { rows_now.get() })
+    // (the first message's seq; the one gone to, looked for by halves)
+    let first = cv.messages.get(0).map(fn(m) { m.seq }).unwrap_or(-1.0)
+    let i = cr.message_from(target)
+    let found = match cv.messages.get(i) {
+      Some(m) if m.seq == target => Some((cr.message_key(i), m))
+      _ => None
     }
     match found {
       Some((k, m)) => {
@@ -762,9 +772,8 @@ pub fn chat_list_node(
   // the list's top its top is, the message at its foot; told the core as the list comes to rest (tell_place) and what
   // is read (tell_focus)
   @ui.read_drawn(v, fn() {
-    let all = entries_by_key.get()
     let in_sight = shown.get().map(fn(k) {
-      let e = all.get(k)
+      let e = row_of(k).map(fn(r) { r.0 })
       let seq = match e { Some(Said(m)) => m.seq; _ => -1.0 }
       (seq, row_rects.get(k), e is Some(State(_, _, _)))
     })
@@ -835,10 +844,9 @@ pub fn chat_list_node(
     if in_sight.length() == 0 {
       return false
     }
-    let all = entries_by_key.get()
     !in_sight.iter().any(fn(k) {
-      match all.get(k) {
-        Some(Said(m)) => asks.contains(m.seq)
+      match row_of(k) {
+        Some((Said(m), _)) => asks.contains(m.seq)
         _ => false
       }
     })
@@ -1082,16 +1090,16 @@ pub fn chat_flight_layer(r : ChatRef) -> @view.View? {
 /// What a chat's list's rows are taken from (chat_list_node's `listed`): its entries and view as the core says them,
 /// the words sent flying (each the same only as the very one), how many times the lines staying a moment changed.
 priv struct ListedFrom {
-  all : Array[Entry]
   cv : ChatView?
   f : SendFlight?
   lingered : Int
+  emitted : Int
 }
 
 ///|
 impl Eq for ListedFrom with equal(self, other) {
-  physical_equal(self.all, other.all) &&
   self.lingered == other.lingered &&
+  self.emitted == other.emitted &&
   (match (self.cv, other.cv) {
     (Some(a), Some(b)) => physical_equal(a, b)
     (None, None) => true
