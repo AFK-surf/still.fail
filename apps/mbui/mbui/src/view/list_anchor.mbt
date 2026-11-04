@@ -134,13 +134,25 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
     let n = was.unwrap_or(0)
     if put_at.get() is Some(_) { n + 1 } else { n }
   })
-  // (where the hand has it is its alone, kept within nothing: what its layout reads is how far it moved since it was
-  // last laid out, the list holding itself at its ends; its bar shows it where it is counted to be among all it
-  // holds, as far from where the hand has it as it was when it was last laid out)
+  // (where the hand has it: what its layout reads is how far it moved since it was last laid out, never changed by the
+  // list as it is laid out; how far that is from where it is counted to be among all it holds, as last laid out, what
+  // its bar and what reads where it is add to it, and where the hand has it is put by as the hand comes to it again:
+  // its ends, their give and a fling's end all as it is counted, from that event)
   let bar_off = Ref(0.0)
-  s.unbounded = true
   s.bar_off = fn() { bar_off.val }
-  self.owns(fn() { s.unbounded = false; s.bar_off = fn() { 0.0 } }) |> ignore
+  s.rebase = fn() {
+    let d = bar_off.val
+    if d != 0.0 {
+      bar_off.val = 0.0
+      seen_x.val = seen_x.val.map(fn(x) { x + d })
+      if s.as_list {
+        s.grew_above(d)
+      } else {
+        @signals.untracked(fn() { s.x.set(s.x.get() + d) })
+      }
+    }
+  }
+  self.owns(fn() { s.bar_off = fn() { 0.0 }; s.rebase = fn() { } }) |> ignore
   // (how tall all it holds is counted, as its layout last counted it: what its bar reads once it is laid out, no signal
   // read then)
   let foot_laid = Ref(0.0)
@@ -428,10 +440,10 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
               let to_top = top - c.cover
               let to_end = most - counted
               if from_top && to_top < to_end - 0.5 {
-                s.glide_to(c.x + to_top)
+                s.glide_to(c.x + to_top, kept=false)
                 follows.set(false)
               } else {
-                s.glide_to(c.x + to_end)
+                s.glide_to(c.x + to_end, kept=false)
               }
             }
             _ => ()
