@@ -130,8 +130,9 @@ export const LOGIN_CARDS =
   "SELECT thread, n, author FROM entries INDEXED BY entries_login_cards WHERE kind = 'message' AND author_kind = 'agent' AND card LIKE '%\"login\"%' AND card LIKE ? AND NOT EXISTS (SELECT 1 FROM closed_cards c WHERE c.thread = entries.thread AND c.n = entries.n)";
 export const PEOPLE_SAID_AFTER =
   "SELECT COUNT(*) AS c FROM (SELECT n FROM entries INDEXED BY entries_people_by_n WHERE thread = ? AND n > ? AND kind = 'message' AND author_kind = 'person' ORDER BY n LIMIT ?)";
-const POST_BLOCKS_READY = `SELECT fresh OR EXISTS (SELECT 1 FROM post_blocks_coverage
+export const POST_BLOCKS_READY = `SELECT fresh OR EXISTS (SELECT 1 FROM post_blocks_coverage
   WHERE thread = ?1 AND (complete = 1 OR cursor <= ?2 + 1)) AS ready FROM post_blocks_meta WHERE id = 1`;
+export const POST_AFTER_FIRST = "SELECT n, ts, kind, author_kind, author FROM entries WHERE thread = ? AND n > ? ORDER BY n LIMIT 1";
 // +e.n keeps the after-position as a filter: otherwise SQLite picks it as the lower index bound and reads the entire
 // gap before the candidate block, even though both block boundaries are also present.
 export const POST_AFTER_INDEXED = `WITH first(bucket) AS MATERIALIZED (
@@ -900,7 +901,7 @@ export class Store {
     if (this.#one(POST_BLOCKS_READY, thread, n)?.ready !== 1) {
       // The usual old-thread delivery is at the end, or just before this session's own post. Both answers are one
       // primary-key seek and need no historical markers. This read shares the batch's snapshot with every answer.
-      const first = this.#one("SELECT n, ts, kind, author_kind, author FROM entries WHERE thread = ? AND n > ? ORDER BY n LIMIT 1", thread, n);
+      const first = this.#one(POST_AFTER_FIRST, thread, n);
       if (!first) return null;
       if (first.kind === "message" && first.author_kind === "agent" && first.author === session) {
         return { n: first.n, ts: first.ts ?? null };

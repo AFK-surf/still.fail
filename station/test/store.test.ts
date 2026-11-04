@@ -9,7 +9,7 @@ import { after, test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
   ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_SINCE, CLOSED_THREAD_SINCE, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
-  MANUAL, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
+  MANUAL, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, POST_AFTER_FIRST, POST_AFTER_INDEXED, POST_BLOCKS_READY, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
 import { addListState, firstDelivery, MERGED, SCHEMA } from "../src/store/schema.ts";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
@@ -1312,6 +1312,7 @@ test("what the station asks again and again is planned by an index, never a scan
     [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]], [SESSION_OF_RUNTIME, ["claude", "r1"]], [SAID_SINCE, [1, 0]],
     [HEARD_IN, ["a", 1]], [MODELS_USED_BY, ["a@x", 0]], [REMOTE_RUNS_OF, ["ws", 0]], [REMOTE_RUNS_ALL, [0]],
     [detail.sql, detail.args], [read.USAGE_DETAIL_DAY_SCOPED, [1n, "ws"]], [read.SAID_LATEST, [1]], [read.SAID_NOT_BY, [1, "a@x"]],
+    [POST_BLOCKS_READY, [1, 0]], [POST_AFTER_FIRST, [1, 0]], [POST_AFTER_INDEXED, [1, "a", 0, 0]],
   ];
   const scans = /^SCAN (?!CONSTANT ROW$|parts$|\(subquery-\d+\)$|\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect|entries_login_cards)\b)/;
   const plans = new Map<string, string[]>();
@@ -1322,6 +1323,7 @@ test("what the station asks again and again is planned by an index, never a scan
     assert.ok(!plan.some((d) => scans.test(d)
       && !(sql === detail.sql && d === "SCAN target" && plan.includes("MATERIALIZE targets"))
       && !(sql === RUNNING_WAIT_JOBS && d === "SCAN active" && plan.includes("CO-ROUTINE active"))
+      && !(sql === POST_AFTER_INDEXED && (d === "SCAN first" || d === "SCAN second"))
       && !(sql === read.USAGE_DETAIL_DAY_SCOPED && d === "SCAN e" && (plan.includes("MATERIALIZE edge") || plan.includes("CO-ROUTINE edge")))
       && !(sql === read.USAGE_DETAIL_DAY_SCOPED && d === "SCAN p" && plan.includes("CO-ROUTINE parts"))), `${sql}\n  ${plan.join(" | ")}`);
     plans.set(sql, plan);
@@ -1335,6 +1337,9 @@ test("what the station asks again and again is planned by an index, never a scan
   // Whether a session heard from a thread: by its deliveries there alone, not every message it was ever given (3.3 s on
   // the main thread on a station); the models someone's chats ran on from the index alone.
   assert.ok(plans.get(HEARD_IN)!.some((d) => d.includes("deliveries_session (session=? AND thread=?)")), plans.get(HEARD_IN)!.join(" | "));
+  assert.ok(plans.get(POST_AFTER_FIRST)!.some((d) => d.includes("(thread=? AND n>?)")), plans.get(POST_AFTER_FIRST)!.join(" | "));
+  assert.ok(plans.get(POST_AFTER_INDEXED)!.some((d) => d.includes("PRIMARY KEY (thread=? AND author=? AND bucket>?)")), plans.get(POST_AFTER_INDEXED)!.join(" | "));
+  assert.ok(plans.get(POST_AFTER_INDEXED)!.some((d) => d.includes("(thread=? AND n>? AND n<?)")), plans.get(POST_AFTER_INDEXED)!.join(" | "));
   assert.ok(plans.get(MODELS_USED_BY)!.some((d) => d.includes("COVERING INDEX sessions_models (created_by=? AND created_at>?)")), plans.get(MODELS_USED_BY)!.join(" | "));
   assert.ok(plans.get(REMOTE_RUNS_OF)!.some((d) => d.includes("PRIMARY KEY (ws=? AND at>?)")), plans.get(REMOTE_RUNS_OF)!.join(" | "));
   assert.ok(plans.get(REMOTE_RUNS_ALL)!.some((d) => d.includes("PRIMARY KEY (at>?)")), plans.get(REMOTE_RUNS_ALL)!.join(" | "));
