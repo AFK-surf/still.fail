@@ -216,7 +216,7 @@ pub fn chat_row_node(
           }
           n.box(fn(w) {
             w.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
-            @sf.words_node(w, fn() { item().title }, fn() {
+            row_title_node(w, key, fn() { item().title }, fn() {
               let look = t().chat_list
               let title = if item().unread { look.title_unread } else { look.title }
               if offline() || item().settled {
@@ -225,7 +225,6 @@ pub fn chat_row_node(
                 title
               }
             })
-            |> ignore
           })
           |> ignore
         })
@@ -454,6 +453,88 @@ pub fn chat_row_node(
       })
       |> ignore
     })
+  })
+}
+
+///|
+/// The title in the retained chat row. Its waiting light is a glyph paint look; an answer exchanges the two lines
+/// inside a single clipped line. Only the title nodes change when a request starts or answers, never on each frame.
+fn row_title_node(parent : @view.View, key : String, title : () -> String, style : () -> @ui.TextStyle) -> Unit {
+  let due : Ref[() -> Unit] = Ref(fn() {  })
+  // The core can publish the new title before or after the animation ends. Keep the answer until both have happened;
+  // when a row comes back into view, the same check cleans up a request that finished while it was away.
+  parent.reacts(fn() {
+    match title_motions.get(key) {
+      Some(m) if !m.waiting && m.next != "" => (m.next, m.at, title())
+      _ => ("", 0.0, "")
+    }
+  }, fn(state) {
+    (due.val)()
+    let (next, at, current) = state
+    if next == "" { return }
+    let end = at + (if @ui.reduced_motion() { 0.0 } else { title_swap_ms })
+    if parent.logic_at() >= end {
+      if current == next { title_motions.remove(key) }
+    } else {
+      due.val = parent.at_moment(end, fn() {
+        match @signals.untracked(fn() { title_motions.get(key) }) {
+          Some(m) if !m.waiting && m.at == at && m.next == next && @signals.untracked(title) == next =>
+            title_motions.remove(key)
+          _ => ()
+        }
+      })
+    }
+  })
+  parent.owns(fn() { (due.val)() }) |> ignore
+  parent.pick(fn() {
+    match title_motions.get(key) {
+      Some(m) if m.waiting => (1, m.old, "", m.at)
+      Some(m) if m.next != "" => (2, m.old, m.next, m.at)
+      _ => (0, "", "", 0.0)
+    }
+  }, fn(slot, state) {
+    let (phase, old, next, at) = state
+    if phase == 0 {
+      @sf.words_node(slot, title, style) |> ignore
+    } else if phase == 1 {
+      let words = @sf.words_node(slot, fn() { old }, style)
+      let across = @ui.current().words_across(old, @signals.untracked(style))
+      words.glyphs_by(By(fn() {
+        if @ui.reduced_motion() { None } else { Some(words.cycle(title_shine_ms)) }
+      }), fn(now, glyph) {
+        let turns = now / title_shine_ms
+        let cycle = turns - turns.floor()
+        let (x, _, room, _) = words.rect()
+        let width = dmin(room, across)
+        let pos = if width > 0.0 { dmin(1.0, dmax(0.0, (glyph.x - x) / width)) } else { 0.0 }
+        let distance = (pos - (cycle * 1.8 - 0.4)).abs()
+        let shine = dmax(0.0, 1.0 - distance / 0.4)
+        { alpha: 0.62 + 0.38 * shine, dx: 0.0, dy: 0.0, scale: 1.0, sx: 1.0 }
+      }) |> ignore
+    } else {
+      let line = fn() {
+        let c = @ui.current()
+        match style().base.leading {
+          Some(leading) => c.theme().leading(leading).unwrap_or(c.text_size(Ui).1)
+          None => c.text_size(Ui).1
+        }
+      }
+      let progress = fn(v : @view.View) {
+        if @ui.reduced_motion() || v.drawn_past(at + title_swap_ms) {
+          1.0
+        } else {
+          @ui.Ease::Out.at(dmin(1.0, dmax(0.0, (v.drawn_at() - at) / title_swap_ms)))
+        }
+      }
+      slot.height(By(fn() { Some(line()) })).clips(Is(true)) |> ignore
+      let before = @sf.words_node(slot, fn() { old }, style)
+      before.offset(By(fn() { (0.0, -line() * progress(before)) })) |> ignore
+      slot.box(fn(layer) {
+        layer.over(Is(true)) |> ignore
+        let after = @sf.words_node(layer, fn() { next }, style)
+        after.offset(By(fn() { (0.0, line() * (1.0 - progress(after))) })) |> ignore
+      }) |> ignore
+    }
   })
 }
 
