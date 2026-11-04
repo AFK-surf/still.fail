@@ -263,3 +263,14 @@ test "scrolls_anchored: a part of a row asked into sight that is in sight alread
   c.tree.frame(390.0, 844.0, now=200.0) |> ignore
   assert_eq((c.top(97), c.scroll.at(c.tree)), (Some(0.0), 3880.0))
 }
+
+///|
+test "scrolls_anchored: the last row grown taller and its start asked into sight in the same change: its start in sight in that frame, as it is measured then" {
+  let c = anchored_case(100)
+  c.tree.event(10.0, fn() {
+    c.heights[99].set(200.0)
+    c.tree.show_in_sight(c.live[99].id(), within=fn() { Some((0.0, 10.0)) })
+  })
+  c.tree.frame(390.0, 844.0, now=20.0) |> ignore
+  assert_eq(c.top(99), Some(0.0))
+}
