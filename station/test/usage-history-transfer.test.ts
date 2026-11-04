@@ -115,6 +115,30 @@ test("an older station can delete a session while the new station waits to insta
   } finally { previous.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("an older station can delete and update a session's usage while an installed history is reopened", () => {
+  const dir = mkdtempSync(join(tmpdir(), "usage-history-previous-installed-"));
+  const path = join(dir, "station.db");
+  const before = Store.open(path);
+  before.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/a",
+    token: "a", ws: "A", createdAt: 0, lastActiveAt: 0 });
+  before.db.prepare(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output, calls)
+    VALUES ('old', 0, 'a', 'claude', 2, 0, 0, 0, 1, 1)`).run();
+  // An older version has the history but has not installed the owner tables.
+  before.db.exec(`DROP TRIGGER IF EXISTS usage_history_owner; DROP TABLE IF EXISTS usage_history_orphans;
+    DROP TABLE IF EXISTS usage_history_owner_scopes; DROP TABLE IF EXISTS usage_history_owner_groups;
+    DROP TABLE IF EXISTS usage_history_fresh_owners;`);
+  before.close();
+  const store = Store.open(path);
+  const previous = new DatabaseSync(path);
+  try {
+    previous.prepare("DELETE FROM sessions WHERE key = 'a'").run();
+    previous.prepare("UPDATE usage SET output = 8 WHERE id = 'old'").run();
+    const result = usageHistory(makeStore(store.db, dir), 0n, { workspace: "A", home: false });
+    assert.ok(result);
+    assert.deepEqual((result.days as { calls: number; tokens: number }[]).map(({ calls, tokens }) => [calls, tokens]), [[1, 10]]);
+  } finally { previous.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("a deleted session follows its workspace move before history installation", () => {
   const store = oldStore();
   const db = store.db;
