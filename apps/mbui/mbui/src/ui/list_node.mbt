@@ -121,6 +121,12 @@ pub fn[T] ListRows::in_node(
     let (items, _) = all.get()
     let c = self.causes
     c.read()
+    // (nothing of the list on its way, nothing leaving: each row as tall as it is, its height kept for a way that may
+    // start from it; nothing more asked of each of a long chat's three thousand as their list is laid out, 2026-11-04)
+    if c.by.is_empty() && self.going.is_empty() {
+      shown[k] = natural
+      return @view.list_room(natural)
+    }
     let i = key_at.get().get(k).unwrap_or(-1)
     guard i >= 0 else { return @view.list_room(natural) }
     let going = self.going.contains(k)
