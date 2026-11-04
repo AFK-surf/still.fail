@@ -366,7 +366,12 @@ static double gpu_last = -1;
 
 static void gpu_query_begin(void) {
   if (gpu_q_on < 0) {
-    const char *ext = (const char *)glGetString(GL_EXTENSIONS);
+    // (only where each frame is said on the log, the probe's: MBUI_PROBE_FRAMES=1, or the debug property adb sets,
+    // perf.mbt's perf_frames_on; no frame's work for what nobody reads else)
+    const char *v = getenv("MBUI_PROBE_FRAMES");
+    char p[PROP_VALUE_MAX];
+    if (!v && __system_property_get("debug.mbui.probe_frames", p) > 0) v = p;
+    const char *ext = v && strcmp(v, "1") == 0 ? (const char *)glGetString(GL_EXTENSIONS) : NULL;
     gpu_q_on = ext && strstr(ext, "GL_EXT_disjoint_timer_query") ? 1 : 0;
     if (gpu_q_on) glGenQueries(MB_GPU_QUERIES, gpu_q);
     while (glGetError() != GL_NO_ERROR) {}
