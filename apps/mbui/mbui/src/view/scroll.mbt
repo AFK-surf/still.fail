@@ -658,7 +658,7 @@ pub fn View::scrolls(
       None => None
     }
   }
-  self.box(fn(held) {
+  let held = self.box(fn(held) {
     inner.val = Some(held)
     self.tree.nodes[self.at].scroll_held = held.at
     self.tree.nodes[self.at].scroll_across = across
@@ -678,24 +678,8 @@ pub fn View::scrolls(
       }
     }))
     |> ignore
-    // (across with a bar: room at its foot for it while it can go, as laid out (none while it cannot), its bar never
-    // over what it holds' last line: Ctx::sideways's bar_room, from this layout's told reach, not a frame's before)
-    // (under what it holds, its own room at its foot counted, as Ctx::sideways' `foot` is the more of its padding there
-    // and the bar's room: what of the bar's room its padding there has not, under it)
-    match bar {
-      Some(b) if across =>
-        held.margin(By(fn() {
-          let room = if s.most_now() > 0.5 { b.size + 2.0 * b.inset } else { 0.0 }
-          let st = self.tree.nodes[held.at].flex.style
-          let pad = if st.padding_bottom_kind() == @flex.LEN_PT { st.padding_bottom_value() } else { 0.0 }
-          (0.0, 0.0, 0.0, if room > pad { room - pad } else { 0.0 })
-        }))
-        |> ignore
-      _ => ()
-    }
     build(held)
   })
-  |> ignore
   // (its bar, over what it holds, told as it scrolls)
   match bar {
     Some(b) => {
@@ -708,7 +692,14 @@ pub fn View::scrolls(
           (None, None) => -1.0e9
         }
       })
-      self.scroll_bar(s, b, state, bar_in~, bar_clear~)
+      if across { self.tree.nodes[self.at].flex.scroll_bar_space = b.size + 2.0 * b.inset }
+      // The bar is measured after this content, in the same parent layout. A virtual list may supply the extent
+      // it computed during its own layout; ordinary scrolls use the child's result directly.
+      let extent = content_extent.unwrap_or(fn() {
+        let n = self.tree.nodes[held.at].flex
+        if across { n.width } else { n.height }
+      })
+      self.scroll_bar(s, b, state, extent, bar_in~, bar_clear~)
       s.on_scrolled = fn(t) { state.woke(b, self, t, scrolled=true) }
     }
     None => ()

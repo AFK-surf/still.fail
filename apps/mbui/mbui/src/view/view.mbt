@@ -1451,14 +1451,19 @@ pub fn Tree::at(self : Tree, ms : Double) -> Unit {
 }
 
 ///|
-/// The actual sample set to `ms` (a frame's or input's): what
-/// follows whether it is at or past a moment told so, as it comes to be so or not (View::drawn_past), each still read
-/// by what reads it and its node living, the rest let go; told of what was followed as this began, what is followed
-/// anew meanwhile kept for the next.
+/// The actual sample set to `ms`, before the frame's or input's bindings and layout.
 fn Tree::clock_to(self : Tree, ms : Double) -> Unit {
+  self.clock.set(ms)
+}
+
+///|
+/// Sample presentation once layout is complete. Its clock and thresholds change together, so a reader never sees
+/// a new presentation time with the old answer to drawn_past. An input samples its own time through this same path.
+fn Tree::paint_clock_to(self : Tree, ms : Double) -> Unit {
   // (the moment and whether it is past each followed, told as one: no reader sees the one without the other)
   @signals.start_batch()
-  self.clock.set(ms)
+  self.paint_clock.set(ms)
+  self.beat_set(ms)
   if self.drawn_marks.length() > 0 {
     let keep = []
     for m in self.drawn_marks {
@@ -1476,8 +1481,8 @@ fn Tree::clock_to(self : Tree, ms : Double) -> Unit {
 }
 
 ///|
-/// Whether what is drawn is drawn at or past moment `t` (Tree::drawn_at's: a frame's moment, an input's, the logic's
-/// while it lays out), followed: told only as that comes to be so or not, never as the clock goes otherwise (a look that
+/// Whether what is drawn is drawn at or past moment `t` (Tree::paint_at's: the frame's presentation time, or an input's
+/// own time), followed: told only as that comes to be so or not, never as the clock goes otherwise (a look that
 /// changes at a moment, as it stands till then: a bar shown full till it starts to go, drawn as of the frame's own
 /// moment, whatever the logic's is). The node's: one for each moment, let go with it or once nothing reads it.
 pub fn View::drawn_past(self : View, t : Double) -> Bool {
@@ -1486,7 +1491,7 @@ pub fn View::drawn_past(self : View, t : Double) -> Bool {
   let cell = match self.tree.drawn_marks.iter().find_first(fn(m) { m.0 == id && m.1 == t }) {
     Some(m) => m.2
     None => {
-      let now = @signals.untracked(fn() { self.tree.clock.get() })
+      let now = @signals.untracked(fn() { self.tree.paint_clock.get() })
       let c = @signals.signal(now >= t, same=fn(a, b) { a == b })
       self.tree.drawn_marks.push((id, t, c))
       c
@@ -2022,6 +2027,7 @@ priv enum Prop {
   OverScrim
   Measured
   LayoutBox
+  ScrollBarLayout
   WordsCentered
   EllipsisPast
   Points
@@ -5968,11 +5974,13 @@ fn Tree::laid_out(self : Tree, upto : Double, paint_at? : Double = upto) -> Unit
   let paint_changes = @signals.untracked(fn() {
     (self.paint_clock.get() != paint_at && self.paint_clock.watched()) ||
     (self.beat.get() != paint_at && self.beat.watched()) ||
-    (self.resident.get() != resident_of(paint_at) && self.resident.watched())
+    (self.resident.get() != resident_of(paint_at) && self.resident.watched()) ||
+    self.drawn_marks.iter().any(fn(m) {
+      self.alive_id(m.0) && m.2.watched() && m.2.get() != (paint_at >= m.1)
+    })
   })
   if !self.due && !paint_changes {
-    self.paint_clock.set(paint_at)
-    self.beat_set(paint_at)
+    self.paint_clock_to(paint_at)
     return
   }
   guard !self.layout_locked else { abort("layout reentered while publishing its result") }
@@ -6058,10 +6066,7 @@ fn Tree::laid_out(self : Tree, upto : Double, paint_at? : Double = upto) -> Unit
   }
   // Prediction enters only after layout has produced its result. Any reader attempting to turn this into a
   // structural or layout change fails at that write; paint may consume the result without a second flex pass.
-  @signals.start_batch()
-  self.paint_clock.set(paint_at)
-  self.beat_set(paint_at)
-  @signals.end_batch()
+  self.paint_clock_to(paint_at)
   // Geometry-dependent paint and transforms consume that result in this frame, without entering flex again.
   self.pull()
   let mut p = 0

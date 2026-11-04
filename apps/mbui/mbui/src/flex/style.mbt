@@ -1014,6 +1014,11 @@ pub(all) struct Node {
   // A bounded container that measures and places its own children. Called only for the final layout, with its
   // content width/height and content origin; intrinsic size probes never build children.
   mut layout_children : ((Double, Double, Double, Double) -> Unit)?
+  // An absolute child's bounds, chosen by its parent after the parent's flow children have been laid out.
+  // Unlike a reactive geometry read, these bounds enter the child's ordinary constraint cache in this compute.
+  mut layout_overlay : ((Double, Double) -> (Double, Double, Double, Double))?
+  // A horizontal scroll container keeps this much room below overflowing content, including its bottom padding.
+  mut scroll_bar_space : Double
   // the result: position relative to the parent's border box, and size
   mut left : Double
   mut top : Double
@@ -1074,6 +1079,8 @@ pub fn Node::new() -> Node {
     children: [],
     measure: None,
     layout_children: None,
+    layout_overlay: None,
+    scroll_bar_space: 0.0,
     left: 0.0,
     top: 0.0,
     width: 0.0,
