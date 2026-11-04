@@ -321,7 +321,7 @@ export function threadsOfShown(s: Store): number[] {
 /// Threads with their sessions, last entry, latest message and the viewer's unread count, most recently said in
 /// first: those of one session, one thread (or those named), or all. A list that only needs to know whether there are
 /// unread messages can ask for existence instead of their exact count.
-export function listThreads(s: Store, viewer: string, session: string | null, thread: number | number[] | null, unread: "count" | "exists" = "count"): ThreadSummary[] {
+export function listThreads(s: Store, viewer: string, session: string | null, thread: number | number[] | null, unread: "count" | "exists" | "none" = "count"): ThreadSummary[] {
   const base = "SELECT t.*, COALESCE(r.n, 0) AS read_n FROM threads t LEFT JOIN reads r ON r.thread = t.id AND r.viewer = ?1";
   const rows: Json[] =
     Array.isArray(thread)
@@ -343,7 +343,7 @@ export function listThreads(s: Store, viewer: string, session: string | null, th
       last: lastEntry(s, t.id),
       lastMessage: lastSaid(s, t.id),
       read,
-      unread: unreadOf(s, t.id, read, t.surface !== STILLFAIL_SURFACE ? selves.slack : selves.own, unread),
+      unread: unread === "none" ? 0 : unreadOf(s, t.id, read, t.surface !== STILLFAIL_SURFACE ? selves.slack : selves.own, unread),
       people: threadPeople(s, t.id, t.surface),
       firstText: firstText(s, t.id),
       letters: letterCount(s, t.id),
@@ -406,6 +406,28 @@ function unreadCount(s: Store, viewer: string, thread: number, read: number): nu
 }
 
 /// Messages after `read` that are not of `selves`, nor letters (isLetter).
+/// A chat's latest message that counts as unread (no letter) and the latest before it its author did not write (`other`:
+/// that one is what is unread for its author), by the index of its messages (store/schema.ts entries_said): what a
+/// viewer's unread is made of with where they read (client/core-ts/src/chat-row.ts), for everyone at once.
+export const SAID_LATEST = "SELECT n, author_kind, author FROM entries INDEXED BY entries_said WHERE thread = ?1 AND kind = 'message' AND letter IS NULL ORDER BY n DESC LIMIT 1";
+export const SAID_NOT_BY = `SELECT MAX(n) AS n FROM entries INDEXED BY entries_said WHERE thread = ?1 AND kind = 'message' AND letter IS NULL
+  AND NOT (author_kind = 'person' AND author = ?2)`;
+
+export function saidOf(s: Store, thread: number): { n: number; authorKind: string; author: string; other: number | null } | null {
+  const r = one(s, SAID_LATEST, thread);
+  if (!r) return null;
+  const other = r.author_kind === "person" ? (one(s, SAID_NOT_BY, thread, r.author)?.n ?? null) : r.n;
+  return { n: r.n, authorKind: r.author_kind, author: r.author, other };
+}
+
+/// Where a viewer read each of these chats to (none: nothing of it).
+export function readsOf(s: Store, viewer: string, threads: number[]): Map<number, number> {
+  const out = new Map<number, number>();
+  if (threads.length === 0) return out;
+  for (const r of all(s, `SELECT thread, n FROM reads WHERE viewer = ?1 AND thread IN (SELECT value FROM json_each(?2))`, viewer, JSON.stringify(threads))) out.set(r.thread, r.n);
+  return out;
+}
+
 function unreadOf(s: Store, thread: number, read: number, selves: string[], mode: "count" | "exists" = "count"): number {
   return one(s, mode === "exists" ? HAS_UNREAD : UNREAD, thread, read, JSON.stringify(selves)).c;
 }

@@ -19,6 +19,7 @@ import { Refused as HttpError } from "../api/request.ts";
 import { entryJson } from "../store/archive.ts";
 import * as titles from "../../../client/core-ts/src/titles.ts";
 import { trim } from "../../../client/core-ts/src/whitespace.ts";
+import * as chatRow from "../../../client/core-ts/src/chat-row.ts";
 
 export { makeStore, openStore } from "./store.ts";
 import { knownChannel, knownPerson, slackCreator, teamName } from "./slack-known.ts";
@@ -366,6 +367,15 @@ export function chatRows(station: Store, viewer: Viewer, sessions: string[], thr
   return { rows: chats(station, viewer, false, scope), scope: [...scope.rows] };
 }
 
+/// GET /chats?shared=1: the chat list as the station makes it for everyone (`sharedChats`), the rows the viewer sees; of
+/// some sessions and threads (`scopeOf`) with the ids those can touch, as `chatRows`.
+export function sharedChatRows(station: Store, viewer: Viewer, sessions: string[] | null, threads: number[] | null): Json {
+  const seen = (rows: Json[]) => rows.filter((row) => sees(viewer, row.ws));
+  if (sessions === null || threads === null) return seen(sharedChats(station, false));
+  const scope = scopeOf(apiOf(station).store, sessions, threads);
+  return { rows: seen(sharedChats(station, false, scope)), scope: [...scope.rows] };
+}
+
 /// GET /chats?marks=1: what a device that makes the viewer's sidebar itself (client/core-ts/src/station/rows-made.ts)
 /// cannot make of it from the sessions' and threads' summaries it holds, as written beside them: the cards and needs
 /// waiting (`card`, `need` by thread, as `chats` gives them), the cards the viewer answered lately (`answered`), the
@@ -479,18 +489,41 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
 /// latest messages, cards, needs, answers or the review's marks read for them, 8 s for 8 jobs' chats on ccvm short of
 /// memory (2026-11-03).
 export function chats(station: Store, viewer: Viewer, archived: boolean, scope: Scope | null = null, titlesOnly = false): Json[] {
+  // Only the chats of the viewer's workspace (docs/multi-workspace.md).
+  const rows = sharedChats(station, archived, scope, titlesOnly).filter((row) => sees(viewer, row.ws));
+  const api = apiOf(station);
+  const s = api.store;
+  const threads = rows.flatMap((row) => (typeof row.thread === "number" ? [row.thread as number] : []));
+  const keys = rows.flatMap((row) => (typeof row.id === "string" ? [row.id as string] : []));
+  const own: chatRow.Own = {
+    mine: isMine(api, viewer),
+    reads: store.readsOf(s, viewer.email, threads),
+    dismissed: store.dismissed(s, viewer.email, scope?.threads ?? null),
+    kept: store.keptChats(s, viewer.email, scope?.threads ?? null),
+    // When the viewer pinned each to the top of their list.
+    pins: store.pins(s, viewer.email, scope === null ? null : keys),
+  };
+  const words = { untitled: untitled(), directMessage: tr("station.chat.directMessage"), quotedOnly: tr("station.chat.quotedOnly") };
+  return rows.map((row) => chatRow.rowFor(row, own, words));
+}
+
+/// The chat list as the station makes it once for everyone who sees it (`chats` without a viewer): each row with its
+/// workspace (`ws`), what names it (`named`: the chat or Slack thread a name is taken from, by the one rule titles.ts
+/// has), who it is mine for (`mineOf`), its latest message and the latest before that its author did not write (`said`:
+/// unread for a viewer read short of either not theirs), its card or need as no one let it go, and the cards answered in
+/// it lately with who answered (`answeredBy`). A viewer's row is it with what is theirs (client/core-ts/src/chat-row.ts):
+/// made so by a device that makes its sidebar itself, and by `chats` for one from before.
+export function sharedChats(station: Store, archived: boolean, scope: Scope | null = null, titlesOnly = false): Json[] {
   useNames(station);
   const api = apiOf(station);
   const s = api.store;
-  const mine = isMine(api, viewer);
-  // Only the chats of the viewer's workspace (docs/multi-workspace.md). For some items alone, the sessions they are made
-  // of alone: each change read every session the station ever had.
+  // For some items alone, the sessions they are made of alone: each change read every session the station ever had.
   const sessions = (
     scope === null
       // The sidebar's by the index of those not archived, not every session the station ever had.
       ? (archived ? store.listSessions(s) : store.shownSessions(s))
       : [...scope.sessions].flatMap((key) => store.getSession(s, key) ?? []).sort((a, b) => b.lastActiveAt - a.lastActiveAt)
-  ).filter((x) => sees(viewer, x.ws));
+  );
   const shown = new Map(sessions.filter((x) => (x.archivedAt !== null) === archived).map((x) => [x.key, x]));
   const order = sessions.filter((x) => (x.archivedAt !== null) === archived && (scope === null || scope.rows.has(x.key))).map((x) => x.key);
   // In the archive, a chat of its own shows its agents whatever they are doing elsewhere.
@@ -515,29 +548,28 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
   };
   // The sidebar's own threads alone; the archive's, all of them.
   const of = scope !== null ? scope.threads : archived ? null : store.threadsOfShown(s);
-  const threads = store.listThreads(s, viewer.email, null, of, "exists").filter((t) => t.sessions.some((m) => all.has(m.session)));
+  const threads = store.listThreads(s, "", null, of, "none").filter((t) => t.sessions.some((m) => all.has(m.session)));
   const stats: ReturnType<typeof store.sessionStats> = titlesOnly ? new Map() : store.sessionStats(s, of === null ? null : [...new Set([...(scope?.sessions ?? shown.keys()), ...threads.flatMap((t) => t.sessions.map((m) => m.session))])]);
-  // Per agent: the Slack thread it came from (the latest one it is in), whether it has an internal chat, and whether
-  // the viewer wrote in one of its Slack threads.
+  // Per agent: the Slack thread it came from (the latest one it is in), whether it has an internal chat, and who wrote
+  // in its Slack threads (a row is mine for them).
   const origins = new Map<string, ThreadSummary>();
   const chatted = new Set<string>();
-  const spoke = new Set<string>();
+  const spoke = new Map<string, Json[]>();
   for (const t of threads) {
-    const viewerIn = t.thread.surface !== STILLFAIL_SURFACE && people(t.people).some((p) => mine(p));
+    const writers = t.thread.surface !== STILLFAIL_SURFACE ? people(t.people) : [];
     for (const m of t.sessions) {
       if (t.thread.surface === STILLFAIL_SURFACE) {
         if (listed(t)) chatted.add(m.session);
       } else {
         if (!origins.has(m.session)) origins.set(m.session, t);
-        if (viewerIn) spoke.add(m.session);
+        if (writers.length > 0) spoke.set(m.session, [...(spoke.get(m.session) ?? []), ...writers]);
       }
     }
   }
   const rows: Json[] = [];
-  // The decisions the viewer said they will not take up.
-  const dismissed = store.dismissed(s, viewer.email, scope?.threads ?? null);
-  const kept = store.keptChats(s, viewer.email, scope?.threads ?? null);
-  // The cards the viewer answered lately, by chat.
+  // No one's let-go cards: a viewer's are theirs (chat-row.ts).
+  const dismissed = new Set<string>();
+  // The cards answered lately, by chat, with who answered.
   const answered = new Map<number, Json[]>();
   const itemThreads = threads.filter((t) => t.thread.surface === STILLFAIL_SURFACE && listed(t) && inChat(t).length > 0);
   if (!archived && !titlesOnly) {
@@ -545,9 +577,8 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
     // messages first made even a change to one cardless chat read that chat's whole recent conversation.
     const carded = store.threadsWithCards(s, itemThreads.map((t) => t.thread.id));
     for (const a of store.answersSince(s, store.nowMs() - ANSWERED_WITHIN, carded)) {
-      if (!mine(creator(a.by))) continue;
       const list = answered.get(a.question.thread) ?? [];
-      list.push(answeredView(a));
+      list.push({ ...answeredView(a), by: creator(a.by) });
       answered.set(a.question.thread, list);
     }
   }
@@ -562,30 +593,33 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
     const starters = agents.map((a) => creator(all.get(a.key)?.createdBy ?? null));
     const key = agents[0].key;
     // with no name of its own, the Slack thread its agent came from names it
-    const title = from !== null && origin_ !== null && given(t.thread) === null ? chatTitle(from, origin_.channelName) : chatTitle(t, null);
+    const named = from !== null && origin_ !== null && given(t.thread) === null
+      ? { thread: from.thread, firstText: from.firstText, channelName: origin_.channelName }
+      : { thread: t.thread, firstText: t.firstText, channelName: null };
     let last: Json = null;
     if (lastView !== null) {
       const text0 = trim(typeof lastView.text === "string" ? lastView.text : "");
-      // Something to show when there are no words: a message that only quotes says so.
-      const text = text0 === "" && Array.isArray(lastView.quotes) && lastView.quotes.length > 0 ? tr("station.chat.quotedOnly") : text0;
+      // Something to show when there are no words: a message that only quotes says so (in the viewer's words).
+      const quotedOnly = text0 === "" && Array.isArray(lastView.quotes) && lastView.quotes.length > 0;
       last = {
         seq: lastView.seq, authorKind: lastView.authorKind, author: lastView.author, authorName: lastView.authorName,
-        text: typeof lastView.text === "string" ? takeChars(text, LAST_CHARS) : null, createdAt: lastView.createdAt,
+        text: typeof lastView.text === "string" ? takeChars(text0, LAST_CHARS) : null, createdAt: lastView.createdAt,
       };
+      if (quotedOnly) last.quotedOnly = true;
       if (lastView.authorPicture !== undefined) last.authorPicture = lastView.authorPicture;
       if (lastView.agentIdentity != null) last.agentIdentity = lastView.agentIdentity;
       if (lastView.authorModel !== undefined) last.authorModel = lastView.authorModel;
       if (lastView.authorRuntime !== undefined) last.authorRuntime = lastView.authorRuntime;
     }
-    const isMineRow = mine(creator_) || people_.some((p) => mine(p)) || starters.some((x) => mine(x)) || agents.some((a) => spoke.has(a.key));
+    const said = store.saidOf(s, t.thread.id);
     const row: Json = {
       // An item is its agent's, from its first moment to its last: the session key is its id, chat or no chat.
       id: key, session: key, thread: t.thread.id,
-      title,
+      title: "",
       agents,
       last,
-      unread: t.unread > 0,
-      mine: isMineRow,
+      unread: false,
+      mine: false,
       lastActiveAt: Math.max(t.thread.createdAt, t.lastMessage?.createdAt ?? 0),
       connect: from === null ? null : slackConnectOf(from),
       origin: origin_,
@@ -593,7 +627,11 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
       creator: creator_,
       people: people_,
     };
-    row.archiveReminderDismissed = kept.has(t.thread.id);
+    row.ws = all.get(key)?.ws ?? null;
+    row.named = named;
+    row.mineOf = [creator_, ...people_, ...starters, ...agents.flatMap((a) => spoke.get(a.key) ?? [])].filter((p) => p !== null);
+    row.said = said;
+    row.archiveReminderDismissed = false;
     // The decision looked at it (after its agent said all done) and found nothing left to do; with the review on, only
     // such a chat is shown as one to archive (`archiveReviewed`), not every one whose agents are done.
     row.archiveRecommended = !archived && !titlesOnly && store.archiveSuggested(s, t.thread.id);
@@ -623,7 +661,7 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
     const list = answered.get(t.thread.id);
     if (list !== undefined) {
       answered.delete(t.thread.id);
-      row.answered = list;
+      row.answeredBy = list;
     }
     if (archived) {
       const home = t.thread.home === null ? undefined : all.get(t.thread.home);
@@ -636,16 +674,16 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
     const from = origins.get(key) ?? null;
     const origin_ = from === null ? null : origin(from);
     const own = x.title === null ? "" : trim(x.title);
-    const title = own !== "" ? own : from !== null && origin_ !== null ? chatTitle(from, origin_.channelName) : untitled();
+    const named = own !== "" ? { thread: { surface: STILLFAIL_SURFACE, title: own } } : from !== null && origin_ !== null ? { thread: from.thread, firstText: from.firstText, channelName: origin_.channelName } : { thread: { surface: STILLFAIL_SURFACE } };
     const starter = creator(x.createdBy);
     const row: Json = {
       id: key, session: key, thread: null,
-      title,
+      title: "",
       agents: [agent(key)],
       last: null,
       unread: false,
       // No chat yet: mine if the viewer started the session or wrote in its Slack thread.
-      mine: mine(starter) || spoke.has(key),
+      mine: false,
       lastActiveAt: x.lastActiveAt,
       connect: x.connect === INTERNAL_CONNECT ? null : x.connect,
       origin: origin_,
@@ -653,14 +691,16 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
       people: starter === null ? [] : [starter],
       creator: starter,
     };
+    row.ws = x.ws;
+    row.named = named;
+    row.mineOf = [starter, ...(spoke.get(key) ?? [])].filter((p) => p !== null);
     if (archived) row.archived = archivedOf(x);
     rows.push(row);
   }
   // Of the items read alone (a change's), theirs alone.
   const ids = scope === null ? null : rows.flatMap((row) => (typeof row.id === "string" && scope.rows.has(row.id) ? [row.id as string] : []));
-  // When the viewer pinned each to the top of their list, or null.
-  const pins = store.pins(s, viewer.email, ids);
-  for (const row of rows) row.pinned = typeof row.id === "string" ? (pins.get(row.id) ?? null) : null;
+  // When a viewer pinned it is theirs (chat-row.ts).
+  for (const row of rows) row.pinned = null;
   // The chat an agent opened it from (chat_create), for its way back there: that chat's station (left out: this one),
   // session and what it was called; only for those opened so. Nothing else of the list goes by it (its order, its
   // archiving): each chat stands on its own.
