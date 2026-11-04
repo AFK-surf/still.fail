@@ -306,9 +306,10 @@ static int window_run(void) {
 }
 
 // Another window of the app's (@hostapi.window_open): the program run again (/proc/self/exe), its environment this
-// one's with MBUI_WINDOW=<what>; a run of its own beside this one (window_run), ending as its window closes. (GLib
-// reaps it: no G_SPAWN_DO_NOT_REAP_CHILD.) Its stdin is a pipe from this run: a byte on it brings its window to the
-// front (mb_host_window_front, window_front_heard), and writing to it finds whether it still runs.
+// one's with MBUI_WINDOW=<what>; a run of its own beside this one (window_run), ending as its window closes or as this
+// run ends. (GLib reaps it: no G_SPAWN_DO_NOT_REAP_CHILD.) Its stdin is a pipe from this run (MBUI_WINDOW_OF says so): a
+// byte on it brings its window to the front (mb_host_window_front, window_front_heard), the pipe's end says this run
+// has ended, and writing to it finds whether it still runs.
 static GHashTable *window_pipes;  // what each was started for, the last for each: the pipe's end to write to (+1)
 int32_t mb_host_window_opens(void) { return 1; }
 int32_t mb_host_window_open(moonbit_string_t what_s) {
@@ -318,6 +319,7 @@ int32_t mb_host_window_open(moonbit_string_t what_s) {
     return 0;
   }
   char **env = g_environ_setenv(g_get_environ(), "MBUI_WINDOW", what, TRUE);
+  env = g_environ_setenv(env, "MBUI_WINDOW_OF", "1", TRUE);
   char *argv[] = {"/proc/self/exe", NULL};
   GError *e = NULL;
   int in = -1;
@@ -357,18 +359,18 @@ int32_t mb_host_window_front(moonbit_string_t what_s) {
 }
 
 // A window of the app's own, told by the run that opened it (its stdin: mb_host_window_front): to the front. That run
-// gone, nothing more can come.
+// gone, however it ended, this one ends too (a window run by hand, with no MBUI_WINDOW_OF, reads nothing).
 static gboolean window_front_heard(gint fd, GIOCondition cond, gpointer data) {
   (void)cond;
   (void)data;
   char said[16];
   ssize_t n = read(fd, said, sizeof said);
-  if (n <= 0) return G_SOURCE_REMOVE;
+  if (n <= 0) exit(0);
   bring_back();
   return G_SOURCE_CONTINUE;
 }
 static void window_front_listen(void) {
-  if (window_run()) g_unix_fd_add(0, G_IO_IN | G_IO_HUP, window_front_heard, NULL);
+  if (window_run() && getenv("MBUI_WINDOW_OF")) g_unix_fd_add(0, G_IO_IN | G_IO_HUP, window_front_heard, NULL);
 }
 
 // ---- once for its person ----

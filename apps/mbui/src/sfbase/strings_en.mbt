@@ -2460,6 +2460,7 @@ let en : Map[String, String] = {
   "web-pages.screen.stats": "Connection",
   "web-pages.screen.takeOverTip": "Pause {names} and take control",
   "web-pages.screen.window": "Open in new window",
+  "web-pages.screen.windowOpen": "This screen is already open in its own window",
   "web-pages.security.devicesWhich": "Signed in within the last 30 days",
   "web-pages.security.peopleCount": "{n} people",
   "web-pages.security.peopleCount.one": "{n} person",

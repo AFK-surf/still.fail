@@ -1502,7 +1502,8 @@ static BOOL window_run(void) {
 
 // Another window of the app's (@hostapi.window_open): the program run again (the bundle's executable, or this
 // program's own path run bare), its environment this one's with MBUI_WINDOW=<what>. It is an app of its own beside
-// this one (its own tile in the Dock, the same bundle's), ending as its window closes (windowShouldClose).
+// this one (its own tile in the Dock, the same bundle's), ending as its window closes (windowShouldClose) or as this
+// run ends (MBUI_WINDOW_OF, this run's pid: window_ends_with_opener).
 static NSMutableDictionary<NSString *, NSTask *> *window_tasks;  // what each was started for, the last for each
 int32_t mb_host_window_opens(void) { return 1; }
 int32_t mb_host_window_open(moonbit_string_t what_s) {
@@ -1511,6 +1512,7 @@ int32_t mb_host_window_open(moonbit_string_t what_s) {
   if (!what.length || !exe) return 0;
   NSMutableDictionary *env = [NSProcessInfo.processInfo.environment mutableCopy];
   env[@"MBUI_WINDOW"] = what;
+  env[@"MBUI_WINDOW_OF"] = @(getpid()).stringValue;
   NSTask *t = [NSTask new];
   t.executableURL = [NSURL fileURLWithPath:exe];
   t.environment = env;
@@ -1545,6 +1547,19 @@ int32_t mb_host_window_front(moonbit_string_t what_s) {
                                                     deliverImmediately:YES];
   [[NSRunningApplication runningApplicationWithProcessIdentifier:pid] activateWithOptions:NSApplicationActivateAllWindows];
   return 1;
+}
+
+// A window of the app's own ends with the run that opened it, however that ends (a window run by hand, with no
+// MBUI_WINDOW_OF, is its own). Its opener gone before this looked: at once.
+static void window_ends_with_opener(void) {
+  const char *of = getenv("MBUI_WINDOW_OF");
+  pid_t pid = of ? atoi(of) : 0;
+  if (pid <= 0) return;
+  static dispatch_source_t watch;
+  watch = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, pid, DISPATCH_PROC_EXIT, dispatch_get_main_queue());
+  dispatch_source_set_event_handler(watch, ^{ exit(0); });
+  dispatch_resume(watch);
+  if (kill(pid, 0) != 0 && errno == ESRCH) exit(0);
 }
 
 static uint64_t put_away_at;  // CLOCK_MONOTONIC's ns as the window was closed (0: it is out)
@@ -1796,6 +1811,7 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
                                                         selector:@selector(windowFrontHeard:)
                                                             name:window_front_notice
                                                           object:@(getpid()).stringValue];
+      window_ends_with_opener();
     }
     notice_start();
     // MBUI_WIN=<w>x<h>: the window's size (a phone's, for the narrow layouts)

@@ -291,6 +291,7 @@ test "a screen beside a chat goes to a window of its own from the panel's bar (a
   @sfbase.open_page_over(Screen({ station: "ws1/st1", screen: "desktop", title: "", until_gone: true }))
   t.frame()
   assert_eq(t.windows_fronted(), [opened[0], opened[0]])
+  assert_eq(@sfbase.toast_words(), "这个屏幕已在独立窗口中打开")
   assert_eq(t.windows_opened().length(), 1)
   assert_true(!side_now(r).0.contains("screen:[\"ws1/st1\",\"desktop\"]"))
   // another screen is its own: that window not asked for

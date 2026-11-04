@@ -1,9 +1,9 @@
 // A page in a window of its own (a desktop's: @ui.window_open), beside the app's: another run of the app, started with
 // what it shows (MBUI_WINDOW, as window_text writes it), that shows that page alone over the same account and ends as
-// its window closes. A station's screen is the page that goes there now: from the side panel's bar beside a chat
+// its window closes or the app's run ends. A station's screen is the page that goes there now: from the side panel's bar beside a chat
 // (sfdesk's panel.mbt) and from its viewer's 控制中心 (sfpages' screen_panel.mbt), the screen leaving where it was.
 // While its window is open, every way to that screen (a chat's link, its card, the station's page) brings the window
-// to the front instead of opening it here too (window_front, open_page).
+// to the front instead of opening it here too, a toast here saying so (window_front, open_page).
 
 ///|
 /// The page this run shows alone, in a window of its own (MBUI_WINDOW, src/stillfail's main); None: the app's run.
@@ -85,13 +85,15 @@ fn window_key(p : Page) -> String? {
 }
 
 ///|
-/// The window showing `p`, where one is open, brought to the front: whether it was (the page is then not to be opened
-/// here as well). A window closed since is forgotten.
+/// The window showing `p`, where one is open, brought to the front and a toast here saying so: whether it was (the
+/// page is then not to be opened here as well). A window closed since is forgotten.
 pub fn window_front(p : Page) -> Bool {
   guard lone_page.val is None && window_key(p) is Some(key) else { return false }
   guard windows_open.get(key) is Some(what) else { return false }
   let there = @ui.window_front(what)
-  if !there {
+  if there {
+    toast_later(@sf.t("web-pages.screen.windowOpen"))
+  } else {
     windows_open.remove(key)
   }
   there

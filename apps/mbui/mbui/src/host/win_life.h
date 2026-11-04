@@ -395,8 +395,30 @@ __declspec(allocate(".CRT$XCU")) void(__cdecl *mb_win_life_begins)(void) = life_
 
 // ---- windows of its own ----
 
+static VOID CALLBACK window_opener_ended(PVOID data, BOOLEAN timed) {
+  (void)data;
+  (void)timed;
+  ExitProcess(0);
+}
+
+// A window of the app's own ends with the run that opened it, however that ends (a window run by hand, with no
+// MBUI_WINDOW_OF, is its own). Its opener gone before this looked: at once.
+static void window_ends_with_opener(void) {
+  const WCHAR *of = _wgetenv(L"MBUI_WINDOW_OF");
+  DWORD pid = of ? wcstoul(of, NULL, 10) : 0;
+  if (!pid) return;
+  HANDLE opener = OpenProcess(SYNCHRONIZE, FALSE, pid);
+  if (!opener) {
+    if (GetLastError() == ERROR_INVALID_PARAMETER) ExitProcess(0);
+    return;
+  }
+  HANDLE wait;
+  if (!RegisterWaitForSingleObject(&wait, opener, window_opener_ended, NULL, INFINITE, WT_EXECUTEONLYONCE)) CloseHandle(opener);
+}
+
 // Another window of the app's (@hostapi.window_open): the program run again, its environment this one's with
-// MBUI_WINDOW=<what>; a run of its own beside this one (window_run), ending as its window closes.
+// MBUI_WINDOW=<what>; a run of its own beside this one (window_run), ending as its window closes or as this run ends
+// (MBUI_WINDOW_OF, this run's pid: window_ends_with_opener).
 typedef struct WindowOpened {
   WCHAR *what;
   HANDLE process;
@@ -434,7 +456,7 @@ int32_t mb_host_window_open(moonbit_string_t what) {
   if (!env) return 0;
   size_t have = 0;
   for (const WCHAR *e = env; *e; e += wcslen(e) + 1) have += wcslen(e) + 1;
-  WCHAR *block = (WCHAR *)calloc(have + (size_t)wn + 16, sizeof(WCHAR));
+  WCHAR *block = (WCHAR *)calloc(have + (size_t)wn + 64, sizeof(WCHAR));
   if (!block) {
     FreeEnvironmentStringsW(env);
     return 0;
@@ -452,6 +474,7 @@ int32_t mb_host_window_open(moonbit_string_t what) {
   memcpy(at, what, (size_t)wn * sizeof(WCHAR));
   at += wn;
   *at++ = 0;
+  at += _snwprintf(at, 40, L"MBUI_WINDOW_OF=%lu", GetCurrentProcessId()) + 1;
   *at = 0;
   WCHAR command[MAX_PATH * 2 + 4];
   _snwprintf(command, MAX_PATH * 2 + 4, L"\"%ls\"", exe);
@@ -733,6 +756,7 @@ static void network_look(void) {
 // once the window is there: its icon in the notification area, the one started again told it may hand over, the
 // network watched, the link it was started with to the app, what it is now
 static void life_start(const WCHAR *title) {
+  window_ends_with_opener();
   window_title = _wcsdup(title);
   taskbar_created = RegisterWindowMessageW(L"TaskbarCreated");
   tray_put();

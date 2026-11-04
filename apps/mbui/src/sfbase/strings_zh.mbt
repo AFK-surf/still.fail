@@ -2435,6 +2435,7 @@ let zh : Map[String, String] = {
   "web-pages.screen.stats": "连接",
   "web-pages.screen.takeOverTip": "暂停 {names}，由你控制",
   "web-pages.screen.window": "在新窗口打开",
+  "web-pages.screen.windowOpen": "这个屏幕已在独立窗口中打开",
   "web-pages.security.devicesWhich": "最近 30 天内登录过",
   "web-pages.security.peopleCount": "{n} 人",
   "web-pages.security.peopleCount.one": "{n} 人",
