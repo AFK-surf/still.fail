@@ -16,10 +16,13 @@ import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/store/usage.ts";
 import { detailQuery } from "../src/store/usage-detail.ts";
 import { installCompactUsage } from "../src/store/usage-compact.ts";
+import { installUsageSummaryBlocks, usageSummaryBlocksRangeScan, usageSummaryBlocksScan } from "../src/store/usage-summary-blocks.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../src/store/remote-runs.ts";
 import { RUNNING_WAIT_JOBS } from "../src/store/active-jobs.ts";
 import { HAS_SESSION_ACTIVE_WATCH } from "../src/store/watch-jobs.ts";
 import * as read from "../src/read/store.ts";
+import { usageSummaryEdgeQuery } from "../src/read/usage-batched.ts";
+import { usageSummaryBlockOverlayQuery, usageSummaryBlockPendingQuery, usageSummaryBlockQueries } from "../src/read/usage-summary-blocks.ts";
 import { HISTORY_AFTER, HISTORY_DAYS, HISTORY_SCOPES, HISTORY_SEED_CALLS, HISTORY_TOTAL } from "../src/store/usage-history.ts";
 import { type CardEnd, cardsEnded } from "../src/connects/card-ends.ts";
 import { fileAway } from "./archived-before.ts";
@@ -1299,6 +1302,45 @@ test("what the station asks again and again is planned by an index, never a scan
   for (const [sql, args] of usagePlans) {
     const plan = (compact.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
     assert.ok(plan.every((d) => !d.startsWith("SCAN ")), `${sql}\n  ${plan.join(" | ")}`);
+  }
+  installUsageSummaryBlocks(compact.db);
+  const groups: [string, unknown[], string][] = [];
+  for (const scoped of [false, true]) {
+    for (const size of [1, 15, 60] as const) {
+      const q = usageSummaryBlockQueries(scoped, size);
+      const index = size === 1 ? (scoped ? "usage_summary_blocks_shadow_scope_time" : "usage_summary_blocks_shadow_time")
+        : scoped ? "PRIMARY KEY" : "usage_summary_blocks_time";
+      groups.push([q.selected, scoped ? [0, 100, "Wws"] : [0, 100], index]);
+    }
+    const q = usageSummaryBlockQueries(scoped, 60);
+    const index = scoped ? "PRIMARY KEY" : "usage_summary_blocks_time";
+    groups.push([q.next, scoped ? [0, 100, "Wws"] : [0, 100], index], [q.last, scoped ? ["Wws"] : [], index]);
+  }
+  for (const side of ["time", "old", "new"] as const) {
+    groups.push([usageSummaryBlockPendingQuery(side), side === "time" ? [0, 100] : [0, 100, "Wws"], `usage_summary_blocks_dirty_${side}`]);
+  }
+  const rowKey = ["a", 0, 0, "p", "cc", "claude", "m", 0];
+  for (const current of [false, true]) groups.push([usageSummaryBlockOverlayQuery(current), rowKey, "PRIMARY KEY"]);
+  groups.push([usageSummaryBlocksScan(true, false), ["Wws", 32], "usage_compact_scope_time"]);
+  groups.push([usageSummaryBlocksScan(true, true), ["Wws", 0, "a", 0, "p", "cc", "claude", "m", 0, 32], "usage_compact_scope_time"]);
+  groups.push([usageSummaryBlocksScan(false, true), [...rowKey, 32], "PRIMARY KEY"]);
+  groups.push([usageSummaryBlocksRangeScan(true, false), ["Wws", 0, 100, 32], "usage_compact_scope_time"]);
+  groups.push([usageSummaryBlocksRangeScan(true, true), ["Wws", 0, 100, 0, "a", 0, "p", "cc", "claude", "m", 0, 32], "usage_compact_scope_time"]);
+  groups.push([usageSummaryBlocksRangeScan(false, false), [0, 100, 32], "usage_compact_time"]);
+  groups.push([usageSummaryBlocksRangeScan(false, true), [0, 100, 0, "a", 0, "p", "cc", "claude", "m", 0, 32], "usage_compact_time"]);
+  for (const [sql, args, index] of groups) {
+    const plan = (compact.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
+    assert.ok(plan.some((d) => d.startsWith("SEARCH ") && d.includes(index)), `${sql}\n  ${plan.join(" | ")}`);
+    assert.ok(plan.every((d) => !d.includes("TEMP B-TREE")), `${sql}\n  ${plan.join(" | ")}`);
+  }
+  for (const scope of ["all", "workspace", "home"] as const) {
+    const sql = usageSummaryEdgeQuery(scope);
+    const args = scope === "workspace" ? [0, 0, "Wws", 1, 2, "ws"] : [0, 0, scope === "home" ? "H" : null, 1, 2];
+    const plan = (compact.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((r) => r.detail);
+    const index = scope === "all" ? "usage_compact_time" : "usage_compact_scope_time";
+    assert.ok(plan.some((d) => d.startsWith("SEARCH ") && d.includes(index)), `${sql}\n  ${plan.join(" | ")}`);
+    assert.ok(plan.some((d) => d.startsWith("SEARCH ") && d.includes("usage_session")), `${sql}\n  ${plan.join(" | ")}`);
+    assert.ok(plan.every((d) => !d.includes("TEMP B-TREE")), `${sql}\n  ${plan.join(" | ")}`);
   }
   // As the station's SQLite (node's) plans each: a scan only of an index that holds the sessions shown or running, the
   // login cards, or of the small one that counts sessions (or of what a subquery found); a table, or an index of every

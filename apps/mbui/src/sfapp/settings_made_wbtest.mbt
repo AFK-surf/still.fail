@@ -613,6 +613,19 @@ test "用量 made once: its figures, its days, its chats and its stations the tr
 }
 
 ///|
+test "用量 keeps its history visible while recent details are prepared" {
+  let t = memories_tester(true, 2, mode="settings-usage-details-pending")
+  let first = instances_sorted(t)
+  let said = t.words_said().map(fn(w) { w.0 })
+  assert_true(said.iter().any(fn(w) { w.contains("各设备的工作量") }), msg="the available history is visible: \{said}")
+  assert_true(!said.iter().any(fn(w) { w == "$0" }), msg="unprepared usage is not said to be zero: \{said}")
+  let status = t.semantics().filter(fn(s) { s.role == Status }).map(fn(s) { s.label })
+  assert_true(status.iter().any(fn(w) { w.contains("正在读取") }), msg="the recent details are still being read: \{status}")
+  t.frame_at(t.time() + @sf.breath_ms / 2.0)
+  assert_true(first != instances_sorted(t), msg="the details' bones breathe")
+}
+
+///|
 /// 用量's 价目表 reached by its link (查看价目表 →), made once (`tree`), at `platform`'s hand and the system's size of
 /// words `scale`; its usage as `state` says once there (prices_said).
 fn prices_tester(

@@ -244,6 +244,31 @@ test("usage_keeps_its_spending_and_account_allowance_current", async () => {
   assert.ok(u.value.notes.some((s: string) => s.includes("studio")));
 });
 
+test("usage keeps its available history visible while recent details are prepared", async () => {
+  const t = setup();
+  const u = ui();
+  const topic = { topic: "stationUsage", station: "ws/st" } as const;
+  t.set(workspace(), oneStation());
+  t.set(link("ws/st"), { state: "online" });
+  t.set(overview("ws/st"), overviewOf([], []));
+  t.set(topic, { rows: [], since: 0, reading: false, detailsPreparing: true,
+    history: { days: [], places: {}, archived: 0, remoteRuns: 0, cards: 0, picked: 0 } });
+  t.subscribe(1, { topic: "usage", scope: "ws", days: 7 });
+  t.views.start({ topic: "fleet", scope: "ws" });
+  await t.read(u, 1);
+  assert.ok(u.value.summary, "the already available history can be seen");
+  assert.equal(u.value.detailsPreparing, true, "the recent totals are not presented as zero");
+  assert.equal(u.value.wait.reading, true);
+  assert.equal(t.views.compute({ topic: "fleet", scope: "ws" }), undefined, "a shareable poster does not present missing usage as complete");
+
+  t.set(topic, { rows: [], since: 0, reading: false,
+    history: { days: [], places: {}, archived: 0, remoteRuns: 0, cards: 0, picked: 0 } });
+  await t.read(u, 1);
+  assert.notEqual(u.value.detailsPreparing, true);
+  assert.equal(u.value.wait.reading, false);
+  assert.ok(t.views.compute({ topic: "fleet", scope: "ws" }), "the poster is available once the recent details are ready");
+});
+
 test("profiles_keep_their_names_and_online_state_current", async () => {
   const t = setup();
   const u = ui();

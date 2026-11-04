@@ -1283,6 +1283,8 @@ export class Views implements Owner {
         const sources = stations.map((s) => ({ address: s.address, name: s.name, online: s.online, value: s.online ? this.value({ topic: "stationUsage", station: s.address }) : undefined }));
         const now = this.#core.host.nowMs();
         const usage = usageView(sources, 7, now, this.#core.host.utcOffsetMin(now), this.me(scope), arr(get(this.ok({ topic: "workspace", workspace: scope }), "members")));
+        // A shareable poster must not present the stations that have answered as the whole workspace.
+        if (get(usage, "detailsPreparing") === true) return undefined;
         // the subscriptions, as the profiles page lists them
         const listed = this.#profilesView(scope);
         const profiles = listed !== undefined && "ok" in listed ? arr(get(listed.ok, "items")) : [];

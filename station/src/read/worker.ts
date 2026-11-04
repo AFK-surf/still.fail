@@ -54,8 +54,9 @@ parentPort!.on("message", async (ask: Ask) => {
       // Usage can span many minutes. Read its compact statistics in bounded steps on this same snapshot, resting
       // between them so the cold database does not displace other work's pages all at once.
       const a = ask.args;
-      const batched = ask.op === "usage"
-        ? await usageGroupsBatched(store, BigInt(a.from), BigInt(a.to), BigInt(a.tz), a.viewer ?? null, undefined, usageCache) : null;
+      const batched = ask.op === "usage" && a.detailsPreparing !== true
+        ? await usageGroupsBatched(store, BigInt(a.from), BigInt(a.to), BigInt(a.tz), a.viewer ?? null, undefined, usageCache,
+          a.summaryStrict === true ? a.summaryPrepared === true : undefined) : null;
       answer = { id: ask.id, text: JSON.stringify(op(store, { ...a, ...(batched === null ? {} : { batchedSummary: batched }) })) };
     } finally {
       store.db.exec("COMMIT");
