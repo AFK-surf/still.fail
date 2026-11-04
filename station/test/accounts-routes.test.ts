@@ -537,6 +537,26 @@ describe("the accounts routes", { concurrency: true }, () => {
     await s.close();
   });
 
+  test("machine login identity readings tell sharing, including the first and a later sign-in", async () => {
+    const m = fakeMachine({ claude: `echo '{"loggedIn": true, "email": "first@x.test"}'` });
+    mkdirSync(join(m.home, ".claude"));
+    writeFileSync(join(m.home, ".claude/.credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "fake", expiresAt: Date.now() + 3_600_000 } }));
+    const machine = new MachineLogins(m.env, undefined, () => "zh");
+    const identities: (string | null)[] = [];
+    const s = await rig({ machine, shared: {
+      status: async () => ({ check: null, quota: null }), view: () => null,
+      loginUpdated: () => identities.push(machine.get().find((l) => l.runtime === "claude")?.email ?? null),
+    } });
+    await until(() => identities.includes("first@x.test"), "the first reading tells sharing");
+    const count = identities.length;
+    await machine.refresh();
+    assert.equal(identities.length, count, "an unchanged reading does not refresh sharing");
+    script(join(m.bin, "claude"), `#!/bin/sh\necho '{"loggedIn": true, "email": "second@x.test"}'\n`);
+    await machine.refresh();
+    assert.equal(identities.at(-1), "second@x.test");
+    await s.close();
+  });
+
   test("the first machine login reading updates a profile checked before its tier was known", async () => {
     const m = fakeMachine({ claude: `echo '{"loggedIn":true,"subscriptionType":"max"}'` });
     mkdirSync(join(m.home, ".claude"));

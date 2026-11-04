@@ -78,6 +78,38 @@ test("a shared profile is listed once, from its host, with where it is signed in
   assert.equal(local.canShare, true);
 });
 
+test("a shared subscription stays one row when older copies have no account identity", () => {
+  const C = "c".repeat(64);
+  const share = { id: "sh-1", host: A, allow: [A, B, C] };
+  const host = station(A, "host", true, [profile("max", { name: "same name", runtime: "claude", email: "a@x.test", share: { ...share, role: "host" } })]);
+  const copy = (id: string) => profile(id, { name: "same name", runtime: "claude", share: { ...share, role: "user", reachable: true } });
+  const b = station(B, "mini", true, [copy("b")]);
+  const c = station(C, "laptop", true, [copy("c")]);
+  for (const stations of [[b, c, host], [host, b, c]]) {
+    const view = workspaceProfiles(stations);
+    assert.equal(view.items.length, 1);
+    assert.equal(view.items[0].profile.id, "max");
+    assert.equal(view.items[0].members.length, 3);
+    assert.deepEqual(new Set(view.items[0].places.map((p: any) => p.stationName)), new Set(["host", "mini", "laptop"]));
+  }
+  const offline = workspaceProfiles([station(A, "host", false, null), b, c]);
+  assert.equal(offline.items.length, 1, "copies still group by share while their host is offline");
+  assert.equal(offline.items[0].usable, false);
+});
+
+test("a shared account uses its host's identity when a copy has an old email", () => {
+  const C = "c".repeat(64);
+  const share = { id: "sh-1", host: A, allow: null };
+  const view = workspaceProfiles([
+    station(B, "mini", true, [profile("copy", { name: "same name", runtime: "claude", email: "old@x.test", share: { ...share, role: "user" } })]),
+    station(A, "host", true, [profile("max", { runtime: "claude", email: "new@x.test", share: { ...share, role: "host" } })]),
+    station(C, "other", true, [profile("other", { name: "same name", runtime: "claude", email: "old@x.test" })]),
+  ]);
+  assert.equal(view.items.length, 2);
+  assert.deepEqual(view.items.find((e: any) => e.key === "sub:claude:new@x.test").members.map((m: any) => m.stationName), ["mini", "host"]);
+  assert.deepEqual(view.items.find((e: any) => e.key === "sub:claude:old@x.test").members.map((m: any) => m.stationName), ["other"]);
+});
+
 test("a shared subscription whose host is away comes from a copy, unusable, first", () => {
   const share = { id: "sh-1", host: A, allow: null };
   const view = workspaceProfiles([

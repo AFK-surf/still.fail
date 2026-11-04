@@ -495,6 +495,7 @@ export const AgentsLive = (control: Control) =>
         ask: (station, workspace, request) => remote.ask(station, workspace === null ? request : { workspace, ...request }),
         agentHome: () => settings().agentHome,
         env: process.env as Record<string, string | undefined>,
+        machineEmail: (runtime) => accounts.machineLogins().find((login) => login.runtime === runtime && login.loggedIn)?.email ?? null,
         claudeToken: (p, rejected) => accounts.claudeToken(p, rejected),
         // In sandboxes no Codex here holds the refresh token: it is renewed here whenever it runs out.
         codexRenewRunning: async (id) => !sandboxed(data) && (await codex.renewLogin(id)),
