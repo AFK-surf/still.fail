@@ -828,12 +828,12 @@ let panel_whole_now : Ref[Int] = Ref(0)
 /// its side; a sheet, to its most), its body scrolling in it as one: what would scroll in itself there (a list held to
 /// a height of its own) lays itself out whole instead, so that one scroll, not one in another, takes the wheel.
 pub fn panel_held() -> Bool {
-  panel_held_now.val
+  (panel_held_now.val)()
 }
 
 ///|
 // kept across runs: said by the presenters while a panel's body is drawn
-let panel_held_now : Ref[Bool] = { val: false }
+let panel_held_now : Ref[() -> Bool] = Ref(fn() { false })
 
 ///|
 /// How far under what a ruled panel holds (`panel`'s `ruled`) the line over its foot is, while its body is drawn (0
@@ -855,7 +855,7 @@ let rule_over_now : Ref[Double] = { val: 0.0 }
 /// in view; all of it where the panel scrolls as one (a small panel held short of what it holds: panel_held), never
 /// one scroll in another.
 pub fn panel_column(c : @ui.Ctx, key : String, most : Double, style : @ui.Style, body : () -> Unit) -> Unit {
-  if panel_held_now.val {
+  if panel_held() {
     c.box(style~, body) |> ignore
   } else if small_panel_now.val {
     // (asking its row for `most` at most, stretched by it past that: Ctx::capped `past_most`, in a row of its own that
@@ -927,6 +927,10 @@ fn row_reach(own : Double) -> Double {
 let beside_given : Ref[@kit.PopState] = { val: { side: Bottom, room: 1.0e9, panel: 0 } }
 
 ///|
+/// The placed side for a retained panel, read only by content which depends on it.
+let beside_side_now : Ref[(() -> @ui.Side)?] = Ref(None)
+
+///|
 /// The room at a panel's sides its rows' grounds reach out across while its body is drawn: a sheet's (its column's
 /// sides), none in a small panel (its rows at its padding, as a menu's are).
 let rows_out : Ref[Double] = { val: 0.0 }
@@ -947,7 +951,12 @@ let small_panel_now : Ref[Bool] = { val: false }
 /// flipped there for want of room below), or a sheet risen from the screen's foot. What a panel keeps nearest what
 /// opened it is at its foot then, else at its top.
 pub fn panel_opens_up() -> Bool {
-  !small_panel_now.val || beside_given.val.side is Top
+  if !small_panel_now.val { return true }
+  let side = match beside_side_now.val {
+    Some(read) => read()
+    None => beside_given.val.side
+  }
+  side is Top
 }
 
 ///|
@@ -1728,9 +1737,10 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
         // (scrolling, where it does, out to the panel's sides, what it holds as far in as without: what reaches them
         // still does; told so as it is drawn, panel_held)
         let k = key + "/panel"
-        panel_held_now.val = @kit.held_in_room(c, beside_given.val, key=k)
+        let held = @kit.held_in_room(c, beside_given.val, key=k)
+        panel_held_now.val = fn() { held }
         @kit.in_room(c, beside_given.val, key=k, reach=held_reach(), style=held_in(), fn() { draw_panel_body(x, c, close, keyed=p) }) |> ignore
-        panel_held_now.val = false
+        panel_held_now.val = fn() { false }
       }
       panel_sides_in.val = 0.0
       small_panel_now.val = false
@@ -2522,9 +2532,9 @@ fn sheet_step(
   } else if scrolls && !capped {
     c.box(style=sheet_grows, fn() {
       c.capped(key + "/panel", wh_of(c), shrinks=true, fn() {
-        panel_held_now.val = true
+        panel_held_now.val = fn() { true }
         c.box(style=room, body) |> ignore
-        panel_held_now.val = false
+        panel_held_now.val = fn() { false }
       })
       |> ignore
     })

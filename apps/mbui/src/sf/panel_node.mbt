@@ -169,13 +169,11 @@ fn panel_node(
             }
           })
         }
-        // (the side of what opened it it went on, as the tree placed it (View::went_told: flipped there for want of room,
-        // told as it goes to the other): what its parts keep nearest what opened it is by that side (panel_opens_up), read
-        // as each is built, so built again as it goes to the other side, never as it only moves; what was told before
-        // given back after, for no other panel to read)
+        // The placed side matters only to content which asks for it. Other content must not depend on placement.
         let opened = fn() {
-          let was = beside_given.val
-          beside_given.val = { side: p.went_told().unwrap_or(x.side), room: 1.0e9, panel: 0 }
+          let was = (beside_given.val, beside_side_now.val)
+          beside_given.val = { side: x.side, room: 1.0e9, panel: 0 }
+          beside_side_now.val = Some(fn() { p.went_told().unwrap_or(x.side) })
           was
         }
         // (each part of it out to the panel's edges it stands by, the panel's padding round what it holds inside it: what
@@ -210,7 +208,8 @@ fn panel_node(
           @ui.old(v, natural=true, fits?=fits, key=fn() { key + "/head" }, fn(c) {
             let was = opened()
             let held = c.box(style=panel_part_in(panel_pad, 0.0), fn() { panel_head(c, title(), end?=x.head_end) })
-            beside_given.val = was
+            beside_given.val = was.0
+            beside_side_now.val = was.1
             words_look(c, held)
           })
         }
@@ -244,7 +243,8 @@ fn panel_node(
                 words_in_now.val = 0.0
                 rule_over_now.val = 0.0
               })
-              beside_given.val = was
+              beside_given.val = was.0
+              beside_side_now.val = was.1
               words_look(c, held)
             }).grow(Is(1.0))
             |> ignore
@@ -269,7 +269,8 @@ fn panel_node(
               let was = opened()
                 let held = c.box(style=held_in().then(@ui.style(pt=room(over()), pb=room(under))), fn() {
                   // (held shorter than what it holds: what would scroll in itself there laid out whole, panel_held)
-                  panel_held_now.val = scroll.goes()
+                  // Only a child which asks whether the panel scrolls needs to follow that state.
+                  panel_held_now.val = fn() { scroll.goes() }
                   panel_sides_in.val = panel_pad
                   small_panel_now.val = true
                   words_in_now.val = text_in
@@ -279,9 +280,10 @@ fn panel_node(
                   small_panel_now.val = false
                   words_in_now.val = 0.0
                   rule_over_now.val = 0.0
-                  panel_held_now.val = false
+                  panel_held_now.val = fn() { false }
                 })
-                beside_given.val = was
+                beside_given.val = was.0
+                beside_side_now.val = was.1
                 words_look(c, held)
               })
               .margin(By(fn() { (0.0, -over(), 0.0, -out_under) }))
@@ -308,7 +310,8 @@ fn panel_node(
                 let at = if x.ruled { panel_corner_foot().then(@ui.style(pt=room(capsule_in(r_menu, button_height())))) } else { panel_corner_foot() }
                 c.box(style=panel_foot_at.then(at), fn() { f(c, close) }) |> ignore
               })
-              beside_given.val = was
+              beside_given.val = was.0
+              beside_side_now.val = was.1
               words_look(c, held)
             })
             .margin(Is((-panel_pad, 0.0, -panel_pad, -panel_pad)))
