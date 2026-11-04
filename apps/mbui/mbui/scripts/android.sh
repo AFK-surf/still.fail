@@ -273,7 +273,7 @@ case "${1:-build}" in
       || { echo "android.sh: $3 is not whole in $APP_ID's files" >&2; exit 1; }
     ;;
   fling-test)
-    # Flings the app's first list (the app built already; still.fail's APP=sffix ENV=MBUI_FIXTURE=long shows a long Home) and
+    # Flings the app's first list (the app built already) and
     # records it: out/android/fling/fling.mp4, the app's log of touches and positions frame by frame (MBUI_SCROLL_LOG),
     # and scripts/scrollplot.py's comparison with Compose's fling at the same velocities (fling.txt, fling.png when
     # matplotlib is there: out/venv).
