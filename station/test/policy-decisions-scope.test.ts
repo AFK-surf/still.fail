@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { overview } from "../src/api/overview.ts";
 import { policyView } from "../src/sessions/archive-policy.ts";
 import { LATEST_DECISIONS, LATEST_DECISIONS_SCOPED, Store } from "../src/store/store.ts";
 
-test("a workspace's policy reads only its own latest decision details", () => {
+test("a workspace's policy reads only its own latest decision details", async () => {
   const store = Store.open(":memory:");
   const db = store.db;
   try {
@@ -25,7 +26,7 @@ test("a workspace's policy reads only its own latest decision details", () => {
     }));
     const expected = (home: boolean) => baseline.filter((row: any) => row.session === "session-0" || row.session === "session-1"
       || (home && (row.session === "session-2" || row.session === "deleted-session")));
-    assert.equal(baseline.find((row: any) => row.session === "session-0").detail.result.selected, "dropped");
+    assert.equal(baseline.find((row: any) => row.session === "session-0")!.detail.result.selected, "dropped");
 
     let visited = 0;
     db.function("visit_policy_result", (result) => { visited++; return result; });
@@ -68,6 +69,16 @@ test("a workspace's policy reads only its own latest decision details", () => {
       { workspace: "mine", home: false });
     assert.equal(policy.checked, 2);
     assert.equal(visited, 2);
+
+    visited = 0;
+    Object.defineProperty(store, "now", { configurable: true, value: () => 50 + 7 * 86_400_000 });
+    const accounts: any = { profilesView: () => [], loginsView: () => [], apiProviders: () => [], machineLogins: () => [],
+      decisionModels: () => [], automaticDecisionsView: () => ({ recent: [] }) };
+    const hub: any = { processes: () => [], config: () => ({ dataDir: "/" }) };
+    const viewer = { sub: "s", email: "p@example.test", name: "P", role: "admin" as const, workspace: "mine", device: "d", home: false };
+    const result: any = await overview({ store, hub, accounts, cloud: { state: null } as any, config: () => ({ connects: [] }) }, viewer, "en");
+    assert.equal(result.automaticDecisions.policy.checked, 2);
+    assert.equal(visited, 2, "the overview passed its workspace to the policy read");
 
     db.prepare("UPDATE sessions SET ws = 'elsewhere' WHERE key = 'session-0'").run();
     visited = 0;
