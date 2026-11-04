@@ -3074,4 +3074,5 @@ pub let home_workspace_title_look : @view.WordsLook = {
   line: 26.0,
   wrap: false,
   tracking: ScaledPoints(-0.4),
+  balance: false,
 }
