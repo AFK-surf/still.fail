@@ -9,7 +9,7 @@ import type { FakeHost } from "../src/testing.ts";
 import { base64url as toB64url, hex, utf8 } from "../src/util.ts";
 import type { Duplex } from "../src/views/pair.ts";
 import { call, subscribe } from "./helpers.ts";
-import { started, stationReplies } from "./station-fixture.ts";
+import { Status, started, stationReplies } from "./station-fixture.ts";
 
 export const unhex = (h: string) => Uint8Array.from(h.match(/../g) ?? [], (b) => parseInt(b, 16));
 /// The base key of the testing core's device (its mesh's).
@@ -42,6 +42,8 @@ export function lockCloud() {
   const devices = new Map<string, Record<string, unknown>[]>();
   const posted: { ws: string; kind: string; id?: string }[] = [];
   const asked: string[] = [];
+  // How many of the next posts of entries are kept but their answer lost on the way back (a gateway's 502).
+  const lose = { posts: 0 };
   const head = (ws: string) => {
     const c = chains.get(ws) ?? [];
     return c.length === 0 ? null : { seq: c.length - 1, hash: entryHash(c.at(-1)!), genesis: entryHash(c[0]!) };
@@ -75,9 +77,13 @@ export function lockCloud() {
       chains.set(ws, [...(chains.get(ws) ?? []), e]);
       posted.push({ ws, kind: e.kind, id: (e.body as { id?: string }).id });
     }
+    if (lose.posts > 0) {
+      lose.posts--;
+      return new Status(502, { error: "bad gateway" });
+    }
     return { ok: true };
   };
-  return { chains, requests, devices, posted, asked, head, reply };
+  return { chains, requests, devices, posted, asked, lose, head, reply };
 }
 
 /// A core on an app's host reaching `ws` (W) and `w2` (日常), each with its lock in the cloud; `before` changes the host.

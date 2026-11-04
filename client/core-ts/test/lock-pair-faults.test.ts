@@ -1,6 +1,6 @@
 // Approving a new device face to face (views/pair.ts) over a line that fails, tested by its properties: each seed draws
 // how the connection between the new device and the trusted one behaves (each message held a while, the connection
-// cut after some message or never) and what the people do (the code typed right, wrong or half, turned away or the
+// cut after some message or never; the cloud keeping the approval but its answer lost) and what the people do (the code typed right, wrong or half, turned away or the
 // prompt closed on the trusted device, time going by), and the real cores on both ends run it on the test clock. What
 // must hold whatever happened: the trusted device signs the new one in only when its code was typed in time, not
 // turned away, within PAIR_TRIES; every code typed is answered; once the code's time is over the new device's page is
@@ -39,7 +39,9 @@ function draw(seed: number) {
   const cutAfter = r.int(3) === 0 ? 1 + r.int(10) : null;
   const kinds: Act["kind"][] = ["right", "wrong", "wrong", "half", "deny", "hide", "wait", "wait", "wait"];
   const acts = Array.from({ length: 1 + r.int(7) }, (): Act => ({ kind: kinds[r.int(kinds.length)]!, ms: [1_000, 30_000, 90_000, 4 * 60_000][r.int(4)]! }));
-  return { delays, cutAfter, acts };
+  // Whether the cloud keeps the trusted device's entry but its answer is lost on the way back.
+  const lost = r.int(4) === 0;
+  return { delays, cutAfter, acts, lost };
 }
 
 /// Two ends of a connection on the core's clock: the n-th message (both ways counted) arrives `delays[n]` ms after it is
@@ -88,12 +90,13 @@ const TEXTS = {
 };
 
 async function once(seed: number): Promise<string[]> {
-  const { delays, cutAfter, acts } = draw(seed);
-  const said: string[] = [`delays ${delays.join(",")}; cut after ${cutAfter ?? "never"}`];
+  const { delays, cutAfter, acts, lost } = draw(seed);
+  const said: string[] = [`delays ${delays.join(",")}; cut after ${cutAfter ?? "never"}${lost ? "; the cloud's answer to the approval lost" : ""}`];
   const g = grant();
   const r = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, ME) }));
   await r.watch({ topic: "lock", workspace: "ws" });
   const prompts = await r.watch({ topic: "lockPrompts" });
+  if (lost) r.cloud.lose.posts = 1;
   const inner = r.core.inner;
   const { ends: [trusted, phone], cut } = line((e) => void inner.runner.fork(e), delays, cutAfter);
   inner.runner.fork(Effect.ignore(serveTrusted(inner, PHONE, ME, trusted)));
