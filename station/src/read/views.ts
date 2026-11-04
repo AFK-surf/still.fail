@@ -515,7 +515,7 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
   };
   // The sidebar's own threads alone; the archive's, all of them.
   const of = scope !== null ? scope.threads : archived ? null : store.threadsOfShown(s);
-  const threads = store.listThreads(s, viewer.email, null, of).filter((t) => t.sessions.some((m) => all.has(m.session)));
+  const threads = store.listThreads(s, viewer.email, null, of, "exists").filter((t) => t.sessions.some((m) => all.has(m.session)));
   const stats: ReturnType<typeof store.sessionStats> = titlesOnly ? new Map() : store.sessionStats(s, of === null ? null : [...new Set([...(scope?.sessions ?? shown.keys()), ...threads.flatMap((t) => t.sessions.map((m) => m.session))])]);
   // Per agent: the Slack thread it came from (the latest one it is in), whether it has an internal chat, and whether
   // the viewer wrote in one of its Slack threads.
