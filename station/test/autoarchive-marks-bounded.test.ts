@@ -24,6 +24,7 @@ test("auto-archiving reads marks for its visible candidates, not old chats", asy
     db.exec("COMMIT");
     let pins = 0;
     let kept = 0;
+    const queries = new Map<string, string>();
     db.function("visit_pin", (_viewer, _session) => { pins++; return 1; });
     db.function("visit_keep", (_viewer, _thread) => { kept++; return 1; });
     Object.defineProperty(r.store, "db", { configurable: true, value: new Proxy(db, {
@@ -31,6 +32,7 @@ test("auto-archiving reads marks for its visible candidates, not old chats", asy
         if (property === "prepare") return (source: string) => {
           let sql = source;
           for (const [table, key, visit] of [["pins", "session", "visit_pin"], ["kept_chats", "thread", "visit_keep"]]) {
+            if (sql.includes(`SELECT 1 FROM ${table} WHERE viewer IN`)) queries.set(table!, sql);
             const check = `${visit}(viewer, ${key}) IS NOT NULL`;
             sql = sql.replace(`SELECT DISTINCT ${key} FROM ${table}`, `SELECT DISTINCT ${key} FROM ${table} WHERE ${check}`)
               .replaceAll(`SELECT MAX(rowid) FROM ${table}`, `SELECT MAX(rowid) FROM ${table} WHERE ${check}`)
@@ -50,6 +52,13 @@ test("auto-archiving reads marks for its visible candidates, not old chats", asy
       assert.equal(r.store.getSession("live")?.archivedAt, null);
       assert.equal(r.store.getThread(own)?.hiddenAt, null);
       assert.ok(pins > 0 && pins <= 512 && kept > 0 && kept <= 512, `the archive check read ${pins} pins and ${kept} kept chats`);
+      for (const [table, value, key] of [["pins", "live", "session"], ["kept_chats", own, "thread"]] as const) {
+        const query = queries.get(table);
+        assert.ok(query, `a targeted ${table} lookup was made`);
+        const plan = (db.prepare(`EXPLAIN QUERY PLAN ${query}`).all(value, '["viewer-39"]') as { detail: string }[])
+          .map((row) => row.detail).join(" | ");
+        assert.match(plan, new RegExp(`SEARCH ${table} USING COVERING INDEX .*viewer=\\? AND ${key}=\\?`));
+      }
     } finally { Object.defineProperty(r.store, "db", { configurable: true, value: db }); }
   } finally { await r.close(); }
 });
@@ -90,10 +99,14 @@ for (const viewers of [2, 40, 300]) {
 
 test("an empty automatic archive pass does not read any marks or jobs", async () => {
   const r = new Rig();
+  const guarded = ["pinnedSessions", "keptChats", "jobsUp", "listBindings"] as const;
   try {
-    for (const name of ["pinnedSessions", "keptChats", "jobsUp", "listBindings"] as const) {
+    for (const name of guarded) {
       Object.defineProperty(r.store, name, { configurable: true, value: () => { throw new Error(`${name} read`); } });
     }
     assert.equal(autoArchive(r.hub, Date.now()), null);
-  } finally { await r.close(); }
+  } finally {
+    for (const name of guarded) delete (r.store as any)[name];
+    await r.close();
+  }
 });

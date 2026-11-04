@@ -1803,7 +1803,7 @@ export class Store {
         remaining = this.#one(`WITH bounds(span) AS (
           SELECT (SELECT MAX(rowid) FROM ${table}) - (SELECT MIN(rowid) FROM ${table})
         ) SELECT CASE WHEN COALESCE(span, 0) < 512 THEN 0
-          WHEN span >= 262144 THEN 32768 ELSE CAST(span / 8 AS INTEGER) END AS budget FROM bounds`)!.budget;
+          WHEN span >= 262144 THEN 4096 ELSE CAST(span / 64 AS INTEGER) END AS budget FROM bounds`)!.budget;
         if (remaining > 0) {
           const rows = this.#all(`WITH RECURSIVE viewers(viewer, n) AS (
             SELECT (SELECT viewer FROM ${table} ORDER BY viewer LIMIT 1), 1
@@ -1817,10 +1817,11 @@ export class Store {
       }
       if (complete === null && remaining < viewerCount) collect();
       if (complete === null && remaining === 0) collect();
-      const found = complete !== null ? complete.has(value) : this.#one(
+      if (complete !== null) return complete.has(value);
+      const found = this.#one(
         `SELECT 1 FROM ${table} WHERE viewer IN (SELECT value FROM json_each(?2)) AND ${key} = ?1 LIMIT 1`, value, viewers,
       ) !== undefined;
-      if (complete === null) remaining -= viewerCount;
+      remaining -= viewerCount;
       answers.set(value, found);
       return found;
     };
