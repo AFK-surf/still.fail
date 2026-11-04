@@ -42,13 +42,14 @@ export function chatOf(s: Store, thread: number): { ws: Ws; chat: string | null;
 const MESSAGE_BATCH = 256;
 
 /// A thread's documents, with a yield after each batch even when none of its messages is searchable.
-function* threadDocSteps(s: Store, id: number, asker?: Asker, kinds: Set<string> | null = null): Generator<Doc | undefined> {
+function* threadDocSteps(s: Store, id: number, asker?: Asker, kinds: Set<string> | null = null, onlyArchived = false): Generator<Doc | undefined> {
   const row = store.getThread(s, id);
   if (row === null) return;
   const { ws, chat, sessions } = chatOf(s, id);
   if (asker && !sees({ ws }, asker)) return;
   // Archived as people see it (by hand, or idle): out of the lists.
   const archived = row.hiddenAt !== null || (sessions.length > 0 && sessions.every((x) => x.archivedAt !== null));
+  if (onlyArchived && !archived) return;
   const surface = row.surface === STILLFAIL_SURFACE ? "stillfail" : "slack";
   const firstText = (s.db.prepare("SELECT m.text FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.person_n WHERE t.thread = ?").get(id) as { text: string | null } | undefined)?.text ?? null;
   // As the chat list calls it (read/views.ts titleOf).
@@ -446,7 +447,7 @@ export function profileDocs(profiles: Profiles): Doc[] {
 // ── all of them ──
 
 /// The documents of the kinds asked for; undefined gives the worker a chance to handle another request.
-export function* stationDocSteps(s: Store, data: string, config: unknown, kinds: Set<string> | null, asker?: Asker): Generator<Doc | undefined> {
+export function* stationDocSteps(s: Store, data: string, config: unknown, kinds: Set<string> | null, asker?: Asker, onlyArchived = false): Generator<Doc | undefined> {
   const wants = (k: string) => kinds === null || kinds.has(k);
   if (wants("chat") || wants("message")) {
     const end = (s.db.prepare("SELECT MAX(id) AS id FROM threads").get() as { id: number | null }).id;
@@ -458,7 +459,7 @@ export function* stationDocSteps(s: Store, data: string, config: unknown, kinds:
       if (rows.length === 0) break;
       for (const r of rows) {
         try {
-          yield* threadDocSteps(s, r.id, asker, kinds);
+          yield* threadDocSteps(s, r.id, asker, kinds, onlyArchived);
         } catch (error) {
           // A thread moved to the archive while it was read: found the next time.
           if (!(error instanceof Error && /no such|archive|ENOENT/.test(error.message))) throw error;

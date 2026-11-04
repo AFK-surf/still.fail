@@ -176,6 +176,10 @@ export class Link {
   readonly rowsWanted = { sessions: new Set<string>(), threads: new Set<number>() };
   /// Whether the archived chats held are as the station has them: read since anything could have changed them.
   archivedCurrent = false;
+  /// The archive's pages are being read: what it holds is not all of it yet.
+  archiveReading = false;
+  /// Why its read stopped short, until it is read again.
+  archiveFailed: string | null = null;
   /// When the station said it has no POST /changed/<list> (one from before): its lists are read whole a while.
   changesRefused: number | null = null;
   /// When the station said it has no POST /batch (one from before): its history is read a request a read a while.

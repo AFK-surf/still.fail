@@ -580,6 +580,7 @@ export class StationsSync {
       const params = [`q=${encode(topic.q as string)}`];
       if (typeof topic.kind === "string") params.push(`kinds=${encode(topic.kind)}`);
       if (typeof topic.limit === "number") params.push(`limit=${topic.limit}`);
+      if (topic.archived === true) params.push("archived=1");
       if (again) params.push("again=1");
       const answer = yield* Effect.result(this.requests.call(link.addr, "GET", `/search?${params.join("&")}`, null, { quiet: true }));
       if (answer._tag === "Success") {
@@ -789,36 +790,69 @@ export class StationsSync {
   /// The station's archive, read a page at a time from its latest (`?page=`, its next where the one before ended): each
   /// page put in with what is held of those older than it, until its end, then what was read alone. Read whole at once,
   /// the archive of many chats took 60 s on a station, every other read of devices waiting (2026-11-03). A station from
-  /// before pages none: its answer, the whole list, is put in as it was.
+  /// before pages none: its answer, the whole list, is put in as it was. A page not answered is asked again a little later
+  /// (as `#read`); given up on, what was read stays, said to fall short (`archiveFailed`), and it is read again as it is shown again.
   #archived(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
     return Effect.suspend(() => {
       const link = this.#links.get(address);
-      if (link) link.archivedCurrent = true;
+      if (link) {
+        link.archivedCurrent = true;
+        link.archiveReading = true;
+        link.archiveFailed = null;
+        this.onChange(address, "link");
+      }
       const topic = { topic: "archivedRows", station: address };
       return this.#archivedFrom(address, topic, "", [], ctx);
     });
   }
 
-  #archivedFrom(address: string, topic: Topic, page: string, read: unknown[], ctx: SpanContext | null): Effect.Effect<void, CoreError> {
+  #archivedFrom(address: string, topic: Topic, page: string, read: unknown[], ctx: SpanContext | null, attempt = 0): Effect.Effect<void, CoreError> {
     return this.#asked((asked) => Effect.gen({ self: this }, function* () {
       const link = this.#links.get(address);
-      if (!link || !this.reachable(address)) return;
-      const answer = yield* this.requests.call(link.addr, "GET", `/chats?archived=1&page=${encode(page)}`, null, { quiet: true, ctx });
+      if (!link) return;
+      const stopped = (why: string | null) => {
+        link.archivedCurrent = false;
+        link.archiveReading = false;
+        link.archiveFailed = why;
+        this.onChange(address, "link");
+      };
+      if (!this.reachable(address)) return stopped(null);
+      const said = yield* Effect.result(this.requests.call(link.addr, "GET", `/chats?archived=1&page=${encode(page)}`, null, { quiet: true, ctx }));
+      if (said._tag === "Failure") {
+        const { status, message } = said.failure;
+        if ((status !== undefined && status < 500) || attempt >= READ_RETRIES) return stopped(message);
+        const again = Effect.sleep(READ_RETRY_MS * 2 ** attempt).pipe(
+          Effect.andThen(Effect.sync(() => void this.#enqueue(address, `archived/${page}`, Priority.background, this.#archivedFrom(address, topic, page, read, null, attempt + 1)))),
+        );
+        this.#core.runner.fork(again, link.scoped);
+        return;
+      }
+      const answer = said.success;
       const key = topicKey(topic);
       link.errors.delete(key);
       if (Array.isArray(answer)) {
+        link.archiveReading = false;
         this.#core.data.set(topic, answer);
         this.#retell(address, asked);
+        this.onChange(address, "link");
         return;
       }
-      const rows = [...read, ...arr(get(answer, "rows"))];
+      // A page's rows are all that its items touch, so a chat of several agents can be in more than one page: once.
+      const seen = new Set(read.map((r) => str(get(r, "id"))));
+      const rows = [...read];
+      for (const r of arr(get(answer, "rows"))) {
+        if (seen.has(str(get(r, "id")))) continue;
+        seen.add(str(get(r, "id")));
+        rows.push(r);
+      }
       const next = str(get(answer, "next"));
-      const seen = new Set(rows.map((r) => str(get(r, "id"))));
       const end = next === null ? null : Number(next.slice(0, next.indexOf(":")));
       const held = end === null ? [] : arr(this.#core.data.shared(topic)).filter((r) => !seen.has(str(get(r, "id"))) && (u64(get(get(r, "archived"), "at")) ?? 0) < end);
+      if (next === null) link.archiveReading = false;
       this.#core.data.set(topic, [...rows, ...held]);
       this.#retell(address, asked);
-      if (next !== null) this.#enqueue(address, `archived/${next}`, Priority.background, this.#archivedFrom(address, topic, next, rows, null));
+      if (next === null) this.onChange(address, "link");
+      else this.#enqueue(address, `archived/${next}`, Priority.background, this.#archivedFrom(address, topic, next, rows, null));
     }));
   }
 

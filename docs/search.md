@@ -9,6 +9,9 @@ pages too); agents find those on the stations and the execution histories, skill
 what they find together with what the device holds. Nothing is gathered in still.fail cloud, and nothing is indexed:
 each station looks through its data as it is when asked.
 
+The archive's own field (core `views/archive.ts`) asks each station the same, of its archived chats alone
+(`/search?kinds=chat,message&archived=1&limit=200`), and lists the chats those are in.
+
 ## What is found, and where it comes from
 
 | Kind | What | Found by |

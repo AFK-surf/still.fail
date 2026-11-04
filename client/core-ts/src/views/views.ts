@@ -35,7 +35,7 @@ import { withDrive } from "../drive-browse.ts";
 import { heardFiles } from "../elsewhere.ts";
 import { isImage, near, placeFiles } from "../placed.ts";
 import { KINDS as THING_KINDS, isVideo, mediaDays, thingsHaving, thingsOf } from "../things.ts";
-import { archive } from "./archive.ts";
+import { archive, archiveSearch } from "./archive.ts";
 import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
 import { askAnswers } from "./vault.ts";
 import * as marks from "./marks.ts";
@@ -544,7 +544,7 @@ export class Views implements Owner {
   /// Shown again while it was kept: a search asks its stations again (what they hold changes; station/sync.ts
   /// `searchShown`), what they found before shown meanwhile.
   resume(view: Topic): void {
-    if (view.topic !== "search") return;
+    if (view.topic !== "search" && view.topic !== "archive") return;
     const live = this.#views.get(topicKey(view));
     for (const key of live?.watches.keys() ?? []) {
       const topic = JSON.parse(key) as Topic;
@@ -558,7 +558,7 @@ export class Views implements Owner {
     if (this.#core.store.subscribed(topic)) return true;
     const key = topicKey(topic);
     for (const live of this.#views.values()) {
-      if (live.topic.topic === "search" && live.watches.has(key) && this.#core.store.subscribed(live.topic)) return true;
+      if ((live.topic.topic === "search" || live.topic.topic === "archive") && live.watches.has(key) && this.#core.store.subscribed(live.topic)) return true;
     }
     return false;
   }
@@ -774,7 +774,7 @@ export class Views implements Owner {
         break;
       case "archive":
         scope = view.scope as string;
-        perStation = (s) => [{ topic: "archivedRows", station: s }];
+        perStation = (s) => [{ topic: "archivedRows", station: s }, { topic: "link", station: s }, ...(typeof view.q === "string" && view.q.trim() !== "" ? [archiveSearch(s, view.q)] : [])];
         break;
       case "longJobs":
         scope = view.scope as string;
