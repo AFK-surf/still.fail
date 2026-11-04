@@ -1,4 +1,4 @@
-import type { Lang } from "./i18n.ts";
+import { cloudProduct, type Lang } from "./i18n.ts";
 import { SIGN_IN_ILLUSTRATION } from "./illus.ts";
 
 export function escape(value: string) {
@@ -42,7 +42,7 @@ const STYLE = [
 // scheme, a loopback listener's origin), which is blocked unless it is listed.
 export function devicePage(lang: Lang, title: string, content: string, cookies?: string, returnTo?: string): Response {
   return new Response(
-    `<!doctype html><html lang="${lang === "zh" ? "zh-CN" : "en"}"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)} · still.fail</title><style>${STYLE}</style><main>${SIGN_IN_ILLUSTRATION}<h1>${escape(title)}</h1>${content}</main></html>`,
+    `<!doctype html><html lang="${lang === "zh" ? "zh-CN" : "en"}"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)} · ${escape(cloudProduct().name)}</title><style>${STYLE}</style><main>${SIGN_IN_ILLUSTRATION}<h1>${escape(title)}</h1>${content}</main></html>`,
     {
       headers: {
         "content-type": "text/html; charset=utf-8",

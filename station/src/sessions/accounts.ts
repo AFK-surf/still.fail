@@ -8,7 +8,7 @@ import { tr, type Lang, stationLang } from "../ops/i18n.ts";
 import { checkContext } from "./context-cap.ts";
 import type { Store } from "../store/store.ts";
 import { type HubConfig, type Profile, runs, runtimeNamed, runtimeTitle, sameModel, spelling } from "./config.ts";
-import { availableEfforts, cheapToLeave, commonEfforts, type ProfileHealth, pickProfile, serves, urgency, usable, windowsOf } from "./pool.ts";
+import { availableEfforts, cheapToLeave, commonEfforts, type ProfileHealth, pickProfile, reportedEfforts, serves, urgency, usable, windowsOf } from "./pool.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
 import { billedPerUse } from "../agents/profiles.ts";
 
@@ -253,18 +253,19 @@ export class Accounts {
     return (this.spent.get(this.accountKey(row.profile)) ?? this.deps.store.lastTurn(key)?.endedAt ?? now) + SPENT_FOR_MS;
   }
 
-  /// The reasoning levels every eligible account offers for a model (a pinned account may offer more): automatic
-  /// selection must work on every one, quota failover included. `allowed`: the profiles of the workspace asked for.
+  /// The reasoning levels every eligible account that has said offers for a model (a pinned account may offer more):
+  /// automatic selection must work on every one, quota failover included. `allowed`: the profiles of the workspace asked for.
   modelEfforts(runtime: RuntimeKind, model: string | null, pinned: string | null, allowed: (p: Profile) => boolean = () => true): string[] {
     const profiles = this.deps
       .config()
       .profiles.filter((p) => p.runtimes.includes(runtime) && allowed(p))
       .filter((p) => pinned === null || p.id === pinned)
       .filter((p) => model === null || runs(p, model));
-    return commonEfforts(
-      profiles.map((p) => availableEfforts(runtime, model ?? p.model ?? null, this.healthOf(p.id).check?.modelEfforts ?? null)),
-      runtime,
-    );
+    // One that has reported no levels (its check not done, or failed) is not known to lack any: it does not hold back
+    // those that have.
+    const catalog = (p: Profile) => this.healthOf(p.id).check?.modelEfforts ?? null;
+    const said = profiles.map((p) => reportedEfforts(runtime, model ?? p.model ?? null, catalog(p))).filter((levels) => levels !== null);
+    return commonEfforts(said.length > 0 ? said : profiles.map((p) => availableEfforts(runtime, model ?? p.model ?? null, catalog(p))), runtime);
   }
 
   /// Checks a change (configure) and works out what it makes of the session: its profile (and whether kept to it), its

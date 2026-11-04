@@ -9,7 +9,7 @@
 // is answered with the one held, unchanged), so that agents on any station may ask for its secrets.
 import { type LockState, admit } from "../../cloud/lock.ts";
 import type { Viewer } from "../../mesh/credential.ts";
-import { type BoxCert, type Item, type Vault, certOk, itemOk, vaultOk } from "../../vault/crypto.ts";
+import { type BoxCert, type Item, type Vault, certOk, itemOk, itemSupersedes, vaultOk, vaultSupersedes } from "../../vault/crypto.ts";
 import type { VaultStore } from "../../vault/store.ts";
 import type { Route } from "../admin.ts";
 import type { Events, To } from "../events.ts";
@@ -79,13 +79,20 @@ export const routes = ({ vaults, lock, events, boxed }: VaultDeps): Route[] => {
         if (next.ws !== r.viewer.workspace) return refuse(400, "vault_invalid", "a vault of another workspace");
         const prev = vaults.vault(l.ws, next.id);
         const copy = param(r, "copy") === "1";
-        // A copy no later than the one held: nothing to change (it never goes back).
-        if (copy && prev !== null && Number.isSafeInteger(next.seq) && next.seq <= prev.seq) return json(200, JSON.stringify({ vault: prev }));
+        // A copy no later than the one held: nothing to change (it never goes back). One of the same seq, written on
+        // another station at once, is taken where every station and device keeps it over the one held
+        // (vaultSupersedes): so the stations come to hold the same, whichever each was given first.
+        let sibling = false;
+        if (copy && prev !== null && Number.isSafeInteger(next.seq) && next.seq <= prev.seq) {
+          if (next.seq < prev.seq || !vaultSupersedes(next, prev)) return json(200, JSON.stringify({ vault: prev }));
+          sibling = true;
+        }
         // Not the version that follows the one held: the device writes on what it was told (it is sent along).
         if (!copy && Number.isSafeInteger(next.seq) && next.seq !== (prev === null ? 0 : prev.seq + 1)) {
           return refuse(409, "vault_conflict", `seq ${prev === null ? 0 : prev.seq + 1} is the one that follows`, { vault: prev });
         }
-        const why = vaultOk(l, prev, next, copy);
+        // (a sibling checked as a first copy, of the same vault and owner: what it follows is not kept here)
+        const why = sibling ? vaultOk(l, null, next, true) ?? (next.owner !== prev!.owner ? "a vault's owner does not change" : null) : vaultOk(l, prev, next, copy);
         if (why !== null) return refuse(400, "vault_invalid", why);
         vaults.putVault(next);
         tell("vault", next, `vault\0${next.id}`, members(next));
@@ -120,11 +127,16 @@ export const routes = ({ vaults, lock, events, boxed }: VaultDeps): Route[] => {
         if (vault.deleted) return refuse(404, "vault_unknown", "that vault was deleted");
         const prev = vaults.item(l.ws, vault.id, next.id);
         const copy = param(r, "copy") === "1";
-        if (copy && prev !== null && Number.isSafeInteger(next.version) && next.version <= prev.version) return json(200, JSON.stringify({ item: prev }));
+        // (one of the same version written on another station at once: as a vault's, vaultSupersedes)
+        let sibling = false;
+        if (copy && prev !== null && Number.isSafeInteger(next.version) && next.version <= prev.version) {
+          if (next.version < prev.version || !itemSupersedes(next, prev)) return json(200, JSON.stringify({ item: prev }));
+          sibling = true;
+        }
         if (!copy && Number.isSafeInteger(next.version) && next.version !== (prev === null ? 0 : prev.version + 1)) {
           return refuse(409, "vault_conflict", `version ${prev === null ? 0 : prev.version + 1} is the one that follows`, { item: prev });
         }
-        const why = itemOk(l, vault, prev, next, copy);
+        const why = itemOk(l, vault, sibling ? null : prev, next, copy);
         if (why !== null) return refuse(400, "vault_invalid", why);
         vaults.putItem(next);
         tell("vault-item", next, `vault-item\0${vault.id}\0${next.id}`, members(vault));

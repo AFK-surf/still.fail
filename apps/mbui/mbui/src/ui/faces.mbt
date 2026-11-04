@@ -104,9 +104,10 @@ fn words_forgotten() -> Unit {
   text_cache.fonts.clear()
   text_cache.metrics.clear()
   glyphs_forget()
-  // (the frame drawn whole, its glyphs other pixels; the host's glyphs as they are now: a face it has later than it is
-  // given (a page's, loaded) moves them on again, and what was laid out till then is laid out again (text_frame))
-  presented.forget()
+  // (the frame drawn whole, nothing of the scene kept, its glyphs other pixels; the host's glyphs as they are now: a face
+  // it has later than it is given (a page's, loaded) moves them on again, and what was laid out till then is laid out
+  // again (text_frame))
+  scene_anew(false)
   text_cache.generation = h_atlas_generation()
   view_words_rescaled()
 }

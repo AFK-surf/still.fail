@@ -677,7 +677,7 @@ pub struct Ctx {
   mut inst : FixedArray[Double]
   mut ninst : Int
   // the pieces of the shapes painted this frame (shape.mbt): x0 y0 x1 y1 each, as shares of their instance's rect
-  segs : Array[Double]
+  mut segs : Array[Double]
   mut ime_sig : String
   /// the input method's action last told the host (@hostapi.ime_action)
   mut ime_action_told : Int

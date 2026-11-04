@@ -170,6 +170,19 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
+  test("a key that runs Codex says the levels Codex offers on it once made", async () => {
+    const levels = ["low", "medium", "high", "xhigh", "max", "ultra"];
+    const t = await rig({
+      codex: () => ({ models: async () => ({ models: ["gpt-6.1-terra"], efforts: new Map([["gpt-6.1-terra", levels]]), defaults: new Map([["gpt-6.1-terra", "low"]]) }) }) as any,
+    });
+    assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "openai", key: "sk-123456" } }))[0], 200);
+    await until(() => t.accounts.health("openai").check?.modelEfforts !== undefined, "its levels read");
+    const check = t.accounts.health("openai").check!;
+    assert.deepEqual(check.modelEfforts, { codex: { "gpt-6.1-terra": levels } }, "without them it would hold other accounts of the model to the usual levels");
+    assert.deepEqual(check.modelEffortDefaults, { codex: { "gpt-6.1-terra": "low" } });
+    await t.close();
+  });
+
   test("a key on a listed provider makes a profile that runs what its endpoints speak", async () => {
     const t = await rig();
     // Chat completions only: DeepSeek Harness alone runs it.
@@ -521,6 +534,26 @@ describe("the accounts routes", { concurrency: true }, () => {
     script(join(m.bin, "claude"), `#!/bin/sh\necho '{"loggedIn": false}'\nexit 1\n`);
     await machine.refresh();
     await until(() => checked.length > afterPlan, "checked again");
+    await s.close();
+  });
+
+  test("machine login identity readings tell sharing, including the first and a later sign-in", async () => {
+    const m = fakeMachine({ claude: `echo '{"loggedIn": true, "email": "first@x.test"}'` });
+    mkdirSync(join(m.home, ".claude"));
+    writeFileSync(join(m.home, ".claude/.credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "fake", expiresAt: Date.now() + 3_600_000 } }));
+    const machine = new MachineLogins(m.env, undefined, () => "zh");
+    const identities: (string | null)[] = [];
+    const s = await rig({ machine, shared: {
+      status: async () => ({ check: null, quota: null }), view: () => null,
+      loginUpdated: () => identities.push(machine.get().find((l) => l.runtime === "claude")?.email ?? null),
+    } });
+    await until(() => identities.includes("first@x.test"), "the first reading tells sharing");
+    const count = identities.length;
+    await machine.refresh();
+    assert.equal(identities.length, count, "an unchanged reading does not refresh sharing");
+    script(join(m.bin, "claude"), `#!/bin/sh\necho '{"loggedIn": true, "email": "second@x.test"}'\n`);
+    await machine.refresh();
+    assert.equal(identities.at(-1), "second@x.test");
     await s.close();
   });
 

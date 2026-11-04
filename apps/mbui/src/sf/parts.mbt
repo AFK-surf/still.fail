@@ -4928,17 +4928,28 @@ fn sync_drawn_back(part : Int, pts : Array[Double], left : Double) -> Array[Arra
 
 ///|
 /// What the catching up said last, by its key (said as it goes), and whether it showed (only then the tick).
-// kept across runs: put back as it goes (sync_key)
+// kept across runs: put back as it goes (sync_key), and as a run begins (on_reset)
 let sync_said : LiveMap[String, String] = LiveMap::new()
 
 ///|
-// kept across runs: put back as it goes (sync_key)
+// kept across runs: put back as it goes (sync_key), and as a run begins (on_reset)
 let sync_seen : LiveMap[String, Bool] = LiveMap::new()
 
 ///|
 /// Where each mark comes to rest once all is here, by its key, from the frame it was.
-// kept across runs: put back as it goes (sync_key)
+// kept across runs: put back as it goes (sync_key), and as a run begins (on_reset)
 let sync_rests : LiveMap[String, SyncRest] = LiveMap::new()
+
+///|
+/// A run begins with nothing caught up: what a run before left showing (a mark seen, its tick still to come, as that
+/// run ended) is no run's after it (a Home's catching up drawn as going away in the next run's first frames).
+fn init {
+  @ui.on_reset(fn() {
+    sync_said.clear()
+    sync_seen.clear()
+    sync_rests.clear()
+  })
+}
 
 ///|
 /// A turn of the mark (the web's SyncMark: 1.4s, eased in and out).

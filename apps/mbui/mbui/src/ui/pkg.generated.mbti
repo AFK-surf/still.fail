@@ -436,6 +436,8 @@ pub fn own_clock() -> Bool
 
 pub fn paginate(Array[Block], Double, Double, style? : PageStyle) -> Pages
 
+pub fn parts_ms() -> Double
+
 pub let pasted_picture_name : String
 
 pub fn patch(row? : Bool, w? : Len, h? : Len, min_w? : Len, max_w? : Len, min_h? : Len, max_h? : Len, p? : Space, px? : Space, py? : Space, pl? : Space, pr? : Space, pt? : Space, pb? : Space, m? : Space, mx? : Space, my? : Space, ml? : Space, mr? : Space, mt? : Space, mb? : Space, gap? : Space, align? : Align, justify? : Justify, bg? : Color, radius? : Radius, border? : Stroke, border_color? : Color, dashed? : Bool, shadow? : Shadow, clip? : Bool, opacity? : Opacity) -> Patch
@@ -521,6 +523,10 @@ pub fn runs_words_now(@view.View) -> Words?
 pub fn runtime() -> @effect.Runtime
 
 pub let same_moment_ms : Double
+
+pub fn scene_done() -> SceneWork
+
+pub fn scene_parts() -> Array[(Double, Double, Double, Double)]
 
 pub let scroll_bar_clear : Double
 
@@ -1113,7 +1119,7 @@ pub struct Ctx {
   mut press_down_tree : Bool
   mut inst : FixedArray[Double]
   mut ninst : Int32
-  segs : Array[Double]
+  mut segs : Array[Double]
   mut ime_sig : String
   mut ime_action_told : Int32
   mut t_build : Double
@@ -1623,6 +1629,7 @@ pub(all) struct FramePerf {
   insts : Int32
   looks : Bool
   painted : Bool
+  alone : Bool
   kept : Int32
   rows : Int32
   build_ms : Double
@@ -1996,6 +2003,7 @@ type Node
 pub struct NodeRows[T] {
   read : () -> (Array[T], Array[String])
   room : (String, Double) -> @view.ListRoom
+  moving : () -> Array[String]
   lend : (@view.View, String) -> Unit
   opening : () -> Bool
 }
@@ -2268,6 +2276,16 @@ pub(all) enum RowSize {
 pub struct RunsLinks {
   pointed : @signals.Signal[Int32]
   pointed_at : @signals.Signal[(Double, Double, Double, Double)?]
+}
+
+#derive(Eq, Show, @debug.Debug)
+pub(all) struct SceneWork {
+  mut layers : Int32
+  mut recorded : Int32
+  mut copied : Int32
+  mut copied_insts : Int32
+  mut alone : Int32
+  mut parts : Int32
 }
 
 type Sem
@@ -2546,7 +2564,7 @@ pub fn Tester::display_frame(Self, Double) -> Double
 pub fn Tester::drag(Self, Double, Double, Double, Double, steps? : Int32) -> Unit
 pub fn Tester::drags_window_at(Self, Double, Double) -> Bool
 pub fn Tester::draw(Self) -> Unit
-pub fn Tester::drawlist(Self, bytes? : Bool) -> String
+pub fn Tester::drawlist(Self, bytes? : Bool, parts? : Bool) -> String
 pub fn Tester::drawlist_images(Self) -> Array[(Int32, String, Bytes)]
 pub fn Tester::drawn_again(Self, Bool) -> Unit
 pub fn Tester::drawn_cut(Self) -> Array[(Int32, Double, Double, Double, Double, (Double, Double, Double, Double))]
@@ -2657,6 +2675,7 @@ pub fn Tester::marks_answer(Self, Int32) -> Unit
 pub fn Tester::marks_by_hand(Self) -> Unit
 pub fn Tester::marks_drawn(Self) -> Array[String]
 pub fn Tester::marks_make(Self, Bytes) -> Unit
+pub fn Tester::measure_as_host(Self) -> Unit
 pub fn Tester::messages_taken(Self) -> Int32
 pub fn Tester::mixed_corners(Self, lit? : Bool) -> Array[String]
 pub fn Tester::move(Self, Double, Double) -> Unit
@@ -2678,6 +2697,7 @@ pub fn Tester::painted_why(Self) -> String
 pub fn Tester::parts_kept(Self) -> Int32
 pub fn Tester::paste(Self, String) -> Unit
 pub fn Tester::pending(Self) -> Array[(Int32, Int32)]
+pub fn Tester::perf_opened(Self) -> Int32
 pub fn Tester::perf_said(Self) -> (Array[Bool], Array[String])
 pub fn Tester::periodic(Self) -> Array[String]
 pub fn Tester::pick_asks(Self) -> Array[@hostapi.PickKind]
@@ -2731,6 +2751,7 @@ pub fn Tester::set_nav_able(Self, Bool) -> Unit
 pub fn Tester::set_notice_permission(Self, String) -> Unit
 pub fn Tester::set_notice_reply(Self, Bool?) -> Unit
 pub fn Tester::set_perf(Self, Int32) -> Unit
+pub fn Tester::set_perf_opens(Self, Bool) -> Unit
 pub fn Tester::set_perf_size(Self, Double) -> Unit
 pub fn Tester::set_player(Self, Int32, duration? : Double, position? : Double, playing? : Bool, natural? : (Double, Double), shown? : Bool, buffering? : Bool, buffered? : Double, ended? : Bool) -> Unit
 pub fn Tester::set_reduce_motion(Self, Bool) -> Unit

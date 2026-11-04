@@ -97,7 +97,7 @@ impl Runner {
 
     fn connect(&self) -> Client {
         let pipe = OpenOptions::new().read(true).write(true).open(self.info["socket"].as_str().unwrap()).unwrap();
-        Client { reader: BufReader::new(pipe.try_clone().unwrap()), writer: pipe }
+        Client { reader: BufReader::new(pipe.try_clone().unwrap()), writer: pipe, said: None }
     }
 
     fn files(&self) -> Vec<String> {
@@ -137,6 +137,8 @@ fn ready_line(stdout: impl std::io::Read) -> Value {
 struct Client {
     reader: BufReader<File>,
     writer: File,
+    /// What the runner said as it was attached to (where it begins): kept aside, the rest read on past it.
+    said: Option<Value>,
 }
 
 impl Client {
@@ -145,12 +147,18 @@ impl Client {
     }
 
     fn recv(&mut self) -> Option<Value> {
-        let mut line = String::new();
-        match self.reader.read_line(&mut line) {
-            Ok(0) => None,
-            Ok(_) => Some(serde_json::from_str(&line).unwrap()),
-            Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe || e.raw_os_error() == Some(233) => None,
-            Err(e) => panic!("reading from the runner: {e}"),
+        loop {
+            let mut line = String::new();
+            let message: Value = match self.reader.read_line(&mut line) {
+                Ok(0) => return None,
+                Ok(_) => serde_json::from_str(&line).unwrap(),
+                Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe || e.raw_os_error() == Some(233) => return None,
+                Err(e) => panic!("reading from the runner: {e}"),
+            };
+            if message["op"] != "attached" {
+                return Some(message);
+            }
+            self.said = Some(message);
         }
     }
 

@@ -31,13 +31,14 @@ exec "$@"`);
   writeFileSync(join(dir, "scripts/release.sh"), `#!/bin/sh
 set -eu
 [ "$MAC_SIGN_IDENTITY" = 'Developer ID Application: test' ]
-suffix= channel=
+suffix= channel= product=stillfail
+if [ "$1" = --product ]; then product=$2; shift 2; fi
 if [ "$1" = --beta ]; then suffix=-beta; channel=beta/; shift; fi
 [ "$1" = desktop ]
 mkdir -p "$RELEASE_DIR/desktop" "$RELEASE_DIR/mac/$channel"
-printf signed > "$RELEASE_DIR/desktop/stillfail$suffix-0.1.7232-arm64-mac.zip"
+printf signed > "$RELEASE_DIR/desktop/$product$suffix-0.1.7232-arm64-mac.zip"
 printf feed > "$RELEASE_DIR/mac/\${channel}latest.json"
-[ "\${INCOMPLETE:-}" = 1 ] || printf legacy > "$RELEASE_DIR/desktop/stillfail$suffix-mac.yml"
+[ "\${INCOMPLETE:-}" = 1 ] || [ "$product" != stillfail ] || printf legacy > "$RELEASE_DIR/desktop/stillfail$suffix-mac.yml"
 `);
   const run = (out: string, args: string[] = [], extra: Record<string, string> = {}) => spawnSync("sh", [".github/release-desktop.sh", ...args, "--out", out], {
     cwd: dir, encoding: "utf8", env: { ...process.env, PATH: `${join(dir, "bin")}:${process.env.PATH}`,
@@ -51,6 +52,12 @@ printf feed > "$RELEASE_DIR/mac/\${channel}latest.json"
     assert.equal(readFileSync(join(out, `mac/${stable ? "" : "beta/"}latest.json`), "utf8"), "feed");
     assert.deepEqual(readdirSync(join(dir, "tmp")), [], "the signing configuration is removed after staging");
   }
+  // monoid's: its own names, no Electron feed (it never had an Electron app)
+  const monoid = join(dir, "monoid");
+  const made = run(monoid, ["--product", "monoid"]);
+  assert.equal(made.status, 0, made.stderr);
+  assert.equal(readFileSync(join(monoid, "desktop/monoid-beta-0.1.7232-arm64-mac.zip"), "utf8"), "signed");
+  assert.equal(existsSync(join(monoid, "desktop/stillfail-beta-mac.yml")), false);
   const failed = join(dir, "failed");
   let result = run(failed, [], { FAIL_SIGN: "1" });
   assert.notEqual(result.status, 0);

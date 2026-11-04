@@ -319,6 +319,8 @@ export class Accounts {
           this.changed();
           const before = last;
           last = new Map(["claude", "codex"].map((r) => [r, said(r)]));
+          // The first reading can arrive after sharing starts; its identity and later sign-ins must reach borrowers.
+          if (before === null || [...last].some(([runtime, value]) => before.get(runtime) !== value)) this.deps.shared?.loginUpdated?.();
           if (before === null) {
             // The first reading can finish after a start-up check. If it knows a more specific tier, recheck that
             // profile so its view and any borrowed copy get the machine login's tier.
@@ -613,18 +615,12 @@ export class Accounts {
       raw.profiles = [...(Array.isArray(raw.profiles) ? raw.profiles : []), made];
     });
     this.keepCheck(id, check);
-    // What the automatic decisions can use is found once the profile is made: a request to add does not wait on that.
+    // All a check finds out beyond its key is found once the profile is made, a request to add not waiting on that: what
+    // the automatic decisions can use, and the levels Codex offers on it, without which it holds every other account of
+    // those models to the runtime's usual ones.
     const profile = this.profile(id);
     if (profile?.runtime === "hermes") this.afterSignIn(id);
-    else if (profile) {
-      this.background.spawn(async () => {
-        const decision = await this.discoverFn(profile, check);
-        // A profile edited or removed meanwhile does not inherit what was found for the one it was.
-        const now = this.profile(id);
-        if (!now || fingerprint(now) !== fingerprint(profile)) return;
-        this.keepCheck(id, { ...check, decision });
-      });
-    }
+    else if (profile) this.background.spawn(() => this.check(id, lang).catch(() => undefined));
     return id;
   }
 

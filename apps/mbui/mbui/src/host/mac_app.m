@@ -1166,9 +1166,19 @@ static NSString *local_doing = nil;
 static NSString *local_failed = nil;
 static int local_percent = -1;   // how far the installer's download is (local_heard, below), -1 not said
 static NSString *local_said = nil; // the last step the installer said
-static NSString *local_data(void) { return [NSHomeDirectory() stringByAppendingPathComponent:@".stillfail"]; }
+// (another product's app, its station's own: MBUI_STATION_ID's directory, MBUI_STATION_LABEL's service; cloud/src/
+// install.ts names them so, monoid's ~/.monoid and build.monoid.station beside still.fail's)
+static NSString *local_env(const char *name, NSString *otherwise) {
+  const char *v = getenv(name);
+  return v && *v ? @(v) : otherwise;
+}
+static NSString *local_data(void) {
+  return [NSHomeDirectory() stringByAppendingPathComponent:[@"." stringByAppendingString:local_env("MBUI_STATION_ID", @"stillfail")]];
+}
 static NSString *local_service(void) {
-  for (NSString *label in @[ @"fail.still.station", @"org.3720.ember.station" ]) {
+  NSString *own = local_env("MBUI_STATION_LABEL", @"fail.still.station");
+  NSArray *labels = [own isEqualToString:@"fail.still.station"] ? @[ own, @"org.3720.ember.station" ] : @[ own ];
+  for (NSString *label in labels) {
     NSString *plist = [NSString stringWithFormat:@"%@/Library/LaunchAgents/%@.plist", NSHomeDirectory(), label];
     if ([NSFileManager.defaultManager fileExistsAtPath:plist]) return label;
   }
@@ -2930,6 +2940,7 @@ int32_t mb_host_perf_state(void) { return -1; }
 void mb_host_set_perf(int32_t on) { (void)on; }
 void mb_host_perf_line(moonbit_string_t line) { (void)line; }
 moonbit_string_t mb_host_perf_where(void) { return moonbit_make_string_raw(0); }
+int32_t mb_host_perf_open(int32_t go) { (void)go; return 0; }
 double mb_host_perf_size(void) { return 0; }
 moonbit_bytes_t mb_host_perf_read(void) { return moonbit_make_bytes(0, 0); }
 

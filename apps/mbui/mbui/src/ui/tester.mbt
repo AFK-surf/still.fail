@@ -33,6 +33,21 @@ pub struct Tester {
 pub let frame_period_default : Double = 1000.0 / 60.0
 
 ///|
+/// Whether the Tester's frames are drawn as a host draws them, none of its checks run on them (Tester::measure_as_host).
+// kept across runs: put back as a run begins (reset_globals)
+let measured_as_host : Ref[Bool] = Ref(false)
+
+///|
+/// From now on its frames drawn as a host draws them, for a bench to measure (src/scenebench): none of the Tester's checks
+/// run on them (the looks drawn whole and compared, words over words, rows steady, what is seen whole, the corners), no
+/// instance's owner kept for them.
+pub fn Tester::measure_as_host(self : Tester) -> Unit {
+  self.check_looks(false)
+  measured_as_host.val = true
+  inst_owners.track = false
+}
+
+///|
 /// The run before let go of, before the next one's inputs are said: the window's tree disposed (what it made, what its
 /// bindings followed, what was due on its timeline), what is made once forgotten. Said where a run is begun before
 /// its Tester is made (what the app is given before it, its made-up core opening a page, then reaches no tree of the
@@ -84,6 +99,7 @@ fn reset_globals() -> Unit {
   text_runs.on = false
   inst_owners.on = false
   inst_owners.track = false
+  measured_as_host.val = false
   inst_owners_clear()
   text_runs.runs.clear()
   desk_reset()
@@ -403,6 +419,8 @@ pub fn Tester::new(
     perf: -1,
     perf_sets: [],
     perf_lines: [],
+    perf_opens: false,
+    perf_opened: 0,
     perf_bytes: 0.0,
     view_texts: {},
     view_stills: {},
@@ -772,10 +790,12 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   }
   on_frame(self.w, self.h, self.fake.scale, if shown > at { shown } else { at })
   self.frames = self.frames + 1
-  self.hold_words_over()
-  self.hold_rows_steady()
-  self.hold_seen_whole_now()
-  self.hold_corners()
+  if !measured_as_host.val {
+    self.hold_words_over()
+    self.hold_rows_steady()
+    self.hold_seen_whole_now()
+    self.hold_corners()
+  }
   match self.each {
     Some(f) => f()
     None => ()
@@ -1853,6 +1873,18 @@ pub fn Tester::set_keyboard(self : Tester, on : Bool) -> Unit {
 /// kept but off, 1 on.
 pub fn Tester::set_perf(self : Tester, state : Int) -> Unit {
   self.fake.perf = state
+}
+
+///|
+/// Whether the performance record's folder can be opened from now on (@hostapi.perf_opens: a host with no share sheet).
+pub fn Tester::set_perf_opens(self : Tester, opens : Bool) -> Unit {
+  self.fake.perf_opens = opens
+}
+
+///|
+/// How many times the app opened the performance record's folder (@hostapi.perf_open).
+pub fn Tester::perf_opened(self : Tester) -> Int {
+  self.fake.perf_opened
 }
 
 ///|

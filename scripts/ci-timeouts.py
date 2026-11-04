@@ -12,7 +12,7 @@ import glob, os, re, sys
 LIMIT = 5
 # (workflow, job): minutes. sfapp's pages in one process of the day's (mbui-check.yml native), the emulator's checks of the day's (2026-10-31: android-devices 430-575 s), the Windows
 # app's end to end of the day's (preview.yml windows' runs that are no push), prebuild's Windows shell (300-450 s) and
-# TestFlight's release (330-550 s), both to be made faster
+# TestFlight's release (330-550 s), both to be made faster; the side run's station part, its simulators one at a time
 LONGER = {
     ("mbui-ci.yml", "android-devices"): 10,
     ("mbui-ci.yml", "android-oldest"): 10,
@@ -25,8 +25,10 @@ LONGER = {
     ("mbui-check.yml", "native"): 10,
     ("mbui-check.yml", "app"): 10,
     ("prebuild.yml", "build"): 10,
+    ("rules.yml", "tools"): 10,
     ("prebuild.yml", "again"): 10,
     ("mbui-testflight.yml", "release"): 10,
+    ("side.yml", "side"): 10,
 }
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 bad = []

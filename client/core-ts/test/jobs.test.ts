@@ -46,11 +46,11 @@ test("a_chats_jobs_put_what_matters_first_and_leave_out_those_over", () => {
   const chat = {
     agents: [
       { jobs: [job("old", { state: "stopped", startedAt: NOW - 90_000, endedAt: NOW - 80_000 }), job("w"), job("done", { state: "exited", exitCode: 0, endedAt: NOW - 1_000 })] },
-      { jobs: [job("s", { session: "b", port: 1, startedAt: NOW - 5_000 }), job("r", { session: "b", port: 2, state: "exited" }), job("x", { session: "b", state: "failed", endedAt: NOW - 1_000 }), job("y", { session: "b", state: "failed", startedAt: NOW - 2 * NEWS, endedAt: NOW - NEWS - 1 })] },
+      { jobs: [job("s", { session: "b", port: 1, startedAt: NOW - 5_000 }), job("r", { session: "b", port: 2, state: "exited" }), job("x", { session: "b", port: 3, state: "failed", endedAt: NOW - 1_000 }), job("y", { session: "b", port: 4, state: "failed", startedAt: NOW - 2 * NEWS, endedAt: NOW - NEWS - 1 }), job("died", { state: "exited", exitCode: 1, endedAt: NOW - 1_000 }), job("lost", { state: "failed", endedAt: NOW - 1_000 })] },
     ],
   };
   const [v, next] = chatJobs(chat, c());
-  assert.deepEqual(v.jobs.map((j: J) => j.id), ["x", "r", "w", "s"], "stopped, done and died over a day ago are left out");
+  assert.deepEqual(v.jobs.map((j: J) => j.id), ["x", "r", "w", "s"], "tasks that ended, however they ended, and services that died over a day ago are left out");
   assert.deepEqual([v.alarm, v.servicesNote, v.jobsNote], ["fail", "1 个在线，1 个在重启", "1 个运行中"]);
   assert.equal(v.allText, "全部 4 个");
   assert.ok(next <= 1000);
@@ -60,7 +60,7 @@ test("a_chats_jobs_put_what_matters_first_and_leave_out_those_over", () => {
 
 test("a_chat_jobs_summary_keeps_the_button_and_alarm_without_preparing_the_jobs_page", () => {
   const chat = { agents: [{ jobs: [
-    job("failed", { state: "failed", endedAt: NOW - NEWS + 5_000 }),
+    job("failed", { port: 3, state: "failed", endedAt: NOW - NEWS + 5_000 }),
     job("restarting", { state: "exited", port: 1 }),
     job("old", { state: "stopped" }),
   ] }] };
@@ -72,7 +72,7 @@ test("a_chat_jobs_summary_keeps_the_button_and_alarm_without_preparing_the_jobs_
   assert.equal(next, 5_000, "the alarm is checked again when the failure is no longer recent");
   const [later] = chatJobs(chat, { ...c(), now: NOW + 5_000 }, true);
   assert.equal(later.alarm, "restart");
-  const [over] = chatJobs({ agents: [{ jobs: [job("old", { state: "stopped" }), job("done", { state: "exited", exitCode: 0 })] }] }, c(), true);
+  const [over] = chatJobs({ agents: [{ jobs: [job("old", { state: "stopped" }), job("done", { state: "exited", exitCode: 0 }), job("died", { state: "exited", exitCode: 1, endedAt: NOW - 1_000 })] }] }, c(), true);
   assert.equal(over.hasJobs, false, "no button for jobs that are all over");
   const [empty, never] = chatJobs({ agents: [] }, c(), true);
   assert.deepEqual([empty.hasJobs, empty.alarm, never], [false, null, Infinity]);

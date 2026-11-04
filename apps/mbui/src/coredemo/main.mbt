@@ -77,7 +77,7 @@ let dumped : Map[String, Int] = {}
 fn dump_one(name : String, s : @core.Sub) -> Unit {
   if dumped.get(name) != Some(s.version) {
     dumped[name] = s.version
-    match (s.value, s.error) {
+    match (s.value(), s.error) {
       (Some(v), _) => @hostapi.log("DUMP \{name} \{v.stringify()}")
       (_, Some(e)) => @hostapi.log("DUMP \{name} error \{e.stringify()}")
       _ => ()
@@ -94,7 +94,7 @@ fn dump(accounts : @core.Sub) -> Unit {
   let ws = @core.subscribe("workspaces")
   dump_one("workspaces", ws)
   // each workspace's stations
-  match ws.value {
+  match ws.value() {
     Some(Array(accounts)) =>
       for a in accounts {
         match a {
@@ -181,7 +181,7 @@ fn view(c : @ui.Ctx) -> Unit {
         |> ignore
       })
       |> ignore
-      match (accounts.value, accounts.error) {
+      match (accounts.value(), accounts.error) {
         (Some(Array(list)), _) =>
           if list.length() == 0 {
             c.text("还没有登录的账号", size=15.0) |> ignore

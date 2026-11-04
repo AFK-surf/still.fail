@@ -51,7 +51,7 @@ fn photo_days_now() -> Result[Array[@gallery.Day], String]? {
   if env("MBUI_CORE_DUMP") == "1" {
     dump_one("media.timeline", s)
   }
-  match (s.value, s.error) {
+  match (s.value(), s.error) {
     (Some(Object(m)), _) => {
       match photo_cache.val {
         Some((v, n, days)) if v == s.version && n == photo_days.val => return Some(Ok(days))

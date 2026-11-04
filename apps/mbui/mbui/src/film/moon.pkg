@@ -3,7 +3,6 @@ import {
   "mbui/ui",
   "mbui/view",
   "mbui/codec",
-  "mbui/damage",
   "moonbitlang/core/json",
 }
 

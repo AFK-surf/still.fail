@@ -248,6 +248,8 @@ fn ImageEntry::poll(self : ImageEntry, now : Double) -> Unit {
 fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
   // (followed: which of its decodes is ready changes as the host says one is, or failed)
   image_decodes_read(src)
+  // (asked again wherever the layer asking it is copied: kept as shown, scene_layers.mbt)
+  scene_image_asked(src, px)
   // bytes still on their way: nothing to load yet
   if src.has_prefix("mem:") && !image_data.contains(src) {
     return None

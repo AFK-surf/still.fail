@@ -1,6 +1,6 @@
 // A screen of its own on the phone for each chat it is lent to (docs/adb-share.md "The chat's own screen", 2026-11-04,
 // user: 「会有一个虚拟屏跑 app 不影响我自己操作」): a virtual display, made and held by a run of scrcpy's server on the
-// phone (./screens/scrcpy-server, `new_display`), in the grant's adb server. The agent starts its apps there
+// phone (android.ts SERVER_FILE, `new_display`), in the grant's adb server. The agent starts its apps there
 // (`am start --display`), touches it (`input -d`) and takes its pictures (`screencap -d`, SurfaceFlinger's id of it),
 // while the person uses the phone's own screen. It is made as phone_use says how the phone is reached, and goes as the
 // grant ends, as nothing of the agent's has used the phone for IDLE_MS (its apps closed with it: they do not move onto
@@ -10,15 +10,12 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { randomInt } from "node:crypto";
 import { statSync } from "node:fs";
 import net from "node:net";
-import { fileURLToPath } from "node:url";
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { platform } from "../platform/index.ts";
-import { adbEnv, sizeOf } from "../screens/android.ts";
+import { adbEnv, SERVER_FILE, SERVER_VERSION, sizeOf } from "../screens/android.ts";
 import { DISPLAY_MARK } from "./activity.ts";
 
-/// The version of ../screens/scrcpy-server (android.ts SERVER_VERSION).
-const SERVER_VERSION = "5.0.1";
 /// How long scrcpy has to make the display.
 const START_TIMEOUT = 20_000;
 /// How long an adb command of the station's is given.
@@ -47,13 +44,30 @@ export function densityOf(wm: string): number {
 }
 
 /// SurfaceFlinger's id of Android's display `id`: its unique id from `dumpsys display`, found in `dumpsys SurfaceFlinger
-/// --display-id`'s lines (`Display 11529215046400789845 (Virtual display): displayName="scrcpy" uniqueId="virtual:…"`).
-export function surfaceOf(displays: string, flinger: string, id: number): string | null {
+/// --display-id`'s lines (`Display 11529215046400789845 (Virtual display): displayName="scrcpy" uniqueId="virtual:…"`);
+/// where they name none (ColorOS 17, 2026-11-04: `Display 11529215049903610350 (Virtual display): displayName="scrcpy"`),
+/// by its layer stack in `dumpsys SurfaceFlinger` (`flinger()`: `Display 115… (virtual, "scrcpy")` then `layerFilter={layerStack=12 …`).
+export async function surfaceOf(displays: string, ids: string, id: number, flinger: () => Promise<string>): Promise<string | null> {
   const info = displays.split("\n").find((l) => l.includes("mBaseDisplayInfo=") && new RegExp(`\\bdisplayId ${id},`).test(l));
-  const unique = info === undefined ? null : /uniqueId "([^"]+)"/.exec(info)?.[1];
-  if (!unique) return null;
-  const line = flinger.split("\n").find((l) => l.includes(`uniqueId="${unique}"`));
-  return line === undefined ? null : (/^Display (\d+)/.exec(line.trim())?.[1] ?? null);
+  if (info === undefined) return null;
+  const unique = /uniqueId "([^"]+)"/.exec(info)?.[1];
+  const line = unique ? ids.split("\n").find((l) => l.includes(`uniqueId="${unique}"`)) : undefined;
+  if (line !== undefined) return /^Display (\d+)/.exec(line.trim())?.[1] ?? null;
+  const stack = /layerStack (\d+)/.exec(info)?.[1];
+  if (stack === undefined || !/\(Virtual display\)/.test(ids) || ids.includes("uniqueId=")) return null;
+  let at: string | null = null;
+  for (const l of (await flinger()).split("\n")) {
+    const display = /^Display (\d+) \(virtual\b/.exec(l.trim());
+    if (display) at = display[1]!;
+    else if (/^\S/.test(l)) at = null;
+    else if (at !== null && new RegExp(`layerFilter=\\{layerStack=${stack}\\b`).test(l)) return at;
+  }
+  return null;
+}
+
+/// The root tasks `am stack list` says are on display `id` (`RootTask id=7723 bounds=[…] displayId=13 userId=0`).
+export function rootTasksOn(list: string, id: number): number[] {
+  return [...list.matchAll(/^(?:RootTask|Stack) id=(\d+)\b.*\bdisplayId=(\d+)/gm)].filter((m) => Number(m[2]) === id).map((m) => Number(m[1]));
 }
 
 type Held = {
@@ -88,7 +102,7 @@ export class PhoneDisplays {
 
   constructor(o: DisplaysOptions) {
     this.#o = o;
-    this.#file = o.file ?? fileURLToPath(new URL("../screens/scrcpy-server", import.meta.url));
+    this.#file = o.file ?? SERVER_FILE;
   }
 
   /// Grant `grant`'s display, made if it has none (`port`: its adb server, `serial`: the phone in it).
@@ -178,11 +192,12 @@ export class PhoneDisplays {
       await wall.sleep(100);
       made = displayOf(said);
     }
-    const surface = surfaceOf(await shell("dumpsys display").catch(() => ""), await shell("dumpsys SurfaceFlinger --display-id").catch(() => ""), made.id);
+    const surface = await surfaceOf(await shell("dumpsys display").catch(() => ""), await shell("dumpsys SurfaceFlinger --display-id").catch(() => ""), made.id,
+      () => shell("dumpsys SurfaceFlinger").catch(() => ""));
     const display: Display = { ...made, surface: surface ?? String(made.id) };
     const held: Held = { grant, owner, title, display, opened: wall.now(), child, socket, forward, closing: false };
     this.#held.set(grant, held);
-    const gone = () => this.#gone(held);
+    const gone = () => void this.#gone(held);
     child.on("close", gone);
     socket.on("close", gone);
     socket.on("error", gone);
@@ -197,26 +212,40 @@ export class PhoneDisplays {
     return display;
   }
 
-  #gone(held: Held) {
-    if (this.#held.get(held.grant) !== held) return;
+  /// Done once its apps are closed and scrcpy is ended (the grant's adb server is still needed till then).
+  #gone(held: Held): Promise<void> {
+    if (this.#held.get(held.grant) !== held) return Promise.resolve();
     this.#held.delete(held.grant);
     held.closing = true;
-    held.socket.destroy();
-    held.child.kill();
     const [adb, ...server] = held.forward.adb;
-    void adbRun(adb!, [...server, "forward", "--remove", `tcp:${held.forward.port}`]).catch(() => {});
+    const shell = (command: string) => adbRun(adb!, [...server, "shell", `${DISPLAY_MARK} ${command}`]);
+    // Its apps closed before it: left to Android as the display goes, ColorOS's Settings (its activities arranged by
+    // another of its processes) stayed half-removed, in the recents and on a display the phone kept (2026-11-04).
+    const closing = held.child.exitCode === null && !held.socket.destroyed
+      ? shell("am stack list").then((list) => {
+        const tasks = rootTasksOn(list, held.display.id);
+        return tasks.length === 0 ? "" : shell(tasks.map((t) => `am stack remove ${t}`).join("; "));
+      })
+      : Promise.resolve("");
+    const ended = closing.catch(() => "").then(() => {
+      held.socket.destroy();
+      held.child.kill();
+      return adbRun(adb!, [...server, "forward", "--remove", `tcp:${held.forward.port}`]).then(() => {}, () => {});
+    });
     log.info("adb", "a chat's display closed", { grant: held.grant });
     this.#o.changed(held.owner);
     if (this.#held.size === 0) {
       this.#check?.();
       this.#check = null;
     }
+    return ended;
   }
 
-  /// Grant `grant`'s display closed (the grant ended, handed back); its apps close with it.
-  close(grant: string) {
+  /// Grant `grant`'s display closed (the grant ended, handed back); its apps close with it. Done when the phone is
+  /// through with it: the grant's adb server is stopped only then.
+  close(grant: string): Promise<void> {
     const held = this.#held.get(grant);
-    if (held !== undefined) this.#gone(held);
+    return held === undefined ? Promise.resolve() : this.#gone(held);
   }
 
   #watch() {
@@ -234,13 +263,13 @@ export class PhoneDisplays {
     const most = this.#o.idleMs ?? IDLE_MS;
     for (const held of [...this.#held.values()]) {
       const used = this.#o.usedAt(held.grant);
-      if (used === null || now - Math.max(used, held.opened) >= most) this.#gone(held);
+      if (used === null || now - Math.max(used, held.opened) >= most) void this.#gone(held);
     }
   }
 
   closeAll() {
     this.#closed = true;
-    for (const held of [...this.#held.values()]) this.#gone(held);
+    for (const held of [...this.#held.values()]) void this.#gone(held);
   }
 }
 

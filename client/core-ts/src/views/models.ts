@@ -193,8 +193,13 @@ export function effortDefault(overview: J, runtime: string, m: string | null, pr
   return null;
 }
 
+/// What its accounts share. One that has reported no levels (its check not done, or failed) is not known to lack any, so
+/// it does not hold back those that have; none having reported, the runtime's usual ones.
 function commonEfforts(profiles: J[], runtime: string, m: string | null): string[] {
-  return reasoning.common(profiles.map((p) => profileEfforts(p, runtime, m)), runtime);
+  const said = profiles
+    .map((p) => reasoning.reported(runtime, m ?? str(get(p, "model")), get(get(p, "check"), "modelEfforts") ?? null))
+    .filter((levels) => levels !== null);
+  return reasoning.common(said.length > 0 ? said : profiles.map((p) => profileEfforts(p, runtime, m)), runtime);
 }
 
 function profilesRunning(overview: J, runtime: string, m: string | null, current: string | null, now: number): J[] {

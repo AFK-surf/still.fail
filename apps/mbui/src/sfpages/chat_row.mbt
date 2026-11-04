@@ -328,7 +328,7 @@ pub fn chat_row(
               None => ()
             }
             // its station offline, or its link coming back: unplugged (the core says which, row by row); one that came
-            // from elsewhere (Slack) says so
+            // from elsewhere (Slack, Feishu) says so, by its platform's mark
             match (item.offline, item.reconnecting) {
               (Some(why), _) | (None, Some(why)) => {
                 let b = c.box(style=kind_slot, id=away, taps=false, points=true, fn() {
@@ -345,7 +345,10 @@ pub fn chat_row(
               _ =>
                 if item.connect {
                   let said = if item.origin_text != "" { item.origin_text } else { "Slack" }
-                  let b = c.box(style=kind_slot, id=away, taps=false, points=true, fn() { @sf.slack_mark(c, kind_mark) |> ignore })
+                  let b = c.box(style=kind_slot, id=away, taps=false, points=true, fn() {
+                    (if item.origin_kind == "feishu" { @sf.feishu_mark(c, kind_mark) } else { @sf.slack_mark(c, kind_mark) })
+                    |> ignore
+                  })
                   c.semantics(b, Image, id=away, label=said)
                   @sf.tip(c, "row/away-tip/" + key, away, said)
                 }

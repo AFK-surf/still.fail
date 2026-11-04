@@ -190,6 +190,19 @@ impl @hostapi.Host for FakeHost with perf_where(_) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with perf_open(_, go) {
+  match fake.val {
+    Some(f) if f.perf_opens => {
+      if go {
+        f.perf_opened += 1
+      }
+      true
+    }
+    _ => false
+  }
+}
+
+///|
 impl @hostapi.Host for FakeHost with perf_size(_) {
   // (what the lines weigh is the real host's, whose times are not a test's: as the test says, Tester::set_perf_size)
   match fake.val {
@@ -523,8 +536,11 @@ impl @hostapi.Host for FakeHost with clipboard_set_image(_, data) {
 }
 
 ///|
-impl @hostapi.Host for FakeHost with present(_, buf, count, _, _, _) {
-  h_present(buf, count)
+impl @hostapi.Host for FakeHost with present(_, _, count, _, _, _) {
+  match fake.val {
+    Some(f) => f.instances = count
+    None => ()
+  }
 }
 
 ///|

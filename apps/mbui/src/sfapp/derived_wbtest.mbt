@@ -180,7 +180,7 @@ test "a chat's messages the core's change did not touch are kept as they were re
   let seen : Ref[Array[Message]] = Ref([])
   let t = @ui.Tester::new(fn(_) {
     seen.val = match view_of_chat(src, r).0 {
-      Some(v) => v.messages
+      Some(v) => v.messages.to_array()
       None => []
     }
   })

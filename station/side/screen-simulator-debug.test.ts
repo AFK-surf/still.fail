@@ -108,8 +108,12 @@ test("a simulator's app found, started again and its log read", { skip: !hasSimc
 
     // Started again: still running, the log going on.
     assert.equal(await debug.relaunch(APP), true);
-    await sleep(2000);
-    assert.ok(debug.logs(after).lines.length > 0, "its log goes on after the restart");
+    let more = 0;
+    for (const asked = Date.now(); more === 0 && Date.now() - asked < 60_000;) {
+      await sleep(500);
+      more = debug.logs(after).lines.length;
+    }
+    assert.ok(more > 0, "its log goes on after the restart");
   } finally {
     debug.close();
     try {

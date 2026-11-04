@@ -7,7 +7,7 @@ import { harness } from "./harness.ts";
 const REVIEW = JSON.stringify([{ email: "Review@Example.test", password: "correct horse battery", name: "App Review" }]);
 const json = { "content-type": "application/json" };
 
-test("a review account signs in with its password and gets a session like any other", { timeout: 20000 }, async () => {
+test("a review account signs in with its password and gets a session like any other", async () => {
   const h = await harness({ reviewAccounts: REVIEW });
   try {
     // From one address each (the login rate limit is per address).
@@ -36,7 +36,7 @@ test("a review account signs in with its password and gets a session like any ot
   }
 });
 
-test("without review accounts nobody signs in with a password", { timeout: 20000 }, async () => {
+test("without review accounts nobody signs in with a password", async () => {
   const h = await harness();
   try {
     const answer = await h.fetch("/v1/auth/password", { method: "POST", headers: json, body: JSON.stringify({ email: "review@example.test", password: "correct horse battery" }) });

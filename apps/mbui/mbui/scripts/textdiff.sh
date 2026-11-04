@@ -47,9 +47,15 @@ for h in $HOSTS; do
       grep -q "TXD done" $O/log.txt || { echo "textdiff android: the app did not finish"; fail=1; }
       $ADB exec-out run-as dev.mbui.demo tar cf - -C files/textdiff . | tar xf - -C $O ;;
     windows)
-      APP=textdiff bash scripts/win.sh build >/dev/null || { echo "textdiff: windows build failed"; fail=1; continue; }
+      # (where its time goes said: moon's build (its `time`, what of the C mbc compiled) and the run, CI's five minutes)
+      s=$SECONDS
+      APP=textdiff bash scripts/win.sh build > $O/build.txt 2>&1 || { cat $O/build.txt; echo "textdiff: windows build failed"; fail=1; continue; }
+      echo "textdiff windows: built in $((SECONDS - s)) s"
+      grep -E '^real|compiled \(|^mbc: linked' $O/build.txt | cut -c1-200
+      s=$SECONDS
       MBUI_BENCH=-1 MBUI_WIN=$WIN MBUI_TEXTDIFF_ONLY=${ONLY:-} MBUI_SHOT_DIR="$(cygpath -w "$PWD/$O")" \
-        out/win/mod/_build/native/release/build/textdiff/textdiff.exe > $O/log.txt 2>&1 ;;
+        out/win/mod/_build/native/release/build/textdiff/textdiff.exe > $O/log.txt 2>&1
+      echo "textdiff windows: run in $((SECONDS - s)) s" ;;
     *) echo "textdiff: no host $h"; fail=1; continue ;;
   esac
   EXPECT=src/text/testdata/textdiff-$h.json node scripts/textdiff.mjs $O $h || fail=1

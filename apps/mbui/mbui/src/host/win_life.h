@@ -378,8 +378,65 @@ static void life_identity(void) {
   if (*app_id()) SetCurrentProcessExplicitAppUserModelID(app_id());
 }
 
+// ---- its log files (win_logs.h) ----
+
+double mb_host_cpu_ms(void);
+
+// (on the window's thread, between its frames: what shows how much the record holds follows it)
+static volatile LONG life_perf_telling;
+static void life_perf_told(void *unused) {
+  (void)unused;
+  InterlockedExchange(&life_perf_telling, 0);
+  told_between(MB_OUTSIDE_PERF, 0);
+}
+
+// The record grown, told once for all the writes before it is delivered.
+static void life_perf_written(void) {
+  if (hwnd && !InterlockedExchange(&life_perf_telling, 1)) mb_app_call(life_perf_told, NULL);
+}
+
+// Each few seconds, whatever the window's thread is doing (the writer's thread): a line for the record of what the
+// process takes; and, record or none, the window no longer answering and answering again (the system's own test: its
+// messages unread for 5 s), so that a freeze has left its time in the log without anyone having caught it live.
+static void life_logs_tick(void) {
+  static double cpu_was = -1;
+  static ULONGLONG at_was, hung_at;
+  double cpu = mb_host_cpu_ms();
+  ULONGLONG at = GetTickCount64();
+  double share = cpu_was >= 0 && at > at_was ? (cpu - cpu_was) * 100.0 / (double)(at - at_was) : 0;
+  cpu_was = cpu;
+  at_was = at;
+  int hung = hwnd && IsHungAppWindow(hwnd);
+  char line[160];
+  int n = 0;
+  if (hung && !hung_at) {
+    hung_at = at;
+    n = snprintf(line, sizeof line, "win: the window is not answering: cpu=%.0f%% mem=%.0fMB", share, mb_host_mem_bytes() / 1048576.0);
+  } else if (!hung && hung_at) {
+    n = snprintf(line, sizeof line, "win: the window answers again, %.0f s on", (double)(at - hung_at) / 1000.0);
+    hung_at = 0;
+  }
+  if (n > 0) logs_line(LOGS_LOG, line, (size_t)n);
+  if (logs_perf_on) {
+    n = snprintf(line, sizeof line, "win: cpu=%.0f%% mem=%.0fMB hung=%d", share, mb_host_mem_bytes() / 1048576.0, hung);
+    logs_line(LOGS_PERF, line, (size_t)n);
+  }
+}
+
+// %LOCALAPPDATA%\<the app's id>\logs, for a program that is an app (a demo has none, and keeps nothing).
+static void life_logs(void) {
+  if (!*app_id()) return;
+  PWSTR local = NULL;
+  if (FAILED(SHGetKnownFolderPath(&FOLDERID_LocalAppData, 0, NULL, &local))) return;
+  WCHAR dir[MAX_PATH * 2];
+  _snwprintf(dir, MAX_PATH * 2, L"%ls\\%ls\\logs", local, app_id());
+  dir[MAX_PATH * 2 - 1] = 0;
+  CoTaskMemFree(local);
+  logs_begin(dir, life_logs_tick, life_perf_written);
+}
+
 // As the program starts, before main (the C runtime's initializers, .CRT$XCU): its console, whether it is the app's
-// one run (else it has handed over, and ends here), its identity.
+// one run (else it has handed over, and ends here), its identity, its log files.
 static void __cdecl life_begin(void) {
   life_console();
   if (!life_single()) {
@@ -387,6 +444,7 @@ static void __cdecl life_begin(void) {
     ExitProcess(0);
   }
   life_identity();
+  life_logs();
 }
 // (named outside the file and asked for by the link: nothing refers to it, and an optimizer would drop it)
 #pragma section(".CRT$XCU", read)
