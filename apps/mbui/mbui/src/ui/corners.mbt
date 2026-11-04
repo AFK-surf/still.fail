@@ -472,7 +472,7 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
       // a corner that never shows: past the window's foot or head (a sheet held past the bottom so its foot's corners
       // are under it). Not past its sides: a pane beside the one in use comes over whole
       let cy = if k < 2 { a.y } else { a.y + a.fh }
-      if cy > c.height + 0.5 || cy < -0.5 || c.corner_cut_off(i, p, k) {
+      if cy > c.height + 0.5 || cy < -0.5 || c.corner_cut_off(i, k) {
         continue
       }
       // flush in the corner of something between it and the container that cuts with a rounded corner (a clip=true
@@ -1470,7 +1470,7 @@ fn Ctx::corner_inset_at(self : Ctx, i : Int, p : Int, k : Int, ra : Double) -> D
   let r = a.x + a.fw - (b.x + b.fw)
   let d = a.y + a.fh - (b.y + b.fh)
   match corner_lies_in(k, l, t, r, d, ra) {
-    Some(v) if !self.cut_round_at(i, p, k) && !self.corner_cut_off(i, p, k) => Some(v)
+    Some(v) if !self.cut_round_at(i, p, k) && !self.corner_cut_off(i, k) => Some(v)
     _ => None
   }
 }
@@ -1517,15 +1517,15 @@ pub fn corners_kept(rs : FixedArray[Double], moved : Int) -> Bool {
 }
 
 ///|
-/// Whether node `i`'s corner `k` (0 top left, then round it) is cut off by something
-/// between it and its container `p` that cuts what it holds (clip, or what scrolls sideways in it): past its edge, it
-/// does not show (a table wider than its column, scrolled sideways in it).
-fn Ctx::corner_cut_off(self : Ctx, i : Int, p : Int, k : Int) -> Bool {
+/// Whether node `i`'s corner `k` (0 top left, then round it) is cut off by an ancestor
+/// that cuts what it holds (clip, or what scrolls sideways in it). A clip above its rounded container counts too:
+/// a card's own contents do not show while the whole card is outside a pane's clip.
+fn Ctx::corner_cut_off(self : Ctx, i : Int, k : Int) -> Bool {
   let b = self.nodes[i]
   let x = if corner_left(k) { b.x } else { b.x + b.fw }
   let y = if k < 2 { b.y } else { b.y + b.fh }
   let mut q = b.parent
-  while q >= 0 && q != p {
+  while q >= 0 {
     let n = self.nodes[q]
     if (n.clip || n.sideways) &&
       (x < n.x - 0.5 || x > n.x + n.fw + 0.5 || y < n.y - 0.5 || y > n.y + n.fh + 0.5) {
@@ -1538,7 +1538,7 @@ fn Ctx::corner_cut_off(self : Ctx, i : Int, p : Int, k : Int) -> Bool {
 
 ///|
 /// Whether what shows at node `i`'s corner `k` (0 top left, then round it) is the curve of
-/// a box between it and its container `p` (`p` included) that cuts what it holds with a rounded corner (clip, a corner of
+/// an ancestor (including those above its rounded container `p`) that cuts what it holds with a rounded corner (clip, a corner of
 /// its own): the node's own corner there lies wholly outside the cut's curve (within half a pixel), so the cut's bounds
 /// it (a square corner flush along its edge, a capsule's fill as round as it). Both corners as drawn (smooth.mbt: each
 /// as smooth as its box has room for); the node's measured at 16 fixed directions over the quarter toward the corner,
@@ -1581,9 +1581,6 @@ fn Ctx::cut_round_at(self : Ctx, i : Int, p : Int, k : Int) -> Bool {
           return true
         }
       }
-    }
-    if q == p {
-      break
     }
     q = n.parent
   }
