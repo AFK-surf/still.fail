@@ -1846,13 +1846,16 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
       None => self.logic
     }
   }
-  self.advance(at)
+  self.advance_logic(at)
+  // What was due has finished. Advancing the drawing clock can notify bindings too: tell it with the structure's
+  // change, so a child already queued by the new data cannot run before its parent has had the chance to let it go.
+  @signals.start_batch()
+  self.advance_clock(at)
   let was = self.cause_at
   self.cause_at = at
   self.committing += 1
   // (one change, as an event is: what it writes told once all of it is written, never what follows it running
   // between two of its writes and seeing half of it)
-  @signals.start_batch()
   let changed = f()
   @signals.end_batch()
   self.committing -= 1
@@ -5687,6 +5690,14 @@ fn Tree::due_leaving(self : Tree, id : NodeId) -> Unit {
 /// its turn. Frames, inputs and the host's calls each advance it to their moment and no further: how often they come
 /// changes nothing of what it does.
 pub fn Tree::advance(self : Tree, upto : Double) -> Unit {
+  self.advance_logic(upto)
+  self.advance_clock(upto)
+}
+
+///|
+/// What was due before a new change, committed before that change reads or writes anything. The drawing clock is
+/// told separately so a structure can tell it together with its own change (Tree::at_cause).
+fn Tree::advance_logic(self : Tree, upto : Double) -> Unit {
   // (one thing due at a time, all it does committed before the next is chosen: asked again while one is being done (a
   // structure it changed committing), the loop doing it goes on from where it is once that one is done)
   if self.advancing {
@@ -5700,7 +5711,11 @@ pub fn Tree::advance(self : Tree, upto : Double) -> Unit {
   if upto > self.logic {
     self.logic = upto
   }
-  if upto > @signals.untracked(fn() { self.clock.get() }) {
+}
+
+///|
+fn Tree::advance_clock(self : Tree, upto : Double) -> Unit {
+  if !self.advancing && upto > @signals.untracked(fn() { self.clock.get() }) {
     self.at(upto)
   }
 }

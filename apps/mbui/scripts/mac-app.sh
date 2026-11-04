@@ -213,10 +213,13 @@ if [ ${#SCHEMES[@]} -gt 0 ]; then
 fi
 plutil -lint "$PLIST" > /dev/null
 
-# ad hoc for now: `sign` after (still.fail's identity in CI)
-codesign --force --sign - --timestamp=none "$APPDIR/Contents/Frameworks/hermes.framework"
-[ -z "$OWN" ] || codesign --force --sign - --timestamp=none "$SQUIRREL"
-codesign --force --sign - --timestamp=none "$APPDIR"
+# A standalone build can be opened ad hoc. beta.sh immediately runs `sign` on its release bundle: do not first
+# sign the same frameworks and app ad hoc only to replace those signatures there.
+if [ "${MBUI_SIGN_AFTER_BUILD:-}" != 1 ]; then
+  codesign --force --sign - --timestamp=none "$APPDIR/Contents/Frameworks/hermes.framework"
+  [ -z "$OWN" ] || codesign --force --sign - --timestamp=none "$SQUIRREL"
+  codesign --force --sign - --timestamp=none "$APPDIR"
+fi
 echo "mac-app.sh: $NAME.app 0.1.$N in $(secs $t0) s: the app and the core's parts $(python3 -c "print(f'{$t2-$t0:.1f}')") s," \
   "the bundle $(secs $t2) s"
 [ "${1:-}" = build ] || sign

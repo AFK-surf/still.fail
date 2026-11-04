@@ -1,4 +1,34 @@
 ///|
+test "a chat header's station disappears and returns while its agent tile is retained" {
+  for agents in [true, false] {
+    for width in [740.0, 1100.0] {
+      let present = Ref(true)
+      let epoch = @signals.signal(0)
+      let t = edited_core([], "chat", fn(name, value) {
+        if name == "stations" && !present.val { Json::array([]) }
+        else if name == "chat" && !agents { with_fields(value, [("agents", [])]) }
+        else { value }
+      }, epoch~, platform=0)
+      t.resize(width, 760.0)
+      t.run_for(@ui.move_most_ms)
+      let title = t.find("整理发布清单")
+      assert_true(title is Some(_))
+      // A core answer can come between frames, with the host clock ahead of the last frame's.
+      t.advance(between_frames_ms)
+      present.val = false
+      epoch.set(epoch.get() + 1)
+      t.frame()
+      assert_true(t.find("整理发布清单") is Some(_))
+      t.advance(between_frames_ms)
+      present.val = true
+      epoch.set(epoch.get() + 1)
+      t.frame()
+      assert_true(t.find("整理发布清单") is Some(_))
+    }
+  }
+}
+
+///|
 test "the chat bar keeps its title node when the core renames the chat, and its info action still opens its chat" {
   let title = Ref("整理发布清单")
   let epoch = @signals.signal(0)
