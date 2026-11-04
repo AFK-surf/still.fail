@@ -129,7 +129,8 @@ fn composer_box_node(
             // Opened, it takes what ＋ and the choices leave of their line, from nothing, its controls at its end: never
             // wider than that line, so it never goes on to a line of its own at the box's left (send there, past its
             // edge, the names it is copied to long). What it holds gives way there by leaving those names out.
-            part.row(Is(true)).gap(Is(4.0)).lines_up(Is(Some(Middle))).lies_along(Is(End))
+            // Closed, where the capsule's line has not the room, it leaves out the names it is copied to (View::fits).
+            part.row(Is(true)).gap(Is(4.0)).lines_up(Is(Some(Middle))).lies_along(Is(End)).fits(Is(true))
             .width(By(fn() { if opened() { Some(0.0) } else { None } })).grow(By(fn() { if opened() { 1.0 } else { 0.0 } }))
             .margin(By(fn() { if opened() { (0.0, 0.0, tools_in(), tools_in()) } else { (0.0, 0.0, 0.0, 0.0) } })) |> ignore
             // The chooser can come and go before the note and send button. Each keeps its own place through
