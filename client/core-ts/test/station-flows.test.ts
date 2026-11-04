@@ -22,6 +22,7 @@ import { CHANGES_RETRY_MS, EVENTS_COALESCE_MS, LINK_KEY, LONG_MISSES, OFFLINE_RE
 import { digest } from "../src/digest.ts";
 import { Priority } from "../src/sync/scheduler.ts";
 import { card } from "../src/views/brief.ts";
+import * as present from "../src/present.ts";
 import { t } from "../src/i18n.ts";
 import { JSON_IDLE_MS, SOCKET_OPEN_MS } from "../src/station/requests.ts";
 import { HostWire, concat, encodeFrame, takeFrames, type LinkNet } from "../src/station/wire.ts";
@@ -928,6 +929,29 @@ test("archive_fallback_updates_the_session_only_after_success", async () => {
 const raw = (log: J) => ({ text: log.text, outputAt: log.outputAt });
 const sessionOf = (core: J, key: string) => core.inner.data.get({ topic: "session", station: ST, key }) as J;
 const reqs = (host: FakeHost) => host.requests.filter((r) => r.url.includes("/admin/api/")).length;
+
+test("messages_its_agent_takes_leave_it_at_work_until_its_summary_says_the_turn_they_began", async () => {
+  // Asked something of the viewer (need_help), then answered: the station tells at once that its agent took the answer
+  // (`session-pending`), its summary with the turn that took it read after. Between the two the agent stood asking
+  // again, and the chat's end said what it needed once more for a moment (2026-11-04).
+  const asked = { kind: "message", declared: "block", ending: "need_help", need: "手机空出来时告诉我", outcome: "completed", startedAt: 1, endedAt: 2 };
+  const told = { ...summary("a", 1), pending: 1, lastTurn: asked };
+  const answers: J = { ...base(), "GET /sessions": [told], "GET /sessions/a": { session: told, threads: [], turns: [], jobs: [] } };
+  const { host, core, push } = await started(answers);
+  await host.settle();
+  const held = () => core.inner.data.summary(ST, "a") as J;
+  const status = () => present.sessionStatus(held());
+  assert.equal(status(), "queued");
+  push("session-pending", { key: "a", pending: 0 });
+  await host.time.pass(EVENTS_COALESCE_MS + 100);
+  assert.equal(held().pending, 0);
+  assert.equal(status(), "running");
+  // Its summary, read after, says where it stands.
+  push("session", { ...summary("a", 2), lastTurn: { ...asked, declared: null, ending: null, need: null, outcome: null, startedAt: 3, endedAt: null } });
+  await host.time.pass(EVENTS_COALESCE_MS + 100);
+  assert.equal(status(), "running");
+  core.close();
+});
 
 test("jobs_are_put_in_place_from_their_events_and_from_stopping_them", async () => {
   const job = (id: string, state: string) => ({ id, session: "a", name: id, state, port: 4817, startedAt: 1 });
