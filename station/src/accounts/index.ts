@@ -205,6 +205,9 @@ export class Accounts {
   private checks = new Map<string, ProfileCheck>();
   private quotas = new Map<string, ProfileQuota>();
   private quotaBusy = new Map<string, Promise<void>>();
+  /// A host on an older version may know the reset count but not the cards' expiries. Try the borrowed login at most
+  /// once a round for the same count, including when the provider cannot supply all of the details.
+  private resetDetailsAsked = new Map<string, { at: number; count: number }>();
   /// A quota read started before a Codex sign-in must not replace the new login's status.
   private loginGeneration = new Map<string, number>();
   /// The last changed borrowed login whose app-servers were told to reload it.
@@ -1032,10 +1035,17 @@ export class Accounts {
       // Unless what the borrowed login read here is newer.
       const local = this.checks.get(profile.id);
       const mine = this.quotas.get(profile.id);
-      if (isObject(got.quota) && !local?.codexRevoked && !(mine !== undefined && Number(got.quota.checkedAt ?? 0) < mine.checkedAt)) {
+      // Keep a recent detailed reading when an older host can only supply the same reset count. It is refreshed after
+      // a reset and every quota round; a host's clock may be ahead of ours.
+      const now = this.background.now();
+      const completeHere = this.missingBorrowedResetDetails(profile, got.quota) && mine !== undefined &&
+        !this.missingBorrowedResetDetails(profile, mine) && mine.resetCount === got.quota.resetCount &&
+        mine.checkedAt <= now && now - mine.checkedAt < QUOTA_EVERY_MS;
+      if (isObject(got.quota) && !local?.codexRevoked && !completeHere && !(mine !== undefined && Number(got.quota.checkedAt ?? 0) < mine.checkedAt)) {
         this.quotas.set(profile.id, got.quota as ProfileQuota);
         this.deps.store.setProfileQuota(profile.id, got.quota);
       }
+      this.refreshMissingBorrowedResetDetails(profile);
     } catch {
       const host = this.deps.shared!.hostName?.(profile) ?? "";
       check = { state: "failed", detail: tr(lang, "station.share.hostOffline", { host }), models: null, checkedAt: 0 };
@@ -1050,6 +1060,25 @@ export class Accounts {
     }
     this.keepCheck(profile.id, check);
     return check;
+  }
+
+  private missingBorrowedResetDetails(profile: Profile, q: ProfileQuota | null | undefined): boolean {
+    return profile.runtime === "codex" && borrowed(profile) && q != null && Number.isInteger(q.resetCount) &&
+      q.resetCount! > 0 && (!Array.isArray(q.resetExpiries) || q.resetExpiries.length < q.resetCount!);
+  }
+
+  /// An older host's fresh count is not a fresh reading of the expiry details. Read those with the lent login, and
+  /// retain the host's count if it cannot be read. In-flight reads also call checkBorrowed on failure, so do not start
+  /// another one from that check.
+  private refreshMissingBorrowedResetDetails(profile: Profile) {
+    const q = this.quotas.get(profile.id);
+    if (!this.deps.shared || !this.missingBorrowedResetDetails(profile, q) || this.quotaBusy.has(profile.id)) return;
+    const now = this.background.now();
+    const count = q!.resetCount!;
+    const last = this.resetDetailsAsked.get(profile.id);
+    if (last && last.count === count && now - last.at < QUOTA_EVERY_MS) return;
+    this.resetDetailsAsked.set(profile.id, { at: now, count });
+    this.background.spawn(() => this.refreshQuota(profile.id));
   }
 
   /// POST /profiles/:id/quota: a profile's allowance asked again (unless a question is on its way already: then the
@@ -1155,7 +1184,10 @@ export class Accounts {
     for (const p of this.profiles()) {
       const q = this.quotas.get(p.id);
       const fresh = q !== undefined && now - q.checkedAt < QUOTA_EVERY_MS - 1000;
-      if (fresh && !all) continue;
+      if (fresh && !all) {
+        this.refreshMissingBorrowedResetDetails(p);
+        continue;
+      }
       this.background.spawn(() => this.refreshQuota(p.id));
     }
   }
