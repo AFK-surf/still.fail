@@ -10,7 +10,7 @@ import { Effect, Fiber, Stream, SubscriptionRef } from "effect";
 import { enroll } from "../src/cli.ts";
 import { loadKey } from "../src/cloud/key.ts";
 import { makeControlPlane } from "../src/cloud/plane.ts";
-import { ROSTER_GRACE_MS, applyState, lapse } from "../src/cloud/presence.ts";
+import { ROSTER_GRACE_MS, applyState, failureText, lapse } from "../src/cloud/presence.ts";
 import { COMMA, STILLFAIL, providerOf } from "../src/cloud/provider.ts";
 import { Cloud } from "../src/cloud/state.ts";
 import { verifyMember } from "../src/mesh/credential.ts";
@@ -190,4 +190,15 @@ test("a viewer reads and keeps their own marks, and changes nothing else", () =>
   assert.ok(!readOnlyMay({ method: "PUT", path: "/threads/3/title" }));
   assert.ok(!readOnlyMay({ method: "PUT", path: "/tools/access" }));
   assert.ok(!readOnlyMay({ method: "DELETE", path: "/sessions/k" }));
+});
+
+test("a presence socket no address of the cloud took says each address's error, not an empty one", () => {
+  // As Node fails a connect when every address it tried failed (autoSelectFamily): an AggregateError with no message.
+  const all = Object.assign(new AggregateError([
+    Object.assign(new Error("connect ETIMEDOUT 104.21.0.1:443"), { code: "ETIMEDOUT" }),
+    Object.assign(new Error("connect EHOSTUNREACH 2606:4700::1:443"), { code: "EHOSTUNREACH" }),
+  ]), { code: "ETIMEDOUT" });
+  assert.equal(all.message, "");
+  assert.equal(failureText(all), "connect ETIMEDOUT 104.21.0.1:443; connect EHOSTUNREACH 2606:4700::1:443");
+  assert.equal(failureText(new Error("still.fail cloud answered 502")), "still.fail cloud answered 502");
 });
