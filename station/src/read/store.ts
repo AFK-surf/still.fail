@@ -8,9 +8,8 @@ import { DatabaseSync } from "node:sqlite";
 import { wall } from "../ops/fibers.ts";
 import { Refused } from "../api/request.ts";
 import { retiredUsage } from "../store/usage-retire.ts";
-import { PENDING_MINUTE_SESSION } from "../store/usage-minutes.ts";
 import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailScopeBySession, usageDetailSince, USAGE_DETAIL_PENDING } from "../store/usage-detail.ts";
-import { compactHistory, compactQuery, compactScopeReady, compactUsageSince, hasCompactUsage } from "../store/usage-compact.ts";
+import { compactQuery, compactScopeReady, compactUsageSince, hasCompactUsage } from "../store/usage-compact.ts";
 import { type UsageChatCoverage, usageCardOutcomesComplete, usageChatStatsReady } from "../store/usage-chat-stats.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
 import { hasRuntimeOrderIndex } from "../store/schema.ts";
@@ -1073,102 +1072,6 @@ export function usageThreads(s: Store, ids: number[]): [ThreadRow, string | null
     out.push([thread, first]);
   }
   return out;
-}
-
-/// Sent back to the pool if a session entered a workspace while its old minutes were being filled; it retries after
-/// that session is ready. The check and the read use the same SQLite snapshot in the reader.
-export const USAGE_MINUTES_PENDING = "usage minutes are still being indexed";
-const QUARTERS_ALL = `FROM usage_day_quarters q`;
-const QUARTERS_SCOPED = `FROM usage_minute_scope sc INDEXED BY usage_minute_scope_ws
-  CROSS JOIN usage_day_quarters q ON q.session = sc.session`;
-const QUARTERS_HOME = `FROM (
-  SELECT session FROM usage_minute_scope INDEXED BY usage_minute_scope_ws WHERE ws = ?2
-  UNION ALL SELECT session FROM usage_minute_scope INDEXED BY usage_minute_scope_ws WHERE ws IS NULL
-) sc CROSS JOIN usage_day_quarters q ON q.session = sc.session`;
-// Each quarter is entirely within one local day except one crossing midnight. Keep those quarters' minutes separate;
-// all the others are read once regardless of how many calls or occupied minutes they contain.
-const CROSSES_DAY = `((q.quarter * 15 + CAST(?1 AS INTEGER)) % 1440 + 1440) % 1440 > 1425`;
-function quartersByDay(from: string, visible: string): string {
-  return `SELECT strftime('%Y-%m-%d', (q.quarter * 15 + CAST(?1 AS INTEGER)) * 60, 'unixepoch') AS day,
-    q.session, q.runtime, NULLIF(q.model, '') AS model, SUM(q.tokens) AS tokens, SUM(q.calls) AS calls
-    ${from} WHERE ${visible} GROUP BY day, q.session, q.runtime, q.model`;
-}
-function minutesAtDayEdges(from: string, visible: string): string {
-  return `WITH edge(session, quarter) AS (
-      SELECT DISTINCT q.session, q.quarter ${from} WHERE ${visible} AND ${CROSSES_DAY}
-    ), parts AS (
-      SELECT q.session, q.quarter * 15 AS minute, q.runtime, q.model, q.tokens, q.calls
-        ${from} WHERE ${visible} AND NOT (${CROSSES_DAY})
-      UNION ALL
-      SELECT m.session, m.minute, m.runtime, m.model, m.tokens, m.calls
-        FROM edge e CROSS JOIN usage_minute m ON m.session = e.session
-          AND m.minute >= e.quarter * 15 AND m.minute < (e.quarter + 1) * 15
-    )
-    SELECT strftime('%Y-%m-%d', (p.minute + CAST(?1 AS INTEGER)) * 60, 'unixepoch') AS day,
-      p.session, p.runtime, NULLIF(p.model, '') AS model, SUM(p.tokens) AS tokens, SUM(p.calls) AS calls
-      FROM parts p GROUP BY day, p.session, p.runtime, p.model`;
-}
-export const USAGE_QUARTERS_ALL = quartersByDay(QUARTERS_ALL, "1");
-export const USAGE_QUARTERS_SCOPED = quartersByDay(QUARTERS_SCOPED, "sc.ws = ?2");
-export const USAGE_QUARTERS_HOME = quartersByDay(QUARTERS_HOME, "1");
-export const USAGE_DAY_ALL = minutesAtDayEdges(QUARTERS_ALL, "1");
-export const USAGE_DAY_SCOPED = minutesAtDayEdges(QUARTERS_SCOPED, "sc.ws = ?2");
-export const USAGE_DAY_HOME = minutesAtDayEdges(QUARTERS_HOME, "1");
-
-// Once detailed statistics supply the minutes, their scope follows session moves without rewriting old buckets.
-const DETAIL_QUARTERS_SCOPED = QUARTERS_SCOPED.replaceAll("usage_minute_scope", "usage_detail_scope");
-const DETAIL_QUARTERS_HOME = QUARTERS_HOME.replaceAll("usage_minute_scope", "usage_detail_scope");
-function detailMinutesAtDayEdges(from: string, visible: string): string {
-  return `WITH edge(session, quarter) AS (
-      SELECT DISTINCT q.session, q.quarter ${from} WHERE ${visible} AND ${CROSSES_DAY}
-    ), parts AS (
-      SELECT q.session, q.quarter * 15 AS minute, q.runtime, q.model, q.tokens, q.calls
-        ${from} WHERE ${visible} AND NOT (${CROSSES_DAY})
-      UNION ALL
-      SELECT d.session, d.bucket AS minute, d.runtime, d.model,
-        d.input + d.cache_read + d.cache_write + d.cache_write_long + d.output AS tokens, d.calls
-        FROM edge e CROSS JOIN usage_detail d ON d.session = e.session AND d.level = 1
-          AND d.bucket >= e.quarter * 15 AND d.bucket < (e.quarter + 1) * 15
-    )
-    SELECT strftime('%Y-%m-%d', (p.minute + CAST(?1 AS INTEGER)) * 60, 'unixepoch') AS day,
-      p.session, p.runtime, NULLIF(p.model, '') AS model, SUM(p.tokens) AS tokens, SUM(p.calls) AS calls
-      FROM parts p GROUP BY day, p.session, p.runtime, p.model`;
-}
-export const USAGE_DETAIL_DAY_ALL = detailMinutesAtDayEdges(QUARTERS_ALL, "1");
-export const USAGE_DETAIL_DAY_SCOPED = detailMinutesAtDayEdges(DETAIL_QUARTERS_SCOPED, "sc.ws = ?2");
-export const USAGE_DETAIL_DAY_HOME = detailMinutesAtDayEdges(DETAIL_QUARTERS_HOME, "1");
-export const USAGE_DETAIL_QUARTERS_SCOPED = quartersByDay(DETAIL_QUARTERS_SCOPED, "sc.ws = ?2");
-export const USAGE_DETAIL_QUARTERS_HOME = quartersByDay(DETAIL_QUARTERS_HOME, "1");
-
-/// Calls added up by local day and session without rereading the calls, including in non-quarter-hour time zones.
-export function usageByDay(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null = null, partial = false,
-  range?: { from: bigint; to: bigint }): { day: string; session: string; runtime: string; model: string | null; tokens: number; calls: number }[] {
-  if (hasCompactUsage(s.db)) {
-    const rows = compactHistory(s.db, utcOffsetMin, viewer, partial, range);
-    if (rows === null) throw new Error(USAGE_MINUTES_PENDING);
-    return rows;
-  }
-  if (retiredUsage(s.db)) throw new Error(USAGE_MINUTES_PENDING);
-  const fromDetail = one(s, "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_history_from_detail'") !== undefined;
-  if (fromDetail) {
-    const generation = usageDetailGeneration(s.db);
-    if (generation !== "legacy" || !usageDetailReady(s.db, viewer, generation)) throw new Error(USAGE_MINUTES_PENDING);
-    const aligned = utcOffsetMin % 15n === 0n;
-    const rows = viewer === null ? all(s, aligned ? USAGE_QUARTERS_ALL : USAGE_DETAIL_DAY_ALL, utcOffsetMin)
-      : all(s, viewer.home === false ? (aligned ? USAGE_DETAIL_QUARTERS_SCOPED : USAGE_DETAIL_DAY_SCOPED)
-        : (aligned ? USAGE_DETAIL_QUARTERS_HOME : USAGE_DETAIL_DAY_HOME), utcOffsetMin, viewer.workspace);
-    return rows.map((r) => ({ day: r.day, session: r.session, runtime: r.runtime, model: r.model, tokens: Number(r.tokens), calls: Number(r.calls) }));
-  }
-  // Before the old fill completed, an old session might have no scope row at all. An empty scope is therefore not
-  // proof that this workspace's historical total is complete.
-  if (one(s, "SELECT done FROM usage_minute_all WHERE id = 1")?.done !== 1) throw new Error(USAGE_MINUTES_PENDING);
-  if (viewer !== null && viewer.home === false && one(s, PENDING_MINUTE_SESSION, viewer.workspace)) {
-    throw new Error(USAGE_MINUTES_PENDING);
-  }
-  const aligned = utcOffsetMin % 15n === 0n;
-  const found = viewer === null ? all(s, aligned ? USAGE_QUARTERS_ALL : USAGE_DAY_ALL, utcOffsetMin)
-    : all(s, viewer.home === false ? (aligned ? USAGE_QUARTERS_SCOPED : USAGE_DAY_SCOPED) : (aligned ? USAGE_QUARTERS_HOME : USAGE_DAY_HOME), utcOffsetMin, viewer.workspace);
-  return found.map((r) => ({ day: r.day, session: r.session, runtime: r.runtime, model: r.model, tokens: Number(r.tokens), calls: Number(r.calls) }));
 }
 
 /// The threads visible through sessions in this workspace. A thread with no sessions belongs to the home workspace.

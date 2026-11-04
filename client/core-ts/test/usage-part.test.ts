@@ -26,6 +26,17 @@ const daysOf = (rows: J[]): J[] => {
   }
   return [...out.values()].sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));
 };
+/// The days a part brought up to date, as withPart keeps them: by day alone.
+const byDay = (rows: J[]): J[] => {
+  const out = new Map<string, J>();
+  for (const d of daysOf(rows)) {
+    const at = out.get(d.day) ?? { day: d.day, runtime: "", model: null, tokens: 0, calls: 0 };
+    at.tokens += d.tokens;
+    at.calls += d.calls;
+    out.set(d.day, at);
+  }
+  return [...out.values()];
+};
 
 test("a day and when it began, in a time zone", () => {
   // 2026-11-03 01:30 in UTC+8 is 2026-11-02 17:30 UTC.
@@ -76,7 +87,7 @@ test("the days a change touched, read again, take the place of those held; the r
   // As read whole: the rows of every day, those days' history added up from them, what the part names added.
   const whole = [row("2026-11-01", "s1", "m", 2), ...after];
   assert.deepEqual(now.rows, whole);
-  assert.deepEqual(now.history, { ...held.history, days: [{ day: "2026-09-30", runtime: "claude", model: "m", tokens: 7, calls: 1 }, ...daysOf(whole)] });
+  assert.deepEqual(now.history, { ...held.history, days: [{ day: "2026-09-30", runtime: "claude", model: "m", tokens: 7, calls: 1 }, ...daysOf(whole.slice(0, 1)), ...byDay(after)] });
   assert.deepEqual(now.threads, { "7": { title: "修登录" }, "8": { title: "#ops" } });
   assert.deepEqual(now.prices.rows.map((p: J) => p.model), ["m", "n"]);
   assert.deepEqual(now.remoteRuns.map((r: J) => r.session), ["remote:w:a", "remote:w:b", "remote:w:c"]);
@@ -109,7 +120,7 @@ test("refreshing new detail preserves a complete older daily total", () => {
   assert.equal(sameDetailCoverage(held, { ...part, detailSince: since + 1 }), false);
   assert.equal(sameDetailCoverage(held, { rows: part.rows }), false);
   const updated: J = withPart(held, part, "2026-11-02", since);
-  const nowNewDetail = daysOf(part.rows)[0];
+  const nowNewDetail = byDay(part.rows)[0];
   assert.deepEqual(updated.history.days, [{ ...nowNewDetail, calls: nowNewDetail.calls + 50, tokens: nowNewDetail.tokens + 5_000 }]);
 });
 
@@ -121,7 +132,7 @@ test("refreshing details updates the available portion of an incomplete history"
   const updated: J = withPart(held, part, "2026-11-02", since);
   assert.equal(updated.historyUnavailable, true);
   assert.equal(updated.history, undefined);
-  assert.deepEqual(updated.partialHistory.days, daysOf(part.rows));
+  assert.deepEqual(updated.partialHistory.days, byDay(part.rows));
   assert.equal(updated.partialHistory.cards, 1);
 });
 

@@ -311,7 +311,8 @@ export function compactScopeReady(db: DatabaseSync, viewer: InWorkspace | null):
   return db.prepare(sql).get(ws) === undefined;
 }
 
-/// The lifetime total of compacted calls alone, with readiness and value read from the same snapshot.
+/// The lifetime total of compacted calls alone, with readiness and value read from the same snapshot: what accounting
+/// the pending buckets (compactTotalsStep) keeps, which the summary cache relies on (usage-batched.ts).
 export function compactTotalQuery(viewer: InWorkspace | null, before?: bigint): { sql: string; args: string[] } {
   const scope = viewer === null ? "scope = 'G'" : viewer.home !== false ? "scope IN (?1, 'H')" : "scope = ?1";
   const moving = viewer === null ? "SELECT 1 FROM usage_compact_moving LIMIT 1"
@@ -588,54 +589,6 @@ function compactQueryWithEdges(from: bigint, to: bigint, offset: bigint, viewer:
       SUM(cache_read) AS cache_read, SUM(cache_write) AS cache_write, SUM(cache_write_long) AS cache_write_long, SUM(output) AS output${countParts ? ", COUNT(*) AS source_parts" : ""}
     FROM parts GROUP BY day, session, thread, person, profile, runtime, model, fast`;
   return { sql, args };
-}
-
-/// Preserve a complete old daily summary and add only the new minute buckets. If the old minute coverage was already
-/// retired, a non-quarter-hour zone cannot infer where the old quarter crossed midnight. A partial read contains only
-/// the newer buckets; it never includes an old summary whose local-day values cannot be proven complete.
-export function compactHistory(db: DatabaseSync, offset: bigint, viewer: InWorkspace | null, partial = false,
-  range?: { from: bigint; to: bigint }): { day: string; session: string; runtime: string; model: string | null; tokens: number; calls: number }[] | null {
-  if (!compactScopeReady(db, viewer)) return null;
-  const coverage = db.prepare("SELECT old_days, old_minutes FROM usage_compact_since WHERE id = 1").get() as { old_days: number; old_minutes: number };
-  const aligned = offset % 15n === 0n;
-  const complete = !!coverage.old_days && (aligned || !!coverage.old_minutes);
-  if (!complete && !partial) return null;
-  const args: (string | bigint)[] = [offset];
-  const source = (table: string, alias: string) => viewer === null ? `FROM ${table} ${alias}`
-    : `FROM usage_minute_scope sc INDEXED BY usage_minute_scope_ws CROSS JOIN ${table} ${alias} ON ${alias}.session = sc.session`;
-  const where = viewer === null ? "" : viewer.home === false ? "WHERE sc.ws = ?2" : "WHERE (sc.ws = ?2 OR sc.ws IS NULL)";
-  if (viewer !== null) args.push(viewer.workspace, `W${viewer.workspace}`);
-  // A caller can ask for a bounded interval in UTC minutes. A partial quarter needs minute statistics even where
-  // local midnight is quarter-aligned; without those the older coverage cannot prove the requested answer.
-  const oldQuarter = aligned && (!range || (range.from % 15n === 0n && range.to % 15n === 0n));
-  // On an empty-at-cutover station there is no old history to seek through session by session.
-  const oldRows = complete && (range === undefined || db.prepare("SELECT 1 FROM usage_day_quarters LIMIT 1").get() !== undefined);
-  if (oldRows && !oldQuarter && !coverage.old_minutes) return null;
-  const old = oldQuarter ? "usage_day_quarters" : "usage_minute";
-  const oldMinute = oldQuarter ? "q.quarter * 15" : "q.minute";
-  const compactSource = viewer === null ? "FROM usage_compact c" :
-    "FROM usage_compact c INDEXED BY usage_compact_scope_time CROSS JOIN usage_minute_scope sc ON sc.session = c.session";
-  let compactWhere = viewer === null ? "WHERE c.records > 0" : viewer.home !== false ? "WHERE c.scope IN (?3, 'H') AND (sc.ws = ?2 OR sc.ws IS NULL) AND c.records > 0"
-    : "WHERE c.scope = ?3 AND sc.ws = ?2 AND c.records > 0";
-  let oldWhere = where;
-  if (range !== undefined) {
-    if (range.from > range.to) throw new RangeError("usage history range is reversed");
-    args.push(range.from, range.to);
-    const low = `?${args.length - 1}`, high = `?${args.length}`;
-    const add = (clause: string, condition: string) => clause === "" ? `WHERE ${condition}` : `${clause} AND ${condition}`;
-    compactWhere = add(compactWhere, `c.minute >= ${low} AND c.minute < ${high}`);
-    oldWhere = add(oldWhere, oldQuarter
-      ? `q.quarter >= ${low} / 15 AND q.quarter < ${high} / 15`
-      : `q.minute >= ${low} AND q.minute < ${high}`);
-  }
-  const sql = `WITH parts AS (
-    ${oldRows ? `SELECT ${oldMinute} AS minute, q.session, q.runtime, q.model, q.calls, q.tokens ${source(old, "q")} ${oldWhere} UNION ALL` : ""}
-    SELECT c.minute, c.session, c.runtime, c.model, c.calls,
-      c.input + c.cache_read + c.cache_write + c.cache_write_long + c.output AS tokens ${compactSource} ${compactWhere}
-  ) SELECT strftime('%Y-%m-%d', (minute + ?1) * 60, 'unixepoch') AS day, session, runtime, NULLIF(model, '') AS model,
-    SUM(tokens) AS tokens, SUM(calls) AS calls FROM parts GROUP BY day, session, runtime, model`;
-  return (db.prepare(sql).all(...args) as { day: string; session: string; runtime: string; model: string | null; tokens: number; calls: number }[])
-    .map((row) => ({ ...row, tokens: Number(row.tokens), calls: Number(row.calls) }));
 }
 
 type RecentCall = ContextCall & { id: string };

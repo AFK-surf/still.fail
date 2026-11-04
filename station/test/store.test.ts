@@ -20,7 +20,7 @@ import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../src/store/remote-runs.ts";
 import { RUNNING_WAIT_JOBS } from "../src/store/active-jobs.ts";
 import { HAS_SESSION_ACTIVE_WATCH } from "../src/store/watch-jobs.ts";
 import * as read from "../src/read/store.ts";
-import { compactHistoryBeforeQuery } from "../src/read/usage.ts";
+import { HISTORY_AFTER, HISTORY_DAYS, HISTORY_SCOPES, HISTORY_SEED_CALLS, HISTORY_TOTAL } from "../src/store/usage-history.ts";
 import { type CardEnd, cardsEnded } from "../src/connects/card-ends.ts";
 import { fileAway } from "./archived-before.ts";
 import { testClock } from "./hub-fakes.ts";
@@ -1295,8 +1295,6 @@ test("what the station asks again and again is planned by an index, never a scan
     [usageBatch.selected, [0n, 100n, "Wws"]], [usageBatch.owner, ["a"]],
     [usageBatch.buckets, [0n, "a", 0n, 100n, "Wws"]], [usageBatch.anyPending, ["Wws"]], [usageBatch.pending, ["Wws"]],
     [usageBatch.pendingRange, [0n, 100n, "Wws"]],
-    [compactHistoryBeforeQuery(null), [0n]], [compactHistoryBeforeQuery({ workspace: "ws", home: false }), [0n, "Wws"]],
-    [compactHistoryBeforeQuery({ workspace: "ws", home: true }), [0n, "Wws"]],
   ] as [string, unknown[]][];
   for (const [sql, args] of usagePlans) {
     const plan = (compact.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
@@ -1312,7 +1310,8 @@ test("what the station asks again and again is planned by an index, never a scan
     [STATS_OF, ["a"]], [SESSION_COUNTS, []], [LATEST_DECISIONS, [0]], [CLOSED_SINCE, [0]], [CLOSED_THREAD_SINCE, [1, 0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
     [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]], [SESSION_OF_RUNTIME, ["claude", "r1"]], [SAID_SINCE, [1, 0]],
     [HEARD_IN, ["a", 1]], [MODELS_USED_BY, ["a@x", 0]], [REMOTE_RUNS_OF, ["ws", 0]], [REMOTE_RUNS_ALL, [0]],
-    [detail.sql, detail.args], [read.USAGE_DETAIL_DAY_SCOPED, [1n, "ws"]], [read.SAID_LATEST, [1]], [read.SAID_SCAN, [1, 100, 64]], [read.SAID_STATE, [1]],
+    [detail.sql, detail.args], [HISTORY_DAYS, ["ws", 0n, 100n, 480n]], [HISTORY_AFTER, ["ws", 100n]], [HISTORY_TOTAL, ["ws"]],
+    [HISTORY_SCOPES, []], [HISTORY_SEED_CALLS, [0]], [read.SAID_LATEST, [1]], [read.SAID_SCAN, [1, 100, 64]], [read.SAID_STATE, [1]],
     [POST_BLOCKS_READY, [1, 0]], [POST_AFTER_FIRST, [1, 0]], [POST_AFTER_INDEXED, [1, "a", 0, 0]],
   ];
   const scans = /^SCAN (?!CONSTANT ROW$|parts$|\(subquery-\d+\)$|\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect|entries_login_cards)\b)/;
@@ -1325,8 +1324,8 @@ test("what the station asks again and again is planned by an index, never a scan
       && !(sql === detail.sql && d === "SCAN target" && plan.includes("MATERIALIZE targets"))
       && !(sql === RUNNING_WAIT_JOBS && d === "SCAN active" && plan.includes("CO-ROUTINE active"))
       && !(sql === POST_AFTER_INDEXED && (d === "SCAN first" || d === "SCAN second"))
-      && !(sql === read.USAGE_DETAIL_DAY_SCOPED && d === "SCAN e" && (plan.includes("MATERIALIZE edge") || plan.includes("CO-ROUTINE edge")))
-      && !(sql === read.USAGE_DETAIL_DAY_SCOPED && d === "SCAN p" && plan.includes("CO-ROUTINE parts"))), `${sql}\n  ${plan.join(" | ")}`);
+      // One row a workspace.
+      && !(sql === HISTORY_SCOPES && d === "SCAN usage_history_total")), `${sql}\n  ${plan.join(" | ")}`);
     plans.set(sql, plan);
   }
   assert.equal(plans.get(JOB_AT_PORT)!.filter((d) => d.includes("jobs_up (state=? AND port=?)")).length, 2,
@@ -1345,8 +1344,10 @@ test("what the station asks again and again is planned by an index, never a scan
   assert.ok(plans.get(REMOTE_RUNS_OF)!.some((d) => d.includes("PRIMARY KEY (ws=? AND at>?)")), plans.get(REMOTE_RUNS_OF)!.join(" | "));
   assert.ok(plans.get(REMOTE_RUNS_ALL)!.some((d) => d.includes("PRIMARY KEY (at>?)")), plans.get(REMOTE_RUNS_ALL)!.join(" | "));
   assert.ok(plans.get(detail.sql)!.some((d) => d.includes("usage_detail_lookup_scope (scope=? AND level=? AND bucket>? AND bucket<?)")), plans.get(detail.sql)!.join(" | "));
-  assert.ok(plans.get(read.USAGE_DETAIL_DAY_SCOPED)!.some((d) => d.includes("usage_detail_scope_ws (ws=?)")), plans.get(read.USAGE_DETAIL_DAY_SCOPED)!.join(" | "));
-  assert.ok(plans.get(read.USAGE_DETAIL_DAY_SCOPED)!.some((d) => d.includes("PRIMARY KEY (session=? AND level=? AND bucket>? AND bucket<?)")), plans.get(read.USAGE_DETAIL_DAY_SCOPED)!.join(" | "));
+  // The usage page's year: its own workspace's quarters of those days alone; installing it, the calls from a time on.
+  assert.ok(plans.get(HISTORY_DAYS)!.some((d) => d.includes("PRIMARY KEY (scope=? AND quarter>? AND quarter<?)")), plans.get(HISTORY_DAYS)!.join(" | "));
+  assert.ok(plans.get(HISTORY_AFTER)!.some((d) => d.includes("PRIMARY KEY (scope=? AND quarter>?)")), plans.get(HISTORY_AFTER)!.join(" | "));
+  assert.ok(plans.get(HISTORY_SEED_CALLS)!.some((d) => d.includes("INDEX usage_at (at>?)")), plans.get(HISTORY_SEED_CALLS)!.join(" | "));
   // The latest card before a message: by the index of cards, not by going back over the thread to it.
   assert.ok(plans.get(CARD_BEFORE)!.some((d) => d.includes("entries_cards")), plans.get(CARD_BEFORE)!.join(" | "));
   assert.ok(plans.get(OPTIONS_BEFORE)!.some((d) => d.includes("entries_options")), plans.get(OPTIONS_BEFORE)!.join(" | "));
@@ -1657,6 +1658,8 @@ test("usage: a row is the calls it says, and a database from before says each wa
     DROP TRIGGER usage_minute_add; DROP TRIGGER usage_minute_drop; DROP TRIGGER usage_minute_grow;
     DROP TRIGGER usage_minute_session_add; DROP TRIGGER usage_minute_session_move; DROP TRIGGER usage_minute_session_drop;
     DROP TABLE usage_minute; DROP TABLE usage_day_quarters; DROP TABLE usage_minute_scope; DROP TABLE usage_minute_sessions; DROP TABLE usage_minute_seen; DROP TABLE usage_minute_all;
+    DROP TRIGGER usage_history_add; DROP TRIGGER usage_history_grow; DROP TRIGGER usage_history_move; DROP TRIGGER usage_history_drop;
+    DROP TABLE usage_history; DROP TABLE usage_history_total; DROP TABLE usage_history_since;
     ALTER TABLE usage DROP COLUMN calls; ALTER TABLE usage DROP COLUMN context; ALTER TABLE usage DROP COLUMN context_window;
     CREATE TRIGGER usage_totals_add AFTER INSERT ON usage BEGIN
       INSERT INTO usage_totals VALUES (NEW.session, NEW.runtime, COALESCE(NEW.model, ''), NEW.fast, 1, NEW.input, NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output)

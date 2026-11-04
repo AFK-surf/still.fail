@@ -74,6 +74,9 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
   let incompleteCards = false;
   let unknownAllDays = false;
   let lastIncompleteDay: string | null = null;
+  // A station still filling its chat or remote-task statistics does not say them: their figures are not known.
+  let archivedUnknown = false;
+  let remoteUnknown = false;
   const num = (v: unknown, k: string): number => (typeof get(v, k) === "number" ? get(v, k) : 0);
   for (const s of sources) {
     const value = s.value !== undefined && "ok" in s.value ? s.value.ok : undefined;
@@ -85,7 +88,17 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
       continue;
     }
     if (get(history, "cardsIncomplete") === true) incompleteCards = true;
-    if (full === undefined || full === null) {
+    // A history counted from a time on (a station whose statistics before did not hold every call): the days until
+    // then are not known.
+    const countedFrom = get(full, "since");
+    if (typeof countedFrom === "number" && Number.isFinite(countedFrom)) {
+      incomplete++;
+      incompleteTokens++;
+      const day = localDay(countedFrom, offset);
+      if (lastIncompleteDay === null || day > lastIncompleteDay) lastIncompleteDay = day;
+    } else if (full === undefined || full === null) {
+      // A station from before its history was counted by quarter hour (2026-11-04) says what it has apart; this goes
+      // after 2026-11-11.
       incomplete++;
       if (get(history, "tokensComplete") !== true) {
         incompleteTokens++;
@@ -98,6 +111,8 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
       }
     }
     read++;
+    if (typeof get(history, "archived") !== "number") archivedUnknown = true;
+    if (typeof get(history, "remoteRuns") !== "number") remoteUnknown = true;
     archived += num(history, "archived");
     remote += num(history, "remoteRuns");
     cards += num(history, "cards");
@@ -121,8 +136,8 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
   const share = (part: number, whole: number) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : "—");
   const figures = [
     { label: t(incompleteTokens > 0 || missing > 0 ? "core-views.usage.summary.counted" : "core-views.usage.summary.lifetime"), value: count(total) },
-    { label: t("core-views.usage.summary.archived"), value: count(archived) },
-    { label: t("core-views.usage.summary.remote"), value: count(remote) },
+    { label: t("core-views.usage.summary.archived"), value: archivedUnknown ? "—" : count(archived) },
+    { label: t("core-views.usage.summary.remote"), value: remoteUnknown ? "—" : count(remote) },
     { label: t("core-views.usage.summary.picked"), value: incompleteCards || missing > 0 ? "—" : share(picked, cards) },
     { label: t("core-views.usage.summary.stations"), value: String(byStation.length) },
   ];

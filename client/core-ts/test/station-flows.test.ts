@@ -1818,7 +1818,9 @@ test("what_the_agents_spent_is_read_again_from_the_day_a_change_touched", async 
   assert.deepEqual(asked().slice(1), [`from=${today.from}&tz=${offset}`]);
   const held: any = core.inner.data.shared({ topic: "stationUsage", station: ST });
   assert.deepEqual(held.rows.map((r: any) => [r.day, r.calls]), [[yesterday.day, 1], [today.day, 5]]);
-  assert.deepEqual(held.history, { days: days([row(yesterday.day, 1), row(today.day, 5)]), cards: 2, picked: 1, places: {}, archived: 0, remoteRuns: 0 });
+  // (the days read again kept by day alone, as the station adds them up)
+  assert.deepEqual(held.history, { days: [...days([row(yesterday.day, 1)]), { day: today.day, runtime: "", model: null, tokens: 10, calls: 5 }],
+    cards: 2, picked: 1, places: {}, archived: 0, remoteRuns: 0 });
   assert.equal(held.from, from);
   // A change that does not say when (a station from before): all of it again.
   push("usage", {});

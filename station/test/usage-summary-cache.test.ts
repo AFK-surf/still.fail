@@ -472,7 +472,7 @@ for (const recursive of [false, true]) test(`a pending bucket coalesces writes w
   } finally { writer.close(); }
 });
 
-test("a cached summary and partial history reuse minutes together and a reader returns the same result", async () => {
+test("a cached summary with the year's history says the same as a fresh read, in a reader too", async () => {
   const dir = mkdtempSync(join(tmpdir(), "usage-cache-history-"));
   const path = join(dir, "stillfail.db");
   const writer = Store.open(path);
@@ -496,19 +496,17 @@ test("a cached summary and partial history reuse minutes together and a reader r
     const store = reads.makeStore(db, dir);
     const viewer = { workspace: "A", home: false }, range = { from: 0n, to: 86_400_000n };
     const expected = usage(store, "en", 0n, 120n * 60_000n, 0n, false, viewer, true, { historyRange: range });
-    assert.ok(expected.partialHistory);
+    assert.ok(expected.history);
     const cache = new reads.UsageSummaryCache();
     const compute = async () => {
       const summary = await reads.usageGroupsBatched(store, 0n, 120n * 60_000n, 0n, viewer, async () => {}, cache);
-      const history = await reads.usageGroupsBatched(store, range.from, range.to, 0n, viewer, async () => {}, cache, "history");
-      assert.ok(summary && history);
-      return usage(store, "en", 0n, 120n * 60_000n, 0n, false, viewer, true,
-        { historyRange: range, batched: summary, batchedHistory: { range, result: history } });
+      assert.ok(summary);
+      return usage(store, "en", 0n, 120n * 60_000n, 0n, false, viewer, true, { historyRange: range, batched: summary });
     };
     db.exec("BEGIN");
     try { assert.deepEqual(JSON.parse(JSON.stringify(await compute())), JSON.parse(JSON.stringify(expected))); }
     finally { db.exec("COMMIT"); }
-    // Total readiness reads only the pending index; denying the bucket values proves neither page component rereads them.
+    // Denying the bucket values proves the summary does not reread them.
     const values = new Set(["minute", "records", "calls", "input", "cache_read", "cache_write", "cache_write_long", "output"]);
     db.setAuthorizer((action, table, column) => action === constants.SQLITE_READ && table === "usage_compact" && values.has(column ?? "")
       ? constants.SQLITE_DENY : constants.SQLITE_OK);
@@ -535,43 +533,12 @@ test("a cached summary and partial history reuse minutes together and a reader r
       db.exec("BEGIN");
       try {
         const summary = await reads.usageGroupsBatched(store, 0n, 120n * 60_000n, offset, viewer, async () => {}, cache);
-        const history = await reads.usageGroupsBatched(store, interval.from, interval.to, offset, viewer, async () => {}, cache, "history");
-        assert.ok(summary && history);
-        const actual = usage(store, "en", 0n, 120n * 60_000n, offset, false, viewer, true,
-          { historyRange: interval, batched: summary, batchedHistory: { range: interval, result: history } });
+        assert.ok(summary);
+        const actual = usage(store, "en", 0n, 120n * 60_000n, offset, false, viewer, true, { historyRange: interval, batched: summary });
         assert.deepEqual(JSON.parse(JSON.stringify(actual)), JSON.parse(JSON.stringify(expectedAtOffset)));
       } finally { db.exec("COMMIT"); }
     }
   } finally { workers?.close(); db?.close(); writer.close(); rmSync(dir, { recursive: true, force: true }); }
-});
-
-test("history groups many people before caching, and leaves an oversized history to the SQL aggregate", async () => {
-  const writer = Store.open(":memory:");
-  try {
-    for (const [key, ws] of [["people", "A"], ["models", "B"]] as const) {
-      writer.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, ws, createdAt: 0, lastActiveAt: 0 });
-    }
-    compact.installCompactUsage(writer.db, () => 0);
-    retireUsageIndexes(writer.db);
-    writer.db.exec("INSERT INTO usage_minute_scope (session, ws, done) VALUES ('people', 'A', 1), ('models', 'B', 1)");
-    const bucket = writer.db.prepare(`INSERT INTO usage_compact
-      (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope)
-      VALUES (?, 0, 0, ?, 'cc', 'claude', ?, 0, 1, 1, 1, 0, 0, 0, 1, ?)`);
-    writer.db.exec("BEGIN");
-    for (let i = 0; i < 8_193; i++) {
-      bucket.run("people", "p" + i, "m", "WA");
-      bucket.run("models", "p", "m" + i, "WB");
-    }
-    writer.db.exec("COMMIT");
-    compact.installUsageSummaryChanges(writer.db);
-    const store = reads.makeStore(writer.db, "."), cache = new reads.UsageSummaryCache();
-    const people = await reads.usageGroupsBatched(store, 0n, 60_000n, 0n, { workspace: "A", home: false }, async () => {}, cache, "history");
-    assert.ok(people);
-    assert.deepEqual(people.groups.map((g) => [g.calls, g.input, g.output]), [[8_193, 8_193, 8_193]]);
-    const models = await reads.usageGroupsBatched(store, 0n, 60_000n, 0n, { workspace: "B", home: false }, async () => {}, cache, "history");
-    assert.equal(models, null, "an unusually large history uses the original SQL aggregate");
-    assert.equal(reads.usageByDay(store, 0n, { workspace: "B", home: false }, true, { from: 0n, to: 1n }).length, 8_193);
-  } finally { writer.close(); }
 });
 
 test("a large summary coarsens its cache without exceeding its limit or losing exact totals", async () => {
