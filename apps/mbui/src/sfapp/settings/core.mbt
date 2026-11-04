@@ -53,6 +53,8 @@ pub(all) struct Core {
   version_tap : () -> Unit
   /// 检查更新 pressed: the update dialog, still.fail cloud asked now unless a newer build is known already
   version_check : () -> Unit
+  /// 自动更新 turned on (the prefs' `appUpdate` kept by the page): the newer build known downloaded as one found by itself
+  update_auto_on : () -> Unit
   /// 本机 Station's installer run (the app's local_station.mbt): `true` a station downloaded and joined to this
   /// workspace (none here), `false` the one here brought up to the latest release and run as a service
   local_install : (Bool) -> Unit

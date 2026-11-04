@@ -80,6 +80,17 @@ pub fn adb_phone_said(json : String) -> Unit {
 /// The phone as its host last said it, asked once (as the page shows) and taken as it comes; what a tap asked of the
 /// host taken too (an answer that changed the phone: asked again).
 fn adb_phone(c : @ui.Ctx) -> Json? {
+  let phone = adb_phone_taken()
+  if phone is None && adb_host.asking is None {
+    c.tell("adb-phone", fn() { adb_phone_ask() })
+  }
+  phone
+}
+
+///|
+/// The phone as its host last said it (adb_phone's), what came of what was asked of the host taken: followed as that
+/// comes, for a node of the window's tree.
+fn adb_phone_taken() -> Json? {
   match adb_host.asking {
     Some(k) =>
       match k.got() {
@@ -108,10 +119,16 @@ fn adb_phone(c : @ui.Ctx) -> Json? {
   }
   adb_host.doing.clear()
   adb_host.doing.append(left)
-  if adb_host.phone.get() is None && adb_host.asking is None {
-    c.tell("adb-phone", fn() { adb_host.asking = Some(@ui.native_call("adb.phone", obj([]))) })
-  }
   adb_host.phone.get()
+}
+
+///|
+/// The phone asked of its host, where it has not said it and nothing asks it now: from a node as it is made, or
+/// told from a frame (adb_phone).
+pub fn adb_phone_ask() -> Unit {
+  if @signals.untracked(fn() { adb_host.phone.get() }) is None && adb_host.asking is None {
+    adb_host.asking = Some(@ui.native_call("adb.phone", obj([])))
+  }
 }
 
 ///|
@@ -135,7 +152,7 @@ fn adb_ask(name : String, params : Json) -> Unit {
 pub fn adb_texts() -> Json {
   let m : Map[String, Json] = {}
   for k in [
-      "title", "notify.title", "notify.chats", "notify.on", "notify.idle", "stop", "turnOff", "pair.channel", "code", "pair.ask", "pair.auto", "typeCode", "enterCode", "connecting",
+      "title", "notify.title", "notify.chats", "notify.on", "notify.idle", "notify.screen", "notify.screens", "stop", "turnOff", "pair.channel", "code", "pair.ask", "pair.auto", "typeCode", "enterCode", "connecting",
       "connected", "connected.left", "notPaired", "pair.popped", "off", "attaching", "pairing", "paired", "pairFailed",
       "shareFailed",
     ] {
@@ -311,7 +328,18 @@ pub(all) enum AdbReady {
 ///|
 /// What the phone has for 共享调试, as a chat's card of it goes by (AdbReady).
 pub fn adb_ready(c : @ui.Ctx) -> AdbReady {
-  let phone = adb_phone(c)
+  adb_ready_of(adb_phone(c))
+}
+
+///|
+/// What the phone has for 共享调试 (adb_ready's), as its host says it now, followed as that comes: for a node of the
+/// window's tree (adb_phone_ask asks it).
+pub fn adb_ready_now() -> AdbReady {
+  adb_ready_of(adb_phone_taken())
+}
+
+///|
+fn adb_ready_of(phone : Json?) -> AdbReady {
   if phone is None {
     return AdbUnknown
   }

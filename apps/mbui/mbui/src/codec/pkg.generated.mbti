@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "mbui/codec"
 
+import {
+  "moonbitlang/core/json",
+}
+
 // Values
 pub fn base64(Bytes) -> String
 
@@ -30,7 +34,7 @@ pub fn parse_timed(String) -> Array[Cue]
 
 pub fn percent_decoded(String) -> String
 
-pub fn pretty_json(Json) -> String
+pub fn pretty_json(@json.Json) -> String
 
 pub fn subtitle_time(String) -> Double?
 

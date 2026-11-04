@@ -115,6 +115,12 @@ test("a chat published: previewed, written out frozen with the attachments ticke
   const jobs = new Jobs({ store, data, notify: () => {}, link: () => null });
   hub.setJobs(jobs);
   const readers = new Readers(data, 1);
+  const draftReads: { includeViews?: boolean }[] = [];
+  const read = readers.read.bind(readers);
+  readers.read = (op, args, lang, options) => {
+    if (op === "publishDraft") draftReads.push(args as { includeViews?: boolean });
+    return read(op, args, lang, options);
+  };
   // The publish routes are a part of the station's (publish/module.ts), given to the admin API as main.ts does.
   const parts = new StationParts();
   parts.routes((tools) => publishRoutes(tools));
@@ -147,6 +153,7 @@ test("a chat published: previewed, written out frozen with the attachments ticke
 
     const preview = await ask(alice, "POST", `/threads/${thread}/publish/preview`, { names: { "alice@acme.dev": "Alice Liddell" } });
     assert.equal(preview.status, 200, JSON.stringify(preview.body));
+    assert.notEqual(draftReads.at(-1)?.includeViews, false, "the preview asks for its chat views");
     const p = preview.body;
     assert.deepEqual(p.entries.map((e: any) => e.author), ["Alice Liddell", "Opus 4.1", "carol"], "people by name, agents by model, never by address or key");
     // The members' preview draws them as the chat does: an agent by its maker's mark, a person by their address's picture.
@@ -178,6 +185,7 @@ test("a chat published: previewed, written out frozen with the attachments ticke
     store.insertMessage(newMessage(thread, "1.4", "person", "alice@acme.dev", "a later word"));
     const done = await ask(alice, "POST", `/threads/${thread}/publish`, { upto, files: ["f0"], names: {} });
     assert.equal(done.status, 200, JSON.stringify(done.body));
+    assert.equal(draftReads.at(-1)?.includeViews, false, "publishing does not ask the reader for preview-only views");
     const published = done.body.published;
     assert.match(published.id, /^[A-Za-z0-9_-]{16}$/);
     assert.match(published.key, /^[A-Za-z0-9_-]{43}$/);

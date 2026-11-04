@@ -4,7 +4,7 @@
 // traces and notices). `api` returns null for paths it does not own. The
 // admin's console has its own, `adminApi`, which only the console's host
 // routes to (index.ts).
-import { isAdmin } from "./admin";
+import { consoleAdmin, isAdmin } from "./admin";
 import { bearerToken, clock, denied, limited, readJson, reply, verifyToken, type Claims } from "./auth";
 import { betaOrigin, header, publicOrigins, signedMessages } from "./compat";
 import { EVENTS_PROTOCOLS, ROLES, type Role } from "./directory";
@@ -19,6 +19,7 @@ import { relays, relayUrls } from "./relays";
 import { receiveLoad, relaysLoad } from "./relay-load";
 import { receiveLogs, receiveTraces } from "./tracing";
 import { ICON_URL_CHARS, keptIcon, serveIcon } from "./icons";
+import { servePicture } from "./pictures";
 
 /** Directory errors travel over RPC as their code; this gives each its status. */
 const STATUS: Record<string, number> = {
@@ -193,6 +194,9 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   // ── the pictures put up as icons: to anyone with the address (icons.ts) ──
   if (path.startsWith("/v1/icons/") && method === "GET") return (await serveIcon(env, path.slice("/v1/icons/".length))) ?? reply({ error: "not_found" }, 404);
 
+  // ── Slack's pictures, for the app in a browser, which may not read them from Slack (pictures.ts) ──
+  if (path === "/v1/pictures" && method === "GET") return servePicture(request);
+
   // ── accounts ────────────────────────────────────────────────────────────
   const isAccountRoute = path === "/v1/me" || path.startsWith("/v1/workspaces") || path.startsWith("/v1/invitations/");
   if (!isAccountRoute) return null;
@@ -314,7 +318,7 @@ export async function blockAccount(env: Env, sub: string, on: boolean): Promise<
 export async function adminApi(request: Request, env: Env, path: string): Promise<Response> {
   const method = request.method;
   const claims = await account(bearerToken(request), env);
-  if (claims instanceof Response || !isAdmin(env, claims.email)) return notFound();
+  if (claims instanceof Response || !(await consoleAdmin(request, env, claims.email))) return notFound();
   let input: Record<string, unknown>;
   try {
     input = await body(request);

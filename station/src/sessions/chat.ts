@@ -19,7 +19,12 @@ export type InboundMessage = {
   addressed: boolean;
   /// Files shared with it, fetched (`download`) into the uploads of a session of its thread when it is recorded.
   files?: InboundFile[];
+  /// The model it was sent to (Slack's `/sf`): a session it starts runs it instead of its connect's.
+  model?: ModelChoice;
 };
+
+/// A model a person picks for a new chat on a platform: its runtime, and its model (null: the runtime's default).
+export type ModelChoice = { runtime: string; model: string | null };
 
 /// A file shared with a message, as the platform holds it. `url`: where its bytes are; null where the platform keeps
 /// them back (a file over a free workspace's limit, a deleted one).
@@ -86,6 +91,8 @@ export interface ChatSurface {
   sessionLink?(url: string, label: string): string | null;
   /// A shared file's bytes, as the bot may read them; throws where it may not (a Slack app without files:read).
   download?(file: InboundFile): Promise<Uint8Array>;
+  /// The files of an `api` answer.
+  answerFiles?(answer: Json): InboundFile[];
   /// A person's display name, or null if unknown.
   userName?(user: string): Promise<string | null>;
   /// Says in the thread what the agent working for it is doing ("" when it is done), best effort, never waited on.

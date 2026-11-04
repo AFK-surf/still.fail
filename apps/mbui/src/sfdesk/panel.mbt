@@ -387,39 +387,6 @@ pub fn side_beside(c : @ui.Ctx, key : String, open : Bool, whole : Double, page 
 }
 
 ///|
-/// Chat `r`'s page (`chat`) with its side panel beside it (in workspace `w`): its tabs, or while the panel slides out
-/// the ones it had.
-pub fn with_side(
-  c : @ui.Ctx,
-  src : Source,
-  w : Workspace,
-  r : ChatRef,
-  v : ChatView?,
-  chat : () -> Unit,
-) -> Unit {
-  // (in a panel of its own, on the tape: the side panel is a panel of its own beside it, the frame's, tape_side)
-  if @sf.in_pane() {
-    chat()
-    return
-  }
-  let key = chat_key(r)
-  let (tabs, front) = match v {
-    Some(view) => side_of(view)
-    None => ([], "")
-  }
-  let open = tabs.length() > 0
-  side_beside(c, key, open, side_width(c.width), chat, fn() {
-    match v {
-      Some(view) => {
-        let (tabs, front) = if open { (tabs, front) } else { side_leaving(key).unwrap_or(([], "")) }
-        side_panel(c, src, w, r, view, tabs, front)
-      }
-      None => ()
-    }
-  })
-}
-
-///|
 /// Whose side panel is open (what the frame puts beside the page on the tape): a chat's, or workspace `ws`'s new
 /// chat's (its Station 文件, kept by the same `chatTabs`, by `new:<ws>`).
 pub(all) enum SideOf {
@@ -445,146 +412,6 @@ pub fn side_open_for(src : Source, w : Workspace, p : Page) -> SideOf? {
     NewChat => if new_files_open(src, w.id) && new_drive_station(src, w) is Some(_) { Some(NewSide(w.id)) } else { None }
     _ => None
   }
-}
-
-///|
-/// The side panel `side` on the tape, a panel of its own beside the page's: a chat's tabs as its view has them, a new
-/// chat's Station 文件; its edge not dragged (its width the tape's: frame.mbt tape_one_beside).
-pub fn tape_side(c : @ui.Ctx, src : Source, w : Workspace, side : SideOf, leaving? : Bool = false) -> Unit {
-  side_over.val = true
-  side_on_tape.val = true
-  match side {
-    ChatSide(r) =>
-      match view_of_chat(src, r).0 {
-        Some(view) => {
-          // (closed while in use: what it had as the tape moves off it)
-          let (tabs, front) = if leaving {
-            side_leaving(chat_key(r)).unwrap_or(side_of(view))
-          } else {
-            side_of(view)
-          }
-          side_panel(c, src, w, r, view, tabs, front)
-        }
-        None => ()
-      }
-    NewSide(_) =>
-      match new_drive_station(src, w) {
-        Some(address) => new_files_panel(c, src, w, address)
-        None => ()
-      }
-  }
-  side_on_tape.val = false
-}
-
-///|
-/// The panel (sidePanel): its edge, its tabs and its switch over what the one in front shows.
-fn side_panel(
-  c : @ui.Ctx,
-  src : Source,
-  w : Workspace,
-  r : ChatRef,
-  v : ChatView,
-  tabs : Array[String],
-  front : String,
-) -> Unit {
-  c.box(style=side_panel_style, fn() {
-    // (the desktop app has no title bar: the panel's bar drags the window as the page's does)
-    let bar = c.id("side/bar")
-    if @ui.window_inset() {
-      c.window_drag(bar)
-    }
-    // a panel of its own on the tape showing one tab: that tab its title, the panel's close its only ×; else the tabs.
-    // One whose page has a bar of its own (a service's: its address names it): that bar the panel's, its × at its end,
-    // no row of the panel's over it (the user, 2026-10-28: two rows there too much)
-    let alone = side_on_tape.val && tabs.length() == 1
-    let own_bar = alone && tab_service(front) is Some(_)
-    if !own_bar {
-      c.box(style=if side_on_tape.val { side_bar_tape() } else { side_bar() }, id=bar, fn() {
-        if alone {
-          side_title(c, src, r, v, tabs[0])
-        } else {
-          c.box(style=side_tab_list, fn() {
-            for tab in tabs {
-              side_tab_of(c, src, r, v, tab, tab == front)
-            }
-          })
-          |> ignore
-        }
-        // the station's screen in front: to a window of its own (a desktop's), its tab closed here (station_tabs.mbt)
-        match station_tab_page(r, front) {
-          Some(p) if @sfbase.window_opens_for(p) =>
-            if @sf.icon_button(c, "external", key="side/window", round=true, label=@sf.t("web-pages.screen.window")) &&
-              @sfbase.open_window(p) {
-              side_change(src, r, "close", Some(front))
-            }
-          _ => ()
-        }
-        // the panel's switch stays in its top right corner, open or closed
-        if @sf.icon_button(c, if alone { "close" } else { "panel-close" }, key="side/close", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.closePanel"), shortcut="panel.close") {
-          side_change(src, r, "clear", None)
-        }
-      })
-      |> ignore
-    }
-    c.box(style=side_pane, fn() {
-      if front == "jobs" {
-        // a service up pressed: its own tab, in front (JobsTab onOpen)
-        jobs_tab(c, src, r.station, chat_key(r), (src.topic)("chatJobs", chat_params(r)).value, fn(job) {
-          c.tell("jobs-open/" + job, fn() { side_change(src, r, "open", Some("service:" + job)) })
-        })
-      } else if front == "files" {
-        // the workspace's stations' files (drive_tab.mbt), what is added from them going into the chat's draft
-        files_tab(c, src, w.id, tabs_key(r), r.station)
-      } else if front == "letters" {
-        match v.thread {
-          Some(th) => letters_tab(c, src, r, v, th)
-          None => ()
-        }
-      } else if front == "things" {
-        // what was said in it besides words (sfpages things.mbt): 在对话里看 goes to the message beside it
-        match v.thread {
-          Some(th) => @sfpages.things_body(c, src, r, th, false, fn(seq) { @sfbase.go_to(r, seq) })
-          None => ()
-        }
-      } else if tab_service(front) is Some(job) {
-        service_pane(c, src, r, job, close=if own_bar {
-          Some(fn() { c.tell("side/close", fn() { side_change(src, r, "clear", None) }) })
-        } else {
-          None
-        })
-      } else if tab_file(front) is Some((session, path, name)) {
-        file_pane(c, src, r, session, path, name)
-      } else if station_tab_pane(c, src, w, r, front) {
-        ()
-      } else if front != "" {
-        // one of its agents' execution histories
-        agent_history(c, src, r.station, front, agent_json((src.topic)("chat", chat_params(r)).value, front))
-      }
-    })
-    |> ignore
-    // its edge (ResizeHandle): dragged, its width (kept while the app runs); pressed, the panel closed; pressed
-    // twice, its own width again; over the page, none
-    if side_over.val {
-      return
-    }
-    match
-      @sf.resize_handle(
-        c,
-        "side/edge",
-        c.width,
-        min=panel_min,
-        max=panel_max,
-        label=@sf.t("web-pages.chat.resizePanel"),
-        edge=Left,
-        press=@sf.t("web-pages.chat.closePanel"),
-      ) {
-      Dragging(x) | Dropped(x) => panel_own.width.set(Some(x))
-      Pressed => side_change(src, r, "clear", None)
-      Twice => panel_own.width.set(None)
-      Untouched => ()
-    }
-  })
-  |> ignore
 }
 
 ///|
@@ -633,97 +460,6 @@ fn side_tab_names(src : Source, r : ChatRef, v : ChatView, tab : String) -> (Str
 }
 
 ///|
-/// A tab's mark: an agent's maker's, a web service's dot of how it is, else the icon of what it shows (in the words'
-/// colour when `front`: in front, or lit by the hand).
-fn side_tab_mark_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : String, front : Bool) -> Unit {
-  let t = @sf.theme()
-  match station_tab(tab) {
-    Some((kind, _, _)) => {
-      @sf.icon(c, match kind { "drive" => "folder"; "adb" => "phone"; _ => "monitor" }, size=14.0, color=if front { t.p.text } else { t.p.muted }) |> ignore
-      return
-    }
-    None => ()
-  }
-  match v.agents.iter().find_first(fn(a) { a.key == tab }) {
-    Some(a) => {
-      @sf.maker_mark(c, a.maker, a.runtime, 14.0) |> ignore
-      return
-    }
-    None => ()
-  }
-  match tab_service(tab) {
-    Some(job) => {
-      let j = (src.topic)("job", { "station": Json::string(r.station), "id": Json::string(job) }).value
-      c.box(style=side_tab_mark, fn() { job_dot(c, text(j, "tone")) }) |> ignore
-      return
-    }
-    None => ()
-  }
-  let icon = if tab_file(tab) is Some(_) {
-    "file"
-  } else if tab == "jobs" {
-    "boxes"
-  } else if tab == "files" {
-    "folder"
-  } else if tab == "things" {
-    "photo"
-  } else {
-    "chats"
-  }
-  @sf.icon(c, icon, size=14.0, color=if front { t.p.text } else { t.p.muted }) |> ignore
-}
-
-///|
-/// A tab (sideTab): its mark and label (all of it in its tip where it is cut); a press brings it in front, its ×
-/// closes it.
-fn side_tab_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : String, front : Bool) -> Unit {
-  let t = @sf.theme()
-  let id = c.id("side/tab/" + tab)
-  if c.clicked(id) {
-    side_change(src, r, "front", Some(tab))
-  }
-  let close = c.id("side/tab-close/" + tab)
-  if c.clicked(close) {
-    side_change(src, r, "close", Some(tab))
-  }
-  let (label, closing) = side_tab_names(src, r, v, tab)
-  // lit, a tab's muted words and marks come up to the words' colour, as its ground comes (docs/ui-panels.md 悬停)
-  let lit = !front && c.lit(id)
-  let b = c.box(style=if front { side_tab_in_front } else { side_tab }, id~, fn() {
-    side_tab_mark_of(c, src, r, v, tab, front || lit)
-    c.text(label, style=if front {
-      side_tab_front
-    } else if lit {
-      side_tab_words_lit
-    } else {
-      side_tab_words
-    })
-    |> ignore
-    let x = c.box(style=side_tab_close, id=close, fn() {
-      @sf.icon(c, "close", size=12.0, color=if c.lit(close) { t.p.text } else { t.p.muted }) |> ignore
-    })
-    c.semantics(x, Button, id=close, label=closing)
-  })
-  c.semantics(b, Tab, id~, label~, selected=front)
-  if !(tab == "jobs" || tab == "files" || tab == "letters" || tab == "things") {
-    @sf.tip(c, "side/tab-tip/" + tab, id, label, repeats=true)
-  }
-}
-
-///|
-/// The one tab of a panel of its own on the tape, as its title (pengxiao, 2026-10-25: a tab alone in a panel's corner
-/// is a capsule against its corner, its × beside the panel's): its mark and its name as the page's bar has its title,
-/// what closes the panel at the bar's end the only close.
-fn side_title(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : String) -> Unit {
-  let (label, _) = side_tab_names(src, r, v, tab)
-  let b = c.box(style=side_title_row, fn() {
-    side_tab_mark_of(c, src, r, v, tab, true)
-    c.text(label, style=side_title_words) |> ignore
-  })
-  c.semantics(b, Heading, label~)
-}
-
-///|
 /// The title's row: grown into the bar, its mark over what the tab shows under it (16 more in), its name 8 after it.
 // kept across runs: a value (no field of it changes)
 let side_title_row : @ui.Style = @ui.style(w=@sf.grow).then(@ui.css("row pl=S4 gap=S2 align=ACenter"))
@@ -738,4 +474,42 @@ let side_title_words : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold
 /// corner it stands where it is concentric.
 fn bar_button_side() -> Double {
   @sf.bar_key_side
+}
+
+///|
+/// The independent page named by the panel's front tab, hosted by its retained shell.
+fn side_front(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, front : String, own_bar : Bool) -> Unit {
+  if front == "jobs" {
+    // a service up pressed: its own tab, in front (JobsTab onOpen)
+    jobs_tab(c, src, r.station, chat_key(r), (src.topic)("chatJobs", chat_params(r)).value, fn(job) {
+      c.tell("jobs-open/" + job, fn() { side_change(src, r, "open", Some("service:" + job)) })
+    })
+  } else if front == "files" {
+    // the workspace's stations' files (drive_tab.mbt), what is added from them going into the chat's draft
+    files_tab(c, src, w.id, tabs_key(r), r.station)
+  } else if front == "letters" {
+    match v.thread {
+      Some(th) => letters_tab(c, src, r, v, th)
+      None => ()
+    }
+  } else if front == "things" {
+    // what was said in it besides words (sfpages things.mbt): 在对话里看 goes to the message beside it
+    match v.thread {
+      Some(th) => @sfpages.things_body(c, src, r, th, false, fn(seq) { @sfbase.go_to(r, seq) })
+      None => ()
+    }
+  } else if tab_service(front) is Some(job) {
+    service_pane(c, src, r, job, close=if own_bar && !column_short.get() {
+      Some(fn() { c.tell("side/close", fn() { side_change(src, r, "clear", None) }) })
+    } else {
+      None
+    })
+  } else if tab_file(front) is Some((session, path, name)) {
+    file_pane(c, src, r, session, path, name)
+  } else if station_tab_pane(c, src, w, r, front) {
+    ()
+  } else if front != "" {
+    // one of its agents' execution histories
+    agent_history(c, src, r.station, front, agent_json((src.topic)("chat", chat_params(r)).value, front))
+  }
 }

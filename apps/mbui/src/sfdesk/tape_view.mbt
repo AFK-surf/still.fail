@@ -811,9 +811,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       }))
       |> ignore
       tape_swipes(panel, Panel)
-      tape_panel_box(panel, bar_gap_now(), fn(pane) {
-        @ui.old(pane, fn(c) { tape_panel_built(c, src) }, key=tape_island_key).over(Is(true)) |> ignore
-      })
+      tape_panel_box(panel, bar_gap_now(), fn(pane) { tape_side_pane(pane, src) })
       tape_cover(panel, Panel, fn() {
         let (_, t, _, b) = tape_panel_room(panel)
         (bar_gap_now(), t, 0.0, b)
@@ -1143,8 +1141,7 @@ fn tape_side_at(side : @view.View) -> SideAt {
 fn tape_panel_built(c : @ui.Ctx, src : Source) -> Unit {
   let (now, _, _, _) = @sfbase.workspace_in_view(src)
   guard now is Some(w) else { return }
-  guard tape_shown_side() is Some(side) else { return }
-  let leaving = (tape_goes.panel_of)() is None
+  guard tape_shown_side() is Some(NewSide(_)) else { return }
   let r = tape_room_now()
   let panel_w = dmax(0.0, c.width - r.under)
   tape_behind(c, Panel, fn() {
@@ -1152,7 +1149,17 @@ fn tape_panel_built(c : @ui.Ctx, src : Source) -> Unit {
     c.box(style=page_apart.then(@ui.style(w=Fixed(c.width), h=Fixed(c.height), radius=@sf.corners_radius(corners))), fn() {
       @sf.pane_round.val = Some(beside_column(corners, r.under))
       c.box(style=@ui.style(w=Fixed(panel_w), h=Full), fn() {
-        c.sized(panel_w, c.height, fn() { tape_side(c, src, w, side, leaving~) })
+        c.sized(panel_w, c.height, fn() {
+          let (was_tape, was_over) = (side_on_tape.val, side_over.val)
+          side_on_tape.val = true
+          side_over.val = true
+          match new_drive_station(src, w) {
+            Some(address) => new_files_panel(c, src, w, address)
+            None => ()
+          }
+          side_on_tape.val = was_tape
+          side_over.val = was_over
+        })
       })
       |> ignore
       @sf.pane_round.val = None
@@ -1331,9 +1338,7 @@ pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
   // (what the page's bars and the sidebar's parts work out from: open, apart, nothing of them moving on the tape)
   let r = tape_room_now()
   // (a page's title on the panel's words' line, panel_words, its row's own 8 (chat_bar_title_row's pl) in from this)
-  wide.bar_pl = @sf.panel_words - chat_bar_title_in
-  wide.bar_ml = 0.0
-  wide.bar_mr = 0.0
+  bar_room_now.set((@sf.panel_words - chat_bar_title_in, 0.0, 0.0))
   wide.brand_h = side_brand_h(false, r.top)
   wide.list_top = wide.brand_h
   wide.list_band = 1.0

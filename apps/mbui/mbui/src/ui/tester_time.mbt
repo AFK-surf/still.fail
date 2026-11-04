@@ -16,6 +16,7 @@
 pub fn Tester::draw(self : Tester) -> Unit {
   // (what the test changed, as an event from outside is: a part kept is built anew, kept_part.mbt)
   outside_came()
+  fake_op_look()
   self.drawn_now()
 }
 

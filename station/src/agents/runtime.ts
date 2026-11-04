@@ -1,4 +1,4 @@
-// The seam between the station and a coding-agent runtime (Claude Code, Codex, DeepSeek Harness, Grok Build, Cursor, Devin), as the Rust station's
+// The seam between the station and a coding-agent runtime (Claude Code, Codex, DeepSeek Harness, Grok Build, Cursor, Devin, Hermes Agent, Antigravity CLI), as the Rust station's
 // runtime/mod.rs has it: everything above is runtime-agnostic. A driver opens sessions; what a session's runtime does
 // comes back as events, in order, to the one listener it was opened with. Processes run under runners (./runner.ts): a
 // station that starts again takes its sessions up from the runners (`adopt`), from what the previous one left
@@ -6,12 +6,12 @@
 import { startEnv } from "../ops/agent-env.ts";
 
 /// The runtimes a station runs, in the order they are offered.
-export type RuntimeKind = "claude" | "codex" | "dsh" | "grok" | "cursor" | "devin" | "hermes";
-export const RUNTIME_KINDS: RuntimeKind[] = ["claude", "codex", "dsh", "grok", "cursor", "devin", "hermes"];
+export type RuntimeKind = "claude" | "codex" | "dsh" | "grok" | "cursor" | "devin" | "hermes" | "agy";
+export const RUNTIME_KINDS: RuntimeKind[] = ["claude", "codex", "dsh", "grok", "cursor", "devin", "hermes", "agy"];
 /// A runtime as stored or sent (a name of one of them), none for anything else.
 export const runtimeKind = (v: unknown): RuntimeKind | undefined => (RUNTIME_KINDS as unknown[]).includes(v) ? (v as RuntimeKind) : undefined;
 /// How a runtime is named to people.
-export const runtimeLabel = (r: RuntimeKind) => (r === "claude" ? "Claude Code" : r === "codex" ? "Codex" : r === "dsh" ? "DeepSeek Harness" : r === "grok" ? "Grok Build" : r === "cursor" ? "Cursor" : r === "hermes" ? "Hermes Agent" : "Devin");
+export const runtimeLabel = (r: RuntimeKind) => (r === "claude" ? "Claude Code" : r === "codex" ? "Codex" : r === "dsh" ? "DeepSeek Harness" : r === "grok" ? "Grok Build" : r === "cursor" ? "Cursor" : r === "hermes" ? "Hermes Agent" : r === "agy" ? "Antigravity CLI" : "Devin");
 
 /// What failed a turn, as people are told it (sessions/actor.ts `failureNotice`, the client's `failureText`): the account
 /// (`auth`), the provider turning away where the request comes from (`refused`: a region it does not serve, an address

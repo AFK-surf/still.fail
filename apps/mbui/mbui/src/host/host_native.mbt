@@ -301,6 +301,10 @@ extern "C" fn ffi_window_opens() -> Int = "mb_host_window_opens"
 extern "C" fn ffi_window_open(what : String) -> Int = "mb_host_window_open"
 
 ///|
+#borrow(what)
+extern "C" fn ffi_window_front(what : String) -> Int = "mb_host_window_front"
+
+///|
 extern "C" fn ffi_set_cursor(kind : Int) -> Unit = "mb_host_set_cursor"
 
 ///|
@@ -401,6 +405,12 @@ fn window_opens() -> Bool {
 /// Another run of the program, its window beside this one (@hostapi.window_open).
 fn window_open(what : String) -> Bool {
   ffi_window_open(what) != 0
+}
+
+///|
+/// The window opened for `what` to the front, while it is open (@hostapi.window_front).
+fn window_front(what : String) -> Bool {
+  ffi_window_front(what) != 0
 }
 
 ///|

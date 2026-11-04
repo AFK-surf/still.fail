@@ -938,6 +938,30 @@ test("a connect's runtime, profile and model decide the session", async () => {
   await r.close();
 });
 
+test("a message sent to a model (Slack's /sf) starts a session on that model, on any profile of the workspace that runs it", async () => {
+  const r = new Rig();
+  // The connect's own model first, then each the workspace's profiles run.
+  assert.deepEqual(r.hub.modelsFor("cl"), [
+    { runtime: "claude", model: "opus" },
+    { runtime: "claude", model: null },
+    { runtime: "codex", model: null },
+  ]);
+  const m = say("refactor this", { model: { runtime: "codex", model: null } });
+  await r.accept(m);
+  await settle();
+  assert.deepEqual([r.claude.count(), r.codex.count()], [0, 1]);
+  const row = r.session(sessionKey("cl", "C1", m.threadTs));
+  assert.deepEqual([row.connect, row.runtime, row.profile, row.model, row.effort], ["cl", "codex", "cx", null, null], "the connect's model and effort are not carried over");
+  // A model no profile runs starts nothing, and the thread is told why.
+  r.edit((raw) => (raw.profiles[0] = { ...raw.profiles[0], models: ["opus"] }));
+  const n = say("hi", { model: { runtime: "claude", model: "sonnet" } });
+  await r.accept(n);
+  await settle();
+  assert.equal(r.store.getSession(sessionKey("cl", "C1", n.threadTs)), null);
+  assert.match(r.chat.texts().at(-1) ?? "", /sonnet/);
+  await r.close();
+});
+
 test("two connects in one thread keep separate sessions, share its messages and reply through their own connection", async () => {
   const r = new Rig();
   const root = say("<@UBOT> <@UGPT> compare notes");

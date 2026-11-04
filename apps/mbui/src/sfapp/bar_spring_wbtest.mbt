@@ -58,13 +58,19 @@ fn place_across(t : @ui.Tester, key : String) -> (Double, Double, Double) raise 
   let told = bar.told.unwrap()
   let items = told.sets[told.cur]
   let j = items.search(key).unwrap()
-  let (x, y, w, _) = said_at(t, place_label(key)).unwrap()
+  let (x, _, w, _) = said_at(t, place_label(key)).unwrap()
+  // The bar may rise or enter from below; find its actual painted glass instead of assuming the distance moved.
+  let bottom = t.drawn_glass_corners().fold(init=0.0, fn(a, g) {
+    if (g.2 - told.width).abs() < 1.0 { dmax(a, g.1 + g.3) } else { a }
+  })
+  assert_true(bottom > 0.0, msg="bar glass not drawn")
+  let top = bottom - bar_track - 2.0
   let mut lo = @double.infinity
   let mut hi = -@double.infinity
   for s in t.drawn_shapes() {
     let (cx, cy) = (s.0 + s.2 / 2.0, s.1 + s.3 / 2.0)
     let ink = s.5 >> 8
-    if cx >= x && cx <= x + w && cy >= y && (ink == 0x6B7280L || ink == 0x111827L) {
+    if cx >= x && cx <= x + w && cy >= top && cy <= bottom + 2.0 && (ink == 0x6B7280L || ink == 0x111827L) {
       lo = dmin(lo, s.0)
       hi = dmax(hi, s.0 + s.2)
     }
@@ -132,4 +138,60 @@ test "bar: a place pressed where it is drawn as the notch opens is that place" {
   t.tap(drawn, y + h / 2.0)
   t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == Files)
+}
+
+///|
+test "bar: a hold closes the notch and centres the places with it; release brings both back" {
+  let during_rise_ms = 100.0
+  let held_frame_ms = 1000.0
+  let t = tester("home")
+  let (xs, y) = bar_places_at()
+  let open = glass_notch(t)
+  let before = place_across(t, "files")
+  assert_eq(open, notch_of(1.0))
+  t.press_at(xs[0], y)
+  t.run_for(bar_hold_ms)
+  t.frame()
+  t.run_for(during_rise_ms)
+  let middle = glass_notch(t)
+  let during = place_across(t, "files")
+  assert_true(middle.1 > 0.0 && middle.1 < open.1, msg="\{open} \{middle}")
+  assert_true((during.0 - during.2).abs() <= 0.5, msg="\{during}")
+  t.run_for(held_frame_ms)
+  let held = place_across(t, "files")
+  let closed_x = 22.0 + bar_centres(390.0 - 44.0, 0.0, 4)[1]
+  assert_eq(glass_notch(t), (0.0, 0.0))
+  assert_true((held.0 - closed_x).abs() <= 0.5 && (held.1 - closed_x).abs() <= 2.0, msg="\{held} \{closed_x}")
+  t.release(xs[0], y)
+  t.run_for(held_frame_ms)
+  let after = place_across(t, "files")
+  let restored = glass_notch(t)
+  assert_true((restored.0 - open.0).abs() < 0.001 && (restored.1 - open.1).abs() < 0.001, msg="\{open} \{restored}")
+  assert_true((after.0 - before.0).abs() <= 0.5 && (after.1 - before.1).abs() <= 0.5, msg="\{before} \{after}")
+}
+
+///|
+test "bar: sliding chooses the place under the finger as the notch closes and when it is closed" {
+  for ms in [100.0, 1000.0] {
+    let t = tester("home")
+    let (xs, y) = bar_places_at()
+    let told = bar.told.unwrap()
+    let items = told.sets[told.cur]
+    assert_eq(items[0], "chats")
+    assert_eq(items[1], "files")
+    t.press_at(xs[3], y)
+    t.run_for(bar_hold_ms)
+    t.frame()
+    t.run_for(ms)
+    let open_boundary = (xs[0] + xs[1]) / 2.0
+    let now_cs = bar_centres(told.width, bar.k_at(t.time()), items.length())
+    let drawn_boundary = 22.0 + (now_cs[0] + now_cs[1]) / 2.0
+    assert_true(drawn_boundary - open_boundary > 1.0, msg="\{ms}: \{open_boundary} \{drawn_boundary}")
+    // This lies on opposite sides of the old and the drawn boundary: the drawn side is chats.
+    let x = (open_boundary + drawn_boundary) / 2.0
+    t.move(x, y)
+    assert_eq(bar.felt, "\{told.cur}/chats", msg="\{ms}")
+    t.release(x, y)
+    assert_true(app.nav.top() == Home, msg="\{ms}")
+  }
 }

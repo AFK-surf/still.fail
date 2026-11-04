@@ -14,9 +14,9 @@
 /// presenter it is (lit meanwhile); the rows swiped off to be archived, until they have gone; each swiped row's being
 /// past its line as last felt, and the press whose menu was last felt.
 priv struct Rows {
-  mut renaming : String
   mut rename_for : String
   mut rename_seen : Bool
+  mut rename_opened_at : Int
   rename_field : @ui.Field
   mut menu_for : String
   mut menu_serial : Int
@@ -26,9 +26,9 @@ priv struct Rows {
 
 ///|
 let rows : Rows = {
-  renaming: "",
   rename_for: "",
   rename_seen: false,
+  rename_opened_at: -1,
   rename_field: @ui.Field::new(),
   menu_for: "",
   menu_serial: -1,
@@ -41,9 +41,9 @@ fn chat_rows_reset() -> Unit {
   row_left.val = ("", false)
   row_left_said.set("")
   row_renaming.set("")
-  rows.renaming = ""
   rows.rename_for = ""
   rows.rename_seen = false
+  rows.rename_opened_at = -1
   rows.rename_field.set("")
   rows.menu_for = ""
   rows.menu_serial = -1
@@ -135,7 +135,7 @@ pub fn chat_row(
   let archive = c.id("row/archive/" + key)
   let parts = [id, slot, kind, away, line, opener]
   let r = row_ref(item)
-  let renaming = rows.renaming == key
+  let renaming = row_renaming.get() == key
   let pressed = parts.iter().any(fn(p) { c.pressed(p) })
   let down = parts.iter().any(fn(p) { c.held_down(p) })
   // Start reading when the finger goes down: the visible press can be delayed in a scrolling list.
@@ -672,8 +672,9 @@ fn chat_menu_items(src : Source, item : ChatItem, extra : Array[@sf.MenuItem?]) 
           @sf.t("common.save"),
           fn(title) { rename(src, item, title) },
           fn() {
-            rows.renaming = @sfbase.row_name(item)
-            row_renaming.set(rows.renaming)
+            rows.rename_for = ""
+            rows.rename_seen = false
+            row_renaming.set(@sfbase.row_name(item))
           },
           value=item.title,
           placeholder=@sf.t("android-chat.rename.field"),
@@ -801,10 +802,28 @@ fn rename(src : Source, item : ChatItem, title : String) -> Unit {
 fn row_rename(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
   let key = "row/rename"
   let whose = @sfbase.row_name(item)
-  if rows.rename_for != whose {
+  let press = c.press()
+  let starting = rows.rename_for != whose
+  if starting {
     rows.rename_for = whose
+    rows.rename_seen = false
+    rows.rename_opened_at = press.frame
     rows.rename_field.set(item.title)
     c.focus_editor(key)
+  }
+  // A row is not necessarily focusable, so a press on another row can leave a field holding the keyboard. A rename
+  // belongs only to its field: a press elsewhere lets it go, while the press still reaches what it was on.
+  if !starting && press.fresh && press.frame != rows.rename_opened_at && !c.press_within(c.id(key)) {
+    if c.editor_focused(key) {
+      c.blur()
+    }
+    stop_rename()
+    return
+  }
+  // Check before drawing: after a focus move the title must replace the editor in that same frame.
+  if !starting && rows.rename_seen && !c.editor_focused(key) {
+    stop_rename()
+    return
   }
   c.box(style=rename_box().then(@ui.style(border_color=Data(@sf.theme().p.line_strong))), fn() {
     let res = c.editor(
@@ -820,16 +839,24 @@ fn row_rename(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
     )
     match res.submitted {
       Some(title) => {
-        rows.renaming = ""
-        rows.rename_for = ""
+        stop_rename()
         c.blur()
         rename(src, item, title)
       }
-      None => if !res.focused && rows.rename_for != "" && rows.rename_seen { rows.renaming = "" }
+      None => ()
     }
     rows.rename_seen = res.focused
   })
   |> ignore
+}
+
+///|
+/// Let a rename go, including the field's identity, so the same row can be renamed again.
+fn stop_rename() -> Unit {
+  row_renaming.set("")
+  rows.rename_for = ""
+  rows.rename_seen = false
+  rows.rename_opened_at = -1
 }
 
 ///|
@@ -1095,16 +1122,16 @@ fn dclamp(v : Double, lo : Double, hi : Double) -> Double {
 ///|
 /// Whether a row's title is being written in place (what the frame holds open meanwhile).
 pub fn renaming() -> Bool {
-  rows.renaming != ""
+  row_renaming.get() != ""
 }
 
 ///|
 /// Esc to a row's title being written in place: let be. Whether there was one.
 pub fn rename_escape(c : @ui.Ctx) -> Bool {
-  if rows.renaming == "" {
+  if row_renaming.get() == "" {
     return false
   }
-  rows.renaming = ""
+  stop_rename()
   c.blur()
   true
 }
@@ -1118,8 +1145,9 @@ pub fn open_chat_menu(
   r : ChatRef,
   extra : Array[@sf.MenuItem?],
   from~ : @sf.Beside,
+  along? : @ui.Along = Start,
 ) -> Unit {
-  @sf.menu(chat_menu_of(src, scope, r, extra), from~)
+  @sf.menu(chat_menu_of(src, scope, r, extra), from~, along~)
 }
 
 ///|

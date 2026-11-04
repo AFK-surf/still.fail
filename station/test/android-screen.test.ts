@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { parseInput } from "../src/mesh/screens.ts";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -86,6 +87,8 @@ test("keys: keycode and meta state; the app's device buttons press the device's"
   assert.deepEqual(keycodes(0, "Nothing"), []);
   assert.deepEqual(input.messages({ t: "device", name: "volume_up" }, size).map((m) => m.readInt32BE(2)), [24, 24]);
   assert.deepEqual(input.messages({ t: "device", name: "memory_warning" }, size), []);
+  // (not a control message: AndroidView turns it by adb)
+  assert.deepEqual(input.messages({ t: "device", name: "rotate" }, size), []);
   assert.deepEqual(input.messages({ t: "pose", name: "open" }, size), []);
 });
 
@@ -200,4 +203,9 @@ esac
     androids.close();
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("a viewer's rotate gets through the station's checks", () => {
+  assert.deepEqual(parseInput({ t: "device", name: "rotate" }), { t: "device", name: "rotate" });
+  assert.equal(parseInput({ t: "device", name: "turn" }), null);
 });

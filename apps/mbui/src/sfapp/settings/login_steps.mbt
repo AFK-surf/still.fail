@@ -1,5 +1,5 @@
 // What the person does in the browser for a profile's sign-in under way (Profiles.kt LoginSteps): open the page and
-// paste the code back (Claude, Devin), copy the code and open the page (Codex, Grok), or only open the page and confirm
+// paste the code back (Claude, Devin, the Antigravity CLI's Google), copy the code and open the page (Codex, Grok), or only open the page and confirm
 // there (Cursor). Each step's button solid until it is pressed (LoginCards.kt StepButton), the code's field with 完成 in
 // its end once a code is in (CodeField); the last of them in the card's foot corners, so all of them capsules a
 // settings button high, reaching past the card's words to its foot's inset (parts.mbt Foot's Capsule: foot_across),
@@ -209,7 +209,7 @@ fn login_steps(
     // what to do said once, then its two steps in the order they are done, the next one solid: its page, then the
     // code it gives in the field (完成 in its end)
     c.text(
-      fill(if provider == "Devin" { "android-settings.login.step1ShortDevin" } else { "android-settings.login.step1Short" }, [
+      fill(if provider == "Devin" { "android-settings.login.step1ShortDevin" } else if provider == "Google" { "android-settings.login.step1ShortGoogle" } else { "android-settings.login.step1Short" }, [
         ("app", "still.fail"),
       ]),
       style=step_note,

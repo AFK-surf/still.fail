@@ -11,7 +11,7 @@ import { log } from "../ops/log.ts";
 import { nowSecs } from "../ops/files.ts";
 import { version } from "../ops/version.ts";
 import { type Cloud as CloudState, isRevocation, joinedOf, joinedPendingPath, pendingLockPath } from "./state.ts";
-import { type Entry, asEntry, entryHash } from "./lock.ts";
+import { type Entry, asEntry, entryHash, fold } from "./lock.ts";
 import type { StationKey } from "./key.ts";
 import { type ProviderSpec, signedHeaders } from "./provider.ts";
 import { wall } from "../ops/fibers.ts";
@@ -114,29 +114,7 @@ const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
     const socket = new WebSocket(`${state.origin.replace("http", "ws")}${plane.connectPath}`, { headers, handshakeTimeout: CONNECT_TIMEOUT_MS });
     let ping: (() => void) | undefined;
     let answered = true;
-    // Entries this station took from devices and other stations, given to the plane too (it keeps the lock for whoever
-    // asks it next): the home workspace's, and each joined one's (`workspace` says which).
-    const told = new Map<string, number>();
-    const tell = () => {
-      for (const m of s.memberships()) {
-        const ws = m.home ? null : m.workspace;
-        const seq = s.locked(ws)?.state?.seq;
-        const plane = ws === null ? s.planeLockSeq : (s.planeLockSeqs.get(ws) ?? null);
-        const was = told.get(m.workspace) ?? (s.locked(ws)?.state?.seq ?? -1);
-        if (!told.has(m.workspace)) told.set(m.workspace, was);
-        if (seq === undefined || seq <= was || socket.readyState !== WebSocket.OPEN || plane === null) continue;
-        const entries = s.lockAfter(Math.max(plane, -1), ws);
-        if (entries.length > 0) socket.send(JSON.stringify({ type: "lock.put", entries, ...(ws === null ? {} : { workspace: ws }) }));
-        told.set(m.workspace, seq);
-      }
-      askPending();
-    };
-    // The lock joining a workspace named, asked for (pendingAsks) as the station hears it joined and at each ping.
-    const asked = new Set<string>();
-    const askPending = () => {
-      if (socket.readyState !== WebSocket.OPEN) return;
-      for (const ws of pendingAsks(s, asked)) socket.send(JSON.stringify({ type: "lock.get", after: -1, workspace: ws }));
-    };
+    const { tell, askPending } = planeTeller(s, (frame) => socket.send(JSON.stringify(frame)), () => socket.readyState === WebSocket.OPEN);
     tell();
     const unlisten = s.listen(tell);
     let failed: Error | null = null;
@@ -187,6 +165,34 @@ const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
       socket.close();
     });
   });
+
+/// What a station tells the plane of its locks on one socket (`send`, while `open`): the entries it took from devices
+/// and other stations since the socket opened (the plane keeps the lock for whoever asks it next): the home
+/// workspace's, and each joined one's (`workspace` says which); and the locks joining named, asked for (pendingAsks).
+/// `tell` as cloud.json changes, `askPending` as the station hears it joined and at each ping.
+export function planeTeller(s: CloudState, send: (frame: unknown) => void, open: () => boolean) {
+  const told = new Map<string, number>();
+  const asked = new Set<string>();
+  const askPending = () => {
+    if (!open()) return;
+    for (const ws of pendingAsks(s, asked)) send({ type: "lock.get", after: -1, workspace: ws });
+  };
+  const tell = () => {
+    for (const m of s.memberships()) {
+      const ws = m.home ? null : m.workspace;
+      const seq = s.locked(ws)?.state?.seq;
+      const plane = ws === null ? s.planeLockSeq : (s.planeLockSeqs.get(ws) ?? null);
+      const was = told.get(m.workspace) ?? (s.locked(ws)?.state?.seq ?? -1);
+      if (!told.has(m.workspace)) told.set(m.workspace, was);
+      if (seq === undefined || seq <= was || !open() || plane === null) continue;
+      const entries = s.lockAfter(Math.max(plane, -1), ws);
+      if (entries.length > 0) send({ type: "lock.put", entries, ...(ws === null ? {} : { workspace: ws }) });
+      told.set(m.workspace, seq);
+    }
+    askPending();
+  };
+  return { tell, askPending };
+}
 
 /// A device tool request pushed on the socket (`{type: "tool", id, request}`, contract §8 presence transport): run
 /// by the mesh's tools and answered `{type: "tool_result", id, response}`. Only a provider with device tools pushes
@@ -326,10 +332,16 @@ function syncLock(s: CloudState, head: any, send: (frame: unknown) => unknown, w
   const mine = s.locked(ws)?.state?.seq;
   if (mine === undefined) {
     const pending = ws === null ? pendingLock(s.data) : s.pendingLock(ws);
-    if (theirs >= 0 && pending !== null) send({ type: "lock.get", after: -1, ...which });
+    // (a joined workspace that turned its lock on after this station joined it, this station not in it then: its lock,
+    // pinned once it names this station, takeFromPlane)
+    if (theirs >= 0 && (pending !== null || (ws !== null && s.leftOut(ws) === "unpinned"))) send({ type: "lock.get", after: -1, ...which });
     return;
   }
-  if (theirs > mine) send({ type: "lock.get", after: mine, ...which });
+  // The plane's lock another than the one pinned here: turned off and on again while this station was not there to hear
+  // it. Asked for the rest of its own (the plane keeps a chain turned off): its `disable` lets it go.
+  const genesis = s.locked(ws)?.state?.genesis;
+  if (head !== null && typeof head === "object" && typeof head.genesis === "string" && genesis !== undefined && head.genesis !== genesis) send({ type: "lock.get", after: mine, genesis, ...which });
+  else if (theirs > mine) send({ type: "lock.get", after: mine, ...which });
   else if (theirs < mine) send({ type: "lock.put", entries: s.lockAfter(theirs, ws), ...which });
 }
 
@@ -341,6 +353,21 @@ function takeFromPlane(s: CloudState, raw: unknown[], ws: string | null = null) 
   try {
     if (s.locked(ws) === null) {
       const pending = ws === null ? pendingLock(s.data) : s.pendingLock(ws);
+      // A joined workspace that turned its lock on after this station joined it: it takes none of its members (leftOut
+      // `unpinned`) until it pins a lock, which no device of it can bring (it refuses them all). Its lock as the plane
+      // has it, once that names this station (its owner put it in, `lock.joinStation`): pinned, as it was the plane's
+      // word it took for that workspace before (2026-11-04: a workspace's members turned away for two hours, then the
+      // station removed from it and added again).
+      if (pending === null && ws !== null && s.leftOut(ws) === "unpinned") {
+        let named = false;
+        try {
+          named = fold(entries as Entry[], null).stations.has(s.state?.station ?? "");
+        } catch {
+          named = false;
+        }
+        if (named) s.takeLock(entries as Entry[], ws);
+        return;
+      }
       if (pending === null) return;
       if (!entries.some((e) => entryHash(e!) === pending)) return log.warn("lock", "the control plane's lock is not the one this station was enrolled with", ws === null ? {} : { workspace: ws });
       s.takeLock(entries as Entry[], ws);

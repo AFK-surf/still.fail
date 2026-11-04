@@ -1118,6 +1118,20 @@ function gh(args: string[], options: { allowFail?: boolean } = {}): string {
   if (done.status !== 0 && !options.allowFail) throw new Error(`gh ${args.join(" ")}: ${done.stderr}`);
   return done.status === 0 ? done.stdout : "";
 }
+// A file put on the release, tried again twice when GitHub's answer does not get through (EOF from the CI Mac,
+// mbui-media-runtime 41766375019, 2026-11-04), over what a broken try left of it (--clobber: the same name, the same key).
+function upload(file: string): void {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      gh(["release", "upload", RELEASE, file, "-R", REPO, ...(attempt > 1 ? ["--clobber"] : [])]);
+      return;
+    } catch (e) {
+      if (attempt === 3) throw e;
+      console.error(`${basename(file)}: not uploaded (try ${attempt}), trying again: ${String(e).trim()}`);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10_000);
+    }
+  }
+}
 async function published(): Promise<Set<string> | null> {
   // (one request, by fetch with the job's token where there is one: the release's own answer lists every asset, 180 of
   // them as they are kept. Through gh it was 21-35 s of Windows mbui runs with nothing missing, its first call in the job
@@ -1290,7 +1304,7 @@ async function main(argv: string[]) {
         let note = "";
         if (!there && publish) {
           const file = pack(dir, name, work);
-          gh(["release", "upload", RELEASE, file, "-R", REPO]);
+          upload(file);
           note = " → published";
         } else if (!there && outbox) {
           pack(dir, name, outbox);
@@ -1322,7 +1336,7 @@ async function main(argv: string[]) {
         any = true;
       }
       try {
-        if (any && toRelease) for (const f of readdirSync(join(work, "natives"))) gh(["release", "upload", RELEASE, join(work, "natives", f), "-R", REPO]);
+        if (any && toRelease) for (const f of readdirSync(join(work, "natives"))) upload(join(work, "natives", f));
         else if (any) run("sh", [join(ROOT, "scripts/release-put.sh"), "--files", work], { stdio: "inherit" });
       } finally { rmSync(work, { recursive: true, force: true }); }
       return;

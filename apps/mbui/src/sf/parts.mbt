@@ -2750,6 +2750,7 @@ pub fn textarea(
       field?,
       placeholder~,
       font_size=input_size,
+      min_lines=rows,
       max_lines=most,
       plain=true,
       line=textarea_line,

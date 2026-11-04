@@ -228,15 +228,7 @@ fn new_chat_beside() -> Unit {
   if app.nav.top() is NewChat {
     return
   }
-  while app.nav.depth() > 1 {
-    if !app.nav.pop() {
-      break
-    }
-  }
-  if app.nav.top() != Home {
-    app.nav.replace(Home)
-  }
-  app.nav.push(NewChat)
+  nav_over_home([NewChat])
 }
 
 ///|
@@ -265,15 +257,7 @@ fn open_chat_beside(r : ChatRef) -> Unit {
       }
     }
   }
-  while app.nav.depth() > 1 {
-    if !app.nav.pop() {
-      break
-    }
-  }
-  if app.nav.top() != Home {
-    app.nav.replace(Home)
-  }
-  app.nav.push(Chat(r))
+  nav_over_home([Chat(r)])
 }
 
 ///|
@@ -814,12 +798,8 @@ fn page_view(
       match page {
         // a device waiting to be confirmed in the workspace's safe mode sees that instead of the chats (its
         // stations refuse it: Security.kt LockGate); its settings stay
-        // (made once: narrow_shell.mbt's Home)
-        Home => ()
-        Chat(r) => {
-          chat_page(c, src, w, r)
-          new_chat_leaving(c, src, w, r)
-        }
+        // Home and Chat are made once in narrow_shell.mbt.
+        Home | Chat(_) => ()
         NewChat => new_chat_page(c, src, w)
         Place(p) => place_page(c, src, w, p)
         // 文件: a place of the bar at the stack's root, else a page pushed

@@ -209,27 +209,29 @@ fn usage_track_node(parent : @view.View, share : () -> Double) -> Unit {
 /// end, in lines where it has not the room), the cost large and its change against the days before after it on its
 /// foot (under it where the line has not the room); once something was spent, the days' parts named and what they
 /// are split by, and the days' bars; what the page is narrowed to.
-fn usage_overview_node(parent : @view.View, core : Core, v : () -> Json?, tips? : @sf.TipLayer) -> Unit {
+fn usage_overview_node(parent : @view.View, core : Core, v : () -> Json?, chart : () -> Json?, tips? : @sf.TipLayer) -> Unit {
   let cost = fn() {
     match items(v(), "tiles").get(0) {
       Some(t) => Some(t)
       None => None
     }
   }
-  parent.show(fn() { items(v(), "tiles").length() > 0 }, fn(at) {
+  parent.show(fn() { items(chart(), "tiles").length() > 0 }, fn(at) {
     ug_card_node(at, fn(k) {
       k.box(fn(h) {
         h.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle))).wraps(Is(Some(12.0))) |> ignore
         ug_grow_words(h, fn() {
-          let period = text(v(), "period")
-          if period == "" { text(cost(), "label") } else { text(cost(), "label") + " · " + period }
+          let shown = if v() is Some(_) { v() } else { chart() }
+          let period = text(shown, "period")
+          let label = match items(shown, "tiles").get(0) { Some(t) => text(Some(t), "label"); None => "" }
+          if period == "" { label } else { label + " · " + period }
         }, ug_hero_label) |> ignore
         usage_prices_link_node(h, core)
       })
       |> ignore
       k.box(fn(f) {
         f.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(End))).wraps(Is(Some(12.0))) |> ignore
-        @sf.words_node(f, fn() { text(cost(), "value") }, fn() { ug_hero_value }) |> ignore
+        @sf.words_node(f, fn() { if v() is None { "…" } else { text(cost(), "value") } }, fn() { ug_hero_value }) |> ignore
         f.show(fn() { text(cost(), "change") != "" }, fn(c) {
           c.row(Is(true)).gap(Is(4.0)).padding(Is((0.0, 0.0, 0.0, 6.0))).lines_up(Is(Some(Middle))) |> ignore
           @sf.words_node(c, fn() { text(cost(), "change") }, fn() { ug_change }) |> ignore
@@ -237,13 +239,13 @@ fn usage_overview_node(parent : @view.View, core : Core, v : () -> Json?, tips? 
         })
       })
       |> ignore
-      k.show(fn() { !flag(v(), "empty") && items(v(), "daily").length() > 0 }, fn(s) {
+      k.show(fn() { !flag(chart(), "empty") && items(chart(), "daily").length() > 0 }, fn(s) {
         // (each the card's own, as far apart as what is on it)
         s.gap(Is(ug_card_gap)) |> ignore
-        usage_split_node(s, v)
-        usage_chart_node(s, v)
+        usage_split_node(s, chart)
+        usage_chart_node(s, chart, v)
       })
-      usage_narrowed_node(k, v, tips?)
+      usage_narrowed_node(k, v, chart, tips?)
     })
   })
 }
@@ -300,7 +302,8 @@ fn usage_split_node(parent : @view.View, v : () -> Json?) -> Unit {
           let pv = fn() { Some(p.get().1) }
           let key = fn() { text(pv(), "key") }
           let split = fn() { text(v(), "split") }
-          let alone = fn() { key() != "" && usage_pick.only.get() != (split(), key()) }
+          let selected = fn() { key() != "" && usage_pick.only.get() == (split(), key()) }
+          let can_pick = fn() { key() != "" }
           {
             it
             .row(Is(true))
@@ -310,17 +313,18 @@ fn usage_split_node(parent : @view.View, v : () -> Json?) -> Unit {
             .shrink(Is(1.0))
             .min_width(Is(Some(0.0)))
             .says(By(fn() {
-              if alone() {
-                Some(@view.said(Button, label=@sf.t("web-main.usage.only", args=[("name", text(pv(), "name"))])))
+              if can_pick() {
+                let word = if selected() { "web-main.usage.onlyOff" } else { "web-main.usage.only" }
+                Some(@view.said(Button, label=@sf.t(word, args=[("name", text(pv(), "name"))])))
               } else {
                 None
               }
             }))
             |> ignore
-            @sf.presses_node(it, on=alone, fn() {
+            @sf.presses_node(it, on=can_pick, fn() {
               @signals.untracked(fn() {
-                if alone() {
-                  usage_pick.only.set((split(), key()))
+                if can_pick() {
+                  usage_pick.only.set(if selected() { ("", "") } else { (split(), key()) })
                   usage_pick.all.set(false)
                 }
               })
@@ -330,12 +334,14 @@ fn usage_split_node(parent : @view.View, v : () -> Json?) -> Unit {
               .width(Is(Some(8.0)))
               .height(Is(Some(8.0)))
               .radius(Is(1.0e6))
-              .ground(By(fn() { usage_series_ink(items(v(), "series"), p.get().0) }))
+              .ground(By(fn() {
+                if usage_chart_only(v()) != "" && !selected() { @ui.tree_theme().color(TintStrong) } else { usage_series_ink(items(v(), "series"), p.get().0) }
+              }))
               |> ignore
             })
             |> ignore
             @sf.words_node(it, fn() { text(pv(), "name") }, fn() {
-              if alone() && @sf.lit_node(it) { ug_legend_lit } else { ug_legend_words }
+              if selected() || (can_pick() && @sf.lit_node(it)) { ug_legend_lit } else { ug_legend_words }
             })
             |> ignore
           }
@@ -370,10 +376,28 @@ fn usage_split_node(parent : @view.View, v : () -> Json?) -> Unit {
 /// in full with none), what the most spent day spent over its bar (the one seen alone's, with one); a day pressed seen
 /// alone, pressed again all of them again; a finger slid across the days lets go on the one it ends on. Each day's
 /// name under its bar, the one seen alone's in the accent's words.
-fn usage_chart_node(parent : @view.View, v : () -> Json?) -> Unit {
+fn usage_chart_node(parent : @view.View, v : () -> Json?, filtered : () -> Json?) -> Unit {
   let daily = fn() { items(v(), "daily") }
   let many = fn() { flag(v(), "many") }
   let gap = fn() { if many() { 2.0 } else { 6.0 } }
+  // The selected view knows whether its own cost was unpriced; the unfiltered parts do not.
+  let shown_day = fn(d : Json?) -> Json? {
+    if usage_chart_only(v()) == "" {
+      d
+    } else {
+      let days = items(filtered(), "daily")
+      match days.search_by(fn(one) { text(Some(one), "day") == text(d, "day") }) {
+        Some(i) => Some(days[i])
+        None => None
+      }
+    }
+  }
+  let shown_cost = fn(d : Json?) {
+    number(shown_day(d), "cost")
+  }
+  let shown_cost_text = fn(d : Json?) {
+    text(shown_day(d), "costText")
+  }
   let days : Map[String, @view.View] = Map([])
   let press = fn(key : String) {
     let now = @signals.untracked(fn() { usage_pick.day.get() })
@@ -407,8 +431,8 @@ fn usage_chart_node(parent : @view.View, v : () -> Json?) -> Unit {
       let mut peak = ""
       let mut most = 0.0
       for d in daily() {
-        if number(Some(d), "cost") > most {
-          most = number(Some(d), "cost")
+        if shown_cost(Some(d)) > most {
+          most = shown_cost(Some(d))
           peak = text(Some(d), "day")
         }
       }
@@ -452,7 +476,7 @@ fn usage_chart_node(parent : @view.View, v : () -> Json?) -> Unit {
             // (as high as the plot, what is said over its bar past its top where they are taller: its own least none)
             .min_height(Is(Some(0.0)))
             .lies_along(Is(End))
-            .says(By(fn() { Some(@view.said(Button, label=text(dv(), "label") + " " + text(dv(), "costText"))) }))
+            .says(By(fn() { Some(@view.said(Button, label=text(dv(), "label") + " " + shown_cost_text(dv()))) }))
             // (by the keyboard and a screen reader, each day its own; a finger or the pointer on the days is the
             // area's, one tap or one slide one choice: what the hand does takes no press of a day's)
             .focusable(Is(true))
@@ -463,7 +487,7 @@ fn usage_chart_node(parent : @view.View, v : () -> Json?) -> Unit {
             usage_bar_node(day, v, dv, fn() {
               let shown = usage_pick.day.get()
               shown == "" || key() == shown
-            }, fn() { if key() == said() { text(dv(), "costText") } else { "" } })
+            }, fn() { if key() == said() { shown_cost_text(dv()) } else { "" } })
           }
         })
       })
@@ -552,7 +576,15 @@ fn usage_bar_node(parent : @view.View, v : () -> Json?, d : () -> Json?, on : ()
             .grow(By(fn() { p.get().1 }))
             .basis(Is(Some(0.0)))
             .min_height(Is(Some(0.0)))
-            .ground(By(fn() { usage_series_ink(items(v(), "series"), p.get().0) }))
+            .ground(By(fn() {
+              let series = items(v(), "series")
+              let only = usage_chart_only(v())
+              if only != "" && (p.get().0 >= series.length() || text(Some(series[p.get().0]), "key") != only) {
+                @ui.tree_theme().color(TintStrong)
+              } else {
+                usage_series_ink(series, p.get().0)
+              }
+            }))
             |> ignore
           },
         )
@@ -567,16 +599,23 @@ fn usage_bar_node(parent : @view.View, v : () -> Json?, d : () -> Json?, on : ()
 ///|
 /// What the page is narrowed to (usage_narrowed's): each a chip that takes it off, 8 apart, in lines where they have
 /// not the room: the one seen alone (只看 林), the day (只看 10/5).
-fn usage_narrowed_node(parent : @view.View, v : () -> Json?, tips? : @sf.TipLayer) -> Unit {
-  let only = fn() { field(v(), "only") is Some(Object(_)) }
-  let day = fn() { text(v(), "day") != "" }
+fn usage_narrowed_node(parent : @view.View, v : () -> Json?, chart : () -> Json?, tips? : @sf.TipLayer) -> Unit {
+  let only = fn() { usage_pick.only.get().0 != "" }
+  let day = fn() { usage_pick.day.get() != "" }
   parent.show(fn() { only() || day() }, fn(at) {
     at.box(fn(chips) {
       // (the last of the card, at its foot's start: its chips concentric with its corner there, as usage_narrowed's)
       let out = @sf.card_corner - @sf.small_corner - @sf.card_pad
       chips.row(Is(true)).gap(Is(8.0)).wraps(Is(Some(8.0))).margin(Is((out, 0.0, 0.0, out))) |> ignore
       chips.show(only, fn(s) {
-        let name = fn() { text(field(v(), "only"), "title") }
+        let name = fn() {
+          let (list, key) = usage_pick.only.get()
+          let parts = items(chart(), "series")
+          match parts.search_by(fn(p) { list == text(chart(), "split") && text(Some(p), "key") == key }) {
+            Some(i) => text(Some(parts[i]), "name")
+            None => text(field(v(), "only"), "title")
+          }
+        }
         @sf.chip_node(
           s,
           fn() { @sf.t("web-main.usage.only", args=[("name", name())]) },
@@ -588,7 +627,13 @@ fn usage_narrowed_node(parent : @view.View, v : () -> Json?, tips? : @sf.TipLaye
         |> ignore
       })
       chips.show(day, fn(s) {
-        let name = fn() { text(v(), "period") }
+        let name = fn() {
+          let days = items(chart(), "daily")
+          match days.search_by(fn(d) { text(Some(d), "day") == usage_pick.day.get() }) {
+            Some(i) => text(Some(days[i]), "name")
+            None => text(v(), "period")
+          }
+        }
         @sf.chip_node(
           s,
           fn() { @sf.t("web-main.usage.only", args=[("name", name())]) },
@@ -608,12 +653,16 @@ fn usage_narrowed_node(parent : @view.View, v : () -> Json?, tips? : @sf.TipLaye
 /// The page's body under its head (usage_body's): the summary, the overview, then (once something was spent) the chats,
 /// or that none was spent (in its bones while it is still read, what failed said over it); how it is counted last; 16
 /// apart.
-fn usage_body_node(parent : @view.View, core : Core, v : () -> Json?, page_w : () -> Double, tips? : @sf.TipLayer) -> Unit {
+fn usage_body_node(parent : @view.View, core : Core, v : () -> Json?, chart : () -> Json?, error : () -> Json?, page_w : () -> Double, tips? : @sf.TipLayer) -> Unit {
   parent.box(fn(b) {
     b.gap(Is(ug_body_gap)) |> ignore
-    usage_summary_node(b, v, page_w, tips?)
-    usage_overview_node(b, core, v, tips?)
-    b.pick(fn() { flag(v(), "empty") }, fn(p, empty) {
+    usage_summary_node(b, chart, page_w, tips?)
+    usage_overview_node(b, core, v, chart, tips?)
+    b.show(fn() { v() is None && error() is Some(_) }, fn(p) {
+      @sf.words_node(p, fn() { @sf.t("web-pages.settings.usage.failed", args=[("error", error_text(error().unwrap()))]) }, fn() { ug_failed }) |> ignore
+    })
+    b.show(fn() { v() is Some(_) }, fn(q) {
+    q.pick(fn() { flag(v(), "empty") }, fn(p, empty) {
       if empty {
         let wait = fn() { field(v(), "wait") }
         p.pick(fn() { flag(wait(), "reading") || failing_of(wait()).length() > 0 }, fn(q, waits) {
@@ -628,6 +677,7 @@ fn usage_body_node(parent : @view.View, core : Core, v : () -> Json?, page_w : (
       } else {
         usage_chats_node(p, core, v)
       }
+    })
     })
     usage_notes_node(b, v)
   })
@@ -909,6 +959,9 @@ pub fn usage_node(
   }
   let read = fn() { (core.topic)("usage", usage_args(here(), usage_pick.days.get())) }
   let value = fn() { read().value }
+  // Keep the chart's unfiltered view subscribed while the selected totals and chats are read.
+  let chart_read = fn() { (core.topic)("usage", usage_args(here(), usage_pick.days.get(), chart=true)) }
+  let chart = fn() { chart_read().value }
   // (at its title's line's end; where a frame's bar names it, in that bar, as tall as its days' choice stands there)
   let actions = fn(l : @view.View) {
     // (the card to share of the agents' week, once something was spent, before the days)
@@ -937,7 +990,7 @@ pub fn usage_node(
     fn(b, _) {
       b.pick(
         fn() {
-          match (value(), read().error) {
+          match (chart(), chart_read().error) {
             (Some(_), _) => 0
             (None, Some(_)) => 1
             (None, None) => 2
@@ -945,10 +998,10 @@ pub fn usage_node(
         },
         fn(p, state) {
           match state {
-            0 => usage_body_node(p, core, value, page_w, tips~)
+            0 => usage_body_node(p, core, value, chart, fn() { read().error }, page_w, tips~)
             1 =>
               @sf.words_node(p, fn() {
-                match read().error {
+                match chart_read().error {
                   Some(e) => @sf.t("web-pages.settings.usage.failed", args=[("error", error_text(e))])
                   None => ""
                 }
@@ -956,7 +1009,8 @@ pub fn usage_node(
               |> ignore
             _ => {
               let quiet = core.quiet()
-              @sf.waiting_node(p, fn(s) { usage_body_node(s, quiet, fn() { Some(usage_sample()) }, page_w) })
+              let sample = fn() { Some(usage_sample()) }
+              @sf.waiting_node(p, fn(s) { usage_body_node(s, quiet, sample, sample, fn() { None }, page_w) })
             }
           }
         },

@@ -201,6 +201,17 @@ pub fn nav_home() -> Unit {
 }
 
 ///|
+/// The stack made Home and `pages` over it, in place, as one change (Nav::replace_above): Home kept where it is the
+/// root, else put in place of the root.
+pub fn nav_over_home(pages : Array[Page]) -> Unit {
+  if app.nav.pages()[0] == Home {
+    app.nav.replace_above(1, pages)
+  } else {
+    app.nav.replace_above(0, [Home, ..pages])
+  }
+}
+
+///|
 /// A chat opened over Home from the start (a link, a scripted run).
 pub fn open_chat(r : ChatRef) -> Unit {
   open_page(Chat(r))
@@ -210,6 +221,9 @@ pub fn open_chat(r : ChatRef) -> Unit {
 /// Page `p` opened, where the layout has it (Shell's `open`: the pane table, docs/architecture.md): what pages, links
 /// and the app's own doings call, never the stack themselves.
 pub fn open_page(p : Page) -> Unit {
+  if window_front(p) {
+    return
+  }
   history_act(fn() { (shell.val.open)(p) })
 }
 
@@ -217,6 +231,9 @@ pub fn open_page(p : Page) -> Unit {
 /// Page `p` opened from the page in view (a chat's link in a message): over it, back coming to it again, where the
 /// layout has it (Shell's `open_over`).
 pub fn open_page_over(p : Page) -> Unit {
+  if window_front(p) {
+    return
+  }
   history_act(fn() { (shell.val.open_over)(p) })
 }
 
@@ -305,10 +322,12 @@ pub fn reset() -> Unit {
   // a new chat while it is made (fresh.mbt)
   fresh_reset()
   // how times are said (message_words.mbt)
-  absolute_times.val = false
+  absolute_times.set(false)
   // a chat's list's turns and its messages out of avatars (list_turns.mbt, emit.mbt)
   turns_by.clear()
   emits.clear()
+  emit_places.clear()
+  emit_rooms.clear()
   // words sent flying (flight.mbt)
   send_flight.set(None)
   landing_shares.clear()
@@ -330,6 +349,7 @@ pub fn reset() -> Unit {
   shell.val = bare_shell()
   // the page shown alone in a window of its own (window.mbt)
   lone_page.val = None
+  windows_open.clear()
 }
 
 ///|

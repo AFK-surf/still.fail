@@ -2352,6 +2352,7 @@ web-pages.screen.device.pose
 web-pages.screen.device.pose.book
 web-pages.screen.device.pose.closed
 web-pages.screen.device.pose.open
+web-pages.screen.device.rotate
 web-pages.screen.device.lock
 web-pages.screen.device.softKeyboard
 web-pages.screen.toGrants
@@ -2413,6 +2414,7 @@ web-pages.screen.stat.system
 web-pages.screen.stats
 web-pages.screen.takeOverTip
 web-pages.screen.window
+web-pages.screen.windowOpen
 web-pages.security.devicesWhich
 web-pages.security.peopleCount
 web-pages.security.title

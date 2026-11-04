@@ -20,11 +20,10 @@ const SPAN_MAX_MS = 31 * 24 * 60 * 60_000;
 
 export const usageOps: Record<string, ReadOp> = {
   // `reading`: the counter's readingAll (absent: true).
-  // `history`: the whole of it by day as well (usage.ts usageHistory).
+  // `history`: the page's year by day as well (usage.ts usageHistory; `historyRange`, its days).
   usage: (store, a) => usage(store, a.lang, BigInt(a.from), BigInt(a.to), BigInt(a.tz), typeof a.reading === "boolean" ? a.reading : true, a.viewer ?? null, a.history === true,
     { ...(a.historyRange ? { historyRange: { from: BigInt(a.historyRange.from), to: BigInt(a.historyRange.to) } } : {}),
-      ...(a.batchedSummary ? { batched: a.batchedSummary } : {}), ...(a.batchedHistory ? { batchedHistory: a.batchedHistory } : {}),
-      ...(typeof a.historyPrepassMs === "number" ? { historyPrepassMs: a.historyPrepassMs } : {}) }),
+      ...(a.batchedSummary ? { batched: a.batchedSummary } : {}) }),
   usageCalls: (store, a) => usageCallsPage(store, String(a.session), BigInt(a.from), BigInt(a.to), [BigInt(a.beforeAt), BigInt(a.beforeSeq)],
     Math.min(Math.max(num(a.limit), 1), 200), a.viewer ?? null),
   resourceChats: (store, a) => resourceChats(store, a.sessions ?? [], a.viewer ?? null),

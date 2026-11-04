@@ -43,7 +43,10 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 | `cloud_keys` | `{keys}`（JWKS） | owner |
 | `disable` | `{}` | owner |
 
-- **签名者**不单独列：锁里某个成员的 app 设备的 `sign_key`，或他的 passkey。权限跟着锁里的角色走。
+- **签名者**不单独列：锁里某个成员的 app 设备的 `sign_key`，或他的 passkey。权限跟着锁里的角色走，而且只有**本人的**设备和 passkey 签的才算（下一条）。
+- **本人的设备**（2026-11-04 用户定，chat EMBER/1793781166.844000）：owner、admin 可以往任何成员名下加设备和 passkey，以前这台设备签的条目就按那个人的角色算：admin 往 owner 名下加一台，签名钥匙在自己手里，就能以 owner 的身份换 cloud 公钥、关掉安全模式、提别人当 owner，在密钥库里也能以 owner 的名义签库的新版本、收封给 owner 的待存值。现在锁里每台设备、每把 passkey 都有 `own`（station `cloud/lock.ts` Device `own`、core `vault/lock-check.ts`，同一套规则）。算本人的有三种：genesis 里列着的；本人的设备或 passkey 签进来的；这个人在锁里还没有过能签名的本人设备或 passkey 时（他的第一台，面对面批准）由 owner、admin 签进来的。admin 把某台本人设备换成自己的 `sign_key`，这台就不再算本人的；签名钥匙不变（网页版续期）则照旧算本人的。不是本人的设备照样能连 station，但它签的条目留在链里、什么也不改（以前的锁里有这样的条目，链照样折得下去）；cloud 不再收新的这种条目（`lock_refused`），core 也不签（`lock_not_own`）。密钥库同样只认本人设备的签名、只封给本人设备（`docs/vault.md`）。
+  - 第二台设备起只能本人批：面对面批准时，别人的设备只在这个人还没有能签名的本人设备时出码（`pair.ts placesFor`/`waitingIn`）。以前由 admin 批进来的第二台设备现在不算本人的：在「成员和设备」里移除，再用自己的设备重新批准。
+  - 设备全丢了：admin 加的新设备不算本人的。admin 把这个人移出成员再加回来（`member.remove` 清掉记录），之后的第一台由 admin 面对面批准，库用恢复码找回。admin 想冒充谁，只能明着把他踢出去。
 - **网页版不能签**：页面代码是 cloud 发的。`kind: web` 的设备不能有 `sign_key`，`exp` 最多 30 天（station 校验）。
 - **设备身份**：`id` 是设备的基础 iroh 密钥（core 的 `DEVICE_KEY` 对应的公钥）。客户端按中继派生出多个 endpoint，所以连 station 时 hello 里带 `lock: {device: <基础公钥>, proof}`，`proof` 是基础密钥对 `"stillfail-lock-endpoint/1\0<ws>\0<endpoint>"` 的签名。老客户端没有这一步，开锁时按它用过的 endpoint 记进 `endpoints`。
 - **passkey**：station 校验 `clientDataJSON` 的 `type` 是 `webauthn.get`、`origin` 在 genesis 的 `origins` 里、challenge 是条目哈希，`authenticatorData` 的 rpIdHash 是 `rp_id`、带 UP 标志，ES256。
@@ -52,18 +55,20 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 ## 同步
 
 - cloud：`GET/POST /v1/workspaces/:ws/lock`（成员；只追加，检查 `seq`/`prev` 接得上，并用 station 的同一份规则（`station/src/cloud/lock.ts` 的 `genesis`/`apply`，cloud 直接 import）校验签名和权限，station 不会收的回 409 `lock_refused`：cloud 收下一条 station 拒收的，之后每一条都接在它后面，station 一条也接不上（2026-10-24 一个 workspace 因此卡了四天）。这之前存下的链，cloud 第一次读到时截到最后一条能通过的为止），`DELETE`（owner，签名者都丢了时清掉）。state 帧多一个 `lock: {seq, hash, genesis} | null`。station 落后就在 presence socket 上发 `{type: "lock.get", after}`，cloud 回 `{type: "lock", entries}`；cloud 落后（丢了、被清了）station 发 `{type: "lock.put", entries}` 补回去。
-- station 之间：`stillfail/station/1` 上的 `lock.head` / `lock.get {after}` / `lock.put {entries}`，只和锁里的 station。锁变长、名单到了就互相拉平（`station/src/mesh/lock-sync.ts`）。
+- station 之间：`stillfail/station/1` 上的 `lock.head` / `lock.get {after}` / `lock.put {entries}`，只和锁里的 station。锁变长、名单到了就互相拉平（`station/src/mesh/lock-sync.ts`）；和某台拉平失败（它离线、两台之间的线断了）就隔 5 秒、10 秒……最长 10 分钟再试，直到拉平：cloud 扣着条目不发时，只有这条路能把它们带过去。自己已不在锁里的 station 不再找别的 station（它们的 mesh 不收它）。
+- 设备签了条目交给 cloud 时没收到回答（网关 502、线断了）：先再读一次 cloud 的链，条目已在就算成了，不报失败（以前报失败，面对面批准时新设备会说「没能批准此设备」，其实已批准）。
 - 设备：`GET/POST /admin/api/lock`（station 自己的锁；POST 逐条校验）。hello 的回复多一个 `lock`（链头），设备发现 station 落后可以推。core 签任何条目前先用 `vault/lock-check.ts` 按 station 的规则把整条链加上新条目验一遍：此设备不是锁里的签名者（锁里有它但没有 `sign_key`，本机却有签名钥匙）、角色不够、cloud 上的链本身验不过，都不发，直接告诉用户原因。
+- **关掉又重开时 station 不在**：cloud 换新链时把关掉的那条留在 `lock_turned_off`。station 发现 state 帧里的链头 genesis 跟自己钉的不同，就发 `{type: "lock.get", after, genesis}`，cloud 回那条旧链剩下的条目（含 `disable`），station 逐条验过后自己解除钉住，不用再到那台电脑上 `lock reset`；之后它跟没开过锁的 station 一样，在「安全」里重新加入。旧 cloud 不认 `genesis`，照旧回当前的链，station 照旧拒收。
 - **station 钉着另一条锁**（重新开启时它没连上，或 cloud 收过它拒收的条目）：它拒绝设备时回的链头不在设备手里这条链上（genesis 不同，或同一序号哈希不同），core 不再当作「station 落后、稍后重试」，而是说这台 station 的记录和 workspace 不一致、要在那台电脑上 `stillfail lock reset` 后重新保护。打开「安全」时 core 问一遍锁里各 station 的 `GET /lock`：说自己没锁或钉着别的锁的不算受保护（可以重新加入）；开启时的核对页把钉着别的锁的 station 列为 `other`，不能勾选。
 - cloud 扣着条目不发只能拖慢，伪造不了。
 
 ## 钉住
 
-- **开锁**（`lock.open`）：owner 的 app 生成签名钥匙，列出成员、最近 31 天领过凭证的设备（cloud 从这版起记 `devices`）、能回答 `GET /lock` 的 station，签 genesis，交给 cloud，再经 admin 连接直接交给每台 station。没钉住的 station 只接 owner（凭证角色）从 genesis 里自己那台设备送来的 genesis。
+- **开锁**（`lock.open`）：owner 的 app 生成签名钥匙，列出成员、最近 31 天领过凭证的设备（cloud 从这版起记 `devices`）、能回答 `GET /lock` 的 station，签 genesis，交给 cloud，再经 admin 连接直接交给每台 station。没钉住的 station 只接 owner（凭证角色）从自己的设备送来的、从 genesis 起的整条链，这台设备要在这条链折完后的锁里、角色是 owner（以前只认 genesis 里的设备：owner 后来批准的手机在「安全」里点「加入」，cloud 上已记下这台 station，station 却回英文报错不钉）。
 - **离线、旧版的 station** 不进 genesis：锁里的 station 能调别的 station 的 `task.*`，一台不认锁的 station 被 cloud 控制后就能借它进来。它们和受保护 station 之间的远程任务、分享会停，升级/上线后用 `lock.addStation` 加。
 - **新 station**：锁住的 workspace 生成的登记命令带锁的哈希（`install.sh … <token> <hash>`、`stillfail station enroll … --lock <hash>`）。station 登记后打印一个短码，cloud 送来含这个哈希的链时钉住；管理员核对短码签 `station` 条目后它才进名单。
 - **签名者都丢了**：在 station 本机运行 `stillfail lock reset`（锁文件改名留底），这台 station 回到信任 cloud。`stillfail lock status` 看现在钉的是什么（原生启动器 `stillfail-station` 把 `lock` 转给 Node，2026-10-29 之前它不认，只打印用法）。
-- **关掉**：owner 签 `disable`，各 station 解除钉住。签之前要郑重确认（2026-10-17 用户要求）：确认框逐条列出关掉后失去什么，要输入 workspace 名称才能点；core 签名前再让系统验证本人（host `secureAsk`：Mac 上 Touch ID，安卓指纹或屏幕锁；没有可验证手段的机器——Windows、Linux、没有 Touch ID 的 Mac、没设屏幕锁的手机——直接通过），用户在系统弹窗里取消（`user_cancelled`）就什么都不签、不提示。
+- **关掉**：owner 签 `disable`，各 station 解除钉住，并在 lock.json 旁的 `lock.json.off` 记下这条锁的 genesis：关过的锁不再钉回。设备每改一次锁都把到那时为止的整条链送给各台 station，这一份比 cloud 的 `disable` 晚到时，以前会把 station 按旧链重新锁上（cloud 上已经关了，这台还在拦新设备）。签之前要郑重确认（2026-10-17 用户要求）：确认框逐条列出关掉后失去什么，要输入 workspace 名称才能点；core 签名前再让系统验证本人（host `secureAsk`：Mac 上 Touch ID，安卓指纹或屏幕锁；没有可验证手段的机器——Windows、Linux、没有 Touch ID 的 Mac、没设屏幕锁的手机——直接通过），用户在系统弹窗里取消（`user_cancelled`）就什么都不签、不提示。
 
 ## 新设备
 
@@ -75,6 +80,9 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 - **CPace**：新设备输入码，两边各自用「码 + 双方 endpoint id（各自从连接上看到的）+ workspace 列表」生成 ristretto255 上的生成元，交换一次 share，算出同一把钥匙再互发 MAC。新设备先验受信任设备的 MAC 才回自己的；受信任设备验过新设备的 MAC 才在每个 workspace 签 `device` 条目（app 带 `sign_key`，网页版 30 天到期）。连错了对象（假的锁、中间人）时双方的 id 不一致，码对也算不出同一把钥匙。
 - **次数和时限**：一次连接最多试 `PAIR_TRIES`（3）次，码 `PAIR_WAIT_MS`（5 分钟）内有效；受信任设备上点「拒绝」（`lockPrompt.deny`），码立即作废；关掉弹窗（点旁边、Esc、返回，`lockPrompt.hide`）只是不再显示，码照样有效（人看完码顺手关掉弹窗是常事，以前关掉就作废，新设备上输对了也报「错误次数过多」，2026-10-25）；新设备连每台 `PAIR_DIAL_MS`（20 秒）为限，一台都没连上时页面说明要在已获批的设备上打开 still.fail。
 - **没批成时说原因**：受信任设备结束时回 `no {error}`（`tries` 次数用完、`denied` 被拒绝、`late` 码过期），新设备照它说（`core-misc.lock.pairTries` / `pairDenied` / `pairLate`），连接断了、对方没说原因就说连不上显示安全码的设备（`pairGone`），不再一律说错误次数过多。受信任设备核对通过、却一个 workspace 都没签进去（`approved` 的 `workspaces` 为空，原因在 `failed`）时，新设备不算获批，照 `failed` 说原因（`pairUnsigned`）；以前当成功，弹框一关回到等待页，什么也不说（2026-10-26）。
+- **几台受信任设备同时显示码**：输的码每台都核对；没一台批准、却有一台在这之前或这时断开（线断了、app 收起），等待页说「安全码不对，或显示它的设备已断开」（`me.pair.error`），不只说码不对：码多半是那台的（以前只说「安全码不对」，用户照着那台的码再输也没用）。
+- **只在一部分 workspace 获批**：新设备同时在几个 workspace 等，答应它的受信任设备只能在其中一些批准（它在别的 workspace 不签名、角色不够）。这次就算完成，其余 workspace 的等待页说「已在 X 获批，在这里还需要此 workspace 的管理员或你在这里的受信任设备批准」（`Trying.approvedIn`；以前那页停在输完码的样子，什么也不说，2026-11-04 网页版「输完不跳」）。
+- **批准了、回话丢了**：受信任设备签完、回 `approved` 前线断了（批完切走 app），新设备说失败之前先重读各 workspace 的锁，自己已经在里面就算批准了（以前等 51 秒后说码不对，2026-11-04）。
 - **状态**：新设备的进度在 `lock` topic 的 `me.pair`（`finding` / `code` / `checking` / `wrong` / `none` / `failed` / `done`），等待页按它显示输入框、剩余次数或重试。
 - 锁住的 station 拒绝不在锁里的设备时回 `{code: "lock_unconfirmed", lock}`，core 报 `lock_unconfirmed`，说明是哪个 workspace、去哪批和这台的安全码。
 - **没有点一下就批的路**（2026-11-02 用户：「为啥现在还能通过被申请设备之间点通过」）：以前留给旧客户端的经 cloud 申请、在 设置 › 安全「待你批准」里核对短码后点「批准」（`lock.request`/`lock.confirm`/`lock.deny`）已从 core 和各端界面删掉：受信任设备上看不到这类申请，也没有批准它们的调用，只能在新设备上输入受信任设备显示的码。cloud 的 `/v1/workspaces/:ws/lock/requests` 和 workspace 视图的 `lock_requests` 为兼容旧客户端还在，新客户端不读也不写。
@@ -101,6 +109,9 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 ## 测试
 
 - 确定性的：`station/test/lock.test.ts`（谁能签什么、passkey、设备身份、锁住后 state 帧换 key/塞名单/改绑被拒、没锁的照旧、station 之间拉平）、`cloud/test/lock.test.ts`（存链、转发、补回、设备登记、待确认）、`client/core-ts/test/lock.test.ts`。三处用同一组哈希测试值。
+- 按性质的随机测试（带种子、可重放，失败时报出种子和缩到最短的步骤）：
+  - `station/test/lock-world.test.ts`：一个 cloud（`cloud/src/lock.ts` 的 `extendLock`，和 cloud 收条目用的同一段）、三台真 station 代码（cloud.json/lock.json、presence 帧、`planeTeller`、mesh 的 `followLock`、设备 hello 带来的条目）和成员设备，两个 workspace 各有一把锁（三台的 home 一个，其中两台另加入一个），每步随机：签条目（加删设备、改角色、加删 station、关掉安全模式、再打开一条新锁）并送到 cloud 和 station、设备连 station、断开或接回某条线、停或起某台 station、cloud 扣着不发或伪造条目；线上的消息随机延迟、乱序（每条 socket 内保序）、随线断而丢。每步都查：各处的链不分叉、cloud 只存 station 会收的、伪造的条目谁都不收也放不进人、station 只放行它自己的链里有的设备。最后线都接回（cloud 对一部分 station 仍扣着不发，station 之间的线最后才接）再查：各 station 追平最长的链，有 station 连着 cloud 时 cloud 也追平，获批的设备每台都进得去、移除的哪台都进不去。`LOCK_WORLD_SEED=<种子>` 只跑那一个，`LOCK_WORLD_RUNS=<n>` 跑前 n 个。它找出过：station 之间那次拉平失败后，在锁或名单再变之前不再试，cloud 不给它发时被移除的设备一直进得去（现在 `followLock` 失败后 5 秒起翻倍、最长 10 分钟重试）；关掉安全模式前那次批准带的旧链晚到，把 station 重新锁上（现在关过的锁不再钉回）。
+  - `client/core-ts/test/lock-pair-faults.test.ts`：面对面批准的两端都是真 core，连接上每条消息随机延迟、在某条之后断开，cloud 存下受信任设备的条目却把回答丢了，人随机输对、输错、输一半、在受信任设备上拒绝或关弹窗、等。查：只有码在时限内输对、没被拒绝、没用完次数时才签进去；输的每个码都有回答；码的时间过了以后新设备要么完成，要么说的原因跟发生的事对得上；受信任设备上不留弹窗；码输对、线没断就一定签进去。`PAIR_FAULT_SEED`、`PAIR_FAULT_RUNS` 同上。线在受信任设备签完、回话之前断了，新设备会先说连不上，等它重读锁（cloud 通知成员 workspace 变了）发现自己已在锁里，等待页就没了。
 - 端到端（真进程、真 relay，不进 CI）：`node station/side/lock-e2e.ts`。dev cloud 加 4 台临时 station 和两个真 core（owner 的桌面、新设备），演示 cloud 给自己的设备发凭证、往名单里塞 station、把 station 改绑到别的 workspace、换 grant key（重启 dev cloud 就是换 key），锁住的 station 都拒绝，没锁的照做。
 
 ## 界面（第二步）
@@ -111,7 +122,7 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 - 被安全模式拦下的 station（这台设备未获批 `lock_unconfirmed`，或 station 不接受这个 workspace 的成员 `lock_station`）不显示成离线：link 的 `cause` 是 `lock`，station 列表写「安全模式未放行」，station 页（`blocked`）和对话里写原因。
 - 受信任设备上，面对面批准的新设备自己弹出来（`lockPrompts` 的 `pairing`，见「新设备」）：在哪个 workspace 都弹，写明申请访问哪几个 workspace，只显示码和「拒绝」（桌面对话框，手机网页和安卓底部面板），关掉只是收起、码仍有效，点「拒绝」才作废；新设备那边输对码、或被拒绝，弹窗跟着关。被拒绝（或手动关掉）的只是那一次请求（设备加它当时的码）：同一台新设备再发请求，弹窗照样弹（以前要重启 app，2026-10-23）。
 - 手机网页（`web/src/mobile/Security.tsx`）和安卓（`screens/Security.kt`）同一套：设置里「安全」一行写现状（等你确认的件数标红），确认设备用底部面板。
-- 网页版设备 30 天到期，快到期（5 天内）在「成员和设备」里标出、可续期（`lock.renew`）。
+- 网页版设备 30 天到期，快到期（5 天内）在「成员和设备」里标出、可续期（`lock.renew`）。过期了的（station 一律拒绝）在 core 里按不在锁里算（`views/lock.ts` `live`）：显示等待页、可以面对面重新批准，station 拒绝时说「尚未获准」并给安全码，不再说「station 尚未收到批准，即将重试」（以前因为锁里还有它，既没有等待页，受信任设备也不肯再批准它）。
 - 「成员和设备」要让人认得出哪台是哪台（2026-10-27 用户：「根本看不出哪个是哪个」）：每台的名字是它最近一次向 cloud 领凭证时自己报的（cloud `devices` 的 `label`；桌面写电脑名、手机写系统设置里的名字，宿主经 `client.device` 的 `machine` 告诉 core；网页版只有浏览器和系统），没报过才用批准时记进锁里的；下面一行先说此设备或什么时候用过（`last_seen`：领凭证最多一天一次、在连 station 的路上，所以按天说；31 天里没领过的说超过一个月未使用），不再写客户端/网页版（图标和名字已经说了）。每人的设备按 app 分组（2026-10-27 用户：「应该先显示设备名而不是网页版啥的，不同版直接分组」）：组名是 app（still.fail 桌面版、still.fail 网页版、youdid.wtf Android…，用中文还是英文起的名都算同一个 app，按看的人的语言说），行名只写哪台机器（电脑名、手机名、浏览器 · 系统）；名字是 core 拼的「{品牌} {app} · {机器}」，`prefs.ts` 的 `deviceParts` 照同一套模板拆回去，拆不出 app 的（批准时起的名、没报过名的旧设备）归「其他」。只有一行地方说一台设备时（移除的确认、待批准的请求、开启时的清单）先说机器再说 app。含此设备的组在最前，其余组按组里最近一次使用排；组内此设备在最前，其余按最近使用排。owner、admin 看得到所有人的使用时间，成员只看自己的（cloud 只给成员他自己的设备）。名字和时间来自 cloud，只用来认设备，谁在锁里仍只看签过的条目。
 - 此设备是受信任设备时可以移除别的设备（`lock.removeDevice`，owner、admin 任何人的，成员自己的；先确认，说明移除后它要重新批准才能用）。窄排法下「续期」「移除」在名字和说明下面单独一行，不跟名字并排：名字是认设备用的，不能被按钮挤得截断。
 

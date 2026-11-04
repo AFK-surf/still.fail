@@ -71,6 +71,7 @@ export class TailcatLink {
   #child: ChildProcess | null = null;
   #closePort: (() => Promise<void>) | null = null;
   #again: (() => void) | null = null;
+  #closed = false;
   /// Bumped by each start and stop: a start overtaken by another leaves what it made alone.
   #run = 0;
 
@@ -84,9 +85,10 @@ export class TailcatLink {
     return { on: this.#on, state: this.#state, address: this.#state === "running" ? this.#address : null, port: this.#state === "running" ? this.#port : null, error: this.#error };
   }
 
-  /// Started as the station starts, when an admin left it on.
+  /// Started once the process before this one is gone, when an admin left it on: until then it holds the port, and a
+  /// link started beside it would move to the next one, away from the line the admin gave out.
   start(): void {
-    if (this.#on) void this.#begin();
+    if (this.#on && !this.#closed && this.#state === "off") void this.#begin();
   }
 
   /// Turned on or off by an admin; kept for the station's next start.
@@ -101,6 +103,7 @@ export class TailcatLink {
   }
 
   async close(): Promise<void> {
+    this.#closed = true;
     await this.#end("off");
   }
 

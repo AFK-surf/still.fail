@@ -12,6 +12,7 @@ import type { ChatMessage, ChatSurface, InboundFile, InboundMessage, ThreadRef }
 import { type HubConfig, hubConfig } from "../src/sessions/config.ts";
 import { type ColdStorage, Hub } from "../src/sessions/hub.ts";
 import { InternalChat } from "../src/sessions/internal.ts";
+import { answerFiles } from "../src/slack/surface.ts";
 import { chatTools } from "../src/tools/chat.ts";
 import { type Attachment, Store } from "../src/store/store.ts";
 import { letterMessage } from "../src/store/rows.ts";
@@ -76,6 +77,9 @@ export class FakeChat implements ChatSurface {
     const bytes = this.shared.get(file.id);
     if (bytes === undefined) throw new Error("missing_scope");
     return new TextEncoder().encode(bytes);
+  }
+  answerFiles(answer: Json) {
+    return answerFiles(answer);
   }
   async userOf(email: string) {
     return this.people.get(email.trim().toLowerCase()) ?? null;

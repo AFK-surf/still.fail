@@ -25,7 +25,7 @@ import { MAX_RELAYS, parseRelays, relays, relayUrls, sameUrl, waysOf } from "./r
 import type { Part } from "./changelog";
 import type { FeedbackInput } from "./feedback";
 import type { AccountEvent, AddedView, Admission, AdminFeedback, AdminPending, AdminUser, AdminWorkspace, DeviceView, FeedbackStatus, InvitationView, InviteCodeView, LockHead, LockRequestView, MeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
-import { apply, asEntry, entryHash, genesis, shortCode, type Entry, type LockEntry, type LockState } from "./lock";
+import { apply, asEntry, entryHash, extendLock, genesis, LockAppendRefused, shortCode, type Entry, type LockEntry, type LockState } from "./lock";
 export type { Role };
 
 export const ROLES: readonly Role[] = ["owner", "admin", "member"];
@@ -118,6 +118,7 @@ export class Directory extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS migrations (name TEXT PRIMARY KEY, at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS lock_entries (workspace TEXT NOT NULL, seq INTEGER NOT NULL, hash TEXT NOT NULL, entry TEXT NOT NULL, PRIMARY KEY (workspace, seq));
       CREATE TABLE IF NOT EXISTS devices (workspace TEXT NOT NULL, sub TEXT NOT NULL, device TEXT NOT NULL, base TEXT, kind TEXT, label TEXT, first_seen INTEGER NOT NULL, last_seen INTEGER NOT NULL, PRIMARY KEY (workspace, sub, device));
+      CREATE TABLE IF NOT EXISTS lock_turned_off (workspace TEXT NOT NULL, genesis TEXT NOT NULL, seq INTEGER NOT NULL, entry TEXT NOT NULL, PRIMARY KEY (workspace, genesis, seq));
       CREATE TABLE IF NOT EXISTS lock_requests (workspace TEXT NOT NULL, base TEXT NOT NULL, sub TEXT NOT NULL, request TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (workspace, base));
     `);
     // users had neither column before invite codes, nor beta (1: let into the test channel) before it, nor blocked (1:
@@ -560,6 +561,11 @@ export class Directory extends DurableObject<Env> {
     return last !== undefined && (JSON.parse(last.entry as string) as LockEntry).kind !== "disable";
   }
 
+  /** The entries after `after` of a chain of the workspace's turned off (its genesis' hash), none if none is kept. */
+  #lockTurnedOff(workspace: string, genesis: string, after: number): unknown[] {
+    return this.#rows("SELECT entry FROM lock_turned_off WHERE workspace = ? AND genesis = ? AND seq > ? ORDER BY seq", workspace, genesis, after).map((r) => JSON.parse(r.entry as string));
+  }
+
   #lockAfter(workspace: string, after: number): unknown[] {
     this.#lockChecked(workspace);
     return this.#rows("SELECT entry FROM lock_entries WHERE workspace = ? AND seq > ? ORDER BY seq", workspace, after).map((r) => JSON.parse(r.entry as string));
@@ -580,39 +586,26 @@ export class Directory extends DurableObject<Env> {
   async #appendLock(workspace: string, raw: unknown): Promise<LockHead | null> {
     const entries = (Array.isArray(raw) ? raw : []).map(asEntry);
     if (entries.length === 0 || entries.length > 256 || entries.some((e) => e === null || e.ws !== workspace)) fail(400, "invalid_lock_entries");
-    // Hashed before anything is read: nothing else runs on this object between the reads and the writes below (no
-    // await between them), so they are one step. What is refused throws before anything is written.
-    const hashed = await Promise.all((entries as LockEntry[]).map(async (e) => ({ e, hash: await entryHash(e) })));
-    let head = this.#lockHead(workspace);
-    let lastKind = head ? (JSON.parse(this.#one("SELECT entry FROM lock_entries WHERE workspace = ? AND seq = ?", workspace, head.seq)!.entry as string) as LockEntry).kind : null;
-    let restart = false;
-    const adding: { e: LockEntry; hash: string }[] = [];
-    for (const { e, hash } of hashed) {
-      if (e.kind === "genesis" && e.seq === 0 && e.prev === null) {
-        if (head?.genesis === hash) continue;
-        if (head && lastKind !== "disable") fail(409, "lock_exists");
-        restart = true;
-        adding.length = 0;
-      } else if (head && e.seq <= head.seq) {
-        const had = adding.find((a) => a.e.seq === e.seq)?.hash ?? (restart ? undefined : (this.#one("SELECT hash FROM lock_entries WHERE workspace = ? AND seq = ?", workspace, e.seq)?.hash as string | undefined));
-        if (had !== hash) fail(409, "lock_fork");
-        continue;
-      } else if (!head || e.seq !== head.seq + 1 || e.prev !== head.hash) fail(409, "lock_does_not_follow");
-      adding.push({ e, hash });
-      head = { seq: e.seq, hash, genesis: e.seq === 0 ? hash : head!.genesis };
-      lastKind = e.kind;
+    // Nothing else runs on this object between the reads and the writes below (no await between them), so they are
+    // one step. What is refused throws before anything is written.
+    this.#lockChecked(workspace);
+    const kept = this.#rows("SELECT entry FROM lock_entries WHERE workspace = ? ORDER BY seq", workspace).map((r) => JSON.parse(r.entry as string) as LockEntry);
+    let plan: ReturnType<typeof extendLock>;
+    try {
+      plan = extendLock(kept, entries as LockEntry[], nowSeconds());
+    } catch (e) {
+      if (e instanceof LockAppendRefused) fail(e.status, e.code);
+      throw e;
     }
+    const { restart, adding } = plan!;
     if (adding.length > 0) {
-      let state = restart ? null : this.#lockState(workspace);
-      for (const { e } of adding) {
-        try {
-          state = state === null ? genesis(e as Entry) : apply(state, e as Entry, nowSeconds());
-        } catch {
-          fail(409, "lock_refused");
-        }
-      }
       this.ctx.storage.transactionSync(() => {
-        if (restart) this.#run("DELETE FROM lock_entries WHERE workspace = ?", workspace);
+        if (restart) {
+          // A chain turned off, kept for the stations that missed its end (lockTurnedOff).
+          const genesisHash = this.#one("SELECT hash FROM lock_entries WHERE workspace = ? AND seq = 0", workspace)?.hash;
+          if (typeof genesisHash === "string") this.#run("INSERT OR IGNORE INTO lock_turned_off (workspace, genesis, seq, entry) SELECT workspace, ?, seq, entry FROM lock_entries WHERE workspace = ?", genesisHash, workspace);
+          this.#run("DELETE FROM lock_entries WHERE workspace = ?", workspace);
+        }
         for (const { e, hash } of adding) this.#run("INSERT INTO lock_entries (workspace, seq, hash, entry) VALUES (?, ?, ?, ?)", workspace, e.seq, hash, JSON.stringify(e));
       });
       this.#changed(workspace, false);
@@ -1568,7 +1561,7 @@ export class Directory extends DurableObject<Env> {
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const attachment = ws.deserializeAttachment() as Attachment;
     if (typeof message !== "string" || !("station" in attachment)) return;
-    let body: { type?: unknown; after?: unknown; entries?: unknown; workspace?: unknown };
+    let body: { type?: unknown; after?: unknown; entries?: unknown; workspace?: unknown; genesis?: unknown };
     try {
       body = JSON.parse(message);
     } catch {
@@ -1579,7 +1572,11 @@ export class Directory extends DurableObject<Env> {
     const workspace = named === null ? all[0] : all.includes(named) ? named : undefined;
     if (!workspace) return;
     if (body.type === "lock.get") {
-      ws.send(JSON.stringify({ type: "lock", entries: this.#lockAfter(workspace, Number.isSafeInteger(body.after) ? (body.after as number) : -1), ...(named === null ? {} : { workspace }) }));
+      const after = Number.isSafeInteger(body.after) ? (body.after as number) : -1;
+      // A station that holds a chain turned off since (it was offline then, and the lock was turned on again after):
+      // the rest of that chain, its `disable` with it, so it lets that chain go by itself (it checks each entry).
+      const off = typeof body.genesis === "string" ? this.#lockTurnedOff(workspace, body.genesis, after) : [];
+      ws.send(JSON.stringify({ type: "lock", entries: off.length > 0 ? off : this.#lockAfter(workspace, after), ...(named === null ? {} : { workspace }) }));
     } else if (body.type === "lock.put") {
       // Refused when it does not follow: the station hears the cloud's head in the state frame and asks again.
       await this.#appendLock(workspace, body.entries).catch(() => this.#sendState(attachment.station));

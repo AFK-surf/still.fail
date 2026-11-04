@@ -24,7 +24,13 @@ test "desk: a chat switched to shows once its view has come, the chat before it 
     leave: fn(name, params) { asked.remove(key(name, params)) },
   }
   let chat = fn(session : String) -> ChatRef { { station: "ws1/st1", session, title: "", station_name: "Willow" } }
-  let read = fn(session : String) { readings.contains("ws1/st1\u{1}" + session) }
+  // The retained list owns Reading even while its view is still on its way. Read what is shown with a view,
+  // rather than the presence of the bookkeeping that its loading state needs too.
+  let read = fn(session : String) {
+    readings.get("ws1/st1\u{1}" + session).map_or(false, fn(rd) {
+      rd.shown_by.map_or(false, fn(shown) { shown() }) && view_of_chat(src, chat(session)).0 is Some(_)
+    })
+  }
   open_chat(chat("s-c1"))
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)

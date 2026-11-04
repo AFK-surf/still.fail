@@ -4,8 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { constants } from "node:sqlite";
 import { test } from "node:test";
-import { makeStore } from "../src/read/store.ts";
-import { usage } from "../src/read/usage.ts";
 import * as compact from "../src/store/usage-compact.ts";
 import { Store } from "../src/store/store.ts";
 import type { UsageCall, UsageFor } from "../src/store/usage.ts";
@@ -109,65 +107,6 @@ test("bounded totals follow edits and an interrupted workspace move", () => {
     store.close();
     rmSync(dir, { recursive: true, force: true });
   }
-});
-
-test("a year's usage view reads only its requested days but keeps the all-time total", () => {
-  const store = Store.open(":memory:");
-  try {
-    for (const [key, ws] of [["a", "A"], ["b", "B"]] as const) {
-      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, ws,
-        createdAt: 0, lastActiveAt: 0 });
-    }
-    compact.installCompactUsage(store.db, () => store.now());
-    retireUsageIndexes(store.db);
-    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
-    const call = (id: string, at: number, input: number) => ({ id, at, model: "m", subagent: true, fast: false,
-      input, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null });
-    store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [
-      [call("old", -86_400_000, 10), owner], [call("new", 60_000, 19), owner], [call("future", 86_400_000, 6), owner],
-    ]);
-    store.recordUsage("/b", { session: "b", offset: 1, model: "m" }, "claude", [[call("other", 60_000, 999), owner]]);
-    const pending = usage(makeStore(store.db, "."), "en", 0n, 86_400_000n, 0n, false, a, true,
-      { historyRange: { from: 0n, to: 86_400_000n } });
-    assert.equal(pending.historyPending, true, "a page missing an unprocessed total knows to retry it");
-    account(store);
-    const limited = compact.compactHistory(store.db, 0n, a, false, { from: 0n, to: 1_440n });
-    assert.deepEqual(limited?.map((d) => [d.day, d.tokens]), [["1970-01-01", 20]]);
-    assert.deepEqual(compact.compactTotal(store.db, a, 1_440n), { calls: 2, tokens: 31 });
-    assert.deepEqual(compact.compactTotal(store.db, b, 1_440n), { calls: 1, tokens: 1_000 });
-    assert.deepEqual(compact.compactTotal(store.db, a, 0n), { calls: 1, tokens: 11 });
-    assert.deepEqual(compact.compactTotal(store.db, a, -1_440n), { calls: 0, tokens: 0 });
-    const answer = usage(makeStore(store.db, "."), "en", 0n, 86_400_000n, 0n, false, a, true,
-      { historyRange: { from: 0n, to: 86_400_000n } });
-    assert.deepEqual(answer.history.days.map((d: { day: string; tokens: number }) => [d.day, d.tokens]), [["1970-01-01", 20]]);
-    assert.equal(answer.history.tokens, 31, "the older day remains in the total, while tomorrow's call is not yet included");
-    assert.equal(answer.history.beforeDay, "1970-01-02");
-    assert.equal(answer.historyPending, undefined);
-    const oldClient = usage(makeStore(store.db, "."), "en", 0n, 86_400_000n, 0n, false, a, true);
-    assert.deepEqual(oldClient.history.days.map((d: { day: string }) => d.day), ["1969-12-31", "1970-01-01", "1970-01-02"]);
-    assert.equal(oldClient.history.tokens, undefined, "older clients keep the full history contract");
-  } finally { store.close(); }
-});
-
-test("bounded requests preserve complete older daily summaries without rebuilding them", () => {
-  const store = Store.open(":memory:");
-  try {
-    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A",
-      createdAt: 0, lastActiveAt: 0 });
-    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
-    const call = { id: "old", at: 0, model: "m", subagent: true, fast: false, input: 9, cacheRead: 0,
-      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
-    store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [[call, owner]]);
-    compact.installCompactUsage(store.db, () => store.now());
-    retireUsageIndexes(store.db);
-    store.recordUsage("/a", { session: "a", offset: 2, model: "m" }, "claude", [[{ ...call, id: "new", at: 86_400_000 }, owner]]);
-    account(store);
-    const answer = usage(makeStore(store.db, "."), "en", 0n, 172_800_000n, 0n, false, a, true,
-      { historyRange: { from: 86_400_000n, to: 172_800_000n } });
-    assert.deepEqual(answer.history.days.map((d: { day: string; tokens: number }) => [d.day, d.tokens]),
-      [["1970-01-01", 10], ["1970-01-02", 10]]);
-    assert.equal(answer.history.tokens, undefined, "the old complete summary remains in the legacy full-history form");
-  } finally { store.close(); }
 });
 
 for (const recursive of [false, true]) test(`compact totals follow changes and workspace moves (recursive triggers ${recursive})`, () => {

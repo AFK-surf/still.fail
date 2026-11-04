@@ -347,3 +347,47 @@ let happened_at : Double = 1050.0
 
 ///|
 let handed_on_at : Double = 1080.0
+
+///|
+test "a bar over the stage: the fitted picture clear of it, in the middle of what is left; zoomed in, its top comes to the bar's foot" {
+  let z = @kit.Zoom::new()
+  z.boxed(1400.0, 820.0)
+  z.natural(880.0, 1280.0)
+  // (no bar: 32 round it)
+  assert_eq(z.rect().unwrap().1, 32.0)
+  z.under_bars(45.0, 0.0)
+  // (16 past the bar, 32 from the foot)
+  let (_, y, _, h) = z.rect().unwrap()
+  assert_eq(y, 61.0)
+  assert_eq(y + h, 788.0)
+  // (panned as far down as it goes, its top no higher than the bar's foot needs; as far up, its foot at the stage's)
+  z.zoom_to(2.0, 700.0, 410.0, false)
+  z.pan(0.0, 10000.0)
+  assert_eq(z.rect().unwrap().1, 45.0)
+  z.pan(0.0, -10000.0)
+  let (_, y, _, h) = z.rect().unwrap()
+  assert_eq(y + h, 820.0)
+  // (a picture short of the room: in the middle of the room between the margins, zoomed or not)
+  z.reset()
+  z.natural(100.0, 100.0)
+  z.fit_now()
+  let (_, y, _, h) = z.rect().unwrap()
+  assert_eq(y - 61.0, 788.0 - (y + h))
+}
+
+///|
+test "a bar over the stage's foot too: the fitted picture between them; zoomed in, its foot comes to the lower bar's top" {
+  let z = @kit.Zoom::new()
+  z.boxed(1400.0, 820.0)
+  z.natural(880.0, 1280.0)
+  z.under_bars(45.0, 60.0)
+  let (_, y, _, h) = z.rect().unwrap()
+  assert_eq(y, 61.0)
+  assert_eq(y + h, 744.0)
+  z.zoom_to(2.0, 700.0, 410.0, false)
+  z.pan(0.0, -10000.0)
+  let (_, y, _, h) = z.rect().unwrap()
+  assert_eq(y + h, 760.0)
+  z.pan(0.0, 10000.0)
+  assert_eq(z.rect().unwrap().1, 45.0)
+}

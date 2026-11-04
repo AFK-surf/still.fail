@@ -9,18 +9,17 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { test } from "node:test";
-import { ed25519 } from "@noble/curves/ed25519.js";
-import { Deferred, Effect, Queue } from "effect";
+import { Deferred, Effect } from "effect";
 import { HostError } from "../src/error.ts";
 import { PAIR_ALPN, PAIR_TRIES, pairCode, pairSession, pakeKeys, pakeStart, sameMac, typedCode } from "../src/pair.ts";
-import { base64url as toB64url, utf8 } from "../src/util.ts";
+import { utf8 } from "../src/util.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { Bridge, BridgeHost } from "../src/hosts/bridge.ts";
 import { t } from "../src/i18n.ts";
 import { pairs } from "../src/views/lock.ts";
-import { type Duplex, keep, PAIR_GRACE_MS, PAIR_WAIT_MS, served, serveTrusted, streamDuplex, trying, tryOne } from "../src/views/pair.ts";
+import { keep, PAIR_GRACE_MS, PAIR_WAIT_MS, served, serveTrusted, streamDuplex, trying, tryOne } from "../src/views/pair.ts";
 import { run as runEffect } from "./run.ts";
-import { ME, PHONE, genesis, rig } from "./lock-rig.ts";
+import { ME, PHONE, genesis, grant, pipe, rig } from "./lock-rig.ts";
 
 const random = (b: Uint8Array) => {
   for (let i = 0; i < b.length; i++) b[i] = (Math.random() * 256) | 0;
@@ -43,34 +42,11 @@ test("the exchange: the same code and the same two ends make the same key; anoth
   assert.equal(pakeKeys(n, new Uint8Array(32), "new"), null, "the identity is no share");
 });
 
-/// The cloud's grant key, as the lock names it, and credentials it signs.
-function grant() {
-  const seed = new Uint8Array(32).fill(7);
-  const jwk = { kty: "OKP", crv: "Ed25519", kid: "k1", x: toB64url(ed25519.getPublicKey(seed)) };
-  const credential = (ws: string, device: string, sub: string, exp = 4102444800) => {
-    const head = toB64url(utf8(JSON.stringify({ alg: "EdDSA", typ: "stillfail-member+jwt", kid: "k1" })));
-    const body = toB64url(utf8(JSON.stringify({ iss: "stillfail-cloud", sub, email: `${sub}@x.com`, name: sub === "s2" ? "李二" : sub, ws, role: "member", device, exp })));
-    return `${head}.${body}.${toB64url(ed25519.sign(utf8(`${head}.${body}`), seed))}`;
-  };
-  return { keys: { keys: [jwk] }, credential };
-}
-
-/// Two ends of a stream of lines.
-async function pipe(): Promise<[Duplex, Duplex]> {
-  const a = await Effect.runPromise(Queue.unbounded<unknown>());
-  const b = await Effect.runPromise(Queue.unbounded<unknown>());
-  const end = (mine: Queue.Queue<unknown>, theirs: Queue.Queue<unknown>): Duplex => ({
-    send: (m) => Effect.sync(() => void Queue.offerUnsafe(theirs, JSON.parse(JSON.stringify(m)))),
-    next: () => Queue.take(mine) as Effect.Effect<any>,
-    close: () => void Queue.offerUnsafe(theirs, null),
-  });
-  return [end(a, b), end(b, a)];
-}
-
-/// `inLock`: the phone in the lock already (an app of s2's, as the genesis put it: its sign key, if any).
-async function met(inLock?: { sign_key?: string }) {
+/// `inLock`: the phone in the lock already (an app of s2's, as the genesis put it: its sign key, if any); `others`:
+/// more devices the genesis puts in.
+async function met(inLock?: { sign_key?: string }, others: Record<string, unknown>[] = []) {
   const g = grant();
-  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, ME, inLock ? [{ id: PHONE, sub: "s2", kind: "app", label: "Pixel 8", ...inLock }] : []) }));
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, ME, [...(inLock ? [{ id: PHONE, sub: "s2", kind: "app", label: "Pixel 8", ...inLock }] : []), ...others]) }));
   await r.watch({ topic: "lock", workspace: "ws" });
   const prompts = await r.watch({ topic: "lockPrompts" });
   const [trusted, phone] = await pipe();
@@ -102,6 +78,18 @@ test("a new device met face to face: the code the trusted device shows, typed ri
   const entry = m.cloud.chains.get("ws")!.at(-1)!;
   assert.deepEqual(entry.body, { id: PHONE, sub: "s2", kind: "app", label: "Pixel 8", sign_key: "ed25519:" + "11".repeat(32) });
   assert.deepEqual((await m.prompts()).pairing, [], "no longer shown");
+});
+
+test("the owner approves a member's first device that signs, not a later one: that one the member approves from a device of their own", async () => {
+  // One the owner (or an admin) puts in for a person who has one of their own already would be no one's, signing
+  // nothing (lock-check.ts Device `own`): this device offers no code for it.
+  const m = await met(undefined, [{ id: "ee".repeat(32), sub: "s2", kind: "app", label: "laptop", sign_key: "ed25519:" + "22".repeat(32) }]);
+  assert.deepEqual(await m.hello(), { ok: { t: "no", error: "not_here" } });
+  assert.deepEqual((await m.prompts()).pairing, []);
+  assert.deepEqual(m.cloud.posted, []);
+  // Their web page only (it signs nothing): the first that signs is still the owner's to approve.
+  const n = await met(undefined, [{ id: "ee".repeat(32), sub: "s2", kind: "web", label: "Chrome", exp: 1000 + 86400 }]);
+  assert.deepEqual(await n.hello(), { ok: { t: "code", workspaces: ["ws"] } });
 });
 
 test("typed wrong: tries left said, the right one still signs it in; PAIR_TRIES wrong ones, nothing", async () => {
@@ -285,6 +273,14 @@ test("an app in the lock that does not sign (let in before it kept a key) is mad
   const theirs = await met({});
   assert.deepEqual(await theirs.hello(theirs.g.credential("ws", PHONE, "s1")), { ok: { t: "no", error: "not_here" } });
   assert.deepEqual([same.cloud.posted, theirs.cloud.posted], [[], []]);
+});
+
+test("a web page whose approval ran out is approved again face to face, as a new one is", async () => {
+  const m = await met({ kind: "web", exp: 2000 } as never);
+  assert.deepEqual(await m.hello(m.g.credential("ws", PHONE, "s2")), { ok: { t: "code", workspaces: ["ws"] } });
+  const done = await m.prove((await m.prompts()).pairing[0].code);
+  assert.ok("ok" in done && "approved" in done.ok, JSON.stringify(done));
+  assert.deepEqual(m.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "device", PHONE]]);
 });
 
 test("a new device that dialled someone else cannot prove even the right code to the trusted one", async () => {

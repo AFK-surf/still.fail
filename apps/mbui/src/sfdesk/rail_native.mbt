@@ -197,8 +197,10 @@ fn bar_action(
 ///|
 /// A chat's actions in the system's bars, each its own button there being room (the user, 2026-10-28): its "…" (a
 /// menu of the system's own: `rows` its items, `more` what opens with none of them), its info, its side panel's
-/// switch (opening the first agent's history, or closing all its tabs), its station's screens where it has them
-/// (`screen`: what opens them, with a dot while an agent drives one; the user 2026-11-03, 共享屏幕没放到侧边栏),
+/// switch (opening the first agent's history, or closing all its tabs), its services and jobs where it has them
+/// (`jobs`: what opens them, with a dot while one is in trouble; the user 2026-11-04, 地球图标收进「…」), its station's
+/// screens where it has them (`screen`: what opens them, with a dot while an agent drives one; the user 2026-11-03,
+/// 共享屏幕没放到侧边栏),
 /// archiving it where it may be.
 /// In place of its buttons (who is in it and where it runs stay by its
 /// title, as the desktop's); false where there are no system's bars (the page draws its own).
@@ -209,18 +211,21 @@ fn bar_chat(
   info : () -> Unit,
   rows : Array[@sf.MenuItem?],
   more : () -> Unit,
+  jobs : (() -> Unit, Bool)?,
   screen : (() -> Unit, Bool)?,
   archive : (() -> Unit)?,
 ) -> Bool {
   if !@sf.native_on() {
     return false
   }
-  bar_chat_of.val = Some((src, r))
-  // (what was kept of the chat before it while it was read: its own in their place, none of the other's left)
-  if bar_chat_carried.length() > 0 {
-    nav_page.retain(fn(p) { !bar_chat_carried.contains(p.0.id) })
-    bar_chat_carried.clear()
+  if drawn_page.val is Some(p) && p != app.nav.top() {
+    return true
   }
+  bar_chat_of.val = Some((src, r))
+  // This is the chat's complete set, including absent optional actions. The previous view may have handed its
+  // actions itself while kept on screen, rather than through bar_chat_waiting; none of those may remain either.
+  nav_page.retain(fn(p) { !p.0.id.has_prefix("page/chat/") })
+  bar_chat_carried.clear()
   bar_action("chat/more", @sf.t("common.more"), "more", more, rows?=if rows.iter().any(fn(i) { i is Some(_) }) { Some(rows) } else { None }) |> ignore
   bar_action("chat/info", @sf.t("web-pages.chat.info"), "info", info) |> ignore
   let (tabs, _) = side_now(src, r)
@@ -236,6 +241,10 @@ fn bar_chat(
         side_change(src, r, "open", Some(key))
       }
     }) |> ignore
+  }
+  match jobs {
+    Some((act, alarm)) => bar_action("chat/jobs", @sf.t("web-pages.chat.services"), "web", act, dot=alarm) |> ignore
+    None => ()
   }
   match screen {
     Some((act, driven)) => bar_action("chat/screen", @sf.t("web-pages.chat.screen"), "monitor", act, dot=driven) |> ignore
@@ -291,6 +300,10 @@ let bar_chat_last : Array[@hostapi.NavItem] = []
 let history_item : String = "chat/history"
 
 ///|
+/// The open side panel's close in the short column (histories_ticked).
+let side_close_item : String = "side/close"
+
+///|
 /// The chat whose actions bar_chat handed (kept with it while the page's part is kept), None as another page comes.
 // kept across runs: said by bar_chat, put back with the page's actions (nav_frame)
 let bar_chat_of : Ref[(Source, ChatRef)?] = Ref(None)
@@ -313,6 +326,22 @@ fn histories_ticked() -> Unit {
       nav_page[i] = ({ ..item, icon, title }, act)
     }
   }
+  // (the short column has no switch of its own: the open panel's close there in place of the panel's own (side_panel).
+  // Handed last, each frame: short of room the system keeps the last of them whatever its priority, and the page handing
+  // its own again puts them after it: the user, 2026-11-04)
+  let key = "page/" + side_close_item
+  nav_page.retain(fn(p) { p.0.id != key })
+  if column_short.get() && tabs.length() > 0 {
+    let item : @hostapi.NavItem = {
+      id: key,
+      title: @sf.t("web-pages.chat.closePanel"),
+      icon: @sf.icon_path("close"),
+      dot: false,
+      prominent: false,
+      menu: [],
+    }
+    nav_page.push((item, fn() { side_change(src, r, "clear", None) }))
+  }
 }
 
 ///|
@@ -326,6 +355,22 @@ fn bar_anchor(id : Int, side : @ui.Side, along : @ui.Along) -> (Int, @ui.Side, @
     (native_mark.val, Left, Start)
   } else {
     (native_mark.val, Bottom, End)
+  }
+}
+
+///|
+/// What opens from one of the page's actions as a menu of the page's (a station's screens): as bar_anchor's. A menu goes
+/// under what opened it, so beside the column down the side it opens from the point left of the item, ending there,
+/// not under the item and over the column (the user, 2026-11-04); `id` where the page has its own.
+fn bar_menu_from(c : @ui.Ctx, id : Int) -> (@sf.Beside, @ui.Along) {
+  if !@sf.native_on() || native_mark.val == 0 {
+    return (Of(id), End)
+  }
+  if @sf.native_side() {
+    let (x, y, _) = native_mark_at(c)
+    (@sf.at_point(x - @sf.panel_offset, y), End)
+  } else {
+    (Of(native_mark.val), End)
   }
 }
 
@@ -497,17 +542,24 @@ fn rail_native_marks(c : @ui.Ctx) -> Unit {
     // (at the bell where the system says it is; else where the column has it: moved there as an item is chosen,
     // @sfbase.nav_tapped_said)
     @sfbase.nav_tapped_said.get() |> ignore
-    let at = @hostapi.nav_tapped_at
-    let (tx, ty, th) = if at[2] > 0.0 {
-      (at[0], at[1], at[3])
-    } else {
-      (dmax(0.0, c.width - @sf.native_clear() - 1.0), dmax(0.0, c.height - native_bell_up), 40.0)
-    }
+    let (tx, ty, th) = native_mark_at(c)
     let id = c.id("rail/attention")
     native_mark.val = id
     c.box(style=@ui.style(w=Fixed(native_mark_w), h=Fixed(th)), tx~, ty~, id~, fn() {  }) |> ignore
   })
   |> ignore
+}
+
+///|
+/// Where the mark is: at the item last chosen, else where the column has the bell (its x, y and height).
+fn native_mark_at(c : @ui.Ctx) -> (Double, Double, Double) {
+  let at = @hostapi.nav_tapped_at
+  if at[2] > 0.0 {
+    (at[0], at[1], at[3])
+  } else {
+    let (ww, wh) = c.window_size()
+    (dmax(0.0, ww - @sf.native_clear() - 1.0), dmax(0.0, wh - native_bell_up), 40.0)
+  }
 }
 
 ///|
@@ -563,7 +615,7 @@ fn rail_nav(src : Source, w : Workspace, _all : Array[Workspace], card : Array[@
       { items: card, foot: false, foldable: true },
       { items: tabs, foot: false, foldable: false },
       {
-        items: [{ ..item("new", @sf.t("web-main.sidebar.newChat"), "compose"), prominent: true }],
+        items: [{ ..item("new", @sf.t("web-main.sidebar.newChat"), "plus"), prominent: true }],
         foot: true,
         foldable: false,
       },

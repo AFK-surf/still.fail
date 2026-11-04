@@ -15,6 +15,7 @@ import { DshDriver } from "../agents/dsh.ts";
 import { GrokDriver } from "../agents/grok.ts";
 import { CursorDriver } from "../agents/cursor.ts";
 import { HermesDriver } from "../agents/hermes.ts";
+import { AgyDriver } from "../agents/agy.ts";
 import { DevinDriver } from "../agents/devin.ts";
 import { Jobs, notifyEndpoint, screenEndpoint } from "../jobs/jobs.ts";
 import { liveMemory } from "../jobs/memory.ts";
@@ -67,7 +68,7 @@ import { buildWorkspaceActivity } from "./workspace-activity-builder.ts";
 import { PostBlockBuilder } from "./post-block-builder.ts";
 import { roomOf } from "./footprint.ts";
 import { InternalChat } from "./internal.ts";
-import { autoArchive, expireArchived, relieveArchived } from "./lifecycle.ts";
+import { expireArchived, relieveArchived, startAutoArchiveTimer } from "./lifecycle.ts";
 import { fromPeer, sender } from "./messages.ts";
 import { CREATE, NOTICE, createForPeer, noticeForPeer } from "./opened.ts";
 import { chatsTouched, forPeer, READ } from "./others.ts";
@@ -187,6 +188,7 @@ export const AgentsLive = (control: Control) =>
       // subscription's is (agents/sandbox.ts).
       const lentToSandbox = (p: any) => !borrowed(p) && p?.access?.kind === "subscription" && sandboxed(data);
       const hermes = new HermesDriver({ data });
+      const agy = new AgyDriver({ data });
       // What the station before this one left, taken up (`start`): until then the codex app-servers its runners keep are
       // the sessions' that ran on them (agents/codex.ts `takenUp`).
       const takenUp = Promise.withResolvers<void>();
@@ -233,6 +235,7 @@ export const AgentsLive = (control: Control) =>
           new CursorDriver({ data }),
           new DevinDriver({ data }),
           hermes,
+          agy,
         ],
         mcpUrl: () => door?.url ?? "",
         internal: new InternalChat(),
@@ -481,7 +484,7 @@ export const AgentsLive = (control: Control) =>
         return cloud.memberships().flatMap((m) => m.peers).find((x) => x?.id === host)?.name ?? host ?? null;
       };
       const accounts: Accounts = makeAccounts({
-        data, store, config, hub, reviewUndecided: () => startReview(hub), codex: () => codex as any, hermes: () => hermes, following: () => events.inUse() || hub.anyRunning(), checkOnStart: true,
+        data, store, config, hub, reviewUndecided: () => startReview(hub), codex: () => codex as any, hermes: () => hermes, agy: () => agy, following: () => events.inUse() || hub.anyRunning(), checkOnStart: true,
         workspaces: () => hub.workspaces(),
         shared: { status: (p) => sharing!.status(p), lendCodex: (p, rejected) => sharing!.lendCodex(p, rejected), quotaReset: (p, key) => sharing!.quotaReset(p.id, key), loginUpdated: () => { void sharing?.reconcile(); }, view: (p) => sharing?.profileView(p) ?? null, hostName },
       });
@@ -515,11 +518,15 @@ export const AgentsLive = (control: Control) =>
         state: async (key) => (JSON.parse(await readers.read("transcriptState", { key }, "zh")) as { states: TailState[] | null }).states,
         page: async (key, before, limit, brief) => JSON.parse(await readers.read("timeline", { key, before: String(before), limit: String(limit), lang: "zh", ...(brief ? { brief: "1" } : {}) }, "zh")),
       };
+      // Not asked of them before the process before has handed over: what it carries says where each reading stands.
+      hub.live.handover = previous;
       // Where each checklist was read to, for the next process to read on from (not back, at each update).
       parts.carry("live.plans", () => hub.live.carriedPlans(), (what) => hub.live.takePlans(what));
       // And where each transcript's reading stood, for it to read on from there (not ask the readers, at each update).
       parts.carry("live.tails", () => hub.live.carriedTails(), (what) => hub.live.takeTails(what));
       hub.threadList = async () => JSON.parse(await readers.read("threadList", {}, "zh"));
+      hub.recentChatList = async (ws, home, limit) => JSON.parse(await readers.read("recentChatList", { ws, home, limit }, "zh"));
+      hub.searchChatList = async (ws, home, limit, query) => JSON.parse(await readers.read("searchChatList", { ws, home, limit, query }, "zh"));
       hub.latestMessages = async (thread, limit) => JSON.parse(await readers.read("latestMessages", { thread, limit }, "zh"));
       hub.followRunning();
       // The readers say what runs, and which chats clients made: the hub's.
@@ -690,16 +697,7 @@ export const AgentsLive = (control: Control) =>
 
       // Chats idle long enough go to the archive: looked at when the next one comes due, and every ten minutes for what
       // was idle but not done (a job up, unread, at a block) and is done since, or the setting changed.
-      const archiving = () => {
-        let next: number | null = null;
-        try {
-          next = autoArchive(hub, hub.now());
-        } catch (error) {
-          log.warn("hub", "auto-archiving failed", { error: (error as Error).message });
-        }
-        time.after(Math.min(600_000, next === null ? Infinity : next - hub.now()), archiving);
-      };
-      time.after(60_000, archiving);
+      const stopArchiving = startAutoArchiveTimer(hub, time, readers);
 
       // Chats archived long enough keep only their history and the files sent in them: looked at when the next one
       // comes due, and every hour for the setting changed.
@@ -766,6 +764,7 @@ export const AgentsLive = (control: Control) =>
         Effect.promise(async () => {
           if (handing) return;
           handing = true;
+          stopArchiving();
           await postBlocks.close();
           await workspaceActivity.close();
           await time.close();

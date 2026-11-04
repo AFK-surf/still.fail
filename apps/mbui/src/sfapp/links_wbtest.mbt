@@ -118,9 +118,14 @@ test "message links jump to the specified message in this chat or another chat" 
   for path in ["/o/ws1/st1/s-c1", "/o/ws1/st1/s-c2", "/w/ws1/s/st1/chats/s-c2"] {
     let calls : Array[Made] = []
     let t = links_core(calls, "chat")
-    open_link("https://app.still.fail" + path + "?message=11")
+    // Message 2 exists in both chats; the second chat has no message 11.
+    open_link("https://app.still.fail" + path + "?message=2")
     let session = if path.has_suffix("s-c1") { "s-c1" } else { "s-c2" }
-    assert_eq(@sfbase.go_tos.get("ws1/st1\u{1}" + session), Some(11.0))
+    // (asked of its list, or already gone to there by it: a list made by nodes goes as it is asked, at once)
+    let key = "ws1/st1\u{1}" + session
+    let asked = @sfbase.go_tos.get(key)
+    let gone = @sfbase.readings.get(key).map(fn(rd) { rd.flash }).unwrap_or("")
+    assert_true(asked == Some(2.0) || (asked is None && gone == "ts2"), msg="\{path}: asked \{asked}, gone to \{gone}")
     assert_eq(top_chat().map(fn(r) { r.session }), Some(session))
     assert_eq(t.opened().length(), 0)
   }

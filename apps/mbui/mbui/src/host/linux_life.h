@@ -26,6 +26,8 @@
 #include <ifaddrs.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <glib-unix.h>
+#include <signal.h>
 #include "mini_json.h"  // the menu the app gives (menu_setup)
 
 static GtkApplication *life_app;  // the app's, registered as the program started (NULL: the program is none)
@@ -304,8 +306,11 @@ static int window_run(void) {
 }
 
 // Another window of the app's (@hostapi.window_open): the program run again (/proc/self/exe), its environment this
-// one's with MBUI_WINDOW=<what>; a run of its own beside this one (window_run), ending as its window closes. (GLib
-// reaps it: no G_SPAWN_DO_NOT_REAP_CHILD.)
+// one's with MBUI_WINDOW=<what>; a run of its own beside this one (window_run), ending as its window closes or as this
+// run ends. (GLib reaps it: no G_SPAWN_DO_NOT_REAP_CHILD.) Its stdin is a pipe from this run (MBUI_WINDOW_OF says so): a
+// byte on it brings its window to the front (mb_host_window_front, window_front_heard), the pipe's end says this run
+// has ended, and writing to it finds whether it still runs.
+static GHashTable *window_pipes;  // what each was started for, the last for each: the pipe's end to write to (+1)
 int32_t mb_host_window_opens(void) { return 1; }
 int32_t mb_host_window_open(moonbit_string_t what_s) {
   char *what = utf8(what_s);
@@ -314,18 +319,58 @@ int32_t mb_host_window_open(moonbit_string_t what_s) {
     return 0;
   }
   char **env = g_environ_setenv(g_get_environ(), "MBUI_WINDOW", what, TRUE);
-  g_free(what);
+  env = g_environ_setenv(env, "MBUI_WINDOW_OF", "1", TRUE);
   char *argv[] = {"/proc/self/exe", NULL};
   GError *e = NULL;
-  gboolean ok = g_spawn_async(NULL, argv, env, G_SPAWN_DEFAULT, NULL, NULL, NULL, &e);
+  int in = -1;
+  gboolean ok = g_spawn_async_with_pipes(NULL, argv, env, G_SPAWN_DEFAULT, NULL, NULL, NULL, &in, NULL, NULL, &e);
   g_strfreev(env);
   if (!ok) {
     fprintf(stdout, "linux: no window of its own (%s)\n", e ? e->message : "");
     fflush(stdout);
     g_clear_error(&e);
+    g_free(what);
     return 0;
   }
+  // (a window that has closed: a write to its pipe says so, and does not end this run)
+  signal(SIGPIPE, SIG_IGN);
+  if (!window_pipes) window_pipes = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+  gpointer before = g_hash_table_lookup(window_pipes, what);
+  if (before) close(GPOINTER_TO_INT(before) - 1);
+  g_hash_table_replace(window_pipes, what, GINT_TO_POINTER(in + 1));
   return 1;
+}
+
+// The window opened for `what` to the front, while it runs (@hostapi.window_front).
+int32_t mb_host_window_front(moonbit_string_t what_s) {
+  char *what = utf8(what_s);
+  gpointer at = window_pipes ? g_hash_table_lookup(window_pipes, what) : NULL;
+  int ok = 0;
+  if (at) {
+    int fd = GPOINTER_TO_INT(at) - 1;
+    ok = write(fd, "f", 1) == 1;
+    if (!ok) {
+      close(fd);
+      g_hash_table_remove(window_pipes, what);
+    }
+  }
+  g_free(what);
+  return ok;
+}
+
+// A window of the app's own, told by the run that opened it (its stdin: mb_host_window_front): to the front. That run
+// gone, however it ended, this one ends too (a window run by hand, with no MBUI_WINDOW_OF, reads nothing).
+static gboolean window_front_heard(gint fd, GIOCondition cond, gpointer data) {
+  (void)cond;
+  (void)data;
+  char said[16];
+  ssize_t n = read(fd, said, sizeof said);
+  if (n <= 0) exit(0);
+  bring_back();
+  return G_SOURCE_CONTINUE;
+}
+static void window_front_listen(void) {
+  if (window_run() && getenv("MBUI_WINDOW_OF")) g_unix_fd_add(0, G_IO_IN | G_IO_HUP, window_front_heard, NULL);
 }
 
 // ---- once for its person ----

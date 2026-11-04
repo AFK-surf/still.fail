@@ -35,8 +35,8 @@ import * as format from "../format.ts";
 import * as prefs from "../prefs.ts";
 import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
-import { checkLock } from "../vault/lock-check.ts";
-import { Lock, baseOf, deviceText, fold, held, nameOf, pairs, read, signerKnown, signerOf, view } from "./lock.ts";
+import { type Checked, checkLock } from "../vault/lock-check.ts";
+import { Lock, baseOf, deviceText, fold, held, live, nameOf, pairs, read, signerKnown, signerOf, view } from "./lock.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -144,14 +144,17 @@ function placesFor(inner: Inner, hello: J, peer: string, me: string): { places: 
     const mine = lock.devices.get(me);
     // One in the lock already: only an app that does not sign with the key it brings (let in before it kept one) is
     // approved again, as one that signs, and as its own person's.
-    const had = lock.devices.get(peer);
+    // (one whose approval ran out, a web page's: approved again as a new one is)
+    const had = live(lock.devices.get(peer), now);
     const key = str(get(hello, "sign_key"));
     const upgrade = had !== undefined && had.kind === "app" && get(hello, "kind") === "app" && key !== null && had.sign_key !== key;
-    if (lock.disabled || mine?.sign_key !== signer || (had !== undefined && !upgrade)) continue;
+    if (lock.disabled || mine?.sign_key !== signer || !mine.own || (had !== undefined && !upgrade)) continue;
     const c = credentialOf(str(get(w, "credential")) ?? "", lock.cloudKeys, ws, peer, now);
     if (c === null || !lock.members.has(c.sub) || (had !== undefined && c.sub !== had.sub)) continue;
+    // Another person's: only their first device that signs, by an owner or admin (any later one they approve from a
+    // device of their own: one approved for them would be no one's, signing nothing; lock-check.ts Device `own`).
     const role = lock.members.get(mine.sub);
-    if (role !== "owner" && role !== "admin" && c.sub !== mine.sub) continue;
+    if (c.sub !== mine.sub && ((role !== "owner" && role !== "admin") || lock.signed.has(c.sub))) continue;
     who ??= c;
     if (c.sub !== who.sub) continue;
     places.push({ ws, sub: c.sub, account });
@@ -277,7 +280,9 @@ function hide(inner: Inner, device: string): void {
 /// (ms, as this device saw it come).
 export type Met = { id: string; d: Duplex; workspaces: string[]; until?: number };
 /// This device's try: how far it got, the trusted devices showing a code.
-export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; workspaces: string[]; met: Map<string, Met>; run: number };
+/// `lost`: a trusted device that showed a code ended since, others still showing theirs (the code typed may be its).
+/// `approvedIn`, once `done`: the workspaces it was signed in to (of those it waited in, the others still wait).
+export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number };
 
 const tryings = new WeakMap<Inner, Trying>();
 let runs = 0;
@@ -285,6 +290,12 @@ let runs = 0;
 function mine(inner: Inner, ws: string): J | null {
   const y = tryings.get(inner);
   if (!y || !y.workspaces.includes(ws)) return null;
+  // Signed in elsewhere, not here: no trusted device that answered approves it in this one (2026-11-04: a web page
+  // waiting in three workspaces, approved in two, showed this one's page as it was, its code typed, as though nothing
+  // had come of it).
+  if (y.state === "done" && y.approvedIn !== undefined && !y.approvedIn.includes(ws)) {
+    return { state: "failed", devices: 0, error: t("core-misc.lock.pairElsewhere", { names: y.approvedIn.map((w) => nameOf(inner, w)).join(t("core-misc.lock.listSep")) }) };
+  }
   const until = Math.max(0, ...[...y.met.values()].map((m) => m.until ?? 0));
   const typing = y.state === "code" || y.state === "wrong";
   return {
@@ -301,7 +312,8 @@ function drop(y: Trying): void {
 }
 
 /// The workspaces this device waits in (a lock without it, or, an app, one where it does not sign with its key), and
-/// the devices that may approve it in them: its person's own that sign, and the owners' and admins'.
+/// the devices that may approve it in them: its person's own that sign, and the owners' and admins' while the person
+/// has none that signs (their first; as the checked lock says, where it checks out: views/pair.ts `placesFor`).
 function waitingIn(inner: Inner, base: string): { workspaces: string[]; trusted: string[] } {
   const workspaces: string[] = [];
   const trusted = new Set<string>();
@@ -310,13 +322,19 @@ function waitingIn(inner: Inner, base: string): { workspaces: string[]; trusted:
     const h = held(inner, ws);
     if (!h?.head) continue;
     const f = fold(h.entries);
-    const had = f.devices.get(base);
+    const had = live(f.devices.get(base), Math.floor(inner.host.nowMs() / 1000));
     const unsigned = had !== undefined && had.kind === "app" && inner.host.appKeys === true && (signer === null || had.sign_key !== signer);
     if (f.disabled || (had !== undefined && !unsigned)) continue;
     workspaces.push(ws);
+    let checked: Checked | null = null;
+    try {
+      checked = checkLock(h.entries, Math.floor(inner.host.nowMs() / 1000));
+    } catch {}
+    const first = checked === null || !checked.signed.has(sub);
     for (const d of f.devices.values()) {
       const role = f.members.get(d.sub)?.role;
-      if (d.id !== base && typeof d.sign_key === "string" && d.kind === "app" && (d.sub === sub || role === "owner" || role === "admin")) trusted.add(d.id);
+      const own = checked === null || checked.devices.get(d.id)?.own === true;
+      if (d.id !== base && own && typeof d.sign_key === "string" && d.kind === "app" && (d.sub === sub || (first && (role === "owner" || role === "admin")))) trusted.add(d.id);
     }
   }
   return { workspaces, trusted: [...trusted] };
@@ -401,7 +419,7 @@ export function keep(inner: Inner, y: Trying, id: string, raw: Duplex, workspace
       y.state = "failed";
       y.error = endedText([why]);
       delete y.left;
-    }
+    } else y.lost = true;
     changed(inner, y);
   };
   y.met.set(id, m);
@@ -456,19 +474,35 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
         y.met.delete(m.id);
       }
     }
+    // Not approved as far as this device heard, a trusted device having ended as the code was proved to it: it may have
+    // signed it in all the same, its answer lost on the way back (its line gone, its app put away as it answered;
+    // 2026-11-04 a phone signed a web page in and the page said the code was wrong). The lock as the cloud keeps it says.
+    if (approved === null && ends.length > 0) {
+      const now = Math.floor(inner.host.nowMs() / 1000);
+      const inNow: string[] = [];
+      for (const ws of y.workspaces) {
+        yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "pairing workspace read" });
+        if (live(fold(held(inner, ws)?.entries ?? []).devices.get(base), now) !== undefined) inNow.push(ws);
+      }
+      if (inNow.length > 0) approved = { t: "approved", workspaces: inNow, failed: [] };
+    }
     if (approved !== null) {
       drop(y);
       y.state = "done";
-      for (const ws of arr(get(approved, "workspaces"))) if (typeof ws === "string") yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "pairing workspace read" });
+      y.approvedIn = arr(get(approved, "workspaces")).filter((w): w is string => typeof w === "string");
+      for (const ws of y.approvedIn) yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "pairing workspace read" });
     } else if (y.met.size > 0) {
       y.state = "wrong";
       y.left = left;
+      // Wrong at those still showing a code, while another ended as it was proved to: the code may well have been that
+      // one's (its line gone, its app put away), not wrong at all.
+      y.error = t(ends.length > 0 || y.lost ? "core-misc.lock.pairWrongOrGone" : "core-misc.lock.pairWrong", { n: left });
     } else {
       y.state = "failed";
       y.error = endedText(ends);
     }
     changed(inner, y);
-    if (approved === null) return yield* Effect.fail(y.state === "wrong" ? new CoreError("pair_wrong", t("core-misc.lock.pairWrong", { n: left })) : new CoreError("pair_ended", y.error ?? ""));
+    if (approved === null) return yield* Effect.fail(y.state === "wrong" ? new CoreError("pair_wrong", y.error ?? "") : new CoreError("pair_ended", y.error ?? ""));
     return approved;
   });
 }

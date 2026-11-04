@@ -50,8 +50,9 @@ test("an incomplete old minute history stays unavailable after a workspace move"
     reader = new MinuteReader(path);
     const before = store.db.prepare("SELECT * FROM usage_minute_all WHERE id = 1").get();
     await assert.rejects(reader.ready({ workspace: "workspace-a", home: false }), /minute.*unavailable/);
-    const page = () => usageHistory(makeStore(store.db, dir), 1n, { workspace: "workspace-a", home: false });
-    assert.throws(page, /minutes.*indexed/);
+    // The page's history does not wait for them: it was counted from the first call.
+    const page = usageHistory(makeStore(store.db, dir), 0n, { workspace: "workspace-a", home: false });
+    assert.deepEqual(page!.days.map((d: { calls: number }) => d.calls), [1]);
     store.db.prepare("UPDATE sessions SET ws = 'workspace-b' WHERE key = 'a'").run();
     await assert.rejects(reader.ready({ workspace: "workspace-b", home: false }), /minute.*unavailable/);
     assert.deepEqual(store.db.prepare("SELECT * FROM usage_minute_all WHERE id = 1").get(), before);

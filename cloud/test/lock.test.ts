@@ -4,7 +4,7 @@
 // check; devices waiting to be confirmed.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canonical, entryHash, shortCode, type LockEntry } from "../src/lock.ts";
+import { LockAppendRefused, canonical, entryHash, extendLock, shortCode, type LockEntry } from "../src/lock.ts";
 import { harness } from "./harness.ts";
 import { signer } from "./lock-signer.ts";
 
@@ -101,6 +101,12 @@ test("one chain per workspace: kept for members, carried to stations, healed by 
     const g2 = await owner.genesis(ws, { again: true });
     assert.equal(((await (await alice("POST", `/v1/workspaces/${ws}/lock`, { entries: [g2] })).json()) as any).head.genesis, await entryHash(g2));
     assert.equal(((await (await alice("GET", `/v1/workspaces/${ws}`)).json()) as any).lock.seq, 0);
+    // A station that holds the first chain (away when it was turned off) asks for the rest of its own: given it, its
+    // end with it. One that names no chain, or one the cloud never kept, gets the chain kept now.
+    socket.send(JSON.stringify({ type: "lock.get", after: 1, genesis: await entryHash(g) }));
+    assert.deepEqual((await next((f) => f.type === "lock")).entries, [e2, off]);
+    socket.send(JSON.stringify({ type: "lock.get", after: -1, genesis: "ab".repeat(32) }));
+    assert.deepEqual((await next((f) => f.type === "lock")).entries, [g2]);
   } finally {
     await h.close();
   }
@@ -193,4 +199,21 @@ test("devices that asked for credentials, for the owner to check; devices waitin
   } finally {
     await h.close();
   }
+});
+
+test("an entry signed with a device someone else put in under the signer's name is kept no more: a station would let it change nothing", async () => {
+  const owner = signer("alice");
+  const admin = signer("bob");
+  const fake = signer("alice");
+  const ws = "01HZZZZZZZZZZZZZZZZZZZZZZZ";
+  const bobs = { id: admin.key.slice(8), sub: "bob", kind: "app", label: "", sign_key: admin.key };
+  const g = await owner.genesis(ws, { members: [{ sub: "alice", email: "alice@example.test", role: "owner" }, { sub: "bob", email: "bob@example.test", role: "admin" }], devices: [{ id: owner.key.slice(8), sub: "alice", kind: "app", label: "", sign_key: owner.key }, bobs] });
+  // bob (an admin) puts a device of his in under alice's name: taken, as a station takes it (not hers).
+  const put = await admin.entry(ws, g, "device", { id: fake.key.slice(8), sub: "alice", kind: "app", label: "alice?", sign_key: fake.key });
+  assert.equal(extendLock([g], [put], 2000).adding.length, 1);
+  // What it signs, as the owner: refused.
+  const off = await fake.entry(ws, put, "disable", {});
+  assert.throws(() => extendLock([g, put], [off], 2000), (e: any) => e instanceof LockAppendRefused && e.code === "lock_refused");
+  // alice's own device signs it: taken.
+  assert.equal(extendLock([g, put], [await owner.entry(ws, put, "disable", {})], 2000).adding.length, 1);
 });

@@ -503,6 +503,8 @@ pub fn window_corner_at(Int32) -> Double
 
 pub fn window_drag() -> Unit
 
+pub fn window_front(String) -> Bool
+
 pub fn window_hold() -> Unit
 
 pub fn window_inset() -> Bool
@@ -580,12 +582,13 @@ pub struct GalleryRead {
 pub fn GalleryRead::id(Self) -> Int32
 pub fn GalleryRead::photos(Self) -> Array[GalleryPhoto]?
 
+#derive(Eq, Show)
 pub(all) enum Hinge {
   NoHinge
   Closed
   Half
   Open
-} derive(Eq, Show)
+}
 
 pub struct Keep {
   // private fields
@@ -595,11 +598,12 @@ pub fn Keep::end(Self) -> Unit
 pub fn Keep::finish(Self) -> Unit
 pub fn Keep::kept(Self) -> Kept
 
+#derive(Eq, Show)
 pub(all) enum KeepWay {
   Downloads
   Choose
   Photos
-} derive(Eq, Show)
+}
 
 pub(all) enum Kept {
   Keeping
@@ -621,6 +625,7 @@ pub struct NativeCall {
 pub fn NativeCall::got(Self) -> (Bool, String)?
 pub fn NativeCall::id(Self) -> Int32
 
+#derive(Eq)
 pub(all) struct NavBar {
   floating : Array[NavFloating]
   groups : Array[NavGroup]
@@ -630,9 +635,10 @@ pub(all) struct NavBar {
   more_icon : String
   bare : Bool
   title : String
-} derive(Eq)
+}
 pub fn NavBar::to_json(Self) -> String
 
+#derive(Eq)
 pub(all) struct NavFloating {
   item : NavItem
   x : Double
@@ -640,14 +646,16 @@ pub(all) struct NavFloating {
   w : Double
   h : Double
   blocked : Bool
-} derive(Eq)
+}
 
+#derive(Eq)
 pub(all) struct NavGroup {
   items : Array[NavItem]
   foot : Bool
   foldable : Bool
-} derive(Eq)
+}
 
+#derive(Eq)
 pub(all) struct NavItem {
   id : String
   title : String
@@ -655,7 +663,7 @@ pub(all) struct NavItem {
   dot : Bool
   prominent : Bool
   menu : Array[(String, String, Bool, String)]
-} derive(Eq)
+}
 
 pub(all) struct OpDone {
   code : Int32
@@ -670,12 +678,14 @@ pub struct OpRun {
 pub fn OpRun::done(Self) -> OpDone?
 pub fn OpRun::end(Self) -> Unit
 
+#derive(Eq, Show, @debug.Debug)
 pub(all) enum OpTrouble {
   NoTool
   Unreached
   Other(String)
-} derive(Eq, Show, @debug.Debug)
+}
 
+#derive(Eq, Show, @debug.Debug)
 pub(all) struct PasskeyDone {
   code : Int32
   credential : String
@@ -684,7 +694,7 @@ pub(all) struct PasskeyDone {
   user_handle : String
   err : String
   client_data : String
-} derive(Eq, Show, @debug.Debug)
+}
 
 pub struct PasskeyRun {
   // private fields
@@ -692,11 +702,12 @@ pub struct PasskeyRun {
 pub fn PasskeyRun::done(Self) -> PasskeyDone?
 pub fn PasskeyRun::end(Self) -> Unit
 
+#derive(Eq, Show, @debug.Debug)
 pub(all) struct PasswordLogin {
   id : String
   title : String
   username : String
-} derive(Eq, Show, @debug.Debug)
+}
 
 pub struct Pick {
   // private fields
@@ -704,11 +715,12 @@ pub struct Pick {
 pub fn Pick::files(Self) -> Array[Picked]?
 pub fn Pick::id(Self) -> Int32
 
+#derive(Eq)
 pub(all) enum PickKind {
   Photos
   Files
   Camera
-} derive(Eq)
+}
 
 pub(all) struct Picked {
   name : String
@@ -718,12 +730,14 @@ pub(all) struct Picked {
   src : String
 }
 
+#derive(Eq, Show)
 pub(all) enum SizeClass {
   Compact
   Medium
   Expanded
-} derive(Eq, Show)
+}
 
+#derive(Eq, Show)
 pub(all) enum SystemSaid {
   Shown(away~ : Double)
   Link(String)
@@ -737,7 +751,7 @@ pub(all) enum SystemSaid {
   Menu(String)
   NavTapped(String)
   NavAction(x~ : Double, y~ : Double, w~ : Double, h~ : Double)
-} derive(Eq, Show)
+}
 
 // Type aliases
 
@@ -760,6 +774,7 @@ pub(open) trait Host {
   fn window_snap_state(Self) -> Int32 = _
   fn window_opens(Self) -> Bool = _
   fn window_open(Self, String) -> Bool = _
+  fn window_front(Self, String) -> Bool = _
   fn set_cursor(Self, Int32) -> Unit = _
   fn set_badge(Self, Int32) -> Unit = _
   fn menu_setup(Self, String) -> Unit = _

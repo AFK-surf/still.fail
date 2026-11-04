@@ -308,6 +308,7 @@ pub using @sfbase {
   emit_step,
   emit_clock,
   emit_flight,
+  emit_place,
   emit_out,
   type Turns,
   type TurnFor,
@@ -548,6 +549,7 @@ pub using @sfbase {
   workspaces_of,
   // what the settings' pages read and call (settings_core.mbt and what it calls)
   settings_core,
+  nav_over_home,
   nav_home,
   bars_in,
   bars_picked,

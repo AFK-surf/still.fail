@@ -403,7 +403,9 @@ if [ $full = 1 ]; then
     # driver (agents/cursor-bridge.mjs) and the sandbox bridge (agents/sandbox-bridge.mjs) run in processes of their own,
     # not the station's.
     step "station: time through its clock" sh -c '! git grep -nE "Date\.now\(|new Date\(\)|setTimeout\(|setInterval\(" -- station/src ":!station/src/ops/fibers.ts" ":!station/src/agents/cursor-bridge.mjs" ":!station/src/agents/sandbox-bridge.mjs"'
-    remembered "tests: station" "station client/i18n vendor scripts/native.ts" after station sh -c 'cd station && pnpm test'
+    # (STILLFAIL_NODE_TEST_JOBS, on a machine CI's runners share: station/package.json's `test`, that many files at a
+    # time, .github/actions/setup-mac)
+    remembered "tests: station" "station client/i18n vendor scripts/native.ts" after station sh -c 'cd station && if [ -n "${STILLFAIL_NODE_TEST_JOBS:-}" ]; then node ../scripts/native.ts run mesh runner archive-rs -- node --import ./test/setup-env.mjs --test --test-concurrency="$STILLFAIL_NODE_TEST_JOBS" --test-timeout=600000 test/*.test.ts; else pnpm test; fi'
   fi
   # The media app's (media/): its service's tests, its core module's, and the two end to end beside the station's module
   # layer (media/test): whenever it, the core or the station changed.

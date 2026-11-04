@@ -31,12 +31,18 @@ export type Workspace = {
   read: (station: string, op: string, args: unknown) => Promise<string>;
 };
 
+/// A request made in the station's admin API as a member, for a program granted `operate`: on this station, or
+/// (`station`) on another of the workspace. The answer's body is the API's, as it is.
+export type Operate = (call: OperateCall) => Promise<{ status: number; headers: Record<string, string>; body: Buffer }>;
+export type OperateCall = { station: string | null; actor: string; role: string; method: string; path: string; query: [string, string][]; headers: Record<string, string>; body: Buffer };
+
 export type OutflowOptions = {
   path: string;
   grants: OutflowGrants;
   reads: Reads;
   identify: Identify;
   workspace: Workspace;
+  operate?: Operate;
   lang: () => Lang;
   /// How long another station is given to answer a read (ms); PEER_WAIT_MS unless said.
   peerWaitMs?: number;
@@ -49,6 +55,21 @@ const PEER_WAIT_MS = 60_000;
 /// A span of usage read at once, at most.
 const SPAN_MAX_MS = 31 * 24 * 60 * 60_000;
 const BODY_MAX = 16 * 1024;
+/// A request `POST /v1/operate` carries, at most: an API request and what it uploads, in base64.
+const OPERATE_MAX = 64 * 1024 * 1024;
+/// What a program granted `operate` is not given, whoever it acts as: the grants it holds would be its own to answer,
+/// and a vault opens only in a person's app (docs/vault.md).
+const NOT_OPERATED = /^\/*(outflow|vault|vault-requests)(\/|$)/;
+/// Read as the admin API's routes read a path, slashes repeated and all; one that cannot be read so is refused too.
+export function notOperated(path: string): boolean {
+  try {
+    const bare = decodeURIComponent(path.split("?")[0]!);
+    return bare.includes("..") || bare.includes("\\") || NOT_OPERATED.test(bare);
+  } catch {
+    return true;
+  }
+}
+const OPERATE_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 /// Messages read at once: by default and at most.
 const MESSAGES_PAGE = 100;
 const MESSAGES_PAGE_MAX = 500;
@@ -72,11 +93,11 @@ const send = (res: ServerResponse, status: number, body: unknown) => {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" }).end(JSON.stringify(body));
 };
 
-async function body(req: IncomingMessage): Promise<any> {
+async function body(req: IncomingMessage, max = BODY_MAX): Promise<any> {
   let text = "";
   for await (const chunk of req) {
     text += chunk;
-    if (text.length > BODY_MAX) throw new Refused(413, "the request is too long");
+    if (text.length > max) throw new Refused(413, "the request is too long");
   }
   try {
     return JSON.parse(text);
@@ -237,6 +258,10 @@ export class OutflowServer {
   async #answer(req: IncomingMessage, res: ServerResponse, identify: Identify) {
     const url = new URL(req.url ?? "/", "http://outflow");
     if (req.method === "POST" && url.pathname === "/v1/request") return this.#request(req, res, identify);
+    if (req.method === "POST" && url.pathname === "/v1/operate") {
+      if (identify !== this.#o.identify) await this.#caller(req, identify);
+      return this.#operate(req, res);
+    }
     if (req.method === "GET" && ["/v1/stations", "/v1/usage", "/v1/chats", "/v1/messages"].includes(url.pathname)) {
       // On a way in other than the socket, a read too comes by that way's own proof (a link's code).
       if (identify !== this.#o.identify) await this.#caller(req, identify);
@@ -296,7 +321,8 @@ export class OutflowServer {
     });
   }
 
-  async #read(req: IncomingMessage, res: ServerResponse, url: URL) {
+  /// The grant `req`'s token holds; refused, said apart as `#read` has always said.
+  #granted(req: IncomingMessage) {
     const token = /^Bearer (\S+)$/i.exec(req.headers.authorization ?? "")?.[1] ?? "";
     const grant = this.#o.grants.byToken(token);
     if (grant === null) {
@@ -307,6 +333,54 @@ export class OutflowServer {
       const { id, name } = this.#o.workspace.here();
       throw new Refused(401, "unknown token", { station: { id, name } });
     }
+    return grant;
+  }
+
+  /// Another station of the workspace named by its id, checked against what `grant` reaches; null for this one.
+  async #station(grant: { reach?: Reach }, named: string): Promise<string | null> {
+    if (named === "" || named === this.#o.workspace.here().id) return null;
+    if (grant.reach !== "workspace") throw new Refused(403, "not granted: other stations");
+    const stations = await this.#o.workspace.stations().catch(() => null);
+    if (stations === null) throw new Refused(503, "the workspace's stations are not known right now");
+    if (!stations.some((s) => s.id === named)) throw new Refused(404, "no such station in the workspace");
+    return named;
+  }
+
+  /// One request of the admin API, as `actor`: a member of the workspace by their email, as the program says, who has
+  /// the role of a member, or the role the person who allowed the grant has when they are that person.
+  async #operate(req: IncomingMessage, res: ServerResponse) {
+    const grant = this.#granted(req);
+    if (!grant.scopes.includes("operate")) throw new Refused(403, "not granted: operate");
+    if (this.#o.operate === undefined) throw new Refused(503, "this station does not operate");
+    const given = await body(req, OPERATE_MAX);
+    const actor = typeof given?.actor === "string" ? given.actor.trim().toLowerCase() : "";
+    const method = typeof given?.method === "string" ? given.method.toUpperCase() : "";
+    const path = typeof given?.path === "string" ? given.path : "";
+    if (actor === "" || !actor.includes("@")) throw new Refused(400, "actor is a member's email");
+    if (!OPERATE_METHODS.includes(method) || !path.startsWith("/")) throw new Refused(400, "method and path are the admin API's");
+    if (notOperated(path)) throw new Refused(403, "not given to a program");
+    const station = await this.#station(grant, typeof given?.station === "string" ? given.station : "");
+    const query = (Array.isArray(given?.query) ? given.query : []).filter((p: unknown) => Array.isArray(p) && p.length === 2).map(([k, v]: unknown[]) => [String(k), String(v)] as [string, string]);
+    const payload = typeof given?.body === "string" ? Buffer.from(given.body, "base64") : Buffer.alloc(0);
+    const headers = { "content-type": typeof given?.contentType === "string" ? given.contentType : "application/json" };
+    const role = (grant.allowedBy ?? "").toLowerCase() === actor ? (grant.allowedRole ?? "member") : "member";
+    const wait = this.#o.peerWaitMs ?? PEER_WAIT_MS;
+    const late = `that station did not answer within ${wait} ms`;
+    const call = this.#o.operate({ station, actor, role, method, path, query, headers, body: payload });
+    let answer: Awaited<ReturnType<Operate>>;
+    try {
+      answer = station === null ? await call : await wall.within(wait, call, late);
+    } catch (e) {
+      const message = (e as Error).message;
+      throw message === late ? new Refused(504, late) : new Refused(502, `that station did not answer: ${message}`);
+    }
+    this.#o.grants.read(grant.id, "operate", 1, station ?? undefined);
+    log.info("outflow", "operated", { grant: grant.id, actor, method, path: path.split("?")[0], status: answer.status, station });
+    send(res, 200, { status: answer.status, contentType: answer.headers["content-type"] ?? null, body: answer.body.toString("base64") });
+  }
+
+  async #read(req: IncomingMessage, res: ServerResponse, url: URL) {
+    const grant = this.#granted(req);
     const whole = grant.reach === "workspace";
     if (url.pathname === "/v1/stations") {
       const here = this.#o.workspace.here();
@@ -315,14 +389,7 @@ export class OutflowServer {
       return send(res, 200, { stations: [here, ...stations.filter((s) => s.id !== here.id)] });
     }
     // Another station of the workspace, named by its id as /v1/stations says it.
-    const named = url.searchParams.get("station") ?? "";
-    const station = named === "" || named === this.#o.workspace.here().id ? null : named;
-    if (station !== null) {
-      if (!whole) throw new Refused(403, "not granted: other stations");
-      const stations = await this.#o.workspace.stations().catch(() => null);
-      if (stations === null) throw new Refused(503, "the workspace's stations are not known right now");
-      if (!stations.some((s) => s.id === station)) throw new Refused(404, "no such station in the workspace");
-    }
+    const station = await this.#station(grant, url.searchParams.get("station") ?? "");
     const scope: Scope = url.pathname === "/v1/usage" ? "usage" : url.pathname === "/v1/messages" ? "messages" : "chats";
     if (!grant.scopes.includes(scope)) throw new Refused(403, `not granted: ${scope}`);
     const lang = this.#o.lang();

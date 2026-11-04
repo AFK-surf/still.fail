@@ -154,6 +154,9 @@ fn debug_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, column : Bool) -> Unit {
       if round_button(c, "screen-volume-down", "volume-x", @sf.t("web-pages.screen.debug.volumeDown")) {
         debug_device_input(c, s, "volume_down")
       }
+      if round_button(c, "screen-rotate", "screen-rotate", @sf.t("web-pages.screen.device.rotate")) {
+        debug_device_input(c, s, "rotate")
+      }
       if flag(s.state, "poses") {
         debug_poses(c, s, u, icons=column)
       }
@@ -220,6 +223,9 @@ fn debug_tools(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
       if round_button(c, "screen-device/" + k.keys, k.icon, k.name) {
         debug_press(c, s, k)
       }
+    }
+    if round_button(c, "screen-rotate", "screen-rotate", @sf.t("web-pages.screen.device.rotate")) {
+      debug_device_input(c, s, "rotate")
     }
     // (one without the panel its volume is in)
     if !flag(s.state, "debug") && s.android() {

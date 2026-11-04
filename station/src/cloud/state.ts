@@ -55,6 +55,18 @@ export const pendingLockPath = (data: string) => join(meshDir(data), "lock-pendi
 /// beside the home one's, by the workspace's id.
 const fileOf = (ws: string) => (/^[0-9A-Za-z_-]{1,64}$/.test(ws) ? ws : Buffer.from(ws).toString("hex").slice(0, 64));
 export const joinedLockPath = (data: string, ws: string) => join(meshDir(data), "locks", `${fileOf(ws)}.json`);
+/// The locks a workspace's owner turned off here (beside its lock.json, `{genesis: [hash]}`): none is pinned again. Each
+/// device that changed one before brings it the whole chain up to then, and one coming after the `disable` (its
+/// answer slower than the control plane's) would lock the station again in a lock no longer on anywhere else.
+const turnedOffPath = (path: string) => `${path}.off`;
+function turnedOff(path: string): string[] {
+  try {
+    const g = JSON.parse(readFileSync(turnedOffPath(path), "utf8"))?.genesis;
+    return Array.isArray(g) ? g.filter((h): h is string => typeof h === "string") : [];
+  } catch {
+    return [];
+  }
+}
 export const joinedPendingPath = (data: string, ws: string) => join(meshDir(data), "locks", `${fileOf(ws)}.pending.json`);
 
 /// The pinned lock as lock.json has it (a joined workspace's: its own file): null without one. A file that does not
@@ -151,13 +163,15 @@ export class Cloud {
   private watcher: FSWatcher | undefined;
   readonly data: string;
 
-  constructor(data: string) {
+  /// `watchFiles`: whether the files are watched for others' changes (tests that start and stop many stations leave it out:
+  /// macOS takes a good while to end each watch).
+  constructor(data: string, watchFiles = true) {
     this.data = data;
     this.state = readState(data);
     this.peersCurrent = this.state !== null && !this.removed();
     this.lock = readLock(data);
     // `enroll` from another process, or an older tool editing the file; `lock reset` taking the lock away.
-    try {
+    if (watchFiles) try {
       this.watcher = watch(meshDir(data), { persistent: false }, (_, name) => {
         if (name === "cloud.json" && !this.writing) this.reload();
         if (name === "lock.json" && !this.writing) this.reloadLock();
@@ -303,6 +317,7 @@ export class Cloud {
     const had = current?.state ? current : null;
     if (current !== null && had === null) throw new Error("this station's lock.json is broken; run `stillfail lock reset` on it");
     const workspace = home ? this.state?.workspace : ws!;
+    const path = home ? lockPath(this.data) : joinedLockPath(this.data, ws!);
     let kept = had?.entries ?? [];
     let state = had?.state ?? null;
     let taken = 0;
@@ -311,6 +326,7 @@ export class Cloud {
       try {
         if (state === null) {
           if (workspace !== undefined && e.ws !== workspace) throw new Error("the lock is another workspace's");
+          if (turnedOff(path).includes(entryHash(e))) throw new Error("this lock was turned off by its owner here; it is not taken again");
           state = fold([e], now);
           kept = [e];
         } else if (e.seq <= state.seq) {
@@ -328,7 +344,6 @@ export class Cloud {
       }
     }
     if (taken > 0) {
-      const path = home ? lockPath(this.data) : joinedLockPath(this.data, ws!);
       const set = (l: { entries: Entry[]; state: LockState | null } | null) => (home ? (this.lock = l) : this.joinedLocks.set(ws!, l));
       this.writing = true;
       try {
@@ -341,6 +356,7 @@ export class Cloud {
       const which = home ? {} : { workspace: ws };
       if (state!.disabled) {
         // Off: nothing pinned, the control plane trusted as before (it sends its lists again on the next frame).
+        writePrivate(turnedOffPath(path), JSON.stringify({ genesis: [...turnedOff(path), state!.genesis].slice(-16) }));
         rmSync(path, { force: true });
         set(null);
         log.info("lock", "the workspace lock was turned off by its owner", which);

@@ -69,6 +69,8 @@ struct Glyph {
   // its plot in the atlas (@hostapi.Atlas; -1: nothing to draw), and whether that is colour glyphs' own
   plot : Int
   in_colour : Bool
+  // the pixels a point its cell in the atlas was sized at
+  sc : Double
 }
 
 ///|
@@ -184,11 +186,12 @@ fn glyph_kept(key : Int, g : Glyph) -> Unit {
 /// Whether the glyphs `kept` (glyphs_kept's) are each where they were in the atlas still, each kept there through this
 /// frame as what draws from it is (Atlas::drawn); else (one moved or gone, or one there was no room for as it was made,
 /// told at -1, -1: never one in the atlas) what draws them is to be made again.
-fn glyphs_still(kept : Array[(Int, Double, Double)]) -> Bool {
+fn glyphs_still(kept : Array[(Int, Double, Double)], sc : Double) -> Bool {
   for k in kept {
     let (key, u, v) = k
     match text_cache.glyphs.get(key) {
-      Some(g) if g.u == u && g.v == v => if g.plot >= 0 { atlas_for(g.in_colour).0.drawn(g.plot) }
+      Some(g) if g.u == u && g.v == v && !glyph_other_scale(g, sc) =>
+        if g.plot >= 0 { atlas_for(g.in_colour).0.drawn(g.plot) }
       _ => return false
     }
   }
@@ -880,6 +883,7 @@ let no_glyph : Glyph = {
   color: false,
   plot: -1,
   in_colour: false,
+  sc: 0.0,
 }
 
 ///|
@@ -918,12 +922,32 @@ fn atlas_for(colour : Bool) -> (@hostapi.Atlas, Int) {
 }
 
 ///|
+/// Whether glyph `g` is in the atlas at other than `sc` pixels a point (a host's generation moves on as its scale
+/// changes; a shot's scale over its zoom comes back to the window's only within rounding).
+fn glyph_other_scale(g : Glyph, sc : Double) -> Bool {
+  g.plot >= 0 && (g.sc - sc).abs() > 0.001
+}
+
+///|
+/// Whether a glyph found at another scale has been logged: once a run, what brought it being what is looked for.
+// kept across runs: only goes to true, and only says whether a line was logged
+let glyph_scale_told : Ref[Bool] = Ref(false)
+
+///|
 /// Glyph `key` as it is drawn at `sc` pixels a point: where it is in the atlas, drawn from in this frame. One not in it
 /// is drawn by the host and put there (its pixels its size at `sc`), in place of the glyphs drawn from longest ago where
 /// it is full (@hostapi.Atlas); with no room while this frame is drawn, it is not drawn in it (asked for again by the
-/// next).
+/// next). One put there at another scale is drawn and put again: its cell at this one would take in what lies beside it.
 fn glyph(key : Int, sc : Double) -> Glyph {
   match text_cache.glyphs.get(key) {
+    Some(g) if glyph_other_scale(g, sc) => {
+      if !glyph_scale_told.val {
+        glyph_scale_told.val = true
+        h_log("GLYPHSCALE placed at \{g.sc}, drawn at \{sc}, generation \{h_atlas_generation()}")
+      }
+      text_cache.glyphs.remove(key)
+      glyph(key, sc)
+    }
     Some(g) => {
       if g.plot >= 0 {
         atlas_for(g.in_colour).0.drawn(g.plot)
@@ -955,6 +979,7 @@ fn glyph(key : Int, sc : Double) -> Glyph {
             color,
             plot,
             in_colour: across > 0,
+            sc,
           }
           text_cache.glyphs[key] = g
           glyph_kept(key, g)

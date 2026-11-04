@@ -11,7 +11,7 @@ import * as compact from "../src/store/usage-compact.ts";
 import { retireUsageIndexes } from "../src/store/usage-retire.ts";
 import { Store } from "../src/store/store.ts";
 
-test("an unbounded incomplete history reuses a summary that covers all its minutes", async () => {
+test("an unbounded read with a cached summary says the same as one without", async () => {
   const writer = Store.open(":memory:");
   try {
     for (const [key, ws] of [["a", "A"], ["h", null], ["other", "B"]] as const) {
@@ -31,7 +31,7 @@ test("an unbounded incomplete history reuses a summary that covers all its minut
     const store = reads.makeStore(writer.db, "."), from = 0n, to = 9223372036854775807n;
     for (const viewer of [null, { workspace: "A", home: false }, { workspace: "A", home: true }]) for (const tz of [0n, 330n, -61n]) {
       const expected = usage(store, "en", from, to, tz, false, viewer, true);
-      assert.ok(expected.partialHistory);
+      assert.ok(expected.history);
       const summary = await reads.usageGroupsBatched(store, from, to, tz, viewer, async () => {});
       assert.ok(summary);
       const values = new Set(["records", "calls", "input", "cache_read", "cache_write", "cache_write_long", "output"]);
@@ -97,12 +97,9 @@ test("a reader returns available usage when only old decisions are missing", asy
     workers = new Readers(dir, 1);
     const args = { from: "0", to: "180000", tz: "0", reading: false, viewer: { workspace: "A", home: false }, history: true };
     const answer = JSON.parse(await workers.read("usage", args, "en"));
-    assert.equal(answer.history, undefined);
-    assert.equal(answer.historyUnavailable, true);
-    assert.equal(answer.partialHistory.cardsIncomplete, true);
-    assert.equal(answer.partialHistory.tokensComplete, true);
-    assert.deepEqual(answer.partialHistory.places, { ember: 1 });
-    assert.deepEqual(answer.partialHistory.days.map((day: { tokens: number }) => day.tokens), [3]);
+    assert.equal(answer.history.cardsIncomplete, true);
+    assert.deepEqual(answer.history.places, { ember: 1 });
+    assert.deepEqual(answer.history.days.map((day: { tokens: number }) => day.tokens), [3]);
     assert.deepEqual(writer.db.prepare("SELECT * FROM usage_chat_progress").get(), before);
   } finally { workers?.close(); writer.close(); rmSync(dir, { recursive: true, force: true }); }
 });

@@ -8,13 +8,13 @@ import { DatabaseSync } from "node:sqlite";
 import { wall } from "../ops/fibers.ts";
 import { Refused } from "../api/request.ts";
 import { retiredUsage } from "../store/usage-retire.ts";
-import { PENDING_MINUTE_SESSION } from "../store/usage-minutes.ts";
 import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailScopeBySession, usageDetailSince, USAGE_DETAIL_PENDING } from "../store/usage-detail.ts";
-import { compactHistory, compactQuery, compactScopeReady, compactUsageSince, hasCompactUsage } from "../store/usage-compact.ts";
+import { compactQuery, compactScopeReady, compactUsageSince, hasCompactUsage } from "../store/usage-compact.ts";
 import { type UsageChatCoverage, usageCardOutcomesComplete, usageChatStatsReady } from "../store/usage-chat-stats.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
 import { hasRuntimeOrderIndex } from "../store/schema.ts";
 import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
+import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import {
@@ -137,6 +137,35 @@ export function listSessions(s: Store): SessionRow[] {
   return all(s, "SELECT * FROM sessions ORDER BY last_active_at DESC").map(toSession);
 }
 
+/// Histories visible in a search. The existing index is ordered by connect, then workspace, so first seek the distinct
+/// connects and then only the rows in the viewer's workspaces. The public workspace is included once even when asked
+/// for as the viewer's own. Preserve the old whole-table ordering when activity times tie.
+export const HISTORY_SESSIONS = `WITH RECURSIVE connects(connect) AS (
+  VALUES ((SELECT connect FROM sessions INDEXED BY sessions_by_connect ORDER BY connect LIMIT 1))
+  UNION ALL SELECT (SELECT connect FROM sessions INDEXED BY sessions_by_connect WHERE connect > c.connect ORDER BY connect LIMIT 1)
+    FROM connects c WHERE c.connect IS NOT NULL
+), workspaces(ws) AS (SELECT ?1 UNION SELECT '*' UNION SELECT NULL WHERE ?2)
+SELECT s.* FROM connects c CROSS JOIN workspaces w CROSS JOIN sessions s INDEXED BY sessions_by_connect
+WHERE c.connect IS NOT NULL AND s.connect = c.connect AND s.ws IS w.ws
+ORDER BY s.last_active_at DESC, s.rowid ASC`;
+export function historySessions(s: Store, viewer: { workspace: string; home: boolean }): SessionRow[] {
+  return all(s, HISTORY_SESSIONS, viewer.workspace, Number(viewer.home)).map(toSession);
+}
+
+/// The session list's active or archived rows: do not bring the other kind out of the database just to discard it.
+/// The old whole-table order put equal timestamps in rowid order; retain that when using either partial index.
+export function listedSessions(s: Store, connect: string | null, archived: boolean, viewer: InWorkspace | null): SessionRow[] {
+  const where = [archived ? "archived_at IS NOT NULL" : "archived_at IS NULL"];
+  const args: Json[] = [];
+  if (connect !== null) { where.push("connect = ?"); args.push(connect); }
+  if (viewer !== null) {
+    where.push(viewer.home === false ? "ws = ?" : "(ws = ? OR ws IS NULL)");
+    args.push(viewer.workspace);
+  }
+  const sql = `SELECT * FROM sessions INDEXED BY ${archived ? "sessions_put_away" : "sessions_live"} WHERE ${where.join(" AND ")} ORDER BY last_active_at DESC, rowid ASC`;
+  return all(s, sql, ...args).map(toSession);
+}
+
 /// The sessions not archived (the sidebar's), the latest active first, by the index of those alone (schema.ts
 /// sessions_live): each read of the sidebar went over every session the station ever had (many on a station, many of them
 /// archived) to pick out its 107 (2026-11-03).
@@ -234,25 +263,28 @@ export function originalRuntime(s: Store, key: string): string | null {
   }
 }
 
-/// How many entries sessions' transcripts have, as the station last read them while they were at work (one, or every
-/// one known when `key` is null): none for a session not read since (or a database no station of this version opened).
-export function transcriptLengths(s: Store, key: string | null): Map<string, number> {
+/// How many entries sessions' transcripts have, as the station last read them while they were at work (one, those
+/// named, or every one when `key` is null): none for a session not read since.
+export function transcriptLengths(s: Store, key: string | string[] | null): Map<string, number> {
+  if (Array.isArray(key) && key.length === 0) return new Map();
   try {
-    const rows = key !== null ? all(s, "SELECT session, n FROM transcript_lengths WHERE session = ?", key) : all(s, "SELECT session, n FROM transcript_lengths");
+    const sql = `SELECT session, n FROM transcript_lengths ${Array.isArray(key) ? "WHERE session IN (SELECT value FROM json_each(?))" : key !== null ? "WHERE session = ?" : ""}`;
+    const rows = Array.isArray(key) ? all(s, sql, JSON.stringify(key)) : key !== null ? all(s, sql, key) : all(s, sql);
     return new Map(rows.map((r) => [r.session as string, Number(r.n)]));
   } catch {
     return new Map();
   }
 }
 
-/// What sessions' calls used, as the station keeps it (store.ts `setSessionUsage`; one, or every one known when `key` is
-/// null): none for a session that has made no call (or a database no station of this version opened).
-export function sessionUsages(s: Store, key: string | null): Map<string, Json> {
+/// What sessions' calls used, as the station keeps it (store.ts `setSessionUsage`; one, those named, or every one
+/// known when `key` is null): none for a session that has made no call.
+export function sessionUsages(s: Store, key: string | string[] | null): Map<string, Json> {
+  if (Array.isArray(key) && key.length === 0) return new Map();
   try {
     const incremental = s.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_totals_incremental'").get() !== undefined;
     const source = incremental ? "session_usage u JOIN usage_totals_source_sessions c ON c.session = u.session AND c.done = 1" : "session_usage u";
-    const rows = key !== null ? all(s, `SELECT u.session, u.usage FROM ${source} WHERE u.session = ?`, key)
-      : all(s, `SELECT u.session, u.usage FROM ${source}`);
+    const sql = `SELECT u.session, u.usage FROM ${source} ${Array.isArray(key) ? "WHERE u.session IN (SELECT value FROM json_each(?))" : key !== null ? "WHERE u.session = ?" : ""}`;
+    const rows = Array.isArray(key) ? all(s, sql, JSON.stringify(key)) : key !== null ? all(s, sql, key) : all(s, sql);
     return new Map(rows.map((r) => [r.session as string, JSON.parse(r.usage as string)]));
   } catch {
     return new Map();
@@ -624,8 +656,8 @@ export function pins(s: Store, viewer: string, sessions: string[] | null = null)
 
 /// Chats kept instead of offered for archiving. Null selects every viewer.
 export function keptChats(s: Store, viewer: string | null, threads: number[] | null = null): Set<number> {
-  const rows = threads === null || viewer === null
-    ? all(s, "SELECT DISTINCT thread FROM kept_chats WHERE ?1 IS NULL OR viewer = ?1", viewer)
+  const rows = viewer === null ? all(s, "SELECT DISTINCT thread FROM kept_chats")
+    : threads === null ? all(s, "SELECT thread FROM kept_chats WHERE viewer = ?1", viewer)
     : [...new Set(threads)].flatMap((thread) => all(s, "SELECT thread FROM kept_chats WHERE viewer = ? AND thread = ?", viewer, thread));
   return new Set(rows.map((r) => r.thread));
 }
@@ -845,35 +877,59 @@ function turnSummary(r: Json, startedAt: number): TurnSummary {
 /// alone (as store.ts STATS_OF), its first words and its latest turn. Its every turn counted and its every delivery read
 /// (the deliveries by session and thread), each summary of a long session read some 65 pages, from the disk on a station
 /// short of memory (2026-11-02), as often as the session changed.
+const SESSION_PENDING = `((SELECT COUNT(*) FROM deliveries d INDEXED BY deliveries_pending WHERE d.session = s.key AND d.delivered_at IS NULL) +
+         (SELECT COUNT(*) FROM letter_deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL)) AS pending`;
+const SESSION_LAST_FIELDS = `l.id AS turn_id, l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.wait_watch, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at`;
+const SESSION_LAST_FROM = `FROM sessions s
+     LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)`;
+
 export const SESSION_STATS = `SELECT s.key,
-       COALESCE((SELECT c.n FROM session_turns c WHERE c.session = s.key), 0) AS turns,
+       COALESCE((SELECT c.n FROM session_turns c WHERE c.session = s.key),
+         (SELECT CASE WHEN COUNT(*) <= ${TURN_COUNT_BATCH} THEN COUNT(*) END FROM
+           (SELECT 1 FROM turns old INDEXED BY turns_by_session WHERE old.session_key = s.key LIMIT ${TURN_COUNT_BATCH + 1}))) AS turns,
        -- How long its turns ran, where every one ended since that was kept (schema.ts SESSION_WORK); else none.
        CASE WHEN NOT EXISTS (SELECT 1 FROM turns o INDEXED BY turns_by_end WHERE o.session_key = s.key AND o.ended_at <= (SELECT f.at FROM session_work_from f WHERE f.id = 1))
          THEN COALESCE((SELECT w.ms FROM session_work w WHERE w.session = s.key), 0) END AS work_ms,
-       ((SELECT COUNT(*) FROM deliveries d INDEXED BY deliveries_pending WHERE d.session = s.key AND d.delivered_at IS NULL) +
-         (SELECT COUNT(*) FROM letter_deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL)) AS pending,
+       ${SESSION_PENDING},
        (SELECT substr(m.text, 1, 300) FROM session_first f JOIN merged m ON m.thread = f.thread AND m.n = f.n WHERE f.session = s.key) AS first_text,
-       l.id AS turn_id, l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.wait_watch, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
-     FROM sessions s
-     LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)`;
+       ${SESSION_LAST_FIELDS}
+     ${SESSION_LAST_FROM}`;
+
+/// What the sidebar actually shows: the latest turn and pending deliveries, without asking for a count or first words.
+export const SESSION_ACTIVITY = `SELECT s.key, ${SESSION_PENDING}, ${SESSION_LAST_FIELDS} ${SESSION_LAST_FROM}`;
+export const TURN_COUNT_PENDING = "turn count pending: ";
+export class TurnCountUnavailable extends Refused {
+  readonly sessions: string[];
+  constructor(sessions: string[]) { super(503, TURN_COUNT_PENDING + JSON.stringify(sessions)); this.sessions = sessions; }
+}
 
 /// A session's latest turn, as `sessionStats` has it, by the index of its turns alone.
 export const LAST_TURN = "SELECT * FROM turns WHERE session_key = ? ORDER BY started_at DESC LIMIT 1";
+
+function sessionRows(s: Store, key: string | string[] | null, select: string): Json[] {
+  if (Array.isArray(key) && key.length === 0) return [];
+  const sql = `${select} ${Array.isArray(key) ? "WHERE s.key IN (SELECT value FROM json_each(?))" : key !== null ? "WHERE s.key = ?" : ""}`;
+  return Array.isArray(key) ? all(s, sql, JSON.stringify(key)) : key !== null ? all(s, sql, key) : all(s, sql);
+}
+const latestTurn = (r: Json): TurnSummary | null => r.started_at === null ? null : { ...turnSummary(r, r.started_at), id: r.turn_id };
 
 /// Per session (or for one): turn count and how long its ended turns ran, the latest turn (with its id: a client holding
 /// the turns puts it in place rather than read them all again), undelivered messages and the first one it heard.
 /// Each session's counts and last turn: one's, those named (`keys`), or all (null).
 export function sessionStats(s: Store, key: string | string[] | null): Map<string, SessionStats> {
-  if (Array.isArray(key) && key.length === 0) return new Map();
-  const sql = `${SESSION_STATS}
-     ${Array.isArray(key) ? `WHERE s.key IN (${key.map(() => "?").join(", ")})` : key !== null ? "WHERE s.key = ?" : ""}`;
-  const rows = Array.isArray(key) ? all(s, sql, ...key) : key !== null ? all(s, sql, key) : all(s, sql);
+  const rows = sessionRows(s, key, SESSION_STATS);
+  const unknown = rows.filter((r) => r.turns === null).map((r) => r.key as string);
+  if (unknown.length) throw new TurnCountUnavailable(unknown);
   return new Map(
     rows.map((r) => [
       r.key as string,
-      { turns: r.turns, workMs: r.work_ms, pending: r.pending, firstText: r.first_text, lastTurn: r.started_at === null ? null : { ...turnSummary(r, r.started_at), id: r.turn_id } },
+      { turns: r.turns, workMs: r.work_ms, pending: r.pending, firstText: r.first_text, lastTurn: latestTurn(r) },
     ]),
   );
+}
+
+export function sessionActivity(s: Store, key: string | string[] | null): Map<string, { pending: number; lastTurn: TurnSummary | null }> {
+  return new Map(sessionRows(s, key, SESSION_ACTIVITY).map((r) => [r.key as string, { pending: r.pending, lastTurn: latestTurn(r) }]));
 }
 
 /// A session's latest turn (as `sessionStats` has it, with its id), without the counts: what a notice of how it ended
@@ -923,13 +979,27 @@ export function jobNotices(s: Store, id: string, limit: number): { at: number; t
 /// The jobs running of some sessions (`?`: a JSON list of their keys), the latest first, by an index (of the jobs running).
 export const RUNNING_OF = "SELECT * FROM jobs WHERE session_key IN (SELECT value FROM json_each(?)) AND state = 'running' ORDER BY started_at DESC";
 
+/// Active watches of the named sessions, using their lookup instead of reading every running job or a session's old jobs.
+export const WATCHING_OF = `SELECT j.* FROM active_watch_jobs w INDEXED BY active_watch_jobs_session
+  CROSS JOIN jobs j ON j.id = w.job WHERE w.session IN (SELECT value FROM json_each(?)) ORDER BY j.started_at DESC, j.rowid`;
+
 /// jobs.rs `watching`: the sessions keeping watch (a watch job running), each with its watches' names, since when, and
 /// when one last said something: of `sessions` alone (a session's summary, the sidebar items a change touched), or of
 /// all. Of all, each summary and sidebar change read every job running and the notices of every watch.
 export function watching(s: Store, sessions: string[] | null = null): Map<string, Json> {
+  if (sessions !== null && sessions.length === 0) return new Map();
   const by = new Map<string, JobRow[]>();
   // (The jobs running, by their state's index: every summary and list asks this, not every job ever.)
-  const running = sessions === null ? all(s, JOBS_RUNNING) : all(s, RUNNING_OF, JSON.stringify(sessions));
+  let running: Json[];
+  if (sessions === null) running = all(s, JOBS_RUNNING);
+  else {
+    try { running = all(s, WATCHING_OF, JSON.stringify(sessions)); }
+    catch (error) {
+      // A reader can also open a database from before active watches were kept.
+      if (!(error instanceof Error) || !error.message.includes("no such table: active_watch_jobs")) throw error;
+      running = all(s, RUNNING_OF, JSON.stringify(sessions));
+    }
+  }
   for (const job of running.map(toJob).filter((j) => j.watch)) {
     by.set(job.sessionKey, [...(by.get(job.sessionKey) ?? []), job]);
   }
@@ -1017,102 +1087,6 @@ export function usageThreads(s: Store, ids: number[]): [ThreadRow, string | null
     out.push([thread, first]);
   }
   return out;
-}
-
-/// Sent back to the pool if a session entered a workspace while its old minutes were being filled; it retries after
-/// that session is ready. The check and the read use the same SQLite snapshot in the reader.
-export const USAGE_MINUTES_PENDING = "usage minutes are still being indexed";
-const QUARTERS_ALL = `FROM usage_day_quarters q`;
-const QUARTERS_SCOPED = `FROM usage_minute_scope sc INDEXED BY usage_minute_scope_ws
-  CROSS JOIN usage_day_quarters q ON q.session = sc.session`;
-const QUARTERS_HOME = `FROM (
-  SELECT session FROM usage_minute_scope INDEXED BY usage_minute_scope_ws WHERE ws = ?2
-  UNION ALL SELECT session FROM usage_minute_scope INDEXED BY usage_minute_scope_ws WHERE ws IS NULL
-) sc CROSS JOIN usage_day_quarters q ON q.session = sc.session`;
-// Each quarter is entirely within one local day except one crossing midnight. Keep those quarters' minutes separate;
-// all the others are read once regardless of how many calls or occupied minutes they contain.
-const CROSSES_DAY = `((q.quarter * 15 + CAST(?1 AS INTEGER)) % 1440 + 1440) % 1440 > 1425`;
-function quartersByDay(from: string, visible: string): string {
-  return `SELECT strftime('%Y-%m-%d', (q.quarter * 15 + CAST(?1 AS INTEGER)) * 60, 'unixepoch') AS day,
-    q.session, q.runtime, NULLIF(q.model, '') AS model, SUM(q.tokens) AS tokens, SUM(q.calls) AS calls
-    ${from} WHERE ${visible} GROUP BY day, q.session, q.runtime, q.model`;
-}
-function minutesAtDayEdges(from: string, visible: string): string {
-  return `WITH edge(session, quarter) AS (
-      SELECT DISTINCT q.session, q.quarter ${from} WHERE ${visible} AND ${CROSSES_DAY}
-    ), parts AS (
-      SELECT q.session, q.quarter * 15 AS minute, q.runtime, q.model, q.tokens, q.calls
-        ${from} WHERE ${visible} AND NOT (${CROSSES_DAY})
-      UNION ALL
-      SELECT m.session, m.minute, m.runtime, m.model, m.tokens, m.calls
-        FROM edge e CROSS JOIN usage_minute m ON m.session = e.session
-          AND m.minute >= e.quarter * 15 AND m.minute < (e.quarter + 1) * 15
-    )
-    SELECT strftime('%Y-%m-%d', (p.minute + CAST(?1 AS INTEGER)) * 60, 'unixepoch') AS day,
-      p.session, p.runtime, NULLIF(p.model, '') AS model, SUM(p.tokens) AS tokens, SUM(p.calls) AS calls
-      FROM parts p GROUP BY day, p.session, p.runtime, p.model`;
-}
-export const USAGE_QUARTERS_ALL = quartersByDay(QUARTERS_ALL, "1");
-export const USAGE_QUARTERS_SCOPED = quartersByDay(QUARTERS_SCOPED, "sc.ws = ?2");
-export const USAGE_QUARTERS_HOME = quartersByDay(QUARTERS_HOME, "1");
-export const USAGE_DAY_ALL = minutesAtDayEdges(QUARTERS_ALL, "1");
-export const USAGE_DAY_SCOPED = minutesAtDayEdges(QUARTERS_SCOPED, "sc.ws = ?2");
-export const USAGE_DAY_HOME = minutesAtDayEdges(QUARTERS_HOME, "1");
-
-// Once detailed statistics supply the minutes, their scope follows session moves without rewriting old buckets.
-const DETAIL_QUARTERS_SCOPED = QUARTERS_SCOPED.replaceAll("usage_minute_scope", "usage_detail_scope");
-const DETAIL_QUARTERS_HOME = QUARTERS_HOME.replaceAll("usage_minute_scope", "usage_detail_scope");
-function detailMinutesAtDayEdges(from: string, visible: string): string {
-  return `WITH edge(session, quarter) AS (
-      SELECT DISTINCT q.session, q.quarter ${from} WHERE ${visible} AND ${CROSSES_DAY}
-    ), parts AS (
-      SELECT q.session, q.quarter * 15 AS minute, q.runtime, q.model, q.tokens, q.calls
-        ${from} WHERE ${visible} AND NOT (${CROSSES_DAY})
-      UNION ALL
-      SELECT d.session, d.bucket AS minute, d.runtime, d.model,
-        d.input + d.cache_read + d.cache_write + d.cache_write_long + d.output AS tokens, d.calls
-        FROM edge e CROSS JOIN usage_detail d ON d.session = e.session AND d.level = 1
-          AND d.bucket >= e.quarter * 15 AND d.bucket < (e.quarter + 1) * 15
-    )
-    SELECT strftime('%Y-%m-%d', (p.minute + CAST(?1 AS INTEGER)) * 60, 'unixepoch') AS day,
-      p.session, p.runtime, NULLIF(p.model, '') AS model, SUM(p.tokens) AS tokens, SUM(p.calls) AS calls
-      FROM parts p GROUP BY day, p.session, p.runtime, p.model`;
-}
-export const USAGE_DETAIL_DAY_ALL = detailMinutesAtDayEdges(QUARTERS_ALL, "1");
-export const USAGE_DETAIL_DAY_SCOPED = detailMinutesAtDayEdges(DETAIL_QUARTERS_SCOPED, "sc.ws = ?2");
-export const USAGE_DETAIL_DAY_HOME = detailMinutesAtDayEdges(DETAIL_QUARTERS_HOME, "1");
-export const USAGE_DETAIL_QUARTERS_SCOPED = quartersByDay(DETAIL_QUARTERS_SCOPED, "sc.ws = ?2");
-export const USAGE_DETAIL_QUARTERS_HOME = quartersByDay(DETAIL_QUARTERS_HOME, "1");
-
-/// Calls added up by local day and session without rereading the calls, including in non-quarter-hour time zones.
-export function usageByDay(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null = null, partial = false,
-  range?: { from: bigint; to: bigint }): { day: string; session: string; runtime: string; model: string | null; tokens: number; calls: number }[] {
-  if (hasCompactUsage(s.db)) {
-    const rows = compactHistory(s.db, utcOffsetMin, viewer, partial, range);
-    if (rows === null) throw new Error(USAGE_MINUTES_PENDING);
-    return rows;
-  }
-  if (retiredUsage(s.db)) throw new Error(USAGE_MINUTES_PENDING);
-  const fromDetail = one(s, "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_history_from_detail'") !== undefined;
-  if (fromDetail) {
-    const generation = usageDetailGeneration(s.db);
-    if (generation !== "legacy" || !usageDetailReady(s.db, viewer, generation)) throw new Error(USAGE_MINUTES_PENDING);
-    const aligned = utcOffsetMin % 15n === 0n;
-    const rows = viewer === null ? all(s, aligned ? USAGE_QUARTERS_ALL : USAGE_DETAIL_DAY_ALL, utcOffsetMin)
-      : all(s, viewer.home === false ? (aligned ? USAGE_DETAIL_QUARTERS_SCOPED : USAGE_DETAIL_DAY_SCOPED)
-        : (aligned ? USAGE_DETAIL_QUARTERS_HOME : USAGE_DETAIL_DAY_HOME), utcOffsetMin, viewer.workspace);
-    return rows.map((r) => ({ day: r.day, session: r.session, runtime: r.runtime, model: r.model, tokens: Number(r.tokens), calls: Number(r.calls) }));
-  }
-  // Before the old fill completed, an old session might have no scope row at all. An empty scope is therefore not
-  // proof that this workspace's historical total is complete.
-  if (one(s, "SELECT done FROM usage_minute_all WHERE id = 1")?.done !== 1) throw new Error(USAGE_MINUTES_PENDING);
-  if (viewer !== null && viewer.home === false && one(s, PENDING_MINUTE_SESSION, viewer.workspace)) {
-    throw new Error(USAGE_MINUTES_PENDING);
-  }
-  const aligned = utcOffsetMin % 15n === 0n;
-  const found = viewer === null ? all(s, aligned ? USAGE_QUARTERS_ALL : USAGE_DAY_ALL, utcOffsetMin)
-    : all(s, viewer.home === false ? (aligned ? USAGE_QUARTERS_SCOPED : USAGE_DAY_SCOPED) : (aligned ? USAGE_QUARTERS_HOME : USAGE_DAY_HOME), utcOffsetMin, viewer.workspace);
-  return found.map((r) => ({ day: r.day, session: r.session, runtime: r.runtime, model: r.model, tokens: Number(r.tokens), calls: Number(r.calls) }));
 }
 
 /// The threads visible through sessions in this workspace. A thread with no sessions belongs to the home workspace.
@@ -1219,11 +1193,12 @@ export function listBindings(s: Store): Map<string, string[]> {
   return out;
 }
 
-/// Store::participants: everyone who wrote in each session's threads (or one session's), as creator references,
+/// Store::participants: everyone who wrote in each session's threads (one, those named, or all), as creator references,
 /// earliest first; a session no one wrote to has none.
-export function participants(s: Store, session: string | null): Map<string, string[]> {
-  const sql = `SELECT ts.session, ts.connect, t.id, t.surface FROM thread_sessions ts JOIN threads t ON t.id = ts.thread ${session !== null ? "WHERE ts.session = ?" : ""}`;
-  const rows = session !== null ? all(s, sql, session) : all(s, sql);
+export function participants(s: Store, session: string | string[] | null): Map<string, string[]> {
+  if (Array.isArray(session) && session.length === 0) return new Map();
+  const sql = `SELECT ts.session, ts.connect, t.id, t.surface FROM thread_sessions ts JOIN threads t ON t.id = ts.thread ${Array.isArray(session) ? "WHERE ts.session IN (SELECT value FROM json_each(?))" : session !== null ? "WHERE ts.session = ?" : ""}`;
+  const rows = Array.isArray(session) ? all(s, sql, JSON.stringify(session)) : session !== null ? all(s, sql, session) : all(s, sql);
   // Each person once per session, at the first time they wrote in any of its threads.
   const firsts = new Map<string, Map<string, number>>();
   for (const r of rows) {

@@ -724,7 +724,8 @@ pub fn enter_sends_by(max_lines : Int, ime_action : Int) -> Bool {
 /// unsaid, the way the words come in decides (enter_sends_by): a keyboard's Enter gives them up (Shift+Enter a new
 /// line); a finger's keyboard's Enter is a new line where the field holds more than one and the keyboard has no key of
 /// its own for it (`ime_action`), else that key, giving them up. `placeholder`: what it shows while nothing is typed in
-/// it, on one line; `shorter`, other ways to say that where the field has less room, each shorter than the one before
+/// it, without soft wrapping; `min_lines`, the least lines it holds even while empty, up to `max_lines`; `shorter`, other ways to
+/// say the placeholder where the field has less room, each shorter than the one before
 /// (搜索全部内容, then 搜索): the longest of them all that fits is shown whole, the shortest cut with an ellipsis only
 /// where none does, as Ctx::text's words (Node::hint_shown).
 pub fn Ctx::editor(
@@ -734,6 +735,7 @@ pub fn Ctx::editor(
   shorter? : Array[String] = no_words,
   w? : Size = Fill(1.0),
   font_size? : Double = 15.0,
+  min_lines? : Int = 1,
   max_lines? : Int = 5,
   plain? : Bool = false,
   line? : Double = 0.0,
@@ -908,7 +910,7 @@ pub fn Ctx::editor(
   n.pad_r = z.pad_x
   n.pad_t = z.pad_y
   n.pad_b = z.pad_y
-  n.min_h = z.min_h
+  n.min_h = z.least_h(min_lines, max_lines)
   n.max_h = z.max_h
   if !plain {
     n.bg = 0xFFFFFFFFL
@@ -970,6 +972,13 @@ priv struct EditorSizing {
 }
 
 ///|
+/// How tall an editor so sized is at least while it holds `min_lines` lines (up to `max_lines`) even when empty.
+fn EditorSizing::least_h(self : EditorSizing, min_lines : Int, max_lines : Int) -> Double {
+  let least = if min_lines < 1 || max_lines < 1 { 1 } else if min_lines > max_lines { max_lines } else { min_lines }
+  self.min_h + (least - 1).to_double() * (self.min_h - 2.0 * self.pad_y)
+}
+
+///|
 /// An editor of words `font_size` big on lines `line` apart (0: `text_line` of its size, the theme's it is built in),
 /// `max_lines` at most, `plain` (no frame of its own: what holds it draws one) or framed, as Ctx::editor lays it out.
 fn Ctx::editor_sizing(
@@ -1022,7 +1031,8 @@ pub fn Field::composed_said(self : Field) -> String {
 ///|
 /// What a plain field (Ctx::editor's `plain`, no look of its own, nothing secret) shows and how its words are set, as
 /// it is laid out by (FieldLaid::size): its words with what is composed in them, their size and line (as said to
-/// Ctx::editor, before the system's size of words; none said, the theme's share of its size), how many lines at most,
+/// Ctx::editor, before the system's size of words; none said, the theme's share of its size), how many lines at least
+/// and at most,
 /// `trim`.
 pub(all) struct FieldLaid {
   words : String
@@ -1030,6 +1040,7 @@ pub(all) struct FieldLaid {
   line : Double
   /// its line, where `line` is 0, of its size: the theme's its tree is drawn in (tree_theme)
   text_line : Double
+  min_lines : Int
   max_lines : Int
   trim : Bool
 } derive(Eq, Debug)
@@ -1037,10 +1048,17 @@ pub(all) struct FieldLaid {
 ///|
 /// What `field` shows, followed (Field::composed_said), as a plain Ctx::editor of it set so lays it out: for a node of
 /// the window's tree holding the old view it is built in, measured by it (View::measured, FieldLaid::size).
-pub fn Field::laid(self : Field, font_size? : Double = 15.0, line? : Double = 0.0, max_lines? : Int = 5, trim? : Bool = false) -> FieldLaid {
+pub fn Field::laid(
+  self : Field,
+  font_size? : Double = 15.0,
+  line? : Double = 0.0,
+  min_lines? : Int = 1,
+  max_lines? : Int = 5,
+  trim? : Bool = false,
+) -> FieldLaid {
   // (its line, where none is said, the theme's of the tree that holds it, followed: as its editor's is, built in it)
   let text_line = if line > 0.0 { 0.0 } else { tree_theme().text_line }
-  { words: self.composed_said(), font_size, line, text_line, max_lines, trim }
+  { words: self.composed_said(), font_size, line, text_line, min_lines, max_lines, trim }
 }
 
 ///|
@@ -1059,7 +1077,7 @@ pub fn FieldLaid::size(self : FieldLaid, w : Double?) -> (Double, Double) {
       Some(w) => w
       None => tw
     },
-    dclamp(th, z.min_h, z.max_h),
+    dclamp(th, z.least_h(self.min_lines, self.max_lines), z.max_h),
   )
 }
 
@@ -1322,14 +1340,14 @@ fn Ctx::paint_float_caret(
 
 ///|
 /// What the field `n` shows while nothing is typed in it, laid out on its line as its words are (FieldBox's line_h, the
-/// system's size of words applied): its placeholder on one line, as words that do not wrap, said the longest way that fits the room its words have (Ctx::editor `shorter`), the
+/// system's size of words applied): its placeholder without soft wrapping, said the longest way that fits the room its words have (Ctx::editor `shorter`), the
 /// shortest cut with an ellipsis where none does; never cut by the field's edge.
 fn Node::hint_shown(self : Node) -> TextLayout {
   self.field_box().hint_shown()
 }
 
 ///|
-/// How the field `n` lays its placeholder out on one line, on its line (FieldBox::hint_lay).
+/// How the field `n` lays its placeholder out without soft wrapping (FieldBox::hint_lay).
 fn Node::hint_lay(self : Node) -> (String) -> TextLayout {
   self.field_box().hint_lay()
 }
@@ -1342,7 +1360,7 @@ fn FieldBox::hint_shown(self : FieldBox) -> TextLayout {
 }
 
 ///|
-/// How the field placed as `b` lays its placeholder out on one line: on the line its words are laid out on (line_h, as
+/// How the field placed as `b` lays its placeholder out without soft wrapping: on the line its words are laid out on (line_h, as
 /// the system's size of words makes it), so that it stands where they would, not on the line as it was asked for.
 fn FieldBox::hint_lay(self : FieldBox) -> (String) -> TextLayout {
   fn(s) { layout_text(s, self.font_size, 400, 1.0e9, false, line=self.line_h, trim=self.trim) }
@@ -1612,10 +1630,11 @@ fn Ctx::sync_ime(self : Ctx) -> Unit {
     }
   }
   if catching {
-    let sig = "catch \{focus}"
+    let (x, y, h) = self.dev.catchers.get(focus).unwrap().place.unwrap_or((0.0, self.height, 1.0))
+    let sig = "catch \{focus} \{x} \{y} \{h}"
     if sig != self.ime_sig {
       self.ime_sig = sig
-      h_set_ime(true, 0.0, self.height, 1.0, 1.0, "", 0, 0)
+      h_set_ime(true, x, y, 1.0, h, "", 0, 0)
     }
     return
   }
@@ -2157,6 +2176,7 @@ fn EditorState::can(self : EditorState) -> Int {
 /// A field right clicked since the last frame (a desktop's secondary button): its id and where, the focus given it (the
 /// edit menu the app puts up there acts on it: field_can, field_edit). None when none was.
 pub fn Ctx::field_right_clicked(self : Ctx) -> (Int, Double, Double)? {
+  hand_events_read()
   for m in desk.menus {
     for id in m.0 {
       if self.editors.contains(id) {

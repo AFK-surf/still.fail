@@ -33,13 +33,15 @@ import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
 import { iso, sessionPlaces, transcriptSources } from "../read/transcript.ts";
 import { type Attachment, MANUAL, type SessionRow, type Store, STILLFAIL_SURFACE, feishuSurface, slackSurface, type MessageRow, type ThreadRow, type ThreadSummary } from "../store/store.ts";
+import type { RecentChatList } from "../store/chat-list.ts";
 import { Accounts } from "./accounts.ts";
 import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
 import { Places } from "../ops/places.ts";
 import { threadCommand } from "./args.ts";
-import type { ChatEvent, ChatSurface, InboundFile, InboundMessage, Person, ThreadRef } from "./chat.ts";
+import type { ChatEvent, ChatSurface, InboundFile, InboundMessage, ModelChoice, Person, ThreadRef } from "./chat.ts";
 import { toolStatus } from "./chat.ts";
-import { type Connect, type HubConfig, type Profile, allowedIn, profilesFor, runtimeNamed, runtimeTitle } from "./config.ts";
+import { type Connect, type HubConfig, type Profile, allowedIn, profilesFor, runtimeNamed, runtimeTitle, sameModel } from "./config.ts";
+import { candidates as modelsRun } from "./model-choice.ts";
 import { INTERNAL_CONNECT, type InternalChat, nextTsAt } from "./internal.ts";
 import { LiveHub } from "./live.ts";
 import type { Jobs } from "./neighbours.ts";
@@ -148,6 +150,10 @@ export class Hub {
   /// Every thread as lists have it, read by the readers (agents.ts sets it): chat_list's, not read on the main thread
   /// (some 15 queries a thread, 1,200 threads on a station: 10 seconds held while memory was short). Unset (tests): the store.
   threadList: (() => Promise<ThreadSummary[]>) | null = null;
+  /// A recent, unfiltered chat_list, with details for its page alone.
+  recentChatList: ((ws: string | null, home: string | null, limit: number) => Promise<RecentChatList>) | null = null;
+  /// The matching chats and count for a chat_list search.
+  searchChatList: ((ws: string | null, home: string | null, limit: number, query: string) => Promise<RecentChatList>) | null = null;
   /// A thread's latest `limit` messages, oldest first, read by the readers (agents.ts sets it): the archive review's
   /// (review.ts), up to 400 of them through the merged view, 3 seconds held on a station. Unset (tests): the store.
   latestMessages: ((thread: number, limit: number) => Promise<MessageRow[]>) | null = null;
@@ -608,7 +614,7 @@ export class Hub {
 
   /// A message's text and its shared files, fetched into the session's uploads (as files sent in the station's own
   /// chats are). A file that cannot be fetched is named in the text with why, so its reader knows one was there.
-  private async fetched(chat: ChatSurface, key: string, text: string, files: InboundFile[] | undefined): Promise<{ text: string; attachments: Attachment[] }> {
+  async fetched(chat: ChatSurface, key: string, text: string, files: InboundFile[] | undefined): Promise<{ text: string; attachments: Attachment[] }> {
     const row = files && files.length > 0 ? this.store.getSession(key) : null;
     if (!files || !row) return { text, attachments: [] };
     const dir = join(row.workspace, "uploads");
@@ -1053,13 +1059,30 @@ export class Hub {
     return s !== null && s !== undefined && this.wsOf(s) === workspace;
   }
 
+  /// The models a person can pick for a new chat with a connect (Slack's `/sf`): those its workspace's profiles run, its
+  /// own first (what a chat with it runs unless told otherwise).
+  modelsFor(connectId: string): ModelChoice[] {
+    const config = this.config();
+    const connect = connectOf(config, connectId);
+    const own: ModelChoice = { runtime: connect.bind.runtime, model: connect.bind.model ?? null };
+    const profiles = config.profiles.filter((p) => allowedIn(p, connect.workspace ?? null, this.workspaces()[0] ?? null));
+    const same = (c: ModelChoice) => c.runtime === own.runtime && (c.model === null || own.model === null ? c.model === own.model : sameModel(c.model, own.model));
+    return [own, ...modelsRun(profiles, null).filter((c) => !same(c))];
+  }
+
   /// A session for a connect: the connect's own profile when it keeps to one (and it still can run it); else any of its
-  /// runtime, the model's first (pool.ts).
+  /// runtime, the model's first (pool.ts). A message sent to a model (`model`) starts one on that model instead, on any
+  /// profile of the connect's workspace that runs it.
   createSession(config: HubConfig, key: string, connect: Connect, scope: "thread" | "all", message: InboundMessage | null, title: string | null, createdBy: string | null) {
-    const fits = profilesFor(config, connect, this.workspaces()[0] ?? null);
+    const home = this.workspaces()[0] ?? null;
+    const chosen = message?.model ?? null;
+    const runtime = chosen === null ? connect.bind.runtime : runtimeNamed(chosen.runtime);
+    if (runtime === null) throw new Error(`unknown runtime ${chosen?.runtime}`);
+    const model = chosen === null ? (connect.bind.model ?? null) : chosen.model;
+    const fits = chosen === null ? profilesFor(config, connect, home) : config.profiles.filter((p) => p.runtimes.includes(runtime) && allowedIn(p, connect.workspace ?? null, home) && serves(p, model));
+    if (fits.length === 0 && chosen !== null) throw new Error(tr(stationLang(), "station.session.noProfileForModel", { model: model ?? runtimeTitle(runtime), runtime: runtimeTitle(runtime) }));
     if (fits.length === 0 && profilesFor(config, connect).length > 0) throw new Error(tr(stationLang(), "station.session.noProfileHere", { runtime: runtimeTitle(connect.bind.runtime) }));
-    const model = connect.bind.model ?? null;
-    const kept = connect.bind.profile !== undefined ? fits.find((p) => p.id === connect.bind.profile && serves(p, model)) : undefined;
+    const kept = chosen === null && connect.bind.profile !== undefined ? fits.find((p) => p.id === connect.bind.profile && serves(p, model)) : undefined;
     const profile = kept ?? this.accounts.pick(fits, model, false);
     const dir = scope === "thread" && message ? `${message.channel}-${message.threadTs.replace(".", "-")}` : key.slice(connect.id.length + 1);
     const workspace = join(config.dataDir, "sessions", connect.id, dir, "workspace");
@@ -1072,11 +1095,11 @@ export class Hub {
       scope,
       title,
       createdBy,
-      runtime: connect.bind.runtime,
+      runtime,
       profile: profile.id,
       profilePinned: kept !== undefined,
-      model: connect.bind.model ?? null,
-      effort: connect.bind.effort ?? null,
+      model,
+      effort: chosen === null ? (connect.bind.effort ?? null) : null,
       fast: null,
       workspace,
       cwd: null,
@@ -1086,7 +1109,7 @@ export class Hub {
       lastActiveAt: now,
       ws: connect.workspace ?? null,
     });
-    log.info("hub", "session created", { session: key, connect: connect.id, scope, runtime: connect.bind.runtime, profile: profile.id });
+    log.info("hub", "session created", { session: key, connect: connect.id, scope, runtime, model: model ?? "", profile: profile.id });
   }
 
   /// The session's actor, made on first use.

@@ -65,6 +65,22 @@ test("a sidebar waits for handover, shares preparation, and leaves short old cha
   } finally { readers.close(); previous.resolve(); f.close(); }
 });
 
+test("the archive and a sidebar share the old-chat worker after handover", async () => {
+  const f = fixture([150]);
+  const previous = Promise.withResolvers<void>();
+  const readers = new Readers(f.dir, 1, undefined, 1, { previousGone: previous.promise });
+  try {
+    const archive = readers.prepareSaid(f.threads);
+    const sidebar = readers.read("sharedChats", { viewer, sessions: null, threads: null }, "en");
+    await readers.read("sharedChats", { viewer, sessions: [], threads: [] }, "en");
+    assert.equal(f.store.db.prepare("SELECT COUNT(*) AS n FROM said_state_guard").get()?.n, 0);
+    previous.resolve();
+    const [, text] = await Promise.all([archive, sidebar]);
+    assert.equal(JSON.parse(text).find((row: any) => row.thread === f.threads[0])?.said?.other, 1);
+    assert.equal(f.store.db.prepare("SELECT said_other_n FROM thread_state WHERE thread=?").get(f.threads[0])?.said_other_n, 1);
+  } finally { readers.close(); previous.resolve(); f.close(); }
+});
+
 test("an abandoned sidebar does not start old-chat work after handover", async () => {
   const f = fixture([150]);
   const previous = Promise.withResolvers<void>();

@@ -17,6 +17,7 @@
 // - a Kimi Code profile signed in to Kimi: its token (minutes) renewed with half its life left, looked at every minute
 //   (kimi.ts).
 import { HERMES_MODEL_LIMIT } from "../agents/hermes.ts";
+import { agyEmailIn, agyToken } from "../agents/agy.ts";
 import { runtimeKind, runtimeLabel } from "../agents/runtime.ts";
 import type { Clock } from "effect";
 import { createHash, randomBytes } from "node:crypto";
@@ -110,6 +111,8 @@ export type AccountsDeps = {
   codex?: () => CodexAccess | undefined;
   /// Hermes reports its configured providers and model IDs in ACP session/new (no model turn).
   hermes?: () => { models(profile: Profile): Promise<string[]> } | undefined;
+  /// The Antigravity CLI says whether it is signed in, and the models it offers, in ACP session/new (no model turn).
+  agy?: () => { models(profile: Profile): Promise<string[]> } | undefined;
   /// Whether someone follows the events or a turn runs (allowances are asked again on a round only then).
   following?: () => boolean;
   /// The station's environment (where the machine's logins are, and the CLIs found); process.env by default.
@@ -203,6 +206,9 @@ export class Accounts {
   private checks = new Map<string, ProfileCheck>();
   private quotas = new Map<string, ProfileQuota>();
   private quotaBusy = new Map<string, Promise<void>>();
+  /// A host on an older version may know the reset count but not the cards' expiries. Try the borrowed login at most
+  /// once a round for the same count, including when the provider cannot supply all of the details.
+  private resetDetailsAsked = new Map<string, { at: number; count: number }>();
   /// A quota read started before a Codex sign-in must not replace the new login's status.
   private loginGeneration = new Map<string, number>();
   /// The last changed borrowed login whose app-servers were told to reload it.
@@ -733,7 +739,7 @@ export class Accounts {
       log.warn("accounts", "could not move a new profile's home", { login: id, error: (e as Error).message });
       return this.pendingFailed(id, tr(lang, "station.login.homeFailed", { error: (e as Error).message }));
     }
-    const name = signedIn ? (email ?? "OpenCode Go") : kimi ? "Kimi Code" : (email ?? tr(lang, p.runtime === "claude" ? "station.profile.claudeSubscription" : p.runtime === "grok" ? "station.profile.grokSubscription" : p.runtime === "cursor" ? "station.profile.cursorSubscription" : p.runtime === "devin" ? "station.profile.devinSubscription" : "station.profile.chatgptSubscription"));
+    const name = signedIn ? (email ?? "OpenCode Go") : kimi ? "Kimi Code" : (email ?? tr(lang, p.runtime === "claude" ? "station.profile.claudeSubscription" : p.runtime === "grok" ? "station.profile.grokSubscription" : p.runtime === "cursor" ? "station.profile.cursorSubscription" : p.runtime === "devin" ? "station.profile.devinSubscription" : p.runtime === "agy" ? "station.profile.agySubscription" : "station.profile.chatgptSubscription"));
     try {
       this.save(p.by, `profile ${profileId} from a sign-in`, (raw) => {
         // An OpenCode Go one runs every runtime its key does (it has none of its own).
@@ -987,6 +993,19 @@ export class Accounts {
         check.detail = tr(lang, "station.profile.hermesModelsFailed", { error: (e as Error).message });
       }
     }
+    // (One signed out of its Google account is said so by its check: no session asked.)
+    if (profile.runtime === "agy" && check.state !== "login" && this.deps.agy?.()) {
+      try {
+        check.models = await this.deps.agy()!.models(profile);
+        check.state = "ok";
+        check.detail = tr(lang, "station.profile.works", { n: check.models.length });
+      } catch (e) {
+        const error = (e as Error).message;
+        check.models = null;
+        check.state = "failed";
+        check.detail = tr(lang, "station.profile.agyFailed", { error });
+      }
+    }
     check.decision = await this.discoverFn(profile, check);
     // A profile edited during the probe does not inherit the previous account's capabilities.
     const now = this.profile(id);
@@ -1018,10 +1037,17 @@ export class Accounts {
       // Unless what the borrowed login read here is newer.
       const local = this.checks.get(profile.id);
       const mine = this.quotas.get(profile.id);
-      if (isObject(got.quota) && !local?.codexRevoked && !(mine !== undefined && Number(got.quota.checkedAt ?? 0) < mine.checkedAt)) {
+      // Keep a recent detailed reading when an older host can only supply the same reset count. It is refreshed after
+      // a reset and every quota round; a host's clock may be ahead of ours.
+      const now = this.background.now();
+      const completeHere = this.missingBorrowedResetDetails(profile, got.quota) && mine !== undefined &&
+        !this.missingBorrowedResetDetails(profile, mine) && mine.resetCount === got.quota.resetCount &&
+        mine.checkedAt <= now && now - mine.checkedAt < QUOTA_EVERY_MS;
+      if (isObject(got.quota) && !local?.codexRevoked && !completeHere && !(mine !== undefined && Number(got.quota.checkedAt ?? 0) < mine.checkedAt)) {
         this.quotas.set(profile.id, got.quota as ProfileQuota);
         this.deps.store.setProfileQuota(profile.id, got.quota);
       }
+      this.refreshMissingBorrowedResetDetails(profile);
     } catch {
       const host = this.deps.shared!.hostName?.(profile) ?? "";
       check = { state: "failed", detail: tr(lang, "station.share.hostOffline", { host }), models: null, checkedAt: 0 };
@@ -1036,6 +1062,25 @@ export class Accounts {
     }
     this.keepCheck(profile.id, check);
     return check;
+  }
+
+  private missingBorrowedResetDetails(profile: Profile, q: ProfileQuota | null | undefined): boolean {
+    return profile.runtime === "codex" && borrowed(profile) && q != null && Number.isInteger(q.resetCount) &&
+      q.resetCount! > 0 && (!Array.isArray(q.resetExpiries) || q.resetExpiries.length < q.resetCount!);
+  }
+
+  /// An older host's fresh count is not a fresh reading of the expiry details. Read those with the lent login, and
+  /// retain the host's count if it cannot be read. In-flight reads also call checkBorrowed on failure, so do not start
+  /// another one from that check.
+  private refreshMissingBorrowedResetDetails(profile: Profile) {
+    const q = this.quotas.get(profile.id);
+    if (!this.deps.shared || !this.missingBorrowedResetDetails(profile, q) || this.quotaBusy.has(profile.id)) return;
+    const now = this.background.now();
+    const count = q!.resetCount!;
+    const last = this.resetDetailsAsked.get(profile.id);
+    if (last && last.count === count && now - last.at < QUOTA_EVERY_MS) return;
+    this.resetDetailsAsked.set(profile.id, { at: now, count });
+    this.background.spawn(() => this.refreshQuota(profile.id));
   }
 
   /// POST /profiles/:id/quota: a profile's allowance asked again (unless a question is on its way already: then the
@@ -1141,7 +1186,10 @@ export class Accounts {
     for (const p of this.profiles()) {
       const q = this.quotas.get(p.id);
       const fresh = q !== undefined && now - q.checkedAt < QUOTA_EVERY_MS - 1000;
-      if (fresh && !all) continue;
+      if (fresh && !all) {
+        this.refreshMissingBorrowedResetDetails(p);
+        continue;
+      }
       this.background.spawn(() => this.refreshQuota(p.id));
     }
   }
@@ -1583,6 +1631,7 @@ function accountFiles(runtime: Runtime, home: string): AccountFile[] {
   if (runtime === "grok") return [{ path: grokAuthFile(home), email: grokEmailIn }];
   if (runtime === "cursor") return [{ path: cursorAuthFile(home), email: (text) => cursorIn(text)?.email ?? null }];
   if (runtime === "devin") return [{ path: devinAccountFile(home), email: devinNotedIn }];
+  if (runtime === "agy") return [{ path: agyToken(home), email: agyEmailIn }];
   if (runtime === "codex") {
     const email = (text: string) => {
       const claims = codexClaimsIn(text);

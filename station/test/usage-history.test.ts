@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { constants } from "node:sqlite";
 import { test } from "node:test";
-import { makeStore, USAGE_DAY_SCOPED, USAGE_QUARTERS_SCOPED, VISIBLE_USAGE_CARDS } from "../src/read/store.ts";
+import { makeStore, VISIBLE_USAGE_CARDS } from "../src/read/store.ts";
 import { usage, usageHistory } from "../src/read/usage.ts";
 import { Store } from "../src/store/store.ts";
 
@@ -21,14 +21,11 @@ test("missing old decision results leave the available usage and chat totals vis
     }, { turn: null, thread, person: null, profile: "cc" }]]);
     store.db.exec("CREATE TABLE card_outcomes_incomplete (id INTEGER PRIMARY KEY)");
     const result = usage(makeStore(store.db, "."), "en", 0n, 180_000n, 0n, false, null, true);
-    assert.equal(result.history, undefined);
-    assert.equal(result.historyUnavailable, true);
-    assert.equal(result.partialHistory.cardsIncomplete, true);
-    assert.equal(result.partialHistory.tokensComplete, true);
-    assert.equal(result.partialHistory.cards, undefined);
-    assert.equal(result.partialHistory.picked, undefined);
-    assert.deepEqual(result.partialHistory.places, { ember: 1 });
-    assert.deepEqual(result.partialHistory.days.map((day: { tokens: number }) => day.tokens), [3]);
+    assert.equal(result.history.cardsIncomplete, true);
+    assert.equal(result.history.cards, undefined);
+    assert.equal(result.history.picked, undefined);
+    assert.deepEqual(result.history.places, { ember: 1 });
+    assert.deepEqual(result.history.days.map((day: { tokens: number }) => day.tokens), [3]);
   } finally { store.close(); }
 });
 
@@ -73,83 +70,6 @@ test("usage history counts only the chats and cards visible in the viewer's work
     visited = 0;
     assert.equal(tracked.all("workspace-a", 1).length, 3);
     assert.equal(visited, 3, "another workspace's card history does not add examined cards");
-  } finally {
-    store.close();
-  }
-});
-
-test("usage history assigns calls to their actual local day for any minute offset", () => {
-  const store = Store.open(":memory:");
-  try {
-    session(store, "a", "workspace-a");
-    const offsets = [1, -1, 0, 15, -15, 345, -345, 1_439, -1_439, 1_440, -1_440];
-    const times = offsets.flatMap((offset) => {
-      const midnight = Date.UTC(2026, 0, 2) - offset * 60_000;
-      return [midnight - 900_001, midnight - 30_000, midnight + 30_000, midnight + 900_001];
-    }).concat([-900_001, -900_000, -1, 0, 1, 899_999, 900_000]);
-    const calls = times.map((at, i) => [{ id: `call-${i}`, at, model: "m", subagent: false, fast: false, input: 1,
-      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 0, calls: 1, context: null, window: null },
-      { turn: null, person: null, thread: null, profile: null }] as const);
-    store.recordUsage("/a.jsonl", { session: "a", offset: 1, model: "m" }, "claude", calls as never);
-    for (const offset of offsets) {
-      const expected = new Map<string, number>();
-      for (const at of times) {
-        const day = new Date(at + offset * 60_000).toISOString().slice(0, 10);
-        expected.set(day, (expected.get(day) ?? 0) + 1);
-      }
-      const got = usageHistory(makeStore(store.db, "."), BigInt(offset), null).days;
-      assert.deepEqual(got.map((d: { day: string; calls: number }) => [d.day, d.calls]), [...expected].sort(), `offset ${offset}`);
-    }
-    const plan = store.db.prepare(`EXPLAIN QUERY PLAN ${USAGE_DAY_SCOPED}`).all(1n, "workspace-a") as { detail: string }[];
-    assert.match(plan.map((r) => r.detail).join(" | "), /SEARCH sc USING COVERING INDEX usage_minute_scope_ws \(ws=\?\)/);
-    assert.match(plan.map((r) => r.detail).join(" | "), /SEARCH q USING PRIMARY KEY \(session=\?\)/);
-    assert.match(plan.map((r) => r.detail).join(" | "), /SEARCH m USING PRIMARY KEY \(session=\? AND minute>\? AND minute<\?\)/);
-    let visited = 0;
-    let edgeVisited = 0;
-    store.db.function("visited_quarter", (quarter) => { visited++; return quarter; });
-    store.db.function("visited_minute", (minute) => { edgeVisited++; return minute; });
-    const tracked = store.db.prepare(USAGE_DAY_SCOPED
-      .replaceAll("ON q.session = sc.session", "ON q.session = sc.session AND visited_quarter(q.quarter) IS NOT NULL")
-      .replace("ON m.session = e.session", "ON m.session = e.session AND visited_minute(m.minute) IS NOT NULL"));
-    const noon = Date.UTC(2026, 0, 1, 12);
-    const noonCall = { id: "noon", at: noon, model: "m", subagent: false, fast: false, input: 1,
-      cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 0, calls: 1, context: null, window: null };
-    const of = { turn: null, person: null, thread: null, profile: null };
-    store.recordUsage("/a.jsonl", { session: "a", offset: 2, model: "m" }, "claude", [[noonCall, of]]);
-    tracked.all(1n, "workspace-a");
-    const before = visited;
-    const edgesBefore = edgeVisited;
-    const extra = Array.from({ length: 2_000 }, (_, i) => [{ ...noonCall, id: `noon-${i}`, at: noon + i }, of] as const);
-    store.recordUsage("/a.jsonl", { session: "a", offset: 3, model: "m" }, "claude", extra as never);
-    visited = 0;
-    edgeVisited = 0;
-    tracked.all(1n, "workspace-a");
-    assert.equal(visited, before, "more calls in a minute do not add examined summaries");
-    assert.equal(edgeVisited, edgesBefore);
-    const spread = Array.from({ length: 14 }, (_, i) => [{ ...noonCall, id: `spread-${i}`, at: noon + (i + 1) * 60_000 }, of] as const);
-    store.recordUsage("/a.jsonl", { session: "a", offset: 4, model: "m" }, "claude", spread as never);
-    visited = 0;
-    edgeVisited = 0;
-    tracked.all(1n, "workspace-a");
-    assert.equal(visited, before, "more calls in an ordinary quarter do not add examined summaries");
-    assert.equal(edgeVisited, edgesBefore, "minutes outside local midnight are not read individually");
-    const aligned = store.db.prepare(`EXPLAIN QUERY PLAN ${USAGE_QUARTERS_SCOPED}`).all(0n, "workspace-a") as { detail: string }[];
-    assert.match(aligned.map((r) => r.detail).join(" | "), /SEARCH q USING PRIMARY KEY \(session=\?\)/);
-    store.db.setAuthorizer((action, table) => action === constants.SQLITE_READ && table === "usage_minute" ? constants.SQLITE_DENY : constants.SQLITE_OK);
-    try {
-      assert.ok(usageHistory(makeStore(store.db, "."), 0n, { workspace: "workspace-a", home: false }).days.length > 0,
-        "a quarter-aligned time zone does not inspect minute summaries");
-    } finally {
-      store.db.setAuthorizer(null);
-    }
-    session(store, "b", "workspace-b");
-    const other = Array.from({ length: 2_000 }, (_, i) => [{ ...noonCall, id: `other-${i}`, at: noon + i * 60_000 }, of] as const);
-    store.recordUsage("/b.jsonl", { session: "b", offset: 1, model: "m" }, "claude", other as never);
-    visited = 0;
-    edgeVisited = 0;
-    tracked.all(1n, "workspace-a");
-    assert.equal(visited, before, "another workspace's growing history is not read");
-    assert.equal(edgeVisited, edgesBefore);
   } finally {
     store.close();
   }

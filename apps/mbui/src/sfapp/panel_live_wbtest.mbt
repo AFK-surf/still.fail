@@ -80,8 +80,10 @@ fn live_frames(t : @ui.Tester, n : Int) -> Unit {
 /// cut to (its clip and its outer one), as panel_reach_said reads them: the first and the last.
 fn rows_seen(t : @ui.Tester) -> (String?, String?) {
   let drawn = t.drawn_instances()
+  // A clipped row can have the title's glyphs inside its old bounds. First require that this row itself is drawn.
+  let runs = t.text_runs()
   let seen = t.words().filter(fn(x) {
-    x.0.has_prefix("第") && {
+    x.0.has_prefix("第") && runs.iter().any(fn(r) { r.text == x.0 }) && {
       let glyphs = drawn.filter(fn(d) {
         d[5] == 1.0 && d[11] > 0.0 && d[0] >= x.1 - 0.01 && d[0] < x.1 + x.3 && d[1] >= x.2 - 0.01 && d[1] < x.2 + x.4
       })

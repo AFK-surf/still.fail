@@ -54,3 +54,15 @@ pub fn style_ink(style : TextStyle) -> Int64 {
 pub fn style_cut(style : TextStyle) -> Bool {
   style.resolve(g().narrow, tree_theme().dark).w is Some(Cut)
 }
+
+///|
+/// A retained rich paragraph as it is laid out now, in the window. Selection, flight and links use the same
+/// shaping and line breaking that paints the paragraph; no old frame needs to have registered a box for it.
+pub fn runs_words_now(v : @view.View) -> Words? {
+  guard v.alive() else { return None }
+  let (x, y, width, _) = v.laid_window_now()
+  let (runs, look, set) = v.runs_set_now()
+  guard !runs.is_empty() else { return None }
+  let (_, lay, _) = view_runs_laid(runs, look, set, width)
+  Some({ text: lay.text, pieces: [{ layout: lay, x, y, w: lay.w, h: lay.h, start: 0 }] })
+}

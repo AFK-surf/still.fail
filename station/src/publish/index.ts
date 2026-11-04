@@ -9,7 +9,7 @@ import type { Published, Store } from "../store/store.ts";
 import type { Hub } from "../sessions/hub.ts";
 import { roomOf } from "../sessions/footprint.ts";
 import { withLock, workspaceFile } from "../sessions/archive.ts";
-import { type Draft, snapshotOf } from "./snapshot.ts";
+import { type SnapshotDraft, snapshotOf } from "./snapshot.ts";
 
 /// Why a snapshot was not written: said to the person publishing.
 export class NotPublished extends Error {
@@ -58,7 +58,7 @@ async function copyAttachment(hub: Hub, thread: number, given: string, to: strin
 export async function publish(
   hub: Hub,
   store: Store,
-  draft: Draft,
+  draft: SnapshotDraft,
   a: { thread: number; ticked: string[]; station: string; by: { email: string; name: string } },
   say: { fileGone: (name: string) => string },
 ): Promise<Published> {

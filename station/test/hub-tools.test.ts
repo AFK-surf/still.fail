@@ -842,6 +842,26 @@ test("slack_api calls Slack as the session's bot; a thread it writes in becomes 
   await r.close();
 });
 
+test("slack_api with save_files saves the files in its answer into the session's uploads and starts with their paths", async () => {
+  const r = new Rig();
+  const mine = say("<@UBOT> look at that thread");
+  await r.accept(mine);
+  await settle();
+  const key = sessionKey("cl", "C1", mine.threadTs);
+  const shot = { id: "F1", name: "shot.png", size: 3, mode: "hosted", url_private_download: "https://files.slack.com/F1/shot.png" };
+  const answer = { ok: true, messages: [{ ts: "1.1", text: "look", files: [shot, { id: "F2", name: "held.png", mode: "hidden_by_limit" }] }] };
+  r.chat.answers.set("conversations.replies", answer);
+  r.chat.shared.set("F1", "png");
+  // Asked only with save_files.
+  assert.equal(await r.call(key, "slack_api", { method: "conversations.replies", params: { channel: "C9", ts: "1.1" } }), JSON.stringify(answer));
+  const said = JSON.parse(await r.call(key, "slack_api", { method: "conversations.replies", params: { channel: "C9", ts: "1.1" }, save_files: true }));
+  assert.equal(said.saved_files.length, 1);
+  assert.equal(said.saved_files[0].name, "shot.png");
+  assert.equal(readFileSync(said.saved_files[0].path, "utf8"), "png");
+  assert.ok(said.not_saved.includes("held.png"), said.not_saved);
+  assert.equal(said.messages[0].text, "look");
+});
+
 test("a still.fail chat calls slack_api as the station's Slack bot, chosen by name when several fit", async () => {
   const r = new Rig();
   const [key] = newSession(r.hub, web());

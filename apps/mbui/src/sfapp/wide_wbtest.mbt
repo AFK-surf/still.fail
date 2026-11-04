@@ -331,7 +331,7 @@ test "wide: where this machine is a station, files from the Finder let go on the
   let t = wide_tester(calls, mode="chat")
   @sfbase.machine_here.val = Some("ws1/st1")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "", station_name: "" }
-  let refs = fn() { @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files }).unwrap_or([]) }
+  let refs = fn() { @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.get() }).unwrap_or([]) }
   // on a message: each by where it is on this machine's station (named by its path: the chat's default)
   let (x, y) = t.find("做完了：").unwrap()
   t.drop_files(x, y, [("报告.pdf", b"%PDF"), ("截图/", b"")], paths=["/Users/lin/报告.pdf", "/Users/lin/截图"])
@@ -759,11 +759,12 @@ fn first_words_glyph(t : @ui.Tester) -> (Double, Double) raise {
 }
 
 ///|
-/// Whether the composer's hint is drawn: glyphs in its ground in the hint's ink.
-fn hint_drawn(t : @ui.Tester) -> Bool raise {
-  let (gx, gy, gw, gh) = composer_glass(t)
-  // (on the field's line, the glass's upper half, as the words typed are: the choices under it are in the same grey)
-  t.drawn_glyphs().iter().any(fn(g) { g.0 > gx && g.0 < gx + gw && g.1 > gy && g.1 < gy + gh / 2.0 && g.2 == @sf.theme().p.subtle })
+/// The field's own ink, including when focus changes its hint's words. Toolbar labels below it are separate nodes.
+fn wide_hint_drawn(t : @ui.Tester) -> Bool raise {
+  let tree = @ui.view_tree().unwrap()
+  let fields = tree.said_order().filter(fn(n) { !n.hidden && n.said is Some(s) && s.role == TextField })
+  assert_eq(fields.length(), 1)
+  t.drawn_glyphs(node=fields[0].id).iter().any(fn(g) { g.2 == @sf.theme().p.subtle })
 }
 
 ///|
@@ -785,7 +786,7 @@ test "wide: a new chat's first words, the hint gone under them, into their bubbl
   // nothing of the core's answered
   assert_at(in_field, first_words_glyph(t))
   let typed = seen_once(t, words)
-  assert_false(hint_drawn(t), msg="the hint under the words sent")
+  assert_false(wide_hint_drawn(t), msg="the hint under the words sent")
   assert_true(app.nav.top() is Chat(_))
   let sent = t.time()
   // the new chat's choices leave as what was by the composer does: fading where they are, on its ground as it goes
@@ -793,7 +794,7 @@ test "wide: a new chat's first words, the hint gone under them, into their bubbl
   t.run_for(new_fade_ms + 1.0)
   let (gx, _, gw, _) = composer_glass(t)
   assert_true(seen_words(t, "Willow").iter().all(fn(p) { p.0 < gx || p.0 > gx + gw }), msg="the choices gone")
-  assert_false(hint_drawn(t), msg="the hint under the words sent, the composer gone to the chat's foot")
+  assert_false(wide_hint_drawn(t), msg="the hint under the words sent, the composer gone to the chat's foot")
   // with the list, no frame where they are not, nor a jump
   let landed = one_way_till(t, words, sent + flight_carry_ms + 34.0, 120.0)
   assert_true(send_flight.get() is None)
@@ -813,10 +814,10 @@ test "wide: a new chat's first words, the hint gone under them, into their bubbl
   assert_at(landed, seen_once(t, words))
   // out of the composer: its hint still away while its field has the cursor, back once it is let go of
   t.run_for(@sf.hint_back_ms)
-  assert_false(hint_drawn(t), msg="the hint over the field with the cursor")
+  assert_false(wide_hint_drawn(t), msg="the hint over the field with the cursor")
   t.ctx().blur()
   t.run_for(@sfpages.let_go_ms + @ui.move_most_ms + @sf.hint_back_ms)
-  assert_true(hint_drawn(t), msg="the hint back once the field is let go of")
+  assert_true(wide_hint_drawn(t), msg="the hint back once the field is let go of")
 }
 
 ///|
@@ -826,7 +827,7 @@ fn choices_in_ground(t : @ui.Tester) -> Unit raise {
   let at = seen_words(t, "Willow").filter(fn(p) { p.0 > gx && p.0 < gx + gw })
   assert_true(
     at.length() > 0 && at.iter().all(fn(p) { p.1 >= gy && p.1 <= gy + gh }),
-    msg="the choices at \{at}, the composer's ground \{(gx, gy, gw, gh)} at \{t.time()}",
+    msg="the choices at \{at}, the composer's ground \{(gx, gy, gw, gh)} at \{t.time()}; Studio=\{t.words().filter(fn(w) { w.0 == "Studio" })}",
   )
 }
 
@@ -996,7 +997,7 @@ test "wide: a right click on the composer's words as the desktop app's: 剪切, 
   t.tap_text("粘贴")
   t.frame()
   t.frame()
-  assert_eq(@sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.map(fn(f) { text(Some(f), "name") }) }), Some(["image.png"]))
+  assert_eq(@sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.get().map(fn(f) { text(Some(f), "name") }) }), Some(["image.png"]))
 }
 
 ///|
@@ -2060,8 +2061,8 @@ test "wide: ⌘V with a picture or files on the clipboard puts them in as files 
   t.frame()
   match @sfbase.writings.get(draft_key(r)) {
     Some(d) => {
-      assert_eq(d.files.length(), 1)
-      assert_eq(text(Some(d.files[0]), "name"), "image.png")
+      assert_eq(d.files.get().length(), 1)
+      assert_eq(text(Some(d.files.get()[0]), "name"), "image.png")
       assert_eq(d.text.get(), "")
     }
     None => fail("no draft")
@@ -2079,7 +2080,7 @@ test "wide: ⌘V with a picture or files on the clipboard puts them in as files 
   t.frame()
   match @sfbase.writings.get(draft_key(r)) {
     Some(d) => {
-      assert_eq(d.files.map(fn(f) { text(Some(f), "name") }), ["image.png", "发布清单.pdf", "截图.jpg"])
+      assert_eq(d.files.get().map(fn(f) { text(Some(f), "name") }), ["image.png", "发布清单.pdf", "截图.jpg"])
       assert_eq(d.text.get(), "再看一眼签名")
     }
     None => fail("no draft")
@@ -2759,4 +2760,31 @@ test "wide: a reference to a chat rested on in one run and again in the next: it
   let again = ref_rested()
   assert_true(first.0 <= 1 && first.1, msg="first: \{first}")
   assert_eq(again, (0, true))
+}
+
+///|
+test "大屏: a settings row pressed, its page opened as one change: the settings never put down on the way, the chats' sidebar never taken between" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  @sfdesk.open_settings()
+  t.run_for(@ui.move_most_ms)
+  // (what the stack is said to be at each change, as what follows it sees it)
+  let seen : Array[String] = []
+  let stop = @signals.effect(fn() {
+    app.nav.pages() |> ignore
+    seen.push(@sfdesk.side_place())
+  })
+  for row in ["密钥", "安全"] {
+    match t.find(row) {
+      Some((x, y)) => t.tap(x, y)
+      None => fail("no \{row} in " + t.words().map(fn(w) { w.0 }).join("|"))
+    }
+    t.run_for(@ui.move_most_ms)
+  }
+  stop()
+  match app.nav.top() {
+    Setting(@settings.Route::Security) => ()
+    _ => fail("not 安全 after its row")
+  }
+  assert_eq(seen.filter(fn(p) { p != "settings" }), [], msg="\{seen}")
 }

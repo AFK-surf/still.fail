@@ -2,7 +2,7 @@
 // never by address, what looks like a secret hidden, its attachments numbered. Read here, off the main thread; the
 // route (api/routes/publish.ts) shows it as a preview, or writes it out with the attachments ticked.
 import { redact } from "../publish/redact.ts";
-import type { Draft, DraftFile } from "../publish/snapshot.ts";
+import type { Draft, DraftFile, SnapshotDraft } from "../publish/snapshot.ts";
 import type { Lang } from "../ops/i18n.ts";
 import * as store from "./store.ts";
 import type { AuthorKind, MessageRow, Store } from "./store.ts";
@@ -55,11 +55,15 @@ function whoDrawn(s: Store, m: MessageRow): { maker?: string; model?: string; ru
   return { ...(maker !== null ? { maker } : {}), ...(model !== null ? { model } : {}), ...(runtime ? { runtime } : {}) };
 }
 
+type DraftArgs = { thread: number; upto: number | null; names: Record<string, string>; viewer: string };
+
 /// The chat `thread` as published up to message n = `upto` (its latest without it), read by `viewer`.
-export function publishDraft(s: Store, a: { thread: number; upto: number | null; names: Record<string, string>; viewer: string }, lang: Lang): Draft {
+export function publishDraft(s: Store, a: DraftArgs & { includeViews: false }, lang: Lang): SnapshotDraft;
+export function publishDraft(s: Store, a: DraftArgs & { includeViews?: true }, lang: Lang): Draft;
+export function publishDraft(s: Store, a: DraftArgs & { includeViews?: boolean }, lang: Lang): Draft | SnapshotDraft {
   setLang(lang);
   useNames(s);
-  const found = store.listThreads(s, a.viewer, null, a.thread)[0];
+  const found = store.listThreads(s, a.viewer, null, a.thread, "none")[0];
   if (found === undefined) throw new HttpError(404, tr("station.publish.noChat"));
   const messages = store.messagesBefore(s, a.thread, a.upto === null ? null : a.upto + 1, MOST);
   if (messages.length === 0) throw new HttpError(400, tr("station.publish.empty"));
@@ -88,7 +92,9 @@ export function publishDraft(s: Store, a: { thread: number; upto: number | null;
   });
   // Its name is the first thing said in it when nobody gave it one: hidden alike.
   const upto = messages.at(-1)!.n;
-  return { title: redact(chatTitle(found, null), mark).text, upto, entries, redacted, files, views: viewsOf(s, a.thread, messages[0]!.n, upto, mark) };
+  const draft = { title: redact(chatTitle(found, null), mark).text, upto, entries, redacted, files };
+  // Only the preview draws the chat's entries. The snapshot already has its messages as merged above.
+  return a.includeViews === false ? draft : { ...draft, views: viewsOf(s, a.thread, messages[0]!.n, upto, mark) };
 }
 
 /// The chat's entries from message `from` to message `upto` as its page reads them (entryViews), each edit of them

@@ -8,12 +8,13 @@ import { knownChannel, slackCreator } from "./slack-known.ts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
-import { type BatchedUsage, type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_MINUTES_PENDING, remoteRunCount, remoteRunsSince, seenBy, sessionThreads, usageByDay, usageChatTotals, usageChatsReady, usageGroups, usageSince, usageThreads } from "./store.ts";
+import { type BatchedUsage, type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, remoteRunCount, remoteRunsSince, seenBy, sessionThreads, usageChatTotals, usageGroups, usageSince, usageThreads } from "./store.ts";
 import { usageCardOutcomesComplete } from "../store/usage-chat-stats.ts";
 import type { UsageSqlTimings } from "./usage-batched.ts";
 import { type InWorkspace, sees } from "../store/rows.ts";
 import { usageDetailSince } from "../store/usage-detail.ts";
-import { compactTotal, hasCompactUsage } from "../store/usage-compact.ts";
+import { hasCompactUsage } from "../store/usage-compact.ts";
+import { HISTORY_AFTER, HISTORY_DAYS, HISTORY_SCOPES, HISTORY_TOTAL, hasUsageHistory, quarter, usageHistorySince } from "../store/usage-history.ts";
 import { titleOf } from "./views.ts";
 import { profileRuntimes } from "../agents/profiles.ts";
 import { facts } from "../accounts/catalog.ts";
@@ -234,39 +235,19 @@ const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.
 /// `reading`: whether the counter is still reading everything for the first time (UsageCounter.readingAll). `viewer`:
 /// only the calls of their workspace's chats (docs/multi-workspace.md; those of sessions gone, the home one's); all of
 /// them for a read made for no one.
-type BatchedHistory = { range: { from: bigint; to: bigint }; result: BatchedUsage; all?: boolean };
 // A reader says once when its cache actually serves a request. Fast reads otherwise leave no trace in the slow-read
 // log, so the absence of that warning alone cannot show whether the cache is used.
 let reportedSummaryReuse = false;
 let reportedCleanSummaryReuse = false;
 
-/// An indexed existence check is enough to know whether an unbounded history has minutes before a summary.
-/// Count even an empty bucket: that can only make us retain the ordinary history query.
-export function compactHistoryBeforeQuery(viewer: InWorkspace | null): string {
-  return viewer === null
-    ? "SELECT 1 FROM usage_compact INDEXED BY usage_compact_time WHERE minute < ?1 LIMIT 1"
-    : `SELECT 1 FROM usage_compact INDEXED BY usage_compact_scope_time WHERE ${viewer.home === false ? "scope = ?2" : "scope IN (?2, 'H')"} AND minute < ?1 LIMIT 1`;
-}
-
-function summaryCoversHistory(s: Store, from: bigint, to: bigint, viewer: InWorkspace | null): boolean {
-  if (from >= to || from % 60_000n !== 0n || to !== 9223372036854775807n || !hasCompactUsage(s.db)) return false;
-  const coverage = s.db.prepare("SELECT old_days FROM usage_compact_since WHERE id = 1").get() as { old_days: number };
-  if (coverage.old_days !== 0) return false;
-  const args: (string | bigint)[] = [from / 60_000n];
-  if (viewer !== null) args.push("W" + viewer.workspace);
-  return s.db.prepare(compactHistoryBeforeQuery(viewer)).get(...args) === undefined;
-}
-
 export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetMin: bigint, reading = true, viewer: InWorkspace | null = null, history = false,
-  options: { remoteRuns?: boolean; historyRange?: { from: bigint; to: bigint }; batched?: BatchedUsage; batchedHistory?: BatchedHistory; historyPrepassMs?: number } = {}): Json {
+  options: { remoteRuns?: boolean; historyRange?: { from: bigint; to: bigint }; batched?: BatchedUsage } = {}): Json {
   const includeRemoteRuns = options.remoteRuns !== false;
   // Keep the stages of a slow read: a reader has only one request at a time, and a slow aggregate can hold up other
   // reads. Only durations are logged, never the request's arguments or the rows it reads.
-  const historyPrepass = options.historyPrepassMs ?? options.batchedHistory?.result.ms ?? 0;
-  const started = performance.now() - (options.batched?.ms ?? 0) - historyPrepass;
-  let last = started + historyPrepass;
+  const started = performance.now() - (options.batched?.ms ?? 0);
+  let last = started;
   const stages: Record<string, number> = {};
-  if (options.historyPrepassMs !== undefined || options.batchedHistory !== undefined) stages.historyQuery = historyPrepass;
   const mark = (stage: string) => {
     const now = performance.now();
     stages[stage] = Math.round(now - last);
@@ -329,37 +310,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
       remoteRuns = undefined;
     }
   }
-  let historyResult: Json | undefined;
-  let partialHistory: Json | undefined;
-  let historyPending = false;
-  if (history) {
-    try { historyResult = usageHistory(s, utcOffsetMin, viewer, mark, false, options.historyRange); }
-    catch (error) {
-      if (!(error instanceof Error) || ![REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_MINUTES_PENDING].includes(error.message)) throw error;
-      // Old clients continue to see history as unavailable; newer clients can use the separately named, explicitly
-      // incomplete history without treating missing earlier calls as zero.
-      const missingCards = error.message === USAGE_CHATS_PENDING && !usageCardOutcomesComplete(s.db);
-      if (error.message === USAGE_MINUTES_PENDING || missingCards) {
-        let batchedHistory = options.batchedHistory;
-        if (batchedHistory === undefined && options.historyRange === undefined && options.batched !== undefined && summaryCoversHistory(s, from, to, viewer)) {
-          batchedHistory = { range: { from, to }, result: options.batched, all: true };
-        }
-        try {
-          if (missingCards) {
-            try { partialHistory = { ...usageHistory(s, utcOffsetMin, viewer, mark, false, options.historyRange, batchedHistory, true), tokensComplete: true }; }
-            catch (cardsError) {
-              if (!(cardsError instanceof Error) || cardsError.message !== USAGE_MINUTES_PENDING) throw cardsError;
-              partialHistory = usageHistory(s, utcOffsetMin, viewer, mark, true, options.historyRange, batchedHistory, true);
-            }
-          } else partialHistory = usageHistory(s, utcOffsetMin, viewer, mark, true, options.historyRange, batchedHistory);
-        }
-        catch (partialError) {
-          if (!(partialError instanceof Error) || ![REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_MINUTES_PENDING].includes(partialError.message)) throw partialError;
-          historyPending = partialError.message === USAGE_MINUTES_PENDING && options.historyRange !== undefined && hasCompactUsage(s.db);
-        }
-      }
-    }
-  }
+  const historyResult = history ? usageHistory(s, utcOffsetMin, viewer, mark, options.historyRange) : null;
   mark("details");
   const answer = {
     from: i64(from),
@@ -375,10 +326,8 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     // the tasks the viewer's workspace's chats on other stations ran here since `from` (the card's 跨设备执行): the
     // workspace their key names (`remote:<workspace>:…`)
     ...(remoteRuns !== undefined ? { remoteRuns } : {}),
-    ...(historyResult !== undefined ? { history: historyResult } : {}),
-    ...(history && historyResult === undefined ? { historyUnavailable: true } : {}),
-    ...(partialHistory !== undefined ? { partialHistory } : {}),
-    ...(historyPending ? { historyPending: true } : {}),
+    ...(historyResult !== null ? { history: historyResult } : {}),
+    ...(history && historyResult === null ? { historyUnavailable: true } : {}),
   };
   mark("other");
   const ms = Math.round(performance.now() - started);
@@ -386,24 +335,27 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   if (options.batched?.diagnostics.cache === "reused" && (!reportedSummaryReuse || (cleanSummaryReuse && !reportedCleanSummaryReuse))) {
     reportedSummaryReuse = true;
     if (cleanSummaryReuse) reportedCleanSummaryReuse = true;
-    log.info("readers", "a usage read reused its summary", { ms, summaryQuery: stages.summaryQuery, summaryCandidates, summaryParts, summaryClean: cleanSummaryReuse,
-      ...(stages.historyQuery === undefined ? {} : { historyQuery: stages.historyQuery }) });
+    log.info("readers", "a usage read reused its summary", { ms, summaryQuery: stages.summaryQuery, summaryCandidates, summaryParts, summaryClean: cleanSummaryReuse });
   }
   if (ms >= 1_000) {
     const partialMinute = from < to && (from % 60_000n !== 0n || (to !== 9223372036854775807n && to % 60_000n !== 0n));
     log.warn("readers", "a usage read's stages", { ms, ...stages, summaryGroups: groups.length,
       ...(summarySqlSlowOp === undefined ? {} : { summarySqlSlowOp }),
       ...(options.batched === undefined ? {} : { summaryCache: options.batched.diagnostics.cache }),
-      ...(summaryCandidates !== undefined ? { summaryCandidates } : {}), historyPending,
+      ...(summaryCandidates !== undefined ? { summaryCandidates } : {}),
       ...(summaryParts !== undefined ? { summaryParts, summaryEdges: partialMinute } : {}) });
   }
   return answer;
 }
 
 /// What the viewer's chats did on this station since it began counting (the usage page's summary): the tokens by day
-/// in the asker's time zone, runtime and model (the year, as Codex's usage summary has it); the chats of each place
-/// (still.fail's, Slack, Feishu) and how many were archived; the tasks other stations' chats ran here (one device's chat
-/// working on another); the decision cards asked and those answered by an option pressed. GET /usage?history=1.
+/// in the asker's time zone (`utcOffsetMin`) over the page's year (`requested`, ms: its first local midnight until the
+/// one after today; absent, an older client's: every day), and in all before the year's end; the chats of each place
+/// (still.fail's, Slack, Feishu) and how many were archived; the tasks other stations' chats ran here (one device's
+/// chat working on another); the decision cards asked and those answered by an option pressed. GET /usage?history=1.
+/// The tokens are read from the history's quarters (store/usage-history.ts): those of the year's days and no more.
+/// `since`: from when the station counted every call (ms; absent, from its first). Null where the history is not
+/// installed yet (just after an update, until the station before has gone).
 export function validHistoryRange(requested: { from: bigint; to: bigint } | undefined, utcOffsetMin: bigint): boolean {
   const day = 86_400_000n;
   return requested !== undefined && requested.from <= requested.to && requested.to - requested.from <= 370n * day
@@ -413,73 +365,47 @@ export function validHistoryRange(requested: { from: bigint; to: bigint } | unde
     && requested.to + utcOffsetMin * 60_000n <= 8_640_000_000_000_000n;
 }
 
-/// A cached detail summary contains the same new minutes as an incomplete compact history. Group it in the same
-/// order as SQLite and keep integer arithmetic exact until each session/model total is converted.
-function historyFromSummary(groups: UsageGroup[]): ReturnType<typeof usageByDay> | null {
-  if (groups.some((g) => g.day === "")) return null;
-  type History = { day: string; session: string; runtime: string; model: string | null; tokens: bigint; calls: bigint };
-  const grouped = new Map<string, History>();
-  for (const g of groups) {
-    const key = JSON.stringify([g.day, g.session, g.runtime, g.model]);
-    let row = grouped.get(key);
-    if (!row) { row = { day: g.day, session: g.session, runtime: g.runtime, model: g.model, tokens: 0n, calls: 0n }; grouped.set(key, row); }
-    row.tokens += BigInt(g.input) + BigInt(g.cacheRead) + BigInt(g.cacheWrite) + BigInt(g.cacheWriteLong) + BigInt(g.output);
-    row.calls += BigInt(g.calls);
-  }
-  const cmp = (a: string | null, b: string | null) => a === b ? 0 : a === null ? -1 : b === null ? 1 : byBytes(a, b);
-  const safe = (n: bigint) => {
-    if (n > BigInt(Number.MAX_SAFE_INTEGER) || n < BigInt(Number.MIN_SAFE_INTEGER)) throw new RangeError("integer is too large to be represented as a JavaScript number");
-    return Number(n);
-  };
-  return [...grouped.values()].sort((a, b) => cmp(a.day, b.day) || cmp(a.session, b.session) || cmp(a.runtime, b.runtime) || cmp(a.model, b.model))
-    .map((r) => ({ ...r, tokens: safe(r.tokens), calls: safe(r.calls) }));
-}
-
-export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null, mark: (stage: string) => void = () => {}, partial = false,
-  requested?: { from: bigint; to: bigint }, batched?: BatchedHistory, allowIncompleteCards = false): Json {
-  const coverage = { allowIncompleteCards };
-  usageChatsReady(s, viewer, coverage);
-  mark("historyVisibility");
-  const valid = validHistoryRange(requested, utcOffsetMin);
-  // Preserve a complete pre-existing history until it has its own bounded source. Incomplete history has only the
-  // new compact buckets; a fresh database has no older daily rows to consult.
-  const bounded = valid && hasCompactUsage(s.db) && (partial ||
-    s.db.prepare("SELECT 1 FROM usage_day_quarters LIMIT 1").get() === undefined);
-  const range = bounded && requested !== undefined ? { from: requested.from / 60_000n, to: requested.to / 60_000n } : undefined;
-  const total = range === undefined ? null : compactTotal(s.db, viewer, range.to);
-  if (range !== undefined && total === null) throw new Error(USAGE_MINUTES_PENDING);
-  const days = new Map<string, { day: string; runtime: string; model: string | null; tokens: number; calls: number }>();
-  // Old complete totals have a separate source. Only substitute when the stored coverage says there are none.
-  const compactOnly = partial && batched !== undefined &&
-    (batched.all === true ? requested === undefined : range !== undefined && requested !== undefined &&
-      batched.range.from === requested.from && batched.range.to === requested.to) &&
-    (s.db.prepare("SELECT old_days FROM usage_compact_since WHERE id = 1").get() as { old_days: number }).old_days === 0;
-  const cachedDays = compactOnly ? historyFromSummary(batched!.result.groups) : null;
-  for (const r of cachedDays ?? usageByDay(s, utcOffsetMin, viewer, partial, range)) {
-    const key = `${r.day}\n${r.runtime}\n${r.model ?? ""}`;
-    const d = days.get(key) ?? { day: r.day, runtime: r.runtime, model: r.model, tokens: 0, calls: 0 };
-    d.tokens += r.tokens;
-    d.calls += r.calls;
-    days.set(key, d);
+export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null, mark: (stage: string) => void = () => {},
+  requested?: { from: bigint; to: bigint }): Json | null {
+  if (!hasUsageHistory(s.db)) return null;
+  const range = validHistoryRange(requested, utcOffsetMin) ? requested! : undefined;
+  // Whose quarters the viewer sees (rows.ts `sees`): their workspace's, and the home one's ('') where it is theirs.
+  const scopes = viewer === null ? (s.db.prepare(HISTORY_SCOPES).all() as Json[]).map((r) => String(r.scope))
+    : viewer.home !== false ? [viewer.workspace, ""] : [viewer.workspace];
+  const from = range === undefined ? -(2n ** 62n) : quarter(range.from);
+  const to = range === undefined ? 2n ** 62n : quarter(range.to);
+  const days = new Map<string, { day: string; runtime: string; model: null; tokens: number; calls: number }>();
+  let tokens = 0;
+  for (const scope of scopes) {
+    for (const r of s.db.prepare(HISTORY_DAYS).all(scope, from, to, utcOffsetMin) as Json[]) {
+      const d = days.get(r.day) ?? { day: r.day, runtime: "", model: null, tokens: 0, calls: 0 };
+      d.tokens += Number(r.tokens);
+      d.calls += Number(r.calls);
+      days.set(r.day, d);
+    }
+    // In all before the year's end: the workspace's total, less what came after (a clock ahead; none, as a rule).
+    if (range !== undefined) tokens += Number((s.db.prepare(HISTORY_TOTAL).get(scope) as Json)?.tokens ?? 0) - Number((s.db.prepare(HISTORY_AFTER).get(scope, to) as Json)?.tokens ?? 0);
   }
   mark("historyDays");
-  // the chats of each place (still.fail's own, a Slack workspace's, a Feishu one's), and those archived
-  const chats = usageChatTotals(s, viewer, coverage);
+  const since = usageHistorySince(s.db);
+  // the chats of each place (still.fail's own, a Slack workspace's, a Feishu one's), those archived and the decision
+  // cards, as their own statistics hold them (none said while those are still being filled)
+  let chats: ReturnType<typeof usageChatTotals> | null = null;
+  try { chats = usageChatTotals(s, viewer, { allowIncompleteCards: true }); }
+  catch (error) { if (!(error instanceof Error) || error.message !== USAGE_CHATS_PENDING) throw error; }
   mark("historyPlaces");
   // the tasks the viewer's chats on other stations ran here, as long as they are kept (remote_runs: 90 days)
-  const remoteRuns = remoteRunCount(s, viewer);
+  let remoteRuns: number | null = null;
+  try { remoteRuns = remoteRunCount(s, viewer); }
+  catch (error) { if (!(error instanceof Error) || error.message !== REMOTE_RUNS_PENDING) throw error; }
   mark("historyRemoteRuns");
-  // the decision cards the viewer's chats were asked with, and those answered by an option pressed
-  mark("historyCards");
   return {
     days: [...days.values()].sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0)),
-    ...(total !== null && requested !== undefined ? {
-      tokens: total.tokens, beforeDay: new Date(Number(requested.to + utcOffsetMin * 60_000n)).toISOString().slice(0, 10),
-    } : {}),
-    ...(!usageCardOutcomesComplete(s.db) ? { cardsIncomplete: true } : { cards: chats.cards, picked: chats.picked }),
-    places: chats.places,
-    archived: chats.archived,
-    remoteRuns,
+    ...(range !== undefined ? { tokens, beforeDay: new Date(Number(range.to + utcOffsetMin * 60_000n)).toISOString().slice(0, 10) } : {}),
+    ...(since !== null ? { since } : {}),
+    ...(chats === null || !usageCardOutcomesComplete(s.db) ? { cardsIncomplete: true } : { cards: chats.cards, picked: chats.picked }),
+    ...(chats === null ? { chatsIncomplete: true, places: {} } : { places: chats.places, archived: chats.archived }),
+    ...(remoteRuns === null ? {} : { remoteRuns }),
   };
 }
 

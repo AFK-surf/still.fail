@@ -454,6 +454,75 @@ describe("slack", { concurrency: true }, () => {
     }
   });
 
+  test("/sf opens a form whose model field completes as typed; sent, its words start a thread on the model picked", async () => {
+    const fake = await FakeSlack.start();
+    bot(fake);
+    const models = [
+      { runtime: "claude", model: "claude-opus-5-5" },
+      { runtime: "claude", model: "claude-sonnet-5-5" },
+      { runtime: "codex", model: null },
+    ];
+    const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base), pingMs: PING, staleMs: STALE * 5, models: () => models });
+    const heard: ChatEvent[] = [];
+    try {
+      await surface.start(async (event) => void heard.push(event));
+      await fake.until("a socket", () => fake.sockets.length === 1 && surface.socket().connected);
+      // Another app's command is acknowledged and left.
+      fake.send({ type: "slash_commands", envelope_id: "s0", payload: { command: "/other", trigger_id: "t0", channel_id: "C1", user_id: "U1", text: "" } });
+      fake.send({ type: "slash_commands", envelope_id: "s1", payload: { command: "/sf", trigger_id: "t1", channel_id: "C1", user_id: "U1", text: "fix the build" } });
+      await fake.until("the form opened", () => fake.calls("views.open").length === 1);
+      const open = fake.calls("views.open")[0]!.params;
+      const view = JSON.parse(open.view!);
+      assert.equal(open.trigger_id, "t1");
+      assert.deepEqual([view.callback_id, view.private_metadata], ["stillfail-new-chat", JSON.stringify({ channel: "C1" })]);
+      assert.equal(view.blocks[0].element.type, "external_select");
+      assert.equal(view.blocks[0].element.initial_option.text.text, "Claude Code · claude-opus-5-5", "the connect's own model first");
+      assert.equal(view.blocks[1].element.initial_value, "fix the build");
+      // Typing in the model field: the matching models, in the acknowledgement.
+      const suggest = (id: string, value: string) => fake.send({ type: "interactive", envelope_id: id, payload: { type: "block_suggestion", action_id: "model", block_id: "model", value, view } });
+      suggest("q1", "sonnet");
+      suggest("q2", "");
+      await fake.until("both answered", () => fake.acks.filter((a) => a.envelope_id === "q1" || a.envelope_id === "q2").length === 2);
+      const options = (id: string) => fake.acks.find((a) => a.envelope_id === id).payload.options.map((o: any) => o.text.text);
+      assert.deepEqual(options("q1"), ["Claude Code · claude-sonnet-5-5"]);
+      assert.equal(options("q2").length, 3);
+      assert.match(options("q2")[2], /默认模型/);
+      // Sent with a model no longer offered: said in the form, nothing posted.
+      const submit = (id: string, value: string, words: string) =>
+        fake.send({
+          type: "interactive",
+          envelope_id: id,
+          payload: { type: "view_submission", user: { id: "U1" }, view: { ...view, state: { values: { model: { model: { selected_option: { value } } }, words: { words: { value: words } } } } } },
+        });
+      submit("v1", JSON.stringify(["claude", "gone"]), "hi");
+      await fake.until("refused", () => fake.acks.some((a) => a.envelope_id === "v1"));
+      assert.equal(fake.acks.find((a) => a.envelope_id === "v1").payload.response_action, "errors");
+      assert.equal(fake.calls("chat.postMessage").length, 0);
+      // Sent: posted in the channel as a new thread, then taken as the person's message on that model.
+      const sonnet = JSON.parse(fake.acks.find((a) => a.envelope_id === "q1").payload.options[0].value);
+      submit("v2", JSON.stringify(sonnet), " fix the build ");
+      await fake.until("taken", () => heard.length === 1);
+      await fake.until("the form closed", () => fake.acks.some((a) => a.envelope_id === "v2"));
+      const post = fake.calls("chat.postMessage")[0]!.params;
+      assert.equal(post.channel, "C1");
+      assert.equal(post.thread_ts, undefined, "a thread of its own");
+      assert.match(post.text!, /<@U1> 用 Claude Code · claude-sonnet-5-5 开的对话\nfix the build/);
+      const ack = fake.acks.find((a) => a.envelope_id === "v2");
+      assert.deepEqual(ack, { envelope_id: "v2" }, "the form closes");
+      const ts = (heard[0] as any).message.ts;
+      assert.deepEqual(heard, [{ type: "message", message: { channel: "C1", threadTs: ts, ts, user: "U1", text: "fix the build", addressed: true, model: { runtime: "claude", model: "claude-sonnet-5-5" } } }]);
+      // A channel the bot cannot post in: said in the form.
+      fake.answer("chat.postMessage", { ok: false, error: "not_in_channel" });
+      submit("v3", JSON.stringify(sonnet), "hi");
+      await fake.until("refused", () => fake.acks.some((a) => a.envelope_id === "v3"));
+      assert.match(fake.acks.find((a) => a.envelope_id === "v3").payload.errors.words, /机器人不在这个频道/);
+      assert.equal(heard.length, 1);
+    } finally {
+      await surface.stop();
+      await fake.close();
+    }
+  });
+
   test("a login card posts a field for its page's code; its button hands the code over, never said in the thread", async () => {
     const fake = await FakeSlack.start();
     bot(fake);

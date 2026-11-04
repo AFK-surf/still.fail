@@ -150,6 +150,10 @@ export class LiveHub {
   private lengthTold = new Map<string, number>();
   /// Where a transcript's past is read (agents.ts: the readers); none (tests): here, and kept in memory.
   history: History | null = null;
+  /// Until the station process before has handed over (gone, agents.ts): where a reading stands is what it carries over
+  /// (`takeTails`), not asked of the readers before then; asked, a reader read a busy transcript on from where it last
+  /// marked it for seconds at each update, every device's reads waiting behind it (ccvm 2026-11-04).
+  handover: Promise<void> | null = null;
 
   constructor(locate: Locate, clock?: Clock.Clock) {
     this.locate = locate;
@@ -743,8 +747,9 @@ export class LiveHub {
       readyNow();
       return true;
     };
-    void this.history
-      .state(key)
+    const history = this.history;
+    void (this.handover ?? Promise.resolve())
+      .then(() => (begun || this.watched.get(key) !== watched ? null : history.state(key)))
       .then(
         (states) => states,
         () => null,

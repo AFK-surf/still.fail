@@ -17,6 +17,7 @@ import type { InWorkspace } from "../store/rows.ts";
 import { giveBackfill, releaseStoppedBackfill, takeBackfill } from "../store/backfill.ts";
 import { retireUsageIndexes, stopUsageIndexes } from "../store/usage-retire.ts";
 import { hasCompactUsage, installCompactUsage, installUsageSummaryChanges } from "../store/usage-compact.ts";
+import { installUsageHistory } from "../store/usage-history.ts";
 import { UsageCounter } from "./counter.ts";
 
 /// A session's usage as its summary says it (store.ts `setSessionUsage`): as recorded now (read/usage.ts `usageNow`).
@@ -58,6 +59,12 @@ function tryStopUsageIndexes(store: StationStore): boolean {
         log.warn("usage", "compact usage statistics could not be installed", { error: (error as Error).message });
       }
       stopUsageIndexes(store.db);
+      try { installUsageHistory(store.db, store.now()); }
+      catch (error) {
+        const code = (error as { errcode?: number }).errcode;
+        if (code !== undefined && [5, 6].includes(code & 255)) throw error;
+        log.warn("usage", "the usage history could not be installed", { error: (error as Error).message });
+      }
       return true;
     } catch (error) {
       const code = (error as { errcode?: number }).errcode;

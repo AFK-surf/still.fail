@@ -3,6 +3,7 @@
 // stations the lock names: `lock.head` says how far one is, `lock.get {after}` gives its entries after that, `lock.put
 // {entries}` offers some. Each station checks every entry itself (cloud/state.ts `takeLock`). A station in several
 // workspaces (docs/multi-workspace.md) does this for each of their locks, with each one's stations, asked in it.
+import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import type { Cloud } from "../cloud/state.ts";
 import { asEntry, type Entry } from "../cloud/lock.ts";
@@ -47,26 +48,64 @@ export async function syncWith(cloud: Cloud, call: PeerCall, peer: string, ws: s
   }
 }
 
-/// Whenever this station's lock grows, or a roster comes, each station of the lock is brought level with it.
-export function followLock(cloud: Cloud, call: PeerCall): () => void {
-  // How far each workspace's lock went and its roster, when last brought level.
-  const last = new Map<string, string>();
+/// How long a station waits before it tries a peer again that it could not bring level, at first; each failure after
+/// doubles it, up to RETRY_MOST_MS.
+export const RETRY_MS = 5_000;
+export const RETRY_MOST_MS = 10 * 60_000;
+
+/// Whenever this station's lock grows, or a roster comes, each station of the lock is brought level with it; one that
+/// could not be (offline, the line between them down) is tried again, sooner at first, until it is: nothing else may
+/// bring it level when the control plane holds entries back from it.
+export function followLock(cloud: Cloud, call: PeerCall, after: (ms: number, f: () => void) => () => void = wall.after): () => void {
+  // Each peer of each workspace: how far this station's lock went when last brought level with it; one being brought
+  // level now; one that failed, how long it waits and whether that wait is over.
+  const level = new Map<string, number>();
+  const going = new Set<string>();
+  const retries = new Map<string, { wait: number; due: boolean; cancel: () => void }>();
+  let stopped = false;
+  const bring = (peer: string, ws: string | null, workspace: string, seq: number) => {
+    const key = `${workspace}|${peer}`;
+    const retry = retries.get(key);
+    if (level.get(key) === seq || going.has(key) || (retry !== undefined && !retry.due)) return;
+    going.add(key);
+    syncWith(cloud, call, peer, ws).then(
+      () => {
+        level.set(key, seq);
+        retries.delete(key);
+      },
+      (e) => {
+        log.info("lock", "a station's lock was not brought level", { peer: peer.slice(0, 12), error: (e as Error).message, ...(ws === null ? {} : { workspace: ws }) });
+        if (stopped) return;
+        const wait = retry === undefined ? RETRY_MS : Math.min(retry.wait * 2, RETRY_MOST_MS);
+        const r = { wait, due: false, cancel: () => {} };
+        r.cancel = after(wait, () => {
+          r.due = true;
+          look();
+        });
+        retries.set(key, r);
+      },
+    ).finally(() => {
+      going.delete(key);
+      if (!stopped) look();
+    });
+  };
   const look = () => {
     const st = cloud.state;
-    if (!st || !cloud.peersCurrent) return;
+    if (stopped || !st || !cloud.peersCurrent) return;
     for (const m of cloud.memberships()) {
       const ws = m.home ? null : m.workspace;
       const s = cloud.locked(ws)?.state;
-      if (!s) continue;
-      const peers: string[] = m.peers.flatMap((p: any) => (typeof p?.id === "string" && p.id !== st.station ? [p.id] : []));
-      const now = `${s.seq}|${peers.join(",")}`;
-      if (last.get(m.workspace) === now) continue;
-      last.set(m.workspace, now);
-      for (const peer of peers) {
-        syncWith(cloud, call, peer, ws).catch((e) => log.info("lock", "a station's lock was not brought level", { peer: peer.slice(0, 12), error: (e as Error).message, ...(ws === null ? {} : { workspace: ws }) }));
-      }
+      // Taken out of the lock itself: the others take nothing from it (their mesh refuses it), however long it tries.
+      if (!s || !s.stations.has(st.station)) continue;
+      for (const p of m.peers) if (typeof p?.id === "string" && p.id !== st.station) bring(p.id, ws, m.workspace, s.seq);
     }
   };
   look();
-  return cloud.listen(look);
+  const unlisten = cloud.listen(look);
+  return () => {
+    stopped = true;
+    unlisten();
+    for (const r of retries.values()) r.cancel();
+    retries.clear();
+  };
 }

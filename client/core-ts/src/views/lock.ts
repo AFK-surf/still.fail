@@ -130,6 +130,13 @@ const readAt = new WeakMap<Inner, Map<string, string>>();
 /// What is folded from the entries, unchecked (the stations check them): who and what is in the lock.
 export type Folded = { members: Map<string, { email: string; role: string }>; devices: Map<string, J>; stations: Map<string, string>; disabled: boolean; added: Map<string, number> };
 
+/// A device of the lock as it stands at `at` (unix seconds): none once its approval ran out (a web page's, after
+/// WEB_DEVICE_SECS). The stations let it in nowhere then (station/src/cloud/lock.ts `admit`): it waits and is approved
+/// again face to face, as a new one is, rather than being told a station has not heard of it yet.
+export function live<D extends { exp?: unknown }>(d: D | undefined, at: number): D | undefined {
+  return d !== undefined && (typeof d.exp !== "number" || d.exp > at) ? d : undefined;
+}
+
 export function fold(entries: Entry[]): Folded {
   const f: Folded = { members: new Map(), devices: new Map(), stations: new Map(), disabled: false, added: new Map() };
   for (const e of entries) {
@@ -339,7 +346,7 @@ function refused(inner: Inner, ws: string, station: string, theirs: unknown): Co
   // In the lock as this device holds it: the station has not heard of it yet (from the cloud, or the device that
   // signed it), and is tried again shortly rather than once the lock moves on, which it may not again for long.
   // A few times, each a little later (each try asks the station anew); after that, as any station not reached.
-  if (base !== null && h?.head != null && !f.disabled && f.devices.has(base)) {
+  if (base !== null && h?.head != null && !f.disabled && live(f.devices.get(base), now(inner)) !== undefined) {
     const tries = p.behind.get(station) ?? 0;
     if (tries < BEHIND_TRIES) {
       p.behind.set(station, tries + 1);
@@ -478,7 +485,7 @@ export function lockView(inner: Inner, ws: string): J {
   const at = now(inner);
   const signer = signers.get(inner) ?? null;
   const people = new Map<string, J>(arr(get(v, "members")).map((m) => [m.sub, m]));
-  const mine = base ? f.devices.get(base) : undefined;
+  const mine = base ? live(f.devices.get(base), at) : undefined;
   const role = str(get(v, "role")) ?? "member";
   const manages = role === "owner" || role === "admin";
   const signs = mine !== undefined && typeof mine.sign_key === "string" && mine.sign_key === signer;
@@ -768,7 +775,10 @@ function checkSigned(entries: Entry[], chain: Entry[], key: string, at: number):
       } catch {
         throw new CoreError("lock_invalid", t("core-misc.lock.chainInvalid"));
       }
-      if (signerIn(kept, key, at) === null) throw new CoreError("lock_no_signer", t("core-misc.lock.notSigner"));
+      const by = signerIn(kept, key, at);
+      if (by === null) throw new CoreError("lock_no_signer", t("core-misc.lock.notSigner"));
+      // (put in under this person's name by someone else: what it signs changes nothing at a station)
+      if (!by.own) throw new CoreError("lock_not_own", t("core-misc.lock.notOwn"));
       try {
         checkLock(chain, at);
       } catch {
@@ -936,7 +946,14 @@ export class Lock {
       if (!s) return yield* Effect.fail(CoreError.invalid("not a station of this workspace"));
       const asked = yield* Effect.result(self.#station(station, "GET", "/lock"));
       if (asked._tag === "Failure") {
-        // It takes none of this workspace's members for a security mode (one turned on after it joined): why, as it said.
+        // It takes none of this workspace's members, the lock turned on after it joined (and it not in it then): it
+        // pins the lock itself once the lock names it, from the cloud (station/src/cloud/presence.ts takeFromPlane), as
+        // no device of this workspace may reach it to bring it.
+        if (asked.failure.code === "lock_station" && asked.failure.message === t("core-logic.mesh.lock_station.unpinned")) {
+          const f = fold(held(self.#inner, self.ws)?.entries ?? []);
+          return f.stations.has(station) ? { head: null, stations: {} } : yield* self.append("station", { key: station, name: s.name ?? "" });
+        }
+        // It takes none of them for another reason (its own workspace locked and this one not): why, as it said.
         if (asked.failure.code === "lock_station") return yield* Effect.fail(asked.failure);
         const old = asked.failure.status === 404 || /404|no route/.test(asked.failure.message);
         return yield* Effect.fail(new CoreError(old ? "lock_station_old" : "lock_station_offline", old ? t("core-misc.lock.stationOld", { name: s.name }) : t("core-misc.lock.stationOffline", { name: s.name })));
@@ -972,7 +989,14 @@ export class Lock {
       // it refused there too (2026-10-28: a device the lock names without its key approved one, and a station kept
       // turning the devices approved after it away for days).
       yield* checkSigned(entries, chain, signer.id, now(self.#inner));
-      yield* self.#cloud("POST", "/lock", { entries: [entry] });
+      // Not taken as far as this device heard: the cloud may have kept it all the same, its answer lost on the way
+      // back (a gateway's 502, the line gone). Then it is done: asked again, it would say it failed while it went.
+      yield* Effect.catch(self.#cloud("POST", "/lock", { entries: [entry] }), (e) =>
+        Effect.flatMap(Effect.orElseSucceed(self.#chain(), () => null), (kept) => {
+          const there = kept?.entries.find((x) => x.seq === entry.seq);
+          return there !== undefined && entryHash(there) === entryHash(entry) ? Effect.void : Effect.fail(e);
+        }),
+      );
       const stations = [...fold(chain).stations.keys()];
       const later = stations.filter((s) => !waitFor.includes(s));
       if (later.length > 0) self.#inner.runner.fork(Effect.ignore(self.#bring(chain, later), { log: "Unhandled", message: "lock chain brought" }));

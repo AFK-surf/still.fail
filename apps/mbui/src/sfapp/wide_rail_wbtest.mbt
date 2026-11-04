@@ -592,7 +592,7 @@ test "wide: folding moves the block as the web's: the list where it was as the b
   let (px, _, _, _) = t.query(Button, label="展开侧边栏").unwrap().rect
   // (its line in the middle of its strip)
   assert_eq(px + @sfdesk.edge_half, @sfdesk.closed_edge + @sfdesk.wide.side_w.get() + @sfdesk.edge_half)
-  assert_true(@sfdesk.wide.bar_mr >= 0.0)
+  assert_true(@sfdesk.page_bar_room().3 >= 0.0)
 }
 
 ///|
@@ -603,7 +603,11 @@ test "wide: shown a while, the page moves aside as far as what it shows is from 
   t.move(1000.0, 400.0)
   t.run_for(@ui.move_most_ms)
   // folded: what the page shows across (its bar left out), and where its field is
-  let (left, right) = t.ctx().shown_across(@sfdesk.pane_page_id(), but="page-bar").unwrap()
+  // (a page made once of the tree's: what its parts show across; else the old view's page)
+  let (left, right) = match @sfdesk.pane_made_seen().bind(fn(id) { @ui.view_tree().unwrap().view_of(id) }) {
+    Some(_) => @sfdesk.pane_content_span().unwrap()
+    None => t.ctx().shown_across(@sfdesk.pane_page_id(), but="page-bar").unwrap()
+  }
   let (x0, _, _, _) = t.rect_of("发消息").unwrap()
   // the pointer on the bar: shown a while, the page moved aside as far as that needs, no further than the room on its
   // right or the sidebar's width
@@ -847,6 +851,33 @@ test "wide: a download of unknown length is still shown" {
 }
 
 ///|
+test "wide: a downloading update's ring sits in the middle of its key, as the filter's mark does" {
+  let t = wide_tester([], mode="chat")
+  @sffixture.fixture_update("0.1.9999")
+  @sffixture.fixture_update_goes("0.1.9999", "downloading", percent=40, away=false)
+  t.run_for(@ui.move_most_ms)
+  let (x, y, w, h) = t.query(Button, label="正在下载 0.1.9999").unwrap().rect
+  // the ring's pieces drawn within the key: as far from its middle on every side
+  let ring = t.drawn_lines().filter(fn(l) { l.0 >= x && l.0 <= x + w && l.1 >= y && l.1 <= y + h })
+  assert_true(ring.length() > 0, msg="the ring drawn in the key")
+  let mut left = x + w
+  let mut top = y + h
+  let mut right = x
+  let mut bottom = y
+  for l in ring {
+    left = dmin(left, dmin(l.0, l.2))
+    right = dmax(right, dmax(l.0, l.2))
+    top = dmin(top, dmin(l.1, l.3))
+    bottom = dmax(bottom, dmax(l.1, l.3))
+  }
+  let (mx, my) = ((left + right) / 2.0, (top + bottom) / 2.0)
+  assert_true(
+    (mx - (x + w / 2.0)).abs() < 0.5 && (my - (y + h / 2.0)).abs() < 0.5,
+    msg="the ring's middle \{(mx, my)}, the key's \{(x + w / 2.0, y + h / 2.0)}",
+  )
+}
+
+///|
 test "wide: a newer build of the desktop app ready: 重启更新 the update key in the sidebar's first row before the filter, as large as it; folded, past the rail, the page bar's start clear of it" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
@@ -864,13 +895,13 @@ test "wide: a newer build of the desktop app ready: 重启更新 the update key 
   t.run_for(@ui.move_most_ms)
   let (fx, _, _, _) = t.query(Button, label="重启更新").unwrap().rect
   assert_eq(fx, @sfdesk.update_closed_in)
-  assert_eq(@sfdesk.wide.bar_pl, @sfdesk.bar_update_in)
+  assert_eq(@sfdesk.page_bar_room().0, @sfdesk.bar_update_in)
   // shown a while: 更新 back in the sidebar's first row, the bar starting past the sidebar with its own 12
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
   t.move(rx + rw / 2.0, ry + rh / 2.0)
   t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.wide.peeking.get())
-  assert_eq(@sfdesk.wide.bar_pl, @sfdesk.bar_in)
+  assert_eq(@sfdesk.page_bar_room().0, @sfdesk.bar_in)
 }
 
 ///|

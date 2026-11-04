@@ -22,7 +22,7 @@ import {
   type Attachment, type AutoTitle, type CardAnswer, type ChatShare, type EntryRow, type JobNotice, type JobRow, type Json, type Membership,
   type MessageRow, type NewMessage, type NewSession, type Opened, type PendingMessage, type Handed, type Letter, type AuthorKind, type Published, type ProcessRow, type ProfileStatus,
   type SessionBusy, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
-  type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
+  type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, type InWorkspace, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
   byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
   CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
@@ -36,21 +36,48 @@ import { installIncrementalUsageTotals, installUsageDetail, usageTotalsComplete 
 import { installUsageSpan } from "./usage-span.ts";
 import { installUsageChatStats } from "./usage-chat-stats.ts";
 import { retireDuplicateUsage } from "./usage-unified.ts";
+import { installEmptyUsageHistory, moveUsageHistory } from "./usage-history.ts";
 import { compactRecentlyCompacted, hasCompactUsage, savedCompactContext } from "./usage-compact.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
 import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from "./watch-jobs.ts";
 import { RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiveJobs } from "./active-jobs.ts";
 import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
 import { installPostBlocks, PostBlocksUnavailable, POST_BLOCK_SIZE, type PostPosition } from "./post-blocks.ts";
-import { installSaidState } from "./said-state.ts";
+import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
+import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
 // (and rows.ts JOBS_RUNNING and SESSION_JOBS, the readers' too).
 export { JOBS_RUNNING, SESSION_JOBS };
 export const LIVE_SESSIONS = "SELECT * FROM sessions WHERE archived_at IS NULL ORDER BY last_active_at DESC";
 export const SESSION_COUNTS = "SELECT connect, ws, COUNT(*) AS n FROM sessions GROUP BY connect, ws";
+// The existing index starts with connect. Seek each distinct connect, then count only the requested workspace's rows;
+// a home workspace also includes rows from before workspaces were kept (ws IS NULL).
+const sessionCountsVisible = (home: boolean) => `WITH RECURSIVE connects(connect) AS (
+  VALUES ((SELECT connect FROM sessions INDEXED BY sessions_by_connect ORDER BY connect LIMIT 1))
+  UNION ALL SELECT (SELECT connect FROM sessions INDEXED BY sessions_by_connect WHERE connect > c.connect ORDER BY connect LIMIT 1)
+    FROM connects c WHERE c.connect IS NOT NULL
+), workspaces(ws) AS (VALUES (?)${home ? ", (NULL)" : ""})
+SELECT c.connect, w.ws,
+  (SELECT COUNT(*) AS n FROM sessions s INDEXED BY sessions_by_connect WHERE s.connect = c.connect AND s.ws IS w.ws) AS n
+FROM connects c CROSS JOIN workspaces w
+WHERE c.connect IS NOT NULL AND EXISTS
+  (SELECT 1 FROM sessions s INDEXED BY sessions_by_connect WHERE s.connect = c.connect AND s.ws IS w.ws)
+ORDER BY c.connect, w.ws`;
+export const SESSION_COUNTS_VISIBLE = sessionCountsVisible(false);
+export const SESSION_COUNTS_HOME = sessionCountsVisible(true);
 export const ANY_RUNNING = "SELECT 1 AS r FROM sessions WHERE running = 1 LIMIT 1";
 export const RUNNING_SESSIONS = "SELECT * FROM sessions WHERE running = 1";
+// Ordering still considers every thread, but it reads only its latest message's time; people and full summaries are
+// needed only after the limit. Applying the connect filter outside the limit preserves the prior cross-connect order.
+export const RECENT_CONNECT_THREADS = `WITH recent AS MATERIALIZED (
+  SELECT t.id, t.surface, t.created_at, COALESCE(e.at, 0) AS said_at
+  FROM threads t LEFT JOIN thread_state s ON s.thread = t.id
+  LEFT JOIN entries e ON e.thread = t.id AND e.n = s.said_n AND e.kind = 'message'
+  ORDER BY said_at DESC, t.created_at DESC, t.id DESC LIMIT ?1
+) SELECT r.id, r.surface FROM recent r
+  WHERE EXISTS (SELECT 1 FROM thread_sessions m WHERE m.thread = r.id AND m.connect = ?2)
+  ORDER BY r.said_at DESC, r.created_at DESC, r.id DESC`;
 /// Whether another shown or running session can use a runtime transcript. Look up the id in the history and current
 /// id indexes, rather than checking every active session's transcripts while an archive is packed.
 export const TRANSCRIPT_IN_USE = `SELECT 1 FROM runtime_sessions r INDEXED BY runtime_sessions_by_id
@@ -86,6 +113,70 @@ export const WORK_OF_SESSION = `SELECT
     THEN 1 ELSE EXISTS (SELECT 1 FROM letter_deliveries d INDEXED BY letter_deliveries_pending WHERE d.session = s.key AND d.delivered_at IS NULL) END AS pending,
   ${SESSION_TURN_COLUMNS} ${SESSION_TURN_JOIN}`;
 
+// `reads` is keyed by viewer, then chat. A small table is cheap to scan; a large one is sought once per viewer.
+// Its rowid range gives an upper bound on its size with two B-tree seeks, even after deletions or explicit rowids.
+function lastRead(column: "at" | "n"): string { return `WITH RECURSIVE few(viewer, count) AS (
+  SELECT (SELECT viewer FROM reads ORDER BY viewer LIMIT 1), 1
+  UNION ALL SELECT (SELECT viewer FROM reads WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.count + 1
+    FROM few v WHERE v.viewer IS NOT NULL AND v.count < 33
+), more(viewer, count) AS (
+  SELECT (SELECT viewer FROM reads ORDER BY viewer LIMIT 1), 1
+  UNION ALL SELECT (SELECT viewer FROM reads WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.count + 1
+    FROM more v WHERE v.viewer IS NOT NULL AND v.count < 257
+), all_viewers(viewer) AS (
+  SELECT (SELECT viewer FROM reads ORDER BY viewer LIMIT 1)
+  UNION ALL SELECT (SELECT viewer FROM reads WHERE viewer > v.viewer ORDER BY viewer LIMIT 1)
+    FROM all_viewers v WHERE v.viewer IS NOT NULL
+), bounds(span) AS (
+  SELECT (SELECT MAX(rowid) FROM reads) - (SELECT MIN(rowid) FROM reads)
+)
+SELECT CASE WHEN (SELECT COUNT(*) FROM few WHERE viewer IS NOT NULL) <= 32
+  THEN (SELECT MAX((SELECT ${column} FROM reads WHERE viewer = v.viewer AND thread = ?1)) FROM few v WHERE v.viewer IS NOT NULL)
+  WHEN (SELECT span FROM bounds) < 512
+  THEN (SELECT MAX(${column}) FROM reads WHERE thread = ?1)
+  WHEN (SELECT COUNT(*) FROM more WHERE viewer IS NOT NULL) <= 256
+  THEN (SELECT MAX((SELECT ${column} FROM reads WHERE viewer = v.viewer AND thread = ?1)) FROM more v WHERE v.viewer IS NOT NULL)
+  WHEN (SELECT span FROM bounds) < 16384
+  THEN (SELECT MAX(${column}) FROM reads WHERE thread = ?1)
+  ELSE (SELECT MAX((SELECT ${column} FROM reads WHERE viewer = v.viewer AND thread = ?1)) FROM all_viewers v WHERE v.viewer IS NOT NULL) END AS ${column}`; }
+export const LAST_READ_AT = lastRead("at");
+export const LAST_KNOWN = `SELECT MAX(n) AS n FROM (${lastRead("n")} UNION ALL SELECT MAX(n) FROM deliveries WHERE thread = ?1)`;
+
+// These marks are keyed by viewer first. For a large table seek once per viewer instead of scanning everybody's other
+// chats. On a small table a scan can be cheaper, especially when most viewers have one mark. A rowid span bounds the
+// number of rows without counting them; the viewer probes are capped so choosing a plan does not scan a long history.
+function deleteViewerMarks(table: "reads" | "dismissed" | "kept_chats" | "pins", key: "thread" | "session") {
+  const choice = `WITH RECURSIVE few(viewer, count) AS (
+    SELECT (SELECT viewer FROM ${table} ORDER BY viewer LIMIT 1), 1
+    UNION ALL SELECT (SELECT viewer FROM ${table} WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.count + 1
+      FROM few v WHERE v.viewer IS NOT NULL AND v.count < 33
+  ), more(viewer, count) AS (
+    SELECT (SELECT viewer FROM ${table} ORDER BY viewer LIMIT 1), 1
+    UNION ALL SELECT (SELECT viewer FROM ${table} WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.count + 1
+      FROM more v WHERE v.viewer IS NOT NULL AND v.count < 257
+  ), bounds(span) AS (SELECT (SELECT MAX(rowid) FROM ${table}) - (SELECT MIN(rowid) FROM ${table}))
+  SELECT CASE WHEN COALESCE((SELECT span FROM bounds), 0) < 512 THEN 0
+    WHEN (SELECT span FROM bounds) >= 32768 THEN 1
+    WHEN (SELECT COUNT(*) FROM few WHERE viewer IS NOT NULL) <= 32 THEN 1
+    WHEN (SELECT span FROM bounds) < 16384 THEN 0
+    WHEN (SELECT COUNT(*) FROM more WHERE viewer IS NOT NULL) <= 256 THEN 1 ELSE 0 END AS seek`;
+  // Materialize the viewers before deleting: a deletion can remove a viewer's last mark in the table.
+  const indexed = `WITH RECURSIVE viewers(viewer) AS MATERIALIZED (
+    SELECT (SELECT viewer FROM ${table} ORDER BY viewer LIMIT 1)
+    UNION ALL SELECT (SELECT viewer FROM ${table} WHERE viewer > v.viewer ORDER BY viewer LIMIT 1)
+      FROM viewers v WHERE v.viewer IS NOT NULL
+  ) DELETE FROM ${table} WHERE viewer IN (SELECT viewer FROM viewers WHERE viewer IS NOT NULL) AND ${key} = ?`;
+  return { choice, indexed, small: `DELETE FROM ${table} WHERE ${key} = ?` };
+}
+export const READ_MARKS = deleteViewerMarks("reads", "thread");
+const DISMISSED_MARKS = deleteViewerMarks("dismissed", "thread");
+const KEPT_MARKS = deleteViewerMarks("kept_chats", "thread");
+const PIN_MARKS = deleteViewerMarks("pins", "session");
+export const DELETE_READS_OF_THREAD = READ_MARKS.indexed;
+export const DELETE_DISMISSED_OF_THREAD = DISMISSED_MARKS.indexed;
+export const DELETE_KEPT_CHAT = KEPT_MARKS.indexed;
+export const DELETE_PINS_OF_SESSION = PIN_MARKS.indexed;
+
 // Each session's latest check of the last days (the archive policy's view) and a login's end (closeLoginCards), each by
 // an index of its own (and rows.ts CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE: each list of chats', the readers' too).
 // The checks are grouped by `+session`: by `session`, the station's SQLite went over every check in order of session.
@@ -94,9 +185,24 @@ export const WORK_OF_SESSION = `SELECT
 export { CARD_BEFORE, CLOSED_SINCE, OPTIONS_BEFORE };
 export const LATEST_DECISIONS =
   "SELECT id, session, created_at, result FROM decision_checks WHERE id IN (SELECT MAX(id) FROM decision_checks WHERE created_at >= ? GROUP BY +session) ORDER BY created_at, id";
+// Keep the grouping on the recent covering index, but fetch result text only after the session's workspace is known.
+export const LATEST_DECISIONS_SCOPED = `WITH latest AS MATERIALIZED (
+  SELECT MAX(id) AS id, session FROM decision_checks WHERE created_at >= ?1 GROUP BY +session
+)
+SELECT d.id, d.session, d.created_at, d.result FROM latest l
+LEFT JOIN sessions s ON s.key = l.session
+CROSS JOIN decision_checks d ON d.id = l.id
+WHERE s.ws = ?2 OR (?3 AND s.ws IS NULL)
+ORDER BY d.created_at, d.id`;
 /// Whether a session has read something from a thread (`heardThreads`): by its deliveries there, named (SQLite took the
 /// index of all it was given by when, from the first).
 export const HEARD_IN = "SELECT 1 FROM deliveries INDEXED BY deliveries_session WHERE session = ? AND thread = ? AND delivered_at IS NOT NULL LIMIT 1";
+// The three ways a closed card's wait can have ended after it: each found in its own existing index, without reading
+// ordinary agent messages between the card and the close (closedCard).
+export const CLOSED_CARD_AFTER = `SELECT
+  EXISTS (SELECT 1 FROM entries INDEXED BY entries_people_by_n WHERE thread = ?1 AND n > ?2 AND kind = 'message' AND author_kind = 'person')
+  OR EXISTS (SELECT 1 FROM entries INDEXED BY entries_cards WHERE thread = ?1 AND n > ?2 AND kind = 'message' AND card IS NOT NULL)
+  OR EXISTS (SELECT 1 FROM entries INDEXED BY entries_options WHERE thread = ?1 AND n > ?2 AND kind = 'message' AND options IS NOT NULL) AS ended`;
 /// Whether a pending delivery can actually be read by the session, without loading the message's text or edits.
 export const HAS_PENDING_MESSAGE = `SELECT 1 FROM deliveries d INDEXED BY deliveries_pending
   JOIN entries m ON m.thread = d.thread AND m.n = d.n AND m.kind = 'message'
@@ -278,6 +384,7 @@ export class Store {
       installWorkspaceActivity(db);
       addCardOutcomes(db);
       installUsageChatStats(db);
+      installEmptyUsageHistory(db);
       addSessionTurns(db);
       addSessionWork(db, clock.currentTimeMillisUnsafe());
       addPendingCards(db);
@@ -469,10 +576,12 @@ export class Store {
     return [...live, ...this.runningSessions().filter((s) => !keys.has(s.key))];
   }
 
-  /// How many sessions each connect has, in each workspace (null: the home one's), archived ones too: from the index
-  /// alone, not every session's row.
-  sessionCounts(): { connect: string; ws: string | null; n: number }[] {
-    return this.#all(SESSION_COUNTS).map((r) => ({ connect: r.connect, ws: r.ws ?? null, n: r.n }));
+  /// How many sessions each connect has, including archived ones. A viewer's count seeks only their workspace; null
+  /// asks for the whole station (including the pre-workspace rows).
+  sessionCounts(viewer: InWorkspace | null = null): { connect: string; ws: string | null; n: number }[] {
+    const rows = viewer === null ? this.#all(SESSION_COUNTS)
+      : this.#all(viewer.home === false ? SESSION_COUNTS_VISIBLE : SESSION_COUNTS_HOME, viewer.workspace);
+    return rows.map((r) => ({ connect: r.connect, ws: r.ws ?? null, n: r.n }));
   }
 
   /// Whether any session runs a turn now.
@@ -487,6 +596,8 @@ export class Store {
       const keys = (from === null ? this.#all("SELECT key FROM sessions WHERE ws IS NULL") : this.#all("SELECT key FROM sessions WHERE ws = ?", from)).map((r) => r.key as string);
       if (from === null) this.#run("UPDATE sessions SET ws = ? WHERE ws IS NULL", to);
       else this.#run("UPDATE sessions SET ws = ? WHERE ws = ?", to, from);
+      // The calls of the sessions gone before them were `from`'s as well: the whole workspace's go.
+      moveUsageHistory(this.db, from ?? "", to ?? "");
       for (const key of keys) changes.push({ type: "session", key });
       if (keys.length > 0 && from !== to) this.#sessionWorkspaceChanged();
     });
@@ -951,18 +1062,7 @@ export class Store {
 
   /// When anyone last read a thread (moved their read position), in ms; null if nobody has.
   lastReadAt(thread: number): number | null {
-    // Reads are keyed by (viewer, thread). For a few viewers, seek this chat once per viewer instead of walking
-    // their other chats. With many viewers, a table scan is cheaper than thousands of separate index seeks.
-    return this.#one(`WITH RECURSIVE viewers(viewer, count) AS (
-      SELECT (SELECT viewer FROM reads ORDER BY viewer LIMIT 1), 1
-      UNION ALL
-      SELECT (SELECT viewer FROM reads WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.count + 1
-        FROM viewers v WHERE v.viewer IS NOT NULL AND v.count < 33
-    )
-    SELECT CASE WHEN (SELECT COUNT(*) FROM viewers WHERE viewer IS NOT NULL) <= 32
-      THEN (SELECT MAX((SELECT at FROM reads WHERE viewer = v.viewer AND thread = ?))
-        FROM viewers v WHERE v.viewer IS NOT NULL)
-      ELSE (SELECT MAX(at) FROM reads WHERE thread = ?) END AS at`, thread, thread).at;
+    return this.#one(LAST_READ_AT, thread).at;
   }
 
   /// A session's own chat on the page (ThreadRow.home), if it has one.
@@ -974,6 +1074,10 @@ export class Store {
   /// Chats of their own on the page (no session's home) still in lists.
   chatsOfTheirOwn(): ThreadRow[] {
     return this.#all("SELECT * FROM threads WHERE surface = ? AND home IS NULL AND hidden_at IS NULL", STILLFAIL_SURFACE).map(toThread);
+  }
+
+  #deleteMarks(marks: ReturnType<typeof deleteViewerMarks>, key: Arg): void {
+    this.#run(this.#one(marks.choice).seek ? marks.indexed : marks.small, key);
   }
 
   /// Forgets a session: its row, turns, deliveries, memberships and bindings, and the threads only it took part in,
@@ -1000,7 +1104,7 @@ export class Store {
         this.#run("DELETE FROM job_notices WHERE job_id IN (SELECT id FROM jobs WHERE session_key = ?)", key);
         this.#run("DELETE FROM jobs WHERE session_key = ?", key);
         this.#run("DELETE FROM widget_states WHERE session = ?", key);
-        this.#run("DELETE FROM pins WHERE session = ?", key);
+        this.#deleteMarks(PIN_MARKS, key);
         this.#run("DELETE FROM transcript_lengths WHERE session = ?", key);
         this.#run("DELETE FROM session_usage WHERE session = ?", key);
         this.#run("DELETE FROM sessions WHERE key = ?", key);
@@ -1014,10 +1118,10 @@ export class Store {
           this.#run("DELETE FROM entries WHERE thread = ?", thread);
           this.#run("DELETE FROM letter_deliveries WHERE thread = ?", thread);
           this.#run("DELETE FROM letters WHERE thread = ?", thread);
-          this.#run("DELETE FROM reads WHERE thread = ?", thread);
-          this.#run("DELETE FROM dismissed WHERE thread = ?", thread);
+          this.#deleteMarks(READ_MARKS, thread);
+          this.#deleteMarks(DISMISSED_MARKS, thread);
           this.#run("DELETE FROM closed_cards WHERE thread = ?", thread);
-          this.#run("DELETE FROM kept_chats WHERE thread = ?", thread);
+          this.#deleteMarks(KEPT_MARKS, thread);
           // Its published snapshots go with it.
           for (const r of this.#all("SELECT id FROM published WHERE thread = ?", thread)) unpublished.push(r.id);
           this.#run("DELETE FROM published WHERE thread = ?", thread);
@@ -1182,7 +1286,7 @@ export class Store {
     return { thread, firstText: thread.surface === STILLFAIL_SURFACE ? null : this.firstText(thread.id) };
   }
 
-  listThreads(viewer: string, session: string | null, thread: number | null): ThreadSummary[] {
+  listThreads(viewer: string, session: string | null, thread: number | null, unread: "count" | "none" = "count"): ThreadSummary[] {
     const base = "SELECT t.*, COALESCE(r.n, 0) AS read_n FROM threads t LEFT JOIN reads r ON r.thread = t.id AND r.viewer = ?1";
     const rows =
       thread !== null
@@ -1198,7 +1302,7 @@ export class Store {
         last: this.lastEntry(t.id),
         lastMessage: this.#lastSaid(t.id),
         read,
-        unread: this.#unreadCount(viewer, t.id, read),
+        unread: unread === "none" ? 0 : this.#unreadCount(viewer, t.id, read),
         people: this.#threadPeople(t.id, t.surface),
         firstText: this.firstText(t.id),
         letters: this.#letterCount(t.id),
@@ -1209,6 +1313,36 @@ export class Store {
     const said = (t: ThreadSummary) => t.lastMessage?.createdAt ?? 0;
     summaries.sort((a, b) => said(b) - said(a) || b.thread.createdAt - a.thread.createdAt || b.thread.id - a.thread.id);
     return summaries;
+  }
+
+  /// People of a connect's threads among the station's latest `limit`: what a connecting platform learns. Order and
+  /// limit all threads first, as listThreads does; only then look up people for the threads of this connect.
+  recentConnectPeople(connect: string, limit: number): { thread: number; people: string[] }[] {
+    const rows = this.#all(RECENT_CONNECT_THREADS, limit, connect);
+    const prefix = `slack:${connect}:`;
+    return rows.map((r) => ({ thread: r.id, people: this.#threadPeople(r.id, r.surface)
+      .flatMap((person) => person.startsWith(prefix) ? [person.slice(prefix.length)] : []) }));
+  }
+
+  /// The unfiltered chat_list, with full details only for the selected chats.
+  recentChatList(ws: string | null, home: string | null, limit: number): RecentChatList {
+    const { ids, total } = recentChatIds(this.db, ws, home, limit);
+    const threads = ids.flatMap((id) => {
+      const thread = this.getThread(id);
+      if (thread === null) return [];
+      return [{ thread, sessions: this.threadSessions(id), lastMessage: this.#lastSaid(id),
+        firstText: thread.title === null && thread.autoTitle === null ? this.firstText(id) : null }];
+    });
+    const keys = new Set(threads.flatMap((t) => t.sessions.map((m) => m.session)));
+    const sessions = [...keys].flatMap((key) => {
+      const s = this.getSession(key);
+      return s === null ? [] : [{ key: s.key, title: s.title, archivedAt: s.archivedAt, ws: s.ws }];
+    });
+    return { threads, sessions, total };
+  }
+
+  searchChatList(ws: string | null, home: string | null, limit: number, query: string): RecentChatList {
+    return searchChats(this.db, ws, home, limit, query, (id) => this.#lastSaid(id));
   }
 
   /// The thread's latest message as merged, for lists.
@@ -1234,6 +1368,24 @@ export class Store {
   /// letters (rows.ts isLetter).
   unreadCount(viewer: string, thread: number): number {
     return this.#unreadCount(viewer, thread, this.readPosition(viewer, thread));
+  }
+
+  /// Whether a still.fail chat's starter has anything unread. Null asks the sidebar state worker to finish an old run.
+  unreadForArchive(viewer: string, thread: number): boolean | null {
+    // The read position, last message and its boundary must describe the same snapshot while other stations write.
+    this.db.exec("SAVEPOINT archive_unread");
+    try {
+      const read = this.readPosition(viewer, thread);
+      const latest = this.#one(SAID_LATEST, thread);
+      if (!latest || latest.n <= read) return false;
+      if (latest.author_kind !== "person" || latest.author !== viewer) return true;
+      const boundary = saidBoundary(this.#one(SAID_STATE, thread), latest);
+      if (boundary.known) return boundary.other !== null && boundary.other > read;
+      const previous = this.#all(SAID_SCAN, thread, latest.n, SAID_BATCH_SIZE);
+      if (previous.some((p) => p.n > read && (p.author_kind !== "person" || p.author !== viewer))) return true;
+      if (previous.length < SAID_BATCH_SIZE || previous.at(-1)!.n <= read) return false;
+      return null;
+    } finally { this.db.exec("RELEASE archive_unread"); }
   }
 
   // ── entries ──
@@ -1312,8 +1464,10 @@ export class Store {
 
   /// Each session's latest check of those recorded since `since` (ms), the oldest first: what the archive policy's view
   /// counts (accounts/index.ts, sessions/archive-policy.ts).
-  latestDecisionsSince(since: number): Json[] {
-    return this.#all(LATEST_DECISIONS, since).map((r) => ({
+  latestDecisionsSince(since: number, viewer?: InWorkspace): Json[] {
+    const rows = viewer === undefined ? this.#all(LATEST_DECISIONS, since)
+      : this.#all(LATEST_DECISIONS_SCOPED, since, viewer.workspace, viewer.home !== false ? 1 : 0);
+    return rows.map((r) => ({
       id: r.id, session: r.session, at: r.created_at, detail: parsed(r.result) ?? null,
     }));
   }
@@ -1632,6 +1786,57 @@ export class Store {
     return new Set(this.#all("SELECT DISTINCT session FROM pins").map((r) => r.session));
   }
 
+  /// The marks needed by one automatic archive pass. A large history is sought by viewer for each candidate; a small
+  /// table, many viewers, or many candidates is read once instead. Neither choice needs an index of its own.
+  archiveMarks(): { pinned: (session: string) => boolean; kept: (thread: number) => boolean } {
+    return {
+      pinned: this.#archiveMark("pins", "session", () => this.pinnedSessions()),
+      kept: this.#archiveMark("kept_chats", "thread", () => this.keptChats(null)),
+    };
+  }
+
+  #archiveMark<K extends string | number>(table: "pins" | "kept_chats", key: "session" | "thread", all: () => Set<K>): (key: K) => boolean {
+    let initialized = false;
+    let complete: Set<K> | null = null;
+    let viewers = "[]";
+    let viewerCount = 0;
+    let remaining = 0;
+    const answers = new Map<K, boolean>();
+    const collect = () => { complete = all(); };
+    return (value) => {
+      const answer = answers.get(value);
+      if (answer !== undefined) return answer;
+      if (!initialized) {
+        initialized = true;
+        // A rowid span bounds the number of rows, even if old rows were deleted or explicit rowids were used. Cap the
+        // budget in SQL so very large rowids never have to be represented as a JavaScript integer.
+        remaining = this.#one(`WITH bounds(span) AS (
+          SELECT (SELECT MAX(rowid) FROM ${table}) - (SELECT MIN(rowid) FROM ${table})
+        ) SELECT CASE WHEN COALESCE(span, 0) < 512 THEN 0
+          WHEN span >= 2097152 THEN 32768 ELSE CAST(span / 64 AS INTEGER) END AS budget FROM bounds`)!.budget;
+        if (remaining > 0) {
+          const rows = this.#all(`WITH RECURSIVE viewers(viewer, n) AS (
+            SELECT (SELECT viewer FROM ${table} ORDER BY viewer LIMIT 1), 1
+            UNION ALL SELECT (SELECT viewer FROM ${table} WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.n + 1
+              FROM viewers v WHERE v.viewer IS NOT NULL AND v.n < ?1
+          ) SELECT viewer FROM viewers WHERE viewer IS NOT NULL`, remaining + 1);
+          viewerCount = rows.length;
+          if (viewerCount > remaining) remaining = 0;
+          else viewers = JSON.stringify(rows.map((row) => row.viewer));
+        }
+      }
+      if (complete === null && remaining < viewerCount) collect();
+      if (complete === null && remaining === 0) collect();
+      if (complete !== null) return complete.has(value);
+      const found = this.#one(
+        `SELECT 1 FROM ${table} WHERE viewer IN (SELECT value FROM json_each(?2)) AND ${key} = ?1 LIMIT 1`, value, viewers,
+      ) !== undefined;
+      remaining -= viewerCount;
+      answers.set(value, found);
+      return found;
+    };
+  }
+
   /// Pins a chat to the top of a viewer's list, or lets it go. Pinned again, it keeps when it was first pinned.
   setPin(viewer: string, session: string, pinned: boolean): void {
     this.#with((changes) => {
@@ -1655,7 +1860,9 @@ export class Store {
 
   /// Chats kept instead of offered for archiving. Null selects every viewer, for automatic archiving.
   keptChats(viewer: string | null): Set<number> {
-    return new Set(this.#all("SELECT DISTINCT thread FROM kept_chats WHERE ?1 IS NULL OR viewer = ?1", viewer).map((r) => r.thread));
+    const rows = viewer === null ? this.#all("SELECT DISTINCT thread FROM kept_chats")
+      : this.#all("SELECT thread FROM kept_chats WHERE viewer = ?1", viewer);
+    return new Set(rows.map((r) => r.thread));
   }
 
   keepChat(viewer: string, thread: number): void {
@@ -1735,11 +1942,8 @@ export class Store {
   /// agent withdrawing it, or a person's choice).
   closedCard(thread: number, n: number): [MessageRow, Json, string] | null {
     const by = this.#one("SELECT viewer FROM closed_cards WHERE thread = ? AND n = ?", thread, n);
-    const after = this.#one(
-      "SELECT 1 FROM entries WHERE thread = ? AND n > ? AND kind = 'message' AND (author_kind = 'person' OR card IS NOT NULL OR options IS NOT NULL) LIMIT 1",
-      thread, n,
-    );
-    const found = by === undefined || after !== undefined ? null : this.#cardPost(thread, n);
+    if (by === undefined || this.#one(CLOSED_CARD_AFTER, thread, n)!.ended !== 0) return null;
+    const found = this.#cardPost(thread, n);
     return found === null ? null : [...found, by.viewer as string];
   }
 
@@ -1879,22 +2083,19 @@ export class Store {
       // Told only when it got as far as closing it (one already closed says true and tells nothing, as the Rust).
       let closed: { agent: string; changed: boolean } | null = null;
       const done = this.#tx(() => {
-        const offered = this.#one("SELECT card, options FROM entries WHERE thread = ? AND n = ? AND kind = 'message'", thread, n);
-        const card = offered ? cardOf(offered.card, offered.options) : undefined;
+        const offered = this.#one("SELECT author, at, card, options FROM entries WHERE thread = ? AND n = ? AND kind = 'message'", thread, n);
+        if (offered === undefined) return false;
+        const card = cardOf(offered.card, offered.options);
         if (card === undefined) return false;
         const choices: Json[] = card !== null && Array.isArray(card.options) ? card.options : [];
         const closes = choices.some((o) => o !== null && typeof o === "object" && typeof o.label === "string" && o.label.trim() === option && o.action === "close");
         if (card === null || card.type !== "options" || !closes) return false;
         if (this.#one("SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, n) !== undefined) return true;
-        const asked = this.#one(
-          "SELECT n, author, at FROM entries WHERE thread = ? AND kind = 'message' AND (card IS NOT NULL OR options IS NOT NULL) ORDER BY n DESC LIMIT 1",
-          thread,
-        );
-        if (asked === undefined) return false;
-        const answered = this.#one("SELECT EXISTS(SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ?) AS e", thread, n).e !== 0;
-        if (asked.n !== n || answered) return false;
+        // The offered row exists and has a card. Only a later person, card or legacy options can end its wait;
+        // reuse the same indexed checks as closedCard instead of walking the intervening ordinary messages.
+        if (this.#one(CLOSED_CARD_AFTER, thread, n)!.ended !== 0) return false;
         // Do not race the agent still composing its question / recording its ending.
-        const composing = this.#one("SELECT ended_at IS NULL AS c FROM turns WHERE session_key = ? ORDER BY started_at DESC LIMIT 1", asked.author);
+        const composing = this.#one("SELECT ended_at IS NULL AS c FROM turns WHERE session_key = ? ORDER BY started_at DESC LIMIT 1", offered.author);
         if (composing !== undefined && composing.c !== 0) return false;
         this.#run("INSERT INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", thread, n, viewer, this.now());
         const changed = this.#run(
@@ -1902,9 +2103,9 @@ export class Store {
            WHERE id = (SELECT id FROM turns WHERE session_key = ?1 ORDER BY started_at DESC LIMIT 1)
              AND declared IN ('block', 'need_help', 'need_human', 'need_decision') AND ended_at IS NOT NULL
              AND ((about_thread = ?2 AND about_n = ?3) OR (about_n IS NULL AND thread = ?2 AND started_at <= ?4))`,
-          asked.author, thread, n, asked.at, tr(lang, "station.card.chosen", { option }),
+          offered.author, thread, n, offered.at, tr(lang, "station.card.chosen", { option }),
         );
-        closed = { agent: asked.author, changed: changed > 0 };
+        closed = { agent: offered.author, changed: changed > 0 };
         return true;
       });
       const told = closed as { agent: string; changed: boolean } | null;
@@ -2584,10 +2785,7 @@ export class Store {
   /// The last entry number known of a thread with no entries: 0 for a new one. One whose archive file was lost is
   /// counted on from what was read and delivered of it, so that what clients keep of it is not numbered again.
   #lastKnown(thread: number): number {
-    const r = this.#one(
-      "SELECT MAX(n) AS n FROM (SELECT MAX(n) AS n FROM reads WHERE thread = ?1 UNION ALL SELECT MAX(n) FROM deliveries WHERE thread = ?1)",
-      thread,
-    );
+    const r = this.#one(LAST_KNOWN, thread);
     return r.n ?? 0;
   }
 

@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Effect, Fiber } from "effect";
-import { makeStore, usageByDay, usageGroups } from "../src/read/store.ts";
+import { makeStore, usageGroups } from "../src/read/store.ts";
+import { usageHistory } from "../src/read/usage.ts";
 import { Store } from "../src/store/store.ts";
 import { installUsageDetail } from "../src/store/usage-detail.ts";
 import { dropUsageIndexStep, stopUsageIndexes, usageIndexBatchSql } from "../src/store/usage-retire.ts";
@@ -47,7 +48,7 @@ test("retirement waits for handover, removes the large indexes and keeps recordi
     assert.deepEqual(store.usageOfSession("a").map((r) => [r.calls, r.input, r.output]), [[3, 9, 3]]);
     assert.equal(store.lastContexts("a", 5).length, 1);
     assert.deepEqual(usageGroups(makeStore(store.db, "."), 0n, 9_223_372_036_854_775_807n, 0n).map((r) => [r.calls, r.input]), [[1, 4]]);
-    assert.deepEqual(usageByDay(makeStore(store.db, "."), 0n).map((r) => [r.calls, r.tokens]), [[3, 12]]);
+    assert.deepEqual(usageHistory(makeStore(store.db, "."), 0n, null)!.days.map((r: { calls: number; tokens: number }) => [r.calls, r.tokens]), [[3, 12]]);
   } finally { store.close(); }
 });
 
@@ -88,7 +89,7 @@ test("the old indexes stop being written even when their cleanup worker cannot s
     write(store, "after", 4);
     assert.equal(count(), atHandover, "new calls no longer write the old detail");
     assert.deepEqual(store.usageOfSession("a").map((r) => [r.calls, r.input]), [[3, 9]]);
-    assert.deepEqual(usageByDay(makeStore(store.db, dir), 0n).map((r) => [r.calls, r.tokens]), [[3, 12]],
+    assert.deepEqual(usageHistory(makeStore(store.db, dir), 0n, null)!.days.map((r: { calls: number; tokens: number }) => [r.calls, r.tokens]), [[3, 12]],
       "the previous complete daily totals and the new call are both kept");
   } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });

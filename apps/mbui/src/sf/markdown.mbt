@@ -1450,7 +1450,7 @@ fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
       c.box(style=table_beside.then(@ui.style(mr=room_of(-hang))), id=c.id(key + "/beside"), taps=false, points=true, fn() {
         self.table_frame(rows, widths, total, key + "/head")
         if self.copy {
-          self.table_key(key, t)
+          self.table_key(key, table_shot(id), t)
         }
       })
       |> ignore
@@ -1461,7 +1461,7 @@ fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
   // its picture, while one is taken (table_copy.mbt): the table whole, as wide as its columns, on the page's ground (its
   // words' ids its own: the next block's as they were)
   let n = self.n
-  c.shot(table_shot(key), total + 2.0 * table_shot_in, fn() {
+  c.shot(table_shot(id), total + 2.0 * table_shot_in, fn() {
     c.box(style=table_shot_paper, fn() { self.table_frame(rows, widths, total, key + "/picture-head") }) |> ignore
   })
   self.n = n

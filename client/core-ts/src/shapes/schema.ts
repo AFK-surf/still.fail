@@ -10,7 +10,7 @@
 import { map, opt, struct, tagged, vec, words, type Shape, type Ty } from "./dsl.ts";
 
 export const SHAPES: Record<string, Shape> = {
-  RuntimeKind: words(["claude","codex","dsh","grok","cursor","devin","hermes"], { doc: "A runtime: Claude Code, Codex, DeepSeek Harness, Grok Build, Cursor or Devin." }),
+  RuntimeKind: words(["claude","codex","dsh","grok","cursor","devin","hermes","agy"], { doc: "A runtime: Claude Code, Codex, DeepSeek Harness, Grok Build, Cursor, Devin, Hermes Agent or Antigravity CLI." }),
   AccessKind: words(["subscription","opencode-go","anthropic-api","env","api-provider"], { doc: "Whose account a profile runs on." }),
   ConnectMode: words(["multi-session","single-session"], { doc: "How a connect's conversations become sessions." }),
   Tone: words(["accent","green","blue","red","amber","neutral"], { doc: "A colour of meaning." }),
@@ -291,7 +291,7 @@ export const SHAPES: Record<string, Shape> = {
     ["type", "String", { doc: "options | text | login" }],
     ["options", opt(vec("DecisionOption"))],
     ["placeholder", opt("String"), { said: true }],
-    ["vault", opt("String"), { doc: "An agent's request to use a vault item (docs/vault.md): the request's id. An app shows approving it (the options,\nthen the person confirms: `vault.approve` with the option's scope, `vault.deny`) rather than answering in the chat;\na web page says to approve it in the app." }],
+    ["vault", opt("String"), { doc: "An agent's request to use a vault item (docs/vault.md): the request's id. An app shows approving it (the options,\nthen the person confirms: `vault.approve` with the option's scope, `vault.deny`) rather than answering in the chat;\na web page says to approve it in the app. Absent where a later post of the chat asks the same request again (its card\nalone)." }],
     ["phoneAsk", opt("PhoneAsk"), { doc: "An agent's request for its person's phone (station/src/adb/grants.ts): drawn in place of the post's words, answered with `adb.decide` (the chat's station)." }],
     ["vaultAsk", opt("VaultAsk"), { doc: "With `vault`: the request as the card says it, drawn in place of the post's words. Absent on a card\nfrom before it did (the words say it)." }],
     ["signinAsk", opt("SignInAsk"), { doc: "An agent's ask to sign in to a site (station/src/vault/signin.ts): drawn in place of the post's words, answered\nwith `signin.fill` (from this device's password manager), `signin.self`, `signin.deny` (the chat's station)." }],
@@ -1638,7 +1638,7 @@ export const SHAPES: Record<string, Shape> = {
     ["state", "String", { doc: "`finding` (dialling the person's trusted devices), `code` (one shows a code: type it), `checking`,\n`wrong` (that code was not it), `none` (no trusted device answered), `failed` (`error`), `done`." }],
     ["devices", "u32", { doc: "How many trusted devices show a code now." }],
     ["left", opt("u32"), { doc: "Tries left, after a wrong code." }],
-    ["error", opt("String"), { said: true }],
+    ["error", opt("String"), { said: true, doc: "Why it `failed`; `wrong`, what to say of it (that code not it, or the device showing it gone)." }],
     ["until", opt("i64"), { client: opt("I54"), doc: "While a code is typed: when the last trusted device's code is too old (ms)." }],
     ["untilText", opt("String"), { said: true, doc: "That, in words (14:05 前有效)." }],
   ], { doc: "This device's try to be approved face to face (views/pair.ts)." }),
@@ -1752,8 +1752,6 @@ export const SHAPES: Record<string, Shape> = {
     ["deviceText", "String", { said: true, doc: "Its name as people know it (LockDevice `fullText`)." }],
     ["at", "i64", { client: "I54", doc: "When it was set up, or last asked (its certificate's date, unix seconds)." }],
     ["atText", "String", { said: true, doc: "That, in words (3 分钟前)." }],
-    ["own", "bool", { doc: "Its person put it in the lock themselves (a device of theirs signed its entry). Else an admin did, under their name: it is given the key only as the person asks here (not by itself as its certificate comes), and the prompt says who put it in." }],
-    ["byText", opt("String"), { said: true, doc: "Not `own`: who put it in the lock, by name." }],
   ], { doc: "A member's device set up that waits on this one for a vault's key (views/vault.ts `vaultAsks`, LockPromptsView `asks`)." }),
   VaultItemRow: struct([
     ["id", "String"],
@@ -1820,6 +1818,7 @@ export const SHAPES: Record<string, Shape> = {
     ["known", "bool", { default: true, doc: "Whether the grants kept on the device were read: before, `wanted` empty says nothing of them (a core just started)." }],
     ["lasts", opt("String"), { doc: "This person's 默认最长授权 for their phone: `hour` or `chat` (the longest a chat's grant may last; `adb.setLasts`)." }],
     ["lends", vec("AdbLend"), { default: true, doc: "This phone lent to each station a grant wants it on (`adb.ports` given): how each stands." }],
+    ["screens", vec("String"), { default: true, doc: "The titles of the chats whose own screens (virtual displays) are up on this phone now, every station's: its notification names them." }],
   ], { doc: "This phone's adb as lent to a station's agents (the `adbShare` topic; client/core-ts/src/adb.ts, docs/adb-share.md).\n`phase`: `off`, `connecting` (the link opening, or opening again after it went: `message` says why) or `offered`;\n`adb`, as the station's adb holds the phone once offered: `connecting`, `connected`, `unpaired`, `unauthorized`,\n`off` (Wireless debugging is), `missing` (no adb there) or `failed`, `message` saying more. Stopped by itself (its hour up, a station too old), it\nis off with why in `message`. `serial`: what the agents reach it at on the station; `until`: when it stops." }),
   AdbLend: struct([
     ["station", "String"],
@@ -1993,6 +1992,7 @@ export const SHAPES: Record<string, Shape> = {
     ["windowZoom", opt("String"), { default: true, doc: "The window's content size on this device, as a percentage; none means 100%." }],
     ["motion", opt("String"), { doc: "Motion on this device's pages: `reduce` (what moves only fades or is there at once), `full`, or none to\nfollow the system's setting." }],
     ["haptics", opt("String"), { doc: "Haptics on this device: `off`, or none for on (a long press taken, a card answered, what is copied, a\nchat open in front coming to need the viewer)." }],
+    ["appUpdate", opt("String"), { doc: "This app keeping itself current on this device: `off` (a newer build is said, and downloaded and put in\nplace only at the person's word), or none for on (downloaded by itself, put in place while the app is not in use)." }],
     ["rowPicture", "RowPictureSetting", { default: true }],
     ["absoluteTime", "bool", { default: true, doc: "Times are shown as dates rather than \"3 分钟前\"." }],
     ["language", opt("String"), { default: true, doc: "The language chosen: `zh`, `en`, or none to follow the device's (its `locale`)." }],

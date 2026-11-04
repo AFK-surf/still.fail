@@ -11,7 +11,7 @@
 /// dots where `secret`; Enter gives its words to `submitted`, once, at that key's moment; `leaves`: the keys it leaves
 /// to what it offers as it is typed in; `placeholder_by`: its placeholder as it is now, followed (in place of
 /// `placeholder`). While `disabled()`, faded, taking no press nor the focus (losing it then). The field's node (what
-/// the focus is given to).
+/// the focus is given to). `at_foot`: just above a card's foot, its words on the card's line.
 pub fn input_node(
   parent : @view.View,
   field : @ui.Field,
@@ -23,11 +23,16 @@ pub fn input_node(
   small? : Bool = false,
   leaves? : Array[Int] = [],
   submitted? : (String) -> Unit = fn(_) {  },
+  at_foot? : Bool = false,
 ) -> @view.View {
   let line = @signals.untracked(fn() { theme().t.body_line })
   field_frame(parent, disabled, row=true, fn(f) {
     f
-    .padding(Is((@ui.Space::px(S4), @ui.Space::px(S1_5), @ui.Space::px(S4), @ui.Space::px(S1_5))))
+    .padding(Is({
+      // (just above a card's foot its words on the card's line: card_foot_words')
+      let px = if at_foot { card_foot_words_in(button_height()) } else { @ui.Space::px(S4) }
+      (px, @ui.Space::px(S1_5), px, @ui.Space::px(S1_5))
+    }))
     |> ignore
     if small {
       // (input_box_small: a small panel's row's height, a mouse's (menu_row_min), its ends round)
@@ -64,7 +69,7 @@ pub fn input_node(
 /// round where said; 16 in and 8 under its top, the strong grey's line, on the surface; its words 14 on lines 1.6 of
 /// them), editing `field`: at least `rows` lines high, growing to `most`, its words scrolling in it past them;
 /// `placeholder` while empty (`placeholder_by`: as it is now, followed); Enter a new line. While `disabled()`, as
-/// input_node's. The field's node.
+/// input_node's, and `at_foot` too. The field's node.
 pub fn textarea_node(
   parent : @view.View,
   field : @ui.Field,
@@ -74,10 +79,14 @@ pub fn textarea_node(
   corner? : Double,
   placeholder_by? : () -> String,
   disabled? : () -> Bool = fn() { false },
+  at_foot? : Bool = false,
 ) -> @view.View {
   field_frame(parent, disabled, row=false, fn(f) {
     f
-    .padding(Is((@ui.Space::px(S4), @ui.Space::px(S2), @ui.Space::px(S4), @ui.Space::px(S2))))
+    .padding(Is({
+      let px = if at_foot { card_foot_words_in(button_height()) } else { @ui.Space::px(S4) }
+      (px, @ui.Space::px(S2), px, @ui.Space::px(S2))
+    }))
     .min_height(Is(Some(rows.to_double() * textarea_line + textarea_in)))
     |> ignore
     match corner {
@@ -91,6 +100,7 @@ pub fn textarea_node(
       placeholder_by?,
       font_size=input_size,
       line=textarea_line,
+      min_lines=rows,
       max_lines=most,
       enter_sends=false,
       colors_by=fn() {

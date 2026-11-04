@@ -100,7 +100,7 @@ function answer(groups: Part[]): UsageGroup[] {
 /// the journal still covers every subsequent change; otherwise this takes the ordinary full indexed path.
 export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null,
   pause: (ms: number) => Promise<void> = (ms) => ms > 0 ? wall.sleep(ms) : new Promise((resolve) => setImmediate(resolve)),
-  cache?: UsageSummaryCache, kind: "summary" | "history" = "summary"): Promise<{
+  cache?: UsageSummaryCache): Promise<{
     groups: UsageGroup[]; diagnostics: { parts: number; candidates: number; selectedMs: number; selectedRestMs: number;
       selectedCpuMs?: number; cpuMs?: number; rests: number; restMs: number; cache: CacheStatus; sql: UsageSqlTimings }; ms: number;
   } | null> {
@@ -157,10 +157,9 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
       restMs: Math.round(restMs), cache, sql: { journal: Math.round(sql.journal), changes: Math.round(sql.changes),
         pending: Math.round(sql.pending), selected: Math.round(sql.selected), owner: Math.round(sql.owner),
         buckets: Math.round(sql.buckets), slowMs: Math.round(sql.slowMs), slowOp: sql.slowMs < 0.5 ? "none" : sql.slowOp } }, ms: Math.round(performance.now() - started) });
-  const key = JSON.stringify([kind, from.toString(), to.toString(), utcOffsetMin.toString(), viewer?.workspace ?? null,
+  const key = JSON.stringify(["summary", from.toString(), to.toString(), utcOffsetMin.toString(), viewer?.workspace ?? null,
     viewer === null ? null : viewer.home !== false]);
   const journal = cache !== undefined && timeSql("journal", () => s.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_summary_changes'").get()) !== undefined;
-  if (kind === "history" && !journal) return null;
   let first = 0n, last = 0n;
   if (journal) {
     const bounds = timeSql("journal", () => s.db.prepare("SELECT (SELECT seq FROM usage_summary_changes ORDER BY seq LIMIT 1) AS first, " +
@@ -275,14 +274,10 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
     if (bucket === undefined) { bucket = timeSql("buckets", () => s.db.prepare(queries.buckets)); bucket.setReadBigInts(true); }
     const args: (string | bigint)[] = [utcOffsetMin, session, low, high];
     if (viewer !== null) args.push("W" + viewer.workspace);
-    for (const bucketRow of sqlRows("buckets", timeSql("buckets", () => bucket!.iterate(...args)) as Iterable<Bucket>)) {
-      // History groups only by day, session, runtime and model. Do not retain a row for every person or thread.
-      const row = kind === "history" ? { ...bucketRow, thread: 0n, person: "", profile: "", fast: 0n } : bucketRow;
+    for (const row of sqlRows("buckets", timeSql("buckets", () => bucket!.iterate(...args)) as Iterable<Bucket>)) {
       parts++;
       if (groups) add(groups, groupKey(row), row);
       putBucket(row);
-      // A very large history can have far more details than its answer. Leave it to the existing SQL aggregate.
-      if (kind === "history" && blocks === null) return false;
       if (++steps >= 64) await rest();
     }
     return true;

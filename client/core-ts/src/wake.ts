@@ -207,6 +207,11 @@ export class WakingHost implements Host {
     return this.inner.storagePath?.(key) ?? null;
   }
 
+  /// Where a picture is fetched from: the device's, at once.
+  pictureVia(url: string): string {
+    return this.inner.pictureVia?.(url) ?? url;
+  }
+
   /// A loopback listener (a login's callback): the device's, nothing of a UI's to wait on.
   get listen(): Host["listen"] {
     const inner = this.inner;

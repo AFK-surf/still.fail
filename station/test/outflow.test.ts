@@ -734,3 +734,32 @@ test("the Tailcat link: off until an admin turns it on, kept so; its address onc
   await assert.rejects(tcp(view.port!, "GET", "/v1/stations"));
   assert.equal(new TailcatLink({ data: r.data, server: r.server, changed: () => {} }).view().on, false);
 });
+
+test("the Tailcat link keeps its port across a hand-over: started once the process before is gone, and not after closing", async () => {
+  const r = await rig();
+  const dir = tempdir();
+  const fake = join(dir, "tailcat");
+  writeFileSync(fake, `#!/bin/sh\nif [ "$1" = genkey ]; then echo '{}' > "$3"; exit 0; fi\necho '{"listenAddr":"tcFAKEADDRESS"}'\nexec sleep 600\n`, { mode: 0o755 });
+  const made = (data: string) => new TailcatLink({ data, server: r.server, command: fake, changed: () => {}, holders: async () => [process.pid] });
+  const running = async (link: TailcatLink) => {
+    while (link.view().state !== "running") await new Promise((resolve) => setTimeout(resolve, 10));
+    return link.view().port!;
+  };
+  const before = made(r.data);
+  after(() => before.close());
+  await before.set(true);
+  const port = await running(before);
+  // While the process before holds the port, the next one has not started its link.
+  const next = made(r.data);
+  after(() => next.close());
+  assert.equal(next.view().state, "off");
+  await before.close();
+  next.start();
+  assert.equal(await running(next), port);
+  // A second start leaves it as it is; one after closing starts nothing.
+  next.start();
+  assert.equal(next.view().state, "running");
+  await next.close();
+  next.start();
+  assert.equal(next.view().state, "off");
+});

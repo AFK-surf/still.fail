@@ -241,7 +241,7 @@ test "refused before the outbox, the words come back and why is said" {
   t.draw()
   // sent, then refused: felt each
   assert_eq(t.haptics(), [@ui.KeyboardTap, @ui.Reject])
-  assert_true(t.dump().contains("发不出去的话"))
+  assert_true(t.find("发不出去的话") is Some(_))
   assert_true(t.find("没有这个对话") is Some(_))
   // the words sent wait over the field for their row, which this core never gives; the composer's room held as
   // tall as they went meanwhile, then let go to its own height (both said as they set off)
@@ -326,6 +326,39 @@ test "a message going up says how far it has gone" {
 }
 
 ///|
+/// A video waiting in the composer looked like a picture waiting (2026-11-04): its tile has a solid play mark in its
+/// middle; a picture's none.
+test "a video waiting is told apart from a picture waiting by its play mark" {
+  new_run()
+  let src = fixture("chat-attach-video")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.image_fade_ms)
+  let tiles = t.drawn_images().filter(fn(i) { (i[2] - 56.0).abs() < 0.5 && (i[3] - 56.0).abs() < 0.5 })
+  tiles.sort_by(fn(a, b) { a[0].compare(b[0]) })
+  assert_eq(tiles.length(), 2)
+  // white shapes in a tile's middle half (its ✕ is on its corner): the video's play mark; none in the picture's
+  let over = fn(i : Array[Double]) {
+    t.drawn_shapes().filter(fn(s) {
+      s.5 == 0xFFFFFFFFL && s.0 > i[0] + 14.0 && s.0 + s.2 < i[0] + 42.0 && s.1 > i[1] + 14.0 && s.1 + s.3 < i[1] + 42.0
+    })
+  }
+  assert_eq(over(tiles[0]).length(), 0)
+  let marks = over(tiles[1])
+  assert_true(marks.length() > 0)
+  // (its bands, one box)
+  let mut top = 1.0e9
+  let mut foot = -1.0e9
+  for m in marks {
+    top = if m.1 < top { m.1 } else { top }
+    foot = if m.1 + m.3 > foot { m.1 + m.3 } else { foot }
+  }
+  assert_true(((top + foot) / 2.0 - (tiles[1][1] + 28.0)).abs() < 3.0, msg="\{marks} \{tiles[1]}")
+  assert_eq(t.squeeze_faults(), [])
+}
+
+///|
 test "the fixture's station: sending, then the message, then an answer; a failure, then 重试" {
   new_run()
   let clock : Ref[Double] = { val: 0.0 }
@@ -399,7 +432,7 @@ test "a picture sent from here is drawn in its message as it was picked, up befo
   ].map(fn(i) { i.to_byte() }))
   let w = @sfbase.writing(src, draft_key(r))
   @sfbase.writing_add(src, w, r.station, "shot.png", png)
-  let id = text(Some(w.files[0]), "id")
+  let id = text(Some(w.files.get()[0]), "id")
   let shot = @sfbase.writing_pictures.get(id).unwrap()
   let file = fn(path : String, upload : String) {
     attachment_of({
@@ -413,7 +446,7 @@ test "a picture sent from here is drawn in its message as it was picked, up befo
   assert_eq(sent_picture(r.station, file("/w/s-c1/uploads/2026-10-23-c3-shot.png", id)), Some(shot))
   // up (the core says where the station keeps it): its message's file by that name, wherever it is moved
   t.draw()
-  let up = text(field(Some(@sfbase.writing(src, draft_key(r)).files[0]), "done"), "path")
+  let up = text(field(Some(@sfbase.writing(src, draft_key(r)).files.get()[0]), "done"), "path")
   assert_true(up != "")
   assert_eq(sent_picture(r.station, file("/w/s-c1/" + up, "")), Some(shot))
   // not another station's of that name
@@ -434,7 +467,7 @@ test "a video picked shows as the host's still of it in its tile and its message
   @sfbase.writing_add_picked(src, w, r.station, picked("短片.mp4", 0, "content://media/video/7"))
   @sfbase.writing_add_picked(src, w, r.station, picked("长片.mov", 3, "content://media/video/8"))
   @sfbase.writing_add_picked(src, w, r.station, picked("合同.pdf", 0, "content://docs/9"))
-  let ids = w.files.map(fn(f) { text(Some(f), "id") })
+  let ids = w.files.get().map(fn(f) { text(Some(f), "id") })
   assert_eq(ids.length(), 3)
   assert_eq(@sfbase.writing_pictures.get(ids[0]), Some("content://media/video/7"))
   assert_eq(@sfbase.writing_pictures.get(ids[1]), Some("content://media/video/8"))
@@ -459,11 +492,11 @@ test "a video picked or pasted that the host has no picture of shows its first f
   let w = @sfbase.writing(src, draft_key(r))
   // (macOS's pasteboard and pickers, Windows', iOS's say no address for a file: no still of the host's)
   let clip = b"\x00\x00\x00\x14ftypqt  \x00\x00\x00\x08wide"
+  let before = t.views().length()
   @sfbase.writing_add(src, w, r.station, "录屏.mov", clip)
-  let id = text(Some(w.files[0]), "id")
+  let id = text(Some(w.files.get()[0]), "id")
   assert_eq(@sfbase.writing_pictures.get(id), None)
   // the composer built: a player of it made out of sight, reading the bytes from here, its frame at 0 grabbed
-  let before = t.views().length()
   t.draw()
   // (a player's open: "open <id> 1 <its type's length>", video/quicktime)
   let opened = t.views()[before:].to_array().filter(fn(l) { l.has_prefix("open ") && l.has_suffix(" 1 15") })
@@ -622,7 +655,7 @@ test "at its end, a row that comes at it: the core told the end is not in view w
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
-  assert_eq(ends, [true])
+  assert_eq(ends, [true], msg="focus read from initial layout: \{told}")
   // someone says something: it comes at the end, the list gliding to it (list_to_end, the frame it comes)
   said_by_ana(171, "我也来看看")
   fix_clock_set(clock, clock.val + fix_said_ms)
@@ -635,7 +668,7 @@ test "at its end, a row that comes at it: the core told the end is not in view w
   // (Android's Chat.kt: rows that came are not read before they are in view) told end:false as it comes, its room
   // opening, end:true once it is open; at its end as it rests
   assert_true(ends.contains(false))
-  assert_eq(ends[ends.length() - 1], true)
+  assert_eq(ends[ends.length() - 1], true, msg="at \{t.time()} after list rest=\{rest}; moving=\{t.moving()}; focus=\{told}")
   // words sent, then the agent's answer (in over the agent's line, what is at the end: the list at its end at once, the
   // rows over it going up for it): at its end again as it rests
   t.tap_text("发消息")

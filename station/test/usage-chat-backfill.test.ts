@@ -60,7 +60,7 @@ test("old chat totals fill in bounded resumable batches while writes and workspa
     const reader = makeStore(store.db, dir);
     assert.throws(() => usageChatTotals(reader, null), /chat statistics.*being filled/);
     store.db.setAuthorizer((action, table) => action === constants.SQLITE_READ && table === "usage" ? constants.SQLITE_DENY : constants.SQLITE_OK);
-    try { assert.equal(usage(reader, "en", 0n, 1n, 0n, false, null, true).history, undefined); }
+    try { assert.equal(usage(reader, "en", 0n, 1n, 0n, false, null, true).history.chatsIncomplete, true); }
     finally { store.db.setAuthorizer(null); }
     assert.deepEqual(backfillUsageChatStats(store.db, 4), { done: false, processed: 4 });
 
@@ -102,7 +102,8 @@ test("an incomplete chat summary is omitted without holding a reader or rebuildi
   try {
     await readers.read("checkpoint", {}, "en");
     const result = JSON.parse(await history);
-    assert.equal(result.history, undefined);
+    assert.equal(result.history.chatsIncomplete, true, "the chats are not said until their statistics are filled");
+    assert.equal(result.history.archived, undefined);
     assert.deepEqual(result.rows, []);
     handover();
     assert.deepEqual(store.db.prepare("SELECT * FROM usage_chat_progress").get(), before);

@@ -1955,6 +1955,8 @@ test("the_archive_is_its_stations_archived_chats_newest_first_by_day_and_one_res
   subscribe(core, ui, 5, { topic: "archive", scope: "ws", limit: 1 });
   subscribe(core, ui, 6, { topic: "archive", scope: "ws", q: "nothing like it" });
   await host.settle();
+  await host.time.pass(1_000);
+  await host.settle();
   answersOf(host, values);
   const ids = (n: number) => v(values, n).days.flatMap((d: J) => d.items.map((i: J) => i.id));
   assert.deepEqual([ids(4), v(values, 4).total, v(values, 4).more], [["k2"], 1, false]);
@@ -1971,6 +1973,50 @@ test("the_archive_is_its_stations_archived_chats_newest_first_by_day_and_one_res
   await host.settle();
   assert.ok("ok" in answersOf(host, values).get(3)!);
   assert.deepEqual([v(values, 1).days, v(values, 1).note], [[], "暂无已归档的对话"]);
+  core.close();
+});
+
+test("the_archive_is_looked_through_as_a_ui_asks_by_what_its_chats_said_each_once_and_a_page_not_answered_is_asked_again", async () => {
+  const chat = (id: string, at: number, last: string | null) => ({ id, session: id, thread: null, title: `聊 ${id}`, last: last === null ? null : { text: last }, lastActiveAt: at, archived: { at, by: "manual", alone: false } });
+  const searches: string[] = [];
+  let failures = 1;
+  const s = stationHost(base());
+  stationReplies(s.host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (path === "/chats?archived=1&page=") return { rows: [chat("k1", 30, "好了"), chat("k2", 20, null)], next: "20:k2" };
+    if (path === "/chats?archived=1&page=20%3Ak2") return { rows: [chat("k2", 20, null), chat("k3", 10, null)], next: null };
+    if (path.startsWith("/search?")) {
+      searches.push(path);
+      return { building: false, groups: [{ kind: "message", more: false, hits: [
+        { kind: "message", key: "m:3:1", title: "", text: "那次深埋的结论是回滚", at: 10, thread: 3, seq: 1, chat: "k3", archived: true },
+        { kind: "message", key: "m:4:1", title: "", text: "深埋在进行中的对话里", at: 11, thread: 4, seq: 1, chat: "live", archived: false },
+      ] }] };
+    }
+    return undefined;
+  });
+  stationLater(s.host, (req) => (req.url.endsWith("page=20%3Ak2") && failures-- > 0 ? Promise.resolve(jsonResponse(500, { error: "busy" })) : undefined));
+  const host = s.host;
+  const core = await Core.create(host, { clock: host.time.clock, sample: 0, wire: () => new HostWire(host) });
+  await host.time.pass(500);
+  const ui = core.connect();
+  const ask = (id: number, topic: J) => core.receiveRaw(ui, { id, subscribe: topic });
+  ask(1, { topic: "archive", scope: "ws", limit: 1 });
+  ask(2, { topic: "archive", scope: "ws", q: "深埋" });
+  ask(3, { topic: "archive", scope: "ws" });
+  await host.settle();
+  await host.time.pass(5_000);
+  await host.settle();
+  const values = new Map();
+  answersOf(host, values);
+  const ids = (n: number) => v(values, n).days.flatMap((d: J) => d.items.map((i: J) => i.id));
+  // `limit` as a UI says it: the newest; the rest said to be there.
+  assert.deepEqual([ids(1), v(values, 1).total, v(values, 1).more], [["k1"], 3, true]);
+  // `q` as a UI says it: found by a message of an archived chat, on a page read after one that was not answered.
+  assert.deepEqual(ids(2), ["k3"]);
+  assert.match(v(values, 2).days[0].items[0].last, /深埋/);
+  assert.ok(searches.every((path) => path.includes("kinds=chat%2Cmessage") && path.includes("limit=200") && path.includes("archived=1")), searches.join());
+  // A chat in two pages is one row.
+  assert.deepEqual(ids(3), ["k1", "k2", "k3"]);
   core.close();
 });
 
@@ -2494,7 +2540,7 @@ test("lends_the_phone_s_adb_through_its_calls_and_topic", async () => {
   await host.settle();
   apply(host, values);
   // Off again, every field of the offer gone (the clients' shape takes their absence).
-  assert.deepEqual(v(values, 1), { sharing: false, phase: "off", on: false, tunnels: 0, grants: [], wanted: [], known: true, lasts: "chat", lends: [] });
+  assert.deepEqual(v(values, 1), { sharing: false, phase: "off", on: false, tunnels: 0, grants: [], wanted: [], known: true, lasts: "chat", lends: [], screens: [] });
   core.close();
 });
 

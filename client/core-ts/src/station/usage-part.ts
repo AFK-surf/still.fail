@@ -41,45 +41,45 @@ export function sameDetailCoverage(held: unknown, part: unknown): boolean {
 
 /// What is held, with the days from `day` on (the part's, read from `since`, ms) as `part` has them: its rows and the
 /// tasks run here from then on in place of those held, the threads, people and prices it names added, the profiles as
-/// it says them; and the history's days from then on added up again from the rows, as the station adds them up (the
-/// tokens read and written, the cache's too, and the calls, by day, runtime and model). The rest of the history (cards,
-/// chats by place, those archived, tasks run here) stays as last read whole.
+/// it says them; and the history's days from then on changed as the rows changed (the tokens read and written, the
+/// cache's too, and the calls). The rest of the history (cards, chats by place, those archived, tasks run here) stays
+/// as last read whole.
 export function withPart(held: J, part: unknown, day: string, since: number): J {
   if (!isObject(part)) return held;
   const rows = [...arr(get(held, "rows")).filter((r) => String(get(r, "day")) < day), ...arr(get(part, "rows"))];
-  type Day = { day: string; runtime: string; model: string | null; tokens: number; calls: number };
-  const days = new Map<string, Day>();
-  const accumulate = (target: Map<string, Day>, records: J[], sign: number) => { for (const r of records) {
+  // The history's days from `day` on, each what it held less what the rows held of it, plus what the part's rows say:
+  // the calls the rows do not cover (a day's before the station's detail began) stay counted. By day alone, however
+  // the station split its days (by model before; not at all since).
+  const change = new Map<string, { tokens: number; calls: number }>();
+  const accumulate = (records: J[], sign: number) => { for (const r of records) {
     const d = String(get(r, "day"));
     if (d < day) continue;
-    const runtime = String(get(r, "runtime"));
-    const model = typeof get(r, "model") === "string" ? (get(r, "model") as string) : null;
-    const key = `${d}\n${runtime}\n${model ?? ""}`;
-    const at = target.get(key) ?? { day: d, runtime, model, tokens: 0, calls: 0 };
+    const at = change.get(d) ?? { tokens: 0, calls: 0 };
     at.tokens += sign * (n(get(r, "input")) + n(get(r, "cacheRead")) + n(get(r, "cacheWrite")) + n(get(r, "output")));
     at.calls += sign * n(get(r, "calls"));
-    target.set(key, at);
+    change.set(d, at);
   } };
-  accumulate(days, rows, 1);
+  accumulate(arr(get(held, "rows")), -1);
+  accumulate(arr(get(part, "rows")), 1);
   const full = get(held, "history");
   const history = isObject(full) ? full : get(held, "partialHistory");
-  const historyDays = arr(get(history, "days"));
-  let updatedDays: J[];
-  if (typeof get(held, "detailSince") === "number") {
-    // A complete day can include older calls which the new detail index intentionally does not contain. Apply only
-    // the change in the new detail, rather than replacing that complete day with the partial detail's total.
-    const totals = new Map<string, Day>();
-    for (const d of historyDays) {
-      const item = { day: String(get(d, "day")), runtime: String(get(d, "runtime")), model: typeof get(d, "model") === "string" ? get(d, "model") as string : null,
-        tokens: n(get(d, "tokens")), calls: n(get(d, "calls")) };
-      totals.set(`${item.day}\n${item.runtime}\n${item.model ?? ""}`, item);
-    }
-    accumulate(totals, arr(get(held, "rows")), -1);
-    accumulate(totals, arr(get(part, "rows")), 1);
-    updatedDays = [...totals.values()].filter((d) => d.calls !== 0 || d.tokens !== 0);
-  } else {
-    updatedDays = [...historyDays.filter((d) => String(get(d, "day")) < day), ...days.values()];
+  const byDay = new Map<string, { day: string; runtime: string; model: null; tokens: number; calls: number }>();
+  const kept: J[] = [];
+  for (const d of arr(get(history, "days"))) {
+    const at = String(get(d, "day"));
+    if (at < day) { kept.push(d); continue; }
+    const sum = byDay.get(at) ?? { day: at, runtime: "", model: null, tokens: 0, calls: 0 };
+    sum.tokens += n(get(d, "tokens"));
+    sum.calls += n(get(d, "calls"));
+    byDay.set(at, sum);
   }
+  for (const [d, c] of change) {
+    const sum = byDay.get(d) ?? { day: d, runtime: "", model: null, tokens: 0, calls: 0 };
+    sum.tokens += c.tokens;
+    sum.calls += c.calls;
+    byDay.set(d, sum);
+  }
+  let updatedDays: J[] = [...kept, ...[...byDay.values()].filter((d) => d.tokens !== 0 || d.calls !== 0)];
   updatedDays.sort((a, b) => {
     const first = String(get(a, "day")), second = String(get(b, "day"));
     return first < second ? -1 : first > second ? 1 : 0;

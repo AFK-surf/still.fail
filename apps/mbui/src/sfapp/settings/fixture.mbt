@@ -416,6 +416,12 @@ pub fn fixture_page(mode : String) -> String {
     }
     // the page's 设置 (its variables' sheet up over it), its 软件与设备
     "settings-station-env" => station_parts["ws1/st1"] = "settings"
+    // its 设置 with data outflow's cards all there: the link, on, a program asking and one granted
+    "settings-station-outflow" => {
+      station_parts["ws1/st1"] = "settings"
+      fx.outflow = true
+      fx.outflow_link = Some({ "on": true, "state": "running", "address": "tcADDRESS", "port": 7480 })
+    }
     // its 设置 while it is away: only what can be changed then
     "settings-station-away" => {
       fx.willow_away = true
@@ -523,7 +529,7 @@ pub fn fixture_page(mode : String) -> String {
   }
   match m {
     "settings" => "home"
-    "settings-station-mark" | "settings-station-gpu" | "settings-station-gpu-many" | "settings-station-env" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-network" | "settings-station-away" =>
+    "settings-station-mark" | "settings-station-gpu" | "settings-station-gpu-many" | "settings-station-env" | "settings-station-outflow" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-network" | "settings-station-away" =>
       "station:ws1/st1"
     "settings-stations-add" | "settings-stations-existing" | "settings-stations-command" | "settings-first-station" =>
       "stations"
@@ -1595,6 +1601,8 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
     "chats" => [("Willow/1", "整理发布清单"), ("Willow/4", "给设置页加一个深色模式开关"), ("", "其他")]
     _ => [("lin@example.com", "林"), ("ana@example.com", "Ana"), ("", "其他")]
   }
+  // The core ranks the filtered rows too: the selected split then contains only the chosen part.
+  let series = if only != "" && series.iter().any(fn(s) { s.0 == only }) { series.filter(fn(s) { s.0 == only }) } else { series }
   let lists = [
     ("people", "按人", [("lin@example.com", "林", "", "$80", 0.68), ("ana@example.com", "Ana", "", "$31", 0.26), ("wu@example.com", "吴", "", "$7.20", 0.06)]),
     (
@@ -2826,8 +2834,9 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
 
 ///|
 /// The lock as a device not confirmed in it has it (MBUI_FIXTURE=lock-waiting, lock-finding, lock-code, lock-wrong,
-/// lock-checking, lock-none, lock-failed, lock-nocode, lock-security, each also -dark: its waiting page asking,
-/// finding, the code being typed, typed wrong, being checked, no device found, the pairing failed, this device without
+/// lock-wrong-gone, lock-checking, lock-none, lock-failed, lock-nocode, lock-security, each also -dark: its waiting page
+/// asking, finding, the code being typed, typed wrong (or the device showing it gone), being checked, no device found,
+/// the pairing failed (lock-elsewhere: approved in another workspace, not this one), this device without
 /// its code yet; its security page): this device waiting, not a signer. lock-upgrade: in the lock but not signing (its key lost), the code being typed on its
 /// security page.
 fn waiting_lock(mode : String) -> Json {
@@ -2837,9 +2846,13 @@ fn waiting_lock(mode : String) -> Json {
     "lock-code" | "lock-upgrade" =>
       obj([("state", str("code")), ("left", Json::number(3.0)), ("untilText", str("14:05 前有效"))])
     "lock-wrong" => obj([("state", str("wrong")), ("left", Json::number(2.0)), ("untilText", str("14:05 前有效"))])
+    "lock-wrong-gone" =>
+      obj([("state", str("wrong")), ("left", Json::number(2.0)), ("error", str("安全码不对，或显示它的设备已断开，还可以试 2 次")), ("untilText", str("14:05 前有效"))])
     "lock-checking" => obj([("state", str("checking")), ("left", Json::number(3.0))])
     "lock-none" => obj([("state", str("none"))])
     "lock-failed" => obj([("state", str("failed")), ("error", str("配对超时"))])
+    "lock-elsewhere" =>
+      obj([("state", str("failed")), ("devices", Json::number(0.0)), ("error", str("此设备已在「日常」获批，在这里还需要此 workspace 的管理员或你在这里的受信任设备批准"))])
     _ => Json::null()
   }
   // in the lock, its key since lost (a phone moved to a new one): made one that signs on its security page

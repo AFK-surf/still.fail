@@ -111,9 +111,12 @@ struct FakeHost {
   mut snap : (Double, Double, Double, Double)
   mut snap_state : Int
   /// whether the app can open a window of its own (Tester::set_window_opens), and what it opened them for, oldest first
-  /// (@hostapi.window_open)
+  /// (@hostapi.window_open); which of them have closed (Tester::close_window) and which came to the front, oldest first
+  /// (@hostapi.window_front)
   mut window_opens : Bool
   windows_opened : Array[String]
+  windows_closed : Array[String]
+  windows_fronted : Array[String]
   /// the number on the app's icon as last told (@ui.set_badge)
   mut badge : Int
   /// this machine's station as its host would say it (Tester::set_local_station), what was done to it
@@ -1195,6 +1198,12 @@ fn outside_end(kind : Int, id : Int, wake? : Bool = true) -> Unit {
 let answers_told : Array[@signals.Signal[Int]] = Array::makei(outside_native + 1, fn(_) { @signals.signal(0) })
 
 ///|
+/// A Tester's frames as its fake host's answers count them (answers_by_the_frame): an answer given in one is taken
+/// from the next.
+// kept across runs: it only counts on
+let answers_frames : Ref[Int] = Ref(0)
+
+///|
 /// The answers the host told of (outside_key) not taken yet.
 // kept across runs: emptied by each Tester (reset_globals)
 let answers_waiting : Map[Int64, Bool] = Map::new()
@@ -1236,6 +1245,9 @@ fn answers_by_the_frame() -> Unit {
   if fake.val is None {
     return
   }
+  // (the frames as its answers count them: this one begun before they are told, so what reads one as it is told
+  // takes it, the window's tree as the old views do as they are built after)
+  answers_frames.val += 1
   let kinds : Map[Int, Bool] = {}
   for k, _ in outside_tickets {
     kinds[(k >> 32).to_int()] = true
@@ -2384,6 +2396,21 @@ fn h_window_open(what : String) -> Bool {
       f.window_opens
     }
     None => @hostapi.window_open(what)
+  }
+}
+
+///|
+fn h_window_front(what : String) -> Bool {
+  match fake.val {
+    Some(f) => {
+      let open = f.windows_opened.iter().filter(fn(w) { w == what }).count() >
+        f.windows_closed.iter().filter(fn(w) { w == what }).count()
+      if open {
+        f.windows_fronted.push(what)
+      }
+      open
+    }
+    None => @hostapi.window_front(what)
   }
 }
 

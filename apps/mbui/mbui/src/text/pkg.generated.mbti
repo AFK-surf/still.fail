@@ -50,21 +50,24 @@ pub fn Bidi::line_levels(Self, Int32, Int32) -> FixedArray[Int32]
 pub fn Bidi::new(String, dir? : Int32) -> Self
 pub fn Bidi::paragraph_level(Self, Int32) -> Int32
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Ground {
   room : Double
   height : Double
   corner : Double
   after : Double
-} derive(Eq, @debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) struct InlineDrawing {
   width : Double
   height : Double
   baseline : Double
   paths : Array[Array[(Array[Double], Bool)]]
   words : Array[(String, Double, Double, Double)]
-} derive(Eq, @debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Run {
   text : String
   weight : Int32
@@ -81,7 +84,7 @@ pub(all) struct Run {
   underline : Bool
   link : String
   drawing : InlineDrawing?
-} derive(Eq, @debug.Debug)
+}
 
 // Type aliases
 

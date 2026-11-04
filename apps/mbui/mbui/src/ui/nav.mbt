@@ -489,6 +489,19 @@ pub fn[P] Nav::top_stay(self : Nav[P]) -> (Int, Int) {
 }
 
 ///|
+/// The page drawn in the top's place, its serial and its stint: the one kept shown there while the top waits for what
+/// it shows (Nav::flat_keep), else the top (read: told as it changes). What is the page's while it is the one seen (its
+/// draft's editor) is this one's.
+pub fn[P] Nav::drawn_stay(self : Nav[P]) -> (Int, Int) {
+  self.said.get() |> ignore
+  self.shown.get() |> ignore
+  match self.flat_kept_entry() {
+    Some(e) => (e.serial, e.stint)
+    None => self.top_stay()
+  }
+}
+
+///|
 /// Drawn flat (Ctx::nav_flat), what shows is said by its owner at its causes, not by the frames (`owned`; let go, as
 /// Nav::shows_when says it): what it keeps shown (Nav::flat_keep) and when the one on top shows.
 pub fn[P] Nav::flat_owned(self : Nav[P], owned : Bool) -> Unit {
@@ -708,6 +721,31 @@ pub fn[P] Nav::replace(self : Nav[P], page : P) -> Unit {
     None => ()
   }
   self.pages.push(e)
+  self.told()
+  wake()
+}
+
+///|
+/// The pages over the stack's first `keep` replaced by `pages` (the first of them over the last kept; `keep` 0, the root
+/// too), in place (nothing slides), told once as it is so: never seen with those taken off and these not on yet (a
+/// list's row choosing the page beside it in place of whatever was open over the list). Never with no page: `pages`
+/// empty, `keep` 1 at least.
+pub fn[P] Nav::replace_above(self : Nav[P], keep : Int, pages : Array[P]) -> Unit {
+  let keep = if keep < 0 { 0 } else { keep }
+  if pages.is_empty() && (keep == 0 || self.pages.length() <= keep) {
+    return
+  }
+  self.settle()
+  while self.pages.length() > keep {
+    self.gone.push(self.pages.pop().unwrap())
+  }
+  for page in pages {
+    self.pages.push(nav_page(page, self.pages.last().map(fn(e) { e.page })))
+  }
+  // (none put on: the one now on top come back to, as a pop's is)
+  if pages.is_empty() {
+    self.topped()
+  }
   self.told()
   wake()
 }

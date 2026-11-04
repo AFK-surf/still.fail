@@ -131,13 +131,13 @@ sealed() {
 # stillfail-setup-0.1.<n>.exe)
 # the installer's own program (windows/setup.c), bare: made once for its source, apart from the app (CI makes it while
 # the app compiles: made in the installer's step, beside the e2e flow's app, it was 4 s alone and 15-56 s there,
-# 2026-10-28)
+# 2026-10-28). -utf-8: its Chinese words, read in the build machine's code page without it, were garbled in the program
 setup_bare() {
   local out=$A/out/setup-bare
   [ "$out/setup-bare.exe" -nt "$A/windows/setup.c" ] && return 0
   mkdir -p "$out"
   local t0=$SECONDS
-  (cd "$A" && cl.exe -nologo -O2 -W3 windows/setup.c -Fe"$(cygpath -w "$out/setup-bare.exe.tmp.exe")" -Fo"$(cygpath -w "$out/")" > "$out/build.log") ||
+  (cd "$A" && cl.exe -nologo -O2 -W3 -utf-8 windows/setup.c -Fe"$(cygpath -w "$out/setup-bare.exe.tmp.exe")" -Fo"$(cygpath -w "$out/")" > "$out/build.log") ||
     { cat "$out/build.log"; return 1; }
   mv -f "$out/setup-bare.exe.tmp.exe" "$out/setup-bare.exe"
   echo "win.sh: setup.c compiled in $((SECONDS - t0)) s"

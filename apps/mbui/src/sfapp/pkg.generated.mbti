@@ -18,7 +18,7 @@ import {
 }
 
 // Values
-pub let absolute_times : @ref.Ref[Bool]
+pub let absolute_times : @signals.Signal[Bool]
 
 pub fn act(@sfbase.Source, String, String, String, @json.Json, done? : String, done_action? : String, done_run? : () -> Unit, at_once? : Bool, ok? : (@json.Json) -> Unit, failed? : () -> Unit) -> Unit
 
@@ -110,7 +110,7 @@ pub fn chat_ref_of(@sfbase.ChatItem) -> @sfbase.ChatRef
 
 pub fn chat_screens_driven(Array[@sfbase.ChatScreen]) -> Bool
 
-pub fn chat_screens_open(@sfbase.ChatRef, Array[@sfbase.ChatScreen], from~ : @sf.Beside) -> Unit
+pub fn chat_screens_open(@sfbase.ChatRef, Array[@sfbase.ChatScreen], from~ : @sf.Beside, along? : @view.Along) -> Unit
 
 pub fn chat_tick(@ui.Ctx, String, @sfbase.Reading, @sfbase.ChatView, shown~ : Bool, in_front~ : Bool) -> Unit
 
@@ -293,6 +293,8 @@ pub fn emit_next(@ui.Ctx, @sfbase.Emits, String, at? : Double) -> Unit
 pub fn emit_out(@ui.Ctx, Int32, Int32, @sfbase.Emits, Double) -> Unit
 
 pub let emit_out_ms : Double
+
+pub fn emit_place(@ui.Ctx, String) -> (Double, Double, Double, Double)?
 
 pub fn emit_release(@sfbase.Emits) -> Unit
 
@@ -549,6 +551,8 @@ pub fn menu_bar_json(@json.Json?, Bool) -> String
 pub fn message_of(@json.Json) -> @sfbase.Message
 
 pub fn nav_home() -> Unit
+
+pub fn nav_over_home(Array[@sfbase.Page]) -> Unit
 
 pub fn near_left(@sfbase.Source, String) -> Unit
 

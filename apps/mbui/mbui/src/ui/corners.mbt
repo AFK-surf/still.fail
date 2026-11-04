@@ -268,7 +268,9 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
     let (d, holder, presses) = h
     let parent = if holder >= 0 { at[holder] } else { -1 }
     let n = Node::new()
-    n.kind = kind_box
+    n.kind = if d.image is Some(_) || d.picture is Some(_) { kind_image } else { kind_box }
+    n.shapes = d.shapes
+    n.lines = d.lines
     n.x = d.x
     n.y = d.y
     n.fw = d.w
@@ -295,6 +297,11 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
     n.opacity = d.alpha
     n.tree_scrolls = tree.scrolls_now(d.id)
     n.tree_short = tree.scroll_short(d.id)
+    let (over, dx, dy) = tree.own_placement(d.id)
+    // (out of the flow in its holder, not a separate old frame layer whose ground is exempt altogether)
+    if over { n.at_l = 0.0 }
+    n.tx = dx
+    n.ty = dy
     n.parent = parent
     if presses {
       n.hit = true
@@ -311,7 +318,7 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
     if d.words != "" {
       let w = Node::new()
       w.kind = kind_text
-      w.text = view_words_set(d.words, d.words_look)
+      w.text = if d.runs_look.breaks { d.words } else { view_words_set(d.words, d.words_look) }
       // (set as the tree draws them (view_host's words: at the system's size of words, Ctx::sp), its weight, its ink)
       w.font_size = self.sp(d.words_look.size)
       w.weight = d.words_look.weight

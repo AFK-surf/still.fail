@@ -56,7 +56,7 @@ export const connectsPart = <P extends Connects>(make: (options: ConnectsOptions
     const connects = yield* Effect.acquireRelease(
       Effect.sync(() =>
         make({
-          data, store, config, receive: (connect, event) => hub.receive(connect, event), bound: () => agents.taken() && agents.bound(),
+          data, store, config, receive: (connect, event) => hub.receive(connect, event), models: (connect) => hub.modelsFor(connect), bound: () => agents.taken() && agents.bound(),
           inWorkspace: (ws) => ws === null || cloud.membership(ws) !== null,
         }),
       ),
@@ -112,10 +112,7 @@ export const connectsPart = <P extends Connects>(make: (options: ConnectsOptions
           for (const c of connects.connects()) {
             if (learned.has(c.id) || connects.state(c.id)?.state !== "connected") continue;
             learned.add(c.id);
-            const prefix = `slack:${c.id}:`;
-            for (const t of store.listThreads("", null, null).slice(0, 200)) {
-              if (t.sessions.some((m) => m.connect === c.id)) learn(t.thread.id, t.people.flatMap((p) => (p.startsWith(prefix) ? [p.slice(prefix.length)] : [])));
-            }
+            for (const t of store.recentConnectPeople(c.id, 200)) learn(t.thread, t.people);
           }
         }),
       ),

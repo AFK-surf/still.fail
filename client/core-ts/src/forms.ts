@@ -795,12 +795,12 @@ function feishuView(f: J, overview: J, pending: boolean): J {
 
 // ── the add-profile pages (profile_flow.rs) ──
 
-const usesNames = (u: providers.Uses) => ([[u.claude, "claude"], [u.codex, "codex"], [u.dsh, "dsh"], [u.grok, "grok"], [u.decision, "decision"]] as [boolean, string][]).filter(([on]) => on).map(([, id]) => id);
+const usesNames = (u: providers.Uses) => ([[u.claude, "claude"], [u.codex, "codex"], [u.dsh, "dsh"], [u.grok, "grok"], [u.agy, "agy"], [u.decision, "decision"]] as [boolean, string][]).filter(([on]) => on).map(([, id]) => id);
 const usesTextOf = present.usesText;
 const runtimeName = format.runtimeLabel;
 
 /// The runtimes a station runs only where its overview's `updates` lists them.
-const LISTED = ["dsh", "grok", "cursor", "devin", "hermes"];
+const LISTED = ["dsh", "grok", "cursor", "devin", "hermes", "agy"];
 
 /// The runtimes a station can run: Claude Code and Codex on any; DeepSeek Harness, Grok Build, Cursor and Devin each on one
 /// that lists its version (a station from before it does not, and is not offered it).
@@ -816,6 +816,7 @@ const PLANS: Record<string, { plan: string; provider: string }> = {
   grok: { plan: "SuperGrok", provider: "Grok" },
   cursor: { plan: "Cursor", provider: "Cursor" },
   devin: { plan: "Devin", provider: "Devin" },
+  agy: { plan: "Google AI", provider: "Google" },
 };
 const planOf = (runtime: string) => PLANS[runtime] ?? PLANS.claude!;
 
@@ -828,8 +829,8 @@ function usesOf(source: providers.Source, endpoint: string | null, protocol: str
 
 function tileOf(source: providers.Source, hasKey: boolean, hasPlan: boolean, runtimes: string[]): J {
   const kind = source.legacy === "opencode-go" ? "opencode-go" : source.legacy === "anthropic-api" ? "anthropic-api" : "api-provider";
-  // xAI's plan (SuperGrok) runs Grok Build.
-  const runtime = source.id === "openai" ? "codex" : source.id === "anthropic" ? "claude" : source.id === "xai" && hasPlan ? "grok" : null;
+  // xAI's plan (SuperGrok) runs Grok Build; Google's (a Google account signed in to) the Antigravity CLI.
+  const runtime = source.id === "openai" ? "codex" : source.id === "anthropic" ? "claude" : source.id === "xai" && hasPlan ? "grok" : source.id === "google" && hasPlan ? "agy" : null;
   // Kimi's plan (Kimi Code signed in to) runs Claude Code, besides what its open platform's key does.
   const planned = source.id === "moonshotai" && hasPlan && runtimes.includes("claude") ? ["claude"] : [];
   const uses = [...planned, ...usesOf(source, null, null, runtimes).filter((u) => !planned.includes(u))];
@@ -866,14 +867,15 @@ function planTile(runtime: string): J {
 /// each runtime it can run, `runtimes`). `console`: the station signs OpenCode Go in to the OpenCode Console (its plan); one
 /// that lists Kimi Code signs Kimi in to the person's Kimi account (Kimi's plan, as ChatGPT's is OpenAI's: one tile,
 /// the open platform's key beside it; Kimi Code has no tile of its own). xAI
-/// has a plan (SuperGrok) where the station runs Grok Build; Cursor and Devin, last of the makers, where it runs them.
+/// has a plan (SuperGrok) where the station runs Grok Build, Google one (its account signed in to) where it runs the
+/// Antigravity CLI; Cursor and Devin, last of the makers, where it runs them.
 export function groups(supported: string[] | null, runtimes: string[] = format.RUNTIMES, console = false): J[] {
   const listed = (id: string) => supported !== null && supported.includes(id);
   const out: J[] = [];
   for (const group of providers.GROUPS) {
     const tiles = providers.SOURCES.filter((s) => s.group === group && !providers.isChinaVariant(s.id) && s.id !== "kimi-code").flatMap((s) => {
       const hasKey = s.legacy !== undefined || listed(s.id);
-      const hasPlan = s.id === "openai" || s.id === "anthropic" || (s.id === "opencode-go" && console) || (s.id === "moonshotai" && listed("kimi-code")) || (s.id === "xai" && runtimes.includes("grok"));
+      const hasPlan = s.id === "openai" || s.id === "anthropic" || (s.id === "opencode-go" && console) || (s.id === "moonshotai" && listed("kimi-code")) || (s.id === "xai" && runtimes.includes("grok")) || (s.id === "google" && runtimes.includes("agy"));
       return hasKey || hasPlan ? [tileOf(s, hasKey, hasPlan, runtimes)] : [];
     });
     if (group === "labs") for (const r of PLAN_ALONE) if (runtimes.includes(r)) tiles.push(planTile(r));

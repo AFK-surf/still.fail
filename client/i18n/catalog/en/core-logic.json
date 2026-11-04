@@ -577,7 +577,7 @@
   "core-logic.mesh.credential_refused_why": "Station refused access: {reason}",
   "core-logic.mesh.lock_unconfirmed": "This device isn't approved in the workspace's security mode yet: {reason}",
   "core-logic.mesh.lock_station.pending": "This station hasn't joined this workspace's security mode yet and will retry shortly. If this persists, update it to the latest version",
-  "core-logic.mesh.lock_station.unpinned": "This workspace turned on security mode after the station joined, so the station no longer accepts its members. Remove the station from this workspace and add it again",
+  "core-logic.mesh.lock_station.unpinned": "This workspace turned on security mode after the station joined, so the station doesn't accept its members yet. On a trusted device, the owner can press Protect beside it in Settings › Security",
   "core-logic.mesh.lock_station.home": "This station's workspace is in security mode, so it only accepts workspaces in security mode too. Turn on security mode here, then remove the station and add it again",
   "core-logic.mesh.credential_revoked": "Access revoked",
   "core-logic.mesh.cut": "Lost connection to this station",

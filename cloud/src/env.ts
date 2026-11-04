@@ -50,6 +50,11 @@ export interface Env {
   ADMIN_TOKEN?: string;
   /** The console admin's Google email (wrangler.jsonc; the tests and the dev cloud set their own). Unset: no admin. */
   ADMIN_EMAIL?: string;
+  /** Cloudflare Access in front of the console's host (admin.ts accessAdmin): its team's domain
+   * (https://<team>.cloudflareaccess.com) and the console's application's audience tag. Set, whoever Access lets through
+   * is the console's admin, not ADMIN_EMAIL alone; unset (still.fail's), only ADMIN_EMAIL. */
+  ACCESS_TEAM_DOMAIN?: string;
+  ACCESS_AUD?: string;
   /** Ed25519 private JWK (JSON) that signs station grants. */
   GRANT_SIGNING_JWK: string;
   /** Axiom's ingest token and dataset for traces (tracing.ts); without a token nothing is sent. */

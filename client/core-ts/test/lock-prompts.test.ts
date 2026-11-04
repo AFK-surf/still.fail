@@ -7,7 +7,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Effect } from "effect";
 import { hooks } from "../src/core/execute.ts";
-import { HostError } from "../src/error.ts";
+import { CoreError, HostError } from "../src/error.ts";
+import { t } from "../src/i18n.ts";
 import { type Entry, Signer, entryHash, next, shortCode } from "../src/lock.ts";
 import { utf8 } from "../src/util.ts";
 import { BEHIND_MS, BEHIND_TRIES, read, signerKnown } from "../src/views/lock.ts";
@@ -123,6 +124,42 @@ test("a change to the lock is done once the cloud keeps it, not once every stati
   });
   await r.ask("lock.removeDevice", { workspace: "ws", device: PHONE });
   assert.deepEqual(r.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "device.remove", PHONE]]);
+});
+
+test("a change the cloud kept, its answer lost on the way back: done, not said to have failed", async () => {
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], {}, ME, [phone]) }));
+  r.cloud.lose.posts = 1;
+  await r.ask("lock.removeDevice", { workspace: "ws", device: PHONE });
+  assert.deepEqual(r.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "device.remove", PHONE]]);
+  // Asked again (the person not sure it went): nothing more is signed, the device is gone already.
+  await assert.rejects(r.ask("lock.removeDevice", { workspace: "ws", device: PHONE }));
+  assert.equal(r.cloud.posted.length, 1);
+});
+
+test("a web page whose approval ran out waits to be approved again, and a station's refusal says so, not that the station has not heard", async () => {
+  // This device a web page of s1's in the lock, its 30 days over (the stations refuse it: "this device's confirmation ran out").
+  const r = await rig(() => ({ ws: genesis("ws", elsewhere(), false, [], {}, ME, [{ id: ME, sub: "s1", kind: "web", label: "Chrome", exp: 2000 }]) }));
+  const lock = await r.watch({ topic: "lock", workspace: "ws" });
+  const me = (await lock()).me;
+  assert.deepEqual([me.confirmed, me.waiting], [false, true], "it waits, as one not in the lock");
+  const woke: string[] = [];
+  r.core.inner.stations.cameOnline = (address: string) => void woke.push(address);
+  const said = hooks.lockRefused!(r.core.inner, "ws", "st", null);
+  assert.equal(said?.code, "lock_unconfirmed");
+  assert.ok(said!.message.includes(shortCode(ME)), said!.message);
+  await r.host.time.pass(BEHIND_MS * 3);
+  assert.deepEqual(woke, [], "not tried again as a station behind");
+});
+
+test("a station that takes none of the workspace's members, the lock turned on after it joined: protected all the same, the station pinning it from the cloud", async () => {
+  const r = await rig((me) => ({ ws: genesis("ws", me, true) }));
+  await r.watch({ topic: "lock", workspace: "ws" });
+  // (as the mesh says such a station's refusal)
+  const call = r.core.inner.stations.requests.call.bind(r.core.inner.stations.requests);
+  r.core.inner.stations.requests.call = ((addr: { station: string }, method: string, path: string, ...rest: unknown[]) =>
+    addr.station === "st" && method === "GET" && path.startsWith("/lock") ? Effect.fail(new CoreError("lock_station", t("core-logic.mesh.lock_station.unpinned"))) : (call as any)(addr, method, path, ...rest)) as never;
+  await r.ask("lock.joinStation", { workspace: "ws", station: "st" });
+  assert.deepEqual(r.cloud.chains.get("ws")!.slice(1).map((e) => [e.kind, (e.body as { key: string }).key]), [["station", "st"]]);
 });
 
 test("a station that refuses this device though the lock names it has not heard yet: tried again shortly, not held", async () => {

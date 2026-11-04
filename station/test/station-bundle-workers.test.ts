@@ -34,11 +34,15 @@ test("the workers in a station release start and process a batch", { skip: !proc
     put.run(saidThread, 1, "agent", "s", "first", 1);
     for (let n = 2; n <= 70; n++) put.run(saidThread, n, "person", "p", `m${n}`, n);
     store.db.prepare("UPDATE thread_state SET said_other_known=0 WHERE thread=?").run(saidThread);
+    const turn = store.db.prepare("INSERT INTO turns(id,session_key,kind,started_at) VALUES (?,'old-turn','input',?)");
+    for (let n = 0; n < 70; n++) turn.run(`old-${n}`, n);
+    store.db.prepare("DELETE FROM session_turns WHERE session='old-turn'").run();
     store.db.exec("UPDATE post_blocks_meta SET fresh = 0; DELETE FROM post_blocks");
     for (const [file, message] of [
       ["sessions/workspace-activity-worker.js", {}],
       ["sessions/post-block-worker.js", { thread, after: 0 }],
       ["read/said-worker.js", { thread: saidThread }],
+      ["read/said-worker.js", { session: "old-turn" }],
       ["outflow/chat-index-worker.js", "H"],
       ["vault/signin-save-worker.js", "s"],
     ] as const) {
@@ -60,5 +64,6 @@ test("the workers in a station release start and process a batch", { skip: !proc
     }
     assert.deepEqual(store.postAfter("s", thread, 0), { n: 1, ts: "post" });
     assert.equal(store.db.prepare("SELECT said_other_n FROM thread_state WHERE thread=?").get(saidThread)?.said_other_n, 1);
+    assert.equal(store.db.prepare("SELECT n FROM session_turns WHERE session='old-turn'").get()?.n, 70);
   } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
 });

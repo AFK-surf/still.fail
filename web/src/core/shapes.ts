@@ -130,6 +130,8 @@ export interface AdbShareView {
 	lasts?: string;
 	/** This phone lent to each station a grant wants it on (`adb.ports` given): how each stands. */
 	lends?: AdbLend[];
+	/** The titles of the chats whose own screens (virtual displays) are up on this phone now, every station's: its notification names them. */
+	screens?: string[];
 }
 
 export interface AgentCardLine {
@@ -240,8 +242,8 @@ export interface AgentEnvDraft {
 	pending: boolean;
 }
 
-/** A runtime: Claude Code, Codex, DeepSeek Harness, Grok Build, Cursor or Devin. */
-export type RuntimeKind = "claude" | "codex" | "dsh" | "grok" | "cursor" | "devin" | "hermes";
+/** A runtime: Claude Code, Codex, DeepSeek Harness, Grok Build, Cursor, Devin, Hermes Agent or Antigravity CLI. */
+export type RuntimeKind = "claude" | "codex" | "dsh" | "grok" | "cursor" | "devin" | "hermes" | "agy";
 
 export interface AgentProcess {
 	pgid: number;
@@ -1931,7 +1933,8 @@ export interface MessageCard {
 	/**
 	 * An agent's request to use a vault item (docs/vault.md): the request's id. An app shows approving it (the options,
 	 * then the person confirms: `vault.approve` with the option's scope, `vault.deny`) rather than answering in the chat;
-	 * a web page says to approve it in the app.
+	 * a web page says to approve it in the app. Absent where a later post of the chat asks the same request again (its card
+	 * alone).
 	 */
 	vault?: string;
 	/** An agent's request for its person's phone (station/src/adb/grants.ts): drawn in place of the post's words, answered with `adb.decide` (the chat's station). */
@@ -4850,6 +4853,7 @@ export interface LockPair {
 	devices: number;
 	/** Tries left, after a wrong code. */
 	left?: number;
+	/** Why it `failed`; `wrong`, what to say of it (that code not it, or the device showing it gone). */
 	error?: string;
 	/** While a code is typed: when the last trusted device's code is too old (ms). */
 	until?: number;
@@ -4936,10 +4940,6 @@ export interface VaultKeyAsk {
 	at: number;
 	/** That, in words (3 分钟前). */
 	atText: string;
-	/** Its person put it in the lock themselves (a device of theirs signed its entry). Else an admin did, under their name: it is given the key only as the person asks here (not by itself as its certificate comes), and the prompt says who put it in. */
-	own: boolean;
-	/** Not `own`: who put it in the lock, by name. */
-	byText?: string;
 }
 
 /** What waits on this device from new devices: to approve them face to face (views/pair.ts), to give them a vault's key (the `lockPrompts` topic). */
@@ -5991,6 +5991,11 @@ export interface PrefsView {
 	 * chat open in front coming to need the viewer).
 	 */
 	haptics?: string;
+	/**
+	 * This app keeping itself current on this device: `off` (a newer build is said, and downloaded and put in
+	 * place only at the person's word), or none for on (downloaded by itself, put in place while the app is not in use).
+	 */
+	appUpdate?: string;
 	rowPicture?: RowPictureSetting;
 	/** Times are shown as dates rather than "3 分钟前". */
 	absoluteTime?: boolean;

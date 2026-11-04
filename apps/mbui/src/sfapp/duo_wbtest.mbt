@@ -259,9 +259,9 @@ test "an iPhone Duo on its side, the soft keyboard rising: the cards end on it f
 /// it, its foot left corner its own).
 fn composer_and_page(t : @ui.Tester) -> (@ui.Laid, @ui.Laid)? {
   let bs = t.boxes_held()
-  guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
-  let ed = bs[e]
-  let round = fn(b : @ui.Laid) { b.x <= ed.x && ed.x + ed.w <= b.x + b.w && b.y <= ed.y && ed.y + ed.h <= b.y + b.h }
+  guard tape_composer_field(t) is Some(ed) else { return None }
+  let (x, y, w, h) = ed.rect
+  let round = fn(b : @ui.Laid) { b.x <= x && x + w <= b.x + b.w && b.y <= y && y + h <= b.y + b.h }
   let mut page : @ui.Laid? = None
   let mut box : @ui.Laid? = None
   for b in bs {
@@ -462,7 +462,7 @@ test "an iPhone Duo on its side: a service alone in the side panel a card in it,
   let (x, y, hw, hh) = holes[0]
   // the panel it is alone in: the roundest at its foot left of those round it
   let mut panel : @ui.Laid? = None
-  for b in t.boxes() {
+  for b in t.boxes_held() {
     if b.radii.3 > 0.0 && b.x < x && x + hw <= b.x + b.w && b.y < y && y + hh < b.y + b.h &&
       (panel is None || panel.unwrap().w > b.w) {
       panel = Some(b)
@@ -635,8 +635,8 @@ test "an iPhone Duo: the workspace's button has a dot while another workspace ha
 ///|
 /// The composer's width in the chat's page (the page's own width less its room), as last drawn.
 fn composer_w(t : @ui.Tester) -> Double {
-  match t.boxes().search_by(fn(b) { b.kind == "editor" }) {
-    Some(i) => t.boxes()[i].w
+  match tape_composer_field(t) {
+    Some(field) => field.rect.2
     None => 0.0
   }
 }
@@ -919,6 +919,26 @@ test "Duo short system column keeps the complete chat menu reachable" {
   t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/info\"}")
   t.run_for(@ui.move_most_ms)
   assert_true(t.find(@sf.t("web-pages.chat.info.created")) is Some(_))
+}
+
+///|
+test "Duo's short column: the open side panel's close in the column, last of the page's, none of the panel's own" {
+  let t = native_chat(466.0, 678.0, true, side=70.0)
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
+  let close = @sf.t("web-pages.chat.closePanel")
+  assert_true(nav_icon_of(t, "page/side/close") is None)
+  side_change(r, "open", Some("s-c1"))
+  @sfdesk.wide.tape_ask.set(Some(@sfdesk.TapePane::Side))
+  t.frame()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(nav_icon_of(t, "page/side/close"), Some(@sf.icon_path("close")))
+  let said = t.nav_said()
+  assert_true(said.find("page/chat/info").unwrap() < said.find("page/side/close").unwrap(), msg=said)
+  assert_false(t.semantics().iter().any(fn(s) { s.label == close && !s.hidden }), msg="the panel's own left")
+  t.post(@hostapi.system_channel, "{\"nav\":\"page/side/close\"}")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(side_now(r).0.length(), 0)
+  assert_true(nav_icon_of(t, "page/side/close") is None, msg="gone with the panel")
 }
 
 ///|
@@ -1228,4 +1248,44 @@ test "an iPhone Duo: the chat's station's screens a button of the system's bars,
   // the short column (the chat narrow: its screens from its agent's sheet, sheets.mbt): none handed
   let s = native_chat(466.0, 678.0, true, side=70.0, mode="chat-agent-screens")
   assert_false(s.nav_said().contains("page/chat/screen"))
+}
+
+///|
+test "Duo chat's services go in the system's column, opening beside it" {
+  let t = native_chat(951.0, 669.0, true, side=84.0, mode="chat-jobs")
+  assert_eq(nav_icon_of(t, "page/chat/jobs"), Some(@sf.icon_path("web")))
+  let services = @sf.t("web-pages.chat.services")
+  assert_false(t.semantics().iter().any(fn(s) { s.label == services }), msg="the page's own button left in the title bar")
+  t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/jobs\",\"at\":[867,120,84,44]}")
+  t.frames_owed()
+  assert_true(@sfdesk.chat_pops_open().1)
+  guard t.semantics().iter().find_first(fn(s) { s.role == @ui.Role::Dialog }) is Some(d) else {
+    fail("no popover in the semantics")
+  }
+  assert_true(d.rect.0 + d.rect.2 <= 867.0, msg="its right edge at \{d.rect.0 + d.rect.2}")
+}
+
+///|
+test "Duo's short column keeps the chat's services in the page" {
+  let t = native_chat(469.0, 681.0, true, side=84.0, mode="chat-jobs")
+  @sfdesk.wide.tape_ask.set(Some(@sfdesk.TapePane::Page))
+  t.frame()
+  t.run_for(@ui.move_most_ms)
+  assert_true(nav_icon_of(t, "page/chat/jobs") is None)
+  let services = @sf.t("web-pages.chat.services")
+  assert_true(t.semantics().iter().any(fn(s) { s.label == services }))
+}
+
+///|
+test "Duo chat's screens menu opens beside the column, not over it" {
+  let t = native_chat(951.0, 669.0, true, side=84.0, mode="chat-station-screens")
+  assert_true(nav_icon_of(t, "page/chat/screen") is Some(_), msg=t.nav_said())
+  t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/screen\",\"at\":[867,120,84,44]}")
+  t.frames_owed()
+  t.run_for(@ui.move_most_ms)
+  guard t.semantics().iter().find_first(fn(s) { s.role == @ui.Role::Menu }) is Some(m) else {
+    fail("no menu in the semantics")
+  }
+  assert_true(m.rect.0 + m.rect.2 <= 867.0, msg="its right edge at \{m.rect.0 + m.rect.2}")
+  assert_true(m.rect.1 >= 120.0, msg="its top at \{m.rect.1}")
 }

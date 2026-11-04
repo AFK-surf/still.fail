@@ -332,7 +332,7 @@ export async function relieveArchived(hub: Hub, free: () => number): Promise<voi
 /// auto-archiving off): what is idle but not done by now is not on a clock, so it is looked at again after a while.
 /// A session heard only in Slack goes after slackArchiveMs even when stopped at a block: nobody answers it from here.
 /// With autoArchiveReviewed, the rest goes only once the archive review recommended each of its chats.
-export function autoArchive(hub: Hub, now: number): number | null {
+export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: number) => void): number | null {
   const { store } = hub;
   const { autoArchiveMs: after, slackArchiveMs, autoArchiveReviewed, automaticDecisions } = hub.config();
   if (after <= 0 && slackArchiveMs <= 0) return null;
@@ -343,11 +343,17 @@ export function autoArchive(hub: Hub, now: number): number | null {
     if (due > now && (next === null || due < next)) next = due;
     return due <= now;
   };
-  const unread = (t: ThreadRow) => t.createdBy !== null && t.surface === STILLFAIL_SURFACE && store.unreadCount(t.createdBy, t.id) > 0;
-  const bound = store.listBindings();
+  const unread = (t: ThreadRow) => {
+    if (t.createdBy === null || t.surface !== STILLFAIL_SURFACE) return false;
+    const answer = store.unreadForArchive(t.createdBy, t.id);
+    if (answer === null) { prepareUnread?.(t.id); return true; }
+    return answer;
+  };
   // Over the sessions shown and the chats of their own (and those chats' sessions), never every one ever archived.
   const live = store.liveSessions();
   const own = store.chatsOfTheirOwn();
+  if (live.length === 0 && own.length === 0) return null;
+  const bound = store.listBindings();
   // Each session's undelivered messages and last turn, read for those idle long enough alone, once each: read for every
   // session shown and every member of their chats at each look, the station's thread was held 17 s on a station short of
   // memory (2026-11-03), what was said meanwhile waiting.
@@ -366,12 +372,11 @@ export function autoArchive(hub: Hub, now: number): number | null {
   };
   const busy = (key: string) => working(key) || statOf(key)?.lastTurn?.declared === "block";
   // A chat someone pinned stays in the lists until put away by hand.
-  const pinned = store.pinnedSessions();
-  const kept = store.keptChats(null);
+  const { pinned, kept } = store.archiveMarks();
   // Where only what the archive review recommended goes (`autoArchiveReviewed`): none while the review is off.
   const recommended = (thread: number) => !autoArchiveReviewed || (automaticDecisions.completion.enabled && store.archiveSuggested(thread));
   for (const s of live) {
-    if (bound.has(s.key) || pinned.has(s.key)) continue;
+    if (bound.has(s.key) || pinned(s.key)) continue;
     // Idle long enough by its times alone, before anything else of it is read.
     const quiet = idle([s.lastActiveAt, s.shownAt]);
     const quietLong = idle([s.lastActiveAt, s.shownAt], slackArchiveMs);
@@ -382,18 +387,53 @@ export function autoArchive(hub: Hub, now: number): number | null {
     const lingering = slack && quietLong && !working(s.key);
     if (!done && !lingering) continue;
     if (!lingering && !threads.every((t) => recommended(t.thread.id))) continue;
-    if (threads.some((t) => kept.has(t.thread.id) || unread(t.thread))) continue;
+    if (threads.some((t) => kept(t.thread.id) || unread(t.thread))) continue;
     log.info("hub", "archiving an idle session", { session: s.key });
     archiveBy(hub, s.key, true, AUTO);
   }
   for (const t of own) {
     const said = store.lastMessage(t.id)?.createdAt ?? null;
-    if (kept.has(t.id) || !idle([t.createdAt, said, t.shownAt]) || unread(t) || !recommended(t.id)) continue;
-    if (store.threadSessions(t.id).some((m) => pinned.has(m.session) || busy(m.session))) continue;
+    if (kept(t.id) || !idle([t.createdAt, said, t.shownAt]) || unread(t) || !recommended(t.id)) continue;
+    if (store.threadSessions(t.id).some((m) => pinned(m.session) || busy(m.session))) continue;
     log.info("hub", "archiving an idle chat", { thread: t.id });
     store.setThreadHidden(t.id, true, AUTO);
   }
   return next;
+}
+
+/// Check on the usual schedule, and try again when an old chat's missing unread boundary is ready.
+export function startAutoArchiveTimer(hub: Hub, time: { after(ms: number, run: () => void): () => void },
+  readers: { prepareSaid(threads: readonly number[], signal?: AbortSignal): Promise<void> }): () => void {
+  const cancel = new AbortController();
+  let timer: (() => void) | null = null;
+  let preparing = false;
+  const schedule = (ms: number) => {
+    timer?.();
+    timer = time.after(ms, check);
+  };
+  const check = () => {
+    timer = null;
+    let next: number | null = null;
+    const missing = new Set<number>();
+    try {
+      next = autoArchive(hub, hub.now(), (thread) => missing.add(thread));
+    } catch (error) {
+      log.warn("hub", "auto-archiving failed", { error: (error as Error).message });
+    }
+    schedule(Math.min(600_000, next === null ? Infinity : next - hub.now()));
+    if (!preparing && missing.size) {
+      preparing = true;
+      void readers.prepareSaid([...missing], cancel.signal).then(() => {
+        preparing = false;
+        if (!cancel.signal.aborted) schedule(0);
+      }, (error) => {
+        preparing = false;
+        if (!cancel.signal.aborted) log.warn("hub", "preparing unread state for auto-archiving failed", { error: (error as Error).message });
+      });
+    }
+  };
+  schedule(60_000);
+  return () => { cancel.abort(); timer?.(); timer = null; };
 }
 
 /// Deletes a session: its process ends, its rows go (with the threads only it was in) and its workspace directory,

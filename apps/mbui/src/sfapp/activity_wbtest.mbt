@@ -149,6 +149,38 @@ test "activity: its line coming in at the list's end is followed, the list glidi
 }
 
 ///|
+test "the viewer's own message taller than the list is followed to the end: its foot and its agent's line in view" {
+  new_run()
+  let clock : Ref[Double] = { val: 0.0 }
+  fix_clock.val = Some(fn() { clock.val })
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  // a message of the viewer's taller than the list (sent from here, or from another of their devices), its agent at
+  // work on it: an agent's message so long is read from its top (Follow.kt), the viewer's own followed to the end
+  let lines = Array::makei(40, fn(i) { "第 \{i + 1} 行" })
+  lines.push("最后一行")
+  fix_later(1.0, fn() {
+    let fc = fix_chat("s-c1")
+    fc.sent.push(
+      msg(150, "person", by_person("林"), lines.join("\n\n"), "刚刚", { "ts": Json::string("me150"), "mine": true, "said": true }),
+    )
+    fc.working = clock.val
+  })
+  fix_clock_set(clock, clock.val + 1.0)
+  t.draw()
+  t.run_for(flight_wait_ms)
+  guard t.shown_of("最后一行") is Some((_, _, w, h)) && w > 0.0 && h > 0.0 else {
+    fail("the foot of the viewer's message is out of view")
+  }
+  guard t.shown_of(tr("android-chat.chat.working")) is Some((_, _, w, h)) && w > 0.0 && h > 0.0 else {
+    fail("its agent's line is out of view")
+  }
+  fix_clock.val = None
+}
+
+///|
 test "its avatar is back in its activity once a message has come out of it, the agent still at work" {
   let clock = Ref::new(0.0)
   let t = emit_core(clock)
