@@ -673,9 +673,9 @@ public actor HIDInjector {
 
     // UIDeviceOrientation values accepted by the guest's GraphicsServices.
     public static let orientationPortrait: UInt32 = 1
-    static let orientationPortraitUpsideDown: UInt32 = 2
+    public static let orientationPortraitUpsideDown: UInt32 = 2
     public static let orientationLandscapeRight: UInt32 = 3
-    static let orientationLandscapeLeft: UInt32 = 4
+    public static let orientationLandscapeLeft: UInt32 = 4
 
     // GSEvent wire-format constants. Reverse-engineered by idb from
     // Simulator.app's ARM64 disassembly; see idb's SimulatorApp/GSEvent.h.

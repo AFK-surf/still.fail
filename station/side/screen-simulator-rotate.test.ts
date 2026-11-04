@@ -1,5 +1,5 @@
 // A device turned from a view (docs/remote-screens.md "Simulators") on a real Mac with Xcode: a simulator of this test's own
-// (SIM_TYPE: its type's name, as "iPhone Duo"; the runtime's first iPhone otherwise), a small app that says the shape of its window, turned there and back through
+// (SIM_TYPE: its type's name, as "iPhone Duo"; the runtime's first iPhone otherwise), a small app that says the shape of its window, turned all the way round through
 // still.fail Helper's view as a person's button does; the app turning, and the view's picture with it. SIM_OUT: its pictures.
 // STILLFAIL_HELPER and STILLFAIL_HELPER_DIR: another helper. A side test.
 import assert from "node:assert/strict";
@@ -86,7 +86,7 @@ const simctl = (...args: string[]) => execFileSync(SIMCTL, args, { encoding: "ut
 const hasSimctl = platform() === "darwin" && existsSync(SIMCTL);
 const run = (file: string, args: string[]) => Promise.resolve(execFileSync(file, args, { encoding: "utf8", maxBuffer: 16 << 20 }));
 
-test("a simulator turned from its view, and back", { skip: !hasSimctl && "no Xcode simulators here", timeout: 10 * 60_000 }, async () => {
+test("a simulator turned from its view, all the way round", { skip: !hasSimctl && "no Xcode simulators here", timeout: 10 * 60_000 }, async () => {
   const runtimes = JSON.parse(simctl("list", "-j", "runtimes")).runtimes.filter((r: any) => r.isAvailable && r.platform === "iOS");
   // (SIM_RUNTIME: an older one, as "iOS-17")
   const runtime = runtimes.findLast((r: any) => r.identifier.includes(process.env.SIM_RUNTIME ?? "")) ?? runtimes.at(-1);
@@ -174,9 +174,13 @@ test("a simulator turned from its view, and back", { skip: !hasSimctl && "no Xco
     assert.ok(touched, "the finger came");
     const [tx, ty] = touched.slice("side-touch:".length).split(",").map(Number);
     assert.ok(Math.abs(tx! - 0.25) < 0.05 && Math.abs(ty! - 0.75) < 0.05, `as shown: ${touched}`);
-    await v.input({ t: "device", name: "rotate" });
+    // Three more quarters: upright again. (Upside down is the app's and the device's to refuse: not asserted.)
+    for (let i = 0; i < 3; i++) {
+      await v.input({ t: "device", name: "rotate" });
+      await sleep(2000);
+    }
     await settled(wideFirst);
-    console.log(`back: ${JSON.stringify(await said(1000))}`);
+    console.log(`round: ${JSON.stringify(await said(1000))}`);
     const back = await shot("3-back");
     assert.equal(back.w > back.h, wideFirst, "and back");
   } finally {

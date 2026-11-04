@@ -46,8 +46,8 @@ const TOUCH_DOWN = 0, TOUCH_UP = 1, TOUCH_MOVE = 2;
 /// scrcpy's POINTER_ID_GENERIC_FINGER: a finger, not its mouse.
 const FINGER = -2n;
 const TEXT_MOST = 300;
-/// The display turned between its two sides (out of following the sensor, as a person's own lock does).
-const ROTATE = `case "$(wm user-rotation)" in "lock 1") wm user-rotation lock 0;; *) wm user-rotation lock 1;; esac`;
+/// The display turned a quarter (out of following the sensor, as a person's own lock does).
+const ROTATE = `case "$(wm user-rotation)" in "lock 1") n=2;; "lock 2") n=3;; "lock 3") n=0;; *) n=1;; esac; wm user-rotation lock $n`;
 
 const KEY_HOME = 3, KEY_BACK = 4, KEY_VOLUME_UP = 24, KEY_VOLUME_DOWN = 25, KEY_POWER = 26, KEY_APP_SWITCH = 187;
 
