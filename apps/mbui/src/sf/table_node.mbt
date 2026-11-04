@@ -390,12 +390,14 @@ fn table_key_node(
   let copied_off : Ref[() -> Unit] = Ref(fn() {  })
   let menu_open = @signals.signal(false)
   beside.box(fn(k) {
-    // (its room kept, as tall as the key, whether it shows or not)
+    // The table supplies any height beyond the key's own. Its alignment with the head only moves the key,
+    // so the measured head is used in placement rather than fed back into this row's layout.
     let top = fn() { dmax(0.0, (head_h() - table_key_size) / 2.0) }
     k
     .width(Is(Some(table_key_gap + table_key_size + table_key_gap)))
-    .min_height(By(fn() { Some(top() + table_key_size) }))
-    .padding(By(fn() { (table_key_gap, top(), table_key_gap, 0.0) }))
+    .min_height(Is(Some(table_key_size)))
+    .padding(Is((table_key_gap, 0.0, table_key_gap, 0.0)))
+    .offset(By(fn() { (0.0, top()) }))
     |> ignore
     let shown = fn() { beside.pointed_in() || menu_open.get() || copied.get() || @ui.pointing() is Finger }
     let seen = EdgeWay::new(0.0)
