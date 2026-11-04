@@ -272,6 +272,10 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         if (more || later || following) {
             moved = drawn;
             sayRate(true);
+        } else if (typing()) {
+            // (typing: what it draws comes as keys are struck, its fingers on the keyboard's window, not on this surface
+            // and nothing of the app's own moving; each key's frame at the display's highest, 2026-11-05)
+            sayRate(true);
         } else if (rateSaid) stillAfter(moved);
         if (more || later) wantFrame();
         else ahead.set(false);
@@ -412,7 +416,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
     private void stillFor(int at, int left) {
         Host.main.post(() -> Choreographer.getInstance().postFrameCallback(t -> queueEvent(() -> {
-            if (moved != at || appWanted.get() || touching || !rateSaid) {
+            if (moved != at || appWanted.get() || touching || typing() || !rateSaid) {
                 if (stillFrom == at) stillFrom = -1;
                 return;
             }
@@ -423,6 +427,23 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             stillFrom = -1;
             sayRate(false);
         })));
+    }
+
+    /**
+     * Whether the app's field is being typed into: it has the focus, or the soft keyboard is up over it. Its frames come
+     * as keys are struck, its fingers on the keyboard's window, so neither a motion nor a touch of this surface says the
+     * display's highest rate for them: this does, as a finger down does, and lets it go as the field does.
+     */
+    private static boolean typing() {
+        return Host.imeActive || Host.imeVisible;
+    }
+
+    /** The field's typing begun or ended (MainActivity, as the keyboard shows or goes): the rate said or let go from now. */
+    void typingChanged() {
+        queueEvent(() -> {
+            if (typing()) sayRate(true);
+            else if (rateSaid) stillAfter(moved);
+        });
     }
 
     /** Whether a finger is on the screen (main thread writes it, from its touches). */

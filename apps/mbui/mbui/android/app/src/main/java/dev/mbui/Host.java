@@ -198,8 +198,8 @@ final class Host {
     // system's boot), is let go by the system; owed until both, each told as it comes (windowFocused, and the insets
     // controller's controllable types), then asked.
     private static boolean imeOwed;
-    /** The soft keyboard shown, as the insets last said (MainActivity). */
-    static boolean imeVisible;
+    /** The soft keyboard shown, as the insets last said (MainActivity; read on the GL thread too: MBView.typing). */
+    static volatile boolean imeVisible;
     /** The app asked for the keyboard and it has not shown since: a hiding seen meanwhile is the one before the
      *  asking (the app's own, still under way), not the person putting it away (MainActivity's text 7). Set as
      *  imeActive is, on the app's thread, so the two never disagree. */
