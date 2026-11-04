@@ -23,6 +23,7 @@ priv struct AnchoredIn[K] {
   keys : Same[Array[K]]
   /// For an indexed source: its shape revision and length, captured before layout.
   indexed : (Int, Int)?
+  words : Int
   x : Double
   foot : Double
   put : (K, Double)?
@@ -44,6 +45,7 @@ impl[K : Eq] Eq for AnchoredIn[K] with equal(a, b) {
   // anew each time it is read)
   (physical_equal(a.keys.v, b.keys.v) || a.keys.v == b.keys.v) &&
   a.indexed == b.indexed &&
+  a.words == b.words &&
   a.x == b.x &&
   a.foot == b.foot &&
   a.put_n == b.put_n &&
@@ -103,6 +105,39 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   foot_room? : () -> Double = fn() { 0.0 },
   indexed? : AnchoredSource[K],
 ) -> View {
+  self.scrolls_anchored_impl(
+    s, keys, make, est~, from_end~, ahead~, slop?=slop, bar?=bar, follows~, shown?=shown,
+    put?=put, rooms?=rooms, fresh~, read_from_top~, cover~, tucked~, kept_keys?=kept_keys,
+    bar_clear~, foot_room~, indexed?=indexed,
+  )
+}
+
+///|
+/// The legacy window adapter can retain fixed estimates for rows it has not measured.
+fn[K : Hash + Eq] View::scrolls_anchored_impl(
+  self : View,
+  s : Scroll,
+  keys : () -> Array[K],
+  make : (View, K) -> Unit,
+  est? : Double = 80.0,
+  from_end? : Bool = true,
+  ahead? : Double = 160.0,
+  slop? : Double,
+  bar? : ScrollBar,
+  follows? : @signals.Signal[Bool] = @signals.signal(true, same=fn(a, b) { a == b }),
+  shown? : @signals.Signal[Array[K]],
+  put? : @signals.Signal[(K, Double)?],
+  rooms? : () -> (K, Double) -> ListRoom,
+  fresh? : (K) -> Bool = fn(_) { false },
+  read_from_top? : (K) -> Bool = fn(_) { true },
+  cover? : () -> Double = fn() { 0.0 },
+  tucked? : () -> K? = fn() { None },
+  kept_keys? : () -> Array[K],
+  bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
+  foot_room? : () -> Double = fn() { 0.0 },
+  indexed? : AnchoredSource[K],
+  fixed_estimate? : Bool = false,
+) -> View {
   guard self.live() is Some(_) else { return self }
   let put_at = put.unwrap_or(@signals.signal(None))
   // (where it is: the row whose foot is nearest under the window's foot and how far under; none at its end)
@@ -112,7 +147,32 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   // (each row's height as last measured, by its key: for how tall all of it is counted, the bar's, and nothing else)
   let heights : Map[K, Double] = Map([])
   let known_sum = Ref(0.0)
-  let mean = fn() { if heights.length() > 0 { known_sum.val / heights.length().to_double() } else { est } }
+  let measured_width = Ref(-1.0)
+  let measured_words = Ref(-1)
+  // Fixed estimates keep the measured differences in a prefix tree, so a scroll does not walk the history.
+  let fixed_sums : Ref[Array[Double]] = Ref([])
+  let fixed_delta = Ref(0.0)
+  let fixed_keys : Ref[Array[K]?] = Ref(None)
+  let fixed_revision : Ref[Int?] = Ref(None)
+  let fixed_add = fn(index : Int, delta : Double) {
+    fixed_delta.val += delta
+    let mut i = index + 1
+    while i < fixed_sums.val.length() {
+      fixed_sums.val[i] += delta
+      i += i & -i
+    }
+  }
+  let fixed_above = fn(index : Int) {
+    let mut i = index
+    let mut sum = 0.0
+    while i > 0 {
+      sum += fixed_sums.val[i]
+      i -= i & -i
+    }
+    index.to_double() * est + sum
+  }
+  let current_keys = @signals.computed(fn(_) { if indexed is Some(_) { [] } else { keys() } })
+  let mean = fn() { if !fixed_estimate && heights.length() > 0 { known_sum.val / heights.length().to_double() } else { est } }
   let count = Ref(0)
   let laid : Ref[ListLaid[K]?] = Ref(None)
   // (the rows it ended with as last laid out)
@@ -144,6 +204,9 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
     }
   }
   let naturals : Map[K, Double] = Map([])
+  let short_glide = Ref(false)
+  let short_due : Ref[() -> Unit] = Ref(fn() { })
+  self.owns(fn() { (short_due.val)() }) |> ignore
   // (each row's room as last laid out, and how often it was: what draws it reads)
   let rooms_laid : Map[K, ListRoom] = Map([])
   let laid_n : @signals.Signal[Int] = @signals.signal(0)
@@ -159,6 +222,11 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   // (the hand scrolling it toward its start: no more at its end, from the hand's cause, before what it brings in is
   // measured)
   s.on_hand = fn(d) {
+    if d != 0.0 {
+      short_glide.val = false
+      (short_due.val)()
+      short_due.val = fn() { }
+    }
     if from_end && d < 0.0 && @signals.untracked(fn() { follows.get() }) {
       follows.set(false)
     }
@@ -222,7 +290,14 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   // (how tall all it holds is counted, as its layout last counted it: what its bar reads once it is laid out, no signal
   // read then)
   let foot_laid = Ref(0.0)
-  let extent = fn() { count.val.to_double() * mean() + foot_laid.val }
+  let extent = fn() {
+    let total = if fixed_estimate {
+      count.val.to_double() * est + fixed_delta.val
+    } else {
+      count.val.to_double() * mean()
+    }
+    total + foot_laid.val
+  }
   // (told once laid out as how tall all it holds is counted comes out otherwise: what follows how far it can go
   // reads it, not its layout)
   let extent_said : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { (a - b).abs() < 0.5 })
@@ -233,8 +308,9 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
     held.layout_box(
       By(fn() {
         {
-          keys: { v: if indexed is Some(_) { [] } else { keys() } },
+          keys: { v: current_keys.get() },
           indexed: indexed.map(fn(s) { (s.snapshot)() }),
+          words: if fixed_estimate { self.words_redone() } else { 0 },
           x: s.drawn(self.tree),
           foot: foot_room(),
           put: put_at.get(),
@@ -245,7 +321,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
           },
           rooms: { v: current_rooms.get() },
           fresh: {
-            let ks = if indexed is Some(_) { [] } else { keys() }
+            let ks = current_keys.get()
             let n = match indexed { Some(s) => (s.snapshot)().1; None => ks.length() }
             let out = []
             for i in dmax_i(0, n - anchored_tail)..<n {
@@ -264,6 +340,20 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
       fn(l, c) {
         let all = c.keys.v
         let n = c.indexed.map(fn(s) { s.1 }).unwrap_or(all.length())
+        let mut reset_fixed = false
+        if fixed_estimate && (l.width != measured_width.val || c.words != measured_words.val) {
+          let keep : Set[K] = Set::new()
+          match laid.val { Some(was) => for k in was.keys { keep.add(k) }; None => () }
+          for k in heights.keys().collect() {
+            if !keep.contains(k) {
+              known_sum.val -= heights[k]
+              heights.remove(k)
+            }
+          }
+          measured_width.val = l.width
+          measured_words.val = c.words
+          reset_fixed = true
+        }
         count.val = n
         foot_laid.val = c.foot
         let h = l.height - c.foot
@@ -289,6 +379,33 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
         }
         let key_at = fn(i : Int) {
           match indexed { Some(source) => (source.key)(i); None => all[i] }
+        }
+        let fixed_changed = match c.indexed {
+          Some((revision, _)) => fixed_revision.val != Some(revision)
+          None => !(fixed_keys.val is Some(was) && physical_equal(was, all))
+        }
+        if fixed_estimate && (reset_fixed || fixed_changed) {
+          fixed_sums.val = Array::make(n + 1, 0.0)
+          fixed_delta.val = 0.0
+          for i in 0..<n {
+            match heights.get(key_at(i)) {
+              Some(h) => fixed_add(i, h - est)
+              None => ()
+            }
+          }
+          fixed_keys.val = Some(all)
+          fixed_revision.val = c.indexed.map(fn(s) { s.0 })
+        }
+        // A list counted from its top keeps the first row in place if rows are inserted before it.
+        if fixed_estimate && !from_end && anchor.val is None && n > 0 {
+          match laid.val {
+            Some(was) if was.first == 0 && was.keys.length() > 0 && key_at(0) != was.keys[0] =>
+              match find(was.keys[0], 0) {
+                Some(i) => anchor.val = Some({ key: was.keys[0], under: -was.tops[0], near: i })
+                None => ()
+              }
+            _ => ()
+          }
         }
         // (a row's node, made the first time it is asked for, the same one while it is asked for each layout)
         let slot_of = fn(k : K) -> View {
@@ -345,6 +462,9 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
           self.tree.nodes[slot.at].row_index = Some(i)
           let natural = l.measure(slot, l.width).1
           naturals[k] = natural
+          if fixed_estimate {
+            fixed_add(i, natural - heights.get(k).unwrap_or(est))
+          }
           match heights.get(k) {
             Some(was) => known_sum.val = known_sum.val - was + natural
             None => known_sum.val = known_sum.val + natural
@@ -401,6 +521,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
         // where it was, glided after once it is laid out; one taller than what shows under its cover glided to only as
         // far as its top under that, no more at its end)
         let mut glide : (K, Bool)? = None
+        let mut short_move = 0.0
         match (if from_end { laid.val } else { None }, anchor.val) {
           (Some(was), None) if was_tail.val.length() > 0 =>
             for f in c.fresh {
@@ -413,6 +534,15 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
                       if was.keys[q] == over {
                         anchor.val = Some({ key: over, under: was.tops[q] + was.heights[q] - h, near: i - 1 })
                         glide = Some(f)
+                        if fixed_estimate && was.first == 0 && was.tops[0] > 0.0 {
+                          short_glide.val = true
+                          let mut j = i
+                          while j < n && short_move < was.tops[0] {
+                            short_move += measure(j)
+                            j += 1
+                          }
+                          short_move = dmin(was.tops[0], short_move)
+                        }
                         break
                       }
                     }
@@ -430,7 +560,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
         let known = fn(i : Int) { heights.get(key_at(i)) }
         let lay = fn(from : ListAnchor[K]?, by : Double) {
           if from_end {
-            list_laid_from_end(n, key_of, find, measure, from, h, by~, ahead~, known~)
+            list_laid_from_end(n, key_of, find, measure, from, h, by~, ahead~, known~, slack=if short_glide.val { h } else { 0.0 })
           } else {
             list_laid_from_top(n, key_of, find, measure, from, h, by~, ahead~, known~, slack~)
           }
@@ -495,13 +625,17 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
         anchor.val = r.anchor
         // (how far it is counted to be scrolled among all it holds, the bar's, as laid out now)
         let at_end = from_end && r.at_end
-        let most = dmax(0.0, n.to_double() * mean() - h)
+        if at_end && short_move == 0.0 { short_glide.val = false }
+        let most = dmax(0.0, extent() - foot_laid.val - h)
         let counted = if at_end || (!from_end && r.at_start) {
           most
         } else if r.first == 0 {
           -r.tops.get(0).unwrap_or(0.0)
         } else {
-          dmin(most, r.first.to_double() * mean() - r.tops.get(0).unwrap_or(0.0))
+          let over = if fixed_estimate {
+            fixed_above(r.first)
+          } else { r.first.to_double() * mean() }
+          dmin(most, over - r.tops.get(0).unwrap_or(0.0))
         }
         bar_off.val = counted - c.x
         // (placed where they are in the window: the column holds them moved by how far it is scrolled)
@@ -579,6 +713,18 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
             follows.set(true)
           }
           match (glide, came_top) {
+            (Some((_, from_top)), Some(top)) if short_move > 0.0 => {
+              let to_end = short_move + most
+              let to_top = top - c.cover
+              let by = if from_top && to_top < to_end - 0.5 { dmax(0.0, to_top) } else { to_end }
+              if from_top && to_top < to_end - 0.5 { follows.set(false) }
+              let at = self.cause_at()
+              (short_due.val)()
+              short_due.val = self.at_moment(at, fn() {
+                short_due.val = fn() { }
+                s.glide_where(c.x + by, kept=false)
+              })
+            }
             (Some((_, from_top)), Some(top)) => {
               // (as far as the hand has it to go: by how far its top is under its cover, or to its end as counted)
               let to_top = top - c.cover

@@ -65,6 +65,8 @@ priv struct Notch {
   t0 : Double
   /// A requested destination (glide_to/glide_under), rather than the wheel's distance.
   sent : Bool
+  /// A free list's coordinates need not be clamped when a layout-requested glide ends.
+  kept : Bool
 }
 
 ///|
@@ -511,7 +513,7 @@ fn Scroll::notched(self : Scroll, v : View, t : Double, d : Double) -> Bool {
   self.settle_off = fn() {  }
   self.x.set(x0)
   (self.on_hand)(d)
-  self.notch.set(Some({ x0, total, v0, t0: t, sent: false }))
+  self.notch.set(Some({ x0, total, v0, t0: t, sent: false, kept: true }))
   (self.on_scrolled)(t)
   self.list_settles(v, t)
   true
@@ -538,7 +540,7 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
     self.notch.set(None)
     match (flung, notch) {
       (Some(f), _) => self.x.set(dclamp(f.end_x, 0.0, self.most()))
-      (_, Some(n)) => self.x.set(dclamp(n.x0 + n.total, 0.0, self.most()))
+      (_, Some(n)) => self.x.set(if n.kept { dclamp(n.x0 + n.total, 0.0, self.most()) } else { n.x0 + n.total })
       _ => ()
     }
   })
@@ -615,7 +617,7 @@ fn Scroll::glide_where(self : Scroll, to : Double, glide? : Bool = true, kept? :
     let to = if kept { dclamp(to, 0.0, self.most()) } else { to }
     // (there already, or gliding there already: as it is)
     let goes_to = match self.notch.get() {
-      Some(n) => Some(dclamp(n.x0 + n.total, 0.0, self.most()))
+      Some(n) => Some(if n.kept { dclamp(n.x0 + n.total, 0.0, self.most()) } else { n.x0 + n.total })
       None => None
     }
     if goes_to == Some(to) || (goes_to is None && self.where_at(t) == to) {
@@ -628,7 +630,7 @@ fn Scroll::glide_where(self : Scroll, to : Double, glide? : Bool = true, kept? :
       return
     }
     self.x.set(x)
-    self.notch.set(Some({ x0: x, total: to - x, v0: 0.0, t0: t, sent: true }))
+    self.notch.set(Some({ x0: x, total: to - x, v0: 0.0, t0: t, sent: true, kept }))
     (self.on_scrolled)(t)
     self.list_settles(v, t)
   })
@@ -646,7 +648,7 @@ pub fn Scroll::glide_under(self : Scroll, under : Double, to : Double) -> Unit {
     let to = dclamp(to, 0.0, self.most())
     let x = self.stopped(t) - under
     self.x.set(to)
-    self.notch.set(Some({ x0: x, total: to - x, v0: 0.0, t0: t, sent: true }))
+    self.notch.set(Some({ x0: x, total: to - x, v0: 0.0, t0: t, sent: true, kept: true }))
     (self.on_scrolled)(t)
     self.list_settles(v, t)
   })

@@ -41,9 +41,9 @@ test "an old view as tall as what it holds, first in a list, unlaid as tall as a
   let (t, made) = unlaid_list(150.0, true)
   assert_true(made.iter().all(fn(i) { i <= 3 }), msg="\{made}")
   assert_eq(t.rect_of("行 1").map(fn(r) { r.1 }), Some(150.0))
-  // (taken as none tall at first, as it is without: rows made for the room it then takes)
+  // Natural height is measured in the list's layout, with or without an estimate. No extra rows are made first.
   let (_, made) = unlaid_list(150.0, false)
-  assert_true(made.iter().any(fn(i) { i > 3 }), msg="\{made}")
+  assert_true(made.iter().all(fn(i) { i <= 3 }), msg="\{made}")
 }
 
 ///|
