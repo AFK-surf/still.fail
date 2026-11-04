@@ -104,6 +104,19 @@ fn AnchoredCase::top(self : AnchoredCase, k : Int) -> Double? {
 }
 
 ///|
+test "scrolls_anchored: content keeps its row identity as the row leaves and comes back" {
+  let c = anchored_case(100)
+  let first = c.live[99].row_place().0
+  assert_true(first.at < 0, msg="the content belongs to its keyed row")
+  c.tree.wheel_at(150.0, 50.0, 0.0, -500.0, 0, 10.0) |> ignore
+  c.tree.frame(390.0, 844.0, now=1000.0) |> ignore
+  assert_true(!c.live.contains(99))
+  c.tree.wheel_at(150.0, 50.0, 0.0, 1000.0, 0, 1100.0) |> ignore
+  c.tree.frame(390.0, 844.0, now=2000.0) |> ignore
+  assert_eq(c.live[99].row_place().0, first)
+}
+
+///|
 test "scrolls_anchored: shown at its end, the rows that fill the window made, none other" {
   let c = anchored_case(3000)
   assert_eq(c.made(), [2997, 2998, 2999])

@@ -185,6 +185,7 @@ pub fn Tree::row_name(self : Tree) -> NodeId {
 pub fn View::row_known_as(self : View, id : NodeId) -> Unit {
   match self.live() {
     Some(n) => {
+      n.each_row = true
       n.row_id = Some(id)
       self.tree.rows_known[id] = self.at
     }
