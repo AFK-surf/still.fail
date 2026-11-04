@@ -845,6 +845,8 @@ const SESSION_FIRST_DROP = `CREATE TRIGGER session_first_drop AFTER DELETE ON de
     SELECT OLD.session, next.thread, next.n FROM (${firstDelivery("OLD.session")}) next
     WHERE NOT EXISTS (SELECT 1 FROM session_first WHERE session = OLD.session);
 END;`;
+const ENTRIES_SAID_INDEX = "CREATE INDEX IF NOT EXISTS entries_said ON entries (thread, n, author_kind, author, letter) WHERE kind = 'message' AND letter IS NULL";
+
 const THREAD_STATE_SCAN = `INSERT INTO thread_state
   SELECT thread, MAX(n), MAX(CASE WHEN kind = 'message' AND letter IS NULL THEN n END),
     MIN(CASE WHEN kind = 'message' AND author_kind = 'person' THEN n END), COUNT(CASE WHEN kind = 'message' AND letter IS NOT NULL THEN 1 END)
@@ -1208,7 +1210,7 @@ export function addPendingCards(db: DatabaseSync): void {
 ///   when they started, every turn the session had was read.
 /// - sessions_models: the chats someone started by when, with their runtime and model (store.ts MODELS_USED_BY).
 export function addTellIndexes(db: DatabaseSync): void {
-  db.exec("CREATE INDEX IF NOT EXISTS entries_said ON entries (thread, n, author_kind, author, letter) WHERE kind = 'message' AND letter IS NULL");
+  db.exec(ENTRIES_SAID_INDEX);
   db.exec("CREATE INDEX IF NOT EXISTS entries_agent_at ON entries (thread, at) WHERE kind = 'message' AND author_kind = 'agent'");
   db.exec("CREATE INDEX IF NOT EXISTS turns_by_end ON turns (session_key, ended_at)");
   // The archive's, a page at a time by
@@ -1225,7 +1227,7 @@ export function addListState(db: DatabaseSync): void {
     .includes("WITH RECURSIVE first_threads");
   if (made() && firstSafe("session_first_add") && firstSafe("session_first_drop")) return;
   // Store.open would build this index later in addTellIndexes. Make it first for this upgrade, after old letters are marked.
-  if (!made()) db.exec("CREATE INDEX IF NOT EXISTS entries_said ON entries (thread, n, author_kind, author, letter) WHERE kind = 'message' AND letter IS NULL");
+  if (!made()) db.exec(ENTRIES_SAID_INDEX);
   const hasIndex = (name: string) => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?").get(name) !== undefined;
   db.exec("BEGIN IMMEDIATE");
   try {

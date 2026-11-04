@@ -62,8 +62,8 @@ test("installing old thread state seeks its boundaries instead of reading a long
   } finally { db.close(); }
 });
 
-for (const missing of ["entries_letters", "entries_people_by_n"]) {
-  test(`an old thread-state upgrade still works without ${missing}`, () => {
+for (const missing of ["entries_letters", "entries_people_by_n", "entries_said"]) {
+  test(`an old thread-state upgrade works when ${missing} is initially missing`, () => {
     const db = new DatabaseSync(":memory:");
     try {
       db.exec(`CREATE TABLE entries (thread INTEGER NOT NULL, n INTEGER NOT NULL, kind TEXT NOT NULL,
@@ -76,7 +76,9 @@ for (const missing of ["entries_letters", "entries_people_by_n"]) {
       if (missing !== "entries_people_by_n") db.exec("CREATE INDEX entries_people_by_n ON entries (thread, n) WHERE author_kind = 'person' AND kind = 'message'");
       addListState(db);
       assert.deepEqual({ ...db.prepare("SELECT * FROM thread_state").get() }, { thread: 1, last_n: 4, said_n: 3, person_n: 3, letters: 1 });
-      assert.equal(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?").get(missing), undefined);
+      const index = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?").get(missing);
+      if (missing === "entries_said") assert.notEqual(index, undefined);
+      else assert.equal(index, undefined);
     } finally { db.close(); }
   });
 }
