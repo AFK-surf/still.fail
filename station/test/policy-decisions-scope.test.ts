@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Store } from "../src/store/store.ts";
+import { LATEST_DECISIONS, Store } from "../src/store/store.ts";
 
 test("a workspace's policy reads only its own latest decision details", () => {
   const store = Store.open(":memory:");
@@ -19,7 +19,9 @@ test("a workspace's policy reads only its own latest decision details", () => {
     check.run("session-0", 10, JSON.stringify({ result: { selected: "old" } }));
     check.run("deleted-session", 95, JSON.stringify({ result: { selected: "answered" } }));
     db.exec("COMMIT");
-    const baseline = store.latestDecisionsSince(50);
+    const baseline = (db.prepare(LATEST_DECISIONS).all(50) as any[]).map(r => ({
+      id: r.id, session: r.session, at: r.created_at, detail: JSON.parse(r.result),
+    }));
     const expected = (home: boolean) => baseline.filter((row: any) => row.session === "session-0" || row.session === "session-1"
       || (home && (row.session === "session-2" || row.session === "deleted-session")));
     assert.equal(baseline.find((row: any) => row.session === "session-0").detail.result.selected, "dropped");
