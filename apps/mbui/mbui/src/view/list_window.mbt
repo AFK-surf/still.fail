@@ -145,20 +145,6 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     out
   })
-  // (where each block is in `laid`, by its key: what each slot reads its own of, not looked for among all of them by
-  // each: a long chat's three thousand slots each walked the three thousand as `laid` changed, its opening 2.8 s on
-  // wasm-gc, 1.1 s so, 2026-11-04)
-  let laid_at = @signals.computed(fn(_) {
-    let m : Map[K, Int] = {}
-    for i, b in laid.get() {
-      m[b.0] = i
-    }
-    m
-  })
-  let laid_of = fn(k : K) -> (K, Double, Double, Bool, ListRoom)? {
-    let all = laid.get()
-    laid_at.get().get(k).map(fn(i) { all[i] })
-  }
   // (where it is scrolled to, as what it holds is drawn now)
   let at = fn() { s.drawn(self.tree) }
   // (those that show: their room met by the column's, as tall as it shows, from the first down to one not laid out yet;
@@ -189,37 +175,25 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // for each between a kept block far from those in sight and them)
   let made = @signals.computed(fn(_) {
     let all = laid.get()
-    let index = laid_at.get()
-    let with_slot : Map[Int, Bool] = {}
-    for k in window.get() {
-      match index.get(k) {
-        Some(i) => with_slot[i] = true
-        None => ()
-      }
-    }
-    // (and every block whose room meets the column's as it is counted, those under one not laid out yet too: their
-    // slots kept as that one is laid out, not let go for a frame and made again, nothing made in them meanwhile)
+    // (every block whose room meets the column's as it is counted (those that show among them, and those under one not
+    // laid out yet: their slots kept as that one is laid out, not let go for a frame and made again), and those kept)
     let room_now = self.laid_size_told().map(fn(z) { z.1 })
     let x = at()
+    let out : Array[Made[K]] = []
+    let mut last = -1
     for i, b in all {
       let near = match room_now {
-        Some(vh) => b.1 < x + vh && b.1 + b.2 > x
+        Some(vh) =>
+          (b.1 < x + vh && b.1 + b.2 > x) || (room is Some(_) && b.2 == 0.0 && b.1 >= x && b.1 <= x + vh)
         None => false
       }
       if near || kept(b.0) {
-        with_slot[i] = true
+        if i > last + 1 {
+          out.push(Gap(last, i))
+        }
+        out.push(Slot(b.0, i))
+        last = i
       }
-    }
-    let ix = with_slot.keys().collect()
-    ix.sort()
-    let out : Array[Made[K]] = []
-    let mut last = -1
-    for i in ix {
-      if i > last + 1 {
-        out.push(Gap(last, i))
-      }
-      out.push(Slot(all[i].0))
-      last = i
     }
     if last + 1 < all.length() {
       out.push(Gap(last, all.length()))
@@ -390,14 +364,14 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     held.padding(By(fn() { (0.0, 0.0, 0.0, foot_room()) })) |> ignore
     held.each(fn() { made.get() }, made_key, fn(slot, item) {
       let k = match @signals.untracked(fn() { item.get() }) {
-        Slot(k) => k
+        Slot(k, _) => k
         Gap(_, _) => {
           // (not a row of what it holds: nothing is made in it, nothing in it is picked)
           self.tree.nodes[slot.at].each_row = false
           slot.height(By(fn() {
             match item.get() {
               Gap(from, to) => Some(gap_height(from, to))
-              Slot(_) => Some(0.0)
+              Slot(_, _) => Some(0.0)
             }
           }))
           .shrink(Is(0.0))
@@ -418,12 +392,19 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       }
       slot.row_known_as(id)
       let shows = fn() { window.get().contains(k) || kept(k) }
-      let room_now = fn() { laid_of(k).map(fn(b) { b.4 }).unwrap_or(list_room(0.0)) }
+      // (its block in `laid`, where the column holds it now: its place there said with its slot, nothing looked for)
+      let laid_now = fn() {
+        match item.get() {
+          Slot(_, i) => laid.get().get(i)
+          Gap(_, _) => None
+        }
+      }
+      let room_now = fn() { laid_now().map(fn(b) { b.4 }).unwrap_or(list_room(0.0)) }
       slot.lends(windowed_room, room_now) |> ignore
       // (as tall as it is counted, showing or not: as what it holds was told laid out, est before; never as tall as
       // what it holds is while that is still to be laid out, the column's end gone up and back in one frame)
       slot
-      .height(By(fn() { laid_of(k).map(fn(b) { b.2 }) }))
+      .height(By(fn() { laid_now().map(fn(b) { b.2 }) }))
       .shrink(Is(0.0))
       |> ignore
       if room is Some(_) {
@@ -468,6 +449,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // (the blocks it held, by key: those new to it among them told apart; the first new to it that `fresh` says is,
     // till its top is counted)
     let last_keys : Ref[Map[K, Bool]?] = Ref(None)
+    // (the array they were told in: the same one again, the same blocks)
+    let last_keys_of : Ref[Array[K]?] = Ref(None)
     let newest : Ref[K?] = Ref(None)
     // (shorter than the column, how far its first block's top is under the column's: the room over them at its foot)
     let lead = fn() {
@@ -487,9 +470,15 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       let all = @signals.untracked(fn() { laid.get() })
       // (what came now, and those of what came before whose heights are told now: the room at its foot falling for
       // them alone, not for the column laid out shorter (the window, a keyboard) nor for anything else)
+      // (the same blocks as last time it was told: nothing come, nothing looked for among them all; it is told as the
+      // column scrolls, every frame of a glide)
+      let same_keys = match last_keys_of.val {
+        Some(a) => physical_equal(a, now_keys)
+        None => false
+      }
       let came_now = match last_keys.val {
-        Some(was) => now_keys.filter(fn(k) { !was.contains(k) })
-        None => []
+        Some(was) if !same_keys => now_keys.filter(fn(k) { !was.contains(k) })
+        _ => []
       }
       let ours = came_now.length() > 0
       if ours {
@@ -498,15 +487,17 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         }
       }
       let mut told_now = false
-      for b in all {
-        if b.3 && awaiting.contains(b.0) {
-          awaiting.remove(b.0)
-          told_now = true
+      if !awaiting.is_empty() {
+        for b in all {
+          if b.3 && awaiting.contains(b.0) {
+            awaiting.remove(b.0)
+            told_now = true
+          }
         }
-      }
-      for k in awaiting.keys().collect() {
-        if !now_keys.contains(k) {
-          awaiting.remove(k)
+        for k in awaiting.keys().collect() {
+          if !now_keys.contains(k) {
+            awaiting.remove(k)
+          }
         }
       }
       let vh = self.laid_size_told().map(fn(z) { z.1 }).unwrap_or(-1.0)
@@ -535,15 +526,18 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         now_keys.last() != last_key.val &&
         now_keys.last().map(fresh).unwrap_or(false)
       // (the first block new to it that `fresh` says is: where its top is, once it is counted)
-      match last_keys.val {
-        Some(was) =>
-          match now_keys.iter().find_first(fn(k) { !was.contains(k) && fresh(k) }) {
-            Some(k) => newest.val = Some(k)
-            None => ()
-          }
-        None => ()
+      if !same_keys {
+        match last_keys.val {
+          Some(was) =>
+            match now_keys.iter().find_first(fn(k) { !was.contains(k) && fresh(k) }) {
+              Some(k) => newest.val = Some(k)
+              None => ()
+            }
+          None => ()
+        }
+        last_keys.val = Some(Map::from_array(now_keys.map(fn(k) { (k, true) })))
+        last_keys_of.val = Some(now_keys)
       }
-      last_keys.val = Some(Map::from_array(now_keys.map(fn(k) { (k, true) })))
       let newest_top = match newest.val {
         Some(k) if !read_from_top(k) => {
           newest.val = None
@@ -621,7 +615,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
 /// What a windowed list's column holds (View::scrolls_window): a block's slot, or the gap between those with slots (the
 /// block before it and the one after by their places, -1 and how many there are at its ends).
 priv enum Made[K] {
-  Slot(K)
+  Slot(K, Int)
   Gap(Int, Int)
 } derive(Eq)
 
@@ -635,7 +629,7 @@ priv enum MadeKey[K] {
 ///|
 fn[K] made_key(m : Made[K]) -> MadeKey[K] {
   match m {
-    Slot(k) => SlotOf(k)
+    Slot(k, _) => SlotOf(k)
     Gap(from, _) => GapAfter(from)
   }
 }
