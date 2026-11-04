@@ -237,10 +237,11 @@ fn rows_steady_fault(
   let speed = fn(a : Int) {
     let (_, t0, y0) = seen[a]
     let (_, t1, y1) = seen[a + 1]
-    (y1 - y0) / dmax(t1 - t0, 1.0)
+    (y1 - y0) / (t1 - t0)
   }
   // its speed off the way the frames round it go: a step (a spike), a stop on its way (a dip), a start at full speed
-  if n >= 4 && !(set_out > seen[0].1 && set_out <= seen[3].1) {
+  if n >= 4 && seen[0].1 < seen[1].1 && seen[1].1 < seen[2].1 && seen[2].1 < seen[3].1 &&
+    !(set_out > seen[0].1 && set_out <= seen[3].1) {
     let v0 = speed(0) * period
     let v1 = speed(1) * period
     let v2 = speed(2) * period

@@ -112,9 +112,7 @@ export interface Host {
   ed25519Sign?(seed: Uint8Array, message: Uint8Array): { publicKey: Uint8Array; signature: Uint8Array } | null;
 
   /// A zstd stream taken apart by the host, open while the scope is, where it has a way of its own (a native app's
-  /// shell: libzstd). None: the core's own, fzstd, in JS, which Hermes (no JIT) runs at some 10 MB of what it makes a
-  /// second on an M2 Max, a tenth of V8's and far under native (bench/zstd-read.ts): what a station sends, compressed,
-  /// is taken apart on the core's thread, slower again on a phone holding back its clock.
+  /// shell: libzstd). None: the core's own, fzstd, in JS. Host decompression keeps this work off the core's thread.
   unzstd?(): Effect.Effect<Unzstd, HostError, Scope.Scope>;
 
   /// Small persistent values by key: accounts, the device key, preferences.

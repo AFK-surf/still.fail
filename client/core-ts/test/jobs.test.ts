@@ -82,7 +82,7 @@ test("those_up_long_are_grouped_oldest_first_with_where_they_are", () => {
   const st = (name: string | null, jobs: J[]): [string, string | null, J[]] => ["w/s1", name, jobs];
   const v = longJobs(
     [
-      st("studio", [
+      st("orchard", [
         job("new", { startedAt: NOW - 60_000 }),
         job("j2", { startedAt: NOW - 2 * LONG, chat: { id: "7", title: "修登录", archived: true } }),
         job("j1", { startedAt: NOW - 3 * LONG, chat: { id: "8", title: "", archived: false } }),
@@ -93,8 +93,8 @@ test("those_up_long_are_grouped_oldest_first_with_where_they_are", () => {
   );
   const g = v.groups;
   assert.deepEqual([g[0].key, g[0].head, g[0].jobs[0].whereText], ["services", "长时间运行的网页服务 · 1", "不属于任何对话"]);
-  assert.deepEqual([g[1].head, g[1].jobs[0].id, g[1].jobs[0].whereText, g[1].jobs[0].age], ["长时间运行的后台任务 · 2", "j1", "studio · 对话", "3 小时"]);
-  assert.equal(g[1].jobs[1].whereText, "studio · 修登录 · 已归档");
+  assert.deepEqual([g[1].head, g[1].jobs[0].id, g[1].jobs[0].whereText, g[1].jobs[0].age], ["长时间运行的后台任务 · 2", "j1", "orchard · 对话", "3 小时"]);
+  assert.equal(g[1].jobs[1].whereText, "orchard · 修登录 · 已归档");
   assert.deepEqual(longJobs([st(null, [job("new")])], c()), { groups: [], lit: false, ids: [] });
   const watch = job("w", { startedAt: NOW - 5 * LONG, watch: true });
   assert.deepEqual(longJobs([st(null, [watch])], c()), { groups: [], lit: false, ids: [] });
@@ -113,17 +113,17 @@ test("those_up_long_light_the_bell_until_it_has_shown_them", () => {
 });
 
 test("a_task_another_stations_chat_runs_is_in_that_chat", () => {
-  assert.deepEqual(remoteOwner("remote:w:ccvm:ember:c-1"), { station: "w/ccvm", session: "ember:c-1" });
+  assert.deepEqual(remoteOwner("remote:w:cedar:ember:c-1"), { station: "w/cedar", session: "ember:c-1" });
   assert.equal(remoteOwner("ember:c-1"), null);
-  const chat = { id: "ember:c-1", title: "编译器", archived: false, station: "w/ccvm" };
+  const chat = { id: "ember:c-1", title: "编译器", archived: false, station: "w/cedar" };
   const from = (session: string): From | null =>
-    session === "remote:w:ccvm:ember:c-1" ? { name: "ccvm", chat } : session === "remote:w:ccvm:ember:c-2" ? { name: "ccvm", chat: null } : null;
+    session === "remote:w:cedar:ember:c-1" ? { name: "cedar", chat } : session === "remote:w:cedar:ember:c-2" ? { name: "cedar", chat: null } : null;
   const ran = (session: string) => job(session, { session, startedAt: NOW - 2 * LONG });
-  const v = longJobs([["w/studio", "studio", [ran("remote:w:ccvm:ember:c-1"), ran("remote:w:ccvm:ember:c-2"), ran("a")]]], c(), from);
+  const v = longJobs([["w/orchard", "orchard", [ran("remote:w:cedar:ember:c-1"), ran("remote:w:cedar:ember:c-2"), ran("a")]]], c(), from);
   const [known, unknown, own] = v.groups[0].jobs;
-  assert.deepEqual([known.whereText, known.chat, known.station], ["studio · 编译器 · 来自 ccvm", chat, "w/studio"]);
-  assert.deepEqual([unknown.whereText, unknown.chat], ["studio · 对话 · 来自 ccvm", undefined]);
-  assert.equal(own.whereText, "studio · 不属于任何对话");
+  assert.deepEqual([known.whereText, known.chat, known.station], ["orchard · 编译器 · 来自 cedar", chat, "w/orchard"]);
+  assert.deepEqual([unknown.whereText, unknown.chat], ["orchard · 对话 · 来自 cedar", undefined]);
+  assert.equal(own.whereText, "orchard · 不属于任何对话");
 });
 
 test("a_logs_last_line_and_when", () => {

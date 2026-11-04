@@ -68,7 +68,7 @@ const archiveFile = (store: Store, thread: number) => join(store.archiveDir(), "
 test("a write waits its turn while another of the station's writers writes, not refused at once", () => {
   // Begun deferred, a transaction that read first was refused at its first write (SQLITE_BUSY_SNAPSHOT, "database is
   // locked", no wait) where another connection wrote meanwhile: the usage worker filling its statistics, and a person's
-  // message was not sent (ccvm, 2026-11-03).
+  // message was not sent (a station, 2026-11-03).
   const path = join(tempdir(), "s.db");
   const store = open(path);
   const other = new DatabaseSync(path, { timeout: 0 });
@@ -1127,7 +1127,7 @@ test("bindings tell both sessions; delivered can be taken back", () => {
   assert.deepEqual([...store.heardThreads("a", [thread.id])], []);
 });
 
-// On ccvm (2026-11-03) a session's detail read its 378 jobs, each with its notices and its log looked at.
+// On a station (2026-11-03) a session's detail read its 378 jobs, each with its notices and its log looked at.
 test("jobs: a session's detail as a device asks it lists its latest and those still up, by indexes", async () => {
   const store = memory();
   session(store, "a");
@@ -1172,7 +1172,7 @@ test("what is written of a chat beside what is said in it is told as written: ar
   ]);
 });
 
-// On ccvm (2026-11-03) the archive was made whole at once: its 1,398 chats in 60 s, every other read of devices waiting.
+// On a station (2026-11-03) the archive was made whole at once: its many chats in 60 s, every other read of devices waiting.
 test("the archive a page at a time, the latest archived first, each by the index of those archived; the sidebar by those shown", async () => {
   const time = testClock();
   await time.adjust(Date.parse("2026-11-03T00:00:00Z"));
@@ -1201,7 +1201,7 @@ test("the archive a page at a time, the latest archived first, each by the index
 });
 
 test("the archived sessions by the index of those archived, the longest archived first; the log's file kept small", async () => {
-  // Every session read whole on the main thread to find the archived held the station 8 to 13 s on ccvm (2026-11-03);
+  // Every session read whole on the main thread to find the archived held the station 8 to 13 s on a station (2026-11-03);
   // and the log's file stayed at the 520 MB it once grew to, with 1 GB of the disk left.
   const time = testClock();
   await time.adjust(Date.parse("2026-11-03T00:00:00Z"));
@@ -1220,7 +1220,7 @@ test("the archived sessions by the index of those archived, the longest archived
 });
 
 test("the card each chat waits on is kept as it is posted, answered and closed; one from before is worked out as it was", () => {
-  // Worked out at each read of the sidebar's marks, a dozen lookups a chat, 26 s for 68 chats on ccvm (2026-11-03).
+  // Worked out at each read of the sidebar's marks, a dozen lookups a chat, 26 s for 68 chats on a station (2026-11-03).
   const path = join(tempdir(), "s.db");
   const before = Store.open(path, null);
   session(before, "a");
@@ -1329,11 +1329,11 @@ test("what the station asks again and again is planned by an index, never a scan
   assert.equal(plans.get(JOB_AT_PORT)!.filter((d) => d.includes("jobs_up (state=? AND port=?)")).length, 2,
     "a port is sought among running and restarting services");
   // A session's messages not delivered yet: by the index of those alone, not every message it was ever given; and its
-  // turns not counted (auto-archiving read each shown session's every delivery and turn so: 13 s and 22 s on ccvm).
+  // turns not counted (auto-archiving read each shown session's every delivery and turn so: 13 s and 22 s on a station).
   assert.ok(plans.get(STATS_OF)!.some((d) => d.includes("deliveries_pending (session=?)")), plans.get(STATS_OF)!.join(" | "));
   assert.ok(!plans.get(STATS_OF)!.some((d) => d.includes("COVERING INDEX turns_by_session")), plans.get(STATS_OF)!.join(" | "));
   // Whether a session heard from a thread: by its deliveries there alone, not every message it was ever given (3.3 s on
-  // the main thread on ccvm); the models someone's chats ran on from the index alone.
+  // the main thread on a station); the models someone's chats ran on from the index alone.
   assert.ok(plans.get(HEARD_IN)!.some((d) => d.includes("deliveries_session (session=? AND thread=?)")), plans.get(HEARD_IN)!.join(" | "));
   assert.ok(plans.get(MODELS_USED_BY)!.some((d) => d.includes("COVERING INDEX sessions_models (created_by=? AND created_at>?)")), plans.get(MODELS_USED_BY)!.join(" | "));
   assert.ok(plans.get(REMOTE_RUNS_OF)!.some((d) => d.includes("PRIMARY KEY (ws=? AND at>?)")), plans.get(REMOTE_RUNS_OF)!.join(" | "));
@@ -1386,7 +1386,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
   // undelivered messages by the index of those alone, its latest turn by its index; the Slack threads a chat copies to,
   // by their last entry; and of the items a change touched, or of a chat, their own shares, openers and snapshots. Each
   // as it was read every message of a chat, every turn or delivery of a session, or every row of its table: a notice of
-  // a chat of 534 messages read 479 pages, 3 to 16 s on ccvm short of memory (2026-11-02), every telling after it waiting.
+  // a chat of many messages read many pages, 3 to 16 s on a station short of memory (2026-11-02), every telling after it waiting.
   const planned: [string, unknown[]][] = [
     [read.UNREAD, [1, 0, "[]"]], [read.ASKED_DURING, [1, 0, 9]], [`${read.SESSION_STATS} WHERE s.key = ?`, ["a"]], [read.LAST_TURN, ["a"]], [read.LATEST_TURNS, ["a", 1]], [CC_THREADS_SQL, [1]],
     [read.SHARES_OF, ['["a"]']], [read.OPENERS_OF, ['["a"]']], [read.OPENED_OF, ['["a"]']], [read.PUBLISHED_OF, ["[1]"]], [read.PINS_OF, ["a@x", '["a"]']],
@@ -1455,7 +1455,7 @@ test("a session's turns are counted as they are written and removed, and once fr
   assert.deepEqual(turns(store), { a: 3 });
 });
 
-// On ccvm (2026-11-03) a device read a session with its every turn (3,685 of them, 25 s) to add up how long they ran.
+// On a station (2026-11-03) a device read a session with its every turn (many of them, 25 s) to add up how long they ran.
 test("a session's work is kept as its turns end and go, from when it began to be kept; one with turns ended before says none", async () => {
   const time = testClock();
   await time.adjust(Date.parse("2026-11-03T00:00:00Z"));

@@ -29,7 +29,7 @@
 #   scripts/e2e-local.sh drive-media TAG  the player's flows' folder in it (e2e-TAG/影音: two episodes, a subtitle, a song)
 #   scripts/e2e-local.sh drive-big TAG    the downloads' folder in it (e2e-TAG/大文件: 48 MB and a small file)
 #   scripts/e2e-local.sh drive-gb TAG     a novel in GB18030 in it (e2e-TAG/旧小说-gb.txt)
-#   scripts/e2e-local.sh drive-photo TAG  the run's photo in it (e2e-TAG/e2e-photo.jpg), as 18's upload left it
+#   scripts/e2e-local.sh drive-photo TAG [renamed]  the run's photo, as 18's upload or 19's rename left it
 #   scripts/e2e-local.sh android-stage FILE…  files to attach put where the app's provider serves them (a share's intent)
 #   scripts/e2e-local.sh android-gallery FILE…  files put in the emulator's gallery, the app let read it
 #   scripts/e2e-local.sh release-seed     a newer build of the app (the APK as built) in the local cloud's releases
@@ -102,7 +102,8 @@ waitfor() { local s=$1; shift; node "$D/waitfor.mjs" --deadline $s "$@" > /dev/n
 
 # ember, cloned (read only from $EMBER: never built or installed in), its packages installed, the station built
 ember() {
-  local want=$(git -C "$EMBER" rev-parse HEAD)
+  local want
+  want=$(git -C "$EMBER" rev-parse --verify HEAD) || die "no source revision in $EMBER"
   if [ ! -d $E/.git ]; then
     git clone -q "$EMBER" $E
   fi
@@ -149,8 +150,22 @@ start_cloud() {
 # the test station (enrolled), its launcher over its own data
 start_station() {
   local launcher=$(native launcher)
-  (. $RUN/station-env.sh && detach "$launcher" run --app $STATION/app --data $STATION/data >$RUN/station.log 2>&1 & echo $! > $RUN/station.pid)
-  waitfor 60 --what "the station's database" --exists $STATION/data/stillfail.db || { tail -20 $RUN/station.log; die "the station did not start"; }
+  # The launcher's takeover means the station has initialized and is serving. Deliver that event directly: the
+  # database can be created empty and filesystem notifications of subsequent writes can be missed on macOS.
+  rm -f "$RUN/station.ready"
+  mkfifo "$RUN/station.ready"
+  exec 9<> "$RUN/station.ready"
+  (. $RUN/station-env.sh && detach node "$D/waitfor.mjs" --tee "$RUN/station.log" \
+    --line 'Node [0-9]+ has taken over' --mark "$RUN/station.ready" -- \
+    "$launcher" run --app "$STATION/app" --data "$STATION/data" 9>&- & echo $! > "$RUN/station.pid")
+  if ! IFS= read -r -t 60 ready <&9; then
+    exec 9>&-
+    rm -f "$RUN/station.ready"
+    tail -20 "$RUN/station.log"
+    die "the station did not start"
+  fi
+  exec 9>&-
+  rm -f "$RUN/station.ready"
 }
 
 # the station and the cloud stopped, their files at rest (the relay holds nothing: it stays)
@@ -285,9 +300,13 @@ down() {
   # a web service its agent started (flow 47's, on E2E_PORT + 7: e2e/run.sh's SVC; or on the port its test's words name,
   # 19107, as the env it was recorded on had it) outlives the station: ended when it runs in the station's own
   # directories (never another's)
-  local p
+  local p cwd station_real
+  station_real=$(cd "$STATION" 2>/dev/null && pwd -P) || station_real=$STATION
   for p in $( (lsof -tnP -iTCP:$((PORT + 7)) -sTCP:LISTEN; pgrep -f -- "-m http\.server ") 2>/dev/null | sort -u); do
-    lsof -a -p $p -d cwd -Fn 2>/dev/null | grep -qE "^n(/private)?$STATION/" && kill $p 2>/dev/null
+    cwd=$(lsof -a -p "$p" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')
+    case "$cwd" in
+      "$STATION/"*|"$station_real/"*|"/private$STATION/"*|"/private$station_real/"*) kill "$p" 2>/dev/null ;;
+    esac
   done
   rm -f "$HELD"
   stop cloud
@@ -419,9 +438,11 @@ drive_big() {
 # it (19-rename, 20-delete) when they are run apart from it
 drive_photo() {
   local d=$STATION/home/e2e-${1:?a tag}
-  mkdir -p $d
-  cp $WORK/files/e2e-photo.jpg $d/e2e-photo.jpg
-  say "drive photo $d/e2e-photo.jpg"
+  local name=e2e-photo.jpg
+  [ "${2:-}" != renamed ] || name="照片-$1.jpg"
+  mkdir -p "$d"
+  cp "$WORK/files/e2e-photo.jpg" "$d/$name"
+  say "drive photo $d/$name"
 }
 
 # a novel of made-up chapters in GB18030 (98-reader: not UTF-8, read as the Android app reads it), e2e-<tag>/旧小说-gb.txt

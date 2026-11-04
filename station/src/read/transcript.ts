@@ -160,7 +160,7 @@ export function claudeProject(cwd: string): string | null {
 
 /// Where a Claude session's transcript is in a directory of them when it ran in one of `places` (the session's working
 /// directories): looked for there alone, a file or two, not in every project's directory (the shared place has one for
-/// each chat the station ever had: 923 on ccvm, each looked at in turn on the main thread).
+/// each chat the station ever had: many on a station, each looked at in turn on the main thread).
 function placedIn(runtime: RuntimeKind, dir: string, id: string, places: readonly string[]): string | null {
   if (runtime !== "claude") return null;
   // Claude Code names it by the directory as its process sees it (symbolic links resolved): one reached through a link
@@ -186,7 +186,7 @@ function placedIn(runtime: RuntimeKind, dir: string, id: string, places: readonl
 /// in a terminal's directory), by directory and id: a transcript stays where it is (put away, its `.zst` beside), so each
 /// is looked for in every project once a process. Null: looked for with its places and in no project then. One a
 /// session writes from now on is in its places (`placedIn`, asked first every time), so it is not looked for again: a
-/// new session's is not written until its conversation begins, and every project (676 on ccvm) was looked in at each
+/// new session's is not written until its conversation begins, and every project (many on a station) was looked in at each
 /// read until then, 25 seconds on the station's thread while memory was short.
 const elsewhere = new Map<string, string | null>();
 
@@ -246,7 +246,7 @@ function transcriptIn(runtime: RuntimeKind, dir: string, id: string, placed = fa
 }
 
 /// The Codex transcripts found, by directory and id: kept by date (sessions/<year>/<month>/<day>/rollout-…-<id>.jsonl),
-/// each was looked for through every day's directory at each read, seconds on the station's thread on ccvm.
+/// each was looked for through every day's directory at each read, seconds on the station's thread on a station.
 const rollouts = new Map<string, string>();
 
 /// A running Codex thread says its own rollout path. The file may not exist until its first turn: keep the path even
@@ -308,8 +308,8 @@ export const homesFirst = (profiles: readonly { id: string; home: string }[], fi
 /// where a Claude transcript is looked for first, in every directory, before anywhere else in them. `anywhere` false: a
 /// Claude transcript is looked for in its places alone, never through every project (one that ran before the data
 /// directory moved, or in a terminal's directory): what the live view of the sessions at work asks, on the station's
-/// main thread (sessions/hub.ts). There each new chat, its transcript not written yet, had every project looked in (923
-/// on ccvm), every device held 22 s and 45 s while memory was short and all their connections lost (2026-11-02). A
+/// main thread (sessions/hub.ts). There each new chat, its transcript not written yet, had every project looked in (many
+/// on a station), every device held 22 s and 45 s while memory was short and all their connections lost (2026-11-02). A
 /// session at work writes in its places.
 export function transcriptPaths(runtime: RuntimeKind, dataDir: string, homes: string[], ids: string[], places: readonly string[] = [], { anywhere = true }: { anywhere?: boolean } = {}): { paths: string[]; current: boolean } {
   // Each directory once, however it is reached (a home's that links to the shared place is that place), the homes' made

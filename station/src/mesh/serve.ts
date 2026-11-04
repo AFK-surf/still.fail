@@ -526,7 +526,7 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
 /// packets sent and lost on it, and how much the station may send on it unacknowledged now and how often that was cut
 /// for loss), so a part of a video slow to come is seen here, the station's time apart from the way's. (Its stream told
 /// nothing as it was acknowledged until 2026-10-28, which this took for the device having stopped it: nothing was ever
-/// said, and a desktop app's images coming at 30 KB/s from ccvm for an hour left no word of how.) `ways` says every
+/// said, and a desktop app's images coming at 30 KB/s from a station for an hour left no word of how.) `ways` says every
 /// way the connection has, `*` the chosen one, with the packets sent on each while the reply went: a connection has a
 /// way through every relay (#2580), and with none chosen noq sends on all of them (2026-10-30: attachments at 11–50
 /// KB/s on a way of 70 ms, `way=?` on half of them, the chosen way alone not saying where the bytes went).

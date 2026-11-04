@@ -100,7 +100,7 @@ test "a table as wide as the message on a wide chat: its key out in the margin, 
 
 ///|
 test "a table in the message, no card round it: its words in line with the message's, its rules from them to its last column's" {
-  let text = "| 人想按什么看 | 背后的事实 | 谁知道 |\n|---|---|---|\n| 项目（still.fail、mbui、家里网络…） | agent 改了哪个仓库、开了哪个 PR、用了哪个「项目记忆」 | station 已经知道（PR 链接本来就会抽出来放进「PR」那一栏） |\n| 要不要我管 | 等你 / 在干活 / 出错 / 没事 | 已经有了（状态点） |\n| 结果怎样 | PR 开着 / 已合 / 检查红了 | 同上 |\n"
+  let text = "| 人想按什么看 | 背后的事实 | 谁知道 |\n|---|---|---|\n| 项目（still.fail、mbui、示例项目…） | agent 改了哪个仓库、开了哪个 PR、用了哪个「项目记忆」 | station 已经知道（PR 链接本来就会抽出来放进「PR」那一栏） |\n| 要不要我管 | 等你 / 在干活 / 出错 / 没事 | 已经有了（状态点） |\n| 结果怎样 | PR 开着 / 已合 / 检查红了 | 同上 |\n"
   for size in [(1080.0, 160.0), (800.0, 16.0), (390.0, 16.0)] {
     let (w, margin) = size
     let t = table_tester(0, w, 800.0, text~, margin~)

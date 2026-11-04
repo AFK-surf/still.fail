@@ -4,7 +4,7 @@
 ///|
 /// The chat a new chat is left for here.
 fn switch_chat() -> Page {
-  Chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  Chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
 }
 
 ///|
@@ -59,8 +59,8 @@ test "the page on top: a new chat become its chat in place (its words sent) no s
   page_switch.from_new = false
   fresh.room.set(7.0)
   // (as the new chat's words are sent: became said first, the page become the chat after)
-  fresh.became.set(Some({ station: "ws1/st1", session: "s-new", title: "", station_name: "Studio" }))
-  app.nav.become(Chat({ station: "ws1/st1", session: "s-new", title: "", station_name: "Studio" }))
+  fresh.became.set(Some({ station: "ws1/st1", session: "s-new", title: "", station_name: "Willow" }))
+  app.nav.become(Chat({ station: "ws1/st1", session: "s-new", title: "", station_name: "Willow" }))
   assert_false(page_switch.from_new)
   assert_eq(fresh.room.get(), 7.0)
   t.draw()

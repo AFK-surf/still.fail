@@ -4,7 +4,7 @@
 // latest message to the first and back. It reads what the workspace's stations have; it sends nothing, though opening
 // a chat marks it read as it would for a person.
 //
-// It runs against a cloud origin (--url): a dev cloud on studio (cloud/test/dev.ts, `pnpm run build:cloud` first) with
+// It runs against a cloud origin (--url): a dev cloud (cloud/test/dev.ts, `pnpm run build:cloud` first) with
 // a station enrolled in its workspace and some chats on it, signed in as --user with the dev cloud's /__dev/account.
 // A real cloud (https://still.fail) has no /__dev routes: give --profile, a Chromium profile directory signed in there
 // by hand (`--login` opens it headed and waits until you have), and keep in mind that what it opens is marked read.

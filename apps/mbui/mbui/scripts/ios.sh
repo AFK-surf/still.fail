@@ -16,7 +16,7 @@
 #     Info.plists; both signed with that group, a device's by its packer, whose profile must have it)
 #   MBUI_IOS_ASSETS  its asset catalog (an .xcassets: AppIcon its icon, the colours its Info.plist names), compiled into
 #     the app (actool), what that adds to the Info.plist with it
-#   MBUI_IOS_DEVICE  the simulator's name (default ios-mbui-sf, Mini1's: Studio's simulators open no app): one of our
+#   MBUI_IOS_DEVICE  the simulator's name (default ios-mbui-sf): one of our
 #     own, made when missing (the newest iOS runtime, an iPhone Pro); never another's
 #   MBUI_IOS_SDK     iphonesimulator (the default: the simulator's app, ad hoc signed) or iphoneos: a device's app, in
 #     out/ios-device, its Info.plist saying iPhoneOS, left unsigned (a device's signature is the packer's: its identity,

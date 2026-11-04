@@ -158,7 +158,7 @@ export function sessions(s: Store, connect: string | null, archived: boolean, la
 
 /// GET /sessions/:key (views.rs `session`): the session, its threads, turns and jobs (newest first). `turns`: only that
 /// many of its latest turns (`?turns=`), for a device that knows how many it had and how long they ran from its summary
-/// (`turns`, `workMs`): all of them were read for that, 3,685 of one session in 25 s on ccvm (2026-11-03).
+/// (`turns`, `workMs`): all of them were read for that, many of one session in 25 s on a station (2026-11-03).
 /// `now`: only its jobs that may matter now (`jobsNow`, `?jobs=now`), not its every one.
 export function session(s: Store, key: string, viewer: Viewer, lang: Lang, turns: number | null = null, now = false): Json {
   setLang(lang);
@@ -278,7 +278,7 @@ export function timeline(s: Store, key: string, beforeParam: string | undefined,
   const chain = chainOf(runtime, paths, marksDir(s.dataDir));
   const end = lengthOf(chain);
   const readOnAt = performance.now();
-  // What a slow one spent where, and read how much: the pages of a history took 2 to 4 s each on ccvm (2026-11-03),
+  // What a slow one spent where, and read how much: the pages of a history took 2 to 4 s each on a station (2026-11-03),
   // unsaid where.
   const read: Read = { bytes: 0, lines: 0, packed: 0 };
   const between = (a: number, b: number) => {

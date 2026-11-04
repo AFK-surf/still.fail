@@ -60,11 +60,11 @@ test "安全, at each width and with either hand: its people, devices and statio
     let t = setting_tester(Security, w, platform~)
     let at = "\{w} platform \{platform}"
     // (by app: its name over its devices, which machine each is, the most lately used first)
-    scrolled_to(t, w, "Mac Studio")
+    scrolled_to(t, w, "示例工作站")
     let (_, app) = t.find("still.fail 桌面版").unwrap()
     let (_, pro) = t.find("林的 MacBook Pro").unwrap()
-    let (_, studio) = t.find("Mac Studio").unwrap()
-    assert_true(app < pro && pro < studio, msg=at)
+    let (_, sample) = t.find("示例工作站").unwrap()
+    assert_true(app < pro && pro < sample, msg=at)
     scrolled_to(t, w, "Ana 的 MacBook Air")
     assert_true(t.find("Ana 的 MacBook Air") is Some(_), msg=at)
     assert_true(t.find("5 天前使用过 · 受信任") is Some(_), msg=at)
@@ -78,16 +78,16 @@ test "protecting a station keeps its button and label, with the spinner inside a
   for (w, platform) in page_cases {
     let at = "\{w} platform \{platform}"
     let idle = setting_tester(Security, w, platform~)
-    scrolled_to(idle, w, "MBA")
+    scrolled_to(idle, w, "Maple")
     assert_false(idle.get(Button, label="保护").disabled, msg=at)
     tap_words(idle, "保护")
     idle.frame()
     assert_true(@sf.presenting(), msg=at)
-    assert_true(idle.find("保护 MBA？") is Some(_), msg=at)
+    assert_true(idle.find("保护 Maple？") is Some(_), msg=at)
     @sf.close_presented()
 
     let busy = setting_tester(Security, w, platform~, mode="settings-security-protecting")
-    scrolled_to(busy, w, "MBA")
+    scrolled_to(busy, w, "Maple")
     busy.run_for(@ui.move_most_ms)
     let button = busy.get(Button, label="保护")
     assert_true(button.disabled, msg=at)
@@ -153,7 +153,7 @@ test "a station's protect button follows its request through failure, retry and 
         },
       }
     })
-    scrolled_to(t, w, "MBA")
+    scrolled_to(t, w, "Maple")
     tap_words(t, "保护")
     t.frame()
     let (x, y, width, height) = t.get(Button, label="保护").rect
@@ -238,7 +238,7 @@ test "开启安全模式, at each width and with either hand: its people, the de
     assert_true(t.find("Ana · MacBook") is Some(_), msg=at)
     assert_true(t.find("林 · 此设备") is Some(_), msg=at)
     scrolled_to(t, w, "批准并开启")
-    assert_true(t.find("Studio") is Some(_), msg=at)
+    assert_true(t.find("Willow") is Some(_), msg=at)
     assert_true(t.find("批准并开启") is Some(_), msg=at)
     tap_words(t, "取消")
     t.draw()

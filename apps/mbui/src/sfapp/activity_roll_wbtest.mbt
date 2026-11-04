@@ -5,7 +5,7 @@
 
 ///|
 /// The step the chat-working agent goes on to, as long as the one it was on.
-let next_step : String = "再在 Studio 上把三种宽度下的截图逐张拼成对比图，标出每处和上一版不一样的地方，发到对话里给人看"
+let next_step : String = "再在 Willow 上把三种宽度下的截图逐张拼成对比图，标出每处和上一版不一样的地方，发到对话里给人看"
 
 ///|
 /// The words drawn on the line of `step`'s words that reach past `right` (their words, where they end).

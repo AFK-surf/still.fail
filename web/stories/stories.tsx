@@ -101,7 +101,7 @@ const toVault: Step[] = [{ click: '[aria-label="设置"]' }, { text: "密钥" }]
 /** To the wide screen's station page, at one of its parts (StationPage.tsx). */
 const toStation = (part: "设置" | "软件与设备"): Step[] => [{ click: '[aria-label^="Station"]' }, { click: `[aria-label="显示"] button:has-text("${part}")` }];
 /** To a station's page on the phone (settings › Station › the demo's one). */
-const toPhoneStation: Step[] = [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Studio" }];
+const toPhoneStation: Step[] = [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Willow" }];
 const toPhoneVault: Step[] = [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "密钥" }];
 
 /** Fonts chosen on this device (client/core-ts/src/fonts.ts): each place a face of its own. */
@@ -346,26 +346,26 @@ const devinAccount = (signingIn: boolean): DemoExtension => {
 /** A new chat on a station this workspace joined that has no profile open to it (the core's `blocked: shared`). */
 const notShared: DemoExtension = {
   then: (t, value) => (t.topic === "newChat" && value && typeof value === "object"
-    ? { ...(value as object), blocked: "shared", problem: "Studio 属于 Lab，其 Profile 尚未对此 workspace 开放：在 Profile 页开启「同时用于 Acme」" }
+    ? { ...(value as object), blocked: "shared", problem: "Willow 属于 Lab，其 Profile 尚未对此 workspace 开放：在 Profile 页开启「同时用于 Acme」" }
     : undefined),
 };
-/** The demo's station in Lab too (the core's `memberships`), and, with `joined`, Lab's Mini1 in this workspace. */
+/** The demo's station in Lab too (the core's `memberships`), and, with `joined`, Lab's Cedar in this workspace. */
 const memberships = (joined = false): DemoExtension => ({
   topic: (t) => (t.topic === "memberships" ? MEMBERSHIPS : undefined),
   then: (t, value) => {
     if (!joined || t.topic !== "stations" || !Array.isArray(value)) return undefined;
     const first = value[0] as Record<string, unknown>;
-    return [...value, { ...first, station: "demo/mini1", id: "mini1", name: "Mini1", emoji: undefined, icon: "glyph:dice-1", joined: true, home: "Lab" }];
+    return [...value, { ...first, station: "demo/cedar", id: "cedar", name: "Cedar", emoji: undefined, icon: "glyph:dice-1", joined: true, home: "Lab" }];
   },
 });
-/** Lab's Mini1 joined to this workspace, which it takes none of the members of for a security mode (the core's `blocked`). */
+/** Lab's Cedar joined to this workspace, which it takes none of the members of for a security mode (the core's `blocked`). */
 const blockedJoined: DemoExtension = {
   then: (t, value) => {
     if (t.topic !== "stations" || !Array.isArray(value)) return undefined;
     const first = value[0] as StationView;
     const why = "此 workspace 在此 station 加入后才开启安全模式，它不再接受此 workspace 的成员：请将它从此 workspace 移除后重新添加";
     const { overview: _, host: __, ...rest } = first;
-    return [...value, { ...rest, station: "demo/mini1", id: "mini1", name: "Mini1", emoji: undefined, icon: "glyph:dice-1", joined: true, home: "Lab", online: false,
+    return [...value, { ...rest, station: "demo/cedar", id: "cedar", name: "Cedar", emoji: undefined, icon: "glyph:dice-1", joined: true, home: "Lab", online: false,
       summary: "安全模式未放行", blocked: why, link: { state: "offline", cause: "lock", message: why } }];
   },
 };
@@ -415,7 +415,7 @@ const sharing = (state: "kept" | "new" | "none" | "loading" | "search"): Pick<St
       if (state === "loading") return { ...site, items: [], stations: [], loading: true } satisfies ShareInView;
       if (state === "none") return { ...site, items: [], stations: [], loading: false, note: "还没有能发到的 chat，也没有在线的 station" } satisfies ShareInView;
       if (state === "new") {
-        return { ...v, newOn: "demo/local", stations: [{ station: "demo/local", name: "Studio" }, { station: "demo/mini1", name: "Mini1" }, { station: "demo/mba", name: "MacBook Air" }] } satisfies ShareInView;
+        return { ...v, newOn: "demo/local", stations: [{ station: "demo/local", name: "Willow" }, { station: "demo/cedar", name: "Cedar" }, { station: "demo/mba", name: "MacBook Air" }] } satisfies ShareInView;
       }
       if (state === "search") {
         // Its own chats, then these: those the words find while searching (the demo's own are found already).
@@ -547,7 +547,7 @@ const sentUpdating: DemoExtension = {
     return {
       ...chat,
       outbox: [{ id: "o-updating", text: "更新完把首页的图换成新的", attachments: [], quotes: [], createdAt: at, state: "sending", time: { createdAt: stamp(at) }, waits: "station 正在更新，完成后发送" }],
-      stationUpdate: { tone: "busy", label: "更新中", text: "「Studio」正在更新", station: "Studio", detail: "正在等待 station 重新连接；消息仍在发送，连接恢复后自动继续", from: "0.1.3640", to: "0.1.3650", open: false, canUpdate: false, dismissible: false },
+      stationUpdate: { tone: "busy", label: "更新中", text: "「Willow」正在更新", station: "Willow", detail: "正在等待 station 重新连接；消息仍在发送，连接恢复后自动继续", from: "0.1.3640", to: "0.1.3650", open: false, canUpdate: false, dismissible: false },
     };
   },
 };
@@ -563,27 +563,27 @@ const ANTHROPIC = { id: "anthropic", name: "Anthropic" };
 const OPENAI = { id: "openai", name: "OpenAI" };
 const noop = () => undefined;
 
-/** The sidebar's chats not come yet: still read from Studio (`reading`), or Studio not reachable (`failing`). */
+/** The sidebar's chats not come yet: still read from Willow (`reading`), or Willow not reachable (`failing`). */
 const chatsWaiting = (state: "reading" | "failing"): DemoExtension => ({
   then: (t, value) => (t.topic !== "chats" || !value ? undefined : {
     ...(value as object), days: [],
-    note: state === "reading" ? { reading: true, text: "正在从 Studio 读取对话", failing: [], empty: false }
-      : { reading: false, failing: [{ station: "demo/local", text: "无法连接 Studio", message: "station 离线" }], empty: false },
+    note: state === "reading" ? { reading: true, text: "正在从 Willow 读取对话", failing: [], empty: false }
+      : { reading: false, failing: [{ station: "demo/local", text: "无法连接 Willow", message: "station 离线" }], empty: false },
   }),
 });
-/** Lab's Mini1 in this workspace, not reached: the bell's Station line, its mark by its name (the core's `trouble`);
- * Studio with an emoji, by its name where it is named. */
+/** Lab's Cedar in this workspace, not reached: the bell's Station line, its mark by its name (the core's `trouble`);
+ * Willow with an emoji, by its name where it is named. */
 const stationDown: DemoExtension = together(memberships(true), {
   then: (t, value) => t.topic === "stations" && Array.isArray(value)
     ? value.map((s: Record<string, unknown>) => (s.station === "demo/local" ? { ...s, emoji: "🖥️" } : s))
     : t.topic !== "chats" || !value ? undefined
-    : { ...(value as object), trouble: { text: "无法连接「Mini1」", state: "error", retry: false, station: "demo/mini1" } },
+    : { ...(value as object), trouble: { text: "无法连接「Cedar」", state: "error", retry: false, station: "demo/cedar" } },
 });
 /** What the core is still reading (topics `names`): never answered, their pages waiting. */
 const held = (...names: string[]): DemoExtension => ({ topic: (t) => (names.includes(t.topic) ? HELD : undefined) });
 /** 用量 not come yet: its stations still read. */
 const usageWaiting: DemoExtension = {
-  then: (t, value) => (t.topic !== "usage" || !value ? undefined : { ...(value as object), empty: true, wait: { reading: true, text: "正在从 Studio 读取用量", failing: [], empty: false } }),
+  then: (t, value) => (t.topic !== "usage" || !value ? undefined : { ...(value as object), empty: true, wait: { reading: true, text: "正在从 Willow 读取用量", failing: [], empty: false } }),
 };
 
 /** The admin console as the demo's account, the admin. */
@@ -592,16 +592,16 @@ const adminConsole = () => stage(<Console account={ACCOUNT} />);
 const toRelays: Step[] = [{ click: 'a[href="/relays"]' }];
 /** A part drawn alone on the app's ground, the whole window its room. */
 const stage = (node: ReactNode) => <div style={{ position: "relative", width: "100%", height: "100vh", overflow: "hidden", background: vars.canvas, color: vars.text }}>{node}</div>;
-/** A model control on ccvm with the workspace's models (docs/station-share.md 借用): its own, one borrowed from Studio,
- *  two only Studio has; `picked` one of those, so the panel's foot borrows it (`borrowing`: its dialog up). */
+/** A model control on Birch with the workspace's models (docs/station-share.md 借用): its own, one borrowed from Willow,
+ *  two only Willow has; `picked` one of those, so the panel's foot borrows it (`borrowing`: its dialog up). */
 function borrowPick(picked: boolean): Picking {
   const option = (model: string, name: string, family: string, runtime: "claude" | "codex" | "dsh", more: Partial<ModelOption> = {}): ModelOption =>
     ({ model, name, family, ids: [model], runtimes: [runtime], efforts: { [runtime]: ["low", "medium", "high"] }, accounts: { [runtime]: [] }, ...more }) as ModelOption;
   const options: ModelOption[] = [
     option("claude-opus-5-5", "Opus 5.5", "Opus", "claude", { availability: "here" }),
-    option("kimi-k3", "Kimi K3", "Kimi", "dsh", { availability: "borrowed", fromText: "借自 Studio", fromStation: { name: "Studio", emoji: "🖥️" } }),
-    option("gpt-6-astra", "GPT-6 Astra", "GPT", "codex", { availability: "borrowable", fromText: "在 Mini1 上", fromStation: { name: "Mini1" } }),
-    option("deepseek-v4-pro", "DeepSeek V4 Pro", "DeepSeek", "dsh", { availability: "borrowable", fromText: "在 Studio 上", fromStation: { name: "Studio", emoji: "🖥️" } }),
+    option("kimi-k3", "Kimi K3", "Kimi", "dsh", { availability: "borrowed", fromText: "借自 Willow", fromStation: { name: "Willow", emoji: "🖥️" } }),
+    option("gpt-6-astra", "GPT-6 Astra", "GPT", "codex", { availability: "borrowable", fromText: "在 Cedar 上", fromStation: { name: "Cedar" } }),
+    option("deepseek-v4-pro", "DeepSeek V4 Pro", "DeepSeek", "dsh", { availability: "borrowable", fromText: "在 Willow 上", fromStation: { name: "Willow", emoji: "🖥️" } }),
   ];
   const value = { model: "claude-opus-5-5", runtime: "claude" as const };
   const draft = picked ? { model: "deepseek-v4-pro", runtime: "dsh" as const } : value;
@@ -609,10 +609,10 @@ function borrowPick(picked: boolean): Picking {
     options, runtimeFixed: false, value, valueOption: options[0], draft, option: draft.model, runtimes: [], efforts: ["low", "medium", "high"], accounts: [],
     who: "账号", autoNote: "额度用完或登录失效时自动切换", changed: picked, was: [], becomes: [], modelText: "", accountText: "自动分配", accountNote: "", accountWarn: false, saveText: "",
     ...(picked ? { borrow: {
-      note: "此 station 还不能用 DeepSeek V4 Pro", title: "向 Studio 借用 alex@example.test", action: "借用账号", allowed: true,
+      note: "此 station 还不能用 DeepSeek V4 Pro", title: "向 Willow 借用 alex@example.test", action: "借用账号", allowed: true,
       lines: [
-        "此 station 尚无可运行 DeepSeek V4 Pro 的账号。借用后，Studio 会把 Profile「alex@example.test」分享给此 station，此 station 上的对话可以用它运行。",
-        "此 station 会保存一份副本，Studio 离线时仍可使用。",
+        "此 station 尚无可运行 DeepSeek V4 Pro 的账号。借用后，Willow 会把 Profile「alex@example.test」分享给此 station，此 station 上的对话可以用它运行。",
+        "此 station 会保存一份副本，Willow 离线时仍可使用。",
         "不同 station 的环境可能不同（已安装的运行时和工具、网络、文件），借用前请确认此 station 能正常使用这个账号。",
       ],
     } } : {}),
@@ -655,7 +655,7 @@ function ChoicesDemo() {
  * that failed, one named by its path, a folder named by its path, pasted words, a folder of the station going as a zip,
  * a link shared in (with its title, and without), a picture. */
 function ComposerCards() {
-  const ref = (path: string, dir = false, mode: "path" | "file" = "path") => ({ station: "demo/studio", stationName: "Studio", path, dir, mode });
+  const ref = (path: string, dir = false, mode: "path" | "file" = "path") => ({ station: "demo/willow", stationName: "Willow", path, dir, mode });
   const files: Pending[] = [
     { id: "1", name: "合同-2026Q4.pdf", size: 1_468_006, done: { name: "合同-2026Q4.pdf", path: "/u/a.pdf", size: 1_468_006 }, error: null },
     { id: "2", name: "export-1013.csv", size: 22_528_000, sent: 9_000_000, done: null, error: null },
@@ -756,14 +756,14 @@ export const stories: Story[] = [
     id: "control-fields", group: "基础控件", title: "输入框",
     render: () => sheet([
       ["单行", <div style={{ display: "grid", gap: 12, width: 360 }}>
-        <Field label="名字" hint="会显示在侧栏和对话里"><input className={controlsCss.input} defaultValue="Studio" /></Field>
+        <Field label="名字" hint="会显示在侧栏和对话里"><input className={controlsCss.input} defaultValue="Willow" /></Field>
         <Field label="地址" error="这个地址打不开"><input className={controlsCss.input} defaultValue="http://127.0.0.1:3000" /></Field>
         <Field label="空的"><input className={controlsCss.input} placeholder="还没填" /></Field>
       </div>],
       ["多行", <div style={{ width: 420 }}><Field label="说明"><textarea className={controlsCss.input} rows={3} defaultValue={"归档建议：\n超过 7 天没有新消息、也没有在跑的任务"} /></Field></div>],
     ]),
   },
-  { id: "control-fields-focus", group: "基础控件", title: "输入框 · 聚焦", render: () => sheet([["单行", <div style={{ width: 360 }}><Field label="名字"><input className={controlsCss.input} defaultValue="Studio" /></Field></div>]]), steps: [{ click: "input" }] },
+  { id: "control-fields-focus", group: "基础控件", title: "输入框 · 聚焦", render: () => sheet([["单行", <div style={{ width: 360 }}><Field label="名字"><input className={controlsCss.input} defaultValue="Willow" /></Field></div>]]), steps: [{ click: "input" }] },
   { id: "control-segmented", group: "基础控件", title: "分段控件", render: () => sheet([["两项", <SegmentedDemo n={2} />], ["三项", <SegmentedDemo n={3} />]]) },
   { id: "control-choices", group: "基础控件", title: "选项卡片", render: () => sheet([["单选", <ChoicesDemo />]]) },
   {
@@ -791,7 +791,7 @@ export const stories: Story[] = [
       ["列表第一次读取", <div style={{ width: 420 }}><Waiting text="正在读取会话" sample={<ChatRowsSample lead="agents" />} /></div>],
       ["设置页第一次读取", <div style={{ width: 420 }}><Waiting sample={<PriceTables view={SAMPLE_USAGE} />} /></div>],
       ["一节内容", <WaitLine text="正在读取配置" />],
-      ["胶囊", <><WaitPill text="正在连接 Studio" /><WaitPill text="无法连接 MBA" error /></>],
+      ["胶囊", <><WaitPill text="正在连接 Willow" /><WaitPill text="无法连接 MBA" error /></>],
       ["进度", <div style={{ display: "grid", gap: 12, width: 240 }}><Progress part={0.4} /><Progress part={null} /></div>],
       ["空", <div style={{ width: 420 }}><Empty>还没有对话</Empty></div>],
       ["命令", <div style={{ width: 520 }}><CopyCommand text="curl -fsSL https://still.fail/install.sh | sh" /></div>],
@@ -804,7 +804,7 @@ export const stories: Story[] = [
         <PanelHead title="自定义侧边条" note="拖动换位置，点 − 拿掉" />
         <PanelGroup label="对话列表"><PanelRow icon={<Folder size={18} />} label="文件" end={<Plus size={16} />} onClick={noop} /><PanelRow icon={<Archive size={18} />} label="已归档" end={<Plus size={16} />} onClick={noop} /></PanelGroup>
       </>)],
-      ["卡片", panel(<><PanelText><b>Studio</b> 有新版本</PanelText><PanelText>更新时会重启 station，正在跑的 agent 会接着跑。</PanelText></>, true)],
+      ["卡片", panel(<><PanelText><b>Willow</b> 有新版本</PanelText><PanelText>更新时会重启 station，正在跑的 agent 会接着跑。</PanelText></>, true)],
     ]),
   },
 
@@ -901,22 +901,22 @@ export const stories: Story[] = [
   { id: "app-files-tree", group: "应用", title: "文件 · 文件树", app: true, steps: [{ click: '[aria-label="文件"]' }, { text: "主目录" }, { click: '[aria-label="文件树"]' }, { text: "code" }, { key: "ArrowRight" }, { key: "ArrowRight" }, { key: "ArrowRight" }, { key: "ArrowRight" }, { key: "ArrowDown" }, { key: "ArrowRight" }] },
   { id: "app-files-list", group: "应用", title: "文件 · 列表", app: true, steps: [{ click: '[aria-label="文件"]' }, { text: "主目录" }, { click: '[aria-label="列表"]' }] },
   { id: "app-files-row-menu", group: "应用", title: "文件 · 文件夹右键", app: true, steps: [{ click: '[aria-label="文件"]' }, { text: "主目录" }, { rightClick: "button:has-text(\"Movies\")" }] },
-  { id: "app-files-stations", group: "应用", title: "文件 · 两台 station", app: true, demo: filesDemo(), steps: [{ click: '[aria-label="文件"]' }, { text: "Studio" }, { click: '[aria-label="展开 MBA"]' }] },
-  { id: "app-files-tabs", group: "应用", title: "文件 · 多标签", app: true, demo: filesDemo(), steps: [{ click: '[aria-label="文件"]' }, { text: "Studio" }, { click: '[aria-label="新标签"]' }, { text: "MBA" }] },
-  { id: "app-files-split", group: "应用", title: "文件 · 左右分栏", app: true, demo: filesDemo(), steps: [{ click: '[aria-label="文件"]' }, { text: "Studio" }, { text: "Downloads" }, { click: '[aria-label="左右分栏"]' }, { text: "MBA" }, { text: "项目" }] },
-  { id: "app-files-transfers", group: "应用", title: "文件 · 传输", app: true, demo: filesDemo(TRANSFERS), steps: [{ click: '[aria-label="文件"]' }, { text: "Studio" }, { click: 'button:has-text("个传输")' }] },
+  { id: "app-files-stations", group: "应用", title: "文件 · 两台 station", app: true, demo: filesDemo(), steps: [{ click: '[aria-label="文件"]' }, { text: "Willow" }, { click: '[aria-label="展开 MBA"]' }] },
+  { id: "app-files-tabs", group: "应用", title: "文件 · 多标签", app: true, demo: filesDemo(), steps: [{ click: '[aria-label="文件"]' }, { text: "Willow" }, { click: '[aria-label="新标签"]' }, { text: "MBA" }] },
+  { id: "app-files-split", group: "应用", title: "文件 · 左右分栏", app: true, demo: filesDemo(), steps: [{ click: '[aria-label="文件"]' }, { text: "Willow" }, { text: "Downloads" }, { click: '[aria-label="左右分栏"]' }, { text: "MBA" }, { text: "项目" }] },
+  { id: "app-files-transfers", group: "应用", title: "文件 · 传输", app: true, demo: filesDemo(TRANSFERS), steps: [{ click: '[aria-label="文件"]' }, { text: "Willow" }, { click: 'button:has-text("个传输")' }] },
   { id: "app-chat-files", group: "应用", title: "对话 · Station 文件", app: true, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=Station 文件" }] },
   { id: "app-chat-files-folder", group: "应用", title: "对话 · Station 文件 · 文件夹", app: true, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=Station 文件" }, { text: "Downloads" }] },
   { id: "app-chat-files-tree", group: "应用", title: "对话 · Station 文件 · 文件树", app: true, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=Station 文件" }, { click: '[aria-label="文件树"]' }, { text: "code" }, { key: "ArrowRight" }, { key: "ArrowRight" }, { key: "ArrowRight" }] },
   { id: "app-chat-files-menu", group: "应用", title: "对话 · Station 文件 · 右键", app: true, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=Station 文件" }, { text: "Downloads" }, { rightClick: "button:has-text(\"login-375.png\")" }] },
   { id: "app-chat-files-added", group: "应用", title: "对话 · Station 文件 · 发路径", app: true, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=Station 文件" }, { text: "Downloads" }, { rightClick: "button:has-text(\"发版录屏 1014.mp4\")" }, { text: "添加到消息" }] },
-  { id: "app-chat-files-card", group: "应用", title: "对话 · 文件卡片悬停", app: true, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=Station 文件" }, { text: "Downloads" }, { rightClick: "button:has-text(\"发版录屏 1014.mp4\")" }, { text: "添加到消息" }, { hover: "text=Studio · 路径" }] },
+  { id: "app-chat-files-card", group: "应用", title: "对话 · 文件卡片悬停", app: true, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=Station 文件" }, { text: "Downloads" }, { rightClick: "button:has-text(\"发版录屏 1014.mp4\")" }, { text: "添加到消息" }, { hover: "text=Willow · 路径" }] },
   { id: "app-station", group: "应用", title: "station", app: true, steps: [{ click: '[aria-label^="Station"]' }] },
-  { id: "app-station-mark", group: "应用", title: "station · 选图标", app: true, steps: [{ click: '[aria-label^="Station"]' }, { click: '[aria-label^="为 Studio 选择图标"]' }] },
+  { id: "app-station-mark", group: "应用", title: "station · 选图标", app: true, steps: [{ click: '[aria-label^="Station"]' }, { click: '[aria-label^="为 Willow 选择图标"]' }] },
   { id: "app-station-workspaces", group: "应用", title: "station · 在几个 workspace 里", app: true, demo: memberships(), steps: toStation("设置") },
-  { id: "app-station-joined", group: "应用", title: "station · 从别的 workspace 加入的", app: true, demo: memberships(true), steps: [{ click: '[aria-label^="Station"]' }, { text: "Mini1" }] },
-  { id: "app-station-blocked", group: "应用", title: "station · 安全模式未放行", app: true, demo: blockedJoined, steps: [{ click: '[aria-label^="Station"]' }, { text: "Mini1" }] },
-  { id: "phone-station-blocked", group: "应用", title: "手机 · station · 安全模式未放行", app: true, phone: true, demo: blockedJoined, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Mini1" }] },
+  { id: "app-station-joined", group: "应用", title: "station · 从别的 workspace 加入的", app: true, demo: memberships(true), steps: [{ click: '[aria-label^="Station"]' }, { text: "Cedar" }] },
+  { id: "app-station-blocked", group: "应用", title: "station · 安全模式未放行", app: true, demo: blockedJoined, steps: [{ click: '[aria-label^="Station"]' }, { text: "Cedar" }] },
+  { id: "phone-station-blocked", group: "应用", title: "手机 · station · 安全模式未放行", app: true, phone: true, demo: blockedJoined, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Cedar" }] },
   { id: "app-station-add-existing", group: "应用", title: "添加 station · 已有的", app: true, demo: joining("list"), steps: [{ click: '[aria-label^="Station"]' }, { text: "添加 station" }, { text: "已有的 station" }] },
   { id: "app-first-station-existing", group: "应用", title: "第一台 station · 也可加已有的", app: true, demo: firstJoining },
   { id: "app-first-station-existing-open", group: "应用", title: "第一台 station · 选已有的", app: true, demo: firstJoining, steps: [{ text: "添加其他 workspace 的 station" }] },
@@ -978,10 +978,10 @@ export const stories: Story[] = [
   { id: "app-waiting-failing", group: "等待", title: "侧栏 · station 无法连接", app: true, demo: chatsWaiting("failing") },
   { id: "app-waiting-usage", group: "等待", title: "设置页 · 正在读取用量", app: true, demo: usageWaiting, steps: [{ click: '[aria-label="用量"]' }] },
   { id: "app-waiting-chat", group: "等待", title: "对话 · 正在读取消息", app: true, demo: held("chat") },
-  { id: "app-waiting-memory", group: "等待", title: "设置页 · 正在读取记忆", app: true, demo: held("memory"), steps: [{ click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }] },
+  { id: "app-waiting-memory", group: "等待", title: "设置页 · 正在读取记忆", app: true, demo: held("memory"), steps: [{ click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Willow" }] },
   { id: "phone-waiting-chats", group: "等待", title: "手机 · 首页 · 正在读取对话", app: true, phone: true, demo: chatsWaiting("reading"), steps: [{ click: '[aria-label="返回"]' }] },
   { id: "phone-waiting-chat", group: "等待", title: "手机 · 对话 · 正在读取消息", app: true, phone: true, demo: held("chat") },
-  { id: "phone-waiting-memory", group: "等待", title: "手机 · 记忆 · 正在读取", app: true, phone: true, demo: held("memory"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }] },
+  { id: "phone-waiting-memory", group: "等待", title: "手机 · 记忆 · 正在读取", app: true, phone: true, demo: held("memory"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Willow" }] },
   { id: "phone-waiting-stations", group: "等待", title: "手机 · Station · 正在读取", app: true, phone: true, demo: held("stations"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }] },
   { id: "app-waiting-stations", group: "等待", title: "设置页 · Station · 正在读取", app: true, demo: held("stations"), steps: [{ click: '[aria-label="设置"]' }, { text: "Station" }] },
   { id: "app-waiting-devices", group: "等待", title: "设置页 · 账号 · 正在读取已登录设备", app: true, demo: held("loginSessions"), steps: [{ click: '[aria-label="设置"]' }] },
@@ -1086,9 +1086,9 @@ export const stories: Story[] = [
   { id: "settings-archive", group: "设置", title: "归档", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "归档" }] },
   { id: "settings-decisions", group: "设置", title: "自动决策", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "自动决策" }] },
   { id: "settings-memory", group: "设置", title: "记忆", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "记忆" }] },
-  { id: "settings-memory-station", group: "设置", title: "记忆 · Studio", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }] },
-  { id: "settings-memory-skill", group: "设置", title: "记忆 · 项目", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }, { text: "acme-web" }] },
-  { id: "settings-memory-global", group: "设置", title: "记忆 · 全局", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }, { text: "合并" }] },
+  { id: "settings-memory-station", group: "设置", title: "记忆 · Willow", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Willow" }] },
+  { id: "settings-memory-skill", group: "设置", title: "记忆 · 项目", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Willow" }, { text: "acme-web" }] },
+  { id: "settings-memory-global", group: "设置", title: "记忆 · 全局", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Willow" }, { text: "合并" }] },
   { id: "settings-workspace", group: "设置", title: "Workspace", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "Acme" }] },
   { id: "settings-workspace-member", group: "设置", title: "Workspace · 成员的角色和移出", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "Acme" }, { text: "陈默" }] },
   { id: "phone-workspace", group: "设置", title: "手机 · Workspace", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Acme" }] },
@@ -1183,7 +1183,7 @@ export const stories: Story[] = [
   { id: "panel-chat-menu", group: "小面板", title: "对话右键菜单", app: true, steps: [{ rightClick: "a:has-text(\"订单导出支持 CSV\")" }] },
   { id: "panel-file-card", group: "小面板", title: "消息里的文件卡片", app: true, peek: "file", steps: [{ move: [1, 1] }, { hover: 'button[class*="fileChip"]' }] },
   { id: "panel-file-card-missing", group: "小面板", title: "消息里的文件卡片 · 找不到", app: true, peek: "missing", steps: [{ move: [1, 1] }, { hover: 'button[class*="fileChip"]' }] },
-  { id: "panel-station-card", group: "小面板", title: "station 卡片", app: true, steps: [{ move: [1, 1] }, { hover: "header >> text=/Studio|这台机器/" }] },
+  { id: "panel-station-card", group: "小面板", title: "station 卡片", app: true, steps: [{ move: [1, 1] }, { hover: "header >> text=/Willow|这台机器/" }] },
   { id: "panel-switcher", group: "小面板", title: "⌘K", app: true, steps: [{ click: "textarea" }, { key: "ControlOrMeta+k" }] },
   { id: "panel-switcher-relay", group: "小面板", title: "⌘K · 接力到频道", app: true, demo: relayDemo(), steps: [{ click: "textarea" }, { key: "ControlOrMeta+k" }, { key: "r" }, { key: "e" }, { key: "l" }, { key: "a" }] },
   { id: "panel-switcher-search", group: "小面板", title: "⌘K · 搜索", app: true, steps: [{ click: "textarea" }, { key: "ControlOrMeta+k" }, { key: "c" }, { key: "s" }, { key: "v" }] },
@@ -1191,14 +1191,14 @@ export const stories: Story[] = [
   {
     id: "panel-station-update", group: "小面板", title: "station 更新",
     render: () => stage(<div style={{ padding: 24 }}><StationUpdate station="local" notice={{
-      tone: "update", text: "Studio 有新版本", label: "有新版本", station: "Studio", detail: "更新时会重启 station，正在跑的 agent 会接着跑",
+      tone: "update", text: "Willow 有新版本", label: "有新版本", station: "Willow", detail: "更新时会重启 station，正在跑的 agent 会接着跑",
       from: "0.1.2790", to: "0.1.2925", version: "0.1.2925", canUpdate: true, dismissible: true, open: true,
     }} /></div>),
   },
   {
     id: "panel-station-updating", group: "小面板", title: "station 更新 · 进行中",
     render: () => stage(<div style={{ padding: 24 }}><StationUpdate station="local" notice={{
-      tone: "busy", text: "Studio 正在更新", label: "正在更新", station: "Studio", detail: "下载新版本", percent: 42, from: "0.1.2790", to: "0.1.2925", open: true,
+      tone: "busy", text: "Willow 正在更新", label: "正在更新", station: "Willow", detail: "下载新版本", percent: 42, from: "0.1.2790", to: "0.1.2925", open: true,
     }} /></div>),
   },
   {
@@ -1285,7 +1285,7 @@ export const stories: Story[] = [
   { id: "app-chat-simulator-side", group: "屏幕", title: "模拟器在对话侧边", app: true, demo: simulatorLinkDemo, steps: [{ hover: 'a[href*="simulator"]' }, { click: '[aria-label="在侧边打开"]' }] },
   { id: "app-chat-adb-link", group: "屏幕", title: "对话里的共享调试链接", app: true, demo: adbLinksDemo(false) },
   { id: "phone-chat-adb-link", group: "屏幕", title: "手机 · 对话里的共享调试链接（已共享）", app: true, phone: true, demo: adbLinksDemo(true) },
-  { id: "phone-station-screens", group: "屏幕", title: "手机 · station 的屏幕", app: true, phone: true, demo: screensDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Studio" }] },
+  { id: "phone-station-screens", group: "屏幕", title: "手机 · station 的屏幕", app: true, phone: true, demo: screensDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Willow" }] },
   // ── a Mac station's grants to still.fail Helper (docs/remote-screens.md "Grants") ──
   { id: "app-station-permissions", group: "权限", title: "station · 权限 · 都已允许", app: true, demo: permissionsDemo("granted"), steps: toStation("设置") },
   { id: "app-station-permissions-missing", group: "权限", title: "station · 权限 · 缺几项", app: true, demo: permissionsDemo("missing"), steps: toStation("设置") },
@@ -1315,7 +1315,7 @@ export const stories: Story[] = [
   { id: "app-station-agent-env-wrong", group: "设置", title: "station · Agent 环境变量 · 有错的行", app: true, demo: agentEnvDemo("wrong"), steps: toStation("设置") },
   { id: "phone-station-agent-env", group: "设置", title: "手机 · station · Agent 环境变量", app: true, phone: true, demo: agentEnvDemo("set"), steps: toPhoneStation },
   { id: "phone-station-agent-env-edit", group: "设置", title: "手机 · station · Agent 环境变量 · 编辑", app: true, phone: true, demo: agentEnvDemo("wrong"), steps: [...toPhoneStation, { text: "编辑变量" }] },
-  { id: "phone-screen", group: "屏幕", title: "手机 · 打开屏幕", app: true, phone: true, demo: screensDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Studio" }, { text: "登录 · GitHub" }] },
+  { id: "phone-screen", group: "屏幕", title: "手机 · 打开屏幕", app: true, phone: true, demo: screensDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Willow" }, { text: "登录 · GitHub" }] },
 
   // ── the phone ──
   { id: "phone-chat", group: "手机", title: "对话", app: true, phone: true },
@@ -1342,8 +1342,8 @@ export const stories: Story[] = [
   { id: "phone-files", group: "手机", title: "文件", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="文件"]' }] },
   { id: "phone-profile", group: "手机", title: "Profile", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }] },
   { id: "phone-profile-kinds", group: "手机", title: "Profile · 各类账号（分组带标记）", app: true, phone: true, demo: everyKind, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }] },
-  { id: "phone-memory", group: "手机", title: "记忆", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }] },
-  { id: "phone-memory-skill", group: "手机", title: "记忆 · 项目", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }, { text: "acme-web" }] },
+  { id: "phone-memory", group: "手机", title: "记忆", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Willow" }] },
+  { id: "phone-memory-skill", group: "手机", title: "记忆 · 项目", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Willow" }, { text: "acme-web" }] },
   { id: "phone-profile-add-install", group: "手机", title: "添加 Profile · SuperGrok · 先安装 Grok Build", app: true, phone: true, demo: installFlowDemo("missing"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { click: '[aria-label="添加 Profile"]' }] },
   { id: "phone-profile-workspaces", group: "手机", title: "Profile · 也给加入的 workspace 用", app: true, phone: true, demo: profileFor(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-opencode-signing-in", group: "手机", title: "Profile · OpenCode Go 重新登录（设备码）", app: true, phone: true, demo: openCode(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
@@ -1363,7 +1363,7 @@ export const stories: Story[] = [
   { id: "phone-station-add-existing", group: "手机", title: "添加 station · 已有的", app: true, phone: true, demo: joining("list"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }] },
   { id: "phone-station-add-existing-done", group: "手机", title: "添加 station · 已加入", app: true, phone: true, demo: joining("list"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }, { text: "添加到此 workspace" }] },
   { id: "phone-station-add-existing-error", group: "手机", title: "添加 station · 加入失败", app: true, phone: true, demo: joining("error"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }, { text: "添加到此 workspace" }] },
-  { id: "phone-station-workspaces", group: "手机", title: "station · 在几个 workspace 里", app: true, phone: true, demo: memberships(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Studio" }] },
+  { id: "phone-station-workspaces", group: "手机", title: "station · 在几个 workspace 里", app: true, phone: true, demo: memberships(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Willow" }] },
   // The admin console (admin.still.fail), its sidebar beside the page: from the overview to 中继.
   { id: "admin-relays", group: "管理后台", title: "中继 · 24 小时", render: adminConsole, demo: relaysDemo("normal"), steps: toRelays },
   { id: "admin-relays-week", group: "管理后台", title: "中继 · 7 天", render: adminConsole, demo: relaysDemo("normal"), steps: [...toRelays, { text: "7 天" }] },

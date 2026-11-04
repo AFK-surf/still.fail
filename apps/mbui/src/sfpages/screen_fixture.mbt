@@ -412,11 +412,11 @@ fn screen_fix_one_password() -> Unit {
     if args.length() >= 2 && args[0] == "item" && args[1] == "list" {
       (
         0,
-        "[{\"id\":\"gh1\",\"title\":\"GitHub\",\"additional_information\":\"zzj\",\"urls\":[{\"href\":\"https://github.com/login\"}]},{\"id\":\"gh2\",\"title\":\"GitHub 工作\",\"additional_information\":\"zzj-work\",\"urls\":[{\"href\":\"github.com\"}]},{\"id\":\"gl\",\"title\":\"GitLab\",\"urls\":[{\"href\":\"https://gitlab.com\"}]}]",
+        "[{\"id\":\"gh1\",\"title\":\"GitHub\",\"additional_information\":\"demo-user\",\"urls\":[{\"href\":\"https://github.com/login\"}]},{\"id\":\"gh2\",\"title\":\"GitHub 工作\",\"additional_information\":\"demo-work\",\"urls\":[{\"href\":\"github.com\"}]},{\"id\":\"gl\",\"title\":\"GitLab\",\"urls\":[{\"href\":\"https://gitlab.com\"}]}]",
         "",
       )
     } else if args.length() >= 3 && args[0] == "item" && args[1] == "get" {
-      let who = if args[2] == "gh1" { "zzj" } else { "zzj-work" }
+      let who = if args[2] == "gh1" { "demo-user" } else { "demo-work" }
       (0, "[{\"id\":\"username\",\"label\":\"username\",\"value\":\"\{who}\"},{\"id\":\"password\",\"label\":\"password\",\"purpose\":\"PASSWORD\",\"value\":\"pw-\{who}\"}]", "")
     } else {
       (1, "", "unknown command")

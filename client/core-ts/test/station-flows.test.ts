@@ -1162,7 +1162,7 @@ test("a_thread_its_station_tells_the_summary_of_is_not_read_again", async () => 
 });
 
 test("a_station_that_leaves_its_rows_to_the_device_has_them_made_here_from_what_it_tells", async () => {
-  // Made by the station, each change read every row it could touch again for every viewer: 3 to 5 s each on ccvm short of
+  // Made by the station, each change read every row it could touch again for every viewer: 3 to 5 s each on a station short of
   // memory (2026-11-03). Told what they are made of, the device makes them; what only the station can say is read.
   const agent = { key: "k1", runtime: "claude", model: null, effort: null, process: "cold", pending: 0, lastTurn: null };
   const row = { id: "k1", session: "k1", thread: 7, title: "部署", agents: [agent], last: null, unread: false, mine: false, lastActiveAt: 1, people: [], archiveRecommended: false, pinned: null };
@@ -1212,7 +1212,7 @@ test("a_station_that_leaves_its_rows_to_the_device_has_them_made_here_from_what_
 });
 
 test("a_station_that_keeps_marks_has_its_sidebar_made_here_from_the_summaries_held", async () => {
-  // The station made every row again for every viewer at every change, 3 to 10 s each on ccvm (2026-11-03): made here
+  // The station made every row again for every viewer at every change, 3 to 10 s each on a station (2026-11-03): made here
   // from the sessions' and threads' summaries and what the station keeps beside them, it reads none of its rows.
   const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [] };
   const answers: J = { ...base(), "GET /chats?marks=1": marks, "GET /sessions": [{ ...session("k1"), creator: { id: "a@x.com", name: "A", email: "a@x.com", via: "cloud" } }] };
@@ -1442,7 +1442,7 @@ test("session_events_update_in_place", async () => {
   core.close();
 });
 
-// On ccvm (2026-11-03) a session's detail with its 3,685 turns took 25 s to read, again after each turn: the device
+// On a station (2026-11-03) a session's detail with its many turns took 25 s to read, again after each turn: the device
 // read them all to add up how long they ran.
 test("a station that counts a sessions turns has its detail read once, without them, and its work said from the summary", async () => {
   const turn = { id: "t9", kind: "chat", outcome: null, declared: null, detail: null, startedAt: 90 * 60_000, endedAt: null };
@@ -1791,7 +1791,7 @@ test("what_the_agents_spent_is_read_only_while_a_page_shows_it", async () => {
 
 test("what_the_agents_spent_is_read_again_from_the_day_a_change_touched", async () => {
   // Read whole at every change while a page showed it: some 200 KB a minute while agents worked, 2 to 23 s of the
-  // station's time a read on ccvm (2026-11-02).
+  // station's time a read on a station (2026-11-02).
   const { host, core, push } = await started();
   const now = host.nowMs();
   const offset = host.utcOffsetMin(now);
@@ -1827,7 +1827,7 @@ test("what_the_agents_spent_is_read_again_from_the_day_a_change_touched", async 
   core.close();
 });
 
-// On ccvm (2026-11-03) the whole archive was made at once: 1,398 chats in 60 s, every other read of devices waiting.
+// On a station (2026-11-03) the whole archive was made at once: many chats in 60 s, every other read of devices waiting.
 test("the archive is read a page at a time, each on from where the one before ended, all of it held at its end", async () => {
   const row = (id: string, at: number) => ({ id, session: id, thread: null, title: id, last: null, lastActiveAt: at, archived: { at, by: "manual", alone: false } });
   const s = await ui({

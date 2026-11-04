@@ -17,7 +17,7 @@ const attrs = (r: ReturnType<typeof record>) => Object.fromEntries(r.attributes.
 test("what leaves has no home, email, key or quoted text", () => {
   assert.equal(scrubText("open /Users/alice/.stillfail/run/x.json", HOME), "open ~/.stillfail/run/x.json");
   assert.equal(scrubText("client connected by bob@example.com", HOME), "client connected by <email>");
-  assert.equal(scrubText("profile zzj3720-gmail-com crashed", HOME), "profile <email> crashed");
+  assert.equal(scrubText("profile alice-example-com crashed", HOME), "profile <email> crashed");
   assert.equal(scrubText("token sk-ant-api03-abcdefghijklmnopqrstuv refused", HOME), "token <secret> refused");
   assert.equal(scrubText("bearer eyJhbGciOiJFZERTQSJ9.eyJzdWIiOiJhbGljZSJ9.c2ln", HOME), "bearer <secret>");
   assert.equal(scrubText(`Unexpected token, "my secret plan" is not valid JSON`, HOME), `Unexpected token, "…" is not valid JSON`);
@@ -30,7 +30,7 @@ test("fields people wrote are not sent; a workspace goes by its id, not its name
   assert.equal(r.severityText, "WARN");
   assert.equal(r.severityNumber, 13);
   assert.deepEqual(attrs(r), { "log.target": "share", "log.text": "…", "log.name": "…", "log.workspace": "…", "log.peer": "c3ba7d15c23f", "log.ms": "12", "log.error": "at ~/x" });
-  assert.equal(attrs(record(line("x", { workspace: "01M3DB2N6P5SY7PJ7RG1F62TRX" }), HOME))["log.workspace"], "01M3DB2N6P5SY7PJ7RG1F62TRX");
+  assert.equal(attrs(record(line("x", { workspace: "01H00000000000000000000000" }), HOME))["log.workspace"], "01H00000000000000000000000");
   // Within an object too, its keys kept.
   assert.equal(attrs(record(line("x", { by: { email: "a@b.co", n: 1 } }), HOME))["log.by"], JSON.stringify({ email: "<email>", n: 1 }));
 });

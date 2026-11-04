@@ -149,7 +149,7 @@ export function protectedTop(path: string, home = homedir(), mounts = platform.m
 /// null for any other path. The drive reaches the first through the helper; a directory the station is to work in
 /// (ops/places.ts) is never looked at by the station's own thread in any of them. A disk is one by where it is mounted
 /// (`mounts`, the platform's), not by its path's name alone: opening one mounted elsewhere waits on macOS asking the
-/// person as one in /Volumes does (2026-11-02, Studio's ~/OrbStack held the station for good).
+/// person as one in /Volumes does.
 export function protectedPlace(path: string, home = homedir(), mounts = platform.mounts()): { top: string; helper: boolean } | null {
   const lower = path.toLowerCase();
   const under = (top: string) => lower === top.toLowerCase() || lower.startsWith(`${top.toLowerCase()}/`);

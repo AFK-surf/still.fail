@@ -24,8 +24,7 @@ const FOLLOW_AGAIN = 5_000;
 /// How long after a device could not be looked at it is looked at again (adb has an emulator long before it has booted).
 const LOOK_AGAIN = 3_000;
 /// How long adb's devices are followed after the screens were last asked for, none of them there: followed from the
-/// station's start, adb's server and `track-devices` ran for good on machines no phone is ever put on (ccvm, a virtual
-/// machine, 2026-11-04). One there keeps them followed.
+/// station's start, adb's server and `track-devices` ran even on machines without a device. One there keeps them followed.
 const FOLLOWED_FOR = 10 * 60_000;
 /// Encoded frames kept for a view that asks slowly: past this they are dropped up to a new key frame (a delta dropped
 /// alone would break every frame after it).

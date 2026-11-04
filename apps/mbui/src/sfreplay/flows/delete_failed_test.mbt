@@ -7,7 +7,7 @@ test "13-delete-failed" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("delete-failed"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
-    f.see("=studio")
+    f.see("=willow")
     f.tap("发消息")
     f.type_text("这条没发出去就删掉 082947")
     // (the station out of reach as it goes, before the app knows it: a live run's step beside the app; once it knows,

@@ -17,7 +17,7 @@ fn completion_over(
       let got = (base.topic)(name, params)
       match name {
         "decisionForm" => { value: form.get(), error: None, version: 1 }
-        // (Studio offline where `offline` says so; `more` stations offline after the workspace's own: a page longer
+        // (Willow offline where `offline` says so; `more` stations offline after the workspace's own: a page longer
         // than the window)
         "stations" =>
           match got.value {

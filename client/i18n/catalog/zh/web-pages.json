@@ -859,7 +859,7 @@
   "web-pages.settings.stations.lead": "每台 station 是一台运行 {name} 的机器，其连接、会话和 Profile 都位于该机器上",
   "web-pages.settings.stations.nameFirst": "为此机器命名",
   "web-pages.settings.stations.nameLabel": "名称",
-  "web-pages.settings.stations.namePlaceholder": "例如 studio、mac-mini",
+  "web-pages.settings.stations.namePlaceholder": "例如 willow、cedar",
   "web-pages.settings.stations.namePrompt": "station 名称",
   "web-pages.settings.stations.noneYet": "此 workspace 暂无 station，需由管理员添加",
   "web-pages.settings.stations.remove": "从 workspace 移除",

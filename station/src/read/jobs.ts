@@ -93,11 +93,11 @@ export function rustLines(text: string): string[] {
 /// with the chat it is in as the viewer's list has it (`chat`: its id, title and whether it is archived). Those of the
 /// viewer's workspace's chats. The jobs up by the index of their states, and the chats of their sessions alone: read
 /// with every job the station ever ran, the whole sidebar and (for a session whose own chat is not listed) the whole
-/// archive, a read took 56 s on ccvm short of memory (2026-11-02), as every device read the station again.
+/// archive, this could hold up every device reading the station again.
 /// `chats`: each with the chat it is in; without (a device that names it from the sidebar it holds), the jobs alone: the
-/// sidebar's items made for it held a device reader up to 17 s on ccvm short of memory (2026-11-03).
+/// sidebar's items do not need to be read for it.
 export function openJobs(s: Store, viewer: Viewer, lang: Lang, named = true): Json[] {
-  // What a slow one spent where: 4 to 13 s on ccvm (2026-11-03), unsaid whether with the chats.
+  // Record what a slow read spent at each stage, including whether it included chats.
   const started = performance.now();
   const slow = (stage: Record<string, unknown>) => {
     const ms = Math.round(performance.now() - started);

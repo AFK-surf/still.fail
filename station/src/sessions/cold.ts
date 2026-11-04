@@ -19,9 +19,7 @@ import { measureRoom, roomOf, roomOfSoon, safeToRemove, within } from "./footpri
 import type { ColdStorage, Hub } from "./hub.ts";
 
 /// Links followed, never into a folder macOS protects (a session continued there, a job's directory: ops/places.ts).
-/// Each path's kept a minute: followed a folder at a time on the station's thread for every session and job in use, at
-/// each look as a session is packed, 33 of them held the station 2.4 s on ccvm short of memory (2026-11-03); kept a
-/// minute, they were followed again at each round of archiving (39 of them, 1.7 s held), a round some minutes apart.
+/// Each path is kept for 15 minutes so repeated archive rounds do not follow the same folders on the station's thread.
 const followed = new Map<string, { at: number; real: string | null }>();
 const FOLLOWED_MS = 15 * 60_000;
 const canonical = (path: string): string | null => {
@@ -177,7 +175,7 @@ export class ColdRooms implements ColdStorage {
   }
 
   /// Whether an archived session's directory holds more than its chat's files. Asked of every archived session in turn
-  /// (lifecycle.ts expireArchived, relieveArchived): its paths followed off the main thread, where on ccvm short of
+  /// (lifecycle.ts expireArchived, relieveArchived): its paths followed off the main thread, where on a station short of
   /// memory (2026-11-02) they held every device for seconds at a time, 47 s in six hours.
   async holdsMore(key: string): Promise<boolean> {
     const row = this.hub().store.getSession(key);
@@ -203,8 +201,7 @@ export class ColdRooms implements ColdStorage {
   }
 
   /// What still runs in an archived session's workspace, its agent's and its jobs' processes gone: what they left
-  /// behind running on its own (an adb server its `adb` started, a daemon), stopped. 13 adb servers ran on ccvm in
-  /// workspaces long archived and removed (2026-11-04).
+  /// behind running on its own (an adb server its `adb` started, a daemon), stopped even after the workspace is removed.
   private async stopStrays(key: string, workspace: string): Promise<void> {
     if (platform.os === "windows") return;
     let pids: number[];
@@ -243,7 +240,7 @@ export class ColdRooms implements ColdStorage {
   }
 
   /// What the Rust station's archiving left (2026-09 and early 10): each archived session's transcript copied into
-  /// `archive/transcripts/`, its own left as it was, so both were on the disk (1.4 GB on ccvm). Each such session's
+  /// `archive/transcripts/`, its own left as it was, so both were on the disk (1.4 GB on a station). Each such session's
   /// transcripts are packed now as archiving packs them, and the copy let go; nothing makes copies any more, so this
   /// comes to an end. Its workspace is left as it is: only the transcripts are touched. A copy whose session is back
   /// in the lists or at work stays until its session is archived again.
@@ -281,7 +278,7 @@ export class ColdRooms implements ColdStorage {
   /// (150 MB for one): put away again in segments, one after another. Once every one is, said so on disk (SEGMENTED),
   /// and none looked for again: each station start went through every archived session's
   /// transcripts again, finding them on the station's thread (a Codex one by its sessions' tree), 1.2 s held at a time
-  /// on ccvm short of memory (2026-11-03), every 10 min that evening.
+  /// on a station short of memory (2026-11-03), every 10 min that evening.
   async segmentHistories(): Promise<void> {
     const said = join(this.dataDir(), SEGMENTED);
     if (await access(said).then(() => true, () => false)) return;

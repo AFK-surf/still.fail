@@ -2,7 +2,7 @@
 // only the days a change touched: the station says when the earliest call it recorded was made (its `usage` event's
 // `from`), and those days alone are read (GET /usage from that day, without the history). Read whole at every change
 // while a page showed it, it was some 200 KB a minute while agents worked, and 2 to 23 s of the station's time a read on
-// ccvm (2026-11-02), every other read of its devices' waiting behind it.
+// a station (2026-11-02), every other read of its devices' waiting behind it.
 import { get, isObject } from "../util.ts";
 
 type J = Record<string, unknown>;

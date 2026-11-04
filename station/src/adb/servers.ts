@@ -32,7 +32,7 @@ export class GrantServers {
   readonly #servers = new Map<string, Promise<Server | null>>();
   /// Where the servers started are written down (null: nowhere, as in tests), for the next station process to stop what
   /// this one left: they are this process's children, and one that ends without stopping them (killed, a handover that
-  /// did not finish) left them running, 14 of them on ccvm over 5 days (2026-11-04).
+  /// did not finish) can leave them running.
   readonly #record: string | null;
   readonly #kept = new Map<number, Kept>();
 

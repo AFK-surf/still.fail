@@ -185,7 +185,7 @@ export async function attach(hub: Hub, key: string, paths: string[], into: strin
   const dir = join(target.workspace, "uploads");
   mkdirSync(dir, { recursive: true });
   // Copied off the station's thread: a large file, or one read back from disk on a machine short of memory, held it
-  // for up to 10 seconds a post (ccvm, 2026-10-28).
+  // for up to 10 seconds a post (a station, 2026-10-28).
   const out: Attachment[] = [];
   for (const given of paths) {
     const path = isAbsolute(given) ? given : join(row.workspace, given);

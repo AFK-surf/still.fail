@@ -35,7 +35,7 @@ fn native_chat(
 ) -> @ui.Tester {
   new_run()
   let src = fixture(mode)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~, window_corner=corner, window_corners?=corners, nav_able=able)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":\{side}}}")
   t.run_for(@ui.move_most_ms)
@@ -581,7 +581,7 @@ test "an iPhone Duo: the chat's info chosen in the system's column opens its pop
 ///|
 test "Duo side panel switch closes all tabs even when a job is in front of its history" {
   let t = native_chat(951.0, 669.0, true, side=84.0, mode="chat-tabs-side")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   assert_eq(side_now(r), (["s-c1", "jobs"], "jobs"))
   assert_eq(nav_icon_of(t, "page/chat/history", field="title"), Some(@sf.t("web-pages.chat.closePanel")))
   t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/history\"}")
@@ -624,7 +624,7 @@ test "an iPhone Duo: the workspace's button has a dot while another workspace ha
       }
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let q = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1)
   q.set_nav_able(true)
   q.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
@@ -699,7 +699,7 @@ test "an iPhone Duo: switching workspace from an open chat never restores the ol
       }
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1)
   t.set_nav_able(true)
   t.keep_parts(true)
@@ -739,7 +739,7 @@ test "Duo HTML preview exposes close source and download in native bars" {
 test "Duo new chat with a long draft and attachment keeps send above the keyboard" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1)
   t.set_nav_able(true)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
@@ -991,7 +991,7 @@ test "an iPhone Duo on its side: another chat opened, its view read a while late
       (base.topic)(name, params)
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1, nav_able=true)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
   t.run_for(@ui.move_most_ms)
@@ -1134,7 +1134,7 @@ test "a picture looked at on an iPhone Duo, the language changed while it is (th
       }
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1, nav_able=true)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
   t.run_for(@ui.move_most_ms)

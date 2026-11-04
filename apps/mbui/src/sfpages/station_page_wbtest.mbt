@@ -1,5 +1,5 @@
 // A station's page in its three parts (station_page.mbt, resources.mbt; the web's StationPage.tsx Body) alone over the
-// settings' fixture: Studio (ws1/st1), online. At a phone's width with a finger, in a box tall enough for all of a
+// settings' fixture: Willow (ws1/st1), online. At a phone's width with a finger, in a box tall enough for all of a
 // part.
 
 ///|
@@ -526,7 +526,7 @@ test "a login's link opens its station's page at 设置, where its card is" {
   })
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("更多") is None, msg="not the overview")
-  assert_true(t.find("在 Studio 上登录 codex") is Some(_))
+  assert_true(t.find("在 Willow 上登录 codex") is Some(_))
 }
 
 ///|
@@ -538,7 +538,7 @@ test "a station's page opened again begins at its overview" {
 }
 
 ///|
-/// MBA (ws1/st2, offline in the fixture) as this machine's station, as still.fail's desktop app left it on a Mac
+/// Maple (ws1/st2, offline in the fixture) as this machine's station, as still.fail's desktop app left it on a Mac
 /// (`local`: the host's words for it), its page open with a mouse at `w`.
 fn this_mba_tester(local : String, w? : Double = 390.0) -> @ui.Tester {
   let t = setting_tester(Station("ws1/st2"), w, platform=0, h=2400.0, ready=fn() {
@@ -553,7 +553,7 @@ fn this_mba_tester(local : String, w? : Double = 390.0) -> @ui.Tester {
 test "this machine's station not running here: its page says it stopped and offers 启动, not 重试; pressed, made a service" {
   for w in [390.0, 1100.0] {
     let t = this_mba_tester(
-      #|{"data":"~/.stillfail","runner":"none","workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"MBA","removed":false}}
+      #|{"data":"~/.stillfail","runner":"none","workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"Maple","removed":false}}
       ,
       w~,
     )
@@ -571,14 +571,14 @@ test "this machine's station not running here: its page says it stopped and offe
 ///|
 test "this machine's station being installed: its page says so, its 启动 busy; one running here, or another machine's, tried again" {
   let t = this_mba_tester(
-    #|{"data":"~/.stillfail","runner":"none","doing":"update","percent":42,"workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"MBA","removed":false}}
+    #|{"data":"~/.stillfail","runner":"none","doing":"update","percent":42,"workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"Maple","removed":false}}
     ,
   )
   assert_true(t.find("正在更新") is Some(_))
   assert_true(t.query(Button, label="重试") is None)
   // running here (the app not reaching it yet): tried again, as any
   let t = this_mba_tester(
-    #|{"data":"~/.stillfail","runner":"service","service":{"kind":"launchd","name":"fail.still.station"},"workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"MBA","removed":false}}
+    #|{"data":"~/.stillfail","runner":"service","service":{"kind":"launchd","name":"fail.still.station"},"workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"Maple","removed":false}}
     ,
   )
   assert_true(t.query(Button, label="重试") is Some(_))
@@ -588,7 +588,7 @@ test "this machine's station being installed: its page says so, its 启动 busy;
     @sfbase.machine_here.val = Some("ws1/st1")
   })
   t.set_local_station(
-    #|{"data":"~/.stillfail","runner":"none","workspace":{"id":"ws1","station":"st1","name":"星火工作室","stationName":"Studio","removed":false}}
+    #|{"data":"~/.stillfail","runner":"none","workspace":{"id":"ws1","station":"st1","name":"星火工作室","stationName":"Willow","removed":false}}
     ,
   )
   t.run_for(@ui.move_most_ms)
@@ -856,7 +856,7 @@ test "on this machine's own page its display says so and opens nothing; its brow
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("这是本机的屏幕") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("3024 × 1964 · 无人在看") is None)
-  t.tap_text("Studio 的屏幕")
+  t.tap_text("Willow 的屏幕")
   t.draw()
   assert_true(!(@sfbase.app.nav.top() is Screen(_)))
   t.tap_text("发布清单 - 文档")

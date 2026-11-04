@@ -285,7 +285,7 @@ test "no 在新窗口打开 where the app opens no window of its own (a phone's,
 
 ///|
 test "what a window of its own is started with: a station's screen and its title, read back; nothing else names a page" {
-  let at : @sfbase.Page = Screen({ station: "ws-1/st-1", screen: "desktop", title: "Studio 的屏幕", until_gone: false })
+  let at : @sfbase.Page = Screen({ station: "ws-1/st-1", screen: "desktop", title: "Willow 的屏幕", until_gone: false })
   let text = @sfbase.window_text(at).unwrap()
   assert_true(@sfbase.window_page(text) == Some(at))
   assert_eq(@sfbase.window_text(Files), None)

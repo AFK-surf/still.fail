@@ -421,7 +421,7 @@ fn chats_in_trouble() -> Json {
   match (fixture("home").topic)("chats", { "scope": Json::string("ws1"), "mine": Json::boolean(false) }).value {
     Some(Object(m)) => {
       let v = m.copy()
-      v["trouble"] = { "text": "MBA 连不上了", "state": "error" }
+      v["trouble"] = { "text": "Maple 连不上了", "state": "error" }
       Json::object(v)
     }
     _ => Json::null()
@@ -433,14 +433,14 @@ test "wide: with the bell in the rail, the stations' trouble is in 待处理's p
   let calls : Array[Made] = []
   let t = wide_with(calls, { "chats": chats_in_trouble() })
   t.frame()
-  assert_true(t.find("MBA 连不上了") is None, msg="not in the lists' foot")
+  assert_true(t.find("Maple 连不上了") is None, msg="not in the lists' foot")
   let (bx, by, bw, bh) = t.query(Button, label="待处理").unwrap().rect
   t.tap(bx + bw / 2.0, by + bh / 2.0)
   t.frame()
-  let (x, y) = t.find("MBA 连不上了").unwrap()
+  let (x, y) = t.find("Maple 连不上了").unwrap()
   // 10 past the bell
   assert_true(x >= bx + bw + 10.0, msg=x.to_string())
-  assert_eq(trouble_said(calls, "ws1\nseen"), Some(Json::string("MBA 连不上了")))
+  assert_eq(trouble_said(calls, "ws1\nseen"), Some(Json::string("Maple 连不上了")))
   // nothing to let it go with: looked at, it goes by itself
   t.move(x, y)
   t.frame()
@@ -449,7 +449,7 @@ test "wide: with the bell in the rail, the stations' trouble is in 待处理's p
   t.frame()
   t.tap(bx + bw / 2.0, by + bh / 2.0)
   t.frame()
-  assert_true(t.find("MBA 连不上了") is None, msg="looked at")
+  assert_true(t.find("Maple 连不上了") is None, msg="looked at")
   assert_true(t.find("暂无待处理") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
 }
 
@@ -1024,7 +1024,7 @@ test "wide: Station's page picked in one workspace: in another, that one's first
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0)
   @sfbase.go_place("stations") |> ignore
   t.run_for(@ui.move_most_ms)
-  t.tap_text("MBA")
+  t.tap_text("Maple")
   t.run_for(@ui.move_most_ms)
   @sfpages.switch_workspace(src, "ws2")
   t.run_for(@ui.move_most_ms)
@@ -1035,7 +1035,7 @@ test "wide: Station's page picked in one workspace: in another, that one's first
   // back in the first: the one picked there still
   @sfpages.switch_workspace(src, "ws1")
   t.run_for(@ui.move_most_ms)
-  let picked = t.words().filter(fn(w) { w.0 == "MBA" }).length()
+  let picked = t.words().filter(fn(w) { w.0 == "Maple" }).length()
   assert_true(picked >= 2, msg=t.words().map(fn(w) { w.0 }).join("|"))
 }
 

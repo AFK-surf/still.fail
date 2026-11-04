@@ -71,7 +71,7 @@ export const REDIAL_MAIN_MS = 30_000;
 export const DIRECT_RECALL_MS = 10 * 60_000;
 /// The `pinned` of a link on the endpoint that dials a station by its LAN addresses alone (docs/mesh-lan.md): no relay,
 /// no hole punching. A path iroh punched through to a station on the LAN stopped answering seconds after it opened, and
-/// requests on it waited out iroh's 15 s before going back to a relay (studio and a phone, 2026-10-17); a connection
+/// requests on it waited out iroh's timeout before going back to a relay; a connection
 /// dialled by address kept working.
 export const LAN = "lan";
 /// The `pinned` of a link on the endpoint that dials a station at its Tailscale addresses alone (docs/mesh-lan.md,
@@ -89,8 +89,8 @@ export const DIRECT = "direct";
 export const SAID_KEY = "station-addresses";
 /// A way direct (on the LAN endpoint, or the main endpoint's punched path) lost within MIN_STAY_MS of the requests moving
 /// to it, FLAKY_LOSSES times in a row: no way direct is moved to for DIRECT_HOLD_MS, twice as long each time it happens
-/// again, up to DIRECT_HOLD_MAX_MS, unless no other way is up. A phone on studio's LAN moved to it and back to a relay
-/// every minute or so, each time its requests waiting out DEAD_PINGS pings on the way gone quiet (2026-10-18).
+/// again, up to DIRECT_HOLD_MAX_MS, unless no other way is up. This avoids repeatedly moving requests to a flaky way and
+/// waiting out DEAD_PINGS pings on it before returning to a relay.
 const FLAKY_LOSSES = 2;
 export const DIRECT_HOLD_MS = 2 * 60_000;
 export const DIRECT_HOLD_MAX_MS = 30 * 60_000;
@@ -903,7 +903,7 @@ export class Mesh {
   /// A reply's body, timed as it is read: once it has brought SPEED_MIN_BYTES, and again as it ends, how fast its way
   /// brought bytes meanwhile is noted for the relay it came through: all that came through it from the station since
   /// this one began coming, not this one's alone. Replies side by side share the line, and each alone said a part of how
-  /// fast it is: a phone's way to ccvm through Beijing's relay, held at a third of its speed, lost to ways never tried,
+  /// fast it is: a phone's way to a station through a relay, held at a third of its speed, lost to ways never tried,
   /// each bringing its videos at 35 KB/s (2026-10-28). Told as it is under way, not after: a way found slow by a reply of
   /// megabytes is left at once (`noteSpeed`), not after it took minutes to come.
   timed(addr: string, relay: string, body: Pull<Uint8Array>): Pull<Uint8Array> {
@@ -1308,7 +1308,7 @@ export class Mesh {
   /// Dials the station every way at once: on the main endpoint (through any relay, or direct), and on each relay's own
   /// endpoint through that relay alone. The first through is the link; the others, as they come through, are ways to it
   /// as well (`#adopt`). Fails once all have, as the main endpoint's dial failed. A phone whose own relay could not
-  /// reach the station (Beijing's, bft in Tokyo, 2026-10-08) waited out CONNECT_TIMEOUT_MS on it time after time.
+  /// reach the station (2026-10-08) waited out CONNECT_TIMEOUT_MS on it time after time.
   #dialAll(addr: string, endpoint: IrohEndpoint, credentials: CredentialSource, fresh: boolean, ctx: SpanContext | undefined): Effect.Effect<Link, CoreError> {
     return Effect.suspend(() => {
       this.#exploredAt.set(addr, this.now());

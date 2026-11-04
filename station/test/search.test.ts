@@ -129,13 +129,13 @@ test("skills, memory, jobs and profiles are found", () => {
   const s = station();
   const agent = join(s.data, "agent");
   mkdirSync(join(agent, "skills/deploy"), { recursive: true });
-  writeFileSync(join(agent, "MEMORY.md"), "the studio has 64 GB\n");
+  writeFileSync(join(agent, "MEMORY.md"), "the willow has 32 GB\n");
   writeFileSync(join(agent, "skills/deploy/SKILL.md"), "---\nname: deploy\ndescription: 项目记忆：how releases go out\n---\nrun release.sh\n");
   const key = "k1";
   chat(s.store, key, null);
   s.store.insertJob({ id: "j1", sessionKey: key, name: "web preview", command: "pnpm dev --port 5173", cwd: "/w/k1", port: 5173, token: "t", state: "running", pgid: null, exitCode: null, startedAt: 5, endedAt: null, restarts: 0, log: "", watch: false });
   assert.deepEqual(kinds(find(s, "releases", home)), { skill: ["k::deploy"] });
-  assert.deepEqual(kinds(find(s, "64 GB", home)), { memory: ["k::"] });
+  assert.deepEqual(kinds(find(s, "32 GB", home)), { memory: ["k::"] });
   assert.deepEqual(kinds(find(s, "5173", home)), { job: ["j:j1"] });
   const profiles = profileDocs(profilesOf({ profiles: [{ id: "studio-max", home: "p/cc", runtime: "claude", model: "claude-opus-5-5" }] }, s.data));
   assert.deepEqual(kinds(pick(profiles, ["opus"], other)), { profile: ["p:studio-max"] });

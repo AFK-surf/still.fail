@@ -195,8 +195,8 @@ test "a notice that a runtime is missing: its word installs it (software.update)
   let t = edited_core(calls, "chat", fn(name, v) {
     if name == "chat" {
       with_chat_message(v, 9.0, [
-        ("text", "Studio 上没有 codex。"),
-        ("notice", { "failed": false, "words": "Studio 上没有 codex" }),
+        ("text", "Willow 上没有 codex。"),
+        ("notice", { "failed": false, "words": "Willow 上没有 codex" }),
         ("install", { "runtime": "codex", "state": "missing", "title": "codex", "action": "安装" }),
       ])
     } else {
@@ -204,7 +204,7 @@ test "a notice that a runtime is missing: its word installs it (software.update)
     }
   })
   for _ in 0..<6 {
-    if t.find("Studio 上没有 codex") is Some(_) {
+    if t.find("Willow 上没有 codex") is Some(_) {
       break
     }
     t.wheel(195.0, 400.0, -300.0)
@@ -224,7 +224,7 @@ test "a notice about a profile: what went wrong (after its ：) leads to the pro
       // (the core says where the profile's link begins: after the ：)
       with_chat_message(v, 9.0, [
         ("profile", "p1"),
-        ("notice", { "failed": true, "words": "Studio 上 codex 的登录已失效：请在设置里重新登录", "linkAt": 22 }),
+        ("notice", { "failed": true, "words": "Willow 上 codex 的登录已失效：请在设置里重新登录", "linkAt": 22 }),
       ])
     } else {
       v
@@ -408,9 +408,9 @@ test "a station's failed update stays out of the chat bar even when its notice w
           "stationUpdate",
           {
             "tone": "trouble",
-            "text": "Studio 更新失败",
+            "text": "Willow 更新失败",
             "label": "更新失败",
-            "station": "Studio",
+            "station": "Willow",
             "detail": "更新时正在运行的 agent 会稍后继续。",
             "from": "1.2.0",
             "to": "1.3.0",

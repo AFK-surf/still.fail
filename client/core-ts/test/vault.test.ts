@@ -608,7 +608,7 @@ test("vault calls: a sign-in granted with the newer cookies its request carries:
 function cardsInChat(): Answers {
   const card = (request: string, more: Record<string, unknown> = {}) => ({ type: "options", options: [], vault: { request, name: "gh", mode: "proxy", reason: "list PRs", hosts: ["api.github.com"], command: "gh pr list", ...more } });
   const asks = (n: number, c: unknown) => ({ ...entry(n, "要用 gh"), authorKind: "agent", author: "k1", card: c });
-  return { "GET /threads/7/entries?limit=50": { last: 3, entries: [entry(1, "存一下"), asks(2, card("r_1")), asks(3, card("r_s", { save: { kind: "login", username: "zzj" } }))] } };
+  return { "GET /threads/7/entries?limit=50": { last: 3, entries: [entry(1, "存一下"), asks(2, card("r_1")), asks(3, card("r_s", { save: { kind: "login", username: "demo-user" } }))] } };
 }
 
 test("a chat's card of an agent's request comes answered with its post, from the vault the core holds; decided here, how it went at once", async () => {
@@ -693,11 +693,11 @@ test("vault calls: a secret an agent asks to keep, opened with this device's box
   r.putLock();
   await r.ask("vault.setup", {});
   const here = [...r.st.boxes.values()][0]!;
-  const fields = { username: "zzj", password: "pw-123" };
+  const fields = { username: "demo-user", password: "pw-123" };
   const keeper = fill(9);
   const save = (rid: string, item: string, to: { device: string; box: string }): Request => ({
-    id: rid, ws: "ws", vault: "", item, session: "k1", chat: "7", mode: "env", reason: "log in to the router", box: boxPublic(keeper), at: 1, status: "pending", owner: "a@x.com",
-    save: { kind: "login", name: "UniFi UX7", modes: ["env"], hosts: [], env: "UX7_PASSWORD", username: "zzj" },
+    id: rid, ws: "ws", vault: "", item, session: "k1", chat: "7", mode: "env", reason: "log in to the test service", box: boxPublic(keeper), at: 1, status: "pending", owner: "a@x.com",
+    save: { kind: "login", name: "测试服务登录", modes: ["env"], hosts: [], env: "SERVICE_PASSWORD", username: "demo-user" },
     sealed: [{ device: to.device, box: to.box, secret: sealWith(to.box, utf8(JSON.stringify(fields)), saveContext("ws", rid), fill(6)) }],
   });
   const item = "i_01JAKEEP000000000000000UX7";
@@ -706,7 +706,7 @@ test("vault calls: a secret an agent asks to keep, opened with this device's box
   const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
   await r.host.time.pass(500);
   r.take();
-  assert.deepEqual(vaults().requests.map((q: any) => [q.id, q.itemName, q.save]), [["r_s", "UniFi UX7", { kind: "login", username: "zzj" }]]);
+  assert.deepEqual(vaults().requests.map((q: any) => [q.id, q.itemName, q.save]), [["r_s", "测试服务登录", { kind: "login", username: "demo-user" }]]);
   assert.equal(vaults().vaults.length, 1, "one's own, made as this device was set up");
 
   const asked = r.host.secureAsked.length;
@@ -716,7 +716,7 @@ test("vault calls: a secret an agent asks to keep, opened with this device's box
   assert.ok(made && kept.vault === made.id && made.owner === "s1");
   const written = r.st.items.get(item)!;
   assert.ok(signedOk(written, TAG.item));
-  assert.deepEqual([written.vault, written.version, written.listing], [made.id, 0, { name: "UniFi UX7", kind: "login", modes: ["env"], hosts: [], env: "UX7_PASSWORD" }]);
+  assert.deepEqual([written.vault, written.version, written.listing], [made.id, 0, { name: "测试服务登录", kind: "login", modes: ["env"], hosts: [], env: "SERVICE_PASSWORD" }]);
   assert.deepEqual((await r.ask("vault.open", { item })).plain.fields, fields);
   // With the grant that lets the asking chat use it: an hour's idle timeout, sealed to the request's box.
   const saved = r.st.saves[0] as any;

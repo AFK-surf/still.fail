@@ -21,7 +21,7 @@ test "记忆, 关于, 更新日志, 一台 station 的记忆, 归档, 一台 sta
     ("about", "服务条款"),
     ("changelog", "10 月 19 日"),
     ("memory:ws1/st1", "发布流程"),
-    ("archiving", "Studio"),
+    ("archiving", "Willow"),
     ("archiving:ws1/st1", "按模型判断"),
     ("decisions-settings", @sf.t("web-pages.automaticDecisions.completion")),
   ] {

@@ -10,7 +10,7 @@ const WORDS = "orbit canvas lemon thrive patrol velvet ankle humble glide quarte
 
 const PERSONAL: VaultRow = {
   id: "v_01JAVAULT", name: "个人", owner: "demo-you", ownerName: "你", mine: true, members: [{ sub: "demo-you", name: "你" }],
-  station: "local", stationName: "Studio", items: 4, devices: 2, open: true, keyed: true, missing: 0, recoverable: true,
+  station: "local", stationName: "Willow", items: 4, devices: 2, open: true, keyed: true, missing: 0, recoverable: true,
 };
 /** An item's row, with what the core says of it (vault-words.ts). */
 const withWords = (row: VaultItemRow): VaultItemRow => ({ ...row, ...itemWords({ ...row, lasts: row.lasts ?? null }, "chat") });
@@ -40,15 +40,15 @@ export const REQUEST: VaultRequest = {
 
 /** An agent asking to keep a password it read with 1Password (secret_save). */
 export const SAVE_REQUEST: VaultRequest = {
-  id: "r_01JASAVE", vault: PERSONAL.id, vaultName: "个人", item: "i_ux7", itemName: "UniFi UX7 管理员", session: "ember:c-demo-safari", chat: "EMBER/1792199000.000100",
-  station: "local", mode: "env", reason: "登录路由器查 WAN 口丢包，以后不用每次都在 Studio 上点 1Password", command: "op read 'op://Personal/Ui/password'", hosts: [], at: AT,
-  save: { kind: "login", username: "zzj3720" },
+  id: "r_01JASAVE", vault: PERSONAL.id, vaultName: "个人", item: "i_test_service", itemName: "测试服务登录", session: "ember:c-demo-safari", chat: "EMBER/1792199000.000100",
+  station: "local", mode: "env", reason: "登录测试服务查看状态", command: "op read 'op://Demo/TestService/password'", hosts: [], at: AT,
+  save: { kind: "login", username: "demo-user" },
 };
 
 /** An agent asking the person to type in a key it has no way to read (secret_save with neither value nor command). */
 export const TYPED_REQUEST: VaultRequest = {
   id: "r_01JATYPED", vault: PERSONAL.id, vaultName: "个人", item: "i_go", itemName: "OpenCode Go", session: "ember:c-demo-safari", chat: "EMBER/1792199000.000100",
-  station: "local", mode: "proxy", reason: "把 OpenCode Go 接到 CLIProxyAPI 后面；在 OpenCode 控制台的 API Keys 里新建一个", hosts: ["opencode.ai"], at: AT,
+  station: "local", mode: "proxy", reason: "在 OpenCode 控制台新建用于测试的 API Key", hosts: ["opencode.ai"], at: AT,
   save: { kind: "token", typed: true },
 };
 
@@ -103,7 +103,7 @@ function withCard(chat: ChatView, told: CardStory): ChatView {
     const r = told.typed ? TYPED_REQUEST : SAVE_REQUEST;
     const keep: ChatMessage = {
       ...last, seq, ts: `${Number(last.ts) + 30}`, quotes: [], attachments: [],
-      text: told.typed ? `请填入「${r.itemName}」（Token）并存入密钥库：${r.reason}` : `申请将「${r.itemName}」存入密钥库：${r.reason}\n\n类型：登录（用户名 zzj3720）\n\n来源：\`${r.command}\`\n\nagent 使用方式：环境变量（命令可读取明文），每次使用需你批准`,
+      text: told.typed ? `请填入「${r.itemName}」（Token）并存入密钥库：${r.reason}` : `申请将「${r.itemName}」存入密钥库：${r.reason}\n\n类型：登录（用户名 demo-user）\n\n来源：\`${r.command}\`\n\nagent 使用方式：环境变量（命令可读取明文），每次使用需你批准`,
       options,
       card: {
         type: "options", options, assignee: "you@acme.dev", assigneeText: "待你决策", vault: r.id,

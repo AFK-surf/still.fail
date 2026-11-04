@@ -337,7 +337,7 @@ export const ARCHIVE_PAGE = 50;
 /// GET /chats?archived=1&before=…: a page of the archive, the latest archived first, before `before` (when, and the
 /// session key or chat id; none: from the latest), and where the next one goes on from (none at its end). Its items, by
 /// the indexes of those archived, and their rows made of them alone (`scopeOf`). The whole archive was made at once: its
-/// 1,398 chats on ccvm in 60 s, every other read of devices waiting behind it (2026-11-03).
+/// many chats on a station in 60 s, every other read of devices waiting behind it (2026-11-03).
 export function archivedPage(station: Store, viewer: Viewer, before: [number, string] | null, limit = ARCHIVE_PAGE): Json {
   const items = store.archivedPage(station, before ?? [Number.MAX_SAFE_INTEGER, "\uffff"], limit);
   const sessions = items.filter((i) => i.kind === "s").map((i) => i.id);
@@ -392,7 +392,7 @@ export function sharedOf(station: Store, sessions: string[] | null, threads: num
 /// teams' names by connect (`teams`) and the Slack users the viewer is (`selves`). Of the shown sessions' chats, or of
 /// those `threads` and `sessions` alone.
 export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: string[]; threads: number[] } | null = null): Json {
-  // What a slow one spent where: 5.7 s for one new chat's on ccvm (2026-11-03), unsaid where.
+  // What a slow one spent where: 5.7 s for one new chat's on a station (2026-11-03), unsaid where.
   const started = performance.now();
   const stages: Record<string, number> = {};
   let last = started;
@@ -408,7 +408,7 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
   const keys = shown.map((x) => x.key);
   const threadIds = [...new Set([...(scope?.threads ?? []), ...store.threadsOfSessions(s, keys)])];
   // The chats themselves and who is in them, by their keys alone: their summaries (latest message, unread, people) are
-  // the device's already, and read with them, this read took up to 73 s on ccvm short of memory (2026-11-03).
+  // the device's already, and read with them, this read took up to 73 s on a station short of memory (2026-11-03).
   const own = threadIds.flatMap((id) => {
     const thread = store.getThread(s, id);
     return thread !== null && thread.surface === STILLFAIL_SURFACE && thread.hiddenAt === null ? [{ thread, sessions: store.threadSessions(s, id) }] : [];
@@ -461,7 +461,7 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
   stage("waiting");
   const answered: Json = {};
   // Of the chats that ever had a card alone: each of the others' people's messages of the last day and a half was looked
-  // at with half a dozen lookups for a card it answered, 3.2 s for one busy chat on ccvm short of memory (2026-11-03).
+  // at with half a dozen lookups for a card it answered, 3.2 s for one busy chat on a station short of memory (2026-11-03).
   const carded = store.threadsWithCards(s, own.map((t) => t.thread.id));
   for (const a of store.answersSince(s, store.nowMs() - ANSWERED_WITHIN, carded)) {
     if (!mine(creator(a.by))) continue;
@@ -496,8 +496,7 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
 /// `scope` (`scopeOf`): only the items whose ids it names (what a change of some sessions and threads can touch), read
 /// from what they are made of alone, each as the whole list has it.
 /// `titlesOnly`: the items' ids, titles and agents alone (what names a job's chat, read/jobs.ts `openJobs`): none of their
-/// latest messages, cards, needs, answers or the review's marks read for them, 8 s for 8 jobs' chats on ccvm short of
-/// memory (2026-11-03).
+/// latest messages, cards, needs, answers or the review's marks read for them.
 export function chats(station: Store, viewer: Viewer, archived: boolean, scope: Scope | null = null, titlesOnly = false): Json[] {
   // Only the chats of the viewer's workspace (docs/multi-workspace.md).
   const rows = sharedChats(station, archived, scope, titlesOnly).filter((row) => sees(viewer, row.ws));

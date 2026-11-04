@@ -42,7 +42,7 @@ fn bar_tabs(t : @ui.Tester) -> Bool {
 fn tape_chat(platform : Int, w : Double, h : Double, width? : String = "", height? : String = "") -> @ui.Tester {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
   if width != "" {
     say_room(t, width, height)
@@ -358,7 +358,7 @@ test "on the tape a chat brought over while its view is on its way: the page com
   new_run()
   let src = round_trip(fixture("chat"), tape_core_late_ms)
   let read = fn(session : String) { readings.contains("ws1/st1\u{1}" + session) }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.draw()
   // the workspace, its list and the chat, their topics one after another
@@ -369,7 +369,7 @@ test "on the tape a chat brought over while its view is on its way: the page com
   let (nx, _) = t.find("新建对话").unwrap()
   // opened and brought over (as 新建对话 is) while its view is on its way: the chat before stays on the page, the tape
   // where it is
-  open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Willow" })
   @sfdesk.bring_page()
   t.run_for(tape_core_late_ms / 2.0)
   assert_true(app.nav.top() is Chat({ session: "s-c2", .. }), msg="the stack has it")
@@ -447,7 +447,7 @@ fn tape_flung(keep : Bool) -> Array[String] {
   // (many weeks of chats in the sidebar: far to fling)
   new_run()
   let src = fixture("long")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=690.0, h=840.0, platform=2)
   say_room(t, "medium", "medium")
   t.run_for(@ui.move_most_ms)
@@ -586,7 +586,7 @@ test "on the tape a chat opened from the page in use goes over it, as on a phone
   let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
   page_over(t, 690.0)
   // a chat opened from the page in use (a link in a message, ⌘K there): over it, sliding in
-  let other : ChatRef = { station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" }
+  let other : ChatRef = { station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Willow" }
   @sfbase.open_page(Chat(other))
   t.run_for(page_local_ms + @ui.move_most_ms)
   assert_eq(app.nav.depth(), 3)
@@ -878,7 +878,7 @@ fn composer_and_panel(t : @ui.Tester) -> (@ui.Laid, @ui.Laid)? {
 test "on a Mac's tape each panel's corners follow the window's where it stands at its edge, the others the ladder's" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=690.0, h=840.0, platform=0, window_corner=16.0)
   t.run_for(@ui.move_most_ms)
   // the window's 16, 6 in: 11.2
@@ -1258,7 +1258,7 @@ test "on the tape a settings page chosen in their list shows beside it, pressed 
   page_over(t, 600.0)
   assert_true(settings_page_whole(t, "全局记忆 · 项目记忆", 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{t.rect_of("全局记忆 · 项目记忆")}")
   // a level further in from the page in use: a station's memory, then one of its pages
-  t.tap_text("Studio")
+  t.tap_text("Willow")
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
   assert_true(settings_page_whole(t, "发布流程", 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{t.rect_of("发布流程")}")
@@ -1272,7 +1272,7 @@ test "on the tape a settings page chosen in their list shows beside it, pressed 
 test "on the tape, a chat's service opened from the chat in use: its side panel comes over with it, the chat beside" {
   new_run()
   let src = fixture("chat-jobs")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.wide.tape)

@@ -122,7 +122,7 @@ export const JOINABLE = {
   offered: true,
   loading: false,
   items: [
-    { station: "lab/mini1", id: "mini1", name: "Mini1", icon: "glyph:dice-1", workspace: "lab", workspaceName: "Lab", online: true, line: "Lab · 在线" },
+    { station: "lab/cedar", id: "cedar", name: "Cedar", icon: "glyph:dice-1", workspace: "lab", workspaceName: "Lab", online: true, line: "Lab · 在线" },
     { station: "lab/gpu", id: "gpu", name: "GPU 主机", emoji: "🔥", workspace: "lab", workspaceName: "Lab", online: false, line: "Lab · 离线" },
     { station: "home/nas", id: "nas", name: "NAS", workspace: "home", workspaceName: "家里", online: true, line: "家里 · 在线" },
     // Its home in security mode, this workspace not: shown, not to be picked.
@@ -139,8 +139,8 @@ export const MEMBERSHIPS = {
   loading: false,
   canJoin: true,
   workspaces: [
-    { workspace: "demo", name: "Acme", stationName: "Studio", home: true, here: true, line: "主 workspace" },
-    { workspace: "lab", name: "Lab", stationName: "Studio", home: false, here: false, line: "加入的 workspace" },
+    { workspace: "demo", name: "Acme", stationName: "Willow", home: true, here: true, line: "主 workspace" },
+    { workspace: "lab", name: "Lab", stationName: "Willow", home: false, here: false, line: "加入的 workspace" },
   ],
 };
 
@@ -205,7 +205,7 @@ export const HISTORY: HistoryView = {
 const LOGIN_AT = Date.UTC(2026, 9, 17, 8, 0);
 /** A login on the demo's station as the core shows it, in one state or another. */
 const login = (id: string, command: string, more: Partial<MachineLoginShown>): MachineLoginShown => ({
-  id, station: "demo/local", stationName: "Studio", name: command.split(" ")[0]!, title: `在 Studio 上登录 ${command.split(" ")[0]}`, command, state: "browser",
+  id, station: "demo/local", stationName: "Willow", name: command.split(" ")[0]!, title: `在 Willow 上登录 ${command.split(" ")[0]}`, command, state: "browser",
   active: true, waiting: false, listening: false, statusText: "", byText: "林", chat: "ember:c-demo", chatTitle: "发布 0.4 版", whenText: "16:00", startedAt: LOGIN_AT, expiresAt: LOGIN_AT + 15 * 60_000, ...more,
 });
 /** Logins in each of their states, by id. */
@@ -231,18 +231,18 @@ export const LOGINS: Record<string, MachineLoginShown> = {
   // The station has a browser of its own: the same step there (docs/remote-login.md, 在 station 的浏览器中登录); its
   // tab open, back to it.
   inStation: login("inStation", "gcloud auth login", {
-    step: "loopback", port: 8085, domain: "accounts.google.com", browser: true, browserText: "在 Studio 的浏览器中打开",
+    step: "loopback", port: 8085, domain: "accounts.google.com", browser: true, browserText: "在 Willow 的浏览器中打开",
     url: "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=32555940559.apps.googleusercontent.com&redirect_uri=http%3A%2F%2Flocalhost%3A8085%2F",
     statusText: "等你打开浏览器",
   }),
   // This device's port taken just now: the station's browser is the step.
   inStationTaken: login("inStationTaken", "gcloud auth login", {
-    step: "loopback", port: 8085, domain: "accounts.google.com", relayText: "本机 8085 端口被占用", browser: true, browserText: "在 Studio 的浏览器中打开",
+    step: "loopback", port: 8085, domain: "accounts.google.com", relayText: "本机 8085 端口被占用", browser: true, browserText: "在 Willow 的浏览器中打开",
     url: "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=32555940559.apps.googleusercontent.com&redirect_uri=http%3A%2F%2Flocalhost%3A8085%2F",
     statusText: "等你打开浏览器",
   }),
   inStationOpen: login("inStationOpen", "gcloud auth login", {
-    step: "loopback", port: 8085, domain: "accounts.google.com", browser: true, browserText: "回到 Studio 的浏览器", screen: "browser:T1",
+    step: "loopback", port: 8085, domain: "accounts.google.com", browser: true, browserText: "回到 Willow 的浏览器", screen: "browser:T1",
     url: "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=32555940559.apps.googleusercontent.com&redirect_uri=http%3A%2F%2Flocalhost%3A8085%2F",
     statusText: "等你打开浏览器",
   }),
@@ -260,15 +260,15 @@ export const LOGINS: Record<string, MachineLoginShown> = {
   }),
   question: login("question", "gh auth login", { state: "input", step: "terminal", waiting: true, statusText: "等 agent 回答命令的问题" }),
   // Its command as an agent ran it (its variables, the program's path): the row names it by its program.
-  done: login("done", "env GH_CONFIG_DIR=/Users/lin/.config/gh /opt/homebrew/bin/gh auth login --web", { name: "gh", title: "在 Studio 上登录 gh", state: "done", active: false, statusText: "登录完成", endedText: "已在 Studio 上登录 gh", doneByText: "林 完成", chatTitle: "修 CI 的 token", whenText: "10/16 11:20", startedAt: LOGIN_AT - 86_400_000, endedAt: LOGIN_AT - 86_400_000 + 60_000 }),
+  done: login("done", "env GH_CONFIG_DIR=/Users/lin/.config/gh /opt/homebrew/bin/gh auth login --web", { name: "gh", title: "在 Willow 上登录 gh", state: "done", active: false, statusText: "登录完成", endedText: "已在 Willow 上登录 gh", doneByText: "林 完成", chatTitle: "修 CI 的 token", whenText: "10/16 11:20", startedAt: LOGIN_AT - 86_400_000, endedAt: LOGIN_AT - 86_400_000 + 60_000 }),
   failed: login("failed", "gcloud auth login", {
-    state: "failed", active: false, statusText: "登录失败", endedText: "在 Studio 上登录 gcloud 失败：ERROR: (gcloud.auth.login) There was a problem with web authentication.", byText: "Ada", whenText: "10/15 09:05", endedAt: LOGIN_AT + 120_000,
+    state: "failed", active: false, statusText: "登录失败", endedText: "在 Willow 上登录 gcloud 失败：ERROR: (gcloud.auth.login) There was a problem with web authentication.", byText: "Ada", whenText: "10/15 09:05", endedAt: LOGIN_AT + 120_000,
     error: "Your browser has been opened to visit:\n\n    https://accounts.google.com/o/oauth2/auth?...\n\nERROR: (gcloud.auth.login) There was a problem with web authentication.\nTry running again with --no-browser.",
   }),
-  timeout: login("timeout", "gcloud auth login", { state: "failed", active: false, statusText: "超时了，没等到浏览器回来", endedText: "在 Studio 上登录 gcloud 超时了", endedAt: LOGIN_AT + 15 * 60_000 }),
+  timeout: login("timeout", "gcloud auth login", { state: "failed", active: false, statusText: "超时了，没等到浏览器回来", endedText: "在 Willow 上登录 gcloud 超时了", endedAt: LOGIN_AT + 15 * 60_000 }),
   // A program still.fail has no maker's mark for: a terminal's.
   other: login("other", "mytool login", { state: "done", active: false, statusText: "登录完成", doneByText: "Ada 完成", chatTitle: "跑内部脚本", whenText: "10/13 10:02", endedAt: LOGIN_AT - 2 * 86_400_000 }),
-  cancelled: login("cancelled", "npm login", { state: "cancelled", active: false, statusText: "已取消", endedText: "Ada 取消了在 Studio 上登录 npm", doneByText: "Ada 取消", chatTitle: "npm 发包", whenText: "10/14 18:42", endedAt: LOGIN_AT + 60_000 }),
+  cancelled: login("cancelled", "npm login", { state: "cancelled", active: false, statusText: "已取消", endedText: "Ada 取消了在 Willow 上登录 npm", doneByText: "Ada 取消", chatTitle: "npm 发包", whenText: "10/14 18:42", endedAt: LOGIN_AT + 60_000 }),
 };
 /** A login seen by a read-only member: no page, no code, only how it stands. */
 export const VIEWER_LOGIN: MachineLoginShown = (({ url: _u, code: _c, ...rest }) => rest)(LOGINS.device!);

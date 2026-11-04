@@ -47,8 +47,7 @@ the same.
     announcement: both recur with each one (twice a second on a Mac that denies the process the local network).
 - **iroh-mdns-address-lookup 0.4.0** (src/lib.rs)
   - Multicast goes out on, and is received from, every local IPv4 interface (swarm-discovery's `add_interface_v4`),
-    not only the default route's. A machine on two networks (studio: wired 192.168.0.x, Wi-Fi 192.168.20.x) was
-    only announced on the first.
+    not only the default route's. A machine on two networks was only announced on the first.
   - Without advertising (ember's devices: they only look stations up), the interfaces are still joined.
   - A republish (same addresses and TXT) is not a new discovery: `Peer`'s equality includes when it was seen, so
     every mDNS packet reached the endpoint as new addresses (also reported upstream-side in rayfish/rayfish#161).
@@ -72,6 +71,6 @@ the same.
   through once it sent more than a packet or two at once, until iroh dropped the path 15 s later (docs/mesh-lan.md).
 - **noq-udp 1.3.0** (src/unix.rs): on Apple platforms a datagram's source address is set with `IP_PKTINFO`. It was
   set with `IP_RECVDSTADDR`, which macOS ignores on send, so a reply left from the address the routing table picked.
-  On a machine with two addresses on one network (studio: 192.168.20.10 on the wired VLAN, 192.168.20.107 on Wi-Fi) a
-  device that had dialed one got the answer from the other, and the handshake never finished: the station dropped
+  On a machine with two addresses on one network, a device that had dialed one got the answer from the other, and
+  the handshake never finished: the station dropped
   what came back as sent to the wrong interface.

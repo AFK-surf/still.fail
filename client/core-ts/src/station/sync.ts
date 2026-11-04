@@ -788,7 +788,7 @@ export class StationsSync {
 
   /// The station's archive, read a page at a time from its latest (`?page=`, its next where the one before ended): each
   /// page put in with what is held of those older than it, until its end, then what was read alone. Read whole at once,
-  /// the archive of 1,398 chats took 60 s on ccvm, every other read of devices waiting (2026-11-03). A station from
+  /// the archive of many chats took 60 s on a station, every other read of devices waiting (2026-11-03). A station from
   /// before pages none: its answer, the whole list, is put in as it was.
   #archived(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
     return Effect.suspend(() => {
@@ -1648,7 +1648,7 @@ export class StationsSync {
   /// The station's sidebar: made here (rows-made.ts) from the summaries held and what the station keeps beside them
   /// (GET /chats?marks=1), once its stream said it keeps them (`made`); else read made, as from a station from before.
   #chats(address: string, ctx: SpanContext | null = null, unread?: () => void): Effect.Effect<void, CoreError> {
-    // Said so by its stream before (kept: a device started again reads the station whole, as each did, some 2 min on ccvm).
+    // Said so by its stream before (kept: a device started again reads the station whole, as each did, some 2 min on a station).
     const keeps = () => this.#links.get(address)?.marks || this.#core.data.record("keepsMarks", address) === true;
     return Effect.suspend(() => (keeps() ? this.#marksWhole(address, ctx, unread) : this.#read(address, { topic: "chatRows", station: address }, "/chats", undefined, ctx, 0, unread)));
   }

@@ -1021,7 +1021,7 @@ export class Updates {
     // Taken now, so another ask meanwhile finds it updating.
     const before = { updating: station.updating, failed: station.failed, done: station.done };
     station.updating = this.fibers.now();
-    // Off the station's thread: 0.7 s held on ccvm short of memory (2026-11-03), at every update.
+    // Off the station's thread so cleanup does not delay its other work at every update.
     await Promise.all(["update.exit", "update.step"].map((f) => rm(join(runDir, f), { force: true })));
     const channel = this.channel();
     // The release verified, the installer to run and what it is told (refused in `lang`: not left updating).

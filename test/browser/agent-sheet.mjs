@@ -47,7 +47,7 @@ createRoot(root).render(<DemoApp phone />);
   const tile = page.locator('header').getByRole('button', { name: /的名片/ }).first();
   await tile.waitFor({ timeout: 30000 });
   await rest();
-  assert.ok(await tile.getByText('Studio', { exact: true }).isVisible(), 'the tile names its station');
+  assert.ok(await tile.getByText('Willow', { exact: true }).isVisible(), 'the tile names its station');
   if (out) await page.locator('header').first().screenshot({ path: `${out}/bar.png` });
   await tile.tap();
   await rest();

@@ -29,8 +29,8 @@ export type Marked = { reading: number; state: TailState; marks: Mark[] };
 const kept = new Map<string, Marked>();
 
 /// How far a transcript's reading may go on past what is kept of it on disk: a reader starting again (every one at each
-/// start of the station, some 30 a day on ccvm) reads on from there, each line parsed again. Written down at each mark
-/// alone, a reading was up to MARK_BYTES behind: 27 MB over the transcripts written to in the last hours on ccvm
+/// start of the station, some 30 a day on a station) reads on from there, each line parsed again. Written down at each mark
+/// alone, a reading was up to MARK_BYTES behind: 27 MB over the transcripts written to in the last hours on a station
 /// (2026-11-02), read again after every update, the first reads of each session's history taking 3 to 7 s.
 const KEPT_BYTES = 256 << 10;
 
@@ -55,7 +55,7 @@ export function forgetMarks(dir: string, paths: string[]): void {
 /// A transcript's reading, read on to where it is written now: from what is kept, else from disk, else from its start.
 /// `dir`: where readings are kept on disk (null: nowhere, as in tests).
 function markedOf(runtime: RuntimeKind, path: string, dir: string | null): Marked {
-  // What a slow one read, and from where: 2 to 6 s for a chat opened on ccvm (2026-11-03), unsaid of which.
+  // What a slow one read, and from where: 2 to 6 s for a chat opened on a station (2026-11-03), unsaid of which.
   const started = performance.now();
   let had = kept.get(path) ?? null;
   const from = had !== null ? "memory" : "disk";

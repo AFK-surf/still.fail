@@ -27,6 +27,22 @@ test("an isolated recording uses a fictional host sample", () => {
   }
 });
 
+test("an isolated recording does not read the machine's GPUs", async () => {
+  const before = process.env.STILLFAIL_TEST_HOST;
+  process.env.STILLFAIL_TEST_HOST = "1";
+  let gpuReads = 0;
+  const readers = { read: async () => JSON.stringify(hostInfo("/private/data", null)) } as unknown as Readers;
+  const host = new Host(readers, { read: async () => { gpuReads++; return [{ name: "Private GPU", cores: 30, busy: 0.9 }]; } });
+  try {
+    const sample = await host.sample("en");
+    assert.deepEqual(sample.gpus, [{ name: "Test GPU", cores: 4, busy: 0.25 }]);
+    assert.equal(gpuReads, 0);
+  } finally {
+    if (before === undefined) delete process.env.STILLFAIL_TEST_HOST;
+    else process.env.STILLFAIL_TEST_HOST = before;
+  }
+});
+
 test("a host read takes the first CPU ticks without sleeping in the reader", () => {
   const waits = mock.method(Atomics, "wait", () => { throw new Error("the reader slept"); });
   let current: [number, number] | null = [10, 20];

@@ -919,7 +919,7 @@
   "web-pages.settings.stations.lead": "Each station is a machine running {name}; its connects, chats and profiles live there",
   "web-pages.settings.stations.nameFirst": "Name this machine",
   "web-pages.settings.stations.nameLabel": "Name",
-  "web-pages.settings.stations.namePlaceholder": "e.g. studio, mac-mini",
+  "web-pages.settings.stations.namePlaceholder": "e.g. willow, cedar",
   "web-pages.settings.stations.namePrompt": "Station name",
   "web-pages.settings.stations.noneYet": "No stations yet. An admin needs to add one.",
   "web-pages.settings.stations.remove": "Remove",

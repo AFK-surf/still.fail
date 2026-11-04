@@ -14,7 +14,7 @@ test "大屏: the sidebar shown a while while the chat put in place waits for it
   new_run()
   let answered = @signals.signal(false)
   let src = over_source(answered)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.draw()
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)

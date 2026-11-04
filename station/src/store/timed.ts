@@ -44,7 +44,7 @@ export function timed(db: DatabaseSync, said: Said | null = isMainThread ? inLog
     const at = now();
     let answer: T | undefined;
     // One that fails is said too: a write waiting for another connection's lock fails once the busy time is out (5 s,
-    // store.ts), as on ccvm while another process wrote (2026-11-02), and none of those waits was said.
+    // store.ts), as on a station while another process wrote (2026-11-02), and none of those waits was said.
     let failed: string | undefined;
     try {
       answer = run();

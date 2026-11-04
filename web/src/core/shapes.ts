@@ -440,7 +440,7 @@ export interface StationFailing {
  */
 export interface ListNote {
 	reading: boolean;
-	/** While reading, what it waits on (正在连接 Studio, 正在读取会话); absent from a core before it. */
+	/** While reading, what it waits on (正在连接 Willow, 正在读取会话); absent from a core before it. */
 	text?: string;
 	failing: StationFailing[];
 	empty: boolean;
@@ -699,7 +699,7 @@ export interface ModelOption {
 	 */
 	availability?: string;
 	/**
-	 * Where it comes from, in words (借自 Studio, 在 Studio 上: what its mark is said as); none for one of this
+	 * Where it comes from, in words (借自 Willow, 在 Willow 上: what its mark is said as); none for one of this
 	 * station's own.
 	 */
 	fromText?: string;
@@ -1641,7 +1641,7 @@ export interface Job {
 	age?: string;
 	/**
 	 * Among the open ones (`longJobs`): its station, that station's name when there are several, the chat it is in as
-	 * the viewer's sidebar has it, and all that in a line (studio · 修登录 · 已归档).
+	 * the viewer's sidebar has it, and all that in a line (willow · 修登录 · 已归档).
 	 */
 	station?: string;
 	stationName?: string;
@@ -2025,12 +2025,12 @@ export interface ChatItem {
 	originText?: string;
 	/** slack | feishu: the kind of connect it came from (its mark). */
 	originKind?: string;
-	/** Its station is offline, in words ("Studio 离线"): the row is shown greyed and marked. Absent while online. */
+	/** Its station is offline, in words ("Willow 离线"): the row is shown greyed and marked. Absent while online. */
 	offline?: string;
 	/** Its station gone for its update: marked with the update's mark in place of the unplugged one. Absent otherwise. */
 	updating?: boolean;
 	/**
-	 * Its station's link coming back, or failing and retried, in words ("正在重连 Studio…"): the row is marked with a
+	 * Its station's link coming back, or failing and retried, in words ("正在重连 Willow…"): the row is marked with a
 	 * turning ring. Absent while linked (and while offline).
 	 */
 	reconnecting?: string;
@@ -3120,7 +3120,7 @@ export interface ChatsView {
 	loading: boolean;
 	days: ChatDay[];
 	/**
-	 * The stations not working as they should, in a line ("MBA 离线", "正在重连 Studio", "2 台 station 异常"), for a
+	 * The stations not working as they should, in a line ("Maple 离线", "正在重连 Willow", "2 台 station 异常"), for a
 	 * corner of the list; absent while all are (a station first connecting is not one).
 	 */
 	trouble?: StationTrouble;
@@ -3755,7 +3755,7 @@ export interface DriveTransferShown {
 	names: string[];
 	toRoot: string;
 	toPath: string;
-	/** Where they go, in words: MBA › 照片. */
+	/** Where they go, in words: Maple › 照片. */
 	toText: string;
 	/** What is copied, in words: 首页截图.png, or 首页截图.png 等 2 项. */
 	title: string;
@@ -4409,7 +4409,7 @@ export interface HostGpu {
 	model: string;
 }
 
-/** A fact of a machine, a row of its details: 主机名 studio. */
+/** A fact of a machine, a row of its details: 主机名 willow. */
 export interface HostDetail {
 	label: string;
 	value: string;
@@ -4437,7 +4437,7 @@ export interface Host {
 	meters: Meter[];
 	/** The machine's GPUs, each with the figures it can report. */
 	gpus?: HostGpu[];
-	/** What the machine is, the same line wherever it is named: Apple M2 Max · 64 GB · macOS 26. */
+	/** What the machine is, the same line wherever it is named: Apple M1 Pro · 32 GB · macOS 26. */
 	identity: string;
 	/** The rest, a row each, where the machine is looked at closely: its hostname, chip, uptime, the process. */
 	details: HostDetail[];
@@ -5045,7 +5045,7 @@ export interface MachineLoginShown {
 	stationName: string;
 	/** Its command's program (gh, gcloud). */
 	name: string;
-	/** 在 studio 上登录 gh. */
+	/** 在 willow 上登录 gh. */
 	title: string;
 	/** The command it runs, as one line. */
 	command: string;
@@ -5111,8 +5111,8 @@ export interface MachineLoginShown {
 	 */
 	doneByText?: string;
 	/**
-	 * Ended: how, in a line, as its card shows it then: 已在 studio 上登录 gh, 张三 取消了在 studio 上登录 gh,
-	 * 在 studio 上登录 gh 失败：<why>, …超时了.
+	 * Ended: how, in a line, as its card shows it then: 已在 willow 上登录 gh, 张三 取消了在 willow 上登录 gh,
+	 * 在 willow 上登录 gh 失败：<why>, …超时了.
 	 */
 	endedText?: string;
 	/** When it started, in words: 14:05 today, 10/16 14:05 before. */
@@ -5642,7 +5642,7 @@ export interface StationProfileGroup {
 
 /** How a profile of the workspace's list is, in a few words and their tone. */
 export interface ProfileState {
-	/** studio 离线; 需要登录; 额度查询失败; 未检查. */
+	/** willow 离线; 需要登录; 额度查询失败; 未检查. */
 	text: string;
 	/** red or amber: it needs a look; neutral: it does not (a check not made yet). */
 	tone: Tone;
@@ -6252,7 +6252,7 @@ export interface ProfileMember {
 	station: string;
 	stationId: string;
 	stationName: string;
-	/** What its row is called: its station's name, and its profile's (studio · 工作) where that station has two copies. */
+	/** What its row is called: its station's name, and its profile's (willow · 工作) where that station has two copies. */
 	title: string;
 	online: boolean;
 	/** Its id on that station (its page there). */
@@ -6261,7 +6261,7 @@ export interface ProfileMember {
 	profileName: string;
 	/** host: has it and lends it; user: borrows it (or a copy of a key); own: signed in there on its own. */
 	role: string;
-	/** What it is there, in words: 借给 mini / 向 studio 借 / 自己登录. */
+	/** What it is there, in words: 借给 birch / 向 willow 借 / 自己登录. */
 	about: string;
 	usable: boolean;
 	checkText: string;
@@ -6322,7 +6322,7 @@ export interface WorkspaceProfile {
 	 * entered (`attention`), first in its kind, its state in colour.
 	 */
 	look: boolean;
-	/** Where it can be used, in words: every station that has it, signed in or borrowing: studio、mini 可用. */
+	/** Where it can be used, in words: every station that has it, signed in or borrowing: willow、birch 可用. */
 	where: string;
 	/** The stations that may use a shared one; absent: every one. */
 	allow?: string[];

@@ -108,7 +108,7 @@ test "chat neighbours: a newly made chat still matches the client key its page o
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
-  open_chat({ station: "ws1/st1", session: "new:chat-1", title: "首页的列表改成按天分组", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "new:chat-1", title: "首页的列表改成按天分组", station_name: "Willow" })
   t.frame()
   t.key(@ui.key_code_down, mods=@ui.mod_alt)
   assert_eq(open_title(), "夜里的构建又失败了")
@@ -123,7 +123,7 @@ test "chat neighbours: with no current row or no neighbour, the page stays where
   assert_true(app.nav.top() == NewChat)
   t.key(@ui.key_code_down, mods=@ui.mod_alt)
   assert_true(app.nav.top() == NewChat)
-  open_chat({ station: "ws1/st1", session: "not-in-the-list", title: "未列出的对话", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "not-in-the-list", title: "未列出的对话", station_name: "Willow" })
   t.frame()
   t.key(@ui.key_code_down, mods=@ui.mod_alt)
   assert_eq(open_title(), "未列出的对话")

@@ -61,7 +61,7 @@ export const TRANSCRIPT_IN_USE = `SELECT 1 FROM runtime_sessions r INDEXED BY ru
   LIMIT 1`;
 /// A session's messages not delivered yet and its latest turn (`statsOf`): what is not delivered by the index of those
 /// alone. By (session, thread), SQLite went over every message the session was ever given, and every turn was counted
-/// besides, for no one: auto-archiving looked at each session shown so, on the main thread, 13 s and 22 s on ccvm short
+/// besides, for no one: auto-archiving looked at each session shown so, on the main thread, 13 s and 22 s on a station short
 /// of memory (2026-11-02).
 export const STATS_OF = `SELECT
     ((SELECT COUNT(*) FROM deliveries d INDEXED BY deliveries_pending WHERE d.session = s.key AND d.delivered_at IS NULL) +
@@ -123,7 +123,7 @@ export const PENDING_SESSIONS = `WITH RECURSIVE
   SELECT session FROM said WHERE session IS NOT NULL
   UNION SELECT session FROM letters_pending WHERE session IS NOT NULL`;
 /// How many chats someone started since a time, by runtime and model (`modelsUsedBy`): from the index of them alone
-/// (schema.ts sessions_models), not each session's row (1.2 s on ccvm, as an agent opened a chat).
+/// (schema.ts sessions_models), not each session's row (1.2 s on a station, as an agent opened a chat).
 export const MODELS_USED_BY = "SELECT runtime, model, COUNT(*) AS n FROM sessions INDEXED BY sessions_models WHERE created_by = ? AND created_at >= ? GROUP BY runtime, model";
 export const LOGIN_CARDS =
   "SELECT thread, n, author FROM entries INDEXED BY entries_login_cards WHERE kind = 'message' AND author_kind = 'agent' AND card LIKE '%\"login\"%' AND card LIKE ? AND NOT EXISTS (SELECT 1 FROM closed_cards c WHERE c.thread = entries.thread AND c.n = entries.n)";
@@ -204,15 +204,15 @@ export class Store {
       // disk, a machine short of memory and disk time held the main thread on them.
       db.exec("PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
       // What this connection reads stays in its own memory (CACHE_KIB), not SQLite's 2 MB: on a machine short of memory
-      // the system's file cache is the first to go, and each page read again from the disk there took some 50 ms (ccvm,
+      // the system's file cache is the first to go, and each page read again from the disk there took some 50 ms (a station,
       // 2026-10-25: the main thread read 1,700 pages in six minutes, some of them six times over). This connection
       // writes alone, so what it keeps stays good across the readers' reads.
       // The log (the WAL) is written into the database off the main thread, by a reader (read/pool.ts `checkpoint`).
       // Left to SQLite, this connection did it itself at every thousandth page: one commit held every device for the
-      // 6 s that took on ccvm (2026-10-25). Here only if the readers' fall behind, at WAL_PAGES.
+      // 6 s that took on a station (2026-10-25). Here only if the readers' fall behind, at WAL_PAGES.
       db.exec(`PRAGMA cache_size = -${CACHE_KIB}; PRAGMA wal_autocheckpoint = ${WAL_PAGES};`);
       // The log's file cut back to WAL_KEEP_BYTES each time it is written into the database from its start: SQLite keeps
-      // it at the most it ever grew to otherwise, 520 MB on ccvm (2026-11-03) with 1 GB of its disk left.
+      // it at the most it ever grew to otherwise, 520 MB on a station (2026-11-03) with 1 GB of its disk left.
       db.exec(`PRAGMA journal_size_limit = ${WAL_KEEP_BYTES};`);
       const hasTables = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sessions'").get() !== undefined;
       if (hasTables) {
@@ -343,7 +343,7 @@ export class Store {
   /// from its start, waiting its turn as long as busy_timeout says. Begun deferred (rusqlite's transaction()), it read
   /// first and took the writing at its first write: where the station's other writers (the usage worker's backfills, a
   /// reader's checkpoint) had written meanwhile, SQLite refused it at once, no wait ("database is locked": a person's
-  /// message not sent, on ccvm 2026-11-03, while the usage worker filled its statistics).
+  /// message not sent, on a station 2026-11-03, while the usage worker filled its statistics).
   #tx<T>(run: () => T): T {
     this.db.exec("BEGIN IMMEDIATE");
     let result: T;
@@ -1499,7 +1499,7 @@ export class Store {
 
   /// Of `threads`, those the session has already read something from: each by the index of its deliveries by session
   /// and thread, its first one delivered. Asked of every thread, it read every message the session was ever given, on
-  /// the main thread as the session was given more: 3.3 s on ccvm short of memory (2026-11-02), every device waiting.
+  /// the main thread as the session was given more: 3.3 s on a station short of memory (2026-11-02), every device waiting.
   heardThreads(session: string, threads: number[]): Set<number> {
     return new Set([...new Set(threads)].filter((thread) => this.#one(HEARD_IN, session, thread) !== undefined));
   }
@@ -1902,7 +1902,7 @@ export class Store {
   startTurnFor(id: string, session: string, kind: string, by: TurnFor): void {
     this.#with((changes) => {
       // The latest turn's alone (by the index on them): each says it, so one with none had none before it to say. Asked
-      // for the latest that says it, a session that never had anyone's read back over every turn it had (1.4 s on ccvm).
+      // for the latest that says it, a session that never had anyone's read back over every turn it had (1.4 s on a station).
       const before = (column: string) => `(SELECT ${column} FROM turns WHERE session_key = ?2 ORDER BY started_at DESC LIMIT 1)`;
       this.#run(
         `INSERT INTO turns (id, session_key, kind, started_at, profile, person, thread) VALUES (?1, ?2, ?3, ?4, ?5, COALESCE(?6, ${before("person")}), COALESCE(?7, ${before("thread")}))`,
@@ -1989,8 +1989,8 @@ export class Store {
   }
 
   /// The session's latest turn.
-  /// Of some sessions, those whose latest turn said it waits (`declared` 'waiting'), in one statement: one each, 21 of
-  /// them took 5 s on the station's thread on ccvm short of memory (2026-11-03), as the workspaces in use were looked at.
+  /// Of some sessions, those whose latest turn said it waits (`declared` 'waiting'), in one statement: looking each up
+  /// separately blocks the station's thread while workspaces in use are read.
   waitingOf(sessions: string[]): Set<string> {
     if (sessions.length === 0) return new Set();
     return new Set(
@@ -2194,7 +2194,7 @@ export class Store {
   }
 
   /// A session's jobs (all sessions' with null), newest first. A session's by its index: asked as one statement for
-  /// both (`?1 IS NULL OR session_key = ?1`), each read every job the station ever ran (5 s on ccvm with its pages put
+  /// both (`?1 IS NULL OR session_key = ?1`), each read every job the station ever ran (5 s on a station with its pages put
   /// out, 2026-10-25).
   listJobs(session: string | null): JobRow[] {
     return (session === null ? this.#all("SELECT * FROM jobs ORDER BY started_at DESC") : this.#all(SESSION_JOBS, session)).map(toJob);

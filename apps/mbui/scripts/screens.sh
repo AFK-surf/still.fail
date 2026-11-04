@@ -4,7 +4,7 @@
 # with), idle there and its corners by the rule. What they draw is not compared with mbui's own drawing (a kept draw
 # list, a Mac's frame, an offscreen picture): what still.fail's screens are held to is Android's app, the original.
 #   apps/mbui/scripts/screens.sh [test]        the tests
-#   apps/mbui/scripts/screens.sh rec [MODE…]   on a Mac (Mini1: station_task): sffix run for each mode (by default every
+#   apps/mbui/scripts/screens.sh rec [MODE…]   on a Mac: sffix run for each mode (by default every
 #                                              screen of screens_wbtest.mbt) as shots.sh runs it, its text kept
 #                                              (scripts/screens.py: its section of screens/text-mac.textrec), for a
 #                                              screen whose text the Mac has not given yet

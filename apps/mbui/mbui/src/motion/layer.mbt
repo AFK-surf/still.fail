@@ -129,6 +129,8 @@ priv struct Moving {
   mut scope : Int
   /// flown from (x, y, scale), how far across, down and grown
   mut fly : (Double, Double, Double, Double, Double, Double)?
+  /// placed by its own look but flying over rows, which must make room for it
+  mut flying_placed : Bool
   /// its own ground changes shape for its cause (reshape), by `spec`
   mut reshape : Bool
   /// reshape: it goes from where it was with what it holds (laid out for another place: the web's morph), what is new
@@ -219,6 +221,10 @@ priv struct Rec {
   mut g_now : Bool
   /// whether its ground set off as last with what it holds (reshape's `carry`)
   mut g_carry : Bool
+  /// Translation inherited from a carried ground, excluded when reporting shape changes to what stands on it.
+  mut g_carried_y : Double
+  mut was_g_carried_y : Double
+  mut was_g_carry : Bool
   /// a move grown for its cause (layout, not in a list: its words a line more): the height it showed at as that set
   /// off, how far it has gone to the height it is laid out at (0 → 1); and the same as the frame before left them
   mut hh : Double
@@ -311,6 +317,9 @@ fn Rec::new() -> Rec {
     was_hh: 0.0,
     was_hp: 1.0,
     g_carry: false,
+    g_carried_y: 0.0,
+    was_g_carried_y: 0.0,
+    was_g_carry: false,
     on: 0,
     on_edges: 0,
   }
@@ -490,6 +499,7 @@ fn moving_of(c : @ui.Ctx, i : Int) -> Moving {
     kept_drawn: false,
     scope: 0,
     fly: None,
+    flying_placed: false,
     reshape: false,
     carry: false,
     foot: false,
@@ -669,6 +679,14 @@ pub fn fly(
 }
 
 ///|
+/// A node placed by its own look flies over list rows, which leave its drawn room clear.
+pub fn flying_placed(c : @ui.Ctx, i : Int) -> Unit {
+  let e = moving_of(c, i)
+  e.flying_placed = true
+  c.stratum(i, Flying)
+}
+
+///|
 /// The keyed nodes in node `i` take their places from its top left, or with `bottom` from its bottom left (what
 /// stands on a bottom edge: the composer's parts), so that it moving (a keyboard coming up) moves none of them.
 pub fn scope(c : @ui.Ctx, i : Int, bottom? : Bool = false) -> Unit {
@@ -725,7 +743,7 @@ pub fn reshaped_over(c : @ui.Ctx, key : String) -> Double {
     Some(r) if r.seen >= c.frame_number() - 1 && !r.g_carry => {
       let p = r.gp.get()
       if p < 1.0 {
-        (r.y - r.gy) * (1.0 - p)
+        (r.y - r.gy + r.g_carried_y) * (1.0 - p)
       } else {
         0.0
       }
@@ -1319,7 +1337,7 @@ fn after_layout(c : @ui.Ctx) -> Unit {
   together.clear()
   // (what reads where each goes told once all of it is worked out, and only where it came out otherwise: a build of
   // the frame again lays it out from where the frame began, as the first did)
-  measures_told_once(frame, fn() {
+  measures_told_once(c, frame, fn() {
     laid_once(
       fn() {
         for e in if order.is_empty() { mo.entries } else { order } {
@@ -1457,10 +1475,12 @@ fn makes_room(c : @ui.Ctx) -> Unit {
   // what flies over the rows (words sent to their bubble): where it is drawn now
   let flying : Array[(Int, Double, Double, Double, Double)] = []
   for e in mo.entries {
-    if e.fly is Some(_) {
-      let (fx, fy, fw, fh) = c.node_rect(e.node)
+    if e.fly is Some(_) || e.flying_placed {
+      // A flying piece can be inside a moving bubble: include its ancestors' translations in its drawn position.
+      let (_, _, fw, fh) = c.node_rect(e.node)
+      let (fx, fy) = c.drawn_at(e.node)
       let l = c.look_of(e.node)
-      flying.push((e.node, fx + l.dx + l.ox * fw * (1.0 - l.sx), fy + l.dy + l.oy * fh * (1.0 - l.sy), fw * l.sx, fh * l.sy))
+      flying.push((e.node, fx + l.ox * fw * (1.0 - l.sx), fy + l.oy * fh * (1.0 - l.sy), fw * l.sx, fh * l.sy))
     }
   }
   if moving.is_empty() && flying.is_empty() {
@@ -1504,10 +1524,13 @@ fn makes_room(c : @ui.Ctx) -> Unit {
       }
       // what flies over it: none of it drawn where that is, on the side of it that is (its words under none of them,
       // shown again as it goes on: an agent's line, a message's time, under words sent on their way up)
-      let (ax0, ax1) = if flying.is_empty() { (0.0, 0.0) } else { c.node_drawn_across(e.node) }
+      let (raw0, raw1) = if flying.is_empty() { (0.0, 0.0) } else { c.node_drawn_across(e.node) }
+      let (node_x, _, _, _) = c.node_rect(e.node)
+      let (draw_x, draw_y) = c.drawn_at(e.node)
+      let (ax0, ax1) = (raw0 + draw_x - node_x, raw1 + draw_x - node_x)
       for f in flying {
         let (fnode, fx, fy, fw, fh) = f
-        if fnode == e.node || fx + fw <= ax0 || fx >= ax1 || fy + fh <= ny + dy || fy >= ny + dy + nh {
+        if fnode == e.node || fx + fw <= ax0 || fx >= ax1 || fy + fh <= draw_y || fy >= draw_y + nh {
           continue
         }
         // (not the row it flies to, which holds it)
@@ -1518,10 +1541,10 @@ fn makes_room(c : @ui.Ctx) -> Unit {
         if q == e.node {
           continue
         }
-        if fy + fh / 2.0 > ny + dy + nh / 2.0 {
-          bottom = dmin(bottom, fy - (ny + dy))
+        if fy + fh / 2.0 > draw_y + nh / 2.0 {
+          bottom = dmin(bottom, fy - draw_y)
         } else {
-          top = dmax(top, fy + fh - (ny + dy))
+          top = dmax(top, fy + fh - draw_y)
         }
       }
       // (its edge soft: what it draws fades in over room_soft as it is shown, the softness going as the room opens
@@ -1659,6 +1682,8 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         r.was_rad = r.rad
         r.gp.step(c)
         r.was_gp = r.gp.get()
+        r.was_g_carry = r.g_carry
+        r.was_g_carried_y = r.g_carried_y
         r.was_gx = r.gx
         r.was_gy = r.gy
         r.was_gw = r.gw
@@ -1894,11 +1919,16 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         if still || !was_seen {
           r.gp.snap(1.0)
           r.g_now = false
+          r.g_carry = false
+          r.g_carried_y = 0.0
         } else if caused && changed_shape {
           // from the shape it showed as the frame began (on its way, or as it was laid out)
           let wr = corners_in(r.was_rad, r.was_w, r.was_h)
           r.gx = r.was_gx + (r.was_x - r.was_gx) * p0
           r.gy = r.was_gy + (r.was_y - r.was_gy) * p0
+          // A carry moves the ground to another place. If a resize interrupts it, preserve that visible position for
+          // drawing while keeping the carried translation out of the room reported to what stands on the shape.
+          r.g_carried_y = if r.was_g_carry { r.gy - r.was_y } else { r.was_g_carried_y * (1.0 - p0) }
           r.gw = r.was_gw + (r.was_w - r.was_gw) * p0
           r.gh = r.was_gh + (r.was_h - r.was_gh) * p0
           // (from its foot: its foot moved this frame by what holds it there at once, its ground set off from there)
@@ -1917,6 +1947,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           // its way going on as it was (a build before this one set it off anew: back as the frame began)
           r.gx = r.was_gx + (rx - r.was_x)
           r.gy = r.was_gy + (ry - r.was_y)
+          r.g_carried_y = r.was_g_carried_y
           r.gw = r.was_gw + (nw - r.was_w)
           r.gh = r.was_gh + (nh - r.was_h)
           r.gr = r.was_gr
@@ -2206,7 +2237,7 @@ fn measured_now(r : Rec?) -> (Double, Double, Double, Double, (Double, Double, D
 ///|
 /// `f`, the measures it tells told only once it is done, each whose kept came out otherwise than before it: a build of
 /// the frame again lays it out as the first did, and two nodes measured by one key (two pages' alike) each told in it.
-fn measures_told_once(frame : Int, f : () -> Unit) -> Unit {
+fn measures_told_once(c : @ui.Ctx, frame : Int, f : () -> Unit) -> Unit {
   let was : Map[Int, (Double, Double, Double, Double, (Double, Double, Double, Double), Int)] = {}
   mo.recs.each(fn(k, r) { was[k] = measured_now(Some(r)).unwrap() })
   let held = []
@@ -2218,6 +2249,13 @@ fn measures_told_once(frame : Int, f : () -> Unit) -> Unit {
     let (said, key, why) = h
     if measured_as(said, measured_now(mo.recs.get(key)), frame) != measured_as(said, was.get(key), frame) {
       measure_changed(said, key, why)
+      // A height read during this build must be reflected in the same frame that lays out its new height.
+      if physical_equal(said, measure_tall) {
+        match said.get(key) {
+          Some(signal) if signal.watched() => c.built_from_changed("measured height changed")
+          _ => ()
+        }
+      }
     }
   }
 }

@@ -23,7 +23,7 @@ const CLOSE_REMOVED = 4004;
 const REMOVED_RETRY_MS = 600_000;
 const CONNECT_TIMEOUT_MS = 20_000;
 /// How long the roster the cloud said last counts as reached once its socket ended. A socket the cloud closes is back
-/// within seconds (ccvm's about every 20 minutes, 2026-10-29): those seconds are not shown as cut off. The roster itself
+/// within seconds (one station's about every 20 minutes, 2026-10-29): those seconds are not shown as cut off. The roster itself
 /// is taken on past this (cloud/state.ts `peersCurrent`), until the station is removed.
 export const ROSTER_GRACE_MS = 60_000;
 

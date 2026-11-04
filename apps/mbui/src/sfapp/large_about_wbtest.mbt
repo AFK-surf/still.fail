@@ -429,7 +429,7 @@ test "大屏 一台 station 的记忆 made once, the language changed and the st
   let global = @sf.t("web-main.memory.global")
   let section = tree_node_of(global)
   let row = tree_node_of("发布流程")
-  let title = tree_node_of("Studio")
+  let title = tree_node_of("Willow")
   assert_true(section is Some(_) && row is Some(_) && title is Some(_), msg="the tree's own: \{tree_words_drawn()}")
   lang.val = "en"
   t.run_for(@ui.move_most_ms)
@@ -475,7 +475,7 @@ test "归档, 一台 station 的归档 and 自动决策 made once on a large scr
     let _ = large_about_tester(true, platform, scale~, w~, mode="settings-archiving")
     assert_true(app.nav.top() == Setting(@settings.Route::Archiving), msg=at)
     let own = tree_words_drawn()
-    for words in ["Studio", @sf.t("web-pages.appearance.archive.title"), @sf.t("web-pages.archiving.auto.title")] {
+    for words in ["Willow", @sf.t("web-pages.appearance.archive.title"), @sf.t("web-pages.archiving.auto.title")] {
       assert_true(own.iter().any(fn(o) { o.contains(words) }), msg="归档's \{words} the tree's own at \{at}: \{own}")
     }
     let _ = large_about_tester(true, platform, scale~, w~, mode="settings-archiving:ws1/st1")

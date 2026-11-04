@@ -8,8 +8,8 @@ import type { LockPair, LockPromptsView, LockStation, LockView } from "../src/co
 export type LockStory = "on" | "noStations" | "waiting" | "finding" | "code" | "wrong" | "none" | "failed" | "prompt";
 
 const STATIONS: LockStation[] = [
-  { id: "s_studio", name: "Studio", version: "0.1.3217", online: true, protected: true },
-  { id: "s_mini", name: "mini1", version: "0.1.2980", online: false, protected: false },
+  { id: "s_willow", name: "Willow", version: "0.1.3217", online: true, protected: true },
+  { id: "s_mini", name: "cedar", version: "0.1.2980", online: false, protected: false },
 ];
 
 const PAIR: Partial<Record<LockStory, LockPair>> = {
@@ -28,7 +28,7 @@ type Device = LockView["members"][number]["groups"][number]["devices"][number];
 const GROUPS: { appText: string; devices: Omit<Device, "mine" | "removable">[] }[] = [
   { appText: "still.fail 桌面版", devices: [
     { id: "d_demo", kind: "app", label: "still.fail 桌面版 · MacBook Pro", signs: true, older: false, renewSoon: false, recent: false, lastSeen: 1_760_000_000, nameText: "MacBook Pro", fullText: "MacBook Pro · still.fail 桌面版", metaText: "此设备 · 受信任" },
-    { id: "d_studio", kind: "app", label: "still.fail 桌面版 · Mac Studio", signs: true, older: false, renewSoon: false, recent: false, lastSeen: 1_759_950_000, nameText: "Mac Studio", fullText: "Mac Studio · still.fail 桌面版", metaText: "一天内使用过 · 受信任" },
+    { id: "d_sample", kind: "app", label: "still.fail 桌面版 · 示例工作站", signs: true, older: false, renewSoon: false, recent: false, lastSeen: 1_759_950_000, nameText: "示例工作站", fullText: "示例工作站 · still.fail 桌面版", metaText: "一天内使用过 · 受信任" },
   ] },
   { appText: "still.fail Android", devices: [
     { id: "d_pixel", kind: "app", label: "still.fail Android · Pixel 9", signs: true, older: false, renewSoon: false, recent: true, lastSeen: 1_759_990_000, nameText: "Pixel 9", fullText: "Pixel 9 · still.fail Android", metaText: "一天内使用过 · 受信任 · 新增" },

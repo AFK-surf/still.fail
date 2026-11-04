@@ -2,7 +2,7 @@
 // sessions' summaries (`sessions`), the threads' summaries as the viewer has them (`threads`), and what the station keeps
 // beside them that no summary says (`marks`, GET /chats?marks=1: the cards and needs waiting, the review's marks, pins,
 // shares…). Made by the station, every change read every row it could touch again for every viewer, from the disk while
-// its machine was short of memory (3 to 10 s each on ccvm, 2026-11-03); the station keeps what is said and its
+// its machine was short of memory (3 to 10 s each on a station, 2026-11-03); the station keeps what is said and its
 // statistics, a device makes what its pages show of them.
 import { get, isObject } from "../util.ts";
 import * as titles from "../titles.ts";

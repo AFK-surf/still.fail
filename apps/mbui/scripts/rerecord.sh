@@ -62,7 +62,11 @@ for n in "$@"; do
   [ -n "$t" ] && tag=$t; [ -n "$s" ] && station=$s
   echo "rerecord: $n ← $test (trace $trace, mark ${t:-none of its own}${s:+, station $s})"
   FLOW_EMIT="$TMP/$idx-$n.drive" moon_tests "$test" > "$TMP/$idx-$n.test.log" 2>&1
-  [ -s "$TMP/$idx-$n.drive" ] || { grep -a 'Error\]\|error:\|failed\|^flow:' "$TMP/$idx-$n.test.log" | head -20 | cut -c1-300; die "$test wrote no script"; }
+  # A test can stop halfway after writing a nonempty script. Never treat that partial run as a complete flow.
+  [ -s "$TMP/$idx-$n.drive" ] && [ "$(tail -n 1 "$TMP/$idx-$n.drive")" = '# flow complete' ] || {
+    grep -a 'Error\]\|error:\|failed\|^flow:' "$TMP/$idx-$n.test.log" | head -20 | cut -c1-300
+    die "$test did not write a complete script"
+  }
   # (from a starting point (E2E_START), the app's core already made: the first start's `migrate`, which a test over a
   # first start's trace waits for, is not asked again)
   if [ -n "${E2E_START:-}" ]; then
@@ -117,8 +121,7 @@ for x in $tests; do
   fi
   # Refuse to keep this machine's identity even if another source is added to the recording later.
   machine=$(hostname -s)
-  if { [ -n "${HOME:-}" ] && [ "$HOME" != / ] && grep -Fq "$HOME" "$trace"; } ||
-     { [ -n "$machine" ] && grep -Fq "$machine" "$trace"; }; then
+  if ! node "$D/recording-privacy.mjs" "$trace" "$machine"; then
     cp "$TMP/$(basename "$trace").old" "$trace"
     echo "  $test: recording contains local machine information; its old trace was kept"
     code=1

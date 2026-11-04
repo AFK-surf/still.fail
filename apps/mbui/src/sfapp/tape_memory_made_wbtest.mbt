@@ -1,5 +1,5 @@
 // 一台 station 的记忆 made once on the tape at any width of a medium screen (600 to 839: the page in its panel narrow or
-// wide as its panel is, the panel's bar naming it), reached as a person does (设置 → 记忆 → Studio).
+// wide as its panel is, the panel's bar naming it), reached as a person does (设置 → 记忆 → Willow).
 
 ///|
 test "on the tape 一台 station 的记忆 made once: its rows the tree's own; what it is for by one mark, the bar's" {

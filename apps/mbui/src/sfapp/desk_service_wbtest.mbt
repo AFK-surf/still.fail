@@ -7,7 +7,7 @@ test "desk: a web service asked as a page is its chat with the service beside it
   new_run()
   // (its agent's services known to the chat: the core keeps only a tab of one of them)
   let src = fixture("chat-info")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   // (a window whose side panel holds the whole of its bar, a press's room round each key: a 1280's leaves its size and
   // how far it came to its ⋯)
@@ -60,7 +60,7 @@ test "desk: a web service asked as a page is its chat with the service beside it
 test "desk: a visualization opened aside is a tab beside its chat, served from here with its name in the bar" {
   new_run()
   let src = fixture("chat-viz")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
@@ -83,7 +83,7 @@ test "desk: a visualization opened aside is a tab beside its chat, served from h
 test "desk: a service up pressed in 任务 beside the chat opens its own tab in front (JobsTab)" {
   new_run()
   let src = fixture("chat-jobs-side")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
@@ -103,7 +103,7 @@ test "desk: a service up pressed in 任务 beside the chat opens its own tab in 
 test "desk: wherever the pointer shows the side panel's edge's ↔, a drag from there sets its width (its room round it as the pointer lights it)" {
   new_run()
   let src = fixture("chat-info")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1440.0, h=900.0, platform=0)
   t.run_for(@ui.move_most_ms)

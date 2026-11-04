@@ -26,7 +26,7 @@ The default `moon` build does not link the engine: only the apps with the core (
 shell's `.a` and Hermes's framework), built by `scripts/mac.sh`, which makes what they link first (`scripts/core.sh
 apple`).
 
-## Building and the smoke test (on Studio)
+## Building and the smoke test
 
 `scripts/core.sh` builds from the still.fail checkout it is in (`$EMBER`), with pnpm and rustup's cargo. Everything it
 makes goes to `out/core/` (ignored); the shell's intermediate build goes to `$CARGO_TARGET_DIR` (`out/core-target`).
@@ -119,8 +119,8 @@ stops the core and prints timings and the process's memory footprint.
 
 ## Measurements
 
-`scripts/core.sh smoke` on Studio (M2 Max, macOS 26.4), 2026-10-19, two runs on one data directory, against
-JavaScriptCore's before it (same machine, ember dda655bbf):
+`scripts/core.sh smoke` compares the native core's engines. The following example compares two runs on one test
+machine against JavaScriptCore's earlier implementation (`ember dda655bbf`):
 
 | | Hermes 0.81.4 (`core.hbc`) | JavaScriptCore (`core.js`, before) |
 |---|---|---|
@@ -249,7 +249,7 @@ memory).
   clang-cl in Hermes's own CMake tree from facebook/hermes at the tag React Native 0.81.4's Hermes is (MSVC fails on
   Hermes at that tag), Hermes static in `stillfail_engine.dll`; the shell `stillfail_shell.dll` (client/shell for
   `x86_64-pc-windows-msvc`). Both are this repository's native parts (`node scripts/native.ts fetch engine|shell
-  win32-x64`), prebuilt on a Mac (Studio: `node scripts/native.ts prebuild`, cross-built with cargo-xwin and clang-cl
+  win32-x64`), prebuilt on a Mac (`node scripts/native.ts prebuild`, cross-built with cargo-xwin and clang-cl
   on xwin's SDK) into the releases bucket by their keys; CI only fetches them, nothing is committed. win.sh puts them
   and `core.hbc` beside the app's .exe.
 - **Script**: `scripts/core.sh hermes` with the engine's own hermesc (`hermesc.exe` in the engine part).
@@ -284,8 +284,8 @@ desktop app do (ember docs/client-core.md, "Sign-in"). The cloud accepts exactly
   below, in the default browser, as the desktop app does); otherwise register the scheme (`CFBundleURLTypes`; on macOS handle `kAEGetURL`, on iOS
   `application:openURL:`). Then `mb_core_send({"id":…,"call":"auth.complete","params":{"query":"<query>"}})`.
   Built: `src/host/apple_auth.m` and `@core.sign_in`; `MBUI_AUTH_DRY=1` makes the session but does not start it (no one
-  has signed in through it yet: a real sign-in is the person's to do). Caveat: another installed still.fail app
-  (Studio has one) also owns `stillfail://`; ASWebAuthenticationSession avoids that clash, a registered scheme does not.
+  has signed in through it yet: a real sign-in is the person's to do). Caveat: another installed still.fail app can
+  also own `stillfail://`; ASWebAuthenticationSession avoids that clash, a registered scheme does not.
 - **Loopback** (`http://127.0.0.1:<port>/oauth/callback`, what command-line tools do). Nothing of it is
   still.fail's: mbui/hostapi's `browser_login` (browser_login.mbt, `src/host/apple_browser_login.m`) listens on
   127.0.0.1 at a port the system picks, gives the app the address to come back to, opens the app's login page with

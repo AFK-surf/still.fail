@@ -157,7 +157,7 @@ async function workspace(h: Harness) {
   const alice = h.as(aliceTokens);
   const id = ((await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as any).id as string;
   assert.equal((await alice("POST", `/v1/workspaces/${id}/members`, { role: "member", emails: ["bob@example.test"] })).status, 200);
-  const enrollment = (await (await alice("POST", `/v1/workspaces/${id}/enrollments`, { name: "studio" })).json()) as any;
+  const enrollment = (await (await alice("POST", `/v1/workspaces/${id}/enrollments`, { name: "willow" })).json()) as any;
   const station = await key();
   const response = await h.fetch("/v1/stations/enroll", {
     method: "POST",

@@ -98,7 +98,7 @@ fn links_core(
     },
   }
   if mode.has_prefix("chat") {
-    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
   t.run_for(@ui.move_most_ms)
@@ -370,7 +370,7 @@ test "a login's page on this device: the notice that holds the app up says which
           {
             value: Some({
               "id": "login-1",
-              "title": "在 Studio 上登录 gcloud",
+              "title": "在 Willow 上登录 gcloud",
               "state": "browser",
               "step": "loopback",
               "active": true,
@@ -390,11 +390,11 @@ test "a login's page on this device: the notice that holds the app up says which
       }
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t.tap_text("在浏览器里登录")
   assert_eq(named(calls, "machineLogin.open").length(), 1)
-  assert_eq(t.hold_words(), Some(("登录", "在 Studio 上登录 gcloud", "正在等待浏览器")))
+  assert_eq(t.hold_words(), Some(("登录", "在 Willow 上登录 gcloud", "正在等待浏览器")))
   assert_eq(t.opened(), ["https://accounts.example.com/o/oauth2/auth?x=1"])
 }

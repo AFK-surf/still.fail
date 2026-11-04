@@ -430,7 +430,7 @@ describe("remote", { concurrency: true }, () => {
 
   test("one chat's slow request holds up no other chat's, nor what only reads", async () => {
     // Every request of every chat was answered in one line: on a loaded station a task's state, asked by one chat,
-    // waited behind another chat's sync past its caller's 30 s (2026-10-21, Studio for ccvm).
+    // waited behind another chat's sync past its caller's 30 s (2026-10-21, Office for lab-node).
     const r = station();
     let release!: () => void;
     const released = new Promise<void>((resolve) => (release = resolve));
@@ -701,12 +701,12 @@ describe("remote", { concurrency: true }, () => {
   });
 
   test("the source can read its remote workspace size and address that station by name", async () => {
-    const { a, b, use } = pair([{ id: "A", name: "Home" }, { id: "B", name: "Studio" }]);
+    const { a, b, use } = pair([{ id: "A", name: "Home" }, { id: "B", name: "Office" }]);
     await use("station_task", { station: "B", key: "k", action: "prepare", command: "true" });
     const work = join(b.remote.room("ws", "A", "s1"), "work");
     writeFileSync(join(work, "data"), Buffer.alloc(1024 * 1024, 1));
     assert.deepEqual(a.remote.workspaceTargets("s1"), { workspace: "ws", stations: ["B"] });
-    assert.equal(await a.remote.workspaceStation("s1", "Studio"), "B");
+    assert.equal(await a.remote.workspaceStation("s1", "Office"), "B");
     assert.equal(await a.remote.workspaceStation("s1", "Home"), "");
     let size = await a.remote.workspaceSize("s1", "B");
     while (size === null) {
@@ -777,9 +777,9 @@ describe("remote", { concurrency: true }, () => {
 
   /// A station's load as one that measures it says it.
   const loadOf = (busy: number, turns: number): Load => ({
-    os: "macOS 15.6", arch: "arm64", cpus: 12, cpuModel: "Apple M2 Max", cpuBusy: { share: busy, seconds: 60 }, loadAvg: [1.5, 2, 2.5],
-    memory: { totalBytes: 64 * 1024 ** 3, availableBytes: 40 * 1024 ** 3 }, disk: { path: "/data", totalBytes: 1000 * 1024 ** 3, freeBytes: 200 * 1024 ** 3 },
-    gpus: [{ name: "Apple M2 Max", cores: 30 }], running: { remoteTasks: 1, jobs: 2, services: 0, turns }, relay: { home: "https://r.example", ping: { relay: "https://r.example", ms: 12 } },
+    os: "macOS 15.6", arch: "arm64", cpus: 10, cpuModel: "Apple M1 Pro", cpuBusy: { share: busy, seconds: 60 }, loadAvg: [1.5, 2, 2.5],
+    memory: { totalBytes: 32 * 1024 ** 3, availableBytes: 20 * 1024 ** 3 }, disk: { path: "/data", totalBytes: 1000 * 1024 ** 3, freeBytes: 200 * 1024 ** 3 },
+    gpus: [{ name: "Apple M1 Pro", cores: 16 }], running: { remoteTasks: 1, jobs: 2, services: 0, turns }, relay: { home: "https://r.example", ping: { relay: "https://r.example", ms: 12 } },
     checkedAt: 0,
   });
 
@@ -820,7 +820,7 @@ describe("remote", { concurrency: true }, () => {
     assert.equal(listed, null);
     await rounds("the list is out", clock, "500 millis", () => listed !== null);
     const busy = (share: string, turns: string) =>
-      `arm64 macOS 15.6, 12 cores (Apple M2 Max), GPU 30 cores; CPU ${share} busy over the last 60 s, load 1.5 / 2 / 2.5 (1 / 5 / 15 min); memory 40 GiB of 64 GiB free, disk 200 GiB of 1000 GiB free; running 1 remote task, 2 jobs, 0 services, ${turns}; relay ping 12 ms`;
+      `arm64 macOS 15.6, 10 cores (Apple M1 Pro), GPU 16 cores; CPU ${share} busy over the last 60 s, load 1.5 / 2 / 2.5 (1 / 5 / 15 min); memory 20 GiB of 32 GiB free, disk 200 GiB of 1000 GiB free; running 1 remote task, 2 jobs, 0 services, ${turns}; relay ping 12 ms`;
     assert.deepEqual(listed, {
       workspace: "ws",
       current: true,
@@ -873,13 +873,13 @@ describe("remote", { concurrency: true }, () => {
   });
 
   test("a station is named by its id or by the name station_list shows it by", async () => {
-    const { a, b, use } = pair([{ id: "A", name: "Studio" }, { id: "B", name: "Mini1" }, { id: "C", name: "MBA" }, { id: "D", name: "mba" }]);
-    assert.deepEqual(await use("station_task", { station: "mini1", key: "k", action: "prepare", command: "true" }), { key: "k", prepared: true });
-    const started = await use("station_task", { station: "Mini1", key: "k", action: "start" });
+    const { a, b, use } = pair([{ id: "A", name: "Office" }, { id: "B", name: "TestStation" }, { id: "C", name: "Laptop" }, { id: "D", name: "laptop" }]);
+    assert.deepEqual(await use("station_task", { station: "teststation", key: "k", action: "prepare", command: "true" }), { key: "k", prepared: true });
+    const started = await use("station_task", { station: "TestStation", key: "k", action: "start" });
     assert.equal(b.store.getJob(started.job.id)!.sessionKey, "remote:ws:A:s1");
     assert.ok(existsSync(a.remote.outgoing("ws", "s1", "B", "k")), "kept under its id, as one started by id is");
     assert.equal((await use("station_task", { station: "B", key: "k", action: "get" })).key, "k");
-    await assert.rejects(use("station_task", { station: "MBA", key: "k", action: "get" }), /2 stations are named MBA/);
+    await assert.rejects(use("station_task", { station: "Laptop", key: "k", action: "get" }), /2 stations are named Laptop/);
     await assert.rejects(use("station_task", { station: "Nowhere", key: "k", action: "get" }), /peer is not another station/);
   });
 
@@ -963,7 +963,7 @@ describe("remote", { concurrency: true }, () => {
 
   test("a task its station does not know, or never started, is told and no longer followed after a while", async () => {
     // Followed for good every 5 s: an agent whose prepare or start did not get through goes on with another key, and
-    // ccvm followed 90 such tasks on Studio (2026-10-21).
+    // lab-node followed 90 such tasks on Office (2026-10-21).
     const clock = testClock();
     const store = Store.open(":memory:", null, clock);
     cleanup.push(() => store.close());

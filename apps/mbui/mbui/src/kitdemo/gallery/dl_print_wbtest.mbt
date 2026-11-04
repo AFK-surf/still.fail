@@ -21,7 +21,7 @@ fn first_frame_time(tape : String) -> Double {
 
 ///|
 /// The controls page's draw list printed when asked (MBUI_DL_PRINT=1: scripts/render_offscreen.sh, render_check.sh):
-/// of the run kept from mini1, or (MBUI_DL_TAPE, a run's log: its text, its input and its frames) of that run, its
+/// of the run kept on a Mac, or (MBUI_DL_TAPE, a run's log: its text, its input and its frames) of that run, its
 /// frames drawn again here, the last one's; and whether each frame here was the run's (DLFRAMES).
 test "the controls page's draw list printed when asked (MBUI_DL_PRINT=1: scripts/render_check.sh)" {
   if node_env("MBUI_DL_PRINT") == "1" {

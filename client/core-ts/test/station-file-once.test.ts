@@ -1,6 +1,6 @@
 // A whole file asked again while it is coming (a preview closed and opened again, an image put up anew) waits for the read
 // going, told how far it has come, rather than being brought again beside it: a desktop app had six images coming fifteen
-// times at once from ccvm, each at a fifteenth of the line (2026-10-28).
+// times at once from a station, each at a fifteenth of the line (2026-10-28).
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { HttpResponse } from "../src/host.ts";

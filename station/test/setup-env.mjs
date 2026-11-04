@@ -8,8 +8,7 @@ import { join } from "node:path";
 for (const key of ["SSL_CERT_FILE", "SSL_CERT_DIR", "CODEX_CA_CERTIFICATE"]) delete process.env[key];
 
 // Each run its own temporary directory, named to every test file's process (they inherit it from the runner, which
-// makes it) and removed when the run ends: the machine's own grew with every run's leftovers (78 794 entries on
-// Studio), and a test that lists what is above its folder there waited minutes for it (test/drive.test.ts). Short,
+// makes it) and removed when the run ends: leftover files in a shared directory slow tests that list its parent. Short,
 // under /tmp, for the sockets made in it (104 bytes on macOS).
 if (!process.env.STILLFAIL_TEST_TMP) {
   const own = mkdtempSync(process.platform === "win32" ? join(tmpdir(), "sft-") : "/tmp/sft-");

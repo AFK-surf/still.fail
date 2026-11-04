@@ -1,7 +1,7 @@
 // Markdown read into the nodes markdown.ts makes its tree of (mdast's, as far as it reads them), by markdown-it.
 // micromark read it before: as GitHub's flavour, the same, but in Hermes (the phones' engine, which has no JIT) at
-// ~370 000 characters a second on a Mac Studio, a chat's page of agents' replies ~0.2 s; markdown-it reads ten times
-// as fast there (bench/md-parse.ts). What it reads as micromark's GFM did: tables, strikethrough with one tilde or
+// a substantial share of opening a chat; markdown-it is faster in that engine (bench/md-parse.ts). What it reads as
+// micromark's GFM did: tables, strikethrough with one tilde or
 // two, task lists; raw HTML left out; links as written (not encoded, none refused: a client keeps what it may open);
 // formulas in `$$` fences and `\[ \]` blocks, `\( \)` in a line (a `$` in prose is a dollar).
 //

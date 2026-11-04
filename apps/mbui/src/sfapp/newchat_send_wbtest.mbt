@@ -391,7 +391,7 @@ test "a new chat's first words not sent (the chat not made): the page the new ch
       match name {
         "newChat.create" =>
           held[name] = fn() {
-            done(Err({ "code": Json::string("unavailable"), "message": Json::string("Studio 离线") }))
+            done(Err({ "code": Json::string("unavailable"), "message": Json::string("Willow 离线") }))
           }
         _ => (base.call)(name, params, done)
       }
@@ -481,7 +481,7 @@ test "a new chat while its stations are read: its page and composer as they will
   // read: the page on the station it started on, the same words in the same field, and they go
   reading.set(false)
   t.draw()
-  assert_true(t.find("它会在 Studio 上") is Some(_))
+  assert_true(t.find("它会在 Willow 上") is Some(_))
   let (_, kept, _, _) = t.ime()
   assert_eq(kept, "先写一半")
   tap_send(t)

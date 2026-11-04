@@ -70,17 +70,17 @@ test("a_feishu_place_is_named_by_its_chat_and_opens_in_feishu_or_lark", () => {
 
 test("a_stillfail_place_is_its_title_or_the_agents_or_new_chat_never_its_first_message", () => {
   // Named as the station's titleOf names it: its first message, links and all, is never its name.
-  const first = "看 [一起排查 ccvm 图片加载](https://app.still.fail/w/01M3/s/0c5f/chats/ember%3Ac-7c92) 要排队";
+  const first = "看 [一起排查 lab-node 图片加载](https://app.still.fail/w/01TEST/s/example/chats/ember%3Ac-abcd) 要排队";
   const threads = [
-    { surface: "ember", channel: "EMBER", threadTs: "1793652177.618000", title: null, firstText: first, sessions: [{ session: "s1" }] },
-    { surface: "ember", channel: "EMBER", threadTs: "1793652178.000000", title: "排查 ccvm 图片加载", firstText: first, sessions: [] },
+    { surface: "ember", channel: "EMBER", threadTs: "1700000001.618000", title: null, firstText: first, sessions: [{ session: "s1" }] },
+    { surface: "ember", channel: "EMBER", threadTs: "1700000002.000000", title: "排查 lab-node 图片加载", firstText: first, sessions: [] },
     // the agent's (chat_post title), a person's being none
-    { surface: "ember", channel: "EMBER", threadTs: "1793635478.750000", title: null, autoTitle: "ccvm 发消息和图片卡顿", firstText: first, sessions: [] },
+    { surface: "ember", channel: "EMBER", threadTs: "1700000003.750000", title: null, autoTitle: "lab-node 发消息和图片卡顿", firstText: first, sessions: [] },
   ];
-  const untitled = format.place(threads, "EMBER/1793652177.618000", 480, new Map()) as J;
+  const untitled = format.place(threads, "EMBER/1700000001.618000", 480, new Map()) as J;
   assert.deepEqual([untitled.name, untitled.surface, untitled.session], ["新对话", "ember", "s1"]);
-  assert.equal((format.place(threads, "EMBER/1793652178.000000", 480, new Map()) as J).name, "排查 ccvm 图片加载");
-  assert.equal((format.place(threads, "EMBER/1793635478.750000", 480, new Map()) as J).name, "ccvm 发消息和图片卡顿");
+  assert.equal((format.place(threads, "EMBER/1700000002.000000", 480, new Map()) as J).name, "排查 lab-node 图片加载");
+  assert.equal((format.place(threads, "EMBER/1700000003.750000", 480, new Map()) as J).name, "lab-node 发消息和图片卡顿");
 });
 
 test("a_feishu_person_is_heard_as_a_slack_one_is", () => {
@@ -120,12 +120,12 @@ test("the_instructions_a_continued_session_is_given_carry_no_messages", () => {
 });
 
 test("a_message_the_station_cut_short_is_still_read_as_one", () => {
-  const cut = '<message via="ember" from="ember" ts="9.1">\nRemote task t1 on mini1: {"job":{"state":"done"\n… (1505 more characters)';
+  const cut = '<message via="ember" from="ember" ts="9.1">\nRemote task t1 on teststation: {"job":{"state":"done"\n… (1505 more characters)';
   const [messages, note] = parsePrompt(cut);
   assert.equal(note, "");
   assert.deepEqual(
     messages.map((m) => [m.station, m.text]),
-    [[true, 'Remote task t1 on mini1: {"job":{"state":"done"\n… (1505 more characters)']],
+    [[true, 'Remote task t1 on teststation: {"job":{"state":"done"\n… (1505 more characters)']],
   );
   // Words not cut by the station and missing their closing tag are not a message.
   assert.equal(parsePrompt('<message via="ember" from="ember" ts="9.1">\nhi')[0].length, 0);
@@ -141,7 +141,7 @@ test("a_station_notice_is_a_jobs_words_or_an_event_in_a_line", () => {
     'Job "shot" (job_2) was stopped by Ada from still.fail\'s page.',
     'The station restarted; Job "shot" (job_2) could not be started again: no such file',
     'The chat you opened, "Fix CI" (https://still.fail/chats/c-1), needs a person: pick one. They are asked there; help if you can, or wait. Read it with chat_read; write to its agent with session_send to its link.',
-    'Remote task t1 on mini1: {"job":{"state":"running"}}',
+    'Remote task t1 on teststation: {"job":{"state":"running"}}',
   ];
   const text = notices.map((n) => `<message via="ember" from="ember" ts="9.1">\n${n}\n</message>`).join("\n");
   assert.equal(parsePrompt(text)[0][0].station, true);
@@ -388,8 +388,8 @@ test("each_prompt_that_woke_the_agent_begins_a_turn_saying_when_and_what_it_did"
 });
 
 test("a_task_on_another_station_says_where_it_runs_and_what", () => {
-  const studio = "d2e33e62a1f88dd30e759c734b6604599a6e4024dbb926b1cd81b99c42da4956";
-  const call = (id: string, a: J) => ({ kind: "tool_call", tool: "mcp__stillfail__station_task", callId: id, text: JSON.stringify({ station: studio, ...a }), at: "2026-10-18T00:00:00Z" });
+  const office = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+  const call = (id: string, a: J) => ({ kind: "tool_call", tool: "mcp__stillfail__station_task", callId: id, text: JSON.stringify({ station: office, ...a }), at: "2026-10-18T00:00:00Z" });
   const done = (id: string) => ({ kind: "tool_result", callId: id, ok: true, text: "{}", at: "2026-10-18T00:00:01Z" });
   const live = {
     timeline: [
@@ -400,9 +400,9 @@ test("a_task_on_another_station_says_where_it_runs_and_what", () => {
       done("b"),
     ],
   };
-  const g = presentHistory(live, { ...cx([], [], []), stations: new Map([[studio, "Studio"]]) }).items[1].body.content;
-  assert.deepEqual(g.rows.map((r: J) => r.content.said), ["在 Studio 上准备 typecheck web", "在 Studio 上运行 typecheck web"]);
-  assert.equal(g.summary, "在 Studio 上运行 typecheck web · 共 2 项");
+  const g = presentHistory(live, { ...cx([], [], []), stations: new Map([[office, "Office"]]) }).items[1].body.content;
+  assert.deepEqual(g.rows.map((r: J) => r.content.said), ["在 Office 上准备 typecheck web", "在 Office 上运行 typecheck web"]);
+  assert.equal(g.summary, "在 Office 上运行 typecheck web · 共 2 项");
 });
 
 test("activity_prefers_an_important_running_step_to_a_routine_one", () => {
@@ -421,7 +421,7 @@ test("activity_prefers_an_important_running_step_to_a_routine_one", () => {
 });
 
 test("activity_tells_a_remote_task_start_from_a_status_check", () => {
-  const call = (action: string) => ({ kind: "tool_call", tool: "mcp__stillfail__station_task", callId: "a", text: JSON.stringify({ action, key: "test", station: "studio" }) });
+  const call = (action: string) => ({ kind: "tool_call", tool: "mcp__stillfail__station_task", callId: "a", text: JSON.stringify({ action, key: "test", station: "office" }) });
   assert.equal(activity({ timeline: [call("start")] }).now.important, true);
   assert.notEqual(activity({ timeline: [call("get")] }).now.important, true);
 });

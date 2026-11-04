@@ -134,8 +134,7 @@ Nothing else in a build tells outside (detlint's build-effect): those two are it
   that screen to the byte (scripts/render_check.sh: kitdemo's controls page, on the CI Mac and on a test Mac). When offscreen
   is wrong it is fixed, not replaced by what a window shows.
 - **Pixel references belong to one machine: the CI Mac, offscreen.** The same draw list drawn offscreen is the same picture
-  to the byte on every run on one machine, and another on another kind (the CI Mac, M4 on macOS 26.5, and a test Mac, M2 Max on
-  macOS 27.0.1: 6910 pixels of a 960×720 page apart; GitHub's macOS runner: 149 from the CI Mac). The references
+  to the byte on every run on one machine, and can differ on another machine or renderer. The references
   (goldens/render/macos-ci-*.png) are made and checked on the CI Mac only, by mbui's own runner there (the dedicated runner, label
   `mbui-render`: the render workflow), on the macOS and GPU they were made on (goldens/render/macos-ci.txt); the workflow
   fails when either is another (the CI Mac updated), and then every reference is made again in one PR from its artifact,
@@ -191,7 +190,7 @@ Nothing else in a build tells outside (detlint's build-effect): those two are it
   | Android | `host-android.yml`: an x86_64 emulator (API 34, google_apis, pixel_7; `ABI=x86_64` build) on ubuntu-24.04 | 9 frames the same | each answer the same | `android_controls` |
   | Windows | `host-windows.yml`: windows-latest, WARP | 9 frames the same | each answer the same | `windows_controls` |
   | web | `host-web.yml`: headless Chromium (SwiftShader's WebGL2) on ubuntu-24.04 | 9 frames the same | each answer the same | `web_controls` |
-  | macOS | `host-mac.yml`: the CI Mac (mbui's runner, `[self-hosted, mbui-render]`; never a fork's pull request), a window | 9 frames the same (also on a test Mac, by hand) | each answer of `mini1_controls` the same (the CI Mac's own; a test Mac's text was the same too) | `mini1_*`, `drive_controls` (the CI Mac's) |
+  | macOS | `host-mac.yml`: the CI Mac (mbui's runner, `[self-hosted, mbui-render]`; never a fork's pull request), a window | 9 frames the same (also on a test Mac, by hand) | each answer of `mac_capture_controls` the same (the CI Mac's own; a test Mac's text was the same too) | `mac_capture_*`, `drive_controls` (the CI Mac's) |
   | iOS | `host-ios.yml`: the CI Mac's simulator (iOS 26.5, `ios-mbui-sf`, scripts/ios.sh; the same runner as macOS'), which the iOS host's own runs use too: booted with an app of theirs running, the job fails at once (`host_contract.sh ios free`), and it shuts the simulator again only when it booted it (`done`) | 9 frames the same | each of 147 answers the same | `ios_controls` |
 
   Each workflow runs when its host's code changes (the host's files in src/host, its scripts, these scripts, its kept

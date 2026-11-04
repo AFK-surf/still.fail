@@ -3,10 +3,10 @@ android_controls
 drive_controls
 ios_controls
 linux_controls
-mini1_controls
-mini1_disclosure
-mini1_foundation
-mini1_menus
-mini1_overlays
+mac_capture_controls
+mac_capture_disclosure
+mac_capture_foundation
+mac_capture_menus
+mac_capture_overlays
 web_controls
 windows_controls

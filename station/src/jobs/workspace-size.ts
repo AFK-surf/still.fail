@@ -130,7 +130,7 @@ export class WorkspaceWatch {
   }
 
   /// What each chat's file says, read off the station's thread as it starts: read on it at the first look after every
-  /// update, 6 of them held it 1.3 s on ccvm short of memory (2026-11-03). By file name; null: none could be read.
+  /// update, these reads can hold up its other work. By file name; null: none could be read.
   readonly #read = new Map<string, string | null>();
 
   async #readAll(): Promise<void> {

@@ -81,7 +81,7 @@ async function read(env: Env, home: string, machine: boolean, lang: Lang): Promi
   }
   let text: string;
   try {
-    // Off the station's thread: six of these at once held it 1 s on ccvm short of memory (2026-11-03).
+    // Off the station's thread: six of these at once held it 1 s on a station short of memory (2026-11-03).
     text = await readFile(join(home, ".credentials.json"), "utf8");
   } catch {
     throw new Said(tr(lang, "station.claudeAuth.noCredentials"));

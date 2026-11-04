@@ -178,7 +178,7 @@ test "a station's file named by its path (RefCard): no ground, its edge dashed i
     fn(c) {
       let _ = begin(c)
       c.box(style=@ui.css("w=Full h=Full p=S4"), fn() {
-        file_card(c, "ref", "发布清单.md", 4210.0, named=true, meta="Studio · 路径", open=true, remove=true) |> ignore
+        file_card(c, "ref", "发布清单.md", 4210.0, named=true, meta="Willow · 路径", open=true, remove=true) |> ignore
         // (a file's card beside it: its size in the quiet ink)
         file_card(c, "file", "build.log", 18432.0, meta="18 KB", remove=true) |> ignore
       })
@@ -191,7 +191,7 @@ test "a station's file named by its path (RefCard): no ground, its edge dashed i
   let card = t.boxes().filter(fn(l) { l.dashed })
   assert_eq(card.length(), 1)
   assert_eq((card[0].bg & 0xFFL, card[0].border_w, card[0].border_c), (0L, 1.0, theme().p.line_strong))
-  let said = t.boxes().filter(fn(l) { l.text == "Studio · 路径" })
+  let said = t.boxes().filter(fn(l) { l.text == "Willow · 路径" })
   let size = t.boxes().filter(fn(l) { l.text == "18 KB" })
   assert_eq((said.length(), size.length()), (1, 1))
   assert_eq(said[0].color, size[0].color)

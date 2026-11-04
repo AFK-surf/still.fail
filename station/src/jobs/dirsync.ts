@@ -182,7 +182,7 @@ export async function listLocal(dir: string): Promise<Listing> {
       if (clean.length > MAX_FILES) throw new Error(`${dir} has more than ${MAX_FILES} files to sync`);
     }
     // Each one's size, off the station's main thread: one at a time there, a repository's thousands of files held every
-    // device for seconds on ccvm short of memory (2026-11-02, 24 s in six hours).
+    // device for seconds on a station short of memory (2026-11-02, 24 s in six hours).
     await pool(clean, async ({ path, id, mode }) => {
       const st = await lstat(join(dir, ...path.split("/"))).catch(() => null);
       if (st === null) return;
@@ -225,7 +225,7 @@ export type Ask = (method: string, more: Json) => Promise<Json>;
 /// The station's bulk requests to other stations (a sync's contents, a file's chunks), one at a time, in the order
 /// they came. What a station sends another waits in one queue with everything else it sends on the way (a relay's,
 /// iroh's: first in, first out): with several syncs pushing at once that queue grew to ten seconds, and members'
-/// devices, whose handshakes waited in it behind them, gave up connecting (2026-10-19, ccvm). One request at a time
+/// devices, whose handshakes waited in it behind them, gave up connecting (2026-10-19, a station). One request at a time
 /// keeps at most one request's worth (under 1 MiB) ahead of them.
 export class Bulk {
   private last: Promise<unknown> = Promise.resolve();
@@ -669,7 +669,7 @@ export async function patchOf(
   }
   const missing: string[] = [];
   // Every file of it off the station's thread: written and read there one by one, a task's 23 files brought back held
-  // the station 3 s on ccvm short of memory (2026-11-03), a message sent meanwhile waiting.
+  // the station 3 s on a station short of memory (2026-11-03), a message sent meanwhile waiting.
   await mkdir(scratch, { recursive: true });
   try {
     const g = (args: string[]) => run("git", ["-C", scratch, "-c", "core.autocrlf=false", "-c", "core.symlinks=true", "-c", "core.filemode=true", ...args], { maxBuffer: 1 << 30 });

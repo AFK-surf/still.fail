@@ -198,7 +198,7 @@ test "wide: rows pressed one after another, one chat open in place of the other;
 test "wide: a chat opened while settings are in view is opened in the chats; the chat open already, nothing changes" {
   let calls : Array[Made] = []
   let t = lists_tester(calls, 1280.0, 0, false)
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   app.nav.push(Settings)
   t.draw()
   assert_eq(@sfdesk.lit_place(), "settings")

@@ -132,7 +132,7 @@ Services listening on another station's localhost are reachable from here with n
 
 - **A program calling an HTTP API with a base URL** (an LLM server, a REST API, a script): use the path form,
   `$STILLFAIL_PEER_HTTP/<station>/<port>/<path>` = `http://localhost:<port>/<path>` there (streams, large bodies and
-  WebSockets pass as they come), e.g. `OLLAMA_HOST=$STILLFAIL_PEER_HTTP/studio/11434`. Without the variable, it is
+  WebSockets pass as they come), e.g. `OLLAMA_HOST=$STILLFAIL_PEER_HTTP/willow/11434`. Without the variable, it is
   your stillfail MCP URL with `/mcp` replaced by `/peer`. Programs only (Host 127.0.0.1, no browser `Origin`). 502
   "needs an update": that station is from before this; 504: it is offline.
 - **Anything else: a browser, web pages, dev servers (HMR), databases, any TCP protocol**: forward the port with

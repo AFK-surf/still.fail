@@ -181,7 +181,7 @@ test("archive cleanup keeps running jobs and shared projects", async () => {
 
 test("the auto-archive reads the state of sessions idle long enough alone", async () => {
   // Read for every session shown and every member of their chats at each look, the station's thread was held 17 s on
-  // ccvm short of memory (2026-11-03).
+  // a station short of memory (2026-11-03).
   const [r] = coldRig();
   const { key } = await idleSession(r);
   const read: string[] = [];

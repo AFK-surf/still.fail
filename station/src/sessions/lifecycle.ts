@@ -349,7 +349,7 @@ export function autoArchive(hub: Hub, now: number): number | null {
   const live = store.liveSessions();
   const own = store.chatsOfTheirOwn();
   // Each session's undelivered messages and last turn, read for those idle long enough alone, once each: read for every
-  // session shown and every member of their chats at each look, the station's thread was held 17 s on ccvm short of
+  // session shown and every member of their chats at each look, the station's thread was held 17 s on a station short of
   // memory (2026-11-03), what was said meanwhile waiting.
   const statsRead = new Map<string, ReturnType<typeof store.workOf>>();
   const statOf = (key: string) => {
