@@ -943,7 +943,14 @@ export class Lock {
       if (!s) return yield* Effect.fail(CoreError.invalid("not a station of this workspace"));
       const asked = yield* Effect.result(self.#station(station, "GET", "/lock"));
       if (asked._tag === "Failure") {
-        // It takes none of this workspace's members for a security mode (one turned on after it joined): why, as it said.
+        // It takes none of this workspace's members, the lock turned on after it joined (and it not in it then): it
+        // pins the lock itself once the lock names it, from the cloud (station/src/cloud/presence.ts takeFromPlane), as
+        // no device of this workspace may reach it to bring it.
+        if (asked.failure.code === "lock_station" && asked.failure.message === t("core-logic.mesh.lock_station.unpinned")) {
+          const f = fold(held(self.#inner, self.ws)?.entries ?? []);
+          return f.stations.has(station) ? { head: null, stations: {} } : yield* self.append("station", { key: station, name: s.name ?? "" });
+        }
+        // It takes none of them for another reason (its own workspace locked and this one not): why, as it said.
         if (asked.failure.code === "lock_station") return yield* Effect.fail(asked.failure);
         const old = asked.failure.status === 404 || /404|no route/.test(asked.failure.message);
         return yield* Effect.fail(new CoreError(old ? "lock_station_old" : "lock_station_offline", old ? t("core-misc.lock.stationOld", { name: s.name }) : t("core-misc.lock.stationOffline", { name: s.name })));
