@@ -129,10 +129,12 @@ test("refreshing a bounded history changes its lifetime total without counting t
   const from = Date.UTC(2026, 8, 5, 16), since = Date.UTC(2026, 10, 1, 16);
   const old = [row("2026-11-02", "s", "m", 1), row("2026-11-04", "s", "m", 10)];
   const held: J = { from, detailSince: since, rows: old, historyUnavailable: true,
-    partialHistory: { days: daysOf([old[0]]), tokens: 1_106, beforeDay: "2026-11-03", cards: 1 } };
+    partialHistory: { days: daysOf([old[0]]), tokens: 1_106, beforeDay: "2026-11-03", cardsIncomplete: true, tokensComplete: true } };
   const part: J = { detailSince: since, rows: [row("2026-11-02", "s", "m", 2), row("2026-11-04", "s", "m", 20)] };
   const updated: J = withPart(held, part, "2026-11-02", since);
   assert.equal(updated.partialHistory.tokens, 1_212);
   assert.equal(updated.partialHistory.beforeDay, "2026-11-03");
+  assert.equal(updated.partialHistory.cardsIncomplete, true);
+  assert.equal(updated.partialHistory.tokensComplete, true);
   assert.deepEqual(updated.partialHistory.days.map((d: J) => d.day), ["2026-11-02"]);
 });

@@ -10,7 +10,7 @@ import { usageRoutes } from "../src/api/routes/usage.ts";
 import { makeStore, USAGE_CALLS_EARLIER, USAGE_CALLS_SAME, usageByDay, usageCallsPage, usageGroups, usageSince } from "../src/read/store.ts";
 import { usage, usageNow } from "../src/read/usage.ts";
 import { Store } from "../src/store/store.ts";
-import { compactHistory, compactQuery, compactScopeReady, compactTotal, installCompactUsage, moveCompactStep } from "../src/store/usage-compact.ts";
+import { compactHistory, compactQuery, compactScopeReady, compactTotal, compactTotalsStep, installCompactUsage, moveCompactStep } from "../src/store/usage-compact.ts";
 import { retireUsageIndexes } from "../src/store/usage-retire.ts";
 import { keepUsage, retireAfterPrevious, watchCompactMoves } from "../src/usage/module.ts";
 import { testClock } from "./hub-fakes.ts";
@@ -811,6 +811,12 @@ test("missing old decisions and old usage keep their separate incomplete coverag
         assert.equal(answer.partialHistory.cards, undefined);
         assert.deepEqual(answer.partialHistory.days.map((d: { tokens: number }) => d.tokens), [3]);
       }
+      while (!compactTotalsStep(store.db, 64).done) { /* Account the new statistics, never the old usage rows. */ }
+      const bounded = usage(makeStore(store.db, "."), "en", 0n, 180_000n, 0n, false, { workspace: "A", home: false }, true,
+        { historyRange: { from: 0n, to: 86_400_000n } });
+      assert.equal(bounded.partialHistory.tokensComplete, undefined);
+      assert.equal(bounded.partialHistory.cardsIncomplete, true);
+      assert.equal(bounded.partialHistory.tokens, 3);
     } finally { store.db.setAuthorizer(null); }
   } finally { store.close(); }
 });
