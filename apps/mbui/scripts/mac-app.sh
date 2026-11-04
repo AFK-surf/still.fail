@@ -107,7 +107,7 @@ t2=$(now)
 # system's appearance is, the app open or not; and the black face's .icns for the macOS before (CFBundleIconFile).
 # actool knows .icon from Xcode 26: the newest Xcode's that does, whichever is selected.
 VARIANT=${MBUI_VARIANT:-preview}
-case $VARIANT in beta | monoid | monoid-beta) FACE=$VARIANT ;; *) FACE=stable ;; esac
+case $VARIANT in beta | monoid-beta) FACE=beta ;; *) FACE=stable ;; esac
 ICON=$OUT/AppIcon-$(shasum -a 256 "$D/mac-icon.swift" | cut -c1-12)-$FACE
 [ -f "$ICON.icns" ] || swift "$D/mac-icon.swift" "$FACE" "$ICON.icns" > /dev/null
 if [ ! -f "$ICON.assets/Assets.car" ]; then

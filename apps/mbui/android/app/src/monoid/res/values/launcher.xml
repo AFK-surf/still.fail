@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- monoid's app's (build.monoid.android): its m in white on black; values-night's the black on white. -->
-<resources>
-    <color name="launcher_bg">#1C1D20</color>
-    <color name="launcher_ink">#FFFFFF</color>
-    <color name="launcher_cheek">#F6BC9F</color>
-</resources>

@@ -55,11 +55,8 @@ variant() {
 # res: the app's resources (out/win-res/app.res), for mbui's win.sh to link into it (MBUI_WIN_RES)
 res() {
   local n=${MBUI_BUILD:-$(git -C "$EMBER" rev-list --count HEAD 2>/dev/null || echo 1)}
-  # (monoid's its m: AppIcon-<hash>-monoid(-beta).ico, mac-icon.swift's --ico monoid(-beta))
-  local face=
-  case "${MBUI_VARIANT:-preview}" in monoid | monoid-beta) face=-$MBUI_VARIANT ;; esac
-  local icon=$A/windows/AppIcon-$(sha256sum "$D/mac-icon.swift" | cut -c1-12)$face.ico
-  [ -f "$icon" ] || { echo "win.sh: no $icon (scripts/mac-icon.swift changed: swift scripts/mac-icon.swift --ico ${face#-} $icon, on a Mac)" >&2; return 1; }
+  local icon=$A/windows/AppIcon-$(sha256sum "$D/mac-icon.swift" | cut -c1-12).ico
+  [ -f "$icon" ] || { echo "win.sh: no $icon (scripts/mac-icon.swift changed: swift scripts/mac-icon.swift --ico $icon, on a Mac)" >&2; return 1; }
   local id name exe dir schemes extra r=$A/out/win-res
   variant || return 1
   [ -z "$schemes" ] || extra="MBUI_SCHEMES=$schemes\n$extra"

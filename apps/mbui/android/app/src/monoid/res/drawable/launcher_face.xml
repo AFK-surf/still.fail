@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- monoid's launcher mark until it has its own (the product's apps: build.monoid.android, .beta): an m, drawn in the
-     ink of its app's colour (values/launcher.xml). -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:pathData="M38 69V47A8 8 0 0 1 54 47V69M54 47A8 8 0 0 1 70 47V69" android:strokeColor="@color/launcher_ink" android:strokeWidth="7" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
-</vector>

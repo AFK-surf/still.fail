@@ -759,7 +759,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: apps/mbui/out/mac/AppIcon-*
-          key: mbui-mac-icon-monoid-beta-${{ hashFiles('apps/mbui/scripts/mac-icon.swift') }}
+          key: mbui-mac-icon-beta-${{ hashFiles('apps/mbui/scripts/mac-icon.swift') }}
       - name: The macOS shell's key
         id: native-keys
         run: echo "key=natives-shell-apple-darwin-arm64-$(node scripts/native.ts key shell-apple darwin-arm64)" >> "$GITHUB_OUTPUT"

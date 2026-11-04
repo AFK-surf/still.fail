@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- monoid's test channel's app's (build.monoid.android.beta, monoid.zone): its m in white on orange. -->
-<resources>
-    <color name="launcher_bg">#E5704A</color>
-    <color name="launcher_ink">#FFFFFF</color>
-    <color name="launcher_cheek">#F6BC9F</color>
-</resources>
