@@ -11,6 +11,7 @@ import { usageHistory } from "../src/read/usage.ts";
 import { Store } from "../src/store/store.ts";
 import { installCompactUsage } from "../src/store/usage-compact.ts";
 import { convertUsageHistoryStep, hasUsageHistory, historyTransferPending, installUsageHistory } from "../src/store/usage-history.ts";
+import { moveHistoryOrphanScope } from "../src/store/usage-history-transfer.ts";
 import { retireAfterPrevious, retireUntilComplete } from "../src/usage/module.ts";
 
 function oldStore(path = ":memory:") {
@@ -270,6 +271,66 @@ test("moving a workspace does not rewrite each deleted session's owner", () => {
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM moved_owners").get() as { n: number }).n, 0);
     assert.deepEqual({ ...db.prepare("SELECT calls, tokens FROM usage_history WHERE scope = 'C'").get() }, { calls: 300, tokens: 900 });
   } finally { store.close(); }
+});
+
+test("deleted sessions follow repeated workspace merges, including reused workspace names", () => {
+  const store = oldStore();
+  const db = store.db;
+  try {
+    const put = db.prepare(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output, calls)
+      VALUES (?, 0, ?, 'claude', 2, 0, 0, 0, 1, 1)`);
+    for (let n = 0; n < 16; n++) {
+      const key = `owner-${n}`;
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, ws: `S${n}`, createdAt: 0, lastActiveAt: 0 });
+      put.run(key, key);
+    }
+    installCompactUsage(db, () => 900_000);
+    installUsageHistory(db, 900_000);
+    while (!convertUsageHistoryStep(db)) { /* Convert old summaries. */ }
+    for (let n = 0; n < 16; n++) store.deleteSession(`owner-${n}`);
+    for (let size = 1; size < 16; size *= 2)
+      for (let n = 0; n < 16; n += 2 * size) store.setSessionsWs(`S${n + size - 1}`, `S${n + 2 * size - 1}`);
+
+    store.insertSession({ key: "reused", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "reused", ws: "S0", createdAt: 0, lastActiveAt: 0 });
+    put.run("reused", "reused");
+    store.deleteSession("reused");
+    store.setSessionsWs("S15", "S0");
+    store.insertSession({ key: "later", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "later", ws: "S16", createdAt: 0, lastActiveAt: 0 });
+    put.run("later", "later");
+    store.deleteSession("later");
+    store.setSessionsWs("S16", "S0");
+    db.prepare("UPDATE usage SET output = 8 WHERE id = 'owner-0'").run();
+    assert.deepEqual(db.prepare("SELECT scope, quarter, calls, tokens FROM usage_history WHERE calls != 0 OR tokens != 0 ORDER BY scope, quarter")
+      .all().map((r) => ({ ...r })), [{ scope: "S0", quarter: 0, calls: 18, tokens: 61 }]);
+    const depth = db.prepare(`WITH RECURSIVE chain(id, parent, depth) AS (
+      SELECT id, parent, 0 FROM usage_history_owner_groups
+      UNION ALL SELECT chain.id, g.parent, chain.depth + 1 FROM chain JOIN usage_history_owner_groups g ON g.id = chain.parent
+    ) SELECT MAX(depth) AS n FROM chain`).get() as { n: number };
+    assert.ok(depth.n <= 5, "repeated moves keep owner lookup shallow");
+  } finally { store.close(); }
+});
+
+test("a failed deleted-owner merge rolls its group changes back", () => {
+  const store = oldStore();
+  const db = store.db;
+  try {
+    const put = db.prepare(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output, calls)
+      VALUES (?, 0, ?, 'claude', 2, 0, 0, 0, 1, 1)`);
+    put.run("one", "a"); put.run("two", "b");
+    installCompactUsage(db, () => 900_000);
+    installUsageHistory(db, 900_000);
+    while (!convertUsageHistoryStep(db)) { /* Convert old summaries. */ }
+    store.deleteSession("a"); store.deleteSession("b");
+    const groups = db.prepare("SELECT * FROM usage_history_owner_groups ORDER BY id").all();
+    const scopes = db.prepare("SELECT * FROM usage_history_owner_scopes ORDER BY scope").all();
+    db.setAuthorizer((action, table, column) => action === constants.SQLITE_UPDATE && table === "usage_history_owner_groups" && column === "parent"
+      ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    try { assert.throws(() => moveHistoryOrphanScope(db, "A", "B")); }
+    finally { db.setAuthorizer(null); }
+    assert.deepEqual(db.prepare("SELECT * FROM usage_history_owner_groups ORDER BY id").all(), groups);
+    assert.deepEqual(db.prepare("SELECT * FROM usage_history_owner_scopes ORDER BY scope").all(), scopes);
+    moveHistoryOrphanScope(db, "A", "B");
+  } finally { db.setAuthorizer(null); store.close(); }
 });
 
 test("an incomplete old summary stays unchanged when an old raw call changes", () => {
