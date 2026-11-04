@@ -313,6 +313,11 @@ export function inMessages(messages: J[], pendingOf: [number, boolean] | null | 
       delete s.login;
       delete s.station;
     }
+    // So is a vault request asked again (the agent's secret_reask): one card on screen, its secret typed in one field.
+    if (s.vault !== undefined && cards.slice(at + 1).some(([, c]) => cardShown(c).vault === s.vault)) {
+      delete s.vault;
+      delete s.vaultAsk;
+    }
     const answer = messages.slice(i + 1).find((m) => get(m, "authorKind") === "person")
       ?? (replaced || sending.length === 0 ? undefined : { ...sending[0], authorKind: "person", mine: true });
     let isWaiting: boolean;

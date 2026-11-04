@@ -232,6 +232,30 @@ test("a_login_asked_for_again_is_the_later_posts_card_alone", () => {
   assert.equal(messages[1].card.login, "mw1g340d1ylnm");
 });
 
+test("a_vault_request_asked_again_is_the_later_posts_card_alone", () => {
+  // An agent putting its request to keep a secret in the chat again (secret_reask): two cards of one request would be
+  // two fields for its secret on screen, and the chat showed 这部分显示出错了 as it opened (2026-11-04).
+  const asked = (seq: number, ts: string, request: string): J => ({
+    seq,
+    ts,
+    authorKind: "agent",
+    text: "请填入令牌并存入密钥库",
+    card: { type: "options", options: [{ label: "存入密钥库" }], vault: { request, name: "Cloudflare API 令牌", mode: "proxy", save: { kind: "token", typed: true } } },
+  });
+  let messages: J[] = d.inMessages([asked(2, "9.000002", "r_1"), said(3, "person", "讲详细点"), asked(4, "9.000004", "r_1")], [4, false]);
+  assert.equal(messages[0].card.vault, undefined);
+  assert.equal(messages[0].card.vaultAsk, undefined);
+  assert.deepEqual(messages[0].decision, { resolved: true, answeredBy: "林晓", text: "林晓 回复了" });
+  assert.equal(messages[2].card.vault, "r_1");
+  assert.equal(messages[2].card.vaultAsk.name, "Cloudflare API 令牌");
+  assert.deepEqual(messages[2].decision, { resolved: false });
+  shape("MessageCard", messages[0].card);
+  // Another request: both keep their cards.
+  messages = d.inMessages([asked(2, "9.000002", "r_1"), asked(4, "9.000004", "r_2")], [4, false]);
+  assert.equal(messages[0].card.vault, "r_1");
+  assert.equal(messages[1].card.vault, "r_2");
+});
+
 test("what_the_viewer_sent_answers_the_last_card_before_the_station_has_it", () => {
   // Written in the composer instead of picking: settled at once, as the viewer's reply.
   let messages: J[] = [askedMsg(2)];

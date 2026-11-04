@@ -1933,7 +1933,8 @@ export interface MessageCard {
 	/**
 	 * An agent's request to use a vault item (docs/vault.md): the request's id. An app shows approving it (the options,
 	 * then the person confirms: `vault.approve` with the option's scope, `vault.deny`) rather than answering in the chat;
-	 * a web page says to approve it in the app.
+	 * a web page says to approve it in the app. Absent where a later post of the chat asks the same request again (its card
+	 * alone).
 	 */
 	vault?: string;
 	/** An agent's request for its person's phone (station/src/adb/grants.ts): drawn in place of the post's words, answered with `adb.decide` (the chat's station). */
