@@ -368,3 +368,103 @@ pub fn fold_held_js(entries : JsValue, now : JsValue, crypto : JsCrypto) -> JsVa
     e => refused(e.to_string())
   }
 }
+
+// ── the vault's rules, as station/src/vault/crypto.ts calls them ──────────────────────────────────────────────────
+
+///|
+extern "js" fn js_entries(m : JsValue) -> JsValue = "(m) => [...m]"
+
+///|
+extern "js" fn js_record_sig_valid(c : JsCrypto, sig : JsValue, tag : String, text : String) -> Bool =
+  "(c, sig, tag, text) => c.recordSigValid(sig, tag, text)"
+
+///|
+impl @vault.Crypto for JsCrypto with record_sig_valid(self, sig, tag, text) {
+  js_record_sig_valid(self, to_js(sig), tag, text)
+}
+
+///|
+/// The lock as the vault reads it, off a station/src/cloud/lock.ts `LockState` (its maps JS Maps).
+fn lock_view(lock : JsValue) -> @vault.LockView {
+  let members : Map[String, Unit] = Map([])
+  let ms = js_entries(js_get(lock, "members"))
+  for i in 0..<js_len(ms) {
+    members[js_str(js_at(js_at(ms, i), 0))] = ()
+  }
+  let devices : Map[String, @vault.Device] = Map([])
+  let ds = js_entries(js_get(lock, "devices"))
+  for i in 0..<js_len(ds) {
+    let d = js_at(js_at(ds, i), 1)
+    devices[js_str(js_at(js_at(ds, i), 0))] = {
+      sub: js_str(js_get(d, "sub")),
+      kind: js_str(js_get(d, "kind")),
+      sign_key: opt_str(js_get(d, "sign_key")),
+      own: js_kind(js_get(d, "own")) == 1 && js_bool(js_get(d, "own")),
+    }
+  }
+  let sign_keys : Map[String, Array[String]] = Map([])
+  let ks = js_entries(js_get(lock, "signKeys"))
+  for i in 0..<js_len(ks) {
+    let had = js_at(js_at(ks, i), 1)
+    sign_keys[js_str(js_at(js_at(ks, i), 0))] = Array::makei(js_len(had), fn(j) { js_str(js_at(had, j)) })
+  }
+  { ws: js_str(js_get(lock, "ws")), members, devices, sign_keys }
+}
+
+///|
+/// A record as JS holds it: none for `undefined` (or null, for what may be none), else its JSON.
+fn record(v : JsValue, null_none~ : Bool = false) -> Json? {
+  if js_kind(v) == 6 || (null_none && js_kind(v) == 0) {
+    return None
+  }
+  Some(json_of(v)) catch {
+    _ => None
+  }
+}
+
+///|
+fn why_js(why : String?) -> JsValue {
+  match why {
+    Some(w) => js_of_str(w)
+    None => js_null()
+  }
+}
+
+///|
+/// station/src/vault/crypto.ts `certOk`: why the certificate is not one (text) or null.
+pub fn cert_ok_js(lock : JsValue, cert : JsValue, ever : Bool, crypto : JsCrypto) -> JsValue {
+  why_js(@vault.cert_ok(lock_view(lock), record(cert), ever, crypto))
+}
+
+///|
+/// station/src/vault/crypto.ts `vaultOk`: why `next` may not follow `prev` (null: none held), or null.
+pub fn vault_ok_js(lock : JsValue, prev : JsValue, next : JsValue, copy : Bool, crypto : JsCrypto) -> JsValue {
+  why_js(@vault.vault_ok(lock_view(lock), record(prev, null_none=true), record(next).unwrap_or(Json::null()), copy, crypto))
+}
+
+///|
+/// station/src/vault/crypto.ts `itemOk`: why `next` may not follow `prev` (null: none held) in `vault`, or null.
+pub fn item_ok_js(lock : JsValue, vault : JsValue, prev : JsValue, next : JsValue, copy : Bool, crypto : JsCrypto) -> JsValue {
+  why_js(@vault.item_ok(lock_view(lock), record(vault).unwrap_or(Json::null()), record(prev, null_none=true), record(next).unwrap_or(Json::null()), copy, crypto))
+}
+
+///|
+/// station/src/vault/crypto.ts `browserListingOk`, of `{kind, modes, hosts}`.
+pub fn browser_listing_ok_js(l : JsValue) -> JsValue {
+  let ms = js_get(l, "modes")
+  let hs = js_get(l, "hosts")
+  why_js(@vault.browser_listing_ok(
+    js_str(js_get(l, "kind")),
+    Array::makei(js_len(ms), fn(i) { js_str(js_at(ms, i)) }),
+    Array::makei(js_len(hs), fn(i) { js_str(js_at(hs, i)) }),
+  ))
+}
+
+///|
+/// station/src/vault/crypto.ts `signerOf`: `{sub, device}` of the own app device signing with `key`, or null.
+pub fn signer_of_js(lock : JsValue, key : String) -> JsValue {
+  match @vault.signer_of(lock_view(lock), key) {
+    Some((sub, device)) => to_js(Json::object(Map([("sub", Json::string(sub)), ("device", Json::string(device))])))
+    None => js_null()
+  }
+}
