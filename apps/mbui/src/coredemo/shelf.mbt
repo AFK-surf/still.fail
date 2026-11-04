@@ -19,7 +19,7 @@ fn media_station() -> String? {
     return Some(chosen)
   }
   let ws = @core.subscribe("workspaces")
-  guard ws.value is Some(Array(accounts)) && accounts.length() > 0 else {
+  guard ws.value() is Some(Array(accounts)) && accounts.length() > 0 else {
     return None
   }
   let first = match accounts[0] {
@@ -34,7 +34,7 @@ fn media_station() -> String? {
     return None
   }
   let stations = @core.subscribe("stations", params={ "scope": Json::string(first) })
-  match stations.value {
+  match stations.value() {
     Some(Array(list)) if list.length() > 0 => Some(str(Some(list[0]), "station"))
     _ => None
   }
@@ -113,7 +113,7 @@ fn core_books() -> Result[Array[@shelf.BookInfo], String]? {
   guard media_station() is Some(station) else { return None }
   import_books()
   let s = @core.subscribe("media.shelf", params={ "station": Json::string(station) })
-  match (s.value, s.error) {
+  match (s.value(), s.error) {
     (Some(Object(m)), _) =>
       match m.get("books") {
         Some(Array(list)) =>
@@ -169,7 +169,7 @@ fn core_toc(book : String) -> Array[String]? {
     "station": Json::string(station),
     "book": Json::string(book),
   })
-  match s.value {
+  match s.value() {
     Some(Object(m)) =>
       match m.get("toc") {
         Some(Array(list)) => Some(list.map(fn(t) { str(Some(t), "title") }))
