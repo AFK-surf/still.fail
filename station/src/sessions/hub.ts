@@ -608,7 +608,7 @@ export class Hub {
 
   /// A message's text and its shared files, fetched into the session's uploads (as files sent in the station's own
   /// chats are). A file that cannot be fetched is named in the text with why, so its reader knows one was there.
-  private async fetched(chat: ChatSurface, key: string, text: string, files: InboundFile[] | undefined): Promise<{ text: string; attachments: Attachment[] }> {
+  async fetched(chat: ChatSurface, key: string, text: string, files: InboundFile[] | undefined): Promise<{ text: string; attachments: Attachment[] }> {
     const row = files && files.length > 0 ? this.store.getSession(key) : null;
     if (!files || !row) return { text, attachments: [] };
     const dir = join(row.workspace, "uploads");
