@@ -37,6 +37,9 @@ export interface OutboundRequest {
   body: Uint8Array;
 }
 
+/** The Cloudflare Access team the harness's `access` puts in front of the console. */
+const ACCESS_TEAM = "https://team.cloudflareaccess.example";
+
 export async function harness(
   options: {
     relay?: string;
@@ -79,6 +82,8 @@ export async function harness(
     /** Signing in with an email: the codes sent are kept in `mails` (and handed to this, if it is one: false, or an
      * error code, and the binding throws as Cloudflare's would). */
     mail?: true | ((message: MailMessage) => boolean | string);
+    /** Cloudflare Access in front of the console's host (ACCESS_TEAM_DOMAIN, ACCESS_AUD): `accessToken` makes its tokens. */
+    access?: true;
     /** Push services, FCM and its token endpoint: a stand-in answering every other outbound request. */
     push?: (request: OutboundRequest) => Promise<{ status: number; body?: string }> | { status: number; body?: string };
   } = {},
@@ -162,6 +167,7 @@ export async function harness(
         AUTH_SIGNING_KEY: signingKey,
         ADMIN_TOKEN: adminToken,
         ADMIN_EMAIL: options.adminEmail ?? "alice@example.test",
+        ...(options.access ? { ACCESS_TEAM_DOMAIN: ACCESS_TEAM, ACCESS_AUD: "test-access-aud" } : {}),
         GRANT_SIGNING_JWK: JSON.stringify(grantJwk),
         ...(options.relayUrl ? { RELAY_URL: options.relayUrl } : {}),
         ...(options.relayUrls ? { RELAY_URLS: options.relayUrls } : {}),
@@ -180,6 +186,9 @@ export async function harness(
       },
       outboundService: async (request) => {
         const url = new URL(request.url);
+        if (options.access && url.href === `${ACCESS_TEAM}/cdn-cgi/access/certs`) {
+          return MFResponse.json({ keys: [{ ...publicJwk, kid: "test-access" }] });
+        }
         if (url.href === "https://www.googleapis.com/oauth2/v3/certs") {
           return MFResponse.json({ keys: [publicJwk] }, { headers: { "cache-control": "max-age=3600" } });
         }
@@ -309,6 +318,15 @@ export async function harness(
     return (await response.json()) as Tokens;
   }
   /** Calls the API as a logged-in account (on the console's host with `on: "admin"`, the test channel's with "beta"). */
+  /** A token Cloudflare Access would add for `email` (Cf-Access-Jwt-Assertion); `aud` another application's, `expired`. */
+  const accessToken = (email: string, made: { aud?: string; expired?: boolean; issuer?: string } = {}) =>
+    new SignJWT({ email, type: "app" })
+      .setProtectedHeader({ alg: "RS256", kid: "test-access" })
+      .setIssuedAt(now() - 600)
+      .setExpirationTime(made.expired ? now() - 60 : now() + 300)
+      .setIssuer(made.issuer ?? ACCESS_TEAM)
+      .setAudience(made.aud ?? "test-access-aud")
+      .sign(privateKey);
   const as = (tokens: Tokens, on: "main" | "admin" | "beta" = "main") => (method: string, path: string, value?: unknown) =>
     ({ main: fetch, admin: fetchAdmin, beta: fetchBeta })[on](path, {
       method,
@@ -318,6 +336,7 @@ export async function harness(
   return {
     mf,
     now,
+    accessToken,
     origin,
     adminOrigin,
     betaOrigin,
