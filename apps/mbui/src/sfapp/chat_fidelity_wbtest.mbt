@@ -20,7 +20,7 @@ test "the visible words of a message are reachable by a scripted long press" {
 ///|
 test "a medium chat's header shares its page's ground while behind the sidebar and when brought over" {
   let t = tape_chat(2, 740.0, 844.0)
-  let grounds = fn() {
+  let grounds = fn() raise {
     let boxes = t.boxes_held()
     let bar = boxes.iter().find_first(fn(b) {
       b.x > 40.0 && b.w > 400.0 && b.h >= 40.0 && b.h <= 80.0 && (b.bg & 0xFFL) == 0xFFL
@@ -28,6 +28,18 @@ test "a medium chat's header shares its page's ground while behind the sidebar a
     let page = boxes.iter().find_first(fn(b) {
       b.x > 40.0 && b.w > 400.0 && b.h > 700.0 && (b.bg & 0xFFL) == 0xFFL
     }).unwrap()
+    let drawn = t.drawn_instances()
+    let header = drawn.iter().find_first(fn(b) {
+      b[0] == bar.x && b[1] == bar.y && b[2] == bar.w && b[3] == bar.h && b[11] == 1.0
+    }).unwrap()
+    let dots = drawn.filter(fn(b) {
+      b[0] > bar.x && b[1] < bar.y + bar.h && b[2] == 10.0 && b[3] == 10.0 && b[6] == 2.0
+    })
+    assert_false(dots.is_empty(), msg="the station's connection mark is in the header")
+    for dot in dots {
+      assert_eq(Array::makei(4, fn(i) { dot[i + 12] }), Array::makei(4, fn(i) { header[i + 8] }),
+        msg="the connection mark's edge follows the panel's ground")
+    }
     (bar.bg, page.bg)
   }
   let behind = grounds()

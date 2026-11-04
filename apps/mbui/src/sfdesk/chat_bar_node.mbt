@@ -96,7 +96,7 @@ fn chat_bar_node(parent : @view.View, src : Source, w : Workspace, r : ChatRef, 
             agent_tile_node(tile, src, r,
               fn() { agents().iter().find_first(fn(a) { a.key == key.get() }).unwrap_or(initial) },
               fn() { view().map_or(false, fn(v) { v.agents.length() > 1 && side_of(v).1 == key.get() }) },
-              fn() { if first() { station() } else { None } }, fn() { stint })
+              fn() { if first() { station() } else { None } }, fn() { stint }, fn() { ground(tile) })
           })
         }) |> ignore
         inner.show(finding, fn(f) {
@@ -121,7 +121,7 @@ fn chat_bar_node(parent : @view.View, src : Source, w : Workspace, r : ChatRef, 
             let b = button(j, "web", "web-pages.chat.services", jobs_toggle)
             jobs_at.val = Some(b)
             j.owns(fn() { jobs_at.val = None }) |> ignore
-            chat_key_dot_node(j, fn() { text(jobs(), "alarm") })
+            chat_key_dot_node(j, fn() { text(jobs(), "alarm") }, fn() { ground(j) })
           })
           keys.show(fn() { (!native() || column_short.get()) && view().map_or(false, fn(v) { v.screens.length() > 0 }) }, fn(s) {
             button(s, "monitor", "web-pages.chat.screen", fn() {
@@ -130,7 +130,7 @@ fn chat_bar_node(parent : @view.View, src : Source, w : Workspace, r : ChatRef, 
                 chat_screens_open(r, v.screens, from=At(x, y, ww, hh))
               }; None => () }
             }) |> ignore
-            chat_key_dot_node(s, fn() { if view().map_or(false, fn(v) { chat_screens_driven(v.screens) }) { "restart" } else { "" } })
+            chat_key_dot_node(s, fn() { if view().map_or(false, fn(v) { chat_screens_driven(v.screens) }) { "restart" } else { "" } }, fn() { ground(s) })
           })
           keys.show(fn() { !native() }, fn(ours) {
             ours.row(Is(true)).gap(By(fn() { @sf.keys_apart() })) |> ignore
@@ -265,17 +265,18 @@ fn chat_station_node(parent : @view.View, address : String, station : () -> Stat
 }
 
 ///|
-fn chat_via_dot_node(parent : @view.View, via : () -> String, size : Double, ring : Double) -> Unit {
+fn chat_via_dot_node(parent : @view.View, via : () -> String, size : Double, ring : Double,
+  ground? : () -> Int64 = fn() { @ui.tree_theme().color(Bg) }) -> Unit {
   parent.width(Is(Some(size))).height(Is(Some(size))).radius(Is(size / 2.0))
   .ground(By(fn() {
     @ui.tree_theme().color(match via() { "direct" => Positive; "relay" => Warn; "offline" => Danger; _ => Muted })
   }))
-  .edge(By(fn() { (ring, @ui.tree_theme().color(Bg)) })) |> ignore
+  .edge(By(fn() { (ring, ground()) })) |> ignore
 }
 
 ///|
 fn agent_tile_node(parent : @view.View, src : Source, r : ChatRef, agent : () -> Agent,
-  marked : () -> Bool, station : () -> Station?, stint : () -> Int) -> Unit {
+  marked : () -> Bool, station : () -> Station?, stint : () -> Int, ground : () -> Int64) -> Unit {
   let aj = fn() { agent_json((src.topic)("chat", chat_params(r)).value, agent().key) }
   let said = fn() { @sf.t("web-pages.chat.historyOf", args=[("agent", agent().who)]) }
   let whole = fn() { station() is Some(_) && @sf.tile_whole() }
@@ -291,7 +292,7 @@ fn agent_tile_node(parent : @view.View, src : Source, r : ChatRef, agent : () ->
     .ground(By(fn() { if maker.pointed() || maker.pressed() { @ui.tree_theme().color(Hover) } else { 0L } }))
     .says(By(fn() { if whole() { None } else { Some(@view.said(Button, label=said())) } })) |> ignore
     @sf.maker_mark_node(maker, fn() { agent().maker }, fn() { agent().runtime }, 12.0) |> ignore
-    @sfpages.agent_badge_node(maker, fn() { agent().badge }, 20.0, fn() { @sf.theme().p.bg })
+    @sfpages.agent_badge_node(maker, fn() { agent().badge }, 20.0, ground)
     let held = @sfpages.hover_node(maker, "bar-agent/" + key, fn(c) {
       match aj() { Some(j) => agent_card(c, src, r, j); None => () }
     }, tile=true)
@@ -330,18 +331,18 @@ fn agent_tile_node(parent : @view.View, src : Source, r : ChatRef, agent : () ->
   .says(By(fn() { if whole() { Some(@view.said(Button, label=said())) } else { None } })) |> ignore
   parent.show(fn() { station().map_or(false, fn(s) { s.via != "" }) }, fn(d) {
     d.over(Is(true)).width_share(Is(1.0)).row(Is(true)).lies_along(Is(End)).offset(Is((3.0, 13.0))) |> ignore
-    d.box(fn(dot) { chat_via_dot_node(dot, fn() { station().unwrap().via }, 10.0, 2.0) }) |> ignore
+    d.box(fn(dot) { chat_via_dot_node(dot, fn() { station().unwrap().via }, 10.0, 2.0, ground~) }) |> ignore
   })
 }
 
 ///|
-fn chat_key_dot_node(parent : @view.View, alarm : () -> String) -> Unit {
+fn chat_key_dot_node(parent : @view.View, alarm : () -> String, ground : () -> Int64) -> Unit {
   parent.show(fn() { alarm() != "" }, fn(d) {
     d.over(Is(true)).offset(Is((18.0, 4.0))) |> ignore
     d.box(fn(dot) {
       dot.width(Is(Some(10.0))).height(Is(Some(10.0))).radius(Is(5.0))
       .ground(By(fn() { @ui.tree_theme().color(if alarm() == "fail" { Danger } else { Warn }) }))
-      .edge(By(fn() { (2.0, @ui.tree_theme().color(Bg)) })) |> ignore
+      .edge(By(fn() { (2.0, ground()) })) |> ignore
     }) |> ignore
   })
 }

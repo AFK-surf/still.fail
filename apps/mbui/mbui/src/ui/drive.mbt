@@ -390,7 +390,8 @@ fn reachable(c : Ctx, what : String) -> Array[(Double, Double)] {
           Some(id) if tree.holds(id, p.2) => at.push((p.0, p.1))
           // A selectable paragraph need not take a press itself. Its still hold goes through an empty old
           // frame (tree_finger_down), or nowhere, to the words. An old button or paragraph over it still owns it.
-          None if old_owns_nothing_at(p.0, p.1) => match tree.target_at(p.0, p.1) {
+          None if old_owns_nothing_at(p.0, p.1) &&
+            tree_sel_at(p.0, p.1, finger=true).map_or(false, fn(t) { t.node == Some(p.2) }) => match tree.target_at(p.0, p.1) {
             Hosted(_) | Nothing => at.push((p.0, p.1))
             _ => ()
           }
