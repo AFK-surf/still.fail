@@ -742,13 +742,8 @@ fn rail_go_told(src : Source, w : Workspace, place : String, tell : (String, () 
     }
     "archive" => {
       @sfbase.history_push()
-      while app.nav.depth() > 1 {
-        if !app.nav.pop() {
-          break
-        }
-      }
       archive_side.landed = false
-      app.nav.push(Archived)
+      app.nav.replace_above(1, [Archived])
     }
     p => @sfbase.go_place(p) |> ignore
   }
@@ -975,12 +970,7 @@ pub fn open_settings_at(route : @settings.Route) -> Unit {
 pub fn settings_beside(route : @settings.Route) -> Unit {
   @sfbase.history_push()
   app.menu = false
-  while app.nav.depth() > 1 {
-    if !app.nav.pop() {
-      break
-    }
-  }
-  app.nav.push(Setting(route))
+  app.nav.replace_above(1, [Setting(route)])
 }
 
 ///|

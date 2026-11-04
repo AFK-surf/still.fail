@@ -2759,3 +2759,30 @@ test "wide: a reference to a chat rested on in one run and again in the next: it
   assert_true(first.0 <= 1 && first.1, msg="first: \{first}")
   assert_eq(again, (0, true))
 }
+
+///|
+test "大屏: a settings row pressed, its page opened as one change: the settings never put down on the way, the chats' sidebar never taken between" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  @sfdesk.open_settings()
+  t.run_for(@ui.move_most_ms)
+  // (what the stack is said to be at each change, as what follows it sees it)
+  let seen : Array[String] = []
+  let stop = @signals.effect(fn() {
+    app.nav.pages() |> ignore
+    seen.push(@sfdesk.side_place())
+  })
+  for row in ["密钥", "安全"] {
+    match t.find(row) {
+      Some((x, y)) => t.tap(x, y)
+      None => fail("no \{row} in " + t.words().map(fn(w) { w.0 }).join("|"))
+    }
+    t.run_for(@ui.move_most_ms)
+  }
+  stop()
+  match app.nav.top() {
+    Setting(@settings.Route::Security) => ()
+    _ => fail("not 安全 after its row")
+  }
+  assert_eq(seen.filter(fn(p) { p != "settings" }), [], msg="\{seen}")
+}

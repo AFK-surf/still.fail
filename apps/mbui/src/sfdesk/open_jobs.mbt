@@ -137,13 +137,7 @@ fn open_chat_ref(r : ChatRef) -> Unit {
     _ => ()
   }
   @sfbase.history_push()
-  while app.nav.depth() > 1 {
-    if !app.nav.pop() {
-      break
-    }
-  }
-  app.nav.replace(Home)
-  app.nav.push(Chat(r))
+  @sfbase.nav_over_home([Chat(r)])
 }
 
 ///|

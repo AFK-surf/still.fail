@@ -713,6 +713,31 @@ pub fn[P] Nav::replace(self : Nav[P], page : P) -> Unit {
 }
 
 ///|
+/// The pages over the stack's first `keep` replaced by `pages` (the first of them over the last kept; `keep` 0, the root
+/// too), in place (nothing slides), told once as it is so: never seen with those taken off and these not on yet (a
+/// list's row choosing the page beside it in place of whatever was open over the list). Never with no page: `pages`
+/// empty, `keep` 1 at least.
+pub fn[P] Nav::replace_above(self : Nav[P], keep : Int, pages : Array[P]) -> Unit {
+  let keep = if keep < 0 { 0 } else { keep }
+  if pages.is_empty() && (keep == 0 || self.pages.length() <= keep) {
+    return
+  }
+  self.settle()
+  while self.pages.length() > keep {
+    self.gone.push(self.pages.pop().unwrap())
+  }
+  for page in pages {
+    self.pages.push(nav_page(page, self.pages.last().map(fn(e) { e.page })))
+  }
+  // (none put on: the one now on top come back to, as a pop's is)
+  if pages.is_empty() {
+    self.topped()
+  }
+  self.told()
+  wake()
+}
+
+///|
 /// A stack changed: changed as the frame is built, built again from it in the frame (no frame shows the page it left
 /// as it was), all of it anew; between frames, the next frame (Ctx::read_changed), what builds a stack told
 /// (stacks_said: a part kept as its nodes that holds one, built again).
