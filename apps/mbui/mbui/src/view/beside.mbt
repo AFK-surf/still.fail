@@ -658,7 +658,8 @@ pub fn[T : Eq] View::keeps_width(self : View, by : () -> T, most? : () -> Double
 /// The side of what it goes beside (View::beside) it went on (the side it was said to go on, or the other where it had
 /// not the room: place_beside's flip), followed: told once all of the layout is done, as the sizes followed are
 /// (View::laid_size_told), what reads it told again only as it goes to the other side; none till the first layout after
-/// it is first asked, or where it goes beside nothing.
+/// it is first asked, or where it goes beside nothing. It is a placement result, not an input to that same layout;
+/// use View::beside_content to adjust the beside node's own content as it is measured.
 pub fn View::went_told(self : View) -> Side? {
   guard self.live() is Some(n) else { return None }
   let cell = match n.went_cell {

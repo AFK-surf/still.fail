@@ -246,15 +246,12 @@ test "went_told: the side it went on told the frame it is first placed, and agai
           b.width(Is(Some(60.0))).height(Is(Some(30.0))).beside(ids["a"], side=Bottom, along=Middle, offset=6.0) |> ignore
         }),
       )
-      // (what reads it: a node as tall as it says)
+      // (what reads it after placement, without feeding that output back into layout)
       root.box(fn(r) {
-        r
-        .height(By(fn() {
+        r.reacts(fn() {
           reads.val = reads.val + 1
-          said.val = b.val.unwrap().went_told()
-          Some(if said.val is Some(Top) { 2.0 } else { 1.0 })
-        }))
-        |> ignore
+          b.val.unwrap().went_told()
+        }, fn(side) { said.val = side })
       })
       |> ignore
     },
@@ -310,13 +307,10 @@ fn went_tree(
         }),
       )
       root.box(fn(r) {
-        r
-        .height(By(fn() {
+        r.reacts(fn() {
           reads.val = reads.val + 1
-          said.val = b.val.unwrap().went_told()
-          Some(if said.val is Some(Top) { 2.0 } else { 1.0 })
-        }))
-        |> ignore
+          b.val.unwrap().went_told()
+        }, fn(side) { said.val = side })
       })
       |> ignore
     },

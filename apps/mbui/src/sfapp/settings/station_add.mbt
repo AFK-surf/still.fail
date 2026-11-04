@@ -17,8 +17,8 @@ priv struct Adding {
   known : @signals.Signal[Array[String]]
   /// the stations of another workspace joined from the sheet: kept where they were, said so
   took : @sf.LiveArray[Json]
-  /// the order the joinable ones came in
-  order : @sf.LiveMap[String, Int]
+  /// the order the joinable ones came in (bookkeeping derived from the joinable list)
+  order : Map[String, Int]
   /// the one picked to join
   picked : @signals.Signal[String]
   /// a count of times opened: its field is its own
@@ -32,7 +32,7 @@ let adding : Adding = {
   error: @signals.signal("", same=fn(a, b) { a == b }),
   known: @signals.signal([]),
   took: @sf.LiveArray::new(),
-  order: @sf.LiveMap::new(),
+  order: {},
   picked: @signals.signal("", same=fn(a, b) { a == b }),
   serial: @signals.signal(0, same=fn(a, b) { a == b }),
 }
