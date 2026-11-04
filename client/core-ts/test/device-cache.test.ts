@@ -5,12 +5,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { randomBytes } from "node:crypto";
 import { Effect } from "effect";
+import { Core } from "../src/core.ts";
+import { SOON_MS } from "../src/data.ts";
 import { HostError } from "../src/error.ts";
+import { HostWire } from "../src/station/wire.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
+import * as format from "../src/format.ts";
 import { t } from "../src/i18n.ts";
 import { CACHE_ALPN } from "../src/pair.ts";
 import { Wake } from "../src/wake.ts";
-import { allowed, fillOver, filledFromDevice, serveCache, served } from "../src/views/device-cache.ts";
+import { FILL_OPENED_AGAIN_MS, allowed, fillOver, serveCache, served } from "../src/views/device-cache.ts";
 import { run as runEffect } from "./run.ts";
 import { ME, PHONE, genesis, grant, pipe, rig } from "./lock-rig.ts";
 import { base, entries, started, stationLater, threadView } from "./station-fixture.ts";
@@ -91,15 +95,14 @@ test("the device away takes what it lacks, before and after what it holds, and s
   s.core.inner.data.putItems("entry", ST, "7", entries(11, 60).map((e) => [e.n, e] as [number, unknown]));
   const [server, client] = await pipe();
   r.core.inner.runner.fork(Effect.ignore(serveCache(r.core.inner, PHONE, server)));
-  const done: true[] = [];
+  const done: { brought: boolean; upTo: number | null }[] = [];
   const hello = Effect.andThen(client.send({ t: "hello", ws: "ws", credential: r.g.credential("ws", PHONE, "s1", 4102444800, "live") }), client.next());
-  s.core.inner.runner.fork(Effect.ignore(Effect.map(Effect.andThen(hello, fillOver(s.core.inner, ST, client, () => true)), () => done.push(true))));
+  s.core.inner.runner.fork(Effect.ignore(Effect.map(Effect.andThen(hello, fillOver(s.core.inner, ST, client, () => true)), (c) => done.push(c))));
   for (let i = 0; i < 500 && done.length === 0; i++) {
     await r.host.time.pass(5);
     await s.host.time.pass(5);
   }
-  assert.deepEqual(done, [true]);
-  assert.equal(filledFromDevice(s.core.inner.data, ST), true);
+  assert.deepEqual(done, [{ brought: true, upTo: 120 }]);
   assert.deepEqual(s.core.inner.data.logSpan("entry", ST, "7"), { min: 1, max: 120, count: 120 });
   assert.equal(s.core.inner.data.logCount("entry", ST, "7", 1, 120), 120);
   assert.equal(s.core.inner.data.threadLast(ST, 7), 120);
@@ -160,7 +163,10 @@ test("over iroh: a station down, the phone asks its person's other device, and i
   for (let i = 0; i < 50; i++) await phone.host.time.pass(50);
   const shown = await chat();
   assert.equal(shown.offline, true);
-  assert.ok(String(shown.offlineNote).includes(t("core-logic.looks.offline.device")), String(shown.offlineNote));
+  // What came, from which device, as far as when: kept with what came.
+  assert.deepEqual(inner.data.record("deviceFill", ST), { state: "filled", from: "Mac", upTo: 120 });
+  assert.ok(String(shown.offlineNote).includes("Mac"), String(shown.offlineNote));
+  assert.ok(String(shown.offlineNote).includes(t("core-logic.looks.offline.fill.upTo", { device: "Mac", time: format.relativeTime(120, phone.host.nowMs(), phone.host.utcOffsetMin(phone.host.nowMs())) })), String(shown.offlineNote));
   // More there now: not asked on a timer, however long; asked as the UI comes back.
   holding.core.inner.data.putThread(ST, threadView(7, 130));
   holding.core.inner.data.putItems("entry", ST, "7", entries(121, 130).map((e) => [e.n, e] as [number, unknown]));
@@ -171,7 +177,28 @@ test("over iroh: a station down, the phone asks its person's other device, and i
   inner.wakes.wake(new Wake(phone.host.nowMs(), 1000, false, false));
   await until(() => inner.data.logSpan("entry", ST, "7")?.count === 130);
   assert.equal(inner.data.logSpan("entry", ST, "7")?.count, 130);
+  // More again: a chat opened asks too, at once, but not again right after it was asked.
+  holding.core.inner.data.putThread(ST, threadView(7, 140));
+  holding.core.inner.data.putItems("entry", ST, "7", entries(131, 140).map((e) => [e.n, e] as [number, unknown]));
+  await holding.host.time.pass(100);
+  await new Promise((d) => setTimeout(d, 100));
+  await phone.host.time.pass(FILL_OPENED_AGAIN_MS + 1000, 1000);
+  await new Promise((d) => setTimeout(d, 50));
+  await phone.watch({ topic: "chat", station: ST, session: "k1" });
+  await until(() => inner.data.logSpan("entry", ST, "7")?.count === 140);
+  assert.equal(inner.data.logSpan("entry", ST, "7")?.count, 140);
+  // Nothing newer: what it brought stays said.
+  assert.equal((inner.data.record("deviceFill", ST) as { state: string }).state, "filled");
+  // Started again, still down: it still says so.
+  await phone.host.time.pass(SOON_MS + 50, 100);
+  await Effect.runPromise(inner.data.written);
+  const kept = inner.data.record("deviceFill", ST);
   phone.core.close();
+  phone.host.takeEmitted();
+  const again = await Core.create(phone.host, { clock: phone.host.time.clock, sample: 0, wire: () => new HostWire(phone.host) });
+  await phone.host.time.pass(500);
+  assert.deepEqual(again.inner.data.record("deviceFill", ST), kept);
+  again.close();
   holding.core.close();
   await runEffect(phoneEnd.close());
   await runEffect(holderEnd.close());

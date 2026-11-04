@@ -18,6 +18,8 @@ import type { Inner } from "../core.ts";
 import { hooks } from "../core/execute.ts";
 import { CoreError } from "../error.ts";
 import type { Data } from "../data.ts";
+import * as format from "../format.ts";
+import { t } from "../i18n.ts";
 import type { IrohConnection } from "../iroh.ts";
 import { nOf } from "../entries.ts";
 import { CACHE_ALPN } from "../pair.ts";
@@ -38,9 +40,31 @@ const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isSa
 export const FILL_DIAL_MS = 15_000;
 export const FILL_ANSWER_MS = 15_000;
 
-/// The stations some of what is shown came from another device, while they stay down (the line over a chat's composer).
-const filled = new WeakMap<Data, Set<string>>();
-export const filledFromDevice = (data: Data, station: string): boolean => filled.get(data)?.has(station) === true;
+/// A chat opened asks again only this long after its station was last asked: opening several in a row is one question.
+export const FILL_OPENED_AGAIN_MS = 30_000;
+
+/// What came of asking, kept with what came (`deviceFill`, by the station's address) until the station is back: `filled`,
+/// from which device and as far as when; `none`, those reached have nothing newer; `unreached`, none was reached.
+export type FillStatus = { state: "filled"; from: string; upTo: number | null } | { state: "none" } | { state: "unreached" };
+/// The device being asked now, by station: not kept.
+const asking = new WeakMap<Data, Map<string, string>>();
+
+/// What the line over a chat's composer adds while its station is down.
+export function fillNote(data: Data, station: string, now: number, offsetMin: number): string | null {
+  const device = asking.get(data)?.get(station);
+  if (device !== undefined) return t("core-logic.looks.offline.fill.asking", { device });
+  const status = data.record("deviceFill", station) as FillStatus | undefined;
+  switch (status?.state) {
+    case "filled":
+      return status.upTo === null ? t("core-logic.looks.offline.fill.from", { device: status.from }) : t("core-logic.looks.offline.fill.upTo", { device: status.from, time: format.relativeTime(status.upTo, now, offsetMin) });
+    case "none":
+      return t("core-logic.looks.offline.fill.none");
+    case "unreached":
+      return t("core-logic.looks.offline.fill.unreached");
+    default:
+      return null;
+  }
+}
 
 // ── the device asked ──
 
@@ -116,11 +140,13 @@ function isDown(inner: Inner, ws: string, station: string): boolean {
   return get(listed, "online") === false || down(inner.stations.link(station)?.state);
 }
 
-/// What a device holds of a station, brought here over `d` (hello answered). Only what is newer or missing is written;
-/// marked before it is, so a chat shown again for it says where it came from.
-export function fillOver(inner: Inner, station: string, d: Duplex, going: () => boolean): Effect.Effect<void, CoreError> {
+/// What a device holds of a station, brought here over `d` (hello answered), all of it: page after page until it has no
+/// more. Only what is newer or missing is written. Whether anything came, and the latest message that did.
+export function fillOver(inner: Inner, station: string, d: Duplex, going: () => boolean): Effect.Effect<{ brought: boolean; upTo: number | null }, CoreError> {
   return Effect.gen(function* () {
     const data = inner.data;
+    let brought = false;
+    let upTo: number | null = null;
     const answer = () => Effect.mapError(Effect.timeout(d.next(), FILL_ANSWER_MS), (e) => (e instanceof CoreError ? e : CoreError.plainly("device cache", "no answer")));
     yield* d.send({ t: "list", station });
     const list = yield* answer();
@@ -133,7 +159,7 @@ export function fillOver(inner: Inner, station: string, d: Duplex, going: () => 
     }
     if (!data.listed(station, "chats")) {
       if (rows.length > 0) {
-        markFilled(data, station);
+        brought = true;
         data.set({ topic: "chatRows", station }, rows);
       }
     } else {
@@ -141,7 +167,7 @@ export function fillOver(inner: Inner, station: string, d: Duplex, going: () => 
       for (const r of rows) {
         const was = heldRows.get(String(get(r, "id")));
         if (was !== undefined && !((u64(get(r, "lastActiveAt")) ?? 0) > (u64(get(was, "lastActiveAt")) ?? 0))) continue;
-        markFilled(data, station);
+        brought = true;
         data.putChat(station, r);
       }
     }
@@ -159,16 +185,22 @@ export function fillOver(inner: Inner, station: string, d: Duplex, going: () => 
             return n !== null && n > after && n <= end ? [[n, e] as [number, unknown]] : [];
           });
           if (items.length === 0) break;
-          markFilled(data, station);
+          brought = true;
           data.putItems("entry", station, id, items);
+          for (const [, e] of items) {
+            const at = u64(get(e, "at"));
+            if (at !== null && (upTo === null || at > upTo)) upTo = at;
+          }
           after = Math.max(...items.map(([n]) => n));
         }
       }
     }
+    return { brought, upTo };
   });
 }
 
-/// A station's other holders asked, one after another: each may have more than the last.
+/// A station's other holders asked, one after another, each for all it has: each may have more than the last. What came
+/// of it kept, a later try that found nothing newer leaving what an earlier one brought said.
 function fill(inner: Inner, ws: string, sub: string, station: string): Effect.Effect<void, CoreError> {
   return Effect.gen(function* () {
     const h = held(inner, ws);
@@ -180,40 +212,61 @@ function fill(inner: Inner, ws: string, sub: string, station: string): Effect.Ef
     if (others.length === 0) return;
     const credential = (yield* inner.cloudSync.credential(ws, me, false, me, mesh.lockClaim(ws, me))).credential;
     const relays = [...new Set([...(inner.cloudSync.relays ?? []), ...inner.cloudSync.workspaceRelays(ws)])];
-    for (const other of others) {
-      if (!isDown(inner, ws, station)) return;
-      yield* Effect.ignore(
-        Effect.gen(function* () {
-          const reached = yield* Effect.timeout(
+    const nameOf = (o: { label?: unknown }) => str(o.label) || t("core-logic.looks.offline.fill.another");
+    const told = () => inner.store.invalidateAll((topic) => topic.topic === "chat" && topic.station === station);
+    let shown = asking.get(inner.data);
+    if (!shown) asking.set(inner.data, (shown = new Map()));
+    let answered = false;
+    let from: string | null = null;
+    let upTo: number | null = null;
+    yield* Effect.ensuring(
+      Effect.gen(function* () {
+        for (const other of others) {
+          if (!isDown(inner, ws, station)) return;
+          shown.set(station, nameOf(other));
+          told();
+          yield* Effect.ignore(
             Effect.gen(function* () {
-              const connection = yield* Effect.mapError(mesh.endpoint().connect({ id: other.id, relays }, CACHE_ALPN, []), (e) => CoreError.plainly("device cache", e));
-              const stream = yield* Effect.mapError(connection.openBi(), (e) => CoreError.plainly("device cache", e));
-              const d = streamDuplex(stream, () => connection.close(0, "done"));
-              yield* d.send({ t: "hello", ws, credential });
-              return { d, ok: get(yield* d.next(), "t") === "ok" };
+              const reached = yield* Effect.timeout(
+                Effect.gen(function* () {
+                  const connection = yield* Effect.mapError(mesh.endpoint().connect({ id: other.id, relays }, CACHE_ALPN, []), (e) => CoreError.plainly("device cache", e));
+                  const stream = yield* Effect.mapError(connection.openBi(), (e) => CoreError.plainly("device cache", e));
+                  const d = streamDuplex(stream, () => connection.close(0, "done"));
+                  yield* d.send({ t: "hello", ws, credential });
+                  return { d, ok: get(yield* d.next(), "t") === "ok" };
+                }),
+                FILL_DIAL_MS,
+              );
+              if (!reached.ok) return reached.d.close();
+              answered = true;
+              const came = yield* Effect.ensuring(fillOver(inner, station, reached.d, () => isDown(inner, ws, station)), Effect.sync(() => reached.d.close()));
+              if (came.brought) {
+                from = nameOf(other);
+                if (came.upTo !== null && (upTo === null || came.upTo > upTo)) upTo = came.upTo;
+              }
             }),
-            FILL_DIAL_MS,
           );
-          yield* Effect.ensuring(reached.ok ? fillOver(inner, station, reached.d, () => isDown(inner, ws, station)) : Effect.void, Effect.sync(() => reached.d.close()));
-        }),
-      );
-    }
+        }
+      }),
+      Effect.sync(() => {
+        shown.delete(station);
+        const was = inner.data.record("deviceFill", station) as FillStatus | undefined;
+        if (from !== null) inner.data.put("deviceFill", station, { state: "filled", from, upTo: upTo ?? (was?.state === "filled" ? was.upTo : null) } satisfies FillStatus);
+        else if (was?.state !== "filled" && isDown(inner, ws, station)) inner.data.put("deviceFill", station, { state: answered ? "none" : "unreached" } satisfies FillStatus);
+        told();
+      }),
+    );
   });
 }
 
-function markFilled(data: Data, station: string): void {
-  let s = filled.get(data);
-  if (!s) filled.set(data, (s = new Set()));
-  s.add(station);
-}
-
-/// A station's other holders asked, once each time it goes down and each time the UI comes back while it is: nothing is
-/// asked on a timer, and a device not reached is asked again only then.
+/// A station's other holders asked as it goes down, as the UI comes back while it is, and as one of its chats is opened:
+/// nothing is asked on a timer, and a device not reached is asked again only then.
 class Asking {
   readonly #inner: Inner;
   /// The stations asked since they went down, or the UI last came back; those being asked now.
   readonly #asked = new Set<string>();
   readonly #going = new Set<string>();
+  readonly #ended = new Map<string, number>();
 
   constructor(inner: Inner) {
     this.#inner = inner;
@@ -225,11 +278,20 @@ class Asking {
     if (at < 0) return;
     const ws = station.slice(0, at);
     if (!isDown(this.#inner, ws, station)) {
-      filled.get(this.#inner.data)?.delete(station);
+      if (this.#inner.data.record("deviceFill", station) !== undefined) this.#inner.data.forgetRecord("deviceFill", station);
       this.#asked.delete(station);
       return;
     }
     this.#ask(ws, station);
+  }
+
+  /// One of its chats opened.
+  chatOpened(station: string): void {
+    const at = station.indexOf("/");
+    if (at < 0 || !isDown(this.#inner, station.slice(0, at), station)) return;
+    if (this.#inner.host.nowMs() - (this.#ended.get(station) ?? -FILL_OPENED_AGAIN_MS) < FILL_OPENED_AGAIN_MS) return;
+    this.#asked.delete(station);
+    this.#ask(station.slice(0, at), station);
   }
 
   /// The UI came back: what is down is asked for again, the other devices maybe there now.
@@ -248,13 +310,17 @@ class Asking {
     if (sub === null || !held(this.#inner, ws)?.head || this.#asked.has(station) || this.#going.has(station)) return;
     this.#asked.add(station);
     this.#going.add(station);
-    this.#inner.runner.fork(Effect.ensuring(Effect.ignore(fill(this.#inner, ws, sub, station)), Effect.sync(() => this.#going.delete(station))));
+    this.#inner.runner.fork(Effect.ensuring(Effect.ignore(fill(this.#inner, ws, sub, station)), Effect.sync(() => {
+      this.#going.delete(station);
+      this.#ended.set(station, this.#inner.host.nowMs());
+    })));
   }
 }
 
 export function install(inner: Inner): void {
   hooks.deviceCache = served;
-  const asking = new Asking(inner);
-  inner.stations.linkChanged = (station) => asking.linkChanged(station);
-  inner.runner.fork(Effect.forever(Effect.map(inner.wakes.next, () => asking.woken())));
+  const questions = new Asking(inner);
+  inner.stations.linkChanged = (station) => questions.linkChanged(station);
+  inner.stations.chatOpened = (station) => questions.chatOpened(station);
+  inner.runner.fork(Effect.forever(Effect.map(inner.wakes.next, () => questions.woken())));
 }

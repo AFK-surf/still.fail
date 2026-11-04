@@ -28,11 +28,18 @@ Chats and messages alone. An agent's transcript and files stay on the station. M
 
 ## When
 
-Nothing is asked on a timer. A station's other holders are asked once as the device finds it down (its link, or the cloud
-saying it is not online), and once each time the UI comes back while it still is: the person's other apps in the lock,
-one after another, 15 s to be reached and 15 s for each answer. A device not reached then is asked again only at the next
-of those. It stops as the station comes back.
+Nothing is asked on a timer. A station's other holders are asked as the device finds it down (its link, or the cloud saying
+it is not online), each time the UI comes back while it still is, and as one of its chats is opened (at most once in 30 s
+that way): the person's other apps in the lock, one after another, each for all it has, page after page. A timeout only
+says a device is not reached: 15 s to be reached and 15 s for each answer. A device not reached then is asked again only at
+the next of those; nothing says that a device came online. It stops as the station comes back.
 
 Entries are numbered and never change, so the station coming back goes on from what was brought; its lists, read then,
-replace what a device said. While it is down, the line over a chat's composer says some of it came from another device
-(held in memory: an app started again no longer says so).
+replace what a device said.
+
+## What it says
+
+While the station is down the line over a chat's composer says how it went: asking which device, caught up as far as when
+from which device, the other devices have nothing newer, or none of them could be reached. What came of it is kept with
+what came (the `deviceFill` record, by the station's address): an app started again still says so. It goes as the station
+comes back.

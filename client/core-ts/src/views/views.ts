@@ -18,7 +18,7 @@ import * as format from "../format.ts";
 import { t } from "../i18n.ts";
 import * as jobs from "../jobs.ts";
 import * as looks from "../looks.ts";
-import { filledFromDevice } from "./device-cache.ts";
+import { fillNote } from "./device-cache.ts";
 import { conformTy, type Ty } from "../conform.ts";
 import * as present from "../present.ts";
 import { topicKey, type Topic } from "../protocol.ts";
@@ -417,6 +417,8 @@ export type ViewsEnv = {
   heard?: (workspace: string) => boolean;
   /// A topic a view watches shown again (its owner asked to bring it up to date, store.ts `resume`).
   resume?: (topic: Topic) => void;
+  /// One of a station's chats opened (views/device-cache.ts).
+  chatOpened?: (station: string) => void;
   /// How agents' requests about vault items are answered on this device, from the vault as the core holds it
   /// (views/vault.ts askAnswers): each `{answer, lasts?}`, in the order asked.
   vaultAnswers?: (workspace: string, asks: VaultAskOf[]) => J[];
@@ -457,6 +459,7 @@ export function envOf(core: Inner): ViewsEnv {
     },
     places: () => xshare.places(core),
     resume: (topic) => core.router.resume(topic),
+    chatOpened: (station) => core.stations?.chatOpened(station),
     xshareAsked: (station, session) => xshare.asked(core, station, session),
     revoking: (station, id) => publish.revoking(core, station, id),
     homeName: (workspace, id) => memberships.homeName(core, workspace, id),
@@ -540,6 +543,7 @@ export class Views implements Owner {
     this.#views.set(topicKey(view), { topic: view, watches: new Map() });
     this.#sync(view);
     this.#core.store.invalidate(view);
+    if (view.topic === "chat" && typeof view.station === "string") this.#core.chatOpened?.(view.station);
   }
 
   /// Shown again while it was kept: a search asks its stations again (what they hold changes; station/sync.ts
@@ -1124,7 +1128,9 @@ export class Views implements Owner {
     if (screens.length > 0) v.screens = screens;
     if (v.offline === true) {
       v.offlineNote = looks.offlineNote(v.link, this.stationName(station));
-      if (filledFromDevice(this.#core.data, station)) v.offlineNote = `${v.offlineNote} ${t("core-logic.looks.offline.device")}`;
+      const { now, offsetMin } = this.#clock();
+      const filled = fillNote(this.#core.data, station, now, offsetMin);
+      if (filled !== null) v.offlineNote = `${v.offlineNote} ${filled}`;
       if (get(v.link, "cause") === "updating") v.updating = true;
       if (Array.isArray(v.outbox)) v.outbox = looks.outboxHeld(v.outbox);
     }

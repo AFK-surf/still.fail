@@ -147,6 +147,8 @@ export class StationsSync {
   /// Told when what a station holds beyond the records changed (link, live views, host, logs).
   /// How a station's link changed (views/device-cache.ts).
   linkChanged: (address: string) => void = () => {};
+  /// One of a station's chats opened (views/device-cache.ts).
+  chatOpened: (address: string) => void = () => {};
   onChange: (address: string, what: "link" | "live" | "host" | "log" | "errors" | "screens" | "logins" | "loginScreen", key?: string) => void = () => {};
   /// The loopback relays of logins this device takes the callback of (docs/remote-login.md).
   readonly relays: Relays;
