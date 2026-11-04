@@ -392,6 +392,7 @@
   "core-logic.looks.offline.station": "「{name}」已离线：当前显示的是之前读取的内容，发出的消息会在它上线后送达",
   "core-logic.looks.offline.network": "本机网络不可用：当前显示的是之前读取的内容，发出的消息会在连上后送达「{name}」",
   "core-logic.looks.offline.unreached": "暂时连不上「{name}」：当前显示的是之前读取的内容，发出的消息会在连上后送达",
+  "core-logic.looks.offline.device": "部分内容来自你的其他设备，可能不是最新。",
   "core-logic.looks.offline.lock": "安全模式未放行「{name}」：{reason}",
   "core-logic.looks.offline.updating": "「{name}」正在更新：当前显示的是之前读取的内容，更新完成后会自动重新连接，发出的消息届时送达",
   "core-logic.looks.outbox.held": "连上后发出",

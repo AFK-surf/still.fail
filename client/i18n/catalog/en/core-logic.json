@@ -512,6 +512,7 @@
   "core-logic.looks.offline.station": "“{name}” is offline. Showing previously loaded content; messages you send are delivered when it is back.",
   "core-logic.looks.offline.network": "No network connection. Showing previously loaded content; messages you send go to “{name}” once connected.",
   "core-logic.looks.offline.unreached": "Can't reach “{name}” right now. Showing previously loaded content; messages you send are delivered once it is reached.",
+  "core-logic.looks.offline.device": "Some of this came from your other devices and may not be the latest.",
   "core-logic.looks.offline.lock": "Security mode is blocking “{name}”: {reason}",
   "core-logic.looks.offline.updating": "“{name}” is updating. Showing previously loaded content; it reconnects when the update finishes, and messages you send are delivered then.",
   "core-logic.looks.outbox.held": "Sends once connected",

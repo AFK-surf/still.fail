@@ -18,6 +18,7 @@ import * as format from "../format.ts";
 import { t } from "../i18n.ts";
 import * as jobs from "../jobs.ts";
 import * as looks from "../looks.ts";
+import { filledFromDevice } from "./device-cache.ts";
 import { conformTy, type Ty } from "../conform.ts";
 import * as present from "../present.ts";
 import { topicKey, type Topic } from "../protocol.ts";
@@ -1123,6 +1124,7 @@ export class Views implements Owner {
     if (screens.length > 0) v.screens = screens;
     if (v.offline === true) {
       v.offlineNote = looks.offlineNote(v.link, this.stationName(station));
+      if (filledFromDevice(this.#core.data, station)) v.offlineNote = `${v.offlineNote} ${t("core-logic.looks.offline.device")}`;
       if (get(v.link, "cause") === "updating") v.updating = true;
       if (Array.isArray(v.outbox)) v.outbox = looks.outboxHeld(v.outbox);
     }
