@@ -292,6 +292,8 @@ pub(all) struct Work {
   /// for a key (Tree::key_at): what shows where it is and what holds the focus, never the whole tree
   mut hit_visited : Int
   mut keys_asked : Int
+  /// places a layout was done from (Tree::laid_from_roots): the root, or a node laid out alone as it was asked
+  mut relayouts : Int
   /// bindings looked at as something asked at once (Tree::pull): those marked, each once
   mut pulled : Int
   /// the boxes round what a node and what it holds draw worked out afresh (View::scale's Drawn: Tree::drawn_box_of)
@@ -601,6 +603,9 @@ pub struct Tree {
   /// those marked as what they read changed, since they last ran (Tree::pull)
   pulls_marked : Array[Int]
   mut layout_due : Bool
+  /// the relayout boundaries marked to be laid out from (Tree::layout_marked_at): the root, or a node whose size is its
+  /// own alone
+  layout_roots : Set[Int]
   mut order_due : Bool
   mut due : Bool
   /// the host is being told that a frame is due (Tree::marked)
@@ -873,6 +878,7 @@ pub fn Tree::new(
     advancing: false,
     logic: start,
     layout_due: true,
+    layout_roots: Set::from_array([0]),
     order_due: true,
     due: true,
     telling_due: false,
@@ -967,6 +973,7 @@ pub fn Tree::new(
       structure: 0,
       hit_visited: 0,
       keys_asked: 0,
+      relayouts: 0,
       pulled: 0,
       drawn_boxes: 0,
       settles: 0,
@@ -1697,17 +1704,118 @@ fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
       flex.p_ok = false
       i = self.nodes[i].parent
     }
+    // (outside any such callback (what reads the layout as it is published): laid out from the root as layout next
+    // runs, as all of it up to the root is marked)
+    if self.layout_owner < 0 {
+      self.layout_roots.add(0)
+    }
     return
   }
   self.layout_due = true
   self.hits = self.hits + 1
   self.marked()
-  let mut i = at
-  while i >= 0 {
-    let n = self.nodes[i]
-    n.flex.dirty = true
-    i = n.parent
+  // (it, and what holds it, which reads what is said of it (its size, its basis, its insets) as it lays it out; what
+  // holds that marked as it is found to read it otherwise once laid out again, as the frame lays out
+  // (Tree::laid_from_roots), not up to the root now: retained.md rule 3)
+  self.nodes[at].flex.dirty = true
+  let p = self.nodes[at].parent
+  if p >= 0 {
+    self.nodes[p].flex.dirty = true
+    self.layout_roots.add(p)
+  } else {
+    self.layout_roots.add(at)
   }
+}
+
+///|
+/// Whether what holds node `at` may read what it holds beyond its size as it lays it out (@flex's Node::reads_least: a
+/// row that wraps by its items' least): no relayout boundary under that.
+fn Tree::least_read_over(self : Tree, at : Int) -> Bool {
+  let mut i = self.nodes[at].parent
+  while i >= 0 {
+    if self.nodes[i].flex.reads_least() {
+      return true
+    }
+    i = self.nodes[i].parent
+  }
+  false
+}
+
+///|
+/// What was marked laid out (Tree::layout_marked_at), each from where it changed up to its first relayout boundary for
+/// this change, the deepest first: each laid out again alone as it was asked last (@flex's relayout_alone); where what
+/// holds it would find it the same (its size, every size it was asked), what holds it stands, else that is marked and
+/// laid out the same way in its turn; the root by a compute of its own as the window gives it. Under a row that wraps
+/// by its items' least (which reads what each holds through them), none stops. What was laid out from, to be placed
+/// from there (Tree::walk).
+fn Tree::laid_from_roots(self : Tree) -> Array[Int] {
+  let depth = fn(at : Int) {
+    let mut d = 0
+    let mut i = self.nodes[at].parent
+    while i >= 0 {
+      d = d + 1
+      i = self.nodes[i].parent
+    }
+    d
+  }
+  // (what is to be laid out, by how deep it is: the deepest first, what holds it after, one shallower)
+  let due : Array[Array[Int]] = []
+  let seen : Set[Int] = Set::new()
+  let add = fn(at : Int, d : Int) {
+    if !seen.contains(at) {
+      seen.add(at)
+      while due.length() <= d {
+        due.push([])
+      }
+      due[d].push(at)
+    }
+  }
+  for at in self.layout_roots {
+    // (one let go since, its slot made another's or none: what it was is gone with it)
+    if self.nodes[at].live {
+      add(at, depth(at))
+    }
+  }
+  self.layout_roots.clear()
+  let out : Array[Int] = []
+  // (one layout, however many places it is done from)
+  self.work.computes += 1
+  let mut d = due.length() - 1
+  while d >= 0 {
+    let here = due[d]
+    // (in the order marked; what holds one of them, one shallower, comes in its own turn)
+    let mut j = 0
+    while j < here.length() {
+      let at = here[j]
+      j = j + 1
+      let n = self.nodes[at]
+      self.work.relayouts += 1
+      if at == 0 {
+        @flex.compute(n.flex, width=self.last_w, height=self.last_h, round=false, reuse=true)
+        out.push(0)
+      } else if self.out_at(at) {
+        // (in what is left out of its row: laid out nowhere now; what holds it up to that marked, so that it is laid out
+        // as that comes back)
+        self.work.relayouts -= 1
+        let mut i = at
+        while i >= 0 && !self.nodes[i].out {
+          self.nodes[i].flex.dirty = true
+          i = self.nodes[i].parent
+        }
+        if i >= 0 {
+          self.nodes[i].flex.dirty = true
+        }
+      } else if @flex.relayout_alone(n.flex) && !self.least_read_over(at) {
+        out.push(at)
+      } else if n.parent >= 0 {
+        // (what holds it reads it otherwise now: laid out again too, in its turn)
+        self.nodes[n.parent].flex.dirty = true
+        add(n.parent, d - 1)
+      }
+    }
+    d = d - 1
+  }
+  out
 }
 
 ///|
@@ -5997,8 +6105,6 @@ pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
 /// What was marked laid out and drawn at `upto`, the logic not moved: no moment's work done, nothing due run (for where
 /// things are as an event finds them in the middle of its change: Tree::laid_now).
 fn Tree::laid_out(self : Tree, upto : Double, paint_at? : Double = upto) -> Unit {
-  let w = self.last_w
-  let h = self.last_h
   let paint_changes = @signals.untracked(fn() {
     (self.paint_clock.get() != paint_at && self.paint_clock.watched()) ||
     (self.beat.get() != paint_at && self.beat.watched()) ||
@@ -6050,10 +6156,10 @@ fn Tree::laid_out(self : Tree, upto : Double, paint_at? : Double = upto) -> Unit
   let placing = self.layout_due || !self.places_due.is_empty()
   if self.layout_due {
     self.layout_due = false
-    self.work.computes += 1
     let gen = @flex.computes() + 1
-    @flex.compute(self.nodes[0].flex, width=w, height=h, round=false, reuse=true)
-    self.walk(0, gen, true)
+    for at in self.laid_from_roots() {
+      self.walk(at, gen, true)
+    }
   }
   // (placed or faded by its own: it alone composed again)
   for at in self.places_due {
