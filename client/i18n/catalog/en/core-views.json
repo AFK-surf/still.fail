@@ -708,7 +708,7 @@
   "core-views.outflow.scope.chatsWhy": "Each chat's title, whether it is working, done or waiting on someone, who started it and when, and its agents' models. No messages.",
   "core-views.outflow.scope.messagesWhy": "What people and agents said in each chat, word for word. With this, the program reads your conversations.",
   "core-views.outflow.scope.operate": "Act in still.fail as your members",
-  "core-views.outflow.scope.operateWhy": "What people can do in the app: start and steer chats, answer them, change settings and manage this station. It acts as the member who asks it. Grants and the vault stay out of its reach.",
+  "core-views.outflow.scope.operateWhy": "What people can do in the app: start and steer chats, answer them, change settings and manage this station. The program says which member it acts for and the station takes its word, so it can act as any member. Grants and the vault stay out of its reach.",
   "core-views.outflow.reach.station": "This station",
   "core-views.outflow.reach.workspace": "Every station of the workspace",
   "core-views.outflow.askedAt": "Asked {when}",

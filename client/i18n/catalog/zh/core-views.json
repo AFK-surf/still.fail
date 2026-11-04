@@ -627,7 +627,7 @@
   "core-views.outflow.scope.chatsWhy": "每个 chat 的标题，是在做、做完了还是在等人，谁开的、什么时候开的，用的模型。不含消息。",
   "core-views.outflow.scope.messagesWhy": "每个 chat 里人和 agent 说的话，原文。勾上这一项，对方能读到你们的对话内容。",
   "core-views.outflow.scope.operate": "以成员身份在 still.fail 里操作",
-  "core-views.outflow.scope.operateWhy": "人在 app 里能做的事：开 chat、驱动和回答 chat、改设置、管理这台 station。它以发起请求的成员身份操作。数据外流授权和密钥库不在其内。",
+  "core-views.outflow.scope.operateWhy": "人在 app 里能做的事：开 chat、驱动和回答 chat、改设置、管理这台 station。由程序说明它代表哪位成员，station 不核实，所以它能以任何成员的身份操作。数据外流授权和密钥库不在其内。",
   "core-views.outflow.reach.station": "这台 station",
   "core-views.outflow.reach.workspace": "整个 workspace 的所有 station",
   "core-views.outflow.askedAt": "{when} 申请",
