@@ -331,7 +331,15 @@ export class SlackSurface extends ConnectedSurface {
         }
         // The form sent: acknowledged once its thread is posted (or with what is wrong, shown in the form), then taken.
         if (envelope?.type === "interactive" && envelope.payload?.type === "view_submission") {
-          void this.startChat(envelope.payload, handler, ack).catch((error) => log.error("slack", "failed to start a chat from the form", { error: (error as Error).message }));
+          let acked = false;
+          const once = (payload?: Json) => {
+            if (!acked) ack(payload);
+            acked = true;
+          };
+          void this.startChat(envelope.payload, handler, once).catch((error) => {
+            log.error("slack", "failed to start a chat from the form", { error: (error as Error).message });
+            once({ response_action: "errors", errors: { words: tr(stationLang(), "station.slack.newChatFailed", { error: (error as Error).message }) } });
+          });
           return;
         }
         // A card's button pressed: acknowledged at once, then said as the person's answer.
