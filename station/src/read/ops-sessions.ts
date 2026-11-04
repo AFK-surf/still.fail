@@ -27,10 +27,7 @@ export const sessionOps: Record<string, ReadOp> = {
     });
     return { threads, sessions, total };
   },
-  searchChatList: (s, a) => searchChats(s.db, a.ws, a.home, a.limit, a.query, {
-    thread: (id) => getThread(s, id), sessions: (id) => threadSessions(s, id), last: (id) => lastSaid(s, id),
-    firstText: (id) => firstText(s, id), session: (key) => getSession(s, key),
-  }),
+  searchChatList: (s, a) => searchChats(s.db, a.ws, a.home, a.limit, a.query, (id) => lastSaid(s, id)),
   /// A thread's latest `limit` messages, oldest first: the archive review's (sessions/review.ts).
   latestMessages: (s, a) => messagesBefore(s, a.thread, null, a.limit),
   /// One session as lists and events have it (views.rs `summary`).

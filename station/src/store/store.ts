@@ -1306,10 +1306,7 @@ export class Store {
   }
 
   searchChatList(ws: string | null, home: string | null, limit: number, query: string): RecentChatList {
-    return searchChats(this.db, ws, home, limit, query, {
-      thread: (id) => this.getThread(id), sessions: (id) => this.threadSessions(id), last: (id) => this.#lastSaid(id),
-      firstText: (id) => this.firstText(id), session: (key) => this.getSession(key),
-    });
+    return searchChats(this.db, ws, home, limit, query, (id) => this.#lastSaid(id));
   }
 
   /// The thread's latest message as merged, for lists.
