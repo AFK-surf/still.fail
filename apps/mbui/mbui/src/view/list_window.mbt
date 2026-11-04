@@ -82,6 +82,18 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   foot_room? : () -> Double = fn() { 0.0 },
 ) -> View {
   guard self.live() is Some(_) else { return self }
+  if room is None {
+    let kept_now = @signals.computed(fn(_) {
+      match kept_keys {
+        Some(f) => f()
+        None => keys().filter(kept)
+      }
+    })
+    return self.scrolls_anchored_impl(
+      s, keys, make, est~, from_end~, ahead=0.0, slop?=slop, bar?=bar, follows~, shown?=shown,
+      put?=put, fresh~, read_from_top~, cover~, kept_keys=fn() { kept_now.get() }, bar_clear~, foot_room~, fixed_estimate=true,
+    )
+  }
   let put_at = put.unwrap_or(@signals.signal(None))
   let measuring_anchor = Ref(false)
   let release_put : Ref[() -> Unit] = Ref(fn() { })

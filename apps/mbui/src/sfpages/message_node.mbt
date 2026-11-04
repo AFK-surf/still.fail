@@ -178,10 +178,12 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
     .min_height(Is(Some(head_line_h)))
     .gap(Is(6.0))
     .lines_up(Is(Some(Middle)))
-    .padding(By(fn() { (if inline() { 25.0 } else { 0.0 }, 0.0, 0.0, 0.0) }))
     .alpha(By(fn() { out().unwrap_or(1.0) }))
     .offset(By(fn() { (-@sfbase.emit_head_slide * (1.0 - out().unwrap_or(1.0)), 0.0) }))
     |> ignore
+    chat_inline_layout(head, inline, fn(on) {
+      head.padding(Is((if on { 25.0 } else { 0.0 }, 0.0, 0.0, 0.0))) |> ignore
+    })
     // (one of the chat's agents' to its history beside the chat; another chat's agent's to that chat: message_name's)
     let now = @signals.untracked(m)
     let press = if now.by.agent != "" {
@@ -214,13 +216,20 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
       })
       // (the menu belongs to the message, not the hover button: it finishes leaving where it hung when that
       // button disappears; beside keeps that last place after its anchor is gone)
-      let popup = @sf.popup_root_node(head)
-      @sf.menu_node(popup, fn() { @sf.menu_is_open(key()) }, fn(_) { anchor.val }, fn() {
-        message_items_of(src, here(), m())
-      }, "", End, 6.0, false, false, fn(item) {
-        close()
-        (item.select)()
-      }, close, exit=true)
+      // (its layer made as the menu first opens, from that cause: nothing made in another layer as the row is made,
+      // which a list makes as it lays its rows out)
+      let made = Ref(false)
+      head.reacts(fn() { @sf.menu_is_open(key()) }, fn(open) {
+        guard open && !made.val else { return }
+        made.val = true
+        let popup = @sf.popup_root_node(head)
+        @sf.menu_node(popup, fn() { @sf.menu_is_open(key()) }, fn(_) { anchor.val }, fn() {
+          message_items_of(src, here(), m())
+        }, "", End, 6.0, false, false, fn(item) {
+          close()
+          (item.select)()
+        }, close, exit=true)
+      })
     }
   })
   |> ignore
@@ -238,7 +247,6 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
   row.box(fn(a) {
     a
     .over(Is(true))
-    .offset(By(fn() { (if inline() { 0.0 } else { -29.0 }, 3.0) }))
     .alpha(By(fn() {
       match emits_here(here(), m()) {
         Some((em, _)) if emit_emitting(em, m().seq) || emit_awaited(em, m().seq) => 0.0
@@ -246,6 +254,7 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
       }
     }))
     |> ignore
+    chat_inline_layout(a, inline, fn(on) { a.offset(Is((if on { 0.0 } else { -29.0 }, 3.0))) |> ignore })
     // (said as the old view's box round it was, 3 over it: emit_flight puts the face 3 down it)
     emit_place_node(a, fn() { emits_here(here(), m()).map(fn(e) { "emit-landing/" + e.1 + "/" + seq_s(m().seq) }) }, dy=-3.0)
     a.pick(fn() { m().author_kind }, fn(slot, kind) {
@@ -378,7 +387,7 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
             draw: fn(v) { message_files_node(v, src, here, fn() { [a] }, false, at~, by~) },
             image: image_ratio(a).map(fn(r) {
               (r, fn(v : @view.View, w : () -> Double) {
-                ignore(media_file_node(v, src, here, fn() { a }, "image", w, at, @sf.message_file_corner, by, fills=true))
+                ignore(media_file_node(v, src, here, fn() { a }, "image", fn() { Some(w()) }, at, @sf.message_file_corner, by, fills=true))
               })
             }),
           })
@@ -465,7 +474,7 @@ fn mine_row_node(col : @view.View, src : Source, here : () -> MessageHere, row :
   let unsay = fn() {
     match said.val {
       Some((at, l)) =>
-        match @signals.untracked(fn() { mine_landings.get(at) }) {
+        match mine_landings.get(at) {
           Some(now) if physical_equal(now, l) => mine_landings.remove(at)
           _ => ()
         }
@@ -532,11 +541,11 @@ fn mine_row_node(col : @view.View, src : Source, here : () -> MessageHere, row :
   // (its words in their bubble, where it has any)
   col.show(fn() { (row.text)() != "" }, fn(b) {
     b
-    .max_width(By(fn() { Some(composer_words_width(width()) + 2.0 * bubble_side) }))
     .padding(Is((bubble_side, bubble_in_y, bubble_side, bubble_in_y)))
     .radius(By(fn() { @ui.tree_theme().corner(Xl2) }))
     .ground(By(fn() { @ui.tree_theme().color(Neutral) }))
     |> ignore
+    chat_bubble_width(b, width)
     // (picked as the chat's, said before its words are made: pick_node.mbt; the viewer's own, by its name in the chat)
     pick_row_node(col, b, fn() {
       let h = here()
@@ -849,7 +858,7 @@ fn quotes_node(
   col.box(fn(qs) {
     qs.gap(Is(4.0)).lines_up(Is(Some(if mine { End } else { Start }))) |> ignore
     if mine {
-      qs.max_width(By(fn() { Some(composer_words_width(width()) + 2.0 * bubble_side) })) |> ignore
+      chat_bubble_width(qs, width)
     }
     qs.each(fn() { quotes().mapi(fn(i, _) { i }) }, fn(i) { i }, fn(slot, i) {
       let i = @signals.untracked(fn() { i.get() })
@@ -876,6 +885,17 @@ fn quotes_node(
         jump?=if @signals.untracked(fn() { q().ts != "" && here().go is Some(_) }) { Some(jump) } else { None },
         // (shown while the message has the file it names: what was sent from here has it once the core takes it over)
         picture_shown=fn() { quote_file(q(), files()) is Some(_) },
+        // (what was sent from here: as tall as its picture is in the card, known before it is laid out, what a copy
+        // flying to it keeps room for)
+        picture_tall=fn() {
+          if mine {
+            quote_file(q(), files()).bind(fn(a) {
+              media_tall(a, Some(@sf.quote_picture_room(composer_words_width(width()) + 2.0 * bubble_side)))
+            })
+          } else {
+            None
+          }
+        },
         picture=fn(pv) {
           // The local file can acquire an upload key before its previous node is released. Both occupy this
           // quote's one picture slot; releasing the previous key must not erase the new one's landing.
@@ -931,13 +951,13 @@ pub(all) struct MineLanding {
 
 ///|
 /// The rows of what the viewer sent that show, by their place (message_place: the outbox entry's while it is one, then
-/// the message's): their landings, let go with them.
+/// the message's): their landings, let go with them. Said as their rows are made, in the list's layout, and read by
+/// the flight in its own after it in the same pass: not followed, nothing of it told.
 // kept across runs: each let go as its row is; message_reset empties it
-let mine_landings : @sf.LiveMap[String, MineLanding] = @sf.LiveMap::new()
+let mine_landings : Map[String, MineLanding] = {}
 
 ///|
-/// Where what was sent to place `place` lands, while its row shows (mine_landings), followed: what reads it told as
-/// one is said or let go.
+/// Where what was sent to place `place` lands, while its row shows (mine_landings), as the rows made so far have it.
 pub fn mine_landing(place : String) -> MineLanding? {
   mine_landings.get(place)
 }

@@ -1381,6 +1381,32 @@ pub(all) struct ComposerPlace {
   capsule_in : (Double, Double, Double)
   capsule_pad : Double
   corner : Double
+} derive(Eq)
+
+///|
+/// The parts of a composer's geometry that do not depend on the pane's width. Capture these before layout and
+/// resolve the width-dependent choice with the width supplied by the parent in that same layout.
+pub struct ComposerLimits {
+  priv side : Double
+  priv native : Bool
+  priv across : (Double, ComposerPlace)
+  priv apart : (Double, ComposerPlace)
+} derive(Eq)
+
+///|
+pub fn composer_limits(radii : FixedArray[Double]?) -> ComposerLimits {
+  let side = @sf.pane_foot_in_of(radii, holds=@sf.theme().round.side)
+  let (_, near_foot, near_place) = composer_geometry(0.0, radii)
+  let (_, far_foot, far_place) = composer_geometry(1.0e9, radii)
+  { side, native: @sf.native_on(), across: (near_foot, near_place), apart: (far_foot, far_place) }
+}
+
+///|
+pub fn ComposerLimits::in_width(self : ComposerLimits, pane : Double) -> (Double, Double, ComposerPlace) {
+  let room = pane - 2.0 * self.side
+  let width = if self.native { room } else { dmin(room, composer_most) }
+  let (foot, place) = if width >= room - 0.5 { self.across } else { self.apart }
+  (width, foot, place)
 }
 
 ///|
@@ -1464,7 +1490,12 @@ let text_own : @ui.Style = @ui.css("w=Full")
 /// and its words' room's sides: text_open's px=S2): where what the viewer sent breaks its lines too (its bubble's,
 /// message.mbt mine_most).
 pub fn composer_words_width(pane : Double) -> Double {
-  composer_width(pane) - 2.0 * @sf.composer_pad - 2.0 * 8.0
+  composer_words_width_given(pane, composer_side(), @sf.native_on())
+}
+
+///|
+fn composer_words_width_given(pane : Double, side : Double, native : Bool) -> Double {
+  composer_width_given(pane, side, native) - 2.0 * @sf.composer_pad - 2.0 * 8.0
 }
 
 ///|

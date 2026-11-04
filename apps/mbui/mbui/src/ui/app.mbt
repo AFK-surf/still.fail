@@ -116,6 +116,11 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // run's input: envrec.mbt)
   c.device_frame_start()
   env_at_frame()
+  view_logic_at.val = h_now()
+  frame_context(c, w, h, scale)
+  c.clock = view_logic_at.val
+  view_frame_committed.val = false
+  frame_arrivals(c, w, h, scale, t)
   // (built whole where what it read changed, painted alone where only what its paint read did, or of its looks by the
   // clock alone: frame_watch.mbt)
   // what is made once laid out, placed and drawn as its frame does; the old view in the room its node is given
@@ -191,6 +196,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
     @hostapi.frame_awaiting(rt.awaiting(), what)
   }
   frame_running.val = false
+  view_frame_committed.val = false
   frame_built.val = false
 }
 
@@ -207,6 +213,10 @@ pub fn frame_offscreen(
   t : Double,
 ) -> Ctx {
   g_view.val = view
+  let c = g()
+  frame_context(c, w, h, scale)
+  c.clock = t
+  frame_arrivals(c, w, h, scale, t)
   frame_body(g(), w, h, scale, t) |> ignore
   g()
 }
@@ -217,8 +227,8 @@ pub fn frame_offscreen(
 let frame_hook : Ref[(() -> Unit)?] = Ref::new(None)
 
 ///|
-/// Builds, lays out and paints a frame; returns when it started.
-fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Double {
+/// Inputs to both retained measurement and the old frame, installed before either lays anything out.
+fn frame_context(c : Ctx, w : Double, h : Double, scale : Double) -> Unit {
   c.width = w
   c.height = h
   c.window_w = w
@@ -243,6 +253,12 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     c.epoch = c.epoch + 1
     view_words_rescaled()
   }
+}
+
+///|
+/// Builds, lays out and paints a frame; returns when it started.
+fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Double {
+  frame_context(c, w, h, scale)
   c.clock = t
   c.dt = if c.last_now < 0.0 { 16.67 } else { dclamp(t - c.last_now, 0.0, 100.0) }
   c.last_now = t
@@ -278,22 +294,11 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   perf_frame_start()
   rows_frame_start()
   let t0 = work_now()
-  // what was posted from outside since the last frame (a core's answers), all of it, handed to its handlers in the
-  // order it came, before anything reads it (messages.mbt)
-  take_messages()
-  // (the probe's: how long the messages took, slow_probe)
-  probe_msgs_ms.val = work_now() - t0
-  // the runtime's fibers run up to this frame's time (fx.mbt): the view reads what they left
-  fx_frame_start(c)
   // the parts kept (kept_part.mbt): another run's forgotten, what the runtime did since the last frame an event from outside
   parts_frame_start(c)
   // what came from outside and of the hand, taken: read, so that the next frame is built again as more comes
   // (frame_watch.mbt)
   frame_inputs_read()
-  // ⌘V's words for a field of the window's tree come with this frame (a Tester's answers by the frame: this one's from
-  // here, ClipboardRead::got), taken before the tree is brought for its paint: what it is laid out and drawn by
-  // (tree_field.mbt; a host's, at its answer's own moment: on_outside_now)
-  tree_fields_pasting(c.clock)
   // what is said to move, handed this frame's time, before the view reads where it is (motion_data.mbt)
   c.movers_sample()
   // what the boxes moved by a move_state were shown as in the last frame: where a move set out now starts (move_state.mbt)
@@ -380,8 +385,6 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
       // what of an old view's came to have the focus, brought into sight by what of the window's tree holds it
       // (view_host.mbt)
       old_show_after_layout(c)
-      // (an old view as tall as what it holds: that height, as laid out now, told its node (view_host.mbt))
-      old_natural_after_layout(c)
     })
     laying.val = false
     layout_coming.val = false
@@ -494,19 +497,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   text_runs.runs.clear()
   words_alpha.val = 1.0
   look_surface.val = (1.0, -1)
-  c.next_hit_ids.clear()
-  c.next_hit_rects.clear()
-  c.next_hit_clips.clear()
-  c.next_hit_ends.clear()
-  c.next_hit_marks.clear()
-  c.next_points.clear()
-  c.next_passes.clear()
-  c.passing = 0
-  c.next_point_hits.clear()
-  c.next_scroll_ids.clear()
-  c.next_scroll_rects.clear()
-  c.next_bars.clear()
-  c.across_seen.clear()
+  c.targets_start()
   c.glass_frame()
   // (the window's tree in its order, the old frame or its old views in their places in it: view_host.mbt)
   c.view_paint(root)
@@ -558,40 +549,9 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.back_layer_spent()
   // (the host told whether the app takes back, as what the old views said now has it: Ctx::back_told_host)
   c.back_told_host()
-  let hi = c.hit_ids
   // (the targets as this frame drew them: what a layer dismissed since the last drew is out of them as it was let go)
   layer_retired_ids.clear()
-  c.hit_ids = c.next_hit_ids
-  c.next_hit_ids = hi
-  let hr = c.hit_rects
-  c.hit_rects = c.next_hit_rects
-  c.next_hit_rects = hr
-  let hc = c.hit_clips
-  c.hit_clips = c.next_hit_clips
-  c.next_hit_clips = hc
-  let he = c.hit_ends
-  c.hit_ends = c.next_hit_ends
-  c.next_hit_ends = he
-  let hm = c.hit_marks
-  c.hit_marks = c.next_hit_marks
-  c.next_hit_marks = hm
-  let ps = c.points
-  c.points = c.next_points
-  c.next_points = ps
-  let pa = c.passes
-  c.passes = c.next_passes
-  c.next_passes = pa
-  let si = c.scroll_ids
-  c.scroll_ids = c.next_scroll_ids
-  c.next_scroll_ids = si
-  let sr = c.scroll_rects
-  c.scroll_rects = c.next_scroll_rects
-  c.next_scroll_rects = sr
-  let bs = c.bars
-  c.bars = c.next_bars
-  c.next_bars = bs
-  // (the old views' kept as painted, each where it is, what scrolls in them and their bars too: view_host.mbt)
-  old_hits_framed(c)
+  c.targets_commit()
   // (what said its presses are another's, under a Tester: that one takes them there)
   c.check_press_owners()
   // (its targets published whole: what nodes yield to of them told, view_host.mbt)

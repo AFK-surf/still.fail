@@ -234,7 +234,10 @@ test "a waiting file's card stands off the composer's frosted ground by its own 
     @sfbase.writing_add(src, w, "ws1/st1", "build.log", @utf8.encode("夜里的构建日志"))
     t.draw()
     t.run_for(@ui.move_most_ms)
-    let (x, y, cw, ch) = match t.query(Group, label="build.log") {
+    // (the composer's, the lowest: the chat's message 5 has a build.log too, its row made ahead of what shows)
+    let cards = t.all(Group, label="build.log")
+    cards.sort_by(fn(a, b) { a.rect.1.compare(b.rect.1) })
+    let (x, y, cw, ch) = match cards.last() {
       Some(g) => g.rect
       None => fail("no card for build.log (platform \{platform})")
     }

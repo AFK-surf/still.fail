@@ -21,7 +21,9 @@ pub fn chat_waiting_node(parent : @view.View, src : Source, r : ChatRef, top : (
 pub fn chat_messages_sample_node(parent : @view.View, top : () -> Double) -> Unit {
   parent.box(fn(column) {
     column.min_width(Is(Some(0.0))).shrink(Is(0.0)) |> ignore
-    let width = fn() { column.laid_size_told().map(fn(s) { s.0 }).unwrap_or(column.window().0) }
+    let room = column.width_context()
+    column.lends(chat_row_width, room) |> ignore
+    let width = fn() { room.now().unwrap_or(column.window().0) }
     let narrow = fn() { width() <= chat_narrow_w }
     let side = fn() { row_side_in(width()) }
     let view = @sfbase.chat_view_made({ "title": Json::string(""), "messages": [] })
@@ -45,12 +47,16 @@ pub fn chat_messages_sample_node(parent : @view.View, top : () -> Double) -> Uni
         row
         .min_width(Is(Some(0.0)))
         .shrink(Is(0.0))
-        .padding(By(fn() {
-          let over = if i == 0 { 0.0 } else if narrow() { list_gap_narrow } else { list_gap }
-          let trailing = if @sf.native_side() { native_row_inset() } else { side() }
-          (side(), over, trailing, 0.0)
-        }))
         |> ignore
+        room.bind(row, By(fn() { (@sf.native_on(), @sf.native_side(), native_row_inset()) }), fn(w, native) {
+          let (on, on_side, inset) = native
+          let narrow = w <= chat_narrow_w
+          let start = if narrow { if on { inset } else { row_side_narrow } }
+            else if on { dense_row_side } else { dmax(row_side_least, (w - chat_column_w) / 2.0) }
+          let over = if i == 0 { 0.0 } else if narrow { list_gap_narrow } else { list_gap }
+          let trailing = if on_side { inset } else { start }
+          row.padding(Is((start, over, trailing, 0.0))) |> ignore
+        })
         message_row_node(row, @sfbase.sample_source, here, fn() { said }, width)
       })
       |> ignore

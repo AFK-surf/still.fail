@@ -46,73 +46,39 @@ fn stage_node(
         { alpha: 1.0, dx: 0.0, dy: 0.0, sx: 1.0, sy: 1.0, ox: 0.5, oy: 0.5, rot: 0.0, circle: 0.0, words: look().words }
       })
     }
-    // (how wide what it holds is drawn (whole_fitted's, told as it is built) and how wide what is under it is laid out
-    // (old's `fits`): the column as wide as the wider, as stage_box is, each in its middle)
-    let body_w : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
-    let under_w : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
-    // (how wide it is laid out: its old view as wide, wider than the column where it is drawn smaller, cut by nothing)
-    let laid_w : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
-    let widest = fn() { dmin(room().0, dmax(body_w.get().unwrap_or(0.0), under_w.get().unwrap_or(0.0))) }
-    // (one of its parts `w` wide in the column's middle: as far in from either side)
-    let in_middle = fn(w : @signals.Signal[Double?]) {
-      let m = (widest() - w.get().unwrap_or(0.0)) / 2.0
-      (m, 0.0, m, 0.0)
-    }
+    // The stage owns the available room. Its layout measures the controls and the whole picture, then places both
+    // at the size that fits; neither child's measured size is published as another layout input.
+    let picture_w = Ref(0.0)
+    let shell_size : Ref[(Double, Double)?] = Ref(None)
+    let picture_scale = Ref(1.0)
     across.box(fn(d) {
       d
-      .width(By(fn() { Some(widest()) }))
-      .max_height(By(fn() { Some(dmax(0.0, room().1)) }))
-      .gap(Is(stage_gap))
+      .width(By(fn() { Some(dmax(0.0, room().0)) }))
+      .height(By(fn() { Some(dmax(0.0, room().1)) }))
       .alpha(By(fn() { look().alpha }))
       .scale(By(fn() { look().sx }))
       .offset(By(fn() { (look().dx, look().dy) }))
-      // (going, read out no more: as an old layer on its way out is hidden from what reads the screen)
-      .says(By(fn() { if layer.leaving() { None } else { Some(@view.said(Dialog, label=title())) } }))
-      // (a press on it its own: not beside it)
-      .presses(Is(true))
-      .on_press(fn() {  })
       |> ignore
-      // (what it holds: as tall as it is laid out at the stage's width, giving way to what the column leaves it)
-      // (the room the column gives it, as the tree laid it out: what it is drawn smaller to)
-      let body_at : Ref[@view.View?] = Ref(None)
-      let body = @ui.old(d, natural=true, gives=true, key=fn() { key + "/body" }, fn(c) {
-          let (sw, sh) = room()
-          let given = match body_at.val {
-            Some(b) =>
-              match b.laid_size_told() {
-                Some((_, g)) if g > 0.0 => g
-                _ => sh
-              }
-            None => sh
-          }
-          let was = (stage_room.val, stage_gives.val)
-          stage_room.val = Some((sw, sh))
-          stage_gives.val = true
-          stage_given.val = given
-          stage_drawn_w.val = 0.0
+      // The ground covers only the actual stage, so pressing beside it still dismisses the layer.
+      let shell = d.box(fn(n) {
+        n.says(By(fn() { if layer.leaving() { None } else { Some(@view.said(Dialog, label=title())) } }))
+        .presses(Is(true)).on_press(fn() { }) |> ignore
+      })
+      let body = @ui.old(d, natural=true, key=fn() { key + "/body" }, fn(c) {
+          let was = (stage_natural.val, stage_natural_scale.val)
+          stage_natural.val = true
+          stage_natural_scale.val = fn() { picture_scale.val }
           stage_laid_w.val = 0.0
           panel_whole_now.val += 1
           let held = c.box(style=stage_box.then(@ui.style(w=Full)), fn() { draw_panel_body(x, c, close, keyed~) })
           panel_whole_now.val -= 1
-          stage_room.val = was.0
-          stage_gives.val = was.1
-          // (as wide as it is drawn: told as that changes, the column laid out again)
-          let (w, lw) = (stage_drawn_w.val, stage_laid_w.val)
-          if @signals.untracked(fn() { body_w.get() }) != Some(w) {
-            body_w.set(Some(w))
-          }
-          if @signals.untracked(fn() { laid_w.get() }) != Some(lw) {
-            laid_w.set(Some(lw))
-          }
+          if stage_laid_w.val > 0.0 { picture_w.val = stage_laid_w.val }
+          stage_natural.val = was.0
+          stage_natural_scale.val = was.1
           words_look(c, held)
         })
-      .width(By(fn() { laid_w.get() }))
-      .margin(By(fn() { in_middle(laid_w) }))
-      .shrink(Is(1.0))
-      .min_height(Is(Some(0.0)))
-      body_at.val = Some(body)
       // (under it: what is chosen of it over 关闭 and its foot's buttons, on the night)
-      @ui.old(d, natural=true, fits=(stage_fits_most, under_w), key=fn() { key + "/foot" }, fn(c) {
+      let under = @ui.old(d, natural=true, fits=stage_fits_most, key=fn() { key + "/foot" }, fn(c) {
           let night = on_night.val
           on_night.val = true
           let held = c.box(style=stage_under, fn() {
@@ -134,9 +100,30 @@ fn stage_node(
           on_night.val = night
           words_look(c, held)
         })
-      .width(By(fn() { under_w.get() }))
-      .margin(By(fn() { in_middle(under_w) }))
-      |> ignore
+      d.layout_box(By(room), fn(l, _) {
+        let first_w = if picture_w.val > 0.0 { picture_w.val } else { l.width }
+        let first = l.measure(body, first_w)
+        let natural_w = if picture_w.val > 0.0 { picture_w.val } else { first.0 }
+        let (bw, bh) = if natural_w != first_w { l.measure(body, natural_w) } else { first }
+        // The picture discovers its required files before the controls decide whether it can be saved.
+        let (uw, uh) = l.fit(under, stage_fits_most)
+        let available = dmax(0.0, l.height - uh - stage_gap)
+        let scale = dmin(1.0, dmin(if bw > 0.0 { l.width / bw } else { 1.0 }, if bh > 0.0 { available / bh } else { 1.0 }))
+        let (drawn_w, drawn_h) = (bw * scale, bh * scale)
+        let sw = dmin(l.width, dmax(drawn_w, uw))
+        let sh = drawn_h + stage_gap + uh
+        let left = (l.width - sw) / 2.0
+        let top = (l.height - sh) / 2.0
+        if shell_size.val != Some((sw, sh)) {
+          shell_size.val = Some((sw, sh))
+          shell.width(Is(Some(sw))).height(Is(Some(sh))) |> ignore
+        }
+        l.measure(shell, sw, height=sh) |> ignore
+        l.place(shell, left, top)
+        picture_scale.val = scale
+        l.place(body, (l.width - bw) / 2.0, top)
+        l.place(under, (l.width - uw) / 2.0, top + drawn_h + stage_gap)
+      }) |> ignore
     })
   })
 }

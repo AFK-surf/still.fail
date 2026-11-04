@@ -345,7 +345,7 @@ fn narrow_page_node(
   }
   v.box(fn(sc) {
     sc.grow(Is(1.0)) |> ignore
-    sc.scrolls_window(scroll, items, bar=@ui.tree_scroll_bar(), est=pg_block_est, fn(s, item) {
+    sc.scrolls_anchored(scroll, items, from_end=false, bar=@ui.tree_scroll_bar(), est=pg_block_est, fn(s, item) {
       with_look(Narrow, fn() {
         match item {
           // under what stands over it (a status bar)

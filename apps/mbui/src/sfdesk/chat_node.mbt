@@ -22,8 +22,7 @@ fn chat_root_node(
   p.pick(fn() { @sfbase.workspace_in_view(src).0.map(fn(w) { w.id }) }, fn(page, _id) {
     page.grow(Is(1.0)).min_height(Is(Some(0.0))).row(Is(true)).ground(By(fn() { ground(page) })) |> ignore
     guard @signals.untracked(fn() { @sfbase.workspace_in_view(src).0 }) is Some(w) else { return }
-    let view = fn() { view_of_chat(src, r).0 }
-    let entries = fn() { view_of_chat(src, r).1 }
+    let view = fn() { @sfbase.chat_view_now(src, r) }
     // (its side panel's tabs, as the core says them: open while it has any)
     let open = fn() { view().map(fn(v) { side_of(v).0.length() > 0 }).unwrap_or(false) }
     let whole = fn() {
@@ -53,7 +52,7 @@ fn chat_root_node(
       .min_width(Is(Some(0.0)))
       .min_height(Is(Some(0.0)))
       |> ignore
-      chat_talk_node(talk, src, w, r, k, view, entries, old_over, corners, ground)
+      chat_talk_node(talk, src, w, r, k, view, old_over, corners, ground)
     })
     |> ignore
     // (its side panel: beside it, cut to how far it has slid; over it from the pane's right where the pane has not the
@@ -94,80 +93,82 @@ fn chat_talk_node(
   r : ChatRef,
   k : Int,
   view : () -> ChatView?,
-  entries : () -> Array[Entry],
   over : (@ui.Ctx, () -> Unit) -> Unit,
   corners : () -> FixedArray[@ui.CornerOf]?,
   ground : (@view.View) -> Int64,
 ) -> Unit {
+  let pane_width = talk.width_context()
+  let pane_height = talk.height_context()
+  // The old view's pane context only describes the view being built at that instant. The retained chat
+  // can be read later while a different old view is being built, so use this page's own corners instead.
+  let bar_room = fn() { chat_bar_room(corners() is Some(_)) }
   let width = fn() { talk.laid_size_told().map(fn(z) { z.0 }).unwrap_or(talk.window().0) }
   let height = fn() { talk.laid_size_told().map(fn(z) { z.1 }).unwrap_or(talk.window().1) }
-  let geometry = fn() {
+  let radii = fn() {
     let roots = @ui.tree_corner_roots_now()
-    @sfpages.composer_geometry(width(), corners().map(fn(ks) { ks.map(fn(k) { k.radius(roots) }) }))
+    corners().map(fn(ks) { ks.map(fn(k) { k.radius(roots) }) })
+  }
+  let geometry = fn() {
+    @sfpages.composer_geometry(width(), radii())
   }
   let latest : Ref[() -> Unit] = Ref(fn() {  })
-  let landing : Ref[(String) -> @sfpages.MineLanding?] = Ref(fn(_) { None })
-  let room : @signals.Signal[(() -> Double)?] = @signals.signal(None, same=fn(a, b) { a is None && b is None })
-  let room_now = fn() { room.get().map(fn(f) { f() }).unwrap_or(0.0) }
+  let place_of : Ref[(String) -> String?] = Ref(fn(_) { None })
+  let room : @signals.Signal[@sfpages.ChatComposerNode?] = @signals.signal(None, same=fn(a, b) { a is None && b is None })
+  let room_now = fn() { room.get().map(fn(n) { (n.room)() }).unwrap_or(0.0) }
   // (its view not read yet: its messages to come in their bones, the first where the list's first row will be, or why
   // it cannot be read. A chat just made from a new chat already has fresh_view's view, so it shows no sample.)
   talk.show(fn() { view() is None }, fn(b) {
     b
     .over(Is(true))
-    .width(By(fn() { talk.laid_size_told().map(fn(z) { z.0 }) }))
-    .height(By(fn() { talk.laid_size_told().map(fn(z) { z.1 }) }))
     |> ignore
-    @sfpages.chat_waiting_node(b, src, r, fn() { chat_bar_room() + list_head_gap }, fn() { @sf.under_bar_room().px() })
+    @sfpages.chat_waiting_node(b, src, r, fn() { bar_room() + list_head_gap }, bar_room)
   })
-  talk.box(fn(l) {
-    l.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
-    let list = @sfpages.chat_list_node(l, src, r, view, entries, fn() { chat_bar_room() + list_head_gap }, room_now, settings_core(src, w), foot_gap=list_foot_gap)
-    latest.val = list.to_latest
-    landing.val = list.landing_of
-  })
-  |> ignore
-  talk.box(fn(f) {
-    f
-    .over(Is(true))
-    .width(By(fn() { talk.laid_size_told().map(fn(z) { z.0 }) }))
-    .height(By(fn() { talk.laid_size_told().map(fn(z) { z.1 }) }))
-    .lies_along(Is(End))
-    |> ignore
-    // (made while its page is the one seen in the stack's top's place (the top, or the one kept there while the top
-    // waits): the draft's field is one editor's, and the same chat may be under it (its history asked as a page, a
-    // service beside it))
-    @sfpages.composer_on_page(f, fn() { app.nav.drawn_stay().0 == k }, fn(f) {
-    let made = @sfpages.chat_composer_node(
-      f,
-      src,
-      r,
-      view,
-      fn() { geometry().0 },
-      height,
-      fn() { geometry().1 },
-      fn() { geometry().2 },
-      fn(_key) { (latest.val)() },
-      active=fn() { app.nav.drawn_stay().0 == k },
-      drops=talk,
-    )
-    room.set(Some(made.room))
-    f.owns(fn() { room.set(None) }) |> ignore
+  talk.box(fn(body) {
+    body.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
+    let list = body.box(fn(l) {
+      l.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
+      let list = @sfpages.chat_list_node(l, src, r, view, fn() { bar_room() + list_head_gap }, fn() { 0.0 }, settings_core(src, w), foot_gap=list_foot_gap, active=fn() { app.nav.drawn_stay().0 == k })
+      latest.val = list.to_latest
+      place_of.val = list.place_of
     })
-  })
-  |> ignore
+    let composer = body.box(fn(f) {
+      // (made while its page is the one seen in the stack's top's place (the top, or the one kept there while the top
+      // waits): the draft's field is one editor's, and the same chat may be under it (its history asked as a page, a
+      // service beside it))
+      @sfpages.composer_on_page(f, fn() { app.nav.drawn_stay().0 == k }, fn(f) {
+        let made = @sfpages.chat_composer_node(
+          f,
+          src,
+          r,
+          view,
+          fn() { geometry().0 },
+          height,
+          fn() { geometry().1 },
+          fn() { geometry().2 },
+          fn(_key) { (latest.val)() },
+          pane_width=(pane_width, fn() { @sfpages.composer_limits(radii()) }),
+          pane_height~,
+          active=fn() { app.nav.drawn_stay().0 == k },
+          drops=talk,
+        )
+        room.set(Some(made))
+        f.owns(fn() { room.set(None) }) |> ignore
+      })
+    })
+    @sfpages.chat_body_layout(body, list, composer, fn() { room.get() })
+  }) |> ignore
   talk.box(fn(fl) {
     fl
     .over(Is(true))
-    .width(By(fn() { talk.laid_size_told().map(fn(z) { z.0 }) }))
-    .height(By(fn() { talk.laid_size_told().map(fn(z) { z.1 }) }))
     |> ignore
     @sfpages.chat_flight_layer_made(r, fl)
     @sfbase.send_flight_node(
       fl,
       r.station + ":" + r.session,
-      fn(f) { (landing.val)(f.key).bind(fn(l) { l.text }) },
-      quotes=fn(f, key) { (landing.val)(f.key).bind(fn(l) { l.quotes.get(key) }) },
-      files=fn(f, key) { (landing.val)(f.key).bind(fn(l) { l.files.get(key) }) },
+      fn(f) { (place_of.val)(f.key) },
+      fn(at) { @sfpages.mine_landing(at).bind(fn(l) { l.text }) },
+      quotes=fn(at, key) { @sfpages.mine_landing(at).bind(fn(l) { l.quotes.get(key) }) },
+      files=fn(at, key) { @sfpages.mine_landing(at).bind(fn(l) { l.files.get(key) }) },
     )
   })
   |> ignore
@@ -175,10 +176,8 @@ fn chat_talk_node(
   talk.box(fn(pl) {
     pl
     .over(Is(true))
-    .width(By(fn() { talk.laid_size_told().map(fn(z) { z.0 }) }))
-    .height(By(fn() { talk.laid_size_told().map(fn(z) { z.1 }) }))
     |> ignore
-    @sfpages.pick_bar_node(pl, src, r.station + ":" + r.session, fn() { chat_bar_room() }, room_now)
+    @sfpages.pick_bar_node(pl, src, r.station + ":" + r.session, bar_room, room_now)
   })
   |> ignore
   // (the bar and what opens over it, what is let go over the pane and what is picked in the messages, the chat's keys:
@@ -189,14 +188,11 @@ fn chat_talk_node(
     o.reacts(fn() { o.laid_window_told() }, fn(r) { pane_rect.val = r })
     o
     .over(Is(true))
-    .width(By(fn() { talk.laid_size_told().map(fn(z) { z.0 }) }))
-    .height(By(fn() { talk.laid_size_told().map(fn(z) { z.1 }) }))
     |> ignore
     o.show(fn() { app.nav.shows(k) }, fn(s) {
       // (all of the chat's room: what opens over it opens in it)
       s
-      .width(By(fn() { o.laid_size_told().map(fn(z) { z.0 }) }))
-      .height(By(fn() { o.laid_size_told().map(fn(z) { z.1 }) }))
+      .grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0)))
       |> ignore
       @ui.old(s, fn(c) {
         app.nav.page_old(c, k, fn(c) {
@@ -209,7 +205,7 @@ fn chat_talk_node(
     })
   })
   |> ignore
-  chat_bar_node(talk, src, w, r, k, view, width, corners, ground)
+  chat_bar_node(talk, src, w, r, k, view, pane_width, corners, ground)
 }
 
 ///|
@@ -229,7 +225,7 @@ fn chat_over(
   // (what a menu's choice in its messages left: menus.mbt)
   @sfpages.chat_menus_frame(c)
   let chat = (src.topic)("chat", chat_params(r)).value
-  let view = view_of_chat(src, r).0
+  let view = @sfbase.chat_view_now(src, r)
   let key = chat_key(r)
   let list = chat_find_list(r)
   if find_chat() != "" && find_chat() != key {

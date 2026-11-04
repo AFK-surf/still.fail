@@ -1,6 +1,5 @@
-// An old view as tall as what it holds (old's `natural`) in a list made as far as it shows (View::scrolls_window),
-// `unlaid`: taken as tall as a screen till the old frame has laid it out, so the list makes none of its rows for room
-// the old view does take; laid out, as tall as it is (none: the rows after it shown from the top).
+// A natural old view in a windowed list is measured in the same layout as the rows after it. Whether or not a caller
+// supplies `unlaid`, the list makes only the rows that fit beside its measured height.
 
 ///|
 /// A list 300 by 200 whose first part is an old view as tall as what it holds (`held` tall), `unlaid` or not, then
@@ -41,9 +40,9 @@ test "an old view as tall as what it holds, first in a list, unlaid as tall as a
   let (t, made) = unlaid_list(150.0, true)
   assert_true(made.iter().all(fn(i) { i <= 3 }), msg="\{made}")
   assert_eq(t.rect_of("行 1").map(fn(r) { r.1 }), Some(150.0))
-  // (taken as none tall at first, as it is without: rows made for the room it then takes)
+  // Natural height is measured in the list's layout, with or without an estimate. No extra rows are made first.
   let (_, made) = unlaid_list(150.0, false)
-  assert_true(made.iter().any(fn(i) { i > 3 }), msg="\{made}")
+  assert_true(made.iter().all(fn(i) { i <= 3 }), msg="\{made}")
 }
 
 ///|

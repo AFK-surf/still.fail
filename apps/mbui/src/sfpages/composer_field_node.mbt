@@ -28,6 +28,12 @@ fn composer_field_node(
     let l = words()
     if l.line > 0.0 { l.line } else { l.size * @ui.tree_theme().text_line }
   }
+  let height_context = parent.lent(composer_height_context)
+  let lines_at = fn(h : Double, l : Double) {
+    let n = (dmin(text_most, h * text_window_share) / l).to_int()
+    if n > 0 { n } else { 1 }
+  }
+  let layout_lines = Ref(lines_at(parent.window().1, line()))
   let field = @ui.field(
     parent,
     w.field,
@@ -35,10 +41,8 @@ fn composer_field_node(
     trim=true,
     size_by=fn() { words().size },
     line_by=line,
-    max_lines_by=fn() {
-      let n = (dmin(text_most, height() * text_window_share) / line()).to_int()
-      if n > 0 { n } else { 1 }
-    },
+    max_lines_by=fn() { lines_at(height(), line()) },
+    max_lines_in_layout?=if height_context is Some(_) { Some(fn() { layout_lines.val }) } else { None },
     enter_by=fn() { @sf.enter_sends() },
     paste_limit_by=fn() { if files() && !w.starting.get() { @sfbase.paste_threshold_read() } else { 0 } },
     files_when=files,
@@ -68,6 +72,15 @@ fn composer_field_node(
       }
     },
   )
+  match height_context {
+    Some(context) => context.bind(field, By(fn() { (line(), parent.window().1) }), fn(h, state) {
+      let next = lines_at(h.unwrap_or(state.1), state.0)
+      if layout_lines.val == next { return false }
+      layout_lines.val = next
+      true
+    })
+    None => ()
+  }
   field.presses(By(live)).focusable(By(live), keys=0) |> ignore
   field.reacts(fn() { true }, fn(_) { @sfbase.paste_threshold_now(src) |> ignore })
   field.reacts(fn() { (w.field.text(), w.field.selection(), w.starting.get(), locked(), station()) }, fn(_) {

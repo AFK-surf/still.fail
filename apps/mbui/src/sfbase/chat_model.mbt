@@ -868,14 +868,15 @@ pub fn ChatMessages::of(rows : @rows.TopicList) -> ChatMessages {
 ///|
 /// The messages `v` (a chat topic's value, whole) holds: a list made of them as they are.
 pub fn ChatMessages::of_value(v : Json?, was? : ChatMessages) -> ChatMessages {
-  let m = ChatMessages::of(@rows.TopicList::new(["messages"], message_fields(), v))
-  // (a made-up core's value anew: what was made of the same JSON before taken as it was made)
   match was {
-    Some(w) =>
-      w.made.each(fn(k, p) { m.made[k] = p })
-    None => ()
+    // (a made-up core's value anew: the same list, told what changed from what it held, row by row, as a core's ops
+    // would; what was made of the same JSON before taken as it was made)
+    Some(w) => {
+      w.rows.given_keyed(v)
+      w
+    }
+    None => ChatMessages::of(@rows.TopicList::new(["messages"], message_fields(), v))
   }
-  m
 }
 
 ///|

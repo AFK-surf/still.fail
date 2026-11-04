@@ -48,13 +48,19 @@ fn media_fitted_node(
   height : () -> Double,
   fit : () -> @ui.Fit,
   radius : () -> Double,
+  shares? : () -> (Double, Double),
 ) -> Unit {
+  // (as big as `width` by `height` say; `shares`: that share of what holds it, laid out by it, `width` and `height` then
+  // only what its picture is chosen by)
+  let sized = fn(v : @view.View) {
+    match shares {
+      Some(f) => v.width_share(By(fn() { f().0 })).height_share(By(fn() { f().1 })) |> ignore
+      None => v.width(By(fn() { Some(width()) })).height(By(fn() { Some(height()) })) |> ignore
+    }
+  }
   parent.box(fn(m) {
-    m
-    .width(By(fn() { Some(width()) }))
-    .height(By(fn() { Some(height()) }))
-    .radius(By(radius))
-    |> ignore
+    sized(m)
+    m.radius(By(radius)) |> ignore
     // (by its state, and one coming in by its picture too: another's way in its own, from its own decode)
     m.pick(fn() {
       let p = picture()
@@ -62,7 +68,12 @@ fn media_fitted_node(
       (state, if state == 4 { p.key } else { "" })
     }, fn(s, which) {
       let state = which.0
-      s.width(By(fn() { Some(width()) })).height(By(fn() { Some(height()) })).radius(By(radius)) |> ignore
+      // (as big as what holds it: its own box's share already said there)
+      match shares {
+        Some(_) => s.width_share(Is(1.0)).height_share(Is(1.0)) |> ignore
+        None => s.width(By(fn() { Some(width()) })).height(By(fn() { Some(height()) })) |> ignore
+      }
+      s.radius(By(radius)) |> ignore
       match state {
         1 => {
           s.ground(Is(0x000000FFL)) |> ignore
@@ -150,11 +161,16 @@ fn media_reveal_node(
   let first = @signals.untracked(fn() { ready() || picture().held })
   let came : @signals.Signal[Double?] = @signals.signal(if first { Some(-1.0e18) } else { None }, same=fn(a, b) { a == b })
   let moving = @signals.signal(false, same=fn(a, b) { a == b })
+  // (where it is laid out told from its making on, read as it is decoded: out_of_window)
+  @signals.untracked(fn() { s.laid_window_told() }) |> ignore
   s.reacts(fn() { (ready(), picture().held) }, fn(now) {
     let (decoded, held) = now
     if @signals.untracked(fn() { came.get() }) is None {
       // (held while it waits: there at once as it comes)
       if held {
+        came.set(Some(-1.0e18))
+      } else if decoded && out_of_window(s) {
+        // (decoded out of the window, a row laid out ahead of what shows: there at once, nothing of it to see come)
         came.set(Some(-1.0e18))
       } else if decoded {
         let at = s.cause_at()
@@ -192,8 +208,6 @@ fn media_reveal_node(
   s.box(fn(i) {
     i
     .over(Is(true))
-    .width(By(fn() { Some(width()) }))
-    .height(By(fn() { Some(height()) }))
     .alpha(By(fn() { if ready() { 1.0 } else { 0.0 } }))
     .scale(By(fn() { 1.0 + reveal_grow * (1.0 - e()) }))
     |> ignore
@@ -204,8 +218,6 @@ fn media_reveal_node(
   s.show(fn() { ready() && reveal_blur * (1.0 - e()) > reveal_blur_least }, fn(f) {
     f
     .over(Is(true))
-    .width(By(fn() { Some(width()) }))
-    .height(By(fn() { Some(height()) }))
     .glass(By(fn() { Some(@ui.Glass::frosted(blur=reveal_blur * (1.0 - e()), tint=0L, solid=0L, contained=true)) }))
     |> ignore
   })
@@ -214,42 +226,45 @@ fn media_reveal_node(
   s.show(fn() { waited() > 0.0 }, fn(w) {
     w.over(Is(true)) |> ignore
     let likeness = fn() { image_wait_colours(picture().hash, width(), height()) }
-    let px_of = fn(y : Double) { (y * @ui.current().scale).round() / @ui.current().scale }
-    // (step k's top and foot and how much of it shows; k == reveal_steps: all under the band)
+    // (step k's top and foot as shares of its height and how much of it shows; k == reveal_steps: all under the
+    // band; laid out by those shares, set on the screen's pixels as it is placed, where how tall it is laid out is read)
     let step = fn(k : Int) -> (Double, Double, Double) {
-      let h = height()
       if !ready() {
-        if k == reveal_steps { (0.0, h, 1.0) } else { (0.0, 0.0, 0.0) }
+        if k == reveal_steps { (0.0, 1.0, 1.0) } else { (0.0, 0.0, 0.0) }
       } else {
-        let band = h * 0.5
-        let top = -band + (h + band) * e()
+        let band = 0.5
+        let top = -band + (1.0 + band) * e()
         let one = band / reveal_steps.to_double()
         let (y0, y1, a) = if k == reveal_steps {
-          (top + band, h, 1.0)
+          (top + band, 1.0, 1.0)
         } else {
           (top + k.to_double() * one, top + (k + 1).to_double() * one, (k.to_double() + 0.5) / reveal_steps.to_double())
         }
-        (px_of(dmax(0.0, y0)), px_of(dmin(h, y1)), a)
+        (dmax(0.0, y0), dmin(1.0, y1), a)
       }
     }
+    let tall = fn() { w.laid_size_told().map(fn(z) { z.1 }).unwrap_or(0.0) }
+    let px_of = fn(y : Double) { (y * @ui.current().scale).round() / @ui.current().scale }
     for k in 0..=reveal_steps {
+      let part = fn() {
+        let (y0, y1, _) = step(k)
+        dmax(0.0, y1 - y0)
+      }
       w.box(fn(strip) {
         strip
         .over(Is(true))
         .clips(Is(true))
-        .width(By(fn() { Some(width()) }))
-        .offset(By(fn() { (0.0, step(k).0) }))
-        .height(By(fn() {
-          let (y0, y1, _) = step(k)
-          Some(dmax(0.0, y1 - y0))
-        }))
+        .width_share(Is(1.0))
+        .height_share(By(part))
+        .offset(By(fn() { (0.0, px_of(step(k).0 * tall())) }))
         .alpha(By(fn() { step(k).2 * waited() }))
         |> ignore
         strip.box(fn(inner) {
           inner
-          .width(By(fn() { Some(width()) }))
-          .height(By(fn() { Some(height()) }))
-          .offset(By(fn() { (0.0, -step(k).0) }))
+          .width_share(Is(1.0))
+          // (as tall as all of it, what the strip shows its share of)
+          .height_share(By(fn() { if part() > 1.0e-6 { 1.0 / part() } else { 1.0 } }))
+          .offset(By(fn() { (0.0, -px_of(step(k).0 * tall())) }))
           .image(By(fn() { likeness().map(fn(l) { (l, "", 64) }) }))
           .ground(By(fn() { if likeness() is Some(_) { 0L } else { @ui.tree_theme().color(Neutral) } }))
           |> ignore
@@ -259,4 +274,14 @@ fn media_reveal_node(
       |> ignore
     }
   })
+}
+
+///|
+/// Whether `s` is laid out wholly out of its window (over its top or under its foot), as last told (where it is told
+/// from its making: media_reveal_node).
+fn out_of_window(s : @view.View) -> Bool {
+  match @signals.untracked(fn() { s.laid_window_told() }) {
+    Some((_, y, _, h)) => y + h <= 0.0 || y >= s.window().1
+    None => false
+  }
 }

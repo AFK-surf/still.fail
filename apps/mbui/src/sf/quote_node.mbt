@@ -6,7 +6,7 @@ pub(all) struct QuoteCardNode {
   root : @view.View
   card : @view.View
   words : @view.View
-  copy : (@view.View, () -> Double?) -> QuoteCardNode
+  copy : (@view.View, () -> (Double, Double)?) -> QuoteCardNode
   sent_shift : () -> (Double, Double)
 }
 
@@ -28,8 +28,9 @@ pub fn quote_card_node(
   remove? : () -> Unit,
   picture? : (@view.View) -> Unit,
   picture_shown? : () -> Bool = fn() { true },
+  picture_tall? : () -> Double? = fn() { None },
   comment_field? : (@view.View) -> Unit,
-  words_width? : () -> Double? = fn() { None },
+  words_toward? : () -> (Double, Double)? = fn() { None },
   tips? : TipLayer,
 ) -> QuoteCardNode {
   let hung = composer && remove is Some(_)
@@ -40,7 +41,7 @@ pub fn quote_card_node(
   let make = fn(outer : @view.View) {
     card_at.val = Some(outer.box(fn(card) {
       card.radius(By(fn() { if composer { corner() } else { quote_corner } }))
-      .clips(By(fn() { words_width() is None }))
+      .clips(By(fn() { words_toward() is None }))
       .gap(Is(if composer { 0.0 } else { 6.0 }))
       .padding(Is(if composer { (0.0, 0.0, 0.0, 0.0) } else { (8.0, 8.0, 8.0, 8.0) }))
       .ground(By(fn() {
@@ -85,11 +86,14 @@ pub fn quote_card_node(
             }
           })
           words_at.val = Some(row.box(fn(text) {
-            // A flying card carries its source's line width. Flexing that width into the destination card would
-            // rewrap the source before its path has begun.
+            // A flying card carries its source's line width (`words_toward`: that width, and the share of its way
+            // across). Flexing all of the destination card into it would rewrap the source before its path has begun:
+            // it takes that share of the room the card leaves it (or gives that share of what it lacks), as it is
+            // laid out in the card.
             text.min_width(Is(Some(0.0)))
-            .grow(By(fn() { if words_width() is Some(_) { 0.0 } else { 1.0 } }))
-            .shrink(By(fn() { if words_width() is Some(_) { 0.0 } else { 1.0 } })).width(By(words_width))
+            .grow(By(fn() { words_toward().map(fn(t) { t.1 }).unwrap_or(1.0) }))
+            .shrink(By(fn() { words_toward().map(fn(t) { t.1 }).unwrap_or(1.0) }))
+            .basis(By(fn() { words_toward().map(fn(t) { t.0 }) }))
             .words_runs(By(fn() {
               if pin() != "" {
                 [@view.words_run(words().split("\n").next().map(fn(s) { s.to_string() }).unwrap_or(""))]
@@ -141,16 +145,23 @@ pub fn quote_card_node(
   }
   { root, card: card_at.val.unwrap(), words: words_at.val.unwrap(),
     sent_shift: fn() { quote_sent_shift(author(), role()) },
-    copy: fn(p, width) {
+    copy: fn(p, toward) {
       // The picture has its own flight. Repeating its factory here would register the flying copy as the real
       // message's landing and preview thumbnail, then remove that registration when the copy is released.
+      // (its room as tall as its picture is in the card where that is known before it is laid out (`picture_tall`, under
+      // its row's padding), else as it was told laid out)
       let picture_room = picture.map(fn(_) {
         fn(room : @view.View) {
-          room.height(By(fn() { Some(picture_height.get()) })) |> ignore
+          room.height(By(fn() {
+            match picture_tall() {
+              Some(h) => Some(h + (if composer { 6.0 } else { corner_inset - quote_card_in }))
+              None => Some(picture_height.get())
+            }
+          })) |> ignore
         }
       })
       quote_card_node(p, author, words, role~, comment~, composer~, corner~,
-        picture?=picture_room, picture_shown~, words_width=width)
+        picture?=picture_room, picture_shown~, picture_tall~, words_toward=toward)
     },
   }
 }

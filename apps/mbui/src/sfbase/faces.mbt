@@ -59,6 +59,7 @@ fn faces_reset() -> Unit {
   previews.clear()
   share_face_asked.val = false
   share_face_whole_asked.val = 0
+  share_face_whole_bytes.clear()
   looks_files_reset()
   vector_cjk.set(CjkUnwanted)
 }
@@ -333,6 +334,15 @@ fn face_preview(src : Source, id : String, index : Int, variable : Bool) -> Int 
 let share_face_asked : Ref[Bool] = Ref(false)
 
 ///|
+/// A Tester's host has its own faces, even if a fixture opened the card before the Tester was made.
+fn init {
+  @ui.on_reset(fn() {
+    share_face_asked.val = false
+    share_face_whole_asked.val = 0
+  })
+}
+
+///|
 /// The share card's face given to its host face (share_face) once, each weight's file unzipped (the card's words set in
 /// it from then on; until it is, or where the host takes none, in the app's): `share_face`, to name as words' face.
 pub fn share_face_given() -> Int {
@@ -364,6 +374,11 @@ pub fn share_face_carried() -> Array[(Bytes, Int)] {
 let share_face_whole_asked : Ref[Int] = Ref(0)
 
 ///|
+/// Unzipped whole-face files, by name. A file may arrive at any time; it is given to the host before layout.
+// kept across runs: cleared by faces_reset
+let share_face_whole_bytes : Map[String, Bytes] = {}
+
+///|
 /// The files of drawing `drawing`'s whole share face (share_face_whole), each with its weight.
 pub fn share_face_whole_files(drawing : Int) -> Array[(String, Int)] {
   [("\{drawing}/face-400.gz", 400), ("\{drawing}/face-600.gz", 600)]
@@ -383,25 +398,28 @@ pub fn share_face_whole(src : Source, drawing : Int) -> Unit {
   // (the carried one given first: asked for later, it would not be given over the whole one)
   ignore(share_face_given())
   let files = share_face_whole_files(drawing)
-  let got : Map[Int, Bytes] = Map::new()
+  let collecting = Ref(true)
   for f in files {
-    let (file, weight) = f
+    let (file, _) = f
     looks_file(src, file, fn(gz) {
       match @zip.gunzip(gz) {
         Some(b) => {
-          got[weight] = b
-          if got.size() == files.length() && share_face_whole_asked.val != drawing {
-            share_face_whole_asked.val = drawing
-            @ui.face_clear(share_face)
-            for w in files {
-              ignore(@ui.face_add_bytes(share_face, got.get(w.1).unwrap(), weight=w.1))
-            }
-          }
+          share_face_whole_bytes[file] = b
+          // Synchronous answers are installed below. A later answer asks for an input phase in which to install it.
+          if !collecting.val { @ui.request_frame() }
         }
         None => ()
       }
     })
     |> ignore
+  }
+  collecting.val = false
+  if files.iter().all(fn(f) { share_face_whole_bytes.get(f.0) is Some(_) }) {
+    share_face_whole_asked.val = drawing
+    @ui.face_clear(share_face)
+    for (file, weight) in files {
+      ignore(@ui.face_add_bytes(share_face, share_face_whole_bytes.get(file).unwrap(), weight~))
+    }
   }
 }
 

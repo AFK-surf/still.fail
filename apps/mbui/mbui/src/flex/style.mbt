@@ -1011,6 +1011,21 @@ pub(all) struct Node {
   style : Style
   children : Array[Node]
   mut measure : MeasureFn?
+  // A bounded holder may resolve descendant layout against its current content width before measuring them.
+  // The callback says whether those descendants changed, so this holder's cached measures can be discarded.
+  mut width_context : ((Double) -> Bool)?
+  // As above, but the intrinsic height can be unknown until this holder is constrained.
+  mut height_context : ((Double?) -> Bool)?
+  // A bounded container that measures and places its own children. Called only for the final layout, with its
+  // content width/height and content origin; intrinsic size probes never build children.
+  mut layout_children : ((Double, Double, Double, Double) -> Unit)?
+  // An absolute child's bounds, chosen by its parent after the parent's flow children have been laid out.
+  // Unlike a reactive geometry read, these bounds enter the child's ordinary constraint cache in this compute.
+  mut layout_overlay : ((Double, Double) -> (Double, Double, Double, Double))?
+  // An absolute child can resolve its content from its measured size before its final layout. True asks for a remeasure.
+  mut absolute_resolve : ((Double, Double) -> Bool)?
+  // A horizontal scroll container keeps this much room below overflowing content, including its bottom padding.
+  mut scroll_bar_space : Double
   // the result: position relative to the parent's border box, and size
   mut left : Double
   mut top : Double
@@ -1047,6 +1062,8 @@ pub(all) struct Node {
   mut p_cbh : Double
   mut p_w : Double
   mut p_h : Double
+  // Grid of the last complete layout when this node was a root; subtrees reuse only on that grid.
+  mut root_grid : Double
   // A row container measured before its height was known, when nothing in
   // it depends on that height (layout_flex): in compute pre_gen (-1: none),
   // the width it was measured at, the size it came to and, for each of its
@@ -1070,6 +1087,12 @@ pub fn Node::new() -> Node {
     style: Style::new(),
     children: [],
     measure: None,
+    width_context: None,
+    height_context: None,
+    layout_children: None,
+    layout_overlay: None,
+    absolute_resolve: None,
+    scroll_bar_space: 0.0,
     left: 0.0,
     top: 0.0,
     width: 0.0,
@@ -1090,6 +1113,7 @@ pub fn Node::new() -> Node {
     p_cbh: 0.0,
     p_w: 0.0,
     p_h: 0.0,
+    root_grid: 0.0,
     laid_gen: -1,
     pre_gen: -1,
     pre: no_pre,
@@ -1108,7 +1132,7 @@ pub fn Node::left_out(self : Node) -> Bool {
 /// reusing its layout from before (or not reaching it, its parent's being
 /// reused): when it did not, nothing under it moved or changed size.
 pub fn Node::laid_out(self : Node) -> Bool {
-  self.laid_gen == generation.val
+  self.laid_gen == completed_generation.val
 }
 
 ///|
@@ -1120,7 +1144,7 @@ pub fn Node::laid_out_at(self : Node) -> Int {
 ///|
 /// How many compute()s there have been.
 pub fn computes() -> Int {
-  generation.val
+  compute_count.val
 }
 
 ///|

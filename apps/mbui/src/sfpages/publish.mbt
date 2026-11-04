@@ -353,7 +353,7 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
   let here : MessageHere = {
     station: r.station,
     session: r.session,
-    view: match @sfbase.view_of_chat(src, r).0 {
+    view: match @sfbase.chat_view_now(src, r) {
       Some(v) => v
       None => @sfbase.chat_view_made(Json::null())
     },

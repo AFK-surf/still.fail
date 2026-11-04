@@ -14,7 +14,7 @@ priv struct FootCase {
 }
 
 ///|
-fn foot_case(est? : Double = 40.0) -> FootCase {
+fn foot_case(est? : Double = 40.0, second_height? : Double = 40.0, read_top? : Bool = true) -> FootCase {
   let scroll = @view.Scroll::list()
   let keys = @signals.signal([0], same=fn(a, b) { a == b })
   let live : Map[Int, @view.View] = Map([])
@@ -22,10 +22,10 @@ fn foot_case(est? : Double = 40.0) -> FootCase {
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(o) {
       o.width(Is(Some(300.0))).height(By(fn() { Some(tall.get()) })) |> ignore
-      o.scrolls_window(scroll, fn() { keys.get() }, est~, from_end=true, fresh=fn(_) { true }, fn(b, k) {
+      o.scrolls_window(scroll, fn() { keys.get() }, est~, from_end=true, fresh=fn(_) { true }, read_from_top=fn(_) { read_top }, fn(b, k) {
         live[k] = b
         b.owns(fn() { live.remove(k) }) |> ignore
-        b.height(Is(Some(40.0))) |> ignore
+        b.height(Is(Some(if k == 1 { second_height } else { 40.0 }))) |> ignore
       })
       |> ignore
     })
@@ -33,6 +33,39 @@ fn foot_case(est? : Double = 40.0) -> FootCase {
   })
   tree.frame(390.0, 844.0, now=0.0) |> ignore
   { tree, scroll, keys, live, tall }
+}
+
+///|
+test "scrolls_window from its end, short: two fresh blocks carry what was there up together" {
+  let k = foot_case()
+  k.frames(1000.0)
+  k.keys.set([0, 1, 2])
+  k.frames(1000.0)
+  assert_eq(k.top(0), 160.0)
+  k.frames(5000.0)
+  assert_eq((k.top(0), k.top(1), k.top(2)), (80.0, 120.0, 160.0))
+}
+
+///|
+test "scrolls_window from its end, short: a tall fresh block glides to its top" {
+  let k = foot_case(second_height=240.0)
+  k.frames(1000.0)
+  k.keys.set([0, 1])
+  k.frames(1000.0)
+  assert_eq(k.top(0), 160.0)
+  k.frames(5000.0)
+  assert_eq(k.top(1), 0.0)
+}
+
+///|
+test "scrolls_window from its end, short: a tall fresh block read from its end glides to its foot" {
+  let k = foot_case(second_height=240.0, read_top=false)
+  k.frames(1000.0)
+  k.keys.set([0, 1])
+  k.frames(1000.0)
+  assert_eq(k.top(0), 160.0)
+  k.frames(5000.0)
+  assert_eq(k.top(1), -40.0)
 }
 
 ///|

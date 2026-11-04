@@ -248,7 +248,7 @@ pub fn presenters_reset() -> Unit {
 }
 
 ///|
-fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit = fn() {  }) -> Unit {
+fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit = fn() {  }, initial_steps? : () -> Unit = fn() {  }) -> Unit {
   presented_count.val += 1
   // (a panel that goes in steps: its own the first of them)
   let steps = match shows {
@@ -295,6 +295,12 @@ fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit
     sinks: 0.0,
   })
   @signals.start_batch()
+  // The initial steps belong to this panel even if it was opened while another panel was being drawn. Publish the
+  // panel only once those steps are on its stack, so its first measurement sees the complete input.
+  let was_drawing = steps_drawn_now.val
+  steps_drawn_now.val = presented_count.val
+  initial_steps()
+  steps_drawn_now.val = was_drawing
   presented_told()
   presented_drawn_said.set(presented_now.map(fn(p) { p.serial }))
   @signals.end_batch()
@@ -380,7 +386,8 @@ pub fn pick(
 /// `heads_itself`: beside what opened it, no head drawn for it: what it holds draws its title where it wants it (the
 /// model panel's, a title over each of its columns; a sheet's head is the sheet's own still).
 /// `fade_out_together`: its ground and contents leave as one instead of the usual staged fade; what is behind it may
-/// show through while it goes (the model picker, 2026-11-02).
+/// show through while it goes (the model picker, 2026-11-02). `initial_steps` puts steps on its stack before it is
+/// published, for a panel opened already inside them.
 pub fn panel(
   title : String,
   body : (@ui.Ctx, () -> Unit) -> Unit,
@@ -410,6 +417,7 @@ pub fn panel(
   offset? : Double = panel_offset,
   steps? : Bool = false,
   back? : () -> Unit,
+  initial_steps? : () -> Unit,
 ) -> Unit {
   present(
     Panel({
@@ -441,7 +449,7 @@ pub fn panel(
       on_back: back,
     }),
     from,
-    gone~,
+    gone~, initial_steps?,
   )
 }
 
@@ -706,6 +714,15 @@ pub fn panel_list(
 pub fn whole_fitted(c : @ui.Ctx, key : String, id : Int, most : Double, draw : (Int) -> Int) -> Unit {
   let room_id = c.id(key + "/room")
   let whole_id = c.id(key + "/whole")
+  // The retained stage measures the whole picture itself, then scales it in its own layout. Give it the natural
+  // picture here, without reading an earlier layout or reporting its dimensions through a signal.
+  if stage_natural.val {
+    stage_laid_w.val = most
+    let scale = stage_natural_scale.val
+    let picture = c.box(style=@ui.style(w=Fixed(most)), id~, fn() { draw(whole_id) |> ignore })
+    c.look_by(picture, fn() { @ui.look(scale=scale(), ox=0.5, oy=0.0) })
+    return
+  }
   let h = match c.laid_size(whole_id) {
     Some((_, h)) => h
     None => 0.0
@@ -759,6 +776,15 @@ pub fn whole_fitted(c : @ui.Ctx, key : String, id : Int, most : Double, draw : (
 }
 
 ///|
+/// Whether a retained stage asks for its body's natural, unscaled picture.
+// kept across runs: set only while the stage's body is built, and put back
+let stage_natural : Ref[Bool] = Ref(false)
+
+///|
+// kept across runs: set only while the stage's body is built, and put back
+let stage_natural_scale : Ref[() -> Double] = Ref(fn() { 1.0 })
+
+///|
 /// Whether the stage whole_fitted is drawn on is the window's tree's (stage_node): what it holds gives way to the room
 /// its column leaves it.
 // kept across runs: set only while a stage's body is built by the window's tree, and put back
@@ -810,12 +836,12 @@ let panel_whole_now : Ref[Int] = Ref(0)
 /// its side; a sheet, to its most), its body scrolling in it as one: what would scroll in itself there (a list held to
 /// a height of its own) lays itself out whole instead, so that one scroll, not one in another, takes the wheel.
 pub fn panel_held() -> Bool {
-  panel_held_now.val
+  (panel_held_now.val)()
 }
 
 ///|
 // kept across runs: said by the presenters while a panel's body is drawn
-let panel_held_now : Ref[Bool] = { val: false }
+let panel_held_now : Ref[() -> Bool] = Ref(fn() { false })
 
 ///|
 /// How far under what a ruled panel holds (`panel`'s `ruled`) the line over its foot is, while its body is drawn (0
@@ -837,7 +863,7 @@ let rule_over_now : Ref[Double] = { val: 0.0 }
 /// in view; all of it where the panel scrolls as one (a small panel held short of what it holds: panel_held), never
 /// one scroll in another.
 pub fn panel_column(c : @ui.Ctx, key : String, most : Double, style : @ui.Style, body : () -> Unit) -> Unit {
-  if panel_held_now.val {
+  if panel_held() {
     c.box(style~, body) |> ignore
   } else if small_panel_now.val {
     // (asking its row for `most` at most, stretched by it past that: Ctx::capped `past_most`, in a row of its own that
@@ -909,6 +935,10 @@ fn row_reach(own : Double) -> Double {
 let beside_given : Ref[@kit.PopState] = { val: { side: Bottom, room: 1.0e9, panel: 0 } }
 
 ///|
+/// The placed side for a retained panel, read only by content which depends on it.
+let beside_side_now : Ref[(() -> @ui.Side)?] = Ref(None)
+
+///|
 /// The room at a panel's sides its rows' grounds reach out across while its body is drawn: a sheet's (its column's
 /// sides), none in a small panel (its rows at its padding, as a menu's are).
 let rows_out : Ref[Double] = { val: 0.0 }
@@ -929,7 +959,12 @@ let small_panel_now : Ref[Bool] = { val: false }
 /// flipped there for want of room below), or a sheet risen from the screen's foot. What a panel keeps nearest what
 /// opened it is at its foot then, else at its top.
 pub fn panel_opens_up() -> Bool {
-  !small_panel_now.val || beside_given.val.side is Top
+  if !small_panel_now.val { return true }
+  let side = match beside_side_now.val {
+    Some(read) => read()
+    None => beside_given.val.side
+  }
+  side is Top
 }
 
 ///|
@@ -1710,9 +1745,10 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
         // (scrolling, where it does, out to the panel's sides, what it holds as far in as without: what reaches them
         // still does; told so as it is drawn, panel_held)
         let k = key + "/panel"
-        panel_held_now.val = @kit.held_in_room(c, beside_given.val, key=k)
+        let held = @kit.held_in_room(c, beside_given.val, key=k)
+        panel_held_now.val = fn() { held }
         @kit.in_room(c, beside_given.val, key=k, reach=held_reach(), style=held_in(), fn() { draw_panel_body(x, c, close, keyed=p) }) |> ignore
-        panel_held_now.val = false
+        panel_held_now.val = fn() { false }
       }
       panel_sides_in.val = 0.0
       small_panel_now.val = false
@@ -2504,9 +2540,9 @@ fn sheet_step(
   } else if scrolls && !capped {
     c.box(style=sheet_grows, fn() {
       c.capped(key + "/panel", wh_of(c), shrinks=true, fn() {
-        panel_held_now.val = true
+        panel_held_now.val = fn() { true }
         c.box(style=room, body) |> ignore
-        panel_held_now.val = false
+        panel_held_now.val = fn() { false }
       })
       |> ignore
     })

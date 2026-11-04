@@ -66,7 +66,9 @@ pub fn changelog_news(@ui.Ctx, @sfbase.Source) -> Unit
 
 pub fn changelog_node(@view.View, @settings.Core, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
-pub fn chat_composer_node(@view.View, @sfbase.Source, @sfbase.ChatRef, () -> @sfbase.ChatView?, () -> Double, () -> Double, () -> Double, () -> ComposerPlace, (String) -> Unit, tips? : @sf.TipLayer, active? : () -> Bool, neighbour? : (Int32) -> Unit, drops? : @view.View) -> ChatComposerNode
+pub fn chat_body_layout(@view.View, @view.View, @view.View, () -> ChatComposerNode?, tabletop? : () -> (Double, Double)?, recent? : @view.View) -> Unit
+
+pub fn chat_composer_node(@view.View, @sfbase.Source, @sfbase.ChatRef, () -> @sfbase.ChatView?, () -> Double, () -> Double, () -> Double, () -> ComposerPlace, (String) -> Unit, pane_width? : (@view.WidthContext, () -> ComposerLimits), pane_height? : @view.HeightContext, tips? : @sf.TipLayer, active? : () -> Bool, neighbour? : (Int32) -> Unit, drops? : @view.View) -> ChatComposerNode
 
 pub fn chat_extra_items(@sfbase.Source, @sfbase.ChatRef, @json.Json?) -> Array[@sf.MenuItem?]
 
@@ -78,7 +80,7 @@ pub fn chat_flight_layer_made(@sfbase.ChatRef, @view.View) -> Unit
 
 pub fn chat_key(@sfbase.ChatRef) -> String
 
-pub fn chat_list_node(@view.View, @sfbase.Source, @sfbase.ChatRef, () -> @sfbase.ChatView?, () -> Array[@sfbase.Entry], () -> Double, () -> Double, @settings.Core, foot_gap? : Double, follows? : @signals.Signal[Bool]) -> ChatListNode
+pub fn chat_list_node(@view.View, @sfbase.Source, @sfbase.ChatRef, () -> @sfbase.ChatView?, () -> Double, () -> Double, @settings.Core, foot_gap? : Double, follows? : @signals.Signal[Bool], active? : () -> Bool) -> ChatListNode
 
 pub fn chat_mark(@ui.Ctx, String) -> Int32
 
@@ -129,6 +131,8 @@ pub fn composer_foot_in(Double) -> Double
 pub fn composer_foot_room(@ui.Ctx, String, Double, let_go~ : Bool) -> Double
 
 pub fn composer_geometry(Double, FixedArray[Double]?) -> (Double, Double, ComposerPlace)
+
+pub fn composer_limits(FixedArray[Double]?) -> ComposerLimits
 
 pub fn composer_node(@view.View, @sfbase.Source, String, () -> ComposerSpec, (@sfbase.Writing) -> Unit, () -> Double, (@view.View, @sfbase.Writing, () -> Double, (@view.View) -> Unit) -> Unit, place? : () -> ComposerPlace, toolbar? : (@view.View) -> Unit, tail? : (@view.View) -> Unit, tips? : @sf.TipLayer, active? : () -> Bool, neighbour? : (Int32) -> Unit, drops? : @view.View) -> ComposerNode
 
@@ -412,7 +416,7 @@ pub fn open_chat_menu(@sfbase.Source, String, @sfbase.ChatRef, Array[@sf.MenuIte
 
 pub fn open_context_actions(@sfbase.Source, String, String, @json.Json?, @sf.Beside) -> Unit
 
-pub fn open_dialog(String, (@ui.Ctx, () -> Unit) -> Unit, (@ui.Ctx, () -> Unit) -> Unit, description? : String, wide? : Bool, live? : () -> (String, String, String), on_gone? : () -> Unit, steps? : Bool, back? : () -> Unit) -> Unit
+pub fn open_dialog(String, (@ui.Ctx, () -> Unit) -> Unit, (@ui.Ctx, () -> Unit) -> Unit, description? : String, wide? : Bool, live? : () -> (String, String, String), on_gone? : () -> Unit, steps? : Bool, back? : () -> Unit, initial_steps? : () -> Unit) -> Unit
 
 pub fn open_new_workspace(@sfbase.Source) -> Unit
 
@@ -745,15 +749,23 @@ pub(all) struct ChatComposerNode {
   root : @view.View
   composer : ComposerNode
   room : () -> Double
+  room_parts : () -> (Double, Double)
+  layout_room : () -> (Double, Double, ComposerPlace, ComposerLimits?, Double)
 }
 
 pub(all) struct ChatListNode {
   to_latest : () -> Unit
   follows : @signals.Signal[Bool]
-  landing_of : (String) -> MineLanding?
+  place_of : (String) -> String?
 }
 
 type ComposerExtrasNode
+
+#derive(Eq)
+pub struct ComposerLimits {
+  // private fields
+}
+pub fn ComposerLimits::in_width(Self, Double) -> (Double, Double, ComposerPlace)
 
 pub(all) struct ComposerNode {
   root : @view.View
@@ -765,6 +777,7 @@ pub(all) struct ComposerNode {
   ground : () -> (Double, Double, Double, Double)
 }
 
+#derive(Eq)
 pub(all) struct ComposerPlace {
   capsule_in : (Double, Double, Double)
   capsule_pad : Double

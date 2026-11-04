@@ -3,7 +3,7 @@ fn retained_quote_flight(steps : Int) -> Array[Array[Double]] raise {
   reset()
   let source = @signals.signal(true)
   let row = @signals.signal(false)
-  let target : @sf.LiveMap[String, @sf.QuoteCardNode] = @sf.LiveMap::new()
+  let target : Map[String, @sf.QuoteCardNode] = {}
   let from : Ref[@sf.QuoteCardNode?] = Ref(None)
   let quoted = "同一张引用卡的两行原文，发送后继续保留原来的断行，再沿着同一条路径到消息里。"
   let comment = "这段也一起带过去"
@@ -11,7 +11,7 @@ fn retained_quote_flight(steps : Int) -> Array[Array[Double]] raise {
   let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=390.0, h=600.0, platform=2, stable=false)
   let make = fn(p : @view.View, width : Double?) {
     @sf.quote_card_node(p, fn() { "作者" }, fn() { quoted }, comment=fn() { comment },
-      composer=true, corner=fn() { 16.0 }, words_width=fn() { width })
+      composer=true, corner=fn() { 16.0 }, words_toward=fn() { width.map(fn(w) { (w, 0.0) }) })
   }
   @ui.set_view_app(fn(root) {
     @ui.set_tree_theme(@sf.ui_theme_now)
@@ -31,7 +31,9 @@ fn retained_quote_flight(steps : Int) -> Array[Array[Double]] raise {
     })
     root.box(fn(layer) {
       layer.over(Is(true)) |> ignore
-      send_flight_node(layer, "quotes", fn(_) { None }, quotes=fn(_, key) { target.get(key) })
+      send_flight_node(layer, "quotes", fn(_) { if row.get() { Some("row") } else { None } }, fn(_) { None }, quotes=fn(_, key) {
+        target.get(key)
+      })
     }) |> ignore
   })
   t.draw()
@@ -51,6 +53,8 @@ fn retained_quote_flight(steps : Int) -> Array[Array[Double]] raise {
   let f = send_flight.get().unwrap()
   assert_false(f.placed)
   row.set(true)
+  t.draw()
+  // (its row told laid out in that frame, it sets out as the next change, at that frame's moment)
   t.draw()
   assert_true(f.placed, msg="a quote-only send starts from its own card's landing")
   let end = f.way.ends()

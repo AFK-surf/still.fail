@@ -363,6 +363,8 @@ struct Node {
   /// what that row is known by where it is made anew for the same key (View::row_known_as: a windowed list's block,
   /// its slot let go as it leaves the window): what is picked in it found in it again as it comes back
   mut row_id : NodeId?
+  /// A virtual row's position among all its siblings, including those outside the window.
+  mut row_index : Int?
   /// whether it takes input now as what reads it reads it (View::takes_input): made as first read, let go with it
   mut input_cell : @signals.Signal[Bool]?
   /// whether it can take the keyboard's focus, which of Enter (1) and Space (2) press it as it has it (View::focusable;
@@ -434,10 +436,10 @@ struct Node {
   /// how much it gives way and how narrow it may be as said of it (View::shrink, View::min_width; None: not said, as
   /// what it is makes them: Tree::give_way_applied)
   mut shrink_said : Double?
-  mut min_w_said : Double??
+  mut min_w_said : @flex.Dim?
   /// how wide it may be at most as said of it (View::max_width; None: not said, as what it is makes it:
   /// Tree::capped_applied)
-  mut max_w_said : Double??
+  mut max_w_said : @flex.Dim?
   /// what it takes over holds for is scrolling what it holds (View::claims' `scrolls`)
   mut claims_scroll : Bool
   /// where it scrolls what it holds up and down (View::scrolls): the node holding that, whose height less its own is how
@@ -544,9 +546,11 @@ pub struct Tree {
   rows_known : Map[NodeId, Int]
   /// how many such names were given (Tree::row_name)
   mut rows_named : Int
-  /// the moment what is drawn is drawn at (a frame's, to be shown then), a signal a look follows (Tree::drawn_at); the
-  /// logic follows no clock (its moment `logic`, what is due on its timeline said once: Tree::advance)
+  /// The actual sample shared by bindings and layout. Logic still follows its event timeline, never this signal.
   clock : @signals.Signal[Double]
+  /// The presentation sample is separate: only paint may consume a time ahead of this layout.
+  paint_clock : @signals.Signal[Double]
+  mut presentation_at : Double
   /// the same moment, for what draws a wait by it (a cycle: View::cycle): what never ends, read apart from what moves
   beat : @signals.Signal[Double]
   /// what works out each glyph's look where a node says one (View::glyphs_by), by its index and making
@@ -671,6 +675,9 @@ pub struct Tree {
   mut list_feel : () -> (ListFeel, Double)
   /// what waits on all of it laid out as it is next, whatever came out otherwise (Tree::once_laid_out)
   laid_waits : Array[() -> Unit]
+  /// Outside events made ready by a layout, handed to the host only after the layout and its cause have ended.
+  laid_events : Array[() -> Unit]
+  mut telling_laid_events : Bool
   /// the node a finger or the pointer is held on, and the one the pointer is over (of those that take a press): each
   /// node's own cell told as it comes or goes (View::pressed, View::pointed)
   mut pressing : NodeId?
@@ -760,16 +767,16 @@ pub struct Tree {
   /// how many ask for where things stand as each change comes, before it is taken (View::laid_before_causes): what is
   /// laid out otherwise by a change before it laid out and placed as that one comes, whether a frame came or not
   mut before_causes : Int
-  /// laying out where things stand before a change (Tree::stand_before_cause): not again inside it
+  /// laying out and placing a result, before a change or for a frame: what that result tells is part of this
+  /// layout, not another cause to lay out at the logic's time inside it
   mut standing : Bool
+  /// Flex is computing or its geometry is being published. Ordinary properties and effects may not change layout
+  /// in this phase; a custom layout can only build and size the descendants it explicitly owns.
+  mut layout_locked : Bool
+  mut layout_owner : Int
   /// asked to be laid out and placed once the change under way is told whole (Tree::settle_after_change)
   mut settle_asked : Bool
   mut settle_at : Double
-  /// what the layout last came to where it was laid out to be read (Tree::measured_now) and not yet placed by: its
-  /// compute's number (-1: none): placed by that once a frame or a change's end places things, nothing laid out anew
-  mut measured_gen : Int
-  /// the first compute laid out to be read since things were last placed (-1: none): what a later layout places by too
-  mut walk_from : Int
   /// how many device pixels a point what hosts it draws at (0: none said): what is drawn off where it is laid out drawn
   /// off by whole pixels (View::drawn_off), as an old view's look is
   mut pixel_grid : Double
@@ -827,6 +834,8 @@ pub fn Tree::new(
   }
   let t : Tree = {
     clock: @signals.signal(start, same=fn(a, b) { a == b }),
+    paint_clock: @signals.signal(start, same=fn(a, b) { a == b }),
+    presentation_at: start,
     beat: @signals.signal(start, same=fn(a, b) { a == b }),
     glyph_looks: {},
     resident: @signals.signal(resident_of(start), same=fn(a, b) { a == b }),
@@ -889,6 +898,8 @@ pub fn Tree::new(
     glides_gone: fn(_) {  },
     list_feel: fn() { (Desktop, 1.0) },
     laid_waits: [],
+    laid_events: [],
+    telling_laid_events: false,
     pressing: None,
     pointed: None,
     lit_every: false,
@@ -928,10 +939,10 @@ pub fn Tree::new(
     drawn_due: false,
     before_causes: 0,
     standing: false,
+    layout_locked: false,
+    layout_owner: -1,
     settle_asked: false,
     settle_at: 0.0,
-    measured_gen: -1,
-    walk_from: -1,
     pixel_grid: 0.0,
     rows_grid: 0.0,
     rows_lists: [],
@@ -981,6 +992,7 @@ pub fn words_measure(words : String, _look : WordsLook, width : Double) -> (Doub
 ///|
 /// A node made in `parent` (-1: the root), its scope its own (made with nothing reading: owned by nothing else).
 fn Tree::made(self : Tree, parent : Int) -> View {
+  self.layout_change_allowed(parent)
   self.work.made = self.work.made + 1
   self.hits = self.hits + 1
   let at = match self.free.pop() {
@@ -1067,6 +1079,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.said_cell = None
       n.each_row = false
       n.row_id = None
+      n.row_index = None
       n.focusable = false
       n.focus_typing = false
       n.focus_keys = 0
@@ -1161,6 +1174,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         said_cell: None,
         each_row: false,
         row_id: None,
+        row_index: None,
         focusable: false,
         focus_typing: false,
         input_cell: None,
@@ -1315,10 +1329,17 @@ pub fn Tree::logic_at(self : Tree) -> Double {
 }
 
 ///|
-/// The moment what is drawn is drawn at (a frame's, to be shown then; an input's, as it is pressed), followed: for a
-/// look worked out from the time (a fade, a place by the time), worked out again as it goes. Never for what is done.
+/// The actual frame or input time, followed by bindings and layout. Predicted presentation is paint_at; neither
+/// clock decides when an action runs, which belongs to the event timeline.
 pub fn Tree::drawn_at(self : Tree) -> Double {
   self.clock.get()
+}
+
+///|
+/// The presentation sample, possibly ahead of the event time. Only paint and drawn transforms may use it; a layout
+/// or structural change caused by this sample is rejected by the layout boundary.
+pub fn Tree::paint_at(self : Tree) -> Double {
+  self.paint_clock.get()
 }
 
 ///|
@@ -1424,7 +1445,7 @@ fn Tree::drawn_in(self : Tree, at : Int) -> Bool {
 ///|
 /// The resident clock's next step after the moment drawn now (Tree::drawn_at's).
 pub fn Tree::resident_next(self : Tree) -> Double {
-  resident_of(@signals.untracked(fn() { self.clock.get() })) + resident_step_ms
+  resident_of(@signals.untracked(fn() { self.paint_clock.get() })) + resident_step_ms
 }
 
 ///|
@@ -1435,21 +1456,26 @@ pub fn Tree::cycle_read(self : Tree) -> Bool {
 }
 
 ///|
-/// The clock set to `ms` (a frame's time).
+/// Declare the next frame's presentation time. Sampling and layout wait for frame's actual `now`.
 pub fn Tree::at(self : Tree, ms : Double) -> Unit {
-  self.clock_to(ms)
-  self.beat_set(ms)
+  // Merely declare when the next frame will be shown. Do not run bindings or advance the event clock here.
+  self.presentation_at = ms
 }
 
 ///|
-/// The moment what is drawn is drawn at set to `ms` (a frame's, an input's, the logic's for a while and back): what
-/// follows whether it is at or past a moment told so, as it comes to be so or not (View::drawn_past), each still read
-/// by what reads it and its node living, the rest let go; told of what was followed as this began, what is followed
-/// anew meanwhile kept for the next.
+/// The actual sample set to `ms`, before the frame's or input's bindings and layout.
 fn Tree::clock_to(self : Tree, ms : Double) -> Unit {
+  self.clock.set(ms)
+}
+
+///|
+/// Sample presentation once layout is complete. Its clock and thresholds change together, so a reader never sees
+/// a new presentation time with the old answer to drawn_past. An input samples its own time through this same path.
+fn Tree::paint_clock_to(self : Tree, ms : Double) -> Unit {
   // (the moment and whether it is past each followed, told as one: no reader sees the one without the other)
   @signals.start_batch()
-  self.clock.set(ms)
+  self.paint_clock.set(ms)
+  self.beat_set(ms)
   if self.drawn_marks.length() > 0 {
     let keep = []
     for m in self.drawn_marks {
@@ -1467,8 +1493,8 @@ fn Tree::clock_to(self : Tree, ms : Double) -> Unit {
 }
 
 ///|
-/// Whether what is drawn is drawn at or past moment `t` (Tree::drawn_at's: a frame's moment, an input's, the logic's
-/// while it lays out), followed: told only as that comes to be so or not, never as the clock goes otherwise (a look that
+/// Whether what is drawn is drawn at or past moment `t` (Tree::paint_at's: the frame's presentation time, or an input's
+/// own time), followed: told only as that comes to be so or not, never as the clock goes otherwise (a look that
 /// changes at a moment, as it stands till then: a bar shown full till it starts to go, drawn as of the frame's own
 /// moment, whatever the logic's is). The node's: one for each moment, let go with it or once nothing reads it.
 pub fn View::drawn_past(self : View, t : Double) -> Bool {
@@ -1477,7 +1503,7 @@ pub fn View::drawn_past(self : View, t : Double) -> Bool {
   let cell = match self.tree.drawn_marks.iter().find_first(fn(m) { m.0 == id && m.1 == t }) {
     Some(m) => m.2
     None => {
-      let now = @signals.untracked(fn() { self.tree.clock.get() })
+      let now = @signals.untracked(fn() { self.tree.paint_clock.get() })
       let c = @signals.signal(now >= t, same=fn(a, b) { a == b })
       self.tree.drawn_marks.push((id, t, c))
       c
@@ -1601,9 +1627,15 @@ pub fn View::logic_at(self : View) -> Double {
 }
 
 ///|
-/// The moment what is drawn is drawn at (Tree::drawn_at), for a look worked out from the time.
+/// The actual frame or input time (Tree::drawn_at), for time-dependent bindings and layout.
 pub fn View::drawn_at(self : View) -> Double {
   self.tree.drawn_at()
+}
+
+///|
+/// The time sampled by paint, never by layout. See Tree::paint_at.
+pub fn View::paint_at(self : View) -> Double {
+  self.tree.paint_at()
 }
 
 ///|
@@ -1628,6 +1660,8 @@ fn Tree::placed(self : Tree, at : Int) -> (Double, Double, Double) {
 fn Tree::marked(self : Tree) -> Unit {
   if !self.due {
     self.due = true
+    // Work produced by this frame's geometry is completed by its paint phase, not another host frame inside it.
+    if self.layout_locked { return }
     // (the host is already being told: it will ask for a frame for everything marked by that telling too. Laying out
     // during the telling can clear `due` and mark it again; telling the host recursively would repeat that layout.)
     if !self.telling_due {
@@ -1650,9 +1684,22 @@ fn Tree::marked(self : Tree) -> Unit {
 /// Its layout to be done again: itself and every node up to the root (one marked before and not laid out since, its
 /// holder's layout reused, is no sign the rest are).
 fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
+  self.layout_change_allowed(at)
+  if self.layout_locked {
+    // A layout callback is building its own children before measuring them. Nothing outside that layout is dirty.
+    let mut i = at
+    while i >= 0 && i != self.layout_owner {
+      let flex = self.nodes[i].flex
+      flex.dirty = true
+      // The child may already have been probed in this compute. Its previous measurements no longer describe
+      // the style the owning layout has just assigned, even though it was touched in the current generation.
+      flex.cache_n = 0
+      flex.p_ok = false
+      i = self.nodes[i].parent
+    }
+    return
+  }
   self.layout_due = true
-  // (what was laid out to be read no more where it stands)
-  self.measured_gen = -1
   self.hits = self.hits + 1
   self.marked()
   let mut i = at
@@ -1661,6 +1708,22 @@ fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
     n.flex.dirty = true
     i = n.parent
   }
+}
+
+///|
+/// Layout output is not another layout input. The only structure built while computing is owned by the explicit
+/// custom-layout callback currently running; a sibling or ancestor is never part of that permission.
+fn Tree::layout_change_allowed(self : Tree, at : Int) -> Unit {
+  if !self.layout_locked { return }
+  if self.layout_owner >= 0 {
+    let mut i = at
+    while i >= 0 {
+      if i == self.layout_owner { return }
+      i = self.nodes[i].parent
+    }
+  }
+  @signals.set_access_guard(None) |> ignore
+  abort("layout output changed layout at node \{at}; measure dependent children inside their parent's layout")
 }
 
 ///|
@@ -1886,6 +1949,12 @@ fn Tree::committed(self : Tree, f : () -> Unit) -> Unit {
 /// brought there first (what had left by then let go), that moment its cause's for all `f` reads and does; what is
 /// marked taken where `f` says it changed something.
 fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
+  if self.layout_locked {
+    // Geometry callbacks may publish paint or a value read by the next input. They are not new events and must
+    // not rewind the drawing clock. Actual structure/layout mutations below are rejected at their write boundary.
+    f() |> ignore
+    return
+  }
   let at = if self.cause_at >= 0.0 {
     self.cause_at
   } else {
@@ -1976,6 +2045,8 @@ priv enum Prop {
   BoundsInput
   OverScrim
   Measured
+  LayoutBox
+  ScrollBarLayout
   WordsCentered
   EllipsisPast
   Points
@@ -2034,6 +2105,7 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
   }
   match live {
     Is(v) => {
+      match phase { Layout | Both => tree.layout_change_allowed(at); _ => () }
       apply(v)
       marked()
     }
@@ -2054,6 +2126,7 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
           return
         }
         last.val = Some(v)
+        match phase { Layout | Both => tree.layout_change_allowed(at); _ => () }
         apply(v)
         marked()
       })
@@ -2976,50 +3049,10 @@ pub fn View::placed_window_now(self : View) -> (Double, Double, Double, Double) 
 }
 
 ///|
-/// What was told worked out and laid out as of the logic's moment, nothing placed by it (each node where it was placed
-/// till a frame or a change's end places things, by this same layout): where a change under way lays things out, read
-/// by what goes from where they stood to there for its cause (View::laid_window_now), the same for all that read it in
-/// that change.
+/// Resolve geometry at the input's moment before it is read. Within layout, its owner reads the current pass's
+/// measurements directly; publishing them never starts another pass.
 fn Tree::measured_now(self : Tree) -> Unit {
-  if self.last_w <= 0.0 {
-    return
-  }
-  let at = self.logic_at()
-  let shown = @signals.untracked(fn() { self.clock.get() })
-  // (its clock set to the moment and back: what that tells is no change of its own to settle after)
-  let was_standing = self.standing
-  self.standing = true
-  @signals.untracked(fn() {
-    self.clock_to(at)
-    self.beat.set(at)
-    self.pull()
-    let mut i = 0
-    while i < self.bindings_due.length() {
-      let b = self.bindings_due[i]
-      if b.queued {
-        (b.run)()
-      }
-      i = i + 1
-    }
-    self.bindings_due.clear()
-    if self.layout_due && self.measured_gen < 0 {
-      self.work.computes = self.work.computes + 1
-      let g = @flex.computes() + 1
-      @flex.compute(self.nodes[0].flex, width=self.last_w, height=self.last_h, round=false, reuse=true)
-      self.measured_gen = g
-      // (placed by once things are placed, whatever is laid out again before that)
-      if self.walk_from < 0 {
-        self.walk_from = g
-      }
-    }
-  })
-  if shown != at {
-    @signals.untracked(fn() {
-      self.clock_to(shown)
-      self.beat.set(shown)
-    })
-  }
-  self.standing = was_standing
+  self.laid_now()
 }
 
 ///|
@@ -3416,35 +3449,10 @@ fn Tree::withins_ready(self : Tree) -> Unit {
     (!self.withins_at.is_empty() || !self.bar_cols.is_empty()) &&
     (self.layout_due || !self.places_due.is_empty() || !self.bindings_due.is_empty() || !self.pulls_marked.is_empty()) {
     self.laid_now()
-    self.withins_restored()
   }
   // (what takes input changed with nothing else to lay out: which column's bar the pointer is along told now, at the
   // change's end)
   if self.committing == 0 && !self.standing && !self.withins_passing && self.bars_due {
-    self.withins_passing = true
-    self.bars_near_told() |> ignore
-    self.withins_passing = false
-  }
-}
-
-///|
-/// Finish pointer work told as an immediate layout restored the drawn clock. The original layout was needed at the
-/// change's moment; this pass uses the restored clock without switching it back and recursively entering that layout.
-fn Tree::withins_restored(self : Tree) -> Unit {
-  if self.committing != 0 || self.withins_passing || self.last_w <= 0.0 {
-    return
-  }
-  if (!self.withins_at.is_empty() || !self.bar_cols.is_empty()) &&
-    (self.layout_due || !self.places_due.is_empty() || !self.bindings_due.is_empty() || !self.pulls_marked.is_empty()) {
-    let was_standing = self.standing
-    self.standing = true
-    @signals.untracked(fn() {
-      self.pull()
-      self.laid_out(self.clock.get())
-    })
-    self.standing = was_standing
-  }
-  if !self.withins_passing && self.bars_due {
     self.withins_passing = true
     self.bars_near_told() |> ignore
     self.withins_passing = false
@@ -4476,31 +4484,18 @@ pub fn Tree::hold_lost_in(self : Tree, at : Int) -> Unit {
 }
 
 ///|
-/// Laid out as of the logic's moment (Tree::logic_at), what the change under way set so far pulled into its properties (as a
-/// computed read in a batch is: nothing told, no structure or effect run before the change ends), the clock put back
-/// where it was drawn at: for where things are as an event finds them (View::laid_size, Tree::drag_at).
+/// Laid out as of the logic's moment (Tree::logic_at), what the change under way set so far pulled into its properties
+/// (as a computed read in a batch is): where things are as an event finds them (View::laid_size, Tree::drag_at).
+/// An already current measurement does not alter the presentation sample of a completed frame.
 fn Tree::laid_now(self : Tree) -> Unit {
-  if self.last_w <= 0.0 {
-    return
-  }
+  if self.layout_locked || self.standing || self.last_w <= 0.0 { return }
   let at = self.logic_at()
-  let shown = @signals.untracked(fn() { self.clock.get() })
-  // (its clock set to the moment and back: what that tells is no change of its own to settle after)
-  let was_standing = self.standing
-  self.standing = true
-  @signals.untracked(fn() {
-    self.clock_to(at)
-    self.beat.set(at)
-    self.pull()
-    self.laid_out(at)
-  })
-  if shown != at {
-    @signals.untracked(fn() {
-      self.clock_to(shown)
-      self.beat.set(shown)
-    })
+  // Reading an already current measurement does not resample a frame's paint at another time. Inputs which need
+  // hit geometry enter through bring_to; an input reading after a change resolves that change here as well.
+  if at != @signals.untracked(fn() { self.clock.get() }) || self.layout_due ||
+    !self.places_due.is_empty() || !self.bindings_due.is_empty() || !self.pulls_marked.is_empty() {
+    self.bring_to(at)
   }
-  self.standing = was_standing
 }
 
 ///|
@@ -4944,6 +4939,7 @@ pub fn View::owned_count(self : View) -> Int {
 /// cleanups run), what goes with it run, its callback and measure dropped, its index free.
 fn View::let_go(self : View) -> Unit {
   guard self.live() is Some(n) else { return }
+  self.tree.layout_change_allowed(self.at)
   // (what the pointer is over let go of, it or one it holds: pointed at no more, what holds it told so while it is
   // still held by them, View::pointed_in; what it is over then the host's to find again, as what takes it changed)
   if self.tree.pointed_within_at(self.at) {
@@ -5089,6 +5085,7 @@ fn Tree::boxes(self : Tree, at : Int, into : Array[@flex.Node]) -> Unit {
 /// What it holds changed (made, let go, moved): the boxes of the node that lays them out (itself, or the first not a
 /// slot holding it) put again in order, it marked to be laid out, the order to be made again.
 fn View::boxes_again(self : View) -> Unit {
+  self.tree.layout_change_allowed(self.at)
   let mut at = self.at
   while self.tree.nodes[at].slot && self.tree.nodes[at].parent >= 0 {
     at = self.tree.nodes[at].parent
@@ -5104,6 +5101,9 @@ fn View::boxes_again(self : View) -> Unit {
   }
   self.tree.layout_marked_at(at)
   self.tree.order_marked()
+  // (what it holds drawn in another order: all of it drawn again where the scene keeps it, as the root's layers are,
+  // Tree::top_last; nothing of what it holds changed of its own)
+  self.tree.placed_pending.push({ at, gen: n.gen })
   // (what is drawn over what, among what holds it, changed: whether a modal layer is over what is held)
   self.tree.modals_told()
 }
@@ -5111,6 +5111,7 @@ fn View::boxes_again(self : View) -> Unit {
 ///|
 /// Node `v` let go and taken out of what it holds.
 fn View::drop(self : View, v : View) -> Unit {
+  self.tree.layout_change_allowed(self.at)
   v.let_go()
   guard self.live() is Some(n) else { return }
   match n.kids.search(v.at) {
@@ -5496,7 +5497,7 @@ fn leave_ends(n : Node) -> Double {
 pub fn Tree::clock_read(self : Tree) -> Bool {
   // (what goes by steps asks for no frames of its own: its next step is a moment woken for, Tree::wake; what it
   // changes that shows asks as any change does)
-  self.clock.watched()
+  self.clock.watched() || self.paint_clock.watched()
 }
 
 ///|
@@ -5607,6 +5608,7 @@ pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> U
   if was < 0.0 {
     self.settle_now(at)
   }
+  self.laid_events_told()
 }
 
 ///|
@@ -5615,8 +5617,7 @@ pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> U
 /// the next change, whenever it comes and whether a frame is drawn first or not, finds them placed as this one left
 /// them: what moves from there for that change's cause goes from there. Asked once for each change.
 fn Tree::settle_after_change(self : Tree, at : Double) -> Unit {
-  // (what laying out and placing things itself tells, its clock set to the change's moment and back, no change of its
-  // own to settle after)
+  // (what laying out and placing things itself tells is no new event to settle after)
   if self.before_causes <= 0 || self.standing {
     return
   }
@@ -5643,34 +5644,16 @@ fn Tree::settle_after_change(self : Tree, at : Double) -> Unit {
 /// Where things stand as of `at` laid out and placed now, where something asks (View::laid_before_causes): what was told
 /// worked out, laid out and placed as a frame would, nothing drawn.
 fn Tree::settle_now(self : Tree, at : Double) -> Unit {
-  if self.before_causes <= 0 || self.standing || self.last_w <= 0.0 {
-    return
-  }
-  if !(self.layout_due || !self.places_due.is_empty() || !self.bindings_due.is_empty() || !self.pulls_marked.is_empty()) {
-    return
-  }
-  self.standing = true
-  self.work.settles = self.work.settles + 1
-  let shown = @signals.untracked(fn() { self.clock.get() })
-  // A due change settles at its own moment, before the outer advance reaches its destination. Its looks must
-  // see that same logical moment when they decide whether a finished way still needs the drawing clock.
+  if self.before_causes <= 0 || self.standing || self.layout_locked || self.last_w <= 0.0 { return }
+  if !(self.layout_due || !self.places_due.is_empty() || !self.bindings_due.is_empty() || !self.pulls_marked.is_empty()) { return }
+  self.work.settles += 1
+  // A due event is resolved before advance_loop moves logic to its destination. Its bindings must see that
+  // event's moment too, including when a completed motion releases its clock dependency.
   let cause = self.cause_at
   self.cause_at = at
-  @signals.untracked(fn() {
-    self.clock_to(at)
-    self.beat.set(at)
-    self.pull()
-    self.laid_out(at)
-  })
+  @signals.untracked(fn() { self.bring_to(at) })
   self.cause_at = cause
-  if shown != at {
-    @signals.untracked(fn() {
-      self.clock_to(shown)
-      self.beat.set(shown)
-    })
-  }
-  self.standing = false
-  self.withins_restored()
+  self.laid_events_told()
 }
 
 ///|
@@ -5810,7 +5793,7 @@ fn Tree::advance_logic(self : Tree, upto : Double) -> Unit {
 ///|
 fn Tree::advance_clock(self : Tree, upto : Double) -> Unit {
   if !self.advancing && upto > @signals.untracked(fn() { self.clock.get() }) {
-    self.at(upto)
+    self.clock_to(upto)
   }
 }
 
@@ -5963,13 +5946,16 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
   // when the frame is to be shown, Tree::at); none given, the clock's)
   let upto = match now {
     Some(n) => n
-    None => @signals.untracked(fn() { self.clock.get() })
+    None => self.presentation_at
   }
   self.changed.clear()
   self.composed.clear()
   if self.nodes.length() == 0 || !self.nodes[0].live {
     return false
   }
+  self.advance_logic(upto)
+  let was_standing = self.standing
+  self.standing = true
   if w != self.last_w || h != self.last_h {
     self.last_w = w
     self.last_h = h
@@ -5980,7 +5966,10 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
     // (what follows it changed as of the frame's moment, before it is laid out)
     self.room.set((w, h))
   }
-  self.brought(upto)
+  self.clock_to(upto)
+  self.laid_out(upto, paint_at=dmax(upto, self.presentation_at))
+  self.standing = was_standing
+  self.laid_events_told()
   let drawn = self.drawn_due
   self.drawn_due = false
   if self.telling_due {
@@ -5996,38 +5985,39 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
 /// changed for the host to draw taken by the next frame's host as its own: Tree::take_changed). Nothing laid out before
 /// the tree has a size (its first frame).
 pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
-  if self.nodes.length() == 0 || !self.nodes[0].live {
-    return
-  }
-  // (its logic first, to the moment, then what it draws drawn as of it (a frame to be shown later drawn ahead of it:
-  // drawn again as of now, for where a press finds things), then what it marked)
-  self.advance(at)
+  if self.nodes.length() == 0 || !self.nodes[0].live || self.layout_locked { return }
+  self.advance_logic(at)
+  let was_standing = self.standing
+  self.standing = true
   self.clock_to(at)
-  // (what the change under way set so far, and the clock, pulled into its properties: an input in a change's batch
-  // finds things where they are then, nothing else told before the change ends)
   self.pull()
-  if self.last_w >= 0.0 {
-    self.brought(at)
-  }
-}
-
-///|
-/// What was marked done, at the clock's now (Tree::frame, Tree::bring_to).
-fn Tree::brought(self : Tree, upto : Double) -> Unit {
-  // what is due by now done (and the logic at `upto`, nothing due or not: what is said next is of then)
-  self.advance(upto)
-  self.laid_out(upto)
+  if self.last_w >= 0.0 { self.laid_out(at) }
+  self.standing = was_standing
+  self.laid_events_told()
 }
 
 ///|
 /// What was marked laid out and drawn at `upto`, the logic not moved: no moment's work done, nothing due run (for where
 /// things are as an event finds them in the middle of its change: Tree::laid_now).
-fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
+fn Tree::laid_out(self : Tree, upto : Double, paint_at? : Double = upto) -> Unit {
   let w = self.last_w
   let h = self.last_h
-  if !self.due {
+  let paint_changes = @signals.untracked(fn() {
+    (self.paint_clock.get() != paint_at && self.paint_clock.watched()) ||
+    (self.beat.get() != paint_at && self.beat.watched()) ||
+    (self.resident.get() != resident_of(paint_at) && self.resident.watched()) ||
+    self.drawn_marks.iter().any(fn(m) {
+      self.alive_id(m.0) && m.2.watched() && m.2.get() != (paint_at >= m.1)
+    })
+  })
+  if !self.due && !paint_changes {
+    self.paint_clock_to(paint_at)
     return
   }
+  guard !self.layout_locked else { abort("layout reentered while publishing its result") }
+  // Resolve state and time before layout. Once flex starts, geometry can only feed paint or the next input.
+  let was_standing = self.standing
+  self.standing = true
   // the bindings whose reads changed since, each once, in the order they were told (what they make runs its own now,
   // what they set again marks what it marks)
   let mut i = 0
@@ -6049,26 +6039,23 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   })
   self.pulls_marked.clear()
   self.pulls_marked.append(still)
+  for at in self.besides_at {
+    let n = self.nodes[at]
+    if n.live && n.placed {
+      match n.flex.absolute_resolve {
+        Some(resolve) => if resolve(n.flex.width, n.flex.height) { self.layout_marked_at(at) }
+        None => ()
+      }
+    }
+  }
+  self.layout_locked = true
   // (what goes beside another placed by it only where anything was laid out or placed again: View::beside)
   let placing = self.layout_due || !self.places_due.is_empty()
   if self.layout_due {
     self.layout_due = false
-    // (laid out already to be read, nothing marked since: placed by that; else laid out now, what was laid out to be
-    // read before it and not placed by yet placed too, Tree::measured_now)
-    let gen = if self.measured_gen >= 0 {
-      if self.walk_from >= 0 { self.walk_from } else { self.measured_gen }
-    } else {
-      self.work.computes = self.work.computes + 1
-      let g = @flex.computes() + 1
-      @flex.compute(self.nodes[0].flex, width=w, height=h, round=false, reuse=true)
-      if self.walk_from >= 0 && self.walk_from < g {
-        self.walk_from
-      } else {
-        g
-      }
-    }
-    self.measured_gen = -1
-    self.walk_from = -1
+    self.work.computes += 1
+    let gen = @flex.computes() + 1
+    @flex.compute(self.nodes[0].flex, width=w, height=h, round=false, reuse=true)
     self.walk(0, gen, true)
   }
   // (placed or faded by its own: it alone composed again)
@@ -6091,11 +6078,56 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     }
     self.besides_placed()
   }
-  // (what changed of its look alone: its content, nothing else)
+  // Publish the one layout's result. No callback here may create another layout or rebuild the tree.
+  if self.outs_changed {
+    self.outs_told()
+  }
+  if self.sized.length() > 0 {
+    self.sizes_told() |> ignore
+  }
+  if self.laid_waits.length() > 0 {
+    let waits = self.laid_waits.copy()
+    self.laid_waits.clear()
+    for f in waits {
+      @signals.untracked(f)
+    }
+  }
+  if self.shows_due.length() > 0 {
+    self.shown_now()
+  }
+  if placing && !self.withins_passing {
+    self.withins_passing = true
+    self.withins_told() |> ignore
+    self.withins_passing = false
+  } else if !self.withins_passing && self.bar_cols.length() > 0 && (self.order_due || self.changed.length() > 0 || self.bars_due) {
+    self.withins_passing = true
+    self.bars_near_told() |> ignore
+    self.withins_passing = false
+  }
+  // Prediction enters only after layout has produced its result. Any reader attempting to turn this into a
+  // structural or layout change fails at that write; paint may consume the result without a second flex pass.
+  self.paint_clock_to(paint_at)
+  // Geometry-dependent paint and transforms consume that result in this frame, without entering flex again.
+  self.pull()
+  let mut p = 0
+  while p < self.bindings_due.length() {
+    let b = self.bindings_due[p]
+    if b.queued { (b.run)() }
+    p += 1
+  }
+  self.bindings_due.clear()
+  for at in self.places_due {
+    let n = self.nodes[at]
+    if n.live && n.place_due {
+      self.work.visited += 1
+      self.place(at)
+    }
+  }
+  self.places_due.clear()
   for at in self.looks_due {
     let n = self.nodes[at]
     if n.live && n.look_due {
-      self.work.visited = self.work.visited + 1
+      self.work.visited += 1
       self.made_again(at)
     }
   }
@@ -6105,63 +6137,13 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   let ordered = self.order_due
   if ordered {
     self.order_due = false
-    self.work.orders = self.work.orders + 1
+    self.work.orders += 1
   }
-  self.work.changes = self.work.changes + self.changed.length() + self.composed.length()
+  self.work.changes += self.changed.length() + self.composed.length()
+  if ordered || self.changed.length() > 0 || self.composed.length() > 0 { self.drawn_due = true }
   self.due = false
-  // (what its rows left out told once all of it is laid out, and what that tells (a ⋯ saying how many) laid out in this
-  // same pass: one result, the frame drawing all of it)
-  if self.outs_changed {
-    self.outs_told()
-    if self.due {
-      self.laid_out(upto)
-    }
-  }
-  // (the sizes followed told once all of it is laid out, and what that tells laid out in this same pass)
-  if self.sized.length() > 0 && self.sizes_told() && self.due {
-    self.laid_out(upto)
-  }
-  // (what waited on all of it laid out, told once now, whether any size it follows came out otherwise or not; what that
-  // tells laid out in this same pass)
-  if self.laid_waits.length() > 0 {
-    let waits = self.laid_waits.copy()
-    self.laid_waits.clear()
-    for f in waits {
-      @signals.untracked(f)
-    }
-    if self.due {
-      self.laid_out(upto)
-    }
-  }
-  // (what is to be brought into sight, where all of it is laid out, before it is drawn; what that moves laid out in
-  // this same pass)
-  if self.shows_due.length() > 0 {
-    self.shown_now()
-    if self.due {
-      self.laid_out(upto)
-    }
-  }
-  if ordered || self.changed.length() > 0 || self.composed.length() > 0 {
-    self.drawn_due = true
-  }
-  // (what is under the pointer as it is placed now, View::pointer_within: told once all of it is placed, and what that
-  // told marked done in this same pass, again till nothing it tells is told otherwise: what it marked all done, as one
-  // change's whole)
-  if placing && !self.withins_passing {
-    self.withins_passing = true
-    while self.withins_told() && self.due {
-      self.laid_out(upto)
-    }
-    self.withins_passing = false
-  } else if !self.withins_passing && self.bar_cols.length() > 0 && (ordered || self.changed.length() > 0 || self.bars_due) {
-    // (which column's bar the pointer is along told anew as what is drawn or found there changes without anything
-    // placed: an order, what bounds input, what takes it; in this same pass)
-    self.withins_passing = true
-    while self.bars_near_told() && self.due {
-      self.laid_out(upto)
-    }
-    self.withins_passing = false
-  }
+  self.layout_locked = false
+  self.standing = was_standing
 }
 
 ///|
@@ -6246,6 +6228,22 @@ fn Tree::sizes_told(self : Tree) -> Bool {
 /// it is as the ones inside it moved it. Once, at this cause (the focus come to it): nothing brings it back of itself
 /// after.
 pub fn Tree::show_in_sight(self : Tree, id : NodeId, within? : () -> (Double, Double)?) -> Unit {
+  // (a list that keeps itself holding it told now, at this cause: it lays it out in sight, Scroll's `reveal`)
+  if self.alive_id(id) {
+    // (what part of it, as it is now: its top and its foot in its own terms)
+    let part = match within {
+      Some(f) => @signals.untracked(f)
+      None => None
+    }
+    let mut i = self.nodes[id.at].parent
+    while i >= 0 {
+      match self.scrolls_at.get(i) {
+        Some(s) => (s.reveal)(id, part)
+        None => ()
+      }
+      i = self.nodes[i].parent
+    }
+  }
   self.shows_due.push((id, within.unwrap_or(fn() { None })))
   self.marked()
 }
@@ -6451,20 +6449,13 @@ fn Tree::capped_applied(self : Tree, at : Int) -> Unit {
   let in_column = p >= 0 && !(self.nodes[p].flex.style.direction is (Row | RowReverse))
   let st = n.flex.style
   let one_line = (n.look.words != "" || !n.look.runs.is_empty()) && !n.look.words_look.wrap
-  let said = match n.max_w_said {
-    Some(Some(w)) => Some(w)
-    _ => None
-  }
   let max : @flex.Dim = if one_line && in_column && st.width_kind() == @flex.LEN_AUTO {
-    match said {
-      Some(w) => Within(w)
-      None => Pct(100.0)
+    match n.max_w_said {
+      Some(Pt(w) | Within(w)) => Within(w)
+      _ => Pct(100.0)
     }
   } else {
-    match said {
-      Some(w) => Pt(w)
-      None => Auto
-    }
+    n.max_w_said.unwrap_or(Auto)
   }
   if st.get_max_width() != max {
     st.set_max_width(max)
@@ -6499,8 +6490,7 @@ fn Tree::give_way_applied(self : Tree, at : Int) -> Unit {
     }
   }
   let min : @flex.Dim = match n.min_w_said {
-    Some(Some(w)) => Pt(w)
-    Some(None) => Auto
+    Some(w) => w
     // (along a row alone, as an old view's least of one-line words is: in a column, cut to the column's width)
     None =>
       if shorter && along {
@@ -6582,6 +6572,9 @@ fn Tree::shorter_in(self : Tree, at : Int) -> Unit {
 /// changed.
 fn Tree::place(self : Tree, at : Int) -> Unit {
   let n = self.nodes[at]
+  // Place also covers drawing-only transforms such as turn and fades. Their binding marks this node even when
+  // its layout rect, offset, opacity and scale remain unchanged.
+  let marked = n.place_due
   n.place_due = false
   let x = n.flex.left + n.look.dx + n.look.sx * n.flex.width
   // (a page's list's first row on the host's pixels where it sets them so: Tree::rows_placed)
@@ -6612,7 +6605,7 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
   n.ls = s
   n.lpx = px
   n.lpy = py
-  if went {
+  if went || marked {
     self.work.composed = self.work.composed + 1
     self.composed.push({ at, gen: n.gen })
     self.placed_pending.push({ at, gen: n.gen })
@@ -7429,6 +7422,32 @@ pub fn Tree::on_target(self : Tree, f : (Target, Array[Target], Double, Double) 
 pub fn Tree::on_glides(self : Tree, glides : (Int, () -> Double?) -> Unit, gone : (Int) -> Unit) -> Unit {
   self.glides = glides
   self.glides_gone = gone
+}
+
+///|
+/// Hand an outside event made ready by this layout to its host when the layout and any input causing it are whole.
+/// The callback must only enqueue the event: a host drawing a frame takes that event after its input snapshot.
+pub fn View::after_layout_event(self : View, enqueue : (Double) -> Unit) -> Unit {
+  guard self.alive() else { return }
+  let at = self.tree.logic_at()
+  if self.tree.layout_locked {
+    self.tree.laid_events.push(fn() { if self.alive() { enqueue(at) } })
+  } else {
+    enqueue(at)
+  }
+}
+
+///|
+fn Tree::laid_events_told(self : Tree) -> Unit {
+  if self.layout_locked || self.standing || self.committing > 0 || self.cause_at >= 0.0 || self.telling_laid_events {
+    return
+  }
+  self.telling_laid_events = true
+  while !self.laid_events.is_empty() {
+    let enqueue = self.laid_events.remove(0)
+    @signals.untracked(enqueue)
+  }
+  self.telling_laid_events = false
 }
 
 ///|

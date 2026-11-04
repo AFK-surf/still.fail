@@ -8,6 +8,8 @@
 fn init {
   @sfbase.login_card_of.val = fn(c, core, station, id, marked) { login_card(c, core, station, id, marked~) }
   @sfbase.share_card_of.val = share_card_open
+  @ui.on_frame_input(fn(_) { share_cards_prepare() })
+  @ui.on_frame_input(fn(c) { sa_prepare_images(c) })
   @sfbase.screen_made_stream.val = screen_fixture_stream
   @sf.picture_out_by.val = fn(c, png, said) { picture_out(c, png, copy_said=said) }
   // (a part of a page whose build faulted, in its place: as a list with nothing in it says so; a page's own bar and

@@ -5,7 +5,7 @@ fn retained_file_flight(steps : Int, picture : Bool) -> Array[Array[Double]] rai
   let from = (20.0, 400.0, if picture { 96.0 } else { 240.0 }, 96.0)
   let source = @signals.signal(true)
   let row = @signals.signal(false)
-  let destination : @sf.LiveMap[String, FileLandingNode] = @sf.LiveMap::new()
+  let destination : Map[String, FileLandingNode] = {}
   let field = @ui.Field::new()
   let fitted : Ref[() -> @ui.Fit] = Ref(fn() { FitCover })
   let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=390.0, h=600.0, platform=2, stable=false)
@@ -17,11 +17,11 @@ fn retained_file_flight(steps : Int, picture : Bool) -> Array[Array[Double]] rai
         file.width(Is(Some(300.0))).height(Is(Some(120.0))).offset(Is((40.0, 30.0))).ground(Is(ink)) |> ignore
         destination["file"] = {
           view: file, share: fn() { (0.8, 1.0) }, top_crop: fn() { true },
-          copy: fn(p, w, h, fit, corner) {
+          copy: fn(p, _, _, fit, corner) {
             fitted.val = fit
+            // (as big as what holds it, as the message's own picture's copy is: the flight lays that out)
             p.box(fn(content) {
-              content.width(By(fn() { Some(w()) })).height(By(fn() { Some(h()) }))
-              .radius(By(corner)).ground(Is(ink)) |> ignore
+              content.width_share(Is(1.0)).height_share(Is(1.0)).radius(By(corner)).ground(Is(ink)) |> ignore
             }) |> ignore
           },
         }
@@ -35,7 +35,9 @@ fn retained_file_flight(steps : Int, picture : Bool) -> Array[Array[Double]] rai
     root.box(fn(input) { @ui.field(input, field) |> ignore }) |> ignore
     root.box(fn(layer) {
       layer.over(Is(true)) |> ignore
-      send_flight_node(layer, "files", fn(_) { None }, files=fn(_, key) { destination.get(key) })
+      send_flight_node(layer, "files", fn(_) { if row.get() { Some("row") } else { None } }, fn(_) { None }, files=fn(_, key) {
+        destination.get(key)
+      })
     }) |> ignore
   })
   t.draw()
@@ -52,6 +54,8 @@ fn retained_file_flight(steps : Int, picture : Bool) -> Array[Array[Double]] rai
   assert_false(f.placed)
   assert_eq(shown(), [(from.0, from.1, from.2, from.3, ink)])
   row.set(true)
+  t.draw()
+  // (its row told laid out in that frame, it sets out as the next change, at that frame's moment)
   t.draw()
   assert_true(f.placed, msg="a file-only send starts when its own real row has a place")
   let start = f.set_out

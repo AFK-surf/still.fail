@@ -53,7 +53,7 @@ fn chat_empty_node(row : @view.View) -> Unit {
 /// go, a card with the bell and 忽略 at its end, its room closing as it is let go and how it went coming in its place
 /// (under_node's); something else asked of the viewer, 忽略 under the line.
 fn chat_state_node(row : @view.View, src : Source, here : () -> MessageHere, state : () -> (String, String, String)) -> Unit {
-  row.lines_up(Is(Some(Start))) |> ignore
+  row.lines_up(Is(None)) |> ignore
   let turn = fn() { state().1 == "need" }
   let asking = fn() {
     match here().view.state_ask {
@@ -77,7 +77,7 @@ fn chat_state_node(row : @view.View, src : Source, here : () -> MessageHere, sta
     (if turn() { look.state_turn } else { look.state_quiet }).then(chat_state_wraps)
   }
   row.pick(way, fn(r, which) {
-    r.lines_up(Is(Some(Start))) |> ignore
+    r.lines_up(Is(None)) |> ignore
     match which {
       1 => {
         under_node(r, fn() { asking() is Some(_) }, fn(u) { need_card_node(u, src, here, state, asking) })
@@ -108,7 +108,7 @@ fn chat_state_node(row : @view.View, src : Source, here : () -> MessageHere, sta
                 if rest == "" && lead == "done" { @sf.t("web-main.status.done") } else { rest }
               }
               line.show(fn() { after() != "" }, fn(w) {
-                w.grow(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+                w.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
                 w.words(By(after)).words_look(By(fn() { @ui.style_words(said()) })).ink(By(fn() { @ui.style_ink(said()) })) |> ignore
               })
             }
@@ -159,16 +159,23 @@ fn need_card_node(
     }
   })
   let stacked = fn() { @sf.native_on() && here().inline }
-  @sf.ask_line_card_node(parent, stacked, fn(card) {
+  let card = @sf.ask_line_card_node(parent, stacked, fn(card) {
     let look = @sf.theme().chat_list
     card.box(fn(words) {
-      words.grow(Is(1.0)).min_width(Is(Some(0.0))).says(By(fn() { Some(@view.said(Text, label=state().0)) })) |> ignore
+      words
+      .min_width(Is(Some(0.0)))
+      .says(By(fn() { Some(@view.said(Text, label=state().0)) })) |> ignore
+      chat_stacked_layout(words, stacked, fn(on) {
+        words.width_share(Is(if on { 1.0 } else { 0.0 }))
+        .grow(Is(if on { 0.0 } else { 1.0 }))
+        .basis(Is(if on { None } else { Some(0.0) })) |> ignore
+      })
       // (what it asks: the bell where an option's number is, what follows it)
       words.box(fn(a) {
         a.row(Is(true)).gap(Is(6.0)).lines_up(Is(Some(Start))).alpha(By(fn() { way_shown(was, a) })) |> ignore
         @sf.ask_line_mark_node(a, fn(m) { lead_icon_node(m, fn() { "need" }, fn() { @sf.theme().p.text }, centred=true) }) |> ignore
         a.box(fn(w) {
-          w.grow(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+          w.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
           w
           .words(By(fn() { state().2 }))
           .words_look(By(fn() { @sf.ask_line_words_look(look.state_turn.then(chat_state_wraps)) }))
@@ -191,10 +198,11 @@ fn need_card_node(
     |> ignore
     // (忽略 ending it, concentric with its end corner; let go, faded where it was)
     card.box(fn(e) {
-      e.lines_up(Is(Some(End))).padding(By(fn() { (0.0, if stacked() { 6.0 } else { 0.0 }, 0.0, 0.0) })).alpha(By(fn() {
+      e.lines_up(Is(Some(End))).alpha(By(fn() {
         way_shown(was, e)
       }))
       |> ignore
+      chat_stacked_layout(e, stacked, fn(on) { e.padding(Is((0.0, if on { 6.0 } else { 0.0 }, 0.0, 0.0))) |> ignore })
       @sf.ask_line_button_node(e, fn() { @sf.t("web-main.chat.asks.dismiss") }, state_icon, live, fn() {
         guard seq() is Some(s) else { return }
         let h = here()
@@ -215,7 +223,10 @@ fn need_card_node(
     })
     |> ignore
   })
-  |> ignore
+  chat_stacked_layout(card, stacked, fn(on) {
+    card.row(Is(!on)).gap(Is(if on { 0.0 } else { 12.0 }))
+    .lines_up(Is(if on { None } else { Some(Start) })) |> ignore
+  })
 }
 
 ///|
@@ -247,22 +258,27 @@ fn sent_elsewhere_node(row : @view.View, src : Source, here : () -> MessageHere,
     .min_height(Is(Some(head_line_h)))
     .gap(Is(6.0))
     .lines_up(Is(Some(Middle)))
-    .padding(By(fn() { (if inline() { 25.0 } else { 0.0 }, 0.0, 0.0, 0.0) }))
     |> ignore
+    chat_inline_layout(head, inline, fn(on) {
+      head.padding(Is((if on { 25.0 } else { 0.0 }, 0.0, 0.0, 0.0))) |> ignore
+    })
     let press = if @signals.untracked(agent) != "" { Some(fn() { open_detail(src, here_ref(here()), agent()) }) } else { None }
     let name = message_name_node(head, fn() { s().by.name }, press)
     if @signals.untracked(agent) != "" {
       agent_hover_node(name, src, here, agent)
     }
-    head.show(fn() { !inline() }, fn(r) { elsewhere_route_node(r, s) })
+    let route = head.box(fn(r) { elsewhere_route_node(r, s) })
+    chat_inline_layout(route, inline, fn(on) { route.laid_nowhere(Is(on)) |> ignore })
     message_time_node(head, fn() { s().time }, None)
   })
   |> ignore
-  row.show(inline, fn(r) { elsewhere_route_node(r, s) })
+  let route = row.box(fn(r) { elsewhere_route_node(r, s) })
+  chat_inline_layout(route, inline, fn(on) { route.laid_nowhere(Is(!on)) |> ignore })
   // (its picture: inline over its head's start, 3 down; else out in the margin, 29 before its words; its place's mark
   // on its corner)
   row.box(fn(a) {
-    a.over(Is(true)).offset(By(fn() { (if inline() { 0.0 } else { -29.0 }, 3.0) })) |> ignore
+    a.over(Is(true)) |> ignore
+    chat_inline_layout(a, inline, fn(on) { a.offset(Is((if on { 0.0 } else { -29.0 }, 3.0))) |> ignore })
     a.pick(fn() { s().received }, fn(slot, received) {
       if received {
         slot.width(Is(Some(avatar_side))).height(Is(Some(avatar_side))) |> ignore

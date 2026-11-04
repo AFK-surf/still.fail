@@ -8,9 +8,10 @@
 pub fn ask_line_card_node(parent : @view.View, column : () -> Bool, body : (@view.View) -> Unit) -> @view.View {
   parent.box(fn(card) {
     card
+    .width_share(Is(1.0))
     .row(By(fn() { !column() }))
     .gap(By(fn() { if column() { 0.0 } else { ask_line_gap } }))
-    .lines_up(Is(Some(Start)))
+    .lines_up(By(fn() { if column() { None } else { Some(Start) } }))
     .padding(By(fn() {
       let p = option_type().pad_in
       (p, p, p, p)

@@ -99,6 +99,7 @@ pub fn ask_outcome_node(
   words : () -> Array[@ui.Run],
   inline : () -> Bool,
   history? : ((@sf.Anchor) -> Unit)? = None,
+  inline_layout? : ((@view.View, (Bool) -> Unit) -> Unit)? = None,
 ) -> Unit {
   // (as the words are measured: again as the system's size of words changes)
   let line = fn() {
@@ -108,7 +109,11 @@ pub fn ask_outcome_node(
   parent.box(fn(e) {
     e.padding(Is((0.0, 2.0, 0.0, 0.0))) |> ignore
     e.box(fn(at) {
-      at.padding(By(fn() { (if inline() { 25.0 } else { 0.0 }, 0.0, 0.0, 0.0) })).lines_up(Is(Some(Start))) |> ignore
+      at.lines_up(Is(Some(Start))) |> ignore
+      match inline_layout {
+        Some(layout) => layout(at, fn(on) { at.padding(Is((if on { 25.0 } else { 0.0 }, 0.0, 0.0, 0.0))) |> ignore })
+        None => at.padding(By(fn() { (if inline() { 25.0 } else { 0.0 }, 0.0, 0.0, 0.0) })) |> ignore
+      }
       match history {
         Some(open) =>
           at.box(fn(h) {

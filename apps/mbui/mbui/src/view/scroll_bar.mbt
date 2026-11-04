@@ -164,10 +164,13 @@ fn View::scroll_bar(
   s : Scroll,
   b : ScrollBar,
   bar : BarState,
+  extent : () -> Double,
   bar_in? : Double = 0.0,
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
 ) -> Unit {
   let across = s.across
+  let clear = Ref((0.0, 0.0))
+  self.bind(ScrollBarLayout, By(bar_clear), Layout, fn(v) { clear.val = v })
   // (where its thumb runs and how long, how far the column goes for a point it moves: ui's bar_track over all of its
   // right, nothing over it kept clear; across, along its foot from `bar_in` to as far from its end)
   // (across, as an old view's foot_bar along the view it is for: `bar_in` in from either side, no more than leaves it
@@ -192,13 +195,13 @@ fn View::scroll_bar(
     }
     // (coming in or going: by the time as it is drawn; out or gone: as it stands, no time read)
     match bar.phase.get() {
-      1 | 3 => bar.shown(b, self.drawn_at())
+      1 | 3 => bar.shown(b, self.paint_at())
       // (out: as it stands, unless what is drawn is drawn past where it starts to go, the logic not come to it yet:
       // from there by the time as drawn)
       2 => {
         let hide = bar.hides_at(b)
         if hide < 1.0e299 && self.drawn_past(hide) {
-          bar.shown(b, self.drawn_at())
+          bar.shown(b, self.paint_at())
         } else {
           bar.shown(b, @signals.untracked(fn() { self.logic_at() }))
         }
@@ -206,12 +209,13 @@ fn View::scroll_bar(
       _ => 0.0
     }
   }
-  self.box(fn(over) {
+  self.box(fn(thumb) {
     // (over what it holds, none of the column's own fading or stretching what it holds: its own showing alone, on its
     // own track; what holds the column drawing it as it draws the column)
-    over.over(Is(true)).drawn_clear_of(self) |> ignore
+    thumb.over(Is(true)).drawn_clear_of(self).row(Is(across))
+    .padding(Is((b.grab, b.grab, b.grab, b.grab))) |> ignore
     // (the pointer along its right brings it out: the innermost column at the pointer's, View::bar_near)
-    over.reacts(fn() { (b.drawn)() && self.bar_near(if has_bar() { b.near } else { 0.0 }, across~) }, fn(on) {
+    thumb.reacts(fn() { (b.drawn)() && self.bar_near(if has_bar() { b.near } else { 0.0 }, across~) }, fn(on) {
       let t = self.logic_at()
       // (come out first, then along it: as ui's bar_near does, its coming in from how far it showed then)
       if on {
@@ -225,67 +229,74 @@ fn View::scroll_bar(
       }
     })
     // (its thumb, and as far round it as a press takes it: held, it moves the column as far as it goes for a point)
-    over.box(fn(thumb) {
-      // (a thumb, for what over it yields to one: Tree::is_thumb)
-      let me = thumb.id()
-      self.tree.thumbs[me.at] = me
-      thumb.owns(fn() { if self.tree.thumbs.get(me.at) == Some(me) { self.tree.thumbs.remove(me.at) } }) |> ignore
-      let held_y = Ref(0.0)
-      let long = fn() { Some(track(s.where_at(0.0)).1 + b.grab * 2.0) }
-      let thick = Is(Some(b.size + b.grab * 2.0))
-      // (along its right; across, along its foot)
-      (if across { thumb.height(thick).width(By(long)) } else { thumb.width(thick).height(By(long)) })
-      .offset(By(fn() {
-        let (w, h) = self.laid_size_told().unwrap_or((0.0, 0.0))
-        let x = s.where_at(if s.fling.get() is Some(_) { thumb.drawn_at() } else { 0.0 })
-        if across {
-          (track(x).0 - b.grab, h - b.inset - b.size - b.grab)
-        } else {
-          (w - b.inset - b.size - b.grab, track(x).0 - b.grab)
+    // (a thumb, for what over it yields to one: Tree::is_thumb)
+    let me = thumb.id()
+    self.tree.thumbs[me.at] = me
+    let flex = self.tree.nodes[thumb.at].flex
+    flex.layout_overlay = Some(fn(w, h) {
+      let guard_before = @signals.set_access_guard(Some("scroll bar layout must use its parent's measured content"))
+      let content = extent()
+      @signals.set_access_guard(guard_before) |> ignore
+      let vh = if across { w } else { h }
+      let ends = if across { dclamp(bar_in, 0.0, dmax(0.0, w / 2.0 - b.least)) } else { 0.0 }
+      let (start, end) = if across { (0.0, 0.0) } else { clear.val }
+      let (_, long, _) = bar_track_of(ends, vh - 2.0 * ends, vh - 2.0 * ends,
+        dmax(content, vh) - 2.0 * ends, 0.0, start, end, b.least, b.inset)
+      let thick = b.size + b.grab * 2.0
+      if across { (0.0, 0.0, long + b.grab * 2.0, thick) } else { (0.0, 0.0, thick, long + b.grab * 2.0) }
+    })
+    thumb.owns(fn() {
+      if self.tree.thumbs.get(me.at) == Some(me) { self.tree.thumbs.remove(me.at) }
+      flex.layout_overlay = None
+    }) |> ignore
+    let held_y = Ref(0.0)
+    // (along its right; across, along its foot)
+    thumb.offset(By(fn() {
+      let (w, h) = self.laid_size_told().unwrap_or((0.0, 0.0))
+      let x = s.where_at(if s.fling.get() is Some(_) { thumb.drawn_at() } else { 0.0 }) + (s.bar_off)()
+      if across {
+        (track(x).0 - b.grab, h - b.inset - b.size - b.grab)
+      } else {
+        (w - b.inset - b.size - b.grab, track(x).0 - b.grab)
+      }
+    }))
+    // (a target while it shows: coming, out or going, or out at rest along its edge or held; said by its state,
+    // never by the time, as a structure's change is said)
+    .presses(By(fn() {
+      (b.drawn)() && has_bar() && bar.phase.get() != 0
+    }))
+    .on_drag(fn(d) {
+      match d.kind {
+        Down => {
+          bar.woke(b, self, d.at)
+          bar.held.set(true)
+          bar.rested_at(b, self)
+          held_y.val = if across { d.wx } else { d.wy }
+          s.stopped(d.at) |> ignore
         }
-      }))
-      // (a target while it shows: coming, out or going, or out at rest along its edge or held; said by its state,
-      // never by the time, as a structure's change is said)
-      .presses(By(fn() {
-        (b.drawn)() && has_bar() && bar.phase.get() != 0
-      }))
-      .on_drag(fn(d) {
-        match d.kind {
-          Down => {
-            bar.woke(b, self, d.at)
-            bar.held.set(true)
-            bar.rested_at(b, self)
-            held_y.val = if across { d.wx } else { d.wy }
-            s.stopped(d.at) |> ignore
-          }
-          Moved => {
-            let (_, _, sc) = self.tree.placed(self.at)
-            let (_, _, ratio) = track(s.at(self.tree))
-            let w = if across { d.wx } else { d.wy }
-            s.moved(d.at, (w - held_y.val) / (if sc > 0.0 { sc } else { 1.0 }) * ratio) |> ignore
-            held_y.val = w
-          }
-          Up | Off => {
-            bar.held.set(false)
-            bar.let_go.set(d.at)
-            bar.rested_at(b, self)
-          }
+        Moved => {
+          let (_, _, sc) = self.tree.placed(self.at)
+          let (_, _, ratio) = track(s.at(self.tree))
+          let w = if across { d.wx } else { d.wy }
+          s.moved(d.at, (w - held_y.val) / (if sc > 0.0 { sc } else { 1.0 }) * ratio) |> ignore
+          held_y.val = w
         }
-      })
-      |> ignore
-      thumb.box(fn(ink) {
-        let long = fn() { Some(track(s.where_at(0.0)).1) }
-        (if across { ink.height(Is(Some(b.size))).width(By(long)) } else { ink.width(Is(Some(b.size))).height(By(long)) })
-        .offset(Is((b.grab, b.grab)))
-        .radius(Is(b.size / 2.0))
-        .ground(By(fn() { if bar.held.get() || thumb.pointed() { (b.ink_held)() } else { (b.ink)() } }))
-        .alpha(By(level))
-        |> ignore
-      })
+        Up | Off => {
+          bar.held.set(false)
+          bar.let_go.set(d.at)
+          bar.rested_at(b, self)
+        }
+      }
+    })
+    |> ignore
+    thumb.box(fn(ink) {
+      ink.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))).min_height(Is(Some(0.0)))
+      .radius(Is(b.size / 2.0))
+      .ground(By(fn() { if bar.held.get() || thumb.pointed() { (b.ink_held)() } else { (b.ink)() } }))
+      .alpha(By(level))
       |> ignore
     })
     |> ignore
   })
   |> ignore
 }
-

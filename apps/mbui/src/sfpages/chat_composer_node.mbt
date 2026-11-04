@@ -6,6 +6,35 @@ pub(all) struct ChatComposerNode {
   root : @view.View
   composer : ComposerNode
   room : () -> Double
+  room_parts : () -> (Double, Double)
+  layout_room : () -> (Double, Double, ComposerPlace, ComposerLimits?, Double)
+}
+
+///|
+priv struct ComposerWidth {
+  context : @view.WidthContext
+  limits : () -> ComposerLimits
+}
+
+///|
+let composer_width_context : @view.Lent[ComposerWidth] = @view.Lent::new()
+
+///|
+let composer_height_context : @view.Lent[@view.HeightContext] = @view.Lent::new()
+
+///|
+// A composer's pane geometry is resolved before its descendants are measured. Other inputs are captured outside
+// layout, so resizing the pane cannot publish a size and then cause a second layout of the composer.
+fn[K : Eq] composer_place_layout(v : @view.View, read : () -> K, apply : (ComposerPlace, K) -> Unit) -> Bool {
+  match v.lent(composer_width_context) {
+    Some(c) => {
+      c.context.bind(v, By(fn() { ((c.limits)(), read()) }), fn(width, state) {
+        apply(state.0.in_width(width).2, state.1)
+      })
+      true
+    }
+    None => false
+  }
 }
 
 ///|
@@ -38,6 +67,8 @@ pub fn chat_composer_node(
   foot : () -> Double,
   place : () -> ComposerPlace,
   sent : (String) -> Unit,
+  pane_width? : (@view.WidthContext, () -> ComposerLimits),
+  pane_height? : @view.HeightContext,
   tips? : @sf.TipLayer,
   active? : () -> Bool = fn() { true },
   neighbour? : (Int) -> Unit,
@@ -47,23 +78,57 @@ pub fn chat_composer_node(
   let node : Ref[ComposerNode?] = Ref(None)
   let extras : Ref[ComposerExtrasNode?] = Ref(None)
   let root_at : Ref[@view.View?] = Ref(None)
+  // Inputs to the parent's layout: the open editor's minimum room and the current shape's height delta.
+  // Neither reads a measured size. The parent combines them with this pass's measurements directly.
+  let layout_room = fn() {
+    let look = @ui.style_words(@sf.theme().t.words)
+    let line = (if look.line > 0.0 { look.line } else { look.size * @ui.tree_theme().text_line }) * @ui.font_scale()
+    let side = @sf.theme().round.side
+    let base = @sf.composer_pad + 8.0 + line + 10.0 + side
+    let (fixed, limits) = match pane_width {
+      Some((_, limits)) => (composer_alone, Some(limits()))
+      None => (place(), None)
+    }
+    (base, side, fixed, limits, (node.val.unwrap().ground)().3)
+  }
+  let room_parts = fn() {
+    let (base, side, fixed, limits, moving) = layout_room()
+    let p = match (pane_width, limits) {
+      (Some((context, _)), Some(limits)) => limits.in_width(context.now().unwrap_or(parent.window().0)).2
+      _ => fixed
+    }
+    (base + @sf.capsule_in(p.corner, side), moving)
+  }
   let room = fn(settled : Bool) {
     let n = node.val.unwrap()
     let root = root_at.val.unwrap()
     let total = root.laid_size_told().map(fn(s) { s.1 }).unwrap_or(0.0)
     let cap = n.cap.laid_size_told().map(fn(s) { s.1 }).unwrap_or(0.0)
-    let look = @ui.style_words(@sf.theme().t.words)
-    let line = (if look.line > 0.0 { look.line } else { look.size * @ui.tree_theme().text_line }) * @ui.font_scale()
-    let opened = @sf.composer_pad + 8.0 + line + 10.0 + @sf.theme().round.side + @sf.capsule_in(place().corner, @sf.theme().round.side)
-    let shape = if settled { 0.0 } else { (n.ground)().3 }
+    let (opened, moving) = room_parts()
+    let shape = if settled { 0.0 } else { moving }
     dmax(total + shape, total - cap + opened)
   }
   let root = parent.box(fn(root) {
     root_at.val = Some(root)
-    root.lines_up(Is(Some(Middle))).padding(By(fn() { (0.0, 12.0, 0.0, foot()) })) |> ignore
+    match pane_height { Some(context) => root.lends(composer_height_context, context) |> ignore; None => () }
+    root.lines_up(Is(Some(Middle))) |> ignore
+    match pane_width {
+      Some((context, limits)) => {
+        root.lends(composer_width_context, { context, limits }) |> ignore
+        context.bind(root, By(limits), fn(w, c) {
+          root.padding(Is((0.0, 12.0, 0.0, c.in_width(w).1))) |> ignore
+        })
+      }
+      None => root.padding(By(fn() { (0.0, 12.0, 0.0, foot()) })) |> ignore
+    }
     let notices = composer_notices_node(root, src, r, view, width)
     let body = root.box(fn(body) {
-      body.width(By(fn() { Some(width()) })) |> ignore
+      match pane_width {
+        Some((context, limits)) => context.bind(body, By(limits), fn(w, c) {
+          body.width(Is(Some(c.in_width(w).0))) |> ignore
+        })
+        None => body.width(By(fn() { Some(width()) })) |> ignore
+      }
       node.val = Some(composer_node(body, src, draft, fn() {
         let v = view()
         { station: r.station, draft, session: r.session, placeholder: @sf.t("web-main.composer.placeholder"), toolbar: None,
@@ -101,5 +166,5 @@ pub fn chat_composer_node(
       _ => ()
     }
   }) |> ignore
-  { root, composer: node.val.unwrap(), room: fn() { room(false) } }
+  { root, composer: node.val.unwrap(), room: fn() { room(false) }, room_parts, layout_room }
 }

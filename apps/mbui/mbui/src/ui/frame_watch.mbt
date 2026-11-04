@@ -901,10 +901,7 @@ fn alone_frame(c : Ctx, t : Double) -> Double {
   dues_wake(c)
   let drawn = match view_app.val {
     Some(tree) => {
-      // (what was told it as the frame went, brought, and taken as its scene's: drawn as it is now)
-      if tree.told_since() {
-        view_brought(tree)
-      }
+      // The tree was laid out by view_frame; take its changes without starting another layout during paint.
       view_changes_taken(tree)
       paint_phase.val = 1
       c.scene_alone(tree)
@@ -942,30 +939,24 @@ fn alone_frame(c : Ctx, t : Double) -> Double {
 }
 
 ///|
-/// The frame at `t`: built whole under the run's watch where what the last read changed, a moment it waits for came
-/// or it left something to come (why: built_why); else painted alone where what its paint read changed, a moment its
-/// paint waits for came or the paint before drew otherwise (painted_why); else of its looks alone. Where looks_check
-/// says, one painted alone or of the looks alone is built whole after it as well and the two compared, the test failing
-/// where they differ. When it began.
-fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Double {
-  // (where the hand's inputs since the frame before went, among the old views: view_host.mbt)
-  let went_to = view_input_taken()
-  let watch = frame_watch_of()
-  let paint = paint_watch_of()
-  let said = watch_said.val
-  watch_said.val = ""
-  let paint_told = paint_said.val
-  paint_said.val = ""
+/// Commit the frame's input snapshot before either retained or legacy layout. The context's clock is the actual
+/// host time here; `t` is used only by the drawing clocks.
+fn frame_arrivals(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Unit {
+  view_events_taken()
   // (what was posted since the last frame taken: come from outside, it is handed on as the frame is built)
+  let started = work_now()
   messages_arrive()
+  view_event(fn() { take_messages() })
+  probe_msgs_ms.val = work_now() - started
   // (a Tester's fake host's answers come by the frame, told as it begins: what waits on them reads them)
   answers_by_the_frame()
   // (what the host says of the streams and the native views, read of it each frame: what changed come from outside)
   streams_arrive()
   views_arrive()
-  // (what came as the frame began told the window's tree: brought before what it does again is decided, where the old
-  // views are placed part of that, and what a still pointer is over found so before the hand is said: view_host.mbt)
-  view_arrived()
+  // Effects and clipboard answers are inputs too. They run at the actual time, before layout, never while an old
+  // island is being painted. Work they post after the snapshot remains for the next frame.
+  fx_frame_start(c)
+  tree_fields_pasting(c.clock)
   // (the hand as the frame sees it: what read what changed of it told, hand.mbt)
   hand_arrive(c)
   // (what reads the clock and the host's settings read so: what read them is stale where they changed; what a part or
@@ -973,6 +964,22 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   frame_clock.set(t)
   frame_env.set(looks_env(c, w, h, scale))
   clock_frame_start(t)
+  for prepare in frame_input_hooks {
+    @signals.untracked(fn() { prepare(c) })
+  }
+}
+
+///|
+/// The frame at `t`: build what changed, else repaint or resample its looks. Input has already been committed and
+/// the retained tree has already produced this frame's layout.
+fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Double {
+  let went_to = view_input_taken()
+  let watch = frame_watch_of()
+  let paint = paint_watch_of()
+  let said = watch_said.val
+  watch_said.val = ""
+  let paint_told = paint_said.val
+  paint_said.val = ""
   // (the hand's discrete events since the frame before: what reads them takes them as it is built, and a frame that
   // takes one is built anew, its rows too: what took one changes as it is built what built before it read)
   // (the pointer's presses among them: hand_pressed)

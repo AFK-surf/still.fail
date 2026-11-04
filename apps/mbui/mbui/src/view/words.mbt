@@ -172,6 +172,15 @@ pub fn View::row_place(self : View) -> (NodeId, Array[Int]) {
 }
 
 ///|
+/// The node's place among its siblings, including virtual list rows that are not currently made.
+pub fn View::order_in_parent(self : View) -> Int {
+  match self.live() {
+    Some(n) if n.row_index is Some(i) => i
+    _ => self.parent().map(fn(p) { p.kids().search_by(fn(k) { k.id() == self.id() }).unwrap_or(0) }).unwrap_or(0)
+  }
+}
+
+///|
 /// A name for a row of a list made by its key (View::row_known_as), never a node's own: no node it names is let go and
 /// made again under it.
 pub fn Tree::row_name(self : Tree) -> NodeId {
@@ -185,6 +194,7 @@ pub fn Tree::row_name(self : Tree) -> NodeId {
 pub fn View::row_known_as(self : View, id : NodeId) -> Unit {
   match self.live() {
     Some(n) => {
+      n.each_row = true
       n.row_id = Some(id)
       self.tree.rows_known[id] = self.at
     }
@@ -317,10 +327,14 @@ pub fn View::shadow(self : View, cast : Live[(Double, Double, Int64)]) -> View {
 
 ///|
 /// How wide it may grow at most (points; None: as wide as its holder lets it), as it changes: layout's.
-pub fn View::max_width(self : View, w : Live[Double?]) -> View {
+/// With `within`, no wider than its holder's content box either, resolved during this layout.
+pub fn View::max_width(self : View, w : Live[Double?], within? : Bool = false) -> View {
   self.bind(MaxWidth, w, Layout, fn(w) {
     // (said: as said, or, one line of words in a column, within the column's width: Tree::capped_applied)
-    self.tree.nodes[self.at].max_w_said = Some(w)
+    self.tree.nodes[self.at].max_w_said = Some(match w {
+      Some(w) => if within { Within(w) } else { Pt(w) }
+      None => Auto
+    })
     self.tree.capped_applied(self.at)
   })
   self
@@ -550,9 +564,13 @@ pub fn View::wraps(self : View, lines : Live[Double?]) -> View {
 
 ///|
 /// How wide it is at least (points; None: as what it holds makes it), as it changes: layout's.
-pub fn View::min_width(self : View, w : Live[Double?]) -> View {
+/// With `within`, this minimum is limited to its holder's content box, resolved during this layout.
+pub fn View::min_width(self : View, w : Live[Double?], within? : Bool = false) -> View {
   self.bind(MinWidth, w, Layout, fn(w) {
-    self.tree.nodes[self.at].min_w_said = Some(w)
+    self.tree.nodes[self.at].min_w_said = Some(match w {
+      Some(w) => if within { Within(w) } else { Pt(w) }
+      None => Auto
+    })
     self.tree.give_way_applied(self.at)
   })
   self

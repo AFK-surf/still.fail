@@ -8,7 +8,7 @@ fn retained_flight_at_half(steps : Int, carried? : Bool = false, row_off? : Doub
   let wide = @signals.signal(358.0)
   let y = @signals.signal(45.0)
   let stamp : Ref[@view.View?] = Ref(None)
-  let landings : @sf.LiveMap[String, (@view.View, @view.View)] = @sf.LiveMap::new()
+  let landings : Map[String, (@view.View, @view.View)] = {}
   let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=390.0, h=600.0, platform=2, stable=false)
   @ui.set_view_app(fn(root) {
     @ui.set_tree_theme(@sf.ui_theme_now)
@@ -32,7 +32,7 @@ fn retained_flight_at_half(steps : Int, carried? : Bool = false, row_off? : Doub
     }) |> ignore
     root.box(fn(layer) {
       layer.over(Is(true)) |> ignore
-      send_flight_node(layer, "chat", fn(_) { landings.get("row") })
+      send_flight_node(layer, "chat", fn(_) { if row.get() { Some("row") } else { None } }, fn(at) { landings.get(at) })
     }) |> ignore
     stamp.val = Some(root.box(fn(time) {
       time.over(Is(true)).offset(Is((20.0, 300.0))).words_runs(Is([@ui.plain("刚刚")])) |> ignore
@@ -52,6 +52,8 @@ fn retained_flight_at_half(steps : Int, carried? : Bool = false, row_off? : Doub
   assert_false(f.placed)
   assert_true(t.glyphs_seen().length() > 10)
   row.set(true)
+  t.draw()
+  // (its row told laid out in that frame, it sets out as the next change, at that frame's moment)
   t.draw()
   assert_true(f.placed)
   let start = f.set_out
@@ -125,8 +127,8 @@ fn sent_cut_frame(retained : Bool, up : Double) -> Array[Array[Double]] {
   }, w=400.0, h=600.0)
   if retained {
     @ui.set_view_app(fn(root) {
-      flight_visible_node(root, Some(shown), from, fn() { (100.0, 110.0, 160.0, 80.0) },
-        fn() { up }, fn() { (0.0, 0.0, 400.0, 600.0) }).ground(Is(0x335599FFL)) |> ignore
+      flight_visible_node(root, FlightWay::new(), Some(shown), from, fn(_) { (100.0, 110.0, 160.0, 80.0) },
+        fn(_) { up }, fn() { (0.0, 0.0, 400.0, 600.0) }, fn(body) { body.ground(Is(0x335599FFL)) |> ignore })
     })
   }
   t.draw()

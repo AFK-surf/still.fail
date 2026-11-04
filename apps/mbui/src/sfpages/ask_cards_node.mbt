@@ -77,7 +77,7 @@ fn vault_ask_card_node(v : @view.View, here : () -> MessageHere, m : () -> Messa
         Some(a) => @settings.vault_outcome_words(asked(), a.status, a.scope)
         None => []
       }
-    }, fn() { here().inline }, history=Some(fn(at) {
+    }, fn() { here().inline }, inline_layout=Some(fn(n, put) { chat_inline_layout(n, fn() { here().inline }, put) }), history=Some(fn(at) {
       let a = @signals.untracked(asked)
       card_history_open(at, fn(p) { @settings.vault_ask_details(p, a) })
     }))
@@ -139,7 +139,7 @@ fn phone_ask_card_node(v : @view.View, here : () -> MessageHere, m : () -> Messa
         }
         None => []
       }
-    }, fn() { here().inline }, history=Some(fn(at) {
+    }, fn() { here().inline }, inline_layout=Some(fn(n, put) { chat_inline_layout(n, fn() { here().inline }, put) }), history=Some(fn(at) {
       let reason = @signals.untracked(ask).map(fn(a) { a.reason }).unwrap_or("")
       card_history_open(at, fn(p) { @sf.ask_words(p, @sf.t("android-misc.adb.ask.chat.title"), reason) })
     }))
@@ -148,7 +148,9 @@ fn phone_ask_card_node(v : @view.View, here : () -> MessageHere, m : () -> Messa
       mine_to(here(), card().map(fn(k) { k.assignee }).unwrap_or("")) && @settings.phone_lends_now()
     }
     u.show(fn() { link() == "unpaired" && ask().map(fn(a) { a.status == "granted" }).unwrap_or(false) && !paired_here() }, fn(n) {
-      n.padding(By(fn() { (if here().inline { 25.0 } else { 0.0 }, 0.0, 0.0, 0.0) })) |> ignore
+      chat_inline_layout(n, fn() { here().inline }, fn(on) {
+        n.padding(Is((if on { 25.0 } else { 0.0 }, 0.0, 0.0, 0.0))) |> ignore
+      })
       @sf.words_node(n, fn() { @sf.t("android-misc.adb.ask.link.onPhone") }, fn() { @sf.ask_note }) |> ignore
     })
     // (on the phone, its pairing with its station a tap away, as a login's card is under its message)

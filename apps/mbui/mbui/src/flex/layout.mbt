@@ -373,8 +373,26 @@ pub fn compute(
   reuse? : Bool = false,
   grid? : Double = 0.0,
 ) -> Unit {
-  generation.val = generation.val + 1
-  reusing.val = reuse && !round && grid == placing_grid.val
+  // A measured leaf may lay out another tree. Preserve the outer compute's grid, cache generation and scratch
+  // results while that happens; the nested tree gets a distinct generation of its own.
+  let nested = computing.val > 0
+  let before = (generation.val, reusing.val, placing_grid.val, absolute_seen.val, out_h.val, out_b.val)
+  computing.val += 1
+  defer {
+    computing.val -= 1
+    if nested {
+      generation.val = before.0
+      reusing.val = before.1
+      placing_grid.val = before.2
+      absolute_seen.val = before.3
+      out_h.val = before.4
+      out_b.val = before.5
+    }
+  }
+  compute_count.val += 1
+  let this_generation = compute_count.val
+  generation.val = this_generation
+  reusing.val = reuse && !round && grid == root.root_grid
   placing_grid.val = grid
   absolute_seen.val = false
   let b = box_of(root.style, width, height)
@@ -410,6 +428,8 @@ pub fn compute(
   if round {
     round_layout(root, 0.0, 0.0)
   }
+  root.root_grid = if round { -1.0 } else { grid }
+  completed_generation.val = this_generation
 }
 
 ///|
@@ -422,6 +442,30 @@ pub fn measured_height(node : Node, width : Double) -> Double {
   let w = or_else(b.w, width)
   size_node(node, w, undef, w, undef, w, undef, false) |> ignore
   out_h.val
+}
+
+///|
+/// Measure and lay out a child of a custom container within the current compute, retaining this generation and
+/// its caches. This is not a new root compute. Its caller owns the child's final position.
+pub fn layout_child(node : Node, width : Double, height? : Double, containing_height? : Double) -> (Double, Double) {
+  let h = height.unwrap_or(undef)
+  let ch = containing_height.unwrap_or(undef)
+  let w = size_node(node, width, h, width, h, width, ch, true)
+  let h = out_h.val
+  node.width = w
+  node.height = h
+  (w, h)
+}
+
+///|
+/// Lay out a custom container's child at its intrinsic width, with `most` available, within the current compute.
+pub fn layout_child_fitted(node : Node, most : Double, containing_height? : Double) -> (Double, Double) {
+  let ch = containing_height.unwrap_or(undef)
+  let w = size_node(node, undef, undef, most, undef, most, ch, true)
+  let h = out_h.val
+  node.width = w
+  node.height = h
+  (w, h)
 }
 
 ///|
@@ -456,8 +500,17 @@ fn inset_offset(s : Style, cb_w : Double, cb_h : Double, horizontal : Bool) -> D
 }
 
 ///|
-/// Bumped by every compute(): sizes cached on nodes are only good within one.
+/// The active compute's generation, with distinct, increasing ids even when computes are nested.
 let generation : Ref[Int] = { val: 0 }
+
+///|
+let compute_count : Ref[Int] = { val: 0 }
+
+///|
+let completed_generation : Ref[Int] = { val: 0 }
+
+///|
+let computing : Ref[Int] = { val: 0 }
 
 ///|
 /// Work done so far: sizes computed, sizes found in the cache, leaves
@@ -517,6 +570,39 @@ fn size_node(
   perform : Bool,
 ) -> Double {
   touch(node)
+  match node.width_context {
+    Some(prepare) => {
+      let b = box_for(node, cb_w, cb_h)
+      let mut width = if known(kw) { kw } else { b.w }
+      if !known(width) && known(b.min_w) && b.min_w == b.max_w { width = b.min_w }
+      if !known(width) && known(kh) && node.style.aspect > 0.0 {
+        width = clamp_size(kh, b.min_h, b.max_h) * node.style.aspect
+      }
+      if known(width) {
+        width = clamp_size(width, soft_floor(node.style, b.min_w), b.max_w)
+        if prepare(fmax(width - b.pbw(), 0.0)) {
+          node.cache_n = 0
+          node.p_ok = false
+        }
+      } else if perform {
+        abort("a width context needs a definite width")
+      }
+    }
+    None => ()
+  }
+  match node.height_context {
+    Some(prepare) => {
+      let b = box_for(node, cb_w, cb_h)
+      let mut height = if known(kh) { kh } else { b.h }
+      if !known(height) && known(b.min_h) && b.min_h == b.max_h { height = b.min_h }
+      let offered = if known(height) { Some(fmax(clamp_size(height, b.min_h, b.max_h) - b.pbh(), 0.0)) } else { None }
+      if prepare(offered) {
+        node.cache_n = 0
+        node.p_ok = false
+      }
+    }
+    None => ()
+  }
   if perform {
     // laid out before as now asked, nothing under it changed since: it
     // stands as it is. (A layout is always asked with the space available
@@ -659,6 +745,19 @@ fn size_uncached(
   }
   let pbw = b.pbw()
   let pbh = b.pbh()
+  match node.layout_children {
+    Some(layout) => {
+      // A viewport's intrinsic content is empty; its parent must give it the final bounds (flex share, explicit
+      // dimensions or insets). Only that final layout is allowed to subcompose its visible children.
+      if perform {
+        guard known(w) && known(h) else { abort("custom child layout needs a bounded width and height") }
+        layout(fmax(w - pbw, 0.0), fmax(h - pbh, 0.0), b.bor_l + b.pad_l, b.bor_t + b.pad_t)
+      }
+      out_h.val = if known(h) { h } else { clamp_size(pbh, b.min_h, b.max_h) }
+      return if known(w) { w } else { clamp_size(pbw, b.min_w, b.max_w) }
+    }
+    None => ()
+  }
   // leaves measured from their content
   match node.measure {
     Some(m) =>
@@ -1403,6 +1502,19 @@ fn layout_flex(
       let lo = if row { b.min_w } else { b.min_h }
       let hi = if row { b.max_w } else { b.max_h }
       clamp_size(max_line_main + pb, lo, hi) - pb
+    }
+    // A horizontal scroll's bar belongs to this same layout. Its overflow is now known from the resolved main
+    // sizes, before either the content's cross size or the container's intrinsic height is decided.
+    if row && s.overflow == Scroll && node.scroll_bar_space > 0.0 {
+      for k in 0..<count {
+        let i = k * ITEM
+        if f.unsafe_get(i + MAIN) > main_size + pbw + 0.5 {
+          let cb = item_box(flow.unsafe_get(at.unsafe_get(k)))
+          let extra = fmax(node.scroll_bar_space - cb.pad_b, 0.0)
+          f.unsafe_set(i + MARGIN_CROSS, f.unsafe_get(i + MARGIN_CROSS) + extra)
+          f.unsafe_set(i + MAR_CROSS_END, f.unsafe_get(i + MAR_CROSS_END) + extra)
+        }
+      }
     }
     // hypothetical cross sizes
     for k in 0..<count {
@@ -2397,6 +2509,13 @@ fn last_resort(pool : Pool, a : Int, b : Int, space : Double) -> Unit {
 /// position in its parent when it has no insets. (ox, oy): the parent's
 /// border box in cb's.
 fn layout_static_absolute(cb : Node, node : Node, ox : Double, oy : Double) -> Unit {
+  if node.layout_children is Some(_) {
+    // The container has already placed its direct children; absolute descendants still use their own holders.
+    for c in node.children {
+      if c.line >= 0 && !kept(c) && c.children.length() > 0 { layout_static_absolute(c, c, 0.0, 0.0) }
+    }
+    return
+  }
   for c in node.children {
     let cs = c.style
     if cs.display == DisplayNone {
@@ -2427,6 +2546,21 @@ fn layout_static_absolute(cb : Node, node : Node, ox : Double, oy : Double) -> U
 fn place_absolute(cb : Node, parent : Node, c : Node, ox : Double, oy : Double) -> Unit {
   // An overlay returning from display:none participates again, just as a flex item given its line does.
   c.line = 0
+  match c.layout_overlay {
+    Some(bounds) => {
+      // The parent's normal-flow children already have their final sizes. The dependent overlay is measured
+      // once with the bounds they imply; a clean child reuses its layout only when these constraints match.
+      let (x, y, w, h) = bounds(parent.width, parent.height)
+      let rw = size_node(c, w, h, w, h, parent.width, parent.height, true)
+      let rh = out_h.val
+      c.width = rw
+      c.height = rh
+      c.left = on_grid(x)
+      c.top = on_grid(y)
+      return
+    }
+    None => ()
+  }
   let cbb = box_of(cb.style, undef, undef)
   let pb = box_of(parent.style, undef, undef)
   let ps = parent.style
@@ -2453,7 +2587,7 @@ fn place_absolute(cb : Node, parent : Node, c : Node, ox : Double, oy : Double) 
   if known(h) {
     h = clamp_size(h, b.min_h, b.max_h)
   }
-  let fw = size_node(
+  let mut fw = size_node(
     c,
     w,
     h,
@@ -2463,7 +2597,19 @@ fn place_absolute(cb : Node, parent : Node, c : Node, ox : Double, oy : Double) 
     ch,
     false,
   )
-  let fh = out_h.val
+  let mut fh = out_h.val
+  match c.absolute_resolve {
+    Some(resolve) => {
+      let mut count = 0
+      while resolve(fw, fh) {
+        count += 1
+        if count > 4 { abort("an absolute child's content did not settle") }
+        fw = size_node(c, w, h, if known(w) { w } else { cw }, if known(h) { h } else { ch }, cw, ch, false)
+        fh = out_h.val
+      }
+    }
+    None => ()
+  }
   let rw = size_node(c, fw, fh, fw, fh, cw, ch, true)
   let rh = out_h.val
   c.width = rw

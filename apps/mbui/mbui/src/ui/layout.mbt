@@ -1088,10 +1088,11 @@ fn Ctx::layout(
 ) -> Double {
   self.flex_tree(i, 0) |> ignore
   let root = self.nodes[i].fl
+  let gen = @flex.computes() + 1
   // (placed on whole device pixels where the host sets things on them, as its lengths: whole_px_layout)
   @flex.compute(root, width=w, height=h, round=false, reuse=true, grid=if self.whole_px { self.scale } else { 0.0 })
   // (lists lay out their rows as they are placed: computes of their own)
-  self.commit(i, x, y, @flex.computes())
+  self.commit(i, x, y, gen)
   root.height
 }
 
@@ -1101,6 +1102,14 @@ fn Ctx::layout(
 /// there.
 pub fn Ctx::gives_way(self : Ctx, i : Int) -> Unit {
   self.nodes[i].shrinks = true
+}
+
+///|
+/// Set a box's height after its children have been built and before it is laid out. This lets the children decide
+/// whether it fills a fixed height or sizes to its content up to a limit, without feeding a measurement into a new build.
+pub fn Ctx::height_after(self : Ctx, i : Int, height : Size, max? : Double) -> Unit {
+  self.nodes[i].h = height
+  self.nodes[i].max_h = max.unwrap_or(1.0e9)
 }
 
 ///|

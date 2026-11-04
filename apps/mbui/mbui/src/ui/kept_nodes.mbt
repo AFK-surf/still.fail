@@ -52,6 +52,8 @@ priv struct RowNodes {
   mut epoch : Int
   mut scale : Double
   mut reads_out : Bool
+  /// A sizing pass cannot stand in for a real build that takes input.
+  mut measuring : Bool
   mut lit_all : Bool
   /// whether it was built in a list whose rows show only what they read (Ctx::list's `rows_read`), and the theme it
   /// was built in there (its colours and sizes, what it may have taken of them as it was built)
@@ -434,6 +436,7 @@ fn row_watch(list : Int, item : Int, laid_pass : Ref[Int], holder : Ref[RowNodes
     // (among another's nodes: that one built again for it, it with it, and what holds that, out to the last: one put
     // back puts back what it holds as it was)
     touch_holders(holder.val)
+    if item < 0 { old_part_changed(list) }
     if frame_running.val && frame_built.val && laid_pass.val != nodes_run.pass {
       return
     }
@@ -468,6 +471,7 @@ fn touch_holders(r : RowNodes?) -> Unit {
   match r {
     Some(o) => {
       o.watch.touch()
+      if o.item < 0 { old_part_changed(o.list) }
       touch_holders(o.holder.val)
     }
     None => ()
@@ -568,6 +572,7 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     epoch: 0,
     scale: 0.0,
     reads_out: false,
+    measuring: false,
     lit_all: false,
     reads_all: false,
     own: false,
@@ -697,6 +702,7 @@ fn Ctx::row_laid(
     rn.epoch == self.epoch &&
     rn.scale == self.scale &&
     rn.reads_out == self.reads_out &&
+    rn.measuring == self.measuring &&
     rn.lit_all == self.lit_all {
     // (what is worked out again of it as it is put back, its places by its size and what it marks used, read as its
     // build read it: followed by its watch, not by what lays out its list)
@@ -823,6 +829,7 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
   rn.epoch = self.epoch
   rn.scale = self.scale
   rn.reads_out = self.reads_out
+  rn.measuring = self.measuring
   rn.lit_all = self.lit_all
   self.build_take(rn.marks, rn.said, cut=false)
   // (what takes back as its build left it, where it changed it: its node, where one of its own, from its first)
@@ -1142,6 +1149,7 @@ fn Ctx::part_nodes(
     rn.epoch == self.epoch &&
     rn.scale == self.scale &&
     rn.reads_out == self.reads_out &&
+    rn.measuring == self.measuring &&
     rn.lit_all == self.lit_all {
     // (what is worked out again of it as it is put back, what it marks used, read as its build read it: followed by its
     // watch, not by what builds it)
@@ -1155,6 +1163,7 @@ fn Ctx::part_nodes(
   // (built for what it read, or as it is new or built elsewhere: what it builds its lists from may be otherwise, their
   // rows built anew; built only as it may not be kept, nothing it read changed: its lists' rows kept)
   let fresh = (nodes_run.fresh && (!(own || rows_stay) || evented_for(id))) ||
+    rn.measuring != self.measuring ||
     rn.n == 0 ||
     rn.watch.is_stale() ||
     rn.key != key ||

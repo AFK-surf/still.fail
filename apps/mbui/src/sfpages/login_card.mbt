@@ -706,9 +706,9 @@ pub fn login_card_node(parent : @view.View, core : Core, station : String, id : 
           .padding(Is((0.0, 8.0, 0.0, 0.0))).lines_up(Is(Some(Start))) |> ignore
           room.box(fn(card) {
             card
-            .min_width(By(fn() { Some(dmin(360.0, room.laid_size_told().map(fn(z) { z.0 }).unwrap_or(360.0))) }))
+            .min_width(Is(Some(360.0)), within=true)
             // (never wider than where it is: min(100%, 560px))
-            .max_width(By(fn() { Some(dmin(560.0, room.laid_size_told().map(fn(z) { z.0 }).unwrap_or(560.0))) }))
+            .max_width(Is(Some(560.0)), within=true)
             .padding(Is((@sf.corner_inset, @sf.corner_inset, @sf.corner_inset, @sf.corner_inset)))
             .gap(Is(2.0))
             .radius(Is(@sf.card_corner))
@@ -1193,8 +1193,8 @@ pub fn step_card_node(parent : @view.View, title : () -> String, line : () -> St
     room.padding(Is((0.0, 8.0, 0.0, 0.0))).lines_up(Is(Some(Start))) |> ignore
     room.box(fn(card) {
       card
-      .min_width(By(fn() { Some(dmin(360.0, room.laid_size_told().map(fn(z) { z.0 }).unwrap_or(360.0))) }))
-      .max_width(By(fn() { Some(dmin(560.0, room.laid_size_told().map(fn(z) { z.0 }).unwrap_or(560.0))) }))
+      .min_width(Is(Some(360.0)), within=true)
+      .max_width(Is(Some(560.0)), within=true)
       .padding(Is((@sf.corner_inset, @sf.corner_inset, @sf.corner_inset, @sf.corner_inset)))
       .gap(Is(2.0))
       .radius(Is(@sf.card_corner))

@@ -20,6 +20,28 @@ test "presented as it is told: what reads it as it is told finds it there, each 
 }
 
 ///|
+test "a new panel's initial step belongs to it before the panel is told" {
+  let _t = presenting_tester(desk, fn(_) { })
+  panel("先", fn(_, _) { }, from=Unanchored, steps=true)
+  let outer = presented_now.last().unwrap()
+  let seen : Array[Array[Int]] = []
+  let stop = @signals.effect(fn() {
+    presented_said.get() |> ignore
+    seen.push(@signals.untracked(fn() {
+      presented_now.map(fn(p) { p.steps.map(fn(nav) { nav.depth() }).unwrap_or(0) })
+    }))
+  })
+  // A panel opened from within another step still initializes its own stack.
+  steps_drawn_now.val = outer.serial
+  panel("后", fn(_, _) { }, from=Unanchored, steps=true, initial_steps=fn() {
+    panel_go("内", fn(_, _) { })
+  })
+  steps_drawn_now.val = 0
+  stop()
+  assert_eq(seen, [[1], [1, 2]])
+}
+
+///|
 test "opened, closed and another opened with no frame between: the one closed unsaid lets go of what it holds once, the other open" {
   let gone = Ref(0)
   let t = presenting_tester(desk, fn(_) {  })
