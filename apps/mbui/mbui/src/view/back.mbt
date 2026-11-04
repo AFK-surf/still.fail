@@ -111,9 +111,14 @@ fn Tree::held_by_root(self : Tree, at : Int) -> Bool {
 }
 
 ///|
-/// Whether node `a` comes before node `b` in Tree::topmost_from's order (the one drawn last first: what a node holds
-/// before it, its later kids before its earlier), both held by the root.
+/// Whether node `a` is over node `b` as they are drawn (the one drawn last first), both held by the root: the one in
+/// the higher place in the window's stack of layers (View::stacked, View::over_all: what the root holds drawn by it,
+/// Tree::root_layers) first; in the same, what a node holds before it, its later kids before its earlier.
 fn Tree::topmost_before(self : Tree, a : Int, b : Int) -> Bool {
+  let (sa, sb) = (self.stack_at(a), self.stack_at(b))
+  if sa != sb {
+    return sa > sb
+  }
   let path = fn(at : Int) {
     let out = [at]
     let mut i = at
