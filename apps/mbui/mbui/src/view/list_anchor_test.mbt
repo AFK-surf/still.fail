@@ -154,13 +154,16 @@ test "scrolls_anchored: what it says of itself after a wheel and a row come is t
     let c = anchored_case(100)
     c.tree.wheel_at(150.0, 50.0, 0.0, -100.0, 0, 10.0) |> ignore
     c.keys.set(Array::makei(101, fn(i) { i }))
-    let mut t = 10.0
-    while t < 1000.0 {
-      t = t + step
-      c.tree.frame(390.0, 844.0, now=t) |> ignore
+    // (frames every `step` on the way, or none: straight to the moment looked at)
+    if step > 0.0 {
+      let mut t = 10.0 + step
+      while t < 1000.0 {
+        c.tree.frame(390.0, 844.0, now=t) |> ignore
+        t = t + step
+      }
     }
     c.tree.frame(390.0, 844.0, now=1000.0) |> ignore
     (c.follows.get(), c.shown.get(), c.top(97), c.top(96), c.scroll.at(c.tree))
   }
-  assert_eq(run(990.0), run(16.0))
+  assert_eq(run(0.0), run(16.0))
 }
