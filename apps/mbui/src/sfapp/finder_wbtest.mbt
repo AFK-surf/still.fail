@@ -355,6 +355,34 @@ test "⌘K's scrolling results reach its curved foot and fade towards it" {
 }
 
 ///|
+test "⌘K: the pointer going down its rows leaves only the one under it shown chosen, none behind it" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=1280.0, h=900.0, platform=0)
+  t.draw()
+  t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
+  t.run_for(@ui.move_most_ms)
+  let c = t.ctx()
+  let (px, py, pw, ph) = c.rect_of(c.id("switcher")).unwrap()
+  let lists = t.boxes().filter(fn(b) { b.kind == "list" && b.w > pw * 0.8 && b.x >= px && b.x + b.w <= px + pw && b.y >= py && b.y < py + ph })
+  assert_eq(lists.length(), 1, msg="lists")
+  let list = lists[0]
+  // the grounds drawn as wide as the list: the rows shown chosen, each at its top
+  let chosen = fn() {
+    t.drawn_instances().filter(fn(a) { a[5] == 0.0 && (a[0] - list.x).abs() < 0.5 && (a[2] - list.w).abs() < 0.5 }).map(fn(a) { a[1] })
+  }
+  let first = chosen()
+  assert_eq(first.length(), 1, msg="as it opens")
+  for k in 0..<4 {
+    let y = first[0] + @sf.theme().chat_list.found.row_h * (k.to_double() + 0.5)
+    t.move(list.x + list.w / 2.0, y)
+    t.run_for(@ui.move_most_ms)
+    let rows = chosen()
+    assert_eq(rows.length(), 1, msg="the pointer on row \{k}: \{rows}")
+    assert_true(rows[0] <= y && y < rows[0] + @sf.theme().chat_list.found.row_h, msg="the pointer at \{y}: \{rows}")
+  }
+}
+
+///|
 test "⌘K at its end leaves its last result as far from the foot as from the sides" {
   for width in [600.0, 1280.0] {
     let calls : Array[Made] = []
