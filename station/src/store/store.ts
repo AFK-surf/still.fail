@@ -22,7 +22,7 @@ import {
   type Attachment, type AutoTitle, type CardAnswer, type ChatShare, type EntryRow, type JobNotice, type JobRow, type Json, type Membership,
   type MessageRow, type NewMessage, type NewSession, type Opened, type PendingMessage, type Handed, type Letter, type AuthorKind, type Published, type ProcessRow, type ProfileStatus,
   type SessionBusy, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
-  type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
+  type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, type InWorkspace, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
   byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
   CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
@@ -50,6 +50,19 @@ import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts"
 export { JOBS_RUNNING, SESSION_JOBS };
 export const LIVE_SESSIONS = "SELECT * FROM sessions WHERE archived_at IS NULL ORDER BY last_active_at DESC";
 export const SESSION_COUNTS = "SELECT connect, ws, COUNT(*) AS n FROM sessions GROUP BY connect, ws";
+// The existing index starts with connect. Seek each distinct connect, then count only the requested workspace's rows;
+// a home workspace also includes rows from before workspaces were kept (ws IS NULL).
+const sessionCountsVisible = (home: boolean) => `WITH RECURSIVE connects(connect) AS (
+  VALUES ((SELECT connect FROM sessions INDEXED BY sessions_by_connect ORDER BY connect LIMIT 1))
+  UNION ALL SELECT (SELECT connect FROM sessions INDEXED BY sessions_by_connect WHERE connect > c.connect ORDER BY connect LIMIT 1)
+    FROM connects c WHERE c.connect IS NOT NULL
+), workspaces(ws) AS (VALUES (?)${home ? ", (NULL)" : ""})
+SELECT s.connect, s.ws, COUNT(*) AS n FROM connects c
+CROSS JOIN workspaces w CROSS JOIN sessions s INDEXED BY sessions_by_connect
+  ON s.connect = c.connect AND s.ws IS w.ws
+WHERE c.connect IS NOT NULL GROUP BY s.connect, s.ws ORDER BY s.connect, s.ws`;
+export const SESSION_COUNTS_VISIBLE = sessionCountsVisible(false);
+export const SESSION_COUNTS_HOME = sessionCountsVisible(true);
 export const ANY_RUNNING = "SELECT 1 AS r FROM sessions WHERE running = 1 LIMIT 1";
 export const RUNNING_SESSIONS = "SELECT * FROM sessions WHERE running = 1";
 // Ordering still considers every thread, but it reads only its latest message's time; people and full summaries are
@@ -544,10 +557,12 @@ export class Store {
     return [...live, ...this.runningSessions().filter((s) => !keys.has(s.key))];
   }
 
-  /// How many sessions each connect has, in each workspace (null: the home one's), archived ones too: from the index
-  /// alone, not every session's row.
-  sessionCounts(): { connect: string; ws: string | null; n: number }[] {
-    return this.#all(SESSION_COUNTS).map((r) => ({ connect: r.connect, ws: r.ws ?? null, n: r.n }));
+  /// How many sessions each connect has, including archived ones. A viewer's count seeks only their workspace; null
+  /// asks for the whole station (including the pre-workspace rows).
+  sessionCounts(viewer: InWorkspace | null = null): { connect: string; ws: string | null; n: number }[] {
+    const rows = viewer === null ? this.#all(SESSION_COUNTS)
+      : this.#all(viewer.home === false ? SESSION_COUNTS_VISIBLE : SESSION_COUNTS_HOME, viewer.workspace);
+    return rows.map((r) => ({ connect: r.connect, ws: r.ws ?? null, n: r.n }));
   }
 
   /// Whether any session runs a turn now.

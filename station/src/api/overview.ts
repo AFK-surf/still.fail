@@ -96,8 +96,8 @@ function diskRoom(path: string): unknown {
 export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Promise<unknown> {
   const raw = d.config() ?? {};
   // What is of the viewer's workspace (docs/multi-workspace.md): its chats, and the connects added in it.
-  // (Counted by connect from an index, not every session's row; the processes not cold are the hub's few.)
-  const counted = d.store.sessionCounts().filter((c) => sees(viewer, c.ws));
+  // (Counted by connect from the viewer's workspace in the index; the processes not cold are the hub's few.)
+  const counted = d.store.sessionCounts(viewer);
   const sessionsOf = (connect: string | null) => counted.reduce((n, c) => (connect === null || c.connect === connect ? n + c.n : n), 0);
   const states = [...d.hub.processes()].filter(([key]) => sees(viewer, d.store.getSession(key)?.ws ?? null)).map(([, state]) => state);
   // The agents' runtime processes; background jobs' groups are recorded too (to be reaped), but they are jobs.
