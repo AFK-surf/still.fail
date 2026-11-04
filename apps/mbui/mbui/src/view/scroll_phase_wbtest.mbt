@@ -53,3 +53,77 @@ test "a horizontal scroll's intrinsic height includes its bar in the same parent
   }
   t.dispose()
 }
+
+///|
+test "an anchored list publishes changing extent in a fixed viewport without a second layout" {
+  for from_end in [false, true] {
+    let keys = @signals.signal([0, 1], same=fn(a, b) { a == b })
+    let s = Scroll::list()
+    let t = Tree::new(fn(root) {
+      root.box(fn(v) {
+        v.width(Is(Some(300.0))).height(Is(Some(100.0)))
+        .scrolls_anchored(s, fn() { keys.get() }, est=40.0, from_end~, bar=phase_bar(), fn(row, _) {
+          row.height(Is(Some(40.0))) |> ignore
+        }) |> ignore
+      }) |> ignore
+    })
+    t.frame(390.0, 844.0, now=0.0) |> ignore
+    let ranges : Array[Double] = []
+    let stop = @signals.effect(fn() { ranges.push(s.most_now()) })
+    assert_eq(ranges, [0.0])
+    t.event(10.0, fn() { keys.set([0, 1, 2, 3, 4]) })
+    let before = t.work.computes
+    t.frame(390.0, 844.0, now=20.0) |> ignore
+    assert_true(t.work.computes - before <= 1, msg="the host frame does not repeat layout")
+    assert_eq(ranges.last(), Some(100.0))
+    t.wheel_at(100.0, 50.0, 0.0, if from_end { -30.0 } else { 30.0 }, 0, 30.0) |> ignore
+    t.frame(390.0, 844.0, now=300.0) |> ignore
+    assert_true(t.drawn().iter().any(fn(d) { d.ground == 0x2468acffL && d.alpha > 0.0 }))
+    t.event(310.0, fn() { keys.set([0, 1]) })
+    let before = t.work.computes
+    t.frame(390.0, 844.0, now=320.0) |> ignore
+    assert_true(t.work.computes - before <= 1)
+    assert_eq(ranges.last(), Some(0.0))
+    assert_eq(s.at(t), 0.0)
+    assert_false(t.drawn().iter().any(fn(d) { d.ground == 0x2468acffL && d.alpha > 0.0 }))
+    stop()
+    t.dispose()
+  }
+}
+
+///|
+test "an anchored list keeps its end when its viewport shrinks and grows without feeding scroll back into layout" {
+  let run = fn(insert_frames : Bool) -> (Array[Int], Array[(Int, Double)], Double) raise {
+    let height = @signals.signal(100.0, same=fn(a, b) { a == b })
+    let shown = @signals.signal([], same=fn(a : Array[Int], b) { a == b })
+    let rows : Map[Int, View] = Map([])
+    let s = Scroll::list()
+    let t = Tree::new(fn(root) {
+      root.box(fn(v) {
+        v.width(Is(Some(300.0))).height(By(fn() { Some(height.get()) }))
+        .scrolls_anchored(s, fn() { Array::makei(10, fn(i) { i }) }, est=40.0, ahead=0.0, shown~, bar=phase_bar(), fn(row, k) {
+          rows[k] = row
+          row.owns(fn() { rows.remove(k) }).height(Is(Some(40.0))) |> ignore
+        }) |> ignore
+      }) |> ignore
+    }, time=fn() { 0.0 })
+    t.frame(390.0, 844.0, now=0.0) |> ignore
+    for (at, h) in [(10.0, 60.0), (110.0, 140.0)] {
+      t.event(at, fn() { height.set(h) })
+      if insert_frames {
+        for dt in [16.0, 32.0, 48.0, 64.0] {
+          t.frame(390.0, 844.0, now=at + dt) |> ignore
+        }
+      }
+      t.frame(390.0, 844.0, now=at + 80.0) |> ignore
+      assert_eq(rows[9].rect().1, h - 40.0, msg="the last row stays at the new viewport's foot")
+      assert_eq(s.at(t), 400.0 - h)
+    }
+    let visible = shown.get()
+    let placed = visible.map(fn(k) { (k, rows[k].rect().1) })
+    let result = (visible, placed, s.at(t))
+    t.dispose()
+    result
+  }
+  assert_eq(run(false), run(true))
+}

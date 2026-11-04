@@ -755,7 +755,9 @@ pub fn View::scrolls(
       @signals.untracked(fn() { s.where_at(t) }) >= most {
       s.stopped(t) |> ignore
     }
-    if @signals.untracked(fn() { s.x.get() }) > most {
+    // An anchored list clamps its rows while measuring and then rebases this coordinate by the same amount.
+    // Its published extent must not clamp it once more before that rebase is published.
+    if content_extent is None && @signals.untracked(fn() { s.x.get() }) > most {
       s.x.set(most)
     }
   })
