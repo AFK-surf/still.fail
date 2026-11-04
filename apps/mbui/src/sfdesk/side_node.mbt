@@ -230,6 +230,7 @@ fn lists_band_node(
               _ => update_go(src)
             }
           },
+          offered=fn() { update_now() is Offered(_, ..) },
         )
       })
       // the filter: its menu (sfpages' filter_menu), a filter its list, 已归档 the archive's list

@@ -182,7 +182,8 @@ let nav_cut : @ui.TextStyle = @ui.text_style(w=Cut)
 
 ///|
 /// An update in a bar as a node (update_key's, the settings' sidebar's band): `side` across, round, the pointer's ground
-/// on it while it can be pressed; its mark `mark` across: ready, the update's arrow up in a ring; being put in place
+/// on it while it can be pressed; its mark `mark` across: offered (`offered()`), a download mark; ready, the update's
+/// arrow up in a ring; being put in place
 /// (`busy()`), that arrow going up (updating_node); while it comes (`coming()`: Some of a known part or of None for an
 /// unknown one), its progress in the mark's place, the two marks faded between each other over a control's ease (dur_ms)
 /// without moving the key. Read out a button named `label()`, unable to be pressed while busy; `why()` its tip where it
@@ -197,6 +198,7 @@ pub fn update_key_node(
   busy : () -> Bool,
   coming : () -> Double??,
   press : () -> Unit,
+  offered? : () -> Bool = fn() { false },
 ) -> Unit {
   // (its tip on what holds it: said while busy too, the key taking no press then, as the pointer rests on it)
   parent.box(fn(o) {
@@ -209,7 +211,9 @@ pub fn update_key_node(
       // (round as its ground is while there is one, as an old view's key's hovered{} look: at rest none, nothing
       // standing in a corner)
       .radius(By(fn() { if lit_node(k) && !busy() { side / 2.0 } else { 0.0 } }))
+      // (its mark in its middle both ways, as update_key_box's: a box lays what it holds down from its top)
       .lines_up(Is(Some(Middle)))
+      .lies_along(Is(Middle))
       .ground(By(fn() { if lit_node(k) && !busy() { @ui.tree_theme().color(Hover) } else { 0L } }))
       .says(By(fn() { Some(@view.said(Button, label=label())) }))
       |> ignore
@@ -227,14 +231,16 @@ pub fn update_key_node(
       |> ignore
       k.box(fn(m) {
         m.width(Is(Some(mark))).height(Is(Some(mark))) |> ignore
-        // (ready: its arrow in a ring; busy, that arrow going up)
+        // (offered: a download mark; ready: its arrow in a ring; busy, that arrow going up)
         m.box(fn(ready) {
           ready.over(Is(true)).alpha(By(fn() { 1.0 - progress.shown(ready) })) |> ignore
           ready.pick(busy, fn(r, b) {
             if b {
               updating_node(r, mark, fn() { theme().p.text })
             } else {
-              icon_node(r, "update", mark, By(fn() { theme().p.text })) |> ignore
+              r.pick(offered, fn(o, on) {
+                icon_node(o, if on { "download" } else { "update" }, mark, By(fn() { theme().p.text })) |> ignore
+              })
             }
           })
         })
