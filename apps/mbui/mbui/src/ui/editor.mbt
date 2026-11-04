@@ -1612,10 +1612,11 @@ fn Ctx::sync_ime(self : Ctx) -> Unit {
     }
   }
   if catching {
-    let sig = "catch \{focus}"
+    let (x, y, h) = self.dev.catchers.get(focus).unwrap().place.unwrap_or((0.0, self.height, 1.0))
+    let sig = "catch \{focus} \{x} \{y} \{h}"
     if sig != self.ime_sig {
       self.ime_sig = sig
-      h_set_ime(true, 0.0, self.height, 1.0, 1.0, "", 0, 0)
+      h_set_ime(true, x, y, 1.0, h, "", 0, 0)
     }
     return
   }

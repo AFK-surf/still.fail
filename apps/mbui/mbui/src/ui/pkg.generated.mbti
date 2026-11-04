@@ -1201,6 +1201,7 @@ pub fn Ctx::kept_as_nodes(Self, Int32, String, () -> Unit, read_out? : Bool, loc
 #callsite(autofill(loc))
 pub fn Ctx::kept_part(Self, Int32, String, () -> Unit, read_out? : Bool, own? : Bool, loc~ : SourceLoc) -> Unit
 pub fn Ctx::key_catcher(Self, String) -> KeyCatch
+pub fn Ctx::key_catcher_place(Self, String, Double, Double, Double) -> Unit
 pub fn Ctx::key_pressed(Self, Int32, mods? : Int32, in_field? : Bool) -> Bool
 pub fn Ctx::keyboard_in_overlay(Self, Int32) -> Bool
 pub fn Ctx::keyboard_in_overlay_since(Self, Int32) -> Double

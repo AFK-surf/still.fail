@@ -308,3 +308,17 @@ test "a round button says its name when the pointer has rested on it: a device's
   assert_true(r.t.find(home) is Some(_))
   mouse_done(r)
 }
+
+///|
+test "this device's input method by the press on the screen being driven, not at the window's foot" {
+  let r = mouse_rig()
+  r.live()
+  let (x, y) = r.at(0.5, 0.5)
+  r.tap_at(0.5, 0.5)
+  r.t.draw()
+  assert_true(r.t.key_catching())
+  let (ix, iy, _, _) = r.t.ime_rect()
+  assert_eq(ix, x)
+  assert_eq(iy, y)
+  mouse_done(r)
+}
