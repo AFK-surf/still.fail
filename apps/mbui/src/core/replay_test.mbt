@@ -20,7 +20,7 @@ test "what came is given in its order, the ids of now in place of those of then"
   assert_eq(s.id, 1)
   // the value came before the message was sent: it is given; the answer waits for the message
   assert_eq(r.deliver(), 1)
-  assert_eq(s.value.unwrap().stringify(), "[]")
+  assert_eq(s.value().unwrap().stringify(), "[]")
   assert_eq(r.waiting(), Some("{\"id\":9,\"call\":\"chat.send\",\"params\":{\"text\":\"hi\"}}"))
   assert_eq(r.deliver(), 0)
   let answer : Ref[String] = { val: "" }
@@ -34,9 +34,9 @@ test "what came is given in its order, the ids of now in place of those of then"
   // one at a time: the answer, then the change
   assert_eq(r.deliver(at_most=1), 1)
   assert_eq(answer.val, "{\"sent\":true}")
-  assert_eq(s.value.unwrap().stringify(), "[]")
+  assert_eq(s.value().unwrap().stringify(), "[]")
   assert_eq(r.deliver(), 1)
-  assert_eq(s.value.unwrap().stringify(), "[{\"sub\":\"u1\"}]")
+  assert_eq(s.value().unwrap().stringify(), "[{\"sub\":\"u1\"}]")
   assert_eq(r.left(), 0)
   assert_eq(r.waiting(), None)
   assert_eq(r.diverged().length(), 0)
@@ -67,7 +67,7 @@ test "a chat recorded before compact views replays without a changed ask" {
   let c = r.client()
   let s = c.subscribe("chat", params={ "station": "w/s", "session": "k", "compact": true })
   assert_eq(r.deliver(), 1)
-  assert_eq(s.value.unwrap().stringify(), "{\"title\":\"hello\"}")
+  assert_eq(s.value().unwrap().stringify(), "{\"title\":\"hello\"}")
   assert_eq(r.fuzzy().length(), 0)
   assert_eq(r.diverged().length(), 0)
 }
@@ -81,7 +81,7 @@ test "a jobs summary is answered by an older recording's full jobs view" {
   let c = r.client()
   let s = c.subscribe("chatJobs", params={ "station": "w/s", "session": "k", "compact": true, "summary": true })
   assert_eq(r.deliver(), 1)
-  assert_eq(s.value.unwrap().stringify(), "{\"jobs\":[{\"id\":\"j1\"}]}")
+  assert_eq(s.value().unwrap().stringify(), "{\"jobs\":[{\"id\":\"j1\"}]}")
   assert_eq(r.fuzzy().length(), 0)
   assert_eq(r.diverged().length(), 0)
 }
@@ -108,8 +108,8 @@ test "a topic the app watches from its start (the device's downloads) that a run
   assert_eq(r.diverged().length(), 0)
   // the run's own go on as it had them; the downloads have nothing
   assert_eq(r.deliver(), 1)
-  assert_eq(s.value.unwrap().stringify(), "[]")
-  assert_true(d.value is None)
+  assert_eq(s.value().unwrap().stringify(), "[]")
+  assert_true(d.value() is None)
   c.unsubscribe(d)
   assert_eq(r.diverged().length(), 0)
 }
@@ -129,7 +129,7 @@ test "an unsubscription matched by what it names" {
   assert_eq(r.deliver(), 0)
   c.unsubscribe(b)
   assert_eq(r.deliver(), 1)
-  assert_eq(a.value.unwrap().stringify(), "[1]")
+  assert_eq(a.value().unwrap().stringify(), "[1]")
   assert_eq(r.diverged().length(), 0)
 }
 
@@ -167,7 +167,7 @@ test "the app's core kept, then given again in its place, its wall clock with it
   @core.unsubscribe(s)
   let s2 = @core.subscribe("replay-test-topic")
   assert_eq(r.deliver(), 1)
-  assert_eq(s2.value.unwrap().stringify(), "\"here\"")
+  assert_eq(s2.value().unwrap().stringify(), "\"here\"")
   assert_eq(@core.wall_ms(), 1234.0)
   @core.Replay::detach()
   @core.trace_stop()
@@ -218,7 +218,7 @@ fn order_of(seed : UInt) -> String raise {
   let a = c.subscribe("a")
   let b = c.subscribe("b")
   while r.deliver(at_most=1) == 1 {
-    seen.push("a\{a.value.map(fn(v) { v.stringify() }).unwrap_or("-")} b\{b.value.map(fn(v) { v.stringify() }).unwrap_or("-")}")
+    seen.push("a\{a.value().map(fn(v) { v.stringify() }).unwrap_or("-")} b\{b.value().map(fn(v) { v.stringify() }).unwrap_or("-")}")
   }
   // the call's answer never comes before the call
   assert_eq(r.left(), 1)
@@ -256,7 +256,7 @@ test "an ask the run's timing made, dropped with what came for it" {
   let c = r.client()
   let a = c.subscribe("a")
   assert_eq(r.deliver(), 1)
-  assert_eq(a.value.map(fn(v) { v.stringify() }), Some("1"))
+  assert_eq(a.value().map(fn(v) { v.stringify() }), Some("1"))
   assert_eq(r.left(), 0)
   assert_eq(r.unmade().length(), 0)
   assert_eq(r.drop("nothing like this"), 0)
@@ -297,7 +297,7 @@ test "at the run's pace: a call's answer measured from its ask made again, the n
   assert_eq(r.next_due(), Some(100.0))
   assert_eq(r.deliver(now=99.0), 0)
   assert_eq(r.deliver(now=100.0), 1)
-  assert_eq(s.value.unwrap().stringify(), "[]")
+  assert_eq(s.value().unwrap().stringify(), "[]")
   // the answer waits for the message: whenever it is sent, nothing is due before
   assert_eq(r.next_due(), None)
   now.val = 500.0

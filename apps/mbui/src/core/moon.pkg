@@ -4,6 +4,7 @@ import {
   "mbui/codec",
   "mbui/hostapi",
   "mbui/signals",
+  "stillfail/rows",
   "moonbitlang/core/json",
   "moonbitlang/core/env",
 }

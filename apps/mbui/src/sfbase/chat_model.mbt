@@ -606,7 +606,8 @@ pub(all) struct ChatView {
   unread : Double
   people : Array[Person]
   agents : Array[Agent]
-  messages : Array[Message]
+  /// read by index, each made as it is read (ChatMessages)
+  messages : ChatMessages
   /// said in Slack before its first message
   elsewhere : Array[Elsewhere]
   more : Bool
@@ -704,13 +705,13 @@ pub fn chat_view_made(v : Json) -> ChatView {
 /// A chat's view as the core gives it, each of its messages read: for view_of_chat alone (chat_read), so no page
 /// works it out of the topic again, each frame.
 fn chat_view(v : Json) -> ChatView {
-  chat_view_of(v, items(Some(v), "messages").map(message_of))
+  chat_view_of(v, ChatMessages::of_value(Some(v)))
 }
 
 ///|
 /// A chat's view as the core gives it, its messages read already (`messages`: chat_read's, each read again only as it
 /// changed).
-fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
+fn chat_view_of(v : Json, messages : ChatMessages) -> ChatView {
   let s = Some(v)
   let thread = field(s, "thread")
   {
@@ -842,4 +843,138 @@ pub fn base_name(path : String) -> String {
     Some(i) => path.view(start_offset=i + 1).to_string()
     None => path
   }
+}
+
+///|
+/// A chat's messages read by their index (mbui docs/retained.md, rule 12): the core's keyed list of them (stillfail/rows'
+/// TopicList), each made a Message as it is read, once for each version of it (by its key), so a message come is the
+/// only one made. Read as an array is (length, an index, the last, each in order) by what still goes through all of
+/// them.
+pub struct ChatMessages {
+  /// the list they are of
+  rows : @rows.TopicList
+  /// each made, by its key: the version and the JSON it was made of
+  priv made : Map[String, (Int, Json, Message)]
+  /// the list's changes, read as it is worked out again (read_changes): what is made of one gone let go of
+  priv reader : @rows.ListReader
+}
+
+///|
+/// A chat's messages as the list `rows` holds them.
+pub fn ChatMessages::of(rows : @rows.TopicList) -> ChatMessages {
+  { rows, made: {}, reader: rows.reader() }
+}
+
+///|
+/// The messages `v` (a chat topic's value, whole) holds: a list made of them as they are.
+pub fn ChatMessages::of_value(v : Json?, was? : ChatMessages) -> ChatMessages {
+  let m = ChatMessages::of(@rows.TopicList::new(["messages"], message_fields(), v))
+  // (a made-up core's value anew: what was made of the same JSON before taken as it was made)
+  match was {
+    Some(w) =>
+      w.made.each(fn(k, p) { m.made[k] = p })
+    None => ()
+  }
+  m
+}
+
+///|
+// kept across runs: a count for tests (messages_made)
+let made_count : Ref[Int] = Ref(0)
+
+///|
+/// How many messages were made of their JSON (ChatMessages): for a test that counts what one come costs.
+pub fn messages_made() -> Int {
+  made_count.val
+}
+
+///|
+/// What a chat's message's key is made of, as the core keys them (client/core-ts collections.ts).
+pub fn message_fields() -> Array[String] {
+  ["seq", "outgoing"]
+}
+
+///|
+/// How many there are.
+pub fn ChatMessages::length(self : ChatMessages) -> Int {
+  self.rows.length()
+}
+
+///|
+/// Whether there are none.
+pub fn ChatMessages::is_empty(self : ChatMessages) -> Bool {
+  self.length() == 0
+}
+
+///|
+/// Message `i`, made once for each version of it.
+pub fn ChatMessages::op_get(self : ChatMessages, i : Int) -> Message {
+  let k = self.rows.key(i)
+  let version = self.rows.version(i)
+  let json = self.rows.value(i)
+  match self.made.get(k) {
+    Some((v, j, m)) if v == version && physical_equal(j, json) => m
+    _ => {
+      let m = message_of(json)
+      made_count.val += 1
+      self.made[k] = (version, json, m)
+      m
+    }
+  }
+}
+
+///|
+/// Message `i`, None past its ends.
+pub fn ChatMessages::get(self : ChatMessages, i : Int) -> Message? {
+  if i >= 0 && i < self.length() {
+    Some(self[i])
+  } else {
+    None
+  }
+}
+
+///|
+/// The last, if any.
+pub fn ChatMessages::last(self : ChatMessages) -> Message? {
+  self.get(self.length() - 1)
+}
+
+///|
+/// Each in order: all of them gone through.
+pub fn ChatMessages::iter(self : ChatMessages) -> Iter[Message] {
+  self.to_array().iter()
+}
+
+///|
+/// All of them folded, in order.
+pub fn[A] ChatMessages::fold(self : ChatMessages, init~ : A, f : (A, Message) -> A) -> A {
+  let mut a = init
+  for i in 0..<self.length() {
+    a = f(a, self[i])
+  }
+  a
+}
+
+///|
+/// All of them as an array: all of them gone through.
+pub fn ChatMessages::to_array(self : ChatMessages) -> Array[Message] {
+  Array::makei(self.length(), fn(i) { self[i] })
+}
+
+///|
+/// Its list's changes since they were last read, followed (what reads it worked out again as there are more): what was
+/// made of a message gone let go of; the changes, for what is moved by them.
+pub fn ChatMessages::read_changes(self : ChatMessages) -> Array[@rows.ListChange] {
+  let cs = self.reader.changes()
+  for c in cs {
+    match c {
+      Removed(_, keys, _) =>
+        for k in keys {
+          self.made.remove(k)
+        }
+      Whole(_) => self.made.clear()
+      _ => ()
+    }
+  }
+  cs
 }

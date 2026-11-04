@@ -15,7 +15,7 @@ src/host/android_core.c the engine on Android: still.fail's own, prebuilt (below
 core/hermes.ts          still.fail's entry: ember's hosts/hermes-start.ts, no app's modules
 core/media-hermes.ts    the media app's entry (still.fail's core with the media module): what the apps ship
 core/smoke.m            headless smoke test on macOS: accounts, auth.begin, stop
-core/delta-vectors.ts   test vectors from core-ts's diff and apply -> src/core/vectors_test.mbt
+core/delta-vectors.ts   test vectors from core-ts's diff and apply -> src/rows/vectors_test.mbt
 src/core                mbui/core: the MoonBit client (subscriptions, deltas, calls, sign-in) and its C queue
 src/coredemo            the core demo app (MBUI_CORE=1 scripts/mac.sh), src/stillfail still.fail itself
 scripts/core.sh         deps | shell [TARGET] | hermes | hermes-apple | engine [TARGET] | apple [TARGET] | smoke | listen | …

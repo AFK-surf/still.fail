@@ -6,7 +6,7 @@ fn check_vector(text : String) -> Unit raise {
   guard v.get("ops") is Some(Array(ops)) else { fail("no ops") }
   let old = v.get("old").unwrap()
   let before = old.stringify()
-  let got = @core.apply_delta(old, ops)
+  let got = @rows.apply_delta(old, ops)
   assert_eq(got.stringify(), v.get("want").unwrap().stringify())
   // The old value is not changed: a view may still hold it.
   assert_eq(old.stringify(), before)
@@ -20,7 +20,7 @@ test "set, append and remove at a path, copying only along it" {
     { "path": ["a", "b", 0], "set": "one" },
     { "path": ["c", "d"], "remove": true },
   ]
-  let got = @core.apply_delta(old, ops)
+  let got = @rows.apply_delta(old, ops)
   assert_eq(got.stringify(), "{\"a\":{\"b\":[\"one\",2,3]},\"c\":{}}")
   assert_eq(old.stringify(), "{\"a\":{\"b\":[1,2]},\"c\":{\"d\":true}}")
 }
@@ -42,7 +42,16 @@ test "keyed ops find items by their key" {
     },
   ]
   assert_eq(
-    @core.apply_delta(old, ops).stringify(),
+    @rows.apply_delta(old, ops).stringify(),
     "{\"items\":[{\"id\":\"c\",\"n\":3},{\"id\":\"a\",\"n\":10},{\"id\":\"d\",\"n\":4}]}",
   )
+}
+
+///|
+test "a keyed put saying why it came applies as one that says nothing (a client from before reads it so too)" {
+  let old : Json = { "messages": [{ "seq": 1 }] }
+  let put : Json = { "path": ["messages"], "key": ["seq"], "put": { "seq": 2 }, "before": Json::null() }
+  let said : Json = { "path": ["messages"], "key": ["seq"], "put": { "seq": 2 }, "before": Json::null(), "why": "came" }
+  assert_eq(@rows.apply_delta(old, [said]).stringify(), @rows.apply_delta(old, [put]).stringify())
+  assert_eq(@rows.apply_delta(old, [said]).stringify(), "{\"messages\":[{\"seq\":1},{\"seq\":2}]}")
 }
