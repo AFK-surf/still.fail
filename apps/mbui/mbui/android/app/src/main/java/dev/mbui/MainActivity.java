@@ -154,8 +154,11 @@ public class MainActivity extends Activity {
                 ((android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE))
                         .hideSoftInputFromWindow(mbView.getWindowToken(), 0);
             }
+            boolean turned = shown != imeShown;
             imeShown = shown;
             Host.imeVisible = shown;
+            // (the keyboard up: what is typed drawn at the display's highest; gone, let go of as a motion's end is)
+            if (turned) mbView.typingChanged();
             if (shown) Host.imeAwaited = false;
             return WindowInsets.CONSUMED;
         });
