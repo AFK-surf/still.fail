@@ -25,7 +25,10 @@ fn composer_box_node(
     }
     let extra = fn() { dmax(0.0, (line() - @sf.theme().round.side) / 2.0) }
     let tools_in = fn() { @sf.capsule_in(place().corner, @sf.theme().round.side) - @sf.composer_pad }
-    cap.row(Is(true)).wraps(By(fn() { if opened() { Some(10.0) } else { None } }))
+    // (opened, the words a line of their own and ＋, the choices and send one line under them, never two: a line breaks
+    // only where its parts have not the room at their least, so the tail gives way, the names it is copied to cut,
+    // rather than going on to a line of its own at the box's left; its row did not wrap before the retained tree)
+    cap.row(Is(true)).wraps(By(fn() { if opened() { Some(10.0) } else { None } })).wraps_at_least(Is(true))
     .gap(By(fn() { if opened() { 4.0 } else { 2.0 } }))
     .lines_up(Is(Some(Middle)))
     .padding(By(fn() {
@@ -126,7 +129,7 @@ fn composer_box_node(
             named["choices"] = part
           }
           "tail" => {
-            part.row(Is(true)).gap(Is(4.0)).lines_up(Is(Some(Middle)))
+            part.row(Is(true)).gap(Is(4.0)).lines_up(Is(Some(Middle))).shrink(Is(1.0)).min_width(Is(Some(0.0)))
             .margin(By(fn() { if opened() { (0.0, 0.0, tools_in(), tools_in()) } else { (0.0, 0.0, 0.0, 0.0) } })) |> ignore
             // The chooser can come and go before the note and send button. Each keeps its own place through
             // that change; moving their shared row would carry them across by the chooser's changing width.
