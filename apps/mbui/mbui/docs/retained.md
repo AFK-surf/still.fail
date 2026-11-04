@@ -188,6 +188,43 @@ is tracked, and layout, paint and composition kept by node. Neither another engi
    ended by then settled first; what a component made then reads the state as it was then. A frame settles what ends
    by its own moment and draws; layout, words and paint wait for it and are merged. Nothing is made right by one frame
    more, by reading the time where a value is worked out, or by waiting for things to settle.
+10. **A collection changes by its items.** A list in the state (a chat's messages, the chats, a folder's entries) is
+   kept as keys in order with a value each, and changed by what happened to it: inserted, removed, moved, one item's
+   value set. What reads it is told those changes since it last read, not the whole array again. What is worked out of
+   a collection item by item (a row's sign, where a key is, the rows' heights and their sums) is kept item by item: one
+   item changed does that item's work, one inserted or removed that item's and an O(log n) update of what is summed
+   over them. Nothing worked out for one item goes through all of them: `keys().search(k)`, `find_first`, a Map made
+   of the whole array in a binding, a `computed` or a `reacts` is the fault, not its fix. A collection given whole (a
+   topic's first value, a page come back) is gone through once, as it is given.
+11. **Layout tells nothing back in its own pass.** Sizes and places worked out by layout are read by paint, by hit
+   tests and by what the next event finds. No binding, `computed` or `reacts` reads them to change the structure, a
+   property layout reads, or where a list is scrolled to, in the frame they were worked out in. Where what is made
+   depends on where things are laid out (which of a list's rows show), it is decided in layout, by the node laying
+   them out (Compose's LazyLayout, Flutter's sliver lists): the list's layout reads its rows' heights (those measured,
+   kept by key in a summed tree; the others estimated), makes the rows that meet its window and measures them in that
+   same pass, lets go of those that left it, and keeps what is read in place (its anchor) before it places them. A
+   frame's layout is one pass: `Tree::laid_out` does not call itself again, and a node marked during layout is a
+   fault the tree says (a test fails on it), not a second pass.
+12. **What a frame costs is what shows and what changed.** A frame scrolled, a row laid out another height, a row's
+   motion stepping, one message come: each costs what is on screen and what changed, O(log n) of the list's length
+   at most; the length counts only in what is done once as a collection is first given (rule 10). Held by counting:
+   the same scene with 30 and with 3000 rows does the same work a frame (bindings worked out, rows gone through,
+   measures), and in milliseconds (bench, matklad's "Benchmark In Milliseconds") against the build before a
+   change that moves a page into the tree, opening, scrolling and a send's motion each faster, on a native build.
+
+Where mbui is not yet so (2026-11-04, a long chat slower in the tree than as an old view, and a composer opening
+laying out without end):
+
+- The windowed list (view's `scrolls_window`, ui's `ListRows::in_node`) works out every row's top again from the
+  first as any height or any row's motion changes, and goes through all rows as it is scrolled (rules 10, 12). It is
+  made again as rule 11 says: the rows' heights in a summed tree by index, its window found by a search of that, its
+  motion's rooms worked out for the rows on their way alone, made and measured in its layout.
+- The signals hold a value whole; there is no collection told by its changes (rule 10). It comes as a keyed
+  collection of the signals' own, and the core's topics of lists (a chat's entries, the chats) give their changes
+  as such.
+- Layout's results are signals (`laid_size_told`, `laid_window_told`, `sizes_told`) read where they change what is
+  made, and `Tree::laid_out` calls itself again where what those told marked more (rule 11). Each reader goes to
+  paint's, the next event's, or into the layout of the node it is about; then laid_out runs once.
 
 Shown by counting, on the real path, apart: bindings worked out, nodes made and let go, measures, drawing made, what is
 composed again, the scene gone through, and what is handed to the host. A colour changed touches no other component; a
