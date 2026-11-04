@@ -9,7 +9,7 @@
 //                       ("home", "lock", "siri", "side_button", "app_switcher", "keyboard": the software
 //                       keyboard shown or hidden), {op:"paste", text} (the device's pasteboard set, then ⌘V);
 //                       {op:"pose", name} (an iPhone Duo's hinge: "closed", "book", "open"), {op:"rotate"} (the device
-//                       turned between upright and on its side; its picture follows what its UI does);
+//                       turned a quarter; its picture follows what its UI does);
 //                       x, y 0..1 of the device's screen, edge 0 none, 2 top, 3 bottom (a system gesture)
 // The rest is as ScreenView's; clipboard, reveal and the cursor are not had.
 import CoreMedia
@@ -279,9 +279,10 @@ final class SimulatorView: ScreenView {
       hinge = pose.hingeDegrees
       await showPanel(cover: pose.hingeDegrees < 90)
     case "rotate":
-      let sideways = !(KnownSideways.shared[udid] ?? false)
-      guard await injector.sendOrientation(orientation: sideways ? HIDInjector.orientationLandscapeRight : HIDInjector.orientationPortrait) else { return }
-      KnownSideways.shared[udid] = sideways
+      let turned = ((KnownTurns.shared[udid] ?? 0) + 1) % 4
+      let orientation = [HIDInjector.orientationPortrait, HIDInjector.orientationLandscapeRight, HIDInjector.orientationPortraitUpsideDown, HIDInjector.orientationLandscapeLeft][turned]
+      guard await injector.sendOrientation(orientation: orientation) else { return }
+      KnownTurns.shared[udid] = turned
       // (a device under load is seconds behind the turn it was told of)
       Task { await lookTurn(cover: coverShown, waits: [0] + Array(repeating: 1, count: 12)) }
     case "paste":
@@ -529,22 +530,22 @@ private final class BootPanel: @unchecked Sendable {
   }
 }
 
-/// Whether a device was last turned on its side from here, for the views after this one.
-private final class KnownSideways: @unchecked Sendable {
-  static let shared = KnownSideways()
+/// How many quarter turns from upright a device was last turned from here, for the views after this one.
+private final class KnownTurns: @unchecked Sendable {
+  static let shared = KnownTurns()
   private let lock = NSLock()
-  private var sideways: [String: Bool] = [:]
+  private var turns: [String: Int] = [:]
 
-  subscript(udid: String) -> Bool? {
+  subscript(udid: String) -> Int? {
     get {
       lock.lock()
       defer { lock.unlock() }
-      return sideways[udid]
+      return turns[udid]
     }
     set {
       lock.lock()
       defer { lock.unlock() }
-      sideways[udid] = newValue
+      turns[udid] = newValue
     }
   }
 }

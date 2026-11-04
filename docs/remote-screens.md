@@ -411,7 +411,7 @@ it), typed text a US keyboard's keys and anything else pasted (the device's past
 ⌘V). Simulator.app's shortcuts press its buttons: ⌘⇧H home, ⌃⌘⇧H the app switcher, ⌘L lock, ⌘K the software
 keyboard. The web viewer has them as buttons too (a column beside the device with a mouse, a row over the foot on a
 phone), and one more that saves the picture shown as a PNG (as large as the view is, not the device's own pixels).
-A device is turned between upright and on its side by `{t:"device", name:"rotate"}` (a GSEvent through its
+A device is turned a quarter by `{t:"device", name:"rotate"}` (a GSEvent through its
 PurpleWorkspacePort, or an iPhone Duo's guest HID: HIDInjector.sendOrientation), its picture and fingers following what `simctl
 io enumerate` says of its UI; a screen that stays upright (an iPhone's Home Screen, an app that only stands so) does not turn (Android: `wm user-rotation` by adb, the display out of following its sensor from then on). The web client touches
 a simulator directly on a phone (no trackpad to choose), a finger held being the device's long press; the mbui app
@@ -440,7 +440,7 @@ says `debug: true` of a simulator; only those who may drive it read or do this (
   there is no app in it; 502 what simctl said (built for a device, not a simulator).
 - **The rest of Device Hub's**: `.../biometrics` `{what}` (`enrol`, `unenrol`, `match`, `nomatch`: what BiometricKit listens for inside
   the device, Face ID's or Touch ID's alike; the first asking waits on the system's own question), `.../uninstall` `{app}`;
-  `screen.input` `{t:"device", name}`: `volume_up`, `volume_down` (dtuhidd's buttons), `memory_warning` (SimDevice's), `rotate` (turned upright or on its side).
+  `screen.input` `{t:"device", name}`: `volume_up`, `volume_down` (dtuhidd's buttons), `memory_warning` (SimDevice's), `rotate` (turned a quarter).
 - **Record**: `POST /admin/api/screens/<id>/record` `{panel?}` starts `simctl io recordVideo` (an iPhone Duo must be told which
   display, `cover` 1 or `inner` 3; the panel in use when it starts is the one recorded, folding on goes unseen), ended by
   `.../record/stop` → `{root, path}`, which the app downloads as any file of the drive (ten minutes at most, some 20 to
