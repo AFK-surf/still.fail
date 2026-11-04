@@ -155,7 +155,12 @@ test "panic a lazily created component's first reaction cannot dirty a sibling" 
       n.width(Is(Some(100.0))).height(Is(Some(100.0)))
       .layout_box(Is(0), fn(l, _) {
         l.child("a", fn(child) {
-          child.reacts(fn() { value.get() }, fn(v) { sibling.height(Is(Some(v))) |> ignore })
+          child.reacts(fn() { value.get() }, fn(v) {
+            // This reaction's first run is in an empty batch. The test runner catches the deliberate abort
+            // without unwinding, so close that batch before provoking it; later tests must not inherit it.
+            @signals.end_batch()
+            sibling.height(Is(Some(v))) |> ignore
+          })
         }) |> ignore
       }) |> ignore
     }) |> ignore
