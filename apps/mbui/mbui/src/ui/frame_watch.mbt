@@ -962,6 +962,7 @@ fn frame_arrivals(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -
   // (what reads the clock and the host's settings read so: what read them is stale where they changed; what a part or
   // a list's row kept read of the frame and of a moment, told: kept_part.mbt's KeptClock)
   frame_clock.set(t)
+  system_dark_arrive()
   frame_env.set(looks_env(c, w, h, scale))
   clock_frame_start(t)
   for prepare in frame_input_hooks {

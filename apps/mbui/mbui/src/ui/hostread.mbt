@@ -208,12 +208,29 @@ fn platform_keyboard(platform : Int) -> Bool {
 }
 
 ///|
-/// Whether the system is set to dark (a Tester's `dark`).
+/// Whether the system is set to dark (a Tester's `dark`), followed as it changes at the start of a frame.
 pub fn system_dark() -> Bool {
+  system_dark_said.get() |> ignore
+  system_dark_now()
+}
+
+///|
+/// The system's appearance last taken into a frame. Its initial read still comes directly from the host, so a view
+/// made before its first frame sees the right appearance too.
+// kept across runs: set from the current host at the beginning of each frame
+let system_dark_said : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
+
+///|
+fn system_dark_now() -> Bool {
   match fake.val {
     Some(f) => f.dark
     None => @hostapi.system_dark()
   }
+}
+
+///|
+fn system_dark_arrive() -> Unit {
+  system_dark_said.set(system_dark_now())
 }
 
 ///|

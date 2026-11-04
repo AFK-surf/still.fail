@@ -487,6 +487,12 @@ pub fn app_tree(src : Source) -> (@view.View) -> Unit {
     // laid out and then said again; the old frame tells them each build, the same)
     @sf.set_words(fill)
     @sfbase.language_said(src)
+    // The tree's theme follows the preference and the system before it is laid out; the old frame tells the same
+    // appearance as it builds, without changing the tree after layout.
+    root.reacts(
+      fn() { @settings.dark((src.topic)("prefs", {}).value, @ui.system_dark()) },
+      fn(dark) { @sf.set_dark(Some(dark)) },
+    )
     // (pictures by their address as the core gives them, said before any page of nodes is made: what one shows on its
     // first frame asks the core, not the library's stand-in; the old frame says it each build, the same)
     @sf.picture_of.val = fn(url, frame) { (src.picture)(url, frame) }
