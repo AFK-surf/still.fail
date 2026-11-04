@@ -28,9 +28,10 @@ Chats and messages alone. An agent's transcript and files stay on the station. M
 
 ## When
 
-Each minute a device looks at its locked workspaces' stations: one down (its link found it so, or the cloud says it is
-not online) is asked of the person's other apps in the lock, one after another, at most every 5 minutes, each with 15 s
-to answer: a long gap comes over several rounds, each going on from what is held. It stops as the station comes back.
+Nothing is asked on a timer. A station's other holders are asked once as the device finds it down (its link, or the cloud
+saying it is not online), and once each time the UI comes back while it still is: the person's other apps in the lock,
+one after another, 15 s to be reached and 15 s for each answer. A device not reached then is asked again only at the next
+of those. It stops as the station comes back.
 
 Entries are numbered and never change, so the station coming back goes on from what was brought; its lists, read then,
 replace what a device said. While it is down, the line over a chat's composer says some of it came from another device

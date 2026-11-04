@@ -9,7 +9,8 @@ import { HostError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { t } from "../src/i18n.ts";
 import { CACHE_ALPN } from "../src/pair.ts";
-import { FILL_LOOK_MS, allowed, fillOver, filledFromDevice, serveCache, served } from "../src/views/device-cache.ts";
+import { Wake } from "../src/wake.ts";
+import { allowed, fillOver, filledFromDevice, serveCache, served } from "../src/views/device-cache.ts";
 import { run as runEffect } from "./run.ts";
 import { ME, PHONE, genesis, grant, pipe, rig } from "./lock-rig.ts";
 import { base, entries, started, stationLater, threadView } from "./station-fixture.ts";
@@ -139,26 +140,37 @@ test("over iroh: a station down, the phone asks its person's other device, and i
   await phone.host.time.pass(100);
   assert.notEqual(inner.data.logSpan("entry", ST, "7")?.max, 120, "not there yet");
   // Up, nothing is asked: the station's own is the way.
-  await phone.host.time.pass(FILL_LOOK_MS + 10);
+  await phone.host.time.pass(10 * 60_000, 1000);
   assert.notEqual(inner.data.logSpan("entry", ST, "7")?.max, 120, "not while the station is up");
   // It goes: the link finds it down, as a phone's does.
   stationLater(phone.host, (req) => (req.url.includes("/admin/api") ? Promise.reject(new HostError("连不上")) : undefined));
   phone.gate.stream = "fail";
   phone.end();
-  await phone.host.time.pass(60_000, 1000);
+  // As it is found down, once; on the test's clock, slowly enough for what goes over a real connection.
+  const until = async (done: () => boolean) => {
+    for (let i = 0; i < 3000 && !done(); i++) {
+      await phone.host.time.pass(200);
+      await holding.host.time.pass(5);
+      await new Promise((d) => setTimeout(d, 2));
+    }
+  };
+  await until(() => inner.data.logSpan("entry", ST, "7")?.count === 120);
   assert.equal((inner.stations.link(ST)?.state as { state: string }).state, "offline");
-  // On the test's clock, slowly enough for what goes over a real connection: its next look, or the one after a dial it
-  // ran out of time for while the clock went on above.
-  for (let i = 0; i < 3000 && inner.data.logSpan("entry", ST, "7")?.count !== 120; i++) {
-    await phone.host.time.pass(200);
-    await holding.host.time.pass(5);
-    await new Promise((d) => setTimeout(d, 2));
-  }
   assert.equal(inner.data.logSpan("entry", ST, "7")?.count, 120);
   for (let i = 0; i < 50; i++) await phone.host.time.pass(50);
   const shown = await chat();
   assert.equal(shown.offline, true);
   assert.ok(String(shown.offlineNote).includes(t("core-logic.looks.offline.device")), String(shown.offlineNote));
+  // More there now: not asked on a timer, however long; asked as the UI comes back.
+  holding.core.inner.data.putThread(ST, threadView(7, 130));
+  holding.core.inner.data.putItems("entry", ST, "7", entries(121, 130).map((e) => [e.n, e] as [number, unknown]));
+  await holding.host.time.pass(100);
+  await phone.host.time.pass(10 * 60_000, 10_000);
+  await new Promise((d) => setTimeout(d, 50));
+  assert.equal(inner.data.logSpan("entry", ST, "7")?.count, 120, "no timer asks");
+  inner.wakes.wake(new Wake(phone.host.nowMs(), 1000, false, false));
+  await until(() => inner.data.logSpan("entry", ST, "7")?.count === 130);
+  assert.equal(inner.data.logSpan("entry", ST, "7")?.count, 130);
   phone.core.close();
   holding.core.close();
   await runEffect(phoneEnd.close());

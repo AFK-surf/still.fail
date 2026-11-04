@@ -34,10 +34,9 @@ const arr = (v: unknown): J[] => (Array.isArray(v) ? v : []);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isSafeInteger(v) && v >= 0 ? v : null);
 
-/// How often what is down is looked at, how long before a station is asked for again, and how long a device has to answer.
-export const FILL_LOOK_MS = 60_000;
-export const FILL_AGAIN_MS = 5 * 60_000;
+/// How long a device has to be reached and say it will answer, and to answer each question after that.
 export const FILL_DIAL_MS = 15_000;
+export const FILL_ANSWER_MS = 15_000;
 
 /// The stations some of what is shown came from another device, while they stay down (the line over a chat's composer).
 const filled = new WeakMap<Data, Set<string>>();
@@ -122,8 +121,9 @@ function isDown(inner: Inner, ws: string, station: string): boolean {
 export function fillOver(inner: Inner, station: string, d: Duplex, going: () => boolean): Effect.Effect<void, CoreError> {
   return Effect.gen(function* () {
     const data = inner.data;
+    const answer = () => Effect.mapError(Effect.timeout(d.next(), FILL_ANSWER_MS), (e) => (e instanceof CoreError ? e : CoreError.plainly("device cache", "no answer")));
     yield* d.send({ t: "list", station });
-    const list = yield* d.next();
+    const list = yield* answer();
     const threads = arr(get(list, "threads")).filter((t) => u64(get(t, "id")) !== null && u64(get(t, "last")) !== null);
     const rows = arr(get(list, "rows")).filter(isObject);
     if (!data.listed(station, "threads")) {
@@ -154,7 +154,7 @@ export function fillOver(inner: Inner, station: string, d: Duplex, going: () => 
         let after = start;
         while (after < end && going()) {
           yield* d.send({ t: "entries", station, thread: t.id, after, limit: PAGE });
-          const items: [number, unknown][] = arr(get(yield* d.next(), "entries")).flatMap((e) => {
+          const items: [number, unknown][] = arr(get(yield* answer(), "entries")).flatMap((e) => {
             const n = nOf(e);
             return n !== null && n > after && n <= end ? [[n, e] as [number, unknown]] : [];
           });
@@ -183,22 +183,19 @@ function fill(inner: Inner, ws: string, sub: string, station: string): Effect.Ef
     for (const other of others) {
       if (!isDown(inner, ws, station)) return;
       yield* Effect.ignore(
-        Effect.timeout(
-          Effect.gen(function* () {
-            const connection = yield* Effect.mapError(mesh.endpoint().connect({ id: other.id, relays }, CACHE_ALPN, []), (e) => CoreError.plainly("device cache", e));
-            const stream = yield* Effect.mapError(connection.openBi(), (e) => CoreError.plainly("device cache", e));
-            const d = streamDuplex(stream, () => connection.close(0, "done"));
-            yield* Effect.ensuring(
-              Effect.gen(function* () {
-                yield* d.send({ t: "hello", ws, credential });
-                if (get(yield* d.next(), "t") !== "ok") return;
-                yield* fillOver(inner, station, d, () => isDown(inner, ws, station));
-              }),
-              Effect.sync(() => d.close()),
-            );
-          }),
-          FILL_DIAL_MS,
-        ),
+        Effect.gen(function* () {
+          const reached = yield* Effect.timeout(
+            Effect.gen(function* () {
+              const connection = yield* Effect.mapError(mesh.endpoint().connect({ id: other.id, relays }, CACHE_ALPN, []), (e) => CoreError.plainly("device cache", e));
+              const stream = yield* Effect.mapError(connection.openBi(), (e) => CoreError.plainly("device cache", e));
+              const d = streamDuplex(stream, () => connection.close(0, "done"));
+              yield* d.send({ t: "hello", ws, credential });
+              return { d, ok: get(yield* d.next(), "t") === "ok" };
+            }),
+            FILL_DIAL_MS,
+          );
+          yield* Effect.ensuring(reached.ok ? fillOver(inner, station, reached.d, () => isDown(inner, ws, station)) : Effect.void, Effect.sync(() => reached.d.close()));
+        }),
       );
     }
   });
@@ -210,30 +207,54 @@ function markFilled(data: Data, station: string): void {
   s.add(station);
 }
 
-/// What is down looked at, each station at most once in FILL_AGAIN_MS; one back no longer says it came from a device.
-function look(inner: Inner, tried: Map<string, number>): Effect.Effect<void> {
-  return Effect.gen(function* () {
-    for (const [ws, sub] of inner.workspaces.owned()) {
-      if (!held(inner, ws)?.head) continue;
-      for (const s of arr(get(inner.data.shared({ topic: "workspace", workspace: ws }), "stations"))) {
+/// A station's other holders asked, once each time it goes down and each time the UI comes back while it is: nothing is
+/// asked on a timer, and a device not reached is asked again only then.
+class Asking {
+  readonly #inner: Inner;
+  /// The stations asked since they went down, or the UI last came back; those being asked now.
+  readonly #asked = new Set<string>();
+  readonly #going = new Set<string>();
+
+  constructor(inner: Inner) {
+    this.#inner = inner;
+  }
+
+  /// How a station's link changed.
+  linkChanged(station: string): void {
+    const at = station.indexOf("/");
+    if (at < 0) return;
+    const ws = station.slice(0, at);
+    if (!isDown(this.#inner, ws, station)) {
+      filled.get(this.#inner.data)?.delete(station);
+      this.#asked.delete(station);
+      return;
+    }
+    this.#ask(ws, station);
+  }
+
+  /// The UI came back: what is down is asked for again, the other devices maybe there now.
+  woken(): void {
+    this.#asked.clear();
+    for (const [ws] of this.#inner.workspaces.owned()) {
+      for (const s of arr(get(this.#inner.data.shared({ topic: "workspace", workspace: ws }), "stations"))) {
         const id = str(get(s, "id"));
-        if (id === null) continue;
-        const station = `${ws}/${id}`;
-        if (!isDown(inner, ws, station)) {
-          filled.get(inner.data)?.delete(station);
-          tried.delete(station);
-          continue;
-        }
-        if (inner.host.nowMs() - (tried.get(station) ?? -FILL_AGAIN_MS) < FILL_AGAIN_MS) continue;
-        tried.set(station, inner.host.nowMs());
-        yield* Effect.ignore(fill(inner, ws, sub, station));
+        if (id !== null && isDown(this.#inner, ws, `${ws}/${id}`)) this.#ask(ws, `${ws}/${id}`);
       }
     }
-  });
+  }
+
+  #ask(ws: string, station: string): void {
+    const sub = this.#inner.workspaces.owner(ws);
+    if (sub === null || !held(this.#inner, ws)?.head || this.#asked.has(station) || this.#going.has(station)) return;
+    this.#asked.add(station);
+    this.#going.add(station);
+    this.#inner.runner.fork(Effect.ensuring(Effect.ignore(fill(this.#inner, ws, sub, station)), Effect.sync(() => this.#going.delete(station))));
+  }
 }
 
 export function install(inner: Inner): void {
   hooks.deviceCache = served;
-  const tried = new Map<string, number>();
-  inner.runner.fork(Effect.forever(Effect.andThen(Effect.sleep(FILL_LOOK_MS), look(inner, tried))));
+  const asking = new Asking(inner);
+  inner.stations.linkChanged = (station) => asking.linkChanged(station);
+  inner.runner.fork(Effect.forever(Effect.map(inner.wakes.next, () => asking.woken())));
 }
