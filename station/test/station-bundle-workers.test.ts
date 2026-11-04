@@ -29,25 +29,36 @@ test("the workers in a station release start and process a batch", { skip: !proc
     installSigninSaveIndex(store.db);
     const thread = store.openThread("ember", "EMBER", "old", null, null).id;
     store.db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,ts,at) VALUES (?,1,'message','agent','s','post',1)").run(thread);
+    const saidThread = store.openThread("ember", "EMBER", "old-said", null, null).id;
+    const put = store.db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,ts,at) VALUES (?,?,'message',?,?,?,?)");
+    put.run(saidThread, 1, "agent", "s", "first", 1);
+    for (let n = 2; n <= 70; n++) put.run(saidThread, n, "person", "p", `m${n}`, n);
+    store.db.prepare("UPDATE thread_state SET said_other_known=0 WHERE thread=?").run(saidThread);
     store.db.exec("UPDATE post_blocks_meta SET fresh = 0; DELETE FROM post_blocks");
     for (const [file, message] of [
       ["sessions/workspace-activity-worker.js", {}],
       ["sessions/post-block-worker.js", { thread, after: 0 }],
+      ["read/said-worker.js", { thread: saidThread }],
       ["outflow/chat-index-worker.js", "H"],
       ["vault/signin-save-worker.js", "s"],
     ] as const) {
       const worker = new Worker(join(process.env.STATION_BUNDLE!, file), { workerData: { path, priority: store.backfillPriority } });
       try {
-        const result = new Promise<{ done: boolean; error?: string }>((resolve, reject) => {
-          worker.once("message", resolve);
-          worker.once("error", reject);
-        });
-        worker.postMessage(message);
-        const answer = await result;
-        assert.equal(answer.error, undefined, file);
-        assert.equal(answer.done, true, file);
+        let done = false;
+        for (let batch = 0; batch < 10 && !done; batch++) {
+          const result = new Promise<{ done: boolean; error?: string }>((resolve, reject) => {
+            worker.once("message", resolve);
+            worker.once("error", reject);
+          });
+          worker.postMessage(message);
+          const answer = await result;
+          assert.equal(answer.error, undefined, file);
+          done = answer.done;
+        }
+        assert.equal(done, true, file);
       } finally { await worker.terminate(); }
     }
     assert.deepEqual(store.postAfter("s", thread, 0), { n: 1, ts: "post" });
+    assert.equal(store.db.prepare("SELECT said_other_n FROM thread_state WHERE thread=?").get(saidThread)?.said_other_n, 1);
   } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
 });

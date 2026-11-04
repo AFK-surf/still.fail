@@ -581,6 +581,16 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
   // The cards answered lately, by chat, with who answered.
   const answered = new Map<number, Json[]>();
   const itemThreads = threads.filter((t) => t.thread.surface === STILLFAIL_SURFACE && listed(t) && inChat(t).length > 0);
+  const saidByThread = new Map<number, ReturnType<typeof store.saidOf>>();
+  const needSaid: number[] = [];
+  for (const t of titlesOnly ? [] : itemThreads) {
+    try { saidByThread.set(t.thread.id, store.saidOf(s, t.thread.id)); }
+    catch (error) {
+      if (!(error instanceof store.SaidUnavailable)) throw error;
+      needSaid.push(...error.threads);
+    }
+  }
+  if (needSaid.length) throw new store.SaidUnavailable([...new Set(needSaid)]);
   if (!archived && !titlesOnly) {
     // Only these items can show an answer, and a chat without cards cannot have one. Looking at every person's recent
     // messages first made even a change to one cardless chat read that chat's whole recent conversation.
@@ -620,7 +630,7 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
       if (lastView.authorModel !== undefined) last.authorModel = lastView.authorModel;
       if (lastView.authorRuntime !== undefined) last.authorRuntime = lastView.authorRuntime;
     }
-    const said = store.saidOf(s, t.thread.id);
+    const said = saidByThread.get(t.thread.id) ?? null;
     const row: Json = {
       // An item is its agent's, from its first moment to its last: the session key is its id, chat or no chat.
       id: key, session: key, thread: t.thread.id,

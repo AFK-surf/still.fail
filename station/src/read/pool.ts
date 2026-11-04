@@ -13,9 +13,10 @@ import { log } from "../ops/log.ts";
 import type { InWorkspace } from "../store/rows.ts";
 import { MinuteReader } from "../usage/minute-reader.ts";
 import { OutflowChatIndex } from "../outflow/chat-index-builder.ts";
+import { SaidBuilder } from "./said-builder.ts";
 import { OUTFLOW_CHATS_PENDING } from "./outflow.ts";
 import type { Answer, Ask, Ready } from "./worker.ts";
-import { REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING, USAGE_MINUTES_PENDING } from "./store.ts";
+import { REMOTE_RUNS_PENDING, SAID_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING, USAGE_MINUTES_PENDING } from "./store.ts";
 import { HttpError } from "./views.ts";
 import { wall } from "../ops/fibers.ts";
 
@@ -104,6 +105,7 @@ export class Readers {
   private closed = false;
   private minutes: MinuteReader | null = null;
   private outflowChats: OutflowChatIndex | null = null;
+  private said: SaidBuilder | null = null;
   /// A checkpoint is armed or running (`checkpointSoon`), and the store changed again since it was armed.
   private checkpointing = false;
   private again = false;
@@ -212,7 +214,22 @@ export class Readers {
     if (op === "usage") return this.usageRead(args, lang, told, signal);
     if (op === "outflowUsage") return this.outflowUsageRead(args, lang, told, signal);
     if (op === "outflowChats") return this.outflowChatsRead(args, lang, told, signal);
-    return this.enqueue(op, args, lang, told, op === CHECKPOINT, background || filling(op, args), signal);
+    return this.saidRead(op, args, lang, told, background || filling(op, args), signal);
+  }
+
+  private async saidRead(op: string, args: unknown, lang: Ask["lang"], told: boolean, background: boolean, signal?: AbortSignal): Promise<string> {
+    while (!this.closed) {
+      try { return await this.enqueue(op, args, lang, told, op === CHECKPOINT, background, signal); }
+      catch (error) {
+        if (!(error instanceof HttpError) || !error.message.startsWith(SAID_PENDING)) throw error;
+        let threads: unknown;
+        try { threads = JSON.parse(error.message.slice(SAID_PENDING.length)); } catch { throw error; }
+        if (!Array.isArray(threads) || threads.length === 0 || !threads.every(Number.isSafeInteger)) throw error;
+        this.said ??= new SaidBuilder(join(this.data, "stillfail.db"), this.backfill);
+        await this.covered(this.said.ready(threads, signal), signal);
+      }
+    }
+    throw new HttpError(502, "station stopping");
   }
 
   private async covered(check: Promise<void>, signal?: AbortSignal): Promise<void> {
@@ -408,6 +425,7 @@ export class Readers {
     this.closed = true;
     if (this.minutes !== null) void this.minutes.close();
     if (this.outflowChats !== null) void this.outflowChats.close();
+    if (this.said !== null) void this.said.close();
     for (const line of [this.asked, this.told, this.log, this.pages]) {
       for (const asked of line.waiting.splice(0)) asked.reject(new HttpError(502, "station stopping"));
       for (const { worker } of line.slots) void worker.terminate();

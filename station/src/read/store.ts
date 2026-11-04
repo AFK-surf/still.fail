@@ -14,6 +14,7 @@ import { compactHistory, compactQuery, compactScopeReady, compactUsageSince, has
 import { type UsageChatCoverage, usageCardOutcomesComplete, usageChatStatsReady } from "../store/usage-chat-stats.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
 import { hasRuntimeOrderIndex } from "../store/schema.ts";
+import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import {
@@ -409,14 +410,27 @@ function unreadCount(s: Store, viewer: string, thread: number, read: number): nu
 /// A chat's latest message that counts as unread (no letter) and the latest before it its author did not write (`other`:
 /// that one is what is unread for its author), by the index of its messages (store/schema.ts entries_said): what a
 /// viewer's unread is made of with where they read (client/core-ts/src/chat-row.ts), for everyone at once.
-export const SAID_LATEST = "SELECT n, author_kind, author FROM entries INDEXED BY entries_said WHERE thread = ?1 AND kind = 'message' AND letter IS NULL ORDER BY n DESC LIMIT 1";
-export const SAID_NOT_BY = `SELECT MAX(n) AS n FROM entries INDEXED BY entries_said WHERE thread = ?1 AND kind = 'message' AND letter IS NULL
-  AND NOT (author_kind = 'person' AND author = ?2)`;
+export { SAID_LATEST, SAID_SCAN, SAID_STATE };
+export const SAID_PENDING = "sidebar said state pending: ";
+export class SaidUnavailable extends Refused {
+  readonly threads: number[];
+  constructor(threads: number[]) { super(503, SAID_PENDING + JSON.stringify(threads)); this.threads = threads; }
+}
 
 export function saidOf(s: Store, thread: number): { n: number; authorKind: string; author: string; other: number | null } | null {
   const r = one(s, SAID_LATEST, thread);
   if (!r) return null;
-  const other = r.author_kind === "person" ? (one(s, SAID_NOT_BY, thread, r.author)?.n ?? null) : r.n;
+  const state = r.author_kind === "person" ? one(s, SAID_STATE, thread) : null;
+  const boundary = saidBoundary(state, r);
+  let other = boundary.other;
+  if (!boundary.known) {
+    // Most old chats can answer from a few nearby messages without recording any history at all. For a longer run,
+    // leave the reader and prepare only this chat in bounded slices before trying the snapshot again.
+    const nearby = all(s, SAID_SCAN, thread, r.n, SAID_BATCH_SIZE);
+    const previous = nearby.find((p) => p.author_kind !== "person" || p.author !== r.author);
+    if (previous) other = previous.n;
+    else if (nearby.length === SAID_BATCH_SIZE) throw new SaidUnavailable([thread]);
+  }
   return { n: r.n, authorKind: r.author_kind, author: r.author, other };
 }
 
