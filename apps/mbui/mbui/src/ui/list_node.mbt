@@ -123,17 +123,40 @@ pub fn[T] ListRows::in_node(
     m
   })
   // (a row's room as the rows and their causes are now, at `now`: nothing read of a signal, what reads it did that)
-  let room_with = fn(items : Array[T], index : Map[String, Int], now : Double, k : String, natural : Double) -> @view.ListRoom {
+  // (those moved by their contents, by the rows as they are now)
+  let own_keys = @signals.computed(fn(_) {
+    let (items, keys) = all.get()
+    let out = []
+    for i, it in items {
+      if own(it) && i < keys.length() {
+        out.push(keys[i])
+      }
+    }
+    out
+  })
+  // (what of a row its room is worked out by: whether it comes in place, the room over it, whether its content grows
+  // with its room, whether its content goes on the way itself; `of` the rows' own, read where they may be)
+  let row_of = fn(items : Array[T], i : Int) -> (Bool, Double, Bool, Bool) {
+    (middle(items[i]), lead(items[i], i), grown(items[i]), own(items[i]))
+  }
+  let room_with = fn(
+    index : Map[String, Int],
+    now : Double,
+    k : String,
+    natural : Double,
+    of : (String, Int) -> (Bool, Double, Bool, Bool),
+  ) -> @view.ListRoom {
     let c = self.causes
     let i = index.get(k).unwrap_or(-1)
     guard i >= 0 else { return @view.list_room(natural) }
     let going = self.going.contains(k)
-    let by_room = going || middle(items[i])
+    let (in_middle, over, grows, owns) = of(k, i)
+    let by_room = going || in_middle
     if by_room {
       c.by_room.add(k)
-      c.leads[k] = lead(items[i], i)
+      c.leads[k] = over
     }
-    if own(items[i]) {
+    if owns {
       c.own.add(k)
     }
     if room_at.val != Some(now) {
@@ -144,7 +167,7 @@ pub fn[T] ListRows::in_node(
     shown[k] = h
     let open = c.opened.contains(k)
     let fraction = if open && natural > 0.0 { dmax(0.0, dmin(1.0, h / natural)) } else { 1.0 }
-    let scaled = open && (going || grown(items[i]))
+    let scaled = open && (going || grows)
     let clipped = (h - natural).abs() > 0.001 || (now < c.end && c.own.contains(k))
     {
       height: h,
@@ -170,7 +193,7 @@ pub fn[T] ListRows::in_node(
       return still(k, natural)
     }
     let now = if v.logic_at() < c.end { v.drawn_at() } else { v.logic_at() }
-    room_with(items, key_at.get(), now, k, natural)
+    room_with(key_at.get(), now, k, natural, fn(_, i) { row_of(items, i) })
   }
   // (the rooms as they are now, read before a layout that lays them out reads none of what they are worked out of:
   // View::layout_box's content; as the rows move, again each frame)
@@ -183,7 +206,27 @@ pub fn[T] ListRows::in_node(
     }
     let now = if v.logic_at() < c.end { v.drawn_at() } else { v.logic_at() }
     let index = key_at.get()
-    fn(k, natural) { room_with(items, index, now, k, natural) }
+    // (what each row on its way is worked out by, read now; the rest still, their content's own way theirs alone)
+    let pre : Map[String, (Bool, Double, Bool, Bool)] = {}
+    let note = fn(k : String) {
+      match index.get(k) {
+        Some(i) if !pre.contains(k) => pre[k] = row_of(items, i)
+        _ => ()
+      }
+    }
+    c.by.each(fn(k, _) { note(k) })
+    for k, _ in self.going {
+      note(k)
+    }
+    let owned : Set[String] = Set::from_array(own_keys.get())
+    fn(k, natural) {
+      room_with(index, now, k, natural, fn(k, _) {
+        match pre.get(k) {
+          Some(r) => r
+          None => (false, 0.0, false, owned.contains(k))
+        }
+      })
+    }
   }
   let lend = fn(row : @view.View, k : String) {
     row.lends(node_row_way, fn() {
@@ -204,17 +247,6 @@ pub fn[T] ListRows::in_node(
     self.causes.read()
     self.causes.end > v.logic_at() && self.causes.by.values().any(fn(cm) { cm.0 is Comes(_) })
   }
-  // (those moved by their contents, by the rows as they are now)
-  let own_keys = @signals.computed(fn(_) {
-    let (items, keys) = all.get()
-    let out = []
-    for i, it in items {
-      if own(it) && i < keys.length() {
-        out.push(keys[i])
-      }
-    }
-    out
-  })
   let moving = fn() -> Array[String] {
     all.get() |> ignore
     let c = self.causes
