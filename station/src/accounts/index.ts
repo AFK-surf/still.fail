@@ -1013,6 +1013,9 @@ export class Accounts {
       if (typeof login?.plan === "string" && login.plan.trim() !== "") check.plan = login.plan.trim();
     }
     const previous = this.checks.get(id);
+    // A list not read this time (the provider not answering a moment, a check that failed) does not take away the models
+    // the profile was found to run: the pickers' liked and frequent models are only those it runs.
+    if (check.models === null && previous !== undefined && previous.models !== null) check.models = previous.models;
     if (codexSubscription && previous?.codexRevoked) {
       check.state = "login";
       check.detail = previous.detail;
