@@ -417,6 +417,13 @@ fn ChatRows::end_taken(self : ChatRows, was : Array[Entry], now : Array[Entry], 
     } else if self.tail_signs.get(keys[i]) != Some(sign) {
       self.tail_signs[keys[i]] = sign
       self.said_of(keys[i])
+    } else {
+      // (the same row showing what is another, its height not: what reads it told, its list not (what was sent from
+      // here taken by the core's outbox entry, as the old list's rows read anew))
+      match was_keys.search(keys[i]) {
+        Some(j) if !same_entry(was[j], e) => self.said_of(keys[i], sized=false)
+        _ => ()
+      }
     }
   }
   for i, e in was {
@@ -679,4 +686,17 @@ pub fn ChatRows::message_key(self : ChatRows, i : Int) -> String {
 /// The same rows only as the very same ones.
 pub impl Eq for ChatRows with equal(a, b) {
   physical_equal(a, b)
+}
+
+///|
+/// Whether `a` and `b` are the very same row's (what it shows as the very same value).
+fn same_entry(a : Entry, b : Entry) -> Bool {
+  match (a, b) {
+    (Said(x), Said(y)) => physical_equal(x, y)
+    (Out(x), Out(y)) => physical_equal(x, y)
+    (Sent(x), Sent(y)) => physical_equal(x, y)
+    (Working(x), Working(y)) => physical_equal(x, y)
+    (State(a1, a2, a3), State(b1, b2, b3)) => a1 == b1 && a2 == b2 && a3 == b3
+    _ => true
+  }
 }
