@@ -376,7 +376,6 @@ export function VaultPrompt() {
       description={r ? t("web-pages.vault.promptBody", { vault: r.vaultName, at: r.atText }) : ""}
       footer={r && <><Button variant="ghost" onClick={later}>{t("web-pages.vault.promptLater")}</Button><Button variant="primary" busy={giving} onClick={give}>{t("web-pages.vault.promptGive")}</Button></>}>
       {r && <p className={css.note}>{r.workspaceName} · {r.vaultName}</p>}
-      {r && !r.own && <p className={css.warn}>{t("web-pages.vault.promptBy", { by: r.byText ?? "" })}</p>}
     </Dialog>
   );
 }

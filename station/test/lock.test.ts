@@ -103,6 +103,61 @@ test("who may sign what: admins manage, members add only their own devices, owne
   assert.throws(() => apply(off, signed(after(off, "member", { sub: "x", email: "x", role: "member" }), w.alice.signer), 2000), /turned off/);
 });
 
+test("a person's own devices: an admin puts in only their first; one put in under someone else's name signs nothing", () => {
+  const w = workspace();
+  let s = w.state;
+  const step = (kind: string, body: unknown, by: Key) => (s = apply(s, signed(after(s, kind, body), by), 2000));
+  // The genesis's devices are each person's own.
+  assert.ok([w.alice, w.bob, w.carol].every((p) => s.devices.get(p.base.hex)?.own));
+  // bob (an admin) puts a device of his making in under alice's name, the owner: it is in the lock, not hers.
+  const fake = { signer: ed(), base: ed() };
+  step("device", { id: fake.base.hex, sub: "alice", kind: "app", label: "alice?", sign_key: fake.signer.id }, w.bob.signer);
+  assert.equal(s.devices.get(fake.base.hex)?.own, false);
+  // What it signs keeps the chain going and changes nothing: no owner made, the lock not turned off, no device put in.
+  const head = s.head;
+  step("member", { sub: "bob", email: "b@x", role: "owner" }, fake.signer);
+  assert.equal(s.members.get("bob")?.role, "admin");
+  assert.notEqual(s.head, head);
+  step("disable", {}, fake.signer);
+  assert.equal(s.disabled, false);
+  const more = ed();
+  step("device", { id: more.hex, sub: "alice", kind: "app", label: "more", sign_key: ed().id }, fake.signer);
+  assert.equal(s.devices.has(more.hex), false);
+  // One taken off its own person's signing key by an admin (same id, his key): no longer theirs.
+  const swap = ed();
+  step("device", { id: w.carol.base.hex, sub: "carol", kind: "app", label: "carol", sign_key: swap.id }, w.bob.signer);
+  assert.equal(s.devices.get(w.carol.base.hex)?.own, false);
+  // A passkey an admin puts in under alice's name: not hers either.
+  step("passkey", { id: "cred-x", sub: "alice", key: p256().id, label: "x" }, w.bob.signer);
+  assert.equal([...s.passkeys.values()].find((p) => p.id === "cred-x")?.own, false);
+  // A new member: their first device is put in by an admin (face to face), and is theirs; the next one only by them.
+  step("member", { sub: "dave", email: "d@x", role: "member" }, w.bob.signer);
+  const dave = { signer: ed(), base: ed() };
+  step("device", { id: dave.base.hex, sub: "dave", kind: "app", label: "dave", sign_key: dave.signer.id }, w.bob.signer);
+  assert.equal(s.devices.get(dave.base.hex)?.own, true);
+  const daveAdmins = ed();
+  step("device", { id: daveAdmins.hex, sub: "dave", kind: "app", label: "dave 2?", sign_key: ed().id }, w.bob.signer);
+  assert.equal(s.devices.get(daveAdmins.hex)?.own, false);
+  const davePhone = ed();
+  step("device", { id: davePhone.hex, sub: "dave", kind: "app", label: "dave 2", sign_key: ed().id }, dave.signer);
+  assert.equal(s.devices.get(davePhone.hex)?.own, true);
+  // dave's web page, renewed by an admin under the same (no) key: stays his.
+  const page = ed();
+  step("device", { id: page.hex, sub: "dave", kind: "web", label: "Chrome", exp: 2000 + 86400 }, dave.signer);
+  step("device", { id: page.hex, sub: "dave", kind: "web", label: "Chrome", exp: 2000 + 2 * 86400 }, w.bob.signer);
+  assert.equal(s.devices.get(page.hex)?.own, true);
+  // Every device of dave's gone (lost): an admin's new one is still not his ...
+  for (const id of [dave.base.hex, daveAdmins.hex, davePhone.hex, page.hex]) step("device.remove", { id }, w.bob.signer);
+  const again = ed();
+  step("device", { id: again.hex, sub: "dave", kind: "app", label: "dave 3?", sign_key: ed().id }, w.bob.signer);
+  assert.equal(s.devices.get(again.hex)?.own, false);
+  // ... until dave is taken out and made a member again, in the open: then his first is put in as anyone's first.
+  step("member.remove", { sub: "dave" }, w.bob.signer);
+  step("member", { sub: "dave", email: "d@x", role: "member" }, w.bob.signer);
+  step("device", { id: again.hex, sub: "dave", kind: "app", label: "dave 3", sign_key: ed().id }, w.bob.signer);
+  assert.equal(s.devices.get(again.hex)?.own, true);
+});
+
 test("an entry follows the head it names, signed as it is", () => {
   const w = workspace();
   const e = signed(after(w.state, "station", { key: ed().hex, name: "new" }), w.alice.signer);

@@ -4,7 +4,7 @@
 // as one it kept that they refuse leaves every entry after it refused too. The stations trust nothing the cloud says
 // of it all the same. The hashing is the stations' own (their lock.ts).
 export { apply, canonical, genesis, shortCode, type Entry, type LockState } from "../../station/src/cloud/lock.ts";
-import { apply, asEntry as stationAsEntry, entryHash as stationEntryHash, genesis, type Entry, type LockState } from "../../station/src/cloud/lock.ts";
+import { apply, asEntry as stationAsEntry, entryHash as stationEntryHash, genesis, signer, type Entry, type LockState } from "../../station/src/cloud/lock.ts";
 
 export type LockEntry = { v: 1; ws: string; seq: number; prev: string | null; at: number; kind: string; body: unknown; sig: unknown };
 
@@ -65,6 +65,9 @@ export function extendLock(kept: LockEntry[], incoming: LockEntry[], now: number
     let state: LockState | null = null;
     if (!restart) for (const e of kept) state = state === null ? genesis(e as Entry) : apply(state, e as Entry, null);
     for (const { e } of adding) {
+      // A new entry signed with a device or passkey someone else put in under the signer's name: a station would fold
+      // it and let it change nothing (one from before keeps a chain whole); none is kept from now on.
+      if (state !== null && signer(state, (e as Entry).sig, now)?.own === false) refuse(409, "lock_refused");
       try {
         state = state === null ? genesis(e as Entry) : apply(state, e as Entry, now);
       } catch {

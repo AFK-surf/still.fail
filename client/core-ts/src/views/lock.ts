@@ -775,7 +775,10 @@ function checkSigned(entries: Entry[], chain: Entry[], key: string, at: number):
       } catch {
         throw new CoreError("lock_invalid", t("core-misc.lock.chainInvalid"));
       }
-      if (signerIn(kept, key, at) === null) throw new CoreError("lock_no_signer", t("core-misc.lock.notSigner"));
+      const by = signerIn(kept, key, at);
+      if (by === null) throw new CoreError("lock_no_signer", t("core-misc.lock.notSigner"));
+      // (put in under this person's name by someone else: what it signs changes nothing at a station)
+      if (!by.own) throw new CoreError("lock_not_own", t("core-misc.lock.notOwn"));
       try {
         checkLock(chain, at);
       } catch {

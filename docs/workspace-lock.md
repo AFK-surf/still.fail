@@ -43,7 +43,10 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 | `cloud_keys` | `{keys}`（JWKS） | owner |
 | `disable` | `{}` | owner |
 
-- **签名者**不单独列：锁里某个成员的 app 设备的 `sign_key`，或他的 passkey。权限跟着锁里的角色走。
+- **签名者**不单独列：锁里某个成员的 app 设备的 `sign_key`，或他的 passkey。权限跟着锁里的角色走，而且只有**本人的**设备和 passkey 签的才算（下一条）。
+- **本人的设备**（2026-11-04 用户定，chat EMBER/1793781166.844000）：owner、admin 可以往任何成员名下加设备和 passkey，以前这台设备签的条目就按那个人的角色算：admin 往 owner 名下加一台，签名钥匙在自己手里，就能以 owner 的身份换 cloud 公钥、关掉安全模式、提别人当 owner，在密钥库里也能以 owner 的名义签库的新版本、收封给 owner 的待存值。现在锁里每台设备、每把 passkey 都有 `own`（station `cloud/lock.ts` Device `own`、core `vault/lock-check.ts`，同一套规则）。算本人的有三种：genesis 里列着的；本人的设备或 passkey 签进来的；这个人在锁里还没有过能签名的本人设备或 passkey 时（他的第一台，面对面批准）由 owner、admin 签进来的。admin 把某台本人设备换成自己的 `sign_key`，这台就不再算本人的；签名钥匙不变（网页版续期）则照旧算本人的。不是本人的设备照样能连 station，但它签的条目留在链里、什么也不改（以前的锁里有这样的条目，链照样折得下去）；cloud 不再收新的这种条目（`lock_refused`），core 也不签（`lock_not_own`）。密钥库同样只认本人设备的签名、只封给本人设备（`docs/vault.md`）。
+  - 第二台设备起只能本人批：面对面批准时，别人的设备只在这个人还没有能签名的本人设备时出码（`pair.ts placesFor`/`waitingIn`）。以前由 admin 批进来的第二台设备现在不算本人的：在「成员和设备」里移除，再用自己的设备重新批准。
+  - 设备全丢了：admin 加的新设备不算本人的。admin 把这个人移出成员再加回来（`member.remove` 清掉记录），之后的第一台由 admin 面对面批准，库用恢复码找回。admin 想冒充谁，只能明着把他踢出去。
 - **网页版不能签**：页面代码是 cloud 发的。`kind: web` 的设备不能有 `sign_key`，`exp` 最多 30 天（station 校验）。
 - **设备身份**：`id` 是设备的基础 iroh 密钥（core 的 `DEVICE_KEY` 对应的公钥）。客户端按中继派生出多个 endpoint，所以连 station 时 hello 里带 `lock: {device: <基础公钥>, proof}`，`proof` 是基础密钥对 `"stillfail-lock-endpoint/1\0<ws>\0<endpoint>"` 的签名。老客户端没有这一步，开锁时按它用过的 endpoint 记进 `endpoints`。
 - **passkey**：station 校验 `clientDataJSON` 的 `type` 是 `webauthn.get`、`origin` 在 genesis 的 `origins` 里、challenge 是条目哈希，`authenticatorData` 的 rpIdHash 是 `rp_id`、带 UP 标志，ES256。

@@ -42,10 +42,11 @@ test("the exchange: the same code and the same two ends make the same key; anoth
   assert.equal(pakeKeys(n, new Uint8Array(32), "new"), null, "the identity is no share");
 });
 
-/// `inLock`: the phone in the lock already (an app of s2's, as the genesis put it: its sign key, if any).
-async function met(inLock?: { sign_key?: string }) {
+/// `inLock`: the phone in the lock already (an app of s2's, as the genesis put it: its sign key, if any); `others`:
+/// more devices the genesis puts in.
+async function met(inLock?: { sign_key?: string }, others: Record<string, unknown>[] = []) {
   const g = grant();
-  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, ME, inLock ? [{ id: PHONE, sub: "s2", kind: "app", label: "Pixel 8", ...inLock }] : []) }));
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, ME, [...(inLock ? [{ id: PHONE, sub: "s2", kind: "app", label: "Pixel 8", ...inLock }] : []), ...others]) }));
   await r.watch({ topic: "lock", workspace: "ws" });
   const prompts = await r.watch({ topic: "lockPrompts" });
   const [trusted, phone] = await pipe();
@@ -77,6 +78,18 @@ test("a new device met face to face: the code the trusted device shows, typed ri
   const entry = m.cloud.chains.get("ws")!.at(-1)!;
   assert.deepEqual(entry.body, { id: PHONE, sub: "s2", kind: "app", label: "Pixel 8", sign_key: "ed25519:" + "11".repeat(32) });
   assert.deepEqual((await m.prompts()).pairing, [], "no longer shown");
+});
+
+test("the owner approves a member's first device that signs, not a later one: that one the member approves from a device of their own", async () => {
+  // One the owner (or an admin) puts in for a person who has one of their own already would be no one's, signing
+  // nothing (lock-check.ts Device `own`): this device offers no code for it.
+  const m = await met(undefined, [{ id: "ee".repeat(32), sub: "s2", kind: "app", label: "laptop", sign_key: "ed25519:" + "22".repeat(32) }]);
+  assert.deepEqual(await m.hello(), { ok: { t: "no", error: "not_here" } });
+  assert.deepEqual((await m.prompts()).pairing, []);
+  assert.deepEqual(m.cloud.posted, []);
+  // Their web page only (it signs nothing): the first that signs is still the owner's to approve.
+  const n = await met(undefined, [{ id: "ee".repeat(32), sub: "s2", kind: "web", label: "Chrome", exp: 1000 + 86400 }]);
+  assert.deepEqual(await n.hello(), { ok: { t: "code", workspaces: ["ws"] } });
 });
 
 test("typed wrong: tries left said, the right one still signs it in; PAIR_TRIES wrong ones, nothing", async () => {
