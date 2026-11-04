@@ -1058,6 +1058,8 @@ pub(all) struct Node {
   mut p_cbh : Double
   mut p_w : Double
   mut p_h : Double
+  // Grid of the last complete layout when this node was a root; subtrees reuse only on that grid.
+  mut root_grid : Double
   // A row container measured before its height was known, when nothing in
   // it depends on that height (layout_flex): in compute pre_gen (-1: none),
   // the width it was measured at, the size it came to and, for each of its
@@ -1105,6 +1107,7 @@ pub fn Node::new() -> Node {
     p_cbh: 0.0,
     p_w: 0.0,
     p_h: 0.0,
+    root_grid: 0.0,
     laid_gen: -1,
     pre_gen: -1,
     pre: no_pre,
@@ -1123,7 +1126,7 @@ pub fn Node::left_out(self : Node) -> Bool {
 /// reusing its layout from before (or not reaching it, its parent's being
 /// reused): when it did not, nothing under it moved or changed size.
 pub fn Node::laid_out(self : Node) -> Bool {
-  self.laid_gen == generation.val
+  self.laid_gen == completed_generation.val
 }
 
 ///|
@@ -1135,7 +1138,7 @@ pub fn Node::laid_out_at(self : Node) -> Int {
 ///|
 /// How many compute()s there have been.
 pub fn computes() -> Int {
-  generation.val
+  compute_count.val
 }
 
 ///|

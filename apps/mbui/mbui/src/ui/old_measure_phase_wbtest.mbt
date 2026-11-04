@@ -1,6 +1,30 @@
 // The compatibility leaf participates in the parent's layout. Its measured height is never another event.
 
 ///|
+test "an old natural leaf is measured in the window tree's theme before its first frame and after resize" {
+  let base = Theme::light()
+  let app_theme = { ..base, text: { ..base.text, meta: (40.0, 48.0) } }
+  let next_theme = { ..base, text: { ..base.text, meta: (20.0, 24.0) } }
+  let changed = @signals.signal(false)
+  let t = Tester::new(fn(_) { }, w=200.0, h=400.0, stable=false)
+  t.check_looks(false)
+  let leaf : Ref[@view.View?] = Ref(None)
+  let following : Ref[@view.View?] = Ref(None)
+  set_view_app(fn(root) {
+    set_tree_theme(fn() { if changed.get() { next_theme } else { app_theme } })
+    leaf.val = Some(old(root, natural=true, fn(c) { c.text("words", style=text_style(size=Meta)) |> ignore }))
+    following.val = Some(root.box(fn(n) { n.height(Is(Some(10.0))) |> ignore }))
+  })
+  t.frame(ms=16.0)
+  assert_eq((leaf.val.unwrap().laid_size().1, following.val.unwrap().rect().1), (48.0, 48.0))
+  t.resize(200.0, 300.0)
+  assert_eq((leaf.val.unwrap().laid_size().1, following.val.unwrap().rect().1), (48.0, 48.0))
+  changed.set(true)
+  t.frame(ms=16.0)
+  assert_eq((leaf.val.unwrap().laid_size().1, following.val.unwrap().rect().1), (24.0, 24.0))
+}
+
+///|
 test "an old natural leaf returns its first and changed height in the parent's only layout" {
   let rows = @signals.signal(2)
   let t = Tester::new(fn(_) { }, w=200.0, h=400.0, stable=false)

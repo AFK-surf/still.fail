@@ -64,6 +64,16 @@ pub fn Layout::measure(self : Layout, child : View, width : Double, height? : Do
 }
 
 ///|
+/// Measure and lay out a child as wide as it asks, with at most `most` available, in this parent's layout.
+pub fn Layout::fit(self : Layout, child : View, most : Double) -> (Double, Double) {
+  self.check(child)
+  let guard_before = @signals.set_access_guard(None)
+  let size = @flex.layout_child_fitted(child.tree.nodes[child.at].flex, most, containing_height=self.height)
+  @signals.set_access_guard(guard_before) |> ignore
+  size
+}
+
+///|
 /// Place a measured child relative to the content box. A retained child not placed in this callback is hidden.
 pub fn Layout::place(self : Layout, child : View, x : Double, y : Double) -> Unit {
   self.check(child)

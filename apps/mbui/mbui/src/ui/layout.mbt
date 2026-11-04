@@ -1088,10 +1088,11 @@ fn Ctx::layout(
 ) -> Double {
   self.flex_tree(i, 0) |> ignore
   let root = self.nodes[i].fl
+  let gen = @flex.computes() + 1
   // (placed on whole device pixels where the host sets things on them, as its lengths: whole_px_layout)
   @flex.compute(root, width=w, height=h, round=false, reuse=true, grid=if self.whole_px { self.scale } else { 0.0 })
   // (lists lay out their rows as they are placed: computes of their own)
-  self.commit(i, x, y, @flex.computes())
+  self.commit(i, x, y, gen)
   root.height
 }
 

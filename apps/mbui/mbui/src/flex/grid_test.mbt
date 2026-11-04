@@ -52,3 +52,36 @@ test "an absolutely placed box on a grid of device pixels: its static place and 
   // 9.75 pixels a side, from 325 × 78: at 315.25 and 68.25
   assert_eq((px(corner.left), px(corner.top)), (315.0, 68.0))
 }
+
+///|
+test "a measured child can lay out its own tree without changing its parent's grid or generation" {
+  let inner = @flex.Node::new()
+  let root = @flex.Node::new()
+  root.style.align_items = Center
+  let child = @flex.Node::new()
+  child.measure = Some(fn(_, _, _, _) {
+    @flex.compute(inner, width=10.0, height=10.0, round=false, grid=1.0)
+    (31.0, 20.0)
+  })
+  root.add(child)
+  let generation = @flex.computes() + 1
+  @flex.compute(root, width=100.0, height=100.0, round=false)
+  assert_eq(child.left, 34.5)
+  assert_eq(root.laid_out_at(), generation)
+}
+
+///|
+test "each root reuses only a layout made on its own previous grid" {
+  let root = @flex.Node::new()
+  root.style.align_items = Center
+  let child = @flex.Node::new()
+  child.style.set_width(Pt(31.0))
+  child.style.set_height(Pt(20.0))
+  root.add(child)
+  @flex.compute(root, width=100.0, height=100.0, round=false, reuse=true, grid=1.0)
+  assert_eq(child.left, 35.0)
+  let other = @flex.Node::new()
+  @flex.compute(other, width=100.0, height=100.0, round=false, reuse=true, grid=2.0)
+  @flex.compute(root, width=100.0, height=100.0, round=false, reuse=true, grid=2.0)
+  assert_eq(child.left, 34.5)
+}

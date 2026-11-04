@@ -46,6 +46,8 @@ priv struct OldIsland {
   natural : Bool
   /// Changes to this island's content invalidate its intrinsic measurement before the next layout.
   measure_revision : @signals.Signal[Int]
+  /// The window tree's theme, captured before measuring an intrinsic island or rebuilding its input geometry.
+  theme : Ref[Theme?]
   /// laid out in the height its node is given, as tall as what it holds asks all the same (old's `gives`)
   gives : Bool
   /// Intrinsic width bounded by this maximum; no geometry result is published as reactive state.
@@ -2548,6 +2550,8 @@ pub fn old(
     // layout: the same pass that asks for this island's height receives the measured result.
     ignore(unlaid)
     let measure_revision = @signals.signal(0)
+    let measured_theme : Ref[Theme?] = Ref(None)
+    let theme_revision = Ref(0)
     let name = "old island \{old_made.val}"
     old_made.val = old_made.val + 1
     let room : Ref[(Double, Double)] = Ref((0.0, 0.0))
@@ -2605,6 +2609,7 @@ pub fn old(
       room,
       natural,
       measure_revision,
+      theme: measured_theme,
       gives: natural && gives,
       fits: if natural { fits } else { None },
       fitted_width: Ref(0.0),
@@ -2616,7 +2621,14 @@ pub fn old(
         Some(most) => n.max_width(Is(Some(most))) |> ignore
         None => ()
       }
-      n.measured(By(fn() { (measure_revision.get(), key(), n.window()) }), fn(snapshot, w) {
+      n.measured(By(fn() {
+        let now = tree_theme()
+        if !(measured_theme.val is Some(was) && physical_equal(was, now)) {
+          measured_theme.val = Some(now)
+          theme_revision.val += 1
+        }
+        (measure_revision.get(), key(), n.window(), theme_revision.val)
+      }), fn(snapshot, w) {
         old_measure(g(), island, w.unwrap_or(snapshot.2.0))
       }) |> ignore
     }
@@ -4440,6 +4452,18 @@ fn old_measure(c : Ctx, o : OldIsland, width : Double) -> (Double, Double) {
 
 ///|
 fn old_build_size(c : Ctx, o : OldIsland, width : Double, height? : Double = 0.0, measuring~ : Bool) -> (Double, Double) {
+  match o.theme.val {
+    Some(theme) => {
+      let result = Ref((0.0, 0.0))
+      c.with_theme(theme, fn() { result.val = old_build_size_in_theme(c, o, width, height~, measuring~) })
+      result.val
+    }
+    None => old_build_size_in_theme(c, o, width, height~, measuring~)
+  }
+}
+
+///|
+fn old_build_size_in_theme(c : Ctx, o : OldIsland, width : Double, height~ : Double, measuring~ : Bool) -> (Double, Double) {
   let w = match o.fits { Some(most) => most; None => width }
   let h = if o.natural { c.window_h } else { height }
   o.room.val = (w, h)
