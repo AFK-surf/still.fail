@@ -114,29 +114,7 @@ const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
     const socket = new WebSocket(`${state.origin.replace("http", "ws")}${plane.connectPath}`, { headers, handshakeTimeout: CONNECT_TIMEOUT_MS });
     let ping: (() => void) | undefined;
     let answered = true;
-    // Entries this station took from devices and other stations, given to the plane too (it keeps the lock for whoever
-    // asks it next): the home workspace's, and each joined one's (`workspace` says which).
-    const told = new Map<string, number>();
-    const tell = () => {
-      for (const m of s.memberships()) {
-        const ws = m.home ? null : m.workspace;
-        const seq = s.locked(ws)?.state?.seq;
-        const plane = ws === null ? s.planeLockSeq : (s.planeLockSeqs.get(ws) ?? null);
-        const was = told.get(m.workspace) ?? (s.locked(ws)?.state?.seq ?? -1);
-        if (!told.has(m.workspace)) told.set(m.workspace, was);
-        if (seq === undefined || seq <= was || socket.readyState !== WebSocket.OPEN || plane === null) continue;
-        const entries = s.lockAfter(Math.max(plane, -1), ws);
-        if (entries.length > 0) socket.send(JSON.stringify({ type: "lock.put", entries, ...(ws === null ? {} : { workspace: ws }) }));
-        told.set(m.workspace, seq);
-      }
-      askPending();
-    };
-    // The lock joining a workspace named, asked for (pendingAsks) as the station hears it joined and at each ping.
-    const asked = new Set<string>();
-    const askPending = () => {
-      if (socket.readyState !== WebSocket.OPEN) return;
-      for (const ws of pendingAsks(s, asked)) socket.send(JSON.stringify({ type: "lock.get", after: -1, workspace: ws }));
-    };
+    const { tell, askPending } = planeTeller(s, (frame) => socket.send(JSON.stringify(frame)), () => socket.readyState === WebSocket.OPEN);
     tell();
     const unlisten = s.listen(tell);
     let failed: Error | null = null;
@@ -187,6 +165,34 @@ const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
       socket.close();
     });
   });
+
+/// What a station tells the plane of its locks on one socket (`send`, while `open`): the entries it took from devices
+/// and other stations since the socket opened (the plane keeps the lock for whoever asks it next): the home
+/// workspace's, and each joined one's (`workspace` says which); and the locks joining named, asked for (pendingAsks).
+/// `tell` as cloud.json changes, `askPending` as the station hears it joined and at each ping.
+export function planeTeller(s: CloudState, send: (frame: unknown) => void, open: () => boolean) {
+  const told = new Map<string, number>();
+  const asked = new Set<string>();
+  const askPending = () => {
+    if (!open()) return;
+    for (const ws of pendingAsks(s, asked)) send({ type: "lock.get", after: -1, workspace: ws });
+  };
+  const tell = () => {
+    for (const m of s.memberships()) {
+      const ws = m.home ? null : m.workspace;
+      const seq = s.locked(ws)?.state?.seq;
+      const plane = ws === null ? s.planeLockSeq : (s.planeLockSeqs.get(ws) ?? null);
+      const was = told.get(m.workspace) ?? (s.locked(ws)?.state?.seq ?? -1);
+      if (!told.has(m.workspace)) told.set(m.workspace, was);
+      if (seq === undefined || seq <= was || !open() || plane === null) continue;
+      const entries = s.lockAfter(Math.max(plane, -1), ws);
+      if (entries.length > 0) send({ type: "lock.put", entries, ...(ws === null ? {} : { workspace: ws }) });
+      told.set(m.workspace, seq);
+    }
+    askPending();
+  };
+  return { tell, askPending };
+}
 
 /// A device tool request pushed on the socket (`{type: "tool", id, request}`, contract §8 presence transport): run
 /// by the mesh's tools and answered `{type: "tool_result", id, response}`. Only a provider with device tools pushes
