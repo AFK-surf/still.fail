@@ -134,9 +134,13 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
     let n = was.unwrap_or(0)
     if put_at.get() is Some(_) { n + 1 } else { n }
   })
-  // (how far what it holds was moved as where it is was counted again for the bar: the hand's moves are what its
-  // layout reads, not that)
-  let rebased = Ref(0.0)
+  // (where the hand has it is its alone, kept within nothing: what its layout reads is how far it moved since it was
+  // last laid out, the list holding itself at its ends; its bar shows it where it is counted to be among all it
+  // holds, as far from where the hand has it as it was when it was last laid out)
+  let bar_off = Ref(0.0)
+  s.unbounded = true
+  s.bar_off = fn() { bar_off.val }
+  self.owns(fn() { s.unbounded = false; s.bar_off = fn() { 0.0 } }) |> ignore
   // (how tall all it holds is counted, as its layout last counted it: what its bar reads once it is laid out, no signal
   // read then)
   let foot_laid = Ref(0.0)
@@ -152,7 +156,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
       By(fn() {
         {
           keys: { v: keys() },
-          x: s.drawn(self.tree) - rebased.val,
+          x: s.drawn(self.tree),
           foot: foot_room(),
           put: put_at.get(),
           put_n: put_n.get(),
@@ -337,10 +341,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
           list_laid_from_top(n, key_of, find, measure, anchor.val, h, by~, ahead~, known~, slack~)
         }
         anchor.val = r.anchor
-        // (how far it is counted to be scrolled among all it holds, the bar's, as laid out now: where the column is
-        // said to be scrolled to as it is told, and what holds its rows moved by as much, its rows placed in it for
-        // that, so they show where they are laid out)
-        let x_now = c.x + rebased.val
+        // (how far it is counted to be scrolled among all it holds, the bar's, as laid out now)
         let at_end = from_end && r.at_end
         let most = dmax(0.0, n.to_double() * mean() - h)
         let counted = if at_end || (!from_end && r.at_start) {
@@ -350,11 +351,10 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
         } else {
           dmin(most, r.first.to_double() * mean() - r.tops.get(0).unwrap_or(0.0))
         }
-        let d = if (counted - x_now).abs() > 0.5 { counted - x_now } else { 0.0 }
-        let x_place = x_now + d
+        bar_off.val = counted - c.x
         // (placed where they are in the window: the column holds them moved by how far it is scrolled)
         for q in 0..<r.keys.length() {
-          l.place(slot_of(r.keys[q]), 0.0, r.tops[q] + x_place)
+          l.place(slot_of(r.keys[q]), 0.0, r.tops[q] + c.x)
         }
         // (and those kept out of sight, as far off as they are counted to be)
         match Some(c.kept) {
@@ -370,7 +370,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
                     r.tops.last().unwrap_or(h) + r.heights.last().unwrap_or(0.0) + (i - r.last - 1).to_double() * mean()
                   }
                   ignore(hk)
-                  l.place(slot, 0.0, top + x_place)
+                  l.place(slot, 0.0, top + c.x)
                 }
                 _ => ()
               }
@@ -422,18 +422,16 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
           if at_end && !@signals.untracked(fn() { follows.get() }) {
             follows.set(true)
           }
-          if d != 0.0 {
-            rebased.val = rebased.val + d
-            s.grew_above(d)
-          }
           match (glide, came_top) {
             (Some((_, from_top)), Some(top)) => {
-              let to_top = counted + top - c.cover
-              if from_top && to_top < most - 0.5 {
-                s.glide_to(to_top)
+              // (as far as the hand has it to go: by how far its top is under its cover, or to its end as counted)
+              let to_top = top - c.cover
+              let to_end = most - counted
+              if from_top && to_top < to_end - 0.5 {
+                s.glide_to(c.x + to_top)
                 follows.set(false)
               } else {
-                s.glide_to(most)
+                s.glide_to(c.x + to_end)
               }
             }
             _ => ()
