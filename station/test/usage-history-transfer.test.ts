@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { constants } from "node:sqlite";
+import { constants, DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -88,6 +88,31 @@ test("a session deleted before history installation keeps its old usage in its w
     assert.deepEqual((mine.days as { calls: number; tokens: number }[]).map(({ calls, tokens }) => [calls, tokens]), [[1, 3]]);
     assert.deepEqual(home.days, []);
   } finally { store.close(); }
+});
+
+test("an older station can delete a session while the new station waits to install history", () => {
+  const dir = mkdtempSync(join(tmpdir(), "usage-history-previous-"));
+  const path = join(dir, "station.db");
+  const before = oldStore(path);
+  before.db.prepare(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output, calls)
+    VALUES ('old', 0, 'a', 'claude', 2, 0, 0, 0, 1, 1)`).run();
+  before.close();
+  const store = Store.open(path);
+  const previous = new DatabaseSync(path);
+  try {
+    assert.equal(hasUsageHistory(store.db), false);
+    // The older process does not know the new Store.deleteSession implementation.
+    previous.prepare("DELETE FROM sessions WHERE key = 'a'").run();
+    installCompactUsage(store.db, () => 900_000);
+    installUsageHistory(store.db, 900_000);
+    while (!convertUsageHistoryStep(store.db, 1)) { /* Take over the old summaries. */ }
+    const result = usageHistory(makeStore(store.db, dir), 0n, { workspace: "A", home: false });
+    const home = usageHistory(makeStore(store.db, dir), 0n, { workspace: "home", home: true });
+    assert.ok(result);
+    assert.ok(home);
+    assert.deepEqual((result.days as { calls: number; tokens: number }[]).map(({ calls, tokens }) => [calls, tokens]), [[1, 3]]);
+    assert.deepEqual(home.days, []);
+  } finally { previous.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("a deleted session follows its workspace move before history installation", () => {
