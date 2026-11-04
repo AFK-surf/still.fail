@@ -60,6 +60,12 @@ pub fn Flow::start(
   platform? : Int,
   loc~ : SourceLoc,
 ) -> Flow {
+  // (the app of the run before let go first, while the core it talks to is that run's: what it says as it goes (a
+  // page's drafts dropped) is that run's, never heard by this one, whichever flow ran before it)
+  match @ui.view_tree() {
+    Some(t) => t.dispose()
+    None => ()
+  }
   let r = @core.Replay::parse(trace)
   use_recorded_jobs(r)
   // (asks the run's timing made, with what came for them: each test says which and why)
