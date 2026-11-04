@@ -1,13 +1,15 @@
 #!/bin/sh
 # Build and sign mbui's Mac app with the existing Developer ID and notary profile. The app's core installs its
 # own dependencies when it needs to build bytecode; the website's root packages are not part of this release.
-#   sh .github/release-desktop.sh [--stable] [--out DIR]
+#   sh .github/release-desktop.sh [--product monoid] [--stable] [--out DIR]
+# --product monoid: monoid's Mac app (scripts/release.sh --product), for monoid's bucket.
 set -eu
 cd "$(dirname "$0")/.."
 root=$PWD
-beta=--beta suffix=-beta channel=beta/ out=
+beta=--beta suffix=-beta channel=beta/ out= product=stillfail
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --product) shift; product=${1:?--product needs a name} ;;
     --stable) beta= suffix= channel= ;;
     --out) shift; out=${1:?--out needs a directory} ;;
     *) echo "release-desktop: unknown argument $1" >&2; exit 2 ;;
@@ -28,9 +30,11 @@ unset UNSIGNED
 export RELEASE_DIR="$dir/releases"
 # The signing helper removes its secrets from the child's environment. release.sh checks the signed archive's
 # identifier, team and build before making either the mbui or the older Electron updater's feed.
-python3 .github/mac_signing.py run -- sh scripts/release.sh ${beta:+$beta} desktop
+python3 .github/mac_signing.py run -- sh scripts/release.sh --product "$product" ${beta:+$beta} desktop
 version=$(git rev-list --count HEAD)
-set -- "desktop/stillfail$suffix-0.1.$version-arm64-mac.zip" "mac/${channel}latest.json" "desktop/stillfail$suffix-mac.yml"
+set -- "desktop/$product$suffix-0.1.$version-arm64-mac.zip" "mac/${channel}latest.json"
+# (electron-updater's feed: still.fail's alone, which had an Electron app)
+[ "$product" != stillfail ] || set -- "$@" "desktop/stillfail$suffix-mac.yml"
 for name do
   [ -f "$RELEASE_DIR/$name" ] || { echo "Expected desktop artifact missing: $name" >&2; exit 1; }
 done

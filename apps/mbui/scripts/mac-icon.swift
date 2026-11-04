@@ -4,7 +4,8 @@
 // scripts/mac-app.sh), the iPhone's square (the system rounds it) as the 1024-pixel PNG of an asset catalog's app icon
 // (scripts/ios.sh), Windows' .ico, or Linux's 512-pixel PNG (its desktop entry's icon, in Windows' shape). Which app's:
 // VARIANT, as mac-app.sh's MBUI_VARIANT (stable by default, still.fail's black face, as mbui's app is still.fail's now;
-// beta youdid.wtf's, the orange tape across its corner; stable-dark and beta-dark their white faces, for a dark system).
+// beta youdid.wtf's, the orange tape across its corner; stable-dark and beta-dark their white faces, for a dark system;
+// monoid and monoid-beta monoid's m, black and orange, with their -dark).
 //   swift apps/mbui/scripts/mac-icon.swift [VARIANT] OUT.icns
 //   swift apps/mbui/scripts/mac-icon.swift --icon [VARIANT] OUT.icon
 //   swift apps/mbui/scripts/mac-icon.swift --ios OUT.png
@@ -37,13 +38,22 @@ let colours: [String: (NSColor, NSColor, NSColor, Bool)] = [
   "stable-dark": (rgb(0xF4F4F5), rgb(0x1C1D20), rgb(0xF6BC9F), false),
   "beta": (rgb(0x1C1D20), rgb(0xFFFFFF), rgb(0xF6BC9F), true),
   "beta-dark": (rgb(0xF4F4F5), rgb(0x1C1D20), rgb(0xF6BC9F), true),
+  // monoid's (android/app/src/monoid/res, monoid-beta's), its m until it has a mark of its own
+  "monoid": (rgb(0x1C1D20), rgb(0xFFFFFF), rgb(0xF6BC9F), false),
+  "monoid-dark": (rgb(0xF4F4F5), rgb(0x1C1D20), rgb(0xF6BC9F), false),
+  "monoid-beta": (rgb(0xE5704A), rgb(0xFFFFFF), rgb(0xF6BC9F), false),
+  "monoid-beta-dark": (rgb(0xE5704A), rgb(0xFFFFFF), rgb(0xF6BC9F), false),
 ]
 guard let palette = colours[variant] else {
-  FileHandle.standardError.write("mac-icon.swift: VARIANT is stable, stable-dark, beta or beta-dark (mbui: stable), not \(variant)\n".data(using: .utf8)!)
+  FileHandle.standardError.write("mac-icon.swift: VARIANT is stable, beta, monoid or monoid-beta, each with -dark (mbui: stable), not \(variant)\n".data(using: .utf8)!)
   exit(1)
 }
 let (ground, ink, cheekColour, taped) = palette
 let tapeColour = rgb(0xE5704A)
+// monoid's m instead of the face: its line on the tile (the Android drawable's, its 108 to the tile's 100), its width
+let monoid = variant.hasPrefix("monoid")
+let mPath = "M27.8 70.8V40.3A11.1 11.1 0 0 1 50 40.3V70.8M50 40.3A11.1 11.1 0 0 1 72.2 40.3V70.8"
+let mWidth: CGFloat = 9.7
 
 // brand: made by design/brand/make.py
 let eyePaths = ["M39 47.6C39 51.25 36.05 54.2 32.4 54.2C28.75 54.2 25.8 51.25 25.8 47.6C25.8 43.95 28.75 41 32.4 41C36.05 41 39 43.95 39 47.6Z", "M74.2 47.6C74.2 51.25 71.25 54.2 67.6 54.2C63.95 54.2 61 51.25 61 47.6C61 43.95 63.95 41 67.6 41C71.25 41 74.2 43.95 74.2 47.6Z"]
@@ -115,6 +125,25 @@ func render(_ size: Int) -> Data {
     square.lineWidth = k
     square.stroke()
   }
+  if monoid {
+    // its m: two arches on three stems
+    let m = NSBezierPath()
+    let r = 11.1 * side / 100 * k
+    m.move(to: p(27.8, 70.8))
+    m.line(to: p(27.8, 40.3))
+    m.appendArc(withCenter: p(38.9, 40.3), radius: r, startAngle: 180, endAngle: 0, clockwise: true)
+    m.line(to: p(50, 70.8))
+    m.move(to: p(50, 40.3))
+    m.appendArc(withCenter: p(61.1, 40.3), radius: r, startAngle: 180, endAngle: 0, clockwise: true)
+    m.line(to: p(72.2, 70.8))
+    m.lineWidth = mWidth * side / 100 * k
+    m.lineCapStyle = .round
+    m.lineJoinStyle = .round
+    ink.setStroke()
+    m.stroke()
+    NSGraphicsContext.restoreGraphicsState()
+    return rep.representation(using: .png, properties: [:])!
+  }
   // the eyes, the cheeks, and the tape inside the square
   ink.setFill()
   for d in eyePaths { shape(d, p).fill() }
@@ -155,10 +184,15 @@ if args.contains("--icon") {
     files["tape.svg"] = svg([(tapePath, "#E5704A"), (tapeWords, "#FFFFFF")])
     layers.append(["name": "tape", "image-name": "tape.svg", "glass": false])
   }
-  files["eyes.svg"] = svg(eyePaths.map { ($0, "#FFFFFF") })
-  files["cheeks.svg"] = svg(cheekPaths.map { ($0, "#F6BC9F") })
-  layers.append(["name": "eyes", "image-name": "eyes.svg", "glass": false].merging(fill(ink, dark.1)) { a, _ in a })
-  layers.append(["name": "cheeks", "image-name": "cheeks.svg", "glass": false].merging(fill(cheekColour, dark.2)) { a, _ in a })
+  if monoid {
+    files["m.svg"] = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1024\" height=\"1024\" viewBox=\"0 0 100 100\"><path d=\"\(mPath)\" fill=\"none\" stroke=\"#FFFFFF\" stroke-width=\"\(mWidth)\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>"
+    layers.append(["name": "m", "image-name": "m.svg", "glass": false].merging(fill(ink, dark.1)) { a, _ in a })
+  } else {
+    files["eyes.svg"] = svg(eyePaths.map { ($0, "#FFFFFF") })
+    files["cheeks.svg"] = svg(cheekPaths.map { ($0, "#F6BC9F") })
+    layers.append(["name": "eyes", "image-name": "eyes.svg", "glass": false].merging(fill(ink, dark.1)) { a, _ in a })
+    layers.append(["name": "cheeks", "image-name": "cheeks.svg", "glass": false].merging(fill(cheekColour, dark.2)) { a, _ in a })
+  }
   let doc: [String: Any] = fill(ground, dark.0).merging([
     "groups": [["layers": layers, "shadow": ["kind": "neutral", "opacity": 0.5], "translucency": ["enabled": false, "value": 0.5]]],
     "supported-platforms": ["squares": ["macOS"]],

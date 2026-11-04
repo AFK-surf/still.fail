@@ -4,6 +4,7 @@ import { ulid } from "ulid";
 import { digest, readJson, reply, type Identity } from "./auth";
 import { consumeLoginRate } from "./login";
 import type { Env } from "./env";
+import { cloudProduct } from "./i18n.ts";
 
 type PasswordAccount = { email: string; password: string; name?: string };
 
@@ -45,5 +46,5 @@ export async function passwordSignIn(env: Env, request: Request): Promise<Respon
   // Digests compared, as the admin token is: the time it takes says nothing of how much of the password was right.
   if (!account || (await digest(body.password)) !== (await digest(account.password))) return refused();
   const identity = await passwordIdentity(account);
-  return env.ACCOUNTS.getByName(identity.sub).create(identity, ulid(), ((body.name as string | undefined) ?? "still.fail").trim() || "still.fail", true);
+  return env.ACCOUNTS.getByName(identity.sub).create(identity, ulid(), ((body.name as string | undefined) ?? cloudProduct().name).trim() || cloudProduct().name, true);
 }
