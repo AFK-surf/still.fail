@@ -1,8 +1,8 @@
 // An old view in the window's tree laid out where its layout alone puts it (Tree::laid_origin) and moved to where it is
 // drawn as the frame is painted (view_host.mbt old_frame): what moves or fades it, or what holds it (an offset, a page
 // slid by its width), paints the frame alone (Tester's own check drawing it whole after and comparing, as in every
-// test), drawn as building it whole draws it, pressed where it is drawn; what lays it out elsewhere (its holder's
-// padding) builds it again. What a frame of it costs is measured as a host draws it, with no such check (appbench).
+// test), drawn as building it whole draws it, pressed where it is drawn; its holder's padding is resolved by the
+// parent's layout, with unchanged island content reusable there. Frame costs are measured without this check.
 
 ///|
 /// A window 400 by 200 whose tree holds, 30 in and 10 down by its padding (`pad`), an old view 300 by 150 moved by `at`
@@ -110,7 +110,7 @@ test "an old view faded by its node: painted alone, drawn as built whole" {
 }
 
 ///|
-test "an old view laid out elsewhere by its holder's padding: built and laid out again there, drawn as built whole, pressed there" {
+test "an old view laid out elsewhere by its holder's padding: its parent lays out once, drawn as built whole, pressed there" {
   let pad = @signals.signal(30.0, same=fn(a, b) { a == b })
   let clicks = Ref(0)
   let t = island_moved_tester(
@@ -119,9 +119,13 @@ test "an old view laid out elsewhere by its holder's padding: built and laid out
     pad,
     clicks,
   )
-  let (alone, drawn, whole) = island_frame(t, fn() { pad.set(70.0) })
+  let before = t.frame_hash()
+  let computes = view_tree().unwrap().work().computes
+  let (_, drawn, whole) = island_frame(t, fn() { pad.set(70.0) })
+  assert_eq(view_tree().unwrap().work().computes - computes, 1)
+  assert_true(drawn != before, msg="the padding moved the picture")
   let pressed = island_pressed(t, clicks, 70.0 + 20.0 + 40.0, 10.0 + 10.0 + 20.0)
-  assert_eq((alone, drawn == whole, pressed), (false, true, true), msg=t.built_why())
+  assert_eq((drawn == whole, pressed), (true, true))
 }
 
 ///|

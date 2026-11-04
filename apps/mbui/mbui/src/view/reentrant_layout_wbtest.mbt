@@ -1,4 +1,43 @@
 ///|
+test "a predicted frame's measured size does not settle its dependent layout at another time" {
+  let source : Ref[NodeId?] = Ref(None)
+  let copy : Ref[NodeId?] = Ref(None)
+  let changes = Ref(0)
+  let escaped = Ref(false)
+  let t = Tree::new(fn(root) {
+    root.laid_before_causes()
+    let box = root.box(fn(n) {
+      source.val = Some(n.id())
+      n.height(By(fn() { Some(if n.drawn_past(75.0) { 40.0 } else { 30.0 }) })) |> ignore
+      n.reacts(fn() { n.laid_size_told() }, fn(_) {
+        changes.val += 1
+        // Bound the broken cycle so it reports this assertion instead of exhausting the test process's stack.
+        if changes.val == 20 {
+          escaped.val = true
+          n.height(Is(Some(40.0))) |> ignore
+        }
+      })
+    })
+    root.box(fn(n) {
+      copy.val = Some(n.id())
+      n.height(By(fn() { Some(box.laid_size_told().map(fn(s) { s.1 }).unwrap_or(0.0)) })) |> ignore
+    }) |> ignore
+  }, time=fn() { 50.0 })
+  t.frame(200.0, 300.0, now=50.0) |> ignore
+  t.at(100.0)
+  t.frame(200.0, 300.0, now=50.0) |> ignore
+  assert_false(escaped.val, msg="a measured result must not become a new cause at another time")
+  assert_eq((t.nodes[source.val.unwrap().at].lh, t.nodes[copy.val.unwrap().at].lh), (40.0, 40.0))
+  let found = Ref(0.0)
+  t.event(60.0, fn() { found.val = t.root().kids()[0].laid_size().1 })
+  assert_eq(found.val, 30.0, msg="an input still sees its own time")
+  t.at(100.0)
+  t.frame(200.0, 300.0, now=60.0) |> ignore
+  assert_eq((t.nodes[source.val.unwrap().at].lh, t.nodes[copy.val.unwrap().at].lh), (40.0, 40.0))
+  t.dispose()
+}
+
+///|
 test "a host's change notification while layout changes the drawn clock does not reenter layout" {
   for change_in_layout in [false, true] {
     let width = @signals.signal(20.0, same=fn(a, b) { a == b })

@@ -282,6 +282,8 @@ pub struct Ctx {
   nodes : Array[Node]
   mut count : Int
   mut cur : Int
+  /// An intrinsic sizing pass builds geometry without observing or taking input.
+  mut measuring : Bool
   mut id_seed : Int
   id_stack : Array[Int]
   mut width : Double
@@ -693,6 +695,7 @@ fn Ctx::new() -> Ctx {
     nodes: [],
     count: 0,
     cur: -1,
+    measuring: false,
     id_seed: 17,
     id_stack: [],
     width: 800.0,
@@ -2103,12 +2106,15 @@ let no_text_patch : TextPatch = text_patch()
 /// Whether `id` was clicked twice in a row since the last frame (a desktop's double click: the second within
 /// double_click_ms of the first, both on it, as near as double_click_slop). Its first click was `clicked` too.
 pub fn Ctx::double_clicked(self : Ctx, id : Int) -> Bool {
+  if self.measuring { return false }
   if id == 0 {
     return false
   }
   // (read so: what reads it is built again as it is clicked twice, hand.mbt)
   hand.double.has(id) |> ignore
-  self.double_clicked.contains(id)
+  let clicked = self.double_clicked.contains(id)
+  if clicked { match old_input_reads.val { Some(r) => r.doubles.add(id); None => () } }
+  clicked
 }
 
 ///|
@@ -2144,11 +2150,14 @@ pub fn Ctx::clicked_on(self : Ctx, id : Int, part : Int) -> Bool {
 ///|
 /// Whether `id` was clicked since the last frame, asked by nothing that takes the click.
 fn Ctx::click_seen(self : Ctx, id : Int) -> Bool {
+  if self.measuring { return false }
   // (what a click changes is drawn by the next frame wherever it was seen, as every input's: on_frame; the Activate
   // a screen reader asks of it is one: semantics.mbt)
   // (read so: what reads it is built again as it is clicked, hand.mbt)
   hand.clicked.has(id) |> ignore
-  self.clicked.contains(id) || (id != 0 && self.action_asked(id, Activate))
+  let clicked = self.clicked.contains(id) || (id != 0 && self.action_asked(id, Activate))
+  if clicked { match old_input_reads.val { Some(r) => r.clicks.add(id); None => () } }
+  clicked
 }
 
 ///|
@@ -2175,6 +2184,7 @@ pub fn Ctx::set_clear(self : Ctx, color : Int64) -> Unit {
 /// tab's ×, a row's buttons pointed at, the tab and the row are still pointed at (the web's `:hover`, which holds for
 /// what holds it). For what only a resting pointer is shown; a look that answers the hand on it is Ctx::lit.
 pub fn Ctx::hovered(self : Ctx, id : Int) -> Bool {
+  if self.measuring { return false }
   // (read so: what reads it is built again as the pointer comes over it or leaves it, hand.mbt)
   let over = hand.over.has(id)
   hand.pointing.get() |> ignore
@@ -2230,6 +2240,7 @@ pub fn Ctx::lit(self : Ctx, id : Int) -> Bool {
 /// from under a resting pointer, and what moves under it (the list scrolled to the keys' choice, new lines come) is not
 /// chosen by it. Not a look that lights up: the spacing rules hold what asks Ctx::lit (gaps.mbt).
 pub fn Ctx::hand_on(self : Ctx, id : Int) -> Bool {
+  if self.measuring { return false }
   if id != 0 {
     self.hand_chooses.add(id)
     built_used(fn() { g().hand_chooses.add(id) })
@@ -2246,6 +2257,7 @@ pub fn Ctx::hand_on(self : Ctx, id : Int) -> Bool {
 ///|
 /// Whether the hand is on `id`: a mouse's pointer resting on it or on what is in it, a finger pressing it.
 fn Ctx::hand_at(self : Ctx, id : Int) -> Bool {
+  if self.measuring { return false }
   if self.lit_every && id != 0 {
     return true
   }
@@ -2274,6 +2286,7 @@ fn Ctx::point_at(self : Ctx, x : Double, y : Double) -> Unit {
 /// Whether the press (Ctx::press) went down on `id` or on what is in it, as the last frame drew them: what lies over it
 /// (a layer over the page, a viewer over the chat) took a press there, not it, though it is under the place.
 pub fn Ctx::press_within(self : Ctx, id : Int) -> Bool {
+  if self.measuring { return false }
   if id == 0 {
     return false
   }
@@ -2365,6 +2378,7 @@ fn Ctx::point_nowhere(self : Ctx) -> Unit {
 
 ///|
 pub fn Ctx::pressed(self : Ctx, id : Int) -> Bool {
+  if self.measuring { return false }
   // (read so: what reads it is built again as it is pressed or let go, hand.mbt)
   if id != 0 {
     hand.pressed.has(id) |> ignore
@@ -2922,6 +2936,7 @@ pub fn Ctx::rect_of(self : Ctx, id : Int, loc~ : SourceLoc) -> (Double, Double, 
 ///|
 /// The pointer, and whether it is down.
 pub fn Ctx::pointer(self : Ctx) -> (Double, Double, Bool) {
+  if self.measuring { return (-@double.infinity, -@double.infinity, false) }
   // (read so: what reads it is built again as the pointer moves, goes down or is let go, hand.mbt)
   hand.pointer.get() |> ignore
   hand.down.get() |> ignore

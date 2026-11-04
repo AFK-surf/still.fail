@@ -49,10 +49,11 @@ fn stage_node(
     // (how wide what it holds is drawn (whole_fitted's, told as it is built) and how wide what is under it is laid out
     // (old's `fits`): the column as wide as the wider, as stage_box is, each in its middle)
     let body_w : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
-    let under_w : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
+    let under_at : Ref[@view.View?] = Ref(None)
+    let under_w = fn() { under_at.val.bind(fn(v) { v.laid_size_told() }).map(fn(size) { size.0 }).unwrap_or(0.0) }
     // (how wide it is laid out: its old view as wide, wider than the column where it is drawn smaller, cut by nothing)
     let laid_w : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
-    let widest = fn() { dmin(room().0, dmax(body_w.get().unwrap_or(0.0), under_w.get().unwrap_or(0.0))) }
+    let widest = fn() { dmin(room().0, dmax(body_w.get().unwrap_or(0.0), under_w())) }
     // (one of its parts `w` wide in the column's middle: as far in from either side)
     let in_middle = fn(w : @signals.Signal[Double?]) {
       let m = (widest() - w.get().unwrap_or(0.0)) / 2.0
@@ -112,7 +113,7 @@ fn stage_node(
       .min_height(Is(Some(0.0)))
       body_at.val = Some(body)
       // (under it: what is chosen of it over 关闭 and its foot's buttons, on the night)
-      @ui.old(d, natural=true, fits=(stage_fits_most, under_w), key=fn() { key + "/foot" }, fn(c) {
+      under_at.val = Some(@ui.old(d, natural=true, fits=stage_fits_most, key=fn() { key + "/foot" }, fn(c) {
           let night = on_night.val
           on_night.val = true
           let held = c.box(style=stage_under, fn() {
@@ -134,9 +135,10 @@ fn stage_node(
           on_night.val = night
           words_look(c, held)
         })
-      .width(By(fn() { under_w.get() }))
-      .margin(By(fn() { in_middle(under_w) }))
-      |> ignore
+      .margin(By(fn() {
+        let m = (widest() - under_w()) / 2.0
+        (m, 0.0, m, 0.0)
+      })))
     })
   })
 }

@@ -21,8 +21,14 @@ pub fn reveal_node(parent : @view.View, open : () -> Bool, make : (@view.View) -
     })
     let shown = fn() { way.shown(room) }
     room.reacts(open, fn(o) {
-      // (how far it goes: what it holds is laid out tall at this moment, the way's length said once, not followed)
-      way.go(room, if o { 1.0 } else { 0.0 }, move().per_unit(held.laid_size().1))
+      let at = room.cause_at()
+      // Measure only after this whole cause has been committed. Other motions still need to capture where their
+      // members stood before it; measuring here in the middle of their watchers would replace that starting place.
+      @signals.after_flush(fn() {
+        if room.alive() {
+          way.go(room, if o { 1.0 } else { 0.0 }, move().per_unit(held.laid_size().1), at~)
+        }
+      })
     })
     room
     .opens(By(fn() {
@@ -85,12 +91,12 @@ fn NodeWay::new(v : Double) -> NodeWay {
 ///|
 /// Off to `to` as `spec` says from `n`'s cause's moment, from where it is then (as fast as it goes then); its end a
 /// moment of `n`'s, what reads it told then.
-fn NodeWay::go(self : NodeWay, n : @view.View, to : Double, spec : Spec) -> Unit {
+fn NodeWay::go(self : NodeWay, n : @view.View, to : Double, spec : Spec, at? : Double) -> Unit {
   if self.way.target() == to {
     return
   }
   (self.due)()
-  self.way.go(to, spec, at=n.cause_at())
+  self.way.go(to, spec, at=at.unwrap_or(n.cause_at()))
   self.due = if self.way.ends_at() >= 0.0 {
     n.at_moment(self.way.end(), fn() { self.ended.set(@signals.untracked(fn() { self.ended.get() }) + 1) })
   } else {

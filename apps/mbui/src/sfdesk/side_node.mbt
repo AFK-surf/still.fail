@@ -190,9 +190,7 @@ fn lists_band_node(
       |> ignore
       // catching up on what changed while away (its old view)
       line.show(fn() { view().map(fn(v) { v.syncing is Some(_) }).unwrap_or(false) }, fn(k) {
-        // (as wide as it is laid out, told by the old frame)
-        let wide : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
-        k.shrink(Is(0.0)).width(By(fn() { wide.get() })) |> ignore
+        k.shrink(Is(0.0)) |> ignore
         @ui.old(
           k,
           fn(c) {
@@ -203,7 +201,7 @@ fn lists_band_node(
             @sf.sync_key(c, "side/syncing", update_key_side, update_key_mark, true, said)
           },
           natural=true,
-          fits=(update_key_side, wide),
+          fits=update_key_side,
         )
         |> @ui.old_takes_own
         |> ignore
@@ -310,4 +308,3 @@ fn lists_band_node(
   })
   |> ignore
 }
-

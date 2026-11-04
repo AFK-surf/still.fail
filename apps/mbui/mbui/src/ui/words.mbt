@@ -383,6 +383,7 @@ fn own_word_at(text : String, i : Int) -> (Int, Int) {
 /// lifted, nothing under it scrolled or dragged by it while it lasts, no edge swipe; the pointer is still told
 /// (Ctx::pointer), so the app follows the finger. Nothing when no finger is down.
 pub fn Ctx::take_press(self : Ctx) -> Unit {
+  if self.measuring { return }
   if !self.down {
     return
   }
@@ -407,7 +408,9 @@ pub fn Ctx::take_press(self : Ctx) -> Unit {
 /// Where a tap landed since the last frame, wherever it was (on a button, a list, nothing), if one did: a press let
 /// go without dragging, not one the app took (Ctx::take_press). For what a tap anywhere lets go of (a pick of words).
 pub fn Ctx::tapped_anywhere(self : Ctx) -> (Double, Double)? {
+  if self.measuring { return None }
   // (read so: what reads it is built again as a press goes, wherever it went: hand.mbt)
   hand_presses_read()
+  if self.tapped is Some(_) { match old_input_reads.val { Some(r) => r.tapped = true; None => () } }
   self.tapped
 }

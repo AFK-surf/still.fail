@@ -393,11 +393,11 @@ fn fits_tester(
   set_view_app(fn(root) {
     root.box(fn(col) {
       col.width(Is(Some(400.0))) |> ignore
-      let wide = @signals.signal(None, same=fn(a : Double?, b : Double?) { a == b })
+      col.lines_up(Is(Some(Start))) |> ignore
       col.box(fn(p) {
-        p.width(By(fn() { Some(dmin(most, wide.get().unwrap_or(0.0))) })).offset(By(fn() { at.get() })) |> ignore
+        p.max_width(Is(Some(most))).offset(By(fn() { at.get() })) |> ignore
         ids["panel"] = p
-        ids["old"] = old(p, natural=true, fits=(most, wide), fn(c) {
+        ids["old"] = old(p, natural=true, fits=most, fn(c) {
           built.val = built.val + 1
           c.box(w=Fill(1.0), fn() { c.text(words.get(), wrap=true) |> ignore }) |> ignore
         })

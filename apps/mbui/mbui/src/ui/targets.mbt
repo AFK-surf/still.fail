@@ -185,7 +185,7 @@ fn Ctx::targets_found(self : Ctx, root : Int, tree : @view.Tree) -> Int {
       return
     }
     targets_island.val = Some(c.id)
-    if old_whole.val {
+    if old_whole.val && !old_input_boxes.contains(c.id) {
       let from = self.next_hit_ids.length()
       let scrolls_from = self.next_scroll_ids.length()
       let bars_from = self.next_bars.length()
@@ -202,7 +202,11 @@ fn Ctx::targets_found(self : Ctx, root : Int, tree : @view.Tree) -> Int {
         y: 0.0,
       })
     } else {
-      match old_boxes.get(c.id) {
+      let box = match old_input_boxes.get(c.id) {
+        Some(i) => Some(i)
+        None => old_boxes.get(c.id)
+      }
+      match box {
         Some(i) => {
           // (in no clip of the window's (island_clips), where it was laid out)
           let from = self.next_hit_ids.length()
@@ -358,3 +362,58 @@ let targets_finds : Ref[Int] = Ref(0)
 ///|
 /// The node of the window's tree hosting the old view whose targets are being found (none: none, or no tree).
 let targets_island : Ref[@view.NodeId?] = Ref(None)
+
+///|
+/// Start a fresh target snapshot, shared by paint and an event that reads a newly measured island.
+fn Ctx::targets_start(c : Ctx) -> Unit {
+  c.next_hit_ids.clear()
+  c.next_hit_rects.clear()
+  c.next_hit_clips.clear()
+  c.next_hit_ends.clear()
+  c.next_hit_marks.clear()
+  c.next_points.clear()
+  c.next_passes.clear()
+  c.passing = 0
+  c.next_point_hits.clear()
+  c.next_scroll_ids.clear()
+  c.next_scroll_rects.clear()
+  c.next_bars.clear()
+  c.across_seen.clear()
+}
+
+///|
+/// Publish a complete target snapshot without drawing or consuming input.
+fn Ctx::targets_commit(c : Ctx) -> Unit {
+  let hi = c.hit_ids
+  c.hit_ids = c.next_hit_ids
+  c.next_hit_ids = hi
+  let hr = c.hit_rects
+  c.hit_rects = c.next_hit_rects
+  c.next_hit_rects = hr
+  let hc = c.hit_clips
+  c.hit_clips = c.next_hit_clips
+  c.next_hit_clips = hc
+  let he = c.hit_ends
+  c.hit_ends = c.next_hit_ends
+  c.next_hit_ends = he
+  let hm = c.hit_marks
+  c.hit_marks = c.next_hit_marks
+  c.next_hit_marks = hm
+  let ps = c.points
+  c.points = c.next_points
+  c.next_points = ps
+  let pa = c.passes
+  c.passes = c.next_passes
+  c.next_passes = pa
+  let si = c.scroll_ids
+  c.scroll_ids = c.next_scroll_ids
+  c.next_scroll_ids = si
+  let sr = c.scroll_rects
+  c.scroll_rects = c.next_scroll_rects
+  c.next_scroll_rects = sr
+  let bs = c.bars
+  c.bars = c.next_bars
+  c.next_bars = bs
+  // (the old views' kept as painted, each where it is, what scrolls in them and their bars too: view_host.mbt)
+  old_hits_framed(c)
+}

@@ -42,14 +42,15 @@ priv struct OldIsland {
   /// how big its node is placed, as the old frame builds it: its room (Ctx::width, height, what it is built for) and
   /// part of its key (built again for another)
   room : Ref[(Double, Double)]
-  /// as tall as what it holds at its width (old's `natural`): that height as the old frame last laid it out (None
-  /// before it first is), what its node is as tall as; the box it is laid out in, as tall as it (-1: none this frame)
-  natural : @signals.Signal[Double?]?
+  /// A measured leaf: its natural height is returned directly during retained layout.
+  natural : Bool
+  /// Changes to this island's content invalidate its intrinsic measurement before the next layout.
+  measure_revision : @signals.Signal[Int]
   /// laid out in the height its node is given, as tall as what it holds asks all the same (old's `gives`)
   gives : Bool
-  /// as wide as what it holds, `most` at most and never narrower than it is (old's `fits`): the least that is, as the
-  /// old frame last laid it out, told the signal (None before it first is)
-  fits : (Double, @signals.Signal[Double?])?
+  /// Intrinsic width bounded by this maximum; no geometry result is published as reactive state.
+  fits : Double?
+  fitted_width : Ref[Double]
   mut held_box : Int
 }
 
@@ -57,6 +58,10 @@ priv struct OldIsland {
 /// The old views in the tree, in the order they were made, and how many were ever (each one's name its own).
 // kept across runs: put back as a run begins (view_forget)
 let old_islands : Array[OldIsland] = []
+
+///|
+/// Intrinsic leaves indexed by their kept part: changing one old component never searches the other islands.
+let old_measures : Map[Int, @signals.Signal[Int]] = {}
 
 ///|
 // kept across runs: put back as a run begins (view_forget)
@@ -265,6 +270,9 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   let made : Ref[@view.Tree?] = Ref(None)
   let t = @view.Tree::new(
     fn(root) {
+      // The host must receive focus and layer requests made by the page's construction too. Attach the empty
+      // tree first, then make its children; no geometry is needed to decide who has the initial focus.
+      view_attached(root.tree)
       make(root)
       // (its words shaped as the theme it is drawn in says (its digits all one width or not: the app's, set_tree_theme,
       // else the window's for its width): as that changes, every word measured and drawn again so at the change's
@@ -282,6 +290,17 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
     time=fn() { h_event_time() },
   )
   made.val = Some(t)
+  view_due.set(@signals.untracked(fn() { view_due.get() }) + 1)
+  // (the tree in place of the one before, whole: whether the app takes back, as it has it, told the host now, as a change
+  // to it is: what it takes it by said as it was made, before what tells of its changes was set)
+  g().back_told_host()
+}
+
+///|
+/// Connect the window's tree before constructing its page. Initial focus, modal and gesture notifications have
+/// the same receiver as subsequent changes, rather than being lost while Tree::new calls its builder.
+fn view_attached(t : @view.Tree) -> Unit {
+  view_app.val = Some(t)
   // (what the old frame's topmost modal layer holds under it, as it is as an input asks: one dismissed by it, at once;
   // Tree::held_under_by)
   t.held_under_by(fn() { g().old_modal_stack() })
@@ -336,11 +355,6 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
       h_frame_owed()
     }
   })
-  view_app.val = Some(t)
-  view_due.set(@signals.untracked(fn() { view_due.get() }) + 1)
-  // (the tree in place of the one before, whole: whether the app takes back, as it has it, told the host now, as a change
-  // to it is: what it takes it by said as it was made, before what tells of its changes was set)
-  g().back_told_host()
 }
 
 ///|
@@ -359,6 +373,8 @@ pub fn view_painted() -> ViewPaintWork {
 /// As a run begins: no tree, its nodes let go. What took back by the old views no more held (what calls it and what it
 /// was said in): none takes back till a frame of the next says what does; nothing held of them.
 fn view_forget() -> Unit {
+  view_events.clear()
+  view_frame_committed.val = false
   view_read_tells.clear()
   view_shape_of.val = OfOld
   let c = g()
@@ -406,6 +422,10 @@ fn view_forget() -> Unit {
   touches_forget()
   view_input_to.val = -3
   old_islands.clear()
+  old_measures.clear()
+  old_input_reads.val = None
+  old_input_boxes.clear()
+  old_targets_due.val = false
   old_placed.clear()
   old_placed_off.clear()
   old_hits.clear()
@@ -643,9 +663,9 @@ fn view_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // (a page's list's rows on the pixels as this frame draws them, as an old view's list's are, before anything of it is
   // laid out: Tree::set_rows_grid)
   tree.set_rows_grid(g().rows_grid_of(scale))
-  // (the logic's moment for all of this frame: what the host has come to as it began; brought again in the frame, the
-  // tree goes no further than that, whatever time its building takes)
-  view_logic_at.val = h_now()
+  // Inputs have been committed. This is the host frame's only call into the tree; later outside events belong to
+  // the next frame, with their own moments preserved.
+  view_frame_committed.val = true
   view_brought(tree)
   // (what a still pointer is over, the tree laid out as this frame has it, before anything is built or drawn of it:
   // view_pointed_again)
@@ -666,24 +686,7 @@ fn view_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
 let view_logic_at : Ref[Double] = Ref(0.0)
 
 ///|
-/// What the frame took as it began (messages, the host's answers, the hand) told the window's tree: brought, before the
-/// frame decides what of the old views it builds again (where they are placed is part of that: view_island_said).
-fn view_arrived() -> Unit {
-  match view_app.val {
-    Some(tree) if tree.told_since() => {
-      view_brought(tree)
-      // (what a still pointer is over, as what came moved it: view_pointed_again)
-      view_pointed_again()
-    }
-    _ => ()
-  }
-}
-
-///|
-/// The tree brought as the frame goes (its logic to the host's now, drawn at the frame's moment), what it marked done:
-/// the instances it changed to be made again, where each old view is placed now. As the frame begins, and again where
-/// something told it as the frame went (a message the frame took), before the old views are built and before it is
-/// painted: what a frame takes it draws.
+/// The input snapshot laid out once, at the host frame's actual time; only paint samples its presentation time.
 fn view_brought(tree : @view.Tree) -> Unit {
   let (w, h) = view_window.val
   @signals.untracked(fn() { tree.frame(w, h, now=view_logic_at.val) |> ignore })
@@ -735,8 +738,8 @@ fn old_place(tree : @view.Tree) -> Unit {
     (match old_placed[0] {
       (id, x, y, iw, ih, a, _, _, _) => x == 0.0 && y == 0.0 && iw == w && ih == h && a == 1.0 && tree.drawn_scale(id) == 1.0 && tree.alone(id)
     }) &&
-    // (one as tall as what it holds measured in a box of its own, whatever it fills: old_natural_after_layout)
-    !old_islands.iter().any(fn(o) { o.id == old_placed[0].0 && o.natural is Some(_) })
+    // Intrinsically sized islands have their own measured box, even when they fill the window.
+    !old_islands.iter().any(fn(o) { o.id == old_placed[0].0 && o.natural })
 }
 
 ///|
@@ -754,14 +757,8 @@ fn view_island_said() -> String {
 /// The old frame's build where the window is a tree: the one old view's own where it is the whole window; else each
 /// old view in a box of its own where it is placed, cut to it, its subtree made once there by its own watch.
 fn old_frame(c : Ctx) -> Unit {
-  // (told since the frame began (what the frame took as it went: a core's answer, the system's bars), or old views made
-  // or let go: the tree brought and each placed as it is, so that the frame builds those there are where they are)
-  match view_app.val {
-    Some(tree) if tree.told_since() ||
-      old_islands.length() != old_placed.length() ||
-      old_islands.iter().any(fn(o) { !old_placed.iter().any(fn(p) { p.0 == o.id }) }) => view_brought(tree)
-    _ => ()
-  }
+  old_input_boxes.clear()
+  old_targets_due.val = false
   // (none laid out yet in this pass: each placed says its own, none where the old frame is the one old view)
   for o in old_islands {
     o.held_box = -1
@@ -788,10 +785,9 @@ fn old_frame(c : Ctx) -> Unit {
         let (id, _, _, w, h, _, ox, oy, _) = p
         let (left, top) = (ox, oy)
         let i = c.box(
-          // (one as tall as what it holds: as tall as that is laid out, whatever its node was given (its height its node's
-          // as that is told, old_natural_after_layout), what grows in it laid out by what it holds, not the room it had)
+          // A natural island paints at the height measured during its parent's layout.
           // (one that gives way: laid out in the height its node is given, as tall as what it holds asks all the same)
-          style=if o.natural is Some(_) && !o.gives {
+          style=if o.natural && !o.gives {
             style(w=Fixed(w), clip=true)
           } else {
             style(w=Fixed(w), h=Fixed(h), clip=true)
@@ -804,24 +800,22 @@ fn old_frame(c : Ctx) -> Unit {
             // (built for its own room: what it reads of the window's size is its node's)
             // (as tall as what it holds: built for its width, its Ctx::height the window's (where it is built, not how
             // tall it may be), never the height it is given, which is what it holds's)
-            let room_h = if o.natural is Some(_) { c.height } else { h }
+            let room_h = if o.natural { c.height } else { h }
             // (as wide as what it holds: built for the most it may be, whatever it is now)
             let room_w = match o.fits {
-              Some((most, _)) => most
+              Some(most) => most
               None => w
             }
             o.room.val = (room_w, room_h)
             let put = fn() { owned_by(o.owner, fn() { o.watch.read(fn() { c.made(o.key, fn() { o.made }) }) }) }
             c.sized(room_w, room_h, fn() {
               match o.natural {
-                // (as tall as what it holds at its width, in a box of its own: how tall that is laid out, its node's
-                // height, old_natural_after_layout; as wide as what it holds, `most` at most, no narrower than its node:
-                // how wide that is laid out, what its node is told)
-                Some(_) =>
+                // Match the intrinsic box used by old_measure, at the width its parent assigned it.
+                true =>
                   match o.fits {
                     // (laid out in the room of the most it may be, at its start: as wide as what it holds there, no
                     // narrower than its node; whatever its node is now)
-                    Some((most, _)) => {
+                    Some(most) => {
                       let most = dmax(w, most)
                       c.box(style=style(w=Fixed(most), align=AStart), fn() {
                         o.held_box = c.box(style=style(w=Hug, min_w=Fixed(w), max_w=Fixed(most)), fn() { put() })
@@ -832,7 +826,7 @@ fn old_frame(c : Ctx) -> Unit {
                     None if o.gives => o.held_box = c.box(style=style(w=Fixed(w), h=Full), fn() { put() })
                     None => o.held_box = c.box(style=style(w=Fixed(w)), fn() { put() })
                   }
-                None => {
+                false => {
                   o.held_box = -1
                   put()
                 }
@@ -887,9 +881,6 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   // (read: told as the tree has something to do, this paint is done again; told as the frame was built, brought first:
   // what the frame took is what it paints)
   view_due.get() |> ignore
-  if tree.told_since() {
-    view_brought(tree)
-  }
   // (the frame's input targets, the old views' and what the old frame put over all of it, found before anything is
   // drawn (Ctx::view_targets); what a still pointer is over told as they say, the tree brought so: drawn as it is now)
   let layers_from = self.view_targets(root, tree)
@@ -918,9 +909,6 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       }
     }
     None => ()
-  }
-  if tree.told_since() {
-    view_brought(tree)
   }
   // (what the tree changed taken, whoever brought it to its moment, before anything of it is painted: by this frame's
   // bringing, or by an input's finding things meanwhile, Tree::bring_to, with nothing told after: what is painted is
@@ -1934,6 +1922,7 @@ let old_fault_words : TextStyle = text_style(size=Meta, color=Muted)
 /// wheel, what is read out): no modal layer of the window's tree is on, or the topmost holds it (Tree::allows). None
 /// (built in no island, or in a layer it opened over everything: a menu, a sheet), always.
 fn island_allows(island : @view.NodeId?) -> Bool {
+  if g().measuring { return false }
   match (island, view_app.val) {
     (Some(id), Some(tree)) => tree.allows(id)
     _ => true
@@ -2491,6 +2480,7 @@ fn view_tapped_old() -> Unit {
 /// As the frame ends: what reads the window's tree's clock keeps the frames coming as the clock goes (a look by the
 /// time, a node fading as it leaves); what only ends at a moment (a leaving nothing draws by) is woken for then.
 fn view_frame_end(c : Ctx) -> Unit {
+  if !view_events.is_empty() { c.wants_frame = true }
   let tree = match view_app.val {
     Some(t) => t
     None => return
@@ -2526,48 +2516,33 @@ fn view_frame_end(c : Ctx) -> Unit {
 /// old frame's (made_island: built again only as what it read changes, whatever another old view does); let go with
 /// it, its build run no more. Any number a window: one the whole window's is the old frame itself. `key`: what it is laid
 /// out by besides what it reads (a part's key, Ctx::kept_part's: what is no signal it reads of the window, the host),
-/// built again as that changes. `natural`: as tall as what it holds at the width it is given (laid out so by the old
-/// frame, old_natural_after_layout), not as said of it (a panel's body, as tall as its words): said no taller (max_height),
+/// built again as that changes. `natural`: as tall as what it holds at the width it is given, measured directly in
+/// its parent's layout (a panel's body, as tall as its words): said no taller (max_height),
 /// cut to that. Built then for its width with the window's height as its Ctx::height (where it is built, no bound on
 /// how tall it is), again as either changes, never for the height it is given. `fits`: as wide as what it holds besides, at
-/// most its first and never narrower than its node is (a panel as wide as what it holds, never narrower than it has been):
-/// that width as the old frame last laid it out told its second (None before), built for the most whatever it is; a
+/// most the given width and never narrower than it has been (a panel as wide as what it holds): built for that
+/// maximum, returning its intrinsic width directly to the parent; a
 /// `natural` one's alone.
 /// `gives`, a `natural` one's: as tall as what it holds asks still (what it holds laid out with no bound on its height,
 /// told its node), but laid out in the height its node is given, what in it gives way giving way (a list in it scrolling
 /// in itself): its node held shorter than what it holds asks (its holder short of room), nothing of it cut off; what it
 /// asks never the height it was given. Not with `fits` (not yet: one that fits laid out as a `natural` one is,
 /// cut where its node is shorter).
-/// `unlaid`, a `natural` one's: how tall it is taken to be till first laid out (in a list: as tall as a screen, the rows
-/// after it made only as it is known to leave room for them).
+/// `unlaid` is accepted for source compatibility; direct measurement needs no estimated height.
 pub fn old(
   v : @view.View,
   build : (Ctx) -> Unit,
   key? : () -> String = fn() { "" },
   natural? : Bool = false,
   gives? : Bool = false,
-  fits? : (Double, @signals.Signal[Double?]),
+  fits? : Double,
   unlaid? : () -> Double,
 ) -> @view.View {
   v.hosted(make=fn(n) {
-    // (as tall as what it holds at the width it is given, as the old frame last laid that out: old_natural_after_layout)
-    let natural_h : @signals.Signal[Double?]? = if natural {
-      let s = @signals.signal(None, same=fn(a, b) { a == b })
-      // (`unlaid`: how tall it is taken to be till the old frame has laid it out, in that frame's first pass (built
-      // again with it once known, never drawn so): what lays out by the room it leaves (a list making its rows as far
-      // as they show) making nothing for room it does not leave)
-      n.height(By(fn() {
-        match (s.get(), unlaid) {
-          (Some(h), _) => Some(h)
-          (None, Some(f)) => Some(f())
-          (None, None) => None
-        }
-      }))
-      |> ignore
-      Some(s)
-    } else {
-      None
-    }
+    // Intrinsic measurement happens in the parent's layout. No estimated height is published as an intermediate
+    // layout: the same pass that asks for this island's height receives the measured result.
+    ignore(unlaid)
+    let measure_revision = @signals.signal(0)
     let name = "old island \{old_made.val}"
     old_made.val = old_made.val + 1
     let room : Ref[(Double, Double)] = Ref((0.0, 0.0))
@@ -2582,6 +2557,7 @@ pub fn old(
           // (its build's reads are the old frame's, which builds it: told, that frame is built again (what came from
           // outside its own, frame_watch.mbt); between frames, one asked for)
           outside_counted()
+          if natural { measure_revision.set(@signals.untracked(fn() { measure_revision.get() }) + 1) }
           if !frame_running.val {
             h_frame_owed()
           }
@@ -2606,7 +2582,7 @@ pub fn old(
     if building.val {
       g().read_changed("an old view made as the frame was built")
     }
-    old_islands.push({
+    let island : OldIsland = {
       id,
       key: name,
       build: held_build,
@@ -2622,11 +2598,23 @@ pub fn old(
       watch: watch.val.unwrap(),
       part: -1,
       room,
-      natural: natural_h,
+      natural,
+      measure_revision,
       gives: natural && gives,
       fits: if natural { fits } else { None },
+      fitted_width: Ref(0.0),
       held_box: -1,
-    })
+    }
+    old_islands.push(island)
+    if natural {
+      match fits {
+        Some(most) => n.max_width(Is(Some(most))) |> ignore
+        None => ()
+      }
+      n.measured(By(fn() { (measure_revision.get(), key(), n.window()) }), fn(snapshot, w) {
+        old_measure(g(), island, w.unwrap_or(snapshot.2.0))
+      }) |> ignore
+    }
     n.owns(fn() {
       match old_islands.search_by(fn(o) { o.id == id }) {
         Some(i) => {
@@ -2640,6 +2628,7 @@ pub fn old(
           o.made.let_go()
           if o.part >= 0 {
             kept_nodes.remove((o.part, -1))
+            old_measures.remove(o.part)
           }
         }
         None => ()
@@ -2818,15 +2807,44 @@ fn view_event(f : () -> Unit) -> Unit {
 /// One event (view_event's) whose own facts (`said`: what the host says it came by) are so as of its moment, told
 /// before it is taken (Tree::event_said).
 fn view_event_said(said : () -> Unit, f : () -> Unit) -> Unit {
+  let at = h_event_time()
+  if frame_running.val && view_frame_committed.val {
+    view_events.push((at, said, f))
+    h_frame_owed()
+    return
+  }
+  view_event_at(at, said, f)
+}
+
+///|
+// The input cutoff is the start of retained layout. A callback during layout or paint retains its original time
+// and is committed before the next frame, without restarting the current one.
+let view_frame_committed : Ref[Bool] = Ref(false)
+
+///|
+let view_events : Array[(Double, () -> Unit, () -> Unit)] = []
+
+///|
+fn view_events_taken() -> Unit {
+  let pending = view_events.copy()
+  view_events.clear()
+  for (at, said, f) in pending { view_event_at(at, said, f) }
+}
+
+///|
+fn view_event_at(at : Double, said : () -> Unit, f : () -> Unit) -> Unit {
   match view_app.val {
-    Some(t) => t.event_said(h_event_time(), said, f)
+    Some(t) => t.event_said(at, said, fn() {
+      f()
+      old_inputs(g(), at)
+    })
     None => {
       said()
       f()
     }
   }
   // (the hand as this event left it, whole, at its moment: hand_turns.mbt)
-  turns_said(g(), h_event_time())
+  turns_said(g(), at)
 }
 
 ///|
@@ -3024,6 +3042,7 @@ fn old_hits_framed(c : Ctx) -> Unit {
 /// take them again as it does. What the old frame put over all of it at its root (overlays) stays where it was painted,
 /// in the window's terms.
 fn old_hits_place(c : Ctx, tree : @view.Tree?) -> Unit {
+  match tree { Some(t) => old_targets_refresh(c, t); None => () }
   let rects = c.hit_rects
   let clips = c.hit_clips
   for h in old_hits {
@@ -4391,34 +4410,54 @@ fn focus_told_tree(c : Ctx) -> Unit {
 let old_show_due : Ref[Int?] = Ref(None)
 
 ///|
-/// The old views as tall as what they hold (old's `natural`), the old frame laid out: each one's height, what it holds
-/// laid out at its width in a box as tall as that (not the box it is cut to), told its node where it differs; the frame
-/// built again then, in this frame (Ctx::read_changed), what comes after it placed under it from the frame it changed.
-/// What it holds is built again only as what it read changes, never for its height (made_island's key: its width).
-fn old_natural_after_layout(c : Ctx) -> Unit {
-  for o in old_islands {
-    match o.natural {
-      Some(s) if o.held_box >= 0 && o.held_box < c.count => {
-        // (one that gives way: as tall as what it holds is laid out with no bound on its height, not the height it was
-        // given and laid out in)
-        let h = if o.gives { c.asked_height(o.held_box) } else { c.nodes[o.held_box].fh }
-        if @signals.untracked(fn() { s.get() }) != Some(h) {
-          s.set(Some(h))
-          c.read_changed("an old view's height, what it holds laid out")
+/// An old island is a measured leaf of the retained tree. Its nodes are built into their ordinary kept part,
+/// measured here, then spliced into the old frame at the position returned by the parent's layout. No signal carries
+/// this result back into layout, and the island's content watch invalidates the leaf when its inputs change.
+fn old_measure(c : Ctx, o : OldIsland, width : Double) -> (Double, Double) {
+  old_build_size(c, o, width, measuring=true)
+}
+
+///|
+fn old_build_size(c : Ctx, o : OldIsland, width : Double, height? : Double = 0.0, measuring~ : Bool) -> (Double, Double) {
+  let w = match o.fits { Some(most) => most; None => width }
+  let h = if o.natural { c.window_h } else { height }
+  o.room.val = (w, h)
+  o.part = c.id(o.key)
+  old_measures[o.part] = o.measure_revision
+  let root = Ref(-1)
+  let held = Ref(-1)
+  let was_building = building.val
+  let was_measuring = c.measuring
+  c.measuring = measuring
+  building.val = true
+  c.with_parent(-1, fn() {
+    c.sized(w, h, fn() {
+      root.val = c.box(style=style(w=Fixed(w), h=if o.natural { Hug } else { Fixed(h) }, align=AStart), fn() {
+        let put = fn() {
+          owned_by(o.owner, fn() { o.watch.read(fn() { c.made(o.key, fn() { o.made }) }) })
         }
         match o.fits {
-          Some((_, f)) => {
-            let w = c.nodes[o.held_box].fw
-            if @signals.untracked(fn() { f.get() }) != Some(w) {
-              f.set(Some(w))
-              c.read_changed("an old view's width, what it holds laid out")
-            }
-          }
-          None => ()
+          Some(most) => held.val = c.box(style=style(w=Hug, min_w=Fixed(o.fitted_width.val), max_w=Fixed(most)), put)
+          None => put()
         }
-      }
-      _ => ()
-    }
+      })
+    })
+  })
+  c.layout(root.val, 0.0, 0.0, w, if o.natural { 0.0 / 0.0 } else { h }) |> ignore
+  old_input_boxes[o.id] = root.val
+  old_targets_due.val = true
+  building.val = was_building
+  c.measuring = was_measuring
+  let measured = if held.val >= 0 { c.nodes[held.val] } else { c.nodes[root.val] }
+  o.fitted_width.val = measured.fw
+  (measured.fw, measured.fh)
+}
+
+/// A kept part's content changed. This is an input change, not a report of its measured size.
+fn old_part_changed(part : Int) -> Unit {
+  match old_measures.get(part) {
+    Some(revision) => revision.set(@signals.untracked(fn() { revision.get() }) + 1)
+    None => ()
   }
 }
 

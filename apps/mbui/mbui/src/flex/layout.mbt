@@ -425,6 +425,19 @@ pub fn measured_height(node : Node, width : Double) -> Double {
 }
 
 ///|
+/// Measure and lay out a child of a custom container within the current compute, retaining this generation and
+/// its caches. This is not a new root compute. Its caller owns the child's final position.
+pub fn layout_child(node : Node, width : Double, height? : Double, containing_height? : Double) -> (Double, Double) {
+  let h = height.unwrap_or(undef)
+  let ch = containing_height.unwrap_or(undef)
+  let w = size_node(node, width, h, width, h, width, ch, true)
+  let h = out_h.val
+  node.width = w
+  node.height = h
+  (w, h)
+}
+
+///|
 /// The offset of a relatively positioned box from its insets.
 fn inset_offset(s : Style, cb_w : Double, cb_h : Double, horizontal : Bool) -> Double {
   if s.position != Relative {
@@ -659,6 +672,19 @@ fn size_uncached(
   }
   let pbw = b.pbw()
   let pbh = b.pbh()
+  match node.layout_children {
+    Some(layout) => {
+      // A viewport's intrinsic content is empty; its parent must give it the final bounds (flex share, explicit
+      // dimensions or insets). Only that final layout is allowed to subcompose its visible children.
+      if perform {
+        guard known(w) && known(h) else { abort("custom child layout needs a bounded width and height") }
+        layout(fmax(w - pbw, 0.0), fmax(h - pbh, 0.0), b.bor_l + b.pad_l, b.bor_t + b.pad_t)
+      }
+      out_h.val = if known(h) { h } else { clamp_size(pbh, b.min_h, b.max_h) }
+      return if known(w) { w } else { clamp_size(pbw, b.min_w, b.max_w) }
+    }
+    None => ()
+  }
   // leaves measured from their content
   match node.measure {
     Some(m) =>
@@ -1403,6 +1429,19 @@ fn layout_flex(
       let lo = if row { b.min_w } else { b.min_h }
       let hi = if row { b.max_w } else { b.max_h }
       clamp_size(max_line_main + pb, lo, hi) - pb
+    }
+    // A horizontal scroll's bar belongs to this same layout. Its overflow is now known from the resolved main
+    // sizes, before either the content's cross size or the container's intrinsic height is decided.
+    if row && s.overflow == Scroll && node.scroll_bar_space > 0.0 {
+      for k in 0..<count {
+        let i = k * ITEM
+        if f.unsafe_get(i + MAIN) > main_size + pbw + 0.5 {
+          let cb = item_box(flow.unsafe_get(at.unsafe_get(k)))
+          let extra = fmax(node.scroll_bar_space - cb.pad_b, 0.0)
+          f.unsafe_set(i + MARGIN_CROSS, f.unsafe_get(i + MARGIN_CROSS) + extra)
+          f.unsafe_set(i + MAR_CROSS_END, f.unsafe_get(i + MAR_CROSS_END) + extra)
+        }
+      }
     }
     // hypothetical cross sizes
     for k in 0..<count {
@@ -2397,6 +2436,13 @@ fn last_resort(pool : Pool, a : Int, b : Int, space : Double) -> Unit {
 /// position in its parent when it has no insets. (ox, oy): the parent's
 /// border box in cb's.
 fn layout_static_absolute(cb : Node, node : Node, ox : Double, oy : Double) -> Unit {
+  if node.layout_children is Some(_) {
+    // The container has already placed its direct children; absolute descendants still use their own holders.
+    for c in node.children {
+      if c.line >= 0 && !kept(c) && c.children.length() > 0 { layout_static_absolute(c, c, 0.0, 0.0) }
+    }
+    return
+  }
   for c in node.children {
     let cs = c.style
     if cs.display == DisplayNone {
@@ -2427,6 +2473,21 @@ fn layout_static_absolute(cb : Node, node : Node, ox : Double, oy : Double) -> U
 fn place_absolute(cb : Node, parent : Node, c : Node, ox : Double, oy : Double) -> Unit {
   // An overlay returning from display:none participates again, just as a flex item given its line does.
   c.line = 0
+  match c.layout_overlay {
+    Some(bounds) => {
+      // The parent's normal-flow children already have their final sizes. The dependent overlay is measured
+      // once with the bounds they imply; a clean child reuses its layout only when these constraints match.
+      let (x, y, w, h) = bounds(parent.width, parent.height)
+      let rw = size_node(c, w, h, w, h, parent.width, parent.height, true)
+      let rh = out_h.val
+      c.width = rw
+      c.height = rh
+      c.left = on_grid(x)
+      c.top = on_grid(y)
+      return
+    }
+    None => ()
+  }
   let cbb = box_of(cb.style, undef, undef)
   let pb = box_of(parent.style, undef, undef)
   let ps = parent.style

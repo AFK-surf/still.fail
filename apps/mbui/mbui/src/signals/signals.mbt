@@ -500,7 +500,7 @@ pub fn after_flush(f : () -> Unit) -> Unit {
 
 ///|
 /// The computed's value, worked out again first if what it read changed since (computedOper).
-pub fn[T] Computed::get(self : Computed[T]) -> T {
+fn[T] Computed::read_value(self : Computed[T]) -> T {
   let node = self.0
   let state = self.1
   let flags = node.flags
@@ -536,7 +536,7 @@ pub fn[T] Computed::get(self : Computed[T]) -> T {
 
 ///|
 /// The signal's value (signalOper read): what was set, once it is read after.
-pub fn[T] Signal::get(self : Signal[T]) -> T {
+fn[T] Signal::read_value(self : Signal[T]) -> T {
   let node = self.0
   let state = self.1
   if (node.flags & DIRTY) != 0 {
@@ -555,6 +555,7 @@ pub fn[T] Signal::get(self : Signal[T]) -> T {
 /// The signal set (signalOper write): what follows it told, unless it is the same as what was set.
 #callsite(autofill(loc))
 pub fn[T] Signal::set(self : Signal[T], value : T, loc~ : SourceLoc) -> Unit {
+  access_checked("signal write", loc)
   let state = self.1
   let changed = !same_as(state.same, state.pending, value)
   state.pending = value
@@ -682,13 +683,6 @@ fn purge_deps(sub : ReactiveNode) -> Unit {
 }
 
 // ── not alien-signals': for what keeps computeds of its own, and lets them go ──────────────────────────────
-
-///|
-/// What the computed made last, not worked out again (none before it was first read).
-pub fn[T] Computed::peek(self : Computed[T]) -> T? {
-  let state = self.1
-  state.value
-}
 
 ///|
 /// The computed let go of what it read (as unwatched does with a computed nothing reads any more): what it read no

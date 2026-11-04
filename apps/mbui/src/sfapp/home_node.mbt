@@ -129,9 +129,8 @@ fn home_top_bar_node(
       })
       // catching up and transfers beside the filter (their old views, hosted)
       row.box(fn(k) {
-        // (as wide as they are laid out, told by the old frame: what gives way is the workspace's name)
-        let wide : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
-        k.shrink(Is(0.0)).width(By(fn() { wide.get() })) |> ignore
+        // Its intrinsic width is measured by this row; the workspace name gives way.
+        k.shrink(Is(0.0)) |> ignore
         @ui.old(k, fn(c) {
           c.box(style=home_keys_row, fn() {
             let (syncing, said) = match view() {
@@ -145,7 +144,7 @@ fn home_top_bar_node(
             }
           })
           |> ignore
-        }, natural=true, fits=(home_keys_most, wide))
+        }, natural=true, fits=home_keys_most)
         |> @ui.old_takes_own
         |> ignore
       })
@@ -221,4 +220,3 @@ let home_keys_row : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
 ///|
 /// How wide what is catching up and going up beside the filter may be at most (two keys and the room between).
 let home_keys_most : Double = 120.0
-

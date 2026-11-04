@@ -13,11 +13,11 @@ fn composer_keyboard_node(
 ) -> Unit {
   let entered = Ref(false)
   root.reacts(fn() {
-    (active(), spec().locked, field.takes_input(), field.laid_size_told() is Some(_), composing.wanted.get(), field.focused())
+    (active(), spec().locked, field.takes_input(), composing.wanted.get(), field.focused())
   }, fn(state) {
-    let (on, locked, input, laid, wanted, focused) = state
+    let (on, locked, input, wanted, focused) = state
     if !on { entered.val = false; return }
-    if locked || !laid { return }
+    if locked { return }
     let first = !entered.val
     entered.val = true
     // Entering under a modal still asks for the initial cursor. The field keeps that request for the modal to

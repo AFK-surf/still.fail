@@ -6,6 +6,7 @@ pub(all) struct ChatComposerNode {
   root : @view.View
   composer : ComposerNode
   room : () -> Double
+  room_parts : () -> (Double, Double)
 }
 
 ///|
@@ -47,15 +48,21 @@ pub fn chat_composer_node(
   let node : Ref[ComposerNode?] = Ref(None)
   let extras : Ref[ComposerExtrasNode?] = Ref(None)
   let root_at : Ref[@view.View?] = Ref(None)
+  // Inputs to the parent's layout: the open editor's minimum room and the current shape's height delta.
+  // Neither reads a measured size. The parent combines them with this pass's measurements directly.
+  let room_parts = fn() {
+    let look = @ui.style_words(@sf.theme().t.words)
+    let line = (if look.line > 0.0 { look.line } else { look.size * @ui.tree_theme().text_line }) * @ui.font_scale()
+    let opened = @sf.composer_pad + 8.0 + line + 10.0 + @sf.theme().round.side + @sf.capsule_in(place().corner, @sf.theme().round.side)
+    (opened, (node.val.unwrap().ground)().3)
+  }
   let room = fn(settled : Bool) {
     let n = node.val.unwrap()
     let root = root_at.val.unwrap()
     let total = root.laid_size_told().map(fn(s) { s.1 }).unwrap_or(0.0)
     let cap = n.cap.laid_size_told().map(fn(s) { s.1 }).unwrap_or(0.0)
-    let look = @ui.style_words(@sf.theme().t.words)
-    let line = (if look.line > 0.0 { look.line } else { look.size * @ui.tree_theme().text_line }) * @ui.font_scale()
-    let opened = @sf.composer_pad + 8.0 + line + 10.0 + @sf.theme().round.side + @sf.capsule_in(place().corner, @sf.theme().round.side)
-    let shape = if settled { 0.0 } else { (n.ground)().3 }
+    let (opened, moving) = room_parts()
+    let shape = if settled { 0.0 } else { moving }
     dmax(total + shape, total - cap + opened)
   }
   let root = parent.box(fn(root) {
@@ -101,5 +108,5 @@ pub fn chat_composer_node(
       _ => ()
     }
   }) |> ignore
-  { root, composer: node.val.unwrap(), room: fn() { room(false) } }
+  { root, composer: node.val.unwrap(), room: fn() { room(false) }, room_parts }
 }

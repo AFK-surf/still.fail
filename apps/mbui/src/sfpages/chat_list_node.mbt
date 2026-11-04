@@ -257,25 +257,22 @@ pub fn chat_list_node(
   let flash : @signals.Signal[(String, Double)] = @signals.signal(("", 0.0), same=fn(a, b) { a == b })
   // (the rows in sight, by their keys, in order)
   let shown : @signals.Signal[Array[String]] = @signals.signal([], same=fn(a, b) { a == b })
-  v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+  v.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
   v.box(fn(col) {
-    col.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
-    col.scrolls_window(
+    col.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
+    col.scrolls_anchored(
       scroll,
       keys,
       est=chat_row_est,
-      from_end=true,
       follows~,
       shown~,
       put~,
+      rooms=sized.room_now,
+      // The flying copy needs its real landing before the glide brings the row into sight.
+      kept_keys=fn() { @sfbase.flight_of(draft).map(fn(f) { [f.key] }).unwrap_or([]) },
       // (new to it: said while it shows, an agent starting, sent from here; not what is caught up on, at once)
       // (the bar over its top: what comes taller than what shows is read from its top under it)
       cover=top,
-      room=sized.room,
-      moving=sized.moving,
-      // The flying copy needs its real landing before the glide brings the row into sight.
-      kept=fn(k) { @sfbase.flight_takes(draft, k) },
-      kept_keys=fn() { @sfbase.flight_of(draft).map(fn(f) { [f.key] }).unwrap_or([]) },
       fresh=fn(k) {
         match row_of(k) {
           Some((Said(m), _)) => m.said
@@ -514,8 +511,6 @@ pub fn chat_list_node(
   v.box(fn(fl) {
     fl
     .over(Is(true))
-    .width(By(fn() { v.laid_size_told().map(fn(z) { z.0 }) }))
-    .height(By(fn() { v.laid_size_told().map(fn(z) { z.1 }) }))
     |> ignore
     emit_flyer_node(fl, rk, view)
   })
@@ -836,13 +831,15 @@ pub fn chat_list_node(
     .over(Is(true))
     .lies_along(Is(End))
     .lines_up(Is(Some(End)))
-    .padding(By(fn() {
+    .offset(By(fn() {
       let w = v.laid_size_told().map(fn(z) { z.0 }).unwrap_or(0.0)
       let above = !follows.get() || view().map(fn(cv) { cv.newer }).unwrap_or(false)
-      (0.0, 0.0, (w - composer_width(w)) / 2.0 + float_in, foot() + float_lift + (if above { float_above } else { 0.0 }))
+      (-((w - composer_width(w)) / 2.0 + float_in), -(foot() + float_lift + (if above { float_above } else { 0.0 })))
     }))
+    .alpha(By(fn() { if asking() { 1.0 } else { 0.0 } }))
+    .presses(By(asking)).hides(By(fn() { !asking() }))
     |> ignore
-    f.show(asking, fn(b) {
+    f.box(fn(b) {
       b
       .width(Is(Some(float_side)))
       .height(Is(Some(float_side)))
@@ -874,7 +871,7 @@ pub fn chat_list_node(
         }
       })
       @sf.icon_node(b, "bell", float_icon, By(fn() { @sf.theme().p.text })) |> ignore
-    })
+    }) |> ignore
   })
   |> ignore
   // the way to the newest (ToLatest): over the list right over the send button, the composer's room under it, a round
@@ -885,12 +882,15 @@ pub fn chat_list_node(
     .over(Is(true))
     .lies_along(Is(End))
     .lines_up(Is(Some(End)))
-    .padding(By(fn() {
+    .offset(By(fn() {
       let w = v.laid_size_told().map(fn(z) { z.0 }).unwrap_or(0.0)
-      (0.0, 0.0, (w - composer_width(w)) / 2.0 + float_in, foot() + float_lift)
+      (-((w - composer_width(w)) / 2.0 + float_in), -(foot() + float_lift))
     }))
+    .alpha(By(fn() { if !follows.get() || view().map(fn(cv) { cv.newer }).unwrap_or(false) { 1.0 } else { 0.0 } }))
+    .presses(By(fn() { !follows.get() || view().map(fn(cv) { cv.newer }).unwrap_or(false) }))
+    .hides(By(fn() { follows.get() && !view().map(fn(cv) { cv.newer }).unwrap_or(false) }))
     |> ignore
-    f.show(fn() { !follows.get() || view().map(fn(cv) { cv.newer }).unwrap_or(false) }, fn(b) {
+    f.box(fn(b) {
       b
       .row(Is(true))
       .height(Is(Some(float_side)))
@@ -930,7 +930,7 @@ pub fn chat_list_node(
           @sf.t("web-main.chat.newMessages", args=[("n", view().map(fn(cv) { cv.unread.to_int() }).unwrap_or(0).to_string())])
         }, fn() { float_count }) |> ignore
       })
-    })
+    }) |> ignore
   })
   |> ignore
   {
