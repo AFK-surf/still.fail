@@ -2,6 +2,7 @@
 // station process's (its adb tunnels over the mesh, not ported yet): it gives them here as `phones`; until it does,
 // there are none, as with the Rust station before it registered its lister.
 import type { Tool } from "../tools/mcp.ts";
+import { type Display, IDLE_MS } from "./displays.ts";
 import { type PhoneGrants, said } from "./grants.ts";
 
 type Json = any;
@@ -47,7 +48,9 @@ export const PHONE_USE = {
 
 /// How a granted phone is reached now: its owner's phones lent here (`phones`), each in the grant's adb server (`port`).
 /// `gone`: when the phone was last offered no longer and why, if it was since the station started.
-export function reached(serials: { serial: string; adb: string; device: string }[], port: number | null, gone?: { at: number; ended: string } | null): string {
+/// `display`: the chat's own screen on the phone (displays.ts), or why it could not be made; none while the phone is not
+/// connected.
+export function reached(serials: { serial: string; adb: string; device: string }[], port: number | null, gone?: { at: number; ended: string } | null, display?: Display | { failed: string } | null): string {
   if (serials.length === 0 || port === null) {
     const since = gone ? ` It stopped being offered ${new Date(gone.at).toISOString()} (${gone.ended === "stopped" ? "its app ended the share: its 共享调试 switch turned off, say" : `its link went: ${gone.ended}`}).` : "";
     return `Granted, but the phone is not lent to this station right now.${since} Its app lends it by itself while a grant is live and its 共享调试 switch is on (started again with the phone, kept up in the background); call phone_use again in a minute. Only if it stays away, ask its person to turn on 共享调试 in the app's settings on the phone (设置 › 共享调试), saying what this says.`;
@@ -57,6 +60,20 @@ export function reached(serials: { serial: string; adb: string; device: string }
     "Granted. Use this chat's adb server, with -P on every adb command (the station's own adb, 5037, does not have the phone; another server is turned away):",
     ...lines,
     'adb "connected" is ready; "unpaired": the phone needs pairing, and its card in your chat shows its person how (a card under it, in the still.fail app on the phone): leave it to the card, do not send them to the phone\'s settings, and you are told in this session when it connects. Never adb kill-server on it. A phone is its owner\'s: use it for what they asked.',
+    ...(display ? ["", displayed(display)] : []),
+  ].join("\n");
+}
+
+/// How the agent works on the chat's own screen of the phone (or why there is none).
+export function displayed(display: Display | { failed: string }): string {
+  if ("failed" in display)
+    return `This chat's own screen on the phone could not be made (${display.failed}), so only the phone's own screen is there, which its person may be using: ask them in the chat before you operate it (installing, reading logs and other commands that touch no screen need no asking). Call phone_use again to try again.`;
+  return [
+    `This chat has a screen of its own on the phone: display ${display.id} (${display.width}x${display.height}, density ${display.density}), apart from the phone's own screen, which its person keeps using. Work on it, not on theirs, unless they ask:`,
+    `- Start an app on it: \`adb … shell am start --display ${display.id} -n <package>/<activity>\` (or \`-a android.intent.action.MAIN -c android.intent.category.LAUNCHER <package>\`; \`cmd package resolve-activity --brief <package>\` names its activity). An app is on one screen at a time: one the person has open moves over, so prefer apps they are not using.`,
+    `- Touch and type there: \`adb … shell input -d ${display.id} tap <x> <y>\`, \`swipe\`, \`text\`, \`keyevent BACK\` (it has no navigation bar; its keyboard shows on it).`,
+    `- Its picture: \`adb … exec-out screencap -d ${display.surface} -p > shot.png\` (the id screencap takes for it), then look at the file.`,
+    `It closes with the apps on it when you hand the phone back (phone_use done: true, do that once finished), when the grant ends, or after ${IDLE_MS / 60_000} minutes of no adb use; phone_use makes a new one then. While it is up, the phone's notification names this chat.`,
   ].join("\n");
 }
 

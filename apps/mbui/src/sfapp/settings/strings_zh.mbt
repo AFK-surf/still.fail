@@ -96,6 +96,8 @@ let zh : Map[String, String] = {
   "android-misc.adb.notify.chats": "正在将调试共享给 {n} 个对话",
   "android-misc.adb.notify.idle": "暂无对话在使用",
   "android-misc.adb.notify.on": "共享调试已开启",
+  "android-misc.adb.notify.screen": "「{title}」正在后台使用虚拟屏",
+  "android-misc.adb.notify.screens": "{n} 个对话正在后台使用虚拟屏",
   "android-misc.adb.notify.title": "正在将调试共享给 {name}",
   "android-misc.adb.off": "手机上的无线调试未开启",
   "android-misc.adb.offValue": "未打开",

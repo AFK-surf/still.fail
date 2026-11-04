@@ -89,6 +89,8 @@ android-misc.adb.notPaired
 android-misc.adb.notify.chats
 android-misc.adb.notify.idle
 android-misc.adb.notify.on
+android-misc.adb.notify.screen
+android-misc.adb.notify.screens
 android-misc.adb.notify.title
 android-misc.adb.off
 android-misc.adb.offValue

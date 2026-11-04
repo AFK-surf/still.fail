@@ -115,6 +115,7 @@ export const NOTES: [number, string][] = [
   [108, "What a remote task brought back (station-back/<key>/) is removed once nothing in it changed for 6 hours: move what you keep into your workspace."],
   [109, "When your turn ends done or asking and your chat still has no title, with nobody at work in it, the station asks you once to give it one: post only its title, then record the same state again."],
   [110, "The Antigravity CLI (agy, Google's) runs on stations that have it, on a Gemini key or its own variables: chat_create takes runtime \"agy\"."],
+  [111, "A phone granted with phone_use now has a screen of your chat's own (a virtual display) while you use it: phone_use says its display id and how to start apps, touch and take pictures there. Work on it, not on the screen its person is using, unless they ask; it closes with its apps when you hand the phone back or after 10 minutes unused."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.
