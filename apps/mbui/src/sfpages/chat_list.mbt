@@ -370,8 +370,8 @@ pub fn here_of(
 /// A row of the list but an agent's activity (ChatRows): its kind's.
 fn entry_row(c : @ui.Ctx, src : Source, here : MessageHere, e : Entry) -> Unit {
   match e {
-    Older => pages_coming(c, true)
-    Newer => pages_coming(c, false)
+    Older => pages_coming(c, here, true)
+    Newer => pages_coming(c, here, false)
     Empty => chat_empty(c)
     Line => unread_line(c)
     Said(m) => message_row(c, src, here, m)

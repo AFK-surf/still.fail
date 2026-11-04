@@ -3,8 +3,8 @@
 // (one quoting, two sent close together), a person's with a picture, an agent's long Markdown (headings, lists,
 // a task list, a quote, code, links, a reference to another chat), its files placed in its words and below them, a
 // message it sent to Slack, an options card, a login card, its last post offering to archive the chat. An older
-// page comes in when the reader nears the top (`chat.older`); "chat-login" its login card for one who may finish it,
-// its page to open in the browser. Every other row's chat is two lines. "chat-long" is a
+// page comes in when the reader nears the top (`chat.older`; "chat-older-failed": it does not); "chat-login" its
+// login card for one who may finish it, its page to open in the browser. Every other row's chat is two lines. "chat-long" is a
 // chat of thousands of messages, for timing the list. Every word here is made up.
 
 ///|

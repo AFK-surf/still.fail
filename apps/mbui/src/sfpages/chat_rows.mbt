@@ -16,9 +16,25 @@ fn unread_line(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// The page before or after being brought in (chatOlder, chatNewer): a spinner in the middle.
-fn pages_coming(c : @ui.Ctx, older : Bool) -> Unit {
-  c.box(style=if older { older_row } else { newer_row }, fn() { @sf.spinner(c) |> ignore }) |> ignore
+/// The page before or after being brought in (chatOlder, chatNewer): a spinner in the middle; one that did not come,
+/// 重试 in its place (msgUnsentBtn), which asks for it again.
+fn pages_coming(c : @ui.Ctx, here : MessageHere, older : Bool) -> Unit {
+  let rd = here.list.map(fn(l) { @sfbase.reading_of(l.rk) })
+  let failed = match rd {
+    Some(rd) => if older { rd.older_failed.get() } else { rd.newer_failed.get() }
+    None => false
+  }
+  c.box(style=if older { older_row } else { newer_row }, fn() {
+    if !failed {
+      @sf.spinner(c) |> ignore
+    } else if unsent_button(c, "pages-again/" + (if older { "older" } else { "newer" }), "retry", @sf.t("common.retry"), true, false, None) {
+      match rd {
+        Some(rd) => c.tell("pages-again", fn() { @sfbase.page_again(rd, older) })
+        None => ()
+      }
+    }
+  })
+  |> ignore
 }
 
 ///|
