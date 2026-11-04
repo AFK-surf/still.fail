@@ -71,6 +71,25 @@ test("the usage page can tell a pending history from one that is unavailable", (
   } finally { store.close(); }
 });
 
+test("a session deleted before history installation keeps its old usage in its workspace", () => {
+  const store = oldStore();
+  const db = store.db;
+  try {
+    db.prepare(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output, calls)
+      VALUES ('old', 0, 'a', 'claude', 2, 0, 0, 0, 1, 1)`).run();
+    store.deleteSession("a");
+    installCompactUsage(db, () => 900_000);
+    installUsageHistory(db, 900_000);
+    while (!convertUsageHistoryStep(db, 1)) { /* Take over the old summaries. */ }
+    const mine = usageHistory(makeStore(db, "."), 0n, { workspace: "A", home: false });
+    const home = usageHistory(makeStore(db, "."), 0n, { workspace: "home", home: true });
+    assert.ok(mine);
+    assert.ok(home);
+    assert.deepEqual((mine.days as { calls: number; tokens: number }[]).map(({ calls, tokens }) => [calls, tokens]), [[1, 3]]);
+    assert.deepEqual(home.days, []);
+  } finally { store.close(); }
+});
+
 for (const recursive of [false, true]) test(`old summaries transfer in batches while calls change (recursive triggers ${recursive})`, () => {
   const store = oldStore();
   const db = store.db;
