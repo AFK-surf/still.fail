@@ -11,7 +11,7 @@ export function GitHubMark({ size = 16 }: { size?: number }) {
 }
 
 /** The agent runtimes a mark is drawn for (still.fail's RuntimeKind). */
-export type RuntimeMarkKind = "claude" | "codex" | "dsh" | "grok" | "cursor" | "devin" | "hermes" | "agy";
+export type RuntimeMarkKind = "claude" | "codex" | "dsh" | "grok" | "cursor" | "devin" | "hermes" | "agy" | "codebuddy";
 /** A mark stands on its own: no baseline room under it, never squeezed in a row. */
 const BLOCK = { display: "block", flex: "none" } as const;
 
@@ -43,10 +43,13 @@ export function FeishuLogo({ size = 16 }: { size?: number; strokeWidth?: number 
 /**
  * The agent runtimes' marks: Claude's in its orange, OpenAI's (Codex), DeepSeek Harness's, xAI's (Grok Build), Cursor's and
  * Devin's in the text colour. Claude's, OpenAI's and Cursor's paths from simple-icons (CC0); DeepSeek Harness's from its
- * repository (MIT); xAI's the maker mark Grok's models have (public/models/xai.svg); Devin's from devin.ai's favicon; the Antigravity CLI's Gemini's mark (public/models/gemini.svg) in its blue.
+ * repository (MIT); xAI's the maker mark Grok's models have (public/models/xai.svg); Devin's from devin.ai's favicon; the Antigravity CLI's Gemini's mark (public/models/gemini.svg) in its blue; CodeBuddy Code's Tencent's maker mark (public/models/tencent.svg).
  */
 export function RuntimeLogo({ runtime, size = 16, className }: { runtime: RuntimeMarkKind; size?: number; className?: string }) {
   if (runtime === "hermes") return <svg width={size} height={size} viewBox="0 0 24 24" role="img" aria-label="Hermes Agent"><path fill="none" stroke="currentColor" strokeWidth="2" d="M6 4v16M18 4v16M6 12h12" /></svg>;
+  if (runtime === "codebuddy") return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-label="CodeBuddy Code" role="img" style={BLOCK} className={className}><path fill="currentColor" fillRule="evenodd" d="M9.976 1L24 9.8l-10.587.015L10.723 23H5.489L8.18 9.8H3.244L1 5.4h8.077L9.976 1z" /></svg>
+  );
   if (runtime === "agy") return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-label="Antigravity CLI" role="img" style={BLOCK} className={className} data-depicts><path fill="#3186FF" d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z" /></svg>
   );

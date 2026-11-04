@@ -16,6 +16,7 @@ import { GrokDriver } from "../agents/grok.ts";
 import { CursorDriver } from "../agents/cursor.ts";
 import { HermesDriver } from "../agents/hermes.ts";
 import { AgyDriver } from "../agents/agy.ts";
+import { CodebuddyDriver } from "../agents/codebuddy.ts";
 import { DevinDriver } from "../agents/devin.ts";
 import { Jobs, notifyEndpoint, screenEndpoint } from "../jobs/jobs.ts";
 import { liveMemory } from "../jobs/memory.ts";
@@ -189,6 +190,7 @@ export const AgentsLive = (control: Control) =>
       const lentToSandbox = (p: any) => !borrowed(p) && p?.access?.kind === "subscription" && sandboxed(data);
       const hermes = new HermesDriver({ data });
       const agy = new AgyDriver({ data });
+      const codebuddy = new CodebuddyDriver({ data });
       // What the station before this one left, taken up (`start`): until then the codex app-servers its runners keep are
       // the sessions' that ran on them (agents/codex.ts `takenUp`).
       const takenUp = Promise.withResolvers<void>();
@@ -236,6 +238,7 @@ export const AgentsLive = (control: Control) =>
           new DevinDriver({ data }),
           hermes,
           agy,
+          codebuddy,
         ],
         mcpUrl: () => door?.url ?? "",
         internal: new InternalChat(),
@@ -484,7 +487,7 @@ export const AgentsLive = (control: Control) =>
         return cloud.memberships().flatMap((m) => m.peers).find((x) => x?.id === host)?.name ?? host ?? null;
       };
       const accounts: Accounts = makeAccounts({
-        data, store, config, hub, reviewUndecided: () => startReview(hub), codex: () => codex as any, hermes: () => hermes, agy: () => agy, following: () => events.inUse() || hub.anyRunning(), checkOnStart: true,
+        data, store, config, hub, reviewUndecided: () => startReview(hub), codex: () => codex as any, hermes: () => hermes, agy: () => agy, codebuddy: () => codebuddy, following: () => events.inUse() || hub.anyRunning(), checkOnStart: true,
         workspaces: () => hub.workspaces(),
         shared: { status: (p) => sharing!.status(p), lendCodex: (p, rejected) => sharing!.lendCodex(p, rejected), quotaReset: (p, key) => sharing!.quotaReset(p.id, key), loginUpdated: () => { void sharing?.reconcile(); }, view: (p) => sharing?.profileView(p) ?? null, hostName },
       });

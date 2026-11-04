@@ -81,7 +81,7 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
       runtime === "claude" ? line.includes('"usage"')
       : runtime === "dsh" ? (line.startsWith('{"type":"assistant/message"') && line.includes('"usage"')) || line.startsWith('{"type":"request/context"')
       : runtime === "grok" ? line.startsWith('{"type":"stillfail/usage"')
-      : runtime === "cursor" || runtime === "devin" || runtime === "hermes" || runtime === "agy" ? line.includes('"type":"usage"')
+      : runtime === "cursor" || runtime === "devin" || runtime === "hermes" || runtime === "agy" || runtime === "codebuddy" ? line.includes('"type":"usage"')
       : line.includes("token_count") || line.includes("turn_context") || line.includes("session_meta");
     if (!wanted) continue;
     let r: unknown;
@@ -103,7 +103,7 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
         input: n(get(usage, "input")), cacheRead: n(get(usage, "cacheRead")), cacheWrite: n(get(usage, "cacheWrite")), cacheWriteLong: 0,
         output: n(get(usage, "output")), calls: Math.max(1, n(get(usage, "calls"))), context: told(get(r, "context")), window: told(get(r, "window")),
       });
-    } else if (runtime === "cursor" || runtime === "devin" || runtime === "hermes" || runtime === "agy") {
+    } else if (runtime === "cursor" || runtime === "devin" || runtime === "hermes" || runtime === "agy" || runtime === "codebuddy") {
       // What the station's driver kept of each Cursor turn (agents/cursor-bridge.mjs): the SDK's counts, input apart
       // from the cache's, the whole run's (no context); of each Devin turn the same (agents/devin.ts), with how many
       // calls it made, the context it ended with and the model's window where Devin said them.
@@ -780,7 +780,7 @@ export class UsageCounter {
     // station kept of its turns beside each one's transcript (grok.ts); Cursor and Devin: their transcripts, the
     // station's own (cursor.ts, devin.ts).
     for (const s of sessions) {
-      if (s.runtime !== "dsh" && s.runtime !== "grok" && s.runtime !== "cursor" && s.runtime !== "devin" && s.runtime !== "hermes" && s.runtime !== "agy") continue;
+      if (s.runtime !== "dsh" && s.runtime !== "grok" && s.runtime !== "cursor" && s.runtime !== "devin" && s.runtime !== "hermes" && s.runtime !== "agy" && s.runtime !== "codebuddy") continue;
       const runtime = s.runtime;
       for (const { id } of store.runtimeSessionSources(s.key).filter((source) => source.runtime === runtime)) {
         const transcript = transcriptPaths(runtime, config.dataDir, homes, [id]).paths[0];

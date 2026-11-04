@@ -143,6 +143,7 @@ fn maker_of(maker : String, runtime : String) -> String {
       "devin" => "devin"
       "hermes" => "hermes"
       "agy" => "gemini"
+      "codebuddy" => "tencent"
       _ => "anthropic"
     }
   }
