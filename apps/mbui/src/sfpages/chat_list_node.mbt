@@ -156,6 +156,40 @@ pub fn chat_list_node(
       node.padding(Is((side, top, side, 0.0))) |> ignore
     })
   }
+  let parts = fn(
+    row : @view.View,
+    lined : () -> Bool,
+    joined : () -> Bool,
+    elsewhere : () -> Array[Elsewhere],
+    here : () -> MessageHere,
+    lead : () -> Double,
+    ground : () -> Int64,
+    body : (@view.View) -> Unit,
+  ) {
+    row.show(lined, fn(l) {
+      row_room(l, lead)
+      l.box(fn(b) { unread_line_node(b) }) |> ignore
+    })
+    row.box(fn(said) {
+      row_room(said, fn() { if lined() { gap_of(joined()) } else { lead() } })
+      said.ground(By(ground)) |> ignore
+      said.box(body) |> ignore
+    })
+    |> ignore
+    row.pick(fn() { elsewhere().length() }, fn(sent, n) {
+      for i in 0..<n {
+        // (the gap over it its own box's: what it draws in its margin (its picture) placed from its top, as a row's)
+        sent.box(fn(g) {
+          row_room(g, fn() { gap_of(false) })
+          g.box(fn(b) {
+            sent_elsewhere_node(b, src, here, fn() { elsewhere().get(i).unwrap_or_else(fn() { elsewhere()[0] }) })
+          })
+          |> ignore
+        })
+        |> ignore
+      }
+    })
+  }
   let said_parts = fn(
     row : @view.View,
     m : () -> Message,
@@ -164,30 +198,7 @@ pub fn chat_list_node(
     ground : () -> Int64,
     body : (@view.View) -> Unit,
   ) {
-    let lined = fn() { line_seq.get() == Some(m().seq) }
-    row.show(lined, fn(l) {
-      row_room(l, lead)
-      l.box(fn(b) { unread_line_node(b) }) |> ignore
-    })
-    row.box(fn(said) {
-      row_room(said, fn() { if lined() { gap_of(m().joined) } else { lead() } })
-      said.ground(By(ground)) |> ignore
-      said.box(body) |> ignore
-    })
-    |> ignore
-    row.pick(fn() { m().elsewhere.length() }, fn(sent, n) {
-      for i in 0..<n {
-        // (the gap over it its own box's: what it draws in its margin (its picture) placed from its top, as a row's)
-        sent.box(fn(g) {
-          row_room(g, fn() { gap_of(false) })
-          g.box(fn(b) {
-            sent_elsewhere_node(b, src, here, fn() { m().elsewhere.get(i).unwrap_or_else(fn() { m().elsewhere[0] }) })
-          })
-          |> ignore
-        })
-        |> ignore
-      }
-    })
+    parts(row, fn() { line_seq.get() == Some(m().seq) }, fn() { m().joined }, fn() { m().elsewhere }, here, lead, ground, body)
   }
   // (the room over row `e`, `i`th: none over the first, 4 over a message joined to the one before, else the gap)
   let gap_kind = fn(e : Entry, i : Int) -> Int {
@@ -364,7 +375,7 @@ pub fn chat_list_node(
         // composer under the last)
         row_width.bind(slot, By(fn() {
           // (a message's row: the room over it its parts', said_parts')
-          let kind = match row_of(k) { Some((Said(_), _)) => -1; Some((e, i)) => gap_kind(e, i); None => 0 }
+          let kind = match row_of(k) { Some((Said(_) | Out(_), _)) => -1; Some((e, i)) => gap_kind(e, i); None => 0 }
           (@sf.native_on(), native_row_inset(), kind)
         }), fn(w, c) {
           let (native, native_inset, kind) = c
@@ -454,7 +465,7 @@ pub fn chat_list_node(
           let a = menu_lit.shown(slot)
           if a > 0.0 { @sf.alpha(@sf.theme().p.hover, a) } else { 0L }
         }
-        slot.ground(By(fn() { if row_of(k) is Some((Said(_), _)) { 0L } else { lit() } })) |> ignore
+        slot.ground(By(fn() { if row_of(k) is Some((Said(_) | Out(_), _)) { 0L } else { lit() } })) |> ignore
         // (the room over a message's first part: the row's gap, as gap_kind says it)
         let said_lead = fn() {
           match row_of(k) {
@@ -558,7 +569,10 @@ pub fn chat_list_node(
                   _ => last_o.val.unwrap()
                 }
               }
-              outbox_node(row, src, here, o, fn() { v.window().0 }, None, key=fn() { k })
+              // (in parts as a message's row is: the core's row going on from it, what it shows the same nodes)
+              parts(row, fn() { false }, fn() { o().joined }, fn() { [] }, here, said_lead, lit, fn(b) {
+                outbox_node(b, src, here, o, fn() { v.window().0 }, None, key=fn() { k })
+              })
             } else if whole == 2 {
               said_parts(row, m, here, said_lead, lit, fn(b) { mine_message_node(b, src, here, m, fn() { v.window().0 }, None, key=fn() { k }) })
             } else {
