@@ -24,7 +24,7 @@ workspace」时，这台 station 经站间通道去读同一 workspace 的其他
 「允许别的机器经 Tailcat 申请」（`POST /outflow/tailcat` `{ on }`，只有 home workspace 的 owner / admin 能开关；状态在 overview 的
 `outflowTailcat` 里，只给他们看）：
 
-- station 在本机回环地址上开一个 TCP 端口（先试 7480，被占就往后试），回答的请求和 socket 上完全一样（`/v1/request`、`/v1/*`）；
+- station 在本机回环地址上开一个 TCP 端口（先试 7480，被占就往后试；更新交接时等旧进程退出后才开，端口不变，发出去的那一行还能用），回答的请求和 socket 上完全一样（`/v1/request`、`/v1/*`）；
   再起一个自己的 `tailcat serve <端口>`，把一个 Tailcat 地址转到这个端口。打开后页面上显示一行 `tailcat <地址> <端口>`，管理员
   复制给对方。对方不用账号、不用开端口，拿到这行就能连。
 - 地址用 station 自己的 key（`<data>/tailcat/outflow.private.json`，第一次打开时生成），station 重启、更新后地址不变；关掉就停掉
