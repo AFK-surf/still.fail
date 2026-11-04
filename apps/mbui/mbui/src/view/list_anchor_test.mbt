@@ -241,3 +241,12 @@ test "scrolls_anchored: a row half out over its top brought into sight (the focu
   c.tree.frame(390.0, 844.0, now=2000.0) |> ignore
   assert_eq((c.top(97), c.top(98), c.scroll.at(c.tree)), (Some(0.0), Some(40.0), 3880.0))
 }
+
+///|
+test "scrolls_anchored: glided from outside to where it is counted less 40, from where it was counted otherwise than the hand had it: there, its rows 40 lower" {
+  let c = anchored_case(100)
+  let at = c.scroll.at(c.tree)
+  c.tree.event(10.0, fn() { c.scroll.glide_to(at - 40.0) })
+  c.tree.frame(390.0, 844.0, now=3000.0) |> ignore
+  assert_eq((at, c.scroll.at(c.tree), c.top(99)), (3900.0, 3860.0, Some(100.0)))
+}
