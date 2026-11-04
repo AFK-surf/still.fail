@@ -2083,22 +2083,19 @@ export class Store {
       // Told only when it got as far as closing it (one already closed says true and tells nothing, as the Rust).
       let closed: { agent: string; changed: boolean } | null = null;
       const done = this.#tx(() => {
-        const offered = this.#one("SELECT card, options FROM entries WHERE thread = ? AND n = ? AND kind = 'message'", thread, n);
-        const card = offered ? cardOf(offered.card, offered.options) : undefined;
+        const offered = this.#one("SELECT author, at, card, options FROM entries WHERE thread = ? AND n = ? AND kind = 'message'", thread, n);
+        if (offered === undefined) return false;
+        const card = cardOf(offered.card, offered.options);
         if (card === undefined) return false;
         const choices: Json[] = card !== null && Array.isArray(card.options) ? card.options : [];
         const closes = choices.some((o) => o !== null && typeof o === "object" && typeof o.label === "string" && o.label.trim() === option && o.action === "close");
         if (card === null || card.type !== "options" || !closes) return false;
         if (this.#one("SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, n) !== undefined) return true;
-        const asked = this.#one(
-          "SELECT n, author, at FROM entries WHERE thread = ? AND kind = 'message' AND (card IS NOT NULL OR options IS NOT NULL) ORDER BY n DESC LIMIT 1",
-          thread,
-        );
-        if (asked === undefined) return false;
-        const answered = this.#one("SELECT EXISTS(SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ?) AS e", thread, n).e !== 0;
-        if (asked.n !== n || answered) return false;
+        // The offered row exists and has a card. Only a later person, card or legacy options can end its wait;
+        // reuse the same indexed checks as closedCard instead of walking the intervening ordinary messages.
+        if (this.#one(CLOSED_CARD_AFTER, thread, n)!.ended !== 0) return false;
         // Do not race the agent still composing its question / recording its ending.
-        const composing = this.#one("SELECT ended_at IS NULL AS c FROM turns WHERE session_key = ? ORDER BY started_at DESC LIMIT 1", asked.author);
+        const composing = this.#one("SELECT ended_at IS NULL AS c FROM turns WHERE session_key = ? ORDER BY started_at DESC LIMIT 1", offered.author);
         if (composing !== undefined && composing.c !== 0) return false;
         this.#run("INSERT INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", thread, n, viewer, this.now());
         const changed = this.#run(
@@ -2106,9 +2103,9 @@ export class Store {
            WHERE id = (SELECT id FROM turns WHERE session_key = ?1 ORDER BY started_at DESC LIMIT 1)
              AND declared IN ('block', 'need_help', 'need_human', 'need_decision') AND ended_at IS NOT NULL
              AND ((about_thread = ?2 AND about_n = ?3) OR (about_n IS NULL AND thread = ?2 AND started_at <= ?4))`,
-          asked.author, thread, n, asked.at, tr(lang, "station.card.chosen", { option }),
+          offered.author, thread, n, offered.at, tr(lang, "station.card.chosen", { option }),
         );
-        closed = { agent: asked.author, changed: changed > 0 };
+        closed = { agent: offered.author, changed: changed > 0 };
         return true;
       });
       const told = closed as { agent: string; changed: boolean } | null;
