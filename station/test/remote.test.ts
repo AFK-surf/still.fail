@@ -105,6 +105,48 @@ const unb64 = (v: Json) => Buffer.from(v.data, "base64").toString();
 
 // Each test has stations of its own (directories, stores, clocks): they run at once.
 describe("remote", { concurrency: true }, () => {
+  test("the hourly cleanup remains due across station restarts", async () => {
+    const clock = testClock();
+    const store = Store.open(":memory:", null, clock);
+    const dir = tempdir();
+    const jobs = new Jobs({ store, data: dir, notify: () => {}, link: () => null });
+    // One station's saved last cleanup, shared by its successive Remote instances.
+    let last = 0;
+    const backTidy = { read: async () => last, write: async (at: number) => { last = at; } };
+    let runs = 0;
+    let remote: Remote | null = null;
+    const open = () => {
+      const options = { data: dir, store, jobs, clock, notify: () => {}, backTidy };
+      const next = new Remote(options);
+      (next as any).tidyBack = async () => { runs++; };
+      return next;
+    };
+    try {
+      for (let i = 0; i < 3; i++) {
+        remote = open();
+        await turn();
+        await Effect.runPromise(clock.adjust("20 minutes"));
+        await turn();
+        if (i < 2) {
+          assert.equal(runs, 0, "the hour has not passed");
+          await remote.close();
+          remote = null;
+        }
+      }
+      assert.equal(runs, 1, "updating the station every 20 minutes must not postpone the hourly cleanup");
+      await remote!.close();
+      remote = open();
+      await turn();
+      await Effect.runPromise(clock.adjust("20 minutes"));
+      await turn();
+      assert.equal(runs, 1, "a restart after cleanup does not scan again immediately");
+    } finally {
+      await remote?.close();
+      await jobs.shutdown();
+      store.close();
+    }
+  });
+
   test("what tasks brought back goes once nothing in it changed for 6 hours, what is newer stays", async () => {
     const r = station();
     const home = join(r.dir, "home");
