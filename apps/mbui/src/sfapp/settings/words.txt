@@ -1564,6 +1564,7 @@ web-pages.stations.search.personal
 web-pages.stations.search.personalLine
 web-pages.stations.search.section
 web-pages.stations.search.what
+web-pages.stations.settingsOffline
 web-pages.stations.software
 web-pages.stations.softwareOffline
 web-pages.vault.accounts

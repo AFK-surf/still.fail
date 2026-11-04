@@ -25,6 +25,12 @@ jq -e --arg output "$(sha "$take/home.png")" --arg wasm "$(sha "$dir/scene.wasm"
    .source.wasm_sha256 == $wasm and .source.host_sha256 == $host and
    .source.runner_sha256 == $runner and .source.compact_sha256 == $compact' \
   "$take/home.png.scene.json" >/dev/null
+# A scene drawn though it may break the corner rule (a change's before) says so in its record
+env MBUI_FIXTURE=home MBUI_WIN=320x560 MBUI_FILM_SCALE=1 MBUI_NATIVE_INPUT=finger MBUI_FILM_ALLOW_CORNER_FAULTS=1 \
+  bash scripts/media.sh picture "$take/kept.png" "$take/pass.drive"
+cmp "$take/home.png" "$take/kept.png"
+jq -e '.settings.allow_corner_faults == "1"' "$take/kept.png.scene.json" >/dev/null
+jq -e '.settings.allow_corner_faults == ""' "$take/home.png.scene.json" >/dev/null
 cp "$take/home.png" "$take/previous.png"
 cp "$take/home.png.scene.json" "$take/previous.json"
 if render "$take/fail.drive" > "$take/failure.log" 2>&1; then
