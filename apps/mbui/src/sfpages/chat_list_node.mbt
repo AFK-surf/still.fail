@@ -103,7 +103,7 @@ pub fn chat_list_node(
   // (emit.mbt's emit_held)
   let key_of = fn(m : Message) { id_of(Said(m)) }
   let rows_now : @signals.Signal[@sfbase.ChatRows] = @signals.signal(
-    @sfbase.ChatRows::new(@sfbase.ChatMessages::of_value(None), key_of),
+    @sfbase.ChatRows::new(@sfbase.ChatMessages::of_value(None), key_of, end_key=id_of),
     same=fn(a, b) { physical_equal(a, b) },
   )
   // (the same, read where no signal may be: the list's layout's)
@@ -124,7 +124,7 @@ pub fn chat_list_node(
       was
     } else {
       was.let_go()
-      @sfbase.ChatRows::new(cv.messages, key_of)
+      @sfbase.ChatRows::new(cv.messages, key_of, end_key=id_of)
     }
     cr.take(cv, tail, empty=@sfbase.fresh_view(r) is None, held~)
     rows_current.val = cr

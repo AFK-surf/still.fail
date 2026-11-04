@@ -167,6 +167,9 @@ fn media_reveal_node(
       // (held while it waits: there at once as it comes)
       if held {
         came.set(Some(-1.0e18))
+      } else if decoded && out_of_window(s) {
+        // (decoded out of the window, a row laid out ahead of what shows: there at once, nothing of it to see come)
+        came.set(Some(-1.0e18))
       } else if decoded {
         let at = s.cause_at()
         came.set(Some(at))
@@ -269,4 +272,13 @@ fn media_reveal_node(
       |> ignore
     }
   })
+}
+
+///|
+/// Whether `s` is laid out wholly out of its window (over its top or under its foot).
+fn out_of_window(s : @view.View) -> Bool {
+  match @signals.untracked(fn() { s.laid_window_told() }) {
+    Some((_, y, _, h)) => y + h <= 0.0 || y >= s.window().1
+    None => false
+  }
 }

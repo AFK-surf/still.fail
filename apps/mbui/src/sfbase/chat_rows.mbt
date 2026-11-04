@@ -28,6 +28,8 @@ pub struct ChatRows {
   priv reader : @rows.ListReader
   /// a message's row's key (as the page keys it: the key it was sent as from here, else `m:` and its ts)
   priv key_of : (Message) -> String
+  /// a row's key at the ends (as the page keys it: what is still going out by the key it was sent as)
+  priv end_key : (Entry) -> String
   priv mut head : Array[Entry]
   priv mut tail : Array[Entry]
   /// each tail row's sign as last made (shown_sign): another, its version one more
@@ -67,12 +69,18 @@ priv struct RowRead {
 let chat_rows_gone_kept = 512
 
 ///|
-/// The rows of a chat whose messages are `messages`, each message's row keyed by `key_of`.
-pub fn ChatRows::new(messages : ChatMessages, key_of : (Message) -> String) -> ChatRows {
+/// The rows of a chat whose messages are `messages`, each message's row keyed by `key_of`, the rows at its ends by
+/// `end_key`.
+pub fn ChatRows::new(
+  messages : ChatMessages,
+  key_of : (Message) -> String,
+  end_key? : (Entry) -> String = fn(e) { e.id() },
+) -> ChatRows {
   {
     messages,
     reader: messages.rows.reader(),
     key_of,
+    end_key,
     head: [Top],
     tail: [Foot],
     tail_signs: {},
@@ -167,7 +175,7 @@ pub fn ChatRows::item(self : ChatRows, i : Int) -> Entry {
 pub fn ChatRows::key(self : ChatRows, i : Int) -> String {
   match self.entry(i) {
     Said(m) => (self.key_of)(m)
-    e => e.id()
+    e => (self.end_key)(e)
   }
 }
 
@@ -398,8 +406,8 @@ fn ChatRows::went(self : ChatRows, k : String, e : Entry, after : String?) -> Un
 /// An end's rows (the head's or the tail's) as they were, `was`, and are, `now`, `before` the key of the row before
 /// them (None at the start): those gone and come told, those showing otherwise by their sign. Whether its keys changed.
 fn ChatRows::end_taken(self : ChatRows, was : Array[Entry], now : Array[Entry], before : String?) -> Bool {
-  let was_keys = was.map(fn(e) { e.id() })
-  let keys = now.map(fn(e) { e.id() })
+  let was_keys = was.map(fn(e) { (self.end_key)(e) })
+  let keys = now.map(fn(e) { (self.end_key)(e) })
   for i, e in now {
     self.work += 1
     let sign = shown_sign(e)
@@ -481,7 +489,7 @@ pub fn ChatRows::take(
         let after = if at > 0 {
           now_at(at - 1).map(fn(a) { (self.key_of)(self.messages[a]) })
         } else {
-          self.head.last().map(fn(e) { e.id() })
+          self.head.last().map(fn(e) { (self.end_key)(e) })
         }
         for k in keys {
           match self.drawn.get(k) {
@@ -536,7 +544,7 @@ pub fn ChatRows::take(
         let m = self.messages[at]
         let after = match self.row_of_message(at - 1) {
           Some(r) if at > 0 => Some(self.key(self.head.length() + r))
-          _ => self.head.last().map(fn(e) { e.id() })
+          _ => self.head.last().map(fn(e) { (self.end_key)(e) })
         }
         self.drawn.remove(self.messages.rows.key(at))
         self.went((self.key_of)(m), Said(m), after)
@@ -579,7 +587,7 @@ pub fn ChatRows::take(
   let was_tail = self.tail
   self.tail = tail
   let n = self.count()
-  let last = if n > 0 { Some(self.key(self.head.length() + n - 1)) } else { self.head.last().map(fn(e) { e.id() }) }
+  let last = if n > 0 { Some(self.key(self.head.length() + n - 1)) } else { self.head.last().map(fn(e) { (self.end_key)(e) }) }
   if self.end_taken(was_tail, tail, last) {
     shaped = true
   }
