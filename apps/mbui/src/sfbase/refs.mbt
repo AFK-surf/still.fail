@@ -188,6 +188,8 @@ fn refs_ask_marks(c : @ui.Ctx, src : Source, key : String, now : String) -> Unit
       f.marks.replace([])
     }
     f.marks_of.set(now)
+    // (the same words written again are to be read again: their marks went with these)
+    f.marks_asked = ""
     return
   }
   if f.marks_of.get() == now || f.marks_asked == now {
@@ -285,6 +287,8 @@ fn refs_ask_words(c : @ui.Ctx, src : Source, key : String, now : String) -> Unit
   if !@sf.words_may_link(words) {
     f.runs = Json::null()
     f.runs_of = words
+    // (the same words written again are to be read again: their runs went with these)
+    f.runs_asked = ""
     return
   }
   f.runs_asked = words
@@ -303,11 +307,12 @@ fn refs_ask_words(c : @ui.Ctx, src : Source, key : String, now : String) -> Unit
 
 ///|
 /// The runs words sent from draft `key`'s field are drawn in (refs_ask_words; lines put after them, as they are) until
-/// the core's row has them: None where the core has not read the words the field holds yet.
+/// the core's row has them. Where the core has not read the words the field holds yet, its marks there as references
+/// and the rest as it is (refs_marked_runs), never a mark's brackets on the way.
 pub fn refs_sent_runs(key : String, words : String) -> Json? {
   let f = ref_field(key)
   let held = sent_words_of(f.text)
-  guard f.runs_of == held && words.has_prefix(held) else { return None }
+  guard f.runs_of == held && words.has_prefix(held) else { return refs_marked_runs(key, words) }
   let runs : Array[Json] = match f.runs {
     Array(a) => a.copy()
     _ => if held != "" { [{ "text": Json::string(held) }] } else { [] }
@@ -316,6 +321,29 @@ pub fn refs_sent_runs(key : String, words : String) -> Json? {
   if rest != "" {
     runs.push({ "text": Json::string(rest) })
   }
+  Some(Json::array(runs))
+}
+
+///|
+/// Words sent from draft `key`'s field in runs by the marks it holds (draftWords' references, the rest as it is): None
+/// where it holds none of them.
+fn refs_marked_runs(key : String, words : String) -> Json? {
+  let marks = refs_sent_marks(key, words)
+  guard !marks.is_empty() else { return None }
+  let runs : Array[Json] = []
+  let plain = fn(a : Int, b : Int) {
+    if b > a {
+      runs.push({ "text": Json::string(words.view(start_offset=a, end_offset=b).to_string()) })
+    }
+  }
+  let mut at = 0
+  for m in marks {
+    let (a, b) = m
+    plain(at, a)
+    runs.push({ "text": Json::string(words.view(start_offset=a + 2, end_offset=b - 1).to_string()), "ref": true })
+    at = b
+  }
+  plain(at, words.length())
   Some(Json::array(runs))
 }
 

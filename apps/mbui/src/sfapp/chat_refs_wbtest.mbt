@@ -192,6 +192,67 @@ test "words sent with a mark draw it as the field did, as their message will: ne
 }
 
 ///|
+test "the same words with a mark sent again are read again: their row draws the mark, not its brackets" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  t.tap_text("发消息")
+  for n in 0..<2 {
+    t.type_text("@[首页] 吧")
+    t.draw()
+    t.draw()
+    assert_eq(named(calls, "ref.words").filter(fn(m) { text(Some(m.params), "text") == "@[首页] 吧" }).length(), n + 1)
+    tap_send(t)
+    (named(calls, "chat.outsideRefs")[n].done)(Ok(Json::object({})))
+    t.draw()
+    t.draw()
+    let sent = sending_of("ws1/st1\u{1}s-c1")
+    assert_true(sent[sent.length() - 1].row.words is Some(_))
+    t.run_for(@ui.move_most_ms)
+    t.run_for(draft_keep_ms)
+  }
+}
+
+///|
+test "words with a mark sent before the core has read them: their row has the mark a reference from the frame it is sent" {
+  new_run()
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    // (the core's reading of the words not answered yet, nor the words sent in its view)
+    call: fn(name, params, done) {
+      if name != "ref.words" && name != "chat.send" {
+        (base.call)(name, params, done)
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("发消息")
+  t.paste("[首页](https://app.still.fail/w/ws1/s/st1/chats/s-c2)")
+  t.type_text(" 吧")
+  t.draw()
+  t.draw()
+  t.draw()
+  let (_, words, _, _) = t.ime()
+  assert_eq(words, "@[首页] 吧")
+  tap_send(t)
+  t.draw()
+  t.draw()
+  match sending_of("ws1/st1\u{1}s-c1") {
+    [l] => {
+      let parts = match l.row.words {
+        Some(Array(a)) => a
+        _ => []
+      }
+      assert_eq(parts.map(fn(p) { text(Some(p), "text") }), ["首页", " 吧"])
+      assert_true(field(Some(parts[0]), "ref") is Some(True))
+    }
+    _ => fail("not in the list")
+  }
+}
+
+///|
 test "a link to an execution history: its mark once the core keeps that link, else the link as it is" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
