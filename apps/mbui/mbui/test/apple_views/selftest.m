@@ -126,7 +126,7 @@ static void webm_steps(NSString *file, NSString *mime) {
   __block double heldPosition = 0;
   double *info = calloc(10, sizeof(double));
   NSString *tag = file.lastPathComponent;
-  double tolerance = [mime isEqualToString:@"video/ogg"] || [tag containsString:@"av1"] ? 120 : 1;
+  __block double tolerance = 1;
   void (^pump)(void) = ^{
     double o[2]; int32_t rid;
     while ((rid = mb_host_view_read_next(vid, o)) != 0) {
@@ -164,7 +164,9 @@ static void webm_steps(NSString *file, NSString *mime) {
     // while that decoder takes over; wait for its playing position as well as for the initial ready state.
     if ((state == 0 || (state == 1 && info[1] < 900)) && t < 20 * 60) return NO;
     check(state == 1 && info[1] >= 900, [NSString stringWithFormat:@"%@: played to %.0f ms", tag, info[1]]);
-    printf("%s: %s decoder\n", tag.UTF8String, mb_host_video_test_software(vid) ? "software" : "system");
+    BOOL software = mb_host_video_test_software(vid);
+    if (software) tolerance = 120; // The software player's seek lands on a frame of this 10 fps fixture.
+    printf("%s: %s decoder\n", tag.UTF8String, software ? "software" : "system");
     fflush(stdout);
     mb_host_view_control(vid, 2, 0);
     mb_host_view_control(vid, 3, 2500);

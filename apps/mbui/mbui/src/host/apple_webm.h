@@ -51,7 +51,7 @@
 @property(nonatomic) int32_t nextRid;
 @property(nonatomic) uint32_t firstBytes;
 @property(nonatomic) unsigned firstMask;
-@property(nonatomic) BOOL pageReady, closed, primed, ready, possibleWebM, usedSoftware, fallbackRequested;
+@property(nonatomic) BOOL pageReady, closed, primed, ready, possibleWebM, usedSoftware, fallbackRequested, probeFailed;
 @property(nonatomic) BOOL grabbing, grabPNG;
 @property(nonatomic) double grabSide;
 - (void)control:(int32_t)op value:(double)value;
@@ -76,6 +76,7 @@ static NSString *const kWebVideoHTML =
      "let soft = false, switching = false, frameReady = false, drawn = false, softwareError = 0;\n"
      "let waiting = false, ticking = false, changes = 0, grabRestore = null, pendingGrab = null;\n"
      "let grabPosition = null, restoringGrab = false;\n"
+     "let probing = false, probe = null, probeGeneration = 0;\n"
      "let wantPlay = false, wantRate = 1, wantVolume = 1, wantSeek = null;\n"
      "const mediaURL = 'mbvideo://local/file.media';\n"
      "const post = o => window.webkit.messageHandlers.mbvideo.postMessage(o);\n"
@@ -118,7 +119,9 @@ static NSString *const kWebVideoHTML =
      "  }\n"
      "  el.addEventListener('loadeddata', () => {\n"
      "    if (el !== v) return;\n"
-     "    frameReady = true; status();\n"
+     "    frameReady = true;\n"
+     "    if (!soft && probing && ready() && !v.error) cancelProbe(true);\n"
+     "    status();\n"
      "    if (pendingGrab !== null) { const ms = pendingGrab; pendingGrab = null; grab(ms); }\n"
      "  });\n"
      "  el.addEventListener('waiting', () => { if (el === v) { waiting = true; status(); } });\n"
@@ -128,6 +131,7 @@ static NSString *const kWebVideoHTML =
      "}\n"
      "function fallback() {\n"
      "  if (soft || switching) return;\n"
+     "  cancelProbe(false);\n"
      "  if (!window.mbCanSoft) { softwareError = 4; status(); return; }\n"
      "  const old = v;\n"
      "  if (Number.isFinite(old.currentTime) && wantSeek === null) wantSeek = old.currentTime;\n"
@@ -146,6 +150,48 @@ static NSString *const kWebVideoHTML =
      "    } catch (_) { switching = false; softwareError = 4; status(); }\n"
      "  };\n"
      "  document.head.appendChild(script);\n"
+     "}\n"
+     "// Prepare a software decoder in the background when WebKit has all the bytes but has not drawn a frame yet.\n"
+     "// Let the first decoder that is actually ready win, instead of treating the download's end as a decode failure.\n"
+     "function cancelProbe(nativeReady) {\n"
+     "  if (!probing) return;\n"
+     "  probing = false; probeGeneration++;\n"
+     "  const oldProbe = probe; probe = null;\n"
+     "  if (oldProbe) { try { oldProbe.stop(); } catch (_) {} oldProbe.remove(); }\n"
+     "  if (nativeReady) post({type:'nativeReady'});\n"
+     "}\n"
+     "function probeSoftware() {\n"
+     "  if (soft || switching || probing) return;\n"
+     "  if (ready() && !v.error) { post({type:'nativeReady'}); return; }\n"
+     "  if (!window.mbCanSoft) { post({type:'probeFailed'}); return; }\n"
+     "  probing = true; const generation = ++probeGeneration;\n"
+     "  const failed = () => {\n"
+     "    if (generation !== probeGeneration) return;\n"
+     "    cancelProbe(false); post({type:'probeFailed'}); status();\n"
+     "  };\n"
+     "  const start = () => {\n"
+     "    if (generation !== probeGeneration) return;\n"
+     "    try {\n"
+     "      OGVLoader.base = 'mbvideo://local/ogv';\n"
+     "      probe = new OGVPlayer({worker:false, threading:false, simd:false});\n"
+     "      Object.assign(probe.style, {width:'1px', height:'1px', position:'fixed', left:'-10px', top:'-10px', opacity:'0', pointerEvents:'none'});\n"
+     "      document.body.appendChild(probe);\n"
+     "      const readyProbe = () => {\n"
+     "        if (generation !== probeGeneration || probe.readyState < 2) return;\n"
+     "        if (ready() && !v.error) cancelProbe(true);\n"
+     "        else { cancelProbe(false); fallback(); }\n"
+     "      };\n"
+     "      for (const event of ['loadeddata','canplay']) probe.addEventListener(event, readyProbe);\n"
+     "      probe.addEventListener('error', failed);\n"
+     "      probe.src = mediaURL; probe.load();\n"
+     "    } catch (_) { failed(); }\n"
+     "  };\n"
+     "  if (window.OGVLoader && window.OGVPlayer) start();\n"
+     "  else {\n"
+     "    const script = document.createElement('script');\n"
+     "    script.src = 'mbvideo://local/ogv/ogv.js'; script.onload = start; script.onerror = failed;\n"
+     "    document.head.appendChild(script);\n"
+     "  }\n"
      "}\n"
      "window.addEventListener('error', () => { if (soft || switching) { switching = false; softwareError = 4; status(); } });\n"
      "window.addEventListener('unhandledrejection', () => { if (soft || switching) { switching = false; softwareError = 4; status(); } });\n"
@@ -187,7 +233,7 @@ static NSString *const kWebVideoHTML =
      "  rate(r) { wantRate = r; if (!switching) v.playbackRate = r; status(); },\n"
      "  volume(n) { wantVolume = n; if (!switching) v.volume = n; status(); },\n"
      "  grab, endGrab, fallback,\n"
-     "  fallbackIfNeeded() { if (!ready() || v.error) fallback(); else { post({type:'nativeReady'}); status(); } }\n"
+     "  fallbackIfNeeded() { probeSoftware(); }\n"
      "};\n"
      "wire(v);\n"
      "if (window.mbStartSoft) fallback(); else { v.preload = 'auto'; status(); }\n"
@@ -288,15 +334,15 @@ static BOOL webm_range(NSString *header, long long size, long long *start, long 
 - (void)fail { [self failWithCode:-1]; }
 
 // Some WebKit versions fully buffer an unsupported VP9 profile but never report a decoder error or a first frame.
-// Once the finite video has arrived, ask the page to switch if WebKit is still unable to show a frame. The page checks
-// again when it receives the request, so a native decoder that became ready meanwhile keeps playing normally.
+// Once the finite video has arrived, prepare the software decoder if WebKit has no frame yet. Keep the native player
+// when it becomes ready first; otherwise switch to the software decoder when it is ready.
 - (BOOL)fullyBuffered {
   double duration = [self.state[@"duration"] doubleValue], buffered = [self.state[@"buffered"] doubleValue];
   return duration > 0 && buffered > 0 && buffered + fmin(50, duration * 0.01) >= duration;
 }
 
 - (void)watchDecode {
-  if (self.closed || self.ready || self.owner.failed || self.usedSoftware || self.fallbackRequested ||
+  if (self.closed || self.ready || self.owner.failed || self.usedSoftware || self.fallbackRequested || self.probeFailed ||
       !self.softwareDir || !self.possibleWebM || ![self fullyBuffered]) return;
   self.fallbackRequested = YES;
   [self send:@"mbPlayer.fallbackIfNeeded()"];
@@ -481,17 +527,18 @@ static BOOL webm_range(NSString *header, long long size, long long *start, long 
   } else if ([s[@"type"] isEqual:@"nativeReady"]) {
     self.fallbackRequested = NO;
     [self notify];
+  } else if ([s[@"type"] isEqual:@"probeFailed"]) {
+    self.fallbackRequested = NO; self.probeFailed = YES;
+    [self notify];
   } else if ([s[@"type"] isEqual:@"state"]) {
     self.state = s;
     if (!v.placed && [s[@"width"] doubleValue] > 0 && [s[@"height"] doubleValue] > 0)
       v.web.frame = CGRectMake(0, 0, [s[@"width"] doubleValue], [s[@"height"] doubleValue]);
     int error = [s[@"error"] intValue];
     if (error && !v.failed) {
-      if (!self.usedSoftware && self.softwareDir && self.possibleWebM && [self.mime isEqualToString:@"video/webm"]) {
-        if (!self.fallbackRequested) {
-          self.fallbackRequested = YES;
-          [self send:@"mbPlayer.fallback()"];
-        }
+      if (!self.usedSoftware && !self.probeFailed && self.softwareDir && self.possibleWebM && [self.mime isEqualToString:@"video/webm"]) {
+        self.fallbackRequested = YES;
+        [self send:@"mbPlayer.fallback()"];
       } else {
         [self failWithCode:error == 4 ? -4 : error == 3 ? -3 : -1];
       }
