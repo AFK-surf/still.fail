@@ -295,7 +295,7 @@ export const SHAPES: Record<string, Shape> = {
     ["phoneAsk", opt("PhoneAsk"), { doc: "An agent's request for its person's phone (station/src/adb/grants.ts): drawn in place of the post's words, answered with `adb.decide` (the chat's station)." }],
     ["vaultAsk", opt("VaultAsk"), { doc: "With `vault`: the request as the card says it, drawn in place of the post's words. Absent on a card\nfrom before it did (the words say it)." }],
     ["signinAsk", opt("SignInAsk"), { doc: "An agent's ask to sign in to a site (station/src/vault/signin.ts): drawn in place of the post's words, answered\nwith `signin.fill` (from this device's password manager), `signin.self`, `signin.deny` (the chat's station)." }],
-    ["login", opt("String"), { doc: "A login card: the login's id on its station (the `machineLogin` topic has the rest)." }],
+    ["login", opt("String"), { doc: "A login card: the login's id on its station (the `machineLogin` topic has the rest); absent where a later post of the chat\nasks for the same login (its card alone)." }],
     ["station", opt("String"), { doc: "A login card for a login on another station than the chat's: that station's key." }],
   ], { doc: "What an agent's message asks people to answer it with (core decisions.ts): `type` options (`options`, as shown: the\nrecommended one last; a tap answers, `decision.answer`) or text (a field to write in, with a `placeholder`;\n`decision.reply`). A type a UI does not know: answered by writing in the chat." }),
   SignInAsk: struct([
