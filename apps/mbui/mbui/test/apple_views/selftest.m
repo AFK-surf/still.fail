@@ -33,6 +33,9 @@ void mb_host_view_control(int32_t, int32_t, double);
 int32_t mb_host_view_info(int32_t, double *);
 int32_t mb_host_view_read_next(int32_t, double *);
 void mb_host_view_read_answer(int32_t, int32_t, moonbit_bytes_t, double, int32_t);
+void mb_host_webm_test_deadline(int32_t);
+moonbit_string_t mb_host_view_text(int32_t, int32_t);
+moonbit_bytes_t mb_host_view_still(int32_t);
 int32_t mb_host_pdf_open(moonbit_bytes_t);
 int32_t mb_host_pdf_pages(int32_t);
 void mb_host_pdf_page_size(int32_t, int32_t, double *);
@@ -111,6 +114,198 @@ static NSString *rgba(const uint8_t *p) {
 typedef BOOL (^Step)(int tick);
 static NSMutableArray<Step> *steps;
 static int step_tick;
+
+// A WebM goes through the app's same streamed reads as an AVPlayer file. Exercise real VP8 and VP9 decoding, the
+// player's controls and its frame grab, with each step waiting for the event/state produced by the preceding one.
+static void webm_steps(NSString *file) {
+  NSData *data = [NSData dataWithContentsOfFile:file];
+  __block int32_t vid = 0;
+  __block int reads = 0;
+  __block double maxRead = 0;
+  double *info = calloc(10, sizeof(double));
+  NSString *tag = file.lastPathComponent;
+  void (^pump)(void) = ^{
+    double o[2]; int32_t rid;
+    while ((rid = mb_host_view_read_next(vid, o)) != 0) {
+      if (rid < 0) continue;
+      reads++; maxRead = MAX(maxRead, o[1]);
+      long long off = (long long)o[0], n = MAX(0, MIN((long long)o[1], (long long)data.length - off));
+      // A short answer followed by an empty last chunk, as station.file.part can deliver.
+      n = MIN(n, 64 << 10);
+      mb_host_view_read_answer(vid, rid, mbytes((const uint8_t *)data.bytes + MIN(off, (long long)data.length), n), data.length, 1);
+      mb_host_view_read_answer(vid, rid, mbytes(NULL, 0), data.length, 0);
+    }
+  };
+  [steps addObject:^BOOL(int t) {
+    vid = mb_host_view_open(1, mb_string_from_ns(@"video/webm"));
+    mb_host_view_place(vid, 40, 30, 320, 240, 40, 30, 360, 270, 0, 0, 0, 0, 1);
+    mb_host_webm_test_deadline(vid);
+    double pending[10];
+    check(mb_host_view_info(vid, pending) == 0, [NSString stringWithFormat:@"%@: incomplete reads do not time out", tag]);
+    NSView *root = mb_views_root(CGRectMake(0, 0, W, H));
+    NSView *web = root.subviews.lastObject.subviews.firstObject;
+    check(web && [web hitTest:NSMakePoint(1, 1)] == nil, [NSString stringWithFormat:@"%@: input reaches the app", tag]);
+    return YES;
+  }];
+  [steps addObject:^BOOL(int t) {
+    pump(); int state = mb_host_view_info(vid, info);
+    if (state == 0 && t < 20 * 60) return NO;
+    check(state == 1 && info[6] == 1, [NSString stringWithFormat:@"%@: ready (%d)", tag, state]);
+    mb_host_webm_test_deadline(vid);
+    check(mb_host_view_info(vid, info) == 1, [NSString stringWithFormat:@"%@: a ready player survives the deadline", tag]);
+    check(fabs(info[0] - 5000) < 300 && info[3] == 320 && info[4] == 240,
+          [NSString stringWithFormat:@"%@: duration %.0f ms, size %.0fx%.0f", tag, info[0], info[3], info[4]]);
+    mb_host_view_control(vid, 1, 0);
+    return YES;
+  }];
+  [steps addObject:^BOOL(int t) {
+    pump(); int state = mb_host_view_info(vid, info);
+    if (state == 1 && info[1] < 900 && t < 20 * 60) return NO;
+    check(state == 1 && info[1] >= 900, [NSString stringWithFormat:@"%@: played to %.0f ms", tag, info[1]]);
+    mb_host_view_control(vid, 2, 0);
+    mb_host_view_control(vid, 3, 2500);
+    return YES;
+  }];
+  [steps addObject:^BOOL(int t) {
+    pump(); int state = mb_host_view_info(vid, info);
+    if (state == 1 && (fabs(info[1] - 2500) > 1 || info[2] != 0) && t < 20 * 60) return NO;
+    check(state == 1 && fabs(info[1] - 2500) <= 1 && info[2] == 0,
+          [NSString stringWithFormat:@"%@: paused and sought to %.0f ms", tag, info[1]]);
+    mb_host_view_control(vid, 22, 160);
+    return YES;
+  }];
+  [steps addObject:^BOOL(int t) {
+    pump(); NSString *state = mb_ns_from_string(mb_host_view_text(vid, 2));
+    if ([state isEqualToString:@"1"] && t < 20 * 60) return NO;
+    BOOL ok = [state isEqualToString:@"2"];
+    moonbit_bytes_t bytes = mb_host_view_still(vid);
+    NSData *image = [NSData dataWithBytes:bytes length:Moonbit_array_length(bytes)];
+    CGImageSourceRef src = CGImageSourceCreateWithData((__bridge CFDataRef)image, NULL);
+    CGImageRef frame = src ? CGImageSourceCreateImageAtIndex(src, 0, NULL) : NULL;
+    check(ok && frame && CGImageGetWidth(frame) == 160 && CGImageGetHeight(frame) == 120,
+          [NSString stringWithFormat:@"%@: current frame captured (%@)", tag, state]);
+    NSString *path = [out_dir stringByAppendingPathComponent:[tag stringByAppendingString:@".jpg"]];
+    [image writeToFile:path atomically:YES];
+    int coloured = 0; uint8_t px[4];
+    for (int x = 20; x < 150; x += 25) {
+      pixel(path, x, 75, px);
+      if (px[3] == 255 && !near(px, 0, 0, 0, 8) && !near(px, 255, 255, 255, 8)) coloured++;
+    }
+    check(coloured >= 3, [NSString stringWithFormat:@"%@: captured the picture, not an empty frame", tag]);
+    if (frame) CGImageRelease(frame);
+    if (src) CFRelease(src);
+    check(reads > 0 && maxRead <= (4 << 20), [NSString stringWithFormat:@"%@: bounded reads (%d)", tag, reads]);
+    mb_host_view_control(vid, 21, 1000);
+    return YES;
+  }];
+  [steps addObject:^BOOL(int t) {
+    pump(); NSString *state = mb_ns_from_string(mb_host_view_text(vid, 2));
+    if ([state isEqualToString:@"1"] && t < 20 * 60) return NO;
+    moonbit_bytes_t bytes = mb_host_view_still(vid);
+    NSData *image = [NSData dataWithBytes:bytes length:Moonbit_array_length(bytes)];
+    [image writeToFile:[out_dir stringByAppendingPathComponent:[tag stringByAppendingString:@".png"]] atomically:YES];
+    CGImageSourceRef src = CGImageSourceCreateWithData((__bridge CFDataRef)image, NULL);
+    CGImageRef frame = src ? CGImageSourceCreateImageAtIndex(src, 0, NULL) : NULL;
+    check([state isEqualToString:@"2"] && frame && CGImageGetWidth(frame) == 320 && CGImageGetHeight(frame) == 240,
+          [NSString stringWithFormat:@"%@: saved a full-size frame", tag]);
+    if (frame) CGImageRelease(frame);
+    if (src) CFRelease(src);
+    return YES;
+  }];
+  [steps addObject:^BOOL(int t) {
+    pump(); int state = mb_host_view_info(vid, info);
+    if (state == 1 && fabs(info[1] - 2500) > 1 && t < 20 * 60) return NO;
+    check(state == 1 && fabs(info[1] - 2500) <= 1 && info[2] == 0,
+          [NSString stringWithFormat:@"%@: saving a different frame kept the playhead", tag]);
+    mb_host_view_control(vid, 4, 2);
+    mb_host_view_control(vid, 1, 0);
+    return YES;
+  }];
+  [steps addObject:^BOOL(int t) {
+    pump(); int state = mb_host_view_info(vid, info);
+    if (state == 1 && info[1] < 3500 && t < 20 * 60) return NO;
+    check(state == 1 && info[1] >= 3500, [NSString stringWithFormat:@"%@: played at a changed speed", tag]);
+    mb_host_view_close(vid);
+    return YES;
+  }];
+}
+
+// A chat can ask for its thumbnail as soon as the player is opened, without placing the view on screen.
+static void webm_thumbnail_steps(NSString *file) {
+  NSData *data = [NSData dataWithContentsOfFile:file];
+  __block int32_t vid = 0;
+  [steps addObject:^BOOL(int t) {
+    vid = mb_host_view_open(1, mb_string_from_ns(@"video/webm"));
+    mb_host_view_control(vid, 21, 0);
+    return YES;
+  }];
+  [steps addObject:^BOOL(int t) {
+    double o[2]; int32_t rid;
+    while ((rid = mb_host_view_read_next(vid, o)) != 0) {
+      if (rid < 0) continue;
+      long long off = (long long)o[0], n = MAX(0, MIN((long long)o[1], (long long)data.length - off));
+      mb_host_view_read_answer(vid, rid, mbytes((const uint8_t *)data.bytes + MIN(off, (long long)data.length), n), data.length, 0);
+    }
+    NSString *state = mb_ns_from_string(mb_host_view_text(vid, 2));
+    if ([state isEqualToString:@"1"] && t < 20 * 60) return NO;
+    moonbit_bytes_t bytes = mb_host_view_still(vid);
+    check([state isEqualToString:@"2"] && Moonbit_array_length(bytes) > 0,
+          @"WebM: first frame grabbed before the view is placed");
+    mb_host_view_close(vid);
+    return YES;
+  }];
+}
+
+// A larger file arrives in small chunks, as over a station connection. The player can start and seek while reads are
+// in flight, and never asks the app for more than one 4 MB part.
+static void webm_large_steps(NSString *file) {
+  NSData *data = [NSData dataWithContentsOfFile:file];
+  __block int32_t vid = 0;
+  __block int reads = 0;
+  __block double maxRead = 0;
+  NSMutableArray<NSMutableArray<NSNumber *> *> *open = [NSMutableArray new];
+  double *info = calloc(10, sizeof(double));
+  void (^pump)(void) = ^{
+    double o[2]; int32_t rid;
+    while ((rid = mb_host_view_read_next(vid, o)) != 0) {
+      if (rid < 0) {
+        for (NSMutableArray<NSNumber *> *r in [open copy]) if (r[0].intValue == -rid) [open removeObject:r];
+        continue;
+      }
+      reads++; maxRead = MAX(maxRead, o[1]);
+      long long off = (long long)o[0], end = MIN((long long)data.length, off + (long long)o[1]);
+      [open addObject:[@[@(rid), @(off), @(end)] mutableCopy]];
+    }
+    for (NSMutableArray<NSNumber *> *r in [open copy]) {
+      long long off = r[1].longLongValue, end = r[2].longLongValue, n = MIN(32 << 10, MAX(0, end - off));
+      BOOL more = off + n < end;
+      mb_host_view_read_answer(vid, r[0].intValue, mbytes((const uint8_t *)data.bytes + MIN(off, (long long)data.length), n),
+                               data.length, more);
+      if (more) r[1] = @(off + n); else [open removeObject:r];
+    }
+  };
+  [steps addObject:^BOOL(int t) {
+    check(data.length > (4 << 20), @"WebM: large fixture exceeds one read");
+    vid = mb_host_view_open(1, mb_string_from_ns(@"video/webm"));
+    mb_host_view_place(vid, 40, 30, 320, 180, 40, 30, 360, 210, 0, 0, 0, 0, 1);
+    return YES;
+  }];
+  [steps addObject:^BOOL(int t) {
+    pump(); int state = mb_host_view_info(vid, info);
+    if (state == 0 && t < 40 * 60) return NO;
+    check(state == 1 && info[3] == 640 && info[4] == 360, @"WebM: large file became ready as its bytes arrived");
+    mb_host_view_control(vid, 3, 10000);
+    return YES;
+  }];
+  [steps addObject:^BOOL(int t) {
+    pump(); int state = mb_host_view_info(vid, info);
+    if (state == 1 && (fabs(info[1] - 10000) > 1 || info[6] == 0) && t < 40 * 60) return NO;
+    check(state == 1 && fabs(info[1] - 10000) <= 1 && info[6] == 1, @"WebM: seek into the large file showed a frame");
+    check(reads > 1 && maxRead <= (4 << 20), [NSString stringWithFormat:@"WebM: %d bounded reads, largest %.0f", reads, maxRead]);
+    mb_host_view_close(vid);
+    return YES;
+  }];
+}
 
 static void video_steps(NSString *file, NSString *mime, double dur, double vw, double vh) {
   NSData *data = [NSData dataWithContentsOfFile:file];
@@ -281,19 +476,11 @@ static void slow_steps(NSString *file, NSString *mime, double rate) {
   }];
 }
 
-// The same host reads: a valid WebM, a damaged MP4, and a read that fails. The first may become playable on a future
-// system, so compare it to the same system opening the file directly instead of assuming a particular codec set.
+// The host distinguishes a failed read from a damaged file. WebKit cannot always distinguish a damaged WebM from an
+// unsupported codec, so either of its two media failure states is valid for that file.
 static void failure_steps(NSString *file, NSString *mime, int kind) {
   NSData *data = [NSData dataWithContentsOfFile:file];
   __block int32_t vid = 0;
-  __block BOOL directDone = kind != 0, directPlayable = NO;
-  if (kind == 0) {
-    AVURLAsset *asset = [AVURLAsset URLAssetWithURL:[NSURL fileURLWithPath:file] options:nil];
-    [asset loadValuesAsynchronouslyForKeys:@[@"playable"] completionHandler:^{
-      BOOL playable = asset.playable;
-      dispatch_async(dispatch_get_main_queue(), ^{ directPlayable = playable; directDone = YES; });
-    }];
-  }
   [steps addObject:^BOOL(int t) {
     vid = mb_host_view_open(1, mb_string_from_ns(mime));
     check(vid > 0 && data.length > 0, [NSString stringWithFormat:@"%@: opened", file.lastPathComponent]);
@@ -316,10 +503,15 @@ static void failure_steps(NSString *file, NSString *mime, int kind) {
                                data.length, 0);
     }
     int state = mb_host_view_info(vid, info);
-    if ((!directDone || state == 0) && t < 20 * 60) return NO;
-    int expected = kind == 0 ? (directPlayable ? 1 : -2) : kind == 1 ? -3 : -1;
-    check(directDone && state == expected,
-          [NSString stringWithFormat:@"%@: state %d, expected %d", file.lastPathComponent, state, expected]);
+    if (kind == 4 && state == 0 && info[0] > 0 && info[8] >= info[0] - 50) {
+      // The complete file is here, but this WebKit cannot decode its profile. Declare the deadline, not wall time.
+      mb_host_webm_test_deadline(vid);
+      state = mb_host_view_info(vid, info);
+    }
+    if (state == 0 && t < 20 * 60) return NO;
+    // A newer WebKit may support this VP9 profile; otherwise it must report an unsupported-or-damaged file.
+    BOOL expected = kind == 1 ? state == -3 : kind == 3 ? state == -3 || state == -4 : kind == 4 ? state == -4 || state == 1 : state == -1;
+    check(expected, [NSString stringWithFormat:@"%@: failure state %d", file.lastPathComponent, state]);
     mb_host_view_close(vid);
     return YES;
   }];
@@ -472,7 +664,13 @@ int main(int argc, char **argv) {
       NSArray<NSString *> *a = [@(argv[i]) componentsSeparatedByString:@"|"];
       video_steps(a[0], a[1], a[2].doubleValue, a[3].doubleValue, a[4].doubleValue);
     }
-    failure_steps([out_dir stringByAppendingPathComponent:@"test.webm"], @"video/webm", 0);
+    webm_steps([out_dir stringByAppendingPathComponent:@"test-vp9.webm"]);
+    webm_steps([out_dir stringByAppendingPathComponent:@"test-vp8.webm"]);
+    webm_thumbnail_steps([out_dir stringByAppendingPathComponent:@"test-vp9.webm"]);
+    webm_large_steps([out_dir stringByAppendingPathComponent:@"test-large.webm"]);
+    failure_steps([out_dir stringByAppendingPathComponent:@"test-vp9.webm"], @"video/webm", 2);
+    failure_steps([out_dir stringByAppendingPathComponent:@"damaged.mp4"], @"video/webm", 3);
+    failure_steps([out_dir stringByAppendingPathComponent:@"profile1.webm"], @"video/webm", 4);
     failure_steps([out_dir stringByAppendingPathComponent:@"damaged.mp4"], @"video/mp4", 1);
     failure_steps([out_dir stringByAppendingPathComponent:@"test.mp4"], @"video/mp4", 2);
     web_steps();

@@ -1,5 +1,5 @@
 // Native views over the canvas (host_native.mbt's view_*), for macOS and iOS:
-// a video player (AVPlayer, its bytes read through the app) and a web page
+// a video player (AVPlayer, or WebKit for WebM on the Mac, its bytes read through the app) and a web page
 // (WKWebView). They live in a view just under the canvas's (mb_views_root);
 // the app paints a hole (kind 9: transparent, unblended) where one shows, and
 // what it paints after the hole draws over it. Also files saved
@@ -165,7 +165,7 @@ id mb_views_root(CGRect frame) {
 
 // ---------------------------------------------------------------------------
 
-@class MBSiteHandler;
+@class MBSiteHandler, MBWebVideo;
 
 // One request of a site's page (kind 3): its scheme task, answered by the app.
 @interface MBSiteReq : NSObject
@@ -194,6 +194,8 @@ id mb_views_root(CGRect frame) {
 @property(nonatomic, strong) AVPlayerItem *item;
 @property(nonatomic, strong) AVPlayerLayer *playerLayer;
 @property(nonatomic, strong) AVPlayerItemVideoOutput *output;
+// WebM on the Mac is decoded by WebKit, whose support is wider than AVPlayer's.
+@property(nonatomic, strong) MBWebVideo *webVideo;
 // a stream's (kind 4): the stream whose frames its layer shows
 @property(nonatomic) int32_t streamSid;
 @property(nonatomic, strong) MBLoader *loader;
@@ -263,6 +265,7 @@ id mb_views_root(CGRect frame) {
 - (void)playWhatCame;
 - (CGImageRef)copyFrame;
 - (void)stood;
+- (void)tell:(int)state;
 @end
 
 int32_t mb_host_view_info(int32_t vid, double *out);
@@ -963,6 +966,8 @@ static int32_t player_failure(NSError *error) {
 
 @end
 
+#import "apple_webm.h"
+
 // ---------------------------------------------------------------------------
 // The host API MoonBit calls
 
@@ -1001,6 +1006,11 @@ static NSString *uti_for(NSString *mime, NSString **ext) {
 }
 
 static MBNative *open_video(int32_t vid, NSString *mime) {
+#if TARGET_OS_OSX
+  NSString *type = [[[mime componentsSeparatedByString:@";"].firstObject
+      stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet] lowercaseString];
+  if ([type isEqualToString:@"video/webm"]) return open_webm_video(vid);
+#endif
   MBNative *v = [MBNative new];
   NSString *ext;
   v.uti = uti_for(mime, &ext);
@@ -1281,6 +1291,21 @@ static void stack(MBNative *v) {
 #endif
 }
 
+// A thumbnail asks for a frame before placing the player. WebKit only loads media in an attached view, so put it
+// under every other native view and under the opaque canvas until the app places it (or closes it after the grab).
+static void prime_webm_grab(MBNative *v) {
+#if TARGET_OS_OSX
+  if (!views_root || v.placed || v.box.superview || !v.webVideo) return;
+  v.box.frame = CGRectMake(0, 0, 320, 240);
+  v.content.frame = v.box.bounds;
+  v.box.hidden = NO;
+  [views_root addSubview:v.box positioned:NSWindowBelow relativeTo:nil];
+  v.webVideo.primed = YES;
+#else
+  (void)v;
+#endif
+}
+
 // How much further in than a circle a capsule's end lies, in r, u r from its tip (mbui's capsule_ease, src/paint/
 // smooth.mbt, and corner.sl's mb_capsule_ease): 0 but from 1 - 0.675 k to 1 + 0.4 k.
 static double capsule_ease(double u, double k) {
@@ -1410,7 +1435,10 @@ void mb_host_view_place(int32_t vid, double x, double y, double w, double h, dou
   v.cx0 = cx0; v.cy0 = cy0; v.cx1 = cx1; v.cy1 = cy1;
   [CATransaction begin];
   [CATransaction setDisableActions:YES];
-  if (!v.box.superview) stack(v);
+  if (!v.box.superview || v.webVideo.primed) {
+    stack(v);
+    v.webVideo.primed = NO;
+  }
   v.box.hidden = !s;
   v.box.frame = CGRectMake(cx0, cy0, fmax(0, cx1 - cx0), fmax(0, cy1 - cy0));
   v.content.frame = CGRectMake(x - cx0, y - cy0, fmax(0, w), fmax(0, h));
@@ -1452,14 +1480,18 @@ void mb_host_view_close(int32_t vid) {
   [views removeObjectForKey:@(vid)];
   v.closed = YES;
   if (v.kind == 1) {
-    [v stopObserving];
-    [v.player pause];
-    for (MBLoad *l in [v.loads copy]) [v end:l error:YES];
-    [v.pending removeAllObjects];
-    [v.taken removeAllObjects];
-    [v.player replaceCurrentItemWithPlayerItem:nil];
-    v.playerLayer.player = nil;
-    vlog(@"view %d: closed (%.0f bytes read)", vid, v.answered);
+    if (v.webVideo) {
+      [v.webVideo close];
+    } else {
+      [v stopObserving];
+      [v.player pause];
+      for (MBLoad *l in [v.loads copy]) [v end:l error:YES];
+      [v.pending removeAllObjects];
+      [v.taken removeAllObjects];
+      [v.player replaceCurrentItemWithPlayerItem:nil];
+      v.playerLayer.player = nil;
+      vlog(@"view %d: closed (%.0f bytes read)", vid, v.answered);
+    }
   } else if (v.kind == 4) {
     mb_stream_attach_layer(v.streamSid, nil);
     vlog(@"view %d: closed", vid);
@@ -1497,6 +1529,11 @@ void mb_host_view_control(int32_t vid, int32_t op, double value) {
     return;
   }
   if (!v || v.kind != 1) return;
+  if (v.webVideo) {
+    if (op == 21) prime_webm_grab(v);
+    [v.webVideo control:op value:value];
+    return;
+  }
   switch (op) {
     case 1: {
       // played again from its end: from the start, as the Android host's player does
@@ -1567,6 +1604,7 @@ int32_t mb_host_view_info(int32_t vid, double *out) {
     out[6] = v.loaded ? 1 : 0;
     return v.failed ? -1 : v.loaded ? 1 : 0;
   }
+  if (v.webVideo) return [v.webVideo info:out];
   [v logState];
   AVPlayerItem *it = v.item;
   out[0] = [v durationMs];
@@ -1602,6 +1640,7 @@ int32_t mb_host_view_info(int32_t vid, double *out) {
 
 int32_t mb_host_view_read_next(int32_t vid, double *out) {
   MBNative *v = views[@(vid)];
+  if (v.webVideo) return [v.webVideo readNext:out];
   if (v.lettingGo.count) {
     int32_t gone = v.lettingGo.firstObject.intValue;
     [v.lettingGo removeObjectAtIndex:0];
@@ -1619,9 +1658,20 @@ int32_t mb_host_view_read_next(int32_t vid, double *out) {
   return 0;
 }
 
+#if defined(MBUI_HOST_SELFTEST)
+// The host self-test declares the decoder deadline instead of waiting for wall time.
+void mb_host_webm_test_deadline(int32_t vid) {
+  [views[@(vid)].webVideo decodeDeadline];
+}
+#endif
+
 void mb_host_view_read_answer(int32_t vid, int32_t req, moonbit_bytes_t data, double total, int32_t more) {
   MBNative *v = views[@(vid)];
   if (!v) return;
+  if (v.webVideo) {
+    [v.webVideo readAnswer:req data:(const uint8_t *)data length:Moonbit_array_length(data) total:total more:more != 0];
+    return;
+  }
   [v answer:req data:(const uint8_t *)data length:Moonbit_array_length(data) total:total more:more != 0];
 }
 
@@ -1976,7 +2026,8 @@ int mb_views_snapping(void) {
 // A snapshot is about to be taken: every page loaded and placed has its picture taken anew (apple.h).
 void mb_views_snap_all(void) {
   for (MBNative *v in views.allValues)
-    if (is_page(v) && !v.closed && v.loaded) [v refreshSnap];
+    if (v.webVideo && !v.closed) [v.webVideo refreshSnap];
+    else if (is_page(v) && !v.closed && v.loaded) [v refreshSnap];
 }
 
 void mb_views_draw_under(CGContextRef ctx, double scale) {
@@ -1996,7 +2047,7 @@ void mb_views_draw_under(CGContextRef ctx, double scale) {
     if (!is_page(v)) CGContextSetRGBFillColor(ctx, 0, 0, 0, 1);
     else CGContextSetRGBFillColor(ctx, 1, 1, 1, 1);
     CGContextFillRect(ctx, r);
-    CGImageRef img = v.kind == 1 ? [v copyFrame] : v.kind == 4 ? NULL : [v copySnap];
+    CGImageRef img = v.webVideo ? [v copySnap] : v.kind == 1 ? [v copyFrame] : v.kind == 4 ? NULL : [v copySnap];
     if (img) {
       // upright in its rect
       CGContextTranslateCTM(ctx, r.origin.x, r.origin.y + r.size.height);

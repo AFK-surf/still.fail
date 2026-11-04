@@ -17,13 +17,17 @@ ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=1280x720:rate=30 -f lavfi -i
   -c:a aac -shortest "$OUT/test.mp4"
 ffmpeg -loglevel error -y -f lavfi -i testsrc=size=320x240:rate=30 -t 5 \
   -c:v libx264 -pix_fmt yuv420p -movflags +faststart "$OUT/test.mov"
-ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=32x32:rate=1 -frames:v 1 -c:v libvpx "$OUT/test.webm"
+ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=320x240:rate=10 -t 5 -c:v libvpx-vp9 "$OUT/test-vp9.webm"
+ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=320x240:rate=10 -t 5 -c:v libvpx "$OUT/test-vp8.webm"
+ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=640x360:rate=30 -t 12 -vf noise=alls=45:allf=t \
+  -c:v libvpx-vp9 -deadline realtime -cpu-used 8 -b:v 8M "$OUT/test-large.webm"
+cp "$R/test/host/playcheck-vp9-profile1.webm" "$OUT/profile1.webm"
 head -c 4096 /dev/zero > "$OUT/damaged.mp4"
 python3 "$D/make_pdf.py" "$OUT/test.pdf"
 RT=""
 for f in runtime; do RT="$RT $MOON_HOME/lib/runtime/$f.c"; done
 clang -fobjc-arc -O1 -Wall -Wno-unused-function -I"$MOON_HOME/include" -I"$R/src/host" \
-  -DMOONBIT_ALLOCATOR=MOONBIT_ALLOCATOR_SYSTEM -fwrapv -fno-strict-aliasing \
+  -DMOONBIT_ALLOCATOR=MOONBIT_ALLOCATOR_SYSTEM -DMBUI_HOST_SELFTEST -fwrapv -fno-strict-aliasing \
   "$D/selftest.m" "$R/src/host/apple_views.m" "$R/src/host/apple_image.m" "$R/src/host/apple_render.m" \
   "$R/src/host/apple_text.m" $RT \
   -framework Cocoa -framework Metal -framework QuartzCore -framework CoreText -framework CoreGraphics \
