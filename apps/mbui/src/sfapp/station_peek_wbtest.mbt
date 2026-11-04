@@ -294,8 +294,7 @@ test "a screen beside a chat goes to a window of its own from the panel's bar (a
   assert_eq(t.windows_opened().length(), 1)
   assert_true(!side_now(r).0.contains("screen:[\"ws1/st1\",\"desktop\"]"))
   // another screen is its own: that window not asked for
-  @sfbase.open_page(Screen({ station: "ws1/st1", screen: "browser:tab-1", title: "", until_gone: false }))
-  t.frame()
+  assert_true(!@sfbase.window_front(Screen({ station: "ws1/st1", screen: "browser:tab-1", title: "", until_gone: false })))
   assert_eq(t.windows_fronted().length(), 2)
   // that window closed: the screen opens here again, as before
   t.close_window(opened[0])
