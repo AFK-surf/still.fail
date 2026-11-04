@@ -523,6 +523,8 @@ struct Node {
   mut leaves_typing : Bool
   /// it, and what it holds, are over all else of the window while this holds (View::over_all)
   mut over_all : Bool
+  /// drawn, with what it holds, over the scrim of a modal layer of the old frame's up (View::over_scrim)
+  mut over_scrim : Bool
   /// where it is in the window's stack of layers, the old frame's among them (View::stacked); -1 none
   mut stack : Int
 }
@@ -1097,6 +1099,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.back_goes_on = false
       n.leaves_typing = false
       n.over_all = false
+      n.over_scrim = false
       n.stack = -1
       i
     }
@@ -1214,6 +1217,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         back_goes_on: false,
         leaves_typing: false,
         over_all: false,
+        over_scrim: false,
         stack: -1,
       })
       self.nodes.length() - 1
@@ -1919,6 +1923,7 @@ priv enum Prop {
   KeepsHeld
   Clips
   BoundsInput
+  OverScrim
   Measured
   WordsCentered
   EllipsisPast
@@ -2193,6 +2198,21 @@ pub fn View::bounds_input(self : View, on : Live[Bool]) -> View {
     }
   })
   self
+}
+
+///|
+/// Drawn, with what it holds, over the scrim of the modal layer the old frame has up while `on` says so (a row held for
+/// its menu, lifted toward the finger: an old view's Stratum OverScrim), under what that layer holds; where no scrim is
+/// up, in its place. Cut as where it is; found by a press as ever (the scrim's layer takes what lands on it). Paint's.
+pub fn View::over_scrim(self : View, on : Live[Bool]) -> View {
+  self.bind(OverScrim, on, Paint, fn(on) { self.tree.nodes[self.at].over_scrim = on })
+  self
+}
+
+///|
+/// Whether node `id` is drawn over the old frame's scrim (View::over_scrim).
+pub fn Tree::over_scrim_of(self : Tree, id : NodeId) -> Bool {
+  self.alive_id(id) && self.nodes[id.at].over_scrim
 }
 
 ///|
