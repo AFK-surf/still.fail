@@ -972,7 +972,14 @@ export class Lock {
       // it refused there too (2026-10-28: a device the lock names without its key approved one, and a station kept
       // turning the devices approved after it away for days).
       yield* checkSigned(entries, chain, signer.id, now(self.#inner));
-      yield* self.#cloud("POST", "/lock", { entries: [entry] });
+      // Not taken as far as this device heard: the cloud may have kept it all the same, its answer lost on the way
+      // back (a gateway's 502, the line gone). Then it is done: asked again, it would say it failed while it went.
+      yield* Effect.catch(self.#cloud("POST", "/lock", { entries: [entry] }), (e) =>
+        Effect.flatMap(Effect.orElseSucceed(self.#chain(), () => null), (kept) => {
+          const there = kept?.entries.find((x) => x.seq === entry.seq);
+          return there !== undefined && entryHash(there) === entryHash(entry) ? Effect.void : Effect.fail(e);
+        }),
+      );
       const stations = [...fold(chain).stations.keys()];
       const later = stations.filter((s) => !waitFor.includes(s));
       if (later.length > 0) self.#inner.runner.fork(Effect.ignore(self.#bring(chain, later), { log: "Unhandled", message: "lock chain brought" }));

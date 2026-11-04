@@ -119,6 +119,8 @@ class World {
   chanSeq = 0;
   /// The plane's chain: the honest history, every entry it took.
   plane: Entry[] = [first];
+  /// Each lock the plane kept, the one it keeps now last: turned off and on again, a new one starts.
+  epochs: Entry[][] = [this.plane];
   /// Lines: each station's presence socket, the mesh between two stations, the devices' to the plane, to each station.
   lines = new Map<string, boolean>();
   stations: StationSim[];
@@ -251,6 +253,8 @@ class World {
       const lost = () => reject(new Error("the line to the station went"));
       this.send(link, chan, () => {
         if (to.cloud === null) return lost();
+        // The mesh takes a station's requests only from the stations its lock names (its roster, filtered by it).
+        if (!(to.cloud.locked()?.state?.stations.has(from.key.hex) ?? false)) return this.send(link, chan, () => reject(new Error("not a station of the lock")), lost);
         let answer: unknown;
         try {
           answer = answerLock(to.cloud, request, ws);
@@ -315,6 +319,8 @@ class World {
     }
     if (plan.adding.length === 0) return true;
     this.plane = plan.restart ? (plan.adding.map((a) => a.e) as Entry[]) : [...this.plane, ...(plan.adding.map((a) => a.e) as Entry[])];
+    if (plan.restart) this.epochs.push(this.plane);
+    else this.epochs[this.epochs.length - 1] = this.plane;
     for (const s of this.stations) {
       if (s.presence) this.sendState(s, `${s.presence.chan}↓`, s.presence.toPlane);
     }
@@ -335,7 +341,15 @@ class World {
       let body: unknown, kind: string;
       const inLock = spare.filter((d) => state.devices.has(d.base.hex));
       const outOfLock = spare.filter((d) => !state.devices.has(d.base.hex));
-      switch (what % 3) {
+      // Turned off now and then, and on again once it is off.
+      if (state.disabled) return this.reopen(by === signers[0] ? 0 : -1);
+      switch (what % 4 === 2 && pick % 5 === 0 ? 4 : what % 4) {
+        case 4: {
+          if (by !== signers[0]) return;
+          kind = "disable";
+          body = {};
+          break;
+        }
         case 0: {
           const d = outOfLock[pick % Math.max(1, outOfLock.length)];
           if (!d) return;
@@ -348,6 +362,14 @@ class World {
           if (!d) return;
           kind = "device.remove";
           body = { id: d.base.hex };
+          break;
+        }
+        case 3: {
+          // A station taken out of the lock, or put back; two at least stay in it.
+          const st = stationKeys[pick % N]!;
+          if (state.stations.has(st.hex) && state.stations.size <= 2) return;
+          kind = state.stations.has(st.hex) ? "station.remove" : "station";
+          body = kind === "station" ? { key: st.hex, name: `s${pick % N}` } : { key: st.hex };
           break;
         }
         default: {
@@ -379,6 +401,37 @@ class World {
     });
   }
 
+  /// The owner turns the lock on again (views/lock.ts `open`): a new genesis with the people and devices of the one
+  /// turned off, and the stations its app reaches that hold no lock (one that still holds the old one is left out, as
+  /// the draft lists it `other`); to the plane, then
+  /// brought to each of them.
+  reopen(owner: number) {
+    if (owner !== 0) return;
+    const last = fold(this.plane, null);
+    const reached = this.stations.filter((s) => s.cloud !== null && this.up(`d${s.i}`) && s.cloud.locked() === null);
+    if (reached.length < 2) return;
+    const at = Math.floor(this.t / 1000);
+    const g = signed({
+      v: 1, ws: WS, seq: 0, prev: null, at, kind: "genesis", body: {
+        owner: "alice", origins: [ORIGIN], rp_id: "app.still.fail", cloud_keys: { keys: [] },
+        members: [...last.members.values()], devices: [...last.devices.values()].map(({ by: _, ...d }) => d), passkeys: [],
+        stations: reached.map((s) => ({ key: s.key.hex, name: `s${s.i}` })), gateways: [],
+      },
+    }, signers[0]!.signer);
+    this.log.push(`  alice turns the lock on again with ${reached.map((s) => `s${s.i}`).join(", ")}`);
+    const chan = `dc#${this.chanSeq++}`;
+    this.send("dc", chan, () => {
+      if (!this.append([g])) return;
+      this.send("dc", chan, () => {
+        for (const s of reached) {
+          this.send(`d${s.i}`, `d${s.i}#${this.chanSeq++}`, () => {
+            if (s.cloud) lockRoute(s.cloud, "POST", [], Buffer.from(JSON.stringify({ entries: [g] })), viewer(signers[0]!.app, "alice", "owner"));
+          });
+        }
+      });
+    });
+  }
+
   /// A device says hello to a station, bringing the entries from the one that put it in the lock, as the plane has
   /// them (at most 64): let in or not, and is that right?
   connect(which: number, at: number, bring = true): boolean | null {
@@ -397,9 +450,9 @@ class World {
       inside = false;
     }
     const mine = s.cloud.locked()?.state;
-    // Let in only as the station's own chain says: the device in it, its member's.
+    // Let in only as the station's own chain says: the device in it, its member's; with no lock, as the plane says.
     const named = mine?.devices.get(d.base.hex);
-    assert.equal(inside, named !== undefined && named.sub === d.sub, `s${s.i} ${inside ? "let in" : "turned away"} ${d.sub}'s device ${d.base.hex.slice(0, 8)} its chain ${named ? "names" : "does not name"}`);
+    assert.equal(inside, mine === undefined || (named !== undefined && named.sub === d.sub), `s${s.i} ${inside ? "let in" : "turned away"} ${d.sub}'s device ${d.base.hex.slice(0, 8)} its chain ${named ? "names" : "does not name"}`);
     assert.ok(!(inside && d === eve), "a device only a forger named is let in");
     return inside;
   }
@@ -410,6 +463,7 @@ class World {
     const s = this.stations[at % N]!;
     if (s.cloud === null) return;
     const chain = s.cloud.lockAfter(-1);
+    if (chain.length === 0) return;
     const fake = (() => {
       switch (how % 3) {
         case 0:
@@ -449,12 +503,15 @@ class World {
   invariants() {
     const all = this.chains();
     for (const { who, chain } of all) {
-      assert.ok(chain.length > 0, `${who} lost its lock`);
+      if (chain.length === 0) continue;
       assert.doesNotThrow(() => fold(chain, null), `${who}'s chain does not check out`);
       for (const e of chain) assert.ok(!this.forged.has(entryHash(e)), `${who} took a forged entry at ${e.seq}`);
+      // Of a lock the plane kept: what it holds, or held before the lock was turned off and on again.
+      assert.ok(this.epochs.some((h) => h.length >= chain.length && entryHash(h[chain.length - 1]!) === entryHash(chain.at(-1)!)), `${who}'s chain is no lock the plane kept`);
     }
     for (const x of all) {
       for (const y of all) {
+        if (x.chain.length === 0 || y.chain.length === 0 || entryHash(x.chain[0]!) !== entryHash(y.chain[0]!)) continue;
         const n = Math.min(x.chain.length, y.chain.length);
         for (let i = 0; i < n; i++) assert.equal(entryHash(x.chain[i]!), entryHash(y.chain[i]!), `${x.who} and ${y.who} disagree at ${i}`);
       }
@@ -527,16 +584,27 @@ class World {
   /// What must come about once the lines are back.
   converged(held: boolean[]) {
     const all = this.chains();
-    const stations = all.slice(1);
+    // The stations the lock names in the end: one taken out of it is no longer brought level by the others. Turned off
+    // in the end: each such station the plane reaches holds none.
+    const end = fold(this.plane, null);
+    const named = end.stations;
+    if (end.disabled) {
+      for (const [i, s] of this.stations.entries()) {
+        if (named.has(s.key.hex) && !held[i]) assert.equal(s.cloud!.locked(), null, `s${i} keeps a lock turned off`);
+      }
+      return;
+    }
+    const stations = all.slice(1).filter((_, i) => named.has(stationKeys[i]!.hex));
     const longest = stations.reduce((x, y) => (y.chain.length > x.chain.length ? y : x));
     for (const s of stations) assert.equal(s.chain.length, longest.chain.length, `${s.who} stays at ${s.chain.length - 1}, ${longest.who} has ${longest.chain.length - 1}`);
-    if (held.some((h) => !h)) {
+    if (held.some((h, i) => !h && named.has(stationKeys[i]!.hex))) {
       assert.equal(longest.chain.length, this.plane.length, `the plane is at ${this.plane.length - 1}, the stations at ${longest.chain.length - 1}`);
     }
     // Who is let in: each device as the final chain says, at every station.
     const state = fold(longest.chain, null);
     for (let d = 0; d < spare.length + 1 + signers.length; d++) {
       for (let i = 0; i < N; i++) {
+        if (!named.has(stationKeys[i]!.hex)) continue;
         const devices = [...spare, eve, ...signers.map((s) => ({ sub: s.sub, base: s.app }))];
         const inside = this.connect(d, i, false);
         const want = state.devices.has(devices[d]!.base.hex);

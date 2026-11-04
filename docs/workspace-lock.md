@@ -52,7 +52,8 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 ## 同步
 
 - cloud：`GET/POST /v1/workspaces/:ws/lock`（成员；只追加，检查 `seq`/`prev` 接得上，并用 station 的同一份规则（`station/src/cloud/lock.ts` 的 `genesis`/`apply`，cloud 直接 import）校验签名和权限，station 不会收的回 409 `lock_refused`：cloud 收下一条 station 拒收的，之后每一条都接在它后面，station 一条也接不上（2026-10-24 一个 workspace 因此卡了四天）。这之前存下的链，cloud 第一次读到时截到最后一条能通过的为止），`DELETE`（owner，签名者都丢了时清掉）。state 帧多一个 `lock: {seq, hash, genesis} | null`。station 落后就在 presence socket 上发 `{type: "lock.get", after}`，cloud 回 `{type: "lock", entries}`；cloud 落后（丢了、被清了）station 发 `{type: "lock.put", entries}` 补回去。
-- station 之间：`stillfail/station/1` 上的 `lock.head` / `lock.get {after}` / `lock.put {entries}`，只和锁里的 station。锁变长、名单到了就互相拉平（`station/src/mesh/lock-sync.ts`）；和某台拉平失败（它离线、两台之间的线断了）就隔 5 秒、10 秒……最长 10 分钟再试，直到拉平：cloud 扣着条目不发时，只有这条路能把它们带过去。
+- station 之间：`stillfail/station/1` 上的 `lock.head` / `lock.get {after}` / `lock.put {entries}`，只和锁里的 station。锁变长、名单到了就互相拉平（`station/src/mesh/lock-sync.ts`）；和某台拉平失败（它离线、两台之间的线断了）就隔 5 秒、10 秒……最长 10 分钟再试，直到拉平：cloud 扣着条目不发时，只有这条路能把它们带过去。自己已不在锁里的 station 不再找别的 station（它们的 mesh 不收它）。
+- 设备签了条目交给 cloud 时没收到回答（网关 502、线断了）：先再读一次 cloud 的链，条目已在就算成了，不报失败（以前报失败，面对面批准时新设备会说「没能批准此设备」，其实已批准）。
 - 设备：`GET/POST /admin/api/lock`（station 自己的锁；POST 逐条校验）。hello 的回复多一个 `lock`（链头），设备发现 station 落后可以推。core 签任何条目前先用 `vault/lock-check.ts` 按 station 的规则把整条链加上新条目验一遍：此设备不是锁里的签名者（锁里有它但没有 `sign_key`，本机却有签名钥匙）、角色不够、cloud 上的链本身验不过，都不发，直接告诉用户原因。
 - **station 钉着另一条锁**（重新开启时它没连上，或 cloud 收过它拒收的条目）：它拒绝设备时回的链头不在设备手里这条链上（genesis 不同，或同一序号哈希不同），core 不再当作「station 落后、稍后重试」，而是说这台 station 的记录和 workspace 不一致、要在那台电脑上 `stillfail lock reset` 后重新保护。打开「安全」时 core 问一遍锁里各 station 的 `GET /lock`：说自己没锁或钉着别的锁的不算受保护（可以重新加入）；开启时的核对页把钉着别的锁的 station 列为 `other`，不能勾选。
 - cloud 扣着条目不发只能拖慢，伪造不了。
@@ -63,7 +64,7 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 - **离线、旧版的 station** 不进 genesis：锁里的 station 能调别的 station 的 `task.*`，一台不认锁的 station 被 cloud 控制后就能借它进来。它们和受保护 station 之间的远程任务、分享会停，升级/上线后用 `lock.addStation` 加。
 - **新 station**：锁住的 workspace 生成的登记命令带锁的哈希（`install.sh … <token> <hash>`、`stillfail station enroll … --lock <hash>`）。station 登记后打印一个短码，cloud 送来含这个哈希的链时钉住；管理员核对短码签 `station` 条目后它才进名单。
 - **签名者都丢了**：在 station 本机运行 `stillfail lock reset`（锁文件改名留底），这台 station 回到信任 cloud。`stillfail lock status` 看现在钉的是什么（原生启动器 `stillfail-station` 把 `lock` 转给 Node，2026-10-29 之前它不认，只打印用法）。
-- **关掉**：owner 签 `disable`，各 station 解除钉住。签之前要郑重确认（2026-10-17 用户要求）：确认框逐条列出关掉后失去什么，要输入 workspace 名称才能点；core 签名前再让系统验证本人（host `secureAsk`：Mac 上 Touch ID，安卓指纹或屏幕锁；没有可验证手段的机器——Windows、Linux、没有 Touch ID 的 Mac、没设屏幕锁的手机——直接通过），用户在系统弹窗里取消（`user_cancelled`）就什么都不签、不提示。
+- **关掉**：owner 签 `disable`，各 station 解除钉住，并在 lock.json 旁的 `lock.json.off` 记下这条锁的 genesis：关过的锁不再钉回。设备每改一次锁都把到那时为止的整条链送给各台 station，这一份比 cloud 的 `disable` 晚到时，以前会把 station 按旧链重新锁上（cloud 上已经关了，这台还在拦新设备）。签之前要郑重确认（2026-10-17 用户要求）：确认框逐条列出关掉后失去什么，要输入 workspace 名称才能点；core 签名前再让系统验证本人（host `secureAsk`：Mac 上 Touch ID，安卓指纹或屏幕锁；没有可验证手段的机器——Windows、Linux、没有 Touch ID 的 Mac、没设屏幕锁的手机——直接通过），用户在系统弹窗里取消（`user_cancelled`）就什么都不签、不提示。
 
 ## 新设备
 
@@ -102,8 +103,8 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 
 - 确定性的：`station/test/lock.test.ts`（谁能签什么、passkey、设备身份、锁住后 state 帧换 key/塞名单/改绑被拒、没锁的照旧、station 之间拉平）、`cloud/test/lock.test.ts`（存链、转发、补回、设备登记、待确认）、`client/core-ts/test/lock.test.ts`。三处用同一组哈希测试值。
 - 按性质的随机测试（带种子、可重放，失败时报出种子和缩到最短的步骤）：
-  - `station/test/lock-world.test.ts`：一个 cloud（`cloud/src/lock.ts` 的 `extendLock`，和 cloud 收条目用的同一段）、三台真 station 代码（cloud.json/lock.json、presence 帧、`planeTeller`、mesh 的 `followLock`、设备 hello 带来的条目）和成员设备，每步随机：签条目并送到 cloud 和 station、设备连 station、断开或接回某条线、停或起某台 station、cloud 扣着不发或伪造条目；线上的消息随机延迟、乱序（每条 socket 内保序）、随线断而丢。每步都查：各处的链不分叉、cloud 只存 station 会收的、伪造的条目谁都不收也放不进人、station 只放行它自己的链里有的设备。最后线都接回（cloud 对一部分 station 仍扣着不发，station 之间的线最后才接）再查：各 station 追平最长的链，有 station 连着 cloud 时 cloud 也追平，获批的设备每台都进得去、移除的哪台都进不去。`LOCK_WORLD_SEED=<种子>` 只跑那一个，`LOCK_WORLD_RUNS=<n>` 跑前 n 个。它找出过：station 之间那次拉平失败后，在锁或名单再变之前不再试，cloud 不给它发时被移除的设备一直进得去（现在 `followLock` 失败后 5 秒起翻倍、最长 10 分钟重试）。
-  - `client/core-ts/test/lock-pair-faults.test.ts`：面对面批准的两端都是真 core，连接上每条消息随机延迟、在某条之后断开，人随机输对、输错、输一半、在受信任设备上拒绝或关弹窗、等。查：只有码在时限内输对、没被拒绝、没用完次数时才签进去；输的每个码都有回答；码的时间过了以后新设备要么完成，要么说的原因跟发生的事对得上；受信任设备上不留弹窗；码输对、线没断就一定签进去。`PAIR_FAULT_SEED`、`PAIR_FAULT_RUNS` 同上。线在受信任设备签完、回话之前断了，新设备会先说连不上，等它重读锁（cloud 通知成员 workspace 变了）发现自己已在锁里，等待页就没了。
+  - `station/test/lock-world.test.ts`：一个 cloud（`cloud/src/lock.ts` 的 `extendLock`，和 cloud 收条目用的同一段）、三台真 station 代码（cloud.json/lock.json、presence 帧、`planeTeller`、mesh 的 `followLock`、设备 hello 带来的条目）和成员设备，每步随机：签条目（加删设备、改角色、加删 station、关掉安全模式、再打开一条新锁）并送到 cloud 和 station、设备连 station、断开或接回某条线、停或起某台 station、cloud 扣着不发或伪造条目；线上的消息随机延迟、乱序（每条 socket 内保序）、随线断而丢。每步都查：各处的链不分叉、cloud 只存 station 会收的、伪造的条目谁都不收也放不进人、station 只放行它自己的链里有的设备。最后线都接回（cloud 对一部分 station 仍扣着不发，station 之间的线最后才接）再查：各 station 追平最长的链，有 station 连着 cloud 时 cloud 也追平，获批的设备每台都进得去、移除的哪台都进不去。`LOCK_WORLD_SEED=<种子>` 只跑那一个，`LOCK_WORLD_RUNS=<n>` 跑前 n 个。它找出过：station 之间那次拉平失败后，在锁或名单再变之前不再试，cloud 不给它发时被移除的设备一直进得去（现在 `followLock` 失败后 5 秒起翻倍、最长 10 分钟重试）；关掉安全模式前那次批准带的旧链晚到，把 station 重新锁上（现在关过的锁不再钉回）。
+  - `client/core-ts/test/lock-pair-faults.test.ts`：面对面批准的两端都是真 core，连接上每条消息随机延迟、在某条之后断开，cloud 存下受信任设备的条目却把回答丢了，人随机输对、输错、输一半、在受信任设备上拒绝或关弹窗、等。查：只有码在时限内输对、没被拒绝、没用完次数时才签进去；输的每个码都有回答；码的时间过了以后新设备要么完成，要么说的原因跟发生的事对得上；受信任设备上不留弹窗；码输对、线没断就一定签进去。`PAIR_FAULT_SEED`、`PAIR_FAULT_RUNS` 同上。线在受信任设备签完、回话之前断了，新设备会先说连不上，等它重读锁（cloud 通知成员 workspace 变了）发现自己已在锁里，等待页就没了。
 - 端到端（真进程、真 relay，不进 CI）：`node station/side/lock-e2e.ts`。dev cloud 加 4 台临时 station 和两个真 core（owner 的桌面、新设备），演示 cloud 给自己的设备发凭证、往名单里塞 station、把 station 改绑到别的 workspace、换 grant key（重启 dev cloud 就是换 key），锁住的 station 都拒绝，没锁的照做。
 
 ## 界面（第二步）

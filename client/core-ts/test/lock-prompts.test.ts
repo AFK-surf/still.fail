@@ -125,6 +125,16 @@ test("a change to the lock is done once the cloud keeps it, not once every stati
   assert.deepEqual(r.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "device.remove", PHONE]]);
 });
 
+test("a change the cloud kept, its answer lost on the way back: done, not said to have failed", async () => {
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], {}, ME, [phone]) }));
+  r.cloud.lose.posts = 1;
+  await r.ask("lock.removeDevice", { workspace: "ws", device: PHONE });
+  assert.deepEqual(r.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "device.remove", PHONE]]);
+  // Asked again (the person not sure it went): nothing more is signed, the device is gone already.
+  await assert.rejects(r.ask("lock.removeDevice", { workspace: "ws", device: PHONE }));
+  assert.equal(r.cloud.posted.length, 1);
+});
+
 test("a station that refuses this device though the lock names it has not heard yet: tried again shortly, not held", async () => {
   const r = await rig((me) => ({ ws: genesis("ws", me, true) }));
   await r.watch({ topic: "lock", workspace: "ws" });

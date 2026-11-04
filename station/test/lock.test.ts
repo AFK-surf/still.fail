@@ -251,6 +251,28 @@ test("the lock is pinned by its owner's own device, grows entry by entry, and is
   assert.equal(new Cloud(cloud.data).lock, null);
 });
 
+test("a lock its owner turned off is not pinned again: the chain up to before the off, brought late by a device, leaves the station as it is", () => {
+  const w = workspace();
+  const cloud = stationData(w, w.stations[0]!.hex);
+  cloud.takeLock([w.first]);
+  const device = signed(after(cloud.locked()!.state!, "device", { id: ed().hex, sub: "carol", kind: "app", label: "phone" }), w.alice.signer);
+  cloud.takeLock([device]);
+  const off = signed(after(cloud.locked()!.state!, "disable", {}), w.alice.signer);
+  cloud.takeLock([off]);
+  assert.equal(cloud.locked(), null, "off");
+  // What alice's app brought every station when it approved the phone, come after the off.
+  const v = { sub: "alice", email: "", name: "", role: "owner", workspace: WS, device: ed().hex, lockDevice: undefined as any };
+  const endpoint = v.device;
+  v.lockDevice = { base: w.alice.base.hex, proof: w.alice.base.sign(endpointBytes(WS, endpoint)) };
+  assert.equal(lockRoute(cloud, "POST", [], Buffer.from(JSON.stringify({ entries: [w.first, device] })), v)[0], 409);
+  assert.equal(cloud.locked(), null, "still off");
+  assert.equal(new Cloud(cloud.data).locked(), null, "and after a restart");
+  // A new lock, turned on again: pinned.
+  const again = workspace();
+  assert.equal(lockRoute(cloud, "POST", [], Buffer.from(JSON.stringify({ entries: [{ ...again.first }] })), { ...v, lockDevice: { base: again.alice.base.hex, proof: again.alice.base.sign(endpointBytes(WS, endpoint)) } })[0], 200);
+  assert.equal(cloud.locked()?.state?.genesis, entryHash(again.first));
+});
+
 test("the control plane's head: a locked station asks for what it lacks and gives back what the plane lost", () => {
   const w = workspace();
   const cloud = stationData(w, w.stations[0]!.hex);

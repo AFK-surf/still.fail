@@ -95,7 +95,8 @@ export function followLock(cloud: Cloud, call: PeerCall, after: (ms: number, f: 
     for (const m of cloud.memberships()) {
       const ws = m.home ? null : m.workspace;
       const s = cloud.locked(ws)?.state;
-      if (!s) continue;
+      // Taken out of the lock itself: the others take nothing from it (their mesh refuses it), however long it tries.
+      if (!s || !s.stations.has(st.station)) continue;
       for (const p of m.peers) if (typeof p?.id === "string" && p.id !== st.station) bring(p.id, ws, m.workspace, s.seq);
     }
   };
