@@ -2393,7 +2393,7 @@ pub fn dialog(
           // (what it holds `column_in` in from its padding: a panel's dialog's, on its words' line)
           let column = @ui.style(px=room(column_in))
           // (untitled: from its padding's top, its head its own)
-          let top = if untitled { dialog_untitled_top } else { no_style }
+          let top = if untitled { dialog_untitled_top() } else { no_style }
           let held = if bare { full_width } else if footer is None { dialog_body_end } else { dialog_body }
           c.box(style=held.then(column).then(top), id=c.id(key + "/held"), gone_empty=true, fn() {
             // (its rows told they are in a dialog: dialog_rows; untitled, its close button over its corner)
@@ -2514,9 +2514,12 @@ pub fn untitled_clear() -> @ui.Style {
 }
 
 ///|
-/// An untitled dialog's body from its padding's top (no title over it to stand 18 under).
-// kept across runs: a value (no field of it changes)
-let dialog_untitled_top : @ui.Style = @ui.css("pt=S0")
+/// An untitled dialog's body from under its close button (no title over it to stand 18 under): what it holds clear of
+/// the button in its corner, pressed where it is drawn (the user, 2026-11-04: 内容让开关闭按钮; the button 26 in to be
+/// concentric with the dialog's 42 stood over what a column 24 in holds).
+fn dialog_untitled_top() -> @ui.Style {
+  @ui.style(pt=room(capsule_in(dialog_r, dialog_close) + dialog_close - dialog_pad))
+}
 
 ///|
 /// Where its close button stands at its title's row's end: in its top right corner as far in as makes it concentric

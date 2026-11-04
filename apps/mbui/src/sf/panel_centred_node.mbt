@@ -162,7 +162,7 @@ fn panel_centred_node(
         @ui.old(d, natural=true, gives=true, key=fn() { key + "/body" }, fn(c) {
           let share = dmax(0.0, x.tall * c.window_size().1 - dialog_frame_h)
           let column = @ui.style(px=room(words_in))
-          let top = if untitled() { dialog_untitled_top } else { no_style }
+          let top = if untitled() { dialog_untitled_top() } else { no_style }
           let at = (if x.foot is None { dialog_body_end } else { dialog_body }).then(column).then(top)
           let whole = if says.get() { @ui.style(w=Full, max_h=Fixed(share)) } else { @ui.style(w=Full, h=Fixed(share)) }
           let id = c.id("sf-present/capped/\{keyed.serial}")
@@ -210,7 +210,7 @@ fn panel_centred_node(
           b.scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(s) {
             @ui.old(s, natural=true, key=fn() { key + "/body" }, fn(c) {
               let column = @ui.style(px=room(words_in))
-              let top = if untitled() { dialog_untitled_top } else { no_style }
+              let top = if untitled() { dialog_untitled_top() } else { no_style }
               let at = if steps is Some(_) {
                 full_width.then(column).then(top)
               } else {
