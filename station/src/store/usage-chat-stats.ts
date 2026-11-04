@@ -113,8 +113,7 @@ INSERT INTO usage_chat_progress
     (SELECT thread FROM card_outcomes ORDER BY thread DESC, n DESC LIMIT 1),
     (SELECT n FROM card_outcomes ORDER BY thread DESC, n DESC LIMIT 1),
     NOT EXISTS (SELECT 1 FROM threads LIMIT 1) AND NOT EXISTS (SELECT 1 FROM thread_sessions LIMIT 1)
-      AND NOT EXISTS (SELECT 1 FROM card_outcomes LIMIT 1)
-      AND NOT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'card_outcomes_incomplete');
+      AND NOT EXISTS (SELECT 1 FROM card_outcomes LIMIT 1);
 
 CREATE TRIGGER usage_chat_scope_add AFTER INSERT ON usage_chat_scopes BEGIN
   INSERT INTO usage_chat_totals SELECT NEW.kind, NEW.ws, s.place, s.live, s.live * s.archived, s.cards, s.picked
@@ -266,8 +265,10 @@ export function usageCardOutcomesComplete(db: DatabaseSync): boolean {
 }
 
 /// A moved session holds only its old and new workspaces. A home move also affects all home views.
-export function usageChatStatsReady(db: DatabaseSync, viewer: InWorkspace | null): boolean {
-  if (!usageCardOutcomesComplete(db)) return false;
+export type UsageChatCoverage = { allowIncompleteCards?: boolean };
+
+export function usageChatStatsReady(db: DatabaseSync, viewer: InWorkspace | null, options: UsageChatCoverage = {}): boolean {
+  if (!options.allowIncompleteCards && !usageCardOutcomesComplete(db)) return false;
   if ((db.prepare("SELECT done FROM usage_chat_progress WHERE id = 1").get() as { done: number } | undefined)?.done !== 1) return false;
   if (viewer === null) return db.prepare("SELECT 1 FROM usage_chat_dirty LIMIT 1").get() === undefined;
   if (db.prepare("SELECT 1 FROM usage_chat_dirty_scope WHERE kind = 2 AND ws = ? LIMIT 1").get(viewer.workspace)) return false;

@@ -11,7 +11,7 @@ import { retiredUsage } from "../store/usage-retire.ts";
 import { PENDING_MINUTE_SESSION } from "../store/usage-minutes.ts";
 import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailScopeBySession, usageDetailSince, USAGE_DETAIL_PENDING } from "../store/usage-detail.ts";
 import { compactHistory, compactQuery, compactScopeReady, compactUsageSince, hasCompactUsage } from "../store/usage-compact.ts";
-import { usageCardOutcomesComplete, usageChatStatsReady } from "../store/usage-chat-stats.ts";
+import { type UsageChatCoverage, usageCardOutcomesComplete, usageChatStatsReady } from "../store/usage-chat-stats.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
 import { hasRuntimeOrderIndex } from "../store/schema.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
@@ -1117,13 +1117,13 @@ export function decisionCards(s: Store, viewer: InWorkspace | null = null): { ho
 
 export const USAGE_CHATS_PENDING = "usage chat statistics are still being filled";
 
-export function usageChatsReady(s: Store, viewer: InWorkspace | null): void {
-  if (!usageChatStatsReady(s.db, viewer)) throw new Error(USAGE_CHATS_PENDING);
+export function usageChatsReady(s: Store, viewer: InWorkspace | null, options: UsageChatCoverage = {}): void {
+  if (!usageChatStatsReady(s.db, viewer, options)) throw new Error(USAGE_CHATS_PENDING);
 }
 
 /// The totals are kept by place and visibility, not gathered from every chat and card on each request.
-export function usageChatTotals(s: Store, viewer: InWorkspace | null): { places: Record<string, number>; archived: number; cards: number; picked: number } {
-  usageChatsReady(s, viewer);
+export function usageChatTotals(s: Store, viewer: InWorkspace | null, options: UsageChatCoverage = {}): { places: Record<string, number>; archived: number; cards: number; picked: number } {
+  usageChatsReady(s, viewer, options);
   const places: Record<string, number> = {};
   let archived = 0, cards = 0, picked = 0;
   const scopes: [number, string, number][] = viewer === null ? [[0, "", 1]] : viewer.home === false

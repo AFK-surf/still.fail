@@ -70,6 +70,8 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
   let read = 0;
   let missing = 0;
   let incomplete = 0;
+  let incompleteTokens = 0;
+  let incompleteCards = false;
   let unknownAllDays = false;
   let lastIncompleteDay: string | null = null;
   const num = (v: unknown, k: string): number => (typeof get(v, k) === "number" ? get(v, k) : 0);
@@ -82,13 +84,17 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
       unknownAllDays = true;
       continue;
     }
+    if (get(history, "cardsIncomplete") === true) incompleteCards = true;
     if (full === undefined || full === null) {
       incomplete++;
-      const since = get(value, "detailSince");
-      if (typeof since !== "number" || !Number.isFinite(since)) unknownAllDays = true;
-      else {
-        const day = localDay(since, offset);
-        if (lastIncompleteDay === null || day > lastIncompleteDay) lastIncompleteDay = day;
+      if (get(history, "tokensComplete") !== true) {
+        incompleteTokens++;
+        const since = get(value, "detailSince");
+        if (typeof since !== "number" || !Number.isFinite(since)) unknownAllDays = true;
+        else {
+          const day = localDay(since, offset);
+          if (lastIncompleteDay === null || day > lastIncompleteDay) lastIncompleteDay = day;
+        }
       }
     }
     read++;
@@ -114,10 +120,10 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
   if (read === 0) return null;
   const share = (part: number, whole: number) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : "—");
   const figures = [
-    { label: t(incomplete > 0 || missing > 0 ? "core-views.usage.summary.counted" : "core-views.usage.summary.lifetime"), value: count(total) },
+    { label: t(incompleteTokens > 0 || missing > 0 ? "core-views.usage.summary.counted" : "core-views.usage.summary.lifetime"), value: count(total) },
     { label: t("core-views.usage.summary.archived"), value: count(archived) },
     { label: t("core-views.usage.summary.remote"), value: count(remote) },
-    { label: t("core-views.usage.summary.picked"), value: share(picked, cards) },
+    { label: t("core-views.usage.summary.picked"), value: incompleteCards ? "—" : share(picked, cards) },
     { label: t("core-views.usage.summary.stations"), value: String(byStation.length) },
   ];
   // the year: 52 weeks of days, Sunday first, the last week today's (Codex's chart_start); a day after today none
@@ -125,7 +131,7 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
   const values: number[] = [];
   for (let i = 0; i < WEEKS * WEEK_DAYS; i++) values.push(byDay.get(plus(start, i)) ?? 0);
   const most = Math.max(0, ...values);
-  const unknown = missing > 0 || incomplete > 0;
+  const unknown = missing > 0 || incompleteTokens > 0;
   // The cutover day can contain earlier, unrecorded calls. Later days have full coverage only if every station
   // supplies a complete history or a known cutover; a missing station makes every day uncertain.
   const unknownDays = values.map((_, i) => {
@@ -158,6 +164,10 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
   });
   byStation.sort((x, y) => y[1] - x[1]);
   const placed = [...places].sort((x, y) => y[1] - x[1]);
+  const partial = [
+    ...(incompleteTokens > 0 ? [t("core-views.usage.summary.incomplete")] : missing > 0 ? [t("core-views.usage.summary.partial")] : []),
+    ...(incompleteCards ? [t("core-views.usage.summary.decisions_unavailable")] : []),
+  ].join(" ") || null;
   return {
     title,
     figures,
@@ -193,6 +203,6 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
         }
       : {}),
     asOf: t("core-views.usage.summary.as_of", { date: format.monthDayOf(today) }),
-    partial: incomplete > 0 ? t("core-views.usage.summary.incomplete") : missing > 0 ? t("core-views.usage.summary.partial") : null,
+    partial: partial ?? (incomplete > 0 ? t("core-views.usage.summary.incomplete") : null),
   };
 }
