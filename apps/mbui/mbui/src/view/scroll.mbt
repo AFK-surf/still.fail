@@ -81,6 +81,11 @@ pub struct Scroll {
   priv edge : @signals.Signal[Edge?]
   /// The editor these choices belong to, whose input method stays while they are scrolled.
   priv mut for_field : NodeId?
+  /// a list laid out from its anchor's (View::scrolls_anchored): where it is is the hand's alone, kept within nothing
+  /// here (the list holds itself at its ends as it is laid out); and how far its bar shows it from where the hand has it
+  /// (where it is counted to be among all it holds, less that)
+  priv mut unbounded : Bool
+  priv mut bar_off : () -> Double
   /// what a virtual list's counted extent is told by, read where how far it can go is followed (none: as it is laid
   /// out alone): View::scrolls_anchored's
   priv mut extent_told : () -> Unit
@@ -150,6 +155,8 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     host: None,
     edge: @signals.signal(None, same=fn(a, b) { same_ref(a, b) }),
     for_field: None,
+    unbounded: false,
+    bar_off: fn() { 0.0 },
     extent_told: fn() { },
     rows: None,
   }
@@ -253,6 +260,12 @@ fn dmax(a : Double, b : Double) -> Double {
 }
 
 ///|
+/// `v` within `lo` and `hi`, as where it is is kept; anything, for a list that keeps itself (Scroll's `unbounded`).
+fn Scroll::bounded(self : Scroll, v : Double, lo : Double, hi : Double) -> Double {
+  if self.unbounded { v } else { dclamp(v, lo, hi) }
+}
+
+///|
 fn dclamp(v : Double, lo : Double, hi : Double) -> Double {
   dmax(lo, dmin(v, hi))
 }
@@ -263,24 +276,24 @@ fn dclamp(v : Double, lo : Double, hi : Double) -> Double {
 fn Scroll::where_at(self : Scroll, t : Double) -> Double {
   let most = self.most_now()
   match self.edge.get() {
-    Some(e) => return dclamp(e.at(t), 0.0, most)
+    Some(e) => return self.bounded(e.at(t), 0.0, most)
     None => ()
   }
   match self.fling.get() {
     Some(f) =>
       if t >= f.end_t {
-        dclamp(f.end_x, 0.0, most)
+        self.bounded(f.end_x, 0.0, most)
       } else {
         match f.way {
-          Some(w) => dclamp(w.at(f, t), 0.0, most)
-          None => dclamp(scroll_fling_at(f.x0, f.v0, t - f.t0), 0.0, most)
+          Some(w) => self.bounded(w.at(f, t), 0.0, most)
+          None => self.bounded(scroll_fling_at(f.x0, f.v0, t - f.t0), 0.0, most)
         }
       }
     None =>
       match self.notch.get() {
         // (set out from under its top, what it holds shown lower than it lies (Scroll::glide_under): from there)
-        Some(n) => dclamp(n.x0 + ease_come(n.total, n.v0, t - n.t0), dmin(0.0, n.x0), most)
-        None => dclamp(self.x.get(), 0.0, most)
+        Some(n) => self.bounded(n.x0 + ease_come(n.total, n.v0, t - n.t0), dmin(0.0, n.x0), most)
+        None => self.bounded(self.x.get(), 0.0, most)
       }
   }
 }
@@ -442,7 +455,7 @@ pub fn Scroll::put(self : Scroll, to : Double) -> Unit {
 /// Moved by `d` (down the column) at `t`, as far as it can go: whether it moved.
 fn Scroll::moved(self : Scroll, t : Double, d : Double) -> Bool {
   let was = self.stopped(t)
-  let to = dclamp(was + d, 0.0, self.most())
+  let to = self.bounded(was + d, 0.0, self.most())
   if to != was { (self.on_hand)(to - was) }
   self.x.set(to)
   if to != was {
@@ -455,7 +468,7 @@ fn Scroll::moved(self : Scroll, t : Double, d : Double) -> Bool {
 /// Brought to `to` at `t`, as far as it can go (a part of it brought into sight).
 fn Scroll::sent(self : Scroll, t : Double, to : Double) -> Unit {
   let was = self.stopped(t)
-  let to = dclamp(to, 0.0, self.most())
+  let to = self.bounded(to, 0.0, self.most())
   self.x.set(to)
   if to != was {
     (self.on_scrolled)(t)
@@ -482,7 +495,7 @@ fn Scroll::flung(self : Scroll, v : View, t : Double) -> Unit {
   let (t_end, end_x) = if t_hit < t_stop {
     (t_hit, bound)
   } else {
-    (t_stop, dclamp(scroll_fling_at(x0, v0, t_stop), 0.0, most))
+    (t_stop, self.bounded(scroll_fling_at(x0, v0, t_stop), 0.0, most))
   }
   if t_end <= 0.0 {
     return
@@ -499,7 +512,7 @@ fn Scroll::flung(self : Scroll, v : View, t : Double) -> Unit {
     (self.on_scrolled)(end_t)
     self.fling.set(None)
     // (within how far it can go as of then: what holds it may have come to be shorter meanwhile)
-    self.x.set(dclamp(end_x, 0.0, self.most()))
+    self.x.set(self.bounded(end_x, 0.0, self.most()))
   })
 }
 
@@ -544,7 +557,7 @@ fn Edge::at(self : Edge, t : Double) -> Double {
 fn Scroll::edge_due(self : Scroll, v : View, t : Double) -> Unit {
   guard @signals.untracked(fn() { self.edge.get() }) is Some(e) else { return }
   let most = self.most()
-  let x0 = dclamp(e.at(t), 0.0, most)
+  let x0 = self.bounded(e.at(t), 0.0, most)
   let bound = if e.v > 0.0 { most } else { 0.0 }
   self.edge_planned(v, e, x0, t, bound)
 }
