@@ -1799,7 +1799,9 @@ export class Store {
 
   /// Chats kept instead of offered for archiving. Null selects every viewer, for automatic archiving.
   keptChats(viewer: string | null): Set<number> {
-    return new Set(this.#all("SELECT DISTINCT thread FROM kept_chats WHERE ?1 IS NULL OR viewer = ?1", viewer).map((r) => r.thread));
+    const rows = viewer === null ? this.#all("SELECT DISTINCT thread FROM kept_chats")
+      : this.#all("SELECT thread FROM kept_chats WHERE viewer = ?1", viewer);
+    return new Set(rows.map((r) => r.thread));
   }
 
   keepChat(viewer: string, thread: number): void {
