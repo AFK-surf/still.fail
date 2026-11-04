@@ -1415,6 +1415,41 @@ sim("the_same_offer_again_is_not_made_anew", async (s) => {
   await s.settle(endpoint.close());
 });
 
+/// 2026-11-04: a chat's own screen up on the phone (the station's displays.ts) is said with how the station holds it, and
+/// the notification names its chat; said no longer, it is gone.
+sim("the_chats_with_screens_up_on_the_phone_are_said", async (s) => {
+  const endpoint = s.net.bindStation({ secretKey: s.net.key(), alpns: [ALPN], relayUrls: [], bindAddr: "127.0.0.1:0" });
+  let say: (line: J) => Promise<void> = async () => {};
+  void (async () => {
+    const conn = (await endpoint.accept())!;
+    const control = (await conn.acceptBi())!;
+    await Station.readLine(control, { bytes: Buffer.alloc(0) });
+    await control.write(Buffer.from(`${JSON.stringify({ ok: true, station: "测试" })}\n`));
+    const offer = (await conn.acceptBi())!;
+    await Station.readLine(offer, { bytes: Buffer.alloc(0) });
+    await offer.write(Buffer.from(`${JSON.stringify({ status: 200, headers: {} })}\n`));
+    say = async (line) => void (await offer.write(Buffer.from(`${JSON.stringify(line)}\n`)));
+    await say({ serial: "127.0.0.1:37001", adb: "connected", message: "" });
+  })().catch(() => {});
+  const mesh = await s.run(Mesh.make(env(s), []));
+  mesh.addAddr({ id: endpoint.id(), ips: endpoint.sockets() });
+  const store = new Store(s.host, s.runner);
+  const adb = new Adb({ host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  const offer = { station: `ws/${endpoint.id()}`, connect: 5555, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 };
+  await s.run(adb.run({ kind: "share", offer }));
+  await s.until(() => adb.value().adb === "connected");
+  assert.deepEqual(adb.value().screens, []);
+  await say({ serial: "127.0.0.1:37001", adb: "connected", message: "", screens: ["修登录页"] });
+  await s.until(() => adb.value().screens.length === 1);
+  assert.deepEqual(adb.value().screens, ["修登录页"]);
+  await say({ serial: "127.0.0.1:37001", adb: "connected", message: "" });
+  await s.until(() => adb.value().screens.length === 0);
+  await s.run(adb.run({ kind: "stop" }));
+  assert.deepEqual(adb.value().screens, []);
+  await s.run(mesh.close());
+  await s.settle(endpoint.close());
+});
+
 /// 2026-10-26, an OPPO: adbd gone from the port the app found (Wireless debugging turned off and on), every tunnel
 /// refused and the station's adb let go until the phone offered again, which it did only as DNS-SD said something new.
 /// The port refused is said (`refusedPort`), so that the app looks again; the station hears the port each offer has.

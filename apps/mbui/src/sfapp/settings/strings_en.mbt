@@ -98,6 +98,8 @@ let en : Map[String, String] = {
   "android-misc.adb.notify.chats": "Debugging shared with {n} chats",
   "android-misc.adb.notify.idle": "No chats are using it",
   "android-misc.adb.notify.on": "Debug sharing is on",
+  "android-misc.adb.notify.screen": "“{title}” is using a virtual screen in the background",
+  "android-misc.adb.notify.screens": "{n} chats are using virtual screens in the background",
   "android-misc.adb.notify.title": "Sharing debugging with {name}",
   "android-misc.adb.off": "Wireless debugging is off",
   "android-misc.adb.offValue": "Off",

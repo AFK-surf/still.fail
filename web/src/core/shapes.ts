@@ -130,6 +130,8 @@ export interface AdbShareView {
 	lasts?: string;
 	/** This phone lent to each station a grant wants it on (`adb.ports` given): how each stands. */
 	lends?: AdbLend[];
+	/** The titles of the chats whose own screens (virtual displays) are up on this phone now, every station's: its notification names them. */
+	screens?: string[];
 }
 
 export interface AgentCardLine {

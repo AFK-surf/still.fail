@@ -11,6 +11,7 @@ import { ControlPlane, Events, Parts, Paths, Previous, ScreenRegistry, Store } f
 import { join } from "node:path";
 import { type PhoneRequest, PhoneGrants, type Scope } from "./grants.ts";
 import { GrantServers } from "./servers.ts";
+import { PhoneDisplays } from "./displays.ts";
 import { adbTools, phoneTools, reached } from "./tool.ts";
 import { Shares, adbPath, answerAdb } from "./link.ts";
 
@@ -39,6 +40,21 @@ export const AdbLive = Layer.effectDiscard(
     // Chats' grants of people's phones (docs/adb-share.md): told to the owner's devices, their phones connected anew in
     // the grants' adb servers, a grant's server stopped as it ends.
     let shares: Shares | null = null;
+    // The chats' own screens on the phones (displays.ts): their phones' offers say which chats have one up.
+    let grantsOf: PhoneGrants | null = null;
+    const displays = yield* Effect.acquireRelease(
+      Effect.sync(() =>
+        new PhoneDisplays({
+          adb: adbPath,
+          usedAt: (id) => {
+            const r = grantsOf?.get(id) ?? null;
+            return r === null || r.status !== "granted" ? null : (r.lastUsedAt ?? 0);
+          },
+          changed: (owner) => shares?.screens(owner, displays.titles(owner)),
+        }),
+      ),
+      (d) => Effect.sync(() => d.closeAll()),
+    );
     const grants = new PhoneGrants({
       db: store.db, hub: hub as any, home: () => plane.state.home(), now: () => wall.now(),
       title: (r) => {
@@ -52,13 +68,17 @@ export const AdbLive = Layer.effectDiscard(
       told: (r: PhoneRequest, workspace, change) => {
         if (workspace !== null) events.tell("adb-grant", r, `adb-grant\0${r.id}`, { workspace, email: r.owner });
         if (change !== "grant") return;
-        if (r.status === "denied" || r.status === "ended") void servers.stop(r.id);
+        if (r.status === "denied" || r.status === "ended") {
+          displays.close(r.id);
+          void servers.stop(r.id);
+        }
         shares?.regrant(r.owner);
         // (granted while the phone is offered here already: its card says at once how it is held)
         const held = r.status === "granted" ? [...(shares?.byKey.values() ?? [])].find((s) => s.owner.email.toLowerCase() === r.owner) : undefined;
         if (held !== undefined) grants.linked(r.owner, held.state);
       },
     });
+    grantsOf = grants;
     shares = yield* Effect.acquireRelease(
       Effect.sync(
         () =>
@@ -103,11 +123,20 @@ export const AdbLive = Layer.effectDiscard(
       }
       return answerAdb(lent, conn, viewer, head, stream, reader);
     });
+    // What the phone's notification names a chat by: its title, else what its agent asked the phone for.
+    const nameOf = (grant: string) => {
+      const r = grants.get(grant);
+      return r === null ? "" : grants.shown(r).chatTitle || r.reason.slice(0, 40);
+    };
     parts.tools(
       phoneTools(grants, async (owner, grant) => {
         const phones = lent.list().filter((p) => p.owner.email.toLowerCase() === owner);
         const server = phones.length > 0 ? await servers.ensure(grant) : null;
-        return reached(phones, server?.port ?? null, lent.gone.get(owner) ?? null);
+        // Its own screen, made once the phone is in the grant's server (the first phone: one person lends one).
+        const phone = phones.find((p) => p.adb === "connected");
+        const display = server === null || phone === undefined ? null
+          : await displays.open(grant, owner, nameOf(grant), server.port, phone.serial).catch((error) => ({ failed: (error as Error).message }));
+        return reached(phones, server?.port ?? null, lent.gone.get(owner) ?? null, display);
       }),
     );
     parts.tools(
