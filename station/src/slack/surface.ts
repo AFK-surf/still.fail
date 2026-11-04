@@ -11,9 +11,11 @@ import { ConnectedSurface, MEMBERS_MS } from "../connects/surface.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { Attachment } from "../store/store.ts";
-import { type ChatEvent, type ChatMessage, type Handler, type InboundFile, type Member, type Person, type Place, type ThreadRef, splitForSlack } from "../sessions/chat.ts";
+import { type ChatEvent, type ChatMessage, type Handler, type InboundFile, type Member, type ModelChoice, type Person, type Place, type ThreadRef, splitForSlack } from "../sessions/chat.ts";
 import { type CardEnd, endedWords } from "../connects/card-ends.ts";
 import { type Stands, answerOf, answeredBlocks, endedBlocks, loginBlocks, loginCodeOf, loginEnteredBlocks, markdown, questionBlocks, standsBlock, standsText } from "./cards.ts";
+import { NEW_CHAT_COMMAND } from "./apps.ts";
+import { modelOptions, modelValue, newChatBlocks, newChatView, submittedChat } from "./new-chat.ts";
 import { ThreadStatus } from "./status.ts";
 import { type Params, SlackClient, field } from "./web.ts";
 import { wall } from "../ops/fibers.ts";
@@ -233,6 +235,8 @@ export type SlackSurfaceOptions = {
   onHeard?: () => void;
   /// A new turn began showing its status, an opportunity to retry an app setup that previously failed.
   onWorking?: () => boolean | void | Promise<boolean | void>;
+  /// The models `/sf` offers, the connect's own first (the hub's `modelsFor`).
+  models?: () => ModelChoice[];
 };
 /// The most of a question's words its card carries (Slack takes 12,000 characters of Markdown in a message, and long
 /// options are listed with them).
@@ -260,6 +264,7 @@ export class SlackSurface extends ConnectedSurface {
   /// One change at a time in each thread, in order.
   private standing = new Map<string, Promise<void>>();
   private onWorking: () => boolean | void | Promise<boolean | void>;
+  private models: () => ModelChoice[];
 
   constructor(options: SlackSurfaceOptions) {
     if (!options.appToken.startsWith("xapp-")) throw new Error("slack.appToken must be an app-level token (xapp-…)");
@@ -270,6 +275,7 @@ export class SlackSurface extends ConnectedSurface {
     this.botToken = options.botToken;
     this.client = options.client ?? new SlackClient();
     this.onWorking = options.onWorking ?? (() => {});
+    this.models = options.models ?? (() => []);
   }
 
   protected identify() {
@@ -303,9 +309,42 @@ export class SlackSurface extends ConnectedSurface {
           } catch {}
           return end(null);
         }
-        // A card's button pressed: acknowledged at once (Slack waits 3 s), then said as the person's answer.
+        // Acknowledged (Slack waits 3 s), with what it asked for when it asks (`payload`).
+        const ack = (payload?: Json) => {
+          if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ envelope_id: envelope.envelope_id ?? null, ...(payload === undefined ? {} : { payload }) }));
+        };
+        // `/sf`: its form opened (its trigger lasts 3 s).
+        if (envelope?.type === "slash_commands") {
+          ack();
+          if (envelope.payload?.command === NEW_CHAT_COMMAND) void this.newChat(envelope.payload).catch((error) => log.error("slack", "failed to open the new chat form", { error: (error as Error).message }));
+          return;
+        }
+        // The form's model field: the models matching what is typed.
+        if (envelope?.type === "interactive" && envelope.payload?.type === "block_suggestion") {
+          let options: Json[] = [];
+          try {
+            options = modelOptions(this.models(), text(envelope.payload.value), stationLang());
+          } catch (error) {
+            log.error("slack", "failed to list the models", { error: (error as Error).message });
+          }
+          return ack({ options });
+        }
+        // The form sent: acknowledged once its thread is posted (or with what is wrong, shown in the form), then taken.
+        if (envelope?.type === "interactive" && envelope.payload?.type === "view_submission") {
+          let acked = false;
+          const once = (payload?: Json) => {
+            if (!acked) ack(payload);
+            acked = true;
+          };
+          void this.startChat(envelope.payload, handler, once).catch((error) => {
+            log.error("slack", "failed to start a chat from the form", { error: (error as Error).message });
+            once({ response_action: "errors", errors: { words: tr(stationLang(), "station.slack.newChatFailed", { error: (error as Error).message }) } });
+          });
+          return;
+        }
+        // A card's button pressed: acknowledged at once, then said as the person's answer.
         if (envelope?.type === "interactive") {
-          if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ envelope_id: envelope.envelope_id ?? null }));
+          ack();
           if (envelope.payload?.type === "block_actions") {
             const pressed = loginCodeOf(envelope.payload) !== null ? this.enterCode(envelope.payload, handler) : this.answer(envelope.payload, handler);
             void pressed.catch((error) => log.error("slack", "failed to take a card's answer", { error: (error as Error).message }));
@@ -396,6 +435,59 @@ export class SlackSurface extends ConnectedSurface {
     }
     if (first === null) throw new Error("nothing to post");
     return first;
+  }
+
+  /// `/sf`: its form, the model field on the connect's own model and the words what followed the command.
+  private async newChat(payload: Json) {
+    const trigger = text(payload?.trigger_id);
+    const channel = text(payload?.channel_id);
+    if (trigger === "" || channel === "") return;
+    const view = newChatView(this.models(), channel, text(payload?.text), stationLang());
+    await this.client.api(
+      "views.open",
+      [
+        ["trigger_id", trigger],
+        ["view", JSON.stringify(view)],
+      ],
+      this.botToken,
+    );
+  }
+
+  /// The `/sf` form sent: its words posted in its channel as the person's, a new thread, which a session on the model
+  /// picked takes (as a message mentioning the bot would start one). What cannot be done is said in the form, which
+  /// stays open; nothing is posted then.
+  private async startChat(payload: Json, handler: Handler, ack: (payload?: Json) => void) {
+    const asked = submittedChat(payload);
+    if (asked === null) return ack();
+    const lang = stationLang();
+    const offered = this.models();
+    const model = asked.model === null ? null : (offered.find((m) => modelValue(m) === modelValue(asked.model!)) ?? null);
+    if (model === null) return ack({ response_action: "errors", errors: { model: tr(lang, "station.slack.newChatNoModel") } });
+    if (asked.words === "") return ack({ response_action: "errors", errors: { words: tr(lang, "station.slack.newChatEmpty") } });
+    const said = newChatBlocks(asked.user, model, asked.words, lang);
+    let ts = "";
+    try {
+      const posted = await this.client.api(
+        "chat.postMessage",
+        [
+          ["channel", asked.channel],
+          ["text", said.text],
+          ["blocks", JSON.stringify(said.blocks)],
+          ["unfurl_links", "false"],
+        ],
+        this.botToken,
+      );
+      ts = text(posted?.ts);
+    } catch (error) {
+      const why = (error as Error).message;
+      const key = /not_in_channel|channel_not_found|is_archived/.test(why) ? "station.slack.newChatNotHere" : "station.slack.newChatFailed";
+      return ack({ response_action: "errors", errors: { words: tr(lang, key, { error: why }) } });
+    }
+    ack();
+    if (ts === "") return;
+    // (the bot's message, but the person's words: nothing of the bot's to change)
+    this.heard(asked.channel, ts, ts);
+    await handler({ type: "message", message: { channel: asked.channel, threadTs: ts, ts, user: asked.user, text: asked.words, addressed: true, model } });
   }
 
   /// A login card's button pressed: the field's code handed to the station (never said in the thread), and the card
