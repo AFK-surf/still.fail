@@ -95,7 +95,13 @@ for t in $targets; do
   out=$(mktemp)
   # Built first on its own (TIMES=1, as CI's: each said with how long it took; its errors shown by the run), then run.
   s=$(date +%s)
-  [ -n "${APP_EXE:-}" ] || moon test $mode $pkgs --build-only > /dev/null 2>&1
+  # (a build that fails fails the run: the programs a build before it left in _build are not run in their place)
+  if [ -z "${APP_EXE:-}" ] && ! moon test $mode $pkgs --build-only > "$out.build" 2>&1; then
+    grep -v "$F" "$out.build" | tail -40
+    rm -f "$out.build"
+    exit 1
+  fi
+  rm -f "$out.build"
   [ -z "${TIMES:-}" ] || [ -n "${APP_EXE:-}" ] || echo "test.sh: built in $(( $(date +%s) - s )) s"
   # (wasm-gc: the whole app's programs (sfapp's, the flows') run as a native one built elsewhere is (APP_EXE, exe_run),
   # their files side by side, each part a moonrun of the program (scripts/wasmtest.mjs): moon test runs a program's
