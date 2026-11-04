@@ -882,7 +882,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   view_changes_taken(tree)
   dr.targets_said = true
   // (what is composed of content made before kept in the atlas, before anything this frame places a glyph)
-  view_glyphs_held(tree)
+  view_glyphs_held(tree, self.scale / words_zoom.val)
   let n0 = self.ninst
   // (what is drawn off where it is laid out drawn off by whole pixels of this frame's: View::drawn_off)
   tree.set_pixel_grid(self.scale)
@@ -1291,14 +1291,14 @@ fn Ctx::view_ring_put(self : Ctx, held : FixedArray[Double], by : (Int, (Double,
 /// as it draws them; content one of whose glyphs is no longer where it was (its plot emptied, the atlas made anew, or
 /// one there was no room for as it was made) made again as it is composed, never composed out of what the atlas now
 /// holds there instead.
-fn view_glyphs_held(tree : @view.Tree) -> Unit {
+fn view_glyphs_held(tree : @view.Tree, sc : Double) -> Unit {
   let stale : Array[@view.NodeId] = []
   tree.each_drawn_scaled(fn(c, _x, _y, a, _s) {
     if c.id.at == 0 || a <= 0.002 || c.hosted {
       return
     }
     match view_blocks.get(c.id) {
-      Some(b) if !glyphs_still(b.kept) => stale.push(c.id)
+      Some(b) if !glyphs_still(b.kept, sc) => stale.push(c.id)
       _ => ()
     }
   })
