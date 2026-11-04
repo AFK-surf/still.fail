@@ -6547,6 +6547,9 @@ fn Tree::shorter_in(self : Tree, at : Int) -> Unit {
 /// changed.
 fn Tree::place(self : Tree, at : Int) -> Unit {
   let n = self.nodes[at]
+  // Place also covers drawing-only transforms such as turn and fades. Their binding marks this node even when
+  // its layout rect, offset, opacity and scale remain unchanged.
+  let marked = n.place_due
   n.place_due = false
   let x = n.flex.left + n.look.dx + n.look.sx * n.flex.width
   // (a page's list's first row on the host's pixels where it sets them so: Tree::rows_placed)
@@ -6577,7 +6580,7 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
   n.ls = s
   n.lpx = px
   n.lpy = py
-  if went {
+  if went || marked {
     self.work.composed = self.work.composed + 1
     self.composed.push({ at, gen: n.gen })
     self.placed_pending.push({ at, gen: n.gen })

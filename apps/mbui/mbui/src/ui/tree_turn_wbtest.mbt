@@ -188,6 +188,26 @@ test "a node turned by the clock: at a moment, turned as far as that moment says
 }
 
 ///|
+test "a tree's turning line draws at every frame's time once the rest of the frame settles" {
+  let t = Tester::new(fn(_c) { }, w=400.0, h=300.0, stable=false)
+  set_view_app(fn(root) {
+    root.box(fn(b) {
+      b.width(Is(Some(40.0))).height(Is(Some(10.0))).lines(Is(turn_bar))
+      .turn(By(fn() { b.cycle(800.0) * 4.0 * quarter })) |> ignore
+    }) |> ignore
+  })
+  t.draw()
+  for _ in 0..<8 {
+    t.frame_at(t.time() + 100.0)
+    let lines = line_pieces(t)
+    let turn = t.time() / 800.0
+    assert_true(lines.length() > 0)
+    assert_true((lines[0][13] - (turn - turn.floor()) * 4.0 * quarter).abs() < 0.000001,
+      msg="the tree is drawn at this frame's time")
+  }
+}
+
+///|
 test "a node turned by the clock let go: nothing reads the clock for it any more" {
   let shown = @signals.signal(true, same=fn(a, b) { a == b })
   let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)

@@ -683,7 +683,12 @@ let view_logic_at : Ref[Double] = Ref(0.0)
 /// The input snapshot laid out once, at the host frame's actual time; only paint samples its presentation time.
 fn view_brought(tree : @view.Tree) -> Unit {
   let (w, h) = view_window.val
-  @signals.untracked(fn() { tree.frame(w, h, now=view_logic_at.val) |> ignore })
+  let drawn = @signals.untracked(fn() { tree.frame(w, h, now=view_logic_at.val) })
+  // Presentation bindings are sampled after layout, while the tree is locked. Their changes belong to this
+  // frame and therefore do not send an on_due callback; make this frame's paint watch see them explicitly.
+  if drawn {
+    view_due.set(@signals.untracked(fn() { view_due.get() }) + 1)
+  }
   view_changes_taken(tree)
   old_place(tree)
 }
