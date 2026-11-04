@@ -747,10 +747,9 @@ pub fn chat_list_node(
   // end (Chat.tsx `lined`)
   v.reacts(fn() {
     let cr = rows_now.get()
-    cr.changed() |> ignore
-    (cr, line_seq.get())
+    (cr, cr.changed(), line_seq.get())
   }, fn(now) {
-    let (cr, line_at) = now
+    let (cr, _, line_at) = now
     let rd = rd0
     // (the rows at its ends it has had, Reading's known: what words sent go on to)
     for e in cr.tail() {
