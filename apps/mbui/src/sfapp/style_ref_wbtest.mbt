@@ -54,38 +54,39 @@ test "styles: the lock's waiting page, every state, drawn as before" {
   }
   inspect(out.to_string(), content=(
     #|waiting narrow 28261:276919d4
-    #|waiting wide 58401:95c1ebd
+    #|waiting wide 58348:6d17d918
     #|waiting-dark narrow 28177:273f1828
-    #|waiting-dark wide 58224:d4684317
+    #|waiting-dark wide 58173:f6c85a4e
     #|finding narrow 33120:e0cb13d0
-    #|finding wide 63930:9f4f7c0a
+    #|finding wide 63877:9fe7c0d
     #|finding-dark narrow 33233:7bd3d895
-    #|finding-dark wide 63950:d3000bbf
+    #|finding-dark wide 63899:d53179f6
     #|code narrow 26964:88a7f87b
-    #|code wide 57233:951cbac9
+    #|code wide 57180:53acc254
     #|code-dark narrow 26856:ce8b5d5e
-    #|code-dark wide 57032:726c81e
+    #|code-dark wide 56981:8e036739
     #|wrong narrow 28173:7d27636f
-    #|wrong wide 58462:4eabfb38
+    #|wrong wide 58409:d2d3041b
     #|wrong-dark narrow 28275:4b23cc12
-    #|wrong-dark wide 58471:fe8bb2bd
+    #|wrong-dark wide 58420:45446d48
     #|checking narrow 35247:a55b4d68
-    #|checking wide 66177:4541c7d2
+    #|checking wide 66124:9566bdf5
     #|checking-dark narrow 35339:cf8b4c9d
-    #|checking-dark wide 66176:8bf911b9
+    #|checking-dark wide 66125:3e1bfc6c
     #|none narrow 27729:50cff18b
-    #|none wide 57877:338f011b
+    #|none wide 57824:81cbd3e
     #|none-dark narrow 27649:92e439f
-    #|none-dark wide 57704:8b9e4363
+    #|none-dark wide 57653:179012c2
     #|failed narrow 23488:6a0bface
-    #|failed wide 53629:e800ce1f
+    #|failed wide 53576:b25856d2
     #|failed-dark narrow 23488:d6aa537e
-    #|failed-dark wide 53536:3d95475b
+    #|failed-dark wide 53485:14a8739a
     #|nocode narrow 28261:276919d4
-    #|nocode wide 58401:95c1ebd
+    #|nocode wide 58348:6d17d918
     #|nocode-dark narrow 28177:273f1828
-    #|nocode-dark wide 58224:d4684317
+    #|nocode-dark wide 58173:f6c85a4e
     #|
+
 
 
 
@@ -145,16 +146,17 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
     #|settings narrow 76417:a41cf0b3
     #|station narrow 85449:40712050
     #|me-reading narrow 15019:a90f4e9c
-    #|settings wide 157089:e6c308e9
-    #|station wide 223364:8ecc0775
-    #|me-reading wide 151802:d4231918
+    #|settings wide 157036:f63a4178
+    #|station wide 223311:75eef3fe
+    #|me-reading wide 151749:d1072b03
     #|settings-dark narrow 76685:a9841340
     #|station-dark narrow 85292:f6d55113
     #|me-reading-dark narrow 15109:3c245f0d
-    #|settings-dark wide 156969:48b783a1
-    #|station-dark wide 223013:5a4a984d
-    #|me-reading-dark wide 151758:469f55b
+    #|settings-dark wide 156918:7d056968
+    #|station-dark wide 222962:53a99d6e
+    #|me-reading-dark wide 151707:310cb5c6
     #|
+
 
 
 
