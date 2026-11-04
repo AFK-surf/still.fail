@@ -270,9 +270,17 @@ fn picker(c : @ui.Ctx, src : Source, station : String) -> Unit {
           Some(_) => path
           None => match way.last() { Some((_, p)) => p; None => "" }
         }
-        for p in places {
-          row(p.0, p.1, p.2, p.3, p.1 == here_at)
+        // (a machine's disks come last: a list, so that all of them are reached however many it has)
+        let h : @ui.Size = if narrow {
+          Px(dmin(places.length().to_double() * pick_row_h, picker_places_most))
+        } else {
+          Fill(1.0)
         }
+        c.list("drive/picker/places", places.length(), pick_row_h, h~, fn(i) {
+          let p = places[i]
+          row(p.0, p.1, p.2, p.3, p.1 == here_at)
+        })
+        |> ignore
       })
       |> ignore
     }
@@ -440,6 +448,10 @@ let picker_box_narrow : @ui.Style = @ui.css("w=Full h=S96 gap=S3")
 ///|
 // kept across runs: a value (no field of it changes)
 let picker_places_narrow : @ui.Style = @ui.css("w=Full gap=S0_5")
+
+///|
+/// Narrow: how high its places' list goes, the folders under it keeping the rest (4.5 rows: the half shows it goes on).
+let picker_places_most : Double = 180.0
 
 ///|
 /// Its places (180) beside its folders, 12 apart, as high as 420 at most.
