@@ -34,7 +34,10 @@ test "a chat's messages of words alone, as nodes, where an old view's message_ro
         fn(c) {
           @sf.begin(c) |> ignore
           c.with_theme(@sf.ui_theme(), fn() {
-            c.column(w=Fill(1.0), pad=16.0, fn() { @sfpages.message_row(c, src, here, m) }) |> ignore
+            c.column(w=Fill(1.0), pad=16.0, fn() {
+              @sfpages.message_row(c, src, here, m)
+              c.text("the next message", style=@sf.theme().t.words) |> ignore
+            }) |> ignore
           })
         },
         w~,
@@ -48,7 +51,11 @@ test "a chat's messages of words alone, as nodes, where an old view's message_ro
         @ui.set_tree_theme(@sf.ui_theme_now)
         root.box(fn(b) {
           b.padding(Is((16.0, 16.0, 16.0, 16.0))).lines_up(Is(None)) |> ignore
-          @sfpages.message_row_node(b, src, fn() { here }, fn() { m }, fn() { w })
+          b.box(fn(message) {
+            @sfpages.message_row_node(message, src, fn() { here }, fn() { m }, fn() { w })
+          }) |> ignore
+          // The room left under it matters too: a time hidden by the next joined message leaves no empty slot.
+          @sf.words_node(b, fn() { "the next message" }, fn() { @sf.theme().t.words }) |> ignore
         })
         |> ignore
       })

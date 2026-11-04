@@ -454,6 +454,7 @@ struct MineRow {
   /// its row's key in its chat's list (Entry::id)
   key : () -> String
   linked : (String) -> String?
+  foot_shown : () -> Bool
   foot : (@view.View) -> Unit
 }
 
@@ -575,11 +576,10 @@ fn mine_row_node(col : @view.View, src : Source, here : () -> MessageHere, row :
     |> ignore
   })
   // (what goes under it comes in with the words sent to it, after they have set off: flight_node.mbt)
-  col.box(fn(f) {
+  col.show(row.foot_shown, fn(f) {
     f.alpha(By(fn() { @sfbase.send_row_arrived(f, here().station + ":" + here().session, (row.key)()) })) |> ignore
     (row.foot)(f)
   })
-  |> ignore
 }
 
 ///|
@@ -610,12 +610,11 @@ fn mine_message_node(
     seq: fn() { m().seq },
     key: key.unwrap_or(fn() { "m:" + m().ts }),
     linked: fn(href) { m().linked(href).map(fn(l) { l.title }) },
+    foot_shown: fn() { !m().followed },
     foot: fn(f) {
       f.pick(fn() {
         let now = m()
-        if now.followed {
-          0
-        } else if now.blocked is Some(b) && b.state != "installed" {
+        if now.blocked is Some(b) && b.state != "installed" {
           3
         } else if now.waiting {
           1
@@ -675,12 +674,13 @@ fn outbox_node(
     // (its row's in the list: the same as the station gives it its own id)
     key: key.unwrap_or(fn() { "o:" + o().id }),
     linked: fn(_) { None },
+    foot_shown: fn() { o().state == "failed" || !o().followed },
     foot: fn(f) {
       let shows = @signals.signal(false, same=fn(a, b) { a == b })
       f.at_moment(f.cause_at() + sending_shows_ms, fn() { shows.set(true) }) |> ignore
       f.pick(fn() {
         let now = o()
-        if now.state == "failed" { 3 } else if now.followed { 0 } else if now.state == "sent" { 2 } else { 1 }
+        if now.state == "failed" { 3 } else if now.state == "sent" { 2 } else { 1 }
       }, fn(foot, which) {
         match which {
           3 => outbox_unsent_node(foot, src, here, o, tips)
