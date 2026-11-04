@@ -685,6 +685,18 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             }
           None => None
         }
+        // The distance from the laid-out tail to the window's foot is local geometry. Subtracting the list's
+        // estimated scroll position from its estimated extent instead treats every visible row as an average
+        // row; one tall measured row elsewhere can then make a short arrival look taller than the window.
+        let mut tail_end = r.tops.last().unwrap_or(h) + r.heights.last().unwrap_or(0.0)
+        if glide is Some(_) {
+          for i in (r.last + 1)..<n {
+            let k = key_at(i)
+            let natural = heights.get(k).unwrap_or(mean())
+            tail_end += (c.rooms.v)(k, natural).height
+          }
+        }
+        let to_tail = dmax(0.0, tail_end - h)
         // (told once all of it is laid out, to what reads it there and after: what is in sight, whether it is at its
         // end, how far it is counted to be scrolled (what holds its rows moved by as much as they were placed for: what
         // its layout reads not moved), and a glide to what came, from this moment; nothing its layout reads changed)
@@ -728,7 +740,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             (Some((_, from_top)), Some(top)) => {
               // (as far as the hand has it to go: by how far its top is under its cover, or to its end as counted)
               let to_top = top - c.cover
-              let to_end = most - counted
+              let to_end = to_tail
               if from_top && to_top < to_end - 0.5 {
                 s.glide_where(c.x + to_top, kept=false)
                 follows.set(false)
