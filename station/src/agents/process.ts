@@ -6,7 +6,7 @@
 // `freeze` stops handling lines (none more is acknowledged): what a snapshot says then matches where the next station
 // begins. After a crash there is no snapshot; `ackedOffset` and `linesBefore` let a driver read what the dead station
 // had handled (silently) to know where things stand before the rest comes.
-import { closeSync, openSync, readSync, statSync } from "node:fs";
+import { closeSync, openSync, readFileSync, readSync, statSync, writeFileSync } from "node:fs";
 import { createConnection } from "node:net";
 import { join } from "node:path";
 import { keyPart } from "./sandbox.ts";
@@ -62,6 +62,29 @@ export const findRunner = (data: string, id: string): RunnerInfo | undefined => 
 };
 export const outFile = (data: string, id: string) => join(runnersDir(data), `${id}.out`);
 
+/// Where in a runner's output what a station must read after a crash begins (`<id>.from`), as the driver keeps it: the
+/// output before it said nothing that still stands. Without it all of it is read: on ccvm a Codex app-server's had
+/// grown to 4.9 GB, and reading 157 MB of another's held the station's thread 10 s (2026-11-04).
+const fromFile = (data: string, id: string) => join(runnersDir(data), `${id}.from`);
+
+/// Where a runner's output is read from after a crash (`fromFile`): 0 when not kept for this runner.
+export function readFrom(data: string, info: RunnerInfo): number {
+  try {
+    const kept = JSON.parse(readFileSync(fromFile(data, info.id), "utf8"));
+    if (kept?.runner === info.runner && kept?.startedAt === info.startedAt && Number.isSafeInteger(kept?.from) && kept.from > 0) return kept.from;
+  } catch {}
+  return 0;
+}
+
+/// Keeps where a runner's output is read from after a crash (`fromFile`).
+export function writeFrom(data: string, info: RunnerInfo, from: number) {
+  try {
+    writeFileSync(fromFile(data, info.id), JSON.stringify({ runner: info.runner, startedAt: info.startedAt, from }));
+  } catch (error) {
+    debug("agents::process", "where a runner's output is read from was not kept", { id: info.id, error: String(error) });
+  }
+}
+
 /// The connection's socket, which runner.ts keeps to itself: its errors would otherwise go unhandled, and its closing
 /// (the runner gone, or another station attached) is how this one learns of it.
 function socketOf(conn: RunnerConnection): import("node:net").Socket {
@@ -71,8 +94,8 @@ function socketOf(conn: RunnerConnection): import("node:net").Socket {
 export type ProcessOptions = {
   /// For the log: what it is ("claude <session>", "codex app-server <profile>").
   label: string;
-  /// Each line of its stdout, in order; acknowledged once this returns.
-  line: (text: string) => void;
+  /// Each line of its stdout, in order, with where in its output it begins and ends; acknowledged once this returns.
+  line: (text: string, from: number, to: number) => void;
   /// It exited (all of its output handled), as `describeExit` says, unless it was let go first; with the last lines it
   /// wrote to stderr (STDERR_TAIL of them, "" when none): what a runtime that fails as it starts says of why.
   exit: (said: string, stderr: string) => void;
@@ -100,14 +123,14 @@ export class AgentProcess {
     this.info = info;
     let resolveExit!: (said: string) => void;
     this.exited = new Promise((resolve) => (resolveExit = resolve));
-    this.conn = new RunnerConnection(info, (stream, text) => {
+    this.conn = new RunnerConnection(info, (stream, text, from, to) => {
       // Frozen: the line stays unacknowledged, for whoever takes the process up next.
       if (this.frozen) return new Promise<void>(() => {});
       const line = text.endsWith("\r") ? text.slice(0, -1) : text;
       if (stream === "err") {
         debug("agents::process", "runtime stderr", { label: options.label, line: line.slice(0, 2000) });
         if (line.trim() !== "") this.stderr = [...this.stderr, line.trim().slice(0, STDERR_LINE)].slice(-STDERR_TAIL);
-      } else options.line(line);
+      } else options.line(line, from, to);
     });
     const socket = socketOf(this.conn);
     socket.on("error", (error) => {
@@ -281,11 +304,18 @@ const READ_CHUNK = 1 << 20;
 /// The whole lines of `file` before byte `end` (a line boundary: acknowledgements are at line ends), one at a time: an
 /// app-server's output holds days of its threads (hundreds of MB), more than one string can, so it is never held whole.
 export function* linesBefore(file: string, end: number, chunk = READ_CHUNK): Generator<string> {
-  if (end <= 0) return;
+  for (const line of linesWithin(file, 0, end, chunk)) yield line.text;
+}
+
+/// The whole lines of `file` from byte `start` to byte `end` (both line boundaries), each with where it begins.
+export function* linesWithin(file: string, start: number, end: number, chunk = READ_CHUNK): Generator<{ text: string; at: number }> {
+  if (end <= start) return;
   const fd = openSync(file, "r");
   try {
     let carry = Buffer.alloc(0);
-    let at = 0;
+    let at = start;
+    // Where the first byte of `carry` is in the file.
+    let base = start;
     while (at < end) {
       const buf = Buffer.allocUnsafe(Math.min(chunk, end - at));
       const n = readSync(fd, buf, 0, buf.length, at);
@@ -295,11 +325,13 @@ export function* linesBefore(file: string, end: number, chunk = READ_CHUNK): Gen
       let from = 0;
       for (let i = bytes.indexOf(0x0a); i >= 0; i = bytes.indexOf(0x0a, from)) {
         const line = bytes.toString("utf8", from, i);
+        const lineAt = base + from;
         from = i + 1;
-        yield line.endsWith("\r") ? line.slice(0, -1) : line;
+        yield { text: line.endsWith("\r") ? line.slice(0, -1) : line, at: lineAt };
       }
       // A line longer than a chunk is carried whole into the next read.
       carry = Buffer.from(bytes.subarray(from));
+      base += from;
     }
   } finally {
     closeSync(fd);

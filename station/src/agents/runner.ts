@@ -155,7 +155,7 @@ export class RunnerConnection {
 
   /// `line` is called for each whole line in order, one at a time (a promise is waited for); once it is done, the line
   /// is acknowledged.
-  constructor(info: RunnerInfo, line: (stream: "out" | "err", text: string) => void | Promise<void>) {
+  constructor(info: RunnerInfo, line: (stream: "out" | "err", text: string, from: number, to: number) => void | Promise<void>) {
     this.info = info;
     this.exited = new Promise((resolve) => (this.exit = resolve));
     this.socket = createConnection(info.socket);
@@ -172,16 +172,17 @@ export class RunnerConnection {
     });
   }
 
-  private data(stream: "out" | "err", at: number, bytes: Buffer, line: (s: "out" | "err", t: string) => void | Promise<void>) {
+  private data(stream: "out" | "err", at: number, bytes: Buffer, line: (s: "out" | "err", t: string, from: number, to: number) => void | Promise<void>) {
     if (this.at[stream] < 0) this.at[stream] = at;
     let buf = Buffer.concat([this.partial[stream], bytes]);
     for (let i = buf.indexOf(10); i >= 0; i = buf.indexOf(10)) {
       const text = buf.subarray(0, i).toString("utf8");
       buf = buf.subarray(i + 1);
+      const start = this.at[stream];
       this.at[stream] += i + 1;
       const end = this.at[stream];
       this.queue = this.queue.then(async () => {
-        await line(stream, text);
+        await line(stream, text, start, end);
         this.acked[stream] = end;
         this.send({ op: "ack", out: this.acked.out, err: this.acked.err });
       });

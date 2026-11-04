@@ -13,6 +13,7 @@ import { delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { CodexDriver, classifyCodexError, type CodexDriverOptions } from "../src/agents/codex.ts";
+import { readFrom, runnerId } from "../src/agents/process.ts";
 import { allLeft, existingRunners } from "../src/agents/runner.ts";
 import type { OpenOptions, Profile, RuntimeEvent } from "../src/agents/runtime.ts";
 import { readAgentEnvFrom } from "../src/ops/agent-env.ts";
@@ -679,6 +680,57 @@ describe("the Codex driver", { concurrency: true }, () => {
       assert.ok(!a.events.some((e) => e.type === "closed"));
     });
   }
+
+  // On ccvm (2026-11-04) a station that crashed left two app-servers; the next read each one's output again from its
+  // start (157 MB, the station's thread held 10 s; the other's was 4.9 GB), though only the turns running said anything
+  // that still stood.
+  test("after a crash an app-server's output is read again from where the earliest turn running began, not from its start", async () => {
+    const first = driver();
+    const p = profile();
+    const a = listen();
+    const a2 = listen();
+    const one = await first.open(options(p), a.push);
+    const two = await first.open(options(p), a2.push);
+    await one.prompt("say:before");
+    await a.until(ended(1));
+    const gate = gates(p.dump, "kept");
+    await two.prompt("gate:6:3:kept");
+    await a2.until((e) => deltas(e).length >= 3);
+    // Another turn ends while that one runs: reading again still begins where that one began.
+    await one.prompt("say:meanwhile");
+    await a.until(ended(2));
+    const info = existingRunners(data).find((r) => r.id === runnerId("codex", p.id))!;
+    const out = readFileSync(join(data, "run", "runners", `${info.id}.out`));
+    const began = (thread: string) => {
+      let at = 0;
+      let found = -1;
+      for (let i = out.indexOf(10); i >= 0; at = i + 1, i = out.indexOf(10, at)) {
+        const msg = JSON.parse(out.toString("utf8", at, i) || "null");
+        if (msg?.method === "turn/started" && msg.params?.threadId === thread) found = at;
+      }
+      return found;
+    };
+    assert.ok(began(two.id()) > 0);
+    assert.equal(readFrom(data, info), began(two.id()), "from where the turn running began");
+    first.detach();
+    await allLeft();
+    await gate.open("a");
+    await eventually(gate.said);
+    const next = driver();
+    const b = listen();
+    const b2 = listen();
+    await next.adopt(options(p, { resume: one.id() }), null, b.push);
+    await next.adopt(options(p, { resume: two.id() }), null, b2.push);
+    await gate.open("b");
+    await b2.until(ended(1));
+    const all = [...a2.events, ...b2.events];
+    assert.equal(ends(all).length, 1, "its end, once");
+    assert.deepEqual(deltas(all), Array.from({ length: 6 }, (_, i) => `d${i} `), "every delta once, in order");
+    assert.equal(b2.events.filter((e) => e.type === "turnStarted").length, 1, "read again as running");
+    assert.equal(b.events.filter((e) => e.type === "turnStarted").length, 0, "the one whose turns had ended, idle");
+    // None running now: reading again would begin past the end of the last.
+    await eventually(() => readFrom(data, info) > began(two.id()));
+  });
 
   // On a station (2026-11-02) a next station asked a profile's quota as it started: it took the app-server up as after a
   // crash, from the station still handing over, which let go of the turn running on it.

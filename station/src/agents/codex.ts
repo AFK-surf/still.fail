@@ -14,7 +14,7 @@ import { rememberCodexRollout } from "../read/transcript.ts";
 import { LiveFromCodex, chars, type CodexLiveState } from "./live.ts";
 import { linkCodexAuth, type Env } from "./machine-logins.ts";
 import { keyOfRunner, lentFile, sandboxed, syncNow } from "./sandbox.ts";
-import { AgentProcess, ackedOffset, debug, findRunner, linesBefore, outFile, runnerId } from "./process.ts";
+import { AgentProcess, ackedOffset, debug, findRunner, linesWithin, outFile, readFrom, runnerId, writeFrom } from "./process.ts";
 import { accessKind, codexOverrides, expandRoute, isMachine, profileEnv, profileFast, profileModel, profileVia } from "./profiles.ts";
 import { TOOL_SERVERS, cleanEnv, failureOf, unreachable, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import type { RunnerInfo } from "./runner.ts";
@@ -139,6 +139,8 @@ type Sink = (notice: Notice) => void;
 
 /// What a crashed station had seen of a thread (read again from the app-server's output).
 type Recovered = { busy: boolean; turnId: string | null; live: LiveFromCodex };
+/// What the station before ran on a host handed over, in its `turnFrom` while its sessions are taken up.
+const BEFORE = "\0before";
 
 /// While sessions are being taken up, what the app-server says of a thread not taken up yet waits this long for it.
 const ORPHANS_MS = 60_000;
@@ -225,6 +227,13 @@ class Host {
   private orphans: Map<string, Notice[]> | null = null;
   /// After a crash: where each thread stood when the station that crashed stopped acknowledging.
   recovered = new Map<string, Recovered>();
+  /// Where in its output each turn running began, and where what a station reads after a crash begins (`keep` keeps it):
+  /// the earliest of them, else just past the line that ended the last one.
+  private turnFrom = new Map<string, number>();
+  private keptFrom = -1;
+  keep: ((from: number) => void) | null = null;
+  /// Where the station before kept, handed over (Host.adopt `from`).
+  handedFrom = 0;
   readonly profile: string;
   /// Which app-server of the driver's it is (`hostKey`): its profile's, or one session's when the station runs things in
   /// sandboxes.
@@ -242,7 +251,7 @@ class Host {
   }
 
   processOptions(label: string) {
-    return { label, line: (line: string) => this.onLine(line), exit: (said: string, stderr: string) => this.onExit(said, stderr) };
+    return { label, line: (line: string, from: number, to: number) => this.onLine(line, from, to), exit: (said: string, stderr: string) => this.onExit(said, stderr) };
   }
 
   /// When the login it was started with runs out, if it was lent by another station.
@@ -263,17 +272,26 @@ class Host {
     // A profile's own app-server (its account's limits and models, no session's work) runs here; a session's in its
     // sandbox when the station runs things there.
     host.proc = await AgentProcess.start(data, runnerId("codex", key), command, hostArgs(profile), childEnv, cwd, { ...host.processOptions(label), local: key === profile.id });
+    host.keep = (from) => writeFrom(data, host.proc.info, from);
     return host;
   }
 
   /// Takes up an app-server a runner keeps. Replies to what the previous station asked are dropped: its ids are below
   /// `nextId`.
-  static adopt(profile: string, info: RunnerInfo, signature: string, nextId: number, ready: boolean, recovered?: Map<string, Recovered>, key = profile): Host {
+  /// `from`: where the station before kept that a crash reads from (handed over): kept there until its sessions are
+  /// taken up, those with a turn running then held there (`running`).
+  static adopt(profile: string, info: RunnerInfo, signature: string, nextId: number, ready: boolean, recovered?: Map<string, Recovered>, key = profile, from?: number): Host {
     log.info("agents::codex", "taking up a codex app-server", { profile, key, pgid: info.pgid, crashed: recovered !== undefined });
     const host = new Host(profile, signature, nextId, ready, key);
     if (recovered) host.recovered = recovered;
+    if (from !== undefined) {
+      host.handedFrom = from;
+      host.turnFrom.set(BEFORE, from);
+      host.keptFrom = from;
+    }
     host.orphans = new Map();
     wall.after(ORPHANS_MS, () => {
+      if (host.turnFrom.delete(BEFORE)) host.reckon(from!);
       const dropped = [...(host.orphans?.values() ?? [])].reduce((n, l) => n + l.length, 0);
       if (dropped > 0) log.warn("agents::codex", "notifications for threads nobody took up, dropped", { profile, threads: host.orphans?.size, dropped });
       host.orphans = null;
@@ -296,7 +314,25 @@ class Host {
     }
   }
 
-  private onLine(line: string) {
+  /// A turn running on it that began at or after `from` in its output (one the station before ran, or one read again).
+  running(thread: string, from: number) {
+    if (!this.turnFrom.has(thread)) this.turnFrom.set(thread, from);
+  }
+
+  private noteTurn(thread: string, started: boolean, from: number, to: number) {
+    if (started) this.running(thread, from);
+    else this.turnFrom.delete(thread);
+    this.reckon(to);
+  }
+
+  private reckon(to: number) {
+    const at = this.turnFrom.size > 0 ? Math.min(...this.turnFrom.values()) : to;
+    if (at === this.keptFrom) return;
+    this.keptFrom = at;
+    this.keep?.(at);
+  }
+
+  private onLine(line: string, from = 0, to = 0) {
     let msg: Json;
     try {
       msg = JSON.parse(line);
@@ -322,6 +358,7 @@ class Host {
       const params = msg.params === undefined ? null : msg.params;
       const thread = typeof params?.threadId === "string" ? (params.threadId as string) : undefined;
       if (thread === undefined) return;
+      if (method === "turn/started" || method === "turn/completed") this.noteTurn(thread, method === "turn/started", from, to);
       const notice: Notice = { kind: "method", method, params };
       const sink = this.threads.get(thread);
       if (sink) sink(notice);
@@ -656,12 +693,13 @@ export class CodexDriver implements AgentDriver {
   }
 
   /// An app-server a runner keeps, with no snapshot: what the previous station had handled of it is read again to know
-  /// where each thread stands.
+  /// where each thread stands, from where the earliest turn running then began (`readFrom`).
   private async takeUp(profile: Profile, info: RunnerInfo, key = profile.id): Promise<Host> {
     const out = outFile(this.data, info.id);
     const at = await ackedOffset(info, out);
     const recovered = new Map<string, Recovered>();
-    for (const line of linesBefore(out, at)) {
+    const began = new Map<string, number>();
+    for (const { text: line, at: lineAt } of linesWithin(out, readFrom(this.data, info), at)) {
       if (UNTOLD.some((m) => line.startsWith(m))) continue;
       let msg: Json;
       try {
@@ -676,8 +714,10 @@ export class CodexDriver implements AgentDriver {
       r.live.feed(msg.method, msg.params);
       if (msg.method === "turn/started") {
         r.busy = true;
+        if (!began.has(thread)) began.set(thread, lineAt);
         if (typeof msg.params.turn?.id === "string") r.turnId = msg.params.turn.id;
       } else if (msg.method === "turn/completed") {
+        began.delete(thread);
         r.busy = false;
         r.turnId = null;
       }
@@ -687,7 +727,12 @@ export class CodexDriver implements AgentDriver {
     // Ids above any the previous station can have sent.
     const host = Host.adopt(profile.id, info, same ? hostSignature(profile) : "unknown", wall.now(), true, recovered, key);
     host.version = versionInOutput(out);
-    for (const [thread, r] of recovered) if (r.busy) host.turns.add(thread);
+    host.keep = (from) => writeFrom(this.data, info, from);
+    for (const [thread, r] of recovered) {
+      if (!r.busy) continue;
+      host.turns.add(thread);
+      host.running(thread, began.get(thread) ?? 0);
+    }
     return host;
   }
 
@@ -832,11 +877,14 @@ export class CodexDriver implements AgentDriver {
       const info = findRunner(this.data, id);
       if (!info) throw new Error(`codex app-server ${key} was not taken up: no runner keeps it`);
       const host = handed
-        ? Host.adopt(profileId, info, handed.host.signature, handed.host.nextId, handed.host.ready, undefined, key)
+        ? Host.adopt(profileId, info, handed.host.signature, handed.host.nextId, handed.host.ready, undefined, key, readFrom(this.data, info))
         : await this.takeUp(options.profile, info, key);
       if (handed?.host.loginStale) host.loginStale = true;
       if (handed?.host.runtimeStale) host.runtimeStale = true;
-      if (handed) host.version = versionInOutput(outFile(this.data, info.id));
+      if (handed) {
+        host.version = versionInOutput(outFile(this.data, info.id));
+        host.keep = (from) => writeFrom(this.data, info, from);
+      }
       this.hosts.set(key, host);
       return host;
     });
@@ -858,7 +906,11 @@ export class CodexDriver implements AgentDriver {
     }
     host.addThread(session.id(), session.sink());
     session.recoverTranscript();
-    if (session.busy()) host.turns.add(session.id());
+    if (session.busy()) {
+      host.turns.add(session.id());
+      // Its turn began at or after where the station before kept: a crash reads from there.
+      if (handed) host.running(session.id(), host.handedFrom);
+    }
     // Left running by a station from before Codex was updated: replaced once the sessions on it are taken up and idle.
     wall.after(ORPHANS_MS, () => this.hostIdle(host));
     return session;
