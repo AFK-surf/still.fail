@@ -753,6 +753,10 @@ pub struct Tree {
   /// laying out and placing a result, before a change or for a frame: what that result tells is part of this
   /// layout, not another cause to lay out at the logic's time inside it
   mut standing : Bool
+  /// Flex is computing or its geometry is being published. Ordinary properties and effects may not change layout
+  /// in this phase; a custom layout can only build and size the descendants it explicitly owns.
+  mut layout_locked : Bool
+  mut layout_owner : Int
   /// asked to be laid out and placed once the change under way is told whole (Tree::settle_after_change)
   mut settle_asked : Bool
   mut settle_at : Double
@@ -918,6 +922,8 @@ pub fn Tree::new(
     drawn_due: false,
     before_causes: 0,
     standing: false,
+    layout_locked: false,
+    layout_owner: -1,
     settle_asked: false,
     settle_at: 0.0,
     measured_gen: -1,
@@ -969,6 +975,7 @@ pub fn words_measure(words : String, _look : WordsLook, width : Double) -> (Doub
 ///|
 /// A node made in `parent` (-1: the root), its scope its own (made with nothing reading: owned by nothing else).
 fn Tree::made(self : Tree, parent : Int) -> View {
+  self.layout_change_allowed(parent)
   self.work.made = self.work.made + 1
   self.hits = self.hits + 1
   let at = match self.free.pop() {
@@ -1595,6 +1602,8 @@ fn Tree::placed(self : Tree, at : Int) -> (Double, Double, Double) {
 fn Tree::marked(self : Tree) -> Unit {
   if !self.due {
     self.due = true
+    // Work produced by this frame's geometry is completed by its paint phase, not another host frame inside it.
+    if self.layout_locked { return }
     // (the host is already being told: it will ask for a frame for everything marked by that telling too. Laying out
     // during the telling can clear `due` and mark it again; telling the host recursively would repeat that layout.)
     if !self.telling_due {
@@ -1617,6 +1626,16 @@ fn Tree::marked(self : Tree) -> Unit {
 /// Its layout to be done again: itself and every node up to the root (one marked before and not laid out since, its
 /// holder's layout reused, is no sign the rest are).
 fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
+  self.layout_change_allowed(at)
+  if self.layout_locked {
+    // A layout callback is building its own children before measuring them. Nothing outside that layout is dirty.
+    let mut i = at
+    while i >= 0 && i != self.layout_owner {
+      self.nodes[i].flex.dirty = true
+      i = self.nodes[i].parent
+    }
+    return
+  }
   self.layout_due = true
   // (what was laid out to be read no more where it stands)
   self.measured_gen = -1
@@ -1628,6 +1647,21 @@ fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
     n.flex.dirty = true
     i = n.parent
   }
+}
+
+///|
+/// Layout output is not another layout input. The only structure built while computing is owned by the explicit
+/// custom-layout callback currently running; a sibling or ancestor is never part of that permission.
+fn Tree::layout_change_allowed(self : Tree, at : Int) -> Unit {
+  if !self.layout_locked { return }
+  if self.layout_owner >= 0 {
+    let mut i = at
+    while i >= 0 {
+      if i == self.layout_owner { return }
+      i = self.nodes[i].parent
+    }
+  }
+  abort("layout output changed layout at node \{at}; measure dependent children inside their parent's layout")
 }
 
 ///|
@@ -1851,6 +1885,12 @@ fn Tree::committed(self : Tree, f : () -> Unit) -> Unit {
 /// brought there first (what had left by then let go), that moment its cause's for all `f` reads and does; what is
 /// marked taken where `f` says it changed something.
 fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
+  if self.layout_locked {
+    // Geometry callbacks may publish paint or a value read by the next input. They are not new events and must
+    // not rewind the drawing clock. Actual structure/layout mutations below are rejected at their write boundary.
+    f() |> ignore
+    return
+  }
   let at = if self.cause_at >= 0.0 {
     self.cause_at
   } else {
@@ -1941,6 +1981,7 @@ priv enum Prop {
   BoundsInput
   OverScrim
   Measured
+  LayoutBox
   WordsCentered
   EllipsisPast
   Points
@@ -1999,6 +2040,7 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
   }
   match live {
     Is(v) => {
+      match phase { Layout | Both => tree.layout_change_allowed(at); _ => () }
       apply(v)
       marked()
     }
@@ -2019,6 +2061,7 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
           return
         }
         last.val = Some(v)
+        match phase { Layout | Both => tree.layout_change_allowed(at); _ => () }
         apply(v)
         marked()
       })
@@ -2946,6 +2989,7 @@ pub fn View::placed_window_now(self : View) -> (Double, Double, Double, Double) 
 /// by what goes from where they stood to there for its cause (View::laid_window_now), the same for all that read it in
 /// that change.
 fn Tree::measured_now(self : Tree) -> Unit {
+  if self.layout_locked { return }
   if self.last_w <= 0.0 {
     return
   }
@@ -4407,6 +4451,7 @@ pub fn Tree::hold_lost_in(self : Tree, at : Int) -> Unit {
 /// computed read in a batch is: nothing told, no structure or effect run before the change ends), the clock put back
 /// where it was drawn at: for where things are as an event finds them (View::laid_size, Tree::drag_at).
 fn Tree::laid_now(self : Tree) -> Unit {
+  if self.layout_locked { return }
   if self.last_w <= 0.0 {
     return
   }
@@ -4871,6 +4916,7 @@ pub fn View::owned_count(self : View) -> Int {
 /// cleanups run), what goes with it run, its callback and measure dropped, its index free.
 fn View::let_go(self : View) -> Unit {
   guard self.live() is Some(n) else { return }
+  self.tree.layout_change_allowed(self.at)
   // (what the pointer is over let go of, it or one it holds: pointed at no more, what holds it told so while it is
   // still held by them, View::pointed_in; what it is over then the host's to find again, as what takes it changed)
   if self.tree.pointed_within_at(self.at) {
@@ -5016,6 +5062,7 @@ fn Tree::boxes(self : Tree, at : Int, into : Array[@flex.Node]) -> Unit {
 /// What it holds changed (made, let go, moved): the boxes of the node that lays them out (itself, or the first not a
 /// slot holding it) put again in order, it marked to be laid out, the order to be made again.
 fn View::boxes_again(self : View) -> Unit {
+  self.tree.layout_change_allowed(self.at)
   let mut at = self.at
   while self.tree.nodes[at].slot && self.tree.nodes[at].parent >= 0 {
     at = self.tree.nodes[at].parent
@@ -5038,6 +5085,7 @@ fn View::boxes_again(self : View) -> Unit {
 ///|
 /// Node `v` let go and taken out of what it holds.
 fn View::drop(self : View, v : View) -> Unit {
+  self.tree.layout_change_allowed(self.at)
   v.let_go()
   guard self.live() is Some(n) else { return }
   match n.kids.search(v.at) {
@@ -5952,8 +6000,9 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   if !self.due {
     return
   }
-  // Sizes and positions published below may change dependent layout. Finish those in this pass, at its drawing
-  // time: settling them as another cause would switch a predicted frame back to the logic's time and back again.
+  guard !self.layout_locked else { abort("layout reentered while publishing its result") }
+  ignore(upto)
+  // Resolve state and time before layout. Once flex starts, geometry can only feed paint or the next input.
   let was_standing = self.standing
   self.standing = true
   // the bindings whose reads changed since, each once, in the order they were told (what they make runs its own now,
@@ -5977,6 +6026,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   })
   self.pulls_marked.clear()
   self.pulls_marked.append(still)
+  self.layout_locked = true
   // (what goes beside another placed by it only where anything was laid out or placed again: View::beside)
   let placing = self.layout_due || !self.places_due.is_empty()
   if self.layout_due {
@@ -6019,11 +6069,53 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     }
     self.besides_placed()
   }
-  // (what changed of its look alone: its content, nothing else)
+  // Publish the one layout's result. No callback here may create another layout or rebuild the tree.
+  if self.outs_changed {
+    self.outs_told()
+  }
+  if self.sized.length() > 0 {
+    self.sizes_told() |> ignore
+  }
+  if self.laid_waits.length() > 0 {
+    let waits = self.laid_waits.copy()
+    self.laid_waits.clear()
+    for f in waits {
+      @signals.untracked(f)
+    }
+  }
+  if self.shows_due.length() > 0 {
+    self.shown_now()
+  }
+  if placing && !self.withins_passing {
+    self.withins_passing = true
+    self.withins_told() |> ignore
+    self.withins_passing = false
+  } else if !self.withins_passing && self.bar_cols.length() > 0 && (self.order_due || self.changed.length() > 0 || self.bars_due) {
+    self.withins_passing = true
+    self.bars_near_told() |> ignore
+    self.withins_passing = false
+  }
+  // Geometry-dependent paint and transforms consume that result in this frame, without entering flex again.
+  self.pull()
+  let mut p = 0
+  while p < self.bindings_due.length() {
+    let b = self.bindings_due[p]
+    if b.queued { (b.run)() }
+    p += 1
+  }
+  self.bindings_due.clear()
+  for at in self.places_due {
+    let n = self.nodes[at]
+    if n.live && n.place_due {
+      self.work.visited += 1
+      self.place(at)
+    }
+  }
+  self.places_due.clear()
   for at in self.looks_due {
     let n = self.nodes[at]
     if n.live && n.look_due {
-      self.work.visited = self.work.visited + 1
+      self.work.visited += 1
       self.made_again(at)
     }
   }
@@ -6034,63 +6126,12 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     self.order.clear()
     self.order_holder.clear()
     self.ordered(0, -1)
-    self.work.orders = self.work.orders + 1
+    self.work.orders += 1
   }
-  self.work.changes = self.work.changes + self.changed.length() + self.composed.length()
+  self.work.changes += self.changed.length() + self.composed.length()
+  if ordered || self.changed.length() > 0 || self.composed.length() > 0 { self.drawn_due = true }
   self.due = false
-  // (what its rows left out told once all of it is laid out, and what that tells (a ⋯ saying how many) laid out in this
-  // same pass: one result, the frame drawing all of it)
-  if self.outs_changed {
-    self.outs_told()
-    if self.due {
-      self.laid_out(upto)
-    }
-  }
-  // (the sizes followed told once all of it is laid out, and what that tells laid out in this same pass)
-  if self.sized.length() > 0 && self.sizes_told() && self.due {
-    self.laid_out(upto)
-  }
-  // (what waited on all of it laid out, told once now, whether any size it follows came out otherwise or not; what that
-  // tells laid out in this same pass)
-  if self.laid_waits.length() > 0 {
-    let waits = self.laid_waits.copy()
-    self.laid_waits.clear()
-    for f in waits {
-      @signals.untracked(f)
-    }
-    if self.due {
-      self.laid_out(upto)
-    }
-  }
-  // (what is to be brought into sight, where all of it is laid out, before it is drawn; what that moves laid out in
-  // this same pass)
-  if self.shows_due.length() > 0 {
-    self.shown_now()
-    if self.due {
-      self.laid_out(upto)
-    }
-  }
-  if ordered || self.changed.length() > 0 || self.composed.length() > 0 {
-    self.drawn_due = true
-  }
-  // (what is under the pointer as it is placed now, View::pointer_within: told once all of it is placed, and what that
-  // told marked done in this same pass, again till nothing it tells is told otherwise: what it marked all done, as one
-  // change's whole)
-  if placing && !self.withins_passing {
-    self.withins_passing = true
-    while self.withins_told() && self.due {
-      self.laid_out(upto)
-    }
-    self.withins_passing = false
-  } else if !self.withins_passing && self.bar_cols.length() > 0 && (ordered || self.changed.length() > 0 || self.bars_due) {
-    // (which column's bar the pointer is along told anew as what is drawn or found there changes without anything
-    // placed: an order, what bounds input, what takes it; in this same pass)
-    self.withins_passing = true
-    while self.bars_near_told() && self.due {
-      self.laid_out(upto)
-    }
-    self.withins_passing = false
-  }
+  self.layout_locked = false
   self.standing = was_standing
 }
 
