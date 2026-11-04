@@ -440,7 +440,7 @@ says `debug: true` of a simulator; only those who may drive it read or do this (
   there is no app in it; 502 what simctl said (built for a device, not a simulator).
 - **The rest of Device Hub's**: `.../biometrics` `{what}` (`enrol`, `unenrol`, `match`, `nomatch`: what BiometricKit listens for inside
   the device, Face ID's or Touch ID's alike; the first asking waits on the system's own question), `.../uninstall` `{app}`;
-  `screen.input` `{t:"device", name}`: `volume_up`, `volume_down` (dtuhidd's buttons), `memory_warning` (SimDevice's).
+  `screen.input` `{t:"device", name}`: `volume_up`, `volume_down` (dtuhidd's buttons), `memory_warning` (SimDevice's), `rotate` (turned upright or on its side).
 - **Record**: `POST /admin/api/screens/<id>/record` `{panel?}` starts `simctl io recordVideo` (an iPhone Duo must be told which
   display, `cover` 1 or `inner` 3; the panel in use when it starts is the one recorded, folding on goes unseen), ended by
   `.../record/stop` → `{root, path}`, which the app downloads as any file of the drive (ten minutes at most, some 20 to
