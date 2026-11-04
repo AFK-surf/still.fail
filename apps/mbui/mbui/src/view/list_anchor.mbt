@@ -399,15 +399,9 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
         match c.reveal {
           (Some(k), asked) if asked > revealed.val => {
             revealed.val = asked
-            let mut q = -1
-            for j in 0..<r.keys.length() {
-              if r.keys[j] == k {
-                q = j
-              }
-            }
-            if q >= 0 {
-              let row_top = r.tops[q]
-              let (top, foot) = match reveal_of.val {
+            // (the part asked of it within its row, where its row is laid out now: its top and its foot from the row's)
+            let part_in = fn(row_h : Double) -> (Double, Double) {
+              match reveal_of.val {
                 Some((id, within)) if self.tree.alive_id(id) => {
                   let mut off = 0.0
                   let mut j = id.at
@@ -417,20 +411,36 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
                     j = self.tree.nodes[j].parent
                   }
                   let (a, b) = within.unwrap_or((0.0, self.tree.nodes[id.at].flex.height))
-                  if j == slot_at { (row_top + off + a, row_top + off + b) } else { (row_top, row_top + r.heights[q]) }
+                  if j == slot_at { (off + a, off + b) } else { (0.0, row_h) }
                 }
-                _ => (row_top, row_top + r.heights[q])
+                _ => (0.0, row_h)
               }
+            }
+            let mut q = -1
+            for j in 0..<r.keys.length() {
+              if r.keys[j] == k {
+                q = j
+              }
+            }
+            if q >= 0 {
+              let row_top = r.tops[q]
+              let (pa, pb) = part_in(r.heights[q])
+              let (top, foot) = (row_top + pa, row_top + pb)
               let down = if top < 0.0 { -top } else if foot > h { -dmin(top, foot - h) } else { 0.0 }
               if down != 0.0 {
                 r = lay(from, by + (if from_end { down } else { -down }))
               }
             } else {
+              // (not laid out among those in sight now: its row measured as it is, put where the part asked of it comes
+              // in, its top at the window's top from over it, its foot at the window's foot from under it, its top first
+              // where it is taller than the window)
               match find(k, r.first) {
                 Some(i) => {
                   let hk = measure(i)
-                  let foot_at = if i < r.first { hk } else { h }
-                  r = lay(Some({ key: k, under: if from_end { foot_at - h } else { hk - foot_at }, near: i }), 0.0)
+                  let (pa, pb) = part_in(hk)
+                  let row_top = if i < r.first || pb - pa > h { -pa } else { h - pb }
+                  let under = if from_end { row_top + hk - h } else { -row_top }
+                  r = lay(Some({ key: k, under, near: i }), 0.0)
                 }
                 None => ()
               }

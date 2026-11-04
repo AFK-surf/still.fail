@@ -13,7 +13,7 @@ priv struct AnchoredCase {
 }
 
 ///|
-fn anchored_case(n : Int, ahead? : Double = 0.0, from_end? : Bool = true) -> AnchoredCase {
+fn anchored_case(n : Int, ahead? : Double = 0.0, from_end? : Bool = true, kept? : () -> Array[Int] = fn() { [] }) -> AnchoredCase {
   let scroll = @view.Scroll::list()
   let keys = @signals.signal(Array::makei(n, fn(i) { i }), same=fn(a, b) { physical_equal(a, b) })
   let heights : Map[Int, @signals.Signal[Double]] = Map([])
@@ -33,7 +33,7 @@ fn anchored_case(n : Int, ahead? : Double = 0.0, from_end? : Bool = true) -> Anc
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(o) {
       o.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
-      o.scrolls_anchored(scroll, fn() { keys.get() }, est=80.0, ahead~, from_end~, follows~, shown~, fn(b, k) {
+      o.scrolls_anchored(scroll, fn() { keys.get() }, est=80.0, ahead~, from_end~, follows~, shown~, kept_keys=kept, fn(b, k) {
         live[k] = b
         b.owns(fn() { live.remove(k) }) |> ignore
         let h = tall(k)
@@ -45,6 +45,16 @@ fn anchored_case(n : Int, ahead? : Double = 0.0, from_end? : Bool = true) -> Anc
   })
   tree.frame(390.0, 844.0, now=0.0) |> ignore
   { tree, scroll, keys, heights, live, follows, shown }
+}
+
+///|
+test "a kept tall row outside the prefetch brings the requested part into sight" {
+  let c = anchored_case(100, kept=fn() { [0] })
+  c.heights[0].set(200.0)
+  c.tree.frame(390.0, 844.0, now=10.0) |> ignore
+  c.tree.show_in_sight(c.live[0].id(), within=fn() { Some((180.0, 190.0)) })
+  c.tree.frame(390.0, 844.0, now=20.0) |> ignore
+  assert_eq(c.top(0), Some(-180.0), msg="the requested part starts at the viewport's top")
 }
 
 ///|
@@ -273,4 +283,20 @@ test "scrolls_anchored: the last row grown taller and its start asked into sight
   })
   c.tree.frame(390.0, 844.0, now=20.0) |> ignore
   assert_eq(c.top(99), Some(0.0))
+}
+
+///|
+test "a kept row under what shows, part of it asked into sight: that part's foot at the window's foot; taller than the window, its top at the top" {
+  let c = anchored_case(100, from_end=false, kept=fn() { [99] })
+  c.heights[99].set(200.0)
+  c.tree.frame(390.0, 844.0, now=10.0) |> ignore
+  c.tree.show_in_sight(c.live[99].id(), within=fn() { Some((10.0, 20.0)) })
+  c.tree.frame(390.0, 844.0, now=20.0) |> ignore
+  assert_eq(c.top(99), Some(80.0))
+  let d = anchored_case(100, from_end=false, kept=fn() { [99] })
+  d.heights[99].set(200.0)
+  d.tree.frame(390.0, 844.0, now=10.0) |> ignore
+  d.tree.show_in_sight(d.live[99].id(), within=fn() { Some((30.0, 180.0)) })
+  d.tree.frame(390.0, 844.0, now=20.0) |> ignore
+  assert_eq(d.top(99), Some(-30.0))
 }
