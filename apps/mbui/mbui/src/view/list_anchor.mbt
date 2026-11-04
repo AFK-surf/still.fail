@@ -140,6 +140,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   // its ends, their give and a fling's end all as it is counted, from that event)
   let bar_off = Ref(0.0)
   s.bar_off = fn() { bar_off.val }
+  s.reads_free = true
   s.rebase = fn() {
     let d = bar_off.val
     if d != 0.0 {
@@ -152,7 +153,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
       }
     }
   }
-  self.owns(fn() { s.bar_off = fn() { 0.0 }; s.rebase = fn() { } }) |> ignore
+  self.owns(fn() { s.bar_off = fn() { 0.0 }; s.rebase = fn() { }; s.reads_free = false }) |> ignore
   // (how tall all it holds is counted, as its layout last counted it: what its bar reads once it is laid out, no signal
   // read then)
   let foot_laid = Ref(0.0)
