@@ -383,6 +383,14 @@ fn ChatRows::carry(self : ChatRows, c : @rows.ListChange, h : Int) -> Unit {
 /// Key `k` gone, as it is now (its shape's next).
 fn ChatRows::went(self : ChatRows, k : String, e : Entry, after : String?) -> Unit {
   self.told.push(Went(k, e, after))
+  // (what read it reads it no more: told so)
+  match self.read.get(k) {
+    Some(r) if r.said.watched() => {
+      r.n += 1
+      r.said.set(r.n)
+    }
+    _ => ()
+  }
   self.gone.push((self.shapes + 1, k))
 }
 
@@ -575,11 +583,21 @@ pub fn ChatRows::take(
   if self.end_taken(was_tail, tail, last) {
     shaped = true
   }
-  // (a row gone from one place and come to another, an outbox entry's taken by its message's: moved, not gone)
+  // (a row gone from one place and come to another, an outbox entry's taken by its message's: moved, not gone; what
+  // read a key come now reads another row of it, told so)
   let came : Set[String] = Set::new()
   for c in self.told[told_from:] {
     if c is Came(k) {
       came.add(k)
+    }
+  }
+  for k in came {
+    match self.read.get(k) {
+      Some(r) if r.said.watched() => {
+        r.n += 1
+        r.said.set(r.n)
+      }
+      _ => ()
     }
   }
   if !came.is_empty() {
