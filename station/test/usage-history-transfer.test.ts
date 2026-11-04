@@ -90,6 +90,69 @@ test("a session deleted before history installation keeps its old usage in its w
   } finally { store.close(); }
 });
 
+test("a deleted session follows its workspace move before history installation", () => {
+  const store = oldStore();
+  const db = store.db;
+  try {
+    db.prepare(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output, calls)
+      VALUES ('old', 0, 'a', 'claude', 2, 0, 0, 0, 1, 1)`).run();
+    store.deleteSession("a");
+    store.setSessionsWs("A", "C");
+    store.insertSession({ key: "new-a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/new-a",
+      token: "new-a", ws: "A", createdAt: 0, lastActiveAt: 0 });
+    db.prepare(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output, calls)
+      VALUES ('new-a', 0, 'new-a', 'claude', 4, 0, 0, 0, 1, 1)`).run();
+    installCompactUsage(db, () => 900_000);
+    installUsageHistory(db, 900_000);
+    while (!convertUsageHistoryStep(db, 1)) { /* Take over the old summaries. */ }
+    const days = (workspace: string) => {
+      const result = usageHistory(makeStore(db, "."), 0n, { workspace, home: false });
+      assert.ok(result);
+      return (result.days as { calls: number; tokens: number }[]).map(({ calls, tokens }) => [calls, tokens]);
+    };
+    assert.deepEqual(days("C"), [[1, 3]]);
+    assert.deepEqual(days("A"), [[1, 5]], "the reused workspace name has only its own calls");
+  } finally { store.close(); }
+});
+
+test("ownership also covers summaries installed after an earlier session was deleted", () => {
+  const store = oldStore();
+  const db = store.db;
+  try {
+    store.deleteSession("a"); // Owners are installed before compact statistics exist.
+    installCompactUsage(db, () => 900_000);
+    db.prepare(`INSERT INTO usage_compact (session, minute, thread, person, profile, runtime, model, fast, records,
+      calls, input, cache_read, cache_write, cache_write_long, output, scope)
+      VALUES ('b', 0, 0, '', '', 'claude', '', 0, 1, 1, 2, 0, 0, 0, 1, 'WB')`).run();
+    store.deleteSession("b");
+    installUsageHistory(db, 900_000);
+    while (!convertUsageHistoryStep(db, 1)) { /* Take over the surviving summary. */ }
+    const result = usageHistory(makeStore(db, "."), 0n, { workspace: "B", home: false });
+    assert.ok(result);
+    assert.deepEqual((result.days as { calls: number; tokens: number }[]).map(({ calls, tokens }) => [calls, tokens]), [[1, 3]]);
+  } finally { store.close(); }
+});
+
+for (const moved of [false, true]) test(`a fresh station keeps later changes to a deleted session's usage (moved ${moved})`, () => {
+  const store = Store.open(":memory:");
+  const db = store.db;
+  try {
+    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/a",
+      token: "a", ws: "A", createdAt: 0, lastActiveAt: 0 });
+    db.prepare(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output, calls)
+      VALUES ('old', 0, 'a', 'claude', 2, 0, 0, 0, 1, 1)`).run();
+    store.deleteSession("a");
+    if (moved) store.setSessionsWs("A", "B");
+    db.prepare("UPDATE usage SET output = 8 WHERE id = 'old'").run();
+    const result = usageHistory(makeStore(db, "."), 0n, { workspace: moved ? "B" : "A", home: false });
+    const home = usageHistory(makeStore(db, "."), 0n, { workspace: "home", home: true });
+    assert.ok(result);
+    assert.ok(home);
+    assert.deepEqual((result.days as { calls: number; tokens: number }[]).map(({ calls, tokens }) => [calls, tokens]), [[1, 10]]);
+    assert.deepEqual(home.days, []);
+  } finally { store.close(); }
+});
+
 for (const recursive of [false, true]) test(`old summaries transfer in batches while calls change (recursive triggers ${recursive})`, () => {
   const store = oldStore();
   const db = store.db;
