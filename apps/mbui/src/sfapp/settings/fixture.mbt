@@ -3414,7 +3414,7 @@ fn fx_adb_share() -> Json {
         ("tunnels", Json::number(0.0)),
         ("lends", [obj([("station", str("ws1/st1")), ("phase", str("offered")), ("adb", str("connected")), ("tunnels", Json::number(1.0))])]),
         ("grants", [
-          obj([("station", str("ws1/st1")), ("id", str("p-long-1")), ("session", str("s-c1")), ("chatTitle", str("键盘升起卡顿排查")), ("reason", str("在固定的开发版里用假数据打开对话，让键盘升起再收起，记录每一帧的时间和显示时刻，量完就停")), ("status", str("granted")), ("scope", str("chat")), ("time", obj([("lastUsedAt", stamp_of("3 分钟前"))]))]),
+          obj([("station", str("ws1/st1")), ("id", str("p-long-1")), ("session", str("s-c1")), ("chatTitle", str("键盘升起卡顿排查")), ("reason", str("在开发版里打开对话，让键盘升起再收起，记录每一帧的时间和显示时刻，量完就停")), ("status", str("granted")), ("scope", str("chat")), ("time", obj([("lastUsedAt", stamp_of("3 分钟前"))]))]),
           obj([("station", str("ws1/st1")), ("id", str("p-long-2")), ("session", str("s-c2")), ("chatTitle", str("客户端卡顿排查")), ("reason", str("量整页重搭那一帧实际跑多久，CPU 跑在什么频率，并比较改动前后的差别")), ("status", str("granted")), ("scope", str("chat")), ("time", obj([("lastUsedAt", stamp_of("2 小时前"))]))]),
           obj([("station", str("ws1/st1")), ("id", str("p-long-3")), ("session", str("s-c3")), ("chatTitle", str("检查登录页面")), ("reason", str("检查登录页面")), ("status", str("granted")), ("scope", str("hour"))]),
         ]),
