@@ -479,6 +479,7 @@ let en : Map[String, String] = {
   "android-settings.login.signIn": "Sign in",
   "android-settings.login.step1Short": "On the page, sign in with the Claude account {app} should use and agree",
   "android-settings.login.step1ShortDevin": "On the page, sign in with the Devin account {app} should use",
+  "android-settings.login.step1ShortGoogle": "On the page, sign in with the Google account {app} should use and allow access",
   "android-settings.login.unfinished": "Sign-in didn't finish",
   "android-settings.machine.added": "Profile added with this machine's login",
   "android-settings.machine.signedIn": "Signed in",

@@ -1,11 +1,43 @@
 // ACP fixture shaped as `agy acp` answers (Antigravity CLI 1.4.12): its initialize, a conversation in --gemini-dir,
 // the instructions in _meta.antigravity.systemPrompt.append, session/set_model, a turn's usage in the prompt's answer.
+// Without `acp`, its terminal interface signing in as 1.4.12's does (in a terminal, not signed in, not in a remote session):
+// how to sign in asked, Google's page printed, the code read back (`bad`: nothing comes of it), its sign-in written to
+// $HOME/.gemini/antigravity-cli, and the interface going on until it is stopped.
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
 const dump = process.env.FAKE_DUMP;
 const args = process.argv.slice(2);
+if (args[0] !== 'acp') await signIn();
+async function signIn() {
+  if (dump) appendFileSync(dump, JSON.stringify({ args, home: process.env.HOME, remote: process.env.SSH_CONNECTION ?? null, key: process.env.GEMINI_API_KEY ?? null }) + '\n');
+  if (!process.stdin.isTTY) { process.stderr.write('not a terminal\n'); process.exit(1); }
+  const url = 'https://accounts.google.com/o/oauth2/auth?access_type=offline&client_id=1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com&code_challenge=311aMcnjlIZigwJvlJ11zPjRZcH3mLzipvgAYB_hEgc&code_challenge_method=S256&prompt=consent&redirect_uri=https%3A%2F%2Fantigravity.google%2Foauth-callback&response_type=code&scope=openid&state=Jn-JRaj4nQfYyaCSr9NcnA';
+  process.stdin.setRawMode(true);
+  process.stdout.write('\u001b[?1049h Welcome to the Antigravity CLI. You are currently not signed in.\n\n Select login method:\n > 1. Google OAuth\n2. Use a Google Cloud project\n');
+  let typed = '';
+  let step = 'menu';
+  process.stdin.on('data', (chunk) => {
+    typed += chunk.toString('utf8');
+    let enter;
+    while ((enter = typed.indexOf('\r')) >= 0) {
+      const line = typed.slice(0, enter).trim();
+      typed = typed.slice(enter + 1);
+      if (step === 'menu') {
+        step = 'code';
+        process.stdout.write(` Signing in...Your browser should open automatically. If not:\n\n ${url}\n\n If you aren't automatically redirected, paste the authorization code below:\n\n authorization code...\n`);
+      } else if (step === 'code' && line !== 'bad') {
+        const at = join(process.env.HOME, '.gemini', 'antigravity-cli');
+        mkdirSync(at, { recursive: true });
+        writeFileSync(join(at, 'antigravity-oauth-token'), JSON.stringify({ token: { access_token: `ya29.${line}`, token_type: 'Bearer' }, auth_method: 'oauth', id_token_email: 'someone@gmail.com' }));
+        step = 'in';
+        process.stdout.write('\u001b[2J Welcome to Antigravity CLI!\n');
+      }
+    }
+  });
+  await new Promise(() => {});
+}
 const say = (m) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', ...m }) + '\n');
 const reply = (id, result) => say({ id, result });
 let sessionId;
@@ -48,6 +80,9 @@ for await (const line of createInterface({ input: process.stdin })) {
     update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } });
     update({ sessionUpdate: 'tool_call', toolCallId: 't1', title: 'view_file', kind: 'read', status: 'in_progress', rawInput: { AbsolutePath: '/a.txt' } });
     update({ sessionUpdate: 'tool_call_update', toolCallId: 't1', status: 'completed', content: [{ type: 'content', content: { type: 'text', text: 'file contents' } }] });
+    // A call to the station's tools, as 1.4.12 titles an MCP tool's.
+    update({ sessionUpdate: 'tool_call', toolCallId: 'call_1', title: 'Run mcp_stillfail_chat_post', kind: 'other', status: 'in_progress', rawInput: { text: 'reply', toolSummary: 'Post reply' } });
+    update({ sessionUpdate: 'tool_call_update', toolCallId: 'call_1', status: 'completed', content: [] });
     update({ sessionUpdate: 'usage_update', used: 5000, size: 1048576 });
     reply(m.id, { stopReason: 'end_turn', usage: { totalTokens: 1600, inputTokens: 1200, outputTokens: 300, thoughtTokens: 100, cachedReadTokens: 200 } });
     held = null;

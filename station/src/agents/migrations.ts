@@ -116,6 +116,7 @@ export const NOTES: [number, string][] = [
   [109, "When your turn ends done or asking and your chat still has no title, with nobody at work in it, the station asks you once to give it one: post only its title, then record the same state again."],
   [110, "The Antigravity CLI (agy, Google's) runs on stations that have it, on a Gemini key or its own variables: chat_create takes runtime \"agy\"."],
   [111, "A phone granted with phone_use now has a screen of your chat's own (a virtual display) while you use it: phone_use says its display id and how to start apps, touch and take pictures there. Work on it, not on the screen its person is using, unless they ask; it closes with its apps when you hand the phone back or after 10 minutes unused."],
+  [112, "The Antigravity CLI (agy) also runs on a Google account signed in to (its plan: Google AI Pro / Ultra), each profile its own sign-in."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

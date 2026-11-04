@@ -459,6 +459,7 @@ android-settings.login.restart
 android-settings.login.signIn
 android-settings.login.step1Short
 android-settings.login.step1ShortDevin
+android-settings.login.step1ShortGoogle
 android-settings.login.unfinished
 android-settings.machine.added
 android-settings.machine.signedIn

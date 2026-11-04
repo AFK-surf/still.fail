@@ -466,6 +466,7 @@ let zh : Map[String, String] = {
   "android-settings.login.signIn": "登录",
   "android-settings.login.step1Short": "在打开的页面用 {app} 要使用的 Claude 账号登录，并同意授权",
   "android-settings.login.step1ShortDevin": "在打开的页面用 {app} 要使用的 Devin 账号登录",
+  "android-settings.login.step1ShortGoogle": "在打开的页面用 {app} 要使用的 Google 账号登录，并同意授权",
   "android-settings.login.unfinished": "登录未完成",
   "android-settings.machine.added": "已添加 Profile，使用此机器的登录",
   "android-settings.machine.signedIn": "已登录",
