@@ -37,13 +37,13 @@ fn page_switch_to(top : Page) -> Unit {
   // frame, whose scene would otherwise leave over the chat, composer_capsule_words_wbtest)
   let frame = @ui.current().frame_number()
   let shown = page_switch.was_from < frame
-  let switched = shown && match (page_switch.was, top) {
-    (Some(NewChat), Chat(r)) =>
+  let switched = match (page_switch.was, top) {
+    (Some(NewChat), Chat(r)) if shown =>
       match @signals.untracked(fn() { fresh.became.get() }) {
         Some(b) if b == r => false
         _ => true
       }
-    (Some(Chat(_)), NewChat) => true
+    (Some(Chat(_)), NewChat) if shown => true
     _ => false
   }
   if switched && !@ui.reduced_motion() {
