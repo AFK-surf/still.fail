@@ -9,7 +9,6 @@ import { PlaceRefused } from "../ops/places.ts";
 import { formatHistory, parseThreadAddress, threadAddress } from "../agents/instructions.ts";
 import { log } from "../ops/log.ts";
 import { iso } from "../read/transcript.ts";
-import { answerFiles } from "../slack/surface.ts";
 import { type Attachment, type MessageRow, STILLFAIL_SURFACE, type SessionThread, type ThreadRow } from "../store/store.ts";
 import type { DeclaredState } from "./actor.ts";
 import {
@@ -537,7 +536,7 @@ export async function slackApi(hub: Hub, key: string, method: string, params: Re
       }
     }
   }
-  const saved = saveFiles ? await hub.fetched(chat, key, "", answerFiles(result)) : null;
+  const saved = saveFiles ? await hub.fetched(chat, key, "", chat.answerFiles?.(result)) : null;
   const text = JSON.stringify(saved === null ? result : { saved_files: saved.attachments.map(({ name, path, size }) => ({ name, path, size })), not_saved: saved.text, ...result });
   const chars = Array.from(text);
   return chars.length > 60_000 ? `${chars.slice(0, 60_000).join("")}… (cut at 60000 characters; ask for less, e.g. a smaller limit)` : text;

@@ -887,6 +887,10 @@ export class SlackSurface extends ConnectedSurface {
     return this.client.download(file.url, file.name, this.botToken);
   }
 
+  answerFiles(answer: Json): InboundFile[] {
+    return answerFiles(answer);
+  }
+
   /// Any Web API method as the bot; values that are not strings (blocks, arrays) go as JSON, as Slack takes them.
   async api(method: string, params: Record<string, Json>): Promise<Json> {
     const form: Params = Object.entries(params)
