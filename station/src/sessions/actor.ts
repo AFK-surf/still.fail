@@ -10,7 +10,7 @@ import { sessionSkills } from "./agent-home.ts";
 import { dirname, join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, BackgroundTask, FailureReason, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
-import { GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatInbound, formatWidgetModels, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
+import { GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatInbound, formatWidgetModels, nameUntitled, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
 import { CONNECTION_LOST } from "../agents/sandbox.ts";
 import { chars } from "../agents/live.ts";
 import { CommandMissing } from "../agents/runner.ts";
@@ -132,6 +132,8 @@ export type SessionDeps = {
   /// Session `key`'s MEMORY.md: its workspace's (agent-home.ts `workspaceAgentHome`).
   memoryPath(key: string): string;
   maxNudges(): number;
+  /// The chat session `key` last heard from (its address), when it has no title and nobody is at work in it.
+  untitled?(key: string): string | null;
   backgroundOnMessage(key: string): boolean;
   /// Where the runtime's live steps go, for whoever watches the session (and that it went on in a new runtime session).
   live?: { event(key: string, event: LiveEvent): void; turnEnded(key: string): void; moved?(key: string): void };
@@ -261,6 +263,8 @@ export class SessionActor {
   private phase: Phase = "idle";
   private turn: Turn | null = null;
   private nudges = 0;
+  /// The chats it was asked to name as a turn ended with them untitled: asked once each.
+  private askedToName = new Set<string>();
   /// Its turns the provider had no room for, in a row: each is tried again after longer (`retryAfter`).
   private overloads = 0;
   /// Its process lost the station's tools during the running turn (why): at the turn's end it starts again.
@@ -1477,6 +1481,13 @@ export class SessionActor {
     this.deps.idle(this.key);
     if (outcome.kind !== "completed" || declared) {
       this.nudges = 0;
+      // Done or asking, and its chat still has no title with nobody at work there: asked once to name it.
+      const untitled = outcome.kind === "completed" && !this.deps.held(this.key) ? this.deps.untitled?.(this.key) ?? null : null;
+      if (untitled !== null && !this.askedToName.has(untitled)) {
+        this.askedToName.add(untitled);
+        log.info("session", "its chat has no title; asking it to name it", { session: this.key, chat: untitled });
+        return this.startTurn("title", nameUntitled(untitled));
+      }
       return;
     }
     if (this.deps.held(this.key)) return;
