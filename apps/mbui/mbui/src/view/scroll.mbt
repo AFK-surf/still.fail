@@ -81,10 +81,8 @@ pub struct Scroll {
   priv edge : @signals.Signal[Edge?]
   /// The editor these choices belong to, whose input method stays while they are scrolled.
   priv mut for_field : NodeId?
-  /// a list laid out from its anchor's (View::scrolls_anchored): where it is is the hand's alone, kept within nothing
-  /// here (the list holds itself at its ends as it is laid out); and how far its bar shows it from where the hand has it
-  /// (where it is counted to be among all it holds, less that)
-  priv mut unbounded : Bool
+  /// a list laid out from its anchor's (View::scrolls_anchored): how far where it is counted to be among all it holds
+  /// is from where the hand has it, as it was last laid out (what its bar and what reads where it is add)
   priv mut bar_off : () -> Double
   /// a list that keeps itself: where the hand has it put where it is counted to be, as the hand comes to it again (its
   /// bounds, its ends' give, a fling's end: all as it is counted)
@@ -158,7 +156,6 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     host: None,
     edge: @signals.signal(None, same=fn(a, b) { same_ref(a, b) }),
     for_field: None,
-    unbounded: false,
     bar_off: fn() { 0.0 },
     rebase: fn() { },
     extent_told: fn() { },
@@ -264,9 +261,9 @@ fn dmax(a : Double, b : Double) -> Double {
 }
 
 ///|
-/// `v` within `lo` and `hi`, as where it is is kept; anything, for a list that keeps itself (Scroll's `unbounded`).
-fn Scroll::bounded(self : Scroll, v : Double, lo : Double, hi : Double) -> Double {
-  if self.unbounded { v } else { dclamp(v, lo, hi) }
+/// `v` within `lo` and `hi`, as where it is is kept.
+fn Scroll::bounded(_self : Scroll, v : Double, lo : Double, hi : Double) -> Double {
+  dclamp(v, lo, hi)
 }
 
 ///|
