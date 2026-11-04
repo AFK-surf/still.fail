@@ -208,13 +208,13 @@ test("a turn ending done in a chat nobody named asks its agent once to name it",
   await settle();
   const key = sessionKey("cl", "C1", m.threadTs);
   const session = r.claude.last();
-  await r.call(key, "chat_state", { kind: "all_done", done: "回答了问题" });
+  await r.call(key, "chat_state", { kind: "all_done", done: "答完了它问的事" });
   session.complete();
   await settle();
   assert.equal(session.prompts.length, 2);
   assert.ok(session.prompts[1]!.includes(`chat_post with only to "C1/${m.threadTs}" and title`), session.prompts[1]);
   // It ends again without naming it: not asked again.
-  await r.call(key, "chat_state", { kind: "all_done", done: "回答了问题" });
+  await r.call(key, "chat_state", { kind: "all_done", done: "答完了它问的事" });
   session.complete();
   await settle();
   assert.equal(session.prompts.length, 2);
@@ -228,7 +228,7 @@ test("a turn ending done in a chat its agent named is not asked to name it", asy
   await settle();
   const key = sessionKey("cl", "C1", m.threadTs);
   await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, title: "构建失败" });
-  await r.call(key, "chat_state", { kind: "all_done", done: "回答了问题" });
+  await r.call(key, "chat_state", { kind: "all_done", done: "答完了它问的事" });
   r.claude.last().complete();
   await settle();
   assert.equal(r.claude.last().prompts.length, 1);
