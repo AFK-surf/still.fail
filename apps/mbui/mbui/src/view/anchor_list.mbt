@@ -59,7 +59,7 @@ pub fn[K : Eq] list_laid_from_end(
         None => (if a.near < n { if a.near < 0 { 0 } else { a.near } } else { n - 1 }, a.under)
       }
   }
-  let mut under = start_under - by
+  let mut under = start_under + by
   let measured : Map[Int, Double] = Map([])
   let height_of = fn(i : Int) {
     match measured.get(i) {

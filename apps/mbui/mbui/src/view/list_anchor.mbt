@@ -1,0 +1,336 @@
+// A page's list laid out from its anchor (retained.md rule 11): the rows it holds made, measured and placed in its own
+// layout (View::layout_box), from the anchor out till the window and `ahead` more is filled, laid out from its end (a
+// chat's). Where it is is the anchor alone (anchor_list.mbt); the column's scroll (View::scrolls) is the hand's, a
+// fling's and the bar's: what it moved by since the last layout is what the anchor moves by, and how far it is
+// scrolled is where the anchor is counted to be among them all (the heights measured, by key, and `est` for the rest),
+// for the bar and for how far it can go, said again as the anchor is laid out.
+
+///|
+/// A value compared by its identity: the rows given are the same as long as their array is.
+priv struct Same[T] {
+  v : T
+}
+
+///|
+impl[T] Eq for Same[T] with equal(a, b) {
+  physical_equal(a.v, b.v)
+}
+
+///|
+/// What a layout of an anchored list reads, pulled before layout: the rows, where its column is scrolled to, the room
+/// under its last row, whether it is put at a row (by how often it was), and the rooms' moment.
+priv struct AnchoredIn[K] {
+  keys : Same[Array[K]]
+  x : Double
+  foot : Double
+  put : Int
+  moving : Int
+} derive(Eq)
+
+///|
+/// Blocks `keys` names, each made by `make` in a row of its own as it comes in the window or `ahead` past it, laid out
+/// from the column's end (at its foot while they are fewer than fill it; shown at its end; kept there as rows come
+/// while it is there), as View::scrolls_window's from its end says, by its anchor. `follows` says whether it is at
+/// its end; `shown` is told the keys in sight; `put` puts a row's top that far under the window's top; `room` is a
+/// row's room as its measured height changes, `moving` says when rooms move; `kept_keys` rows made and laid out
+/// though not in sight (a send's landing); `foot_room` room under the last row.
+pub fn[K : Hash + Eq + Show] View::scrolls_anchored(
+  self : View,
+  s : Scroll,
+  keys : () -> Array[K],
+  make : (View, K) -> Unit,
+  est? : Double = 80.0,
+  ahead? : Double = 160.0,
+  slop? : Double,
+  bar? : ScrollBar,
+  follows? : @signals.Signal[Bool] = @signals.signal(true, same=fn(a, b) { a == b }),
+  shown? : @signals.Signal[Array[K]],
+  put? : @signals.Signal[(K, Double)?],
+  room? : (K, Double) -> ListRoom,
+  moving? : () -> Array[K],
+  kept_keys? : () -> Array[K],
+  bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
+  foot_room? : () -> Double = fn() { 0.0 },
+) -> View {
+  guard self.live() is Some(_) else { return self }
+  let put_at = put.unwrap_or(@signals.signal(None))
+  // (where it is: the row whose foot is nearest under the window's foot and how far under; none at its end)
+  let anchor : Ref[ListAnchor[K]?] = Ref(None)
+  // (how far it was scrolled as last laid out: what it moved by since is what the anchor moves by)
+  let seen_x : Ref[Double?] = Ref(None)
+  // (each row's height as last measured, by its key: for how tall all of it is counted, the bar's, and nothing else)
+  let heights : Map[K, Double] = Map([])
+  let known_sum = Ref(0.0)
+  let mean = fn() { if heights.length() > 0 { known_sum.val / heights.length().to_double() } else { est } }
+  let count = Ref(0)
+  let laid : Ref[ListLaid[K]?] = Ref(None)
+  let window_h = Ref(0.0)
+  // (what each row is known by, whatever node it is made in, by its key: View::row_known_as)
+  let row_ids : Map[K, NodeId] = Map([])
+  let slots : Map[K, View] = Map([])
+  let naturals : Map[K, Double] = Map([])
+  // (the hand scrolling it toward its start: no more at its end, from the hand's cause, before what it brings in is
+  // measured)
+  s.on_hand = fn(d) {
+    if d < 0.0 && @signals.untracked(fn() { follows.get() }) {
+      follows.set(false)
+    }
+  }
+  self.owns(fn() { s.on_hand = fn(_) { } }) |> ignore
+  // (how many times it was put at a row, and the rooms' moment: what is laid out again as they change)
+  let put_n = @signals.computed(fn(was : Int?) {
+    put_at.get() |> ignore
+    was.unwrap_or(0) + 1
+  })
+  let room_n = @signals.computed(fn(was : Int?) {
+    match moving {
+      Some(f) => if f().length() > 0 { self.drawn_at() |> ignore }
+      None => ()
+    }
+    was.unwrap_or(0) + 1
+  })
+  let extent = fn() { count.val.to_double() * mean() + @signals.untracked(foot_room) }
+  let out = self.scrolls(s, slop?=slop, bar?=bar, content_extent=extent, bar_clear~, fn(held) {
+    held.height_share(Is(1.0)) |> ignore
+    held.layout_box(
+      By(fn() {
+        {
+          keys: { v: keys() },
+          x: s.drawn(self.tree),
+          foot: foot_room(),
+          put: put_n.get(),
+          moving: room_n.get(),
+        }
+      }),
+      fn(l, c) {
+        let all = c.keys.v
+        let n = all.length()
+        count.val = n
+        let h = l.height - c.foot
+        window_h.val = h
+        // (the row a key is, looked for from where it was, out both ways)
+        let find = fn(k : K, near : Int) -> Int? {
+          let near = if near < 0 { 0 } else if near >= n { n - 1 } else { near }
+          let mut d = 0
+          while near - d >= 0 || near + d < n {
+            if near + d < n && all[near + d] == k {
+              return Some(near + d)
+            }
+            if d > 0 && near - d >= 0 && all[near - d] == k {
+              return Some(near - d)
+            }
+            d = d + 1
+          }
+          None
+        }
+        // (a row's node, made the first time it is asked for, the same one while it is asked for each layout)
+        let slot_of = fn(k : K) -> View {
+          l.child(k.to_string(), fn(slot) {
+            let id = match row_ids.get(k) {
+              Some(id) => id
+              None => {
+                let id = self.tree.row_name()
+                row_ids[k] = id
+                id
+              }
+            }
+            slot.row_known_as(id)
+            slots[k] = slot
+            slot.owns(fn() { slots.remove(k) }) |> ignore
+            let room_now = fn() {
+              let natural = naturals.get(k).unwrap_or(0.0)
+              match room {
+                Some(f) => f(k, natural)
+                None => list_room(natural)
+              }
+            }
+            slot.lends(windowed_room, room_now) |> ignore
+            slot.shrink(Is(0.0)) |> ignore
+            if room is Some(_) {
+              slot
+              .clips(By(fn() { room_now().clip }))
+              .cuts_softly(By(fn() { room_now().soft }))
+              .presses(By(fn() { room_now().presses }))
+              .hides(By(fn() { !room_now().presses }))
+              |> ignore
+            }
+            slot.box(fn(v) {
+              v.shrink(Is(0.0)) |> ignore
+              if room is Some(_) {
+                v
+                .offset(By(fn() { (0.0, room_now().offset) }))
+                .scale(By(fn() { room_now().scale }), about=Drawn)
+                .alpha(By(fn() { room_now().alpha }))
+                |> ignore
+              }
+              make(v, k)
+            })
+            |> ignore
+          })
+        }
+        // (a row measured: as tall as it is, its room's height where its room moves)
+        let measure = fn(i : Int) -> Double {
+          let k = all[i]
+          let slot = slot_of(k)
+          let natural = l.measure(slot, l.width).1
+          naturals[k] = natural
+          match heights.get(k) {
+            Some(was) => known_sum.val = known_sum.val - was + natural
+            None => known_sum.val = known_sum.val + natural
+          }
+          heights[k] = natural
+          let r = match room {
+            Some(f) => f(k, natural)
+            None => list_room(natural)
+          }
+          if (r.height - natural).abs() > 0.001 {
+            l.measure(slot, l.width, height=r.height) |> ignore
+          }
+          r.height
+        }
+        // (put at a row, its top that far under the window's top)
+        match @signals.untracked(fn() { put_at.get() }) {
+          Some((k, off)) =>
+            match find(k, anchor.val.map(fn(a) { a.near }).unwrap_or(n - 1)) {
+              Some(i) => anchor.val = Some({ key: k, under: off + measure(i) - h, near: i })
+              None => ()
+            }
+          None => ()
+        }
+        let by = match seen_x.val {
+          Some(x) => x - c.x
+          None => 0.0
+        }
+        seen_x.val = Some(c.x)
+        let r = list_laid_from_end(n, fn(i) { all[i] }, find, measure, anchor.val, h, by~, ahead~)
+        anchor.val = r.anchor
+        // (placed where they are in the window: the column holds them moved by how far it is scrolled)
+        for q in 0..<r.keys.length() {
+          l.place(slot_of(r.keys[q]), 0.0, r.tops[q] + c.x)
+        }
+        // (and those kept out of sight, as far off as they are counted to be)
+        match kept_keys {
+          Some(f) =>
+            for k in @signals.untracked(f) {
+              match find(k, r.first) {
+                Some(i) if i < r.first || i > r.last => {
+                  let slot = slot_of(k)
+                  let hk = measure(i)
+                  let top = if i < r.first {
+                    r.tops.get(0).unwrap_or(0.0) - (r.first - i).to_double() * mean()
+                  } else {
+                    r.tops.last().unwrap_or(h) + r.heights.last().unwrap_or(0.0) + (i - r.last - 1).to_double() * mean()
+                  }
+                  ignore(hk)
+                  l.place(slot, 0.0, top + c.x)
+                }
+                _ => ()
+              }
+            }
+          None => ()
+        }
+        laid.val = Some(r)
+        // (told once all of it is laid out: what is in sight, whether it is at its end, and how far it is counted to
+        // be scrolled among all it holds, the bar's)
+        self.tree.once_laid_out(fn() {
+          let in_sight = []
+          for q in 0..<r.keys.length() {
+            if r.tops[q] + r.heights[q] > 0.0 && r.tops[q] < h {
+              in_sight.push(r.keys[q])
+            }
+          }
+          match shown {
+            Some(sh) => if @signals.untracked(fn() { sh.get() }) != in_sight { sh.set(in_sight) }
+            None => ()
+          }
+          if @signals.untracked(fn() { put_at.get() }) is Some(_) {
+            put_at.set(None)
+          }
+          let at_end = r.at_end
+          if at_end && !@signals.untracked(fn() { follows.get() }) {
+            follows.set(true)
+          }
+          let most = dmax(0.0, extent() - h - c.foot)
+          let counted = if at_end {
+            most
+          } else if r.at_start {
+            -r.tops.get(0).unwrap_or(0.0)
+          } else {
+            dmin(most, r.first.to_double() * mean() - r.tops.get(0).unwrap_or(0.0))
+          }
+          let d = counted - c.x
+          if d.abs() > 0.5 {
+            seen_x.val = seen_x.val.map(fn(x) { x + d })
+            s.grew_above(d)
+          }
+        })
+      },
+    )
+    |> ignore
+  })
+  // (its rows in sight by their places, it put at one, how far past the first in sight's top it is, and where one is:
+  // what a test reads and asks, Tree::list_rows)
+  s.rows = Some((
+    fn() {
+      match laid.val {
+        Some(r) => {
+          let h = window_h.val
+          let mut a = -1
+          let mut b = -1
+          for q in 0..<r.keys.length() {
+            if r.tops[q] + r.heights[q] > 0.0 && r.tops[q] < h {
+              if a < 0 {
+                a = r.first + q
+              }
+              b = r.first + q
+            }
+          }
+          (a, b)
+        }
+        None => (-1, -1)
+      }
+    },
+    fn(i) {
+      match @signals.untracked(keys).get(i) {
+        Some(k) => put_at.set(Some((k, 0.0)))
+        None => ()
+      }
+    },
+    fn() {
+      match laid.val {
+        Some(r) => {
+          for q in 0..<r.keys.length() {
+            if r.tops[q] + r.heights[q] > 0.0 {
+              return -r.tops[q]
+            }
+          }
+          0.0
+        }
+        None => 0.0
+      }
+    },
+    fn(i) {
+      @signals.untracked(keys).get(i).bind(fn(k) { slots.get(k).map(fn(v) { v.rect() }) })
+    },
+  ))
+  self.owns(fn() { s.rows = None }) |> ignore
+  self.reacts(keys, fn(now) {
+    let here : Set[K] = Set::new()
+    for k in now {
+      here.add(k)
+    }
+    for k in row_ids.keys().collect() {
+      if !here.contains(k) {
+        row_ids.remove(k)
+      }
+    }
+    for k in heights.keys().collect() {
+      if !here.contains(k) {
+        known_sum.val = known_sum.val - heights.get(k).unwrap_or(0.0)
+        heights.remove(k)
+        naturals.remove(k)
+      }
+    }
+  })
+  out
+}
