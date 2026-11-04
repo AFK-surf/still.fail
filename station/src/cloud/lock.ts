@@ -184,10 +184,7 @@ export function apply(prev: LockState, e: Entry, now: number | null): LockState 
 
 /// A whole chain, from its genesis. Throws at the first entry that does not follow.
 export function fold(entries: Entry[], now: number | null): LockState {
-  if (entries.length === 0) throw new Error("no lock");
-  let s = genesis(entries[0]!);
-  for (const e of entries.slice(1)) s = apply(s, e, now);
-  return s;
+  return taken(rules.fold_held_js(entries, now, crypto));
 }
 
 /// The device a connection is, by the base key's proof for its endpoint or (an older client) the endpoint itself, and

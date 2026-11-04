@@ -4977,7 +4977,7 @@ function _M0FP39stillfail5rules2js11state__json(s) {
     const _p$16 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind, 0, 5), undefined);
     return { _0: _tmp$13, _1: new _M0DTPC14json4Json6Object(_p$16) };
   }))) };
-  const _p$11 = _M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB4Iter3mapGsRPC14json4JsonE(_M0MPB3Map4keysGsuE(s.signed), (_hole83) => new _M0DTPC14json4Json6String(_hole83)));
+  const _p$11 = _M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB4Iter3mapGsRPC14json4JsonE(_M0MPB3Map4keysGsuE(s.signed), (_hole90) => new _M0DTPC14json4Json6String(_hole90)));
   const _tmp$13 = { _0: "signed", _1: new _M0DTPC14json4Json5Array(_p$11) };
   const _tmp$14 = { _0: "stations", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS1922(_M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB4Iter3mapGsRPC14json4JsonE(_M0MPB3Map4iterGsRPC14json4JsonE(s.stations), (p) => {
     const _tmp$15 = p._0;
@@ -4988,7 +4988,7 @@ function _M0FP39stillfail5rules2js11state__json(s) {
     const _p$14 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind, 0, 2), undefined);
     return { _0: _tmp$15, _1: new _M0DTPC14json4Json6Object(_p$14) };
   }))) };
-  const _p$12 = _M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB4Iter3mapGsRPC14json4JsonE(_M0MPB3Map4keysGsuE(s.gateways), (_hole86) => new _M0DTPC14json4Json6String(_hole86)));
+  const _p$12 = _M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB4Iter3mapGsRPC14json4JsonE(_M0MPB3Map4keysGsuE(s.gateways), (_hole93) => new _M0DTPC14json4Json6String(_hole93)));
   const _tmp$15 = { _0: "gateways", _1: new _M0DTPC14json4Json5Array(_p$12) };
   const _p$13 = s.disabled;
   const _bind = [_tmp, _tmp$2, _tmp$3, _tmp$4, _tmp$6, _tmp$7, _tmp$8, _tmp$9, _tmp$10, _tmp$11, _tmp$12, _tmp$13, _tmp$14, _tmp$15, { _0: "disabled", _1: _p$13 ? _M0DTPC14json4Json4True__ : _M0DTPC14json4Json5False__ }];
@@ -5382,4 +5382,56 @@ function _M0FP39stillfail5rules2js14admit__one__js(s, who, now, crypto) {
   }
   return _M0FP39stillfail5rules2js6to__js(answer);
 }
-export { _M0FP39stillfail5rules2js13canonical__of as canonical_of, _M0FP39stillfail5rules2js15entry__text__of as entry_text_of, _M0FP39stillfail5rules2js11lower__role as lower_role, _M0FP39stillfail5rules2js8fold__js as fold_js, _M0FP39stillfail5rules2js9admit__js as admit_js, _M0FP39stillfail5rules2js11genesis__js as genesis_js, _M0FP39stillfail5rules2js9apply__js as apply_js, _M0FP39stillfail5rules2js10signer__js as signer_js, _M0FP39stillfail5rules2js14admit__one__js as admit_one_js }
+function _M0FP39stillfail5rules2js14fold__held__js(entries, now, crypto) {
+  let _try_err;
+  _L: {
+    const _bind = _M0FP39stillfail5rules2js11entries__of(entries);
+    let _tmp;
+    if (_bind.$tag === 1) {
+      const _ok = _bind;
+      _tmp = _ok._0;
+    } else {
+      const _err = _bind;
+      _try_err = _err._0;
+      break _L;
+    }
+    const _bind$2 = _M0FP39stillfail5rules4lock4fold(_tmp, _M0FP39stillfail5rules2js8opt__num(now), { self: crypto, method_table: _M0FP077stillfail_2frules_2fjs_2fJsCrypto_24as_24_40stillfail_2frules_2flock_2eCrypto });
+    let _tmp$2;
+    if (_bind$2.$tag === 1) {
+      const _ok = _bind$2;
+      _tmp$2 = _ok._0;
+    } else {
+      const _err = _bind$2;
+      _try_err = _err._0;
+      break _L;
+    }
+    return _M0FP39stillfail5rules2js4held(_tmp$2);
+  }
+  let why;
+  _L$2: {
+    switch (_try_err.$tag) {
+      case 2: {
+        const _Refused = _try_err;
+        const _why = _Refused._0;
+        why = _why;
+        break _L$2;
+      }
+      case 1: {
+        const _Refusal = _try_err;
+        const _why$2 = _Refusal._0;
+        why = _why$2;
+        break _L$2;
+      }
+      case 0: {
+        const _Invalid = _try_err;
+        const _why$3 = _Invalid._0;
+        return _M0FP39stillfail5rules2js7refused(_why$3);
+      }
+      default: {
+        return _M0FP39stillfail5rules2js7refused(_M0FP15Error10to__string(_try_err));
+      }
+    }
+  }
+  return _M0FP39stillfail5rules2js7refused(why);
+}
+export { _M0FP39stillfail5rules2js13canonical__of as canonical_of, _M0FP39stillfail5rules2js15entry__text__of as entry_text_of, _M0FP39stillfail5rules2js11lower__role as lower_role, _M0FP39stillfail5rules2js8fold__js as fold_js, _M0FP39stillfail5rules2js9admit__js as admit_js, _M0FP39stillfail5rules2js11genesis__js as genesis_js, _M0FP39stillfail5rules2js9apply__js as apply_js, _M0FP39stillfail5rules2js10signer__js as signer_js, _M0FP39stillfail5rules2js14admit__one__js as admit_one_js, _M0FP39stillfail5rules2js14fold__held__js as fold_held_js }
