@@ -958,7 +958,7 @@ pub fn list_row_line(@ui.Ctx, () -> Unit) -> Unit
 
 pub fn list_row_line_node(@view.View, (@view.View) -> Unit) -> Unit
 
-pub fn list_row_node(@view.View, ListAt, (@view.View) -> Unit, (@view.View) -> Unit, ground? : () -> Int64, mark? : (@view.View) -> Unit, high? : Bool, end_room? : () -> Double, corner? : (@view.View) -> Unit, corner_shown? : () -> Bool, corner_w? : () -> Double, after? : (@view.View) -> Unit, slotted? : Bool, end_slot? : Double, corner_end? : () -> Double) -> @view.View
+pub fn list_row_node(@view.View, ListAt, (@view.View) -> Unit, (@view.View) -> Unit, ground? : () -> Int64, mark? : (@view.View) -> Unit, high? : Bool, end_room? : () -> Double, corner? : (@view.View) -> Unit, corner_shown? : () -> Bool, corner_w? : () -> Double, after? : (@view.View) -> Unit, slotted? : Bool, end_slot? : Double, corner_end? : () -> Double) -> Unit
 
 pub fn list_row_slot(ListAt) -> @ui.Style
 

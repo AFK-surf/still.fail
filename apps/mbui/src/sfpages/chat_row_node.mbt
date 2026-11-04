@@ -35,35 +35,11 @@ pub fn chat_row_node(
   // (its title a field in its place, from a mouse's 重命名: rename_node)
   let renaming = fn() { row_renaming.get() == key }
   let failed = fn() { row_failed(src, item()) }
-  let made : Ref[@view.View?] = Ref(None)
-  let row_at : Ref[@view.View?] = Ref(None)
   // (held by a finger a while: its time shows)
   let held : @signals.Signal[Bool] = @signals.signal(false)
   // (pressed by a finger, shown so once it has stayed tap_indication_ms: one going on to scroll lights nothing)
   let press_lit : @signals.Signal[Bool] = @signals.signal(false)
   let press_due : Ref[() -> Unit] = Ref(fn() {  })
-  let open_menu = fn(x : Double, y : Double, from_row : Bool) {
-    guard @signals.untracked(menu_ok) else { return }
-    let i = @signals.untracked(item)
-    let from = if from_row {
-      match row_at.val {
-        Some(v) => {
-          let (x, y, w, h) = v.placed_window_now()
-          @sf.Beside::At(x, y, w, h)
-        }
-        None => @sf.at_point(x, y)
-      }
-    } else {
-      @sf.at_point(x, y)
-    }
-    // (held by a finger: felt as it opens)
-    if from_row {
-      @ui.haptic(LongPress)
-    }
-    @sf.menu(chat_menu_items(src, i, []), from~)
-    rows.menu_for = @sfbase.row_name(i)
-    rows.menu_serial = @sf.last_presented()
-  }
   // (what a finger going down on it read ahead, let go as it is let go without opening it: a scroll, a hold)
   let primed = Ref(false)
   let opened = Ref(false)
@@ -89,14 +65,33 @@ pub fn chat_row_node(
     open_page(Chat(r))
   }
   parent.box(fn(slot) {
-    made.val = Some(slot)
     @sf.style_node(slot, fn() { if more { @sf.list_more(at) } else { row_last } })
-    let hover = fn() {
-      match row_at.val {
-        Some(v) => !finger && (@sf.lit_in_node(v) || menu_on())
-        None => false
-      }
+    let swipes = finger && @sf.more_held()
+    // (swiped: in its slot, cut to its corners where its list stands, 归档 under it)
+    let holder = if swipes {
+      slot.box(fn(sw) { @sf.style_node(sw, fn() { @sf.list_row_slot(at) }) })
+    } else {
+      slot
     }
+    let row = holder.box(fn(_) {  })
+    let open_menu = fn(x : Double, y : Double, from_row : Bool) {
+      guard @signals.untracked(menu_ok) else { return }
+      let i = @signals.untracked(item)
+      let from = if from_row {
+        let (x, y, w, h) = row.placed_window_now()
+        @sf.Beside::At(x, y, w, h)
+      } else {
+        @sf.at_point(x, y)
+      }
+      // (held by a finger: felt as it opens)
+      if from_row {
+        @ui.haptic(LongPress)
+      }
+      @sf.menu(chat_menu_items(src, i, []), from~)
+      rows.menu_for = @sfbase.row_name(i)
+      rows.menu_serial = @sf.last_presented()
+    }
+    let hover = fn() { !finger && (@sf.lit_in_node(row) || menu_on()) }
     let shows_time = fn() { hover() || held.get() || (finger && menu_on()) }
     let archive_key = fn() { !finger && menu_ok() && hover() && !renaming() }
     // its ground: a finger's, held or its menu open the ink at 5%, its chat in view the selected one's; a mouse's, the
@@ -105,54 +100,43 @@ pub fn chat_row_node(
     // and a while after (left_lit_ms), then fades (left_fade_ms); one row so, the chat last in view
     let left = @sf.EdgeWay::new(0.0)
     // (a finger's swiped left in its slot, by so many points: swipe_node's)
-    let swipes = finger && @sf.more_held()
     let off = @sf.EdgeWay::new(0.0)
     let hand = @sf.EdgeWay::new(0.0)
     let chosen = @sf.EdgeWay::new(if @signals.untracked(on) { 1.0 } else { 0.0 })
     let ground = fn() {
       let p = t().p
-      match row_at.val {
-        None => 0L
-        Some(v) =>
-          if finger {
-            if held.get() || menu_on() || press_lit.get() {
-              @sf.alpha(p.text, 0.05)
-            } else if on() {
-              p.selected
-            } else {
-              let share = left.shown(v)
-              if share > 0.0 {
-                @sf.alpha(p.selected, share)
-              } else if swipes && off.shown(v) < 0.0 {
-                // moved across: over 归档's words, which it uncovers as it goes
-                p.bg
-              } else {
-                0L
-              }
-            }
+      if finger {
+        if held.get() || menu_on() || press_lit.get() {
+          @sf.alpha(p.text, 0.05)
+        } else if on() {
+          p.selected
+        } else {
+          let share = left.shown(row)
+          if share > 0.0 {
+            @sf.alpha(p.selected, share)
+          } else if swipes && off.shown(row) < 0.0 {
+            // moved across: over 归档's words, which it uncovers as it goes
+            p.bg
           } else {
-            let h = hand.shown(v)
-            let o = chosen.shown(v)
-            if h <= 0.0 && o <= 0.0 {
-              0L
-            } else {
-              @sf.over(@sf.alpha(p.hover, h * (1.0 - o)), @sf.alpha(p.selected, o))
-            }
+            0L
           }
+        }
+      } else {
+        let h = hand.shown(row)
+        let o = chosen.shown(row)
+        if h <= 0.0 && o <= 0.0 {
+          0L
+        } else {
+          @sf.over(@sf.alpha(p.hover, h * (1.0 - o)), @sf.alpha(p.selected, o))
+        }
       }
     }
     // (in a side column who is in it stands in the row's foot's end corner, placed there by the corner rule; across the
     // whole screen at its second line's end; the row pointed at says when instead)
     let cornered = fn() { at == Side && !shows_time() && row_aside_shows(item(), lead) }
     let face_ground = fn() { @sf.over(list_ground(), ground()) }
-    // (swiped: in its slot, cut to its corners where its list stands, 归档 under it)
-    let holder = if swipes {
-      slot.box(fn(sw) { @sf.style_node(sw, fn() { @sf.list_row_slot(at) }) })
-    } else {
-      slot
-    }
-    let row = @sf.list_row_node(
-      holder,
+    @sf.list_row_node(
+      row,
       at,
       ground~,
       high=true,
@@ -328,7 +312,6 @@ pub fn chat_row_node(
         })
       },
     )
-    row_at.val = Some(row)
     if swipes {
       let past : @signals.Signal[Bool] = @signals.signal(false)
       let out : @signals.Signal[Bool] = @signals.signal(false)
@@ -421,8 +404,6 @@ pub fn chat_row_node(
       |> ignore
     })
   })
-  |> ignore
-  made.val.unwrap()
 }
 
 ///|
