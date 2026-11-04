@@ -99,11 +99,15 @@ fn chat_talk_node(
   corners : () -> FixedArray[@ui.CornerOf]?,
   ground : (@view.View) -> Int64,
 ) -> Unit {
+  let pane_width = talk.width_context()
   let width = fn() { talk.laid_size_told().map(fn(z) { z.0 }).unwrap_or(talk.window().0) }
   let height = fn() { talk.laid_size_told().map(fn(z) { z.1 }).unwrap_or(talk.window().1) }
-  let geometry = fn() {
+  let radii = fn() {
     let roots = @ui.tree_corner_roots_now()
-    @sfpages.composer_geometry(width(), corners().map(fn(ks) { ks.map(fn(k) { k.radius(roots) }) }))
+    corners().map(fn(ks) { ks.map(fn(k) { k.radius(roots) }) })
+  }
+  let geometry = fn() {
+    @sfpages.composer_geometry(width(), radii())
   }
   let latest : Ref[() -> Unit] = Ref(fn() {  })
   let landing : Ref[(String) -> @sfpages.MineLanding?] = Ref(fn(_) { None })
@@ -140,6 +144,7 @@ fn chat_talk_node(
           fn() { geometry().1 },
           fn() { geometry().2 },
           fn(_key) { (latest.val)() },
+          pane_width=(pane_width, fn() { @sfpages.composer_limits(radii()) }),
           active=fn() { app.nav.drawn_stay().0 == k },
           drops=talk,
         )
@@ -196,7 +201,7 @@ fn chat_talk_node(
     })
   })
   |> ignore
-  chat_bar_node(talk, src, w, r, k, view, corners, ground)
+  chat_bar_node(talk, src, w, r, k, view, pane_width, corners, ground)
 }
 
 ///|

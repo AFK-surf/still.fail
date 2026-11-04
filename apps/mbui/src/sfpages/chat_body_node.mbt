@@ -12,14 +12,16 @@ pub fn chat_body_layout(
 ) -> Unit {
   body.layout_box(By(fn() {
     let editor = made().map(fn(n) {
-      let (least, change) = (n.room_parts)()
-      (n.root.id(), n.composer.cap.id(), least, change)
+      let (base, side, place, limits, change) = (n.layout_room)()
+      (n.root.id(), n.composer.cap.id(), base, side, place, limits, change)
     })
     (editor, tabletop())
   }), fn(l, state) {
     let size = l.measure(composer, l.width)
     let room = match state.0 {
-      Some((root_id, cap_id, least, change)) => {
+      Some((root_id, cap_id, base, side, place, limits, change)) => {
+        let p = match limits { Some(limits) => limits.in_width(l.width).2; None => place }
+        let least = base + @sf.capsule_in(p.corner, side)
         let total = body.tree.view_of(root_id).map(fn(n) { n.laid_size().1 }).unwrap_or(0.0)
         let cap = body.tree.view_of(cap_id).map(fn(n) { n.laid_size().1 }).unwrap_or(0.0)
         dmax(total + change, total - cap + least)
