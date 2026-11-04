@@ -347,6 +347,14 @@ pub fn capsule_fits(corner : Double, height : Double) -> Bool {
 }
 
 ///|
+/// Under a list in a panel whose rows' words stand on the panel's words' line (panel_words), as much room as keeps a
+/// box `box` across, in the middle of its last row `row_h` high, out of the panel's foot corner (pane_corner): a box
+/// there would have to be concentric with the corner (the corner rule), so it stands clear of it instead.
+pub fn panel_foot_clear(row_h : Double, box : Double) -> @ui.Space {
+  room(dmax(0.0, pane_corner - panel_words - (row_h - box) / 2.0))
+}
+
+///|
 /// `x` as a style's room (room, for the frame's packages).
 pub fn room_of(x : Double) -> @ui.Space {
   room(x)

@@ -1520,6 +1520,8 @@ pub fn panel_depth() -> Int32
 
 pub fn panel_foot(@ui.Ctx, () -> Unit) -> Unit
 
+pub fn panel_foot_clear(Double, Double) -> @ui.Space
+
 pub let panel_foot_end : @ui.Style
 
 pub let panel_foot_ends : @ui.Style

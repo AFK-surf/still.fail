@@ -1713,8 +1713,7 @@ let pf_model_rows : @ui.Style = @ui.css("w=Full gap=SPx")
 /// round, a box's 6: the corner rule), so it stands clear of it, its rows' spacing as it was (a card row's control the
 /// same: @sf.card_control_end).
 fn pf_models_foot() -> @ui.Style {
-  let box_in = (@sf.theme().items.least - pf_like_box) / 2.0
-  @ui.style(pb=@sf.room_of(dmax(0.0, @sf.pane_corner - @sf.panel_words - box_in)))
+  @ui.style(pb=@sf.panel_foot_clear(@sf.theme().items.least, pf_like_box))
 }
 
 ///|
