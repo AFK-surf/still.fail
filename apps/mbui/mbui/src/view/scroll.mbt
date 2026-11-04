@@ -936,7 +936,7 @@ pub fn View::scrolls(
     let vh = if across { self.tree.nodes[self.at].flex.width } else { self.tree.nodes[self.at].flex.height }
     // (in sight already, as a list that keeps itself brought it there as it was laid out (Scroll's `reveal`): nothing
     // moved, nothing of where it is put)
-    if top >= 0.0 && foot <= vh {
+    if top >= 0.0 && (foot <= vh || top == 0.0) {
       return 0.0
     }
     // (where it is as counted, before what it is brought by is worked out from it)
