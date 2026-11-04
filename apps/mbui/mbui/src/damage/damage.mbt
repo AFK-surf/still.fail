@@ -480,3 +480,65 @@ fn dmin(a : Double, b : Double) -> Double {
     b
   }
 }
+
+///|
+/// What changed of a run of instances drawn by what says nothing of what it changed (the old frame's views, painted
+/// again whole: an adapter, said to be one, docs/retained.md rule 4), `before` (`nb` of them, as it drew them the last
+/// time) and `now` (`nn`), compared: what differs drawn again where it was and where it is. Their same start and end
+/// passed by; between, as many each: each pair that differs; else all between. A shape's piece (kind 12) among what
+/// differs: all of both (its band, which holds it, may be anywhere in them). Counted as work as it goes.
+pub fn Parts::add_changed(self : Parts, before : FixedArray[Double], nb : Int, now : FixedArray[Double], nn : Int) -> Unit {
+  let least = if nb < nn { nb } else { nn }
+  let mut p = 0
+  while p < least && same_inst(before, p, now, p) {
+    p = p + 1
+  }
+  if p == nb && p == nn {
+    self.work = self.work + p
+    return
+  }
+  let mut s = 0
+  while s < least - p && same_inst(before, nb - 1 - s, now, nn - 1 - s) {
+    s = s + 1
+  }
+  self.work = self.work + p + s
+  let (eb, en) = (nb - s, nn - s)
+  for k in p..<eb {
+    if kind_at(before, k) == 12 {
+      self.add(self.reach_of(before, 0, nb))
+      self.add(self.reach_of(now, 0, nn))
+      return
+    }
+  }
+  for k in p..<en {
+    if kind_at(now, k) == 12 {
+      self.add(self.reach_of(before, 0, nb))
+      self.add(self.reach_of(now, 0, nn))
+      return
+    }
+  }
+  if eb - p == en - p {
+    for k in p..<en {
+      if !same_inst(before, k, now, k) {
+        self.add(self.reach_of(before, k, k + 1))
+        self.add(self.reach_of(now, k, k + 1))
+      }
+    }
+  } else {
+    self.add(self.reach_of(before, p, eb))
+    self.add(self.reach_of(now, p, en))
+  }
+}
+
+///|
+/// Whether instance `ka` of `a` and `kb` of `b` are the same, to the last number.
+fn same_inst(a : FixedArray[Double], ka : Int, b : FixedArray[Double], kb : Int) -> Bool {
+  let oa = ka * inst_size
+  let ob = kb * inst_size
+  for j in 0..<inst_size {
+    if a[oa + j] != b[ob + j] {
+      return false
+    }
+  }
+  true
+}

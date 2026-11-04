@@ -104,6 +104,11 @@ priv struct Scene {
   /// before's and this one's
   old_before : Map[@view.NodeId?, (Double, Double, Double, Double)]
   old_now : Map[@view.NodeId?, (Double, Double, Double, Double)]
+  /// and its instances themselves, as it drew them the last time it painted and as it paints now (its numbers, in
+  /// order): compared where it is painted again, what differs drawn again (the old frame says nothing of what changed in
+  /// it: Parts::add_changed, an adapter)
+  old_insts_before : Map[@view.NodeId?, (FixedArray[Double], Int)]
+  old_insts_now : Map[@view.NodeId?, Array[Double]]
   /// whether what the old frame draws may have changed this frame (built or painted for it: frame_drawn)
   mut old_due : Bool
   /// nothing kept to be copied this frame (a check drawing it anew, a picture at another size, who drew what kept)
@@ -173,6 +178,8 @@ let scene : Scene = {
   streams: [],
   old_before: Map([]),
   old_now: Map([]),
+  old_insts_before: Map([]),
+  old_insts_now: Map([]),
   old_due: true,
   fresh: false,
   checking: false,
@@ -286,6 +293,8 @@ fn scene_forget() -> Unit {
   scene.streams.clear()
   scene.old_before.clear()
   scene.old_now.clear()
+  scene.old_insts_before.clear()
+  scene.old_insts_now.clear()
   scene.old_due = true
   scene.fresh = false
   scene.drawing = None
@@ -693,11 +702,21 @@ fn Ctx::scene_end(self : Ctx) -> Unit {
   }
   scene.over_scrim_said = false
   if scene.old_due {
+    // (each old view's drawn again where what it draws differs from what it drew the last time: it says nothing of
+    // what changed in it, Parts::add_changed; one drawn first, or no longer drawn, where all of it is or was)
     for k, r in scene.old_now {
-      scene.parts.add(r)
-      match scene.old_before.get(k) {
-        Some(b) => scene.parts.add(b)
-        None => ()
+      match (scene.old_insts_before.get(k), scene.old_insts_now.get(k)) {
+        (Some((b, nb)), Some(a)) => {
+          let now = FixedArray::from_array(a)
+          scene.parts.add_changed(b, nb, now, a.length() / inst_size)
+        }
+        _ => {
+          scene.parts.add(r)
+          match scene.old_before.get(k) {
+            Some(b) => scene.parts.add(b)
+            None => ()
+          }
+        }
       }
     }
     for k, b in scene.old_before {
@@ -710,6 +729,22 @@ fn Ctx::scene_end(self : Ctx) -> Unit {
   for k, r in scene.old_now {
     scene.old_before[k] = r
   }
+  // (what each drew, kept as it drew it now; where the old frame was painted, one it no longer draws let go)
+  for k, a in scene.old_insts_now {
+    scene.old_insts_before[k] = (FixedArray::from_array(a), a.length() / inst_size)
+  }
+  if scene.old_due {
+    let gone = []
+    for k, _ in scene.old_insts_before {
+      if !scene.old_insts_now.contains(k) {
+        gone.push(k)
+      }
+    }
+    for k in gone {
+      scene.old_insts_before.remove(k)
+    }
+  }
+  scene.old_insts_now.clear()
   // (what is no longer drawn let go)
   let gone = []
   for id, l in scene.layers {
@@ -793,6 +828,17 @@ fn Ctx::scene_old_drawn(self : Ctx, island : @view.NodeId?, from : Int) -> Unit 
   scene.old_now[island] = match scene.old_now.get(island) {
     Some(b) => @damage.union(b, r)
     None => r
+  }
+  let kept = match scene.old_insts_now.get(island) {
+    Some(a) => a
+    None => {
+      let a = []
+      scene.old_insts_now[island] = a
+      a
+    }
+  }
+  for j in (from * inst_size)..<(self.ninst * inst_size) {
+    kept.push(self.inst[j])
   }
 }
 
