@@ -35,6 +35,7 @@ export class GrantServers {
   /// did not finish) can leave them running.
   readonly #record: string | null;
   readonly #kept = new Map<number, Kept>();
+  #writing: Promise<void> = Promise.resolve();
 
   constructor(adb: () => string | null, record: string | null = null) {
     this.#adb = adb;
@@ -65,10 +66,21 @@ export class GrantServers {
     return stopped;
   }
 
-  async #write(): Promise<void> {
-    if (this.#record === null) return;
-    const temp = `${this.#record}.${process.pid}.tmp`;
-    await writeFile(temp, JSON.stringify([...this.#kept.values()])).then(() => rename(temp, this.#record!), () => undefined);
+  /// One write at a time, each of what is kept as it begins: two servers that ended at once (as a station hands over)
+  /// wrote through the same temporary file, and the second's rename, finding none, ended the process (ccvm 2026-11-04).
+  #write(): Promise<void> {
+    const record = this.#record;
+    if (record === null) return Promise.resolve();
+    this.#writing = this.#writing.then(async () => {
+      const temp = `${record}.${process.pid}.tmp`;
+      try {
+        await writeFile(temp, JSON.stringify([...this.#kept.values()]));
+        await rename(temp, record);
+      } catch (error) {
+        log.warn("adb", "the grants' adb servers were not written down", { error: (error as Error).message });
+      }
+    });
+    return this.#writing;
   }
 
   /// Grant `id`'s server, started if it is not running (`adb -P <port> server nodaemon`: its own process, held here).
