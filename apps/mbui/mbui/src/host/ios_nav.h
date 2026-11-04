@@ -483,6 +483,8 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
                             if (still()) drawn.image = nav_any(spec, 24);
                           })
                                         : nav_letter(d[@"title"], 24);
+        // (a chat's "…" the system's own glyph, as the "…" it folds into: the user, 2026-11-04)
+        if ([ident hasSuffix:@"chat/more"]) icon = [UIImage systemImageNamed:@"ellipsis"] ?: icon;
         BOOL prominent = [d[@"prominent"] boolValue];
         // (said with where the item is in the app's view, for what opens from it: a popover at it)
         __block __weak UIBarButtonItem *weak = nil;
@@ -544,9 +546,12 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
           // left beside the system's would be two "…" in the column: the user 2026-11-03)
           if (@available(iOS 27.0, *)) {
             // (the bell above all: on the outer screen's short column there is room for one of the app's own)
-            if ([ident hasSuffix:@"/attention"]) b.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
+            if ([ident hasSuffix:@"/attention"] || [ident hasSuffix:@"side/close"]) b.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
             else if (![ident hasPrefix:@"act/"] && ![ident hasPrefix:@"lead/"])
               b.visibilityPriority = rows.count ? UIBarButtonItemVisibilityPriorityLow - 1 : UIBarButtonItemVisibilityPriorityLow;
+            // (on a glass of its own: on one with the others, short of room, the system folded those and left this "…"
+            // beside its own: the user 2026-11-04)
+            if (rows.count) b.sharesBackground = NO;
           }
 #endif
           b.badge = [d[@"dot"] boolValue] ? [UIBarButtonItemBadge indicatorBadge] : nil;
