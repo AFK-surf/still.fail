@@ -341,6 +341,7 @@ fn reset_drawing() -> Unit {
   dr.carry.clear()
   dr.cycling = -1
   list_counts.clear()
+  list_keys_seen.clear()
   for f in reset_hooks {
     f()
   }

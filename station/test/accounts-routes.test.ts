@@ -11,6 +11,7 @@ import { checkConfig } from "../src/accounts/check.ts";
 import { MachineLogins } from "../src/accounts/machine.ts";
 import { OUTDATED } from "../src/accounts/models.ts";
 import { routes } from "../src/api/routes/accounts.ts";
+import { overview } from "../src/api/overview.ts";
 import type { Request } from "../src/api/request.ts";
 import { ConfigFile } from "../src/ops/config.ts";
 import { profileEnv } from "../src/agents/profiles.ts";
@@ -779,6 +780,84 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
+  test("a successful reset wakes its account and informs its share; an old redemption with no allowance does neither", async () => {
+    const woke: string[] = [];
+    const sent: string[] = [];
+    let used = 100;
+    const hub: NonNullable<AccountsDeps["hub"]> = {
+      accounts: { setHealth: () => {}, healthOf: () => ({}) },
+      allowanceReset: async (id) => { woke.push(id); },
+    };
+    const t = await rig({
+      hub,
+      readQuota: async () => ({ state: "ok", windows: [{ label: "week", usedPercent: used, resetsAt: null }], detail: null, checkedAt: 0 }),
+      resetQuota: async (_p, key) => {
+        if (key === "new") { used = 5; return { outcome: "reset" }; }
+        return { outcome: key === "old" ? "alreadyRedeemed" : "noCredit" };
+      },
+      shared: { status: async () => ({ check: null, quota: null }), view: () => null, quotaReset: async (p, key) => { sent.push(`${p.id}:${key}`); } },
+    });
+    await t.call("PUT", "/profiles/cx", { access: { kind: "subscription" } });
+    const redeem = (key: string) => t.call("POST", "/profiles/cx/reset-quota", undefined, owner, { "Idempotency-Key": key });
+    assert.equal((await redeem("empty"))[0], 409);
+    assert.equal((await redeem("old"))[0], 200);
+    assert.deepEqual(woke, []);
+    assert.equal((await redeem("new"))[0], 200);
+    await until(() => sent.length === 1, "the reset is shared");
+    assert.deepEqual(woke, ["cx"]);
+    assert.deepEqual(sent, ["cx:new"]);
+    await t.close();
+  });
+
+  test("a changed shared Codex login is fetched and loaded even when the old token has not expired", async () => {
+    const data = temp("borrowed-changed");
+    const home = join(data, "homes", "bx");
+    mkdirSync(home, { recursive: true });
+    writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "bx", runtime: "codex", home: "homes/bx", access: { kind: "subscription" }, share: { id: "s1", borrowed: true, host: "H" } }], connects: [] }));
+    const jwt = (name: string) => ["{}", JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 86400, name }), "s"].map((x) => Buffer.from(x).toString("base64url")).join(".");
+    const old = jwt("old"), fresh = jwt("fresh");
+    const write = (token: string) => writeFileSync(join(home, "auth.json"), JSON.stringify({ tokens: { access_token: token, account_id: "acct" } }));
+    write(old);
+    const chatgpt = await provider((asked) => asked.headers.authorization === `Bearer ${fresh}`
+      ? { status: 200, body: { rate_limit: { primary_window: { used_percent: 20 } } } }
+      : { status: 401, body: { error: { code: "token_revoked" } } });
+    const woke: string[] = [];
+    let replaced = 0;
+    let failReload = true;
+    const hub: NonNullable<AccountsDeps["hub"]> = { accounts: { setHealth: () => {}, healthOf: () => ({}) }, allowanceReset: async (id) => { woke.push(id); } };
+    const shared = {
+      status: async () => ({ check: { state: "ok", detail: "host", models: null, checkedAt: 1 }, quota: null }),
+      lendCodex: async (_profile: any, noFallback: boolean) => { assert.equal(noFallback, true); write(fresh); return Date.now() + 86400_000; },
+      view: () => null,
+    };
+    const codex = () => ({ rateLimits: async () => ({}), resetQuota: async () => ({}), models: async () => ({ models: [], efforts: new Map() }), loginChanged: async () => { replaced++; if (failReload) { failReload = false; throw new Error("reload failed"); } } });
+    const t = await rig({ data, shared, codex, hub, urls: { ...URLS, chatgpt: chatgpt.base } });
+    await assert.rejects(t.accounts.sharedChanged("bx", true), /reload failed/);
+    await t.accounts.sharedChanged("bx", true);
+    assert.equal(JSON.parse(readFileSync(join(home, "auth.json"), "utf8")).tokens.access_token, fresh);
+    assert.equal(replaced, 2, "a failed reload is retried even though the new file was already written");
+    assert.equal(t.accounts.health("bx").quota.windows[0].usedPercent, 20);
+    assert.deepEqual(woke, ["bx"]);
+    await t.accounts.sharedChanged("bx", false);
+    assert.equal(replaced, 2, "a quota or profile update with the same login does not restart a running app-server");
+    await chatgpt.close();
+    await t.close();
+  });
+
+  test("a shared Codex host signing out updates the borrowed check even when there is no login to lend", async () => {
+    const data = temp("borrowed-signed-out");
+    writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "bx", runtime: "codex", home: "homes/bx", access: { kind: "subscription" }, share: { id: "s1", borrowed: true, host: "H" } }], connects: [] }));
+    const shared = {
+      status: async () => ({ check: { state: "login", detail: "signed out", models: null, checkedAt: 1 }, quota: null }),
+      lendCodex: async () => { throw new Error("no login to lend"); },
+      view: () => null,
+    };
+    const t = await rig({ data, shared });
+    await assert.rejects(t.accounts.sharedChanged("bx", false), /no login to lend/);
+    assert.equal(t.accounts.health("bx").check.state, "login");
+    await t.close();
+  });
+
   test("OpenAI fast defaults off, survives other edits and can be turned off", async () => {
     const t = await rig();
     assert.equal(t.profile("cx")!.fast, undefined);
@@ -873,6 +952,66 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.equal(after.change.summary, "改了策略，删了「看不出来」");
     await t.close();
   });
+});
+
+test("an overview names only the visible chats once when it makes the archive policy", async () => {
+  const t = await rig();
+  try {
+    for (const [key, ws] of [["b1", "B"], ["b2", "B"], ["w", "W"]] as const) {
+      t.store.insertSession({ key, ws, connect: "ds", runtime: "claude", profile: "cc", workspace: `/w/${key}`, token: key, createdAt: 1, lastActiveAt: 1 });
+      const thread = t.store.openThread(`chat:${key}`, key, key, null, null);
+      t.store.joinThread(thread.id, key, "ds");
+      t.store.setThreadTitle(thread.id, `title-${key}`);
+    }
+    const decision = { purpose: "archive", accepted: true, result: { selected: "landed" } };
+    t.store.recordDecision("b1", decision);
+    for (let i = 0; i < 30; i++) t.store.recordDecision("w", decision);
+    t.store.recordDecision("b2", decision);
+    t.store.setArchivePolicy(DEFAULT_POLICY, { kind: "agent", session: "b2" }, "edit", "B");
+
+    const named: string[] = [];
+    let policies = 0;
+    let policyReads = 0;
+    const sessionChat = t.store.sessionChat.bind(t.store);
+    const latest = t.store.latestDecisionsSince.bind(t.store);
+    const archivePolicy = t.store.archivePolicy.bind(t.store);
+    t.store.sessionChat = (session) => { named.push(session); return sessionChat(session); };
+    t.store.latestDecisionsSince = (since) => { policies++; return latest(since); };
+    t.store.archivePolicy = (ws) => { policyReads++; return archivePolicy(ws); };
+    const hub: any = { processes: () => new Map(), config: () => ({ dataDir: t.data }) };
+    const cloud: any = { state: null };
+    const of = async (as: typeof joined) => (await overview({ store: t.store, hub, cloud, config: () => t.config.raw(), accounts: t.accounts }, as, "en") as any).automaticDecisions;
+    const joined = { ...owner, workspace: "B", home: false };
+    const view = await of(joined);
+    assert.deepEqual(view.recent.map((r: any) => [r.session, r.title]), [["b2", "title-b2"]], "the global latest 30 checks are filtered to this workspace");
+    assert.deepEqual([view.policy.checked, view.policy.failed, view.canEditPolicy], [2, 0, true]);
+    assert.deepEqual(view.policy.options.find((o: any) => o.id === "landed").chats.map((c: any) => c.title).sort(), ["title-b1", "title-b2"]);
+    assert.equal(view.policy.change.by.title, "title-b2");
+    assert.equal(policies, 1, "only the policy being returned is read");
+    assert.equal(policyReads, 1, "the policy and its change come from one read");
+    assert.deepEqual(named.sort(), ["b1", "b2"], "invisible chats are not named, and each visible chat is named once");
+    named.length = 0;
+    policies = 0;
+    policyReads = 0;
+    const again = await of(joined);
+    assert.deepEqual(again, view);
+    assert.deepEqual([policies, named], [0, []], "a repeated overview reuses its view");
+    assert.equal(policyReads, 0);
+    const homeView = await of({ ...joined, workspace: "W", home: true });
+    assert.equal(homeView.recent.length, 29);
+    assert.ok(homeView.recent.every((r: any) => r.session === "w" && r.title === "title-w"));
+    assert.deepEqual([homeView.policy.checked, homeView.policy.failed], [1, 0]);
+    assert.deepEqual([policies, named], [1, ["w"]], "the home workspace's checks use their own policy and names");
+    assert.equal(policyReads, 1);
+    named.length = 0;
+    policies = 0;
+    const memberView = await of({ ...joined, role: "member" });
+    assert.deepEqual(memberView, { canEdit: false, settings: {}, models: [], recent: [] });
+    assert.deepEqual([policies, named], [0, []]);
+  } finally {
+    await t.close();
+    t.store.close();
+  }
 });
 
 test("a Hermes profile offers discovered models and keeps a manual selection when discovery fails", async () => {

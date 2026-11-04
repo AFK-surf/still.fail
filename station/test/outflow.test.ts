@@ -4,18 +4,21 @@
 import assert from "node:assert/strict";
 import { request as http } from "node:http";
 import type { Socket } from "node:net";
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { type Identity, OutflowGrants, REQUEST_KEPT_MS } from "../src/outflow/grants.ts";
 import { OutflowServer, type Workspace } from "../src/outflow/server.ts";
+import { TAILCAT_PORT, TailcatLink, VIA_TAILCAT } from "../src/outflow/tailcat.ts";
 import { routes } from "../src/api/routes/outflow.ts";
 import { Store, newMessage } from "../src/store/store.ts";
+import { installOutflowChatIndex, outflowChatIndexStep, outflowChatScopes } from "../src/store/outflow-index.ts";
+import type { InWorkspace } from "../src/store/rows.ts";
 import * as read from "../src/read/store.ts";
 import { outflowChats, outflowMessages, outflowThread, outflowUsage } from "../src/read/outflow.ts";
 import { usageOps } from "../src/read/ops-usage.ts";
-import { peerRead, textOf } from "../src/outflow/peer.ts";
+import { homeRead, peerRead, textOf } from "../src/outflow/peer.ts";
 import { bytesOf } from "../src/mesh/bus.ts";
 
 const dirs: string[] = [];
@@ -28,6 +31,11 @@ const tempdir = () => {
   dirs.push(d);
   return d;
 };
+
+function readyChats(store: Store, viewer: InWorkspace = { workspace: "\u0000home", home: true }): void {
+  installOutflowChatIndex(store.db);
+  for (const scope of outflowChatScopes(viewer)) while (!outflowChatIndexStep(store.db, scope).done) { /* bounded batches */ }
+}
 
 const COMMA: Identity = { path: "/Applications/Comma.app/Contents/Resources/station/node", valid: true, teamId: "D9AAN3VJK8", identifier: "surf.comma.station", signer: "Developer ID Application: AFK Inc. (D9AAN3VJK8)", app: "Comma", sha256: null };
 const OTHER: Identity = { ...COMMA, teamId: "XXXXXXXXXX", signer: "Developer ID Application: Someone (XXXXXXXXXX)" };
@@ -355,10 +363,14 @@ test("v1 reads: the home workspace's usage and chats, field by field, no message
     store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: `/w/${key}`, token: key, createdAt: 1, lastActiveAt: 1, createdBy: "ann@x", ws } as never);
   session("a", null);
   session("b", "other-ws");
+  // Made in the app: it names the home workspace by its id.
+  session("c", "ws-home");
   const home = store.openThreadOf("ember", "EMBER", "100.1", "Fix the build", "ann@x", "a");
   const away = store.openThreadOf("ember", "EMBER", "100.2", "Theirs", "bob@x", "b");
+  const app = store.openThreadOf("ember", "EMBER", "100.6", "From the app", "ann@x", "c");
   store.joinThread(home.id, "a", "ember");
   store.joinThread(away.id, "b", "ember");
+  store.joinThread(app.id, "c", "ember");
   store.insertMessage(newMessage(home.id, "100.3", "person", "ann@x", "a secret plan"));
   store.startTurnFor("t1", "a", "input", { profile: "cc", person: "ann@x", thread: home.id });
   store.endTurn("t1", "done", null, "all_done", null);
@@ -375,6 +387,7 @@ test("v1 reads: the home workspace's usage and chats, field by field, no message
   const otherUsage = outflowUsage(r, "en", 86_400_000, 2 * 86_400_000, 0, { workspace: "other-ws", home: false }) as any;
   assert.deepEqual(otherUsage.rows.map((x: any) => [x.session, x.thread]), [["b", away.id]]);
 
+  readyChats(store);
   const chats = outflowChats(r, 0) as any;
   assert.deepEqual(chats.chats.map((c: any) => [c.thread, c.title, c.state, c.creator?.email, c.surface, c.archived]), [[home.id, "Fix the build", "all_done", "ann@x", "stillfail", false]]);
   assert.ok(!JSON.stringify(chats).includes("secret"), "no message");
@@ -385,16 +398,159 @@ test("v1 reads: the home workspace's usage and chats, field by field, no message
   const second = store.openThreadOf("ember", "EMBER", "100.4", "Ship it", "ann@x", "a");
   store.joinThread(second.id, "a", "ember");
   store.insertMessage(newMessage(second.id, "100.5", "person", "ann@x", "ship"));
+  readyChats(store);
   const all = (outflowChats(read.openStore(dir), 0) as any).chats.map((c: any) => c.thread);
   const first = outflowChats(read.openStore(dir), 0, undefined, { limit: 1, before: null }) as any;
   const rest = outflowChats(read.openStore(dir), 0, undefined, { limit: 1, before: first.next }) as any;
   assert.deepEqual([first.chats.map((c: any) => c.thread), first.more, rest.chats.map((c: any) => c.thread), rest.more, rest.next], [[all[0]], true, [all[1]], false, null]);
   assert.equal(all.length, 2);
   // Another station of a workspace this one joined reads that workspace's, as its program's grant there asks.
+  readyChats(store, { workspace: "other-ws", home: false });
   const theirs = usageOps.outflowChats!(r, { since: 0, ws: { workspace: "other-ws", home: false } }) as any;
   assert.deepEqual(theirs.chats.map((c: any) => c.title), ["Theirs"]);
   const spent = usageOps.outflowUsage!(r, { lang: "en", from: 0, to: 365 * 86_400_000, tz: 0, ws: { workspace: "other-ws", home: false } }) as any;
   assert.deepEqual([spent.rows.map((x: any) => x.person), spent.to], [["bob@x"], 31 * 86_400_000], "a span of 31 days at most, whoever asks");
+  // Read here with the home workspace's id: its chats made in the app too, those that say no workspace as well.
+  readyChats(store, { workspace: "ws-home", home: true });
+  const own = usageOps.outflowChats!(read.openStore(dir), { since: 0, ws: { workspace: "ws-home", home: true } }) as any;
+  assert.deepEqual(own.chats.map((c: any) => c.title).sort(), ["Fix the build", "From the app", "Ship it"]);
+});
+
+test("listing chats for a program does not count the chat's unread history", () => {
+  const store = Store.open(":memory:");
+  try {
+    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/a", token: "a", createdAt: 1, lastActiveAt: 1 });
+    const thread = store.openThreadOf("ember", "EMBER", "100.1", "A chat", "ann@x", "a");
+    store.joinThread(thread.id, "a", "ember");
+    const entry = store.db.prepare("INSERT INTO entries (thread, n, kind, author_kind, author, text, at) VALUES (?, ?, 'message', 'person', 'ann@x', 'body', ?)");
+    store.db.exec("BEGIN");
+    for (let n = 1; n <= 1_000; n++) entry.run(thread.id, n, n);
+    store.db.exec("COMMIT");
+    store.db.prepare("UPDATE threads SET created_at = 1 WHERE id = ?").run(thread.id);
+    store.db.prepare("INSERT INTO entries (thread, n, kind, target, author_kind, author, text, at) VALUES (?, 1001, 'edit', 1000, 'person', 'ann@x', 'edited', 999999)").run(thread.id);
+    readyChats(store);
+    const reader = read.makeStore(store.db, ".");
+    const expected = outflowChats(reader, 0, undefined, { limit: 1, before: null }) as any;
+    assert.equal(expected.chats[0].lastActiveAt, read.lastSaid(reader, thread.id)?.createdAt);
+    assert.equal(expected.chats[0].lastActiveAt, 1_000, "an edit does not replace the message's original activity time");
+    const db = reader.db;
+    const traced = new Proxy(db, { get(target, property) {
+      if (property === "prepare") return (sql: string) => {
+        if (sql === read.UNREAD) throw new Error("counted unread history");
+        return target.prepare(sql);
+      };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    Object.defineProperty(reader, "db", { value: traced, configurable: true });
+    try { assert.deepEqual(outflowChats(reader, 0, undefined, { limit: 1, before: null }), expected); }
+    finally { Object.defineProperty(reader, "db", { value: db, configurable: true }); }
+  } finally { store.close(); }
+});
+
+test("a chat export reads its agents' state without counting pending deliveries", () => {
+  const store = Store.open(":memory:");
+  try {
+    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", createdAt: 1, lastActiveAt: 1 });
+    const thread = store.openThreadOf("ember", "EMBER", "pending", "Chat", "ann@x", "a");
+    store.joinThread(thread.id, "a", "ember");
+    const insert = store.db.prepare("INSERT INTO deliveries (thread,n,session) VALUES (?,?,'a')");
+    store.db.exec("BEGIN");
+    for (let n=1; n<=500; n++) insert.run(thread.id, n);
+    store.db.exec("COMMIT");
+    readyChats(store);
+    const reader = read.makeStore(store.db, ".");
+    const expected = outflowChats(reader, 0, undefined, { limit: 1, before: null });
+    const db = reader.db;
+    const traced = new Proxy(db, { get(target, property) {
+      if (property === "prepare") return (sql: string) => {
+        if (sql.includes("FROM deliveries d INDEXED BY deliveries_pending")) throw new Error("counted pending deliveries");
+        return target.prepare(sql);
+      };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    Object.defineProperty(reader, "db", { value: traced, configurable: true });
+    try { assert.deepEqual(outflowChats(reader, 0, undefined, { limit: 1, before: null }), expected); }
+    finally { Object.defineProperty(reader, "db", { value: db, configurable: true }); }
+  } finally { store.close(); }
+});
+
+test("a shared chat's exported agents belong to the requested workspace", () => {
+  const store = Store.open(":memory:");
+  try {
+    for (const [key, ws, runtime] of [["a", "A", "claude"], ["b", "B", "codex"], ["home", null, "gemini"]] as const) {
+      store.insertSession({ key, connect: "ember", runtime, profile: "p", workspace: "/w", token: key, createdAt: 1, lastActiveAt: 1, ws });
+    }
+    const thread = store.openThreadOf("ember", "EMBER", "shared", "Shared", "ann@x", "a");
+    for (const key of ["a", "b", "home"]) store.joinThread(thread.id, key, "ember");
+    readyChats(store, { workspace: "A", home: true });
+    readyChats(store, { workspace: "B", home: false });
+    const reader = read.makeStore(store.db, ".");
+    const a = outflowChats(reader, 0, { workspace: "A", home: true }, { limit: 1, before: null }) as any;
+    const b = outflowChats(reader, 0, { workspace: "B", home: false }, { limit: 1, before: null }) as any;
+    assert.deepEqual(a.chats[0].agents.map((agent: any) => agent.runtime), ["claude", "gemini"]);
+    assert.deepEqual(b.chats[0].agents.map((agent: any) => agent.runtime), ["codex"]);
+  } finally { store.close(); }
+});
+
+test("export pages merge home and workspace chats once, including tied activity times", () => {
+  const store = Store.open(":memory:");
+  try {
+    for (const [key, ws] of [["home", null], ["a", "A"], ["b", "B"]] as const)
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, createdAt: 1, lastActiveAt: 1, ws });
+    for (const [name, members] of [["one", ["a", "home"]], ["two", ["a"]], ["three", ["home"]], ["four", ["a", "home"]], ["away", ["b"]]] as const) {
+      const thread = store.openThreadOf("ember", "EMBER", name, name, "ann@x", members[0]!);
+      for (const member of members) store.joinThread(thread.id, member, "ember");
+      store.db.prepare("UPDATE threads SET created_at=10 WHERE id=?").run(thread.id);
+    }
+    const viewer = { workspace: "A", home: true };
+    readyChats(store, viewer);
+    const reader = read.makeStore(store.db, ".");
+    const first = outflowChats(reader, 10, viewer, { limit: 2, before: null }) as any;
+    const second = outflowChats(reader, 10, viewer, { limit: 2, before: first.next }) as any;
+    assert.deepEqual(first.chats.map((chat: any) => chat.title), ["four", "three"]);
+    assert.deepEqual(second.chats.map((chat: any) => chat.title), ["two", "one"]);
+    assert.deepEqual([first.more, second.more, second.next], [true, false, null]);
+    assert.deepEqual((outflowChats(reader, 11, viewer) as any).chats, []);
+  } finally { store.close(); }
+});
+
+test("a page of exported chats does not enumerate every session", () => {
+  const store = Store.open(":memory:");
+  try {
+    for (const key of ["a", "b", "c"]) {
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key,
+        createdAt: 1, lastActiveAt: 1, ws: "A" });
+      const thread = store.openThreadOf("ember", "EMBER", `chat-${key}`, key, "ann@x", key);
+      store.joinThread(thread.id, key, "ember");
+      store.db.prepare("UPDATE threads SET created_at = 10 WHERE id = ?").run(thread.id);
+    }
+    store.db.exec("BEGIN");
+    for (let i = 0; i < 200; i++) store.insertSession({ key: `other-${i}`, connect: "ember", runtime: "claude", profile: "cc",
+      workspace: "/w", token: `other-${i}`, createdAt: 1, lastActiveAt: 1, ws: "B" });
+    store.db.exec("COMMIT");
+    const reader = read.makeStore(store.db, "."), viewer = { workspace: "A", home: false };
+    readyChats(store, viewer);
+    const first = outflowChats(reader, 0, viewer, { limit: 1, before: null }) as any;
+    const second = outflowChats(reader, 0, viewer, { limit: 1, before: first.next }) as any;
+    assert.deepEqual(first.chats.map((chat: any) => chat.title), ["c"]);
+    assert.deepEqual(second.chats.map((chat: any) => chat.title), ["b"]);
+    const db = reader.db;
+    const traced = new Proxy(db, { get(target, property) {
+      if (property === "prepare") return (sql: string) => {
+        if (sql === "SELECT * FROM sessions ORDER BY last_active_at DESC") throw new Error("enumerated session history");
+        return target.prepare(sql);
+      };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    Object.defineProperty(reader, "db", { value: traced, configurable: true });
+    try {
+      assert.deepEqual(outflowChats(reader, 0, viewer, { limit: 1, before: null }), first);
+      assert.deepEqual(outflowChats(reader, 0, viewer, { limit: 1, before: first.next }), second);
+    } finally { Object.defineProperty(reader, "db", { value: db, configurable: true }); }
+  } finally { store.close(); }
 });
 
 test("messages: a chat's, a page at a time, to a program granted them", async () => {
@@ -499,4 +655,111 @@ test("another station's read: one of the outflow reads, of the workspace it asks
   assert.deepEqual(asked.at(-1)![1].ws, { workspace: "ws-joined", home: false });
   await assert.rejects(answer("peer", { op: "usage", args: {} }, "ws-home"), /no such read/, "none of the station's other reads");
   await assert.rejects(answer("peer", { op: "outflowChats", args: {} }, undefined), /workspace/);
+});
+
+test("this station's own read: of its home workspace by its id, once known", async () => {
+  const asked: any[] = [];
+  let home: string | null = null;
+  const reads = homeRead(async (_op, args) => (asked.push(args), "{}"), () => home);
+  await reads("outflowChats", { since: 1 }, "en");
+  home = "ws-home";
+  await reads("outflowChats", { since: 2 }, "en");
+  assert.deepEqual(asked, [{ since: 1 }, { since: 2, ws: { workspace: "ws-home", home: true } }]);
+});
+
+/// A request on a TCP port of the loopback, as tailcat forwards one there.
+function tcp(port: number, method: string, path: string, body?: unknown, token?: string): Promise<{ status: number; body: any }> {
+  return new Promise((resolve, reject) => {
+    const req = http({ host: "127.0.0.1", port, method, path, headers: token ? { authorization: `Bearer ${token}` } : {} }, (res) => {
+      let text = "";
+      res.setEncoding("utf8");
+      res.on("data", (c) => (text += c));
+      res.on("end", () => resolve({ status: res.statusCode!, body: text ? JSON.parse(text) : null }));
+    });
+    req.on("error", reject);
+    req.end(body === undefined ? undefined : JSON.stringify(body));
+  });
+}
+
+test("through the Tailcat link: a program of another machine asks and reads as one here does; anything else on the port is turned away", async () => {
+  const r = await rig();
+  const m = members(r);
+  const through = { now: true };
+  const { port, close } = await r.server.listenTcp(0, async () => (through.now ? VIA_TAILCAT : null));
+  after(close);
+  const asking = tcp(port, "POST", "/v1/request", { name: "Comma", purpose: "usage for the team", scopes: ["usage"], workspace: true, key: "comma" });
+  while (r.waited.count < 1) await new Promise((resolve) => setImmediate(resolve));
+  const [request] = (await m.list()).requests;
+  assert.deepEqual(request.identity, VIA_TAILCAT, "shown as come through Tailcat, nothing it says of itself taken for who it is");
+  assert.equal(await m.answer(request.id, { allow: true, scopes: ["usage"], workspace: true }), 200);
+  const granted = await asking;
+  assert.deepEqual([granted.status, granted.body.reach], [200, "workspace"]);
+  assert.equal((await tcp(port, "GET", "/v1/usage?from=0&to=1", undefined, granted.body.token)).status, 200);
+  // Not the link's tailcat at the other end (a program of this machine on the port): neither asks nor reads, token or not.
+  through.now = false;
+  assert.equal((await tcp(port, "GET", "/v1/usage?from=0&to=1", undefined, granted.body.token)).status, 403);
+  assert.equal((await tcp(port, "POST", "/v1/request", { scopes: ["usage"] })).status, 403);
+  // The socket's programs are not the link's: the link's grant is not theirs to take.
+  assert.equal(r.grants.held(COMMA, ["usage"], "workspace"), null);
+});
+
+test("the Tailcat link: off until an admin turns it on, kept so; its address once tailcat says it; only the link's tailcat counts on its port", async () => {
+  const r = await rig();
+  const dir = tempdir();
+  // A tailcat that makes its key and, serving, says its address and stays.
+  const fake = join(dir, "tailcat");
+  writeFileSync(
+    fake,
+    `#!/bin/sh\nif [ "$1" = genkey ]; then echo '{}' > "$3"; exit 0; fi\necho '{"listenAddr":"tcFAKEADDRESS"}'\nexec sleep 600\n`,
+    { mode: 0o755 },
+  );
+  const changes = { count: 0 };
+  const link = new TailcatLink({ data: r.data, server: r.server, command: fake, changed: () => changes.count++, holders: async () => [process.pid] });
+  after(() => link.close());
+  link.start();
+  assert.deepEqual(link.view(), { on: false, state: "off", address: null, port: null, error: null });
+  await link.set(true);
+  while (link.view().state !== "running") await new Promise((resolve) => setTimeout(resolve, 10));
+  const view = link.view();
+  assert.equal(view.address, "tcFAKEADDRESS");
+  assert.ok(view.port! >= TAILCAT_PORT && view.port! < TAILCAT_PORT + 10);
+  assert.ok(statSync(join(r.data, "tailcat", "outflow.private.json")).isFile(), "its key made once, for the same address each start");
+  assert.ok(changes.count > 0);
+  // This test's process is not the link's tailcat: its requests on the port are refused.
+  assert.equal((await tcp(view.port!, "POST", "/v1/request", { scopes: ["usage"] })).status, 403);
+  // Kept for the next start; off, the port closes.
+  assert.equal(new TailcatLink({ data: r.data, server: r.server, changed: () => {} }).view().on, true);
+  await link.set(false);
+  assert.deepEqual(link.view(), { on: false, state: "off", address: null, port: null, error: null });
+  await assert.rejects(tcp(view.port!, "GET", "/v1/stations"));
+  assert.equal(new TailcatLink({ data: r.data, server: r.server, changed: () => {} }).view().on, false);
+});
+
+test("the Tailcat link keeps its port across a hand-over: started once the process before is gone, and not after closing", async () => {
+  const r = await rig();
+  const dir = tempdir();
+  const fake = join(dir, "tailcat");
+  writeFileSync(fake, `#!/bin/sh\nif [ "$1" = genkey ]; then echo '{}' > "$3"; exit 0; fi\necho '{"listenAddr":"tcFAKEADDRESS"}'\nexec sleep 600\n`, { mode: 0o755 });
+  const made = (data: string) => new TailcatLink({ data, server: r.server, command: fake, changed: () => {}, holders: async () => [process.pid] });
+  const running = async (link: TailcatLink) => {
+    while (link.view().state !== "running") await new Promise((resolve) => setTimeout(resolve, 10));
+    return link.view().port!;
+  };
+  const before = made(r.data);
+  after(() => before.close());
+  await before.set(true);
+  const port = await running(before);
+  // While the process before holds the port, the next one has not started its link.
+  const next = made(r.data);
+  after(() => next.close());
+  assert.equal(next.view().state, "off");
+  await before.close();
+  next.start();
+  assert.equal(await running(next), port);
+  // A second start leaves it as it is; one after closing starts nothing.
+  next.start();
+  assert.equal(next.view().state, "running");
+  await next.close();
+  next.start();
+  assert.equal(next.view().state, "off");
 });

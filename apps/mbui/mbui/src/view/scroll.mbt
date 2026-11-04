@@ -335,6 +335,13 @@ pub fn Scroll::most(self : Scroll) -> Double {
 }
 
 ///|
+/// How far it can go, as it was last laid out, followed (0 before it first is): what keeps room at what it holds' foot
+/// by it (a list's room for what is tucked over its rows) reads it so.
+pub fn Scroll::reach(self : Scroll) -> Double {
+  self.most_now()
+}
+
+///|
 /// Whether what it holds is taller than it, as last laid out, followed (asked once it scrolls: View::scrolls): what is
 /// painted by that alone reads it (cut at its box only while it scrolls, as @kit.in_room's held list), never what lays
 /// it out.
@@ -383,6 +390,18 @@ fn Scroll::stopped(self : Scroll, t : Double) -> Double {
   }
   self.x.set(x)
   x
+}
+
+///|
+/// Put at `to` (down the column) at the logic's moment of the tree it scrolls in, read as far as it can go as it is
+/// laid out (a list's first place, past what is tucked over its rows; its top again): what it was on by itself stopped
+/// there, no scroll of the hand's (nothing told as scrolled: its bar). Not scrolling in a node yet, there as it comes to.
+pub fn Scroll::put(self : Scroll, to : Double) -> Unit {
+  match self.host {
+    Some(v) if v.alive() => self.stopped(v.tree.logic_at()) |> ignore
+    _ => ()
+  }
+  self.x.set(dmax(to, 0.0))
 }
 
 ///|
@@ -551,7 +570,8 @@ pub fn View::scroll_holding(self : View, across? : Bool = false) -> Scroll? {
 /// laid out as wide as it is, given way to nothing across where what holds it is narrower; a hold its own once it moves
 /// across past the slop; its bar along its foot, `bar_in` in from either end (under what it is for, where what it holds
 /// reaches past that: Ctx::sideways's), room under what it holds for it while it can go (its bar never over what it
-/// holds' last line), none while it cannot.
+/// holds' last line), none while it cannot. `bar_clear`: down a column, how much of its top and its foot its bar keeps
+/// clear of, as it is now (what lies over them: a bar the list runs under), as an old view's list's bar does.
 pub fn View::scrolls(
   self : View,
   s : Scroll,
@@ -559,6 +579,7 @@ pub fn View::scrolls(
   slop? : Double,
   bar? : ScrollBar,
   bar_in? : Double = 0.0,
+  bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
 ) -> View {
   guard self.live() is Some(_) else { return self }
   // (a page's list's as its platform's is as it is held: what hosts the tree may say it after it is made)
@@ -619,10 +640,17 @@ pub fn View::scrolls(
     |> ignore
     // (across with a bar: room at its foot for it while it can go, as laid out (none while it cannot), its bar never
     // over what it holds' last line: Ctx::sideways's bar_room, from this layout's told reach, not a frame's before)
-    // (under what it holds, not within: its own room, whatever room what holds it says what it holds has round it)
+    // (under what it holds, its own room at its foot counted, as Ctx::sideways' `foot` is the more of its padding there
+    // and the bar's room: what of the bar's room its padding there has not, under it)
     match bar {
       Some(b) if across =>
-        held.margin(By(fn() { (0.0, 0.0, 0.0, if s.most_now() > 0.5 { b.size + 2.0 * b.inset } else { 0.0 }) })) |> ignore
+        held.margin(By(fn() {
+          let room = if s.most_now() > 0.5 { b.size + 2.0 * b.inset } else { 0.0 }
+          let st = self.tree.nodes[held.at].flex.style
+          let pad = if st.padding_bottom_kind() == @flex.LEN_PT { st.padding_bottom_value() } else { 0.0 }
+          (0.0, 0.0, 0.0, if room > pad { room - pad } else { 0.0 })
+        }))
+        |> ignore
       _ => ()
     }
     build(held)
@@ -640,7 +668,7 @@ pub fn View::scrolls(
           (None, None) => -1.0e9
         }
       })
-      self.scroll_bar(s, b, state, bar_in~)
+      self.scroll_bar(s, b, state, bar_in~, bar_clear~)
       s.on_scrolled = fn(t) { state.woke(b, self, t, scrolled=true) }
     }
     None => ()

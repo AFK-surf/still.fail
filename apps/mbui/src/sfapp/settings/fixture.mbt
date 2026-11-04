@@ -1,7 +1,7 @@
 // Made-up settings in the core's shapes (WorkspaceView, StationView, LockView, VaultsView, ProfilesView, ConnectsView,
 // UsageView, ArchiveView, StationMemory…) for the app with no core (src/sffix): screenshots that are the same on every
 // run (scripts/shots.sh settings, web-settings). Every word here is made up. The workspace is the fixture's own ws1
-// (星火工作室, lin@example.com), its stations ws1/st1 (Studio) and ws1/st2 (MBA, offline).
+// (星火工作室, lin@example.com), its stations ws1/st1 (Willow) and ws1/st2 (Maple, offline).
 
 ///|
 /// What the made-up settings changed since they started (a station renamed, a chat restored), and how often.
@@ -20,11 +20,15 @@ priv struct SettingsFixture {
   mut afresh_above : Double
   /// the station sending its log to still.fail
   mut logs : Bool
-  /// a program granted Studio's data and another asking for it (docs/data-outflow.md: its overview's
+  /// a program granted Willow's data and another asking for it (docs/data-outflow.md: its overview's
   /// `outflowGrants`), as a test sets it
   mut outflow : Bool
   /// what an admin answered the program asking (`outflow.answer`'s params)
   mut outflow_answer : Json?
+  /// Willow's Tailcat link as an admin sees it (its overview's `outflowTailcat`), as a test sets it; none: not shown
+  mut outflow_link : Json?
+  /// what an admin turned the link to (`outflow.tailcat`'s `on`)
+  mut outflow_link_set : Bool?
   /// a Windows station's running as administrator, as the core shows it (its overview's `elevation`), as a test sets
   /// it; none: not a Windows station
   mut elevation : Json?
@@ -60,10 +64,19 @@ priv struct SettingsFixture {
   /// a new device of lin's asking to be let in with this one's code (settings-lock-prompt), until turned away or its
   /// prompt closed
   mut pairing : Bool
+  /// Maple is being added to security mode (settings-security-protecting).
+  mut protecting : Bool
   /// how its prompt went: "deny" (turned away), "hide" (closed, the code still good), "" while it is up
   mut pair_ended : String
-  /// MBA online too (settings-profiles-pick: Profile's ＋ asks which station)
+  /// a device of lin's (Pixel 9) set up without the key to 林的库, waiting on this one for it (settings-vault-prompt),
+  /// until given it or put away
+  mut key_ask : Bool
+  /// how that went: "give" (授权), "hide" (稍后, or closed), "" while it is up
+  mut key_ask_ended : String
+  /// Maple online too (settings-profiles-pick: Profile's ＋ asks which station)
   mut mba_online : Bool
+  // (settings-station-away: Willow away, what it last said of itself kept)
+  mut willow_away : Bool
   /// the subscriptions' allowances a month's window too, three in all (settings-profiles-monthly: OpenCode Go's)
   mut monthly : Bool
   /// The same subscription independently signed in and borrowed on several stations.
@@ -74,6 +87,8 @@ priv struct SettingsFixture {
   mut profile_away : Bool
   /// A station may use the account, but its copy has not arrived yet.
   mut profile_pending : Bool
+  /// That station is cut off from still.fail cloud, so the copy does not come.
+  mut profile_cut_off : Bool
   /// how far the made-up workspace has changed on its own (settings-workspace-motion, settings-stations-motion): 1 a
   /// person and a station come, 2 one of each goes (fixture_motion)
   mut motion : Int
@@ -96,6 +111,8 @@ let fx : SettingsFixture = {
   logs: true,
   outflow: false,
   outflow_answer: None,
+  outflow_link: None,
+  outflow_link_set: None,
   elevation: None,
   gpus: false,
   more_gpus: false,
@@ -111,13 +128,18 @@ let fx : SettingsFixture = {
   reset_expiry: false,
   models_added: [],
   pairing: false,
+  protecting: false,
   pair_ended: "",
+  key_ask: false,
+  key_ask_ended: "",
   mba_online: false,
+  willow_away: false,
   monthly: false,
   profile_hosts: false,
   profile_one_owner: false,
   profile_away: false,
   profile_pending: false,
+  profile_cut_off: false,
   motion: 0,
   drive_kept: fx_drive_kept,
   kept_cleared: [],
@@ -193,6 +215,8 @@ fn fixture_reset() -> Unit {
   fx.logs = true
   fx.outflow = false
   fx.outflow_answer = None
+  fx.outflow_link = None
+  fx.outflow_link_set = None
   fx.elevation = None
   fx.gpus = false
   fx.more_gpus = false
@@ -206,13 +230,18 @@ fn fixture_reset() -> Unit {
   fx.vault_off = false
   fx.plain_left = 0
   fx.pairing = false
+  fx.protecting = false
   fx.pair_ended = ""
+  fx.key_ask = false
+  fx.key_ask_ended = ""
   fx.mba_online = false
+  fx.willow_away = false
   fx.monthly = false
   fx.profile_hosts = false
   fx.profile_one_owner = false
   fx.profile_away = false
   fx.profile_pending = false
+  fx.profile_cut_off = false
   fx.motion = 0
   fixture_open.sheet = ""
   fixture_open.list = ""
@@ -308,19 +337,38 @@ pub fn fixture_pair_ended() -> String {
 }
 
 ///|
-/// Studio with a program granted its data and one asking for it (its page's 数据外流), or not.
+/// How the prompt for a vault's key went (`vault.addDevice` "give", `vault.hidePrompt` "hide"; "" while it is up).
+pub fn fixture_key_ask_ended() -> String {
+  fx.key_ask_ended
+}
+
+///|
+/// Willow with a program granted its data and one asking for it (its page's 数据外流), or not.
 pub fn fixture_outflow(on : Bool) -> Unit {
   fx.outflow = on
 }
 
 ///|
-/// What an admin answered the program asking for Studio's data, if they did.
+/// What an admin answered the program asking for Willow's data, if they did.
 pub fn fixture_outflow_answer() -> Json? {
   fx.outflow_answer
 }
 
 ///|
-/// Studio a Windows station, running as administrator as `v` says (the core's `StationElevation`), or not.
+/// Willow's Tailcat link of data outflow as an admin sees it (the core's `OutflowTailcat`), or none.
+pub fn fixture_outflow_link(v : Json?) -> Unit {
+  fx.outflow_link = v
+  fx_changed()
+}
+
+///|
+/// What an admin turned Willow's Tailcat link to, if they did.
+pub fn fixture_outflow_link_set() -> Bool? {
+  fx.outflow_link_set
+}
+
+///|
+/// Willow a Windows station, running as administrator as `v` says (the core's `StationElevation`), or not.
 pub fn fixture_elevation(v : Json?) -> Unit {
   fx.elevation = v
 }
@@ -368,6 +416,11 @@ pub fn fixture_page(mode : String) -> String {
     }
     // the page's 设置 (its variables' sheet up over it), its 软件与设备
     "settings-station-env" => station_parts["ws1/st1"] = "settings"
+    // its 设置 while it is away: only what can be changed then
+    "settings-station-away" => {
+      fx.willow_away = true
+      station_parts["ws1/st1"] = "settings"
+    }
     // its 设置 with 高级网络设置 opened: its congestion control, a section of the page after it
     "settings-station-network" => {
       station_parts["ws1/st1"] = "settings"
@@ -394,11 +447,12 @@ pub fn fixture_page(mode : String) -> String {
     "settings-profile-lower" => up("", "settings/profile/ws1/st1/cc", 2)
     // The sharing section of the made-up subscription, for reviewing its on-screen layout.
     "settings-profile-share" => up("", "settings/profile/ws1/st1/cc", 6)
-    "settings-profile-hosts" | "settings-profile-hosts-one" | "settings-profile-hosts-away" | "settings-profile-hosts-pending" => {
+    "settings-profile-hosts" | "settings-profile-hosts-one" | "settings-profile-hosts-away" | "settings-profile-hosts-pending" | "settings-profile-hosts-cutoff" => {
       fx.profile_hosts = true
       fx.profile_one_owner = m == "settings-profile-hosts-one"
       fx.profile_away = m == "settings-profile-hosts-away"
-      fx.profile_pending = m == "settings-profile-hosts-pending"
+      fx.profile_pending = m == "settings-profile-hosts-pending" || m == "settings-profile-hosts-cutoff"
+      fx.profile_cut_off = m == "settings-profile-hosts-cutoff"
       up("", "settings/profile/ws1/st1/cc", 3)
     }
     "settings-profile-login" => {
@@ -430,6 +484,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-vault-off" => fx.vault_off = true
     "settings-vault-plain" => fx.plain_left = 2
     "settings-lock-prompt" => fx.pairing = true
+    "settings-vault-prompt" => fx.key_ask = true
     "settings-vault-words" => recovery_words["ws1"] = fx_words()
     "settings-vault-add" => fixture_open.desk = "vault-add"
     "settings-vault-editor" => fixture_open.desk = "vault-editor"
@@ -439,11 +494,12 @@ pub fn fixture_page(mode : String) -> String {
     // 外观's 本机字体 open (src/sfpages font_setting.mbt local_tile: the families the host lists)
     "settings-local-fonts" => fixture_open.desk = "local-fonts"
     // the archive policy with a dialog up (src/sfpages automatic_decisions.mbt): its words, an option of the
-    // station's; its 安全 with one (security.mbt): MBA to take in, turning it off
+    // station's; its 安全 with one (security.mbt): Maple to take in, turning it off
     "settings-policy-text" => fixture_open.desk = "policy-text"
     "settings-policy-option" => fixture_open.desk = "policy-option"
     "settings-security-join" => fixture_open.desk = "lock-join"
     "settings-security-off" => fixture_open.desk = "lock-off"
+    "settings-security-protecting" => fx.protecting = true
     // the run's models listed (model_list.mbt): more than 8, by series, one of another station's to borrow
     "settings-run-models" => {
       fx_many_models.val = true
@@ -467,7 +523,7 @@ pub fn fixture_page(mode : String) -> String {
   }
   match m {
     "settings" => "home"
-    "settings-station-mark" | "settings-station-gpu" | "settings-station-gpu-many" | "settings-station-env" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-network" =>
+    "settings-station-mark" | "settings-station-gpu" | "settings-station-gpu-many" | "settings-station-env" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-network" | "settings-station-away" =>
       "station:ws1/st1"
     "settings-stations-add" | "settings-stations-existing" | "settings-stations-command" | "settings-first-station" =>
       "stations"
@@ -495,21 +551,21 @@ pub fn fixture_page(mode : String) -> String {
     "settings-about-flow" => "about"
     "settings-fonts-coming" | "settings-fonts-code" => "fonts"
     "settings-prices" => "prices:7"
-    "settings-run" | "settings-run-models" | "settings-run-accounts" => "run:ws1/st1#s-c1"
+    "settings-run" | "settings-run-models" | "settings-run-accounts" | "settings-run-runtime" => "run:ws1/st1#s-c1"
     "settings-add-people" | "settings-workspace-mark" | "settings-workspace-motion" => "workspace"
     "settings-stations-motion" => "stations"
     "settings-connects-motion" => "connects"
     "settings-vault-motion" => "vault-items"
     "settings-local-fonts" => "fonts"
-    "settings-security-join" | "settings-security-off" => "security"
-    "settings-notify-off" | "settings-lock-prompt" => "home"
+    "settings-security-join" | "settings-security-off" | "settings-security-protecting" => "security"
+    "settings-notify-off" | "settings-lock-prompt" | "settings-vault-prompt" => "home"
     // (the notifications' page; the system having refused them: its banner's way to allow them)
     "settings-notify" | "settings-notify-denied" => "notifications"
     "settings-station" | "settings-station-many-profiles" => "station:ws1/st1"
     "settings-station-offline" => "station:ws1/st2"
     "settings-memory" => "memory:ws1/st1"
     "settings-memory-doc" => "memory-doc:ws1/st1#发布流程"
-    "settings-profile" | "settings-profile-hosts" | "settings-profile-hosts-one" | "settings-profile-hosts-away" | "settings-profile-hosts-pending" | "settings-profile-quota-failed" | "settings-profile-blocked" | "settings-profile-signin" =>
+    "settings-profile" | "settings-profile-hosts" | "settings-profile-hosts-one" | "settings-profile-hosts-away" | "settings-profile-hosts-pending" | "settings-profile-hosts-cutoff" | "settings-profile-quota-failed" | "settings-profile-blocked" | "settings-profile-signin" =>
       "profile:ws1/st1#cc"
     "settings-profile-key" => "profile:ws1/st1#k2"
     "settings-profile-quota" | "settings-profile-quota-login" | "settings-profile-quota-expiry" => "profile:ws1/st1#cx"
@@ -639,7 +695,7 @@ fn fx_profile(id : String, name : String, kind : String, tone : String, check : 
 }
 
 ///|
-/// The made-up station's profiles (Studio's), for the chats' fixture's overview of it too: one made-up world.
+/// The made-up station's profiles (Willow's), for the chats' fixture's overview of it too: one made-up world.
 pub fn fixture_profiles() -> Array[Json] {
   fx_profiles()
 }
@@ -778,12 +834,12 @@ fn fx_profile_hosts() -> Array[Json] {
     ])
   }
   let members = [
-    member("st1", "Studio", "cc", "host", "Studio", "在此 station 登录，借给 MBA、Mini1、ccvm"),
-    member("st2", "MBA", "sh1", "user", "MBA", "向 Studio 借用"),
-    member("st3", "Mini1", "local", "own", "Mini1", "在此 station 单独登录"),
-    member("st3", "Mini1", "sh1", "user", "Mini1", "向 Studio 借用"),
-    member("st4", "ccvm", "local", "own", "ccvm", "在此 station 单独登录"),
-    member("st4", "ccvm", "sh1", "user", "ccvm", "向 Studio 借用"),
+    member("st1", "Willow", "cc", "host", "Willow", "在此 station 登录，借给 Maple、Cedar、Birch"),
+    member("st2", "Maple", "sh1", "user", "Maple", "向 Willow 借用"),
+    member("st3", "Cedar", "local", "own", "Cedar", "在此 station 单独登录"),
+    member("st3", "Cedar", "sh1", "user", "Cedar", "向 Willow 借用"),
+    member("st4", "Birch", "local", "own", "Birch", "在此 station 单独登录"),
+    member("st4", "Birch", "sh1", "user", "Birch", "向 Willow 借用"),
   ]
   if fx.profile_one_owner {
     return [members[0], members[1]]
@@ -805,8 +861,14 @@ fn fx_profile_places() -> Array[Json] {
       ("station", str(text(v, "station"))), ("stationId", str(text(v, "stationId"))),
       ("stationName", str(text(v, "stationName"))), ("profileId", str(if pending { "" } else { text(v, "profileId") })),
       ("online", Json::boolean(!offline)), ("usable", Json::boolean(!offline && !unavailable && !pending)),
-      ("sourceName", str(if unavailable || pending { "Studio" } else { "" })),
-      ("state", if pending { obj([("text", str("等待同步")), ("tone", str("neutral"))]) } else { Json::null() }),
+      ("sourceName", str(if unavailable || pending { "Willow" } else { "" })),
+      ("state", if pending && fx.profile_cut_off {
+        obj([("text", str("无法连接 still.fail cloud")), ("tone", str("amber"))])
+      } else if pending {
+        obj([("text", str("等待同步")), ("tone", str("neutral"))])
+      } else {
+        Json::null()
+      }),
     ])
   })
 }
@@ -1085,15 +1147,24 @@ fn fx_station(address : String) -> Json {
     obj([
       ("station", str(address)),
       ("id", str(id)),
-      ("name", str(renamed.unwrap_or("Studio"))),
+      ("name", str(renamed.unwrap_or("Willow"))),
       ("icon", str(fx.marks.get(id).unwrap_or("glyph:desktop"))),
-      ("summary", str(if fx.gpus { "AMD EPYC · 2 个 agent 在工作" } else { "Apple M2 Max · 2 个 agent 在工作" })),
+      ("summary", str(if fx.gpus { "AMD EPYC · 2 个 agent 在工作" } else { "Apple M1 Pro · 2 个 agent 在工作" })),
       ("face", str("working")),
-      ("line", str(if fx.gpus { "AMD EPYC · 64 GB · Linux" } else { "Apple M2 Max · 64 GB · macOS 26" })),
-      ("online", Json::boolean(true)),
+      ("line", str(if fx.gpus { "AMD EPYC · 32 GB · Linux" } else { "Apple M1 Pro · 32 GB · macOS 26" })),
+      ("online", Json::boolean(!fx.willow_away)),
       ("profileGroups", Json::array(fx_station_profile_groups(profiles))),
       ("profileStates", fx_station_profile_states(profiles)),
-      ("link", obj([("state", str("online"))])),
+      ("link", obj([("state", str(if fx.willow_away { "offline" } else { "online" }))])),
+      ("stateText", str(if fx.willow_away { "2 天前在线" } else { "" })),
+      (
+        "problems",
+        if fx.willow_away {
+          [obj([("key", str("away")), ("level", str("red")), ("text", str("离线：在该机器上打开 still.fail 即可重新连接"))])]
+        } else {
+          []
+        },
+      ),
       ("runtimes", []),
       // what its profiles have turned on (Claude 主账号's: Opus 5.5 and Sonnet 5, on claude)
       (
@@ -1106,7 +1177,7 @@ fn fx_station(address : String) -> Json {
       (
         "host",
         obj([
-          ("identity", str(if fx.gpus { "AMD EPYC · 64 GB · Linux" } else { "Apple M2 Max · 64 GB · macOS 26" })),
+          ("identity", str(if fx.gpus { "AMD EPYC · 32 GB · Linux" } else { "Apple M1 Pro · 32 GB · macOS 26" })),
           ("gpus", if fx.gpus {
             let cards : Array[Json] = [
               obj([("big", str("63")), ("unit", str("%")), ("left", Json::number(63.0)), ("level", str("ok")), ("title", str("GPU 1 空闲")), ("total", str("显存剩 20/24G")), ("model", str("NVIDIA GeForce RTX 4090"))]),
@@ -1122,15 +1193,15 @@ fn fx_station(address : String) -> Json {
             "meters",
             [
               meter("CPU", 72, "ok", "空闲 72%", "72", "%", "CPU 空闲", "负载 1.4"),
-              meter("内存", 18, "amber", "剩 11.5 G", "11.5", "GB", "内存剩", "共 64 GB"),
-              meter("磁盘", 41, "ok", "剩 380 G", "380", "GB", "磁盘剩", "共 926 GB"),
+              meter("内存", 18, "amber", "剩 5.8 G", "5.8", "GB", "内存剩", "共 32 GB"),
+              meter("磁盘", 42, "ok", "剩 420 G", "420", "GB", "磁盘剩", "共 1 TB"),
             ],
           ),
           (
             "details",
             [
-              obj([("label", str("主机名")), ("value", str("studio"))]),
-              obj([("label", str("芯片")), ("value", str("Apple M2 Max，12 核"))]),
+              obj([("label", str("主机名")), ("value", str("willow"))]),
+              obj([("label", str("芯片")), ("value", str("Apple M1 Pro，10 核"))]),
               obj([("label", str("已运行")), ("value", str("6 天 4 小时"))]),
               obj([("label", str("进程")), ("value", str("station 412 MB"))]),
             ],
@@ -1234,6 +1305,7 @@ fn fx_station(address : String) -> Json {
           ("network", obj([("congestion", str(fx.congestion))])),
           ("outflowGrants", Json::number(if fx.outflow { 2.0 } else { 0.0 })),
           ("outflowAnswers", Json::boolean(true)),
+          ("outflowTailcat", fx.outflow_link.unwrap_or(Json::null())),
           ("elevation", fx.elevation.unwrap_or(Json::null())),
           ("sharing", Json::boolean(true)),
           (
@@ -1309,7 +1381,7 @@ fn fx_station(address : String) -> Json {
     obj([
       ("station", str(address)),
       ("id", str(id)),
-      ("name", str(renamed.unwrap_or("MBA"))),
+      ("name", str(renamed.unwrap_or("Maple"))),
       ("icon", str(fx.marks.get(id).unwrap_or("glyph:laptop:teal"))),
       ("summary", str(if fx.mba_online { "Apple M3 · 空闲" } else { "离线 · 2 天前" })),
       ("face", str(if fx.mba_online { "idle" } else { "offline" })),
@@ -1464,7 +1536,7 @@ fn fx_usage_summary() -> Json {
         ("captions", [str(""), str("每列一周 · 最高 1.1 亿"), str("累计 · 共 18.3 亿")]),
       ]),
     ),
-    ("stations", named("各设备的工作量", "name", [("Studio", "12.6 亿 token · 69%"), ("MBA", "4.1 亿 token · 22%"), ("ccvm", "1.6 亿 token · 9%")])),
+    ("stations", named("各设备的工作量", "name", [("Willow", "12.6 亿 token · 69%"), ("Maple", "4.1 亿 token · 22%"), ("Birch", "1.6 亿 token · 9%")])),
     ("places", named("对话来自", "name", [("still.fail", "1,212 个对话"), ("Slack", "184 个对话"), ("飞书", "34 个对话")])),
     ("asOf", str("统计截至 10月2日")),
   ])
@@ -1519,8 +1591,8 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
   }
   let series = match split {
     "models" => [("claude-opus-5-5", "Opus 5.5"), ("gpt-6", "GPT-6"), ("", "其他")]
-    "profiles" => [("Studio/cc", "公司 Claude"), ("Studio/codex", "Codex 团队"), ("", "其他")]
-    "chats" => [("Studio/1", "整理发布清单"), ("Studio/4", "给设置页加一个深色模式开关"), ("", "其他")]
+    "profiles" => [("Willow/cc", "公司 Claude"), ("Willow/codex", "Codex 团队"), ("", "其他")]
+    "chats" => [("Willow/1", "整理发布清单"), ("Willow/4", "给设置页加一个深色模式开关"), ("", "其他")]
     _ => [("lin@example.com", "林"), ("ana@example.com", "Ana"), ("", "其他")]
   }
   let lists = [
@@ -1529,12 +1601,12 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
       "chats",
       "按对话",
       [
-        ("Studio/1", "整理发布清单", "林 · Opus 5.5 · Studio", "$31", 0.26),
-        ("Studio/4", "给设置页加一个深色模式开关", "Ana · GPT-6 · Studio", "$22", 0.19),
-        ("MBA/3", "夜里的构建又失败了", "林 · Opus 5.5 · MBA", "$15", 0.13),
+        ("Willow/1", "整理发布清单", "林 · Opus 5.5 · Willow", "$31", 0.26),
+        ("Willow/4", "给设置页加一个深色模式开关", "Ana · GPT-6 · Willow", "$22", 0.19),
+        ("Maple/3", "夜里的构建又失败了", "林 · Opus 5.5 · Maple", "$15", 0.13),
       ],
     ),
-    ("profiles", "按账号", [("Studio/cc", "公司 Claude", "Studio · 最多 Opus 5.5", "$84", 0.71), ("Studio/codex", "Codex 团队", "Studio · 最多 GPT-6", "$34", 0.29)]),
+    ("profiles", "按账号", [("Willow/cc", "公司 Claude", "Willow · 最多 Opus 5.5", "$84", 0.71), ("Willow/codex", "Codex 团队", "Willow · 最多 GPT-6", "$34", 0.29)]),
     ("models", "按模型", [("claude-opus-5-5", "Opus 5.5", "", "$84", 0.71), ("gpt-6", "GPT-6", "", "$28", 0.24), ("claude-haiku-5", "Haiku 5", "", "$6.10", 0.05)]),
   ]
   // (the day's name as the core says it: 10/5 for 2026-10-05)
@@ -1653,7 +1725,7 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
       "prices",
       [
         obj([
-          ("station", str("Studio")),
+          ("station", str("Willow")),
           ("note", str("每百万 token 的美元价格，取自服务商公开价格")),
           (
             "rows",
@@ -1663,7 +1735,7 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
             ],
           ),
         ]),
-        obj([("station", str("MBA")), ("note", str("station 离线，读不到它的价格表")), ("rows", [])]),
+        obj([("station", str("Maple")), ("note", str("station 离线，读不到它的价格表")), ("rows", [])]),
       ],
     ),
   ])
@@ -1735,7 +1807,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
   }
   let me : Json = obj([("sub", str("u1")), ("email", str("lin@example.com")), ("name", str("林")), ("role", str("owner"))])
   match name {
-    // Studio's programs granted its data (sfpages/station_outflow.mbt, docs/data-outflow.md): Comma's; and Comma for
+    // Willow's programs granted its data (sfpages/station_outflow.mbt, docs/data-outflow.md): Comma's; and Comma for
     // Teams asking for the whole workspace's, until answered
     "outflowGrants" if mode.has_prefix("settings") && text(Some(Json::object(params)), "station") == "ws1/st1" =>
       Some(
@@ -1783,7 +1855,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ),
         ]),
       )
-    // Studio's logins (station_logins.mbt): codex's under way, gh's done yesterday
+    // Willow's logins (station_logins.mbt): codex's under way, gh's done yesterday
     // (the settings' own pages only: a chat's login cards are the chats' fixture's)
     "machineLogins" if mode.has_prefix("settings") && text(Some(Json::object(params)), "station") == "ws1/st1" => {
       let gh_login = obj([
@@ -1831,7 +1903,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
       Some(
         obj([
           ("id", str("login-2")),
-          ("title", str("在 Studio 上登录 codex")),
+          ("title", str("在 Willow 上登录 codex")),
           ("state", str("browser")),
           ("step", str("open")),
           ("url", str("https://auth.openai.com/log-in")),
@@ -1850,7 +1922,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
             "members",
             fx_members(me),
           ),
-          ("stations", [obj([("id", str("st1")), ("name", str("Studio"))]), obj([("id", str("st2")), ("name", str("MBA"))])]),
+          ("stations", [obj([("id", str("st1")), ("name", str("Willow"))]), obj([("id", str("st2")), ("name", str("Maple"))])]),
           ("invitations", [obj([("id", str("i1")), ("role", str("member")), ("email", str("qin@example.com")), ("time", obj([("expires_at", stamp_of("", until="6 天后"))]))])]),
           ("added", [obj([("email", str("he@example.com")), ("role", str("member"))])]),
           ("relays", []),
@@ -1878,7 +1950,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
       if fx.none {
         Some([])
       } else {
-        // (settings-stations-motion: 3 comes, then MBA goes)
+        // (settings-stations-motion: 3 comes, then Maple goes)
         let all = [fx_station("ws1/st1"), fx_station("ws1/st2")]
         if fx.motion >= 1 {
           all.push(fx_station("ws1/st3"))
@@ -1913,6 +1985,26 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
               []
             },
           ),
+          // a device of lin's waiting on this one for the key to 林的库 (vault_prompts.mbt)
+          (
+            "asks",
+            if fx.key_ask {
+              [
+                obj([
+                  ("workspace", str("ws1")),
+                  ("workspaceName", str("星火工作室")),
+                  ("vault", str("v1")),
+                  ("vaultName", str("林的库")),
+                  ("device", str("d-new")),
+                  ("deviceText", str("Pixel 9")),
+                  ("at", Json::number(0.0)),
+                  ("atText", str("3 分钟前")),
+                ]),
+              ]
+            } else {
+              []
+            },
+          ),
         ]),
       )
     "screens" =>
@@ -1921,7 +2013,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           (
             "screens",
             [
-              obj([("id", str("desktop")), ("kind", str("desktop")), ("title", str("Studio 的屏幕")), ("width", Json::number(3024.0)), ("height", Json::number(1964.0)), ("line", str("3024 × 1964 · 无人在看")), ("link", str(""))]),
+              obj([("id", str("desktop")), ("kind", str("desktop")), ("title", str("Willow 的屏幕")), ("width", Json::number(3024.0)), ("height", Json::number(1964.0)), ("line", str("3024 × 1964 · 无人在看")), ("link", str(""))]),
               obj([("id", str("browser:t1")), ("kind", str("browser")), ("title", str("发布清单 - 文档")), ("width", Json::number(1280.0)), ("height", Json::number(800.0)), ("line", str("浏览器标签页 · 1280 × 800")), ("link", str(""))]),
             ],
           ),
@@ -1930,7 +2022,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("known", Json::boolean(true)),
         ]),
       )
-    // what still.fail uses of Studio's machine (the `resources` view): a chat's agent and the station
+    // what still.fail uses of Willow's machine (the `resources` view): a chat's agent and the station
     "resources" => Some(fx_resources())
     "adbShare" => Some(fx_adb_share())
     "joinable" =>
@@ -1964,7 +2056,21 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
       )
     "profileFlow" if fx.new_login => Some(fx_profile_flow_plan())
     "profileFlow" => Some(fx_profile_flow(hermes=mode == "settings-new-profile-hermes"))
-    "pick" if text(Some(Json::object(params)), "of").has_prefix("session:") => Some(fx_session_pick())
+    "pick" if text(Some(Json::object(params)), "of").has_prefix("session:") => {
+      let v = fx_session_pick()
+      if mode == "settings-run-runtime" {
+        match v {
+          Object(o) => {
+            o["runtimeFixed"] = Json::boolean(false)
+            o["runtimes"] = ["claude", "codex"]
+            Some(Json::object(o))
+          }
+          _ => Some(v)
+        }
+      } else {
+        Some(v)
+      }
+    }
     "connectFlow" if fx_connect_step.val != "team" && fx_connect_step.val != "app" =>
       Some(fx_feishu_flow(fx_connect_step.val))
     "connectFlow" =>
@@ -2057,13 +2163,13 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("pending", Json::boolean(false)),
         ]),
       )
-    // what the settings say of the workspace (the core's views/settings.ts): Studio's completion rule on
+    // what the settings say of the workspace (the core's views/settings.ts): Willow's completion rule on
     "settings" =>
       Some(
         obj([
           ("decisionsOn", Json::number(1.0)),
           ("decisionsText", str("1 台 station 已启用")),
-          // (Studio reviews, MBA is offline: nothing to say of the hint)
+          // (Willow reviews, Maple is offline: nothing to say of the hint)
           ("hintNoReview", Json::boolean(false)),
           ("hintReviewText", str("")),
         ]),
@@ -2126,7 +2232,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
             [
               obj([
                 ("station", str("ws1/st1")),
-                ("stationName", str("Studio")),
+                ("stationName", str("Willow")),
                 ("connect", fx_connect("k1", "星火助手", "online", "在线", "multi-session")),
                 (
                   "sessions",
@@ -2141,7 +2247,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
               ]),
               obj([
                 ("station", str("ws1/st1")),
-                ("stationName", str("Studio")),
+                ("stationName", str("Willow")),
                 ("connect", fx_connect("k2", "值班机器人", "error", "连接失败", "single-session")),
                 ("sessions", []),
                 ("candidates", []),
@@ -2153,7 +2259,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("wait", obj([("reading", Json::boolean(false)), ("failing", []), ("empty", Json::boolean(false))])),
         ]), obj([
           ("station", str("ws1/st1")),
-          ("stationName", str("Studio")),
+          ("stationName", str("Willow")),
           ("connect", fx_connect("k9", "发布助手", "online", "在线", "multi-session")),
           ("sessions", []),
           ("candidates", []),
@@ -2199,7 +2305,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                       ("appText", str("still.fail 桌面版")),
                       ("devices", [
                         obj([("id", str("d4")), ("kind", str("app")), ("label", str("still.fail 桌面版 · 林的 MacBook Pro")), ("signs", Json::boolean(true)), ("older", Json::boolean(false)), ("mine", Json::boolean(false)), ("renewSoon", Json::boolean(false)), ("recent", Json::boolean(false)), ("lastSeen", Json::number(1759990000.0)), ("removable", Json::boolean(true)), ("nameText", str("林的 MacBook Pro")), ("fullText", str("林的 MacBook Pro · still.fail 桌面版")), ("metaText", str("一天内使用过 · 受信任"))]),
-                        obj([("id", str("d6")), ("kind", str("app")), ("label", str("still.fail 桌面版 · Mac Studio")), ("signs", Json::boolean(true)), ("older", Json::boolean(false)), ("mine", Json::boolean(false)), ("renewSoon", Json::boolean(false)), ("recent", Json::boolean(false)), ("lastSeen", Json::number(1759700000.0)), ("removable", Json::boolean(true)), ("nameText", str("Mac Studio")), ("fullText", str("Mac Studio · still.fail 桌面版")), ("metaText", str("3 天前使用过 · 受信任"))]),
+                        obj([("id", str("d6")), ("kind", str("app")), ("label", str("still.fail 桌面版 · 示例工作站")), ("signs", Json::boolean(true)), ("older", Json::boolean(false)), ("mine", Json::boolean(false)), ("renewSoon", Json::boolean(false)), ("recent", Json::boolean(false)), ("lastSeen", Json::number(1759700000.0)), ("removable", Json::boolean(true)), ("nameText", str("示例工作站")), ("fullText", str("示例工作站 · still.fail 桌面版")), ("metaText", str("3 天前使用过 · 受信任"))]),
                       ]),
                     ]),
                     obj([
@@ -2242,8 +2348,8 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           (
             "stations",
             [
-              obj([("id", str("st1")), ("name", str("Studio")), ("online", Json::boolean(true)), ("protected", Json::boolean(true))]),
-              obj([("id", str("st2")), ("name", str("MBA")), ("online", Json::boolean(false)), ("protected", Json::boolean(false))]),
+              obj([("id", str("st1")), ("name", str("Willow")), ("online", Json::boolean(true)), ("protected", Json::boolean(true))]),
+              obj([("id", str("st2")), ("name", str("Maple")), ("online", Json::boolean(false)), ("protected", Json::boolean(false))]),
             ],
           ),
           ("renew", []),
@@ -2268,7 +2374,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                 ("mine", Json::boolean(true)),
                 ("members", []),
                 ("station", str("st1")),
-                ("stationName", str("Studio")),
+                ("stationName", str("Willow")),
                 ("items", Json::number(3.0)),
                 ("devices", Json::number(2.0)),
                 ("open", Json::boolean(false)),
@@ -2341,28 +2447,28 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("groupTitle", str(text(Some(p), "groupTitle"))),
           ("station", str("ws1/st1")),
           ("stationId", str("st1")),
-          ("stationName", str("Studio")),
+          ("stationName", str("Willow")),
           ("profile", p),
           ("title", str(if text(Some(p), "email") == "" { text(Some(p), "name") } else { text(Some(p), "email") })),
           ("shared", Json::boolean(false)),
           ("host", str("st1")),
-          ("hostName", str("Studio")),
+          ("hostName", str("Willow")),
           ("hostOnline", Json::boolean(true)),
           ("usable", Json::boolean(true)),
           ("state", state),
           ("look", Json::boolean(look)),
-          ("where", str(if fx.trouble == "quota-login" && text(pv, "id") == "cx" { "Studio" } else { "Studio 可用" })),
+          ("where", str(if fx.trouble == "quota-login" && text(pv, "id") == "cx" { "Willow" } else { "Willow 可用" })),
           (
             "stations",
             [
-              obj([("id", str("st1")), ("station", str("ws1/st1")), ("name", str("Studio")), ("online", Json::boolean(true)), ("allowed", Json::boolean(true))]),
-              obj([("id", str("st2")), ("station", str("ws1/st2")), ("name", str("MBA")), ("online", Json::boolean(false)), ("allowed", Json::boolean(true))]),
+              obj([("id", str("st1")), ("station", str("ws1/st1")), ("name", str("Willow")), ("online", Json::boolean(true)), ("allowed", Json::boolean(true))]),
+              obj([("id", str("st2")), ("station", str("ws1/st2")), ("name", str("Maple")), ("online", Json::boolean(false)), ("allowed", Json::boolean(true))]),
             ],
           ),
           (
             "members",
             if fx.profile_hosts && text(pv, "id") == "cc" { Json::array(fx_profile_hosts().filter(fn(m) { !fx.profile_pending || text(Some(m), "stationId") != "st2" })) } else { [
-              obj([("station", str("ws1/st1")), ("stationId", str("st1")), ("stationName", str("Studio")), ("online", Json::boolean(true)), ("profileId", str(text(Some(p), "id"))), ("role", str("host")), ("about", str("")), ("usable", Json::boolean(true)), ("checkText", str("可用")), ("checkTone", str("green")), ("usedBy", Json::number(1.0))]),
+              obj([("station", str("ws1/st1")), ("stationId", str("st1")), ("stationName", str("Willow")), ("online", Json::boolean(true)), ("profileId", str(text(Some(p), "id"))), ("role", str("host")), ("about", str("")), ("usable", Json::boolean(true)), ("checkText", str("可用")), ("checkTone", str("green")), ("usedBy", Json::number(1.0))]),
             ] },
           ),
           (
@@ -2370,7 +2476,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
             if fx.profile_hosts && text(pv, "id") == "cc" {
               Json::array(fx_profile_places())
             } else {
-              [obj([("station", str("ws1/st1")), ("stationId", str("st1")), ("stationName", str("Studio")), ("profileId", str(text(pv, "id"))), ("online", Json::boolean(true)), ("usable", Json::boolean(true)), ("sourceName", str("")), ("state", Json::null())])]
+              [obj([("station", str("ws1/st1")), ("stationId", str("st1")), ("stationName", str("Willow")), ("profileId", str(text(pv, "id"))), ("online", Json::boolean(true)), ("usable", Json::boolean(true)), ("sourceName", str("")), ("state", Json::null())])]
             },
           ),
           ("editable", Json::boolean(true)),
@@ -2444,7 +2550,11 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
         ]),
       )
     }
-    "doing" => Some(obj([("doing", [])]))
+    "doing" => Some(obj([("doing", if fx.protecting {
+      [obj([("call", str("lock.joinStation")), ("stage", str("running")), ("params", obj([("workspace", str("ws1")), ("station", str("st2"))]))])]
+    } else {
+      []
+    })]))
     "lockDraft" =>
       Some(
         obj([
@@ -2470,8 +2580,8 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           (
             "stations",
             [
-              obj([("id", str("st1")), ("name", str("Studio")), ("version", str("0.1.4600")), ("state", str("ok")), ("on", Json::boolean(true)), ("fixed", Json::boolean(false))]),
-              obj([("id", str("st2")), ("name", str("MBA")), ("state", str("offline")), ("on", Json::boolean(false)), ("fixed", Json::boolean(true)), ("stateText", str("离线 · 上线后可在此保护"))]),
+              obj([("id", str("st1")), ("name", str("Willow")), ("version", str("0.1.4600")), ("state", str("ok")), ("on", Json::boolean(true)), ("fixed", Json::boolean(false))]),
+              obj([("id", str("st2")), ("name", str("Maple")), ("state", str("offline")), ("on", Json::boolean(false)), ("fixed", Json::boolean(true)), ("stateText", str("离线 · 上线后可在此保护"))]),
             ],
           ),
         ]),
@@ -2511,7 +2621,13 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
           ]),
         ),
       )
-    // an admin's answer to the program asking for Studio's data
+    // an admin turning Willow's Tailcat link on or off
+    "outflow.tailcat" => {
+      fx.outflow_link_set = Some(flag(Some(params), "on"))
+      fx_changed()
+      Some(Ok(obj([])))
+    }
+    // an admin's answer to the program asking for Willow's data
     "outflow.answer" => {
       fx.outflow_answer = Some(params)
       fx_changed()
@@ -2523,6 +2639,15 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       fx_changed()
       Some(Ok(obj([])))
     }
+    // the device waiting for a key given it (the vault's key unsealed here), or its prompt put away: no longer shown
+    "vault.addDevice" | "vault.hidePrompt" => {
+      fx.key_ask = false
+      fx.key_ask_ended = if name == "vault.addDevice" { "give" } else { "hide" }
+      fx_changed()
+      Some(Ok(obj([("added", Json::number(1.0))])))
+    }
+    // this device asking for the keys it lacks: its other devices told
+    "vault.ask" => Some(Ok(obj([("asked", Json::number(1.0))])))
     // the new device turned away, or its prompt closed: no longer shown
     "lockPrompt.deny" | "lockPrompt.hide" => {
       fx.pairing = false
@@ -2972,7 +3097,7 @@ fn fx_session_pick() -> Json {
   let m = fn(id : String, name : String, family : String) {
     obj([("model", str(id)), ("name", str(name)), ("family", str(family)), ("maker", obj([("id", str("anthropic"))]))])
   }
-  // (MBUI_FIXTURE=settings-run-models: many, by series, one borrowed from MBA)
+  // (MBUI_FIXTURE=settings-run-models: many, by series, one borrowed from Maple)
   let options : Json = if fx_many_models.val {
     [
       obj([("model", str("claude-opus-5-5")), ("name", str("Opus 5.5")), ("family", str("Opus")), ("maker", obj([("id", str("anthropic"))]))]),
@@ -2989,8 +3114,8 @@ fn fx_session_pick() -> Json {
         ("family", str("Fable")),
         ("maker", obj([("id", str("anthropic"))])),
         ("availability", str("borrowable")),
-        ("fromStation", obj([("name", str("MBA")), ("icon", str("glyph:laptop:teal"))])),
-        ("fromText", str("借自 MBA")),
+        ("fromStation", obj([("name", str("Maple")), ("icon", str("glyph:laptop:teal"))])),
+        ("fromText", str("借自 Maple")),
       ]),
     ]
   } else {
@@ -3134,7 +3259,7 @@ fn fx_use(cpu : Double, memory : Double, net : Double, disk : Double, texts : (S
 }
 
 ///|
-/// What still.fail uses of Studio's machine now (ResourcesView), as a busy Mac says it: its four totals with what is
+/// What still.fail uses of Willow's machine now (ResourcesView), as a busy Mac says it: its four totals with what is
 /// under each (the network and the disk both read), two chats' agents (one titled at length) and the station, each with
 /// its processes.
 fn fx_resources() -> Json {
@@ -3156,8 +3281,8 @@ fn fx_resources() -> Json {
     (
       "tiles",
       [
-        tile("cpu", "CPU", "20.5%", "占 12 核的 2%", [12.0, 18.0, 15.0, 22.0, 20.5]),
-        tile("memory", "内存", "508 MB", "占 64 GB 的 1%", [480.0, 495.0, 500.0, 504.0, 508.0]),
+        tile("cpu", "CPU", "20.5%", "占 10 核的 2%", [12.0, 18.0, 15.0, 22.0, 20.5]),
+        tile("memory", "内存", "508 MB", "占 32 GB 的 2%", [480.0, 495.0, 500.0, 504.0, 508.0]),
         tile("disk", "磁盘", "↓ 2.9 MB/s", "↑ 13 KB/s", [9.0, 1.0, 1.2, 0.9, 2.9]),
         tile("net", "网络", "↓ 1.6 KB/s", "↑ 410 B/s", [0.8, 2.4, 1.1, 1.9, 1.6]),
       ],
@@ -3226,7 +3351,7 @@ fn fx_resources() -> Json {
 let fx_adb : Ref[String] = Ref("")
 
 ///|
-/// The core's `adbShare` for fx_adb: lent to Studio (ws1/st1) and how its adb holds the phone, the ports the app found.
+/// The core's `adbShare` for fx_adb: lent to Willow (ws1/st1) and how its adb holds the phone, the ports the app found.
 fn fx_adb_share() -> Json {
   let lent = fn(adb : String, fields : Array[(String, Json)]) {
     obj(
@@ -3252,7 +3377,7 @@ fn fx_adb_share() -> Json {
       ])
     // settings' 共享调试, its switch off: nothing granted
     "idle" => obj([("sharing", Json::boolean(false)), ("phase", str("off")), ("on", Json::boolean(false)), ("tunnels", Json::number(0.0))])
-    // lent for chats' grants to two stations: Studio's adb holds the phone, the other's waits to be paired with it (as
+    // lent for chats' grants to two stations: Willow's adb holds the phone, the other's waits to be paired with it (as
     // a core from before it said the one it names at its top: the first)
     "second" =>
       lent("connected", [
@@ -3281,7 +3406,7 @@ fn fx_adb_share() -> Json {
           obj([("station", str("ws1/st1")), ("id", str("p-long-3")), ("session", str("s-c3")), ("chatTitle", str("检查登录页面")), ("reason", str("检查登录页面")), ("status", str("granted")), ("scope", str("hour"))]),
         ]),
       ])
-    // settings' 共享调试, its switch on: two chats granted it, one asking; lent to both their stations, Studio's adb
+    // settings' 共享调试, its switch on: two chats granted it, one asking; lent to both their stations, Willow's adb
     // holding the phone and the other's waiting to be paired
     "chats" | "chats-off" =>
       obj([
@@ -3312,7 +3437,7 @@ fn fx_adb_share() -> Json {
 }
 
 ///|
-/// MBUI_FIXTURE=newchat-machine: the sessions Studio's machine kept (as the core gives them: the parts of each line
+/// MBUI_FIXTURE=newchat-machine: the sessions Willow's machine kept (as the core gives them: the parts of each line
 /// apart too), their list open over the new chat: two runtimes, a few folders, still.fail's own among them, one of them
 /// already going on in a chat.
 pub fn fixture_machine_sessions(core : Core) -> Unit {
@@ -3345,5 +3470,5 @@ pub fn fixture_machine_sessions(core : Core) -> Unit {
     s("m8", "claude", "Review the onboarding copy", "~/Documents/GitHub/still.fail", "星期二", "18:09", ""),
     s("m9", "codex", "把发票 PDF 按月份归档", "~/Documents/Codex/ledger", "10月20日", "09:31", ""),
   ]
-  open_machine_sessions(core, "ws1/st1", "Studio")
+  open_machine_sessions(core, "ws1/st1", "Willow")
 }

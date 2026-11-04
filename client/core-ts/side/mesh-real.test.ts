@@ -602,10 +602,7 @@ test("a_link_moves_to_the_relay_its_requests_go_quicker_through_far_from_the_dev
   rb.kill();
 });
 
-/// Judged by what it chooses, again: b answers sooner than a but brings a reply slowly (the device 40 ms away each way
-/// on a 256 KiB/s line, as Hong Kong's back to the mainland; 40 against a's 100 clears MOVE_GAIN by more than a busy
-/// machine's jitter, which 60 did not: on the Mac Studio at load 26, 3 runs in 16 stayed on a, at 136 ms against 207). Its speed not known, the link goes there; a large reply
-/// through it shows how slow it is, and the link goes back to a, where the same reply comes sooner.
+/// A faster initial response can lead to a slower large transfer. Once measured, the link returns to the faster path.
 test("a_link_leaves_a_relay_found_slow_for_one_that_brings_replies_sooner", { skip: noRelay }, async () => {
   const [[a, ra], [b, rb]] = await Promise.all([relay(), relay()]);
   const station = await Station.on(b, await slowed(a, 100, 1));

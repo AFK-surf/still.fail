@@ -8,7 +8,10 @@
 // as fetched). A face's files stay once fetched, chosen or not (the `fonts` topic's `kept`: the faces whole here), so
 // choosing one again asks nothing of the network. A face's preview
 // (`fonts.preview {id}`: the fonts page's characters alone, tens of KB) is fetched once and kept whatever is chosen, as is
-// a file of the share card's looks the app does not carry (`fonts.share {file}`: a look's own face, web/public/share-looks/).
+// a file of the share card's looks the app does not carry (`fonts.share {file}`: a look's picture or their face,
+// web/public/share-looks/), kept only once it is the file the site's table says (share-looks.ts: a site that has not
+// got it answers its page), how far each being fetched is on the topic (`share`), each one's failure until it is asked
+// again (`shareFailed`).
 import { Effect } from "effect";
 import { CoreError } from "./error.ts";
 import * as fonts from "./fonts.ts";
@@ -16,14 +19,17 @@ import type { Host } from "./host.ts";
 import { t } from "./i18n.ts";
 import type { Owner } from "./core/routing.ts";
 import { Beside, type Topic } from "./protocol.ts";
+import { SHARE_LOOKS_FILES } from "./share-looks.ts";
 import type { Store, Value } from "./store.ts";
-import { isObject, parseJson, toJsonBytes } from "./util.ts";
+import { hex, isObject, parseJson, sha256, toJsonBytes } from "./util.ts";
 
 /// What is kept, by file's hash: gzipped as fetched, or unzipped as the app checked it.
 const INDEX = "fonts/kept";
 const fileKey = (sha256: string) => `fonts/file/${sha256}`;
 const previewKey = (id: string, url: string) => `fonts/preview/${id}/${url.slice(url.lastIndexOf("/") + 1)}`;
-const shareKey = (file: string) => `fonts/share/${file}`;
+const shareKey = (file: string) => `share-looks/${file}`;
+/// Where a share file was kept before it was checked (whatever the site answered: its page, where it had not got it).
+const uncheckedShareKey = (file: string) => `fonts/share/${file}`;
 
 type Kept = Record<string, "gz" | "ttf">;
 
@@ -37,6 +43,10 @@ export class FontFiles implements Owner {
   /// A face whose fetch failed: why.
   readonly #failed = new Map<string, string>();
   #kept: Kept | null = null;
+  /// A share file being fetched: how many of its bytes are here.
+  readonly #sharing = new Map<string, number>();
+  /// A share file whose fetch failed: why.
+  readonly #shareFailed = new Map<string, string>();
 
   constructor(host: Host, store: Store) {
     this.#host = host;
@@ -55,7 +65,16 @@ export class FontFiles implements Owner {
   compute(): Value {
     const kept = this.#kept;
     const whole = kept === null ? [] : fonts.ids().filter((id) => fonts.faceOf(id)!.files.every((f) => kept[f.sha256] !== undefined));
-    return { ok: { fetching: Object.fromEntries(this.#fetching), failed: Object.fromEntries(this.#failed), kept: whole } };
+    const share = Object.fromEntries([...this.#sharing].map(([file, got]) => [file, { got, bytes: SHARE_LOOKS_FILES[file]!.bytes }]));
+    return {
+      ok: {
+        fetching: Object.fromEntries(this.#fetching),
+        failed: Object.fromEntries(this.#failed),
+        kept: whole,
+        share,
+        shareFailed: Object.fromEntries(this.#shareFailed),
+      },
+    };
   }
 
   #changed(): void {
@@ -189,13 +208,50 @@ export class FontFiles implements Owner {
     });
   }
 
-  /// A file of the share card's looks (`<drawing>/<name>`, fonts.shareLooksFile): kept, else fetched and kept (a
-  /// drawing's files never change: one drawn anew goes under the next number).
+  /// A file of the share card's looks (`<drawing>/<name>`, fonts.shareLooksFile, one of share-looks.ts'): kept, else
+  /// fetched in parts (how far said on the topic), checked against its size and hash and kept (a drawing's files never
+  /// change: one drawn anew goes under the next number). Failed: said on the topic too, until it is asked again.
   share(file: string): Effect.Effect<Beside, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      const want = SHARE_LOOKS_FILES[file];
       const url = fonts.shareLooksFile(file);
-      if (url === null) return yield* Effect.fail(CoreError.invalid(t("core-misc.params.invalid", { error: `file ${file}` })));
-      return yield* this.#keptOrFetched(shareKey(file), url);
+      if (want === undefined || url === null) return yield* Effect.fail(CoreError.invalid(t("core-misc.params.invalid", { error: `file ${file}` })));
+      const kept = yield* Effect.orElseSucceed(this.#host.storageGet(shareKey(file)), () => null);
+      if (kept !== null) return new Beside({}, kept);
+      // (one kept before files were checked: perhaps the site's page)
+      yield* Effect.ignore(this.#host.storageDelete(uncheckedShareKey(file)));
+      this.#sharing.set(file, 0);
+      this.#shareFailed.delete(file);
+      this.#changed();
+      const got = yield* Effect.result(
+        Effect.scoped(
+          Effect.gen({ self: this }, function* () {
+            const r = yield* Effect.mapError(this.#host.fetchStream({ method: "GET", url, headers: [], body: null }), (e) => CoreError.plainly("fonts", e));
+            if (r.status !== 200) return yield* Effect.fail(new CoreError("fonts", t("android-misc.updates.httpStatus", { status: r.status })));
+            const whole = new Uint8Array(want.bytes);
+            let size = 0;
+            while (true) {
+              const part = yield* Effect.mapError(r.body.take, (e) => CoreError.plainly("fonts", e));
+              if (part === null) break;
+              if (size + part.length > want.bytes) return yield* Effect.fail(new CoreError("fonts", t("core-misc.shareLooks.notTheFile")));
+              whole.set(part, size);
+              size += part.length;
+              // said each percent, not each part
+              const before = Math.floor(((this.#sharing.get(file) ?? 0) * 100) / want.bytes);
+              this.#sharing.set(file, size);
+              if (Math.floor((size * 100) / want.bytes) !== before) this.#changed();
+            }
+            if (size !== want.bytes || hex(sha256(whole)) !== want.sha256) return yield* Effect.fail(new CoreError("fonts", t("core-misc.shareLooks.notTheFile")));
+            yield* Effect.ignore(this.#host.storageSet(shareKey(file), whole), { log: "Unhandled", message: "share file kept" });
+            return whole;
+          }),
+        ),
+      );
+      this.#sharing.delete(file);
+      if (got._tag === "Failure") this.#shareFailed.set(file, got.failure.message);
+      this.#changed();
+      if (got._tag === "Failure") return yield* Effect.fail(got.failure);
+      return new Beside({}, got.success);
     });
   }
 

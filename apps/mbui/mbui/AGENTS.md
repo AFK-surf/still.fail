@@ -39,7 +39,10 @@ yet and you can add one, add it.
   native on any system: CI runs the native tests on Linux. detlint's `host-import` holds it.
 - A new host call: a method of `Host` in `src/hostapi/host.mbt` (its default is what a host with nothing for it
   answers) and its wrapper there, the platform's in `src/host/native_host.mbt` over the function each target has, and
-  the fake's in `src/ui/fake_host.mbt` where a test needs another answer than the default.
+  the fake's in `src/ui/fake_host.mbt` where a test needs another answer than the default. Its `extern "C"`
+  declaration's Wasm side (`x_wasm.mbt` beside `x_native.mbt`, for an app run in Wasm by the native shell,
+  `src/host/wasm_shell.c`) is written by `tools/wasmhost`: still.fail's `scripts/wasm-app.sh build` writes it,
+  `check` says where it is not what the declarations make.
 
 ## There are no flaky failures
 
@@ -54,9 +57,11 @@ yet and you can add one, add it.
 
 > 删掉所有你妈的 py，怎么这么喜欢 py
 
-- A build, CI or check tool is a MoonBit program (native, in `tools/`, run through a script that builds it when it is
-  not built: `scripts/mbc`), or shell when it only runs other programs. No new Python; a Python script that needs a
-  change is rewritten instead (those left are going one by one).
+- A build, CI or check tool is a MoonBit program (in `tools/`, run through a script that builds it when it is not
+  built: `scripts/chk`), or shell when it only runs other programs. In development it is built for wasm-gc and run by
+  `scripts/wasmrun.mjs` in Node, no C compiled (the user, 2026-11-03); in CI natively (`scripts/tooltarget.sh`). What
+  it asks of the system goes through `tools/sys` (sys.c on native, wasmrun's "tsys" on Wasm). No new Python; a Python
+  script that needs a change is rewritten instead (those left are going one by one).
 
 ## Before a PR
 

@@ -57,13 +57,11 @@ pub fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
     // haptics, all of them (on unless turned off: @ui.set_haptics, app_frame.mbt)
     fn() {
       let title = @sf.t("web-pages.appearance.haptics.title")
-      @sf.setting(c, title, note=@sf.t("web-pages.appearance.haptics.description"), fn() {
-        let on = @settings.pref(core, "haptics") != "off"
-        let now = @sf.switch(c, "appearance/haptics", on, label=title, small=true)
-        if now != on {
-          c.tell("appearance/haptics", fn() { @settings.set_pref(core, "haptics", if now { "" } else { "off" }) })
-        }
-      })
+      let on = @settings.pref(core, "haptics") != "off"
+      let now = @sf.setting_switch(c, "appearance/haptics", title, on, note=@sf.t("web-pages.appearance.haptics.description"))
+      if now != on {
+        c.tell("appearance/haptics", fn() { @settings.set_pref(core, "haptics", if now { "" } else { "off" }) })
+      }
     },
     fn() {
       @sf.setting(c, @sf.t("common.language"), note=@sf.t("web-pages.appearance.language.description"), fn() {

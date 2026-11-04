@@ -9,12 +9,12 @@ F='^Warning\|^ *│\|^ *╭\|^ *╰\|^─\|^ *[0-9]* │'
 code=0
 for t in native; do
   echo "== effect, $t"
-  moon_test_native -p mbui/effecttest 2>&1 | grep -v "$F" | tail -${LINES_OUT:-30}
+  moon_tests -p mbui/effecttest 2>&1 | grep -v "$F" | tail -${LINES_OUT:-30}
   [ ${PIPESTATUS[0]} = 0 ] || code=1
 done
 echo "== the window's runtime and the demo, native"
-moon_test_native src/ui/fx_test.mbt 2>&1 | grep -v "$F" | tail -${LINES_OUT:-30}
+moon_tests src/ui/fx_test.mbt 2>&1 | grep -v "$F" | tail -${LINES_OUT:-30}
 [ ${PIPESTATUS[0]} = 0 ] || code=1
-moon_test_native -p mbui/effectdemo 2>&1 | grep -v "$F" | tail -${LINES_OUT:-30}
+moon_tests -p mbui/effectdemo 2>&1 | grep -v "$F" | tail -${LINES_OUT:-30}
 [ ${PIPESTATUS[0]} = 0 ] || code=1
 exit $code

@@ -56,7 +56,7 @@
    }
   ],
   "mesh": {
-   "name": "Studio",
+   "name": "Willow",
    "origin": "https://app.still.fail",
    "state": "running",
    "station": "5f1c0b7d2a9e4c83b6d1f0a2e7c94b58d3a61f0e9c2b7d4a8e5f1c3b9a0d6e2f",
@@ -283,12 +283,12 @@
   "emberRssBytes": 39845888,
   "emberText": "still.fail 38 MB",
   "facts": [
-   "studio",
+   "willow",
    "macOS 26.6.2",
    "arm64 · 16 核",
    "已运行 14 天"
   ],
-  "hostname": "studio",
+  "hostname": "willow",
   "line": "macOS 26.6.2 · 16 核 · 64 GB · 已运行 14 天",
   "load": 3.1,
   "memory": {
@@ -325,7 +325,7 @@
   "uptimeSec": 1209600,
   "identity": "Apple M4 Max · 64 GB · macOS 26.6.2",
   "details": [
-   { "label": "主机名", "value": "studio" },
+   { "label": "主机名", "value": "willow" },
    { "label": "芯片", "value": "Apple M4 Max · 16 核 · arm64" },
    { "label": "已运行", "value": "14 天 0 小时" },
    { "label": "still.fail", "value": "进程占用 38 MB" }
@@ -345,12 +345,12 @@
    "emberRssBytes": 39845888,
    "emberText": "still.fail 38 MB",
    "facts": [
-    "studio",
+    "willow",
     "macOS 26.6.2",
     "arm64 · 16 核",
     "已运行 14 天"
    ],
-   "hostname": "studio",
+   "hostname": "willow",
    "line": "macOS 26.6.2 · 16 核 · 64 GB · 已运行 14 天",
    "load": 3.1,
    "memory": {
@@ -387,7 +387,7 @@
    "uptimeSec": 1209600,
    "identity": "Apple M4 Max · 64 GB · macOS 26.6.2",
    "details": [
-    { "label": "主机名", "value": "studio" },
+    { "label": "主机名", "value": "willow" },
     { "label": "芯片", "value": "Apple M4 Max · 16 核 · arm64" },
     { "label": "已运行", "value": "14 天 0 小时" },
     { "label": "still.fail", "value": "进程占用 38 MB" }
@@ -517,7 +517,7 @@
     ]
    }
   ],
-  "name": "Studio",
+  "name": "Willow",
   "online": true,
   "overview": {
    "connects": [],
@@ -576,7 +576,7 @@
     }
    ],
    "mesh": {
-    "name": "Studio",
+    "name": "Willow",
     "origin": "https://app.still.fail",
     "state": "running",
     "station": "5f1c0b7d2a9e4c83b6d1f0a2e7c94b58d3a61f0e9c2b7d4a8e5f1c3b9a0d6e2f",

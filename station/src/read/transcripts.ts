@@ -14,8 +14,9 @@ import { join } from "node:path";
 import { threadId } from "node:worker_threads";
 import { zstdDecompressSync } from "node:zlib";
 import type { RuntimeKind } from "../agents/runtime.ts";
+import { log } from "../ops/log.ts";
 import { readSegments } from "./packed.ts";
-import { type Mark, type TailState, TranscriptTail, recordOf } from "./tail.ts";
+import { type Mark, type TailState, type TranscriptRef, TranscriptTail, recordOf } from "./tail.ts";
 import { READING, type ReadState, type TimelineEntry, brief, storage, timelineOf, utf8 } from "./transcript.ts";
 
 /// The transcripts whose reading is kept in memory, the most recently read last (a reader's heap is small: one's reading
@@ -28,8 +29,8 @@ export type Marked = { reading: number; state: TailState; marks: Mark[] };
 const kept = new Map<string, Marked>();
 
 /// How far a transcript's reading may go on past what is kept of it on disk: a reader starting again (every one at each
-/// start of the station, some 30 a day on ccvm) reads on from there, each line parsed again. Written down at each mark
-/// alone, a reading was up to MARK_BYTES behind: 27 MB over the transcripts written to in the last hours on ccvm
+/// start of the station, some 30 a day on a station) reads on from there, each line parsed again. Written down at each mark
+/// alone, a reading was up to MARK_BYTES behind: 27 MB over the transcripts written to in the last hours on a station
 /// (2026-11-02), read again after every update, the first reads of each session's history taking 3 to 7 s.
 const KEPT_BYTES = 256 << 10;
 
@@ -54,20 +55,32 @@ export function forgetMarks(dir: string, paths: string[]): void {
 /// A transcript's reading, read on to where it is written now: from what is kept, else from disk, else from its start.
 /// `dir`: where readings are kept on disk (null: nowhere, as in tests).
 function markedOf(runtime: RuntimeKind, path: string, dir: string | null): Marked {
+  // What a slow one read, and from where: 2 to 6 s for a chat opened on a station (2026-11-03), unsaid of which.
+  const started = performance.now();
   let had = kept.get(path) ?? null;
+  const from = had !== null ? "memory" : "disk";
   kept.delete(path);
   if (had === null && dir !== null) {
     try {
       const v = JSON.parse(readFileSync(fileOf(dir, path), "utf8")) as Marked;
-      if (v.reading === READING && v.state.path === path) {
+      if (v.reading === READING && v.state.path === path && (v.state.runtime ?? runtime) === runtime) {
         had = v;
         onDisk.set(path, v.state.offset);
       }
     } catch {}
   }
+  if (had !== null && (had.state.runtime ?? runtime) !== runtime) had = null;
   const tail = had === null ? new TranscriptTail(runtime, path, null, false, true) : TranscriptTail.from(runtime, had.state, had.marks);
+  const marked = performance.now();
   tail.read();
   const now: Marked = { reading: READING, state: tail.snapshot(), marks: tail.marks };
+  const ms = Math.round(performance.now() - started);
+  if (ms >= 1_000) {
+    log.warn("readers", "a transcript's reading went slowly", {
+      ms, markedMs: Math.round(marked - started), from: had === null ? "start" : from, bytes: now.state.offset - (had?.state.offset ?? 0),
+      entries: now.state.count - (had?.state.count ?? 0), anew: tail.anew, packed: now.state.packedStamp !== null, path,
+    });
+  }
   kept.set(path, now);
   if (kept.size > KEPT) kept.delete(kept.keys().next().value!);
   // Written down when there is a mark more (or it was written anew, or put away or back), or it read on KEPT_BYTES past
@@ -90,9 +103,9 @@ function markedOf(runtime: RuntimeKind, path: string, dir: string | null): Marke
 
 /// A session's transcripts read as one (those of the runtime sessions it ran in before first): each one's reading, read
 /// on to where it is written now.
-export function chainOf(runtime: RuntimeKind, paths: string[], dir: string | null): Marked[] {
-  if (unpacked !== null && !paths.includes(unpacked.path)) unpacked = null;
-  return paths.map((path) => markedOf(runtime, path, dir));
+export function chainOf(runtime: RuntimeKind, paths: TranscriptRef[], dir: string | null): Marked[] {
+  if (unpacked !== null && !paths.some((ref) => (typeof ref === "string" ? ref : ref.path) === unpacked!.path)) unpacked = null;
+  return paths.map((ref) => typeof ref === "string" ? markedOf(runtime, ref, dir) : markedOf(ref.runtime, ref.path, dir));
 }
 
 /// How many entries a chain of transcripts has.
@@ -100,7 +113,7 @@ export const lengthOf = (chain: Marked[]): number => chain.reduce((n, m) => n + 
 
 /// Where the reading of a chain of transcripts stands now (read/tail.ts `snapshot`): what the live view of a session
 /// goes on from on the main thread, which then reads none of what came before (sessions/live.ts).
-export function stateOf(runtime: RuntimeKind, paths: string[], dir: string | null): TailState[] {
+export function stateOf(runtime: RuntimeKind, paths: TranscriptRef[], dir: string | null): TailState[] {
   return chainOf(runtime, paths, dir).map((m) => m.state);
 }
 
@@ -116,7 +129,7 @@ export function entriesOf(runtime: RuntimeKind, chain: Marked[], from: number, t
   for (const m of chain) {
     const [a, b] = [Math.max(from, first), Math.min(to, first + m.state.count)];
     if (a < b) {
-      const got = readBetween(runtime, m, a - first, b - first, read);
+      const got = readBetween(m.state.runtime ?? runtime, m, a - first, b - first, read);
       for (const e of got) entries.push(inBrief ? brief(e) : e);
       if (got.length < b - a) break;
     }

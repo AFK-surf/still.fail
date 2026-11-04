@@ -37,7 +37,7 @@ fn chat_open_tester(slow : Ref[Bool], waiting : Ref[Bool]) -> @ui.Tester {
     },
     leave: fn(name, params) { asked.remove(key(name, params)) },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(first_page_ms + @ui.move_most_ms)
   slow.val = true
   t
@@ -72,7 +72,7 @@ fn chat_prefetch_tester(asked : Array[String], left : Array[String]) -> @ui.Test
       (base.leave)(name, params)
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(first_page_ms + @ui.move_most_ms)
   asked.clear()
   left.clear()
@@ -115,7 +115,7 @@ test "a chat whose view the core reads slower than LOCAL_MS slides in with its m
   let waiting = Ref(false)
   let t = chat_open_tester(slow, waiting)
   assert_true(!composer_shown(t), msg="Home")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.frame()
   // the core still reading it, three times LOCAL_MS: Home as it was, nothing slid in
   t.run_for(@sf.local_ms * 3.0)
@@ -134,7 +134,7 @@ test "a chat the core says waits on a station slides in at once, its messages to
   let slow = Ref(false)
   let waiting = Ref(true)
   let t = chat_open_tester(slow, waiting)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.frame()
   t.frame()
   t.run_for(@ui.move_most_ms)
@@ -147,7 +147,7 @@ test "a chat whose view does not come slides in once it has waited the most a pa
   let slow = Ref(false)
   let waiting = Ref(false)
   let t = chat_open_tester(slow, waiting)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.frame()
   t.run_for(page_local_ms / 2.0)
   assert_true(!composer_shown(t), msg="still waiting")

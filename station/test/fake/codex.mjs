@@ -13,6 +13,7 @@
 // FAKE_DUMP: its argv and env are appended there as a JSON line, and every line of stdin to FAKE_DUMP.stdin. The
 // version it says it is (`--version`, its userAgent) is FAKE_DUMP.version's when there is one, else 0.
 import fs from "node:fs";
+import { join } from "node:path";
 import readline from "node:readline";
 
 const dump = process.env.FAKE_DUMP;
@@ -52,7 +53,8 @@ function thread(id) {
 /// Loads thread `id` with `config`'s MCP url, unless it is loaded.
 function load(id, config) {
   const t = thread(id);
-  t.mcp ??= String(config?.["mcp_servers.stillfail.url"] ?? "").includes(":1/") ? "failed" : "connected";
+  const url = config?.["mcp_servers.stillfail.url"];
+  t.mcp ??= process.env.FAKE_MCP_UNAVOIDABLE === "1" ? "connected" : config?.mcp_servers?.configured?.enabled === false ? "disabled" : process.env.FAKE_MCP_CONFIGURED === "1" || process.env.FAKE_MCP_PROJECT === "1" ? "connected" : typeof url === "string" ? (url.includes(":1/") ? "failed" : "connected") : null;
 }
 
 /// A reply of `texts`, `gap` ms apart; `before(i)`, if given, waited for before the i-th (and before its end, at i =
@@ -155,11 +157,17 @@ function handle(msg) {
   if (method === "thread/start") {
     const threadId = `th-${++n}`;
     load(threadId, params.config);
-    return reply({ thread: { id: threadId } });
+    const path = process.env.FAKE_ROLLOUT ? join(process.env.CODEX_HOME, "sessions", "2026", "11", "03", `rollout-${threadId}.jsonl`) : undefined;
+    return reply({ thread: { id: threadId, ...(path ? { path } : {}) } });
   }
   if (method === "thread/resume") {
     load(params.threadId, params.config);
-    return reply({ thread: { id: params.threadId } });
+    const path = process.env.FAKE_ROLLOUT ? join(process.env.CODEX_HOME, "sessions", "2026", "11", "03", `rollout-${params.threadId}.jsonl`) : undefined;
+    return reply({ thread: { id: params.threadId, ...(path ? { path } : {}) } });
+  }
+  if (method === "thread/read") {
+    const path = process.env.FAKE_ROLLOUT || process.env.FAKE_ROLLOUT_ON_READ ? join(process.env.CODEX_HOME, "sessions", "2026", "11", "03", `rollout-${params.threadId}.jsonl`) : undefined;
+    return reply({ thread: { id: params.threadId, ...(path ? { path } : {}) } });
   }
   if (method === "turn/start") {
     const t = thread(params.threadId);
@@ -190,7 +198,10 @@ function handle(msg) {
     thread(params.threadId).mcp = null;
     return reply({ status: "unsubscribed" });
   }
-  if (method === "mcpServerStatus/list") return reply({ data: [{ name: "stillfail", runtimeStatus: thread(params.threadId).mcp, tools: {} }], nextCursor: null });
+  if (method === "mcpServerStatus/list") {
+    if (params.threadId === undefined) return reply({ data: process.env.FAKE_MCP_CONFIGURED === "1" || process.env.FAKE_MCP_UNAVOIDABLE === "1" ? [{ name: "configured" }] : [], nextCursor: null });
+    return reply({ data: thread(params.threadId).mcp === null ? [] : [{ name: process.env.FAKE_MCP_CONFIGURED === "1" || process.env.FAKE_MCP_PROJECT === "1" || process.env.FAKE_MCP_UNAVOIDABLE === "1" ? "configured" : "stillfail", runtimeStatus: thread(params.threadId).mcp, tools: {} }], nextCursor: null });
+  }
   if (method === "account/rateLimits/read") return reply({ rateLimits: { primary: { usedPercent: 5 } } });
   if (method === "account/read") return reply({ account: { type: "chatgpt", email: "a@x.test", planType: "plus" }, requiresOpenaiAuth: true });
   if (method === "model/list") {

@@ -95,7 +95,7 @@ export function existingRunners(data: string): RunnerInfo[] {
 
 /// The runners alive now, as `existingRunners` finds them, read without holding the station's thread: what is looked at
 /// every few seconds (jobs/memory.ts, resources/watch.ts). Their files are some 10 kB each (a command's arguments), and
-/// on a machine short of memory the twenty of ccvm took up to 5 s to read on the thread (2026-10-25).
+/// on a machine short of memory twenty runners took up to 5 s to read on the thread (2026-10-25).
 export async function liveRunners(data: string): Promise<RunnerInfo[]> {
   const dir = runnersDir(data);
   let names: string[];

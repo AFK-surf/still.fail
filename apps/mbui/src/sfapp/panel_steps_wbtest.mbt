@@ -153,8 +153,8 @@ test "wide, a new connect's wizard in the window's tree's dialog: 下一步 slid
 ///|
 test "a folder picked in 添加目录 goes back to the fields with it among the preset's folders" {
   let t = preset_add(false)
-  t.tap_text("tstst")
+  t.tap_text("web-app")
   t.run_for(@ui.move_most_ms)
   assert_true(preset_fields(t) && !preset_adding(t), msg="\{t.text_runs().map(fn(r) { r.text })}")
-  assert_true(shows(t, "tstst"))
+  assert_true(shows(t, "web-app"))
 }

@@ -36,7 +36,7 @@ jobs:
   # installed one updates in place) since 2026-10-24, as asked; the Kotlin app stopped at 0.1.4520.
   android:
     needs: plan
-    runs-on: [self-hosted, mini1]
+    runs-on: [self-hosted, macos-ci]
     environment: production
     timeout-minutes: 5
     steps:
@@ -55,7 +55,7 @@ jobs:
   # Electron app's updater moves it over, its data and sign-in kept), as the beta's became on 2026-10-26.
   desktop:
     needs: plan
-    runs-on: [self-hosted, mini1]
+    runs-on: [self-hosted, macos-ci]
     environment: production
     timeout-minutes: 5
     steps:
@@ -164,7 +164,7 @@ jobs:
   # Offer compatible apps before making the station update available.
   station:
     needs: [plan, web]
-    runs-on: [self-hosted, mini1]
+    runs-on: [self-hosted, macos-ci]
     environment: production
     timeout-minutes: 5
     steps:
@@ -175,6 +175,11 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          # AFK's Developer ID (.github/mac_signing.py): the native parts are signed with it, as the beta's are; without
+          # it the stable station went out ad hoc (2026-11-02's).
+          MACOS_DEVELOPER_ID_KEYCHAIN_B64_1: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 }}
+          MACOS_DEVELOPER_ID_KEYCHAIN_B64_2: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_2 }}
+          KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
           # The key the release is signed with (docs/release-signing.md): none is an error.
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: sh .github/release.sh --stable station
@@ -201,7 +206,7 @@ jobs:
   # stable release that left it out kept still.fail at 2026-10-01's for two weeks (no Windows download on it).
   site:
     needs: [plan, web]
-    runs-on: [self-hosted, mini1]
+    runs-on: [self-hosted, macos-ci]
     environment: production
     timeout-minutes: 5
     steps:
@@ -215,7 +220,7 @@ jobs:
 
   done:
     needs: [plan, android, desktop, desktop-win, web, station, modules, site]
-    runs-on: [self-hosted, mini1]
+    runs-on: [self-hosted, macos-ci]
     timeout-minutes: 5
     permissions:
       contents: write
@@ -228,9 +233,9 @@ jobs:
           RELEASE_VERSION: ${{ needs.plan.outputs.version }}
         run: |
           git tag -f deployed/stable "$RELEASE_REVISION"
-          # As mini1's own GitHub login, not the run's token: GitHub refuses that token a ref to a commit that changes a
+          # As macos-ci's own GitHub login, not the run's token: GitHub refuses that token a ref to a commit that changes a
           # workflow (no `workflows` permission), and a tag stuck behind such a commit stays stuck (2026-10-02, e3ae7c10).
-          # (again on a dropped connection: one from mini1 to github.com failed the tag's push alone, the beta out, main
+          # (again on a dropped connection: one from macos-ci to github.com failed the tag's push alone, the beta out, main
           # 30f68adc 41249459343, 2026-11-01)
           for i in 1 2 3; do
             git push --no-verify -f "https://github.com/$GITHUB_REPOSITORY" refs/tags/deployed/stable && break

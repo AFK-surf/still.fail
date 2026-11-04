@@ -8,8 +8,8 @@ test "favorite rows have the same spacing as station rows" {
     t.run_for(@ui.move_most_ms)
     let (_, first) = t.locate("文档").fold(init=(1.0e9, 0.0), fn(a, p) { if p.0 < a.0 { p } else { a } })
     let (_, second) = t.find("备份盘").unwrap()
-    let (_, station1) = t.find_last("Studio").unwrap()
-    let (_, station2) = t.find_last("MBA").unwrap()
+    let (_, station1) = t.find_last("Willow").unwrap()
+    let (_, station2) = t.find_last("Maple").unwrap()
     assert_true(((second - first) - (station2 - station1)).abs() < 1.0, msg="\{platform}: favorites \{second - first}, stations \{station2 - station1}")
   }
 }

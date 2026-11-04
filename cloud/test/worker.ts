@@ -143,7 +143,7 @@ export class Directory extends ProductionDirectory {
           const station = `${"0".repeat(56)}${String(i * 4 + k).padStart(8, "0")}`;
           sql.exec("INSERT INTO stations (id, last_seen, version) VALUES (?, ?, ?)", station, seen, pick(["0.1.1212", "0.1.1212", "0.1.1212", "0.1.1190", "0.1.1104"]));
           sql.exec("INSERT INTO station_members (workspace, station, name, enrolled_at, enrolled_by) VALUES (?, ?, ?, ?, ?)",
-            id, station, `${pick(["mac-mini", "studio", "dev-box", "nas", "mbp"])}${k > 1 ? `-${k}` : ""}`, created, owner.sub);
+            id, station, `${pick(["cedar", "willow", "dev-box", "nas", "mbp"])}${k > 1 ? `-${k}` : ""}`, created, owner.sub);
         }
         if (random() < 0.15) {
           sql.exec("INSERT INTO invitations (id, workspace, token_hash, role, email, created_by, expires_at) VALUES (?, ?, ?, 'member', ?, ?, ?)",

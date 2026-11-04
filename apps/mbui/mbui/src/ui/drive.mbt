@@ -40,6 +40,8 @@
 //                               home, end, pageup, pagedown, backspace, a character; cmd+ (⌘ on macOS, Ctrl
 //                               elsewhere), ctrl+, alt+, shift+ (cmd+k, shift+enter, alt+down)
 //   resize W H                  the window's content resized to W by H (the host's own window, where it can)
+//   trackpad begin|DX DY|end    the keyboard's trackpad (iOS's floating cursor) begun, its finger at DX DY from where it
+//                               began, let go
 //   ime H                       under a Tester (a film's run), the soft keyboard H points over the window's foot, as a
 //                               host says it while it moves (Tester::set_ime_inset); a real host's is its own
 //   viewsaid JSON               under a Tester (a film's run), its host says JSON of a native view, as Tester::view_said
@@ -315,11 +317,15 @@ fn tree_on_screen(c : Ctx, what : String) -> Array[(Double, Double, @view.NodeId
     // contentDescription, on_screen_nodes)
     let label = tree.said_label(d.id)
     // (its words as they are drawn: on one line where they do not wrap, as an old view's text is found: view_words_set)
-    let words = view_words_set(d.words, d.words_look)
+    let words = view_words_found(d)
     let by_words = !what.has_prefix("icon:") && words != "" &&
       (if what.has_prefix("=") { words == what.unsafe_substring(start=1, end=what.length()) } else { words.contains(what) })
     let hit = if what.has_prefix("icon:") {
       tree.drawn_name(d.id).contains("/icon/" + what.unsafe_substring(start=5, end=what.length()) + "/")
+    } else if what.has_prefix("switch:") {
+      // a switch by what it turns (its label, whole), as on_screen_nodes finds an old view's: the switch alone
+      let label = what.unsafe_substring(start=7, end=what.length())
+      tree.said_of(d.id) is Some({ role: Switch, label: l, .. }) && l == label
     } else if what.has_prefix("=") && what.length() > 1 {
       let exact = what.unsafe_substring(start=1, end=what.length())
       words == exact || (label != "" && label == exact)
@@ -1362,6 +1368,22 @@ fn drive_steps(c : Ctx) -> Unit {
           }
           None => {
             drive_fail(c, d, "viewsaid: only a Tester's host says what a script tells it of its views")
+            return
+          }
+        }
+        acted()
+        return
+      }
+      "trackpad" => {
+        // (the keyboard's trackpad: begun at the window's top left, its finger moved to DX DY from there, let go)
+        let words = arg.split(" ").map(fn(v) { v.to_string() }).to_array()
+        let u = text_float_unit
+        match words {
+          ["begin"] => on_text(text_float_begin, "", 0, 0)
+          ["end"] => on_text(text_float_end, "", 0, 0)
+          [dx, dy] => on_text(text_float_move, "", (number(dx) * u).to_int(), (number(dy) * u).to_int())
+          _ => {
+            drive_fail(c, d, "trackpad begin | DX DY | end")
             return
           }
         }

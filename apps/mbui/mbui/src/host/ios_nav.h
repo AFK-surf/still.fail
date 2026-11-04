@@ -539,11 +539,14 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
           if ([ident hasPrefix:@"act/"] || [ident hasPrefix:@"lead/"]) b.sharesBackground = NO;
 #ifdef __IPHONE_27_0
           // (short of room in the column, what goes first: never 待处理's bell, the user 2026-10-27, more wanted than the
-          // workspace's and than any page's action; a page's first)
+          // workspace's and than any page's action; a page's first, and of a page's one that is itself a menu (a
+          // chat's "…") before the rest: folded, it is a submenu of the system's "…", nothing lost, where its button
+          // left beside the system's would be two "…" in the column: the user 2026-11-03)
           if (@available(iOS 27.0, *)) {
             // (the bell above all: on the outer screen's short column there is room for one of the app's own)
             if ([ident hasSuffix:@"/attention"]) b.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
-            else if (![ident hasPrefix:@"act/"] && ![ident hasPrefix:@"lead/"]) b.visibilityPriority = UIBarButtonItemVisibilityPriorityLow;
+            else if (![ident hasPrefix:@"act/"] && ![ident hasPrefix:@"lead/"])
+              b.visibilityPriority = rows.count ? UIBarButtonItemVisibilityPriorityLow - 1 : UIBarButtonItemVisibilityPriorityLow;
           }
 #endif
           b.badge = [d[@"dot"] boolValue] ? [UIBarButtonItemBadge indicatorBadge] : nil;

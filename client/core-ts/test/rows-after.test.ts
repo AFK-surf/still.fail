@@ -3,6 +3,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { rowAfterDismiss, rowAfterKept, rowAfterPin, rowAfterSaid, rowAfterSession } from "../src/station/rows-after.ts";
+import { marksOf, rowsMade } from "../src/station/rows-made.ts";
+import { lastBy } from "../src/present.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -18,6 +20,17 @@ const said = (n: number, authorKind: string, author: string, text: string, over:
   thread: 7, n, kind: "message", target: null, ts: `1.${n}`, authorKind, author, text, attachments: [], quotes: [], declared: null, at: n * 10, authorName: author === "k" ? "bot" : author.toUpperCase(), ...over,
 });
 const summary = (over: J = {}): J => ({ key: "k", title: null, connect: "ember", createdBy: null, archivedAt: null, runtime: "claude", model: "m", effort: null, process: "cold", pending: 0, lastTurn: null, lastActiveAt: 30, ...over });
+
+test("the last speaker keeps the identity of its message when the chat switches runtime", () => {
+  const identity = { model: "claude-opus-5-5", runtime: "claude" };
+  const session = summary({ runtime: "codex", model: "gpt-6" });
+  const entry = said(4, "agent", "k", "已完成", { agentIdentity: identity, authorRuntime: "claude" });
+  const next = rowAfterSaid(row({ agents: [agent({ runtime: "codex", model: "gpt-6" })] }), [entry], "a@x") as J;
+  assert.deepEqual([lastBy(next, null, [], []).name, lastBy(next, null, [], []).runtime], ["Opus 5.5", "claude"]);
+  const thread = { id: 7, surface: "ember", sessions: [{ session: "k", connect: "ember" }], createdAt: 1, lastMessage: { seq: 4, authorKind: "agent", author: "k", text: "已完成", createdAt: 40, agentIdentity: identity, authorRuntime: "claude" } };
+  const made = rowsMade([session], [thread], marksOf({ card: {} })!, "a@x", { untitled: "新对话", directMessage: "私信", quotedOnly: "引用" })[0]!;
+  assert.deepEqual([lastBy(made, null, [], []).name, lastBy(made, null, [], []).runtime], ["Opus 5.5", "claude"]);
+});
 
 test("what was said brings a chat's row on: its latest message, unread, who wrote, how lately", () => {
   const next = rowAfterSaid(row(), [said(4, "agent", "k", "  改好了\n"), said(5, "person", "b@x", "收到")], "a@x") as J;

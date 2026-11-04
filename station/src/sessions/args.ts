@@ -279,9 +279,6 @@ export function threadCommand(text: string): "stop" | "compact" | "clear" | null
   return word === "-stop" ? "stop" : word === "-compact" ? "compact" : word === "-clear" ? "clear" : null;
 }
 
-/// `-stop`, alone or after mentions.
-export const isStopCommand = (text: string): boolean => threadCommand(text) === "stop";
-
 /// A Slack Web API method's shape: family.method, lower camel case.
 export function isSlackMethod(method: string): boolean {
   const [first, ...rest] = method.split(".");

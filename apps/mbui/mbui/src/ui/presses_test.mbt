@@ -137,6 +137,23 @@ test "the next wake the app waits on: when, and who said it; none once it has co
 }
 
 ///|
+test "a fractional wake is due at its requested moment" {
+  let armed = Ref::new(false)
+  let requested_wake_ms = 0.125
+  let t = @ui.Tester::new(fn(c) {
+      if !armed.val {
+        armed.val = true
+        c.wake_in(requested_wake_ms)
+      }
+      c.text("waiting", wrap=false) |> ignore
+    }, w=100.0, h=100.0)
+  match t.next_wake() {
+    Some((at, _)) => assert_eq(at - t.time(), requested_wake_ms)
+    None => fail("a wake waited on")
+  }
+}
+
+///|
 /// A paragraph with a link after words that lead nowhere (as a chat's markdown has it), the link's right part under a
 /// box that takes presses from `cover` on (none: at 1000, past it all).
 fn link_after_words(went : Array[String], cover : Ref[Double]) -> @ui.Tester {

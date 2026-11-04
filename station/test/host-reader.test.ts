@@ -10,6 +10,39 @@ import { hostInfo } from "../src/read/host.ts";
 import { Readers } from "../src/read/pool.ts";
 import { Store } from "../src/store/store.ts";
 
+test("an isolated recording uses a fictional host sample", () => {
+  const before = process.env.STILLFAIL_TEST_HOST;
+  process.env.STILLFAIL_TEST_HOST = "1";
+  try {
+    const result = hostInfo("/Users/example/private/data", null);
+    const info = result.info as { hostname: string; cpuModel: string; disk: { path: string }; cpuBusy: number | null };
+    assert.equal(info.hostname, "test-station");
+    assert.equal(info.cpuModel, "Test CPU");
+    assert.equal(info.disk.path, "/test-station/data");
+    assert.equal(info.cpuBusy, 0.25);
+    assert.equal(result.needsTicks, false);
+  } finally {
+    if (before === undefined) delete process.env.STILLFAIL_TEST_HOST;
+    else process.env.STILLFAIL_TEST_HOST = before;
+  }
+});
+
+test("an isolated recording does not read the machine's GPUs", async () => {
+  const before = process.env.STILLFAIL_TEST_HOST;
+  process.env.STILLFAIL_TEST_HOST = "1";
+  let gpuReads = 0;
+  const readers = { read: async () => JSON.stringify(hostInfo("/private/data", null)) } as unknown as Readers;
+  const host = new Host(readers, { read: async () => { gpuReads++; return [{ name: "Private GPU", cores: 30, busy: 0.9 }]; } });
+  try {
+    const sample = await host.sample("en");
+    assert.deepEqual(sample.gpus, [{ name: "Test GPU", cores: 4, busy: 0.25 }]);
+    assert.equal(gpuReads, 0);
+  } finally {
+    if (before === undefined) delete process.env.STILLFAIL_TEST_HOST;
+    else process.env.STILLFAIL_TEST_HOST = before;
+  }
+});
+
 test("a host read takes the first CPU ticks without sleeping in the reader", () => {
   const waits = mock.method(Atomics, "wait", () => { throw new Error("the reader slept"); });
   let current: [number, number] | null = [10, 20];

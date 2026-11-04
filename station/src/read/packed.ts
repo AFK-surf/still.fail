@@ -5,7 +5,7 @@
 // zstd frames of the one file the transcript is put away as (every reader finds it as `<file>.zst`), then a table of
 // the frames' sizes (zstd's seekable format: a skippable frame, which zstd readers pass over). A page of a history, read
 // from the mark before it, decompresses the segment or two it is in: not the whole transcript (one is 150 MB) each time.
-// Read whole, it is read a segment at a time too: Node 24.15's zstd (Studio's) gives the first of several frames and
+// Read whole, it is read a segment at a time too: Node 24.15's zstd gives the first of several frames and
 // stops. One put away before the table (2026-11), or with its last segment stored as it is (0.1.6800 to 0.1.6802: most
 // transcripts are one segment, so they were not compressed at all), is put away again (sessions/cold.ts
 // `segmentHistories`).
@@ -276,6 +276,33 @@ export function segmented(path: string): boolean {
     }
   } catch {
     return false;
+  }
+}
+
+/// `segmented` off the thread that asks: the station's sweep of the transcripts put away (sessions/cold.ts
+/// `segmentHistories`), 50 frames' heads read on its thread were 3.3 s held on a station short of memory (2026-11-03).
+export async function segmentedSoon(path: string): Promise<boolean> {
+  let file: FileHandle;
+  try {
+    file = await open(path, "r");
+  } catch {
+    return false;
+  }
+  try {
+    const frames = await framesOfHandle(file);
+    if (frames === null) return false;
+    const head = Buffer.alloc(5);
+    for (const f of frames) {
+      if (f.packed < 5) continue;
+      const { bytesRead } = await file.read(head, 0, 5, f.at);
+      if (bytesRead < 5) return false;
+      if (head.readUInt32LE(0) === FRAME_MAGIC && head[4] === STORED) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  } finally {
+    await file.close();
   }
 }
 

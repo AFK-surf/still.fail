@@ -51,6 +51,8 @@
   "android-misc.adb.notify.chats": "Debugging shared with {n} chats",
   "android-misc.adb.notify.idle": "No chats are using it",
   "android-misc.adb.notify.on": "Debug sharing is on",
+  "android-misc.adb.notify.screen": "“{title}” is using a virtual screen in the background",
+  "android-misc.adb.notify.screens": "{n} chats are using virtual screens in the background",
   "android-misc.adb.notify.title": "Sharing debugging with {name}",
   "android-misc.adb.off": "Wireless debugging is off",
   "android-misc.adb.on": "On",
@@ -554,6 +556,7 @@
   "android-misc.screen.fill.none": "1Password has no login for {host}",
   "android-misc.screen.fill.noOp": "Install 1Password's command-line tool, then turn on Integrate with 1Password CLI in 1Password › Settings › Developer",
   "android-misc.screen.fill.failed": "1Password did not give it: {why}",
+  "android-misc.screen.fill.unreached": "1Password could not reach its servers. Try again",
   "android-misc.screen.fill.empty": "This login has no account or password",
   "android-misc.screen.fill.offerAuto": "Fill from your password manager",
   "android-misc.screen.fill.autoPick": "Pick a login for {host} in your password manager",
@@ -637,10 +640,11 @@
   "android-misc.updates.downloadingVersion": "Downloading {version}",
   "android-misc.updates.installingVersion": "Installing {version}",
   "android-misc.updates.ready": "Restart to update to {version}",
-  "android-misc.updates.readyAway": "Installs by itself once you've been away from {app} for a while",
-  "android-misc.updates.readyQuit": "Installs when you quit {app}",
+  "android-misc.updates.readyAway": "{from} → {to} downloaded. Installs by itself once you've been away from {app} for a while",
+  "android-misc.updates.readyQuit": "{from} → {to} downloaded. Installs when you quit {app}",
   "android-misc.updates.retry": "Retry updating to {version}",
   "android-misc.updates.updated": "{app} updated to {version}. Tap to open",
   "android-misc.updates.waitWifi": "Downloads by itself on Wi‑Fi · {size}",
-  "android-misc.adb.manage": "Manage in Settings"
+  "android-misc.adb.manage": "Manage in Settings",
+  "android-misc.fault.shown": "This part couldn't be shown"
 }

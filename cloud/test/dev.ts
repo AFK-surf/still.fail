@@ -108,7 +108,7 @@ try {
 } catch {
   // No dist/releases: nothing to put.
 }
-for (const name of resumed ? [] : ["studio", "mac-mini"]) {
+for (const name of resumed ? [] : ["willow", "mac-mini"]) {
   const enrollment = await (await alice("POST", `/v1/workspaces/${workspace.id}/enrollments`, { name })).json() as { command: string };
   console.log(`ENROLL ${enrollment.command}`);
 }

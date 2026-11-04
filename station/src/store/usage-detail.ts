@@ -2,6 +2,8 @@
 // same dimensions; coarser buckets let a read cover a long interval without visiting each finer bucket.
 import type { DatabaseSync } from "node:sqlite";
 import type { InWorkspace } from "./rows.ts";
+import { retiredUsage } from "./usage-retire.ts";
+import { compactCoverageSince, hasCompactUsage } from "./usage-compact.ts";
 
 const SIZES = [900_000, 60_000, 1_000, 1] as const;
 const COLUMNS = ["calls", "input", "cache_read", "cache_write", "cache_write_long", "output"] as const;
@@ -215,6 +217,8 @@ export function usageDetailGeneration(db: DatabaseSync): DetailGeneration {
 }
 
 export function usageDetailSince(db: DatabaseSync): number | null {
+  if (hasCompactUsage(db)) return compactCoverageSince(db);
+  if (retiredUsage(db)) return null;
   if (usageDetailGeneration(db) !== "live") return null;
   return (db.prepare("SELECT since FROM usage_detail_live_since WHERE id = 1").get() as { since: number }).since;
 }
@@ -222,6 +226,8 @@ export function usageDetailSince(db: DatabaseSync): number | null {
 /// Install triggers and the cutover under one write lock, so no call can fall between them. The old statistics remain
 /// untouched and no old calls are enumerated; an already complete index continues to be used as before.
 export function installUsageDetail(db: DatabaseSync, now: number): void {
+  if (hasCompactUsage(db)) return;
+  if (retiredUsage(db)) return;
   const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_detail_all'").get() !== undefined;
   const incomplete = () => (db.prepare("SELECT done FROM usage_detail_all WHERE id = 1").get() as { done: number }).done !== 1;
   if (installed() && (usageDetailGeneration(db) === "live" || !incomplete())) return;
@@ -253,9 +259,13 @@ export function installIncrementalUsageTotals(db: DatabaseSync): void {
   try {
     if (!has("usage_totals_source_all")) {
       db.exec(schema(true, [SIZES[0]]).replace(/\busage_detail(?=_|\b)/g, "usage_totals_source"));
+      // A compact station can keep its bounded context on a totals row. Do not delete that row while it owns it.
+      const keepContext = db.prepare("SELECT 1 FROM pragma_table_info('usage_totals') WHERE name = 'compact_context'").get()
+        ? " AND compact_context IS NULL" : "";
       db.exec(`UPDATE usage_totals_source_all SET done = 1 WHERE id = 1;
         CREATE TRIGGER usage_totals_source_aggregate_add AFTER INSERT ON usage_totals_source BEGIN
-          INSERT INTO usage_totals VALUES (NEW.session, NEW.runtime, NEW.model, NEW.fast, NEW.calls, NEW.input,
+          INSERT INTO usage_totals (session, runtime, model, fast, calls, input, cache_read, cache_write, cache_write_long, output)
+          VALUES (NEW.session, NEW.runtime, NEW.model, NEW.fast, NEW.calls, NEW.input,
             NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output)
           ON CONFLICT (session, runtime, model, fast) DO UPDATE SET
             calls = calls + excluded.calls, input = input + excluded.input, cache_read = cache_read + excluded.cache_read,
@@ -268,14 +278,14 @@ export function installIncrementalUsageTotals(db: DatabaseSync): void {
             cache_write_long = cache_write_long + NEW.cache_write_long - OLD.cache_write_long, output = output + NEW.output - OLD.output
             WHERE session = OLD.session AND runtime = OLD.runtime AND model = OLD.model AND fast = OLD.fast;
           DELETE FROM usage_totals WHERE session = OLD.session AND runtime = OLD.runtime AND model = OLD.model AND fast = OLD.fast
-            AND calls = 0 AND input = 0 AND cache_read = 0 AND cache_write = 0 AND cache_write_long = 0 AND output = 0;
+            AND calls = 0 AND input = 0 AND cache_read = 0 AND cache_write = 0 AND cache_write_long = 0 AND output = 0${keepContext};
         END;
         CREATE TRIGGER usage_totals_source_aggregate_drop AFTER DELETE ON usage_totals_source BEGIN
           UPDATE usage_totals SET calls = calls - OLD.calls, input = input - OLD.input, cache_read = cache_read - OLD.cache_read,
             cache_write = cache_write - OLD.cache_write, cache_write_long = cache_write_long - OLD.cache_write_long, output = output - OLD.output
             WHERE session = OLD.session AND runtime = OLD.runtime AND model = OLD.model AND fast = OLD.fast;
           DELETE FROM usage_totals WHERE session = OLD.session AND runtime = OLD.runtime AND model = OLD.model AND fast = OLD.fast
-            AND calls = 0 AND input = 0 AND cache_read = 0 AND cache_write = 0 AND cache_write_long = 0 AND output = 0;
+            AND calls = 0 AND input = 0 AND cache_read = 0 AND cache_write = 0 AND cache_write_long = 0 AND output = 0${keepContext};
         END;`);
     }
     db.exec("COMMIT");
@@ -301,6 +311,7 @@ export const USAGE_DETAIL_PENDING = "usage detail statistics are still being fil
 /// When a session has moved, its buckets still carry their former lookup scope. Read the asking workspace's current
 /// sessions and seek each one's buckets instead of rewriting its history or trusting the stale scope on those buckets.
 export function usageDetailScopeBySession(db: DatabaseSync, viewer: InWorkspace | null, generation = usageDetailGeneration(db)): boolean {
+  if (retiredUsage(db)) return false;
   if (viewer === null) return false;
   const table = prefix(generation);
   if (db.prepare(`SELECT 1 FROM ${table}_dirty_scope INDEXED BY ${table}_dirty_by_scope WHERE scope = ? LIMIT 1`).get(`W${viewer.workspace}`)) return true;
@@ -308,6 +319,8 @@ export function usageDetailScopeBySession(db: DatabaseSync, viewer: InWorkspace 
 }
 
 export function usageDetailReady(db: DatabaseSync, viewer: InWorkspace | null, generation = usageDetailGeneration(db)): boolean {
+  if (hasCompactUsage(db)) return false;
+  if (retiredUsage(db)) return false;
   const table = prefix(generation);
   if ((db.prepare(`SELECT done FROM ${table}_all WHERE id = 1`).get() as { done: number }).done === 1) return true;
   if (viewer === null || viewer.home !== false) return false;

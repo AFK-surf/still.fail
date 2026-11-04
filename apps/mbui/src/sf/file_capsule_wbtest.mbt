@@ -32,6 +32,28 @@ test "a short file name and size stay whole in a card sized to them on whole-pix
 }
 
 ///|
+test "a message's file card: its name keeps as clear of the round end it ends at as of the card's top and foot, its mark concentric with the other end; a ✕ there concentric with it" {
+  for platform in [0, 2] {
+    for name in ["signals-progress.md", "build.log", "a.txt"] {
+      for ends in [0, 1] {
+        let t = @ui.Tester::new(fn(c) {
+          begin(c) |> ignore
+          c.with_theme(ui_theme(), fn() {
+            let across = file_card_across(c, name, 14336.0, ends~)
+            c.box(w=Px(across), fn() {
+              file_card(c, "file", name, 14336.0, remove=ends == 1) |> ignore
+            }) |> ignore
+          })
+        }, w=390.0, h=200.0, platform~)
+        t.draw()
+        let faults = t.gap_faults().filter(fn(f) { f.has_prefix("rule 4") })
+        assert_eq(faults, [], msg="platform=\{platform} name=\{name} ends=\{ends}")
+      }
+    }
+  }
+}
+
+///|
 test "a file card's end stays in its corner with larger system text" {
   let pixels_text = "{\"m\":[12,400,0],\"r\":[9.6,2.4,17,9.6,2.4,1]}"
   let t = @ui.Tester::new(fn(c) {

@@ -155,8 +155,8 @@ test "names already where files go, two asked in turn, 大屏 keyboard and mouse
     into_name: "会议记录",
     total: 2,
     clashes: [
-      { name: "甲.txt", dir: false, size: 2048.0, station: "MBA", there: entry("甲.txt") },
-      { name: "乙.txt", dir: false, size: 1024.0, station: "MBA", there: entry("乙.txt") },
+      { name: "甲.txt", dir: false, size: 2048.0, station: "Maple", there: entry("甲.txt") },
+      { name: "乙.txt", dir: false, size: 1024.0, station: "Maple", there: entry("乙.txt") },
     ],
     answers: {},
     all: false,
@@ -185,7 +185,7 @@ test "names already where files go, two asked in turn, 大屏 keyboard and mouse
   let after = (done.val, @sf.presenting(), said())
   // (as main has it: the second asked about in the frame after the first is answered, its own size said; the last
   // answered, what goes goes once and the dialog closes in the frame after)
-  let facts = fn(s : String, title : String, size : String) { s.has_prefix(title + " |") && s.contains(size + " · MBA") }
+  let facts = fn(s : String, title : String, size : String) { s.has_prefix(title + " |") && s.contains(size + " · Maple") }
   assert_eq(
     (
       facts(first, "「会议记录」里已有「甲.txt」", "2 KB"),

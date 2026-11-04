@@ -8,7 +8,7 @@ test "42-notice-looking" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("notice-looking"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
-    f.see("=studio")
+    f.see("=willow")
     f.see("发消息")
     // (a live run's step beside the app, the trace has what came of it)
     f.peer("peer send 看着的时候 083209 card:这个不该通知 083209|好 083209|不好 083209")

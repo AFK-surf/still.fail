@@ -214,6 +214,25 @@ test("a view: its answer, what it is, then the config and frames as the source g
   await v.served;
 });
 
+test("an actionable failure after opening is sent in the viewer's language", async () => {
+  class FailedView extends FakeView {
+    override next(): Promise<Frame | null> { return Promise.reject(new ScreenRefused(422, "station.screen.linuxTextUnsupported")); }
+  }
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  source.make = () => new FailedView();
+  hub.add(source);
+  const view = await open(hub, member);
+  const states: any[] = [];
+  for (;;) {
+    const got = await view.frames.next();
+    if (!got) break;
+    if (got.kind === KIND.state) states.push(json(got.payload));
+  }
+  assert.ok(states.some((state) => typeof state.ended === "string" && state.ended.startsWith("This app cannot receive that text")));
+  await view.served;
+});
+
 test("frames go unacknowledged while the link keeps up: two before its round trip is known, none once one waits too long", async () => {
   const hub = new ScreenHub();
   const source = new FakeSource();
@@ -1812,12 +1831,14 @@ test("the simulators booted, as simctl lists them: their runtime's name, their s
 
 test("a simulator says it can be debugged; other screens neither say so nor answer", () => {
   const hub = new ScreenHub();
-  const debug = {} as SimDebug;
+  const debug = { installFolder: () => "/up" } as unknown as SimDebug;
   hub.add({ id: "simulator:U", kind: "simulator", title: () => "iPhone", size: () => ({ width: 1, height: 1 }), open: () => Promise.reject(new Error("no")), debug });
   hub.add({ id: "browser:T", kind: "browser", title: () => "tab", size: () => ({ width: 1, height: 1 }), open: () => Promise.reject(new Error("no")) });
   const [sim, tab] = hub.listed("en").screens;
   assert.equal(sim!.debug, true);
+  assert.equal(sim!.install, "/up");
   assert.equal("debug" in tab!, false);
+  assert.equal("install" in tab!, false);
   assert.equal(hub.debugOf("simulator:U"), debug);
   assert.throws(() => hub.debugOf("browser:T"), (e: ScreenRefused) => e.status === 405);
   assert.throws(() => hub.debugOf("simulator:gone"), (e: ScreenRefused) => e.status === 404);

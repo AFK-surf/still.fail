@@ -1,5 +1,8 @@
 # Station storage and change notifications
 
+> Machine names in examples and measurements are anonymized; they are not requirements for the reader’s environment.
+
+
 Two rules shape this:
 
 - **One place for every message.** Whatever is said in a conversation — by a
@@ -406,27 +409,23 @@ their whole thread (deleting a session removes threads left without one):
 
 A thread out of every list (archived itself, or every session of it archived)
 keeps its entries in the database, as one in a list does: entries are small
-(all of ccvm's 26,000 come to some 20 MB), and every list reads what it shows
+(all of test-c's 26,000 come to some 20 MB), and every list reads what it shows
 of every thread by an index, some 10 ms for all of a station's (2026-10-25).
 
-Stations before wrote such a thread's entries out to
-`<data>/archive/threads/<id>.jsonl.zst` (one entry per line, zstd) in one step
-with deleting their rows, and marked the thread row (`archived_at`). Then every
-list of chats, sessions and threads read each archived thread's file (some 850
-on ccvm), decompressed again whenever a reader had let go of what it kept of
-them. Those files are read as they are (the same API and summaries, answered
-from the decompressed entries; what lists show of each read from its file once
-a reader and kept by the file as it is) until the station brings each back
-into the database: a few at a time, two minutes after it starts
-(`Store.bringInArchived`, 20 a second), and at once when one is said in (an
-edit too) or a session of it is shown again. Since entries never change, they
-are the same either way, and clients' kept copies stay valid. Bringing one back
-writes its entries into the database first and removes the file.
+Stations before (the Rust station's database, version 12) wrote such a
+thread's entries out to `<data>/archive/threads/<id>.jsonl.zst` (one entry per
+line, zstd) in one step with deleting their rows, and marked the thread row
+(`archived_at`). Opening such a database brings every one of them back at once
+and takes it to version 13 (`Store.#upgradeFrom12`): each file's entries are
+written into the database, then the file removed. Since entries never change,
+clients' kept copies stay valid. A file lost with its disk leaves a thread with
+no entries, numbered on from what was read and delivered of it. Nothing reads
+those files after that.
 
 An archived, idle session's transcripts are packed in place (cold storage,
 under Housekeeping). The Rust station instead wrote a copy of them,
 `<data>/archive/transcripts/<session>.jsonl.zst`, and left them as they were,
-so both stayed on the disk (1.4 GB on ccvm); a station packs those sessions'
+so both stayed on the disk (1.4 GB on test-c); a station packs those sessions'
 transcripts and lets go of the copy three minutes after it starts
 (`ColdRooms.finishLegacyCopies`, their workspaces left as they are). Nothing
 reads the copies; showing the session again or deleting it removes one too.
@@ -475,7 +474,7 @@ when it is small:
 | `read` | `{ viewer, thread, n }` (only to that viewer) |
 | `chat` | an item of the viewer's sidebar, new or changed (only to that viewer) |
 | `chat-removed` | `{ id }`: an item gone from the viewer's sidebar |
-| `made` | `{ rows: true }`, first on a stream asked with `rows=1`: the client makes the viewer's sidebar items from what it is told (`thread`, `session`, `read`, `pin`, `dismiss`, `kept`), and none is read and told for those; what only the station can say of them (a card waiting, an agent's need, an item new or gone, the review's marks: after a `chat-mark`) it reads, the items those touch alone (`GET /chats?session=<key>&thread=<id>`, repeated: `{ rows, scope }`, an id of `scope` not among `rows` gone); its sidebar is not read as its stream opens, nor told against |
+| `made` | `{ rows: true, marks: true }`, first on a stream asked with `rows=1`; `marks`: the client makes the whole sidebar itself from the sessions' and threads' summaries it holds and `GET /chats?marks=1` (what the station keeps beside them: cards and needs waiting, answered cards, the review's marks, pins, kept chats, openers and opened chats, shares, client keys, Slack teams and the viewer's Slack users; `&session=&thread=`, repeated: those chats' alone), read again for a chat on `chat-mark`, `chat-changed`, a card posted or a person writing, and reads no rows; before it: the client makes the viewer's sidebar items from what it is told (`thread`, `session`, `read`, `pin`, `dismiss`, `kept`), and none is read and told for those; what only the station can say of them (a card waiting, an agent's need, an item new or gone, the review's marks: after a `chat-mark`) it reads, the items those touch alone (`GET /chats?session=<key>&thread=<id>`, repeated: `{ rows, scope }`, an id of `scope` not among `rows` gone); its sidebar is not read as its stream opens, nor told against |
 | `chat-changed` | `{ thread }`: what changes which sidebar items there are and what they say beside what is said in it (its sessions, its shares); `{}`: anything of them (the settings, who the viewer is on Slack): a client that makes its items reads those, or all of them |
 | `overview` | the whole overview, with the viewer and their Slack users (`slackUsers`) — sent when config, connect status, logins, profile checks, quotas, ember-mesh's state, recorded runtime processes, the running/warm counts or a viewer's Slack users change |
 | `host` | host info; sampled every 10 s **only while some client asks for it** (`/events?host=1`) and sent when it changed |
@@ -518,7 +517,7 @@ crash leaves no file; a file older than an hour, one that does not read, or
 one by another process than the one `run/hub.json` named as it started (one
 that a process before it stopped waiting for after 40 s, written once that
 process had begun a run of its own) is not taken up but removed: a run of its
-own, and `missed`. (On ccvm, updated 32 times on 2026-10-24, every stream was told
+own, and `missed`. (On test-c, updated 32 times on 2026-10-24, every stream was told
 `missed` at each update, and every device read the whole station at once
 while the new process was starting.)
 

@@ -234,6 +234,15 @@ export function rowWatch(agents: J[]): J {
   return { text: t("core-views.present.watching_names", { names: names.join(separator) }), ask: t("core-views.present.watch_ask", { names: named }) };
 }
 
+/// What a finger's swipe asks before archiving a chat (only the swipe: its menu's and its key's 归档 ask only for a watch):
+/// its watch's words while one of its agents keeps watch, else while one is at work or waits on work it started (an
+/// archived one finishes its turn and waits on nothing after); null otherwise.
+export function swipeAsk(agents: J[]): string | null {
+  const watch = rowWatch(agents);
+  if (watch !== null) return watch.ask;
+  return agents.some((a) => markOf(a) === "run") ? t("core-views.present.run_ask") : null;
+}
+
 /// Waiting on its watch: one runs and the agent said its wait is that (`waitWatch`; said before it, taken so). Waiting on
 /// anything else, a watch running or not, it waits as any.
 export function watching(s: J): boolean {
@@ -492,12 +501,15 @@ export function lastBy(row: J, me: J, slackUsers: string[], members: J[]): J {
   const saidName = str(last.authorName) || null;
   if (kind === "agent") {
     const agent = (arr(get(row, "agents")) ?? []).find((a) => get(a, "key") === author);
-    const m = str(get(last.agentIdentity, "model")) ?? str(get(agent, "model")) ?? null;
+    const identity = isObject(last.agentIdentity) ? last.agentIdentity : null;
+    const runtime = str(get(identity, "runtime")) ?? str(get(last, "authorRuntime")) ?? get(agent, "runtime") ?? "claude";
+    const otherRuntime = str(get(last, "authorRuntime")) !== undefined && get(agent, "runtime") !== undefined && runtime !== get(agent, "runtime");
+    const m = (identity !== null ? str(get(identity, "model")) : otherRuntime ? str(get(last, "authorModel")) : str(get(agent, "model"))) ?? null;
     return {
       kind: "agent",
-      name: m !== null ? model.name(m) : (saidName ?? "agent"),
+      name: m !== null ? model.name(m) : identity !== null ? format.agentLabel(null, str(get(identity, "effort"))) : otherRuntime ? format.runtimeLabel(runtime) : (saidName ?? "agent"),
       model: m,
-      runtime: get(agent, "runtime") ?? "claude",
+      runtime,
       mine: false,
       state: agent ? markOf(agent) : null,
     };
@@ -1372,7 +1384,7 @@ export function software(u: J): J {
   const latest = typeof get(u, "latest") === "string" ? (get(u, "latest") as string) : null;
   const shownText = installed ? (version ?? t(get(u, "id") === "station" ? "core-views.software.dev" : "core-views.software.unknown")) : t("core-views.software.not_installed");
   const tips = [
-    installed && get(u, "newer") !== true && get(u, "downgrade") !== true && latest !== null ? t("core-views.software.latest") : null,
+    installed && get(u, "repairable") !== true && get(u, "newer") !== true && get(u, "downgrade") !== true && latest !== null ? t("core-views.software.latest") : null,
     installed && latest === null && typeof get(u, "checkedAt") === "number" ? t("core-views.software.check_failed_retry") : null,
   ].filter((x): x is string => x !== null);
   const progress = get(u, "progress");

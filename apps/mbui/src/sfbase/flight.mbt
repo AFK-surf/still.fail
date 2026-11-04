@@ -787,6 +787,43 @@ let bubble_in_x : Double = 14.0
 let bubble_in_y : Double = 8.0
 
 ///|
+/// The part of a flying piece left visible by larger pieces it crosses while its source and destination wrap
+/// differently. A longer piece keeps the space it covers, so a short fragment gives way instead of hiding a line.
+fn flight_piece_room(
+  pieces : Array[FlightPiece],
+  k : Int,
+  wx : Double,
+  wy : Double,
+  across : Double,
+  up : Double,
+) -> (Double, Double) {
+  let p = pieces[k]
+  let (ax, ay, aw, ah) = p.at
+  let (fx, fy) = p.from
+  let px = fx + (wx + ax - fx) * across
+  let py = fy + (wy + ay - fy) * up
+  let mut left = 0.0
+  let mut right = aw
+  for j in 0..<pieces.length() {
+    if j == k { continue }
+    let other = pieces[j]
+    let (bx, by, bw, bh) = other.at
+    if bw < aw || (bw == aw && j > k) { continue }
+    let (sx, sy) = other.from
+    let x = sx + (wx + bx - sx) * across
+    let y = sy + (wy + by - sy) * up
+    if x < px + aw && x + bw > px && y < py + ah && y + bh > py {
+      if x <= px {
+        left = dmax(left, x + bw - px)
+      } else {
+        right = dmin(right, x - px)
+      }
+    }
+  }
+  (dmin(dmax(left, 0.0), aw), dmin(dmax(right, 0.0), aw))
+}
+
+///|
 /// The words sent, as their message sets them: one copy of them for each piece, cut to its room there, from where it
 /// was in the field to where the message is laid out this frame (flown across and up as their bubble is), with the
 /// message's own runs (links as its), so that each piece is what the message draws there when they land. Drawn in
@@ -813,6 +850,15 @@ fn flight_pieces_drawn(
         c.rich(runs, key="flight/piece/\{k}", style=t.t.words, link_color=t.p.blue, words=true) |> ignore
       })
       c.look(all, @ui.look(dx=-ax, dy=-ay))
+    })
+    // The pieces can cross when the field and message wrap at different places. Give each only the room left by the
+    // larger pieces, as rows give way to what moves over them; the actual flight stays on its original path.
+    @motion.flying_placed(c, cut)
+    c.cut_across_by(cut, fn() {
+      match @motion.measured_rect(c, flight_words_key) {
+        Some((wx, wy, _, _)) => flight_piece_room(pieces, k, wx, wy, across, up)
+        None => (0.0, aw)
+      }
     })
     // where the message's words are laid out this frame (the list gliding meanwhile), not a frame behind; less how far
     // off its place its bubble is drawn (flight_bubble: from the first line as typed, across and up)
@@ -1152,7 +1198,7 @@ pub fn flight_quote_landing(c : @ui.Ctx, f : SendFlight, card : Int, key : Strin
   let up = flight_up_of(c, f)
   let own = c.node_bg(card)
   let from = if ff.ground != 0L { ff.ground } else { own }
-  c.stratum(card, Flying)
+  @motion.flying_placed(c, card)
   @motion.placed(c, card, fn() {
     let (x, y, w, h) = c.node_rect(card)
     let dx = (fx + sx - x) * (1.0 - across)

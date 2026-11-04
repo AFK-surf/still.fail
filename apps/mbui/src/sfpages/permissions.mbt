@@ -415,3 +415,10 @@ let permission_state_given : @ui.TextStyle = permission_state_words.then(@ui.tex
 ///|
 // kept across runs: a value (no field of it changes)
 let permission_state_refused : @ui.TextStyle = permission_state_words.then(@ui.text_style(color=Danger))
+
+///|
+/// The system's settings of this app's notifications, where they are allowed again once refused (the host knows where:
+/// Android's page of the app's notifications, iOS's, macOS's and Windows' Notifications), told as the frame ends.
+fn open_notify_settings(c : @ui.Ctx) -> Unit {
+  c.tell("notify-settings", fn() { @ui.notice_settings() |> ignore })
+}

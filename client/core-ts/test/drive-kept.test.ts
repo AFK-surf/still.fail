@@ -439,7 +439,7 @@ test("the page of what the device keeps calls each chat as the chats' list does,
   const t = await started();
   const data = t.core.inner.data;
   // named by its agent; of still.fail's own, never named; a Slack thread, by its first line
-  data.putThread(ST, { id: 1, surface: "ember", title: null, autoTitle: "ccvm 扩容", sessions: [{ session: "k1" }] });
+  data.putThread(ST, { id: 1, surface: "ember", title: null, autoTitle: "处理构建问题", sessions: [{ session: "k1" }] });
   data.putThread(ST, { id: 2, surface: "ember", title: null, sessions: [{ session: "k2" }] });
   data.putThread(ST, { id: 3, surface: "slack:T1", channel: "C1", title: null, firstText: "<@U1> 看下构建", sessions: [{ session: "k3" }] });
   data.putItems("entry", ST, "1", [[1, { text: "a" }]]);
@@ -449,6 +449,6 @@ test("the page of what the device keeps calls each chat as the chats' list does,
   call(t.core, ui, 1, "cache.usage", {});
   await t.host.settle();
   const usage = answers(t.host.takeEmitted(), 1)?.ok as { chats: { thread: number; title: string | null }[] };
-  assert.deepEqual(usage.chats.filter((c) => c.thread <= 3).map((c) => [c.thread, c.title]), [[2, "新对话"], [3, "看下构建"], [1, "ccvm 扩容"]]);
+  assert.deepEqual(usage.chats.filter((c) => c.thread <= 3).map((c) => [c.thread, c.title]), [[2, "新对话"], [3, "看下构建"], [1, "处理构建问题"]]);
   t.core.close();
 });

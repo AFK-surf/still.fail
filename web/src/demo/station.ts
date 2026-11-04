@@ -163,7 +163,7 @@ function slack(): Connect {
 
 export const connects = (): ConnectsView => ({
   me: { id: "local" }, wait: { reading: false, failing: [], empty: false },
-  items: [{ station: STATION, stationName: "Studio", connect: slack(), sessions: [], candidates: [], running: 0, changes: [
+  items: [{ station: STATION, stationName: "Willow", connect: slack(), sessions: [], candidates: [], running: 0, changes: [
     { mode: "multi-session", requireMention: true, changed: false, effects: [], action: "确认更改" },
     { mode: "single-session", requireMention: true, changed: true, effects: ["此后它收到的消息都将进入同一个会话；现有各 thread 的会话不再接收新消息，包括这些 thread 中的回复。记录会保留。", "下一条消息将开始新的单会话；也可在切换后选择已有会话。"], action: "改为单会话" },
     { mode: "single-session", requireMention: false, changed: true, effects: ["此后它收到的消息都将进入同一个会话；现有各 thread 的会话不再接收新消息，包括这些 thread 中的回复。记录会保留。", "下一条消息将开始新的单会话；也可在切换后选择已有会话。", "无需 @：它可见的所有频道和私信中的每条消息都会发送给 agent，用量会明显增加。"], action: "改为单会话" },
@@ -232,11 +232,11 @@ export function profiles() {
   return {
     loading: false, wait: { reading: false, failing: [], empty: false }, attention: 1,
     items: [{
-      key: `${STATION}/${p.id}`, group: "claude", groupTitle: "Claude 订阅", station: STATION, stationId: "local", stationName: "Studio",
+      key: `${STATION}/${p.id}`, group: "claude", groupTitle: "Claude 订阅", station: STATION, stationId: "local", stationName: "Willow",
       // (stopped by its provider: in its check's words, needing a look)
-      profile: p, title: p.name, shared: false, host: "local", hostName: "Studio", hostOnline: true, usable: true, state: { text: p.checkText, tone: p.checkTone }, look: true, where: "Studio 可用",
+      profile: p, title: p.name, shared: false, host: "local", hostName: "Willow", hostOnline: true, usable: true, state: { text: p.checkText, tone: p.checkTone }, look: true, where: "Willow 可用",
       stations: [], editable: true, canShare: true,
-      members: [{ station: STATION, stationId: "local", stationName: "Studio", title: "Studio", online: true, profileId: p.id, profileName: p.name, role: "own", about: "自己登录", usable: true, checkText: p.checkText, checkTone: p.checkTone, usedBy: 1 }],
+      members: [{ station: STATION, stationId: "local", stationName: "Willow", title: "Willow", online: true, profileId: p.id, profileName: p.name, role: "own", about: "自己登录", usable: true, checkText: p.checkText, checkTone: p.checkTone, usedBy: 1 }],
     }],
   };
 }
@@ -270,7 +270,7 @@ export function resources() {
   // Their sessions as the demo's chats have them (fixtures.ts chatOf), for the agents' cards.
   const chats = { "ember:c-demo-p99": { thread: 4, title: "排查 API p99 变慢" }, "ember:c-demo-csv": { thread: 5, title: "订单导出支持 CSV" } };
   const value = { at: now, everyMs: 5000, counted: true, net: true, disk: true, total, groups, history, chats, machine: { cores: 10, memory: 32 * 1024 ** 3 } };
-  return resourcesView([{ address: STATION, name: "Studio", online: true, value: { ok: value } }], now, () => ({ reading: false, failing: [], empty: false }));
+  return resourcesView([{ address: STATION, name: "Willow", online: true, value: { ok: value } }], now, () => ({ reading: false, failing: [], empty: false }));
 }
 
 /** What the agents spent (the core's `usage`, client/core-ts/src/views/usage.ts), made up: the last `days`, each day's
@@ -305,11 +305,11 @@ export function usage(days: number) {
     daily, max: Math.max(...daily.map((d) => d.cost)), ...scale(Math.max(...daily.map((d) => d.cost))),
     lists: [
       { key: "chats", title: "按对话", items: [
-        item("deps", "每周依赖升级", 0.31, "Studio · Sonnet 5.5", { chat: { station: STATION, session: "ember:c-demo-deps" } }),
-        item("p99", "排查 API p99 变慢", 0.24, "Studio · Opus 5.5", { chat: { station: STATION, session: "ember:c-demo-p99" } }),
-        item("csv", "订单导出支持 CSV", 0.19, "Studio · GPT-5.5", { chat: { station: STATION, session: "ember:c-demo-csv" } }),
-        item("safari", "登录页手机适配", 0.15, "Studio · Opus 5.5", { chat: { station: STATION, session: "ember:c-demo-safari" } }),
-        item("docs", "补一下部署文档", 0.11, "Studio · Opus 5.5"),
+        item("deps", "每周依赖升级", 0.31, "Willow · Sonnet 5.5", { chat: { station: STATION, session: "ember:c-demo-deps" } }),
+        item("p99", "排查 API p99 变慢", 0.24, "Willow · Opus 5.5", { chat: { station: STATION, session: "ember:c-demo-p99" } }),
+        item("csv", "订单导出支持 CSV", 0.19, "Willow · GPT-5.5", { chat: { station: STATION, session: "ember:c-demo-csv" } }),
+        item("safari", "登录页手机适配", 0.15, "Willow · Opus 5.5", { chat: { station: STATION, session: "ember:c-demo-safari" } }),
+        item("docs", "补一下部署文档", 0.11, "Willow · Opus 5.5"),
       ] },
       { key: "people", title: "按人", items: people.map((p, k) => item(p.id, p.name, [0.5, 0.33, 0.17][k]!, undefined, { person: p })) },
       { key: "models", title: "按模型", items: [item("opus", "Opus 5.5", 0.5, "Anthropic"), item("sonnet", "Sonnet 5.5", 0.31, "Anthropic"), item("gpt", "GPT-5.5", 0.19, "OpenAI")] },
@@ -342,7 +342,7 @@ export function workspace() {
   return {
     id: WORKSPACE, name: "Acme", role: "admin", created_at: at - 90 * 86_400_000,
     members: [member(user(LIN), "owner", 90), member(ACCOUNT, "admin", 60), member(user(CHEN), "member", 45), member(user(ZHOU), "member", 30)],
-    stations: [{ id: "local", name: "Studio", enrolled_at: at - 88 * 86_400_000, enrolled_by: LIN.email, last_seen: null, version: "0.1.1024" }],
+    stations: [{ id: "local", name: "Willow", enrolled_at: at - 88 * 86_400_000, enrolled_by: LIN.email, last_seen: null, version: "0.1.1024" }],
     invitations: [], added: [],
   };
 }
@@ -362,7 +362,7 @@ export function loginSessions() {
 export function vaults(): VaultsView {
   return {
     available: true, locked: true, canSign: true, setUp: true, refused: [], statusText: "1 个待批准", statusBad: true,
-    vaults: [{ id: "mine", name: "我的密钥", owner: "lin", ownerName: "林晓", mine: true, members: [], station: STATION, stationName: "Studio", items: 3, devices: 2, open: true, keyed: true, missing: 0, recoverable: true, lasts: "chat" }],
+    vaults: [{ id: "mine", name: "我的密钥", owner: "lin", ownerName: "林晓", mine: true, members: [], station: STATION, stationName: "Willow", items: 3, devices: 2, open: true, keyed: true, missing: 0, recoverable: true, lasts: "chat" }],
     requests: [{
       id: "ask-1", vault: "mine", vaultName: "我的密钥", item: "github", itemName: "GitHub token", lasts: "chat", session: "ember:c-demo-safari", chat: "登录页手机适配",
       station: "local", mode: "proxy", reason: "推送 fix/login-button 分支并开 PR", command: "git push origin fix/login-button", hosts: ["github.com", "api.github.com"],

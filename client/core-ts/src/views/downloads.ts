@@ -208,6 +208,13 @@ export class Downloads {
         self.#moved(d, 0);
         yield* self.#note(d);
       }
+      // A file of the drive whose size nobody said (a simulator's recording, asked to be saved as it ended): as the station has it.
+      if (from.kind === "drive" && d.size === 0) {
+        const first = yield* inner.stations.requests.driveRead(addr, from.root, from.path, 0, 1, null);
+        d.size = first.total;
+        from.mtime = first.mtime ?? 0;
+        yield* self.#note(d);
+      }
       const file = kept(d.station, from)!;
       // Old messages can omit a file's size (represented as 0). Ask for its first part to find the real size before
       // deciding it is ready: otherwise download.read would see a zero-length kept file even if it has contents.

@@ -9,7 +9,7 @@ import { linkTarget } from "../src/asks.ts";
 import { parseCall } from "../src/core/calls.ts";
 import { CoreError } from "../src/error.ts";
 import { CLIP_PNG_MAX, CLIP_TEXT_MAX, FrameReader, ackFrame, clipboardFrame, configFrame, copiedFrame, inputFrame, keyframeFrame, lookFrame, readClientFrames, stateFrame, videoFrame, type ClientFrame, type StationFrame } from "../src/screen-frames.ts";
-import { LOOK_MS, checkInput, othersOf } from "../src/screens.ts";
+import { LOOK_MS, accessOf, checkInput, othersOf } from "../src/screens.ts";
 import { HostWire, type RequestHead, type ScreenAsk, type StationWire } from "../src/station/wire.ts";
 import type { FakeHost } from "../src/testing.ts";
 import { base64 } from "../src/util.ts";
@@ -19,6 +19,11 @@ import { base, started } from "./station-fixture.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
+
+test("desktop setup help crosses the screen state without accepting arbitrary links", () => {
+  assert.deepEqual(accessOf({ capture: false, control: false, help: "linux-desktop" }), { capture: false, control: false, help: "linux-desktop" });
+  assert.deepEqual(accessOf({ capture: false, control: false, help: "https://example.com" }), { capture: false, control: false });
+});
 
 /// Draws from a seed (xorshift): the same seed, the same cuts.
 function random(seed: number): () => number {
@@ -115,6 +120,7 @@ test("a_persons_input_is_checked_and_put_in_the_frame", () => {
   assert.deepEqual(checkInput({ t: "pointer", kind: "down", x: 1.5, y: -0.1, buttons: 1, extra: true }), { t: "pointer", kind: "down", x: 1, y: 0, buttons: 1 });
   assert.deepEqual(checkInput({ t: "key", kind: "up", key: "Enter", code: "Enter", mods: 9 }), { t: "key", kind: "up", key: "Enter", code: "Enter", mods: 9 });
   assert.deepEqual(checkInput({ t: "wheel", x: 0.5, y: 0.5, dx: 0, dy: -120 }), { t: "wheel", x: 0.5, y: 0.5, dx: 0, dy: -120 });
+  assert.deepEqual(checkInput({ t: "device", name: "rotate" }), { t: "device", name: "rotate" });
   for (const bad of [null, { t: "pointer", kind: "drag", x: 0, y: 0 }, { t: "pointer", kind: "down", x: Number.NaN, y: 0 }, { t: "key", kind: "down", key: "" }, { t: "text", text: "" }, { t: "paste" }]) {
     assert.throws(() => checkInput(bad), (e: J) => e.code === "invalid_params");
   }

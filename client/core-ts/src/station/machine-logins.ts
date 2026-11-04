@@ -170,7 +170,7 @@ export function loginShown(l: J, station: string, stationName: string, now: numb
   };
 }
 
-/// An ended login in a line, as its card shows it then: 已在 studio 上登录 gh; 张三 取消了在 studio 上登录 gh; 在 studio 上登录 gh
+/// An ended login in a line, as its card shows it then: 已在 willow 上登录 gh; 张三 取消了在 willow 上登录 gh; 在 willow 上登录 gh
 /// 失败：<the line of its error that says why>; …超时了.
 function endedText(state: string, l: J, name: string, station: string): string {
   const what = { name, station };

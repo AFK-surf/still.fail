@@ -113,13 +113,13 @@ test "stations: the first list after a wait or an empty list appears in place" {
     t.run_for(@ui.move_most_ms)
     t.frame()
     assert_true(app.nav.top() == Place("stations"))
-    assert_true(t.find("Studio") is None)
+    assert_true(t.find("Willow") is None)
     ready.set(true)
     t.frame()
-    let first = (t.drawn_of("Studio").unwrap(), t.drawn_of("MBA").unwrap())
+    let first = (t.drawn_of("Willow").unwrap(), t.drawn_of("Maple").unwrap())
     assert_true(first.1.1 > first.0.1, msg="the stations overlap when their first list comes: \{first}")
     t.run_for(@ui.row_size_ms)
-    assert_eq((t.drawn_of("Studio").unwrap(), t.drawn_of("MBA").unwrap()), first)
+    assert_eq((t.drawn_of("Willow").unwrap(), t.drawn_of("Maple").unwrap()), first)
   }
 }
 
@@ -136,7 +136,7 @@ test "stations: a station added to a list already shown opens its place" {
         match answer.value {
           Some(Array(rows)) => {
             let rows = rows.copy()
-            rows.insert(0, { "station": "ws1/new", "name": "Mini1", "online": false })
+            rows.insert(0, { "station": "ws1/new", "name": "Cedar", "online": false })
             { ..answer, value: Some(Json::array(rows)), version: answer.version + 1 }
           }
           _ => answer
@@ -151,13 +151,13 @@ test "stations: a station added to a list already shown opens its place" {
   t.tap_once(xs[3], y)
   t.run_for(@ui.move_most_ms)
   t.frame()
-  let (_, before) = t.drawn_of("Studio").unwrap()
+  let (_, before) = t.drawn_of("Willow").unwrap()
   added.set(true)
   t.frame()
   t.run_for(@ui.row_size_ms / 2.0)
-  let (_, halfway) = t.drawn_of("Studio").unwrap()
+  let (_, halfway) = t.drawn_of("Willow").unwrap()
   t.run_for(@ui.row_size_ms / 2.0)
-  let (_, after) = t.drawn_of("Studio").unwrap()
+  let (_, after) = t.drawn_of("Willow").unwrap()
   assert_true(before < halfway && halfway < after, msg="\{before}, \{halfway}, \{after}")
 }
 

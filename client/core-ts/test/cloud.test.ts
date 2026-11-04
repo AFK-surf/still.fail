@@ -101,6 +101,21 @@ test("says_nothing_until_a_wait_is_slow_then_what_and_how_fast", () => {
   assert.equal(v().state, null);
 });
 
+/// 2026-11-03: the splash said 「无法打开本机数据…· 共 4 项 · 172 KB/s」 under 正在读取你的 workspace. What is read is its
+/// bar's; its lines are only what lasts and is why it is slow.
+test("a_loading_pages_lines_are_only_what_lasts", () => {
+  const host = new FakeHost();
+  const status = new Status(host, new Runner(host.time.clock));
+  status.setNames((a) => (a === "ws/s1" ? "studio" : null));
+  const lines = () => (status.value() as { lines: string[] }).lines;
+  status.begin({ station: "ws/s1" }, stationWhat("GET", "/threads"), false).received(1536 * 1024);
+  status.begin(RELAY, "连接", true);
+  status.skew += 3_000;
+  assert.deepEqual(lines(), []);
+  status.setDb(new Map([["a", { kind: "failed", detail: "disk I/O error" }]]));
+  assert.deepEqual(lines(), ["本机数据无法打开，只能从网络读取"]);
+});
+
 test("a_connection_goes_first_and_a_socket_down_is_trouble", () => {
   const host = new FakeHost();
   const status = new Status(host, new Runner(host.time.clock));
@@ -229,6 +244,11 @@ test("renaming_a_chat_names_its_thread_or_its_session", () => {
   assert.deepEqual([r.method, r.path, r.body], ["PUT", "/threads/7/title", { title: "值班" }]);
   r = req("chat.rename", { station: "ws/st", session: "k", title: "" });
   assert.deepEqual([r.method, r.path, r.body], ["POST", "/sessions/k/title", { title: "" }]);
+});
+
+test("regenerating_a_chat_title_asks_its_thread", () => {
+  const r = req("chat.regenerateTitle", { station: "ws/st", thread: 7 });
+  assert.deepEqual([r.method, r.path, r.body], ["POST", "/threads/7/regenerate-title", null]);
 });
 
 test("unknown_names_and_missing_params", () => {

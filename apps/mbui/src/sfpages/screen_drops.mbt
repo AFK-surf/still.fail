@@ -15,14 +15,18 @@ priv struct ScreenDropItem {
   serial : Int
   folder : String
   reveal : Bool
+  /// an app to install on the device once it is there
+  install : Bool
   bytes : Bytes
   name : @signals.Signal[String]
   /// the names refused for being taken there
   tried : @sf.LiveArray[String]
   sent : @signals.Signal[Int]
-  /// `waiting`, `going`, `done` or `failed` (why in `error`)
+  /// `waiting`, `going`, `installing`, `done` or `failed` (why in `error`)
   state : @signals.Signal[String]
   mut error : String
+  /// the app it was, once installed
+  mut installed : String
   id : @signals.Signal[String]
 }
 
@@ -51,12 +55,14 @@ fn ScreenSess::send_files(self : ScreenSess, files : Array[@hostapi.Picked], to 
       serial: self.drops_serial,
       folder: to.folder,
       reveal: to.reveal,
+      install: to.install,
       bytes: f.bytes,
       name: @signals.signal(f.name),
       tried: @sf.LiveArray::from([]),
       sent: @signals.signal(0),
       state: @signals.signal("waiting"),
       error: "",
+      installed: "",
       id: @signals.signal(""),
     })
   }
@@ -66,7 +72,7 @@ fn ScreenSess::send_files(self : ScreenSess, files : Array[@hostapi.Picked], to 
 ///|
 /// Let go of: off the list (stopped, if it was going: what the station says of it next is let go).
 fn ScreenSess::dismiss(self : ScreenSess, d : ScreenDropItem) -> Unit {
-  let going = d.state.get() == "going"
+  let going = d.state.get() == "going" || d.state.get() == "installing"
   self.drops.retain(fn(x) { x.serial != d.serial })
   if going {
     self.pumping = false
@@ -114,6 +120,29 @@ fn ScreenSess::pump(self : ScreenSess) -> Unit {
 }
 
 ///|
+/// The app gone up installed on the device and started: which it is said (its bundle id), or why not.
+fn ScreenSess::drop_install(self : ScreenSess, d : ScreenDropItem) -> Unit {
+  d.state.set("installing")
+  let params = {
+    "station": Json::string(self.station),
+    "screen": Json::string(self.screen),
+    "path": Json::string(d.path()),
+  }
+  (self.src.call)("screen.install", Json::object(params), fn(r) {
+    guard self.drops.iter().any(fn(x) { x.serial == d.serial }) else { return }
+    match r {
+      Ok(v) => {
+        d.installed = text(Some(v), "app")
+        d.state.set("done")
+        self.pumping = false
+        self.pump()
+      }
+      Err(e) => self.drop_failed(d, text(Some(e), "message"))
+    }
+  })
+}
+
+///|
 /// Whether `d` is still on the list, going.
 fn ScreenSess::still_going(self : ScreenSess, d : ScreenDropItem) -> Bool {
   self.drops.iter().any(fn(x) { x.serial == d.serial }) && d.state.get() == "going"
@@ -152,9 +181,13 @@ fn ScreenSess::drop_part(self : ScreenSess, d : ScreenDropItem, have : Int, plan
         }
         if entry || next >= size {
           d.sent.set(size)
-          d.state.set("done")
-          self.pumping = false
-          self.pump()
+          if d.install {
+            self.drop_install(d)
+          } else {
+            d.state.set("done")
+            self.pumping = false
+            self.pump()
+          }
         } else if next <= have {
           // nothing more taken: a part the station could not take
           self.drop_failed(d, @sf.t("android-chat.file.uploadFailed"))

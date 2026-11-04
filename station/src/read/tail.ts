@@ -17,14 +17,18 @@ export const PIECE = 4 << 20;
 export type Mark = { offset: number; index: number; inner: [string, number][] };
 
 /// A mark is taken once at least this many entries came after the last, or this many bytes with at least one entry: a
-/// read from the mark before an entry reads no more than that before it.
+/// read from the mark before an entry reads no more than that before it. 8 MB apart, a page of a Codex history read 2 to
+/// 16 MB, 1 to 7 s from a disk short of memory on a station (2026-11-03).
 export const MARK_EVERY = 256;
-export const MARK_BYTES = 8 << 20;
+export const MARK_BYTES = 1 << 20;
 
 /// Where a transcript's reading stands (`snapshot`): where its next read goes on from and what it keeps between reads,
 /// without the entries read. A tail made from it (`TranscriptTail.from`) reads on as the one it was taken of would: what
 /// one thread read, another goes on from.
-export type TailState = { path: string; offset: number; partial: string; count: number; inner: [string, number][]; packedStamp: string | null };
+export type TailState = { path: string; runtime?: RuntimeKind; offset: number; partial: string; count: number; inner: [string, number][]; packedStamp: string | null };
+/// A transcript and the runtime that wrote it. A plain path uses the chain's default runtime.
+export type TranscriptRef = string | { path: string; runtime: RuntimeKind };
+const transcriptRef = (runtime: RuntimeKind, ref: TranscriptRef) => typeof ref === "string" ? { path: ref, runtime } : ref;
 
 /// Reads a transcript as it grows (transcript.rs TranscriptTail): each read gives the timeline entries of the lines
 /// written since the last one. Everything read is kept (as `shape` makes it), so watchers joining later are served from
@@ -66,13 +70,13 @@ export class TranscriptTail {
 
   /// Where its reading stands, to go on from in another thread.
   snapshot(): TailState {
-    return { path: this.path, offset: this.offset, partial: this.partial.toString("base64"), count: this.length, inner: [...this.state.inner], packedStamp: this.packedStamp };
+    return { path: this.path, runtime: this.runtime, offset: this.offset, partial: this.partial.toString("base64"), count: this.length, inner: [...this.state.inner], packedStamp: this.packedStamp };
   }
 
   /// A tail that goes on from where another's reading stood: it keeps none of what that one read, only counts it; with
   /// `marks` (those taken before), it takes marks on as it reads.
   static from(runtime: RuntimeKind, state: TailState, marks: Mark[] | null = null): TranscriptTail {
-    const tail = new TranscriptTail(runtime, state.path, null, false, marks !== null);
+    const tail = new TranscriptTail(state.runtime ?? runtime, state.path, null, false, marks !== null);
     if (marks !== null) tail.marks = [...marks];
     tail.offset = state.offset;
     tail.partial = Buffer.from(state.partial, "base64");
@@ -202,11 +206,11 @@ export class ChainTail {
   /// Whether what is read is kept (TranscriptTail.keeps).
   readonly keeps: boolean;
 
-  constructor(runtime: RuntimeKind, paths: string[], shape: ((e: TimelineEntry) => TimelineEntry) | null = null, keeps = true) {
+  constructor(runtime: RuntimeKind, paths: TranscriptRef[], shape: ((e: TimelineEntry) => TimelineEntry) | null = null, keeps = true) {
     this.runtime = runtime;
     this.shape = shape;
     this.keeps = keeps;
-    this.tails = paths.map((path) => new TranscriptTail(runtime, path, shape, keeps));
+    this.tails = paths.map((ref) => { const r = transcriptRef(runtime, ref); return new TranscriptTail(r.runtime, r.path, shape, keeps); });
   }
 
   /// A chain that goes on from where another's reading stood (`snapshot`), keeping none of what it read.
@@ -243,12 +247,13 @@ export class ChainTail {
   }
 
   /// Goes on with the transcripts given (those it has, then new ones): the new ones are read after what it has.
-  extend(paths: string[]) {
-    if (paths.length < this.tails.length || this.tails.some((t, i) => t.path !== paths[i])) {
-      this.tails = paths.map((path) => new TranscriptTail(this.runtime, path, this.shape, this.keeps));
+  extend(paths: TranscriptRef[]) {
+    const refs = paths.map((ref) => transcriptRef(this.runtime, ref));
+    if (refs.length < this.tails.length || this.tails.some((t, i) => t.path !== refs[i]!.path || t.runtime !== refs[i]!.runtime)) {
+      this.tails = refs.map((r) => new TranscriptTail(r.runtime, r.path, this.shape, this.keeps));
       return;
     }
-    for (const path of paths.slice(this.tails.length)) this.tails.push(new TranscriptTail(this.runtime, path, this.shape, this.keeps));
+    for (const r of refs.slice(this.tails.length)) this.tails.push(new TranscriptTail(r.runtime, r.path, this.shape, this.keeps));
   }
 
   /// New entries since the last read, with the index of the first (all from the first that changed when an earlier
@@ -260,7 +265,7 @@ export class ChainTail {
     for (let i = 0; i < this.tails.length; i++) {
       // One that keeps nothing, after one that changed: what it read is to be told again, numbered on from there, so it
       // is read again from its start (an earlier transcript that grew is rare: its runtime session is over).
-      if (from !== null && !this.keeps && this.tails[i]!.length > 0) this.tails[i] = new TranscriptTail(this.runtime, this.tails[i]!.path, this.shape, false);
+      if (from !== null && !this.keeps && this.tails[i]!.length > 0) this.tails[i] = new TranscriptTail(this.tails[i]!.runtime, this.tails[i]!.path, this.shape, false);
       const tail = this.tails[i]!;
       const had = tail.length;
       const [start, entries] = tail.read();

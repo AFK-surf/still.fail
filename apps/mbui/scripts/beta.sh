@@ -73,7 +73,7 @@ changed() {
 moon_tools() {
   local base=https://cli.moonbitlang.com tag dir
   mkdir -p "$C/moon" "$C/tools"
-  # (a curl that fails, as mini1's line now and then does, is an answer missing: the MoonBit there is kept below)
+  # (a curl that fails is an answer missing: the MoonBit already present is kept below)
   tag=$( { curl -sfI --max-time 5 $base/binaries/latest/moonbit-darwin-aarch64.tar.gz || true; curl -sfI --max-time 5 $base/cores/core-latest.tar.gz || true; } \
     | tr -d '\r' | awk -F': ' 'tolower($1) == "etag" { print $2 }' | tr -d '\n')
   if [ "$(printf '%s' "$tag" | tr -cd '"' | wc -c | tr -d ' ')" != 4 ]; then
@@ -286,7 +286,7 @@ linux() {
 }
 
 # fetched back and the same bytes as made: from R2 itself through Cloudflare's API when there is a token (R2 reads what
-# was written, at once: no waiting for it to show), else from the public URL; a request the line from mini1 drops
+# was written, at once: no waiting for it to show), else from the public URL; a request the network drops is
 # tried again by curl itself (--retry: its network errors, not a wait for the object)
 # (into a file, and its bytes read only once curl said it got them all: piped to shasum, a fetch cut off by --max-time
 # was hashed as it stood, and the retries' bytes after it, linux x64's 36 MB taking 74 s from GitHub's runner on main

@@ -201,7 +201,41 @@ test("a turn ending without a state is nudged, then reported after max nudges", 
   await r.close();
 });
 
-test("a turn ending waiting is not nudged nor evicted, and is asked again when the wait is over", async (t) => {
+test("a turn ending done in a chat nobody named asks its agent once to name it", async () => {
+  const r = new Rig({ askToName: true });
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const session = r.claude.last();
+  await r.call(key, "chat_state", { kind: "all_done", done: "答完了它问的事" });
+  session.complete();
+  await settle();
+  assert.equal(session.prompts.length, 2);
+  assert.ok(session.prompts[1]!.includes(`chat_post with only to "C1/${m.threadTs}" and title`), session.prompts[1]);
+  // It ends again without naming it: not asked again.
+  await r.call(key, "chat_state", { kind: "all_done", done: "答完了它问的事" });
+  session.complete();
+  await settle();
+  assert.equal(session.prompts.length, 2);
+  await r.close();
+});
+
+test("a turn ending done in a chat its agent named is not asked to name it", async () => {
+  const r = new Rig({ askToName: true });
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, title: "构建失败" });
+  await r.call(key, "chat_state", { kind: "all_done", done: "答完了它问的事" });
+  r.claude.last().complete();
+  await settle();
+  assert.equal(r.claude.last().prompts.length, 1);
+  await r.close();
+});
+
+test("a turn ending waiting is not nudged, its process let go with nothing of its own going, and is asked again in a new one when the wait is over", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: Date.now() });
   const r = new Rig({ maxWarmClaude: 0, warmMinutes: 0 });
   const m = message();
@@ -215,13 +249,13 @@ test("a turn ending waiting is not nudged nor evicted, and is asked again when t
   const last = r.store.sessionStats(null).get(key)!.lastTurn!;
   assert.deepEqual([last.declared, last.waitFor], ["waiting", "CI 跑完"], "what it waits for is kept with the turn");
   assert.equal(r.claude.last().prompts.length, 1, "not nudged");
-  assert.ok(!r.claude.last().disposed, "its background work may run in its process");
+  assert.ok(r.claude.last().disposed, "nothing of its own going in its process: let go, the wait the station's");
   assert.deepEqual(r.chat.texts(), []);
   t.mock.timers.tick(11_000);
   await settle();
   const prompts = r.claude.last().prompts;
-  assert.equal(prompts.length, 2);
-  assert.ok(prompts[1]!.includes("waiting on work you started (10 seconds)"), prompts[1]);
+  assert.equal(prompts.length, 1, "a new process");
+  assert.ok(prompts[0]!.includes("waiting on work you started (10 seconds)"), prompts[0]);
   assert.deepEqual(
     r.store.listTurns(key).flatMap((t) => t.summary.declared ?? []),
     ["waiting"],
@@ -229,9 +263,54 @@ test("a turn ending waiting is not nudged nor evicted, and is asked again when t
   await r.close();
 });
 
+test("a turn ending waiting with work going in its own process keeps it", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: Date.now() });
+  const r = new Rig({ maxWarmClaude: 0, warmMinutes: 0 });
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  await r.call(key, "chat_state", { kind: "waiting", seconds: 60, for: "CI 跑完" });
+  r.claude.last().tasks = [{ id: "b1", kind: "shell", description: "ci-wait", startedAt: Date.now() } as any];
+  r.claude.last().complete();
+  await settle();
+  assert.ok(!r.claude.last().disposed, "its background work runs in its process");
+  await r.close();
+});
+
 const watchJob = (session: string) => ({
   id: "job_w", sessionKey: session, name: "盯 CI", command: "sleep 600", cwd: "/", port: null, token: "tw", state: "running",
   pgid: null, exitCode: null, startedAt: Date.now(), endedAt: null, restarts: 0, log: "/dev/null", watch: true,
+});
+
+test("a watched wait checks its active watch without reading the session's job history", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: Date.now() });
+  const r = new Rig();
+  const list = r.store.listJobs;
+  try {
+    const m = message();
+    await r.accept(m);
+    await settle();
+    const key = sessionKey("cl", "C1", m.threadTs);
+    r.store.insertJob(watchJob(key));
+    r.store.listJobs = function (session) {
+      if (session === key) throw new Error("the session's job history was read");
+      return list.call(this, session);
+    };
+    await r.call(key, "chat_state", { kind: "waiting", seconds: 10, for: "盯 CI", watch: true });
+    r.claude.last().complete();
+    await settle();
+    t.mock.timers.tick(10_000);
+    await settle();
+    assert.equal(r.claude.last().prompts.length, 1, "a running watch keeps the wait");
+    r.store.jobEnded("job_w", "stopped", null);
+    t.mock.timers.tick(11_000);
+    await settle();
+    assert.equal(r.claude.last().prompts.length, 2, "the wait ends after its watch ends");
+  } finally {
+    r.store.listJobs = list;
+    await r.close();
+  }
 });
 
 test("a wait does not run out while a watch of its session runs", async (t) => {
@@ -488,12 +567,49 @@ test("stop while waiting ends the jobs that would bring it back, but not its ser
   await r.call(key, "chat_state", { kind: "waiting", seconds: 600, for: "任务跑完" });
   r.claude.last().complete();
   await settle();
-  await r.hub.stop(key);
-  await settle();
+  const list = r.store.listJobs;
+  r.store.listJobs = function (session) {
+    if (session === key) throw new Error("the session's job history was read");
+    return list.call(this, session);
+  };
+  try {
+    await r.hub.stop(key);
+    await settle();
+  } finally {
+    r.store.listJobs = list;
+  }
   const state = (id: string) => r.store.getJob(id)!.state;
   assert.deepEqual([state("build"), state("watch"), state("page")], ["stopped", "stopped", "running"]);
   assert.equal(r.chat.lastText(), "已停止当前任务");
   await r.close();
+});
+
+test("archiving stops its active jobs without reading its job history", async () => {
+  const r = new Rig();
+  const list = r.store.listJobs;
+  try {
+    const key = "archive-jobs";
+    r.store.insertSession({ key, connect: "cl", runtime: "claude", profile: "cc", workspace: r.dir, token: key, createdAt: 1, lastActiveAt: 1 });
+    const add = (id: string, state: string, port: number | null, watch: boolean, startedAt: number, sessionKey = key) =>
+      r.store.insertJob({ ...watchJob(sessionKey), id, token: `t-${id}`, state, port, watch, startedAt });
+    for (let i = 0; i < 200; i++) add(`old-${i}`, "exited", null, false, i);
+    add("watch", "running", null, true, 201);
+    add("command", "running", null, false, 202);
+    add("service", "running", 47123, false, 203);
+    add("restarting", "exited", 47124, false, 204);
+    add("stopped", "stopped", 47125, false, 205);
+    add("other", "running", null, false, 206, "another-session");
+    const stopped: string[] = [];
+    r.hub.setJobs({ stop: async (id) => { stopped.push(id); r.store.jobEnded(id, "stopped", null); return r.store.getJob(id)!; } });
+    r.store.listJobs = () => { throw new Error("the session's job history was read"); };
+    await r.hub.actor(r.store.getSession(key)!).putAway();
+    assert.deepEqual(stopped, ["restarting", "service", "command", "watch"]);
+    assert.equal(r.store.getJob("other")!.state, "running");
+    assert.equal(r.store.getJob("stopped")!.state, "stopped");
+  } finally {
+    r.store.listJobs = list;
+    await r.close();
+  }
 });
 
 test("a turn that cannot start is not left starting, and stop clears what is still said to be under way", async () => {
@@ -822,6 +938,30 @@ test("a connect's runtime, profile and model decide the session", async () => {
   await r.close();
 });
 
+test("a message sent to a model (Slack's /sf) starts a session on that model, on any profile of the workspace that runs it", async () => {
+  const r = new Rig();
+  // The connect's own model first, then each the workspace's profiles run.
+  assert.deepEqual(r.hub.modelsFor("cl"), [
+    { runtime: "claude", model: "opus" },
+    { runtime: "claude", model: null },
+    { runtime: "codex", model: null },
+  ]);
+  const m = say("refactor this", { model: { runtime: "codex", model: null } });
+  await r.accept(m);
+  await settle();
+  assert.deepEqual([r.claude.count(), r.codex.count()], [0, 1]);
+  const row = r.session(sessionKey("cl", "C1", m.threadTs));
+  assert.deepEqual([row.connect, row.runtime, row.profile, row.model, row.effort], ["cl", "codex", "cx", null, null], "the connect's model and effort are not carried over");
+  // A model no profile runs starts nothing, and the thread is told why.
+  r.edit((raw) => (raw.profiles[0] = { ...raw.profiles[0], models: ["opus"] }));
+  const n = say("hi", { model: { runtime: "claude", model: "sonnet" } });
+  await r.accept(n);
+  await settle();
+  assert.equal(r.store.getSession(sessionKey("cl", "C1", n.threadTs)), null);
+  assert.match(r.chat.texts().at(-1) ?? "", /sonnet/);
+  await r.close();
+});
+
 test("two connects in one thread keep separate sessions, share its messages and reply through their own connection", async () => {
   const r = new Rig();
   const root = say("<@UBOT> <@UGPT> compare notes");
@@ -927,7 +1067,7 @@ test("a job's notice given to a session while the next station starts, before it
   await settle();
   await first.hub.handOver();
   // The next station, held while it starts (agents.ts): a task followed from here is told ended (Remote.resume, once
-  // the peers' bus is there) before the hub takes the sessions up (2026-10-30 ccvm, a Studio task's end lost so).
+  // the peers' bus is there) before the hub takes the sessions up (2026-10-30 a station, a another station task's end lost so).
   const claude = new FakeDriver("claude");
   const hub = first.newHub({ chats: (id) => (id === "cl" ? first.chat : undefined), drivers: [claude, new FakeDriver("codex")], internal: false });
   hub.hold("starting");
@@ -2312,6 +2452,77 @@ test("an account spent with none to move to is said once; what wakes it waits fo
   await r.close();
 });
 
+test("a manual allowance reset wakes only waiting sessions on that account, including a second profile", async () => {
+  const time = testClock();
+  const r = new Rig({ clock: time.clock });
+  r.edit((raw) => {
+    raw.profiles[0].models = ["opus"];
+    raw.profiles.push({ ...raw.profiles[0], id: "cc2" }, { ...raw.profiles[0], id: "other" });
+  });
+  const now = time.clock.currentTimeMillisUnsafe();
+  r.hub.accounts.setHealth((id) => ({ account: id === "other" ? "other" : "same", quota: { state: "ok", checkedAt: now, windows: [{ usedPercent: 100, resetsAt: now + 7200_000 }] } }));
+  const agents = [];
+  for (const id of ["cc", "cc2", "other", "cc"]) {
+    r.edit((raw) => { raw.connects[0].bind.profile = id; });
+    await r.accept(message());
+    await settle();
+    const agent = r.claude.last();
+    r.store.setSessionProfile(agent.options.route, id, true);
+    agents.push(agent);
+  }
+  const spent = { kind: "failed" as const, reason: "rate_limit" as const, message: "usage limit reached" };
+  for (const agent of agents) agent.end(spent);
+  await settle();
+  await r.hub.stop(agents[3]!.options.route);
+  r.hub.hold("drain");
+  await r.hub.allowanceReset("cc");
+  assert.deepEqual(agents.map((a) => a.prompts.length), [1, 1, 1, 1], "a hold still prevents turns");
+  r.hub.release("drain");
+  await time.adjust(1);
+  await settle();
+  assert.deepEqual(agents.map((a) => a.prompts.length), [2, 2, 1, 1]);
+  assert.equal(agents[0]!.prompts[1], GO_ON_AFTER_REFILL);
+  assert.equal(agents[1]!.prompts[1], GO_ON_AFTER_REFILL);
+  await r.hub.allowanceReset("cc");
+  await time.adjust(7200_000);
+  await settle();
+  assert.deepEqual(agents.map((a) => a.prompts.length), [2, 2, 2, 1], "old timers do not start the resumed or stopped sessions again");
+  await r.close();
+});
+
+test("after a station restart, a reset resumes a recorded allowance wait but not one stopped by hand", async () => {
+  const time = testClock();
+  const r = new Rig({ clock: time.clock });
+  const now = time.clock.currentTimeMillisUnsafe();
+  const health = () => ({ quota: { state: "ok", checkedAt: now, windows: [{ usedPercent: 100, resetsAt: now + 7200_000 }] } });
+  r.hub.accounts.setHealth(health);
+  const first = message(), stopped = message();
+  await r.accept(first);
+  await r.accept(stopped);
+  await settle();
+  const [waitingAgent, stoppedAgent] = r.claude.sessions;
+  const spent = { kind: "failed" as const, reason: "rate_limit" as const, message: "usage limit reached" };
+  waitingAgent!.end(spent);
+  stoppedAgent!.end(spent);
+  await settle();
+  await r.hub.stop(stoppedAgent!.options.route);
+  assert.equal(r.store.lastTurn(stoppedAgent!.options.route)!.outcome, "aborted");
+  await r.hub.shutdown();
+  const claude = new FakeDriver("claude");
+  const hub = r.newHub({ chats: (id) => (id === "cl" ? r.chat : undefined), drivers: [claude, new FakeDriver("codex")], internal: false });
+  hub.accounts.setHealth(health);
+  hub.recover();
+  await settle();
+  assert.equal(claude.count(), 0);
+  await hub.allowanceReset("cc");
+  await settle();
+  assert.equal(claude.count(), 1);
+  assert.equal(claude.last().options.route, waitingAgent!.options.route);
+  assert.equal(claude.last().prompts[0], GO_ON_AFTER_REFILL);
+  await hub.shutdown();
+  await r.close();
+});
+
 test("an overload notice identifies the retry it can cancel, even after another attempt", async () => {
   const time = testClock();
   const r = new Rig({ clock: time.clock });
@@ -2487,6 +2698,43 @@ test("taken up by the next station, a process runs on the account it was started
   assert.equal(idleNext.options.profile.id, "cc2");
   assert.ok(idleNext.prompts[0]!.includes("one more"), idleNext.prompts[0]);
   await hub.shutdown();
+  await r.close();
+});
+
+test("changing runtime lets the running turn finish and the next reads back the same conversation", async () => {
+  const r = new Rig();
+  r.edit((raw) => { raw.profiles[1].models = ["gpt-5"]; });
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const old = r.claude.last();
+  const key = old.options.route;
+  const path = join(r.config.profiles[0]!.home, "projects", claudeProject(r.session(key).workspace)!, `${old.id()}.jsonl`);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify({ type: "user", message: { role: "user", content: "earlier work" } }) + "\n");
+  await configure(r.hub, key, { runtime: "codex", model: "gpt-5" });
+  assert.equal(r.session(key).runtime, "codex");
+  assert.equal(old.disposed, false);
+  assert.equal(r.store.sessionOfRuntime("claude", old.id())?.key, key);
+  assert.equal(r.store.sessionOfRuntime("codex", old.id()), null);
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  const sent = r.said(r.thread("C1", m.threadTs).id).find((x) => x.text === "done");
+  assert.deepEqual(sent?.agentIdentity, { runtime: "claude", model: "opus", effort: "high" });
+  old.complete();
+  await settle();
+  await r.accept(reply(m, "9999.9", "continue", { addressed: true }));
+  await settle();
+  const next = r.codex.last();
+  assert.equal(old.disposed, true);
+  assert.equal(next.options.resume, undefined);
+  assert.ok(matches(next.prompts[0]!, ["This is a new conversation", `session_history with chat ${key}`, "continue"]));
+  assert.equal(r.store.runtimeSessionSources(key)[0]!.runtime, "claude");
+  assert.ok(r.hub.live.before(key, 100, 100)![1].some((e) => e.text === "earlier work"));
+  const codexPath = join(r.config.profiles[1]!.home, "sessions", "2026", "11", "03", `rollout-${next.id()}.jsonl`);
+  mkdirSync(dirname(codexPath), { recursive: true });
+  writeFileSync(codexPath, JSON.stringify({ type: "response_item", timestamp: "2026-10-24T00:00:00Z", payload: { type: "message", role: "assistant", content: [{ type: "output_text", text: "continued work" }] } }) + "\n");
+  const history = await r.call(key, "session_history", { chat: key });
+  assert.ok(matches(history, ["earlier work", "continued work"]), history);
   await r.close();
 });
 

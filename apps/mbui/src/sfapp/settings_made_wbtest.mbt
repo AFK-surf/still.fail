@@ -348,7 +348,7 @@ test "归档 made once: its choice, notes and stations drawn, with a finger and 
     let made = memories_tester(true, platform, scale~, mode="settings-archiving")
     assert_true(app.nav.top() == Setting(@settings.Route::Archiving))
     assert_true(instances_sorted(made).length() > 0, msg="\{case}")
-    for w in ["Studio", @sf.t("web-pages.appearance.archive.title"), @sf.t("web-pages.archiving.auto.title")] {
+    for w in ["Willow", @sf.t("web-pages.appearance.archive.title"), @sf.t("web-pages.archiving.auto.title")] {
       assert_true(made.find(w) is Some(_), msg="\{w} at \{case}")
     }
   }
@@ -567,7 +567,7 @@ test "一台 station 的归档 made once: as the core says it anew, the same nod
 ///|
 test "归档 made once: a station's row pressed opens its own archiving, made once too" {
   let t = memories_tester(true, 2, mode="settings-archiving")
-  t.tap_text("Studio")
+  t.tap_text("Willow")
   t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == Setting(@settings.Route::StationArchiving("ws1/st1")), msg="on top \{@sfbase.page_kind(app.nav.top())}")
   let own = tree_words_drawn()
@@ -599,7 +599,7 @@ test "用量 made once: its figures, its days, its chats and its stations the tr
     assert_true(app.nav.top() == Setting(@settings.Route::Usage))
     assert_true(instances_sorted(made).length() > 0)
     let own = tree_words_drawn()
-    for w in ["用量", "$118", "比前 7 天", "10/4", "最花钱的对话", "整理发布清单", "各设备的工作量", "MBA"] {
+    for w in ["用量", "$118", "比前 7 天", "10/4", "最花钱的对话", "整理发布清单", "各设备的工作量", "Maple"] {
       assert_true(own.iter().any(fn(o) { o.contains(w) }), msg="\{w} not the tree's own at \{case}: \{own}")
     }
   }
@@ -647,7 +647,7 @@ fn prices_said(base : Source, state : @signals.Signal[String]) -> Source {
         "held" => ({ value: None, error: None, version: -1 } : Topic)
         "failed" => ({ value: None, error: Some({ "message": Json::string("网络连接失败") }), version: 1 } : Topic)
         "reading" => read_as(Some({ "reading": Json::boolean(true) }))
-        "failing" => read_as(Some({ "failing": Json::array([{ "text": Json::string("Studio 离线") }]) }))
+        "failing" => read_as(Some({ "failing": Json::array([{ "text": Json::string("Willow 离线") }]) }))
         "none" => read_as(None)
         _ => t
       }
@@ -672,7 +672,7 @@ test "价目表 made once while its usage is not read yet, fails to be read, is 
       let has = fn(w : String) { words.iter().any(fn(x) { x.contains(w) }) }
       match state {
         "failed" => assert_true(has("网络连接失败") && out.iter().any(fn(w) { w.contains("网络连接失败") }), msg=at)
-        "failing" => assert_true(has("Studio 离线"), msg="\{at}: \{words}")
+        "failing" => assert_true(has("Willow 离线"), msg="\{at}: \{words}")
         "none" => assert_true(has(@sf.t("web-main.usage.noPrices")), msg="\{at}: \{words}")
         _ => ()
       }
@@ -692,8 +692,8 @@ test "价目表 made once in a window made narrower and wider as it shows: its c
       made.resize(w, 2400.0)
       made.run_for(@ui.move_most_ms)
       // (its card's name and what its prices are within the window; its table scrolls across within the card)
-      let words = made.words().filter(fn(x) { x.5 > 0.5 && (x.0 == "Studio" || x.0.contains("价")) })
-      assert_true(words.iter().any(fn(x) { x.0 == "Studio" }), msg="its card at \{w}")
+      let words = made.words().filter(fn(x) { x.5 > 0.5 && (x.0 == "Willow" || x.0.contains("价")) })
+      assert_true(words.iter().any(fn(x) { x.0 == "Willow" }), msg="its card at \{w}")
       for x in words {
         assert_true(x.1 >= -0.5 && x.1 + x.3 <= w + 0.5, msg="\{x.0} within \{w} at \{case}: \{x}")
       }
@@ -709,7 +709,7 @@ test "价目表 made once: its stations' cards and their tables the tree's own, 
     assert_true(app.nav.top() is Setting(@settings.Route::UsagePrices(_)), msg="\{case}")
     assert_true(instances_sorted(made).length() > 0)
     let own = tree_words_drawn()
-    for w in ["价目表", "Studio"] {
+    for w in ["价目表", "Willow"] {
       assert_true(own.iter().any(fn(o) { o.contains(w) }), msg="\{w} not the tree's own at \{case}: \{own}")
     }
   }
@@ -1110,7 +1110,7 @@ test "一台 station 的记忆 made once: a part of its global memory pressed op
     msg="\{@sfbase.page_kind(part)} \{@sfbase.page_kind(skill)}",
   )
   let list = memories_tester(true, 2)
-  list.tap_text("Studio")
+  list.tap_text("Willow")
   list.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == Setting(@settings.Route::Memory("ws1/st1")), msg="on top \{@sfbase.page_kind(app.nav.top())}")
   let own = tree_words_drawn()
@@ -1160,12 +1160,12 @@ fn topic_asked(base : Source, name : String, key : String, asked : Array[String]
 test "a station's memory made once become another's in its place: its title that station's, its memory read of it, its rows there" {
   let asked : Array[String] = []
   let t = memories_tester(true, 2, mode="settings-memory", wrap=fn(b) { topic_asked(b, "memory", "station", asked) })
-  let first = (asked.last(), tree_words_drawn().contains("Studio"))
+  let first = (asked.last(), tree_words_drawn().contains("Willow"))
   app.nav.become(Setting(@settings.Route::Memory("ws1/st2")))
   t.run_for(@ui.move_most_ms)
   let own = tree_words_drawn()
   assert_eq(
-    (first, asked.last(), own.contains("MBA"), own.iter().any(fn(o) { o.contains("发布流程") })),
+    (first, asked.last(), own.contains("Maple"), own.iter().any(fn(o) { o.contains("发布流程") })),
     ((Some("ws1/st1"), true), Some("ws1/st2"), true, true),
     msg="\{own}",
   )

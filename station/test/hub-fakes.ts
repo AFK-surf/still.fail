@@ -12,6 +12,7 @@ import type { ChatMessage, ChatSurface, InboundFile, InboundMessage, ThreadRef }
 import { type HubConfig, hubConfig } from "../src/sessions/config.ts";
 import { type ColdStorage, Hub } from "../src/sessions/hub.ts";
 import { InternalChat } from "../src/sessions/internal.ts";
+import { answerFiles } from "../src/slack/surface.ts";
 import { chatTools } from "../src/tools/chat.ts";
 import { type Attachment, Store } from "../src/store/store.ts";
 import { letterMessage } from "../src/store/rows.ts";
@@ -76,6 +77,9 @@ export class FakeChat implements ChatSurface {
     const bytes = this.shared.get(file.id);
     if (bytes === undefined) throw new Error("missing_scope");
     return new TextEncoder().encode(bytes);
+  }
+  answerFiles(answer: Json) {
+    return answerFiles(answer);
   }
   async userOf(email: string) {
     return this.people.get(email.trim().toLowerCase()) ?? null;
@@ -266,7 +270,8 @@ export const reply = (to: InboundMessage, ts: string, text: string, over: Partia
 });
 
 /// `workspaces`: those the station is in, its home one first (docs/multi-workspace.md); a session's link names its own.
-export type Setup = { maxNudges?: number; maxWarmClaude?: number; warmMinutes?: number; teamRequireMention?: boolean; link?: boolean; cold?: ColdStorage; clock?: Clock.Clock; place?: { workspace: string; station: string }; workspaces?: string[] };
+/// `askToName`: asked to name an untitled chat as its turn ends (off unless a test looks at it).
+export type Setup = { maxNudges?: number; askToName?: boolean; maxWarmClaude?: number; warmMinutes?: number; teamRequireMention?: boolean; link?: boolean; cold?: ColdStorage; clock?: Clock.Clock; place?: { workspace: string; station: string }; workspaces?: string[] };
 
 /// A TestClock for a rig (its hub's, its store's, its sessions'): `adjust(ms)` moves it on, and what was due by then runs.
 /// `asked()` counts the waits begun on it; `begun(n)` resolves once `n` have, each then sleeping on it (an adjust
@@ -325,6 +330,7 @@ export class Rig {
       ],
     };
     if (o.maxNudges !== undefined) this.raw.maxNudges = o.maxNudges;
+    this.raw.askToName = o.askToName ?? false;
     if (o.maxWarmClaude !== undefined) this.raw.maxWarmClaude = o.maxWarmClaude;
     if (o.warmMinutes !== undefined) this.raw.warmMinutes = o.warmMinutes;
     this.config = hubConfig(this.raw, this.dir);

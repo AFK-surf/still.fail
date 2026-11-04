@@ -1,8 +1,9 @@
 # station 用 TypeScript 重写：设计方案
 
 > 已完成：TS station 是唯一的 station，Rust station（`mesh/`）2026-10-04 删除（分支 native-prebuilt），之前的代码在 git 历史里。
-> 下文是当时的方案，提到的 `mesh/…` 文件都指删除前的 Rust station。退回 Rust 版仍然可以：装一个旧的发布包（数据目录和
-> `stillfail.db` 两边通用）。
+> 下文是当时的方案，提到的 `mesh/…` 文件都指删除前的 Rust station。2026-11-03 起不再保证能退回 Rust 版：`stillfail.db`
+> 升到版本 13（打开时把 Rust 版写出去的归档文件一次搬回库里），Rust 版不再能打开；下文「来回切」「user_version 仍是 12」
+> 这些约束作废。
 
 2026-10-03。依据：现有 Rust station（main d5a4dd72，去掉测试约 3.2 万行）的完整梳理，以及分支 proto-rust-shell-ts 上的原型实测（`proto/ts-station`：同库 53 个请求与 Rust 逐字段一致；4.1 万行 TS 的类型检查 165ms、esbuild 38ms；Node 单线程会被重请求堵住）。
 
@@ -109,7 +110,7 @@ launchd / 桌面 app
 2. **读接口全量 + 事件流**：所有 GET、`/events`（带序号）。完成标志：客户端只读地用 TS station 一切正常，对照测试全过。
 3. **agent**：会话状态机、claude/codex 适配器、MCP 工具、站内聊天、jobs、预览。完成标志：在测试 workspace 里网页 chat 完整可用，假 agent 规则测试全过，重启不断轮次。
 4. **其余**：Slack、账号（Profile、登录、额度、续期）、更新、adb、站间任务、遥测、反馈。
-5. **切换**：安装器和桌面 app 改为装 TS 版（带 Node）；先在一台测试 station 上跑，再到 studio、bft；保留退回 Rust 版的路径一段时间。
+5. **切换**：安装器和桌面 app 改为装 TS 版（带 Node）；先在一台测试 station 上跑，再逐步推广；保留退回 Rust 版的路径一段时间。
 
 规模估计：3.2 万行 Rust → 约 2 万多行 TS；每期都在分支上做完、给证据、你认可再合。
 

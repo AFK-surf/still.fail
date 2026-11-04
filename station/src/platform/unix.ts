@@ -1,10 +1,10 @@
 // macOS and Linux (and another Unix as Linux): process groups and signals, /bin/sh, `/` paths, links. What the two
 // differ in (how the machine reads: sysctl and vm_stat, or /proc; the keychain and QuickLook) is said here too.
 import { type ChildProcess, execFile, execFileSync, spawn } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, lstatSync, readFileSync, readdirSync, readlinkSync, realpathSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, readFileSync, readdirSync, readlinkSync, realpathSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { release, type as osType, userInfo } from "node:os";
 import { basename, delimiter, join } from "node:path";
-import { readdir } from "node:fs/promises";
+import { copyFile, readdir } from "node:fs/promises";
 import { promisify } from "node:util";
 import { wall } from "../ops/fibers.ts";
 import type { Env, Found, Host, Platform } from "./index.ts";
@@ -482,13 +482,13 @@ export const unix: Platform = {
   /// In the background of a shell that ends at once: the installer is nobody's child here, and outlives both a handover
   /// (this process is let go) and a restart (the service's processes are stopped).
   installerExt: "sh",
-  startInstaller(script, runDir, env) {
-    // A copy: the installer replaces the release it is in.
+  async startInstaller(script, runDir, env) {
+    // A copy: the installer replaces the release it is in. Off the station's thread so file I/O does not hold it up.
     const copy = join(runDir, "install.sh");
     try {
-      copyFileSync(script, copy);
+      await copyFile(script, copy);
     } catch {
-      return Promise.resolve(false);
+      return false;
     }
     const shell = `( sh "$1"; echo $? > "$2/update.exit" ) > "$2/update.log" 2>&1 < /dev/null &`;
     return new Promise<boolean>((resolve) => {

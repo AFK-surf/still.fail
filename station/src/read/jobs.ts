@@ -8,6 +8,7 @@ import * as store from "./store.ts";
 import type { Json, JobRow, Store } from "./store.ts";
 import { HttpError, chats, scopeOf } from "./views.ts";
 import type { Lang } from "../ops/i18n.ts";
+import { log } from "../ops/log.ts";
 
 /// How much of a log `tail` reads at most.
 const LOG_BYTES = 64 * 1024;
@@ -92,13 +93,27 @@ export function rustLines(text: string): string[] {
 /// with the chat it is in as the viewer's list has it (`chat`: its id, title and whether it is archived). Those of the
 /// viewer's workspace's chats. The jobs up by the index of their states, and the chats of their sessions alone: read
 /// with every job the station ever ran, the whole sidebar and (for a session whose own chat is not listed) the whole
-/// archive, a read took 56 s on ccvm short of memory (2026-11-02), as every device read the station again.
-export function openJobs(s: Store, viewer: Viewer, lang: Lang): Json[] {
+/// archive, this could hold up every device reading the station again.
+/// `chats`: each with the chat it is in; without (a device that names it from the sidebar it holds), the jobs alone: the
+/// sidebar's items do not need to be read for it.
+export function openJobs(s: Store, viewer: Viewer, lang: Lang, named = true): Json[] {
+  // Record what a slow read spent at each stage, including whether it included chats.
+  const started = performance.now();
+  const slow = (stage: Record<string, unknown>) => {
+    const ms = Math.round(performance.now() - started);
+    if (ms >= 1_000) log.warn("readers", "a jobs read's stages", { ms, named, ...stage });
+  };
   setLang(lang);
   const up = store.upJobs(s);
   const seen = store.seenBy(s, viewer, up.map((j) => j.sessionKey));
   const open = up.filter((j) => seen(j.sessionKey));
-  if (open.length === 0) return [];
+  const looked = Math.round(performance.now() - started);
+  if (open.length === 0) return (slow({ up: up.length, looked }), []);
+  if (!named) {
+    const out = open.map((j) => shown(s, j));
+    slow({ up: up.length, open: open.length, looked });
+    return out;
+  }
   // Each job's chat: the session's own over one it only takes part in, a listed one over an archived one (the last of
   // each, as the sidebar lists them): of the items its session and the chats it takes part in make (views.ts
   // `scopeOf`), each as the whole list has it. The archive's are read only for a session whose own chat is not listed.
@@ -107,7 +122,7 @@ export function openJobs(s: Store, viewer: Viewer, lang: Lang): Json[] {
   const scan = (archived: boolean) => {
     const own = new Map<string, Json>();
     const any = new Map<string, Json>();
-    for (const chat of chats(s, viewer, archived, scope)) {
+    for (const chat of chats(s, viewer, archived, scope, true)) {
       const shownChat = { id: chat.id ?? null, title: chat.title ?? null, archived };
       for (const agent of Array.isArray(chat.agents) ? chat.agents : []) {
         const key = agent?.key;
@@ -118,8 +133,11 @@ export function openJobs(s: Store, viewer: Viewer, lang: Lang): Json[] {
     }
     return { own, any };
   };
+  const scanStart = performance.now();
   const listed = scan(false);
+  const listedMs = Math.round(performance.now() - scanStart);
   const archived = [...keys].some((key) => !listed.own.has(key)) ? scan(true) : null;
+  slow({ up: up.length, open: open.length, looked, listedMs, archivedScanned: archived !== null });
   return open.map((j) => {
     const v = shown(s, j);
     const k = j.sessionKey;

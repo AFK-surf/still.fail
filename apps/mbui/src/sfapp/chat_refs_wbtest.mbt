@@ -66,10 +66,10 @@ test "`@` and words: the workspace's other stations' chats too, each with its st
   let calls : Array[Made] = []
   let t = fake_core(calls)
   t.tap_text("发消息")
-  // written in a chat of Studio's (ws1/st1); 夜里的构建又失败了 is MBA's (ws1/st2)
+  // written in a chat of Willow's (ws1/st1); 夜里的构建又失败了 is Maple's (ws1/st2)
   t.type_text("@的")
   // (then when it was last active)
-  assert_true(after_on_its_row(t, "夜里的构建又失败了") == ["MBA", "15 分钟前"], msg=about_its_row(t, "夜里的构建又失败了"))
+  assert_true(after_on_its_row(t, "夜里的构建又失败了") == ["Maple", "15 分钟前"], msg=about_its_row(t, "夜里的构建又失败了"))
   assert_true(after_on_its_row(t, "首页的列表改成按天分组") == ["8 分钟前"], msg=about_its_row(t, "首页的列表改成按天分组"))
   // a finger's row: 44 high at least (Theme::rows pick)
   let (_, _, _, high) = t.get(Button, label="夜里的构建又失败了").rect

@@ -16,7 +16,7 @@ fn words_show(t : @ui.Tester, s : String) -> Bool {
 test "a picture of the chat opened on a phone: drawn in each frame from the tap on, its thumbnail's place never left empty" {
   new_run()
   let src = fixture("chat-preview-named")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   // (a phone's: a finger's tap, as a phone's host hands it on)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   nav_rested(t)

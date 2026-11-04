@@ -11,8 +11,11 @@ import { ConnectedSurface, MEMBERS_MS } from "../connects/surface.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { Attachment } from "../store/store.ts";
-import { type ChatEvent, type ChatMessage, type Handler, type InboundFile, type Member, type Person, type Place, type ThreadRef, splitForSlack } from "../sessions/chat.ts";
-import { type Stands, answerOf, answeredBlocks, markdown, questionBlocks, standsBlock, standsText } from "./cards.ts";
+import { type ChatEvent, type ChatMessage, type Handler, type InboundFile, type Member, type ModelChoice, type Person, type Place, type ThreadRef, splitForSlack } from "../sessions/chat.ts";
+import { type CardEnd, endedWords } from "../connects/card-ends.ts";
+import { type Stands, answerOf, answeredBlocks, endedBlocks, loginBlocks, loginCodeOf, loginEnteredBlocks, markdown, questionBlocks, standsBlock, standsText } from "./cards.ts";
+import { NEW_CHAT_COMMAND } from "./apps.ts";
+import { modelOptions, modelValue, newChatBlocks, newChatView, submittedChat } from "./new-chat.ts";
 import { ThreadStatus } from "./status.ts";
 import { type Params, SlackClient, field } from "./web.ts";
 import { wall } from "../ops/fibers.ts";
@@ -144,6 +147,12 @@ export function messageFiles(m: Json): InboundFile[] {
     });
 }
 
+/// The files of a Web API answer: its messages' (conversations.replies, conversations.history), or a message's or a file's.
+export function answerFiles(answer: Json): InboundFile[] {
+  const messages = [...(Array.isArray(answer?.messages) ? answer.messages : []), answer?.message, { files: [answer?.file] }];
+  return messages.flatMap((m: Json) => messageFiles(m));
+}
+
 /// A Slack event as the station takes it: someone's message (a person, or another app's bot: agents work together in
 /// threads), an edit, or nothing it keeps (its own messages, deletes). `botId`: this app's bot id (B…).
 export function toEvent(event: Json, botUserId: string, botId: string): ChatEvent | null {
@@ -232,6 +241,8 @@ export type SlackSurfaceOptions = {
   onHeard?: () => void;
   /// A new turn began showing its status, an opportunity to retry an app setup that previously failed.
   onWorking?: () => boolean | void | Promise<boolean | void>;
+  /// The models `/sf` offers, the connect's own first (the hub's `modelsFor`).
+  models?: () => ModelChoice[];
 };
 /// The most of a question's words its card carries (Slack takes 12,000 characters of Markdown in a message, and long
 /// options are listed with them).
@@ -241,12 +252,16 @@ export const PEOPLE_MS = 10 * 60_000;
 
 export class SlackSurface extends ConnectedSurface {
   protected readonly kind = "slack";
+  readonly loginCards = true;
   readonly appToken: string;
   readonly botToken: string;
   readonly client: SlackClient;
   private channels = new Map<string, string | null>();
-  /// The questions answered (their messages' ts): a second press before the card changed is not said again.
+  /// The questions answered or closed (their messages' ts): a second press before the card changed is not said again.
   private answered = new Set<string>();
+  /// The questions posted after words too long for them (by the ts `post` gave, the first part's): their own message's
+  /// ts and words. One within QUESTION_CHARS is the message `post` gave. Kept while connected.
+  private questions = new Map<string, { ts: string; text: string }>();
   /// Each thread's newest message as the station saw it (by `channel/threadTs`), the bot's with what it posted (to be
   /// changed: `standsAt`), anyone else's with null; and where the thread stands said at its end: on the bot's message
   /// (`mine`, what it said before) or in a message of its own (null). Kept while connected: a restart forgets them.
@@ -255,6 +270,7 @@ export class SlackSurface extends ConnectedSurface {
   /// One change at a time in each thread, in order.
   private standing = new Map<string, Promise<void>>();
   private onWorking: () => boolean | void | Promise<boolean | void>;
+  private models: () => ModelChoice[];
 
   constructor(options: SlackSurfaceOptions) {
     if (!options.appToken.startsWith("xapp-")) throw new Error("slack.appToken must be an app-level token (xapp-…)");
@@ -265,6 +281,7 @@ export class SlackSurface extends ConnectedSurface {
     this.botToken = options.botToken;
     this.client = options.client ?? new SlackClient();
     this.onWorking = options.onWorking ?? (() => {});
+    this.models = options.models ?? (() => []);
   }
 
   protected identify() {
@@ -298,11 +315,45 @@ export class SlackSurface extends ConnectedSurface {
           } catch {}
           return end(null);
         }
-        // A card's button pressed: acknowledged at once (Slack waits 3 s), then said as the person's answer.
+        // Acknowledged (Slack waits 3 s), with what it asked for when it asks (`payload`).
+        const ack = (payload?: Json) => {
+          if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ envelope_id: envelope.envelope_id ?? null, ...(payload === undefined ? {} : { payload }) }));
+        };
+        // `/sf`: its form opened (its trigger lasts 3 s).
+        if (envelope?.type === "slash_commands") {
+          ack();
+          if (envelope.payload?.command === NEW_CHAT_COMMAND) void this.newChat(envelope.payload).catch((error) => log.error("slack", "failed to open the new chat form", { error: (error as Error).message }));
+          return;
+        }
+        // The form's model field: the models matching what is typed.
+        if (envelope?.type === "interactive" && envelope.payload?.type === "block_suggestion") {
+          let options: Json[] = [];
+          try {
+            options = modelOptions(this.models(), text(envelope.payload.value), stationLang());
+          } catch (error) {
+            log.error("slack", "failed to list the models", { error: (error as Error).message });
+          }
+          return ack({ options });
+        }
+        // The form sent: acknowledged once its thread is posted (or with what is wrong, shown in the form), then taken.
+        if (envelope?.type === "interactive" && envelope.payload?.type === "view_submission") {
+          let acked = false;
+          const once = (payload?: Json) => {
+            if (!acked) ack(payload);
+            acked = true;
+          };
+          void this.startChat(envelope.payload, handler, once).catch((error) => {
+            log.error("slack", "failed to start a chat from the form", { error: (error as Error).message });
+            once({ response_action: "errors", errors: { words: tr(stationLang(), "station.slack.newChatFailed", { error: (error as Error).message }) } });
+          });
+          return;
+        }
+        // A card's button pressed: acknowledged at once, then said as the person's answer.
         if (envelope?.type === "interactive") {
-          if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ envelope_id: envelope.envelope_id ?? null }));
+          ack();
           if (envelope.payload?.type === "block_actions") {
-            void this.answer(envelope.payload, handler).catch((error) => log.error("slack", "failed to take a card's answer", { error: (error as Error).message }));
+            const pressed = loginCodeOf(envelope.payload) !== null ? this.enterCode(envelope.payload, handler) : this.answer(envelope.payload, handler);
+            void pressed.catch((error) => log.error("slack", "failed to take a card's answer", { error: (error as Error).message }));
           }
           return;
         }
@@ -326,8 +377,8 @@ export class SlackSurface extends ConnectedSurface {
   }
 
   /// Posted as written, in a markdown block (Slack draws the agent's Markdown as still.fail does, tables too); a long
-  /// message goes out in parts, the first part's ts standing for the whole. A question (`card`: options or a field) is
-  /// one message with its buttons (cards.ts). Files are uploaded before anything is posted (an app without
+  /// message goes out in parts, the first part's ts standing for the whole. A question (`card`: options or a field), or
+  /// a login's field for its page's code, is one message with its buttons (cards.ts). Files are uploaded before anything is posted (an app without
   /// `files:write` fails there, with nothing said), then shared into the thread below the text.
   async post(thread: ThreadRef, message: string, files: Attachment[], card?: Json | null): Promise<string> {
     const uploaded: [string, string][] = [];
@@ -348,7 +399,7 @@ export class SlackSurface extends ConnectedSurface {
       if (first === null && typeof posted?.ts === "string") first = posted.ts;
       if (typeof posted?.ts === "string") this.heard(thread.channel, thread.threadTs, posted.ts, { text: said, blocks, ...(question ? { question } : {}) });
     };
-    const question = card && (card.type === "options" || card.type === "text") ? card : null;
+    const question = card && (card.type === "options" || card.type === "text" || card.type === "login") ? card : null;
     let parts = splitForSlack(message, 3500).filter((t) => t !== "");
     // A question is one message with its buttons; what is too long for it goes before it, in parts.
     let asking = "";
@@ -357,7 +408,16 @@ export class SlackSurface extends ConnectedSurface {
       else asking = parts.pop() ?? "";
     }
     for (const part of parts) await send(part, [markdown(part)]);
-    if (question) await send(asking, questionBlocks(asking, question, stationLang()), true);
+    if (question) {
+      const before = first;
+      await send(asking, question.type === "login" ? loginBlocks(asking, stationLang()) : questionBlocks(asking, question, stationLang()), true);
+      const ts = this.ends.get(`${thread.channel}/${thread.threadTs}`)?.ts;
+      if (before !== null && ts !== undefined) {
+        this.questions.set(before, { ts, text: asking });
+        // (the oldest go once there are many: long answered or closed)
+        if (this.questions.size > 500) this.questions.delete(this.questions.keys().next().value!);
+      }
+    }
     if (uploaded.length > 0) {
       const list = JSON.stringify(uploaded.map(([id, title]) => ({ id, title })));
       const shared = await this.client.api(
@@ -381,6 +441,108 @@ export class SlackSurface extends ConnectedSurface {
     }
     if (first === null) throw new Error("nothing to post");
     return first;
+  }
+
+  /// `/sf`: its form, the model field on the connect's own model and the words what followed the command.
+  private async newChat(payload: Json) {
+    const trigger = text(payload?.trigger_id);
+    const channel = text(payload?.channel_id);
+    if (trigger === "" || channel === "") return;
+    const view = newChatView(this.models(), channel, text(payload?.text), stationLang());
+    await this.client.api(
+      "views.open",
+      [
+        ["trigger_id", trigger],
+        ["view", JSON.stringify(view)],
+      ],
+      this.botToken,
+    );
+  }
+
+  /// The `/sf` form sent: its words posted in its channel as the person's, a new thread, which a session on the model
+  /// picked takes (as a message mentioning the bot would start one). What cannot be done is said in the form, which
+  /// stays open; nothing is posted then.
+  private async startChat(payload: Json, handler: Handler, ack: (payload?: Json) => void) {
+    const asked = submittedChat(payload);
+    if (asked === null) return ack();
+    const lang = stationLang();
+    const offered = this.models();
+    const model = asked.model === null ? null : (offered.find((m) => modelValue(m) === modelValue(asked.model!)) ?? null);
+    if (model === null) return ack({ response_action: "errors", errors: { model: tr(lang, "station.slack.newChatNoModel") } });
+    if (asked.words === "") return ack({ response_action: "errors", errors: { words: tr(lang, "station.slack.newChatEmpty") } });
+    const said = newChatBlocks(asked.user, model, asked.words, lang);
+    let ts = "";
+    try {
+      const posted = await this.client.api(
+        "chat.postMessage",
+        [
+          ["channel", asked.channel],
+          ["text", said.text],
+          ["blocks", JSON.stringify(said.blocks)],
+          ["unfurl_links", "false"],
+        ],
+        this.botToken,
+      );
+      ts = text(posted?.ts);
+    } catch (error) {
+      const why = (error as Error).message;
+      const key = /not_in_channel|channel_not_found|is_archived/.test(why) ? "station.slack.newChatNotHere" : "station.slack.newChatFailed";
+      return ack({ response_action: "errors", errors: { words: tr(lang, key, { error: why }) } });
+    }
+    ack();
+    if (ts === "") return;
+    // (the bot's message, but the person's words: nothing of the bot's to change)
+    this.heard(asked.channel, ts, ts);
+    await handler({ type: "message", message: { channel: asked.channel, threadTs: ts, ts, user: asked.user, text: asked.words, addressed: true, model } });
+  }
+
+  /// A login card's button pressed: the field's code handed to the station (never said in the thread), and the card
+  /// changed to say who entered it. Nothing written, or refused (the login ended, it was entered before): only they are
+  /// told.
+  private async enterCode(payload: Json, handler: Handler) {
+    const code = loginCodeOf(payload) ?? "";
+    const channel = text(payload?.channel?.id) || text(payload?.container?.channel_id);
+    const asked = text(payload?.message?.ts) || text(payload?.container?.message_ts);
+    const threadTs = text(payload?.message?.thread_ts) || text(payload?.container?.thread_ts) || asked;
+    const user = text(payload?.user?.id);
+    if (channel === "" || asked === "" || user === "") return;
+    const lang = stationLang();
+    const tell = (said: string) =>
+      this.client.api(
+        "chat.postEphemeral",
+        [
+          ["channel", channel],
+          ["user", user],
+          ["thread_ts", threadTs],
+          ["text", said],
+        ],
+        this.botToken,
+      );
+    if (code === "") return void (await tell(tr(lang, "station.feishu.answerEmpty")));
+    try {
+      await handler({ type: "loginCode", channel, threadTs, ts: asked, user, code });
+    } catch (error) {
+      return void (await tell(tr(lang, "station.slack.loginRefused", { error: (error as Error).message })));
+    }
+    // (entered: the login's end leaves it saying so)
+    this.answered.add(asked);
+    if (this.answered.size > 500) this.answered.delete(this.answered.values().next().value!);
+    const asking = text(payload?.message?.text);
+    const entered = loginEnteredBlocks(asking, (await this.userName(user)) ?? "", lang);
+    const key = `${channel}/${threadTs}`;
+    if (this.stands.get(key)?.ts === asked) this.stands.delete(key);
+    const end = this.ends.get(key);
+    if (end?.ts === asked && end.mine !== null) end.mine = { text: asking, blocks: entered };
+    await this.client.api(
+      "chat.update",
+      [
+        ["channel", channel],
+        ["ts", asked],
+        ["text", asking],
+        ["blocks", JSON.stringify(entered)],
+      ],
+      this.botToken,
+    );
   }
 
   /// A card's send button pressed: said in its thread as the person's message, and the card changed to say who
@@ -437,6 +599,26 @@ export class SlackSurface extends ConnectedSurface {
       ],
       this.botToken,
     );
+  }
+
+  /// A question that stopped waiting other than by its button (connects/card-ends.ts), a login's field among them:
+  /// changed to say why, its buttons gone. One pressed is changed by `answer` (a login's by `enterCode`); one after words too long for it, whose own message is not known any more
+  /// (a restart since), stays as it is.
+  async cardEnded(thread: ThreadRef, ts: string, said: string, card: Json, end: CardEnd): Promise<void> {
+    if (card?.type !== "options" && card?.type !== "text" && card?.type !== "login") return;
+    const asked = this.questions.get(ts) ?? (Array.from(said).length <= QUESTION_CHARS ? { ts, text: said } : null);
+    if (asked === null || this.answered.has(asked.ts)) return;
+    this.answered.add(asked.ts);
+    if (this.answered.size > 500) this.answered.delete(this.answered.values().next().value!);
+    const lang = stationLang();
+    const who = end.why === "message" ? await this.userName(end.by).catch(() => null) : null;
+    const blocks = endedBlocks(asked.text, endedWords(card, end, who, lang));
+    // (its buttons gone for good: never put back with where the thread stands)
+    const key = `${thread.channel}/${thread.threadTs}`;
+    if (this.stands.get(key)?.ts === asked.ts) this.stands.delete(key);
+    const last = this.ends.get(key);
+    if (last?.ts === asked.ts && last.mine !== null) last.mine = { text: asked.text, blocks };
+    await this.update(thread.channel, asked.ts, asked.text, blocks);
   }
 
   /// The channels the bot is in, public and private (users.conversations), at most a couple of thousand.
@@ -795,6 +977,10 @@ export class SlackSurface extends ConnectedSurface {
   async download(file: InboundFile): Promise<Uint8Array> {
     if (file.url === null) throw new Error("Slack does not give its contents");
     return this.client.download(file.url, file.name, this.botToken);
+  }
+
+  answerFiles(answer: Json): InboundFile[] {
+    return answerFiles(answer);
   }
 
   /// Any Web API method as the bot; values that are not strings (blocks, arrays) go as JSON, as Slack takes them.

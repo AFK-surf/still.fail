@@ -151,6 +151,9 @@ pub(all) enum Answer {
   SetUp
   /// approved only in an app that keeps keys (a web page keeps none)
   Elsewhere
+  /// a secret to keep its station sealed to the person's devices set up then, this one not among them: approved on
+  /// one of those (or here once the station has this device's certificate and seals it again)
+  NotHere
   /// decided already, its card not saying so yet
   Decided
   /// another's to answer: whose (the card's 由…决定)
@@ -170,6 +173,7 @@ pub fn card_answer(answer : String, lasts : String, mine : Bool, who? : String? 
   match answer {
     "setUp" => SetUp
     "elsewhere" => Elsewhere
+    "notHere" => NotHere
     _ => Approve(lasts)
   }
 }
@@ -204,6 +208,8 @@ fn topic_answer(core : Core, ws : String, request : String, mine : Bool, who : S
   let typed = typed_of(field(row, "save"))
   if save && !flag(view, "plain") && !flag(view, "setUp") {
     Some((SetUp, save, typed))
+  } else if save && flag(row, "notHere") {
+    Some((NotHere, save, typed))
   } else {
     Some((Approve(text(row, "lasts")), save, typed))
   }
@@ -476,6 +482,10 @@ pub fn vault_foot(
   let lasts = match answer {
     Elsewhere => {
       note(tr("android-settings.vault.approve.inApp"))
+      return
+    }
+    NotHere => {
+      note(tr("web-pages.vault.approve.notHere"))
       return
     }
     Decided => {

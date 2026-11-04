@@ -345,9 +345,10 @@ void mb_host_local_station_act(moonbit_string_t action) {
         ps_plain(token)) {
       size_t cap = wcslen(origin) + wcslen(token) + 200;
       WCHAR *command = (WCHAR *)calloc(cap, sizeof(WCHAR));
+      // (OutputEncoding: what it says in UTF-8, as local_run reads it; by default the system's code page, GBK in Chinese)
       if (command)
         _snwprintf(command, cap,
-                   L"powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& ([scriptblock]::Create((irm '%ls/install.ps1'))) %ls\"",
+                   L"powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"[Console]::OutputEncoding = [Text.Encoding]::UTF8; & ([scriptblock]::Create((irm '%ls/install.ps1'))) %ls\"",
                    origin, token);
       if (command) local_begin(install ? "install" : "update", command, beta ? L"beta" : NULL);
     } else {

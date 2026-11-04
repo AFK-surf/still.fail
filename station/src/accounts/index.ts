@@ -19,7 +19,7 @@
 import { HERMES_MODEL_LIMIT } from "../agents/hermes.ts";
 import { runtimeKind, runtimeLabel } from "../agents/runtime.ts";
 import type { Clock } from "effect";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from "node:fs";
 import { access as accessFile, readFile, stat } from "node:fs/promises";
 import { hostname } from "node:os";
@@ -40,7 +40,7 @@ import type { Store } from "../store/store.ts";
 import { joinPath } from "../ops/paths.ts";
 import { modelName } from "../ops/model-name.ts";
 import { titleOf } from "../read/views.ts";
-import { currentPolicy, LEGACY_OPTIONS, savePolicy } from "../sessions/archive-policy.ts";
+import { LEGACY_OPTIONS, policyFrom, savePolicy } from "../sessions/archive-policy.ts";
 import { Fibers, wall } from "../ops/fibers.ts";
 import { checkAutomaticDecisions } from "./check.ts";
 import { CONSOLE_FILE, consoleIn, readConsole, RenewRefused, renewToken, writeConsole } from "./console.ts";
@@ -103,11 +103,15 @@ export type AccountsDeps = {
     accounts: { setHealth(health: (id: string) => ProfileHealth): void; healthOf(id: string): ProfileHealth; setRecheck?(recheck: (id: string) => Promise<unknown>): void };
     /// A profile was deleted: its sessions are taken on by another, or stopped.
     profileGone?(id: string): Promise<void>;
+    /// A manual reset lets sessions waiting on this account continue.
+    allowanceReset?(id: string): void | Promise<void>;
   };
   /// The codex driver, once there.
   codex?: () => CodexAccess | undefined;
   /// Hermes reports its configured providers and model IDs in ACP session/new (no model turn).
   hermes?: () => { models(profile: Profile): Promise<string[]> } | undefined;
+  /// The Antigravity CLI says whether it is signed in, and the models it offers, in ACP session/new (no model turn).
+  agy?: () => { models(profile: Profile): Promise<string[]> } | undefined;
   /// Whether someone follows the events or a turn runs (allowances are asked again on a round only then).
   following?: () => boolean;
   /// The station's environment (where the machine's logins are, and the CLIs found); process.env by default.
@@ -133,6 +137,8 @@ export type AccountsDeps = {
     status(profile: Profile): Promise<{ check: Json; quota: Json }>;
     view(profile: Json): Json | null;
     lendCodex?(profile: Profile, rejected: boolean): Promise<number>;
+    quotaReset?(profile: Profile, key: string): Promise<void>;
+    loginUpdated?(): void;
     /// Whether the station the profile is another's of did not answer lately.
     hostName?(profile: Json): string | null;
   };
@@ -153,6 +159,16 @@ const text = (v: unknown) => (v === undefined || v === null ? "" : typeof v === 
 const named = (runtime: Runtime) => runtimeLabel(runtime);
 /// A copy of a profile another station shares (share/index.ts): edited, checked and signed in only there.
 export const borrowed = (p: Json): boolean => isObject(p?.share) && p.share.borrowed === true;
+
+/// Which login a borrowed Codex process will read, without keeping its tokens in memory or logs.
+function lentLoginVersion(home: string): string | null {
+  try {
+    const tokens = JSON.parse(readFileSync(join(home, "auth.json"), "utf8"))?.tokens;
+    return createHash("sha256").update(JSON.stringify([tokens?.id_token, tokens?.access_token, tokens?.account_id])).digest("hex");
+  } catch {
+    return null;
+  }
+}
 
 /// What a profile's home says, as the overview shows it: whether it is there, and whose account its files say (a
 /// subscription's, or a console sign-in's).
@@ -191,6 +207,8 @@ export class Accounts {
   private quotaBusy = new Map<string, Promise<void>>();
   /// A quota read started before a Codex sign-in must not replace the new login's status.
   private loginGeneration = new Map<string, number>();
+  /// The last changed borrowed login whose app-servers were told to reload it.
+  private borrowedLogin = new Map<string, string | null>();
   /// OpenCode Console and Kimi tokens being renewed, by profile (a refresh token is spent once).
   private renewing = new Map<string, Promise<void>>();
   private pending = new Map<string, Pending>();
@@ -856,6 +874,7 @@ export class Accounts {
     if (profile?.runtime === "codex" && accessKind(profile) === "subscription") {
       this.loginGeneration.set(id, (this.loginGeneration.get(id) ?? 0) + 1);
       this.codexLogin(id, false);
+      this.deps.shared?.loginUpdated?.();
     }
     this.background.spawn(async () => {
       const profile = this.profile(id);
@@ -968,6 +987,18 @@ export class Accounts {
         check.models = this.checks.get(id)?.models ?? null;
         check.state = "unknown";
         check.detail = tr(lang, "station.profile.hermesModelsFailed", { error: (e as Error).message });
+      }
+    }
+    if (profile.runtime === "agy" && this.deps.agy?.()) {
+      try {
+        check.models = await this.deps.agy()!.models(profile);
+        check.state = "ok";
+        check.detail = tr(lang, "station.profile.works", { n: check.models.length });
+      } catch (e) {
+        const error = (e as Error).message;
+        check.models = null;
+        check.state = "failed";
+        check.detail = tr(lang, "station.profile.agyFailed", { error });
       }
     }
     check.decision = await this.discoverFn(profile, check);
@@ -1136,6 +1167,35 @@ export class Accounts {
     }
   }
 
+  /// A shared profile changed on its host. Get the new login even when the old access token has not expired yet, and
+  /// retire app-servers that cached it after their current turns. A reset also wakes sessions once its allowance is read.
+  async sharedChanged(id: string, reset: boolean): Promise<void> {
+    const profile = this.profile(id);
+    if (!profile || !borrowed(profile) || accessKind(profile) !== "subscription" || !this.deps.shared) return;
+    // A host that signed out may have no login to lend; its status must still reach the copy.
+    await this.checkBorrowed(profile, stationLang());
+    if (profile.runtime === "codex" && this.deps.shared.lendCodex) {
+      const before = this.borrowedLogin.has(id) ? this.borrowedLogin.get(id) : lentLoginVersion(profile.home);
+      if (!this.borrowedLogin.has(id)) this.borrowedLogin.set(id, before ?? null);
+      await this.deps.shared.lendCodex(profile, true);
+      const after = lentLoginVersion(profile.home);
+      if (before !== after) {
+        this.loginGeneration.set(id, (this.loginGeneration.get(id) ?? 0) + 1);
+        await this.deps.codex?.()?.loginChanged?.(id);
+      }
+      this.borrowedLogin.set(id, after);
+      await this.readQuota(id, true);
+      if (reset) await this.deps.hub?.allowanceReset?.(id);
+    }
+    await this.checkBorrowed(profile, stationLang());
+  }
+
+  /// Another station redeemed a reset on a subscription hosted here.
+  async sharedQuotaReset(id: string): Promise<void> {
+    await this.readQuota(id, true);
+    await this.deps.hub?.allowanceReset?.(id);
+  }
+
   /// The first follower of the events came: allowances older than a round are asked again now.
   followed() {
     this.refreshQuotas(false);
@@ -1149,9 +1209,21 @@ export class Accounts {
     if (profile.runtime !== "codex" || accessKind(profile) !== "subscription") throw new Refusal(400, t("station.quota.resetOpenAiOnly"));
     if (!this.resetFn) throw new Refusal(503, t("station.quota.resetUnsupported"));
     const result = await this.resetFn(profile, key);
-    await this.readQuota(id, true);
+    const quota = await this.readQuota(id, true).catch((error) => {
+      log.warn("accounts", "could not read the allowance after a reset", { profile: id, error: (error as Error).message });
+      return null;
+    });
     const outcome = result?.outcome;
-    if (outcome === "reset" || outcome === "alreadyRedeemed") return result;
+    if (outcome === "reset" || outcome === "alreadyRedeemed") {
+      // An old idempotency key may be replayed after the account has run out again.
+      if (outcome === "reset" || (quota?.state === "ok" && quota.windows.every((w) => w.usedPercent < 100))) {
+        await this.deps.shared?.quotaReset?.(profile, key).catch((error) => {
+          log.warn("accounts", "could not record a shared allowance reset", { profile: id, error: (error as Error).message });
+        });
+        await this.deps.hub?.allowanceReset?.(id);
+      }
+      return result;
+    }
     if (outcome === "nothingToReset") throw new Refusal(409, t("station.quota.nothingToReset"));
     if (outcome === "noCredit") throw new Refusal(409, t("station.quota.noCredit"));
     throw new Refusal(502, t("station.quota.resetUnconfirmed"));
@@ -1250,18 +1322,19 @@ export class Accounts {
     return this.deps.store.getSession(session)?.title ?? session;
   }
 
-  /// The overview's `automaticDecisions`.
-  automaticDecisionsView(viewer: Viewer): Json {
+  /// The overview's `automaticDecisions`. A workspace overview supplies its own policy and names, and filters the
+  /// already limited recent checks before naming them; direct callers keep the station-wide policy and checks.
+  automaticDecisionsView(viewer: Viewer, options: { includePolicy?: boolean; visible?: (session: string) => boolean; title?: (session: string) => string } = {}): Json {
     if (!manages(viewer)) return { canEdit: false, settings: {}, models: [], recent: [] };
     const lang = stationLang();
     const titles = new Map<string, string>();
     const title = (session: string) => {
       let t = titles.get(session);
-      if (t === undefined) titles.set(session, (t = this.chatTitleOf(session)));
+      if (t === undefined) titles.set(session, (t = options.title?.(session) ?? this.chatTitleOf(session)));
       return t;
     };
     // For pages from before the policy: the checks one by one.
-    const recent = this.deps.store.recentDecisions().map((row: Json) => {
+    const recent = this.deps.store.recentDecisions().filter((row: Json) => options.visible?.(typeof row.session === "string" ? row.session : "") ?? true).map((row: Json) => {
       const d = row.detail ?? {};
       const session = typeof row.session === "string" ? row.session : "";
       return {
@@ -1277,7 +1350,7 @@ export class Accounts {
       settings: { completion: { enabled: completion.enabled === true, model: typeof completion.model === "string" ? completion.model : null } },
       models: this.decisionModels(),
       recent,
-      policy: this.policyView(title),
+      ...(options.includePolicy === false ? {} : { policy: this.policyView(title) }),
     };
   }
 
@@ -1285,8 +1358,8 @@ export class Accounts {
   /// put there (by their latest check), who changed it last, and how many checks failed.
   private policyView(title: (session: string) => string): Json {
     const store = this.deps.store;
-    const policy = currentPolicy(store);
     const saved = store.archivePolicy();
+    const policy = policyFrom(saved);
     const latest = new Map<string, Json>();
     for (const row of store.latestDecisionsSince(store.now() - POLICY_DAYS * 86_400_000)) if (typeof row.session === "string") latest.set(row.session, row);
     const byOption = new Map<string, Json[]>();
@@ -1306,7 +1379,7 @@ export class Accounts {
       text: policy.policy,
       options: policy.options.map((o) => {
         const chats = byOption.get(o.id) ?? [];
-        // Named only as shown: each name is a lookup of the chat's (a week's checks came to 210 chats on ccvm).
+        // Named only as shown: each name is a lookup of the chat's (a week's checks came to many chats on a station).
         return { ...o, count: chats.length, chats: chats.slice(0, POLICY_CHATS).map(({ session, ...c }) => ({ session, title: title(session), ...c })) };
       }),
       days: POLICY_DAYS,

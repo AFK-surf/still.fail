@@ -59,6 +59,7 @@ fn faces_reset() -> Unit {
   previews.clear()
   share_face_asked.val = false
   share_face_whole_asked.val = 0
+  looks_files_reset()
   vector_cjk.set(CjkUnwanted)
 }
 
@@ -253,7 +254,7 @@ fn face_files(
   let f = Some(files[at])
   let sha = text(f, "sha256")
   let weight = number(f, "weight").to_int()
-  (src.read_bytes)("fonts.file", Json::object({ "sha256": sha.to_json() }), fn(r) {
+  (src.read_bytes)("fonts.file", Json::object({ "sha256": ToJson::to_json(sha) }), fn(r) {
     match r {
       Ok((v, bytes)) => {
         let whole = if flag(Some(v), "zipped") { @zip.gunzip(bytes) } else { Some(bytes) }
@@ -261,7 +262,7 @@ fn face_files(
           Some(b) if @zip.sha256(b) == sha => {
             // kept unzipped from now on
             if flag(Some(v), "zipped") {
-              (src.call_bytes)("fonts.keep", Json::object({ "sha256": sha.to_json() }), b, fn(_) {  })
+              (src.call_bytes)("fonts.keep", Json::object({ "sha256": ToJson::to_json(sha) }), b, fn(_) {  })
             }
             got.push((Held(b), weight))
             face_files(src, id, files, at + 1, got, fetched, had)
@@ -271,7 +272,7 @@ fn face_files(
       }
       Err(e) if text(Some(e), "code") == "not_found" && !fetched => {
         had(Fetching)
-        (src.call)("fonts.fetch", Json::object({ "id": id.to_json() }), fn(r) {
+        (src.call)("fonts.fetch", Json::object({ "id": ToJson::to_json(id) }), fn(r) {
           match r {
             Ok(_) => face_files(src, id, files, 0, [], true, had)
             Err(e) => had(NotHad(text(Some(e), "message")))
@@ -310,7 +311,7 @@ fn face_preview(src : Source, id : String, index : Int, variable : Bool) -> Int 
     Some(f) => if f > 0 { f } else { 0 }
     None => {
       previews[id] = 0
-      (src.read_bytes)("fonts.preview", Json::object({ "id": id.to_json() }), fn(r) {
+      (src.read_bytes)("fonts.preview", Json::object({ "id": ToJson::to_json(id) }), fn(r) {
         match r {
           Ok((_, bytes)) =>
             previews[id] = if @ui.face_add_bytes(host_face, bytes, weight=if variable { 0 } else { 400 }) {
@@ -352,46 +353,55 @@ pub fn share_face_given() -> Int {
 }
 
 ///|
-/// The drawing whose whole share face was asked for (share_face_whole), 0 none.
+/// The share card's face as the app carries it, each weight's file gzipped and its weight (empty on the web until the
+/// page has it).
+pub fn share_face_carried() -> Array[(Bytes, Int)] {
+  share_files()
+}
+
+///|
+/// The drawing whose whole share face was given to the share face, 0 none.
 let share_face_whole_asked : Ref[Int] = Ref(0)
+
+///|
+/// The files of drawing `drawing`'s whole share face (share_face_whole), each with its weight.
+pub fn share_face_whole_files(drawing : Int) -> Array[(String, Int)] {
+  [("\{drawing}/face-400.gz", 400), ("\{drawing}/face-600.gz", 600)]
+}
 
 ///|
 /// The share card's face with the characters of looks whose words the app's carried face has not (千恋＊万花's: the
 /// card's every word, sfpages/share_senren.mbt), had from still.fail's site as their pictures are
-/// (web/public/share-looks/<drawing>/face-<weight>.gz, `fonts.share`, kept by the core once fetched; scripts/fonts.py
-/// --share makes both), so the app does not carry them: asked once a run, and once each weight's is here, given to the
-/// share face in place of the carried one (each a superset of it). Until then, or where it cannot be had, the card's
-/// words are in the carried face, a character not in it in the system's.
+/// (web/public/share-looks/<drawing>/face-<weight>.gz, each a file of the looks: looks_file; scripts/fonts.py --share
+/// makes both), so the app does not carry them: once each weight's is here, given to the share face in place of the
+/// carried one (each a superset of it). Until then the card's words are in the carried face, and the card is not
+/// handed out (its looks' files not all here: looks_stand). How they stand: looks_stand of share_face_whole_files.
 pub fn share_face_whole(src : Source, drawing : Int) -> Unit {
   if share_face_whole_asked.val == drawing {
     return
   }
-  share_face_whole_asked.val = drawing
   // (the carried one given first: asked for later, it would not be given over the whole one)
   ignore(share_face_given())
-  let weights = [400, 600]
+  let files = share_face_whole_files(drawing)
   let got : Map[Int, Bytes] = Map::new()
-  for weight in weights {
-    let file = "\{drawing}/face-\{weight}.gz"
-    (src.read_bytes)("fonts.share", Json::object({ "file": file.to_json() }), fn(r) {
-      match r {
-        Ok((_, gz)) =>
-          match @zip.gunzip(gz) {
-            Some(b) => {
-              got[weight] = b
-              if got.size() == weights.length() && share_face_whole_asked.val == drawing {
-                @ui.face_clear(share_face)
-                for w in weights {
-                  ignore(@ui.face_add_bytes(share_face, got.get(w).unwrap(), weight=w))
-                }
-              }
+  for f in files {
+    let (file, weight) = f
+    looks_file(src, file, fn(gz) {
+      match @zip.gunzip(gz) {
+        Some(b) => {
+          got[weight] = b
+          if got.size() == files.length() && share_face_whole_asked.val != drawing {
+            share_face_whole_asked.val = drawing
+            @ui.face_clear(share_face)
+            for w in files {
+              ignore(@ui.face_add_bytes(share_face, got.get(w.1).unwrap(), weight=w.1))
             }
-            None => ()
           }
-        // (asked again next run)
-        Err(_) => ()
+        }
+        None => ()
       }
     })
+    |> ignore
   }
 }
 

@@ -1,6 +1,7 @@
 // 52-drive-sheet-closing (e2e/traces/drive-sheet-closing.trace, MBUI_OPEN_PAGE=files): what can be done to a row let
 // go of: right clicked, its menu beside the pointer; a press beside the menu closes it, and 重命名 where it was drawn
 // asks nothing (no drive rename in the asks).
+// before it: 15-drive-lend
 
 ///|
 test "52-drive-sheet-closing" {

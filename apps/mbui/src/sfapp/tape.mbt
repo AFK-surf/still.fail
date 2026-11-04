@@ -239,7 +239,7 @@ pub fn tape_differences(json : String, base~ : Source, trace? : Array[String] = 
         (_, _, _, Some(_)) => t.back()
         // the list in view at its top
         _ if field(Some(e), "listTop") is Some(_) => {
-          t.scroll_to(0)
+          @sfpages.lists_top()
           t.draw()
         }
         _ =>

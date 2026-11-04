@@ -134,7 +134,7 @@ fn share_looks_pick(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           let on = look.key == now
           let name = @sf.t("web-main.stations.shareLook." + look.key)
           let b = c.box(style=looks_item, id~, fn() {
-            c.box(style=if on { looks_ring_on } else { looks_ring }, fn() { look_tile(c, look, fleet) }) |> ignore
+            c.box(style=if on { looks_ring_on } else { looks_ring }, fn() { look_tile(c, src, look, fleet) }) |> ignore
             c.text(name, style=if on || c.lit(id) { looks_name_on } else { looks_name }) |> ignore
           })
           c.semantics(b, Button, id~, label=name, selected=on)
@@ -152,17 +152,36 @@ fn share_looks_pick(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 
 ///|
 /// A look's small picture: the picture it draws, laid out as wide as it is handed out (@sf.share_w_most) and drawn as
-/// wide as the tile, from its top (what is under the tile's foot cut); said by its name, not its words.
-fn look_tile(c : @ui.Ctx, look : ShareLook, fleet : Json?) -> Unit {
+/// wide as the tile, from its top (what is under the tile's foot cut); said by its name, not its words. Its own files of
+/// the looks (its small picture: senren_drawing) had on their own, how far in a spinner in its middle until they are
+/// here (2026-11-03 用户「每张独立下载并提供进度」).
+fn look_tile(c : @ui.Ctx, src : Source, look : ShareLook, fleet : Json?) -> Unit {
   let k = @sf.share_look_tile_w / @sf.share_w_most
   c.box(style=@sf.share_look_tile, fn() {
     c.hidden_from_semantics(fn() {
-      let at = c.box(style=tile_whole, left=0.0, top=0.0, taps=false, fn() { (look.draw)(c, fleet, 0, true) |> ignore })
+      let files : Ref[Array[String]] = Ref([])
+      let at = c.box(style=tile_whole, left=0.0, top=0.0, taps=false, fn() {
+        let was = look_tile_now.val
+        look_tile_now.val = true
+        files.val = senren_drawing(src, fn() { (look.draw)(c, fleet, 0, true) }).1
+        look_tile_now.val = was
+      })
       c.look(at, @ui.look(scale=k, ox=0.0, oy=0.0))
+      if @sfbase.looks_stand(src, files.val) is LooksGoing(part) {
+        c.box(style=tile_waiting, left=0.0, top=0.0, fn() {
+          @sf.progress_spinner(c, "share-card/look/" + look.key + "/coming", part, size=@sf.theme().round.glyph) |> ignore
+        })
+        |> ignore
+      }
     })
   })
   |> ignore
 }
+
+///|
+/// Over a look's tile while its files come: as large as the tile, its spinner in the middle.
+// kept across runs: a value (no field of it changes)
+let tile_waiting : @ui.Style = @sf.centred.then(@ui.style(w=Fixed(@sf.share_look_tile_w), h=Fixed(@sf.share_look_tile_h)))
 
 ///|
 /// The card as box `id`, in `ground`: round as a card on the stage, or `flat` (handed out: its ground to its edges).
@@ -800,3 +819,9 @@ let term_prompt_row : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 /// Its cursor: a block of the orange, as a terminal's.
 // kept across runs: a value (no field of it changes)
 let term_cursor : @ui.Style = @ui.style(w=@sf.share_terminal_cursor_w, h=@sf.share_terminal_cursor_h, bg=Data(@sf.share_orange))
+
+///|
+/// Whether a look is drawn now as its tile in the strip (look_tile), not as the card on the stage nor as what is handed
+/// out (box 0 too: share_card_open's shot): a look with a picture of its own draws that alone there (share_senren.mbt).
+// kept across runs: set only while a tile is drawn, and put back
+let look_tile_now : Ref[Bool] = Ref(false)

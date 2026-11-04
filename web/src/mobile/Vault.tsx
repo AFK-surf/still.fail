@@ -5,7 +5,7 @@
 // profiles' accounts and each vault's items, a section a kind, and adding. An item opens on a page of its own and is
 // edited in a sheet. A web page only lists the names it is told. All of it is the core's (`vaults`, `vaultItems`,
 // `vault.*`; ../vault.ts): this only draws.
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, ChevronUp, Copy, Edit, Eye, Plus, Quota, Search } from "@stillfail/ui/icons.tsx";
 import { useParams } from "react-router";
 import { useProfiles } from "../api.ts";
@@ -19,7 +19,7 @@ import { VaultActions } from "../VaultApproval.tsx";
 import { AskCard } from "../VaultAsk.tsx";
 import {
   ITEM_SECTIONS, KINDS, LASTS, SCOPES, scopeOf, blankForm, copySecret, lastsChoice, lastsName, useVaultUses, type Kind, fileSize, formOf, formProblem, kindName, masked, modeName, modesOf, pickInto, putOf, useForm,
-  useVaultCall, useVaultItems, useVaults, useVaultsItems, type Form, type Opened, type VaultItemRow, type VaultRequest, type VaultRow, type VaultsView, type VaultUse,
+  useVaultCall, useVaultItems, useVaultPrompts, useVaults, useVaultsItems, type Form, type Opened, type VaultItemRow, type VaultKeyAsk, type VaultRequest, type VaultRow, type VaultsView, type VaultUse,
 } from "../vault.ts";
 import { t } from "../i18n.ts";
 import { StationInWords } from "../StationNamed.tsx";
@@ -301,18 +301,59 @@ function Request({ r }: { r: VaultRequest }) {
   );
 }
 
-/** A vault this device has no key to, under its name: that it has none, and the recovery words typed where they can
- * give it one. */
+/** A vault this device has no key to, under its name: that it has none, asking for it (the owner's other devices
+ * prompted, or giving it at once: `vault.ask`), and the recovery words typed where they can give it one. */
 function NoKey({ v }: { v: VaultRow }) {
   const app = useApp();
+  const run = useVaultCall();
+  const asking = useDoing("vault.ask", { workspace: app.entry.id });
   return <>
     <SectionHeader title={v.name} start={24} />
     <ListCard><div className={securityCss.mBody}>
       <div className={securityCss.mState}><span className={securityCss.mDot} data-tone="amber" />{t("web-pages.vault.notKeyed")}</div>
       <span className={partsCss.mSubtle}>{t("web-pages.vault.notKeyedWhy")}</span>
-      {v.recoverable && v.mine && <LinkButton label={t("web-pages.vault.recover")} className={css.mStart} onClick={() => app.sheet({ height: 0.6, content: () => <RecoverSheet /> })} />}
+      <div className={securityCss.mDeviceActs}>
+        <LinkButton label={asking ? `${t("web-pages.vault.ask")}…` : t("web-pages.vault.ask")} className={css.mStart} onClick={() => { if (!asking) void run("vault.ask", { workspace: app.entry.id }, t("web-pages.vault.askWhat"), t("web-pages.vault.asked")); }} />
+        {v.recoverable && v.mine && <LinkButton label={t("web-pages.vault.recover")} className={css.mStart} onClick={() => app.sheet({ height: 0.6, content: () => <RecoverSheet /> })} />}
+      </div>
     </div></ListCard>
   </>;
+}
+
+/** A member's device set up without a vault's key, waiting on this one (the core's `lockPrompts` `asks`): put up wherever
+ * the person is, the latest asking first, and kept up as pages change. 授权 gives it the key (`vault.addDevice`: this
+ * device's key unsealed, the person asked once); 稍后 puts it away until that device asks again (`vault.hidePrompt`). */
+export function VaultPrompt() {
+  const app = useApp();
+  const run = useVaultCall();
+  const r = useVaultPrompts()?.asks[0] ?? null;
+  useEffect(() => {
+    if (!r) return;
+    app.sheet({ height: 0.45, keep: true, onClose: () => void run("vault.hidePrompt", { workspace: r.workspace, device: r.device, at: r.at }, t("web-pages.vault.promptLater")), content: () => <KeyAskSheet r={r} /> });
+  }, [r?.device, r?.vault, r?.at]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
+/** The device asking and the vault it asks the key to; gone once it is given (here or elsewhere) or put away. */
+function KeyAskSheet({ r }: { r: VaultKeyAsk }) {
+  const app = useApp();
+  const run = useVaultCall();
+  const prompts = useVaultPrompts();
+  const giving = useDoing("vault.addDevice", { workspace: r.workspace, vault: r.vault, device: r.device });
+  const gone = prompts !== undefined && !prompts.asks.some((x) => x.device === r.device && x.vault === r.vault && x.at === r.at);
+  useEffect(() => { if (gone) app.sheet(null); }, [gone]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className={securityCss.mSheet}>
+      <b className={securityCss.mSheetTitle}>{t("web-pages.vault.promptTitle", { device: r.deviceText })}</b>
+      <span className={partsCss.mSubtle}>{t("web-pages.vault.promptBody", { vault: r.vaultName, at: r.atText })}</span>
+      <span className={securityCss.mNote}>{r.workspaceName} · {r.vaultName}</span>
+      {!r.own && <span className={securityCss.mWarn}>{t("web-pages.vault.promptBy", { by: r.byText ?? "" })}</span>}
+      <div className={securityCss.mActions}>
+        <Button primary label={t("web-pages.vault.promptGive")} busy={giving} onClick={() => void run("vault.addDevice", { workspace: r.workspace, vault: r.vault, device: r.device }, t("web-pages.vault.addDeviceWhat"), t("web-pages.vault.addedDevice"))} />
+        <Button primary={false} label={t("web-pages.vault.promptLater")} onClick={() => { app.sheet(null); void run("vault.hidePrompt", { workspace: r.workspace, device: r.device, at: r.at }, t("web-pages.vault.promptLater")); }} />
+      </div>
+    </div>
+  );
 }
 
 /** A vault known by its items' names only (a web page's, or one this device has no key to): the names it is told (the

@@ -1,8 +1,8 @@
 // alien-signals' signals, computeds and effects (https://github.com/stackblitz/alien-signals 3.2.1, src/index.ts;
 // MIT, Copyright (c) 2024-present Johnson Chu), ported line for line over system.mbt's graph. What differs is
 // MoonBit's: a signal and a computed are their node with `get` and `set` rather than functions bound to it, what
-// index.ts's node of their kind holds besides the graph's fields kept in the node's `own` (system.mbt) as the type its
-// signal or computed says (`coerce`); an effect's cleanup is said by which of `effect` and `effect_cleanup` makes it;
+// index.ts's node of their kind holds besides the graph's fields kept in their Signal and Computed and their update,
+// an effect's fn and a watch's in the node's `own` (system.mbt); an effect's cleanup is said by which of `effect` and `effect_cleanup` makes it;
 // nothing throws, so nothing is put back in a `finally`; and "the same value" is `same` (physical_equal without one:
 // index.ts's `!==`, but for strings, which it compares by their words: say `same=fn(a, b) { a == b }` where that
 // matters). Added for what keeps its own computeds (docs/signals.md): Computed::peek, Computed::dispose,
@@ -52,8 +52,8 @@ let run : Run = {
 }
 
 ///|
-/// A signal (SignalNode): its node, whose own is a SignalState[T].
-struct Signal[T](ReactiveNode)
+/// A signal (SignalNode): its node and its state.
+struct Signal[T](ReactiveNode, SignalState[T])
 
 ///|
 /// A signal's own: its value and the one set (pendingValue), what is the same as what (physical_equal without one).
@@ -64,8 +64,8 @@ priv struct SignalState[T] {
 }
 
 ///|
-/// A computed (ComputedNode): its node, whose own is a ComputedState[T].
-struct Computed[T](ReactiveNode)
+/// A computed (ComputedNode): its node and its state.
+struct Computed[T](ReactiveNode, ComputedState[T])
 
 ///|
 /// A computed's own: its getter, given the value it made last (none the first time), and that value.
@@ -74,11 +74,6 @@ priv struct ComputedState[T] {
   getter : (T?) -> T
   same : ((T, T) -> Bool)?
 }
-
-///|
-/// The same reference as another type: a node's own to and from what it is (the SignalState[_], ComputedState[_] or
-/// fn the node was made with, as its Signal[_], Computed[_], update or kind says).
-fn[A, B] coerce(a : A) -> B = "%identity"
 
 ///|
 /// Whether `a` is `b` as `same` says, physical_equal (index.ts's `===`) without one.
@@ -90,21 +85,15 @@ fn[T] same_as(same : ((T, T) -> Bool)?, a : T, b : T) -> Bool {
 }
 
 ///|
-/// A signal's update (updateSignal) for its node to call, one function for every signal of `T` (`_state` says which).
-fn[T] signal_update(_state : SignalState[T]) -> (ReactiveNode) -> Bool {
-  fn(n) {
-    let own : SignalState[T] = coerce(n.own)
-    update_signal(n, own)
-  }
+/// A signal's update (updateSignal) for its node to call, over its state.
+fn[T] signal_update(state : SignalState[T]) -> (ReactiveNode) -> Bool {
+  fn(n) { update_signal(n, state) }
 }
 
 ///|
-/// A computed's update (updateComputed) for its node to call, one function for every computed of `T`.
-fn[T] computed_update(_state : ComputedState[T]) -> (ReactiveNode) -> Bool {
-  fn(n) {
-    let own : ComputedState[T] = coerce(n.own)
-    update_computed(n, own)
-  }
+/// A computed's update (updateComputed) for its node to call, over its state.
+fn[T] computed_update(state : ComputedState[T]) -> (ReactiveNode) -> Bool {
+  fn(n) { update_computed(n, state) }
 }
 
 // ── system.mbt's callbacks (createReactiveSystem's update, notify, unwatched) ─────────────────────────────
@@ -136,7 +125,7 @@ fn notify(first : ReactiveNode) -> Unit {
     // (a watch marked as it is notified, whatever batch it is in: what it holds told it may be stale before it is told
     // so as the batch ends: Watch::on_marked)
     if effect.kind is WatchNode {
-      let o : WatchOwn = coerce(effect.own)
+      guard effect.own is WatchOwned(o) else { abort("a watch without its own") }
       o.marked_by.val = setting.val
       match o.marked.val {
         Some(f) => f()
@@ -247,9 +236,9 @@ pub fn[T] signal(initial : T, same? : (T, T) -> Bool) -> Signal[T] {
     ReactiveNode::new(
       MUTABLE,
       SignalNode,
-      own=coerce(state),
       update=signal_update(state),
     ),
+    state,
   )
 }
 
@@ -261,9 +250,9 @@ pub fn[T] computed(getter : (T?) -> T, same? : (T, T) -> Bool) -> Computed[T] {
     ReactiveNode::new(
       NONE,
       ComputedNode,
-      own=coerce(state),
       update=computed_update(state),
     ),
+    state,
   )
 }
 
@@ -284,7 +273,7 @@ pub fn effect_cleanup(f : () -> (() -> Unit)) -> () -> Unit {
 
 ///|
 fn effect_of(f : () -> (() -> Unit)?) -> () -> Unit {
-  let e = ReactiveNode::new(WATCHING | RECURSED_CHECK, EffectNode, own=coerce(f))
+  let e = ReactiveNode::new(WATCHING | RECURSED_CHECK, EffectNode, own=EffectOwn(f))
   let parent = owner_now()
   let prev_sub = set_active_sub(Some(e))
   let prev_owner = set_owner(Some(e))
@@ -411,7 +400,7 @@ fn run_effect(e : ReactiveNode) -> Unit {
         })
       )
     e.flags = WATCHING
-    let o : WatchOwn = coerce(e.own)
+    guard e.own is WatchOwned(o) else { abort("a watch without its own") }
     if dirty {
       // (told where no set is under way (a batch's end): the set that marked it said, as it would be had it been told
       // as it was set)
@@ -454,7 +443,7 @@ fn run_effect(e : ReactiveNode) -> Unit {
     run.cycle += 1
     run.run_depth += 1
     if e.kind is EffectNode {
-      let f : () -> (() -> Unit)? = coerce(e.own)
+      guard e.own is EffectOwn(f) else { abort("an effect without its fn") }
       e.cleanup = f()
     }
     run.run_depth -= 1
@@ -507,7 +496,7 @@ pub fn after_flush(f : () -> Unit) -> Unit {
 /// The computed's value, worked out again first if what it read changed since (computedOper).
 pub fn[T] Computed::get(self : Computed[T]) -> T {
   let node = self.0
-  let state : ComputedState[T] = coerce(node.own)
+  let state = self.1
   let flags = node.flags
   let stale = if (flags & DIRTY) != 0 {
     true
@@ -543,7 +532,7 @@ pub fn[T] Computed::get(self : Computed[T]) -> T {
 /// The signal's value (signalOper read): what was set, once it is read after.
 pub fn[T] Signal::get(self : Signal[T]) -> T {
   let node = self.0
-  let state : SignalState[T] = coerce(node.own)
+  let state = self.1
   if (node.flags & DIRTY) != 0 {
     if update_signal(node, state) {
       match node.subs {
@@ -560,7 +549,7 @@ pub fn[T] Signal::get(self : Signal[T]) -> T {
 /// The signal set (signalOper write): what follows it told, unless it is the same as what was set.
 #callsite(autofill(loc))
 pub fn[T] Signal::set(self : Signal[T], value : T, loc~ : SourceLoc) -> Unit {
-  let state : SignalState[T] = coerce(self.0.own)
+  let state = self.1
   let changed = !same_as(state.same, state.pending, value)
   state.pending = value
   if changed {
@@ -641,7 +630,7 @@ fn effect_scope_oper(e : ReactiveNode) -> Unit {
   // (a watch stopped, by itself or by what owns it: it follows nothing from here, so it is stale, and gone: what kept
   // it by what it read keeps nothing by it, Watch::gone)
   if e.kind is WatchNode {
-    let o : WatchOwn = coerce(e.own)
+    guard e.own is WatchOwned(o) else { abort("a watch without its own") }
     o.stale.val = true
     o.gone.val = true
   }
@@ -690,7 +679,7 @@ fn purge_deps(sub : ReactiveNode) -> Unit {
 ///|
 /// What the computed made last, not worked out again (none before it was first read).
 pub fn[T] Computed::peek(self : Computed[T]) -> T? {
-  let state : ComputedState[T] = coerce(self.0.own)
+  let state = self.1
   state.value
 }
 
@@ -819,7 +808,7 @@ pub fn watch(changed : () -> Unit) -> Watch {
   }
   // (told, it runs nothing of what it read: what it read stays followed till it reads anew, run_effect)
   let own : WatchOwn = { told, marked: Ref(None), stale, gone: Ref(false), marked_by: Ref(None) }
-  let node = ReactiveNode::new(NONE, WatchNode, own=coerce(own))
+  let node = ReactiveNode::new(NONE, WatchNode, own=WatchOwned(own))
   // (made where an owner is set (set_owner: a scope that is not reading, an old view's): that owner's, let go with it;
   // not what is reading's, whose reading anew would let it go)
   match run.owner {
@@ -856,7 +845,7 @@ pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
   e.flags = e.flags & RECURSED_CHECK.lnot()
   purge_deps(e)
   // (let go as it read (what owned it let go meanwhile): what it read after that let go too, none of it kept as read)
-  let own : WatchOwn = coerce(e.own)
+  guard e.own is WatchOwned(own) else { abort("a watch without its own") }
   if own.gone.val {
     e.flags = NONE
     dispose_all_deps_in_reverse(e)
@@ -875,7 +864,7 @@ pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
       for s in watch_reading.sets {
         self.set_by.push(s)
       }
-      let o : WatchOwn = coerce(e.own)
+      guard e.own is WatchOwned(o) else { abort("a watch without its own") }
       (o.told)()
     }
   }
@@ -913,7 +902,7 @@ pub fn Watch::touch(self : Watch) -> Unit {
 /// Whether the watch was stopped (Watch::stop, or by what owned it as that stopped: a scope, an effect run again): it
 /// follows nothing, and nothing that kept a thing by it may keep it so; a new one, owned where it is made again, may.
 pub fn Watch::gone(self : Watch) -> Bool {
-  let o : WatchOwn = coerce(self.node.own)
+  guard self.node.own is WatchOwned(o) else { abort("a watch without its own") }
   o.gone.val
 }
 
@@ -986,7 +975,7 @@ pub fn Watch::changed_now(self : Watch) -> Bool {
 /// `f` called as what the watch read changes, at once, in a batch too (before it is told as the batch ends): only to
 /// note that it may be stale (a flag, a list), nothing read or set there. Whether it is is Watch::changed_now's to say.
 pub fn Watch::on_marked(self : Watch, f : () -> Unit) -> Unit {
-  let o : WatchOwn = coerce(self.node.own)
+  guard self.node.own is WatchOwned(o) else { abort("a watch without its own") }
   o.marked.val = Some(f)
 }
 

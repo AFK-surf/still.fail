@@ -172,6 +172,22 @@ test "the card to share on a phone: the picture as wide as its sheet lets it, no
 }
 
 ///|
+test "the card to share in a 千恋＊万花 look, kept on a phone: the whole card, as tall as it is laid out, not its tile in the looks' strip" {
+  // (the picture kept is drawn as box 0, as each look's tile in the strip is: the look's whole card is kept, not its
+  // picture alone in a tile's ground, 2026-11-03 用户「保存至相册，存下来之后只有蓝色背景，啥都没有」)
+  let src = fixture_app("share-card-senren-ledger")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@kit.presence_in_ms)
+  t.click(Button, label="保存到相册")
+  t.run_for(@kit.presence_in_ms)
+  match png_size(t.kept()[0].2) {
+    // (a tile's is 360 by 480: 1080 by 1440; the ledger's card is taller, its every day's row under its picture)
+    Some((pw, ph)) => assert_true(pw == 1080 && ph > 2000, msg="\{(pw, ph)}")
+    None => fail("not a PNG")
+  }
+}
+
+///|
 /// The card to share as `t` shows it: laid out the one way.
 fn share_card_laid(t : @ui.Tester) -> Unit raise {
   t.run_for(@kit.presence_in_ms)
@@ -439,3 +455,53 @@ test "stage, 大屏 keyboard and mouse: the focus as it opens and after a Tab: a
   assert_eq(["open \{open}", "tab \{tabbed}"], ["open None", "tab None"])
 }
 
+
+///|
+test "a look with files of its own (千恋＊万花's): handed out only once its pictures and its face are here, each had on its own, how far on the button; one not had, 下载失败，重试 asks it again" {
+  let held : Array[(String, (Result[(Json, Bytes), Json]) -> Unit)] = []
+  @sffixture.fixture_looks_held.val = Some(held)
+  let src = fixture_app("share-card-senren-adv")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@kit.presence_in_ms)
+  // each asked on its own: the look's picture, its tile's small one, the face's two weights
+  let asked = held.map(fn(h) { h.0 })
+  for file in ["1/a1-murasame-adv.webp", "1/a1-murasame-adv.small.webp", "1/face-400.gz", "1/face-600.gz"] {
+    assert_true(asked.contains(file), msg="\{asked}")
+  }
+  // nothing to save while they come: the button says so, and does nothing
+  assert_true(t.query(Button, label="保存到相册") is None)
+  t.click(Button, label="正在下载")
+  t.run_for(@kit.presence_in_ms)
+  assert_eq(t.kept().length(), 0)
+  // the picture here, the face not had: 下载失败，重试
+  let answer = fn(file : String, r : Result[(Json, Bytes), Json]) {
+    for h in held {
+      if h.0 == file {
+        (h.1)(r)
+      }
+    }
+  }
+  for file in asked {
+    if file.has_suffix(".webp") {
+      answer(file, @sffixture.fixture_looks_answer(file))
+    }
+  }
+  answer("1/face-400.gz", Err({ "code": "fonts", "message": "下载到的文件不对" }))
+  answer("1/face-600.gz", @sffixture.fixture_looks_answer("1/face-600.gz"))
+  t.run_for(@kit.presence_in_ms)
+  assert_true(t.query(Button, label="保存到相册") is None)
+  held.clear()
+  t.click(Button, label="下载失败，重试")
+  t.run_for(@kit.presence_in_ms)
+  // only what failed asked again
+  assert_eq(held.map(fn(h) { h.0 }), ["1/face-400.gz"])
+  answer("1/face-400.gz", @sffixture.fixture_looks_answer("1/face-400.gz"))
+  t.run_for(@kit.presence_in_ms)
+  @sffixture.fixture_looks_held.val = None
+  t.click(Button, label="保存到相册")
+  t.run_for(@kit.presence_in_ms)
+  match png_size(t.kept()[0].2) {
+    Some((pw, _)) => assert_eq(pw, 1080)
+    None => fail("not a PNG")
+  }
+}

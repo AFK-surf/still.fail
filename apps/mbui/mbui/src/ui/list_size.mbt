@@ -33,23 +33,53 @@ fn RowSize::at(self : RowSize) -> Double {
 }
 
 ///|
-/// A row on the list's way, as it stood the last time what it goes by changed (the way set out again or given another
-/// end, what it is laid out at stepping, another cause): `h` tall at `at`, laid out `to` tall then, on the way from
-/// `start` to `end`, going `v` (points a ms) then. Where it is at any moment after is worked out from that alone,
-/// whatever frames came between: what was off of it then closing by the end, on a Move's way from that speed
-/// (@ui.move_path), so a cause coming on its way neither stops it nor steps it.
+/// A row on the list's way, as it stood as the way last set out (another cause come, the way given another end): what
+/// was off of its height `to` then (`a`: as tall as it was then, less `to`), closing by the way's end as every row on
+/// it does, by the same share of it at every moment (way_share): so what is over and under them, the sum of theirs,
+/// goes one way to where it all comes to stand, the rows' heights shared out in it (2026-11-03 the user: 「一旦一个新的
+/// 运动加入，就把当前运动的剩余部分跟新的运动结合起来，高度作为一个整体往终态走，然后在里面分配各自的高度」「这样整体高度不会来回
+/// 变」). `before`: the way it was on till the way set out again later than now (a row's cause timed on: words sent
+/// leaving the composer), `a`, `to`, `start`, `end` and its speed's share as there. `k`: the share's speed as the way
+/// set out, as last known (RowCauses::way_k).
 priv struct RowSizing {
   mut cause : RowSize
-  mut h : Double
-  mut v : Double
+  mut a : Double
   mut to : Double
-  mut at : Double
   mut start : Double
   mut end : Double
+  mut k : Double
+  mut before : (Double, Double, Double, Double, Double)?
   /// the frame it was last laid out in, and how it stood as that frame found it (a frame laid out twice, built again
   /// from what it read, lays it out the same: from there each time)
   mut frame : Int
-  mut was : (RowSize, Double, Double, Double, Double, Double, Double)
+  mut was : (RowSize, Double, Double, Double, Double, Double, (Double, Double, Double, Double, Double)?)
+}
+
+///|
+/// What is left of what was off as the rows' way set out at `start` (1 then, 0 at `end`), and how fast that goes (a
+/// share a ms), at `t`: a Move's way from the speed `k` it set out at (@ui.move_path).
+fn way_share(t : Double, start : Double, end : Double, k : Double) -> (Double, Double) {
+  if t <= start {
+    (1.0, k)
+  } else {
+    move_path(1.0, k, t - start, end - start)
+  }
+}
+
+///|
+/// Row `r`'s height at `t` and how fast it goes (points a ms), `to` the height it goes to now (its own, where its
+/// content goes on the way itself: Ctx::row_way), the way's speed `k`.
+fn RowSizing::at(self : RowSizing, t : Double, to : Double, k : Double) -> (Double, Double) {
+  match self.before {
+    Some((a, bto, start, end, bk)) if t < self.start => {
+      let (x, v) = way_share(t, start, end, bk)
+      (bto + a * x, a * v)
+    }
+    _ => {
+      let (x, v) = way_share(t, self.start, self.end, k)
+      (to + self.a * x, self.a * v)
+    }
+  }
 }
 
 ///|
@@ -112,7 +142,7 @@ pub fn Ctx::held_look(self : Ctx, i : Int, p : Double, top? : Bool = false) -> L
 ///|
 /// Row `k`, laid out `natural` tall, as tall as what changed it has it at `now` (its list's ListRows, by its key): off
 /// from it as it was as its cause came (from nothing, one coming; from the height it had, one changed), by less as the
-/// list's way goes.
+/// list's way goes, every row on it by the same share (RowSizing).
 fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Double, frame : Int) -> Double {
   let (c, key, cause) = match self.causes {
     Some(c) if k < c.keys.length() => {
@@ -137,6 +167,7 @@ fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Doubl
   // (its rows laid out on the way till its end, as it was declared: what is dropped of it a hair before is the list's)
   self.sizes_end = c.end
   let own = c.own.contains(key)
+  c.way_begun(frame)
   let r = match self.sizes.get(key) {
     Some(r) => r
     None => {
@@ -146,49 +177,87 @@ fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Doubl
         // the rows given change)
         _ => self.shown_h.get(key).unwrap_or(natural)
       }
-      // (off as its cause came, from its moment: laid out first a while on, it is where the way has it by then)
-      let at = cause.at()
-      let r = { cause, h: from, v: 0.0, to, at, start: c.start, end: c.end, frame: -1, was: (cause, from, 0.0, to, at, c.start, c.end) }
+      // (off as the way set out: laid out first a while on, it is where the way has it by then)
+      let r = {
+        cause,
+        a: from - to,
+        to,
+        start: c.start,
+        end: c.end,
+        k: 0.0,
+        before: None,
+        frame: -1,
+        was: (cause, from - to, to, c.start, c.end, 0.0, None),
+      }
       self.sizes[key] = r
+      c.way_off(key, from - to, 0.0)
       r
     }
   }
   if r.frame == frame {
-    let (was_cause, h, v, was_to, at, start, end) = r.was
+    let (was_cause, a, was_to, start, end, rk, before) = r.was
     r.cause = was_cause
-    r.h = h
-    r.v = v
+    r.a = a
     r.to = was_to
-    r.at = at
     r.start = start
     r.end = end
+    r.k = rk
+    r.before = before
   } else {
     r.frame = frame
-    r.was = (r.cause, r.h, r.v, r.to, r.at, r.start, r.end)
+    r.was = (r.cause, r.a, r.to, r.start, r.end, r.k, r.before)
   }
-  // where it is at `t` as it stood (laid out `now_to` tall then), and how fast it goes: what was off of it closing by
-  // the way's end from the speed it had; one whose content goes on the way itself, only what was off of it as it
-  // changed, what it does itself its own
-  let at_t = fn(t : Double, now_to : Double) -> (Double, Double) {
-    let off = if own { r.h - r.to } else { r.h - now_to }
-    let (x, v) = move_path(off, r.v, t - r.at, r.end - r.at)
-    (now_to + x, v)
+  // (the way's speed as it set out, once every row on it has said what was off of it: the frame after)
+  if r.start == c.start && r.end == c.end {
+    match c.way_k(frame) {
+      Some(wk) => r.k = wk
+      None => ()
+    }
   }
-  // what it goes by changed (another cause, the way set out again or given another end, what it is laid out at
-  // stepping: a picture come to its size, the core's row joined to the one before): on from where it is now, as fast
-  // as it goes, so it neither steps nor stops
-  if r.cause != cause || r.start != c.start || r.end != c.end || (!own && (to - r.to).abs() > 0.5) {
-    let (h, v) = at_t(now, if own { to } else { r.to })
-    r.h = h
-    r.v = v
+  // its height laid out as it goes to: its own, where its content goes on the way itself (only what was off of it as it
+  // changed is the way's)
+  let base = fn(r : RowSizing) { if own { to } else { r.to } }
+  // what it goes by changed (another cause, the way set out again or given another end): what is left of it, from
+  // where it is as the way sets out (how fast it goes then telling how fast the rows' sum goes), one share of the
+  // whole that goes on from there (RowCauses::way_k)
+  if r.cause == cause && r.start == c.start && r.end != c.end && now >= r.start {
+    // (the way given another end, set out as it was: on from where it is, by the share of the new way left)
+    let (h, _) = r.at(now, base(r), r.k)
+    r.end = c.end
+    let (x, _) = way_share(now, r.start, r.end, r.k)
+    r.a = if x > 0.02 { (h - base(r)) / x } else { 0.0 }
+  } else if r.cause != cause || r.start != c.start || r.end != c.end {
+    let t = c.start
+    // (till then, on the way it was on; one whose own cause sets out then (timed on: words sent leaving the composer)
+    // as it is now, till then)
+    let held = cause.at() > now
+    let (h, v) = if held { (r.at(now, base(r), r.k).0, 0.0) } else { r.at(t, base(r), r.k) }
+    r.before = if t <= now {
+      None
+    } else if held {
+      Some((h - base(r), base(r), @double.infinity, @double.infinity, 0.0))
+    } else {
+      Some((r.a, base(r), r.start, r.end, r.k))
+    }
+    r.a = h - to
     r.to = to
-    // (its own not set out yet: from then)
-    r.at = dmax(now, cause.at())
     r.start = c.start
     r.end = c.end
+    r.k = 0.0
     r.cause = cause
+    c.way_off(key, r.a, v)
+  } else if !own && (to - r.to).abs() > 0.5 {
+    // what it is laid out at stepping on the way (a picture come to its size, the core's row joined to the one before):
+    // on from where it is, by the share of the way left
+    let (h, _) = r.at(now, r.to, r.k)
+    let (x, _) = way_share(now, r.start, r.end, r.k)
+    r.a = if x > 0.02 && now >= r.start { (h - to) / x } else { r.a + r.to - to }
+    r.to = to
   }
-  let shown = at_t(now, to).0
+  // (in the frame the way sets out, its speed not known till every row on it has said where it was: where the way has
+  // them as it set out, a sliver of a frame before now, not on from rest and then at its speed the frame after)
+  let t = if r.start == c.start && r.end == c.end && c.way_speed is None { dmin(now, r.start) } else { now }
+  let shown = r.at(t, base(r), r.k).0
   // (one coming or going where it is, how far open: what it holds is drawn by it as it is painted, ListRows::enter,
   // leave)
   if !(cause is Changed(_)) && c.by_room.contains(key) {
@@ -357,6 +426,61 @@ pub struct RowCauses {
   priv leads : Map[String, Double]
   /// the frame its list was last laid out in (shown): one not shown the frame before is shown anew, as it is
   priv mut laid : Int
+  /// the way as its rows last set out on it (`start`, -1 none), the frame they did, what was off of each and how fast
+  /// it went then, by its key, and the speed the share of what is left sets out at once all have said (way_k)
+  priv mut way_at : Double
+  priv mut way_frame : Int
+  priv way_offs : Map[String, (Double, Double)]
+  priv mut way_speed : Double?
+}
+
+///|
+/// The rows set out on the way as it is now, in frame `frame`: what each said of the way before forgotten.
+fn RowCauses::way_begun(self : RowCauses, frame : Int) -> Unit {
+  if self.way_at != self.start {
+    self.way_at = self.start
+    self.way_frame = frame
+    self.way_offs.clear()
+    self.way_speed = None
+  }
+}
+
+///|
+/// Row `key` set out on the way `off` off of where it goes, going `v` (points a ms) then.
+fn RowCauses::way_off(self : RowCauses, key : String, off : Double, v : Double) -> Unit {
+  self.way_offs[key] = (off, v)
+}
+
+///|
+/// The speed what is left of every row's way sets out at (a share a ms: 0 from rest), once all on it have said where
+/// they were (a frame after it set out; None till then): what is off of them all together, and how fast that went as
+/// the way set out, so that the rows' sum goes on as fast as it went where it went toward where it all comes to stand,
+/// not a step slower or faster; from rest where it went the other way (stopped there, no further that way first), and
+/// never so fast it passes where it comes to stand.
+fn RowCauses::way_k(self : RowCauses, frame : Int) -> Double? {
+  match self.way_speed {
+    Some(k) => return Some(k)
+    None => ()
+  }
+  if frame <= self.way_frame {
+    return None
+  }
+  let mut d = 0.0
+  let mut v = 0.0
+  self.way_offs.each(fn(_, o) {
+    d = d + o.0
+    v = v + o.1
+  })
+  let len = self.end - self.start
+  // (from rest where a row's content goes on the way itself (Ctx::row_way: a Move from its start, from rest), so that
+  // its share and every other's are the same at every moment)
+  let k = if d.abs() < 0.5 || len <= 0.0 || !self.own.is_empty() {
+    0.0
+  } else {
+    dmin(0.0, dmax(v / d, -move_k / len))
+  }
+  self.way_speed = Some(k)
+  Some(k)
 }
 
 ///|
@@ -401,7 +525,7 @@ pub struct ListRows[T] {
 
 ///|
 pub fn[T] ListRows::new() -> ListRows[T] {
-  { was: {}, order: [], going: {}, causes: { by: {}, keys: [], said: @signals.signal(0), n: 0, start: -1.0, end: -1.0, own: Set::new(), by_room: Set::new(), opened: {}, leads: {}, laid: -10 }, given: false, last_keys: [], last_items: [], going_said: @signals.keyed() }
+  { was: {}, order: [], going: {}, causes: { by: {}, keys: [], said: @signals.signal(0), n: 0, start: -1.0, end: -1.0, own: Set::new(), by_room: Set::new(), opened: {}, leads: {}, laid: -10, way_at: -1.0, way_frame: -1, way_offs: {}, way_speed: None }, given: false, last_keys: [], last_items: [], going_said: @signals.keyed() }
 }
 
 ///|

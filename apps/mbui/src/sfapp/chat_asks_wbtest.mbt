@@ -6,7 +6,7 @@
 test "renaming the chat: asked for its name, an empty one said too (named anew, as its note says)" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-info")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_rename(decide_src.val.unwrap(), r, Some(7.0), "整理发布清单", from=Unanchored)
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("重命名对话") is Some(_), msg="its question")

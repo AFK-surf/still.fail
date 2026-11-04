@@ -15,6 +15,10 @@ const MAX_SERVICE = 8192;
 // Mark our own maintenance so the same command run by an agent still counts as use.
 export const KEEP_LENDING = "STILLFAIL_ADB_KEEP=1";
 
+/// A command of the station's about the chat's display (displays.ts), marked so.
+export const DISPLAY_MARK = `${KEEP_LENDING} STILLFAIL_ADB_DISPLAY=1`;
+const displayCommand = (command: string) => command.startsWith(`${DISPLAY_MARK} `);
+
 export class AdbActivity {
   readonly #package: string;
   readonly #used: (force: boolean) => void;
@@ -85,7 +89,10 @@ export class AdbActivity {
     const service = this.#service.toString("utf8").replace(/\0+$/, "");
     this.#service = null;
     const command = /^shell(?:,[^:]*)?:(.*)$/.exec(service)?.[1];
-    const ours = this.#package !== "" && (command === `${KEEP_LENDING} pm grant ${this.#package} android.permission.WRITE_SECURE_SETTINGS` || command === `${KEEP_LENDING} cmd deviceidle whitelist +${this.#package}`);
+    const ours =
+      (this.#package !== "" && (command === `${KEEP_LENDING} pm grant ${this.#package} android.permission.WRITE_SECURE_SETTINGS` || command === `${KEEP_LENDING} cmd deviceidle whitelist +${this.#package}`)) ||
+      // The chat's display (displays.ts): what holds it up and what the station asks of it, and its pictures' socket.
+      (command !== undefined && displayCommand(command)) || /^localabstract:scrcpy_[0-9a-f]{8}$/.test(service);
     if (ours) return;
     this.#active.add(this.#serviceId);
     this.#used(true);

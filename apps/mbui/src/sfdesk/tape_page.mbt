@@ -103,7 +103,7 @@ fn tape_page_one(c : @ui.Ctx, src : Source, page : Page) -> Unit {
     context_page(c, page_id)
     let pane = c.box(style=frame_main.then(@ui.style(w=Fixed(c.width))), id=page_id, fn() {
       @sf.pane_round.val = Some(beside_column(corners, under))
-      tape_bar_collected(c, fn() { page_one(c, src, w, page, c.width, c.height, 0.0, pane_finger()) })
+      tape_bar_collected(c, fn() { page_one(c, src, w, page, c.width, c.height, 0.0) })
       @sf.pane_round.val = None
     })
     // (what moves in the page of its own takes its place from the page's foot: the tape moving the page, a keyboard
@@ -342,7 +342,7 @@ fn tape_made(
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_)) =>
+        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion) =>
           tape_made(src, Setting(r), tips).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
@@ -351,6 +351,24 @@ fn tape_made(
       made("memory/" + address, fn(p, core, here, _stint, told, _acts) {
         context_node(p)
         @sfpages.memory_node(p, core, here, address, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~)
+      })
+    Setting(Shortcuts) if pane_makes.val =>
+      made("shortcuts", fn(p, core, _here, stint, told, _acts) {
+        context_node(p)
+        // (recording while it is the one on top of the stack: its stay there, stint's)
+        @sfpages.shortcuts_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, active=fn() {
+          app.nav.top_stay().1 == stint()
+        }, said=told, width~)
+      })
+    Setting(Notifications) if pane_makes.val =>
+      made("notifications", fn(p, core, here, stint, told, _acts) {
+        context_node(p)
+        @sfpages.notify_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, stint~, said=told, width~)
+      })
+    Setting(AutoCompletion) if pane_makes.val =>
+      made("auto-completion", fn(p, core, here, _stint, told, acts) {
+        context_node(p)
+        @sfpages.completion_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~, bar_actions=acts)
       })
     Setting(Usage) if pane_makes.val =>
       made("usage", fn(p, core, here, _stint, told, acts) {

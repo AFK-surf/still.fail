@@ -13,60 +13,25 @@
 //     trace maxbytes TRACE…      the most bytes beside a message the traces kept (at least 16384)
 
 ///|
-#borrow(path)
-extern "C" fn c_read(path : Bytes) -> Bytes = "sft_read"
-
-///|
-extern "C" fn c_ok() -> Int = "sft_ok"
-
-///|
-#borrow(path, data)
-extern "C" fn c_write(path : Bytes, data : Bytes) -> Int = "sft_write"
-
-///|
-#borrow(s)
-extern "C" fn c_out(s : Bytes, err : Int) -> Unit = "sft_out"
-
-///|
-#borrow(name)
-extern "C" fn c_getenv(name : Bytes) -> Bytes = "sft_getenv"
-
-///|
-extern "C" fn c_getcwd() -> Bytes = "sft_getcwd"
-
-///|
-extern "C" fn c_exit(code : Int) -> Unit = "sft_exit"
-
-///|
 fn read(path : String) -> String? {
-  let b = c_read(@utf8.encode(path))
-  if c_ok() == 0 {
-    None
-  } else {
-    Some(@utf8.decode_lossy(b[:]))
-  }
+  @sys.read_text(path)
 }
 
 ///|
 fn say(s : String) -> Unit {
-  c_out(@utf8.encode(s + "\n"), 0)
+  @sys.println_out(s)
 }
 
 ///|
 fn die(s : String) -> Unit {
-  c_out(@utf8.encode(s + "\n"), 1)
-  c_exit(1)
+  @sys.eprintln(s)
+  @sys.exit(1)
   panic()
 }
 
 ///|
 fn env(name : String) -> String? {
-  let v = c_getenv(@utf8.encode(name))
-  if c_ok() == 0 {
-    None
-  } else {
-    Some(@utf8.decode_lossy(v[:]))
-  }
+  @sys.getenv(name)
 }
 
 ///|
@@ -113,6 +78,46 @@ fn scrub(v : @rjson.Value) -> @rjson.Value {
       )
     Arr(xs) => Arr(xs.map(scrub))
     x => x
+  }
+}
+
+///|
+/// Keep paths consistent without keeping the recording machine's checkout, its private parent, test work or home.
+fn recording_paths(v : @rjson.Value, checkout : String, work : String, home : String) -> @rjson.Value {
+  match v {
+    Obj(kvs) => Obj(kvs.map(fn(kv) { (kv.0, recording_paths(kv.1, checkout, work, home)) }))
+    Arr(xs) => Arr(xs.map(fn(x) { recording_paths(x, checkout, work, home) }))
+    Str(s) => {
+      let s = if checkout.length() > 1 {
+        s.replace_all(old=checkout, new="/test-worktree")
+      } else { s }
+      let s = if work.length() > 1 {
+        s.replace_all(old=work, new="/test-e2e")
+      } else { s }
+      // A service or tool can live beside the checkout instead of inside the test work directory.
+      // Only replace that parent when it is below home; never replace home itself or a shared /tmp directory.
+      let parent = match checkout.rev_find("/") {
+        Some(k) => checkout.view(end_offset=k).to_string()
+        None => ""
+      }
+      let s = if home.length() > 1 && parent.has_prefix(home + "/") {
+        s.replace_all(old=parent, new="/test-workspace")
+      } else { s }
+      Str(if home.length() > 1 { s.replace_all(old=home, new="/test-home") } else { s })
+    }
+    x => x
+  }
+}
+
+///|
+/// A host text answer kept after removing local paths. A shape's offsets and glyph keys describe the original
+/// words, so they cannot be used for a shortened path; leave that answer out for the fake host to shape anew.
+fn recording_text(v : @rjson.Value, checkout : String, work : String, home : String) -> @rjson.Value? {
+  let clean = recording_paths(v, checkout, work, home)
+  if (v.get("s") is Some(_) || v.get("k") is Some(_)) && compact(clean) != compact(v) {
+    None
+  } else {
+    Some(clean)
   }
 }
 
@@ -284,7 +289,7 @@ fn abspath(p : String) -> String {
   let full = if p.has_prefix("/") {
     p
   } else {
-    @utf8.decode_lossy(c_getcwd()[:]) + "/" + p
+    @sys.cwd() + "/" + p
   }
   let parts = []
   for part in full.split("/") {
@@ -349,6 +354,12 @@ fn make(args : Array[String]) -> Unit {
     }
   }
   let src_abs = abspath(src)
+  let checkout = abspath(root() + "/../..")
+  let work = match env("E2E_WORK") {
+    Some(path) if path != "" => abspath(path)
+    _ => ""
+  }
+  let home = env("HOME").unwrap_or("")
   let lines : Array[String] = []
   let texts : Array[String] = []
   for line in log.split("\n") {
@@ -357,7 +368,11 @@ fn make(args : Array[String]) -> Unit {
     match line.find("TEXTREC ") {
       Some(t) => {
         match parse(line.view(start_offset=t + 8).to_string()) {
-          Some(j) => texts.push(compact(Obj([("textrec", j)])))
+          Some(j) =>
+            match recording_text(j, checkout, work, home) {
+              Some(kept) => texts.push(compact(Obj([("textrec", kept)])))
+              None => ()
+            }
           None => ()
         }
         continue
@@ -414,7 +429,7 @@ fn make(args : Array[String]) -> Unit {
         ev = ev.remove("b").set("bn", Num((b.length() / 2).to_string()))
       _ => ()
     }
-    lines.push(compact(ev))
+    lines.push(compact(recording_paths(ev, checkout, work, home)))
   }
   for t in texts {
     lines.push(t)
@@ -425,7 +440,7 @@ fn make(args : Array[String]) -> Unit {
     )
   }
   let path = root() + "/e2e/traces/" + name + ".trace"
-  if c_write(@utf8.encode(path), @utf8.encode(lines.join("\n") + "\n")) == 0 {
+  if !@sys.write_text(path, lines.join("\n") + "\n") {
     die("trace: cannot write \{path}")
   }
   say("\{lines.length()} messages: e2e/traces/\{name}.trace")

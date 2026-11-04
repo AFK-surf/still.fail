@@ -1,7 +1,7 @@
 // What the agents spent, counted (the Rust station's usage.rs `Usage`): every model call their runtimes write to a transcript
 // (Claude Code's message usage, Codex's token counts) is recorded once in the store (store/usage.ts), with the turn it
 // was in and whom that turn worked for. The transcripts are read as they grow, from where the last read stopped: all of
-// them the first time (what was spent before the station counted), then those of the sessions that ran since.
+// them as sessions run, from the counter's installation onward; older transcripts are not backfilled.
 //
 // Pushed rather than polled (the Rust reads every minute): a read when the counter starts, one shortly after a turn
 // ends (the store's session changes say so), one of a session alone shortly after its transcript grew while it works
@@ -20,7 +20,7 @@ import { log } from "../ops/log.ts";
 import { segmentsFrom, writtenLength } from "../read/packed.ts";
 import { parseIso, sharedTranscripts, transcriptDir, transcriptPaths } from "../read/transcript.ts";
 import type { SessionRow, Store, UsageCall, UsageFile, UsageFor } from "../store/store.ts";
-import type { RuntimeKind } from "../agents/runtime.ts";
+import { runtimeKind, type RuntimeKind } from "../agents/runtime.ts";
 
 /// Calls a little before a session was made (the runtime's clock against the station's) are still its own.
 export const SKEW_MS = 5_000;
@@ -34,6 +34,8 @@ export const SETTLE_MS = 2_000;
 export const SAFETY_MS = 10 * 60_000;
 /// How much of a transcript is read and parsed at a time.
 const CHUNK = 1 << 20;
+/// Bytes before a saved position: a file can be replaced and grow past that position between reads.
+const ANCHOR = 256;
 /// How many calls are recorded in one transaction before the event loop is let through.
 const WRITE_BATCH = 64;
 
@@ -79,7 +81,7 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
       runtime === "claude" ? line.includes('"usage"')
       : runtime === "dsh" ? (line.startsWith('{"type":"assistant/message"') && line.includes('"usage"')) || line.startsWith('{"type":"request/context"')
       : runtime === "grok" ? line.startsWith('{"type":"stillfail/usage"')
-      : runtime === "cursor" || runtime === "devin" || runtime === "hermes" ? line.includes('"type":"usage"')
+      : runtime === "cursor" || runtime === "devin" || runtime === "hermes" || runtime === "agy" ? line.includes('"type":"usage"')
       : line.includes("token_count") || line.includes("turn_context") || line.includes("session_meta");
     if (!wanted) continue;
     let r: unknown;
@@ -101,7 +103,7 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
         input: n(get(usage, "input")), cacheRead: n(get(usage, "cacheRead")), cacheWrite: n(get(usage, "cacheWrite")), cacheWriteLong: 0,
         output: n(get(usage, "output")), calls: Math.max(1, n(get(usage, "calls"))), context: told(get(r, "context")), window: told(get(r, "window")),
       });
-    } else if (runtime === "cursor" || runtime === "devin" || runtime === "hermes") {
+    } else if (runtime === "cursor" || runtime === "devin" || runtime === "hermes" || runtime === "agy") {
       // What the station's driver kept of each Cursor turn (agents/cursor-bridge.mjs): the SDK's counts, input apart
       // from the cache's, the whole run's (no context); of each Devin turn the same (agents/devin.ts), with how many
       // calls it made, the context it ended with and the model's window where Devin said them.
@@ -231,7 +233,7 @@ function extension(path: string): string | null {
 }
 
 /// A part of a transcript: its whole lines and their bounds in the file.
-export type Part = { text: string; from: number; offset: number };
+export type Part = { text: string; from: number; offset: number; bytes: Buffer };
 
 /// Whole lines of `bytes` (what follows `from` in the file), a part at most CHUNK long each where lines allow.
 function* partsOf(bytes: Buffer, from: number): Generator<Part> {
@@ -241,9 +243,24 @@ function* partsOf(bytes: Buffer, from: number): Generator<Part> {
     let cut = bytes.lastIndexOf(0x0a, window - 1);
     if (cut < at) cut = bytes.indexOf(0x0a, window);
     if (cut < 0) return;
-    yield { text: bytes.toString("utf8", at, cut + 1), from: from + at, offset: from + cut + 1 };
+    const part = bytes.subarray(at, cut + 1);
+    yield { text: part.toString("utf8"), from: from + at, offset: from + cut + 1, bytes: part };
     at = cut + 1;
   }
+}
+
+/// A line already begun at the cutoff belongs to the old part; complete later lines belong to the followed suffix.
+function sectionsOf(part: Part, cutoff: number): (Part & { followed: boolean })[] {
+  if (part.offset <= cutoff) return [{ ...part, followed: false }];
+  if (part.from >= cutoff) return [{ ...part, followed: true }];
+  const at = cutoff - part.from;
+  const end = part.bytes[at - 1] === 0x0a ? at : part.bytes.indexOf(0x0a, at) + 1;
+  const old = part.bytes.subarray(0, end);
+  const next = part.bytes.subarray(end);
+  return [
+    { text: old.toString("utf8"), bytes: old, from: part.from, offset: part.from + end, followed: false },
+    ...(end < part.bytes.length ? [{ text: next.toString("utf8"), bytes: next, from: part.from + end, offset: part.offset, followed: true }] : []),
+  ];
 }
 
 /// Keep unfinished lines as pieces and copy them only when a newline arrives, even if one line spans many chunks.
@@ -399,21 +416,6 @@ export async function claudeFiles(dir: string, only: string | null): Promise<[st
   return out;
 }
 
-async function rolloutsIn(dir: string, out: string[]): Promise<void> {
-  let names: string[];
-  try {
-    names = await readdir(dir);
-  } catch {
-    return;
-  }
-  for (const name of names.sort()) {
-    let path = join(dir, name);
-    if (extension(path) === "zst") path = path.slice(0, -".zst".length);
-    if (await isDir(path)) await rolloutsIn(path, out);
-    else if (name.startsWith("rollout-") && extension(path) === "jsonl") out.push(path);
-  }
-}
-
 /// The first line of a file (or of its `.zst`), up to its end when it has no newline; null when it does not read.
 async function firstLine(path: string): Promise<string | null> {
   const source = (await exists(path)) ? path : packed(path);
@@ -467,6 +469,72 @@ const breathe = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 class Stopped extends Error {}
 
+/// Old single-frame archives have no seek table. Count their uncompressed bytes as a stream when a recent session
+/// needs one, so the following byte boundary is saved before any part is recorded.
+async function unpackedLength(path: string, keep: () => boolean): Promise<number | null> {
+  const raw = createReadStream(path, { highWaterMark: CHUNK });
+  const stream = raw.pipe(createZstdDecompress({ chunkSize: CHUNK }));
+  raw.on("error", (error) => stream.destroy(error));
+  let size = 0;
+  try {
+    for await (const bytes of stream as AsyncIterable<Buffer>) {
+      if (!keep()) throw new Stopped();
+      size += bytes.length;
+    }
+    return size;
+  } catch (error) {
+    if (error instanceof Stopped) throw error;
+    return null;
+  } finally { raw.destroy(); stream.destroy(); }
+}
+
+/// Bytes immediately before a saved offset, from the raw transcript or the segment containing it.
+async function anchorAt(path: string, offset: number, archived: boolean, keep: () => boolean): Promise<string | null> {
+  const length = Math.min(ANCHOR, offset);
+  if (length === 0) return "";
+  const start = offset - length;
+  if (!archived) {
+    let file: FileHandle | undefined;
+    try {
+      file = await open(path, "r");
+      const out = Buffer.alloc(length);
+      const { bytesRead } = await file.read(out, 0, length, start);
+      return bytesRead === length ? out.toString("hex") : null;
+    } catch { return null; } finally { await file?.close(); }
+  }
+  let source: AsyncIterable<Buffer> | null;
+  try { source = await segmentsFrom(packed(path), start); } catch { return null; }
+  let raw: ReturnType<typeof createReadStream> | null = null;
+  let stream: ReturnType<typeof createZstdDecompress> | null = null;
+  let skip = 0;
+  if (source === null) {
+    raw = createReadStream(packed(path), { highWaterMark: CHUNK });
+    stream = raw.pipe(createZstdDecompress({ chunkSize: CHUNK }));
+    raw.on("error", (error) => stream!.destroy(error));
+    source = stream as AsyncIterable<Buffer>;
+    skip = start;
+  }
+  const pieces: Buffer[] = [];
+  let got = 0;
+  try {
+    for await (const piece of source) {
+      if (!keep()) throw new Stopped();
+      if (skip >= piece.length) { skip -= piece.length; continue; }
+      const bytes = piece.subarray(skip, skip + length - got);
+      skip = 0;
+      pieces.push(bytes);
+      got += bytes.length;
+      if (got === length) break;
+    }
+    return got === length ? Buffer.concat(pieces, length).toString("hex") : null;
+  } catch (error) {
+    if (error instanceof Stopped) throw error;
+    return null;
+  } finally { raw?.destroy(); stream?.destroy(); }
+}
+
+type CountedFile = UsageFile & { cutoff: number | null; anchor: string | null; path: string };
+
 // ── the counter ──
 
 export class UsageCounter {
@@ -476,7 +544,7 @@ export class UsageCounter {
   readonly #safetyMs: number;
   /// When the last read started; 0 before the first.
   #last = 0;
-  /// The first read (everything) is under way.
+  /// The first sweep is under way.
   #first = false;
   /// The read under way (reads queue behind it).
   #reading: Promise<unknown> = Promise.resolve();
@@ -494,8 +562,10 @@ export class UsageCounter {
   /// The sessions the read under way recorded new calls of, and when the earliest of the calls it recorded was made.
   #counted = new Set<string>();
   #from = Infinity;
-  /// What was read of each transcript (usage_files): the store's at the first read, and what this counter wrote since.
-  #files: Map<string, UsageFile> | null = null;
+  /// Positions of transcripts this counter has needed, read from the store by path and kept as it writes them.
+  #files: Map<string, CountedFile> | null = null;
+  /// Codex's path for a runtime session, remembered by session rather than searched through all known files.
+  #codexPaths = new Map<string, Map<string, string>>();
 
   constructor(options: UsageCounterOptions) {
     this.#store = options.store;
@@ -505,8 +575,8 @@ export class UsageCounter {
     this.#clock = options.clock ?? liveClock;
   }
 
-  /// Reads every transcript now, then those of sessions whose turn ended (shortly after), and all that ran every
-  /// SAFETY_MS. Stopped by `stop`.
+  /// Reads sessions that ran since the previous sweep, then those whose turn ended (shortly after), and all that ran
+  /// every SAFETY_MS. Stopped by `stop`.
   start(): void {
     if (this.#fiber !== null) return;
     this.#startedAt = this.#clock.currentTimeMillisUnsafe();
@@ -590,8 +660,8 @@ export class UsageCounter {
     }
   }
 
-  /// One read: the transcripts of every session the first time, then of those that ran since the last; `only`: of those
-  /// sessions alone (it says nothing of when the last read was). How many calls were new. Reads queue behind one another.
+  /// One read: the transcripts of sessions that ran since the last sweep; `only`: of those sessions alone (it says
+  /// nothing of when the last sweep was). How many calls were new. Reads queue behind one another.
   read(only?: ReadonlySet<string>): Promise<number> {
     const next = this.#reading.catch(() => {}).then(() => this.#read(only ?? null));
     this.#reading = next;
@@ -603,12 +673,10 @@ export class UsageCounter {
     const last = this.#last;
     if (only === null) this.#first = last === 0;
     const store = this.#store;
-    const wanted: Set<string> | null = only !== null ? new Set(only) : last === 0 ? null : new Set(store.usageActiveSessions(last - MARGIN_MS));
-    // Every session the first time; then those that ran since, by their rows (a read comes every few seconds while
-    // agents work: not every session ever).
-    const sessions: SessionRow[] = wanted === null ? store.listSessions() : [...wanted].flatMap((key) => store.getSession(key) ?? []);
-    // What was read of each transcript: as the store has it the first time, then as this counter wrote it (it alone does).
-    const known = (this.#files ??= store.usageFiles());
+    const cursor = store.usageCounter();
+    const wanted = only !== null ? new Set(only) : new Set(store.usageActiveSessions(Math.max(cursor.since, (last || cursor.through) - MARGIN_MS)));
+    const sessions: SessionRow[] = [...wanted].flatMap((key) => store.getSession(key) ?? []);
+    const known = (this.#files ??= new Map<string, CountedFile>());
     const config = this.#config();
     const homes = config.profiles.map((p) => p.home);
     let added = 0;
@@ -632,23 +700,50 @@ export class UsageCounter {
     const ways = (runtime: Runtime) => [sharedTranscripts(config.dataDir, runtime), ...config.profiles.map((p) => join(p.home, transcriptDir(runtime)))];
     // How far a transcript was read, however it was reached then: one read through a home's own directory before is
     // reached through the shared place once that directory is a link there (sessions/agent-home.ts `linkTranscripts`).
-    const readBefore = (path: string, runtime: Runtime): UsageFile | undefined => {
-      const had = known.get(path);
+    const readBefore = (path: string, runtime: Runtime): CountedFile | undefined => {
+      const position = (name: string) => {
+        const cached = known.get(name);
+        if (cached !== undefined) return cached;
+        const file = store.usageFile(name);
+        const counter = store.usageCounterFile(name);
+        if (file === undefined && counter === null) return undefined;
+        const saved = { ...(file ?? { session: null, offset: 0, model: null }), cutoff: counter?.cutoff ?? null, anchor: counter?.anchor ?? null, path: name };
+        known.set(name, saved);
+        return saved;
+      };
+      const had = position(path);
       if (had !== undefined) return had;
       const roots = ways(runtime);
       const root = roots.find((r) => path.startsWith(r + sep));
       if (root === undefined) return undefined;
       for (const r of roots) {
-        const was = known.get(r + path.slice(root.length));
+        const was = position(r + path.slice(root.length));
         if (was !== undefined) return was;
       }
       return undefined;
     };
     const claudeRoots = await distinct(ways("claude"));
-    const codexRoots = await distinct(ways("codex"));
     const seenFiles = new Set<string>();
+    // A chat may have left a runtime while its final turn was still writing. Count each earlier segment with the
+    // runtime that wrote it, even when the session now runs on another one.
     for (const s of sessions) {
       if (wanted !== null && !wanted.has(s.key)) continue;
+      for (const source of store.runtimeSessionSources(s.key)) {
+        const runtime = runtimeKind(source.runtime);
+        if (!runtime || runtime === s.runtime) continue;
+        const transcript = transcriptPaths(runtime, config.dataDir, homes, [source.id]).paths[0];
+        if (!transcript) continue;
+        const files: [string, boolean][] = runtime === "claude" ? await claudeFiles(dirname(transcript), source.id) : [[runtime === "grok" ? join(dirname(transcript), "stillfail-usage.jsonl") : transcript, false]];
+        for (const [path, subagent] of files) {
+          if (runtime === "grok" && !existsSync(path)) continue;
+          const real = await canonical(path);
+          if (seenFiles.has(real)) continue;
+          seenFiles.add(real);
+          added += await this.#readFile(path, runtime, subagent, s, readBefore(path, runtime), cursor.since);
+        }
+      }
+    }
+    for (const s of sessions) {
       if (s.runtime !== "claude") continue;
       const project = claudeProject(s.cwd ?? s.workspace);
       const only = s.cwd !== null ? s.runtimeSessionId : null;
@@ -658,103 +753,90 @@ export class UsageCounter {
           const real = await canonical(path);
           if (seenFiles.has(real)) continue;
           seenFiles.add(real);
-          added += await this.#readFile(path, "claude", subagent, s, readBefore(path, "claude"));
+          added += await this.#readFile(path, "claude", subagent, s, readBefore(path, "claude"), cursor.since);
         }
       }
     }
     // Codex: its transcripts are kept by date, so each new one is matched to a session by its id, or by where it ran.
     // Read of a few sessions alone (every few seconds while they work), not every one is walked: those of their
     // runtime sessions, as read before or found by their ids.
-    const found: string[] = [];
-    if (only === null) for (const root of codexRoots) await rolloutsIn(root, found);
-    else {
-      const ids = sessions.filter((s) => s.runtime === "codex").flatMap((s) => store.runtimeSessions(s.key));
-      if (ids.length > 0) {
-        const readOf = new Map<string, string>();
-        for (const [path, file] of known) if (file.session !== null && wanted!.has(file.session)) readOf.set(basename(path), path);
-        for (const id of ids) {
-          const had = [...readOf].find(([name]) => name.endsWith(`${id}.jsonl`))?.[1];
-          const path = had ?? transcriptPaths("codex", config.dataDir, homes, [id]).paths[0];
-          if (path !== undefined) found.push(path);
-        }
-      }
+    const codex = sessions.filter((s) => s.runtime === "codex");
+    const found = new Map<string, SessionRow>();
+    for (const s of codex) for (const { id } of store.runtimeSessionSources(s.key).filter((source) => source.runtime === "codex")) {
+      const paths = this.#codexPaths.get(s.key) ?? new Map<string, string>();
+      this.#codexPaths.set(s.key, paths);
+      let had = paths.get(id);
+      if (had !== undefined && !(await isFile(had)) && !(await isFile(packed(had)))) { paths.delete(id); had = undefined; }
+      // A running thread can report its path before it creates the file; earlier threads can still search history.
+      const path = had ?? transcriptPaths("codex", config.dataDir, homes, [id], [], { anywhere: !(s.running && s.runtimeSessionId === id) }).paths[0];
+      if (path !== undefined) { paths.set(id, path); found.set(path, s); }
     }
-    const rollouts = [...new Set(found)];
-    if (rollouts.length > 0) {
-      // A new one is matched among the sessions read, then (it may be one that ran before the last read) among every
-      // Codex session, asked only then: one matched to none is passed over for good.
-      let codex = sessions.filter((s) => s.runtime === "codex");
-      let every = wanted === null;
-      const match = (meta: [string | null, string | null]) => codex.find((s) => s.runtimeSessionId === meta[0] || (s.cwd === null && s.workspace === meta[1]))?.key ?? null;
-      for (const path of rollouts) {
-        const file = readBefore(path, "codex");
-        let session: string | null;
-        if (file !== undefined) session = file.session;
-        else {
-          const meta = await codexMeta(path);
-          session = meta === null ? null : match(meta);
-          if (session === null && meta !== null && !every) {
-            codex = store.listSessions().filter((s) => s.runtime === "codex");
-            every = true;
-            session = match(meta);
-          }
-        }
-        if (session === null) {
-          if (file === undefined) {
-            // None of the station's (a terminal's own): passed over from now on.
-            let size = 0;
-            try {
-              size = (await stat(path)).size;
-            } catch {}
-            store.recordUsage(path, { session: null, offset: size, model: null }, "codex", []);
-            known.set(path, { session: null, offset: size, model: null });
-          }
-          continue;
-        }
-        if (wanted !== null && !wanted.has(session) && file !== undefined) continue;
-        const s = codex.find((c) => c.key === session);
-        if (s === undefined) continue;
-        added += await this.#readFile(path, "codex", false, s, file);
-      }
+    for (const [path, s] of found) {
+      const file = readBefore(path, "codex");
+      if (file !== undefined && file.session !== null && file.session !== s.key) continue;
+      added += await this.#readFile(path, "codex", false, s, file, cursor.since);
     }
     // DeepSeek Harness: each runtime session's own file, found as its history finds it (dsh.ts); Grok Build: what the
     // station kept of its turns beside each one's transcript (grok.ts); Cursor and Devin: their transcripts, the
     // station's own (cursor.ts, devin.ts).
     for (const s of sessions) {
-      if ((s.runtime !== "dsh" && s.runtime !== "grok" && s.runtime !== "cursor" && s.runtime !== "devin" && s.runtime !== "hermes") || (wanted !== null && !wanted.has(s.key))) continue;
+      if (s.runtime !== "dsh" && s.runtime !== "grok" && s.runtime !== "cursor" && s.runtime !== "devin" && s.runtime !== "hermes" && s.runtime !== "agy") continue;
       const runtime = s.runtime;
-      for (const id of store.runtimeSessions(s.key)) {
+      for (const { id } of store.runtimeSessionSources(s.key).filter((source) => source.runtime === runtime)) {
         const transcript = transcriptPaths(runtime, config.dataDir, homes, [id]).paths[0];
         const path = transcript !== undefined && runtime === "grok" ? join(dirname(transcript), "stillfail-usage.jsonl") : transcript;
         if (path === undefined || (runtime === "grok" && !existsSync(path))) continue;
         const real = await canonical(path);
         if (seenFiles.has(real)) continue;
         seenFiles.add(real);
-        added += await this.#readFile(path, runtime, false, s, readBefore(path, runtime));
+        added += await this.#readFile(path, runtime, false, s, readBefore(path, runtime), cursor.since);
       }
     }
     if (only === null) {
+      if (wanted.size > 0) store.advanceUsageCounter(started);
       this.#last = started;
       this.#first = false;
     }
-    if (added > 0) {
-      if (last === 0 && only === null) log.info("usage", "usage read from every transcript", { calls: added, ms: this.#clock.currentTimeMillisUnsafe() - started });
+    if (this.#counted.size > 0) {
+      if (last === 0 && only === null) log.info("usage", "usage read from recent transcripts", { calls: added, ms: this.#clock.currentTimeMillisUnsafe() - started });
       store.usageChanged([...this.#counted], Number.isFinite(this.#from) ? this.#from : undefined);
     }
     return added;
   }
 
   /// Reads one transcript of `session` on from where it was left, and records its calls, a part at a time.
-  async #readFile(path: string, runtime: Runtime, subagent: boolean, session: SessionRow, was: UsageFile | undefined): Promise<number> {
-    // A transcript put away (only its `.zst` there) was read before it was: its session is archived and idle, and it is
-    // restored before its runtime writes in it again. Read again as the station starts, every one was decompressed
-    // whole at each start (10.8 s on ccvm, 2026-10-24, the station slow to answer meanwhile). One never read is read once.
-    if (this.#first && was !== undefined && (await putAway(path))) return 0;
-    // Nor is one counted to its end read again: it is not written in while it is put away. (Every count of its session
-    // decompressed it whole before, 150 MB for one, to find nothing new: ccvm, 2026-11-02.)
-    if (was !== undefined && (await putAway(path)) && (await writtenLength(packed(path)).catch(() => null)) === was.offset) return 0;
-    const before = was ?? { session: null, offset: 0, model: null };
+  async #readFile(path: string, runtime: Runtime, subagent: boolean, session: SessionRow, was: CountedFile | undefined, since: number): Promise<number> {
+    // A transcript may have been put away after its turn ended but before its last new calls were read. A seekable
+    // archive tells its original size without decompression; an older archive is measured only for a wanted session.
+    const archived = await putAway(path);
+    let size: number | null;
+    if (archived) {
+      size = await writtenLength(packed(path)).catch(() => null)
+        ?? await unpackedLength(packed(path), () => !this.#abort.signal.aborted);
+      if (size === null) return 0;
+    } else {
+      try { size = (await stat(path)).size; } catch { return 0; }
+    }
+    let anchor = "";
+    const shortened = was !== undefined && size < was.offset;
+    if (!shortened && was !== undefined) {
+      const found = await anchorAt(path, was.offset, archived, () => !this.#abort.signal.aborted);
+      if (found === null) return 0;
+      anchor = found;
+    }
+    const replaced = was !== undefined && (shortened || (was.anchor !== null && anchor !== was.anchor));
+    const before = replaced ? { session: was.session, offset: 0, model: null } : (was ?? { session: null, offset: 0, model: null });
+    if (replaced) anchor = "";
+    let cutoff = was?.cutoff ?? null;
+    if (replaced || cutoff === null || was?.anchor === null || was?.path !== path) {
+      cutoff = this.#store.beginUsageCounterFile(path, before, { cutoff: replaced ? size : (cutoff ?? size), anchor }, replaced).cutoff;
+    }
+    this.#files?.set(path, { ...before, cutoff, anchor, path });
+    if (archived && !replaced && size === before.offset) return 0;
     const state: CallState = { model: before.model, codexId: null };
+    // A session created after the counter began can have its first call timestamped just before that boundary when
+    // the runtime's clock is behind. Use the same clock-skew allowance already used to attribute calls to a session.
+    const firstNewAt = session.createdAt >= since ? Math.min(since, session.createdAt - SKEW_MS) : since;
     let added = 0;
     let first = true;
     for await (const part of readFrom(path, before.offset)) {
@@ -764,38 +846,46 @@ export class UsageCounter {
         if (runtime === "codex") state.codexId = (await codexMeta(path))?.[0] ?? null;
         first = false;
       }
-      // What ran before the station had the session (a terminal's, continued here) is not the station's.
-      const modelBefore = state.model;
-      const calls = callsOf(runtime, part.text, subagent, state).filter((c) => c.at >= session.createdAt - SKEW_MS);
-      // The turns they were made in, those alone (store/usage.ts usageTurns).
-      const of = calls.length === 0 ? [] : this.#store.usageTurns(session.key, calls.reduce((m, c) => Math.min(m, c.at), Infinity), calls.reduce((m, c) => Math.max(m, c.at), -Infinity));
-      const withFor: [UsageCall, UsageFor][] = calls.map((c) => {
-        // The turn it was made in: the last to start before it (the first, for one before them all).
-        let lo = 0;
-        let hi = of.length;
-        while (lo < hi) {
-          const mid = (lo + hi) >> 1;
-          if (of[mid]!.startedAt <= c.at) lo = mid + 1;
-          else hi = mid;
+      for (const section of sectionsOf(part, cutoff)) {
+        const nextAnchor = (section.bytes.length >= ANCHOR ? section.bytes.subarray(-ANCHOR)
+          : Buffer.concat([Buffer.from(anchor, "hex"), section.bytes]).subarray(-ANCHOR)).toString("hex");
+        // What ran before the station had the session (a terminal's, continued here) is not the station's.
+        const modelBefore = state.model;
+        const fromKnownSuffix = was !== undefined && !replaced && section.from >= before.offset;
+        const calls = callsOf(runtime, section.text, subagent, state).filter((c) => c.at >= session.createdAt - SKEW_MS && (section.followed || c.at >= firstNewAt || fromKnownSuffix));
+        // The turns they were made in, those alone (store/usage.ts usageTurns).
+        const of = calls.length === 0 ? [] : this.#store.usageTurns(session.key, calls.reduce((m, c) => Math.min(m, c.at), Infinity), calls.reduce((m, c) => Math.max(m, c.at), -Infinity));
+        const withFor: [UsageCall, UsageFor][] = calls.map((c) => {
+          // The turn it was made in: the last to start before it (the first, for one before them all).
+          let lo = 0;
+          let hi = of.length;
+          while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (of[mid]!.startedAt <= c.at) lo = mid + 1;
+            else hi = mid;
+          }
+          return [c, of[Math.max(lo - 1, 0)]!.of];
+        });
+        // A dense part can contain thousands of calls. Save its starting position until all its calls are recorded: if
+        // stopped between transactions, replaying the part is safe (the store keeps each call by id). `section.from` also
+        // handles a transcript that was shortened and is being read again from zero.
+        for (let i = 0; i < Math.max(1, withFor.length); i += WRITE_BATCH) {
+          if (this.#abort.signal.aborted) throw new Stopped();
+          const complete = i + WRITE_BATCH >= withFor.length;
+          const file = { session: session.key, offset: complete ? section.offset : section.from, model: complete ? state.model : modelBefore };
+          const batch = withFor.slice(i, i + WRITE_BATCH);
+          const changed = { from: Infinity };
+          const savedAnchor = complete ? nextAnchor : anchor;
+          const recorded = this.#store.recordUsage(path, file, runtime, batch, { changed, counter: { cutoff, anchor: savedAnchor }, ...(section.followed ? {} : { minNewAt: firstNewAt }) });
+          this.#files?.set(path, { ...file, cutoff, anchor: savedAnchor, path });
+          if (Number.isFinite(changed.from)) {
+            this.#counted.add(session.key);
+            this.#from = Math.min(this.#from, changed.from);
+          }
+          added += recorded;
+          await breathe();
         }
-        return [c, of[Math.max(lo - 1, 0)]!.of];
-      });
-      // A dense part can contain thousands of calls. Save its starting position until all its calls are recorded: if
-      // stopped between transactions, replaying the part is safe (the store keeps each call by id). `part.from` also
-      // handles a transcript that was shortened and is being read again from zero.
-      for (let i = 0; i < Math.max(1, withFor.length); i += WRITE_BATCH) {
-        if (this.#abort.signal.aborted) throw new Stopped();
-        const complete = i + WRITE_BATCH >= withFor.length;
-        const file = { session: session.key, offset: complete ? part.offset : part.from, model: complete ? state.model : modelBefore };
-        const batch = withFor.slice(i, i + WRITE_BATCH);
-        const recorded = this.#store.recordUsage(path, file, runtime, batch);
-        this.#files?.set(path, file);
-        if (recorded > 0) {
-          this.#counted.add(session.key);
-          this.#from = batch.reduce((m, [c]) => Math.min(m, c.at), this.#from);
-        }
-        added += recorded;
-        await breathe();
+        anchor = nextAnchor;
       }
     }
     return added;

@@ -238,7 +238,7 @@ function shareInView(source: string, query = ""): ShareInView {
   return {
     ...(site ? { site } : {}), items: (kept ? [kept, ...rows.filter((r) => r !== kept)] : rows).slice(0, 30),
     ...(kept ? { kept: { station: kept.station, id: kept.id, text: site ? `${site} 的链接上次发到这里` : "上次分享的文字发到这里" } } : {}),
-    stations: [{ station: STATION, name: "Studio" }], newOn: STATION, loading: false,
+    stations: [{ station: STATION, name: "Willow" }], newOn: STATION, loading: false,
   };
 }
 
@@ -259,7 +259,7 @@ function searchView(query: string, kind: string | null): SearchView {
   if (!q) return { items: all.slice(0, 30), wait };
   const items = all.filter((i) => i.title.toLowerCase().includes(q));
   const first = items[0] ?? all[0];
-  const where = { station: first?.station ?? STATION, stationName: first?.stationName ?? "Studio" };
+  const where = { station: first?.station ?? STATION, stationName: first?.stationName ?? "Willow" };
   const said = (text: string) => ({ text, marks: marks(text, q) });
   const of = (c: ChatItem | undefined) => (c ? { chat: c.id, chatTitle: c.title } : {});
   const groups: NonNullable<SearchView["groups"]> = [

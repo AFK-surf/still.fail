@@ -2239,9 +2239,17 @@ fn resolve_flexible(
     let mut sum_factors = 0.0
     let mut free = space
     let mut sum_scaled = 0.0
+    let mut remaining = space
+    let mut unfrozen = 0
     for k in a..<b {
       let i = k * ITEM
       let frozen = (flags.unsafe_get(k) & FROZEN) != 0
+      remaining = remaining - f.unsafe_get(i + MARGIN_MAIN)
+      if frozen {
+        remaining = remaining - f.unsafe_get(i + TARGET)
+      } else {
+        unfrozen += 1
+      }
       free = free -
         f.unsafe_get(i + MARGIN_MAIN) -
         (if frozen { f.unsafe_get(i + TARGET) } else { f.unsafe_get(i + BASIS) })
@@ -2264,7 +2272,11 @@ fn resolve_flexible(
       }
       let i = k * ITEM
       let basis = f.unsafe_get(i + BASIS)
-      let t = if grow {
+      // One item taking all the remaining room takes that room itself. Reconstructing it from its basis and a
+      // scaled difference can alternate between adjacent floating-point values as its content is measured again.
+      let t = if unfrozen == 1 && sum_factors >= 1.0 && (grow || sum_scaled > 0.0) {
+        remaining
+      } else if grow {
         basis + free * f.unsafe_get(i + FACTOR) / sum_factors
       } else {
         let scaled = f.unsafe_get(i + FACTOR) * basis

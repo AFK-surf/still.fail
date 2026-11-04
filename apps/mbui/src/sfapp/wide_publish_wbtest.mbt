@@ -13,7 +13,7 @@ test "wide: 分享图片 from the chat's info: the picture as it would be over t
       (base.call)(name, params, done)
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   t.click(Button, label="更多")
@@ -56,7 +56,7 @@ test "wide: 分享图片 from the chat's info: the picture as it would be over t
 ///|
 test "wide: a vault request's outcome line has its dot in the middle of its words' line, its name set apart without quotes" {
   new_run()
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let src = fixture("chat-info")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
@@ -103,7 +103,7 @@ test "wide: right click copies the whole message for its author and the viewer, 
         { ..got, value: Some(Json::object(out)) }
       },
     }
-    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
     let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
     t.run_for(@ui.move_most_ms)
     let (x, y, _, _) = t.rect_of("截图换成").unwrap()
@@ -129,7 +129,7 @@ test "wide: a message right clicked offers 分享这一轮, which shares its tur
       (base.call)(name, params, done)
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   let (x, y, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
@@ -148,7 +148,7 @@ test "wide: a message right clicked offers 分享这一轮, which shares its tur
 ///|
 test "wide: a link in a message right clicked opens its own menu alone, not the message's 分享这一轮 under it" {
   new_run()
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let src = fixture("chat")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
@@ -188,7 +188,7 @@ test "wide: the message header's ⋯ offers the same message actions as a right 
       (base.call)(name, params, done)
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   let (x, y, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
@@ -245,7 +245,7 @@ fn drawn_near(t : @ui.Tester, words : String, x : Double, y : Double) -> Bool? {
 test "wide: the message's ⋯ menu goes out where it hung, closed by Escape or a click away" {
   for how in ["escape", "away"] {
     new_run()
-    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
     let src = fixture("chat")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
     t.run_for(@ui.move_most_ms)
@@ -279,7 +279,7 @@ test "wide: the message's ⋯ menu goes out where it hung, closed by Escape or a
 ///|
 test "wide: the message's ⋯ menu closed by its ⋯ pressed again, the pointer then off the message: goes out where it hung" {
   new_run()
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let src = fixture("chat")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)

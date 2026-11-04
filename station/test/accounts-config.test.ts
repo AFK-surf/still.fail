@@ -53,6 +53,7 @@ test("what cannot run is refused in words", () => {
   assert.equal(err({ connects: [{ id: "c", bind: { runtime: "claude" } }, { id: "c", bind: { runtime: "claude" } }] }), "duplicate connect id c");
   assert.equal(err({ profiles: [{ id: "a", home: "h", runtime: "claude" }, { id: "a", home: "h", runtime: "claude" }] }), "duplicate profile id a");
   assert.equal(err({ connects: [{ id: "c", kind: "teams", bind: { runtime: "claude" } }] }), "connect c: unknown kind teams");
+  assert.equal(err({ connects: [{ id: "f", kind: "feishu", feishu: { appId: "cli_x", appSecret: "s" }, bind: { runtime: "claude" } }] }), "accepted", "a Feishu connect is taken");
   assert.equal(err({ profiles: [{ id: "p", home: "h", access: { kind: "api-provider", provider: "nope", key: "k" } }] }), "profile p: api-provider needs a known provider");
   assert.equal(err({ profiles: [{ id: "p", home: "h", access: { kind: "api-provider", provider: "azure-openai", key: "k" } }] }), "profile p: Azure OpenAI needs an endpoint address");
   assert.match(err({ connects: [{ id: "c", bind: { runtime: "nope" } }] }), /unknown variant `nope`/);

@@ -15,7 +15,15 @@ export const routes = ({ read }: Tools): Route[] => [
   {
     method: "GET",
     pattern: /^\/chats$/,
-    handle: (r: Request) => (r.query.some(([k]) => k === "session" || k === "thread") ? read(r, "chatRows", scoped(r)) : read(r, "chats", chatsOf(r))),
+    handle: (r: Request) => {
+      const some = r.query.some(([k]) => k === "session" || k === "thread");
+      // `marks=1`: what a device that makes the sidebar itself cannot make of it (read/views.ts `chatMarks`).
+      if (param(r, "marks") === "1") return read(r, "chatMarks", { viewer: r.viewer, scope: some ? (({ sessions, threads }) => ({ sessions, threads }))(scoped(r)) : null });
+      // `shared=1`: the chat list as the station makes it once for everyone (read/views.ts `sharedChats`), what the viewer
+      // sees of it: a device puts what is the viewer's own on it itself (client/core-ts/src/chat-row.ts).
+      if (param(r, "shared") === "1") return read(r, "sharedChats", some ? scoped(r) : { viewer: r.viewer, sessions: null, threads: null });
+      return some ? read(r, "chatRows", scoped(r)) : read(r, "chats", chatsOf(r));
+    },
   },
   { method: "POST", pattern: /^\/changed\/chats$/, handle: (r: Request) => changed(read, r, "chats", chatsOf(r), "id") },
   {

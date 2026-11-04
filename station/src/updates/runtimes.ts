@@ -123,6 +123,8 @@ export function howToUpdate(kind: Kind, found: Found, env: Env): How | Unable {
   const realPath = found.real.split(platform.paths.separator).join("/");
   const name = kindName(kind);
   if (kind === "station") return new Unable("");
+  // The Antigravity CLI updates itself on asking (it would in the background too, which its sessions here are kept from).
+  if (kind === "agy") return { program: found.onPath, args: ["update"] };
   if (kind === "hermes") return new Unable("station.updates.hermesExternal");
   // The Devin CLI's installer keeps its versions under its data directory (devin/cli/_versions), the command a link to
   // the current one: the installer again fetches the latest and switches it (`devin update` wants a terminal: without
@@ -206,6 +208,8 @@ export function howToInstall(kind: Kind, env: Env, node: OwnNode | null = null):
   if (kind === "station") return new Unable("");
   if (kind === "hermes") return new Unable("station.updates.hermesExternal");
   if (kind === "claude") return platform.claudeInstall;
+  // Its installer also writes the machine's shell profiles: installed by the person, from antigravity.google.
+  if (kind === "agy") return new Unable("station.updates.agyExternal");
   if (kind === "devin") return platform.devinInstall;
   // DeepSeek Harness is an npm package (it runs on the Node npm is of: 22.19 or newer).
   if (kind === "dsh" || kind === "grok") return npmInstall(env, node, ["install", "-g", `${kindPackage(kind)}@latest`], kindName(kind));

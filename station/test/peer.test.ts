@@ -65,7 +65,7 @@ test("a peer's request is answered by the other station's remote tasks", async (
 
 test("a slow request holds up no other on the same connection", async () => {
   // Answered one after another, one slow request (a sync on a loaded station) held up all the caller's others: every
-  // chat of a station asking another shares one connection, and each timed out (2026-10-20, ccvm to Studio).
+  // chat of a station asking another shares one connection, and each timed out (2026-10-20, a station to another station).
   const mesh = memoryMesh();
   const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_BYTES_ALPN, PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
   const [source, target] = await Promise.all([bind(), bind()]);
@@ -103,7 +103,7 @@ test("a slow request holds up no other on the same connection", async () => {
 
 test("requests asked while no connection is open share the one dialed; one answered late leaves it to the others", async () => {
   // Each request dialed its own, and one that timed out dropped the connection for the next to dial another while the
-  // old one's requests were still answered: dozens of a station's followed tasks, each round (2026-10-21, ccvm to Studio).
+  // old one's requests were still answered: dozens of a station's followed tasks, each round (2026-10-21, a station to another station).
   const mesh = memoryMesh();
   const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_BYTES_ALPN, PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
   const [source, target] = await Promise.all([bind(), bind()]);

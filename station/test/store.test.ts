@@ -4,19 +4,24 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { constants, DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
-  ANY_RUNNING, ARCHIVED_THREADS, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_SINCE, CLOSED_THREAD_SINCE, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
-  MANUAL, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
+  ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_SINCE, CLOSED_THREAD_SINCE, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
+  MANUAL, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, POST_AFTER_FIRST, POST_AFTER_INDEXED, POST_BLOCKS_READY, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
-import { MERGED, SCHEMA } from "../src/store/schema.ts";
+import { addListState, firstDelivery, MERGED, SCHEMA } from "../src/store/schema.ts";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/store/usage.ts";
 import { detailQuery } from "../src/store/usage-detail.ts";
+import { installCompactUsage } from "../src/store/usage-compact.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../src/store/remote-runs.ts";
+import { RUNNING_WAIT_JOBS } from "../src/store/active-jobs.ts";
+import { HAS_SESSION_ACTIVE_WATCH } from "../src/store/watch-jobs.ts";
 import * as read from "../src/read/store.ts";
+import { compactHistoryBeforeQuery } from "../src/read/usage.ts";
+import { type CardEnd, cardsEnded } from "../src/connects/card-ends.ts";
 import { fileAway } from "./archived-before.ts";
 import { testClock } from "./hub-fakes.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
@@ -63,7 +68,7 @@ const archiveFile = (store: Store, thread: number) => join(store.archiveDir(), "
 test("a write waits its turn while another of the station's writers writes, not refused at once", () => {
   // Begun deferred, a transaction that read first was refused at its first write (SQLITE_BUSY_SNAPSHOT, "database is
   // locked", no wait) where another connection wrote meanwhile: the usage worker filling its statistics, and a person's
-  // message was not sent (ccvm, 2026-11-03).
+  // message was not sent (a station, 2026-11-03).
   const path = join(tempdir(), "s.db");
   const store = open(path);
   const other = new DatabaseSync(path, { timeout: 0 });
@@ -95,10 +100,10 @@ test("a database of another schema version is refused", () => {
   const db = new DatabaseSync(path);
   db.exec("CREATE TABLE sessions (key TEXT); PRAGMA user_version = 8;");
   db.close();
-  assert.throws(() => Store.open(path), /schema version 8; this station uses 12/);
+  assert.throws(() => Store.open(path), /schema version 8; this station uses 13/);
 });
 
-test("a new database is made at version 12", () => {
+test("a new database is made at version 13", () => {
   const path = join(tempdir(), "new.db");
   open(path).close();
   const db = new DatabaseSync(path, { readOnly: true });
@@ -163,7 +168,11 @@ test("a message is recorded once and delivered to every session in its thread", 
   assert.deepEqual(store.deliver(thread.id, first[0], ["a", "b"]), ["a", "b"]);
   assert.deepEqual(store.deliver(thread.id, first[0], ["a", "b"]), []);
   assert.deepEqual(store.pendingMessages("b").map((m) => [m.message.text, m.connect]), [["hi", "gpt"]]);
+  const told = heard(store);
   store.markDelivered("a", [{ thread: thread.id, n: first[0], apart: false }]);
+  told.stop();
+  // How many it has yet to take, said with the change: devices are told it at once, not after its summary is read.
+  assert.deepEqual(told.changes.filter((c) => c.type === "session"), [{ type: "session", key: "a", pending: 0 }]);
   assert.deepEqual(store.sessionsWithPending(), ["b"]);
   assert.equal(store.latestThread("a")!.thread.id, thread.id);
   assert.equal(store.sessionThread("b", "C1", "1.1")!.connect, "gpt");
@@ -252,9 +261,27 @@ test("reads move forward only and unread counts skip the viewer's own", () => {
   assert.deepEqual(store.listThreads("me@x", null, null).map((t) => t.thread.id), [slack.id, thread.id], "the latest said first");
 });
 
-test("an archived thread keeps its entries in the database; one a station before wrote out to its file is read from it, and brought back", () => {
+test("an archived thread keeps its entries in the database", () => {
   const archive = tempdir();
   const store = open(":memory:", archive);
+  session(store, "a");
+  const own = store.openThread("ember", "EMBER", "2.1", null, null);
+  store.joinThread(own.id, "a", "ember");
+  say(store, own.id, "2.2", "person", "local", "看看");
+  say(store, own.id, "2.3", "agent", "a", "好");
+  const before = store.listThreads("local", null, own.id)[0];
+  const entries = store.entriesAfter(own.id, 0);
+  store.setArchived("a", true, MANUAL);
+  assert.ok(!existsSync(join(archive, "threads", `${own.id}.jsonl.zst`)), "archived, its entries stay where they are");
+  assert.deepEqual(store.entriesAfter(own.id, 0), entries);
+  assert.deepEqual(store.listThreads("local", null, own.id)[0], before);
+});
+
+test("a database of version 12 has the threads a station before wrote out to files brought back, and goes to 13", () => {
+  const data = tempdir();
+  const path = join(data, "stillfail.db");
+  const archive = join(data, "archive");
+  const store = open(path, archive);
   session(store, "a");
   session(store, "b");
   const shared = store.openThread("slack:T1", "C1", "1.1", null, null);
@@ -266,64 +293,27 @@ test("an archived thread keeps its entries in the database; one a station before
   store.insertMessage(at(newMessage(own.id, "2.2", "person", "local", "看看"), 1));
   store.insertMessage(at(newMessage(own.id, "2.3", "agent", "a", "好"), 2));
   store.insertMessage(at(newMessage(shared.id, "1.1", "person", "U1", "hi"), 3));
-  const before = store.listThreads("local", null, own.id)[0];
-  const entries = store.entriesAfter(own.id, 0);
-  const file = join(archive, "threads", `${own.id}.jsonl.zst`);
-
-  store.setArchived("a", true, MANUAL);
-  assert.ok(!existsSync(file), "archived, its entries stay where they are");
-  assert.deepEqual(store.entriesAfter(own.id, 0), entries);
-  assert.deepEqual(store.listThreads("local", null, own.id)[0], before);
-
-  // As a station before archived it: written out to its file, out of the database.
-  assert.equal(fileAway(store, own.id), file);
-  const text = zstdDecompressSync(readFileSync(file)).toString("utf8");
-  // The shape the Rust station writes (serde's EntryRow): its archives read here, and back.
-  assert.ok(text.split("\n")[0]!.startsWith(`{"thread":${own.id},"n":1,"kind":"message","target":null,"ts":"2.2","authorKind":"person"`), text);
-  assert.ok(text.split("\n")[1]!.startsWith(`{"agentIdentity":{"model":null,"effort":null},"thread":${own.id},"n":2,`), text);
-  // Out of the database, read from the file the same way.
-  assert.equal((store.db.prepare("SELECT COUNT(*) AS c FROM entries WHERE thread = ?").get(own.id) as any).c, 0);
-  assert.deepEqual(store.entriesAfter(own.id, 0), entries);
-  assert.deepEqual(store.entriesBefore(own.id, null, 1), entries.slice(1));
-  assert.deepEqual(store.entriesBetween(own.id, 2, 2), entries.slice(1));
-  assert.deepEqual(store.listThreads("local", null, own.id)[0], before);
-  assert.deepEqual(store.participants("a").get("a"), ["local", "slack:ds:U1"]);
-
-  store.setArchived("a", false, MANUAL);
-  assert.ok(!existsSync(file), "shown again: back in the database");
-  assert.deepEqual(store.entriesAfter(own.id, 0), entries);
-
-  // Someone writing in one written out brings it back first.
-  store.setArchived("a", true, MANUAL);
-  fileAway(store, own.id);
-  const h = heard(store);
-  assert.deepEqual(say(store, own.id, "2.4", "person", "local", "还在吗"), [3, true]);
-  assert.ok(!existsSync(file));
-  assert.deepEqual(store.entriesAfter(own.id, 0).map((e) => e.n), [1, 2, 3]);
-  const appended = h.changes.flatMap((c) => (c.type === "thread" && c.entries.length > 0 ? [c.entries.map((e) => e.n)] : []));
-  assert.deepEqual(appended, [[3]]);
-  h.stop();
-
-  // Those written out are brought back a few at a time, the oldest first, as they read from their files.
+  const before = store.listThreads("local", null, null);
+  const entries = [store.entriesAfter(own.id, 0), store.entriesAfter(shared.id, 0)];
   store.setArchived("a", true, MANUAL);
   store.setArchived("b", true, MANUAL);
-  const sharedEntries = store.entriesAfter(shared.id, 0);
-  fileAway(store, shared.id);
-  fileAway(store, own.id);
-  assert.deepEqual(store.bringInArchived(1), { brought: 1, left: 1 });
-  assert.ok(!existsSync(join(archive, "threads", `${shared.id}.jsonl.zst`)) && existsSync(file));
-  assert.deepEqual(store.bringInArchived(5), { brought: 1, left: 0 });
-  assert.deepEqual(store.bringInArchived(5), { brought: 0, left: 0 });
-  assert.ok(!existsSync(file));
-  assert.deepEqual([store.entriesAfter(shared.id, 0), store.entriesAfter(own.id, 0).length], [sharedEntries, 3]);
+  const files = [fileAway(store, own.id), fileAway(store, shared.id)];
+  // The shape the Rust station wrote (serde's EntryRow).
+  const text = zstdDecompressSync(readFileSync(files[0]!)).toString("utf8");
+  assert.ok(text.split("\n")[0]!.startsWith(`{"thread":${own.id},"n":1,"kind":"message","target":null,"ts":"2.2","authorKind":"person"`), text);
+  store.db.exec("CREATE TABLE IF NOT EXISTS items (thread INTEGER)");
+  store.close();
 
-  // Deleting the session removes an archived thread's file with it.
-  fileAway(store, own.id);
-  const removed = heard(store);
-  store.deleteSession("a");
-  assert.deepEqual(removed.changes.flatMap((c) => (c.type === "threadRemoved" ? [c.id] : [])), [own.id]);
-  assert.ok(!existsSync(file));
-  assert.deepEqual(store.entriesAfter(shared.id, 0).map((e) => e.text), ["hi"], "b's archived thread stays");
+  const again = open(path, archive);
+  assert.deepEqual([again.entriesAfter(own.id, 0), again.entriesAfter(shared.id, 0)], entries);
+  assert.deepEqual(again.listThreads("local", null, null), before);
+  assert.deepEqual(again.participants("a").get("a"), ["local", "slack:ds:U1"]);
+  assert.ok(files.every((f) => !existsSync(f)), "the files go once their entries are back");
+  const has = (type: string, name: string) => again.db.prepare("SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?").get(type, name) !== undefined;
+  assert.ok(!has("table", "items") && !has("index", "threads_archived"));
+  assert.equal((again.db.prepare("PRAGMA user_version").get() as any).user_version, SCHEMA_VERSION);
+  // Said in again, numbered on.
+  assert.deepEqual(say(again, own.id, "2.4", "person", "local", "还在吗"), [3, true]);
 });
 
 test("what lists say of a thread and a session is kept as its messages are written, and goes with them", () => {
@@ -358,6 +348,155 @@ test("what lists say of a thread and a session is kept as its messages are writt
   assert.deepEqual(people(), []);
 });
 
+test("deleting a session removes its first-message summary once, not once per delivery", () => {
+  const store = memory();
+  session(store, "a");
+  session(store, "b");
+  const thread = store.openThread("ember", "EMBER", "1.1", null, null);
+  store.joinThread(thread.id, "a", "ember");
+  store.joinThread(thread.id, "b", "ember");
+  for (let i = 0; i < 32; i++) {
+    const [n] = say(store, thread.id, `1.${i + 2}`, "person", "x@a", `message ${i}`);
+    store.deliver(thread.id, n, i === 0 ? ["a", "b"] : ["a"]);
+  }
+  store.db.exec(`
+    CREATE TEMP TABLE first_removed (session TEXT);
+    CREATE TEMP TRIGGER count_first_removed AFTER DELETE ON main.session_first BEGIN
+      INSERT INTO first_removed VALUES (OLD.session);
+    END;
+  `);
+  store.deleteSession("a");
+  assert.deepEqual(store.db.prepare("SELECT session FROM first_removed").all().map((r) => r.session), ["a"]);
+  assert.equal(store.sessionStats("b").get("b")!.firstText, "message 0", "the other participant keeps its summary");
+});
+
+for (const mode of ["ABORT", "REPLACE"] as const) for (const recursive of [false, true]) {
+  test(`a delivery written with ${mode} keeps the session's first message (recursive triggers ${recursive})`, () => {
+    const store = memory();
+    const db = store.db;
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    session(store, "first");
+    db.prepare("INSERT INTO deliveries (thread,n,session) VALUES (1,1,'first')").run();
+    db.prepare(`INSERT OR ${mode} INTO deliveries (thread,n,session) VALUES (1,2,'first')`).run();
+    assert.deepEqual({ ...db.prepare("SELECT thread,n FROM session_first WHERE session='first'").get() }, { thread: 1, n: 1 });
+  });
+}
+
+for (const recursive of [false, true]) {
+  test(`replacing the first delivery keeps the earliest remaining delivery (recursive triggers ${recursive})`, () => {
+    const store = memory();
+    const db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+      session(store, "first");
+      db.prepare("INSERT INTO deliveries (thread,n,session) VALUES (1,1,'first'), (1,2,'first')").run();
+      db.prepare("INSERT OR IGNORE INTO deliveries (thread,n,session) VALUES (1,1,'first')").run();
+      assert.deepEqual({ ...db.prepare("SELECT thread,n FROM session_first WHERE session='first'").get() }, {thread:1,n:1});
+      db.prepare("INSERT OR REPLACE INTO deliveries (thread,n,session) VALUES (1,1,'first')").run();
+      assert.deepEqual({ ...db.prepare("SELECT thread,n FROM session_first WHERE session='first'").get() }, {thread:1,n:2});
+    } finally { store.close(); }
+  });
+}
+
+test("replacing a sole delivery does not rewrite the unchanged first-message summary", () => {
+  const store = memory();
+  const db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = OFF;
+      CREATE TEMP TABLE first_changed (session TEXT);
+      CREATE TEMP TRIGGER watch_first AFTER UPDATE ON main.session_first BEGIN INSERT INTO first_changed VALUES (NEW.session); END;`);
+    session(store, "first");
+    db.prepare("INSERT INTO deliveries (thread,n,session) VALUES (1,1,'first')").run();
+    db.prepare("INSERT OR REPLACE INTO deliveries (thread,n,session) VALUES (1,1,'first')").run();
+    assert.deepEqual(db.prepare("SELECT session FROM first_changed").all(), []);
+  } finally { store.close(); }
+});
+
+test("deleting a first delivery finds the earliest remaining one across its threads", () => {
+  const store = memory();
+  const db = store.db;
+  try {
+    session(store, "first");
+    db.prepare("INSERT INTO deliveries (thread,n,session) VALUES (9,1,'first'), (2,1,'first'), (9,2,'first')").run();
+    db.prepare("DELETE FROM deliveries WHERE thread=9 AND n=1 AND session='first'").run();
+    assert.deepEqual({ ...db.prepare("SELECT thread,n FROM session_first WHERE session='first'").get() }, {thread:2,n:1});
+    db.prepare("DELETE FROM deliveries WHERE thread=2 AND n=1 AND session='first'").run();
+    assert.deepEqual({ ...db.prepare("SELECT thread,n FROM session_first WHERE session='first'").get() }, {thread:9,n:2});
+    db.prepare("DELETE FROM deliveries WHERE thread=9 AND n=2 AND session='first'").run();
+    assert.equal(db.prepare("SELECT 1 FROM session_first WHERE session='first'").get(), undefined);
+  } finally { store.close(); }
+});
+
+test("finding the first delivery seeks each thread without walking its messages", () => {
+  const store = memory();
+  const db = store.db;
+  try {
+    const put = db.prepare("INSERT INTO deliveries (thread,n,session,delivered_at) VALUES (?,?,?,1)");
+    db.exec("BEGIN");
+    for (let n=0; n<5_000; n++) { put.run(9,n,"target"); put.run(10,n,"other"); }
+    put.run(2,0,"target");
+    db.exec("COMMIT");
+    let visited = 0;
+    db.function("visit_first_delivery", (_row) => { visited++; return 1; });
+    const sql = firstDelivery("?1");
+    const traced = sql.replaceAll("WHERE session = ?1", "WHERE visit_first_delivery(rowid) AND session = ?1");
+    assert.deepEqual({ ...db.prepare(traced).get("target") }, {thread:9,n:0});
+    assert.ok(visited <= 4, `one seek per thread plus its first row (visited ${visited})`);
+    const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all("target") as {detail:string}[]).map((r) => r.detail).join(" | ");
+    assert.match(plan, /SEARCH deliveries USING COVERING INDEX deliveries_session \(session=\? AND thread=\?\)/);
+    assert.doesNotMatch(plan, /USE TEMP B-TREE/);
+    db.exec("BEGIN");
+    for (let n=0; n<1_200; n++) put.run(1000+n,0,"target");
+    db.exec("COMMIT");
+    visited = 0;
+    assert.deepEqual({ ...db.prepare(traced).get("target") }, {thread:9,n:0});
+    assert.ok(visited <= 2 * 1_202, `many threads still seek their first rows (visited ${visited})`);
+  } finally { store.close(); }
+});
+
+test("an older database replaces the first-delivery trigger without rebuilding its summary", () => {
+  const path = join(tempdir(), "first-delivery.db");
+  const before = open(path);
+  session(before, "first");
+  before.db.prepare("INSERT INTO deliveries (thread,n,session) VALUES (1,1,'first')").run();
+  before.db.exec(`DROP TRIGGER session_first_add; DROP TRIGGER session_first_drop;
+    CREATE TRIGGER session_first_add AFTER INSERT ON deliveries BEGIN
+      INSERT OR IGNORE INTO session_first VALUES (NEW.session, NEW.thread, NEW.n);
+    END;
+    CREATE TRIGGER session_first_drop AFTER DELETE ON deliveries
+      WHEN EXISTS (SELECT 1 FROM session_first WHERE session=OLD.session AND thread=OLD.thread AND n=OLD.n) BEGIN
+      DELETE FROM session_first WHERE session=OLD.session;
+      INSERT OR IGNORE INTO session_first SELECT session,thread,n FROM deliveries WHERE session=OLD.session ORDER BY rowid LIMIT 1;
+    END`);
+  before.close();
+  const after = open(path);
+  after.db.prepare("INSERT OR REPLACE INTO deliveries (thread,n,session) VALUES (1,2,'first')").run();
+  assert.deepEqual({ ...after.db.prepare("SELECT thread,n FROM session_first WHERE session='first'").get() }, { thread: 1, n: 1 });
+  after.db.prepare("DELETE FROM deliveries WHERE thread=1 AND n=1 AND session='first'").run();
+  assert.deepEqual({ ...after.db.prepare("SELECT thread,n FROM session_first WHERE session='first'").get() }, { thread: 1, n: 2 });
+  assert.match((after.db.prepare("SELECT sql FROM sqlite_master WHERE type='trigger' AND name='session_first_drop'").get() as {sql:string}).sql, /WITH RECURSIVE first_threads/);
+});
+
+test("updating the first-delivery trigger does not read or rewrite old deliveries and summaries", () => {
+  const store = memory();
+  const db = store.db;
+  db.exec(`DROP TRIGGER session_first_add; DROP TRIGGER session_first_drop;
+    CREATE TRIGGER session_first_add AFTER INSERT ON deliveries BEGIN
+      INSERT OR IGNORE INTO session_first VALUES (NEW.session, NEW.thread, NEW.n);
+    END;
+    CREATE TRIGGER session_first_drop AFTER DELETE ON deliveries BEGIN
+      DELETE FROM session_first WHERE session=OLD.session;
+      INSERT OR IGNORE INTO session_first SELECT session,thread,n FROM deliveries WHERE session=OLD.session ORDER BY rowid LIMIT 1;
+    END`);
+  const tables = new Set(["deliveries", "entries", "session_first", "thread_state", "thread_people"]);
+  db.setAuthorizer((action, table) => tables.has(table ?? "") && [constants.SQLITE_READ, constants.SQLITE_INSERT, constants.SQLITE_UPDATE, constants.SQLITE_DELETE].includes(action)
+    ? constants.SQLITE_DENY : constants.SQLITE_OK);
+  try { addListState(db); } finally { db.setAuthorizer(null); }
+  db.setAuthorizer((action) => action === constants.SQLITE_CREATE_TRIGGER || action === constants.SQLITE_DROP_TRIGGER
+    ? constants.SQLITE_DENY : constants.SQLITE_OK);
+  try { addListState(db); } finally { db.setAuthorizer(null); }
+});
+
 test("what two chats' agents wrote each other is neither a chat's unread nor what lists show of it, archived or not", () => {
   const data = tempdir();
   const store = open(join(data, "stillfail.db"), join(data, "archive"));
@@ -380,10 +519,8 @@ test("what two chats' agents wrote each other is neither a chat's unread nor wha
   // This chat's own agent quoting one in the chat says it in the chat.
   say(store, thread.id, "1.7", "agent", "a", "来自 [备份](https://x/o/w/s/b)：\n\n照它说的改了");
   for (const threads of lists()) assert.deepEqual(threads.map((t) => [t.lastMessage?.ts, t.unread, t.letters]), [["1.7", 3, 3]]);
-  // Archived: the same; written out to its file by a station before, read from it: the same.
+  // Archived: the same.
   store.setArchived("a", true, MANUAL);
-  for (const threads of lists()) assert.deepEqual(threads.map((t) => [t.lastMessage?.ts, t.unread, t.letters]), [["1.7", 3, 3]]);
-  fileAway(store, thread.id);
   for (const threads of lists()) assert.deepEqual(threads.map((t) => [t.lastMessage?.ts, t.unread, t.letters]), [["1.7", 3, 3]]);
   reader.db.close();
 });
@@ -402,6 +539,7 @@ test("letters from before they were marked are marked as the column comes, by th
   store.close();
   // As a station from before letters left it (from before the lists' kept state too, whose trigger reads the column).
   const db = new DatabaseSync(path);
+  db.exec("DROP TRIGGER said_state_before_insert; DROP TRIGGER said_state_before_delete; DROP TRIGGER said_state_before_update; DROP TABLE said_state_guard");
   db.exec("DROP TRIGGER thread_state_add; DROP TRIGGER thread_state_drop; DROP TRIGGER session_first_add; DROP TRIGGER session_first_drop");
   db.exec("DROP TABLE thread_state; DROP TABLE thread_people; DROP TABLE session_first");
   db.exec("DROP VIEW merged; DROP INDEX entries_letters; DROP INDEX entries_said; ALTER TABLE entries DROP COLUMN letter");
@@ -419,25 +557,25 @@ test("letters from before they were marked are marked as the column comes, by th
   assert.equal(again.listThreads("local", null, null)[0]?.letters, 2);
 });
 
-test("an archived thread whose file is lost reads as empty, and is counted on from what was read of it", () => {
+test("an archived thread whose file is lost comes back empty, and is counted on from what was read of it", () => {
   const data = tempdir();
-  const store = open(join(data, "stillfail.db"), join(data, "archive"));
-  session(store, "a");
-  session(store, "b");
-  const lost = store.openThread("ember", "EMBER", "1.1", null, null);
-  const kept = store.openThread("ember", "EMBER", "2.1", null, null);
-  store.joinThread(lost.id, "a", "ember");
-  store.joinThread(kept.id, "b", "ember");
-  say(store, lost.id, "1.2", "person", "local", "看看");
-  say(store, lost.id, "1.3", "agent", "a", "好");
-  say(store, lost.id, "1.4", "agent", "a", "做完了");
-  say(store, kept.id, "2.2", "person", "local", "还有这个");
-  store.setRead("local", lost.id, 3);
-  store.setArchived("a", true, MANUAL);
-  fileAway(store, lost.id);
-  assert.deepEqual(store.lostArchives(), []);
-  rmSync(archiveFile(store, lost.id));
-  assert.deepEqual(store.lostArchives(), [lost.id]);
+  const path = join(data, "stillfail.db");
+  const before = open(path, join(data, "archive"));
+  session(before, "a");
+  session(before, "b");
+  const lost = before.openThread("ember", "EMBER", "1.1", null, null);
+  const kept = before.openThread("ember", "EMBER", "2.1", null, null);
+  before.joinThread(lost.id, "a", "ember");
+  before.joinThread(kept.id, "b", "ember");
+  say(before, lost.id, "1.2", "person", "local", "看看");
+  say(before, lost.id, "1.3", "agent", "a", "好");
+  say(before, lost.id, "1.4", "agent", "a", "做完了");
+  say(before, kept.id, "2.2", "person", "local", "还有这个");
+  before.setRead("local", lost.id, 3);
+  before.setArchived("a", true, MANUAL);
+  rmSync(fileAway(before, lost.id));
+  before.close();
+  const store = open(path, join(data, "archive"));
 
   // Every list it is in is still read, by the station and by its readers (another connection over the same file).
   const reader = read.openStore(data);
@@ -453,7 +591,6 @@ test("an archived thread whose file is lost reads as empty, and is counted on fr
   // thread (1 to 3) is not numbered again.
   assert.deepEqual(say(store, lost.id, "1.5", "person", "local", "还在吗"), [4, true]);
   assert.deepEqual(store.entriesAfter(lost.id, 0).map((e) => [e.n, e.text]), [[4, "还在吗"]]);
-  assert.deepEqual(store.lostArchives(), []);
   // A thread nothing was said in starts at 1 as before.
   const fresh = store.openThread("ember", "EMBER", "3.1", null, null);
   assert.deepEqual(say(store, fresh.id, "3.2", "person", "local", "新的"), [1, true]);
@@ -654,7 +791,6 @@ test("a database made before clients gains the column and a message keeps its ap
   assert.deepEqual(clients(), [null, "android 0.1.1123"]);
   assert.equal(store.pendingMessages("a")[0]!.message.client, "android 0.1.1123");
   store.setArchived("a", true, MANUAL);
-  fileAway(store, thread.id);
   assert.deepEqual(clients(), [null, "android 0.1.1123"]);
   store.setArchived("a", false, MANUAL);
   assert.deepEqual(clients(), [null, "android 0.1.1123"]);
@@ -692,6 +828,26 @@ test("a widget's state is kept by session and path, its model told once until it
   assert.equal(store.widgetState("a", path), null);
 });
 
+test("old transcript records keep their runtime when a chat changes runtime", () => {
+  const path = join(tempdir(), "ember.db");
+  let store = open(path);
+  session(store, "old");
+  store.setRuntimeSessionId("old", "earlier");
+  store.ranIn("old", "earlier", "cc");
+  store.close();
+  const db = new DatabaseSync(path);
+  db.exec("ALTER TABLE runtime_sessions DROP COLUMN runtime");
+  db.close();
+  store = open(path);
+  store.setSessionRuntime("old", "codex", "cx", false, null, null, null, null);
+  assert.deepEqual(store.runtimeSessionSources("old"), [{ id: "earlier", runtime: "claude", profile: "cc" }]);
+  assert.equal(store.sessionOfRuntime("claude", "earlier")?.key, "old");
+  assert.equal(store.sessionOfRuntime("codex", "earlier"), null);
+  store.close();
+  store = open(path);
+  assert.equal(store.runtimeSessionSources("old")[0]!.runtime, "claude");
+});
+
 test("session fast migrates old databases and survives restart", () => {
   const path = join(tempdir(), "ember.db");
   let store = open(path);
@@ -708,6 +864,22 @@ test("session fast migrates old databases and survives restart", () => {
   assert.equal(store.getSession("old")!.fast, false);
 });
 
+test("the sessions that wait are those whose latest turn said so, found together", () => {
+  const store = memory();
+  for (const key of ["waits", "waited", "done", "none"]) session(store, key);
+  store.startTurn("w1", "waits", "input");
+  store.endTurn("w1", "completed", null, "waiting", 60);
+  store.startTurn("d1", "waited", "input");
+  store.endTurn("d1", "completed", null, "waiting", 60);
+  store.startTurn("d2", "waited", "job");
+  store.endTurn("d2", "completed", null, null, null);
+  store.startTurn("x1", "done", "input");
+  store.endTurn("x1", "completed", null, null, null);
+  assert.deepEqual([...store.waitingOf(["waits", "waited", "done", "none"])], ["waits"]);
+  assert.deepEqual([...store.waitingOf([])], []);
+  for (const key of ["waits", "waited", "done", "none"]) assert.equal(store.waitingOf([key]).has(key), store.lastTurn(key)?.declared === "waiting", key);
+});
+
 test("the latest turn is the last inserted when start times tie", () => {
   const store = memory();
   session(store, "same-ms");
@@ -720,6 +892,13 @@ test("the latest turn is the last inserted when start times tie", () => {
   assert.equal(latest.kind, "resume");
   assert.equal(latest.outcome, "completed");
   assert.equal(latest.detail, null);
+  assert.equal(store.statsOf(["same-ms"]).get("same-ms")!.lastTurn!.outcome, "completed");
+  assert.equal(store.stopWait("same-ms", true), false, "stopping an allowance wait does not change an older turn");
+  store.startTurn("third", "same-ms", "resume");
+  store.endTurn("third", "failed", "rate_limit: quota", null, null);
+  store.db.exec("UPDATE turns SET started_at = 123 WHERE session_key = 'same-ms'");
+  assert.equal(store.stopWait("same-ms", true), true);
+  assert.equal(store.lastTurn("same-ms")!.outcome, "aborted");
 });
 
 test("a message keeps its model after switching, editing and archiving", () => {
@@ -737,7 +916,7 @@ test("a message keeps its model after switching, editing and archiving", () => {
     const messages = store.messagesBefore(thread.id, null, 10);
     assert.equal(messages[0]!.agentIdentity.model, "gpt-6-sol");
     assert.equal(messages[0]!.agentIdentity.effort, "high");
-    assert.equal(messages[0]!.agentIdentity.runtime, undefined);
+    assert.equal(messages[0]!.agentIdentity.runtime, "claude");
     assert.equal(messages[1]!.agentIdentity.model, "gpt-6-astra");
     assert.equal(messages[0]!.text, "edited");
   };
@@ -813,7 +992,7 @@ test("an options card is kept as options too, and a choice that closes it ends t
   assert.equal(store.closeCard("local", t2.id, k, "再看"), false, "a reply option does not close");
   const h = heard(store);
   assert.equal(store.closeCard("local", t2.id, k, "合并", "en"), true);
-  assert.deepEqual(h.changes, [{ type: "session", key: "a" }, { type: "thread", id: t2.id, entries: [] }]);
+  assert.deepEqual(h.changes, [{ type: "session", key: "a" }, { type: "thread", id: t2.id, entries: [], closed: k }]);
   const last = store.lastTurn("a")!;
   assert.deepEqual([last.declared, last.ending, last.need], ["final", "all_done", "Chose “合并”"]);
   assert.equal(store.pendingCard(t2.id), null);
@@ -853,6 +1032,39 @@ test("an agent withdraws its own card only", () => {
   assert.equal(store.pendingCard(thread.id), null);
   assert.deepEqual(store.answersSince(0), [], "withdrawn is not answered");
   assert.ok(n > 0);
+});
+
+test("a card stops waiting as a person writes, a newer card comes, its agent withdraws it or someone closes it: each said once", () => {
+  const store = memory();
+  session(store, "a");
+  const thread = store.openThread("slack", "C1", "1.1", null, null);
+  const h = heard(store);
+  const ended = () => h.changes.splice(0).flatMap((c) => cardsEnded(store, c)).map((e) => [e.message.ts, e.end]);
+  const options = { type: "options", options: [{ label: "合并", action: "close" }, { label: "先不" }] };
+  store.insertMessage({ ...newMessage(thread.id, "1.2", "agent", "a", "合并吗？"), card: options });
+  assert.deepEqual(ended(), [], "a first card replaces nothing");
+  say(store, thread.id, "1.3", "person", "U1", "再想想");
+  assert.deepEqual(ended(), [["1.2", { why: "message", by: "U1", byTs: "1.3" }]]);
+  say(store, thread.id, "1.4", "person", "U2", "还有");
+  assert.deepEqual(ended(), [], "only the first message after it closes it");
+  store.insertMessage({ ...newMessage(thread.id, "1.5", "agent", "a", "那这样？"), card: options });
+  store.insertMessage({ ...newMessage(thread.id, "1.6", "agent", "a", "还是这样？"), card: { type: "text" } });
+  assert.deepEqual(ended(), [["1.5", { why: "replaced" }]]);
+  assert.equal(store.withdrawCard("a", thread.id, "1.6"), true);
+  assert.deepEqual(ended(), [["1.6", { why: "withdrawn" }]]);
+  store.insertMessage({ ...newMessage(thread.id, "1.7", "agent", "a", "那就？"), card: options });
+  assert.deepEqual(ended(), [], "one withdrawn before it is not replaced again");
+  assert.equal(store.closeCard("local", thread.id, store.messageAt(thread.id, "1.7")!.n, "合并"), true);
+  assert.deepEqual(ended(), [["1.7", { why: "closed" }]]);
+  say(store, thread.id, "1.8", "person", "U1", "好");
+  assert.deepEqual(ended(), [], "one closed is not closed again by a message");
+  store.insertMessage({ ...newMessage(thread.id, "1.9", "agent", "a", "最后？"), card: options });
+  say(store, thread.id, "1.10", "person", "U1", "嗯");
+  assert.deepEqual(ended().map(([, e]) => (e as CardEnd).why), ["message"]);
+  assert.equal(store.withdrawCard("a", thread.id, "1.9"), true);
+  assert.equal(store.withdrawCard("a", thread.id, "1.9"), true);
+  assert.deepEqual(ended(), [], "one answered and withdrawn after keeps its answer");
+  h.stop();
 });
 
 test("an agent restates its card on its post: an edit with the same words and the new card, its latest the base of the next", () => {
@@ -916,7 +1128,7 @@ test("bindings tell both sessions; delivered can be taken back", () => {
   assert.deepEqual([...store.heardThreads("a", [thread.id])], []);
 });
 
-// On ccvm (2026-11-03) a session's detail read its 378 jobs, each with its notices and its log looked at.
+// On a station (2026-11-03) a session's detail read its 378 jobs, each with its notices and its log looked at.
 test("jobs: a session's detail as a device asks it lists its latest and those still up, by indexes", async () => {
   const store = memory();
   session(store, "a");
@@ -961,7 +1173,7 @@ test("what is written of a chat beside what is said in it is told as written: ar
   ]);
 });
 
-// On ccvm (2026-11-03) the archive was made whole at once: its 1,398 chats in 60 s, every other read of devices waiting.
+// On a station (2026-11-03) the archive was made whole at once: its many chats in 60 s, every other read of devices waiting.
 test("the archive a page at a time, the latest archived first, each by the index of those archived; the sidebar by those shown", async () => {
   const time = testClock();
   await time.adjust(Date.parse("2026-11-03T00:00:00Z"));
@@ -987,6 +1199,54 @@ test("the archive a page at a time, the latest archived first, each by the index
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((p) => p.detail);
     assert.ok(!plan.some((d) => /^SCAN (sessions|threads)\b/.test(d) && !d.includes("INDEX sessions_live")), plan.join(" | "));
   }
+});
+
+test("the archived sessions by the index of those archived, the longest archived first; the log's file kept small", async () => {
+  // Every session read whole on the main thread to find the archived held the station 8 to 13 s on a station (2026-11-03);
+  // and the log's file stayed at the 520 MB it once grew to, with 1 GB of the disk left.
+  const time = testClock();
+  await time.adjust(Date.parse("2026-11-03T00:00:00Z"));
+  const store = Store.open(join(tempdir(), "s.db"), null, time.clock);
+  stores.push(store);
+  for (const key of ["a", "b", "c"]) session(store, key);
+  for (const key of ["c", "a"]) {
+    await time.adjust(1000);
+    store.setArchived(key, true, MANUAL);
+  }
+  assert.deepEqual(store.archivedSessions().map((s) => s.key), ["c", "a"]);
+  const plan = (store.db.prepare("EXPLAIN QUERY PLAN SELECT key, archived_at FROM sessions INDEXED BY sessions_put_away WHERE archived_at IS NOT NULL ORDER BY archived_at, key").all() as { detail: string }[]).map((p) => p.detail).join(" | ");
+  assert.match(plan, /sessions_put_away/);
+  assert.ok(!/TEMP B-TREE/.test(plan), plan);
+  assert.equal((store.db.prepare("PRAGMA journal_size_limit").get() as { journal_size_limit: number }).journal_size_limit, 64 << 20);
+});
+
+test("the card each chat waits on is kept as it is posted, answered and closed; one from before is worked out as it was", () => {
+  // Worked out at each read of the sidebar's marks, a dozen lookups a chat, 26 s for 68 chats on a station (2026-11-03).
+  const path = join(tempdir(), "s.db");
+  const before = Store.open(path, null);
+  session(before, "a");
+  const old = before.openThread("ember", "EMBER", "old", null, null).id;
+  before.insertMessage({ ...newMessage(old, "1.1", "agent", "a", "选一个"), card: { type: "options", options: [{ label: "好" }] } } as any);
+  // As a database from before the cards were kept: made again on what is there.
+  before.db.exec("DROP TABLE pending_cards; DROP TABLE pending_cards_from; DROP TRIGGER IF EXISTS pending_cards_post; DROP TRIGGER IF EXISTS pending_cards_answered; DROP TRIGGER IF EXISTS pending_cards_closed; DROP TRIGGER IF EXISTS pending_cards_gone");
+  before.close();
+  const store = open(path);
+  const r = read.makeStore(store.db, tempdir());
+  const chat = store.openThread("ember", "EMBER", "new", null, null).id;
+  const card = { ...newMessage(chat, "2.1", "agent", "a", "选一个"), card: { type: "options", options: [{ label: "好" }] } } as any;
+  const [n] = store.insertMessage(card);
+  let kept = read.pendingCards(r, [old, chat])!;
+  assert.deepEqual([[...kept.at], [...kept.before]], [[[chat, n]], [old]]);
+  assert.equal(read.cardAt(r, chat, n)?.[0].n, n);
+  // A person writes: it waits no more.
+  say(store, chat, "2.2", "person", "a@x", "好");
+  assert.deepEqual([...read.pendingCards(r, [chat])!.at], []);
+  // Posted again, then closed: none.
+  const [m] = store.insertMessage({ ...card, ts: "2.3" });
+  assert.deepEqual([...read.pendingCards(r, [chat])!.at], [[chat, m]]);
+  store.db.prepare("INSERT INTO closed_cards VALUES (?, ?, 'a@x', 1)").run(chat, m);
+  kept = read.pendingCards(r, [chat])!;
+  assert.deepEqual([...kept.at], []);
 });
 
 test("jobs: started, said, ended and cleared", () => {
@@ -1028,17 +1288,34 @@ test("usage: the sessions at work are found by when their turns ended, once each
 test("what the station asks again and again is planned by an index, never a scan of what grows with time", () => {
   const store = memory();
   const detail = detailQuery(1n, 1_000_001n, 1n, { workspace: "ws", home: false })!;
+  const compact = memory();
+  installCompactUsage(compact.db, () => 0);
+  const usageBatch = read.batchedUsageQueries({ workspace: "ws", home: false });
+  const usagePlans = [
+    [usageBatch.selected, [0n, 100n, "Wws"]], [usageBatch.owner, ["a"]],
+    [usageBatch.buckets, [0n, "a", 0n, 100n, "Wws"]], [usageBatch.anyPending, ["Wws"]], [usageBatch.pending, ["Wws"]],
+    [usageBatch.pendingRange, [0n, 100n, "Wws"]],
+    [compactHistoryBeforeQuery(null), [0n]], [compactHistoryBeforeQuery({ workspace: "ws", home: false }), [0n, "Wws"]],
+    [compactHistoryBeforeQuery({ workspace: "ws", home: true }), [0n, "Wws"]],
+  ] as [string, unknown[]][];
+  for (const [sql, args] of usagePlans) {
+    const plan = (compact.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
+    assert.ok(plan.every((d) => !d.startsWith("SCAN ")), `${sql}\n  ${plan.join(" | ")}`);
+  }
   // As the station's SQLite (node's) plans each: a scan only of an index that holds the sessions shown or running, the
   // login cards, or of the small one that counts sessions (or of what a subquery found); a table, or an index of every
   // turn, job or entry, never.
   const planned: [string, unknown[]][] = [
-    [ACTIVE_SESSIONS, [0]], [LIVE_SESSIONS, []], [ANY_RUNNING, []], [RUNNING_SESSIONS, []], [JOBS_RUNNING, []], [JOBS_UP, []], [SESSION_JOBS, ["a"]],
+    [read.ORIGINAL_RUNTIME, ["a"]],
+    [ACTIVE_SESSIONS, [0]], [LIVE_SESSIONS, []], [ANY_RUNNING, []], [RUNNING_SESSIONS, []], [JOBS_RUNNING, []], [JOBS_UP, []], [JOB_AT_PORT, [5100]], [SESSION_JOBS, ["a"]],
+    [HAS_SESSION_ACTIVE_WATCH, ["a"]], [RUNNING_WAIT_JOBS, ["a"]],
     [STATS_OF, ["a"]], [SESSION_COUNTS, []], [LATEST_DECISIONS, [0]], [CLOSED_SINCE, [0]], [CLOSED_THREAD_SINCE, [1, 0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
     [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]], [SESSION_OF_RUNTIME, ["claude", "r1"]], [SAID_SINCE, [1, 0]],
-    [HEARD_IN, ["a", 1]], [ARCHIVED_THREADS, []], [MODELS_USED_BY, ["a@x", 0]], [REMOTE_RUNS_OF, ["ws", 0]], [REMOTE_RUNS_ALL, [0]],
-    [detail.sql, detail.args], [read.USAGE_DETAIL_DAY_SCOPED, [1n, "ws"]],
+    [HEARD_IN, ["a", 1]], [MODELS_USED_BY, ["a@x", 0]], [REMOTE_RUNS_OF, ["ws", 0]], [REMOTE_RUNS_ALL, [0]],
+    [detail.sql, detail.args], [read.USAGE_DETAIL_DAY_SCOPED, [1n, "ws"]], [read.SAID_LATEST, [1]], [read.SAID_SCAN, [1, 100, 64]], [read.SAID_STATE, [1]],
+    [POST_BLOCKS_READY, [1, 0]], [POST_AFTER_FIRST, [1, 0]], [POST_AFTER_INDEXED, [1, "a", 0, 0]],
   ];
-  const scans = /^SCAN (?!CONSTANT ROW$|parts$|\(subquery-\d+\)$|\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect|entries_login_cards|threads_archived)\b)/;
+  const scans = /^SCAN (?!CONSTANT ROW$|parts$|\(subquery-\d+\)$|\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect|entries_login_cards)\b)/;
   const plans = new Map<string, string[]>();
   for (const [sql, args] of planned) {
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
@@ -1046,19 +1323,24 @@ test("what the station asks again and again is planned by an index, never a scan
     // order. It must still seek the underlying lookup below (asserted separately), not scan the historical table.
     assert.ok(!plan.some((d) => scans.test(d)
       && !(sql === detail.sql && d === "SCAN target" && plan.includes("MATERIALIZE targets"))
+      && !(sql === RUNNING_WAIT_JOBS && d === "SCAN active" && plan.includes("CO-ROUTINE active"))
+      && !(sql === POST_AFTER_INDEXED && (d === "SCAN first" || d === "SCAN second"))
       && !(sql === read.USAGE_DETAIL_DAY_SCOPED && d === "SCAN e" && (plan.includes("MATERIALIZE edge") || plan.includes("CO-ROUTINE edge")))
       && !(sql === read.USAGE_DETAIL_DAY_SCOPED && d === "SCAN p" && plan.includes("CO-ROUTINE parts"))), `${sql}\n  ${plan.join(" | ")}`);
     plans.set(sql, plan);
   }
+  assert.equal(plans.get(JOB_AT_PORT)!.filter((d) => d.includes("jobs_up (state=? AND port=?)")).length, 2,
+    "a port is sought among running and restarting services");
   // A session's messages not delivered yet: by the index of those alone, not every message it was ever given; and its
-  // turns not counted (auto-archiving read each shown session's every delivery and turn so: 13 s and 22 s on ccvm).
+  // turns not counted (auto-archiving read each shown session's every delivery and turn so: 13 s and 22 s on a station).
   assert.ok(plans.get(STATS_OF)!.some((d) => d.includes("deliveries_pending (session=?)")), plans.get(STATS_OF)!.join(" | "));
   assert.ok(!plans.get(STATS_OF)!.some((d) => d.includes("COVERING INDEX turns_by_session")), plans.get(STATS_OF)!.join(" | "));
   // Whether a session heard from a thread: by its deliveries there alone, not every message it was ever given (3.3 s on
-  // the main thread on ccvm); the threads still in archive files by the index of those alone; the models someone's
-  // chats ran on from the index alone.
+  // the main thread on a station); the models someone's chats ran on from the index alone.
   assert.ok(plans.get(HEARD_IN)!.some((d) => d.includes("deliveries_session (session=? AND thread=?)")), plans.get(HEARD_IN)!.join(" | "));
-  assert.deepEqual(plans.get(ARCHIVED_THREADS), ["SCAN threads USING COVERING INDEX threads_archived"]);
+  assert.ok(plans.get(POST_AFTER_FIRST)!.some((d) => d.includes("(thread=? AND n>?)")), plans.get(POST_AFTER_FIRST)!.join(" | "));
+  assert.ok(plans.get(POST_AFTER_INDEXED)!.some((d) => d.includes("PRIMARY KEY (thread=? AND author=? AND bucket>?)")), plans.get(POST_AFTER_INDEXED)!.join(" | "));
+  assert.ok(plans.get(POST_AFTER_INDEXED)!.some((d) => d.includes("(thread=? AND n>? AND n<?)")), plans.get(POST_AFTER_INDEXED)!.join(" | "));
   assert.ok(plans.get(MODELS_USED_BY)!.some((d) => d.includes("COVERING INDEX sessions_models (created_by=? AND created_at>?)")), plans.get(MODELS_USED_BY)!.join(" | "));
   assert.ok(plans.get(REMOTE_RUNS_OF)!.some((d) => d.includes("PRIMARY KEY (ws=? AND at>?)")), plans.get(REMOTE_RUNS_OF)!.join(" | "));
   assert.ok(plans.get(REMOTE_RUNS_ALL)!.some((d) => d.includes("PRIMARY KEY (at>?)")), plans.get(REMOTE_RUNS_ALL)!.join(" | "));
@@ -1110,10 +1392,10 @@ test("what is told as chats change is planned by the size of what it finds, not 
   // undelivered messages by the index of those alone, its latest turn by its index; the Slack threads a chat copies to,
   // by their last entry; and of the items a change touched, or of a chat, their own shares, openers and snapshots. Each
   // as it was read every message of a chat, every turn or delivery of a session, or every row of its table: a notice of
-  // a chat of 534 messages read 479 pages, 3 to 16 s on ccvm short of memory (2026-11-02), every telling after it waiting.
+  // a chat of many messages read many pages, 3 to 16 s on a station short of memory (2026-11-02), every telling after it waiting.
   const planned: [string, unknown[]][] = [
-    [read.UNREAD, [1, 0, "[]"]], [read.ASKED_DURING, [1, 0, 9]], [`${read.SESSION_STATS} WHERE s.key = ?`, ["a"]], [read.LAST_TURN, ["a"]], [read.LATEST_TURNS, ["a", 1]], [CC_THREADS_SQL, [1]],
-    [read.SHARES_OF, ['["a"]']], [read.OPENERS_OF, ['["a"]']], [read.OPENED_OF, ['["a"]']], [read.PUBLISHED_OF, ["[1]"]],
+    [read.UNREAD, [1, 0, "[]"]], [read.ASKED_DURING, [1, 0, 9]], [`${read.SESSION_STATS} WHERE s.key = ?`, ["a"]], [`${read.SESSION_ACTIVITY} WHERE s.key = ?`, ["a"]], [read.LAST_TURN, ["a"]], [read.LATEST_TURNS, ["a", 1]], [CC_THREADS_SQL, [1]],
+    [read.SHARES_OF, ['["a"]']], [read.OPENERS_OF, ['["a"]']], [read.OPENED_OF, ['["a"]']], [read.PUBLISHED_OF, ["[1]"]], [read.PINS_OF, ["a@x", '["a"]']],
     [`${read.SEEN_OF} WHERE key IN (SELECT value FROM json_each(?))`, ['["a"]']], [read.TOLD_BLOCKED, ["a", 0, 9]], [read.RUNNING_OF, ['["a"]']],
   ];
   const scans = /^SCAN (?!CONSTANT ROW$|\(subquery-\d+\)$|json_each VIRTUAL TABLE\b)/;
@@ -1133,7 +1415,9 @@ test("what is told as chats change is planned by the size of what it finds, not 
   // Whether a turn of it ended before its work was kept: its first by its end, from the index alone.
   has(stats, "o USING COVERING INDEX turns_by_end (session_key=?");
   has(stats, "deliveries_pending (session=?)");
-  lacks(stats, "COVERING INDEX turns_by_session");
+  // An uncounted old session checks at most 65 of its own turns before asking for bounded preparation.
+  has(stats, "old USING COVERING INDEX turns_by_session (session_key=?)");
+  lacks(`${read.SESSION_ACTIVITY} WHERE s.key = ?`, "session_turns");
   lacks(stats, "deliveries_session");
   has(read.LAST_TURN, "turns_by_session (session_key=?)");
   // A session's latest turns by the index of its turns, from its end: not every turn read and sorted.
@@ -1145,6 +1429,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
   has(read.OPENERS_OF, "o USING INDEX sqlite_autoindex_opened_chats_1 (child_station=? AND child=?)");
   has(read.OPENED_OF, "o USING INDEX opened_chats_by_key (parent_station=? AND parent=?)");
   has(read.PUBLISHED_OF, "published USING INDEX published_by_thread (thread=?)");
+  has(read.PINS_OF, "pins USING INDEX sqlite_autoindex_pins_1 (viewer=? AND session=?)");
   has(read.TOLD_BLOCKED, "turns_by_end (session_key=? AND ended_at>? AND ended_at<?)");
   // The jobs running of some sessions: by an index (of those running, or of their sessions' jobs), never every job.
   has(read.RUNNING_OF, "SEARCH jobs USING INDEX");
@@ -1170,15 +1455,15 @@ test("a session's turns are counted as they are written and removed, and once fr
   store.deleteSession("b");
   assert.deepEqual(turns(store), { a: 2 });
   assert.deepEqual(store.db.prepare("SELECT session, n FROM session_turns").all().map((r: any) => [r.session, r.n]), [["a", 2]]);
-  // A database from before the count: made from the turns it has, as it opens.
-  store.db.exec("DROP TRIGGER session_turns_add; DROP TRIGGER session_turns_drop; DROP TABLE session_turns;");
+  // A database from before the count: a short old session answers from its turns without writing a summary.
+  store.db.exec("DROP TRIGGER session_turns_add; DROP TRIGGER session_turns_drop; DROP TRIGGER session_turns_before_insert; DROP TRIGGER session_turns_move; DROP TABLE session_turns_guard; DROP TABLE session_turns;");
   store.startTurn("t4", "a", "input");
   store.close();
   store = open(path);
   assert.deepEqual(turns(store), { a: 3 });
 });
 
-// On ccvm (2026-11-03) a device read a session with its every turn (3,685 of them, 25 s) to add up how long they ran.
+// On a station (2026-11-03) a device read a session with its every turn (many of them, 25 s) to add up how long they ran.
 test("a session's work is kept as its turns end and go, from when it began to be kept; one with turns ended before says none", async () => {
   const time = testClock();
   await time.adjust(Date.parse("2026-11-03T00:00:00Z"));

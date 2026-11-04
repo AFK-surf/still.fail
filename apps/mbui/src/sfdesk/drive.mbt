@@ -497,6 +497,7 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : (String?) -> Uni
                   shown,
                   view == "tree",
                   foot~,
+                  head_shows=ups_here.length().to_string() + "/" + (view == "list" && list.length() > 0 && f.room >= row_stack_below).to_string(),
                   head=fn() {
                     draw_head()
                     uploads_here(c, src, ups_here)

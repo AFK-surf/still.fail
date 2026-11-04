@@ -14,6 +14,7 @@ import {
   slackManifest,
   upsertToken,
   withSocketMode,
+  upgraded,
   withStopEvent,
 } from "../src/slack/apps.ts";
 import { SlackApiError, SlackClient } from "../src/slack/web.ts";
@@ -83,6 +84,26 @@ test("an already subscribed plain bot still gets an agent view; an existing assi
   const assistant = withStopEvent(old);
   assert.deepEqual(assistant.features.assistant_view, old.features.assistant_view);
   assert.equal(assistant.features.agent_view, undefined);
+});
+
+test("/sf is in the manifest while the bot may take slash commands; other commands are kept", () => {
+  const sf = (m: any) => (m.features.slash_commands ?? []).filter((c: any) => c.command === "/sf").length;
+  const made = slackManifest("ember");
+  assert.equal(sf(made), 1);
+  // An app from before /sf gets it as it is brought up to date, beside a command of its own; once there, nothing to do.
+  const old = structuredClone(made);
+  old.features.slash_commands = [{ command: "/mine", description: "mine" }];
+  const next = upgraded(old);
+  assert.deepEqual(next.features.slash_commands.map((c: any) => c.command), ["/mine", "/sf"]);
+  assert.equal(upgraded(next), null);
+  // An app whose bot lacks the `commands` scope (made before it joined the base group): no command until a save puts
+  // the scope back (Slack refuses a command without it).
+  const bare = structuredClone(made);
+  bare.oauth_config.scopes.bot = bare.oauth_config.scopes.bot.filter((s: string) => s !== "commands");
+  delete bare.features.slash_commands;
+  assert.equal(upgraded(bare), null);
+  assert.equal(sf(applySettings(bare, { groups: { more: false } })), 1);
+  assert.equal(sf(withSocketMode(made, false)), 0, "nothing comes without Socket Mode");
 });
 
 test("automatic and manual edits of the same app keep both changes", async () => {

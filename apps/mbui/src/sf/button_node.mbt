@@ -28,14 +28,15 @@ pub fn button_node(
     // (the hand on it, or pressing it: how far its ground has gone towards its lit one; at work, how far its spinner is
     // in and how far its room is open; how faded it is)
     let lit = fn() {
-      live() &&
+      (busy() && (tone == Ghost || tone == GhostDanger)) ||
+      (live() &&
       (v.focus_shown() ||
       (match @ui.pointing() {
         Mouse => v.pointed() || v.pressed()
         Finger => v.pressed()
-      }))
+      })))
     }
-    let hand = EdgeWay::new(0.0)
+    let hand = EdgeWay::new(if @signals.untracked(lit) { 1.0 } else { 0.0 })
     let turning = EdgeWay::new(if @signals.untracked(busy) { 1.0 } else { 0.0 })
     let open = EdgeWay::new(if @signals.untracked(busy) { 1.0 } else { 0.0 })
     let seen = EdgeWay::new(if @signals.untracked(disabled) { 0.45 } else { 1.0 })
@@ -120,7 +121,13 @@ pub fn button_node(
     })
     // (its icon before its words where it has one: button's `icon`)
     if icon != "" {
-      icon_node(v, icon, button_icon, By(fn() { looks().2 })) |> ignore
+      // (by its ink: as far in from the end as the words are from the other, the grid's room round its strokes taking
+      // none, so the two ends look alike: button's draw_icon by_ink)
+      let (ink_l, ink_r) = match icon_numbers(icon) {
+        Some(d) => @ui.shapes_ink_in(icon_shapes(d, button_icon / 24.0, 0x000000FFL), button_icon)
+        None => (0.0, 0.0)
+      }
+      icon_node(v, icon, button_icon, By(fn() { looks().2 })).margin(Is((-ink_l, 0.0, -ink_r, 0.0))) |> ignore
       v.box(fn(g) { g.width(By(fn() { Some(gap()) })) |> ignore }) |> ignore
     }
     let words = v.box(fn(w) {

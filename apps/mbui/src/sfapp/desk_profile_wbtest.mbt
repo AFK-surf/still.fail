@@ -32,7 +32,7 @@ test "wide: adding a profile picks its provider from the core's groups, the mach
   assert_true(t.find("选择服务商") is Some(_))
   assert_true(t.find("模型厂商") is Some(_) && t.find("中转站") is Some(_))
   assert_true(t.find("OpenRouter") is Some(_))
-  // Studio's own Codex login, used as it is
+  // Willow's own Codex login, used as it is
   assert_true(t.find("使用此账号") is Some(_), msg="the machine's login offered")
   // a provider picked: told to the core
   match t.find("DeepSeek") {

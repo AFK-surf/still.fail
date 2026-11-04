@@ -5,6 +5,7 @@
 // something else. What comes on it and what is read as it opens is the sync's (sync.ts), told here as `Told`: a stream
 // opens either afresh (nothing says what the device missed: the station is read again) or going on from where the
 // device was in the station's log of events (cursor.ts: what changed meanwhile is told first).
+import type { Marks } from "./rows-made.ts";
 import { record, said, stationTag } from "../record.ts";
 import { Deferred, Effect, type Fiber } from "effect";
 import type { Inner } from "../core.ts";
@@ -163,6 +164,15 @@ export class Link {
   /// Whether the station leaves its sidebar rows' changes to the device (`rows=1`, rows-after.ts: it said so as its
   /// stream opened): what only it can say of them is read, the rows that change alone (`rowsWanted`).
   makesRows = false;
+  /// What the station keeps beside the summaries that the sidebar is made of here (rows-made.ts): null while it is not
+  /// read, or the station answers its sidebar made (one from before).
+  marks: Marks | null = null;
+  /// Whether its sidebar is made of the chat list the station makes once for everyone (`shared`, chat-row.ts), as its
+  /// stream said; and that list as read and told since, by row id (null till read).
+  shared = false;
+  sharedRows: Map<string, Record<string, any>> | null = null;
+  /// The marks to read again: those of some chats, or all of them (`whole`).
+  readonly marksWanted = { sessions: new Set<string>(), threads: new Set<number>(), whole: false };
   readonly rowsWanted = { sessions: new Set<string>(), threads: new Set<number>() };
   /// Whether the archived chats held are as the station has them: read since anything could have changed them.
   archivedCurrent = false;
@@ -496,7 +506,7 @@ export class Links {
   #path(address: string, wants: EventsFor, since: string | null = null): string {
     // The sessions at work followed by the station itself, those named ignored where it does (FOLLOWS); a thread's
     // summary made here from what is said in it (thread-after.ts), not told; and the sidebar's rows (rows-after.ts).
-    const query: string[] = ["running=1", "views=1", "rows=1"];
+    const query: string[] = ["running=1", "views=1", "rows=1", "shared=1"];
     if (wants.host) query.push("host=1");
     for (const key of wants.live) {
       const held = this.#core.data.logSpan("transcript", address, key);

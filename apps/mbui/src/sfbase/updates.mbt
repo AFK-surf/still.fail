@@ -207,8 +207,15 @@ pub fn update_check(src : Source, now : Bool, done? : (String) -> Unit = fn(_) {
           // A slower check answered with an older build than the one already waiting.
           ()
         } else if (how.phase == "downloading" || how.phase == "retrying") && how.file != update_file_name(v) {
-          // Hosts take one download at a time. Keep showing the one in flight and give them the newest after it ends.
-          update_pending.set(Some(v))
+          // Hosts take one download at a time. Keep showing the one in flight and give them the newest after it ends
+          // (自动更新 off: the person's next word takes it).
+          if update_auto(src) {
+            update_pending.set(Some(v))
+          }
+        } else if !update_auto(src) {
+          // 自动更新 off: the newer build said, downloaded only at the person's word (update_go)
+          update_pending.set(None)
+          update.available.set(Some(v))
         } else {
           update_pending.set(None)
           update.available.set(Some(v))
@@ -232,6 +239,23 @@ pub fn update_check(src : Source, now : Bool, done? : (String) -> Unit = fn(_) {
       }
     }
   })
+}
+
+///|
+/// Whether newer builds are downloaded by themselves here (the prefs' `appUpdate`: 自动更新, on unless turned off),
+/// else only at the person's word.
+pub fn update_auto(src : Source) -> Bool {
+  text((src.topic)("prefs", {}).value, "appUpdate") != "off"
+}
+
+///|
+/// 自动更新 turned on (关于; the prefs keep it): the newer build known and not asked for yet handed to the host as one
+/// found by itself is.
+pub fn update_auto_on() -> Unit {
+  match update_known() {
+    Offered(v, waiting=false) => update_fetch_found(v, false)
+    _ => ()
+  }
 }
 
 ///|
@@ -437,7 +461,9 @@ fn update_stands_of(now : UpdateNow) -> @settings.VersionNow {
     Offered(v, waiting~) => {
       let size = number(Some(v), "size")
       (
-        @sf.t("android-misc.updates.download", args=version(v)),
+        // (the first of the update's three stages, 有新版本, 正在下载, 重启以更新到: 2026-11-03 the user, 「所有能看到更新的
+        // 地方，一定要有三个阶段」; pressed, downloaded now)
+        @sf.t("desktop.update.available", args=version(v)),
         // (its size, what it waits for: a line under it from the first, the row as tall as it goes on)
         if size <= 0.0 {
           ""
@@ -481,7 +507,13 @@ fn update_stands_of(now : UpdateNow) -> @settings.VersionNow {
     Ready(v, away~) =>
       (
         @sf.t("android-misc.updates.ready", args=version(v)),
-        @sf.t(if away { "android-misc.updates.readyAway" } else { "android-misc.updates.readyQuit" }, args=[app]),
+        // (which build is downloaded, from this one to it: 2026-11-03 the user, 「让用户知道已经有一个什么版本下载了，从哪个
+        // 升级到哪个」)
+        @sf.t(if away { "android-misc.updates.readyAway" } else { "android-misc.updates.readyQuit" }, args=[
+          ("from", "0.1.\{this_version()}"),
+          ("to", text(Some(v), "versionName")),
+          app,
+        ]),
         false,
         None,
       )
@@ -489,7 +521,8 @@ fn update_stands_of(now : UpdateNow) -> @settings.VersionNow {
     Installing(v) => (@sf.t("android-misc.updates.installingVersion", args=version(v)), "", true, None)
     Failed(v, why) => (@sf.t("android-misc.updates.retry", args=version(v)), why, false, None)
   }
-  { label, note, going, part, ready: update_ready_version(), asks: update_asks() }
+  let newer = now is (Offered(_, ..) | Coming(_, _) | Ready(_, ..) | Allow(_) | Installing(_) | Failed(_, _))
+  { newer, label, note, going, part, ready: update_ready_version(), asks: update_asks() }
 }
 
 ///|

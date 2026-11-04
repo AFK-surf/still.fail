@@ -29,7 +29,7 @@ function named(key: string, args: Record<string, string>, name: string, classNam
 /** Where the name goes while the words are filled in (named), to split them there. */
 const NAME = "\u0000";
 
-/** Its title: 使用 GitHub token, 存入密码 UniFi UX7 管理员 (the name heavier than the words). */
+/** Its title: 使用 GitHub token, 存入密码 测试服务登录 (the name heavier than the words). */
 export const askTitle = (a: Asked): ReactNode =>
   a.save ? named("web-pages.vault.ask.save", { kind: t(`web-pages.vault.ask.kind.${a.save.kind}`) }, a.name, css.titleName)
     : named("web-pages.vault.ask.use", {}, a.name, css.titleName);

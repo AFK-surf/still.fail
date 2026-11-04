@@ -2,6 +2,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { parentPort, workerData } from "node:worker_threads";
 import { usageDetailReady } from "../store/usage-detail.ts";
+import { retiredUsage } from "../store/usage-retire.ts";
 import { usageChatStatsReady } from "../store/usage-chat-stats.ts";
 import type { MinuteRequest, MinuteResponse } from "./minute-reader.ts";
 
@@ -11,7 +12,7 @@ const minutesReady = () => !installed("usage_minute_all") ||
   (db.prepare("SELECT done FROM usage_minute_all WHERE id = 1").get() as { done: number } | undefined)?.done === 1;
 const remoteReady = () => !installed("remote_run_progress") ||
   (db.prepare("SELECT done FROM remote_run_progress WHERE id = 1").get() as { done: number } | undefined)?.done === 1;
-const detailReady = (viewer: Parameters<typeof usageDetailReady>[1]) => !installed("usage_detail_all") || usageDetailReady(db, viewer);
+const detailReady = (viewer: Parameters<typeof usageDetailReady>[1]) => !retiredUsage(db) && (!installed("usage_detail_all") || usageDetailReady(db, viewer));
 const chatsReady = (viewer: Parameters<typeof usageChatStatsReady>[1]) => !installed("usage_chat_progress") || usageChatStatsReady(db, viewer);
 
 parentPort!.on("message", (request: MinuteRequest) => {

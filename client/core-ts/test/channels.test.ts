@@ -454,6 +454,21 @@ test("a_stretch_and_the_page_before_are_read_for_one_who_waits_and_fail_as_the_r
   assert.deepEqual(w.numbers(c).slice(0, 4), run(1, 4));
 });
 
+test("a long requested range is read in pages, with incomplete pages retried", async () => {
+  const w = world();
+  const c = log("range");
+  w.there.set(c.id, 12);
+  w.tell(c, ...run(1, 5));
+  const first = await Effect.runPromise(Effect.result(w.channels.range(c, 1, 16, { quiet: false })));
+  assert.equal(first._tag === "Failure" && first.failure.code, "bad_response");
+  assert.deepEqual(w.asked, ["range?from=6&to=10", "range?from=11&to=15"]);
+  assert.deepEqual(w.numbers(c), run(1, 12), "already received records stay on the device");
+  w.there.set(c.id, 16);
+  await Effect.runPromise(w.channels.range(c, 1, 16, { quiet: false }));
+  assert.deepEqual(w.asked.slice(2), ["range?from=11&to=15", "range?from=16&to=16"]);
+  assert.deepEqual(w.numbers(c), run(1, 16));
+});
+
 test("a_read_in_the_background_says_how_it_was_answered_and_a_station_not_reached_is_not_asked", async () => {
   const w = world();
   const c = log("c");

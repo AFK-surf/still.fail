@@ -167,11 +167,13 @@ test "the workspaces' sheet: drawn up to 94%, dragged down past 30% it closes" {
 ///|
 test "a sheet takes the drags on it: the list under it does not scroll" {
   let t = tester("home")
-  let before = t.list_offset()
+  // (where the list is, by a row of it)
+  let row = fn() { t.locate("=把旧的截图都换成新的").map(fn(p) { p.1 }) }
+  let before = row()
   t.tap_text("星火工作室")
   sheet_rested(t, "sf-present")
   t.drag(195.0, 700.0, 195.0, 400.0)
-  assert_eq(t.list_offset(), before)
+  assert_eq(row(), before)
   assert_true(@sf.presenting())
 }
 
@@ -239,17 +241,17 @@ test "a new chat: its station picked in the sheet, its model in the model's pane
   // (the page opened drawn at its moment, its rise from there)
   t.draw()
   t.run_for(@ui.move_most_ms)
-  assert_true(t.find("它会在 Studio 上") is Some(_))
+  assert_true(t.find("它会在 Willow 上") is Some(_))
   // the station's control, after the preset's, beside the model's
-  let (sx, sy) = t.find_last("Studio").unwrap()
+  let (sx, sy) = t.find_last("Willow").unwrap()
   t.tap(sx, sy)
   assert_true(t.find("选择运行的 station") is Some(_))
   run_to_sheet_rest(t)
-  let (mx, my) = t.find_last("MBA").unwrap()
+  let (mx, my) = t.find_last("Maple").unwrap()
   t.tap(mx, my)
   assert_true(!@sf.presented_open_of(@sf.last_presented()))
   assert_eq(new_fix.station, "st2")
-  assert_true(t.find("它会在 MBA 上") is Some(_))
+  assert_true(t.find("它会在 Maple 上") is Some(_))
   t.tap_text("Opus 5.5")
   assert_true(t.find("思考深度") is Some(_))
   run_to_sheet_rest(t)

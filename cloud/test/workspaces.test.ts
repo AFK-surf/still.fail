@@ -49,7 +49,7 @@ test("accounts own workspaces, invite each other, enroll stations and get creden
     assert.equal((await alice("PATCH", `/v1/workspaces/${home.id}/members/${bobSub}`, { role: "admin" })).status, 200);
 
     // A station enrolls with a one-time token and proves it holds its key.
-    const enrollment = await (await bob("POST", `/v1/workspaces/${home.id}/enrollments`, { name: "studio" })).json() as any;
+    const enrollment = await (await bob("POST", `/v1/workspaces/${home.id}/enrollments`, { name: "willow" })).json() as any;
     assert.match(enrollment.command, /^stillfail station enroll https:\/\/relay\.example [A-Za-z0-9_-]{43}$/);
     const station = await key();
     const forged = await key();
@@ -58,7 +58,7 @@ test("accounts own workspaces, invite each other, enroll stations and get creden
     const message = (id: string) => `stillfail-station-enroll-v1:${h.origin}:${enrollment.token}:${id}`;
     assert.equal((await enroll(enrollment.token, station.id, await forged.sign(message(station.id)))).status, 401, "must hold the key");
     const enrolled = await (await enroll(enrollment.token, station.id, await station.sign(message(station.id)))).json() as any;
-    assert.deepEqual([enrolled.workspace, enrolled.name, enrolled.relay_url], [home.id, "studio", h.origin]);
+    assert.deepEqual([enrolled.workspace, enrolled.name, enrolled.relay_url], [home.id, "willow", h.origin]);
     assert.deepEqual(enrolled.relay_urls, [h.origin], "every relay, still.fail's first");
     assert.equal((await enroll(enrollment.token, forged.id, await forged.sign(message(forged.id)))).status, 404, "one use");
 

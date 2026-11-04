@@ -312,7 +312,7 @@ pub fn progress_spinner(
 
 ///|
 /// What a page or a list waits on (WaitNote), from the core's note (a list's ListNote) or the page's own words: still
-/// reading (its placeholders breathe), what it waits on (正在读取会话, 正在连接 Studio: said to a screen reader), what
+/// reading (its placeholders breathe), what it waits on (正在读取会话, 正在连接 Willow: said to a screen reader), what
 /// could not be read (each said in red).
 pub(all) struct WaitNote {
   reading : Bool

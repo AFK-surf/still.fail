@@ -121,6 +121,10 @@ export function stationHost(answers: Answers) {
     if (!(key in answers) && /^GET \/sessions\/[^/?]+\?turns=\d+(&jobs=now)?$/.test(key)) key = key.split("?")[0]!;
     // The archive a page at a time (`&page=`): as a station from before, the whole list, unless the test answers pages.
     if (!(key in answers) && /^GET \/chats\?archived=1&page=/.test(key)) key = "GET /chats?archived=1";
+    // The sidebar's marks (`marks=1`): as a station from before, the sidebar made, unless the test answers marks.
+    if (!(key in answers) && /^GET \/chats\?marks=1/.test(key)) key = "GET /chats";
+    // The open jobs without their chats (`chats=0`): as a station from before, the list as the test answers it.
+    if (!(key in answers) && key === "GET /jobs?chats=0") key = "GET /jobs";
     if (key in answers) return answers[key] instanceof Status ? jsonResponse((answers[key] as Status).code, (answers[key] as Status).body) : jsonResponse(200, answers[key]);
     if (path.startsWith("/admin/api/threads/") && path.includes("/entries")) return jsonResponse(200, { last: 0, entries: [] });
     return jsonResponse(404, { error: "no" });

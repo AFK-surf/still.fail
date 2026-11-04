@@ -40,7 +40,7 @@ test "a newer build: handed to the host at once to be made ready, nothing over H
   assert_true(update.available.get() is Some(_))
   // (as asked at the start: it may wait for a network that is not metered)
   assert_eq(t.update_asked(), ["fetch stillfail-2.apk false"])
-  assert_eq(update_stands().label, "下载 0.1.1")
+  assert_eq(update_stands().label, "有新版本 0.1.1")
   t.tells_update("{\"phase\":\"downloading\",\"percent\":40,\"error\":\"\",\"file\":\"stillfail-2.apk\"}")
   t.run_for(@ui.move_most_ms)
   assert_true(update_button_at(t, "传输") is None, msg="the build coming shown over Home")
@@ -120,7 +120,7 @@ test "several releases found during one download: fetch the newest even if an ol
   t.tells_update("{\"phase\":\"failed\",\"percent\":-1,\"error\":\"incomplete\",\"file\":\"stillfail-2.apk\"}")
   t.run_for(@ui.move_most_ms)
   assert_eq(t.update_asked(), ["fetch stillfail-2.apk false", "fetch stillfail-4.apk false"])
-  assert_eq(update_stands().label, "下载 0.1.3")
+  assert_eq(update_stands().label, "有新版本 0.1.3")
 }
 
 ///|

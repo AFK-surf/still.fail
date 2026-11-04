@@ -329,7 +329,7 @@ function deciding(id: string, th: number, seq: number, at: number, dismissed: bo
 const ids = (v: J): string[] => v.days.flatMap((d: J) => d.items.map((i: J) => i.id));
 
 /// A value without what the clients show of it: what a view puts together, alone.
-const SHOWN = new Set(["trouble", "settled", "archivable", "swipeArchive", "stateText", "stateLead", "stateRest", "face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "originKind", "summary", "modelsText", "stateBusy", "problems", "changes", "modeWords", "modeLabel", "modeSentence", "placeText"]);
+const SHOWN = new Set(["trouble", "settled", "archivable", "swipeArchive", "swipeAsk", "stateText", "stateLead", "stateRest", "face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "originKind", "summary", "modelsText", "stateBusy", "problems", "changes", "modeWords", "modeLabel", "modeSentence", "placeText"]);
 function plain(v: J): J {
   if (Array.isArray(v)) return v.map(plain);
   if (v !== null && typeof v === "object") return Object.fromEntries(Object.entries(v).filter(([k, x]) => !SHOWN.has(k) && x !== null && x !== undefined).map(([k, x]) => [k, plain(x)]));
@@ -413,14 +413,24 @@ test("historical_messages_do_not_follow_the_current_model", () => {
   assert.equal(message.by.maker.id, "openai");
 });
 
+test("historical messages keep the runtime they were sent on", () => {
+  const agents = [{ session: { key: "k", runtime: "codex", agentText: "GPT-6", maker: { id: "openai", name: "OpenAI" } } }];
+  const old = shownMessage({ authorKind: "agent", author: "k", agentIdentity: { model: "claude-opus-5-5", runtime: "claude" } }, agents, null, [], [], [], undefined);
+  assert.deepEqual([old.by.name, old.by.maker?.id, old.by.runtime], [format.agentLabel("claude-opus-5-5", null), "anthropic", "claude"]);
+  const defaultModel = shownMessage({ authorKind: "agent", author: "k", agentIdentity: { model: null, effort: null, runtime: "claude" } }, agents, null, [], [], [], undefined);
+  assert.deepEqual([defaultModel.by.name, defaultModel.by.maker, defaultModel.by.runtime], [format.agentLabel(null, null), null, "claude"]);
+  const legacy = shownMessage({ authorKind: "agent", author: "k", authorRuntime: "claude" }, agents, null, [], [], [], undefined);
+  assert.equal(legacy.by.runtime, "claude");
+});
+
 test("an_agents_mark_is_drawn_from_what_its_message_says_before_its_session_is_read", () => {
   const message: J = { authorKind: "agent", author: "k", authorName: "Worker", authorModel: "gpt-5.5", authorRuntime: "codex", text: "hi" };
   const before = shownMessage(message, [], null, [], [], [], undefined);
   assert.deepEqual([before.by.name, before.by.maker?.id, before.by.runtime], ["Worker", "openai", "codex"]);
-  // Once read, the session says.
+  // Its author runtime remains the one given with the message after its session is read.
   const agents = [{ session: { key: "k", agentText: "Opus", model: "claude-opus-5-5", runtime: "claude", maker: { id: "anthropic", name: "Anthropic" } } }];
   const after = shownMessage(message, agents, null, [], [], [], undefined);
-  assert.deepEqual([after.by.maker.id, after.by.runtime], ["anthropic", "claude"]);
+  assert.deepEqual([after.by.name, after.by.maker.id, after.by.runtime], ["Worker", "openai", "codex"]);
   // From a station that does not say: no mark yet.
   const old = shownMessage({ authorKind: "agent", author: "k", text: "hi" }, [], null, [], [], [], undefined);
   assert.deepEqual([old.by.maker, old.by.runtime], [null, null]);
@@ -914,6 +924,12 @@ test("any_made_chat_is_swiped_away_regardless_of_its_state_its_station_there", a
   assert.deepEqual(flags(u.value), {
     unread: [true, false], pinned: [true, false], kept: [true, false], reviewed: [true, false],
     running: [true, false], failed: [true, false], watching: [true, false], decision: [true, false], pending: [false, false], empty: [true, false],
+  });
+  // Only one at work or keeping watch is asked about before its swipe archives it.
+  const asks = Object.fromEntries(u.value.days.flatMap((d: J) => d.items).filter((i: J) => i.swipeAsk !== undefined).map((i: J) => [i.id, i.swipeAsk]));
+  assert.deepEqual(asks, {
+    running: "此对话正在进行中。归档后，agent 完成当前回复即停止，等待中的任务也会停止。",
+    watching: "「CI」仍在监控。归档会停止监控。",
   });
   // Its station offline: nothing there to take it.
   t.set(link("ws/st"), { state: "offline" });
@@ -1951,7 +1967,7 @@ test("an_image_sent_while_going_up_is_among_its_messages_files_at_once", async (
   assert.deepEqual([f.attachments.map((a: J) => a.path), f.uploads, f.waits], [["upload:u3"], undefined, undefined]);
 });
 
-// A video sent with a new chat's first message showed as a file card (zuozijian, 2026-10-29): a new chat's files go up
+// A video sent with a new chat's first message showed as a file card: a new chat's files go up
 // only as its message goes, so its video was still going up when its row came. Drawn as its message draws it once up:
 // in its place and shape, its still the one picked here.
 test("a_video_sent_while_going_up_is_among_its_messages_files_at_once", async () => {

@@ -2,6 +2,8 @@
 // inserting or deleting a call can change only that call and its immediate successor.
 import type { DatabaseSync } from "node:sqlite";
 import { COMPACTED_FROM } from "./rows.ts";
+import { retiredUsage } from "./usage-retire.ts";
+import { hasCompactUsage } from "./usage-compact.ts";
 
 // The old append-only table remains available to older station versions. Its former trigger looked backward through
 // subagent calls; its replacement takes the result already maintained in the main-call index.
@@ -65,6 +67,8 @@ ${KEEP_NEW_CALLS}
 
 /// Install only empty tables and triggers. The last old row is found by rowid, not by scanning history.
 export function installUsageCompactions(db: DatabaseSync): void {
+  if (hasCompactUsage(db)) return;
+  if (retiredUsage(db)) return;
   const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_compaction_backfill'").get() !== undefined;
   const triggerCurrent = () => ((db.prepare("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'usage_compactions_add'").get() as { sql: string } | undefined)?.sql ?? "").includes("INSERT OR IGNORE INTO usage_main_calls");
   if (installed() && triggerCurrent()) return;
@@ -80,6 +84,8 @@ export function installUsageCompactions(db: DatabaseSync): void {
 }
 
 export function usageCompactionsReady(db: DatabaseSync): boolean {
+  if (hasCompactUsage(db)) return false;
+  if (retiredUsage(db)) return false;
   return (db.prepare("SELECT done FROM usage_compaction_backfill WHERE id = 1").get() as { done: number }).done === 1;
 }
 

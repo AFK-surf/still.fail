@@ -8,7 +8,8 @@
 //                       {op:"key", type:"down"|"up", usage} (a USB HID keyboard usage), {op:"button", name}
 //                       ("home", "lock", "siri", "side_button", "app_switcher", "keyboard": the software
 //                       keyboard shown or hidden), {op:"paste", text} (the device's pasteboard set, then ⌘V);
-//                       {op:"pose", name} (an iPhone Duo's hinge: "closed", "book", "open");
+//                       {op:"pose", name} (an iPhone Duo's hinge: "closed", "book", "open"), {op:"rotate"} (the device
+//                       turned a quarter; its picture follows what its UI does);
 //                       x, y 0..1 of the device's screen, edge 0 none, 2 top, 3 bottom (a system gesture)
 // The rest is as ScreenView's; clipboard, reveal and the cursor are not had.
 import CoreMedia
@@ -61,7 +62,12 @@ final class SimulatorView: ScreenView {
       do {
         let helper = Bundle.main.resourceURL?.appendingPathComponent("stillfail-duo-hid").path ?? ""
         try await injector.setup(deviceUDID: udid, duoHelper: helper)
-        if await injector.isFoldable() { await followPanels() }
+        if await injector.isFoldable() {
+          await followPanels()
+        } else if let said = await enumerated() {
+          // (a device left on its side by an earlier view: as it stands from the first picture)
+          _ = setTurn(Self.turnOf(said, panel: "primary"))
+        }
         let first = AsyncStream<(Int, Int)>.makeStream()
         await capture.setReemitsIdle(false)
         try await capture.start(deviceUDID: udid, pixelConsumers: PixelConsumerCount()) { [weak self] buffer, time, _ in
@@ -262,14 +268,23 @@ final class SimulatorView: ScreenView {
     case "button":
       switch op["name"] as? String {
       case "keyboard": await injector.toggleSoftwareKeyboard()
-      case let name? where ["home", "lock", "siri", "side_button", "app_switcher"].contains(name): await injector.sendButton(button: name, deviceUDID: udid)
+      case let name? where ["home", "lock", "siri", "side_button", "app_switcher", "volume_up", "volume_down"].contains(name): await injector.sendButton(button: name, deviceUDID: udid)
       default: return
       }
+    case "memory_warning":
+      await injector.simulateMemoryWarning()
     case "pose":
       guard let name = op["name"] as? String, let pose = DevicePose.preset(named: name) else { return }
       guard await injector.setPose(name, fromDegrees: hinge) else { return }
       hinge = pose.hingeDegrees
       await showPanel(cover: pose.hingeDegrees < 90)
+    case "rotate":
+      let turned = ((KnownTurns.shared[udid] ?? 0) + 1) % 4
+      let orientation = [HIDInjector.orientationPortrait, HIDInjector.orientationLandscapeRight, HIDInjector.orientationPortraitUpsideDown, HIDInjector.orientationLandscapeLeft][turned]
+      guard await injector.sendOrientation(orientation: orientation) else { return }
+      KnownTurns.shared[udid] = turned
+      // (a device under load is seconds behind the turn it was told of)
+      Task { await lookTurn(cover: coverShown, waits: [0] + Array(repeating: 1, count: 12)) }
     case "paste":
       guard let text = op["text"] as? String, !text.isEmpty else { return }
       guard await pasteboard(text) else { return }
@@ -332,6 +347,17 @@ final class SimulatorView: ScreenView {
     _ = run(["show", "--last", "boot"], { boot.read() }) { text in
       if let cover = said(text) { boot.said(cover) }
     }
+    // The panel an earlier view here left it on, at once: the boot's log is read whole, longer the longer the device has been up,
+    // and on a busy Mac past the wait below (the first pictures the cover's, then the inner's, side run 41673108710). The log
+    // still says, as it comes, a fold made with no view following it.
+    if let cover = KnownPanels.shared[udid] {
+      await showPanel(cover: cover, opening: true)
+      Task {
+        while !boot.done { try? await Task.sleep(for: .milliseconds(100)) }
+        if let cover = boot.taken() { change.yield(cover) }
+      }
+      return
+    }
     for _ in 0..<150 where !boot.done {
       try? await Task.sleep(for: .milliseconds(20))
     }
@@ -349,6 +375,7 @@ final class SimulatorView: ScreenView {
   func showPanel(cover: Bool, opening: Bool = false) async {
     guard coverShown != cover else { return }
     coverShown = cover
+    KnownPanels.shared[udid] = cover
     if cover { hinge = min(hinge, 0) } else if hinge < 90 { hinge = 180 }
     let size = cover ? (DevicePose.coverWidth, DevicePose.coverHeight) : (DevicePose.innerWidth, DevicePose.innerHeight)
     await capture.setPreferredScreenSize(width: size.0, height: size.1)
@@ -364,11 +391,11 @@ final class SimulatorView: ScreenView {
 
   /// How the panel's UI stands as CoreSimulator says it, the picture turned to match. Asked as a panel comes up, and again
   /// once it has settled (its orientation follows the panel by a moment).
-  func lookTurn(cover: Bool) async {
-    for wait in [0, 1, 2] {
+  func lookTurn(cover: Bool?, waits: [Int] = [0, 1, 2]) async {
+    for wait in waits {
       try? await Task.sleep(for: .seconds(wait))
       guard coverShown == cover, let said = await enumerated() else { continue }
-      let now = Self.turnOf(said, panel: cover ? "primary" : "primary-1")
+      let now = Self.turnOf(said, panel: cover == false ? "primary-1" : "primary")
       if setTurn(now) {
         // a still screen brings no picture: what it shows now, turned
         queue.async {
@@ -398,7 +425,9 @@ final class SimulatorView: ScreenView {
 
   /// The quarter turns clockwise a panel's picture is shown at, from `simctl io enumerate`'s words of it.
   static func turnOf(_ said: String, panel: String) -> Int {
-    for block in said.components(separatedBy: "Device Name: ").dropFirst() where block.hasPrefix(panel + "\n") {
+    // (a device of one panel: "primary" on the newer runtimes, "PurpleMain" on the older)
+    for block in said.components(separatedBy: "Device Name: ").dropFirst()
+    where block.hasPrefix(panel + "\n") || (panel == "primary" && block.hasPrefix("PurpleMain\n")) {
       guard let line = block.split(separator: "\n").first(where: { $0.contains("UI Orientation:") }) else { return 0 }
       if line.hasSuffix("Landscape Left") { return 1 }
       if line.hasSuffix("Landscape Right") { return 3 }
@@ -498,5 +527,45 @@ private final class BootPanel: @unchecked Sendable {
     defer { lock.unlock() }
     defer { last = nil }
     return last
+  }
+}
+
+/// How many quarter turns from upright a device was last turned from here, for the views after this one.
+private final class KnownTurns: @unchecked Sendable {
+  static let shared = KnownTurns()
+  private let lock = NSLock()
+  private var turns: [String: Int] = [:]
+
+  subscript(udid: String) -> Int? {
+    get {
+      lock.lock()
+      defer { lock.unlock() }
+      return turns[udid]
+    }
+    set {
+      lock.lock()
+      defer { lock.unlock() }
+      turns[udid] = newValue
+    }
+  }
+}
+
+/// The panel each device was last shown on by a view here, by its UDID (true: the cover).
+private final class KnownPanels: @unchecked Sendable {
+  static let shared = KnownPanels()
+  private let lock = NSLock()
+  private var covers: [String: Bool] = [:]
+
+  subscript(udid: String) -> Bool? {
+    get {
+      lock.lock()
+      defer { lock.unlock() }
+      return covers[udid]
+    }
+    set {
+      lock.lock()
+      defer { lock.unlock() }
+      covers[udid] = newValue
+    }
   }
 }

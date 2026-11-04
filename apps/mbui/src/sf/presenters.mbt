@@ -597,6 +597,8 @@ fn capped_want(c : @ui.Ctx, serial : Int, id : Int) -> Double? {
   let mut laid = 0.0
   let mut holds = 0.0
   for l in lists {
+    // A list has not been laid out yet. Wait for all the body's lists to say what they hold.
+    guard l.1 >= 0.0 else { return None }
     match c.laid_size(l.0) {
       Some((_, h)) => laid = laid + h
       None => ()
@@ -623,6 +625,7 @@ pub fn panel_list(
   row : (Int) -> Unit,
   stick_end? : Bool = false,
   fills? : Bool = false,
+  rows? : @ui.RowCauses,
 ) -> Int {
   let arrangement = look()
   let (sides, out, words, body, small) = (
@@ -639,14 +642,16 @@ pub fn panel_list(
   let room_id = c.id(key + "/room")
   let mut sized = None
   if lists_said_now.val && !fills {
-    let holds = match c.list_info_as(key, fn(i) { i.map(fn(x) { x.content }) }) {
-      Some(i) => i.content
-      None => est * count.to_double()
-    }
-    lists_now.push((room_id, holds))
-    // (drawn by the window's tree: as tall as it says, giving way: lists_sized_now)
-    if lists_sized_now.val {
-      sized = Some(holds)
+    match c.list_info_as(key, fn(i) { i.map(fn(x) { x.content }) }) {
+      Some(i) => {
+        lists_now.push((room_id, i.content))
+        // (drawn by the window's tree: as tall as it says, giving way: lists_sized_now)
+        if lists_sized_now.val {
+          sized = Some(i.content)
+        }
+      }
+      // An estimate here would first size the panel to an unmeasured row, then size it again when the row is laid out.
+      None => lists_now.push((room_id, -1.0))
     }
   }
   let room_at = match sized {
@@ -654,7 +659,7 @@ pub fn panel_list(
     None => sheet_grows.then(@ui.style(mx=room(-out)))
   }
   let room_box = c.box(style=room_at, id=room_id, taps=false, fn() {
-    list = c.list(key, count, est, stick_end~, fn(i) {
+    list = c.list(key, count, est, stick_end~, sized?=rows, fn(i) {
       with_look(arrangement, fn() {
         let was = (panel_sides_in.val, rows_out.val, words_in_now.val, panel_body_now.val, small_panel_now.val)
         panel_sides_in.val = sides - out

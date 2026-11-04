@@ -1,5 +1,6 @@
-// Archived threads as files (store.rs `// ── archive`): `<archive>/threads/<id>.jsonl.zst`, one entry per line as serde
-// writes EntryRow (camelCase, fields in the struct's order, the skipped Nones left out), zstd level 3.
+// Archived threads as files, as the Rust station wrote them (store.rs `// ── archive`): `<archive>/threads/<id>.jsonl.zst`,
+// one entry per line as serde writes EntryRow (camelCase, fields in the struct's order, the skipped Nones left out),
+// zstd level 3. Read once, as a database of version 12 is brought up (store.ts `#upgradeFrom12`).
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { constants, zstdCompressSync, zstdDecompressSync } from "node:zlib";
@@ -70,5 +71,3 @@ export function archiveEntries(text: string): EntryRow[] {
     .map((l) => archivedEntry(JSON.parse(l)));
 }
 
-/// What archive_thread writes: each entry and a newline.
-export const archiveText = (entries: EntryRow[]): string => entries.map((e) => `${JSON.stringify(entryJson(e))}\n`).join("");

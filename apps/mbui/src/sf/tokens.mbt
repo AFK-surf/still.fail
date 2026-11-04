@@ -1821,9 +1821,12 @@ pub let share_letters_apart : @ui.Tracking = Wide
 pub let share_look_tile_w : Double = 72.0
 
 ///|
+pub let share_look_tile_h : Double = 96.0
+
+///|
 pub let share_look_tile : @ui.Style = @ui.style(
   w=Fixed(share_look_tile_w),
-  h=Fixed(96.0),
+  h=Fixed(share_look_tile_h),
   radius=small_radius,
   clip=true,
 )
@@ -2037,6 +2040,14 @@ pub let link_card_w : @ui.Len = Fixed(236.0)
 /// A file's card in a message and a screen's without its picture, a capsule a row high (two lines, 20 and 16 on a
 /// desktop): 52 whatever the screen's words, so that what stands in its round ends stands concentric with them.
 pub let file_capsule_h : @ui.Len = Fixed(52.0)
+
+///|
+/// How far in from such a capsule's end its words end where they are the last thing in it: where its round end begins
+/// (its half, 26) less the 2 every capsule's words reach into one (a button's 16 in its 34, a toast's 18 in its 40), so
+/// that their corners keep as clear of the curve there as their top and foot of the capsule's (the user, 2026-11-03:
+/// 右边是不是边距不够; at 14, as far as its mark at the other end, a name's last tall letter came within 10 of the curve,
+/// the mark 15 from its own). Its mark (and a ✕ or a ↻ at this end) stands concentric with its end instead, 14 in.
+pub let file_capsule_words_end : Double = 24.0
 
 ///|
 pub let peek_card_px : Double = 280.0
@@ -2968,6 +2979,16 @@ pub let top_bar_title_look : @view.WordsLook = {
   size: 24.0,
   weight: 700,
   line: 30.0,
+  wrap: false,
+  tracking: ScaledPoints(-0.4),
+}
+
+///|
+/// The workspace's name in Home's top bar: top_bar_title_look made smaller, 20 on 26, its mark's size (asked 2026-11-03).
+pub let home_workspace_title_look : @view.WordsLook = {
+  size: 20.0,
+  weight: 700,
+  line: 26.0,
   wrap: false,
   tracking: ScaledPoints(-0.4),
 }

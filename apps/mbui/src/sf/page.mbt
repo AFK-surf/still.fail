@@ -160,8 +160,14 @@ pub fn page(
   actions? : () -> Unit,
   head? : () -> Unit,
   small? : String = "",
+  keys? : Array[(String, String)],
 ) -> Unit {
   let l = look_for(c.width)
+  // (each block by its key and what it shows, while it is not waiting in its bones: page_keyed)
+  page_keyed.val = match keys {
+    Some(ks) if ks.length() == content.length() && page_bones.val is None => Some(ks)
+    _ => None
+  }
   let (title, content, head, actions, lead) = page_parts(c, title, content, head, actions, lead)
   // (what it holds drawn as its list lays it out, maybe after this returns: each block says its look as it is drawn)
   let content = content.map(fn(b) { fn() { with_look(l, b) } })
@@ -179,6 +185,8 @@ pub fn page(
       }
     })
   })
+  // (taken by its list as it was built, or by none: not another page's)
+  page_keyed.val = None
 }
 
 ///|
@@ -305,19 +313,20 @@ fn barred_page(
       |> ignore
     })
   }
+  let chrome = blocks.length()
   match l {
     Narrow => {
       for b in content {
         blocks.push(b)
       }
-      narrow_list(c, key, blocks, foot)
+      narrow_list(c, key, blocks, foot, chrome~)
     }
     Wide => {
       // (what it holds as under a head: its first 16 under it, the head's own 12 over that)
       for i, b in content {
         blocks.push(fn() { c.box(style=if i == 0 { desk_first } else { desk_block }, fn() { b() }) |> ignore })
       }
-      desk_lanes(c, key, blocks, foot~)
+      desk_lanes(c, key, blocks, foot~, chrome~)
     }
   }
 }
@@ -440,12 +449,13 @@ fn narrow_page(
   if !lead.is_empty() {
     blocks.push(fn() { c.box(style=pg_lead_box, fn() { lead.draw(c, pg_lead) }) |> ignore })
   }
+  let own = blocks.length()
   for b in content {
     blocks.push(b)
   }
   // (each drawn as its list lays it out, after this returns: its back, its title's line and what it does there in the
   // page's arrangement, as what it holds is)
-  narrow_list(c, key, blocks.map(fn(b) { fn() { with_look(Narrow, b) } }), foot, chrome~)
+  narrow_list(c, key, blocks.map(fn(b) { fn() { with_look(Narrow, b) } }), foot, chrome~, own~)
 }
 
 ///|
@@ -454,12 +464,83 @@ fn narrow_page(
 pub let page_list_opened : Ref[(@ui.Ctx, String, Int) -> Unit] = Ref(fn(_, _, _) {  })
 
 ///|
+/// The keys of the blocks of the page being drawn (`page`'s `keys`: each block's own and what it shows), taken by the
+/// list its blocks are laid out in (keyed_blocks); None: its blocks by their places.
+// kept across runs: set by each page as it is drawn and taken by its list in the same build
+let page_keyed : Ref[Array[(String, String)]?] = Ref(None)
+
+///|
+/// Each page's blocks as given and as its list made of them, by the list's key (keyed_blocks).
+// kept across runs: put back by page_rows_reset (the app's reset)
+let page_lists : Map[String, @ui.ListRows[(String, () -> Unit)]] = {}
+
+///|
+/// What every page's blocks were forgets (a run anew).
+pub fn page_rows_reset() -> Unit {
+  page_lists.clear()
+  page_keyed.val = None
+}
+
+///|
+/// List `key`'s `blocks` (the first `chrome` of them its page's own: back, title, head, what it is for), by the keys
+/// the page gave its blocks (page_keyed, as many as those after `chrome`): a block new to it opens its room where it
+/// is, one gone closes where it was, one showing another thing goes to its new height, as a chat's rows do (ListRows,
+/// docs/list-motion.md; 2026-11-03 the user: 「只给那几页加身份」); its rows' heights so (the list's `sized`). As
+/// given, by their places, where the page gave no keys.
+fn keyed_blocks(
+  c : @ui.Ctx,
+  key : String,
+  blocks : Array[() -> Unit],
+  chrome : Int,
+) -> (Array[() -> Unit], @ui.RowCauses?) {
+  let ks = match page_keyed.val {
+    Some(ks) if ks.length() == blocks.length() - chrome => ks
+    _ => return (blocks, None)
+  }
+  page_keyed.val = None
+  let lr = match page_lists.get(key) {
+    Some(l) => l
+    None => {
+      let l = @ui.ListRows::new()
+      page_lists[key] = l
+      l
+    }
+  }
+  let keys = Array::makei(chrome, fn(i) { "~" + i.to_string() })
+  let versions : Map[String, String] = {}
+  for k in ks {
+    keys.push(k.0)
+    versions[k.0] = k.1
+  }
+  let items = Array::makei(blocks.length(), fn(i) { (keys[i], blocks[i]) })
+  let (items, keys) = lr.rows(c, keys, items, fn(it) { versions.get(it.0).unwrap_or("") })
+  let drawn = items.mapi(fn(i, it) {
+    let k = keys[i]
+    fn() {
+      let n = c.box(style=full_width, it.1)
+      lr.enter(c, n, k)
+      lr.leave(c, n, k)
+    }
+  })
+  (drawn, Some(lr.sized()))
+}
+
+///|
 /// A narrow page's blocks in its list, those from `chrome` on (what it holds: its own head, what it is for, its
 /// groups, cards, headings, notes) in the page's room 12 from its sides (pg_room), as a panel's are in the room it
 /// leaves; the frame's own over them (back, the large title) from the page's edges; 30 under the last, then `foot`.
-fn narrow_list(c : @ui.Ctx, key : String, blocks : Array[() -> Unit], foot : Double, chrome? : Int = 0) -> Unit {
+fn narrow_list(
+  c : @ui.Ctx,
+  key : String,
+  blocks : Array[() -> Unit],
+  foot : Double,
+  chrome? : Int = 0,
+  own? : Int = chrome,
+) -> Unit {
+  // (`own`: how many of them are the page's own, before what it holds: its keys are those after)
+  let (blocks, sized) = keyed_blocks(c, "settings/" + key, blocks, own)
   let n = blocks.length()
-  c.list("settings/" + key, n + 1, 80.0, fn(i) {
+  c.list("settings/" + key, n + 1, 80.0, sized?, fn(i) {
     if i == n {
       c.box(style=@ui.style(w=Full, h=Fixed(pg_foot + foot)), fn() {  }) |> ignore
     } else if i < chrome {
@@ -538,10 +619,11 @@ fn wide_page(
         |> ignore
       })
   }
+  let chrome = blocks.length()
   for i, b in content {
     blocks.push(fn() { c.box(style=if i == 0 { desk_first } else { desk_block }, fn() { b() }) |> ignore })
   }
-  desk_lanes(c, key, blocks, foot~)
+  desk_lanes(c, key, blocks, foot~, chrome~)
 }
 
 ///|
@@ -562,9 +644,17 @@ fn desk_back(c : @ui.Ctx, back : String, on_back : () -> Unit) -> Unit {
 
 ///|
 /// A page's blocks in a list, each laid out as it comes into view: in the pane's middle, 24 from its sides at least,
-/// 80 room at its foot (and the frame's room under that).
-pub fn desk_lanes(c : @ui.Ctx, key : String, blocks : Array[() -> Unit], foot? : Double = 0.0) -> Unit {
-  c.list("settings/" + key, blocks.length() + 1, 80.0, fn(i) {
+/// 80 room at its foot (and the frame's room under that). `chrome`: how many of them are its page's own (back, title,
+/// head), before the blocks its page keys (keyed_blocks).
+pub fn desk_lanes(
+  c : @ui.Ctx,
+  key : String,
+  blocks : Array[() -> Unit],
+  foot? : Double = 0.0,
+  chrome? : Int = 0,
+) -> Unit {
+  let (blocks, sized) = keyed_blocks(c, "settings/" + key, blocks, chrome)
+  c.list("settings/" + key, blocks.length() + 1, 80.0, sized?, fn(i) {
     if i == blocks.length() {
       if foot > 0.0 {
         c.box(style=@ui.style(w=Full, h=Fixed(desk_foot_h + foot)), fn() {  }) |> ignore
@@ -650,6 +740,28 @@ pub fn setting(c : @ui.Ctx, title : String, control : () -> Unit, note? : String
           page_note(c, note)
         }
       })
+  }
+}
+
+///|
+/// A setting turned on or off. Wide: a switch row with its note; narrow: the switch at the end of the section's
+/// heading, with the note using the full width below it. Only the switch takes the press.
+pub fn setting_switch(c : @ui.Ctx, key : String, title : String, on : Bool, note? : String = "") -> Bool {
+  match look() {
+    Wide => {
+      let mut now = on
+      setting(c, title, note~, fn() { now = switch(c, key, on, label=title, small=true) })
+      now
+    }
+    Narrow => {
+      let mut now = on
+      section(c, title, actions=fn() { now = switch(c, key, on, label=title, small=true) }, fn() {
+        if note != "" {
+          page_note(c, note)
+        }
+      })
+      now
+    }
   }
 }
 

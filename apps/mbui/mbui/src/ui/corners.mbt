@@ -247,6 +247,7 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
     self.count = i + 1
     i
   }
+  tree_pictures.clear()
   let held = if laid { tree.laid_held() } else { tree.drawn_held() }
   // (each drawn one's node here, and the last of what it holds so far: what follows it among them)
   let at : Array[Int] = Array::make(held.length(), -1)
@@ -297,6 +298,10 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
     let i = add(n)
     at[k] = i
     link(parent, i)
+    // (said to be a picture, as an old view's box is by its semantics: Ctx::pictures)
+    if tree.says_picture(d.id) {
+      tree_pictures.add(i)
+    }
     if d.words != "" {
       let w = Node::new()
       w.kind = kind_text
@@ -324,6 +329,7 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
   // (what the old views hold where it is drawn, as big, as the window draws it: Ctx::with_old_drawn; laid out, where
   // their nodes are laid out, as the tree's: each old view's carried back from where it is drawn, Ctx::moved_carries)
   let out = if laid { self.with_old_laid(count, f) } else { self.with_old_drawn(f) }
+  tree_pictures.clear()
   for r in reparented {
     self.nodes[r.0].parent = r.1
   }
@@ -392,6 +398,10 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
   for i in 0..<c.count {
     let b = c.nodes[i]
     if !(b.shows_ground() || b.lit_ground()) || b.layer {
+      continue
+    }
+    // (none of it drawn: wholly outside the clip of the window's tree its old view is hosted in, old_cuts)
+    if c.cut_away(i) {
       continue
     }
     let ct = match c.corner_container(i, grounds) {
@@ -466,7 +476,7 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
       // a corner that never shows: past the window's foot or head (a sheet held past the bottom so its foot's corners
       // are under it). Not past its sides: a pane beside the one in use comes over whole
       let cy = if k < 2 { a.y } else { a.y + a.fh }
-      if cy > c.height + 0.5 || cy < -0.5 || c.corner_cut_off(i, p, k) {
+      if cy > c.height + 0.5 || cy < -0.5 || c.corner_cut_off(i, k) {
         continue
       }
       // flush in the corner of something between it and the container that cuts with a rounded corner (a clip=true
@@ -1009,9 +1019,18 @@ fn Ctx::scroll_still(self : Ctx, q : Int, st : Sideways) -> Bool {
 }
 
 ///|
-/// The nodes said to be pictures (Role Image) this frame (in_picture).
+/// The window's tree's nodes said to be pictures (View::says: Role Image), by their node here, while they are among the
+/// frame's (Ctx::with_tree_nodes).
+// kept across runs: emptied before and after each time the tree's nodes are taken in
+let tree_pictures : Set[Int] = Set::new()
+
+///|
+/// The nodes said to be pictures (Role Image) this frame, the old views' and the tree's (in_picture).
 fn Ctx::pictures(self : Ctx) -> Set[Int] {
   let out : Set[Int] = Set::new()
+  for i in tree_pictures {
+    out.add(i)
+  }
   for s in self.sems {
     if s.role == Image {
       out.add(s.node)
@@ -1455,7 +1474,7 @@ fn Ctx::corner_inset_at(self : Ctx, i : Int, p : Int, k : Int, ra : Double) -> D
   let r = a.x + a.fw - (b.x + b.fw)
   let d = a.y + a.fh - (b.y + b.fh)
   match corner_lies_in(k, l, t, r, d, ra) {
-    Some(v) if !self.cut_round_at(i, p, k) && !self.corner_cut_off(i, p, k) => Some(v)
+    Some(v) if !self.cut_round_at(i, p, k) && !self.corner_cut_off(i, k) => Some(v)
     _ => None
   }
 }
@@ -1502,15 +1521,15 @@ pub fn corners_kept(rs : FixedArray[Double], moved : Int) -> Bool {
 }
 
 ///|
-/// Whether node `i`'s corner `k` (0 top left, then round it) is cut off by something
-/// between it and its container `p` that cuts what it holds (clip, or what scrolls sideways in it): past its edge, it
-/// does not show (a table wider than its column, scrolled sideways in it).
-fn Ctx::corner_cut_off(self : Ctx, i : Int, p : Int, k : Int) -> Bool {
+/// Whether node `i`'s corner `k` (0 top left, then round it) is cut off by an ancestor
+/// that cuts what it holds (clip, or what scrolls sideways in it). A clip above its rounded container counts too:
+/// a card's own contents do not show while the whole card is outside a pane's clip.
+fn Ctx::corner_cut_off(self : Ctx, i : Int, k : Int) -> Bool {
   let b = self.nodes[i]
   let x = if corner_left(k) { b.x } else { b.x + b.fw }
   let y = if k < 2 { b.y } else { b.y + b.fh }
   let mut q = b.parent
-  while q >= 0 && q != p {
+  while q >= 0 {
     let n = self.nodes[q]
     if (n.clip || n.sideways) &&
       (x < n.x - 0.5 || x > n.x + n.fw + 0.5 || y < n.y - 0.5 || y > n.y + n.fh + 0.5) {
@@ -1523,7 +1542,7 @@ fn Ctx::corner_cut_off(self : Ctx, i : Int, p : Int, k : Int) -> Bool {
 
 ///|
 /// Whether what shows at node `i`'s corner `k` (0 top left, then round it) is the curve of
-/// a box between it and its container `p` (`p` included) that cuts what it holds with a rounded corner (clip, a corner of
+/// an ancestor (including those above its rounded container `p`) that cuts what it holds with a rounded corner (clip, a corner of
 /// its own): the node's own corner there lies wholly outside the cut's curve (within half a pixel), so the cut's bounds
 /// it (a square corner flush along its edge, a capsule's fill as round as it). Both corners as drawn (smooth.mbt: each
 /// as smooth as its box has room for); the node's measured at 16 fixed directions over the quarter toward the corner,
@@ -1566,9 +1585,6 @@ fn Ctx::cut_round_at(self : Ctx, i : Int, p : Int, k : Int) -> Bool {
           return true
         }
       }
-    }
-    if q == p {
-      break
     }
     q = n.parent
   }
@@ -1698,4 +1714,22 @@ fn[T] Ctx::with_old_laid(self : Ctx, count : Int, f : () -> T) -> T {
     shift(c.0, c.1, c.2)
   }
   out
+}
+
+///|
+/// Whether node `i` lies wholly outside the clip the old view holding it is drawn within, hosted in a node of the
+/// window's tree that clips (old_cuts): nothing of it drawn.
+fn Ctx::cut_away(self : Ctx, i : Int) -> Bool {
+  let b = self.nodes[i]
+  // (where it is laid out, as the clip is said there: old_cuts)
+  let (bx, by) = (b.x, b.y)
+  let mut p = i
+  while p >= 0 {
+    match old_cuts.get(p) {
+      Some((x0, y0, x1, y1)) => return bx >= x1 || by >= y1 || bx + b.fw <= x0 || by + b.fh <= y0
+      None => ()
+    }
+    p = self.nodes[p].parent
+  }
+  false
 }
