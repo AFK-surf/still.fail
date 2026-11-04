@@ -147,3 +147,20 @@ test "scrolls_anchored from its start: the rows that fill the window from the fi
   assert_eq((c.top(3), c.top(4)), (Some(20.0), Some(60.0)))
   assert_true(!c.live.contains(0))
 }
+
+///|
+test "scrolls_anchored: what it says of itself after a wheel and a row come is the same whichever frames came between" {
+  let run = fn(step : Double) {
+    let c = anchored_case(100)
+    c.tree.wheel_at(150.0, 50.0, 0.0, -100.0, 0, 10.0) |> ignore
+    c.keys.set(Array::makei(101, fn(i) { i }))
+    let mut t = 10.0
+    while t < 1000.0 {
+      t = t + step
+      c.tree.frame(390.0, 844.0, now=t) |> ignore
+    }
+    c.tree.frame(390.0, 844.0, now=1000.0) |> ignore
+    (c.follows.get(), c.shown.get(), c.top(97), c.top(96), c.scroll.at(c.tree))
+  }
+  assert_eq(run(990.0), run(16.0))
+}
