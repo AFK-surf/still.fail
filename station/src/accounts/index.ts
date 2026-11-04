@@ -113,6 +113,8 @@ export type AccountsDeps = {
   hermes?: () => { models(profile: Profile): Promise<string[]> } | undefined;
   /// The Antigravity CLI says whether it is signed in, and the models it offers, in ACP session/new (no model turn).
   agy?: () => { models(profile: Profile): Promise<string[]> } | undefined;
+  /// CodeBuddy Code says whether it is signed in, and the models it offers, in ACP session/new (no model turn).
+  codebuddy?: () => { models(profile: Profile): Promise<string[]> } | undefined;
   /// Whether someone follows the events or a turn runs (allowances are asked again on a round only then).
   following?: () => boolean;
   /// The station's environment (where the machine's logins are, and the CLIs found); process.env by default.
@@ -1004,6 +1006,17 @@ export class Accounts {
         check.models = null;
         check.state = "failed";
         check.detail = tr(lang, "station.profile.agyFailed", { error });
+      }
+    }
+    if (profile.runtime === "codebuddy" && this.deps.codebuddy?.()) {
+      try {
+        check.models = await this.deps.codebuddy()!.models(profile);
+        check.state = "ok";
+        check.detail = tr(lang, "station.profile.works", { n: check.models.length });
+      } catch (e) {
+        check.models = null;
+        check.state = "failed";
+        check.detail = tr(lang, "station.profile.codebuddyFailed", { error: (e as Error).message });
       }
     }
     check.decision = await this.discoverFn(profile, check);

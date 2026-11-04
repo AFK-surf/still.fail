@@ -16,6 +16,7 @@ pub fn runtime_label(rt : String) -> String {
     "devin" => "Devin"
     "hermes" => "Hermes Agent"
     "agy" => "Antigravity CLI"
+    "codebuddy" => "CodeBuddy Code"
     _ => rt
   }
 }

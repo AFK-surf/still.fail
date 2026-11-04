@@ -256,6 +256,7 @@ fn runtime_tag(r : String) -> String {
     "devin" => "Devin"
     "hermes" => "Hermes"
     "agy" => "AGY"
+    "codebuddy" => "CBC"
     _ => r
   }
 }

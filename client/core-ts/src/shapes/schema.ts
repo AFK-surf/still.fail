@@ -10,7 +10,7 @@
 import { map, opt, struct, tagged, vec, words, type Shape, type Ty } from "./dsl.ts";
 
 export const SHAPES: Record<string, Shape> = {
-  RuntimeKind: words(["claude","codex","dsh","grok","cursor","devin","hermes","agy"], { doc: "A runtime: Claude Code, Codex, DeepSeek Harness, Grok Build, Cursor, Devin, Hermes Agent or Antigravity CLI." }),
+  RuntimeKind: words(["claude","codex","dsh","grok","cursor","devin","hermes","agy","codebuddy"], { doc: "A runtime: Claude Code, Codex, DeepSeek Harness, Grok Build, Cursor, Devin, Hermes Agent, Antigravity CLI or CodeBuddy Code." }),
   AccessKind: words(["subscription","opencode-go","anthropic-api","env","api-provider"], { doc: "Whose account a profile runs on." }),
   ConnectMode: words(["multi-session","single-session"], { doc: "How a connect's conversations become sessions." }),
   Tone: words(["accent","green","blue","red","amber","neutral"], { doc: "A colour of meaning." }),

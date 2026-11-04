@@ -96,6 +96,8 @@ export const URLS: Urls = {
 /// The access kinds each runtime can use.
 export function accessKinds(runtime: Runtime): AccessKind[] {
   if (runtime === "hermes") return ["env"];
+  // CodeBuddy Code: its own variables (CODEBUDDY_API_KEY, CODEBUDDY_INTERNET_ENVIRONMENT: docs/codebuddy.md).
+  if (runtime === "codebuddy") return ["env"];
   // Antigravity CLI: a Google account signed in to (its plan: Google AI Pro / Ultra), a Gemini key, or its own variables.
   if (runtime === "agy") return ["subscription", "api-provider", "env"];
   if (runtime === "claude") return ["subscription", "opencode-go", "anthropic-api", "api-provider", "env"];

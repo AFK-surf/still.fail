@@ -22,7 +22,7 @@ export const kindName = (k: Kind) => (k === "station" ? "Station" : runtimeLabel
 export const kindCommand = (k: Kind) => (k === "station" ? "stillfail-station" : k);
 /// Where the latest is said: the npm registry's latest of the runtime's package (none for Devin: its manifest says it,
 /// DEVIN_MANIFEST).
-export const kindPackage = (k: Kind) => (k === "claude" ? "@anthropic-ai/claude-code" : k === "codex" ? "@openai/codex" : k === "dsh" ? "@deepseek-ai/dsh" : k === "grok" ? "@xai-official/grok" : k === "cursor" ? "@cursor/sdk" : "");
+export const kindPackage = (k: Kind) => (k === "claude" ? "@anthropic-ai/claude-code" : k === "codex" ? "@openai/codex" : k === "dsh" ? "@deepseek-ai/dsh" : k === "grok" ? "@xai-official/grok" : k === "cursor" ? "@cursor/sdk" : k === "codebuddy" ? "@tencent-ai/codebuddy-code" : "");
 
 /// Where the Devin CLI's installer reads the latest build ({version, platforms}).
 export const DEVIN_MANIFEST = "https://static.devin.ai/cli/current/manifest.json";
@@ -159,8 +159,8 @@ export function howToUpdate(kind: Kind, found: Found, env: Env): How | Unable {
   };
   const using = (program: string | Unable, args: string[]): How | Unable => (program instanceof Unable ? program : { program, args });
   const pkg = `${kindPackage(kind)}@latest`;
-  // Homebrew has Claude Code and Codex (DeepSeek Harness and Grok Build are npm's only here).
-  const npmOnly = kind === "dsh" || kind === "grok";
+  // Homebrew has Claude Code and Codex (DeepSeek Harness, Grok Build and CodeBuddy Code are npm's only here).
+  const npmOnly = kind === "dsh" || kind === "grok" || kind === "codebuddy";
   if (!npmOnly && realPath.includes("/Caskroom/")) return using(brew(), ["upgrade", "--cask", kind === "claude" ? "claude-code" : "codex"]);
   if (!npmOnly && realPath.includes("/Cellar/")) return using(brew(), ["upgrade", kind === "claude" ? "claude-code" : "codex"]);
   if (realPath.includes("/node_modules/")) {
@@ -212,7 +212,7 @@ export function howToInstall(kind: Kind, env: Env, node: OwnNode | null = null):
   if (kind === "agy") return new Unable("station.updates.agyExternal");
   if (kind === "devin") return platform.devinInstall;
   // DeepSeek Harness is an npm package (it runs on the Node npm is of: 22.19 or newer).
-  if (kind === "dsh" || kind === "grok") return npmInstall(env, node, ["install", "-g", `${kindPackage(kind)}@latest`], kindName(kind));
+  if (kind === "dsh" || kind === "grok" || kind === "codebuddy") return npmInstall(env, node, ["install", "-g", `${kindPackage(kind)}@latest`], kindName(kind));
   const args = ["install", "-g", "@openai/codex@latest"];
   const npm = findCommand("npm", env);
   if (npm) return { program: npm.onPath, args };
