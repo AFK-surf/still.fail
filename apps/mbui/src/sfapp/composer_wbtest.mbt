@@ -326,29 +326,35 @@ test "a message going up says how far it has gone" {
 }
 
 ///|
-/// A video waiting in the composer looked like a picture waiting (2026-11-04): its tile has the play capsule its
-/// message's has, in its foot's start corner; a picture's none.
-test "a video waiting is told apart from a picture waiting by its play capsule" {
+/// A video waiting in the composer looked like a picture waiting (2026-11-04): its tile has a solid play mark in its
+/// middle; a picture's none.
+test "a video waiting is told apart from a picture waiting by its play mark" {
   new_run()
   let src = fixture("chat-attach-video")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.image_fade_ms)
-  let shade = match @sf.video_shade {
-    Data(v) => v
-    _ => abort("video_shade is a colour")
-  }
   let tiles = t.drawn_images().filter(fn(i) { (i[2] - 56.0).abs() < 0.5 && (i[3] - 56.0).abs() < 0.5 })
   tiles.sort_by(fn(a, b) { a[0].compare(b[0]) })
   assert_eq(tiles.length(), 2)
-  let capsules = t.drawn_rect_corners().filter(fn(r) { r.4 == shade })
-  assert_eq(capsules.length(), 1)
-  let (x, y, w, h, _, _) = capsules[0]
-  // in the video's tile (the second), at its foot's start; none on the picture's
-  let v = tiles[1]
-  assert_true(x > v[0] && x + w < v[0] + 56.0 / 2.0 + w, msg="\{capsules[0]} \{v}")
-  assert_true(y > v[1] + 56.0 / 2.0 && y + h < v[1] + 56.0, msg="\{capsules[0]} \{v}")
+  // white shapes in a tile's middle half (its ✕ is on its corner): the video's play mark; none in the picture's
+  let over = fn(i : Array[Double]) {
+    t.drawn_shapes().filter(fn(s) {
+      s.5 == 0xFFFFFFFFL && s.0 > i[0] + 14.0 && s.0 + s.2 < i[0] + 42.0 && s.1 > i[1] + 14.0 && s.1 + s.3 < i[1] + 42.0
+    })
+  }
+  assert_eq(over(tiles[0]).length(), 0)
+  let marks = over(tiles[1])
+  assert_true(marks.length() > 0)
+  // (its bands, one box)
+  let mut top = 1.0e9
+  let mut foot = -1.0e9
+  for m in marks {
+    top = if m.1 < top { m.1 } else { top }
+    foot = if m.1 + m.3 > foot { m.1 + m.3 } else { foot }
+  }
+  assert_true(((top + foot) / 2.0 - (tiles[1][1] + 28.0)).abs() < 3.0, msg="\{marks} \{tiles[1]}")
   assert_eq(t.squeeze_faults(), [])
 }
 
