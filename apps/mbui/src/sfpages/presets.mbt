@@ -153,6 +153,21 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
   open_dialog(
     title,
     steps=true,
+    // A fixture may open a new preset already inside these steps. Build that stack before the dialog is published,
+    // not while its body is being measured.
+    initial_steps=fn() {
+      if e.adding && e.filled {
+        e.adding = false
+        field_of(key("q")).set("")
+        @sf.panel_go(@sf.t("web-main.preset.add"), fn(c, _) {
+          preset_add_step(c, src, address, stations, offered_dirs(src, address, stations), e, key)
+        })
+        if e.browsing {
+          e.browsing = false
+          preset_browse(src, address, stations, e, key)
+        }
+      }
+    },
     fn(c, _) {
       let offered = offered_dirs(src, address, stations)
       // (one changed: what it is, once the station's presets are read)

@@ -248,7 +248,7 @@ pub fn presenters_reset() -> Unit {
 }
 
 ///|
-fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit = fn() {  }) -> Unit {
+fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit = fn() {  }, initial_steps? : () -> Unit = fn() {  }) -> Unit {
   presented_count.val += 1
   // (a panel that goes in steps: its own the first of them)
   let steps = match shows {
@@ -295,6 +295,12 @@ fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit
     sinks: 0.0,
   })
   @signals.start_batch()
+  // The initial steps belong to this panel even if it was opened while another panel was being drawn. Publish the
+  // panel only once those steps are on its stack, so its first measurement sees the complete input.
+  let was_drawing = steps_drawn_now.val
+  steps_drawn_now.val = presented_count.val
+  initial_steps()
+  steps_drawn_now.val = was_drawing
   presented_told()
   presented_drawn_said.set(presented_now.map(fn(p) { p.serial }))
   @signals.end_batch()
@@ -380,7 +386,8 @@ pub fn pick(
 /// `heads_itself`: beside what opened it, no head drawn for it: what it holds draws its title where it wants it (the
 /// model panel's, a title over each of its columns; a sheet's head is the sheet's own still).
 /// `fade_out_together`: its ground and contents leave as one instead of the usual staged fade; what is behind it may
-/// show through while it goes (the model picker, 2026-11-02).
+/// show through while it goes (the model picker, 2026-11-02). `initial_steps` puts steps on its stack before it is
+/// published, for a panel opened already inside them.
 pub fn panel(
   title : String,
   body : (@ui.Ctx, () -> Unit) -> Unit,
@@ -410,6 +417,7 @@ pub fn panel(
   offset? : Double = panel_offset,
   steps? : Bool = false,
   back? : () -> Unit,
+  initial_steps? : () -> Unit,
 ) -> Unit {
   present(
     Panel({
@@ -441,7 +449,7 @@ pub fn panel(
       on_back: back,
     }),
     from,
-    gone~,
+    gone~, initial_steps?,
   )
 }
 
