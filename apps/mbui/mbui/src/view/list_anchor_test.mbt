@@ -182,3 +182,30 @@ test "scrolls_anchored: where the hand has it put where it is counted to be as t
   assert_eq(c.top(0), Some(0.0))
   assert_eq(c.scroll.at(c.tree), 0.0)
 }
+
+///|
+test "scrolls_anchored: flung to its start and to its end from where it was counted otherwise than the hand had it: at each end as counted, its rows there" {
+  let c = anchored_case(100)
+  let fling = fn(from : Double, to : Double, at : Double) raise {
+    let id = match c.tree.claimer_of(c.tree.claimers_at(150.0, from), 0.0, to - from) {
+      Some(id) => id
+      None => fail("not taken over")
+    }
+    c.tree.drag_at(id, Down, 150.0, from, at) |> ignore
+    c.tree.drag_at(id, Moved, 150.0, (from + to) / 2.0, at + 5.0) |> ignore
+    c.tree.drag_at(id, Moved, 150.0, to, at + 10.0) |> ignore
+    c.tree.drag_at(id, Up, 150.0, to, at + 10.0) |> ignore
+  }
+  // (toward its start, hard, again and again: its first row at its top, it at 0 as counted)
+  for i in 0..<12 {
+    fling(10.0, 95.0, 100.0 + i.to_double() * 3000.0)
+    c.tree.frame(390.0, 844.0, now=100.0 + i.to_double() * 3000.0 + 2900.0) |> ignore
+  }
+  assert_eq((c.top(0), c.scroll.at(c.tree)), (Some(0.0), 0.0))
+  // (and back to its end: its last row at its foot, at its end again)
+  for i in 0..<12 {
+    fling(95.0, 10.0, 40000.0 + i.to_double() * 3000.0)
+    c.tree.frame(390.0, 844.0, now=40000.0 + i.to_double() * 3000.0 + 2900.0) |> ignore
+  }
+  assert_eq((c.top(99), c.follows.get(), c.scroll.at(c.tree)), (Some(60.0), true, 3900.0))
+}
