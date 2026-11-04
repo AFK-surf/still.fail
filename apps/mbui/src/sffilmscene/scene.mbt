@@ -27,7 +27,20 @@ pub fn source(arg : (String) -> String) -> () -> @sfapp.Source {
         let s = @sfapp.fixture_app(mode)
         if arg("MBUI_WINDOW") != "" { @sfbase.lone_page.val = @sfbase.window_page(arg("MBUI_WINDOW")) }
         if arg("MBUI_UPDATES_MS") != "" { @sffixture.fixture_updates(ms=whole_ms(arg("MBUI_UPDATES_MS"))) }
-        if arg("MBUI_UPDATE") != "" { @sffixture.fixture_update(arg("MBUI_UPDATE")) }
+        if arg("MBUI_UPDATE") != "" {
+          let parts : Array[String] = arg("MBUI_UPDATE").split(",").map(fn(p) { p.to_string() }).collect()
+          let version = parts[0]
+          @sffixture.fixture_update(version)
+          if parts.length() > 1 {
+            if parts[1] == "finishing" {
+              // The host says it is ready 600 ms into a made-up run, to film the control's actual transition.
+              @sffixture.fixture_update_goes(version, "downloading", percent=90, away=false)
+              @sffixture.fix_later(600.0, fn() { @sffixture.fixture_update_goes(version, "ready", away=false) })
+            } else {
+              @sffixture.fixture_update_goes(version, parts[1], percent=40, away=false)
+            }
+          }
+        }
         let s = if late > 0.0 { @sffixture.round_trip(s, late) } else { s }
         let held = arg("MBUI_HOLD")
         let s = if held != "" { @sffixture.held_topics(s, held.split(",").map(fn(x) { x.to_string() }).collect()) } else { s }

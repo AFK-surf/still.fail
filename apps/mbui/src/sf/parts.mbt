@@ -4683,9 +4683,10 @@ let sign_in_many : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=f
 
 ///|
 /// An update in a bar: while it comes, its progress in the mark's place (`coming`: Some of a known part or None for an
-/// unknown part); ready, the update's arrow up in a ring; being put in place (`busy`), that arrow going up. The two
-/// marks fade between each other without moving the key. `why` is its tip, `label` what it is said to be. True on its
-/// press, not while it is busy.
+/// unknown part); ready, a restart mark on an accent circle; being put in place (`busy`), the update arrow going up.
+/// When a download finishes, its ring fades as the accent circle grows from its size and the restart mark comes in,
+/// over the progress control's ease, without moving the key. `why` is its tip, `label` what it is said to be. True on
+/// its press, not while it is busy.
 pub fn update_key(
   c : @ui.Ctx,
   key : String,
@@ -4696,24 +4697,38 @@ pub fn update_key(
   busy : Bool,
   coming? : Double?? = None,
   offered? : Bool = false,
+  ready? : Bool = false,
 ) -> Bool {
   let t = theme()
   let id = c.id(key)
   let hot = c.lit(id) && !busy
-  let progress = ease_to(c, "update/coming/" + key, coming is Some(_))
+  let progress = @motion.animate(
+    c,
+    "update/coming/" + key,
+    if coming is Some(_) { 1.0 } else { 0.0 },
+    spec=@motion.tween(@kit.progress_ms, ease=Out),
+  )
   let b = c.box(
     style=(if hot { update_key_hot } else { update_key_box }).then(@ui.style(w=Fixed(side), h=Fixed(side))),
     id~,
     fn() {
+      if ready {
+        let disk = c.layer(fn() {
+          c.box(style=update_key_box.then(@ui.style(w=Full, h=Full, bg=Data(update_ready_ground(hot)))), fn() {  }) |> ignore
+        })
+        let arrived = 1.0 - progress
+        c.look(disk, @ui.look(scale=update_ready_scale(arrived, mark, side), alpha=arrived))
+      }
       c.box(style=@ui.style(w=Fixed(mark), h=Fixed(mark)), fn() {
-        let ready = c.box(style=update_ring_at, fn() {
+        let mark_box = c.box(style=update_ring_at, fn() {
           if busy {
             updating_mark(c, mark, t.p.text) |> ignore
           } else {
-            icon(c, if offered { "download" } else { "update" }, size=mark, color=t.p.text) |> ignore
+            let name = if ready { "refresh" } else if offered { "download" } else { "update" }
+            icon(c, name, size=mark, color=if ready { t.p.on_primary } else { t.p.text }) |> ignore
           }
         })
-        c.look(ready, @ui.look(alpha=1.0 - progress))
+        c.look(mark_box, @ui.look(alpha=1.0 - progress))
         if progress > 0.0 {
           c.layer(fn() {
             let part = match coming {
@@ -5024,6 +5039,20 @@ let update_key_box : @ui.Style = @ui.css("radius=Full align=ACenter justify=JCen
 /// Under the pointer: on the hover's ground.
 // kept across runs: a value (no field of it changes)
 let update_key_hot : @ui.Style = update_key_box.then(@ui.css("bg=Hover"))
+
+///|
+/// The ready key keeps its accent on hover, with the same hover tint as the other keys.
+fn update_ready_ground(hot : Bool) -> Int64 {
+  let p = theme().p
+  if hot { over(p.accent, p.hover) } else { p.accent }
+}
+
+///|
+/// The ready circle grows from the download mark's size to the whole key.
+fn update_ready_scale(arrived : Double, mark : Double, side : Double) -> Double {
+  let start = if side <= 0.0 { 0.0 } else { dmin(mark / side, 1.0) }
+  start + (1.0 - start) * arrived
+}
 
 ///|
 /// What a key holds, in its middle, over what else it holds (sync_key's marks turning into each other).

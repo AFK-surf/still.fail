@@ -2422,9 +2422,9 @@ pub let under_card_words : @ui.Style
 
 pub fn untitled_clear() -> @ui.Style
 
-pub fn update_key(@ui.Ctx, String, Double, Double, String, String, Bool, coming? : Double??, offered? : Bool) -> Bool
+pub fn update_key(@ui.Ctx, String, Double, Double, String, String, Bool, coming? : Double??, offered? : Bool, ready? : Bool) -> Bool
 
-pub fn update_key_node(@view.View, TipLayer, Double, Double, () -> String, () -> String, () -> Bool, () -> Double??, () -> Unit, offered? : () -> Bool) -> Unit
+pub fn update_key_node(@view.View, TipLayer, Double, Double, () -> String, () -> String, () -> Bool, () -> Double??, () -> Unit, offered? : () -> Bool, ready? : () -> Bool) -> Unit
 
 pub let update_raised : Raised
 

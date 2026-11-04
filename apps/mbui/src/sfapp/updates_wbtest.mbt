@@ -200,7 +200,7 @@ test "an update's download answered otherwise: its status in Updates.kt's words"
 fn update_key_marks(busy : Bool) -> (@ui.Tester, Array[String]) {
   new_run()
   let t = @ui.Tester::new(
-    fn(c) { @sf.update_key(c, "k", 34.0, 20.0, "重启更新", "", busy) |> ignore },
+    fn(c) { @sf.update_key(c, "k", 34.0, 20.0, "重启更新", "", busy, ready= !busy) |> ignore },
     w=120.0,
     h=80.0,
   )
@@ -209,9 +209,9 @@ fn update_key_marks(busy : Bool) -> (@ui.Tester, Array[String]) {
 }
 
 ///|
-test "the update key, a build here already waiting on its press: the update's mark (an arrow up in a ring), not download's" {
+test "the update key, a build here already waiting on its press: a restart mark on the accent circle" {
   let (_, marks) = update_key_marks(false)
-  assert_true(marks.iter().any(fn(m) { m.contains("icon/update") }), msg="\{marks}")
+  assert_true(marks.iter().any(fn(m) { m.contains("icon/refresh") }), msg="\{marks}")
   assert_true(!marks.iter().any(fn(m) { m.contains("icon/download") }), msg="\{marks}")
 }
 

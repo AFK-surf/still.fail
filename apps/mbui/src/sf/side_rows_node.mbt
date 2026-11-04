@@ -182,12 +182,12 @@ let nav_cut : @ui.TextStyle = @ui.text_style(w=Cut)
 
 ///|
 /// An update in a bar as a node (update_key's, the settings' sidebar's band): `side` across, round, the pointer's ground
-/// on it while it can be pressed; its mark `mark` across: offered (`offered()`), a download mark; ready, the update's
-/// arrow up in a ring; being put in place
-/// (`busy()`), that arrow going up (updating_node); while it comes (`coming()`: Some of a known part or of None for an
-/// unknown one), its progress in the mark's place, the two marks faded between each other over a control's ease (dur_ms)
-/// without moving the key. Read out a button named `label()`, unable to be pressed while busy; `why()` its tip where it
-/// says one (in `tips`); pressed while not busy, `press`.
+/// on it while it can be pressed; its mark `mark` across: offered (`offered()`), a download mark; ready (`ready()`), a
+/// restart mark on an accent circle; being put in place (`busy()`), the update arrow going up (updating_node); while it
+/// comes (`coming()`: Some of a known part or of None for an unknown one), its progress in the mark's place. As it
+/// becomes ready, the circle grows from the ring as the marks fade, on the progress control's ease without moving the
+/// key. Read out a button named `label()`, unable to be pressed while busy; `why()` its tip where it says one (in
+/// `tips`); pressed while not busy, `press`.
 pub fn update_key_node(
   parent : @view.View,
   tips : TipLayer,
@@ -199,18 +199,19 @@ pub fn update_key_node(
   coming : () -> Double??,
   press : () -> Unit,
   offered? : () -> Bool = fn() { false },
+  ready? : () -> Bool = fn() { false },
 ) -> Unit {
   // (its tip on what holds it: said while busy too, the key taking no press then, as the pointer rests on it)
   parent.box(fn(o) {
     o.box(fn(k) {
       let progress = EdgeWay::new(if @signals.untracked(coming) is Some(_) { 1.0 } else { 0.0 })
-      k.reacts(fn() { coming() is Some(_) }, fn(on) { progress.go(k, if on { 1.0 } else { 0.0 }, dur_ms) })
+      k.reacts(fn() { coming() is Some(_) }, fn(on) { progress.go(k, if on { 1.0 } else { 0.0 }, @kit.progress_ms) })
       k
       .width(Is(Some(side)))
       .height(Is(Some(side)))
       // (round as its ground is while there is one, as an old view's key's hovered{} look: at rest none, nothing
       // standing in a corner)
-      .radius(By(fn() { if lit_node(k) && !busy() { side / 2.0 } else { 0.0 } }))
+      .radius(By(fn() { if ready() || (lit_node(k) && !busy()) { side / 2.0 } else { 0.0 } }))
       // (its mark in its middle both ways, as update_key_box's: a box lays what it holds down from its top)
       .lines_up(Is(Some(Middle)))
       .lies_along(Is(Middle))
@@ -229,18 +230,29 @@ pub fn update_key_node(
         drag=fn(d) { if d.kind == Up && @ui.pointing() is Mouse && on_it(d) && able() { press() } },
       )
       |> ignore
+      k.show(ready, fn(disk) {
+        let arrived = fn() { 1.0 - progress.shown(disk) }
+        disk.over(Is(true)).width(Is(Some(side))).height(Is(Some(side))).radius(Is(side / 2.0))
+        .ground(By(fn() { update_ready_ground(lit_node(k) && !busy()) }))
+        .scale(By(fn() { update_ready_scale(arrived(), mark, side) })).alpha(By(arrived)) |> ignore
+      })
       k.box(fn(m) {
         m.width(Is(Some(mark))).height(Is(Some(mark))) |> ignore
-        // (offered: a download mark; ready: its arrow in a ring; busy, that arrow going up)
-        m.box(fn(ready) {
-          ready.over(Is(true)).alpha(By(fn() { 1.0 - progress.shown(ready) })) |> ignore
-          ready.pick(busy, fn(r, b) {
+        // (offered: a download mark; ready: restart; busy, the update arrow going up)
+        m.box(fn(mark_box) {
+          mark_box.over(Is(true)).alpha(By(fn() { 1.0 - progress.shown(mark_box) })) |> ignore
+          mark_box.pick(busy, fn(r, b) {
             if b {
               updating_node(r, mark, fn() { theme().p.text })
             } else {
-              r.pick(offered, fn(o, on) {
-                icon_node(o, if on { "download" } else { "update" }, mark, By(fn() { theme().p.text })) |> ignore
-              })
+              icon_node(
+                r,
+                "update",
+                mark,
+                By(fn() { let p = theme().p; if ready() { p.on_primary } else { p.text } }),
+                name_now=fn() { if ready() { "refresh" } else if offered() { "download" } else { "update" } },
+              )
+              |> ignore
             }
           })
         })
