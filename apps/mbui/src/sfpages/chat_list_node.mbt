@@ -141,12 +141,26 @@ pub fn chat_list_node(
   let gap_of = fn(joined : Bool) {
     if joined { joined_gap } else if narrow() { list_gap_narrow } else { list_gap }
   }
-  let said_parts = fn(row : @view.View, m : () -> Message, here : () -> MessageHere, body : (@view.View) -> Unit) {
-    row.show(fn() { line_seq.get() == Some(m().seq) }, fn(l) {
-      l.padding(By(fn() { (0.0, 0.0, 0.0, gap_of(m().joined)) })) |> ignore
+  // (`lead` the room over the first of them, the row's (the line's, else the message's); `ground` the message's, lit
+  // as a row is (its menu open, gone to) over the room over it and it alone, as the row it was)
+  let said_parts = fn(
+    row : @view.View,
+    m : () -> Message,
+    here : () -> MessageHere,
+    lead : () -> Double,
+    ground : () -> Int64,
+    body : (@view.View) -> Unit,
+  ) {
+    let lined = fn() { line_seq.get() == Some(m().seq) }
+    row.show(lined, fn(l) {
+      l.padding(By(fn() { (0.0, lead(), 0.0, 0.0) })) |> ignore
       l.box(fn(b) { unread_line_node(b) }) |> ignore
     })
-    row.box(body) |> ignore
+    row.box(fn(said) {
+      said.padding(By(fn() { (0.0, if lined() { gap_of(m().joined) } else { lead() }, 0.0, 0.0) })).ground(By(ground)) |> ignore
+      said.box(body) |> ignore
+    })
+    |> ignore
     row.pick(fn() { m().elsewhere.length() }, fn(sent, n) {
       for i in 0..<n {
         // (the gap over it its own box's: what it draws in its margin (its picture) placed from its top, as a row's)
@@ -328,7 +342,8 @@ pub fn chat_list_node(
         // (its room: in from the pane's sides to the column, the gap over it; under the bar over the first, the
         // composer under the last)
         row_width.bind(slot, By(fn() {
-          let kind = match row_of(k) { Some((e, i)) => gap_kind(e, i); None => 0 }
+          // (a message's row: the room over it its parts', said_parts')
+          let kind = match row_of(k) { Some((Said(_), _)) => 0; Some((e, i)) => gap_kind(e, i); None => 0 }
           (@sf.native_on(), native_row_inset(), kind)
         }), fn(w, c) {
           let (native, native_inset, kind) = c
@@ -403,8 +418,9 @@ pub fn chat_list_node(
             |> ignore
           }
         })
-        slot.ground(By(fn() {
-          // (lit whole: a band in the accent's ground, square; its menu open, in the pointer's)
+        // (lit whole: a band in the accent's ground, square; its menu open, in the pointer's; a message's in its part,
+        // said_parts')
+        let lit = fn() -> Int64 {
           let f = if rd0.flash_passage == "" { flash_k() } else { 0.0 }
           if f > 0.0 {
             let g = @sf.theme().p.accent_bg
@@ -412,8 +428,18 @@ pub fn chat_list_node(
           }
           let a = menu_lit.shown(slot)
           if a > 0.0 { @sf.alpha(@sf.theme().p.hover, a) } else { 0L }
-        }))
-        |> ignore
+        }
+        slot.ground(By(fn() { if row_of(k) is Some((Said(_), _)) { 0L } else { lit() } })) |> ignore
+        // (the room over a message's first part: the row's gap, as gap_kind says it)
+        let said_lead = fn() {
+          match row_of(k) {
+            Some((e, i)) => {
+              let kind = gap_kind(e, i)
+              if kind == 0 { 0.0 } else { gap_of(kind == 1) }
+            }
+            None => 0.0
+          }
+        }
         // (what it is: a message (message_node.mbt), what was sent from here, an agent at work, the line over what is new,
         // the pages coming, a chat with nothing in it, where it stands, what was said elsewhere (chat_rows_node.mbt);
         // made again as which of those it is changes)
@@ -479,7 +505,7 @@ pub fn chat_list_node(
                 }
               })
             } else if whole == 5 {
-              said_parts(row, m, here, fn(b) { notice_node(b, src, here, m) })
+              said_parts(row, m, here, said_lead, lit, fn(b) { notice_node(b, src, here, m) })
             } else if whole == 4 {
               // (an agent at work as it is now; as it last was while its row goes; new to the list as it is
               // watched, its first words coming in from then)
@@ -509,9 +535,9 @@ pub fn chat_list_node(
               }
               outbox_node(row, src, here, o, fn() { v.window().0 }, None, key=fn() { k })
             } else if whole == 2 {
-              said_parts(row, m, here, fn(b) { mine_message_node(b, src, here, m, fn() { v.window().0 }, None, key=fn() { k }) })
+              said_parts(row, m, here, said_lead, lit, fn(b) { mine_message_node(b, src, here, m, fn() { v.window().0 }, None, key=fn() { k }) })
             } else {
-              said_parts(row, m, here, fn(b) { others_message_node(b, src, here, m, None) })
+              said_parts(row, m, here, said_lead, lit, fn(b) { others_message_node(b, src, here, m, None) })
             }
           }
         })
