@@ -10,7 +10,7 @@ export const SNAPSHOT_VERSION = 1;
 export type DraftFile = { k: string; name: string; size: number; type: string; width?: number; height?: number; thumbhash?: string; n: number; path: string; owner: string | null };
 
 /// A chat as a snapshot would show it.
-export type Draft = {
+export type SnapshotDraft = {
   title: string;
   upto: number;
   /// `maker`, `runtime`: an agent's mark; `model`, `person`: an agent's model, a person's address (the members' preview alone).
@@ -18,6 +18,10 @@ export type Draft = {
   /// How many things were hidden, by message (those with none left out).
   redacted: { n: number; count: number }[];
   files: DraftFile[];
+};
+
+/// A draft with the extra entries the members' preview draws.
+export type Draft = SnapshotDraft & {
   /// The chat's entries up to it as its page reads them (GET /threads/:id/entries), what looks like a secret hidden in
   /// all they say, and how many were in each message as its page shows it (its last edit's words for its first's): the
   /// members' preview draws them as the chat's list does. Never in the snapshot.
@@ -25,7 +29,7 @@ export type Draft = {
 };
 
 /// What a draft's snapshot is, with the attachments `ticked` (`null`: all): the share page's snapshot.json.
-export function snapshotOf(d: Draft, station: string, by: string, at: number, ticked: Set<string> | null): Json {
+export function snapshotOf(d: SnapshotDraft, station: string, by: string, at: number, ticked: Set<string> | null): Json {
   const files = new Map(d.files.filter((f) => ticked === null || ticked.has(f.k)).map((f) => [f.k, f]));
   return {
     v: SNAPSHOT_VERSION,

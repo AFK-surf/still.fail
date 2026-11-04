@@ -5,7 +5,7 @@ import { type Request, type Answer, error, json, percentDecode } from "../reques
 import type { Route, Tools } from "../admin.ts";
 import { tr } from "../../ops/i18n.ts";
 import { NotPublished, publish } from "../../publish/index.ts";
-import type { Draft } from "../../publish/snapshot.ts";
+import type { Draft, SnapshotDraft } from "../../publish/snapshot.ts";
 
 /// A request's JSON object: nothing is `{}`, as is anything not an object; more than a megabyte refused.
 function input(r: Request): Record<string, any> | null {
@@ -26,12 +26,12 @@ function namesOf(v: unknown): Record<string, string> {
 
 export const routes = ({ read, store, agents }: Tools): Route[] => {
   /// The chat as its snapshot would show it, up to `upto` (its latest message without it), or the readers' refusal.
-  const draft = async (r: Request, thread: number, upto: number | null, names: Record<string, string>): Promise<Draft | Answer> => {
-    const answer = await read(r, "publishDraft", { thread, upto, names, viewer: r.viewer.email, lang: r.lang });
+  const draft = async <T extends boolean>(r: Request, thread: number, upto: number | null, names: Record<string, string>, includeViews: T): Promise<(T extends true ? Draft : SnapshotDraft) | Answer> => {
+    const answer = await read(r, "publishDraft", { thread, upto, names, includeViews, viewer: r.viewer.email, lang: r.lang });
     if (answer.status !== 200) return answer;
-    return JSON.parse((answer.body as Buffer).toString("utf8")) as Draft;
+    return JSON.parse((answer.body as Buffer).toString("utf8")) as T extends true ? Draft : SnapshotDraft;
   };
-  const isAnswer = (v: Draft | Answer): v is Answer => "status" in v;
+  const isAnswer = (v: SnapshotDraft | Answer): v is Answer => "status" in v;
   const threadOf = (raw: string) => (/^\d+$/.test(raw) ? Number(raw) : null);
   return [
     {
@@ -45,7 +45,7 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
         const i = input(r);
         if (thread === null) return error(404, tr(r.lang, "station.publish.noChat"));
         if (i === null) return error(400, "invalid JSON");
-        const d = await draft(r, thread, null, namesOf(i.names));
+        const d = await draft(r, thread, null, namesOf(i.names), true);
         if (isAnswer(d)) return d;
         return json(200, JSON.stringify({
           upto: d.upto,
@@ -68,7 +68,7 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
         if (i === null) return error(400, "invalid JSON");
         if (store === undefined || agents === undefined) return error(503, "station starting");
         if (typeof i.upto !== "number" || !Number.isSafeInteger(i.upto) || !Array.isArray(i.files)) return error(400, "upto: a message's n; files: [k]");
-        const d = await draft(r, thread, i.upto, namesOf(i.names));
+        const d = await draft(r, thread, i.upto, namesOf(i.names), false);
         if (isAnswer(d)) return d;
         try {
           const published = await publish(
