@@ -910,8 +910,7 @@ pub fn Ctx::editor(
   n.pad_r = z.pad_x
   n.pad_t = z.pad_y
   n.pad_b = z.pad_y
-  let least = if min_lines < 1 || max_lines < 1 { 1 } else if min_lines > max_lines { max_lines } else { min_lines }
-  n.min_h = z.min_h + (least - 1).to_double() * (z.min_h - 2.0 * z.pad_y)
+  n.min_h = z.least_h(min_lines, max_lines)
   n.max_h = z.max_h
   if !plain {
     n.bg = 0xFFFFFFFFL
@@ -973,6 +972,13 @@ priv struct EditorSizing {
 }
 
 ///|
+/// How tall an editor so sized is at least while it holds `min_lines` lines (up to `max_lines`) even when empty.
+fn EditorSizing::least_h(self : EditorSizing, min_lines : Int, max_lines : Int) -> Double {
+  let least = if min_lines < 1 || max_lines < 1 { 1 } else if min_lines > max_lines { max_lines } else { min_lines }
+  self.min_h + (least - 1).to_double() * (self.min_h - 2.0 * self.pad_y)
+}
+
+///|
 /// An editor of words `font_size` big on lines `line` apart (0: `text_line` of its size, the theme's it is built in),
 /// `max_lines` at most, `plain` (no frame of its own: what holds it draws one) or framed, as Ctx::editor lays it out.
 fn Ctx::editor_sizing(
@@ -1025,7 +1031,8 @@ pub fn Field::composed_said(self : Field) -> String {
 ///|
 /// What a plain field (Ctx::editor's `plain`, no look of its own, nothing secret) shows and how its words are set, as
 /// it is laid out by (FieldLaid::size): its words with what is composed in them, their size and line (as said to
-/// Ctx::editor, before the system's size of words; none said, the theme's share of its size), how many lines at most,
+/// Ctx::editor, before the system's size of words; none said, the theme's share of its size), how many lines at least
+/// and at most,
 /// `trim`.
 pub(all) struct FieldLaid {
   words : String
@@ -1033,6 +1040,7 @@ pub(all) struct FieldLaid {
   line : Double
   /// its line, where `line` is 0, of its size: the theme's its tree is drawn in (tree_theme)
   text_line : Double
+  min_lines : Int
   max_lines : Int
   trim : Bool
 } derive(Eq, Debug)
@@ -1040,10 +1048,17 @@ pub(all) struct FieldLaid {
 ///|
 /// What `field` shows, followed (Field::composed_said), as a plain Ctx::editor of it set so lays it out: for a node of
 /// the window's tree holding the old view it is built in, measured by it (View::measured, FieldLaid::size).
-pub fn Field::laid(self : Field, font_size? : Double = 15.0, line? : Double = 0.0, max_lines? : Int = 5, trim? : Bool = false) -> FieldLaid {
+pub fn Field::laid(
+  self : Field,
+  font_size? : Double = 15.0,
+  line? : Double = 0.0,
+  min_lines? : Int = 1,
+  max_lines? : Int = 5,
+  trim? : Bool = false,
+) -> FieldLaid {
   // (its line, where none is said, the theme's of the tree that holds it, followed: as its editor's is, built in it)
   let text_line = if line > 0.0 { 0.0 } else { tree_theme().text_line }
-  { words: self.composed_said(), font_size, line, text_line, max_lines, trim }
+  { words: self.composed_said(), font_size, line, text_line, min_lines, max_lines, trim }
 }
 
 ///|
@@ -1062,7 +1077,7 @@ pub fn FieldLaid::size(self : FieldLaid, w : Double?) -> (Double, Double) {
       Some(w) => w
       None => tw
     },
-    dclamp(th, z.min_h, z.max_h),
+    dclamp(th, z.least_h(self.min_lines, self.max_lines), z.max_h),
   )
 }
 

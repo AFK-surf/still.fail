@@ -91,6 +91,7 @@ pub fn textarea_node(
       placeholder_by?,
       font_size=input_size,
       line=textarea_line,
+      min_lines=rows,
       max_lines=most,
       enter_sends=false,
       colors_by=fn() {
