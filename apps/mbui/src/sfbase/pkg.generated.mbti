@@ -158,6 +158,8 @@ pub fn chat_tick(@ui.Ctx, String, Reading, ChatView, shown~ : Bool, in_front~ : 
 
 pub fn chat_view_made(@json.Json) -> ChatView
 
+pub fn chat_view_now(Source, ChatRef) -> ChatView?
+
 pub fn chats_of(Source, String, String) -> (ChatsView?, String?)
 
 pub fn chats_view_made(@json.Json) -> ChatsView
@@ -417,6 +419,8 @@ pub fn emit_head_at(Emits, Double, () -> Double) -> Double?
 pub let emit_head_slide : Double
 
 pub fn emit_held(Emits, Double) -> Bool
+
+pub fn emit_held_seqs(Emits) -> Array[Double]
 
 pub fn emit_keeps(Emits) -> Map[String, Bool]
 
@@ -1414,6 +1418,8 @@ pub let row_turn_ms : Double
 
 pub fn runs_by_line(Array[@text.Run]) -> Array[Array[@text.Run]]
 
+pub fn said_key(Reading, Message) -> String
+
 pub fn same_pane(DriveAt, DriveAt) -> Bool
 
 pub let sample_source : Source
@@ -1629,6 +1635,8 @@ pub fn tag_place(Bytes, Bool) -> Int32?
 pub fn tagging_new() -> Tagging
 
 pub fn tagging_take(Tagging, Bytes, Bool) -> Bytes
+
+pub fn tail_taken(Reading, String, ChatView, SendFlight?) -> Array[Entry]
 
 pub fn tap_stage(@ui.Ctx, Viewer, Int32) -> Unit
 
@@ -2165,19 +2173,41 @@ pub(all) struct ChatRef {
   station_name : String
 }
 
+pub(all) enum ChatRowChange {
+  Came(String)
+  Went(String, Entry, String?)
+  Set(String)
+  Whole
+}
+
 pub struct ChatRows {
   messages : ChatMessages
   // private fields
 }
 pub fn ChatRows::changed(Self) -> Int32
+pub fn ChatRows::changes(Self) -> Array[ChatRowChange]
+pub fn ChatRows::contains(Self, String) -> Bool
 pub fn ChatRows::entry(Self, Int32) -> Entry
 pub fn ChatRows::find(Self, String, Int32) -> Int32?
+pub fn ChatRows::head_length(Self) -> Int32
+pub fn ChatRows::item(Self, Int32) -> Entry
 pub fn ChatRows::key(Self, Int32) -> String
+pub fn ChatRows::lead(Self) -> String
 pub fn ChatRows::length(Self) -> Int32
-pub fn ChatRows::new(ChatMessages, (Message) -> String) -> Self
-pub fn ChatRows::take(Self, ChatView, Array[Entry]) -> Unit
+pub fn ChatRows::let_go(Self) -> Unit
+pub fn ChatRows::message_at(Self, Double) -> Int32
+pub fn ChatRows::message_from(Self, Double) -> Int32
+pub fn ChatRows::message_key(Self, Int32) -> String
+pub fn ChatRows::new(ChatMessages, (Message) -> String, end_key? : (Entry) -> String) -> Self
+pub fn ChatRows::removed_since(Self, Int32) -> Array[String]?
+pub fn ChatRows::row_of(Self, String) -> (Entry, Int32)?
+pub fn ChatRows::said(Self, String) -> Unit
+pub fn ChatRows::snapshot(Self) -> (Int32, Int32)
+pub fn ChatRows::tail(Self) -> Array[Entry]
+pub fn ChatRows::take(Self, ChatView, Array[Entry], empty? : Bool, held? : Array[Double]) -> Unit
 pub fn ChatRows::version_of(Self, String) -> Int32?
 pub fn ChatRows::work(Self) -> Int32
+pub impl Eq for ChatRows
 
 pub(all) struct ChatScreen {
   id : String
@@ -2392,6 +2422,7 @@ pub(all) struct Emits {
   mut trace : (Double, Double, Double)
   mover : @ui.Mover
   mut held_until : Double
+  mut floor : Double
   mut out_key : String
   mut taken : (@rows.TopicList, @rows.ListReader)?
   out_at : Map[String, @motion.Anim]

@@ -412,6 +412,8 @@ pub fn on_app_change((Bool, Bool) -> Unit) -> Unit
 
 pub fn on_frame_built((Ctx) -> Unit) -> Unit
 
+pub fn on_frame_input((Ctx) -> Unit) -> Unit
+
 pub fn on_list_underlay((Ctx, Int32) -> Unit) -> Unit
 
 pub fn on_message(String, (String, Bytes?) -> Unit) -> Unit
@@ -474,6 +476,8 @@ pub let press_slop : Double
 
 pub let press_space : Int32
 
+pub fn[T : Eq] react_laid(@view.View, () -> T, (T) -> Unit) -> Unit
+
 pub fn[T : Eq] read_drawn(@view.View, () -> T, (T) -> Unit) -> Unit
 
 pub fn redraw_vector_pictures() -> Unit
@@ -523,6 +527,8 @@ pub fn runs_words_now(@view.View) -> Words?
 pub fn runtime() -> @effect.Runtime
 
 pub let same_moment_ms : Double
+
+pub fn scene_alone_why() -> String
 
 pub fn scene_done() -> SceneWork
 
@@ -778,13 +784,6 @@ pub fn yield_thumbs(@view.View, @view.View) -> Unit
 
 // Types and methods
 #derive(Eq)
-pub(all) enum RowsChange[T] {
-  Came(String)
-  Went(String, T, String?)
-  Set(String)
-  Whole
-}
-
 pub(all) enum Align {
   AStart
   ACenter
@@ -1232,6 +1231,7 @@ pub fn Ctx::hand_shown(Self, Bool, () -> Unit) -> Unit
 pub fn Ctx::handed_hold(Self) -> (Double, Double)?
 pub fn Ctx::handed_taken(Self) -> Unit
 pub fn Ctx::has_focus(Self, Int32) -> Bool
+pub fn Ctx::height_after(Self, Int32, Size, max? : Double) -> Unit
 #callsite(autofill(loc))
 pub fn Ctx::held(Self, String, Bool, Double, keep? : Bool, later? : Bool, since? : Double, owned? : Bool, loc~ : SourceLoc) -> Bool
 pub fn Ctx::held_down(Self, Int32) -> Bool
@@ -1862,7 +1862,7 @@ pub struct ListRows[T] {
 }
 pub fn[T] ListRows::came(Self[T], String) -> Double?
 pub fn[T] ListRows::enter(Self[T], Ctx, Int32, String, lead? : Double, grown? : Bool) -> Unit
-pub fn[T] ListRows::in_node(Self[T], @view.View, () -> Array[T], (T) -> String, (T) -> String, watched? : () -> Bool, ms? : (String) -> Double?, from? : (String) -> Double?, comes? : (T) -> Bool, moves? : (T) -> Bool, middle? : (T) -> Bool, grown? : (T) -> Bool, lead? : (T, Int32) -> Double, own? : (T) -> Bool) -> NodeRows[T]
+pub fn[T] ListRows::in_node(Self[T], @view.View, () -> Array[T], (T) -> String, (T) -> String, watched? : () -> Bool, ms? : (String) -> Double?, from? : (String) -> Double?, comes? : (T) -> Bool, moves? : (T) -> Bool, middle? : (T) -> Bool, grown? : (T) -> Bool, lead? : (T, Int32) -> Double, lead_in_layout? : (T, Int32) -> () -> Double, own? : (T) -> Bool) -> NodeRows[T]
 pub fn[T] ListRows::in_node_indexed(Self[T], @view.View, @view.AnchoredSource[String], (Int32) -> T, () -> Array[RowsChange[T]], (String) -> Int32?, watched? : () -> Bool, ms? : (String) -> Double?, from? : (String) -> Double?, comes? : (T) -> Bool, middle? : (T) -> Bool, grown? : (T) -> Bool, lead? : (T, Int32) -> Double, lead_in_layout? : (T, Int32) -> () -> Double, own? : (T) -> Bool) -> NodeRowsIndexed[T]
 pub fn[T] ListRows::leave(Self[T], Ctx, Int32, String, lead? : Double) -> Unit
 pub fn[T] ListRows::new() -> Self[T]
@@ -2011,6 +2011,7 @@ type Node
 pub struct NodeRows[T] {
   read : () -> (Array[T], Array[String])
   room : (String, Double) -> @view.ListRoom
+  room_now : () -> (String, Double) -> @view.ListRoom
   moving : () -> Array[String]
   lend : (@view.View, String) -> Unit
   opening : () -> Bool
@@ -2291,6 +2292,13 @@ pub(all) enum RowSize {
   Changed(Double)
 }
 
+pub(all) enum RowsChange[T] {
+  Came(String)
+  Went(String, T, String?)
+  Set(String)
+  Whole
+}
+
 pub struct RunsLinks {
   pointed : @signals.Signal[Int32]
   pointed_at : @signals.Signal[(Double, Double, Double, Double)?]
@@ -2303,7 +2311,10 @@ pub(all) struct SceneWork {
   mut copied : Int32
   mut copied_insts : Int32
   mut alone : Int32
+  mut full : Int32
   mut parts : Int32
+  mut alone_recorded : Int32
+  mut alone_parts : Int32
 }
 
 type Sem

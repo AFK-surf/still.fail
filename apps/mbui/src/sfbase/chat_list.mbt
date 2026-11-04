@@ -2083,3 +2083,110 @@ pub fn sent_rows_taken(
   }
   (all, all_keys, came_new)
 }
+
+///|
+/// A message's row's key as the page has it before what was sent from here takes it (sent_rows_taken's core keys):
+/// the outbox entry it was, else `m:` and its ts.
+pub fn said_key(rd : Reading, m : Message) -> String {
+  if m.outgoing != "" {
+    "o:" + m.outgoing
+  } else {
+    match rd.sent.get(m.seq) {
+      Some(o) => "o:" + o
+      None => "m:" + m.ts
+    }
+  }
+}
+
+///|
+/// The rows at the end of chat `v`'s list (ChatRows' tail: the page after's spinner, the outbox and what was sent from
+/// here not in it yet, where it stands, its agents at work and those lingering, Foot), what was sent from here taken by
+/// the core's row once it has it (sent_rows_taken's, the messages looked at from the end: those newer than what was
+/// there as it was sent, and the outbox).
+pub fn tail_taken(rd : Reading, rk : String, v : ChatView, flight : SendFlight?) -> Array[Entry] {
+  for o in v.outbox {
+    if o.seq >= 0.0 {
+      rd.sent[o.seq] = o.id
+    }
+  }
+  let sending = sending_of(rk)
+  if sending.length() > 0 {
+    // (what may be one's: the messages newer than the oldest newest any was sent after, from the end; the outbox)
+    let oldest = sending.fold(init=@double.infinity, fn(a, l) { if l.newest < a { l.newest } else { a } })
+    let recent : Array[Message] = []
+    let mut i = v.messages.length() - 1
+    while i >= 0 {
+      let m = v.messages[i]
+      if m.seq <= oldest {
+        break
+      }
+      recent.push(m)
+      i -= 1
+    }
+    recent.rev_in_place()
+    let taken : Map[String, Bool] = {}
+    let still : Array[LocalSent] = []
+    for l in sending {
+      let came = Ref("")
+      let take = fn(k : String) {
+        if !l.before.contains(k) && !taken.contains(k) && !rd.sent_as.contains(k) {
+          came.val = "o:" + l.row.id
+          rd.sent_as[k] = came.val
+          rd.sent_as_told.set(@signals.untracked(fn() { rd.sent_as_told.get() }) + 1)
+          taken[k] = true
+          true
+        } else {
+          false
+        }
+      }
+      for m in recent {
+        if m.mine && !m.system && m.seq > l.newest && take(said_key(rd, m)) {
+          break
+        }
+      }
+      if came.val == "" {
+        for o in v.outbox {
+          if take("o:" + o.id) {
+            break
+          }
+        }
+      }
+      if came.val == "" {
+        still.push(l)
+        continue
+      }
+      rd.known[came.val] = true
+      match flight {
+        Some(f) if f.key == "o:" + l.row.id => f.key = came.val
+        _ => ()
+      }
+    }
+    sending.clear()
+    for l in still {
+      sending.push(l)
+    }
+  }
+  let out : Array[Entry] = []
+  if v.newer {
+    out.push(Newer)
+  }
+  for o in v.outbox {
+    out.push(Out(o))
+  }
+  for l in sending {
+    out.push(Out(l.row))
+  }
+  if !v.newer {
+    match v.state {
+      Some((words, lead, rest)) => out.push(State(words, lead, rest))
+      None => ()
+    }
+    for a in v.agents {
+      if a.status == "running" {
+        out.push(Working(a))
+      }
+    }
+  }
+  out.push(Foot)
+  with_lingering(rd, out)
+}
