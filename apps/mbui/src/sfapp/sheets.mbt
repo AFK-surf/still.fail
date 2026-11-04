@@ -759,7 +759,7 @@ fn agent_title_row(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> Unit
 fn open_agent(src : Source, r : ChatRef, key : String) -> Unit {
   // (its mark, name and where it stands its title row in the middle of the window: the user, 2026-11-04, 这个是不是也可以
   // 想办法做成标题)
-  @sf.panel("", from=Unanchored, title_row=fn(c) { agent_title_row(c, src, r, key) }, fn(c, close) {
+  @sf.panel("", from=Unanchored, title_row=fn(c) { c.box(w=Fill(1.0), pb=@sf.panel_card_in, fn() { agent_title_row(c, src, r, key) }) |> ignore }, fn(c, close) {
     agent_body(c, src, r, key, close)
   })
 }

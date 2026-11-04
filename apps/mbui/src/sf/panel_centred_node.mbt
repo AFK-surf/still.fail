@@ -84,6 +84,17 @@ fn panel_centred_node(
         Some(@view.said(Dialog, label=title, description~))
       }))
       |> ignore
+      // (where what it holds starts: under an untitled one's close button; right under a title row of its own, which
+      // keeps what space it wants under it, as what it holds kept it when it drew that row itself; a title's gap else)
+      let body_top = fn() {
+        if untitled() {
+          dialog_untitled_top()
+        } else if x.title_row is Some(_) {
+          title_row_under
+        } else {
+          no_style
+        }
+      }
       // (untitled: its close button alone over its top corner, concentric with it, there while it is untitled: built
       // first, as dialog built its layer before what it holds (read out first, drawn under what comes after it); one
       // whose title is as it is now (`live`) built after what it holds and its foot, as the old frame builds it now (read
@@ -172,7 +183,7 @@ fn panel_centred_node(
         @ui.old(d, natural=true, gives=true, key=fn() { key + "/body" }, fn(c) {
           let share = dmax(0.0, x.tall * c.window_size().1 - dialog_frame_h)
           let column = @ui.style(px=room(words_in))
-          let top = if untitled() { dialog_untitled_top() } else { no_style }
+          let top = body_top()
           let at = (if x.foot is None { dialog_body_end } else { dialog_body }).then(column).then(top)
           let whole = if says.get() { @ui.style(w=Full, max_h=Fixed(share)) } else { @ui.style(w=Full, h=Fixed(share)) }
           let id = c.id("sf-present/capped/\{keyed.serial}")
@@ -220,7 +231,7 @@ fn panel_centred_node(
           b.scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(s) {
             @ui.old(s, natural=true, key=fn() { key + "/body" }, fn(c) {
               let column = @ui.style(px=room(words_in))
-              let top = if untitled() { dialog_untitled_top() } else { no_style }
+              let top = body_top()
               let at = if steps is Some(_) {
                 full_width.then(column).then(top)
               } else {
@@ -333,6 +344,12 @@ fn centred_part_in(over : Double, under : Double) -> @ui.Style {
 /// button.
 // kept across runs: a value (no field of it changes)
 let title_row_room : @ui.Style = @ui.style(w=grow)
+
+///|
+/// What a panel holds under its own title row (panel's `title_row`): from right under it, the row keeping what it
+/// wants under it.
+// kept across runs: a value (no field of it changes)
+let title_row_under : @ui.Style = @ui.css("pt=S0")
 
 ///|
 /// Whether what a panel holds is drawn under a title row the panel draws for it (panel's `title_row`, in the middle of
