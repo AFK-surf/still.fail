@@ -118,6 +118,8 @@ struct State {
 struct Push {
     epoch: u64,
     at: [u64; 2],
+    /// What was kept with the ack it begins from (`at`), as it was attached.
+    keep: Option<u64>,
     exit_sent: bool,
     /// Whether where it begins (what was acknowledged, and kept) was said first.
     said: bool,
@@ -421,7 +423,7 @@ fn connection(shared: &Arc<Shared>, stream: Conn, conn: u64) {
         if line.iter().all(u8::is_ascii_whitespace) {
             continue;
         }
-        match handle(shared, &line) {
+        match handle(shared, conn, &line) {
             Ok(Next::Read) => {}
             Ok(Next::Leave) => break,
             Err(e) => {
@@ -444,19 +446,28 @@ enum Next {
     Leave,
 }
 
-fn handle(shared: &Shared, line: &[u8]) -> Result<Next, String> {
+/// `conn`: the connection it came on. What changes where a station stands (an attach, an ack) is taken only from the
+/// current one, looked at under the same lock it is applied under: one replaced between reading a message and handling
+/// it would otherwise move the ack (and what is kept, and given back) of the station after it.
+fn handle(shared: &Shared, conn: u64, line: &[u8]) -> Result<Next, String> {
     let message: Value = serde_json::from_slice(line).map_err(|e| format!("bad message: {e}"))?;
     match message["op"].as_str().ok_or("message has no op")? {
         "attach" => {
             let mut st = shared.lock();
+            if st.conn != conn {
+                return Ok(Next::Leave);
+            }
             st.epoch += 1;
-            st.push = Some(Push { epoch: st.epoch, at: st.acked, exit_sent: false, said: false });
+            st.push = Some(Push { epoch: st.epoch, at: st.acked, keep: st.keep, exit_sent: false, said: false });
             // A station that attaches wants it again.
             st.done = false;
             shared.changed.notify_all();
         }
         "ack" => {
             let mut st = shared.lock();
+            if st.conn != conn {
+                return Ok(Next::Leave);
+            }
             let mut acked = st.acked;
             for (i, stream) in STREAMS.iter().enumerate() {
                 let Some(n) = message.get(*stream) else { continue };
@@ -537,7 +548,7 @@ fn push(shared: &Shared, conn: u64, writer: &Mutex<Conn>) {
                 }
                 if let Some(p) = &st.push {
                     if !p.said {
-                        break (Work::Said(json!({"op": "attached", "out": p.at[0], "err": p.at[1], "keep": st.keep})), p.epoch);
+                        break (Work::Said(json!({"op": "attached", "out": p.at[0], "err": p.at[1], "keep": p.keep})), p.epoch);
                     }
                     let next = [first, 1 - first].into_iter().find(|&i| p.at[i] < st.len[i]);
                     if let Some(i) = next {

@@ -381,6 +381,29 @@ fn what_the_station_keeps_is_not_given_back() {
 }
 
 #[test]
+fn an_ack_on_a_connection_replaced_moves_nothing() {
+    let runner = Runner::start("stale-ack", "printf 'one\\ntwo\\n'; read x");
+    let mut old = runner.connect();
+    old.send(json!({"op": "attach"}));
+    let (mut at, mut got) = ([0, 0], [vec![], vec![]]);
+    old.read_until(&mut at, &mut got, 0, 8);
+    old.send(json!({"op": "ack", "out": 4, "err": 0, "keep": 0}));
+    old.handled();
+    // Another station attaches; the one before, not knowing, acknowledges the rest afterwards.
+    let mut new = runner.connect();
+    new.send(json!({"op": "attach"}));
+    new.handled();
+    // (its connection may be closed by now: what it sends is lost, or read and refused)
+    let _ = old.writer.write_all(format!("{}\n", json!({"op": "ack", "out": 8, "err": 0, "keep": 4})).as_bytes());
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    let mut next = runner.connect();
+    next.send(json!({"op": "attach"}));
+    let mut line = String::new();
+    next.reader.read_line(&mut line).unwrap();
+    assert_eq!(serde_json::from_str::<Value>(&line).unwrap(), json!({"op": "attached", "out": 4, "err": 0, "keep": 0}), "where the current one stood: the old one's late ack taken from nobody");
+}
+
+#[test]
 fn stdin_is_written_and_closed() {
     let runner = Runner::start("stdin", "cat; echo end");
     let mut client = runner.connect();
