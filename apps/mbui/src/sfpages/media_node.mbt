@@ -275,10 +275,11 @@ fn media_reveal_node(
 }
 
 ///|
-/// Whether `s` is laid out wholly out of its window (over its top or under its foot).
+/// Whether `s` is laid out wholly out of its window (over its top or under its foot), or laid out nowhere (in a row
+/// made ahead of what shows, not laid out yet).
 fn out_of_window(s : @view.View) -> Bool {
   match @signals.untracked(fn() { s.laid_window_told() }) {
     Some((_, y, _, h)) => y + h <= 0.0 || y >= s.window().1
-    None => false
+    None => true
   }
 }
