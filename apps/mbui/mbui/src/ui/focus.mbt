@@ -213,7 +213,6 @@ fn Ctx::focus_frame_start(self : Ctx) -> Unit {
   // (the keys, what a reader asked and the focus, read so: hand.mbt)
   hand_presses_read()
   hand.focus_id.get() |> ignore
-  self.actions.clear()
   for a in self.asked_actions {
     self.actions.push(a)
     if a.1 == Focus {

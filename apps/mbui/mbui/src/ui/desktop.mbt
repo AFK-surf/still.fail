@@ -345,14 +345,13 @@ fn desk_reset() -> Unit {
 }
 
 ///|
-/// As a frame starts: what came since the last one is what this one reads.
+/// Take the queued inputs into the compatibility build's snapshot. An event can take its portion before the frame;
+/// what no island consumed stays available to the legacy root until that frame consumes it.
 fn desk_frame_start() -> Unit {
-  desk.menus.clear()
   for m in desk.mutable_menus {
     desk.menus.push(m)
   }
   desk.mutable_menus.clear()
-  desk.keys.clear()
   for k in desk.mutable_keys {
     desk.keys.push(k)
   }
@@ -572,6 +571,7 @@ pub fn Ctx::right_clicked(self : Ctx, id : Int) -> (Double, Double)? {
   hand_events_read()
   for m in desk.menus {
     if m.0.contains(id) {
+      match old_input_reads.val { Some(r) => r.menus.add(id); None => () }
       return Some((m.1, m.2))
     }
   }
@@ -598,6 +598,7 @@ pub fn Ctx::menu_asked(self : Ctx, id : Int) -> (Double, Double)? {
         None => id
       }
       if innermost == id {
+        match old_input_reads.val { Some(r) => r.menus.add(id); None => () }
         at = Some((m.1, m.2))
       }
     }
@@ -650,6 +651,7 @@ pub fn Ctx::key_pressed(self : Ctx, code : Int, mods? : Int = 0, in_field? : Boo
   }
   for k in desk.keys {
     if k.0 == code && k.1 == mods && (in_field || !k.2) {
+      match old_input_reads.val { Some(r) => r.keys.push(k); None => () }
       return true
     }
   }
@@ -679,6 +681,7 @@ pub fn Ctx::take_key(self : Ctx, code : Int, mods? : Int = 0) -> Bool {
     let (kc, km, taken) = desk.keys[k]
     if kc == code && km == mods && !taken {
       desk.keys[k] = (kc, km, true)
+      match old_input_reads.val { Some(r) => r.keys.push((kc, km, true)); None => () }
       return true
     }
   }
@@ -702,6 +705,7 @@ pub fn Ctx::keys(self : Ctx) -> Array[(Int, Int, Bool)] {
   if !self.keys_here() {
     return []
   }
+  match old_input_reads.val { Some(r) => r.keys.append(desk.keys); None => () }
   desk.keys
 }
 

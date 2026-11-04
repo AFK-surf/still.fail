@@ -2112,7 +2112,9 @@ pub fn Ctx::double_clicked(self : Ctx, id : Int) -> Bool {
   }
   // (read so: what reads it is built again as it is clicked twice, hand.mbt)
   hand.double.has(id) |> ignore
-  self.double_clicked.contains(id)
+  let clicked = self.double_clicked.contains(id)
+  if clicked { match old_input_reads.val { Some(r) => r.doubles.add(id); None => () } }
+  clicked
 }
 
 ///|
@@ -2153,7 +2155,9 @@ fn Ctx::click_seen(self : Ctx, id : Int) -> Bool {
   // a screen reader asks of it is one: semantics.mbt)
   // (read so: what reads it is built again as it is clicked, hand.mbt)
   hand.clicked.has(id) |> ignore
-  self.clicked.contains(id) || (id != 0 && self.action_asked(id, Activate))
+  let clicked = self.clicked.contains(id) || (id != 0 && self.action_asked(id, Activate))
+  if clicked { match old_input_reads.val { Some(r) => r.clicks.add(id); None => () } }
+  clicked
 }
 
 ///|
