@@ -55,15 +55,16 @@ priv enum FindLine {
 }
 
 ///|
-/// The search as it stands: the kind looked at alone ("" every kind); the row chosen, and whether it is shown so (a
-/// mouse's lines mark it; a finger's mark none, so its keyboard's search key opens nothing); its field and what is
+/// The search as it stands: the kind looked at alone ("" every kind); the row chosen (a signal: the rows it was built
+/// into, kept as their nodes, built again as it changes), and whether it is shown so (a mouse's lines mark it; a
+/// finger's mark none, so its keyboard's search key opens nothing); its field and what is
 /// typed; the view last read (kept while the next words are looked up) and whether reading it failed; what was last
 /// asked of `commands.find`, its last answer and what it answered (kept: the list opened again with the same words has
 /// it at once; for other words none until the core has answered them); the lines as last drawn (what Enter opens); the
 /// list to go back to its top (into one kind or out of it).
 priv struct Finder {
   mut kind : String
-  mut chosen : Int
+  chosen : @signals.Signal[Int]
   mut chosen_shown : Bool
   field : @ui.Field
   mut query : String
@@ -85,7 +86,7 @@ priv struct Finder {
 ///|
 let finder : Finder = {
   kind: "",
-  chosen: 0,
+  chosen: @signals.signal(0, same=fn(a, b) { a == b }),
   chosen_shown: false,
   field: @ui.Field::new(),
   query: "",
@@ -123,7 +124,7 @@ pub fn finder_cleared() -> Unit {
   finder_leave.val = None
   finder.held = None
   finder.kind = ""
-  finder.chosen = 0
+  finder.chosen.set(0)
   finder.query = ""
   finder.field.set("")
   // (as it is, nothing set: what is cleared as a page is built changes nothing it reads where it was clear)
@@ -175,7 +176,7 @@ pub fn finder_query() -> String {
 pub fn finder_typed(words : String) -> Unit {
   if words != finder.query {
     finder.query = words
-    finder.chosen = if finder.kind != "" { 1 } else { 0 }
+    finder.chosen.set(if finder.kind != "" { 1 } else { 0 })
   }
 }
 
@@ -186,7 +187,7 @@ pub fn finder_back() -> Bool {
     return false
   }
   finder.kind = ""
-  finder.chosen = 0
+  finder.chosen.set(0)
   finder.to_top = true
   true
 }
@@ -195,7 +196,7 @@ pub fn finder_back() -> Bool {
 /// Enter: the line chosen opened where it is shown chosen (`close` first, where the frame closes the search as one
 /// opens).
 pub fn finder_enter(close : () -> Unit) -> Unit {
-  match finder.picks.get().get(finder.chosen) {
+  match finder.picks.get().get(@signals.untracked(fn() { finder.chosen.get() })) {
     Some(k) if finder.chosen_shown => finder_go(finder.lines.get()[k], close)
     _ => ()
   }
@@ -409,7 +410,7 @@ fn finder_go(line : FindLine, close : () -> Unit) -> Unit {
     Back => ignore(finder_back())
     More(kind) => {
       finder.kind = kind
-      finder.chosen = 1
+      finder.chosen.set(1)
       finder.to_top = true
     }
     Command(_, o) => {
@@ -482,21 +483,24 @@ pub fn finder_list(
   finder.picks.set(picks)
   // (chosen by the keys where the screen has them: shown so, Enter opens it)
   finder.chosen_shown = f.keys
-  if finder.chosen >= picks.length() {
-    finder.chosen = if picks.length() > 0 { picks.length() - 1 } else { 0 }
+  // (read by the rows it shows in, not by what builds them: the rows alone built again as it changes)
+  let mut chosen = @signals.untracked(fn() { finder.chosen.get() })
+  if chosen >= picks.length() {
+    chosen = if picks.length() > 0 { picks.length() - 1 } else { 0 }
   }
   let mut keyed = false
-  if c.key_pressed(@ui.key_code_down, in_field=true) && finder.chosen < picks.length() - 1 {
-    finder.chosen += 1
+  if c.key_pressed(@ui.key_code_down, in_field=true) && chosen < picks.length() - 1 {
+    chosen += 1
     keyed = true
   }
-  if c.key_pressed(@ui.key_code_up, in_field=true) && finder.chosen > 0 {
-    finder.chosen -= 1
+  if c.key_pressed(@ui.key_code_up, in_field=true) && chosen > 0 {
+    chosen -= 1
     keyed = true
   }
+  finder.chosen.set(chosen)
   let key = "switcher/list"
   if keyed {
-    match picks.get(finder.chosen) {
+    match picks.get(chosen) {
       Some(k) => c.list_scroll_to(key, if k > switcher_lead { k - switcher_lead } else { 0 })
       None => ()
     }
@@ -538,9 +542,9 @@ pub fn finder_list(
       }
       // (the pointer over a line chooses it, as the keys do)
       if f.keys && c.hand_on(id) {
-        finder.chosen = k
+        finder.chosen.set(k)
       }
-      found_line(c, lk, id, line, f.keys && k == finder.chosen, several, at, stacked)
+      found_line(c, lk, id, line, f.keys && k == finder.chosen.get(), several, at, stacked)
     },
     h~,
   )

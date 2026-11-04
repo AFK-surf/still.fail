@@ -7,7 +7,7 @@
 // gone). A vault is written on one station (its host) and copied to the
 // others by its members' devices (`?copy=1`: a later version than the one held, not necessarily the next; one not later
 // is answered with the one held, unchanged), so that agents on any station may ask for its secrets.
-import type { LockState } from "../../cloud/lock.ts";
+import { type LockState, admit } from "../../cloud/lock.ts";
 import type { Viewer } from "../../mesh/credential.ts";
 import { type BoxCert, type Item, type Vault, certOk, itemOk, vaultOk } from "../../vault/crypto.ts";
 import type { VaultStore } from "../../vault/store.ts";
@@ -35,6 +35,17 @@ function body(r: Request): unknown {
     return JSON.parse(r.body.toString("utf8"));
   } catch {
     return undefined;
+  }
+}
+
+/// The lock device the request comes from, as a connection is admitted (cloud/lock.ts `admit`); null for none. (No
+/// clock: only an app device has a box, and an app's approval does not run out.)
+function deviceOf(lock: LockState, r: Request): string | null {
+  const v = r.viewer;
+  try {
+    return admit(lock, { sub: v.sub, endpoint: v.device, base: v.lockDevice?.base, proof: v.lockDevice?.proof }, 0).device.id;
+  } catch {
+    return null;
   }
 }
 
@@ -139,6 +150,9 @@ export const routes = ({ vaults, lock, events, boxed }: VaultDeps): Route[] => {
         const cert = body(r) as BoxCert;
         const why = certOk(l, cert);
         if (why !== null) return refuse(400, "vault_invalid", why);
+        // Published by the device itself, as the lock admits it: a signing key alone (an admin's, who put a device in
+        // under someone's name) does not publish a box that the person's secrets would be sealed to.
+        if (deviceOf(l, r) !== cert.device) return refuse(403, "vault_not_device", "a device publishes its own box certificate");
         const had = vaults.box(l.ws, cert.device);
         // An older one than held changes nothing.
         if (had !== null && had.at > cert.at) return json(200, JSON.stringify({ box: had }));

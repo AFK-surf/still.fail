@@ -392,7 +392,13 @@ pub fn in_pane() -> Bool {
 /// both are: the right's apart from it there alone); an end that cannot, `side` in, as alone; none, `side` and `foot`
 /// in, as in a window's whole, its right end past the window's corner there.
 pub fn foot_capsule(height : Double, side : Double, foot : Double) -> (Double, Double, Double) {
-  match pane_radii() {
+  foot_capsule_of(pane_radii(), height, side, foot)
+}
+
+///|
+/// A capsule at the foot of a panel whose corners are given, independent of the old view being built.
+pub fn foot_capsule_of(radii : FixedArray[Double]?, height : Double, side : Double, foot : Double) -> (Double, Double, Double) {
+  match radii {
     // (in a window's whole its right end in the window's foot corner: past it, window_corner_past)
     None => (side, window_corner_past(side), foot)
     // (beside the system's action at the column's foot, as high as it: on its line, in the foot left corner made for
@@ -483,7 +489,13 @@ pub fn foot_fit(left : Double, right : Double, inset : Double, least? : Double =
 /// turn (a composer's ＋ and send: holds_least), else standing alone there (the user, 2026-10-25: a composer's corner
 /// followed a window's its send could not).
 pub fn pane_foot_in(holds? : Double = 0.0) -> Double {
-  match pane_radii() {
+  pane_foot_in_of(pane_radii(), holds~)
+}
+
+///|
+/// A box's inset at the foot of the given panel (pane_foot_in), also used by retained pages.
+pub fn pane_foot_in_of(radii : FixedArray[Double]?, holds? : Double = 0.0) -> Double {
+  match radii {
     Some(k) => foot_fit(k[3], k[2], foot_inset(dmax(k[3], k[2])), least=holds_least(holds))
     None => corner_inset
   }
@@ -503,9 +515,15 @@ fn foot_inset(corner : Double) -> Double {
 /// Mac window's at the page's right, as that one: InnerOr's own); a card's of the ladder's where it follows none (a
 /// window's whole, a panel's foot corners all too square). The tape's 28, 4 in: 24.8.
 pub fn pane_foot_corner(holds? : Double = 0.0) -> Double {
-  match pane_radii() {
+  pane_foot_corner_of(pane_radii(), holds~)
+}
+
+///|
+/// The box's corner at that inset in the given panel (pane_foot_corner).
+pub fn pane_foot_corner_of(radii : FixedArray[Double]?, holds? : Double = 0.0) -> Double {
+  match radii {
     Some(k) => {
-      let d = pane_foot_in(holds~)
+      let d = pane_foot_in_of(radii, holds~)
       let least = holds_least(holds)
       let mut out = card_corner
       let mut roundest = -1.0
@@ -532,11 +550,17 @@ pub fn pane_foot_corner(holds? : Double = 0.0) -> Double {
 /// nearer than 4 in its own ends, at corner_fit's nearest (4) at most; else `own`. In the tape's 28 (a circle reads it
 /// as 26.78): keyboard and mouse's 48 (its 32 buttons) 41.6, 6 in; a finger's 52 (its 36) 44, 4.8 in.
 pub fn foot_capsule_h(own : Double, holds : Double) -> Double {
+  foot_capsule_h_of(pane_radii(), own, holds)
+}
+
+///|
+/// The height of a capsule standing in the given panel's foot corners (foot_capsule_h).
+pub fn foot_capsule_h_of(radii : FixedArray[Double]?, own : Double, holds : Double) -> Double {
   // (beside the system's action at the column's foot: as high as it, one row with it)
-  if in_pane() && native_capsule_h() is Some(h) {
+  if radii is Some(_) && native_capsule_h() is Some(h) {
     return h
   }
-  match pane_radii() {
+  match radii {
     Some(k) => {
       let r = @ui.round_like(dmax(k[2], k[3]))
       let most = 2.0 * (r - corner_fit.near)
@@ -1893,7 +1917,11 @@ pub let card_across : @ui.Size = Fill(1.0)
 /// A visualization in a message (Android ui/Viz.kt, chat/VizFiles.kt): its place while it comes (120 high), the ways
 /// under it (22 boxes); a whole page's corners (Smooth 20, the web's card) on its paper (#F6F2EA, dark #26272B); the
 /// full screen's name 18 in (Viz.kt VizFull).
-pub let viz_wait_h : @ui.Len = Fixed(120.0)
+pub let viz_wait_h : @ui.Len = Fixed(viz_wait_h_px)
+
+///|
+/// viz_wait_h, for a node of the window's tree.
+pub let viz_wait_h_px : Double = 120.0
 
 ///|
 pub let viz_way_side : @ui.Len = Fixed(22.0)

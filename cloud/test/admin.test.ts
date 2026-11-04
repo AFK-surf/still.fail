@@ -33,6 +33,34 @@ test("the console answers only the admin, and only on its host; everyone else ge
   }
 });
 
+test("with Cloudflare Access in front of the console, whoever it lets through is its admin, and nobody else", async () => {
+  const h = await harness({ access: true });
+  try {
+    const bobTokens = await h.login("bob");
+    const aliceTokens = await h.login("alice");
+    const me = (tokens: typeof bobTokens, access?: string, host: "admin" | "main" = "admin") =>
+      (host === "admin" ? h.fetchAdmin : h.fetch)("/v1/admin/me", { headers: { authorization: `Bearer ${tokens.access_token}`, ...(access ? { "cf-access-jwt-assertion": access } : {}) } });
+    // bob is not ADMIN_EMAIL, and Access let him through: he is in, as himself.
+    const through = await me(bobTokens, await h.accessToken("bob@team.example"));
+    assert.equal(through.status, 200);
+    assert.deepEqual(await through.json(), { email: "bob@example.test" });
+    assert.equal((await h.fetchAdmin("/v1/admin/users", { headers: { authorization: `Bearer ${bobTokens.access_token}`, "cf-access-jwt-assertion": await h.accessToken("bob@team.example") } })).status, 200);
+    // Not through Access, ADMIN_EMAIL's account included; nor with a token of another application, team, or expired; nor
+    // signed in to nothing; nor on the main host.
+    for (const response of [
+      await me(aliceTokens),
+      await me(bobTokens, "not-a-token"),
+      await me(bobTokens, await h.accessToken("bob@team.example", { aud: "another-app" })),
+      await me(bobTokens, await h.accessToken("bob@team.example", { issuer: "https://other.cloudflareaccess.example" })),
+      await me(bobTokens, await h.accessToken("bob@team.example", { expired: true })),
+      await h.fetchAdmin("/v1/admin/me", { headers: { "cf-access-jwt-assertion": await h.accessToken("bob@team.example") } }),
+      await me(bobTokens, await h.accessToken("bob@team.example"), "main"),
+    ]) assert.equal(response.status, 404);
+  } finally {
+    await h.close();
+  }
+});
+
 test("the admin sees every user, workspace and code", async () => {
   const h = await harness();
   try {

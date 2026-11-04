@@ -347,7 +347,6 @@ function KeyAskSheet({ r }: { r: VaultKeyAsk }) {
       <b className={securityCss.mSheetTitle}>{t("web-pages.vault.promptTitle", { device: r.deviceText })}</b>
       <span className={partsCss.mSubtle}>{t("web-pages.vault.promptBody", { vault: r.vaultName, at: r.atText })}</span>
       <span className={securityCss.mNote}>{r.workspaceName} · {r.vaultName}</span>
-      {!r.own && <span className={securityCss.mWarn}>{t("web-pages.vault.promptBy", { by: r.byText ?? "" })}</span>}
       <div className={securityCss.mActions}>
         <Button primary label={t("web-pages.vault.promptGive")} busy={giving} onClick={() => void run("vault.addDevice", { workspace: r.workspace, vault: r.vault, device: r.device }, t("web-pages.vault.addDeviceWhat"), t("web-pages.vault.addedDevice"))} />
         <Button primary={false} label={t("web-pages.vault.promptLater")} onClick={() => { app.sheet(null); void run("vault.hidePrompt", { workspace: r.workspace, device: r.device, at: r.at }, t("web-pages.vault.promptLater")); }} />

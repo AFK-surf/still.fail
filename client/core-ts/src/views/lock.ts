@@ -775,7 +775,10 @@ function checkSigned(entries: Entry[], chain: Entry[], key: string, at: number):
       } catch {
         throw new CoreError("lock_invalid", t("core-misc.lock.chainInvalid"));
       }
-      if (signerIn(kept, key, at) === null) throw new CoreError("lock_no_signer", t("core-misc.lock.notSigner"));
+      const by = signerIn(kept, key, at);
+      if (by === null) throw new CoreError("lock_no_signer", t("core-misc.lock.notSigner"));
+      // (put in under this person's name by someone else: what it signs changes nothing at a station)
+      if (!by.own) throw new CoreError("lock_not_own", t("core-misc.lock.notOwn"));
       try {
         checkLock(chain, at);
       } catch {
@@ -943,7 +946,14 @@ export class Lock {
       if (!s) return yield* Effect.fail(CoreError.invalid("not a station of this workspace"));
       const asked = yield* Effect.result(self.#station(station, "GET", "/lock"));
       if (asked._tag === "Failure") {
-        // It takes none of this workspace's members for a security mode (one turned on after it joined): why, as it said.
+        // It takes none of this workspace's members, the lock turned on after it joined (and it not in it then): it
+        // pins the lock itself once the lock names it, from the cloud (station/src/cloud/presence.ts takeFromPlane), as
+        // no device of this workspace may reach it to bring it.
+        if (asked.failure.code === "lock_station" && asked.failure.message === t("core-logic.mesh.lock_station.unpinned")) {
+          const f = fold(held(self.#inner, self.ws)?.entries ?? []);
+          return f.stations.has(station) ? { head: null, stations: {} } : yield* self.append("station", { key: station, name: s.name ?? "" });
+        }
+        // It takes none of them for another reason (its own workspace locked and this one not): why, as it said.
         if (asked.failure.code === "lock_station") return yield* Effect.fail(asked.failure);
         const old = asked.failure.status === 404 || /404|no route/.test(asked.failure.message);
         return yield* Effect.fail(new CoreError(old ? "lock_station_old" : "lock_station_offline", old ? t("core-misc.lock.stationOld", { name: s.name }) : t("core-misc.lock.stationOffline", { name: s.name })));

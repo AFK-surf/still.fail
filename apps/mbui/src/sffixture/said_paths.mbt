@@ -751,7 +751,6 @@ pub let said_paths : Map[String, Array[String]] = {
     "asks.*.vaultName",
     "asks.*.deviceText",
     "asks.*.atText",
-    "asks.*.byText",
   ],
   "longJobs": [
     "groups.*.jobs.*.name",

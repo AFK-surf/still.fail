@@ -60,6 +60,7 @@ fn island_menu_tester() -> IslandMenu {
         if m.menu.get() {
           c.with_dismissed(fn(_) { m.menu.set(false) }, fn() {
             c.overlay("层/菜单", fn() {
+              c.focusable(c.id("选这个"))
               if c.button("选这个") {
                 m.picked.val = m.picked.val + 1
               }
@@ -80,6 +81,23 @@ fn island_menu_frames(t : Tester, n : Int) -> Unit {
   for _ in 0..<n {
     t.frame_at(t.next_frame_time())
   }
+}
+
+///|
+test "a menu at the last layer's place is painted, read out and included in keyboard focus" {
+  let m = island_menu_tester()
+  m.t.draw()
+  m.place.set(2147483647)
+  m.open.set(true)
+  island_menu_frames(m.t, 3)
+  assert_true(m.t.query(Button, label="选这个") is Some(_))
+  let r = m.t.query(Button, label="选这个").unwrap().rect
+  assert_true(m.t.glyphs_seen().iter().any(fn(g) { g.0 >= r.0 && g.0 < r.0 + r.2 && g.1 >= r.1 && g.1 < r.1 + r.3 }))
+  assert_eq(m.t.focused().map(fn(s) { s.label }), Some("层里的字段"))
+  m.t.tab()
+  assert_eq(m.t.focused().map(fn(s) { s.label }), Some("选这个"))
+  m.t.click(Button, label="选这个")
+  assert_eq(m.picked.val, 1)
 }
 
 ///|

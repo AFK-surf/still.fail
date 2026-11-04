@@ -4,7 +4,7 @@
 // traces and notices). `api` returns null for paths it does not own. The
 // admin's console has its own, `adminApi`, which only the console's host
 // routes to (index.ts).
-import { isAdmin } from "./admin";
+import { consoleAdmin, isAdmin } from "./admin";
 import { bearerToken, clock, denied, limited, readJson, reply, verifyToken, type Claims } from "./auth";
 import { betaOrigin, header, publicOrigins, signedMessages } from "./compat";
 import { EVENTS_PROTOCOLS, ROLES, type Role } from "./directory";
@@ -318,7 +318,7 @@ export async function blockAccount(env: Env, sub: string, on: boolean): Promise<
 export async function adminApi(request: Request, env: Env, path: string): Promise<Response> {
   const method = request.method;
   const claims = await account(bearerToken(request), env);
-  if (claims instanceof Response || !isAdmin(env, claims.email)) return notFound();
+  if (claims instanceof Response || !(await consoleAdmin(request, env, claims.email))) return notFound();
   let input: Record<string, unknown>;
   try {
     input = await body(request);

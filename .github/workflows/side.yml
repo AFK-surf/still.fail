@@ -18,6 +18,9 @@ jobs:
   side:
     strategy:
       fail-fast: false
+      # One at a time: the mesh's tests compare real round trips, and the station's boot simulators beside them on this one
+      # Mac; beside those the mesh's measured too unevenly to move, or 109 ms for a line of nothing (side run 41798988101).
+      max-parallel: 1
       matrix:
         part: [core-ts, station, rust]
     runs-on: [self-hosted, macos-ci]

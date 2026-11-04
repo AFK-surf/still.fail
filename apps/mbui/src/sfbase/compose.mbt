@@ -13,13 +13,13 @@ pub(all) struct Writing {
   key : String
   field : @ui.Field
   text : @signals.Signal[String]
-  mut quotes : Array[Json]
-  mut files : Array[Json]
-  mut focus : String
-  mut starting : Bool
-  mut error : String
-  mut ready : Bool
-  mut uploading : Bool
+  quotes : @signals.Signal[Array[Json]]
+  files : @signals.Signal[Array[Json]]
+  focus : @signals.Signal[String]
+  starting : @signals.Signal[Bool]
+  error : @signals.Signal[String]
+  ready : @signals.Signal[Bool]
+  uploading : @signals.Signal[Bool]
   pending : @signals.Signal[Int]
   mut acked : Double
   mut seen_rev : Double
@@ -35,7 +35,7 @@ pub let writings : Map[String, Writing] = {}
 ///|
 /// The pictures of the files picked or pasted here, by their id: shown at once from their bytes (until the file leaves
 /// the draft), and the station each went up to with its bytes (one sent to another station goes up again there).
-pub let writing_pictures : Map[String, String] = {}
+pub let writing_pictures : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 
 ///|
 let writing_went : Map[String, (String, String, Bytes)] = {}
@@ -88,7 +88,7 @@ let writing_seeds : Map[String, String] = {}
 ///|
 /// Whether draft `w` has the file `seed` names already (writing_seeds).
 fn writing_has(w : Writing, seed : String) -> Bool {
-  w.files.iter().any(fn(f) { writing_seeds.get(text(Some(f), "id")) == Some(seed) })
+  w.files.get().iter().any(fn(f) { writing_seeds.get(text(Some(f), "id")) == Some(seed) })
 }
 
 ///|
@@ -119,13 +119,13 @@ pub fn writing(src : Source, key : String) -> Writing {
         key,
         field: @ui.Field::new(),
         text: @signals.signal(""),
-        quotes: [],
-        files: [],
-        focus: "",
-        starting: false,
-        error: "",
-        ready: false,
-        uploading: false,
+        quotes: @signals.signal([]),
+        files: @signals.signal([]),
+        focus: @signals.signal(""),
+        starting: @signals.signal(false),
+        error: @signals.signal(""),
+        ready: @signals.signal(false),
+        uploading: @signals.signal(false),
         pending: @signals.signal(0),
         acked: 0.0,
         seen_rev: -1.0,
@@ -142,6 +142,17 @@ pub fn writing(src : Source, key : String) -> Writing {
 }
 
 ///|
+/// A retained page's draft: one Writing and one Field for this key, following the core while `owner` lives. A topic
+/// arriving during an optimistic edit is adopted after its answer, subject to the acknowledged core version.
+pub fn writing_in(owner : @view.View, src : Source, key : String) -> Writing {
+  let w = @signals.untracked(fn() { writing(src, key) })
+  owner.reacts(fn() { ((src.topic)("composer", { "key": Json::string(key) }).version, w.pending.get()) }, fn(_) {
+    writing(src, key) |> ignore
+  })
+  w
+}
+
+///|
 /// The core's value shown, unless the page has done something it has not answered yet; its own words (a new `rev`:
 /// read back, taken, put back, carried on) into the field.
 fn writing_adopt(w : Writing, v : Json?, version : Int) -> Unit {
@@ -150,8 +161,9 @@ fn writing_adopt(w : Writing, v : Json?, version : Int) -> Unit {
     return
   }
   w.adopted = version
-  w.quotes = items(v, "quotes")
-  w.files = items(v, "files")
+  @signals.start_batch()
+  w.quotes.set(items(v, "quotes"))
+  w.files.set(items(v, "files"))
   // a picture picked here (a quote's too: a mark's screenshot), up: its message drawn from it as picked, by the name
   // the station keeps it under (sent.mbt)
   for f in writing_files(w) {
@@ -162,17 +174,18 @@ fn writing_adopt(w : Writing, v : Json?, version : Int) -> Unit {
       _ => ()
     }
   }
-  w.focus = text(v, "focus")
-  w.starting = flag(v, "starting")
-  w.error = text(v, "error")
-  w.ready = flag(v, "ready")
-  w.uploading = flag(v, "uploading")
+  w.focus.set(text(v, "focus"))
+  w.starting.set(flag(v, "starting"))
+  w.error.set(text(v, "error"))
+  w.ready.set(flag(v, "ready"))
+  w.uploading.set(flag(v, "uploading"))
   let rev = number(v, "rev")
   if rev != w.seen_rev {
     w.seen_rev = rev
     w.text.set(text(v, "text"))
     w.field.set(w.text.get())
   }
+  @signals.end_batch()
 }
 
 ///|
@@ -191,11 +204,15 @@ fn writing_act(
     toast_later(read_only_words)
     return
   }
-  show(w)
+  // Mark the optimistic edit pending before publishing it: a retained reader may read the old topic again as soon
+  // as an edited property changes. It must not adopt that topic over what the person just did.
+  @signals.start_batch()
   w.pending.set(w.pending.get() + 1)
+  show(w)
+  @signals.end_batch()
   params["key"] = Json::string(w.key)
   let answered = fn(r : Result[Json, Json]) {
-    w.pending.set(w.pending.get() - 1)
+    @signals.start_batch()
     match r {
       Ok(a) =>
         match field(Some(a), "version") {
@@ -204,7 +221,9 @@ fn writing_act(
         }
       Err(_) => ()
     }
+    w.pending.set(w.pending.get() - 1)
     done(r)
+    @signals.end_batch()
   }
   match bytes {
     Some(b) => (src.call_bytes)("composer." + what, Json::object(params), b, answered)
@@ -218,8 +237,7 @@ pub fn writing_text(src : Source, w : Writing, words : String) -> Unit {
   if words == w.text.get() {
     return
   }
-  w.text.set(words)
-  writing_act(src, w, "text", { "text": Json::string(words) })
+  writing_act(src, w, "text", { "text": Json::string(words) }, show=fn(w) { w.text.set(words) })
 }
 
 ///|
@@ -304,9 +322,9 @@ pub fn writing_add(
     { "station": Json::string(station), "files": Json::array([Json::object(one)]) },
     show=fn(w) {
       if quote == "" {
-        w.files = w.files + [Json::object(shown)]
+        w.files.set(w.files.get() + [Json::object(shown)])
       } else {
-        w.quotes = w.quotes.map(fn(q) {
+        w.quotes.set(w.quotes.get().map(fn(q) {
           match q {
             Object(m) if text(Some(q), "id") == quote => {
               let n = m.copy()
@@ -315,7 +333,7 @@ pub fn writing_add(
             }
             _ => q
           }
-        })
+        }))
       }
     },
     bytes~,
@@ -364,7 +382,7 @@ pub fn writing_add_held(src : Source, w : Writing, station : String, f : @hostap
     w,
     "add",
     { "station": Json::string(station), "files": Json::array([Json::object(one)]) },
-    show=fn(w) { w.files = w.files + [Json::object(shown)] },
+    show=fn(w) { w.files.set(w.files.get() + [Json::object(shown)]) },
   )
 }
 
@@ -461,7 +479,7 @@ pub fn writing_drop(src : Source, d : Writing, station : String, dropped : Array
     Json::object(one)
   })
   writing_act(src, d, "add", { "station": Json::string(station), "files": Json::array(files) }, show=fn(d) {
-    d.files = d.files + files
+    d.files.set(d.files.get() + files)
   })
 }
 
@@ -478,7 +496,7 @@ pub fn writing_remove(src : Source, w : Writing, id : String) -> Unit {
   writing_went.remove(id)
   writing_seeds.remove(id)
   writing_act(src, w, "remove", { "id": Json::string(id) }, show=fn(w) {
-    w.files = w.files.filter(fn(f) { text(Some(f), "id") != id })
+    w.files.set(w.files.get().filter(fn(f) { text(Some(f), "id") != id }))
   })
 }
 
@@ -505,7 +523,7 @@ pub fn writing_quote(src : Source, w : Writing, quote : Json, file? : Json, pict
     }
     None => ()
   }
-  writing_act(src, w, "quote", p, show=fn(w) { if ask { w.focus = id } })
+  writing_act(src, w, "quote", p, show=fn(w) { if ask { w.focus.set(id) } })
   match picture {
     Some((station, name, bytes)) => writing_add(src, w, station, name, bytes, quote=id)
     None => ()
@@ -516,14 +534,14 @@ pub fn writing_quote(src : Source, w : Writing, quote : Json, file? : Json, pict
 /// Its files and its quotes' own pictures (the core's composer keeps both among its files; its message has both among
 /// its own).
 pub fn writing_files(w : Writing) -> Array[Json] {
-  w.files + w.quotes.filter_map(fn(q) { field(Some(q), "own") })
+  w.files.get() + w.quotes.get().filter_map(fn(q) { field(Some(q), "own") })
 }
 
 ///|
 /// What is said about a quote (`composer.comment`), the page's at once as the words are.
 pub fn writing_comment(src : Source, w : Writing, id : String, words : String) -> Unit {
   writing_act(src, w, "comment", { "id": Json::string(id), "comment": Json::string(words) }, show=fn(w) {
-    w.quotes = w.quotes.map(fn(q) {
+    w.quotes.set(w.quotes.get().map(fn(q) {
       match q {
         Object(m) if text(Some(q), "id") == id => {
           let said = m.copy()
@@ -532,14 +550,14 @@ pub fn writing_comment(src : Source, w : Writing, id : String, words : String) -
         }
         _ => q
       }
-    })
+    }))
   })
 }
 
 ///|
 /// A quote let go (`composer.unquote`), its picture with it.
 pub fn writing_unquote(src : Source, w : Writing, id : String) -> Unit {
-  match w.quotes.iter().find_first(fn(q) { text(Some(q), "id") == id }) {
+  match w.quotes.get().iter().find_first(fn(q) { text(Some(q), "id") == id }) {
     Some(q) => {
       let own = text(field(Some(q), "own"), "id")
       writing_pictures.remove(own)
@@ -548,9 +566,9 @@ pub fn writing_unquote(src : Source, w : Writing, id : String) -> Unit {
     None => ()
   }
   writing_act(src, w, "unquote", { "id": Json::string(id) }, show=fn(w) {
-    w.quotes = w.quotes.filter(fn(q) { text(Some(q), "id") != id })
-    if w.focus == id {
-      w.focus = ""
+    w.quotes.set(w.quotes.get().filter(fn(q) { text(Some(q), "id") != id }))
+    if w.focus.get() == id {
+      w.focus.set("")
     }
   })
 }
@@ -558,21 +576,21 @@ pub fn writing_unquote(src : Source, w : Writing, id : String) -> Unit {
 ///|
 /// A quote's comment line has the focus it asked for (`composer.focused`).
 pub fn writing_focused(src : Source, w : Writing) -> Unit {
-  writing_act(src, w, "focused", {}, show=fn(w) { w.focus = "" })
+  writing_act(src, w, "focused", {}, show=fn(w) { w.focus.set("") })
 }
 
 ///|
 /// What went wrong said in the draft, or no longer (`composer.error`).
 pub fn writing_error(src : Source, w : Writing, error : String) -> Unit {
   writing_act(src, w, "error", { "error": if error == "" { Json::null() } else { Json::string(error) } }, show=fn(w) {
-    w.error = error
+    w.error.set(error)
   })
 }
 
 ///|
 /// A new chat being made for the message, or no longer (`composer.starting`).
 pub fn writing_starting(src : Source, w : Writing, on : Bool) -> Unit {
-  writing_act(src, w, "starting", { "starting": Json::boolean(on) }, show=fn(w) { w.starting = on })
+  writing_act(src, w, "starting", { "starting": Json::boolean(on) }, show=fn(w) { w.starting.set(on) })
 }
 
 ///|
@@ -581,7 +599,7 @@ pub fn writing_starting(src : Source, w : Writing, on : Bool) -> Unit {
 /// going up), sent as it says: its files as they were when it took them, not as this page last drew them. `station`:
 /// the one it goes to, where a new chat's files go up now.
 pub fn writing_take(src : Source, w : Writing, station? : String = "", done : (Json?) -> Unit) -> Unit {
-  w.taken = Some((w.text.get(), w.quotes, w.files))
+  w.taken = Some((w.text.get(), w.quotes.get(), w.files.get()))
   let params : Map[String, Json] = {}
   if station != "" {
     params["station"] = Json::string(station)
@@ -594,11 +612,11 @@ pub fn writing_take(src : Source, w : Writing, station? : String = "", done : (J
     show=fn(w) {
       w.text.set("")
       w.field.set("")
-      w.quotes = []
-      w.files = []
-      w.focus = ""
-      w.error = ""
-      w.ready = false
+      w.quotes.set([])
+      w.files.set([])
+      w.focus.set("")
+      w.error.set("")
+      w.ready.set(false)
     },
     done=fn(r) {
       match r {
@@ -613,7 +631,7 @@ pub fn writing_take(src : Source, w : Writing, station? : String = "", done : (J
 /// What `take` took put back (a chat that could not be made, a message never sent), saying why; with `unless_written`,
 /// only while nothing new is written there (`composer.restore`).
 pub fn writing_restore(src : Source, w : Writing, error : String, unless_written? : Bool = false) -> Unit {
-  if unless_written && (w.text.get().trim(chars=" \n\t").to_string() != "" || w.files.length() > 0 || w.quotes.length() > 0) {
+  if unless_written && (w.text.get().trim(chars=" \n\t").to_string() != "" || w.files.get().length() > 0 || w.quotes.get().length() > 0) {
     return
   }
   let kept = w.taken
@@ -631,12 +649,12 @@ pub fn writing_restore(src : Source, w : Writing, error : String, unless_written
         Some((words, quotes, files)) => {
           w.text.set(words)
           w.field.set(words)
-          w.quotes = quotes
-          w.files = files
+          w.quotes.set(quotes)
+          w.files.set(files)
         }
         None => ()
       }
-      w.error = error
+      w.error.set(error)
     },
   )
 }

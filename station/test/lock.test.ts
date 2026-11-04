@@ -103,6 +103,61 @@ test("who may sign what: admins manage, members add only their own devices, owne
   assert.throws(() => apply(off, signed(after(off, "member", { sub: "x", email: "x", role: "member" }), w.alice.signer), 2000), /turned off/);
 });
 
+test("a person's own devices: an admin puts in only their first; one put in under someone else's name signs nothing", () => {
+  const w = workspace();
+  let s = w.state;
+  const step = (kind: string, body: unknown, by: Key) => (s = apply(s, signed(after(s, kind, body), by), 2000));
+  // The genesis's devices are each person's own.
+  assert.ok([w.alice, w.bob, w.carol].every((p) => s.devices.get(p.base.hex)?.own));
+  // bob (an admin) puts a device of his making in under alice's name, the owner: it is in the lock, not hers.
+  const fake = { signer: ed(), base: ed() };
+  step("device", { id: fake.base.hex, sub: "alice", kind: "app", label: "alice?", sign_key: fake.signer.id }, w.bob.signer);
+  assert.equal(s.devices.get(fake.base.hex)?.own, false);
+  // What it signs keeps the chain going and changes nothing: no owner made, the lock not turned off, no device put in.
+  const head = s.head;
+  step("member", { sub: "bob", email: "b@x", role: "owner" }, fake.signer);
+  assert.equal(s.members.get("bob")?.role, "admin");
+  assert.notEqual(s.head, head);
+  step("disable", {}, fake.signer);
+  assert.equal(s.disabled, false);
+  const more = ed();
+  step("device", { id: more.hex, sub: "alice", kind: "app", label: "more", sign_key: ed().id }, fake.signer);
+  assert.equal(s.devices.has(more.hex), false);
+  // One taken off its own person's signing key by an admin (same id, his key): no longer theirs.
+  const swap = ed();
+  step("device", { id: w.carol.base.hex, sub: "carol", kind: "app", label: "carol", sign_key: swap.id }, w.bob.signer);
+  assert.equal(s.devices.get(w.carol.base.hex)?.own, false);
+  // A passkey an admin puts in under alice's name: not hers either.
+  step("passkey", { id: "cred-x", sub: "alice", key: p256().id, label: "x" }, w.bob.signer);
+  assert.equal([...s.passkeys.values()].find((p) => p.id === "cred-x")?.own, false);
+  // A new member: their first device is put in by an admin (face to face), and is theirs; the next one only by them.
+  step("member", { sub: "dave", email: "d@x", role: "member" }, w.bob.signer);
+  const dave = { signer: ed(), base: ed() };
+  step("device", { id: dave.base.hex, sub: "dave", kind: "app", label: "dave", sign_key: dave.signer.id }, w.bob.signer);
+  assert.equal(s.devices.get(dave.base.hex)?.own, true);
+  const daveAdmins = ed();
+  step("device", { id: daveAdmins.hex, sub: "dave", kind: "app", label: "dave 2?", sign_key: ed().id }, w.bob.signer);
+  assert.equal(s.devices.get(daveAdmins.hex)?.own, false);
+  const davePhone = ed();
+  step("device", { id: davePhone.hex, sub: "dave", kind: "app", label: "dave 2", sign_key: ed().id }, dave.signer);
+  assert.equal(s.devices.get(davePhone.hex)?.own, true);
+  // dave's web page, renewed by an admin under the same (no) key: stays his.
+  const page = ed();
+  step("device", { id: page.hex, sub: "dave", kind: "web", label: "Chrome", exp: 2000 + 86400 }, dave.signer);
+  step("device", { id: page.hex, sub: "dave", kind: "web", label: "Chrome", exp: 2000 + 2 * 86400 }, w.bob.signer);
+  assert.equal(s.devices.get(page.hex)?.own, true);
+  // Every device of dave's gone (lost): an admin's new one is still not his ...
+  for (const id of [dave.base.hex, daveAdmins.hex, davePhone.hex, page.hex]) step("device.remove", { id }, w.bob.signer);
+  const again = ed();
+  step("device", { id: again.hex, sub: "dave", kind: "app", label: "dave 3?", sign_key: ed().id }, w.bob.signer);
+  assert.equal(s.devices.get(again.hex)?.own, false);
+  // ... until dave is taken out and made a member again, in the open: then his first is put in as anyone's first.
+  step("member.remove", { sub: "dave" }, w.bob.signer);
+  step("member", { sub: "dave", email: "d@x", role: "member" }, w.bob.signer);
+  step("device", { id: again.hex, sub: "dave", kind: "app", label: "dave 3", sign_key: ed().id }, w.bob.signer);
+  assert.equal(s.devices.get(again.hex)?.own, true);
+});
+
 test("an entry follows the head it names, signed as it is", () => {
   const w = workspace();
   const e = signed(after(w.state, "station", { key: ed().hex, name: "new" }), w.alice.signer);
@@ -332,6 +387,29 @@ test("an unlocked station pins no lock the control plane offers, but the one its
   assert.equal(cloud.locked()?.state?.genesis, entryHash(w.first));
 });
 
+test("a workspace that turned its lock on after this station joined it, the station not in it then: pinned once the lock names it", async () => {
+  const B = "01HBBBBBBBBBBBBBBBBBBBBBBB";
+  const w = workspace();
+  const b = workspace(B);
+  const me = w.stations[0]!.hex;
+  const cloud = stationData(w, me);
+  const sent: any[] = [];
+  const frame = (lock: unknown) => JSON.stringify({ type: "state", workspace: WS, workspace_name: "Team", name: "s0", peers: w.stations.map((s) => ({ id: s.hex })), grant_keys: { keys: [w.grant.jwk] }, revocations: [], lock: null, workspaces: [{ workspace: B, workspace_name: "B", name: "s0", peers: [{ id: me }], revocations: [], lock, locked: true }] });
+  applyState(cloud, frame({ seq: 0, hash: entryHash(b.first), genesis: entryHash(b.first) }), (f) => sent.push(f));
+  assert.deepEqual(cloud.memberships().map((m) => m.workspace), [WS], "B's members turned away");
+  assert.equal(cloud.leftOut(B), "unpinned");
+  // Its owner puts this station in B's lock (lock.joinStation, signed on a trusted device): the plane says so, the
+  // station asks for it and pins it.
+  const named = signed({ ...after(b.state, "station", { key: me, name: "s0" }, 2000), ws: B }, b.alice.signer);
+  sent.length = 0;
+  applyState(cloud, frame({ seq: 1, hash: entryHash(named), genesis: entryHash(b.first) }), (f) => sent.push(f));
+  assert.deepEqual(sent, [{ type: "lock.get", after: -1, workspace: B }]);
+  applyState(cloud, JSON.stringify({ type: "lock", workspace: B, entries: [b.first, named] }));
+  assert.equal(cloud.locked(B)?.state?.seq, 1);
+  assert.equal(cloud.leftOut(B), null);
+  assert.deepEqual(cloud.memberships().map((m) => m.workspace), [WS, B], "B's members taken, as its lock says");
+});
+
 test("a station in a second workspace pins that one's lock there: none of its members until then, then only those it names", async () => {
   const { joinedPendingPath, joinedLockPath } = await import("../src/cloud/state.ts");
   const { mkdirSync, writeFileSync, existsSync } = await import("node:fs");
@@ -348,10 +426,13 @@ test("a station in a second workspace pins that one's lock there: none of its me
   const frame = (joined: unknown[], lock: unknown = null) => JSON.stringify({ type: "state", workspace: WS, workspace_name: "Team", name: "s0", peers: w.stations.map((s) => ({ id: s.hex })), grant_keys: { keys: [w.grant.jwk] }, revocations: [], lock, workspaces: joined });
   const inB = { workspace: B, workspace_name: "B", name: "s0", peers: [{ id: b.stations[0]!.hex }, { id: intruder }], revocations: [], lock: { seq: 0, hash: entryHash(b.first) }, locked: true };
   const ws = () => cloud.memberships().map((m) => m.workspace);
-  // In security mode, as the plane says, its lock not pinned here: none of B's members are taken, nor its lock asked.
+  // In security mode, as the plane says, its lock not pinned here: none of B's members are taken. Its lock is asked
+  // for, and not pinned, as it does not name this station.
   applyState(cloud, frame([inB]), (f) => sent.push(f));
   assert.deepEqual(ws(), [WS]);
-  assert.equal(sent.length, 0);
+  assert.deepEqual(sent.splice(0), [{ type: "lock.get", after: -1, workspace: B }]);
+  applyState(cloud, JSON.stringify({ type: "lock", workspace: B, entries: [b.first] }));
+  assert.equal(cloud.locked(B), null);
   // Joined naming B's lock: asked for it, pinned once the plane brings that one.
   mkdirSync(dirname(joinedPendingPath(cloud.data, B)), { recursive: true });
   writeFileSync(joinedPendingPath(cloud.data, B), JSON.stringify({ hash: entryHash(b.first) }));
@@ -455,9 +536,9 @@ test("joining a locked workspace: the plane's frame comes before the join's answ
   const forged = { credential: credential(new GrantKey("k9"), B, endpoint, "member") };
   const refused = (h: unknown) => refusalOf(cloud, h, endpoint, new Error("credential is for another workspace"));
   // The plane tells the station it is in B as it takes the join, before the join is answered: which lock to pin is not
-  // written yet, and nothing is asked for.
+  // written yet. B's lock is asked for (pinned only once it names this station, which this one does not).
   applyState(cloud, frame([inB]), (f) => sent.push(f));
-  assert.equal(sent.length, 0);
+  assert.deepEqual(sent.splice(0), [{ type: "lock.get", after: -1, workspace: B }]);
   assert.equal(cloud.leftOut(B), "unpinned");
   assert.deepEqual(pendingAsks(cloud, asked), []);
   assert.deepEqual(refused(hello), { error: refused(hello).error, code: "lock_station", why: "unpinned" });

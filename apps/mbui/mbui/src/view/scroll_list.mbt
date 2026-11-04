@@ -63,6 +63,8 @@ priv struct Notch {
   total : Double
   v0 : Double
   t0 : Double
+  /// A requested destination (glide_to/glide_under), rather than the wheel's distance.
+  sent : Bool
 }
 
 ///|
@@ -505,7 +507,8 @@ fn Scroll::notched(self : Scroll, v : View, t : Double, d : Double) -> Bool {
   (self.settle_off)()
   self.settle_off = fn() {  }
   self.x.set(x0)
-  self.notch.set(Some({ x0, total, v0, t0: t }))
+  (self.on_hand)(d)
+  self.notch.set(Some({ x0, total, v0, t0: t, sent: false }))
   (self.on_scrolled)(t)
   self.list_settles(v, t)
   true
@@ -587,4 +590,133 @@ fn met_now(f : Fling, w : ListWay, t : Double, bound : Double, density : Double)
     }
   }
   { ..f, end_t: t, end_x: bound, till: bound, way: Some({ ..w, hit, }) }
+}
+
+///|
+/// A page's list (Scroll::list) sent to `to` (as far as it can go) from where it is at the logic's moment, eased there as
+/// a wheel's notch of that length is (ease_come), what it was doing by itself stopped; at once where `glide` is false.
+/// Not where it scrolls in nothing.
+pub fn Scroll::glide_to(self : Scroll, to : Double, glide? : Bool = true) -> Unit {
+  guard self.host is Some(v) else { return }
+  @signals.untracked(fn() {
+    let t = v.logic_at()
+    let to = dclamp(to, 0.0, self.most())
+    // (there already, or gliding there already: as it is)
+    let goes_to = match self.notch.get() {
+      Some(n) => Some(dclamp(n.x0 + n.total, 0.0, self.most()))
+      None => None
+    }
+    if goes_to == Some(to) || (goes_to is None && self.where_at(t) == to) {
+      return
+    }
+    let x = self.stopped(t)
+    if !glide {
+      self.x.set(to)
+      (self.on_scrolled)(t)
+      return
+    }
+    self.x.set(x)
+    self.notch.set(Some({ x0: x, total: to - x, v0: 0.0, t0: t, sent: true }))
+    (self.on_scrolled)(t)
+    self.list_settles(v, t)
+  })
+}
+
+///|
+/// A page's list (Scroll::list) sent to `to` (as far as it can go) as glide_to sends it, set out from `under` lower than
+/// where it is at the logic's moment: what it holds shown that much under where it lies now (more came at its end while
+/// it was shorter than its column, at its foot: what was there drawn where it was), on one way from there.
+pub fn Scroll::glide_under(self : Scroll, under : Double, to : Double) -> Unit {
+  guard self.host is Some(v) else { return }
+  @signals.untracked(fn() {
+    let t = v.logic_at()
+    let to = dclamp(to, 0.0, self.most())
+    let x = self.stopped(t) - under
+    self.x.set(to)
+    self.notch.set(Some({ x0: x, total: to - x, v0: 0.0, t0: t, sent: true }))
+    (self.on_scrolled)(t)
+    self.list_settles(v, t)
+  })
+}
+
+///|
+/// A destination requested of this list, until it gets there or the hand takes it over. A list following newly
+/// measured rows may move this destination with its end; a wheel's distance belongs to the hand instead.
+fn Scroll::sent_to(self : Scroll) -> Double? {
+  @signals.untracked(fn() {
+    match self.notch.get() {
+      Some(n) if n.sent => Some(n.x0 + n.total)
+      _ => None
+    }
+  })
+}
+
+///|
+/// Whether a page's list of the tree (Scroll::list) moves on its own now (a fling, a glide, what shows past an end
+/// going back), as Scroll::glides_till says: what a test asks of the tree's lists as of an old view's (Tester's
+/// list_moving).
+pub fn Tree::lists_moving(self : Tree) -> Bool {
+  self.scrolls_at.values().any(fn(s) { s.as_list && s.glides_till() is Some(_) })
+}
+
+///|
+/// Whether the tree has a page's list (Scroll::list) scrolling in it.
+pub fn Tree::has_list(self : Tree) -> Bool {
+  self.scrolls_at.values().any(fn(s) { s.as_list })
+}
+
+///|
+/// Stopped where it is at the logic's moment, whatever it was doing by itself (a fling, a glide): as a tap anywhere stops
+/// an old view's list flung, what was tapped taking it as that alone.
+pub fn Scroll::stop(self : Scroll) -> Unit {
+  guard self.host is Some(v) else { return }
+  @signals.untracked(fn() { self.stopped(v.logic_at()) }) |> ignore
+}
+
+///|
+/// The first page list laid out in the window. Retained pages keep their lists while laid out nowhere; those must
+/// not hide the page in view from the Tester. This is layout state, readable before painting as well as after it.
+fn Tree::page_list(self : Tree, windowed? : Bool = false) -> Scroll? {
+  for _, s in self.scrolls_at {
+    guard s.as_list && (!windowed || s.rows is Some(_)) else { continue }
+    match s.host {
+      Some(v) if !v.shown_nowhere() => return Some(s)
+      _ => ()
+    }
+  }
+  None
+}
+
+///|
+/// Whether the shown page's list is at its end at the logic's moment (within half a point of as far as it scrolls).
+pub fn Tree::list_at_end(self : Tree) -> Bool? {
+  self.page_list().map(fn(s) { s.at(self) >= s.most() - 0.5 })
+}
+
+///|
+/// The shown page list's blocks in sight (View::scrolls_window), first and last by their places (-1, -1 none).
+pub fn Tree::list_rows(self : Tree) -> (Int, Int)? {
+  self.page_list(windowed=true).bind(fn(s) { s.rows.map(fn(r) { @signals.untracked(r.0) }) })
+}
+
+///|
+/// Put the shown page's list with its block `i` at its top, following its end no more; whether it has one.
+pub fn Tree::list_to_row(self : Tree, i : Int) -> Bool {
+  match self.page_list(windowed=true).bind(fn(s) { s.rows }) {
+    Some((_, put, _, _)) => { put(i); true }
+    None => false
+  }
+}
+
+///|
+/// How far the shown page list's top is past its first block in sight's top; None where it has none.
+pub fn Tree::list_offset(self : Tree) -> Double? {
+  self.page_list(windowed=true).bind(fn(s) { s.rows.map(fn(r) { @signals.untracked(r.2) }) })
+}
+
+///|
+/// The shown page list's row `i`, while built: its allocated box in the window. Its content may be taller while
+/// its room opens or closes; this is the room the list gives it, as an old list's row reports.
+pub fn Tree::list_row(self : Tree, i : Int) -> (Double, Double, Double, Double)? {
+  self.page_list(windowed=true).bind(fn(s) { s.rows.bind(fn(r) { @signals.untracked(fn() { (r.3)(i) }) }) })
 }

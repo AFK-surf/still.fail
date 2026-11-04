@@ -368,6 +368,28 @@ fn download_option(src : Source, here : MessageHere, a : Attachment, owner : Str
 }
 
 ///|
+/// A video brought to this device to play here, or stopped where it is. Shared by its old and retained menus.
+fn video_load_options(src : Source, here : MessageHere, a : Attachment, owner : String) -> Array[@sf.MenuItem?] {
+  let name = stored_name(a.path)
+  let saving = download_of(src, here.station, owner, name)
+  let brought = keeping_of(src, here.station, owner, name)
+  if (a.upload != "" && a.path == @sfbase.upload_path(a.upload)) || flag(saving, "active") {
+    []
+  } else if brought is Some(_) {
+    let id = text(brought, "id")
+    [Some(@sf.menu_item_of(@sf.t("web-main.file.stopLoading"), fn() { keeping_stop(src, id) }, icon="stop"))]
+  } else {
+    let (station, size) = (here.station, a.size)
+    let from : Map[String, Json] = { "session": Json::string(here.session), "file": attachment_json(a, a.owner) }
+    match here.view.thread {
+      Some(n) => from["thread"] = Json::number(n)
+      None => ()
+    }
+    [Some(@sf.menu_item_of(@sf.t("web-main.file.load"), fn() { fill_want(src, station, owner, name, size, Json::object(from)) }, icon="download"))]
+  }
+}
+
+///|
 /// A message's file as the chat draws it, by its kind.
 fn file_drawn(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?, landing_key? : String = "", media? : MediaPicture? = None, corner? : Double = @sf.message_file_corner, at? : String = "") -> Unit {
   match file_kind(a.name) {
@@ -596,31 +618,8 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   if c.clicked(open) && !going_up {
     open_file(here, a, at~)
   }
-  let name = stored_name(a.path)
-  let saving = download_of(src, here.station, owner, name)
-  let brought = keeping_of(src, here.station, owner, name)
-  // (being downloaded to be saved: it comes anyway, nothing to load or stop here)
-  let load : Array[@sf.MenuItem?] = if going_up || flag(saving, "active") {
-    []
-  } else if brought is Some(_) {
-    let id = text(brought, "id")
-    [Some(@sf.menu_item_of(@sf.t("web-main.file.stopLoading"), fn() { keeping_stop(src, id) }, icon="stop"))]
-  } else {
-    let (station, size) = (here.station, a.size)
-    // (where it was asked: its chat and the file, as its viewer would say it, the list leading back here)
-    let from : Map[String, Json] = { "session": Json::string(here.session), "file": attachment_json(a, a.owner) }
-    match here.view.thread {
-      Some(n) => from["thread"] = Json::number(n)
-      None => ()
-    }
-    [
-      Some(
-        @sf.menu_item_of(@sf.t("web-main.file.load"), fn() { fill_want(src, station, owner, name, size, Json::object(from)) }, icon="download"),
-      ),
-    ]
-  }
   let more = [download_option(src, here, a, owner)]
-  more.append(load)
+  more.append(video_load_options(src, here, a, owner))
   file_menu(c, open, "", quote=quote_of(here, a, owner, by), more~)
   // (its name, which nothing over its picture says)
   @sf.tip(c, "msg-file/" + place + "/" + @sfbase.file_key(a), open, a.name, repeats=true)
@@ -884,6 +883,7 @@ fn message_reset() -> Unit {
   reveals.clear()
   notices_open.clear()
   notices_copied.clear()
+  mine_landings.clear()
 }
 
 ///|

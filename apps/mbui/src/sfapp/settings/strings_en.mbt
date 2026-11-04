@@ -1724,7 +1724,6 @@ let en : Map[String, String] = {
   "web-pages.vault.personal": "Personal",
   "web-pages.vault.private": "Only for you",
   "web-pages.vault.promptBody": "This device is in the lock of security mode and asked for the key to “{vault}” {at}. With it, it can use the secrets in that vault.",
-  "web-pages.vault.promptBy": "Put in the lock by {by}, not paired by you: give the key only if it is yours",
   "web-pages.vault.promptGive": "Give the key",
   "web-pages.vault.promptLater": "Later",
   "web-pages.vault.promptTitle": "{device} asks for a vault key",

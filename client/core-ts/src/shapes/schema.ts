@@ -1752,8 +1752,6 @@ export const SHAPES: Record<string, Shape> = {
     ["deviceText", "String", { said: true, doc: "Its name as people know it (LockDevice `fullText`)." }],
     ["at", "i64", { client: "I54", doc: "When it was set up, or last asked (its certificate's date, unix seconds)." }],
     ["atText", "String", { said: true, doc: "That, in words (3 分钟前)." }],
-    ["own", "bool", { doc: "Its person put it in the lock themselves (a device of theirs signed its entry). Else an admin did, under their name: it is given the key only as the person asks here (not by itself as its certificate comes), and the prompt says who put it in." }],
-    ["byText", opt("String"), { said: true, doc: "Not `own`: who put it in the lock, by name." }],
   ], { doc: "A member's device set up that waits on this one for a vault's key (views/vault.ts `vaultAsks`, LockPromptsView `asks`)." }),
   VaultItemRow: struct([
     ["id", "String"],

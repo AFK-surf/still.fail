@@ -42,7 +42,7 @@ export class Beside {
 /// options left out). `station` is `"<workspace>/<station>"`.
 export type Topic = { topic: string; [param: string]: unknown };
 
-type Param = "string" | "u64" | "u32" | "u16" | "bool";
+type Param = "string" | "u64" | "u32" | "u16" | "bool" | "object";
 /// How each param is kept: `req` must be given; `def` is filled in when absent (and always sent); `opt` is null when
 /// absent and sent so; `skip` is left out when absent (`skip_serializing_if`); `skipFalse`, a bool left out when false.
 type Spec = Record<string, [Param, "req" | "def" | "opt" | "skip" | "skipFalse"]>;
@@ -113,7 +113,7 @@ export const TOPICS: Record<string, Spec> = {
   imageNear: { station: S, thread: ["u64", "opt"], session: ["string", "opt"], path: S, at: ["string", "skip"] },
   longJobs: { scope: S },
   stationUsage: { station: S },
-  usage: { scope: S, days: ["u32", "skip"] },
+  usage: { scope: S, days: ["u32", "skip"], split: ["string", "skip"], only: ["object", "skip"], day: ["string", "skip"] },
   fleet: { scope: S },
   railCard: { scope: S, place: S },
   settings: { scope: S },
@@ -161,6 +161,8 @@ function fits(value: unknown, kind: Param): boolean {
       return typeof value === "string";
     case "bool":
       return typeof value === "boolean";
+    case "object":
+      return isObject(value);
     default:
       return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= LIMITS[kind]!;
   }

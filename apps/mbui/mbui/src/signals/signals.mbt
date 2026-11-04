@@ -21,6 +21,7 @@ priv struct Run {
   mut cycle : Int
   mut run_depth : Int
   mut batch_depth : Int
+  mut batch_changed : Bool
   mut notify_index : Int
   mut queued_length : Int
   mut active_sub : ReactiveNode?
@@ -41,6 +42,7 @@ let run : Run = {
   cycle: 0,
   run_depth: 0,
   batch_depth: 0,
+  batch_changed: false,
   notify_index: 0,
   queued_length: 0,
   active_sub: None,
@@ -111,6 +113,7 @@ fn update(node : ReactiveNode) -> Bool {
 
 ///|
 fn notify(first : ReactiveNode) -> Unit {
+  if run.batch_depth > 0 { run.batch_changed = true }
   let mut effect = first
   let mut insert_index = run.queued_length
   let mut first_inserted = insert_index
@@ -217,13 +220,16 @@ pub fn batch_depth() -> Int {
 
 ///|
 pub fn start_batch() -> Unit {
+  if run.batch_depth == 0 { run.batch_changed = false }
   run.batch_depth += 1
 }
 
 ///|
 pub fn end_batch() -> Unit {
   run.batch_depth -= 1
-  if run.batch_depth == 0 {
+  // An unchanged batch inside a queued watcher adds no work of its own. Let the outer flush finish the queue
+  // instead of nesting every independent watcher. A batch that writes still commits before its caller continues.
+  if run.batch_depth == 0 && (run.flushing == 0 || run.batch_changed) {
     flush()
   }
 }
@@ -553,6 +559,7 @@ pub fn[T] Signal::set(self : Signal[T], value : T, loc~ : SourceLoc) -> Unit {
   let changed = !same_as(state.same, state.pending, value)
   state.pending = value
   if changed {
+    if run.batch_depth > 0 { run.batch_changed = true }
     // (set as a watch reads: where, for it to say what changed what it read as it read, Watch::set_as_read)
     if watch_reading.depth > 0 && watch_reading.sets.length() < 4 {
       watch_reading.sets.push(loc.to_string())
@@ -715,6 +722,7 @@ pub fn[T] untracked(f : () -> T) -> T {
 /// The computed worked out again as it is next read, whatever it read (what reads it told, as a signal set tells it):
 /// for one built again for what is no signal (a part kept, Ctx::kept_part: its key, the pointer over it).
 pub fn[T] Computed::invalidate(self : Computed[T]) -> Unit {
+  if run.batch_depth > 0 { run.batch_changed = true }
   let node = self.0
   node.flags = node.flags | DIRTY
   match node.subs {
@@ -978,4 +986,3 @@ pub fn Watch::on_marked(self : Watch, f : () -> Unit) -> Unit {
   guard self.node.own is WatchOwned(o) else { abort("a watch without its own") }
   o.marked.val = Some(f)
 }
-

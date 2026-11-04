@@ -1677,7 +1677,6 @@ web-pages.vault.opened
 web-pages.vault.personal
 web-pages.vault.private
 web-pages.vault.promptBody
-web-pages.vault.promptBy
 web-pages.vault.promptGive
 web-pages.vault.promptLater
 web-pages.vault.promptTitle

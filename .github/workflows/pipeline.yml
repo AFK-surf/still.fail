@@ -546,6 +546,72 @@ jobs:
         uses: actions/upload-artifact@v4
         with: { name: "cloud-web-${{ github.sha }}", path: dist/cloud-web, include-hidden-files: true, retention-days: 90 }
 
+  # monoid's cloud (deploy.py CLOUDS: monoid.build, its test channel monoid.zone), in the company's Cloudflare account:
+  # the same API and static parts, after still.fail's, as their own jobs (each fits its 5 minutes on its own). Its
+  # secrets are its own token and keys.json; the Google client, the push keys, PostHog and Axiom are still.fail's (one
+  # app). Not its sites (still.fail's words and downloads, until monoid has its own) nor its relay (by hand, as ours).
+  monoid-api:
+    needs: [plan, api]
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.plan.outputs.api == 'true' && needs.api.result == 'success' }}
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - name: Deploy api to monoid
+        env:
+          STILLFAIL_CLOUD: monoid
+          CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
+          STILLFAIL_ADMIN_EMAIL: ${{ secrets.STILLFAIL_ADMIN_EMAIL }}
+          DEPLOY_KEYS_JSON: ${{ secrets.MONOID_DEPLOY_KEYS_JSON }}
+          GOOGLE_OAUTH_JSON: ${{ secrets.GOOGLE_OAUTH_JSON }}
+          AXIOM_JSON: ${{ secrets.AXIOM_JSON }}
+          VAPID_JSON: ${{ secrets.VAPID_JSON }}
+          FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
+          APNS_JSON: ${{ secrets.APNS_JSON }}
+          APPLE_JSON: ${{ secrets.APPLE_JSON }}
+          REVIEW_ACCOUNTS_JSON: ${{ secrets.REVIEW_ACCOUNTS_JSON }}
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+        run: sh .github/deploy.sh api
+
+  monoid-static:
+    needs: [plan, static, monoid-api]
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.static.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.monoid-api.result) }}
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - id: parts
+        run: |
+          parts=$(printf '%s\n' ${{ needs.plan.outputs.parts }} | { grep -vE '^site(-beta)?$' || true; } | tr '\n' ' ')
+          echo "parts=$parts" >> "$GITHUB_OUTPUT"
+      - if: steps.parts.outputs.parts != ''
+        uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - if: steps.parts.outputs.parts != ''
+        uses: ./.github/actions/setup
+      - if: steps.parts.outputs.parts != ''
+        uses: ./.github/actions/natives
+      - if: steps.parts.outputs.parts != ''
+        id: page
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: "mbui-web-${{ github.sha }}", path: web/public/mbui }
+      - if: steps.parts.outputs.parts != '' && steps.page.outcome == 'failure'
+        uses: actions/download-artifact@v4
+        with: { name: "mbui-web-${{ github.sha }}", path: web/public/mbui }
+      - name: Deploy ${{ steps.parts.outputs.parts }} to monoid
+        if: steps.parts.outputs.parts != ''
+        env:
+          STILLFAIL_CLOUD: monoid
+          CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+        run: sh .github/deploy.sh ${{ steps.parts.outputs.parts }}
+      - if: contains(steps.parts.outputs.parts, 'web-beta')
+        uses: actions/upload-artifact@v4
+        with: { name: "monoid-cloud-web-${{ github.sha }}", path: dist/cloud-web, include-hidden-files: true, retention-days: 90 }
+
   # The test channel's releases are built beside the check (the builds are most of a release: before 2026-10-04 they
   # waited for the check and the API). The apps' files, named by their version, go in the bucket at once (nothing points
   # at them yet); the station's (named the same each time: what installs get) go in at once under staged/, and with
@@ -928,8 +994,8 @@ jobs:
 
   # main, once all of it is out: the tag the next run's range starts from, and what is left to do by hand.
   done:
-    needs: [plan, natives, check, check-linux, check-browser, api, static, station, modules, android, desktop, desktop-win, put]
-    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.check-browser.result == 'success' || (needs.check-browser.result == 'skipped' && needs.plan.outputs.browser != 'true')) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result)
+    needs: [plan, natives, check, check-linux, check-browser, api, static, monoid-api, monoid-static, station, modules, android, desktop, desktop-win, put]
+    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.check-browser.result == 'success' || (needs.check-browser.result == 'skipped' && needs.plan.outputs.browser != 'true')) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.monoid-api.result) && contains(fromJSON('["success","skipped"]'), needs.monoid-static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result)
     runs-on: [self-hosted, quick]
     timeout-minutes: 5
     permissions:
@@ -954,7 +1020,7 @@ jobs:
   # How long this run took against its budget (scripts/ci-time.ts): in the run's summary, and a warning when over. A
   # station's watch reads the same of every run and has an agent find why one went over.
   timing:
-    needs: [plan, natives, check, check-linux, check-browser, bundle, mac-build, api, static, station, station-update, modules, android, desktop, desktop-win, put, changelog, done]
+    needs: [plan, natives, check, check-linux, check-browser, bundle, mac-build, api, static, monoid-api, monoid-static, station, station-update, modules, android, desktop, desktop-win, put, changelog, done]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5

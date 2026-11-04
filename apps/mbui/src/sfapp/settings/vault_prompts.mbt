@@ -65,10 +65,6 @@ fn key_ask_sheet(core : Core, r : Json) -> Unit {
       c.text(fill("web-pages.vault.promptBody", [("vault", text(rv, "vaultName")), ("at", text(rv, "atText"))]), style=key_ask_body)
       |> ignore
       c.text(text(rv, "workspaceName") + " · " + text(rv, "vaultName"), style=key_ask_where) |> ignore
-      // put in the lock by someone else (an admin, under this person's name): said, so they know what they give to
-      if !flag(rv, "own") {
-        c.text(fill("web-pages.vault.promptBy", [("by", text(rv, "byText"))]), style=key_ask_warn) |> ignore
-      }
       c.box(style=key_ask_buttons, fn() {
         let giving = is_doing(core, ["vault.addDevice"], on)
         if wide_button(c, "vault-key-give", tr("web-pages.vault.promptGive"), true, busy=giving) {
@@ -103,7 +99,6 @@ let key_ask_where : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, 
 ///|
 /// That someone else put the device in the lock (13, in the warning's ink).
 // kept across runs: a value (no field of it changes)
-let key_ask_warn : @ui.TextStyle = @ui.text_style(size=Meta, color=WarnInk, w=Full)
 
 ///|
 /// 授权 over 稍后, each as wide as the sheet, 8 apart, 16 over the sheet's foot (pair_deny_room's).

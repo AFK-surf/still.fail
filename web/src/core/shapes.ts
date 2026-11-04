@@ -4940,10 +4940,6 @@ export interface VaultKeyAsk {
 	at: number;
 	/** That, in words (3 分钟前). */
 	atText: string;
-	/** Its person put it in the lock themselves (a device of theirs signed its entry). Else an admin did, under their name: it is given the key only as the person asks here (not by itself as its certificate comes), and the prompt says who put it in. */
-	own: boolean;
-	/** Not `own`: who put it in the lock, by name. */
-	byText?: string;
 }
 
 /** What waits on this device from new devices: to approve them face to face (views/pair.ts), to give them a vault's key (the `lockPrompts` topic). */

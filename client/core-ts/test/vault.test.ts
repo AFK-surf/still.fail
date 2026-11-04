@@ -929,11 +929,11 @@ test("certificates coming one upon another while a key is being given: given in 
   r.core.close();
 });
 
-test("a device an admin put in the lock under the person's name is given no key by itself: it waits, saying who put it in, till the person gives it", async () => {
+test("a device an admin put in the lock under the person's name is no one's: given no key, prompted for nowhere, and what it signs counts for nothing", async () => {
   // An admin adds devices under any member's name with no code typed (lock-check.ts `device`): one under the owner's
-  // name, signing with a key of the admin's own, was given the vault's key as its certificate came (review of #3624).
-  // The lock does not tell it from one the admin approved for the person face to face, so it is not refused: given as
-  // the person asks, told who put it in.
+  // name, signing with a key of the admin's own, was given the vault's key as its certificate came (review of #3624),
+  // then waited on a prompt for one tap (2026-11-04: and it signed as the owner, in the lock and the vault). Now only
+  // a person's own devices count: one an admin puts in after their first is in the lock, and is given nothing.
   const r = await rig();
   r.putLock();
   const { made: id } = await r.ask("vault.setup", {});
@@ -942,27 +942,29 @@ test("a device an admin put in the lock under the person's name is given no key 
   grow(r, "member", { sub: "s2", email: "b@x.com", role: "admin" });
   const evil = key(fill(13));
   grow(r, "device", { id: evil.hex, sub: "s1", kind: "app", label: "iPhone", sign_key: evil.id }, r.other);
+  const checked = checkLock(r.lock.entries as Entry[], 4000);
+  assert.deepEqual([checked.devices.get(evil.hex)?.own, checked.devices.get(r.phone.hex)?.own], [false, true]);
+  // What it signs as the owner keeps the chain going and changes nothing: no one made an owner, the lock still on.
+  grow(r, "member", { sub: "s2", email: "b@x.com", role: "owner" }, evil);
+  grow(r, "disable", {}, evil);
+  const after = checkLock(r.lock.entries as Entry[], 4000);
+  assert.deepEqual([after.members.get("s2"), after.disabled], ["admin", false]);
   const evilCert = sign({ v: 1 as const, ws: "ws", device: evil.hex, box: boxPublic(fill(14)), at: 2000 }, TAG.box, evil);
   r.st.boxes.set(evil.hex, evilCert);
   r.push("vault-box", evilCert);
   await r.host.time.pass(500);
   r.take();
-  assert.deepEqual([r.st.vaults.get(id)!.seq, vaults().vaults[0].missing, prompts().asks.length], [0, 1, 1], "not given by itself; waiting");
-  assert.deepEqual([prompts().asks[0].own, prompts().asks[0].byText], [false, "s2"]);
-  // Given as the person asks (授权 on the prompt): the key sealed to it, the certificate as its device signed it.
-  assert.deepEqual(await r.ask("vault.addDevice", { vault: id, device: evil.hex }), { added: 1 });
-  const given = r.st.vaults.get(id)!.keys.find((k) => k.cert.device === evil.hex)!;
-  assert.ok(signedOk(given.cert, TAG.box), "the certificate carried as signed, nothing added to it");
-  assert.deepEqual(Object.keys(given.cert).sort(), ["at", "box", "device", "sig", "v", "ws"]);
-  assert.deepEqual([vaults().vaults[0].missing, prompts().asks.length], [0, 0]);
+  assert.deepEqual([r.st.vaults.get(id)!.seq, vaults().vaults[0].missing, prompts().asks.length], [0, 0, 0], "not given, not waiting");
+  // Not given as the person asks either.
+  assert.deepEqual(await r.ask("vault.addDevice", { vault: id, device: evil.hex }), { added: 0 });
   // The owner's own phone, added by themselves: given at once, as before.
   const phoneCert = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(fill(7)), at: 2001 }, TAG.box, r.phone);
   r.st.boxes.set(r.phone.hex, phoneCert);
   r.push("vault-box", phoneCert);
   await r.host.time.pass(500);
   r.take();
-  assert.deepEqual(r.st.vaults.get(id)!.keys.map((k) => k.cert.device).sort(), ["ab".repeat(32), evil.hex, r.phone.hex].sort());
-  for (const k of r.st.vaults.get(id)!.keys) assert.ok(signedOk(k.cert, TAG.box) && !("own" in k.cert) && !("sub" in k.cert), "each certificate as its device signed it");
+  assert.deepEqual(r.st.vaults.get(id)!.keys.map((k) => k.cert.device).sort(), ["ab".repeat(32), r.phone.hex].sort());
+  for (const k of r.st.vaults.get(id)!.keys) assert.ok(signedOk(k.cert, TAG.box) && !("sub" in k.cert), "each certificate as its device signed it");
   r.core.close();
 });
 

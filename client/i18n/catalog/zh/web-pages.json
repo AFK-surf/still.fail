@@ -1870,7 +1870,6 @@
   "web-pages.vault.promptBody": "这台设备已在安全模式的锁里，{at}申请「{vault}」的钥匙。授权后它就能用这个库里的密钥。",
   "web-pages.vault.promptGive": "授权",
   "web-pages.vault.promptLater": "稍后",
-  "web-pages.vault.promptBy": "这台设备是 {by} 加进锁里的，不是你自己配对的；确认是你的设备再授权",
   "web-pages.vault.recover": "使用恢复码",
   "web-pages.vault.recoverGo": "恢复",
   "web-pages.vault.recoverLead": "输入 24 个词，以空格分隔",

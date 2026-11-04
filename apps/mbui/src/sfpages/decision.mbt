@@ -129,7 +129,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
                       Some(tu) if !list[i].closes => {
                         tu.keep_turn(c)
                         // (asked of the list: its key names it only where it is built, not in this row)
-                        reading_of(here.station + "\u{1}" + here.session).end_asked = true
+                        reading_of(here.station + "\u{1}" + here.session).end_asked.set(true)
                       }
                       _ => ()
                     }

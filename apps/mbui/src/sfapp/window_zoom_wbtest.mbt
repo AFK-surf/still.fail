@@ -45,9 +45,10 @@ test "window zoom: the chat remains usable at both limits" {
     }
     let faults = t.corner_faults()
     assert_true(faults.is_empty(), msg="zoom \{zoom}: \{faults}")
-    guard t.boxes().iter().find_first(fn(b) { b.kind == "editor" }) is Some(editor) else { fail("no chat editor at zoom \{zoom}") }
+    guard tape_composer_field(t) is Some(editor) else { fail("no chat editor at zoom \{zoom}") }
     let (w, h) = t.ctx().window_size()
-    let (x, y) = (editor.x + editor.w / 2.0, editor.y + editor.h / 2.0)
+    let (ex, ey, ew, eh) = editor.rect
+    let (x, y) = (ex + ew / 2.0, ey + eh / 2.0)
     assert_true(x >= 0.0 && x < w && y >= 0.0 && y < h, msg="the chat editor is outside the window at zoom \{zoom}")
     t.tap(x, y)
     t.type_text("第一行")

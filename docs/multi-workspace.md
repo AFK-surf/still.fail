@@ -41,6 +41,7 @@
 - station 的主 workspace 开了锁、目标 workspace 没开锁，就拒绝（`409 locked_workspace`）；目标开了锁、而 station 没在请求里说 `locks: true`（会在每个 workspace 钉锁的版本才说），也拒绝：旧版 station 会把那里的成员当成 cloud 说了算。目标开了锁时，加入方的设备在请求里带上它手上那把锁的头（`lock`，和 `enroll --lock` 一样），station 记下这个哈希；cloud 把那把锁带过来、锁链里有这一条时才钉住。在这之前，这个 workspace 的人一个都不放进来。core 的 `station.join` 接着用这台设备的签名把 station 加进那把锁（`lock.addStation`，短码由 core 自己算）；签不了的话，由那个 workspace 的 owner 照短码确认。
 - cloud 在回应加入之前就给 station 发了 `state` 帧，那时 station 还没写下要钉哪把锁，这一帧什么也不会去要；station 写下之后自己去要（`presence.ts` `pendingAsks`：听到加入时、每次 ping 时，每个连接每把锁要一次）。以前要等 cloud 下一次发 `state` 帧，可能几天都不来，这期间 station 不接受那个 workspace 的任何人，那边一直显示离线（2026-10-23）。
 - station 因为锁不接受某个加入的 workspace 的成员时（`Cloud.leftOut`：`pending` 锁还没送到、`unpinned` 加入后那边才开锁、`home` 自己的主 workspace 开了锁而那边没开），对凭证按 cloud 的签法核对得上的设备回 `{code: "lock_station", why}`；core 把它当作被安全模式拦下（link 的 `cause: "lock"`），列表、station 页、对话里说原因和怎么办，不说离线。核对不上的设备照旧只得到 `credential_refused`。
+- `unpinned`（那边开锁时这台不在线、没进 genesis）：station 向 cloud 要那个 workspace 的锁，锁里一写上它（owner 在「设置 › 安全」点它旁边的「保护」，`lock.joinStation` 这时只签 `station` 条目、不去连它）就自己钉上，成员随即能进（`presence.ts` `takeFromPlane`）。这台 station 那边开锁前本来就按 cloud 的话放人，钉的这份锁还得是 owner 签的、写着它，所以不降低安全。以前只能把它从那个 workspace 移除再重新加入，「保护」按钮也报同一句错（2026-11-04 一台这样拒绝了 4 个人两个小时）。
 - state 帧的 `workspaces[]` 每项带自己的 `lock`（锁头）和 `locked: true`（开着锁）；`lock.get`/`lock.put`/`lock` 帧可带 `workspace`，不带就是主 workspace 的。cloud 的 workspace 视图多一个 `locked: true`，core 用它决定候选列表里要不要列出主 workspace 开了锁的 station。
 - 回应和 enroll 一样带 `workspace`、`workspace_name`、`name`，另外带 `home`（主 workspace 的 id）。
 

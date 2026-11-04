@@ -25,14 +25,6 @@ let chat_title_line : Double = 16.0 * 1.4
 let composer_room : Double = 110.0
 
 ///|
-/// The list's gap between messages (web mobile --list-gap), and under the viewer's message sent soon after the one
-/// before it (`joined`).
-let gap : Double = 20.0
-
-///|
-let joined_gap : Double = 4.0
-
-///|
 /// Where the chat's bar ends, from the list's top (the list runs on under it), and what the list keeps over its first
 /// row: 14 under the bar (Chat.kt).
 fn bar_foot() -> Double {
@@ -51,108 +43,10 @@ fn list_foot() -> Double {
 }
 
 ///|
-/// How far under the list's top the unread line opens: a few lines of what came before it in view (Chat.kt 85).
-fn unread_lead() -> Double {
-  85.0
-}
-
-///|
-/// The chat's page.
-fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
-  let t = @sf.theme()
-  let (view, list, error) = view_of_chat(src, r)
-  // (named to know where it is, not pressed: what is pressed in it is what holds it's)
-  let page = c.id("chat/page")
-  // words dragged in from another app and let go anywhere on it but a field (a field takes them where they were let
-  // go): into the composer's field at its caret, as a paste's
-  // files from this machine's Finder let go anywhere on it but another field, where it is a station: into the draft by
-  // their station and path, as a row of the 文件 tab put there (its composer takes them, files_taken); elsewhere as
-  // words, as above
-  if @sfbase.finder_by_station() {
-    match c.paths_into(page, @sfpages.composer_field_key) {
-      Some(paths) =>
-        for d in @sfbase.finder_dragged(src, paths) {
-          @sfbase.files_into(draft_key(r), d)
-        }
-      None => ()
-    }
-  }
-  c.words_into(page, @sfpages.composer_field_key)
-  // over the navigation bar (ChatHost.kt: windowInsetsPadding(keyboard.union(navigationBars)))
-  c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, pb=nav_foot(), id=page, taps=false, points=true, fn() {
-    match view {
-      None => {
-        // until the core has it, already a chat's page: its bar with the title it was opened by (a row's, a new
-        // chat's), the messages to come in their bones
-        bar_frame(c, r.title, fn() {  }, fn() {  }, false)
-        let failed = match error {
-          Some(e) =>
-            Some(
-              fill("android-chat.chat.unreadable", [("error", text(Some(e), "message"))]),
-            )
-          None => None
-        }
-        // a chat just made from a new chat (its scene leaving, its first words on their way) is the core's own:
-        // nothing to read from a station, nothing breathing for the frames until the core's view of it comes
-        // (Chat.kt made)
-        if failed is Some(_) || !@sfbase.new_chat_made(c, r) {
-          waiting_messages(c, failed)
-        }
-        c.layer(fn() { chat_foot(c, src, w, r, None) })
-        |> ignore
-        // its first words, as typed, till their row is in the list (flight.mbt; their wait for it counted from now)
-        flight_frame(c, draft_key(r))
-        flight_waiting(c, draft_key(r))
-        flight_files(c, draft_key(r))
-      }
-      Some(v) => {
-        // coming to need the viewer while open, felt (feel.mbt)
-        @sfbase.feel_needed(c, r, v)
-        // its messages: the pages' one list, laid out by its width (sfpages chat_list.mbt), under the bar, over the
-        // composer's room
-        @sfpages.chat_list(
-          c,
-          src,
-          r,
-          v,
-          list,
-          chat_foot_room(c, r, Some(v)),
-          settings_core(src, w),
-          top=list_top(),
-          lead=unread_lead(),
-          bar=bar_foot(),
-          foot=list_foot(),
-        )
-        let foot = c.layer(fn() { chat_foot(c, src, w, r, Some(v)) })
-        // (over the viewer's picture as it flies from the list or back into it)
-        over_flight(c, foot)
-        // words sent, as typed, until their row is in the list (flight.mbt)
-        flight_waiting(c, draft_key(r))
-        // and the files sent with them, from their tiles to their places (flight.mbt)
-        flight_files(c, draft_key(r))
-        // the bar over all of it (@ui.Stratum's Bar): what flies to the list goes under it, as the list does
-        let bar = c.layer(fn() { chat_bar(c, src, w, r, v) })
-        c.stratum(bar, Bar)
-        over_flight(c, bar)
-        // a passage picked: its handles and its bar over the list (pick.mbt)
-        pick_layer(c, src, r)
-      }
-    }
-  })
-  |> ignore
-}
-
-
-///|
 /// The chat's list, its key.
 fn list_key(r : ChatRef) -> String {
   "chat/" + r.station + "/" + r.session
 }
-
-///|
-/// How far a row new to the list comes up as it fades in (Chat.kt rise: 14, over its turn's 320 ms, the standard
-/// curve).
-let rise_dy : Double = 14.0
 
 ///|
 /// A chat opened over Home from the start at its message `seq`, as a notification opens it; `held`: its flash kept at
@@ -206,191 +100,7 @@ fn chat_left(src : Source, r : ChatRef) -> Unit {
 let ask_turns : Map[String, Int] = {}
 
 ///|
-/// How long the bell rises over the way to the end as that comes, and goes back down.
-let ask_lift_ms : Double = 200.0
-
-///|
 let bar_drop_people : Int = 1
-
-///|
-/// The bar's frame (Chat.kt BarFrame), the same while the chat is read and once it is: back, the title, what follows
-/// it, what is at its end, and "…".
-fn bar_frame(
-  c : @ui.Ctx,
-  title : String,
-  after : () -> Unit,
-  trailing : () -> Unit,
-  more : Bool,
-  on_info? : () -> Unit = fn() {  },
-  on_more? : (Int) -> Unit = fn(_) {  },
-) -> Unit {
-  let t = @sf.theme()
-  // under the status bar (Chat.kt BarFrame: windowInsetsPadding(statusBars), then TopBarHeight, as Home's bar)
-  c.box(dir=Row, w=Fill(1.0), pl=4.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), align=ACenter, fn() {
-    let back = c.id("chat-back")
-    if c.clicked(back) {
-      @sfbase.go_back() |> ignore
-    }
-    c.box(
-      w=Px(40.0),
-      h=Px(40.0),
-      radius=20.0,
-      align=ACenter,
-      justify=JCenter,
-      id=back,
-      fn() {
-        @sf.icon(c, "chevron-left", size=22.0, color=t.p.accent_text) |> ignore
-        // Chat.kt: back, clip(CircleShape).clickable
-        @motion.ripple(c, back, 20.0)
-      },
-    )
-    |> ignore
-    c.box(dir=Row, w=Fill(1.0), pr=8.0, gap=8.0, align=ACenter, fn() {
-      // the title whole beside what follows it while what follows may leave the row for it (chat_bar: its people, then
-      // its station's update), cut short only once nothing more may (a name: never cut while something less needed can
-      // go)
-      c.text(title, size=t.t.title, weight=600, color=t.p.text, wrap=false, line=chat_title_line, w=Cut, keep=true)
-      |> ignore
-      after()
-    })
-    |> ignore
-    trailing()
-    if more {
-      // what it is (its info's sheet), then what is done with it ("…": the menu a row of the list has)
-      c.box(style=bar_key_apart(), fn() {
-        if nav_button(c, "info", 20.0, key="chat-info", said=tr("android-chat.info.title")) {
-          on_info()
-        }
-      })
-      |> ignore
-      c.box(style=bar_key_apart(), fn() {
-        if nav_button(c, "more", 18.0, key="chat-more", said=tr("common.more")) {
-          on_more(c.id("chat-more"))
-        }
-      })
-      |> ignore
-    }
-  })
-  |> ignore
-}
-
-///|
-/// The chat's bar (Chat.kt ChatBar): its title from the left, then its people, then its agents' marks (the first's
-/// tile carrying the station it runs on); its services and jobs, its archive while nothing is left in it, and "…".
-/// Frosted glass over the messages, no line under it (the frost alone sets it off).
-fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
-  let t = @sf.theme()
-  let stations = stations_of((src.topic)("stations", { "scope": Json::string(w.id) }).value)
-  let station = stations.iter().find_first(fn(s) { s.address == r.station })
-  let jobs = (src.topic)("chatJobs", chat_jobs_summary_params(r))
-  let has_jobs = flag(jobs.value, "hasJobs") || items(jobs.value, "jobs").length() > 0
-  let archive = v.archivable && !v.archived
-  // 归档 comes and goes as nothing is left in the chat or something is again (Chat.kt ChatBar: 280 ms, ArchiveEase;
-  // fading, from or to 85%, its width from its end)
-  let archive_key = "bar-archive/" + r.station + "/" + r.session
-  let archive_look = @motion.presence(
-    c,
-    archive_key,
-    archive,
-    enter=@motion.trans(fade=0.0, scale=0.85, spec=archive_tween),
-  )
-  let archive_w = @motion.anim(c, archive_key + "/w", if archive { 1.0 } else { 0.0 }, global=true)
-  archive_w.follow(if archive { 1.0 } else { 0.0 }, archive_tween)
-  let archive_share = if archive_look is None { 0.0 } else { archive_w.get() }
-  let people = if v.people.length() > 5 { v.people[:5].to_array() } else { v.people }
-  let glass_top = c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
-    bar_frame(
-      c,
-      v.title,
-      fn() {
-        if v.agents.length() == 0 {
-          match station {
-            Some(s) => station_chip(c, r.station, s)
-            None => ()
-          }
-        }
-        if people.length() > 0 {
-          c.box(drop=bar_drop_people, fn() { people_stack(c, src, people, 16.0) }) |> ignore
-        }
-        for i, a in v.agents {
-          // each opens its card (AgentSheet.kt)
-          let id = c.id("bar-agent/" + a.key)
-          if c.clicked(id) {
-            open_agent(src, r, a.key)
-          }
-          c.box(id~, fn() {
-            if i == 0 {
-              agent_station_mark(c, a, station)
-            } else {
-              model_mark(c, a, 22.0)
-            }
-          })
-          |> ignore
-        }
-      },
-      fn() {
-        match archive_look {
-          Some(look) =>
-            // (coming with the room before it, as the keys after it stand apart: bar_key_apart)
-            c.box(dir=Row, w=Px((nav_key_side + bar_keys_apart()) * archive_share), justify=JEnd, fn() {
-              let b = c.box(w=Px(34.0), min_w=34.0, h=Px(34.0), fn() {
-                if doing("archive/" + r.station + "/" + r.session) {
-                  c.box(w=Px(34.0), h=Px(34.0), align=ACenter, justify=JCenter, fn() {
-                    @sf.spinner(c) |> ignore
-                  })
-                  |> ignore
-                } else if nav_button(c, "archive", 20.0, key="chat-archive", said=tr("android-chat.archive")) && archive {
-                  archive_chat(src, r, v)
-                }
-              })
-              c.look(b, look)
-              @motion.leaving(c, b, archive)
-            })
-            |> ignore
-          None => ()
-        }
-        if has_jobs {
-          // a dot when one died lately (red) or a service is started again (amber)
-          let alarm = text(jobs.value, "alarm")
-          c.box(style=bar_key_apart(), fn() {
-            if nav_button(c, "web", 20.0, key="chat-jobs") {
-              open_chat_jobs(src, r)
-            }
-            if alarm == "fail" || alarm == "restart" {
-              c.layer(align=AEnd, fn() {
-                c.box(pt=6.0, pr=6.0, fn() {
-                  c.box(w=Px(11.0), h=Px(11.0), radius=5.5, bg=t.p.bg, pad=2.0, fn() {
-                    c.box(
-                      w=Fill(1.0),
-                      h=Fill(1.0),
-                      radius=3.5,
-                      bg=if alarm == "fail" { t.p.red } else { 0xD9962BFFL },
-                      fn() {  },
-                    )
-                    |> ignore
-                  })
-                  |> ignore
-                })
-                |> ignore
-              })
-              |> ignore
-            }
-          })
-          |> ignore
-        }
-      },
-      // (a chat of a Slack or Feishu thread alone too: where it is, its agents, the way there: chat_info_body)
-      true,
-      on_info=fn() { open_info(src, r) },
-      on_more=fn(id) {
-        let chat = (src.topic)("chat", chat_params(r)).value
-        @sfpages.open_chat_menu(src, w.id, r, @sfpages.chat_extra_items(src, r, chat), from=Of(id))
-      },
-    )
-  })
-  // over what runs under it: the scroll bar there keeps clear of it
-  c.floats_over(glass_top)
-}
 
 ///|
 /// A station named in a small outlined tag (PageParts.kt StationTag): how it is reached as a dot, its mark, its name.
@@ -440,17 +150,6 @@ let station_tag_end : Double = 8.0
 let via_dot_side : Double = 7.0
 
 ///|
-/// The station's tag in a chat's bar while no agent is in it (PageParts.kt ChatStationChip): a tap opens its card
-/// (Stations.kt openStationPeek).
-fn station_chip(c : @ui.Ctx, address : String, s : Station) -> Unit {
-  let id = c.id("bar-station")
-  if c.clicked(id) {
-    @settings.open_station_peek(address, from=Of(id))
-  }
-  c.box(id~, fn() { station_tag(c, s) }) |> ignore
-}
-
-///|
 /// How a station is reached (StationLink.css.ts dot, cornerDot): the online green direct, amber through the relay, red
 /// offline, grey while it is being reached; ringed in the page's ground on a tile's corner.
 fn via_dot(c : @ui.Ctx, via : String, size : Double, ring : Double) -> Unit {
@@ -481,94 +180,6 @@ fn via_dot(c : @ui.Ctx, via : String, size : Double, ring : Double) -> Unit {
     },
   )
   |> ignore
-}
-
-///|
-/// At work, as a row says it (Spokes.kt): yellow spokes 10 across stepping round in 12, no disc round them (it showed as
-/// a dark rim).
-fn at_work_mark(c : @ui.Ctx) -> Unit {
-  @sf.spokes(c, 10.0, mark_yellow, box=12.0) |> ignore
-}
-
-///|
-/// An agent's mark (Parts.kt ModelMark, small, as a list's): its maker's mark on a soft tile, its state on the corner.
-fn model_mark(c : @ui.Ctx, a : Agent, size : Double) -> Unit {
-  let t = @sf.theme()
-  let (ground, line) = mark_ground()
-  c.box(w=Px(size), h=Px(size), fn() {
-    c.box(
-      w=Px(size),
-      h=Px(size),
-      radius=mark_corner(size),
-      bg=ground,
-      border=line,
-      border_color=t.p.line,
-      align=ACenter,
-      justify=JCenter,
-      fn() { @sf.maker_mark(c, a.maker, a.runtime, mark_logo(size)) |> ignore },
-    )
-    |> ignore
-    // its state on the corner, as every agent's mark has it (sfpages' agent_badge)
-    @sfpages.agent_badge(c, a.badge, size, t.p.bg)
-  })
-  |> ignore
-}
-
-///|
-/// The chat's first agent with the station it runs on, one tile (PageParts.kt AgentStationMark): the maker's
-/// square, then the station's mark or name; the agent's state on the maker's corner, how the station is reached on the
-/// tile's. Until the station is known, the agent's mark alone.
-fn agent_station_mark(c : @ui.Ctx, a : Agent, station : Station?) -> Unit {
-  let t = @sf.theme()
-  let m = mark_side()
-  let (ground, line) = mark_ground()
-  match station {
-    None => model_mark(c, a, m)
-    Some(s) =>
-      // (AgentStationMark: 「who · station」 to a screen reader)
-      c.box(label=a.who + " · " + s.name, fn() {
-        c.box(
-          dir=Row,
-          h=Px(m),
-          radius=6.0,
-          bg=ground,
-          border=line,
-          border_color=t.p.line,
-          align=ACenter,
-          fn() {
-            c.box(w=Px(m), h=Px(m), align=ACenter, justify=JCenter, fn() {
-              @sf.maker_mark(c, a.maker, a.runtime, mark_logo(m)) |> ignore
-            })
-            |> ignore
-            // the station's part: its mark, or its name kept short (the web's 140, its words .19 of the tile and 1 in)
-            let (most, inside, said_line) = station_part_type()
-            c.box(max_w=most, padx=inside, align=ACenter, fn() {
-              if @sf.has_station_mark(s.emoji, s.icon) {
-                @sf.station_mark(c, s.emoji, s.icon, mark_station(), t.p.muted)
-              } else {
-                c.text(s.name, size=t.t.caption, color=t.p.muted, wrap=false, line=said_line)
-                |> ignore
-              }
-            })
-            |> ignore
-          },
-        )
-        |> ignore
-        // the agent's state on the maker's corner, how the station is reached on the tile's: each 3 past it
-        c.layer(fn() {
-          c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), fn() {
-            c.box(w=Px(m), h=Px(m), fn() { @sfpages.agent_badge(c, a.badge, m, t.p.bg) }) |> ignore
-            c.spacer()
-            if s.via != "" {
-              c.box(tx=3.0, ty=m - 7.0, fn() { via_dot(c, s.via, 10.0, 2.0) }) |> ignore
-            }
-          })
-          |> ignore
-        })
-        |> ignore
-      })
-      |> ignore
-  }
 }
 
 ///|
@@ -676,9 +287,4 @@ let bench_on : Ref[Int] = { val: -1 }
 /// (@sf.keys_apart: 2 with keyboard and mouse, 10 with touch), the room before each.
 fn bar_keys_apart() -> Double {
   @sf.keys_apart(size=nav_key_side)
-}
-
-///|
-fn bar_key_apart() -> @ui.Style {
-  @ui.style(row=true, pl=@sf.room_of(bar_keys_apart()))
 }

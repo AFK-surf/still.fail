@@ -11,7 +11,7 @@ import { log } from "../ops/log.ts";
 import { nowSecs } from "../ops/files.ts";
 import { version } from "../ops/version.ts";
 import { type Cloud as CloudState, isRevocation, joinedOf, joinedPendingPath, pendingLockPath } from "./state.ts";
-import { type Entry, asEntry, entryHash } from "./lock.ts";
+import { type Entry, asEntry, entryHash, fold } from "./lock.ts";
 import type { StationKey } from "./key.ts";
 import { type ProviderSpec, signedHeaders } from "./provider.ts";
 import { wall } from "../ops/fibers.ts";
@@ -332,7 +332,9 @@ function syncLock(s: CloudState, head: any, send: (frame: unknown) => unknown, w
   const mine = s.locked(ws)?.state?.seq;
   if (mine === undefined) {
     const pending = ws === null ? pendingLock(s.data) : s.pendingLock(ws);
-    if (theirs >= 0 && pending !== null) send({ type: "lock.get", after: -1, ...which });
+    // (a joined workspace that turned its lock on after this station joined it, this station not in it then: its lock,
+    // pinned once it names this station, takeFromPlane)
+    if (theirs >= 0 && (pending !== null || (ws !== null && s.leftOut(ws) === "unpinned"))) send({ type: "lock.get", after: -1, ...which });
     return;
   }
   // The plane's lock another than the one pinned here: turned off and on again while this station was not there to hear
@@ -351,6 +353,21 @@ function takeFromPlane(s: CloudState, raw: unknown[], ws: string | null = null) 
   try {
     if (s.locked(ws) === null) {
       const pending = ws === null ? pendingLock(s.data) : s.pendingLock(ws);
+      // A joined workspace that turned its lock on after this station joined it: it takes none of its members (leftOut
+      // `unpinned`) until it pins a lock, which no device of it can bring (it refuses them all). Its lock as the plane
+      // has it, once that names this station (its owner put it in, `lock.joinStation`): pinned, as it was the plane's
+      // word it took for that workspace before (2026-11-04: a workspace's members turned away for two hours, then the
+      // station removed from it and added again).
+      if (pending === null && ws !== null && s.leftOut(ws) === "unpinned") {
+        let named = false;
+        try {
+          named = fold(entries as Entry[], null).stations.has(s.state?.station ?? "");
+        } catch {
+          named = false;
+        }
+        if (named) s.takeLock(entries as Entry[], ws);
+        return;
+      }
       if (pending === null) return;
       if (!entries.some((e) => entryHash(e!) === pending)) return log.warn("lock", "the control plane's lock is not the one this station was enrolled with", ws === null ? {} : { workspace: ws });
       s.takeLock(entries as Entry[], ws);
