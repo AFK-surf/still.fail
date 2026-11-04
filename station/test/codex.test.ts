@@ -696,8 +696,9 @@ describe("the Codex driver", { concurrency: true }, () => {
     const gate = gates(p.dump, "kept");
     await two.prompt("gate:6:3:kept");
     await a2.until((e) => deltas(e).length >= 3);
-    // Another turn ends while that one runs: reading again still begins where that one began.
-    await one.prompt("say:meanwhile");
+    // Another turn ends while that one runs, saying more than the runner gives back at once (32 MiB, native/runner
+    // `punch`): reading again still begins where that one began, and the runner keeps it.
+    await one.prompt(`say:${"x".repeat(34 * 1024 * 1024)}`);
     await a.until(ended(2));
     const info = existingRunners(data).find((r) => r.id === runnerId("codex", p.id))!;
     const out = readFileSync(join(data, "run", "runners", `${info.id}.out`));

@@ -194,6 +194,12 @@ export class AgentProcess {
     this.conn.write(line.endsWith("\n") ? line : `${line}\n`);
   }
 
+  /// The runner gives the disk back under its stdout only up to `at` (told with the next ack): what is read again after
+  /// a crash begins there.
+  keepFrom(at: number) {
+    this.conn.keep = at;
+  }
+
   /// Stops handling its lines: the next station is sent them.
   freeze() {
     this.frozen = true;

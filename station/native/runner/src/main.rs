@@ -460,9 +460,16 @@ fn handle(shared: &Shared, line: &[u8]) -> Result<Next, String> {
                 acked[i] = acked[i].max(n);
             }
             st.acked = acked;
+            // Of stdout, the station keeps what it reads again after a crash (from `keep` on: where the earliest turn
+            // still running began); without it, all that was acknowledged may go.
+            let keep = match message.get("keep") {
+                Some(n) => Some(n.as_u64().ok_or("ack: keep is not a byte offset")?),
+                None => None,
+            };
             for (i, path) in [&shared.paths.out, &shared.paths.err].into_iter().enumerate() {
                 // What was acknowledged is never sent again: its blocks go, a whole block at a time.
-                let upto = acked[i] - acked[i] % (1024 * 1024);
+                let bound = if i == 0 { keep.map_or(acked[i], |k| k.min(acked[i])) } else { acked[i] };
+                let upto = bound - bound % (1024 * 1024);
                 if upto >= st.punched[i] + PUNCH_EVERY && sys::punch(path, st.punched[i], upto - st.punched[i]).is_ok() {
                     st.punched[i] = upto;
                 }

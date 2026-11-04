@@ -337,6 +337,32 @@ fn what_was_acknowledged_gives_its_disk_back_its_offsets_staying() {
 }
 
 #[test]
+fn what_the_station_keeps_is_not_given_back() {
+    use std::os::unix::fs::MetadataExt;
+    // 40 MiB written and acknowledged, the station keeping from its start (a turn still running began there).
+    let runner = Runner::start("keep", "head -c 41943040 /dev/zero; read x; printf 'after\\n'");
+    let mut client = runner.connect();
+    client.send(json!({"op": "attach"}));
+    let (mut at, mut got) = ([0, 0], [vec![], vec![]]);
+    client.read_until(&mut at, &mut got, 0, 41943040);
+    let out = runner.info["out"].as_str().unwrap().to_string();
+    let before = fs::metadata(&out).unwrap();
+    client.send(json!({"op": "ack", "out": 41943040, "err": 0, "keep": 0}));
+    client.handled();
+    assert_eq!(fs::metadata(&out).unwrap().blocks(), before.blocks(), "kept whole");
+    // That turn ended: what came before goes.
+    client.send(json!({"op": "ack", "out": 41943040, "err": 0, "keep": 41943040}));
+    client.handled();
+    let after = fs::metadata(&out).unwrap();
+    assert_eq!(after.len(), before.len());
+    assert!(after.blocks() * 512 < before.blocks() * 512 / 2, "given back once no longer kept: {} then {}", before.blocks(), after.blocks());
+    client.write(b"go\n");
+    let ([more, _], exit) = client.until_exit([41943040, 0]);
+    assert_eq!(more, b"after\n");
+    assert_eq!(exit["code"], 0);
+}
+
+#[test]
 fn stdin_is_written_and_closed() {
     let runner = Runner::start("stdin", "cat; echo end");
     let mut client = runner.connect();

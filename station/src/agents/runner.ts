@@ -148,6 +148,9 @@ export class RunnerConnection {
   /// Where each stream's next line starts, as the runner counts bytes.
   private at: Record<"out" | "err", number> = { out: -1, err: -1 };
   private acked: Record<"out" | "err", number> = { out: 0, err: 0 };
+  /// Up to where of stdout the runner may give the disk back (native/runner `punch`), told with each ack: what a station
+  /// reads again after a crash begins there (process.ts `readFrom`). Null: up to what was acknowledged.
+  keep: number | null = null;
   private queue: Promise<void> = Promise.resolve();
   private left = false;
   readonly exited: Promise<Exit>;
@@ -184,7 +187,7 @@ export class RunnerConnection {
       this.queue = this.queue.then(async () => {
         await line(stream, text, start, end);
         this.acked[stream] = end;
-        this.send({ op: "ack", out: this.acked.out, err: this.acked.err });
+        this.send({ op: "ack", out: this.acked.out, err: this.acked.err, ...(this.keep !== null ? { keep: this.keep } : {}) });
       });
     }
     this.partial[stream] = buf;

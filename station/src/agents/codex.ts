@@ -272,7 +272,7 @@ class Host {
     // A profile's own app-server (its account's limits and models, no session's work) runs here; a session's in its
     // sandbox when the station runs things there.
     host.proc = await AgentProcess.start(data, runnerId("codex", key), command, hostArgs(profile), childEnv, cwd, { ...host.processOptions(label), local: key === profile.id });
-    host.keep = (from) => writeFrom(data, host.proc.info, from);
+    host.keep = (from) => (writeFrom(data, host.proc.info, from), host.proc.keepFrom(from));
     return host;
   }
 
@@ -297,6 +297,7 @@ class Host {
       host.orphans = null;
     });
     host.proc = AgentProcess.adopt(info, host.processOptions(`codex app-server ${profile}`));
+    if (from !== undefined) host.proc.keepFrom(from);
     return host;
   }
 
@@ -325,7 +326,7 @@ class Host {
     this.reckon(to);
   }
 
-  private reckon(to: number) {
+  reckon(to: number) {
     const at = this.turnFrom.size > 0 ? Math.min(...this.turnFrom.values()) : to;
     if (at === this.keptFrom) return;
     this.keptFrom = at;
@@ -727,12 +728,13 @@ export class CodexDriver implements AgentDriver {
     // Ids above any the previous station can have sent.
     const host = Host.adopt(profile.id, info, same ? hostSignature(profile) : "unknown", wall.now(), true, recovered, key);
     host.version = versionInOutput(out);
-    host.keep = (from) => writeFrom(this.data, info, from);
+    host.keep = (from) => (writeFrom(this.data, info, from), host.proc.keepFrom(from));
     for (const [thread, r] of recovered) {
       if (!r.busy) continue;
       host.turns.add(thread);
       host.running(thread, began.get(thread) ?? 0);
     }
+    host.reckon(at);
     return host;
   }
 
@@ -883,7 +885,7 @@ export class CodexDriver implements AgentDriver {
       if (handed?.host.runtimeStale) host.runtimeStale = true;
       if (handed) {
         host.version = versionInOutput(outFile(this.data, info.id));
-        host.keep = (from) => writeFrom(this.data, info, from);
+        host.keep = (from) => (writeFrom(this.data, info, from), host.proc.keepFrom(from));
       }
       this.hosts.set(key, host);
       return host;
