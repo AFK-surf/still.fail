@@ -282,7 +282,7 @@ fn ChatRows::count(self : ChatRows) -> Int {
 ///|
 /// How many messages, those waiting their turn too, followed by nothing.
 fn ChatRows::all_count(self : ChatRows) -> Int {
-  @signals.untracked(fn() { self.messages.rows.length() })
+  self.messages.rows.length_now()
 }
 
 ///|

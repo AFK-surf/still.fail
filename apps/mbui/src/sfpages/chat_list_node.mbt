@@ -106,7 +106,9 @@ pub fn chat_list_node(
     @sfbase.ChatRows::new(@sfbase.ChatMessages::of_value(None), key_of),
     same=fn(a, b) { physical_equal(a, b) },
   )
-  v.owns(fn() { @signals.untracked(fn() { rows_now.get() }).let_go() }) |> ignore
+  // (the same, read where no signal may be: the list's layout's)
+  let rows_current : Ref[@sfbase.ChatRows] = Ref(@signals.untracked(fn() { rows_now.get() }))
+  v.owns(fn() { rows_current.val.let_go() }) |> ignore
   v.reacts(fn() {
     em.read()
     ListedFrom::{ cv: view(), f: @sfbase.send_flight.get(), lingered: rd0.linger_said.get(), emitted: em.said.get() }
@@ -125,6 +127,7 @@ pub fn chat_list_node(
       @sfbase.ChatRows::new(cv.messages, key_of)
     }
     cr.take(cv, tail, empty=@sfbase.fresh_view(r) is None, held~)
+    rows_current.val = cr
     rows_now.set(cr)
   })
   // (in from the pane's sides to the column (row_side's): 16 narrow (as wide as the composer's words beside the
@@ -231,7 +234,7 @@ pub fn chat_list_node(
     }
     "foot/\{view().map_or(false, @sfbase.ask_clears)}/\{sent_foot.val}"
   }, fn(_) { @signals.untracked(fn() { rows_now.get() }).said("foot") })
-  let sized = rows_sized(row_sizes, v, fn() { rows_now.get() }, watched=fn() { !view().map_or(false, fn(cv) { cv.newer }) },
+  let sized = rows_sized(row_sizes, v, fn() { rows_now.get() }, rows_current, watched=fn() { !view().map_or(false, fn(cv) { cv.newer }) },
     from=fn(_) {
       match leaving() {
         Some(f) if !f.carried => {

@@ -142,7 +142,8 @@ pub fn TopicList::length(self : TopicList) -> Int {
 }
 
 ///|
-fn TopicList::length_now(self : TopicList) -> Int {
+/// How many rows it has, followed by nothing (read where no signal may be: a layout's).
+pub fn TopicList::length_now(self : TopicList) -> Int {
   self.front_keys.length() + self.keys.length()
 }
 

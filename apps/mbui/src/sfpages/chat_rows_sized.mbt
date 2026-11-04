@@ -4,11 +4,13 @@
 // go on from the last one's, the new one's first change all of it.
 
 ///|
-/// Chat rows `rows` (the ChatRows now, followed) kept in `v` by `sizes`.
+/// Chat rows `rows` (the ChatRows now, followed; `current` the same, read where no signal may be: a layout's) kept in
+/// `v` by `sizes`.
 fn rows_sized(
   sizes : @ui.ListRows[Entry],
   v : @view.View,
   rows : () -> @sfbase.ChatRows,
+  current : Ref[@sfbase.ChatRows],
   watched~ : () -> Bool,
   ms~ : (String) -> Double?,
   from~ : (String) -> Double?,
@@ -23,7 +25,7 @@ fn rows_sized(
   let counted : Ref[@sfbase.ChatRows?] = Ref(None)
   let base = Ref(0)
   let last = Ref(0)
-  let now = fn() { @signals.untracked(rows) }
+  let now = fn() { current.val }
   let source : @view.AnchoredSource[String] = {
     snapshot: fn() {
       let cr = rows()
