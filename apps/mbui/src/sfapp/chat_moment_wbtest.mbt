@@ -178,3 +178,8 @@ test "chat: switching chats during their transitions has the same whole picture 
 
 ///|
 test "chat moment diagnosis" { chat_at_moment(Edit, 390.0, 2, 4, 270.0) |> ignore }
+
+///|
+test "a chat in its own panel keeps its header room while the composer opens and closes" {
+  chat_at_moment(Edit, 740.0, 0, 0, 270.0) |> ignore
+}

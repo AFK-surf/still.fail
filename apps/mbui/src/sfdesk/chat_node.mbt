@@ -100,6 +100,9 @@ fn chat_talk_node(
   ground : (@view.View) -> Int64,
 ) -> Unit {
   let pane_width = talk.width_context()
+  // The old view's pane context only describes the view being built at that instant. The retained chat
+  // can be read later while a different old view is being built, so use this page's own corners instead.
+  let bar_room = fn() { chat_bar_room(corners() is Some(_)) }
   let width = fn() { talk.laid_size_told().map(fn(z) { z.0 }).unwrap_or(talk.window().0) }
   let height = fn() { talk.laid_size_told().map(fn(z) { z.1 }).unwrap_or(talk.window().1) }
   let radii = fn() {
@@ -119,13 +122,13 @@ fn chat_talk_node(
     b
     .over(Is(true))
     |> ignore
-    @sfpages.chat_waiting_node(b, src, r, fn() { chat_bar_room() + list_head_gap }, fn() { @sf.under_bar_room().px() })
+    @sfpages.chat_waiting_node(b, src, r, fn() { bar_room() + list_head_gap }, bar_room)
   })
   talk.box(fn(body) {
     body.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
     let list = body.box(fn(l) {
       l.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
-      let list = @sfpages.chat_list_node(l, src, r, view, entries, fn() { chat_bar_room() + list_head_gap }, fn() { 0.0 }, settings_core(src, w), foot_gap=list_foot_gap)
+      let list = @sfpages.chat_list_node(l, src, r, view, entries, fn() { bar_room() + list_head_gap }, fn() { 0.0 }, settings_core(src, w), foot_gap=list_foot_gap)
       latest.val = list.to_latest
       landing.val = list.landing_of
     })
@@ -173,7 +176,7 @@ fn chat_talk_node(
     pl
     .over(Is(true))
     |> ignore
-    @sfpages.pick_bar_node(pl, src, r.station + ":" + r.session, fn() { chat_bar_room() }, room_now)
+    @sfpages.pick_bar_node(pl, src, r.station + ":" + r.session, bar_room, room_now)
   })
   |> ignore
   // (the bar and what opens over it, what is let go over the pane and what is picked in the messages, the chat's keys:
