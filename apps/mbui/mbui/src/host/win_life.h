@@ -468,8 +468,8 @@ int32_t mb_host_window_open(moonbit_string_t what) {
   // (its window to the front once it is there: it may take the foreground from this one)
   AllowSetForegroundWindow(pi.dwProcessId);
   CloseHandle(pi.hThread);
-  WindowOpened **at = window_opened_at((const WCHAR *)what, wn);
-  if (*at) window_opened_drop(at);
+  WindowOpened **before = window_opened_at((const WCHAR *)what, wn);
+  if (*before) window_opened_drop(before);
   WindowOpened *w = (WindowOpened *)calloc(1, sizeof *w);
   WCHAR *words = (WCHAR *)calloc((size_t)wn + 1, sizeof(WCHAR));
   if (!w || !words) {
