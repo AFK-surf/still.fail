@@ -101,6 +101,12 @@ test("one chain per workspace: kept for members, carried to stations, healed by 
     const g2 = await owner.genesis(ws, { again: true });
     assert.equal(((await (await alice("POST", `/v1/workspaces/${ws}/lock`, { entries: [g2] })).json()) as any).head.genesis, await entryHash(g2));
     assert.equal(((await (await alice("GET", `/v1/workspaces/${ws}`)).json()) as any).lock.seq, 0);
+    // A station that holds the first chain (away when it was turned off) asks for the rest of its own: given it, its
+    // end with it. One that names no chain, or one the cloud never kept, gets the chain kept now.
+    socket.send(JSON.stringify({ type: "lock.get", after: 1, genesis: await entryHash(g) }));
+    assert.deepEqual((await next((f) => f.type === "lock")).entries, [e2, off]);
+    socket.send(JSON.stringify({ type: "lock.get", after: -1, genesis: "ab".repeat(32) }));
+    assert.deepEqual((await next((f) => f.type === "lock")).entries, [g2]);
   } finally {
     await h.close();
   }
