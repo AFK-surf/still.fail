@@ -250,6 +250,32 @@ test("a deleted session's usage change during a workspace move stays with the mo
   } finally { store.close(); }
 });
 
+test("a deleted session keeps its workspace while its old summaries are still converting", () => {
+  const store = oldStore();
+  const db = store.db;
+  try {
+    const put = db.prepare(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output, calls)
+      VALUES (?, ?, 'a', 'claude', 2, 0, 0, 0, 1, 1)`);
+    put.run("old", 0); put.run("later", 900_000);
+    installCompactUsage(db, () => 1_800_000);
+    put.run("compact", 1_800_000);
+    installUsageHistory(db, 2_700_000);
+    assert.equal(convertUsageHistoryStep(db, 1), false);
+    store.deleteSession("a");
+    db.exec(`CREATE TEMP TRIGGER move_usage_during_history_copy AFTER INSERT ON main.usage_history
+      WHEN NEW.scope = 'C' BEGIN UPDATE usage SET output = 8 WHERE id = 'old'; END`);
+    store.setSessionsWs("A", "C");
+    db.exec("DROP TRIGGER move_usage_during_history_copy");
+    while (!convertUsageHistoryStep(db, 1)) { /* Complete the remaining summaries. */ }
+    assert.deepEqual(db.prepare("SELECT scope, quarter, calls, tokens FROM usage_history WHERE calls != 0 OR tokens != 0 ORDER BY scope, quarter")
+      .all().map((r) => ({ ...r })), [
+      { scope: "C", quarter: 0, calls: 1, tokens: 10 },
+      { scope: "C", quarter: 1, calls: 1, tokens: 3 },
+      { scope: "C", quarter: 2, calls: 1, tokens: 3 },
+    ]);
+  } finally { store.close(); }
+});
+
 test("moving a workspace does not rewrite each deleted session's owner", () => {
   const store = oldStore();
   const db = store.db;
