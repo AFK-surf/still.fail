@@ -36,16 +36,18 @@ priv struct AnchoredIn[K] {
 
 ///|
 impl[K : Eq] Eq for AnchoredIn[K] with equal(a, b) {
-  let d = [
-    ("keys", a.keys == b.keys), ("x", a.x == b.x), ("foot", a.foot == b.foot), ("put", a.put == b.put),
-    ("put_n", a.put_n == b.put_n), ("kept", a.kept == b.kept), ("rooms", a.rooms == b.rooms), ("fresh", a.fresh == b.fresh),
-    ("cover", a.cover == b.cover), ("tucked", a.tucked == b.tucked),
-  ]
-  let diff = d.filter(fn(p) { !p.1 }).map(fn(p) { p.0 })
-  if diff.length() > 0 {
-    println("ZZDIFF \{diff} x \{a.x}->\{b.x} foot \{a.foot}->\{b.foot} cover \{a.cover}->\{b.cover}")
-  }
-  diff.length() == 0
+  // (the rows the same where their array is, or where it was made again holding the same: what pulls them makes it
+  // anew each time it is read)
+  (physical_equal(a.keys.v, b.keys.v) || a.keys.v == b.keys.v) &&
+  a.x == b.x &&
+  a.foot == b.foot &&
+  a.put == b.put &&
+  a.put_n == b.put_n &&
+  a.kept == b.kept &&
+  a.rooms == b.rooms &&
+  a.fresh == b.fresh &&
+  a.cover == b.cover &&
+  a.tucked == b.tucked
 }
 
 ///|
