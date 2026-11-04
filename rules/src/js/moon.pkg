@@ -1,0 +1,11 @@
+import {
+  "stillfail/rules/form",
+  "stillfail/rules/role",
+  "stillfail/rules/lock",
+}
+
+options(
+  link: {
+    "js": { "exports": [ "canonical_of", "entry_text_of", "lower_role", "fold_js", "admit_js" ], "format": "esm" },
+  },
+)

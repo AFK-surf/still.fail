@@ -392,11 +392,11 @@ if [ $full = 1 ]; then
   # package.json). Its side run's (real relays, networks made up at random) are scripts/side.sh's.
   # Run whenever one of what they read changed (the list `remembered` keys them by): a change to the words alone
   # (client/i18n) broke them on main unseen (2026-10-17, a28f78496).
-  if part ts && touches "$ts_core|^client/i18n/|^web/src/core/|^web/public/avatars/|^station/native/mesh/|^vendor/|^scripts/native\.ts$"; then prep core deps client/core-ts; remembered "tests: core-ts" "client/core-ts client/i18n web/src/core web/public/avatars station/native/mesh vendor scripts/native.ts" after core sh -c 'cd client/core-ts && pnpm test'; fi
+  if part ts && touches "$ts_core|^client/i18n/|^web/src/core/|^web/public/avatars/|^station/native/mesh/|^vendor/|^rules/js/|^scripts/native\.ts$"; then prep core deps client/core-ts; remembered "tests: core-ts" "client/core-ts client/i18n web/src/core web/public/avatars station/native/mesh vendor rules/js scripts/native.ts" after core sh -c 'cd client/core-ts && pnpm test'; fi
   if part ts && touches "$ts_cloud"; then remembered "tests: cloud" "cloud client/i18n" after cloud sh -c 'cd cloud && pnpm test'; fi
   # The station, with its native parts prebuilt (mesh addon, runner, the Rust station's archive for the compatibility
   # tests): its tests run whenever it, one of them or the words it says changed.
-  if part station && touches '^station/|^vendor/|^client/i18n/|^scripts/native\.ts$'; then
+  if part station && touches '^station/|^vendor/|^client/i18n/|^rules/js/|^scripts/native\.ts$'; then
     prep station deps station
     step "typecheck: station" after station sh -c 'cd station && pnpm exec tsgo --noEmit'
     # The station's time is its Clock's (docs/station-ts.md, 写法): the machine's only through ops/fibers.ts' wall. Cursor's
@@ -405,7 +405,7 @@ if [ $full = 1 ]; then
     step "station: time through its clock" sh -c '! git grep -nE "Date\.now\(|new Date\(\)|setTimeout\(|setInterval\(" -- station/src ":!station/src/ops/fibers.ts" ":!station/src/agents/cursor-bridge.mjs" ":!station/src/agents/sandbox-bridge.mjs"'
     # (STILLFAIL_NODE_TEST_JOBS, on a machine CI's runners share: station/package.json's `test`, that many files at a
     # time, .github/actions/setup-mac)
-    remembered "tests: station" "station client/i18n vendor scripts/native.ts" after station sh -c 'cd station && if [ -n "${STILLFAIL_NODE_TEST_JOBS:-}" ]; then node ../scripts/native.ts run mesh runner archive-rs -- node --import ./test/setup-env.mjs --test --test-concurrency="$STILLFAIL_NODE_TEST_JOBS" --test-timeout=600000 test/*.test.ts; else pnpm test; fi'
+    remembered "tests: station" "station client/i18n vendor rules/js scripts/native.ts" after station sh -c 'cd station && if [ -n "${STILLFAIL_NODE_TEST_JOBS:-}" ]; then node ../scripts/native.ts run mesh runner archive-rs -- node --import ./test/setup-env.mjs --test --test-concurrency="$STILLFAIL_NODE_TEST_JOBS" --test-timeout=600000 test/*.test.ts; else pnpm test; fi'
   fi
   # The media app's (media/): its service's tests, its core module's, and the two end to end beside the station's module
   # layer (media/test): whenever it, the core or the station changed.
