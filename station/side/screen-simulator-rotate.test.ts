@@ -148,10 +148,12 @@ test("a simulator turned from its view, all the way round", { skip: !hasSimctl &
     };
     const first = await shot("1-upright");
     const wideFirst = first.w > first.h;
-    // Up to 15 s from the press: how soon is printed, a device under load being behind it.
+    // Waited for by its picture, as the Duo's poses are (screen-simulator-duo.test.ts): a Duo's first press starts its guest,
+    // as long as DuoHIDBridge gives it. 15 s closed before it turned (side run 41798988101); it turned in 36 s, and every
+    // later press at once (side run 41804357060). How soon is printed.
     const settled = async (wide: boolean) => {
       const at = Date.now();
-      while (Date.now() - at < 15_000) {
+      while (Date.now() - at < 60_000) {
         await sleep(250);
         const now = last as { w: number } & { h: number } | null;
         if (now && now.w > now.h === wide) break;
