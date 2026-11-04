@@ -203,6 +203,8 @@ pub fn[T] ListRows::in_node(
     for k, _ in self.going {
       out.push(k)
     }
+    // (and those whose content went on the way itself as it was laid out, row_way: clipped while it goes)
+    c.own.each(fn(k) { out.push(k) })
     out.append(own_keys.get())
     out
   }
