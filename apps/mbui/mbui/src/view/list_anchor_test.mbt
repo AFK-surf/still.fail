@@ -167,3 +167,18 @@ test "scrolls_anchored: what it says of itself after a wheel and a row come is t
   }
   assert_eq(run(0.0), run(16.0))
 }
+
+///|
+test "scrolls_anchored: where the hand has it put where it is counted to be as the hand comes to it; to its start by the wheel, its first row at its top and it there as counted" {
+  let c = anchored_case(100)
+  // (laid out at its end, its rows counted 40 each where 80 was said before they were measured)
+  assert_eq(c.scroll.at(c.tree), 3900.0)
+  c.tree.wheel_at(150.0, 50.0, 0.0, -60.0, 0, 10.0) |> ignore
+  c.tree.frame(390.0, 844.0, now=1000.0) |> ignore
+  assert_eq(c.scroll.at(c.tree), 3840.0)
+  assert_eq(c.top(98), Some(20.0))
+  c.tree.wheel_at(150.0, 50.0, 0.0, -100000.0, 0, 1100.0) |> ignore
+  c.tree.frame(390.0, 844.0, now=3000.0) |> ignore
+  assert_eq(c.top(0), Some(0.0))
+  assert_eq(c.scroll.at(c.tree), 0.0)
+}
