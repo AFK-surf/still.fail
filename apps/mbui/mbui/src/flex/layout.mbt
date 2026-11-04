@@ -530,6 +530,26 @@ fn size_node(
   perform : Bool,
 ) -> Double {
   touch(node)
+  match node.width_context {
+    Some(prepare) => {
+      let b = box_for(node, cb_w, cb_h)
+      let mut width = if known(kw) { kw } else { b.w }
+      if !known(width) && known(b.min_w) && b.min_w == b.max_w { width = b.min_w }
+      if !known(width) && known(kh) && node.style.aspect > 0.0 {
+        width = clamp_size(kh, b.min_h, b.max_h) * node.style.aspect
+      }
+      if known(width) {
+        width = clamp_size(width, soft_floor(node.style, b.min_w), b.max_w)
+        if prepare(fmax(width - b.pbw(), 0.0)) {
+          node.cache_n = 0
+          node.p_ok = false
+        }
+      } else if perform {
+        abort("a width context needs a definite width")
+      }
+    }
+    None => ()
+  }
   if perform {
     // laid out before as now asked, nothing under it changed since: it
     // stands as it is. (A layout is always asked with the space available

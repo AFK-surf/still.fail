@@ -23,6 +23,9 @@ pub fn chat_list_node(
 ) -> ChatListNode {
   let rk = r.station + "\u{1}" + r.session
   let scroll = @view.Scroll::list()
+  // The list's width is a constraint of this layout, shared with its rows while they are measured.
+  let row_width = v.width_context()
+  v.lends(chat_row_width, row_width) |> ignore
   // The last row stands above the decision bell when the core says that it can cover the list's end (the old
   // list's ask_clear). The bell itself stays over the composer's room, even while its post is elsewhere in the list.
   let clear_foot = fn() {
@@ -70,10 +73,7 @@ pub fn chat_list_node(
   })
   // (narrow: 700 or less, as the list is laid out: 20 apart, the pictures at their heads' start)
   let narrow = fn() {
-    match v.laid_size_told() {
-      Some((w, _)) => w <= chat_narrow_w
-      None => true
-    }
+    row_width.now().map(fn(w) { w <= chat_narrow_w }).unwrap_or(true)
   }
   // (an agent's message waiting its turn to come out of its avatar not in it yet: emit.mbt's emit_held)
   let em = @sfbase.emits_of(rk)
@@ -130,33 +130,29 @@ pub fn chat_list_node(
   // (in from the pane's sides to the column (row_side's): 16 narrow (as wide as the composer's words beside the
   // system's bars), else the column 760 wide at most in its middle (48 in beside the system's bars))
   let side = fn() {
-    let w = match v.laid_size_told() {
-      Some((w, _)) => w
-      None => v.window().0
-    }
-    if w <= chat_narrow_w {
-      if @sf.native_on() { native_row_inset() } else { row_side_narrow }
-    } else if @sf.native_on() {
-      dense_row_side
-    } else {
-      dmax(row_side_least, (w - chat_column_w) / 2.0)
-    }
+    let w = match row_width.now() { Some(w) => w; None => v.window().0 }
+    row_side_in(w)
   }
   // (the room over row `e`, `i`th: none over the first, 4 over a message joined to the one before, else the gap)
-  let over = fn(e : Entry, i : Int) -> Double {
+  let gap_kind = fn(e : Entry, i : Int) -> Int {
     let joined = match e {
       Said(m) => m.joined
       Out(o) => o.joined
       _ => false
     }
     if e is Top || e is Foot || i <= 1 {
-      0.0
+      0
     } else if joined {
-      joined_gap
-    } else if narrow() {
-      list_gap_narrow
+      1
     } else {
-      list_gap
+      2
+    }
+  }
+  let over = fn(e : Entry, i : Int) -> Double {
+    match gap_kind(e, i) {
+      0 => 0.0
+      1 => joined_gap
+      _ => if narrow() { list_gap_narrow } else { list_gap }
     }
   }
   let draft = r.station + ":" + r.session
@@ -224,6 +220,13 @@ pub fn chat_list_node(
       match e { Said(m) => !emit_words_only(em, m.seq); Working(_) => false; _ => true }
     },
     lead=over,
+    lead_in_layout=fn(e, i) {
+      let kind = gap_kind(e, i)
+      fn() {
+        if kind == 0 { 0.0 } else if kind == 1 { joined_gap }
+        else if row_width.now().unwrap_or(0.0) <= chat_narrow_w { list_gap_narrow } else { list_gap }
+      }
+    },
     own=fn(e) { e is Foot },
   )
   let rows = fn() { (sized.read)().0 }
@@ -312,16 +315,17 @@ pub fn chat_list_node(
         })
         // (its room: in from the pane's sides to the column, the gap over it; under the bar over the first, the
         // composer under the last)
-        slot
-        .padding(By(fn() {
-          let gap = match row_of(k) {
-            Some((e, i)) => over(e, i)
-            None => 0.0
-          }
-          let side = side()
-          (side, gap, side, 0.0)
-        }))
-        |> ignore
+        row_width.bind(slot, By(fn() {
+          let kind = match row_of(k) { Some((e, i)) => gap_kind(e, i); None => 0 }
+          (@sf.native_on(), native_row_inset(), kind)
+        }), fn(w, c) {
+          let (native, native_inset, kind) = c
+          let narrow = w <= chat_narrow_w
+          let side = if narrow { if native { native_inset } else { row_side_narrow } }
+            else if native { dense_row_side } else { dmax(row_side_least, (w - chat_column_w) / 2.0) }
+          let gap = if kind == 0 { 0.0 } else if kind == 1 { joined_gap } else if narrow { list_gap_narrow } else { list_gap }
+          slot.padding(Is((side, gap, side, 0.0))) |> ignore
+        })
         // (its menu open (right clicked, its ⋯): the row in the pointer's ground, easing in and out as a row's under the
         // pointer does: the old list's band)
         let menu_lit = @sf.EdgeWay::new(0.0)
