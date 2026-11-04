@@ -271,3 +271,19 @@ test("without a way to send mail, signing in goes straight to Google as before",
     await h.close();
   }
 });
+
+test("monoid's cloud names monoid on its pages and in its mails, still.fail's hosts kept", { timeout: 30000 }, async () => {
+  const h = await harness({ mail: true, origin: "https://app.monoid.build" });
+  try {
+    const b = await browser(h, "10.1.0.9");
+    assert.match(b.page, /<title>[^<]*monoid<\/title>/);
+    assert.doesNotMatch(b.page.replace(/https:\/\/still\.fail\//g, ""), /(?<![\w./@-])still\.fail/, "no still.fail but the legal pages' links");
+    assert.equal((await b.post({ via: "email", email: "a@example.test" })).status, 200);
+    const mail = h.mails.at(-1)!;
+    assert.equal(typeof mail.from === "string" ? mail.from : mail.from.name, "monoid");
+    assert.match(mail.subject, /monoid/);
+    assert.doesNotMatch(mail.subject + mail.text, /(?<![\w./@-])still\.fail/);
+  } finally {
+    await h.close();
+  }
+});

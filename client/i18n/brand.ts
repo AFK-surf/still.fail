@@ -8,13 +8,17 @@ export interface Product {
   name: string;
   /** Its test channel's (still.fail's on youdid.wtf, monoid's on monoid.zone). */
   test: string;
+  /** Its name in a program's, a directory's or a service's (stillfail: ~/.stillfail, `stillfail`, stillfail-station.service). */
+  id: string;
+  /** Its reversed domain, a bundle's or a launchd label's (fail.still.station). */
+  reverse: string;
 }
 
-export const STILLFAIL: Product = { name: "still.fail", test: "youdid.wtf" };
+export const STILLFAIL: Product = { name: "still.fail", test: "youdid.wtf", id: "stillfail", reverse: "fail.still" };
 
 /** Each product other than still.fail: the domains its clouds are on, its names. */
-const PRODUCTS: { zones: string[]; product: Product }[] = [
-  { zones: ["monoid.build", "monoid.zone"], product: { name: "monoid", test: "monoid.zone" } },
+export const PRODUCTS: { zones: string[]; product: Product }[] = [
+  { zones: ["monoid.build", "monoid.zone"], product: { name: "monoid", test: "monoid.zone", id: "monoid", reverse: "build.monoid" } },
 ];
 
 /** The product whose cloud is at `origin` (a URL, or a bare host): still.fail's for any other, a local cloud's too. */

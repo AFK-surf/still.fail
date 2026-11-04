@@ -10,7 +10,16 @@
 #include <errno.h>
 #include <signal.h>
 
-#define STATION_UNIT "stillfail-station.service"
+// (another product's app, its station's own: MBUI_STATION_ID's directory and service, cloud/src/install.ts's names)
+static const char *station_id(void) {
+  const char *v = getenv("MBUI_STATION_ID");
+  return v && *v ? v : "stillfail";
+}
+static const char *station_unit(void) {
+  static char *unit;
+  if (!unit) unit = g_strconcat(station_id(), "-station.service", NULL);
+  return unit;
+}
 
 static GMutex local_lock;
 static char local_doing[16];  // what is being done ("": nothing), under local_lock
@@ -22,11 +31,16 @@ static void local_set(char **at, const char *s) {
   *at = g_strdup(s);
 }
 
-static char *local_data(void) { return g_build_filename(g_get_home_dir(), ".stillfail", NULL); }
+static char *local_data(void) {
+  char *dir = g_strconcat(".", station_id(), NULL);
+  char *path = g_build_filename(g_get_home_dir(), dir, NULL);
+  g_free(dir);
+  return path;
+}
 
 // whether the installer's service is there (its unit, where systemd looks for a user's)
 static int local_service(void) {
-  char *unit = g_build_filename(g_get_user_config_dir(), "systemd", "user", STATION_UNIT, NULL);
+  char *unit = g_build_filename(g_get_user_config_dir(), "systemd", "user", station_unit(), NULL);
   int there = g_file_test(unit, G_FILE_TEST_EXISTS);
   g_free(unit);
   return there;
@@ -85,7 +99,7 @@ moonbit_string_t mb_host_local_station(void) {
   char *app = g_build_filename(data, "app", NULL);
   if (g_file_test(app, G_FILE_TEST_IS_DIR)) g_string_append(o, ",\"installed\":true");
   g_free(app);
-  if (service) g_string_append(o, ",\"service\":{\"kind\":\"systemd\",\"name\":\"" STATION_UNIT "\"}");
+  if (service) g_string_append_printf(o, ",\"service\":{\"kind\":\"systemd\",\"name\":\"%s\"}", station_unit());
   jv cloud = local_json(data, "mesh/cloud.json");
   const char *ws = jtext(&cloud, "workspace");
   if (*ws) {
@@ -245,7 +259,7 @@ void mb_host_local_station_act(moonbit_string_t action) {
     if (local_service()) {
       char **argv = g_new0(char *, 5);
       argv[0] = g_strdup("systemctl"), argv[1] = g_strdup("--user"), argv[2] = g_strdup(a);
-      argv[3] = g_strdup(STATION_UNIT);
+      argv[3] = g_strdup(station_unit());
       local_begin(a, argv, NULL);
     } else {
       jv run = local_json(data, "run/station.json");
