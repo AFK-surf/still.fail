@@ -198,6 +198,18 @@ pub fn table_node(
 }
 
 ///|
+/// Measurements of a table are shared by all its cells; the same measurements need no per-cell traversal.
+priv struct TableMetrics {
+  extents : Array[Array[(Double, Double, Bool)]]
+  em : Double
+}
+
+///|
+impl Eq for TableMetrics with equal(a, b) {
+  physical_equal(a.extents, b.extents) && a.em == b.em
+}
+
+///|
 /// A table (`table`, as it changes) as nodes in `outer` (table_node's, whatever reads its Markdown: a table alone, or
 /// one of a message's blocks, markdown_node's): its columns' widths from the room `outer` is laid out in, `bleed` past
 /// it either side where it scrolls across; its copy key where `copy`; its links taken by `on_link` (`on_link_hold`).
@@ -211,15 +223,9 @@ fn md_table_body_node(
   files? : (String) -> PlacedNode? = fn(_) { None },
 ) -> Unit {
     outer.margin(Is((-bleed, 0.0, -bleed, 0.0))) |> ignore
-    let room = fn() {
-      outer.words_redone() |> ignore
-      match outer.laid_size_told() {
-        Some((w, _)) => w - 2.0 * bleed
-        None => 0.0
-      }
-    }
-    // (each cell's extent and the columns' widths, as Md::table works them out: table_widths)
-    let widths_for = fn(t : MdTable) {
+    let room = outer.width_context()
+    // Measure the contents before layout; only the available width is needed when the current layout places them.
+    let extents_for = fn(t : MdTable) {
       let c = @ui.current()
       let rows = [t.head]
       rows.append(t.rows)
@@ -238,14 +244,29 @@ fn md_table_body_node(
           }
         })
       })
-      table_widths(extents, room(), false, fn(x) { c.sp(x) })
+      { extents, em: c.sp(13.0) }
     }
-    let widths = fn() {
+    let metrics = @signals.computed(fn(_) {
+      outer.words_redone() |> ignore
       match table() {
-        Some(t) => widths_for(t)
-        None => ([], 0.0)
+        Some(t) => extents_for(t)
+        None => { extents: [], em: @ui.current().sp(13.0) }
+      }
+    })
+    // Every cell uses these widths, so calculate them once for a given room and set of measurements.
+    let last_widths : Ref[(Double, TableMetrics, (Array[Double], Double))?] = Ref(None)
+    let widths_at = fn(w : Double, m : TableMetrics) {
+      match last_widths.val {
+        Some((room, measured, widths)) if room == w && measured == m => widths
+        _ => {
+          let widths = table_widths(m.extents, w - 2.0 * bleed, false, fn(_) { m.em })
+          last_widths.val = Some((w, m, widths))
+          widths
+        }
       }
     }
+    // Picture and copy actions run after layout and use the same room and measurements as the table.
+    let widths_for = fn(t : MdTable) { widths_at(room.now().unwrap_or(0.0), extents_for(t)) }
     // (its head's row's height, as laid out: where its copy key's middle is)
     let head_h : Ref[@view.View?] = Ref(None)
     // (its own key, whatever its words: two tables of the same each their own menu, copy and picture)
@@ -264,7 +285,9 @@ fn md_table_body_node(
         .margin(Is((0.0, 0.0, if copy && bleed >= table_key_room { -table_key_room } else { 0.0 }, 0.0)))
         |> ignore
       beside.box(fn(frame) {
-        frame.width(By(fn() { Some(widths().1) })) |> ignore
+        room.bind(frame, By(fn() { metrics.get() }), fn(w, m) {
+          frame.width(Is(Some(widths_at(w, m).1))) |> ignore
+        })
         let rows = fn() {
           match table() {
             Some(t) => Array::makei(t.rows.length() + 1, fn(i) { i })
@@ -280,7 +303,7 @@ fn md_table_body_node(
               head_h.val = Some(cells)
             }
             cells.row(Is(true)).lines_up(Is(None)) |> ignore
-            let cols = fn() { Array::makei(widths().0.length(), fn(k) { k }) }
+            let cols = fn() { Array::makei(table().map_or(0, fn(t) { t.head.length() }), fn(k) { k }) }
             cells.each(cols, fn(k) { k }, fn(cell, k) {
               let k = @signals.untracked(fn() { k.get() })
               let words = fn() {
@@ -289,9 +312,11 @@ fn md_table_body_node(
                   None => []
                 }
               }
-              let pad = fn() { table_cell_pad(k, widths().0.length()) }
+              let pad = fn() { table_cell_pad(k, table().map_or(0, fn(t) { t.head.length() })) }
+              room.bind(cell, By(fn() { metrics.get() }), fn(w, m) {
+                cell.width(Is(widths_at(w, m).0.get(k))) |> ignore
+              })
               cell
-              .width(By(fn() { widths().0.get(k) }))
               .padding(By(fn() {
                 let (pl, pr) = pad()
                 (pl, table_cell_y, pr, table_cell_y)
@@ -342,8 +367,10 @@ fn md_table_body_node(
           |> ignore
           // (a rule under each but the last, as faint as is seen)
           line.show(fn() { r < rows().length() - 1 }, fn(rule) {
+            room.bind(rule, By(fn() { metrics.get() }), fn(w, m) {
+              rule.width(Is(Some(widths_at(w, m).1))) |> ignore
+            })
             rule
-            .width(By(fn() { Some(widths().1) }))
             .height(Is(Some(1.0)))
             .ground(By(fn() { theme().p.line }))
             |> ignore
