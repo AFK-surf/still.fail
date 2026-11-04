@@ -515,7 +515,7 @@ pub fn first_line(String) -> String
 
 pub let first_page_waits : @signals.Signal[Bool]
 
-pub fn fitted_rect(Double, Double, Double, Double) -> (Double, Double, Double, Double)?
+pub fn fitted_rect(Double, Double, Double, Double, bar? : Double) -> (Double, Double, Double, Double)?
 
 pub fn flag(@json.Json?, String) -> Bool
 
