@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Store } from "../src/store/store.ts";
+import { RECENT_CONNECT_THREADS, Store } from "../src/store/store.ts";
 
 test("a connect learns people of the 200 recent threads without reading older people's rows", () => {
   const store = Store.open(":memory:");
@@ -79,5 +79,14 @@ test("recent connect people agree with the prior list for ties, edits, empty cha
         .map((t) => ({ thread: t.thread.id, people: t.people.flatMap((p) => p.startsWith(prefix) ? [p.slice(prefix.length)] : []) }));
       assert.deepEqual(store.recentConnectPeople(connect, 200), before, connect);
     }
+  } finally { store.close(); }
+});
+
+test("recent thread ordering seeks each thread's latest message", () => {
+  const store = Store.open(":memory:");
+  try {
+    const plan = store.db.prepare(`EXPLAIN QUERY PLAN ${RECENT_CONNECT_THREADS}`).all(200, "team").map((r) => String(r.detail));
+    assert.ok(plan.some((d) => d.includes("SEARCH e USING INDEX") && d.includes("thread=? AND n=?")), plan.join("; "));
+    assert.ok(!plan.some((d) => d === "SCAN e"), plan.join("; "));
   } finally { store.close(); }
 });
