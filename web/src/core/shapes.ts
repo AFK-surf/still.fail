@@ -1946,7 +1946,10 @@ export interface MessageCard {
 	 * with `signin.fill` (from this device's password manager), `signin.self`, `signin.deny` (the chat's station).
 	 */
 	signinAsk?: SignInAsk;
-	/** A login card: the login's id on its station (the `machineLogin` topic has the rest). */
+	/**
+	 * A login card: the login's id on its station (the `machineLogin` topic has the rest); absent where a later post of the chat
+	 * asks for the same login (its card alone).
+	 */
 	login?: string;
 	/** A login card for a login on another station than the chat's: that station's key. */
 	station?: string;
