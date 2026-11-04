@@ -6198,6 +6198,17 @@ fn Tree::sizes_told(self : Tree) -> Bool {
 /// it is as the ones inside it moved it. Once, at this cause (the focus come to it): nothing brings it back of itself
 /// after.
 pub fn Tree::show_in_sight(self : Tree, id : NodeId, within? : () -> (Double, Double)?) -> Unit {
+  // (a list that keeps itself holding it told now, at this cause: it lays it out in sight, Scroll's `reveal`)
+  if self.alive_id(id) {
+    let mut i = self.nodes[id.at].parent
+    while i >= 0 {
+      match self.scrolls_at.get(i) {
+        Some(s) => (s.reveal)(id)
+        None => ()
+      }
+      i = self.nodes[i].parent
+    }
+  }
   self.shows_due.push((id, within.unwrap_or(fn() { None })))
   self.marked()
 }
