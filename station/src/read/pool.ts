@@ -17,7 +17,7 @@ import { SaidBuilder } from "./said-builder.ts";
 import { TurnBuilder } from "./turn-builder.ts";
 import { OUTFLOW_CHATS_PENDING } from "./outflow.ts";
 import type { Answer, Ask, Ready } from "./worker.ts";
-import { REMOTE_RUNS_PENDING, SAID_PENDING, TURN_COUNT_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING, USAGE_MINUTES_PENDING } from "./store.ts";
+import { REMOTE_RUNS_PENDING, SAID_PENDING, TURN_COUNT_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING } from "./store.ts";
 import { HttpError } from "./views.ts";
 import { wall } from "../ops/fibers.ts";
 
@@ -273,9 +273,6 @@ export class Readers {
       try {
         return await this.enqueue("usage", args, lang, told, false, false, signal);
       } catch (error) {
-        // The reader checks its own snapshot: a session may have moved after the coverage check.
-        if (error instanceof HttpError && error.message === USAGE_MINUTES_PENDING && history)
-          throw new HttpError(503, "historical minute statistics are unavailable");
         if (error instanceof HttpError && error.message === USAGE_DETAIL_PENDING) {
           this.startUsageIndex();
           await this.covered(this.minutes!.readyDetail(viewer), signal);

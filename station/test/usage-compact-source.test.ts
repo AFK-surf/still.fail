@@ -7,10 +7,10 @@ import { mock, test } from "node:test";
 import { Worker } from "node:worker_threads";
 import { Effect, Fiber } from "effect";
 import { usageRoutes } from "../src/api/routes/usage.ts";
-import { makeStore, USAGE_CALLS_EARLIER, USAGE_CALLS_SAME, usageByDay, usageCallsPage, usageGroups, usageSince } from "../src/read/store.ts";
-import { usage, usageNow } from "../src/read/usage.ts";
+import { makeStore, USAGE_CALLS_EARLIER, USAGE_CALLS_SAME, usageCallsPage, usageGroups, usageSince } from "../src/read/store.ts";
+import { usage, usageHistory, usageNow } from "../src/read/usage.ts";
 import { Store } from "../src/store/store.ts";
-import { compactHistory, compactQuery, compactScopeReady, compactTotal, compactTotalsStep, installCompactUsage, moveCompactStep } from "../src/store/usage-compact.ts";
+import { compactQuery, compactScopeReady, compactTotal, compactTotalsStep, installCompactUsage, moveCompactStep } from "../src/store/usage-compact.ts";
 import { retireUsageIndexes } from "../src/store/usage-retire.ts";
 import { keepUsage, retireAfterPrevious, watchCompactMoves } from "../src/usage/module.ts";
 import { testClock } from "./hub-fakes.ts";
@@ -138,8 +138,8 @@ for (const recursive of [false, true]) test(`an older writer grows calls recorde
     const reader = makeStore(store.db, ".");
     assert.deepEqual(usageGroups(reader, 120_000n, 180_000n, 0n, { workspace: "A", home: false })
       .map((row) => [row.calls, row.input, row.output]), [[1, 10, 4]], "the later call's compact bucket includes its growth once");
-    assert.deepEqual(usageByDay(reader, 0n, { workspace: "A", home: false })
-      .map((row) => [row.calls, row.tokens]), [[2, 28]], "the preserved historical total and the compact total both stay accurate");
+    assert.deepEqual(usageHistory(reader, 0n, { workspace: "A", home: false })!.days
+      .map((row: { calls: number; tokens: number }) => [row.calls, row.tokens]), [[2, 28]], "the history counts both calls' growth once");
   } finally { store.close(); }
 });
 
@@ -164,16 +164,12 @@ test("a time range does not visit sessions with only older statistics", () => {
       return visits;
     };
     const before = read();
-    const history = () => compactHistory(store.db, 0n, { workspace: "A", home: false }, false, { from: 1n, to: 2n })
-      ?.map((row) => [row.session, row.calls, row.tokens]);
-    assert.deepEqual(history(), [["a", 1, 2]]);
     const scope = store.db.prepare("INSERT INTO usage_minute_scope (session, ws, done) VALUES (?, 'A', 1)");
     const old = store.db.prepare("INSERT INTO usage_compact (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope) VALUES (?, -1, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 1, 0, 0, 0, 1, 'WA')");
     for (let n = 0; n < 200; n++) { scope.run(`old-${n}`); old.run(`old-${n}`); }
     const other = store.db.prepare("INSERT INTO usage_compact (session, minute, thread, person, profile, runtime, model, fast, records, calls, input, cache_read, cache_write, cache_write_long, output, scope) VALUES (?, 1, 0, 'p', 'cc', 'claude', 'm', 0, 1, 1, 1, 0, 0, 0, 1, 'WB')");
     for (let n = 0; n < 200; n++) other.run(`other-${n}`);
     assert.equal(read(), before, "older sessions outside the requested range do not increase lookup work");
-    assert.deepEqual(history(), [["a", 1, 2]], "history excludes older days and other workspaces too");
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${q.sql}`).all(...q.args) as { detail: string }[]).map((row) => row.detail).join(" | ");
     assert.match(plan, /usage_compact_scope_time \(scope=\? AND minute>\? AND minute<\?\)/);
   } finally { store.close(); }
@@ -515,7 +511,7 @@ test("an omitted home flag includes home usage in compact histories, time edges 
       cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
     store.recordUsage("/h", { session: "h", offset: 1, model: "m" }, "claude", [[call, owner]]);
     const viewer = { workspace: "A" };
-    assert.deepEqual(compactHistory(store.db, 0n, viewer)?.map((row) => row.tokens), [2]);
+    assert.deepEqual(usageHistory(makeStore(store.db, "."), 0n, viewer)!.days.map((row: { tokens: number }) => row.tokens), [2]);
     assert.deepEqual(usageGroups(makeStore(store.db, "."), 500n, 2_000n, 0n, viewer).map((row) => row.input), [1]);
     store.db.exec("UPDATE sessions SET ws = 'B' WHERE key = 'h'");
     assert.equal(compactScopeReady(store.db, viewer), false);
@@ -723,9 +719,8 @@ test("after handover old per-call indexes are removed and new statistics remain 
       const reader = makeStore(store.db, ".");
       assert.deepEqual(usageGroups(reader, 0n, 86_400_000n, 0n, { workspace: "A", home: false }).map((row) => [row.calls, row.input]), [[1, 4]],
         "the new period is computed from statistics without rereading calls");
-      assert.deepEqual(usageByDay(reader, 0n, { workspace: "A", home: false }).map((row) => [row.day, row.calls, row.tokens]), [
-        ["1969-12-31", 1, 3], ["1970-01-01", 1, 5],
-      ], "the old complete daily summary is retained");
+      assert.deepEqual(usageHistory(reader, 0n, { workspace: "A", home: false })!.days.map((row: { day: string; calls: number; tokens: number }) =>
+        [row.day, row.calls, row.tokens]), [["1969-12-31", 1, 3], ["1970-01-01", 1, 5]], "the history keeps the older day");
     } finally { store.db.setAuthorizer(null); }
   } finally { store.close(); }
 });
@@ -741,83 +736,9 @@ test("an old response growing after handover updates the preserved daily total",
     store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [[old, owner]]);
     compactUsage(store);
     store.recordUsage("/a", { session: "a", offset: 2, model: "m" }, "claude", [[{ ...old, output: 9 }, owner]]);
-    assert.deepEqual(usageByDay(makeStore(store.db, "."), 0n, { workspace: "A", home: false }).map((row) => [row.calls, row.tokens]), [[1, 11]]);
+    assert.deepEqual(usageHistory(makeStore(store.db, "."), 0n, { workspace: "A", home: false })!.days.map((row: { calls: number; tokens: number }) =>
+      [row.calls, row.tokens]), [[1, 11]]);
     assert.deepEqual(store.usageOfSession("a").map((row) => [row.calls, row.input, row.output]), [[1, 2, 9]]);
-  } finally { store.close(); }
-});
-
-test("old daily totals are not claimed complete after summary writers were stopped", () => {
-  const store = Store.open(":memory:");
-  try {
-    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A", createdAt: 0, lastActiveAt: 0 });
-    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
-    const call = { id: "old", at: 60_000, model: "m", subagent: false, fast: false, input: 2, cacheRead: 0,
-      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
-    store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [[call, owner]]);
-    store.db.exec("CREATE TABLE usage_retired_detail (id INTEGER PRIMARY KEY); INSERT INTO usage_retired_detail VALUES (1)");
-    compactUsage(store);
-    assert.throws(() => usageByDay(makeStore(store.db, "."), 0n, { workspace: "A", home: false }), /being indexed|unavailable/);
-    store.recordUsage("/a", { session: "a", offset: 2, model: "m" }, "claude", [[{ ...call, id: "new", at: 120_000 }, owner]]);
-    assert.deepEqual(usageGroups(makeStore(store.db, "."), 0n, 180_000n, 0n, { workspace: "A", home: false }).map((row) => [row.calls, row.input]), [[1, 2]]);
-  } finally { store.close(); }
-});
-
-test("a station with incomplete old totals can report its new history without claiming completeness", () => {
-  const store = Store.open(":memory:");
-  try {
-    for (const [key, ws] of [["a", "A"], ["b", "B"]] as const) {
-      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, ws, createdAt: 0, lastActiveAt: 0 });
-    }
-    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
-    const call = { id: "old", at: 60_000, model: "m", subagent: false, fast: false, input: 100, cacheRead: 0,
-      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
-    store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [[call, owner]]);
-    store.db.exec("CREATE TABLE usage_retired_detail (id INTEGER PRIMARY KEY); INSERT INTO usage_retired_detail VALUES (1)");
-    compactUsage(store);
-    store.recordUsage("/a", { session: "a", offset: 2, model: "m" }, "claude", [[{ ...call, id: "new", at: 120_000, input: 2 }, owner]]);
-    store.recordUsage("/b", { session: "b", offset: 1, model: "m" }, "claude", [[{ ...call, id: "other", at: 120_000, input: 50 }, owner]]);
-    store.db.setAuthorizer((action, name) => action === constants.SQLITE_READ && name === "usage" ? constants.SQLITE_DENY : constants.SQLITE_OK);
-    try {
-      for (const offset of [0n, 1n]) {
-        const answer = usage(makeStore(store.db, "."), "en", 0n, 180_000n, offset, false, { workspace: "A", home: false }, true);
-        assert.equal(answer.history, undefined, "older clients must not mistake the new records for complete history");
-        assert.equal(answer.historyUnavailable, true);
-        assert.deepEqual(answer.partialHistory.days.map((d: { calls: number; tokens: number }) => [d.calls, d.tokens]), [[1, 3]]);
-      }
-    } finally { store.db.setAuthorizer(null); }
-  } finally { store.close(); }
-});
-
-test("missing old decisions and old usage keep their separate incomplete coverage", () => {
-  const store = Store.open(":memory:");
-  try {
-    store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A", createdAt: 0, lastActiveAt: 0 });
-    const owner = { turn: null, thread: null, person: "p", profile: "cc" };
-    const call = { id: "old", at: 60_000, model: "m", subagent: false, fast: false, input: 100, cacheRead: 0,
-      cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null };
-    store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [[call, owner]]);
-    store.db.exec("CREATE TABLE usage_retired_detail (id INTEGER PRIMARY KEY); INSERT INTO usage_retired_detail VALUES (1)");
-    compactUsage(store);
-    store.recordUsage("/a", { session: "a", offset: 2, model: "m" }, "claude", [[{ ...call, id: "new", at: 120_000, input: 2 }, owner]]);
-    store.db.exec("CREATE TABLE card_outcomes_incomplete (id INTEGER PRIMARY KEY)");
-    store.db.setAuthorizer((action, name) => action === constants.SQLITE_READ && name === "usage" ? constants.SQLITE_DENY : constants.SQLITE_OK);
-    try {
-      for (const offset of [0n, 1n]) {
-        const answer = usage(makeStore(store.db, "."), "en", 0n, 180_000n, offset, false, { workspace: "A", home: false }, true);
-        assert.equal(answer.history, undefined);
-        assert.equal(answer.historyUnavailable, true);
-        assert.equal(answer.partialHistory.tokensComplete, undefined);
-        assert.equal(answer.partialHistory.cardsIncomplete, true);
-        assert.equal(answer.partialHistory.cards, undefined);
-        assert.deepEqual(answer.partialHistory.days.map((d: { tokens: number }) => d.tokens), [3]);
-      }
-      while (!compactTotalsStep(store.db, 64).done) { /* Account the new statistics, never the old usage rows. */ }
-      const bounded = usage(makeStore(store.db, "."), "en", 0n, 180_000n, 0n, false, { workspace: "A", home: false }, true,
-        { historyRange: { from: 0n, to: 86_400_000n } });
-      assert.equal(bounded.partialHistory.tokensComplete, undefined);
-      assert.equal(bounded.partialHistory.cardsIncomplete, true);
-      assert.equal(bounded.partialHistory.tokens, 3);
-    } finally { store.db.setAuthorizer(null); }
   } finally { store.close(); }
 });
 

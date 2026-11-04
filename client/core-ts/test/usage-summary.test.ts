@@ -145,3 +145,19 @@ test("each station must cover a day before an empty day can be called zero", () 
   const withMissing = usageSummary([older, source("missing", undefined)], NOW, 480, "")!;
   assert.equal(withMissing.activity.cells.at(-2), -1, "a missing station could have calls today");
 });
+
+test("a history counted from a time on: the days before it unknown, those after it known even when empty", () => {
+  // Counted from 2026-09-30 10:00 at +8: that day is part known, the days before not at all; 10-01 had nothing.
+  const counted = history([day("2026-09-30", 50), day("2026-10-02", 20)], { since: Date.UTC(2026, 8, 30, 2) });
+  const s = usageSummary([source("studio", counted)], NOW, 480, "")!;
+  // the last column: Sunday 9/27 .. Saturday 10/3
+  assert.deepEqual(s.activity.cells.slice(-7), [-1, -1, -1, 4, 0, 2, -1]);
+  assert.equal(s.figures[0].label, "已计入 token");
+  assert.notEqual(s.partial, null);
+});
+
+test("a station still filling its chat or task statistics leaves those figures unknown, not zero", () => {
+  const filling = history([day("2026-10-02", 20)], { archived: undefined, remoteRuns: undefined, places: {}, chatsIncomplete: true, cardsIncomplete: true });
+  const s = usageSummary([source("studio", filling), source("mba", history([], { archived: 3, remoteRuns: 2 }))], NOW, 480, "")!;
+  assert.deepEqual(s.figures.slice(1, 4).map((f: J) => f.value), ["—", "—", "—"]);
+});

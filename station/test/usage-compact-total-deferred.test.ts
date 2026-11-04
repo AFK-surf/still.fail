@@ -56,7 +56,6 @@ test("pending deletions stay invisible and only the affected scope waits", () =>
     assert.equal(compact.compactTotal(store.db, { workspace: "A", home: false }), null);
     assert.equal(compact.compactTotal(store.db, null), null);
     assert.deepEqual(compact.compactTotal(store.db, { workspace: "B", home: false }), { calls: 1, tokens: 2 });
-    assert.deepEqual(compact.compactHistory(store.db, 0n, { workspace: "A", home: false }), []);
     const query = compact.compactQuery(0n, 60_000n, 0n, { workspace: "A", home: false });
     assert.deepEqual(store.db.prepare(query.sql).all(...query.args), []);
     // A replacement in the same minute keeps the old contribution until the bucket can be accounted once.

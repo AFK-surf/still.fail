@@ -26,7 +26,7 @@ test("an unfinished remote-task summary does not read task records or report a p
       const result = readUsage(makeStore(store.db, "."), "en", 0n, 100n, 0n, false,
         { workspace: "workspace-a", home: false }, true);
       assert.equal(result.remoteRuns, undefined, "an incomplete task count is not returned as zero");
-      assert.equal(result.history, undefined, "the history is omitted while its task count is unavailable");
+      assert.equal(result.history.remoteRuns, undefined, "the history leaves out its task count while it is unavailable");
       assert.deepEqual(result.rows, [], "independent complete usage details remain readable");
     } finally {
       store.db.setAuthorizer(null);
@@ -70,7 +70,7 @@ test("an incomplete remote summary is omitted without holding a reader or rebuil
     await readers.read("checkpoint", {}, "en");
     const result = JSON.parse(await usage);
     assert.equal(result.remoteRuns, undefined);
-    assert.equal(result.history, undefined);
+    assert.equal(result.history.remoteRuns, undefined);
     assert.deepEqual(result.rows, []);
     handover();
     assert.deepEqual(store.db.prepare("SELECT * FROM remote_run_progress WHERE id = 1").get(), before);

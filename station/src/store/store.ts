@@ -36,6 +36,7 @@ import { installIncrementalUsageTotals, installUsageDetail, usageTotalsComplete 
 import { installUsageSpan } from "./usage-span.ts";
 import { installUsageChatStats } from "./usage-chat-stats.ts";
 import { retireDuplicateUsage } from "./usage-unified.ts";
+import { installEmptyUsageHistory, moveUsageHistory } from "./usage-history.ts";
 import { compactRecentlyCompacted, hasCompactUsage, savedCompactContext } from "./usage-compact.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
 import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from "./watch-jobs.ts";
@@ -383,6 +384,7 @@ export class Store {
       installWorkspaceActivity(db);
       addCardOutcomes(db);
       installUsageChatStats(db);
+      installEmptyUsageHistory(db);
       addSessionTurns(db);
       addSessionWork(db, clock.currentTimeMillisUnsafe());
       addPendingCards(db);
@@ -594,6 +596,8 @@ export class Store {
       const keys = (from === null ? this.#all("SELECT key FROM sessions WHERE ws IS NULL") : this.#all("SELECT key FROM sessions WHERE ws = ?", from)).map((r) => r.key as string);
       if (from === null) this.#run("UPDATE sessions SET ws = ? WHERE ws IS NULL", to);
       else this.#run("UPDATE sessions SET ws = ? WHERE ws = ?", to, from);
+      // The calls of the sessions gone before them were `from`'s as well: the whole workspace's go.
+      moveUsageHistory(this.db, from ?? "", to ?? "");
       for (const key of keys) changes.push({ type: "session", key });
       if (keys.length > 0 && from !== to) this.#sessionWorkspaceChanged();
     });
