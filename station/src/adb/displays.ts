@@ -1,6 +1,6 @@
 // A screen of its own on the phone for each chat it is lent to (docs/adb-share.md "The chat's own screen", 2026-11-04,
 // user: 「会有一个虚拟屏跑 app 不影响我自己操作」): a virtual display, made and held by a run of scrcpy's server on the
-// phone (./screens/scrcpy-server, `new_display`), in the grant's adb server. The agent starts its apps there
+// phone (android.ts SERVER_FILE, `new_display`), in the grant's adb server. The agent starts its apps there
 // (`am start --display`), touches it (`input -d`) and takes its pictures (`screencap -d`, SurfaceFlinger's id of it),
 // while the person uses the phone's own screen. It is made as phone_use says how the phone is reached, and goes as the
 // grant ends, as nothing of the agent's has used the phone for IDLE_MS (its apps closed with it: they do not move onto
@@ -10,15 +10,12 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { randomInt } from "node:crypto";
 import { statSync } from "node:fs";
 import net from "node:net";
-import { fileURLToPath } from "node:url";
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { platform } from "../platform/index.ts";
-import { adbEnv, sizeOf } from "../screens/android.ts";
+import { adbEnv, SERVER_FILE, SERVER_VERSION, sizeOf } from "../screens/android.ts";
 import { DISPLAY_MARK } from "./activity.ts";
 
-/// The version of ../screens/scrcpy-server (android.ts SERVER_VERSION).
-const SERVER_VERSION = "5.0.1";
 /// How long scrcpy has to make the display.
 const START_TIMEOUT = 20_000;
 /// How long an adb command of the station's is given.
@@ -88,7 +85,7 @@ export class PhoneDisplays {
 
   constructor(o: DisplaysOptions) {
     this.#o = o;
-    this.#file = o.file ?? fileURLToPath(new URL("../screens/scrcpy-server", import.meta.url));
+    this.#file = o.file ?? SERVER_FILE;
   }
 
   /// Grant `grant`'s display, made if it has none (`port`: its adb server, `serial`: the phone in it).
