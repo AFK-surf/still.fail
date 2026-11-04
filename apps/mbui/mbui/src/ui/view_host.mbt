@@ -2786,7 +2786,8 @@ fn view_frame_end(c : Ctx) -> Unit {
 /// in itself): its node held shorter than what it holds asks (its holder short of room), nothing of it cut off; what it
 /// asks never the height it was given. Not with `fits` (not yet: one that fits laid out as a `natural` one is,
 /// cut where its node is shorter).
-/// `unlaid` is accepted for source compatibility; direct measurement needs no estimated height.
+/// `unlaid` is accepted for source compatibility; direct measurement needs no estimated height. `measured` is told
+/// the intrinsic size during measurement, and must not publish it as a signal that changes layout.
 pub fn old(
   v : @view.View,
   build : (Ctx) -> Unit,
@@ -2795,6 +2796,7 @@ pub fn old(
   gives? : Bool = false,
   fits? : Double,
   unlaid? : () -> Double,
+  measured? : ((Double, Double)) -> Unit,
 ) -> @view.View {
   v.hosted(make=fn(n) {
     // Intrinsic measurement happens in the parent's layout. No estimated height is published as an intermediate
@@ -2880,7 +2882,9 @@ pub fn old(
         }
         (measure_revision.get(), key(), n.window(), theme_revision.val)
       }), fn(snapshot, w) {
-        old_measure(g(), island, w.unwrap_or(snapshot.2.0))
+        let size = old_measure(g(), island, w.unwrap_or(snapshot.2.0))
+        match measured { Some(f) => f(size); None => () }
+        size
       }) |> ignore
     }
     n.owns(fn() {
@@ -4720,10 +4724,19 @@ fn old_build_size_in_theme(c : Ctx, o : OldIsland, width : Double, height~ : Dou
   o.room.val = (w, h)
   o.part = c.id(o.key)
   old_measures[o.part] = o.measure_revision
+  match kept_nodes.get((o.part, -1)) {
+    Some(rn) if rn.in_pool => {
+      c.row_nodes_out(rn)
+      rn.in_pool = false
+    }
+    _ => ()
+  }
   let root = Ref(-1)
   let held = Ref(-1)
   let was_building = building.val
   let was_measuring = c.measuring
+  let was_part = nodes_run.building
+  nodes_run.building = None
   c.measuring = measuring
   building.val = true
   c.with_parent(-1, fn() {
@@ -4744,6 +4757,7 @@ fn old_build_size_in_theme(c : Ctx, o : OldIsland, width : Double, height~ : Dou
   old_targets_due.val = true
   building.val = was_building
   c.measuring = was_measuring
+  nodes_run.building = was_part
   let measured = if held.val >= 0 { c.nodes[held.val] } else { c.nodes[root.val] }
   o.fitted_width.val = measured.fw
   (measured.fw, measured.fh)

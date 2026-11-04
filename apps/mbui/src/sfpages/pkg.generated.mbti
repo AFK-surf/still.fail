@@ -66,7 +66,7 @@ pub fn changelog_news(@ui.Ctx, @sfbase.Source) -> Unit
 
 pub fn changelog_node(@view.View, @settings.Core, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
-pub fn chat_composer_node(@view.View, @sfbase.Source, @sfbase.ChatRef, () -> @sfbase.ChatView?, () -> Double, () -> Double, () -> Double, () -> ComposerPlace, (String) -> Unit, tips? : @sf.TipLayer, active? : () -> Bool, neighbour? : (Int32) -> Unit, drops? : @view.View) -> ChatComposerNode
+pub fn chat_composer_node(@view.View, @sfbase.Source, @sfbase.ChatRef, () -> @sfbase.ChatView?, () -> Double, () -> Double, () -> Double, () -> ComposerPlace, (String) -> Unit, pane_width? : (@view.WidthContext, () -> ComposerLimits), pane_height? : @view.HeightContext, tips? : @sf.TipLayer, active? : () -> Bool, neighbour? : (Int32) -> Unit, drops? : @view.View) -> ChatComposerNode
 
 pub fn chat_extra_items(@sfbase.Source, @sfbase.ChatRef, @json.Json?) -> Array[@sf.MenuItem?]
 

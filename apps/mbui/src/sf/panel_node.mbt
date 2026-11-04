@@ -131,6 +131,7 @@ fn panel_node(
         })
       }
       layer.box(fn(p) {
+        let side_now = Ref(x.side)
         p
         .beside(at.id(), side=x.side, along=x.along, offset=x.offset, padding=8.0)
         .width(Is(if x.fits { None } else { Some(x.w) }))
@@ -152,6 +153,7 @@ fn panel_node(
         .presses(Is(true))
         .on_press(fn() {  })
         |> ignore
+        p.beside_content(fn(side) { side_now.val = side })
         if !modal {
           let first_down = @signals.untracked(fn() { p.window_downs() })
           p.reacts(fn() { p.window_downs() }, fn(down) {
@@ -173,7 +175,7 @@ fn panel_node(
         let opened = fn() {
           let was = (beside_given.val, beside_side_now.val)
           beside_given.val = { side: x.side, room: 1.0e9, panel: 0 }
-          beside_side_now.val = Some(fn() { p.went_told().unwrap_or(x.side) })
+          beside_side_now.val = Some(fn() { side_now.val })
           was
         }
         // (each part of it out to the panel's edges it stands by, the panel's padding round what it holds inside it: what
@@ -205,7 +207,7 @@ fn panel_node(
         let out_under = if footed { 0.0 } else { panel_pad }
         // (its title, panel_head's: out to the panel's edges over it, on `v`'s node)
         let head = fn(v : @view.View) {
-          @ui.old(v, natural=true, fits?=fits, key=fn() { key + "/head" }, fn(c) {
+          @ui.old(v, natural=true, fits?=fits, key=fn() { key + "/head/\{side_now.val}" }, fn(c) {
             let was = opened()
             let held = c.box(style=panel_part_in(panel_pad, 0.0), fn() { panel_head(c, title(), end?=x.head_end) })
             beside_given.val = was.0
@@ -230,7 +232,7 @@ fn panel_node(
           p.box(fn(b) {
             b.grow(Is(1.0)).min_height(Is(Some(0.0))).margin(By(fn() { (-panel_pad, -over(), -panel_pad, -out_under) })).focusable(Is(x.focus), keys=0, tab=false) |> ignore
             body_box.val = Some(b)
-            @ui.old(b, key=fn() { key + "/body" }, fn(c) {
+            @ui.old(b, key=fn() { key + "/body/\{side_now.val}" }, fn(c) {
               let was = opened()
               let held = c.box(style=panel_grows.then(panel_part_in(over(), under)), fn() {
                 panel_sides_in.val = panel_pad
@@ -255,6 +257,9 @@ fn panel_node(
           // panel's sides, what it holds as far in as without (held_reach, held_in: in_room's))
           p.box(fn(b) {
             let scroll = @view.Scroll::new()
+            let held_now = Ref(false)
+            let natural = Ref(0.0)
+            let context = b.height_context()
             b
             .shrink(Is(1.0))
             .min_height(Is(Some(0.0)))
@@ -265,12 +270,14 @@ fn panel_node(
             |> ignore
             body_box.val = Some(b)
             b.scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(s) {
-              @ui.old(s, natural=true, fits?=fits, key=fn() { key + "/body" }, fn(c) {
+              let island = @ui.old(s, natural=true, fits?=fits, key=fn() { key + "/body/\{held_now.val}/\{side_now.val}" }, measured=fn(size) {
+                if !held_now.val { natural.val = size.1 }
+              }, fn(c) {
               let was = opened()
                 let held = c.box(style=held_in().then(@ui.style(pt=room(over()), pb=room(under))), fn() {
                   // (held shorter than what it holds: what would scroll in itself there laid out whole, panel_held)
                   // Only a child which asks whether the panel scrolls needs to follow that state.
-                  panel_held_now.val = fn() { scroll.goes() }
+                  panel_held_now.val = fn() { held_now.val }
                   panel_sides_in.val = panel_pad
                   small_panel_now.val = true
                   words_in_now.val = text_in
@@ -287,7 +294,15 @@ fn panel_node(
                 words_look(c, held)
               })
               .margin(By(fn() { (0.0, -over(), 0.0, -out_under) }))
-              |> ignore
+              context.bind(island, By(fn() { over() + out_under }), fn(height, less) {
+                let held = match height {
+                  Some(h) => natural.val - less > h + 0.5
+                  None => false
+                }
+                if held == held_now.val { return false }
+                held_now.val = held
+                true
+              })
             })
             // (cut at its box while what it holds is taller than it, as @kit.in_room's held list (pick_node's): else what
             // reaches past it drawn whole, in the panel's round corners; what it paints alone, nothing laid out by it)
@@ -301,7 +316,7 @@ fn panel_node(
         // (its foot: its buttons in its foot corner, a line over them where `ruled`)
         match x.foot {
           Some(f) =>
-            @ui.old(p, natural=true, fits?=fits, key=fn() { key + "/foot" }, fn(c) {
+            @ui.old(p, natural=true, fits?=fits, key=fn() { key + "/foot/\{side_now.val}" }, fn(c) {
               let was = opened()
               let held = c.box(style=panel_part_in(0.0, panel_pad), fn() {
                 if x.ruled {

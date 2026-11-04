@@ -156,6 +156,116 @@ pub fn View::beside(
 }
 
 ///|
+/// Project a node using the current flex results and the same offsets, scales and beside placements as Tree::place.
+/// Absolute children are measured after their anchors' flow, before the tree publishes those placements.
+fn Tree::layout_projection(self : Tree, at : Int, visiting : Set[Int]) -> (Double, Double, Double)? {
+  if at < 0 { return Some((0.0, 0.0, 1.0)) }
+  guard at < self.nodes.length() && self.nodes[at].live && !visiting.contains(at) else { return None }
+  visiting.add(at)
+  let out = fn() -> (Double, Double, Double)? {
+    let n = self.nodes[at]
+    guard self.layout_projection(n.parent, visiting) is Some((hx, hy, hs)) else { return None }
+    if n.slot { return Some((hx, hy, hs)) }
+    let (w, h) = (n.flex.width, n.flex.height)
+    let mut went : Side? = None
+    let (x, y) = match n.beside {
+      Some(b) if self.alive_id(b.anchor) && !self.leaving_at(at) &&
+        !self.out_at(b.anchor.at) && !self.leaving_at(b.anchor.at) => {
+        guard self.layout_projection(b.anchor.at, visiting) is Some((ax, ay, scale)) else { return None }
+        let a = self.nodes[b.anchor.at]
+        let (aw, ah) = (a.flex.width * scale, a.flex.height * scale)
+        let (px, py) = self.pointer_xy
+        let rect = if b.at_pointer && px >= ax && py >= ay && px < ax + aw && py < ay + ah {
+          (px, py, 0.0, 0.0)
+        } else {
+          match (b.at_pointer, n.beside_point) {
+            (true, Some((ox, oy))) => (ax + ox * scale, ay + oy * scale, 0.0, 0.0)
+            _ => (ax, ay, aw, ah)
+          }
+        }
+        let (x, y, side) = place_beside(rect, w * hs, h * hs, self.last_w, self.last_h,
+          side=b.side, along=b.along, offset=b.offset, padding=b.padding)
+        went = Some(side)
+        (x, y)
+      }
+      Some(_) if n.beside_last is Some((lx, ly, _, _)) => (hx + hs * lx, hy + hs * ly)
+      _ => {
+        let lx = n.flex.left + n.look.dx + n.look.sx * w
+        let ly = self.rows_placed(at, n.flex.top + n.look.dy + n.look.sy * h)
+        (hx + hs * lx, hy + hs * ly)
+      }
+    }
+    let (px, py) = match (n.look.pivot, n.beside, went) {
+      (FromBeside, Some(b), Some(side)) => {
+        let across = match b.along { Start => 0.0; Middle => 0.5; End => 1.0 }
+        match side {
+          Bottom => (across * w, 0.0)
+          Top => (across * w, h)
+          Right => (0.0, across * h)
+          Left => (w, across * h)
+        }
+      }
+      _ => self.pivot_of(at, w, h)
+    }
+    Some((x + hs * (1.0 - n.look.scale) * px, y + hs * (1.0 - n.look.scale) * py, hs * n.look.scale))
+  }()
+  visiting.remove(at)
+  out
+}
+
+///|
+/// Update this beside node's content for the side it will occupy in the current layout. The callback must use
+/// inputs captured before layout and may change only this node's content; it must not read signals. A leaving node
+/// keeps the side it had when it began leaving, as its placement does.
+pub fn View::beside_content(self : View, apply : (Side) -> Unit) -> Unit {
+  guard self.live() is Some(n) && n.beside is Some(b) else { abort("beside content needs an anchor") }
+  let current = Ref(b.side)
+  let tree = self.tree
+  n.flex.absolute_resolve = Some(fn(w, h) {
+    guard self.alive() && tree.alive_id(b.anchor) else { return false }
+    if tree.leaving_at(self.at) || tree.out_at(b.anchor.at) || tree.leaving_at(b.anchor.at) {
+      return false
+    }
+    guard tree.layout_projection(b.anchor.at, Set::new()) is Some((x, y, scale)) &&
+      tree.layout_projection(n.parent, Set::new()) is Some((_, _, parent_scale)) else { return false }
+    let anchor = tree.nodes[b.anchor.at]
+    let (aw, ah) = (anchor.flex.width * scale, anchor.flex.height * scale)
+    let (px, py) = tree.pointer_xy
+    let rect = if b.at_pointer && px >= x && py >= y && px < x + aw && py < y + ah {
+      (px, py, 0.0, 0.0)
+    } else {
+      match (b.at_pointer, n.beside_point) {
+        (true, Some((ox, oy))) => (x + ox * scale, y + oy * scale, 0.0, 0.0)
+        _ => (x, y, aw, ah)
+      }
+    }
+    let (_, _, side) = place_beside(rect, w * parent_scale, h * parent_scale, tree.last_w, tree.last_h, side=b.side, along=b.along,
+      offset=b.offset, padding=b.padding)
+    if current.val == side { return false }
+    current.val = side
+    let was = tree.layout_owner
+    tree.layout_owner = self.at
+    let guard_before = @signals.set_access_guard(Some("beside content must use its measured size"))
+    @signals.untracked(fn() { apply(side) })
+    @signals.set_access_guard(guard_before) |> ignore
+    let todo = [self.at]
+    while !todo.is_empty() {
+      let at = todo.pop().unwrap()
+      let child = tree.nodes[at]
+      child.flex.dirty = true
+      child.flex.cache_n = 0
+      child.flex.p_ok = false
+      child.flex.pre_gen = -1
+      todo.append(child.kids)
+    }
+    tree.layout_owner = was
+    true
+  })
+  self.owns(fn() { n.flex.absolute_resolve = None }) |> ignore
+  tree.layout_marked_at(self.at)
+}
+
+///|
 /// What goes beside another placed by it (View::beside), as the tree is placed now (Tree::laid_out, where anything was
 /// laid out or placed again): each after what it goes beside where that goes beside another in turn, and after what
 /// holds it where that does (a chain of them in its order, whatever order they were made or said in), what lands

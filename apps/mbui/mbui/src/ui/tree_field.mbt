@@ -85,7 +85,8 @@ fn view_words_found(d : @view.Drawn) -> String {
 /// paste of `paste_limit` characters or more, not put in, once, at that paste's. `placeholder_by`: its placeholder as it
 /// is now, followed (in place of `placeholder`). `line_by`, `max_lines_by`, `enter_by` and `paste_limit_by`: those
 /// options as they change, keeping the same editor, selection and undo. `files_when`: whether it takes files at the
-/// paste's moment (else its words, like a field without `files`). The node made.
+/// paste's moment (else its words, like a field without `files`). `max_lines_in_layout` reads a value captured or
+/// set during layout, without reading signals; it takes precedence over `max_lines_by`. The node made.
 pub fn field(
   parent : @view.View,
   field : Field,
@@ -112,6 +113,7 @@ pub fn field(
   size_by? : () -> Double,
   line_by? : () -> Double,
   max_lines_by? : () -> Int,
+  max_lines_in_layout? : () -> Int,
   enter_by? : () -> Bool,
   paste_limit_by? : () -> Int,
   files_when? : () -> Bool = fn() { true },
@@ -126,7 +128,7 @@ pub fn field(
     None => fn() { font_size }
   }
   let line_now = line_by.unwrap_or(fn() { line })
-  let lines_now = max_lines_by.unwrap_or(fn() { max_lines })
+  let lines_now = max_lines_in_layout.unwrap_or(max_lines_by.unwrap_or(fn() { max_lines }))
   let enter_now = enter_by.unwrap_or(fn() { enter_sends.unwrap_or(enter_sends_by(lines_now(), ime_action)) })
   let limit_now = paste_limit_by.unwrap_or(fn() { paste_limit })
   // (what it says it is while empty as said once, or followed as it changes (`placeholder_by`: in the words as they
@@ -229,7 +231,13 @@ pub fn field(
         let (shown, spans) = st.look_shown()
         ({ ..laid, words: if secret { st.shown() } else { shown } }, spans)
       }),
-      fn(k, w) { k.0.size(w) },
+      fn(k, w) {
+        let laid = match max_lines_in_layout {
+          Some(read) => { ..k.0, max_lines: read() }
+          None => k.0
+        }
+        laid.size(w)
+      },
     )
     .focusable(Is(true), keys=0, typing=true)
     // (the pointer an I-beam over it, as over an old view's editor: Ctx's pointer shape, desktop.mbt)

@@ -100,6 +100,7 @@ fn chat_talk_node(
   ground : (@view.View) -> Int64,
 ) -> Unit {
   let pane_width = talk.width_context()
+  let pane_height = talk.height_context()
   // The old view's pane context only describes the view being built at that instant. The retained chat
   // can be read later while a different old view is being built, so use this page's own corners instead.
   let bar_room = fn() { chat_bar_room(corners() is Some(_)) }
@@ -148,6 +149,7 @@ fn chat_talk_node(
           fn() { geometry().2 },
           fn(_key) { (latest.val)() },
           pane_width=(pane_width, fn() { @sfpages.composer_limits(radii()) }),
+          pane_height~,
           active=fn() { app.nav.drawn_stay().0 == k },
           drops=talk,
         )

@@ -590,6 +590,19 @@ fn size_node(
     }
     None => ()
   }
+  match node.height_context {
+    Some(prepare) => {
+      let b = box_for(node, cb_w, cb_h)
+      let mut height = if known(kh) { kh } else { b.h }
+      if !known(height) && known(b.min_h) && b.min_h == b.max_h { height = b.min_h }
+      let offered = if known(height) { Some(fmax(clamp_size(height, b.min_h, b.max_h) - b.pbh(), 0.0)) } else { None }
+      if prepare(offered) {
+        node.cache_n = 0
+        node.p_ok = false
+      }
+    }
+    None => ()
+  }
   if perform {
     // laid out before as now asked, nothing under it changed since: it
     // stands as it is. (A layout is always asked with the space available
@@ -2574,7 +2587,7 @@ fn place_absolute(cb : Node, parent : Node, c : Node, ox : Double, oy : Double) 
   if known(h) {
     h = clamp_size(h, b.min_h, b.max_h)
   }
-  let fw = size_node(
+  let mut fw = size_node(
     c,
     w,
     h,
@@ -2584,7 +2597,19 @@ fn place_absolute(cb : Node, parent : Node, c : Node, ox : Double, oy : Double) 
     ch,
     false,
   )
-  let fh = out_h.val
+  let mut fh = out_h.val
+  match c.absolute_resolve {
+    Some(resolve) => {
+      let mut count = 0
+      while resolve(fw, fh) {
+        count += 1
+        if count > 4 { abort("an absolute child's content did not settle") }
+        fw = size_node(c, w, h, if known(w) { w } else { cw }, if known(h) { h } else { ch }, cw, ch, false)
+        fh = out_h.val
+      }
+    }
+    None => ()
+  }
   let rw = size_node(c, fw, fh, fw, fh, cw, ch, true)
   let rh = out_h.val
   c.width = rw

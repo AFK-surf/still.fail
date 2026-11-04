@@ -20,6 +20,9 @@ priv struct ComposerWidth {
 let composer_width_context : @view.Lent[ComposerWidth] = @view.Lent::new()
 
 ///|
+let composer_height_context : @view.Lent[@view.HeightContext] = @view.Lent::new()
+
+///|
 // A composer's pane geometry is resolved before its descendants are measured. Other inputs are captured outside
 // layout, so resizing the pane cannot publish a size and then cause a second layout of the composer.
 fn[K : Eq] composer_place_layout(v : @view.View, read : () -> K, apply : (ComposerPlace, K) -> Unit) -> Bool {
@@ -65,6 +68,7 @@ pub fn chat_composer_node(
   place : () -> ComposerPlace,
   sent : (String) -> Unit,
   pane_width? : (@view.WidthContext, () -> ComposerLimits),
+  pane_height? : @view.HeightContext,
   tips? : @sf.TipLayer,
   active? : () -> Bool = fn() { true },
   neighbour? : (Int) -> Unit,
@@ -106,6 +110,7 @@ pub fn chat_composer_node(
   }
   let root = parent.box(fn(root) {
     root_at.val = Some(root)
+    match pane_height { Some(context) => root.lends(composer_height_context, context) |> ignore; None => () }
     root.lines_up(Is(Some(Middle))) |> ignore
     match pane_width {
       Some((context, limits)) => {

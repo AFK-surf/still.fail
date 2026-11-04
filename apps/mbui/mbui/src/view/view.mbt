@@ -6036,6 +6036,15 @@ fn Tree::laid_out(self : Tree, upto : Double, paint_at? : Double = upto) -> Unit
   })
   self.pulls_marked.clear()
   self.pulls_marked.append(still)
+  for at in self.besides_at {
+    let n = self.nodes[at]
+    if n.live && n.placed {
+      match n.flex.absolute_resolve {
+        Some(resolve) => if resolve(n.flex.width, n.flex.height) { self.layout_marked_at(at) }
+        None => ()
+      }
+    }
+  }
   self.layout_locked = true
   // (what goes beside another placed by it only where anything was laid out or placed again: View::beside)
   let placing = self.layout_due || !self.places_due.is_empty()
