@@ -66,8 +66,10 @@ import type { SpanContext } from "../trace.ts";
 import { get, isObject, utf8 } from "../util.ts";
 import {
   type BoxCert, type Deny, type Grant, type Item, type Listing, type Plain, type Request, type Save, type Scope, type Vault,
-  SCOPES, TAG, allows, boxPublic, decrypt, encryptWith, fromWords, grantContext, itemContext, keyContext, openSeal, recoveryPair, saveContext, sealWith, sign, signedOk, toWords,
+  SCOPES, TAG, allows, boxPublic, decrypt, encryptWith, fromWords, grantContext, itemContext, keyContext, openSeal, recoveryPair, saveContext, rulesCrypto, sealWith, sign, toWords,
 } from "../vault/crypto.ts";
+// @ts-ignore: the MoonBit build's JS, untyped
+import * as rules from "../../../../rules/js/rules.js";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { ofAddress } from "../workspace.ts";
 import { stamp } from "../present.ts";
@@ -197,18 +199,22 @@ function lockOf(inner: Inner, ws: string): Checked | CoreError {
 /// Whether a certificate is of an app device in the lock that is its person's own (lock-check.ts Device `own`: one an
 /// admin put in under their name is given no key, by itself or asked), signed by its own key; whose device it is.
 function certOwner(lock: Checked, cert: BoxCert): string | null {
-  const d = lock.devices.get(cert?.device);
-  if (!d || d.kind !== "app" || !d.own || !lock.members.has(d.sub) || d.sign_key !== cert.sig?.key || cert.ws !== lock.ws || !signedOk(cert, TAG.box)) return null;
-  return d.sub;
+  return rules.cert_ok_js(lock, cert, false, rulesCrypto) === null ? lock.devices.get(cert.device)!.sub : null;
 }
 
 /// The app device of the lock that signs with `key`, where it is its person's own (no other's signature counts).
 const ownSigner = (lock: Checked, key: unknown) => [...lock.devices.values()].find((x) => x.kind === "app" && x.own && x.sign_key === key);
 
-/// Whether a vault's version is its owner's (signed by one of their own app devices in the lock).
+/// Whether a vault's version is one the stations take (rules/, as station/src/vault/crypto.ts `vaultOk` checks a copy
+/// brought from another station): signed by one of its owner's own app devices in the lock, its members in the lock,
+/// each of its keys for a member's own device. Found once for each lock and version.
+const trust = new WeakMap<Checked, WeakMap<Vault, boolean>>();
 function trusted(lock: Checked, v: Vault): boolean {
-  if (v?.ws !== lock.ws || !Array.isArray(v.members) || !signedOk(v, TAG.vault)) return false;
-  return ownSigner(lock, v.sig.key)?.sub === v.owner;
+  let of = trust.get(lock);
+  if (!of) trust.set(lock, (of = new WeakMap()));
+  let ok = of.get(v);
+  if (ok === undefined) of.set(v, (ok = rules.vault_ok_js(lock, null, v, true, rulesCrypto) === null));
+  return ok;
 }
 
 /// This device in the lock: the one whose signing key is this app's, where it is its person's own (one an admin put
@@ -1325,8 +1331,8 @@ class Vaults {
 
   /// What an item holds: written by a member's own device in the lock, opened with its vault's key.
   #plain(lock: Checked, v: Vault, item: Item, key: Uint8Array): Effect.Effect<Uint8Array, CoreError> {
-    const by = ownSigner(lock, item.sig?.key);
-    if (!by || !v.members.includes(by.sub) || item.vault !== v.id || item.epoch !== v.epoch || !signedOk(item, TAG.item)) return fail("vault_untrusted", t("core-misc.vault.untrusted"));
+    // (as the stations take it, rules/ `itemOk`, and written under the key it is opened with)
+    if (rules.item_ok_js(lock, v, null, item, true, rulesCrypto) !== null || item.epoch !== v.epoch) return fail("vault_untrusted", t("core-misc.vault.untrusted"));
     return Effect.try({ try: () => decrypt(key, item.ct, itemContext(this.ws, v.id, item.id, item.version, item.epoch)), catch: asCoreError });
   }
 

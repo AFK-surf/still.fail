@@ -429,6 +429,22 @@ test("vault calls: set up, a vault of one's own, an item written, opened, unlock
   r.core.close();
 });
 
+test("a vault version the stations would refuse is not trusted here: one naming someone not in the lock is not shown, though its owner signed it", async () => {
+  const r = await rig();
+  r.putLock();
+  const { made: id } = await r.ask("vault.setup", {});
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  assert.equal(vaults().vaults.length, 1);
+  const v = r.st.vaults.get(id)!;
+  const { sig: _, ...rest } = v;
+  const ghost = sign({ ...rest, seq: v.seq + 1, members: [...v.members, "ghost"], at: v.at + 1 }, TAG.vault, r.me.signer!);
+  r.st.vaults.set(id, ghost);
+  r.push("vault", ghost);
+  await r.host.time.pass(200);
+  assert.deepEqual(vaults().vaults, [], "a station would refuse it (member ghost is not in the lock): not this person's vault to show");
+  r.core.close();
+});
+
 test("what the system said no with is said in the person's words: no screen lock, no vault here", async () => {
   const r = await rig();
   r.putLock();
@@ -700,7 +716,7 @@ test("vault calls: a secret an agent asks to keep, opened with this device's box
     save: { kind: "login", name: "测试服务登录", modes: ["env"], hosts: [], env: "SERVICE_PASSWORD", username: "demo-user" },
     sealed: [{ device: to.device, box: to.box, secret: sealWith(to.box, utf8(JSON.stringify(fields)), saveContext("ws", rid), fill(6)) }],
   });
-  const item = "i_01JAKEEP000000000000000UX7";
+  const item = "i_01JAKEEP000000000000000AX7";
   r.st.requests.push(save("r_s", item, here));
   r.push("vault-request", save("r_s", item, here));
   const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
@@ -726,7 +742,7 @@ test("vault calls: a secret an agent asks to keep, opened with this device's box
   assert.deepEqual(vaults().requests, []);
 
   // Into that vault next time; one sealed to another device is not this one's to open.
-  const second = "i_01JAKEEP000000000000000TWO";
+  const second = "i_01JAKEEP000000000000000TW2";
   r.st.requests.push(save("r_t", second, here));
   r.push("vault-request", save("r_t", second, here));
   await r.ask("vault.approve", { request: "r_t", scope: "once" });
@@ -772,7 +788,7 @@ test("vault calls: a secret an agent asks the person to type in: what they typed
   assert.deepEqual(JSON.parse(new TextDecoder().decode(openSeal(keeper, saved.grant.secret, grantContext("ws", "r_y")))).fields, { value: "sk-go-1" });
 
   // A login with no account given: the one typed in with the password, as typed.
-  const login = "i_01JAKEEP0000000000000LOGIN";
+  const login = "i_01JAKEEP00000000000001060N";
   const asksLogin = typed("r_z", login, { kind: "login", name: "Router", modes: ["env"], hosts: [], typed: true });
   r.st.requests.push(asksLogin);
   r.push("vault-request", asksLogin);
@@ -893,7 +909,7 @@ test("one vault of one's own: a device set up later makes none, and is given its
   r.st.requests.push(save);
   r.push("vault-request", save);
   // One its station sealed to the phone alone (this device not set up there then): said on its row, approved elsewhere.
-  const elsewhere: Request = { ...save, id: "r_e", item: "i_01JAKEEP000000000000000ELS", sealed: [{ device: r.phone.hex, box: boxPublic(phoneBox3), secret: "x" }] };
+  const elsewhere: Request = { ...save, id: "r_e", item: "i_01JAKEEP000000000000000E15", sealed: [{ device: r.phone.hex, box: boxPublic(phoneBox3), secret: "x" }] };
   r.st.requests.push(elsewhere);
   r.push("vault-request", elsewhere);
   await r.host.time.pass(500);
@@ -1111,7 +1127,7 @@ test("the plain library: no security mode, items kept on the station as they are
   await r.ask("vault.approve", { request: "r_p", scope: "once" });
   assert.deepEqual(r.st.plainGrants, [{ request: "r_p", scope: "once" }]);
   // One it asks to keep: written by the station from what it holds, once its owner says so.
-  r.st.requests.push({ id: "r_k", ws: "ws", vault: "plain", item: "i_01JAKEEP0000000000000PLAIN", session: "ember:s", chat: "", mode: "env", reason: "slack", box: "", at: 1000, status: "pending", owner: "me@x.com", save: { kind: "token", name: "Slack", modes: ["env"], hosts: [] } } as Request);
+  r.st.requests.push({ id: "r_k", ws: "ws", vault: "plain", item: "i_01JAKEEP0000000000000P1A1N", session: "ember:s", chat: "", mode: "env", reason: "slack", box: "", at: 1000, status: "pending", owner: "me@x.com", save: { kind: "token", name: "Slack", modes: ["env"], hosts: [] } } as Request);
   await r.ask("vault.approve", { request: "r_k", scope: "once" });
   assert.deepEqual(r.st.plainSaves, [{ request: "r_k" }]);
   // One its owner types in: sent with what they typed, as the item's fields.
@@ -1172,7 +1188,7 @@ test("a file kept: its bytes in base64 under its name; opened, shown as its text
   await fails(r.ask("vault.putItem", { vault: "plain", plain: { kind: "file", name: "坏", fields: { content: "not base64" } } }), "invalid_params");
 
   // One an agent asks the person for: the file they picked, under the name the agent gave, else its own.
-  r.st.requests.push({ id: "r_f", ws: "ws", vault: "plain", item: "i_01JAKEEP00000000000000FILE", session: "ember:s", chat: "", mode: "file", reason: "go", box: "", at: 1000, status: "pending", owner: "me@x.com", save: { kind: "file", name: "SA", modes: ["file"], hosts: [], typed: true } } as Request);
+  r.st.requests.push({ id: "r_f", ws: "ws", vault: "plain", item: "i_01JAKEEP00000000000000F11E", session: "ember:s", chat: "", mode: "file", reason: "go", box: "", at: 1000, status: "pending", owner: "me@x.com", save: { kind: "file", name: "SA", modes: ["file"], hosts: [], typed: true } } as Request);
   await fails(r.ask("vault.approve", { request: "r_f", typed: { secret: b64(new Uint8Array(64 * 1024 + 1)), filename: "sa.json" } }), "vault_file_too_big");
   await r.ask("vault.approve", { request: "r_f", typed: { secret: b64("{}"), filename: "sa.json" } });
   assert.deepEqual(r.st.plainSaves.at(-1), { request: "r_f", fields: { content: b64("{}"), filename: "sa.json" } });

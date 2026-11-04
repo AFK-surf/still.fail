@@ -120,9 +120,22 @@ export function signedBytes(o: Record<string, unknown>, tag: string): Uint8Array
 /// on this device for those bytes (verified.ts).
 export function signedOk(o: { sig: Sig } & Record<string, unknown>, tag: string): boolean {
   try {
-    const sig = o.sig;
+    return sigOver(o.sig, signedBytes(o, tag));
+  } catch {
+    return false;
+  }
+}
+
+/// The vault's rules' cryptography (rules/, MoonBit: views/vault.ts checks by them): whether `sig` is its key's over a
+/// record whose canonical text without it is `text`, under `tag`.
+export const rulesCrypto = {
+  recordSigValid: (sig: Sig, tag: string, text: string): boolean => sigOver(sig, concat(utf8(`${tag}\0`), sha256(utf8(text)))),
+};
+
+/// Whether `sig` is its key's over `bytes`.
+function sigOver(sig: Sig, bytes: Uint8Array): boolean {
+  try {
     if (sig === null || typeof sig !== "object" || typeof sig.key !== "string" || typeof sig.sig !== "string") return false;
-    const bytes = signedBytes(o, tag);
     if (sig.alg === "Ed25519" && /^ed25519:[0-9a-f]{64}$/.test(sig.key) && /^[0-9a-f]{128}$/.test(sig.sig)) return ed25519Ok(unhex(sig.sig), bytes, unhex(sig.key.slice(8)));
     if (sig.alg === "ES256" && sig.key.startsWith("p256:")) {
       const point = fromB64url(sig.key.slice(5)), s = fromB64url(sig.sig);

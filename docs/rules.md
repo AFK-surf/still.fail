@@ -1,6 +1,6 @@
 # 规则（rules/，MoonBit）
 
-安全模式（和以后的密钥库）的判断规则写在一份 MoonBit 代码里，编成 JS（`rules/js/rules.js`，提交进仓库）。station 的锁（`station/src/cloud/lock.ts`，cloud 也用它）和设备上的锁检查（core 的 `vault/lock-check.ts`，交出密钥库的钥匙前用）都只调用它，所以设备拒绝的正是 station 拒绝的。其中能证明的部分用 `moon prove` 证明（2026-11-04 用户：「研究一下怎么给密钥库和安全模式搞证明」「拎出来用其它语言实现」）。
+安全模式（和以后的密钥库）的判断规则写在一份 MoonBit 代码里，编成 JS（`rules/js/rules.js`，提交进仓库）。station 的锁（`station/src/cloud/lock.ts`，cloud 也用它）和设备上的锁检查（core 的 `vault/lock-check.ts`，交出密钥库的钥匙前用）都只调用它，所以设备拒绝的正是 station 拒绝的。设备信不信一个密钥库版本、一张 box 证书、一个条目（core 的 `views/vault.ts`）也按 station 的规则：密钥库版本照 `vaultOk` 检查别的 station 带来的副本那样查（2026-11-04 用户选「换成 station 的规则」），不合的不显示、不用。其中能证明的部分用 `moon prove` 证明（2026-11-04 用户：「研究一下怎么给密钥库和安全模式搞证明」「拎出来用其它语言实现」）。
 
 ## 包
 - `rules/src/form`：记录的规范化 JSON（键按 UTF-16 码元排序、无空白、只收安全整数，字符串照 `JSON.stringify` 写）和条目哈希的原文。和 `client/core-ts/src/lock-form.ts` 逐字节一致。
