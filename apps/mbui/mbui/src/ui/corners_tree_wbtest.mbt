@@ -154,6 +154,36 @@ fn tree_cut_card(inside : (@view.View) -> Unit, clips : Bool) -> Tester {
 }
 
 ///|
+test "corners of the window's tree: a card clipped by an ancestor above its own container is checked only where it shows; outside the window's side without that clip it is still checked" {
+  let x = @signals.signal(204.0)
+  let clips = @signals.signal(true)
+  let t = Tester::new(fn(_c) { }, w=400.0, h=300.0, platform=0, corners_held=false)
+  set_view_app(fn(root) {
+    root.box(fn(pane) {
+      pane.width(Is(Some(200.0))).height(Is(Some(200.0))).clips(By(fn() { clips.get() })) |> ignore
+      pane.box(fn(card) {
+        card.over(Is(true)).offset(By(fn() { (x.get(), 0.0) }))
+        .width(Is(Some(180.0))).height(Is(Some(120.0)))
+        .radius(Is(20.0)).ground(Is(0x333333FFL)).pad(Is(6.0)) |> ignore
+        card.box(fn(inner) {
+          inner.width(Is(Some(168.0))).height(Is(Some(60.0)))
+          .radius(Is(20.0)).ground(Is(0xEEEEEEFFL)) |> ignore
+        }) |> ignore
+      }) |> ignore
+    }) |> ignore
+  })
+  t.draw()
+  assert_eq(t.corner_faults(), [], msg="the card's corners are beyond the ancestor's clip")
+  x.set(10.0)
+  t.draw()
+  assert_true(wants(t.corner_faults(), concentric(20.0, 6.0)), msg="brought into the pane: its wrong corner is checked")
+  clips.set(false)
+  x.set(404.0)
+  t.draw()
+  assert_true(wants(t.corner_faults(), concentric(20.0, 6.0)), msg="past the window's side alone: the card's corner is still checked")
+}
+
+///|
 test "corners of the window's tree: a square ground filling a node 20 round that cuts it, drawn round by the cut, nothing; not cut, said; an old view's the same" {
   let cut = tree_cut_card(tree_ground(0.0), true).corner_faults()
   let uncut = tree_cut_card(tree_ground(0.0), false).corner_faults()
