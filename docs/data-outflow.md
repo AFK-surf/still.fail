@@ -12,6 +12,7 @@
 | 怎么批准 | 申请出现在 still.fail app 里这台 station 的设置页「数据外流」，只有 home workspace 的 owner / admin 能答：逐项勾掉不给的数据和「整个 workspace」，点允许后再出一次摘要确认 |
 | 拿到什么 | 一个专用 token（`sfo_…`），不设有效期，只在这台机器的本机 socket（和打开时的 Tailcat 端口）上有效；读数据只认 token，程序升级后照样能读 |
 | 能读什么 | 授权里勾了的几类：`usage`（token 用量和按价目的金额）、`chats`（chat 的标题、状态、创建人、时间）、`messages`（chat 里的消息原文，单独一项，写明对方能读到对话内容）；范围是这台 station，或整个 workspace 的所有 station |
+| 能做什么 | 授权里勾了 `operate`：以 workspace 成员的身份调管理 API，能做的和人在 app 里一样，见下面「操作」 |
 | 怎么收回 | 「数据外流」页列出每份授权、申请方、谁批准的、最近读了什么；取消后立即失效 |
 
 申请方不必在批准的人旁边：给每个客户一台默认设备（可能是没人守着的虚拟机），上面的程序申请，管理员在自己的设备上批准；授权「整个
@@ -117,6 +118,17 @@ still.fail 这边没有任何为某个使用者写的东西：谁来申请都走
   说的是回答的这台，程序据此知道自己问错了地方，该去发它的那台读，或在这台重新申请。
 
 授权覆盖这台 station（或 workspace 的每台 station）上这个 workspace 的全部 chat，不按 chat、不按人分（station 不做按 chat、按人的权限：同一 workspace 里所有 chat 本来就对所有成员和 agent 可见；workspace 之间的软隔离照 docs/multi-workspace.md）。
+
+## 操作
+
+`operate` 是单独一项，默认和其他几类一样由管理员逐项勾选。有了它，程序能做人在 app 里能做的事：
+
+- `POST /v1/operate`（`operate`，带 token）：`{ actor, method, path, query, body, contentType, station }`。`actor` 是成员的 email，
+  由程序说，station 信它，所以这一项写明对方能以任何成员的身份操作；`body` 是 base64；`query` 是 `[名, 值]` 的列表；`station` 同上，读别的
+  station 时经站间通道（`outflow.operate`），请求最多 1 MiB。回答是 `200 { status, contentType, body }`，`status`、`body`（base64）是管理 API 的回答。
+- 角色：`actor` 是批准这份授权的人时，是批准时的角色；其余是 `member`。
+- 不给的：`/outflow`（程序不能答自己的申请）、`/vault`、`/vault-requests`（密钥库只在人的 app 里打开）；事件流（`406`）；超过 32 MiB 的回答（`413`）。
+- 每次操作和读取一样记一笔，在「数据外流」页能看到。
 
 ## 怎么传
 

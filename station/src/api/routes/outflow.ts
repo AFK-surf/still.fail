@@ -37,7 +37,7 @@ export const routes = (grants: OutflowGrants): Route[] => [
       }
       const scopes: Scope[] = Array.isArray(given?.scopes) ? given.scopes.filter((s: unknown): s is Scope => SCOPES.includes(s as Scope)) : [];
       const answer = given?.allow === true ? { allow: true as const, scopes, reach: given?.workspace === true ? ("workspace" as const) : ("station" as const) } : { allow: false as const };
-      return grants.answer(percentDecode(id!), r.viewer.email, answer) ? json(200, JSON.stringify({ answered: true })) : error(404, "no such request waiting");
+      return grants.answer(percentDecode(id!), r.viewer.email, answer, r.viewer.role) ? json(200, JSON.stringify({ answered: true })) : error(404, "no such request waiting");
     },
   },
 ];
