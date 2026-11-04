@@ -59,7 +59,7 @@ function whoDrawn(s: Store, m: MessageRow): { maker?: string; model?: string; ru
 export function publishDraft(s: Store, a: { thread: number; upto: number | null; names: Record<string, string>; viewer: string }, lang: Lang): Draft {
   setLang(lang);
   useNames(s);
-  const found = store.listThreads(s, a.viewer, null, a.thread)[0];
+  const found = store.listThreads(s, a.viewer, null, a.thread, "none")[0];
   if (found === undefined) throw new HttpError(404, tr("station.publish.noChat"));
   const messages = store.messagesBefore(s, a.thread, a.upto === null ? null : a.upto + 1, MOST);
   if (messages.length === 0) throw new HttpError(400, tr("station.publish.empty"));
