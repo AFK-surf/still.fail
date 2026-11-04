@@ -411,5 +411,6 @@ pub fn Ctx::tapped_anywhere(self : Ctx) -> (Double, Double)? {
   if self.measuring { return None }
   // (read so: what reads it is built again as a press goes, wherever it went: hand.mbt)
   hand_presses_read()
+  if self.tapped is Some(_) { match old_input_reads.val { Some(r) => r.tapped = true; None => () } }
   self.tapped
 }

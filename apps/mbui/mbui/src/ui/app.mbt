@@ -491,19 +491,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   text_runs.runs.clear()
   words_alpha.val = 1.0
   look_surface.val = (1.0, -1)
-  c.next_hit_ids.clear()
-  c.next_hit_rects.clear()
-  c.next_hit_clips.clear()
-  c.next_hit_ends.clear()
-  c.next_hit_marks.clear()
-  c.next_points.clear()
-  c.next_passes.clear()
-  c.passing = 0
-  c.next_point_hits.clear()
-  c.next_scroll_ids.clear()
-  c.next_scroll_rects.clear()
-  c.next_bars.clear()
-  c.across_seen.clear()
+  c.targets_start()
   c.glass_frame()
   // (the window's tree in its order, the old frame or its old views in their places in it: view_host.mbt)
   c.view_paint(root)
@@ -545,40 +533,9 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.back_layer_spent()
   // (the host told whether the app takes back, as what the old views said now has it: Ctx::back_told_host)
   c.back_told_host()
-  let hi = c.hit_ids
   // (the targets as this frame drew them: what a layer dismissed since the last drew is out of them as it was let go)
   layer_retired_ids.clear()
-  c.hit_ids = c.next_hit_ids
-  c.next_hit_ids = hi
-  let hr = c.hit_rects
-  c.hit_rects = c.next_hit_rects
-  c.next_hit_rects = hr
-  let hc = c.hit_clips
-  c.hit_clips = c.next_hit_clips
-  c.next_hit_clips = hc
-  let he = c.hit_ends
-  c.hit_ends = c.next_hit_ends
-  c.next_hit_ends = he
-  let hm = c.hit_marks
-  c.hit_marks = c.next_hit_marks
-  c.next_hit_marks = hm
-  let ps = c.points
-  c.points = c.next_points
-  c.next_points = ps
-  let pa = c.passes
-  c.passes = c.next_passes
-  c.next_passes = pa
-  let si = c.scroll_ids
-  c.scroll_ids = c.next_scroll_ids
-  c.next_scroll_ids = si
-  let sr = c.scroll_rects
-  c.scroll_rects = c.next_scroll_rects
-  c.next_scroll_rects = sr
-  let bs = c.bars
-  c.bars = c.next_bars
-  c.next_bars = bs
-  // (the old views' kept as painted, each where it is, what scrolls in them and their bars too: view_host.mbt)
-  old_hits_framed(c)
+  c.targets_commit()
   // (what said its presses are another's, under a Tester: that one takes them there)
   c.check_press_owners()
   // (its targets published whole: what nodes yield to of them told, view_host.mbt)

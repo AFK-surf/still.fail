@@ -62,7 +62,7 @@ test "an old natural leaf follows the size of a separately kept component inside
 }
 
 ///|
-test "an old natural leaf takes a click once and measures its changed height" {
+test "an old natural leaf takes a click once before the frame that measures its changed height" {
   let clicks = @signals.signal(0)
   let t = Tester::new(fn(_) { }, w=200.0, h=400.0, stable=false)
   t.check_looks(false)
@@ -73,12 +73,141 @@ test "an old natural leaf takes a click once and measures its changed height" {
       if c.clicked(id) { clicks.set(clicks.get() + 1) }
       c.box(id~, w=Px(100.0), h=Px(30.0 + clicks.get().to_double() * 20.0), bg=0x13579bffL, fn() { }) |> ignore
     }))
+    root.box(fn(m) { m.height(Is(Some(10.0))).ground(Is(0x2468acffL)) |> ignore }) |> ignore
   })
   t.frame(ms=16.0)
-  t.tap_once(20.0, 20.0)
+  finger(0, 20.0, 20.0)
+  finger(2, 20.0, 20.0)
+  let before = view_tree().unwrap().work().computes
   t.frame(ms=16.0)
   assert_eq(clicks.get(), 1)
+  assert_true(t.drawn_rects().contains((0.0, 50.0, 200.0, 10.0, 0x2468acffL)), msg="the following sibling is already below the changed leaf in the first frame")
+  let layouts = view_tree().unwrap().work().computes - before
+  // The event may already have resolved the changed size for the next input. A display frame can reuse it.
+  assert_true(layouts <= 1, msg="layouts in the host frame: \{layouts}")
   assert_eq(leaf.val.unwrap().laid_size().1, 50.0)
+}
+
+///|
+test "an old leaf's click changes the next event's target with or without a frame between" {
+  let pictures : Array[Array[(Double, Double, Double, Double, Int64)]] = []
+  for between in [false, true] {
+    let clicks = @signals.signal(0)
+    let following = Ref(0)
+    let t = Tester::new(fn(_) { }, w=200.0, h=400.0, stable=false)
+    t.check_looks(false)
+    set_view_app(fn(root) {
+      old(root, natural=true, fn(c) {
+        let id = c.id("grow")
+        if c.clicked(id) { clicks.set(clicks.get() + 1) }
+        c.box(id~, w=Px(100.0), h=Px(30.0 + clicks.get().to_double() * 20.0), bg=0x13579bffL, fn() { }) |> ignore
+      }) |> ignore
+      root.box(fn(n) {
+        n.height(Is(Some(20.0))).ground(Is(0x2468acffL)).presses(Is(true)).on_press(fn() { following.val += 1 }) |> ignore
+      }) |> ignore
+    })
+    t.frame_at(16.0)
+    t.advance(4.0)
+    finger(0, 20.0, 20.0)
+    finger(2, 20.0, 20.0)
+    assert_eq(clicks.get(), 1, msg="input is committed before a display frame")
+    if between { t.frame_at(35.0) } else { t.advance(15.0) }
+    t.advance(15.0)
+    finger(0, 20.0, 55.0)
+    finger(2, 20.0, 55.0)
+    t.frame_at(80.0)
+    assert_eq((clicks.get(), following.val), (1, 1), msg="between frames \{between}")
+    pictures.push(t.drawn_rects())
+  }
+  assert_eq(pictures[0], pictures[1])
+}
+
+///|
+test "a changed old leaf uses its new internal hit geometry before the next frame" {
+  for between in [false, true] {
+    let tall = @signals.signal(false)
+    let pressed = Ref(0)
+    let t = Tester::new(fn(_) { }, w=200.0, h=400.0, stable=false)
+    t.check_looks(false)
+    set_view_app(fn(root) {
+      old(root, natural=true, fn(c) {
+        let grow = c.id("grow")
+        if c.clicked(grow) { tall.set(true) }
+        c.box(id=grow, w=Px(100.0), h=Px(if tall.get() { 50.0 } else { 30.0 }), fn() { }) |> ignore
+        let next = c.id("next")
+        if c.clicked(next) { pressed.val += 1 }
+        c.box(id=next, w=Px(100.0), h=Px(20.0), fn() { }) |> ignore
+      }) |> ignore
+    })
+    t.frame_at(16.0)
+    t.advance(4.0)
+    finger(0, 20.0, 20.0)
+    finger(2, 20.0, 20.0)
+    if between { t.frame_at(35.0) } else { t.advance(15.0) }
+    t.advance(15.0)
+    finger(0, 20.0, 60.0)
+    finger(2, 20.0, 60.0)
+    assert_eq(pressed.val, 1, msg="new target before frame, inserted frame \{between}")
+  }
+}
+
+///|
+test "separate old leaves keep both updated target layouts between frames" {
+  let tall = [@signals.signal(false), @signals.signal(false)]
+  let pressed = [0, 0]
+  let t = Tester::new(fn(_) { }, w=200.0, h=400.0, stable=false)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    for k in 0..<2 {
+      root.box(fn(part) {
+        part.height(Is(Some(120.0))) |> ignore
+        old(part, natural=true, fn(c) {
+          c.box(w=Px(100.0), h=Px(if tall[k].get() { 50.0 } else { 30.0 }), fn() { }) |> ignore
+          let next = c.id("next \{k}")
+          if c.clicked(next) { pressed[k] += 1 }
+          c.box(id=next, w=Px(100.0), h=Px(20.0), fn() { }) |> ignore
+        }) |> ignore
+      }) |> ignore
+    }
+  })
+  t.frame_at(16.0)
+  for k in 0..<2 {
+    t.advance(10.0)
+    view_event(fn() { tall[k].set(true) })
+    finger(1, 180.0, 300.0)
+  }
+  t.advance(10.0)
+  finger(0, 20.0, 60.0)
+  finger(2, 20.0, 60.0)
+  finger(0, 20.0, 180.0)
+  finger(2, 20.0, 180.0)
+  assert_eq(pressed, [1, 1])
+}
+
+///|
+test "an old leaf commits keyboard and semantic activation once before its first changed frame" {
+  for semantic in [false, true] {
+    let clicks = @signals.signal(0)
+    let id = Ref(0)
+    let t = Tester::new(fn(_) { }, w=200.0, h=400.0, stable=false)
+    t.check_looks(false)
+    set_view_app(fn(root) {
+      old(root, natural=true, fn(c) {
+        id.val = c.id("grow")
+        if c.clicked(id.val) || c.key_pressed(key_of_char('g')) { clicks.set(clicks.get() + 1) }
+        let b = c.box(id=id.val, w=Px(100.0), h=Px(30.0 + clicks.get().to_double() * 20.0), bg=0x13579bffL, fn() { })
+        c.semantics(b, Button, label="grow")
+      }) |> ignore
+      root.box(fn(n) { n.height(Is(Some(10.0))).ground(Is(0x2468acffL)) |> ignore }) |> ignore
+    })
+    t.frame_at(16.0)
+    t.advance(4.0)
+    if semantic { g().ask_action(id.val, Activate) } else { t.key_told(key_of_char('g'), 0, 20.0) }
+    assert_eq(clicks.get(), 1, msg="semantic \{semantic}: handled at the event")
+    t.frame_at(32.0)
+    assert_eq(clicks.get(), 1, msg="semantic \{semantic}: not handled again by paint")
+    assert_true(t.drawn_rects().contains((0.0, 50.0, 200.0, 10.0, 0x2468acffL)))
+  }
 }
 
 ///|
