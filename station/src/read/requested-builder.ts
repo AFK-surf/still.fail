@@ -29,29 +29,29 @@ export class RequestedBuilder<K extends number | string> {
     this.#path = path; this.#options = options; this.#workerFile = workerFile; this.#field = field; this.#timers = new Fibers(name);
   }
 
-  ready(threads: readonly K[], signal?: AbortSignal): Promise<void> {
+  ready(items: readonly K[], signal?: AbortSignal): Promise<void> {
     if (this.#closed) return Promise.reject(new Error("station stopping"));
     if (signal?.aborted) return Promise.reject(new Error("read cancelled"));
     const cancel = new AbortController();
     setMaxListeners(0, cancel.signal);
     const abort = () => cancel.abort();
     signal?.addEventListener("abort", abort, { once: true });
-    return Promise.all([...new Set(threads)].map((thread) => this.#readyThread(thread, cancel.signal)))
+    return Promise.all([...new Set(items)].map((item) => this.#readyItem(item, cancel.signal)))
       .then(() => {})
       .catch((error: unknown) => { cancel.abort(); throw error; })
       .finally(() => signal?.removeEventListener("abort", abort));
   }
 
-  #readyThread(thread: K, signal: AbortSignal): Promise<void> {
+  #readyItem(item: K, signal: AbortSignal): Promise<void> {
     return new Promise((resolve, reject) => {
-      let waiters = this.#waiting.get(thread);
-      if (!waiters) { waiters = new Set(); this.#waiting.set(thread, waiters); }
+      let waiters = this.#waiting.get(item);
+      if (!waiters) { waiters = new Set(); this.#waiting.set(item, waiters); }
       const group = waiters;
       const abort = () => { waiter.done(); reject(new Error("read cancelled")); this.#pump(); };
       const waiter: Waiter = { resolve, reject, done: () => {
         signal.removeEventListener("abort", abort);
         group.delete(waiter);
-        if (group.size === 0 && this.#waiting.get(thread) === group) this.#waiting.delete(thread);
+        if (group.size === 0 && this.#waiting.get(item) === group) this.#waiting.delete(item);
       } };
       group.add(waiter);
       signal.addEventListener("abort", abort, { once: true });
@@ -59,24 +59,24 @@ export class RequestedBuilder<K extends number | string> {
     });
   }
 
-  #fail(thread: K, error: Error): void {
-    const waiters = this.#waiting.get(thread);
-    this.#waiting.delete(thread);
+  #fail(item: K, error: Error): void {
+    const waiters = this.#waiting.get(item);
+    this.#waiting.delete(item);
     if (waiters) for (const waiter of [...waiters]) { waiter.done(); waiter.reject(error); }
   }
 
   #answer(result: { done: boolean; error?: string }): void {
-    const thread = this.#current;
+    const item = this.#current;
     this.#current = null;
-    if (this.#closed || thread === null) return;
-    if (result.error) this.#fail(thread, new Error(result.error));
+    if (this.#closed || item === null) return;
+    if (result.error) this.#fail(item, new Error(result.error));
     else {
-      const waiters = this.#waiting.get(thread);
+      const waiters = this.#waiting.get(item);
       if (waiters && result.done) for (const waiter of [...waiters]) { waiter.done(); waiter.resolve(); }
-      else if (waiters) { this.#waiting.delete(thread); this.#waiting.set(thread, waiters); }
+      else if (waiters) { this.#waiting.delete(item); this.#waiting.set(item, waiters); }
       this.#retryMs = 250;
     }
-    if (!this.#waiting.has(thread) && !result.done) this.#worker?.postMessage({ [this.#field]: thread, cancel: true });
+    if (!this.#waiting.has(item) && !result.done) this.#worker?.postMessage({ [this.#field]: item, cancel: true });
     this.#pump();
   }
 
@@ -102,7 +102,7 @@ export class RequestedBuilder<K extends number | string> {
         this.#previousReady = true; this.#previousWaiting = false; this.#pump();
       }, (error) => {
         this.#previousWaiting = false;
-        for (const thread of [...this.#waiting.keys()]) this.#fail(thread, error instanceof Error ? error : new Error(String(error)));
+        for (const item of [...this.#waiting.keys()]) this.#fail(item, error instanceof Error ? error : new Error(String(error)));
       });
       return;
     }
@@ -110,7 +110,7 @@ export class RequestedBuilder<K extends number | string> {
       const file = this.#workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./said-worker.ts" : "./read/said-worker.js", import.meta.url);
       let worker: Worker;
       try { worker = new Worker(file, { workerData: { path: this.#path, priority: this.#options.priority }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } }); }
-      catch (error) { for (const thread of [...this.#waiting.keys()]) this.#fail(thread, error instanceof Error ? error : new Error(String(error))); return; }
+      catch (error) { for (const item of [...this.#waiting.keys()]) this.#fail(item, error instanceof Error ? error : new Error(String(error))); return; }
       const owner = worker.threadId;
       this.#worker = worker;
       worker.unref();
@@ -127,8 +127,8 @@ export class RequestedBuilder<K extends number | string> {
         this.#retry = this.#timers.after(ms, () => { this.#retry = null; this.#pump(); });
       });
     }
-    const thread = this.#waiting.keys().next().value as K | undefined;
-    if (thread !== undefined) { this.#current = thread; this.#worker.postMessage({ [this.#field]: thread }); }
+    const item = this.#waiting.keys().next().value as K | undefined;
+    if (item !== undefined) { this.#current = item; this.#worker.postMessage({ [this.#field]: item }); }
   }
 
   async close(): Promise<void> {
@@ -136,7 +136,7 @@ export class RequestedBuilder<K extends number | string> {
     this.#closed = true;
     this.#retry?.(); this.#retry = null;
     this.#idle?.(); this.#idle = null;
-    for (const thread of [...this.#waiting.keys()]) this.#fail(thread, new Error("station stopping"));
+    for (const item of [...this.#waiting.keys()]) this.#fail(item, new Error("station stopping"));
     const worker = this.#worker; this.#worker = null;
     if (worker !== null) await worker.terminate();
     await this.#timers.close();
