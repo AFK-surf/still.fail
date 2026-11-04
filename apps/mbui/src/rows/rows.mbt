@@ -137,6 +137,7 @@ pub fn TopicList::length(self : TopicList) -> Int {
 ///|
 /// Row `i`'s key, followed by nothing (its changes are: a reader's).
 pub fn TopicList::key(self : TopicList, i : Int) -> String {
+  self.work += 1
   self.keys[i]
 }
 
