@@ -381,6 +381,11 @@ impl @hostapi.Host for Native with perf_size(_) {
 }
 
 ///|
+impl @hostapi.Host for Native with perf_open(_, go) {
+  perf_open(go)
+}
+
+///|
 impl @hostapi.Host for Native with perf_read(_) {
   perf_read()
 }

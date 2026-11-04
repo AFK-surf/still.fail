@@ -28,7 +28,11 @@ set -eu
 # Called through a link (~/.local/bin/stillfail): the app is where the link points.
 self=$(readlink -f "$0" 2>/dev/null || echo "$0")
 here=$(cd "$(dirname "$self")/.." && pwd)
-data=${STILLFAIL_DATA:-${EMBER_DATA:-$HOME/.stillfail}}
+# Called as another product's command (`monoid`: the installer links it so, client/i18n/brand.ts), that product's data
+# directory (~/.monoid) beside still.fail's.
+own=$HOME/.stillfail
+case "$(basename "$0")" in stillfail|ember|stillfail-*) ;; *) [ ! -d "$HOME/.$(basename "$0")/app" ] || own="$HOME/.$(basename "$0")" ;; esac
+data=${STILLFAIL_DATA:-${EMBER_DATA:-$own}}
 [ "$data" = "$HOME/.ember" ] && data="$HOME/.stillfail"
 station=${STILLFAIL_STATION_BIN:-${EMBER_STATION_BIN:-$here/mesh/target/release/stillfail-station}}
 case "${1:-} ${2:-}" in

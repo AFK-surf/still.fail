@@ -456,18 +456,8 @@ pub fn person_words(
   runs? : Json? = None,
 ) -> Unit {
   let p = @sf.theme().p
-  // (the core's reading: a message's `words`, or what was sent from here's; a run without a core's, as it kept it;
-  // none yet, the words as they are)
-  let shown = match runs {
-    Some(Array(parts)) => words_runs(parts, p.accent, chat_title~)
-    _ =>
-      match @sf.kept_words(words) {
-        Some(Array(parts)) => words_runs(parts, p.accent, chat_title~)
-        _ => [@ui.plain(words)]
-      }
-  }
   c.rich(
-    @sf.found_weight(shown, found),
+    @sf.found_weight(@sfbase.person_runs(words, runs, p.accent, chat_title~), found),
     key="msg-words/" + key,
     style=@sf.theme().t.words,
     link_color=p.blue,

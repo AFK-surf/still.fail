@@ -403,6 +403,8 @@ pub fn Tester::new(
     perf: -1,
     perf_sets: [],
     perf_lines: [],
+    perf_opens: false,
+    perf_opened: 0,
     perf_bytes: 0.0,
     view_texts: {},
     view_stills: {},
@@ -1853,6 +1855,18 @@ pub fn Tester::set_keyboard(self : Tester, on : Bool) -> Unit {
 /// kept but off, 1 on.
 pub fn Tester::set_perf(self : Tester, state : Int) -> Unit {
   self.fake.perf = state
+}
+
+///|
+/// Whether the performance record's folder can be opened from now on (@hostapi.perf_opens: a host with no share sheet).
+pub fn Tester::set_perf_opens(self : Tester, opens : Bool) -> Unit {
+  self.fake.perf_opens = opens
+}
+
+///|
+/// How many times the app opened the performance record's folder (@hostapi.perf_open).
+pub fn Tester::perf_opened(self : Tester) -> Int {
+  self.fake.perf_opened
 }
 
 ///|

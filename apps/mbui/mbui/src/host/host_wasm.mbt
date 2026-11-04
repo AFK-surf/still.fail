@@ -216,6 +216,9 @@ fn ffi_perf_where() -> String {
   @wasmrt.take_string(mbw_mb_host_perf_where())
 }
 
+///|
+fn ffi_perf_open(go : Int) -> Int = "mbhost" "mb_host_perf_open"
+
 fn ffi_perf_size() -> Double = "mbhost" "mb_host_perf_size"
 
 fn mbw_mb_host_perf_read() -> Int = "mbhost" "mb_host_perf_read"
@@ -934,6 +937,11 @@ fn perf_line(line : String) -> Unit {
 ///|
 fn perf_where() -> String {
   ffi_perf_where()
+}
+
+///|
+fn perf_open(go : Bool) -> Bool {
+  ffi_perf_open(if go { 1 } else { 0 }) != 0
 }
 
 ///|

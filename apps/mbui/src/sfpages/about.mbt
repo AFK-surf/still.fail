@@ -2,7 +2,8 @@
 // narrow app's mobile/Settings.tsx AboutScreen, mobile/Changelog.tsx). 关于: this build, the way to a newer one,
 // what changed; whether this device sends usage statistics and error reports (not where nothing is sent); still.fail's
 // terms and privacy policy on its site; last, where the device keeps one, its performance record (性能记录: what
-// warms it, kept on the device alone, @hostapi.perf_state). 更新日志: the core's `changelog`, a tab a part, by day,
+// warms it, kept on the device alone, @hostapi.perf_state; where the device has no share sheet, the way to its folder,
+// where its logs are too: @hostapi.perf_opens). 更新日志: the core's `changelog`, a tab a part, by day,
 // each change's lines with their kind before them, its version, what is not out yet; opened, what the last update
 // brought is read (`changelog.seen`). Laid out by the page's width (page_look.mbt).
 
@@ -14,7 +15,8 @@
 /// the switch as the host has it, told as it is turned); still.fail's terms and privacy policy on its site; last, where
 /// the device keeps one, its performance record (its switch as the host says it as it is turned here, the host telling
 /// nothing of it otherwise: perf_turned; how much it holds as the host tells each write, @ui.perf_size; 分享记录 while
-/// it holds anything).
+/// it holds anything; where the host opens its folder instead, 打开日志文件夹 always, for its logs are there whether the
+/// record is kept or not).
 pub fn about_node(
   v : @view.View,
   core : Core,
@@ -59,7 +61,7 @@ pub fn about_node(
               fn() { @sf.t("common.telemetry.title") },
               fn() { (core.reporting)().unwrap_or(false) },
               fn(on) { (core.set_reporting)(on) },
-              note=fn() { @sf.t("common.telemetry.note", args=[("name", "still.fail")]) },
+              note=fn() { @sf.t("common.telemetry.note", args=[("name", @sf.product())]) },
             )
           })
         })
@@ -72,10 +74,11 @@ pub fn about_node(
             }
           })
         })
-      // this device's performance record, last and out of the way (where the device keeps one: iOS)
+      // this device's performance record, last and out of the way (where the device keeps one: iOS, Windows)
       _ =>
         section("web-pages.about.diagnostics", fn(s) {
           @sf.group_node(s, fn(g) {
+            let opens = @hostapi.perf_opens()
             let on = fn() {
               perf_turned.get() |> ignore
               @hostapi.perf_state() == 1
@@ -94,14 +97,23 @@ pub fn about_node(
                 perf_turned.set(@signals.untracked(fn() { perf_turned.get() }) + 1)
               },
               note=fn() {
-                @sf.t("web-pages.about.perf.note", args=[("where", @hostapi.perf_where()), ("size", @sf.file_size(size()))])
+                @sf.t(
+                  if opens { "web-pages.about.perf.noteFolder" } else { "web-pages.about.perf.note" },
+                  args=[("where", @hostapi.perf_where()), ("size", @sf.file_size(size()))],
+                )
               },
             )
-            g.show(fn() { size() > 0.0 }, fn(r) {
-              @sf.link_row_node(r, fn() { @sf.t("web-pages.about.perf.share") }, acts=true, fn() {
-                @hostapi.share("", "still.fail-perf.log", "text/plain", @hostapi.perf_read()) |> ignore
+            if opens {
+              @sf.link_row_node(g, fn() { @sf.t("web-pages.about.perf.open") }, acts=true, fn() {
+                @hostapi.perf_open() |> ignore
               })
-            })
+            } else {
+              g.show(fn() { size() > 0.0 }, fn(r) {
+                @sf.link_row_node(r, fn() { @sf.t("web-pages.about.perf.share") }, acts=true, fn() {
+                  @hostapi.share("", "still.fail-perf.log", "text/plain", @hostapi.perf_read()) |> ignore
+                })
+              })
+            }
           })
         })
     }
@@ -124,7 +136,7 @@ fn version_rows_node(g : @view.View, core : Core) -> Unit {
   // (its name as the core's preferences say it, still.fail where they say none)
   @sf.link_row_node(g, fn() {
     let product = text((core.topic)("prefs", Map::new()).value, "productName")
-    (if product == "" { "still.fail" } else { product }) + " " + build_version()
+    (if product == "" { @sf.product() } else { product }) + " " + build_version()
   }, fn() {  }, goes=false)
   let v = fn() { (core.version_now)() }
   // (whether newer builds come by themselves, on unless turned off, under what it is about: off, one is said in the
@@ -140,7 +152,7 @@ fn version_rows_node(g : @view.View, core : Core) -> Unit {
           (core.update_auto_on)()
         }
       },
-      note=fn() { @sf.t("android-settings.version.auto.note", args=[("app", "still.fail")]) },
+      note=fn() { @sf.t("android-settings.version.auto.note", args=[("app", @sf.product())]) },
     )
   })
   // (what is done at once where it is, in the link's ink: checking, and the update's row under it)

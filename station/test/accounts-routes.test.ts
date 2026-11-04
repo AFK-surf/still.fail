@@ -170,6 +170,19 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
+  test("a key that runs Codex says the levels Codex offers on it once made", async () => {
+    const levels = ["low", "medium", "high", "xhigh", "max", "ultra"];
+    const t = await rig({
+      codex: () => ({ models: async () => ({ models: ["gpt-6.1-terra"], efforts: new Map([["gpt-6.1-terra", levels]]), defaults: new Map([["gpt-6.1-terra", "low"]]) }) }) as any,
+    });
+    assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "openai", key: "sk-123456" } }))[0], 200);
+    await until(() => t.accounts.health("openai").check?.modelEfforts !== undefined, "its levels read");
+    const check = t.accounts.health("openai").check!;
+    assert.deepEqual(check.modelEfforts, { codex: { "gpt-6.1-terra": levels } }, "without them it would hold other accounts of the model to the usual levels");
+    assert.deepEqual(check.modelEffortDefaults, { codex: { "gpt-6.1-terra": "low" } });
+    await t.close();
+  });
+
   test("a key on a listed provider makes a profile that runs what its endpoints speak", async () => {
     const t = await rig();
     // Chat completions only: DeepSeek Harness alone runs it.

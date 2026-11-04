@@ -269,8 +269,10 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         showAt(at[1]);
         askedAtEnd = more || later;
         drawn++;
-        if (more || later || following) sayRate(true);
-        else if (rateSaid) stillAfter(drawn);
+        if (more || later || following) {
+            moved = drawn;
+            sayRate(true);
+        } else if (rateSaid) stillAfter(moved);
         if (more || later) wantFrame();
         else ahead.set(false);
         // (the native views moved in it: their frames follow once they rest)
@@ -389,14 +391,37 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         }
     }
 
+    /** The last frame drawn that moved something (GL thread): a motion, the hand moving what it holds, one asked after it. */
+    private int moved;
+    /** The motion whose end is being counted down to saying no rate (GL thread; -1 none). */
+    private int stillFrom = -1;
+
     /**
-     * Frame {@code at} asked for none after it (GL thread): at the next vsync, after the touches it brings (a frame they
-     * ask for is drawn at it), the app still with nothing drawn since, none asked and no finger down says no rate (the
-     * frame after the finger lifts says, as it asks for none).
+     * The motion that ended with frame {@code at} (GL thread): no rate said once the display's highest rate's worth of
+     * vsyncs (a second) passed with nothing moved since, none asked and no finger down. A frame drawn meanwhile that moves
+     * nothing (a spinner's step, a page's words coming in) does not keep it. Said at once after the motion, the display
+     * went down to the rate the system picks from how often frames came (a spinner stepping: 12-60 Hz on an OPPO Find
+     * N6), and the next flick's first frames stepped up through it at 83, 17, 17, 17 ms before 8.3 (2026-11-04: 5-8
+     * frames at the start of every swipe, the app's own work 2-5 ms each): a list is flicked again well within a second.
      */
     private void stillAfter(int at) {
+        if (stillFrom == at) return;
+        stillFrom = at;
+        stillFor(at, Math.max(1, Math.round(topRate)));
+    }
+
+    private void stillFor(int at, int left) {
         Host.main.post(() -> Choreographer.getInstance().postFrameCallback(t -> queueEvent(() -> {
-            if (drawn == at && !appWanted.get() && !touching) sayRate(false);
+            if (moved != at || appWanted.get() || touching || !rateSaid) {
+                if (stillFrom == at) stillFrom = -1;
+                return;
+            }
+            if (left > 1) {
+                stillFor(at, left - 1);
+                return;
+            }
+            stillFrom = -1;
+            sayRate(false);
         })));
     }
 

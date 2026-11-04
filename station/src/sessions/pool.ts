@@ -156,14 +156,17 @@ export function fallbackEfforts(runtime: string): string[] {
   return ["low", "medium", "high", "xhigh", "max"];
 }
 
-/// The levels a model offers: as its runtime reported them (an empty list: none), else the runtime's usual ones.
-export function availableEfforts(runtime: string, model: string | null | undefined, catalog: Catalog | null | undefined): string[] {
+/// The levels a model's runtime reported (an empty list: none), null where it has reported none.
+export function reportedEfforts(runtime: string, model: string | null | undefined, catalog: Catalog | null | undefined): string[] | null {
   const models = catalog?.[runtime];
-  if (model !== null && model !== undefined && models) {
-    const levels = models[model] ?? Object.entries(models).find(([id]) => sameModel(id, model))?.[1];
-    if (levels) return [...levels];
-  }
-  return fallbackEfforts(runtime);
+  if (model === null || model === undefined || !models) return null;
+  const levels = models[model] ?? Object.entries(models).find(([id]) => sameModel(id, model))?.[1];
+  return levels ? [...levels] : null;
+}
+
+/// The levels a model offers: as its runtime reported them, else the runtime's usual ones.
+export function availableEfforts(runtime: string, model: string | null | undefined, catalog: Catalog | null | undefined): string[] {
+  return reportedEfforts(runtime, model, catalog) ?? fallbackEfforts(runtime);
 }
 
 /// The levels every one of these offers.

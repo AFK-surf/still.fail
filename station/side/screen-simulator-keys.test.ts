@@ -102,7 +102,10 @@ test("keys and text on a simulator, with and without its Device Hub window", { s
     debug.logs(0);
     await sleep(1500);
     assert.equal(await debug.relaunch(APP), true);
-    assert.ok((await said(6000)).includes("side-ready"), "the app came up");
+    // Waited for, not a fixed 6 s (side run 41810080693): how long a device just booted takes is not this test's.
+    let up = false;
+    for (const asked = Date.now(); !up && Date.now() - asked < 60_000;) up = (await said(500)).includes("side-ready");
+    assert.ok(up, "the app came up");
 
     await simulators.start();
     for (let i = 0; i < 10 && !hub.get(`simulator:${udid}`); i++) await simulators.refresh();

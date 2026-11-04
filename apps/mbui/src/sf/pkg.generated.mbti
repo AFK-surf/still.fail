@@ -192,6 +192,8 @@ pub fn bones(@ui.Ctx, () -> Unit, still? : Bool, fill? : Bool) -> Unit
 
 pub fn box_fit(Double, Double, Double) -> (Double, Double)
 
+pub fn branded(String) -> String
+
 pub let breath_ms : Double
 
 pub fn breathe(@ui.Ctx, Int32, failed? : Bool, low? : Double, resident? : Bool, share? : Double) -> Unit
@@ -1388,6 +1390,8 @@ pub fn options_card(@ui.Ctx, String, Array[(String, String, Bool)], Bool, Int32?
 
 pub fn options_card_node(@view.View, () -> Array[(String, String, Bool)], () -> Bool, () -> Int32?, (Int32) -> Unit, chosen? : () -> Int32?, wide? : Bool, history? : Bool, waits? : () -> Array[Bool], waits_why? : () -> String) -> @view.View
 
+pub fn origin_mark_node(@view.View, () -> String, Double) -> @view.View
+
 pub fn outset(Double) -> @ui.Style
 
 pub fn outset_bottom(Double) -> @ui.Style
@@ -1762,6 +1766,8 @@ pub fn prev_in(String, Array[String]) -> String?
 
 pub let preview_address_h : @ui.Len
 
+pub fn product() -> String
+
 pub fn progress(@ui.Ctx, String, Double?, w? : @ui.Size, color? : Int64) -> Unit
 
 pub fn progress_key(@ui.Ctx, String, Double, Double, String, String, Double?, failed~ : Bool) -> Bool
@@ -2006,6 +2012,8 @@ pub fn set_dark(Bool?) -> Unit
 
 pub fn set_language(String?) -> Unit
 
+pub fn set_product(String) -> Unit
+
 pub fn set_shortcuts((String) -> String) -> Unit
 
 pub fn set_viewer_host(ViewerHost) -> Unit
@@ -2145,8 +2153,6 @@ pub let sign_in_side : @ui.Space
 pub let sign_in_title_size : @ui.TextSize
 
 pub fn slack_mark(@ui.Ctx, Double) -> Int32
-
-pub fn slack_mark_node(@view.View, Double) -> @view.View
 
 pub let sleep_ms : Double
 

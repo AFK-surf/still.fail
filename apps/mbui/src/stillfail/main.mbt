@@ -17,14 +17,14 @@ fn core_topic(name : String, params : Map[String, Json]) -> @sfapp.Topic {
     let key = name + " " + Json::object(params).stringify()
     if dumped.get(key) != Some(s.version) {
       dumped[key] = s.version
-      match (s.value, s.error) {
+      match (s.value(), s.error) {
         (Some(v), _) => @hostapi.log("DUMP \{key} \{v.stringify()}")
         (_, Some(e)) => @hostapi.log("DUMP \{key} error \{e.stringify()}")
         _ => ()
       }
     }
   }
-  { value: s.value, error: s.error, version: s.version }
+  { value: s.rest(), error: s.error, version: s.version }
 }
 
 ///|
@@ -159,6 +159,9 @@ fn refused(name : String) -> Json {
 let core_source : @sfapp.Source = {
   topic: core_topic,
   waits: fn(name, params) { @core.subscribe(name, params=@sfbase.core_topic_params(name, params)).followed().waiting },
+  list: fn(name, params, path, fields) {
+    Some(@core.subscribe(name, params=@sfbase.core_topic_params(name, params)).list(path, fields))
+  },
   call: fn(name, params, done) {
     if read_only && !read_only_calls.contains(name) {
       done(Err(refused(name)))
@@ -423,7 +426,7 @@ fn main {
   }
   if core_linked() == 0 || !@sfcore.start() {
     @sfapp.host_setup()
-    @ui.run("still.fail", fn(c) {
+    @ui.run(@sf.product(), fn(c) {
       @sf.begin(c) |> ignore
       c.box(w=Fill(1.0), h=Fill(1.0), align=ACenter, justify=JCenter, fn() {
         c.text("这个版本没有链接内核（APP=stillfail scripts/mac.sh build）", size=13.0, color=@sf.theme().p.muted)
@@ -479,7 +482,7 @@ fn main {
   @ui.perf_also("page", fn(_) { @sfbase.page_kind(@sfbase.app.nav.top()) })
   @ui.perf_also("screens", @sfpages.screens_perf)
   @ui.run(
-    "still.fail",
+    @sf.product(),
     fn(c) {
       // (what the core said since the last frame is handed to @core.receive as the frame begins, before this:
       // sfcore.start)

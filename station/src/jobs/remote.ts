@@ -95,6 +95,8 @@ export type RemoteOptions = {
   diskFree?: (path: string) => number;
   /// Remove a mirror's tree. Tests can hold or fail the removal to exercise interrupted requests.
   removeMirror?: (path: string) => Promise<void>;
+  /// The last completed cleanup of files brought back. Tests can keep this across station restarts in memory.
+  backTidy?: { read: () => Promise<number | null>; write: (at: number) => Promise<void> };
 };
 
 /// A start that syncs a directory answers within this, synced or not (the sync goes on): an agent's tool call is given
@@ -300,7 +302,6 @@ export class Remote {
   private following = new Map<string, Set<string>>();
   /// The station is stopping: nothing more is followed.
   private stopped = false;
-  private stopTidying: () => void = () => {};
   /// Tasks asked about after their station said something (`check`), each with whether it said more meanwhile.
   private checking = new Map<string, boolean>();
   /// Tasks here whose source is being told they changed (`pushOut`), each with whether they changed again meanwhile.
@@ -336,10 +337,19 @@ export class Remote {
     this.root = join(options.data, "remote");
     for (const name of ["incoming", "outgoing", "sessions", "used", "prepared"]) mkdirSync(join(this.root, name), { recursive: true });
     void readAllUsed(join(this.root, "used"));
-    this.stopTidying = wall.every(BACK_TIDY_MS, () => void this.tidyBack());
     this.scope = Effect.runSync(Scope.make());
     const runtime = Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope);
     this.run = Effect.runSync(options.clock ? runtime.pipe(Effect.provideService(Clock.Clock, options.clock)) : runtime);
+    const tidiedAt = join(this.root, "back-tidied.json");
+    this.startBackTidying(options.backTidy ?? {
+      read: async () => {
+        try {
+          const at: unknown = JSON.parse(await readFile(tidiedAt, "utf8"));
+          return typeof at === "number" && Number.isSafeInteger(at) && at >= 0 ? at : null;
+        } catch { return null; }
+      },
+      write: async (at) => { await writeFile(tidiedAt, JSON.stringify(at)); },
+    });
     this.bus = options.bus ?? new PeerBus({ waitMs: options.meshWaitMs ?? MESH_WAIT_MS, sleep: (ms) => this.run(Effect.sleep(Duration.millis(ms))).catch(() => undefined) });
     // What this answers: how this station is and what it takes, and the tasks (whatever no other part answers).
     this.bus.on("describe", () => this.describe());
@@ -495,6 +505,31 @@ export class Remote {
     return { taken: true };
   }
 
+  /// Schedule the cleanup across station restarts, remembering each completed sweep.
+  private startBackTidying(record: NonNullable<RemoteOptions["backTidy"]>): void {
+    // Updates can restart the station more often than this hourly cleanup. Remember the last completed sweep, so a new
+    // process waits only for what remains of the hour. A missing or unreadable record means it should sweep now.
+    const delay = Effect.promise(async () => {
+      const last = await record.read().catch(() => null);
+      return last === null ? 0 : Math.min(BACK_TIDY_MS, Math.max(0, last + BACK_TIDY_MS - this.store.now()));
+    });
+    const tidy = Effect.promise(async () => {
+      try {
+        if (this.stopped) return;
+        await this.tidyBack();
+        // An interrupted sweep must be tried again by the next station, not recorded as complete.
+        if (!this.stopped) await record.write(this.store.now());
+      } catch (error) {
+        log.warn("remote", "could not clean brought-back files", { error: String(error) });
+      }
+    });
+    void this.run(delay.pipe(
+      Effect.flatMap((ms) => Effect.sleep(Duration.millis(ms))),
+      Effect.andThen(tidy.pipe(Effect.repeat(Schedule.spaced("1 hour")))),
+      Effect.asVoid,
+    )).catch(() => undefined);
+  }
+
   /// What tasks brought back (`station-back/<key>` of each session's workspace in use) let go of once nothing in it
   /// changed for BACK_KEPT_MS: kept indefinitely, these files can fill the disk. Off the station's thread.
   private async tidyBack(): Promise<void> {
@@ -512,7 +547,6 @@ export class Remote {
   /// Its schedules end (the station stops).
   async close(): Promise<void> {
     this.stopped = true;
-    this.stopTidying();
     this.workspaceReader.close();
     await Effect.runPromise(Scope.close(this.scope, Exit.void));
   }
