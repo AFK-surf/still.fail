@@ -8,7 +8,7 @@ import { Readers } from "../src/read/pool.ts";
 import * as read from "../src/read/store.ts";
 import { addSessionTurns } from "../src/store/schema.ts";
 import { Store } from "../src/store/store.ts";
-import { TURN_COUNT_AFTER, TURN_COUNT_BATCH, TURN_COUNT_EARLIER, TURN_COUNT_FIRST, turnCountStep, type TurnCountScan } from "../src/store/turn-state.ts";
+import { TURN_COUNT_AFTER, TURN_COUNT_BATCH, TURN_COUNT_EARLIER, TURN_COUNT_FIRST, TURN_COUNT_TAIL_NEWER, TURN_COUNT_TAIL_SAME, turnCountStep, type TurnCountScan } from "../src/store/turn-state.ts";
 
 function forgetCounts(db: DatabaseSync) {
   db.exec(`DROP TRIGGER IF EXISTS session_turns_add; DROP TRIGGER IF EXISTS session_turns_drop;
@@ -123,6 +123,8 @@ test("new turns past the old boundary do not restart a long session's count", ()
     assert.equal(step.visited, 64);
     f.store.db.prepare("INSERT INTO turns(id,session_key,kind,started_at) VALUES ('new-2','long','input',2)").run();
     step = turnCountStep(f.store.db, "long", step.scan);
+    assert.equal(step.done, false);
+    step = turnCountStep(f.store.db, "long", step.scan);
     assert.equal(step.done, true);
     assert.equal(read.sessionStats(read.makeStore(f.store.db, f.dir), "long").get("long")?.turns, 152);
   } finally { f.close(); }
@@ -135,7 +137,8 @@ test("slices seek through turns with identical start times and arbitrary rowids"
     put.run(9_007_199_254_740_992n, "large-a");
     put.run(9_007_199_254_740_993n, "large-b");
     for (const [sql, args] of [[TURN_COUNT_FIRST, ["long", 1, 100, 64]], [TURN_COUNT_AFTER, ["long", 1, 100, 64]],
-      [TURN_COUNT_EARLIER, ["long", 2, 64]]] as const) {
+      [TURN_COUNT_EARLIER, ["long", 2, 64]], [TURN_COUNT_TAIL_SAME, ["long", 1, 100, 64]],
+      [TURN_COUNT_TAIL_NEWER, ["long", 1, 64]]] as const) {
       const plan = (f.store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((r) => r.detail);
       assert.ok(plan.some((line) => line.includes("turns_by_session") && line.includes("started_at")), plan.join(" | "));
       assert.ok(!plan.some((line) => line.includes("TEMP B-TREE")), plan.join(" | "));
@@ -144,6 +147,18 @@ test("slices seek through turns with identical start times and arbitrary rowids"
     assert.ok(plans.some((line) => line.includes("rowid<?")), plans.join(" | "));
     finish(f.store.db, "long");
     assert.equal(read.sessionStats(read.makeStore(f.store.db, f.dir), "long").get("long")?.turns, 152);
+  } finally { f.close(); }
+});
+
+test("catching up many new turns stays bounded and resumes correctly", () => {
+  const f = fixture();
+  try {
+    let step = turnCountStep(f.store.db, "long", null);
+    step = turnCountStep(f.store.db, "long", step.scan);
+    const put = f.store.db.prepare("INSERT INTO turns(id,session_key,kind,started_at) VALUES (?,'long','input',2)");
+    for (let n = 0; n < 150; n++) put.run(`new-${n}`);
+    finish(f.store.db, "long", step.scan);
+    assert.equal(read.sessionStats(read.makeStore(f.store.db, f.dir), "long").get("long")?.turns, 300);
   } finally { f.close(); }
 });
 

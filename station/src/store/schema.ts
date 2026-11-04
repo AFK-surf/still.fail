@@ -1023,8 +1023,7 @@ CREATE TABLE session_turns_guard (
   session TEXT PRIMARY KEY,
   token TEXT NOT NULL,
   boundary_at INTEGER NOT NULL,
-  boundary_rowid INTEGER NOT NULL,
-  appended INTEGER NOT NULL DEFAULT 0
+  boundary_rowid INTEGER NOT NULL
 ) WITHOUT ROWID;
 CREATE TRIGGER session_turns_before_insert BEFORE INSERT ON turns BEGIN
   DELETE FROM session_turns_guard WHERE session IN (SELECT session_key FROM turns WHERE id = NEW.id);
@@ -1033,10 +1032,9 @@ CREATE TRIGGER session_turns_before_insert BEFORE INSERT ON turns BEGIN
   DELETE FROM session_turns WHERE session IN (SELECT session_key FROM turns WHERE id = NEW.id);
 END;
 CREATE TRIGGER session_turns_add AFTER INSERT ON turns BEGIN
-  -- Appends after a scan's original end can be added to it without starting its old-history work over.
+  -- Appends after a scan's current end are read later; they need not write the guard or restart the old scan.
   DELETE FROM session_turns_guard WHERE session = NEW.session_key
     AND (NEW.started_at, NEW.rowid) <= (boundary_at, boundary_rowid);
-  UPDATE session_turns_guard SET appended = appended + 1 WHERE session = NEW.session_key;
   UPDATE session_turns SET n = n + 1 WHERE session = NEW.session_key;
   INSERT INTO session_turns (session, n) SELECT NEW.session_key, 1
     WHERE NOT EXISTS (SELECT 1 FROM session_turns WHERE session = NEW.session_key)
