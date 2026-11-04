@@ -332,7 +332,7 @@ export async function relieveArchived(hub: Hub, free: () => number): Promise<voi
 /// auto-archiving off): what is idle but not done by now is not on a clock, so it is looked at again after a while.
 /// A session heard only in Slack goes after slackArchiveMs even when stopped at a block: nobody answers it from here.
 /// With autoArchiveReviewed, the rest goes only once the archive review recommended each of its chats.
-export function autoArchive(hub: Hub, now: number): number | null {
+export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: number) => void): number | null {
   const { store } = hub;
   const { autoArchiveMs: after, slackArchiveMs, autoArchiveReviewed, automaticDecisions } = hub.config();
   if (after <= 0 && slackArchiveMs <= 0) return null;
@@ -343,7 +343,12 @@ export function autoArchive(hub: Hub, now: number): number | null {
     if (due > now && (next === null || due < next)) next = due;
     return due <= now;
   };
-  const unread = (t: ThreadRow) => t.createdBy !== null && t.surface === STILLFAIL_SURFACE && store.unreadCount(t.createdBy, t.id) > 0;
+  const unread = (t: ThreadRow) => {
+    if (t.createdBy === null || t.surface !== STILLFAIL_SURFACE) return false;
+    const answer = store.unreadForArchive(t.createdBy, t.id);
+    if (answer === null) { prepareUnread?.(t.id); return true; }
+    return answer;
+  };
   const bound = store.listBindings();
   // Over the sessions shown and the chats of their own (and those chats' sessions), never every one ever archived.
   const live = store.liveSessions();
@@ -394,6 +399,41 @@ export function autoArchive(hub: Hub, now: number): number | null {
     store.setThreadHidden(t.id, true, AUTO);
   }
   return next;
+}
+
+/// Check on the usual schedule, and try again when an old chat's missing unread boundary is ready.
+export function startAutoArchiveTimer(hub: Hub, time: { after(ms: number, run: () => void): () => void },
+  readers: { prepareSaid(threads: readonly number[], signal?: AbortSignal): Promise<void> }): () => void {
+  const cancel = new AbortController();
+  let timer: (() => void) | null = null;
+  let preparing = false;
+  const schedule = (ms: number) => {
+    timer?.();
+    timer = time.after(ms, check);
+  };
+  const check = () => {
+    timer = null;
+    let next: number | null = null;
+    const missing = new Set<number>();
+    try {
+      next = autoArchive(hub, hub.now(), (thread) => missing.add(thread));
+    } catch (error) {
+      log.warn("hub", "auto-archiving failed", { error: (error as Error).message });
+    }
+    schedule(Math.min(600_000, next === null ? Infinity : next - hub.now()));
+    if (!preparing && missing.size) {
+      preparing = true;
+      void readers.prepareSaid([...missing], cancel.signal).then(() => {
+        preparing = false;
+        if (!cancel.signal.aborted) schedule(0);
+      }, (error) => {
+        preparing = false;
+        if (!cancel.signal.aborted) log.warn("hub", "preparing unread state for auto-archiving failed", { error: (error as Error).message });
+      });
+    }
+  };
+  schedule(60_000);
+  return () => { cancel.abort(); timer?.(); timer = null; };
 }
 
 /// Deletes a session: its process ends, its rows go (with the threads only it was in) and its workspace directory,
