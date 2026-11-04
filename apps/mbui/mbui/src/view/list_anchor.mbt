@@ -41,7 +41,6 @@ impl[K : Eq] Eq for AnchoredIn[K] with equal(a, b) {
   (physical_equal(a.keys.v, b.keys.v) || a.keys.v == b.keys.v) &&
   a.x == b.x &&
   a.foot == b.foot &&
-  a.put == b.put &&
   a.put_n == b.put_n &&
   a.kept == b.kept &&
   a.rooms == b.rooms &&
@@ -130,10 +129,14 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   }
   self.owns(fn() { s.on_hand = fn(_) { } }) |> ignore
   // (how many times it was put at a row, and the rooms' moment: what is laid out again as they change)
+  // (how many times it was put at a row: one said none again, as its layout has done it, is not another)
   let put_n = @signals.computed(fn(was : Int?) {
-    put_at.get() |> ignore
-    was.unwrap_or(0) + 1
+    let n = was.unwrap_or(0)
+    if put_at.get() is Some(_) { n + 1 } else { n }
   })
+  // (how far what it holds was moved as where it is was counted again for the bar: the hand's moves are what its
+  // layout reads, not that)
+  let rebased = Ref(0.0)
   let extent = fn() { count.val.to_double() * mean() + @signals.untracked(foot_room) }
   let out = self.scrolls(s, slop?=slop, bar?=bar, content_extent=extent, bar_clear~, fn(held) {
     held.height_share(Is(1.0)) |> ignore
@@ -141,7 +144,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
       By(fn() {
         {
           keys: { v: keys() },
-          x: s.drawn(self.tree),
+          x: s.drawn(self.tree) - rebased.val,
           foot: foot_room(),
           put: put_at.get(),
           put_n: put_n.get(),
@@ -325,9 +328,24 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
           list_laid_from_top(n, key_of, find, measure, anchor.val, h, by~, ahead~, known~, slack~)
         }
         anchor.val = r.anchor
+        // (how far it is counted to be scrolled among all it holds, the bar's, as laid out now: where the column is
+        // said to be scrolled to as it is told, and what holds its rows moved by as much, its rows placed in it for
+        // that, so they show where they are laid out)
+        let x_now = c.x + rebased.val
+        let at_end = from_end && r.at_end
+        let most = dmax(0.0, n.to_double() * mean() - h)
+        let counted = if at_end || (!from_end && r.at_start) {
+          most
+        } else if r.first == 0 {
+          -r.tops.get(0).unwrap_or(0.0)
+        } else {
+          dmin(most, r.first.to_double() * mean() - r.tops.get(0).unwrap_or(0.0))
+        }
+        let d = if (counted - x_now).abs() > 0.5 { counted - x_now } else { 0.0 }
+        let x_place = x_now + d
         // (placed where they are in the window: the column holds them moved by how far it is scrolled)
         for q in 0..<r.keys.length() {
-          l.place(slot_of(r.keys[q]), 0.0, r.tops[q] + c.x)
+          l.place(slot_of(r.keys[q]), 0.0, r.tops[q] + x_place)
         }
         // (and those kept out of sight, as far off as they are counted to be)
         match Some(c.kept) {
@@ -343,7 +361,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
                     r.tops.last().unwrap_or(h) + r.heights.last().unwrap_or(0.0) + (i - r.last - 1).to_double() * mean()
                   }
                   ignore(hk)
-                  l.place(slot, 0.0, top + c.x)
+                  l.place(slot, 0.0, top + x_place)
                 }
                 _ => ()
               }
@@ -372,12 +390,11 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
             }
           None => None
         }
-        // (told from the next moment on, not in this layout: what is in sight, whether it is at its end, how far it is
-        // counted to be scrolled among all it holds (the bar's), and a glide to what came; layout tells nothing back in
-        // its own pass, retained.md rule 10)
-        // (what draws its rows' rooms, read once all of it is laid out: paint's)
+        // (told once all of it is laid out, to what reads it there and after: what is in sight, whether it is at its
+        // end, how far it is counted to be scrolled (what holds its rows moved by as much as they were placed for: what
+        // its layout reads not moved), and a glide to what came, from this moment; nothing its layout reads changed)
         self.tree.once_laid_out(fn() { laid_n.set(@signals.untracked(fn() { laid_n.get() }) + 1) })
-        let _ = self.at_moment(self.logic_at(), fn() {
+        self.tree.once_laid_out(fn() {
           let in_sight = []
           for q in 0..<r.keys.length() {
             if r.tops[q] + r.heights[q] > 0.0 && r.tops[q] < h {
@@ -391,21 +408,11 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
           if @signals.untracked(fn() { put_at.get() }) is Some(_) {
             put_at.set(None)
           }
-          let at_end = from_end && r.at_end
           if at_end && !@signals.untracked(fn() { follows.get() }) {
             follows.set(true)
           }
-          let most = dmax(0.0, extent() - h - c.foot)
-          let counted = if at_end || (!from_end && r.at_start) {
-            most
-          } else if r.first == 0 {
-            -r.tops.get(0).unwrap_or(0.0)
-          } else {
-            dmin(most, r.first.to_double() * mean() - r.tops.get(0).unwrap_or(0.0))
-          }
-          let d = counted - c.x
-          if d.abs() > 0.5 {
-            seen_x.val = seen_x.val.map(fn(x) { x + d })
+          if d != 0.0 {
+            rebased.val = rebased.val + d
             s.grew_above(d)
           }
           match (glide, came_top) {
