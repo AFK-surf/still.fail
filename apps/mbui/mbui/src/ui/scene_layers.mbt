@@ -20,9 +20,9 @@ priv struct SceneLayer {
   mut seg_from : Int
   mut seg_count : Int
   /// its bands of shapes (kind 11), from its first instance: their first piece told again where it is copied
-  bands : Array[Int]
+  mut bands : Array[Int]
   /// the layers it holds, at once below it: moved with it where it is copied; and the layer it is in at once
-  inner : Array[@view.NodeId]
+  mut inner : Array[@view.NodeId]
   mut outer : @view.NodeId?
   /// what it was drawn in as it began: the clip it was cut by (clip_stack's level, whether it is the window's, its
   /// outer apart from it), the fades, stretches and glyph looks of what holds it, and where what holds it is drawn
@@ -49,9 +49,9 @@ priv struct SceneLayer {
   /// editor has them): never copied, never drawn again alone
   mut each : Bool
   /// the glyphs' plots it draws from, held in their atlas while it is in the scene (colour or not, the plot)
-  plots : Array[(Bool, Int)]
+  mut plots : Array[(Bool, Int)]
   /// the pictures it shows, each as asked (source, pixels): asked again where it is copied, kept as shown
-  images : Array[(String, Double)]
+  mut images : Array[(String, Double)]
   /// its drawing read the clock (an image fading in): drawn again each frame the clock goes
   mut reads_clock : Bool
   /// the frame that last drew it (Scene's `frame`)
@@ -886,10 +886,8 @@ fn Ctx::scene_copied(
 fn scene_keep_undo(l : SceneLayer) -> Unit {
   if scene.trying && !scene.undo.iter().any(fn(u) { physical_equal(u.0, l) }) {
     // (all of it as it was: where it is, what it holds, what it was drawn in (a failed try drew it in another), whether
-    // it was told)
-    scene.undo.push(
-      (l, { ..l, bands: l.bands.copy(), inner: l.inner.copy(), plots: l.plots.copy(), images: l.images.copy() }),
-    )
+    // it was told; its tables as they are, drawn again into new ones while trying: scene_drawn)
+    scene.undo.push((l, { ..l }))
   }
 }
 
@@ -902,10 +900,8 @@ fn scene_undo() -> Unit {
     l.count = was.count
     l.seg_from = was.seg_from
     l.seg_count = was.seg_count
-    l.bands.clear()
-    l.bands.append(was.bands)
-    l.inner.clear()
-    l.inner.append(was.inner)
+    l.bands = was.bands
+    l.inner = was.inner
     l.outer = was.outer
     l.clip = was.clip
     l.clip_window = was.clip_window
@@ -919,10 +915,8 @@ fn scene_undo() -> Unit {
     l.told = was.told
     l.own_only = was.own_only
     l.each = was.each
-    l.plots.clear()
-    l.plots.append(was.plots)
-    l.images.clear()
-    l.images.append(was.images)
+    l.plots = was.plots
+    l.images = was.images
     l.reads_clock = was.reads_clock
     l.seen = was.seen
   }
@@ -1056,7 +1050,16 @@ fn Ctx::scene_drawn(
   l.own_only = false
   l.each = false
   l.told = false
-  l.inner.clear()
+  // (drawn again into new tables while the frame is tried alone: those it had kept as they were, put back where the try
+  // does not come to be, scene_keep_undo)
+  if scene.trying {
+    l.inner = []
+    l.images = []
+    l.plots = []
+    l.bands = []
+  } else {
+    l.inner.clear()
+  }
   // (drawn again alone, from what it began in: what holds it as it was)
   match outer {
     Some(o) => l.outer = Some(o.id)
