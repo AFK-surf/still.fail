@@ -64,20 +64,6 @@ priv struct TreeField {
 let tree_fields : Map[@view.NodeId, TreeField] = Map([])
 
 ///|
-// The tree is not installed in its host while its nodes are made. Keep their requests in the order received and
-// deliver them when the whole tree is attached, before any geometry is measured. Reset with that tree.
-let tree_field_focus_pending : Array[@view.NodeId] = []
-
-///|
-fn tree_fields_attached() -> Unit {
-  let pending = tree_field_focus_pending.copy()
-  tree_field_focus_pending.clear()
-  for id in pending {
-    if tree_fields.contains(id) { tree_field_focus(id) }
-  }
-}
-
-///|
 /// The words by which a drawn node is found in tests and drives. An editor is found by its hint as an old editor's
 /// Node.text is; its glyphs are painted by the editor, so Drawn.words is deliberately empty.
 fn view_words_found(d : @view.Drawn) -> String {
@@ -369,10 +355,7 @@ pub fn Ctx::focus_field(self : Ctx, field : Field) -> Unit {
 /// Field node `id` given the keyboard's focus where it can take it now (the tree's: under no modal layer that does not
 /// hold it, able to take it); else the focus where it was.
 fn tree_field_focus(id : @view.NodeId) -> Unit {
-  guard view_app.val is Some(tree) else {
-    tree_field_focus_pending.push(id)
-    return
-  }
+  guard view_app.val is Some(tree) else { return }
   if view_focus_kept_under(tree, id, tree_said_id(id)) { return }
   guard tree.can_focus(id) else { return }
   g().focus_moved(tree_said_id(id))
