@@ -502,6 +502,7 @@ describe("slack", { concurrency: true }, () => {
       const sonnet = JSON.parse(fake.acks.find((a) => a.envelope_id === "q1").payload.options[0].value);
       submit("v2", JSON.stringify(sonnet), " fix the build ");
       await fake.until("taken", () => heard.length === 1);
+      await fake.until("the form closed", () => fake.acks.some((a) => a.envelope_id === "v2"));
       const post = fake.calls("chat.postMessage")[0]!.params;
       assert.equal(post.channel, "C1");
       assert.equal(post.thread_ts, undefined, "a thread of its own");
