@@ -115,6 +115,41 @@ SELECT CASE WHEN (SELECT COUNT(*) FROM few WHERE viewer IS NOT NULL) <= 32
 export const LAST_READ_AT = lastRead("at");
 export const LAST_KNOWN = `SELECT MAX(n) AS n FROM (${lastRead("n")} UNION ALL SELECT MAX(n) FROM deliveries WHERE thread = ?1)`;
 
+// These marks are keyed by viewer first. For a large table seek once per viewer instead of scanning everybody's other
+// chats. On a small table a scan can be cheaper, especially when most viewers have one mark. A rowid span bounds the
+// number of rows without counting them; the viewer probes are capped so choosing a plan does not scan a long history.
+function deleteViewerMarks(table: "reads" | "dismissed" | "kept_chats" | "pins", key: "thread" | "session") {
+  const choice = `WITH RECURSIVE few(viewer, count) AS (
+    SELECT (SELECT viewer FROM ${table} ORDER BY viewer LIMIT 1), 1
+    UNION ALL SELECT (SELECT viewer FROM ${table} WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.count + 1
+      FROM few v WHERE v.viewer IS NOT NULL AND v.count < 33
+  ), more(viewer, count) AS (
+    SELECT (SELECT viewer FROM ${table} ORDER BY viewer LIMIT 1), 1
+    UNION ALL SELECT (SELECT viewer FROM ${table} WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.count + 1
+      FROM more v WHERE v.viewer IS NOT NULL AND v.count < 257
+  ), bounds(span) AS (SELECT (SELECT MAX(rowid) FROM ${table}) - (SELECT MIN(rowid) FROM ${table}))
+  SELECT CASE WHEN COALESCE((SELECT span FROM bounds), 0) < 512 THEN 0
+    WHEN (SELECT span FROM bounds) >= 32768 THEN 1
+    WHEN (SELECT COUNT(*) FROM few WHERE viewer IS NOT NULL) <= 32 THEN 1
+    WHEN (SELECT span FROM bounds) < 16384 THEN 0
+    WHEN (SELECT COUNT(*) FROM more WHERE viewer IS NOT NULL) <= 256 THEN 1 ELSE 0 END AS seek`;
+  // Materialize the viewers before deleting: a deletion can remove a viewer's last mark in the table.
+  const indexed = `WITH RECURSIVE viewers(viewer) AS MATERIALIZED (
+    SELECT (SELECT viewer FROM ${table} ORDER BY viewer LIMIT 1)
+    UNION ALL SELECT (SELECT viewer FROM ${table} WHERE viewer > v.viewer ORDER BY viewer LIMIT 1)
+      FROM viewers v WHERE v.viewer IS NOT NULL
+  ) DELETE FROM ${table} WHERE viewer IN (SELECT viewer FROM viewers WHERE viewer IS NOT NULL) AND ${key} = ?`;
+  return { choice, indexed, small: `DELETE FROM ${table} WHERE ${key} = ?` };
+}
+export const READ_MARKS = deleteViewerMarks("reads", "thread");
+const DISMISSED_MARKS = deleteViewerMarks("dismissed", "thread");
+const KEPT_MARKS = deleteViewerMarks("kept_chats", "thread");
+const PIN_MARKS = deleteViewerMarks("pins", "session");
+export const DELETE_READS_OF_THREAD = READ_MARKS.indexed;
+export const DELETE_DISMISSED_OF_THREAD = DISMISSED_MARKS.indexed;
+export const DELETE_KEPT_CHAT = KEPT_MARKS.indexed;
+export const DELETE_PINS_OF_SESSION = PIN_MARKS.indexed;
+
 // Each session's latest check of the last days (the archive policy's view) and a login's end (closeLoginCards), each by
 // an index of its own (and rows.ts CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE: each list of chats', the readers' too).
 // The checks are grouped by `+session`: by `session`, the station's SQLite went over every check in order of session.
@@ -994,6 +1029,10 @@ export class Store {
     return this.#all("SELECT * FROM threads WHERE surface = ? AND home IS NULL AND hidden_at IS NULL", STILLFAIL_SURFACE).map(toThread);
   }
 
+  #deleteMarks(marks: ReturnType<typeof deleteViewerMarks>, key: Arg): void {
+    this.#run(this.#one(marks.choice).seek ? marks.indexed : marks.small, key);
+  }
+
   /// Forgets a session: its row, turns, deliveries, memberships and bindings, and the threads only it took part in,
   /// with their entries (or archive files) and reads.
   deleteSession(key: string): void {
@@ -1018,7 +1057,7 @@ export class Store {
         this.#run("DELETE FROM job_notices WHERE job_id IN (SELECT id FROM jobs WHERE session_key = ?)", key);
         this.#run("DELETE FROM jobs WHERE session_key = ?", key);
         this.#run("DELETE FROM widget_states WHERE session = ?", key);
-        this.#run("DELETE FROM pins WHERE session = ?", key);
+        this.#deleteMarks(PIN_MARKS, key);
         this.#run("DELETE FROM transcript_lengths WHERE session = ?", key);
         this.#run("DELETE FROM session_usage WHERE session = ?", key);
         this.#run("DELETE FROM sessions WHERE key = ?", key);
@@ -1032,10 +1071,10 @@ export class Store {
           this.#run("DELETE FROM entries WHERE thread = ?", thread);
           this.#run("DELETE FROM letter_deliveries WHERE thread = ?", thread);
           this.#run("DELETE FROM letters WHERE thread = ?", thread);
-          this.#run("DELETE FROM reads WHERE thread = ?", thread);
-          this.#run("DELETE FROM dismissed WHERE thread = ?", thread);
+          this.#deleteMarks(READ_MARKS, thread);
+          this.#deleteMarks(DISMISSED_MARKS, thread);
           this.#run("DELETE FROM closed_cards WHERE thread = ?", thread);
-          this.#run("DELETE FROM kept_chats WHERE thread = ?", thread);
+          this.#deleteMarks(KEPT_MARKS, thread);
           // Its published snapshots go with it.
           for (const r of this.#all("SELECT id FROM published WHERE thread = ?", thread)) unpublished.push(r.id);
           this.#run("DELETE FROM published WHERE thread = ?", thread);
