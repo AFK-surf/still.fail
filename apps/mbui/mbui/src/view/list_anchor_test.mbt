@@ -210,3 +210,23 @@ test "scrolls_anchored: flung to its start and to its end from where it was coun
   }
   assert_eq((c.top(99), c.follows.get(), c.scroll.at(c.tree)), (Some(60.0), true, 3900.0))
 }
+
+///|
+test "scrolls_anchored on iOS: pulled past its end, drawn past it, and back at its end let go; its rows as they were" {
+  let c = anchored_case(100)
+  c.tree.lists_feel(fn() { (@view.ListFeel::Ios, 2.0) })
+  // (at its end; a finger up on it, past its end by 60)
+  let id = match c.tree.claimer_of(c.tree.claimers_at(150.0, 90.0), 0.0, -30.0) {
+    Some(id) => id
+    None => fail("not taken over at its end")
+  }
+  c.tree.drag_at(id, Down, 150.0, 90.0, 100.0) |> ignore
+  c.tree.drag_at(id, Moved, 150.0, 60.0, 110.0) |> ignore
+  c.tree.drag_at(id, Moved, 150.0, 30.0, 120.0) |> ignore
+  c.tree.frame(390.0, 844.0, now=120.0) |> ignore
+  let pulled = c.scroll.past(c.tree)
+  c.tree.drag_at(id, Up, 150.0, 30.0, 400.0) |> ignore
+  c.tree.frame(390.0, 844.0, now=3000.0) |> ignore
+  assert_true(pulled.abs() > 1.0, msg="drawn past its end as it is pulled: \{pulled}")
+  assert_eq((c.scroll.past(c.tree), c.top(99), c.follows.get()), (0.0, Some(60.0), true))
+}
