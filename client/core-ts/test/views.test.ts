@@ -255,7 +255,7 @@ test("usage shows its history as loading until a station finishes preparing it",
   t.subscribe(1, { topic: "usage", scope: "ws", days: 7 });
   await t.read(u, 1);
   assert.equal(u.value.summaryPreparing, true);
-  assert.equal(u.value.summary, undefined);
+  assert.equal(u.value.summary, null);
 
   t.set(topic, { rows: [], since: 0, reading: false,
     history: { days: [], places: {}, archived: 0, remoteRuns: 0, cards: 0, picked: 0 } });
@@ -266,7 +266,7 @@ test("usage shows its history as loading until a station finishes preparing it",
   // An older station that cannot provide a history is not presented as loading forever.
   t.set(topic, { rows: [], since: 0, reading: false, historyUnavailable: true });
   await t.read(u, 1);
-  assert.equal(u.value.summary, undefined);
+  assert.equal(u.value.summary, null);
   assert.notEqual(u.value.summaryPreparing, true);
 });
 

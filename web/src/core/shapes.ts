@@ -7416,6 +7416,8 @@ export interface UsageView {
 	 * has told its history (stations from before).
 	 */
 	summary?: UsageSummary;
+	/** A station is preparing its old history; the summary is still being read. */
+	summaryPreparing?: boolean;
 }
 
 /** A field of an item as its page shows it (vault-words.ts shownFields): `vault.open` answers `shown`, a row says `shut`. */

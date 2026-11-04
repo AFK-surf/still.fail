@@ -691,6 +691,12 @@ fn usage_body_node(parent : @view.View, core : Core, v : () -> Json?, chart : ()
 /// have the room), when it is as of, what is missing.
 fn usage_summary_node(parent : @view.View, v : () -> Json?, page_w : () -> Double, tips? : @sf.TipLayer) -> Unit {
   let sv = fn() { field(v(), "summary") }
+  parent.show(fn() { flag(v(), "summaryPreparing") && !(sv() is Some(Object(_))) }, fn(at) {
+    let sample = usage_summary_sample()
+    @sf.waiting_node(at, fn(s) { usage_summary_node(s, fn() { Some(sample) }, page_w) }, note=fn() {
+      { reading: true, text: @sf.t("common.reading"), failing: [] }
+    })
+  })
   parent.show(fn() { sv() is Some(Object(_)) }, fn(at) {
     ug_card_node(at, fn(k) {
       // (as wide as the card leaves it up to its most, in its middle: ug_sum's w=Full max_w)

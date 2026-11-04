@@ -59,9 +59,10 @@ test("the usage page can tell a pending history from one that is unavailable", (
   try {
     db.prepare(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output, calls)
       VALUES ('old', 0, 'a', 'claude', 2, 0, 0, 0, 1, 1)`).run();
+    const read = () => usage(makeStore(db, "."), "en", 0n, 900_000n, 0n, false, null, true);
+    assert.equal(read().historyPreparing, true, "history is also being prepared before its tables are installed");
     installCompactUsage(db, () => 900_000);
     installUsageHistory(db, 900_000);
-    const read = () => usage(makeStore(db, "."), "en", 0n, 900_000n, 0n, false, null, true);
     assert.equal(read().historyPreparing, true);
     while (!convertUsageHistoryStep(db)) { /* Transfer the old summaries. */ }
     const ready = read();

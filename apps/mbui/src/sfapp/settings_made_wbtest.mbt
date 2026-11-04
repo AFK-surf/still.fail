@@ -613,6 +613,24 @@ test "用量 made once: its figures, its days, its chats and its stations the tr
 }
 
 ///|
+test "用量 keeps the summary's place in its bones while its history is prepared" {
+  let t = memories_tester(true, 2, mode="settings-usage-pending")
+  let first = instances_sorted(t)
+  let said = t.words_said().map(fn(w) { w.0 })
+  let words = t.words()
+  let cost = match words.search_by(fn(w) { w.0 == "$118" }) {
+    Some(i) => words[i]
+    None => fail("the current cost is still shown")
+  }
+  assert_true(cost.2 > 300.0, msg="the summary keeps its place above the cost: \{cost.2}")
+  assert_true(!said.iter().any(fn(w) { w.contains("字") || w.contains("各设备的工作量") }), msg="\{said}")
+  let status = t.semantics().filter(fn(s) { s.role == Status }).map(fn(s) { s.label })
+  assert_true(status.iter().any(fn(w) { w.contains("正在读取") }), msg="the preparation is said: \{status}")
+  t.frame_at(t.time() + @sf.breath_ms / 2.0)
+  assert_true(first != instances_sorted(t), msg="the summary's bones breathe")
+}
+
+///|
 /// 用量's 价目表 reached by its link (查看价目表 →), made once (`tree`), at `platform`'s hand and the system's size of
 /// words `scale`; its usage as `state` says once there (prices_said).
 fn prices_tester(

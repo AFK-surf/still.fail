@@ -576,6 +576,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-profile-key" => "profile:ws1/st1#k2"
     "settings-profile-quota" | "settings-profile-quota-login" | "settings-profile-quota-expiry" => "profile:ws1/st1#cx"
     "settings-me-reading" => "me"
+    "settings-usage-pending" => "usage"
     "settings-profiles-pick" | "settings-profiles-monthly" => "profiles"
     "settings-connect" => "connect:ws1/st1#k1"
     _ =>
@@ -1551,7 +1552,7 @@ fn fx_usage_summary() -> Json {
 ///|
 /// What the core's `usage` view says (views/usage.ts) of a made-up workspace: its days split by the list `split`
 /// asks for, of the one person, account or model `only` names (its key) alone.
-fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : String = "") -> Json {
+fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : String = "", pending? : Bool = false) -> Json {
   // (the one alone: a part of everything)
   let part = if only == "" { 1.0 } else { 0.42 }
   let daily : Array[Json] = []
@@ -1702,7 +1703,8 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
         ]),
       ],
     ),
-    ("summary", fx_usage_summary()),
+    ("summary", if pending { Json::null() } else { fx_usage_summary() }),
+    ("summaryPreparing", Json::boolean(pending)),
     ("series", Json::array(series.map(fn(x) { obj([("key", str(x.0)), ("name", str(x.1))]) }))),
     ("daily", Json::array(daily)),
     ("many", Json::boolean(days > 10)),
@@ -2523,6 +2525,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
             Some(String(d)) => d
             _ => ""
           },
+          pending=mode == "settings-usage-pending",
         ),
       )
     "archive" => Some(fx_archive())

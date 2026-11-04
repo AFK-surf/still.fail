@@ -327,7 +327,9 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     // workspace their key names (`remote:<workspace>:…`)
     ...(remoteRuns !== undefined ? { remoteRuns } : {}),
     ...(historyResult !== null ? { history: historyResult } : {}),
-    ...(history && historyResult === null ? { historyUnavailable: true } : {}),
+    // This station installs and retries history after the previous process exits, then transfers old summaries.
+    // Keep the older flag for clients that only know unavailable, and say preparation to newer clients throughout.
+    ...(history && historyResult === null ? { historyUnavailable: true, historyPreparing: true } : {}),
   };
   mark("other");
   const ms = Math.round(performance.now() - started);

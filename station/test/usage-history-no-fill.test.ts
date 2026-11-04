@@ -4,7 +4,7 @@ import { Effect } from "effect";
 import { makeStore } from "../src/read/store.ts";
 import { usageHistory } from "../src/read/usage.ts";
 import { installCompactUsage } from "../src/store/usage-compact.ts";
-import { convertUsageHistoryStep, historyTransferPending, installUsageHistory, usageHistorySince } from "../src/store/usage-history.ts";
+import { convertUsageHistoryStep, hasUsageHistory, historyTransferPending, installEmptyUsageHistory, installUsageHistory, usageHistorySince } from "../src/store/usage-history.ts";
 import { Store } from "../src/store/store.ts";
 import { retireAfterPrevious } from "../src/usage/module.ts";
 
@@ -29,6 +29,40 @@ test("handover preserves the old quarterly and compact summaries in the usage hi
     assert.deepEqual(read(), [["1970-01-01", 1, 3], ["1970-01-02", 1, 5]]);
     put.run("after-handover", 86_400_001, 6);
     assert.deepEqual(read(), [["1970-01-01", 1, 3], ["1970-01-02", 2, 12]]);
+  } finally { store.close(); }
+});
+
+test("old summaries are kept even if no raw calls remain", () => {
+  const store = Store.open(":memory:");
+  const db = store.db;
+  try {
+    beforeHistory(store);
+    db.prepare("INSERT INTO usage_day_quarters (session, quarter, runtime, model, calls, tokens) VALUES ('old', 1, 'claude', '', 2, 7)").run();
+    installEmptyUsageHistory(db);
+    assert.equal(hasUsageHistory(db), false, "the existing summary waits for handover");
+    installCompactUsage(db, () => 900_000);
+    installUsageHistory(db, 900_000);
+    while (!convertUsageHistoryStep(db)) { /* Transfer the surviving summary. */ }
+    const row = db.prepare("SELECT calls, tokens FROM usage_history_total WHERE scope = ''").get();
+    assert.deepEqual({ ...row }, { calls: 2, tokens: 7 });
+  } finally { store.close(); }
+});
+
+test("a compact summary is kept even if no raw calls or old quarters remain", () => {
+  const store = Store.open(":memory:");
+  const db = store.db;
+  try {
+    beforeHistory(store);
+    installCompactUsage(db, () => 900_000);
+    db.prepare(`INSERT INTO usage_compact (session, minute, thread, person, profile, runtime, model, fast, records,
+      calls, input, cache_read, cache_write, cache_write_long, output, scope)
+      VALUES ('old', 15, 0, '', '', 'claude', '', 0, 1, 1, 2, 0, 0, 0, 1, 'H')`).run();
+    installEmptyUsageHistory(db);
+    assert.equal(hasUsageHistory(db), false, "the compact summary waits for handover");
+    installUsageHistory(db, 900_000);
+    while (!convertUsageHistoryStep(db)) { /* Transfer the surviving summary. */ }
+    const row = db.prepare("SELECT calls, tokens FROM usage_history_total WHERE scope = ''").get();
+    assert.deepEqual({ ...row }, { calls: 1, tokens: 3 });
   } finally { store.close(); }
 });
 

@@ -2932,6 +2932,7 @@ export const SHAPES: Record<string, Shape> = {
     ["basis", "String"],
     ["prices", opt(vec("UsagePriceTable")), { doc: "Each station's own calculation table; absent with older cores." }],
     ["summary", opt("UsageSummary"), { doc: "Everything since counting began, as Codex's usage summary (views/usage-summary.ts); absent where no station\nhas told its history (stations from before)." }],
+    ["summaryPreparing", "bool", { default: true, doc: "A station is preparing its old history; the summary is still being read." }],
   ], { doc: "What the agents of a workspace spent over its last `days` (the `usage` view, client/core-ts/src/views/usage.ts): a few\ntotals (`tiles`), each day's cost split by the people who spent most (`series`, the rest as 其他), and lists of who,\nwhich chats, which accounts and which models spent the most, at the providers' API prices (`basis` says what that\nmeans). `notes`: what is missing or still being read, in lines; `loading` while a station has not answered.", keepNone: true }),
   FleetView: struct([
     ["at", "String", { doc: "When this is, in words: 10月26日 04:12." }],

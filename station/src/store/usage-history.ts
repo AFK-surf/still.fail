@@ -64,9 +64,16 @@ const has = (db: DatabaseSync, table: string) =>
 
 export const hasUsageHistory = (db: DatabaseSync): boolean => has(db, "usage_history_since");
 
-/// With no call recorded yet (a new station's) there is nothing to take over: installed as the database opens.
+/// A new station has no calls or older summaries. Each existence check stops at its first row.
+function hasHistorySource(db: DatabaseSync): boolean {
+  return db.prepare("SELECT 1 FROM usage LIMIT 1").get() !== undefined
+    || (has(db, "usage_day_quarters") && db.prepare("SELECT 1 FROM usage_day_quarters LIMIT 1").get() !== undefined)
+    || (has(db, "usage_compact") && db.prepare("SELECT 1 FROM usage_compact LIMIT 1").get() !== undefined);
+}
+
+/// With no call or old summary yet (a new station's), install as the database opens.
 export function installEmptyUsageHistory(db: DatabaseSync): void {
-  if (!hasUsageHistory(db) && db.prepare("SELECT 1 FROM usage LIMIT 1").get() === undefined) installUsageHistory(db, 0);
+  if (!hasUsageHistory(db) && !hasHistorySource(db)) installUsageHistory(db, 0);
 }
 
 /// Installs empty tables and the bounded transfer. It does not scan old calls or summaries under the installation lock.
@@ -75,7 +82,7 @@ export function installUsageHistory(db: DatabaseSync, now: number): void {
   db.exec("BEGIN IMMEDIATE");
   try {
     if (hasUsageHistory(db)) { db.exec("COMMIT"); return; }
-    const empty = db.prepare("SELECT 1 FROM usage LIMIT 1").get() === undefined;
+    const empty = !hasHistorySource(db);
     const compact = has(db, "usage_compact_since")
       ? db.prepare("SELECT since, old_days FROM usage_compact_since WHERE id = 1").get() as { since: number; old_days: number } : undefined;
     if (!empty && compact === undefined) throw new Error("compact usage statistics are not installed");
