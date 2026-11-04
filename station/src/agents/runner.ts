@@ -25,6 +25,8 @@ export type RunnerInfo = {
   program: string;
   args: string[];
   socket: string;
+  /// It gives back stdout's disk only up to an ack's `keep` (one from before gives back up to the ack).
+  keeps?: boolean;
 };
 
 export type Exit = { code: number | null; signal: string | null };
@@ -148,6 +150,9 @@ export class RunnerConnection {
   /// Where each stream's next line starts, as the runner counts bytes.
   private at: Record<"out" | "err", number> = { out: -1, err: -1 };
   private acked: Record<"out" | "err", number> = { out: 0, err: 0 };
+  /// Up to where of stdout the runner may give the disk back (native/runner `punch`), told with each ack: what a station
+  /// reads again after a crash begins there (process.ts `readFrom`). Null: up to what was acknowledged.
+  keep: number | null = null;
   private queue: Promise<void> = Promise.resolve();
   private left = false;
   readonly exited: Promise<Exit>;
@@ -155,7 +160,7 @@ export class RunnerConnection {
 
   /// `line` is called for each whole line in order, one at a time (a promise is waited for); once it is done, the line
   /// is acknowledged.
-  constructor(info: RunnerInfo, line: (stream: "out" | "err", text: string) => void | Promise<void>) {
+  constructor(info: RunnerInfo, line: (stream: "out" | "err", text: string, from: number, to: number) => void | Promise<void>) {
     this.info = info;
     this.exited = new Promise((resolve) => (this.exit = resolve));
     this.socket = createConnection(info.socket);
@@ -172,18 +177,19 @@ export class RunnerConnection {
     });
   }
 
-  private data(stream: "out" | "err", at: number, bytes: Buffer, line: (s: "out" | "err", t: string) => void | Promise<void>) {
+  private data(stream: "out" | "err", at: number, bytes: Buffer, line: (s: "out" | "err", t: string, from: number, to: number) => void | Promise<void>) {
     if (this.at[stream] < 0) this.at[stream] = at;
     let buf = Buffer.concat([this.partial[stream], bytes]);
     for (let i = buf.indexOf(10); i >= 0; i = buf.indexOf(10)) {
       const text = buf.subarray(0, i).toString("utf8");
       buf = buf.subarray(i + 1);
+      const start = this.at[stream];
       this.at[stream] += i + 1;
       const end = this.at[stream];
       this.queue = this.queue.then(async () => {
-        await line(stream, text);
+        await line(stream, text, start, end);
         this.acked[stream] = end;
-        this.send({ op: "ack", out: this.acked.out, err: this.acked.err });
+        this.send({ op: "ack", out: this.acked.out, err: this.acked.err, ...(this.keep !== null ? { keep: this.keep } : {}) });
       });
     }
     this.partial[stream] = buf;

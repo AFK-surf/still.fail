@@ -13,6 +13,7 @@ import { delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { CodexDriver, classifyCodexError, type CodexDriverOptions } from "../src/agents/codex.ts";
+import { ackedOffset, runnerId } from "../src/agents/process.ts";
 import { allLeft, existingRunners } from "../src/agents/runner.ts";
 import type { OpenOptions, Profile, RuntimeEvent } from "../src/agents/runtime.ts";
 import { readAgentEnvFrom } from "../src/ops/agent-env.ts";
@@ -679,6 +680,71 @@ describe("the Codex driver", { concurrency: true }, () => {
       assert.ok(!a.events.some((e) => e.type === "closed"));
     });
   }
+
+  // On ccvm (2026-11-04) a station that crashed left two app-servers; the next read each one's output again from its
+  // start (157 MB, the station's thread held 10 s; the other's was 4.9 GB), though only the turns running said anything
+  // that still stood.
+  test("after a crash an app-server's output is read again from where the earliest turn running began, not from its start", async () => {
+    const first = driver();
+    const p = profile();
+    const a = listen();
+    const a2 = listen();
+    const one = await first.open(options(p), a.push);
+    const two = await first.open(options(p), a2.push);
+    await one.prompt("say:before");
+    await a.until(ended(1));
+    const info = existingRunners(data).find((r) => r.id === runnerId("codex", p.id))!;
+    // Where the last turn of a thread began in the output as it is now.
+    const began = (thread: string) => {
+      const out = readFileSync(join(data, "run", "runners", `${info.id}.out`));
+      let at = 0;
+      let found = -1;
+      for (let i = out.indexOf(10); i >= 0; at = i + 1, i = out.indexOf(10, at)) {
+        if (out[at] !== 0x7b || out.subarray(at, i).indexOf("turn/started") < 0) continue;
+        const msg = JSON.parse(out.toString("utf8", at, i));
+        if (msg?.params?.threadId === thread) found = at;
+      }
+      return found;
+    };
+    const gate = gates(p.dump, "kept");
+    await two.prompt("gate:6:3:kept");
+    await a2.until((e) => deltas(e).length >= 3);
+    // Another turn ends while that one runs, saying more than the runner gives back at once (32 MiB, native/runner
+    // `punch`): reading again still begins where that one began, and the runner keeps it.
+    await one.prompt(`say:${"x".repeat(34 * 1024 * 1024)}`);
+    await a.until(ended(2));
+    assert.ok(began(two.id()) > 0);
+    assert.equal(info.keeps, true, "the runner says it keeps what the station keeps");
+    first.detach();
+    await allLeft();
+    // The runner says what was acknowledged and kept, both from the last ack: from where the turn running began.
+    const out = join(data, "run", "runners", `${info.id}.out`);
+    assert.equal((await ackedOffset(info, out)).keep, began(two.id()), "from where the turn running began");
+    await gate.open("a");
+    await eventually(gate.said);
+    const next = driver();
+    const b = listen();
+    const b2 = listen();
+    await next.adopt(options(p, { resume: one.id() }), null, b.push);
+    const takenTwo = await next.adopt(options(p, { resume: two.id() }), null, b2.push);
+    await gate.open("b");
+    await b2.until(ended(1));
+    const all = [...a2.events, ...b2.events];
+    assert.equal(ends(all).length, 1, "its end, once");
+    assert.deepEqual(deltas(all), Array.from({ length: 6 }, (_, i) => `d${i} `), "every delta once, in order");
+    assert.equal(b2.events.filter((e) => e.type === "turnStarted").length, 1, "read again as running");
+    assert.equal(b.events.filter((e) => e.type === "turnStarted").length, 0, "the one whose turns had ended, idle");
+    // None running now: reading again begins past it.
+    const twoBegan = began(two.id());
+    await takenTwo.prompt("say:after");
+    await b2.until(ended(2));
+    next.detach();
+    await allLeft();
+    const now = await ackedOffset(info, out);
+    assert.ok(now.keep !== null && now.keep > twoBegan && now.keep <= now.at, `${twoBegan} < ${now.keep} <= ${now.at}`);
+    // Taken up once more, so the driver's shutdown ends it.
+    await driver().adopt(options(p, { resume: two.id() }), null, () => {});
+  });
 
   // On a station (2026-11-02) a next station asked a profile's quota as it started: it took the app-server up as after a
   // crash, from the station still handing over, which let go of the turn running on it.
