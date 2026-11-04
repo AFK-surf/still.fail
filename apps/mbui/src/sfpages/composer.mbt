@@ -1912,9 +1912,11 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   let runs = @sfbase.refs_sent_runs(w.key, words)
   let row = sent_local(rk, Some(v), words, up_files(w), going=going_files(w), quotes=sent_quotes(w), runs~)
   // its words take off from the field as they are (before it is emptied), the composer (its box and its room) held as
-  // tall as it is till they let go of it
-  let room = @motion.measured(c, "composer/foot").unwrap_or(0.0)
-  let box = @motion.measured(c, "composer/content").unwrap_or(0.0)
+  // tall as it shows till they let go of it, as the list's foot over it is: sent on its way to a line more or less,
+  // where it is drawn then, not where that way ends (the rows over it went there at once, in the frame it was sent, or
+  // the composer grew on under them, held where they were)
+  let room = composer_room(c, w.key)
+  let box = @motion.measured(c, "composer/content").unwrap_or(0.0) + @motion.reshaped_over(c, "composer/box")
   // its quotes fly too, each from its card, and its files that are up, each from its tile (ChatHost.kt sending)
   let flying = flying_quotes(c, src, w, r.station) + flying_files(c, src, w)
   @sfbase.flight_start(
@@ -2009,7 +2011,10 @@ fn composer_least(c : @ui.Ctx) -> Double {
 /// it is.
 pub fn composer_foot_room(c : @ui.Ctx, draft : String, room : Double, let_go~ : Bool) -> Double {
   if let_go {
-    dmax(room - dmax(composer_room(c, draft) - composer_least(c), 0.0), 0.0)
+    // (where it comes to stand: as tall as it is laid out once they let go of it, a line or more typed meanwhile
+    // with it; not a line always, its room opening on as the way was over)
+    ignore(room)
+    composer_room(c, draft, settled=true, held=false)
   } else {
     room
   }
@@ -2049,8 +2054,8 @@ fn composer_held_box(c : @ui.Ctx, draft : String) -> Double {
 /// tall as its place (chat_composer: its box, what it says under it, its margins) with its ground as drawn (a line
 /// more or less: the list's rows go with the ground as it reshapes, the frame it does), at least as tall as that opened
 /// with one line; let go by words sent from it (composer_hold), from as tall as it was then down to that, on its
-/// ground's curve.
-pub fn composer_room(c : @ui.Ctx, draft : String, settled? : Bool = false) -> Double {
+/// ground's curve (not `held`: where it comes to stand once let go, whatever was typed in it meanwhile).
+pub fn composer_room(c : @ui.Ctx, draft : String, settled? : Bool = false, held? : Bool = true) -> Double {
   // (not laid out yet: a capsule's)
   let foot = @motion.measured(c, "composer/foot").unwrap_or(capsule_room(c.width))
   // never less than it takes opened with one line where it is (its box that tall, what is round it as it is: the web's
@@ -2061,6 +2066,9 @@ pub fn composer_room(c : @ui.Ctx, draft : String, settled? : Bool = false) -> Do
   // coming down from the middle of the pane to its foot, the chat's rows standing over its foot from the first, not over
   // the middle of the pane where the new chat's scene still is)
   let now = dmax(foot + (if settled { 0.0 } else { @motion.reshaped_over(c, "composer/box") }), least)
+  if !held {
+    return now
+  }
   let held = @motion.anim(c, "composer/held/" + draft, 0.0, global=true).get()
   let share = @motion.anim(c, "composer/hold/" + draft, 0.0, global=true).get()
   if held > now {

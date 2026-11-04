@@ -23,6 +23,10 @@ const ADB_TIMEOUT = 15_000;
 const FOLLOW_AGAIN = 5_000;
 /// How long after a device could not be looked at it is looked at again (adb has an emulator long before it has booted).
 const LOOK_AGAIN = 3_000;
+/// How long adb's devices are followed after the screens were last asked for, none of them there: followed from the
+/// station's start, adb's server and `track-devices` ran for good on machines no phone is ever put on (ccvm, a virtual
+/// machine, 2026-11-04). One there keeps them followed.
+const FOLLOWED_FOR = 10 * 60_000;
 /// Encoded frames kept for a view that asks slowly: past this they are dropped up to a new key frame (a delta dropped
 /// alone would break every frame after it).
 const QUEUE_MOST = 30;
@@ -590,6 +594,9 @@ export class AndroidScreens {
   #looking = Promise.resolve();
   #lookAgain: (() => void) | null = null;
   readonly #again_ms: number;
+  /// When following stops, nothing listed (`FOLLOWED_FOR` after the screens were last asked for).
+  #rest: (() => void) | null = null;
+  #resting = false;
 
   constructor(o: { screens: Screens & { changed(): void }; adb: () => string | null; file?: string; lookAgain?: number }) {
     this.#screens = o.screens;
@@ -599,6 +606,7 @@ export class AndroidScreens {
   }
 
   start() {
+    this.#resting = false;
     if (this.#closed || this.#follow !== null) return;
     const path = this.#adb();
     if (path === null) return;
@@ -617,7 +625,7 @@ export class AndroidScreens {
     child.on("error", () => {});
     child.on("close", () => {
       this.#follow = null;
-      if (this.#closed) return;
+      if (this.#closed || this.#resting) return;
       this.#again?.();
       this.#again = wall.after(FOLLOW_AGAIN, () => this.start());
     });
@@ -626,7 +634,23 @@ export class AndroidScreens {
   /// As the screens are asked for: adb may have come since (one put on the machine, its follow ended).
   async refresh(): Promise<void> {
     this.start();
+    this.#rest?.();
+    this.#rest = wall.after(FOLLOWED_FOR, () => this.#stopFollowing());
     await this.#looking;
+  }
+
+  /// Not asked for in a while: adb's devices let go of while none is listed (asked for again: followed again).
+  #stopFollowing() {
+    this.#rest = null;
+    if (this.#closed) return;
+    if (this.#listed.size > 0) {
+      this.#rest = wall.after(FOLLOWED_FOR, () => this.#stopFollowing());
+      return;
+    }
+    this.#resting = true;
+    this.#again?.();
+    this.#again = null;
+    this.#follow?.kill();
   }
 
   #heard(path: string, serials: string[]) {
@@ -684,6 +708,7 @@ export class AndroidScreens {
   /// The station stopping: nothing followed, every source gone.
   close() {
     this.#closed = true;
+    this.#rest?.();
     this.#again?.();
     this.#lookAgain?.();
     this.#follow?.kill();

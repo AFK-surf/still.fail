@@ -375,7 +375,6 @@ export class SessionActor {
     return this.agent ? "warm" : "cold";
   }
 
-  /// How long the runtime process has sat idle, or null if there is none or it is working.
   /// How long its process has had nothing to do (null: none, or it does). One waiting is idle all the same: what it waits
   /// for is the station's (its timer is this actor's, its jobs and tasks the station's); what it has going in its own
   /// process (`holding`) keeps that from being ended.

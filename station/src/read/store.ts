@@ -319,8 +319,9 @@ export function threadsOfShown(s: Store): number[] {
 }
 
 /// Threads with their sessions, last entry, latest message and the viewer's unread count, most recently said in
-/// first: those of one session, one thread (or those named), or all.
-export function listThreads(s: Store, viewer: string, session: string | null, thread: number | number[] | null): ThreadSummary[] {
+/// first: those of one session, one thread (or those named), or all. A list that only needs to know whether there are
+/// unread messages can ask for existence instead of their exact count.
+export function listThreads(s: Store, viewer: string, session: string | null, thread: number | number[] | null, unread: "count" | "exists" = "count"): ThreadSummary[] {
   const base = "SELECT t.*, COALESCE(r.n, 0) AS read_n FROM threads t LEFT JOIN reads r ON r.thread = t.id AND r.viewer = ?1";
   const rows: Json[] =
     Array.isArray(thread)
@@ -342,7 +343,7 @@ export function listThreads(s: Store, viewer: string, session: string | null, th
       last: lastEntry(s, t.id),
       lastMessage: lastSaid(s, t.id),
       read,
-      unread: unreadOf(s, t.id, read, t.surface !== STILLFAIL_SURFACE ? selves.slack : selves.own),
+      unread: unreadOf(s, t.id, read, t.surface !== STILLFAIL_SURFACE ? selves.slack : selves.own, unread),
       people: threadPeople(s, t.id, t.surface),
       firstText: firstText(s, t.id),
       letters: letterCount(s, t.id),
@@ -405,14 +406,16 @@ function unreadCount(s: Store, viewer: string, thread: number, read: number): nu
 }
 
 /// Messages after `read` that are not of `selves`, nor letters (isLetter).
-function unreadOf(s: Store, thread: number, read: number, selves: string[]): number {
-  return one(s, UNREAD, thread, read, JSON.stringify(selves)).c;
+function unreadOf(s: Store, thread: number, read: number, selves: string[], mode: "count" | "exists" = "count"): number {
+  return one(s, mode === "exists" ? HAS_UNREAD : UNREAD, thread, read, JSON.stringify(selves)).c;
 }
 
 /// A chat's messages after where a viewer read (`?2`) but their own (`?3`, a JSON list) and letters, counted from the
 /// index of its messages alone (store/schema.ts entries_said): from the messages themselves, each was a page read.
-export const UNREAD = `SELECT COUNT(*) AS c FROM entries WHERE thread = ?1 AND n > ?2 AND kind = 'message' AND letter IS NULL
+const UNREAD_MESSAGES = `FROM entries WHERE thread = ?1 AND n > ?2 AND kind = 'message' AND letter IS NULL
   AND NOT (author_kind = 'person' AND author IN (SELECT value FROM json_each(?3)))`;
+export const UNREAD = `SELECT COUNT(*) AS c ${UNREAD_MESSAGES}`;
+export const HAS_UNREAD = `SELECT EXISTS (SELECT 1 ${UNREAD_MESSAGES}) AS c`;
 
 /// Everyone who wrote in a thread, as creator references (a Slack user through a connect in it), earliest first.
 export function threadPeople(s: Store, thread: number, surface: string): string[] {
