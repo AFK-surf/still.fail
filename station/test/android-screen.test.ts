@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { parseInput } from "../src/mesh/screens.ts";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -202,4 +203,9 @@ esac
     androids.close();
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("a viewer's rotate gets through the station's checks", () => {
+  assert.deepEqual(parseInput({ t: "device", name: "rotate" }), { t: "device", name: "rotate" });
+  assert.equal(parseInput({ t: "device", name: "turn" }), null);
 });

@@ -120,6 +120,7 @@ test("a_persons_input_is_checked_and_put_in_the_frame", () => {
   assert.deepEqual(checkInput({ t: "pointer", kind: "down", x: 1.5, y: -0.1, buttons: 1, extra: true }), { t: "pointer", kind: "down", x: 1, y: 0, buttons: 1 });
   assert.deepEqual(checkInput({ t: "key", kind: "up", key: "Enter", code: "Enter", mods: 9 }), { t: "key", kind: "up", key: "Enter", code: "Enter", mods: 9 });
   assert.deepEqual(checkInput({ t: "wheel", x: 0.5, y: 0.5, dx: 0, dy: -120 }), { t: "wheel", x: 0.5, y: 0.5, dx: 0, dy: -120 });
+  assert.deepEqual(checkInput({ t: "device", name: "rotate" }), { t: "device", name: "rotate" });
   for (const bad of [null, { t: "pointer", kind: "drag", x: 0, y: 0 }, { t: "pointer", kind: "down", x: Number.NaN, y: 0 }, { t: "key", kind: "down", key: "" }, { t: "text", text: "" }, { t: "paste" }]) {
     assert.throws(() => checkInput(bad), (e: J) => e.code === "invalid_params");
   }
