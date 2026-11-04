@@ -6,7 +6,7 @@ import { usage, usageHistory } from "../src/read/usage.ts";
 import { Store } from "../src/store/store.ts";
 import type { InWorkspace } from "../src/store/rows.ts";
 import { installCompactUsage } from "../src/store/usage-compact.ts";
-import { HISTORY_DAYS, HISTORY_SEED_CALLS, installUsageHistory } from "../src/store/usage-history.ts";
+import { HISTORY_DAYS, installUsageHistory } from "../src/store/usage-history.ts";
 import type { UsageCall, UsageFor } from "../src/store/usage.ts";
 
 const of: UsageFor = { turn: null, person: "p", thread: null, profile: "cc" };
@@ -138,16 +138,16 @@ test("when the home workspace changes, its whole history goes with it, its sessi
 /// A station from before: its database without the history, as it was then.
 function before(store: Store) {
   store.db.exec(`DROP TRIGGER usage_history_add; DROP TRIGGER usage_history_grow; DROP TRIGGER usage_history_move; DROP TRIGGER usage_history_drop;
-    DROP TABLE usage_history; DROP TABLE usage_history_total; DROP TABLE usage_history_since;`);
+    DROP TABLE usage_history; DROP TABLE usage_history_total; DROP TABLE usage_history_since;
+    ALTER TABLE usage DROP COLUMN history_counted;`);
 }
 
-test("installed on an older station, the history takes over the old daily quarters and reads only the calls after them", () => {
+test("installed on an older station, the history counts new calls without reconstructing older statistics", () => {
   for (const state of ["kept", "compact", "stopped"] as const) {
     const store = Store.open(":memory:");
     try {
       before(store);
-      const ws = new Map<string, string | null>([["a", "A"], ["h", null]]);
-      for (const [key, w] of ws) session(store, key, w);
+      for (const [key, w] of [["a", "A"], ["h", null]] as const) session(store, key, w);
       // Calls while the old quarters were kept with them.
       record(store, "a", Array.from({ length: 40 }, (_, i) => call(`old${i}`, i * 3_600_000, 1 + i)));
       record(store, "h", [call("home", 600_000, 7)]);
@@ -165,21 +165,18 @@ test("installed on an older station, the history takes over the old daily quarte
         // An old call's response grows: the compact statistics keep the old quarters with it (not after a stop).
         if (state === "compact") record(store, "a", [call("old0", 0, 1, 9)]);
       }
-      // The calls are read again only from where the old quarters stop, by the index on their time.
-      const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${HISTORY_SEED_CALLS}`).all(0) as { detail: string }[]).map((r) => r.detail).join(" | ");
-      assert.match(plan, /SEARCH u USING INDEX usage_at \(at>\?\)/);
       installUsageHistory(store.db, last + 20_000_000);
       for (const viewer of [null, { workspace: "A", home: false }, { workspace: "A", home: true }]) {
-        assert.deepEqual(days(history(store, 480, viewer)), truth(store, 480, viewer, ws), `${state} ${JSON.stringify(viewer)}`);
+        assert.deepEqual(days(history(store, 480, viewer)), [], `${state} ${JSON.stringify(viewer)}`);
       }
-      assert.equal(history(store, 0, null).since, undefined, `${state}: every call is counted`);
+      assert.equal(history(store, 0, null).since, last + 20_000_000, `${state}: the older history is incomplete`);
       record(store, "a", [call("after", last + 30_000_000, 3)]);
-      assert.deepEqual(days(history(store, 0, null)), truth(store, 0, null, ws));
+      assert.equal(history(store, 0, null).days.reduce((sum, day) => sum + day.tokens, 0), 4);
     } finally { store.close(); }
   }
 });
 
-test("a station whose old quarters never held every call counts from when its statistics did", () => {
+test("a station whose old quarters were incomplete does not reconstruct them", () => {
   const store = Store.open(":memory:");
   try {
     before(store);
@@ -190,7 +187,7 @@ test("a station whose old quarters never held every call counts from when its st
     record(store, "a", [call("new", 7_200_000, 2)]);
     installUsageHistory(store.db, 10_000_000);
     const h = history(store, 0, null);
-    assert.equal(h.since, 3_600_000);
-    assert.deepEqual(days(h), [["1970-01-01", 1, 3]]);
+    assert.equal(h.since, 10_000_000);
+    assert.deepEqual(days(h), []);
   } finally { store.close(); }
 });

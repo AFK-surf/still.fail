@@ -8,13 +8,15 @@ test("installing usage history does not read or reconstruct old calls or quarter
   const store = Store.open(":memory:");
   const db = store.db;
   try {
+    // An older store has no history or marker column yet.
+    db.exec(`DROP TRIGGER usage_history_add; DROP TRIGGER usage_history_grow; DROP TRIGGER usage_history_move; DROP TRIGGER usage_history_drop;
+      DROP TABLE usage_history; DROP TABLE usage_history_total; DROP TABLE usage_history_since;
+      ALTER TABLE usage DROP COLUMN history_counted;`);
     const insert = db.prepare(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output, calls)
       VALUES (?, ?, 'old', 'claude', 2, 0, 0, 0, 3, 1)`);
     db.exec("BEGIN");
     for (let n = 0; n < 5000; n++) insert.run(`old-${n}`, n * 900_000);
-    db.exec(`COMMIT;
-      DROP TRIGGER usage_history_add; DROP TRIGGER usage_history_grow; DROP TRIGGER usage_history_move; DROP TRIGGER usage_history_drop;
-      DROP TABLE usage_history; DROP TABLE usage_history_total; DROP TABLE usage_history_since;`);
+    db.exec("COMMIT");
     installCompactUsage(db, () => 0);
     let calls = 0, quarters = 0;
     db.function("visit_old_call", () => { calls++; return 1; });
