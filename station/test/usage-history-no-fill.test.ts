@@ -1,14 +1,37 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { Effect } from "effect";
+import { makeStore } from "../src/read/store.ts";
+import { usageHistory } from "../src/read/usage.ts";
 import { installCompactUsage } from "../src/store/usage-compact.ts";
 import { installUsageHistory, usageHistorySince } from "../src/store/usage-history.ts";
 import { Store } from "../src/store/store.ts";
+import { retireAfterPrevious } from "../src/usage/module.ts";
 
 function beforeHistory(store: Store): void {
   store.db.exec(`DROP TRIGGER usage_history_add; DROP TRIGGER usage_history_grow; DROP TRIGGER usage_history_move; DROP TRIGGER usage_history_drop;
     DROP TABLE usage_history; DROP TABLE usage_history_total; DROP TABLE usage_history_since;
     ALTER TABLE usage DROP COLUMN history_counted;`);
 }
+
+test("handover preserves the old quarterly and compact summaries in the usage history", async () => {
+  const store = Store.open(":memory:");
+  const db = store.db;
+  try {
+    beforeHistory(store);
+    const put = db.prepare(`INSERT INTO usage (id, at, session, runtime, input, cache_read, cache_write, cache_write_long, output, calls)
+      VALUES (?, ?, 'old', 'claude', ?, 0, 0, 0, 1, 1)`);
+    put.run("old-quarter", 1, 2);
+    installCompactUsage(db, () => 900_000);
+    put.run("old-compact", 86_400_000, 4);
+    await Effect.runPromise(retireAfterPrevious(store, Promise.resolve()));
+    const read = () => usageHistory(makeStore(db, "."), 0n, null)!.days.map((day: { day: string; calls: number; tokens: number }) =>
+      [day.day, day.calls, day.tokens]);
+    assert.deepEqual(read(), [["1970-01-01", 1, 3], ["1970-01-02", 1, 5]]);
+    put.run("after-handover", 86_400_001, 6);
+    assert.deepEqual(read(), [["1970-01-01", 1, 3], ["1970-01-02", 2, 12]]);
+  } finally { store.close(); }
+});
 
 test("installing usage history does not read or reconstruct old calls or quarters", () => {
   const store = Store.open(":memory:");
