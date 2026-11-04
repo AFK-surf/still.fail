@@ -1638,7 +1638,7 @@ export const SHAPES: Record<string, Shape> = {
     ["state", "String", { doc: "`finding` (dialling the person's trusted devices), `code` (one shows a code: type it), `checking`,\n`wrong` (that code was not it), `none` (no trusted device answered), `failed` (`error`), `done`." }],
     ["devices", "u32", { doc: "How many trusted devices show a code now." }],
     ["left", opt("u32"), { doc: "Tries left, after a wrong code." }],
-    ["error", opt("String"), { said: true }],
+    ["error", opt("String"), { said: true, doc: "Why it `failed`; `wrong`, what to say of it (that code not it, or the device showing it gone)." }],
     ["until", opt("i64"), { client: opt("I54"), doc: "While a code is typed: when the last trusted device's code is too old (ms)." }],
     ["untilText", opt("String"), { said: true, doc: "That, in words (14:05 前有效)." }],
   ], { doc: "This device's try to be approved face to face (views/pair.ts)." }),

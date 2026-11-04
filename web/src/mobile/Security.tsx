@@ -295,7 +295,7 @@ function PairSteps({ lock }: { lock: LockView }) {
     <CodeEntry value={code} onChange={setCode} onDone={prove} wrong={pair.state === "wrong" && code === ""} disabled={checking || pair.state === "checking"} label={t("web-pages.security.pairEnter")} />
     {checking || pair.state === "checking" ? <span className={css.mNote}><Spinner inline />{t("web-pages.security.pairChecking")}</span>
       : <>
-        {pair.state === "wrong" && <span className={css.mFailed}>{t("web-pages.security.pairWrong", { n: pair.left ?? 0 })}</span>}
+        {pair.state === "wrong" && <span className={css.mFailed}>{pair.error ?? t("web-pages.security.pairWrong", { n: pair.left ?? 0 })}</span>}
         {/* how long the code holds, and a new one asked for at any time (2026-10-30) */}
         {pair.untilText && <span className={css.mNote}>{pair.untilText}</span>}
         <Button primary={false} label={t("web-pages.security.pairAgain")} onClick={() => { setCode(""); void run("lock.pair", { workspace: ws }, t("web-pages.security.pairAgain")); }} />

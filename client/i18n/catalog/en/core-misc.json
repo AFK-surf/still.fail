@@ -228,6 +228,7 @@
   "core-misc.lock.otherLock": "{name} keeps a different security mode record from this workspace's and won't accept new approvals: run stillfail lock reset on that computer, then protect it again in Settings › Security",
   "core-misc.lock.pairBadCode": "The security code is 6 digits",
   "core-misc.lock.pairWrong": "That security code isn't right; {n} tries left",
+  "core-misc.lock.pairWrongOrGone": "That security code isn't right, or the device showing it disconnected; {n} tries left",
   "core-misc.lock.pairTries": "Too many wrong security codes; request approval again",
   "core-misc.lock.pairDenied": "The device showing the code denied this request; request approval again",
   "core-misc.lock.pairLate": "The security code expired; request approval again",

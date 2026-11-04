@@ -15,7 +15,7 @@ import { t } from "../src/i18n.ts";
 import { PAIR_TRIES } from "../src/pair.ts";
 import { pairs } from "../src/views/lock.ts";
 import { type Duplex, keep, PAIR_GRACE_MS, PAIR_WAIT_MS, serveTrusted, trying } from "../src/views/pair.ts";
-import { ME, PHONE, genesis, grant, rig } from "./lock-rig.ts";
+import { ME, PHONE, genesis, grant, pipe, rig } from "./lock-rig.ts";
 
 /// A seeded random (mulberry32): the same seed, the same draws.
 function rng(seed: number) {
@@ -46,7 +46,7 @@ function draw(seed: number) {
 
 /// Two ends of a connection on the core's clock: the n-th message (both ways counted) arrives `delays[n]` ms after it is
 /// sent, each way in order; after `cutAfter` messages the connection is cut (each end hears its end, sending fails).
-function line(fork: (e: Effect.Effect<void>) => void, delays: number[], cutAfter: number | null): { ends: [Duplex, Duplex]; cut: () => boolean } {
+function line(fork: (e: Effect.Effect<void>) => void, delays: number[], cutAfter: number | null): { ends: [Duplex, Duplex]; cut: () => boolean; cutNow: () => void } {
   const a = Effect.runSync(Queue.unbounded<unknown>());
   const b = Effect.runSync(Queue.unbounded<unknown>());
   let sent = 0;
@@ -79,7 +79,7 @@ function line(fork: (e: Effect.Effect<void>) => void, delays: number[], cutAfter
     next: () => Queue.take(mine) as Effect.Effect<any>,
     close: () => void Queue.offerUnsafe(theirs, null),
   });
-  return { ends: [end(a, b), end(b, a)], cut: () => cut };
+  return { ends: [end(a, b), end(b, a)], cut: () => cut, cutNow };
 }
 
 const TEXTS = {
@@ -174,6 +174,41 @@ async function once(seed: number): Promise<string[]> {
   assert.deepEqual(shown, [], `a prompt stays on the trusted device; ${why}`);
   return said;
 }
+
+test("two trusted devices show a code, the line to the one whose code is typed goes: not said to be the wrong code alone", async () => {
+  const g = grant();
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, ME) }));
+  await r.watch({ topic: "lock", workspace: "ws" });
+  const prompts = await r.watch({ topic: "lockPrompts" });
+  const inner = r.core.inner;
+  // This core is the trusted device A, its line cut once its code is read off it.
+  const { ends: [trusted, phone], cutNow } = line((e) => void inner.runner.fork(e), [0], null);
+  inner.runner.fork(Effect.ignore(serveTrusted(inner, PHONE, ME, trusted)));
+  const answer: unknown[] = [];
+  inner.runner.fork(Effect.ignore(Effect.andThen(phone.send({ t: "hello", v: 1, workspaces: [{ ws: "ws", credential: g.credential("ws", PHONE, "s2") }], kind: "app", label: "Pixel 8", sign_key: "ed25519:" + "11".repeat(32) }), Effect.map(phone.next(), (m) => answer.push(m)))));
+  for (let i = 0; i < 100 && answer.length === 0; i++) await r.host.time.pass(100);
+  const code = (await prompts()).pairing[0].code as string;
+  const y = trying(inner, ["ws"]);
+  keep(inner, y, ME, phone, ["ws"]);
+  // Another trusted device B, showing a code of its own: any code typed is not its.
+  const [bTheirs, bHere] = await pipe();
+  keep(inner, y, "bb".repeat(32), bHere, ["ws"]);
+  inner.runner.fork(Effect.ignore(Effect.gen(function* () {
+    yield* bTheirs.next();
+    yield* bTheirs.send({ t: "pake", y: "00".repeat(32), mac: "00".repeat(32) });
+    yield* bTheirs.next();
+    yield* bTheirs.send({ t: "wrong", left: PAIR_TRIES - 1 });
+  })));
+  // A's line goes, B still showing its code.
+  cutNow();
+  await r.host.time.pass(100);
+  assert.deepEqual([pairs.mine(inner, "ws")?.state, pairs.mine(inner, "ws")?.devices], ["code", 1]);
+  inner.mesh = () => Effect.succeed({ deviceId: () => PHONE } as never);
+  const said = await r.ask("lock.pairCode", { workspace: "ws", code }).then(() => null, (e) => e as { code: string; message: string });
+  const words = t("core-misc.lock.pairWrongOrGone", { n: PAIR_TRIES - 1 });
+  assert.deepEqual([said?.code, said?.message], ["pair_wrong", words]);
+  assert.deepEqual([pairs.mine(inner, "ws")?.state, pairs.mine(inner, "ws")?.error], ["wrong", words], "and its page says it");
+});
 
 const RUNS = Number(process.env.PAIR_FAULT_RUNS ?? 40);
 const seeds = process.env.PAIR_FAULT_SEED ? [Number(process.env.PAIR_FAULT_SEED)] : Array.from({ length: RUNS }, (_, i) => i + 1);

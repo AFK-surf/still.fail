@@ -228,6 +228,7 @@
   "core-misc.lock.otherLock": "{name} 保存的安全模式记录和此 workspace 的不一致，不会接受新的批准：在那台电脑上运行 stillfail lock reset，再在「设置 › 安全」中重新保护它",
   "core-misc.lock.pairBadCode": "安全码是 6 位数字",
   "core-misc.lock.pairWrong": "安全码不对，还可以试 {n} 次",
+  "core-misc.lock.pairWrongOrGone": "安全码不对，或显示它的设备已断开，还可以试 {n} 次",
   "core-misc.lock.pairTries": "安全码错误次数过多，请重新发送批准请求",
   "core-misc.lock.pairDenied": "显示安全码的设备已拒绝此请求，请重新发送批准请求",
   "core-misc.lock.pairLate": "安全码已过期，请重新发送批准请求",

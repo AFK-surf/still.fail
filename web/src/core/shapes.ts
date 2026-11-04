@@ -4852,6 +4852,7 @@ export interface LockPair {
 	devices: number;
 	/** Tries left, after a wrong code. */
 	left?: number;
+	/** Why it `failed`; `wrong`, what to say of it (that code not it, or the device showing it gone). */
 	error?: string;
 	/** While a code is typed: when the last trusted device's code is too old (ms). */
 	until?: number;

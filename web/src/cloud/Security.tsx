@@ -379,7 +379,7 @@ function PairSteps({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
     <CodeEntry value={code} onChange={setCode} onDone={prove} wrong={pair.state === "wrong" && code === ""} disabled={checking || pair.state === "checking"} label={t("web-pages.security.pairEnter")} />
     {checking || pair.state === "checking" ? <div className={css.waitingNote}><Spinner inline />{t("web-pages.security.pairChecking")}</div>
       : <>
-        {pair.state === "wrong" && <div className={css.waitingFailed}>{t("web-pages.security.pairWrong", { n: pair.left ?? 0 })}</div>}
+        {pair.state === "wrong" && <div className={css.waitingFailed}>{pair.error ?? t("web-pages.security.pairWrong", { n: pair.left ?? 0 })}</div>}
         {/* how long the code holds, and a new one asked for at any time (2026-10-30) */}
         {pair.untilText && <div className={css.waitingNote}>{pair.untilText}</div>}
         <div className={css.actions}><Button variant="ghost" onClick={() => { setCode(""); ask(t("web-pages.security.pairAgain")); }}>{t("web-pages.security.pairAgain")}</Button></div>
