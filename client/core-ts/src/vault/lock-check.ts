@@ -20,8 +20,9 @@ import { ed25519Ok, p256Ok } from "./verified.ts";
 export type Device = { id: string; sub: string; kind: "app" | "web"; sign_key?: string; exp?: number; by?: string; own: boolean };
 /// `cloudKeys`: the keys the cloud signs member credentials with, as the lock names them (a JWKS). `passkeys`: whose
 /// each is, by its key, and whether their own. `signed`: the members who have had an own device that signs or an own
-/// passkey since they were last made members.
-export type Checked = { ws: string; head: string; genesis: string; members: Map<string, string>; devices: Map<string, Device>; passkeys: Map<string, { sub: string; own: boolean }>; signed: Set<string>; origins: string[]; rp_id: string; disabled: boolean; cloudKeys: unknown };
+/// passkey since they were last made members. `signKeys`: the signing keys each device has had in it (a vault's keys may
+/// be sealed under a certificate an earlier one signed).
+export type Checked = { ws: string; head: string; genesis: string; members: Map<string, string>; devices: Map<string, Device>; passkeys: Map<string, { sub: string; own: boolean }>; signed: Set<string>; signKeys: Map<string, string[]>; origins: string[]; rp_id: string; disabled: boolean; cloudKeys: unknown };
 
 const unhex = (h: string) => Uint8Array.from(h.match(/../g) ?? [], (b) => parseInt(b, 16));
 function refuse(why: string): never {
@@ -102,7 +103,7 @@ export function checkLock(entries: Entry[], now: number): Checked {
       id: d.id, sub: d.sub, kind: d.kind, ...(d.sign_key !== undefined ? { sign_key: d.sign_key } : {}), ...(d.exp !== undefined ? { exp: d.exp } : {}), ...(d.by !== undefined ? { by: d.by } : {}), own: d.own,
     }])),
     passkeys: new Map(t.passkeys.map(([key, p]: [string, { sub: string; own: boolean }]) => [key, { sub: p.sub, own: p.own }])),
-    signed: new Set(t.signed),
+    signed: new Set(t.signed), signKeys: new Map(t.signKeys),
   };
   held.set(s, out.rules);
   return s;
