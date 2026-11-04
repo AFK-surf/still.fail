@@ -45,7 +45,7 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
           }))
         }))
         |> ignore
-        let list = @sfpages.chat_list_node(l, src, r, view, entries, fn() { list_top() }, fn() { 0.0 }, settings_core(src, w), foot_gap=list_foot())
+        let list = @sfpages.chat_list_node(l, src, r, view, entries, fn() { list_top() }, fn() { 0.0 }, settings_core(src, w), foot_gap=list_foot(), active=fn() { app.nav.top_stay().0 == entry })
         latest.val = list.to_latest
         landing.val = list.landing_of
       })

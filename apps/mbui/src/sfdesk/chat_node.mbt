@@ -128,7 +128,7 @@ fn chat_talk_node(
     body.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
     let list = body.box(fn(l) {
       l.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
-      let list = @sfpages.chat_list_node(l, src, r, view, entries, fn() { bar_room() + list_head_gap }, fn() { 0.0 }, settings_core(src, w), foot_gap=list_foot_gap)
+      let list = @sfpages.chat_list_node(l, src, r, view, entries, fn() { bar_room() + list_head_gap }, fn() { 0.0 }, settings_core(src, w), foot_gap=list_foot_gap, active=fn() { app.nav.drawn_stay().0 == k })
       latest.val = list.to_latest
       landing.val = list.landing_of
     })

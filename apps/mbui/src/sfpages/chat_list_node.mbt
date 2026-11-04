@@ -20,6 +20,7 @@ pub fn chat_list_node(
   core : Core,
   foot_gap? : Double = 0.0,
   follows? : @signals.Signal[Bool] = @signals.signal(true, same=fn(a, b) { a == b }),
+  active? : () -> Bool = fn() { true },
 ) -> ChatListNode {
   let rk = r.station + "\u{1}" + r.session
   let scroll = @view.Scroll::list()
@@ -768,10 +769,12 @@ pub fn chat_list_node(
       (seq, row_rects.get(k), e is Some(State(_, _, _)))
     })
     (v.laid_window_told(), top(), clear_foot(), in_sight, scroll.glides_till_told(), follows.get(),
-      view().map(fn(cv) { cv.newer }), (sized.opening)(), v.shown_nowhere())
+      view().map(fn(cv) { cv.newer }), (sized.opening)(), v.shown_nowhere(), active())
   }, fn(now) {
-    let (rect, bar, foot, in_sight, moving, at_end, _, opening, hidden) = now
-    guard !hidden && rect is Some((_, list_y, _, list_h)) else { return }
+    let (rect, bar, foot, in_sight, moving, at_end, _, opening, hidden, active) = now
+    // The outgoing page can still be drawn while its composer is removed. Its newly enlarged list is not a place
+    // the reader chose; preserve the last observation of the active page for reopening it.
+    guard active && !hidden && rect is Some((_, list_y, _, list_h)) else { return }
     guard @signals.untracked(view) is Some(cv) else { return }
     let rd = rd0
     let room_top = list_y + bar
