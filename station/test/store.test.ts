@@ -21,6 +21,7 @@ import { RUNNING_WAIT_JOBS } from "../src/store/active-jobs.ts";
 import { HAS_SESSION_ACTIVE_WATCH } from "../src/store/watch-jobs.ts";
 import * as read from "../src/read/store.ts";
 import { HISTORY_AFTER, HISTORY_DAYS, HISTORY_SCOPES, HISTORY_TOTAL } from "../src/store/usage-history.ts";
+import { historyOwnerSources } from "../src/store/usage-history-transfer.ts";
 import { type CardEnd, cardsEnded } from "../src/connects/card-ends.ts";
 import { fileAway } from "./archived-before.ts";
 import { testClock } from "./hub-fakes.ts";
@@ -1290,6 +1291,10 @@ test("what the station asks again and again is planned by an index, never a scan
   const detail = detailQuery(1n, 1_000_001n, 1n, { workspace: "ws", home: false })!;
   const compact = memory();
   installCompactUsage(compact.db, () => 0);
+  for (const db of [store.db, compact.db]) for (const sql of historyOwnerSources(db)) {
+    const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all("a") as { detail: string }[]).map((r) => r.detail);
+    assert.ok(plan.some((d) => d.startsWith("SEARCH ")) && plan.every((d) => !d.startsWith("SCAN ")), `${sql}\n  ${plan.join(" | ")}`);
+  }
   const usageBatch = read.batchedUsageQueries({ workspace: "ws", home: false });
   const usagePlans = [
     [usageBatch.selected, [0n, 100n, "Wws"]], [usageBatch.owner, ["a"]],

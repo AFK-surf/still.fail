@@ -22,26 +22,48 @@ const contribute = (r: string, period: string, calls: string, tokens: string, co
 const qAdd = (r: string, sign: string) => contribute(r, `${r}.quarter`, `${sign}${r}.calls`, `${sign}${r}.tokens`, qDone(r));
 const cAdd = (r: string, sign: string) => contribute(r, compactQuarter(r), `${sign}${r}.calls`, `${sign}${compactTokens(r)}`, cDone(r));
 
-/// Called inside installation's write transaction, after compact usage has taken over the old writers.
-export function installHistoryTransfer(db: DatabaseSync): void {
-  db.exec(`
-    CREATE TABLE usage_history_transfer (id INTEGER PRIMARY KEY CHECK (id = 1), phase INTEGER NOT NULL,
-      q_session TEXT, q_quarter INTEGER, q_runtime TEXT, q_model TEXT,
-      c_session TEXT, c_minute INTEGER, c_thread INTEGER, c_person TEXT, c_profile TEXT, c_runtime TEXT, c_model TEXT, c_fast INTEGER);
-    INSERT INTO usage_history_transfer (id, phase) VALUES (1, 0);
-    -- A deleted session keeps its owner. Groups let a workspace move all its deleted sessions without rewriting them.
+const ownerSources = ["usage_minute_scope", "usage_day_quarters", "usage_compact"];
+export function historyOwnerSources(db: DatabaseSync): string[] {
+  const has = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?");
+  return ["SELECT 1 FROM usage INDEXED BY usage_session WHERE session = ?1 LIMIT 1",
+    ...ownerSources.filter((name) => has.get(name) !== undefined).map((name) => `SELECT 1 FROM ${name} WHERE session = ?1 LIMIT 1`)];
+}
+
+/// Remember a deleted session's workspace, including while old summaries have not been installed yet. Each source is
+/// sought by session and stops at its first row. Refresh the trigger when a new source becomes available.
+export function installHistoryOwners(db: DatabaseSync, fresh: boolean): void {
+  const has = (name: string) => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name) !== undefined;
+  if (!has("usage_history_orphans")) db.exec(`
     CREATE TABLE usage_history_owner_groups (id INTEGER PRIMARY KEY, parent INTEGER, rank INTEGER NOT NULL DEFAULT 0, scope TEXT NOT NULL);
     CREATE TABLE usage_history_owner_scopes (scope TEXT PRIMARY KEY, group_id INTEGER NOT NULL) WITHOUT ROWID;
     CREATE TABLE usage_history_orphans (session TEXT PRIMARY KEY, group_id INTEGER NOT NULL) WITHOUT ROWID;
+    ${fresh ? "CREATE TABLE usage_history_fresh_owners (id INTEGER PRIMARY KEY);" : ""}
+  `);
+  const sources = historyOwnerSources(db);
+  const available = ownerSources.filter(has);
+  const existing = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'usage_history_owner'").get() as
+    { sql: string } | undefined;
+  if (existing && ownerSources.every((name) => existing.sql.includes(`FROM ${name} `) === available.includes(name))
+    && existing.sql.includes("FROM usage INDEXED BY usage_session")) return;
+  db.exec(`DROP TRIGGER IF EXISTS usage_history_owner;
     CREATE TRIGGER usage_history_owner BEFORE DELETE ON sessions
-      WHEN EXISTS (SELECT 1 FROM usage_day_quarters WHERE session = OLD.key LIMIT 1)
-        OR EXISTS (SELECT 1 FROM usage_compact WHERE session = OLD.key LIMIT 1) BEGIN
+      WHEN ${sources.map((source) => `EXISTS (${source.replace("?1", "OLD.key")})`).join(" OR ")} BEGIN
       INSERT INTO usage_history_owner_groups (scope) SELECT COALESCE(OLD.ws, '')
         WHERE NOT EXISTS (SELECT 1 FROM usage_history_owner_scopes WHERE scope = COALESCE(OLD.ws, ''));
       INSERT OR IGNORE INTO usage_history_owner_scopes VALUES (COALESCE(OLD.ws, ''), last_insert_rowid());
       INSERT INTO usage_history_orphans SELECT OLD.key, group_id FROM usage_history_owner_scopes WHERE scope = COALESCE(OLD.ws, '')
         ON CONFLICT (session) DO UPDATE SET group_id = excluded.group_id;
-    END;
+    END;`);
+}
+
+/// Called inside installation's write transaction, after compact usage has taken over the old writers.
+export function installHistoryTransfer(db: DatabaseSync): void {
+  installHistoryOwners(db, false);
+  db.exec(`DROP TABLE IF EXISTS usage_history_fresh_owners;
+    CREATE TABLE usage_history_transfer (id INTEGER PRIMARY KEY CHECK (id = 1), phase INTEGER NOT NULL,
+      q_session TEXT, q_quarter INTEGER, q_runtime TEXT, q_model TEXT,
+      c_session TEXT, c_minute INTEGER, c_thread INTEGER, c_person TEXT, c_profile TEXT, c_runtime TEXT, c_model TEXT, c_fast INTEGER);
+    INSERT INTO usage_history_transfer (id, phase) VALUES (1, 0);
     CREATE TRIGGER usage_history_transfer_q_add AFTER INSERT ON usage_day_quarters BEGIN ${qAdd("NEW", "")} END;
     CREATE TRIGGER usage_history_transfer_q_change AFTER UPDATE OF session, quarter, runtime, model, calls, tokens ON usage_day_quarters BEGIN
       ${qAdd("OLD", "-")} ${qAdd("NEW", "")}

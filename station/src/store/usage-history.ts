@@ -6,7 +6,7 @@
 // An older station takes over its existing quarterly and compact summaries in bounded batches, without reading the
 // raw call history. New stations count directly from their first call.
 import type { DatabaseSync } from "node:sqlite";
-import { historyTransferPending, historyTransferStep, installHistoryTransfer, moveHistoryOrphanScope, transferScope } from "./usage-history-transfer.ts";
+import { historyTransferPending, historyTransferStep, installHistoryOwners, installHistoryTransfer, moveHistoryOrphanScope, transferScope } from "./usage-history-transfer.ts";
 
 /// A quarter hour (15 minutes) as a number: the ms since the epoch over 900 000, rounded down.
 const QUARTER_MS = 900_000;
@@ -36,8 +36,8 @@ END;`;
 
 /// An incomplete old daily summary cannot tell which old calls it holds. Keep that summary as it was, and update it
 /// only for calls represented by the complete old quarters or by compact usage. New calls enter compact usage.
-const liveSchema = (transferred: boolean) => {
-  const scope = transferred ? transferScope : scopeOf;
+const liveSchema = (transferred: boolean, owners = transferred) => {
+  const scope = owners ? transferScope : scopeOf;
   const kept = (r: string) => transferred ? `(${r}.compact_counted = 1 OR (SELECT old_days FROM usage_compact_since WHERE id = 1) = 1)` : "1";
   const change = (r: string, sign: string) => `INSERT INTO usage_history (scope, quarter, calls, tokens)
     SELECT ${scope(r)}, ${quarterOf(r)}, ${sign}${r}.calls, ${sign}${tokensOf(r)} WHERE ${kept(r)}
@@ -76,6 +76,17 @@ export function installEmptyUsageHistory(db: DatabaseSync): void {
   if (!hasUsageHistory(db) && !hasHistorySource(db)) installUsageHistory(db, 0);
 }
 
+/// Install ownership within the first deletion's transaction, even if history is still awaiting installation.
+export function ensureHistoryOwners(db: DatabaseSync): void {
+  const installed = has(db, "usage_history_orphans");
+  const history = hasUsageHistory(db);
+  installHistoryOwners(db, history);
+  if (installed || !history) return;
+  db.exec(`DROP TRIGGER IF EXISTS usage_history_add; DROP TRIGGER IF EXISTS usage_history_grow;
+    DROP TRIGGER IF EXISTS usage_history_move; DROP TRIGGER IF EXISTS usage_history_drop;`);
+  db.exec(liveSchema(false, true));
+}
+
 /// Installs empty tables and the bounded transfer. It does not scan old calls or summaries under the installation lock.
 export function installUsageHistory(db: DatabaseSync, now: number): void {
   if (hasUsageHistory(db)) return;
@@ -88,7 +99,7 @@ export function installUsageHistory(db: DatabaseSync, now: number): void {
     if (!empty && compact === undefined) throw new Error("compact usage statistics are not installed");
     db.exec(SCHEMA);
     db.prepare("INSERT INTO usage_history_since VALUES (1, ?)").run(empty || compact?.old_days === 1 ? null : compact?.since ?? now);
-    if (empty) db.exec(liveSchema(false));
+    if (empty) db.exec(liveSchema(false, has(db, "usage_history_orphans")));
     else installHistoryTransfer(db);
     db.exec("COMMIT");
   } catch (error) { db.exec("ROLLBACK"); throw error; }
@@ -104,8 +115,9 @@ export { historyTransferPending };
 /// The calls of workspace `from` ('' the home one) are `to`'s from now on: when the station's home workspace changes,
 /// all its sessions go together (store.ts setSessionsWs), and so do their quarters. In the caller's write.
 export function moveUsageHistory(db: DatabaseSync, from: string, to: string): void {
-  if (from === to || !hasUsageHistory(db)) return;
+  if (from === to) return;
   if (has(db, "usage_history_orphans")) moveHistoryOrphanScope(db, from, to);
+  if (!hasUsageHistory(db)) return;
   db.prepare(`INSERT INTO usage_history (scope, quarter, calls, tokens) SELECT ?2, quarter, calls, tokens FROM usage_history WHERE scope = ?1
     ON CONFLICT (scope, quarter) DO UPDATE SET calls = calls + excluded.calls, tokens = tokens + excluded.tokens`).run(from, to);
   db.prepare("DELETE FROM usage_history WHERE scope = ?").run(from);
