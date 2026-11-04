@@ -266,8 +266,10 @@ pub fn chat_list_node(
       // (the bar over its top: what comes taller than what shows is read from its top under it)
       cover=top,
       room=sized.room,
+      moving=sized.moving,
       // The flying copy needs its real landing before the glide brings the row into sight.
       kept=fn(k) { @sfbase.flight_takes(draft, k) },
+      kept_keys=fn() { @sfbase.flight_of(draft).map(fn(f) { [f.key] }).unwrap_or([]) },
       fresh=fn(k) {
         match row_of(k) {
           Some((Said(m), _)) => m.said
