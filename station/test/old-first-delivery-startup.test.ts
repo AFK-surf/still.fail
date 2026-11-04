@@ -25,6 +25,8 @@ test("installing first deliveries seeks each session's threads without reading t
       get(target, property) {
         if (property === "exec") return (sql: string) => target.exec(sql
           .replace("FROM deliveries GROUP BY session", "FROM deliveries WHERE visit_first_delivery() GROUP BY session")
+          .replaceAll("SELECT 1 FROM deliveries INDEXED BY deliveries_session WHERE session = s.session LIMIT 65", "SELECT 1 FROM deliveries INDEXED BY deliveries_session WHERE session = s.session AND visit_first_delivery() LIMIT 65")
+          .replaceAll("WHERE session = s.session)\n  ELSE", "WHERE session = s.session AND visit_first_delivery())\n  ELSE")
           .replaceAll("AND thread = first_threads.thread ORDER BY rowid LIMIT 1", "AND thread = first_threads.thread AND visit_first_delivery() ORDER BY rowid LIMIT 1"));
         const value = Reflect.get(target, property, target);
         return typeof value === "function" ? value.bind(target) : value;
@@ -32,7 +34,7 @@ test("installing first deliveries seeks each session's threads without reading t
     });
     schema.addListState(traced);
     assert.deepEqual(db.prepare("SELECT session, thread, n FROM session_first ORDER BY session").all(), expected);
-    assert.ok(visited <= 12, `installing first deliveries examined ${visited} historical rows`);
+    assert.ok(visited <= 150, `installing first deliveries examined ${visited} historical rows`);
     const seed = (schema as any).SESSION_FIRST_INITIAL as string;
     const plan = db.prepare(`EXPLAIN QUERY PLAN ${seed}`).all().map((r: any) => r.detail).join("\n");
     assert.match(plan, /SEARCH deliveries USING COVERING INDEX deliveries_session \(session=\? AND thread=\?\)/);
