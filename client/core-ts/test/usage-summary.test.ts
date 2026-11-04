@@ -75,8 +75,9 @@ test("what each day and week says under the pointer: its date and tokens; a day 
 });
 
 test("a station from before tells no history: left out and said; none at all: no summary", () => {
-  const s = usageSummary([source("studio", history([day("2026-10-02", 1)])), source("old", undefined)], NOW, 480, "")!;
+  const s = usageSummary([source("studio", history([day("2026-10-02", 1)], { cards: 10, picked: 5 })), source("old", undefined)], NOW, 480, "")!;
   assert.ok(s.partial !== null);
+  assert.equal(s.figures[3].value, "—", "a missing station's decisions cannot be treated as zero");
   assert.equal(usageSummary([source("old", undefined)], NOW, 480, ""), null);
   const v = { ...usageView([source("studio", history([day("2026-10-02", 1)]))], 7, NOW, 480, { id: "a@x", email: "a@x" }, []), summary: s };
   assert.ok("ok" in conform("UsageView", v));
@@ -96,6 +97,32 @@ test("an incomplete station contributes the records it has and marks missing day
   assert.doesNotMatch(s.activity.runningTips.at(-2), /没有用 token/);
   const empty: Source = { ...partial, value: { ok: { ...station(undefined), historyUnavailable: true, partialHistory: history([]) } } };
   assert.doesNotMatch(usageSummary([empty], NOW, 480, "")!.activity.captions[0], /没有 token 用量/);
+});
+
+test("missing decisions do not hide complete usage or turn another station's rate into the total", () => {
+  const partial: Source = { address: "ws/partial", name: "partial", online: true,
+    value: { ok: { ...station(undefined), historyUnavailable: true,
+      partialHistory: history([day("2026-10-02", 20)], { cards: undefined, picked: undefined, cardsIncomplete: true, tokensComplete: true, archived: 2 }) } } };
+  const complete = source("complete", history([day("2026-10-02", 10)], { cards: 10, picked: 5, archived: 3 }));
+  const s = usageSummary([partial, complete], NOW, 480, "")!;
+  assert.equal(s.figures[0].value, "30");
+  assert.equal(s.figures[0].label, "累计 token");
+  assert.equal(s.figures[1].value, "5");
+  assert.equal(s.figures[3].value, "—", "the combined decision rate is unavailable");
+  assert.equal(s.activity.cells.at(-3), 0, "a fully covered day is not marked unknown");
+  assert.equal(s.partial, "部分旧决策记录不可用，决策点击率未显示");
+});
+
+test("missing decisions and incomplete token history are both said", () => {
+  const partial: Source = { address: "ws/partial", name: "partial", online: true,
+    value: { ok: { ...station(undefined), historyUnavailable: true,
+      partialHistory: history([day("2026-10-02", 20)], { cards: undefined, picked: undefined, cardsIncomplete: true }) } } };
+  const s = usageSummary([partial], NOW, 480, "")!;
+  assert.equal(s.figures[0].label, "已计入 token");
+  assert.equal(s.figures[3].value, "—");
+  assert.equal(s.activity.cells.at(-3), -1);
+  assert.match(s.partial, /统计不完整/);
+  assert.match(s.partial, /旧决策记录不可用/);
 });
 
 test("an empty day after partial recording began is known, while the cutover day remains incomplete", () => {

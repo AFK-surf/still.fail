@@ -1,5 +1,5 @@
 // Counts for the usage history: one contribution per visible chat, rather than a walk over chats and cards each time.
-// Old rows are added in bounded background batches. Triggers include writes from an older station during the fill.
+// Triggers include writes from older stations. Incomplete old statistics are not filled in the background.
 import type { DatabaseSync } from "node:sqlite";
 import type { InWorkspace } from "./rows.ts";
 
@@ -259,8 +259,16 @@ export function installUsageChatStats(db: DatabaseSync): void {
   }
 }
 
+/// A legacy store without historical card outcomes keeps only decisions made after they were installed.
+export function usageCardOutcomesComplete(db: DatabaseSync): boolean {
+  return db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'card_outcomes_incomplete'").get() === undefined;
+}
+
 /// A moved session holds only its old and new workspaces. A home move also affects all home views.
-export function usageChatStatsReady(db: DatabaseSync, viewer: InWorkspace | null): boolean {
+export type UsageChatCoverage = { allowIncompleteCards?: boolean };
+
+export function usageChatStatsReady(db: DatabaseSync, viewer: InWorkspace | null, options: UsageChatCoverage = {}): boolean {
+  if (!options.allowIncompleteCards && !usageCardOutcomesComplete(db)) return false;
   if ((db.prepare("SELECT done FROM usage_chat_progress WHERE id = 1").get() as { done: number } | undefined)?.done !== 1) return false;
   if (viewer === null) return db.prepare("SELECT 1 FROM usage_chat_dirty LIMIT 1").get() === undefined;
   if (db.prepare("SELECT 1 FROM usage_chat_dirty_scope WHERE kind = 2 AND ws = ? LIMIT 1").get(viewer.workspace)) return false;

@@ -455,6 +455,7 @@
   "core-views.usage.summary.as_of": "统计截至 {date}",
   "core-views.usage.summary.partial": "部分 station 尚未提供完整记录，未计入",
   "core-views.usage.summary.incomplete": "部分记录尚不可用，统计不完整",
+  "core-views.usage.summary.decisions_unavailable": "部分旧决策记录不可用，决策点击率未显示",
   "core-views.usage.summary.unknown": "暂无可用记录",
   "core-views.usage.summary.no_year_incomplete": "暂无可用的近 12 个月用量",
   "core-views.usage.unknown_account": "未知账号",

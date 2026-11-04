@@ -966,16 +966,6 @@ CREATE TABLE card_outcomes (
   said INTEGER NOT NULL,
   PRIMARY KEY (thread, n)
 ) WITHOUT ROWID;
-INSERT INTO card_outcomes
-  SELECT c.thread, c.n, c.author, c.labels, c.next IS NOT NULL,
-    c.next IS NOT NULL AND ${saidLabel("c.labels", "(SELECT p.text FROM entries p WHERE p.thread = c.thread AND p.n = c.next)")}
-  FROM (
-    SELECT thread, n, author, author_kind, CASE WHEN author_kind = 'agent' THEN ${cardLabels(cardOptions("card", "options"))} END AS labels,
-      CASE WHEN author_kind = 'agent' THEN ${cardOptions("card", "options")} END IS NOT NULL AS asked,
-      MIN(CASE WHEN author_kind = 'person' THEN n END) OVER (PARTITION BY thread ORDER BY n DESC ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS next
-    FROM entries WHERE kind = 'message'
-  ) c
-  WHERE c.asked;
 CREATE TRIGGER card_outcomes_asked AFTER INSERT ON entries
   WHEN NEW.kind = 'message' AND NEW.author_kind = 'agent' AND (NEW.card IS NOT NULL OR NEW.options IS NOT NULL) BEGIN
   INSERT OR REPLACE INTO card_outcomes
@@ -988,15 +978,18 @@ CREATE TRIGGER card_outcomes_dropped AFTER DELETE ON entries WHEN OLD.kind = 'me
 END;
 `;
 
-/// The decision cards' outcomes (CARD_OUTCOMES), made once from the messages written before, in the same transaction as
-/// the triggers that keep them from then on (as addUsageQuarters): one pass over a thread's messages, not a look-up a
-/// card.
+/// Install empty decision statistics and their triggers without reconstructing old messages. If messages already
+/// exist, persist the missing coverage so the usage page never mistakes the new-only results for complete history.
 export function addCardOutcomes(db: DatabaseSync): void {
   const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'card_outcomes'").get() !== undefined;
   if (!made()) {
     db.exec("BEGIN IMMEDIATE");
     try {
-      if (!made()) db.exec(CARD_OUTCOMES);
+      if (!made()) {
+        const old = db.prepare("SELECT 1 FROM entries LIMIT 1").get() !== undefined;
+        db.exec(CARD_OUTCOMES);
+        if (old) db.exec("CREATE TABLE IF NOT EXISTS card_outcomes_incomplete (id INTEGER PRIMARY KEY)");
+      }
       db.exec("COMMIT");
     } catch (e) {
       db.exec("ROLLBACK");

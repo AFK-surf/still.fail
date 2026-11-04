@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { type BatchedUsage, type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_MINUTES_PENDING, remoteRunCount, remoteRunsSince, seenBy, sessionThreads, usageByDay, usageChatTotals, usageChatsReady, usageGroups, usageSince, usageThreads } from "./store.ts";
+import { usageCardOutcomesComplete } from "../store/usage-chat-stats.ts";
 import type { UsageSqlTimings } from "./usage-batched.ts";
 import { type InWorkspace, sees } from "../store/rows.ts";
 import { usageDetailSince } from "../store/usage-detail.ts";
@@ -337,12 +338,21 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
       if (!(error instanceof Error) || ![REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_MINUTES_PENDING].includes(error.message)) throw error;
       // Old clients continue to see history as unavailable; newer clients can use the separately named, explicitly
       // incomplete history without treating missing earlier calls as zero.
-      if (error.message === USAGE_MINUTES_PENDING) {
+      const missingCards = error.message === USAGE_CHATS_PENDING && !usageCardOutcomesComplete(s.db);
+      if (error.message === USAGE_MINUTES_PENDING || missingCards) {
         let batchedHistory = options.batchedHistory;
         if (batchedHistory === undefined && options.historyRange === undefined && options.batched !== undefined && summaryCoversHistory(s, from, to, viewer)) {
           batchedHistory = { range: { from, to }, result: options.batched, all: true };
         }
-        try { partialHistory = usageHistory(s, utcOffsetMin, viewer, mark, true, options.historyRange, batchedHistory); }
+        try {
+          if (missingCards) {
+            try { partialHistory = { ...usageHistory(s, utcOffsetMin, viewer, mark, false, options.historyRange, batchedHistory, true), tokensComplete: true }; }
+            catch (cardsError) {
+              if (!(cardsError instanceof Error) || cardsError.message !== USAGE_MINUTES_PENDING) throw cardsError;
+              partialHistory = usageHistory(s, utcOffsetMin, viewer, mark, true, options.historyRange, batchedHistory, true);
+            }
+          } else partialHistory = usageHistory(s, utcOffsetMin, viewer, mark, true, options.historyRange, batchedHistory);
+        }
         catch (partialError) {
           if (!(partialError instanceof Error) || ![REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, USAGE_MINUTES_PENDING].includes(partialError.message)) throw partialError;
           historyPending = partialError.message === USAGE_MINUTES_PENDING && options.historyRange !== undefined && hasCompactUsage(s.db);
@@ -426,8 +436,9 @@ function historyFromSummary(groups: UsageGroup[]): ReturnType<typeof usageByDay>
 }
 
 export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null, mark: (stage: string) => void = () => {}, partial = false,
-  requested?: { from: bigint; to: bigint }, batched?: BatchedHistory): Json {
-  usageChatsReady(s, viewer);
+  requested?: { from: bigint; to: bigint }, batched?: BatchedHistory, allowIncompleteCards = false): Json {
+  const coverage = { allowIncompleteCards };
+  usageChatsReady(s, viewer, coverage);
   mark("historyVisibility");
   const valid = validHistoryRange(requested, utcOffsetMin);
   // Preserve a complete pre-existing history until it has its own bounded source. Incomplete history has only the
@@ -453,7 +464,7 @@ export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace
   }
   mark("historyDays");
   // the chats of each place (still.fail's own, a Slack workspace's, a Feishu one's), and those archived
-  const chats = usageChatTotals(s, viewer);
+  const chats = usageChatTotals(s, viewer, coverage);
   mark("historyPlaces");
   // the tasks the viewer's chats on other stations ran here, as long as they are kept (remote_runs: 90 days)
   const remoteRuns = remoteRunCount(s, viewer);
@@ -465,8 +476,7 @@ export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace
     ...(total !== null && requested !== undefined ? {
       tokens: total.tokens, beforeDay: new Date(Number(requested.to + utcOffsetMin * 60_000n)).toISOString().slice(0, 10),
     } : {}),
-    cards: chats.cards,
-    picked: chats.picked,
+    ...(!usageCardOutcomesComplete(s.db) ? { cardsIncomplete: true } : { cards: chats.cards, picked: chats.picked }),
     places: chats.places,
     archived: chats.archived,
     remoteRuns,

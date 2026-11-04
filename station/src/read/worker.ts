@@ -65,7 +65,7 @@ parentPort!.on("message", async (ask: Ask) => {
         const offset = BigInt(a.tz);
         const coverage = store.db.prepare("SELECT old_days FROM usage_compact_since WHERE id = 1").get() as { old_days: number };
         let chatsReady = true;
-        try { usageChatsReady(store, a.viewer ?? null); }
+        try { usageChatsReady(store, a.viewer ?? null, { allowIncompleteCards: true }); }
         catch (error) { if ((error as Error).message === USAGE_CHATS_PENDING) chatsReady = false; else throw error; }
         if (chatsReady && coverage.old_days === 0 && validHistoryRange(range, offset) &&
           compactTotal(store.db, a.viewer ?? null, range.to / 60_000n) !== null) {
