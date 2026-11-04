@@ -11,7 +11,7 @@ test("installing recent chat writers avoids old message and membership history, 
   try {
     const id = store.openThread("ember", "EMBER", "old", "Old", null).id;
     db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',1)").run(id);
-    db.setAuthorizer((action, name) => action === constants.SQLITE_CREATE_TRIGGER && name === "recent_chat_entry_add"
+    db.setAuthorizer((action, name) => action === constants.SQLITE_CREATE_TRIGGER && name === "recent_chat_entry_before_change"
       ? constants.SQLITE_DENY : constants.SQLITE_OK);
     try { assert.throws(() => installRecentChatIndex(db)); }
     finally { db.setAuthorizer(null); }
@@ -122,6 +122,33 @@ for (const recursive of [false, true]) for (const how of ["append", "replace"] a
     } finally { store.close(); }
   });
 }
+
+for (const recursive of [false, true]) test(`old message inserts keep or restore the selected ordering (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:");
+  const db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    const chat = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
+    const other = store.openThread("ember", "EMBER", "other", "Other", null).id;
+    db.prepare("UPDATE threads SET created_at = 1 WHERE id IN (?, ?)").run(chat, other);
+    const message = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,?,'message','person','p','hello',?)");
+    message.run(chat, 5, 30);
+    message.run(other, 1, 20);
+    installRecentChatIndex(db);
+    while (!stepRecentChatIndex(db, 3).done) { /* Prepare before old messages arrive. */ }
+    const page = readGlobalRecentChatIndex(db, 5);
+    message.run(chat, 1, 10);
+    assert.deepEqual(readGlobalRecentChatIndex(db, 5), page, "an older message does not change the selected one");
+    db.prepare("DELETE FROM entries WHERE thread = ? AND n = 5").run(chat);
+    db.prepare("INSERT OR REPLACE INTO thread_state(thread,last_n,said_n,person_n,letters) VALUES (?,5,5,NULL,0)").run(chat);
+    while (!stepRecentChatIndex(db, 3).done) { /* Prepare the unresolved pointer left by an old writer. */ }
+    assert.deepEqual(readGlobalRecentChatIndex(db, 5), { ids: [other, chat], total: 2 });
+    message.run(chat, 5, 30);
+    assert.equal(readGlobalRecentChatIndex(db, 5), null, "filling the selected number changes the ordering");
+    while (!stepRecentChatIndex(db, 3).done) { /* Account the resolved pointer. */ }
+    assert.deepEqual(readGlobalRecentChatIndex(db, 5), { ids: [chat, other], total: 2 });
+  } finally { store.close(); }
+});
 
 for (const recursive of [false, true]) for (const how of ["number", "timestamp", "timestamp update"] as const) {
   test(`replacing the latest message by ${how} invalidates its ordering (recursive triggers ${recursive})`, () => {

@@ -15,6 +15,11 @@ const replacedSaid = (exceptOld: boolean) => `EXISTS (SELECT 1 FROM thread_state
   JOIN entries e ON e.thread = s.thread AND e.n = s.said_n AND e.kind = 'message'
   WHERE s.thread = NEW.thread AND (e.n = NEW.n OR (NEW.ts IS NOT NULL AND e.ts = NEW.ts))
     ${exceptOld ? "AND (e.thread IS NOT OLD.thread OR e.n IS NOT OLD.n)" : ""})`;
+// An old writer may replace the selected row without firing a DELETE trigger. Also mark when the selected number
+// was absent: inserting it makes the existing thread_state pointer resolve to a message for the first time.
+const insertedSaid = `EXISTS (SELECT 1 FROM thread_state s WHERE s.thread = NEW.thread AND
+  (s.said_n = NEW.n OR (NEW.ts IS NOT NULL AND EXISTS (SELECT 1 FROM entries e WHERE e.thread = s.thread
+    AND e.n = s.said_n AND e.kind = 'message' AND e.ts = NEW.ts))))`;
 
 const SCHEMA = `
 CREATE TABLE recent_chat_rows (thread INTEGER PRIMARY KEY, at INTEGER NOT NULL, said_at INTEGER NOT NULL, created_at INTEGER NOT NULL);
@@ -37,12 +42,9 @@ CREATE TRIGGER recent_chat_state_change AFTER UPDATE OF thread, said_n ON thread
   WHEN OLD.thread IS NOT NEW.thread OR OLD.said_n IS NOT NEW.said_n BEGIN ${dirty("OLD.thread")} ${dirty("NEW.thread")} END;
 CREATE TRIGGER recent_chat_state_drop AFTER DELETE ON thread_state WHEN OLD.said_n IS NOT NULL BEGIN ${dirty("OLD.thread")} END;
 CREATE TRIGGER recent_chat_entry_before_add BEFORE INSERT ON entries
-  WHEN (NEW.kind <> 'message' OR NEW.letter IS NOT NULL) AND ${replacedSaid(false)} BEGIN ${dirty("NEW.thread")} END;
+  WHEN ${insertedSaid} BEGIN ${dirty("NEW.thread")} END;
 CREATE TRIGGER recent_chat_entry_before_change BEFORE UPDATE OF thread, n, ts ON entries
   WHEN ${replacedSaid(true)} BEGIN ${dirty("NEW.thread")} END;
-CREATE TRIGGER recent_chat_entry_add AFTER INSERT ON entries WHEN NEW.kind = 'message' AND
-  (NEW.letter IS NULL OR EXISTS (SELECT 1 FROM thread_state s WHERE s.thread = NEW.thread AND s.said_n = NEW.n))
-  BEGIN ${dirty("NEW.thread")} END;
 CREATE TRIGGER recent_chat_entry_change AFTER UPDATE OF thread, n, kind, at ON entries BEGIN ${dirty("OLD.thread")} ${dirty("NEW.thread")} END;
 CREATE TRIGGER recent_chat_entry_drop AFTER DELETE ON entries BEGIN ${dirty("OLD.thread")} END;
 `;
