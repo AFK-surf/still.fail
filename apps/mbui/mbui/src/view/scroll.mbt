@@ -86,6 +86,9 @@ pub struct Scroll {
   /// (where it is counted to be among all it holds, less that)
   priv mut unbounded : Bool
   priv mut bar_off : () -> Double
+  /// a list that keeps itself: where the hand has it put where it is counted to be, as the hand comes to it again (its
+  /// bounds, its ends' give, a fling's end: all as it is counted)
+  priv mut rebase : () -> Unit
   /// what a virtual list's counted extent is told by, read where how far it can go is followed (none: as it is laid
   /// out alone): View::scrolls_anchored's
   priv mut extent_told : () -> Unit
@@ -157,6 +160,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     for_field: None,
     unbounded: false,
     bar_off: fn() { 0.0 },
+    rebase: fn() { },
     extent_told: fn() { },
     rows: None,
   }
@@ -445,6 +449,7 @@ fn Scroll::stopped(self : Scroll, t : Double) -> Double {
 /// laid out (a list's first place, past what is tucked over its rows; its top again): what it was on by itself stopped
 /// there, no scroll of the hand's (nothing told as scrolled: its bar). Not scrolling in a node yet, there as it comes to.
 pub fn Scroll::put(self : Scroll, to : Double) -> Unit {
+  (self.rebase)()
   match self.host {
     Some(v) if v.alive() => self.stopped(v.tree.logic_at()) |> ignore
     _ => ()
@@ -455,6 +460,7 @@ pub fn Scroll::put(self : Scroll, to : Double) -> Unit {
 ///|
 /// Moved by `d` (down the column) at `t`, as far as it can go: whether it moved.
 fn Scroll::moved(self : Scroll, t : Double, d : Double) -> Bool {
+  (self.rebase)()
   let was = self.stopped(t)
   let to = self.bounded(was + d, 0.0, self.most())
   if to != was { (self.on_hand)(to - was) }
@@ -468,6 +474,7 @@ fn Scroll::moved(self : Scroll, t : Double, d : Double) -> Bool {
 ///|
 /// Brought to `to` at `t`, as far as it can go (a part of it brought into sight).
 fn Scroll::sent(self : Scroll, t : Double, to : Double) -> Unit {
+  (self.rebase)()
   let was = self.stopped(t)
   let to = self.bounded(to, 0.0, self.most())
   self.x.set(to)
@@ -480,6 +487,7 @@ fn Scroll::sent(self : Scroll, t : Double, to : Double) -> Unit {
 /// Let go of at `t` at the hand's speed: flung on (held by `v`, at rest at its end: then where it is, at rest), or at
 /// rest where it is.
 fn Scroll::flung(self : Scroll, v : View, t : Double) -> Unit {
+  (self.rebase)()
   let x0 = self.stopped(t)
   let v0 = self.hand_v
   let speed = v0.abs()
@@ -524,6 +532,7 @@ fn Scroll::flung(self : Scroll, v : View, t : Double) -> Unit {
 /// on from where it is then at the new speed: where it is a function of the time, nothing stepped by frames. Not where
 /// it scrolls in nothing (View::scrolls not said, or let go).
 pub fn Scroll::edge_toward(self : Scroll, speed : Double) -> Unit {
+  (self.rebase)()
   guard self.host is Some(v) else { return }
   @signals.untracked(fn() {
     let t = v.logic_at()
