@@ -214,13 +214,20 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
       })
       // (the menu belongs to the message, not the hover button: it finishes leaving where it hung when that
       // button disappears; beside keeps that last place after its anchor is gone)
-      let popup = @sf.popup_root_node(head)
-      @sf.menu_node(popup, fn() { @sf.menu_is_open(key()) }, fn(_) { anchor.val }, fn() {
-        message_items_of(src, here(), m())
-      }, "", End, 6.0, false, false, fn(item) {
-        close()
-        (item.select)()
-      }, close, exit=true)
+      // (its layer made as the menu first opens, from that cause: nothing made in another layer as the row is made,
+      // which a list makes as it lays its rows out)
+      let made = Ref(false)
+      head.reacts(fn() { @sf.menu_is_open(key()) }, fn(open) {
+        guard open && !made.val else { return }
+        made.val = true
+        let popup = @sf.popup_root_node(head)
+        @sf.menu_node(popup, fn() { @sf.menu_is_open(key()) }, fn(_) { anchor.val }, fn() {
+          message_items_of(src, here(), m())
+        }, "", End, 6.0, false, false, fn(item) {
+          close()
+          (item.select)()
+        }, close, exit=true)
+      })
     }
   })
   |> ignore
@@ -378,7 +385,7 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
             draw: fn(v) { message_files_node(v, src, here, fn() { [a] }, false, at~, by~) },
             image: image_ratio(a).map(fn(r) {
               (r, fn(v : @view.View, w : () -> Double) {
-                ignore(media_file_node(v, src, here, fn() { a }, "image", w, at, @sf.message_file_corner, by, fills=true))
+                ignore(media_file_node(v, src, here, fn() { a }, "image", fn() { Some(w()) }, at, @sf.message_file_corner, by, fills=true))
               })
             }),
           })
