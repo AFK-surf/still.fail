@@ -32,7 +32,17 @@ pub fn spokes_node(parent : @view.View, size : Double, color : () -> Int64, box?
       }
       lines
     }))
-    .turn(By(fn() { v.cycle_resident(8.0 * spoke_step_ms) * 2.0 * pi }), drawn=true)
+    .turn(
+      By(fn() {
+        // (held at its first step while motion is reduced, as spoke_turn's: nothing woken for it)
+        if @ui.reduced_motion() {
+          0.0
+        } else {
+          v.cycle_resident(8.0 * spoke_step_ms) * 2.0 * pi
+        }
+      }),
+      drawn=true,
+    )
     |> ignore
   })
   |> ignore
