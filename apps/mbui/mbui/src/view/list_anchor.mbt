@@ -26,7 +26,16 @@ priv struct AnchoredIn[K] {
   put : (K, Double)?
   put_n : Int
   kept : Array[K]
+  rooms : Same[(K, Double) -> ListRoom]
+  /// of the rows the list ends with (the last `tail`), those new to it that `fresh` says are, and of those whether each
+  /// is read from its top; what covers its top
+  fresh : Array[(K, Bool)]
+  cover : Double
 } derive(Eq)
+
+///|
+/// How many of the rows it ends with are looked at for one come new among them.
+let anchored_tail = 8
 
 ///|
 /// Blocks `keys` names, each made by `make` in a row of its own as it comes in the window or `ahead` past it, laid out
@@ -47,8 +56,10 @@ pub fn[K : Hash + Eq + Show] View::scrolls_anchored(
   follows? : @signals.Signal[Bool] = @signals.signal(true, same=fn(a, b) { a == b }),
   shown? : @signals.Signal[Array[K]],
   put? : @signals.Signal[(K, Double)?],
-  room? : (K, Double) -> ListRoom,
-  moving? : () -> Array[K],
+  rooms? : () -> (K, Double) -> ListRoom,
+  fresh? : (K) -> Bool = fn(_) { false },
+  read_from_top? : (K) -> Bool = fn(_) { true },
+  cover? : () -> Double = fn() { 0.0 },
   kept_keys? : () -> Array[K],
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
   foot_room? : () -> Double = fn() { 0.0 },
@@ -65,11 +76,17 @@ pub fn[K : Hash + Eq + Show] View::scrolls_anchored(
   let mean = fn() { if heights.length() > 0 { known_sum.val / heights.length().to_double() } else { est } }
   let count = Ref(0)
   let laid : Ref[ListLaid[K]?] = Ref(None)
+  // (the rows it ended with as last laid out)
+  let was_tail : Ref[Array[K]] = Ref([])
   let window_h = Ref(0.0)
   // (what each row is known by, whatever node it is made in, by its key: View::row_known_as)
   let row_ids : Map[K, NodeId] = Map([])
   let slots : Map[K, View] = Map([])
   let naturals : Map[K, Double] = Map([])
+  // (each row's room as last laid out, and how often it was: what draws it reads)
+  let rooms_laid : Map[K, ListRoom] = Map([])
+  let laid_n : @signals.Signal[Int] = @signals.signal(0)
+  let natural_room = fn(_k : K, h : Double) { list_room(h) }
   // (the hand scrolling it toward its start: no more at its end, from the hand's cause, before what it brings in is
   // measured)
   s.on_hand = fn(d) {
@@ -98,6 +115,23 @@ pub fn[K : Hash + Eq + Show] View::scrolls_anchored(
             Some(f) => f()
             None => []
           },
+          rooms: {
+            v: match rooms {
+              Some(f) => f()
+              None => natural_room
+            },
+          },
+          fresh: {
+            let ks = keys()
+            let out = []
+            for i in dmax_i(0, ks.length() - anchored_tail)..<ks.length() {
+              if fresh(ks[i]) {
+                out.push((ks[i], read_from_top(ks[i])))
+              }
+            }
+            out
+          },
+          cover: cover(),
         }
       }),
       fn(l, c) {
@@ -136,15 +170,12 @@ pub fn[K : Hash + Eq + Show] View::scrolls_anchored(
             slots[k] = slot
             slot.owns(fn() { slots.remove(k) }) |> ignore
             let room_now = fn() {
-              let natural = naturals.get(k).unwrap_or(0.0)
-              match room {
-                Some(f) => f(k, natural)
-                None => list_room(natural)
-              }
+              laid_n.get() |> ignore
+              rooms_laid.get(k).unwrap_or(list_room(naturals.get(k).unwrap_or(0.0)))
             }
             slot.lends(windowed_room, room_now) |> ignore
             slot.shrink(Is(0.0)) |> ignore
-            if room is Some(_) {
+            if rooms is Some(_) {
               slot
               .clips(By(fn() { room_now().clip }))
               .cuts_softly(By(fn() { room_now().soft }))
@@ -154,7 +185,7 @@ pub fn[K : Hash + Eq + Show] View::scrolls_anchored(
             }
             slot.box(fn(v) {
               v.shrink(Is(0.0)) |> ignore
-              if room is Some(_) {
+              if rooms is Some(_) {
                 v
                 .offset(By(fn() { (0.0, room_now().offset) }))
                 .scale(By(fn() { room_now().scale }), about=Drawn)
@@ -177,7 +208,12 @@ pub fn[K : Hash + Eq + Show] View::scrolls_anchored(
             None => known_sum.val = known_sum.val + natural
           }
           heights[k] = natural
-          natural
+          let r = (c.rooms.v)(k, natural)
+          rooms_laid[k] = r
+          if (r.height - natural).abs() > 0.001 {
+            l.measure(slot, l.width, height=r.height) |> ignore
+          }
+          r.height
         }
         // (put at a row, its top that far under the window's top)
         match c.put {
@@ -193,6 +229,34 @@ pub fn[K : Hash + Eq + Show] View::scrolls_anchored(
           None => 0.0
         }
         seen_x.val = Some(c.x)
+        // (one new to it come among the rows it ends with while it is at its end, that `fresh` says is: what showed kept
+        // where it was, glided after once it is laid out; one taller than what shows under its cover glided to only as
+        // far as its top under that, no more at its end)
+        let mut glide : (K, Bool)? = None
+        match (laid.val, anchor.val) {
+          (Some(was), None) if was_tail.val.length() > 0 =>
+            for f in c.fresh {
+              if !was_tail.val.contains(f.0) {
+                // (the row over it as it was laid out: kept where its foot was)
+                match find(f.0, n - 1) {
+                  Some(i) if i > 0 => {
+                    let over = all[i - 1]
+                    for q in 0..<was.keys.length() {
+                      if was.keys[q] == over {
+                        anchor.val = Some({ key: over, under: was.tops[q] + was.heights[q] - h, near: i - 1 })
+                        glide = Some(f)
+                        break
+                      }
+                    }
+                  }
+                  _ => ()
+                }
+                break
+              }
+            }
+          _ => ()
+        }
+        was_tail.val = all[dmax_i(0, n - anchored_tail):].to_array()
         let r = list_laid_from_end(n, fn(i) { all[i] }, find, measure, anchor.val, h, by~, ahead~, known=fn(i) {
           heights.get(all[i])
         })
@@ -223,9 +287,31 @@ pub fn[K : Hash + Eq + Show] View::scrolls_anchored(
           None => ()
         }
         laid.val = Some(r)
+        // (where the one come is, its top in the window: what it is glided to)
+        let came_top = match glide {
+          Some((k, _)) =>
+            match find(k, n - 1) {
+              Some(i) => {
+                let mut top = None
+                for q in 0..<r.keys.length() {
+                  if r.keys[q] == k {
+                    top = Some(r.tops[q])
+                  }
+                }
+                match top {
+                  Some(t) => Some(t)
+                  // (under what was laid out: as far under the last laid out as the rows between are tall)
+                  None => Some(r.tops.last().unwrap_or(h) + r.heights.last().unwrap_or(0.0) + (i - r.last - 1).to_double() * mean())
+                }
+              }
+              None => None
+            }
+          None => None
+        }
         // (told once all of it is laid out: what is in sight, whether it is at its end, and how far it is counted to
         // be scrolled among all it holds, the bar's)
         self.tree.once_laid_out(fn() {
+          laid_n.set(@signals.untracked(fn() { laid_n.get() }) + 1)
           let in_sight = []
           for q in 0..<r.keys.length() {
             if r.tops[q] + r.heights[q] > 0.0 && r.tops[q] < h {
@@ -255,6 +341,18 @@ pub fn[K : Hash + Eq + Show] View::scrolls_anchored(
           if d.abs() > 0.5 {
             seen_x.val = seen_x.val.map(fn(x) { x + d })
             s.grew_above(d)
+          }
+          match (glide, came_top) {
+            (Some((_, from_top)), Some(top)) => {
+              let to_top = counted + top - c.cover
+              if from_top && to_top < most - 0.5 {
+                s.glide_to(to_top)
+                follows.set(false)
+              } else {
+                s.glide_to(most)
+              }
+            }
+            _ => ()
           }
         })
       },
@@ -322,8 +420,14 @@ pub fn[K : Hash + Eq + Show] View::scrolls_anchored(
         known_sum.val = known_sum.val - heights.get(k).unwrap_or(0.0)
         heights.remove(k)
         naturals.remove(k)
+        rooms_laid.remove(k)
       }
     }
   })
   out
+}
+
+///|
+fn dmax_i(a : Int, b : Int) -> Int {
+  if a > b { a } else { b }
 }

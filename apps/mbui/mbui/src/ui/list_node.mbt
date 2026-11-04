@@ -8,6 +8,8 @@
 pub struct NodeRows[T] {
   read : () -> (Array[T], Array[String])
   room : (String, Double) -> @view.ListRoom
+  /// the rooms as they are now, read before the layout that asks them (View::scrolls_anchored's `rooms`)
+  room_now : () -> (String, Double) -> @view.ListRoom
   /// the keys whose rooms are on their way now (those with a cause, those leaving, those moved on the same curve by
   /// their contents while anything is): what a windowed list asks `room` of again as it moves, the rest as they were
   moving : () -> Array[String]
@@ -120,17 +122,10 @@ pub fn[T] ListRows::in_node(
     }
     m
   })
-  let room = fn(k : String, natural : Double) -> @view.ListRoom {
-    let (items, _) = all.get()
+  // (a row's room as the rows and their causes are now, at `now`: nothing read of a signal, what reads it did that)
+  let room_with = fn(items : Array[T], index : Map[String, Int], now : Double, k : String, natural : Double) -> @view.ListRoom {
     let c = self.causes
-    c.read()
-    // (nothing of the list on its way, nothing leaving: each row as tall as it is, its height kept for a way that may
-    // start from it; nothing more asked of each of a long chat's three thousand as their list is laid out, 2026-11-04)
-    if c.by.is_empty() && self.going.is_empty() {
-      shown[k] = natural
-      return @view.list_room(natural)
-    }
-    let i = key_at.get().get(k).unwrap_or(-1)
+    let i = index.get(k).unwrap_or(-1)
     guard i >= 0 else { return @view.list_room(natural) }
     let going = self.going.contains(k)
     let by_room = going || middle(items[i])
@@ -141,12 +136,11 @@ pub fn[T] ListRows::in_node(
     if own(items[i]) {
       c.own.add(k)
     }
-    let now = if v.logic_at() < c.end { v.drawn_at() } else { v.logic_at() }
     if room_at.val != Some(now) {
       room_at.val = Some(now)
       room_frame.val += 1
     }
-    let h = dmax(0.0, c.height(sizes, shown, k, natural, now, room_frame.val))
+    let h = dmax(0.0, c.height(sizes, shown, k, natural, now, room_frame.val, told=false))
     shown[k] = h
     let open = c.opened.contains(k)
     let fraction = if open && natural > 0.0 { dmax(0.0, dmin(1.0, h / natural)) } else { 1.0 }
@@ -161,6 +155,35 @@ pub fn[T] ListRows::in_node(
       alpha: if scaled { dmax(0.0, (fraction - row_gone_at) / (1.0 - row_gone_at)) } else { 1.0 },
       presses: !going,
     }
+  }
+  let still = fn(k : String, natural : Double) -> @view.ListRoom {
+    shown[k] = natural
+    @view.list_room(natural)
+  }
+  let room = fn(k : String, natural : Double) -> @view.ListRoom {
+    let (items, _) = all.get()
+    let c = self.causes
+    c.read()
+    // (nothing of the list on its way, nothing leaving: each row as tall as it is, its height kept for a way that may
+    // start from it; nothing more asked of each of a long chat's three thousand as their list is laid out, 2026-11-04)
+    if c.by.is_empty() && self.going.is_empty() {
+      return still(k, natural)
+    }
+    let now = if v.logic_at() < c.end { v.drawn_at() } else { v.logic_at() }
+    room_with(items, key_at.get(), now, k, natural)
+  }
+  // (the rooms as they are now, read before a layout that lays them out reads none of what they are worked out of:
+  // View::layout_box's content; as the rows move, again each frame)
+  let room_now = fn() -> (String, Double) -> @view.ListRoom {
+    let (items, _) = all.get()
+    let c = self.causes
+    c.read()
+    if c.by.is_empty() && self.going.is_empty() {
+      return still
+    }
+    let now = if v.logic_at() < c.end { v.drawn_at() } else { v.logic_at() }
+    let index = key_at.get()
+    fn(k, natural) { room_with(items, index, now, k, natural) }
   }
   let lend = fn(row : @view.View, k : String) {
     row.lends(node_row_way, fn() {
@@ -212,5 +235,5 @@ pub fn[T] ListRows::in_node(
     own_keys.get().each(add)
     out
   }
-  { read: fn() { all.get() }, room, moving, lend, opening }
+  { read: fn() { all.get() }, room, room_now, moving, lend, opening }
 }

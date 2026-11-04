@@ -267,10 +267,27 @@ pub fn chat_list_node(
       follows~,
       shown~,
       put~,
-      room=sized.room,
-      moving=sized.moving,
+      rooms=sized.room_now,
       // The flying copy needs its real landing before the glide brings the row into sight.
       kept_keys=fn() { @sfbase.flight_of(draft).map(fn(f) { [f.key] }).unwrap_or([]) },
+      // (new to it: said while it shows, an agent starting, sent from here; not what is caught up on, at once)
+      // (the bar over its top: what comes taller than what shows is read from its top under it)
+      cover=top,
+      fresh=fn(k) {
+        match row_of(k) {
+          Some((Said(m), _)) => m.said
+          Some((Working(a), _)) => a.started
+          Some((Out(_), _)) => true
+          _ => false
+        }
+      },
+      read_from_top=fn(k) {
+        match row_of(k) {
+          Some((Said(m), _)) => !m.mine
+          Some((Out(_), _)) => false
+          _ => true
+        }
+      },
       fn(slot, k) {
         (sized.lend)(slot, k)
         match @signals.untracked(fn() { row_of(k) }) {

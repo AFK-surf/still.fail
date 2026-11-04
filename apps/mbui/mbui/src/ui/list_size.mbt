@@ -164,8 +164,11 @@ fn RowCauses::height(
   natural : Double,
   now : Double,
   frame : Int,
+  told? : Bool = true,
 ) -> Double {
-  c.read()
+  if told {
+    c.read()
+  }
   let cause = match c.by.get(key) {
     Some((cause, _)) => cause
     None => return natural
