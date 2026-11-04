@@ -242,7 +242,7 @@ fn switcher_offered(c : @ui.Ctx, src : Source, w : Workspace) -> Array[@sfpages.
   // chat.relay; StationUpdate.tsx update.station)
   match app.nav.top() {
     Chat(r) => {
-      let view = view_of_chat(src, r).0
+      let view = @sfbase.chat_view_now(src, r)
       if view is Some({ thread: Some(_), .. }) {
         offer(action_offered("chat.find", "search", fn() { chat_find_open(c, r) }))
       }
