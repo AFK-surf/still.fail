@@ -155,7 +155,7 @@ export const OutflowLive = Layer.effectDiscard(
           await server.listen().catch((e) => log.warn("outflow", "the outflow socket is not listened on", { error: (e as Error).message }));
           void previous.gone.then(() => server.previousGone());
         }
-        link.start();
+        void previous.gone.then(() => link.start(), () => link.start());
         return server;
       }),
       (server) => Effect.promise(async () => (await link.close(), await server.close())),
