@@ -297,7 +297,24 @@ export async function historyHits(s: Store, profiles: Profiles, words: string[],
   const want = options.offset + options.limit + 1;
   const until = options.now() + options.ms;
   const found: Hit[] = [];
-  const sessions = store.listSessions(s).filter((x) => sees({ ws: x.ws }, asker));
+  const sessions = store.historySessions(s, asker);
+  // A search yields while it reads files, and sessions can move or be removed in the meantime. Check before looking at
+  // a session's files and once more before returning any hits accumulated from it (including a timed-out page).
+  const workspaceOf = s.db.prepare("SELECT ws FROM sessions WHERE key = ?");
+  const workspacesOf = s.db.prepare("SELECT s.key, s.ws FROM json_each(?) j LEFT JOIN sessions s ON s.key = j.value");
+  const hitSessions = new Set<string>();
+  const checkVisible = (key: string) => {
+    const row = workspaceOf.get(key) as { ws: string | null } | undefined;
+    if (!row || !sees({ ws: row.ws ?? null }, asker)) throw new Error("the session changed while searching; search again");
+  };
+  const finish = (result: HistoryFound): HistoryFound => {
+    if (hitSessions.size > 0) {
+      const rows = workspacesOf.all(JSON.stringify([...hitSessions])) as { key: string | null; ws: string | null }[];
+      if (rows.some((row) => row.key === null || !sees({ ws: row.ws ?? null }, asker)))
+        throw new Error("the session changed while searching; search again");
+    }
+    return result;
+  };
   let looked = 0;
   let cancelled = false;
   let expired = false;
@@ -307,23 +324,26 @@ export async function historyHits(s: Store, profiles: Profiles, words: string[],
     else if (options.now() > until) expired = true;
     return !cancelled && !expired;
   };
-  const partial = (): HistoryFound => {
+  const partial = (current: string): HistoryFound => {
     if (cancelled) throw new Error("the search took too long");
-    return { hits: found.slice(options.offset, options.offset + options.limit), more: true, left: sessions.length - looked };
+    checkVisible(current);
+    return finish({ hits: found.slice(options.offset, options.offset + options.limit), more: true, left: sessions.length - looked });
   };
   for (const session of sessions) {
     if (found.length >= want) break;
-    if (!keep()) return partial();
+    if (!keep()) return partial(session.key);
     // Let through: a search asked meanwhile is answered between sessions.
     await new Promise<void>((resolve) => setImmediate(resolve));
-    if (!keep()) return partial();
+    if (!keep()) return partial(session.key);
+    checkVisible(session.key);
     const files = transcriptFiles(s, session, profiles);
-    if (!keep()) return partial();
+    if (!keep()) return partial(session.key);
     if (files === null) { looked++; continue; }
     let any = false;
     for (const p of files.paths) {
       if (await mentions(p.path, words, keep)) any = true;
-      if (!keep()) return partial();
+      if (!keep()) return partial(session.key);
+      checkVisible(session.key);
       if (any) break;
     }
     if (!any) { looked++; continue; }
@@ -344,11 +364,13 @@ export async function historyHits(s: Store, profiles: Profiles, words: string[],
         }
         i++;
       }, keep);
-      if (!keep()) return partial();
+      if (!keep()) return partial(session.key);
+      checkVisible(session.key);
     }
     const thread = store.sessionThreads(s, session.key).find((t) => t.surface === STILLFAIL_SURFACE) ?? null;
     const chatTitle = (thread !== null ? given(thread) : null) ?? (session.title?.trim() || "");
     const ordered = latest.length < room ? latest : [...latest.slice(oldest), ...latest.slice(0, oldest)];
+    if (ordered.length > 0) hitSessions.add(session.key);
     for (const { i, entry, tool, at, text } of ordered.reverse()) {
       found.push({
         session: session.key, index: i, entry, ...(tool ? { tool } : {}), chat: session.key, chatTitle, ...(thread ? { thread: thread.id } : {}),
@@ -357,7 +379,7 @@ export async function historyHits(s: Store, profiles: Profiles, words: string[],
     }
     looked++;
   }
-  return { hits: found.slice(options.offset, options.offset + options.limit), more: found.length > options.offset + options.limit, left: 0 };
+  return finish({ hits: found.slice(options.offset, options.offset + options.limit), more: found.length > options.offset + options.limit, left: 0 });
 }
 
 export const sessionKeys = (s: Store): string[] => all(s, "SELECT key FROM sessions").map((r) => r.key as string);
