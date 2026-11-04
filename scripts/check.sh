@@ -231,7 +231,8 @@ if part ts; then
   # (the core's own files the web imports and typechecks under its stricter settings: a change there alone, #2395's
   # util.ts import in error.ts, passed its own check and turned main red at the next change to the web, 8cb036d5)
   web_reads='^client/core-ts/src/'
-  ts_cloud='^cloud/'
+  # (cloud's lock is station's, through the rules: cloud/src/lock.ts imports station/src/cloud/lock.ts)
+  ts_cloud='^cloud/|^station/src/cloud/lock\.ts$|^client/core-ts/src/lock-form\.ts$|^rules/js/'
   ts_core='^client/core-ts/|^web/src/core/delta\.ts$'
 
   # The clients' types and the UIs' operation bindings are made from the core's (client/core-ts/src/shapes/schema.ts,
@@ -393,7 +394,7 @@ if [ $full = 1 ]; then
   # Run whenever one of what they read changed (the list `remembered` keys them by): a change to the words alone
   # (client/i18n) broke them on main unseen (2026-10-17, a28f78496).
   if part ts && touches "$ts_core|^client/i18n/|^web/src/core/|^web/public/avatars/|^station/native/mesh/|^vendor/|^rules/js/|^scripts/native\.ts$"; then prep core deps client/core-ts; remembered "tests: core-ts" "client/core-ts client/i18n web/src/core web/public/avatars station/native/mesh vendor rules/js scripts/native.ts" after core sh -c 'cd client/core-ts && pnpm test'; fi
-  if part ts && touches "$ts_cloud"; then remembered "tests: cloud" "cloud client/i18n" after cloud sh -c 'cd cloud && pnpm test'; fi
+  if part ts && touches "$ts_cloud"; then remembered "tests: cloud" "cloud client/i18n station/src/cloud/lock.ts client/core-ts/src/lock-form.ts rules/js" after cloud sh -c 'cd cloud && pnpm test'; fi
   # The station, with its native parts prebuilt (mesh addon, runner, the Rust station's archive for the compatibility
   # tests): its tests run whenever it, one of them or the words it says changed.
   if part station && touches '^station/|^vendor/|^client/i18n/|^rules/js/|^scripts/native\.ts$'; then

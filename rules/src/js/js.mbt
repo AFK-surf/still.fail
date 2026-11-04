@@ -293,3 +293,67 @@ pub fn admit_js(entries : JsValue, fold_now : JsValue, queries : JsValue, crypto
   }
   to_js(Json::array(out))
 }
+
+// ── the lock as station/src/cloud/lock.ts holds it ────────────────────────────────────────────────────────────────
+
+///|
+/// The rules' own state, handed to JS as it is, to be given back to `apply_js`, `signer_js` and `admit_one_js`.
+extern "js" fn handle(s : @lock.LockState) -> JsValue = "(s) => s"
+
+///|
+fn held(s : @lock.LockState) -> JsValue {
+  let o = js_new_object()
+  js_put(o, "state", to_js(state_json(s)))
+  js_put(o, "rules", handle(s))
+  o
+}
+
+///|
+fn refused(why : String) -> JsValue {
+  let o = js_new_object()
+  js_put(o, "error", js_of_str(why))
+  o
+}
+
+///|
+/// The lock its first entry starts (station/src/cloud/lock.ts `genesis`): `{state, rules}` or `{error}`.
+pub fn genesis_js(entry : JsValue, crypto : JsCrypto) -> JsValue {
+  try held(@lock.genesis(json_of(entry), crypto)) catch {
+    @lock.Refused(why) | @lock.Refusal(why) => refused(why)
+    @form.Invalid(why) => refused(why)
+    e => refused(e.to_string())
+  }
+}
+
+///|
+/// The lock with one more entry (station/src/cloud/lock.ts `apply`): `{state, rules}` or `{error}`.
+pub fn apply_js(prev : @lock.LockState, entry : JsValue, now : JsValue, crypto : JsCrypto) -> JsValue {
+  try held(@lock.apply(prev, json_of(entry), opt_num(now), crypto)) catch {
+    @lock.Refused(why) | @lock.Refusal(why) => refused(why)
+    @form.Invalid(why) => refused(why)
+    e => refused(e.to_string())
+  }
+}
+
+///|
+/// Who signed with `key` (station/src/cloud/lock.ts `signer`): `{sub, role, passkey, own}` or null.
+pub fn signer_js(s : @lock.LockState, key : String, now : JsValue) -> JsValue {
+  match @lock.signer(s, key, opt_num(now)) {
+    None => js_null()
+    Some(w) =>
+      to_js(Json::object(Map([("sub", Json::string(w.sub)), ("role", Json::string(w.role)), ("passkey", Json::boolean(w.passkey)), ("own", Json::boolean(w.own))])))
+  }
+}
+
+///|
+/// Who a connection is (station/src/cloud/lock.ts `admit`), `who` `{sub, endpoint, base?, proof?}`: `{device, role}`
+/// (the device's id) or `{refusal}`.
+pub fn admit_one_js(s : @lock.LockState, who : JsValue, now : Double, crypto : JsCrypto) -> JsValue {
+  let answer = try {
+    let (d, role) = @lock.admit(s, js_str(js_get(who, "sub")), js_str(js_get(who, "endpoint")), opt_str(js_get(who, "base")), opt_str(js_get(who, "proof")), now, crypto)
+    Json::object(Map([("device", Json::string(d.id)), ("role", Json::string(role))]))
+  } catch {
+    @lock.Refusal(why) | @lock.Refused(why) => Json::object(Map([("refusal", Json::string(why))]))
+  }
+  to_js(answer)
+}
