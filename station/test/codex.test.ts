@@ -314,8 +314,10 @@ describe("the Codex driver", { concurrency: true }, () => {
         model: "gpt-x",
       },
     });
+    // Its connection to the station's tools asked after first.
+    assert.deepEqual(sent[3], { id: 3, method: "mcpServerStatus/list", params: { threadId: session.id(), serverName: "stillfail", detail: "toolsAndAuthOnly" } });
     // Not a subscription: no service tier.
-    assert.deepEqual(sent[3], { id: 3, method: "turn/start", params: { threadId: session.id(), input: [{ type: "text", text: "cmd" }] } });
+    assert.deepEqual(sent[4], { id: 4, method: "turn/start", params: { threadId: session.id(), input: [{ type: "text", text: "cmd" }] } });
     await session.dispose();
     assert.equal(stdin(p.dump).at(-1).method, "thread/unsubscribe");
   });
@@ -438,6 +440,22 @@ describe("the Codex driver", { concurrency: true }, () => {
     const { events, push, until } = listen();
     const session = await d.open(options(p, { key: first.key, resume: before.id() }), push);
     assert.equal(session.id(), before.id());
+    await session.prompt("mcp");
+    await until(ended(1));
+    assert.deepEqual(deltas(events), ["connected"]);
+  });
+
+  test("a thread whose station tools failed starts no turn: opened again, resuming, it has them", async () => {
+    const d = driver();
+    const p = profile();
+    // Opened while the station's door was closed: its MCP connection failed, so its turns would have no station tools.
+    const first = options(p, { mcpUrl: "http://127.0.0.1:1/mcp" });
+    const { events, push, until } = listen();
+    const failed = await d.open(first, push);
+    await assert.rejects(failed.prompt("mcp"), /station's tools failed/);
+    assert.equal(failed.busy(), false);
+    await failed.dispose();
+    const session = await d.open(options(p, { key: first.key, resume: failed.id() }), push);
     await session.prompt("mcp");
     await until(ended(1));
     assert.deepEqual(deltas(events), ["connected"]);

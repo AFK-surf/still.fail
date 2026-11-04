@@ -1051,6 +1051,10 @@ export class CodexSession implements AgentSession {
     if (this.state.closed) throw new Error("codex session is closed");
     if (this.state.busy) throw new Error("a turn is already running");
     if (outdated) throw new Error("codex was updated, or its profile changed, under its app-server");
+    // Its thread could not connect to the station's tools (the door was closed or slow as it was opened, or as it was
+    // taken up): its turn would have no chat_post or chat_state, and nothing it called would say so. Opened again,
+    // resuming, the thread is loaded with them.
+    if (await stationToolsFailed(this.host, this.threadId)) throw new Error("codex thread's connection to the station's tools failed");
     this.state.busy = true;
     this.host.turns.add(this.threadId);
     const params: Json = { threadId: this.threadId, input: input(text) };
