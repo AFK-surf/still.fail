@@ -39,7 +39,7 @@ import { Retold } from "./retold.ts";
 import { dayOf, holdsWhole, sameDetailCoverage, usageHistoryRange, withPart } from "./usage-part.ts";
 import { threadAfter, threadAfterLetters } from "./thread-after.ts";
 import { type After, rowAfterDismiss, rowAfterKept, rowAfterPin, rowAfterSaid, rowAfterSession } from "./rows-after.ts";
-import { type Marks, marksOf, marksWith, rowsMade } from "./rows-made.ts";
+import { type Marks, marksOf, marksWith, rowsMade, rowsShared } from "./rows-made.ts";
 import { current, tr } from "../i18n.ts";
 import { timed } from "../spent.ts";
 
@@ -1300,6 +1300,8 @@ export class StationsSync {
       case "made":
       case "chat-mark":
       case "chat-changed":
+      case "chat-shared":
+      case "chat-shared-removed":
         return this.#held(address, name, data);
       // The stream that took over could not be told all that came since the last its predecessor gave: read again.
       case "missed":
@@ -1399,6 +1401,12 @@ export class StationsSync {
         const thread = u64(get(data, "thread"));
         const n = u64(get(data, "n"));
         if (thread !== null && n !== null) this.putRead(address, thread, n);
+        // Where the viewer read to, theirs on the chat list's rows.
+        const link = this.#links.get(address);
+        if (thread !== null && n !== null && link?.shared && link.marks) {
+          link.marks.reads[String(thread)] = Math.max(link.marks.reads[String(thread)] ?? 0, n);
+          this.#remake(address);
+        }
         return;
       }
       case "pin": {
@@ -1423,6 +1431,7 @@ export class StationsSync {
         if (thread === null || n === null) return;
         const marks = this.#links.get(address)?.marks;
         if (marks) {
+          if (!marks.dismissed.includes(`${thread}:${n}`)) marks.dismissed.push(`${thread}:${n}`);
           for (const kind of [marks.card, marks.need]) {
             const v = kind[String(thread)];
             if (isObject(v) && get(v, "seq") === n) kind[String(thread)] = { ...v, dismissed: true };
@@ -1488,7 +1497,25 @@ export class StationsSync {
         link.makesRows = get(data, "rows") === true;
         if (this.#core.data.record("keepsMarks", address) !== (get(data, "marks") === true)) this.#core.data.put("keepsMarks", address, get(data, "marks") === true);
         if (get(data, "marks") === true && link.marks === null) this.#enqueue(address, "chats", Priority.shown, this.#marksWhole(address));
+        // The chat list the station makes once for everyone: the sidebar made of it and what is the viewer's own.
+        link.shared = get(data, "shared") === true;
+        if (link.shared && link.sharedRows === null) this.#enqueue(address, "shared", Priority.shown, this.#sharedWhole(address));
         return;
+      }
+      case "chat-shared": {
+        // A row of the chat list as it is now, as the station made it for everyone who sees it.
+        const id = str(get(data, "id"));
+        const link = this.#links.get(address);
+        if (id === null || !link?.sharedRows) return;
+        link.sharedRows.set(id, data as Record<string, any>);
+        return this.#remake(address);
+      }
+      case "chat-shared-removed": {
+        const id = str(get(data, "id"));
+        const link = this.#links.get(address);
+        if (id === null || !link?.sharedRows) return;
+        link.sharedRows.delete(id);
+        return this.#remake(address);
       }
       case "chat-changed": {
         // What changes which rows there are and what they say, and only the station can say (a chat's sessions, its
@@ -1626,6 +1653,20 @@ export class StationsSync {
     return Effect.suspend(() => (keeps() ? this.#marksWhole(address, ctx, unread) : this.#read(address, { topic: "chatRows", station: address }, "/chats", undefined, ctx, 0, unread)));
   }
 
+  /// The chat list as the station makes it for everyone (GET /chats?shared=1), what the viewer sees of it; the sidebar
+  /// made of it.
+  #sharedWhole(address: string): Effect.Effect<void, CoreError> {
+    return this.#asked((asked) => Effect.gen({ self: this }, function* () {
+      const link = this.#links.get(address);
+      if (!link || !this.reachable(address)) return;
+      const rows = yield* this.requests.call(link.addr, "GET", "/chats?shared=1", null, { quiet: true });
+      if (!Array.isArray(rows)) return;
+      link.sharedRows = new Map(rows.flatMap((r) => (isObject(r) && typeof get(r, "id") === "string" ? [[get(r, "id") as string, r as Record<string, any>]] : [])));
+      this.#made(address);
+      this.#retell(address, asked);
+    }));
+  }
+
   #marksWhole(address: string, ctx: SpanContext | null = null, unread?: () => void): Effect.Effect<void, CoreError> {
     return this.#asked((asked) => Effect.gen({ self: this }, function* () {
       const link = this.#links.get(address);
@@ -1685,6 +1726,13 @@ export class StationsSync {
     const me = this.#me(address);
     if (!link?.marks || me === null) return;
     const data = this.#core.data;
+    if (link.shared) {
+      // Of the chat list the station makes for everyone, once it is read: till then the rows held stand.
+      if (link.sharedRows === null) return;
+      const lang = current();
+      const words = { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly") };
+      return data.set({ topic: "chatRows", station: address }, rowsShared(link.sharedRows.values(), link.marks, me, words));
+    }
     const sessions = data.shared({ topic: "sessions", station: address });
     const threads = data.shared({ topic: "threads", station: address });
     if (!Array.isArray(sessions) || !Array.isArray(threads)) return;

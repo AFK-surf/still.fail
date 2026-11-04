@@ -167,6 +167,10 @@ export class Link {
   /// What the station keeps beside the summaries that the sidebar is made of here (rows-made.ts): null while it is not
   /// read, or the station answers its sidebar made (one from before).
   marks: Marks | null = null;
+  /// Whether its sidebar is made of the chat list the station makes once for everyone (`shared`, chat-row.ts), as its
+  /// stream said; and that list as read and told since, by row id (null till read).
+  shared = false;
+  sharedRows: Map<string, Record<string, any>> | null = null;
   /// The marks to read again: those of some chats, or all of them (`whole`).
   readonly marksWanted = { sessions: new Set<string>(), threads: new Set<number>(), whole: false };
   readonly rowsWanted = { sessions: new Set<string>(), threads: new Set<number>() };
@@ -502,7 +506,7 @@ export class Links {
   #path(address: string, wants: EventsFor, since: string | null = null): string {
     // The sessions at work followed by the station itself, those named ignored where it does (FOLLOWS); a thread's
     // summary made here from what is said in it (thread-after.ts), not told; and the sidebar's rows (rows-after.ts).
-    const query: string[] = ["running=1", "views=1", "rows=1"];
+    const query: string[] = ["running=1", "views=1", "rows=1", "shared=1"];
     if (wants.host) query.push("host=1");
     for (const key of wants.live) {
       const held = this.#core.data.logSpan("transcript", address, key);
