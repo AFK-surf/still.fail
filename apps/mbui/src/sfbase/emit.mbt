@@ -81,6 +81,8 @@ pub(all) struct Emits {
   /// a message's coming in held for words sent from here on their way (emit_step): till their declared landing (-1:
   /// none)
   mut held_until : Double
+  /// the newest message's seq as its list was first taken (or given whole): none to that come out of an avatar
+  mut floor : Double
   /// the first row of what was sent from here not in the chat yet (the outbox's, under the messages), as last built
   /// ("" none): a message coming in comes in over it
   mut out_key : String
@@ -130,6 +132,7 @@ pub fn emits_of(key : String) -> Emits {
         mover: @ui.Mover::new(),
         held_until: -1.0,
         out_key: "",
+        floor: -1.0e300,
         taken: None,
         out_at: {},
         said: @signals.signal(0),
@@ -175,9 +178,7 @@ pub fn emit_take(c : @ui.Ctx, e : Emits, v : ChatView, showing : Map[String, Boo
           Set(at, _) => came.push(at)
           Whole(_) => {
             came.clear()
-            for i in 0..<v.messages.length() {
-              came.push(i)
-            }
+            e.floor = last_seq(v)
           }
           Removed(_, _, _) | Moved(_, _, _, _) => ()
         }
@@ -188,9 +189,8 @@ pub fn emit_take(c : @ui.Ctx, e : Emits, v : ChatView, showing : Map[String, Boo
         None => ()
       }
       e.taken = Some((rows, rows.reader()))
-      for i in 0..<v.messages.length() {
-        came.push(i)
-      }
+      // (what it holds as it is first taken: in it before, none of it to come out of an avatar; nothing of it read)
+      e.floor = last_seq(v)
     }
   }
   let decided = e.decided.length()
@@ -199,6 +199,9 @@ pub fn emit_take(c : @ui.Ctx, e : Emits, v : ChatView, showing : Map[String, Boo
     // (where one come then is now: past its end, taken out since)
     guard i < n else { continue }
     let m = v.messages[i]
+    if m.seq <= e.floor {
+      continue
+    }
     let k = seq_s(m.seq)
     if e.decided.contains(k) {
       continue
@@ -898,4 +901,13 @@ pub fn emit_glyph_out(
 ) -> @view.GlyphLook {
   let l = glyph_out(dmax(at - from, 0.0), { index: g.index, x: g.x, y: g.y, h: g.h, top: g.top, foot: g.foot }, col, seq.to_int64().to_int())
   { alpha: l.alpha, dx: l.dx, dy: l.dy, scale: l.scale, sx: l.sx }
+}
+
+///|
+/// The newest of chat `v`'s messages' seq, the least there is where it has none (its messages kept in seq's order).
+fn last_seq(v : ChatView) -> Double {
+  match v.messages.last() {
+    Some(m) => m.seq
+    None => -1.0e300
+  }
 }
