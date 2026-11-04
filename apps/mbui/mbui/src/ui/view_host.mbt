@@ -342,6 +342,7 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
     }
   })
   view_app.val = Some(t)
+  tree_fields_attached()
   view_due.set(@signals.untracked(fn() { view_due.get() }) + 1)
   // (the tree in place of the one before, whole: whether the app takes back, as it has it, told the host now, as a change
   // to it is: what it takes it by said as it was made, before what tells of its changes was set)
@@ -365,6 +366,7 @@ pub fn view_painted() -> ViewPaintWork {
 /// was said in): none takes back till a frame of the next says what does; nothing held of them.
 fn view_forget() -> Unit {
   view_events.clear()
+  tree_field_focus_pending.clear()
   view_frame_committed.val = false
   view_read_tells.clear()
   view_shape_of.val = OfOld
