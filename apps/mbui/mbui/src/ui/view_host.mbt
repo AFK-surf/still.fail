@@ -4761,6 +4761,7 @@ fn old_build_size_in_theme(c : Ctx, o : OldIsland, width : Double, height~ : Dou
   let was_building = building.val
   let was_measuring = c.measuring
   let was_part = nodes_run.building
+  let covers_before = c.cover_asks.length()
   nodes_run.building = None
   c.measuring = measuring
   building.val = true
@@ -4778,6 +4779,9 @@ fn old_build_size_in_theme(c : Ctx, o : OldIsland, width : Double, height~ : Dou
     })
   })
   c.layout(root.val, 0.0, 0.0, w, if o.natural { 0.0 / 0.0 } else { h }) |> ignore
+  // This is a temporary build for measurement or input. Its node indices will not belong to the next
+  // frame's build, which asks for its own covers; keep any requests the caller already had.
+  c.cover_asks.truncate(covers_before)
   old_input_boxes[o.id] = root.val
   old_targets_due.val = true
   building.val = was_building
