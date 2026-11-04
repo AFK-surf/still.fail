@@ -766,13 +766,27 @@ export function blockedAsk(s: Store, thread: number, key: string, turn: TurnSumm
   return { asked, fresh: !told };
 }
 
+/// A short card history can be checked by its cards; beyond this, look at recent people instead of all old cards.
+const ANSWER_CARD_SAMPLE_SIZE = 65;
+export const ANSWER_CARD_SAMPLE = "SELECT n, kind FROM entries INDEXED BY entries_cards WHERE thread = ? AND card IS NOT NULL ORDER BY n LIMIT 65";
+export const ANSWER_OPTIONS_SAMPLE = "SELECT n, kind FROM entries INDEXED BY entries_options WHERE thread = ? AND options IS NOT NULL ORDER BY n LIMIT 65";
+export const ANSWER_PEOPLE_SINCE = `SELECT thread, n FROM entries INDEXED BY entries_people_since
+  WHERE thread = ? AND author_kind = 'person' AND kind = 'message' AND at >= ? ORDER BY n`;
+export const HAS_ANSWER_PEOPLE_SINCE = `SELECT 1 FROM entries INDEXED BY entries_people_since
+  WHERE thread = ? AND author_kind = 'person' AND kind = 'message' AND at >= ? LIMIT 1`;
+
 /// The people's messages since `since` (ms) in a thread that each are the first after a card (the last before it), in
-/// order: by its cards, each with the first person's message after it (none between: a card after it is the one asked).
+/// order. With many old cards, the caller checks each recent person against the preceding card instead.
 function answersOf(s: Store, thread: number, since: number): { thread: number; n: number }[] {
+  if (one(s, HAS_ANSWER_PEOPLE_SINCE, thread, since) === undefined) return [];
+  // Sample all card-bearing entries, including edits, so even a chat of many card edits cannot make this scan long.
+  const cardRows = all(s, ANSWER_CARD_SAMPLE, thread);
+  const optionRows = all(s, ANSWER_OPTIONS_SAMPLE, thread);
+  if (cardRows.length >= ANSWER_CARD_SAMPLE_SIZE || optionRows.length >= ANSWER_CARD_SAMPLE_SIZE)
+    return all(s, ANSWER_PEOPLE_SINCE, thread, since) as { thread: number; n: number }[];
   const cards = [...new Set([
-    ...all(s, "SELECT n FROM entries WHERE thread = ? AND kind = 'message' AND card IS NOT NULL", thread),
-    ...all(s, "SELECT n FROM entries WHERE thread = ? AND kind = 'message' AND options IS NOT NULL", thread),
-  ].map((r) => r.n as number))].sort((a, b) => a - b);
+    ...cardRows, ...optionRows,
+  ].filter((r) => r.kind === "message").map((r) => r.n as number))].sort((a, b) => a - b);
   const out: { thread: number; n: number }[] = [];
   cards.forEach((card, i) => {
     const next = one(s, "SELECT n, at FROM entries WHERE thread = ? AND author_kind = 'person' AND kind = 'message' AND n > ? ORDER BY n LIMIT 1", thread, card);

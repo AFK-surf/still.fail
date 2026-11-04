@@ -45,3 +45,41 @@ test("a scoped recent-answer read does not enumerate a chat's old cards", () => 
     assert.ok(cardsRead <= 130, `reading recent answers returned ${cardsRead} old card entries`);
   } finally { store.close(); }
 });
+
+test("a short card history does not enumerate many recent ordinary messages", () => {
+  const store = Store.open(":memory:");
+  const db = store.db;
+  try {
+    const thread = store.openThread("ember", "EMBER", "few-cards", null, null).id;
+    const put = db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at,card) VALUES (?,?,?,?,?,?,?,?,?)");
+    put.run(thread, 1, "message", "card", "agent", "a", "choose", 1, JSON.stringify({ type: "text" }));
+    db.exec("BEGIN");
+    for (let n = 2; n <= 5_001; n++) put.run(thread, n, "message", `p-${n}`, "person", "p", "yes", 100 + n, null);
+    db.exec("COMMIT");
+    const expected = store.answersSince(100);
+    assert.equal(expected.length, 1);
+    let peopleRead = 0;
+    const traced = new Proxy(db, {
+      get(target, property) {
+        if (property === "prepare") return (sql: string) => {
+          const statement = target.prepare(sql);
+          return new Proxy(statement, {
+            get(query, method) {
+              if (method === "all") return (...args: any[]) => {
+                const rows = query.all(...args);
+                if (/\bfrom entries\b/i.test(sql) && /author_kind\s*=\s*'person'/i.test(sql)) peopleRead += rows.length;
+                return rows;
+              };
+              const value = Reflect.get(query, method, query);
+              return typeof value === "function" ? value.bind(query) : value;
+            },
+          });
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    assert.deepEqual(answersSince(makeStore(traced, "."), 100, [thread]), expected);
+    assert.ok(peopleRead <= 2, `reading one answer returned ${peopleRead} recent messages`);
+  } finally { store.close(); }
+});

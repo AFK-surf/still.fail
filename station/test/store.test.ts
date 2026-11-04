@@ -1312,6 +1312,7 @@ test("what the station asks again and again is planned by an index, never a scan
     [HEARD_IN, ["a", 1]], [MODELS_USED_BY, ["a@x", 0]], [REMOTE_RUNS_OF, ["ws", 0]], [REMOTE_RUNS_ALL, [0]],
     [detail.sql, detail.args], [HISTORY_DAYS, ["ws", 0n, 100n, 480n]], [HISTORY_AFTER, ["ws", 100n]], [HISTORY_TOTAL, ["ws"]],
     [HISTORY_SCOPES, []], [HISTORY_SEED_CALLS, [0]], [read.SAID_LATEST, [1]], [read.SAID_SCAN, [1, 100, 64]], [read.SAID_STATE, [1]],
+    [read.ANSWER_CARD_SAMPLE, [1]], [read.ANSWER_OPTIONS_SAMPLE, [1]], [read.ANSWER_PEOPLE_SINCE, [1, 0]], [read.HAS_ANSWER_PEOPLE_SINCE, [1, 0]],
     [POST_BLOCKS_READY, [1, 0]], [POST_AFTER_FIRST, [1, 0]], [POST_AFTER_INDEXED, [1, "a", 0, 0]],
   ];
   const scans = /^SCAN (?!CONSTANT ROW$|parts$|\(subquery-\d+\)$|\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect|entries_login_cards)\b)/;
