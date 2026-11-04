@@ -225,6 +225,7 @@ pub fn chat_list_node(
   let sent_foot = Ref("")
   let row_sizes : @ui.ListRows[Entry] = @ui.ListRows::new()
   rd0.rows = row_sizes
+  let foot_said = Ref(false)
   // (the room under the last row: another as what it is kept clear of changes (the bell's, ask_clears), and as words
   // sent let go of the composer, its version one more: list_size.mbt's Foot)
   v.reacts(fn() {
@@ -233,7 +234,13 @@ pub fn chat_list_node(
       _ => ()
     }
     "foot/\{view().map_or(false, @sfbase.ask_clears)}/\{sent_foot.val}"
-  }, fn(_) { @signals.untracked(fn() { rows_now.get() }).said("foot") })
+  }, fn(_) {
+    // (as it first is: the room it is made with, nothing changed)
+    if foot_said.val {
+      @signals.untracked(fn() { rows_now.get() }).said("foot")
+    }
+    foot_said.val = true
+  })
   let sized = rows_sized(row_sizes, v, fn() { rows_now.get() }, rows_current, watched=fn() { !view().map_or(false, fn(cv) { cv.newer }) },
     from=fn(_) {
       match leaving() {

@@ -238,7 +238,8 @@ pub fn ChatRows::version_of(self : ChatRows, key : String) -> Int? {
 pub fn ChatRows::changes(self : ChatRows) -> Array[ChatRowChange] {
   let out = self.told
   self.told = []
-  out
+  // (all of it to be taken as it is: what came, went or changed with it is so at once)
+  if out.iter().any(fn(c) { c is Whole }) { [Whole] } else { out }
 }
 
 ///|
