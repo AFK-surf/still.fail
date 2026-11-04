@@ -1789,6 +1789,34 @@ test("what_the_agents_spent_is_read_only_while_a_page_shows_it", async () => {
   core.close();
 });
 
+test("the_usage_page_is_split_and_narrowed_as_a_ui_asks", async () => {
+  // The topic kept only its scope and days, so a UI's picks were dropped on the way in: 按模型 changed nothing.
+  const { host, core } = await started();
+  const now = host.nowMs();
+  const offset = host.utcOffsetMin(now);
+  const today = dayOf(now, offset);
+  const yesterday = dayOf(now - 86_400_000, offset);
+  const row = (day: string, person: string, model: string, cost: number) => ({ day, session: "k", thread: 1, person, profile: "cc", runtime: "claude", model, calls: 1, input: 1, cacheRead: 0, cacheWrite: 0, output: 1, cost });
+  const rows = [row(today.day, "a@x", "opus", 1), row(today.day, "b@x", "haiku", 2), row(yesterday.day, "a@x", "haiku", 4)];
+  stationReplies(host, (req) => (req.url.includes("/admin/api/usage?") ? { from: 0, to: 9223372036854775807, since: 0, reading: false, prices: { note: "", rows: [] }, rows, threads: {}, people: {}, profiles: {}, remoteRuns: [] } : undefined));
+  const ui = core.connect();
+  const ask = (id: number, picks: J) => core.receiveRaw(ui, { id, subscribe: { topic: "usage", scope: "ws", ...picks } });
+  ask(1, {});
+  ask(2, { split: "models" });
+  ask(3, { only: { list: "people", key: "b@x" } });
+  ask(4, { day: yesterday.day });
+  await host.settle();
+  const values = new Map<number, J>();
+  apply(host, values);
+  const cost = (n: number) => values.get(n).tiles[0].value;
+  assert.equal(values.get(1).split, "people");
+  assert.equal(values.get(2).split, "models");
+  assert.equal(cost(1), "$7.00");
+  assert.equal(cost(3), "$2.00");
+  assert.equal(cost(4), "$4.00");
+  core.close();
+});
+
 test("what_the_agents_spent_is_read_again_from_the_day_a_change_touched", async () => {
   // Read whole at every change while a page showed it: some 200 KB a minute while agents worked, 2 to 23 s of the
   // station's time a read on a station (2026-11-02).

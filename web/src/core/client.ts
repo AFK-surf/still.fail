@@ -113,7 +113,7 @@ export type Topic =
   | { topic: "profiles"; scope: string }
   // What the agents of a scope's stations spent over its last `days` (7 or 30), by day, person, chat, profile and model
   // (client/core-ts/src/views/usage.ts). A core from before it answers an error.
-  | { topic: "usage"; scope: string; days?: number }
+  | { topic: "usage"; scope: string; days?: number; split?: string; only?: { list: string; key: string }; day?: string }
   // What the settings say of the scope as a whole: how many stations have the automatic decisions on
   // (client/core-ts/src/views/settings.ts).
   | { topic: "settings"; scope: string }
