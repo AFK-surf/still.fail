@@ -88,7 +88,7 @@ export const WORK_OF_SESSION = `SELECT
 
 // `reads` is keyed by viewer, then chat. A small table is cheap to scan; a large one is sought once per viewer.
 // Its rowid range gives an upper bound on its size with two B-tree seeks, even after deletions or explicit rowids.
-export const LAST_READ_AT = `WITH RECURSIVE few(viewer, count) AS (
+function lastRead(column: "at" | "n"): string { return `WITH RECURSIVE few(viewer, count) AS (
   SELECT (SELECT viewer FROM reads ORDER BY viewer LIMIT 1), 1
   UNION ALL SELECT (SELECT viewer FROM reads WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.count + 1
     FROM few v WHERE v.viewer IS NOT NULL AND v.count < 33
@@ -104,14 +104,16 @@ export const LAST_READ_AT = `WITH RECURSIVE few(viewer, count) AS (
   SELECT (SELECT MAX(rowid) FROM reads) - (SELECT MIN(rowid) FROM reads)
 )
 SELECT CASE WHEN (SELECT COUNT(*) FROM few WHERE viewer IS NOT NULL) <= 32
-  THEN (SELECT MAX((SELECT at FROM reads WHERE viewer = v.viewer AND thread = ?1)) FROM few v WHERE v.viewer IS NOT NULL)
+  THEN (SELECT MAX((SELECT ${column} FROM reads WHERE viewer = v.viewer AND thread = ?1)) FROM few v WHERE v.viewer IS NOT NULL)
   WHEN (SELECT span FROM bounds) < 512
-  THEN (SELECT MAX(at) FROM reads WHERE thread = ?1)
+  THEN (SELECT MAX(${column}) FROM reads WHERE thread = ?1)
   WHEN (SELECT COUNT(*) FROM more WHERE viewer IS NOT NULL) <= 256
-  THEN (SELECT MAX((SELECT at FROM reads WHERE viewer = v.viewer AND thread = ?1)) FROM more v WHERE v.viewer IS NOT NULL)
+  THEN (SELECT MAX((SELECT ${column} FROM reads WHERE viewer = v.viewer AND thread = ?1)) FROM more v WHERE v.viewer IS NOT NULL)
   WHEN (SELECT span FROM bounds) < 16384
-  THEN (SELECT MAX(at) FROM reads WHERE thread = ?1)
-  ELSE (SELECT MAX((SELECT at FROM reads WHERE viewer = v.viewer AND thread = ?1)) FROM all_viewers v WHERE v.viewer IS NOT NULL) END AS at`;
+  THEN (SELECT MAX(${column}) FROM reads WHERE thread = ?1)
+  ELSE (SELECT MAX((SELECT ${column} FROM reads WHERE viewer = v.viewer AND thread = ?1)) FROM all_viewers v WHERE v.viewer IS NOT NULL) END AS ${column}`; }
+export const LAST_READ_AT = lastRead("at");
+export const LAST_KNOWN = `SELECT MAX(n) AS n FROM (${lastRead("n")} UNION ALL SELECT MAX(n) FROM deliveries WHERE thread = ?1)`;
 
 // Each session's latest check of the last days (the archive policy's view) and a login's end (closeLoginCards), each by
 // an index of its own (and rows.ts CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE: each list of chats', the readers' too).
@@ -2618,10 +2620,7 @@ export class Store {
   /// The last entry number known of a thread with no entries: 0 for a new one. One whose archive file was lost is
   /// counted on from what was read and delivered of it, so that what clients keep of it is not numbered again.
   #lastKnown(thread: number): number {
-    const r = this.#one(
-      "SELECT MAX(n) AS n FROM (SELECT MAX(n) AS n FROM reads WHERE thread = ?1 UNION ALL SELECT MAX(n) FROM deliveries WHERE thread = ?1)",
-      thread,
-    );
+    const r = this.#one(LAST_KNOWN, thread);
     return r.n ?? 0;
   }
 
