@@ -203,3 +203,58 @@ for (const recursive of [false, true]) for (const what of ["thread", "thread upd
     } finally { store.close(); }
   });
 }
+
+for (const recursive of [false, true]) test(`recent ordering matches the original through interleaved old writes (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:");
+  const db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    let seed = 0x49c2a718;
+    const pick = (n: number) => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed % n; };
+    let nextName = 0;
+    const addThread = () => {
+      const id = store.openThread("ember", "EMBER", `chat-${nextName++}`, "Chat", null).id;
+      db.prepare("UPDATE threads SET created_at = ? WHERE id = ?").run(pick(100), id);
+    };
+    for (let i = 0; i < 20; i++) addThread();
+    installRecentChatIndex(db);
+    const insert = db.prepare("INSERT OR REPLACE INTO entries(thread,n,kind,ts,author_kind,author,text,at) VALUES (?,?,?,?, 'person','p','hello',?)");
+    const check = (step: number) => {
+      const actual = readGlobalRecentChatIndex(db, 5);
+      if (actual === null) return;
+      const rows = db.prepare(RECENT_CHAT_LIST).all(null, null, 5) as { id: number; total: number }[];
+      assert.deepEqual(actual, { ids: rows.map((row) => row.id), total: rows[0]?.total ?? 0 }, `after write ${step}`);
+    };
+    for (let i = 0; i < 300; i++) {
+      const threads = db.prepare("SELECT id, thread_ts FROM threads ORDER BY id").all() as { id: number; thread_ts: string }[];
+      if (threads.length === 0) addThread();
+      else {
+        const { id, thread_ts } = threads[pick(threads.length)]!;
+        const entries = db.prepare("SELECT n FROM entries WHERE thread = ? ORDER BY n").all(id) as { n: number }[];
+        const next = (entries.at(-1)?.n ?? 0) + 1;
+        const action = pick(9);
+        if (action === 0) addThread();
+        else if (action === 1) insert.run(id, next, "message", null, pick(100));
+        else if (action === 2) insert.run(id, next, "edit", null, pick(100));
+        else if (action === 3 && entries.length) {
+          const n = entries[pick(entries.length)]!.n;
+          db.prepare("UPDATE entries SET at = ? WHERE thread = ? AND n = ?").run(pick(100), id, n);
+        } else if (action === 4 && entries.length) {
+          const n = entries[pick(entries.length)]!.n;
+          db.prepare("DELETE FROM entries WHERE thread = ? AND n = ?").run(id, n);
+        } else if (action === 5 && entries.length) {
+          const n = entries[pick(entries.length)]!.n;
+          insert.run(id, n, pick(2) ? "message" : "edit", null, pick(100));
+        } else if (action === 6) db.prepare("UPDATE threads SET created_at = ? WHERE id = ?").run(pick(100), id);
+        else if (action === 7) db.prepare("DELETE FROM threads WHERE id = ?").run(id);
+        else if (action === 8) db.prepare("INSERT OR REPLACE INTO threads(id,surface,channel,thread_ts,created_at) VALUES (?,'ember','EMBER',?,?)")
+          .run(100_000 + i, thread_ts, pick(100));
+      }
+      check(i);
+      if (pick(3) !== 0) stepRecentChatIndex(db, 2);
+      check(i);
+    }
+    while (!stepRecentChatIndex(db, 3).done) { /* Finish the interleaved batches. */ }
+    check(300);
+  } finally { store.close(); }
+});
