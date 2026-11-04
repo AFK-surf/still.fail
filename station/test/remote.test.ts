@@ -147,6 +147,27 @@ describe("remote", { concurrency: true }, () => {
     }
   });
 
+  test("a first cleanup is remembered on disk", async () => {
+    const clock = testClock();
+    const store = Store.open(":memory:", null, clock);
+    const dir = tempdir();
+    const jobs = new Jobs({ store, data: dir, notify: () => {}, link: () => null });
+    const remote = new Remote({ data: dir, store, jobs, clock, notify: () => {} });
+    let runs = 0;
+    (remote as any).tidyBack = async () => { runs++; };
+    const record = join(dir, "remote", "back-tidied.json");
+    try {
+      await until("the first cleanup was recorded", () => {
+        try { return runs === 1 && JSON.parse(readFileSync(record, "utf8")) === 0; } catch { return false; }
+      });
+      assert.equal(runs, 1);
+    } finally {
+      await remote.close();
+      await jobs.shutdown();
+      store.close();
+    }
+  });
+
   test("what tasks brought back goes once nothing in it changed for 6 hours, what is newer stays", async () => {
     const r = station();
     const home = join(r.dir, "home");
