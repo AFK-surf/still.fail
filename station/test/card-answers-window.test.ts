@@ -146,6 +146,22 @@ test("out-of-order message times do not hide a later card's recent answer", () =
   } finally { store.close(); }
 });
 
+test("a person's answer can itself carry the next card", () => {
+  const store = Store.open(":memory:");
+  const db = store.db;
+  try {
+    const thread = store.openThread("ember", "EMBER", "answer-with-card", null, null).id;
+    const put = db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at,card) VALUES (?,?,?,?,?,?,?,?,?)");
+    const card = JSON.stringify({ type: "text" });
+    for (let n = 1; n <= 70; n++) put.run(thread, n, "message", `old-${n}`, "agent", "a", "choose", 1, card);
+    put.run(thread, 71, "message", "answer-and-card", "person", "p", "first", 100, card);
+    put.run(thread, 72, "message", "answer-next", "person", "p", "second", 101, null);
+    const expected = store.answersSince(100).filter((a) => a.question.thread === thread);
+    assert.deepEqual(expected.map((a) => [a.question.n, a.answer?.n]), [[70, 71], [71, 72]]);
+    assert.deepEqual(answersSince(makeStore(db, "."), 100, [thread]), expected);
+  } finally { store.close(); }
+});
+
 test("a scoped read agrees with the whole-station read for mixed card and message histories", () => {
   for (let seed = 1; seed <= 12; seed++) {
     const store = Store.open(":memory:");
