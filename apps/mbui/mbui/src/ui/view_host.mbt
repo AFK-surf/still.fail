@@ -4726,7 +4726,32 @@ fn old_build_size_in_theme(c : Ctx, o : OldIsland, width : Double, height~ : Dou
   old_measures[o.part] = o.measure_revision
   match kept_nodes.get((o.part, -1)) {
     Some(rn) if rn.in_pool => {
+      // Unlike rows_detach at the start of a new frame, this takes the previous measurement out while the
+      // current frame's tree is still live. Unlink its root before replacing its slots with spare nodes.
+      let first = rn.base
+      let parent = c.nodes[first].parent
+      if parent >= 0 {
+        let p = c.nodes[parent]
+        let mut previous = -1
+        let mut at = p.first
+        while at >= 0 && at != first {
+          previous = at
+          at = c.nodes[at].next
+        }
+        if at == first {
+          let next = c.nodes[first].next
+          if previous < 0 { p.first = next } else { c.nodes[previous].next = next }
+          if p.last == first { p.last = previous }
+        }
+      }
+      let end = rn.base + rn.n
       c.row_nodes_out(rn)
+      // The frame can still visit its other roots. A spare's old child links are not part of this frame.
+      for at in first..<end {
+        let spare = c.nodes[at]
+        spare.reset_rest()
+        spare.parent = 0
+      }
       rn.in_pool = false
     }
     _ => ()
