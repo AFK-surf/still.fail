@@ -4,7 +4,7 @@ import { Effect } from "effect";
 import { makeStore } from "../src/read/store.ts";
 import { usageHistory } from "../src/read/usage.ts";
 import { installCompactUsage } from "../src/store/usage-compact.ts";
-import { installUsageHistory, usageHistorySince } from "../src/store/usage-history.ts";
+import { convertUsageHistoryStep, historyTransferPending, installUsageHistory, usageHistorySince } from "../src/store/usage-history.ts";
 import { Store } from "../src/store/store.ts";
 import { retireAfterPrevious } from "../src/usage/module.ts";
 
@@ -32,7 +32,7 @@ test("handover preserves the old quarterly and compact summaries in the usage hi
   } finally { store.close(); }
 });
 
-test("installing usage history does not read or reconstruct old calls or quarters", () => {
+test("installing usage history does not read old calls or summaries under its installation lock", () => {
   const store = Store.open(":memory:");
   const db = store.db;
   try {
@@ -48,8 +48,8 @@ test("installing usage history does not read or reconstruct old calls or quarter
     const traced = new Proxy(db, {
       get(target, property) {
         if (property === "prepare" || property === "exec") return (source: string) => {
-          if (/\b(?:from|join)\s+usage_day_quarters\b/i.test(source)
-            || (/\b(?:from|join)\s+usage\b/i.test(source) && !/^\s*select 1 from usage limit 1\s*$/i.test(source))) oldReads.push(source);
+          if (property === "prepare" && (/\b(?:from|join)\s+usage_day_quarters\b/i.test(source)
+            || (/\b(?:from|join)\s+usage\b/i.test(source) && !/^\s*select 1 from usage limit 1\s*$/i.test(source)))) oldReads.push(source);
           return property === "prepare" ? target.prepare(source) : target.exec(source);
         };
         const value = Reflect.get(target, property, target);
@@ -58,25 +58,26 @@ test("installing usage history does not read or reconstruct old calls or quarter
     });
     const now = 5_000 * 900_000;
     installUsageHistory(traced, now);
-    assert.deepEqual(oldReads, [], "old history is never read to initialize new statistics");
-    assert.equal(usageHistorySince(db), now, "earlier usage is marked incomplete");
+    assert.deepEqual(oldReads, [], "installation does not read old calls or summaries");
+    assert.equal(usageHistorySince(db), null, "the old summary was complete");
+    assert.equal(historyTransferPending(db), true);
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM usage_history").get() as { n: number }).n, 0);
-
+    while (!convertUsageHistoryStep(db)) { /* Old summaries only, in bounded batches. */ }
     insert.run("new", now + 1000);
     const total = () => db.prepare("SELECT calls, tokens FROM usage_history_total WHERE scope = ''").get() as { calls: number; tokens: number };
-    assert.deepEqual({ ...total() }, { calls: 1, tokens: 5 });
+    assert.deepEqual({ ...total() }, { calls: 5_001, tokens: 25_005 });
     db.prepare("UPDATE usage SET output=100 WHERE id='old-0'").run();
-    assert.deepEqual({ ...total() }, { calls: 1, tokens: 5 }, "changes to an uncounted old row do not affect the new total");
+    assert.deepEqual({ ...total() }, { calls: 5_001, tokens: 25_102 });
     db.prepare("UPDATE usage SET output=10 WHERE id='new'").run();
-    assert.deepEqual({ ...total() }, { calls: 1, tokens: 12 });
+    assert.deepEqual({ ...total() }, { calls: 5_001, tokens: 25_109 });
     db.prepare("DELETE FROM usage WHERE id='old-1'").run();
-    assert.deepEqual({ ...total() }, { calls: 1, tokens: 12 });
+    assert.deepEqual({ ...total() }, { calls: 5_000, tokens: 25_104 });
     db.prepare("DELETE FROM usage WHERE id='new'").run();
-    assert.deepEqual({ ...total() }, { calls: 0, tokens: 0 });
+    assert.deepEqual({ ...total() }, { calls: 4_999, tokens: 25_092 });
   } finally { store.close(); }
 });
 
-for (const recursive of [false, true]) test(`old and new calls in the same quarter stay separate (recursive triggers ${recursive})`, () => {
+for (const recursive of [false, true]) test(`old and new calls in the same quarter are each counted once (recursive triggers ${recursive})`, () => {
   const store = Store.open(":memory:");
   const db = store.db;
   try {
@@ -89,17 +90,18 @@ for (const recursive of [false, true]) test(`old and new calls in the same quart
     installCompactUsage(db, () => 900_100);
     installUsageHistory(db, 900_100);
     write.run("new", 900_200, 3); // An older writer omits the marker.
+    while (!convertUsageHistoryStep(db)) { /* Old summaries only. */ }
     const rows = () => db.prepare("SELECT quarter, calls, tokens FROM usage_history ORDER BY quarter").all().map((row) => ({ ...row }));
-    assert.deepEqual(rows(), [{ quarter: 1, calls: 1, tokens: 5 }]);
+    assert.deepEqual(rows(), [{ quarter: 1, calls: 2, tokens: 10 }]);
     write.run("old", 900_010, 30);
     db.prepare("UPDATE usage SET at = 10 WHERE id = 'old'").run();
-    assert.deepEqual(rows(), [{ quarter: 1, calls: 1, tokens: 5 }], "old calls never enter new totals when changed or moved");
+    assert.deepEqual(rows(), [{ quarter: 0, calls: 1, tokens: 32 }, { quarter: 1, calls: 1, tokens: 5 }]);
     write.run("new", 900_200, 10);
-    assert.deepEqual(rows(), [{ quarter: 1, calls: 1, tokens: 12 }]);
+    assert.deepEqual(rows(), [{ quarter: 0, calls: 1, tokens: 32 }, { quarter: 1, calls: 1, tokens: 12 }]);
     db.prepare("UPDATE usage SET at = 1_800_000 WHERE id = 'new'").run();
-    assert.deepEqual(rows(), [{ quarter: 1, calls: 0, tokens: 0 }, { quarter: 2, calls: 1, tokens: 12 }]);
+    assert.deepEqual(rows(), [{ quarter: 0, calls: 1, tokens: 32 }, { quarter: 1, calls: 0, tokens: 0 }, { quarter: 2, calls: 1, tokens: 12 }]);
     db.prepare("DELETE FROM usage WHERE id IN ('old', 'new')").run();
-    assert.deepEqual(rows(), [{ quarter: 1, calls: 0, tokens: 0 }, { quarter: 2, calls: 0, tokens: 0 }]);
+    assert.deepEqual(rows(), [{ quarter: 0, calls: 0, tokens: 0 }, { quarter: 1, calls: 0, tokens: 0 }, { quarter: 2, calls: 0, tokens: 0 }]);
   } finally { store.close(); }
 });
 

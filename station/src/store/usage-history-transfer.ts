@@ -26,10 +26,10 @@ export function installHistoryTransfer(db: DatabaseSync): void {
       q_session TEXT, q_quarter INTEGER, q_runtime TEXT, q_model TEXT,
       c_session TEXT, c_minute INTEGER, c_thread INTEGER, c_person TEXT, c_profile TEXT, c_runtime TEXT, c_model TEXT, c_fast INTEGER);
     INSERT INTO usage_history_transfer (id, phase) VALUES (1, 0);
-    -- Remember the owner of a session deleted during conversion. Previously converted and later rows then stay together.
+    -- Remember a deleted session's owner so its old summaries and later changes stay in that workspace.
     CREATE TABLE usage_history_orphans (session TEXT PRIMARY KEY, scope TEXT NOT NULL) WITHOUT ROWID;
     CREATE INDEX usage_history_orphans_scope ON usage_history_orphans (scope, session);
-    CREATE TRIGGER usage_history_transfer_owner BEFORE DELETE ON sessions
+    CREATE TRIGGER usage_history_owner BEFORE DELETE ON sessions
       WHEN EXISTS (SELECT 1 FROM usage_day_quarters WHERE session = OLD.key LIMIT 1)
         OR EXISTS (SELECT 1 FROM usage_compact WHERE session = OLD.key LIMIT 1) BEGIN
       INSERT INTO usage_history_orphans VALUES (OLD.key, COALESCE(OLD.ws, ''))
@@ -95,7 +95,7 @@ export function historyTransferStep(db: DatabaseSync, finish: () => void, batch 
       db.exec(`DROP TRIGGER usage_history_transfer_q_add; DROP TRIGGER usage_history_transfer_q_change;
         DROP TRIGGER usage_history_transfer_q_drop; DROP TRIGGER usage_history_transfer_c_add;
         DROP TRIGGER usage_history_transfer_c_change; DROP TRIGGER usage_history_transfer_c_drop;
-        DROP TRIGGER usage_history_transfer_owner; DROP TABLE usage_history_transfer`);
+        DROP TABLE usage_history_transfer`);
       finish();
       db.exec("COMMIT");
       return true;

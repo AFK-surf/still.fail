@@ -6,7 +6,7 @@ import { usage, usageHistory } from "../src/read/usage.ts";
 import { Store } from "../src/store/store.ts";
 import type { InWorkspace } from "../src/store/rows.ts";
 import { installCompactUsage } from "../src/store/usage-compact.ts";
-import { HISTORY_DAYS, installUsageHistory } from "../src/store/usage-history.ts";
+import { convertUsageHistoryStep, HISTORY_DAYS, installUsageHistory } from "../src/store/usage-history.ts";
 import type { UsageCall, UsageFor } from "../src/store/usage.ts";
 
 const of: UsageFor = { turn: null, person: "p", thread: null, profile: "cc" };
@@ -22,11 +22,12 @@ function record(store: Store, key: string, calls: UsageCall[]) {
 }
 
 /// What the page should say, added up from the calls themselves: by local day, of the sessions `viewer` sees.
-function truth(store: Store, offset: number, viewer: InWorkspace | null, ws: Map<string, string | null>): [string, number, number][] {
+function truth(store: Store, offset: number, viewer: InWorkspace | null, ws: Map<string, string | null>, excluded = new Set<string>()): [string, number, number][] {
   const days = new Map<string, [number, number]>();
-  const rows = store.db.prepare("SELECT session, at, calls, input + cache_read + cache_write + cache_write_long + output AS tokens FROM usage").all() as
-    { session: string; at: number; calls: number; tokens: number }[];
+  const rows = store.db.prepare("SELECT id, session, at, calls, input + cache_read + cache_write + cache_write_long + output AS tokens FROM usage").all() as
+    { id: string; session: string; at: number; calls: number; tokens: number }[];
   for (const r of rows) {
+    if (excluded.has(r.id)) continue;
     const w = ws.get(r.session) ?? null;
     if (viewer !== null && !(w === viewer.workspace || (w === null && viewer.home !== false))) continue;
     const day = new Date(r.at + offset * 60_000).toISOString().slice(0, 10);
@@ -141,7 +142,7 @@ function before(store: Store) {
     DROP TABLE usage_history; DROP TABLE usage_history_total; DROP TABLE usage_history_since;`);
 }
 
-test("installed on an older station, the history counts new calls without reconstructing older statistics", () => {
+test("installed on an older station, the history takes over known old summaries and counts new calls", () => {
   for (const state of ["kept", "compact", "stopped"] as const) {
     const store = Store.open(":memory:");
     try {
@@ -158,24 +159,28 @@ test("installed on an older station, the history counts new calls without recons
         store.db.exec("CREATE TABLE usage_retired_detail (id INTEGER PRIMARY KEY CHECK (id = 1)); INSERT INTO usage_retired_detail VALUES (1)");
         record(store, "a", [call("gap-last-quarter", last + 60_000, 500), call("gap", last + 7_200_000, 600)]);
       }
+      installCompactUsage(store.db, () => last + 10_800_000);
       if (state !== "kept") {
-        installCompactUsage(store.db, () => last + 10_800_000);
         record(store, "a", [call("compact", last + 14_400_000, 700)]);
         // An old call's response grows: the compact statistics keep the old quarters with it (not after a stop).
         if (state === "compact") record(store, "a", [call("old0", 0, 1, 9)]);
       }
       installUsageHistory(store.db, last + 20_000_000);
+      while (!convertUsageHistoryStep(store.db)) { /* Old summaries only. */ }
+      const excluded = new Set(state === "stopped" ? ["gap-last-quarter", "gap"] : []);
+      const ws = new Map<string, string | null>([["a", "A"], ["h", null]]);
       for (const viewer of [null, { workspace: "A", home: false }, { workspace: "A", home: true }]) {
-        assert.deepEqual(days(history(store, 480, viewer)), [], `${state} ${JSON.stringify(viewer)}`);
+        assert.deepEqual(days(history(store, 480, viewer)), truth(store, 480, viewer, ws, excluded), `${state} ${JSON.stringify(viewer)}`);
       }
-      assert.equal(history(store, 0, null).since, last + 20_000_000, `${state}: the older history is incomplete`);
+      assert.equal(history(store, 0, null).since, state === "stopped" ? last + 10_800_000 : undefined,
+        `${state}: an unknown gap is marked incomplete`);
       record(store, "a", [call("after", last + 30_000_000, 3)]);
-      assert.deepEqual(days(history(store, 0, null)), [["1970-01-02", 1, 4]]);
+      assert.deepEqual(days(history(store, 0, null)), truth(store, 0, null, ws, excluded));
     } finally { store.close(); }
   }
 });
 
-test("a station whose old quarters were incomplete does not reconstruct them", () => {
+test("a station whose old quarters were incomplete keeps what they hold and marks the gap", () => {
   const store = Store.open(":memory:");
   try {
     before(store);
@@ -185,8 +190,9 @@ test("a station whose old quarters were incomplete does not reconstruct them", (
     installCompactUsage(store.db, () => 3_600_000);
     record(store, "a", [call("new", 7_200_000, 2)]);
     installUsageHistory(store.db, 10_000_000);
+    while (!convertUsageHistoryStep(store.db)) { /* Old summaries only. */ }
     const h = history(store, 0, null);
-    assert.equal(h.since, 10_000_000);
-    assert.deepEqual(days(h), []);
+    assert.equal(h.since, 3_600_000);
+    assert.deepEqual(days(h), [["1970-01-01", 2, 5]]);
   } finally { store.close(); }
 });

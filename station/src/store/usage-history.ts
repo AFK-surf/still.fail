@@ -15,10 +15,6 @@ const tokensOf = (r: string) => `(${r}.input + ${r}.cache_read + ${r}.cache_writ
 /// A session's workspace as its usage is told apart (rows.ts `sees`): its chat's, '' for the home one's (and a session
 /// gone, whose calls stay counted where they were).
 const scopeOf = (r: string) => `COALESCE((SELECT ws FROM sessions WHERE key = ${r}.session), '')`;
-const addTo = (scope: string, quarter: string, calls: string, tokens: string) => `INSERT INTO usage_history (scope, quarter, calls, tokens)
-    VALUES (${scope}, ${quarter}, ${calls}, ${tokens})
-    ON CONFLICT (scope, quarter) DO UPDATE SET calls = calls + excluded.calls, tokens = tokens + excluded.tokens;`;
-
 const SCHEMA = `
 CREATE TABLE usage_history (scope TEXT NOT NULL, quarter INTEGER NOT NULL, calls INTEGER NOT NULL, tokens INTEGER NOT NULL,
   PRIMARY KEY (scope, quarter)) WITHOUT ROWID;
