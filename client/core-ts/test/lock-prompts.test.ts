@@ -135,6 +135,21 @@ test("a change the cloud kept, its answer lost on the way back: done, not said t
   assert.equal(r.cloud.posted.length, 1);
 });
 
+test("a web page whose approval ran out waits to be approved again, and a station's refusal says so, not that the station has not heard", async () => {
+  // This device a web page of s1's in the lock, its 30 days over (the stations refuse it: "this device's confirmation ran out").
+  const r = await rig(() => ({ ws: genesis("ws", elsewhere(), false, [], {}, ME, [{ id: ME, sub: "s1", kind: "web", label: "Chrome", exp: 2000 }]) }));
+  const lock = await r.watch({ topic: "lock", workspace: "ws" });
+  const me = (await lock()).me;
+  assert.deepEqual([me.confirmed, me.waiting], [false, true], "it waits, as one not in the lock");
+  const woke: string[] = [];
+  r.core.inner.stations.cameOnline = (address: string) => void woke.push(address);
+  const said = hooks.lockRefused!(r.core.inner, "ws", "st", null);
+  assert.equal(said?.code, "lock_unconfirmed");
+  assert.ok(said!.message.includes(shortCode(ME)), said!.message);
+  await r.host.time.pass(BEHIND_MS * 3);
+  assert.deepEqual(woke, [], "not tried again as a station behind");
+});
+
 test("a station that refuses this device though the lock names it has not heard yet: tried again shortly, not held", async () => {
   const r = await rig((me) => ({ ws: genesis("ws", me, true) }));
   await r.watch({ topic: "lock", workspace: "ws" });

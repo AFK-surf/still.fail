@@ -36,7 +36,7 @@ import * as prefs from "../prefs.ts";
 import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { checkLock } from "../vault/lock-check.ts";
-import { Lock, baseOf, deviceText, fold, held, nameOf, pairs, read, signerKnown, signerOf, view } from "./lock.ts";
+import { Lock, baseOf, deviceText, fold, held, live, nameOf, pairs, read, signerKnown, signerOf, view } from "./lock.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -144,7 +144,8 @@ function placesFor(inner: Inner, hello: J, peer: string, me: string): { places: 
     const mine = lock.devices.get(me);
     // One in the lock already: only an app that does not sign with the key it brings (let in before it kept one) is
     // approved again, as one that signs, and as its own person's.
-    const had = lock.devices.get(peer);
+    // (one whose approval ran out, a web page's: approved again as a new one is)
+    const had = live(lock.devices.get(peer), now);
     const key = str(get(hello, "sign_key"));
     const upgrade = had !== undefined && had.kind === "app" && get(hello, "kind") === "app" && key !== null && had.sign_key !== key;
     if (lock.disabled || mine?.sign_key !== signer || (had !== undefined && !upgrade)) continue;
@@ -310,7 +311,7 @@ function waitingIn(inner: Inner, base: string): { workspaces: string[]; trusted:
     const h = held(inner, ws);
     if (!h?.head) continue;
     const f = fold(h.entries);
-    const had = f.devices.get(base);
+    const had = live(f.devices.get(base), Math.floor(inner.host.nowMs() / 1000));
     const unsigned = had !== undefined && had.kind === "app" && inner.host.appKeys === true && (signer === null || had.sign_key !== signer);
     if (f.disabled || (had !== undefined && !unsigned)) continue;
     workspaces.push(ws);

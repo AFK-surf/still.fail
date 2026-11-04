@@ -262,6 +262,14 @@ test("an app in the lock that does not sign (let in before it kept a key) is mad
   assert.deepEqual([same.cloud.posted, theirs.cloud.posted], [[], []]);
 });
 
+test("a web page whose approval ran out is approved again face to face, as a new one is", async () => {
+  const m = await met({ kind: "web", exp: 2000 } as never);
+  assert.deepEqual(await m.hello(m.g.credential("ws", PHONE, "s2")), { ok: { t: "code", workspaces: ["ws"] } });
+  const done = await m.prove((await m.prompts()).pairing[0].code);
+  assert.ok("ok" in done && "approved" in done.ok, JSON.stringify(done));
+  assert.deepEqual(m.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "device", PHONE]]);
+});
+
 test("a new device that dialled someone else cannot prove even the right code to the trusted one", async () => {
   const m = await met();
   await m.hello();
