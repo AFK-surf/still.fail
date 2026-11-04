@@ -37,7 +37,23 @@ let rows : Rows = {
 }
 
 ///|
+/// A title request and its answer, kept by chat while the list changes around it.
+priv struct TitleMotion {
+  old : String
+  next : String
+  at : Double
+  waiting : Bool
+}
+
+///|
+let title_motions : @sf.LiveMap[String, TitleMotion] = @sf.LiveMap::new()
+
+///|
+let title_swap_ms : Double = 300.0
+
+///|
 fn chat_rows_reset() -> Unit {
+  title_motions.clear()
   row_left.val = ("", false)
   row_left_said.set("")
   row_renaming.set("")
@@ -77,6 +93,79 @@ fn row_busy(src : Source, item : ChatItem) -> Bool {
 ///|
 fn row_failed(src : Source, item : ChatItem) -> String? {
   core_failed(src, row_calls, [("station", item.station), ("session", item.session)])
+}
+
+///|
+/// A title being generated keeps its original words, with a light passing along their glyphs. The answer moves the
+/// two lines through one clipped line, so neither can cover the other or the row beside it.
+fn row_title(c : @ui.Ctx, key : String, title : String, style : @ui.TextStyle) -> Unit {
+  match title_motions.get(key) {
+    Some(m) if m.waiting => {
+      let node = @sf.name_words(c, m.old, style)
+      if !c.reduced_motion() {
+        let count = c.words_glyph_cells(m.old, style).length().to_double()
+        c.glyphs_by(node, fn(g) {
+          let f = c.now() / 1800.0
+          let phase = f - f.floor()
+          let pos = if count > 1.0 { g.index.to_double() / (count - 1.0) } else { 0.5 }
+          let distance = (pos - (phase * 1.8 - 0.4)).abs()
+          let shine = dmax(0.0, 1.0 - distance / 0.4)
+          { alpha: 0.62 + 0.38 * shine, dx: 0.0, dy: 0.0, scale: 1.0, sx: 1.0 }
+        })
+      }
+    }
+    Some(m) if !m.waiting && m.next != "" => {
+      let line = match style.base.leading {
+        Some(leading) => c.theme().leading(leading).unwrap_or(c.text_size(Ui).1)
+        None => c.text_size(Ui).1
+      }
+      let end = m.at + title_swap_ms
+      if c.moment() < end { c.wake_in(end - c.moment(), later=true) }
+      let cut = style.then(@ui.text_style(wrap=false, w=Cut))
+      c.box(style=@ui.style(w=@sf.grow, h=Fixed(line), clip=true), keep=true, fn() {
+        let old = c.text(m.old, style=cut)
+        let next = c.layer(fn() { c.text(m.next, style=cut) |> ignore })
+        c.look_by(old, fn() {
+          let k = if c.reduced_motion() { 1.0 } else { dmin(1.0, dmax(0.0, (c.now_before(end) - m.at) / title_swap_ms)) }
+          @ui.look(dy=-line * @ui.Ease::Out.at(k))
+        })
+        c.look_by(next, fn() {
+          let k = if c.reduced_motion() { 1.0 } else { dmin(1.0, dmax(0.0, (c.now_before(end) - m.at) / title_swap_ms)) }
+          @ui.look(dy=line * (1.0 - @ui.Ease::Out.at(k)))
+        })
+      }) |> ignore
+      if title == m.next && c.moment() >= end {
+        title_motions.remove(key)
+      }
+    }
+    _ => @sf.name_words(c, title, style) |> ignore
+  }
+}
+
+///|
+fn regenerate_row_title(src : Source, key : String, station : String, thread : Double, title : String) -> Unit {
+  if title_motions.get(key) is Some({ waiting: true, .. }) { return }
+  if !src.read_only {
+    title_motions[key] = { old: title, next: "", at: 0.0, waiting: true }
+    toast_later(@sf.t("web-main.chat.regenerateTitle.start"))
+  }
+  act(
+    src,
+    @sf.t("web-main.chat.regenerateTitle.verb"),
+    "",
+    "chat.regenerateTitle",
+    { "station": Json::string(station), "thread": Json::number(thread) },
+    done=@sf.t("web-main.chat.regenerateTitle.done"),
+    ok=fn(v) {
+      let next = text(Some(v), "autoTitle")
+      if next == "" || next == title {
+        title_motions.remove(key)
+      } else {
+        title_motions[key] = { old: title, next, at: @ui.current().moment(), waiting: false }
+      }
+    },
+    failed=fn() { title_motions.remove(key) },
+  )
 }
 
 ///|
@@ -312,7 +401,7 @@ pub fn chat_row(
               row_rename(c, src, item)
             } else {
               let title = if item.unread { look.title_unread } else { look.title }
-              @sf.name_words(c, item.title, if offline || item.settled { title.then(title_dim) } else { title }) |> ignore
+              row_title(c, key, item.title, if offline || item.settled { title.then(title_dim) } else { title })
             }
             // pinned, renamed or archived: nothing while its station answers (the core's list has it so at once);
             // failed, a red mark a few seconds, why on it (the menu that asked has closed, the core put it back)
@@ -688,17 +777,7 @@ fn chat_menu_items(src : Source, item : ChatItem, extra : Array[@sf.MenuItem?]) 
       items.push(
         Some(
           @sf.menu_item_of(@sf.t("web-main.chat.regenerateTitle"), icon="refresh", fn() {
-            if !src.read_only {
-              toast_later(@sf.t("web-main.chat.regenerateTitle.start"))
-            }
-            act(
-              src,
-              @sf.t("web-main.chat.regenerateTitle.verb"),
-              "",
-              "chat.regenerateTitle",
-              { "station": Json::string(item.station), "thread": Json::number(th) },
-              done=@sf.t("web-main.chat.regenerateTitle.done"),
-            )
+            regenerate_row_title(src, @sfbase.row_name(item), item.station, th, item.title)
           }),
         ),
       )
