@@ -475,9 +475,11 @@ fn swipe_under_node(
     // (over the row as big as it is, out of its row of parts: what is past its end as wide as it)
     u.over(Is(true)) |> ignore
     u.box(fn(g) {
+      // (归档 cut to it: laid out at the slot's end, it shows only as far as the row has uncovered, as under the row)
       g
       .over(Is(true))
       .shift(Is((1.0, 0.0)))
+      .clips(Is(true))
       .ground(By(fn() {
         let t = @sf.theme()
         @sf.mix(t.p.text, fill.shown(g), t.p.chip)
