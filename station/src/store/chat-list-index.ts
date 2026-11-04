@@ -22,10 +22,13 @@ INSERT INTO recent_chat_meta SELECT 1, NULL, (SELECT MAX(id) FROM threads), 0,
 CREATE TRIGGER recent_chat_thread_add AFTER INSERT ON threads BEGIN ${dirty("NEW.id")} END;
 CREATE TRIGGER recent_chat_thread_change AFTER UPDATE OF id, created_at ON threads BEGIN ${dirty("OLD.id")} ${dirty("NEW.id")} END;
 CREATE TRIGGER recent_chat_thread_drop AFTER DELETE ON threads BEGIN ${dirty("OLD.id")} END;
-CREATE TRIGGER recent_chat_state_add AFTER INSERT ON thread_state BEGIN ${dirty("NEW.thread")} END;
-CREATE TRIGGER recent_chat_state_change AFTER UPDATE OF thread, said_n ON thread_state BEGIN ${dirty("OLD.thread")} ${dirty("NEW.thread")} END;
-CREATE TRIGGER recent_chat_state_drop AFTER DELETE ON thread_state BEGIN ${dirty("OLD.thread")} END;
-CREATE TRIGGER recent_chat_entry_add AFTER INSERT ON entries BEGIN ${dirty("NEW.thread")} END;
+CREATE TRIGGER recent_chat_state_add AFTER INSERT ON thread_state WHEN NEW.said_n IS NOT NULL BEGIN ${dirty("NEW.thread")} END;
+CREATE TRIGGER recent_chat_state_change AFTER UPDATE OF thread, said_n ON thread_state
+  WHEN OLD.thread IS NOT NEW.thread OR OLD.said_n IS NOT NEW.said_n BEGIN ${dirty("OLD.thread")} ${dirty("NEW.thread")} END;
+CREATE TRIGGER recent_chat_state_drop AFTER DELETE ON thread_state WHEN OLD.said_n IS NOT NULL BEGIN ${dirty("OLD.thread")} END;
+CREATE TRIGGER recent_chat_entry_add AFTER INSERT ON entries WHEN NEW.kind = 'message' AND
+  (NEW.letter IS NULL OR EXISTS (SELECT 1 FROM thread_state s WHERE s.thread = NEW.thread AND s.said_n = NEW.n))
+  BEGIN ${dirty("NEW.thread")} END;
 CREATE TRIGGER recent_chat_entry_change AFTER UPDATE OF thread, n, kind, at ON entries BEGIN ${dirty("OLD.thread")} ${dirty("NEW.thread")} END;
 CREATE TRIGGER recent_chat_entry_drop AFTER DELETE ON entries BEGIN ${dirty("OLD.thread")} END;
 `;
