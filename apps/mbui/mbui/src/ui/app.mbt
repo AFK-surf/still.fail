@@ -117,10 +117,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   c.device_frame_start()
   env_at_frame()
   view_logic_at.val = h_now()
-  c.width = w
-  c.height = h
-  c.window_w = w
-  c.window_h = h
+  frame_context(c, w, h, scale)
   c.clock = view_logic_at.val
   view_frame_committed.val = false
   frame_arrivals(c, w, h, scale, t)
@@ -212,6 +209,7 @@ pub fn frame_offscreen(
 ) -> Ctx {
   g_view.val = view
   let c = g()
+  frame_context(c, w, h, scale)
   c.clock = t
   frame_arrivals(c, w, h, scale, t)
   frame_body(g(), w, h, scale, t) |> ignore
@@ -224,8 +222,8 @@ pub fn frame_offscreen(
 let frame_hook : Ref[(() -> Unit)?] = Ref::new(None)
 
 ///|
-/// Builds, lays out and paints a frame; returns when it started.
-fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Double {
+/// Inputs to both retained measurement and the old frame, installed before either lays anything out.
+fn frame_context(c : Ctx, w : Double, h : Double, scale : Double) -> Unit {
   c.width = w
   c.height = h
   c.window_w = w
@@ -250,6 +248,12 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     c.epoch = c.epoch + 1
     view_words_rescaled()
   }
+}
+
+///|
+/// Builds, lays out and paints a frame; returns when it started.
+fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Double {
+  frame_context(c, w, h, scale)
   c.clock = t
   c.dt = if c.last_now < 0.0 { 16.67 } else { dclamp(t - c.last_now, 0.0, 100.0) }
   c.last_now = t
@@ -376,8 +380,6 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
       // what of an old view's came to have the focus, brought into sight by what of the window's tree holds it
       // (view_host.mbt)
       old_show_after_layout(c)
-      // (an old view as tall as what it holds: that height, as laid out now, told its node (view_host.mbt))
-      old_natural_after_layout(c)
     })
     laying.val = false
     layout_coming.val = false

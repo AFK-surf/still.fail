@@ -123,10 +123,8 @@ fn panel_node(
       let body_box : Ref[@view.View?] = Ref(None)
       // (its old views' words as far in as its look says: on entering, its ground first, then they; read as they are
       // painted (Ctx::look_by), so that its way in and out paints them, nothing of them built again)
-      // (`fits`: how wide what its head, its body and its foot each hold is laid out, out to the panel's sides: what it
-      // is as wide as; each made before what reads them)
-      let wide : Array[@signals.Signal[Double?]] = Array::makei(3, fn(_) { @signals.signal(None, same=fn(a, b) { a == b }) })
-      let fits = fn(k : Int) -> (Double, @signals.Signal[Double?])? { if x.fits { Some((x.w, wide[k])) } else { None } }
+      // Each leaf returns its intrinsic width to this parent during measurement.
+      let fits = if x.fits { Some(x.w) } else { None }
       let words_look = fn(c : @ui.Ctx, held : Int) {
         c.look_by(held, fn() {
           { alpha: 1.0, dx: 0.0, dy: 0.0, sx: 1.0, sy: 1.0, ox: 0.5, oy: 0.5, rot: 0.0, circle: 0.0, words: look().words }
@@ -135,9 +133,8 @@ fn panel_node(
       layer.box(fn(p) {
         p
         .beside(at.id(), side=x.side, along=x.along, offset=x.offset, padding=8.0)
-        // (`fits`: as wide as what it holds, `w` at most, never narrower than it has been: its parts each told how wide
-        // what they hold is laid out, out to its sides, none narrower than it is, small_panel's min_w and max_w)
-        .width(if x.fits { By(fn() { Some(dmin(x.w, wide.iter().fold(init=0.0, fn(m, s) { dmax(m, s.get().unwrap_or(0.0)) }))) }) } else { Is(Some(x.w)) })
+        .width(Is(if x.fits { None } else { Some(x.w) }))
+        .max_width(Is(Some(x.w)))
         .max_height(By(fn() { Some(dmax(0.0, layer.window().1 - 16.0)) }))
         // (`tall`: a share of the window, no taller than the room beside what opened it, small_panel's `h`)
         .height(By(fn() { if x.tall > 0.0 { Some(dmin(x.tall * layer.window().1, dmax(0.0, layer.window().1 - 16.0))) } else { None } }))
@@ -210,7 +207,7 @@ fn panel_node(
         let out_under = if footed { 0.0 } else { panel_pad }
         // (its title, panel_head's: out to the panel's edges over it, on `v`'s node)
         let head = fn(v : @view.View) {
-          @ui.old(v, natural=true, fits?=fits(0), key=fn() { key + "/head" }, fn(c) {
+          @ui.old(v, natural=true, fits?=fits, key=fn() { key + "/head" }, fn(c) {
             let was = opened()
             let held = c.box(style=panel_part_in(panel_pad, 0.0), fn() { panel_head(c, title(), end?=x.head_end) })
             beside_given.val = was
@@ -268,7 +265,7 @@ fn panel_node(
             |> ignore
             body_box.val = Some(b)
             b.scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(s) {
-              @ui.old(s, natural=true, fits?=fits(1), key=fn() { key + "/body" }, fn(c) {
+              @ui.old(s, natural=true, fits?=fits, key=fn() { key + "/body" }, fn(c) {
               let was = opened()
                 let held = c.box(style=held_in().then(@ui.style(pt=room(over()), pb=room(under))), fn() {
                   // (held shorter than what it holds: what would scroll in itself there laid out whole, panel_held)
@@ -302,7 +299,7 @@ fn panel_node(
         // (its foot: its buttons in its foot corner, a line over them where `ruled`)
         match x.foot {
           Some(f) =>
-            @ui.old(p, natural=true, fits?=fits(2), key=fn() { key + "/foot" }, fn(c) {
+            @ui.old(p, natural=true, fits?=fits, key=fn() { key + "/foot" }, fn(c) {
               let was = opened()
               let held = c.box(style=panel_part_in(0.0, panel_pad), fn() {
                 if x.ruled {

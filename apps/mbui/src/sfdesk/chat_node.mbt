@@ -118,7 +118,7 @@ fn chat_talk_node(
     @sfpages.chat_waiting_node(b, src, r, fn() { chat_bar_room() + list_head_gap }, fn() { @sf.under_bar_room().px() })
   })
   talk.box(fn(l) {
-    l.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+    l.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
     let list = @sfpages.chat_list_node(l, src, r, view, entries, fn() { chat_bar_room() + list_head_gap }, room_now, settings_core(src, w), foot_gap=list_foot_gap)
     latest.val = list.to_latest
     landing.val = list.landing_of

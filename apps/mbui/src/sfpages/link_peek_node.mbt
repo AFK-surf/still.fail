@@ -85,7 +85,6 @@ fn link_peeks_node(
     guard @signals.untracked(fn() { open.get() }) is Some((href, words, (px, py, _, ph))) else { return }
     let scope = "link-peek-node/" + href
     l.box(fn(card) {
-      let card_w : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
       card.owns(fn() {
         card_on.val = None
         @sfbase.let_go(src, scope)
@@ -96,7 +95,7 @@ fn link_peeks_node(
       .offset(By(fn() {
         match l.laid_window_told() {
           Some((lx, ly, lw, _)) => {
-            let cw = card_w.get().unwrap_or(0.0)
+            let cw = card.laid_size_told().map(fn(size) { size.0 }).unwrap_or(0.0)
             (dmax(0.0, dmin(px - lx, lw - cw - 8.0)), py + ph + hover_offset - ly)
           }
           None => (0.0, 0.0)
@@ -116,9 +115,8 @@ fn link_peeks_node(
           |> ignore
         })
         |> ignore
-      }, natural=true, fits=(if tile { link_peek_tile_most } else { link_peek_card_w }, card_w))
+      }, natural=true, fits=if tile { link_peek_tile_most } else { link_peek_card_w })
       // (as wide as the old frame lays what it holds out: it takes the pointer there, its own lighting by it)
-      .width(By(fn() { card_w.get() }))
       |> fn(island) { card_on.val = Some(island) }
     })
     .lives_with(anchor)

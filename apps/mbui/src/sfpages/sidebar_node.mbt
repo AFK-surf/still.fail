@@ -106,7 +106,7 @@ pub fn chats_lists_node(
         // kept from then while the workspace is: each row only while it is in view; where it is scrolled to its list's
         // own, kept by the list's key: list_scroll)
         lane.show(fn() { shown_once[i].get() }, fn(l) {
-          l.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+          l.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
           if i < list_filters.length() {
             chats_pane_node(l, src, id, list_filters[i], frame, fn() { (frame.shown)() == i }, tips, stint)
           } else {
@@ -277,7 +277,7 @@ fn chats_pane_node(
       _ => ()
     }
   })
-  v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+  v.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
   // (its bar along its right, clear of what is over its top and at its foot: the band, the bars)
   v.scrolls_window(
     scroll,
@@ -778,4 +778,3 @@ fn kept_in_order(was : Array[Int]) -> Array[Bool] {
 ///|
 /// How long a row's coming or going takes (mbui's ListRows: row_size_ms).
 let row_size_ms : Double = @ui.row_size_ms
-

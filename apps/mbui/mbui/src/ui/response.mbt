@@ -123,6 +123,7 @@ pub fn Ctx::interact(
 /// (the widget's response, its tooltip); the press is then no tap. What a finger asks a menu or a tooltip by. Like a
 /// click, an input of the frame's: the frame built again (frame_body) sees it no more, so what it opens opens once.
 pub fn Ctx::held_long(self : Ctx, id : Int) -> Bool {
+  if self.measuring { return false }
   if id != 0 {
     // (read so: hand.mbt)
     hand.held.has(id) |> ignore
@@ -135,6 +136,7 @@ pub fn Ctx::held_long(self : Ctx, id : Int) -> Bool {
 /// Whether the press under way on `id` has just been held long_press_ms without moving: then it is the hold's (no
 /// click when let go). A frame is asked for when it will have been.
 fn Ctx::long_press(self : Ctx, id : Int) -> Bool {
+  if self.measuring { return false }
   // (read so: what reads it is built again as it is pressed or let go, hand.mbt; held long a moment, woken at)
   if id != 0 {
     hand.pressed.has(id) |> ignore
@@ -183,6 +185,7 @@ fn Ctx::held_through(self : Ctx) -> Bool {
 /// gone), no press down since: let go since or not, it is a long press there, once, whatever frames came between. What
 /// a hold over words takes as held (kit's Pick::hold), as a held press is.
 pub fn Ctx::handed_hold(self : Ctx) -> (Double, Double)? {
+  if self.measuring { return None }
   hand.down.get() |> ignore
   match view_handed.val {
     Some(h) if !h.taken &&
@@ -196,6 +199,7 @@ pub fn Ctx::handed_hold(self : Ctx) -> (Double, Double)? {
 ///|
 /// The hold handed here (Ctx::handed_hold) taken by what it is held on: none to take after it.
 pub fn Ctx::handed_taken(self : Ctx) -> Unit {
+  if self.measuring { return }
   match view_handed.val {
     Some(h) => h.taken = true
     None => ()
@@ -207,6 +211,7 @@ pub fn Ctx::handed_taken(self : Ctx) -> Unit {
 /// the window's tree handed on, since the finger went down, Ctx::held_through), whatever is pressed: what a hold over
 /// words asks (kit's Pick::hold). A frame asked for when it will have been.
 pub fn Ctx::held_for(self : Ctx, ms : Double) -> Bool {
+  if self.measuring { return false }
   // (read so: what reads it is built again as it is pressed or let go, hand.mbt; held long a moment, woken at)
   hand.down.get() |> ignore
   if !self.down || self.dragging || self.press_strayed || self.press_at < 0.0 {

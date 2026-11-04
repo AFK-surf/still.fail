@@ -149,6 +149,7 @@ pub fn Ctx::roving_prefer(self : Ctx, id : Int) -> Unit {
 ///|
 /// Whether `id` has the keyboard's focus.
 pub fn Ctx::has_focus(self : Ctx, id : Int) -> Bool {
+  if self.measuring { return false }
   if id == 0 {
     return false
   }
@@ -169,6 +170,7 @@ pub fn Ctx::focus_shown(self : Ctx, id : Int) -> Bool {
 /// The focus given to `id` (a field, a button, what a dialog opens on); `visible`: shown as though the keyboard moved
 /// it.
 pub fn Ctx::focus_on(self : Ctx, id : Int, visible? : Bool = false) -> Unit {
+  if self.measuring { return }
   if visible {
     self.focus_visible = true
   }
@@ -199,6 +201,7 @@ pub fn Ctx::focus_roved_to(self : Ctx, id : Int) -> Bool {
 ///|
 /// What had the focus as the frame started (0 nothing).
 pub fn Ctx::focused_id(self : Ctx) -> Int {
+  if self.measuring { return 0 }
   hand.focus_id.get() |> ignore
   self.focus
 }

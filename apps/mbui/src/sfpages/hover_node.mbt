@@ -36,10 +36,9 @@ pub fn hover_node(trigger : @view.View, key : String, body : (@ui.Ctx) -> Unit,
     .on_key(fn(k) { if k.code == @ui.key_escape && @signals.untracked(live) { close(); true } else { false } })
     .takes_back(close).held_back_goes_on() |> ignore
     layer.box(fn(card) {
-      let card_width : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
       card.beside(trigger.id(), side=Bottom, along=Start, offset=hover_offset, padding=8.0)
       .alpha(By(fn() { look().alpha })).scale(By(fn() { look().sx }), about=FromBeside).presses(By(live)) |> ignore
-      @ui.old(card, natural=true, fits?=if tile { Some((agent_card_most, card_width)) } else { None }, fn(c) {
+      @ui.old(card, natural=true, fits?=if tile { Some(agent_card_most) } else { None }, fn(c) {
         let b = c.box(id=c.id(key + "/panel"), style=if tile { hover_tile } else { hover_card }, fn() {
           @sf.small_panel(c, w=Fill(1.0), fn() {
             c.box(style=if padded { hover_inner } else { hover_bare }, fn() {
@@ -55,7 +54,7 @@ pub fn hover_node(trigger : @view.View, key : String, body : (@ui.Ctx) -> Unit,
             rot: 0.0, circle: 0.0, words: look().words }
         })
       })
-      .width(if tile { By(fn() { card_width.get() }) } else { Is(Some(320.0)) })
+      .width(Is(if tile { None } else { Some(320.0) }))
       |> fn(island) { card_on.val = Some(island) }
       card.owns(fn() { card_on.val = None }) |> ignore
     }) |> ignore

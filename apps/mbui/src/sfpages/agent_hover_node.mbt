@@ -32,7 +32,6 @@ fn agent_hover_node(pic : @view.View, src : Source, here : () -> MessageHere, ag
     // (in the layer, let go as it closes: what holds it here)
     l.box(fn(card) {
       // (as wide as what it holds, 420 at most, 220 at least: hover_tile's, as the old view laid it out)
-      let card_w : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
       card.owns(fn() { card_on.val = None }) |> ignore
       card.beside(pic.id(), side=Bottom, along=Start, offset=hover_offset, padding=8.0) |> ignore
       @ui.old(card, fn(c) {
@@ -51,10 +50,9 @@ fn agent_hover_node(pic : @view.View, src : Source, here : () -> MessageHere, ag
           |> ignore
         })
         |> ignore
-      }, natural=true, fits=(agent_card_most, card_w))
+      }, natural=true, fits=agent_card_most)
       // (as wide as the old frame lays what it holds out: it takes presses and the pointer there, all of it, its own
       // lighting and tips by it)
-      .width(By(fn() { card_w.get() }))
       |> fn(island) { card_on.val = Some(island) }
     })
     .lives_with(anchor)

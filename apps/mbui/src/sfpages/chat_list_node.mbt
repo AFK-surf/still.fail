@@ -251,9 +251,9 @@ pub fn chat_list_node(
   let flash : @signals.Signal[(String, Double)] = @signals.signal(("", 0.0), same=fn(a, b) { a == b })
   // (the rows in sight, by their keys, in order)
   let shown : @signals.Signal[Array[String]] = @signals.signal([], same=fn(a, b) { a == b })
-  v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+  v.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
   v.box(fn(col) {
-    col.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+    col.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
     col.scrolls_window(
       scroll,
       keys,

@@ -567,6 +567,7 @@ pub fn Ctx::takes_presses(self : Ctx, id : Int) -> Unit {
 /// Where `id` was clicked with the secondary button (a right click; Ctrl-click on macOS) since the last frame, in the
 /// window's terms: for its context menu. It counts for what is under the pointer and what holds it.
 pub fn Ctx::right_clicked(self : Ctx, id : Int) -> (Double, Double)? {
+  if self.measuring { return None }
   ignore(self)
   hand_events_read()
   for m in desk.menus {
@@ -584,6 +585,7 @@ pub fn Ctx::right_clicked(self : Ctx, id : Int) -> (Double, Double)? {
 /// the innermost asker's under it (a row's, not the list's it sits in, though the list is asked first: its rows are
 /// built after it), as a press goes to one target; a hold is already the target's held.
 pub fn Ctx::menu_asked(self : Ctx, id : Int) -> (Double, Double)? {
+  if self.measuring { return None }
   hand_events_read()
   self.mark_id(id, mark_asks)
   let mut at : (Double, Double)? = None
@@ -614,6 +616,7 @@ pub fn Ctx::menu_asked(self : Ctx, id : Int) -> (Double, Double)? {
 ///|
 /// Whether anything was clicked with the secondary button since the last frame (what closes a menu as another opens).
 pub fn Ctx::any_right_click(self : Ctx) -> Bool {
+  if self.measuring { return false }
   ignore(self)
   hand_events_read()
   desk.menus.length() > 0
@@ -639,6 +642,7 @@ pub fn Ctx::mouse_drags_lists(self : Ctx, on : Bool) -> Unit {
 /// Whether key `code` came since the last frame with exactly `mods` held (with `in_field`, also one a focused field
 /// took: an Enter it sent, an arrow it moved by).
 pub fn Ctx::key_pressed(self : Ctx, code : Int, mods? : Int = 0, in_field? : Bool = false) -> Bool {
+  if self.measuring { return false }
   hand_events_read()
   // (under an open menu or dialog, none: they are its)
   if !self.keys_here() {
@@ -656,6 +660,7 @@ pub fn Ctx::key_pressed(self : Ctx, code : Int, mods? : Int = 0, in_field? : Boo
 /// Whether any key came since the last frame: what looks for keys of its own (an app's shortcuts, each a binding to
 /// read) has none to look for when none came, as on every frame of a phone without a keyboard.
 pub fn Ctx::keys_came(self : Ctx) -> Bool {
+  if self.measuring { return false }
   ignore(self)
   hand_events_read()
   !desk.keys.is_empty()
@@ -665,6 +670,7 @@ pub fn Ctx::keys_came(self : Ctx) -> Bool {
 /// Key `code` with exactly `mods` held, if it came since the last frame and nothing took it yet: taken now (what reads
 /// keys after this does not see it). For a widget's own keys while it has the focus (a slider's arrows).
 pub fn Ctx::take_key(self : Ctx, code : Int, mods? : Int = 0) -> Bool {
+  if self.measuring { return false }
   hand_events_read()
   if !self.keys_here() {
     return false
@@ -691,6 +697,7 @@ pub fn Ctx::shortcut(self : Ctx, ch : Char, shift? : Bool = false) -> Bool {
 /// The keys since the last frame (code, modifiers, whether a field took it); none under an open menu or dialog (they
 /// are its).
 pub fn Ctx::keys(self : Ctx) -> Array[(Int, Int, Bool)] {
+  if self.measuring { return [] }
   hand_events_read()
   if !self.keys_here() {
     return []

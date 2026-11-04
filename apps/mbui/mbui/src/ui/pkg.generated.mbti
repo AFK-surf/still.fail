@@ -388,7 +388,7 @@ pub fn notice_show(channel~ : String, tag~ : String, title~ : String, body~ : St
 
 pub fn now() -> Double
 
-pub fn old(@view.View, (Ctx) -> Unit, key? : () -> String, natural? : Bool, gives? : Bool, fits? : (Double, @signals.Signal[Double?]), unlaid? : () -> Double) -> @view.View
+pub fn old(@view.View, (Ctx) -> Unit, key? : () -> String, natural? : Bool, gives? : Bool, fits? : Double, unlaid? : () -> Double) -> @view.View
 
 pub fn old_anchor(@view.View, Int32, (Double, Double, Double, Double)) -> @view.View
 
@@ -892,6 +892,7 @@ pub struct Ctx {
   nodes : Array[Node]
   mut count : Int32
   mut cur : Int32
+  mut measuring : Bool
   mut id_seed : Int32
   id_stack : Array[Int32]
   mut width : Double
