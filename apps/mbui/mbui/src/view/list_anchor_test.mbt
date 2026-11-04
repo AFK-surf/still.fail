@@ -250,3 +250,16 @@ test "scrolls_anchored: glided from outside to where it is counted less 40, from
   c.tree.frame(390.0, 844.0, now=3000.0) |> ignore
   assert_eq((at, c.scroll.at(c.tree), c.top(98)), (3900.0, 3860.0, Some(60.0)))
 }
+
+///|
+test "scrolls_anchored: a part of a row asked into sight that is in sight already: nothing moved; a part under its foot: by as much as brings it in" {
+  let c = anchored_case(100)
+  // (row 97 from -20 to 20: its part from 20 to 30 of it, 0 to 10 in the window, in sight)
+  c.tree.show_in_sight(c.live[97].id(), within=fn() { Some((20.0, 30.0)) })
+  c.tree.frame(390.0, 844.0, now=100.0) |> ignore
+  assert_eq((c.top(97), c.scroll.at(c.tree)), (Some(-20.0), 3900.0))
+  // (its part from 0 to 10 of it, -20 to -10 in the window, over its top: down 20)
+  c.tree.show_in_sight(c.live[97].id(), within=fn() { Some((0.0, 10.0)) })
+  c.tree.frame(390.0, 844.0, now=200.0) |> ignore
+  assert_eq((c.top(97), c.scroll.at(c.tree)), (Some(0.0), 3880.0))
+}

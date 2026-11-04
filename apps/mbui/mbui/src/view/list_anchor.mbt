@@ -109,6 +109,8 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   // (the row asked to be brought into sight at the cause that asked, and how many times; how many its layout did)
   let reveal_said : @signals.Signal[(K?, Int)] = @signals.signal((None, 0))
   let revealed = Ref(0)
+  // (the node in it to be brought into sight, and what part of it)
+  let reveal_of : Ref[(NodeId, (Double, Double)?)?] = Ref(None)
   // (each key's name among its layout's children, as long as it is in it)
   let names : Map[K, String] = Map([])
   let named = Ref(0)
@@ -162,12 +164,13 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
     }
   }
   // (one of its rows' nodes to be brought into sight: that row, laid out in sight as it is laid out next)
-  s.reveal = fn(id) {
+  s.reveal = fn(id, part) {
     let mut i = id.at
     while i >= 0 {
       match slot_keys.get(i) {
         Some(k) => {
           let (_, n) = @signals.untracked(fn() { reveal_said.get() })
+          reveal_of.val = Some((id, part))
           reveal_said.set((Some(k), n + 1))
           return
         }
@@ -179,7 +182,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
       }
     }
   }
-  self.owns(fn() { s.bar_off = fn() { 0.0 }; s.rebase = fn() { }; s.reveal = fn(_) { }; s.reads_free = false }) |> ignore
+  self.owns(fn() { s.bar_off = fn() { 0.0 }; s.rebase = fn() { }; s.reveal = fn(_, _) { }; s.reads_free = false }) |> ignore
   // (how tall all it holds is counted, as its layout last counted it: what its bar reads once it is laid out, no signal
   // read then)
   let foot_laid = Ref(0.0)
@@ -322,7 +325,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
             }
           None => ()
         }
-        let by = match seen_x.val {
+        let mut by = match seen_x.val {
           Some(x) => if from_end { x - c.x } else { c.x - x }
           // (from its start, first laid out: as far down as it was scrolled, as its rows are counted)
           None => if from_end { 0.0 } else { c.x }
@@ -393,9 +396,32 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
                   }
                 }
                 let hk = measure(i)
+                // (laid out last in sight or near it: what part of the node is to be in sight, where it was laid out then,
+                // moved as little as brings it in, as shows has a column do)
+                let part = match (q >= 0, reveal_of.val) {
+                  (true, Some((id, within))) if self.tree.alive_id(id) => {
+                    let mut off = 0.0
+                    let mut j = id.at
+                    let slot_at = slots.get(k).map(fn(v) { v.at }).unwrap_or(-1)
+                    while j >= 0 && j != slot_at {
+                      off = off + self.tree.nodes[j].flex.top
+                      j = self.tree.nodes[j].parent
+                    }
+                    let (a, b) = within.unwrap_or((0.0, self.tree.nodes[id.at].flex.height))
+                    if j == slot_at { Some((was.tops[q] + off + a, was.tops[q] + off + b)) } else { None }
+                  }
+                  _ => None
+                }
+                match part {
+                  Some((top, foot)) => {
+                    let down = if top < 0.0 { -top } else if foot > h { -dmin(top, foot - h) } else { 0.0 }
+                    by = by + (if from_end { down } else { -down })
+                  }
+                  None => ()
+                }
                 let (top, foot) = if q >= 0 { (was.tops[q], was.tops[q] + was.heights[q]) } else { (-1.0, h + 1.0) }
-                let over = top < 0.0 && (q >= 0 || i < was.first)
-                let under_foot = foot > h && (q >= 0 || i > was.last)
+                let over = part is None && top < 0.0 && (q >= 0 || i < was.first)
+                let under_foot = part is None && foot > h && (q >= 0 || i > was.last)
                 if over || under_foot {
                   // (its top at the window's, or its foot at the window's foot)
                   let foot_at = if over { hk } else { h }
