@@ -129,6 +129,8 @@ export class FakeHost implements Host {
   openDbHook: ((name: string) => Sql | Error | null) | null = null;
   /// A database in memory, where a test gives one.
   memoryDb?: () => Sql | undefined;
+  /// Where a picture is fetched from, where a test says (a browser's: Host.pictureVia).
+  pictureVia?: (url: string) => string;
   /// What the core reported to error tracking (Host.report).
   readonly reported: Error[] = [];
   #responder: Responder | null = null;

@@ -870,13 +870,20 @@ fn cd_secret_dialog(core : Core, station : String, cv : Json?) -> Unit {
 }
 
 ///|
-/// A connect as its people see it (ui.tsx ConnectAvatar): its bot's picture; its kind's mark till that is said.
+/// A connect as its people see it (ui.tsx ConnectAvatar): its bot's picture, filling its head's tile with the tile's
+/// corners (the app's icon it is: a square, as Slack shows it), once it is here; its kind's mark till then, and where
+/// it is not said.
 fn cd_avatar(c : @ui.Ctx, core : Core, cv : Json?, size : Double) -> Unit {
-  match opt_text(cv, "botImage") {
-    Some(image) => avatar(c, core, text(cv, "id"), text(cv, "name"), size, picture=image)
+  let picture = match opt_text(cv, "botImage") {
+    Some(image) => (core.picture)(image, c.page_stint())
+    None => ""
+  }
+  match picture {
+    key if key != "" && c.image_ready(key, size * c.scale) =>
+      c.image(key, w=Px(size), h=Px(size), radius=c.theme().corner(Lg), bg=0L, fade=false) |> ignore
     // (its kind's mark three fifths of it, on a tile of its side: no larger than the room its head gives it, which
     // a tile 2.4 times the mark was, over the lines under it on a phone)
-    None => {
+    _ => {
       let mark = (size * cd_avatar_mark).round()
       c.box(style=cd_avatar_box.then(@ui.style(w=Fixed(size), h=Fixed(size), bg=Data(@sf.theme().p.paper))), fn() {
         cn_kind(c, text(cv, "kind"), mark)

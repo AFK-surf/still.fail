@@ -17,6 +17,7 @@ import { t } from "../i18n.ts";
 import type { ClientId, CoreMessage } from "../protocol.ts";
 import { service } from "../trace.ts";
 import { collate } from "./collate.ts";
+import { pictureRelay, relayedPicture } from "../picture-relay.ts";
 
 /// Shared values frozen where they are shared (util.ts `checkShared`): the web's development build turns it on.
 export { checkShared } from "../util.ts";
@@ -229,6 +230,10 @@ export class WebHost implements Host {
 
   cloudOrigin(): string {
     return (globalThis as { location?: { origin?: string } }).location?.origin ?? "";
+  }
+  /// Slack's pictures through still.fail cloud: the page may not read them from Slack.
+  pictureVia(url: string): string {
+    return relayedPicture(url) ? pictureRelay(this.cloudOrigin(), url) : url;
   }
   beta(): boolean {
     return false;
