@@ -15,6 +15,7 @@ import { type UsageChatCoverage, usageCardOutcomesComplete, usageChatStatsReady 
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
 import { hasRuntimeOrderIndex } from "../store/schema.ts";
 import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
+import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import {
@@ -845,35 +846,59 @@ function turnSummary(r: Json, startedAt: number): TurnSummary {
 /// alone (as store.ts STATS_OF), its first words and its latest turn. Its every turn counted and its every delivery read
 /// (the deliveries by session and thread), each summary of a long session read some 65 pages, from the disk on a station
 /// short of memory (2026-11-02), as often as the session changed.
+const SESSION_PENDING = `((SELECT COUNT(*) FROM deliveries d INDEXED BY deliveries_pending WHERE d.session = s.key AND d.delivered_at IS NULL) +
+         (SELECT COUNT(*) FROM letter_deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL)) AS pending`;
+const SESSION_LAST_FIELDS = `l.id AS turn_id, l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.wait_watch, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at`;
+const SESSION_LAST_FROM = `FROM sessions s
+     LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)`;
+
 export const SESSION_STATS = `SELECT s.key,
-       COALESCE((SELECT c.n FROM session_turns c WHERE c.session = s.key), 0) AS turns,
+       COALESCE((SELECT c.n FROM session_turns c WHERE c.session = s.key),
+         (SELECT CASE WHEN COUNT(*) <= ${TURN_COUNT_BATCH} THEN COUNT(*) END FROM
+           (SELECT 1 FROM turns old INDEXED BY turns_by_session WHERE old.session_key = s.key LIMIT ${TURN_COUNT_BATCH + 1}))) AS turns,
        -- How long its turns ran, where every one ended since that was kept (schema.ts SESSION_WORK); else none.
        CASE WHEN NOT EXISTS (SELECT 1 FROM turns o INDEXED BY turns_by_end WHERE o.session_key = s.key AND o.ended_at <= (SELECT f.at FROM session_work_from f WHERE f.id = 1))
          THEN COALESCE((SELECT w.ms FROM session_work w WHERE w.session = s.key), 0) END AS work_ms,
-       ((SELECT COUNT(*) FROM deliveries d INDEXED BY deliveries_pending WHERE d.session = s.key AND d.delivered_at IS NULL) +
-         (SELECT COUNT(*) FROM letter_deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL)) AS pending,
+       ${SESSION_PENDING},
        (SELECT substr(m.text, 1, 300) FROM session_first f JOIN merged m ON m.thread = f.thread AND m.n = f.n WHERE f.session = s.key) AS first_text,
-       l.id AS turn_id, l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.wait_watch, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
-     FROM sessions s
-     LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)`;
+       ${SESSION_LAST_FIELDS}
+     ${SESSION_LAST_FROM}`;
+
+/// What the sidebar actually shows: the latest turn and pending deliveries, without asking for a count or first words.
+export const SESSION_ACTIVITY = `SELECT s.key, ${SESSION_PENDING}, ${SESSION_LAST_FIELDS} ${SESSION_LAST_FROM}`;
+export const TURN_COUNT_PENDING = "turn count pending: ";
+export class TurnCountUnavailable extends Refused {
+  readonly sessions: string[];
+  constructor(sessions: string[]) { super(503, TURN_COUNT_PENDING + JSON.stringify(sessions)); this.sessions = sessions; }
+}
 
 /// A session's latest turn, as `sessionStats` has it, by the index of its turns alone.
 export const LAST_TURN = "SELECT * FROM turns WHERE session_key = ? ORDER BY started_at DESC LIMIT 1";
+
+function sessionRows(s: Store, key: string | string[] | null, select: string): Json[] {
+  if (Array.isArray(key) && key.length === 0) return [];
+  const sql = `${select} ${Array.isArray(key) ? "WHERE s.key IN (SELECT value FROM json_each(?))" : key !== null ? "WHERE s.key = ?" : ""}`;
+  return Array.isArray(key) ? all(s, sql, JSON.stringify(key)) : key !== null ? all(s, sql, key) : all(s, sql);
+}
+const latestTurn = (r: Json): TurnSummary | null => r.started_at === null ? null : { ...turnSummary(r, r.started_at), id: r.turn_id };
 
 /// Per session (or for one): turn count and how long its ended turns ran, the latest turn (with its id: a client holding
 /// the turns puts it in place rather than read them all again), undelivered messages and the first one it heard.
 /// Each session's counts and last turn: one's, those named (`keys`), or all (null).
 export function sessionStats(s: Store, key: string | string[] | null): Map<string, SessionStats> {
-  if (Array.isArray(key) && key.length === 0) return new Map();
-  const sql = `${SESSION_STATS}
-     ${Array.isArray(key) ? `WHERE s.key IN (${key.map(() => "?").join(", ")})` : key !== null ? "WHERE s.key = ?" : ""}`;
-  const rows = Array.isArray(key) ? all(s, sql, ...key) : key !== null ? all(s, sql, key) : all(s, sql);
+  const rows = sessionRows(s, key, SESSION_STATS);
+  const unknown = rows.filter((r) => r.turns === null).map((r) => r.key as string);
+  if (unknown.length) throw new TurnCountUnavailable(unknown);
   return new Map(
     rows.map((r) => [
       r.key as string,
-      { turns: r.turns, workMs: r.work_ms, pending: r.pending, firstText: r.first_text, lastTurn: r.started_at === null ? null : { ...turnSummary(r, r.started_at), id: r.turn_id } },
+      { turns: r.turns, workMs: r.work_ms, pending: r.pending, firstText: r.first_text, lastTurn: latestTurn(r) },
     ]),
   );
+}
+
+export function sessionActivity(s: Store, key: string | string[] | null): Map<string, { pending: number; lastTurn: TurnSummary | null }> {
+  return new Map(sessionRows(s, key, SESSION_ACTIVITY).map((r) => [r.key as string, { pending: r.pending, lastTurn: latestTurn(r) }]));
 }
 
 /// A session's latest turn (as `sessionStats` has it, with its id), without the counts: what a notice of how it ended

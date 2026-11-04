@@ -14,9 +14,10 @@ import type { InWorkspace } from "../store/rows.ts";
 import { MinuteReader } from "../usage/minute-reader.ts";
 import { OutflowChatIndex } from "../outflow/chat-index-builder.ts";
 import { SaidBuilder } from "./said-builder.ts";
+import { TurnBuilder } from "./turn-builder.ts";
 import { OUTFLOW_CHATS_PENDING } from "./outflow.ts";
 import type { Answer, Ask, Ready } from "./worker.ts";
-import { REMOTE_RUNS_PENDING, SAID_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING, USAGE_MINUTES_PENDING } from "./store.ts";
+import { REMOTE_RUNS_PENDING, SAID_PENDING, TURN_COUNT_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING, USAGE_MINUTES_PENDING } from "./store.ts";
 import { HttpError } from "./views.ts";
 import { wall } from "../ops/fibers.ts";
 
@@ -106,6 +107,7 @@ export class Readers {
   private minutes: MinuteReader | null = null;
   private outflowChats: OutflowChatIndex | null = null;
   private said: SaidBuilder | null = null;
+  private turns: TurnBuilder | null = null;
   /// A checkpoint is armed or running (`checkpointSoon`), and the store changed again since it was armed.
   private checkpointing = false;
   private again = false;
@@ -228,7 +230,16 @@ export class Readers {
     while (!this.closed) {
       try { return await this.enqueue(op, args, lang, told, op === CHECKPOINT, background, signal); }
       catch (error) {
-        if (!(error instanceof HttpError) || !error.message.startsWith(SAID_PENDING)) throw error;
+        if (!(error instanceof HttpError)) throw error;
+        if (error.message.startsWith(TURN_COUNT_PENDING)) {
+          let sessions: unknown;
+          try { sessions = JSON.parse(error.message.slice(TURN_COUNT_PENDING.length)); } catch { throw error; }
+          if (!Array.isArray(sessions) || sessions.length === 0 || !sessions.every((key) => typeof key === "string")) throw error;
+          this.turns ??= new TurnBuilder(join(this.data, "stillfail.db"), this.backfill);
+          await this.covered(this.turns.ready(sessions, signal), signal);
+          continue;
+        }
+        if (!error.message.startsWith(SAID_PENDING)) throw error;
         let threads: unknown;
         try { threads = JSON.parse(error.message.slice(SAID_PENDING.length)); } catch { throw error; }
         if (!Array.isArray(threads) || threads.length === 0 || !threads.every(Number.isSafeInteger)) throw error;
@@ -432,6 +443,7 @@ export class Readers {
     if (this.minutes !== null) void this.minutes.close();
     if (this.outflowChats !== null) void this.outflowChats.close();
     if (this.said !== null) void this.said.close();
+    if (this.turns !== null) void this.turns.close();
     for (const line of [this.asked, this.told, this.log, this.pages]) {
       for (const asked of line.waiting.splice(0)) asked.reject(new HttpError(502, "station stopping"));
       for (const { worker } of line.slots) void worker.terminate();
