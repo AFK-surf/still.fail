@@ -287,6 +287,7 @@ let kept_answers : String =
   #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"s-c1\"},\"jobs\":[{\"id\":\"j-web\"}]}],\"noChat\":false,\"session\":\"s-c1\",\"change\":{\"action\":\"open\",\"tab\":\"s-c1\",\"auto\":true}}",{"next":{"tabs":["s-c1"],"active":"s-c1"},"tabs":{"open":["s-c1"],"shown":"s-c1"}}]
   #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"s-c1\"},\"jobs\":[{\"id\":\"j-web\"}]}],\"noChat\":false,\"session\":\"s-c1\",\"change\":{\"action\":\"open\",\"tab\":\"service:j-web\",\"auto\":true}}",{"next":{"tabs":["service:j-web"],"active":"service:j-web"},"tabs":{"open":["service:j-web"],"shown":"service:j-web"}}]
   #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"s-c1\"},\"jobs\":[{\"id\":\"j-web\"}]}],\"noChat\":false,\"session\":\"s-c1\"}",{"open":[]}]
+  #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"s-c10\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"s-c10\"}",{"open":[]}]
   #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"s-c2\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"s-c2\",\"change\":{\"action\":\"open\",\"tab\":\"s-c2\",\"auto\":true}}",{"next":{"tabs":["s-c2"],"active":"s-c2"},"tabs":{"open":["s-c2"],"shown":"s-c2"}}]
   #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"s-c2\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"s-c2\"}",{"open":[]}]
   #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"s-c3\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"s-c3\"}",{"open":[]}]

@@ -317,7 +317,7 @@ fn tree_on_screen(c : Ctx, what : String) -> Array[(Double, Double, @view.NodeId
     // contentDescription, on_screen_nodes)
     let label = tree.said_label(d.id)
     // (its words as they are drawn: on one line where they do not wrap, as an old view's text is found: view_words_set)
-    let words = view_words_set(d.words, d.words_look)
+    let words = view_words_found(d)
     let by_words = !what.has_prefix("icon:") && words != "" &&
       (if what.has_prefix("=") { words == what.unsafe_substring(start=1, end=what.length()) } else { words.contains(what) })
     let hit = if what.has_prefix("icon:") {

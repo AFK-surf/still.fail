@@ -167,11 +167,13 @@ test "the workspaces' sheet: drawn up to 94%, dragged down past 30% it closes" {
 ///|
 test "a sheet takes the drags on it: the list under it does not scroll" {
   let t = tester("home")
-  let before = t.list_offset()
+  // (where the list is, by a row of it)
+  let row = fn() { t.locate("=把旧的截图都换成新的").map(fn(p) { p.1 }) }
+  let before = row()
   t.tap_text("星火工作室")
   sheet_rested(t, "sf-present")
   t.drag(195.0, 700.0, 195.0, 400.0)
-  assert_eq(t.list_offset(), before)
+  assert_eq(row(), before)
   assert_true(@sf.presenting())
 }
 

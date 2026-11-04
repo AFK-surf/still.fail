@@ -400,6 +400,10 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
     if !(b.shows_ground() || b.lit_ground()) || b.layer {
       continue
     }
+    // (none of it drawn: wholly outside the clip of the window's tree its old view is hosted in, old_cuts)
+    if c.cut_away(i) {
+      continue
+    }
     let ct = match c.corner_container(i, grounds) {
       Some(found) => found
       None => continue
@@ -1710,4 +1714,22 @@ fn[T] Ctx::with_old_laid(self : Ctx, count : Int, f : () -> T) -> T {
     shift(c.0, c.1, c.2)
   }
   out
+}
+
+///|
+/// Whether node `i` lies wholly outside the clip the old view holding it is drawn within, hosted in a node of the
+/// window's tree that clips (old_cuts): nothing of it drawn.
+fn Ctx::cut_away(self : Ctx, i : Int) -> Bool {
+  let b = self.nodes[i]
+  // (where it is laid out, as the clip is said there: old_cuts)
+  let (bx, by) = (b.x, b.y)
+  let mut p = i
+  while p >= 0 {
+    match old_cuts.get(p) {
+      Some((x0, y0, x1, y1)) => return bx >= x1 || by >= y1 || bx + b.fw <= x0 || by + b.fh <= y0
+      None => ()
+    }
+    p = self.nodes[p].parent
+  }
+  false
 }

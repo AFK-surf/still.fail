@@ -548,13 +548,32 @@ pub fn Ctx::list(
     self.moving(st.ease_mover, st as &Moving, what="a list's wheel ease, glide and scroll bar")
   }
   // with `glide_on_growth`, rows come at the end while it is at its end: it glides after them from where it was
-  // (still.fail's Follow), rather than being put at its end at once; put there, it scrolled all the same
+  // (still.fail's Follow), rather than being put at its end at once; put there, it scrolled all the same: held at its
+  // end by the rows come where they come in with a way of their own (their room opening, ListRows' Comes), what is in
+  // view going with their heights; put there at once where none of them does (rows caught up on, there at once: what
+  // is in view moved by no row's way, rows_steady.mbt)
+  // (the keys new to it since it was last built: wherever they come in, not by where its count had got to)
+  let seen = list_keys_seen.get(id)
+  let new_keys = match (st.causes, seen) {
+    (Some(c), Some(was)) => c.keys.filter(fn(k) { !was.contains(k) })
+    _ => []
+  }
+  match st.causes {
+    Some(c) => list_keys_seen[id] = Set::from_array(c.keys)
+    None => ()
+  }
   if self.list_grew(id, count) && st.stick_end && st.at_end {
     if glide_on_growth && !self.still() {
       st.at_end = false
       self.glide_to_end(id, st)
     } else {
-      self.app_scrolled(id, st, put=false)
+      // (put there at once only where every row new to it is there at once: one of them coming, the list held by its
+      // way)
+      let comes = match st.causes {
+        Some(c) => new_keys.iter().any(fn(k) { c.by.get(k) is Some((Comes(_), _)) })
+        None => false
+      }
+      self.app_scrolled(id, st, put=!comes)
     }
   }
   let i = self.alloc_part(kind_list, true, false)
@@ -1552,6 +1571,10 @@ pub fn Ctx::list_moving(self : Ctx, key : String) -> Bool {
 ///|
 /// How many rows each list had (Ctx::list_grew).
 let list_counts : Map[Int, Int] = {}
+
+///|
+/// The keys each list given its rows' causes (ListRows) had as it was last built: which are new to it.
+let list_keys_seen : Map[Int, Set[String]] = {}
 
 ///|
 /// Whether list `id` has more rows than when it was last built.

@@ -22,7 +22,11 @@ test "96-viewer" {
     f.peer("peer createfiles 两张图片 201493 post:收到两张图片 201493 -- e2e-photo.jpg e2e-photo2.png")
     f.see("两张图片 201493")
     // The new row is moving into place; tap it after the list has made room for it.
-    f.run_to_rest("a list's rows' heights")
+    // (where the run's pace had the row come with the list's first rows, nothing of the list moved: where it rests)
+    let rows_end = @sfpages.rows_rest()
+    if rows_end >= 0.0 {
+      f.run_to(rows_end)
+    }
     f.tap("两张图片 201493")
     f.see("=willow")
     f.see("img:e2e-photo.jpg")

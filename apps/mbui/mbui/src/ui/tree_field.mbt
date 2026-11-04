@@ -59,6 +59,16 @@ priv struct TreeField {
 let tree_fields : Map[@view.NodeId, TreeField] = Map([])
 
 ///|
+/// The words by which a drawn node is found in tests and drives. An editor is found by its hint as an old editor's
+/// Node.text is; its glyphs are painted by the editor, so Drawn.words is deliberately empty.
+fn view_words_found(d : @view.Drawn) -> String {
+  match tree_fields.get(d.id) {
+    Some(tf) => (tf.hint)()
+    None => view_words_set(d.words, d.words_look)
+  }
+}
+
+///|
 /// A field of words in `parent`, showing and editing `field`: as Ctx::editor's plain one (no frame of its own: what
 /// holds it draws one) set so (`placeholder` and its `shorter` ways, `font_size`, `line`, `max_lines`, `trim`, its
 /// colours, `enter_sends`, `leaves`, `ime_action`, `paste_limit`, `secret`, `words`, `look`: each as Ctx::editor takes
@@ -930,4 +940,25 @@ fn Ctx::paint_tree_field(
   )
   pop_clip()
   self.transform_insts(i0, self.ninst, ux, uy, s, s, x - ux, y - uy, outer, outer_r, outer_s)
+}
+
+///|
+/// The window's tree's scene as Tree::drawn_held has it, each with the words it is found by (view_words_found: a field
+/// by its hint, its glyphs the editor's) and their size as drawn (a field's as its editor sets them, the system's size
+/// of words applied; another's its words' look's): what holds each as drawn (its index, -1 none) and whether it takes a
+/// press, as there. Drawn.words keeps what is drawn as words; nothing of a field made to look drawn.
+pub fn Tester::drawn_words_found(self : Tester) -> Array[(@view.Drawn, Int, Bool, String, Double)] {
+  ignore(self)
+  guard view_tree() is Some(tree) else { return [] }
+  let c = g()
+  tree
+  .drawn_held()
+  .map(fn(e) {
+    let (d, holder, presses) = e
+    let size = match tree_fields.get(d.id) {
+      Some(tf) => c.editor_sizing((tf.font_size)(), tf.line, tf.max_lines, true, tree_theme().text_line).font_size
+      None => d.words_look.size
+    }
+    (d, holder, presses, view_words_found(d), size)
+  })
 }

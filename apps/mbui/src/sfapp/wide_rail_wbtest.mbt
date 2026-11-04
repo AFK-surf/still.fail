@@ -99,12 +99,18 @@ test "wide on a Mac: the closed bar, shown a while, one corner all round, the wi
       let (fx, fy, fw, fh) = t.query(Button, label=named).unwrap().rect
       t.move(fx + fw / 2.0, fy + fh / 2.0)
       t.run_for(@ui.move_most_ms)
-      let filter = t
-        .boxes()
-        .iter()
-        .find_first(fn(b) { b.kind != "text" && b.w == fw && b.h == fh && b.x == fx && b.y == fy && b.bg != 0L })
+      // (the band's filter a node of the window's tree: its ground as the tree draws it)
+      let filter = @ui.view_tree()
         .unwrap()
-      assert_eq(filter.radii, (inner, inner, inner, inner))
+        .drawn()
+        .iter()
+        .find_first(fn(d) { d.w == fw && d.h == fh && d.x == fx && d.y == fy && d.ground != 0L })
+        .unwrap()
+      let radii = match filter.corners {
+        Some(k) => k
+        None => (filter.radius, filter.radius, filter.radius, filter.radius)
+      }
+      assert_eq(radii, (inner, inner, inner, inner))
       assert_eq((bar.x + bar.w - (filter.x + filter.w), filter.y - bar.y), (6.0, 6.0))
       assert_eq(t.corner_faults(), [])
     }

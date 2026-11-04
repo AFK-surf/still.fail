@@ -63,6 +63,21 @@ test "Home: the workspace's name, the search, the days and their rows" {
 }
 
 ///|
+test "Home: the search tucked under the top bar whole, its rows fewer than the page is tall or not" {
+  // (the same rows in a window they overfill, and in one they leave room in: the first heading where it is in both)
+  let at = fn(h : Double) {
+    new_run()
+    let src = fixture("home")
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h~, platform=2)
+    t.run_for(@ui.move_most_ms)
+    t.find("今天").unwrap().1
+  }
+  let overfilled = at(500.0)
+  let room_left = at(844.0)
+  assert_true((room_left - overfilled).abs() < 0.5, msg="\{room_left} against \{overfilled}")
+}
+
+///|
 test "a row tapped pushes its chat, its title in the bar; back comes home" {
   let t = tester("home")
   t.tap_text("夜里的构建又失败了")
@@ -103,7 +118,7 @@ test "a row pressed: on the ground it has held once the press is not the list's 
   // one needing the viewer, one offered for archiving
   for title in ["夜里的构建又失败了", "把旧的截图都换成新的"] {
     let t = android_home()
-    t.scroll_to(12)
+    list_down(t, 12)
     t.draw()
     let (x, y) = t.find(title).unwrap()
     t.press_at(x, y)
@@ -202,7 +217,10 @@ test "small screen home: a long workspace name gives way to syncing and transfer
   let (tx, _, tw, _) = t.query(Button, label="1 个传输 · 2%").unwrap().rect
   let (sx, _, sw, _) = t.query(Button, label="设置").unwrap().rect
   let (wx, wy, ww, wh) = t.rect_of(long_name).unwrap()
-  assert_true(fx + fw <= sync_x && sync_x + sync_w <= tx && tx + tw <= wx && wx + ww <= sx && sx + sw <= 320.0)
+  assert_true(
+    fx + fw <= sync_x && sync_x + sync_w <= tx && tx + tw <= wx && wx + ww <= sx && sx + sw <= 320.0,
+    msg="filter \{fx}+\{fw}, sync \{sync_x}+\{sync_w}, transfers \{tx}+\{tw}, name \{wx}+\{ww}, settings \{sx}+\{sw}",
+  )
   assert_true(ww > 0.0, msg="workspace name stays in the bar: \{wx}, \{ww}")
   t.tap(wx + ww / 2.0, wy + wh / 2.0)
   assert_true(@sf.presenting())
@@ -257,7 +275,8 @@ test "the list while it is read: no rows, the shapes" {
   t.frame()
   // (the first page built as it opens, shown once it has its list, first_page_ms at most: not drawn till then, not
   // its shapes swapped for its rows a frame later)
-  let drawn = fn(s : String) { t.words().iter().any(fn(w) { w.0.contains(s) && w.5 > 0.0 }) }
+  // (seen: some of its glyphs drawn and nothing over them, the splash's ground none)
+  let drawn = fn(s : String) { words_seen(t, s) }
   assert_true(!drawn("星火工作室"))
   t.run_for(@sf.local_ms)
   assert_true(!drawn("星火工作室"), msg="the first page's wait is not LOCAL_MS")
@@ -435,7 +454,7 @@ test "a chat keeping watch is archived only once asked, in the core's words" {
 test "a row with nothing left in it, swiped left past a third: off, then archived (chat.archive); a short swipe archives nothing" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
-  t.scroll_to(12)
+  list_down(t, 12)
   t.draw()
   let (_, y) = t.find("把旧的截图都换成新的").unwrap()
   // across a little: let go short of a third, nothing archived
@@ -468,7 +487,7 @@ test "a finger swipes a waiting, failed or unread chat to archive it on both sma
       let calls : Array[Made] = []
       let t = wide_tester(calls, w~, h=900.0, platform=2)
       if session == "s-c10" {
-        t.scroll_to(12)
+        list_down(t, 12)
         t.draw()
       }
       let (_, y) = t.find(title).unwrap()
@@ -845,7 +864,8 @@ test "the wide frame's first page: shown once its pane has landed on what the co
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
-  let drawn = fn(s : String) { t.words().iter().any(fn(w) { w.0.contains(s) && w.5 > 0.0 }) }
+  // (seen: some of its glyphs drawn and nothing over them, the splash's ground none)
+  let drawn = fn(s : String) { words_seen(t, s) }
   t.frame()
   assert_true(t.find("整理发布清单") is Some(_), msg="the list built")
   t.run_for(@sf.local_ms)
@@ -861,7 +881,7 @@ test "the wide frame's first page: shown once its pane has landed on what the co
 test "a row swiped off and archived, then asked back with 撤销, is back where it rests, not off to the left" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
-  t.scroll_to(12)
+  list_down(t, 12)
   t.draw()
   let before = t.locate("=把旧的截图都换成新的")
   let (_, y) = before[0]
@@ -873,11 +893,25 @@ test "a row swiped off and archived, then asked back with 撤销, is back where 
   t.run_for(@kit.presence_in_ms)
   t.tap_text("撤销")
   assert_eq(named(calls, "chat.archive").length(), 2)
-  t.scroll_to(12)
+  list_down(t, 12)
   t.draw()
   // where it rests, its 归档 under it covered: nothing of the swipe left
   let after = t.locate("=把旧的截图都换成新的")
   assert_eq(after.length(), 1)
   assert_eq(after[0].0, before[0].0)
   assert_true(t.locate("=归档").is_empty())
+}
+
+///|
+/// Whether words with `s` in them are seen: some of their glyphs drawn, nothing drawn over them (Tester::glyphs_seen).
+fn words_seen(t : @ui.Tester, s : String) -> Bool {
+  let seen = t.glyphs_seen()
+  t
+  .words()
+  .iter()
+  .any(fn(w) {
+    w.0.contains(s) &&
+    w.5 > 0.0 &&
+    seen.iter().any(fn(g) { g.0 < w.1 + w.3 && g.2 > w.1 && g.1 < w.2 + w.4 && g.3 > w.2 })
+  })
 }

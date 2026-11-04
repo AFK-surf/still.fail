@@ -301,6 +301,20 @@ fn Len::space(self : Len) -> Space? {
 }
 
 ///|
+/// How long a length is in points where it says one (Fixed, a spacing token); None where it says how it fits (Hug, Cut,
+/// Full, Grow, Pct, Within): a node of the window's tree laid out as a style says (sf's style_node).
+pub fn Len::points(self : Len) -> Double? {
+  match self {
+    Fixed(v) => Some(v)
+    l =>
+      match l.space() {
+        Some(s) => Some(s.px())
+        None => None
+      }
+  }
+}
+
+///|
 /// A length as a node's size.
 fn Len::size(self : Len) -> Size {
   match self {

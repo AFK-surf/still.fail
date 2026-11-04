@@ -106,7 +106,7 @@ test "a mouse pointing at a row: its time and 归档 at its top right; a finger'
     let calls : Array[Made] = []
     let t = lists_tester(calls, w, platform, regular)
     let at = "\{w} platform \{platform}"
-    t.scroll_to(12)
+    list_down(t, 12)
     t.draw()
     if platform == 2 {
       // (swiped left, or held for its menu's)
@@ -235,5 +235,54 @@ test "a row asks its station to regenerate its title from both menu gestures" {
     t.frame()
     t.tap_text("重新生成标题")
     assert_eq(named(calls, "chat.regenerateTitle").length(), 1, msg="\{w} platform \{platform}")
+  }
+}
+
+///|
+/// The chats' list scrolled down `rows` rows (the theme's row's height each), by the wheel over it (its left, where
+/// the sidebar is too, half way down the window), and let come to rest.
+fn list_down(t : @ui.Tester, rows : Int) -> Unit {
+  let c = t.ctx()
+  t.wheel(150.0, c.height / 2.0, rows.to_double() * @sf.theme().chat_list.row_h)
+  t.run_for(@ui.move_most_ms)
+}
+
+///|
+/// The chats' list scrolled to its very top (what is tucked over its rows in view), by the wheel over it as list_down's,
+/// and let come to rest.
+fn list_up_to_top(t : @ui.Tester) -> Unit {
+  let c = t.ctx()
+  t.wheel(150.0, c.height / 2.0, -4000.0)
+  t.run_for(@ui.move_most_ms)
+}
+
+///|
+test "a mouse's 重命名: the row's title a field in its place, focused; Enter renames it (chat.rename), Esc lets it be" {
+  for w in [720.0, 1280.0] {
+    let calls : Array[Made] = []
+    let t = lists_tester(calls, w, 0, false)
+    let at = "\{w}"
+    let (x, y) = t.find("夜里的构建又失败了").unwrap()
+    t.right_click(x, y)
+    t.tap_text("重命名")
+    t.frame()
+    // (no sheet over the page: the row's own field, its words the title's, written in at once)
+    assert_true(t.find("重命名对话") is None, msg=at)
+    let (active, _, _, _) = t.ime()
+    assert_true(active, msg=at)
+    t.type_text("（已修）")
+    t.key(@ui.key_code_enter)
+    let asked = named(calls, "chat.rename")
+    assert_eq(asked.length(), 1, msg=at)
+    assert_eq(text(Some(asked[0].params), "title"), "夜里的构建又失败了（已修）", msg=at)
+    // again, let be with Esc: nothing asked
+    let (x, y) = t.find("夜里的构建又失败了").unwrap()
+    t.right_click(x, y)
+    t.tap_text("重命名")
+    t.frame()
+    t.type_text("x")
+    t.key(@ui.key_escape)
+    t.frame()
+    assert_eq(named(calls, "chat.rename").length(), 1, msg=at)
   }
 }
