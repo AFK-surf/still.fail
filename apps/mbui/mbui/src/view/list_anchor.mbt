@@ -327,10 +327,12 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
             }
           None => None
         }
-        // (told once all of it is laid out: what is in sight, whether it is at its end, and how far it is counted to
-        // be scrolled among all it holds, the bar's)
-        self.tree.once_laid_out(fn() {
-          laid_n.set(@signals.untracked(fn() { laid_n.get() }) + 1)
+        // (told from the next moment on, not in this layout: what is in sight, whether it is at its end, how far it is
+        // counted to be scrolled among all it holds (the bar's), and a glide to what came; layout tells nothing back in
+        // its own pass, retained.md rule 10)
+        // (what draws its rows' rooms, read once all of it is laid out: paint's)
+        self.tree.once_laid_out(fn() { laid_n.set(@signals.untracked(fn() { laid_n.get() }) + 1) })
+        let _ = self.at_moment(self.logic_at(), fn() {
           let in_sight = []
           for q in 0..<r.keys.length() {
             if r.tops[q] + r.heights[q] > 0.0 && r.tops[q] < h {
