@@ -25,13 +25,16 @@ for (const reader of [false, true]) test(`a recent chat list reads details only 
     assert.match(expected, /\(245 more; raise limit or narrow query\)/);
 
     let visited = 0;
+    let details = 0;
     db.function("visit_chat_list_person", (_author) => { visited++; return 1; });
+    db.function("visit_chat_list_detail", (_n) => { details++; return 1; });
     const instrumented = new Proxy(db, {
       get(target, property) {
-        if (property === "prepare") return (sql: string) => target.prepare(sql.replace(
-          "SELECT author FROM thread_people WHERE thread = ?",
-          "SELECT author FROM thread_people WHERE thread = ? AND visit_chat_list_person(author)",
-        ));
+        if (property === "prepare") return (sql: string) => target.prepare(sql
+          .replace("SELECT author FROM thread_people WHERE thread = ?",
+            "SELECT author FROM thread_people WHERE thread = ? AND visit_chat_list_person(author)")
+          .replace("SELECT m.* FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.said_n WHERE t.thread = ?",
+            "SELECT m.* FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.said_n WHERE t.thread = ? AND visit_chat_list_detail(m.n)"));
         const value = Reflect.get(target, property, target);
         return typeof value === "function" ? value.bind(target) : value;
       },
@@ -43,7 +46,8 @@ for (const reader of [false, true]) test(`a recent chat list reads details only 
       recentChatList: reader ? async (ws: string | null, home: string | null, limit: number) => sessionOps.recentChatList!(read, { ws, home, limit }) : null,
     } as unknown as Hub;
     assert.equal(await chatList(hub, "agent", { limit: 5 }), expected);
-    assert.ok(visited <= 5, `the list read people from ${visited} chats to show only five`);
+    assert.equal(visited, 0, `the list read people from ${visited} chats although it does not show them`);
+    assert.equal(details, 5, `the list read message details from ${details} chats to show five`);
   } finally {
     Object.defineProperty(store, "db", { value: db, configurable: true });
     store.close();

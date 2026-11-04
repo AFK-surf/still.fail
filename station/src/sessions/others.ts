@@ -4,7 +4,7 @@
 import { parseThreadAddress, threadAddress } from "../agents/instructions.ts";
 import { iso, type TimelineEntry } from "../read/transcript.ts";
 import { LAPSED } from "../store/rows.ts";
-import { type Attachment, STILLFAIL_SURFACE, type SessionRow, type SessionThread, type ThreadRow } from "../store/store.ts";
+import { type Attachment, STILLFAIL_SURFACE, type SessionThread, type ThreadRow } from "../store/store.ts";
 import { type Args, jsNumber, jsString } from "./args.ts";
 import { threadHistory } from "./conversations.ts";
 import type { Hub } from "./hub.ts";

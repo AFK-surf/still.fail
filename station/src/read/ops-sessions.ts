@@ -1,7 +1,7 @@
 // The reads of sessions, threads and jobs (src/api/routes/sessions.ts asks them), each with the request's `lang`.
 import type { ReadOp } from "./ops.ts";
 import { job, jobLog, openJobs } from "./jobs.ts";
-import { getSession, listThreads, messagesBefore } from "./store.ts";
+import { firstText, getSession, getThread, lastSaid, listThreads, messagesBefore, threadSessions } from "./store.ts";
 import { recentChatIds } from "../store/chat-list.ts";
 import { session, sessionPlace, sessions, summary, thread, threads, timeline, transcriptFile, transcriptState, widgetState } from "./sessions.ts";
 
@@ -14,9 +14,17 @@ export const sessionOps: Record<string, ReadOp> = {
   /// The first page of chat_list and its count, read together in the reader's snapshot.
   recentChatList: (s, a) => {
     const { ids, total } = recentChatIds(s.db, a.ws, a.home, a.limit);
-    const threads = listThreads(s, "", null, ids, "none");
+    const threads = ids.flatMap((id) => {
+      const thread = getThread(s, id);
+      if (thread === null) return [];
+      return [{ thread, sessions: threadSessions(s, id), lastMessage: lastSaid(s, id),
+        firstText: thread.title === null && thread.autoTitle === null ? firstText(s, id) : null }];
+    });
     const keys = new Set(threads.flatMap((t) => t.sessions.map((m) => m.session)));
-    const sessions = [...keys].flatMap((key) => { const row = getSession(s, key); return row === null ? [] : [row]; });
+    const sessions = [...keys].flatMap((key) => {
+      const row = getSession(s, key);
+      return row === null ? [] : [{ key: row.key, title: row.title, archivedAt: row.archivedAt, ws: row.ws }];
+    });
     return { threads, sessions, total };
   },
   /// A thread's latest `limit` messages, oldest first: the archive review's (sessions/review.ts).

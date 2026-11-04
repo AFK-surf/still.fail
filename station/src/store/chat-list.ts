@@ -4,7 +4,8 @@ import type { DatabaseSync } from "node:sqlite";
 import type { SessionRow, ThreadSummary } from "./rows.ts";
 
 export type ChatListSession = Pick<SessionRow, "key" | "title" | "archivedAt" | "ws">;
-export type RecentChatList = { threads: ThreadSummary[]; sessions: ChatListSession[]; total: number };
+export type ChatListThread = Pick<ThreadSummary, "thread" | "sessions" | "lastMessage" | "firstText">;
+export type RecentChatList = { threads: ChatListThread[]; sessions: ChatListSession[]; total: number };
 
 /// A chat with a home belongs there; otherwise it belongs to any of its sessions' workspaces, or the home workspace
 /// when it has none. Unknown sessions, and sessions with no workspace, belong to the home workspace too.

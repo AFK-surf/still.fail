@@ -1291,9 +1291,17 @@ export class Store {
   /// The unfiltered chat_list, with full details only for the selected chats.
   recentChatList(ws: string | null, home: string | null, limit: number): RecentChatList {
     const { ids, total } = recentChatIds(this.db, ws, home, limit);
-    const threads = ids.flatMap((id) => this.listThreads("", null, id, "none"));
+    const threads = ids.flatMap((id) => {
+      const thread = this.getThread(id);
+      if (thread === null) return [];
+      return [{ thread, sessions: this.threadSessions(id), lastMessage: this.#lastSaid(id),
+        firstText: thread.title === null && thread.autoTitle === null ? this.firstText(id) : null }];
+    });
     const keys = new Set(threads.flatMap((t) => t.sessions.map((m) => m.session)));
-    const sessions = [...keys].flatMap((key) => { const s = this.getSession(key); return s === null ? [] : [s]; });
+    const sessions = [...keys].flatMap((key) => {
+      const s = this.getSession(key);
+      return s === null ? [] : [{ key: s.key, title: s.title, archivedAt: s.archivedAt, ws: s.ws }];
+    });
     return { threads, sessions, total };
   }
 
