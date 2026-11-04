@@ -65,6 +65,11 @@ export async function surfaceOf(displays: string, ids: string, id: number, fling
   return null;
 }
 
+/// The root tasks `am stack list` says are on display `id` (`RootTask id=7723 bounds=[…] displayId=13 userId=0`).
+export function rootTasksOn(list: string, id: number): number[] {
+  return [...list.matchAll(/^(?:RootTask|Stack) id=(\d+)\b.*\bdisplayId=(\d+)/gm)].filter((m) => Number(m[2]) === id).map((m) => Number(m[1]));
+}
+
 type Held = {
   grant: string;
   owner: string;
@@ -211,10 +216,21 @@ export class PhoneDisplays {
     if (this.#held.get(held.grant) !== held) return;
     this.#held.delete(held.grant);
     held.closing = true;
-    held.socket.destroy();
-    held.child.kill();
     const [adb, ...server] = held.forward.adb;
-    void adbRun(adb!, [...server, "forward", "--remove", `tcp:${held.forward.port}`]).catch(() => {});
+    const shell = (command: string) => adbRun(adb!, [...server, "shell", `${DISPLAY_MARK} ${command}`]);
+    // Its apps closed before it: left to Android as the display goes, ColorOS's Settings (its activities arranged by
+    // another of its processes) stayed half-removed, in the recents and on a display the phone kept (2026-11-04).
+    const closing = held.child.exitCode === null && !held.socket.destroyed
+      ? shell("am stack list").then((list) => {
+        const tasks = rootTasksOn(list, held.display.id);
+        return tasks.length === 0 ? "" : shell(tasks.map((t) => `am stack remove ${t}`).join("; "));
+      })
+      : Promise.resolve("");
+    void closing.catch(() => "").then(() => {
+      held.socket.destroy();
+      held.child.kill();
+      void adbRun(adb!, [...server, "forward", "--remove", `tcp:${held.forward.port}`]).catch(() => {});
+    });
     log.info("adb", "a chat's display closed", { grant: held.grant });
     this.#o.changed(held.owner);
     if (this.#held.size === 0) {
