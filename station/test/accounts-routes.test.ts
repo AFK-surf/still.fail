@@ -329,6 +329,27 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
+  test("a check that cannot read the models this time keeps those it read last", async () => {
+    let listed: string[] | null = ["claude-opus-5-5", "claude-sonnet-5-5"];
+    let state = "ok";
+    const t = await rig({ check: async () => ({ state, detail: "fake", models: listed, checkedAt: Date.now() }) });
+    await t.call("POST", "/profiles/cc/check");
+    assert.deepEqual(t.profile("cc")!.models, ["claude-opus-5-5", "claude-sonnet-5-5"]);
+    // Its model list not answered (a timeout, a 5xx), or the whole check failing a moment: still the models it runs.
+    listed = null;
+    await t.call("POST", "/profiles/cc/check");
+    assert.deepEqual(t.profile("cc")!.models, ["claude-opus-5-5", "claude-sonnet-5-5"]);
+    state = "failed";
+    await t.call("POST", "/profiles/cc/check");
+    assert.deepEqual(t.profile("cc")!.models, ["claude-opus-5-5", "claude-sonnet-5-5"]);
+    // A list read again replaces it.
+    state = "ok";
+    listed = ["claude-opus-5-5"];
+    await t.call("POST", "/profiles/cc/check");
+    assert.deepEqual(t.profile("cc")!.models, ["claude-opus-5-5"]);
+    await t.close();
+  });
+
   test("known outdated models are unchecked once when the station starts; one checked again by hand stays", async () => {
     const data = temp("outdated");
     writeFileSync(
