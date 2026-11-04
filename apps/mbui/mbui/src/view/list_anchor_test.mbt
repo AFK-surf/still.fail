@@ -318,3 +318,19 @@ test "a kept row under what shows, part of it asked into sight: that part's foot
   d.tree.frame(390.0, 844.0, now=20.0) |> ignore
   assert_eq(d.top(99), Some(-30.0))
 }
+
+
+///|
+test "scrolls_anchored: put at a row far from what shows: that row at its top, its end no more followed, counted where that row is; back at its end by the wheel" {
+  let c = anchored_case(100)
+  assert_true(c.tree.list_to_row(50))
+  c.tree.frame(390.0, 844.0, now=100.0) |> ignore
+  c.tree.frame(390.0, 844.0, now=200.0) |> ignore
+  assert_eq((c.top(50), c.top(51), c.follows.get()), (Some(0.0), Some(40.0), false))
+  // (the bar's: row 50's top 50 rows of 40 down)
+  assert_eq(c.scroll.at(c.tree), 2000.0)
+  assert_eq(c.tree.list_rows(), Some((50, 52)))
+  c.tree.wheel_at(150.0, 50.0, 0.0, 100000.0, 0, 300.0) |> ignore
+  c.tree.frame(390.0, 844.0, now=3000.0) |> ignore
+  assert_eq((c.top(99), c.follows.get(), c.scroll.at(c.tree)), (Some(60.0), true, 3900.0))
+}
