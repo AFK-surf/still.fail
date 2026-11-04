@@ -1415,7 +1415,8 @@ test("what is told as chats change is planned by the size of what it finds, not 
   // Whether a turn of it ended before its work was kept: its first by its end, from the index alone.
   has(stats, "o USING COVERING INDEX turns_by_end (session_key=?");
   has(stats, "deliveries_pending (session=?)");
-  lacks(stats, "COVERING INDEX turns_by_session");
+  // An uncounted old session checks at most 65 of its own turns before asking for bounded preparation.
+  has(stats, "old USING COVERING INDEX turns_by_session (session_key=?)");
   lacks(stats, "deliveries_session");
   has(read.LAST_TURN, "turns_by_session (session_key=?)");
   // A session's latest turns by the index of its turns, from its end: not every turn read and sorted.
@@ -1453,8 +1454,8 @@ test("a session's turns are counted as they are written and removed, and once fr
   store.deleteSession("b");
   assert.deepEqual(turns(store), { a: 2 });
   assert.deepEqual(store.db.prepare("SELECT session, n FROM session_turns").all().map((r: any) => [r.session, r.n]), [["a", 2]]);
-  // A database from before the count: made from the turns it has, as it opens.
-  store.db.exec("DROP TRIGGER session_turns_add; DROP TRIGGER session_turns_drop; DROP TABLE session_turns;");
+  // A database from before the count: a short old session answers from its turns without writing a summary.
+  store.db.exec("DROP TRIGGER session_turns_add; DROP TRIGGER session_turns_drop; DROP TRIGGER session_turns_before_insert; DROP TRIGGER session_turns_move; DROP TABLE session_turns_guard; DROP TABLE session_turns;");
   store.startTurn("t4", "a", "input");
   store.close();
   store = open(path);

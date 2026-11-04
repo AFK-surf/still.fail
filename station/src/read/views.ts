@@ -558,7 +558,7 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
   // The sidebar's own threads alone; the archive's, all of them.
   const of = scope !== null ? scope.threads : archived ? null : store.threadsOfShown(s);
   const threads = store.listThreads(s, "", null, of, "none").filter((t) => t.sessions.some((m) => all.has(m.session)));
-  const stats: ReturnType<typeof store.sessionStats> = titlesOnly ? new Map() : store.sessionStats(s, of === null ? null : [...new Set([...(scope?.sessions ?? shown.keys()), ...threads.flatMap((t) => t.sessions.map((m) => m.session))])]);
+  const stats: ReturnType<typeof store.sessionActivity> = titlesOnly ? new Map() : store.sessionActivity(s, of === null ? null : [...new Set([...(scope?.sessions ?? shown.keys()), ...threads.flatMap((t) => t.sessions.map((m) => m.session))])]);
   // Per agent: the Slack thread it came from (the latest one it is in), whether it has an internal chat, and who wrote
   // in its Slack threads (a row is mine for them).
   const origins = new Map<string, ThreadSummary>();

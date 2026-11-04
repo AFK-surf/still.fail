@@ -1019,18 +1019,39 @@ CREATE TABLE session_turns (
   session TEXT PRIMARY KEY,
   n INTEGER NOT NULL
 ) WITHOUT ROWID;
-INSERT INTO session_turns SELECT session_key, COUNT(*) FROM turns GROUP BY session_key;
+CREATE TABLE session_turns_guard (
+  session TEXT PRIMARY KEY,
+  token TEXT NOT NULL
+) WITHOUT ROWID;
+CREATE TRIGGER session_turns_before_insert BEFORE INSERT ON turns BEGIN
+  DELETE FROM session_turns_guard WHERE session = NEW.session_key OR session IN (SELECT session_key FROM turns WHERE id = NEW.id);
+  -- A replacement may delete its old row without firing DELETE triggers. Even an ignored conflict may safely leave
+  -- that session unknown; a later read will count it, rather than accepting a stale summary.
+  DELETE FROM session_turns WHERE session IN (SELECT session_key FROM turns WHERE id = NEW.id);
+END;
 CREATE TRIGGER session_turns_add AFTER INSERT ON turns BEGIN
-  INSERT INTO session_turns VALUES (NEW.session_key, 1) ON CONFLICT (session) DO UPDATE SET n = n + 1;
+  UPDATE session_turns SET n = n + 1 WHERE session = NEW.session_key;
+  INSERT INTO session_turns (session, n) SELECT NEW.session_key, 1
+    WHERE NOT EXISTS (SELECT 1 FROM session_turns WHERE session = NEW.session_key)
+      AND NOT EXISTS (SELECT 1 FROM turns INDEXED BY turns_by_session
+        WHERE session_key = NEW.session_key AND rowid != NEW.rowid LIMIT 1);
 END;
 CREATE TRIGGER session_turns_drop AFTER DELETE ON turns BEGIN
+  DELETE FROM session_turns_guard WHERE session = OLD.session_key;
   UPDATE session_turns SET n = n - 1 WHERE session = OLD.session_key;
   DELETE FROM session_turns WHERE session = OLD.session_key AND n <= 0;
 END;
+CREATE TRIGGER session_turns_move BEFORE UPDATE OF session_key, started_at, id ON turns
+  WHEN OLD.session_key IS NOT NEW.session_key OR OLD.started_at IS NOT NEW.started_at OR OLD.id IS NOT NEW.id BEGIN
+  DELETE FROM session_turns_guard WHERE session IN (OLD.session_key, NEW.session_key)
+    OR session IN (SELECT session_key FROM turns WHERE id = NEW.id AND rowid != OLD.rowid);
+  DELETE FROM session_turns WHERE session IN (OLD.session_key, NEW.session_key) AND OLD.session_key IS NOT NEW.session_key;
+  DELETE FROM session_turns WHERE session IN (SELECT session_key FROM turns WHERE id = NEW.id AND rowid != OLD.rowid);
+END;
 `;
 
-/// The sessions' turn counts (SESSION_TURNS), made once from the turns written before, in the same transaction as the
-/// triggers that keep them from then on (as addCardOutcomes).
+/// Install counts without walking old turns under the startup write lock. A missing count is not zero: short old
+/// sessions can be read directly, and a requested long session is counted in bounded slices before it is reported.
 export function addSessionTurns(db: DatabaseSync): void {
   const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'session_turns'").get() !== undefined;
   if (made()) return;

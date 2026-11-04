@@ -149,11 +149,9 @@ export function summary(s: Store, key: string): Json {
 /// those of the viewer's workspace (all of them for a read made for no one).
 export function sessions(s: Store, connect: string | null, archived: boolean, lang: Lang, viewer: InWorkspace | null = null): Json[] {
   setLang(lang);
-  const l: Lists = { stats: store.sessionStats(s, null), bindings: store.listBindings(s), participants: store.participants(s, null), watches: watching(s), lengths: store.transcriptLengths(s, null), usages: store.sessionUsages(s, null) };
-  return store
-    .listSessions(s)
-    .filter((x) => (connect === null || x.connect === connect) && (x.archivedAt !== null) === archived && (viewer === null || sees(viewer, x.ws)))
-    .map((x) => summaryWith(s, x.key, l));
+  const rows = store.listSessions(s).filter((x) => (connect === null || x.connect === connect) && (x.archivedAt !== null) === archived && (viewer === null || sees(viewer, x.ws)));
+  const l: Lists = { stats: store.sessionStats(s, rows.map((row) => row.key)), bindings: store.listBindings(s), participants: store.participants(s, null), watches: watching(s), lengths: store.transcriptLengths(s, null), usages: store.sessionUsages(s, null) };
+  return rows.map((x) => summaryWith(s, x.key, l));
 }
 
 /// GET /sessions/:key (views.rs `session`): the session, its threads, turns and jobs (newest first). `turns`: only that
