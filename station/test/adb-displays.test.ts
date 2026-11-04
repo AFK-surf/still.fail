@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { AdbActivity } from "../src/adb/activity.ts";
-import { PhoneDisplays, densityOf, displayOf, surfaceOf } from "../src/adb/displays.ts";
+import { PhoneDisplays, densityOf, displayOf, rootTasksOn, surfaceOf } from "../src/adb/displays.ts";
 import { reached } from "../src/adb/tool.ts";
 
 test("the display scrcpy made, as it says it", () => {
@@ -31,12 +31,55 @@ const FLINGER = [
   `Display 11529215049899194809 (Virtual display): displayName="scrcpy" uniqueId="virtual:com.android.shell,2000,scrcpy,1"`,
 ].join("\n");
 
-test("screencap's id of a display: SurfaceFlinger's, by its unique id, whatever other chats' are up", () => {
-  assert.equal(surfaceOf(DISPLAYS, FLINGER, 2), "11529215049899194809");
-  assert.equal(surfaceOf(DISPLAYS, FLINGER, 12), "11529215046400789845");
+test("screencap's id of a display: SurfaceFlinger's, by its unique id, whatever other chats' are up", async () => {
+  const none = async () => assert.fail("not needed");
+  assert.equal(await surfaceOf(DISPLAYS, FLINGER, 2, none), "11529215049899194809");
+  assert.equal(await surfaceOf(DISPLAYS, FLINGER, 12, none), "11529215046400789845");
   // (Android 12: SurfaceFlinger names no virtual display, screencap takes Android's id)
-  assert.equal(surfaceOf(DISPLAYS, FLINGER.split("\n")[0]!, 2), null);
-  assert.equal(surfaceOf(DISPLAYS, FLINGER, 3), null);
+  assert.equal(await surfaceOf(DISPLAYS, FLINGER.split("\n")[0]!, 2, none), null);
+  assert.equal(await surfaceOf(DISPLAYS, FLINGER, 3, none), null);
+});
+
+test("the root tasks on a display, as am stack list says them", () => {
+  const list = [
+    "RootTask id=7723 bounds=[0,0][1140,2616] displayId=13 userId=0",
+    " configuration={1.0 ?? displayId=13}",
+    "  taskId=7723: com.android.settings/com.oplus.settings.feature.homepage.OplusSettingsHomepageActivity bounds=[0,0][1140,2616] userId=0 visible=true",
+    "RootTask id=7720 bounds=[0,0][1140,2616] displayId=0 userId=0",
+    "RootTask id=7721 bounds=[0,0][1140,2616] displayId=13 userId=0",
+  ].join("\n");
+  assert.deepEqual(rootTasksOn(list, 13), [7723, 7721]);
+  assert.deepEqual(rootTasksOn(list, 0), [7720]);
+  assert.deepEqual(rootTasksOn(list, 2), []);
+});
+
+test("screencap's id of a display where SurfaceFlinger names no unique ids: by its layer stack", async () => {
+  // What an OPPO Find N on ColorOS 17 (Android 17) said (2026-11-04), shortened: screencap refused -d 12.
+  const displays = [
+    `    mBaseDisplayInfo=DisplayInfo{"内屏", displayId 0, displayGroupId 0, FLAG_SECURE, real 1140 x 2616, type INTERNAL, uniqueId "local:4630946165954792596", layerStack 0, app 1140 x 2616}`,
+    `    mBaseDisplayInfo=DisplayInfo{"scrcpy", displayId 12, displayGroupId 0, FLAG_SECURE, real 1140 x 2616, type VIRTUAL, uniqueId "virtual:com.android.shell,2000,scrcpy,1", layerStack 12, owner com.android.shell (uid 2000)}`,
+    `    mBaseDisplayInfo=DisplayInfo{"scrcpy", displayId 13, displayGroupId 0, FLAG_SECURE, real 1140 x 2616, type VIRTUAL, uniqueId "virtual:com.android.shell,2000,scrcpy,0", layerStack 13, owner com.android.shell (uid 2000)}`,
+  ].join("\n");
+  const ids = [
+    `Display 4630946317637160339 (HWC display 0): port=147 pnpId=QCM screenPartStatus=UNSUPPORTED displayName=""`,
+    `Display 11529215049903610350 (Virtual display): displayName="scrcpy"`,
+    `Display 11529215046400789845 (Virtual display): displayName="scrcpy"`,
+  ].join("\n");
+  const flinger = async () => [
+    `Display 4630946165954792596 (physical, "")`,
+    `   layerFilter={layerStack=0 toInternalDisplay=true skipScreenshot=false }`,
+    ``,
+    `Display 11529215046400789845 (virtual, "scrcpy")`,
+    `   Composition Display State:`,
+    `   layerFilter={layerStack=13 toInternalDisplay=false skipScreenshot=false }`,
+    `Display 11529215049903610350 (virtual, "scrcpy")`,
+    `   Composition Display State:`,
+    `   isEnabled=true isSecure=false usesDeviceComposition=false `,
+    `   layerFilter={layerStack=12 toInternalDisplay=false skipScreenshot=false }`,
+  ].join("\n");
+  assert.equal(await surfaceOf(displays, ids, 12, flinger), "11529215049903610350");
+  assert.equal(await surfaceOf(displays, ids, 13, flinger), "11529215046400789845");
+  assert.equal(await surfaceOf(displays, ids, 3, flinger), null);
 });
 
 function packet(name: string, id = 0, payload = ""): Buffer {
@@ -96,6 +139,7 @@ case "$*" in
   *"wm size"*) echo 'Physical size: 1080x2400' ;;
   *"wm density"*) echo 'Physical density: 420' ;;
   *app_process*) echo '[server] INFO: New display: 1080x2400/420 (id=2)'; exec sleep 60 ;;
+  *"am stack list"*) printf 'RootTask id=7 bounds=[0,0][1080,2400] displayId=2 userId=0\n  taskId=7: com.android.settings/.Settings\nRootTask id=1 bounds=[0,0][1080,2400] displayId=0 userId=0\n' ;;
   *"dumpsys display"*) cat <<'EOF'
 ${DISPLAYS}
 EOF
@@ -137,6 +181,9 @@ esac
     assert.equal(displays.has("g1"), true);
     displays.close("g1");
     assert.equal(displays.has("g1"), false);
+    // Its apps closed before it; the person's screen's left alone.
+    for (let i = 0; i < 100 && !readFileSync(calls, "utf8").includes("am stack remove 7"); i++) await new Promise((r) => setTimeout(r, 20));
+    assert.match(readFileSync(calls, "utf8"), /shell STILLFAIL_ADB_KEEP=1 STILLFAIL_ADB_DISPLAY=1 am stack remove 7\n/);
   } finally {
     displays.closeAll();
     phone.close();
