@@ -6,10 +6,14 @@ import type { Route, Tools } from "../admin.ts";
 import { cpus, totalmem } from "node:os";
 import { NotEndable, type ResourceWatch } from "../../resources/watch.ts";
 import { log } from "../../ops/log.ts";
+import { wall } from "../../ops/fibers.ts";
 import type { InWorkspace } from "../../store/rows.ts";
+import { USAGE_SUMMARY_PENDING, type UsageSummaryRange } from "../../store/usage-summary-blocks.ts";
 
 const I64_MIN = -9223372036854775808n;
 const I64_MAX = 9223372036854775807n;
+const floorMinute = (n: bigint) => n >= 0n ? n / 60_000n : -1n - (-1n - n) / 60_000n;
+const ceilMinute = (n: bigint) => -floorMinute(-n);
 
 /// `v.parse::<f64>().ok().map(|v| v as i64)`: Rust's float syntax (inf, infinity and nan too, any case), then as an i64
 /// (NaN 0, beyond its range its ends, the fraction dropped). None when it does not read.
@@ -89,7 +93,8 @@ export const routes = (tools: Tools): Route[] => {
 };
 
 /// GET /usage, the usage part's (usage/module.ts): `reading`, whether the counter is still reading what was spent.
-export const usageRoutes = ({ read }: Tools, reading: () => boolean, wakeTotals: (viewer: InWorkspace | null) => void = () => {}): Route[] => [
+export const usageRoutes = ({ read }: Tools, reading: () => boolean, wakeTotals: (viewer: InWorkspace | null) => void = () => {},
+  waitSummary?: (viewer: InWorkspace | null, range: UsageSummaryRange, signal?: AbortSignal) => Promise<void>): Route[] => [
   // A bounded page of one session's original calls; aggregates remain a separate, statistics-only read.
   {
     method: "GET",
@@ -106,7 +111,7 @@ export const usageRoutes = ({ read }: Tools, reading: () => boolean, wakeTotals:
   {
     method: "GET",
     pattern: /^\/usage$/,
-    handle: (r: Request) => {
+    handle: async (r: Request) => {
       const to = number(r, "to") ?? I64_MAX;
       const from = number(r, "from") ?? 0n;
       const tz = number(r, "tz") ?? 0n;
@@ -121,18 +126,110 @@ export const usageRoutes = ({ read }: Tools, reading: () => boolean, wakeTotals:
         wakeTotals(r.viewer);
       }
       const history = param(r, "history") === "1";
-      const answer = read(r, "usage", { lang: r.lang, from: String(from), to: String(to), tz: String(clamped), reading: reading(), viewer: r.viewer, history,
-        ...(historyFrom !== null && historyTo !== null ? { historyRange: { from: String(historyFrom), to: String(historyTo) } } : {}) });
+      const allowPartial = history && param(r, "allowPartial") === "1";
+      const args = { lang: r.lang, from: String(from), to: String(to), tz: String(clamped), reading: reading(), viewer: r.viewer, history,
+        ...(waitSummary !== undefined ? { summaryStrict: true } : {}),
+        ...(historyFrom !== null && historyTo !== null ? { historyRange: { from: String(historyFrom), to: String(historyTo) } } : {}) };
+      const answer = async (request: Request, tell?: (answer: Answer) => void): Promise<Answer> => {
+        let prepared = false;
+        let partialTold = false;
+        for (;;) {
+          const result = await read(request, "usage", { ...args, ...(prepared ? { summaryPrepared: true } : {}) });
+          let preparing = false;
+          if (result.status === 503 && Buffer.isBuffer(result.body)) {
+            try { preparing = JSON.parse(result.body.toString("utf8")).error === USAGE_SUMMARY_PENDING; } catch { /* An unrelated error. */ }
+          }
+          if (!preparing || waitSummary === undefined) return result;
+          // Only clients that ask for a partial result know to keep its recent totals in a waiting state. Read the
+          // independent history on a new snapshot, without falling back to a scan of the old minute or call tables.
+          if (allowPartial && !partialTold) {
+            const partial = await read(request, "usage", { ...args, detailsPreparing: true });
+            if (tell === undefined || partial.status !== 200) return partial;
+            tell(partial);
+            partialTold = true;
+          }
+          // Release the reader while the existing background worker prepares the selected workspace, then read one
+          // new snapshot. A device that leaves the page can cancel the wait.
+          try {
+            await waitSummary(r.viewer, { from: floorMinute(from), to: to === I64_MAX ? I64_MAX : ceilMinute(to) }, request.signal);
+            prepared = true;
+          }
+          catch (cause) { return error(503, (cause as Error).message); }
+        }
+      };
       // Older clients request the whole history without its chart range. Their summary cache also needs the new
       // pending buckets to be accounted; otherwise every later read revisits them. Let the current read finish first,
       // then settle only this viewer's new statistics in the existing bounded background worker.
-      return history && historyFrom === null ? answer.then((result) => {
+      const finish = (result: Answer) => {
         if (result.status === 200) wakeTotals(r.viewer);
         return result;
-      }) : answer;
+      };
+      const run = async (request: Request, tell?: (answer: Answer) => void) => {
+        const result = await answer(request, tell);
+        return history && historyFrom === null ? finish(result) : result;
+      };
+      // Unlike a JSON request, a stream can stay open while a large range is prepared. It sends the history as soon
+      // as it is available, then the completed answer from the same wait (and closes if the caller leaves).
+      if ((r.headers["accept"] ?? "").includes("text/event-stream")) return followedUsage(r, run);
+      return run(r);
     },
   },
 ];
+
+/// A usage read may need many bounded conversion batches. An event stream keeps that wait and its cursor alive without
+/// holding a reader, and its heartbeats let a client distinguish slow preparation from a lost connection.
+function followedUsage(r: Request, run: (request: Request, tell: (answer: Answer) => void) => Promise<Answer>): Answer {
+  const controller = new AbortController();
+  const queue: Buffer[] = [];
+  let wake: (() => void) | null = null;
+  let closed = false;
+  let finished = false;
+  const notify = () => { const ready = wake; wake = null; ready?.(); };
+  const tell = (answer: Answer) => {
+    if (closed) return;
+    if (answer.status === 200 && Buffer.isBuffer(answer.body)) {
+      queue.push(Buffer.from(`event: usage\ndata: ${answer.body.toString("utf8")}\n\n`));
+    } else {
+      let body: unknown = {};
+      if (Buffer.isBuffer(answer.body)) {
+        try { body = JSON.parse(answer.body.toString("utf8")); } catch { /* A non-JSON failure. */ }
+      }
+      queue.push(Buffer.from(`event: error\ndata: ${JSON.stringify({ status: answer.status, body })}\n\n`));
+    }
+    notify();
+  };
+  const stopHeartbeat = wall.every(15_000, () => {
+    if (!closed && !finished && queue.length === 0) { queue.push(Buffer.from(": ping\n\n")); notify(); }
+  });
+  const end = () => {
+    if (closed) return;
+    closed = true;
+    stopHeartbeat();
+    r.signal?.removeEventListener("abort", end);
+    controller.abort();
+    queue.length = 0;
+    notify();
+  };
+  if (r.signal?.aborted) end();
+  else r.signal?.addEventListener("abort", end, { once: true });
+  void run({ ...r, signal: controller.signal }, tell).then(tell, (cause) => tell(error(500, (cause as Error).message))).finally(() => {
+    finished = true;
+    stopHeartbeat();
+    r.signal?.removeEventListener("abort", end);
+    notify();
+  });
+  const body: AsyncIterableIterator<Buffer> = {
+    [Symbol.asyncIterator]: () => body,
+    next: async () => {
+      while (!closed && !finished && queue.length === 0) await new Promise<void>((resolve) => { wake = resolve; });
+      if (queue.length > 0) return { done: false, value: queue.shift()! };
+      end();
+      return { done: true, value: undefined };
+    },
+    return: async () => { end(); return { done: true, value: undefined }; },
+  };
+  return { status: 200, headers: { "content-type": "text/event-stream", "cache-control": "no-store", "x-accel-buffering": "no" }, body };
+}
 
 /// What still.fail uses of this machine now as `r`'s asker sees it (GET /resources): by whose and process, and the
 /// last minutes' totals (resources/watch.ts), the chats named. A chat the asker does not see (another workspace's) is

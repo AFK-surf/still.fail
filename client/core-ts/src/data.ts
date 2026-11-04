@@ -861,6 +861,12 @@ export class Data {
 
   /// A held topic known no more (a draft sent or emptied).
   forgetTopic(topic: Topic): void {
+    if (topic.topic === "stationUsage") {
+      const station = String(topic.station);
+      const db = this.of(station);
+      if (db && db.stationDoc(station, "usage") !== undefined) db.dropStationDoc(station, "usage", topic);
+      return;
+    }
     if (topic.topic === "drive") {
       const station = String(topic.station);
       const kind = driveDoc(String(topic.root), String(topic.path));

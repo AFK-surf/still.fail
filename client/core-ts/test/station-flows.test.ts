@@ -10,6 +10,7 @@ import { dbName } from "../src/data.ts";
 import { Core } from "../src/core.ts";
 import { CoreError } from "../src/error.ts";
 import { encode, request } from "../src/ops.ts";
+import { topicKey } from "../src/protocol.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { SseParser } from "../src/station/sse.ts";
 import { run } from "./run.ts";
@@ -25,7 +26,7 @@ import { card } from "../src/views/brief.ts";
 import * as present from "../src/present.ts";
 import { t } from "../src/i18n.ts";
 import { JSON_IDLE_MS, SOCKET_OPEN_MS } from "../src/station/requests.ts";
-import { HostWire, concat, encodeFrame, takeFrames, type LinkNet } from "../src/station/wire.ts";
+import { HostWire, concat, encodeFrame, readAll, takeFrames, type LinkNet } from "../src/station/wire.ts";
 import { NET_EVERY_MS } from "../src/station/topics.ts";
 import { apply as applyOps, type Op } from "../src/delta.ts";
 import type { FakeHost } from "../src/testing.ts";
@@ -1841,6 +1842,181 @@ test("the_usage_page_is_split_and_narrowed_as_a_ui_asks", async () => {
   core.close();
 });
 
+test("a station from before usage streams still answers with complete JSON", async () => {
+  const { host, core } = await started();
+  try {
+    const now = host.nowMs(), offset = host.utcOffsetMin(now), today = dayOf(now, offset);
+    const from = today.from - 59 * 86_400_000;
+    const history = { days: [{ day: today.day, runtime: "", model: null, calls: 1, tokens: 2 }], cards: 0, picked: 0, places: {}, archived: 0, remoteRuns: 0 };
+    const row = (calls: number) => ({ day: today.day, session: "k", thread: 1, person: "a@x", profile: "cc", runtime: "claude", model: "m", calls, input: calls, cacheRead: 0, cacheWrite: 0, output: calls, cost: null });
+    stationReplies(host, (req) => req.url.includes("/admin/api/usage?")
+      ? { from, since: 0, reading: false, prices: { rows: [] }, threads: {}, people: {}, profiles: {}, remoteRuns: [], rows: [row(1)], history }
+      : undefined);
+    const ui = core.connect();
+    subscribe(core, ui, 1, { topic: "stationUsage", station: ST });
+    await host.settle();
+    const held = core.inner.data.shared({ topic: "stationUsage", station: ST }) as J;
+    assert.notEqual(held?.detailsPreparing, true);
+    assert.deepEqual(held.history, history);
+    assert.equal(held.rows[0].calls, 1);
+  } finally {
+    await core.close();
+  }
+});
+
+test("usage preparation keeps one stream without occupying a station sync slot", async () => {
+  const chunks = Effect.runSync(Queue.unbounded<Uint8Array | null>());
+  const blockers = Effect.runSync(Queue.unbounded<void>());
+  const bytes = (s: string) => new TextEncoder().encode(s);
+  const event = (value: unknown) => bytes(`event: usage\ndata: ${JSON.stringify(value)}\n\n`);
+  let opened = 0, closed = 0;
+  let fresh: unknown;
+  class UsageStream extends HostWire {
+    override request(...args: Parameters<HostWire["request"]>) {
+      const head = args[1];
+      if (head.path.includes("/usage?") && head.headers.some(([key, value]) => key.toLowerCase() === "accept" && value.includes("text/event-stream"))) {
+        opened++;
+        if (opened === 1) return Effect.gen(function* () {
+          yield* Effect.addFinalizer(() => Effect.sync(() => { closed++; }));
+          return { status: 200, headers: [["content-type", "text/event-stream"]] as [string, string][], body: { take: Queue.take(chunks) }, via: null };
+        });
+        const data = bytes(JSON.stringify(fresh));
+        let sent = false;
+        return Effect.succeed({ status: 200, headers: [["content-type", "application/json"]] as [string, string][],
+          body: { take: Effect.sync(() => sent ? null : (sent = true, data)) }, via: null });
+      }
+      return super.request(...args);
+    }
+  }
+  const { host, core, push } = await started(base(), 0, (h) => new UsageStream(h));
+  try {
+    const now = host.nowMs(), offset = host.utcOffsetMin(now), today = dayOf(now, offset);
+    const from = today.from - 59 * 86_400_000;
+    const history = { days: [{ day: today.day, runtime: "", model: null, calls: 1, tokens: 2 }], cards: 0, picked: 0, places: {}, archived: 0, remoteRuns: 0 };
+    const row = (calls: number) => ({ day: today.day, session: "k", thread: 1, person: "a@x", profile: "cc", runtime: "claude", model: "m", calls, input: calls, cacheRead: 0, cacheWrite: 0, output: calls, cost: null });
+    const common = { from, since: 0, reading: false, prices: { rows: [] }, threads: {}, people: {}, profiles: {}, remoteRuns: [] };
+    fresh = { ...common, from: today.from, rows: [row(3)] };
+    stationReplies(host, (req) => req.url.includes("/admin/api/usage?") ? { ...common, rows: [row(1)], history } : undefined);
+    const ui = core.connect();
+    subscribe(core, ui, 1, { topic: "stationUsage", station: ST });
+    await host.settle();
+    assert.equal(opened, 1, "the station is asked for one stream");
+    Queue.offerUnsafe(chunks, event({ ...common, rows: [], history, detailsPreparing: true }));
+    await host.settle();
+    let held = core.inner.data.shared({ topic: "stationUsage", station: ST }) as J;
+    assert.equal(held.detailsPreparing, true);
+    assert.deepEqual(held.history, history);
+    let entered = 0;
+    for (const key of ["first", "second"]) core.inner.scheduler.enqueue(ST, `${ST} ${key} while usage prepares`, Priority.shown,
+      Effect.sync(() => { entered++; }).pipe(Effect.andThen(Queue.take(blockers))));
+    await host.settle();
+    assert.equal(entered, 2, "both ordinary station sync slots remain available");
+    Queue.offerUnsafe(blockers, undefined);
+    Queue.offerUnsafe(blockers, undefined);
+    // Longer than the JSON idle deadline: heartbeats keep this same preparation and its range cursor alive.
+    for (let i = 0; i < 4; i++) {
+      push("usage", { from: now - 1 });
+      Queue.offerUnsafe(chunks, bytes(": ping\n\n"));
+      await host.time.pass(16_000, 1_000);
+    }
+    assert.equal(opened, 1, "changes while waiting are coalesced rather than starting another preparation");
+    Queue.offerUnsafe(chunks, event({ ...common, rows: [row(1)], history }));
+    Queue.offerUnsafe(chunks, null);
+    await host.settle();
+    held = core.inner.data.shared({ topic: "stationUsage", station: ST }) as J;
+    assert.notEqual(held.detailsPreparing, true);
+    assert.equal(held.rows[0].calls, 3, "changes during preparation are read after the completed answer");
+    assert.equal(opened, 2);
+    assert.equal(closed, 1);
+  } finally {
+    Queue.offerUnsafe(blockers, undefined);
+    Queue.offerUnsafe(blockers, undefined);
+    await core.close();
+  }
+});
+
+test("leaving a preparing usage page closes its stream and reopening starts a new read", async () => {
+  const feeds: { queue: Queue.Queue<Uint8Array | null>; closed: boolean }[] = [];
+  class UsageStream extends HostWire {
+    override request(...args: Parameters<HostWire["request"]>) {
+      if (args[1].path.includes("/usage?") && args[1].headers.some(([key, value]) => key.toLowerCase() === "accept" && value.includes("text/event-stream"))) {
+        return Effect.gen(function* () {
+          const queue = yield* Queue.unbounded<Uint8Array | null>();
+          const feed = { queue, closed: false };
+          feeds.push(feed);
+          yield* Effect.addFinalizer(() => Effect.sync(() => { feed.closed = true; }));
+          return { status: 200, headers: [["content-type", "text/event-stream"]] as [string, string][], body: { take: Queue.take(queue) }, via: null };
+        });
+      }
+      return super.request(...args);
+    }
+  }
+  const { host, core } = await started(base(), 0, (h) => new UsageStream(h));
+  try {
+    const ui = core.connect();
+    const topic = { topic: "stationUsage", station: ST };
+    subscribe(core, ui, 1, topic);
+    await host.settle();
+    assert.equal(feeds.length, 1);
+    core.receive(ui, { kind: "unsubscribe", id: 1, unsubscribe: true });
+    assert.equal(core.inner.store.inUse(topic), false);
+    Queue.offerUnsafe(feeds[0]!.queue, new TextEncoder().encode(": ping\n\n"));
+    await host.settle();
+    assert.equal(feeds[0]!.closed, true, "the next heartbeat lets go of preparation when no view needs it");
+    subscribe(core, ui, 2, topic);
+    await host.settle();
+    assert.equal(feeds.length, 2, "reopening in the topic's grace period reads again");
+  } finally {
+    await core.close();
+  }
+});
+
+test("a dropped usage preparation retries, and a later refusal removes incomplete data", async () => {
+  const feeds: { queue: Queue.Queue<Uint8Array | null>; closed: boolean }[] = [];
+  class UsageStream extends HostWire {
+    override request(...args: Parameters<HostWire["request"]>) {
+      if (args[1].path.includes("/usage?") && args[1].headers.some(([key, value]) => key.toLowerCase() === "accept" && value.includes("text/event-stream"))) {
+        return Effect.gen(function* () {
+          const queue = yield* Queue.unbounded<Uint8Array | null>();
+          const feed = { queue, closed: false };
+          feeds.push(feed);
+          yield* Effect.addFinalizer(() => Effect.sync(() => { feed.closed = true; }));
+          return { status: 200, headers: [["content-type", "text/event-stream"]] as [string, string][], body: { take: Queue.take(queue) }, via: null };
+        });
+      }
+      return super.request(...args);
+    }
+  }
+  const { host, core, push } = await started(base(), 0, (h) => new UsageStream(h));
+  try {
+    const ui = core.connect(), topic = { topic: "stationUsage", station: ST };
+    const send = (index: number, name: string, data: unknown) => Queue.offerUnsafe(feeds[index]!.queue,
+      new TextEncoder().encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`));
+    subscribe(core, ui, 1, topic);
+    await host.settle();
+    send(0, "usage", { detailsPreparing: true, rows: [], history: { days: [] } });
+    await host.settle();
+    assert.equal((core.inner.data.shared(topic) as J).detailsPreparing, true);
+    Queue.offerUnsafe(feeds[0]!.queue, null);
+    await host.settle();
+    push("usage", { from: host.nowMs() - 1 });
+    push("usage", { from: host.nowMs() - 1 });
+    await host.settle();
+    assert.equal(feeds.length, 1, "usage changes do not bypass the retry delay after a dropped stream");
+    await host.time.pass(READ_RETRY_MS + 100, 100);
+    assert.equal(feeds.length, 2, "a lost connection is retried while the page is open");
+    assert.equal(feeds[0]!.closed, true);
+    send(1, "error", { status: 403, body: { error: "not allowed" } });
+    await host.settle();
+    assert.equal(core.inner.data.shared(topic), undefined, "a refused read cannot leave an incomplete history visible");
+    assert.equal(core.inner.stations.link(ST)?.errors.get(topicKey(topic))?.status, 403);
+    await host.time.pass(2 * READ_RETRY_MS, 100);
+    assert.equal(feeds.length, 2, "a refusal is not retried in a loop");
+  } finally {
+    await core.close();
+  }
+});
+
 test("what_the_agents_spent_is_read_again_from_the_day_a_change_touched", async () => {
   // Read whole at every change while a page showed it: some 200 KB a minute while agents worked, 2 to 23 s of the
   // station's time a read on a station (2026-11-02).
@@ -1863,7 +2039,7 @@ test("what_the_agents_spent_is_read_again_from_the_day_a_change_touched", async 
   subscribe(core, ui, 1, { topic: "stationUsage", station: ST });
   await host.settle();
   const asked = () => host.requests.filter((r) => r.url.includes("/admin/api/usage?")).map((r) => r.url.slice(r.url.indexOf("?") + 1));
-  assert.deepEqual(asked(), [`from=${from}&tz=${offset}&history=1&historyFrom=${range.from}&historyTo=${range.to}`], "shown: read whole");
+  assert.deepEqual(asked(), [`from=${from}&tz=${offset}&history=1&historyFrom=${range.from}&historyTo=${range.to}&allowPartial=1`], "shown: read whole");
   // A call recorded today: today alone read again, in place of what is held of it.
   push("usage", { from: now - 1000 });
   await host.settle();
@@ -1877,7 +2053,7 @@ test("what_the_agents_spent_is_read_again_from_the_day_a_change_touched", async 
   // A change that does not say when (a station from before): all of it again.
   push("usage", {});
   await host.settle();
-  assert.deepEqual(asked().slice(2), [`from=${from}&tz=${offset}&history=1&historyFrom=${range.from}&historyTo=${range.to}`]);
+  assert.deepEqual(asked().slice(2), [`from=${from}&tz=${offset}&history=1&historyFrom=${range.from}&historyTo=${range.to}&allowPartial=1`]);
   core.close();
 });
 
@@ -3187,6 +3363,31 @@ test("a_host_that_takes_zstd_apart_itself_is_given_every_compressed_reply_and_a_
     assert.equal(counts.closed - was.closed, 2);
   } finally {
     core.close();
+  }
+});
+
+test("a stream request requires a complete compressed JSON reply but permits a stopped live stream", async () => {
+  const { host, core } = await started(base(), 0, undefined, (s) => {
+    // The native decompressor tells the caller whether its compressed frame ended; model a cut frame directly.
+    Object.assign(s.host, { unzstd: () => Effect.acquireRelease(
+      Effect.succeed({ push: (piece: Uint8Array) => Effect.succeed({ bytes: piece, whole: false }) }), () => Effect.void) });
+  });
+  const path = "/usage?legacy=1";
+  const encoded = new TextEncoder().encode('{"rows":[]}');
+  let type = "application/json";
+  stationReplies(host, (req) => req.url.endsWith(path) ? new Raw({ status: 200,
+    headers: [["content-type", type], ["content-encoding", "zstd"]], body: encoded }) : undefined);
+  const read = () => core.inner.runner.run(Effect.result(Effect.scoped(Effect.gen(function* () {
+    const reply = yield* core.inner.stations.requests.stream(remote(), path, null);
+    return yield* readAll(reply.body);
+  }))));
+  try {
+    const cut = await read();
+    assert.equal(cut._tag, "Failure", "an old station's cut JSON is not used as a complete answer");
+    type = "application/x-ndjson";
+    assert.equal((await read())._tag, "Success", "a live stream can close between compression frames");
+  } finally {
+    await core.close();
   }
 });
 

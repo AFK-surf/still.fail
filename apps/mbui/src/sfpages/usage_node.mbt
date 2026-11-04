@@ -654,14 +654,25 @@ fn usage_narrowed_node(parent : @view.View, v : () -> Json?, chart : () -> Json?
 /// or that none was spent (in its bones while it is still read, what failed said over it); how it is counted last; 16
 /// apart.
 fn usage_body_node(parent : @view.View, core : Core, v : () -> Json?, chart : () -> Json?, error : () -> Json?, page_w : () -> Double, tips? : @sf.TipLayer) -> Unit {
+  let details_pending = fn() { flag(v(), "detailsPreparing") || flag(chart(), "detailsPreparing") }
   parent.box(fn(b) {
     b.gap(Is(ug_body_gap)) |> ignore
     usage_summary_node(b, chart, page_w, tips?)
-    usage_overview_node(b, core, v, chart, tips?)
+    b.show(details_pending, fn(at) {
+      let sample = fn() { Some(usage_sample()) }
+      @sf.waiting_node(at, fn(s) {
+        s.box(fn(details) {
+          details.gap(Is(ug_body_gap)) |> ignore
+          usage_overview_node(details, core.quiet(), sample, sample)
+          usage_none_node(details)
+        }) |> ignore
+      }, note=fn() { { reading: true, text: @sf.t("common.reading"), failing: [] } })
+    })
+    b.show(fn() { !details_pending() }, fn(at) { usage_overview_node(at, core, v, chart, tips?) })
     b.show(fn() { v() is None && error() is Some(_) }, fn(p) {
       @sf.words_node(p, fn() { @sf.t("web-pages.settings.usage.failed", args=[("error", error_text(error().unwrap()))]) }, fn() { ug_failed }) |> ignore
     })
-    b.show(fn() { v() is Some(_) }, fn(q) {
+    b.show(fn() { v() is Some(_) && !details_pending() }, fn(q) {
     q.pick(fn() { flag(v(), "empty") }, fn(p, empty) {
       if empty {
         let wait = fn() { field(v(), "wait") }

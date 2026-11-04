@@ -14,7 +14,7 @@
 //
 // Then the rest is brought onto the device in the background, the most urgent first (`#history`): every session's
 // detail, and every channel. The UI makes some of it more urgent (`prioritize`), never more or less.
-import { Deferred, Effect, Exit, Scope } from "effect";
+import { Deferred, Effect, Exit, Scope, type Fiber } from "effect";
 import type { Inner } from "../core.ts";
 import { join } from "../data.ts";
 import { CoreError, asCoreError } from "../error.ts";
@@ -26,12 +26,12 @@ import { equal, get, isObject, parseJson } from "../util.ts";
 import { Priority } from "../sync/scheduler.ts";
 import { activity as historyActivity } from "../history.ts";
 import { StationAddr } from "./addr.ts";
-import { IDEMPOTENCY_KEY, READS, Requests, httpError } from "./requests.ts";
+import { IDEMPOTENCY_KEY, JSON_IDLE_MS, READS, Requests, httpError } from "./requests.ts";
 import { digest } from "../digest.ts";
 import { type Channel, Channels } from "../channels/channels.ts";
 import { ENTRIES, LETTERS, PAGE, TRANSCRIPT, TRANSCRIPT_PAGE, entriesOf, heldIn, lettersOf, transcriptOf } from "./channel-kinds.ts";
 import { type HistoryRead, type Link, Links, type LiveView, MEMORY, OUTFLOW, PRESETS, filePeekKey, linkPreviewKey, logKey, messagePeekKey } from "./link.ts";
-import { readAll, replyHeader, type StationWire } from "./wire.ts";
+import { concat, readAll, replyHeader, type StationWire } from "./wire.ts";
 import { SseParser } from "./sse.ts";
 import * as logins from "./machine-logins.ts";
 import { Relays } from "./machine-logins.ts";
@@ -142,6 +142,8 @@ export class StationsSync {
   readonly #retold = new Retold();
   /// The stations whose searches shown are to be asked again once SEARCH_STALE_MS is up.
   readonly #staleSearches = new Set<string>();
+  /// A usage preparation can take many bounded batches; it has its own cancellable stream, outside the sync lane.
+  readonly #usageReading = new Map<string, { link: Link; fiber: Fiber.Fiber<void, never> | null }>();
   /// What the station topics want of a stream beyond what the sync wants (host samples, logs, sessions shown).
   wanted: (address: string) => { host: boolean; live: string[]; logs: [string, number][]; logins?: string[] } = () => ({ host: false, live: [], logs: [] });
   /// Told when what a station holds beyond the records changed (link, live views, host, logs).
@@ -768,6 +770,7 @@ export class StationsSync {
       link.usageFrom = from === null || link.usageFrom === null ? null : Math.min(link.usageFrom ?? Infinity, from);
     }
     if (!this.#core.store.inUse({ topic: "stationUsage", station: address })) return [];
+    if (this.#usageReading.get(address)?.link === link) return [];
     return [this.#enqueue(address, "usage", Priority.background, this.#usage(address, ctx))];
   }
 
@@ -974,14 +977,122 @@ export class StationsSync {
     if (link && !link.usageCurrent) this.#enqueue(address, "usage", Priority.shown, this.#usage(address));
   }
 
+  /// A topic kept after its last viewer is eventually stopped. A preparation which is still open goes with it.
+  usageHidden(address: string): void {
+    const active = this.#usageReading.get(address);
+    if (!active) return;
+    this.#usageReading.delete(address);
+    active.link.usageCurrent = false;
+    active.link.usageFrom = null;
+    if (active.fiber) this.#core.runner.interrupt(active.fiber);
+  }
+
+  /// A stream tells the independent history while preparing recent details, then the complete read. Events received
+  /// in between only mark the earliest changed day; after the complete answer that part is read once more. The wait
+  /// does not hold a sync lane or retain unrelated station events, and leaving it closes its request scope.
+  #usageRead(address: string, topic: Topic, path: string, shape?: (answer: unknown) => unknown,
+    ctx: SpanContext | null = null, attempt = 0): Effect.Effect<void, CoreError> {
+    return Effect.sync(() => {
+      const link = this.#links.get(address);
+      if (!link) return;
+      if (!this.reachable(address) || !this.#core.store.inUse(topic)) {
+        link.usageCurrent = false;
+        link.usageFrom = null;
+        return;
+      }
+      const previous = this.#usageReading.get(address);
+      if (previous?.link === link) return;
+      if (previous?.fiber) this.#core.runner.interrupt(previous.fiber);
+      const active: { link: Link; fiber: Fiber.Fiber<void, never> | null } = { link, fiber: null };
+      this.#usageReading.set(address, active);
+      const stillHere = () => this.#links.get(address) === link && this.#usageReading.get(address) === active;
+      const timeout = () => new CoreError("timeout", t("core-logic.mesh.timed_out"));
+      const read = Effect.scoped(Effect.gen({ self: this }, function* () {
+        const reply = yield* Effect.timeoutOrElse(this.requests.stream(link.addr, path, ctx), {
+          duration: JSON_IDLE_MS, orElse: () => Effect.fail(timeout()),
+        });
+        const take = () => Effect.timeoutOrElse(Effect.mapError(reply.body.take, asCoreError), {
+          duration: JSON_IDLE_MS, orElse: () => Effect.fail(timeout()),
+        });
+        const told = (value: unknown) => {
+          if (!stillHere() || !this.#core.store.inUse(topic)) return false;
+          link.errors.delete(topicKey(topic));
+          this.#core.data.set(topic, shape ? shape(value) : value);
+          return true;
+        };
+        if (!(replyHeader(reply, "content-type") ?? "").startsWith("text/event-stream")) {
+          // A station from before streams answers with its ordinary complete JSON.
+          const chunks: Uint8Array[] = [];
+          for (;;) {
+            const chunk = yield* take();
+            if (chunk === null) break;
+            chunks.push(chunk);
+          }
+          const value = parseJson(concat(chunks));
+          if (value === undefined) return yield* Effect.fail(new CoreError("bad_response", t("station.core.invalidReply")));
+          return told(value);
+        }
+        const parser = new SseParser();
+        for (;;) {
+          const chunk = yield* take();
+          if (!stillHere() || !this.#core.store.inUse(topic)) return false;
+          if (chunk === null) return yield* Effect.fail(new CoreError("bad_response", t("station.core.invalidReply")));
+          for (const [name, data] of parser.feed(chunk)) {
+            if (name === "error") {
+              const failure = parseJson(data);
+              const status = get(failure, "status");
+              return yield* Effect.fail(httpError(typeof status === "number" ? status : 500, get(failure, "body")));
+            }
+            if (name !== "usage") continue;
+            const value = parseJson(data);
+            if (value === undefined) return yield* Effect.fail(new CoreError("bad_response", t("station.core.invalidReply")));
+            if (!told(value)) return false;
+            if (get(value, "detailsPreparing") !== true) return true;
+          }
+        }
+      }));
+      const work = Effect.gen({ self: this }, function* () {
+        const answer = yield* Effect.result(read);
+        if (!stillHere()) return;
+        if (answer._tag === "Success" && answer.success) {
+          this.#usageReading.delete(address);
+          if (!link.usageCurrent && this.#core.store.inUse(topic)) this.#enqueue(address, "usage", Priority.background, this.#usage(address));
+          return;
+        }
+        link.usageCurrent = false;
+        link.usageFrom = null;
+        if (answer._tag === "Success") { this.#usageReading.delete(address); return; }
+        const key = topicKey(topic), status = answer.failure.status;
+        if (status !== undefined && status >= 400 && status < 500) {
+          this.#usageReading.delete(address);
+          this.#core.data.forgetTopic(topic);
+          link.errors.set(key, answer.failure);
+          this.onChange(address, "errors", key);
+        } else if (this.#core.store.inUse(topic)) {
+          const delay = Math.min(READ_RETRY_MS * 2 ** Math.min(attempt, 4), 30_000);
+          // Remain the one active read during the delay: usage events are coalesced instead of bypassing backoff.
+          yield* Effect.sleep(delay);
+          if (stillHere()) {
+            this.#usageReading.delete(address);
+            if (this.#core.store.inUse(topic)) this.#enqueue(address, "usage", Priority.background, this.#usage(address, null, attempt + 1));
+          }
+        }
+      }).pipe(Effect.ensuring(Effect.sync(() => {
+        if (this.#usageReading.get(address) === active) this.#usageReading.delete(address);
+      })));
+      active.fiber = this.#core.runner.fork(work, link.scoped);
+    });
+  }
+
   /// What the station's agents spent over the last 60 days, days as this device's clock has them: the usage page's 30 at
   /// most and as many before, to say its totals against (views/usage.ts); and everything since it began counting by
   /// day (`history`: the page's summary, views/usage-summary.ts). Current from when it is asked: a change said
   /// meanwhile has it read again. Held whole for these same days, only the days a change since touched are read again
   /// (usage-part.ts), from the earliest call the station said it recorded.
-  #usage(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
+  #usage(address: string, ctx: SpanContext | null = null, attempt = 0): Effect.Effect<void, CoreError> {
     return Effect.suspend(() => {
       const link = this.#links.get(address);
+      if (link && this.#usageReading.get(address)?.link === link) return Effect.void;
       const changed = link?.usageFrom;
       if (link) {
         link.usageCurrent = true;
@@ -1004,10 +1115,11 @@ export class StationsSync {
           }
           return held;
         };
-        return this.#read(address, topic, `/usage?from=${part.from}&tz=${offset}`, put, ctx);
+        return this.#usageRead(address, topic, `/usage?from=${part.from}&tz=${offset}`, put, ctx, attempt);
       }
       const range = usageHistoryRange(now, offset);
-      return this.#read(address, topic, `/usage?from=${from}&tz=${offset}&history=1&historyFrom=${range.from}&historyTo=${range.to}`, undefined, ctx);
+      const path = `/usage?from=${from}&tz=${offset}&history=1&historyFrom=${range.from}&historyTo=${range.to}`;
+      return this.#usageRead(address, topic, `${path}&allowPartial=1`, undefined, ctx, attempt);
     });
   }
 

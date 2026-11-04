@@ -235,7 +235,7 @@ test("an unbounded history settles its workspace's new statistics so its cache c
     });
     const route = usageRoutes({ read: () => Promise.resolve({ status: 200, headers: {}, body: Buffer.alloc(0) }) } as never,
       () => false, (scope) => mover!.read(scope))[1]!;
-    await route.handle({ lang: "en", query: [["history", "1"]], viewer } as never, []);
+    await route.handle({ lang: "en", headers: {}, query: [["history", "1"]], viewer } as never, []);
     await settled;
     assert.deepEqual(compact.compactTotal(writer.db, viewer), { calls: 128, tokens: 256 },
       "a call from before compact statistics is not added to the new total");

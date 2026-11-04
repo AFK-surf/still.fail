@@ -69,6 +69,7 @@ test("the days a change touched, read again, take the place of those held; the r
   };
   assert.equal(holdsWhole(held, from), true);
   assert.equal(holdsWhole({ ...held, historyPending: true }, from), false, "an unfinished total needs a whole retry");
+  assert.equal(holdsWhole({ ...held, detailsPreparing: true }, from), false, "a history without recent details cannot receive a partial update");
   assert.equal(holdsWhole(held, from + DAY), false, "another day's window");
   assert.equal(holdsWhole({ ...held, history: undefined }, from), false, "a read without the history");
   // Calls recorded from 2026-11-02 on (UTC+8): that day and the next read again.

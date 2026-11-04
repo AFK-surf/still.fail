@@ -3,8 +3,10 @@ import { Refused } from "../api/request.ts";
 import { wall } from "../ops/fibers.ts";
 import type { InWorkspace } from "../store/rows.ts";
 import { compactScopeReady, hasCompactUsage } from "../store/usage-compact.ts";
+import { hasUsageSummaryBlocks, USAGE_SUMMARY_PENDING } from "../store/usage-summary-blocks.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import type { Store } from "./store.ts";
+import { usageGroupsFromBlocks } from "./usage-summary-blocks.ts";
 
 /// The requested time index, ownership lookup, and the selected session's minute index.
 export function batchedUsageQueries(viewer: InWorkspace | null): { selected: string; owner: string; buckets: string; pending: string; pendingRange: string; anyPending: string } {
@@ -26,6 +28,24 @@ export function batchedUsageQueries(viewer: InWorkspace | null): { selected: str
   };
 }
 
+/// The only original calls needed for an exact partial-minute boundary. Each scope is sought separately so a home
+/// workspace cannot duplicate a session from the named workspace, and the minute index orders sessions for DISTINCT.
+export function usageSummaryEdgeQuery(scope: "all" | "workspace" | "home"): string {
+  const index = scope === "all" ? "usage_compact_time" : "usage_compact_scope_time";
+  const restriction = scope === "all" ? "" : "scope = ?3 AND ";
+  const owner = scope === "all" ? "" : "CROSS JOIN usage_minute_scope sc ON sc.session = p.session";
+  const visible = scope === "all" ? "" : scope === "home" ? " AND sc.ws IS NULL" : " AND sc.ws = ?6";
+  return `WITH selected AS MATERIALIZED (
+      SELECT DISTINCT session FROM usage_compact INDEXED BY ${index} WHERE ${restriction}minute = ?1 AND records > 0
+    ) SELECT strftime('%Y-%m-%d', (?1 + ?2) * 60, 'unixepoch') AS day, u.session,
+      COALESCE(u.thread, 0) AS thread, COALESCE(u.person, '') AS person, COALESCE(u.profile, '') AS profile,
+      u.runtime, COALESCE(u.model, '') AS model, u.fast, u.calls, u.input, u.cache_read, u.cache_write,
+      u.cache_write_long, u.output
+    FROM selected p ${owner} CROSS JOIN usage u INDEXED BY usage_session
+      ON u.session = p.session AND u.at >= ?4 AND u.at < ?5
+    WHERE u.compact_counted = 1${visible}`;
+}
+
 type Part = { day: string | null; session: string; thread: bigint; person: string; profile: string;
   runtime: string; model: string; fast: bigint; calls: bigint; input: bigint; cache_read: bigint;
   cache_write: bigint; cache_write_long: bigint; output: bigint };
@@ -33,20 +53,41 @@ type Bucket = Part & { minute: bigint };
 type Block = { session: string; minute: bigint; groups: Map<string, Part>; bytes: number };
 type Total = { row: Part; refs: number; bytes: number };
 type Cached = { seq: bigint; blocks: Map<string, Block>; totals: Map<string, Total>; width: bigint; cells: number; bytes: number };
-type CacheStatus = "disabled" | "miss" | "expired" | "reused" | "oversized";
+type CacheStatus = "disabled" | "miss" | "expired" | "reused" | "oversized" | "indexed";
 type SqlStage = "journal" | "changes" | "pending" | "selected" | "owner" | "buckets";
 export type UsageSqlTimings = Record<SqlStage, number> & { slowMs: number; slowOp: string };
 const names = ["calls", "input", "cache_read", "cache_write", "cache_write_long", "output"] as const;
 const MAX_CELLS = 8192;
 const MAX_BYTES = 8 * 1024 * 1024;
 const MAX_ENTRIES = 3;
+const MAX_PREPARED_RANGES = 16;
 
 /// Kept by one reader, never shared across connections. Bound both the number and size of cached answers.
 export class UsageSummaryCache {
   private db: DatabaseSync | null = null;
   private readonly entries = new Map<string, Cached>();
+  private readonly prepared = new Map<string, true>();
+  private schema: number | null = null;
   private use(db: DatabaseSync): void {
-    if (this.db !== db) { this.entries.clear(); this.db = db; }
+    if (this.db !== db) { this.entries.clear(); this.prepared.clear(); this.schema = null; this.db = db; }
+  }
+  private checkSchema(db: DatabaseSync): void {
+    this.use(db);
+    const version = (db.prepare("PRAGMA schema_version").get() as { schema_version: number }).schema_version;
+    if (version !== this.schema) { this.prepared.clear(); this.schema = version; }
+  }
+  hasPrepared(db: DatabaseSync, key: string): boolean {
+    this.checkSchema(db);
+    if (!this.prepared.has(key)) return false;
+    this.prepared.delete(key);
+    this.prepared.set(key, true);
+    return true;
+  }
+  putPrepared(db: DatabaseSync, key: string): void {
+    this.checkSchema(db);
+    this.prepared.delete(key);
+    while (this.prepared.size >= MAX_PREPARED_RANGES) this.prepared.delete(this.prepared.keys().next().value!);
+    this.prepared.set(key, true);
   }
   get(db: DatabaseSync, key: string): Cached | undefined {
     this.use(db);
@@ -96,16 +137,21 @@ function answer(groups: Part[]): UsageGroup[] {
     cache_read: safe(r.cache_read), cache_write: safe(r.cache_write), cache_write_long: safe(r.cache_write_long), output: safe(r.output) }));
 }
 
-/// An aligned compact summary, read in bounded steps on the caller's snapshot. Cached blocks are only reused when
+/// A compact summary, read in bounded steps on the caller's snapshot. Cached blocks are only reused when
 /// the journal still covers every subsequent change; otherwise this takes the ordinary full indexed path.
 export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null = null,
   pause: (ms: number) => Promise<void> = (ms) => ms > 0 ? wall.sleep(ms) : new Promise((resolve) => setImmediate(resolve)),
-  cache?: UsageSummaryCache): Promise<{
+  cache?: UsageSummaryCache, prepared?: boolean): Promise<{
     groups: UsageGroup[]; diagnostics: { parts: number; candidates: number; selectedMs: number; selectedRestMs: number;
       selectedCpuMs?: number; cpuMs?: number; rests: number; restMs: number; cache: CacheStatus; sql: UsageSqlTimings }; ms: number;
   } | null> {
   const max = 9223372036854775807n;
-  if (!hasCompactUsage(s.db) || (from < to && (from % 60_000n !== 0n || (to !== max && to % 60_000n !== 0n)))) return null;
+  if (!hasCompactUsage(s.db)) {
+    if (prepared !== undefined && from < to) throw new Refused(503, USAGE_SUMMARY_PENDING);
+    return null;
+  }
+  const partial = from < to && (from % 60_000n !== 0n || (to !== max && to % 60_000n !== 0n));
+  if (partial && prepared === undefined && !hasUsageSummaryBlocks(s.db)) return null;
   if (!compactScopeReady(s.db, viewer)) throw new Refused(503, "usage statistics are moving between workspaces");
   const start = from >= to ? 0n : floorDiv(from, 60_000n);
   const end = from >= to ? 0n : to === max ? max : floorDiv(to, 60_000n);
@@ -157,6 +203,51 @@ export async function usageGroupsBatched(s: Store, from: bigint, to: bigint, utc
       restMs: Math.round(restMs), cache, sql: { journal: Math.round(sql.journal), changes: Math.round(sql.changes),
         pending: Math.round(sql.pending), selected: Math.round(sql.selected), owner: Math.round(sql.owner),
         buckets: Math.round(sql.buckets), slowMs: Math.round(sql.slowMs), slowOp: sql.slowMs < 0.5 ? "none" : sql.slowOp } }, ms: Math.round(performance.now() - started) });
+  // A prepared range remains covered while later writes are tracked by the dirty queue. Keep only a small number of
+  // proofs per connection, and discard them if the database schema is changed or the connection is replaced.
+  const preparedKey = JSON.stringify([String(from), String(to), viewer?.workspace ?? null, viewer === null ? null : viewer.home !== false]);
+  const canReuse = prepared === false && cache?.hasPrepared(s.db, preparedKey) === true;
+  let innerFrom = from, innerTo = to;
+  const edges: { minute: bigint; from: bigint; to: bigint }[] = [];
+  if (partial) {
+    const size = 60_000n;
+    if (from % size !== 0n) {
+      const minute = floorDiv(from, size), next = (minute + 1n) * size;
+      const until = next < to ? next : to;
+      edges.push({ minute, from, to: until });
+      innerFrom = until;
+    }
+    if (to !== max && to % size !== 0n) {
+      const minute = floorDiv(to, size), first = minute * size;
+      if (first >= innerFrom) { edges.push({ minute, from: first, to }); innerTo = first; }
+      else innerTo = innerFrom;
+    }
+    if (innerFrom >= innerTo) innerFrom = innerTo = 0n;
+  }
+  const grouped = await usageGroupsFromBlocks(s.db, innerFrom, innerTo, utcOffsetMin, viewer, timeSql, async () => {
+    if (++steps >= 64) await rest();
+  }, canReuse ? true : prepared);
+  if (grouped !== null) {
+    const combined = new Map<string, Part>();
+    for (const row of grouped.groups) add(combined, totalKey(row.session, groupKey(row)), row);
+    if (prepared === true) cache?.putPrepared(s.db, preparedKey);
+    parts += grouped.parts;
+    candidates += grouped.candidates;
+    const scopes = viewer === null ? ["all"] as const : viewer.home === false ? ["workspace"] as const : ["workspace", "home"] as const;
+    for (const edge of edges) for (const scope of scopes) {
+      const stmt = timeSql("buckets", () => s.db.prepare(usageSummaryEdgeQuery(scope)));
+      stmt.setReadBigInts(true);
+      const args = [edge.minute, utcOffsetMin, scope === "all" ? null : scope === "home" ? "H" : `W${viewer!.workspace}`,
+        edge.from, edge.to, ...(scope === "workspace" ? [viewer!.workspace] : [])];
+      for (const row of sqlRows<Part>("buckets", stmt.iterate(...args) as Iterable<Part>)) {
+        candidates++;
+        parts++;
+        add(combined, totalKey(row.session, groupKey(row)), row);
+        if (++steps >= 64) await rest();
+      }
+    }
+    return result([...combined.values()], Math.round(performance.now() - started), "indexed");
+  }
   const key = JSON.stringify(["summary", from.toString(), to.toString(), utcOffsetMin.toString(), viewer?.workspace ?? null,
     viewer === null ? null : viewer.home !== false]);
   const journal = cache !== undefined && timeSql("journal", () => s.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_summary_changes'").get()) !== undefined;

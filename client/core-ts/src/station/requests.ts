@@ -293,7 +293,9 @@ export class Requests {
       // What comes on it is no longer waited on, only counted (as it came over the link: `came`), and decompressed.
       const came = { bytes: 0 };
       const body = { take: Effect.tap(reply.body.take, (chunk) => Effect.sync(() => chunk && (status.received(null, chunk.length), (came.bytes += chunk.length)))) };
-      return { ...reply, body: yield* plain(this.#core.host, { ...reply, body }), came };
+      // An older station may answer a stream request with finite JSON; it still has to end its compression frame.
+      const finiteJson = (replyHeader(reply, "content-type") ?? "").startsWith("application/json");
+      return { ...reply, body: yield* plain(this.#core.host, { ...reply, body }, !finiteJson), came };
     });
   }
 

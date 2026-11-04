@@ -408,6 +408,13 @@ if [ $full = 1 ]; then
     # time, .github/actions/setup-mac)
     remembered "tests: station" "station client/i18n vendor rules/js scripts/native.ts" after station sh -c 'cd station && if [ -n "${STILLFAIL_NODE_TEST_JOBS:-}" ]; then node ../scripts/native.ts run mesh runner archive-rs -- node --import ./test/setup-env.mjs --test --test-concurrency="$STILLFAIL_NODE_TEST_JOBS" --test-timeout=600000 test/*.test.ts; else pnpm test; fi'
   fi
+  # The usage stream exercises the real station reader and the client together. Keep it out of either side's own
+  # typecheck and prepare both sides before checking and running it, including on a fresh checkout.
+  if part station && touches '^station/(src/|integration/|test/setup-env\.mjs$)|^client/core-ts/(src/|test/(helpers|station-fixture)\.ts$)|^scripts/check\.sh$'; then
+    prep station deps station
+    prep core deps client/core-ts
+    step "tests: station and core usage stream" after station after core sh -c 'cd station && pnpm exec tsgo -p integration/tsconfig.json && node --disable-warning=ExperimentalWarning --import ./test/setup-env.mjs --test --test-timeout=30000 integration/usage-client-stream.test.ts'
+  fi
   # The media app's (media/): its service's tests, its core module's, and the two end to end beside the station's module
   # layer (media/test): whenever it, the core or the station changed.
   if part station && touches '^media/|^client/core-ts/src/|^station/src/|^scripts/native\.ts$'; then

@@ -22,6 +22,24 @@ const station = (rows: J[]): J => ({
 const NOW = 1_790_913_600_000;
 const ok = (v: J) => ({ ok: v });
 
+test("recent totals wait for every station even when one has already answered", () => {
+  const ready: Source = { address: "ws/a", name: "alpha", online: true,
+    value: ok(station([row("2026-10-02", "a@x", 7, "cc", "claude-opus-5-5", 1, 3)])) };
+  const pending: Source = { address: "ws/b", name: "beta", online: true,
+    value: ok({ ...station([]), detailsPreparing: true }) };
+  for (const sources of [[ready, pending], [pending, ready]]) {
+    const view = usageView(sources, 7, NOW, 480, {}, []);
+    assert.equal(view.detailsPreparing, true);
+    assert.equal(view.wait.reading, true);
+    assert.equal(view.empty, true, "incomplete totals cannot be shared as a whole");
+  }
+  const complete = usageView([ready, { ...pending, value: ok(station([])) }], 7, NOW, 480, {}, []);
+  assert.notEqual(complete.detailsPreparing, true);
+  assert.equal(complete.wait.reading, false);
+  assert.equal(complete.empty, false);
+  assert.equal(complete.tiles[0].value, "$3.00");
+});
+
 test("days_split_by_who_and_lists_ranked_by_cost", () => {
   assert.equal(localDay(NOW, 480), "2026-10-02");
   const rows = [

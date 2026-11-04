@@ -576,6 +576,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-profile-key" => "profile:ws1/st1#k2"
     "settings-profile-quota" | "settings-profile-quota-login" | "settings-profile-quota-expiry" => "profile:ws1/st1#cx"
     "settings-me-reading" => "me"
+    "settings-usage-details-pending" => "usage"
     "settings-profiles-pick" | "settings-profiles-monthly" => "profiles"
     "settings-connect" => "connect:ws1/st1#k1"
     _ =>
@@ -1551,7 +1552,7 @@ fn fx_usage_summary() -> Json {
 ///|
 /// What the core's `usage` view says (views/usage.ts) of a made-up workspace: its days split by the list `split`
 /// asks for, of the one person, account or model `only` names (its key) alone.
-fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : String = "") -> Json {
+fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : String = "", details_pending? : Bool = false) -> Json {
   // (the one alone: a part of everything)
   let part = if only == "" { 1.0 } else { 0.42 }
   let daily : Array[Json] = []
@@ -1637,18 +1638,19 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
     ("days", Json::number(days.to_double())),
     ("split", str(split)),
     ("only", only_shown),
-    ("wait", obj([("reading", Json::boolean(false)), ("failing", []), ("empty", Json::boolean(false))])),
-    ("empty", Json::boolean(false)),
+    ("wait", obj([("reading", Json::boolean(details_pending)), ("failing", []), ("empty", Json::boolean(false))])),
+    ("empty", Json::boolean(details_pending)),
+    ("detailsPreparing", Json::boolean(details_pending)),
     (
       "tiles",
       [
         obj([
           ("label", str("折合费用")),
-          ("value", str(if day_cost != "" { day_cost } else if only != "" { "$50" } else if days == 7 { "$118" } else { "$486" })),
+          ("value", str(if details_pending { "$0" } else if day_cost != "" { day_cost } else if only != "" { "$50" } else if days == 7 { "$118" } else { "$486" })),
           ("sub", str("按 API 标准单价估算")),
           // (a day picked: against nothing)
-          ("change", if day != "" { Json::null() } else { str(if days == 7 { "↑18%" } else { "↓6.4%" }) }),
-          ("trend", str(if days == 7 { "up" } else { "down" })),
+          ("change", if details_pending || day != "" { Json::null() } else { str(if days == 7 { "↑18%" } else { "↓6.4%" }) }),
+          ("trend", str(if details_pending { "" } else if days == 7 { "up" } else { "down" })),
         ]),
         obj([
           ("label", str("模型调用")),
@@ -1727,7 +1729,7 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
         }),
       ),
     ),
-    ("notes", []),
+    ("notes", if details_pending { [str("正在读取历史记录，数据可能变化")] } else { [] }),
     ("basis", str("按各服务商公开的 API 价格折算，不是实际账单。")),
     (
       "prices",
@@ -2523,6 +2525,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
             Some(String(d)) => d
             _ => ""
           },
+          details_pending=mode == "settings-usage-details-pending",
         ),
       )
     "archive" => Some(fx_archive())
