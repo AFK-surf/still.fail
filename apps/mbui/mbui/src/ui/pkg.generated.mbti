@@ -1161,6 +1161,8 @@ pub fn Ctx::cut_to_top(Self, Int32, Double, soft? : Double) -> Unit
 pub fn Ctx::cycle(Self, Double, resident? : Bool, loc~ : SourceLoc) -> Double
 #callsite(autofill(loc))
 pub fn Ctx::cycle_look(Self, Int32, Double, (Double) -> Look, resident? : Bool, held? : Bool, loc~ : SourceLoc) -> Unit
+#callsite(autofill(loc))
+pub fn Ctx::cycle_look_each(Self, Int32, Double, (Double, Double) -> Look, held? : Bool, loc~ : SourceLoc) -> Unit
 pub fn Ctx::direction(Self) -> Direction
 pub fn Ctx::dismiss(Self, Int32, why? : Dismiss) -> Unit
 pub fn Ctx::double_clicked(Self, Int32) -> Bool

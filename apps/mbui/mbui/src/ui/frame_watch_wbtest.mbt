@@ -423,3 +423,25 @@ test "a frame built again for what a part or a list's row read names it and wher
   let parts = at.to_string().split(":").take(2).map(fn(v) { v.to_string() }).collect()
   assert_true(why.contains(", set at \{parts[0]}:\{parts[1]}:"), msg=why)
 }
+
+///|
+test "a light travelling across text is drawn per glyph without rebuilding the view" {
+  let builds = Ref(0)
+  let t = Tester::new(fn(c) {
+    builds.val += 1
+    let words = c.text("a long title", size=18.0)
+    c.cycle_look_each(words, looks_turn_ms, fn(phase, x) {
+      let light = (x - phase).abs()
+      look(alpha=if light < 0.25 { 1.0 } else { 0.5 })
+    })
+  })
+  t.check_looks(false)
+  t.clock_frame()
+  t.clock_frame()
+  let built = builds.val
+  let before = t.drawn_glyphs()
+  t.clock_frame(ms=looks_turn_ms / 4.0)
+  assert_eq(builds.val, built)
+  assert_true(looks_drawn.val)
+  assert_true(before != t.drawn_glyphs())
+}

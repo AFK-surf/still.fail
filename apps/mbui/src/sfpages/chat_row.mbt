@@ -52,6 +52,9 @@ let title_motions : @sf.LiveMap[String, TitleMotion] = @sf.LiveMap::new()
 let title_swap_ms : Double = 300.0
 
 ///|
+let title_shine_ms : Double = 1800.0
+
+///|
 fn chat_rows_reset() -> Unit {
   title_motions.clear()
   row_left.val = ("", false)
@@ -103,14 +106,10 @@ fn row_title(c : @ui.Ctx, key : String, title : String, style : @ui.TextStyle) -
     Some(m) if m.waiting => {
       let node = @sf.name_words(c, m.old, style)
       if !c.reduced_motion() {
-        let count = c.words_glyph_cells(m.old, style).length().to_double()
-        c.glyphs_by(node, fn(g) {
-          let f = c.now() / 1800.0
-          let phase = f - f.floor()
-          let pos = if count > 1.0 { g.index.to_double() / (count - 1.0) } else { 0.5 }
+        c.cycle_look_each(node, title_shine_ms, fn(phase, pos) {
           let distance = (pos - (phase * 1.8 - 0.4)).abs()
           let shine = dmax(0.0, 1.0 - distance / 0.4)
-          { alpha: 0.62 + 0.38 * shine, dx: 0.0, dy: 0.0, scale: 1.0, sx: 1.0 }
+          @ui.look(alpha=0.62 + 0.38 * shine)
         })
       }
     }

@@ -23,6 +23,7 @@ priv struct CycleLook {
   resident : Bool
   held : Bool
   look : (Double) -> Look
+  each : ((Double, Double) -> Look)?
   loc : SourceLoc
 }
 
@@ -56,7 +57,24 @@ pub fn Ctx::cycle_look(
     return
   }
   self.tick_said(true, period, loc, node=i)
-  self.drawn_of(i).cycle = Some(CycleLook::{ period, resident, held, look, loc })
+  self.drawn_of(i).cycle = Some(CycleLook::{ period, resident, held, look, each: None, loc })
+}
+
+///|
+/// Like cycle_look, but each painted instance receives its horizontal position (0 to 1) within the node as well as
+/// the cycle's phase. A moving light can pass over shaped text without rebuilding or splitting its glyphs.
+#callsite(autofill(loc))
+pub fn Ctx::cycle_look_each(
+  self : Ctx,
+  i : Int,
+  period : Double,
+  by : (Double, Double) -> Look,
+  held? : Bool = false,
+  loc~ : SourceLoc,
+) -> Unit {
+  if period <= 0.0 || i < 0 { return }
+  self.tick_said(true, period, loc, node=i)
+  self.drawn_of(i).cycle = Some(CycleLook::{ period, resident: false, held, look: fn(_) { look() }, each: Some(by), loc })
 }
 
 ///|
@@ -141,10 +159,12 @@ fn Ctx::cycle_looks(self : Ctx) -> Unit {
     return
   }
   let looks : Map[Int, Look] = {}
+  let phases : Map[Int, Double] = {}
   for tag, _ in boxes {
     match cycle_frame.get(tag) {
       Some(cy) => {
         let (f, next) = cy.at(self.clock)
+        phases[tag] = f
         looks[tag] = (cy.look)(f)
         if !self.cycles.iter().any(fn(c) { c.1.to_string() == cy.loc.to_string() }) {
           self.cycles.push((cy.period, cy.loc))
@@ -169,8 +189,15 @@ fn Ctx::cycle_looks(self : Ctx) -> Unit {
     }
     a[b + 20] = 0.0
     match looks.get(tag) {
-      Some(l) => {
+      Some(base) => {
         let (x0, y0, x1, y1) = boxes[tag]
+        let l = match cycle_frame.get(tag) {
+          Some({ each: Some(each), .. }) => {
+            let x = if x1 > x0 { (a[b] + a[b + 2] / 2.0 - x0) / (x1 - x0) } else { 0.5 }
+            each(phases[tag], x)
+          }
+          _ => base
+        }
         look_inst(a, b, l, x0 + l.ox * (x1 - x0), y0 + l.oy * (y1 - y0))
       }
       None => ()

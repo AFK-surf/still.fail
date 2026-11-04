@@ -9,7 +9,7 @@ test "title generation paints a moving light and its answer slides into the same
   })
   t.draw()
   let first = t.drawn_glyphs()
-  t.run_for(450.0)
+  t.run_for(title_shine_ms / 4.0)
   let later = t.drawn_glyphs()
   assert_true(first != later)
   let at = t.time()
@@ -59,7 +59,7 @@ test "reduced motion keeps waiting words still and shows the new title at once" 
   t.set_reduce_motion(true)
   t.draw()
   let first = t.drawn_glyphs()
-  t.run_for(500.0)
+  t.run_for(title_shine_ms / 4.0)
   assert_eq(t.drawn_glyphs(), first)
   title_motions["test"] = { old: "Old", next: "New", at: t.time(), waiting: false }
   t.frame()
