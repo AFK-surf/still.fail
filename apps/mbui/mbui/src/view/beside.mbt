@@ -381,15 +381,25 @@ pub fn View::drawn_scale(self : View) -> Double {
 ///|
 /// A finger or a button went down in the window at `at`, wherever it lands (the host's, before it goes to
 /// what takes it): one change at that moment, told to what follows the window's presses (View::window_downs).
-pub fn Tree::went_down(self : Tree, at : Double) -> Unit {
-  self.event(at, fn() { self.pressed_anywhere.set(@signals.untracked(fn() { self.pressed_anywhere.get() }) + 1) })
+pub fn Tree::went_down(self : Tree, at : Double, x? : Double = -1.0, y? : Double = -1.0) -> Unit {
+  self.event(at, fn() {
+    let (count, _, _) = @signals.untracked(fn() { self.pressed_anywhere.get() })
+    self.pressed_anywhere.set((count + 1, x, y))
+  })
 }
 
 ///|
 /// How many times a finger or a button has gone down anywhere in the window (Tree::went_down), followed: what closes at
 /// the next press, wherever it lands (a tip a finger held open, once let go).
 pub fn View::window_downs(self : View) -> Int {
-  self.tree.pressed_anywhere.get()
+  self.tree.pressed_anywhere.get().0
+}
+
+///|
+/// Where the most recent window press went down, in window coordinates, as the host told it.
+pub fn View::window_down_point(self : View) -> (Double, Double) {
+  let (_, x, y) = self.tree.pressed_anywhere.get()
+  (x, y)
 }
 
 ///|

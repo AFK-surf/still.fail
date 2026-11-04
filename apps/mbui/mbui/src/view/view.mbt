@@ -573,9 +573,8 @@ pub struct Tree {
   mut last_h : Double
   /// the window's size, as its frames give it: what is laid out by it (which frame a window's width calls for) follows it
   room : @signals.Signal[(Double, Double)]
-  /// how many times a finger or a button went down anywhere in the window, as the host tells each (Tree::went_down):
-  /// what closes at the next press, wherever it lands, follows it
-  pressed_anywhere : @signals.Signal[Int]
+  /// Each window press, with its number and window coordinates (Tree::went_down).
+  pressed_anywhere : @signals.Signal[(Int, Double, Double)]
   /// how many taps there have been anywhere in the window, as the host tells each (Tree::tapped): what a tap anywhere
   /// lets go of follows it
   tapped_anywhere : @signals.Signal[Int]
@@ -788,7 +787,7 @@ pub fn Tree::new(
     resident_readers: {},
     places: @signals.signal(0),
     room: @signals.signal((0.0, 0.0), same=fn(a, b) { a == b }),
-    pressed_anywhere: @signals.signal(0, same=fn(a, b) { a == b }),
+    pressed_anywhere: @signals.signal((0, -1.0, -1.0), same=fn(a, b) { a == b }),
     tapped_anywhere: @signals.signal(0, same=fn(a, b) { a == b }),
     words_redone: @signals.signal(0, same=fn(a, b) { a == b }),
     outs_said: @signals.signal(0, same=fn(a, b) { a == b }),

@@ -597,10 +597,7 @@ fn row_aside_w_node(item : ChatItem, lead : String) -> Double {
 /// the title's, the focus in it as it comes; Enter saves it (`chat.rename`), Esc or leaving it lets it be.
 fn rename_node(n : @view.View, src : Source, item : () -> ChatItem) -> Unit {
   rows.rename_field.set(@signals.untracked(item).title)
-  let done = fn() {
-    rows.renaming = ""
-    row_renaming.set("")
-  }
+  let done = fn() { stop_rename() }
   n.box(fn(b) {
     @sf.style_node(b, fn() { rename_box() }, in_row=true)
     b.row(Is(true)).lines_up(Is(Some(Middle))).edge(By(fn() { (1.0, @sf.theme().p.line_strong) })) |> ignore
@@ -622,6 +619,19 @@ fn rename_node(n : @view.View, src : Source, item : () -> ChatItem) -> Unit {
     )
     f.grow(Is(1.0)).basis(Is(Some(0.0))).shrink(Is(1.0)) |> ignore
     b.focus_opens(f) |> ignore
+    // A press outside the field ends the rename even when its target cannot take the focus. It still reaches that
+    // target. The press that opened the menu predates this field, so only later presses are considered.
+    let opened = @signals.untracked(fn() { b.window_downs() })
+    b.reacts(fn() { b.window_downs() }, fn(count) {
+      if count > opened {
+        let (x, y) = b.window_down_point()
+        let (left, top, w, h) = b.placed_window_now()
+        if x < left || x >= left + w || y < top || y >= top + h {
+          @ui.current().blur()
+          done()
+        }
+      }
+    })
     // (left: let be)
     let seen = Ref(false)
     b.reacts(fn() { f.focused() }, fn(on) {

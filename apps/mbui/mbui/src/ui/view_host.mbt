@@ -1957,7 +1957,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
   old_hits_place(g(), Some(tree))
   // (a press anywhere, told before it goes to what takes it: what closes at the next press follows it)
   if kind == 0 {
-    tree.went_down(at)
+    tree.went_down(at, x~, y~)
   }
   // (a press on nothing a tap no more: another press, a second finger, moved past a gesture's slop from where it went
   // down, come back or not)
