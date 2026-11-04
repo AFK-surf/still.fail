@@ -177,15 +177,12 @@ fn panel_centred_node(
       // taller than the dialog leaves it, laid out in that, its lists giving way and scrolling in themselves (old's
       // `gives`), nothing of it scrolling past it)
       if x.tall > 0.0 && !x.form && steps is None {
-        // (whether a list in it says how tall it would be, as it was last built: what it holds as tall as that then)
-        let says = @signals.signal(false)
         // (the old view itself held shorter where the dialog is short of room: what it asks its own node's height)
         @ui.old(d, natural=true, gives=true, key=fn() { key + "/body" }, fn(c) {
           let share = dmax(0.0, x.tall * c.window_size().1 - dialog_frame_h)
           let column = @ui.style(px=room(words_in))
           let top = body_top()
           let at = (if x.foot is None { dialog_body_end } else { dialog_body }).then(column).then(top)
-          let whole = if says.get() { @ui.style(w=Full, max_h=Fixed(share)) } else { @ui.style(w=Full, h=Fixed(share)) }
           let id = c.id("sf-present/capped/\{keyed.serial}")
           let held = c.box(style=centred_part_in(0.0, 0.0).then(@ui.style(h=Full)), fn() {
             c.box(style=at.then(@ui.style(h=Full)), fn() {
@@ -199,7 +196,14 @@ fn panel_centred_node(
               untitled_clear_now.val = if untitled() { dialog_close_clear() } else { 0.0 }
               lists_sized_now.val = true
               // (what holds what it holds giving way to the height the dialog leaves it)
-              c.gives_way(measured_body(c, keyed.serial, id, whole, fn() { titled_by_row(x, fn() { draw_panel_body(x, c, close, keyed~) }) }))
+              let body = measured_body(c, keyed.serial, id, @ui.style(w=Full), fn() { titled_by_row(x, fn() { draw_panel_body(x, c, close, keyed~) }) })
+              c.gives_way(body)
+              // Its children have now said whether they contain a list. Choose the height for this same layout.
+              if lists_of.get(keyed.serial).unwrap_or([]).length() > 0 {
+                c.height_after(body, Auto, max=share)
+              } else {
+                c.height_after(body, Px(share))
+              }
               panel_sides_in.val = was.0
               rows_out.val = was.1
               words_in_now.val = was.2
@@ -211,11 +215,6 @@ fn panel_centred_node(
             })
             |> ignore
           })
-          // (a list in it said how tall it would be, or none did: told as that changes, what read it built again)
-          let said = lists_of.get(keyed.serial).unwrap_or([]).length() > 0
-          if @signals.untracked(fn() { says.get() }) != said {
-            says.set(said)
-          }
           words_look(c, held)
         })
         .shrink(Is(1.0))

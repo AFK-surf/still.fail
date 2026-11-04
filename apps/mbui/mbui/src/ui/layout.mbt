@@ -1105,6 +1105,14 @@ pub fn Ctx::gives_way(self : Ctx, i : Int) -> Unit {
 }
 
 ///|
+/// Set a box's height after its children have been built and before it is laid out. This lets the children decide
+/// whether it fills a fixed height or sizes to its content up to a limit, without feeding a measurement into a new build.
+pub fn Ctx::height_after(self : Ctx, i : Int, height : Size, max? : Double) -> Unit {
+  self.nodes[i].h = height
+  self.nodes[i].max_h = max.unwrap_or(1.0e9)
+}
+
+///|
 /// How tall node `i`, as laid out, asks to be: measured at the width it was laid out at with no bound on its height (what
 /// in it gave way to the height it was given as tall as it asks), as the layout just done left it, nothing of that laid
 /// out again (@flex.measured_height). An old view laid out in the height its node is given (old's `gives`) asks its
