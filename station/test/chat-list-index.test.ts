@@ -75,3 +75,32 @@ for (const recursive of [false, true]) test(`an edit or a letter does not make t
     assert.deepEqual(readGlobalRecentChatIndex(db, 5), page, "a letter does not become the latest visible message");
   } finally { store.close(); }
 });
+
+for (const recursive of [false, true]) for (const how of ["number", "timestamp", "timestamp update"] as const) {
+  test(`replacing the latest message by ${how} invalidates its ordering (recursive triggers ${recursive})`, () => {
+    const store = Store.open(":memory:");
+    const db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+      const id = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
+      db.prepare("UPDATE threads SET created_at = 100 WHERE id = ?").run(id);
+      const other = store.openThread("ember", "EMBER", "other", "Other", null).id;
+      db.prepare("UPDATE threads SET created_at = 50 WHERE id = ?").run(other);
+      db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at) VALUES (?,1,'message','same','person','p','hello',1)").run(id);
+      if (how === "timestamp update")
+        db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at) VALUES (?,2,'edit','different','person','p','edit',2)").run(id);
+      installRecentChatIndex(db);
+      while (!stepRecentChatIndex(db, 3).done) { /* Prepare the chat before an older writer changes it. */ }
+      assert.ok(readGlobalRecentChatIndex(db, 5));
+      if (how === "number")
+        db.prepare("INSERT OR REPLACE INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'edit','person','p','edit',2)").run(id);
+      else if (how === "timestamp")
+        db.prepare("INSERT OR REPLACE INTO entries(thread,n,kind,ts,author_kind,author,text,at) VALUES (?,2,'edit','same','person','p','edit',2)").run(id);
+      else db.prepare("UPDATE OR REPLACE entries SET ts = 'same' WHERE thread = ? AND n = 2").run(id);
+      assert.equal(readGlobalRecentChatIndex(db, 5), null, "a replaced latest message must not leave a stale page");
+      while (!stepRecentChatIndex(db, 3).done) { /* Account the changed ordering. */ }
+      const rows = db.prepare(RECENT_CHAT_LIST).all(null, null, 5) as { id: number; total: number }[];
+      assert.deepEqual(readGlobalRecentChatIndex(db, 5), { ids: rows.map((row) => row.id), total: rows[0]?.total ?? 0 });
+    } finally { store.close(); }
+  });
+}
