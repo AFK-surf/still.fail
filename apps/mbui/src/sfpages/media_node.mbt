@@ -280,6 +280,6 @@ fn media_reveal_node(
 fn out_of_window(s : @view.View) -> Bool {
   match @signals.untracked(fn() { s.laid_window_told() }) {
     Some((_, y, _, h)) => y + h <= 0.0 || y >= s.window().1
-    None => true
+    None => s.shown_nowhere()
   }
 }
