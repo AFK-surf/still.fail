@@ -964,6 +964,9 @@ fn frame_arrivals(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -
   frame_clock.set(t)
   frame_env.set(looks_env(c, w, h, scale))
   clock_frame_start(t)
+  for prepare in frame_input_hooks {
+    @signals.untracked(fn() { prepare(c) })
+  }
 }
 
 ///|

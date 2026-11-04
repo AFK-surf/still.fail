@@ -706,6 +706,15 @@ pub fn panel_list(
 pub fn whole_fitted(c : @ui.Ctx, key : String, id : Int, most : Double, draw : (Int) -> Int) -> Unit {
   let room_id = c.id(key + "/room")
   let whole_id = c.id(key + "/whole")
+  // The retained stage measures the whole picture itself, then scales it in its own layout. Give it the natural
+  // picture here, without reading an earlier layout or reporting its dimensions through a signal.
+  if stage_natural.val {
+    stage_laid_w.val = most
+    let scale = stage_natural_scale.val
+    let picture = c.box(style=@ui.style(w=Fixed(most)), id~, fn() { draw(whole_id) |> ignore })
+    c.look_by(picture, fn() { @ui.look(scale=scale(), ox=0.5, oy=0.0) })
+    return
+  }
   let h = match c.laid_size(whole_id) {
     Some((_, h)) => h
     None => 0.0
@@ -757,6 +766,15 @@ pub fn whole_fitted(c : @ui.Ctx, key : String, id : Int, most : Double, draw : (
     c.gives_way(room_box)
   }
 }
+
+///|
+/// Whether a retained stage asks for its body's natural, unscaled picture.
+// kept across runs: set only while the stage's body is built, and put back
+let stage_natural : Ref[Bool] = Ref(false)
+
+///|
+// kept across runs: set only while the stage's body is built, and put back
+let stage_natural_scale : Ref[() -> Double] = Ref(fn() { 1.0 })
 
 ///|
 /// Whether the stage whole_fitted is drawn on is the window's tree's (stage_node): what it holds gives way to the room

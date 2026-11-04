@@ -373,8 +373,26 @@ pub fn compute(
   reuse? : Bool = false,
   grid? : Double = 0.0,
 ) -> Unit {
-  generation.val = generation.val + 1
-  reusing.val = reuse && !round && grid == placing_grid.val
+  // A measured leaf may lay out another tree. Preserve the outer compute's grid, cache generation and scratch
+  // results while that happens; the nested tree gets a distinct generation of its own.
+  let nested = computing.val > 0
+  let before = (generation.val, reusing.val, placing_grid.val, absolute_seen.val, out_h.val, out_b.val)
+  computing.val += 1
+  defer {
+    computing.val -= 1
+    if nested {
+      generation.val = before.0
+      reusing.val = before.1
+      placing_grid.val = before.2
+      absolute_seen.val = before.3
+      out_h.val = before.4
+      out_b.val = before.5
+    }
+  }
+  compute_count.val += 1
+  let this_generation = compute_count.val
+  generation.val = this_generation
+  reusing.val = reuse && !round && grid == root.root_grid
   placing_grid.val = grid
   absolute_seen.val = false
   let b = box_of(root.style, width, height)
@@ -410,6 +428,8 @@ pub fn compute(
   if round {
     round_layout(root, 0.0, 0.0)
   }
+  root.root_grid = if round { -1.0 } else { grid }
+  completed_generation.val = this_generation
 }
 
 ///|
@@ -431,6 +451,17 @@ pub fn layout_child(node : Node, width : Double, height? : Double, containing_he
   let h = height.unwrap_or(undef)
   let ch = containing_height.unwrap_or(undef)
   let w = size_node(node, width, h, width, h, width, ch, true)
+  let h = out_h.val
+  node.width = w
+  node.height = h
+  (w, h)
+}
+
+///|
+/// Lay out a custom container's child at its intrinsic width, with `most` available, within the current compute.
+pub fn layout_child_fitted(node : Node, most : Double, containing_height? : Double) -> (Double, Double) {
+  let ch = containing_height.unwrap_or(undef)
+  let w = size_node(node, undef, undef, most, undef, most, ch, true)
   let h = out_h.val
   node.width = w
   node.height = h
@@ -469,8 +500,17 @@ fn inset_offset(s : Style, cb_w : Double, cb_h : Double, horizontal : Bool) -> D
 }
 
 ///|
-/// Bumped by every compute(): sizes cached on nodes are only good within one.
+/// The active compute's generation, with distinct, increasing ids even when computes are nested.
 let generation : Ref[Int] = { val: 0 }
+
+///|
+let compute_count : Ref[Int] = { val: 0 }
+
+///|
+let completed_generation : Ref[Int] = { val: 0 }
+
+///|
+let computing : Ref[Int] = { val: 0 }
 
 ///|
 /// Work done so far: sizes computed, sizes found in the cache, leaves

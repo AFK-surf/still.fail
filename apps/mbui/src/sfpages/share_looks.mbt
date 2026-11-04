@@ -506,6 +506,9 @@ let share_group_shown : Ref[String] = Ref("")
 ///|
 fn share_looks_reset() -> Unit {
   share_group_shown.val = ""
+  share_cards.clear()
+  senren_pending.clear()
+  senren_requested.clear()
 }
 
 // ── the picker's styles ──────────────────────────────────────────────────

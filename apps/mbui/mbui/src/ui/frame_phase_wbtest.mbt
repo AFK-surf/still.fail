@@ -82,3 +82,26 @@ test "an outside callback during paint keeps its own time and changes the next f
   assert_eq(times, [16.0])
   assert_true(t.drawn_rects().contains((0.0, 0.0, 200.0, 80.0, 0x13579bffL)))
 }
+
+///|
+test "resources prepared as a frame starts are available to its only layout" {
+  let prepare = Ref(false)
+  on_frame_input(fn(_) {
+    if prepare.val {
+      prepare.val = false
+      face_add(4, "/fonts/share.ttf") |> ignore
+    }
+  })
+  let t = Tester::new(fn(_) { }, w=200.0, h=300.0, stable=false)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.box(fn(n) {
+      n.width(Is(Some(100.0))).height(Is(Some(20.0))).ground(Is(0x13579bffL)) |> ignore
+    }) |> ignore
+  })
+  prepare.val = true
+  t.frame(ms=16.0)
+  assert_true(face_given(4))
+  assert_true(t.drawn_rects().contains((0.0, 0.0, 100.0, 20.0, 0x13579bffL)))
+  assert_eq(view_tree().unwrap().work().computes, 1)
+}

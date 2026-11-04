@@ -21,8 +21,36 @@ fn senren_art_file(art : String) -> String {
 let senren_drew : Ref[Array[String]?] = Ref(None)
 
 ///|
+/// Pictures discovered while drawing are requested at the next input phase, before any view is measured. A cached
+/// core reply may be synchronous and must not invalidate another part while the stage is laying out.
+// kept across runs: cleared by share_looks_reset
+let senren_pending : Map[String, Source] = {}
+
+///|
+// kept across runs: cleared by share_looks_reset
+let senren_requested : Set[String] = Set::new()
+
+///|
+fn senren_request(src : Source, file : String) -> Unit {
+  if !senren_requested.contains(file) {
+    senren_requested.add(file)
+    senren_pending[file] = src
+    @ui.request_frame()
+  }
+}
+
+///|
+fn senren_prepare() -> Unit {
+  let pending = senren_pending.copy()
+  senren_pending.clear()
+  for file, src in pending {
+    @sfbase.looks_file(src, file, fn(bytes) { @ui.add_image(senren_art_key(file), bytes) }) |> ignore
+  }
+}
+
+///|
 /// `draw` as it draws a look, and the files of the looks it needs (its pictures as it drew them: senren_drew; the
-/// whole share face's), each asked of the core the first time (@sfbase.looks_file), given as a picture once here.
+/// whole share face's), each asked of the core before the next layout and given as a picture once here.
 fn senren_drawing(src : Source, draw : () -> Int) -> (Int, Array[String]) {
   let was = senren_drew.val
   let drew : Array[String] = []
@@ -33,7 +61,7 @@ fn senren_drawing(src : Source, draw : () -> Int) -> (Int, Array[String]) {
   for file in drew {
     if !files.contains(file) {
       files.push(file)
-      @sfbase.looks_file(src, file, fn(bytes) { @ui.add_image(senren_art_key(file), bytes) }) |> ignore
+      senren_request(src, file)
     }
   }
   (b, files)
@@ -137,13 +165,13 @@ fn sr_art(c : @ui.Ctx, art : String, w : Double, h : Double, at? : Double = 0.5)
 ///|
 /// Words in the card's own face (霞鹜文楷 with EB Garamond: @sfbase.share_face_given), as every look's are.
 fn sr_words(c : @ui.Ctx, words : String, style : @ui.TextStyle) -> Unit {
-  c.rich([@ui.span(words)], style~, face=@sfbase.share_face_given()) |> ignore
+  c.rich([@ui.span(words)], style~, face=@sfbase.share_face) |> ignore
 }
 
 ///|
 /// Words in the card's face from runs (`@ui.span`s: a figure in another colour, larger, bolder).
 fn sr_rich(c : @ui.Ctx, runs : Array[@ui.Run], style : @ui.TextStyle) -> Unit {
-  c.rich(runs, style~, face=@sfbase.share_face_given()) |> ignore
+  c.rich(runs, style~, face=@sfbase.share_face) |> ignore
 }
 
 ///|

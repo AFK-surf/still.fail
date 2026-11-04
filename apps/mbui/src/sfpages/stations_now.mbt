@@ -9,22 +9,55 @@
 // ── the card to share ────────────────────────────────────────────────────
 
 ///|
+/// Open share cards, whose faces must be installed before their pictures are measured.
+// kept across runs: cleared by share_looks_reset
+let share_cards : Map[Int, Source] = {}
+
+///|
+// kept across runs: serials only count on, including when an old panel is let go after a reset
+let share_cards_next : Ref[Int] = Ref(0)
+
+///|
+fn share_cards_prepare() -> Unit {
+  senren_prepare()
+  for _, src in share_cards {
+    share_card_prepare(src)
+  }
+}
+
+///|
+fn share_card_prepare(src : Source) -> Unit {
+  ignore(@sfbase.share_face_given())
+  if share_look(src).key.has_prefix(senren_prefix) {
+    @sfbase.share_face_whole(src, senren_drawn)
+  }
+}
+
+///|
 /// The card to share of workspace `w`'s agents at work, opened by nothing, on a stage of its own on every screen (a
 /// panel's `stage`: the picture alone in the window's middle over the night, no dialog round it: 2026-10-26 用户「分享的
 /// 弹窗有点丑，感觉应该给分享特制一个逼格高点的」): the picture (share_picture), under it 关闭 and 复制图片, or on a phone
 /// (iOS, Android) 保存到相册: a phone keeps pictures in its photo album, where a post or a chat picks them from
 /// (2026-10-26 用户：「手机上能复制图片吗？」「是不是应该是下载」「保存」).
 pub fn share_card_open(src : Source, w : Workspace) -> Unit {
+  share_cards_next.val += 1
+  let serial = share_cards_next.val
+  share_cards[serial] = src
+  // Each card's picture and controls share the files discovered while measuring that card.
+  let look_needs : Map[String, Array[String]] = {}
+  // An opened panel may be measured by the very input that opens it, before another frame arrives.
+  if @ui.view_tree() is Some(_) { share_card_prepare(src) }
   @sf.panel(
     @sf.t("web-main.stations.shareCard"),
     fn(c, _) {
-      share_picture(c, src, w)
+      share_picture(c, src, w, look_needs)
       // what is handed out: the same poster drawn apart, all of it, its ground to its edges (Ctx::shot)
-      c.shot(share_shot, @sf.share_w_most, fn() { share_poster(c, src, w, 0, flat=true) |> ignore })
+      c.shot(share_shot, @sf.share_w_most, fn() { share_poster(c, src, w, 0, look_needs, flat=true) |> ignore })
     },
     from=Unanchored,
     // (as large as the picture while the window has the room; past it, the picture drawn smaller: @sf.whole_fitted)
     stage=true,
+    gone=fn() { share_cards.remove(serial) },
     // the looks it can be drawn in, over its buttons (share_looks.mbt)
     above=fn(c) { share_looks_pick(c, src, w) },
     // (its title said as it is drawn, in the language then)
@@ -34,7 +67,7 @@ pub fn share_card_open(src : Source, w : Workspace) -> Unit {
     // 下载失败，重试 in its place
     foot=fn(c, _) {
       let (label, icon) = @sf.picture_out_way()
-      match share_stand(src) {
+      match share_stand(src, look_needs) {
         LooksReady =>
           if @sf.button(c, label, key="share-card/copy", tone=Primary, icon~) {
             c.take_shot(share_shot, fn(png) { picture_out(c, png) |> ignore }, scale=share_scale)
@@ -48,7 +81,7 @@ pub fn share_card_open(src : Source, w : Workspace) -> Unit {
         }
         LooksNotHad(_) =>
           if @sf.button(c, @sf.t("web-main.stations.shareFetchFailed"), key="share-card/copy", tone=Primary, icon="retry") {
-            share_fetch_again(src)
+            share_fetch_again(src, look_needs)
           }
       }
     },
@@ -57,7 +90,7 @@ pub fn share_card_open(src : Source, w : Workspace) -> Unit {
 
 ///|
 /// The files of the chosen look not had asked for again.
-fn share_fetch_again(src : Source) -> Unit {
+fn share_fetch_again(src : Source, look_needs : Map[String, Array[String]]) -> Unit {
   let look = share_look(src)
   let all = look_needs.get(look.key).unwrap_or([]).copy()
   for f in @sfbase.share_face_whole_files(senren_drawn) {
@@ -95,21 +128,17 @@ let share_scale : Double = 3.0
 /// its bar); the chats at work now, a dot before them, and the tasks agents ran across devices over the 7 days (how
 /// many, and under it how many a chat on average), the devices' icon before them; still.fail's line. With nothing
 /// used: the chats at work large in its place.
-fn share_picture(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+fn share_picture(c : @ui.Ctx, src : Source, w : Workspace, look_needs : Map[String, Array[String]]) -> Unit {
   @sf.whole_fitted(c, share_picture_key, c.id(share_picture_key), @sf.share_w_most, fn(whole) {
-    share_poster(c, src, w, whole)
+    share_poster(c, src, w, whole, look_needs)
   })
 }
 
 ///|
 /// The poster (share_picture) as box `id`: round as a card, or `flat` (handed out: its ground to its edges), in the look
 /// chosen under it (share_look: the night's here, the others' share_looks.mbt).
-fn share_poster(c : @ui.Ctx, src : Source, w : Workspace, id : Int, flat? : Bool = false) -> Int {
+fn share_poster(c : @ui.Ctx, src : Source, w : Workspace, id : Int, look_needs : Map[String, Array[String]], flat? : Bool = false) -> Int {
   let look = share_look(src)
-  // (千恋＊万花's words in a face the app does not carry: had from the site as their pictures are, share_senren.mbt)
-  if look.key.has_prefix(senren_prefix) {
-    @sfbase.share_face_whole(src, senren_drawn)
-  }
   let (b, files) = senren_drawing(src, fn() { (look.draw)(c, share_fleet(src, w), id, flat) })
   if look_needs.get(look.key) != Some(files) {
     look_needs[look.key] = files
@@ -118,15 +147,9 @@ fn share_poster(c : @ui.Ctx, src : Source, w : Workspace, id : Int, flat? : Bool
 }
 
 ///|
-/// The files of the looks (@sfbase.looks_file) each look drew its card with as it was last drawn, by its key: those it
-/// is handed out only once they are here (share_stand). None for a look of the app's own alone.
-// kept across runs: what a look draws its card with is the same in every run
-let look_needs : @sf.LiveMap[String, Array[String]] = @sf.LiveMap::new()
-
-///|
 /// How the files the chosen look needs stand (@sfbase.looks_stand): its pictures as it drew them, and the whole share
 /// face for 千恋＊万花's; a look not drawn yet is on its way.
-fn share_stand(src : Source) -> @sfbase.LooksStand {
+fn share_stand(src : Source, look_needs : Map[String, Array[String]]) -> @sfbase.LooksStand {
   let look = share_look(src)
   if !look.key.has_prefix(senren_prefix) {
     return LooksReady
@@ -157,7 +180,7 @@ fn night_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
     c.box(style=pic_head, fn() {
       c.box(style=pic_grow, fn() {
         let words = [@ui.span("still"), @ui.span(".", color=@sf.share_orange), @ui.span("fail")]
-        c.rich(words, style=pic_brand, face=@sfbase.share_face_given()) |> ignore
+        c.rich(words, style=pic_brand, face=@sfbase.share_face) |> ignore
       })
       |> ignore
       pic_words(c, text(fleet, "at"), pic_at)
@@ -221,7 +244,7 @@ fn night_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
 /// Words on the night's card, in the card's own face (@sfbase.share_face_given: EB Garamond and 霞鹜文楷, 2026-10-31
 /// 用户 chose it from drawn versions, 「就用右边这版」), the same on every device whatever face its app is set in.
 fn pic_words(c : @ui.Ctx, words : String, style : @ui.TextStyle) -> Unit {
-  c.rich([@ui.span(words)], style~, face=@sfbase.share_face_given()) |> ignore
+  c.rich([@ui.span(words)], style~, face=@sfbase.share_face) |> ignore
 }
 
 ///|
@@ -239,7 +262,7 @@ fn pic_line(c : @ui.Ctx, mark : () -> Unit, words : String, more : String, apart
       |> ignore
     } else {
       let runs = [@ui.span(words, weight=700), @ui.span("  ·  " + more, color=@sf.share_dim)]
-      c.rich(runs, style=pic_line_one, face=@sfbase.share_face_given())
+      c.rich(runs, style=pic_line_one, face=@sfbase.share_face)
       |> ignore
     }
   })

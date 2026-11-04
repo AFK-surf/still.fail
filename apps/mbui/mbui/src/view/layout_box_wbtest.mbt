@@ -37,6 +37,24 @@ test "a custom parent measures the composer before laying out its list in one pa
 }
 
 ///|
+test "a custom parent can fit a child to its intrinsic width" {
+  let size = Ref((0.0, 0.0))
+  let t = Tree::new(fn(root) {
+    let child = root.box(fn(n) {
+      n.measured(Is(0), fn(_, most) { (dmin(360.0, most.unwrap_or(360.0)), 50.0) }) |> ignore
+    })
+    root.layout_box(Is(0), fn(l, _) {
+      size.val = l.fit(child, 1000.0)
+      l.place(child, 0.0, 0.0)
+    }) |> ignore
+  })
+  t.frame(1000.0, 500.0) |> ignore
+  assert_eq(size.val, (360.0, 50.0))
+  assert_eq(t.work.computes, 1)
+  t.dispose()
+}
+
+///|
 test "a lazy child keeps its identity and measurements while scrolling, and only leaves when omitted" {
   let offset = @signals.signal(0.0, same=fn(a, b) { a == b })
   let height = @signals.signal(20.0, same=fn(a, b) { a == b })

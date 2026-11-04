@@ -285,6 +285,17 @@ let after_layout_hooks : Array[(Ctx) -> Unit] = []
 let frame_built_hooks : Array[(Ctx) -> Unit] = []
 
 ///|
+/// Input preparation installed by packages over ui. It runs before either view is laid out.
+// kept across runs: installed once in the process by the packages over ui
+let frame_input_hooks : Array[(Ctx) -> Unit] = []
+
+///|
+/// `f` prepares inputs for a frame before its layout, including resources that arrived since the last frame.
+pub fn on_frame_input(f : (Ctx) -> Unit) -> Unit {
+  frame_input_hooks.push(f)
+}
+
+///|
 /// `f` runs every frame once its builds are over, before it is painted: what it changes is read from the next frame.
 pub fn on_frame_built(f : (Ctx) -> Unit) -> Unit {
   frame_built_hooks.push(f)
