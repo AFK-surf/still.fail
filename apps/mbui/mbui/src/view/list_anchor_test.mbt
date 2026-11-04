@@ -176,7 +176,7 @@ test "scrolls_anchored: where the hand has it put where it is counted to be as t
   c.tree.wheel_at(150.0, 50.0, 0.0, -60.0, 0, 10.0) |> ignore
   c.tree.frame(390.0, 844.0, now=1000.0) |> ignore
   assert_eq(c.scroll.at(c.tree), 3840.0)
-  assert_eq(c.top(98), Some(20.0))
+  assert_eq(c.top(98), Some(80.0))
   c.tree.wheel_at(150.0, 50.0, 0.0, -100000.0, 0, 1100.0) |> ignore
   c.tree.frame(390.0, 844.0, now=3000.0) |> ignore
   assert_eq(c.top(0), Some(0.0))

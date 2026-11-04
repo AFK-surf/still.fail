@@ -84,6 +84,9 @@ pub struct Scroll {
   /// a list laid out from its anchor's (View::scrolls_anchored): how far where it is counted to be among all it holds
   /// is from where the hand has it, as it was last laid out (what its bar and what reads where it is add)
   priv mut bar_off : () -> Double
+  /// how far it is scrolled read as the hand last left it, not kept within how far it can go as that is counted now:
+  /// what such a list's layout reads changes only as the hand moves it, not as it is counted taller or shorter
+  priv mut reads_free : Bool
   /// a list that keeps itself: where the hand has it put where it is counted to be, as the hand comes to it again (its
   /// bounds, its ends' give, a fling's end: all as it is counted)
   priv mut rebase : () -> Unit
@@ -157,6 +160,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     edge: @signals.signal(None, same=fn(a, b) { same_ref(a, b) }),
     for_field: None,
     bar_off: fn() { 0.0 },
+    reads_free: false,
     rebase: fn() { },
     extent_told: fn() { },
     rows: None,
@@ -267,6 +271,12 @@ fn Scroll::bounded(_self : Scroll, v : Double, lo : Double, hi : Double) -> Doub
 }
 
 ///|
+/// `v` within `lo` and `hi` as where it is is read; as it is, where its reads are free (Scroll's `reads_free`).
+fn Scroll::read_kept(self : Scroll, v : Double, lo : Double, hi : Double) -> Double {
+  if self.reads_free { v } else { dclamp(v, lo, hi) }
+}
+
+///|
 fn dclamp(v : Double, lo : Double, hi : Double) -> Double {
   dmax(lo, dmin(v, hi))
 }
@@ -277,24 +287,24 @@ fn dclamp(v : Double, lo : Double, hi : Double) -> Double {
 fn Scroll::where_at(self : Scroll, t : Double) -> Double {
   let most = self.most_now()
   match self.edge.get() {
-    Some(e) => return self.bounded(e.at(t), 0.0, most)
+    Some(e) => return self.read_kept(e.at(t), 0.0, most)
     None => ()
   }
   match self.fling.get() {
     Some(f) =>
       if t >= f.end_t {
-        self.bounded(f.end_x, 0.0, most)
+        self.read_kept(f.end_x, 0.0, most)
       } else {
         match f.way {
-          Some(w) => self.bounded(w.at(f, t), 0.0, most)
-          None => self.bounded(scroll_fling_at(f.x0, f.v0, t - f.t0), 0.0, most)
+          Some(w) => self.read_kept(w.at(f, t), 0.0, most)
+          None => self.read_kept(scroll_fling_at(f.x0, f.v0, t - f.t0), 0.0, most)
         }
       }
     None =>
       match self.notch.get() {
         // (set out from under its top, what it holds shown lower than it lies (Scroll::glide_under): from there)
-        Some(n) => self.bounded(n.x0 + ease_come(n.total, n.v0, t - n.t0), dmin(0.0, n.x0), most)
-        None => self.bounded(self.x.get(), 0.0, most)
+        Some(n) => self.read_kept(n.x0 + ease_come(n.total, n.v0, t - n.t0), dmin(0.0, n.x0), most)
+        None => self.read_kept(self.x.get(), 0.0, most)
       }
   }
 }
