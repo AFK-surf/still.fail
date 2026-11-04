@@ -197,7 +197,7 @@ static BOOL webm_range(NSString *header, long long size, long long *start, long 
   if (self.closed || self.ready || self.owner.failed || self.decodeTimer || ![self fullyBuffered]) return;
   self.decodeTimer = YES;
   __weak MBWebVideo *weak = self;
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 20 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 20 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{ // det-ok(host-delay): WebKit says nothing of a VP9 profile it cannot decode; a deadline once fully buffered is the only word
     [weak decodeDeadline];
   });
 }
