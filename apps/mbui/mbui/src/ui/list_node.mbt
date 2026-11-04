@@ -199,13 +199,17 @@ pub fn[T] ListRows::in_node(
     if c.by.is_empty() && self.going.is_empty() {
       return []
     }
-    let out : Array[String] = c.by.keys().collect()
+    // (each once: a row's room asked twice in a frame moves its way twice)
+    let seen : Set[String] = Set::new()
+    let out : Array[String] = []
+    let add = fn(k : String) { if !seen.contains(k) { seen.add(k); out.push(k) } }
+    c.by.each(fn(k, _) { add(k) })
     for k, _ in self.going {
-      out.push(k)
+      add(k)
     }
     // (and those whose content went on the way itself as it was laid out, row_way: clipped while it goes)
-    c.own.each(fn(k) { out.push(k) })
-    out.append(own_keys.get())
+    c.own.each(add)
+    own_keys.get().each(add)
     out
   }
   { read: fn() { all.get() }, room, moving, lend, opening }
