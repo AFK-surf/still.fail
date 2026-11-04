@@ -87,6 +87,24 @@ test "a station's page in three parts: 概览 what runs on it, 设置 what it is
 }
 
 ///|
+test "an away station's 设置 shows none of what only it can change, a line saying so" {
+  for (w, platform) in page_cases {
+    let t = setting_tester(Station("ws1/st1"), w, platform~, mode="settings-station-away", h=2400.0)
+    t.run_for(@ui.move_most_ms)
+    let at = "\{w} platform \{platform}"
+    assert_true(t.find("station 离线，连接后可查看和修改设置") is Some(_), msg=at)
+    assert_true(t.find("Agent 环境变量") is None, msg="its variables: \{at}")
+    assert_true(t.find("高级网络设置") is None, msg="its network: \{at}")
+    assert_true(t.find("屏幕录制") is None, msg="its grants: \{at}")
+    // a login under way goes on there only; the logins done stay
+    assert_true(t.find("在浏览器里登录") is None, msg="its login under way: \{at}")
+    assert_true(t.find("gh") is Some(_), msg="its logins done: \{at}")
+    // the workspaces it is in, nothing there to change
+    assert_true(t.boxes().iter().any(fn(b) { b.text == "个人" }), msg="its workspaces: \{at}")
+  }
+}
+
+///|
 test "a station's profiles are grouped by account kind and open their own page" {
   for (w, platform) in page_cases {
     let t = setting_tester(Station("ws1/st1"), w, platform~, h=2400.0)
