@@ -112,6 +112,18 @@ test("missing decisions do not hide complete usage or turn another station's rat
   assert.equal(s.partial, "部分旧决策记录不可用，决策点击率未显示");
 });
 
+test("missing decisions and incomplete token history are both said", () => {
+  const partial: Source = { address: "ws/partial", name: "partial", online: true,
+    value: { ok: { ...station(undefined), historyUnavailable: true,
+      partialHistory: history([day("2026-10-02", 20)], { cards: undefined, picked: undefined, cardsIncomplete: true }) } } };
+  const s = usageSummary([partial], NOW, 480, "")!;
+  assert.equal(s.figures[0].label, "已计入 token");
+  assert.equal(s.figures[3].value, "—");
+  assert.equal(s.activity.cells.at(-3), -1);
+  assert.match(s.partial, /统计不完整/);
+  assert.match(s.partial, /旧决策记录不可用/);
+});
+
 test("an empty day after partial recording began is known, while the cutover day remains incomplete", () => {
   const partial: Source = { address: "ws/partial", name: "partial", online: true,
     value: { ok: { ...station(undefined), historyUnavailable: true, detailSince: Date.UTC(2026, 9, 1, 4), partialHistory: history([]) } } };
