@@ -156,6 +156,8 @@ test("an iPhone Duo's poses, its picture following", { skip: !hasSimctl && "no X
     const seen = (async () => {
       for (let f = await again.next(); f !== null; f = await again.next()) shapes.push(shape(f.data));
     })();
+    // (a first picture may be slow to come; then long enough to see any it goes through)
+    for (const asked = Date.now(); shapes.length === 0 && Date.now() - asked < 60_000;) await sleep(250);
     await sleep(6000);
     again.close();
     view = null;
