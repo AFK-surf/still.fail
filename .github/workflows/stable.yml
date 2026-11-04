@@ -214,6 +214,108 @@ jobs:
 
   # The official site, still.fail, from the same revision: the pipeline deploys only youdid.wtf's (site-beta), and a
   # stable release that left it out kept still.fail at 2026-10-01's for two weeks (no Windows download on it).
+  # monoid's apps (apps/mbui's monoid variants on monoid's cloud: build.monoid.android, build.monoid.desktop), the same
+  # reviewed release, put in monoid's bucket in the company's Cloudflare account (scripts/release.sh --product monoid;
+  # release-put.sh finds that account by its token). Apart from done: still.fail's stable is recorded whatever they do.
+  monoid-android:
+    needs: plan
+    runs-on: [self-hosted, macos-ci]
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
+      - uses: ./.github/actions/setup-mac
+      - uses: ./.github/actions/natives
+      - name: Build monoid's stable Android app with the same signing key
+        env:
+          ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          RELEASE_DIR: ${{ runner.temp }}/release
+        run: sh .github/release.sh --product monoid --stable android
+      - name: Put it in monoid's bucket (its files, then its feed)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
+        run: |
+          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          sh scripts/release-put.sh "$RUNNER_TEMP/release"
+
+  monoid-desktop:
+    needs: plan
+    runs-on: [self-hosted, macos-ci]
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
+      - uses: ./.github/actions/setup-mac
+      - uses: ./.github/actions/natives
+      - name: Publish monoid's stable Mac app, signed and notarized by the same team
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          MACOS_DEVELOPER_ID_KEYCHAIN_B64_1: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 }}
+          MACOS_DEVELOPER_ID_KEYCHAIN_B64_2: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_2 }}
+          KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
+        run: sh .github/release-desktop.sh --product monoid --stable
+
+  monoid-desktop-win:
+    needs: plan
+    runs-on: windows-2025
+    environment: production
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: bash
+    env:
+      MSYS: winsymlinks:nativestrict
+      HBC_CACHE: ${{ github.workspace }}/.ci/hbc
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+        with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0, filter: "blob:none" } # its build is the commits in the history
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/msvc
+      - uses: ./.github/actions/mbui-moonbit
+      - name: The Windows natives' keys
+        id: native-keys
+        run: echo "key=natives-win32-x64-$(node scripts/native.ts key shell win32-x64)-$(node scripts/native.ts key engine win32-x64)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/AppData/Local/stillfail-native
+          key: ${{ steps.native-keys.outputs.key }}
+      - name: The Windows engine and shell, prebuilt
+        run: |
+          node scripts/native.ts fetch shell win32-x64
+          node scripts/native.ts fetch engine win32-x64
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            apps/mbui/mbui/_build
+            apps/mbui/mbui/out
+          key: mbui-win-build-mono-${{ needs.plan.outputs.sha }}
+          restore-keys: mbui-win-build-mono-
+      - uses: actions/cache/restore@v4
+        with:
+          path: .ci/hbc
+          key: mbui-win-hbc-${{ needs.plan.outputs.sha }}
+          restore-keys: mbui-win-hbc-
+      - name: Build, pack and sign monoid's stable Windows app
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          RELEASE_DIR: ${{ runner.temp }}/release
+        run: |
+          git show "$GITHUB_SHA:apps/mbui/scripts/win-compiler.sh" > "$RUNNER_TEMP/win-compiler.sh"
+          . "$RUNNER_TEMP/win-compiler.sh"
+          (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          sh scripts/release.sh --product monoid desktop-win
+      - name: Put it in monoid's bucket (its files, then its feed)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
+        run: |
+          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          sh scripts/release-put.sh "$RUNNER_TEMP/release"
+
   site:
     needs: [plan, web]
     runs-on: [self-hosted, macos-ci]
