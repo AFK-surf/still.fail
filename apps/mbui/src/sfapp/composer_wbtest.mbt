@@ -550,11 +550,10 @@ test "words sent as the composer grows a line hold its room where it is drawn, t
   assert_eq(foot(), growing + over)
   tap_send(t)
   assert_eq(named(calls, "chat.send").length(), 1)
-  for _ in 0..<4 {
-    t.frame()
-    assert_eq(foot(), @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") + over)
-    assert_eq(@sfpages.composer_room(t.ctx(), "ws1/st1:s-c1"), growing)
-  }
+  // (a while on, the words still in it)
+  t.run_for(@ui.row_size_ms / 4.0)
+  assert_eq(foot(), @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") + over)
+  assert_eq(@sfpages.composer_room(t.ctx(), "ws1/st1:s-c1"), growing)
   // (the words flown, the composer let go of)
   t.run_for(@ui.move_most_ms)
   t.run_for(draft_keep_ms)
