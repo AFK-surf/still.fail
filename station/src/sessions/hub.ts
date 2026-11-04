@@ -160,7 +160,7 @@ export class Hub {
   /// Installed by the agents' side: older stores finish indexing active keys without holding the station thread.
   waitForWorkspaceActivity: (() => Promise<boolean>) | null = null;
   /// An old thread's requested message suffix is indexed off the station thread before delivery.
-  preparePostsAfter: ((messages: readonly { thread: number; n: number }[]) => Promise<void>) | null = null;
+  preparePostsAfter: ((messages: readonly { thread: number; n: number }[], signal?: AbortSignal) => Promise<void>) | null = null;
   private awaitingWorkspaceActivity = new Set<string>();
   /// When each idle process is next looked at for eviction.
   private deadlines = new Map<string, Fiber.Fiber<void>>();
@@ -205,7 +205,6 @@ export class Hub {
     this.accounts = new Accounts({
       config: () => this.config(),
       store: this.store,
-      preparePostsAfter: (messages) => this.preparePostsAfter?.(messages) ?? Promise.resolve(),
       running: (except) => [...this.actors.values()].filter((a) => a.key !== except && a.processState() !== "cold").flatMap((a) => this.store.getSession(a.key)?.profile ?? []),
       clock: this.clock,
       allows: (key, profile) => allowedIn(profile, this.wsOf(key), this.workspaces()[0] ?? null),
@@ -1121,6 +1120,7 @@ export class Hub {
   private sessionDeps(): SessionDeps {
     return {
       store: this.store,
+      preparePostsAfter: (messages, signal) => this.preparePostsAfter?.(messages, signal) ?? Promise.resolve(),
       chat: (connect) => this.chatOf(connect),
       driver: (runtime) => this.sessionDriver(runtime),
       runOn: (key, holding) => this.accounts.runOn(key, holding),

@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { PostBlockBuilder } from "../src/sessions/post-block-builder.ts";
 import { installPostBlocks, postBlocksReady } from "../src/store/post-blocks.ts";
 import { Store } from "../src/store/store.ts";
+import { Rig } from "./hub-fakes.ts";
 
 function fromBefore(store: Store): number {
   const thread = store.openThread("ember", "EMBER", "old", null, null).id;
@@ -32,6 +33,10 @@ test("deliveries wait for the previous station and only index their requested su
     assert.throws(() => store.postAfter("wanted", thread, 170), /not ready/);
     let finished = false;
     const waiting = builder.ready([{ thread, n: 170 }]).then(() => { finished = true; });
+    const abort = new AbortController();
+    const cancelled = assert.rejects(builder.ready([{ thread, n: 0 }], abort.signal), /delivery cancelled/);
+    abort.abort();
+    await cancelled;
     await new Promise<void>((resolve) => setImmediate(resolve));
     assert.equal(finished, false);
     assert.equal(postBlocksReady(store.db, thread, 170), false);
@@ -40,7 +45,7 @@ test("deliveries wait for the previous station and only index their requested su
     assert.deepEqual(store.postAfter("wanted", thread, 170), { n: 180, ts: "m180" });
     assert.equal(postBlocksReady(store.db, thread, 100), false);
     assert.deepEqual({ ...store.db.prepare("SELECT cursor, complete FROM post_blocks_coverage WHERE thread = ?").get(thread) },
-      { cursor: 137, complete: 0 });
+      { cursor: 170, complete: 0 });
   } finally { previous.resolve(); await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -82,4 +87,45 @@ test("a stopped post block worker retries the requested suffix", async () => {
     await builder.ready([{ thread, n: 170 }]);
     assert.deepEqual(store.postAfter("wanted", thread, 170), { n: 180, ts: "m180" });
   } finally { await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a delivery from an old thread waits for its indexed suffix before formatting", async () => {
+  const rig = new Rig();
+  const builder = new PostBlockBuilder(rig.store, Promise.resolve());
+  try {
+    rig.store.insertSession({ key: "wanted", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/s", token: "wanted", createdAt: 1, lastActiveAt: 1 });
+    const thread = fromBefore(rig.store);
+    rig.store.joinThread(thread, "wanted", "ember");
+    rig.store.db.prepare("INSERT INTO deliveries(thread,n,session) VALUES (?,170,'wanted')").run(thread);
+    rig.hub.preparePostsAfter = (positions, signal) => builder.ready(positions, signal);
+    const original = rig.store.postAfter.bind(rig.store);
+    rig.store.postAfter = (session, id, n) => {
+      assert.ok(postBlocksReady(rig.store.db, id, n), "formatting never scans an unindexed old suffix");
+      return original(session, id, n);
+    };
+    const actor = rig.hub.actor(rig.session("wanted"));
+    const [text] = await (actor as any).format(rig.store.pendingMessages("wanted")) as [string, unknown];
+    assert.ok(text.includes('ts="m170" before="m180">'));
+    assert.equal(postBlocksReady(rig.store.db, thread, 100), false);
+  } finally { await builder.close(); await rig.close(); }
+});
+
+test("closing an actor cancels its pending old-history work", async () => {
+  const rig = new Rig();
+  const previous = Promise.withResolvers<void>();
+  const builder = new PostBlockBuilder(rig.store, previous.promise);
+  try {
+    rig.store.insertSession({ key: "wanted", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/s", token: "wanted", createdAt: 1, lastActiveAt: 1 });
+    const thread = fromBefore(rig.store);
+    rig.store.joinThread(thread, "wanted", "ember");
+    rig.store.db.prepare("INSERT INTO deliveries(thread,n,session) VALUES (?,170,'wanted')").run(thread);
+    rig.hub.preparePostsAfter = (positions, signal) => builder.ready(positions, signal);
+    const actor = rig.hub.actor(rig.session("wanted"));
+    const rejected = assert.rejects((actor as any).format(rig.store.pendingMessages("wanted")), /delivery cancelled/);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    actor.close();
+    await rejected;
+    previous.resolve();
+    assert.equal(postBlocksReady(rig.store.db, thread, 170), false);
+  } finally { previous.resolve(); await builder.close(); await rig.close(); }
 });

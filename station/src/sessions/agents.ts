@@ -250,7 +250,7 @@ export const AgentsLive = (control: Control) =>
         Effect.sync(() => new PostBlockBuilder(store, previous)),
         (builder) => Effect.promise(() => builder.close()),
       );
-      hub.preparePostsAfter = (messages) => postBlocks.ready(messages);
+      hub.preparePostsAfter = (messages, signal) => postBlocks.ready(messages, signal);
       // No turn until the agents' door is open: a runtime started before has no MCP endpoint, and Codex does not
       // connect to it again for that thread.
       hub.hold("starting");

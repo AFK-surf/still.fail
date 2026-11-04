@@ -37,9 +37,9 @@ test("an old thread indexes only the requested suffix and resumes in bounded bat
     for (let n = 1; n <= 200; n++) put.run(1, n, n % 3 ? "person" : "agent", n % 3 ? "person" : `s${n % 4}`, `m${n}`);
     put.run(2, 1, "agent", "other-thread", "other");
     installPostBlocks(db);
-    assert.deepEqual(postBlocksStep(db, 1, 190, 16, () => false), { done: false, visited: 16 });
+    assert.deepEqual(postBlocksStep(db, 1, 190, 16, () => false), { done: false, visited: 11 });
     assert.equal(postBlocksReady(db, 1, 190), false, "foreground work can refuse the write after the read");
-    assert.deepEqual(postBlocksStep(db, 1, 190, 16), { done: true, visited: 16 });
+    assert.deepEqual(postBlocksStep(db, 1, 190, 16), { done: true, visited: 11 });
     assert.equal(postBlocksReady(db, 1, 190), true);
     assert.equal(postBlocksReady(db, 1, 180), false);
     assert.equal(postBlocksReady(db, 2, 0), false);

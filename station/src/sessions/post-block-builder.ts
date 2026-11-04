@@ -1,11 +1,12 @@
 import { Worker } from "node:worker_threads";
+import { setMaxListeners } from "node:events";
 import { Fibers } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { releaseStoppedBackfill } from "../store/backfill.ts";
 import { postBlocksCoverage, postBlocksReady, postBlocksStep } from "../store/post-blocks.ts";
 import type { Store } from "../store/store.ts";
 
-type Waiter = { after: number; resolve: () => void; reject: (error: Error) => void };
+type Waiter = { after: number; resolve: () => void; reject: (error: Error) => void; done: () => void };
 type Current = { thread: number; after: number };
 const IDLE_MS = 5_000;
 
@@ -32,19 +33,41 @@ export class PostBlockBuilder {
     this.#workerFile = workerFile;
   }
 
-  ready(messages: readonly { thread: number; n: number }[]): Promise<void> {
+  ready(messages: readonly { thread: number; n: number }[], signal?: AbortSignal): Promise<void> {
     if (this.#closed) return Promise.reject(new Error("station stopping"));
+    if (signal?.aborted) return Promise.reject(new Error("delivery cancelled"));
     const threads = new Map<number, number>();
     for (const message of messages) threads.set(message.thread, Math.min(threads.get(message.thread) ?? message.n, message.n));
-    return Promise.all([...threads].map(([thread, after]) => this.#readyThread(thread, after))).then(() => {});
+    const cancel = new AbortController();
+    setMaxListeners(0, cancel.signal); // One listener per requested thread, all removed when the delivery settles.
+    const abort = () => cancel.abort();
+    signal?.addEventListener("abort", abort, { once: true });
+    try {
+      return Promise.all([...threads].map(([thread, after]) => this.#readyThread(thread, after, cancel.signal)))
+        .then(() => {})
+        .catch((error: unknown) => { cancel.abort(); throw error; })
+        .finally(() => signal?.removeEventListener("abort", abort));
+    } catch (error) {
+      cancel.abort();
+      signal?.removeEventListener("abort", abort);
+      return Promise.reject(error);
+    }
   }
 
-  #readyThread(thread: number, after: number): Promise<void> {
+  #readyThread(thread: number, after: number, signal?: AbortSignal): Promise<void> {
     if (postBlocksReady(this.#store.db, thread, after)) return Promise.resolve();
     return new Promise((resolve, reject) => {
       let waiters = this.#waiting.get(thread);
       if (!waiters) { waiters = new Set(); this.#waiting.set(thread, waiters); }
-      waiters.add({ after, resolve, reject });
+      const group = waiters;
+      const abort = () => { waiter.done(); reject(new Error("delivery cancelled")); this.#pump(); };
+      const waiter: Waiter = { after, resolve, reject, done: () => {
+        signal?.removeEventListener("abort", abort);
+        group.delete(waiter);
+        if (group.size === 0 && this.#waiting.get(thread) === group) this.#waiting.delete(thread);
+      } };
+      group.add(waiter);
+      signal?.addEventListener("abort", abort, { once: true });
       this.#pump();
     });
   }
@@ -52,7 +75,7 @@ export class PostBlockBuilder {
   #fail(thread: number, error: Error): void {
     const waiters = this.#waiting.get(thread);
     this.#waiting.delete(thread);
-    if (waiters) for (const waiter of waiters) waiter.reject(error);
+    if (waiters) for (const waiter of [...waiters]) { waiter.done(); waiter.reject(error); }
   }
 
   #answer(result: { done: boolean; error?: string }): void {
@@ -66,8 +89,8 @@ export class PostBlockBuilder {
         try {
           const { complete, cursor } = postBlocksCoverage(this.#store.db, current.thread);
           for (const waiter of [...waiters]) {
-            if (!complete && (cursor === null || cursor > waiter.after)) continue;
-            waiters.delete(waiter);
+            if (!complete && (cursor === null || cursor > waiter.after + 1)) continue;
+            waiter.done();
             waiter.resolve();
           }
         } catch (error) {

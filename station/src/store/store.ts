@@ -131,14 +131,26 @@ export const LOGIN_CARDS =
 export const PEOPLE_SAID_AFTER =
   "SELECT COUNT(*) AS c FROM (SELECT n FROM entries INDEXED BY entries_people_by_n WHERE thread = ? AND n > ? AND kind = 'message' AND author_kind = 'person' ORDER BY n LIMIT ?)";
 const POST_BLOCKS_READY = `SELECT fresh OR EXISTS (SELECT 1 FROM post_blocks_coverage
-  WHERE thread = ?1 AND (complete = 1 OR cursor <= ?2)) AS ready FROM post_blocks_meta WHERE id = 1`;
-export const POST_AFTER_INDEXED = `WITH blocks AS (
-  SELECT bucket FROM post_blocks WHERE thread = ?1 AND author = ?2 AND bucket >= ?3 ORDER BY bucket LIMIT 2
+  WHERE thread = ?1 AND (complete = 1 OR cursor <= ?2 + 1)) AS ready FROM post_blocks_meta WHERE id = 1`;
+// +e.n keeps the after-position as a filter: otherwise SQLite picks it as the lower index bound and reads the entire
+// gap before the candidate block, even though both block boundaries are also present.
+export const POST_AFTER_INDEXED = `WITH first(bucket) AS MATERIALIZED (
+  SELECT bucket FROM post_blocks WHERE thread = ?1 AND author = ?2 AND bucket >= ?3 ORDER BY bucket LIMIT 1
+), second(bucket) AS MATERIALIZED (
+  SELECT bucket FROM post_blocks WHERE thread = ?1 AND author = ?2 AND bucket > (SELECT bucket FROM first) ORDER BY bucket LIMIT 1
 )
-SELECT e.n, e.ts FROM blocks b CROSS JOIN entries e
-WHERE e.thread = ?1 AND +e.n > ?4 AND e.n >= b.bucket * ${POST_BLOCK_SIZE} AND e.n <= b.bucket * ${POST_BLOCK_SIZE} + ${POST_BLOCK_SIZE - 1}
-  AND e.kind = 'message' AND e.author_kind = 'agent' AND e.author = ?2
-ORDER BY e.n LIMIT 1`;
+SELECT n, ts FROM (
+  SELECT e.n, e.ts FROM entries e
+  WHERE e.thread = ?1 AND +e.n > ?4 AND e.n >= (SELECT bucket FROM first) * ${POST_BLOCK_SIZE}
+    AND e.n <= (SELECT bucket FROM first) * ${POST_BLOCK_SIZE} + ${POST_BLOCK_SIZE - 1}
+    AND e.kind = 'message' AND e.author_kind = 'agent' AND e.author = ?2 ORDER BY e.n LIMIT 1
+)
+UNION ALL SELECT n, ts FROM (
+  SELECT e.n, e.ts FROM entries e
+  WHERE e.thread = ?1 AND +e.n > ?4 AND e.n >= (SELECT bucket FROM second) * ${POST_BLOCK_SIZE}
+    AND e.n <= (SELECT bucket FROM second) * ${POST_BLOCK_SIZE} + ${POST_BLOCK_SIZE - 1}
+    AND e.kind = 'message' AND e.author_kind = 'agent' AND e.author = ?2 ORDER BY e.n LIMIT 1
+) LIMIT 1`;
 
 export * from "./rows.ts";
 export { SCHEMA_VERSION } from "./schema.ts";

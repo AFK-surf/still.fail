@@ -2,7 +2,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { parentPort, threadId, workerData } from "node:worker_threads";
 import { wall } from "../ops/fibers.ts";
-import { giveBackfill, takeBackfill } from "../store/backfill.ts";
+import { REQUEST_BACKFILL_PAUSE_MS, giveBackfill, takeBackfill } from "../store/backfill.ts";
 import { POST_BLOCK_SIZE, postBlocksStep } from "../store/post-blocks.ts";
 
 const db = new DatabaseSync(workerData.path as string, { timeout: 250 });
@@ -20,6 +20,6 @@ parentPort!.on("message", async ({ thread, after }: { thread: number; after: num
   } finally {
     if (owns) giveBackfill(priority, threadId);
   }
-  if (!result.done && !result.error) await wall.sleep(20);
+  if (!result.done && !result.error) await wall.sleep(REQUEST_BACKFILL_PAUSE_MS);
   parentPort!.postMessage(result);
 });

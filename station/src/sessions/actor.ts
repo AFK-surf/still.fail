@@ -113,7 +113,7 @@ export type Surface = {
 export type SessionDeps = {
   store: SessionStore;
   /// An older store brings forward only the message ranges this delivery needs.
-  preparePostsAfter?(messages: readonly { thread: number; n: number }[]): Promise<void>;
+  preparePostsAfter?(messages: readonly { thread: number; n: number }[], signal?: AbortSignal): Promise<void>;
   chat(connect: string): Surface | undefined;
   driver(runtime: RuntimeKind): AgentDriver;
   /// The profile a session's runtime starts on now: its own while usable, else another that can take it on (`holding`:
@@ -316,6 +316,7 @@ export class SessionActor {
   /// Messages given to the running turn since its model was last asked: what it writes now was written without them.
   private unread: PendingMessage[] = [];
   private queued = 0;
+  private formatAbort: AbortController | null = null;
 
   constructor(key: string, runtime: RuntimeKind, deps: SessionDeps) {
     this.key = key;
@@ -473,6 +474,7 @@ export class SessionActor {
 
   /// Stops what it is doing: the running turn; or, while it waits on work it started, that work and the wait.
   stop(): Promise<void> {
+    this.formatAbort?.abort();
     return this.enqueue(async () => {
       if (this.agent?.session.busy()) {
         this.stopRequested = true;
@@ -765,6 +767,7 @@ export class SessionActor {
   /// given (session.rs `suspend`): a turn under way stays marked running (to resume once back), unless it had already
   /// said a settled state; messages given to it while it ran are pending again.
   suspend(): Promise<void> {
+    this.formatAbort?.abort();
     return this.enqueue(async () => {
       const agent = this.agent;
       this.agent = null;
@@ -870,6 +873,7 @@ export class SessionActor {
   /// For shutdown or handover: queued and later tasks are skipped, timers end. A running turn stays marked running.
   close() {
     this.phase = "closed";
+    this.formatAbort?.abort();
     Effect.runFork(Scope.close(this.scope, Exit.void));
   }
 
@@ -981,6 +985,13 @@ export class SessionActor {
 
   /// The messages as the agent reads them, made now so edits count (session.rs `format`).
   private async format(said: any[]): Promise<[string, [string, string][]]> {
+    const abort = new AbortController();
+    this.formatAbort = abort;
+    try { return await this.formatWithSignal(said, abort.signal); }
+    finally { if (this.formatAbort === abort) this.formatAbort = null; }
+  }
+
+  private async formatWithSignal(said: any[], signal: AbortSignal): Promise<[string, [string, string][]]> {
     const store = this.deps.store;
     const threads: number[] = said.map((m) => m.message.thread);
     const heard = new Set(store.heardThreads(this.key, threads));
@@ -1008,7 +1019,8 @@ export class SessionActor {
     const posts = new Map<PendingMessage, string>();
     const fromChat = (said as PendingMessage[]).filter((m) => m.message.apart !== true);
     const positions = fromChat.map((m) => ({ thread: m.message.thread, n: m.message.n }));
-    await this.deps.preparePostsAfter?.(positions);
+    await this.deps.preparePostsAfter?.(positions, signal);
+    if (signal.aborted) throw new Error("delivery cancelled");
     const laterPosts = store.postsAfter(this.key, positions);
     fromChat.forEach((m, i) => { const ts = laterPosts[i]; if (ts !== undefined && ts !== null) posts.set(m, ts); });
     const cards = new Map<PendingMessage, { ended: MessageRow; current: MessageRow | null; special: string | null }>();

@@ -71,7 +71,7 @@ const coverage = (db: DatabaseSync, thread: number): Coverage | undefined =>
 const fresh = (db: DatabaseSync): boolean =>
   (db.prepare("SELECT fresh FROM post_blocks_meta WHERE id = 1").get() as { fresh: number }).fresh === 1;
 const covers = (row: Coverage | undefined, after: number): boolean =>
-  row !== undefined && (row.complete === 1 || (row.cursor !== null && row.cursor <= after));
+  row !== undefined && (row.complete === 1 || (row.cursor !== null && row.cursor <= after + 1));
 
 export function postBlocksReady(db: DatabaseSync, thread: number, after: number): boolean {
   return fresh(db) || covers(coverage(db, thread), after);
@@ -95,8 +95,9 @@ export function postBlocksStep(db: DatabaseSync, thread: number, after: number, 
   const before = coverage(db, thread);
   if (covers(before, after)) return { done: true, visited: 0 };
   const rows = (before?.cursor === null || before?.cursor === undefined
-    ? db.prepare("SELECT n, kind, author_kind, author FROM entries WHERE thread = ? ORDER BY n DESC LIMIT ?").all(thread, limit)
-    : db.prepare("SELECT n, kind, author_kind, author FROM entries WHERE thread = ? AND n < ? ORDER BY n DESC LIMIT ?").all(thread, before.cursor, limit)) as Entry[];
+    ? db.prepare("SELECT n, kind, author_kind, author FROM entries WHERE thread = ? AND n >= ? ORDER BY n DESC LIMIT ?").all(thread, after, limit)
+    : db.prepare("SELECT n, kind, author_kind, author FROM entries WHERE thread = ? AND n < ? AND n >= ? ORDER BY n DESC LIMIT ?").all(thread, before.cursor, after, limit)) as Entry[];
+  const older = rows.length < limit && db.prepare("SELECT 1 FROM entries WHERE thread = ? AND n < ? LIMIT 1").get(thread, after) !== undefined;
   // A foreground writer may have arrived while those pages were read. Do not try to take SQLite's writer then.
   if (mayWrite && !mayWrite()) return { done: false, visited: rows.length };
   db.exec("BEGIN IMMEDIATE");
@@ -112,12 +113,12 @@ export function postBlocksStep(db: DatabaseSync, thread: number, after: number, 
       WHERE e.thread = ? AND e.n = ? AND e.author = ? AND ${isPost("e")}
         AND NOT EXISTS (SELECT 1 FROM post_blocks b WHERE b.thread = e.thread AND b.author = e.author AND b.bucket = ${block("e.n")})`);
     for (const row of rows) if (row.kind === "message" && row.author_kind === "agent") add.run(thread, row.n, row.author);
-    const cursor = rows.at(-1)?.n ?? before?.cursor ?? null;
-    const complete = rows.length < limit ? 1 : 0;
+    const cursor = rows.length < limit ? after : rows.at(-1)!.n;
+    const complete = rows.length < limit && !older ? 1 : 0;
     db.prepare(`INSERT INTO post_blocks_coverage(thread, cursor, complete) VALUES (?, ?, ?)
       ON CONFLICT(thread) DO UPDATE SET cursor = excluded.cursor, complete = excluded.complete`).run(thread, cursor, complete);
     db.exec("COMMIT");
-    return { done: complete === 1 || (cursor !== null && cursor <= after), visited: rows.length };
+    return { done: complete === 1 || cursor <= after + 1, visited: rows.length };
   } catch (error) {
     try { db.exec("ROLLBACK"); } catch {}
     throw error;
