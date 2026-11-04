@@ -36,7 +36,8 @@ pub fn chat_row_node(
   let renaming = fn() { row_renaming.get() == key }
   let failed = fn() { row_failed(src, item()) }
   let made : Ref[@view.View?] = Ref(None)
-  let row_at : Ref[@view.View?] = Ref(None)
+  // Bindings made while the row is being built must follow the node becoming available too.
+  let row_at : @signals.Signal[@view.View?] = @signals.signal(None, same=fn(a, b) { a.map(fn(v) { v.id() }) == b.map(fn(v) { v.id() }) })
   // (held by a finger a while: its time shows)
   let held : @signals.Signal[Bool] = @signals.signal(false)
   // (pressed by a finger, shown so once it has stayed tap_indication_ms: one going on to scroll lights nothing)
@@ -46,7 +47,7 @@ pub fn chat_row_node(
     guard @signals.untracked(menu_ok) else { return }
     let i = @signals.untracked(item)
     let from = if from_row {
-      match row_at.val {
+      match row_at.get() {
         Some(v) => {
           let (x, y, w, h) = v.placed_window_now()
           @sf.Beside::At(x, y, w, h)
@@ -92,7 +93,7 @@ pub fn chat_row_node(
     made.val = Some(slot)
     @sf.style_node(slot, fn() { if more { @sf.list_more(at) } else { row_last } })
     let hover = fn() {
-      match row_at.val {
+      match row_at.get() {
         Some(v) => !finger && (@sf.lit_in_node(v) || menu_on())
         None => false
       }
@@ -111,7 +112,7 @@ pub fn chat_row_node(
     let chosen = @sf.EdgeWay::new(if @signals.untracked(on) { 1.0 } else { 0.0 })
     let ground = fn() {
       let p = t().p
-      match row_at.val {
+      match row_at.get() {
         None => 0L
         Some(v) =>
           if finger {
@@ -328,7 +329,7 @@ pub fn chat_row_node(
         })
       },
     )
-    row_at.val = Some(row)
+    row_at.set(Some(row))
     if swipes {
       let past : @signals.Signal[Bool] = @signals.signal(false)
       let out : @signals.Signal[Bool] = @signals.signal(false)
