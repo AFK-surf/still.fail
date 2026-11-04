@@ -51,6 +51,16 @@ export const LIVE_SESSIONS = "SELECT * FROM sessions WHERE archived_at IS NULL O
 export const SESSION_COUNTS = "SELECT connect, ws, COUNT(*) AS n FROM sessions GROUP BY connect, ws";
 export const ANY_RUNNING = "SELECT 1 AS r FROM sessions WHERE running = 1 LIMIT 1";
 export const RUNNING_SESSIONS = "SELECT * FROM sessions WHERE running = 1";
+// Ordering still considers every thread, but it reads only its latest message's time; people and full summaries are
+// needed only after the limit. Applying the connect filter outside the limit preserves the prior cross-connect order.
+export const RECENT_CONNECT_THREADS = `WITH recent AS MATERIALIZED (
+  SELECT t.id, t.surface, t.created_at, COALESCE(e.at, 0) AS said_at
+  FROM threads t LEFT JOIN thread_state s ON s.thread = t.id
+  LEFT JOIN entries e ON e.thread = t.id AND e.n = s.said_n AND e.kind = 'message'
+  ORDER BY said_at DESC, t.created_at DESC, t.id DESC LIMIT ?1
+) SELECT r.id, r.surface FROM recent r
+  WHERE EXISTS (SELECT 1 FROM thread_sessions m WHERE m.thread = r.id AND m.connect = ?2)
+  ORDER BY r.said_at DESC, r.created_at DESC, r.id DESC`;
 /// Whether another shown or running session can use a runtime transcript. Look up the id in the history and current
 /// id indexes, rather than checking every active session's transcripts while an archive is packed.
 export const TRANSCRIPT_IN_USE = `SELECT 1 FROM runtime_sessions r INDEXED BY runtime_sessions_by_id
@@ -1266,6 +1276,15 @@ export class Store {
     const said = (t: ThreadSummary) => t.lastMessage?.createdAt ?? 0;
     summaries.sort((a, b) => said(b) - said(a) || b.thread.createdAt - a.thread.createdAt || b.thread.id - a.thread.id);
     return summaries;
+  }
+
+  /// People of a connect's threads among the station's latest `limit`: what a connecting platform learns. Order and
+  /// limit all threads first, as listThreads does; only then look up people for the threads of this connect.
+  recentConnectPeople(connect: string, limit: number): { thread: number; people: string[] }[] {
+    const rows = this.#all(RECENT_CONNECT_THREADS, limit, connect);
+    const prefix = `slack:${connect}:`;
+    return rows.map((r) => ({ thread: r.id, people: this.#threadPeople(r.id, r.surface)
+      .flatMap((person) => person.startsWith(prefix) ? [person.slice(prefix.length)] : []) }));
   }
 
   /// The thread's latest message as merged, for lists.
