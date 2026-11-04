@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { Readers } from "../src/read/pool.ts";
+import { sessions } from "../src/read/sessions.ts";
 import * as read from "../src/read/store.ts";
 import { addSessionTurns } from "../src/store/schema.ts";
 import { Store } from "../src/store/store.ts";
@@ -117,6 +118,19 @@ test("a direct old count visits at most 65 turns and a prepared count visits non
     visited = 0;
     assert.equal(read.sessionStats(r, "long").get("long")?.turns, 150);
     assert.equal(visited, 0);
+  } finally { f.close(); }
+});
+
+test("a workspace session list does not prepare another workspace's old counts", () => {
+  const f = fixture();
+  try {
+    const assign = f.store.db.prepare("UPDATE sessions SET ws=? WHERE key=?");
+    assign.run("mine", "short");
+    assign.run("elsewhere", "long");
+    const shown = sessions(read.makeStore(f.store.db, f.dir), null, false, "en", { workspace: "mine", home: false });
+    assert.deepEqual(shown.map((row: any) => [row.key, row.turns]), [["short", 5]]);
+    assert.equal(f.store.db.prepare("SELECT COUNT(*) AS n FROM session_turns").get()?.n, 0);
+    assert.equal(f.store.db.prepare("SELECT COUNT(*) AS n FROM session_turns_guard").get()?.n, 0);
   } finally { f.close(); }
 });
 
