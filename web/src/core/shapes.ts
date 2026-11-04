@@ -5991,6 +5991,11 @@ export interface PrefsView {
 	 * chat open in front coming to need the viewer).
 	 */
 	haptics?: string;
+	/**
+	 * This app keeping itself current on this device: `off` (a newer build is said, and downloaded and put in
+	 * place only at the person's word), or none for on (downloaded by itself, put in place while the app is not in use).
+	 */
+	appUpdate?: string;
 	rowPicture?: RowPictureSetting;
 	/** Times are shown as dates rather than "3 分钟前". */
 	absoluteTime?: boolean;

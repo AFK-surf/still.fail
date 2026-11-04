@@ -298,3 +298,42 @@ test "关于's 性能记录 turned on stays on: its first line written (the 分�
     assert_eq(@hostapi.perf_state(), 1, msg=at)
   }
 }
+
+///|
+test "自动更新 in 关于, on unless turned off: off, a newer build is said but downloaded only at the person's word; on again, the one known downloaded by itself" {
+  let kept : Ref[Source?] = Ref(None)
+  let newer : Json = { "versionCode": 3, "versionName": "0.1.3", "file": "android/stillfail-3.apk", "sha256": "ab", "size": 1000 }
+  let t = setting_tester(
+    About,
+    390.0,
+    platform=2,
+    over=fn(s) {
+      kept.val = Some(s)
+      s
+    },
+    ready=fn() {
+      @sfbase.update_version.val = 2
+      @sfbase.set_update_source(Some({ check: fn(_, _, done) { done(Ok(newer)) }, url: fn(f) { f } }))
+    },
+  )
+  let src = kept.val.unwrap()
+  t.click(Switch, label="自动更新")
+  t.frame()
+  t.frame()
+  assert_false(@sfbase.update_auto(src))
+  @sfbase.update_check(src, false)
+  assert_eq(t.update_asked(), [])
+  assert_eq(@sfbase.update_stands().label, "有新版本 0.1.3")
+  @sfbase.update_go(src)
+  assert_eq(t.update_asked(), ["fetch stillfail-3.apk true"])
+  // (the update's row come in over it meanwhile: pressed where it has come to rest)
+  t.run_for(@ui.move_most_ms)
+  t.click(Switch, label="自动更新")
+  t.frame()
+  t.frame()
+  assert_true(@sfbase.update_auto(src))
+  assert_eq(t.update_asked(), ["fetch stillfail-3.apk true", "fetch stillfail-3.apk false"])
+  @sfbase.update_check(src, false)
+  assert_eq(t.update_asked().length(), 3)
+  @sfbase.update_reset()
+}

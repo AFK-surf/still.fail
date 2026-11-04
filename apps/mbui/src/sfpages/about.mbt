@@ -157,6 +157,22 @@ fn version_rows_node(g : @view.View, core : Core) -> Unit {
       below_open=share,
     )
   })
+  // (whether newer builds come by themselves, on unless turned off: off, one is said in the row over it and comes only as
+  // the person presses it, 2026-11-04 the user「自动更新应该有个设置，默认打开可以关闭」)
+  g.show(fn() { v().asks }, fn(r) {
+    @sf.switch_row_node(
+      r,
+      fn() { @sf.t("android-settings.version.auto") },
+      fn() { @settings.pref(core, "appUpdate") != "off" },
+      fn(on) {
+        @settings.set_pref(core, "appUpdate", if on { "" } else { "off" })
+        if on {
+          (core.update_auto_on)()
+        }
+      },
+      note=fn() { @sf.t("android-settings.version.auto.note", args=[("app", "still.fail")]) },
+    )
+  })
 }
 
 ///|

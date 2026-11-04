@@ -18,6 +18,8 @@ pub(all) struct Fixture {
   mut motion : String
   /// haptics chosen (the prefs' `haptics`: off; "" on)
   mut haptics : String
+  /// automatic updates chosen (the prefs' `appUpdate`: off; "" on)
+  mut app_update : String
   archived : Map[String, Bool]
   filters : Map[String, String]
   /// the faces chosen (the prefs' `fonts`), and those whose files the core has (fonts_fixture.mbt)
@@ -849,6 +851,7 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
         "windowZoom": Json::string(f.window_zoom),
         "motion": Json::string(f.motion),
         "haptics": Json::string(f.haptics),
+        "appUpdate": Json::string(f.app_update),
         "shareLook": if f.share_look == "" { Json::null() } else { Json::string(f.share_look) },
         "fonts": fixture_fonts(f.fonts),
         "faces": fixture_faces(f.fonts),
@@ -1065,6 +1068,7 @@ pub fn fixture(mode : String) -> Source {
     motion: "",
     window_zoom: "",
     haptics: "",
+    app_update: "",
     archived: {},
     filters: {},
     fonts: if mode == "settings-fonts-coming" { { "ui": "noto-sans-sc" } } else { {} },
@@ -1362,6 +1366,11 @@ pub fn fixture(mode : String) -> Source {
           match field(Some(params), "haptics") {
             Some(String(h)) => f.haptics = h
             Some(Null) => f.haptics = ""
+            _ => ()
+          }
+          match field(Some(params), "appUpdate") {
+            Some(String(u)) => f.app_update = u
+            Some(Null) => f.app_update = ""
             _ => ()
           }
           match field(Some(params), "listFilter") {
