@@ -133,6 +133,48 @@ describe("allowances and renewing", { concurrency: true }, () => {
     await p.close();
   });
 
+  test("a Codex app-server's missing or partial reset details are read with the same profile's login", async () => {
+    const data = temp("codex-app-server-reset-details");
+    const home = join(data, "homes", "cx");
+    mkdirSync(home, { recursive: true });
+    writeFileSync(join(home, "auth.json"), JSON.stringify({ tokens: { access_token: "at", account_id: "acc" } }));
+    const profile = hubConfig({ profiles: [{ id: "cx", home: "homes/cx", runtime: "codex", access: { kind: "subscription" } }] }, data).profiles[0]!;
+    const dates = ["2030-03-17T00:00:00Z", "2030-03-19T00:00:00Z"];
+    let status = 200;
+    let usageCount = 2;
+    let detail: any = { available_count: 2, credits: dates.map((expires_at) => ({ status: "available", expires_at })) };
+    const p = await provider((request) => request.url.endsWith("/usage")
+      ? { status: 200, body: { rate_limit_reset_credits: { available_count: usageCount }, rate_limit: { primary_window: { used_percent: 35 } } } }
+      : { status, body: detail });
+    const urls = { ...URLS, chatgpt: p.base };
+    const ask = (credits: any[], count: number) => checkQuota(profile, {}, async () => ({ rateLimits: { primary: { usedPercent: 30 } }, rateLimitResetCredits: { availableCount: count, credits } }), urls);
+    const got = await ask([], 2);
+    assert.deepEqual(got.resetExpiries, dates.map(Date.parse));
+    assert.equal(got.windows[0]!.usedPercent, 35, "the dates and windows come from the same login");
+    assert.equal(p.asked[0]!.url, "/backend-api/wham/usage");
+    assert.equal(p.asked[0]!.headers.authorization, "Bearer at");
+    assert.equal(p.asked[0]!.headers["chatgpt-account-id"], "acc");
+    assert.equal(p.asked[1]!.url, "/backend-api/wham/rate-limit-reset-credits");
+    // No extra request when the app-server already provided every date.
+    const complete = dates.map((expiresAt) => ({ status: "available", expiresAt }));
+    await ask(complete, 2);
+    assert.equal(p.asked.length, 2);
+    // An incomplete detail reply cannot erase dates already known from the app-server.
+    usageCount = 3;
+    detail = { available_count: 3, credits: complete.slice(0, 1) };
+    assert.deepEqual((await ask(complete, 3)).resetExpiries, dates.map(Date.parse));
+    // If the count changed during the requests, only the newer detail response's cards are shown.
+    usageCount = 2;
+    detail = { available_count: 0, credits: [] };
+    const changed = await ask(complete.slice(0, 1), 2);
+    assert.equal(changed.resetCount, 0);
+    assert.equal(changed.resetExpiries, undefined);
+    status = 503;
+    const unavailable = await ask([], 2);
+    assert.deepEqual([unavailable.state, unavailable.resetCount, unavailable.resetExpiries], ["ok", 2, undefined]);
+    await p.close();
+  });
+
   test("codex app-server limits and window names", () => {
     const limits = { rateLimits: { primary: { usedPercent: 12.4, windowDurationMins: 300, resetsAt: 1_900_000_000 }, secondary: null } };
     assert.deepEqual(codexWindows(limits), [{ label: "5 小时", usedPercent: 12, resetsAt: 1_900_000_000_000, minutes: 300 }]);
