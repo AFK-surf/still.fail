@@ -4,6 +4,7 @@
 // wrong policy can be told apart. People edit it on the pages, agents with the archive_policy tool; the station keeps
 // who changed it last (store `archive_policy`). Until anyone does, the default below.
 import type { ChoiceQuestion, ChoiceResult } from "./decision.ts";
+import type { InWorkspace } from "../store/rows.ts";
 
 export type ArchiveOption = { id: string; name: string; rubric: string; archive: boolean };
 export type ArchivePolicy = { policy: string; options: ArchiveOption[] };
@@ -138,16 +139,16 @@ export function savePolicy(store: Kept, input: unknown, by: PolicyAuthor, ws: st
 const VIEW_DAYS = 7;
 const VIEW_CHATS = 20;
 
-type Viewed = Kept & { latestDecisionsSince(since: number): any[]; now(): number; getSession(key: string): { runtime: string } | null };
+type Viewed = Kept & { latestDecisionsSince(since: number, viewer?: InWorkspace): any[]; now(): number; getSession(key: string): { runtime: string } | null };
 
 /// A workspace's archive policy as the pages show it (accounts' `policyView`, for one workspace: docs/multi-workspace.md):
 /// its words, its options each with the chats of that workspace (`mine`) the checks of the last days put there (by
 /// their latest check), who changed it last, and how many checks failed.
-export function policyView(store: Viewed, ws: string | null, mine: (session: string) => boolean, title: (session: string) => string): any {
+export function policyView(store: Viewed, ws: string | null, mine: (session: string) => boolean, title: (session: string) => string, viewer?: InWorkspace): any {
   const saved = store.archivePolicy(ws);
   const policy = policyFrom(saved);
   const latest = new Map<string, any>();
-  for (const row of store.latestDecisionsSince(store.now() - VIEW_DAYS * 86_400_000)) if (typeof row.session === "string" && mine(row.session)) latest.set(row.session, row);
+  for (const row of store.latestDecisionsSince(store.now() - VIEW_DAYS * 86_400_000, viewer)) if (typeof row.session === "string" && mine(row.session)) latest.set(row.session, row);
   const byOption = new Map<string, any[]>();
   let failed = 0;
   for (const [session, row] of [...latest.entries()].reverse()) {

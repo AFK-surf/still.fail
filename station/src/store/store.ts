@@ -184,6 +184,15 @@ export const DELETE_PINS_OF_SESSION = PIN_MARKS.indexed;
 export { CARD_BEFORE, CLOSED_SINCE, OPTIONS_BEFORE };
 export const LATEST_DECISIONS =
   "SELECT id, session, created_at, result FROM decision_checks WHERE id IN (SELECT MAX(id) FROM decision_checks WHERE created_at >= ? GROUP BY +session) ORDER BY created_at, id";
+// Keep the grouping on the recent covering index, but fetch result text only after the session's workspace is known.
+export const LATEST_DECISIONS_SCOPED = `WITH latest AS MATERIALIZED (
+  SELECT MAX(id) AS id, session FROM decision_checks WHERE created_at >= ?1 GROUP BY +session
+)
+SELECT d.id, d.session, d.created_at, d.result FROM latest l
+LEFT JOIN sessions s ON s.key = l.session
+CROSS JOIN decision_checks d ON d.id = l.id
+WHERE s.ws = ?2 OR (?3 AND s.ws IS NULL)
+ORDER BY d.created_at, d.id`;
 /// Whether a session has read something from a thread (`heardThreads`): by its deliveries there, named (SQLite took the
 /// index of all it was given by when, from the first).
 export const HEARD_IN = "SELECT 1 FROM deliveries INDEXED BY deliveries_session WHERE session = ? AND thread = ? AND delivered_at IS NOT NULL LIMIT 1";
@@ -1445,8 +1454,10 @@ export class Store {
 
   /// Each session's latest check of those recorded since `since` (ms), the oldest first: what the archive policy's view
   /// counts (accounts/index.ts, sessions/archive-policy.ts).
-  latestDecisionsSince(since: number): Json[] {
-    return this.#all(LATEST_DECISIONS, since).map((r) => ({
+  latestDecisionsSince(since: number, viewer?: InWorkspace): Json[] {
+    const rows = viewer === undefined ? this.#all(LATEST_DECISIONS, since)
+      : this.#all(LATEST_DECISIONS_SCOPED, since, viewer.workspace, viewer.home !== false ? 1 : 0);
+    return rows.map((r) => ({
       id: r.id, session: r.session, at: r.created_at, detail: parsed(r.result) ?? null,
     }));
   }

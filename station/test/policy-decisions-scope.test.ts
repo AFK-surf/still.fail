@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { LATEST_DECISIONS, Store } from "../src/store/store.ts";
+import { policyView } from "../src/sessions/archive-policy.ts";
+import { LATEST_DECISIONS, LATEST_DECISIONS_SCOPED, Store } from "../src/store/store.ts";
 
 test("a workspace's policy reads only its own latest decision details", () => {
   const store = Store.open(":memory:");
@@ -43,6 +44,7 @@ test("a workspace's policy reads only its own latest decision details", () => {
     }) });
     // A fresh statement is needed after installing the observer.
     const read = (store.latestDecisionsSince as any).bind(store);
+    assert.deepEqual(read(50), baseline);
     visited = 0;
     assert.deepEqual(read(51, { workspace: "mine", home: false }), expected(false));
     assert.equal(visited, 2, `the joined workspace read ${visited} decision details for two sessions`);
@@ -52,6 +54,20 @@ test("a workspace's policy reads only its own latest decision details", () => {
     visited = 0;
     assert.deepEqual(read(53, { workspace: "absent", home: false }), []);
     assert.equal(visited, 0);
+
+    const plan = (db.prepare(`EXPLAIN QUERY PLAN ${LATEST_DECISIONS_SCOPED}`).all(50, "mine", 0) as { detail: string }[]).map(r => r.detail);
+    assert.ok(plan.some(p => p.includes("COVERING INDEX decision_checks_lately")), plan.join(" | "));
+    const sessionLookup = plan.findIndex(p => p.includes("SEARCH s USING INDEX"));
+    const detailLookup = plan.findIndex(p => p.includes("SEARCH d USING INTEGER PRIMARY KEY"));
+    assert.ok(sessionLookup >= 0 && detailLookup > sessionLookup, plan.join(" | "));
+
+    visited = 0;
+    const viewed = { archivePolicy: store.archivePolicy.bind(store), setArchivePolicy: store.setArchivePolicy.bind(store),
+      latestDecisionsSince: read, getSession: store.getSession.bind(store), now: () => 50 + 7 * 86_400_000 };
+    const policy = policyView(viewed, "mine", (session) => session === "session-0" || session === "session-1", s => s,
+      { workspace: "mine", home: false });
+    assert.equal(policy.checked, 2);
+    assert.equal(visited, 2);
 
     db.prepare("UPDATE sessions SET ws = 'elsewhere' WHERE key = 'session-0'").run();
     visited = 0;
