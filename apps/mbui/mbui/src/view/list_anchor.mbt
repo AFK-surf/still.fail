@@ -141,6 +141,11 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   // read then)
   let foot_laid = Ref(0.0)
   let extent = fn() { count.val.to_double() * mean() + foot_laid.val }
+  // (told once laid out as how tall all it holds is counted comes out otherwise: what follows how far it can go
+  // reads it, not its layout)
+  let extent_said : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { (a - b).abs() < 0.5 })
+  s.extent_told = fn() { extent_said.get() |> ignore }
+  self.owns(fn() { s.extent_told = fn() { } }) |> ignore
   let out = self.scrolls(s, slop?=slop, bar?=bar, content_extent=extent, bar_clear~, fn(held) {
     held.height_share(Is(1.0)) |> ignore
     held.layout_box(
@@ -398,6 +403,8 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
         // end, how far it is counted to be scrolled (what holds its rows moved by as much as they were placed for: what
         // its layout reads not moved), and a glide to what came, from this moment; nothing its layout reads changed)
         self.tree.once_laid_out(fn() { laid_n.set(@signals.untracked(fn() { laid_n.get() }) + 1) })
+        let extent_now = extent()
+        self.tree.once_laid_out(fn() { extent_said.set(extent_now) })
         self.tree.once_laid_out(fn() {
           let in_sight = []
           for q in 0..<r.keys.length() {

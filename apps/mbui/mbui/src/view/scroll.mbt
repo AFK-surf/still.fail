@@ -81,6 +81,9 @@ pub struct Scroll {
   priv edge : @signals.Signal[Edge?]
   /// The editor these choices belong to, whose input method stays while they are scrolled.
   priv mut for_field : NodeId?
+  /// what a virtual list's counted extent is told by, read where how far it can go is followed (none: as it is laid
+  /// out alone): View::scrolls_anchored's
+  priv mut extent_told : () -> Unit
   /// a page's list's blocks (View::scrolls_window): the first and last of them in sight, by their places, it put with
   /// one of them at its top, by its place, and how far past the first in sight's top it is (what a test reads and asks
   /// of an old view's list)
@@ -147,6 +150,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     host: None,
     edge: @signals.signal(None, same=fn(a, b) { same_ref(a, b) }),
     for_field: None,
+    extent_told: fn() { },
     rows: None,
   }
 }
@@ -646,7 +650,10 @@ pub fn View::scrolls(
   // (how far it can go: as tall as what it holds is, less as tall as it shows; told as laid out)
   s.room = fn() {
     match content_extent {
-      Some(extent) => return self.laid_size_told().map(fn(v) { extent() - (if across { v.0 } else { v.1 }) })
+      Some(extent) => {
+        (s.extent_told)()
+        return self.laid_size_told().map(fn(v) { extent() - (if across { v.0 } else { v.1 }) })
+      }
       None => ()
     }
     match inner.val {
