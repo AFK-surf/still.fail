@@ -105,3 +105,37 @@ test "resources prepared as a frame starts are available to its only layout" {
   assert_true(t.drawn_rects().contains((0.0, 0.0, 100.0, 20.0, 0x13579bffL)))
   assert_eq(view_tree().unwrap().work().computes, 1)
 }
+
+///|
+test "the cursor's selection query does not lay out the next frame while painting this one" {
+  let height = @signals.signal(20.0)
+  let late = Ref(false)
+  let t = Tester::new(fn(_) { }, w=200.0, h=300.0, stable=false)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.box(fn(n) {
+      n.height(By(fn() { Some(height.get()) })).ground(Is(0x13579bffL)) |> ignore
+    }) |> ignore
+    old(root, fn(_) { }).grow(Is(1.0)) |> ignore
+  })
+  t.frame(ms=16.0)
+  t.move(190.0, 290.0)
+  let tree = view_tree().unwrap()
+  let before = tree.work().computes
+  let selections = tree_sels_made.val
+  on_frame_built(fn(_) {
+    if late.val {
+      late.val = false
+      height.set(80.0)
+    }
+  })
+  late.val = true
+  test_stepped()
+  t.frame(ms=16.0)
+  assert_eq(height.get(), 80.0, msg="the late change was made")
+  assert_true(tree_sels_made.val > selections, msg="the cursor asked for selectable words")
+  assert_true(t.drawn_rects().contains((0.0, 0.0, 200.0, 20.0, 0x13579bffL)))
+  assert_eq(tree.work().computes - before, 0, msg="a cursor query must use this frame's layout")
+  t.frame(ms=16.0)
+  assert_true(t.drawn_rects().contains((0.0, 0.0, 200.0, 80.0, 0x13579bffL)))
+}

@@ -114,8 +114,11 @@ fn tree_sels(finger? : Bool = false) -> Array[SelTarget] {
   guard pointing() is Mouse || picked.finger || finger else { return out }
   match view_app.val {
     Some(tree) => {
-      // (laid out as of the moment it is asked: what an event finds)
-      tree.laid_as_now()
+      // An input between frames finds the tree at its own moment. Once this frame has committed its layout,
+      // paint and cursor queries use that layout; pending changes belong to the next frame.
+      if !frame_running.val || !view_frame_committed.val {
+        tree.laid_as_now()
+      }
       tree.each_drawn_scaled(fn(c, x, y, a, s) {
         if c.runs.is_empty() || a <= 0.0 || !tree.allows(c.id) {
           return
