@@ -289,7 +289,26 @@ fn fitted(
   tree? : Bool = false,
 ) -> Fitted {
   let size = c.sp(base)
-  let words = labels.map(fn(l) { choice_words_w(c, l, size, weight~, tree~) })
+  let tabular = if tree { @ui.tree_theme().tabular } else { c.theme().tabular }
+  fitted_at(labels, room, base, size, weight, side, least, tabular)
+}
+
+///|
+/// Fit with the face and scaled size captured before layout. Measuring the words then needs no reactive input.
+fn fitted_at(
+  labels : Array[String],
+  room : Double,
+  base : Double,
+  size : Double,
+  weight : Int,
+  side : Double,
+  least : Double,
+  tabular : Bool,
+) -> Fitted {
+  let width = fn(l : String, at : Double) {
+    @ui.text_advance(l, size=at, weight~, style=if tabular { @hostapi.style_tabular } else { 0 })
+  }
+  let words = labels.map(fn(l) { width(l, size) })
   // (no smaller than the app says them: the size the system's own size of words draws)
   let smallest = dmin(1.0, base / size)
   let (widths, fit) = option_widths(words, room, side, least, smallest)
@@ -300,14 +319,14 @@ fn fitted(
     Smaller(k0) => {
       let most = room - 2.0 * least * labels.length().to_double()
       let mut k = k0
-      let mut drawn = labels.map(fn(l) { choice_words_w(c, l, size * k, weight~, tree~) })
+      let mut drawn = labels.map(fn(l) { width(l, size * k) })
       let mut sum = drawn.fold(init=0.0, fn(s, w) { s + w })
       for _ in 0..<4 {
         if sum <= most + 0.01 || sum <= 0.0 || k < smallest {
           break
         }
         k = k * most / sum
-        drawn = labels.map(fn(l) { choice_words_w(c, l, size * k, weight~, tree~) })
+        drawn = labels.map(fn(l) { width(l, size * k) })
         sum = drawn.fold(init=0.0, fn(s, w) { s + w })
       }
       if k < smallest || sum > most + 0.01 {
