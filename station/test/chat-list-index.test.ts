@@ -98,6 +98,31 @@ for (const recursive of [false, true]) test(`an edit or a letter does not make t
   } finally { store.close(); }
 });
 
+for (const recursive of [false, true]) for (const how of ["append", "replace"] as const) {
+  test(`a message ${how} updates the ready recent ordering (recursive triggers ${recursive})`, () => {
+    const store = Store.open(":memory:");
+    const db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+      const chat = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
+      const other = store.openThread("ember", "EMBER", "other", "Other", null).id;
+      db.prepare("UPDATE threads SET created_at = 1 WHERE id IN (?, ?)").run(chat, other);
+      const message = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,?,'message','person','p','hello',?)");
+      message.run(chat, 1, 10);
+      message.run(other, 1, 20);
+      installRecentChatIndex(db);
+      while (!stepRecentChatIndex(db, 3).done) { /* Prepare before the message changes. */ }
+      assert.deepEqual(readGlobalRecentChatIndex(db, 5), { ids: [other, chat], total: 2 });
+      if (how === "append") message.run(chat, 2, 30);
+      else db.prepare("INSERT OR REPLACE INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','changed',30)").run(chat);
+      assert.equal(readGlobalRecentChatIndex(db, 5), null, "the old ordering is not returned after a message changes it");
+      while (!stepRecentChatIndex(db, 3).done) { /* Account the message. */ }
+      const rows = db.prepare(RECENT_CHAT_LIST).all(null, null, 5) as { id: number; total: number }[];
+      assert.deepEqual(readGlobalRecentChatIndex(db, 5), { ids: rows.map((row) => row.id), total: rows[0]?.total ?? 0 });
+    } finally { store.close(); }
+  });
+}
+
 for (const recursive of [false, true]) for (const how of ["number", "timestamp", "timestamp update"] as const) {
   test(`replacing the latest message by ${how} invalidates its ordering (recursive triggers ${recursive})`, () => {
     const store = Store.open(":memory:");
