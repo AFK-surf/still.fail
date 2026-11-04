@@ -5,6 +5,28 @@ import { RECENT_CHAT_LIST } from "../src/store/chat-list.ts";
 import { installRecentChatIndex, readGlobalRecentChatIndex, stepRecentChatIndex } from "../src/store/chat-list-index.ts";
 import { Store } from "../src/store/store.ts";
 
+test("installing recent chat writers avoids old message and membership history, and a failed install can retry", () => {
+  const store = Store.open(":memory:");
+  const db = store.db;
+  try {
+    const id = store.openThread("ember", "EMBER", "old", "Old", null).id;
+    db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',1)").run(id);
+    db.setAuthorizer((action, name) => action === constants.SQLITE_CREATE_TRIGGER && name === "recent_chat_entry_add"
+      ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    try { assert.throws(() => installRecentChatIndex(db)); }
+    finally { db.setAuthorizer(null); }
+    assert.equal(db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'recent_chat_meta'").get(), undefined);
+    db.setAuthorizer((action, name) => action === constants.SQLITE_READ &&
+      ["entries", "thread_state", "sessions", "thread_sessions"].includes(name ?? "") ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    try { installRecentChatIndex(db); }
+    finally { db.setAuthorizer(null); }
+    db.setAuthorizer((action) => action === constants.SQLITE_TRANSACTION ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    try { installRecentChatIndex(db); }
+    finally { db.setAuthorizer(null); }
+    assert.equal(readGlobalRecentChatIndex(db, 5), null);
+  } finally { db.setAuthorizer(null); store.close(); }
+});
+
 for (const recursive of [false, true]) test(`a global recent page uses a maintained count and ordering (recursive triggers ${recursive})`, () => {
   const store = Store.open(":memory:");
   const db = store.db;
