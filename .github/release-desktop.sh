@@ -30,7 +30,8 @@ unset UNSIGNED
 export RELEASE_DIR="$dir/releases"
 # The signing helper removes its secrets from the child's environment. release.sh checks the signed archive's
 # identifier, team and build before making either the mbui or the older Electron updater's feed.
-python3 .github/mac_signing.py run -- sh scripts/release.sh --product "$product" ${beta:+$beta} desktop
+# shellcheck disable=SC2046 # --product and its value, two words, another product's alone
+python3 .github/mac_signing.py run -- sh scripts/release.sh $([ "$product" = stillfail ] || echo --product "$product") ${beta:+$beta} desktop
 version=$(git rev-list --count HEAD)
 set -- "desktop/$product$suffix-0.1.$version-arm64-mac.zip" "mac/${channel}latest.json"
 # (electron-updater's feed: still.fail's alone, which had an Electron app)
