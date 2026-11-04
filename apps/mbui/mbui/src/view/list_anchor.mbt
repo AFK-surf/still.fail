@@ -144,6 +144,16 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
     let n = was.unwrap_or(0)
     if put_at.get() is Some(_) { n + 1 } else { n }
   })
+  // A requested place takes the list away from following its end before layout. If the requested row turns out to
+  // be at the end, the finished layout says so again below.
+  self.reacts(fn() { put_at.get() }, fn(p) {
+    if from_end && p is Some(_) && @signals.untracked(fn() { follows.get() }) {
+      follows.set(false)
+    }
+  })
+  // A layout may be measured more than once before it is committed. Keep the request through those probes, then do
+  // not replay the cached input as later frames lay the list out for another reason.
+  let put_laid = Ref(0)
   // (where the hand has it: what its layout reads is how far it moved since it was last laid out, never changed by the
   // list as it is laid out; how far that is from where it is counted to be among all it holds, as last laid out, what
   // its bar and what reads where it is add to it, and where the hand has it is put by as the hand comes to it again:
@@ -316,14 +326,15 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
           r.height
         }
         // (put at a row, its top that far under the window's top)
+        let putting = c.put_n > put_laid.val && c.put is Some(_)
         match c.put {
-          Some((k, off)) =>
+          Some((k, off)) if putting =>
             match find(k, anchor.val.map(fn(a) { a.near }).unwrap_or(n - 1)) {
               Some(i) =>
                 anchor.val = Some({ key: k, under: if from_end { off + measure(i) - h } else { -off }, near: i })
               None => ()
             }
-          None => ()
+          _ => ()
         }
         let by = match seen_x.val {
           Some(x) => if from_end { x - c.x } else { c.x - x }
@@ -524,8 +535,12 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
             Some(sh) => if @signals.untracked(fn() { sh.get() }) != in_sight { sh.set(in_sight) }
             None => ()
           }
-          if @signals.untracked(fn() { put_at.get() }) is Some(_) {
-            put_at.set(None)
+          if putting {
+            put_laid.val = c.put_n
+            // Do not clear a newer request that arrived before this result was published.
+            if @signals.untracked(fn() { put_n.get() }) == c.put_n {
+              put_at.set(None)
+            }
           }
           if at_end && !@signals.untracked(fn() { follows.get() }) {
             follows.set(true)

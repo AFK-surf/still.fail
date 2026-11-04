@@ -10,6 +10,7 @@ priv struct AnchoredCase {
   live : Map[Int, @view.View]
   follows : @signals.Signal[Bool]
   shown : @signals.Signal[Array[Int]]
+  put : @signals.Signal[(Int, Double)?]
 }
 
 ///|
@@ -20,6 +21,7 @@ fn anchored_case(n : Int, ahead? : Double = 0.0, from_end? : Bool = true, kept? 
   let live : Map[Int, @view.View] = Map([])
   let follows = @signals.signal(true, same=fn(a, b) { a == b })
   let shown : @signals.Signal[Array[Int]] = @signals.signal([], same=fn(a, b) { a == b })
+  let put : @signals.Signal[(Int, Double)?] = @signals.signal(None)
   let tall = fn(k : Int) {
     match heights.get(k) {
       Some(h) => h
@@ -33,7 +35,7 @@ fn anchored_case(n : Int, ahead? : Double = 0.0, from_end? : Bool = true, kept? 
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(o) {
       o.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
-      o.scrolls_anchored(scroll, fn() { keys.get() }, est=80.0, ahead~, from_end~, follows~, shown~, kept_keys=kept, fn(b, k) {
+      o.scrolls_anchored(scroll, fn() { keys.get() }, est=80.0, ahead~, from_end~, follows~, shown~, put~, kept_keys=kept, fn(b, k) {
         live[k] = b
         b.owns(fn() { live.remove(k) }) |> ignore
         let h = tall(k)
@@ -44,7 +46,23 @@ fn anchored_case(n : Int, ahead? : Double = 0.0, from_end? : Bool = true, kept? 
     |> ignore
   })
   tree.frame(390.0, 844.0, now=0.0) |> ignore
-  { tree, scroll, keys, heights, live, follows, shown }
+  { tree, scroll, keys, heights, live, follows, shown, put }
+}
+
+///|
+test "scrolls_anchored: a put is consumed once; the hand can move on and the same put can be requested again" {
+  let c = anchored_case(100)
+  c.put.set(Some((50, 10.0)))
+  c.tree.frame(390.0, 844.0, now=10.0) |> ignore
+  assert_eq(c.top(50), Some(10.0))
+  assert_false(c.follows.get())
+  c.tree.wheel_at(150.0, 50.0, 0.0, -40.0, 0, 20.0) |> ignore
+  c.tree.frame(390.0, 844.0, now=1000.0) |> ignore
+  assert_eq(c.top(50), Some(50.0), msg="the old request must not pull the list back")
+  assert_false(c.follows.get())
+  c.put.set(Some((50, 10.0)))
+  c.tree.frame(390.0, 844.0, now=1100.0) |> ignore
+  assert_eq(c.top(50), Some(10.0), msg="a later request at the same place is applied")
 }
 
 ///|
@@ -300,4 +318,3 @@ test "a kept row under what shows, part of it asked into sight: that part's foot
   d.tree.frame(390.0, 844.0, now=20.0) |> ignore
   assert_eq(d.top(99), Some(-30.0))
 }
-
