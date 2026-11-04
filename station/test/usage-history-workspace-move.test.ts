@@ -33,9 +33,10 @@ test("a fresh history installed after an early deletion can move its later calls
     session(store, "a", "A");
     record(store, "a", "a", 2);
     store.setSessionsWs("A", "B");
+    db.prepare("UPDATE usage SET output = 8 WHERE id = 'a'").run();
     const result = usageHistory(makeStore(db, "."), 0n, { workspace: "B", home: false });
     assert.ok(result);
-    assert.deepEqual((result.days as { calls: number; tokens: number }[]).map(({ calls, tokens }) => [calls, tokens]), [[1, 3]]);
+    assert.deepEqual((result.days as { calls: number; tokens: number }[]).map(({ calls, tokens }) => [calls, tokens]), [[1, 10]]);
   } finally { store.close(); }
 });
 
