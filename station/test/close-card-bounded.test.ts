@@ -55,3 +55,15 @@ for (const { name, kind, author, nextCard, options, closes } of [
     } finally { store.close(); }
   });
 }
+
+test("a previously closed card stays closed even after a later message", () => {
+  const store = Store.open(":memory:");
+  try {
+    const thread = store.openThread("ember", "EMBER", "closed", null, null).id;
+    const put = store.db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at,card) VALUES (?,?,?,?,?,?,?,?,?)");
+    put.run(thread, 1, "message", "card", "agent", "a", "choose", 1, card);
+    assert.equal(store.closeCard("person", thread, 1, "yes"), true);
+    put.run(thread, 2, "message", "next", "person", "person", "next", 2, null);
+    assert.equal(store.closeCard("person", thread, 1, "yes"), true);
+  } finally { store.close(); }
+});
