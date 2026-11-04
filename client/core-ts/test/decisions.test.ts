@@ -254,6 +254,15 @@ test("a_vault_request_asked_again_is_the_later_posts_card_alone", () => {
   messages = d.inMessages([asked(2, "9.000002", "r_1"), asked(4, "9.000004", "r_2")], [4, false]);
   assert.equal(messages[0].card.vault, "r_1");
   assert.equal(messages[1].card.vault, "r_2");
+  // Any ask living beyond its post, not one kind at a time: a sign-in, a phone request asked again.
+  const signin = (seq: number): J => ({ seq, ts: `9.00000${seq}`, authorKind: "agent", text: "登录", card: { type: "options", options: [{ label: "填入" }], signin: { id: "s_1", site: "github.com", screen: "t1" } } });
+  messages = d.inMessages([signin(2), signin(4)], [4, false]);
+  assert.equal(messages[0].card.signinAsk, undefined);
+  assert.equal(messages[1].card.signinAsk.id, "s_1");
+  const phone = (seq: number): J => ({ seq, ts: `9.00000${seq}`, authorKind: "agent", text: "借手机", card: { type: "options", options: [{ label: "允许" }], adb: { request: "p_1" } } });
+  messages = d.inMessages([phone(2), phone(4)], [4, false]);
+  assert.equal(messages[0].card.phoneAsk, undefined);
+  assert.equal(messages[1].card.phoneAsk.request, "p_1");
 });
 
 test("what_the_viewer_sent_answers_the_last_card_before_the_station_has_it", () => {

@@ -77,6 +77,18 @@ export function cardShown(card: J): J {
   return v;
 }
 
+/// A card's fields that stand for an ask living beyond its post (inMessages: one card on screen for each).
+const LIVE_ASK_FIELDS = ["login", "station", "vault", "vaultAsk", "signinAsk", "phoneAsk"];
+
+/// Which ask living beyond its post a shown card is (cardShown's), or null: the same one twice is one ask.
+function liveAsk(s: J): string | null {
+  if (s.login !== undefined) return `login ${s.station ?? ""} ${s.login}`;
+  if (s.vault !== undefined) return `vault ${s.vault}`;
+  if (s.signinAsk !== undefined) return `signin ${s.signinAsk.id}`;
+  if (s.phoneAsk !== undefined) return `phone ${s.phoneAsk.request}`;
+  return null;
+}
+
 /// A vault request as its card says it (station/src/vault/secrets.ts): which item, why, the command, how (or, one to
 /// keep a secret, what it is); and once decided, how. Null for a card from before it said so (its post's words say it).
 function vaultAsk(v: J): J | null {
@@ -307,16 +319,13 @@ export function inMessages(messages: J[], pendingOf: [number, boolean] | null | 
     const s = cardShown(card);
     const options: J[] = s.options ?? [];
     const replaced = at + 1 < cards.length;
-    // A login asked for again in a later post is that post's card alone: the login is one card on screen, its code
-    // typed in one field, and this post says how it went as any replaced card does.
-    if (s.login !== undefined && cards.slice(at + 1).some(([, c]) => { const l = cardShown(c); return l.login === s.login && l.station === s.station; })) {
-      delete s.login;
-      delete s.station;
-    }
-    // So is a vault request asked again (the agent's secret_reask): one card on screen, its secret typed in one field.
-    if (s.vault !== undefined && cards.slice(at + 1).some(([, c]) => cardShown(c).vault === s.vault)) {
-      delete s.vault;
-      delete s.vaultAsk;
+    // Whatever a card asks that lives beyond it (a login, a vault request, a sign-in, a phone request) asked again in a
+    // later post is that post's card alone: the ask is one card on screen, its field (a login's code, a secret typed in)
+    // one editor, and this post says how it went as any replaced card does. Not one kind at a time: #3798 took a login
+    // alone and a vault request asked again (secret_reask) still drew two cards of one field (2026-11-04).
+    const ask = liveAsk(s);
+    if (ask !== null && cards.slice(at + 1).some(([, c]) => liveAsk(cardShown(c)) === ask)) {
+      for (const field of LIVE_ASK_FIELDS) delete s[field];
     }
     const answer = messages.slice(i + 1).find((m) => get(m, "authorKind") === "person")
       ?? (replaced || sending.length === 0 ? undefined : { ...sending[0], authorKind: "person", mine: true });
