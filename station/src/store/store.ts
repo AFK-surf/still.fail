@@ -951,18 +951,27 @@ export class Store {
 
   /// When anyone last read a thread (moved their read position), in ms; null if nobody has.
   lastReadAt(thread: number): number | null {
-    // Reads are keyed by (viewer, thread). For a few viewers, seek this chat once per viewer instead of walking
-    // their other chats. With many viewers, a table scan is cheaper than thousands of separate index seeks.
+    // Reads are keyed by (viewer, thread). Seek the chat once per viewer when there are a modest number of viewers.
+    // With many viewers, scanning a small table is faster; probe at most 16,385 rows before choosing that path, and
+    // use the viewer seeks for a larger table so unrelated chat history cannot make this read grow without bound.
     return this.#one(`WITH RECURSIVE viewers(viewer, count) AS (
       SELECT (SELECT viewer FROM reads ORDER BY viewer LIMIT 1), 1
       UNION ALL
       SELECT (SELECT viewer FROM reads WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.count + 1
-        FROM viewers v WHERE v.viewer IS NOT NULL AND v.count < 33
+        FROM viewers v WHERE v.viewer IS NOT NULL AND v.count < 257
+    ), all_viewers(viewer) AS (
+      SELECT (SELECT viewer FROM reads ORDER BY viewer LIMIT 1)
+      UNION ALL
+      SELECT (SELECT viewer FROM reads WHERE viewer > v.viewer ORDER BY viewer LIMIT 1)
+        FROM all_viewers v WHERE v.viewer IS NOT NULL
     )
-    SELECT CASE WHEN (SELECT COUNT(*) FROM viewers WHERE viewer IS NOT NULL) <= 32
+    SELECT CASE WHEN (SELECT COUNT(*) FROM viewers WHERE viewer IS NOT NULL) <= 256
       THEN (SELECT MAX((SELECT at FROM reads WHERE viewer = v.viewer AND thread = ?))
         FROM viewers v WHERE v.viewer IS NOT NULL)
-      ELSE (SELECT MAX(at) FROM reads WHERE thread = ?) END AS at`, thread, thread).at;
+      WHEN EXISTS (SELECT 1 FROM reads LIMIT 1 OFFSET 16384)
+      THEN (SELECT MAX((SELECT at FROM reads WHERE viewer = v.viewer AND thread = ?))
+        FROM all_viewers v WHERE v.viewer IS NOT NULL)
+      ELSE (SELECT MAX(at) FROM reads WHERE thread = ?) END AS at`, thread, thread, thread).at;
   }
 
   /// A session's own chat on the page (ThreadRow.home), if it has one.
