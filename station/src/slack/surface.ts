@@ -147,6 +147,12 @@ export function messageFiles(m: Json): InboundFile[] {
     });
 }
 
+/// The files of a Web API answer: its messages' (conversations.replies, conversations.history), or a message's or a file's.
+export function answerFiles(answer: Json): InboundFile[] {
+  const messages = [...(Array.isArray(answer?.messages) ? answer.messages : []), answer?.message, { files: [answer?.file] }];
+  return messages.flatMap((m: Json) => messageFiles(m));
+}
+
 /// A Slack event as the station takes it: someone's message (a person, or another app's bot: agents work together in
 /// threads), an edit, or nothing it keeps (its own messages, deletes). `botId`: this app's bot id (B…).
 export function toEvent(event: Json, botUserId: string, botId: string): ChatEvent | null {
@@ -971,6 +977,10 @@ export class SlackSurface extends ConnectedSurface {
   async download(file: InboundFile): Promise<Uint8Array> {
     if (file.url === null) throw new Error("Slack does not give its contents");
     return this.client.download(file.url, file.name, this.botToken);
+  }
+
+  answerFiles(answer: Json): InboundFile[] {
+    return answerFiles(answer);
   }
 
   /// Any Web API method as the bot; values that are not strings (blocks, arrays) go as JSON, as Slack takes them.

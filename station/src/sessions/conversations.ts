@@ -496,7 +496,9 @@ export function slackConnectOf(hub: Hub, key: string, bot: string | null): strin
 
 /// slack_api: a Slack Web API call from session `key`, as the bot of `via` (else `slackConnectOf`). Writes keep to the
 /// threads rule: not in a thread another session of the same bot takes part in; one it writes in becomes its own.
-export async function slackApi(hub: Hub, key: string, method: string, params: Record<string, Json>, via: string | null, bot: string | null = null): Promise<string> {
+/// `saveFiles`: the files in its answer also go into the session's uploads, as a file sent to it does, and the answer
+/// starts with their paths: the addresses Slack gives open only with the bot's token, which no agent holds.
+export async function slackApi(hub: Hub, key: string, method: string, params: Record<string, Json>, via: string | null, bot: string | null = null, saveFiles = false): Promise<string> {
   const { store } = hub;
   const identity = actorOf(hub, key)?.messageIdentity() ?? undefined;
   if (!isSlackMethod(method)) throw new Error(`not a Slack method: ${JSON.stringify(method)}`);
@@ -534,7 +536,8 @@ export async function slackApi(hub: Hub, key: string, method: string, params: Re
       }
     }
   }
-  const text = JSON.stringify(result);
+  const saved = saveFiles ? await hub.fetched(chat, key, "", chat.answerFiles?.(result)) : null;
+  const text = JSON.stringify(saved === null ? result : { saved_files: saved.attachments.map(({ name, path, size }) => ({ name, path, size })), not_saved: saved.text, ...result });
   const chars = Array.from(text);
   return chars.length > 60_000 ? `${chars.slice(0, 60_000).join("")}… (cut at 60000 characters; ask for less, e.g. a smaller limit)` : text;
 }

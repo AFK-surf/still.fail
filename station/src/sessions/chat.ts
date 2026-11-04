@@ -91,6 +91,8 @@ export interface ChatSurface {
   sessionLink?(url: string, label: string): string | null;
   /// A shared file's bytes, as the bot may read them; throws where it may not (a Slack app without files:read).
   download?(file: InboundFile): Promise<Uint8Array>;
+  /// The files of an `api` answer.
+  answerFiles?(answer: Json): InboundFile[];
   /// A person's display name, or null if unknown.
   userName?(user: string): Promise<string | null>;
   /// Says in the thread what the agent working for it is doing ("" when it is done), best effort, never waited on.
