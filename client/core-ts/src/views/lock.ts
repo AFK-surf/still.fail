@@ -130,6 +130,13 @@ const readAt = new WeakMap<Inner, Map<string, string>>();
 /// What is folded from the entries, unchecked (the stations check them): who and what is in the lock.
 export type Folded = { members: Map<string, { email: string; role: string }>; devices: Map<string, J>; stations: Map<string, string>; disabled: boolean; added: Map<string, number> };
 
+/// A device of the lock as it stands at `at` (unix seconds): none once its approval ran out (a web page's, after
+/// WEB_DEVICE_SECS). The stations let it in nowhere then (station/src/cloud/lock.ts `admit`): it waits and is approved
+/// again face to face, as a new one is, rather than being told a station has not heard of it yet.
+export function live<D extends { exp?: unknown }>(d: D | undefined, at: number): D | undefined {
+  return d !== undefined && (typeof d.exp !== "number" || d.exp > at) ? d : undefined;
+}
+
 export function fold(entries: Entry[]): Folded {
   const f: Folded = { members: new Map(), devices: new Map(), stations: new Map(), disabled: false, added: new Map() };
   for (const e of entries) {
@@ -339,7 +346,7 @@ function refused(inner: Inner, ws: string, station: string, theirs: unknown): Co
   // In the lock as this device holds it: the station has not heard of it yet (from the cloud, or the device that
   // signed it), and is tried again shortly rather than once the lock moves on, which it may not again for long.
   // A few times, each a little later (each try asks the station anew); after that, as any station not reached.
-  if (base !== null && h?.head != null && !f.disabled && f.devices.has(base)) {
+  if (base !== null && h?.head != null && !f.disabled && live(f.devices.get(base), now(inner)) !== undefined) {
     const tries = p.behind.get(station) ?? 0;
     if (tries < BEHIND_TRIES) {
       p.behind.set(station, tries + 1);
@@ -478,7 +485,7 @@ export function lockView(inner: Inner, ws: string): J {
   const at = now(inner);
   const signer = signers.get(inner) ?? null;
   const people = new Map<string, J>(arr(get(v, "members")).map((m) => [m.sub, m]));
-  const mine = base ? f.devices.get(base) : undefined;
+  const mine = base ? live(f.devices.get(base), at) : undefined;
   const role = str(get(v, "role")) ?? "member";
   const manages = role === "owner" || role === "admin";
   const signs = mine !== undefined && typeof mine.sign_key === "string" && mine.sign_key === signer;

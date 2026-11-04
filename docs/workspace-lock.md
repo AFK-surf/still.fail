@@ -61,7 +61,7 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 
 ## 钉住
 
-- **开锁**（`lock.open`）：owner 的 app 生成签名钥匙，列出成员、最近 31 天领过凭证的设备（cloud 从这版起记 `devices`）、能回答 `GET /lock` 的 station，签 genesis，交给 cloud，再经 admin 连接直接交给每台 station。没钉住的 station 只接 owner（凭证角色）从 genesis 里自己那台设备送来的 genesis。
+- **开锁**（`lock.open`）：owner 的 app 生成签名钥匙，列出成员、最近 31 天领过凭证的设备（cloud 从这版起记 `devices`）、能回答 `GET /lock` 的 station，签 genesis，交给 cloud，再经 admin 连接直接交给每台 station。没钉住的 station 只接 owner（凭证角色）从自己的设备送来的、从 genesis 起的整条链，这台设备要在这条链折完后的锁里、角色是 owner（以前只认 genesis 里的设备：owner 后来批准的手机在「安全」里点「加入」，cloud 上已记下这台 station，station 却回英文报错不钉）。
 - **离线、旧版的 station** 不进 genesis：锁里的 station 能调别的 station 的 `task.*`，一台不认锁的 station 被 cloud 控制后就能借它进来。它们和受保护 station 之间的远程任务、分享会停，升级/上线后用 `lock.addStation` 加。
 - **新 station**：锁住的 workspace 生成的登记命令带锁的哈希（`install.sh … <token> <hash>`、`stillfail station enroll … --lock <hash>`）。station 登记后打印一个短码，cloud 送来含这个哈希的链时钉住；管理员核对短码签 `station` 条目后它才进名单。
 - **签名者都丢了**：在 station 本机运行 `stillfail lock reset`（锁文件改名留底），这台 station 回到信任 cloud。`stillfail lock status` 看现在钉的是什么（原生启动器 `stillfail-station` 把 `lock` 转给 Node，2026-10-29 之前它不认，只打印用法）。
@@ -116,7 +116,7 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 - 被安全模式拦下的 station（这台设备未获批 `lock_unconfirmed`，或 station 不接受这个 workspace 的成员 `lock_station`）不显示成离线：link 的 `cause` 是 `lock`，station 列表写「安全模式未放行」，station 页（`blocked`）和对话里写原因。
 - 受信任设备上，面对面批准的新设备自己弹出来（`lockPrompts` 的 `pairing`，见「新设备」）：在哪个 workspace 都弹，写明申请访问哪几个 workspace，只显示码和「拒绝」（桌面对话框，手机网页和安卓底部面板），关掉只是收起、码仍有效，点「拒绝」才作废；新设备那边输对码、或被拒绝，弹窗跟着关。被拒绝（或手动关掉）的只是那一次请求（设备加它当时的码）：同一台新设备再发请求，弹窗照样弹（以前要重启 app，2026-10-23）。
 - 手机网页（`web/src/mobile/Security.tsx`）和安卓（`screens/Security.kt`）同一套：设置里「安全」一行写现状（等你确认的件数标红），确认设备用底部面板。
-- 网页版设备 30 天到期，快到期（5 天内）在「成员和设备」里标出、可续期（`lock.renew`）。
+- 网页版设备 30 天到期，快到期（5 天内）在「成员和设备」里标出、可续期（`lock.renew`）。过期了的（station 一律拒绝）在 core 里按不在锁里算（`views/lock.ts` `live`）：显示等待页、可以面对面重新批准，station 拒绝时说「尚未获准」并给安全码，不再说「station 尚未收到批准，即将重试」（以前因为锁里还有它，既没有等待页，受信任设备也不肯再批准它）。
 - 「成员和设备」要让人认得出哪台是哪台（2026-10-27 用户：「根本看不出哪个是哪个」）：每台的名字是它最近一次向 cloud 领凭证时自己报的（cloud `devices` 的 `label`；桌面写电脑名、手机写系统设置里的名字，宿主经 `client.device` 的 `machine` 告诉 core；网页版只有浏览器和系统），没报过才用批准时记进锁里的；下面一行先说此设备或什么时候用过（`last_seen`：领凭证最多一天一次、在连 station 的路上，所以按天说；31 天里没领过的说超过一个月未使用），不再写客户端/网页版（图标和名字已经说了）。每人的设备按 app 分组（2026-10-27 用户：「应该先显示设备名而不是网页版啥的，不同版直接分组」）：组名是 app（still.fail 桌面版、still.fail 网页版、youdid.wtf Android…，用中文还是英文起的名都算同一个 app，按看的人的语言说），行名只写哪台机器（电脑名、手机名、浏览器 · 系统）；名字是 core 拼的「{品牌} {app} · {机器}」，`prefs.ts` 的 `deviceParts` 照同一套模板拆回去，拆不出 app 的（批准时起的名、没报过名的旧设备）归「其他」。只有一行地方说一台设备时（移除的确认、待批准的请求、开启时的清单）先说机器再说 app。含此设备的组在最前，其余组按组里最近一次使用排；组内此设备在最前，其余按最近使用排。owner、admin 看得到所有人的使用时间，成员只看自己的（cloud 只给成员他自己的设备）。名字和时间来自 cloud，只用来认设备，谁在锁里仍只看签过的条目。
 - 此设备是受信任设备时可以移除别的设备（`lock.removeDevice`，owner、admin 任何人的，成员自己的；先确认，说明移除后它要重新批准才能用）。窄排法下「续期」「移除」在名字和说明下面单独一行，不跟名字并排：名字是认设备用的，不能被按钮挤得截断。
 

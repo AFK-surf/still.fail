@@ -13,7 +13,7 @@ import { wall } from "../ops/fibers.ts";
 import { nowSecs } from "../ops/files.ts";
 import type { Accepted } from "../cloud/provider.ts";
 import { type Admitted, readOnly, revoked, verifyMemberOf } from "./credential.ts";
-import { type Entry, LockRefusal, admit, asEntry, genesis, lowerRole } from "../cloud/lock.ts";
+import { type Entry, LockRefusal, admit, asEntry, fold, lowerRole } from "../cloud/lock.ts";
 import type { Connection, Stream } from "./native.ts";
 import { answerScreen } from "./screens.ts";
 import type { ScreenHub } from "../screens/hub.ts";
@@ -205,9 +205,11 @@ export function lockRoute(cloud: Cloud, method: string, query: [string, string][
   try {
     if (cloud.locked(ws) === null) {
       if (viewer.role !== "owner") return [403, { error: "only the workspace's owner turns its lock on" }];
-      const first = genesis(entries[0]!);
-      admit(first, { sub: viewer.sub, endpoint: viewer.device, base: viewer.lockDevice?.base, proof: viewer.lockDevice?.proof }, nowSecs());
-      if (first.members.get(viewer.sub)?.role !== "owner") return [403, { error: "the lock is brought by its owner" }];
+      // Brought by one of its owner's devices as the chain brought names them (one approved after the genesis too:
+      // the owner takes a station in from the phone they approved since).
+      const brought = fold(entries as Entry[], nowSecs());
+      admit(brought, { sub: viewer.sub, endpoint: viewer.device, base: viewer.lockDevice?.base, proof: viewer.lockDevice?.proof }, nowSecs());
+      if (brought.members.get(viewer.sub)?.role !== "owner") return [403, { error: "the lock is brought by its owner" }];
     }
     const taken = cloud.takeLock(entries as Entry[], ws);
     return [200, { taken, head: lockHead(cloud, ws) }];

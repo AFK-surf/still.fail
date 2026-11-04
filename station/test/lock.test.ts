@@ -273,6 +273,25 @@ test("a lock its owner turned off is not pinned again: the chain up to before th
   assert.equal(cloud.locked()?.state?.genesis, entryHash(again.first));
 });
 
+test("a station is pinned by any of its owner's devices the lock names now, not only one the genesis named", () => {
+  // The owner turned the lock on from one device, approved a phone of theirs after, and takes a station in from it.
+  const w = workspace();
+  const cloud = stationData(w, w.stations[0]!.hex);
+  const phone = { sub: "alice", signer: ed(), base: ed() };
+  const added = signed(after(w.state, "device", { id: phone.base.hex, sub: "alice", kind: "app", label: "phone", sign_key: phone.signer.id }), w.alice.signer);
+  const station = signed(after(apply(w.state, added, 2000), "station", { key: ed().hex, name: "new" }), phone.signer);
+  const endpoint = ed().hex;
+  const from = (who: { base: Key }, role: string) => ({ sub: "alice", email: "", name: "", role, workspace: WS, device: endpoint, lockDevice: { base: who.base.hex, proof: who.base.sign(endpointBytes(WS, endpoint)) } });
+  assert.deepEqual(lockRoute(cloud, "POST", [], Buffer.from(JSON.stringify({ entries: [w.first, added, station] })), from(phone, "owner"))[0], 200);
+  assert.equal(cloud.locked()?.state?.seq, 2);
+  // One the lock does not name, or not its owner's, pins nothing.
+  const other = stationData(w, w.stations[1]!.hex);
+  assert.equal(lockRoute(other, "POST", [], Buffer.from(JSON.stringify({ entries: [w.first, added, station] })), from({ base: ed() }, "owner"))[0], 409);
+  const bobs = { sub: "bob", email: "", name: "", role: "admin", workspace: WS, device: endpoint, lockDevice: { base: w.bob.base.hex, proof: w.bob.base.sign(endpointBytes(WS, endpoint)) } };
+  assert.equal(lockRoute(other, "POST", [], Buffer.from(JSON.stringify({ entries: [w.first, added, station] })), bobs)[0], 403);
+  assert.equal(other.locked(), null);
+});
+
 test("the control plane's head: a locked station asks for what it lacks and gives back what the plane lost", () => {
   const w = workspace();
   const cloud = stationData(w, w.stations[0]!.hex);
