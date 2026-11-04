@@ -1440,7 +1440,7 @@ pub fn seg_distance(Double, Double, Double, Double, Double, Double) -> Double
 
 pub let send_flight : @signals.Signal[SendFlight?]
 
-pub fn send_flight_node(@view.View, String, (SendFlight) -> (@view.View, @view.View)?, quotes? : (SendFlight, String) -> @sf.QuoteCardNode?, files? : (SendFlight, String) -> FileLandingNode?) -> Unit
+pub fn send_flight_node(@view.View, String, (SendFlight) -> String?, (String) -> (@view.View, @view.View)?, quotes? : (String, String) -> @sf.QuoteCardNode?, files? : (String, String) -> FileLandingNode?) -> Unit
 
 pub fn send_list_rise(@view.View, String, (SendFlight) -> @view.View?) -> Double
 

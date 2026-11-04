@@ -60,6 +60,24 @@ fn message_files_node(
 }
 
 ///|
+/// How wide an image's or a video's box (image_box's) is in its message, `most` wide at most where that is said.
+fn media_wide(boxed : (Double, Double, Bool), most : Double?) -> Double {
+  match most { Some(m) => dmin(boxed.0, m); None => boxed.0 }
+}
+
+///|
+/// How tall file `a` is in its message where it is an image or a video (media_file_node's box, `most` wide at most):
+/// what its proportions make it, known before it is laid out. None for any other file.
+fn media_tall(a : Attachment, most : Double?) -> Double? {
+  let kind = file_kind(a.name)
+  guard kind == "image" || kind == "video" else { return None }
+  let least = if kind == "image" { image_least } else { video_least }
+  let side = if kind == "image" { image_min_side } else { 0.0 }
+  let boxed = image_box(a, least, min_side=side)
+  Some(boxed.1 * media_wide(boxed, most) / boxed.0)
+}
+
+///|
 /// An image or a video of a message (image_item's, video_item's) in `item`: its box as wide as image_box says, the
 /// column's at most; what it shows by message_media's picture of it; pressed, the preview (one that could not be had for
 /// want of its station asked again); where the preview flies from and back into (note_thumb_node), hidden while the
@@ -82,10 +100,7 @@ fn media_file_node(
   // (as wide as image_box says, its column's at most (`most` where that is said, else as its column is laid out:
   // flex's, nothing told back); `fills`: as wide as it is given, a row of the images its message places; as tall as its
   // proportions make it then. `w`, `h`: as wide and tall as it is said to be, what its picture is chosen by)
-  let w = fn() {
-    let bw = boxed().0
-    if fills { bw } else { match most() { Some(m) => dmin(bw, m); None => bw } }
-  }
+  let w = fn() { media_wide(boxed(), if fills { None } else { most() }) }
   let h = fn() {
     let (bw, bh, _) = boxed()
     bh * w() / bw
@@ -220,7 +235,10 @@ fn media_file_node(
     view,
     share,
     top_crop,
-    copy: fn(v, cw, ch, cfit, cradius) { media_fitted_node(v, picture, cw, ch, cfit, cradius) },
+    // (as big as what holds it: the flight lays that out; `cw` and `ch` only what its picture is chosen by)
+    copy: fn(v, cw, ch, cfit, cradius) {
+      media_fitted_node(v, picture, cw, ch, cfit, cradius, shares=fn() { (1.0, 1.0) })
+    },
   }
 }
 

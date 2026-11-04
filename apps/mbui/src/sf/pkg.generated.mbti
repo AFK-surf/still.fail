@@ -1796,7 +1796,7 @@ pub fn quota_said(@json.Json?) -> String
 
 pub fn quote_card(@ui.Ctx, String, String, String, role? : String, comment? : String, composer? : Bool, jump? : Bool, remove? : Bool, picture? : () -> Unit, comment_field? : () -> Unit, words_width? : Double, words_key? : String) -> QuoteCardDone
 
-pub fn quote_card_node(@view.View, () -> String, () -> String, role? : () -> String, comment? : () -> String, composer? : Bool, corner? : () -> Double, jump? : () -> Unit, remove? : () -> Unit, picture? : (@view.View) -> Unit, picture_shown? : () -> Bool, comment_field? : (@view.View) -> Unit, words_width? : () -> Double?, tips? : TipLayer) -> QuoteCardNode
+pub fn quote_card_node(@view.View, () -> String, () -> String, role? : () -> String, comment? : () -> String, composer? : Bool, corner? : () -> Double, jump? : () -> Unit, remove? : () -> Unit, picture? : (@view.View) -> Unit, picture_shown? : () -> Bool, picture_tall? : () -> Double?, comment_field? : (@view.View) -> Unit, words_toward? : () -> (Double, Double)?, tips? : TipLayer) -> QuoteCardNode
 
 pub fn quote_ground() -> Int64
 
@@ -3208,7 +3208,7 @@ pub(all) struct QuoteCardNode {
   root : @view.View
   card : @view.View
   words : @view.View
-  copy : (@view.View, () -> Double?) -> QuoteCardNode
+  copy : (@view.View, () -> (Double, Double)?) -> QuoteCardNode
   sent_shift : () -> (Double, Double)
 }
 

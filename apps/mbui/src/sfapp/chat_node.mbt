@@ -20,7 +20,7 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
     // (the list's way to its end, once it is made: what words sent take it to)
     let latest : Ref[() -> Unit] = Ref(fn() {  })
     // (where what was sent lands, by its row as the list has it, once the list is made)
-    let landing : Ref[(String) -> @sfpages.MineLanding?] = Ref(fn(_) { None })
+    let place_of : Ref[(String) -> String?] = Ref(fn(_) { None })
     // The editor's identity belongs to the page; only overlays read its published room.
     let room : @signals.Signal[@sfpages.ChatComposerNode?] = @signals.signal(None, same=fn(a, b) { a is None && b is None })
     let composer_room = fn() { room.get().map(fn(n) { (n.room)() }).unwrap_or(0.0) }
@@ -41,13 +41,13 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
         .min_height(Is(Some(0.0)))
         .drawn_off(By(fn() {
           (0.0, @sfbase.send_list_rise(l, r.station + ":" + r.session, fn(f) {
-            (landing.val)(f.key).map(fn(m) { m.anchor })
+            (place_of.val)(f.key).bind(@sfpages.mine_landing).map(fn(m) { m.anchor })
           }))
         }))
         |> ignore
         let list = @sfpages.chat_list_node(l, src, r, view, entries, fn() { list_top() }, fn() { 0.0 }, settings_core(src, w), foot_gap=list_foot(), active=fn() { app.nav.top_stay().0 == entry })
         latest.val = list.to_latest
-        landing.val = list.landing_of
+        place_of.val = list.place_of
       })
       let composer = body.box(fn(f) {
         @sfpages.composer_on_page(f, fn() { app.nav.top_stay().0 == entry }, fn(f) {
@@ -88,11 +88,14 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
       |> ignore
       @sfpages.chat_flight_layer_made(r, fl)
       // (words sent: from the composer to their row's bubble and words, as the list has that row)
-      @sfbase.send_flight_node(fl, r.station + ":" + r.session, fn(f) {
-        (landing.val)(f.key).bind(fn(l) { l.text })
-      }, quotes=fn(f, key) { (landing.val)(f.key).bind(fn(l) { l.quotes.get(key) }) }, files=fn(f, key) {
-        (landing.val)(f.key).bind(fn(l) { l.files.get(key) })
-      })
+      @sfbase.send_flight_node(
+        fl,
+        r.station + ":" + r.session,
+        fn(f) { (place_of.val)(f.key) },
+        fn(at) { @sfpages.mine_landing(at).bind(fn(l) { l.text }) },
+        quotes=fn(at, key) { @sfpages.mine_landing(at).bind(fn(l) { l.quotes.get(key) }) },
+        files=fn(at, key) { @sfpages.mine_landing(at).bind(fn(l) { l.files.get(key) }) },
+      )
     })
     |> ignore
     // (what is picked of a message: the finger's bar or the mouse's pill over it, under the bar: pick_node.mbt)

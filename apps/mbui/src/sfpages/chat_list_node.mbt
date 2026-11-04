@@ -955,10 +955,10 @@ pub fn chat_list_node(
     to_latest: to_end,
     follows,
     // (by its row as the list has it: its message's place, or its outbox entry's)
-    landing_of: fn(k) {
+    place_of: fn(k) {
       match row_of(k) {
-        Some((Said(m), _)) => mine_landing(message_place(m))
-        Some((Out(o), _)) => mine_landing("o:" + o.id)
+        Some((Said(m), _)) => Some(message_place(m))
+        Some((Out(o), _)) => Some("o:" + o.id)
         _ => None
       }
     },
@@ -971,12 +971,12 @@ let chat_column_most : Double = 760.0
 
 ///|
 /// A chat's list made once (chat_list_node): to its end, following it again (glided there, at once from further than
-/// chat_glide_rows rows off); whether it follows its end; where what was sent to its row `key` lands (by the key the
-/// list has it by: what was sent from here by the key it was sent as), followed.
+/// chat_glide_rows rows off); whether it follows its end; by what place what was sent to its row `key` lands (by the
+/// key the list has it by: what was sent from here by the key it was sent as; mine_landing), followed.
 pub(all) struct ChatListNode {
   to_latest : () -> Unit
   follows : @signals.Signal[Bool]
-  landing_of : (String) -> MineLanding?
+  place_of : (String) -> String?
 }
 
 ///|

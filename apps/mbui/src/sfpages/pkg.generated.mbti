@@ -750,7 +750,7 @@ pub(all) struct ChatComposerNode {
 pub(all) struct ChatListNode {
   to_latest : () -> Unit
   follows : @signals.Signal[Bool]
-  landing_of : (String) -> MineLanding?
+  place_of : (String) -> String?
 }
 
 type ComposerExtrasNode

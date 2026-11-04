@@ -113,7 +113,7 @@ fn chat_talk_node(
     @sfpages.composer_geometry(width(), radii())
   }
   let latest : Ref[() -> Unit] = Ref(fn() {  })
-  let landing : Ref[(String) -> @sfpages.MineLanding?] = Ref(fn(_) { None })
+  let place_of : Ref[(String) -> String?] = Ref(fn(_) { None })
   let room : @signals.Signal[@sfpages.ChatComposerNode?] = @signals.signal(None, same=fn(a, b) { a is None && b is None })
   let room_now = fn() { room.get().map(fn(n) { (n.room)() }).unwrap_or(0.0) }
   // (its view not read yet: its messages to come in their bones, the first where the list's first row will be, or why
@@ -130,7 +130,7 @@ fn chat_talk_node(
       l.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
       let list = @sfpages.chat_list_node(l, src, r, view, entries, fn() { bar_room() + list_head_gap }, fn() { 0.0 }, settings_core(src, w), foot_gap=list_foot_gap, active=fn() { app.nav.drawn_stay().0 == k })
       latest.val = list.to_latest
-      landing.val = list.landing_of
+      place_of.val = list.place_of
     })
     let composer = body.box(fn(f) {
       // (made while its page is the one seen in the stack's top's place (the top, or the one kept there while the top
@@ -165,9 +165,10 @@ fn chat_talk_node(
     @sfbase.send_flight_node(
       fl,
       r.station + ":" + r.session,
-      fn(f) { (landing.val)(f.key).bind(fn(l) { l.text }) },
-      quotes=fn(f, key) { (landing.val)(f.key).bind(fn(l) { l.quotes.get(key) }) },
-      files=fn(f, key) { (landing.val)(f.key).bind(fn(l) { l.files.get(key) }) },
+      fn(f) { (place_of.val)(f.key) },
+      fn(at) { @sfpages.mine_landing(at).bind(fn(l) { l.text }) },
+      quotes=fn(at, key) { @sfpages.mine_landing(at).bind(fn(l) { l.quotes.get(key) }) },
+      files=fn(at, key) { @sfpages.mine_landing(at).bind(fn(l) { l.files.get(key) }) },
     )
   })
   |> ignore

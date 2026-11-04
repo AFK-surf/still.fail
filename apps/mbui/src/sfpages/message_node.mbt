@@ -474,7 +474,7 @@ fn mine_row_node(col : @view.View, src : Source, here : () -> MessageHere, row :
   let unsay = fn() {
     match said.val {
       Some((at, l)) =>
-        match @signals.untracked(fn() { mine_landings.get(at) }) {
+        match mine_landings.get(at) {
           Some(now) if physical_equal(now, l) => mine_landings.remove(at)
           _ => ()
         }
@@ -885,6 +885,17 @@ fn quotes_node(
         jump?=if @signals.untracked(fn() { q().ts != "" && here().go is Some(_) }) { Some(jump) } else { None },
         // (shown while the message has the file it names: what was sent from here has it once the core takes it over)
         picture_shown=fn() { quote_file(q(), files()) is Some(_) },
+        // (what was sent from here: as tall as its picture is in the card, known before it is laid out, what a copy
+        // flying to it keeps room for)
+        picture_tall=fn() {
+          if mine {
+            quote_file(q(), files()).bind(fn(a) {
+              media_tall(a, Some(@sf.quote_picture_room(composer_words_width(width()) + 2.0 * bubble_side)))
+            })
+          } else {
+            None
+          }
+        },
         picture=fn(pv) {
           // The local file can acquire an upload key before its previous node is released. Both occupy this
           // quote's one picture slot; releasing the previous key must not erase the new one's landing.
@@ -940,13 +951,13 @@ pub(all) struct MineLanding {
 
 ///|
 /// The rows of what the viewer sent that show, by their place (message_place: the outbox entry's while it is one, then
-/// the message's): their landings, let go with them.
+/// the message's): their landings, let go with them. Said as their rows are made, in the list's layout, and read by
+/// the flight in its own after it in the same pass: not followed, nothing of it told.
 // kept across runs: each let go as its row is; message_reset empties it
-let mine_landings : @sf.LiveMap[String, MineLanding] = @sf.LiveMap::new()
+let mine_landings : Map[String, MineLanding] = {}
 
 ///|
-/// Where what was sent to place `place` lands, while its row shows (mine_landings), followed: what reads it told as
-/// one is said or let go.
+/// Where what was sent to place `place` lands, while its row shows (mine_landings), as the rows made so far have it.
 pub fn mine_landing(place : String) -> MineLanding? {
   mine_landings.get(place)
 }
