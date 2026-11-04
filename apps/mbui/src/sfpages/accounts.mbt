@@ -963,7 +963,7 @@ fn profile_models_panel(c : @ui.Ctx, core : Core, address : String, p : Json?) -
           }
         })
         |> ignore
-        @sf.tip(c, "profile-model-item/" + key + "/" + m + "/tip", item, m, repeats=name(m) == m)
+        @sf.tip(c, "profile-model-item/" + key + "/" + m + "/tip", item, m, side=Right, repeats=name(m) == m)
       }
     }
   })
@@ -1709,7 +1709,7 @@ let pf_model_rows : @ui.Style = @ui.css("w=Full gap=SPx")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pf_model_row : @ui.Style = @ui.css("row w=Full px=S2_5 gap=S2 align=ACenter")
+let pf_model_row : @ui.Style = @ui.css("row w=Cut px=S2_5 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

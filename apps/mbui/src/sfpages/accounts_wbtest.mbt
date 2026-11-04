@@ -377,6 +377,24 @@ test "a profile's models, a narrow page with a mouse: how many in a row; all of 
 }
 
 ///|
+test "a profile model's id appears beside the option the pointer is over" {
+  let t = setting_tester(Profile("ws1/st1", "cc"), 1280.0)
+  scrolled_to(t, 1280.0, "全部模型")
+  t.tap_text("全部模型")
+  t.run_for(@kit.presence_in_ms)
+  for (name, id) in [("Opus 5.5", "claude-opus-5-5"), ("Sonnet 5", "claude-sonnet-5")] {
+    let (x, y, w, h) = t.rect_of(name).unwrap()
+    t.move(x + w / 2.0, y + h / 2.0)
+    t.run_for(@sf.tip_delay_ms + @kit.presence_in_ms)
+    let tip = t.get(Tooltip, label=id).rect
+    let gap = tip.0 - (x + w)
+    assert_true(gap >= 0.0 && gap <= 24.0, msg="\{name}: tip is directly to its right, gap \{gap}")
+    let middle = tip.1 + tip.3 / 2.0 - (y + h / 2.0)
+    assert_true(middle >= -1.0 && middle <= 1.0, msg="\{name}: tip is on the same row, offset \{middle}")
+  }
+}
+
+///|
 /// The fixture's Claude subscription as android 0.1.6389 showed one (2026-10-31): named by its long address, four
 /// models on, its last 7 days' figures large.
 fn long_profile(s : Source) -> Source {
