@@ -349,10 +349,11 @@ export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: numb
     if (answer === null) { prepareUnread?.(t.id); return true; }
     return answer;
   };
-  const bound = store.listBindings();
   // Over the sessions shown and the chats of their own (and those chats' sessions), never every one ever archived.
   const live = store.liveSessions();
   const own = store.chatsOfTheirOwn();
+  if (live.length === 0 && own.length === 0) return null;
+  const bound = store.listBindings();
   // Each session's undelivered messages and last turn, read for those idle long enough alone, once each: read for every
   // session shown and every member of their chats at each look, the station's thread was held 17 s on a station short of
   // memory (2026-11-03), what was said meanwhile waiting.
@@ -371,12 +372,11 @@ export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: numb
   };
   const busy = (key: string) => working(key) || statOf(key)?.lastTurn?.declared === "block";
   // A chat someone pinned stays in the lists until put away by hand.
-  const pinned = store.pinnedSessions();
-  const kept = store.keptChats(null);
+  const { pinned, kept } = store.archiveMarks();
   // Where only what the archive review recommended goes (`autoArchiveReviewed`): none while the review is off.
   const recommended = (thread: number) => !autoArchiveReviewed || (automaticDecisions.completion.enabled && store.archiveSuggested(thread));
   for (const s of live) {
-    if (bound.has(s.key) || pinned.has(s.key)) continue;
+    if (bound.has(s.key) || pinned(s.key)) continue;
     // Idle long enough by its times alone, before anything else of it is read.
     const quiet = idle([s.lastActiveAt, s.shownAt]);
     const quietLong = idle([s.lastActiveAt, s.shownAt], slackArchiveMs);
@@ -387,14 +387,14 @@ export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: numb
     const lingering = slack && quietLong && !working(s.key);
     if (!done && !lingering) continue;
     if (!lingering && !threads.every((t) => recommended(t.thread.id))) continue;
-    if (threads.some((t) => kept.has(t.thread.id) || unread(t.thread))) continue;
+    if (threads.some((t) => kept(t.thread.id) || unread(t.thread))) continue;
     log.info("hub", "archiving an idle session", { session: s.key });
     archiveBy(hub, s.key, true, AUTO);
   }
   for (const t of own) {
     const said = store.lastMessage(t.id)?.createdAt ?? null;
-    if (kept.has(t.id) || !idle([t.createdAt, said, t.shownAt]) || unread(t) || !recommended(t.id)) continue;
-    if (store.threadSessions(t.id).some((m) => pinned.has(m.session) || busy(m.session))) continue;
+    if (kept(t.id) || !idle([t.createdAt, said, t.shownAt]) || unread(t) || !recommended(t.id)) continue;
+    if (store.threadSessions(t.id).some((m) => pinned(m.session) || busy(m.session))) continue;
     log.info("hub", "archiving an idle chat", { thread: t.id });
     store.setThreadHidden(t.id, true, AUTO);
   }

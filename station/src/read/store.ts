@@ -642,8 +642,8 @@ export function pins(s: Store, viewer: string, sessions: string[] | null = null)
 
 /// Chats kept instead of offered for archiving. Null selects every viewer.
 export function keptChats(s: Store, viewer: string | null, threads: number[] | null = null): Set<number> {
-  const rows = threads === null || viewer === null
-    ? all(s, "SELECT DISTINCT thread FROM kept_chats WHERE ?1 IS NULL OR viewer = ?1", viewer)
+  const rows = viewer === null ? all(s, "SELECT DISTINCT thread FROM kept_chats")
+    : threads === null ? all(s, "SELECT thread FROM kept_chats WHERE viewer = ?1", viewer)
     : [...new Set(threads)].flatMap((thread) => all(s, "SELECT thread FROM kept_chats WHERE viewer = ? AND thread = ?", viewer, thread));
   return new Set(rows.map((r) => r.thread));
 }
