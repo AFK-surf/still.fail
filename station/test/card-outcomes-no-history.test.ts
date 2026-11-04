@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { constants } from "node:sqlite";
 import { test } from "node:test";
 import { decisionCards, makeStore, usageChatsReady } from "../src/read/store.ts";
+import { usage } from "../src/read/usage.ts";
 import { addCardOutcomes } from "../src/store/schema.ts";
 import { Store, newMessage } from "../src/store/store.ts";
 import { MinuteReader } from "../src/usage/minute-reader.ts";
@@ -84,6 +85,11 @@ test("restoring old archived chats does not reconstruct their decision statistic
     for (const thread of threads) assert.equal(store.entriesAfter(thread, 0).length, 2);
     assert.equal((store.db.prepare("SELECT COUNT(*) AS n FROM card_outcomes").get() as { n: number }).n, 0);
     assert.throws(() => usageChatsReady(makeStore(store!.db, dir), null), /usage chat statistics/);
+    const answer = usage(makeStore(store.db, dir), "en", 0n, 100n, 0n, false, null, true);
+    assert.equal(answer.history, undefined);
+    assert.equal(answer.partialHistory.cardsIncomplete, true);
+    assert.equal(answer.partialHistory.tokensComplete, true);
+    assert.deepEqual(answer.partialHistory.places, { ember: 2 });
     store.insertMessage({ ...newMessage(threads[0]!, "3", "agent", "agent", "new pick"), card });
     store.insertMessage(newMessage(threads[0]!, "4", "person", "person", "yes"));
     assert.deepEqual((store.db.prepare("SELECT answered, said FROM card_outcomes").all() as { answered: number; said: number }[])

@@ -123,7 +123,7 @@ export function usageSummary(sources: Source[], now: number, offset: number, tit
     { label: t(incompleteTokens > 0 || missing > 0 ? "core-views.usage.summary.counted" : "core-views.usage.summary.lifetime"), value: count(total) },
     { label: t("core-views.usage.summary.archived"), value: count(archived) },
     { label: t("core-views.usage.summary.remote"), value: count(remote) },
-    { label: t("core-views.usage.summary.picked"), value: incompleteCards ? "—" : share(picked, cards) },
+    { label: t("core-views.usage.summary.picked"), value: incompleteCards || missing > 0 ? "—" : share(picked, cards) },
     { label: t("core-views.usage.summary.stations"), value: String(byStation.length) },
   ];
   // the year: 52 weeks of days, Sunday first, the last week today's (Codex's chart_start); a day after today none

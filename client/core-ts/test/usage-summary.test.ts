@@ -75,8 +75,9 @@ test("what each day and week says under the pointer: its date and tokens; a day 
 });
 
 test("a station from before tells no history: left out and said; none at all: no summary", () => {
-  const s = usageSummary([source("studio", history([day("2026-10-02", 1)])), source("old", undefined)], NOW, 480, "")!;
+  const s = usageSummary([source("studio", history([day("2026-10-02", 1)], { cards: 10, picked: 5 })), source("old", undefined)], NOW, 480, "")!;
   assert.ok(s.partial !== null);
+  assert.equal(s.figures[3].value, "—", "a missing station's decisions cannot be treated as zero");
   assert.equal(usageSummary([source("old", undefined)], NOW, 480, ""), null);
   const v = { ...usageView([source("studio", history([day("2026-10-02", 1)]))], 7, NOW, 480, { id: "a@x", email: "a@x" }, []), summary: s };
   assert.ok("ok" in conform("UsageView", v));
