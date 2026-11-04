@@ -506,74 +506,74 @@ const _M0MPB4Iter3newN6constrS142GUsRPC14json4JsonEE = 0;
 const _M0MPB4Iter3newN6constrS172GORPC14json4JsonE = 0;
 const _M0MPB4Iter3newN6constrS178GcE = 0;
 const _M0FP39stillfail5rules4form11hex__digits = "0123456789abcdef";
-const _M0FP39stillfail5rules4lock8role__ofN6constrS1859 = 3;
-const _M0FP39stillfail5rules4lock8role__ofN6constrS1860 = 2;
-const _M0FP39stillfail5rules4lock8role__ofN6constrS1861 = 1;
-const _M0FP39stillfail5rules4lock8role__ofN6constrS1862 = 0;
+const _M0FP39stillfail5rules4lock8role__ofN6constrS1874 = 3;
+const _M0FP39stillfail5rules4lock8role__ofN6constrS1875 = 2;
+const _M0FP39stillfail5rules4lock8role__ofN6constrS1876 = 1;
+const _M0FP39stillfail5rules4lock8role__ofN6constrS1877 = 0;
 const _M0FP39stillfail5rules5vault6scopes = ["once", "hour", "chat"];
 const _M0FP39stillfail5rules5vault5kinds = ["token", "ssh_key", "login", "file", "browser"];
 const _M0FP39stillfail5rules5vault5modes = ["proxy", "ssh", "env", "file", "browser"];
 let _M0FPB4seed__held;
 const _M0FPB4seed__drawn = () => (_M0FPB4seed__held === undefined ? (_M0FPB4seed__held = _M0FPB12random__seed()) : _M0FPB4seed__held);
-const _M0FP39stillfail5rules4lock7passkeyN6recordS1917 = new _M0TPC16string10StringView("p256:", 0, 5);
-const _M0FP39stillfail5rules4lock5applyN6constrS2162 = new _M0DTPC16option6OptionGdE4Some(1);
-const _M0FP39stillfail5rules4lock7genesisN6constrS2070 = "genesis";
-const _M0FP39stillfail5rules4lock7genesisN6constrS2071 = new _M0DTPC16option6OptionGdE4Some(0);
-const _M0FP39stillfail5rules4lock7genesisN6constrS2072 = new _M0DTPC16option6OptionGdE4Some(1);
-const _M0FP39stillfail5rules5vault8box__keyN6recordS2328 = new _M0TPC16string10StringView("x25519:", 0, 7);
-const _M0FP39stillfail5rules5vault10sig__shapeN6constrS2368 = "Ed25519";
-const _M0FP39stillfail5rules5vault10sig__shapeN6constrS2369 = "ES256";
-const _M0FP39stillfail5rules5vault8cert__okN6constrS2402 = "the box certificate's device is not an app device in the lock";
-const _M0FP39stillfail5rules5vault8cert__okN6constrS2403 = "the box certificate's device was put in the lock by someone else, not its person";
-const _M0FP39stillfail5rules5vault8cert__okN6constrS2404 = "a box certificate is signed by its own device's key";
-const _M0FP39stillfail5rules5vault8cert__okN6constrS2405 = "the box certificate's signature is invalid";
-const _M0FP39stillfail5rules5vault8cert__okN5shapeS2406 = "a box certificate is {v: 1, ws, device, box, at, sig} of this workspace";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS2430 = "a vault is {v: 1, ws, …} of this workspace";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS2431 = "a vault's id is v_<ULID>";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS2432 = "seq, epoch and at are whole numbers";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS2433 = "a vault has an owner and a name";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS2434 = "members are distinct subs";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS2435 = "the owner is a member";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS2436 = "keys is a list";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS2437 = "recovery is a seal";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS2438 = "lasts is once, hour or chat";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS2439 = "a deleted vault is sealed to no one";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS2440 = "a vault is signed";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS2441 = "a vault's first version is seq 0";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS2442 = "another vault";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS2443 = "a vault's owner does not change";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS2444 = "a deleted vault stays deleted";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS2445 = "the epoch does not go back";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS2446 = "removing a member or device takes a new epoch (a new vault key)";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS2447 = "a key is {cert, wrapped}";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS2448 = "one key per device";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS2449 = "a key is for a member's device";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS2450 = "a vault is signed by one of its owner's devices in the lock";
-const _M0FP39stillfail5rules5vault9vault__okN6constrS2451 = "the vault's signature is invalid";
+const _M0FP39stillfail5rules4lock7passkeyN6recordS1932 = new _M0TPC16string10StringView("p256:", 0, 5);
+const _M0FP39stillfail5rules4lock5applyN6constrS2177 = new _M0DTPC16option6OptionGdE4Some(1);
+const _M0FP39stillfail5rules4lock7genesisN6constrS2085 = "genesis";
+const _M0FP39stillfail5rules4lock7genesisN6constrS2086 = new _M0DTPC16option6OptionGdE4Some(0);
+const _M0FP39stillfail5rules4lock7genesisN6constrS2087 = new _M0DTPC16option6OptionGdE4Some(1);
+const _M0FP39stillfail5rules5vault8box__keyN6recordS2345 = new _M0TPC16string10StringView("x25519:", 0, 7);
+const _M0FP39stillfail5rules5vault10sig__shapeN6constrS2385 = "Ed25519";
+const _M0FP39stillfail5rules5vault10sig__shapeN6constrS2386 = "ES256";
+const _M0FP39stillfail5rules5vault8cert__okN6constrS2419 = "the box certificate's device is not an app device in the lock";
+const _M0FP39stillfail5rules5vault8cert__okN6constrS2420 = "the box certificate's device was put in the lock by someone else, not its person";
+const _M0FP39stillfail5rules5vault8cert__okN6constrS2421 = "a box certificate is signed by its own device's key";
+const _M0FP39stillfail5rules5vault8cert__okN6constrS2422 = "the box certificate's signature is invalid";
+const _M0FP39stillfail5rules5vault8cert__okN5shapeS2423 = "a box certificate is {v: 1, ws, device, box, at, sig} of this workspace";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS2447 = "a vault is {v: 1, ws, …} of this workspace";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS2448 = "a vault's id is v_<ULID>";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS2449 = "seq, epoch and at are whole numbers";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS2450 = "a vault has an owner and a name";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS2451 = "members are distinct subs";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS2452 = "the owner is a member";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS2453 = "keys is a list";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS2454 = "recovery is a seal";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS2455 = "lasts is once, hour or chat";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS2456 = "a deleted vault is sealed to no one";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS2457 = "a vault is signed";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS2458 = "a vault's first version is seq 0";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS2459 = "another vault";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS2460 = "a vault's owner does not change";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS2461 = "a deleted vault stays deleted";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS2462 = "the epoch does not go back";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS2463 = "removing a member or device takes a new epoch (a new vault key)";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS2464 = "a key is {cert, wrapped}";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS2465 = "one key per device";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS2466 = "a key is for a member's device";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS2467 = "a vault is signed by one of its owner's devices in the lock";
+const _M0FP39stillfail5rules5vault9vault__okN6constrS2468 = "the vault's signature is invalid";
 const _M0MPC16string10StringView4findN6constrS338 = 0;
-const _M0FP39stillfail5rules5vault4hostN6recordS2334 = new _M0TPC16string10StringView("*.", 0, 2);
-const _M0FP39stillfail5rules5vault4hostN6recordS2335 = new _M0TPC16string10StringView(".", 0, 1);
-const _M0FP39stillfail5rules5vault20browser__listing__okN6constrS2546 = "a sign-in (kind browser) is given into a chat's browser (modes: [\"browser\"]), and only a sign-in is";
-const _M0FP39stillfail5rules5vault20browser__listing__okN6recordS2547 = new _M0TPC16string10StringView("*.", 0, 2);
-const _M0FP39stillfail5rules5vault20browser__listing__okN6constrS2548 = "a sign-in names the sites it is for (github.com: its subdomains with it)";
-const _M0FP39stillfail5rules5vault11listing__okN6constrS2554 = "a listing is {name, kind, modes, hosts, env?}";
-const _M0FP39stillfail5rules5vault11listing__okN6constrS2555 = "modes are proxy, ssh, env, file or browser";
-const _M0FP39stillfail5rules5vault11listing__okN6constrS2556 = "hosts are domain names (*.example.com allowed)";
-const _M0FP39stillfail5rules5vault11listing__okN6constrS2557 = "env is a variable name";
-const _M0FP39stillfail5rules5vault11listing__okN6constrS2558 = "lasts is once, hour or chat";
-const _M0FP39stillfail5rules5vault8item__okN6constrS2602 = "an item is {v: 1, ws, vault, …} of this vault";
-const _M0FP39stillfail5rules5vault8item__okN6constrS2603 = "an item's id is i_<ULID>";
-const _M0FP39stillfail5rules5vault8item__okN6constrS2604 = "version, epoch and at are whole numbers";
-const _M0FP39stillfail5rules5vault8item__okN6constrS2605 = "deleted is true or absent";
-const _M0FP39stillfail5rules5vault8item__okN6constrS2606 = "ct is base64url";
-const _M0FP39stillfail5rules5vault8item__okN6constrS2607 = "a deleted item has no ciphertext or listing";
-const _M0FP39stillfail5rules5vault8item__okN6constrS2608 = "an item holds a ciphertext";
-const _M0FP39stillfail5rules5vault8item__okN6constrS2609 = "an item is signed";
-const _M0FP39stillfail5rules5vault8item__okN6constrS2610 = "an item's first version is 0";
-const _M0FP39stillfail5rules5vault8item__okN6constrS2611 = "another item";
-const _M0FP39stillfail5rules5vault8item__okN6constrS2612 = "the item was deleted";
-const _M0FP39stillfail5rules5vault8item__okN6constrS2613 = "an item is signed by a vault member's device in the lock";
-const _M0FP39stillfail5rules5vault8item__okN6constrS2614 = "the item's signature is invalid";
+const _M0FP39stillfail5rules5vault4hostN6recordS2351 = new _M0TPC16string10StringView("*.", 0, 2);
+const _M0FP39stillfail5rules5vault4hostN6recordS2352 = new _M0TPC16string10StringView(".", 0, 1);
+const _M0FP39stillfail5rules5vault20browser__listing__okN6constrS2563 = "a sign-in (kind browser) is given into a chat's browser (modes: [\"browser\"]), and only a sign-in is";
+const _M0FP39stillfail5rules5vault20browser__listing__okN6recordS2564 = new _M0TPC16string10StringView("*.", 0, 2);
+const _M0FP39stillfail5rules5vault20browser__listing__okN6constrS2565 = "a sign-in names the sites it is for (github.com: its subdomains with it)";
+const _M0FP39stillfail5rules5vault11listing__okN6constrS2571 = "a listing is {name, kind, modes, hosts, env?}";
+const _M0FP39stillfail5rules5vault11listing__okN6constrS2572 = "modes are proxy, ssh, env, file or browser";
+const _M0FP39stillfail5rules5vault11listing__okN6constrS2573 = "hosts are domain names (*.example.com allowed)";
+const _M0FP39stillfail5rules5vault11listing__okN6constrS2574 = "env is a variable name";
+const _M0FP39stillfail5rules5vault11listing__okN6constrS2575 = "lasts is once, hour or chat";
+const _M0FP39stillfail5rules5vault8item__okN6constrS2619 = "an item is {v: 1, ws, vault, …} of this vault";
+const _M0FP39stillfail5rules5vault8item__okN6constrS2620 = "an item's id is i_<ULID>";
+const _M0FP39stillfail5rules5vault8item__okN6constrS2621 = "version, epoch and at are whole numbers";
+const _M0FP39stillfail5rules5vault8item__okN6constrS2622 = "deleted is true or absent";
+const _M0FP39stillfail5rules5vault8item__okN6constrS2623 = "ct is base64url";
+const _M0FP39stillfail5rules5vault8item__okN6constrS2624 = "a deleted item has no ciphertext or listing";
+const _M0FP39stillfail5rules5vault8item__okN6constrS2625 = "an item holds a ciphertext";
+const _M0FP39stillfail5rules5vault8item__okN6constrS2626 = "an item is signed";
+const _M0FP39stillfail5rules5vault8item__okN6constrS2627 = "an item's first version is 0";
+const _M0FP39stillfail5rules5vault8item__okN6constrS2628 = "another item";
+const _M0FP39stillfail5rules5vault8item__okN6constrS2629 = "the item was deleted";
+const _M0FP39stillfail5rules5vault8item__okN6constrS2630 = "an item is signed by a vault member's device in the lock";
+const _M0FP39stillfail5rules5vault8item__okN6constrS2631 = "the item's signature is invalid";
 function _M0MPC16string10StringView12unsafe__view(self, start, end) {
   return new _M0TPC16string10StringView(self.str, self.start + start | 0, self.start + end | 0);
 }
@@ -3547,6 +3547,9 @@ function _M0FP39stillfail5rules4form11entry__text(e) {
     return new _M0DTPC16result6ResultGsRP39stillfail5rules4form7InvalidE3Err(new _M0DTPC15error5Error44stillfail_2frules_2fform_2eInvalid_2eInvalid("an entry is an object"));
   }
 }
+function _M0FP39stillfail5rules7history15item__epoch__ok(deleted, copy, epoch, vault) {
+  return BigInt.asIntN(64, epoch) > BigInt.asIntN(64, vault) ? false : !(!deleted && (!copy && BigInt.asUintN(64, epoch) !== BigInt.asUintN(64, vault)));
+}
 function _M0FP39stillfail5rules4role4rank(r) {
   switch (r) {
     case 0: {
@@ -3744,16 +3747,16 @@ function _M0FP39stillfail5rules4lock8role__of(v) {
         const _x$2 = _String._0;
         switch (_x$2) {
           case "owner": {
-            return _M0FP39stillfail5rules4lock8role__ofN6constrS1859;
+            return _M0FP39stillfail5rules4lock8role__ofN6constrS1874;
           }
           case "admin": {
-            return _M0FP39stillfail5rules4lock8role__ofN6constrS1860;
+            return _M0FP39stillfail5rules4lock8role__ofN6constrS1875;
           }
           case "member": {
-            return _M0FP39stillfail5rules4lock8role__ofN6constrS1861;
+            return _M0FP39stillfail5rules4lock8role__ofN6constrS1876;
           }
           case "viewer": {
-            return _M0FP39stillfail5rules4lock8role__ofN6constrS1862;
+            return _M0FP39stillfail5rules4lock8role__ofN6constrS1877;
           }
           default: {
             break _L;
@@ -4029,7 +4032,7 @@ function _M0FP39stillfail5rules4lock7passkey(v, c) {
             let _tmp$2;
             const _p$2 = "";
             if (!(_sub === _p$2)) {
-              _tmp$2 = _M0MPC16string6String11has__prefix(_key, _M0FP39stillfail5rules4lock7passkeyN6recordS1917) && (_key.length <= 200 && c.method_table.method_2(c.self, _key));
+              _tmp$2 = _M0MPC16string6String11has__prefix(_key, _M0FP39stillfail5rules4lock7passkeyN6recordS1932) && (_key.length <= 200 && c.method_table.method_2(c.self, _key));
             } else {
               _tmp$2 = false;
             }
@@ -4380,8 +4383,8 @@ function _M0FP39stillfail5rules4lock7genesis(e, c) {
   const v = e;
   const ws = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(v, "ws"));
   _L: {
-    if (_M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(v, "kind")), _M0FP39stillfail5rules4lock7genesisN6constrS2070)) {
-      if (_M0IPC16option6OptionPB2Eq5equalGdE(_M0FP39stillfail5rules4lock9safe__num(_M0FP39stillfail5rules4lock5field(v, "seq")), _M0FP39stillfail5rules4lock7genesisN6constrS2071)) {
+    if (_M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(v, "kind")), _M0FP39stillfail5rules4lock7genesisN6constrS2085)) {
+      if (_M0IPC16option6OptionPB2Eq5equalGdE(_M0FP39stillfail5rules4lock9safe__num(_M0FP39stillfail5rules4lock5field(v, "seq")), _M0FP39stillfail5rules4lock7genesisN6constrS2086)) {
         _L$2: {
           const _bind = _M0FP39stillfail5rules4lock5field(v, "prev");
           if (_bind === undefined) {
@@ -4390,7 +4393,7 @@ function _M0FP39stillfail5rules4lock7genesis(e, c) {
             const _Some = _bind;
             const _x = _Some;
             if (_x.$tag === 0) {
-              if (_M0IPC16option6OptionPB2Eq5equalGdE(_M0FP39stillfail5rules4lock9safe__num(_M0FP39stillfail5rules4lock5field(v, "v")), _M0FP39stillfail5rules4lock7genesisN6constrS2072)) {
+              if (_M0IPC16option6OptionPB2Eq5equalGdE(_M0FP39stillfail5rules4lock9safe__num(_M0FP39stillfail5rules4lock5field(v, "v")), _M0FP39stillfail5rules4lock7genesisN6constrS2087)) {
                 if (ws === undefined) {
                   break _L;
                 } else {
@@ -4719,7 +4722,7 @@ function _M0FP39stillfail5rules4lock10kind__text(v) {
     }
   }
 }
-function _M0FP39stillfail5rules4lock5applyN4needS2161(ok, why) {
+function _M0FP39stillfail5rules4lock5applyN4needS2176(ok, why) {
   if (!ok) {
     return new _M0DTPC16result6ResultGuRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused(why));
   } else {
@@ -4737,7 +4740,7 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
       return _bind;
     }
   }
-  if (_M0IP016_24default__implPB2Eq10not__equalGOdE(_M0FP39stillfail5rules4lock9safe__num(_M0FP39stillfail5rules4lock5field(v, "v")), _M0FP39stillfail5rules4lock5applyN6constrS2162) || _M0IP016_24default__implPB2Eq10not__equalGOsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(v, "ws")), prev.ws)) {
+  if (_M0IP016_24default__implPB2Eq10not__equalGOdE(_M0FP39stillfail5rules4lock9safe__num(_M0FP39stillfail5rules4lock5field(v, "v")), _M0FP39stillfail5rules4lock5applyN6constrS2177) || _M0IP016_24default__implPB2Eq10not__equalGOsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(v, "ws")), prev.ws)) {
     const _bind = _M0FP39stillfail5rules4lock6refuse("an entry of another lock");
     if (_bind.$tag === 1) {
       const _ok = _bind;
@@ -4746,18 +4749,20 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
       return _bind;
     }
   }
-  if (_M0IP016_24default__implPB2Eq10not__equalGOdE(_M0FP39stillfail5rules4lock9safe__num(_M0FP39stillfail5rules4lock5field(v, "seq")), new _M0DTPC16option6OptionGdE4Some(prev.seq + 1)) || _M0IP016_24default__implPB2Eq10not__equalGOsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(v, "prev")), prev.head)) {
-    const _bind = _M0FP39stillfail5rules4lock6refuse("the entry does not follow this lock's head");
-    if (_bind.$tag === 1) {
-      const _ok = _bind;
-      _ok._0;
-    } else {
-      return _bind;
-    }
+  const _bind = _M0FP39stillfail5rules4lock9safe__int(_M0FP39stillfail5rules4lock5field(v, "seq"));
+  let follows;
+  if (_bind.$tag === 1) {
+    const _Some = _bind;
+    const _seq = _Some._0;
+    const _p = false;
+    const _p$2 = $i64_trunc_f64(prev.seq);
+    const _p$3 = $i64_trunc_f64(_seq);
+    follows = _p ? BigInt.asIntN(64, _p$3) > BigInt.asIntN(64, _p$2) : BigInt.asUintN(64, _p$3) === BigInt.asUintN(64, BigInt.asUintN(64, _p$2 + 1n));
+  } else {
+    follows = false;
   }
-  const _bind = _M0FP39stillfail5rules4lock9safe__int(_M0FP39stillfail5rules4lock5field(v, "at"));
-  if (_bind.$tag === 0) {
-    const _bind$2 = _M0FP39stillfail5rules4lock6refuse("at is unix seconds");
+  if (!follows || _M0IP016_24default__implPB2Eq10not__equalGOsE(_M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(v, "prev")), prev.head)) {
+    const _bind$2 = _M0FP39stillfail5rules4lock6refuse("the entry does not follow this lock's head");
     if (_bind$2.$tag === 1) {
       const _ok = _bind$2;
       _ok._0;
@@ -4765,50 +4770,60 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
       return _bind$2;
     }
   }
+  const _bind$2 = _M0FP39stillfail5rules4lock9safe__int(_M0FP39stillfail5rules4lock5field(v, "at"));
+  if (_bind$2.$tag === 0) {
+    const _bind$3 = _M0FP39stillfail5rules4lock6refuse("at is unix seconds");
+    if (_bind$3.$tag === 1) {
+      const _ok = _bind$3;
+      _ok._0;
+    } else {
+      return _bind$3;
+    }
+  }
   const at = _M0MPC16option6Option6unwrapGdE(_M0FP39stillfail5rules4lock9safe__int(_M0FP39stillfail5rules4lock5field(v, "at")));
-  const _bind$2 = _M0FP39stillfail5rules4lock11entry__hash(e, c);
+  const _bind$3 = _M0FP39stillfail5rules4lock11entry__hash(e, c);
   let hash;
-  if (_bind$2.$tag === 1) {
-    const _ok = _bind$2;
+  if (_bind$3.$tag === 1) {
+    const _ok = _bind$3;
     hash = _ok._0;
   } else {
-    return _bind$2;
+    return _bind$3;
   }
-  const _bind$3 = _M0FP39stillfail5rules4lock6signer(prev, _M0FP39stillfail5rules4lock8sig__key(e), now);
-  if (_bind$3 === undefined) {
+  const _bind$4 = _M0FP39stillfail5rules4lock6signer(prev, _M0FP39stillfail5rules4lock8sig__key(e), now);
+  if (_bind$4 === undefined) {
     return new _M0DTPC16result6ResultGRP39stillfail5rules4lock9LockStateRP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefused("not signed by a device or passkey in the lock"));
   } else {
-    const _Some = _bind$3;
+    const _Some = _bind$4;
     const _by = _Some;
     if (!c.method_table.method_1(c.self, _M0FP39stillfail5rules4lock7sig__of(e), hash, prev.origins, prev.rp_id, _by.passkey)) {
-      const _bind$4 = _M0FP39stillfail5rules4lock6refuse("signature invalid");
-      if (_bind$4.$tag === 1) {
-        const _ok = _bind$4;
+      const _bind$5 = _M0FP39stillfail5rules4lock6refuse("signature invalid");
+      if (_bind$5.$tag === 1) {
+        const _ok = _bind$5;
         _ok._0;
       } else {
-        return _bind$4;
+        return _bind$5;
       }
     }
     const s = new _M0TP39stillfail5rules4lock9LockState(prev.ws, prev.seq + 1, hash, prev.genesis, prev.origins, prev.rp_id, prev.cloud_keys, _M0FP39stillfail5rules4lock4copyGsRP39stillfail5rules4lock6MemberE(prev.members), _M0FP39stillfail5rules4lock4copyGsRP39stillfail5rules4lock6DeviceE(prev.devices), _M0FP39stillfail5rules4lock4copyGsRPB5ArrayGsEE(prev.sign_keys), _M0FP39stillfail5rules4lock4copyGsRP39stillfail5rules4lock7PasskeyE(prev.passkeys), _M0FP39stillfail5rules4lock4copyGsuE(prev.signed), _M0FP39stillfail5rules4lock4copyGsRP39stillfail5rules4lock7StationE(prev.stations), _M0FP39stillfail5rules4lock4copyGsuE(prev.gateways), prev.disabled);
     let b;
     _L: {
       _L$2: {
-        const _bind$4 = _M0FP39stillfail5rules4lock5field(v, "body");
-        if (_bind$4 === undefined) {
+        const _bind$5 = _M0FP39stillfail5rules4lock5field(v, "body");
+        if (_bind$5 === undefined) {
           break _L$2;
         } else {
-          const _Some$2 = _bind$4;
+          const _Some$2 = _bind$5;
           const _x = _Some$2;
           if (_x.$tag === 0) {
             break _L$2;
           } else {
-            b = _bind$4;
+            b = _bind$5;
           }
         }
         break _L;
       }
-      const _bind$4 = [];
-      const _p = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind$4, 0, 0), undefined);
+      const _bind$5 = [];
+      const _p = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind$5, 0, 0), undefined);
       b = new _M0DTPC14json4Json6Object(_p);
     }
     const who = _M0FP39stillfail5rules4lock11role__named(_by.role);
@@ -4816,37 +4831,37 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
     let out = s;
     switch (kind) {
       case "member": {
-        const _bind$4 = _M0FP39stillfail5rules4lock6member(b);
+        const _bind$5 = _M0FP39stillfail5rules4lock6member(b);
         let m;
-        if (_bind$4.$tag === 1) {
-          const _ok = _bind$4;
+        if (_bind$5.$tag === 1) {
+          const _ok = _bind$5;
           m = _ok._0;
         } else {
-          return _bind$4;
+          return _bind$5;
         }
-        const _bind$5 = _M0MPB3Map3getGsRP39stillfail5rules4lock6MemberE(s.members, m.sub);
+        const _bind$6 = _M0MPB3Map3getGsRP39stillfail5rules4lock6MemberE(s.members, m.sub);
         let was_owner;
-        if (_bind$5 === undefined) {
+        if (_bind$6 === undefined) {
           was_owner = false;
         } else {
-          const _Some$2 = _bind$5;
+          const _Some$2 = _bind$6;
           const _w = _Some$2;
           was_owner = _w.role === "owner";
         }
-        const _bind$6 = _M0FP39stillfail5rules4lock5applyN4needS2161(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change9MemberSet(was_owner, m.role === "owner")), _M0FP39stillfail5rules4role4rank(who) >= 2 ? "only owners make or change owners" : "only owners and admins change members");
-        if (_bind$6.$tag === 1) {
-          const _ok = _bind$6;
-          _ok._0;
-        } else {
-          return _bind$6;
-        }
-        _M0MPB3Map3setGsRP39stillfail5rules4lock6MemberE(s.members, m.sub, m);
-        const _bind$7 = _M0FP39stillfail5rules4lock5applyN4needS2161(_M0FP39stillfail5rules4lock6owners(s) > 0, "a lock keeps an owner");
+        const _bind$7 = _M0FP39stillfail5rules4lock5applyN4needS2176(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change9MemberSet(was_owner, m.role === "owner")), _M0FP39stillfail5rules4role4rank(who) >= 2 ? "only owners make or change owners" : "only owners and admins change members");
         if (_bind$7.$tag === 1) {
           const _ok = _bind$7;
           _ok._0;
         } else {
           return _bind$7;
+        }
+        _M0MPB3Map3setGsRP39stillfail5rules4lock6MemberE(s.members, m.sub, m);
+        const _bind$8 = _M0FP39stillfail5rules4lock5applyN4needS2176(_M0FP39stillfail5rules4lock6owners(s) > 0, "a lock keeps an owner");
+        if (_bind$8.$tag === 1) {
+          const _ok = _bind$8;
+          _ok._0;
+        } else {
+          return _bind$8;
         }
         break;
       }
@@ -4868,28 +4883,28 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
                   const _p$2 = _p;
                   _tmp = _p$2;
                 }
-                const _bind$8 = _M0FP39stillfail5rules4lock5applyN4needS2161(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change12MemberRemove(_tmp.role === "owner")), "only owners and admins remove members, owners owners");
-                if (_bind$8.$tag === 1) {
-                  const _ok = _bind$8;
-                  _ok._0;
-                } else {
-                  return _bind$8;
-                }
-                _M0MPB3Map6removeGsRP39stillfail5rules4lock6MemberE(s.members, _sub);
-                const _bind$9 = _M0FP39stillfail5rules4lock5applyN4needS2161(_M0FP39stillfail5rules4lock6owners(s) > 0, "a lock keeps an owner");
+                const _bind$9 = _M0FP39stillfail5rules4lock5applyN4needS2176(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change12MemberRemove(_tmp.role === "owner")), "only owners and admins remove members, owners owners");
                 if (_bind$9.$tag === 1) {
                   const _ok = _bind$9;
                   _ok._0;
                 } else {
                   return _bind$9;
                 }
-                const _bind$10 = _M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB3Map4keysGsRPC14json4JsonE(s.devices));
-                const _bind$11 = _bind$10.length;
+                _M0MPB3Map6removeGsRP39stillfail5rules4lock6MemberE(s.members, _sub);
+                const _bind$10 = _M0FP39stillfail5rules4lock5applyN4needS2176(_M0FP39stillfail5rules4lock6owners(s) > 0, "a lock keeps an owner");
+                if (_bind$10.$tag === 1) {
+                  const _ok = _bind$10;
+                  _ok._0;
+                } else {
+                  return _bind$10;
+                }
+                const _bind$11 = _M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB3Map4keysGsRPC14json4JsonE(s.devices));
+                const _bind$12 = _bind$11.length;
                 let _tmp$2 = 0;
                 while (true) {
                   const _ = _tmp$2;
-                  if (_ < _bind$11) {
-                    const k = _bind$10[_];
+                  if (_ < _bind$12) {
+                    const k = _bind$11[_];
                     const _p$2 = _M0MPB3Map3getGsRP39stillfail5rules4lock6DeviceE(s.devices, k);
                     let _tmp$3;
                     if (_p$2 === undefined) {
@@ -4907,13 +4922,13 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
                     break;
                   }
                 }
-                const _bind$12 = _M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB3Map4keysGsRPC14json4JsonE(s.passkeys));
-                const _bind$13 = _bind$12.length;
+                const _bind$13 = _M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB3Map4keysGsRPC14json4JsonE(s.passkeys));
+                const _bind$14 = _bind$13.length;
                 let _tmp$3 = 0;
                 while (true) {
                   const _ = _tmp$3;
-                  if (_ < _bind$13) {
-                    const k = _bind$12[_];
+                  if (_ < _bind$14) {
+                    const k = _bind$13[_];
                     const _p$2 = _M0MPB3Map3getGsRP39stillfail5rules4lock7PasskeyE(s.passkeys, k);
                     let _tmp$4;
                     if (_p$2 === undefined) {
@@ -4943,37 +4958,37 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
         break;
       }
       case "device": {
-        const _bind$8 = _M0FP39stillfail5rules4lock6device(b, at, c);
+        const _bind$9 = _M0FP39stillfail5rules4lock6device(b, at, c);
         let d;
-        if (_bind$8.$tag === 1) {
-          const _ok = _bind$8;
-          d = _ok._0;
-        } else {
-          return _bind$8;
-        }
-        const _bind$9 = _M0FP39stillfail5rules4lock5applyN4needS2161(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change3Own(d.sub === _by.sub)), "members add only their own devices");
         if (_bind$9.$tag === 1) {
           const _ok = _bind$9;
-          _ok._0;
+          d = _ok._0;
         } else {
           return _bind$9;
         }
-        const _bind$10 = _M0FP39stillfail5rules4lock3add(s, new _M0TP39stillfail5rules4lock6Device(d.id, d.sub, d.kind, d.label, d.sign_key, d.endpoints, d.exp, _by.sub, _M0FP39stillfail5rules4lock7own__of(prev, d.sub, _by, _M0MPB3Map3getGsRP39stillfail5rules4lock6DeviceE(prev.devices, d.id), d.sign_key)));
+        const _bind$10 = _M0FP39stillfail5rules4lock5applyN4needS2176(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change3Own(d.sub === _by.sub)), "members add only their own devices");
         if (_bind$10.$tag === 1) {
           const _ok = _bind$10;
           _ok._0;
         } else {
           return _bind$10;
         }
+        const _bind$11 = _M0FP39stillfail5rules4lock3add(s, new _M0TP39stillfail5rules4lock6Device(d.id, d.sub, d.kind, d.label, d.sign_key, d.endpoints, d.exp, _by.sub, _M0FP39stillfail5rules4lock7own__of(prev, d.sub, _by, _M0MPB3Map3getGsRP39stillfail5rules4lock6DeviceE(prev.devices, d.id), d.sign_key)));
+        if (_bind$11.$tag === 1) {
+          const _ok = _bind$11;
+          _ok._0;
+        } else {
+          return _bind$11;
+        }
         break;
       }
       case "device.remove": {
-        const _bind$11 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "id"));
+        const _bind$12 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "id"));
         let d$2;
-        if (_bind$11 === undefined) {
+        if (_bind$12 === undefined) {
           d$2 = undefined;
         } else {
-          const _Some$2 = _bind$11;
+          const _Some$2 = _bind$12;
           const _id = _Some$2;
           d$2 = _M0MPB3Map3getGsRP39stillfail5rules4lock6DeviceE(s.devices, _id);
         }
@@ -4982,50 +4997,50 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
         } else {
           const _Some$2 = d$2;
           const _d = _Some$2;
-          const _bind$12 = _M0FP39stillfail5rules4lock5applyN4needS2161(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change3Own(_d.sub === _by.sub)), "members remove only their own devices");
-          if (_bind$12.$tag === 1) {
-            const _ok = _bind$12;
+          const _bind$13 = _M0FP39stillfail5rules4lock5applyN4needS2176(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change3Own(_d.sub === _by.sub)), "members remove only their own devices");
+          if (_bind$13.$tag === 1) {
+            const _ok = _bind$13;
             _ok._0;
           } else {
-            return _bind$12;
+            return _bind$13;
           }
           _M0MPB3Map6removeGsRP39stillfail5rules4lock6DeviceE(s.devices, _d.id);
         }
         break;
       }
       case "passkey": {
-        const _bind$12 = _M0FP39stillfail5rules4lock7passkey(b, c);
+        const _bind$13 = _M0FP39stillfail5rules4lock7passkey(b, c);
         let p;
-        if (_bind$12.$tag === 1) {
-          const _ok = _bind$12;
-          p = _ok._0;
-        } else {
-          return _bind$12;
-        }
-        const _bind$13 = _M0FP39stillfail5rules4lock5applyN4needS2161(_M0MPB3Map8containsGsRP39stillfail5rules4lock6MemberE(s.members, p.sub), "a passkey is a member's");
         if (_bind$13.$tag === 1) {
           const _ok = _bind$13;
-          _ok._0;
+          p = _ok._0;
         } else {
           return _bind$13;
         }
-        const _bind$14 = _M0FP39stillfail5rules4lock5applyN4needS2161(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change3Own(p.sub === _by.sub)), "members add only their own passkeys");
+        const _bind$14 = _M0FP39stillfail5rules4lock5applyN4needS2176(_M0MPB3Map8containsGsRP39stillfail5rules4lock6MemberE(s.members, p.sub), "a passkey is a member's");
         if (_bind$14.$tag === 1) {
           const _ok = _bind$14;
           _ok._0;
         } else {
           return _bind$14;
         }
+        const _bind$15 = _M0FP39stillfail5rules4lock5applyN4needS2176(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change3Own(p.sub === _by.sub)), "members add only their own passkeys");
+        if (_bind$15.$tag === 1) {
+          const _ok = _bind$15;
+          _ok._0;
+        } else {
+          return _bind$15;
+        }
         _M0FP39stillfail5rules4lock12add__passkey(s, new _M0TP39stillfail5rules4lock7Passkey(p.id, p.sub, p.key, p.label, _M0FP39stillfail5rules4lock7own__of(prev, p.sub, _by, undefined, undefined)));
         break;
       }
       case "passkey.remove": {
-        const _bind$15 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "key"));
+        const _bind$16 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "key"));
         let p$2;
-        if (_bind$15 === undefined) {
+        if (_bind$16 === undefined) {
           p$2 = undefined;
         } else {
-          const _Some$2 = _bind$15;
+          const _Some$2 = _bind$16;
           const _k = _Some$2;
           p$2 = _M0MPB3Map3getGsRP39stillfail5rules4lock7PasskeyE(s.passkeys, _k);
         }
@@ -5034,60 +5049,60 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
         } else {
           const _Some$2 = p$2;
           const _p = _Some$2;
-          const _bind$16 = _M0FP39stillfail5rules4lock5applyN4needS2161(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change3Own(_p.sub === _by.sub)), "members remove only their own passkeys");
-          if (_bind$16.$tag === 1) {
-            const _ok = _bind$16;
+          const _bind$17 = _M0FP39stillfail5rules4lock5applyN4needS2176(_M0FP39stillfail5rules4role3may(who, new _M0DTP39stillfail5rules4role6Change3Own(_p.sub === _by.sub)), "members remove only their own passkeys");
+          if (_bind$17.$tag === 1) {
+            const _ok = _bind$17;
             _ok._0;
           } else {
-            return _bind$16;
+            return _bind$17;
           }
           _M0MPB3Map6removeGsRP39stillfail5rules4lock7PasskeyE(s.passkeys, _p.key);
         }
         break;
       }
       case "station": {
-        const _bind$16 = _M0FP39stillfail5rules4lock5applyN4needS2161(_M0FP39stillfail5rules4role3may(who, _M0DTP39stillfail5rules4role6Change6Roster__), "only owners and admins add stations");
-        if (_bind$16.$tag === 1) {
-          const _ok = _bind$16;
-          _ok._0;
-        } else {
-          return _bind$16;
-        }
-        const _bind$17 = _M0FP39stillfail5rules4lock7station(b);
-        let st;
+        const _bind$17 = _M0FP39stillfail5rules4lock5applyN4needS2176(_M0FP39stillfail5rules4role3may(who, _M0DTP39stillfail5rules4role6Change6Roster__), "only owners and admins add stations");
         if (_bind$17.$tag === 1) {
           const _ok = _bind$17;
-          st = _ok._0;
+          _ok._0;
         } else {
           return _bind$17;
+        }
+        const _bind$18 = _M0FP39stillfail5rules4lock7station(b);
+        let st;
+        if (_bind$18.$tag === 1) {
+          const _ok = _bind$18;
+          st = _ok._0;
+        } else {
+          return _bind$18;
         }
         _M0MPB3Map3setGsRP39stillfail5rules4lock7StationE(s.stations, st.key, st);
         break;
       }
       case "station.remove": {
-        const _bind$18 = _M0FP39stillfail5rules4lock5applyN4needS2161(_M0FP39stillfail5rules4role3may(who, _M0DTP39stillfail5rules4role6Change6Roster__), "only owners and admins remove stations");
-        if (_bind$18.$tag === 1) {
-          const _ok = _bind$18;
+        const _bind$19 = _M0FP39stillfail5rules4lock5applyN4needS2176(_M0FP39stillfail5rules4role3may(who, _M0DTP39stillfail5rules4role6Change6Roster__), "only owners and admins remove stations");
+        if (_bind$19.$tag === 1) {
+          const _ok = _bind$19;
           _ok._0;
         } else {
-          return _bind$18;
+          return _bind$19;
         }
-        const _bind$19 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "key"));
-        if (_bind$19 === undefined) {
+        const _bind$20 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "key"));
+        if (_bind$20 === undefined) {
         } else {
-          const _Some$2 = _bind$19;
+          const _Some$2 = _bind$20;
           const _k = _Some$2;
           _M0MPB3Map6removeGsRP39stillfail5rules4lock7StationE(s.stations, _k);
         }
         break;
       }
       case "gateway": {
-        const _bind$20 = _M0FP39stillfail5rules4lock5applyN4needS2161(_M0FP39stillfail5rules4role3may(who, _M0DTP39stillfail5rules4role6Change6Roster__) && _M0FP39stillfail5rules4lock6is__id(_M0FP39stillfail5rules4lock5field(b, "key")), "only owners and admins add gateways, by iroh id");
-        if (_bind$20.$tag === 1) {
-          const _ok = _bind$20;
+        const _bind$21 = _M0FP39stillfail5rules4lock5applyN4needS2176(_M0FP39stillfail5rules4role3may(who, _M0DTP39stillfail5rules4role6Change6Roster__) && _M0FP39stillfail5rules4lock6is__id(_M0FP39stillfail5rules4lock5field(b, "key")), "only owners and admins add gateways, by iroh id");
+        if (_bind$21.$tag === 1) {
+          const _ok = _bind$21;
           _ok._0;
         } else {
-          return _bind$20;
+          return _bind$21;
         }
         const _tmp = s.gateways;
         const _p = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "key"));
@@ -5102,17 +5117,17 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
         break;
       }
       case "gateway.remove": {
-        const _bind$21 = _M0FP39stillfail5rules4lock5applyN4needS2161(_M0FP39stillfail5rules4role3may(who, _M0DTP39stillfail5rules4role6Change6Roster__), "only owners and admins remove gateways");
-        if (_bind$21.$tag === 1) {
-          const _ok = _bind$21;
+        const _bind$22 = _M0FP39stillfail5rules4lock5applyN4needS2176(_M0FP39stillfail5rules4role3may(who, _M0DTP39stillfail5rules4role6Change6Roster__), "only owners and admins remove gateways");
+        if (_bind$22.$tag === 1) {
+          const _ok = _bind$22;
           _ok._0;
         } else {
-          return _bind$21;
+          return _bind$22;
         }
-        const _bind$22 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "key"));
-        if (_bind$22 === undefined) {
+        const _bind$23 = _M0FP39stillfail5rules4lock8text__of(_M0FP39stillfail5rules4lock5field(b, "key"));
+        if (_bind$23 === undefined) {
         } else {
-          const _Some$2 = _bind$22;
+          const _Some$2 = _bind$23;
           const _k = _Some$2;
           _M0MPB3Map6removeGsuE(s.gateways, _k);
         }
@@ -5121,17 +5136,17 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
       case "cloud_keys": {
         let _tmp$3;
         if (_M0FP39stillfail5rules4role3may(who, _M0DTP39stillfail5rules4role6Change9CloudKeys__)) {
-          const _bind$23 = _M0FP39stillfail5rules4lock5field(b, "keys");
-          _tmp$3 = !(_bind$23 === undefined);
+          const _bind$24 = _M0FP39stillfail5rules4lock5field(b, "keys");
+          _tmp$3 = !(_bind$24 === undefined);
         } else {
           _tmp$3 = false;
         }
-        const _bind$23 = _M0FP39stillfail5rules4lock5applyN4needS2161(_tmp$3, "only owners change the control plane's keys");
-        if (_bind$23.$tag === 1) {
-          const _ok = _bind$23;
+        const _bind$24 = _M0FP39stillfail5rules4lock5applyN4needS2176(_tmp$3, "only owners change the control plane's keys");
+        if (_bind$24.$tag === 1) {
+          const _ok = _bind$24;
           _ok._0;
         } else {
-          return _bind$23;
+          return _bind$24;
         }
         const _p$2 = _M0FP39stillfail5rules4lock5field(b, "keys");
         let _tmp$4;
@@ -5145,23 +5160,23 @@ function _M0FP39stillfail5rules4lock5apply(prev, e, now, c) {
         break;
       }
       case "disable": {
-        const _bind$24 = _M0FP39stillfail5rules4lock5applyN4needS2161(_M0FP39stillfail5rules4role3may(who, _M0DTP39stillfail5rules4role6Change7Disable__), "only owners turn the lock off");
-        if (_bind$24.$tag === 1) {
-          const _ok = _bind$24;
-          _ok._0;
-        } else {
-          return _bind$24;
-        }
-        out = new _M0TP39stillfail5rules4lock9LockState(s.ws, s.seq, s.head, s.genesis, s.origins, s.rp_id, s.cloud_keys, s.members, s.devices, s.sign_keys, s.passkeys, s.signed, s.stations, s.gateways, true);
-        break;
-      }
-      default: {
-        const _bind$25 = _M0FP39stillfail5rules4lock6refuse(`unknown entry kind ${_M0FP39stillfail5rules4lock10kind__text(_M0FP39stillfail5rules4lock5field(v, "kind"))}`);
+        const _bind$25 = _M0FP39stillfail5rules4lock5applyN4needS2176(_M0FP39stillfail5rules4role3may(who, _M0DTP39stillfail5rules4role6Change7Disable__), "only owners turn the lock off");
         if (_bind$25.$tag === 1) {
           const _ok = _bind$25;
           _ok._0;
         } else {
           return _bind$25;
+        }
+        out = new _M0TP39stillfail5rules4lock9LockState(s.ws, s.seq, s.head, s.genesis, s.origins, s.rp_id, s.cloud_keys, s.members, s.devices, s.sign_keys, s.passkeys, s.signed, s.stations, s.gateways, true);
+        break;
+      }
+      default: {
+        const _bind$26 = _M0FP39stillfail5rules4lock6refuse(`unknown entry kind ${_M0FP39stillfail5rules4lock10kind__text(_M0FP39stillfail5rules4lock5field(v, "kind"))}`);
+        if (_bind$26.$tag === 1) {
+          const _ok = _bind$26;
+          _ok._0;
+        } else {
+          return _bind$26;
         }
       }
     }
@@ -5276,12 +5291,16 @@ function _M0FP39stillfail5rules4lock5admit(s, sub, endpoint, base, proof, now, c
       return new _M0DTPC16result6ResultGURP39stillfail5rules4lock6DevicesERP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefusal("this device is someone else's in the workspace's lock"));
     }
     const _bind$4 = _d.exp;
+    let _p$2;
     if (_bind$4.$tag === 1) {
-      const _Some$2 = _bind$4;
-      const _exp = _Some$2._0;
-      if (_exp <= now) {
-        return new _M0DTPC16result6ResultGURP39stillfail5rules4lock6DevicesERP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefusal("this device's confirmation ran out"));
-      }
+      _p$2 = true;
+    } else {
+      _p$2 = false;
+    }
+    const _p$3 = $i64_trunc_f64(_M0MPC16option6Option10unwrap__orGdE(_d.exp, 0));
+    const _p$4 = $i64_trunc_f64(now);
+    if (!(!_p$2 || BigInt.asIntN(64, _p$3) > BigInt.asIntN(64, _p$4))) {
+      return new _M0DTPC16result6ResultGURP39stillfail5rules4lock6DevicesERP39stillfail5rules4lock9LockErrorE3Err(new _M0DTPC15error5Error46stillfail_2frules_2flock_2eLockError_2eRefusal("this device's confirmation ran out"));
     }
     const _bind$5 = _M0MPB3Map3getGsRP39stillfail5rules4lock6MemberE(s.members, _d.sub);
     if (_bind$5 === undefined) {
@@ -5499,7 +5518,7 @@ function _M0FP39stillfail5rules5vault5hex32(s) {
   return s.length === 64 && _M0FP39stillfail5rules5vault10all__units(s, (c) => c >= 48 && c <= 57 || c >= 97 && c <= 102);
 }
 function _M0FP39stillfail5rules5vault8box__key(s) {
-  return _M0MPC16string6String11has__prefix(s, _M0FP39stillfail5rules5vault8box__keyN6recordS2328) && _M0FP39stillfail5rules5vault5hex32(_M0MPC16string10StringView9to__owned(_M0MPC16string6String12view_2einner(s, 7, undefined)));
+  return _M0MPC16string6String11has__prefix(s, _M0FP39stillfail5rules5vault8box__keyN6recordS2345) && _M0FP39stillfail5rules5vault5hex32(_M0MPC16string10StringView9to__owned(_M0MPC16string6String12view_2einner(s, 7, undefined)));
 }
 function _M0FP39stillfail5rules5vault8ulid__id(s, prefix) {
   if (!_M0MPC16string6String11has__prefix(s, new _M0TPC16string10StringView(prefix, 0, prefix.length)) || s.length !== (prefix.length + 26 | 0)) {
@@ -5507,12 +5526,12 @@ function _M0FP39stillfail5rules5vault8ulid__id(s, prefix) {
   }
   return _M0FP39stillfail5rules5vault10all__units(_M0MPC16string10StringView9to__owned(_M0MPC16string6String12view_2einner(s, prefix.length, undefined)), (c) => c >= 48 && c <= 57 || c >= 65 && c <= 90 && (c !== 73 && (c !== 76 && (c !== 79 && c !== 85))));
 }
-function _M0FP39stillfail5rules5vault4hostN2lcS2333(c) {
+function _M0FP39stillfail5rules5vault4hostN2lcS2350(c) {
   return c >= 97 && c <= 122 || c >= 48 && c <= 57;
 }
 function _M0FP39stillfail5rules5vault4host(s) {
-  const name = _M0MPC16string6String11has__prefix(s, _M0FP39stillfail5rules5vault4hostN6recordS2334) ? _M0MPC16string10StringView9to__owned(_M0MPC16string6String12view_2einner(s, 2, undefined)) : s;
-  const labels = _M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPC16string6String5split(name, _M0FP39stillfail5rules5vault4hostN6recordS2335));
+  const name = _M0MPC16string6String11has__prefix(s, _M0FP39stillfail5rules5vault4hostN6recordS2351) ? _M0MPC16string10StringView9to__owned(_M0MPC16string6String12view_2einner(s, 2, undefined)) : s;
+  const labels = _M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPC16string6String5split(name, _M0FP39stillfail5rules5vault4hostN6recordS2352));
   const _bind = labels.length;
   let _tmp = 0;
   while (true) {
@@ -5526,7 +5545,7 @@ function _M0FP39stillfail5rules5vault4host(s) {
       const first = 0 >>> 0 < l$2.length ? l$2.charCodeAt(0) : $oob();
       const _tmp$2 = l$2.length - 1 | 0;
       const last = _tmp$2 >>> 0 < l$2.length ? l$2.charCodeAt(_tmp$2) : $oob();
-      if (!_M0FP39stillfail5rules5vault4hostN2lcS2333(first) || (!_M0FP39stillfail5rules5vault4hostN2lcS2333(last) || !_M0FP39stillfail5rules5vault10all__units(l$2, (c) => _M0FP39stillfail5rules5vault4hostN2lcS2333(c) || c === 45))) {
+      if (!_M0FP39stillfail5rules5vault4hostN2lcS2350(first) || (!_M0FP39stillfail5rules5vault4hostN2lcS2350(last) || !_M0FP39stillfail5rules5vault10all__units(l$2, (c) => _M0FP39stillfail5rules5vault4hostN2lcS2350(c) || c === 45))) {
         return false;
       }
       _tmp = _ + 1 | 0;
@@ -5650,7 +5669,7 @@ function _M0FP39stillfail5rules5vault10sig__shape(s) {
       _tmp = false;
     } else {
       const _bind$2 = _M0FP39stillfail5rules5vault8text__of(_M0FP39stillfail5rules5vault5field(s, "sig"));
-      _tmp = _bind$2 === undefined ? false : _M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules5vault8text__of(_M0FP39stillfail5rules5vault5field(s, "alg")), _M0FP39stillfail5rules5vault10sig__shapeN6constrS2368) || _M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules5vault8text__of(_M0FP39stillfail5rules5vault5field(s, "alg")), _M0FP39stillfail5rules5vault10sig__shapeN6constrS2369);
+      _tmp = _bind$2 === undefined ? false : _M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules5vault8text__of(_M0FP39stillfail5rules5vault5field(s, "alg")), _M0FP39stillfail5rules5vault10sig__shapeN6constrS2385) || _M0IPC16option6OptionPB2Eq5equalGsE(_M0FP39stillfail5rules5vault8text__of(_M0FP39stillfail5rules5vault5field(s, "alg")), _M0FP39stillfail5rules5vault10sig__shapeN6constrS2386);
     }
     return _tmp;
   } else {
@@ -5774,11 +5793,11 @@ function _M0FP39stillfail5rules5vault8cert__ok(lock, cert, ever, c) {
     _tmp = _tmp$2;
   }
   if (_tmp) {
-    return _M0FP39stillfail5rules5vault8cert__okN5shapeS2406;
+    return _M0FP39stillfail5rules5vault8cert__okN5shapeS2423;
   }
   const device = _M0FP39stillfail5rules5vault10js__string(_M0FP39stillfail5rules5vault5field(cert, "device"));
   if (!_M0FP39stillfail5rules5vault5hex32(device) || (!_M0FP39stillfail5rules5vault8box__key(_M0FP39stillfail5rules5vault10js__string(_M0FP39stillfail5rules5vault5field(cert, "box"))) || (!_M0FP39stillfail5rules5vault3int(_M0FP39stillfail5rules5vault5field(cert, "at")) || !_M0FP39stillfail5rules5vault10sig__shape(_M0FP39stillfail5rules5vault5field(cert, "sig"))))) {
-    return _M0FP39stillfail5rules5vault8cert__okN5shapeS2406;
+    return _M0FP39stillfail5rules5vault8cert__okN5shapeS2423;
   }
   let d;
   _L: {
@@ -5810,7 +5829,7 @@ function _M0FP39stillfail5rules5vault8cert__ok(lock, cert, ever, c) {
       if (_d.kind === "app") {
         if (_M0MPB3Map8containsGsuE(lock.members, _d.sub)) {
           if (!_d.own && !ever) {
-            return _M0FP39stillfail5rules5vault8cert__okN6constrS2403;
+            return _M0FP39stillfail5rules5vault8cert__okN6constrS2420;
           }
           const _p = _M0FP39stillfail5rules5vault8text__of(_M0FP39stillfail5rules5vault5field(_M0FP39stillfail5rules5vault5field(cert, "sig"), "key"));
           let key;
@@ -5822,7 +5841,7 @@ function _M0FP39stillfail5rules5vault8cert__ok(lock, cert, ever, c) {
           }
           const had = _M0MPC16option6Option10unwrap__orGRPB5ArrayGsEE(_M0MPB3Map3getGsRPB5ArrayGsEE(lock.sign_keys, device), []);
           if (_M0IP016_24default__implPB2Eq10not__equalGOsE(_d.sign_key, key) && !(ever && _M0MPC15array5Array8containsGsE(had, key))) {
-            return _M0FP39stillfail5rules5vault8cert__okN6constrS2404;
+            return _M0FP39stillfail5rules5vault8cert__okN6constrS2421;
           }
           let _tmp$2;
           if (cert === undefined) {
@@ -5832,7 +5851,7 @@ function _M0FP39stillfail5rules5vault8cert__ok(lock, cert, ever, c) {
             _tmp$2 = _p$2;
           }
           if (!_M0FP39stillfail5rules5vault10signed__ok(_tmp$2, "stillfail-vault-box/1", c)) {
-            return _M0FP39stillfail5rules5vault8cert__okN6constrS2405;
+            return _M0FP39stillfail5rules5vault8cert__okN6constrS2422;
           }
           return undefined;
         } else {
@@ -5843,7 +5862,7 @@ function _M0FP39stillfail5rules5vault8cert__ok(lock, cert, ever, c) {
       }
     }
   }
-  return _M0FP39stillfail5rules5vault8cert__okN6constrS2402;
+  return _M0FP39stillfail5rules5vault8cert__okN6constrS2419;
 }
 function _M0FP39stillfail5rules5vault5whole(n) {
   let _try_err;
@@ -5895,7 +5914,7 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
     _tmp = _tmp$2;
   }
   if (_tmp) {
-    return _M0FP39stillfail5rules5vault9vault__okN6constrS2430;
+    return _M0FP39stillfail5rules5vault9vault__okN6constrS2447;
   }
   _L: {
     _L$2: {
@@ -5910,7 +5929,7 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
           const _id = _String._0;
           if (_M0FP39stillfail5rules5vault8ulid__id(_id, "v_")) {
             if (!_M0FP39stillfail5rules5vault3int(_M0FP39stillfail5rules5vault5field(v, "seq")) || (!_M0FP39stillfail5rules5vault3int(_M0FP39stillfail5rules5vault5field(v, "epoch")) || !_M0FP39stillfail5rules5vault3int(_M0FP39stillfail5rules5vault5field(v, "at")))) {
-              return _M0FP39stillfail5rules5vault9vault__okN6constrS2432;
+              return _M0FP39stillfail5rules5vault9vault__okN6constrS2449;
             }
             _L$3: {
               _L$4: {
@@ -6015,10 +6034,10 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                               }
                               break _L$5;
                             }
-                            return _M0FP39stillfail5rules5vault9vault__okN6constrS2434;
+                            return _M0FP39stillfail5rules5vault9vault__okN6constrS2451;
                           }
                           if (!_M0MPC15array5Array8containsGsE(members, _owner)) {
-                            return _M0FP39stillfail5rules5vault9vault__okN6constrS2435;
+                            return _M0FP39stillfail5rules5vault9vault__okN6constrS2452;
                           }
                           let keys;
                           _L$6: {
@@ -6043,13 +6062,13 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                               }
                               break _L$6;
                             }
-                            return _M0FP39stillfail5rules5vault9vault__okN6constrS2436;
+                            return _M0FP39stillfail5rules5vault9vault__okN6constrS2453;
                           }
                           const _bind$3 = _M0FP39stillfail5rules5vault5field(v, "recovery");
                           if (_bind$3 === undefined) {
                           } else {
                             if (!_M0FP39stillfail5rules5vault3b64(_M0FP39stillfail5rules5vault5field(v, "recovery"), 200)) {
-                              return _M0FP39stillfail5rules5vault9vault__okN6constrS2437;
+                              return _M0FP39stillfail5rules5vault9vault__okN6constrS2454;
                             }
                           }
                           const _bind$4 = _M0FP39stillfail5rules5vault5field(v, "lasts");
@@ -6066,7 +6085,7 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                               _tmp$2 = false;
                             }
                             if (!_tmp$2) {
-                              return _M0FP39stillfail5rules5vault9vault__okN6constrS2438;
+                              return _M0FP39stillfail5rules5vault9vault__okN6constrS2455;
                             }
                           }
                           const _bind$5 = _M0FP39stillfail5rules5vault5field(v, "deleted");
@@ -6102,86 +6121,85 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                                 }
                                 break _L$7;
                               }
-                              return _M0FP39stillfail5rules5vault9vault__okN6constrS2439;
+                              return _M0FP39stillfail5rules5vault9vault__okN6constrS2456;
                             }
                           }
                           if (!_M0FP39stillfail5rules5vault10sig__shape(_M0FP39stillfail5rules5vault5field(v, "sig"))) {
-                            return _M0FP39stillfail5rules5vault9vault__okN6constrS2440;
+                            return _M0FP39stillfail5rules5vault9vault__okN6constrS2457;
                           }
                           const seq = _M0FP39stillfail5rules5vault3num(_M0FP39stillfail5rules5vault5field(v, "seq"));
                           const epoch = _M0FP39stillfail5rules5vault3num(_M0FP39stillfail5rules5vault5field(v, "epoch"));
                           if (prev === undefined) {
                             if (seq !== 0 && !copy) {
-                              return _M0FP39stillfail5rules5vault9vault__okN6constrS2441;
+                              return _M0FP39stillfail5rules5vault9vault__okN6constrS2458;
                             }
                           } else {
                             const _Some$3 = prev;
                             if (_M0IP016_24default__implPB2Eq10not__equalGOsE(_M0FP39stillfail5rules5vault8text__of(_M0FP39stillfail5rules5vault5field(_Some$3, "id")), _id)) {
-                              return _M0FP39stillfail5rules5vault9vault__okN6constrS2442;
+                              return _M0FP39stillfail5rules5vault9vault__okN6constrS2459;
                             }
                             const held = _M0FP39stillfail5rules5vault3num(_M0FP39stillfail5rules5vault5field(_Some$3, "seq"));
-                            if (copy && seq <= held) {
-                              return `a copy is later than seq ${_M0FP39stillfail5rules5vault5whole(held)}`;
-                            }
-                            if (!copy && seq !== held + 1) {
-                              return `seq ${_M0FP39stillfail5rules5vault5whole(held + 1)} follows ${_M0FP39stillfail5rules5vault5whole(held)}`;
+                            const _p$2 = $i64_trunc_f64(held);
+                            const _p$3 = $i64_trunc_f64(seq);
+                            if (!(copy ? BigInt.asIntN(64, _p$3) > BigInt.asIntN(64, _p$2) : BigInt.asUintN(64, _p$3) === BigInt.asUintN(64, BigInt.asUintN(64, _p$2 + 1n)))) {
+                              return copy ? `a copy is later than seq ${_M0FP39stillfail5rules5vault5whole(held)}` : `seq ${_M0FP39stillfail5rules5vault5whole(held + 1)} follows ${_M0FP39stillfail5rules5vault5whole(held)}`;
                             }
                             if (_M0IP016_24default__implPB2Eq10not__equalGOsE(_M0FP39stillfail5rules5vault8text__of(_M0FP39stillfail5rules5vault5field(_Some$3, "owner")), _owner)) {
-                              return _M0FP39stillfail5rules5vault9vault__okN6constrS2443;
+                              return _M0FP39stillfail5rules5vault9vault__okN6constrS2460;
                             }
-                            _L$7: {
-                              _L$8: {
-                                const _bind$7 = _M0FP39stillfail5rules5vault5field(_Some$3, "deleted");
-                                if (_bind$7 === undefined) {
-                                  break _L$8;
-                                } else {
-                                  const _Some$4 = _bind$7;
-                                  const _x$3 = _Some$4;
-                                  if (_x$3.$tag === 1) {
-                                    if (!deleted) {
-                                      return _M0FP39stillfail5rules5vault9vault__okN6constrS2444;
-                                    }
-                                  } else {
-                                    break _L$8;
-                                  }
-                                }
-                                break _L$7;
+                            const _bind$7 = _M0FP39stillfail5rules5vault5field(_Some$3, "deleted");
+                            let _p$4;
+                            if (_bind$7 === undefined) {
+                              _p$4 = false;
+                            } else {
+                              const _Some$4 = _bind$7;
+                              const _x$3 = _Some$4;
+                              if (_x$3.$tag === 1) {
+                                _p$4 = true;
+                              } else {
+                                _p$4 = false;
                               }
                             }
-                            if (epoch < _M0FP39stillfail5rules5vault3num(_M0FP39stillfail5rules5vault5field(_Some$3, "epoch"))) {
-                              return _M0FP39stillfail5rules5vault9vault__okN6constrS2445;
+                            if (!(!_p$4 || deleted)) {
+                              return _M0FP39stillfail5rules5vault9vault__okN6constrS2461;
                             }
-                            const _p$2 = new Array(keys.length);
-                            const _p$3 = keys.length;
+                            const held_epoch = $i64_trunc_f64(_M0FP39stillfail5rules5vault3num(_M0FP39stillfail5rules5vault5field(_Some$3, "epoch")));
+                            const _p$5 = false;
+                            const _p$6 = $i64_trunc_f64(epoch);
+                            if (!(BigInt.asIntN(64, _p$6) < BigInt.asIntN(64, held_epoch) ? false : !(_p$5 && BigInt.asUintN(64, _p$6) === BigInt.asUintN(64, held_epoch)))) {
+                              return _M0FP39stillfail5rules5vault9vault__okN6constrS2462;
+                            }
+                            const _p$7 = new Array(keys.length);
+                            const _p$8 = keys.length;
                             let _tmp$2 = 0;
                             while (true) {
-                              const _p$4 = _tmp$2;
-                              if (_p$4 < _p$3) {
-                                const _p$5 = keys[_p$4];
-                                _p$2[_p$4] = _M0FP39stillfail5rules5vault5field(_M0FP39stillfail5rules5vault5field(_p$5, "cert"), "device");
-                                _tmp$2 = _p$4 + 1 | 0;
+                              const _p$9 = _tmp$2;
+                              if (_p$9 < _p$8) {
+                                const _p$10 = keys[_p$9];
+                                _p$7[_p$9] = _M0FP39stillfail5rules5vault5field(_M0FP39stillfail5rules5vault5field(_p$10, "cert"), "device");
+                                _tmp$2 = _p$9 + 1 | 0;
                                 continue;
                               } else {
                                 break;
                               }
                             }
-                            const devices = _p$2;
+                            const devices = _p$7;
                             let gone;
-                            const _p$4 = _M0MPC15array5Array4iterGsE(_M0FP39stillfail5rules5vault7strings(_M0FP39stillfail5rules5vault5field(_Some$3, "members")));
+                            const _p$9 = _M0MPC15array5Array4iterGsE(_M0FP39stillfail5rules5vault7strings(_M0FP39stillfail5rules5vault5field(_Some$3, "members")));
                             let _tmp$3;
                             while (true) {
-                              const _p$5 = _M0MPB4Iter4nextGUsRPB5ArrayGsEEE(_p$4);
-                              if (_p$5 === undefined) {
+                              const _p$10 = _M0MPB4Iter4nextGUsRPB5ArrayGsEEE(_p$9);
+                              if (_p$10 === undefined) {
                                 _tmp$3 = false;
                                 break;
                               } else {
-                                const _p$6 = _p$5;
-                                const _p$7 = _p$6;
+                                const _p$11 = _p$10;
+                                const _p$12 = _p$11;
                                 let _tmp$4;
-                                if (_p$7.$tag === 4) {
-                                  const _p$8 = _p$7;
-                                  const _p$9 = _p$8._0;
-                                  _tmp$4 = _M0MPC15array5Array8containsGsE(members, _p$9);
+                                if (_p$12.$tag === 4) {
+                                  const _p$13 = _p$12;
+                                  const _p$14 = _p$13._0;
+                                  _tmp$4 = _M0MPC15array5Array8containsGsE(members, _p$14);
                                 } else {
                                   _tmp$4 = false;
                                 }
@@ -6195,25 +6213,25 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                             if (_tmp$3) {
                               gone = true;
                             } else {
-                              const _p$5 = _M0MPC15array5Array4iterGsE(_M0FP39stillfail5rules5vault7strings(_M0FP39stillfail5rules5vault5field(_Some$3, "keys")));
+                              const _p$10 = _M0MPC15array5Array4iterGsE(_M0FP39stillfail5rules5vault7strings(_M0FP39stillfail5rules5vault5field(_Some$3, "keys")));
                               let _tmp$4;
                               while (true) {
-                                const _p$6 = _M0MPB4Iter4nextGUsRPB5ArrayGsEEE(_p$5);
-                                if (_p$6 === undefined) {
+                                const _p$11 = _M0MPB4Iter4nextGUsRPB5ArrayGsEEE(_p$10);
+                                if (_p$11 === undefined) {
                                   _tmp$4 = false;
                                   break;
                                 } else {
-                                  const _p$7 = _p$6;
-                                  const _p$8 = _p$7;
-                                  const _p$9 = _M0FP39stillfail5rules5vault5field(_M0FP39stillfail5rules5vault5field(_p$8, "cert"), "device");
-                                  const _p$10 = _M0MPC15array5Array4iterGORPC14json4JsonE(devices);
+                                  const _p$12 = _p$11;
+                                  const _p$13 = _p$12;
+                                  const _p$14 = _M0FP39stillfail5rules5vault5field(_M0FP39stillfail5rules5vault5field(_p$13, "cert"), "device");
+                                  const _p$15 = _M0MPC15array5Array4iterGORPC14json4JsonE(devices);
                                   let _tmp$5;
                                   while (true) {
-                                    const _p$11 = _M0MPB4Iter4nextGORPC14json4JsonE(_p$10);
-                                    if (_p$11.$tag === 1) {
-                                      const _p$12 = _p$11;
-                                      const _p$13 = _p$12._0;
-                                      if (_M0IPC16option6OptionPB2Eq5equalGRPC14json4JsonE(_p$13, _p$9)) {
+                                    const _p$16 = _M0MPB4Iter4nextGORPC14json4JsonE(_p$15);
+                                    if (_p$16.$tag === 1) {
+                                      const _p$17 = _p$16;
+                                      const _p$18 = _p$17._0;
+                                      if (_M0IPC16option6OptionPB2Eq5equalGRPC14json4JsonE(_p$18, _p$14)) {
                                         _tmp$5 = true;
                                         break;
                                       }
@@ -6232,8 +6250,9 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                               }
                               gone = _tmp$4;
                             }
-                            if (gone && epoch === _M0FP39stillfail5rules5vault3num(_M0FP39stillfail5rules5vault5field(_Some$3, "epoch"))) {
-                              return _M0FP39stillfail5rules5vault9vault__okN6constrS2446;
+                            const _p$10 = $i64_trunc_f64(epoch);
+                            if (!(BigInt.asIntN(64, _p$10) < BigInt.asIntN(64, held_epoch) ? false : !(gone && BigInt.asUintN(64, _p$10) === BigInt.asUintN(64, held_epoch)))) {
+                              return _M0FP39stillfail5rules5vault9vault__okN6constrS2463;
                             }
                           }
                           const _bind$7 = members.length;
@@ -6261,7 +6280,7 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                               const k = keys[_];
                               const k$2 = k;
                               if (!_M0FP39stillfail5rules5vault10is__object(k$2) || !_M0FP39stillfail5rules5vault3b64(_M0FP39stillfail5rules5vault5field(k$2, "wrapped"), 200)) {
-                                return _M0FP39stillfail5rules5vault9vault__okN6constrS2447;
+                                return _M0FP39stillfail5rules5vault9vault__okN6constrS2464;
                               }
                               const _bind$10 = _M0FP39stillfail5rules5vault8cert__ok(lock, _M0FP39stillfail5rules5vault5field(k$2, "cert"), true, c);
                               if (_bind$10 === undefined) {
@@ -6279,7 +6298,7 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                                 device = _p$3;
                               }
                               if (_M0MPB3Map8containsGsuE(seen, device)) {
-                                return _M0FP39stillfail5rules5vault9vault__okN6constrS2448;
+                                return _M0FP39stillfail5rules5vault9vault__okN6constrS2465;
                               }
                               _M0MPB3Map3setGsuE(seen, device, undefined);
                               const _p$3 = _M0MPB3Map3getGsRP39stillfail5rules5vault6DeviceE(lock.devices, device);
@@ -6291,7 +6310,7 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                                 _tmp$4 = _p$4;
                               }
                               if (!_M0MPC15array5Array8containsGsE(members, _tmp$4.sub)) {
-                                return _M0FP39stillfail5rules5vault9vault__okN6constrS2449;
+                                return _M0FP39stillfail5rules5vault9vault__okN6constrS2466;
                               }
                               _tmp$3 = _ + 1 | 0;
                               continue;
@@ -6317,7 +6336,7 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                               const _sub = _x$3._0;
                               if (_sub === _owner) {
                                 if (!_M0FP39stillfail5rules5vault10signed__ok(next, "stillfail-vault/1", c)) {
-                                  return _M0FP39stillfail5rules5vault9vault__okN6constrS2451;
+                                  return _M0FP39stillfail5rules5vault9vault__okN6constrS2468;
                                 }
                                 return undefined;
                               } else {
@@ -6325,7 +6344,7 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
                               }
                             }
                           }
-                          return _M0FP39stillfail5rules5vault9vault__okN6constrS2450;
+                          return _M0FP39stillfail5rules5vault9vault__okN6constrS2467;
                         } else {
                           break _L$3;
                         }
@@ -6342,7 +6361,7 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
               }
               break _L$3;
             }
-            return _M0FP39stillfail5rules5vault9vault__okN6constrS2433;
+            return _M0FP39stillfail5rules5vault9vault__okN6constrS2450;
           } else {
             break _L;
           }
@@ -6353,7 +6372,7 @@ function _M0FP39stillfail5rules5vault9vault__ok(lock, prev, next, copy, c) {
     }
     break _L;
   }
-  return _M0FP39stillfail5rules5vault9vault__okN6constrS2431;
+  return _M0FP39stillfail5rules5vault9vault__okN6constrS2448;
 }
 function _M0FP39stillfail5rules5vault20browser__listing__ok(kind, modes, hosts) {
   const sign = kind === "browser";
@@ -6365,7 +6384,7 @@ function _M0FP39stillfail5rules5vault20browser__listing__ok(kind, modes, hosts) 
     _tmp = sign && modes.length !== 1;
   }
   if (_tmp) {
-    return _M0FP39stillfail5rules5vault20browser__listing__okN6constrS2546;
+    return _M0FP39stillfail5rules5vault20browser__listing__okN6constrS2563;
   }
   let _tmp$2;
   if (sign) {
@@ -6383,7 +6402,7 @@ function _M0FP39stillfail5rules5vault20browser__listing__ok(kind, modes, hosts) 
         } else {
           const _p$4 = _p$3;
           const _p$5 = _p$4;
-          if (_M0MPC16string6String11has__prefix(_p$5, _M0FP39stillfail5rules5vault20browser__listing__okN6recordS2547)) {
+          if (_M0MPC16string6String11has__prefix(_p$5, _M0FP39stillfail5rules5vault20browser__listing__okN6recordS2564)) {
             _tmp$4 = true;
             break;
           }
@@ -6397,7 +6416,7 @@ function _M0FP39stillfail5rules5vault20browser__listing__ok(kind, modes, hosts) 
     _tmp$2 = false;
   }
   if (_tmp$2) {
-    return _M0FP39stillfail5rules5vault20browser__listing__okN6constrS2548;
+    return _M0FP39stillfail5rules5vault20browser__listing__okN6constrS2565;
   }
   return undefined;
 }
@@ -6493,7 +6512,7 @@ function _M0FP39stillfail5rules5vault11listing__ok(l) {
                     }
                     break _L$3;
                   }
-                  return _M0FP39stillfail5rules5vault11listing__okN6constrS2555;
+                  return _M0FP39stillfail5rules5vault11listing__okN6constrS2572;
                 }
                 let hs;
                 _L$4: {
@@ -6572,7 +6591,7 @@ function _M0FP39stillfail5rules5vault11listing__ok(l) {
                     }
                     break _L$4;
                   }
-                  return _M0FP39stillfail5rules5vault11listing__okN6constrS2556;
+                  return _M0FP39stillfail5rules5vault11listing__okN6constrS2573;
                 }
                 const _bind$2 = _M0FP39stillfail5rules5vault20browser__listing__ok(_kind, ms, hs);
                 if (_bind$2 === undefined) {
@@ -6595,7 +6614,7 @@ function _M0FP39stillfail5rules5vault11listing__ok(l) {
                     _tmp = false;
                   }
                   if (!_tmp) {
-                    return _M0FP39stillfail5rules5vault11listing__okN6constrS2557;
+                    return _M0FP39stillfail5rules5vault11listing__okN6constrS2574;
                   }
                 }
                 const _bind$4 = _M0FP39stillfail5rules5vault5field(l, "lasts");
@@ -6612,7 +6631,7 @@ function _M0FP39stillfail5rules5vault11listing__ok(l) {
                     _tmp = false;
                   }
                   if (!_tmp) {
-                    return _M0FP39stillfail5rules5vault11listing__okN6constrS2558;
+                    return _M0FP39stillfail5rules5vault11listing__okN6constrS2575;
                   }
                 }
                 return undefined;
@@ -6632,7 +6651,7 @@ function _M0FP39stillfail5rules5vault11listing__ok(l) {
       break _L;
     }
   }
-  return _M0FP39stillfail5rules5vault11listing__okN6constrS2554;
+  return _M0FP39stillfail5rules5vault11listing__okN6constrS2571;
 }
 function _M0FP39stillfail5rules5vault8item__ok(lock, vault, prev, next, copy, c) {
   const i = next;
@@ -6694,7 +6713,7 @@ function _M0FP39stillfail5rules5vault8item__ok(lock, vault, prev, next, copy, c)
     _tmp = _tmp$2;
   }
   if (_tmp) {
-    return _M0FP39stillfail5rules5vault8item__okN6constrS2602;
+    return _M0FP39stillfail5rules5vault8item__okN6constrS2619;
   }
   _L: {
     _L$2: {
@@ -6709,7 +6728,7 @@ function _M0FP39stillfail5rules5vault8item__ok(lock, vault, prev, next, copy, c)
           const _id = _String._0;
           if (_M0FP39stillfail5rules5vault8ulid__id(_id, "i_")) {
             if (!_M0FP39stillfail5rules5vault3int(_M0FP39stillfail5rules5vault5field(i, "version")) || (!_M0FP39stillfail5rules5vault3int(_M0FP39stillfail5rules5vault5field(i, "epoch")) || !_M0FP39stillfail5rules5vault3int(_M0FP39stillfail5rules5vault5field(i, "at")))) {
-              return _M0FP39stillfail5rules5vault8item__okN6constrS2604;
+              return _M0FP39stillfail5rules5vault8item__okN6constrS2621;
             }
             const _bind$2 = _M0FP39stillfail5rules5vault5field(i, "deleted");
             if (_bind$2 === undefined) {
@@ -6723,7 +6742,7 @@ function _M0FP39stillfail5rules5vault8item__ok(lock, vault, prev, next, copy, c)
                 _tmp$2 = false;
               }
               if (!_tmp$2) {
-                return _M0FP39stillfail5rules5vault8item__okN6constrS2605;
+                return _M0FP39stillfail5rules5vault8item__okN6constrS2622;
               }
             }
             const _bind$3 = _M0FP39stillfail5rules5vault5field(i, "deleted");
@@ -6740,7 +6759,7 @@ function _M0FP39stillfail5rules5vault8item__ok(lock, vault, prev, next, copy, c)
               }
             }
             if (!_M0FP39stillfail5rules5vault3b64(_M0FP39stillfail5rules5vault5field(i, "ct"), 1048576)) {
-              return _M0FP39stillfail5rules5vault8item__okN6constrS2606;
+              return _M0FP39stillfail5rules5vault8item__okN6constrS2623;
             }
             const _p = _M0FP39stillfail5rules5vault8text__of(_M0FP39stillfail5rules5vault5field(i, "ct"));
             let ct;
@@ -6765,11 +6784,11 @@ function _M0FP39stillfail5rules5vault8item__ok(lock, vault, prev, next, copy, c)
                   }
                   break _L$3;
                 }
-                return _M0FP39stillfail5rules5vault8item__okN6constrS2607;
+                return _M0FP39stillfail5rules5vault8item__okN6constrS2624;
               }
             }
             if (!deleted && ct.length < 38) {
-              return _M0FP39stillfail5rules5vault8item__okN6constrS2608;
+              return _M0FP39stillfail5rules5vault8item__okN6constrS2625;
             }
             const _bind$4 = _M0FP39stillfail5rules5vault5field(i, "listing");
             if (_bind$4 === undefined) {
@@ -6783,22 +6802,22 @@ function _M0FP39stillfail5rules5vault8item__ok(lock, vault, prev, next, copy, c)
               }
             }
             if (!_M0FP39stillfail5rules5vault10sig__shape(_M0FP39stillfail5rules5vault5field(i, "sig"))) {
-              return _M0FP39stillfail5rules5vault8item__okN6constrS2609;
+              return _M0FP39stillfail5rules5vault8item__okN6constrS2626;
             }
             const epoch = _M0FP39stillfail5rules5vault3num(_M0FP39stillfail5rules5vault5field(i, "epoch"));
             const vault_epoch = _M0FP39stillfail5rules5vault3num(_M0FP39stillfail5rules5vault5field(vault$2, "epoch"));
-            if (epoch > vault_epoch || !deleted && (!copy && epoch !== vault_epoch)) {
+            if (!_M0FP39stillfail5rules7history15item__epoch__ok(deleted, copy, $i64_trunc_f64(epoch), $i64_trunc_f64(vault_epoch))) {
               return `an item is written under the vault's epoch ${_M0FP39stillfail5rules5vault5whole(vault_epoch)}`;
             }
             const version = _M0FP39stillfail5rules5vault3num(_M0FP39stillfail5rules5vault5field(i, "version"));
             if (prev === undefined) {
               if (version !== 0 && !copy) {
-                return _M0FP39stillfail5rules5vault8item__okN6constrS2610;
+                return _M0FP39stillfail5rules5vault8item__okN6constrS2627;
               }
             } else {
               const _Some$2 = prev;
               if (_M0IP016_24default__implPB2Eq10not__equalGOsE(_M0FP39stillfail5rules5vault8text__of(_M0FP39stillfail5rules5vault5field(_Some$2, "id")), _id) || _M0IP016_24default__implPB2Eq10not__equalGORPC14json4JsonE(_M0FP39stillfail5rules5vault5field(_Some$2, "vault"), _M0FP39stillfail5rules5vault5field(i, "vault"))) {
-                return _M0FP39stillfail5rules5vault8item__okN6constrS2611;
+                return _M0FP39stillfail5rules5vault8item__okN6constrS2628;
               }
               const _bind$5 = _M0FP39stillfail5rules5vault5field(_Some$2, "deleted");
               if (_bind$5 === undefined) {
@@ -6806,15 +6825,14 @@ function _M0FP39stillfail5rules5vault8item__ok(lock, vault, prev, next, copy, c)
                 const _Some$3 = _bind$5;
                 const _x$2 = _Some$3;
                 if (_x$2.$tag === 1) {
-                  return _M0FP39stillfail5rules5vault8item__okN6constrS2612;
+                  return _M0FP39stillfail5rules5vault8item__okN6constrS2629;
                 }
               }
               const held = _M0FP39stillfail5rules5vault3num(_M0FP39stillfail5rules5vault5field(_Some$2, "version"));
-              if (copy && version <= held) {
-                return `a copy is later than version ${_M0FP39stillfail5rules5vault5whole(held)}`;
-              }
-              if (!copy && version !== held + 1) {
-                return `version ${_M0FP39stillfail5rules5vault5whole(held + 1)} follows ${_M0FP39stillfail5rules5vault5whole(held)}`;
+              const _p$2 = $i64_trunc_f64(held);
+              const _p$3 = $i64_trunc_f64(version);
+              if (!(copy ? BigInt.asIntN(64, _p$3) > BigInt.asIntN(64, _p$2) : BigInt.asUintN(64, _p$3) === BigInt.asUintN(64, BigInt.asUintN(64, _p$2 + 1n)))) {
+                return copy ? `a copy is later than version ${_M0FP39stillfail5rules5vault5whole(held)}` : `version ${_M0FP39stillfail5rules5vault5whole(held + 1)} follows ${_M0FP39stillfail5rules5vault5whole(held)}`;
               }
             }
             const _p$2 = _M0FP39stillfail5rules5vault8text__of(_M0FP39stillfail5rules5vault5field(_M0FP39stillfail5rules5vault5field(i, "sig"), "key"));
@@ -6836,7 +6854,7 @@ function _M0FP39stillfail5rules5vault8item__ok(lock, vault, prev, next, copy, c)
                 const _sub = _x$2._0;
                 if (_M0FP39stillfail5rules5vault9has__text(members, _sub)) {
                   if (!_M0FP39stillfail5rules5vault10signed__ok(next, "stillfail-vault-item/1", c)) {
-                    return _M0FP39stillfail5rules5vault8item__okN6constrS2614;
+                    return _M0FP39stillfail5rules5vault8item__okN6constrS2631;
                   }
                   return undefined;
                 } else {
@@ -6844,7 +6862,7 @@ function _M0FP39stillfail5rules5vault8item__ok(lock, vault, prev, next, copy, c)
                 }
               }
             }
-            return _M0FP39stillfail5rules5vault8item__okN6constrS2613;
+            return _M0FP39stillfail5rules5vault8item__okN6constrS2630;
           } else {
             break _L;
           }
@@ -6855,7 +6873,7 @@ function _M0FP39stillfail5rules5vault8item__ok(lock, vault, prev, next, copy, c)
     }
     break _L;
   }
-  return _M0FP39stillfail5rules5vault8item__okN6constrS2603;
+  return _M0FP39stillfail5rules5vault8item__okN6constrS2620;
 }
 function _M0FP39stillfail5rules2js8json__of(v) {
   const _bind = _M0FP39stillfail5rules2js8js__kind(v);
@@ -7117,7 +7135,7 @@ function _M0FP39stillfail5rules2js8opt__num(v) {
 function _M0FP39stillfail5rules2js8opt__str(v) {
   return _M0FP39stillfail5rules2js8js__kind(v) === 3 ? _M0FP39stillfail5rules2js7js__str(v) : undefined;
 }
-function _M0FP39stillfail5rules2js11state__jsonN5pairsS2734(xs) {
+function _M0FP39stillfail5rules2js11state__jsonN5pairsS2751(xs) {
   const _p = new Array(xs.length);
   const _p$2 = xs.length;
   let _tmp = 0;
@@ -7167,7 +7185,7 @@ function _M0FP39stillfail5rules2js11state__json(s) {
   const _p$10 = s.rp_id;
   const _tmp$7 = { _0: "rp_id", _1: new _M0DTPC14json4Json6String(_p$10) };
   const _tmp$8 = { _0: "cloud_keys", _1: s.cloud_keys };
-  const _tmp$9 = { _0: "members", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS2734(_M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB4Iter3mapGsRPC14json4JsonE(_M0MPB3Map4iterGsRPC14json4JsonE(s.members), (p) => {
+  const _tmp$9 = { _0: "members", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS2751(_M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB4Iter3mapGsRPC14json4JsonE(_M0MPB3Map4iterGsRPC14json4JsonE(s.members), (p) => {
     const _tmp$10 = p._0;
     const _p$11 = p._1.sub;
     const _tmp$11 = { _0: "sub", _1: new _M0DTPC14json4Json6String(_p$11) };
@@ -7178,7 +7196,7 @@ function _M0FP39stillfail5rules2js11state__json(s) {
     const _p$14 = _M0MPB3Map3MapGsRPC14json4JsonE(new _M0TPB9ArrayViewGUsRPC14json4JsonEE(_bind, 0, 3), undefined);
     return { _0: _tmp$10, _1: new _M0DTPC14json4Json6Object(_p$14) };
   }))) };
-  const _tmp$10 = { _0: "devices", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS2734(_M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB4Iter3mapGsRPC14json4JsonE(_M0MPB3Map4iterGsRPC14json4JsonE(s.devices), (p) => {
+  const _tmp$10 = { _0: "devices", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS2751(_M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB4Iter3mapGsRPC14json4JsonE(_M0MPB3Map4iterGsRPC14json4JsonE(s.devices), (p) => {
     const _tmp$11 = p._0;
     const d = p._1;
     const _p$11 = d.id;
@@ -7236,7 +7254,7 @@ function _M0FP39stillfail5rules2js11state__json(s) {
     }
     return { _0: _tmp$11, _1: new _M0DTPC14json4Json6Object(m) };
   }))) };
-  const _tmp$11 = { _0: "signKeys", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS2734(_M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB4Iter3mapGsRPC14json4JsonE(_M0MPB3Map4iterGsRPB5ArrayGsEE(s.sign_keys), (p) => {
+  const _tmp$11 = { _0: "signKeys", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS2751(_M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB4Iter3mapGsRPC14json4JsonE(_M0MPB3Map4iterGsRPB5ArrayGsEE(s.sign_keys), (p) => {
     const _tmp$12 = p._0;
     const _p$11 = p._1;
     const _p$12 = new Array(_p$11.length);
@@ -7256,7 +7274,7 @@ function _M0FP39stillfail5rules2js11state__json(s) {
     const _p$14 = _p$12;
     return { _0: _tmp$12, _1: new _M0DTPC14json4Json5Array(_p$14) };
   }))) };
-  const _tmp$12 = { _0: "passkeys", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS2734(_M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB4Iter3mapGsRPC14json4JsonE(_M0MPB3Map4iterGsRPC14json4JsonE(s.passkeys), (p) => {
+  const _tmp$12 = { _0: "passkeys", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS2751(_M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB4Iter3mapGsRPC14json4JsonE(_M0MPB3Map4iterGsRPC14json4JsonE(s.passkeys), (p) => {
     const _tmp$13 = p._0;
     const _p$11 = p._1.id;
     const _tmp$14 = { _0: "id", _1: new _M0DTPC14json4Json6String(_p$11) };
@@ -7273,7 +7291,7 @@ function _M0FP39stillfail5rules2js11state__json(s) {
   }))) };
   const _p$11 = _M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB4Iter3mapGsRPC14json4JsonE(_M0MPB3Map4keysGsuE(s.signed), (_hole140) => new _M0DTPC14json4Json6String(_hole140)));
   const _tmp$13 = { _0: "signed", _1: new _M0DTPC14json4Json5Array(_p$11) };
-  const _tmp$14 = { _0: "stations", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS2734(_M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB4Iter3mapGsRPC14json4JsonE(_M0MPB3Map4iterGsRPC14json4JsonE(s.stations), (p) => {
+  const _tmp$14 = { _0: "stations", _1: _M0FP39stillfail5rules2js11state__jsonN5pairsS2751(_M0MPB4Iter9to__arrayGUsRPC14json4JsonEE(_M0MPB4Iter3mapGsRPC14json4JsonE(_M0MPB3Map4iterGsRPC14json4JsonE(s.stations), (p) => {
     const _tmp$15 = p._0;
     const _p$12 = p._1.key;
     const _tmp$16 = { _0: "key", _1: new _M0DTPC14json4Json6String(_p$12) };

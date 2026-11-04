@@ -1,0 +1,110 @@
+// (Each formula one connective deep, the rest in predicates of their own: the lowering to WhyML prints `a && (b || c)`
+// without its brackets.)
+
+predicate next_one(held : Int64, next : Int64) {
+  next == held + 1L
+}
+
+predicate later(held : Int64, next : Int64) {
+  next > held
+}
+
+predicate copy_later(copy : Bool, held : Int64, next : Int64) {
+  copy && later(held, next)
+}
+
+predicate kept_next(copy : Bool, held : Int64, next : Int64) {
+  !copy && next_one(held, next)
+}
+
+predicate follows_rule(copy : Bool, held : Int64, next : Int64) {
+  copy_later(copy, held, next) || kept_next(copy, held, next)
+}
+
+predicate follows_sound(copy : Bool, held : Int64, next : Int64, result : Bool) {
+  result → follows_rule(copy, held, next)
+}
+
+predicate follows_complete(copy : Bool, held : Int64, next : Int64, result : Bool) {
+  follows_rule(copy, held, next) → result
+}
+
+predicate follows_post(copy : Bool, held : Int64, next : Int64, result : Bool) {
+  follows_sound(copy, held, next, result) && follows_complete(copy, held, next, result)
+}
+
+predicate new_key(gone : Bool, prev : Int64, next : Int64) {
+  gone → later(prev, next)
+}
+
+predicate epoch_taken(gone : Bool, prev : Int64, next : Int64) {
+  next >= prev && new_key(gone, prev, next)
+}
+
+predicate epoch_sound(gone : Bool, prev : Int64, next : Int64, result : Bool) {
+  result → epoch_taken(gone, prev, next)
+}
+
+predicate epoch_complete(gone : Bool, prev : Int64, next : Int64, result : Bool) {
+  epoch_taken(gone, prev, next) → result
+}
+
+predicate epoch_post(gone : Bool, prev : Int64, next : Int64, result : Bool) {
+  epoch_sound(gone, prev, next, result) && epoch_complete(gone, prev, next, result)
+}
+
+predicate stays(was : Bool, now : Bool) {
+  was → now
+}
+
+predicate deletion_sound(was : Bool, now : Bool, result : Bool) {
+  result → stays(was, now)
+}
+
+predicate deletion_complete(was : Bool, now : Bool, result : Bool) {
+  stays(was, now) → result
+}
+
+predicate deletion_post(was : Bool, now : Bool, result : Bool) {
+  deletion_sound(was, now, result) && deletion_complete(was, now, result)
+}
+
+predicate kept_live(deleted : Bool, copy : Bool) {
+  !deleted && !copy
+}
+
+predicate under_key(deleted : Bool, copy : Bool, epoch : Int64, vault : Int64) {
+  kept_live(deleted, copy) → epoch == vault
+}
+
+predicate item_epoch_taken(deleted : Bool, copy : Bool, epoch : Int64, vault : Int64) {
+  epoch <= vault && under_key(deleted, copy, epoch, vault)
+}
+
+predicate item_epoch_sound(deleted : Bool, copy : Bool, epoch : Int64, vault : Int64, result : Bool) {
+  result → item_epoch_taken(deleted, copy, epoch, vault)
+}
+
+predicate item_epoch_complete(deleted : Bool, copy : Bool, epoch : Int64, vault : Int64, result : Bool) {
+  item_epoch_taken(deleted, copy, epoch, vault) → result
+}
+
+predicate item_epoch_post(deleted : Bool, copy : Bool, epoch : Int64, vault : Int64, result : Bool) {
+  item_epoch_sound(deleted, copy, epoch, vault, result) && item_epoch_complete(deleted, copy, epoch, vault, result)
+}
+
+predicate in_time(lasts : Bool, exp : Int64, now : Int64) {
+  lasts → exp > now
+}
+
+predicate unexpired_sound(lasts : Bool, exp : Int64, now : Int64, result : Bool) {
+  result → in_time(lasts, exp, now)
+}
+
+predicate unexpired_complete(lasts : Bool, exp : Int64, now : Int64, result : Bool) {
+  in_time(lasts, exp, now) → result
+}
+
+predicate unexpired_post(lasts : Bool, exp : Int64, now : Int64, result : Bool) {
+  unexpired_sound(lasts, exp, now, result) && unexpired_complete(lasts, exp, now, result)
+}
