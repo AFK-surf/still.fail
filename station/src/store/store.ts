@@ -57,10 +57,12 @@ const sessionCountsVisible = (home: boolean) => `WITH RECURSIVE connects(connect
   UNION ALL SELECT (SELECT connect FROM sessions INDEXED BY sessions_by_connect WHERE connect > c.connect ORDER BY connect LIMIT 1)
     FROM connects c WHERE c.connect IS NOT NULL
 ), workspaces(ws) AS (VALUES (?)${home ? ", (NULL)" : ""})
-SELECT s.connect, s.ws, COUNT(*) AS n FROM connects c
-CROSS JOIN workspaces w CROSS JOIN sessions s INDEXED BY sessions_by_connect
-  ON s.connect = c.connect AND s.ws IS w.ws
-WHERE c.connect IS NOT NULL GROUP BY s.connect, s.ws ORDER BY s.connect, s.ws`;
+SELECT c.connect, w.ws,
+  (SELECT COUNT(*) AS n FROM sessions s INDEXED BY sessions_by_connect WHERE s.connect = c.connect AND s.ws IS w.ws) AS n
+FROM connects c CROSS JOIN workspaces w
+WHERE c.connect IS NOT NULL AND EXISTS
+  (SELECT 1 FROM sessions s INDEXED BY sessions_by_connect WHERE s.connect = c.connect AND s.ws IS w.ws)
+ORDER BY c.connect, w.ws`;
 export const SESSION_COUNTS_VISIBLE = sessionCountsVisible(false);
 export const SESSION_COUNTS_HOME = sessionCountsVisible(true);
 export const ANY_RUNNING = "SELECT 1 AS r FROM sessions WHERE running = 1 LIMIT 1";
