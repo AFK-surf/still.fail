@@ -84,6 +84,7 @@ fn reset_globals() -> Unit {
   text_runs.on = false
   inst_owners.on = false
   inst_owners.track = false
+  host_record_forget()
   inst_owners_clear()
   text_runs.runs.clear()
   desk_reset()
@@ -781,6 +782,8 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   }
   // what the outside the test stands for has said meanwhile, posted for the next frame (messages.mbt)
   frame_ended_outside()
+  // (as its host got it, where a test records that: tester_host.mbt)
+  host_frame_drawn(if shown > at { shown } else { at })
 }
 
 ///|

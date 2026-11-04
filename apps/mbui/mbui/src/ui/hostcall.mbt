@@ -805,7 +805,16 @@ fn h_atlas_generation() -> Int {
 ///|
 fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
   match fake.val {
-    Some(f) => f.instances = count
+    Some(f) => {
+      f.instances = count
+      // (what a host that keeps its picture is told, kept for a test that records it: tester_host.mbt)
+      if host_recording() {
+        let c = g()
+        let (r, gg, b) = c.clear
+        let parts = host_presented.next(buf, count, c.window_w, c.window_h, c.scale, r, gg, b)
+        host_parts_last.val = (parts, 0.0)
+      }
+    }
     None => {
       let c = g()
       let (r, gg, b) = c.clear
