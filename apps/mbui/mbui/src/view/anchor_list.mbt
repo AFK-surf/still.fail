@@ -47,7 +47,6 @@ pub fn[K : Eq] list_laid_from_end(
   by? : Double = 0.0,
   ahead? : Double = 0.0,
   known? : (Int) -> Double? = fn(_) { None },
-  guess? : Double? = None,
   slack? : Double = 0.0,
 ) -> ListLaid[K] {
   if n == 0 {
@@ -74,7 +73,9 @@ pub fn[K : Eq] list_laid_from_end(
       }
     }
   }
-  // (a row only gone past on the way to the anchor, as tall as it was last measured: not made again for it)
+  // (a row only gone past on the way to the anchor, as tall as it was last measured: not made again for it; one never
+  // measured, measured now: a scroll goes by the heights of the rows it passes, never a guess, so where it stops is the
+  // same in one jump as in many: retained.md, "Layout read back")
   let passed = fn(i : Int) {
     match measured.get(i) {
       Some(v) => v
@@ -85,22 +86,13 @@ pub fn[K : Eq] list_laid_from_end(
         }
     }
   }
-  // (one gone past wholly out of the window and what is made ahead of it, never measured: as tall as one is guessed
-  // to be (`guess`), not made for it: a scroll further in one layout than it makes ahead costs what shows, however
-  // many rows it goes past; `beyond` how far out of that it would end)
-  let passed_far = fn(i : Int, beyond : (Double) -> Bool) {
-    match (measured.get(i), known(i), guess) {
-      (None, None, Some(g)) if beyond(g) => g
-      _ => passed(i)
-    }
-  }
   let mut i = start_i
   // (scrolled toward its end, the anchor's foot over the window's: the newer rows under it come into the window, the
   // newest's foot held at the foot)
   while under < 0.0 && i < n - 1 {
     i = i + 1
     // (its foot over the window's top and what is made over it)
-    under = under + passed_far(i, fn(g) { h + under + g < -ahead })
+    under = under + passed(i)
   }
   if under < 0.0 {
     under = 0.0
@@ -108,7 +100,7 @@ pub fn[K : Eq] list_laid_from_end(
   // (scrolled toward its start: a row wholly under the foot is no more the anchor, the one over it is)
   while i > 0 {
     // (its top under the window's foot and what is made under it)
-    let hi = passed_far(i, fn(g) { under - g > ahead })
+    let hi = passed(i)
     if under < hi {
       break
     }
@@ -203,7 +195,6 @@ pub fn[K : Eq] list_laid_from_top(
   by? : Double = 0.0,
   ahead? : Double = 0.0,
   known? : (Int) -> Double? = fn(_) { None },
-  guess? : Double? = None,
   slack? : Double = 0.0,
 ) -> ListLaid[K] {
   // (the same list turned over: its last row its first, its foot its top)
@@ -218,7 +209,6 @@ pub fn[K : Eq] list_laid_from_top(
     by~,
     ahead~,
     known=fn(i) { known(m(i)) },
-    guess~,
     slack~,
   )
   let count = r.keys.length()
