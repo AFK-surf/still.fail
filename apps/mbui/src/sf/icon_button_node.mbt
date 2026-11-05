@@ -5,8 +5,9 @@
 
 ///|
 /// The icon button in `parent` showing icon `icon`, `size` across (round), its icon `icon_size`; named `label` (read
-/// out, and its tip in `tips`); `press` done as it is pressed; its corners linked where `linked` says (icon_button's
-/// `linked`: a bar's key at the window's corner following it, bar_keys_link), round where it says None. The node.
+/// out, and its tip in `tips`); `press` done as it is pressed; `on` keeps it lit while its menu is open. Its corners
+/// are linked where `linked` says (icon_button's `linked`: a bar's key at the window's corner following it,
+/// bar_keys_link), round where it says None. The node.
 pub fn icon_button_node(
   parent : @view.View,
   icon : String,
@@ -17,6 +18,7 @@ pub fn icon_button_node(
   icon_size? : Double = 16.0,
   icon_now? : () -> String,
   linked? : () -> @ui.CornerOf?,
+  on? : () -> Bool = fn() { false },
 ) -> @view.View {
   parent.box(fn(v) {
     // (the hand on it: a mouse over it or pressing it, a finger pressing it; the keyboard's focus shown on it)
@@ -38,7 +40,7 @@ pub fn icon_button_node(
     .presses(Is(true))
     .focusable(Is(true))
     // (the page's hover, as a tint of the ink it sits with: icon_button's)
-    .ground(By(fn() { alpha(theme().p.text, 0.065 * hand.shown(v)) }))
+    .ground(By(fn() { alpha(theme().p.text, if on() { 0.08 } else { 0.065 * hand.shown(v) }) }))
     .says(By(fn() { Some(@view.said(Button, label=label())) }))
     .on_press(press)
     |> ignore
@@ -47,7 +49,7 @@ pub fn icon_button_node(
       Some(l) => @ui.tree_corners_linked(v, fn() { l().map(fn(k) { FixedArray::make(4, k) }) })
       None => ()
     }
-    icon_node(v, icon, icon_size, By(fn() { if hand.shown(v) > 0.5 { theme().p.text } else { theme().p.muted } }), name_now?=icon_now)
+    icon_node(v, icon, icon_size, By(fn() { if on() || hand.shown(v) > 0.5 { theme().p.text } else { theme().p.muted } }), name_now?=icon_now)
     |> ignore
     let tip = match tips {
       Some(t) => Some(tip_node(t, v, label, side=Bottom))

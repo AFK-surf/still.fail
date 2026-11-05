@@ -208,9 +208,9 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
         anchor.val = more
         more.width(Is(Some(24.0))).height(Is(Some(24.0))).lines_up(Is(Some(Middle))).lies_along(Is(Middle)) |> ignore
         // (the library's ⋯ menu by its key, as menu_of keeps it: one open at a time, its button pressed again closing it)
-        @sf.round_key_node(more, "more", fn() { @sf.t("web-main.menu.more") }, fn() {
+        @sf.icon_button_node(more, "more", fn() { @sf.t("web-main.menu.more") }, fn() {
           if @sf.menu_is_open(key()) { close() } else { @sf.menu_open_here(key(), 0.0, 0.0) }
-        }, side=24.0, icon_size=16.0)
+        }, size=24.0, icon_size=16.0, tips?=tips, on=fn() { @sf.menu_is_open(key()) }) |> ignore
       })
       // (the menu belongs to the message, not the hover button: it finishes leaving where it hung when that
       // button disappears; beside keeps that last place after its anchor is gone)
