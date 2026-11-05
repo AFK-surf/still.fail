@@ -579,6 +579,9 @@ struct Node {
   mut going : @signals.Signal[Int]?
   /// it, and what it holds, take no press (View::presses)
   mut inert : Bool
+  /// turned off (View::turned_off): where it is drawn it takes a press and does nothing with it, what lies under it not
+  /// reached, the pointer an arrow over it (a send button with nothing to send, a picture with nothing to open)
+  mut turned_off : Bool
   /// it is a modal layer while this holds (View::modal): what it does not hold takes no input
   mut modal : Bool
   /// as a modal layer, a back gesture under way as it comes over what holds it goes on to that (View::held_back_goes_on)
@@ -740,6 +743,9 @@ pub struct Tree {
   /// what the host says takes a finger at a point instead of what the tree found there (Tree::on_target), given what
   /// takes it there in the order they are drawn
   mut retarget : (Target, Array[Target], Double, Double) -> Target
+  /// how far across each way a press's room is at least (the host's, by how it is pointed at: a finger's 44, a pointer's
+  /// 36): what is drawn smaller than that is reached from round it (Tree::target_in); 0, by what is drawn alone
+  mut press_least : Double
   /// what hosts the tree is told as a column it holds glides on by itself, let go (Tree::on_glides): which column and
   /// when its glide ends as it is asked (none: at rest); and as that column is let go
   mut glides : (Int, () -> Double?) -> Unit
@@ -970,6 +976,7 @@ pub fn Tree::new(
     on_through: fn(_, _, _, _, _) {  },
     hosts_at: fn(_, _, _) { None },
     retarget: fn(t, _, _, _) { t },
+    press_least: 0.0,
     glides: fn(_, _) {  },
     glides_gone: fn(_) {  },
     list_feel: fn() { (Desktop, 1.0) },
@@ -1209,6 +1216,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.back_from = 0.0
       n.going = None
       n.inert = false
+      n.turned_off = false
       n.modal = false
       n.back_goes_on = false
       n.leaves_typing = false
@@ -1333,6 +1341,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         back_from: 0.0,
         going: None,
         inert: false,
+        turned_off: false,
         modal: false,
         back_goes_on: false,
         leaves_typing: false,
@@ -2060,6 +2069,7 @@ priv enum Prop {
   Over
   Shift
   Presses
+  TurnedOff
   Modal
   Shapes
   Tint
@@ -3439,7 +3449,7 @@ pub fn Tree::modal_stack(self : Tree) -> Int {
 /// of the tree's taking it.
 pub fn Tree::stack_takes(self : Tree, x : Double, y : Double) -> Int {
   match self.target_at(x, y) {
-    Pressed(id) | Dragged(id) | Hosted(id) | TopRow(id) => self.stack_at(id.at)
+    Pressed(id) | Dragged(id) | Hosted(id) | TopRow(id) | Off(id) => self.stack_at(id.at)
     Nothing => -2
   }
 }
@@ -3515,7 +3525,7 @@ pub fn Tree::places_read(self : Tree) -> Unit {
 /// the old frame's is put over all of it there under it, taking none of it.
 pub fn Tree::over_all_takes(self : Tree, x : Double, y : Double) -> Bool {
   match self.target_at(x, y) {
-    Pressed(id) | Dragged(id) | Hosted(id) | TopRow(id) => self.over_all_at(id.at)
+    Pressed(id) | Dragged(id) | Hosted(id) | TopRow(id) | Off(id) => self.over_all_at(id.at)
     Nothing => false
   }
 }
@@ -7532,6 +7542,9 @@ pub(all) enum Target {
   Hosted(NodeId)
   /// a top row of the app's own, what moves the window (View::moves_window)
   TopRow(NodeId)
+  /// a control said to take no press itself (View::presses: turned off), what holds it taking them: the press its, and
+  /// nothing done with it; what lies under it not reached
+  Off(NodeId)
   Nothing
 } derive(Eq, Debug)
 
@@ -7669,22 +7682,134 @@ fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Targ
   // (the logic's moment, what is where taken as of then: View::takes)
   let at = self.logic_at()
   let found : Array[Target] = []
+  // (where the topmost found is drawn, and in what order of all gone through; what is drawn smaller than a press's
+  // room that takes a press, each with its order and where it is drawn: reached from round it)
+  let top_rect : Ref[(Double, Double, Double, Double)?] = Ref(None)
+  let top_order = Ref(-1)
+  let small : Array[(Int, Target, (Double, Double, Double, Double))] = []
+  let order = Ref(0)
+  let least = self.press_least
   self.walk_taken(x, y, fn(c, cx, cy, _, s) {
-    if self.finger_on(c, cx, cy, s, x, y, at, tracked~) {
-      let n = self.nodes[c.id.at]
+    order.val = order.val + 1
+    let n = self.nodes[c.id.at]
+    let target = if n.on_drag is Some(_) && n.claims is None {
       // (one that takes over holds (View::claims) takes none at its own down: it is found as it moves)
-      if n.on_drag is Some(_) && n.claims is None {
-        found.push(Dragged(c.id))
-      } else if n.on_press is Some(_) {
-        found.push(Pressed(c.id))
-      } else if n.hosted {
-        found.push(Hosted(c.id))
-      } else if n.top_row {
-        found.push(TopRow(c.id))
-      }
+      Some(Dragged(c.id))
+    } else if n.on_press is Some(_) {
+      Some(Pressed(c.id))
+    } else if n.hosted {
+      Some(Hosted(c.id))
+    } else if n.top_row {
+      Some(TopRow(c.id))
+    } else {
+      None
+    }
+    // (one turned off (View::turned_off), what holds it taking presses: where it is drawn it takes the point and does
+    // nothing with it, what lies under it not reached, as an old view's turned off control is; what holds it said to take
+    // none (a page), none of it)
+    if n.turned_off && self.blocks_at(c, cx, cy, s, x, y) {
+      found.push(Off(c.id))
+      top_rect.val = Some((cx, cy, cx + c.w * s, cy + c.h * s))
+      top_order.val = order.val
+      return
+    }
+    guard target is Some(t) else { return }
+    if self.finger_on(c, cx, cy, s, x, y, at, tracked~) {
+      found.push(t)
+      top_rect.val = Some((cx, cy, cx + c.w * s, cy + c.h * s))
+      top_order.val = order.val
+    } else if least > 0.0 &&
+      // (what a press does something with: not what is only held (a sheet's grip, a slider's track), as the old frame's
+      // press_reach reaches only what takes a press)
+      t is Pressed(_) &&
+      n.takes is None &&
+      (c.w * s < least || c.h * s < least) &&
+      c.w > 0.0 &&
+      c.h > 0.0 &&
+      !self.pressless_at(c.id.at) {
+      small.push((order.val, t, (cx, cy, cx + c.w * s, cy + c.h * s)))
     }
   })
-  self.chosen(found, x, y)
+  match self.reached(small, top_rect.val, top_order.val, x, y) {
+    Some(t) => t
+    None => self.chosen(found, x, y)
+  }
+}
+
+///|
+/// Of what takes a press drawn smaller than a press's room (`small`: each one's order among what was gone through, what
+/// it is, where it is drawn), the one whose room holds (x, y): drawn over what (x, y) is on (`top`, in the order after
+/// it) and within it, its room as wide and as tall as `press_least` about it, moved in from what it lies along (the
+/// window, what bounds input to it) and cut to what it is on; the nearest of several (where rooms meet, each has the
+/// part nearer it): a row's small button reached from round it, not the row's neighbour's, a pointer lit and a press
+/// taken the same (the old frame's press_reach). None: what is drawn there takes it.
+fn Tree::reached(
+  self : Tree,
+  small : Array[(Int, Target, (Double, Double, Double, Double))],
+  top : (Double, Double, Double, Double)?,
+  top_order : Int,
+  x : Double,
+  y : Double,
+) -> Target? {
+  let least = self.press_least
+  if least <= 0.0 || small.is_empty() {
+    return None
+  }
+  let (ww, wh) = (self.last_w, self.last_h)
+  let room = fn(lo : Double, hi : Double, clo : Double, chi : Double, elo : Double, ehi : Double) {
+    let mut a = lo
+    let mut b = hi
+    if hi - lo < least {
+      let mid = (lo + hi) / 2.0
+      a = mid - least / 2.0
+      b = mid + least / 2.0
+      // (moved in from an edge it passes, not cut short at it)
+      if a < elo {
+        b = b + (elo - a)
+        a = elo
+      }
+      if b > ehi {
+        a = a - (b - ehi)
+        b = ehi
+      }
+    }
+    (dmax(a, dmax(clo, elo)), dmin(b, dmin(chi, ehi)))
+  }
+  let mut best : Target? = None
+  let mut best_d = 1.0e18
+  for e in small {
+    let (k, t, (x0, y0, x1, y1)) = e
+    if k <= top_order {
+      continue
+    }
+    let cut = match top {
+      Some((t0, t1, t2, t3)) => {
+        if x0 < t0 || y0 < t1 || x1 > t2 || y1 > t3 {
+          continue
+        }
+        (t0, t1, t2, t3)
+      }
+      None => (0.0, 0.0, ww, wh)
+    }
+    let id = match t {
+      Pressed(id) | Dragged(id) => id
+      _ => continue
+    }
+    let (bx0, by0, bx1, by1) = self.input_bounds(id)
+    let (rx0, rx1) = room(x0, x1, cut.0, cut.2, dmax(0.0, bx0), dmin(ww, bx1))
+    let (ry0, ry1) = room(y0, y1, cut.1, cut.3, dmax(0.0, by0), dmin(wh, by1))
+    if x < rx0 || x >= rx1 || y < ry0 || y >= ry1 {
+      continue
+    }
+    let dx = dmax(0.0, dmax(x0 - x, x - x1))
+    let dy = dmax(0.0, dmax(y0 - y, y - y1))
+    let d = dx * dx + dy * dy
+    if d < best_d {
+      best_d = d
+      best = Some(t)
+    }
+  }
+  best
 }
 
 ///|
@@ -8533,4 +8658,41 @@ fn Tree::first_drawn_now(self : Tree) -> Unit {
   }
   self.first_drawn.clear()
   self.first_drawn.append(waiting)
+}
+
+///|
+/// How far across each way a press's room is at least, said by the host (a finger's 44, a pointer's 36): what takes a
+/// press drawn smaller is reached from round it (Tree::target_in); 0, by what is drawn alone.
+pub fn Tree::set_press_least(self : Tree, least : Double) -> Unit {
+  self.press_least = least
+}
+
+///|
+/// Whether (x, y) is on content `c` (drawn at (cx, cy), `s` as big), said to take no press itself, and within what
+/// bounds input to it, what holds it taking presses (none leaving, none said to take none, under no modal layer it is
+/// not in): a control turned off there (Tree::target_in).
+fn Tree::blocks_at(self : Tree, c : Content, cx : Double, cy : Double, s : Double, x : Double, y : Double) -> Bool {
+  if x < cx || y < cy || x >= cx + c.w * s || y >= cy + c.h * s {
+    return false
+  }
+  let n = self.nodes[c.id.at]
+  if n.parent >= 0 && self.pressless_at(n.parent) {
+    return false
+  }
+  if !self.allows_at(c.id.at) || n.left_at >= 0.0 || n.out || n.bones != 0L {
+    return false
+  }
+  let (bx0, by0, bx1, by1) = self.input_bounds(c.id)
+  x >= bx0 && y >= by0 && x < bx1 && y < by1
+}
+
+///|
+/// Turned off while `on` holds (a send button with nothing to send, a picture with nothing to open, a file card that
+/// cannot be opened): where it is drawn it takes a press and does nothing with it, what lies under it (a field's
+/// ground) not reached, the pointer an arrow over it, as an old view's control turned off is (its target kept, its
+/// press taking nothing). Unlike View::presses(false), which lets presses through to what lies under it (a page laid
+/// over another, a part that is only shown). Said at the moment it changes. Input's: nothing laid out or drawn again.
+pub fn View::turned_off(self : View, on : Live[Bool]) -> View {
+  self.bind(TurnedOff, on, Said, fn(on) { self.tree.nodes[self.at].turned_off = on })
+  self
 }

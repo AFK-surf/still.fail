@@ -51,7 +51,7 @@ fn tree_drop_aim(x : Double, y : Double) -> (TreeField, TreeDropField?, Bool)? {
   guard view_app.val is Some(tree) && !old_layer_over(x, y) else { return None }
   let target = tree.target_at(x, y)
   let id = match target {
-    Pressed(id) | Dragged(id) | Hosted(id) | TopRow(id) => Some(id)
+    Pressed(id) | Dragged(id) | Hosted(id) | TopRow(id) | Off(id) => Some(id)
     Nothing => None
   }
   let owner = id.bind(fn(id) { tree.view_of(id) }).bind(tree_drop_owner)

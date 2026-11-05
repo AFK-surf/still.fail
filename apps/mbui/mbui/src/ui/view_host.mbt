@@ -694,6 +694,8 @@ fn view_arrived() -> Unit {
 /// painted: what a frame takes it draws.
 fn view_brought(tree : @view.Tree) -> Unit {
   let (w, h) = view_window.val
+  // (a press's room at least, by how the app is pointed at: what is drawn smaller reached from round it)
+  tree.set_press_least(room_least())
   @signals.untracked(fn() { tree.frame(w, h, now=view_logic_at.val) |> ignore })
   view_changes_taken(tree)
   old_place(tree)
@@ -2665,6 +2667,11 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
           }
           true
         }
+        // (a control turned off: the press its, nothing done with it, nothing under it reached)
+        Off(_) => {
+          view_held.val = Some(Nowhere)
+          true
+        }
         // (nothing of the tree's there: where the one old view is the whole window, its own (the old root's, as it was
         // before the tree: what it draws past the window, a list scrolled on below it, is its own: a way there, no rule
         // of the tree's); else nobody's)
@@ -2728,7 +2735,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
           }
           !old_whole.val
         }
-        Pressed(_) | Dragged(_) | TopRow(_) => true
+        Pressed(_) | Dragged(_) | TopRow(_) | Off(_) => true
       }
     }
     (2, Some(Node(id))) => {
@@ -4323,6 +4330,11 @@ fn view_target_pointed(t : @view.Target, x : Double, y : Double) -> Unit {
       view_old_pointed(None)
       // The row owns the press, but may say a cursor or have selectable words under it.
       view_shape_of.val = OfNode(id)
+    }
+    // (a control turned off: the arrow, nothing under it lit)
+    Off(_) => {
+      view_old_pointed(None)
+      view_shape_of.val = OfGround
     }
     Nothing => {
       view_old_pointed(if old_whole.val { Some((x, y)) } else { None })
