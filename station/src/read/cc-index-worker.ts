@@ -19,7 +19,9 @@ parentPort!.on("message", async (message: { session: string; name?: boolean; lat
   let owns = false;
   try {
     if ((owns = takeBackfill(priority, threadId))) result = { done: message.latest
-      ? prepareLatestThreadStep(db, message.session, 64, { existingSession: true }).done : work.step(db, message.session).done };
+      ? prepareLatestThreadStep(db, message.session, 64, { existingSession: true }).done
+      : message.name ? names.step(db, message.session, 64, { existingSession: true }).done
+      : preparation.step(db, message.session).done };
   } catch (error) {
     const code = (error as { errcode?: number }).errcode;
     if (code === undefined || ![5, 6].includes(code & 255)) result = { done: false, error: (error as Error).message };

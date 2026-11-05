@@ -90,17 +90,23 @@ export class SessionChatPreparation {
 
   cancel(session: string): void { this.#cc.cancel(session); }
 
-  step(db: DatabaseSync, session: string, limit = 64): { done: boolean; visited: number } {
+  step(db: DatabaseSync, session: string, limit = 64,
+    options: { existingSession?: boolean } = {}): { done: boolean; visited: number } {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 128) throw new RangeError("session chat batch must be between 1 and 128");
     checkSessionChatIndex(db);
+    if (options.existingSession && !db.prepare("SELECT 1 FROM sessions WHERE key=?").get(session)) return { done: true, visited: 0 };
     if (!ccSessionReady(db, session)) {
-      const progress = this.#cc.step(db, session, limit);
+      const progress = this.#cc.step(db, session, limit, options);
       return { done: false, visited: progress.visited };
     }
     db.exec("BEGIN IMMEDIATE");
     try {
       // Another writer may have changed the projection before this transaction took the write lock.
       checkSessionChatIndex(db);
+      // A session can disappear while the worker waits for handover or between batches. Never recreate its scope.
+      if (options.existingSession && !db.prepare("SELECT 1 FROM sessions WHERE key=?").get(session)) {
+        db.exec("COMMIT"); return { done: true, visited: 0 };
+      }
       if (!ccSessionReady(db, session)) { db.exec("COMMIT"); return { done: false, visited: 0 }; }
       db.prepare(`INSERT INTO session_chat_scopes(session,scan_end)
         SELECT ?1,(SELECT thread FROM cc_session_rows WHERE session=?1 ORDER BY thread DESC LIMIT 1)

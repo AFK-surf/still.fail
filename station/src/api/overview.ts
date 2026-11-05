@@ -274,7 +274,10 @@ async function decisionsView(d: OverviewDeps, viewer: Viewer): Promise<unknown> 
           if (sees(viewer, d.store.getSession(session)?.ws ?? null) !== was) { moved = true; break; }
         }
         if (!moved) for (const session of placeholders.keys()) {
-          if (!sessionChatReady(d.store.db, session)) missing.push(session);
+          // A historical check can name a session deleted while the worker was preparing it. It has no scope to
+          // prepare; retain the original title fallback rather than waiting for that scope forever.
+          if (d.store.getSession(session) === null) names.set(session, chatTitleOf(d.store, session));
+          else if (!sessionChatReady(d.store.db, session)) missing.push(session);
           else names.set(session, chatTitleOf(d.store, session));
         }
       } finally { d.store.db.exec("RELEASE overview_chat_names"); }

@@ -195,5 +195,6 @@ test("a session removed before handover does not regain chat-name state", async 
     previous.resolve(); await ready;
     assert.equal(store.db.prepare("SELECT COUNT(*) AS n FROM session_chat_scopes WHERE session='short'").get()?.n, 0);
     assert.equal(store.db.prepare("SELECT COUNT(*) AS n FROM session_chat_ember WHERE session='short'").get()?.n, 0);
+    assert.equal(store.db.prepare("SELECT COUNT(*) AS n FROM cc_sessions WHERE session='short'").get()?.n, 0);
   } finally { previous.resolve(); await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
