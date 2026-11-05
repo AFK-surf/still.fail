@@ -1044,6 +1044,9 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   // (what came as the frame began told the window's tree: brought before what it does again is decided, where the old
   // views are placed part of that, and what a still pointer is over found so before the hand is said: view_host.mbt)
   view_arrived()
+  // (the pointer's shape as what it is over says it now, a node's shape said anew though nothing it is over moved:
+  // told the host whatever this frame does, built, painted or not, view_host.mbt)
+  view_cursor_tell()
   // (the hand as the frame sees it: what read what changed of it told, hand.mbt)
   hand_arrive(c)
   // (what reads the clock and the host's settings read so: what read them is stale where they changed; what a part or
