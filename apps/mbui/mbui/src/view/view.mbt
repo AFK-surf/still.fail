@@ -577,6 +577,8 @@ pub struct Tree {
   // (Tree::told_noted)
   mut laid_passes : Int
   told_otherwise : Array[String]
+  // where what marked it to be laid out again came from, in the layout pass under way: said with passes that never stop
+  mut laid_marked_at : String
   /// how words are measured: (words, how they are set, width offered) -> (width, height)
   measure : (String, WordsLook, Double) -> (Double, Double)
   /// and words in pieces set their own way (View::words_runs): (the pieces, how the words are set, width offered)
@@ -858,6 +860,7 @@ pub fn Tree::new(
     cause_at: -1.0,
     bringing_at: -1.0,
     laid_passes: 0,
+    laid_marked_at: "",
     told_otherwise: [],
     measure,
     measure_runs,
@@ -1652,8 +1655,13 @@ fn Tree::placed(self : Tree, at : Int) -> (Double, Double, Double) {
 }
 
 ///|
-/// Something for a frame to do: what hosts it told as there first is.
-fn Tree::marked(self : Tree) -> Unit {
+/// Something for a frame to do: what hosts it told as there first is. Where it was marked from in a layout pass, kept
+/// (said with passes that never stop: Tree::laid_out).
+#callsite(autofill(loc))
+fn Tree::marked(self : Tree, loc~ : SourceLoc) -> Unit {
+  if self.laid_passes > 0 && !self.due {
+    self.laid_marked_at = "\{loc}, last set at \{@signals.last_set_at()}"
+  }
   if !self.due {
     self.due = true
     // (the host is already being told: it will ask for a frame for everything marked by that telling too. Laying out
@@ -6204,7 +6212,7 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool) {
 /// How many layout passes one may take (each what the one before told marking more: opening a long chat, 19; a quoted
 /// picture's card flown to its message, its rows placed a few points on in each, more than 32): a guard against passes
 /// that never stop, not a budget.
-pub let laid_passes_most : Int = 512
+pub let laid_passes_most : Int = 64
 
 ///|
 /// Each layout pass's sizes told otherwise said (a switch for finding why passes go on: what was told, from what to
@@ -6243,7 +6251,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     passes += 1
     self.laid_passes = passes
     if passes > laid_passes_most {
-      let said = "view: \{passes - 1} layout passes in one, each telling what marks another; told otherwise in the last: \{self.told_otherwise}"
+      let said = "view: \{passes - 1} layout passes in one, each telling what marks another; told otherwise in the last: \{self.told_otherwise}; marked again from \{self.laid_marked_at}"
       println(said)
       fault(said)
       self.due = false
