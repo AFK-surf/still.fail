@@ -145,21 +145,33 @@ fn media_reveal_node(
   fit : () -> @ui.Fit,
 ) -> Unit {
   let px = fn() { dmin(dmax(width(), height()) * @ui.current().scale, image_px_most) }
-  let ready = fn() { @ui.current().image_ready(picture().key, px()) }
+  // (in the window once: from then on its picture asked for, decoded, drawn. Laid out ahead of what shows (a list's
+  // row made before it comes in), it is only measured: its size is its message's, nothing of it decoded till it shows)
+  let in_sight = @signals.computed(fn(_) {
+    match s.laid_window_told() {
+      Some((_, y, _, h)) => y + h > 0.0 && y < s.window().1
+      None => false
+    }
+  }, same=fn(a, b) { a == b })
+  let seen = @signals.signal(false, same=fn(a, b) { a == b })
+  let ready = fn() { seen.get() && @ui.current().image_ready(picture().key, px()) }
   // (when it came in: none, there at once; its way in's end the moment it is all in)
-  let first = @signals.untracked(fn() { ready() || picture().held })
-  let came : @signals.Signal[Double?] = @signals.signal(if first { Some(-1.0e18) } else { None }, same=fn(a, b) { a == b })
+  let came : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
+  // (decoded already, or held while it waits, as it first shows: there at once)
+  s.reacts(fn() { in_sight.get() }, fn(now) {
+    if now && !@signals.untracked(fn() { seen.get() }) {
+      if @signals.untracked(fn() { @ui.current().image_ready(picture().key, px()) || picture().held }) {
+        came.set(Some(-1.0e18))
+      }
+      seen.set(true)
+    }
+  })
   let moving = @signals.signal(false, same=fn(a, b) { a == b })
-  // (where it is laid out told from its making on, read as it is decoded: out_of_window)
-  @signals.untracked(fn() { s.laid_window_told() }) |> ignore
   s.reacts(fn() { (ready(), picture().held) }, fn(now) {
     let (decoded, held) = now
     if @signals.untracked(fn() { came.get() }) is None {
       // (held while it waits: there at once as it comes)
       if held {
-        came.set(Some(-1.0e18))
-      } else if decoded && out_of_window(s) {
-        // (decoded out of the window, a row laid out ahead of what shows: there at once, nothing of it to see come)
         came.set(Some(-1.0e18))
       } else if decoded {
         let at = s.cause_at()
@@ -194,7 +206,7 @@ fn media_reveal_node(
   }
   let e = fn() { @ui.Out.at(way()) }
   s.clips(Is(true)) |> ignore
-  s.box(fn(i) {
+  s.show(fn() { seen.get() }, fn(i) {
     i
     .over(Is(true))
     .width(By(fn() { Some(width()) }))
@@ -204,7 +216,6 @@ fn media_reveal_node(
     |> ignore
     media_image(i, fn() { picture().key }, width, height, fit)
   })
-  |> ignore
   // (the frost over it as it comes, none under a quarter deep)
   s.show(fn() { ready() && reveal_blur * (1.0 - e()) > reveal_blur_least }, fn(f) {
     f
@@ -264,14 +275,4 @@ fn media_reveal_node(
       |> ignore
     }
   })
-}
-
-///|
-/// Whether `s` is laid out wholly out of its window (over its top or under its foot), as last told (where it is told
-/// from its making: media_reveal_node).
-fn out_of_window(s : @view.View) -> Bool {
-  match @signals.untracked(fn() { s.laid_window_told() }) {
-    Some((_, y, _, h)) => y + h <= 0.0 || y >= s.window().1
-    None => false
-  }
 }
