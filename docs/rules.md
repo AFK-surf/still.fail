@@ -21,6 +21,11 @@
 - `sh rules/build.sh`（`MBUI_TOOLS` 同 mbui 的脚本）：编成 JS，复制到 `rules/js/rules.js`。改了 `rules/src` 要重编并提交 `rules/js`；CI 的 `rules` 工作流核对两者一致。
 - `moon prove`（在 `rules/` 里）：要 Why3 1.7.2（opam 装）和一个求解器（z3 即可）。CI 的 `rules` 工作流每次改到 `rules/` 都跑一遍，证不出来就红：`tools` 每个 MoonBit 版本做一次证明工具（moonc-prove 和 opam 装的 Why3 1.7.2，放进 Actions 缓存；各 job 共用的 MoonBit 里删掉了 moonc-prove），`proved` 取出来跑；`planted` 同时跑 `rules/planted.sh`：把证过的规则逐条故意改错（最后一个 owner 能被移走、过期设备能签、别人替加的设备拿到钥匙……），各在一份副本里依次证（并排跑时 why3server 偶尔卡住不动），外加一份原样的副本必须证得出，每一处都要证不出来，有一处还证得出来就红（说明那条证明没管住它该管的）。改了被改错的那几行要跟着改脚本。
 
+## 协议（Tamarin，2026-11-05）
+`rules/protocol/lock.spthy` 把锁、面对面批准和库钥匙的封装写成消息往来，攻击者握着整个网络（cloud 和问的那台以外的所有 station：读、扣、重放、伪造任何消息），还能拿下任意设备的钥匙（Reveal）。rules/src 证的是每个判断，这里证的是这些判断在恶意网络上拼起来仍然管用：station 收的每把钥匙，签它的若是设备自己的钥匙，就是那台设备批准的（或它被拿下）；批准的只会是亮过码的那台新设备的钥匙；库钥匙封给设备自己的钥匙时，封的是它自己认证过的箱钥匙，它没被拿下就没人学得到。整条链由每一步归纳得出（Tamarin 自己顺着链找停不下来，所以只让它证每一步，归纳写在模型开头）。没建模的：角色和谁能签哪类记录（rules/src/role 证了）、移除、版本和 epoch（rules/src/history）、passkey、密码学本身（这里当完美的）。
+
+`sh rules/protocol/check.sh`（PATH 上要有 tamarin-prover 和 maude，`MAUDE_LIB` 指到 Maude 的目录）：每条引理各证一遍，再把三处判断各改错一份（station 收没签名的记录、没看码就批准、封给没人认证的箱钥匙），每份都要被 Tamarin 找出攻击。CI 的 `rules` 工作流 `protocol` 跑它，约 15 秒，Tamarin 1.12.0 和 Maude 3.5.1 从各自的 GitHub release 取、进缓存。
+
 ## 写证明的坑
 - MoonBit 翻成 WhyML 时**不加括号**：`a && (b || c)` 翻出来是 `a /\ b \/ c`，意思变了。每个公式只用一种连接词，其余拆成具名的 `predicate`。
 - `by` 是 WhyML 的关键字，不能当参数名。
