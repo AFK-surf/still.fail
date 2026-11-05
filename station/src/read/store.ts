@@ -14,6 +14,7 @@ import { type UsageChatCoverage, usageCardOutcomesComplete, usageChatStatsReady 
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
 import { hasRuntimeOrderIndex } from "../store/schema.ts";
 import { SESSION_LIST_CONNECT, SESSION_LIST_PENDING, SESSION_LIST_SCOPE, SESSION_LIST_SCOPE_CONNECT, sessionListReady } from "../store/session-list-index.ts";
+import { SESSION_BINDINGS_PENDING, SESSION_BINDINGS_SELECTED, sessionBindingsReady } from "../store/session-bindings-index.ts";
 import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
 import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
@@ -1241,9 +1242,13 @@ export function remoteRunCount(s: Store, viewer: InWorkspace | null): number {
 export const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.from(b));
 
 /// Store::list_bindings: the connects bound to each session.
-export function listBindings(s: Store): Map<string, string[]> {
+export function listBindings(s: Store, keys?: readonly string[]): Map<string, string[]> {
   const out = new Map<string, string[]>();
-  for (const r of all(s, "SELECT connect, session_key FROM bindings")) out.set(r.session_key, [...(out.get(r.session_key) ?? []), r.connect]);
+  if (keys !== undefined && keys.length === 0) return out;
+  if (keys !== undefined && !sessionBindingsReady(s.db)) throw new Error(SESSION_BINDINGS_PENDING);
+  const rows = keys === undefined ? all(s, "SELECT connect, session_key AS session FROM bindings")
+    : all(s, SESSION_BINDINGS_SELECTED, JSON.stringify([...new Set(keys)]));
+  for (const r of rows) out.set(r.session, [...(out.get(r.session) ?? []), r.connect]);
   return out;
 }
 
