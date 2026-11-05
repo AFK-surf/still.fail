@@ -247,6 +247,9 @@ test "laid out otherwise by a signal, where a box was laid out read as it was bu
   t.clock_frame()
   t.clock_frame()
   assert_eq(t.built_why(), "")
+}
+
+///|
 test "a tell a build says once (a page left): told once, and the frames after it of the look alone, as before it" {
   let poke = @signals.signal(0)
   let seen = Ref(0)
