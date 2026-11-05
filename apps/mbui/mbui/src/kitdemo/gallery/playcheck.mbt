@@ -1,6 +1,6 @@
 // The players' contract (scripts/host_contract.sh HOST play): on a real host, MBUI_PLAYCHECK=<a video's bytes, base64>
-// (test/host/playcheck.mp4: a second of red, 64 × 48 at 10 frames a second, H.264): a player of it (a native view,
-// video/mp4) in a box of its own, each read it asks answered from those bytes (the whole file its total), as the app's
+// (test/host/playcheck.mp4: a second of red, 64 × 48 at 10 frames a second, H.264; MBUI_PLAYCHECK_WEBM=1 or
+// MBUI_PLAYCHECK_OGG=1 selects another container): a player of it in a box of its own, each read it asks answered from those bytes (the whole file its total), as the app's
 // players are; once ready, its length to the tenth of a second and its picture's size said (`PLAYCHECK ready 1000
 // 64x48`); where the host draws its picture in the canvas (MBUI_PLAYCHECK_DRAWN=1: Linux's), once its first frame is
 // drawn, the middle of its picture as the canvas drew it (`PLAYCHECK drawn red`, else its colour: `PLAYCHECK drawn r g
@@ -149,7 +149,8 @@ pub fn play_check_run(c : @ui.Ctx, video : String) -> Unit {
     Some(v) => v
     None => {
       let data = @codec.from_base64(video)
-      let v = @ui.NativeView::video("video/mp4", fn(offset, length, answer) {
+      let mime = if @ui.env("MBUI_PLAYCHECK_WEBM") == "1" { "video/webm" } else if @ui.env("MBUI_PLAYCHECK_OGG") == "1" { "video/ogg" } else { "video/mp4" }
+      let v = @ui.NativeView::video(mime, fn(offset, length, answer) {
         let n = data.length()
         let from = if offset < 0.0 { 0 } else if offset > n.to_double() { n } else { offset.to_int() }
         let to = if from + length > n { n } else { from + length }
