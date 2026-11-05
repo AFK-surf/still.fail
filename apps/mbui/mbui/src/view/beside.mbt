@@ -403,18 +403,6 @@ pub fn View::window_down_point(self : View) -> (Double, Double) {
 }
 
 ///|
-/// The latest press in the window, in this node's drawn coordinates. Unlike pointer_here, a finger has this
-/// position too. Read as window_downs changes to dismiss a popup only when that press is outside it.
-pub fn View::window_down_here(self : View) -> (Double, Double)? {
-  guard self.alive() && self.tree.last_w > 0.0 else { return None }
-  let (count, px, py) = self.tree.pressed_anywhere.get()
-  guard count > 0 else { return None }
-  let (x, y, s) = self.tree.placed(self.at)
-  let scale = if s > 0.0 { s } else { 1.0 }
-  Some(((px - x) / scale, (py - y) / scale))
-}
-
-///|
 /// A tap in the window at `at`, wherever it landed (the host's, as the old frame's Ctx::tapped_anywhere has one: a
 /// press let go without dragging, not taken by what it went down on), told after what it landed on took it: one change
 /// at that moment, told to what follows the window's taps (View::window_taps).
@@ -430,13 +418,6 @@ pub fn Tree::gesture_tap_taken(self : Tree) -> Bool {
   let was = self.gesture_tapped
   self.gesture_tapped = false
   was
-}
-
-///|
-/// Whether a gesture's finger let go from now taps nothing (its tap told the tree, View::gesture's `tap` not done): what
-/// it would tap lets go of words a finger picked alone, the host's to say as it lets go.
-pub fn Tree::withhold_taps(self : Tree, on : Bool) -> Unit {
-  self.taps_withheld = on
 }
 
 ///|

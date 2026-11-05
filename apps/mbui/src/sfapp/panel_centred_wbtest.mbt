@@ -79,14 +79,14 @@ test "panel centred, 大屏 keyboard and mouse: closed by its close button, by E
   }
   // (as main has it, a4c845604)
   assert_eq(out, [
-    "close: focus closed Some(TextField 发消息) midway Some(TextField 发消息) then presenting false gone 1 said [] focus Some(TextField 发消息)",
-    "escape: focus closed Some(TextField 发消息) midway Some(TextField 发消息) then presenting false gone 1 said [] focus Some(TextField 发消息)",
-    "outside: focus closed Some(TextField 发消息) midway Some(TextField 发消息) then presenting false gone 1 said [] focus Some(TextField 发消息)",
-    "own: focus closed Some(TextField 发消息) midway Some(TextField 发消息) then presenting false gone 0 said [ok] focus Some(TextField 发消息)",
+    "close: focus closed Some(TextField 按空格输入) midway Some(TextField 按空格输入) then presenting false gone 1 said [] focus Some(TextField 发消息)",
+    "escape: focus closed Some(TextField 按空格输入) midway Some(TextField 按空格输入) then presenting false gone 1 said [] focus Some(TextField 发消息)",
+    "outside: focus closed Some(TextField 按空格输入) midway Some(TextField 按空格输入) then presenting false gone 1 said [] focus Some(TextField 发消息)",
+    "own: focus closed Some(TextField 按空格输入) midway Some(TextField 按空格输入) then presenting false gone 0 said [ok] focus Some(TextField 发消息)",
     // (untitled, its close button pressed where it is drawn: closed. On main, a4c845604, it was not: its close button
     // built under what it holds, the press taken by what scrolls what it holds there, "untitled close pressed: focus
     // closed None midway None then presenting true gone 0 said [] focus None")
-    "untitled close pressed: focus closed Some(TextField 发消息) midway Some(TextField 发消息) then presenting false gone 1 said [] focus Some(TextField 发消息)",
+    "untitled close pressed: focus closed Some(TextField 按空格输入) midway Some(TextField 按空格输入) then presenting false gone 1 said [] focus Some(TextField 发消息)",
   ])
 }
 

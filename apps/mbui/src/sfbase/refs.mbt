@@ -34,7 +34,7 @@ let ref_fields : Map[String, RefField] = {}
 
 ///|
 /// From how many characters words pasted at once go as a file (the core's PASTE_THRESHOLD; 0 till it has said).
-let paste_bound : @signals.Signal[Int] = @signals.signal(0)
+let paste_bound : Ref[Int] = Ref(0)
 
 ///|
 let paste_bound_asked : Ref[Bool] = Ref(false)
@@ -42,7 +42,7 @@ let paste_bound_asked : Ref[Bool] = Ref(false)
 ///|
 pub fn refs_reset() -> Unit {
   ref_fields.clear()
-  paste_bound.set(0)
+  paste_bound.val = 0
   paste_bound_asked.val = false
 }
 
@@ -101,29 +101,13 @@ fn ref_key(text : String, caret : Int) -> String {
 /// workspace of station `here`) in what was put in at once going in as its mark, once the core has made it (not while
 /// `locked`).
 pub fn refs_edits(c : @ui.Ctx, src : Source, key : String, input : @ui.Field, here : String, locked : Bool) -> Unit {
-  refs_edits_with(fn(k, f) { c.tell(k, f) }, src, key, input, here, locked)
-}
-
-///|
-/// The same edit at a retained field's input cause. Calls go after the field's reference state is updated, as old
-/// views' tells do after their build; a synchronous core answer must not be overwritten by the edit it answered.
-pub fn refs_edits_now(src : Source, key : String, input : @ui.Field, here : String, locked : Bool) -> Unit {
-  let told : Array[() -> Unit] = []
-  refs_edits_with(fn(_, f) { told.push(f) }, src, key, input, here, locked)
-  for f in told {
-    f()
-  }
-}
-
-///|
-fn refs_edits_with(tell : (String, () -> Unit) -> Unit, src : Source, key : String, input : @ui.Field, here : String, locked : Bool) -> Unit {
   let f = ref_field(key)
   let now = input.text()
   let (anchor, caret) = input.selection()
   if now == f.text && anchor == f.anchor && caret == f.caret {
     // (words the app put in itself: their marks)
-    refs_ask_marks(tell, src, key, now)
-    refs_ask_words(tell, src, key, now)
+    refs_ask_marks(c, src, key, now)
+    refs_ask_words(c, src, key, now)
     return
   }
   let was = f.text
@@ -155,17 +139,17 @@ fn refs_edits_with(tell : (String, () -> Unit) -> Unit, src : Source, key : Stri
     // what was put in at once: the chats' links in it
     if put - start > 1 && !locked {
       let pasted = now.view(start_offset=start, end_offset=put).to_string()
-      tell("refs/pasted/" + key, fn() { refs_pasted(src, key, input, here, now, start, pasted) })
+      c.tell("refs/pasted/" + key, fn() { refs_pasted(src, key, input, here, now, start, pasted) })
     }
   }
   f.text = now
   f.anchor = anchor
   f.caret = caret
-  refs_ask_marks(tell, src, key, now)
-  refs_ask_words(tell, src, key, now)
+  refs_ask_marks(c, src, key, now)
+  refs_ask_words(c, src, key, now)
   if anchor == caret {
     let asked = ref_key(now, caret)
-    tell("refs/at/" + key, fn() {
+    c.tell("refs/at/" + key, fn() {
       (src.call)("ref.at", { "text": Json::string(now), "caret": Json::number(caret.to_double()) }, fn(r) {
         match r {
           Ok(v) => {
@@ -196,7 +180,7 @@ fn refs_edits_with(tell : (String, () -> Unit) -> Unit, src : Source, key : Stri
 
 ///|
 /// The marks of words `now` asked of the core (once for them, holding a `@[`).
-fn refs_ask_marks(tell : (String, () -> Unit) -> Unit, src : Source, key : String, now : String) -> Unit {
+fn refs_ask_marks(c : @ui.Ctx, src : Source, key : String, now : String) -> Unit {
   let f = ref_field(key)
   if !now.contains("@[") {
     // (said only as it changes: said each build, what read it would be built again each frame)
@@ -212,7 +196,7 @@ fn refs_ask_marks(tell : (String, () -> Unit) -> Unit, src : Source, key : Strin
     return
   }
   f.marks_asked = now
-  tell("refs/marks/" + key, fn() {
+  c.tell("refs/marks/" + key, fn() {
     (src.call)("ref.marks", { "text": Json::string(now) }, fn(r) {
       match r {
         Ok(v) if f.text == now => {
@@ -231,9 +215,6 @@ fn refs_ask_marks(tell : (String, () -> Unit) -> Unit, src : Source, key : Strin
 /// Words the app put in draft `key`'s field itself (a mark, the draft kept, put back): put there, seen as they are,
 /// not as written (no paste in them, no Backspace).
 pub fn refs_put(key : String, input : @ui.Field, words : String, caret? : Int) -> Unit {
-  // The editor and its reference state are one edit. A retained field can read a synchronous core answer as
-  // soon as Field::set notifies it; that answer must not then be moved again as if it belonged to the old words.
-  @signals.start_batch()
   let f = ref_field(key)
   let was = f.text
   input.set(words, caret?)
@@ -256,7 +237,6 @@ pub fn refs_put(key : String, input : @ui.Field, words : String, caret? : Int) -
   f.anchor = anchor
   f.caret = at
   f.at.set(None)
-  @signals.end_batch()
 }
 
 ///|
@@ -299,7 +279,7 @@ fn sent_words_of(s : String) -> String {
 ///|
 /// The runs the words of draft `key`'s field `now` will be drawn in once sent (the core's `ref.words`: refLinks.ts
 /// draftWords), asked once for them (of words that may hold more than one: @sf.words_may_link).
-fn refs_ask_words(tell : (String, () -> Unit) -> Unit, src : Source, key : String, now : String) -> Unit {
+fn refs_ask_words(c : @ui.Ctx, src : Source, key : String, now : String) -> Unit {
   let f = ref_field(key)
   let words = sent_words_of(now)
   if f.runs_of == words || f.runs_asked == words {
@@ -313,7 +293,7 @@ fn refs_ask_words(tell : (String, () -> Unit) -> Unit, src : Source, key : Strin
     return
   }
   f.runs_asked = words
-  tell("refs/words/" + key, fn() {
+  c.tell("refs/words/" + key, fn() {
     (src.call)("ref.words", { "text": Json::string(words) }, fn(r) {
       match r {
         Ok(v) if sent_words_of(f.text) == words => {
@@ -464,12 +444,6 @@ pub fn refs_active(key : String, n : Int, by? : Int = 0, to? : Int) -> Int {
 }
 
 ///|
-/// The choice currently shown among `n` chats, read without changing it (a retained row's selected state).
-pub fn refs_active_now(key : String, n : Int) -> Int {
-  if n <= 0 { 0 } else { ((ref_field(key).active.get() % n) + n) % n }
-}
-
-///|
 /// A chat picked in the menu of draft `key` (its station, its id, its title) put in as the mark the core makes of it
 /// (`chat.ref`, which keeps its link until it is sent; one of another workspace's keeps it for this one, `into`, too)
 /// in the `@words`' place if they are still there, a space and the caret after it; the menu closed for this `@`.
@@ -485,78 +459,41 @@ pub fn refs_pick(
   title : String,
   failed : (String) -> Unit,
 ) -> Unit {
-  match refs_pick_range(key, input) {
-    Some(range) => c.tell("refs/pick/" + key, fn() {
-      refs_pick_send(src, key, input, into, station, id, title, range, failed)
-    })
-    None => ()
-  }
-}
-
-///|
-/// A retained menu's choice, made at its input cause, through the same reference insertion as the old menu.
-pub fn refs_pick_now(
-  src : Source,
-  key : String,
-  input : @ui.Field,
-  into : String,
-  station : String,
-  id : String,
-  title : String,
-  failed : (String) -> Unit,
-) -> Unit {
-  match refs_pick_range(key, input) {
-    Some(range) => refs_pick_send(src, key, input, into, station, id, title, range, failed)
-    None => ()
-  }
-}
-
-///|
-/// Close the offering at the input, keeping the exact range the choice replaces when the core answers.
-fn refs_pick_range(key : String, input : @ui.Field) -> (Int, Int)? {
   let f = ref_field(key)
-  guard f.at.get() is Some((start, _)) else { return None }
+  guard f.at.get() is Some((start, _)) else { return }
   // (the caret as it is now: the words typed after the `@` since its menu was built are the `@`'s too)
   let caret = input.selection().1
   f.closed.set(start)
-  Some((start, caret))
-}
-
-///|
-/// Ask for a chosen chat's mark, either through the old frame's tell or directly from a retained input handler.
-fn refs_pick_send(
-  src : Source, key : String, input : @ui.Field, into : String, station : String,
-  id : String, title : String, range : (Int, Int), failed : (String) -> Unit,
-) -> Unit {
-  let (start, caret) = range
-  (src.call)(
-    "chat.ref",
-    {
-      "station": Json::string(station),
-      "id": Json::string(id),
-      "title": Json::string(title),
-      "base": Json::string(cloud_origin()),
-      "into": Json::string(into),
-    },
-    fn(res) {
-      match res {
-        Ok(v) => {
-          let mark = text(Some(v), "mark")
-          let now = input.text()
-          if mark == "" || start >= now.length() || now.at(start).to_int() != 64 || caret > now.length() {
-            return
+  c.tell("refs/pick/" + key, fn() {
+    (src.call)(
+      "chat.ref",
+      {
+        "station": Json::string(station),
+        "id": Json::string(id),
+        "title": Json::string(title),
+        "base": Json::string(cloud_origin()),
+        "into": Json::string(into),
+      },
+      fn(res) {
+        match res {
+          Ok(v) => {
+            let mark = text(Some(v), "mark")
+            let now = input.text()
+            if mark == "" || start >= now.length() || now.at(start).to_int() != 64 || caret > now.length() {
+              return
+            }
+            refs_put(
+              key,
+              input,
+              now.view(end_offset=start).to_string() + mark + " " + now.view(start_offset=caret).to_string(),
+              caret=start + mark.length() + 1,
+            )
           }
-          refs_put(
-            key,
-            input,
-            now.view(end_offset=start).to_string() + mark + " " + now.view(start_offset=caret).to_string(),
-            caret=start + mark.length() + 1,
-          )
+          Err(e) => failed(text(Some(e), "message"))
         }
-        Err(e) => failed(text(Some(e), "message"))
-      }
-    },
-  )
+      },
+    )
+  })
 }
 
 ///|
@@ -664,35 +601,18 @@ fn trimmed(o : String) -> String {
 /// From how many characters words pasted at once go as a file (the core's: `paste.info`, asked once; 0 till it has
 /// answered, none taken so).
 pub fn paste_threshold(c : @ui.Ctx, src : Source) -> Int {
-  paste_threshold_with(fn(k, f) { c.tell(k, f) }, src)
-}
-
-///|
-/// The paste bound asked at a retained composer's creation, followed when the core answers it.
-pub fn paste_threshold_now(src : Source) -> Int {
-  paste_threshold_with(fn(_, f) { f() }, src)
-}
-
-///|
-/// The bound already asked for, followed without making a call from a node's property binding.
-pub fn paste_threshold_read() -> Int {
-  paste_bound.get()
-}
-
-///|
-fn paste_threshold_with(tell : (String, () -> Unit) -> Unit, src : Source) -> Int {
   if !paste_bound_asked.val {
     paste_bound_asked.val = true
-    tell("refs/paste-bound", fn() {
+    c.tell("refs/paste-bound", fn() {
       (src.call)("paste.info", { "text": Json::string("") }, fn(r) {
         match r {
-          Ok(v) => paste_bound.set(number(Some(v), "threshold").to_int())
+          Ok(v) => paste_bound.val = number(Some(v), "threshold").to_int()
           Err(_) => paste_bound_asked.val = false
         }
       })
     })
   }
-  paste_bound.get()
+  paste_bound.val
 }
 
 ///|
@@ -704,7 +624,7 @@ pub fn writing_paste(src : Source, w : Writing, station : String, words : String
     let info = field(Some(v), "info")
     match info {
       Some(Object(_)) =>
-        writing_add(src, w, station, "pasted-text-" + upload_id(w.key + "\u{2}" + words, w.files.get().length() + 1) + ".txt", @utf8.encode(words), pasted=info.unwrap())
+        writing_add(src, w, station, "pasted-text-" + upload_id(w.key + "\u{2}" + words, w.files.length() + 1) + ".txt", @utf8.encode(words), pasted=info.unwrap())
       _ => ()
     }
   })
@@ -715,7 +635,7 @@ pub fn writing_paste(src : Source, w : Writing, station : String, words : String
 /// again with what the core said of them).
 pub fn writing_paste_again(src : Source, w : Writing, id : String) -> Unit {
   guard writing_went.get(id) is Some((station, name, bytes)) else { return }
-  let info = w.files.get().iter().find_first(fn(f) { text(Some(f), "id") == id }).map(fn(f) { field(Some(f), "pasted") })
+  let info = w.files.iter().find_first(fn(f) { text(Some(f), "id") == id }).map(fn(f) { field(Some(f), "pasted") })
   writing_remove(src, w, id)
   match info {
     Some(Some(p)) => writing_add(src, w, station, name, bytes, pasted=p)

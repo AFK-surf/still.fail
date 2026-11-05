@@ -20,8 +20,6 @@ pub fn chat_row_node(
   stint : () -> Int,
   list_ground? : () -> Int64 = fn() { @sf.theme().p.bg },
   more? : Bool = false,
-  found? : Bool = false,
-  opened? : (ChatRef) -> Unit,
 ) -> @view.View {
   let t = fn() { @sf.theme() }
   // (a finger rests on nothing: a press reads ahead, a hold shows the time; a pointer's over it shows them)
@@ -32,7 +30,7 @@ pub fn chat_row_node(
   rows.swiped_off.remove(swiped_key(first))
   let r = fn() { row_ref(item()) }
   let offline = fn() { item().offline is Some(_) }
-  let menu_ok = fn() { !found && item().offline is None && !item().pending }
+  let menu_ok = fn() { item().offline is None && !item().pending }
   let menu_on = fn() { row_menu_open(item()) }
   // (its title a field in its place, from a mouse's 重命名: rename_node)
   let renaming = fn() { row_renaming.get() == key }
@@ -44,19 +42,15 @@ pub fn chat_row_node(
   let press_due : Ref[() -> Unit] = Ref(fn() {  })
   // (what a finger going down on it read ahead, let go as it is let go without opening it: a scroll, a hold)
   let primed = Ref(false)
-  let opened_once = Ref(false)
+  let opened = Ref(false)
   // (where the last press went down, and its state line: pressed there, while the core says which message that is
   // about and nothing in it is unread, its chat goes there as it opens: ChatMark.tsx jumpFromLine)
   let down_at : Ref[(Double, Double)?] = Ref(None)
   let state_at : Ref[@view.View?] = Ref(None)
   let press = fn() {
     let i = @signals.untracked(item)
-    opened_once.val = true
+    opened.val = true
     let r = row_ref(i)
-    match opened {
-      Some(f) => { f(r); return }
-      None => ()
-    }
     let on_line = match (down_at.val, state_at.val) {
       (Some((x, y)), Some(l)) if l.alive() => {
         let (lx, ly, lw, lh) = l.placed_window_now()
@@ -84,8 +78,8 @@ pub fn chat_row_node(
     // the way once its menu opens, back down as the menu goes (@sf.lift_of's), a card of the raised ground over the
     // menu's scrim, drawn in from the screen's sides (row_lifted, @sf.lift_over's)
     let lift = @sf.EdgeWay::new(0.0)
-    let lifted = fn() { if finger && !found { dmin(1.0, dmax(0.0, lift.shown(slot))) } else { 0.0 } }
-    if finger && !found {
+    let lifted = fn() { if finger { dmin(1.0, dmax(0.0, lift.shown(slot))) } else { 0.0 } }
+    if finger {
       slot.reacts(
         fn() {
           if menu_on() {
@@ -391,10 +385,6 @@ pub fn chat_row_node(
     .says(By(fn() { Some(@view.said(Link, label=item().title)) }))
     .on_menu(fn(m) { open_menu(m.wx, m.wy, false) })
     |> ignore
-    if found {
-      // A search result or recent chat has its press's ripple, with no hold menu; swiping is still the row's.
-      @sf.pressed_node(row, press, Is(0.0), Link, fn() { item().title })
-    } else {
     @sf.presses_held_node(
       row,
       press,
@@ -407,7 +397,7 @@ pub fn chat_row_node(
       },
       down=fn(d) {
         down_at.val = Some((d.wx, d.wy))
-        opened_once.val = false
+        opened.val = false
         (press_due.val)()
         press_due.val = row.at_moment(row.cause_at() + @ui.tap_indication_ms, fn() { press_lit.set(true) })
         if finger && !src.read_only {
@@ -419,13 +409,12 @@ pub fn chat_row_node(
         held.set(false)
         (press_due.val)()
         press_lit.set(false)
-        if primed.val && !opened_once.val {
+        if primed.val && !opened.val {
           unprime(src, @signals.untracked(r))
         }
         primed.val = false
       },
     )
-    }
     // (Tab passes the rows, as the old list's: they are gone through by ⌥↑ ⌥↓, chat.prev and chat.next)
     row.tab_stop(Is(false)) |> ignore
     // 归档 at the row's top right while a mouse points at it (concentric with the row's corner)
@@ -709,3 +698,4 @@ let row_renaming : @signals.Signal[String] = @signals.signal("")
 /// The row last gone back from by a finger (its name: row_name), the one whose ground stays a while.
 // kept across runs: put back by chat_rows_reset
 let row_left_said : @signals.Signal[String] = @signals.signal("")
+

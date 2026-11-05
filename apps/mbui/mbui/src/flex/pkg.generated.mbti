@@ -21,7 +21,6 @@ pub fn measured_height(Node, Double) -> Double
 // Errors
 
 // Types and methods
-#derive(Eq)
 pub(all) enum Align {
   Auto
   FlexStart
@@ -32,52 +31,46 @@ pub(all) enum Align {
   SpaceBetween
   SpaceAround
   SpaceEvenly
-}
+} derive(Eq)
 
 type Box
 
-#derive(Eq)
 pub(all) enum BoxSizing {
   BorderBox
   ContentBox
-}
+} derive(Eq)
 
-#derive(Eq)
 pub(all) enum Dim {
   Auto
   Pt(Double)
   Pct(Double)
   Within(Double)
-}
+} derive(Eq)
 
-#derive(Eq)
 pub(all) enum Display {
   Flex
   DisplayNone
   Contents
-}
+} derive(Eq)
 
-#derive(Eq)
 pub(all) enum FlexDirection {
   Column
   Row
   ColumnReverse
   RowReverse
-}
+} derive(Eq)
 
-#derive(Eq)
 pub(all) enum FlexWrap {
   NoWrap
   Wrap
   WrapReverse
-}
+} derive(Eq)
 
-#derive(Eq)
 pub(all) enum MeasureMode {
   Undefined
   Exactly
   AtMost
-}
+} derive(Eq)
 
 pub(all) struct Node {
   style : Style
@@ -114,19 +107,17 @@ pub fn Node::laid_out_at(Self) -> Int32
 pub fn Node::left_out(Self) -> Bool
 pub fn Node::new() -> Self
 
-#derive(Eq)
 pub(all) enum Overflow {
   Visible
   Hidden
   Scroll
-}
+} derive(Eq)
 
-#derive(Eq)
 pub(all) enum PositionType {
   Relative
   Absolute
   Static
-}
+} derive(Eq)
 
 pub(all) struct Style {
   mut display : Display
@@ -145,7 +136,6 @@ pub(all) struct Style {
   mut fits : Bool
   mut one_of : Bool
   mut fit_need : Double
-  mut fit_held : Bool
   mut soft_min : Double
   mut stretch_past_max : Bool
   mut min_held : Bool

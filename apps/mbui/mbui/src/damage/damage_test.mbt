@@ -22,43 +22,88 @@ fn frame(rects : Array[(Double, Double, Double, Double, Int)]) -> FixedArray[Dou
 }
 
 ///|
-/// The parts of a 400 × 300 window where each of `a`'s instances changed.
-fn parts_of(a : FixedArray[Double], captures? : Array[(Double, Double, Double, Double)] = []) -> Array[(Double, Double, Double, Double)] {
-  let p = @damage.Parts::new()
-  for k in 0..<(a.length() / 60) {
-    p.add(p.reach_of(a, k, k + 1))
-  }
-  p.take(400.0, 300.0, captures)
+fn copy(a : FixedArray[Double]) -> FixedArray[Double] {
+  let b = FixedArray::make(a.length(), 0.0)
+  a.blit_to(b, len=a.length())
+  b
 }
 
 ///|
-test "nothing said: no part; the whole said: all of it, and why" {
-  let p = @damage.Parts::new()
-  inspect(p.take(400.0, 300.0, []), content="[]")
-  p.add((10.0, 10.0, 20.0, 20.0))
-  p.whole(1)
-  inspect(p.take(400.0, 300.0, []), content="[(0, 0, -1, -1)]")
-  inspect(p.why(), content="1")
-  inspect(p.take(400.0, 300.0, []), content="[]")
-  inspect(p.why(), content="0")
+/// A damage that has seen `a`.
+fn seen(a : FixedArray[Double]) -> @damage.Damage {
+  let d = @damage.Damage::new()
+  ignore(d.next(a, a.length() / 60, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0))
+  d
 }
 
 ///|
-test "an instance: its rect, its edge's reach round it" {
-  inspect(parts_of(frame([(100.0, 50.0, 20.0, 10.0, 0)])), content="[(98, 48, 24, 14)]")
+fn next(d : @damage.Damage, a : FixedArray[Double]) -> Array[(Double, Double, Double, Double)] {
+  d.next(a, a.length() / 60, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0)
 }
 
 ///|
-test "where it was and where it is, near: one part" {
-  let p = @damage.Parts::new()
-  p.add(p.reach_of(frame([(100.0, 50.0, 20.0, 10.0, 0)]), 0, 1))
-  p.add(p.reach_of(frame([(130.0, 50.0, 20.0, 10.0, 0)]), 0, 1))
-  inspect(p.take(400.0, 300.0, []), content="[(98, 48, 54, 14)]")
+test "the first frame whole, the same again none" {
+  let a = frame([(10.0, 10.0, 20.0, 20.0, 0)])
+  let d = @damage.Damage::new()
+  inspect(next(d, a), content="[(0, 0, -1, -1)]")
+  inspect(next(d, a), content="[]")
+  d.forget()
+  inspect(next(d, a), content="[(0, 0, -1, -1)]")
+}
+
+///|
+test "an instance that changed: where it is, its edge's reach round it" {
+  let a = frame([(0.0, 0.0, 400.0, 300.0, 0), (100.0, 50.0, 20.0, 10.0, 0)])
+  let d = seen(a)
+  let b = copy(a)
+  b[60 + 8] = 0.5
+  inspect(next(d, b), content="[(98, 48, 24, 14)]")
+}
+
+///|
+test "moved: where it was and where it is" {
+  let a = frame([(0.0, 0.0, 400.0, 300.0, 0), (100.0, 50.0, 20.0, 10.0, 0)])
+  let d = seen(a)
+  let b = copy(a)
+  b[60] = 130.0
+  inspect(next(d, b), content="[(98, 48, 54, 14)]")
+}
+
+///|
+test "another window, scale or ground: whole" {
+  let a = frame([(10.0, 10.0, 20.0, 20.0, 0)])
+  let d = seen(a)
+  inspect(d.next(a, 1, 401.0, 300.0, 2.0, 1.0, 1.0, 1.0), content="[(0, 0, -1, -1)]")
+  inspect(d.next(a, 1, 401.0, 300.0, 3.0, 1.0, 1.0, 1.0), content="[(0, 0, -1, -1)]")
+  inspect(d.next(a, 1, 401.0, 300.0, 3.0, 0.0, 1.0, 1.0), content="[(0, 0, -1, -1)]")
+  inspect(d.next(a, 1, 401.0, 300.0, 3.0, 0.0, 1.0, 1.0), content="[]")
+}
+
+///|
+test "another number of instances: the same from the start and the end kept, what is between drawn again" {
+  // a ground, a caret shown between two words, then hidden again
+  let a = frame([(0.0, 0.0, 400.0, 300.0, 0), (10.0, 10.0, 40.0, 16.0, 1), (60.0, 10.0, 40.0, 16.0, 1)])
+  let d = seen(a)
+  let b = frame([
+    (0.0, 0.0, 400.0, 300.0, 0),
+    (10.0, 10.0, 40.0, 16.0, 1),
+    (52.0, 10.0, 2.0, 16.0, 0),
+    (60.0, 10.0, 40.0, 16.0, 1),
+  ])
+  inspect(next(d, b), content="[(50, 8, 6, 20)]")
+  inspect(next(d, a), content="[(50, 8, 6, 20)]")
+  // a word longer at the end
+  let c = frame([(0.0, 0.0, 400.0, 300.0, 0), (10.0, 10.0, 40.0, 16.0, 1), (60.0, 10.0, 40.0, 16.0, 1), (100.0, 10.0, 8.0, 16.0, 1)])
+  inspect(next(d, c), content="[(98, 8, 12, 20)]")
 }
 
 ///|
 test "more than half the window: whole" {
-  inspect(parts_of(frame([(0.0, 0.0, 300.0, 300.0, 0)])), content="[(0, 0, -1, -1)]")
+  let a = frame([(0.0, 0.0, 300.0, 300.0, 0)])
+  let d = seen(a)
+  let b = copy(a)
+  b[8] = 0.0
+  inspect(next(d, b), content="[(0, 0, -1, -1)]")
 }
 
 ///|
@@ -68,74 +113,107 @@ test "in its clip, and in the window" {
   a[17] = 60.0
   a[18] = 140.0
   a[19] = 70.0
-  inspect(parts_of(a), content="[(118, 58, 24, 14)]")
-  inspect(parts_of(frame([(-10.0, -10.0, 20.0, 20.0, 0)])), content="[(0, 0, 12, 12)]")
+  let d = seen(a)
+  let b = copy(a)
+  b[8] = 0.0
+  inspect(next(d, b), content="[(118, 58, 24, 14)]")
+  let c = frame([(-10.0, -10.0, 20.0, 20.0, 0)])
+  let d = seen(c)
+  let e = copy(c)
+  e[8] = 0.0
+  inspect(next(d, e), content="[(0, 0, 12, 12)]")
 }
 
 ///|
 test "turned: the circle about its point, its clip turned with it not cut by" {
   let a = frame([(100.0, 100.0, 20.0, 20.0, 0)])
-  a[32] = 0.6
+  a[32] = 0.5
   a[33] = 110.0
   a[34] = 110.0
   a[16] = 105.0
   a[17] = 105.0
   a[18] = 115.0
   a[19] = 115.0
+  let d = seen(a)
+  let b = copy(a)
+  b[32] = 0.6
   // (half its diagonal grown by the edge's reach: 12 √2)
-  inspect(parts_of(a), content="[(93.02943725152286, 93.02943725152286, 33.94112549695427, 33.94112549695427)]")
+  inspect(next(d, b), content="[(93.02943725152286, 93.02943725152286, 33.94112549695427, 33.94112549695427)]")
   // its clip where it is drawn (35): cut by it
-  a[35] = 1.0
-  inspect(parts_of(a), content="[(103, 103, 14, 14)]")
+  let c = copy(a)
+  c[35] = 1.0
+  let d = seen(c)
+  let e = copy(c)
+  e[32] = 0.6
+  inspect(next(d, e), content="[(103, 103, 14, 14)]")
 }
 
 ///|
 test "a shadow: its blur's reach" {
   let a = frame([(100.0, 100.0, 20.0, 20.0, 2)])
   a[7] = 4.0
+  let d = seen(a)
+  let b = copy(a)
+  b[8] = 0.0
   // (3 sigma, 2 more, the edge's 2)
-  inspect(parts_of(a), content="[(84, 84, 52, 52)]")
+  inspect(next(d, b), content="[(84, 84, 52, 52)]")
 }
 
 ///|
-test "pieces of shapes reach nothing of their own: their band holds them" {
-  let a = frame([(50.0, 50.0, 30.0, 8.0, 11), (0.0, 0.0, 0.0, 0.0, 12)])
-  a[12] = 0.0
-  a[13] = 1.0
-  inspect(parts_of(a), content="[(48, 48, 34, 12)]")
+test "a band whose pieces changed, the band the same" {
+  // a band (11) of pieces 7 and 8 (the second piece instance's), then two piece instances (12)
+  let a = frame([(50.0, 50.0, 30.0, 8.0, 11), (0.0, 0.0, 0.0, 0.0, 12), (0.0, 0.0, 0.0, 0.0, 12)])
+  a[12] = 7.0
+  a[13] = 2.0
+  let d = seen(a)
+  // a piece of the first piece instance: no band of it drawn
+  let b = copy(a)
+  b[60 + 0] = 0.25
+  inspect(next(d, b), content="[]")
+  // the band's
+  let c = copy(b)
+  c[120 + 8] = 0.25
+  inspect(next(d, c), content="[(48, 48, 34, 12)]")
 }
 
 ///|
-test "a stream's picture, a native view's hole" {
-  let a = frame([(10.0, 10.0, 20.0, 20.0, 4), (40.0, 10.0, 20.0, 20.0, 9)])
+test "a stream's picture: drawn again each frame" {
+  let a = frame([(10.0, 10.0, 20.0, 20.0, 4)])
   a[20] = @damage.stream_tex_base + 3.0
-  a[80] = @damage.view_tex_base + 3.0
-  inspect(@damage.shows_stream(a, 0), content="true")
-  inspect(@damage.shows_stream(a, 1), content="false")
+  let d = seen(a)
+  inspect(next(d, a), content="[(8, 8, 24, 24)]")
+  // a native view's hole: as its numbers say
+  let b = copy(a)
+  b[20] = @damage.view_tex_base + 3.0
+  let d = seen(b)
+  inspect(next(d, b), content="[]")
 }
 
 ///|
 test "glass: the part reaching what its capture copies takes all of that in" {
-  // frosted glass (5), blur 4, its capture -1; a dot that changed under its margin, outside the glass
-  let g = frame([(100.0, 20.0, 80.0, 20.0, 5)])
-  g[7] = 4.0
-  g[20] = -1.0
-  let captures = match @damage.capture_of(g, 0) {
-    Some((_, r)) => [r]
-    None => []
-  }
-  // (the glass's rect, 3 sigma, 2, and the edge's 2 round it: 84 … 196, 4 … 56; the dot's 188 … 196)
-  inspect(captures, content="[(84, 4, 196, 56)]")
-  inspect(parts_of(frame([(190.0, 10.0, 4.0, 4.0, 0)]), captures~), content="[(84, 4, 112, 52)]")
+  // frosted glass (5) over a ground, blur 4, its capture -1; a dot that changed under its margin, outside the glass
+  let a = frame([(0.0, 0.0, 400.0, 300.0, 0), (200.0, 10.0, 4.0, 4.0, 0), (100.0, 20.0, 80.0, 20.0, 5)])
+  a[120 + 7] = 4.0
+  a[120 + 20] = -1.0
+  let d = seen(a)
+  let b = copy(a)
+  b[60] = 190.0
+  // (the glass's rect, 3 sigma, 2, and the edge's 2 round it: 84 … 196, 4 … 56; the dot's 188 … 206)
+  inspect(next(d, b), content="[(84, 4, 122, 52)]")
   // far from it: only the dot
-  inspect(parts_of(frame([(300.0, 200.0, 4.0, 4.0, 0)]), captures~), content="[(298, 198, 8, 8)]")
-  // no glass, or glass of no capture of its own
-  inspect(@damage.capture_of(frame([(0.0, 0.0, 4.0, 4.0, 0)]), 0), content="None")
+  let c = frame([(0.0, 0.0, 400.0, 300.0, 0), (300.0, 200.0, 4.0, 4.0, 0), (100.0, 20.0, 80.0, 20.0, 5)])
+  c[120 + 7] = 4.0
+  c[120 + 20] = -1.0
+  let d = seen(c)
+  let e = copy(c)
+  e[60 + 8] = 0.0
+  inspect(next(d, e), content="[(298, 198, 8, 8)]")
 }
 
 ///|
 test "parts far apart: each its own, up to four; near: one" {
   let a = frame([
+    (0.0, 0.0, 400.0, 300.0, 0),
     (10.0, 10.0, 4.0, 4.0, 0),
     (300.0, 10.0, 4.0, 4.0, 0),
     (10.0, 200.0, 4.0, 4.0, 0),
@@ -143,43 +221,50 @@ test "parts far apart: each its own, up to four; near: one" {
     (200.0, 100.0, 4.0, 4.0, 0),
     (20.0, 10.0, 4.0, 4.0, 0),
   ])
+  let d = seen(a)
+  let b = copy(a)
+  for k in 1..<7 {
+    b[k * 60 + 8] = 0.0
+  }
   // (the dot at 20 near the one at 10: one part; five left, the pair whose rect grows least merged)
-  inspect(parts_of(a), content="[(8, 8, 18, 198), (298, 8, 8, 8), (298, 198, 8, 8), (198, 98, 8, 8)]")
+  inspect(
+    next(d, b),
+    content="[(8, 8, 18, 198), (298, 8, 8, 8), (298, 198, 8, 8), (198, 98, 8, 8)]",
+  )
 }
 
 ///|
-test "the work counted: each instance reached, each rect said" {
-  let p = @damage.Parts::new()
-  let a = frame([(10.0, 10.0, 4.0, 4.0, 0), (20.0, 10.0, 4.0, 4.0, 0), (30.0, 10.0, 4.0, 4.0, 0)])
-  p.add(p.reach_of(a, 0, 3))
-  // (an empty rect said is no work)
-  p.add(@damage.nowhere)
-  inspect(p.work(), content="4")
-  inspect(@damage.union((0.0, 0.0, 1.0, 1.0), @damage.nowhere), content="(0, 0, 1, 1)")
+test "another number of instances, two changes far apart: each its own, what is between kept" {
+  // a dot near the top that changes colour, rows between, and a caret shown at the foot
+  let rows = [(0.0, 0.0, 400.0, 300.0, 0), (10.0, 10.0, 4.0, 4.0, 0)]
+  for k in 0..<20 {
+    rows.push((20.0, 30.0 + k.to_double() * 10.0, 100.0, 8.0, 1))
+  }
+  let a = frame(rows)
+  let d = seen(a)
+  let more = rows.copy()
+  more.push((300.0, 280.0, 2.0, 12.0, 0))
+  let b = frame(more)
+  b[60 + 8] = 0.0
+  inspect(next(d, b), content="[(8, 8, 8, 8), (298, 278, 6, 16)]")
 }
 
 ///|
-test "an old view's instances compared: what differs drawn again where it was and is, the rest not" {
-  let before = frame([(0.0, 0.0, 400.0, 300.0, 0), (10.0, 10.0, 20.0, 20.0, 0), (300.0, 200.0, 20.0, 20.0, 0)])
-  // the one in the middle moved: it alone
-  let moved = frame([(0.0, 0.0, 400.0, 300.0, 0), (40.0, 10.0, 20.0, 20.0, 0), (300.0, 200.0, 20.0, 20.0, 0)])
-  let p = @damage.Parts::new()
-  p.add_changed(before, 3, moved, 3)
-  let parts = p.take(400.0, 300.0, [])
-  assert_eq(parts.length(), 1)
-  let (x, _, w, _) = parts[0]
-  assert_true(x < 10.0 && x + w > 60.0 && w < 60.0, msg="\{parts}")
-  // nothing differs: nothing
-  p.add_changed(before, 3, before, 3)
-  assert_eq(p.take(400.0, 300.0, []), [])
-  // one more at its end: that one
-  let more = frame([(0.0, 0.0, 400.0, 300.0, 0), (10.0, 10.0, 20.0, 20.0, 0), (300.0, 200.0, 20.0, 20.0, 0), (100.0, 100.0, 10.0, 10.0, 0)])
-  p.add_changed(before, 3, more, 4)
-  let parts = p.take(400.0, 300.0, [])
-  assert_eq(parts.length(), 1)
-  assert_true(parts[0].2 < 20.0, msg="\{parts}")
-  // a shape's piece differs: all of it
-  let piece = frame([(0.0, 0.0, 400.0, 300.0, 0), (10.0, 10.0, 20.0, 20.0, 12), (300.0, 200.0, 20.0, 20.0, 0)])
-  p.add_changed(before, 3, piece, 3)
-  assert_eq(p.take(400.0, 300.0, []), [(0.0, 0.0, -1.0, -1.0)])
+test "a list scrolled, a row more: each row where it was and where it is, one part, what is beside it kept" {
+  // rows moved up 3 points with one more come in at the foot, none of them the same as any before, and a dot drawn
+  // among them that stays
+  let rows = [(0.0, 0.0, 400.0, 300.0, 0)]
+  let moved = [(0.0, 0.0, 400.0, 300.0, 0)]
+  for k in 0..<21 {
+    if k < 20 {
+      rows.push((20.0, 30.0 + k.to_double() * 10.0, 100.0, 8.0, 1))
+    }
+    moved.push((20.0, 27.0 + k.to_double() * 10.0, 100.0, 8.0, 1))
+    if k == 9 {
+      rows.push((300.0, 150.0, 4.0, 4.0, 0))
+      moved.push((300.0, 150.0, 4.0, 4.0, 0))
+    }
+  }
+  let d = seen(frame(rows))
+  inspect(next(d, frame(moved)), content="[(18, 25, 104, 212)]")
 }

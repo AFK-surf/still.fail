@@ -7,8 +7,6 @@ fn init {
   // The requested whole-panel fade lets the page show through for its last frames. Keep this exception exact: the
   // checker still reports every other overlap, and even this pair outside a closing layer.
   @ui.words_over_closing_expected([
-    // (panel_node's explicit whole-panel fade: its words and surface keep the same alpha over this message)
-    ("src/sfapp/menu_node_wbtest.mbt", "Willow 上 codex 的登录已失效：请在设置里重新登录", "一起退场"),
     ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "Opus 5.5"),
     ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "中"),
     ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "GPT-6 Astra"),

@@ -131,17 +131,12 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   }
   let t3 = work_now()
   h_present(c.inst, c.ninst)
-  // What a retained page read of its geometry is told only for the frame that reached the screen.
-  view_read_drawn()
   // what the shots being taken drew read back (shot.mbt)
   c.shots_after_present()
   log_drawn(w, h, scale, t)
-  // (a frame of the looks alone, or of the tree alone, drew no picture of its own: none is let go for it)
-  if !looks_drawn.val && !tree_alone_drawn.val {
+  // (a frame of the looks alone drew no picture of its own: none is let go for it)
+  if !looks_drawn.val {
     c.trim_images()
-  } else {
-    // (what is said of a picture nothing follows any more let go all the same: none of it drawn)
-    images_said_trim()
   }
   let t4 = work_now()
   c.t_present = t4 - t3
@@ -159,10 +154,8 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // shown (motion_data.mbt)
   c.motion_left = c.motion_owed() || c.motion_read
   c.motion_read = false
-  // (what the window's tree has going: drawn as the clock goes; what ends at a moment, woken then: view_host.mbt; what a
-  // layer of its scene waits for, scene_layers.mbt)
+  // (what the window's tree has going: drawn as the clock goes; what ends at a moment, woken then: view_host.mbt)
   view_frame_end(c)
-  c.scene_wake_into()
   // (a layout read back that moved: what was placed from it, placed again)
   if c.read_back_moved {
     c.wants_frame = true
@@ -489,8 +482,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   }
   cycle_looks_begin()
   dr.tops.clear()
-  // (the last frame's pieces kept for what of its scene is copied: scene_layers.mbt)
-  scene_segs_kept(c)
+  c.segs.clear()
   text_runs.runs.clear()
   words_alpha.val = 1.0
   look_surface.val = (1.0, -1)
@@ -510,7 +502,6 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.glass_frame()
   // (the window's tree in its order, the old frame or its old views in their places in it: view_host.mbt)
   c.view_paint(root)
-  let tree_end = c.ninst
   // what flies that no stratum over it took (strata.mbt), then what is over everything of the page wherever it was
   // painted (an editor's handles), after the rest of it (a layer's after the rest of the layer: Ctx::paint)
   c.land_flying()
@@ -523,18 +514,9 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.paint_over_layers()
   // (the handles of words a finger picked, over everything, as a field's: finger_select.mbt)
   c.paint_finger_ends()
-  // (what the old frame drew over the tree, its own: scene_layers.mbt)
-  if view_app.val is Some(_) {
-    c.scene_old_drawn(None, if tree_end < c.ninst { tree_end } else { c.ninst })
-  }
   // what was shaped and not drawn, for the host to draw ahead while it presents this frame (text.mbt)
   glyphs_ahead()
-  scene.seg_tail = c.ninst
   c.emit_segs()
-  // (the scene as this frame drew it: what changed drawn where it reaches now, scene_layers.mbt)
-  if view_app.val is Some(_) {
-    c.scene_end()
-  }
   // what is drawn by the clock, as its cycle is now (cycle_look.mbt), what it is drawn over kept for a frame of it alone
   // (frame_watch.mbt)
   looks_keep(c)
@@ -853,10 +835,6 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
     args.push(by.to_double())
   }
   // (where a mouse points, said before the event is taken; what it is over told once it is: view_host.mbt)
-  if button != 2 {
-    if kind == 0 { pointer_down_now.set(true) }
-    else if kind == 2 || kind == 3 { pointer_down_now.set(false) }
-  }
   view_point_said(kind, x, y)
   // (what the tree made once routes elsewhere than to the old view (a press on a node of its own, one outside the old
   // view's island) is no input of the old view's: taped alone, view_host.mbt)
@@ -928,7 +906,6 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
   }
   c.px = x
   c.py = y
-  c.pointer_pending = true
   // the event's own time (`t`): events handled together happened apart
   c.pointer_t = t
   if scroll_logging() {
@@ -1142,10 +1119,9 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
           }
         }
       }
-      // A field keeps its keyboard while surrounding words are picked, including the tree's words that have no
-      // old widget target. A mouse on empty ground still lets the focus go; another field takes it on its own tap.
-      None => if target == 0 && c.focus_allowed() != 0 &&
-        !(c.field_focused() && (pointing() is Finger || picked.from.base != NoSel)) {
+      // On a finger's tap, a field keeps the keyboard while its surroundings are read or used. A mouse on nothing
+      // still lets the focus go; another field takes it on its own tap.
+      None => if target == 0 && c.focus_allowed() != 0 && !(pointing() is Finger && c.field_focused()) {
         c.focus_moved(0)
       }
     }
@@ -1394,11 +1370,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     c.active = 0
     c.editor_drag = false
     c.handle_drag = 0
-    // (what is picked no longer being dragged out: told what follows it, as it is now: tree_picked)
-    if picked.dragging {
-      picked.dragging = false
-      picked_told()
-    }
+    picked.dragging = false
     finger_let_go()
     select_edge_stop()
     second_ptr[2] = 0.0
@@ -1465,12 +1437,8 @@ fn Ctx::press_called_off(self : Ctx, x : Double, y : Double, t : Double) -> Unit
       c.pager_release(c.drag_scroll, 0.0)
     }
   }
-  // (words being picked by it: picked as far as they are, no more, nothing scrolled on at an edge for it; told what
-  // follows it: tree_picked)
-  if picked.dragging {
-    picked.dragging = false
-    picked_told()
-  }
+  // (words being picked by it: picked as far as they are, no more, nothing scrolled on at an edge for it)
+  picked.dragging = false
   finger_let_go()
   select_edge_stop()
   c.down = false
@@ -1904,12 +1872,6 @@ fn on_key_now(code : Int, mods : Int) -> Unit {
     input_taped("key", h_now(), [code.to_double(), mods.to_double()])
     return
   }
-  // (none of its nodes took it, the focus a field of the tree's that takes it as its own: that field's alone,
-  // key_in_tree_field)
-  if key_in_tree_field(code, mods) {
-    input_taped("key", h_now(), [code.to_double(), mods.to_double()])
-    return
-  }
   took_input("key", h_now(), [code.to_double(), mods.to_double()])
   hand_event()
   key_in(code, mods)
@@ -1917,26 +1879,6 @@ fn on_key_now(code : Int, mods : Int) -> Unit {
   if code == key_escape {
     g().layer_keys_now()
   }
-}
-
-///|
-/// Key `code` taken by the field of the window's tree with the focus, where it is one of a field's own (its caret, its
-/// words: field_key) and reaches it (no layer over it taking its keys, Ctx::keys_reach):
-/// that field's alone, told it and painted again (tree_field_redraw), no old view's, nothing of the old frame nor any
-/// part kept built again for it (an input of the old views': on_key_now). False where it is no such key or field.
-fn key_in_tree_field(code : Int, mods : Int) -> Bool {
-  let c = g()
-  let focus = c.focus_allowed()
-  guard tree_said_ids.contains(focus) && c.keys_reach(focus) else { return false }
-  // (copying, cutting, all picked: what the page's words picked with the pointer may take before the field, key_in;
-  // one held with ⌥, ⌃ or ⌘: what the app reads of the keys may take it first, ⌥↓ the next chat, Ctx::key_pressed)
-  guard code != key_copy && code != key_cut && code != key_select_all && (mods & (mod_ctrl | mod_alt | mod_cmd)) == 0 else {
-    return false
-  }
-  guard c.editors.get(focus) is Some(st) && field_key(code) else { return false }
-  st.key(code, mods, h_now())
-  tree_field_redraw()
-  true
 }
 
 ///|
@@ -2028,13 +1970,8 @@ fn on_text(kind : Int, s : String, a : Int, b : Int) -> Unit {
 
 ///|
 fn on_text_now(kind : Int, s : String, a : Int, b : Int) -> Unit {
-  // (into a field of the window's tree: told it alone, typed_in_tree; no discrete event of the hand's for what reads
-  // them to be built again)
-  let typed = typed_in_tree(kind)
   took_input("text", h_now(), [kind.to_double(), a.to_double(), b.to_double()], text=s)
-  if !typed {
-    hand_event()
-  }
+  hand_event()
   let c = g()
   // (words for a focus a modal layer of the window's tree keeps from input: none's, island_allows; but a field it
   // leaves what is typed to, its: Ctx::typing_allowed)
@@ -2060,11 +1997,10 @@ fn on_text_now(kind : Int, s : String, a : Int, b : Int) -> Unit {
   // the input method deleting around the caret (`a` before, `b` after: Android's deleteSurroundingText): a field's
   // Backspace, its Delete
   if kind == text_delete_around {
-    // (a field of the tree's: its own Backspace and Delete, key_in_tree_field)
-    if a > 0 && !(typed && key_in_tree_field(key_backspace, 0)) {
+    if a > 0 {
       key_in(key_backspace, 0)
     }
-    if b > 0 && !(typed && key_in_tree_field(key_delete, 0)) {
+    if b > 0 {
       key_in(key_delete, 0)
     }
     return
@@ -2072,20 +2008,11 @@ fn on_text_now(kind : Int, s : String, a : Int, b : Int) -> Unit {
   match c.editors.get(c.focus) {
     Some(st) if kind == text_float_begin || kind == text_float_move || kind == text_float_end => {
       float_caret(c, st, kind, a.to_double() / text_float_unit, b.to_double() / text_float_unit, h_now())
-      if typed {
-        tree_field_redraw()
-      } else {
-        h_request_frame()
-      }
+      h_request_frame()
     }
     Some(st) => {
       st.text_input(kind, s, a, b, h_now())
-      // (a field of the tree's painted again for it, its words told as signals; an old view's editor, the frame)
-      if typed {
-        tree_field_redraw()
-      } else {
-        h_request_frame()
-      }
+      h_request_frame()
     }
     None => ()
   }
@@ -2357,7 +2284,7 @@ let probe_parts : FixedArray[Int] = FixedArray::make(3, 0)
 ///|
 /// Why the frames drawn whole were (@damage.Damage::why), each its count.
 // kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
-let probe_why : FixedArray[Int] = FixedArray::make(7, 0)
+let probe_why : FixedArray[Int] = FixedArray::make(6, 0)
 
 ///|
 // kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
@@ -2514,6 +2441,7 @@ let probe_record_ms : Double = 5000.0
 fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
   if probe_on.val < 0 {
     probe_on.val = if @hostapi.env("MBUI_PROBE") == "1" { 1 } else { 0 }
+    presented.tell(@hostapi.env("MBUI_PROBE_DAMAGE") == "1")
   }
   let recording = @hostapi.perf_recording()
   if probe_on.val == 0 && !recording {
@@ -2567,7 +2495,7 @@ fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
   // (how much of the window each drew again, docs/partial-redraw.md; the GPU's time of the last done)
   let share = presented_share.val
   probe_parts[if share >= 1.0 { 0 } else if share > 0.0 { 1 } else { 2 }] += 1
-  probe_why[scene.parts.why()] += 1
+  probe_why[presented.why()] += 1
   probe_share.val = probe_share.val + share
   probe_damage.val = probe_damage.val + presented_ms.val
   let gms = h_gpu_ms()

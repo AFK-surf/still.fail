@@ -268,9 +268,7 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
     let (d, holder, presses) = h
     let parent = if holder >= 0 { at[holder] } else { -1 }
     let n = Node::new()
-    n.kind = if d.image is Some(_) || d.picture is Some(_) { kind_image } else { kind_box }
-    n.shapes = d.shapes
-    n.lines = d.lines
+    n.kind = kind_box
     n.x = d.x
     n.y = d.y
     n.fw = d.w
@@ -296,12 +294,6 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
     n.clip = d.clips
     n.opacity = d.alpha
     n.tree_scrolls = tree.scrolls_now(d.id)
-    n.tree_short = tree.scroll_short(d.id)
-    let (over, dx, dy) = tree.own_placement(d.id)
-    // (out of the flow in its holder, not a separate old frame layer whose ground is exempt altogether)
-    if over { n.at_l = 0.0 }
-    n.tx = dx
-    n.ty = dy
     n.parent = parent
     if presses {
       n.hit = true
@@ -318,7 +310,7 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
     if d.words != "" {
       let w = Node::new()
       w.kind = kind_text
-      w.text = if d.runs_look.breaks { d.words } else { view_words_set(d.words, d.words_look) }
+      w.text = view_words_set(d.words, d.words_look)
       // (set as the tree draws them (view_host's words: at the system's size of words, Ctx::sp), its weight, its ink)
       w.font_size = self.sp(d.words_look.size)
       w.weight = d.words_look.weight
@@ -519,12 +511,6 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
       // are under it). Not past its sides: a pane beside the one in use comes over whole
       let cy = if k < 2 { a.y } else { a.y + a.fh }
       if cy > c.height + 0.5 || cy < -0.5 || c.corner_cut_off(i, k) {
-        continue
-      }
-      // a foot corner in what scrolls and holds less than it shows: where its words end, not a place it stands (only
-      // scrolled to its end, what it holds reaching its foot, is it held to the container's foot corners:
-      // scrolled_side_fault; the user, 2026-11-04: 滚到底才查底角)
-      if k >= 2 && c.short_scroll_between(i, p) {
         continue
       }
       // flush in the corner of something between it and the container that cuts with a rounded corner (a clip=true
@@ -1040,20 +1026,6 @@ fn Ctx::scrolls_between(self : Ctx, i : Int, p : Int) -> (Bool, Bool) {
 }
 
 ///|
-/// Whether what scrolls up and down between node `i` and its container `p` holds less than it shows (Node::tree_short):
-/// what it holds ends above its foot, so `i` is as near the container's foot as its words make it, not standing there.
-fn Ctx::short_scroll_between(self : Ctx, i : Int, p : Int) -> Bool {
-  let mut q = self.nodes[i].parent
-  while q >= 0 && q != p {
-    if self.nodes[q].tree_short {
-      return true
-    }
-    q = self.nodes[q].parent
-  }
-  false
-}
-
-///|
 /// Whether the box `q` kept to a height or scrolled sideways (its state `st`) has nothing to scroll this frame: at its
 /// start, and what it holds as long (or as wide) as it at most, so it does not move. What lies in it then lies where it
 /// is for good, in a container's corner as anything else does (a table as narrow as its column on a card: the card's
@@ -1361,15 +1333,12 @@ fn Ctx::inner_after_layout(self : Ctx, i : Int, grounds : Map[Int, Int], hung : 
   // row of a list in it scrolls past its top and foot, so what it is near is the sides it lies between; a card of a
   // strip scrolled sideways, past its sides, so what it is near is its top and foot)
   let (up_down, across) = self.scrolls_between(i, p)
-  // (in what scrolls and holds less than it shows, its foot no edge it is near: short_scroll_between)
-  let short = self.short_scroll_between(i, p)
   let near = unhung(
     n,
     sides.filter(fn(s) {
       s.1 >= -inner_even &&
       s.1 < ra &&
       !(up_down && (s.0 == "top" || s.0 == "bottom")) &&
-      !(s.0 == "bottom" && short) &&
       !(across && (s.0 == "left" || s.0 == "right"))
     }),
     hung,

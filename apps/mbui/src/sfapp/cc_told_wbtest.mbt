@@ -1,27 +1,6 @@
-// The composer's 抄送 menu (sfpages' cc_chooser_node: the chat's Slack and Feishu threads to copy to) dismissed by the hand:
+// The composer's 抄送 menu (sfpages' cc_chooser: the chat's Slack and Feishu threads to copy to) dismissed by the hand:
 // Escape, a press on the page, at that input's moment; 抄送 pressed again with it open, then Escape at once, closed and
 // staying closed.
-
-///|
-/// The chat's retained composer, opened to write, with the copy choices supplied by its core view.
-fn chat_cc_tester(src : Source, r : ChatRef, read : () -> ChatView) -> @ui.Tester {
-  let t = @ui.Tester::new(fn(c) {
-    @sf.set_words(fill)
-    @sf.begin(c) |> ignore
-  }, w=900.0, h=500.0, pointing=Mouse)
-  let made : Ref[@sfpages.ChatComposerNode?] = Ref(None)
-  @ui.set_view_app(fn(root) {
-    @ui.set_tree_theme(@sf.ui_theme_now)
-    root.lies_along(Is(End)) |> ignore
-    made.val = Some(@sfpages.chat_composer_node(root, src, r, fn() { Some(read()) },
-      fn() { @sfpages.composer_width(900.0) }, fn() { 500.0 }, fn() { @sfpages.composer_foot_in(900.0) },
-      fn() { @sfpages.composer_alone }, fn(_) { }))
-  })
-  t.draw()
-  made.val.unwrap().composer.writing.field.focus()
-  t.run_for(@ui.move_most_ms)
-  t
-}
 
 ///|
 /// A mouse's, a chat's composer whose agents are in a Slack thread and a Feishu one (none ticked).
@@ -36,8 +15,12 @@ fn cc_tester(calls? : Array[Made] = []) -> @ui.Tester {
     },
   }
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
-  chat_cc_tester(src, r, fn() {
-      chat_view_made({
+  let t = @ui.Tester::new(
+    fn(c) {
+      @sf.set_words(fill)
+      let _ = @sf.begin(c)
+      let ws : Workspace = { id: "ws1", name: "Acme", emoji: "", icon: "", email: "" }
+      let v = chat_view_made({
         "title": "整理发布清单",
         "thread": { "id": 7 },
         "cc": [
@@ -45,7 +28,15 @@ fn cc_tester(calls? : Array[Made] = []) -> @ui.Tester {
           { "thread": 22, "place": "产品讨论", "via": "feishu", "on": false },
         ],
       })
-  })
+      @sfpages.chat_composer(c, src, ws, r, Some(v))
+      @sf.presented(c)
+    },
+    w=900.0,
+    h=500.0,
+    pointing=Mouse,
+  )
+  t.draw()
+  t
 }
 
 ///|

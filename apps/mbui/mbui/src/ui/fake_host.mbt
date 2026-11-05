@@ -536,11 +536,8 @@ impl @hostapi.Host for FakeHost with clipboard_set_image(_, data) {
 }
 
 ///|
-impl @hostapi.Host for FakeHost with present(_, _, count, _, _, _) {
-  match fake.val {
-    Some(f) => f.instances = count
-    None => ()
-  }
+impl @hostapi.Host for FakeHost with present(_, buf, count, _, _, _) {
+  h_present(buf, count)
 }
 
 ///|
@@ -622,28 +619,7 @@ pub let fake_op_runs : Array[Array[String]] = []
 
 ///|
 impl @hostapi.Host for FakeHost with pw_able(_) {
-  fake_op_told.get() |> ignore
   fake_op.val is Some(_)
-}
-
-///|
-/// Told as a test gives this device a password manager or takes it away (`fake_op`, `fake_autofill` set between
-/// frames: seen as the next frame is drawn, Tester::frame_shown_at), as a host says what it can do: what reads it
-/// follows.
-pub let fake_op_told : @signals.Signal[Int] = @signals.signal(0)
-
-///|
-/// What the last frame drawn saw of a password manager given: 1Password's, the autofill service's (fake_op_told's).
-let fake_op_seen : Ref[(Bool, Bool)] = Ref((false, false))
-
-///|
-/// What the test gave of a password manager since the last frame, told.
-fn fake_op_look() -> Unit {
-  let now = (fake_op.val is Some(_), fake_autofill.val)
-  if now != fake_op_seen.val {
-    fake_op_seen.val = now
-    fake_op_told.set(@signals.untracked(fn() { fake_op_told.get() }) + 1)
-  }
 }
 
 ///|
@@ -694,7 +670,6 @@ pub fn fake_autofill_picks(host : String, username : String, password : String) 
 
 ///|
 impl @hostapi.Host for FakeHost with af_able(_) {
-  fake_op_told.get() |> ignore
   fake_autofill.val
 }
 

@@ -153,9 +153,6 @@ pub(all) struct Style {
   mut fits : Bool
   mut one_of : Bool
   mut fit_need : Double
-  // Measure it whole while deciding what leaves its row; after that decision it may still give way (a title kept
-  // before the row's less needed marks, cut short only once they have all left).
-  mut fit_held : Bool
   // Not CSS's: the least an item of a row comes to as a last resort (NaN: its min-width), where the row has not the room
   // for all it holds at their min-widths once what may give way has: words on one line that say not how they give, and
   // what holds them. What may come down so, the widest first (layout.mbt last_resort).
@@ -258,7 +255,6 @@ pub fn Style::new() -> Style {
     fits: false,
     one_of: false,
     fit_need: 0.0 / 0.0,
-    fit_held: false,
     soft_min: 0.0 / 0.0,
     stretch_past_max: false,
     min_held: false,
@@ -339,7 +335,6 @@ pub fn Style::reset(self : Style) -> Unit {
   self.fits = false
   self.one_of = false
   self.fit_need = 0.0 / 0.0
-  self.fit_held = false
   self.soft_min = 0.0 / 0.0
   self.stretch_past_max = false
   self.min_held = false

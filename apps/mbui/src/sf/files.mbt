@@ -436,7 +436,7 @@ pub fn corner_remove_reach(corner : Double) -> Double {
 }
 
 ///|
-pub let corner_remove_side : Double = 20.0
+let corner_remove_side : Double = 20.0
 
 ///|
 // kept across runs: a value (no field of it changes)

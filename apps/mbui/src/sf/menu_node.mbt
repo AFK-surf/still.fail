@@ -20,8 +20,7 @@
 /// it, lined up `along` it; `by_key`: opened by the keyboard (the focus on its first row); `keep_field`: opened by a
 /// finger with a field focused (kit's dropdown_menu: its input method left in place): the focus left in that field, what
 /// is typed still its (View::leaves_typing), every key, the wheel and every press the menu's as ever. `choose` with the item chosen, once,
-/// as it closes; `cancel` as it is closed unchosen. `exit`: keep the control's dropdown for its pop_out, as
-/// menu_of does; a presenter's menu otherwise leaves at once. `shown`, `gone`: as dialog_layer_node's.
+/// as it closes; `cancel` as it is closed unchosen. `shown`, `gone`: as dialog_layer_node's.
 pub fn menu_node(
   parent : @view.View,
   open : () -> Bool,
@@ -38,12 +37,6 @@ pub fn menu_node(
   gone? : () -> Unit = fn() {  },
   extras? : (Int) -> MenuExtra = fn(_) { menu_no_extra },
   min_w? : Double = menu_w,
-  side? : @view.Side = Bottom,
-  keep_open? : () -> Bool = fn() { false },
-  check_end? : Bool = false,
-  multiple? : Bool = false,
-  mark_node? : (@view.View, Int) -> Unit,
-  exit? : Bool = false,
 ) -> Unit {
   parent.show(
     open,
@@ -53,19 +46,10 @@ pub fn menu_node(
       let t = theme()
       // (how far in it is, from the moment it opened)
       let way = EdgeWay::new(0.0)
-      // (one choice per opening; a dropdown reopened during its exit keeps this layer)
-      let said = Ref(false)
-      layer.reacts(fn() { layer.leaving() }, fn(going) {
-        if going {
-          way.go(layer, 0.0, @kit.pop_out_ms, ease=Leave)
-        } else {
-          said.val = false
-          way.go(layer, 1.0, @kit.pop_ms)
-        }
-      })
+      way.go(layer, 1.0, @kit.pop_ms)
       let look = fn() {
         let p = way.shown(layer)
-        if layer.leaving() { @kit.pop_out.at(p, p) } else { @kit.pop_in.at(p, p) }
+        @kit.pop_in.at(p, p)
       }
       let live = fn() { !layer.leaving() }
       // (its words and icons as far in as its look says: its ground first, then they, as pop_in has it)
@@ -100,11 +84,13 @@ pub fn menu_node(
           None => ()
         }
       }
+      // (said once: the first choice, or a close)
+      let said = Ref(false)
       let go = fn(i : Int) {
         // (what it holds now: what the row pressed shows)
         match @signals.untracked(content).get(i) {
           Some(Some(item)) if !item.disabled && !item.heading && !said.val => {
-            said.val = !keep_open()
+            said.val = true
             choose(item)
           }
           _ => ()
@@ -117,7 +103,6 @@ pub fn menu_node(
       .over(Is(true))
       // (modal while open: closing, what is under it its own again as it begins to go)
       .modal(By(live))
-      .hides(By(fn() { layer.leaving() }))
       .held_back_goes_on()
       |> ignore
       if keep_field {
@@ -200,12 +185,11 @@ pub fn menu_node(
       let at = anchor(layer)
       // (a column before every item's words where one has an icon or is one of a choice: menu_popover's dropdown)
       let iconed = fn() { content().iter().any(fn(x) { x is Some(i) && i.chosen is None && i.icon != "" }) }
-      let lead = fn() { iconed() || (!check_end && content().iter().any(fn(x) { x is Some(i) && i.chosen is Some(_) })) }
+      let lead = fn() { iconed() || content().iter().any(fn(x) { x is Some(i) && i.chosen is Some(_) }) }
       let gap = fn() { if lead() && !iconed() { chooser_gap } else { menu_gap } }
       // (how far in a heading's words are: past the check's or icon's column, and a mark's where a row has one, as the
       // dropdown's heading_look has them)
       let marked = fn() {
-        if mark_node is Some(_) { return true }
         let n = content().length()
         let mut any = false
         for i in 0..<n {
@@ -229,7 +213,7 @@ pub fn menu_node(
       }
       layer.box(fn(p) {
         p
-        .beside(at.id(), side~, along=view_along(along), offset~, padding=8.0)
+        .beside(at.id(), side=Bottom, along=view_along(along), offset~, padding=8.0)
         .min_width(Is(Some(min_w)))
         .max_width(By(fn() { Some(layer.window().0 - 16.0) }))
         .max_height(By(fn() { Some(dmax(0.0, layer.window().1 - 16.0)) }))
@@ -278,7 +262,7 @@ pub fn menu_node(
                 0 => menu_rule_node(cell, reach)
                 1 => menu_heading_node(cell, fn() { item().label }, past, reach)
                 _ => {
-                  rows[i] = menu_row_node(cell, item, i, lead, gap, reach, go, current, stop, extras(i), check_end~, multiple~, mark_node?=mark_node)
+                  rows[i] = menu_row_node(cell, item, i, lead, gap, reach, go, current, stop, extras(i))
                   cell.owns(fn() { rows.remove(i) }) |> ignore
                 }
               }
@@ -303,7 +287,6 @@ pub fn menu_node(
       })
       |> ignore
     },
-    leave=if exit { @kit.pop_out_ms } else { 0.0 },
   )
 }
 
@@ -344,9 +327,6 @@ fn menu_row_node(
   current : @signals.Signal[Int],
   stop : () -> Int,
   extra : MenuExtra,
-  check_end? : Bool = false,
-  multiple? : Bool = false,
-  mark_node? : (@view.View, Int) -> Unit,
 ) -> @view.View {
   let t = theme()
   let off = fn() { item().disabled }
@@ -371,7 +351,7 @@ fn menu_row_node(
         let actions : Array[@view.Action] = if it.disabled { [] } else { [Activate] }
         Some(
           match it.chosen {
-            Some(on) => @view.said(if multiple { MenuItemCheckbox } else { MenuItemRadio }, label=it.label, check=if on { On } else { Off }, actions~)
+            Some(on) => @view.said(MenuItemRadio, label=it.label, check=if on { On } else { Off }, actions~)
             None => @view.said(MenuItem, label=it.label, actions~)
           },
         )
@@ -423,19 +403,13 @@ fn menu_row_node(
         })
       })
       // (its own mark (a station's, a maker's), drawn by the old frame, as wide as the check's column)
-      match mark_node {
-        Some(make) => into.box(fn(m) {
-          m.width(Is(Some(menu_check_w))).height(Is(Some(menu_check_w))) |> ignore
-          make(m, i)
-        }) |> ignore
-        None => match extra.mark {
-          Some(m) =>
-            @ui.old(into, fn(c) { m(c, menu_check_w) })
-            .width(Is(Some(menu_check_w)))
-            .height(Is(Some(menu_check_w)))
-            |> ignore
-          None => ()
-        }
+      match extra.mark {
+        Some(m) =>
+          @ui.old(into, fn(c) { m(c, menu_check_w) })
+          .width(Is(Some(menu_check_w)))
+          .height(Is(Some(menu_check_w)))
+          |> ignore
+        None => ()
       }
       into.box(fn(w) {
         w
@@ -453,15 +427,6 @@ fn menu_row_node(
           |> ignore
         })
         |> ignore
-      }
-      if check_end {
-        into.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
-        into.box(fn(check) {
-          check.width(Is(Some(menu_check_w))).height(Is(Some(menu_check_w))) |> ignore
-          check.show(fn() { item().chosen == Some(true) }, fn(mark) {
-            icon_node(mark, "check", 14.0, By(fn() { library_theme().p.text })) |> ignore
-          })
-        }) |> ignore
       }
     }
     if extra.note == "" {

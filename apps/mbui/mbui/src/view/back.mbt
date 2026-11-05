@@ -26,7 +26,6 @@ pub fn View::takes_back(self : View, f : () -> Unit) -> View {
   n.on_back = Some(f)
   n.on_back_step = None
   n.back_said = n.back_said + 1
-  self.tree.back_said_by(self.at)
   // (what takes back changed: what hosts the tree told, once the change is committed whole: Tree::on_modals)
   self.tree.modals_told()
   self
@@ -52,7 +51,6 @@ pub fn View::follows_back(self : View, f : (BackStep) -> Unit) -> View {
   n.on_back_step = Some(f)
   n.on_back = None
   n.back_said = n.back_said + 1
-  self.tree.back_said_by(self.at)
   self.tree.modals_told()
   self
 }
@@ -64,86 +62,15 @@ pub fn Tree::back_taker(self : Tree) -> NodeId? {
   if self.nodes.length() == 0 || !self.nodes[0].live {
     return None
   }
-  // (of those said to take back, those that take it still, where the root holds them: the one drawn last first)
   let found : Array[Int] = []
-  let mut k = 0
-  while k < self.back_said_at.length() {
-    let i = self.back_said_at[k]
-    let n = self.nodes[i]
-    if n.live && (n.on_back is Some(_) || n.on_back_step is Some(_)) {
-      if self.held_by_root(i) {
-        found.push(i)
-      }
-      k = k + 1
-    } else {
-      self.back_said_at.remove(k) |> ignore
-    }
-  }
-  found.sort_by(fn(a, b) { if a == b { 0 } else if self.topmost_before(a, b) { -1 } else { 1 } })
+  self.topmost_from(0, fn(n) { n.on_back is Some(_) || n.on_back_step is Some(_) }, found)
   for i in found {
-    if !self.pressless_at(i) {
-      return Some({ at: i, gen: self.nodes[i].gen })
+    let n = self.nodes[i]
+    if n.live && !self.pressless_at(i) {
+      return Some({ at: i, gen: n.gen })
     }
   }
   None
-}
-
-///|
-/// Node `at` said to take back (View::takes_back, View::follows_back): gone over by Tree::back_taker.
-fn Tree::back_said_by(self : Tree, at : Int) -> Unit {
-  if !self.back_said_at.contains(at) {
-    self.back_said_at.push(at)
-  }
-}
-
-///|
-/// Whether node `at` is held by the root, through what holds it.
-fn Tree::held_by_root(self : Tree, at : Int) -> Bool {
-  let mut i = at
-  while i > 0 {
-    let p = self.nodes[i].parent
-    if p < 0 || !self.nodes[p].kids.contains(i) {
-      return false
-    }
-    i = p
-  }
-  i == 0
-}
-
-///|
-/// Whether node `a` is over node `b` as they are drawn (the one drawn last first), both held by the root: the one in
-/// the higher place in the window's stack of layers (View::stacked, View::over_all: what the root holds drawn by it,
-/// Tree::root_layers) first; in the same, what a node holds before it, its later kids before its earlier.
-fn Tree::topmost_before(self : Tree, a : Int, b : Int) -> Bool {
-  let (sa, sb) = (self.stack_at(a), self.stack_at(b))
-  if sa != sb {
-    return sa > sb
-  }
-  let path = fn(at : Int) {
-    let out = [at]
-    let mut i = at
-    while i > 0 {
-      i = self.nodes[i].parent
-      out.push(i)
-    }
-    out.rev_in_place()
-    out
-  }
-  let pa = path(a)
-  let pb = path(b)
-  let mut d = 0
-  while d < pa.length() && d < pb.length() && pa[d] == pb[d] {
-    d = d + 1
-  }
-  // (one holds the other: what it holds first)
-  if d == pa.length() {
-    return false
-  }
-  if d == pb.length() {
-    return true
-  }
-  let kids = self.nodes[pa[d - 1]].kids
-  kids.search(pa[d]).unwrap_or(0) > kids.search(pb[d]).unwrap_or(0)
 }
 
 ///|
@@ -234,7 +161,7 @@ fn Tree::back_lost_in(self : Tree, at : Int) -> Unit {
 }
 
 ///|
-/// A modal layer that leaves what is typed to the field under it that has the focus (a menu a finger
+/// A modal layer that leaves what is typed to the field of an old view under it that has the focus (a menu a finger
 /// opens beside a field, its input method left in place: kit's dropdown_menu's): the text typed that field's still;
 /// every key, the wheel and every press the layer's and what it holds, as a modal layer's are, none of them the
 /// field's or anything else's under it.

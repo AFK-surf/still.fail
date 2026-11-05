@@ -8,12 +8,7 @@
 ///|
 /// ＋'s panel for draft `key`, opened by ＋ (`plus`): the gallery's recent photos read again as it opens.
 fn attach_open(plus : Int, src : Source, key : String) -> Unit {
-  attach_open_from(Of(plus), src, key)
-}
-
-///|
-fn attach_open_from(from : @sf.Anchor, src : Source, key : String) -> Unit {
-  @sf.panel("", fn(c, close) { attach_body(c, src, key, close) }, from~, w=attach_w)
+  @sf.panel("", fn(c, close) { attach_body(c, src, key, close) }, from=Of(plus), w=attach_w)
   recent_opened()
 }
 
@@ -24,7 +19,7 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
   let ask = fn(kind : @hostapi.PickKind) {
     close()
     match @ui.pick(kind, hold=true) {
-      Some(pick) => composing.picking.set(Some((key, pick)))
+      Some(pick) => composing.picking = Some((key, pick))
       None =>
         say(c, @sf.t(if kind == Camera { "android-chat.composer.noCamera" } else { "android-chat.composer.noFiles" }))
     }
@@ -37,7 +32,7 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
     } else if i > 0 {
       close()
       match recent_photo(i - 1).map(fn(photo) { @ui.pick_photos([photo.src]) }) {
-        Some(Some(pick)) => composing.picking.set(Some((key, pick)))
+        Some(Some(pick)) => composing.picking = Some((key, pick))
         _ => ()
       }
     } else {
@@ -68,7 +63,7 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
   // photos chosen in the strip: 添加 n 个 where the tiles were
   let adding = recent_adding(c, fn(pick) {
     close()
-    composing.picking.set(Some((key, pick)))
+    composing.picking = Some((key, pick))
   })
   if adding {
     return

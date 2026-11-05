@@ -377,8 +377,6 @@ pub struct Ctx {
   // pointer
   mut px : Double
   mut py : Double
-  /// an old view's pointer event still to be read by its next frame, including where a tap or drag was let go
-  mut pointer_pending : Bool
   mut down : Bool
   mut hover : Int
   /// what holds the one under the pointer (`hover`), as the last frame drew them, outermost first (Ctx::hovered)
@@ -675,7 +673,7 @@ pub struct Ctx {
   mut inst : FixedArray[Double]
   mut ninst : Int
   // the pieces of the shapes painted this frame (shape.mbt): x0 y0 x1 y1 each, as shares of their instance's rect
-  mut segs : Array[Double]
+  segs : Array[Double]
   mut ime_sig : String
   /// the input method's action last told the host (@hostapi.ime_action)
   mut ime_action_told : Int
@@ -770,7 +768,6 @@ fn Ctx::new() -> Ctx {
     press_strayed: false,
     press_late: false,
     pointer_t: 0.0,
-    pointer_pending: false,
     held_told: -1.0,
     held_on: 0,
     held_build: -1,
@@ -2864,7 +2861,7 @@ pub fn Ctx::spring_rest(self : Ctx, key : String) -> Double {
 ///|
 #callsite(autofill(loc))
 fn Ctx::wake_at_time(self : Ctx, t : Double, later? : Bool = false, loc~ : SourceLoc) -> Unit {
-  part_wake(self.clock, t, later, loc)
+  part_wake(self.clock, t, later)
   // (asked as a list's row is built: the row's, built again as it comes by what it read of it, kept_part.mbt's
   // KeptClock; not the frame's own, frame_watch.mbt)
   if nodes_run.building is None {
@@ -2910,13 +2907,7 @@ pub fn Ctx::rect_of(self : Ctx, id : Int, loc~ : SourceLoc) -> (Double, Double, 
     y1 = dmax(y1, self.hit_rects[j * 4 + 3])
     j = j - 1
   }
-  // A kept target whose holder takes no input has an empty rectangle. It has no place to report until it takes
-  // input again; callers following it (a menu or a returning picture) keep their last visible place meanwhile.
-  if x1 <= x0 || y1 <= y0 {
-    None
-  } else {
-    Some((x0, y0, x1 - x0, y1 - y0))
-  }
+  Some((x0, y0, x1 - x0, y1 - y0))
 }
 
 ///|

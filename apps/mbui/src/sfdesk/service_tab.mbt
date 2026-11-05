@@ -224,4 +224,5 @@ fn tab_beside(
     }
     side_change(src, r, "open", Some(tab))
   })
+  chat_page(c, src, w, r)
 }

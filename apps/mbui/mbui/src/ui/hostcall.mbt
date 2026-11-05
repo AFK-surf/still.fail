@@ -804,16 +804,19 @@ fn h_atlas_generation() -> Int {
 
 ///|
 fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
-  let c = g()
-  // where the frame changed, as the scene was told it at its causes: the parts a host that keeps its picture draws
-  // again (docs/partial-redraw.md, scene_layers.mbt)
-  let t0 = h_now()
-  let parts = c.scene_parts_taken()
-  presented_ms.val = h_now() - t0
   match fake.val {
     Some(f) => f.instances = count
     None => {
+      let c = g()
       let (r, gg, b) = c.clear
+      // what of it differs from the frame presented before, the part a host that keeps its picture draws again
+      // (docs/partial-redraw.md)
+      let t0 = h_now()
+      let parts = presented.next(buf, count, c.window_w, c.window_h, c.scale, r, gg, b)
+      presented_ms.val = h_now() - t0
+      if presented.telling() && presented.why() == 5 {
+        h_log("DAMAGE whole, the part more than half: \{presented.told()}")
+      }
       let mut area = 0.0
       for p in parts {
         let (x, y, w, h) = p
@@ -830,23 +833,20 @@ fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
       } else {
         0.0
       }
-      // (the frame handed over whole: every renderer uploads all of it. An adapter, said to be one: the parts are what
-      // changed, the upload is not, and nothing is done because of it, docs/retained.md rule 4)
       @hostapi.present(buf, count, r, gg, b)
     }
   }
 }
 
 ///|
+/// The frames presented, the next compared with the last (h_present).
+// kept across runs: a host's, whose picture is the last frame it was given
+let presented : @damage.Damage = @damage.Damage::new()
+
+///|
 /// How much of the window the frame presented last drew again (1 all of it, 0 none), for the probe (app.mbt).
 // kept across runs: the probe's (MBUI_PROBE), set by each frame presented before it is read
 let presented_share : Ref[Double] = { val: 1.0 }
-
-///|
-/// How long taking where the last frame presented changed took (its scene's parts settled: h_present), for a bench.
-pub fn parts_ms() -> Double {
-  presented_ms.val
-}
 
 ///|
 /// How long working out the part took, for the probe.
@@ -1202,12 +1202,6 @@ fn outside_end(kind : Int, id : Int, wake? : Bool = true) -> Unit {
 let answers_told : Array[@signals.Signal[Int]] = Array::makei(outside_native + 1, fn(_) { @signals.signal(0) })
 
 ///|
-/// A Tester's frames as its fake host's answers count them (answers_by_the_frame): an answer given in one is taken
-/// from the next.
-// kept across runs: it only counts on
-let answers_frames : Ref[Int] = Ref(0)
-
-///|
 /// The answers the host told of (outside_key) not taken yet.
 // kept across runs: emptied by each Tester (reset_globals)
 let answers_waiting : Map[Int64, Bool] = Map::new()
@@ -1249,9 +1243,6 @@ fn answers_by_the_frame() -> Unit {
   if fake.val is None {
     return
   }
-  // (the frames as its answers count them: this one begun before they are told, so what reads one as it is told
-  // takes it, the window's tree as the old views do as they are built after)
-  answers_frames.val += 1
   let kinds : Map[Int, Bool] = {}
   for k, _ in outside_tickets {
     kinds[(k >> 32).to_int()] = true

@@ -523,10 +523,10 @@ console.log(b && b.state ? b.host + ':' + b.port + b.path : 'none');" "$url" 2>&
   return $code
 }
 
-# src/rows/vectors_test.mbt: core-ts's diff and apply over values shaped like the topics (core/delta-vectors.ts).
+# src/core/vectors_test.mbt: core-ts's diff and apply over values shaped like the topics (core/delta-vectors.ts).
 vectors() {
-  EMBER=$EMBER node core/delta-vectors.ts > src/rows/vectors_test.mbt
-  echo "vectors: $(grep -c '^test ' src/rows/vectors_test.mbt) tests in src/rows/vectors_test.mbt"
+  EMBER=$EMBER node core/delta-vectors.ts > src/core/vectors_test.mbt
+  echo "vectors: $(grep -c '^test ' src/core/vectors_test.mbt) tests in src/core/vectors_test.mbt"
 }
 
 # (the shell's .a stripped only here, for its size: the apps link the unstripped one, and stripping 70 MB took a minute

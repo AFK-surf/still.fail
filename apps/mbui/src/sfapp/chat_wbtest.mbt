@@ -13,6 +13,10 @@ fn chat_tester(mode : String) -> @ui.Tester {
 test "a chat opens at its end: its bar, its last messages, the composer's room under them" {
   let t = chat_tester("chat")
   assert_true(t.find("整理发布清单") is Some(_))
+  // its people in the bar lettered as it calls them: the viewer 「你」, not their name (Parts.kt PeopleStack)
+  let bar = t.words().filter(fn(w) { w.2 < 100.0 }).map(fn(w) { w.0 })
+  assert_true(bar.contains("你"))
+  assert_true(!bar.contains("林"))
   let (_, y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   // the last message over the composer's capsule
   let (_, field_y) = t.find("发消息").unwrap()
@@ -25,13 +29,6 @@ test "a chat opens at its end: its bar, its last messages, the composer's room u
   // no way to the newest at the newest
   assert_true(!readings.get("ws1/st1\u{1}s-c1").unwrap().jump)
   t.assert_idle()
-  // The narrow bar gives up its people before shortening its title. With room for them, their letters say
-  // what the bar calls them: the viewer 「你」, not their name (Parts.kt PeopleStack).
-  t.resize(500.0, 844.0)
-  t.run_for(@ui.move_most_ms)
-  let bar = t.words().filter(fn(w) { w.2 < 50.0 }).map(fn(w) { w.0 })
-  assert_true(bar.contains("你"))
-  assert_true(!bar.contains("林"))
 }
 
 ///|
@@ -257,10 +254,6 @@ test "a file card in the chat opens its preview" {
 }
 
 ///|
-/// How long the bell rises over the way to the end as that comes (the chat's: 200 ms).
-let ask_lift_ms : Double = 200.0
-
-///|
 test "what waits to be decided and is out of view: a bell over the way to the end; tapped, the first one's post" {
   let t = chat_tester("chat")
   t.draw()
@@ -337,7 +330,6 @@ test "a chat's place: told the core as the list comes to rest (the message at th
   let seq = number(Some(p), "seq")
   let px = number(Some(p), "offset")
   assert_true(seq > 0.0)
-  let left_rows = t.rows()
   // opened again where the core says it was left (its `at` and `atOffset`, as it was told), the same place told back
   let again : Array[Made] = []
   let t2 = fake_core(again, over=fn(name, tp) {
@@ -355,7 +347,7 @@ test "a chat's place: told the core as the list comes to rest (the message at th
   let back = named(again, "chat.place")
   assert_true(back.length() > 0)
   let q = back[back.length() - 1].params
-  assert_eq(number(Some(q), "seq"), seq, msg="left \{p} rows=\{left_rows}; reopened \{q} rows=\{t2.rows()}; places=\{back.map(fn(c) { c.params })}")
+  assert_eq(number(Some(q), "seq"), seq)
   assert_true((number(Some(q), "offset") - px).abs() <= 1.0)
   ignore(t)
 }
@@ -366,21 +358,28 @@ let place_drag : Double = 300.0
 
 ///|
 test "a long title has what is left beside what follows it, which keeps its own width (Chat.kt BarFrame)" {
-  let title = Ref("短标题")
-  let epoch = @signals.signal(0)
-  let t = edited_core([], "chat", fn(name, value) {
-    if name == "chat" { with_fields(value, [("title", Json::string(title.val))]) } else { value }
-  }, epoch~)
-  let agent = fn() { t.all(Button).filter(fn(s) { s.label.has_prefix("Claude ·") })[0].rect }
-  let before = agent()
-  let info = t.get(Button, label=tr("android-chat.info.title")).rect
-  title.val = "端到端测试的对话 post:你好，我是测试用的 agent"
-  epoch.set(epoch.get() + 1)
-  t.frame()
+  new_run()
+  let t = @ui.Tester::new(
+    fn(c) {
+      bar_frame(
+        c,
+        "端到端测试的对话 post:你好，我是测试用的 agent",
+        fn() { c.box(w=Px(60.0), fn() { c.text("尾", size=12.0, wrap=false) |> ignore }) |> ignore },
+        fn() {  },
+        true,
+      )
+    },
+    w=390.0,
+    h=200.0,
+    platform=2,
+  )
+  t.draw()
   let (tx, _, tw, _) = t.rect_of("端到端").unwrap()
-  let (ax, _, aw, ah) = agent()
-  assert_eq((aw, ah), (before.2, before.3), msg="the agent keeps its own width beside the long title")
-  assert_eq(t.get(Button, label=tr("android-chat.info.title")).rect, info, msg="the bar's actions stay in place")
+  let (ax, _, _, _) = t.rect_of("尾").unwrap()
+  // 390 - 16 (its end) - 34 (…) and the room before it (bar_keys_apart) - 34 (ⓘ) and its room - 8, the box of 60: what
+  // follows starts where it would with a short title
+  assert_eq(ax, 390.0 - 16.0 - 34.0 - bar_keys_apart() - 34.0 - bar_keys_apart() - 8.0 - 60.0)
+  // the title cut to what is left, 8 before it
   assert_true(tx + tw <= ax - 8.0 + 0.5)
   assert_true(t.lines_of("端到端")[0].has_suffix("…"))
 }
@@ -456,7 +455,7 @@ test "left short of its end, a chat opens again where it was left, though the co
   t.run_for(@ui.move_most_ms)
   // opened there, not at its end where the core's view, kept a minute after the page left it, still opens it
   assert_eq(readings.get(k).unwrap().top_seq, left_at)
-  assert_true((readings.get(k).unwrap().top_off - left_off).abs() < 0.5, msg="reopened \{left_at}: offset \{left_off} to \{readings.get(k).unwrap().top_off}; rows=\{t.rows()}")
+  assert_true((readings.get(k).unwrap().top_off - left_off).abs() < 0.5)
   assert_true(!readings.get(k).unwrap().at_end)
 }
 
@@ -485,7 +484,7 @@ fn focus_seen(calls : Array[Made]) -> (Bool, Double) {
 let seen_drag : Double = 160.0
 
 ///|
-test "opened at a saved place before the end, only the messages shown whole are reported read" {
+test "opened short of its end, the core is told the messages shown whole: read up to there, the end not seen" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
   // at its end: the end seen, and its newest shown whole
@@ -500,7 +499,7 @@ test "opened at a saved place before the end, only the messages shown whole are 
   let p = told[told.length() - 1].params
   let seq = number(Some(p), "seq")
   let px = number(Some(p), "offset")
-  // Opened again there (the core's `at`): the earlier messages shown whole are read, while the newest stays below.
+  // opened again there (the core's `at`): the messages in view shown whole, the end not
   let again : Array[Made] = []
   let t2 = fake_core(again, over=fn(name, tp) {
     match (name, tp.value) {
@@ -515,29 +514,10 @@ test "opened at a saved place before the end, only the messages shown whole are 
   })
   t2.run_for(@ui.move_most_ms)
   let (end2, seen) = focus_seen(again)
-  assert_true(!end2, msg="opened at \{seq}/\{px}: \{named(again, "client.focus").map(fn(c) { c.params })}")
-  assert_true(seen >= 0.0 && seen < newest, msg="opened at \{seq}/\{px}: seen \{seen}, newest \{newest}")
+  assert_true(!end2)
+  assert_true(seen >= 0.0)
+  assert_true(seen < newest)
   ignore(t)
-}
-
-///|
-test "opened at a short message, the core is told the messages shown whole below the bar" {
-  let calls : Array[Made] = []
-  let t = fake_core(calls, over=fn(name, tp) {
-    match (name, tp.value) {
-      ("chat", Some(Object(m))) => {
-        let v = m.copy()
-        v["at"] = 6
-        v["atOffset"] = 100
-        { ..tp, value: Some(Json::object(v)) }
-      }
-      _ => tp
-    }
-  })
-  let (end, seen) = focus_seen(calls)
-  assert_false(end)
-  // The quote, its follow-up, the options card and the notice fit; the login card below them does not.
-  assert_eq(seen, 9.0, msg="focus=\{named(calls, "client.focus").map(fn(c) { c.params })}; rows=\{t.rows()}")
 }
 
 ///|

@@ -34,35 +34,10 @@
 //                                 bottom left), 28-31 how smooth those corners are (smooth.mbt)
 
 ///|
-/// What the last frame drew, as a draw list (the file's head); `bytes`: with the pictures handed over as bytes in it;
-/// `parts`: with the parts it was drawn again in, as the scene said them (a line `parts X Y W H` each, `parts all` the
-/// whole, `parts none` nothing: for a renderer to draw it over the frame before only there, mbui-render's
-/// MBUI_DL_FROM).
-pub fn Tester::drawlist(self : Tester, bytes? : Bool = false, parts? : Bool = false) -> String {
+/// What the last frame drew, as a draw list (the file's head); `bytes`: with the pictures handed over as bytes in it.
+pub fn Tester::drawlist(self : Tester, bytes? : Bool = false) -> String {
   ignore(self)
-  let dl = drawlist_of(g(), bytes~)
-  if !parts {
-    return dl
-  }
-  let sb = StringBuilder()
-  sb.write_string(dl)
-  let ps = scene_parts()
-  if ps.is_empty() {
-    sb.write_string("parts none\n")
-  }
-  for p in ps {
-    if p.2 < 0.0 {
-      sb.write_string("parts all\n")
-    } else {
-      sb.write_string("parts")
-      dl_num(sb, p.0)
-      dl_num(sb, p.1)
-      dl_num(sb, p.2)
-      dl_num(sb, p.3)
-      sb.write_char('\n')
-    }
-  }
-  sb.to_string()
+  drawlist_of(g(), bytes~)
 }
 
 ///|

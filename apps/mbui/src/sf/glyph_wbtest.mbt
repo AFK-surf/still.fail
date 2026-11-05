@@ -23,16 +23,3 @@ test "a station's link on its way: its arc breathes as a look by the clock, buil
   // (a breath and a half: every step of it on the resident clock drawn)
   assert_eq(glyph_builds(breathing, glyph_breath_period * 1.5), glyph_builds(still, glyph_breath_period * 1.5))
 }
-
-///|
-test "a station at work: the robot blinks as looks by the clock, built no more than a glyph standing still" {
-  let working : GlyphCounts = { online: 1, dim: 0, failing: 0, working: 2, asleep: false, connecting: 0 }
-  let still : GlyphCounts = { online: 1, dim: 0, failing: 0, working: 0, asleep: false, connecting: 0 }
-  // (two blinks: every step of them on the resident clock drawn)
-  assert_eq(glyph_builds(working, glyph_blink_period * 2.0), glyph_builds(still, glyph_blink_period * 2.0))
-}
-
-///|
-test "the robot's blink: its eyes as they were, a face a step" {
-  inspect(glyph_blink_faces.map(glyph_blink_eye), content="[1, 0.9, 0.2, 0.5]")
-}

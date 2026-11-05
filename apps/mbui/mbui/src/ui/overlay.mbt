@@ -29,8 +29,6 @@ struct Layer {
   id : Int
   node : Int
   parent : Int
-  /// the retained old-view node that built it, including layers portalled out of that node
-  owner : @view.NodeId?
   modal : Bool
   trap : Bool
   escape : Bool
@@ -172,7 +170,6 @@ pub fn Ctx::overlay(
     id,
     node: i,
     parent: saved_layer,
-    owner: island_building.val,
     modal,
     trap: trap && !inert,
     escape,

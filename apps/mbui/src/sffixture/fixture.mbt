@@ -658,8 +658,7 @@ pub fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> 
   fix_tick()
   // (the same answer while the made-up core is as it was, as the core's own: a subscription's value kept, not worked
   // out again each time it is read)
-  let version = f.changes() + @settings.fixture_version() + fix_browse.changes + fix_presets_said.val +
-    (if name == "composer" || name == "draft" { fix_typed.val } else { 0 })
+  let version = f.changes() + @settings.fixture_version() + fix_browse.changes + fix_presets_said.val
   let key = name + "\u{1}" + f.mode + "\u{1}" + Json::object(params).stringify()
   match fixture_answers.get(key) {
     Some(t) if t.version == version => return t
@@ -669,12 +668,6 @@ pub fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> 
   fixture_answers[key] = t
   t
 }
-
-///|
-/// How many times the made-up core's composers were told what is typed (`composer.text`): as the core's own, only the
-/// composer's topic and its draft's told for it (client/core-ts composer.ts #tell), nothing else of the core changed.
-// kept across runs: it only counts on
-let fix_typed : Ref[Int] = Ref(0)
 
 ///|
 /// The made-up core's answers given, by topic and what was asked, each as of the version it was given at
@@ -1507,7 +1500,6 @@ pub fn fixture(mode : String) -> Source {
     images: @sfbase.ChatImages::new(),
     now: fn() { 0.0 },
     leave: fn(_, _) {  },
-    list: fn(_, _, _, _) { None },
     read_only: false,
   }
 }

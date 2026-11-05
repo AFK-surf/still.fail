@@ -354,63 +354,11 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_resize(JNIEnv *env, jclass c, jint w
 // Over another app (OverActivity: Native.overOther): what the app does not paint stays clear, the app under it shows.
 JNIEXPORT void JNICALL Java_dev_mbui_Native_overOther(JNIEnv *env, jclass c, jboolean on) { over_other = on ? 1 : 0; }
 
-// The GPU's time for the frames drawn (GL_EXT_disjoint_timer_query, where the GPU has it: a query of the time each
-// frame's drawing took on it, read back frames later, as it is ready, never waited for): the last one read, ms (-1:
-// none, or no such query here). For the probe's PERF lines (@hostapi.gpu_ms).
-#define MB_TIME_ELAPSED 0x88BF
-#define MB_GPU_DISJOINT 0x8FBB
-#define MB_GPU_QUERIES 4
-static GLuint gpu_q[MB_GPU_QUERIES];
-static int gpu_q_on = -1, gpu_q_next, gpu_q_out[MB_GPU_QUERIES];
-static double gpu_last = -1;
-
-static void gpu_query_begin(void) {
-  if (gpu_q_on < 0) {
-    // (only where each frame is said on the log, the probe's: MBUI_PROBE_FRAMES=1, or the debug property adb sets,
-    // perf.mbt's perf_frames_on; no frame's work for what nobody reads else)
-    const char *v = getenv("MBUI_PROBE_FRAMES");
-    char p[PROP_VALUE_MAX];
-    if (!v && __system_property_get("debug.mbui.probe_frames", p) > 0) v = p;
-    const char *ext = v && strcmp(v, "1") == 0 ? (const char *)glGetString(GL_EXTENSIONS) : NULL;
-    gpu_q_on = ext && strstr(ext, "GL_EXT_disjoint_timer_query") ? 1 : 0;
-    if (gpu_q_on) glGenQueries(MB_GPU_QUERIES, gpu_q);
-    while (glGetError() != GL_NO_ERROR) {}
-  }
-  if (!gpu_q_on) return;
-  // (those done read, oldest first; a disjoint one, the GPU's clock moved under it, dropped)
-  GLint disjoint = 0;
-  glGetIntegerv(MB_GPU_DISJOINT, &disjoint);
-  for (int k = 0; k < MB_GPU_QUERIES; k++) {
-    int i = (gpu_q_next + k) % MB_GPU_QUERIES;
-    if (!gpu_q_out[i]) continue;
-    GLuint ready = 0;
-    glGetQueryObjectuiv(gpu_q[i], GL_QUERY_RESULT_AVAILABLE, &ready);
-    if (!ready) continue;
-    GLuint ns = 0;
-    glGetQueryObjectuiv(gpu_q[i], GL_QUERY_RESULT, &ns);
-    gpu_q_out[i] = 0;
-    if (!disjoint) gpu_last = ns / 1.0e6;
-  }
-  // (all four still out: none begun, the GPU that far behind)
-  if (gpu_q_out[gpu_q_next]) return;
-  glBeginQuery(MB_TIME_ELAPSED, gpu_q[gpu_q_next]);
-  gpu_q_out[gpu_q_next] = 2;
-}
-
-static void gpu_query_end(void) {
-  if (gpu_q_on != 1 || gpu_q_out[gpu_q_next] != 2) return;
-  glEndQuery(MB_TIME_ELAPSED);
-  gpu_q_out[gpu_q_next] = 1;
-  gpu_q_next = (gpu_q_next + 1) % MB_GPU_QUERIES;
-}
-
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   // the glyphs placed in the atlas as the frame was painted, uploaded before it is drawn (MBText.flush)
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, text_cls, m_flush);
-  gpu_query_begin();
   gl_present(buf, count, r, g, b);
-  gpu_query_end();
 }
 
 // (MBView.onDrawFrame, GL thread: only a native view's picture changed since the last frame)
@@ -1081,7 +1029,7 @@ int32_t mb_host_perf_open(int32_t go) { (void)go; return 0; }
 double mb_host_perf_size(void) { return 0; }
 moonbit_bytes_t mb_host_perf_read(void) { return moonbit_make_bytes(0, 0); }
 
-double mb_host_gpu_ms(void) { return gpu_last; }
+double mb_host_gpu_ms(void) { return -1; }
 
 // The CPU's time the whole process has had, every thread's (@hostapi.cpu_ms: MBUI_PROBE's share of a CPU), in ms.
 double mb_host_cpu_ms(void) {

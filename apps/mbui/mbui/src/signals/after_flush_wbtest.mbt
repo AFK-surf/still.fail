@@ -74,48 +74,16 @@ test "none under way: done at once" {
 }
 
 ///|
-test "what waits for all of it: done once what waits by after_flush is done, what that asked included, whatever order they were asked in" {
-  let a = signal(0)
-  let log : Array[String] = []
-  effect(fn() {
-    let v = a.get()
-    if v > 0 {
-      after_all_flushed(fn() { log.push("last \{a.get()}") })
-    }
-  })
-  |> ignore
-  effect(fn() {
-    let v = a.get()
-    if v > 0 {
-      after_flush(fn() {
-        log.push("after \{v}")
-        after_flush(fn() { log.push("after that") })
-      })
-    }
-  })
-  |> ignore
-  a.set(1)
-  assert_eq(log, ["after 1", "after that", "last 1"])
-  // none under way: at once
-  after_all_flushed(fn() { log.push("now") })
-  assert_eq(log.length(), 4)
-}
-
-///|
-test "many asked by one change, each asking another and one more for all of it: all done, in order" {
+test "many asked by one change, each asking another: all done, in order" {
   let a = signal(0)
   let n = 200000
   let log : Array[Int] = []
-  let lasts = Ref(0)
   effect(fn() {
     if a.get() > 0 {
       for i in 0..<n {
         after_flush(fn() {
           log.push(i)
           after_flush(fn() { log.push(n + i) })
-          if i % 2 == 0 {
-            after_all_flushed(fn() { lasts.val += 1 })
-          }
         })
       }
     }
@@ -126,7 +94,6 @@ test "many asked by one change, each asking another and one more for all of it: 
   for i, v in log {
     assert_eq(v, i)
   }
-  assert_eq(lasts.val, n / 2)
   // (none left over for the next change)
   after_flush(fn() { log.push(-1) })
   assert_eq(log.length(), 2 * n + 1)

@@ -76,16 +76,6 @@ fn pick_told_gone() -> Unit {
 }
 
 ///|
-/// A passage of message `ts` picked anew by the window's tree (from `a` until `b` in its words), or what it picked let
-/// go (None): told once each, as a hand's in an old view is (pick_told_new, pick_told_gone).
-pub fn picked_by_node_told(now : (String, Int, Int)?) -> Unit {
-  match now {
-    Some((ts, a, b)) => pick_told_new(ts, a, b)
-    None => pick_told_gone()
-  }
-}
-
-///|
 /// A message right clicked: the frame, where, its share, link and complete text, and its row's key, for the window's
 /// menu. None once taken.
 pub let share_offered : Ref[(Int, Double, Double, () -> Unit, String, String, String)?] = Ref(None)
@@ -135,19 +125,6 @@ pub fn share_turn_tool(c : @ui.Ctx, key : String, row : Int, link : String, word
 }
 
 ///|
-/// A message's own items (message_items), for a message drawn by nodes: its ⋯'s menu.
-pub fn message_menu_items(link : String, words : String, go : () -> Unit) -> Array[@sf.MenuItem?] {
-  message_items(link, words, go)
-}
-
-///|
-/// A message drawn by nodes right clicked at (x, y) in the window: its turn offered the window's right click menu
-/// (share_offer's, as pickable offers it), its row's key `key`.
-pub fn offer_message_menu(x : Double, y : Double, go : () -> Unit, link : String, words : String, key : String) -> Unit {
-  share_offer(@ui.current().frame_number(), x, y, go, link, words, key)
-}
-
-///|
 /// A message's own items (its ⋯, its right click's): its words, link and turn's picture, where each exists.
 fn message_items(link : String, words : String, go : () -> Unit) -> Array[@sf.MenuItem?] {
   let items : Array[@sf.MenuItem?] = []
@@ -191,11 +168,6 @@ let share_turn_room : @ui.Style = @ui.css("w=S6 h=S6")
 ///|
 /// Let go of what is picked.
 pub fn pick_clear() -> Unit {
-  // (picked as the window's tree's words are, a message made as nodes: let go there too)
-  if picked_by_node.val {
-    picked_by_node.val = false
-    @ui.picked_none()
-  }
   pk.ts = ""
   pk.sel.clear()
   pick_told_gone()
@@ -228,12 +200,6 @@ pub fn pick_reset() -> Unit {
   // at took this one's feel, run after composer_wbtest or motion_wbtest, 2026-10-24)
   pick_felt.val = -1
 }
-
-///|
-/// Whether what is picked (pk) is of a message made as nodes, picked as the window's tree's words are (sfpages'
-/// pick_node.mbt): its bar and pill theirs, pick_layer drawing none.
-// kept across runs: none as a run begins (pick_reset)
-pub let picked_by_node : Ref[Bool] = Ref(false)
 
 ///|
 /// Whether words are picked as a desktop's (a mouse's selection over the page, its pill) rather than as a phone's
@@ -396,10 +362,6 @@ pub fn pick_layer(
   mouse : Bool,
   quote : (String, String, String, String) -> Unit,
 ) -> Unit {
-  // (a message made as nodes picked: its bar and pill the nodes' (sfpages' pick_node.mbt), none of this)
-  if picked_by_node.val {
-    return
-  }
   if mouse {
     pick_pop(c, quote)
     return

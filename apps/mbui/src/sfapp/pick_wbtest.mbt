@@ -16,29 +16,6 @@ fn hold_on(t : @ui.Tester, words : String) -> (Double, Double) {
 }
 
 ///|
-/// Where what is picked runs (in its paragraphs' words: the first's start, the last's end), as far as it is while a
-/// finger still drags it out too.
-fn picked_span() -> (Int, Int) {
-  match @ui.tree_picked(dragged=true) {
-    Some(p) if p.spans.length() > 0 => (p.spans[0].0, p.spans[p.spans.length() - 1].1)
-    _ => (0, 0)
-  }
-}
-
-///|
-/// The words picked.
-fn picked_words() -> String {
-  @ui.tree_picked(dragged=true).map(fn(p) { p.words }).unwrap_or("")
-}
-
-///|
-/// The picked passage's lines as drawn, each on the accent at 26%, in order.
-fn passage(t : @ui.Tester) -> Array[(Double, Double, Double, Double, Int64)] {
-  let ground = @sf.alpha(@sf.theme().p.accent, 0.26)
-  t.drawn_rects().filter(fn(r) { r.4 == ground })
-}
-
-///|
 /// A finger already down moved from (x0, y0) to (x1, y1) in `steps` moves, a frame apart.
 fn slide(t : @ui.Tester, x0 : Double, y0 : Double, x1 : Double, y1 : Double, steps : Int) -> Unit {
   for i in 1..=steps {
@@ -53,8 +30,7 @@ test "held still on a message's words: the word under the finger is picked, the 
   let t = fake_core(calls)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   assert_true(pk.ts != "")
-  let (a, b) = picked_span()
-  assert_eq(b - a, 1)
+  assert_eq(pk.sel.b - pk.sel.a, 1)
   // felt as it picked, once (MessagePick.kt: LongPress)
   assert_eq(t.haptics(), [@ui.Haptic::LongPress])
   assert_true(t.find("引用") is Some(_))
@@ -75,12 +51,11 @@ test "a finger sliding on widens it by words, from the word first held; the list
   let before = t.list_offset()
   t.press_at(x, y)
   t.run_for(long_press_ms)
-  let first = picked_span()
+  let first = (pk.sel.a, pk.sel.b)
   slide(t, x, y, x + 60.0, y, 6)
   t.release(x + 60.0, y)
-  let now = picked_span()
-  assert_eq(now.0, first.0)
-  assert_true(now.1 > first.1 + 2)
+  assert_eq(pk.sel.a, first.0)
+  assert_true(pk.sel.b > first.1 + 2)
   assert_eq(t.list_offset(), before)
   // lifting it tapped nothing: still picked
   assert_true(pk.ts != "")
@@ -93,7 +68,7 @@ test "复制 puts the passage on the clipboard and lets go; 全选 takes all of 
   let calls : Array[Made] = []
   let t = fake_core(calls)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
-  let one = picked_words()
+  let one = t.ctx().words_of(pk.sel.key).unwrap().slice(pk.sel.a, pk.sel.b)
   t.tap_text("复制")
   assert_eq(t.clipboard(), one)
   assert_eq(pk.ts, "")
@@ -134,7 +109,7 @@ test "a message that did not go: a finger can select and copy its words" {
   assert_true(t.find("引用") is Some(_))
   assert_true(t.query(Button, label="复制消息链接") is None)
   assert_true(t.query(Button, label="分享这一轮") is None)
-  let one = picked_words()
+  let one = t.ctx().words_of(pk.sel.key).unwrap().slice(pk.sel.a, pk.sel.b)
   t.tap_text("复制")
   assert_eq(t.clipboard(), one)
   t.run_for(@sf.toast_ms)
@@ -228,15 +203,16 @@ test "a handle moves its end: the passage's end follows the finger" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
-  let lines = passage(t)
+  let w = t.ctx().words_of(pk.sel.key).unwrap()
+  let lines = w.rects(pk.sel.a, pk.sel.b)
   let last = lines[lines.length() - 1]
   // the end's knob is under the line's end
   let (kx, ky) = (last.0 + last.2, last.1 + last.3 + 6.0)
-  let was = picked_span().1
+  let was = pk.sel.b
   t.press_at(kx, ky)
   slide(t, kx, ky, kx + 50.0, ky, 5)
   t.release(kx + 50.0, ky)
-  assert_true(picked_span().1 > was + 2)
+  assert_true(pk.sel.b > was + 2)
   assert_true(pk.ts != "")
   t.assert_idle()
 }
@@ -294,13 +270,16 @@ test "a handle moved down lines to a short line and let go past its end: still p
   let t = long_answer_core(calls)
   hold_on(t, "列表的每一行先按估计的高度占位") |> ignore
   assert_true(pk.ts == "ts11")
-  let last = passage(t)[0]
+  let w = t.ctx().words_of(pk.sel.key).unwrap()
+  let lines = w.rects(pk.sel.a, pk.sel.b)
+  let last = lines[0]
   // the first paragraph runs over several lines
-  let (_, _, _, first_h) = t.rect_of(long_answer[0]).unwrap()
-  assert_true(first_h > 3.0 * last.3)
-  // the short one: its line ends well short of the screen's right (where it ends: its own words' length in it)
-  let short_end = long_answer[1].length()
-  let line = t.run_rects(long_answer[1])[0]
+  let first = w.pieces[0]
+  assert_true(first.h > 3.0 * last.3)
+  // the short one: its line ends well short of the screen's right
+  let short = w.pieces[1]
+  let short_end = short.start + long_answer[1].length()
+  let line = w.rects(short.start, short_end)[0]
   assert_true(line.0 + line.2 + 60.0 < 390.0)
   // the end's knob (under the line's end) taken down to the short line, the finger past its end: the end at the line's
   // end, its handle there, away from the finger
@@ -308,11 +287,11 @@ test "a handle moved down lines to a short line and let go past its end: still p
   let (tx, ty) = (line.0 + line.2 + 60.0, line.1 + line.3 / 2.0 + last.3 / 2.0 + 6.0)
   t.press_at(kx, ky)
   slide(t, kx, ky, tx, ty, 8)
-  assert_eq(picked_span().1, short_end)
+  assert_eq(pk.sel.b, short_end)
   t.release(tx, ty)
   // let go: no tap away from it, the passage kept and its bar back over it
   assert_eq(pk.ts, "ts11")
-  assert_eq(picked_span().1, short_end)
+  assert_eq(pk.sel.b, short_end)
   t.frame()
   assert_true(t.find("复制") is Some(_))
   t.assert_idle()
@@ -338,8 +317,8 @@ test "its words no longer laid out: what was picked goes in that very frame, not
   let t = fake_core(calls)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   assert_true(pk.ts != "")
-  // (as if its message scrolled far off: what holds its words let go of)
-  @sfpages.pick_rows_let_go()
+  // (as if its message scrolled far off: no box laid out holds its words now)
+  pk.sel.key = "gone"
   t.frame()
   assert_eq(pk.ts, "")
   t.assert_idle()

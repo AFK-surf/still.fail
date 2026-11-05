@@ -10,9 +10,6 @@ import {
 
 import {
   "moonbitlang/core/env",
-  "mbui/view",
-  "mbui/signals",
-  "mbui/paint",
   "mbui/dmath",
   "mbui/runfs",
 } for "wbtest"

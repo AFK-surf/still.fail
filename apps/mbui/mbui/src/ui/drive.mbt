@@ -299,8 +299,7 @@ fn on_screen(c : Ctx, what : String) -> Array[(Double, Double)] {
 
 ///|
 /// What of the window's tree shows `what` (its words, `=WORDS` exactly, `icon:NAME` what it draws is called so:
-/// View::drawn_as; img:NAME its picture's source contains NAME; or is called `what`, its label whole: View::says),
-/// the middle of each where it takes input, in the
+/// View::drawn_as; or is called `what`, its label whole: View::says), the middle of each where it is drawn, in the
 /// window, as it is made, however faded this frame (made transparent, coming in), as on_screen_nodes finds an old
 /// view's laid out; not on its way out (View::leaving: drawn only, as an old layer leaving is, Ctx::overlay's inert);
 /// whether it takes a press or not, whatever lies over it (reachable says which of it a finger
@@ -317,49 +316,26 @@ fn tree_on_screen(c : Ctx, what : String) -> Array[(Double, Double, @view.NodeId
     // (or by what it is called, its label whole, as an old view's box is: as Compose's test finds a node by its
     // contentDescription, on_screen_nodes)
     let label = tree.said_label(d.id)
-    let drawn_name = tree.drawn_name(d.id)
     // (its words as they are drawn: on one line where they do not wrap, as an old view's text is found: view_words_set)
     let words = view_words_found(d)
     let by_words = !what.has_prefix("icon:") && words != "" &&
       (if what.has_prefix("=") { words == what.unsafe_substring(start=1, end=what.length()) } else { words.contains(what) })
     let hit = if what.has_prefix("icon:") {
       tree.drawn_name(d.id).contains("/icon/" + what.unsafe_substring(start=5, end=what.length()) + "/")
-    } else if what.has_prefix("img:") {
-      d.image.map(fn(p) { p.0.contains(what.unsafe_substring(start=4, end=what.length())) }).unwrap_or(false)
     } else if what.has_prefix("switch:") {
       // a switch by what it turns (its label, whole), as on_screen_nodes finds an old view's: the switch alone
       let label = what.unsafe_substring(start=7, end=what.length())
       tree.said_of(d.id) is Some({ role: Switch, label: l, .. }) && l == label
     } else if what.has_prefix("=") && what.length() > 1 {
       let exact = what.unsafe_substring(start=1, end=what.length())
-      words == exact || (label != "" && label == exact) || (drawn_name != "" && drawn_name == exact)
+      words == exact || (label != "" && label == exact)
+    } else if what.contains(":") {
+      false
     } else {
-      (words != "" && words.contains(what)) || (label != "" && label == what) || (drawn_name != "" && drawn_name == what)
+      (words != "" && words.contains(what)) || (label != "" && label == what)
     }
-    let v = tree.view_of(d.id).unwrap()
-    let (left, top, width, height) = v.rect()
-    // A rich paragraph is found at the requested words, not at the paragraph's middle (which may be off screen
-    // on a long line). Its laid ranges are the same ones selection and links use, projected into its drawn box.
-    let (x, y) = if by_words && !what.has_prefix("=") {
-      match runs_words_now(v) {
-        Some(now) => {
-          let whole = (left + width / 2.0, top + height / 2.0)
-          match now.text.find(what) {
-            Some(k) => match now.pieces[0].layout.rects(k, k + what.length()).get(0) {
-              Some(r) => {
-                let laid = v.laid_size()
-                let scale = if laid.0 > 0.0 { width / laid.0 } else { 1.0 }
-                (left + (r.0 + r.2 / 2.0) * scale, top + (r.1 + r.3 / 2.0) * scale)
-              }
-              None => whole
-            }
-            None => whole
-          }
-        }
-        None => (left + width / 2.0, top + height / 2.0)
-      }
-    } else { (left + width / 2.0, top + height / 2.0) }
-    if hit && !tree.leaving(d.id) && width > 0.0 && height > 0.0 && x >= 0.0 && x <= c.width && y >= 0.0 && y <= c.height {
+    let (x, y) = (d.x + d.w / 2.0, d.y + d.h / 2.0)
+    if hit && !tree.leaving(d.id) && d.w > 0.0 && d.h > 0.0 && x >= 0.0 && x <= c.width && y >= 0.0 && y <= c.height {
       hits.push((x, y, d.id, by_words))
     }
   }
@@ -388,13 +364,6 @@ fn reachable(c : Ctx, what : String) -> Array[(Double, Double)] {
       for p in tree_on_screen(c, what) {
         match view_presses_at(p.0, p.1) {
           Some(id) if tree.holds(id, p.2) => at.push((p.0, p.1))
-          // A selectable paragraph need not take a press itself. Its still hold goes through an empty old
-          // frame (tree_finger_down), or nowhere, to the words. An old button or paragraph over it still owns it.
-          None if old_owns_nothing_at(p.0, p.1) &&
-            tree_sel_at(p.0, p.1, finger=true).map_or(false, fn(t) { t.node == Some(p.2) }) => match tree.target_at(p.0, p.1) {
-            Hosted(_) | Nothing => at.push((p.0, p.1))
-            _ => ()
-          }
           _ => ()
         }
       }

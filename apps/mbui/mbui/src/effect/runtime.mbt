@@ -167,8 +167,6 @@ pub struct Runtime {
   /// Told when a task becomes ready outside a turn (a host's callback gave a
   /// Deferred its value): the host then schedules a `tick`.
   priv mut waker : () -> Unit
-  /// Told of each timer set, at its moment (Runtime::on_timer): the host then wakes at it, whoever set it.
-  priv mut timed : (Int64) -> Unit
   priv mut turning : Bool
   /// What failed, as said, when nobody else was told.
   defects : Array[String]
@@ -211,7 +209,6 @@ fn Runtime::make(seed : Int, shuffle : Bool, start : Int64, clock : (() -> Int64
     frames: 0,
     defect: e => defects.push(e.to_string()),
     waker: () => (),
-    timed: _ => (),
     turning: false,
     defects,
     log: [],
@@ -257,13 +254,6 @@ fn Runtime::report(self : Runtime, e : Error) -> Unit {
 /// the host then calls `tick` soon, on its run loop).
 pub fn Runtime::on_wake(self : Runtime, f : () -> Unit) -> Unit {
   self.waker = f
-}
-
-///|
-/// Who is told of each timer set, at its moment (a test's step or a host's callback setting one between frames: the
-/// host wakes then, as for one set in a frame).
-pub fn Runtime::on_timer(self : Runtime, f : (Int64) -> Unit) -> Unit {
-  self.timed = f
 }
 
 ///|
@@ -457,7 +447,6 @@ fn Runtime::add_timer(
   self.seq += 1
   let t = { at, seq: self.seq, fire, live: true, later, who }
   self.timers.push(t)
-  (self.timed)(at)
   t
 }
 

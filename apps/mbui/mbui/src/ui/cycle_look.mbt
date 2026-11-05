@@ -161,8 +161,6 @@ fn Ctx::cycle_looks(self : Ctx) -> Unit {
       None => ()
     }
   }
-  // (where each drew what it moves, as applied: drawn again where it was and where it is, scene_layers.mbt)
-  let reach : Map[Int, (Double, Double, Double, Double)] = {}
   for q in 0..<self.ninst {
     let b = q * inst_size
     let tag = cycle_tag_of(a, b)
@@ -174,17 +172,9 @@ fn Ctx::cycle_looks(self : Ctx) -> Unit {
       Some(l) => {
         let (x0, y0, x1, y1) = boxes[tag]
         look_inst(a, b, l, x0 + l.ox * (x1 - x0), y0 + l.oy * (y1 - y0))
-        let r = scene.parts.reach_of(a, q, q + 1)
-        reach[tag] = match reach.get(tag) {
-          Some(w) => @damage.union(w, r)
-          None => r
-        }
       }
       None => ()
     }
-  }
-  if !shooting.val {
-    scene_cycled(reach.values().collect())
   }
 }
 

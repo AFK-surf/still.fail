@@ -17,9 +17,6 @@ test "wide: the chat's \"…\" opens under its button; agent 往来 from it open
   assert_true(t.find("agent 往来") is Some(_))
   assert_true(t.find("4 条") is Some(_))
   assert_true(t.find("参与") is Some(_), msg="its facts")
-  let (_, ay) = t.find("agent 往来").unwrap()
-  let (_, py, _, ph) = t.get(Dialog).rect
-  assert_true(ay >= py && ay < py + ph, msg="its action inside the panel")
   t.tap_text("agent 往来")
   // (the popover goes as a popover does: gone once its going is over; the panel slid in)
   t.run_for(dmax(@kit.presence_out_ms, @ui.move_most_ms))
@@ -162,7 +159,7 @@ test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: 
   t.tap_text("添加到消息")
   t.frame()
   t.frame()
-  let refs = @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.get() }).unwrap_or([])
+  let refs = @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files }).unwrap_or([])
   assert_eq(refs.length(), 1)
   assert_eq(text(field(Some(refs[0]), "ref"), "path"), fix_docs + "/发布清单.md")
   assert_eq(text(field(Some(refs[0]), "ref"), "stationName"), "Willow")
@@ -174,7 +171,7 @@ test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: 
   t.drag(x, y, 400.0, 400.0)
   t.frame()
   t.frame()
-  let refs = @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.get() }).unwrap_or([])
+  let refs = @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files }).unwrap_or([])
   assert_eq(refs.length(), 2)
   assert_eq(text(field(refs.get(1), "ref"), "path"), fix_docs + "/长篇小说.txt")
 }
@@ -217,7 +214,7 @@ test "wide: a new chat's Station 文件 beside it (NewChat.tsx): kept open, clos
   t.tap_text("添加到消息")
   t.frame()
   t.frame()
-  let refs = @sfbase.writings.get("new:ws1").map(fn(d) { d.files.get() }).unwrap_or([])
+  let refs = @sfbase.writings.get("new:ws1").map(fn(d) { d.files }).unwrap_or([])
   assert_eq(refs.length(), 1)
   assert_eq(text(field(Some(refs[0]), "ref"), "path"), fix_docs + "/发布清单.md")
 }

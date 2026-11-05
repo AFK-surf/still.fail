@@ -729,12 +729,6 @@ pub fn pane_made_seen() -> @view.NodeId? {
 }
 
 ///|
-/// What the shown retained page's content spans across, with its bar left out as an old page's "page-bar" is.
-pub fn pane_content_span() -> (Double, Double)? {
-  pane_made_shown().bind(fn(p) { p.shown_across(but?=p.lent(pane_bar_node_lent).bind(fn(s) { s.val })) })
-}
-
-///|
 /// How far the page moves aside for the folded sidebar shown a while, worked out once as it is shown (frame.mbt
 /// peek_shift: what the page showed across as the last frame laid it out: an old view's page, or one made once of the
 /// tree's), the block where it is (`at`).
@@ -742,7 +736,7 @@ fn fold_peek_shift(at : FoldLook) -> Double {
   let c = @ui.current()
   // (a page made once: what its tree's parts show across; else the old view's page)
   let shown = match pane_made_shown() {
-    Some(_) => pane_content_span()
+    Some(p) => p.shown_across()
     None => c.shown_across(fold_goes.page_id, but="page-bar")
   }
   match fold_goes.node {
@@ -781,7 +775,9 @@ fn fold_held(f : FoldLook) -> (Double, Double, Double) {
 /// What the page's bars and the sidebar's parts work out from, where the block's move has got (page_bar_room, side_top,
 /// the lists' bands, the rail's marks).
 fn fold_bars(f : FoldLook) -> Unit {
-  bar_room_now.set((f.bar_pl, f.bar_ml, f.bar_mr))
+  wide.bar_pl = f.bar_pl
+  wide.bar_ml = f.bar_ml
+  wide.bar_mr = f.bar_mr
   wide.brand_h = f.brand
   let (list_top, _, list_band) = fold_held(f)
   wide.list_top = list_top

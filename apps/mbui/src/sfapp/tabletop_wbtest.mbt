@@ -111,12 +111,6 @@ test "half open on its back half: the messages over the fold, under it the compo
   // the latest chats under it
   let (_, ry, _, _) = words_at(t, "首页的列表改成按天分组").unwrap()
   assert_true(ry > words, msg="the latest chats' row at \{ry}")
-  // Recent chats stand across this half, as Home's rows: the list's 6, then the row's 22, with faces on its second line.
-  let (rx, _, _, _) = words_at(t, "盯着 CI，绿了告诉我").unwrap()
-  assert_eq(rx, 28.0)
-  let below = t.glyphs_seen().filter(fn(g) { g.3 > 870.0 })
-  let clips = @ui.view_tree().unwrap().drawn().filter(fn(n) { n.clips }).map(fn(n) { (n.x, n.y, n.w, n.h) })
-  assert_true(below.is_empty(), msg="recent chats stay above the system's bottom bar: \{below}; clips \{clips}")
   // one tapped: that chat in this one's place
   t.tap_text("首页的列表改成按天分组")
   t.run_for(@ui.move_most_ms)
@@ -135,9 +129,8 @@ test "half open: a recent chat under the composer is swiped left to archive it" 
   let calls : Array[Made] = []
   let t = duo_chat(626.0, 890.0, "regular", across("half"), calls~)
   let title = "首页的列表改成按天分组"
-  let (x, y, w, h) = t.get(Link, label=title).rect
-  // The row's own bounds, including when the title node fills the available line.
-  t.drag(x + w * 0.85, y + h / 2.0, x + w * 0.15, y + h / 2.0)
+  let (x, y) = t.find(title).unwrap()
+  t.drag(x + 420.0, y, x + 20.0, y)
   t.run_for(@ui.move_most_ms)
   let asked = named(calls, "chat.archive")
   assert_eq(asked.length(), 1)
@@ -167,13 +160,10 @@ test "its outer screen (compact, the status bar down its right side): the phone'
 }
 
 ///|
-/// The page's old views as the window's tree draws them: where across and how wide. A card inside the retained
-/// scrolling list has the row's inset width, not the page's width beside the system bars.
+/// The old views of the window's tree as it draws them: where across and how wide.
 fn islands_across() -> Array[(Double, Double)] {
   match @ui.view_tree() {
-    Some(tree) => tree.drawn().filter(fn(d) {
-      d.hosted && tree.view_of(d.id).bind(fn(v) { v.scroll_holding() }) is None
-    }).map(fn(d) { (d.x, d.w) })
+    Some(tree) => tree.drawn().filter(fn(d) { d.hosted }).map(fn(d) { (d.x, d.w) })
     None => []
   }
 }

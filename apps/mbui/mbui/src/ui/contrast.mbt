@@ -649,12 +649,6 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
       disabled.add(s.node)
     }
   }
-  let tree_disabled : Set[@view.NodeId] = Set::new()
-  match view_app.val {
-    Some(tree) => for s in tree.said_order() { if s.disabled { tree_disabled.add(s.id) } }
-    None => ()
-  }
-  let tree_exempt : Map[@view.NodeId, Bool] = Map::new()
   let holding = self.holding()
   // each node's words at their faintest letter, a line's or an icon's pieces at their strongest: (ratio, what is said
   // where it is under the least)
@@ -677,20 +671,6 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
     let b = k * inst_size
     match inst_by(k) {
       Node(id) => {
-        // A disabled control and what it holds follow the same contrast rule as an old view's control.
-        let find_exempt = fn() {
-          let mut node = view_app.val.bind(fn(tree) { tree.view_of(id) })
-          while node is Some(v) {
-            if tree_disabled.contains(v.id()) { return true }
-            node = v.parent()
-          }
-          false
-        }
-        let exempt = match tree_exempt.get(id) {
-          Some(v) => v
-          None => { let v = find_exempt(); tree_exempt[id] = v; v }
-        }
-        if exempt { continue }
         let kind = a[b + 5]
         let is_words = kind == 1.0
         // (a shape's piece: checked as the whole shape it is of is, an icon or a line, as made: inst_owners' `mark`)

@@ -38,9 +38,9 @@ pub let waiting_in : @motion.Trans = @motion.trans(fade=0.0, dy=enter_rise, spec
 
 ///|
 /// A page over the whole window, a picture to share (FilePreview.css.ts fp: fadeInKeyframes): faded in over 140 ms on
-/// the ease-out, its ground covering the old words before its own appear; gone by kit's pop_out, as a dialog.
+/// the ease-out; gone by kit's pop_out, as a dialog.
 // kept across runs: a value (no field of it changes)
-pub let window_page_in : @motion.Trans = @motion.trans(fade=0.0, ground_first=true, spec=@motion.tween(140.0, ease=Out))
+pub let window_page_in : @motion.Trans = @motion.trans(fade=0.0, spec=@motion.tween(140.0, ease=Out))
 
 ///|
 /// A row new to a list (listMotion.ts): grown in where it is from 0.9 and clear over 240 ms on the ease-out, 100 ms

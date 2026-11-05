@@ -486,11 +486,6 @@ fn narrow_made_as(
     made_at(kind, place, f)
   }
   match page {
-    // (a chat's page, kept by its chat: chat_node.mbt)
-    Chat(r) =>
-      Some(("chat/" + r.station + ":" + r.session, fn(outer : @view.View, _page, _under, stint, entry) {
-        chat_root_node(outer, src, r, entry, system_frame, stint)
-      }))
     // the chats' lists under Home's top bar (home_node); a device waiting to be confirmed in the workspace's safe mode
     // sees that instead (lock_gate, its old view)
     Home =>
@@ -705,3 +700,4 @@ fn next_place_actions_gen() -> Int {
   place_actions_made.val += 1
   place_actions_made.val
 }
+
