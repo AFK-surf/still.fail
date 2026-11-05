@@ -24,6 +24,8 @@ const keyConflict = (extra: string) => `(SELECT key FROM sessions WHERE key = NE
 const keyConflictWs = (extra: string) => `(SELECT ws FROM sessions WHERE key = NEW.key ${extra})`;
 const tokenConflict = (extra: string) => `(SELECT key FROM sessions WHERE token = NEW.token ${extra})`;
 const tokenConflictWs = (extra: string) => `(SELECT ws FROM sessions WHERE token = NEW.token ${extra})`;
+const rowidConflict = (extra: string) => `(SELECT key FROM sessions WHERE rowid = NEW.rowid ${extra})`;
+const rowidConflictWs = (extra: string) => `(SELECT ws FROM sessions WHERE rowid = NEW.rowid ${extra})`;
 const changesHome = `OLD.key IS NOT NEW.key OR (OLD.ws IS NULL AND NEW.ws IS NOT NULL)
   OR (OLD.ws IS NOT NULL AND NEW.ws IS NULL)`;
 const markMember = (thread: string, session: string, home = false) => {
@@ -106,6 +108,7 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
     if (!installed()) db.exec(`
       CREATE TABLE recent_scope_tracked (kind INTEGER NOT NULL, ws TEXT NOT NULL, total INTEGER NOT NULL DEFAULT 0,
         complete INTEGER NOT NULL DEFAULT 0, scan_connect TEXT, scan_after INTEGER, scan_done INTEGER NOT NULL DEFAULT 0,
+        scan_high INTEGER, scan_connections INTEGER NOT NULL DEFAULT 0, scan_rowids INTEGER NOT NULL DEFAULT 0,
         scan_session TEXT, scan_phase TEXT, scan_thread_after INTEGER, PRIMARY KEY(kind, ws)) WITHOUT ROWID;
       CREATE TABLE recent_scope_session_dirty (kind INTEGER NOT NULL, ws TEXT NOT NULL, session TEXT NOT NULL,
         revision INTEGER NOT NULL, PRIMARY KEY(kind, ws, session)) WITHOUT ROWID;
@@ -135,16 +138,27 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
       CREATE TRIGGER recent_scope_session_before_add BEFORE INSERT ON sessions BEGIN
         ${markSession(keyConflict(""), keyConflictWs(""))}
         ${markSession(tokenConflict(""), tokenConflictWs(""))}
+        ${markSession(rowidConflict(""), rowidConflictWs(""))}
       END;
       CREATE TRIGGER recent_scope_session_add AFTER INSERT ON sessions BEGIN ${markSession("NEW.key", "NEW.ws")} END;
-      CREATE TRIGGER recent_scope_session_before_change BEFORE UPDATE OF key, ws, token ON sessions
-        WHEN OLD.key IS NOT NEW.key OR OLD.ws IS NOT NEW.ws OR OLD.token IS NOT NEW.token BEGIN
+      CREATE TRIGGER recent_scope_session_before_change BEFORE UPDATE OF key, ws, token, connect ON sessions
+        WHEN OLD.key IS NOT NEW.key OR OLD.ws IS NOT NEW.ws OR OLD.token IS NOT NEW.token OR OLD.connect IS NOT NEW.connect BEGIN
           ${markSession("OLD.key", "OLD.ws", changesHome)}
           ${markSession(keyConflict("AND key IS NOT OLD.key"), keyConflictWs("AND key IS NOT OLD.key"))}
           ${markSession(tokenConflict("AND key IS NOT OLD.key"), tokenConflictWs("AND key IS NOT OLD.key"))}
       END;
-      CREATE TRIGGER recent_scope_session_change AFTER UPDATE OF key, ws, token ON sessions
-        WHEN OLD.key IS NOT NEW.key OR OLD.ws IS NOT NEW.ws OR OLD.token IS NOT NEW.token BEGIN ${markSession("NEW.key", "NEW.ws", changesHome)} END;
+      CREATE TRIGGER recent_scope_session_change AFTER UPDATE OF key, ws, token, connect ON sessions
+        WHEN OLD.key IS NOT NEW.key OR OLD.ws IS NOT NEW.ws OR OLD.token IS NOT NEW.token OR OLD.connect IS NOT NEW.connect
+        BEGIN ${markSession("NEW.key", "NEW.ws", changesHome)} END;
+      -- The initial scan also uses rowid. Its aliases can move a row across the saved boundary, or REPLACE a
+      -- different session without firing DELETE when recursive triggers are disabled.
+      CREATE TRIGGER recent_scope_session_before_rowid BEFORE UPDATE ON sessions WHEN OLD.rowid IS NOT NEW.rowid BEGIN
+        ${markSession("OLD.key", "OLD.ws", "0")}
+        ${markSession(rowidConflict("AND rowid IS NOT OLD.rowid"), rowidConflictWs("AND rowid IS NOT OLD.rowid"))}
+      END;
+      CREATE TRIGGER recent_scope_session_after_rowid AFTER UPDATE ON sessions WHEN OLD.rowid IS NOT NEW.rowid BEGIN
+        ${markSession("NEW.key", "NEW.ws", "0")}
+      END;
       CREATE TRIGGER recent_scope_session_drop BEFORE DELETE ON sessions BEGIN ${markSession("OLD.key", "OLD.ws")} END;
       -- A rowid REPLACE can evict a different membership without firing its DELETE trigger.
       CREATE TRIGGER recent_scope_member_before_add BEFORE INSERT ON thread_sessions BEGIN
@@ -225,7 +239,10 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
 export function trackRecentScope(db: DatabaseSync, scope: RecentScope): void {
   const kind = scope.kind === "home" ? 0 : 1;
   const ws = scope.kind === "home" ? "" : scope.workspace;
-  db.prepare(`INSERT INTO recent_scope_tracked(kind, ws) SELECT ?1, ?2
+  // MAX(rowid) is an indexed endpoint lookup. Later sessions are covered by the installed change journal.
+  db.prepare(`INSERT INTO recent_scope_tracked(kind, ws, scan_high, scan_done)
+    SELECT ?1, ?2, (SELECT MAX(rowid) FROM sessions),
+      CASE WHEN ?1 = 1 AND NOT EXISTS (SELECT 1 FROM sessions LIMIT 1) THEN 1 ELSE 0 END
     WHERE NOT EXISTS (SELECT 1 FROM recent_scope_tracked WHERE kind = ?1 AND ws = ?2)`).run(kind, ws);
 }
 

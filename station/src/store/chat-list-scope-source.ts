@@ -12,19 +12,29 @@ export const SCOPE_SESSIONS = `SELECT rowid, key FROM sessions INDEXED BY sessio
   WHERE connect = ?1 AND ws = ?2 AND rowid > ?3 ORDER BY rowid LIMIT ?4`;
 export const FIRST_SCOPE_SESSIONS = `SELECT rowid, key FROM sessions INDEXED BY sessions_by_connect
   WHERE connect = ?1 AND ws = ?2 ORDER BY rowid LIMIT ?3`;
+export const FIRST_SCOPE_SESSIONS_THROUGH = `SELECT rowid, key FROM sessions INDEXED BY sessions_by_connect
+  WHERE connect = ?1 AND ws = ?2 AND rowid <= ?3 ORDER BY rowid LIMIT ?4`;
+export const SCOPE_SESSIONS_THROUGH = `SELECT rowid, key FROM sessions INDEXED BY sessions_by_connect
+  WHERE connect = ?1 AND ws = ?2 AND rowid > ?3 AND rowid <= ?4 ORDER BY rowid LIMIT ?5`;
+// Fallback source: limit raw session rows before testing their workspace, so each transaction stays bounded.
+export const FIRST_SCOPE_OLD_SESSION = "SELECT rowid, key, ws FROM sessions WHERE rowid <= ?1 ORDER BY rowid LIMIT 1";
+export const NEXT_SCOPE_OLD_SESSION = "SELECT rowid, key, ws FROM sessions WHERE rowid > ?1 AND rowid <= ?2 ORDER BY rowid LIMIT 1";
 
 /// One step visits at most one connection's `limit` sessions. A connection with none is advanced in its own step,
 /// so even a station with many connections does not hold a write transaction while searching through them all.
 export function recentScopeSessionsStep(db: DatabaseSync, workspace: string, cursor: RecentScopeSessionCursor,
-  limit: number): { sessions: RecentScopeSession[]; cursor: RecentScopeSessionCursor } {
+  limit: number, through?: bigint): { sessions: RecentScopeSession[]; cursor: RecentScopeSessionCursor } {
   if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError("recent scope session batch must be positive");
   if (cursor.done) return { sessions: [], cursor };
   const connect = cursor.connect ?? (db.prepare(FIRST_SCOPE_CONNECT).get() as { connect: string } | undefined)?.connect ?? null;
   if (connect === null) return { sessions: [], cursor: { connect: null, after: null, done: true } };
-  const query = db.prepare(cursor.after === null ? FIRST_SCOPE_SESSIONS : SCOPE_SESSIONS);
+  const query = db.prepare(through === undefined ? (cursor.after === null ? FIRST_SCOPE_SESSIONS : SCOPE_SESSIONS)
+    : (cursor.after === null ? FIRST_SCOPE_SESSIONS_THROUGH : SCOPE_SESSIONS_THROUGH));
   query.setReadBigInts(true);
-  const sessions = (cursor.after === null ? query.all(connect, workspace, limit)
-    : query.all(connect, workspace, cursor.after, limit)) as RecentScopeSession[];
+  const sessions = (through === undefined
+    ? (cursor.after === null ? query.all(connect, workspace, limit) : query.all(connect, workspace, cursor.after, limit))
+    : (cursor.after === null ? query.all(connect, workspace, through, limit)
+      : query.all(connect, workspace, cursor.after, through, limit))) as RecentScopeSession[];
   if (sessions.length === limit) return { sessions, cursor: { connect, after: sessions.at(-1)!.rowid, done: false } };
   const next = (db.prepare(NEXT_SCOPE_CONNECT).get(connect) as { connect: string } | undefined)?.connect ?? null;
   return { sessions, cursor: { connect: next, after: null, done: next === null } };

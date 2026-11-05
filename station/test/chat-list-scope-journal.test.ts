@@ -171,3 +171,27 @@ for (const recursive of [false, true]) test(`an update replacing another session
     ]);
   } finally { store.close(); }
 });
+
+for (const recursive of [false, true]) for (const operation of ["insert", "update"] as const)
+  test(`a session ${operation} replacing a rowid records the displaced session (recursive triggers ${recursive})`, () => {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+      for (const [key, ws] of [["one", "A"], ["two", "B"]] as const)
+        store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+          token: key, createdAt: 1, lastActiveAt: 1, ws });
+      store.openThreadOf("ember", "EMBER", "chat-two", "Chat", null, "two");
+      installRecentScopeJournal(db);
+      trackRecentScope(db, { kind: "home" });
+      for (const workspace of ["A", "B"]) trackRecentScope(db, { kind: "workspace", workspace });
+      const target = (db.prepare("SELECT rowid FROM sessions WHERE key = 'two'").get() as { rowid: number }).rowid;
+      if (operation === "insert") db.prepare(`INSERT OR REPLACE INTO sessions(rowid,key,connect,scope,runtime,profile,workspace,token,created_at,last_active_at,ws)
+        VALUES (?,'new','ember','thread','claude','cc','/work','new',1,1,'A')`).run(target);
+      else db.prepare("UPDATE OR REPLACE sessions SET oid = ? WHERE key = 'one'").run(target);
+      const pending = db.prepare("SELECT kind, ws, session FROM recent_scope_session_dirty ORDER BY kind, ws, session").all()
+        .map((row) => ({ ...row }));
+      assert.ok(pending.some((row) => row.kind === 0 && row.session === "two"));
+      assert.ok(pending.some((row) => row.kind === 1 && row.ws === "B" && row.session === "two"));
+      assert.ok(pending.some((row) => row.kind === 1 && row.ws === "A" && row.session === (operation === "insert" ? "new" : "one")));
+    } finally { store.close(); }
+  });

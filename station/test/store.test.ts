@@ -29,8 +29,9 @@ import { RECENT_DEFAULT_HOME_PAGE } from "../src/store/chat-list-home-index.ts";
 import { installRecentHomeOverlap, RECENT_HOME_ORDER_PAGE, RECENT_HOME_WORKSPACE_ORDER_PAGE } from "../src/store/chat-list-home-overlap.ts";
 import { RECENT_SCOPE_ORDER_PENDING, RECENT_SCOPE_VISIBILITY_PENDING, RECENT_WORKSPACE_PAGE } from "../src/store/chat-list-scope-rows.ts";
 import { recentScopeHomeMemberQueries } from "../src/store/chat-list-scope-journal.ts";
-import { FIRST_SCOPE_CONNECT, FIRST_SCOPE_HOME_THREADS, FIRST_SCOPE_MEMBER_THREADS, FIRST_SCOPE_SESSIONS,
-  NEXT_SCOPE_CONNECT, SCOPE_HOME_THREADS, SCOPE_MEMBER_THREADS, SCOPE_MEMBER_WITHOUT_HOME, SCOPE_SESSIONS } from "../src/store/chat-list-scope-source.ts";
+import { FIRST_SCOPE_CONNECT, FIRST_SCOPE_HOME_THREADS, FIRST_SCOPE_MEMBER_THREADS, FIRST_SCOPE_OLD_SESSION, FIRST_SCOPE_SESSIONS,
+  FIRST_SCOPE_SESSIONS_THROUGH, NEXT_SCOPE_CONNECT, NEXT_SCOPE_OLD_SESSION, SCOPE_HOME_THREADS, SCOPE_MEMBER_THREADS,
+  SCOPE_MEMBER_WITHOUT_HOME, SCOPE_SESSIONS, SCOPE_SESSIONS_THROUGH } from "../src/store/chat-list-scope-source.ts";
 import { FIRST_HOME_CHAT_MEMBERS, NEXT_HOME_CHAT_MEMBERS } from "../src/store/chat-list-home-source.ts";
 import { type CardEnd, cardsEnded } from "../src/connects/card-ends.ts";
 import { fileAway } from "./archived-before.ts";
@@ -100,6 +101,9 @@ function assertRecentChatPlans() {
   for (const [sql, args, index, seek] of [
     [FIRST_SCOPE_CONNECT, [], "sessions_by_connect", false], [NEXT_SCOPE_CONNECT, ["a"], "sessions_by_connect", true],
     [FIRST_SCOPE_SESSIONS, ["a", "ws", 5], "sessions_by_connect", true], [SCOPE_SESSIONS, ["a", "ws", 0n, 5], "sessions_by_connect", true],
+    [FIRST_SCOPE_SESSIONS_THROUGH, ["a", "ws", 10n, 5], "sessions_by_connect", true],
+    [SCOPE_SESSIONS_THROUGH, ["a", "ws", 0n, 10n, 5], "sessions_by_connect", true],
+    [FIRST_SCOPE_OLD_SESSION, [10n], "INTEGER PRIMARY KEY", true], [NEXT_SCOPE_OLD_SESSION, [0n, 10n], "INTEGER PRIMARY KEY", true],
     [FIRST_SCOPE_HOME_THREADS, ["a", 5], "threads_home", true], [SCOPE_HOME_THREADS, ["a", 0n, 5], "threads_home", true],
     [FIRST_SCOPE_MEMBER_THREADS, ["a", 5], "thread_sessions_session", true], [SCOPE_MEMBER_THREADS, ["a", 0n, 5], "thread_sessions_session", true],
     [SCOPE_MEMBER_WITHOUT_HOME, [1], "INTEGER PRIMARY KEY", true],

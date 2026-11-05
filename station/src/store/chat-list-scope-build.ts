@@ -3,10 +3,16 @@
 import type { DatabaseSync } from "node:sqlite";
 import { acknowledgeRecentScopeSession } from "./chat-list-scope-journal.ts";
 import { putRecentScopeSource, removeRecentScopeSource } from "./chat-list-scope-rows.ts";
-import { recentScopeSessionThreadsStep, recentScopeSessionsStep, type RecentScopeThreadCursor } from "./chat-list-scope-source.ts";
+import { FIRST_SCOPE_OLD_SESSION, NEXT_SCOPE_OLD_SESSION, recentScopeSessionThreadsStep, recentScopeSessionsStep,
+  type RecentScopeThreadCursor } from "./chat-list-scope-source.ts";
 
 type Progress = { scan_connect: string | null; scan_after: bigint | null; scan_done: bigint; scan_session: string | null;
+  scan_high: bigint | null; scan_connections: bigint; scan_rowids: bigint;
   scan_phase: "home" | "members" | null; scan_thread_after: bigint | null };
+
+// Most stations have few connections, so seek each workspace in the existing covering index. If connections keep
+// arriving while this scan runs, switch to a finite rowid walk of the sessions that existed when tracking began.
+const MAX_SCAN_CONNECTIONS = 64n;
 
 /// One transaction advances at most `limit` source units. An empty session phase or connection also costs one unit,
 /// so ordinary short sessions can share a batch without an unbounded scan. A crash leaves rows and cursor together.
@@ -15,7 +21,8 @@ export function scanRecentWorkspaceStep(db: DatabaseSync, ws: string, limit = 64
   if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError("recent workspace scan batch must be positive");
   db.exec("BEGIN IMMEDIATE");
   try {
-    const get = db.prepare(`SELECT scan_connect, scan_after, scan_done, scan_session, scan_phase, scan_thread_after
+    const get = db.prepare(`SELECT scan_connect, scan_after, scan_done, scan_session, scan_phase, scan_thread_after,
+      scan_high, scan_connections, scan_rowids
       FROM recent_scope_tracked WHERE kind = 1 AND ws = ?`);
     get.setReadBigInts(true);
     const row = get.get(ws) as Progress | undefined;
@@ -38,19 +45,38 @@ export function scanRecentWorkspaceStep(db: DatabaseSync, ws: string, limit = 64
         }
       } else if (progress.scan_done === 1n) break;
       else {
-        const batch = recentScopeSessionsStep(db, ws, { connect: progress.scan_connect, after: progress.scan_after, done: false }, 1);
-        progress.scan_connect = batch.cursor.connect;
-        progress.scan_after = batch.cursor.after;
-        progress.scan_done = batch.cursor.done ? 1n : 0n;
-        progress.scan_session = batch.sessions[0]?.key ?? null;
+        if (progress.scan_high === null) throw new Error("recent workspace scan has no starting boundary");
+        if (progress.scan_rowids === 1n) {
+          const query = db.prepare(progress.scan_after === null ? FIRST_SCOPE_OLD_SESSION : NEXT_SCOPE_OLD_SESSION);
+          query.setReadBigInts(true);
+          const session = (progress.scan_after === null ? query.get(progress.scan_high)
+            : query.get(progress.scan_after, progress.scan_high)) as { rowid: bigint; key: string; ws: string | null } | undefined;
+          progress.scan_done = session === undefined ? 1n : 0n;
+          if (session !== undefined) progress.scan_after = session.rowid;
+          progress.scan_session = session?.ws === ws ? session.key : null;
+        } else {
+          const previousConnect = progress.scan_connect;
+          const batch = recentScopeSessionsStep(db, ws, { connect: progress.scan_connect, after: progress.scan_after, done: false }, 1,
+            progress.scan_high);
+          progress.scan_connect = batch.cursor.connect;
+          progress.scan_after = batch.cursor.after;
+          progress.scan_done = batch.cursor.done ? 1n : 0n;
+          progress.scan_session = batch.sessions[0]?.key ?? null;
+          if (progress.scan_connect !== previousConnect) progress.scan_connections++;
+          if (progress.scan_done === 0n && progress.scan_connections >= MAX_SCAN_CONNECTIONS) {
+            progress.scan_rowids = 1n;
+            progress.scan_after = null;
+          }
+        }
         progress.scan_phase = progress.scan_session === null ? null : "home";
         progress.scan_thread_after = null;
         visited++;
       }
     }
     if (visited !== 0) db.prepare(`UPDATE recent_scope_tracked SET scan_connect = ?, scan_after = ?, scan_done = ?, scan_session = ?,
-      scan_phase = ?, scan_thread_after = ? WHERE kind = 1 AND ws = ?`)
-      .run(progress.scan_connect, progress.scan_after, progress.scan_done, progress.scan_session, progress.scan_phase, progress.scan_thread_after, ws);
+      scan_phase = ?, scan_thread_after = ?, scan_connections = ?, scan_rowids = ? WHERE kind = 1 AND ws = ?`)
+      .run(progress.scan_connect, progress.scan_after, progress.scan_done, progress.scan_session, progress.scan_phase,
+        progress.scan_thread_after, progress.scan_connections, progress.scan_rowids, ws);
     db.exec("COMMIT");
     return { sourceDone: progress.scan_done === 1n && progress.scan_session === null, visited };
   } catch (error) { db.exec("ROLLBACK"); throw error; }

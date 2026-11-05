@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { FIRST_SCOPE_CONNECT, FIRST_SCOPE_HOME_THREADS, FIRST_SCOPE_MEMBER_THREADS, FIRST_SCOPE_SESSIONS,
-  NEXT_SCOPE_CONNECT, recentScopeSessionThreadsStep, recentScopeSessionsStep, SCOPE_HOME_THREADS, SCOPE_MEMBER_THREADS,
-  SCOPE_MEMBER_WITHOUT_HOME, SCOPE_SESSIONS, type RecentScopeSessionCursor, type RecentScopeThreadCursor } from "../src/store/chat-list-scope-source.ts";
+import { FIRST_SCOPE_CONNECT, FIRST_SCOPE_HOME_THREADS, FIRST_SCOPE_MEMBER_THREADS, FIRST_SCOPE_OLD_SESSION, FIRST_SCOPE_SESSIONS,
+  FIRST_SCOPE_SESSIONS_THROUGH, NEXT_SCOPE_CONNECT, NEXT_SCOPE_OLD_SESSION, recentScopeSessionThreadsStep, recentScopeSessionsStep,
+  SCOPE_HOME_THREADS, SCOPE_MEMBER_THREADS, SCOPE_MEMBER_WITHOUT_HOME, SCOPE_SESSIONS, SCOPE_SESSIONS_THROUGH,
+  type RecentScopeSessionCursor, type RecentScopeThreadCursor } from "../src/store/chat-list-scope-source.ts";
 import { Store } from "../src/store/store.ts";
 
 test("a workspace's old sessions are sought by connection in bounded steps", () => {
@@ -38,12 +39,19 @@ test("workspace session batches use the existing covering order without sorting 
   const store = Store.open(":memory:");
   try {
     for (const [sql, args] of [[FIRST_SCOPE_CONNECT, []], [NEXT_SCOPE_CONNECT, ["a"]],
-      [FIRST_SCOPE_SESSIONS, ["a", "here", 3]], [SCOPE_SESSIONS, ["a", "here", 0n, 3]]] as const) {
+      [FIRST_SCOPE_SESSIONS, ["a", "here", 3]], [SCOPE_SESSIONS, ["a", "here", 0n, 3]],
+      [FIRST_SCOPE_SESSIONS_THROUGH, ["a", "here", 10n, 3]], [SCOPE_SESSIONS_THROUGH, ["a", "here", 0n, 10n, 3]]] as const) {
       const rows = store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[];
       const plan = rows.map((row) => row.detail).join("; ");
       assert.match(plan, /sessions_by_connect/, plan);
       assert.doesNotMatch(plan, /TEMP B-TREE/, plan);
-      if (sql === FIRST_SCOPE_SESSIONS || sql === SCOPE_SESSIONS) assert.match(plan, /connect=\? AND ws=\?/, plan);
+      if (sql !== FIRST_SCOPE_CONNECT && sql !== NEXT_SCOPE_CONNECT) assert.match(plan, /connect=\? AND ws=\?/, plan);
+    }
+    for (const [sql, args] of [[FIRST_SCOPE_OLD_SESSION, [10n]], [NEXT_SCOPE_OLD_SESSION, [0n, 10n]]] as const) {
+      const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((r) => r.detail).join("; ");
+      assert.match(plan, /SEARCH sessions USING INTEGER PRIMARY KEY/, plan);
+      assert.doesNotMatch(plan, /TEMP B-TREE/, plan);
+      assert.match(sql, /LIMIT 1$/);
     }
   } finally { store.close(); }
 });

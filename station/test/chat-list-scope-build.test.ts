@@ -5,10 +5,167 @@ import { join } from "node:path";
 import { constants } from "node:sqlite";
 import { test } from "node:test";
 import { RECENT_CHAT_LIST } from "../src/store/chat-list.ts";
-import { scanRecentWorkspaceStep, settleRecentWorkspaceSessionStep } from "../src/store/chat-list-scope-build.ts";
+import { RecentChatPreparation } from "../src/store/chat-list-prepare.ts";
+import { scanRecentWorkspaceStep, settleRecentWorkspaceMemberStep, settleRecentWorkspaceSessionStep } from "../src/store/chat-list-scope-build.ts";
 import { installRecentScopeJournal, trackRecentScope } from "../src/store/chat-list-scope-journal.ts";
 import { readPreparedRecentWorkspace } from "../src/store/chat-list-scope-rows.ts";
 import { Store } from "../src/store/store.ts";
+
+test("new unrelated connections cannot keep an old workspace scan open", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    for (const [key, connect, ws] of [["ours", "a", "here"], ["foreign", "z", "away"]] as const) {
+      store.insertSession({ key, connect, runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws });
+    }
+    const chat = store.openThreadOf("ember", "EMBER", "old-chat", "Old", null, "ours").id;
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    let done = false;
+    for (let i = 0; i < 200 && !done; i++) {
+      const key = `new-${String(i).padStart(3, "0")}`;
+      store.insertSession({ key, connect: `zz-${String(i).padStart(3, "0")}`, runtime: "claude", profile: "cc",
+        workspace: "/work", token: key, createdAt: 1, lastActiveAt: 1, ws: "away" });
+      const result = scanRecentWorkspaceStep(db, "here", 1);
+      assert.ok(result.visited <= 1);
+      done = result.sourceDone;
+    }
+    assert.ok(done, "new connections outside this workspace cannot indefinitely extend the old scan");
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [chat], total: 1 });
+  } finally { store.close(); }
+});
+
+test("new sessions on an old connection are journaled instead of extending the old scan", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    store.insertSession({ key: "old", connect: "a", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "old", createdAt: 1, lastActiveAt: 1, ws: "here" });
+    const old = store.openThreadOf("ember", "EMBER", "old-chat", "Old", null, "old").id;
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    let done = false, newest = 0;
+    for (let i = 0; i < 20 && !done; i++) {
+      const key = `new-${i}`;
+      store.insertSession({ key, connect: "a", runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws: "here" });
+      newest = store.openThreadOf("ember", "EMBER", `new-chat-${i}`, "New", null, key).id;
+      const result = scanRecentWorkspaceStep(db, "here", 1);
+      assert.ok(result.visited <= 1);
+      done = result.sourceDone;
+    }
+    assert.ok(done, "new sessions do not move the endpoint of the old-session scan");
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    assert.equal(readPreparedRecentWorkspace(db, "here", 50), null, "the new sessions still need reconciliation");
+    let sessionsDone = false, membersDone = false;
+    for (let i = 0; i < 200 && !sessionsDone; i++) sessionsDone = settleRecentWorkspaceSessionStep(db, "here", 2).sessionsDone;
+    for (let i = 0; i < 200 && !membersDone; i++) membersDone = settleRecentWorkspaceMemberStep(db, "here", 2).membersDone;
+    assert.ok(sessionsDone && membersDone);
+    const preparation = new RecentChatPreparation(db, 2);
+    let ready = false;
+    for (let i = 0; i < 200 && !ready; i++) ready = preparation.step({ ws: "here", home: "home" }).done;
+    assert.ok(ready, "other changes caused by the new chats are also settled");
+    const expected = db.prepare(RECENT_CHAT_LIST).all("here", "home", 50) as { id: number; total: number }[];
+    const page = readPreparedRecentWorkspace(db, "here", 50);
+    assert.deepEqual(page, { ids: expected.map((row) => row.id), total: expected[0]?.total ?? 0 });
+    assert.ok(page?.ids.includes(old) && page.ids.includes(newest));
+  } finally { store.close(); }
+});
+
+for (const recursive of [false, true]) test(`a session moved past the old scan boundary is still accounted (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    store.insertSession({ key: "old", connect: "a", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "old", createdAt: 1, lastActiveAt: 1, ws: "here" });
+    const chat = store.openThreadOf("ember", "EMBER", "old-chat", "Old", null, "old").id;
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    db.prepare("UPDATE sessions SET _rowid_ = 900 WHERE key = 'old'").run();
+    let scanned = false;
+    for (let i = 0; i < 20 && !scanned; i++) scanned = scanRecentWorkspaceStep(db, "here", 2).sourceDone;
+    assert.ok(scanned);
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "the moved row must remain pending");
+    const preparation = new RecentChatPreparation(db, 2);
+    let ready = false;
+    for (let i = 0; i < 100 && !ready; i++) ready = preparation.step({ ws: "here", home: "home" }).done;
+    assert.ok(ready);
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [chat], total: 1 });
+  } finally { store.close(); }
+});
+
+for (const recursive of [false, true]) test(`a session whose connection moves behind the scan is still accounted (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    for (const [key, connect] of [["first", "a"], ["moving", "z"]] as const)
+      store.insertSession({ key, connect, runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws: "here" });
+    const chat = store.openThreadOf("ember", "EMBER", "moving-chat", "Moving", null, "moving").id;
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    scanRecentWorkspaceStep(db, "here", 1);
+    db.prepare("UPDATE sessions SET connect = '0' WHERE key = 'moving'").run();
+    let scanned = false;
+    for (let i = 0; i < 30 && !scanned; i++) scanned = scanRecentWorkspaceStep(db, "here", 2).sourceDone;
+    assert.ok(scanned);
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "the moved connection must remain pending");
+    const preparation = new RecentChatPreparation(db, 2);
+    let ready = false;
+    for (let i = 0; i < 100 && !ready; i++) ready = preparation.step({ ws: "here", home: "home" }).done;
+    assert.ok(ready);
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [chat], total: 1 });
+  } finally { store.close(); }
+});
+
+test("the finite old-session walk resumes after reopening and rolls back as one batch", () => {
+  const dir = mkdtempSync(join(tmpdir(), "recent-workspace-boundary-"));
+  const path = join(dir, "station.db");
+  let store = Store.open(path);
+  try {
+    let db = store.db;
+    for (let i = 0; i < 70; i++) {
+      const key = `old-${String(i).padStart(3, "0")}`;
+      store.insertSession({ key, connect: `c-${String(i).padStart(3, "0")}`, runtime: "claude", profile: "cc",
+        workspace: "/work", token: key, createdAt: 1, lastActiveAt: 1, ws: i === 69 ? "here" : "away" });
+    }
+    store.openThreadOf("ember", "EMBER", "later", "Later", null, "old-069");
+    store.openThreadOf("ember", "EMBER", "moves", "Moves", null, "old-000");
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    const progress = () => db.prepare("SELECT * FROM recent_scope_tracked WHERE kind = 1 AND ws = 'here'").get()!;
+    for (let i = 0; i < 200 && progress().scan_rowids !== 1; i++) scanRecentWorkspaceStep(db, "here", 1);
+    assert.equal(progress().scan_rowids, 1, "many connections switch to the finite old-session walk");
+    for (let i = 0; i < 5; i++) scanRecentWorkspaceStep(db, "here", 1);
+    db.prepare("UPDATE sessions SET ws = 'here' WHERE key = 'old-000'").run();
+    store.insertSession({ key: "new", connect: "new", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "new", createdAt: 1, lastActiveAt: 1, ws: "here" });
+    store.openThreadOf("ember", "EMBER", "new", "New", null, "new");
+    const beforeClose = progress();
+    store.close();
+    store = Store.open(path);
+    db = store.db;
+    assert.deepEqual(progress(), beforeClose);
+    const beforeSources = db.prepare("SELECT COUNT(*) AS n FROM recent_scope_sources").get()?.n;
+    db.exec(`CREATE TRIGGER fail_later_source BEFORE INSERT ON recent_scope_sources WHEN NEW.session = 'old-069'
+      BEGIN SELECT RAISE(ABORT, 'test failure'); END`);
+    assert.throws(() => scanRecentWorkspaceStep(db, "here", 128), /test failure/);
+    assert.deepEqual(progress(), beforeClose);
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM recent_scope_sources").get()?.n, beforeSources);
+    db.exec("DROP TRIGGER fail_later_source");
+    let scanned = false;
+    for (let i = 0; i < 100 && !scanned; i++) scanned = scanRecentWorkspaceStep(db, "here", 8).sourceDone;
+    assert.ok(scanned);
+    const preparation = new RecentChatPreparation(db, 8);
+    let ready = false;
+    for (let i = 0; i < 200 && !ready; i++) ready = preparation.step({ ws: "here", home: "home" }).done;
+    assert.ok(ready);
+    const expected = db.prepare(RECENT_CHAT_LIST).all("here", "home", 5) as { id: number; total: number }[];
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: expected.map((row) => row.id), total: expected[0]?.total ?? 0 });
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
 
 test("one bounded workspace batch advances through multiple empty old sessions", () => {
   const store = Store.open(":memory:"), db = store.db;
