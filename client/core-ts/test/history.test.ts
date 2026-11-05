@@ -72,13 +72,13 @@ test("a_stillfail_place_is_its_title_or_the_agents_or_new_chat_never_its_first_m
   // Named as the station's titleOf names it: its first message, links and all, is never its name.
   const first = "看 [一起排查 lab-node 图片加载](https://app.still.fail/w/01TEST/s/example/chats/chat%3Ac-abcd) 要排队";
   const threads = [
-    { surface: "ember", channel: "EMBER", threadTs: "1700000001.618000", title: null, firstText: first, sessions: [{ session: "s1" }] },
-    { surface: "ember", channel: "EMBER", threadTs: "1700000002.000000", title: "排查 lab-node 图片加载", firstText: first, sessions: [] },
+    { surface: "ember", channel: "CHAT", threadTs: "1700000001.618000", title: null, firstText: first, sessions: [{ session: "s1" }] },
+    { surface: "ember", channel: "CHAT", threadTs: "1700000002.000000", title: "排查 lab-node 图片加载", firstText: first, sessions: [] },
     // the agent's (chat_post title), a person's being none
-    { surface: "ember", channel: "EMBER", threadTs: "1700000003.750000", title: null, autoTitle: "lab-node 发消息和图片卡顿", firstText: first, sessions: [] },
+    { surface: "ember", channel: "CHAT", threadTs: "1700000003.750000", title: null, autoTitle: "lab-node 发消息和图片卡顿", firstText: first, sessions: [] },
   ];
   const untitled = format.place(threads, "CHAT/1700000001.618000", 480, new Map()) as J;
-  assert.deepEqual([untitled.name, untitled.surface, untitled.session], ["新对话", "ember", "s1"]);
+  assert.deepEqual([untitled.name, untitled.surface, untitled.session], ["新对话", "chat", "s1"]);
   assert.equal((format.place(threads, "CHAT/1700000002.000000", 480, new Map()) as J).name, "排查 lab-node 图片加载");
   assert.equal((format.place(threads, "CHAT/1700000003.750000", 480, new Map()) as J).name, "lab-node 发消息和图片卡顿");
 });
