@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { autoArchive } from "../src/sessions/lifecycle.ts";
+import { installSessionBindingsIndex, sessionBindingsReady, sessionBindingsStep } from "../src/store/session-bindings-index.ts";
 import { Store } from "../src/store/store.ts";
 import { Rig } from "./hub-fakes.ts";
 
@@ -56,7 +57,7 @@ test("auto-archive checks bindings only for active sessions", async () => {
       extra(40, 400); observed.reset(); autoArchive(r.hub, Date.now() + 3 * 86_400_000);
       assert.equal(r.store.getSession("mine")?.archivedAt, null);
       assert.equal(observed.visits(), before, `binding visits grew from ${before} to ${observed.visits()}`);
-      assert.ok(observed.plans().some((plan) => plan.some((line) => line.startsWith("SEARCH i ") && line.includes("session=?")));
+      assert.ok(observed.plans().some((plan) => plan.some((line) => line.startsWith("SEARCH i ") && line.includes("session=?"))));
     } finally { observed.restore(); }
   } finally { await r.close(); }
 });
@@ -80,4 +81,27 @@ test("deleting a session does not scan unrelated bindings", () => {
     } finally { observed.restore(); }
     assert.equal(db.prepare("SELECT COUNT(*) AS n FROM bindings").get()?.n, 400);
   } finally { store.close(); }
+});
+
+test("archive waits for old bindings without guessing which sessions are bound", async () => {
+  const r = new Rig(), db = r.store.db;
+  try {
+    session(r.store, "bound"); session(r.store, "free");
+    db.exec("INSERT INTO bindings(connect,session_key) VALUES('old-connect','bound')");
+    for (const row of db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'session_binding_%'").all() as { name: string }[])
+      db.exec(`DROP TRIGGER ${row.name}`);
+    db.exec("DROP TABLE session_binding_rows; DROP TABLE session_binding_replaced; DROP TABLE session_binding_meta");
+    installSessionBindingsIndex(db);
+    assert.equal(sessionBindingsReady(db), false);
+    let requested = 0;
+    autoArchive(r.hub, Date.now() + 3 * 86_400_000, undefined, () => { requested++; });
+    assert.equal(requested, 1);
+    assert.equal(r.store.getSession("bound")?.archivedAt, null);
+    assert.equal(r.store.getSession("free")?.archivedAt, null);
+    while (!sessionBindingsReady(db)) sessionBindingsStep(db, 1);
+    autoArchive(r.hub, Date.now() + 3 * 86_400_000, undefined, () => { requested++; });
+    assert.equal(requested, 1);
+    assert.equal(r.store.getSession("bound")?.archivedAt, null);
+    assert.notEqual(r.store.getSession("free")?.archivedAt, null);
+  } finally { await r.close(); }
 });
