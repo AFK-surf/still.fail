@@ -59,7 +59,7 @@ import { PENDING_BACKFILL_AFTER, PENDING_BODIES, PENDING_DUE, PENDING_MEMBER, PE
 import { REBOX_BACKFILL_FIRST, REBOX_BACKFILL_NEXT, REBOX_READY } from "../src/vault/rebox-index.ts";
 import { CARRIED_SAVE_PENDING, Secrets } from "../src/vault/secrets.ts";
 import { VaultStore } from "../src/vault/store.ts";
-import { enableSandboxIndex, SANDBOX_DIRTY_BATCH, SANDBOX_PRUNE_FIRST, SANDBOX_PRUNE_NEXT, SANDBOX_SCAN_FIRST,
+import { enableSandboxIndex, runnerChoiceFromKeys, RUNNER_SESSION_CANDIDATES, SANDBOX_DIRTY_BATCH, SANDBOX_PRUNE_FIRST, SANDBOX_PRUNE_NEXT, SANDBOX_SCAN_FIRST,
   SANDBOX_SCAN_NEXT, SANDBOX_SESSION } from "../src/store/sandbox-index.ts";
 
 const dirs: string[] = [];
@@ -107,10 +107,13 @@ function assertSandboxPlans() {
   enableSandboxIndex(db);
   const plan = (sql: string, ...args: (string | number)[]) =>
     (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((row) => row.detail).join(" | ");
-  const lookup = plan(SANDBOX_SESSION, "s");
-  assert.match(lookup, /SEARCH n USING (?:COVERING )?INDEX sandbox_name_lookup .*name=\?/);
-  assert.match(lookup, /SEARCH s USING INDEX sqlite_autoindex_sessions_1 .*key=\?/);
-  assert.doesNotMatch(lookup, /SCAN (n|s|sessions)\b/);
+  for (const sql of [SANDBOX_SESSION, RUNNER_SESSION_CANDIDATES]) {
+    const lookup = plan(sql, "s");
+    assert.match(lookup, /SEARCH n USING (?:COVERING )?INDEX sandbox_name_lookup .*name=\?/);
+    assert.match(lookup, /SEARCH s USING INDEX sqlite_autoindex_sessions_1 .*key=\?/);
+    assert.doesNotMatch(lookup, /SCAN (n|s|sessions)\b/);
+  }
+  assert.match(plan(runnerChoiceFromKeys(2), "a", "b"), /SEARCH s USING INDEX sqlite_autoindex_sessions_1 .*key=\?/);
   for (const sql of [SANDBOX_SCAN_FIRST, SANDBOX_SCAN_NEXT, SANDBOX_PRUNE_FIRST, SANDBOX_PRUNE_NEXT, SANDBOX_DIRTY_BATCH])
     assert.match(sql, /LIMIT \?$/);
   assert.match(plan(SANDBOX_SCAN_NEXT, "s", "z", 64), /SEARCH sessions USING COVERING INDEX sqlite_autoindex_sessions_1 .*key>\?/);

@@ -1,15 +1,17 @@
 import { Worker } from "node:worker_threads";
 import { log } from "../ops/log.ts";
 import { releaseStoppedBackfill } from "../store/backfill.ts";
-import { disableSandboxIndex, enableSandboxIndex, sandboxIndexEnabled, sandboxIndexReady, sandboxIndexStep, sandboxSessions } from "../store/sandbox-index.ts";
+import { disableSandboxIndex, enableSandboxIndex, runnerNameSessions, sandboxIndexEnabled, sandboxIndexReady, sandboxIndexStep, sandboxSessions } from "../store/sandbox-index.ts";
 import type { Store } from "../store/store.ts";
 
-/// Prepare the sandbox-name lookup only when a sweep actually needs it. Old sessions and old writers' journalled
-/// keys are handled after handover in short transactions. Concurrent sweeps share the same preparation.
+/// Prepare the session-name lookup only when an idle sandbox or a runner needs it. Old sessions and old writers'
+/// journalled keys are handled after handover in short transactions. Concurrent callers share the same preparation.
 export class SandboxNameBuilder {
   private pending: Promise<boolean> | null = null;
+  private disabling: Promise<boolean> | null = null;
   private worker: Worker | null = null;
   private stopped = false;
+  private forRunners = false;
   private readonly cancelled = Promise.withResolvers<boolean>();
   private readonly store: Store;
   private readonly previous: Promise<boolean>;
@@ -49,20 +51,65 @@ export class SandboxNameBuilder {
     return null;
   }
 
+  /// Memory protection must not wait for an old store to be prepared. It can use the old answer immediately while one
+  /// shared preparation runs; later looks use the same name lookup as sandbox sweeps, even without sandbox mode.
+  runners(runners: readonly { id: string; part: string }[]): Map<string, string> | "fallback" {
+    if (runners.length === 0) {
+      // Runners can disappear briefly between turns. Keep the lookup current so their return does not repeatedly
+      // rebuild all historical names; no lookup is installed on a station that has never needed it.
+      if (this.forRunners && !this.stopped) {
+        try {
+          if (!sandboxIndexEnabled(this.store.db) || !sandboxIndexReady(this.store.db)) void this.prepare();
+        } catch (error) {
+          log.warn("hub", "the runner name lookup could not be checked", { error: (error as Error).message });
+        }
+      }
+      return new Map();
+    }
+    if (this.stopped) return "fallback";
+    this.forRunners = true;
+    try {
+      if (sandboxIndexEnabled(this.store.db)) {
+        const sessions = runnerNameSessions(this.store.db, runners);
+        if (sessions !== null) {
+          // The answer may include a bounded overlay of keys the worker still needs to save.
+          if (!sandboxIndexReady(this.store.db)) void this.prepare();
+          return sessions;
+        }
+      }
+    } catch (error) {
+      log.warn("hub", "the runner name lookup could not be read", { error: (error as Error).message });
+    }
+    void this.prepare();
+    return "fallback";
+  }
+
+  /// Let callers that need to know when a requested preparation settled wait without starting another one.
+  async settled(): Promise<void> { await this.pending; await this.disabling; }
+
+  private needed(): boolean { return this.enabled() || this.forRunners; }
+
   /// Stop recording keys after sandbox mode is disabled. A busy writer delays this small change on the worker, never
   /// on the station's thread.
   async disable(): Promise<void> {
+    if (this.needed()) return;
     if (this.pending !== null && this.previousReady) await this.pending;
-    if (this.stopped || !sandboxIndexEnabled(this.store.db)) return;
+    if (this.stopped || this.needed() || !sandboxIndexEnabled(this.store.db)) return;
     if (this.store.db.location() === null) disableSandboxIndex(this.store.db);
-    else await this.runWorker("sandbox-off");
+    else {
+      const work = this.disabling ??= this.runWorker("sandbox-off");
+      try { await work; } finally { if (this.disabling === work) this.disabling = null; }
+      // A runner or sandbox may have appeared while the worker turned journalling off.
+      if (!this.stopped && this.needed()) void this.prepare();
+    }
   }
 
   private prepare(): Promise<boolean> {
     if (this.pending !== null) return this.pending;
     const work = (async () => {
       const previous = await Promise.race([this.previous, this.cancelled.promise]);
-      if (!previous || this.stopped || !this.enabled()) return false;
+      if (this.disabling !== null) await this.disabling;
+      if (!previous || this.stopped || !this.needed()) return false;
       return this.build();
     })().catch((error) => {
       log.warn("hub", "the sandbox name lookup could not be prepared", { error: (error as Error).message });
@@ -76,11 +123,11 @@ export class SandboxNameBuilder {
     const path = this.store.db.location();
     if (path === null) {
       enableSandboxIndex(this.store.db);
-      while (!this.stopped && this.enabled() && !sandboxIndexReady(this.store.db)) {
+      while (!this.stopped && this.needed() && !sandboxIndexReady(this.store.db)) {
         sandboxIndexStep(this.store.db);
         await new Promise<void>((resolve) => setImmediate(resolve));
       }
-      return !this.stopped && this.enabled();
+      return !this.stopped && this.needed();
     }
     return this.runWorker("sandbox");
   }
@@ -106,8 +153,8 @@ export class SandboxNameBuilder {
         if (result.error) {
           log.warn("hub", "a sandbox name batch stopped", { error: result.error });
           void current.terminate();
-        } else if (result.done || this.stopped || (kind === "sandbox" && !this.enabled())) {
-          done = result.done && !this.stopped && (kind !== "sandbox" || this.enabled());
+        } else if (result.done || this.stopped || (kind === "sandbox" && !this.needed())) {
+          done = result.done && !this.stopped && (kind !== "sandbox" || this.needed());
           void current.terminate();
         } else current.postMessage({ kind });
       });
@@ -115,7 +162,7 @@ export class SandboxNameBuilder {
       current.once("exit", (code) => {
         releaseStoppedBackfill(this.store.backfillPriority, owner);
         if (this.worker === current) this.worker = null;
-        if (!done && !this.stopped && (kind !== "sandbox" || this.enabled()))
+        if (!done && !this.stopped && (kind !== "sandbox" || this.needed()))
           log.warn("hub", "the sandbox name worker stopped before finishing", { code });
         resolve(done);
       });
@@ -129,5 +176,6 @@ export class SandboxNameBuilder {
     this.cancelled.resolve(false);
     if (this.worker !== null) await this.worker.terminate();
     await this.pending;
+    await this.disabling;
   }
 }
