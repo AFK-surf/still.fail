@@ -8,7 +8,7 @@ import { constants, DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
-  ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_SINCE, CLOSED_THREAD_SINCE, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
+  ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_CARD_AFTER_POSTS, CLOSED_SINCE, CLOSED_THREAD_SINCE, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
   MANUAL, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, POST_AFTER_FIRST, POST_AFTER_INDEXED, POST_BLOCKS_READY, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
 import { addListState, firstDelivery, MERGED, SCHEMA } from "../src/store/schema.ts";
@@ -1491,6 +1491,7 @@ test("what the station asks again and again is planned by an index, never a scan
     [detail.sql, detail.args], [HISTORY_DAYS, ["ws", 0n, 100n, 480n]], [HISTORY_AFTER, ["ws", 100n]], [HISTORY_TOTAL, ["ws"]],
     [HISTORY_SCOPES, []], [HISTORY_SEED_CALLS, [0]], [read.SAID_LATEST, [1]], [read.SAID_SCAN, [1, 100, 64]], [read.SAID_STATE, [1]],
     [CARD_POST_BEFORE, [1, 9]], [CARD_POST_NEXT, [1, 0]], [CARD_POST_AFTER, [1, 0]], [CARD_POST_LATEST, [1]], [CARD_POST_SAMPLE, [1]],
+    [CLOSED_CARD_AFTER_POSTS, [1, 0]],
     [read.HAS_ANSWER_PEOPLE_SINCE, [1, 0]],
     [read.FIRST_ANSWER_PERSON_SINCE, [1, 0]], [read.ANSWER_PEOPLE_AFTER, [1, 0, 1]],
     [read.ANSWER_NEXT_PERSON, [1, 0]],
