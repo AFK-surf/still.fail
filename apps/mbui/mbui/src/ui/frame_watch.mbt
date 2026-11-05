@@ -436,13 +436,30 @@ priv struct PaintBase {
   mut sig : Int64
   mut had : Bool
   mut laid_same : Bool
+  /// what of the layout the last build read, the first (layout_read; "" none)
+  mut read_at : String
   mut root : Int
   mut wake : Double
 }
 
 ///|
 // kept across runs: put back with the globals (looks_reset), else made again by each frame built and painted
-let paint_base : PaintBase = { sig: 0L, had: false, laid_same: false, root: 0, wake: -1.0 }
+let paint_base : PaintBase = { sig: 0L, had: false, laid_same: false, read_at: "", root: 0, wake: -1.0 }
+
+///|
+/// What the frame's builds read of the layout as the last frame laid it out (readback.mbt's reads, a row kept reading
+/// it again), the first by where it was read ("" none): a build that read none of it builds nothing from how the one
+/// before laid out, so laid out otherwise, nothing of it is for the frame after it to build again (laid_kept).
+// kept across runs: put back as each frame's build begins (frame_body)
+let layout_read_at : Ref[String] = Ref("")
+
+///|
+/// What a build read of the layout (`what`, where it was read): the first a frame's builds read kept (layout_read_at).
+fn layout_read(what : String) -> Unit {
+  if layout_read_at.val == "" {
+    layout_read_at.val = what
+  }
+}
 
 ///|
 /// Whether the looks by the clock are being applied (looks_apply): a wake asked now is theirs.
@@ -517,10 +534,14 @@ fn looks_reset() -> Unit {
   looks_base.settled = false
   paint_base.had = false
   paint_base.laid_same = false
+  paint_base.read_at = ""
+  layout_read_at.val = ""
   paint_base.root = 0
   paint_base.wake = -1.0
   looks_tells.now = []
   looks_tells.before = []
+  looks_tells.kept_now = []
+  looks_tells.kept_before = []
   looks_drawn.val = false
   painted_alone.val = false
   tree_alone_drawn.val = false
@@ -561,16 +582,20 @@ fn looks_wake(t : Double, loc : SourceLoc) -> Unit {
 }
 
 ///|
-/// The looks by the clock applied to what the frame drew (Ctx::cycle_looks), what they ask for said as theirs.
-fn looks_apply(c : Ctx) -> Unit {
+/// The looks by the clock applied to what the frame drew (Ctx::cycle_looks; none where the frame has no looks of its
+/// own, `looks` false), what they ask for said as theirs: the tree's resident clock's next step asked either way, as a
+/// frame built whole asks it, never left as the frame before asked it (a step already drawn).
+fn looks_apply(c : Ctx, looks? : Bool = true) -> Unit {
   looks_own.wake = -1.0
   looks_own.cycling = false
   in_looks.val = true
-  c.cycle_looks()
+  if looks {
+    c.cycle_looks()
+  }
   // (the window's tree's endless decorations on the resident clock (View::cycle_resident): its next step woken for,
   // said later, as a look's here is: nothing built for it; a step nobody can see waits)
   match view_app.val {
-    Some(tree) if tree.resident_read() && app_visible() => c.wake_at_time(tree.resident_next(), later=true)
+    Some(tree) if tree.resident_read() && app_visible() => c.wake_at_time(tree.resident_next(c.clock), later=true)
     _ => ()
   }
   in_looks.val = false
@@ -630,10 +655,12 @@ let env_changed : Ref[String] = Ref("")
 
 ///|
 /// The frame is built and laid out, `root` its tree (frame_body): what it laid out said as one number, and whether the
-/// build before it laid out the same.
+/// build before it laid out the same, or nothing it built came of how that one laid out (it read none of the layout:
+/// layout_read_at), laid out otherwise all the same.
 fn laid_kept(c : Ctx, root : Int) -> Unit {
   let sig = tree_sig(c)
-  paint_base.laid_same = paint_base.had && sig == paint_base.sig
+  paint_base.read_at = layout_read_at.val
+  paint_base.laid_same = paint_base.had && (sig == paint_base.sig || paint_base.read_at == "")
   paint_base.had = true
   paint_base.sig = sig
   paint_base.root = root
@@ -811,22 +838,31 @@ fn inst_bits(x : Double, j : Int) -> Int64 {
 }
 
 ///|
-/// What the frames told outside (Ctx::after_build's ids, then Ctx::tell's), the last built and the one before.
+/// What the frames told outside (Ctx::after_build's ids, then Ctx::tell's), the last built and the one before; and of
+/// those what each of the two said again of what the build before it said (`kept_now`, `kept_before`): told as it goes
+/// on, not once. What a build tells once (a page left, the menu bar told anew) is an event, sent by that build; told
+/// again by none after it, nothing of it is for a frame after it to build again.
 priv struct LooksTold {
   mut now : Array[Int]
   mut before : Array[Int]
+  mut kept_now : Array[Int]
+  mut kept_before : Array[Int]
 }
 
 ///|
 // kept across runs: put back as a run begins (looks_reset), else said by each frame built whole
-let looks_tells : LooksTold = { now: [], before: [] }
+let looks_tells : LooksTold = { now: [], before: [], kept_now: [], kept_before: [] }
 
 ///|
-/// What the frame built tells outside (frame_body): what that does is for the next frame to read, so the next is built
-/// whole unless it told the same as the one before (said again each frame) and drew the same (looks_left).
+/// What the frame built tells outside (frame_body): what it goes on telling is for the next frame to read, so the next
+/// is built whole unless what it went on telling is what the one before went on telling (said again each frame) and it
+/// drew the same (looks_left). What it told once is not in that: sent by it, the next tells it no more either way.
 fn looks_told(after : Array[Int], told : Array[Int]) -> Unit {
   looks_tells.before = looks_tells.now
   looks_tells.now = after + told
+  looks_tells.kept_before = looks_tells.kept_now
+  let before = looks_tells.before
+  looks_tells.kept_now = looks_tells.now.filter(fn(i) { before.contains(i) })
 }
 
 ///|
@@ -850,7 +886,7 @@ fn looks_left(c : Ctx, held : Bool) -> Unit {
   } else {
     // (and it laid out what the one before it laid out, and told outside what that one told: built whole again, it
     // would lay out the same)
-    looks_base.told_same = looks_tells.now == looks_tells.before
+    looks_base.told_same = looks_tells.kept_now == looks_tells.kept_before
     looks_base.ok = left && paint_base.laid_same && looks_base.told_same
     looks_base.built_at = c.clock
   }
@@ -881,8 +917,8 @@ fn looks_frame(c : Ctx, t : Double) -> Double {
   if looks_base.looks {
     looks_base.inst.blit_to(c.inst, len=looks_base.n * inst_size)
     c.ninst = looks_base.n
-    looks_apply(c)
   }
+  looks_apply(c, looks=looks_base.looks)
   c.t_build = 0.0
   c.t_layout = 0.0
   c.t_paint = work_now() - t0
@@ -1019,6 +1055,9 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   // (what came as the frame began told the window's tree: brought before what it does again is decided, where the old
   // views are placed part of that, and what a still pointer is over found so before the hand is said: view_host.mbt)
   view_arrived()
+  // (the pointer's shape as what it is over says it now, a node's shape said anew though nothing it is over moved:
+  // told the host whatever this frame does, built, painted or not, view_host.mbt)
+  view_cursor_tell()
   // (the hand as the frame sees it: what read what changed of it told, hand.mbt)
   hand_arrive(c)
   // (what reads the clock and the host's settings read so: what read them is stale where they changed; what a part or
@@ -1090,7 +1129,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     }) +
     (if part_at != "" { ", the clock read in it at \{said_clock(part_at, part_who)}" } else { "" })
   } else if !paint_base.laid_same {
-    "the one before it laid out otherwise"
+    "the one before it laid out otherwise, its layout read as it was built (\{paint_base.read_at})"
   } else {
     ""
   }

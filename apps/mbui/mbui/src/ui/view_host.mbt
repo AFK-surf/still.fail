@@ -4208,6 +4208,8 @@ fn view_old_pointed(at : (Double, Double)?) -> Unit {
       c.px = x
       c.py = y
       c.point_at(x, y)
+      // (its shape what is under it as the last frame drew it, told now: no frame built for it)
+      c.show_cursor()
     }
     None =>
       if c.px >= 0.0 || c.hover != 0 {

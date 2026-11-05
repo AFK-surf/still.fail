@@ -2891,6 +2891,10 @@ pub fn Ctx::rect_of(self : Ctx, id : Int, loc~ : SourceLoc) -> (Double, Double, 
   if nodes_run.building is Some(_) {
     built_aside(why="where the last frame drew a target, read at \{loc}")
   }
+  // (where the last frame drew it: a read of the layout, frame_watch.mbt layout_read)
+  if building.val {
+    layout_read("rect_of at \{loc}")
+  }
   let mut k = self.hit_ids.length() - 1
   while k >= 0 && self.hit_ids[k] != id {
     k = k - 1

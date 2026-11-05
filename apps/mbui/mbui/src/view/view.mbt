@@ -1429,9 +1429,12 @@ fn Tree::drawn_in(self : Tree, at : Int) -> Bool {
 }
 
 ///|
-/// The resident clock's next step after the moment drawn now (Tree::drawn_at's).
-pub fn Tree::resident_next(self : Tree) -> Double {
-  resident_of(@signals.untracked(fn() { self.clock.get() })) + resident_step_ms
+/// The resident clock's next step after `now`, the moment a frame draws: the frame's own, not the tree's clock, which a
+/// frame of the looks alone does not move (a step found from the moment built last was one already drawn, woken for at
+/// once again and again).
+pub fn Tree::resident_next(self : Tree, now : Double) -> Double {
+  ignore(self)
+  resident_of(now) + resident_step_ms
 }
 
 ///|

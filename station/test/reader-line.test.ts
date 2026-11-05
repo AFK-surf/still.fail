@@ -286,3 +286,14 @@ test("a batch's chat reads, in the background, are read one at a time beside wha
   }
   assert.equal(Atomics.load(state, 0), 3);
 });
+
+test("a background session list keeps a reader free for an interactive read", { timeout: 30_000 }, async () => {
+  const { readers, state, args, started, open } = gated(2);
+  const asked = [readers.read("thread", args(true), "en")];
+  try {
+    await started(1);
+    asked.push(readers.read("sessions", args(false), "en", { background: true }));
+    assert.equal(await readers.read("thread", args(false), "en"), "{}");
+    assert.equal(Atomics.load(state, 0), 2, "the background session list is still waiting");
+  } finally { await open(asked); }
+});

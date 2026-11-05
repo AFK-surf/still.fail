@@ -65,6 +65,7 @@ import type { TailState } from "../read/tail.ts";
 import { ColdRooms } from "./cold.ts";
 import { Hub } from "./hub.ts";
 import { buildWorkspaceActivity } from "./workspace-activity-builder.ts";
+import { buildSessionCounts } from "./session-count-builder.ts";
 import { PostBlockBuilder } from "./post-block-builder.ts";
 import { roomOf } from "./footprint.ts";
 import { InternalChat } from "./internal.ts";
@@ -249,6 +250,11 @@ export const AgentsLive = (control: Control) =>
         (builder) => Effect.promise(() => builder.close()),
       );
       hub.waitForWorkspaceActivity = () => workspaceActivity.ready;
+      const sessionCounts = yield* Effect.acquireRelease(
+        Effect.sync(() => buildSessionCounts(store, previous)),
+        (builder) => Effect.promise(() => builder.close()),
+      );
+      hub.waitForSessionCounts = () => sessionCounts.ready;
       const postBlocks = yield* Effect.acquireRelease(
         Effect.sync(() => new PostBlockBuilder(store, previous)),
         (builder) => Effect.promise(() => builder.close()),
@@ -526,7 +532,7 @@ export const AgentsLive = (control: Control) =>
       // And where each transcript's reading stood, for it to read on from there (not ask the readers, at each update).
       parts.carry("live.tails", () => hub.live.carriedTails(), (what) => hub.live.takeTails(what));
       hub.threadList = async () => JSON.parse(await readers.read("threadList", {}, "zh"));
-      hub.recentChatList = async (ws, home, limit) => JSON.parse(await readers.read("recentChatList", { ws, home, limit }, "zh"));
+      hub.recentChatList = async (ws, home, limit, signal) => JSON.parse(await readers.read("recentChatList", { ws, home, limit }, "zh", { signal }));
       hub.searchChatList = async (ws, home, limit, query) => JSON.parse(await readers.read("searchChatList", { ws, home, limit, query }, "zh"));
       hub.latestMessages = async (thread, limit) => JSON.parse(await readers.read("latestMessages", { thread, limit }, "zh"));
       hub.followRunning();
@@ -768,6 +774,7 @@ export const AgentsLive = (control: Control) =>
           stopArchiving();
           await postBlocks.close();
           await workspaceActivity.close();
+          await sessionCounts.close();
           await time.close();
           await sharing?.close();
           await xshare.close();

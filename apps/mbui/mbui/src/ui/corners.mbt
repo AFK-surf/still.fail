@@ -1349,6 +1349,9 @@ fn Ctx::inner_after_layout(self : Ctx, i : Int, grounds : Map[Int, Int], hung : 
     }
   }
   let p = ct.node
+  // (worked out of where what holds it is laid out, whoever builds that: what is built anew as that lays out
+  // otherwise, as a build that read the layout is, frame_watch.mbt layout_read)
+  layout_read("radius=Inner of \{self.named(i)}, from what holds it")
   let ra = self.container_most(ct)
   let a = self.nodes[p]
   let sides = [

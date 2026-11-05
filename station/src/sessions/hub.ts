@@ -151,7 +151,7 @@ export class Hub {
   /// (some 15 queries a thread, 1,200 threads on a station: 10 seconds held while memory was short). Unset (tests): the store.
   threadList: (() => Promise<ThreadSummary[]>) | null = null;
   /// A recent, unfiltered chat_list, with details for its page alone.
-  recentChatList: ((ws: string | null, home: string | null, limit: number) => Promise<RecentChatList>) | null = null;
+  recentChatList: ((ws: string | null, home: string | null, limit: number, signal?: AbortSignal) => Promise<RecentChatList>) | null = null;
   /// The matching chats and count for a chat_list search.
   searchChatList: ((ws: string | null, home: string | null, limit: number, query: string) => Promise<RecentChatList>) | null = null;
   /// A thread's latest `limit` messages, oldest first, read by the readers (agents.ts sets it): the archive review's
@@ -165,6 +165,8 @@ export class Hub {
   readonly actors = new Map<string, SessionActor>();
   /// Installed by the agents' side: older stores finish indexing active keys without holding the station thread.
   waitForWorkspaceActivity: (() => Promise<boolean>) | null = null;
+  /// An older store's session totals are built in bounded batches after handover.
+  waitForSessionCounts: (() => Promise<boolean>) | null = null;
   /// An old thread's requested message suffix is indexed off the station thread before delivery.
   preparePostsAfter: ((messages: readonly { thread: number; n: number }[], signal?: AbortSignal) => Promise<void>) | null = null;
   private awaitingWorkspaceActivity = new Set<string>();

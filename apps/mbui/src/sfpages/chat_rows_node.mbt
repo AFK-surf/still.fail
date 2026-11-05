@@ -53,7 +53,7 @@ fn chat_empty_node(row : @view.View) -> Unit {
 /// go, a card with the bell and 忽略 at its end, its room closing as it is let go and how it went coming in its place
 /// (under_node's); something else asked of the viewer, 忽略 under the line.
 fn chat_state_node(row : @view.View, src : Source, here : () -> MessageHere, state : () -> (String, String, String)) -> Unit {
-  row.lines_up(Is(Some(Start))) |> ignore
+  row.lines_up(Is(None)) |> ignore
   let turn = fn() { state().1 == "need" }
   let asking = fn() {
     match here().view.state_ask {
@@ -77,7 +77,7 @@ fn chat_state_node(row : @view.View, src : Source, here : () -> MessageHere, sta
     (if turn() { look.state_turn } else { look.state_quiet }).then(chat_state_wraps)
   }
   row.pick(way, fn(r, which) {
-    r.lines_up(Is(Some(Start))) |> ignore
+    r.lines_up(Is(None)) |> ignore
     match which {
       1 => {
         under_node(r, fn() { asking() is Some(_) }, fn(u) { need_card_node(u, src, here, state, asking) })
@@ -108,7 +108,7 @@ fn chat_state_node(row : @view.View, src : Source, here : () -> MessageHere, sta
                 if rest == "" && lead == "done" { @sf.t("web-main.status.done") } else { rest }
               }
               line.show(fn() { after() != "" }, fn(w) {
-                w.grow(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+                w.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
                 w.words(By(after)).words_look(By(fn() { @ui.style_words(said()) })).ink(By(fn() { @ui.style_ink(said()) })) |> ignore
               })
             }
@@ -162,13 +162,18 @@ fn need_card_node(
   @sf.ask_line_card_node(parent, stacked, fn(card) {
     let look = @sf.theme().chat_list
     card.box(fn(words) {
-      words.grow(Is(1.0)).min_width(Is(Some(0.0))).says(By(fn() { Some(@view.said(Text, label=state().0)) })) |> ignore
+      words
+      .width_share(By(fn() { if stacked() { 1.0 } else { 0.0 } }))
+      .grow(By(fn() { if stacked() { 0.0 } else { 1.0 } }))
+      .basis(By(fn() { if stacked() { None } else { Some(0.0) } }))
+      .min_width(Is(Some(0.0)))
+      .says(By(fn() { Some(@view.said(Text, label=state().0)) })) |> ignore
       // (what it asks: the bell where an option's number is, what follows it)
       words.box(fn(a) {
         a.row(Is(true)).gap(Is(6.0)).lines_up(Is(Some(Start))).alpha(By(fn() { way_shown(was, a) })) |> ignore
         @sf.ask_line_mark_node(a, fn(m) { lead_icon_node(m, fn() { "need" }, fn() { @sf.theme().p.text }, centred=true) }) |> ignore
         a.box(fn(w) {
-          w.grow(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+          w.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
           w
           .words(By(fn() { state().2 }))
           .words_look(By(fn() { @sf.ask_line_words_look(look.state_turn.then(chat_state_wraps)) }))
@@ -287,12 +292,11 @@ fn sent_elsewhere_node(row : @view.View, src : Source, here : () -> MessageHere,
         })
         |> ignore
       } else {
-        agent_avatar_node(slot, fn() { s().by.maker }, fn() { s().by.runtime }, fn() {
+        let face = agent_avatar_node(slot, fn() { s().by.maker }, fn() { s().by.runtime }, fn() {
           if surface() == "feishu" { "feishu" } else { "slack" }
         })
-        |> ignore
         if @signals.untracked(agent) != "" {
-          agent_hover_node(slot, src, here, agent)
+          agent_hover_node(face, src, here, agent)
         }
       }
     })

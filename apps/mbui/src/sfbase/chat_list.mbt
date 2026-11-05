@@ -389,9 +389,58 @@ pub fn entries_made() -> Int {
 }
 
 ///|
-/// Chat `r`'s view (chat_view), its list's entries and its topic's error: worked out once for each version of it,
-/// whoever reads it in a frame (the page, its side panel, the frame round it, the chats kept: linger_tick).
+// kept across runs: a count for tests (views_worked)
+let views_worked_count : Ref[Int] = Ref(0)
+
+///|
+/// How many times a chat's view was worked out (view_of_chat's getter: the core's topic asked for each time): for a
+/// test that counts what a page costs.
+pub fn views_worked() -> Int {
+  views_worked_count.val
+}
+
+///|
+/// Chat `r`'s view (chat_view), its list's entries and its topic's error: worked out once for each version of what it
+/// is made of (the topic, its messages, the chat a new chat became), whoever reads it in a frame (the page, its rows,
+/// its side panel, the frame round it, the chats kept: linger_tick), each read after that the one kept (chat_views).
+/// Asking for the topic is not free on a device (its params made, written out and looked for among the
+/// subscriptions: core_topic, Client::subscribe), and a chat's page reads its view hundreds of times as it is entered
+/// or left (its rows' words, its bar, its composer): 185 of a leave's 378 ms on a phone, when each read asked anew
+/// (2026-11-05).
 pub fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json?) {
+  chat_views.read(chat_key(r), fn(_) { view_of_chat_now(src, r) }, same=fn(a, b) {
+    same_view(a.0, b.0) && physical_equal(a.1, b.1) && a.2 == b.2
+  })
+}
+
+///|
+/// Chat `r`'s view let go of as its page is left, before its topic is (chat.mbt chat_left): what read it on the page
+/// still follows it till the page is gone, and a view kept would be worked out again as the topic ends, a watch
+/// asking whether it changed (signals' check_dirty), and ask the core for the topic anew: the chat subscribed to
+/// again as it is left. A read after this works it out anew, the topic asked then.
+pub fn chat_view_left(r : ChatRef) -> Unit {
+  chat_views.forget(chat_key(r))
+  chat_bare_views.forget(chat_key(r))
+}
+
+///|
+// kept across runs: what it keeps is let go of by a run anew and by reset (derived.mbt)
+let chat_views : Kept[(ChatView?, Array[Entry], Json?)] = Kept::new()
+
+///|
+fn same_view(a : ChatView?, b : ChatView?) -> Bool {
+  match (a, b) {
+    (Some(x), Some(y)) => physical_equal(x, y)
+    (None, None) => true
+    _ => false
+  }
+}
+
+///|
+/// Chat `r`'s view as it is now (view_of_chat's getter): what reads the view follows the topic through it, so a page
+/// left is told it changed by the topic's end.
+fn view_of_chat_now(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json?) {
+  views_worked_count.val += 1
   let (read, present, error) = chat_read_now(src, r)
   match (read, present, fresh_view(r)) {
     // (the chat a new chat became is never said to be empty: its first message is in it from the frame it was sent,
@@ -413,8 +462,18 @@ pub fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json
 }
 
 ///|
-/// The chat's view for a reader which does not need its list of entries. Messages are made only as they are read.
+/// The chat's view for a reader which does not need its list of entries (messages are made only as they are read):
+/// kept as view_of_chat's is, its topic asked for once for each version of it.
 pub fn chat_view_now(src : Source, r : ChatRef) -> ChatView? {
+  chat_bare_views.read(chat_key(r), fn(_) { chat_view_bare(src, r) }, same=same_view)
+}
+
+///|
+// kept across runs: as chat_views, let go of with it (chat_view_left)
+let chat_bare_views : Kept[ChatView?] = Kept::new()
+
+///|
+fn chat_view_bare(src : Source, r : ChatRef) -> ChatView? {
   let (read, present, _) = chat_read_now(src, r)
   match (read, present, fresh_view(r)) {
     (Some(c), true, _) => Some(c.view)
@@ -427,8 +486,6 @@ pub fn chat_view_now(src : Source, r : ChatRef) -> ChatView? {
 /// Follow the topic and its cached view without asking for its entries.
 fn chat_read_now(src : Source, r : ChatRef) -> (ChatRead?, Bool, Json?) {
   let params = chat_params(r)
-  // (the topic read here first: what reads the view follows the topic itself too, so a page left is told it changed
-  // by the topic's end, not by working the view out again: that would ask for the topic anew)
   let topic = (src.topic)("chat", params)
   let read = chat_reads.read(chat_key(r), fn(was) { chat_read(src, params, was) })
   (read, topic.value is Some(Object(_)), topic.error)

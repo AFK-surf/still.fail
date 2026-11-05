@@ -283,7 +283,7 @@ export function sessionThreadOf(hub: Hub, key: string): SessionThread {
 
 /// chat_list: the station's conversations of session `key`'s workspace, the latest first, each with its agents
 /// (session keys).
-export async function chatList(hub: Hub, key: string, args: Args): Promise<string> {
+export async function chatList(hub: Hub, key: string, args: Args, signal?: AbortSignal): Promise<string> {
   const given = args.limit === undefined ? null : jsNumber(args.limit);
   const limit = given === null ? 20 : Number.isNaN(given) ? 0 : Math.trunc(Math.min(100, Math.max(1, given)));
   const query = (args.query === undefined ? "" : jsString(args.query)).trim().toLowerCase();
@@ -292,7 +292,7 @@ export async function chatList(hub: Hub, key: string, args: Args): Promise<strin
   const home = hub.wsOf(null);
   // The reader counts and selects before returning the page. A search still checks each scoped chat's titles and words.
   const listed = query === ""
-    ? hub.recentChatList != null ? await hub.recentChatList(ws, home, limit)
+    ? hub.recentChatList != null ? await hub.recentChatList(ws, home, limit, signal)
       : hub.threadList == null ? hub.store.recentChatList(ws, home, limit) : null
     : hub.searchChatList != null ? await hub.searchChatList(ws, home, limit, query)
       : hub.threadList == null ? hub.store.searchChatList(ws, home, limit, query) : null;

@@ -13,6 +13,7 @@ import { compactQuery, compactScopeReady, compactUsageSince, hasCompactUsage } f
 import { type UsageChatCoverage, usageCardOutcomesComplete, usageChatStatsReady } from "../store/usage-chat-stats.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
 import { hasRuntimeOrderIndex } from "../store/schema.ts";
+import { SESSION_LIST_CONNECT, SESSION_LIST_PENDING, SESSION_LIST_SCOPE, SESSION_LIST_SCOPE_CONNECT, sessionListReady } from "../store/session-list-index.ts";
 import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
 import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
@@ -155,15 +156,16 @@ export function historySessions(s: Store, viewer: { workspace: string; home: boo
 /// The session list's active or archived rows: do not bring the other kind out of the database just to discard it.
 /// The old whole-table order put equal timestamps in rowid order; retain that when using either partial index.
 export function listedSessions(s: Store, connect: string | null, archived: boolean, viewer: InWorkspace | null): SessionRow[] {
-  const where = [archived ? "archived_at IS NOT NULL" : "archived_at IS NULL"];
-  const args: Json[] = [];
-  if (connect !== null) { where.push("connect = ?"); args.push(connect); }
-  if (viewer !== null) {
-    where.push(viewer.home === false ? "ws = ?" : "(ws = ? OR ws IS NULL)");
-    args.push(viewer.workspace);
+  if (viewer === null && connect === null) {
+    const where = archived ? "archived_at IS NOT NULL" : "archived_at IS NULL";
+    const sql = `SELECT * FROM sessions INDEXED BY ${archived ? "sessions_put_away" : "sessions_live"} WHERE ${where} ORDER BY last_active_at DESC, rowid ASC`;
+    return all(s, sql).map(toSession);
   }
-  const sql = `SELECT * FROM sessions INDEXED BY ${archived ? "sessions_put_away" : "sessions_live"} WHERE ${where.join(" AND ")} ORDER BY last_active_at DESC, rowid ASC`;
-  return all(s, sql, ...args).map(toSession);
+  if (!sessionListReady(s.db)) throw new Error(SESSION_LIST_PENDING);
+  if (viewer === null) return all(s, SESSION_LIST_CONNECT, Number(archived), connect).map(toSession);
+  const args: Json[] = [viewer.workspace, Number(viewer.home !== false), Number(archived)];
+  if (connect !== null) args.push(connect);
+  return all(s, connect === null ? SESSION_LIST_SCOPE : SESSION_LIST_SCOPE_CONNECT, ...args).map(toSession);
 }
 
 /// The sessions not archived (the sidebar's), the latest active first, by the index of those alone (schema.ts

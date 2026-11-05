@@ -1,0 +1,118 @@
+// Incremental contributions to a prepared explicit workspace. These primitives do not yet account for membership
+// or thread changes by themselves; a builder must keep the scope pending until all such changes have been settled.
+import type { DatabaseSync } from "node:sqlite";
+import type { RecentChatPage } from "./chat-list-index.ts";
+import { recentChatIndexInstalled } from "./chat-list-schema.ts";
+
+type Current = { at: bigint; said_at: bigint; created_at: bigint };
+
+// A small number of undistributed order changes can be checked against this workspace without waiting for other
+// workspaces. Cap the input before probing; for a larger backlog, the small-workspace check below runs instead.
+export const RECENT_SCOPE_ORDER_PENDING = `SELECT COUNT(*) AS n,
+  MAX(EXISTS (SELECT 1 FROM recent_scope_rows r WHERE r.ws = ?1 AND r.thread = d.thread)) AS affects
+  FROM (SELECT thread FROM recent_scope_order_dispatch ORDER BY thread LIMIT 65) d`;
+export const RECENT_SCOPE_VISIBILITY_PENDING = `SELECT COUNT(*) AS n,
+  MAX(d.ambiguous) AS ambiguous,
+  MAX(COALESCE(d.home_ws = ?1, 0) OR
+    EXISTS (SELECT 1 FROM recent_scope_rows r WHERE r.ws = ?1 AND r.thread = d.thread)) AS affects
+  FROM (SELECT thread, home_ws, ambiguous FROM recent_scope_visibility_dirty ORDER BY thread LIMIT 65) d`;
+// Only ambiguous jobs need candidate lookups. The input is bounded before each workspace/thread primary-key seek.
+export const RECENT_SCOPE_VISIBILITY_AMBIGUOUS = `SELECT MAX(EXISTS (
+  SELECT 1 FROM recent_scope_candidates c WHERE c.ws = ?1 AND c.thread = d.thread)) AS affects
+  FROM (SELECT thread, ambiguous FROM recent_scope_visibility_dirty ORDER BY thread LIMIT 65) d WHERE d.ambiguous`;
+// If there are many pending chats, the opposite direction can still be bounded for a small workspace. Limit its
+// rows before probing pending chat ids; a 65th row means the reader must wait instead of walking the whole scope.
+export const RECENT_SCOPE_ORDER_SMALL = `SELECT COUNT(*) AS n, MAX(EXISTS (
+  SELECT 1 FROM recent_scope_order_dispatch d WHERE d.thread = r.thread)) AS affects
+  FROM (SELECT thread FROM recent_scope_rows WHERE ws = ?1 ORDER BY thread LIMIT 65) r`;
+export const RECENT_SCOPE_VISIBILITY_ROWS_SMALL = `SELECT COUNT(*) AS n, MAX(EXISTS (
+  SELECT 1 FROM recent_scope_visibility_dirty d WHERE d.thread = r.thread)) AS affects
+  FROM (SELECT thread FROM recent_scope_rows WHERE ws = ?1 ORDER BY thread LIMIT 65) r`;
+export const RECENT_SCOPE_VISIBILITY_MEMBERS_SMALL = `SELECT COUNT(*) AS n, MAX(EXISTS (
+  SELECT 1 FROM recent_scope_visibility_dirty d WHERE d.thread = c.thread AND d.ambiguous = 1)) AS affects
+  FROM (SELECT thread FROM recent_scope_candidates WHERE ws = ?1 ORDER BY thread, session LIMIT 65) c`;
+export const RECENT_SCOPE_VISIBILITY_HOME = "SELECT 1 FROM recent_scope_visibility_dirty WHERE home_ws = ? LIMIT 1";
+export const RECENT_WORKSPACE_PAGE = `SELECT thread FROM recent_scope_rows INDEXED BY recent_scope_order WHERE ws = ?
+  ORDER BY at DESC, said_at DESC, created_at DESC, thread DESC LIMIT ?`;
+
+function atomic<T>(db: DatabaseSync, f: () => T): T {
+  db.exec("SAVEPOINT recent_scope_contribution");
+  try { const result = f(); db.exec("RELEASE recent_scope_contribution"); return result; }
+  catch (error) { db.exec("ROLLBACK TO recent_scope_contribution; RELEASE recent_scope_contribution"); throw error; }
+}
+
+/// Add or refresh one session's contribution. Multiple sessions in the same workspace count the chat only once.
+export function putRecentScopeSource(db: DatabaseSync, ws: string, thread: bigint, session: string): boolean {
+  return atomic(db, () => {
+    if (db.prepare("SELECT 1 FROM recent_scope_tracked WHERE kind = 1 AND ws = ?").get(ws) === undefined)
+      throw new Error("recent scope is not tracked");
+    const current = db.prepare(`SELECT COALESCE(e.at, t.created_at) AS at, COALESCE(e.at, 0) AS said_at, t.created_at
+      FROM threads t LEFT JOIN thread_state s ON s.thread = t.id
+      LEFT JOIN entries e ON e.thread = t.id AND e.n = s.said_n AND e.kind = 'message' WHERE t.id = ?`);
+    current.setReadBigInts(true);
+    const row = current.get(thread) as Current | undefined;
+    if (row === undefined) return false;
+    const had = db.prepare("SELECT 1 FROM recent_scope_rows WHERE ws = ? AND thread = ?").get(ws, thread) !== undefined;
+    db.prepare(`INSERT INTO recent_scope_sources(ws, thread, session) SELECT ?1, ?2, ?3
+      WHERE NOT EXISTS (SELECT 1 FROM recent_scope_sources WHERE ws = ?1 AND thread = ?2 AND session = ?3)`).run(ws, thread, session);
+    db.prepare(`INSERT INTO recent_scope_rows(ws, thread, at, said_at, created_at) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(ws, thread) DO UPDATE SET at = excluded.at, said_at = excluded.said_at, created_at = excluded.created_at
+      WHERE at IS NOT excluded.at OR said_at IS NOT excluded.said_at OR created_at IS NOT excluded.created_at`)
+      .run(ws, thread, row.at, row.said_at, row.created_at);
+    if (!had) db.prepare("UPDATE recent_scope_tracked SET total = total + 1 WHERE kind = 1 AND ws = ?").run(ws);
+    return true;
+  });
+}
+
+/// Remove just one source; the chat remains until its final source in this workspace is gone.
+export function removeRecentScopeSource(db: DatabaseSync, ws: string, thread: bigint, session: string): void {
+  atomic(db, () => {
+    const removed = db.prepare("DELETE FROM recent_scope_sources WHERE ws = ? AND thread = ? AND session = ?").run(ws, thread, session).changes;
+    if (removed === 0 || db.prepare("SELECT 1 FROM recent_scope_sources WHERE ws = ? AND thread = ? LIMIT 1").get(ws, thread) !== undefined) return;
+    if (db.prepare("DELETE FROM recent_scope_rows WHERE ws = ? AND thread = ?").run(ws, thread).changes !== 0)
+      db.prepare("UPDATE recent_scope_tracked SET total = total - 1 WHERE kind = 1 AND ws = ?").run(ws);
+  });
+}
+
+/// The caller holds a read snapshot while using this count and the corresponding rows.
+export function preparedRecentWorkspaceTotal(db: DatabaseSync, ws: string): number | null {
+  if (!recentChatIndexInstalled(db, "scope")) return null;
+  const meta = db.prepare("SELECT total, complete, scan_done, scan_session FROM recent_scope_tracked WHERE kind = 1 AND ws = ?").get(ws) as
+    { total: number; complete: number; scan_done: number; scan_session: string | null } | undefined;
+  if (!meta || meta.complete !== 1 || db.prepare("SELECT 1 FROM recent_scope_session_dirty WHERE kind = 1 AND ws = ? LIMIT 1").get(ws) !== undefined ||
+      db.prepare("SELECT 1 FROM recent_scope_member_dirty WHERE ws = ? LIMIT 1").get(ws) !== undefined ||
+      db.prepare("SELECT 1 FROM recent_scope_order_dirty WHERE ws = ? LIMIT 1").get(ws) !== undefined)
+    return null;
+  const visibility = db.prepare(RECENT_SCOPE_VISIBILITY_PENDING).get(ws) as { n: number; ambiguous: number | null; affects: number | null };
+  if (visibility.affects === 1) return null;
+  if (visibility.n > 64) {
+    if (meta.scan_done !== 1 || meta.scan_session !== null || db.prepare(RECENT_SCOPE_VISIBILITY_HOME).get(ws) !== undefined) return null;
+    for (const sql of [RECENT_SCOPE_VISIBILITY_ROWS_SMALL, RECENT_SCOPE_VISIBILITY_MEMBERS_SMALL]) {
+      const small = db.prepare(sql).get(ws) as { n: number; affects: number | null };
+      if (small.n > 64 || small.affects === 1) return null;
+    }
+  } else if (visibility.ambiguous === 1) {
+    if (meta.scan_done !== 1 || meta.scan_session !== null) return null;
+    if ((db.prepare(RECENT_SCOPE_VISIBILITY_AMBIGUOUS).get(ws) as { affects: number | null }).affects === 1) return null;
+  }
+  const pending = db.prepare(RECENT_SCOPE_ORDER_PENDING).get(ws) as { n: number; affects: number | null };
+  if (pending.affects === 1) return null;
+  if (pending.n > 64) {
+    const small = db.prepare(RECENT_SCOPE_ORDER_SMALL).get(ws) as { n: number; affects: number | null };
+    if (small.n > 64 || small.affects === 1) return null;
+  }
+  return meta.total;
+}
+
+/// Only a builder that has checked all change journals may mark a scope complete.
+export function readPreparedRecentWorkspace(db: DatabaseSync, ws: string, limit: number): RecentChatPage | null {
+  if (!Number.isSafeInteger(limit) || limit < 0) throw new RangeError("recent workspace page size must be nonnegative");
+  if (limit === 0) return { ids: [], total: 0 };
+  db.exec("SAVEPOINT recent_scope_page");
+  try {
+    const total = preparedRecentWorkspaceTotal(db, ws);
+    if (total === null) return null;
+    const rows = db.prepare(RECENT_WORKSPACE_PAGE).all(ws, limit) as { thread: number }[];
+    return { ids: rows.map((row) => row.thread), total };
+  } finally { db.exec("RELEASE recent_scope_page"); }
+}

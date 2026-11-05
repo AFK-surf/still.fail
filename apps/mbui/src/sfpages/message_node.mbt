@@ -251,9 +251,9 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
     a.pick(fn() { m().author_kind }, fn(slot, kind) {
       match kind {
         "agent" => {
-          agent_avatar_node(slot, fn() { m().by.maker }, fn() { m().by.runtime }, fn() { "" }) |> ignore
+          let face = agent_avatar_node(slot, fn() { m().by.maker }, fn() { m().by.runtime }, fn() { "" })
           // (its card while the pointer rests on it: agent_hover's)
-          agent_hover_node(slot, src, here, fn() { m().by.agent })
+          agent_hover_node(face, src, here, fn() { m().by.agent })
         }
         "ember" | "stillfail" => agent_avatar_node(slot, fn() { "" }, fn() { "" }, fn() { "" }) |> ignore
         _ => person_avatar_node(slot, src, fn() { m().author }, fn() { m().by.name }, fn() { m().by.picture }, fn() { 0 })

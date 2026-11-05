@@ -9,10 +9,13 @@ import { after, test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
   ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_SINCE, CLOSED_THREAD_SINCE, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
-  MANUAL, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, POST_AFTER_FIRST, POST_AFTER_INDEXED, POST_BLOCKS_READY, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
+  MANUAL, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, POST_AFTER_FIRST, POST_AFTER_INDEXED, POST_BLOCKS_READY, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
 import { addListState, firstDelivery, MERGED, SCHEMA } from "../src/store/schema.ts";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
+import { SESSION_COUNT_FIRST, SESSION_COUNT_NEXT, SESSION_COUNT_TOTAL, SESSION_COUNT_CONNECT, SESSION_COUNT_DISPLACED } from "../src/store/session-counts.ts";
+import { SESSION_LIST_CONNECT, SESSION_LIST_DISPLACED, SESSION_LIST_FIRST, SESSION_LIST_NEXT, SESSION_LIST_SCOPE,
+  SESSION_LIST_SCOPE_CONNECT } from "../src/store/session-list-index.ts";
 import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/store/usage.ts";
 import { detailQuery } from "../src/store/usage-detail.ts";
 import { installCompactUsage } from "../src/store/usage-compact.ts";
@@ -23,7 +26,22 @@ import { HAS_SESSION_ACTIVE_WATCH } from "../src/store/watch-jobs.ts";
 import * as read from "../src/read/store.ts";
 import { usageSummaryEdgeQuery } from "../src/read/usage-batched.ts";
 import { usageSummaryBlockOverlayQuery, usageSummaryBlockPendingQuery, usageSummaryBlockQueries } from "../src/read/usage-summary-blocks.ts";
+import { recentChatDisplacedEntry } from "../src/store/chat-list-entry-rowid.ts";
 import { HISTORY_AFTER, HISTORY_DAYS, HISTORY_SCOPES, HISTORY_SEED_CALLS, HISTORY_TOTAL } from "../src/store/usage-history.ts";
+import { installRecentChatIndex, RECENT_GLOBAL_PAGE } from "../src/store/chat-list-index.ts";
+import { RECENT_DEFAULT_HOME_PAGE } from "../src/store/chat-list-home-index.ts";
+import { installRecentHomeOverlap, RECENT_HOME_ORDER_PAGE, RECENT_HOME_WORKSPACE_ORDER_PAGE } from "../src/store/chat-list-home-overlap.ts";
+import { RECENT_SCOPE_ORDER_PENDING, RECENT_SCOPE_ORDER_SMALL, RECENT_SCOPE_VISIBILITY_AMBIGUOUS, RECENT_SCOPE_VISIBILITY_HOME,
+  RECENT_SCOPE_VISIBILITY_MEMBERS_SMALL, RECENT_SCOPE_VISIBILITY_PENDING, RECENT_SCOPE_VISIBILITY_ROWS_SMALL,
+  RECENT_WORKSPACE_PAGE } from "../src/store/chat-list-scope-rows.ts";
+import { recentScopeHomeMemberQueries } from "../src/store/chat-list-scope-journal.ts";
+import { FIRST_SCOPE_CANDIDATE_SESSION, NEXT_SCOPE_CANDIDATE_SESSION, PUT_SCOPE_CANDIDATE, RECENT_SCOPE_MEMBER_EXISTS,
+  REMOVE_SCOPE_CANDIDATE } from "../src/store/chat-list-scope-build.ts";
+import { RECENT_CHAT_SCHEMA_VERSION } from "../src/store/chat-list-schema.ts";
+import { FIRST_SCOPE_CONNECT, FIRST_SCOPE_HOME_THREADS, FIRST_SCOPE_MEMBER_THREADS, FIRST_SCOPE_OLD_SESSION, FIRST_SCOPE_SESSIONS,
+  FIRST_SCOPE_SESSIONS_THROUGH, NEXT_SCOPE_CONNECT, NEXT_SCOPE_OLD_SESSION, SCOPE_HOME_THREADS, SCOPE_MEMBER_THREADS,
+  SCOPE_MEMBER_WITHOUT_HOME, SCOPE_SESSIONS, SCOPE_SESSIONS_THROUGH } from "../src/store/chat-list-scope-source.ts";
+import { FIRST_HOME_CHAT_MEMBERS, NEXT_HOME_CHAT_MEMBERS } from "../src/store/chat-list-home-source.ts";
 import { type CardEnd, cardsEnded } from "../src/connects/card-ends.ts";
 import { fileAway } from "./archived-before.ts";
 import { testClock } from "./hub-fakes.ts";
@@ -53,6 +71,86 @@ function open(path: string, archive: string | null = null): Store {
 }
 
 const memory = () => open(":memory:");
+
+function assertRecentChatPlans() {
+  const db = memory().db;
+  installRecentChatIndex(db);
+  installRecentHomeOverlap(db);
+  const plan = (sql: string, args: unknown[]) =>
+    (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
+  const versionSteps = plan(RECENT_CHAT_SCHEMA_VERSION, ["global", "recent_chat_meta"]);
+  assert.ok(versionSteps.some((s) => s.startsWith("SEARCH ") && s.includes("PRIMARY KEY (part=?)")), versionSteps.join(" | "));
+  const displacedSteps = plan(recentChatDisplacedEntry("?"), [1]);
+  assert.ok(displacedSteps.some((s) => s.startsWith("SEARCH e ") && s.includes("INTEGER PRIMARY KEY (rowid=?)")), displacedSteps.join(" | "));
+  assert.ok(displacedSteps.some((s) => s.startsWith("SEARCH s ") && s.includes("INTEGER PRIMARY KEY (rowid=?)")), displacedSteps.join(" | "));
+  // An ordered scan is safe here only because the query stops at the requested page size.
+  for (const [sql, args, index, seek] of [
+    [RECENT_GLOBAL_PAGE, [5], "recent_chat_order", false],
+    [RECENT_DEFAULT_HOME_PAGE, [5], "recent_home_order", false],
+    [RECENT_HOME_ORDER_PAGE, [5], "recent_home_order", false],
+    [RECENT_WORKSPACE_PAGE, ["ws", 5], "recent_scope_order", true],
+    [RECENT_HOME_WORKSPACE_ORDER_PAGE, ["ws", 5], "recent_scope_order", true],
+  ] as [string, unknown[], string, boolean][]) {
+    const steps = plan(sql, args), detail = `${sql}\n  ${steps.join(" | ")}`;
+    assert.match(sql, /LIMIT \?\s*$/);
+    assert.ok(steps.some((s) => s.includes(index) && (seek ? s.startsWith("SEARCH ") && s.includes("ws=?") : s.startsWith("SCAN "))), detail);
+    assert.ok(steps.every((s) => !s.includes("TEMP B-TREE")), detail);
+  }
+  // The pending-job input is limited before each primary-key lookup into the requested workspace.
+  for (const sql of [RECENT_SCOPE_ORDER_PENDING, RECENT_SCOPE_VISIBILITY_PENDING]) {
+    const steps = plan(sql, ["ws"]), detail = `${sql}\n  ${steps.join(" | ")}`;
+    assert.match(sql, /ORDER BY thread LIMIT 65/);
+    assert.ok(steps.some((s) => s.includes("SEARCH r USING PRIMARY KEY (ws=? AND thread=?)")), detail);
+    assert.ok(steps.every((s) => !s.includes("TEMP B-TREE")), detail);
+  }
+  const visibilitySteps = plan(RECENT_SCOPE_VISIBILITY_AMBIGUOUS, ["ws"]);
+  assert.match(RECENT_SCOPE_VISIBILITY_AMBIGUOUS, /ORDER BY thread LIMIT 65/);
+  assert.ok(visibilitySteps.some((s) => s.startsWith("SEARCH c ") && s.includes("PRIMARY KEY (ws=? AND thread=?)")), visibilitySteps.join(" | "));
+  for (const sql of [RECENT_SCOPE_ORDER_SMALL, RECENT_SCOPE_VISIBILITY_ROWS_SMALL, RECENT_SCOPE_VISIBILITY_MEMBERS_SMALL]) {
+    const steps = plan(sql, ["ws"]), detail = `${sql}\n  ${steps.join(" | ")}`;
+    assert.match(sql, /WHERE ws = \?1 ORDER BY thread(?:, session)? LIMIT 65/);
+    assert.ok(steps.some((s) => s.startsWith("SEARCH ") && s.includes("PRIMARY KEY (ws=?)")), detail);
+    assert.ok(steps.some((s) => s.startsWith("SEARCH d ") && s.includes("INTEGER PRIMARY KEY (rowid=?)")), detail);
+    assert.ok(steps.every((s) => !s.includes("TEMP B-TREE")), detail);
+  }
+  const homeSteps = plan(RECENT_SCOPE_VISIBILITY_HOME, ["ws"]);
+  assert.ok(homeSteps.some((s) => s.startsWith("SEARCH ") && s.includes("recent_scope_visibility_home") && s.includes("home_ws=?")),
+    homeSteps.join(" | "));
+  for (const sql of [PUT_SCOPE_CANDIDATE, REMOVE_SCOPE_CANDIDATE]) {
+    const steps = plan(sql, ["ws", 1, "a"]);
+    assert.ok(steps.some((s) => s.startsWith("SEARCH recent_scope_candidates ") && s.includes("PRIMARY KEY (ws=? AND thread=? AND session=?)")),
+      `${sql}\n  ${steps.join(" | ")}`);
+  }
+  const memberSteps = plan(RECENT_SCOPE_MEMBER_EXISTS, [1, "a", "ws"]);
+  assert.ok(memberSteps.some((s) => s.startsWith("SEARCH m ") && s.includes("thread=? AND session=?")), memberSteps.join(" | "));
+  assert.ok(memberSteps.some((s) => s.startsWith("SEARCH s ") && s.includes("key=?")), memberSteps.join(" | "));
+  const memberWrites = recentScopeHomeMemberQueries("?1");
+  for (const sql of [memberWrites.update, memberWrites.insert]) {
+    const steps = plan(sql, [1]), detail = `${sql}\n  ${steps.join(" | ")}`;
+    assert.match(sql, /WHERE thread = \?1 ORDER BY session LIMIT 64/);
+    assert.ok(steps.some((s) => s.startsWith("SEARCH ") && s.includes("thread_sessions") && s.includes("thread=?")), detail);
+    assert.ok(steps.some((s) => s.startsWith("SEARCH ") && s.includes("PRIMARY KEY")), detail);
+    assert.ok(steps.every((s) => !s.startsWith("SCAN recent_scope_member_dirty") && !s.includes("TEMP B-TREE")), detail);
+  }
+  // Old source scans seek each connection, workspace, session or chat before applying their batch limits.
+  for (const [sql, args, index, seek] of [
+    [FIRST_SCOPE_CONNECT, [], "sessions_by_connect", false], [NEXT_SCOPE_CONNECT, ["a"], "sessions_by_connect", true],
+    [FIRST_SCOPE_SESSIONS, ["a", "ws", 5], "sessions_by_connect", true], [SCOPE_SESSIONS, ["a", "ws", 0n, 5], "sessions_by_connect", true],
+    [FIRST_SCOPE_SESSIONS_THROUGH, ["a", "ws", 10n, 5], "sessions_by_connect", true],
+    [SCOPE_SESSIONS_THROUGH, ["a", "ws", 0n, 10n, 5], "sessions_by_connect", true],
+    [FIRST_SCOPE_OLD_SESSION, [10n], "INTEGER PRIMARY KEY", true], [NEXT_SCOPE_OLD_SESSION, [0n, 10n], "INTEGER PRIMARY KEY", true],
+    [FIRST_SCOPE_CANDIDATE_SESSION, ["ws", "a", 5], "recent_scope_candidates_session", true],
+    [NEXT_SCOPE_CANDIDATE_SESSION, ["ws", "a", 0n, 5], "recent_scope_candidates_session", true],
+    [FIRST_SCOPE_HOME_THREADS, ["a", 5], "threads_home", true], [SCOPE_HOME_THREADS, ["a", 0n, 5], "threads_home", true],
+    [FIRST_SCOPE_MEMBER_THREADS, ["a", 5], "thread_sessions_session", true], [SCOPE_MEMBER_THREADS, ["a", 0n, 5], "thread_sessions_session", true],
+    [SCOPE_MEMBER_WITHOUT_HOME, [1], "INTEGER PRIMARY KEY", true],
+    [FIRST_HOME_CHAT_MEMBERS, [1, 5], "thread_sessions", true], [NEXT_HOME_CHAT_MEMBERS, [1, "a", 5], "thread_sessions", true],
+  ] as [string, unknown[], string, boolean][]) {
+    const steps = plan(sql, args), detail = `${sql}\n  ${steps.join(" | ")}`;
+    assert.ok(steps.some((s) => s.includes(index) && (seek ? s.startsWith("SEARCH ") : s.startsWith("SCAN "))), detail);
+    assert.ok(steps.every((s) => !s.includes("TEMP B-TREE")), detail);
+  }
+}
 
 function session(store: Store, key: string) {
   store.insertSession({ key, connect: "ds", runtime: "claude", profile: "cc", workspace: `/w/${key}`, token: key, createdAt: 1, lastActiveAt: 1 });
@@ -1289,7 +1387,18 @@ test("usage: the sessions at work are found by when their turns ended, once each
 });
 
 test("what the station asks again and again is planned by an index, never a scan of what grows with time", () => {
+  assertRecentChatPlans();
   const store = memory();
+  for (const [sql, args, keys] of [
+    [SESSION_LIST_SCOPE, ["ws", 1, 0], ["kind=?", "ws=?", "archived=?"]],
+    [SESSION_LIST_SCOPE_CONNECT, ["ws", 1, 0, "a"], ["kind=?", "ws=?", "archived=?", "connect=?"]],
+    [SESSION_LIST_CONNECT, [0, "a"], ["archived=?", "connect=?"]],
+  ] as [string, unknown[], string[]][]) {
+    const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
+    assert.ok(plan.some((line) => line.startsWith("SEARCH i ") && keys.every((key) => line.includes(key))), `${sql}\n  ${plan.join(" | ")}`);
+    assert.ok(plan.some((line) => line.startsWith("SEARCH s ") && line.includes("key=?")), plan.join(" | "));
+    assert.ok(!plan.some((line) => /^SCAN (i|s)\b/.test(line)), plan.join(" | "));
+  }
   const detail = detailQuery(1n, 1_000_001n, 1n, { workspace: "ws", home: false })!;
   const compact = memory();
   installCompactUsage(compact.db, () => 0);
@@ -1349,7 +1458,10 @@ test("what the station asks again and again is planned by an index, never a scan
     [read.ORIGINAL_RUNTIME, ["a"]],
     [ACTIVE_SESSIONS, [0]], [LIVE_SESSIONS, []], [ANY_RUNNING, []], [RUNNING_SESSIONS, []], [JOBS_RUNNING, []], [JOBS_UP, []], [JOB_AT_PORT, [5100]], [SESSION_JOBS, ["a"]],
     [HAS_SESSION_ACTIVE_WATCH, ["a"]], [RUNNING_WAIT_JOBS, ["a"]],
-    [STATS_OF, ["a"]], [SESSION_COUNTS, []], [LATEST_DECISIONS, [0]], [CLOSED_SINCE, [0]], [CLOSED_THREAD_SINCE, [1, 0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
+    [STATS_OF, ["a"]], [SESSION_COUNT_TOTAL, [1, "ws"]], [SESSION_COUNT_CONNECT, [1, "ws", "a"]],
+    [SESSION_COUNT_FIRST, ["100", 64]], [SESSION_COUNT_NEXT, ["1", "100", 64]],
+    [SESSION_LIST_FIRST, ["100", 64]], [SESSION_LIST_NEXT, ["1", "100", 64]],
+    [LATEST_DECISIONS, [0]], [CLOSED_SINCE, [0]], [CLOSED_THREAD_SINCE, [1, 0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
     [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]], [SESSION_OF_RUNTIME, ["claude", "r1"]], [SAID_SINCE, [1, 0]],
     [HEARD_IN, ["a", 1]], [MODELS_USED_BY, ["a@x", 0]], [REMOTE_RUNS_OF, ["ws", 0]], [REMOTE_RUNS_ALL, [0]],
     [detail.sql, detail.args], [HISTORY_DAYS, ["ws", 0n, 100n, 480n]], [HISTORY_AFTER, ["ws", 100n]], [HISTORY_TOTAL, ["ws"]],
@@ -1375,6 +1487,12 @@ test("what the station asks again and again is planned by an index, never a scan
   }
   assert.equal(plans.get(JOB_AT_PORT)!.filter((d) => d.includes("jobs_up (state=? AND port=?)")).length, 2,
     "a port is sought among running and restarting services");
+  assert.ok(plans.get(SESSION_COUNT_TOTAL)!.some((d) => d.includes("PRIMARY KEY (kind=? AND ws=?)")));
+  assert.ok(plans.get(SESSION_COUNT_CONNECT)!.some((d) => d.includes("PRIMARY KEY (kind=? AND ws=? AND connect=?)")));
+  assert.ok(plans.get(SESSION_COUNT_FIRST)!.some((d) => d.includes("INTEGER PRIMARY KEY (rowid<?)")));
+  assert.ok(plans.get(SESSION_COUNT_NEXT)!.some((d) => d.includes("INTEGER PRIMARY KEY (rowid>? AND rowid<?)")));
+  assert.ok(plans.get(SESSION_LIST_FIRST)!.some((d) => d.includes("INTEGER PRIMARY KEY (rowid<?)")));
+  assert.ok(plans.get(SESSION_LIST_NEXT)!.some((d) => d.includes("INTEGER PRIMARY KEY (rowid>? AND rowid<?)")));
   // A session's messages not delivered yet: by the index of those alone, not every message it was ever given; and its
   // turns not counted (auto-archiving read each shown session's every delivery and turn so: 13 s and 22 s on a station).
   assert.ok(plans.get(STATS_OF)!.some((d) => d.includes("deliveries_pending (session=?)")), plans.get(STATS_OF)!.join(" | "));
@@ -1432,6 +1550,7 @@ test("what the station asks again and again is planned by an index, never a scan
 });
 
 test("what is told as chats change is planned by the size of what it finds, not by a chat's or a session's history", () => {
+  assertRecentChatPlans();
   const store = memory();
   // As node's SQLite plans each, over the file the readers read: a chat's unread messages counted from the index of its
   // messages alone; an agent's message during a turn by the index of theirs by time; a session's turns as counted, its
@@ -1443,6 +1562,8 @@ test("what is told as chats change is planned by the size of what it finds, not 
     [read.UNREAD, [1, 0, "[]"]], [read.ASKED_DURING, [1, 0, 9]], [`${read.SESSION_STATS} WHERE s.key = ?`, ["a"]], [`${read.SESSION_ACTIVITY} WHERE s.key = ?`, ["a"]], [read.LAST_TURN, ["a"]], [read.LATEST_TURNS, ["a", 1]], [CC_THREADS_SQL, [1]],
     [read.SHARES_OF, ['["a"]']], [read.OPENERS_OF, ['["a"]']], [read.OPENED_OF, ['["a"]']], [read.PUBLISHED_OF, ["[1]"]], [read.PINS_OF, ["a@x", '["a"]']],
     [`${read.SEEN_OF} WHERE key IN (SELECT value FROM json_each(?))`, ['["a"]']], [read.TOLD_BLOCKED, ["a", 0, 9]], [read.RUNNING_OF, ['["a"]']],
+    [SESSION_COUNT_DISPLACED, ["a", "token", 1]],
+    [SESSION_LIST_DISPLACED, ["a", "token", 1]],
   ];
   const scans = /^SCAN (?!CONSTANT ROW$|\(subquery-\d+\)$|json_each VIRTUAL TABLE\b)/;
   const plans = new Map<string, string[]>();
@@ -1453,6 +1574,10 @@ test("what is told as chats change is planned by the size of what it finds, not 
   }
   const has = (sql: string, step: string) => assert.ok(plans.get(sql)!.some((d) => d.includes(step)), `${step}\n  ${plans.get(sql)!.join(" | ")}`);
   const lacks = (sql: string, step: string) => assert.ok(!plans.get(sql)!.some((d) => d.includes(step)), `${step}\n  ${plans.get(sql)!.join(" | ")}`);
+  assert.equal(plans.get(SESSION_COUNT_DISPLACED)!.filter((d) => d.startsWith("SEARCH sessions")).length, 3,
+    "a replacing session finds at most one row by each unique identity");
+  assert.equal(plans.get(SESSION_LIST_DISPLACED)!.filter((d) => d.startsWith("SEARCH s ")).length, 3,
+    "session list updates find displaced rows by unique identity");
   has(read.UNREAD, "COVERING INDEX entries_said (thread=? AND n>?)");
   has(read.ASKED_DURING, "entries_agent_at (thread=? AND at>? AND at<?)");
   const stats = `${read.SESSION_STATS} WHERE s.key = ?`;

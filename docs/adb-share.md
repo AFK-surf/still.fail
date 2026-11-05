@@ -208,6 +208,16 @@ one its person is using (station/src/adb/displays.ts):
 - Its keyboard was `local` (on it) until 2026-11-05: that took the phone's one keyboard over to it, and a field the
   person tapped on their own screen while it was up drew the keyboard on the chat's display, out of their sight, till a
   fold changed the screens (an OPPO PLP110, WeChat's keyboard). `hide` keeps the keyboard with the person.
+- **Never taken to the top** (2026-11-05, user: 「现在会抢输入法」): Android serves its one keyboard to the window
+  focused on the top display only (`hasInputMethodClientFocus`), and a trusted display goes to the top as an app starts
+  on it or is touched, so the person's keyboard went away whenever the agent worked, and at once as the display was
+  made (its launcher), until they touched their own screen again. Our `scrcpy-server` is scrcpy 5.0.1 built with
+  `screens/scrcpy-server.patch` (`VIRTUAL_DISPLAY_FLAG_STEAL_TOP_FOCUS_DISABLED` from Android 15, which needs the
+  `OWN_FOCUS` and `TRUSTED` scrcpy already sets; `server/build_without_gradle.sh`, platform 36, build-tools 36.0.0):
+  the display keeps its own focus, so `input -d <id> text` reaches its field, and the top stays the person's. Seen on
+  the OPPO PLP110 (Android 17): `mTopFocusedDisplayId` stayed 0 through `am start --display`, a tap and typing on the
+  chat's display, while WeChat kept the focus of the person's. Android 14 and older have no such flag: there it still
+  takes the top as before.
 
 ## On the station
 

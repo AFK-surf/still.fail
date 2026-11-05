@@ -57,7 +57,10 @@ pub fn notice_opened() -> String {
 /// host lets it unless the test says otherwise (Tester::set_notice_permission).
 pub fn notice_permission() -> String {
   match fake.val {
-    Some(f) => f.notice_perm
+    Some(f) => {
+      notice_said.get() |> ignore
+      f.notice_perm
+    }
     None => @hostapi.notice_permission()
   }
 }
@@ -89,15 +92,18 @@ pub fn notice_ask() -> Bool {
 /// None not yet.
 pub fn notice_answer() -> Bool? {
   match fake.val {
-    Some(f) =>
+    Some(f) => {
+      notice_said.get() |> ignore
       match f.notice_due {
         Some((yes, asked)) if g().frame_no > asked => {
           f.notice_due = None
           f.notice_perm = if yes { "granted" } else { "denied" }
+          notice_told()
           Some(yes)
         }
         _ => None
       }
+    }
     None => @hostapi.notice_answer()
   }
 }
@@ -133,6 +139,7 @@ pub fn badge_shown() -> Bool {
 pub fn Tester::set_notice_permission(self : Tester, state : String) -> Unit {
   self.fake.notice_perm = state
   self.fake.wants = true
+  notice_told()
 }
 
 ///|
@@ -152,4 +159,25 @@ pub fn Tester::notice_asks(self : Tester) -> Int {
 /// How often the app opened the system's settings of its notifications (notice_settings).
 pub fn Tester::notice_settings_opened(self : Tester) -> Int {
   self.fake.notice_settings
+}
+
+///|
+/// A Tester's host's say on notifications changed (the test set it, the person answered): what read it
+/// (notice_permission) built again for it, as for any value it read.
+// kept across runs: only counts on
+let notice_said : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+fn notice_told() -> Unit {
+  notice_said.set(@signals.untracked(fn() { notice_said.get() }) + 1)
+}
+
+///|
+/// A Tester's host's answer to an ask, as a frame begins (answers_by_the_frame): what waits on it (notice_answer) told,
+/// as a host's answer is as it comes.
+fn notice_answer_by_the_frame() -> Unit {
+  match fake.val {
+    Some({ notice_due: Some(_), .. }) => notice_told()
+    _ => ()
+  }
 }
