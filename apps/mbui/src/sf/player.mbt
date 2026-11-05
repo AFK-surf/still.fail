@@ -1141,7 +1141,7 @@ fn desk_player(
     // or hides the controls, a double one in the middle plays or pauses, on the left third back, on the right on (the
     // user, 2026-10-28); the screen filled by F or its key
     let stage = c.id(key + "/desk-stage")
-    @ui.capture(c, stage)
+    @ui.capture(c, stage, zooms=picture)
     if !flying {
       p.stage(c, stage, c.width - panel)
     }
