@@ -1043,7 +1043,7 @@ fn alone_frame(c : Ctx, t : Double) -> Double {
   // and what takes back, the keys and the field's menu told the host, as a frame painted tells them)
   streams_after_paint()
   c.anchors_after_paint()
-  view_after_paint()
+  view_after_paint_taken()
   tree_told_host(c)
   c.t_build = 0.0
   c.t_layout = 0.0
