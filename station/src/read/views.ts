@@ -464,7 +464,8 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
   const answered: Json = {};
   // Of the chats that ever had a card alone: each of the others' people's messages of the last day and a half was looked
   // at with half a dozen lookups for a card it answered, 3.2 s for one busy chat on a station short of memory (2026-11-03).
-  for (const a of store.answersSince(s, store.nowMs() - ANSWERED_WITHIN, ids)) {
+  const carded = store.threadsWithCards(s, ids);
+  for (const a of store.answersSince(s, store.nowMs() - ANSWERED_WITHIN, carded)) {
     if (!mine(creator(a.by))) continue;
     (answered[a.question.thread] ??= []).push(answeredView(a));
   }
