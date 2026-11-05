@@ -63,3 +63,12 @@ export function trackRecentScope(db: DatabaseSync, scope: RecentScope): void {
   db.prepare(`INSERT INTO recent_scope_tracked(kind, ws) SELECT ?1, ?2
     WHERE NOT EXISTS (SELECT 1 FROM recent_scope_tracked WHERE kind = ?1 AND ws = ?2)`).run(kind, ws);
 }
+
+/// A builder may clear only the revision it actually accounted. An older writer changing the session between
+/// batches increments the revision, leaving it pending for another pass.
+export function acknowledgeRecentScopeSession(db: DatabaseSync, scope: RecentScope, session: string, revision: number | bigint): boolean {
+  const kind = scope.kind === "home" ? 0 : 1;
+  const ws = scope.kind === "home" ? "" : scope.workspace;
+  return db.prepare("DELETE FROM recent_scope_session_dirty WHERE kind = ? AND ws = ? AND session = ? AND revision = ?")
+    .run(kind, ws, session, revision).changes === 1;
+}
