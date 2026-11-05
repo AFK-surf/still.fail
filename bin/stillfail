@@ -1,6 +1,5 @@
 #!/bin/sh
 # still.fail's command line, from a clone or from an installed release (~/.stillfail/app, see cloud/src/install.ts).
-# `ember`, its name before the rename, is a link to it (bin/ember, ~/.local/bin/ember).
 #   stillfail start [--port N]                          runs the station (the release's service does this):
 #                                                       stillfail-station, whose loopback port (4760, or a free one when
 #                                                       that is taken; --port insists on one) sends links to the page it
@@ -22,8 +21,7 @@
 #   stillfail heap                                      a heap snapshot of the running station's main thread, written
 #                                                       to <data>/run (only the latest kept; it holds the station's
 #                                                       tokens): what its memory holds, for Chrome's DevTools
-# The data is in $STILLFAIL_DATA (else $EMBER_DATA), default ~/.stillfail; ~/.ember is the old default, which the
-# station moves there on its first start (the Rust station's former.rs).
+# The data is in $STILLFAIL_DATA, default ~/.stillfail.
 set -eu
 # Called through a link (~/.local/bin/stillfail): the app is where the link points.
 self=$(readlink -f "$0" 2>/dev/null || echo "$0")
@@ -31,10 +29,9 @@ here=$(cd "$(dirname "$self")/.." && pwd)
 # Called as another product's command (`monoid`: the installer links it so, client/i18n/brand.ts), that product's data
 # directory (~/.monoid) beside still.fail's.
 own=$HOME/.stillfail
-case "$(basename "$0")" in stillfail|ember|stillfail-*) ;; *) [ ! -d "$HOME/.$(basename "$0")/app" ] || own="$HOME/.$(basename "$0")" ;; esac
-data=${STILLFAIL_DATA:-${EMBER_DATA:-$own}}
-[ "$data" = "$HOME/.ember" ] && data="$HOME/.stillfail"
-station=${STILLFAIL_STATION_BIN:-${EMBER_STATION_BIN:-$here/mesh/target/release/stillfail-station}}
+case "$(basename "$0")" in stillfail|stillfail-*) ;; *) [ ! -d "$HOME/.$(basename "$0")/app" ] || own="$HOME/.$(basename "$0")" ;; esac
+data=${STILLFAIL_DATA:-$own}
+station=${STILLFAIL_STATION_BIN:-$here/mesh/target/release/stillfail-station}
 case "${1:-} ${2:-}" in
   "start "*) shift; exec "$station" run --app "$here" --data "$data" "$@" ;;
   "update "*)

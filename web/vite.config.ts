@@ -11,12 +11,12 @@ const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
 /**
  * PostHog's project key (docs/telemetry.md), from the file $STILLFAIL_POSTHOG
- * ($EMBER_POSTHOG before the rename) names ({host, key}), with this
+ * names ({host, key}), with this
  * build's commit as the release. Without it the build has no analytics. The station's own copy is written by
  * scripts/posthog-key.ts, the same way.
  */
 function posthogKey(): { host: string; key: string; release: string } | null {
-  const path = process.env.STILLFAIL_POSTHOG ?? process.env.EMBER_POSTHOG;
+  const path = process.env.STILLFAIL_POSTHOG;
   if (!path) return null;
   const { host, key } = JSON.parse(readFileSync(path, "utf8")) as { host: string; key: string };
   let release = "unknown";
@@ -85,7 +85,7 @@ export default defineConfig(({ mode }) => {
       __BUILD__: JSON.stringify(build),
       __WEB_REVISION__: JSON.stringify(revision),
       // Where a station's web services are shown (cloud/src/preview.ts); the dev rig gives its own.
-      __PREVIEW_ORIGIN__: JSON.stringify(process.env.STILLFAIL_PREVIEW_ORIGIN ?? process.env.EMBER_PREVIEW_ORIGIN ?? "https://preview.still.fail"),
+      __PREVIEW_ORIGIN__: JSON.stringify(process.env.STILLFAIL_PREVIEW_ORIGIN ?? "https://preview.still.fail"),
     },
     // The core's worker (src/core/worker.ts) is a module worker: the TypeScript core, SQLite's and iroh's wasm.
     worker: { format: "es" },

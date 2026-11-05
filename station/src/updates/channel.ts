@@ -16,7 +16,7 @@ import { CHANNEL_ANSWER, CHANNEL_ASK, writeWhole } from "./updates.ts";
 import { type Channel, channelOf, channelOfId } from "./versions.ts";
 import { platform } from "../platform/index.ts";
 
-const configPath = (data: string) => process.env.STILLFAIL_CONFIG || process.env.EMBER_CONFIG || join(data, "config.json");
+const configPath = (data: string) => process.env.STILLFAIL_CONFIG || join(data, "config.json");
 
 /// Whether `pid` is a station (its command says so), as the installer checks it: a pid left in station.json may be
 /// another process's by now.

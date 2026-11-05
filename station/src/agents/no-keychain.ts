@@ -7,7 +7,7 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative, isAbsolute } from "node:path";
+import { join } from "node:path";
 import { log } from "../ops/log.ts";
 import { platform } from "../platform/index.ts";
 
@@ -57,45 +57,34 @@ export function keychainItem(home: string): string {
   return `Claude Code-credentials-${createHash("sha256").update(home).digest("hex").slice(0, 8)}`;
 }
 
-/// The keychain items a home's login may be in: its own, then (a home under ~/.stillfail) the one of the path it had
-/// under ~/.ember, before the data directory moved, with whether it is that older one.
-export function keychainItems(home: string, userHome = process.env.HOME ?? "."): [string, boolean][] {
-  const items: [string, boolean][] = [[keychainItem(home), false]];
-  const rest = relative(join(userHome, ".stillfail"), home);
-  if (rest !== "" && !rest.startsWith("..") && !isAbsolute(rest)) items.push([keychainItem(join(userHome, ".ember", rest)), true]);
-  return items;
-}
-
 const security = (args: string[]) =>
   new Promise<{ ok: boolean; stdout: string }>((resolve) => {
     execFile("/usr/bin/security", args, { timeout: 5000 }, (error, stdout) => resolve({ ok: !error, stdout: String(stdout) }));
   });
 
-/// A profile's login that Claude Code moved into the keychain, moved back into its home's file; one under the home's
-/// name from before the data directory moved is copied (and left). Nothing when the file is there or unreadable.
+/// A profile's login that Claude Code moved into the keychain, moved back into its home's file. Nothing when the file
+/// is there or unreadable.
 export async function takeBack(home: string) {
   if (!platform.hasKeychain) return;
   const file = join(home, ".credentials.json");
   if (existsSync(file)) return;
-  for (const [item, former] of keychainItems(home)) {
-    const found = await security(["find-generic-password", "-w", "-s", item]);
-    if (!found.ok) continue;
-    const text = found.stdout.trim();
-    let isLogin = false;
-    try {
-      isLogin = JSON.parse(text)?.claudeAiOauth !== undefined;
-    } catch {}
-    if (!isLogin) continue;
-    try {
-      writePrivate(file, text);
-    } catch (error) {
-      log.warn("agents::no_keychain", "could not move a profile's login out of the keychain", { home, error: String(error) });
-      return;
-    }
-    if (!former) await security(["delete-generic-password", "-s", item]);
-    log.info("agents::no_keychain", "a profile's login moved back from the keychain to its file", { home, former });
+  const item = keychainItem(home);
+  const found = await security(["find-generic-password", "-w", "-s", item]);
+  if (!found.ok) return;
+  const text = found.stdout.trim();
+  let isLogin = false;
+  try {
+    isLogin = JSON.parse(text)?.claudeAiOauth !== undefined;
+  } catch {}
+  if (!isLogin) return;
+  try {
+    writePrivate(file, text);
+  } catch (error) {
+    log.warn("agents::no_keychain", "could not move a profile's login out of the keychain", { home, error: String(error) });
     return;
   }
+  await security(["delete-generic-password", "-s", item]);
+  log.info("agents::no_keychain", "a profile's login moved back from the keychain to its file", { home });
 }
 
 /// Written aside (readable by its owner only) and moved in.

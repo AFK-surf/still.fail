@@ -229,7 +229,7 @@ pub fn viz_frame(
     let g = viz_css_color(ground)
     c.tell("viz/theme/" + key + "/" + owner.to_string(), fn() {
       f.view.script(
-        "postMessage({emberViz:true,type:\"theme\",tokens:" +
+        "postMessage({vizMessage:true,type:\"theme\",tokens:" +
         viz_tokens_json(dark) +
         ",scheme:\"" +
         scheme +

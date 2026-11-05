@@ -77,7 +77,7 @@ if (-not $Token -and $env:STILLFAIL_TOKEN) { $Token = $env:STILLFAIL_TOKEN }
 function Say([string]$text) { Write-Host $text }
 function Fail([string]$text) { [Console]::Error.WriteLine($text); exit 1 }
 
-$data = if ($env:STILLFAIL_DATA) { $env:STILLFAIL_DATA } elseif ($env:EMBER_DATA) { $env:EMBER_DATA } else { Join-Path $env:USERPROFILE ('.' + $product) }
+$data = if ($env:STILLFAIL_DATA) { $env:STILLFAIL_DATA } else { Join-Path $env:USERPROFILE ('.' + $product) }
 $run = Join-Path $data 'run'
 # Where the update is, for the station to show on its pages: download, restart.
 function Step([string]$what) { if (Test-Path $run) { Set-Content -Path (Join-Path $run 'update.step') -Value $what -ErrorAction SilentlyContinue } }

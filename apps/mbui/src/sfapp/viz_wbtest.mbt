@@ -163,12 +163,12 @@ test "a placed HTML file is drawn in its message, 120 high, covered until it has
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("touch \{page} vertical ") }))
   // what it says of its height: taken, however tall (a long post's last part not cut off), and the page shown (heard
   // as a frame is painted: the next one has it)
-  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":231.4}")
+  t.view_says(page, "{\"vizMessage\":true,\"type\":\"height\",\"height\":231.4}")
   // (there on a move from the height it had, as what is over and under it goes with it: rows_steady.mbt)
   t.run_for(@ui.move_most_ms)
   let (_, _, _, h2) = view_rect(t, page).unwrap()
   assert_eq(h2, 232.0)
-  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":5000}")
+  t.view_says(page, "{\"vizMessage\":true,\"type\":\"height\",\"height\":5000}")
   t.run_for(@ui.move_most_ms)
   assert_eq(view_rect(t, page).unwrap().3, 5000.0)
   // what is not a message of the bridge's is let go
@@ -183,17 +183,17 @@ test "a page that grows a little with each height it is given (100vh) is held wh
   let t = chat_tester("chat-viz")
   t.frame()
   let (page, _) = viz_views(t)
-  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":300}")
+  t.view_says(page, "{\"vizMessage\":true,\"type\":\"height\",\"height\":300}")
   for i in 1..=100 {
-    t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":\{300 + i * 10}}")
+    t.view_says(page, "{\"vizMessage\":true,\"type\":\"height\",\"height\":\{300 + i * 10}}")
   }
   t.run_for(@ui.move_most_ms)
   // 60 times running it followed, then held
   assert_eq(view_rect(t, page).unwrap().3, 900.0)
-  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":2000}")
+  t.view_says(page, "{\"vizMessage\":true,\"type\":\"height\",\"height\":2000}")
   t.frame()
   assert_eq(view_rect(t, page).unwrap().3, 900.0)
-  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":400}")
+  t.view_says(page, "{\"vizMessage\":true,\"type\":\"height\",\"height\":400}")
   t.run_for(@ui.move_most_ms)
   assert_eq(view_rect(t, page).unwrap().3, 400.0)
 }
@@ -203,12 +203,12 @@ test "what a visualization's widget keeps is kept, given back as it is shown aga
   let t = chat_tester("chat-viz")
   t.frame()
   let (page, _) = viz_views(t)
-  t.view_says(page, "{\"emberViz\":true,\"type\":\"state\",\"state\":{\"seen\":true}}")
+  t.view_says(page, "{\"vizMessage\":true,\"type\":\"state\",\"state\":{\"seen\":true}}")
   t.frame()
   let l = viz_loads.get(viz_id("ws1/st1", "s-c1", "work/s-c1/release.html")).unwrap()
   assert_eq(l.state.get(), Some({ "seen": true }))
   let big = "x".repeat(17000)
-  t.view_says(page, "{\"emberViz\":true,\"type\":\"state\",\"state\":\"" + big + "\"}")
+  t.view_says(page, "{\"vizMessage\":true,\"type\":\"state\",\"state\":\"" + big + "\"}")
   t.frame()
   assert_eq(l.state.get(), Some({ "seen": true }))
 }
@@ -218,7 +218,7 @@ test "words a visualization asks to send go into the composer, said so; the pers
   let t = chat_tester("chat-viz")
   t.frame()
   let (page, _) = viz_views(t)
-  t.view_says(page, "{\"emberViz\":true,\"type\":\"followup\",\"prompt\":\"  把周五的发布挪到周四 \"}")
+  t.view_says(page, "{\"vizMessage\":true,\"type\":\"followup\",\"prompt\":\"  把周五的发布挪到周四 \"}")
   t.frame()
   // (left for the chat's composer, whichever frame's: taken as it is next drawn)
   t.frame()
@@ -300,7 +300,7 @@ test "beside: the visualization as a page of its own, served from here with what
   assert_true(v.iter().any(fn(s) { s.has_prefix("site head \{site} 1 200 ") && s.contains("text/html") }))
   assert_true(v.iter().any(fn(s) { s.has_prefix("site head \{site} 2 404 ") }))
   // what its widget keeps from there is kept too
-  t.view_says(site, "{\"emberViz\":true,\"type\":\"state\",\"state\":{\"n\":2}}")
+  t.view_says(site, "{\"vizMessage\":true,\"type\":\"state\",\"state\":{\"n\":2}}")
   t.frame()
   assert_eq(viz_loads.get(viz_id("ws1/st1", "s-c1", "work/s-c1/release.html")).unwrap().state.get(), Some({ "n": 2 }))
 }
@@ -362,7 +362,7 @@ test "on the tape what shows of a visualization's page beside the sidebar in use
   assert_true(@sfdesk.wide.tape)
   let (page, _) = viz_views(t)
   // as tall as it may be: the chat's page under all of what shows of it
-  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":5000}")
+  t.view_says(page, "{\"vizMessage\":true,\"type\":\"height\",\"height\":5000}")
   t.frame()
   t.frame()
   // the sidebar in use at first, a strip of the page showing beside it
@@ -441,7 +441,7 @@ test "a page that said its height stays covered till its host has drawn it (its 
   let (page, _) = viz_views(t)
   assert_true(view_covered(t, page))
   // its height said (its page loaded): still covered, the host not done drawing it
-  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":231.4}")
+  t.view_says(page, "{\"vizMessage\":true,\"type\":\"height\",\"height\":231.4}")
   t.run_for(@ui.move_most_ms)
   assert_eq(view_rect(t, page).unwrap().3, 232.0)
   assert_true(view_covered(t, page))
@@ -515,7 +515,7 @@ test "an inline page not drawn yet holds its place with a placeholder, gone once
     })
   }
   assert_true(placeholder())
-  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":231.4}")
+  t.view_says(page, "{\"vizMessage\":true,\"type\":\"height\",\"height\":231.4}")
   t.frame()
   t.frame()
   // its height said, its host not done drawing it: still held

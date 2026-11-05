@@ -25,7 +25,7 @@ to app.still.fail with promote-web. `web` named deploys a new build to app.still
     python3 deploy.py promote-web <dir> # a build already made (a directory, or a commit kept in <deploy>/builds) to app.still.fail
     python3 deploy.py --check           # only report what is missing
 
-Inputs (none of them in the repository), in the deploy directory: $STILLFAIL_DEPLOY_DIR (or $EMBER_DEPLOY_DIR),
+Inputs (none of them in the repository), in the deploy directory: $STILLFAIL_DEPLOY_DIR,
 else ~/stillfail-deploy, else ~/ember-deploy while only that one exists (from before the rename; move it when you
 like, nothing else changes):
   --google  Google "Web application" OAuth client JSON (default <deploy>/google-oauth.json;
@@ -65,8 +65,8 @@ REPO = ROOT.parent
 
 
 def env_var(name: str):
-    """STILLFAIL_<name>, or EMBER_<name> from before the rename."""
-    return os.environ.get(f"STILLFAIL_{name}") or os.environ.get(f"EMBER_{name}")
+    """STILLFAIL_<name>."""
+    return os.environ.get(f"STILLFAIL_{name}")
 
 
 def deploy_dir() -> Path:
@@ -476,10 +476,10 @@ def main() -> None:
             parts.insert(parts.index("admin"), "web")
             print("note: deploying web (app.still.fail) instead of web-beta", flush=True)
     if not args.skip_build and {"web", "web-beta", "admin", "preview", "share"} & set(parts):
-        # web/vite.config.ts reads the key from the file STILLFAIL_POSTHOG (EMBER_POSTHOG before the rename) names.
+        # web/vite.config.ts reads the key from the file STILLFAIL_POSTHOG names.
         if not POSTHOG.exists():
             print(f"note: no {POSTHOG}; building the web app without analytics")
-        env = {**os.environ, "STILLFAIL_POSTHOG": str(POSTHOG), "EMBER_POSTHOG": str(POSTHOG)} if POSTHOG.exists() else dict(os.environ)
+        env = {**os.environ, "STILLFAIL_POSTHOG": str(POSTHOG)} if POSTHOG.exists() else dict(os.environ)
         if CLOUD:
             # What the builds read of still.fail's hosts themselves: the preview host the web app opens services on
             # (web/vite.config.ts), the cloud and relays the share page asks (share-hosts.ts).

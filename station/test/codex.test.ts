@@ -293,7 +293,7 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.equal(started.env.OPENAI_API_KEY, undefined);
     assert.equal(started.env.SSL_CERT_FILE, bundle);
     assert.equal(started.env.OPENCODE_GO_KEY, "k2");
-    assert.equal(started.env.OPENCODE_SESSION, `ember-${p.id}`, "a codex route is its profile");
+    assert.equal(started.env.OPENCODE_SESSION, `stillfail-${p.id}`, "a codex route is its profile");
 
     const sent = stdin(p.dump);
     assert.deepEqual(sent[0], { id: 1, method: "initialize", params: { clientInfo: { name: "stillfail", version: "0" }, capabilities: { experimentalApi: true } } });

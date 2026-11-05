@@ -236,7 +236,7 @@ function attach(inner: HTMLIFrameElement, nonce: string) {
   hook();
 
   addEventListener("message", (event) => {
-    if (event.source !== parent || event.data?.type !== "ember-preview-annotate") return;
+    if (event.source !== parent || (event.data?.type !== "stillfail-preview-annotate" && event.data?.type !== "ember-preview-annotate")) return;
     const data = event.data as { on?: boolean; remove?: number; clear?: boolean; capture?: number; each?: boolean; canvas?: boolean };
     hook();
     if (typeof data.canvas === "boolean") canvas = data.canvas;

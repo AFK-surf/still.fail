@@ -118,6 +118,7 @@ export const NOTES: [number, string][] = [
   [111, "A phone granted with phone_use now has a screen of your chat's own (a virtual display) while you use it: phone_use says its display id and how to start apps, touch and take pictures there. Work on it, not on the screen its person is using, unless they ask; it closes with its apps when you hand the phone back or after 10 minutes unused."],
   [112, "The Antigravity CLI (agy) also runs on a Google account signed in to (its plan: Google AI Pro / Ultra), each profile its own sign-in."],
   [113, "Station notices now arrive as via=\"station\" from=\"station\" (before: ember), and new still.fail chats have addresses CHAT/… and session keys chat:c-…; chats made before keep EMBER/… and chat:c-…, and both work everywhere."],
+  [114, "The old names from before the rename are gone: `ember-job` (use `stillfail-job`), the EMBER_* variables (STILLFAIL_* only), and in inline HTML a widget's API is `window.openai` and its theme event `viz:theme` (window.ember and ember-viz:theme still work in widgets made before)."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

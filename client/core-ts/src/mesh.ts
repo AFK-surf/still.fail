@@ -2,7 +2,7 @@
 // per core, its key the device key (storage `device`). A link is to a station's address, `<workspace>/<station>`: a
 // station in several workspaces has a link in each (docs/multi-workspace.md), dialled to the same station id. A link is
 // opened with this device's member credential for its address's workspace and presents it again every RENEW_MS on its
-// control stream; a closed link is opened again on the next request. Wire format (station/src/mesh/serve.ts): ALPN `stillfail/admin/1` (or `ember/admin/1`); the first bi-stream
+// control stream; a closed link is opened again on the next request. Wire format (station/src/mesh/serve.ts): ALPN `stillfail/admin/1`; the first bi-stream
 // carries `{"credential": …}` lines, each further bi-stream one request: a JSON head line `{method, path, headers}`
 // then the body; the reply a JSON head line `{status, headers}` then the body, streamed.
 //
@@ -36,7 +36,6 @@ type J = any;
 
 export const DEVICE_KEY = "device";
 export const ALPN = utf8("stillfail/admin/1");
-export const FORMER_ALPN = utf8("ember/admin/1");
 export const RENEW_MS = 5 * 60_000;
 export const CONNECT_TIMEOUT_MS = 10_000;
 /// How long a dial waits for its endpoint to get onto a relay before its CONNECT_TIMEOUT_MS counts all the same
@@ -2124,7 +2123,7 @@ function open(
       const dialled = Deferred.makeUnsafe<IrohConnection, CoreError>();
       env.runner.fork(
         Effect.gen(function* () {
-          const r = yield* Effect.result(endpoint.connect(ips.length > 0 ? { id: stationId, relays, ips } : { id: stationId, relays }, ALPN, [FORMER_ALPN]));
+          const r = yield* Effect.result(endpoint.connect(ips.length > 0 ? { id: stationId, relays, ips } : { id: stationId, relays }, ALPN, []));
           opened.dialled = since();
           stages.dialled = opened.dialled;
           if (r._tag === "Success") {

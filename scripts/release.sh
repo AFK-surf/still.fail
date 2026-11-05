@@ -276,8 +276,6 @@ for platform in $platforms; do
       ;;
     *)
       sh "$root/scripts/station-bundle.sh" "$out/$platform" "$platform"
-      # Under the new name only: the old name (ember-station-*.tar.gz) keeps the last release from before the rename,
-      # for the cloud's installer from before it, which would not know this layout (cloud/src/install.ts).
       # Packed and put beside the next platform's bundling (each ~20 s, one after another before 2026-10-04).
       # Windows' a zip (install.ps1 opens it with Expand-Archive), its Node nodejs.org's own zip (node-dist.sh).
       if [ "$platform" = win32-x64 ]; then

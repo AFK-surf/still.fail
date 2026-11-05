@@ -1,7 +1,7 @@
 // Made by scripts/webassets.py from the web's own files (do not edit: run it again when they change).
 
 ///|
-/// web/src/viz/ember-viz.css, as it is.
+/// web/src/viz/viz.css, as it is.
 // kept across runs: a file's words, never written
 pub let viz_css : String =
   #|/*
@@ -364,19 +364,19 @@ pub let viz_css : String =
 pub let viz_bridge : String =
   #|// Runs first inside an inline visualization's frame (Viz.tsx). The frame is sandboxed without its page's origin, so
   #|// the two only talk by messages: the frame says how tall its content is, the page says when its theme changes (the
-  #|// --e-* tokens ember-viz.css maps), and the frame draws the tooltip of any element with data-tooltip.
+  #|// --e-* tokens viz.css maps), and the frame draws the tooltip of any element with data-tooltip.
   #|//
-  #|// The widget's API is window.ember, named as Codex's Visualize names window.openai (which it also answers to, for a
-  #|// widget written for that): widgetState and setWidgetState keep what the widget wants back when it is shown again,
+  #|// The widget's API is window.openai, as Codex's Visualize names it (and window.ember, as widgets written before
+  #|// 2026-11-05 call it): widgetState and setWidgetState keep what the widget wants back when it is shown again,
   #|// sendFollowUpMessage puts words in the chat's composer for the person to send — only on their click or key.
   #|(() => {
   #|  const root = document.documentElement;
   #|  // The page is the parent in a message; opened beside the chat it is the top, over the preview's own frame
   #|  // (Preview.tsx), which takes no notice.
   #|  const pages = parent === top ? [parent] : [parent, top];
-  #|  const post = (message) => { for (const page of pages) page.postMessage({ emberViz: true, ...message }, "*"); };
+  #|  const post = (message) => { for (const page of pages) page.postMessage({ vizMessage: true, ...message }, "*"); };
   #|
-  #|  const given = document.getElementById("ember-viz-state");
+  #|  const given = document.getElementById("viz-state");
   #|  let state = JSON.parse(given?.textContent || "{}").widgetState ?? null;
   #|  given?.remove();
   #|  const api = {
@@ -408,7 +408,7 @@ pub let viz_bridge : String =
   #|    }
   #|  };
   #|  addEventListener("message", (event) => {
-  #|    if (!pages.includes(event.source) || !event.data?.emberViz) return;
+  #|    if (!pages.includes(event.source) || !event.data?.vizMessage) return;
   #|    if (event.data.type === "theme") {
   #|      for (const [name, value] of Object.entries(event.data.tokens ?? {})) root.style.setProperty(name, value);
   #|      root.dataset.theme = event.data.scheme;
@@ -417,8 +417,9 @@ pub let viz_bridge : String =
   #|      for (const href of event.data.sheets ?? []) {
   #|        if (![...document.querySelectorAll("link[rel=stylesheet]")].some((l) => l.href === href)) document.head.append(Object.assign(document.createElement("link"), { rel: "stylesheet", href }));
   #|      }
-  #|      // For charts drawn with resolved colours (a canvas, a chart library): redraw on this.
-  #|      dispatchEvent(new CustomEvent("ember-viz:theme", { detail: { scheme: event.data.scheme } }));
+  #|      // For charts drawn with resolved colours (a canvas, a chart library): redraw on this (ember-viz:theme as widgets
+  #|      // written before 2026-11-05 listen for it).
+  #|      for (const name of ["viz:theme", "ember-viz:theme"]) dispatchEvent(new CustomEvent(name, { detail: { scheme: event.data.scheme } }));
   #|    }
   #|  });
   #|
@@ -521,7 +522,7 @@ pub let viz_components : String =
   #|          this.draw();
   #|        } catch (e) {
   #|          put(this, h("p.text-small.text-muted", {}, `${this.localName}: ${e.message}`));
-  #|          postMessage({ emberViz: true, type: "error", message: `${this.localName}: ${e.message}` }, "*");
+  #|          postMessage({ vizMessage: true, type: "error", message: `${this.localName}: ${e.message}` }, "*");
   #|        }
   #|      };
   #|      if (document.readyState === "loading") addEventListener("DOMContentLoaded", go, { once: true });
@@ -776,7 +777,7 @@ pub let viz_components : String =
   #|      svg.innerHTML = OWN[name];
   #|      el.replaceWith(svg);
   #|    }
-  #|    // which end of a button an icon is at (ember-viz.css sets it in by less there): what is first or last in it, words
+  #|    // which end of a button an icon is at (viz.css sets it in by less there): what is first or last in it, words
   #|    // aside from blank ones
   #|    for (const b of document.querySelectorAll(".btn")) {
   #|      const parts = [...b.childNodes].filter((n) => n.nodeType === 1 || n.textContent.trim());

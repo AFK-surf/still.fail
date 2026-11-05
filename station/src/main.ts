@@ -85,7 +85,7 @@ const HELD_MS = 1_000;
 
 // What it says on this machine is in the station's language (config.json `language`).
 try {
-  const config = process.env.STILLFAIL_CONFIG || process.env.EMBER_CONFIG || join(data, "config.json");
+  const config = process.env.STILLFAIL_CONFIG || join(data, "config.json");
   setStationLang(JSON.parse(readFileSync(config, "utf8")).language);
 } catch {}
 

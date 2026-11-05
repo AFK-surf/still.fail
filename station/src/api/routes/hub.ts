@@ -340,8 +340,8 @@ export const routes = (tools: Tools): Route[] => {
 
   /// admin/mod.rs Input::text: JavaScript's String(x ?? "").
   const said = (v: unknown) => (v === undefined || v === null ? "" : typeof v === "string" ? v : JSON.stringify(v));
-  /// A development station's (STILLFAIL_DEV=1, else EMBER_DEV=1): only there is /dev/inject a route.
-  const dev = (process.env.STILLFAIL_DEV || process.env.EMBER_DEV) === "1";
+  /// A development station's (STILLFAIL_DEV=1): only there is /dev/inject a route.
+  const dev = process.env.STILLFAIL_DEV === "1";
   return [
     {
       method: "POST",
