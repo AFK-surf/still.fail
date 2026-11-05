@@ -39,6 +39,29 @@ const markMember = (thread: string, session: string) => {
 };
 const memberConflictThread = (extra: string) => `(SELECT thread FROM thread_sessions WHERE rowid = NEW.rowid ${extra})`;
 const memberConflictSession = (extra: string) => `(SELECT session FROM thread_sessions WHERE rowid = NEW.rowid ${extra})`;
+// Most chats belong to a few workspaces. For a highly shared chat, defer distributing the change so a single write
+// cannot walk an arbitrary number of workspaces; readers wait while that distribution is incomplete.
+const markOrder = (thread: string) => {
+  const many = `EXISTS (SELECT 1 FROM recent_scope_rows INDEXED BY recent_scope_rows_thread WHERE thread = ${thread} LIMIT 1 OFFSET 64)`;
+  return `
+    UPDATE recent_scope_order_dispatch SET after_ws = NULL WHERE thread = ${thread};
+    INSERT INTO recent_scope_order_dirty(ws, thread)
+      SELECT r.ws, r.thread FROM (SELECT ws, thread FROM recent_scope_rows INDEXED BY recent_scope_rows_thread
+        WHERE thread = ${thread} ORDER BY ws LIMIT 64) r
+      WHERE NOT (${many}) AND NOT EXISTS
+        (SELECT 1 FROM recent_scope_order_dirty d WHERE d.ws = r.ws AND d.thread = r.thread);
+    INSERT INTO recent_scope_order_dispatch(thread, after_ws)
+      SELECT ${thread}, NULL WHERE ${thread} IS NOT NULL AND (${many}) AND NOT EXISTS
+        (SELECT 1 FROM recent_scope_order_dispatch WHERE thread = ${thread});`;
+};
+const insertedSaid = `EXISTS (SELECT 1 FROM thread_state s WHERE s.thread = NEW.thread AND
+  (s.said_n = NEW.n OR (NEW.ts IS NOT NULL AND EXISTS (SELECT 1 FROM entries e WHERE e.thread = s.thread
+    AND e.n = s.said_n AND e.kind = 'message' AND e.ts = NEW.ts))))`;
+const displacedSaid = `EXISTS (SELECT 1 FROM thread_state s JOIN entries e ON e.thread = s.thread AND e.n = s.said_n AND e.kind = 'message'
+  WHERE s.thread = NEW.thread AND (e.n = NEW.n OR (NEW.ts IS NOT NULL AND e.ts = NEW.ts))
+    AND (e.thread IS NOT OLD.thread OR e.n IS NOT OLD.n))`;
+const displacedThread = `(SELECT t.id FROM threads t WHERE t.surface = NEW.surface AND t.channel = NEW.channel
+  AND t.thread_ts = NEW.thread_ts AND t.id IS NOT NEW.id)`;
 
 export function installRecentScopeJournal(db: DatabaseSync): void {
   const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'recent_scope_tracked'").get() !== undefined;
@@ -94,6 +117,30 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
           ${markMember("NEW.thread", "NEW.session")}
       END;
       CREATE TRIGGER recent_scope_member_drop BEFORE DELETE ON thread_sessions BEGIN ${markMember("OLD.thread", "OLD.session")} END;
+      CREATE TRIGGER recent_scope_order_row_add AFTER INSERT ON recent_scope_rows BEGIN
+        UPDATE recent_scope_order_dispatch SET after_ws = NULL WHERE thread = NEW.thread;
+      END;
+      CREATE TRIGGER recent_scope_order_row_drop AFTER DELETE ON recent_scope_rows BEGIN
+        UPDATE recent_scope_order_dispatch SET after_ws = NULL WHERE thread = OLD.thread;
+      END;
+      CREATE TRIGGER recent_scope_order_thread_before_add BEFORE INSERT ON threads BEGIN
+        ${markOrder("NEW.id")} ${markOrder(displacedThread)}
+      END;
+      CREATE TRIGGER recent_scope_order_thread_before_change BEFORE UPDATE OF id, surface, channel, thread_ts ON threads BEGIN
+        ${markOrder(displacedThread)}
+      END;
+      CREATE TRIGGER recent_scope_order_thread_add AFTER INSERT ON threads BEGIN ${markOrder("NEW.id")} END;
+      CREATE TRIGGER recent_scope_order_thread_change AFTER UPDATE OF id, created_at ON threads BEGIN ${markOrder("OLD.id")} ${markOrder("NEW.id")} END;
+      CREATE TRIGGER recent_scope_order_thread_drop AFTER DELETE ON threads BEGIN ${markOrder("OLD.id")} END;
+      CREATE TRIGGER recent_scope_order_state_add AFTER INSERT ON thread_state BEGIN ${markOrder("NEW.thread")} END;
+      CREATE TRIGGER recent_scope_order_state_change AFTER UPDATE OF thread, said_n ON thread_state
+        WHEN OLD.thread IS NOT NEW.thread OR OLD.said_n IS NOT NEW.said_n BEGIN ${markOrder("OLD.thread")} ${markOrder("NEW.thread")} END;
+      CREATE TRIGGER recent_scope_order_state_drop AFTER DELETE ON thread_state WHEN OLD.said_n IS NOT NULL BEGIN ${markOrder("OLD.thread")} END;
+      CREATE TRIGGER recent_scope_order_entry_before_add BEFORE INSERT ON entries WHEN ${insertedSaid} BEGIN ${markOrder("NEW.thread")} END;
+      CREATE TRIGGER recent_scope_order_entry_before_change BEFORE UPDATE OF thread, n, ts ON entries
+        WHEN ${displacedSaid} BEGIN ${markOrder("NEW.thread")} END;
+      CREATE TRIGGER recent_scope_order_entry_change AFTER UPDATE OF thread, n, kind, at ON entries BEGIN ${markOrder("OLD.thread")} ${markOrder("NEW.thread")} END;
+      CREATE TRIGGER recent_scope_order_entry_drop AFTER DELETE ON entries BEGIN ${markOrder("OLD.thread")} END;
     `);
     db.exec("COMMIT");
   } catch (error) { db.exec("ROLLBACK"); throw error; }
