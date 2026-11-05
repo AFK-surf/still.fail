@@ -97,13 +97,14 @@ pub struct ListReader {
 ///|
 /// The list at `path` of a value (fields of objects from its top), by the keys its `fields` make (core-ts
 /// collections.ts: a chat's messages `["seq", "outgoing"]`), as `v` has it.
-pub fn TopicList::new(path : Array[String], fields : Array[String], v : Json?) -> TopicList {
+/// `was`, a preceding snapshot of the same list: preserve each unchanged row's version, without changing that snapshot.
+pub fn TopicList::new(path : Array[String], fields : Array[String], v : Json?, was? : TopicList) -> TopicList {
   let l : TopicList = {
     path,
     fields: fields.map(Json::string(_)),
-    keys: [],
-    values: [],
-    versions: [],
+    keys: was.map(fn(w) { w.keys }).unwrap_or([]),
+    values: was.map(fn(w) { w.values }).unwrap_or([]),
+    versions: was.map(fn(w) { w.versions }).unwrap_or([]),
     holds: {},
     near: 0,
     coming_at: -1,
@@ -431,6 +432,12 @@ pub fn TopicList::given(self : TopicList, v : Json?) -> Unit {
     Some(Array(a)) => a
     _ => []
   }
+  // A full value changes content just as a keyed patch does. Resetting every
+  // version to zero would hide edits from consumers that retain rows by key.
+  let before : Map[String, (Json, Int)] = {}
+  for i, k in self.keys {
+    before[k] = (self.values[i], self.versions[i])
+  }
   self.keys = []
   self.values = []
   self.versions = []
@@ -441,7 +448,10 @@ pub fn TopicList::given(self : TopicList, v : Json?) -> Unit {
     self.holds[k] = true
     self.keys.push(k)
     self.values.push(item)
-    self.versions.push(0)
+    self.versions.push(match before.get(k) {
+      Some((old, version)) => version + (if physical_equal(old, item) || old == item { 0 } else { 1 })
+      None => 0
+    })
   }
   // (what followed a row by its key told: it may have changed, come or gone; looked for from the start)
   let followed = self.by_key.keys().collect()

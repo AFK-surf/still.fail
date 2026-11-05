@@ -489,7 +489,23 @@ also fail on the pre-boundary revision `4f39726ad7`, with the same two position
 jumps (101 focused checks, 96 passing in each source state). They remain work
 for this redesign. The full script also reports 57 uncaptured core answers;
 56 occur in those focused checks in both states and still need the core's
-recording tool. Before/after pictures for this boundary batch are in progress.
+recording tool. The boundary batch's twelve actual-app pictures have now been
+inspected: attachments and quotes at 390×844, 720×900 and 1280×900 match their
+controls byte-for-byte. The before/after Wasm SHA-256 values are respectively
+`1cefd3c35ec5ad4d43cac071ba1ab4195a93e147d267ac265f298c9fa91b443b`
+and `943f9fc9ac22be961e72c77203b4c01c5462bd4dcf938875db2816df0018905e`.
+These are stable pictures, not evidence that the five motion/work failures are fixed.
+
+The two position jumps were then traced to separate missing inputs. The leaving
+new-chat container received zero height: its hosted child grew, but the container
+itself did not, losing 218 px of centering room. Letting that container fill its
+parent fixes the existing large-screen transition check. A replacement chat value
+also reset every row version to zero, hiding the removal of the previous message's
+timestamp from the list's height causes. A new snapshot regression failed before
+preserving per-key versions across full values; unchanged rows keep their version.
+The row, subscription, snapshot, send, composer, quote and wide-page checks then
+passed all 219 tests. The three host-frame work checks remain unresolved; actual
+transition pictures are being captured separately from these checks.
 This is not a validated release.
 
 The experimental kernel does not yet demonstrate a general owner tree, full

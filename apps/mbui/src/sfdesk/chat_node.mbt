@@ -190,6 +190,7 @@ fn chat_talk_node(
     o.show(fn() { app.nav.shows(k) }, fn(s) {
       // (all of the chat's room: what opens over it opens in it)
       s
+      .grow(Is(1.0))
       |> ignore
       @ui.old(s, fn(c) {
         app.nav.page_old(c, k, fn(c) {
