@@ -1,6 +1,6 @@
 // A node's actions of the keymap (keymap.mbt actions_node): done by their keys as the tree asks them of what takes keys,
-// none while the 快捷键 page records, one not said for a focused field not by a key that field had, and one chosen from
-// the menu bar done there at once.
+// none while the 快捷键 page records, none by a key a focused field takes as its own, and one chosen from the menu bar
+// done there at once.
 
 ///|
 fn keymap_prefs() -> Json {
@@ -8,7 +8,7 @@ fn keymap_prefs() -> Json {
     "keymap": {
       "actions": [
         { "action": "chat.latest", "keys": ["Mod+J"] },
-        { "action": "composer.focus", "keys": ["Mod+K"] },
+        { "action": "composer.focus", "keys": ["Mod+K", "Left"] },
         { "action": "chat.find", "keys": ["Mod+F"] },
       ],
     },
@@ -24,7 +24,7 @@ fn press(t : @ui.Tester, binding : String, at : Double) -> Unit {
 }
 
 ///|
-test "a node's actions done by their keys at once, none while keys are recorded, one not for a field not from it" {
+test "a node's actions done by their keys at once, none while keys are recorded, none by a key a focused field takes" {
   keymap_reset()
   let t = @ui.Tester::new(fn(_) {  }, w=400.0, h=200.0, platform=0)
   let draft = @ui.Field::new(text="draft")
@@ -33,10 +33,10 @@ test "a node's actions done by their keys at once, none while keys are recorded,
     root.box(fn(page) {
       page.grow(Is(1.0)) |> ignore
       actions_node(page, fn() { Some(keymap_prefs()) }, [
-        ("chat.latest", true, fn() { done.push("latest"); true }),
-        ("composer.focus", false, fn() { done.push("focus"); true }),
+        ("chat.latest", fn() { done.push("latest"); true }),
+        ("composer.focus", fn() { done.push("focus"); true }),
         // (one that cannot now: nothing done, the key not taken)
-        ("chat.find", false, fn() { false }),
+        ("chat.find", fn() { false }),
       ])
       @ui.field(page, draft).width(Is(Some(300.0))).height(Is(Some(22.0))) |> ignore
     }) |> ignore
@@ -54,12 +54,14 @@ test "a node's actions done by their keys at once, none while keys are recorded,
   press(t, "Mod+J", 40.0)
   keys_recording.set("")
   assert_eq(done, ["latest", "focus"])
-  // (a field with the focus: what is said for it too done by its keys there, what is not, not)
+  // (a field with the focus: a key it does not take (⌘J, ⌘K) done as ever; one it takes as its own (←, its caret's)
+  // its, nothing done)
   draft.focus()
   t.draw()
   press(t, "Mod+J", 50.0)
   press(t, "Mod+K", 60.0)
-  assert_eq(done, ["latest", "focus", "latest"])
+  press(t, "Left", 70.0)
+  assert_eq(done, ["latest", "focus", "latest", "focus"])
 }
 
 ///|
@@ -70,13 +72,20 @@ test "an action chosen from the menu bar done by the node that does it, at once;
   let done : Array[String] = []
   @ui.set_view_app(fn(root) {
     root.show(fn() { shown.get() }, fn(page) {
-      actions_node(page, fn() { Some(keymap_prefs()) }, [("chat.latest", false, fn() { done.push("latest"); true })])
+      actions_node(page, fn() { Some(keymap_prefs()) }, [
+        ("chat.latest", fn() { done.push("latest"); true }),
+        ("chat.find", fn() { false }),
+      ])
     })
   })
   t.draw()
   ask_action("chat.latest")
   assert_eq(done, ["latest"])
   assert_eq(action_asked.val, "")
+  // (one it cannot do now: the old views' to read, by the frame after)
+  ask_action("chat.find")
+  assert_eq(action_asked.val, "chat.find")
+  action_asked_done()
   // (its node gone: the old views' to read, by the frame after)
   shown.set(false)
   t.draw()
