@@ -71,7 +71,7 @@ export function displayed(display: Display | { failed: string }): string {
   return [
     `This chat has a screen of its own on the phone: display ${display.id} (${display.width}x${display.height}, density ${display.density}), apart from the phone's own screen, which its person keeps using. Work on it, not on theirs, unless they ask:`,
     `- Start an app on it: \`adb … shell am start --display ${display.id} -n <package>/<activity>\` (or \`-a android.intent.action.MAIN -c android.intent.category.LAUNCHER <package>\`; \`cmd package resolve-activity --brief <package>\` names its activity). An app is on one screen at a time: one the person has open moves over, so prefer apps they are not using.`,
-    `- Touch and type there: \`adb … shell input -d ${display.id} tap <x> <y>\`, \`swipe\`, \`text\`, \`keyevent BACK\` (it has no navigation bar; its keyboard shows on it).`,
+    `- Touch and type there: \`adb … shell input -d ${display.id} tap <x> <y>\`, \`swipe\`, \`text\`, \`keyevent BACK\` (it has no navigation bar and shows no keyboard: `text` types into the field it focused, ASCII only).`,
     `- Its picture: \`adb … exec-out screencap -d ${display.surface} -p > shot.png\` (the id screencap takes for it), then look at the file.`,
     `It closes with the apps on it when you hand the phone back (phone_use done: true, do that once finished), when the grant ends, or after ${IDLE_MS / 60_000} minutes of no adb use; phone_use makes a new one then. While it is up, the phone's notification names this chat.`,
   ].join("\n");
