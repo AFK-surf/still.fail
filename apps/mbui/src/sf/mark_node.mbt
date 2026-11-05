@@ -55,6 +55,57 @@ pub fn avatar_node(
 }
 
 ///|
+/// A tile (tile_avatar's, as a node) in `parent`, `size` across, its corner `corner` (30% of it where none is said):
+/// `picture` (an address or a data URL, "" none) once it is decoded at the size it is shown, filling it; its initial
+/// (by `name`) on its colour (by `id`) until then, and for good without one. Each as it changes.
+pub fn tile_avatar_node(
+  parent : @view.View,
+  id : () -> String,
+  name : () -> String,
+  picture : () -> String,
+  size : Double,
+  corner? : Double,
+) -> Unit {
+  let corner = corner.unwrap_or(size * 0.3)
+  let half = size / 2.0
+  let key = fn() { data_image(picture()) }
+  parent.box(fn(d) {
+    let decoded = fn() {
+      let k = key()
+      k != "" && @ui.current().image_ready(k, size * @ui.current().scale)
+    }
+    d
+    .bone_whole(Is(true))
+    .width(Is(Some(size)))
+    .height(Is(Some(size)))
+    .radius(Is(corner))
+    // (what it holds in its middle, both ways: avatar_disc's)
+    .row(Is(true))
+    .lines_up(Is(Some(Middle)))
+    .lies_along(Is(Middle))
+    .ground(By(fn() { if decoded() { transparent_ground } else { avatar_color(id()) } }))
+    |> ignore
+    d.show(decoded, fn(p) {
+      p
+      .width(Is(Some(size)))
+      .height(Is(Some(size)))
+      .radius(Is(corner))
+      .image(By(fn() { Some((key(), "", 8192)) }))
+      .image_covers(Is(true))
+      |> ignore
+    })
+    d.show(fn() { !decoded() }, fn(l) {
+      l
+      .words(By(fn() { initial(name()) }))
+      .words_look(Is({ size: half, weight: 600, line: half, wrap: false, tracking: @view.letters_own, balance: false }))
+      .ink(Is(face_ink))
+      |> ignore
+    })
+  })
+  |> ignore
+}
+
+///|
 /// A station's or a workspace's mark (station_mark's, as a node) in `parent`, `size` across: its `icon` first, a glyph
 /// (glyph:<name>, glyph:<name>:<colour>, in that colour, else `tint`) or a picture put up (its address: its bytes the
 /// core's, asked for on `stint` as the page's time on top is, a GIF among them moving; or a data URL), covering its

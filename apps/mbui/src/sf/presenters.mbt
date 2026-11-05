@@ -8,13 +8,33 @@
 // back, Escape and a press outside, and the focus going into it as it opens.
 
 ///|
-/// What opened a presenter: the box pressed (its id, `c.id(key)`), a rectangle of the window (x, y, w, h: a point
-/// is one 0 by 0, where a right click was), or nothing (what is asked by no press of the person's).
+/// What opened a presenter: the box pressed (its id, `c.id(key)`), a node of the window's tree pressed (`Node`: where
+/// it is drawn as the presenter stands, followed as it moves), a rectangle of the window (x, y, w, h: a point is one 0
+/// by 0, where a right click was), or nothing (what is asked by no press of the person's).
 pub(all) enum Anchor {
   Of(Int)
+  Node(Pressed)
   At(Double, Double, Double, Double)
   Unanchored
 } derive(Eq)
+
+///|
+/// A node of the window's tree that opened a presenter (Anchor's `Node`, Beside's): the same one, as long as it is.
+pub(all) struct Pressed {
+  view : @view.View
+}
+
+///|
+pub impl Eq for Pressed with equal(a, b) {
+  a.view.at == b.view.at && a.view.gen == b.view.gen && physical_equal(a.view.tree, b.view.tree)
+}
+
+///|
+/// What opens a presenter beside node `v` of the window's tree as it is pressed (a control of the tree's: Beside's
+/// `Node`).
+pub fn beside_node(v : @view.View) -> Beside {
+  Node({ view: v })
+}
 
 ///|
 /// What opened a menu or a pick, which stand beside it on Medium and Large (docs/architecture.md, rule 3: the steps one
@@ -22,6 +42,7 @@ pub(all) enum Anchor {
 /// nothing: no page can open one beside nothing, as a dialog in the middle of the window.
 pub(all) enum Beside {
   Of(Int)
+  Node(Pressed)
   At(Double, Double, Double, Double)
 } derive(Eq)
 
@@ -30,6 +51,7 @@ pub(all) enum Beside {
 pub fn Beside::anchor(self : Beside) -> Anchor {
   match self {
     Of(id) => Anchor::Of(id)
+    Node(n) => Anchor::Node(n)
     At(x, y, w, h) => Anchor::At(x, y, w, h)
   }
 }
@@ -1443,7 +1465,9 @@ fn anchor_of(c : @ui.Ctx, from : Anchor) -> (Int, (Double, Double, Double, Doubl
   match from {
     Of(id) => (id, None)
     At(x, y, w, h) => (0, Some((x, y, w, h)))
-    Unanchored => {
+    // (a node of the tree's: no old frame's to stand beside, the window's middle a third down, as where nothing opened it;
+    // the tree's presenters stand beside it, presented_node.mbt)
+    Node(_) | Unanchored => {
       let (ww, wh) = c.window_size()
       (0, Some((ww / 2.0, wh / 3.0, 0.0, 0.0)))
     }

@@ -299,6 +299,11 @@ fn menu_anchor_now(from : Anchor) -> ((@view.View) -> @view.View, Bool, Double, 
       let by_key = c.focus_shown(id)
       (fn(layer) { @ui.old_anchor(layer, id, (0.0, 0.0, 0.0, 0.0)) }, by_key, panel_offset, keep && !by_key)
     }
+    // (a node of the tree's: beside it as it is drawn, as a chooser's menu beside its button, chooser_node)
+    Node(n) => {
+      let by_key = n.view.focus_shown()
+      (fn(_) { n.view }, by_key, panel_offset, keep && !by_key)
+    }
     At(x, y, w, h) =>
       (
         fn(layer) { fixed_anchor(layer, (x, y, w, h)) },
