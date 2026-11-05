@@ -68,6 +68,10 @@ test("a pending list reads its member vaults and follows membership changes", as
     put("mine", "mine");
     for (let i = 0; i < 400; i++) put(`other-${i}`, "theirs");
     await secrets.preparePending("w");
+    const plan = (db.prepare(`EXPLAIN QUERY PLAN ${PENDING_MEMBER}`).all("w", "alice") as { detail: string }[]).map((row) => row.detail).join("\n");
+    assert.match(plan, /SEARCH m USING PRIMARY KEY/);
+    assert.match(plan, /SEARCH p USING (?:COVERING )?INDEX vault_pending_vault/);
+    assert.match(plan, /SEARCH r USING INDEX/);
     const viewer = { sub: "alice", email: "alice@example.test" }, lock = { ws: "w" } as never;
     reading = true;
     assert.deepEqual(secrets.pending("w", lock, viewer).map((r) => r.id), ["mine"]);
@@ -77,6 +81,45 @@ test("a pending list reads its member vaults and follows membership changes", as
     assert.deepEqual(secrets.pending("w", lock, viewer), []);
     putVault("mine", ["alice"]);
     assert.deepEqual(secrets.pending("w", lock, viewer).map((r) => r.id), ["mine"]);
+  } finally { db.close(); }
+});
+
+test("preparing a pending list waits for the previous process to finish writing", async () => {
+  const db = new DatabaseSync(":memory:");
+  let exited!: () => void;
+  const previousGone = new Promise<void>((resolve) => { exited = resolve; });
+  try {
+    const secrets = new Secrets({ db, data: ".", now: () => 0, home: () => "w", lock: () => null, backfill: { previousGone },
+      hub: { store: { subscribe() {}, getSession() { return {}; } } } as never,
+      proxy: {} as never, vaults: {} as never, plain: {} as never });
+    let ready = false;
+    const preparing = secrets.preparePending("w").then(() => { ready = true; });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(ready, false);
+    const request = { ws: "w", id: "lost", session: "s", vault: PLAIN, owner: "bob@example.test", at: 0,
+      item: "i", mode: "env", status: "pending", save: { typed: false } };
+    db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w','lost','s','pending',?)").run(JSON.stringify(request));
+    exited();
+    await preparing;
+    secrets.pending("w", null, { sub: "alice", email: "alice@example.test" });
+    assert.equal((db.prepare("SELECT status FROM vault_requests WHERE ws='w' AND id='lost'").get() as { status: string }).status, "expired");
+  } finally { exited(); db.close(); }
+});
+
+test("a later handover keeps a save even after the pending list was prepared", async () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    const secrets = new Secrets({ db, data: ".", now: () => 0, home: () => "w", lock: () => null,
+      hub: { store: { subscribe() {}, getSession() { return {}; } } } as never,
+      proxy: {} as never, vaults: {} as never, plain: {} as never });
+    const request = { ws: "w", id: "save", session: "s", vault: PLAIN, owner: "bob@example.test", at: 0,
+      item: "i", mode: "env", status: "pending", save: { typed: false } };
+    db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w','save','s','pending',?)").run(JSON.stringify(request));
+    await secrets.preparePending("w");
+    secrets.carry({ keeper: { boxes: [], held: [] }, unsaved: [["save", { value: "secret" }, [{ ws: "w", owner: "bob@example.test" }]]] });
+    assert.deepEqual(secrets.pending("w", null, { sub: "bob", email: "bob@example.test" }).map((r) => r.id), ["save"]);
+    assert.equal((db.prepare("SELECT status FROM vault_requests WHERE ws='w' AND id='save'").get() as { status: string }).status, "pending");
+    await new Promise<void>((resolve) => setImmediate(resolve));
   } finally { db.close(); }
 });
 
