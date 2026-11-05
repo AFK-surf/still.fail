@@ -52,39 +52,41 @@ test "styles: the lock's waiting page, every state, drawn as before" {
       }
     }
   }
+  // The old waiting-page host no longer clips at x=56 on wide screens; every affected draw stays inside that
+  // boundary, so removing the clip changes this draw-list reference without changing pixels.
   inspect(out.to_string(), content=(
     #|waiting narrow 28261:276919d4
-    #|waiting wide 58348:6d17d918
+    #|waiting wide 58259:a244971f
     #|waiting-dark narrow 28177:273f1828
-    #|waiting-dark wide 58173:f6c85a4e
+    #|waiting-dark wide 58084:4a3c4ffb
     #|finding narrow 33120:e0cb13d0
-    #|finding wide 63877:9fe7c0d
+    #|finding wide 63795:4253fa07
     #|finding-dark narrow 33233:7bd3d895
-    #|finding-dark wide 63899:d53179f6
+    #|finding-dark wide 63817:b1865c8c
     #|code narrow 26964:88a7f87b
-    #|code wide 57180:53acc254
+    #|code wide 57101:41b2c7fb
     #|code-dark narrow 26856:ce8b5d5e
-    #|code-dark wide 56981:8e036739
+    #|code-dark wide 56902:943a3f34
     #|wrong narrow 28173:7d27636f
-    #|wrong wide 58409:d2d3041b
+    #|wrong wide 58318:1e1e5488
     #|wrong-dark narrow 28275:4b23cc12
-    #|wrong-dark wide 58420:45446d48
+    #|wrong-dark wide 58329:44144007
     #|checking narrow 35247:a55b4d68
-    #|checking wide 66124:9566bdf5
+    #|checking wide 66027:a6b80882
     #|checking-dark narrow 35339:cf8b4c9d
-    #|checking-dark wide 66125:3e1bfc6c
+    #|checking-dark wide 66028:c8707815
     #|none narrow 27729:50cff18b
-    #|none wide 57824:81cbd3e
+    #|none wide 57739:b049819f
     #|none-dark narrow 27649:92e439f
-    #|none-dark wide 57653:179012c2
+    #|none-dark wide 57568:824a045d
     #|failed narrow 23488:6a0bface
-    #|failed wide 53576:b25856d2
+    #|failed wide 53523:409128eb
     #|failed-dark narrow 23488:d6aa537e
-    #|failed-dark wide 53485:14a8739a
+    #|failed-dark wide 53432:532d6135
     #|nocode narrow 28261:276919d4
-    #|nocode wide 58348:6d17d918
+    #|nocode wide 58259:a244971f
     #|nocode-dark narrow 28177:273f1828
-    #|nocode-dark wide 58173:f6c85a4e
+    #|nocode-dark wide 58084:4a3c4ffb
     #|
 
 
