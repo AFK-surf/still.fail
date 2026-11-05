@@ -321,7 +321,21 @@ pub fn row_agent_groups(item : ChatItem) -> Array[RowAgent] {
 /// The stations at a glance, as the core has them in workspace `ws` (asleep while every station is down as the
 /// device's network is), and in words: asleep, what the core cannot reach says it; else the stations (the core's),
 /// and what is wrong with them.
+/// Worked out of the chats' list as it changes and followed as that, told only where it comes out otherwise: the list
+/// changes with every chat's every turn, an agent's words as they come, a chat read; what reads this (the rail's, the
+/// tabs', the bars' glyph, built in the old frame) is built again only for what it shows (as the bar's glance is).
 pub fn stations_at_glance(src : Source, ws : String) -> (@sf.GlyphCounts, String) {
+  stations_glances.read(ws, fn(_) { stations_at_glance_now(src, ws) }, same=fn(a, b) { a == b })
+}
+
+///|
+/// stations_at_glance's, by the workspace.
+// kept across runs: let go as no frame reads them (Kept), and with the kept as a run begins
+let stations_glances : Kept[(@sf.GlyphCounts, String)] = Kept::new()
+
+///|
+/// stations_at_glance as the core has them now.
+fn stations_at_glance_now(src : Source, ws : String) -> (@sf.GlyphCounts, String) {
   let chats = (src.topic)("chats", { "scope": Json::string(ws), "mine": Json::boolean(false) })
   let g = field(chats.value, "glyph")
   let status = (src.topic)("status", { "workspace": Json::string(ws) }).value
