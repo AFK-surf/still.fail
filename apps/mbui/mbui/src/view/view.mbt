@@ -1791,6 +1791,8 @@ priv enum Phase {
 /// next frame (Tree::frame runs the queue first), however often it changed meanwhile; there it is read anew and its
 /// value handed to `then`. What stops it (it follows nothing, runs no more, and lets go of what it holds).
 fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Unit {
+  // (a node's own read, of what is laid out too, as told last: wherever a write set it off, reads_own)
+  let read = fn() { reads_own(read) }
   // (its one state, every way it is run read from it: queued for a frame (told as a change ended), marked as what it
   // read changed (in a change's batch too: what asks at once pulls it), live; run once it is due, by any of them, and
   // done with all of them)
@@ -1877,6 +1879,10 @@ pub fn Tree::bindings_held(self : Tree) -> Int {
 /// by that moment let go first. Layout, words and paint of what it makes wait for the frame. Run now with the target
 /// it starts at. What stops it.
 fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Unit {
+  // (a node's own, what it reads and what it does as that changes, of what is laid out too, as told last: wherever a
+  // write set it off, reads_own)
+  let read = fn() { reads_own(read) }
+  let then = fn(v : T) { reads_own(fn() { then(v) }) }
   let live = Ref(true)
   let last : Ref[T?] = Ref(None)
   // (the watch reads anew as it is told; let go as it stops)
@@ -8259,6 +8265,19 @@ pub fn shut_layout_reads(why : String?) -> String? {
   let was = layout_reads_shut.val
   layout_reads_shut.val = why
   was
+}
+
+///|
+/// `g` done as one of a node's own reads, what is laid out open to it, shut again after it as it was. The boundary of
+/// shut_layout_reads (@ui.on_host_said's): every node's own binding (Tree::queued: a property said By) and structure
+/// (Tree::structured: show, pick, each, View::reacts) reads what is laid out as told last, wherever it runs, a hand-off's
+/// write having set it off or a node made in it; what is shut is the hand-off's own code alone, what it reads itself.
+fn[T] reads_own(g : () -> T) -> T {
+  let was = layout_reads_shut.val
+  layout_reads_shut.val = None
+  let r = g()
+  layout_reads_shut.val = was
+  r
 }
 
 ///|
