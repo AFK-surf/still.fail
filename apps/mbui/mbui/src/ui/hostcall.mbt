@@ -872,6 +872,19 @@ fn h_gpu_ms() -> Double {
 }
 
 ///|
+/// The memory the process holds, MB, as the system counts it (the fake host's none: -1).
+fn h_mem_mb() -> Double {
+  match fake.val {
+    Some(_) => -1.0
+    None => {
+      let b = @hostapi.mem_bytes()
+      if b < 0.0 { -1.0 } else { b / 1048576.0 }
+    }
+  }
+}
+
+///|
+/// The process's CPU time, ms (the fake host's none: -1).
 fn h_cpu_ms() -> Double {
   match fake.val {
     Some(_) => -1.0
