@@ -12,6 +12,12 @@ pub enum Height {
 }
 
 ///|
+struct HeightQuery {
+  mut expression : Height
+  mut value : Double?
+}
+
+///|
 pub fn height(value : Double) -> Height { Constant(value) }
 
 ///|
@@ -122,7 +128,9 @@ fn Tree::height_dirty(self : Tree, at : Int) -> Unit {
       seen.add(i)
       let n = self.nodes[i]
       n.flex.dirty = true
-      match self.height_users.get({ at: i, gen: n.gen }) {
+      let id = { at: i, gen: n.gen }
+      if self.height_queries.contains(id) { self.heights_due.add(id) }
+      match self.height_users.get(id) {
         Some(users) => for id in users {
           if self.alive_id(id) { todo.push(id.at) }
         }
@@ -134,6 +142,38 @@ fn Tree::height_dirty(self : Tree, at : Int) -> Unit {
 }
 
 ///|
+// Being stale is not a changed layout result. Resolve the geometry graph before
+// deciding whether to place it again. Leaf measures read the same expressions,
+// so a query of another query sees the new inputs independent of queue order.
+fn Tree::heights_resolved(self : Tree) -> Unit {
+  if self.heights_due.is_empty() { return }
+  let due = self.heights_due.iter().collect()
+  self.heights_due.clear()
+  let changed = @flex.measure_pass(fn() {
+    let mut changed = false
+    for id in due {
+      match self.height_queries.get(id) {
+        Some(q) if self.alive_id(id) => {
+          let value = q.expression.value()
+          guard value >= 0.0 && !value.is_inf() else { abort("a height expression must be finite and nonnegative") }
+          if q.value != Some(value) {
+            q.value = Some(value)
+            changed = true
+          }
+        }
+        _ => ()
+      }
+    }
+    changed
+  })
+  if changed {
+    self.layout_due = true
+    self.measured_gen = -1
+    self.hits += 1
+  }
+}
+
+///|
 /// A leaf's height as an intrinsic expression, in the same layout calculation.
 /// The binding captures model inputs; layout evaluates numeric geometry only.
 /// The sources must not contain the leaf or depend on it through another query.
@@ -141,14 +181,15 @@ pub fn View::height_measured(self : View, expression : Live[Height]) -> View {
   guard self.live() is Some(n) else { return self }
   let tree = self.tree
   let target = self.id()
-  let current : Ref[Height] = Ref(Constant(0.0))
+  let query = { expression: Constant(0.0), value: None }
+  tree.height_queries[target] = query
   n.flex.measure = Some(fn(w, _, _, _) {
     tree.work.measured += 1
-    let h = current.val.value()
+    let h = query.expression.value()
     guard h >= 0.0 && !h.is_inf() else { abort("a height expression must be finite and nonnegative") }
     (w, h)
   })
-  self.bind(Measured, expression, Layout, fn(expr) {
+  self.bind(Measured, expression, Said, fn(expr) {
     let ids : Set[NodeId] = Set::new()
     expr.sources(tree, ids)
     let sources = ids.iter().collect()
@@ -165,8 +206,15 @@ pub fn View::height_measured(self : View, expression : Live[Height]) -> View {
         users.add(target)
       }
     }
-    current.val = expr
+    query.expression = expr
+    tree.heights_due.add(target)
+    tree.height_dirty(self.at)
   })
-  self.owns(fn() { tree.height_unlink(target); current.val = Constant(0.0) }) |> ignore
+  self.owns(fn() {
+    tree.height_unlink(target)
+    tree.height_queries.remove(target)
+    tree.heights_due.remove(target)
+    query.expression = Constant(0.0)
+  }) |> ignore
   self
 }

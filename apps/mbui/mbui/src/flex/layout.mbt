@@ -280,8 +280,8 @@ fn box_for(node : Node, cb_w : Double, cb_h : Double) -> Box {
 /// forgotten unless the compute reuses it and the node is not dirty.
 /// (Written out where every item of a container is set up: layout_flex.)
 fn touch(node : Node) -> Unit {
-  if node.cache_gen != generation.val {
-    node.cache_gen = generation.val
+  if node.cache_gen != cache_generation.val {
+    node.cache_gen = cache_generation.val
     if !reusing.val || node.dirty {
       node.cache_n = 0
       node.p_ok = false
@@ -374,6 +374,7 @@ pub fn compute(
   grid? : Double = 0.0,
 ) -> Unit {
   generation.val = generation.val + 1
+  cache_generation.val += 1
   reusing.val = reuse && !round && grid == placing_grid.val
   placing_grid.val = grid
   absolute_seen.val = false
@@ -425,6 +426,18 @@ pub fn measured_height(node : Node, width : Double) -> Double {
 }
 
 ///|
+/// Resolve intrinsic queries after their inputs changed, without placing any
+/// node. A fresh cache generation observes dirty content even if no layout has
+/// run since the change. Unchanged subtrees retain their measured sizes.
+pub fn[T] measure_pass(read : () -> T) -> T {
+  cache_generation.val += 1
+  let was = reusing.val
+  reusing.val = true
+  defer { reusing.val = was }
+  read()
+}
+
+///|
 /// The offset of a relatively positioned box from its insets.
 fn inset_offset(s : Style, cb_w : Double, cb_h : Double, horizontal : Bool) -> Double {
   if s.position != Relative {
@@ -456,8 +469,12 @@ fn inset_offset(s : Style, cb_w : Double, cb_h : Double, horizontal : Bool) -> D
 }
 
 ///|
-/// Bumped by every compute(): sizes cached on nodes are only good within one.
+/// Bumped by every compute(): the revision that placed each node.
 let generation : Ref[Int] = { val: 0 }
+
+///|
+// Measuring can observe new content without producing another placed layout.
+let cache_generation : Ref[Int] = { val: 0 }
 
 ///|
 /// Work done so far: sizes computed, sizes found in the cache, leaves
@@ -1071,7 +1088,7 @@ fn layout_flex(
   // it: its items where that measure put them
   let pre = node.pre
   let fast = perform &&
-    node.pre_gen == generation.val &&
+    node.pre_gen == cache_generation.val &&
     known(w0) &&
     w0 == pre.unsafe_get(0) &&
     known(h0) &&
@@ -1132,8 +1149,8 @@ fn layout_flex(
       }
       // box_for(c, cb_w, cb_h), its calls written out (this runs for every
       // item of every container)
-      if c.cache_gen != generation.val {
-        c.cache_gen = generation.val
+      if c.cache_gen != cache_generation.val {
+        c.cache_gen = cache_generation.val
         if !reusing.val || c.dirty {
           c.cache_n = 0
           c.p_ok = false
@@ -1668,7 +1685,7 @@ fn layout_flex(
         pre.unsafe_set(j + 2, f.unsafe_get(i + MAIN_POS))
         pre.unsafe_set(j + 3, f.unsafe_get(i + CROSS_POS))
       }
-      node.pre_gen = generation.val
+      node.pre_gen = cache_generation.val
     } else if !perform {
       node.pre_gen = -1
     }

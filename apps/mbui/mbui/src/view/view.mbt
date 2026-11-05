@@ -623,6 +623,8 @@ pub struct Tree {
   // Intrinsic geometry dependencies stay inside layout; they publish no signals.
   height_sources : Map[NodeId, Array[NodeId]]
   height_users : Map[NodeId, Set[NodeId]]
+  height_queries : Map[NodeId, HeightQuery]
+  heights_due : Set[NodeId]
   /// what is to be brought into sight once laid out (Tree::show_in_sight): a node, and where in it (its own terms, asked
   /// then; none: all of it)
   shows_due : Array[(NodeId, () -> (Double, Double)?)]
@@ -844,6 +846,8 @@ pub fn Tree::new(
     sized: [],
     height_sources: {},
     height_users: {},
+    height_queries: {},
+    heights_due: Set::new(),
     shows_due: [],
     outs_gone: [],
     time,
@@ -3005,6 +3009,7 @@ fn Tree::measured_now(self : Tree) -> Unit {
       i = i + 1
     }
     self.bindings_due.clear()
+    self.heights_resolved()
     if self.layout_due && self.measured_gen < 0 {
       self.work.computes = self.work.computes + 1
       let g = @flex.computes() + 1
@@ -6046,6 +6051,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     i = i + 1
   }
   self.bindings_due.clear()
+  self.heights_resolved()
   // (those marked that ran so, no longer to be pulled; one marked in a change not ended yet still is)
   let still = self.pulls_marked.filter(fn(k) {
     match self.pulls.get(k) {
