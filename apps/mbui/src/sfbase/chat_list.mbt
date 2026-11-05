@@ -420,7 +420,6 @@ pub fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json
 /// again as it is left. A read after this works it out anew, the topic asked then.
 pub fn chat_view_left(r : ChatRef) -> Unit {
   chat_views.forget(chat_key(r))
-  chat_bare_views.forget(chat_key(r))
 }
 
 ///|
@@ -462,18 +461,11 @@ fn view_of_chat_now(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json
 }
 
 ///|
-/// The chat's view for a reader which does not need its list of entries (messages are made only as they are read):
-/// kept as view_of_chat's is, its topic asked for once for each version of it.
+/// The chat's view for a reader which does not need its list of entries (messages are made only as they are read).
+/// Not kept as view_of_chat's is (chat_views): a reaction of the tree reading it from one kept was not told the view
+/// changed (a request decided in its chat: its card kept its buttons, 2026-11-05); its readers are the page's
+/// reactions, a few, not each frame's hundreds.
 pub fn chat_view_now(src : Source, r : ChatRef) -> ChatView? {
-  chat_bare_views.read(chat_key(r), fn(_) { chat_view_bare(src, r) }, same=same_view)
-}
-
-///|
-// kept across runs: as chat_views, let go of with it (chat_view_left)
-let chat_bare_views : Kept[ChatView?] = Kept::new()
-
-///|
-fn chat_view_bare(src : Source, r : ChatRef) -> ChatView? {
   let (read, present, _) = chat_read_now(src, r)
   match (read, present, fresh_view(r)) {
     (Some(c), true, _) => Some(c.view)
