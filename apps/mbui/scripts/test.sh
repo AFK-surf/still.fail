@@ -134,7 +134,8 @@ for t in $targets; do
     files=(src/sfapp/*_wbtest.mbt)
     n=${SFAPP_SHARDS:-5}
     runs=("$(echo " $pkgs " | sed 's| -p stillfail/sfapp | |')")
-    # Run the screen sweeps beside page tests, so their durations do not add. Corners includes squeeze's screens;
+    # Run the screen sweeps beside page tests, so their durations do not add. Corners includes squeeze's screens (and,
+    # in its Chinese run, a press's room and the light theme's contrast: each screen opened once for all its rules);
     # the long-text, contrast, and kept-row sweeps have their own processes.
     sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:3 src/sfapp/squeeze_said_wbtest.mbt:1
       src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:4)
