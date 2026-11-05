@@ -117,6 +117,29 @@ test("a pending list checks each member vault once, however many of its requests
   assert.deepEqual(await Promise.all([vaultReads(40), vaultReads(400)]), [1, 1]);
 });
 
+test("an unreadable old vault preserves the original request-list behavior until rewritten", async () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec("CREATE TABLE vaults(ws TEXT NOT NULL,id TEXT NOT NULL,seq INTEGER NOT NULL,body TEXT NOT NULL,PRIMARY KEY(ws,id))");
+    db.prepare("INSERT INTO vaults VALUES('w','broken',0,?)").run("{broken");
+    const vaults = new VaultStore(db);
+    const secrets = new Secrets({ db, data: ".", now: () => 0, home: () => "w", lock: () => ({ ws: "w" } as never),
+      hub: { store: { subscribe() {}, getSession() { return {}; } } } as never,
+      proxy: {} as never, vaults, plain: {} as never });
+    const insert = db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w',?,'s','pending',?)");
+    const put = (id: string, vault: string) => insert.run(id, JSON.stringify({ ws: "w", id, session: "s", vault,
+      owner: "alice@example.test", at: 0, item: "i", mode: "env", status: "pending" }));
+    put("mine", PLAIN);
+    await secrets.preparePending("w");
+    const viewer = { sub: "alice", email: "alice@example.test" }, lock = { ws: "w" } as never;
+    assert.deepEqual(secrets.pending("w", lock, viewer).map((r) => r.id), ["mine"]);
+    put("waiting", "broken");
+    assert.throws(() => secrets.pending("w", lock, viewer), SyntaxError);
+    vaults.putVault({ ws: "w", id: "broken", seq: 1, members: ["alice"] } as never);
+    assert.deepEqual(secrets.pending("w", lock, viewer).map((r) => r.id), ["mine", "waiting"]);
+  } finally { db.close(); }
+});
+
 test("preparing a pending list waits for the previous process to finish writing", async () => {
   const db = new DatabaseSync(":memory:");
   let exited!: () => void;

@@ -67,3 +67,21 @@ test("a failed vault member batch rolls its entries and cursor back together", (
     assert.deepEqual(members("w", "alice"), ["v"]);
   } finally { db.close(); }
 });
+
+test("unreadable old vaults do not stop preparation and are cleared when rewritten", () => {
+  const { db, put, members } = fixture();
+  try {
+    db.prepare("INSERT INTO vaults VALUES('w','broken',0,?)").run("{broken");
+    db.prepare("INSERT INTO vaults VALUES('w','legacy',0,?)").run(JSON.stringify({ members: "alice" }));
+    put("w", "valid", ["alice"]);
+    initializeVaultMembers(db);
+    while (!backfillVaultMembers(db, "w", 2)) {}
+    const invalid = () => db.prepare("SELECT vault FROM vault_member_invalid WHERE ws='w' ORDER BY vault").all().map((row) => row.vault);
+    assert.deepEqual(invalid(), ["broken", "legacy"]);
+    assert.deepEqual(members("w", "alice"), ["valid"]);
+    put("w", "broken", ["bob"], 1);
+    db.prepare("DELETE FROM vaults WHERE ws='w' AND id='legacy'").run();
+    assert.deepEqual(invalid(), []);
+    assert.deepEqual(members("w", "bob"), ["broken"]);
+  } finally { db.close(); }
+});
