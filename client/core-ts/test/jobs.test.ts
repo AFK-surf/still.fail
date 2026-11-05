@@ -113,13 +113,13 @@ test("those_up_long_light_the_bell_until_it_has_shown_them", () => {
 });
 
 test("a_task_another_stations_chat_runs_is_in_that_chat", () => {
-  assert.deepEqual(remoteOwner("remote:w:cedar:ember:c-1"), { station: "w/cedar", session: "ember:c-1" });
-  assert.equal(remoteOwner("ember:c-1"), null);
-  const chat = { id: "ember:c-1", title: "编译器", archived: false, station: "w/cedar" };
+  assert.deepEqual(remoteOwner("remote:w:cedar:chat:c-1"), { station: "w/cedar", session: "chat:c-1" });
+  assert.equal(remoteOwner("chat:c-1"), null);
+  const chat = { id: "chat:c-1", title: "编译器", archived: false, station: "w/cedar" };
   const from = (session: string): From | null =>
-    session === "remote:w:cedar:ember:c-1" ? { name: "cedar", chat } : session === "remote:w:cedar:ember:c-2" ? { name: "cedar", chat: null } : null;
+    session === "remote:w:cedar:chat:c-1" ? { name: "cedar", chat } : session === "remote:w:cedar:chat:c-2" ? { name: "cedar", chat: null } : null;
   const ran = (session: string) => job(session, { session, startedAt: NOW - 2 * LONG });
-  const v = longJobs([["w/orchard", "orchard", [ran("remote:w:cedar:ember:c-1"), ran("remote:w:cedar:ember:c-2"), ran("a")]]], c(), from);
+  const v = longJobs([["w/orchard", "orchard", [ran("remote:w:cedar:chat:c-1"), ran("remote:w:cedar:chat:c-2"), ran("a")]]], c(), from);
   const [known, unknown, own] = v.groups[0].jobs;
   assert.deepEqual([known.whereText, known.chat, known.station], ["orchard · 编译器 · 来自 cedar", chat, "w/orchard"]);
   assert.deepEqual([unknown.whereText, unknown.chat], ["orchard · 对话 · 来自 cedar", undefined]);

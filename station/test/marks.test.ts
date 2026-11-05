@@ -12,7 +12,7 @@ const readers: any = { names: new Map(), read: async (op: string, a: any) => JSO
 function rig() {
   const store = Store.open(":memory:", null);
   store.insertSession({ key: "s1", connect: "ds", runtime: "claude", profile: "cc", workspace: "/w/s1", token: "t", createdAt: 1, lastActiveAt: 1 });
-  const chat = store.openThread("ember", "EMBER", "1.1", null, "a@x");
+  const chat = store.openThread("ember", "CHAT", "1.1", null, "a@x");
   const slack = store.openThread("slack", "C1", "2.2", null, null);
   store.insertMessage(newMessage(chat.id, "1.2", "person", "a@x", "hi"));
   store.insertMessage(newMessage(chat.id, "1.3", "agent", "s1", "which one?"));

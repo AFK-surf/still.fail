@@ -18,7 +18,7 @@ for (const recursive of [false, true]) test(`requested recent pages prepare in b
       store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
         token: key, createdAt: 1, lastActiveAt: 1, ws });
     for (let i = 0; i < 12; i++) {
-      const thread = store.openThread("ember", "EMBER", `old-${i}`, "Old", null).id;
+      const thread = store.openThread("ember", "CHAT", `old-${i}`, "Old", null).id;
       if (i % 3 === 0) db.prepare("UPDATE threads SET home = ? WHERE id = ?").run(i % 2 ? "away" : "here", thread);
       else if (i % 3 === 1) { store.joinThread(thread, "here", "ember"); store.joinThread(thread, "missing", "ember"); }
       db.prepare("UPDATE threads SET created_at = ? WHERE id = ?").run(i, thread);
@@ -32,7 +32,7 @@ for (const recursive of [false, true]) test(`requested recent pages prepare in b
     let allDone = false;
     for (let round = 0; round < 1_000 && !allDone; round++) {
       if (round === 3) {
-        const thread = store.openThread("ember", "EMBER", "new", "New", null).id;
+        const thread = store.openThread("ember", "CHAT", "new", "New", null).id;
         store.joinThread(thread, "here", "ember");
         store.joinThread(thread, "missing", "ember");
         db.prepare("UPDATE sessions SET ws = NULL WHERE key = 'away'").run();
@@ -58,7 +58,7 @@ test("requested workspace preparation resumes after the database is reopened", (
     store.insertSession({ key: "here", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
       token: "here", createdAt: 1, lastActiveAt: 1, ws: "here" });
     for (let i = 0; i < 30; i++) {
-      const id = store.openThread("ember", "EMBER", `chat-${i}`, "Chat", null).id;
+      const id = store.openThread("ember", "CHAT", `chat-${i}`, "Chat", null).id;
       store.joinThread(id, "here", "ember");
     }
     const scope = { ws: "here", home: "home" };
@@ -84,8 +84,8 @@ test("a busy workspace cannot starve another requested home's preparation", () =
     for (const [key, ws] of [["a", "a"], ["b", "b"], ["busy", "busy"]] as const)
       store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
         token: key, createdAt: 1, lastActiveAt: 1, ws });
-    const changing = store.openThreadOf("ember", "EMBER", "changing", "Changing", null, "a").id;
-    const orphan = store.openThread("ember", "EMBER", "orphan", "Orphan", null).id;
+    const changing = store.openThreadOf("ember", "CHAT", "changing", "Changing", null, "a").id;
+    const orphan = store.openThread("ember", "CHAT", "orphan", "Orphan", null).id;
     for (let i = 0; i < 400; i++) {
       const key = `busy-${i}`;
       store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",

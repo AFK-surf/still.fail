@@ -8,9 +8,9 @@ import { Store } from "../src/store/store.ts";
 test("a phone grant's known chat name does not read the session's other chats", () => {
   const store = Store.open(":memory:");
   try {
-    const known = store.openThread("ember", "EMBER", "own", "Own title", null);
+    const known = store.openThread("ember", "CHAT", "own", "Own title", null);
     store.joinThread(known.id, "s", "ember");
-    const request: PhoneRequest = { id: "p", session: "s", chat: "EMBER/own", owner: "person@example.test", reason: "test", at: 0, status: "pending" };
+    const request: PhoneRequest = { id: "p", session: "s", chat: "CHAT/own", owner: "person@example.test", reason: "test", at: 0, status: "pending" };
     let calls = 0;
     const real = store.sessionChat.bind(store);
     store.sessionChat = (session) => { calls++; return real(session); };
@@ -28,7 +28,7 @@ test("a phone grant's known chat name does not read the session's other chats", 
 test("grant names keep the same results for both surfaces and missing original chats", () => {
   const store = Store.open(":memory:");
   try {
-    const own = store.openThread("ember", "EMBER", "own", null, null);
+    const own = store.openThread("ember", "CHAT", "own", null, null);
     const named = store.openThread("slack", "C", "named", "A given title", null);
     const unnamed = store.openThread("slack", "C", "unnamed", null, null);
     for (const thread of [own, named, unnamed]) store.joinThread(thread.id, "s", thread.surface);

@@ -11,7 +11,7 @@ function setup() {
   const rig = new Rig();
   rig.store.insertSession({ key: "s", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/s", token: "s", createdAt: 1, lastActiveAt: 1 });
   const thread = (name: string) => {
-    const id = rig.store.openThread("ember", "EMBER", name, null, null).id;
+    const id = rig.store.openThread("ember", "CHAT", name, null, null).id;
     rig.store.joinThread(id, "s", "ember");
     return id;
   };
@@ -85,7 +85,7 @@ test("a batch sees one snapshot while another station writes", () => {
   const store = Store.open(path);
   const other = new DatabaseSync(path);
   try {
-    const thread = store.openThread("ember", "EMBER", "chat", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "chat", null, null).id;
     store.db.prepare("INSERT INTO entries (thread, n, kind, author_kind, author, ts, at) VALUES (?, 2, 'message', 'agent', 's', 'p2', 2)").run(thread);
     const postAfter = store.postAfter.bind(store);
     let wrote = false;

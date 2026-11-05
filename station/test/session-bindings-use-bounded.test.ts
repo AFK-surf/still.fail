@@ -100,7 +100,7 @@ test("archive waits for old bindings without guessing which sessions are bound",
   try {
     session(r.store, "bound"); session(r.store, "free");
     db.exec("INSERT INTO bindings(connect,session_key) VALUES('old-connect','bound')");
-    const own = r.store.openThread("ember", "EMBER", "own", null, null).id;
+    const own = r.store.openThread("ember", "CHAT", "own", null, null).id;
     makeOld(r.store);
     assert.equal(sessionBindingsReady(db), false);
     let requested = 0;

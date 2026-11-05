@@ -1,7 +1,7 @@
 // The store's schema (once the Rust station's store.rs `// ── schema`): the tables as CREATE … IF NOT EXISTS, and the
 // columns that came after, added in place on open (add_*_columns).
 import type { DatabaseSync } from "node:sqlite";
-import { COMPACTED_FROM, QUARTER_MS } from "./rows.ts";
+import { COMPACTED_FROM, QUARTER_MS, STILLFAIL_SURFACE } from "./rows.ts";
 
 /// Bump on a change a station before it cannot open. 12 is the Rust station's, brought up on open (store.ts
 /// `#upgradeFrom12`); a database of another version is refused.
@@ -472,9 +472,9 @@ export function addArchiveColumns(db: DatabaseSync): void {
      ALTER TABLE threads ADD COLUMN hidden_by TEXT;
      ALTER TABLE threads ADD COLUMN shown_at INTEGER;
      UPDATE threads SET home = (SELECT ts.session FROM thread_sessions ts WHERE ts.thread = threads.id ORDER BY ts.joined_at, ts.rowid LIMIT 1)
-     WHERE surface = 'ember' AND id = (
+     WHERE surface = '${STILLFAIL_SURFACE}' AND id = (
        SELECT MIN(t2.id) FROM threads t2 JOIN thread_sessions ts2 ON ts2.thread = t2.id
-       WHERE t2.surface = 'ember' AND ts2.session = (SELECT ts.session FROM thread_sessions ts WHERE ts.thread = threads.id ORDER BY ts.joined_at, ts.rowid LIMIT 1));
+       WHERE t2.surface = '${STILLFAIL_SURFACE}' AND ts2.session = (SELECT ts.session FROM thread_sessions ts WHERE ts.thread = threads.id ORDER BY ts.joined_at, ts.rowid LIMIT 1));
      UPDATE sessions SET archived_by = 'manual' WHERE archived_at IS NOT NULL AND archived_by IS NULL;
      UPDATE threads SET hidden_at = (SELECT archived_at FROM sessions WHERE key = threads.home), hidden_by = 'manual'
      WHERE home IN (SELECT key FROM sessions WHERE archived_at IS NOT NULL);

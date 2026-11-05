@@ -194,7 +194,7 @@ test("a write waits its turn while another of the station's writers writes, not 
     return DatabaseSync.prototype.exec.call(this, sql);
   };
   session(store, "k");
-  const thread = store.openThread("ember", "EMBER", "1.0", null, null).id;
+  const thread = store.openThread("ember", "CHAT", "1.0", null, null).id;
   say(store, thread, "1.1", "person", "a@x", "hi");
   assert.ok(begun.length > 0 && begun.every((sql) => sql !== "BEGIN"), `every transaction takes the writing as it begins: ${begun.filter((s) => s.startsWith("BEGIN"))}`);
   assert.ok(begun.includes("BEGIN IMMEDIATE"));
@@ -236,7 +236,7 @@ test("a database from before the index on turns gets it as it is opened", () => 
 
 test("counting people for a title stops at the threshold even in a long conversation", () => {
   const store = memory();
-  const thread = store.openThread("ember", "EMBER", "many", null, null).id;
+  const thread = store.openThread("ember", "CHAT", "many", null, null).id;
   const insert = store.db.prepare("INSERT INTO entries (thread, n, kind, author_kind, author, text, at) VALUES (?, ?, 'message', 'person', 'p', 'hello', ?)");
   store.db.exec("BEGIN");
   for (let n = 1; n <= 2_000; n++) insert.run(thread, n, n);
@@ -372,7 +372,7 @@ test("an archived thread keeps its entries in the database", () => {
   const archive = tempdir();
   const store = open(":memory:", archive);
   session(store, "a");
-  const own = store.openThread("ember", "EMBER", "2.1", null, null);
+  const own = store.openThread("ember", "CHAT", "2.1", null, null);
   store.joinThread(own.id, "a", "ember");
   say(store, own.id, "2.2", "person", "local", "看看");
   say(store, own.id, "2.3", "agent", "a", "好");
@@ -392,7 +392,7 @@ test("a database of version 12 has the threads a station before wrote out to fil
   session(store, "a");
   session(store, "b");
   const shared = store.openThread("slack:T1", "C1", "1.1", null, null);
-  const own = store.openThread("ember", "EMBER", "2.1", null, null);
+  const own = store.openThread("ember", "CHAT", "2.1", null, null);
   store.joinThread(shared.id, "a", "ds");
   store.joinThread(shared.id, "b", "ds");
   store.joinThread(own.id, "a", "ember");
@@ -426,7 +426,7 @@ test("a database of version 12 has the threads a station before wrote out to fil
 test("what lists say of a thread and a session is kept as its messages are written, and goes with them", () => {
   const store = memory();
   session(store, "a");
-  const thread = store.openThread("ember", "EMBER", "1.1", null, null);
+  const thread = store.openThread("ember", "CHAT", "1.1", null, null);
   store.joinThread(thread.id, "a", "ember");
   const state = () => store.db.prepare("SELECT last_n, said_n, person_n, letters FROM thread_state WHERE thread = ?").get(thread.id);
   const people = () => store.db.prepare("SELECT author, first_n FROM thread_people WHERE thread = ? ORDER BY first_n").all(thread.id).map((r: any) => [r.author, r.first_n]);
@@ -441,7 +441,7 @@ test("what lists say of a thread and a session is kept as its messages are writt
   assert.deepEqual({ ...(state() as object) }, { last_n: 5, said_n: 5, person_n: 1, letters: 1 });
   assert.deepEqual(people(), [["x@a", 1], ["y@a", 4]]);
   // An edit is an entry of its own: the last, nothing else; what is said of the message as merged is its new words.
-  store.editMessage("ember", "EMBER", "1.1", "1.2", "先看看今天的日志");
+  store.editMessage("ember", "CHAT", "1.1", "1.2", "先看看今天的日志");
   assert.deepEqual({ ...(state() as object) }, { last_n: 6, said_n: 5, person_n: 1, letters: 1 });
   const [listed] = store.listThreads("x@a", null, thread.id);
   assert.deepEqual([listed!.firstText, listed!.lastMessage?.text, listed!.letters, listed!.people], ["先看看今天的日志", "好", 1, ["x@a", "y@a"]]);
@@ -459,7 +459,7 @@ test("deleting a session removes its first-message summary once, not once per de
   const store = memory();
   session(store, "a");
   session(store, "b");
-  const thread = store.openThread("ember", "EMBER", "1.1", null, null);
+  const thread = store.openThread("ember", "CHAT", "1.1", null, null);
   store.joinThread(thread.id, "a", "ember");
   store.joinThread(thread.id, "b", "ember");
   for (let i = 0; i < 32; i++) {
@@ -608,7 +608,7 @@ test("what two chats' agents wrote each other is neither a chat's unread nor wha
   const data = tempdir();
   const store = open(join(data, "stillfail.db"), join(data, "archive"));
   session(store, "a");
-  const thread = store.openThread("ember", "EMBER", "1.1", null, null);
+  const thread = store.openThread("ember", "CHAT", "1.1", null, null);
   store.joinThread(thread.id, "a", "ember");
   // Opened by another chat's agent: what it is about is the chat's first message, said as any other.
   say(store, thread.id, "1.2", "agent", "b", "由 [备份](https://x/o/w/s/b) 开的 chat：\n\n看看备份");
@@ -617,7 +617,7 @@ test("what two chats' agents wrote each other is neither a chat's unread nor wha
   const letter = (ts: string, author: string, text: string, way: "in" | "out") =>
     store.insertMessage({ ...newMessage(thread.id, ts, "agent", author, text), letter: { way, title: "备份", link: "https://x/o/w/s/b" } });
   letter("1.4", "b", "来自 [备份](https://x/o/w/s/b)：\n\n脚本放好了", "in");
-  letter("1.5", "peer/ember:c-9", "From [Backups](https://x/o/w/t/c):\n\nDone", "in");
+  letter("1.5", "peer/chat:c-9", "From [Backups](https://x/o/w/t/c):\n\nDone", "in");
   letter("1.6", "a", "发给 [备份](https://x/o/w/s/b)：\n\n收到", "out");
   const reader = read.openStore(data);
   const lists = () => [store.listThreads("local", null, null), read.listThreads(reader, "local", null, null)];
@@ -637,10 +637,10 @@ test("letters from before they were marked are marked as the column comes, by th
   const path = join(data, "stillfail.db");
   const store = open(path);
   session(store, "a");
-  const thread = store.openThread("ember", "EMBER", "1.1", null, null);
+  const thread = store.openThread("ember", "CHAT", "1.1", null, null);
   store.joinThread(thread.id, "a", "ember");
   say(store, thread.id, "1.2", "agent", "b", "来自 [备份](https://x/o/w/s/b)：\n\n脚本放好了");
-  say(store, thread.id, "1.3", "agent", "peer/ember:c-9", "From <https://x/o/w/t/c|Backups>:\n\nDone");
+  say(store, thread.id, "1.3", "agent", "peer/chat:c-9", "From <https://x/o/w/t/c|Backups>:\n\nDone");
   say(store, thread.id, "1.4", "agent", "a", "来自 [备份](https://x/o/w/s/b)：\n\n照它说的改了");
   say(store, thread.id, "1.5", "agent", "b", "由 [备份](https://x/o/w/s/b) 开的 chat：\n\n看看备份");
   store.close();
@@ -674,8 +674,8 @@ test("an archived thread whose file is lost comes back empty, and is counted on 
   const before = open(path, join(data, "archive"));
   session(before, "a");
   session(before, "b");
-  const lost = before.openThread("ember", "EMBER", "1.1", null, null);
-  const kept = before.openThread("ember", "EMBER", "2.1", null, null);
+  const lost = before.openThread("ember", "CHAT", "1.1", null, null);
+  const kept = before.openThread("ember", "CHAT", "2.1", null, null);
   before.joinThread(lost.id, "a", "ember");
   before.joinThread(kept.id, "b", "ember");
   say(before, lost.id, "1.2", "person", "local", "看看");
@@ -703,17 +703,17 @@ test("an archived thread whose file is lost comes back empty, and is counted on 
   assert.deepEqual(say(store, lost.id, "1.5", "person", "local", "还在吗"), [4, true]);
   assert.deepEqual(store.entriesAfter(lost.id, 0).map((e) => [e.n, e.text]), [[4, "还在吗"]]);
   // A thread nothing was said in starts at 1 as before.
-  const fresh = store.openThread("ember", "EMBER", "3.1", null, null);
+  const fresh = store.openThread("ember", "CHAT", "3.1", null, null);
   assert.deepEqual(say(store, fresh.id, "3.2", "person", "local", "新的"), [1, true]);
 });
 
 test("thread ids are never used again", () => {
   const store = memory();
   session(store, "a");
-  const thread = store.openThread("ember", "EMBER", "1.1", null, null);
+  const thread = store.openThread("ember", "CHAT", "1.1", null, null);
   store.joinThread(thread.id, "a", "ember");
   store.deleteSession("a");
-  assert.ok(store.openThread("ember", "EMBER", "2.1", null, null).id > thread.id);
+  assert.ok(store.openThread("ember", "CHAT", "2.1", null, null).id > thread.id);
 });
 
 test("deleting removes the session's rows and the threads only it was in", () => {
@@ -721,7 +721,7 @@ test("deleting removes the session's rows and the threads only it was in", () =>
   session(store, "a");
   session(store, "b");
   const shared = store.openThread("slack:T1", "C1", "1.1", null, null);
-  const own = store.openThread("ember", "EMBER", "2.1", null, null);
+  const own = store.openThread("ember", "CHAT", "2.1", null, null);
   store.joinThread(shared.id, "a", "ds");
   store.joinThread(shared.id, "b", "ds");
   store.joinThread(own.id, "a", "ember");
@@ -754,7 +754,7 @@ test("the store announces what changed", () => {
   const store = memory();
   const h = heard(store);
   session(store, "a");
-  const thread = store.openThread("ember", "EMBER", "1.1", null, null);
+  const thread = store.openThread("ember", "CHAT", "1.1", null, null);
   store.joinThread(thread.id, "a", "ember");
   const [n] = say(store, thread.id, "1.2", "person", "local", "hi");
   store.deliver(thread.id, n, ["a"]);
@@ -782,7 +782,7 @@ test("a session's chat is named by the thread said in last, as the lists have it
   session(store, "a");
   assert.equal(store.sessionChat("a"), null);
   const slack = store.openThread("slack", "C1", "1.1", null, null);
-  const own = store.openThreadOf("ember", "EMBER", "2.1", null, null, "a");
+  const own = store.openThreadOf("ember", "CHAT", "2.1", null, null, "a");
   store.joinThread(slack.id, "a", "slack");
   store.joinThread(own.id, "a", "ember");
   say(store, slack.id, "1.2", "person", "u1", "看一下构建");
@@ -801,8 +801,8 @@ test("a session's chat is named by the thread said in last, as the lists have it
 test("a session's own chat is archived with it, a chat of its own alone; anything new said brings them back", () => {
   const store = memory();
   session(store, "a");
-  const own = store.openThreadOf("ember", "EMBER", "1.1", null, null, "a");
-  const other = store.openThread("ember", "EMBER", "2.1", null, null);
+  const own = store.openThreadOf("ember", "CHAT", "1.1", null, null, "a");
+  const other = store.openThread("ember", "CHAT", "2.1", null, null);
   store.joinThread(own.id, "a", "ember");
   store.joinThread(other.id, "a", "ember");
   say(store, other.id, "2.2", "person", "local", "hi");
@@ -867,7 +867,7 @@ test("a database made before archiving gains its columns and each session's firs
   db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   db.exec(`INSERT INTO sessions (key, connect, scope, runtime, profile, workspace, token, created_at, last_active_at, archived_at)
              VALUES ('a', 'ember', 'all', 'claude', 'cc', '/w/a', 'a', 1, 1, 5);
-           INSERT INTO threads (id, surface, channel, thread_ts, created_at) VALUES (1, 'ember', 'EMBER', '1.1', 1), (2, 'ember', 'EMBER', '2.1', 2);
+           INSERT INTO threads (id, surface, channel, thread_ts, created_at) VALUES (1, 'ember', 'CHAT', '1.1', 1), (2, 'ember', 'CHAT', '2.1', 2);
            INSERT INTO thread_sessions (thread, session, connect, joined_at) VALUES (1, 'a', 'ember', 1), (2, 'a', 'ember', 2);`);
   db.close();
   const store = open(path);
@@ -893,7 +893,7 @@ test("a database made before clients gains the column and a message keeps its ap
   db.close();
   const store = open(path, join(dir, "archive"));
   session(store, "a");
-  const thread = store.openThread("ember", "EMBER", "1.1", null, null);
+  const thread = store.openThread("ember", "CHAT", "1.1", null, null);
   store.joinThread(thread.id, "a", "ember");
   say(store, thread.id, "1.2", "person", "local", "旧的");
   const [n] = store.insertMessage({ ...newMessage(thread.id, "1.3", "person", "local", "新的"), client: "android 0.1.1123" });
@@ -913,7 +913,7 @@ test("a widget's state is kept by session and path, its model told once until it
   const store = memory();
   session(store, "a");
   session(store, "b");
-  const thread = store.openThread("ember", "EMBER", "3.1", null, null);
+  const thread = store.openThread("ember", "CHAT", "3.1", null, null);
   assert.equal(widgetSourcesStep(store.db, thread.id).done, true);
   store.joinThread(thread.id, "a", "ember");
   const path = "/w/a/uploads/pick.html";
@@ -923,7 +923,7 @@ test("a widget's state is kept by session and path, its model told once until it
   store.putWidgetState("a", "/w/a/uploads/quiet.html", `{"privateContent":1}`, null);
   assert.equal(store.widgetState("a", path), `{"modelContent":"red"}`);
   assert.equal(store.widgetState("b", path), null, "kept per session");
-  assert.deepEqual(store.untoldWidgetModels("a"), [{ path, name: "pick.html", thread: ["EMBER", "3.1"], model: "red" }]);
+  assert.deepEqual(store.untoldWidgetModels("a"), [{ path, name: "pick.html", thread: ["CHAT", "3.1"], model: "red" }]);
   store.markWidgetModelsTold("a", [[path, "red"]]);
   assert.deepEqual(store.untoldWidgetModels("a"), []);
   // The same model again is not news; another is, and one changed after it was read is not marked told.
@@ -1017,13 +1017,13 @@ test("a message keeps its model after switching, editing and archiving", () => {
   const dir = tempdir();
   const store = open(join(dir, "ember.db"), join(dir, "archive"));
   session(store, "a");
-  const thread = store.openThread("ember", "EMBER", "1.1", null, null);
+  const thread = store.openThread("ember", "CHAT", "1.1", null, null);
   store.joinThread(thread.id, "a", "ember");
   store.setSessionModel("a", "gpt-6-sol", "high");
   say(store, thread.id, "1.2", "agent", "a", "first");
   store.setSessionModel("a", "gpt-6-astra", "medium");
   say(store, thread.id, "1.3", "agent", "a", "second");
-  store.editMessage("ember", "EMBER", "1.1", "1.2", "edited");
+  store.editMessage("ember", "CHAT", "1.1", "1.2", "edited");
   const check = () => {
     const messages = store.messagesBefore(thread.id, null, 10);
     assert.equal(messages[0]!.agentIdentity.model, "gpt-6-sol");
@@ -1069,7 +1069,7 @@ test("an existing client view gains model identity even after a partial upgrade"
 
 test("canonical and legacy system authors are read as the same kind", () => {
   const store = memory();
-  const thread = store.openThread("ember", "EMBER", "1.1", null, null);
+  const thread = store.openThread("ember", "CHAT", "1.1", null, null);
   store.db.exec(`INSERT INTO entries (thread, n, kind, ts, author_kind, author, text, at) VALUES (${thread.id}, 1, 'message', '1.1', 'stillfail', 'stillfail', 'x', 1)`);
   say(store, thread.id, "1.2", "ember", "ember", "y");
   assert.deepEqual(store.entriesAfter(thread.id, 0).map((e) => e.authorKind), ["ember", "ember"]);
@@ -1082,7 +1082,7 @@ test("canonical and legacy system authors are read as the same kind", () => {
 test("an options card is kept as options too, and a choice that closes it ends the need", () => {
   const store = memory();
   session(store, "a");
-  const thread = store.openThread("ember", "EMBER", "1.1", null, null);
+  const thread = store.openThread("ember", "CHAT", "1.1", null, null);
   store.joinThread(thread.id, "a", "ember");
   const card = { type: "options", options: [{ label: "合并", action: "close" }, { label: "再看" }] };
   store.startTurnFor("t1", "a", "input", { profile: "cc", person: "local", thread: thread.id });
@@ -1095,7 +1095,7 @@ test("an options card is kept as options too, and a choice that closes it ends t
   assert.deepEqual(store.entriesBetween(thread.id, m, m)[0]!.card, { type: "options", options: [{ label: "x" }] });
   assert.equal(store.closeCard("local", thread.id, n, "合并"), false, "not the latest card");
   // Back to one card: a fresh thread.
-  const t2 = store.openThread("ember", "EMBER", "2.1", null, null);
+  const t2 = store.openThread("ember", "CHAT", "2.1", null, null);
   store.joinThread(t2.id, "a", "ember");
   const [k] = store.insertMessage({ ...newMessage(t2.id, "2.2", "agent", "a", "合并吗？"), card });
   assert.equal(store.closeCard("local", t2.id, k, "合并"), false, "the agent is still composing (its turn runs)");
@@ -1121,7 +1121,7 @@ test("the cards answered lately of some threads alone are those the whole statio
   session(store, "a");
   const card = { type: "options", options: [{ label: "x" }] };
   const threads = ["1", "2"].map((ts) => {
-    const t = store.openThread("ember", "EMBER", `${ts}.0`, null, null);
+    const t = store.openThread("ember", "CHAT", `${ts}.0`, null, null);
     store.joinThread(t.id, "a", "ember");
     store.insertMessage({ ...newMessage(t.id, `${ts}.1`, "agent", "a", "?"), card });
     say(store, t.id, `${ts}.2`, "person", "me@x", "x");
@@ -1137,7 +1137,7 @@ test("the cards answered lately of some threads alone are those the whole statio
 test("an agent withdraws its own card only", () => {
   const store = memory();
   session(store, "a");
-  const thread = store.openThread("ember", "EMBER", "1.1", null, null);
+  const thread = store.openThread("ember", "CHAT", "1.1", null, null);
   const [n] = store.insertMessage({ ...newMessage(thread.id, "1.2", "agent", "a", "?"), card: { type: "text" } });
   assert.equal(store.withdrawCard("b", thread.id, "1.2"), false);
   assert.equal(store.withdrawCard("a", thread.id, "1.2"), true);
@@ -1182,7 +1182,7 @@ test("a card stops waiting as a person writes, a newer card comes, its agent wit
 test("an agent restates its card on its post: an edit with the same words and the new card, its latest the base of the next", () => {
   const store = memory();
   session(store, "a");
-  const thread = store.openThread("ember", "EMBER", "1.1", null, null);
+  const thread = store.openThread("ember", "CHAT", "1.1", null, null);
   const card = { type: "options", options: [{ label: "仅本次" }], vault: { request: "r_1", name: "GitHub" } };
   const [n] = store.insertMessage({ ...newMessage(thread.id, "1.2", "agent", "a", "申请使用「GitHub」"), card });
   assert.equal(store.restateCard("b", thread.id, "1.2", (c) => c), false, "not another's");
@@ -1229,7 +1229,7 @@ test("bindings tell both sessions; delivered can be taken back", () => {
   assert.deepEqual(h.changes, [{ type: "session", key: "b" }, { type: "session", key: "a" }, { type: "session", key: "b" }]);
   assert.deepEqual([...store.listBindings()], [["a", ["team"]]]);
   h.stop();
-  const thread = store.openThread("ember", "EMBER", "1.1", null, null);
+  const thread = store.openThread("ember", "CHAT", "1.1", null, null);
   store.joinThread(thread.id, "a", "ember");
   const [n] = say(store, thread.id, "1.2", "person", "local", "hi");
   store.deliver(thread.id, n, ["a"]);
@@ -1337,14 +1337,14 @@ test("the card each chat waits on is kept as it is posted, answered and closed; 
   const path = join(tempdir(), "s.db");
   const before = Store.open(path, null);
   session(before, "a");
-  const old = before.openThread("ember", "EMBER", "old", null, null).id;
+  const old = before.openThread("ember", "CHAT", "old", null, null).id;
   before.insertMessage({ ...newMessage(old, "1.1", "agent", "a", "选一个"), card: { type: "options", options: [{ label: "好" }] } } as any);
   // As a database from before the cards were kept: made again on what is there.
   before.db.exec("DROP TABLE pending_cards; DROP TABLE pending_cards_from; DROP TRIGGER IF EXISTS pending_cards_post; DROP TRIGGER IF EXISTS pending_cards_answered; DROP TRIGGER IF EXISTS pending_cards_closed; DROP TRIGGER IF EXISTS pending_cards_gone");
   before.close();
   const store = open(path);
   const r = read.makeStore(store.db, tempdir());
-  const chat = store.openThread("ember", "EMBER", "new", null, null).id;
+  const chat = store.openThread("ember", "CHAT", "new", null, null).id;
   const card = { ...newMessage(chat, "2.1", "agent", "a", "选一个"), card: { type: "options", options: [{ label: "好" }] } } as any;
   const [n] = store.insertMessage(card);
   let kept = read.pendingCards(r, [old, chat])!;
@@ -1949,13 +1949,13 @@ test("a session's usage as its summary says it: kept as told, a change told as t
 test("a session's starter: whom its chat was started for, before anyone wrote in it (a chat an agent opened)", () => {
   const store = memory();
   store.insertSession({ key: "opened", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/opened", token: "opened", createdAt: 1, lastActiveAt: 1, createdBy: "Pat@Example.com" });
-  const thread = store.openThread("ember", "EMBER", "3.1", null, "Pat@Example.com");
+  const thread = store.openThread("ember", "CHAT", "3.1", null, "Pat@Example.com");
   store.joinThread(thread.id, "opened", "ember");
   say(store, thread.id, "3.2", "agent", "opened", "开始");
   assert.equal(store.starter("opened"), "pat@example.com", "started for Pat, though only its agent has written");
   // A session of before createdBy was kept: the first person who wrote in it.
   session(store, "older");
-  const older = store.openThread("ember", "EMBER", "4.1", null, null);
+  const older = store.openThread("ember", "CHAT", "4.1", null, null);
   store.joinThread(older.id, "older", "ember");
   say(store, older.id, "4.2", "person", "Bob@x.com", "hi");
   assert.equal(store.starter("older"), "bob@x.com");

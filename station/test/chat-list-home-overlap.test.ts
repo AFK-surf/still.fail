@@ -21,11 +21,11 @@ for (const recursive of [false, true]) test(`home and workspace overlap is count
     for (const [key, ws] of [["one", "home"], ["two", "elsewhere"]] as const)
       store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
         token: key, createdAt: 1, lastActiveAt: 1, ws });
-    const shared = store.openThread("ember", "EMBER", "shared", "Shared", null).id;
+    const shared = store.openThread("ember", "CHAT", "shared", "Shared", null).id;
     for (const member of ["one", "two", "missing"]) store.joinThread(shared, member, "ember");
-    const named = store.openThread("ember", "EMBER", "named", "Named", null).id;
+    const named = store.openThread("ember", "CHAT", "named", "Named", null).id;
     db.prepare("UPDATE threads SET home = 'one' WHERE id = ?").run(named);
-    store.openThread("ember", "EMBER", "orphan", "Orphan", null);
+    store.openThread("ember", "CHAT", "orphan", "Orphan", null);
     installRecentHomeIndex(db);
     for (const ws of ["home", "elsewhere"]) {
       trackRecentScope(db, { kind: "workspace", workspace: ws });
@@ -84,7 +84,7 @@ test("a home union reads its rows and overlap count on one snapshot", () => {
   try {
     store.insertSession({ key: "one", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
       token: "one", createdAt: 1, lastActiveAt: 1, ws: "home" });
-    const old = store.openThread("ember", "EMBER", "old", "Old", null).id;
+    const old = store.openThread("ember", "CHAT", "old", "Old", null).id;
     store.joinThread(old, "one", "ember");
     store.joinThread(old, "missing", "ember");
     installRecentHomeIndex(db);
@@ -109,7 +109,7 @@ test("a home union reads its rows and overlap count on one snapshot", () => {
               if (member === "get") return (...args: Parameters<typeof row.get>) => {
                 const result = row.get(...args);
                 if (added === null) {
-                  added = store.openThread("ember", "EMBER", "added", "Added", null).id;
+                  added = store.openThread("ember", "CHAT", "added", "Added", null).id;
                   store.joinThread(added, "one", "ember");
                   store.joinThread(added, "missing", "ember");
                   db.prepare("UPDATE threads SET created_at = ? WHERE id = ?").run(9_999_999_999_999, added);
@@ -148,7 +148,7 @@ for (const recursive of [false, true]) test(`home overlap survives new scopes an
   const store = Store.open(":memory:"), db = store.db;
   try {
     db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
-    const shared = store.openThread("ember", "EMBER", "shared-many", "Shared", null).id;
+    const shared = store.openThread("ember", "CHAT", "shared-many", "Shared", null).id;
     const workspaces = Array.from({ length: 8 }, (_, i) => `w0${i}`);
     for (const ws of [...workspaces, "000-new"]) {
       store.insertSession({ key: ws, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",

@@ -36,9 +36,9 @@ function world() {
       starter: () => "pat@example.com",
       latestThread: () => {
         latestReads++;
-        return hasChats ? ({ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } }) as any : null;
+        return hasChats ? ({ connect: "c", thread: { id: 1, channel: "CHAT", threadTs: "1.0", surface: STILLFAIL_SURFACE } }) as any : null;
       },
-      sessionThreadById: () => originalJoined ? ({ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } }) as any : null,
+      sessionThreadById: () => originalJoined ? ({ connect: "c", thread: { id: 1, channel: "CHAT", threadTs: "1.0", surface: STILLFAIL_SURFACE } }) as any : null,
       insertMessage: (m: any) => {
         cards.push({ ts: m.ts, card: m.card });
         hidden = false;

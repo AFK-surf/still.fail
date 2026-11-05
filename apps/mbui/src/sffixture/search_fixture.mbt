@@ -182,7 +182,7 @@ pub fn fixture_search(f : Fixture, params : Map[String, Json]) -> Json? {
 /// A chat of SearchResultsTest's: on willow or on mac, active `minutes` ago.
 pub fn login_chat(id : String, title : String, minutes : Int, station? : String = "ws1/st1", name? : String = "willow") -> Json {
   row(id, title, station, "\{minutes} 分钟前", {
-    "session": Json::string("ember:" + id),
+    "session": Json::string("chat:" + id),
     "stationName": Json::string(name),
     "stationIcon": "",
     "agents": [agent("anthropic", "claude")],

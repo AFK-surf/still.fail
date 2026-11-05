@@ -21,6 +21,7 @@ import { facts } from "../accounts/catalog.ts";
 import { log } from "../ops/log.ts";
 import type { ContextCall } from "../store/usage.ts";
 import { key as modelKey } from "../../../client/core-ts/src/shapes/model.ts";
+import { STILLFAIL_CONNECT } from "../store/rows.ts";
 
 // ── prices (usage.rs) ──
 
@@ -433,6 +434,6 @@ export function resourceChats(s: Store, sessions: string[], viewer: InWorkspace 
 
 /// The connect a Slack thread came in through: the first of its sessions' that is not the station's own.
 function threadConnect(s: Store, thread: number): string | null {
-  const row = s.db.prepare("SELECT connect FROM thread_sessions WHERE thread = ? AND connect != 'ember' ORDER BY joined_at, rowid LIMIT 1").get(thread) as { connect: string } | undefined;
+  const row = s.db.prepare(`SELECT connect FROM thread_sessions WHERE thread = ? AND connect != '${STILLFAIL_CONNECT}' ORDER BY joined_at, rowid LIMIT 1`).get(thread) as { connect: string } | undefined;
   return row?.connect ?? null;
 }

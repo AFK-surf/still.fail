@@ -6,7 +6,7 @@ import { SESSION_HOME_THREAD, Store } from "../src/store/store.ts";
 test("finding a session's own conversation does not traverse its other memberships", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const own = store.openThreadOf("ember", "EMBER", "own", null, null, "s");
+    const own = store.openThreadOf("ember", "CHAT", "own", null, null, "s");
     store.joinThread(own.id, "s", "ember");
     const add = (from: number, to: number) => {
       db.exec("BEGIN");
@@ -55,9 +55,9 @@ test("finding a session's own conversation does not traverse its other membershi
 test("an owned conversation must be joined and keeps the most recent membership order", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const one = store.openThreadOf("ember", "EMBER", "one", null, null, "s");
-    const two = store.openThreadOf("ember", "EMBER", "two", null, null, "s");
-    const absent = store.openThreadOf("ember", "EMBER", "absent", null, null, "s");
+    const one = store.openThreadOf("ember", "CHAT", "one", null, null, "s");
+    const two = store.openThreadOf("ember", "CHAT", "two", null, null, "s");
+    const absent = store.openThreadOf("ember", "CHAT", "absent", null, null, "s");
     const other = store.openThread("slack", "C", "other", null, null);
     store.joinThread(one.id, "s", "first");
     store.joinThread(two.id, "s", "second");

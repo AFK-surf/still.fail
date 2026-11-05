@@ -17,7 +17,7 @@ test("workspace contributions keep the original ordering and count once per shar
     }
     const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',?)");
     const make = (name: string, home: string | null, members: string[], created: number, at: number | null) => {
-      const id = store.openThread("ember", "EMBER", name, name, null).id;
+      const id = store.openThread("ember", "CHAT", name, name, null).id;
       db.prepare("UPDATE threads SET home = ?, created_at = ? WHERE id = ?").run(home, created, id);
       for (const member of members) store.joinThread(id, member, "ember");
       if (at !== null) put.run(id, at);
@@ -70,7 +70,7 @@ for (const recursive of [false, true]) test(`a new membership cannot leave a rea
     db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
     store.insertSession({ key: "one", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
       token: "one", createdAt: 1, lastActiveAt: 1, ws: "here" });
-    const id = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
+    const id = store.openThread("ember", "CHAT", "chat", "Chat", null).id;
     installRecentScopeJournal(db);
     trackRecentScope(db, { kind: "workspace", workspace: "here" });
     while (!scanRecentWorkspaceStep(db, "here", 2).sourceDone) { /* Prepare before the membership arrives. */ }
@@ -97,8 +97,8 @@ for (const recursive of [false, true]) for (const how of ["insert", "update"] as
       db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
       for (const key of ["one", "two"]) store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc",
         workspace: "/work", token: key, createdAt: 1, lastActiveAt: 1, ws: "here" });
-      const first = store.openThread("ember", "EMBER", "first", "First", null).id;
-      const second = store.openThread("ember", "EMBER", "second", "Second", null).id;
+      const first = store.openThread("ember", "CHAT", "first", "First", null).id;
+      const second = store.openThread("ember", "CHAT", "second", "Second", null).id;
       store.joinThread(first, "one", "ember");
       store.joinThread(second, "two", "ember");
       const rowid = db.prepare("SELECT rowid FROM thread_sessions WHERE thread = ? AND session = 'one'").get(first)!.rowid as number;
@@ -127,7 +127,7 @@ for (const recursive of [false, true]) test(`a changed message cannot leave its 
     db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
     store.insertSession({ key: "one", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
       token: "one", createdAt: 1, lastActiveAt: 1, ws: "here" });
-    const id = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
+    const id = store.openThread("ember", "CHAT", "chat", "Chat", null).id;
     db.prepare("UPDATE threads SET home = 'one' WHERE id = ?").run(id);
     db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',1)").run(id);
     installRecentScopeJournal(db);

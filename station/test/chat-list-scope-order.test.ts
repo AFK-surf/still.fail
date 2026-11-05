@@ -15,8 +15,8 @@ import { Store } from "../src/store/store.ts";
 test("a frequently updated shared chat does not starve another shared chat's ordering", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const hot = store.openThread("ember", "EMBER", "hot-dispatch", "Hot", null).id;
-    const other = store.openThread("ember", "EMBER", "other-dispatch", "Other", null).id;
+    const hot = store.openThread("ember", "CHAT", "hot-dispatch", "Hot", null).id;
+    const other = store.openThread("ember", "CHAT", "other-dispatch", "Other", null).id;
     const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',1)");
     put.run(hot); put.run(other);
     const workspaces: [string, number][] = [];
@@ -87,7 +87,7 @@ for (const recursive of [false, true]) test(`a changed message updates only its 
         token: key, createdAt: 1, lastActiveAt: 1, ws });
     const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',?)");
     const make = (name: string, home: string, at: number) => {
-      const id = store.openThread("ember", "EMBER", name, name, null).id;
+      const id = store.openThread("ember", "CHAT", name, name, null).id;
       db.prepare("UPDATE threads SET home = ? WHERE id = ?").run(home, id);
       put.run(id, at);
       return id;
@@ -117,7 +117,7 @@ test("many unrelated undistributed chats do not block a small workspace", () => 
   try {
     store.insertSession({ key: "one", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
       token: "one", createdAt: 1, lastActiveAt: 1, ws: "here" });
-    const thread = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
+    const thread = store.openThread("ember", "CHAT", "chat", "Chat", null).id;
     db.prepare("UPDATE threads SET home = 'one' WHERE id = ?").run(thread);
     installRecentScopeJournal(db);
     trackRecentScope(db, { kind: "workspace", workspace: "here" });
@@ -146,7 +146,7 @@ test("a large workspace waits instead of scanning its rows against a large dispa
   try {
     store.insertSession({ key: "one", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
       token: "one", createdAt: 1, lastActiveAt: 1, ws: "here" });
-    for (let i = 0; i < 65; i++) store.openThreadOf("ember", "EMBER", `large-workspace-${i}`, "Chat", null, "one");
+    for (let i = 0; i < 65; i++) store.openThreadOf("ember", "CHAT", `large-workspace-${i}`, "Chat", null, "one");
     installRecentScopeJournal(db);
     trackRecentScope(db, { kind: "workspace", workspace: "here" });
     while (!scanRecentWorkspaceStep(db, "here", 16).sourceDone) { /* Prepare this workspace. */ }
@@ -164,7 +164,7 @@ for (const recursive of [false, true]) test(`a shared chat's changing order is d
   const db = store.db;
   try {
     db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
-    const thread = store.openThread("ember", "EMBER", "shared", "Shared", null).id;
+    const thread = store.openThread("ember", "CHAT", "shared", "Shared", null).id;
     db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',1)").run(thread);
     const workspaces = Array.from({ length: 70 }, (_, i) => `w${String(i).padStart(3, "0")}`);
     for (const ws of [...workspaces, "000-new"]) {
@@ -174,7 +174,7 @@ for (const recursive of [false, true]) test(`a shared chat's changing order is d
     }
     store.insertSession({ key: "unrelated", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
       token: "unrelated", createdAt: 1, lastActiveAt: 1, ws: "unrelated" });
-    const unrelated = store.openThread("ember", "EMBER", "unrelated", "Unrelated", null).id;
+    const unrelated = store.openThread("ember", "CHAT", "unrelated", "Unrelated", null).id;
     db.prepare("UPDATE threads SET home = 'unrelated' WHERE id = ?").run(unrelated);
     installRecentScopeJournal(db);
     for (const ws of workspaces) {
@@ -224,7 +224,7 @@ test("a deleted shared chat removes its workspace sources in bounded steps", () 
   const store = Store.open(":memory:");
   const db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "shared", "Shared", null).id;
+    const thread = store.openThread("ember", "CHAT", "shared", "Shared", null).id;
     for (let i = 0; i < 7; i++) {
       const key = `session-${i}`;
       store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",

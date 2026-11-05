@@ -7,19 +7,20 @@ import { join } from "node:path";
 import { liveClock } from "../ops/fibers.ts";
 import type { Attachment } from "../store/store.ts";
 import type { ChatSurface, ThreadRef } from "./chat.ts";
+import { STILLFAIL_CONNECT } from "../store/rows.ts";
 
 /// The connect id the station's own chat goes by, as its rows store it (named as before the rename, like the threads'
 /// surface, store/rows.ts STILLFAIL_SURFACE: the stations' data has it). Not configurable; never in config.json.
-export const INTERNAL_CONNECT = "ember";
+export const INTERNAL_CONNECT = STILLFAIL_CONNECT;
 /// The channel its chats are made in, their address `CHAT/<ts>`; chats made before the rename are in EMBER and keep
 /// their address.
 export const INTERNAL_CHANNEL = "CHAT";
 const FORMER_CHANNEL = "EMBER";
 /// Whether a channel is the station's own chats'.
 export const isInternalChannel = (channel: string) => channel === INTERNAL_CHANNEL || channel === FORMER_CHANNEL;
-/// What the keys of sessions made for its chats begin with (`chat:c-…`); those made before the rename, `ember:c-…`.
+/// What the keys of sessions made for its chats begin with (`chat:c-…`); those made before the rename, `chat:c-…`.
 export const CHAT_KEY = "chat";
-const FORMER_CHAT_KEY = "ember";
+const FORMER_CHAT_KEY = STILLFAIL_CONNECT;
 /// A chat's session key, from its id (`c-…`): the one already made with `made` (true: it is the station's), else a
 /// new one.
 export const chatKey = (id: string, made: (key: string) => boolean = () => false) =>

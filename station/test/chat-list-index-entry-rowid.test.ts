@@ -18,10 +18,10 @@ for (const recursive of [false, true]) for (const how of ["insert", "insert nega
       db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
       store.insertSession({ key: "one", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
         token: "one", createdAt: 1, lastActiveAt: 1, ws: "here" });
-      const victim = store.openThread("ember", "EMBER", "victim", "Victim", null).id;
+      const victim = store.openThread("ember", "CHAT", "victim", "Victim", null).id;
       store.joinThread(victim, "one", "ember");
       store.joinThread(victim, "missing", "ember");
-      const other = store.openThreadOf("ember", "EMBER", "other", "Other", null, "one").id;
+      const other = store.openThreadOf("ember", "CHAT", "other", "Other", null, "one").id;
       db.prepare("UPDATE threads SET created_at = 0 WHERE id IN (?, ?)").run(victim, other);
       const message = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',?)");
       message.run(victim, 100); message.run(other, 50);

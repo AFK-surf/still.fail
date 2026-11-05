@@ -583,7 +583,7 @@
   "web-mobile.workspace.removeMember": "移出 workspace",
   "web-mobile.workspace.removeMemberAction": "移出",
   "web-mobile.workspace.removeMemberAsk": "将 {email} 移出「{name}」？",
-  "web-mobile.workspace.removeMemberText": "对方将无法访问此 workspace 中的 station，以后可以重新邀请。",
+  "web-mobile.workspace.removeMstationText": "对方将无法访问此 workspace 中的 station，以后可以重新邀请。",
   "web-mobile.workspace.removed": "已移除",
   "web-mobile.workspace.renameTitle": "Workspace 名称",
   "web-mobile.workspace.renamed": "已重命名",

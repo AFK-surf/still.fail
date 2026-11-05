@@ -10,7 +10,7 @@ test("auto-archiving reads marks for its visible candidates, not old chats", asy
   try {
     r.store.insertSession({ key: "live", connect: "ember", runtime: "claude", profile: "cc",
       workspace: "/w/live", token: "live", createdAt: 1, lastActiveAt: 1 });
-    const own = r.store.openThread("ember", "EMBER", "own", null, null).id;
+    const own = r.store.openThread("ember", "CHAT", "own", null, null).id;
     const pin = db.prepare("INSERT INTO pins(viewer,session,at) VALUES (?,?,1)");
     const keep = db.prepare("INSERT INTO kept_chats(viewer,thread) VALUES (?,?)");
     db.exec("BEGIN");

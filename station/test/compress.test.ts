@@ -30,7 +30,7 @@ test("a whole JSON answer is compressed for a client that asks so, and only then
 });
 
 test("several reads in one are compressed harder: nobody waits on them", async () => {
-  const pages = Array.from({ length: 40 }, (_, p) => ({ status: 200, body: { last: 50, entries: Array.from({ length: 50 }, (_, i) => ({ n: i + 1, thread: p, kind: "message", authorKind: i % 2 ? "agent" : "person", author: i % 2 ? "ember:c-00be6a2584" : "a@x.com", text: `第 ${p}.${i} 条：${"部署 station 之后看日志 ".repeat(1 + ((p * 7 + i) % 5))}${(p * 131 + i * 17) % 997}`, attachments: [], quotes: [], at: 1791478600000 + p * 1000 + i })) } }));
+  const pages = Array.from({ length: 40 }, (_, p) => ({ status: 200, body: { last: 50, entries: Array.from({ length: 50 }, (_, i) => ({ n: i + 1, thread: p, kind: "message", authorKind: i % 2 ? "agent" : "person", author: i % 2 ? "chat:c-00be6a2584" : "a@x.com", text: `第 ${p}.${i} 条：${"部署 station 之后看日志 ".repeat(1 + ((p * 7 + i) % 5))}${(p * 131 + i * 17) % 997}`, attachments: [], quotes: [], at: 1791478600000 + p * 1000 + i })) } }));
   const answer = json({ answers: pages });
   const batch = await compressed(answer, asks, "/batch");
   const one = await compressed(answer, asks, "/threads/1/entries");
@@ -40,7 +40,7 @@ test("several reads in one are compressed harder: nobody waits on them", async (
 
 test("an event stream is compressed event by event, each whole as it arrives, and let go of at once", async () => {
   const events = [
-    ...Array.from({ length: 50 }, (_, i) => `id: 1f2e3d4c.${i}\nevent: session\ndata: ${JSON.stringify({ key: `ember:c-${i % 5}`, turns: i, process: "warm" })}\n\n`),
+    ...Array.from({ length: 50 }, (_, i) => `id: 1f2e3d4c.${i}\nevent: session\ndata: ${JSON.stringify({ key: `chat:c-${i % 5}`, turns: i, process: "warm" })}\n\n`),
     // One far bigger than what a stream holds back unread.
     `event: live\ndata: ${JSON.stringify({ entries: Array.from({ length: 4000 }, (_, i) => ({ kind: "tool_call", text: `step ${i} ${"x".repeat(200)}` })) })}\n\n`,
     "event: session\ndata: {}\n\n",

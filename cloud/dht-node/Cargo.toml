@@ -1,0 +1,15 @@
+[package]
+name = "stillfail-dht-node"
+edition = "2024"
+version = "0.1.0"
+publish = false
+description = "A Mainline DHT node on still.fail's relays' machines, for stations and apps to start their DHT from"
+
+[dependencies]
+n0-mainline = "=0.6.0"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+
+[workspace]
+
+[profile.release]
+strip = true

@@ -9,7 +9,7 @@ for (const side of ["station", "reader"] as const) {
   test(`${side} finds a page of messages without traversing their later edits`, () => {
     const store = Store.open(":memory:"), db = store.db;
     try {
-      const thread = store.openThread("ember", "EMBER", "message-page", null, null).id;
+      const thread = store.openThread("ember", "CHAT", "message-page", null, null).id;
       const put = db.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,text,at)
         VALUES(?,?,?,?, 'person','viewer',?,?)`);
       for (let n = 1; n <= 3; n++) put.run(thread, n, "message", null, `message-${n}`, n);
@@ -39,8 +39,8 @@ for (const side of ["station", "reader"] as const) {
 test("message pages keep the original boundaries, order, letters and latest edits", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "message-page", null, null).id;
-    const other = store.openThread("ember", "EMBER", "other", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "message-page", null, null).id;
+    const other = store.openThread("ember", "CHAT", "other", null, null).id;
     const reader = makeStore(db, "/no-station-config");
     const insert = db.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,text,at,letter)
       VALUES(?,?,?,?, 'person','viewer',?,?,?)`);
@@ -83,8 +83,8 @@ test("message pages seek both message indexes and fetch only their candidates", 
 test("message pages take only a page from the two ordered message indexes", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const short = store.openThread("ember", "EMBER", "short-page", null, null).id;
-    const long = store.openThread("ember", "EMBER", "long-page", null, null).id;
+    const short = store.openThread("ember", "CHAT", "short-page", null, null).id;
+    const long = store.openThread("ember", "CHAT", "long-page", null, null).id;
     const insert = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,text,at,letter)
       VALUES(?,?,'message','person','viewer','words',?,?)`);
     const letter = JSON.stringify({ way: "in", title: "old", link: null });

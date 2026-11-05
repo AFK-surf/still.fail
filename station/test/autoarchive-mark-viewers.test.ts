@@ -9,7 +9,7 @@ test("automatic archive does not read marks belonging only to other viewers' cha
   try {
     r.store.insertSession({ key: "mine", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/mine",
       token: "mine", createdAt: 1, lastActiveAt: 1 });
-    const own = r.store.openThread("ember", "EMBER", "own", null, null).id;
+    const own = r.store.openThread("ember", "CHAT", "own", null, null).id;
     const pin = db.prepare("INSERT INTO pins(viewer,session,at) VALUES (?,?,1)");
     const keep = db.prepare("INSERT INTO kept_chats(viewer,thread) VALUES (?,?)");
     const add = (from: number, to: number) => {

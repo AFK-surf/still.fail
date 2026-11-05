@@ -688,7 +688,7 @@ test("a chat archived closes the tabs it opened, and only those", async () => {
 });
 
 test("a session's address of the browser: its key, and nothing else", () => {
-  for (const key of ["EMBER/1792746112.235000", "slack:C1/1.2", "中文"]) assert.equal(sessionOfPath(sessionPath(key)), key);
+  for (const key of ["CHAT/1792746112.235000", "slack:C1/1.2", "中文"]) assert.equal(sessionOfPath(sessionPath(key)), key);
   assert.equal(sessionOfPath(`${sessionPath("k")}/`), "k");
   assert.equal(sessionOfPath("/browser/"), null);
   assert.equal(sessionOfPath("/browser/a+b"), null);
@@ -716,7 +716,7 @@ test("a session's connection through the door reaches the browser through its ch
   };
   const route = browserDoor(browser);
   const door = await openAgentsDoor({ port: 0 }, new McpEndpoint(() => undefined, []), () => ({ status: 404, body: {} }), () => null, () => [route]);
-  const at = `ws://127.0.0.1:${door.port}${sessionPath("EMBER/1.2")}`;
+  const at = `ws://127.0.0.1:${door.port}${sessionPath("CHAT/1.2")}`;
   const client = new WebSocket(at);
   await new Promise<void>((r, j) => (client.once("open", () => r()), client.once("error", j)));
   const answers: any[] = [];
@@ -728,7 +728,7 @@ test("a session's connection through the door reaches the browser through its ch
   client.send(JSON.stringify({ id: 2, method: "Target.createTarget", params: { url: "about:blank" } }));
   await answered(2);
   assert.deepEqual(answers[0], { id: 1, result: { echo: { a: 1 } } });
-  assert.deepEqual(asked, ["EMBER/1.2"], "the session's own chat's context");
+  assert.deepEqual(asked, ["CHAT/1.2"], "the session's own chat's context");
   assert.deepEqual(opened, ["T2"]);
   // Opened in the chat's context, in a window of its own behind the others, the rest of what was asked as it was.
   assert.deepEqual(creates, [{ id: 2, method: "Target.createTarget", params: { url: "about:blank", browserContextId: "C1", newWindow: true, background: true } }]);
@@ -746,7 +746,7 @@ test("a session's connection through the door reaches the browser through its ch
   const refused = await new Promise<number>((r) => page.once("unexpected-response", (_req, res) => r(res.statusCode!)));
   assert.equal(refused, 403);
   // Not a WebSocket: what to do with the address.
-  assert.equal((await fetch(`http://127.0.0.1:${door.port}${sessionPath("EMBER/1.2")}`)).status, 400);
+  assert.equal((await fetch(`http://127.0.0.1:${door.port}${sessionPath("CHAT/1.2")}`)).status, 400);
 
   client.close();
   await door.close(0);
@@ -758,8 +758,8 @@ test("the browser tool gives each session its own address on the door, never Chr
   const { clock: c } = clock();
   const b = new Browsers({ later: () => () => {}, dir: scratch(), chrome: chrome.host, clock: c });
   const [tool] = browserTools(b, () => "http://127.0.0.1:4750/mcp");
-  const said = await tool!.run("EMBER/1.2", {});
-  const ws = `ws://127.0.0.1:4750${sessionPath("EMBER/1.2")}`;
+  const said = await tool!.run("CHAT/1.2", {});
+  const ws = `ws://127.0.0.1:4750${sessionPath("CHAT/1.2")}`;
   assert.ok(said.includes(`--wsEndpoint ${ws}`), said);
   assert.ok(said.includes(`connectOverCDP("${ws}")`), said);
   assert.ok(!said.includes("9300"), "Chrome's own port is not given");

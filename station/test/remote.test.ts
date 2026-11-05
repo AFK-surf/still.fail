@@ -332,10 +332,10 @@ describe("remote", { concurrency: true }, () => {
     const got: [string, Json][] = [];
     r.remote.setInbox(async (peer, request) => {
       got.push([peer, request]);
-      return { thread: "EMBER/1.1" };
+      return { thread: "CHAT/1.1" };
     });
     const answer = await call(r, "peer-c", "session.message", { to: "k", text: "hi" });
-    assert.equal(answer.thread, "EMBER/1.1");
+    assert.equal(answer.thread, "CHAT/1.1");
     const [peer, request] = got.pop()!;
     assert.deepEqual([peer, request.to, request.text], ["peer-c", "k", "hi"]);
     for (const method of ["session.file", "session.put"]) {

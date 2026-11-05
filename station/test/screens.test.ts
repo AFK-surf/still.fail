@@ -1779,12 +1779,12 @@ test("reveal: a file shown in the file manager by a view that drives a source th
 test("a tab is closed from a person's app (POST /screens/<id>/close) and says which session opened it; the desktop is not closed", async () => {
   const hub = new ScreenHub();
   const closed: string[] = [];
-  const tab = Object.assign(new FakeSource("browser:A"), { openedBy: () => "EMBER/1.2", discard: async () => void closed.push("browser:A") });
+  const tab = Object.assign(new FakeSource("browser:A"), { openedBy: () => "CHAT/1.2", discard: async () => void closed.push("browser:A") });
   hub.add(tab);
   hub.add(new Desktop({ supported: false, helper: null, changed: () => hub.changed(), title: () => "studio" }));
   const [a, d] = hub.listed("en").screens;
   assert.equal(a!.closable, true);
-  assert.equal(a!.openedBy, "EMBER/1.2");
+  assert.equal(a!.openedBy, "CHAT/1.2");
   assert.equal("closable" in d!, false);
   assert.equal("openedBy" in d!, false);
   const admin = new Admin({ names: new Map(), read: async () => "{}" } as any, { screens: hub });

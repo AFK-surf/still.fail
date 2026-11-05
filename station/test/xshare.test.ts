@@ -247,7 +247,7 @@ test("the pages share a chat (its starter or a manager) and say which station to
   const dir = mkdtempSync(join(tmpdir(), "xshare-routes-"));
   const store = Store.open(join(dir, "stillfail.db"), join(dir, "archive"));
   store.insertSession({ key: "s1", connect: "ds", runtime: "claude", profile: "cc", workspace: "/w/s1", token: "t", createdAt: 1, lastActiveAt: 1 });
-  const chat = store.openThreadOf("ember", "EMBER", "1.1", null, "a@x", "s1");
+  const chat = store.openThreadOf("ember", "CHAT", "1.1", null, "a@x", "s1");
   const roster = new Roster(W1, "Team", [{ id: X, name: "studio" }]);
   const xshare = new ChatShares({
     data: dir, store, cloud: roster.cloudFor(X),

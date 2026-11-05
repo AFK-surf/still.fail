@@ -4,12 +4,12 @@ import { partsOf, readMessage, refused, saysNothing } from "../scripts/changelog
 
 test("a commit's lines and fixes come from each paragraph of trailers, not only git's last one", () => {
   // As 4ae91923 and 36 others were written: the trailers git reads are only Co-Authored-By.
-  const above = "Mobile station list: what runs low\n\nWhy, at length.\n\nSession: ember:c-1\nChangelog: 修复：手机上 station 列表写出剩多少\nFixes: FB-12\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n";
+  const above = "Mobile station list: what runs low\n\nWhy, at length.\n\nSession: chat:c-1\nChangelog: 修复：手机上 station 列表写出剩多少\nFixes: FB-12\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n";
   assert.deepEqual(readMessage(above), { text: ["修复：手机上 station 列表写出剩多少"], fixes: [12], parts: [] });
-  const last = "Pin chats\n\nChangelog: 新功能：会话可以置顶\nChangelog: 修复：置顶后顺序不变\nFixes: FB-3 FB-4\nSession: ember:c-2\n";
+  const last = "Pin chats\n\nChangelog: 新功能：会话可以置顶\nChangelog: 修复：置顶后顺序不变\nFixes: FB-3 FB-4\nSession: chat:c-2\n";
   assert.deepEqual(readMessage(last), { text: ["新功能：会话可以置顶", "修复：置顶后顺序不变"], fixes: [3, 4], parts: [] });
   // A line folded onto the next, indented.
-  assert.deepEqual(readMessage("Subject\n\nChangelog: 修复：很长的一行\n  接着写\nSession: ember:c-3\n").text, ["修复：很长的一行 接着写"]);
+  assert.deepEqual(readMessage("Subject\n\nChangelog: 修复：很长的一行\n  接着写\nSession: chat:c-3\n").text, ["修复：很长的一行 接着写"]);
 });
 
 test("a squash merge's commits each saying the same line tell it once", () => {
@@ -21,14 +21,14 @@ test("a squash merge's commits each saying the same line tell it once", () => {
 
 test("a subject, or prose that only mentions a trailer, says nothing", () => {
   // 43d5a869's subject.
-  assert.deepEqual(readMessage("Changelog: the stable channel's is written once a release\n\nSession: ember:c-4\n"), { text: [], fixes: [], parts: [] });
+  assert.deepEqual(readMessage("Changelog: the stable channel's is written once a release\n\nSession: chat:c-4\n"), { text: [], fixes: [], parts: [] });
   const prose = "Subject\n\nThe line to write is\nChangelog: 修复：……\nin the trailers.\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n";
   assert.deepEqual(readMessage(prose), { text: [], fixes: [], parts: [] });
 });
 
 test("a Changelog trailer saying there is nothing to tell is refused", () => {
   for (const nothing of ["none", "None.", "n/a", "无", "-"]) {
-    assert.deepEqual(saysNothing(`Subject\n\nSession: ember:c-5\nChangelog: ${nothing}\nFixes: FB-7\n`), [nothing]);
+    assert.deepEqual(saysNothing(`Subject\n\nSession: chat:c-5\nChangelog: ${nothing}\nFixes: FB-7\n`), [nothing]);
   }
   assert.deepEqual(saysNothing("Subject\n\nChangelog: 修复：none 不再出现在更新提示里\n"), []);
 });
@@ -85,9 +85,9 @@ test("a commit's agent says the parts people see it in; one that does not, or na
   // The site's: no release.
   assert.deepEqual(refused("Site: plainly\n\nChangelog: 官网首屏只留一句\nChangelog-parts: none\n"), []);
   // Nothing to tell, nothing to say.
-  assert.deepEqual(refused("Refactor\n\nSession: ember:c-6\n"), []);
+  assert.deepEqual(refused("Refactor\n\nSession: chat:c-6\n"), []);
   const unsaid = (m: string) => refused(m).filter((why) => why.startsWith("no Changelog-parts")).length;
-  assert.equal(unsaid("Subject\n\nChangelog: 修复：……\nSession: ember:c-7\n"), 1);
+  assert.equal(unsaid("Subject\n\nChangelog: 修复：……\nSession: chat:c-7\n"), 1);
   assert.equal(unsaid("Subject\n\nFixes: FB-9\n"), 1);
   assert.equal(refused("Subject\n\nChangelog: 修复：……\nChangelog-parts: mac, desktop\n").length, 1);
   assert.equal(refused("Subject\n\nChangelog: none\nChangelog-parts: web\n").length, 1);

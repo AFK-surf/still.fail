@@ -5,7 +5,7 @@ import { Store } from "../src/store/store.ts";
 function fixture() {
   const store = Store.open(":memory:");
   store.insertSession({ key: "s", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/s", token: "s", createdAt: 1, lastActiveAt: 1 });
-  const thread = (name: string) => store.openThread("ember", "EMBER", name, null, null).id;
+  const thread = (name: string) => store.openThread("ember", "CHAT", name, null, null).id;
   return { store, thread };
 }
 

@@ -6,7 +6,7 @@ test("finding a session's next post does not read unrelated chat history", () =>
   const store = Store.open(":memory:");
   const db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "chat", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "chat", null, null).id;
     const put = db.prepare("INSERT INTO entries (thread, n, kind, author_kind, author, ts, at) VALUES (?, ?, 'message', ?, ?, ?, ?)");
     db.exec("BEGIN");
     for (let n = 1; n <= 5_000; n++) put.run(thread, n, n % 2 ? "person" : "agent", "someone-else", `m${n}`, n);
@@ -61,7 +61,7 @@ for (const recursive of [false, true]) test(`the indexed lookup agrees with the 
   const db = store.db;
   try {
     db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
-    const threads = ["one", "two"].map((name) => store.openThread("ember", "EMBER", name, null, null).id);
+    const threads = ["one", "two"].map((name) => store.openThread("ember", "CHAT", name, null, null).id);
     const put = db.prepare("INSERT OR REPLACE INTO entries (thread,n,kind,author_kind,author,ts,at) VALUES (?,?,?,?,?,?,?)");
     const remove = db.prepare("DELETE FROM entries WHERE thread=? AND n=?");
     const oracle = db.prepare("SELECT n,ts FROM entries WHERE thread=? AND n>? AND kind='message' AND author_kind='agent' AND author=? ORDER BY n LIMIT 1");

@@ -68,7 +68,7 @@ function world() {
   return { alice, bob, carol, state, vault, item, plain };
 }
 
-const requestOf = (id: string, box: string, o: Partial<Request> = {}): Request => ({ id, ws: WS, vault: VAULT, item: ITEM, session: "s1", chat: "EMBER/1.0", mode: "proxy", reason: "test", box, at: 1000, status: "pending", ...o });
+const requestOf = (id: string, box: string, o: Partial<Request> = {}): Request => ({ id, ws: WS, vault: VAULT, item: ITEM, session: "s1", chat: "CHAT/1.0", mode: "proxy", reason: "test", box, at: 1000, status: "pending", ...o });
 
 function grantOf(r: Request, by: Person, secret: unknown, o: Partial<Grant> = {}): Grant {
   const g = { v: 1 as const, ws: WS, request: r.id, vault: VAULT, item: ITEM, mode: r.mode, hosts: ["api.github.com"], scope: "once" as const, exp: 1500, secret: seal(r.box, Buffer.from(JSON.stringify(secret)), grantContext(WS, r.id)), at: 1000, ...o };
@@ -601,7 +601,7 @@ test("a grant for the chat: offered as far as the item allows, kept across a res
   };
   try {
     // The card offers every scope, the longest recommended; an item that stops at an hour, those up to it.
-    thread = { connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } };
+    thread = { connect: "c", thread: { id: 1, channel: "CHAT", threadTs: "1.0", surface: STILLFAIL_SURFACE } };
     let secrets = make();
     const [, first] = await grant(secrets, "s1", "chat");
     assert.deepEqual(cards[0]!.options.map((o) => [o.label, !!o.recommended]), [["仅本次", false], ["本对话 1 小时内", false], ["本对话直到归档", true], ["拒绝", false]]);
