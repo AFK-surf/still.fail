@@ -10,7 +10,7 @@ import { routes as requestRoutes } from "../api/routes/vault-requests.ts";
 import { wall } from "../ops/fibers.ts";
 import { Browser } from "../browser/service.ts";
 import { Agents } from "../sessions/agents.ts";
-import { sender } from "../sessions/messages.ts";
+import { sender, senderTitleIfReady } from "../sessions/messages.ts";
 import { ControlPlane, Events, Parts, Paths, Previous, Store } from "../services.ts";
 import { vaultTools } from "./tool.ts";
 import { SignIns } from "./signin.ts";
@@ -41,6 +41,7 @@ export const VaultLive = Layer.effectDiscard(
     const secrets = new Secrets({
       db: store.db, vaults, plain: plainStore(store.db), hub, data, home: () => cloud.home(), lock, now: () => wall.now(),
       title: (session) => sender(hub, session)[0] ?? null,
+      titleIfReady: (session) => senderTitleIfReady(hub, session),
       // Commands with a secret on another station of the workspace (docs/vault.md 在另一台 station 上用).
       peer: (given) => {
         if (given === cloud.state?.station || cloud.memberships().some((m) => m.name.toLowerCase() === given.toLowerCase())) return null;
