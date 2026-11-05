@@ -19,9 +19,9 @@ const displaced = `EXISTS (SELECT 1 FROM card_posts p WHERE p.thread=NEW.thread 
   OR EXISTS (SELECT 1 FROM entries e JOIN card_posts p ON p.thread=e.thread AND p.n=e.n WHERE e.rowid=NEW.rowid)
   OR (NEW.ts IS NOT NULL AND EXISTS (SELECT 1 FROM entries e JOIN card_posts p ON p.thread=e.thread AND p.n=e.n
     WHERE e.thread=NEW.thread AND e.ts=NEW.ts))`;
-const needsInsert = `(${candidate} AND EXISTS (SELECT 1 FROM card_post_scopes WHERE thread=NEW.thread))
-  OR (${displaced}) OR EXISTS (SELECT 1 FROM card_post_changed)`;
-const needsUpdate = `(${needsInsert}) OR EXISTS (SELECT 1 FROM card_posts WHERE thread=OLD.thread AND n=OLD.n)`;
+const needsInsert = `(${displaced}) OR EXISTS (SELECT 1 FROM card_post_changed)`;
+const needsUpdate = `(${needsInsert}) OR (${candidate} AND EXISTS (SELECT 1 FROM card_post_scopes WHERE thread=NEW.thread))
+  OR EXISTS (SELECT 1 FROM card_posts WHERE thread=OLD.thread AND n=OLD.n)`;
 const stage = (update: boolean) => `DELETE FROM card_post_changed;
   INSERT INTO card_post_changed(thread,n)
   SELECT k.thread,k.n FROM (SELECT NEW.thread AS thread,NEW.n AS n UNION ${conflicts}
@@ -52,6 +52,14 @@ export function installCardPosts(db: DatabaseSync): void {
       END;
       CREATE TRIGGER card_post_before_insert BEFORE INSERT ON entries WHEN ${needsInsert} BEGIN ${stage(false)} END;
       CREATE TRIGGER card_post_insert AFTER INSERT ON entries WHEN EXISTS (SELECT 1 FROM card_post_changed) BEGIN ${reconcile} END;
+      -- A new post with no displaced indexed row needs no staging. If the reconciliation trigger ran first, it may
+      -- already have inserted this post; the existence check keeps either trigger order correct.
+      CREATE TRIGGER card_post_fast_insert AFTER INSERT ON entries WHEN ${candidate}
+        AND EXISTS (SELECT 1 FROM card_post_scopes WHERE thread=NEW.thread)
+        AND NOT EXISTS (SELECT 1 FROM card_post_changed) BEGIN
+        INSERT INTO card_posts(thread,n) SELECT NEW.thread,NEW.n
+          WHERE NOT EXISTS (SELECT 1 FROM card_posts WHERE thread=NEW.thread AND n=NEW.n);
+      END;
       CREATE TRIGGER card_post_before_update BEFORE UPDATE OF rowid,_rowid_,oid,thread,n,kind,ts,card,options ON entries
       WHEN ${needsUpdate} BEGIN ${stage(true)} END;
       CREATE TRIGGER card_post_update AFTER UPDATE OF rowid,_rowid_,oid,thread,n,kind,ts,card,options ON entries

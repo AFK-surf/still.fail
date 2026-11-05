@@ -26,6 +26,24 @@ test("reconciling a card post seeks its changed entries", () => {
   } finally { store.close(); }
 });
 
+test("a new card post does not stage a conflict", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    installCardPosts(db);
+    const thread = store.openThread("ember", "EMBER", "fast", null, null).id;
+    let staged = 0;
+    db.function("count_card_post_stage", () => { staged++; return 0; });
+    db.exec("CREATE TRIGGER count_card_post_stage AFTER INSERT ON card_post_changed BEGIN SELECT count_card_post_stage(); END");
+    const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at,card) VALUES(?,?,'message','agent','a',?,?)");
+    for (let n = 1; n <= 20; n++) put.run(thread, n, n, textCard);
+    assert.equal(staged, 0);
+    assert.deepEqual(posts(db, thread), original(db, thread));
+    db.prepare("INSERT OR REPLACE INTO entries(thread,n,kind,author_kind,author,at) VALUES(?,1,'message','agent','a',21)").run(thread);
+    assert.ok(staged > 0);
+    assert.deepEqual(posts(db, thread), original(db, thread));
+  } finally { store.close(); }
+});
+
 for (const recursive of [false, true]) {
   test(`card posts follow mixed writes and replacements (recursive triggers ${recursive})`, () => {
     const store = Store.open(":memory:"), db = store.db;
