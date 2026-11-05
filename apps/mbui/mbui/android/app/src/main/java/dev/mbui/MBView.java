@@ -19,7 +19,6 @@ import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
 
 import java.util.ArrayDeque;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -131,15 +130,30 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     @Override
     public void onSurfaceChanged(GL10 gl, int w, int h) {
         // (a new surface, told after it is made, or the same at another size: whatever was said of the rate, nothing said)
-        sayRate(false);
+        pacer.sayRate(false);
         Native.resize(w, h);
     }
 
-    private double lastFrame;
-    // the frame before's vsync (0: none, or it had none), and whether it asked for this one (askAhead: the vsync after
-    // its own, or where its work went past that one, the first after its work)
-    private long lastVsync;
-    private boolean askedAtEnd;
+    /** Which vsync the next frame is drawn for, and the rate the surface says of the display (FramePacer). */
+    private final FramePacer pacer = new FramePacer(new FramePacer.Platform() {
+        @Override public long nanoTime() { return System.nanoTime(); }
+
+        @Override public boolean onMain() { return Looper.myLooper() == Looper.getMainLooper(); }
+
+        @Override public void postMain(Runnable r) { Host.main.post(r); }
+
+        @Override public void postVsync() { postVsync.run(); }
+
+        @Override public void atNextVsyncOnDrawing(Runnable r) {
+            Host.main.post(() -> Choreographer.getInstance().postFrameCallback(t -> queueEvent(r)));
+        }
+
+        @Override public void requestRender() { MBView.this.requestRender(); }
+
+        @Override public boolean setRate(float rate) { return surfaceRate(rate); }
+
+        @Override public boolean typing() { return MBView.typing(); }
+    });
 
     // A picture at a declared moment (Host.shotAt, --ei shot_at MS: scripts/shots.sh android): the run's frames are on
     // a clock of their own, 1/60 s a frame from 0, as a stable run's on macOS (mac_app.m) and the browser's
@@ -207,7 +221,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         // a view not the host's (its activity paused under another of the app's: an OverActivity's draws), kept as it
         // last drew: one thread draws the app at a time
         if (Host.view != this) return;
-        boolean app = appWanted.getAndSet(false), pictured = picturesOnly.getAndSet(false);
+        boolean app = pacer.appWanted.getAndSet(false), pictured = pacer.picturesOnly.getAndSet(false);
         // another view set the drawing up in its own context since this one did (an OverActivity came and went): set
         // up again here, at this view's size
         if (mine != setUp) {
@@ -228,57 +242,25 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         }
         // only a view's picture changed (pictureFrame): the last frame drawn again with it, the app not asked; a frame
         // the app or the system asked for is the app's
-        long[] at = vsyncAt;
+        long[] at = pacer.vsyncAt();
         if (pictured && !app) {
             Native.redraw();
             showAt(at[1]);
             NativeViews.framed(false);
-            askedAtEnd = false;
+            pacer.redrawn();
             return;
         }
         long began = System.nanoTime();
-        // (the frame before asked for this one: the one after it asked for now, before this one's work: askAhead)
-        if (askedAtEnd) askAhead();
-        // the vsync's time; a frame the system asked for (a resize) has none, and time never goes back
-        long v = at[0];
-        double now = v != 0 ? v / 1e6 : began / 1e6;
-        if (now < lastFrame) now = lastFrame;
-        lastFrame = now;
-        // how late the frame before reached the screen (@hostapi.frame_late): the display's frames that passed past the one
-        // after it without a frame, on the vsyncs' grid (its work over the display's frame and drawn on for the vsync it
-        // asked ahead, shown at that vsync's refresh: none passed, it was in time; past that one too, this one's vsync is
-        // the first after its work); 0 where it did not ask for this one (its vsync perhaps one during that work), or
-        // either has no vsync. (Counted from when its work ended, a frame drawn on at once for the vsync asked ahead was
-        // said late by a frame it was not: a page let go as the finger lifts, its slide held a frame and its first step
-        // shown twice.)
-        double late = 0;
-        if (v != 0 && lastVsync != 0 && askedAtEnd) {
-            long frames = Math.round((double) (v - lastVsync) / framePeriod);
-            if (frames > 1) late = (frames - 1) * framePeriod / 1e6;
-        }
-        // drawn at the vsync after the frame before's: the hand moving what it holds, a frame each vsync
-        boolean following = v > lastVsync && lastVsync != 0 && v - lastVsync < framePeriod * 3 / 2;
-        lastVsync = v;
+        FramePacer.Begun b = pacer.begin(at, began);
         // the system's back said before this frame's vsync (back(), below); what was said after it, the next frame's
-        boolean later = takeBacks(v != 0 ? v : began);
+        boolean later = takeBacks(b.vsync != 0 ? b.vsync : began);
         // (what it waits for said again by the frame, if it still does: Host.wakeAfter, from its time)
         wakeFor = -1;
-        buildingFor = now;
-        boolean more = Native.frame(w, h, density, now, late);
+        buildingFor = b.now;
+        boolean more = Native.frame(w, h, density, b.now, b.late);
         buildingFor = -1;
-        showAt(at[1]);
-        askedAtEnd = more || later;
-        drawn++;
-        if (more || later || following) {
-            moved = drawn;
-            sayRate(true);
-        } else if (typing()) {
-            // (typing: what it draws comes as keys are struck, its fingers on the keyboard's window, not on this surface
-            // and nothing of the app's own moving; each key's frame at the display's highest, 2026-11-05)
-            sayRate(true);
-        } else if (rateSaid) stillAfter(moved);
-        if (more || later) wantFrame();
-        else ahead.set(false);
+        showAt(b.shows);
+        pacer.ended(more, later, b.following);
         // (the native views moved in it: their frames follow once they rest)
         NativeViews.framed(more || later);
         Script.frameDrawn();
@@ -309,7 +291,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         hints = null;
         hintTid = tid;
         android.os.PerformanceHintManager pm = getContext().getSystemService(android.os.PerformanceHintManager.class);
-        long target = framePeriod * 7 / 10;
+        long target = pacer.framePeriod * 7 / 10;
         try {
             hints = pm == null ? null : pm.createHintSession(new int[] {tid}, target);
         } catch (RuntimeException e) {
@@ -322,15 +304,9 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     private android.os.PerformanceHintManager.Session hints;
     private int hintTid;
     private long hintTarget;
-    /**
-     * The display's frame (ns), read as the view is shown and as the display changes its rate, and since Android 13 from
-     * each vsync's timelines (main thread).
-     */
-    private volatile long framePeriod = 16_666_667L;
-
-    /** The display's frame, ms. */
+    /** The display's frame, ms (FramePacer's framePeriod). */
     double framePeriodMs() {
-        return framePeriod / 1e6;
+        return pacer.framePeriod / 1e6;
     }
 
     private final android.hardware.display.DisplayManager.DisplayListener displays =
@@ -346,7 +322,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
     private void readFramePeriod() {
         android.view.Display d = getDisplay();
-        if (d != null && d.getRefreshRate() > 1) framePeriod = (long) (1e9 / d.getRefreshRate());
+        if (d != null && d.getRefreshRate() > 1) pacer.framePeriod = (long) (1e9 / d.getRefreshRate());
         if (d == null) return;
         // the highest rate the display shows at the size it has now (another size is another mode, not a rate)
         android.view.Display.Mode m = d.getMode();
@@ -355,78 +331,23 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             if (o.getPhysicalWidth() == m.getPhysicalWidth() && o.getPhysicalHeight() == m.getPhysicalHeight())
                 top = Math.max(top, o.getRefreshRate());
         }
-        topRate = top;
+        pacer.topRate = top;
     }
 
     // ---- the display's rate ----
 
-    /**
-     * The rate this surface's frames want of the display (Surface.setFrameRate), said as the system's own views say
-     * theirs (a list flung, a view moved: Android 15's frame rate categories): the display's highest while the app
-     * draws frame after frame (a motion, the hand moving what it holds), and from a finger going down (as the system's
-     * touch boost: the motion it starts is not where the display goes over to it) until it lifts; nothing once a vsync
-     * passes with none drawn and no finger on the screen. Withdrawn as a single vsync passed with none drawn while a
-     * finger was down, it went down and up again within a gesture, wherever a vsync brought no touch (a finger slowing,
-     * the touches' own rate a little off the display's), and each change of the display's rate can step what moves (OPPO
-     * Find N6, 0.1.5814: scrolling stepped all along, its frames 1.3–2.7 ms).
-     * A surface that says nothing is left at the rate the system picks for it from how often its buffers came: a phone
-     * that does 120 Hz (an OPPO Find N6) kept the display at 60 for the app, every motion with half the frames its
-     * own views' get. Said only while it moves: a rate said keeps the display at it for as long as the surface shows,
-     * still or not.
-     */
-    private volatile float topRate;
-    /** Whether this surface says the display's highest rate now (GL thread; a new surface says nothing). */
-    private boolean rateSaid;
-    /** The app's frames drawn (GL thread): one drawn since a frame that asked for none is told by it. */
-    private int drawn;
-
-    /** The surface says the display's highest rate, or nothing (GL thread). */
-    private void sayRate(boolean on) {
-        if (on == rateSaid || android.os.Build.VERSION.SDK_INT < 30) return;
-        float rate = on ? topRate : 0;
-        if (on && rate <= 0) return;
+    /** The surface says the display's rate {@code rate} (0: nothing), as FramePacer asks (drawing thread). */
+    private boolean surfaceRate(float rate) {
+        if (android.os.Build.VERSION.SDK_INT < 30) return false;
         android.view.Surface s = getHolder().getSurface();
-        if (s == null || !s.isValid()) return;
+        if (s == null || !s.isValid()) return false;
         try {
             s.setFrameRate(rate, android.view.Surface.FRAME_RATE_COMPATIBILITY_DEFAULT);
-            rateSaid = on;
+            return true;
         } catch (RuntimeException e) {
             Host.log("display rate: " + e);
+            return false;
         }
-    }
-
-    /** The last frame drawn that moved something (GL thread): a motion, the hand moving what it holds, one asked after it. */
-    private int moved;
-    /** The motion whose end is being counted down to saying no rate (GL thread; -1 none). */
-    private int stillFrom = -1;
-
-    /**
-     * The motion that ended with frame {@code at} (GL thread): no rate said once the display's highest rate's worth of
-     * vsyncs (a second) passed with nothing moved since, none asked and no finger down. A frame drawn meanwhile that moves
-     * nothing (a spinner's step, a page's words coming in) does not keep it. Said at once after the motion, the display
-     * went down to the rate the system picks from how often frames came (a spinner stepping: 12-60 Hz on an OPPO Find
-     * N6), and the next flick's first frames stepped up through it at 83, 17, 17, 17 ms before 8.3 (2026-11-04: 5-8
-     * frames at the start of every swipe, the app's own work 2-5 ms each): a list is flicked again well within a second.
-     */
-    private void stillAfter(int at) {
-        if (stillFrom == at) return;
-        stillFrom = at;
-        stillFor(at, Math.max(1, Math.round(topRate)));
-    }
-
-    private void stillFor(int at, int left) {
-        Host.main.post(() -> Choreographer.getInstance().postFrameCallback(t -> queueEvent(() -> {
-            if (moved != at || appWanted.get() || touching || typing() || !rateSaid) {
-                if (stillFrom == at) stillFrom = -1;
-                return;
-            }
-            if (left > 1) {
-                stillFor(at, left - 1);
-                return;
-            }
-            stillFrom = -1;
-            sayRate(false);
-        })));
     }
 
     /**
@@ -440,14 +361,8 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
     /** The field's typing begun or ended (MainActivity, as the keyboard shows or goes): the rate said or let go from now. */
     void typingChanged() {
-        queueEvent(() -> {
-            if (typing()) sayRate(true);
-            else if (rateSaid) stillAfter(moved);
-        });
+        queueEvent(pacer::typingChanged);
     }
-
-    /** Whether a finger is on the screen (main thread writes it, from its touches). */
-    private volatile boolean touching;
 
     @Override
     protected void onAttachedToWindow() {
@@ -472,7 +387,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
      */
     private void frameWorked(long nanos) {
         if (hints == null) return;
-        long target = framePeriod * 7 / 10;
+        long target = pacer.framePeriod * 7 / 10;
         if (target != hintTarget) {
             hintTarget = target;
             hints.updateTargetWorkDuration(target);
@@ -516,14 +431,8 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
     // ---- vsync ----
 
-    /**
-     * The vsync the next frame is drawn for and when the system is to show it (ns, System.nanoTime's clock; 0: not said):
-     * since Android 13, the expected presentation of the vsync's preferred frame timeline (Choreographer.FrameData), the
-     * refresh a frame of the system's own drawn for that vsync is shown at.
-     */
-    private volatile long[] vsyncAt = {0, 0};
-    private final AtomicBoolean wanted = new AtomicBoolean();
-    private final Choreographer.FrameCallback vsync = t -> vsyncCame(t, 0);
+    /** A vsync asked for (FramePacer's postVsync) told to the pacer as it comes, with its timelines where it has them. */
+    private final Choreographer.FrameCallback vsync = t -> pacer.vsyncCame(t, 0);
     /** The vsync told with its frame's timelines (Timelines: Android 13's), made as first asked for. */
     private Object vsyncTimed;
     private final Runnable postVsync = () -> {
@@ -544,61 +453,12 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
                     Choreographer.FrameTimeline[] tl = d.getFrameTimelines();
                     long period = tl.length > 1
                             ? tl[1].getExpectedPresentationTimeNanos() - tl[0].getExpectedPresentationTimeNanos() : 0;
-                    if (period > 0 && Math.abs(period - v.framePeriod) * 16 > v.framePeriod) v.framePeriod = period;
-                    v.vsyncCame(d.getFrameTimeNanos(), shows);
+                    if (period > 0 && Math.abs(period - v.pacer.framePeriod) * 16 > v.pacer.framePeriod) v.pacer.framePeriod = period;
+                    v.pacer.vsyncCame(d.getFrameTimeNanos(), shows);
                 };
             }
             Choreographer.getInstance().postVsyncCallback((Choreographer.VsyncCallback) v.vsyncTimed);
         }
-    }
-
-    /**
-     * A vsync asked for came (main thread), at {@code t}, its frame shown at {@code shows} (vsyncAt): drawn for, where a
-     * frame is wanted; where only the frame drawing now asked for it ahead (askAhead), kept for that frame to take as it
-     * ends (ask), should it want one.
-     */
-    private void vsyncCame(long t, long shows) {
-        vsyncAt = new long[] {t, shows};
-        if (appWanted.get() || picturesOnly.get()) {
-            wanted.set(false);
-            requestRender();
-            return;
-        }
-        ahead.set(true);
-        wanted.set(false);
-        // (a frame wanted as this was kept: the one asking saw it not yet kept, and asked for another vsync, or none)
-        if ((appWanted.get() || picturesOnly.get()) && ahead.getAndSet(false)) requestRender();
-    }
-
-    /**
-     * The vsync after the frame beginning now asked for before its work (GL thread), where the frame before asked for
-     * this one (a motion going on): a frame asked for only as it ended had the first vsync after its work, so one whose
-     * work went past the display's frame left a refresh with no new frame, what moved standing still for one and then
-     * stepping two (an OPPO Find N6's inner screen, its frames 6–16 ms at 120 Hz). Asked ahead, the vsync comes while
-     * the frame is drawn; one that ends after it draws the next at once, for that vsync and shown at its refresh
-     * (showAt), as the system's own frames are asked for in the vsync before theirs: a frame over the display's frame
-     * costs nothing where the next is lighter.
-     */
-    private void askAhead() {
-        ahead.set(false);
-        if (wanted.compareAndSet(false, true)) Host.main.post(postVsync);
-    }
-
-    /**
-     * A vsync asked for ahead came and no frame was drawn for it (vsyncCame): the next frame wanted is drawn at once,
-     * for it, while it is the latest vsync (a frame later than that is the next vsync's).
-     */
-    private final AtomicBoolean ahead = new AtomicBoolean();
-
-    /** A frame wanted (appWanted or picturesOnly just set, from any thread): drawn for the vsync kept, or the next. */
-    private void ask() {
-        if (ahead.getAndSet(false) && System.nanoTime() - vsyncAt[0] < framePeriod) {
-            requestRender();
-            return;
-        }
-        if (!wanted.compareAndSet(false, true)) return;
-        if (Looper.myLooper() == Looper.getMainLooper()) postVsync.run();
-        else Host.main.post(postVsync);
     }
 
     /**
@@ -614,7 +474,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
      */
     private void showAt(long shows) {
         if (android.os.Build.VERSION.SDK_INT < 33) return;
-        long at = shows != 0 ? shows - framePeriod / 2 : System.nanoTime();
+        long at = shows != 0 ? shows - pacer.framePeriod / 2 : System.nanoTime();
         android.opengl.EGLExt.eglPresentationTimeANDROID(android.opengl.EGL14.eglGetCurrentDisplay(),
                 android.opengl.EGL14.eglGetCurrentSurface(android.opengl.EGL14.EGL_DRAW), at);
     }
@@ -626,11 +486,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
      */
     void frameNow() {
         if (shotTaken) return;
-        // (the frame's own vsync time is not public: now, a moment after it, never before a frame drawn; shown as soon as
-        // it is drawn, as the keyboard moves)
-        vsyncAt = new long[] {System.nanoTime(), 0};
-        wanted.set(false);
-        requestRender();
+        pacer.frameNow();
     }
 
     /**
@@ -652,7 +508,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             public void doFrame(long t) {
                 if (wakeFor != at) return;
                 // (the vsync after this one is the frame's: asked for as any other, with its timelines)
-                if ((t + framePeriod) / 1e6 < at - 0.5) {
+                if ((t + pacer.framePeriod) / 1e6 < at - 0.5) {
                     Choreographer.getInstance().postFrameCallback(this);
                     return;
                 }
@@ -665,8 +521,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     /** A frame at the next vsync (from any thread). */
     void wantFrame() {
         if (shotTaken) return;
-        appWanted.set(true);
-        ask();
+        pacer.wantFrame();
     }
 
     /**
@@ -675,12 +530,9 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
      */
     void pictureFrame() {
         if (shotTaken) return;
-        picturesOnly.set(true);
-        ask();
+        pacer.pictureFrame();
     }
 
-    /** A frame asked of the app (wantFrame), or only for a view's picture (pictureFrame), since the last was drawn. */
-    private final AtomicBoolean appWanted = new AtomicBoolean(), picturesOnly = new AtomicBoolean();
 
     /** Runs r on the GL thread and asks for a frame. */
     void toGL(Runnable r) {
@@ -700,12 +552,12 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         switch (a) {
             case MotionEvent.ACTION_DOWN:
                 // (the display's highest from a finger going down: what it moves moves at it from its first frame)
-                touching = true;
-                queueEvent(() -> sayRate(true));
+                pacer.touching = true;
+                queueEvent(() -> pacer.sayRate(true));
                 requestFocus();
                 break;
-            case MotionEvent.ACTION_UP: Host.lifts++; touching = false; break;
-            case MotionEvent.ACTION_CANCEL: touching = false; break;
+            case MotionEvent.ACTION_UP: Host.lifts++; pacer.touching = false; break;
+            case MotionEvent.ACTION_CANCEL: pacer.touching = false; break;
             default: break;
         }
         switch (a) {
