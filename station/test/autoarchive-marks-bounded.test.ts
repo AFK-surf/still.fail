@@ -62,20 +62,20 @@ for (const viewers of [2, 40, 300]) {
     const store = Store.open(":memory:");
     const db = store.db;
     try {
-      const pin = db.prepare("INSERT INTO pins(viewer,session,at) VALUES (?,?,1)");
-      const keep = db.prepare("INSERT INTO kept_chats(viewer,thread) VALUES (?,?)");
+      const pin = db.prepare("INSERT INTO pins(rowid,viewer,session,at) VALUES (?,?,?,1)");
+      const keep = db.prepare("INSERT INTO kept_chats(rowid,viewer,thread) VALUES (?,?,?)");
+      let position = -1;
       db.exec("BEGIN");
       for (let i = 0; i < viewers; i++) {
         const viewer = i === 0 ? "" : `viewer-${i}`;
         for (let n = 0; n < 150; n++) {
-          pin.run(viewer, `old-${n}`);
-          keep.run(viewer, n + 1000);
+          pin.run(position, viewer, `old-${n}`);
+          keep.run(position--, viewer, n + 1000);
         }
-        pin.run(viewer, `visible-${i}`);
-        keep.run(viewer, i);
+        pin.run(position, viewer, `visible-${i}`);
+        keep.run(position--, viewer, i);
       }
       db.exec("COMMIT");
-      db.exec("UPDATE pins SET rowid = -rowid; UPDATE kept_chats SET rowid = -rowid");
       const expectedPins = store.pinnedSessions();
       const expectedKept = store.keptChats(null);
       const { pinned, kept } = store.archiveMarks();
