@@ -5,6 +5,7 @@ import { scanRecentWorkspaceStep, settleRecentWorkspaceMemberStep } from "../src
 import { installRecentScopeJournal, trackRecentScope } from "../src/store/chat-list-scope-journal.ts";
 import { dispatchRecentScopeOrderStep, settleRecentWorkspaceOrderStep } from "../src/store/chat-list-scope-order.ts";
 import { putRecentScopeSource, readPreparedRecentWorkspace } from "../src/store/chat-list-scope-rows.ts";
+import { settleRecentScopeVisibilityStep } from "../src/store/chat-list-scope-visibility.ts";
 import { Store } from "../src/store/store.ts";
 
 for (const recursive of [false, true]) test(`a changed message updates only its own workspace order (recursive triggers ${recursive})`, () => {
@@ -125,6 +126,7 @@ test("a deleted shared chat removes its workspace sources in bounded steps", () 
     }
     assert.ok(done);
     assert.ok(steps >= 4);
+    while (!settleRecentScopeVisibilityStep(db, 2).visibilityDone) { /* Settle the deleted chat's visibility. */ }
     while (!settleRecentWorkspaceMemberStep(db, "here", 2).membersDone) { /* Settle cascaded changes, if any. */ }
     assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), recentChatIds(db, "here", "home", 5));
     assert.equal(readPreparedRecentWorkspace(db, "here", 5)?.total, 0);
