@@ -17,12 +17,13 @@ export type Of = { workspace: string; home: boolean };
 /// The home workspace: its chats are those of no other workspace.
 export const HOME: Of = { workspace: "\u0000home", home: true };
 
-/// Who a person reference is, as far as known: their email.
+/// Who a person reference is, as far as known: their name and email, and where they were heard (`slack`, `feishu`,
+/// `cloud`, `local`). A chat app's person whose name is not known has none here, not their id.
 function person(s: Store, ref: string): Json {
-  const slack = slackCreator(s, ref);
-  if (slack !== null) return { email: slack.email, via: "slack" };
-  if (ref === "local") return { email: null, via: "local" };
-  return { email: ref, via: "cloud" };
+  const chat = slackCreator(s, ref);
+  if (chat !== null) return { name: ref.endsWith(`:${chat.name}`) ? null : chat.name, email: chat.email, via: chat.via };
+  if (ref === "local") return { name: null, email: null, via: "local" };
+  return { name: null, email: ref, via: "cloud" };
 }
 
 /// v1 `usage`: the model calls from `from` until `to` (ms), added up by day in UTC+`tz` minutes, chat, session, person,
