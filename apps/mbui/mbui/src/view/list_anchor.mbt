@@ -215,9 +215,23 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   let short_glide = Ref(false)
   let short_due : Ref[() -> Unit] = Ref(fn() { })
   self.owns(fn() { (short_due.val)() }) |> ignore
-  // (each row's room as last laid out, and how often it was: what draws it reads)
+  // (each row's room as last laid out; and as told once all of it is laid out, a row's own: what draws it reads, told
+  // again only where it came out otherwise, never because it was laid out again)
   let rooms_laid : Map[K, ListRoom] = Map([])
-  let laid_n : @signals.Signal[Int] = @signals.signal(0)
+  let rooms_told : Map[K, @signals.Signal[ListRoom]] = Map([])
+  let room_told = fn(k : K) {
+    match rooms_told.get(k) {
+      Some(s) => s
+      None => {
+        let s = @signals.signal(
+          rooms_laid.get(k).unwrap_or(list_room(naturals.get(k).unwrap_or(0.0))),
+          same=fn(a, b) { a == b },
+        )
+        rooms_told[k] = s
+        s
+      }
+    }
+  }
   let natural_room = fn(_k : K, h : Double) { list_room(h) }
   // Keep the captured room function until one of its own inputs changes. Clearing a completed placement request
   // must not make an otherwise identical room look new while the layout result is being published.
@@ -461,10 +475,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
               slot_keys.remove(at)
             })
             |> ignore
-            let room_now = fn() {
-              laid_n.get() |> ignore
-              rooms_laid.get(k).unwrap_or(list_room(naturals.get(k).unwrap_or(0.0)))
-            }
+            let room_now = fn() { room_told(k).get() }
             slot.lends(windowed_room, room_now) |> ignore
             slot.shrink(Is(0.0)) |> ignore
             if rooms is Some(_) {
@@ -797,7 +808,14 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         // (told once all of it is laid out, to what reads it there and after: what is in sight, whether it is at its
         // end, how far it is counted to be scrolled (what holds its rows moved by as much as they were placed for: what
         // its layout reads not moved), and a glide to what came, from this moment; nothing its layout reads changed)
-        self.tree.once_laid_out(fn() { laid_n.set(@signals.untracked(fn() { laid_n.get() }) + 1) })
+        self.tree.once_laid_out(fn() {
+          for k, room in rooms_laid {
+            match rooms_told.get(k) {
+              Some(s) => s.set(room)
+              None => ()
+            }
+          }
+        })
         let extent_now = extent()
         self.tree.once_laid_out(fn() { extent_said.set(extent_now) })
         // (where its last row's foot is below where it shows to, laid out; as far as can be where it is not:
@@ -957,6 +975,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
     }
     naturals.remove(k)
     rooms_laid.remove(k)
+    rooms_told.remove(k)
   }
   let forget_missing = fn(contains : (K) -> Bool) {
     for k in row_ids.keys().collect() {
