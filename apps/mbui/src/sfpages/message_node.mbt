@@ -328,9 +328,9 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
         link: @sfbase.message_link(h.station, h.session, now.seq),
       })
     })
-    // (its words and its files under them 4 apart, as message_row's: a person's, and an agent's Markdown and the files
-    // it does not place, prose_with_files')
-    body.gap(Is(4.0)) |> ignore
+    // (its files under its words: a person's 4 apart, as message_row's; an agent's right under its Markdown, the files
+    // it does not place as prose_with_files has them)
+    body.gap(Is(if person { 4.0 } else { 0.0 })) |> ignore
     if person {
       body.show(fn() { m().text != "" }, fn(w) {
         person_words_node(w, fn() { m().text }, fn() { m().words }, fn() { marked_of(here(), m().ts) }, fn(href) {
