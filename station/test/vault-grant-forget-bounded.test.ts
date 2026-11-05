@@ -25,8 +25,11 @@ function fixture() {
     hub: { store: { subscribe() {}, getSession() { return {}; } } } as never,
     proxy: {} as never, vaults: {} as never, plain: {} as never });
   const insert = db.prepare("INSERT INTO vault_grants(ws,id,session,body) VALUES(?,?,'s','{}')");
-  const held = (ws: string, id: string, vault: string) => ({ request: { ws, id, session: "s", vault },
-    grant: { exp: 1000 }, secret: { kind: "token", name: "token", fields: { value: "x" } }, uses: 0 }) as Held;
+  const held = (ws: string, id: string, vault: string): Held => ({
+    request: { ws, id, session: "s", vault, item: "i", chat: "", mode: "env", reason: "", box: "", at: 0, status: "granted" },
+    grant: { v: 1, ws, request: id, vault, item: "i", mode: "env", hosts: [], scope: "chat", exp: 1000,
+      secret: "", at: 0, sig: { key: "", alg: "Ed25519", sig: "" } },
+    secret: { kind: "token", name: "token", fields: { value: "x" } }, uses: 0 });
   return { db, secrets, insert, held, deletes, visits: () => visited, reset: () => { visited = 0; deletes.length = 0; } };
 }
 
