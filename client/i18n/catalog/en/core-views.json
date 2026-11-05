@@ -681,6 +681,9 @@
     "one": "1 agent running",
     "other": "{n} agents running"
   },
+  "core-views.station.incompatible": "Version mismatch: this station and this copy of {name} do not match, so some details can't be shown. Update {name} and this station.",
+  "core-views.station.incompatible_named": "{name}: version mismatch, update needed",
+  "core-views.station.incompatible_short": "Version mismatch, update needed",
   "core-views.station.silent": "Not responding: {name} cloud reports it online, but its status can't be read. The machine may be offline or asleep.",
   "core-views.station.away": "Offline: open {name} on that machine to reconnect",
   "core-views.station.never_connected": "Never connected: open {name} on that machine",

@@ -909,6 +909,11 @@ export function series(models: string[]): J {
 
 const GIB = 1024 ** 3;
 
+/// Whether this core can read a station's host reading.
+export function hostFits(h: J): boolean {
+  return "ok" in conform("Host", host(h));
+}
+
 /// A machine as the clients show it.
 export function host(h: J): J {
   if (!isObject(h)) return h;

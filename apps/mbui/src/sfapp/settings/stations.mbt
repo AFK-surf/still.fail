@@ -188,7 +188,7 @@ fn station_body(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
           }
         })
         |> ignore
-        if online && host is None {
+        if online && host is None && !unreadable(s) {
           c.layer(fn() { sample_meters(c, "station-body/" + text(s, "station")) }) |> ignore
         }
       })
