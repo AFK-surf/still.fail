@@ -1166,9 +1166,11 @@ pub let message_stroke : StrokeShape
 
 pub let meta : @ui.TextStyle
 
-pub fn meter_chip(@ui.Ctx, @json.Json?, brief? : Bool, drop? : Int32, keep? : Bool, key? : String) -> Unit
+pub fn meter_chip(@ui.Ctx, @json.Json?, brief? : Bool, figure? : Bool, drop? : Int32, keep? : Bool, key? : String) -> Unit
 
 pub fn meter_chips(@ui.Ctx, Array[@json.Json], brief? : Bool, key? : String) -> Unit
+
+pub fn meter_line(@ui.Ctx, Array[@json.Json], key? : String) -> Unit
 
 pub fn mix(Int64, Double, Int64) -> Int64
 

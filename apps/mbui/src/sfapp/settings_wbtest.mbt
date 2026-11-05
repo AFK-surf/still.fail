@@ -690,6 +690,25 @@ test "settings: an offline station's picture and line centred across its card's 
 }
 
 ///|
+test "settings: a station's card with its CPU, memory and disk all low shows each chip whole, never cut with an ellipsis" {
+  // (on a phone they were cut to CPU 空闲…, 内存剩 9.2 G, 磁盘剩 19…, 2026-11-06)
+  for w in [390.0, 320.0] {
+    let t = settings_tester("stations", shows="settings-stations-low")
+    t.resize(w, 844.0)
+    t.draw()
+    let shown = t.words().filter(fn(x) { x.5 > 0.5 }).map(fn(x) { x.0 })
+    // in words where the line has the room for all three, else all by their figures: one way for all of them
+    let worded = ["空闲 8%", "剩 5.8 G", "剩 19.4 G"].iter().all(fn(x) { shown.contains(x) })
+    let figured = ["8%", "5.8G", "19.4G"].iter().all(fn(x) { shown.contains(x) })
+    assert_true(worded != figured, msg="\{w}: \{shown}")
+    assert_true(!shown.iter().any(fn(x) { x.contains("…") }), msg="\{w}: \{shown}")
+    // (at 320 its summary beside its name is cut short, as it may be: none of the chips is)
+    let chips = t.squeeze_faults().filter(fn(f) { ["空闲", "剩", "%", "G」"].iter().any(fn(x) { f.contains(x) }) })
+    assert_eq(chips, [], msg="\{w}")
+  }
+}
+
+///|
 test "settings: a station's low box filled as far as is used (FillChip): 内存 18% left, 82% of it" {
   let t = stations_unread_net()
   let (fill, chip) = chip_fill(t, "剩 5.8 G")
