@@ -24,7 +24,7 @@ import {
   type SessionBusy, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
   type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, type InWorkspace, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
   byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
-  CC_THREADS_SQL, LAST_MESSAGE, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
+  CC_THREADS_SQL, LAST_MESSAGE, LETTER_SQL, MESSAGES_BEFORE, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addRuntimeSessionRuntime, hasRuntimeOrderIndex, addCardOutcomes, addListState, addLetters, addPendingCards, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle, addLeftColumn } from "./schema.ts";
 import { installUsageCompactions, usageCompactionsReady } from "./usage-compactions.ts";
@@ -1606,7 +1606,7 @@ export class Store {
   /// The latest `limit` messages before n (the latest of all without it), as merged, oldest first.
   messagesBefore(thread: number, n: number | null, limit: number): MessageRow[] {
     const before = n ?? I64_MAX;
-    return this.#all("SELECT * FROM merged WHERE thread = ? AND n < ? ORDER BY n DESC LIMIT ?", thread, before, limit).map(toMessage).reverse();
+    return this.#all(MESSAGES_BEFORE, thread, before, limit).map(toMessage).reverse();
   }
 
   // ── letters ──
