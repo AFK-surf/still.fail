@@ -37,6 +37,10 @@ priv struct Run {
   lasts : Array[() -> Unit]
   /// doing what waits for a change told whole (after_flush): one at a time, in order, whatever they set meanwhile
   mut draining : Bool
+  /// where each flush under way was set off from (the set under way, flush_said): the innermost last
+  flush_trail : Array[String]
+  /// the effect or watch running now, the innermost (what it writes is its own, however untracked: effect_round)
+  mut running : ReactiveNode?
   /// how many computeds are being worked out now, one inside another: what is set meanwhile (a getter's own
   /// bookkeeping) told, but nothing that follows it run till the outermost is worked out (computed_done)
   mut computing : Int
@@ -57,6 +61,8 @@ let run : Run = {
   afters: [],
   lasts: [],
   draining: false,
+  flush_trail: [],
+  running: None,
   computing: 0,
 }
 
@@ -271,22 +277,25 @@ pub fn[T] computed(getter : (T?) -> T, same? : (T, T) -> Bool) -> Computed[T] {
 
 ///|
 /// An effect: `fn` run now, and again as what it read changes; the function that stops it.
-pub fn effect(f : () -> Unit) -> () -> Unit {
-  effect_of(fn() {
-    f()
-    None
-  })
+pub fn effect(f : () -> Unit, loc~ : SourceLoc = _) -> () -> Unit {
+  effect_of(
+    fn() {
+      f()
+      None
+    },
+    loc,
+  )
 }
 
 ///|
 /// An effect whose run returns its cleanup, run before it runs again and as it is stopped.
-pub fn effect_cleanup(f : () -> (() -> Unit)) -> () -> Unit {
-  effect_of(fn() { Some(f()) })
+pub fn effect_cleanup(f : () -> (() -> Unit), loc~ : SourceLoc = _) -> () -> Unit {
+  effect_of(fn() { Some(f()) }, loc)
 }
 
 ///|
-fn effect_of(f : () -> (() -> Unit)?) -> () -> Unit {
-  let e = ReactiveNode::new(WATCHING | RECURSED_CHECK, EffectNode, own=EffectOwn(f))
+fn effect_of(f : () -> (() -> Unit)?, loc : SourceLoc) -> () -> Unit {
+  let e = ReactiveNode::new(WATCHING | RECURSED_CHECK, EffectNode, own=EffectOwn(f, loc))
   let parent = owner_now()
   let prev_sub = set_active_sub(Some(e))
   let prev_owner = set_owner(Some(e))
@@ -298,7 +307,10 @@ fn effect_of(f : () -> (() -> Unit)?) -> () -> Unit {
     None => ()
   }
   run.run_depth += 1
+  let running = run.running
+  run.running = Some(e)
   e.cleanup = f()
+  run.running = running
   run.run_depth -= 1
   run.active_sub = prev_sub
   run.owner = prev_owner
@@ -423,7 +435,10 @@ fn run_effect(e : ReactiveNode) -> Unit {
       if was is None {
         setting.val = o.marked_by.val
       }
+      let running = run.running
+      run.running = Some(e)
       (o.told)()
+      run.running = running
       setting.val = was
     }
     o.marked_by.val = None
@@ -458,8 +473,11 @@ fn run_effect(e : ReactiveNode) -> Unit {
     run.cycle += 1
     run.run_depth += 1
     if e.kind is EffectNode {
-      guard e.own is EffectOwn(f) else { abort("an effect without its fn") }
+      guard e.own is EffectOwn(f, _) else { abort("an effect without its fn") }
+      let running = run.running
+      run.running = Some(e)
       e.cleanup = f()
+      run.running = running
     }
     run.run_depth -= 1
     run.active_sub = prev_sub
@@ -472,7 +490,70 @@ fn run_effect(e : ReactiveNode) -> Unit {
 }
 
 ///|
+/// How deep flushes may run in each other (a batch that writes, inside an effect, flushes there and then: as deep as
+/// what it sets going goes on so; leaving a long chat, 15).
+pub let flush_deepest : Int = 64
+
+///|
+/// Where an effect is said whose read another effect run inside it set again (two going round, never settled: what it
+/// read set after it read it, it not run again): printed (a test's, a tool's); an app's run on a host says it on its
+/// log (mbui/ui's run). Not an end yet: the app's pages do it in places (sfbase's compose.mbt, writing_text), to be
+/// made right first.
+pub let effect_round_said : Ref[(String) -> Unit] = Ref(fn(s) { println(s) })
+
+///|
+fn effect_round(under_way : ReactiveNode) -> Unit {
+  let at = match setting.val {
+    Some(l) => l.to_string()
+    None => "a batch's end"
+  }
+  let made = fn(n : ReactiveNode) {
+    match n.own {
+      EffectOwn(_, l) => "the effect made at \{l}"
+      WatchOwned(o) => "the watch made at \{o.at}"
+      _ => "?"
+    }
+  }
+  let inside = match run.running {
+    Some(r) => made(r)
+    None => "nothing running"
+  }
+  (effect_round_said.val)(
+    "signals: \{made(under_way)}, under way, had what it read set again at \{at} by \{inside}, run inside it: the two go round, the first not run again",
+  )
+}
+
+///|
+/// Where flushes too deep are said instead of the program ending (a test's; none: abort).
+pub let flush_too_deep_said : Ref[((String) -> Unit)?] = Ref(None)
+
+///|
 fn flush() -> Unit {
+  // (one inside another past flush_deepest: something set going without end what sets more going, or what is not
+  // the program's (a clock read as it goes) taken into it, each round a flush deeper; said where they were set off,
+  // before it runs the stack out. 2026-11-05: a frame's layout took the host's now, 2000 deep as a chat was left)
+  if run.flushing >= flush_deepest {
+    let from = if run.flush_trail.length() > 8 { run.flush_trail.length() - 8 } else { 0 }
+    let last = Array::makei(run.flush_trail.length() - from, fn(i) { run.flush_trail[from + i] })
+    let said = "signals: flushes \{run.flushing} deep in each other, set off from (the innermost last) \{last}"
+    match flush_too_deep_said.val {
+      // (a test's: said, and what is queued left to the flushes under way)
+      Some(f) => {
+        f(said)
+        return
+      }
+      None => {
+        println(said)
+        abort(said)
+      }
+    }
+  }
+  run.flush_trail.push(
+    match setting.val {
+      Some(l) => l.to_string()
+      None => "a batch's end"
+    },
+  )
   run.flushing += 1
   while run.notify_index < run.queued_length {
     let effect = run.queued[run.notify_index].unwrap()
@@ -483,6 +564,7 @@ fn flush() -> Unit {
   run.notify_index = 0
   run.queued_length = 0
   run.flushing -= 1
+  run.flush_trail.pop() |> ignore
   // (the change told whole, every effect it set going run: what waits for that, in order; what one of them sets
   // flushed in its turn, what waits on that after it)
   if run.flushing == 0 && run.batch_depth == 0 && !run.draining {
@@ -812,6 +894,8 @@ priv struct WatchOwn {
   /// the set that marked it, as it marked it (`setting`, None: a trigger, …): said as it is told (setting_at), where
   /// that is later (a batch's end) and no set is under way then
   marked_by : Ref[SourceLoc?]
+  /// where it was made (watch's caller), said where it goes round with an effect (effect_round)
+  at : SourceLoc
 }
 
 ///|
@@ -836,7 +920,7 @@ let watch_reading : WatchReading = { depth: 0, sets: [] }
 ///|
 /// A watch (Watch): stale until it is first read; `changed` called as what a read read first changes after it, once
 /// till the next read.
-pub fn watch(changed : () -> Unit) -> Watch {
+pub fn watch(changed : () -> Unit, loc~ : SourceLoc = _) -> Watch {
   let stale = Ref(true)
   // (told once till it reads anew: what changes again meanwhile adds nothing to its being stale)
   let told : () -> Unit = fn() {
@@ -846,7 +930,7 @@ pub fn watch(changed : () -> Unit) -> Watch {
     }
   }
   // (told, it runs nothing of what it read: what it read stays followed till it reads anew, run_effect)
-  let own : WatchOwn = { told, marked: Ref(None), stale, gone: Ref(false), marked_by: Ref(None) }
+  let own : WatchOwn = { told, marked: Ref(None), stale, gone: Ref(false), marked_by: Ref(None), at: loc }
   let node = ReactiveNode::new(NONE, WatchNode, own=WatchOwned(own))
   // (made where an owner is set (set_owner: a scope that is not reading, an old view's): that owner's, let go with it;
   // not what is reading's, whose reading anew would let it go)
