@@ -92,6 +92,32 @@ test("a prepared order follows deliveries, membership changes and missing thread
   } finally { store.close(); }
 });
 
+test("a membership replaced behind an old-session cursor is not missed", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const members: number[] = [];
+    db.exec("BEGIN");
+    for (let n = 0; n < 40; n++) {
+      const thread = store.openThread("slack", "C", `old-${n}`, null, null);
+      store.joinThread(thread.id, "s", "slack"); members.push(thread.id);
+    }
+    db.exec("COMMIT");
+    const first = db.prepare("SELECT rowid FROM thread_sessions WHERE session='s' AND thread=?").get(members[0]!)!.rowid;
+    const replacement = store.openThread("slack", "C", "replacement", null, null);
+    installLatestThreadIndex(db);
+    assert.deepEqual(prepareLatestThreadStep(db, "s", 8), { done: false, visited: 8 });
+    db.prepare("INSERT OR REPLACE INTO thread_sessions(rowid,thread,session,connect,joined_at) VALUES(?,?,'s','new',10000)")
+      .run(first, replacement.id);
+    db.prepare("INSERT INTO deliveries(rowid,thread,n,session,delivered_at) VALUES(500,?,1,'s',NULL)").run(replacement.id);
+    prepare(store, "s", 8);
+    assert.equal(indexedLatestThread(db, "s")?.id, replacement.id);
+    assert.equal(indexedLatestThread(db, "s")?.id, store.latestThread("s")?.thread.id);
+    const actual = db.prepare("SELECT member_rowid,thread FROM latest_thread_rows WHERE session='s' ORDER BY member_rowid").all();
+    const expected = db.prepare("SELECT m.rowid AS member_rowid,m.thread FROM thread_sessions m JOIN threads t ON t.id=m.thread WHERE m.session='s' ORDER BY m.rowid").all();
+    assert.deepEqual(actual, expected);
+  } finally { store.close(); }
+});
+
 for (const recursive of [false, true]) for (const alias of ["rowid", "_rowid_", "oid"]) {
   test(`a prepared order follows ${alias} replacements and rollback (recursive triggers ${recursive})`, () => {
     const store = Store.open(":memory:"), db = store.db;
