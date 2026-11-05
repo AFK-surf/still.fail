@@ -7,9 +7,11 @@ test "table pictures are decoded once at their drawn size" {
     let asked : Array[String] = []
     let images = @sfbase.ChatImages::new()
     let calls : Array[Made] = []
-    let web = fixture_file_png("compare.png")
-    let phone = fixture_file_png("peek.png")
-    let other = fixture_file_png("home-after.png")
+    // The bytes and the attachments' declared dimensions have the same proportions: fit-to-cover must not turn
+    // the tall phone picture into a crop of an unrelated wide fixture.
+    let web = @sffixture.fixture_png(160, 100)
+    let phone = @sffixture.fixture_png(195, 422)
+    let other = fixture_file_png("compare.png")
     let t = wide_tester(calls, mode="chat-table-images", w=width, h=1000.0, platform=2, wrap=fn(base) {
       { ..base, images, file: fn(station, key, name) {
         images.get(station, @sfbase.file_image_id(station, key, name), "mem:bucket-test/" + name, fn(_, done) {

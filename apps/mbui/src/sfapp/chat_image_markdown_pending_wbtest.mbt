@@ -5,8 +5,9 @@
 test "a crossed message's pictures wait for its Markdown and are decoded at their cell sizes" {
   let images = @sfbase.ChatImages::new()
   let calls : Array[Made] = []
-  let web = fixture_file_png("compare.png")
-  let phone = fixture_file_png("peek.png")
+  // Match the attachments' declared proportions so the requested and drawn crop describe the same pictures.
+  let web = @sffixture.fixture_png(160, 100)
+  let phone = @sffixture.fixture_png(195, 422)
   let changed = @signals.signal(false)
   let answer : Ref[((Json?) -> Unit)?] = Ref(None)
   let t = wide_tester(calls, mode="chat-many-images", w=390.0, h=844.0, platform=2, wrap=fn(base) {
@@ -54,5 +55,6 @@ test "a crossed message's pictures wait for its Markdown and are decoded at thei
   let decoded = picture_loads()
   @sf.markdown_read.val = None
   assert_eq(decoded.length(), 2, msg="the crossed pictures are decoded when the answer arrives, before another frame")
-  assert_true(decoded.iter().all(fn(load) { load.1 == 512 }), msg="both use their table cells' decode size")
+  assert_true(decoded.contains(("bytes:\{web.length()}", 512)), msg="the wide picture is decoded at its table cell's size")
+  assert_true(decoded.contains(("bytes:\{phone.length()}", 1024)), msg="the tall picture includes the part cropped by its table cell")
 }
