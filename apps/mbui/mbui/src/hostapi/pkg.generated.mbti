@@ -193,6 +193,8 @@ pub let ime_action_number : Int32
 
 pub let ime_action_search : Int32
 
+pub let ime_action_secret : Int32
+
 pub fn ime_inset() -> Double
 
 pub fn install_package(String, Bytes) -> Unit

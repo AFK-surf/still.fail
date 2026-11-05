@@ -611,7 +611,13 @@ static void touches_sent(int kind, NSSet<UITouch *> *t, UIEvent *e, UIView *v) {
   if (key_catching) return UIKeyboardTypeDefault;
   return ime_action_kind == 2 ? UIKeyboardTypeURL : ime_action_kind == 3 ? UIKeyboardTypeNumbersAndPunctuation : UIKeyboardTypeDefault;
 }
-- (UITextAutocorrectionType)autocorrectionType { return key_catching ? UITextAutocorrectionTypeNo : UITextAutocorrectionTypeDefault; }
+- (UITextAutocorrectionType)autocorrectionType {
+  return key_catching || ime_action_kind == 4 ? UITextAutocorrectionTypeNo : UITextAutocorrectionTypeDefault;
+}
+// (a secret's, hostapi ime_action 4, a token or a password: no corrections nor spelling, nothing of it suggested)
+- (UITextSpellCheckingType)spellCheckingType {
+  return key_catching || ime_action_kind == 4 ? UITextSpellCheckingTypeNo : UITextSpellCheckingTypeDefault;
+}
 - (UITextAutocapitalizationType)autocapitalizationType { return UITextAutocapitalizationTypeNone; }
 - (UITextSmartQuotesType)smartQuotesType { return UITextSmartQuotesTypeNo; }
 - (UITextSmartDashesType)smartDashesType { return UITextSmartDashesTypeNo; }
