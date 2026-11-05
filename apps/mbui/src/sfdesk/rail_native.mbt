@@ -123,6 +123,7 @@ fn top_acts() -> PageActs {
 ///|
 /// Whether the frame that hands the system its bars is being built (nav_frame): what a page's nodes hand meanwhile
 /// handed with the rest as it ends.
+// kept across runs: put back by rail_native_reset
 let nav_framing : Ref[Bool] = { val: false }
 
 ///|
@@ -928,6 +929,7 @@ fn rail_native_reset() -> Unit {
   bar_chat_last.clear()
   nav_page_before.clear()
   top_drawn.val = false
+  nav_framing.val = false
   native_mark.val = 0
   // (where the system said an item was last chosen: none yet, what opens from one by the bell till one says so)
   for k in 0..<4 {
