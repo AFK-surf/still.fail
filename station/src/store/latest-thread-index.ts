@@ -24,6 +24,13 @@ const stage = (keys: string) => `DELETE FROM latest_thread_changed;
 // not change the source or the order; the next staged write clears it before collecting its own affected pairs.
 const reconcile = `DELETE FROM latest_thread_rows WHERE (session,has_last,last_delivery,joined_at,member_rowid) IN
     (SELECT session,old_has,old_last,old_joined,old_member FROM latest_thread_changed WHERE old_valid=1);
+  DELETE FROM latest_thread_members WHERE (thread,session) IN
+    (SELECT x.thread,x.session FROM latest_thread_changed x WHERE NOT EXISTS
+      (SELECT 1 FROM thread_sessions m WHERE m.thread=x.thread AND m.session=x.session));
+  INSERT INTO latest_thread_members(thread,session)
+    SELECT m.thread,m.session FROM latest_thread_changed x
+      CROSS JOIN thread_sessions m ON m.thread=x.thread AND m.session=x.session
+    WHERE NOT EXISTS (SELECT 1 FROM latest_thread_members r WHERE r.thread=m.thread AND r.session=m.session);
   INSERT INTO latest_thread_rows(session,has_last,last_delivery,joined_at,member_rowid,thread)
     SELECT m.session,d.rowid IS NOT NULL,COALESCE(d.rowid,0),m.joined_at,m.rowid,m.thread
     FROM latest_thread_changed x CROSS JOIN thread_sessions m ON m.session=x.session AND m.thread=x.thread
@@ -40,7 +47,7 @@ const memberKeys = (update: boolean) => `SELECT NEW.session AS session,NEW.threa
   UNION SELECT m.session,m.thread FROM thread_sessions m WHERE m.rowid=NEW.rowid
   UNION SELECT m.session,m.thread FROM thread_sessions m WHERE m.thread=NEW.thread AND m.session=NEW.session
   ${update ? "UNION SELECT OLD.session,OLD.thread" : ""}`;
-const threadKeys = (ids: string) => `SELECT m.session,m.thread FROM thread_sessions m WHERE m.thread IN (${ids})`;
+const threadKeys = (ids: string) => `SELECT m.session,m.thread FROM latest_thread_members m WHERE m.thread IN (${ids})`;
 const displacedThread = `(SELECT id FROM threads WHERE surface=NEW.surface AND channel=NEW.channel AND thread_ts=NEW.thread_ts)`;
 const deliveryConflict = `EXISTS (SELECT 1 FROM deliveries WHERE rowid=NEW.rowid)
   OR EXISTS (SELECT 1 FROM deliveries WHERE thread=NEW.thread AND n=NEW.n AND session=NEW.session)`;
@@ -58,7 +65,11 @@ const fastDelivery = `DELETE FROM latest_thread_rows WHERE session=NEW.session A
     WHERE m.session=NEW.session AND m.thread=NEW.thread AND NOT EXISTS
       (SELECT 1 FROM latest_thread_rows r WHERE r.session=m.session AND r.has_last=1 AND r.last_delivery=NEW.rowid
         AND r.joined_at IS m.joined_at AND r.member_rowid=m.rowid);`;
-const fastMember = `INSERT INTO latest_thread_rows(session,has_last,last_delivery,joined_at,member_rowid,thread)
+const fastMember = `INSERT INTO latest_thread_members(thread,session)
+    SELECT m.thread,m.session FROM thread_sessions m WHERE m.session=NEW.session AND m.thread=NEW.thread
+      AND EXISTS (SELECT 1 FROM latest_thread_scopes s WHERE s.session=m.session)
+      AND NOT EXISTS (SELECT 1 FROM latest_thread_members r WHERE r.thread=m.thread AND r.session=m.session);
+  INSERT INTO latest_thread_rows(session,has_last,last_delivery,joined_at,member_rowid,thread)
     SELECT m.session,d.rowid IS NOT NULL,COALESCE(d.rowid,0),m.joined_at,m.rowid,m.thread
     FROM thread_sessions m CROSS JOIN threads t ON t.id=m.thread
       LEFT JOIN deliveries d ON d.rowid=${lastDelivery("m.session", "m.thread")}
@@ -79,6 +90,10 @@ export function installLatestThreadIndex(db: DatabaseSync): void {
       CREATE TABLE latest_thread_rows(session TEXT NOT NULL,has_last INTEGER NOT NULL,last_delivery INTEGER NOT NULL,
         joined_at NOT NULL,member_rowid INTEGER NOT NULL,thread INTEGER NOT NULL,
         PRIMARY KEY(session,has_last DESC,last_delivery DESC,joined_at DESC,member_rowid DESC)) WITHOUT ROWID;
+      -- Only tracked memberships, including those whose thread is temporarily missing. This bounds thread changes
+      -- by the requested sessions without adding another index to every delivery.
+      CREATE TABLE latest_thread_members(thread INTEGER NOT NULL,session TEXT NOT NULL,
+        PRIMARY KEY(thread,session)) WITHOUT ROWID;
       CREATE TABLE latest_thread_changed(session TEXT NOT NULL,thread INTEGER NOT NULL,old_valid INTEGER NOT NULL,
         old_has INTEGER NOT NULL,old_last INTEGER NOT NULL,old_joined,old_member INTEGER,
         PRIMARY KEY(session,thread)) WITHOUT ROWID;
@@ -117,8 +132,7 @@ export function installLatestThreadIndex(db: DatabaseSync): void {
         BEGIN ${stage(threadKeys(`NEW.id,${displacedThread}`))} END;
       CREATE TRIGGER latest_thread_add AFTER INSERT ON threads BEGIN
         INSERT INTO latest_thread_changed(session,thread,old_valid,old_has,old_last,old_joined,old_member)
-          SELECT m.session,m.thread,0,0,0,NULL,NULL FROM thread_sessions m WHERE m.thread=NEW.id
-            AND EXISTS (SELECT 1 FROM latest_thread_scopes s WHERE s.session=m.session)
+          SELECT m.session,m.thread,0,0,0,NULL,NULL FROM latest_thread_members m WHERE m.thread=NEW.id
             AND NOT EXISTS (SELECT 1 FROM latest_thread_changed x WHERE x.session=m.session AND x.thread=m.thread);
         ${reconcile}
       END;
@@ -131,6 +145,8 @@ export function installLatestThreadIndex(db: DatabaseSync): void {
         BEGIN ${stage(threadKeys("OLD.id"))} END;
       CREATE TRIGGER latest_thread_drop AFTER DELETE ON threads WHEN ${changed} BEGIN ${reconcile} END;
       CREATE TRIGGER latest_thread_session_drop AFTER DELETE ON sessions BEGIN
+        DELETE FROM latest_thread_members WHERE (thread,session) IN
+          (SELECT thread,session FROM thread_sessions INDEXED BY thread_sessions_session WHERE session=OLD.key);
         DELETE FROM latest_thread_rows WHERE session=OLD.key;
         DELETE FROM latest_thread_changed WHERE session=OLD.key;
         DELETE FROM latest_thread_scopes WHERE session=OLD.key;
@@ -168,6 +184,9 @@ const addCandidate = `INSERT INTO latest_thread_rows(session,has_last,last_deliv
   FROM (${candidate}) c WHERE NOT EXISTS (SELECT 1 FROM latest_thread_rows r WHERE r.session=c.session
     AND r.has_last=(c.last_delivery IS NOT NULL) AND r.last_delivery=COALESCE(c.last_delivery,0)
     AND r.joined_at IS c.joined_at AND r.member_rowid=c.member_rowid)`;
+const addMember = `INSERT INTO latest_thread_members(thread,session)
+  SELECT m.thread,m.session FROM thread_sessions m WHERE m.session=?1 AND m.rowid=?2
+    AND NOT EXISTS (SELECT 1 FROM latest_thread_members r WHERE r.thread=m.thread AND r.session=m.session)`;
 
 /// Begin and advance an old session's walk in transactions bounded by `limit` source memberships.
 export function prepareLatestThreadStep(db: DatabaseSync, session: string, limit = 64): { done: boolean; visited: number } {
@@ -188,8 +207,8 @@ export function prepareLatestThreadStep(db: DatabaseSync, session: string, limit
     scan.setReadBigInts(true);
     const rows = (scope.scan_after === null ? scan.all(session, scope.scan_end, limit)
       : scan.all(session, scope.scan_after, scope.scan_end, limit)) as { rowid: bigint }[];
-    const put = db.prepare(addCandidate);
-    for (const row of rows) put.run(session, row.rowid);
+    const put = db.prepare(addCandidate), putMember = db.prepare(addMember);
+    for (const row of rows) { putMember.run(session, row.rowid); put.run(session, row.rowid); }
     const done = rows.length < limit;
     db.prepare("UPDATE latest_thread_scopes SET scan_after=?,complete=? WHERE session=?")
       .run(rows.at(-1)?.rowid ?? scope.scan_after, done ? 1 : 0, session);

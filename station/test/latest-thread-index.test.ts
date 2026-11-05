@@ -163,6 +163,44 @@ test("a changed thread does not inspect memberships of unprepared sessions", () 
   assert.deepEqual(counts, [1, 1]);
 });
 
+for (const recursive of [false, true]) {
+  test(`the reverse membership set follows tracked writes and session removal (recursive triggers ${recursive})`, () => {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers=${recursive ? 1 : 0}`);
+      const session = (key: string) => store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc",
+        workspace: `/w/${key}`, token: key, createdAt: 1, lastActiveAt: 1 });
+      session("s1"); session("s2");
+      const a = store.openThread("slack", "C", "a", null, null);
+      const b = store.openThread("slack", "C", "b", null, null);
+      store.joinThread(a.id, "s1", "a"); store.joinThread(b.id, "s1", "b");
+      store.joinThread(a.id, "s2", "a"); store.joinThread(a.id, "untracked", "a");
+      db.prepare("INSERT INTO thread_sessions(thread,session,connect,joined_at) VALUES(999999,'s1','orphan',9)").run();
+      installLatestThreadIndex(db); prepare(store, "s1"); prepare(store, "s2");
+      const check = () => {
+        assert.deepEqual(db.prepare("SELECT thread,session FROM latest_thread_members ORDER BY thread,session").all(),
+          db.prepare(`SELECT m.thread,m.session FROM thread_sessions m JOIN latest_thread_scopes s ON s.session=m.session
+            ORDER BY m.thread,m.session`).all());
+        for (const s of ["s1", "s2"].filter((key) => latestThreadReady(db, key)))
+          assert.equal(indexedLatestThread(db, s)?.id ?? null, store.latestThread(s)?.thread.id ?? null);
+      };
+      check();
+      db.prepare("DELETE FROM threads WHERE id=?").run(a.id); check();
+      db.prepare("INSERT INTO threads(id,surface,channel,thread_ts,created_at) VALUES(?,'slack','C','restored',1)").run(a.id); check();
+      const first = db.prepare("SELECT rowid FROM thread_sessions WHERE thread=? AND session='s1'").get(b.id)!.rowid;
+      db.exec("BEGIN");
+      db.prepare("INSERT OR REPLACE INTO thread_sessions(rowid,thread,session,connect,joined_at) VALUES(?,999999,'s2','new',10)").run(first);
+      check();
+      db.exec("ROLLBACK"); check();
+      db.prepare("INSERT OR REPLACE INTO thread_sessions(rowid,thread,session,connect,joined_at) VALUES(?,999999,'s2','new',10)").run(first);
+      check();
+      db.prepare("DELETE FROM thread_sessions WHERE thread=999999 AND session='s1'").run(); check();
+      db.prepare("DELETE FROM sessions WHERE key='s1'").run(); check();
+      session("s1"); prepare(store, "s1"); check();
+    } finally { store.close(); }
+  });
+}
+
 for (const recursive of [false, true]) for (const alias of ["rowid", "_rowid_", "oid"]) {
   test(`a prepared order follows ${alias} replacements and rollback (recursive triggers ${recursive})`, () => {
     const store = Store.open(":memory:"), db = store.db;
