@@ -13,6 +13,13 @@
 /// whether the field had the keyboard last frame (it losing it ends the rename); the row whose menu is open and the
 /// presenter it is (lit meanwhile); the rows swiped off to be archived, until they have gone; each swiped row's being
 /// past its line as last felt, and the press whose menu was last felt.
+priv struct PendingSwipeArchive {
+  way : @sf.EdgeWay
+  out : @signals.Signal[Bool]
+  mut cancel : () -> Unit
+}
+
+///|
 priv struct Rows {
   mut rename_for : String
   mut rename_seen : Bool
@@ -22,6 +29,8 @@ priv struct Rows {
   /// it opens
   menu_open : @signals.Signal[(String, Int)]
   swiped_off : Map[String, Bool]
+  /// An archive and its departure are owned by the chat, even while its list has no row for it.
+  pending_swipes : Map[String, PendingSwipeArchive]
   felt_past : Map[String, Bool]
 }
 
@@ -33,6 +42,7 @@ let rows : Rows = {
   rename_field: @ui.Field::new(),
   menu_open: @signals.signal(("", -1), same=fn(a, b) { a == b }),
   swiped_off: {},
+  pending_swipes: {},
   felt_past: {},
 }
 
@@ -46,6 +56,11 @@ fn chat_rows_reset() -> Unit {
   rows.rename_opened_at = -1
   rows.rename_field.set("")
   rows.menu_open.set(("", -1))
+  for _, pending in rows.pending_swipes {
+    (pending.cancel)()
+    pending.way.put(0.0)
+  }
+  rows.pending_swipes.clear()
   rows.swiped_off.clear()
   rows.felt_past.clear()
 }
@@ -922,6 +937,7 @@ fn archive_row(
   ask? : String? = item.watch_ask,
   then? : () -> Unit = fn() {  },
   failed? : () -> Unit = fn() {  },
+  ok? : () -> Unit = fn() {  },
 ) -> Unit {
   let params : Map[String, Json] = {
     "station": Json::string(item.station),
@@ -945,6 +961,7 @@ fn archive_row(
       done_action=@sf.t("android-chat.archived.undo"),
       done_run=@sfbase.archive_undo(src, params),
       at_once=true,
+      ok=fn(_) { ok() },
       failed~,
     )
   }
