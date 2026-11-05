@@ -465,7 +465,11 @@ jobs:
             apps/mbui/mbui/_build
             apps/mbui/mbui/out
           key: mbui-win-build-mono-${{ github.sha }}
-          restore-keys: mbui-win-build-mono-
+          # (arch/next's own, kept on main's ref by preview-arch.yml, before main's: a branch off arch/next took main's,
+          # and moon made the C of every package arch/next had changed again, ~70 s, 42066369298)
+          restore-keys: |
+            ${{ github.ref != 'refs/heads/main' && 'mbui-win-build-a-' || 'mbui-win-build-mono-' }}
+            mbui-win-build-mono-
       # A branch's own units over main's build (MBC_STORE: those of its last push, by content, which main's build has
       # not): without, each push of a branch compiled all it changed against main again, presets' 277 of 480 units on
       # every push, ~55 s (2026-11-01, 41291664812). Its objects alone (some tens of MB), not the build's 160; main's
@@ -497,7 +501,8 @@ jobs:
           # clang on Linux's runner of the same four cores the same 159 in 22, chat-opener-groups 41250236826,
           # 2026-11-01; MSVC's link and lib all the same, scripts/mbc shim)
           # The app's win.sh selects it for both this build and its release variants, which share these objects.
-          nohup bash -c 'MBUI_WIN_CORE=0 bash apps/mbui/scripts/win.sh build > "$0/log" 2>&1; echo $? > "$0/status"' "$B" > /dev/null 2>&1 &
+          # (each line it says with the seconds since it began: what of its time is MoonBit's, what the C's, 2026-11-05)
+          nohup bash -c 'MBUI_WIN_CORE=0 bash apps/mbui/scripts/win.sh build 2>&1 | while IFS= read -r l; do printf "%4d %s\n" $SECONDS "$l"; done > "$0/log"; echo ${PIPESTATUS[0]} > "$0/status"' "$B" > /dev/null 2>&1 &
       - uses: ./.github/actions/setup
       # core.hbc by its inputs (HBC_CACHE, scripts/core.sh hermes), as the other jobs keep it: the core's step was 12-17 s
       # of every run (~14 s of a CPU, beside cl), the core unchanged in most of them (restored on every run, saved by
