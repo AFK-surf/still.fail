@@ -647,6 +647,10 @@ test("letters from before they were marked are marked as the column comes, by th
   db.exec("DROP TRIGGER said_state_before_insert; DROP TRIGGER said_state_before_delete; DROP TRIGGER said_state_before_update; DROP TABLE said_state_guard");
   db.exec("DROP TRIGGER thread_state_add; DROP TRIGGER thread_state_drop; DROP TRIGGER session_first_add; DROP TRIGGER session_first_drop");
   db.exec("DROP TABLE thread_state; DROP TABLE thread_people; DROP TABLE session_first");
+  db.exec(`DROP TRIGGER widget_source_before_add; DROP TRIGGER widget_source_add; DROP TRIGGER widget_source_fast_add;
+    DROP TRIGGER widget_source_before_change; DROP TRIGGER widget_source_change; DROP TRIGGER widget_source_drop;
+    DROP TRIGGER widget_source_drop_thread; DROP TABLE widget_source_rows; DROP TABLE widget_source_invalid;
+    DROP TABLE widget_source_changed; DROP TABLE widget_source_scopes; DROP TABLE widget_source_meta`);
   db.exec("DROP VIEW merged; DROP INDEX entries_letters; DROP INDEX entries_said; ALTER TABLE entries DROP COLUMN letter");
   db.close();
   const again = open(path);
