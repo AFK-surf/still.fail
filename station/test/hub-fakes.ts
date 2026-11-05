@@ -88,8 +88,8 @@ export class FakeChat implements ChatSurface {
     this.statuses.push([`${thread.channel}/${thread.threadTs}`, messageTs, status]);
   }
   /// Where each thread was said to stand as its turn ended (null: no longer so), in order.
-  stands: [string, { kind: "done" | "need"; words: string | null } | null][] = [];
-  standsAt(thread: ThreadRef, stands: { kind: "done" | "need"; words: string | null } | null) {
+  stands: [string, { kind: "done" | "need" | "left"; words: string | null } | null][] = [];
+  standsAt(thread: ThreadRef, stands: { kind: "done" | "need" | "left"; words: string | null } | null) {
     this.stands.push([`${thread.channel}/${thread.threadTs}`, stands]);
   }
   async api(method: string, params: Json) {

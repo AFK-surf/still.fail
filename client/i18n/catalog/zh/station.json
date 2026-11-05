@@ -374,6 +374,7 @@
   "station.slack.standsDoneBare": "已完成",
   "station.slack.standsNeed": "需要你处理：{need}",
   "station.slack.standsNeedBare": "需要你处理",
+  "station.slack.standsLeft": "已退出这个 thread，@ 我即可回来",
   "station.slack.sessionFailed": "无法创建会话：{error}",
   "station.slack.viewFigure": "在 still.fail 中查看图表",
   "station.slack.viewFigureAndFiles": "在 still.fail 中查看图表和附件",

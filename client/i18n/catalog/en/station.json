@@ -377,6 +377,7 @@
   "station.slack.standsDoneBare": "Done",
   "station.slack.standsNeed": "Needs you: {need}",
   "station.slack.standsNeedBare": "Needs you",
+  "station.slack.standsLeft": "Left this thread: mention me to bring me back",
   "station.slack.sessionFailed": "Couldn't create session: {error}",
   "station.slack.viewFigure": "View the chart in still.fail",
   "station.slack.viewFigureAndFiles": "View the chart and files in still.fail",
