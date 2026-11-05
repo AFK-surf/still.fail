@@ -448,7 +448,8 @@ fn narrow_made_as(
               None => ()
             }
           })
-          narrow_made_top(v)
+          // Home and a place draw their own top bar under the status bar.
+          narrow_made_top(v, has_top=place || kind == "home")
           // (a place of the bottom bar's: its top bar over it, the place's name as the entry is now (another of the same
           // page's names it may become), what its page does at its end, settings at its end: place_page's)
           if place {
@@ -608,16 +609,18 @@ fn place_comes_in(v : @view.View) -> Unit {
 }
 
 ///|
-/// Over a page made once that has no top of its own (narrow_made's): the page's ground under the status bar, and the
-/// band a window's buttons are in dragging it where it has them (page_view's, an old view's).
-fn narrow_made_top(v : @view.View) -> Unit {
-  v.box(fn(o) {
-    o.over(Is(true)) |> ignore
-    o.show(fn() { status_top_now(v.window().0) > 0.0 }, fn(paper) {
-      paper.height(By(fn() { Some(status_top_now(v.window().0)) })).ground(By(fn() { @sf.theme().p.bg })) |> ignore
+/// Over a page made once: its ground under the status bar if it has no top of its own, and the band a window's buttons
+/// are in dragging it where it has them (page_view's, an old view's).
+fn narrow_made_top(v : @view.View, has_top~ : Bool) -> Unit {
+  if !has_top {
+    v.box(fn(o) {
+      o.over(Is(true)) |> ignore
+      o.show(fn() { status_top_now(v.window().0) > 0.0 }, fn(paper) {
+        paper.height(By(fn() { Some(status_top_now(v.window().0)) })).ground(By(fn() { @sf.theme().p.bg })) |> ignore
+      })
     })
-  })
-  |> ignore
+    |> ignore
+  }
   v.box(fn(o) {
     o.over(Is(true)) |> ignore
     // (where the frame is not wide: is_wide, by the window as it is)

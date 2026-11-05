@@ -1,3 +1,4 @@
+// Built by rules/build.sh from rules/src (MoonBit): not to be edited, built again.
 function _M0TPC16string10StringView(param0, param1, param2) {
   this.str = param0;
   this.start = param1;
