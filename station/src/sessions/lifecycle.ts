@@ -21,6 +21,7 @@ import type { SessionChange } from "./accounts.ts";
 import { unlockWorktrees, withLock } from "./archive.ts";
 import { roomOf } from "./footprint.ts";
 import { type Runtime, runs, runtimeNamed, runtimeTitle } from "./config.ts";
+import { FAST_RUNTIMES } from "../agents/profiles.ts";
 import { CLIENT_KEY_KEPT_MS, type Hub, connectOf, newChatKey, newSingleSessionKey, newToken } from "./hub.ts";
 import { INTERNAL_CHANNEL, INTERNAL_CONNECT } from "./internal.ts";
 
@@ -180,7 +181,7 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
     profilePinned: pinned !== null,
     model: model ?? profile.model ?? null,
     effort,
-    fast: runtime === "codex" ? (options.fast ?? null) : null,
+    fast: FAST_RUNTIMES.includes(runtime) ? (options.fast ?? null) : null,
     context: options.context ?? null,
     workspace,
     cwd: null,

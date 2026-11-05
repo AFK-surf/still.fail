@@ -26,6 +26,17 @@ describe("allowances and renewing", { concurrency: true }, () => {
     await p.close();
   });
 
+  test("a Claude subscription's allowance says whether its usage credits (what Fast is billed to) are on", async () => {
+    let extra: unknown = { is_enabled: true, monthly_limit: 5000 };
+    const p = await provider(() => ({ status: 200, body: { five_hour: { utilization: 5, resets_at: null }, extra_usage: extra } }));
+    assert.equal((await claudeUsage(p.base, "t", "zh")).extraUsage, true);
+    extra = { is_enabled: false };
+    assert.equal((await claudeUsage(p.base, "t", "zh")).extraUsage, false);
+    extra = null;
+    assert.equal("extraUsage" in (await claudeUsage(p.base, "t", "zh")), false, "not said: not known");
+    await p.close();
+  });
+
   test("a codex login's allowance is read with its auth.json's tokens", async () => {
     const dir = temp("codex-usage");
     const file = join(dir, "auth.json");

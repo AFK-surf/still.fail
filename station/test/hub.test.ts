@@ -2957,7 +2957,7 @@ test("a session from before a change is told it once, and a new one never", asyn
   await r.close();
 });
 
-test("fast is per session, and null restores the subscription default", async () => {
+test("fast is per session, on Codex and Claude Code, and null restores the account's default", async () => {
   const r = new Rig();
   const [a] = newSession(r.hub, { ...chat("codex"), fast: true });
   const [b] = newSession(r.hub, chat("codex"));
@@ -2972,8 +2972,11 @@ test("fast is per session, and null restores the subscription default", async ()
   assert.equal(r.session(a).fast, false, "unrelated changes preserve an explicit standard speed");
   await configure(r.hub, a, { fast: null });
   assert.equal(r.session(a).fast, null);
-  const [claude] = newSession(r.hub, chat("claude"));
-  await assert.rejects(configure(r.hub, claude, { fast: true }));
+  // Claude Code takes it too (on an Anthropic key: its driver says fastMode as it starts).
+  const [claude] = newSession(r.hub, { ...chat("claude"), fast: true });
+  assert.equal(r.session(claude).fast, true);
+  await configure(r.hub, claude, { fast: false });
+  assert.equal(r.session(claude).fast, false);
   await r.close();
 });
 

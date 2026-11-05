@@ -10,7 +10,7 @@ import type { Store } from "../store/store.ts";
 import { type HubConfig, type Profile, runs, runtimeNamed, runtimeTitle, sameModel, spelling } from "./config.ts";
 import { availableEfforts, cheapToLeave, commonEfforts, type ProfileHealth, pickProfile, reportedEfforts, serves, urgency, usable, windowsOf } from "./pool.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
-import { billedPerUse } from "../agents/profiles.ts";
+import { billedPerUse, FAST_RUNTIMES } from "../agents/profiles.ts";
 
 /// How long a profile a turn ran into the allowance of is passed over when its allowance is not read again.
 const SPENT_FOR_MS = 60 * 60 * 1000;
@@ -300,11 +300,11 @@ export class Accounts {
         const efforts = this.modelEfforts(target, model, typeof wantedProfile === "string" ? picked.id : null, allowed);
         if (!efforts.includes(effort)) throw new Error(t("station.profile.efforts", { runtime: runtimeTitle(target), efforts: efforts.join(t("station.list.separator")) }));
       }
-      if (change.fast != null && target !== "codex") throw new Error(t("station.session.fastOpenAiOnly"));
+      if (change.fast != null && !FAST_RUNTIMES.includes(target)) throw new Error(t("station.session.fastOpenAiOnly"));
       checkContext(target, change.context, lang);
       return { row, runtime: target, model, effort, profile: picked.id, pinned: typeof wantedProfile === "string", repick: false };
     }
-    if (change.fast !== undefined && change.fast !== null && runtime !== "codex") throw new Error(t("station.session.fastOpenAiOnly"));
+    if (change.fast !== undefined && change.fast !== null && !FAST_RUNTIMES.includes(runtime)) throw new Error(t("station.session.fastOpenAiOnly"));
     checkContext(runtime, change.context, lang);
     if (typeof wantedProfile === "string") {
       const next = config.profiles.find((p) => p.id === wantedProfile);
