@@ -19,6 +19,7 @@ pub fn chat_list_node(
   foot : () -> Double,
   core : Core,
   foot_gap? : Double = 0.0,
+  foot_height? : () -> @view.Height,
   follows? : @signals.Signal[Bool] = @signals.signal(true, same=fn(a, b) { a == b }),
 ) -> ChatListNode {
   let rk = r.station + "\u{1}" + r.session
@@ -295,7 +296,15 @@ pub fn chat_list_node(
         (sized.lend)(slot, k)
         match @signals.untracked(fn() { row_of(k) }) {
           Some((Top, _)) => { slot.height(By(fn() { Some(top()) })) |> ignore; return }
-          Some((Foot, _)) => { slot.height(By(fn() { Some(clear_foot() + foot_gap) })) |> ignore; return }
+          Some((Foot, _)) => {
+            match foot_height {
+              Some(measure) => slot.height_measured(By(fn() {
+                measure().plus(@view.height(foot_gap + (if view().map_or(false, @sfbase.ask_clears) { float_lift + float_side } else { 0.0 })))
+              })) |> ignore
+              None => slot.height(By(fn() { Some(clear_foot() + foot_gap) })) |> ignore
+            }
+            return
+          }
           _ => ()
         }
         // (its node while it is made, what is read of where it is: the reading's)

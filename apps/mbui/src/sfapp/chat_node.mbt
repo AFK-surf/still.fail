@@ -23,6 +23,7 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
     let landing : Ref[(String) -> @sfpages.MineLanding?] = Ref(fn(_) { None })
     // (the composer's room at the page's foot, as it says it: the list's foot over it)
     let room : @signals.Signal[(() -> Double)?] = @signals.signal(None, same=fn(a, b) { a is None && b is None })
+    let room_height : @signals.Signal[(() -> @view.Height)?] = @signals.signal(None, same=fn(a, b) { a is None && b is None })
     let composer_room = fn() { room.get().map(fn(f) { f() }).unwrap_or(0.0) }
     let page_height = fn() { p.laid_size_told().map(fn(z) { z.1 }).unwrap_or(height()) }
     let list_room = fn() { dmax(composer_room(), tabletop_clear_in(page_height(), frame().foot)) }
@@ -45,7 +46,11 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
         }))
       }))
       |> ignore
-      let list = @sfpages.chat_list_node(l, src, r, view, entries, fn() { list_top() }, list_room, settings_core(src, w), foot_gap=list_foot())
+      let list = @sfpages.chat_list_node(l, src, r, view, entries, fn() { list_top() }, list_room, settings_core(src, w), foot_gap=list_foot(),
+        foot_height=fn() {
+          room_height.get().map(fn(f) { f() }).unwrap_or(@view.height(0.0))
+          .maximum(@view.height(tabletop_clear_in(page_height(), frame().foot)))
+        })
       latest.val = list.to_latest
       landing.val = list.landing_of
     })
@@ -86,8 +91,9 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
         drops=p,
       )
       room.set(Some(made.room))
+      room_height.set(Some(made.room_height))
       made.root.shrink(Is(0.0)) |> ignore
-      f.owns(fn() { room.set(None) }) |> ignore
+      f.owns(fn() { room.set(None); room_height.set(None) }) |> ignore
       // The fold owns the room below it. The composer remains the same editor as the pose changes; the recent
       // chats take only the space left below it, and give that space up as the keyboard comes in.
       f.show(fn() { @ui.system_tabletop() is Some(_) }, fn(recent) {

@@ -108,6 +108,7 @@ fn chat_talk_node(
   let latest : Ref[() -> Unit] = Ref(fn() {  })
   let landing : Ref[(String) -> @sfpages.MineLanding?] = Ref(fn(_) { None })
   let room : @signals.Signal[(() -> Double)?] = @signals.signal(None, same=fn(a, b) { a is None && b is None })
+  let room_height : @signals.Signal[(() -> @view.Height)?] = @signals.signal(None, same=fn(a, b) { a is None && b is None })
   let room_now = fn() { room.get().map(fn(f) { f() }).unwrap_or(0.0) }
   // (its view not read yet: its messages to come in their bones, the first where the list's first row will be, or why
   // it cannot be read. A chat just made from a new chat already has fresh_view's view, so it shows no sample.)
@@ -121,7 +122,8 @@ fn chat_talk_node(
   })
   talk.box(fn(l) {
     l.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
-    let list = @sfpages.chat_list_node(l, src, r, view, entries, fn() { chat_bar_room() + list_head_gap }, room_now, settings_core(src, w), foot_gap=list_foot_gap)
+    let list = @sfpages.chat_list_node(l, src, r, view, entries, fn() { chat_bar_room() + list_head_gap }, room_now, settings_core(src, w), foot_gap=list_foot_gap,
+      foot_height=fn() { room_height.get().map(fn(f) { f() }).unwrap_or(@view.height(0.0)) })
     latest.val = list.to_latest
     landing.val = list.landing_of
   })
@@ -151,7 +153,8 @@ fn chat_talk_node(
       drops=talk,
     )
     room.set(Some(made.room))
-    f.owns(fn() { room.set(None) }) |> ignore
+    room_height.set(Some(made.room_height))
+    f.owns(fn() { room.set(None); room_height.set(None) }) |> ignore
     })
   })
   |> ignore

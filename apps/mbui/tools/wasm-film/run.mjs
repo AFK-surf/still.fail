@@ -56,7 +56,9 @@ const strings = [process.env.MBUI_FIXTURE ?? '', process.env.MBUI_LOCALE ?? '', 
   process.env.MBUI_FAILED ?? '', process.env.MBUI_FAILED_WHY ?? '', process.env.MBUI_SAID ?? '',
   process.env.MBUI_UPDATE ?? '', process.env.MBUI_FILM_AUTOFILL ?? '',
   process.env.MBUI_CORE_MS ?? '', process.env.MBUI_UPDATES_MS ?? ''].map(s => Array.from(s, c => c.codePointAt(0)));
-const numbers = [size[0], size[1], scale, platform, dark, at, fps, max, frame, fontScale, inset, corner, nav, cornersKept];
+const profile = process.env.MBUI_PICTURE_PROFILE === '1';
+if (profile && hasFrame) throw new Error('a profiled drive cannot select a film frame');
+const numbers = [size[0], size[1], scale, platform, dark, at, fps, max, frame, fontScale, inset, corner, nav, cornersKept, Number(profile)];
 let core, scratch = [], pixels;
 function text() {
   const n = core.text_length();

@@ -620,6 +620,9 @@ pub struct Tree {
   mut outs_changed : Bool
   /// the nodes whose size is followed (View::laid_size_told), told as all of the layout is done
   sized : Array[Int]
+  // Intrinsic geometry dependencies stay inside layout; they publish no signals.
+  height_sources : Map[NodeId, Array[NodeId]]
+  height_users : Map[NodeId, Set[NodeId]]
   /// what is to be brought into sight once laid out (Tree::show_in_sight): a node, and where in it (its own terms, asked
   /// then; none: all of it)
   shows_due : Array[(NodeId, () -> (Double, Double)?)]
@@ -839,6 +842,8 @@ pub fn Tree::new(
     outs_said: @signals.signal(0, same=fn(a, b) { a == b }),
     outs_changed: false,
     sized: [],
+    height_sources: {},
+    height_users: {},
     shows_due: [],
     outs_gone: [],
     time,
@@ -1658,12 +1663,7 @@ fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
   self.measured_gen = -1
   self.hits = self.hits + 1
   self.marked()
-  let mut i = at
-  while i >= 0 {
-    let n = self.nodes[i]
-    n.flex.dirty = true
-    i = n.parent
-  }
+  self.height_dirty(at)
 }
 
 ///|
@@ -4947,6 +4947,9 @@ pub fn View::owned_count(self : View) -> Int {
 /// cleanups run), what goes with it run, its callback and measure dropped, its index free.
 fn View::let_go(self : View) -> Unit {
   guard self.live() is Some(n) else { return }
+  if self.tree.height_users.contains(self.id()) {
+    self.tree.layout_marked_at(self.at)
+  }
   // (what the pointer is over let go of, it or one it holds: pointed at no more, what holds it told so while it is
   // still held by them, View::pointed_in; what it is over then the host's to find again, as what takes it changed)
   if self.tree.pointed_within_at(self.at) {

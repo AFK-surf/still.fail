@@ -48,6 +48,8 @@ fn image_free_host(id : Int) -> Unit = "probe" "imageFree"
 fn host_turn() -> Unit = "probe" "turn"
 ///|
 fn host_view(w : Double, h : Double, scale : Double) -> Unit = "probe" "view"
+///|
+fn work_now() -> Double = "film" "now"
 
 ///|
 let host_text : Ref[String] = Ref("")
@@ -213,13 +215,29 @@ pub fn draw() -> Int {
   let prepare = option(3)
   let script = option(4)
   let max = option_number(7).to_int()
+  let profile = option_number(14) == 1.0
+  if profile {
+    t.measure_as_host()
+    @ui.set_work_clock(Some(work_now))
+  }
   if prepare != "" && !drive_passed(t.drive(prepare, max~)) {
     println("picture: scene preparation did not pass")
     return -1
   }
   if script != "" {
     let frame = option_number(8).to_int()
-    if frame >= 0 {
+    if profile {
+      let mut previous = @ui.view_tree().unwrap().work()
+      let logs = t.bench(script, fps=option_number(6), max~, each=fn(t, drawn) {
+        let work = @ui.view_tree().unwrap().work()
+        if drawn {
+          let perf = t.frame_perf()
+          println("APPWORK {\"at\":\{t.time()},\"computes\":\{work.computes - previous.computes},\"measured\":\{work.measured - previous.measured},\"laid\":\{work.laid - previous.laid},\"bound\":\{work.bound - previous.bound},\"structure\":\{work.structure - previous.structure},\"made\":\{work.made - previous.made},\"released\":\{work.let_go - previous.let_go},\"build_ms\":\{perf.build_ms},\"layout_ms\":\{perf.layout_ms},\"paint_ms\":\{perf.paint_ms}}")
+        }
+        previous = work
+      })
+      if !drive_passed(logs) { println("picture: measured scene steps did not pass"); return -1 }
+    } else if frame >= 0 {
       let (reached, logs) = t.film_frame(script, frame, max~)
       for line in logs { if line.has_prefix("DRIVE") { println(line) } }
       if !reached { println("picture: requested frame was not reached"); return -1 }
@@ -263,6 +281,7 @@ pub fn draw() -> Int {
 }
 ///|
 pub fn done() -> Unit {
+  @ui.set_work_clock(None)
   match current_tester.val {
     Some(t) => {
       t.end_run(WasmHost::{})

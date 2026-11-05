@@ -6,6 +6,7 @@ pub(all) struct ChatComposerNode {
   root : @view.View
   composer : ComposerNode
   room : () -> Double
+  room_height : () -> @view.Height
 }
 
 ///|
@@ -101,5 +102,15 @@ pub fn chat_composer_node(
       _ => ()
     }
   }) |> ignore
-  { root, composer: node.val.unwrap(), room: fn() { room(false) } }
+  { root, composer: node.val.unwrap(), room: fn() { room(false) },
+    room_height: fn() {
+      let n = node.val.unwrap()
+      let look = @ui.style_words(@sf.theme().t.words)
+      let line = (if look.line > 0.0 { look.line } else { look.size * @ui.tree_theme().text_line }) * @ui.font_scale()
+      let opened = @sf.composer_pad + 8.0 + line + 10.0 + @sf.theme().round.side + @sf.capsule_in(place().corner, @sf.theme().round.side)
+      let total = root.natural_height(width())
+      let cap = n.cap.natural_height(width())
+      total.plus(@view.height((n.ground)().3)).maximum(total.minus(cap).plus(@view.height(opened)))
+    },
+  }
 }
