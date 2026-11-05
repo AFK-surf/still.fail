@@ -8,6 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { ops } from "../src/read/ops.ts";
 import { answersSince, dismissed, keptChats, makeStore, openStore, PUBLISHED_OF, SEEN_OF, SHARES_OF } from "../src/read/store.ts";
+import { CcIndexPreparation } from "../src/store/cc-thread-index.ts";
 import { MANUAL, Store, newMessage } from "../src/store/store.ts";
 
 test("a scoped chat update reads marks and answers only for those chats", () => {
@@ -74,6 +75,9 @@ test("a change's sidebar items and a chat's view read their own shares, openers 
       open.run(`d${i}`, "k2", `q${i}`);
       publish.run(`x${i}`, 1000 + i);
     }
+    // This test calls the read operations directly, without the Readers pool that prepares pending copy destinations.
+    const cc = new CcIndexPreparation();
+    while (!cc.step(store.db, "k").done) {}
     const reader = openStore(dir);
     const counts: Record<string, number> = {};
     const db = reader.db;
