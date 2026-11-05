@@ -440,6 +440,27 @@ pub fn chat_list_node(
           })
         })
         |> ignore
+        // (a quote's passage below four fifths of the pane: once its target row is placed and laid out, move the
+        // anchored row so that the passage is in the middle; leave the row alone when its passage is already high)
+        slot.reacts(fn() { (flash.get().0, put.get(), slot.laid_window_told(), v.laid_window_told()) }, fn(now) {
+          guard rd0.flash_centre && now.0 != "" && now.1 is None &&
+            row_of(k).map_or(false, fn(r) { match r.0 { Said(m) => m.ts == now.0; _ => false } }) &&
+            now.2 is Some((_, row_y, _, _)) && now.3 is Some((_, py, _, ph)) else { return }
+          let (ready, found) = quote_passage_rect(slot, now.0, rd0.flash_passage)
+          guard ready else { return }
+          rd0.flash_centre = false
+          match found {
+            Some((first, last)) => {
+              let mid = (first.1 + last.1 + last.3) / 2.0 - py
+              if mid > ph * 0.8 {
+                let offset = row_y - py - (mid - ph / 2.0)
+                // Change the list's anchor itself: scrolling without changing it would put this row back.
+                put.set(Some((k, offset)))
+              }
+            }
+            None => ()
+          }
+        })
         slot.reacts(fn() { flash.get() }, fn(f) {
           // (over once its time is: nothing more read of the clock for it)
           if f.0 != "" {
@@ -1055,6 +1076,64 @@ pub fn chat_list_node(
       }
     },
   }
+}
+
+///|
+/// A quoted passage in the message's own laid-out words, by its first and last lines. Words of separate paragraphs
+/// are one text, separated by newlines, as they are when picked; the row's author and quote cards are not its words.
+fn quote_passage_rect(row : @view.View, ts : String, passage : String) -> (Bool, ((Double, Double, Double, Double), (Double, Double, Double, Double))?) {
+  let pending = [row]
+  let mut body : @view.View? = None
+  while pending.pop() is Some(node) {
+    match pick_rows.get(node.id()) {
+      Some(pick) =>
+        match pick() {
+          Some(r) if r.ts == ts => { body = Some(node); break }
+          _ => ()
+        }
+      None => ()
+    }
+    let children = node.kids()
+    for i in 0..<children.length() {
+      pending.push(children[children.length() - 1 - i])
+    }
+  }
+  guard body is Some(body) else { return (false, None) }
+  let paragraphs : Array[(@ui.Words, Int)] = []
+  let text = StringBuilder()
+  let mut length = 0
+  pending.clear()
+  pending.push(body)
+  while pending.pop() is Some(node) {
+    if !node.runs_set_now().0.is_empty() {
+      match @ui.runs_words_now(node) {
+        Some(words) => {
+          if !paragraphs.is_empty() {
+            text.write_char('\n')
+            length = length + 1
+          }
+          paragraphs.push((words, length))
+          text.write_string(words.text)
+          length = length + words.text.length()
+        }
+        None => ()
+      }
+    }
+    let children = node.kids()
+    for i in 0..<children.length() {
+      pending.push(children[children.length() - 1 - i])
+    }
+  }
+  guard @sf.find_passage(text.to_string(), passage) is Some((a, b)) else { return (true, None) }
+  let lines : Array[(Double, Double, Double, Double)] = []
+  for (words, start) in paragraphs {
+    let from = if a > start { a - start } else { 0 }
+    let to = if b - start < words.text.length() { b - start } else { words.text.length() }
+    if from < to {
+      lines.append(words.rects(from, to))
+    }
+  }
+  if lines.is_empty() { (true, None) } else { (true, Some((lines[0], lines[lines.length() - 1]))) }
 }
 
 ///|
