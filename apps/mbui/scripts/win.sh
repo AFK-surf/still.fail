@@ -96,10 +96,21 @@ END
 RC
   # (rc's options with -, not /: Git Bash hands /fo to Windows programs as a path)
   (cd "$r" && rc.exe -nologo -fo app.res app.rc) || return 1
-  # (named by what is in it: moon links the program again only for a link of other inputs, the link's flags among
-  # them, and so for resources that changed, another variant's or version's, as their name does; the same name, an
-  # app built before linked none of them and kept the resources it had)
-  local res=$r/app-$(sha256sum "$r/app.res" | cut -c1-16).res
+  # (one name whatever is in it, the app's link flags the same from one build to the next: named by its content, a
+  # version's every commit made the app package's moon.pkg another and moon built all of it again, moonc and its C split
+  # anew, ~45 s of a Windows preview with nothing of its MoonBit changed, 2026-11-05. moon links the program again only
+  # as an input it knows changes, which these resources are not: where they are not what the program was linked with
+  # (kept beside it), the program is taken away, and moon links it again alone; mbc's link goes by its inputs' content)
+  local res=$r/app.linked.res
+  . "$MBUI_DIR/scripts/env.sh"
+  # (a build before this one's: none, nothing linked yet)
+  if [ -f "$MBUI_DIR/out/win/app/moon.work" ]; then
+    local built=$MBUI_DIR/out/win/app/$(cd "$MBUI_DIR/out/win/app" && pkg_build $APP native ${MODE:-release})
+    if ! cmp -s "$r/app.res" "$built/app.res"; then
+      rm -f "$built/stillfail.exe"
+      mkdir -p "$built" && cp "$r/app.res" "$built/app.res"
+    fi
+  fi
   cp "$r/app.res" "$res"
   export MBUI_WIN_RES=$res
   echo "win.sh: $name 0.1.$n ($id), its resources $(wc -c < "$res") bytes ($(basename "$res"))"
