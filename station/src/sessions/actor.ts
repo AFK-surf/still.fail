@@ -1775,12 +1775,22 @@ const SPENT_BEFORE = ["⚠️ 已达到额度或速率限制", "⚠️ Hit a usa
 const OVERLOADED_NOTICE = () => `⚠️ ${t("station.notice.overloaded")}`;
 
 /// A failed turn as its chat is told it: what it means and what to do, by its reason, on its first line (what a
-/// notice shows closed, and a push says); what the runtime said after it, as it said it (`withSaid`).
+/// notice shows closed, and a push says); what the runtime said after it, as it said it (`withSaid`). A reason the
+/// station cannot put in words of its own (the model's, any other) has the runtime's first line in it: "模型服务出错"
+/// alone told people nothing (2026-11-05).
 function failureNotice(outcome: TurnOutcome): string {
   if (outcome.kind !== "failed") return "";
   const key = outcome.reason === "rate_limit" ? "rateLimit" : outcome.reason === "other" ? "failed" : outcome.reason;
-  return `⚠️ ${withSaid(t(`station.notice.${key}`), outcome.message)}`;
+  const why = outcome.reason === "model" || outcome.reason === "other" ? firstLine(outcome.message) : "";
+  return `⚠️ ${withSaid(why === "" ? t(`station.notice.${key}`) : t(`station.notice.${key}Why`, { why }), outcome.message)}`;
 }
+
+/// The first line of what failed said, short enough for a notice's line and a push.
+function firstLine(said: string): string {
+  const line = said.trim().split("\n")[0]!.trim();
+  return line.length > FIRST_LINE ? `${line.slice(0, FIRST_LINE - 1).trimEnd()}…` : line;
+}
+const FIRST_LINE = 200;
 
 /// `words`, and under them what failed said itself (a provider's, a process's, in its own words), as a code block: a
 /// notice opened shows it, for whoever wants to see the error as it was (2026-11-03).

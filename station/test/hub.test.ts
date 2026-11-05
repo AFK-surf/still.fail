@@ -401,8 +401,9 @@ test("a turn that fails after it said it would wait ends failed, not waiting: no
   await settle();
   const last = () => r.store.lastTurn(key)!;
   assert.deepEqual([last().outcome, last().declared, last().waitSeconds], ["failed", null, null], "shown failed, not waiting");
-  // What it means on the first line; what the runtime said under it, as it said it (opened, the notice shows it).
-  assert.equal(r.chat.lastText(), "⚠️ 模型服务出错，回复即可重试\n\n```\nAPI Error: Connection dropped (ECONNRESET)\n```");
+  // What it means on the first line, with the runtime's first words where the station has none of its own; all it
+  // said under it, as it said it (opened, the notice shows it).
+  assert.equal(r.chat.lastText(), "⚠️ 模型服务出错：API Error: Connection dropped (ECONNRESET)\n\n```\nAPI Error: Connection dropped (ECONNRESET)\n```");
   const thread = r.thread("C1", m.threadTs);
   const notice = r.store.entriesBefore(thread.id, null, 1).at(-1)!;
   assert.deepEqual(last().about, { thread: thread.id, seq: notice.n, ts: notice.ts }, "the failure points to its own notice");
