@@ -133,6 +133,7 @@
     "files": [
       "src/sfapp/app.mbt",
       "src/sfapp/bar.mbt",
+      "src/sfapp/bar_node.mbt",
       "src/sfapp/bar_timing.mbt",
       "src/sfapp/bars.mbt",
       "src/sfapp/home_node.mbt",
