@@ -569,6 +569,10 @@ pub struct Tree {
   // The moment a frame or the clock brings the tree to while it does (Tree::brought, Tree::at), -1 outside one: what
   // is told meanwhile (a size laid out otherwise, a moment come) is of it
   mut bringing_at : Double
+  // The layout pass under way in one (Tree::laid_out), 0 outside one; what it told otherwise, where noted
+  // (Tree::told_noted)
+  mut laid_passes : Int
+  told_otherwise : Array[String]
   /// how words are measured: (words, how they are set, width offered) -> (width, height)
   measure : (String, WordsLook, Double) -> (Double, Double)
   /// and words in pieces set their own way (View::words_runs): (the pieces, how the words are set, width offered)
@@ -847,6 +851,8 @@ pub fn Tree::new(
     time,
     cause_at: -1.0,
     bringing_at: -1.0,
+    laid_passes: 0,
+    told_otherwise: [],
     measure,
     measure_runs,
     measure_shorter: match measure_shorter {
@@ -1763,15 +1769,7 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
   let w = @signals.watch(fn() {
     if b.live && !b.queued {
       b.queued = true
-      // (told as a frame or the clock brings the tree to its moment: of that moment, Tree::brought)
-      told_at.val = if self.bringing_at >= 0.0 {
-        self.bringing_at
-      } else {
-        match self.time {
-          Some(f) => f()
-          None => self.logic
-        }
-      }
+      told_at.val = self.time_now()
       self.bindings_due.push(b)
       self.marked()
       // (where things stand once the change that told it is told whole, a frame drawn after or none: placed then, where
@@ -1904,14 +1902,8 @@ fn Tree::committed(self : Tree, f : () -> Unit) -> Unit {
 fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   let at = if self.cause_at >= 0.0 {
     self.cause_at
-  } else if self.bringing_at >= 0.0 {
-    // (told as a frame or the clock brings the tree to its moment: of that moment, Tree::brought)
-    self.bringing_at
   } else {
-    match self.time {
-      Some(now) => now()
-      None => self.logic
-    }
+    self.time_now()
   }
   self.advance_logic(at)
   // What was due has finished. Advancing the drawing clock can notify bindings too: tell it with the structure's
@@ -5569,8 +5561,12 @@ pub fn Tree::moment(self : Tree) -> Double? {
 }
 
 ///|
-/// The time now, as a change is told (the host's, else the clock's).
+/// The time now, as a change is told: the moment a frame or the clock brings the tree to while it does (what is told
+/// then is of it, Tree::brought), else the host's, else the clock's. The one place the host's clock is read.
 fn Tree::time_now(self : Tree) -> Double {
+  if self.bringing_at >= 0.0 {
+    return self.bringing_at
+  }
   match self.time {
     Some(f) => f()
     None => self.logic
@@ -6048,12 +6044,9 @@ fn Tree::brought(self : Tree, upto : Double) -> Unit {
 ///|
 /// What was marked laid out and drawn at `upto`, the logic not moved: no moment's work done, nothing due run (for where
 /// things are as an event finds them in the middle of its change: Tree::laid_now).
-fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
+fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool) {
   let w = self.last_w
   let h = self.last_h
-  if !self.due {
-    return
-  }
   // the bindings whose reads changed since, each once, in the order they were told (what they make runs its own now,
   // what they set again marks what it marks)
   let mut i = 0
@@ -6140,12 +6133,12 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   if self.outs_changed {
     self.outs_told()
     if self.due {
-      self.laid_out(upto)
+      return (placing, ordered)
     }
   }
   // (the sizes followed told once all of it is laid out, and what that tells laid out in this same pass)
   if self.sized.length() > 0 && self.sizes_told() && self.due {
-    self.laid_out(upto)
+    return (placing, ordered)
   }
   // (what waited on all of it laid out, told once now, whether any size it follows came out otherwise or not; what that
   // tells laid out in this same pass)
@@ -6156,7 +6149,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
       @signals.untracked(f)
     }
     if self.due {
-      self.laid_out(upto)
+      return (placing, ordered)
     }
   }
   // (what is to be brought into sight, where all of it is laid out, before it is drawn; what that moves laid out in
@@ -6164,9 +6157,65 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   if self.shows_due.length() > 0 {
     self.shown_now()
     if self.due {
-      self.laid_out(upto)
+      return (placing, ordered)
     }
   }
+  (placing, ordered)
+}
+
+///|
+/// How many layout passes one may take (each what the one before told marking more: opening a long chat, 19).
+pub let laid_passes_most : Int = 32
+
+///|
+/// Each layout pass's sizes told otherwise said (a switch for finding why passes go on: what was told, from what to
+/// what), else only those of the passes past laid_passes_most.
+pub let laid_passes_traced : Ref[Bool] = Ref(false)
+
+///|
+/// Where a pass's sizes told otherwise are said while laid_passes_traced is on.
+pub let laid_passes_trace : Ref[(String) -> Unit] = Ref(fn(s) { println(s) })
+
+///|
+/// Node `at`'s `what` told otherwise in this pass, from `was` to `now`: noted where it is asked for (the trace on, or
+/// the last passes before laid_passes_most).
+fn Tree::told_noted(self : Tree, at : Int, what : String, was : () -> String, now : () -> String) -> Unit {
+  if laid_passes_traced.val {
+    (laid_passes_trace.val)("view: layout pass \{self.laid_passes}: node \{at} \{what} \{was()} -> \{now()}")
+  }
+  if self.laid_passes >= laid_passes_most && self.told_otherwise.length() < 8 {
+    self.told_otherwise.push("node \{at} \{what} \{was()} -> \{now()}")
+  }
+}
+
+///|
+/// What was marked laid out and drawn at `upto`, the logic not moved: no moment's work done, nothing due run (for where
+/// things are as an event finds them in the middle of its change: Tree::laid_now). Pass after pass while what one tells
+/// marks more to do, each from the start, in a loop: once it ran in itself, as deep as passes came, and a frame whose
+/// passes never stopped (what it told taken at the host's clock, gone on: Tree::brought) ran the stack out, 2000 deep.
+fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
+  if !self.due {
+    return
+  }
+  let mut placing = false
+  let mut ordered = false
+  let mut passes = 0
+  while self.due {
+    passes += 1
+    self.laid_passes = passes
+    if passes > laid_passes_most {
+      fault(
+        "view: \{passes - 1} layout passes in one, each telling what marks another; told otherwise in the last: \{self.told_otherwise}",
+      )
+      self.due = false
+      break
+    }
+    self.told_otherwise.clear()
+    let (p, o) = self.laid_pass(upto)
+    placing = placing || p
+    ordered = ordered || o
+  }
+  self.laid_passes = 0
   if ordered || self.changed.length() > 0 || self.composed.length() > 0 {
     self.drawn_due = true
   }
@@ -6209,6 +6258,7 @@ fn Tree::sizes_told(self : Tree) -> Bool {
           let rect = if self.out_at(at) { None } else { Some(self.handle(at).placed_window_now()) }
           if @signals.untracked(fn() { cell.get() }) != rect {
             told.val = true
+            self.told_noted(at, "place", fn() { @signals.untracked(fn() { cell.get() }).to_string() }, fn() { rect.to_string() })
             cell.set(rect)
           }
         }
@@ -6222,6 +6272,7 @@ fn Tree::sizes_told(self : Tree) -> Bool {
           }
           if @signals.untracked(fn() { cell.get() }) != rect {
             told.val = true
+            self.told_noted(at, "place", fn() { @signals.untracked(fn() { cell.get() }).to_string() }, fn() { rect.to_string() })
             cell.set(rect)
           }
         }
@@ -6238,6 +6289,7 @@ fn Tree::sizes_told(self : Tree) -> Bool {
           let size = Some((n.flex.width, n.flex.height))
           if @signals.untracked(fn() { cell.get() }) != size {
             told.val = true
+            self.told_noted(at, "size", fn() { @signals.untracked(fn() { cell.get() }).to_string() }, fn() { size.to_string() })
             cell.set(size)
           }
         }
@@ -6248,6 +6300,7 @@ fn Tree::sizes_told(self : Tree) -> Bool {
         Some(cell) =>
           if @signals.untracked(fn() { cell.get() }) != n.went {
             told.val = true
+            self.told_noted(at, "side", fn() { "" }, fn() { "" })
             cell.set(n.went)
           }
         None => ()
