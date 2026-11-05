@@ -18,7 +18,16 @@ fn bar_after_push(frames : Array[Double]) -> (Double, Double, Double, Double, Do
     t.frame_at(t0 + f)
   }
   t.frame_at(t0 + 160.0)
-  (bar.vis.start - t0, bar.vis.value, bar.vis.target, bar.k.x, bar.ball_x.x, bar.ball_alpha.value, bar.ball_scale.value)
+  let now = t.time()
+  (
+    bar.vis.start - t0,
+    bar.vis.at(now).0,
+    bar.vis.target,
+    bar.k.at(now).0,
+    bar.ball_x.at(now).0,
+    bar.ball_alpha.at(now).0,
+    bar.ball_scale.at(now).0,
+  )
 }
 
 ///|
@@ -64,10 +73,10 @@ fn bar_at_rest() -> (@ui.Tester, Double) {
 }
 
 ///|
-/// How lit place `key` of the bar is (1 lit, 0 not; -1 never drawn).
-fn bar_lit(key : String) -> Double {
+/// How lit place `key` of the bar is at `now` (1 lit, 0 not; -1 never told).
+fn bar_lit(key : String, now : Double) -> Double {
   match bar.tints.get("bar:" + key) {
-    Some(g) => g.value
+    Some(g) => g.at(now).0
     None => -1.0
   }
 }
@@ -108,7 +117,8 @@ fn bar_after_place(place : String, frames : Array[Double]) -> (String, Double, D
     t.frame_at(t0 + f)
   }
   t.frame_at(t0 + 160.0)
-  (m_face.val, bar.icon_swap.start - t0, bar.icon_swap.value, bar_lit(place), bar_lit("chats"), bar.ball_x.x)
+  let now = t.time()
+  (m_face.val, bar.icon_swap.start - t0, bar.icon_swap.at(now).0, bar_lit(place, now), bar_lit("chats", now), bar.ball_x.at(now).0)
 }
 
 ///|
@@ -137,7 +147,7 @@ fn bar_after_order(frames : Array[Double]) -> (Double, Double, Double) {
     t.frame_at(t0 + f)
   }
   t.frame_at(t0 + 160.0)
-  (bar.ball_x.x, bar.ball_x.to, bar.ball_x.set_at - t0)
+  (bar.ball_x.at(t.time()).0, bar.ball_x.to, bar.ball_x.set_at - t0)
 }
 
 ///|
@@ -221,7 +231,7 @@ fn bar_drawn_up(frames : Array[Double]) -> (Double, Double, Bool, Double, Double
     t.touch_at(kind, xs[0], y + dy, t0 + at)
   }
   t.frame_at(t0 + 400.0)
-  (bar.o.value_at(t0 + 400.0), bar.o.to, bar.mode.get(), bar.ball_x.x, bar.ball_y.x)
+  (bar.o.value_at(t0 + 400.0), bar.o.to, bar.mode.get(), bar.ball_x.at(t0 + 400.0).0, bar.ball_y.at(t0 + 400.0).0)
 }
 
 ///|

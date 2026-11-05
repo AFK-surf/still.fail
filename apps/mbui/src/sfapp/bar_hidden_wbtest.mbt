@@ -16,7 +16,7 @@ test "a hidden bar does not rebuild as its unseen motions finish, and works when
   assert_true(motions_end > hidden_at, msg="a bar motion remains after it is hidden")
   ignore(host_frames_till(t, t.display_frame(hidden_at)))
   if t.time() < hidden_at { t.frame_at(t.display_frame(hidden_at)) }
-  assert_true(bar.vis.value <= 0.0 && bar.told.map(fn(x) { x.shown }) == Some(false))
+  assert_true(bar.vis.at(t.time()).0 <= 0.0 && bar.told.map(fn(x) { x.shown }) == Some(false))
   t.record_host()
   let (_, built) = steps_built(t, motions_end - t.time() + 2.0 * host_phone_period)
   let bar_builds = built.filter(fn(why) { why.contains("part kept at src/sfapp/bar.mbt") })

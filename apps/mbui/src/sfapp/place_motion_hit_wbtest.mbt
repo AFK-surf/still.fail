@@ -4,7 +4,7 @@ test "a place coming in has its drawing and input in the same place" {
   bars_picked.set(Some(([["chats", "stations"]], 0)))
   t.frame()
   to_bar_rest(t)
-  let xs = bar_centres(390.0 - 44.0, bar.k.x, 2)
+  let xs = bar_centres(390.0 - 44.0, bar.k.at(t.time()).0, 2)
   t.tap_once(xs[1] + 22.0, 844.0 - 22.0 - 28.0)
   let at = t.time()
   t.frame_at(at + @ui.move_ms(switch_slide) / 4.0)

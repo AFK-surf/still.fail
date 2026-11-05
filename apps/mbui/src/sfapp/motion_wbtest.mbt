@@ -503,7 +503,8 @@ test "the bar going down under a page pushed takes no tap: the field tapped wher
   tap_once_on(t, "夜里的构建又失败了")
   // the chat half way in (its composer in the window: a page's Move across the phone), the bar still going down over it
   t.run_for(phone_page_ms / 2.0)
-  assert_true(bar.vis.value > 0.01 && bar.vis.value < 0.5, msg="\{bar.vis.value}")
+  let shown = bar.vis.at(t.time()).0
+  assert_true(shown > 0.01 && shown < 0.5, msg="\{shown}")
   let (x, y, w, h) = t.rect_of("发消息").unwrap()
   assert_true(y + h > 844.0 - 22.0 - 56.0)
   t.tap_once(x + w / 2.0, y + h / 2.0)

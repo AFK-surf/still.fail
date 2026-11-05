@@ -131,9 +131,21 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
   )
   @ui.old(v, fn(c) {
     match workspace_in_view(src).0 {
+      // ⌘K's search over a page other than the lists (sfdesk's keys.mbt, sfpages' search.mbt), under the bars
+      Some(w) => @sfpages.search_over(c, src, w, status_top())
+      None => ()
+    }
+  })
+  .over(Is(true))
+  // (a press where it has nothing of its own its pages', a page made once as nodes among them: entry_tree's over's)
+  |> @ui.old_takes_own
+  |> ignore
+  // the bottom bar, over the pages (bar_node.mbt): on a place's top page with nothing over it; none while this device
+  // waits to be confirmed in the workspace's safe mode (its Home is the wait: lock_gate; App.kt PlaceBar)
+  bar_node(v, src, fn() { workspace_in_view(src).0 })
+  @ui.old(v, fn(c) {
+    match workspace_in_view(src).0 {
       Some(w) => {
-        // ⌘K's search over a page other than the lists (sfdesk's keys.mbt, sfpages' search.mbt), under the bars
-        @sfpages.search_over(c, src, w, status_top())
         narrow_over(c, src, w)
         signed_in_over(c, src, w)
       }
@@ -141,7 +153,6 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
     }
   })
   .over(Is(true))
-  // (a press where it has nothing of its own its pages', a page made once as nodes among them: entry_tree's over's)
   |> @ui.old_takes_own
   |> ignore
   // the bottom bar's glass, where the bar is laid out: a finger on it the bar's at each event's moment (drawn by the old
@@ -430,12 +441,17 @@ fn narrow_page(c : @ui.Ctx, src : Source, w : Workspace, page : Page) -> Unit {
 }
 
 ///|
-/// Over the pages laid out Small: the bottom bar, the chat being made public, a visualization over the whole screen (a
-/// file open over them is the window's tree's: sfbase viewer_tree.mbt).
+/// Over the pages laid out Small and their bottom bar (bar_node): the chat being made public, a visualization over the
+/// whole screen (a file open over them is the window's tree's: sfbase viewer_tree.mbt).
 fn narrow_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  // the bottom bar: on a place's top page with nothing over it; none while this device waits to be confirmed in the
-  // workspace's safe mode (its Home is the wait: lock_gate; App.kt PlaceBar)
-  bottom_bar(c, src, w, place_of(app.nav.top()), narrow_bar_shown(src, w))
+  // the bar's panel open: back closes it (back still said by the old views as they are built, at the moment it is
+  // taken)
+  if narrow_bar_shown(src, w) && bar.mode.get() {
+    c.on_back(fn() {
+      bar.open_panel(false)
+      bar_retell(@ui.current().moment())
+    })
+  }
   // the chat being made public (sfpages' publish.mbt)
   @sfpages.publish_layer(c, src)
   // a visualization over the whole screen (viz.mbt)
