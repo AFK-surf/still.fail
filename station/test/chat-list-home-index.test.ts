@@ -12,7 +12,7 @@ test("old default-home chats are built in bounded steps while new chats arrive b
       store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
         token: key, createdAt: 1, lastActiveAt: 1, ws });
     for (let i = 0; i < 12; i++) {
-      const id = store.openThread("ember", "EMBER", `chat-${i}`, `Chat ${i}`, null).id;
+      const id = store.openThread("ember", "CHAT", `chat-${i}`, `Chat ${i}`, null).id;
       if (i % 3 === 0) db.prepare("UPDATE threads SET home = 'named' WHERE id = ?").run(id);
       else if (i % 3 === 1) store.joinThread(id, "default", "ember");
       db.prepare("UPDATE threads SET created_at = ? WHERE id = ?").run(i, id);
@@ -46,7 +46,7 @@ for (const recursive of [false, true]) test(`a membership change behind a home s
   const store = Store.open(":memory:"), db = store.db;
   try {
     db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
-    const thread = store.openThread("ember", "EMBER", "many", "Many", null).id;
+    const thread = store.openThread("ember", "CHAT", "many", "Many", null).id;
     for (let i = 0; i < 8; i++) {
       const key = `agent-${i}`;
       store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
@@ -74,7 +74,7 @@ for (const recursive of [false, true]) test(`a membership change behind a home s
 test("a failed default-home batch rolls back its row, count and pending work", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "orphan", "Orphan", null).id;
+    const thread = store.openThread("ember", "CHAT", "orphan", "Orphan", null).id;
     installRecentHomeIndex(db);
     while (!scanRecentHomeChatsStep(db, 2).scanDone) { /* Enqueue the old chat. */ }
     db.setAuthorizer((action, name) => action === constants.SQLITE_INSERT && name === "recent_home_rows" ? constants.SQLITE_DENY : constants.SQLITE_OK);
@@ -95,7 +95,7 @@ for (const recursive of [false, true]) test(`a session moving again while home c
     store.insertSession({ key: "one", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
       token: "one", createdAt: 1, lastActiveAt: 1, ws: "work" });
     for (let i = 0; i < 8; i++) {
-      const thread = store.openThread("ember", "EMBER", `chat-${i}`, `Chat ${i}`, null).id;
+      const thread = store.openThread("ember", "CHAT", `chat-${i}`, `Chat ${i}`, null).id;
       if (i < 4) db.prepare("UPDATE threads SET home = 'one' WHERE id = ?").run(thread);
       else store.joinThread(thread, "one", "ember");
     }
@@ -128,8 +128,8 @@ for (const recursive of [false, true]) test(`a message time change cannot leave 
   const store = Store.open(":memory:"), db = store.db;
   try {
     db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
-    const first = store.openThread("ember", "EMBER", "first", "First", null).id;
-    const second = store.openThread("ember", "EMBER", "second", "Second", null).id;
+    const first = store.openThread("ember", "CHAT", "first", "First", null).id;
+    const second = store.openThread("ember", "CHAT", "second", "Second", null).id;
     const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',?)");
     put.run(first, 1);
     put.run(second, 2);
@@ -152,7 +152,7 @@ for (const recursive of [false, true]) test(`a chat moving between named workspa
     for (const [key, ws] of [["a", "a"], ["b", "b"]] as const)
       store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
         token: key, createdAt: 1, lastActiveAt: 1, ws });
-    const thread = store.openThreadOf("ember", "EMBER", "named", "Named", null, "a").id;
+    const thread = store.openThreadOf("ember", "CHAT", "named", "Named", null, "a").id;
     installRecentHomeIndex(db);
     while (!scanRecentHomeChatsStep(db, 2).scanDone) { /* Prepare the default scope. */ }
     while (!settleRecentHomeChatStep(db, 2).chatsDone) { /* The chat belongs to neither default range. */ }
@@ -173,7 +173,7 @@ for (const recursive of [false, true]) for (const home of ["a", "missing"]) {
       db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
       store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
         token: "a", createdAt: 1, lastActiveAt: 1, ws: "a" });
-      const thread = store.openThreadOf("ember", "EMBER", "named", "Named", null, home).id;
+      const thread = store.openThreadOf("ember", "CHAT", "named", "Named", null, home).id;
       installRecentHomeIndex(db);
       while (!scanRecentHomeChatsStep(db, 2).scanDone) { /* Prepare the default scope. */ }
       while (!settleRecentHomeChatStep(db, 2).chatsDone) { /* Account the home. */ }
@@ -192,8 +192,8 @@ for (const recursive of [false, true]) for (const how of ["number", "timestamp",
     const store = Store.open(":memory:"), db = store.db;
     try {
       db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
-      const chat = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
-      const other = store.openThread("ember", "EMBER", "other", "Other", null).id;
+      const chat = store.openThread("ember", "CHAT", "chat", "Chat", null).id;
+      const other = store.openThread("ember", "CHAT", "other", "Other", null).id;
       db.prepare("UPDATE threads SET created_at = 100 WHERE id = ?").run(chat);
       db.prepare("UPDATE threads SET created_at = 50 WHERE id = ?").run(other);
       db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at) VALUES (?,1,'message','same','person','p','hello',1)").run(chat);

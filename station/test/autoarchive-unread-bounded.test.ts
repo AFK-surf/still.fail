@@ -12,7 +12,7 @@ import { Rig } from "./hub-fakes.ts";
 const later = () => Date.now() + 3 * 86_400_000;
 
 function chat(r: Rig, name: string, who: "agent" | "person", firstOther = false) {
-  const thread = r.store.openThread("ember", "EMBER", name, null, "me").id;
+  const thread = r.store.openThread("ember", "CHAT", name, null, "me").id;
   const put = r.store.db.prepare("INSERT INTO entries (thread,n,kind,author_kind,author,text,at) VALUES (?,?,'message',?,?,?,?)");
   r.store.db.exec("BEGIN");
   if (firstOther) put.run(thread, 1, "agent", "a", "first", 1);
@@ -88,7 +88,7 @@ test("auto-archive does not scan a long run of the starter's messages", async ()
 test("the archive check ignores letters and the starter's messages", async () => {
   const r = new Rig();
   try {
-    const thread = r.store.openThread("ember", "EMBER", "mixed", null, "me").id;
+    const thread = r.store.openThread("ember", "CHAT", "mixed", null, "me").id;
     const put = r.store.db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at,letter) VALUES (?,?,?,?,?,?,?,?)");
     put.run(thread, 1, "message", "person", "someone", "other", 1, null);
     put.run(thread, 2, "message", "person", "me", "mine", 2, null);
@@ -109,7 +109,7 @@ test("the archive's unread decision reads one snapshot while another station wri
   const store = Store.open(path);
   const other = new DatabaseSync(path);
   try {
-    const thread = store.openThread("ember", "EMBER", "chat", null, "me").id;
+    const thread = store.openThread("ember", "CHAT", "chat", null, "me").id;
     const put = "INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,?,'message',?,?,?,?)";
     store.db.prepare(put).run(thread, 1, "person", "me", "mine", 1);
     const read = store.readPosition.bind(store);

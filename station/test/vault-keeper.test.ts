@@ -601,7 +601,7 @@ test("a grant for the chat: offered as far as the item allows, kept across a res
   };
   try {
     // The card offers every scope, the longest recommended; an item that stops at an hour, those up to it.
-    thread = { connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } };
+    thread = { connect: "c", thread: { id: 1, channel: "CHAT", threadTs: "1.0", surface: STILLFAIL_SURFACE } };
     let secrets = make();
     const [, first] = await grant(secrets, "s1", "chat");
     assert.deepEqual(cards[0]!.options.map((o) => [o.label, !!o.recommended]), [["仅本次", false], ["本对话 1 小时内", false], ["本对话直到归档", true], ["拒绝", false]]);

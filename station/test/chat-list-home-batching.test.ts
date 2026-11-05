@@ -13,8 +13,8 @@ test("one bounded home batch accounts for multiple ordinary old chats", () => {
     store.insertSession({ key: "away", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
       token: "away", createdAt: 1, lastActiveAt: 1, ws: "away" });
     for (let i = 0; i < 20; i++) {
-      store.openThreadOf("ember", "EMBER", `away-${i}`, "Away", null, "away");
-      store.openThread("ember", "EMBER", `orphan-${i}`, "Orphan", null);
+      store.openThreadOf("ember", "CHAT", `away-${i}`, "Away", null, "away");
+      store.openThread("ember", "CHAT", `orphan-${i}`, "Orphan", null);
     }
     installRecentHomeIndex(db);
     while (!scanRecentHomeChatsStep(db, 64).scanDone) { /* Enqueue the old chats. */ }
@@ -31,7 +31,7 @@ test("one bounded overlap batch accounts for multiple ordinary shared chats", ()
     store.insertSession({ key: "here", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
       token: "here", createdAt: 1, lastActiveAt: 1, ws: "here" });
     for (let i = 0; i < 20; i++) {
-      const id = store.openThread("ember", "EMBER", `shared-${i}`, "Shared", null).id;
+      const id = store.openThread("ember", "CHAT", `shared-${i}`, "Shared", null).id;
       store.joinThread(id, "here", "ember");
       store.joinThread(id, "missing", "ember");
     }
@@ -54,8 +54,8 @@ test("one bounded overlap batch accounts for multiple ordinary shared chats", ()
 test("a failure on a later home chat rolls back the entire batch", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    store.openThread("ember", "EMBER", "first", "First", null);
-    const second = store.openThread("ember", "EMBER", "second", "Second", null).id;
+    store.openThread("ember", "CHAT", "first", "First", null);
+    const second = store.openThread("ember", "CHAT", "second", "Second", null).id;
     installRecentHomeIndex(db);
     while (!scanRecentHomeChatsStep(db, 64).scanDone) { /* Enqueue both chats. */ }
     db.exec(`CREATE TRIGGER fail_later_home BEFORE INSERT ON recent_home_rows WHEN NEW.thread = ${second}
@@ -77,7 +77,7 @@ test("a failure on a later overlap rolls back the entire batch", () => {
     store.insertSession({ key: "here", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
       token: "here", createdAt: 1, lastActiveAt: 1, ws: "here" });
     const ids = ["first", "second"].map((name) => {
-      const id = store.openThread("ember", "EMBER", name, name, null).id;
+      const id = store.openThread("ember", "CHAT", name, name, null).id;
       store.joinThread(id, "here", "ember");
       store.joinThread(id, "missing", "ember");
       return id;

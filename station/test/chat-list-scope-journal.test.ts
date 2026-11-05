@@ -88,7 +88,7 @@ for (const recursive of [false, true]) test(`a move between named workspaces doe
     db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
     store.insertSession({ key: "moving", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
       token: "moving", createdAt: 1, lastActiveAt: 1, ws: "A" });
-    const thread = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
+    const thread = store.openThread("ember", "CHAT", "chat", "Chat", null).id;
     db.prepare("UPDATE threads SET home = 'moving' WHERE id = ?").run(thread);
     installRecentScopeJournal(db);
     trackRecentScope(db, { kind: "home" });
@@ -110,7 +110,7 @@ for (const recursive of [false, true]) test(`replacing a session also records th
     db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
     store.insertSession({ key: "old", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
       token: "shared-token", createdAt: 1, lastActiveAt: 1, ws: "A" });
-    const thread = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
+    const thread = store.openThread("ember", "CHAT", "chat", "Chat", null).id;
     db.prepare("UPDATE threads SET home = 'old' WHERE id = ?").run(thread);
     installRecentScopeJournal(db);
     trackRecentScope(db, { kind: "home" });
@@ -131,7 +131,7 @@ for (const recursive of [false, true]) test(`a missing home session becoming kno
   const db = store.db;
   try {
     db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
-    const thread = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
+    const thread = store.openThread("ember", "CHAT", "chat", "Chat", null).id;
     db.prepare("UPDATE threads SET home = 'appears' WHERE id = ?").run(thread);
     installRecentScopeJournal(db);
     trackRecentScope(db, { kind: "home" });
@@ -157,7 +157,7 @@ for (const recursive of [false, true]) test(`an update replacing another session
       store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
         token: key, createdAt: 1, lastActiveAt: 1, ws });
     }
-    const thread = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
+    const thread = store.openThread("ember", "CHAT", "chat", "Chat", null).id;
     db.prepare("UPDATE threads SET home = 'two' WHERE id = ?").run(thread);
     installRecentScopeJournal(db);
     trackRecentScope(db, { kind: "home" });
@@ -180,7 +180,7 @@ for (const recursive of [false, true]) for (const operation of ["insert", "updat
       for (const [key, ws] of [["one", "A"], ["two", "B"]] as const)
         store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
           token: key, createdAt: 1, lastActiveAt: 1, ws });
-      store.openThreadOf("ember", "EMBER", "chat-two", "Chat", null, "two");
+      store.openThreadOf("ember", "CHAT", "chat-two", "Chat", null, "two");
       installRecentScopeJournal(db);
       trackRecentScope(db, { kind: "home" });
       for (const workspace of ["A", "B"]) trackRecentScope(db, { kind: "workspace", workspace });

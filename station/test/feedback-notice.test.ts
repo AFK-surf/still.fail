@@ -24,7 +24,7 @@ test("a failure notice reported: the turn, the agent, versions, variables' names
     store.insertSession({ key: "chat:c-aaa111", connect: "ember", runtime: "codex", profile: "pro", model: "gpt-6", workspace: "/w", token: "t", createdAt: 1, lastActiveAt: 1, createdBy: "ada@x.com" } as any);
     store.setRuntimeSessionId("chat:c-aaa111", "019a-codex-thread");
     store.insertSession({ key: "other", connect: "ember", runtime: "claude", profile: "cc", workspace: "/o", token: "t2", createdAt: 1, lastActiveAt: 1, createdBy: "ada@x.com" } as any);
-    const chat = store.openThread("ember", "EMBER", "1.1", null, "ada@x.com");
+    const chat = store.openThread("ember", "CHAT", "1.1", null, "ada@x.com");
     store.joinThread(chat.id, "chat:c-aaa111", "ember");
     store.insertMessage(newMessage(chat.id, "1.2", "person", "ada@x.com", "fix it"));
     store.startTurn("t1", "chat:c-aaa111", "message");
@@ -90,7 +90,7 @@ test("a failure notice reported: the turn, the agent, versions, variables' names
 test("a report not taken by still.fail cloud is said so", async () => {
   const store = Store.open(":memory:", null);
   try {
-    const chat = store.openThread("ember", "EMBER", "2.1", null, "ada@x.com");
+    const chat = store.openThread("ember", "CHAT", "2.1", null, "ada@x.com");
     store.insertMessage(newMessage(chat.id, "2.2", "ember", "ember", "⚠️ 本轮出错：boom"));
     const parts = new StationParts();
     const deps = { logTail: () => null, versions: () => ({}), envNames: () => [], link: () => null, home: "/h" };

@@ -14,7 +14,7 @@ function fixture() {
   const store = Store.open(path);
   store.insertSession({ key: "here", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
     token: "here", createdAt: 1, lastActiveAt: 1, ws: "here" });
-  store.openThreadOf("ember", "EMBER", "chat", "Chat", null, "here");
+  store.openThreadOf("ember", "CHAT", "chat", "Chat", null, "here");
   return { dir, path, store, close: () => { store.close(); rmSync(dir, { recursive: true, force: true }); } };
 }
 

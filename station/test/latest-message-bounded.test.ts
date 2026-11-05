@@ -9,7 +9,7 @@ for (const side of ["station", "reader"] as const) {
   test(`${side} finds a chat's last message without traversing its later edits`, () => {
     const store = Store.open(":memory:"), db = store.db;
     try {
-      const thread = store.openThread("ember", "EMBER", "last-message", null, null).id;
+      const thread = store.openThread("ember", "CHAT", "last-message", null, null).id;
       const insert = db.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,text,at)
         VALUES(?,?,?,?, 'person','viewer',?,?)`);
       insert.run(thread, 1, "message", null, "original", 1);
@@ -40,8 +40,8 @@ for (const side of ["station", "reader"] as const) {
 test("the last message keeps old letters, edits and the original entry order", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "last-message", null, null).id;
-    const other = store.openThread("ember", "EMBER", "other", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "last-message", null, null).id;
+    const other = store.openThread("ember", "CHAT", "other", null, null).id;
     const reader = makeStore(db, "/no-station-config");
     const original = db.prepare("SELECT * FROM merged WHERE thread = ? ORDER BY n DESC LIMIT 1");
     const expected = () => { const row = original.get(thread); return row === undefined ? null : toMessage(row); };

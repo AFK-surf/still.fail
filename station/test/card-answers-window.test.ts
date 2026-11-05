@@ -7,7 +7,7 @@ test("a scoped recent-answer read does not enumerate a chat's old cards", () => 
   const store = Store.open(":memory:");
   const db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "answer-window", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "answer-window", null, null).id;
     const put = db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at,card,options) VALUES (?,?,?,?,?,?,?,?,?,?)");
     const card = JSON.stringify({ type: "options", options: [{ label: "yes" }] });
     db.exec("BEGIN");
@@ -50,7 +50,7 @@ test("a short card history does not enumerate many recent ordinary messages", ()
   const store = Store.open(":memory:");
   const db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "few-cards", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "few-cards", null, null).id;
     const put = db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at,card) VALUES (?,?,?,?,?,?,?,?,?)");
     put.run(thread, 1, "message", "card", "agent", "a", "choose", 1, JSON.stringify({ type: "text" }));
     db.exec("BEGIN");
@@ -88,7 +88,7 @@ test("many old cards and many recent ordinary messages do not require a lookup f
   const store = Store.open(":memory:");
   const db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "many-of-both", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "many-of-both", null, null).id;
     const put = db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at,card) VALUES (?,?,?,?,?,?,?,?,?)");
     const card = JSON.stringify({ type: "text" });
     db.exec("BEGIN");
@@ -124,7 +124,7 @@ test("out-of-order message times do not hide a later card's recent answer", () =
   const store = Store.open(":memory:");
   const db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "time-order", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "time-order", null, null).id;
     const put = db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at,card) VALUES (?,?,?,?,?,?,?,?,?)");
     const card = JSON.stringify({ type: "text" });
     let n = 0;
@@ -150,7 +150,7 @@ test("a person's answer can itself carry the next card", () => {
   const store = Store.open(":memory:");
   const db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "answer-with-card", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "answer-with-card", null, null).id;
     const put = db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at,card) VALUES (?,?,?,?,?,?,?,?,?)");
     const card = JSON.stringify({ type: "text" });
     for (let n = 1; n <= 70; n++) put.run(thread, n, "message", `old-${n}`, "agent", "a", "choose", 1, card);
@@ -167,7 +167,7 @@ test("a scoped read agrees with the whole-station read for mixed card and messag
     const store = Store.open(":memory:");
     const db = store.db;
     try {
-      const thread = store.openThread("ember", "EMBER", `mixed-${seed}`, null, null).id;
+      const thread = store.openThread("ember", "CHAT", `mixed-${seed}`, null, null).id;
       const put = db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at,card,options) VALUES (?,?,?,?,?,?,?,?,?,?)");
       const card = JSON.stringify({ type: "text" });
       let state = seed;
@@ -195,7 +195,7 @@ test("recent answers agree on both sides of the card-history cutoff", () => {
       const store = Store.open(":memory:");
       const db = store.db;
       try {
-        const thread = store.openThread("ember", "EMBER", `cutoff-${count}-${filler}`, null, null).id;
+        const thread = store.openThread("ember", "CHAT", `cutoff-${count}-${filler}`, null, null).id;
         const put = db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at,card,options) VALUES (?,?,?,?,?,?,?,?,?,?)");
         const card = JSON.stringify({ type: "options", options: [{ label: "yes" }] });
         let n = 0;

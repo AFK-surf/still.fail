@@ -28,7 +28,7 @@ test("an old chat is read in bounded slices and same-person appends do not resta
   const store = Store.open(":memory:");
   const db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "old", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "old", null, null).id;
     const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,ts,at) VALUES (?,?,'message',?,?,?,?)");
     db.exec("BEGIN");
     put.run(thread, 1, "agent", "s", "t1", 1);
@@ -66,7 +66,7 @@ test("a change after an old slice is read cannot publish its stale result", () =
   const store = Store.open(":memory:");
   const db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "race", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "race", null, null).id;
     const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,ts,at) VALUES (?,?,'message',?,?,?,?)");
     put.run(thread, 1, "agent", "s", "t1", 1);
     for (let n = 2; n <= 30; n++) put.run(thread, n, "person", "a", `t${n}`, n);
@@ -97,7 +97,7 @@ test("a partial deletion can leave a missing thread state without leaving an inc
   const store = Store.open(":memory:");
   const db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "removed", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "removed", null, null).id;
     const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,ts,at) VALUES (?,?,'message',?,?,?,?)");
     put.run(thread, 1, "agent", "s", "t1", 1);
     for (let n = 2; n <= 10; n++) put.run(thread, n, "person", "a", `t${n}`, n);
@@ -127,7 +127,7 @@ for (const recursive of [false, true]) test(`sidebar state follows appends and i
   const db = store.db;
   try {
     db.exec(`PRAGMA recursive_triggers=${recursive ? "ON" : "OFF"}`);
-    const thread = store.openThread("ember", "EMBER", "chat", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "chat", null, null).id;
     const insert = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,ts,at,letter)
       VALUES (?,?,?,?,?,?,?,?)`);
     const read = makeStore(db, "/no-station-config");

@@ -15,7 +15,7 @@ for (const reader of [false, true]) test(`searching chats does not read people o
       token: "token", createdAt: 1, lastActiveAt: 1 });
     const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person',?,?,?)");
     for (let n = 0; n < 250; n++) {
-      const thread = store.openThread("ember", "EMBER", `chat-${n}`, n % 10 === 0 ? `Matching title ${n}` : `Title ${n}`, null).id;
+      const thread = store.openThread("ember", "CHAT", `chat-${n}`, n % 10 === 0 ? `Matching title ${n}` : `Title ${n}`, null).id;
       store.joinThread(thread, "agent", "ember");
       put.run(thread, `person-${n}`, `words ${n}`, n);
     }
