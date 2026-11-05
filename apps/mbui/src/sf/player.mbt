@@ -611,7 +611,7 @@ fn where_runs(p : @kit.Media, fr : Frames, s : @kit.MediaStatus, playing : Bool,
 
 ///|
 /// The frame shown saved as a picture once the host has it (`<name>-<frame>.png`, to the device: the host's keep).
-fn take_grab(v : PlayerView, p : @kit.Media, name : String) -> Unit {
+fn take_grab(c : @ui.Ctx, v : PlayerView, p : @kit.Media, name : String) -> Unit {
   if !v.grabbing {
     return
   }
@@ -630,7 +630,12 @@ fn take_grab(v : PlayerView, p : @kit.Media, name : String) -> Unit {
             (viewer_host().say)(t("android-chat.video.saveFrame.failed"))
           }
         }
-        None => ()
+        None =>
+          if @kit.media_grab_stalled(c, n) {
+            v.grabbing = false
+            c.tell(p.key() + "/grab-given-up", fn() { n.give_up_grab() })
+            (viewer_host().say)(t("android-chat.video.saveFrame.failed"))
+          }
       }
     None => v.grabbing = false
   }
@@ -847,6 +852,8 @@ fn player_format(mime : String) -> String? {
     "video/webm" | "audio/webm" => Some("WebM")
     "video/mp4" | "audio/mp4" => Some("MP4")
     "video/quicktime" => Some("MOV")
+    "video/3gpp" => Some("3GP")
+    "video/3gpp2" => Some("3G2")
     "video/x-matroska" => Some("MKV")
     "video/x-msvideo" => Some("AVI")
     "video/ogg" | "audio/ogg" => Some("Ogg")
@@ -1010,7 +1017,7 @@ fn desk_player(
   let playing = plays(p, f)
   let fr = frames_of(p, s, p.scrubbing().unwrap_or(s.position))
   let mac = @ui.platform() == 0
-  take_grab(v, p, name)
+  take_grab(c, v, p, name)
   // a click (a finger's tap, on a tablet's screen too) shows or hides the controls; a mouse's pointer over the bar or
   // the controls shows them while it is there
   let finger = @ui.pointing() is Finger
@@ -1603,7 +1610,7 @@ fn phone_player(
   let prev = if index > 0 { list.get(index - 1) } else { None }
   let many = list.length() > 1
   let fr = frames_of(p, s, p.scrubbing().unwrap_or(s.position))
-  take_grab(v, p, name)
+  take_grab(c, v, p, name)
   let go = fn(other : String) {
     p.pause()
     on_go(other)

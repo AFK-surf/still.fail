@@ -48,3 +48,85 @@ test "a player: a double tap on the right third jumps on, said a moment; the spe
   assert_true(m.scrubbing() is None)
   assert_true(told(" 9 0"))
 }
+
+///|
+test "a player waits for the decoder only after all bytes arrived, and retry starts a new wait" {
+  let m = @kit.Media::new()
+  let last : Ref[@kit.MediaFrame?] = Ref(None)
+  let t = @ui.Tester::new(fn(c) { last.val = Some(m.frame(c)) }, finish=false)
+  let wait = @kit.media_decode_wait_ms
+  let margin = wait / 40.0
+  let track : @kit.MediaTrack = {
+    name: "a.webm",
+    mime: "video/webm",
+    audio: false,
+    read: fn(_, _, _) { fn() {  } },
+    direct: "",
+  }
+  m.open(track)
+  let id = m.native().unwrap().id()
+  t.draw()
+  t.run_for(wait * 1.5)
+  assert_eq(last.val.unwrap().status.state, 0, msg="a slow read is not a decoder timeout")
+  assert_true(t.view_said("{\"info\":{\"view\":\{id},\"state\":2,\"at\":[-1,0,0,0,0,100,0,0,0,0]}}"))
+  // No frames at all between the host's event and this observation.
+  t.advance(wait - margin)
+  t.frame_at(t.time())
+  assert_eq(last.val.unwrap().status.state, 0)
+  t.advance(margin * 2.0)
+  t.frame_at(t.time())
+  assert_eq(last.val.unwrap().status.state, -4)
+  assert_eq(m.status().state, -4)
+  m.retry()
+  let next = m.native().unwrap().id()
+  assert_true(next != id)
+  assert_true(t.view_said("{\"info\":{\"view\":\{next},\"state\":2,\"at\":[-1,0,0,0,0,100,0,0,0,0]}}"))
+  t.advance(wait - margin)
+  t.frame_at(t.time())
+  assert_eq(last.val.unwrap().status.state, 0, msg="retry gets its own wait")
+  assert_true(t.view_said("{\"info\":{\"view\":\{next},\"state\":1,\"at\":[10000,0,0,640,360,100,1,0,0,0]}}"))
+  t.draw()
+  t.run_for(margin * 2.0)
+  assert_eq(last.val.unwrap().status.state, 1)
+}
+
+///|
+test "a frame asked of a player is waited for only so long, and another can be asked then" {
+  let m = @kit.Media::new()
+  let stalled = Ref(false)
+  let t = @ui.Tester::new(
+    fn(c) {
+      m.frame(c) |> ignore
+      if m.native() is Some(n) && @kit.media_grab_stalled(c, n) {
+        stalled.val = true
+      }
+    },
+    finish=false,
+  )
+  let wait = @kit.media_grab_wait_ms
+  let margin = wait / 40.0
+  let track : @kit.MediaTrack = {
+    name: "a.mp4",
+    mime: "video/mp4",
+    audio: false,
+    read: fn(_, _, _) { fn() {  } },
+    direct: "",
+  }
+  m.open(track)
+  let n = m.native().unwrap()
+  t.draw()
+  n.grab_frame(1000.0)
+  t.draw()
+  t.advance(wait - margin)
+  t.frame_at(t.time())
+  assert_false(stalled.val)
+  assert_true(n.grabbing())
+  t.advance(margin * 2.0)
+  t.frame_at(t.time())
+  assert_true(stalled.val)
+  n.give_up_grab()
+  assert_false(n.grabbing())
+  assert_eq(n.grab_since(), -1.0)
+  n.grab_frame(2000.0)
+  assert_true(n.grabbing())
+}

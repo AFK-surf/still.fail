@@ -77,6 +77,8 @@ pub fn preview_kind(name : String) -> (PKind?, String, String) {
     "webm" => Some((KVideo, "video/webm"))
     "mov" => Some((KVideo, "video/quicktime"))
     "ogv" => Some((KVideo, "video/ogg"))
+    "3gp" => Some((KVideo, "video/3gpp"))
+    "3g2" => Some((KVideo, "video/3gpp2"))
     "mp3" => Some((KAudio, "audio/mpeg"))
     "m4a" => Some((KAudio, "audio/mp4"))
     "aac" => Some((KAudio, "audio/aac"))
@@ -421,7 +423,12 @@ fn grab_first(c : @ui.Ctx, id : String, name : String, open : () -> @ui.NativeVi
           let got = match n.grabbed() {
             Some(png) => Some(png)
             // (no player here, or one that cannot read it: none to be had)
-            None => if n.state() < 0 && !n.grabbing() { Some(b"") } else { None }
+            None =>
+              if (n.state() < 0 && !n.grabbing()) || @kit.media_decode_stalled(c, Some(n)) {
+                Some(b"")
+              } else {
+                None
+              }
           }
           match got {
             Some(png) => {

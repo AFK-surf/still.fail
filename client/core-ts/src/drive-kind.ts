@@ -6,7 +6,7 @@ export type DriveKind = "folder" | "video" | "audio" | "image" | "markdown" | "t
 
 const EXT: Record<string, DriveKind> = {};
 const put = (kind: DriveKind, exts: string) => exts.split(" ").forEach((e) => (EXT[e] = kind));
-put("video", "mp4 m4v mov webm mkv avi ts m2ts flv wmv 3gp");
+put("video", "mp4 m4v mov webm ogv mkv avi ts m2ts flv wmv 3gp 3g2");
 put("audio", "mp3 m4a aac flac wav ogg opus wma");
 put("image", "png jpg jpeg gif webp svg heic bmp avif");
 put("markdown", "md markdown");

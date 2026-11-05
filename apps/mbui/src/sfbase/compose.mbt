@@ -678,8 +678,12 @@ pub fn file_type(name : String) -> String {
     "video/quicktime"
   } else if ends(".webm") {
     "video/webm"
+  } else if ends(".ogv") {
+    "video/ogg"
   } else if ends(".3gp") {
     "video/3gpp"
+  } else if ends(".3g2") {
+    "video/3gpp2"
   } else if ends(".pdf") {
     "application/pdf"
   } else if ends(".txt") {

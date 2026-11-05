@@ -1278,7 +1278,7 @@ fn on_outside_now(kind : Int, id : Int, state : Int) -> Unit {
     return
   }
   if kind == outside_stood {
-    view_stood(id)
+    view_stood(id, state)
     return
   }
   // (the performance record written: what shows how much it holds follows it, perf.mbt's perf_size; a frame only

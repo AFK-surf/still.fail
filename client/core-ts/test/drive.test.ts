@@ -244,6 +244,9 @@ test("what a press on an entry does, by its kind: entered, read, played, preview
   assert.deepEqual(["notes.txt", "README", "a.md", "film.mkv", "song.flac", "shot.png", "doc.pdf", "main.rs", "data.csv", "page.html", "a.srt", "archive.zip"].map(of),
     ["read", "read", "read", "play", "play", "preview", "preview", "preview", "preview", "preview", "preview", "save"]);
   assert.equal(opensOf("folder"), "folder");
+  for (const video of ["clip.ogv", "clip.3GP", "clip.3g2"]) assert.equal(of(video), "play");
+  assert.equal(of("song.ogg"), "play");
+  assert.equal(kindOf("song.ogg"), "audio");
 });
 
 test("a name typed for a file or folder: empty, a slash, . or .. said in words; anything else none", () => {

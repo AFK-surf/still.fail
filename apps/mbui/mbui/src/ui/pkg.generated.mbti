@@ -1853,13 +1853,16 @@ pub fn NativeView::buffered(Self) -> Double
 pub fn NativeView::buffering(Self) -> Bool
 pub fn NativeView::bytes(Self) -> Double
 pub fn NativeView::close(Self) -> Unit
+pub fn NativeView::decode_since(Self) -> Double
 pub fn NativeView::duration(Self) -> Double
 pub fn NativeView::ended(Self) -> Bool
 pub fn NativeView::frames(Self) -> Array[Double]?
+pub fn NativeView::give_up_grab(Self) -> Unit
 pub fn NativeView::go_back(Self) -> Unit
 pub fn NativeView::go_forward(Self) -> Unit
 pub fn NativeView::grab_frame(Self, Double) -> Unit
 pub fn NativeView::grab_shown(Self, Double) -> Unit
+pub fn NativeView::grab_since(Self) -> Double
 pub fn NativeView::grabbed(Self) -> Bytes?
 pub fn NativeView::grabbing(Self) -> Bool
 pub fn NativeView::grabs_told(Self) -> Int32
