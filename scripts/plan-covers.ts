@@ -10,7 +10,10 @@ import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const esbuild = createRequire(resolve(root, "station/package.json"))("esbuild") as typeof import("esbuild");
+// (station's esbuild, as its build takes it; only what is used of it, typed: the scripts' typecheck has no esbuild)
+const esbuild = createRequire(resolve(root, "station/package.json"))("esbuild") as {
+  build(options: Record<string, unknown>): Promise<{ metafile?: { inputs: Record<string, unknown> } }>;
+};
 
 type Part = { name: string; entries: string[]; keys: string[]; alias?: Record<string, string>; conditions?: string[] };
 
