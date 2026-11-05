@@ -50,8 +50,19 @@ priv struct OldIsland {
   /// as wide as what it holds, `most` at most and never narrower than it is (old's `fits`): the least that is, as the
   /// old frame last laid it out, told the signal (None before it first is)
   fits : (Double, @signals.Signal[Double?])?
+  /// a fits view first measures at its maximum width, then lays out again at the measured width
+  fit_probe : Ref[Bool]
+  mut fit_probing : Bool
+  /// an input event is carried through every build in its frame; measure it only once
+  mut fit_event_frame : Int
   /// whether laid-out content exceeds the hosted node, which then cuts it at its own edges
   overflow : @signals.Signal[Bool]
+  /// the wrapper and its last layout checked for overflow, and the host size it was checked against
+  mut overflow_ident : Int
+  mut overflow_at : Int
+  mut overflow_size : (Double, Double)
+  /// number of checks (for tests of the work an unchanged island does)
+  mut overflow_walks : Int
   mut held_box : Int
 }
 
@@ -837,9 +848,35 @@ fn old_frame(c : Ctx) -> Unit {
                   match o.fits {
                     // (laid out in the room of the most it may be, at its start: as wide as what it holds there, no
                     // narrower than its node; whatever its node is now)
-                    Some((most, _)) => {
+                    Some((most, width)) => {
                       let most = dmax(w, most)
-                      c.box(style=style(w=Fixed(most), align=AStart), fn() {
+                      // (the island follows its own reads, rather than its host's watch; measure again when that part
+                      // is stale or its build key changes, before putting its retained nodes at the new width)
+                      let part_changed = match kept_nodes.get((o.part, -1)) {
+                        Some(rn) => {
+                          let key = match o.made.island {
+                            Some((_, k, _, _)) => @signals.untracked(k)
+                            None => ""
+                          }
+                          let event = nodes_run.fresh && evented_for(o.part) && o.fit_event_frame != c.frame_no
+                          if event {
+                            o.fit_event_frame = c.frame_no
+                          }
+                          rn.watch.is_stale() || rn.key != key || rn.seed != c.id_seed || rn.owner != c.owner ||
+                            event
+                        }
+                        None => true
+                      }
+                      if part_changed {
+                        o.fit_probe.val = true
+                      }
+                      o.fit_probing = o.fit_probe.val
+                      let laid_width = if o.fit_probing {
+                        most
+                      } else {
+                        dmin(most, dmax(w, @signals.untracked(fn() { width.get() }).unwrap_or(w)))
+                      }
+                      c.box(style=style(w=Fixed(laid_width), align=AStart), fn() {
                         o.held_box = c.box(style=style(w=Hug, min_w=Fixed(w), max_w=Fixed(most)), fn() { put() })
                       })
                       |> ignore
@@ -2843,6 +2880,7 @@ pub fn old(
     let name = "old island \{old_made.val}"
     old_made.val = old_made.val + 1
     let room : Ref[(Double, Double)] = Ref((0.0, 0.0))
+    let fit_probe = Ref(true)
     let id = n.id()
     // (a scope of the node's: all it makes as it is built and laid out is owned by it, stopped as the node goes)
     let owner : Ref[@signals.ReactiveNode?] = Ref(None)
@@ -2851,6 +2889,8 @@ pub fn old(
     owned_by(owner.val, fn() {
       watch.val = Some(
         @signals.watch(fn() {
+          // (what it holds changed: measure again before laying out at the new width)
+          fit_probe.val = true
           // (its build's reads are the old frame's, which builds it: told, that frame is built again (what came from
           // outside its own, frame_watch.mbt); between frames, one asked for. Said as set where what it read was)
           outside_counted(by?=@signals.setting_at())
@@ -2897,7 +2937,14 @@ pub fn old(
       natural: natural_h,
       gives: natural && gives,
       fits: if natural { fits } else { None },
+      fit_probe,
+      fit_probing: false,
+      fit_event_frame: -1,
       overflow,
+      overflow_ident: 0,
+      overflow_at: -1,
+      overflow_size: (-1.0, -1.0),
+      overflow_walks: 0,
       held_box: -1,
     })
     n.owns(fn() {
@@ -4725,10 +4772,19 @@ fn old_natural_after_layout(c : Ctx) -> Unit {
         }
         match o.fits {
           Some((_, f)) => {
-            let w = c.nodes[o.held_box].fw
-            if @signals.untracked(fn() { f.get() }) != Some(w) {
-              f.set(Some(w))
-              c.read_changed("an old view's width, what it holds laid out")
+            if o.fit_probe.val && !o.fit_probing {
+              // (the island was rebuilt after this pass chose its width: measure in the next pass)
+              c.read_followed_changed("an old view changed and needs its width measured")
+            } else {
+              let w = c.nodes[o.held_box].fw
+              if @signals.untracked(fn() { f.get() }) != Some(w) {
+                f.set(Some(w))
+                c.read_changed("an old view's width, what it holds laid out")
+              }
+              if o.fit_probe.val {
+                o.fit_probe.val = false
+                c.read_followed_changed("an old view's measured width ready for its final layout")
+              }
             }
           }
           None => ()
@@ -4739,11 +4795,30 @@ fn old_natural_after_layout(c : Ctx) -> Unit {
     // (the host clips only when the content, as laid out, exceeds it; shadows may extend without being cut)
     let overflow = match (old_boxes.get(o.id), old_placed.iter().find_first(fn(p) { p.0 == o.id })) {
       (Some(box), Some((_, _, _, w, h, _, _, _, _))) if box >= 0 && box < c.count => {
-        let root = if o.held_box >= 0 { o.held_box } else { box }
-        // (the old frame can place its wrapper inside another offset box: compare in that same laid-out space)
-        root < c.count && old_content_overflows(c, root, c.nodes[box].x, c.nodes[box].y, w, h)
+        let node = c.nodes[box]
+        let f = node.fl
+        let same_box = o.overflow_ident == node.ident
+        // (the flex subtree retains its layout across builds; a move alone does not change its content's extent)
+        if same_box && node.same && o.overflow_at == f.laid_out_at() && o.overflow_size == (w, h) {
+          @signals.untracked(fn() { o.overflow.get() })
+        } else {
+          o.overflow_ident = node.ident
+          o.overflow_at = f.laid_out_at()
+          o.overflow_size = (w, h)
+          let root = if o.held_box >= 0 { o.held_box } else { box }
+          // (the old frame can place its wrapper inside another offset box: compare in that same laid-out space)
+          if root < c.count {
+            o.overflow_walks = o.overflow_walks + 1
+            old_content_overflows(c, root, node.x, node.y, w, h)
+          } else {
+            false
+          }
+        }
       }
-      _ => false
+      _ => {
+        o.overflow_ident = 0
+        false
+      }
     }
     if @signals.untracked(fn() { o.overflow.get() }) != overflow {
       o.overflow.set(overflow)

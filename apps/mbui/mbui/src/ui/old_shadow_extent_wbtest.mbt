@@ -114,6 +114,65 @@ test "content already cut inside the old view does not cut its shadow" {
 }
 
 ///|
+test "an unchanged hosted view does not walk its content as another view builds ten times" {
+  let updated = @signals.signal(0)
+  let other_builds = Ref(0)
+  let host : Ref[@view.NodeId?] = Ref(None)
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  set_view_app(fn(root) {
+    root.box(fn(p) {
+      p.width(Is(Some(100.0))).height(Is(Some(80.0))) |> ignore
+      let v = old(p, fn(c) {
+        c.box(w=Px(100.0), h=Px(80.0), bg=0xFFFFFFFFL, fn() {  }) |> ignore
+      })
+      v.width(Is(Some(100.0))).height(Is(Some(80.0))) |> ignore
+      host.val = Some(v.id())
+    }) |> ignore
+    root.box(fn(p) {
+      p.width(Is(Some(100.0))).height(Is(Some(80.0))) |> ignore
+      old(p, fn(c) {
+        other_builds.val = other_builds.val + 1
+        c.text("other \{updated.get()}") |> ignore
+      }).width(Is(Some(100.0))).height(Is(Some(80.0))) |> ignore
+    }) |> ignore
+  })
+  t.draw()
+  let island = old_islands.iter().find_first(fn(o) { Some(o.id) == host.val }).unwrap()
+  let before = island.overflow_walks
+  let builds = other_builds.val
+  for i in 1..=10 {
+    updated.set(i)
+    t.draw()
+  }
+  assert_true(other_builds.val >= builds + 10, msg="the other old view built each time: \{other_builds.val - builds}")
+  assert_eq(island.overflow_walks, before, msg="the unchanged island did not walk its content again")
+}
+
+///|
+test "an old view that fits lays its final measuring box at the content's width" {
+  let wide = @signals.signal(None, same=fn(a : Double?, b : Double?) { a == b })
+  let host : Ref[@view.NodeId?] = Ref(None)
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  set_view_app(fn(root) {
+    root.box(fn(p) {
+      p.width(Is(Some(100.0))) |> ignore
+      let v = old(p, natural=true, fits=(100000.0, wide), fn(c) {
+        c.box(w=Fill(1.0), fn() { c.text("A short label") |> ignore }) |> ignore
+      })
+      v.width(Is(Some(100.0))) |> ignore
+      host.val = Some(v.id())
+    }) |> ignore
+  })
+  t.draw()
+  let island = old_islands.iter().find_first(fn(o) { Some(o.id) == host.val }).unwrap()
+  let c = g()
+  let held = c.nodes[island.held_box]
+  let measure = c.nodes[held.parent]
+  assert_true(measure.fw <= 100.01 && measure.fw == held.fw,
+    msg="the final layout uses its measured width, not the 100000 point probe: \{(measure.fw, held.fw)}")
+}
+
+///|
 test "an old view that fits is clipped only while its content is taller than its host" {
   let cap = @signals.signal(80.0)
   let wide = @signals.signal(None, same=fn(a : Double?, b : Double?) { a == b })
