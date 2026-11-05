@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { test } from "node:test";
 import { WidgetSourcesBuilder } from "../src/read/widget-sources-builder.ts";
 import { installWidgetSources, widgetSourcesReady, widgetSourcesStep } from "../src/store/widget-sources.ts";
@@ -64,6 +65,21 @@ test("cancelling one widget source request leaves another waiting", async () => 
     await kept;
     assert.equal(widgetSourcesReady(store.db, thread), true);
   } finally { cancel.abort(); previous.resolve(); await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a stopped widget source worker resumes the requested thread", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "widget-worker-"));
+  const path = join(dir, "stillfail.db"), store = Store.open(path);
+  const file = join(dir, "worker.mjs"), marker = join(dir, "exited");
+  const real = new URL("../src/read/widget-sources-worker.ts", import.meta.url).href;
+  writeFileSync(file, `import { existsSync, writeFileSync } from 'node:fs';\nif (!existsSync(${JSON.stringify(marker)})) { writeFileSync(${JSON.stringify(marker)}, '1'); process.exit(1); }\nawait import(${JSON.stringify(real)});\n`);
+  const builder = new WidgetSourcesBuilder(path, {}, pathToFileURL(file));
+  try {
+    const [, thread] = oldThreads(store);
+    await builder.ready([thread]);
+    assert.ok(existsSync(marker));
+    assert.equal(widgetSourcesReady(store.db, thread), true);
+  } finally { await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("delivery prepares old widget sources again if membership changes while it waits", async () => {

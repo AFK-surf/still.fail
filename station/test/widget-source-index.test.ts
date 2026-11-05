@@ -237,6 +237,52 @@ test("another connection's writes remain exact during and after old-thread prepa
   } finally { other?.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("a writer between the old-position read and batch commit cannot be missed", () => {
+  const dir = mkdtempSync(join(tmpdir(), "widget-step-race-")), path = join(dir, "station.db");
+  const store = Store.open(path), db = store.db;
+  let other: DatabaseSync | null = null;
+  try {
+    beforeIndex(db);
+    const thread = store.openThread("ember", "EMBER", "race", null, null).id;
+    store.joinThread(thread, "a", "ember");
+    const pathName = "/w/item.html", files = (name: string) => JSON.stringify([{ path: pathName, name }]);
+    db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
+      VALUES(?,1,'message','agent','a',1,?)`).run(thread, files("old"));
+    installWidgetSources(db);
+    other = new DatabaseSync(path);
+    let wrote = false;
+    const watched = new Proxy(db, {
+      get(target, key) {
+        if (key === "prepare") return (sql: string) => {
+          const statement = target.prepare(sql);
+          if (!sql.startsWith("SELECT CAST(n AS TEXT) AS n FROM entries")) return statement;
+          return new Proxy(statement, {
+            get(s, name) {
+              if (name === "all") return (...args: Parameters<typeof s.all>) => {
+                const rows = s.all(...args);
+                if (!wrote) {
+                  wrote = true;
+                  other!.prepare("UPDATE entries SET at=100,attachments=? WHERE thread=? AND n=1").run(files("changed"), thread);
+                  other!.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
+                    VALUES(?,-1,'message','agent','a',200,?)`).run(thread, files("behind"));
+                }
+                return rows;
+              };
+              const value = Reflect.get(s, name, s);
+              return typeof value === "function" ? value.bind(s) : value;
+            },
+          });
+        };
+        const value = Reflect.get(target, key, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    }) as DatabaseSync;
+    assert.equal(widgetSourcesStep(watched, thread, 4).done, true);
+    assert.equal(wrote, true);
+    assert.deepEqual(plain(db.prepare(WIDGET_SOURCE).get("a", pathName)), plain(db.prepare(original).get("a", pathName)));
+  } finally { other?.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("a delivery reads all widget sources from one snapshot", () => {
   const dir = mkdtempSync(join(tmpdir(), "widget-snapshot-")), path = join(dir, "station.db");
   const store = Store.open(path), db = store.db, other = new DatabaseSync(path);
