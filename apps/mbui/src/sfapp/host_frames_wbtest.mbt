@@ -92,6 +92,9 @@ fn host_walk(mode : String, w : Double, h : Double, platform : Int) -> (Array[Ho
     steps.push({ what, frames: t.host_frames() })
   }
   t.record_host()
+  // (what a chat's page makes outside frames too: its list's entries, its messages made of their JSON)
+  t.count_between("entries", @sfbase.entries_made)
+  t.count_between("messages", @sfbase.messages_made)
   // (a tap as the host hands it: down and up at one moment, the frames it asks for after)
   let tap = fn(x : Double, y : Double) {
     t.touch_at(0, x, y, t.time())
@@ -150,8 +153,16 @@ fn host_walk(mode : String, w : Double, h : Double, platform : Int) -> (Array[Ho
       Some((x, y)) => step("another chosen", @ui.move_most_ms, fn() { tap(x, y) })
       None => abort("no other chat in the list")
     }
+    match t.find("整理发布清单") {
+      Some((x, y)) => step("chosen back", @ui.move_most_ms, fn() { tap(x, y) })
+      None => abort("no chat in the list")
+    }
   } else {
     step("left", @ui.move_most_ms, fn() { t.back_told(t.time()) })
+    match t.find("整理发布清单") {
+      Some((x, y)) => step("entered", @ui.move_most_ms, fn() { tap(x, y) })
+      None => abort("no chat in the list")
+    }
   }
   (steps, room)
 }
@@ -296,6 +307,47 @@ test "each frame of a chat of 3000 messages costs no more than the same frame of
             }
           }
         Some(o) => out.push("\{s.what} at \{w}: \{s.frames.length()} frames at 3000, \{o.frames.length()} at 30")
+        None => out.push("\{s.what} at \{w}: none at 30")
+      }
+    }
+  }
+  assert_eq(out, [])
+}
+
+///|
+/// What step `s` did between its frames, outside them (HostFrame's `between`), each count summed.
+fn host_between(s : HostStep) -> Map[String, Int] {
+  let out : Map[String, Int] = {}
+  for f in s.frames {
+    for c in f.between {
+      out[c.0] = out.get(c.0).unwrap_or(0) + c.1
+    }
+  }
+  out
+}
+
+///|
+/// Entering a chat, leaving it and choosing another do outside their frames (the events taken as they come, the
+/// changes they make settled then: what a phone's PERF does not see, 300–400 ms of it as a long chat is entered or left
+/// on 2026-11-05) what they do for a chat of its last 30 alone: no more nodes made, bindings run, nodes laid out, list
+/// entries or messages made.
+test "entering, leaving or choosing a long chat does no more outside its frames than for a chat of 30, on a phone and a desktop" {
+  let out : Array[String] = []
+  for w in [390.0, 1280.0] {
+    let (long, _) = host_walk_of("chat-long", w)
+    let (short, _) = host_walk_of("chat-long-30", w)
+    for s in long {
+      if !["left", "entered", "another chosen", "chosen back", "sent"].contains(s.what) {
+        continue
+      }
+      match short.search_by(fn(o) { o.what == s.what }) {
+        Some(j) => {
+          let (a, b) = (host_between(s), host_between(short[j]))
+          let more = a.iter().filter(fn(c) { c.1 > b.get(c.0).unwrap_or(0) }).map(fn(c) { "\{c.0} \{c.1} (30: \{b.get(c.0).unwrap_or(0)})" }).collect()
+          if !more.is_empty() {
+            out.push("\{s.what} at \{w}: " + more.join(", "))
+          }
+        }
         None => out.push("\{s.what} at \{w}: none at 30")
       }
     }
