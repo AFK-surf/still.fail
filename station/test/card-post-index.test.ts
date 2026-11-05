@@ -64,6 +64,37 @@ for (const recursive of [false, true]) {
       } finally { store.close(); }
     });
   }
+  test(`card posts agree after interleaved writes (recursive triggers ${recursive})`, () => {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers=${recursive ? "ON" : "OFF"}`);
+      const untracked = store.openThread("ember", "EMBER", "untracked", null, null).id;
+      installCardPosts(db);
+      const tracked = ["one", "two"].map((name) => store.openThread("ember", "EMBER", name, null, null).id);
+      const threads = [...tracked, untracked];
+      let seed = 71239;
+      const next = (max: number) => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed % max; };
+      const insert = db.prepare(`INSERT OR REPLACE INTO entries(rowid,thread,n,kind,target,ts,author_kind,author,at,card,options)
+        VALUES(?,?,?,?,?,?,'agent','a',?,?,?)`);
+      const ignore = db.prepare(`INSERT OR IGNORE INTO entries(rowid,thread,n,kind,target,ts,author_kind,author,at,card,options)
+        VALUES(?,?,?,?,?,?,'agent','a',?,?,?)`);
+      const update = db.prepare(`UPDATE OR REPLACE entries SET rowid=?,thread=?,n=?,kind=?,target=?,ts=?,at=?,card=?,options=? WHERE rowid=?`);
+      for (let step = 0; step < 150; step++) {
+        const current = db.prepare("SELECT rowid FROM entries ORDER BY rowid").all() as { rowid: number }[];
+        const action = current.length === 0 ? 0 : next(4);
+        if (action === 3) db.prepare("DELETE FROM entries WHERE rowid=?").run(current[next(current.length)]!.rowid);
+        else {
+          const kind = next(3) === 0 ? "edit" : "message";
+          const args = [next(25) - 1, threads[next(threads.length)]!, next(16) - 3, kind,
+            kind === "edit" ? next(16) - 3 : null, next(4) === 0 ? `ts-${next(8)}` : null,
+            next(20), next(3) === 0 ? textCard : null, next(3) === 0 ? '["yes"]' : null] as const;
+          if (action === 2) update.run(...args, current[next(current.length)]!.rowid);
+          else (action === 1 ? ignore : insert).run(...args);
+        }
+        for (const thread of tracked) assert.deepEqual(posts(db, thread), original(db, thread), `step ${step}, thread ${thread}`);
+      }
+    } finally { store.close(); }
+  });
 }
 
 test("old card posts are prepared in bounded batches while another connection writes", () => {
@@ -91,6 +122,48 @@ test("old card posts are prepared in bounded batches while another connection wr
     assert.deepEqual(posts(db, thread), original(db, thread));
     assert.ok(posts(db, thread).includes("9007199254740993"));
     other.prepare("DELETE FROM entries WHERE thread=? AND n=12").run(thread);
+    assert.deepEqual(posts(db, thread), original(db, thread));
+  } finally { other?.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a writer between the old-position read and commit cannot be missed", () => {
+  const dir = mkdtempSync(join(tmpdir(), "card-post-race-")), path = join(dir, "station.db");
+  const store = Store.open(path), db = store.db;
+  let other: DatabaseSync | null = null;
+  try {
+    const thread = store.openThread("ember", "EMBER", "race", null, null).id;
+    db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at,card) VALUES(?,1,'message','agent','a',1,?)").run(thread, textCard);
+    installCardPosts(db);
+    other = new DatabaseSync(path);
+    let wrote = false;
+    const watched = new Proxy(db, {
+      get(target, key) {
+        if (key === "prepare") return (sql: string) => {
+          const statement = target.prepare(sql);
+          if (!sql.startsWith("SELECT CAST(n AS TEXT) AS n FROM")) return statement;
+          return new Proxy(statement, {
+            get(s, name) {
+              if (name === "all") return (...args: Parameters<typeof s.all>) => {
+                const rows = s.all(...args);
+                if (!wrote) {
+                  wrote = true;
+                  other!.prepare("UPDATE entries SET card=NULL WHERE thread=? AND n=1").run(thread);
+                  other!.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at,card) VALUES(?,-1,'message','agent','a',2,?)").run(thread, textCard);
+                }
+                return rows;
+              };
+              const value = Reflect.get(s, name, s);
+              return typeof value === "function" ? value.bind(s) : value;
+            },
+          });
+        };
+        const value = Reflect.get(target, key, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    }) as DatabaseSync;
+    let step = cardPostsStep(watched, thread, 4);
+    while (!step.done) step = cardPostsStep(db, thread, 4);
+    assert.equal(wrote, true);
     assert.deepEqual(posts(db, thread), original(db, thread));
   } finally { other?.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
