@@ -173,6 +173,8 @@ export class Hub {
   preparePostsAfter: ((messages: readonly { thread: number; n: number }[], signal?: AbortSignal) => Promise<void>) | null = null;
   /// The message files needed to identify an old widget's source.
   prepareWidgetSources: ((threads: readonly number[], signal?: AbortSignal) => Promise<void>) | null = null;
+  /// The sessions whose old copy destinations are needed before posting a copy.
+  prepareCcSessions: ((sessions: readonly string[], signal?: AbortSignal) => Promise<void>) | null = null;
   private awaitingWorkspaceActivity = new Set<string>();
   /// When each idle process is next looked at for eviction.
   private deadlines = new Map<string, Fiber.Fiber<void>>();

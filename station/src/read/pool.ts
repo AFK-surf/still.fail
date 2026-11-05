@@ -23,6 +23,8 @@ import { SessionBindingsBuilder } from "./session-bindings-builder.ts";
 import { ArchiveMarkBuilder } from "./archive-mark-builder.ts";
 import { SessionUpJobsBuilder } from "./session-up-jobs-builder.ts";
 import { WidgetSourcesBuilder } from "./widget-sources-builder.ts";
+import { CcIndexBuilder } from "./cc-index-builder.ts";
+import { CC_SESSIONS_PENDING } from "../store/cc-thread-index.ts";
 import { SESSION_BINDINGS_PENDING } from "../store/session-bindings-index.ts";
 import { OUTFLOW_CHATS_PENDING } from "./outflow.ts";
 import type { Answer, Ask, Ready } from "./worker.ts";
@@ -123,6 +125,7 @@ export class Readers {
   private archiveMarks: ArchiveMarkBuilder | null = null;
   private sessionUpJobs: SessionUpJobsBuilder | null = null;
   private widgetSources: WidgetSourcesBuilder | null = null;
+  private ccIndex: CcIndexBuilder | null = null;
   /// A checkpoint is armed or running (`checkpointSoon`), and the store changed again since it was armed.
   private checkpointing = false;
   private again = false;
@@ -271,6 +274,13 @@ export class Readers {
     return this.covered(this.widgetSources.ready(threads, signal), signal);
   }
 
+  /// Prepare the sessions needed to choose a chat's copy destinations.
+  prepareCcSessions(sessions: readonly string[], signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.ccIndex ??= new CcIndexBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.ccIndex.ready(sessions, signal), signal);
+  }
+
   private async saidRead(op: string, args: unknown, lang: Ask["lang"], told: boolean, background: boolean, signal?: AbortSignal): Promise<string> {
     while (!this.closed) {
       try { return await this.enqueue(op, args, lang, told, op === CHECKPOINT, background, signal); }
@@ -278,6 +288,13 @@ export class Readers {
         if (!(error instanceof HttpError)) throw error;
         if (error.message === SESSION_BINDINGS_PENDING) {
           await this.prepareSessionBindings(signal);
+          continue;
+        }
+        if (error.message.startsWith(CC_SESSIONS_PENDING)) {
+          let sessions: unknown;
+          try { sessions = JSON.parse(error.message.slice(CC_SESSIONS_PENDING.length)); } catch { throw error; }
+          if (!Array.isArray(sessions) || sessions.length === 0 || !sessions.every((key) => typeof key === "string")) throw error;
+          await this.prepareCcSessions(sessions, signal);
           continue;
         }
         if (error.message.startsWith(TURN_COUNT_PENDING)) {
@@ -524,6 +541,7 @@ export class Readers {
     if (this.archiveMarks !== null) void this.archiveMarks.close();
     if (this.sessionUpJobs !== null) void this.sessionUpJobs.close();
     if (this.widgetSources !== null) void this.widgetSources.close();
+    if (this.ccIndex !== null) void this.ccIndex.close();
     for (const line of [this.asked, this.told, this.log, this.pages]) {
       for (const asked of line.waiting.splice(0)) asked.reject(new HttpError(502, "station stopping"));
       for (const { worker } of line.slots) void worker.terminate();

@@ -13,6 +13,7 @@ import { compactQuery, compactScopeReady, compactUsageSince, hasCompactUsage } f
 import { type UsageChatCoverage, usageCardOutcomesComplete, usageChatStatsReady } from "../store/usage-chat-stats.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
 import { hasRuntimeOrderIndex } from "../store/schema.ts";
+import { CC_SESSIONS_PENDING, CcSessionsUnavailable, ccSessionReady, indexedCcThreads } from "../store/cc-thread-index.ts";
 import { SESSION_LIST_CONNECT, SESSION_LIST_PENDING, SESSION_LIST_SCOPE, SESSION_LIST_SCOPE_CONNECT, sessionListReady } from "../store/session-list-index.ts";
 import { SESSION_BINDINGS_PENDING, SESSION_BINDINGS_SELECTED, sessionBindingsReady } from "../store/session-bindings-index.ts";
 import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
@@ -20,7 +21,7 @@ import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import {
-  CARD_BEFORE, CC_THREADS_SQL, CLOSED_SINCE, CLOSED_THREAD_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LAST_MESSAGE, MESSAGES_BEFORE, type Membership, type MessageRow, OPTIONS_BEFORE,
+  CARD_BEFORE, CLOSED_SINCE, CLOSED_THREAD_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LAST_MESSAGE, MESSAGES_BEFORE, type Membership, type MessageRow, OPTIONS_BEFORE,
   PEOPLE_AT, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, authorKind, cardOf, liveShare,
   ending, parsed, saidBefore, sees, takeChars, toChatShare, toEntry, letterEntry, toMembership, toMessage, toThread,
 } from "../store/rows.ts";
@@ -306,10 +307,20 @@ export function sessionThreads(s: Store, session: string): ThreadRow[] {
   return all(s, "SELECT t.* FROM thread_sessions ts JOIN threads t ON t.id = ts.thread WHERE ts.session = ? ORDER BY ts.joined_at DESC, ts.rowid DESC", session).map(toThread);
 }
 
+/// A page listing many chats asks for all their pending copy destinations together before constructing the views.
+export function requireCcSessions(s: Store, sessions: readonly string[]): void {
+  const missing = [...new Set(sessions)].filter((session) => !ccSessionReady(s.db, session));
+  if (missing.length) throw new Refused(503, CC_SESSIONS_PENDING + JSON.stringify(missing));
+}
+
 /// The threads a still.fail chat can copy people's messages to (rows.ts CC_THREADS_SQL), with the connect posting
 /// in each.
 export function ccThreads(s: Store, thread: number): { thread: ThreadRow; connect: string }[] {
-  return all(s, CC_THREADS_SQL, thread).map((r) => ({ thread: toThread(r), connect: r.connect }));
+  try { return indexedCcThreads(s.db, thread).map((r) => ({ thread: toThread(r), connect: r.connect as string })); }
+  catch (error) {
+    if (error instanceof CcSessionsUnavailable) throw new Refused(503, CC_SESSIONS_PENDING + JSON.stringify(error.sessions));
+    throw error;
+  }
 }
 
 export function threadSessions(s: Store, thread: number): Membership[] {
