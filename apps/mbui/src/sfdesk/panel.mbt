@@ -497,7 +497,10 @@ fn side_panel(
     // One whose page has a bar of its own (a service's: its address names it): that bar the panel's, its × at its end,
     // no row of the panel's over it (the user, 2026-10-28: two rows there too much)
     let alone = side_on_tape.val && tabs.length() == 1
-    let own_bar = alone && tab_service(front) is Some(_)
+    // (on its side the screen's tools are a rail, with no name of its own: the panel's row names it)
+    let (ww, wh) = c.window_size()
+    let screen_alone = screen_tab_alone(tabs) && !column_short.get() && ww <= wh
+    let own_bar = (alone && tab_service(front) is Some(_)) || screen_alone
     if !own_bar {
       c.box(style=if side_on_tape.val { side_bar_tape() } else { side_bar() }, id=bar, fn() {
         if alone {
@@ -521,7 +524,7 @@ fn side_panel(
         }
         // the panel's switch stays in its top right corner, open or closed; in the short column, the column's
         // (histories_ticked)
-        if !column_short.get() && @sf.icon_button(c, if alone { "close" } else { "panel-close" }, key="side/close", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.closePanel"), shortcut="panel.close") {
+        if !column_short.get() && !(@sf.native_on() && screen_tab_alone(tabs)) && @sf.icon_button(c, if alone { "close" } else { "panel-close" }, key="side/close", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.closePanel"), shortcut="panel.close") {
           side_change(src, r, "clear", None)
         }
       })
@@ -555,7 +558,7 @@ fn side_panel(
         })
       } else if tab_file(front) is Some((session, path, name)) {
         file_pane(c, src, r, session, path, name)
-      } else if station_tab_pane(c, src, w, r, front) {
+      } else if station_tab_pane(c, src, w, r, front, own_bar=if screen_alone { Some(side_bar_tape()) } else { None }) {
         ()
       } else if front != "" {
         // one of its agents' execution histories

@@ -208,7 +208,7 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
     c.cursor(stage, cursor_of_shape(text(field(s.state, "cursor"), "shape")))
   }
   let in_body = s.simulator() && !u.zoom.zoomed()
-  c.box(style=if in_body { stage_box_body } else { stage_box }, id=stage, fn() {
+  c.box(style=if in_body { stage_box_body } else if u.in_tab { stage_box_in_panel } else { stage_box }, id=stage, fn() {
     if size is Some(_) && fit.w > 0.0 {
       let shown = u.shown()
       // on its way back, as it was, faded; over (ended, gone…), blurred under the dark it has gone to

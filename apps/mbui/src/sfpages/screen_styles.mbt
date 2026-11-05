@@ -87,6 +87,12 @@ let round_icon : Double = 20.0
 let screen_bar : @ui.Style = @ui.css("row w=Full h=S14 pl=S1_5 pr=S2_5 gap=S2 align=ACenter")
 
 ///|
+/// Under a panel's tabs (the tab in front names it, its mark first): its figures from under the tab's mark, its last
+/// under the panel's close.
+// kept across runs: a value (no field of it changes)
+let screen_bar_in_tabs : @ui.Style = @ui.css("row w=Full h=S11 pl=S10 pr=S6 gap=S2 align=ACenter")
+
+///|
 // kept across runs: a value (no field of it changes)
 let screen_bar_words : @ui.Style = @ui.css("w=Full")
 
@@ -268,6 +274,11 @@ let take_over_button_words : @ui.TextStyle = @ui.text_style(
 ///|
 // kept across runs: a value (no field of it changes)
 let stage_box : @ui.Style = @ui.css("w=Full h=Full clip")
+
+///|
+/// Beside a chat: a ground a shade off the page's, what a wide picture leaves of a tall panel not taken for the page.
+// kept across runs: a value (no field of it changes)
+let stage_box_in_panel : @ui.Style = @ui.css("w=Full h=Full clip bg=Faint")
 
 ///|
 /// A device's at its whole size, its body round the picture being past this box.
