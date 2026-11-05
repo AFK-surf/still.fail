@@ -1425,6 +1425,11 @@ fn Ctx::tree_draw_node(
   // (what it draws, and an old view it hosts, faded out towards the edges of each that holds it so, each pixel by
   // where it is; then what it holds towards its own, not its own drawing: View::fades)
   let k0 = self.ninst
+  // (where the host puts a control of its own: a rect of no opacity drawn as it is, kept by its layer, native_anchor.mbt)
+  if c.native_anchor != "" {
+    scene_anchor_drawn(c.native_anchor, self.ninst)
+    self.push_inst(x, y, c.w * s, c.h * s, 0.0, 0.0, 0.0, 0.0, 0L, 0.0, 0.0, 0.0, 0.0, 0.0)
+  }
   // (its edge drawn after what it holds, composed as the rest of it was (moved, turned, faded, cut, its own): taken
   // out where it was drawn, held till what it holds is drawn, as the last of what it does here)
   let ring_k = Ref((-1, 0))

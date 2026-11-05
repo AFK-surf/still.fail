@@ -134,6 +134,8 @@ pub(all) struct Look {
   mut picture : @pixels.Vector?
   /// the moment its glyphs, and those of all it holds, are drawn as View::glyphs_by works out for (None: as laid out)
   mut glyphs_at : Double?
+  /// where the host puts a control of its own, by this name, wherever this node is drawn (View::native_anchor; "": none)
+  mut native_anchor : String
 } derive(Eq, Debug)
 
 ///|
@@ -191,6 +193,8 @@ pub(all) struct Content {
   /// in its bones, how: drawn as its words, shapes and grounds are (0), one piece of its own box (1: View::bone_whole),
   /// or nothing, in one drawn whole (2)
   bone_as : Int
+  /// the name of the host's control put where it is drawn (View::native_anchor; "": none)
+  native_anchor : String
 } derive(Eq, Debug)
 
 ///|
@@ -207,7 +211,8 @@ pub fn Content::draws(self : Content) -> Bool {
   self.picture is Some(_) ||
   self.glass is Some(_) ||
   self.shadow.0 > 0.0 ||
-  self.hosted
+  self.hosted ||
+  self.native_anchor != ""
 }
 
 ///|
@@ -1157,7 +1162,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), runs_lit: (0, 0, 0L, 0.0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), edge_dashed: false, image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None, glyphs_at: None },
+        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), runs_lit: (0, 0, 0L, 0.0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), edge_dashed: false, image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None, glyphs_at: None, native_anchor: "" },
         parent,
         allow_ellipsis: false,
         kids: [],
@@ -2052,6 +2057,7 @@ priv enum Prop {
   Nowhere
   Edge
   EdgeDashed
+  NativeAnchor
   Image
   ImageFor
   ImageCover
@@ -2540,6 +2546,17 @@ pub fn View::picture(self : View, picture : Live[@pixels.Vector?]) -> View {
 /// Its ground (0: none): paint's.
 pub fn View::ground(self : View, ink : Live[Int64]) -> View {
   self.bind(Ground, ink, Paint, fn(k) { self.tree.nodes[self.at].look.ground = k })
+  self
+}
+
+///|
+/// Where the host puts a control of its own named `name` ("": none), as it changes: wherever this node is drawn in a
+/// frame, as big and as cut as it is drawn there (what holds it moved, grown, cut), handed the host as the frame ends
+/// (@ui.native_anchors); where it is not drawn (cut out of sight, laid out nowhere, its layer not drawn), not handed,
+/// and the host hides its control. Drawn as nothing of its own, and no change of where it is drawn draws anything again.
+/// Paint's.
+pub fn View::native_anchor(self : View, name : Live[String]) -> View {
+  self.bind(NativeAnchor, name, Paint, fn(a) { self.tree.nodes[self.at].look.native_anchor = a })
   self
 }
 
@@ -6861,6 +6878,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     picture: n.look.picture,
     bones: self.bones_of_at(at),
     bone_as: self.bone_as_at(at),
+    native_anchor: n.look.native_anchor,
   })
   self.changed.push(id)
   self.pending.push(id)

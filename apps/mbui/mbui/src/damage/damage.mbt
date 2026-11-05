@@ -331,6 +331,11 @@ fn reach(a : FixedArray[Double], k : Int, into : Rect) -> Unit {
   if kind == 12 {
     return
   }
+  // (a rect that draws no pixel: its fill of no opacity, no edge of any, no picture; an anchor's, where the host puts a
+  // control of its own: @ui's native_anchor.mbt)
+  if kind == 0 && a[o + 11] == 0.0 && (a[o + 6] == 0.0 || a[o + 15] == 0.0) && a[o + 20] == 0.0 {
+    return
+  }
   if is_glass(kind) {
     // (all a capture of it copies, and all it draws: its group's bounds, inside that)
     let m = glass_margin(a, k)
