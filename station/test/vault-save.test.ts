@@ -10,7 +10,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { type Entry, entryHash, genesis, signedBytes as lockBytes } from "../src/cloud/lock.ts";
+import { type Entry, apply as applyLock, entryHash, genesis, signedBytes as lockBytes } from "../src/cloud/lock.ts";
+import { routes as requestRoutes } from "../src/api/routes/vault-requests.ts";
 import { type BoxCert, type Deny, type Grant, type Item, type Request, type Sig, type Vault, TAG, encryptWith, grantContext, itemContext, keyContext, newBoxPair, openSeal, saveContext, seal, signedBytes } from "../src/vault/crypto.ts";
 import { PLAIN, PlainStore } from "../src/vault/plain.ts";
 import { Secrets } from "../src/vault/secrets.ts";
@@ -115,6 +116,83 @@ const decided = async (h: { notified: [string, string][] }, asked: Promise<strin
 };
 const pendingOf = (secrets: Secrets, lock: ReturnType<typeof world>["state"] | null, email: string, sub = email.split("@")[0]!) => secrets.pending(WS, lock, { sub, email });
 const opened = (r: Request, p: Person) => JSON.parse(Buffer.from(openSeal(p.box.priv, r.sealed!.find((s) => s.box === p.box.pub)!.secret, saveContext(WS, r.id))).toString());
+
+for (const change of ["member.remove", "device.remove", "member"] as const) test(`a pending-request read checks ${change} while old requests are prepared`, async () => {
+  const w = world();
+  let current = w.state;
+  let ready!: () => void;
+  const preparing = new Promise<void>((resolve) => { ready = resolve; });
+  const secrets = { preparePending: () => preparing, pending: () => [{ id: "private" }] };
+  const route = requestRoutes({ secrets: secrets as never, plain: {} as never, lock: () => current })
+    .find((r) => r.method === "GET" && r.pattern.test("/vault/requests"))!;
+  const answer = route.handle({ viewer: { sub: "bob", email: "bob@x.com", workspace: WS, device: w.bob.base.hex } } as never, []);
+  const body = change === "member.remove" ? { sub: "bob" } : change === "device.remove" ? { id: w.bob.base.hex } : { sub: "carol", email: "carol@x.com", role: "member" };
+  const entry = { v: 1 as const, ws: WS, seq: current.seq + 1, prev: current.head, at: 1001, kind: change, body };
+  current = applyLock(current, { ...entry, sig: { key: w.alice.signer.id, alg: "Ed25519", sig: w.alice.signer.sign(lockBytes(entryHash(entry as Entry))) } }, 1001);
+  ready();
+  assert.equal((await answer).status, change === "member" ? 200 : 403);
+});
+
+test("a cancelled pending-request read does not settle requests after preparation", async () => {
+  let ready!: () => void;
+  const preparing = new Promise<void>((resolve) => { ready = resolve; });
+  let read = false;
+  const secrets = { preparePending: () => preparing, pending: () => { read = true; return []; } };
+  const route = requestRoutes({ secrets: secrets as never, plain: {} as never, lock: () => null })
+    .find((r) => r.method === "GET" && r.pattern.test("/vault/requests"))!;
+  const controller = new AbortController();
+  const answer = route.handle({ viewer: { sub: "bob", email: "bob@x.com", workspace: WS }, signal: controller.signal } as never, []);
+  controller.abort();
+  const result = await Promise.race([answer, tick().then(() => null)]);
+  ready();
+  assert.equal(result?.status, 503);
+  assert.equal(read, false);
+});
+
+test("cancelling one pending-request read leaves another caller's preparation intact", async () => {
+  let ready!: () => void;
+  const preparing = new Promise<void>((resolve) => { ready = resolve; });
+  let reads = 0;
+  const secrets = { preparePending: () => preparing, pending: () => { reads++; return []; } };
+  const route = requestRoutes({ secrets: secrets as never, plain: {} as never, lock: () => null })
+    .find((r) => r.method === "GET" && r.pattern.test("/vault/requests"))!;
+  const controller = new AbortController(), viewer = { sub: "bob", email: "bob@x.com", workspace: WS };
+  const cancelled = route.handle({ viewer, signal: controller.signal } as never, []);
+  const remaining = route.handle({ viewer } as never, []);
+  controller.abort();
+  assert.equal((await cancelled).status, 503);
+  ready();
+  assert.equal((await remaining).status, 200);
+  assert.equal(reads, 1);
+});
+
+test("a pending-request read retries if security mode ends while old requests are prepared", async () => {
+  const w = world();
+  let current: typeof w.state | null = w.state, ready!: () => void;
+  const preparing = new Promise<void>((resolve) => { ready = resolve; });
+  const secrets = { preparePending: () => preparing, pending: () => { throw new Error("must not read"); } };
+  const route = requestRoutes({ secrets: secrets as never, plain: {} as never, lock: () => current })
+    .find((r) => r.method === "GET" && r.pattern.test("/vault/requests"))!;
+  const answer = route.handle({ viewer: { sub: "bob", email: "bob@x.com", workspace: WS, device: w.bob.base.hex } } as never, []);
+  current = null;
+  ready();
+  assert.equal((await answer).status, 409);
+});
+
+test("a pending-request read prepares vault membership if security mode starts while it waits", async () => {
+  const w = world();
+  let current: typeof w.state | null = null, ready!: () => void;
+  const preparing = new Promise<void>((resolve) => { ready = resolve; });
+  const scopes: boolean[] = [];
+  const secrets = { preparePending: (_ws: string, members: boolean) => { scopes.push(members); return scopes.length === 1 ? preparing : Promise.resolve(); }, pending: () => [] };
+  const route = requestRoutes({ secrets: secrets as never, plain: {} as never, lock: () => current })
+    .find((r) => r.method === "GET" && r.pattern.test("/vault/requests"))!;
+  const answer = route.handle({ viewer: { sub: "bob", email: "bob@x.com", workspace: WS, device: w.bob.base.hex } } as never, []);
+  current = w.state;
+  ready();
+  assert.equal((await answer).status, 200);
+  assert.deepEqual(scopes, [false, true]);
+});
 
 test("a still-needed secret save can be asked again without reading the secret again", async () => {
   const h = harness(() => null);

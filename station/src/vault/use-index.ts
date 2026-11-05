@@ -4,6 +4,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { Worker } from "node:worker_threads";
 import { log } from "../ops/log.ts";
 import { releaseStoppedBackfill } from "../store/backfill.ts";
+import { backfillPendingPreparation, pendingPreparationComplete } from "./pending-index.ts";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS vault_use_lookup (
@@ -46,7 +47,8 @@ export const PLAIN_USES = `SELECT r.body FROM vault_use_lookup u INDEXED BY vaul
 export const USE_BACKFILL_AFTER = "SELECT id FROM vault_requests WHERE ws = ? AND id > ? ORDER BY id LIMIT ?";
 
 export type UseRead = { id: number; ws: string; vault: string; owner: string | null; limit: number };
-export type UseAnswer = { id: number; bodies?: string[]; error?: string };
+export type PendingPrepare = { kind: "pending"; id: number; ws: string; members: boolean };
+export type UseAnswer = { id: number; bodies?: string[]; ready?: true; error?: string };
 
 export function initializeUseIndex(db: DatabaseSync): void {
   db.exec(SCHEMA);
@@ -124,7 +126,7 @@ export class UseIndex {
   #stopped!: () => void;
   readonly #whenStopped = new Promise<void>((resolve) => { this.#stopped = resolve; });
   #next = 0;
-  #waiting = new Map<number, { resolve: (bodies: string[]) => void; reject: (error: Error) => void }>();
+  #waiting = new Map<number, { resolve: (answer: UseAnswer) => void; reject: (error: Error) => void }>();
 
   constructor(db: DatabaseSync, options: { previousGone?: Promise<void>; priority?: SharedArrayBuffer } = {}) {
     this.#db = db;
@@ -154,7 +156,7 @@ export class UseIndex {
       if (!waiting) return;
       this.#waiting.delete(answer.id);
       if (answer.error !== undefined) waiting.reject(new Error(answer.error));
-      else if (answer.bodies !== undefined) waiting.resolve(answer.bodies);
+      else if (answer.bodies !== undefined || answer.ready === true) waiting.resolve(answer);
       else waiting.reject(new Error("the vault use reader sent no result"));
     });
     let failure: Error | null = null;
@@ -176,6 +178,23 @@ export class UseIndex {
       while (!useIndexComplete(this.#db, ws) && !backfillUseIndex(this.#db, ws)) await new Promise<void>((resolve) => setImmediate(resolve));
       return readUses(this.#db, q);
     }
+    const answer = await this.#ask(q);
+    if (answer.bodies === undefined) throw new Error("the vault use reader sent no page");
+    return answer.bodies;
+  }
+
+  /// Prepare one workspace's pending lookup in bounded transactions on the same worker as use-history preparation.
+  async preparePending(ws: string, members: boolean): Promise<void> {
+    if (pendingPreparationComplete(this.#db, ws, members)) return;
+    if (this.#path === null) {
+      while (!pendingPreparationComplete(this.#db, ws, members) && !backfillPendingPreparation(this.#db, ws, members)) await new Promise<void>((resolve) => setImmediate(resolve));
+      return;
+    }
+    const answer = await this.#ask({ kind: "pending", id: ++this.#next, ws, members });
+    if (answer.ready !== true) throw new Error("the vault reader did not prepare pending requests");
+  }
+
+  async #ask(q: UseRead | PendingPrepare): Promise<UseAnswer> {
     if (this.#previousGone !== null) await Promise.race([this.#previousGone, this.#whenStopped]);
     if (this.#closed) throw new Error("station stopping");
     return new Promise((resolve, reject) => {
