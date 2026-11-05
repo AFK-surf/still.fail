@@ -146,6 +146,24 @@ test "a glyph of what is on the screen in every plot of a full atlas: a new word
 }
 
 ///|
+test "starting a full atlas over redraws glyphs held by other scene layers" {
+  let host = SquareHost::{ drawn: [], put: {} }
+  let words = @signals.signal(square_words(Array::makei(99, fn(i) { 0x4E01 + i })))
+  let t = @ui.Tester::new(fn(_c) {  }, w=4000.0, h=400.0, scale=1.0, live={ host, turn: fn() {  } })
+  t.measure_as_host()
+  @ui.set_view_app(fn(root) {
+    root.box(fn(n) { n.width(Is(Some(4000.0))).words(Is(square_words([0x4E00]))) |> ignore }) |> ignore
+    root.box(fn(n) { n.width(Is(Some(4000.0))).words(By(fn() { words.get() })) |> ignore }) |> ignore
+  })
+  t.draw()
+  let codes = [0x4E00, 0x4E00 + 25, 0x4E00 + 50, 0x4E00 + 75, 0x5E00]
+  words.set(square_words([0x4E00 + 25, 0x4E00 + 50, 0x4E00 + 75, 0x5E00]))
+  t.draw()
+  t.draw()
+  assert_eq(square_drawn_from(t, host), codes)
+}
+
+///|
 test "more on the screen than a whole atlas holds: started over once, not every frame" {
   let host = SquareHost::{ drawn: [], put: {} }
   let t = @ui.Tester::new(
@@ -157,11 +175,13 @@ test "more on the screen than a whole atlas holds: started over once, not every 
   t.draw()
   t.draw()
   t.draw()
-  // from here only the one with no room is asked for, each frame
-  let drawn = host.drawn.length()
+  // from here only the one with no room is asked for; retained scene checks may draw the frame more than once
+  let drawn = host.drawn.filter(fn(k) { k != 0x4E00 + 100 }).length()
+  let missed = host.drawn.filter(fn(k) { k == 0x4E00 + 100 }).length()
   t.draw()
   t.draw()
-  assert_eq(host.drawn.length(), drawn + 2)
+  assert_eq(host.drawn.filter(fn(k) { k != 0x4E00 + 100 }).length(), drawn)
+  assert_true(host.drawn.filter(fn(k) { k == 0x4E00 + 100 }).length() > missed)
   assert_eq(square_drawn_from(t, host).length(), 100)
 }
 
