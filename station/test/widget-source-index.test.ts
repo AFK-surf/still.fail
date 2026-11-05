@@ -51,6 +51,48 @@ for (const recursive of [false, true]) {
       db.prepare("DELETE FROM thread_sessions WHERE thread=? AND session='a'").run(second); check();
     } finally { store.close(); }
   });
+  for (const alias of ["rowid", "_rowid_", "oid"]) {
+    test(`replacing an entry by ${alias} removes its former widget source (recursive triggers ${recursive})`, () => {
+      const store = Store.open(":memory:"), db = store.db;
+      try {
+        db.exec(`PRAGMA recursive_triggers=${recursive ? "ON" : "OFF"}`);
+        const first = store.openThread("ember", "EMBER", "first", null, null).id;
+        const second = store.openThread("ember", "EMBER", "second", null, null).id;
+        widgetSourcesStep(db, first); widgetSourcesStep(db, second);
+        store.joinThread(first, "a", "ember"); store.joinThread(second, "a", "ember");
+        const path = "/w/item.html", files = (name: string) => JSON.stringify([{ path, name }]);
+        const put = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
+          VALUES(?,1,'message','agent','a',?,?)`);
+        put.run(first, 10, files("first")); put.run(second, 20, files("second"));
+        const target = (db.prepare("SELECT rowid FROM entries WHERE thread=? AND n=1").get(second) as { rowid: number }).rowid;
+        db.prepare(`UPDATE OR REPLACE entries SET ${alias}=? WHERE thread=? AND n=1`).run(target, first);
+        assert.deepEqual(plain(db.prepare(WIDGET_SOURCE).get("a", path)), plain(db.prepare(original).get("a", path)));
+      } finally { store.close(); }
+    });
+  }
+  test(`an unrequested thread replacing a tracked row keeps the source exact (recursive triggers ${recursive})`, () => {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers=${recursive ? "ON" : "OFF"}`);
+      const tracked = store.openThread("ember", "EMBER", "tracked", null, null).id;
+      const other = store.openThread("ember", "EMBER", "other", null, null).id;
+      widgetSourcesStep(db, tracked);
+      store.joinThread(tracked, "a", "ember");
+      const path = "/w/item.html", files = JSON.stringify([{ path, name: "tracked" }]);
+      db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
+        VALUES(?,1,'message','agent','a',1,?)`).run(tracked, files);
+      const rowid = (db.prepare("SELECT rowid FROM entries WHERE thread=? AND n=1").get(tracked) as { rowid: number }).rowid;
+      // IGNORE may leave a stage; the next unrelated write must clear it without losing the tracked source.
+      db.prepare(`INSERT OR IGNORE INTO entries(rowid,thread,n,kind,author_kind,author,at,attachments)
+        VALUES(?, ?,2,'message','agent','a',2,'[]')`).run(rowid, other);
+      db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
+        VALUES(?,3,'message','agent','a',3,'[]')`).run(other);
+      assert.deepEqual(plain(db.prepare(WIDGET_SOURCE).get("a", path)), plain(db.prepare(original).get("a", path)));
+      db.prepare(`INSERT OR REPLACE INTO entries(rowid,thread,n,kind,author_kind,author,at,attachments)
+        VALUES(?, ?,4,'message','agent','a',4,'[]')`).run(rowid, other);
+      assert.deepEqual(plain(db.prepare(WIDGET_SOURCE).get("a", path)), plain(db.prepare(original).get("a", path)));
+    } finally { store.close(); }
+  });
 }
 
 test("old widget sources are built in bounded batches while messages change", () => {
@@ -148,14 +190,49 @@ test("another connection's writes remain exact during and after old-thread prepa
   } finally { other?.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("a delivery reads all widget sources from one snapshot", () => {
+  const dir = mkdtempSync(join(tmpdir(), "widget-snapshot-")), path = join(dir, "station.db");
+  const store = Store.open(path), db = store.db, other = new DatabaseSync(path);
+  try {
+    const thread = store.openThread("ember", "EMBER", "snapshot", null, null).id;
+    widgetSourcesStep(db, thread);
+    store.joinThread(thread, "a", "ember");
+    const put = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
+      VALUES(?,?,'message','agent','a',?,?)`);
+    const files = (name: string, file: string) => JSON.stringify([{ name, path: file }]);
+    put.run(thread, 1, 10, files("first", "/w/first"));
+    put.run(thread, 2, 20, files("old", "/w/second"));
+    store.putWidgetState("a", "/w/first", "{}", "1");
+    store.putWidgetState("a", "/w/second", "{}", "2");
+    let wrote = false;
+    db.function("during_widget_read", (name) => {
+      if (!wrote) {
+        wrote = true;
+        other.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
+          VALUES(?,3,'message','agent','a',30,?)`).run(thread, files("new", "/w/second"));
+      }
+      return name;
+    });
+    db.exec(`ALTER TABLE widget_source_rows RENAME TO widget_source_rows_test;
+      CREATE VIEW widget_source_rows AS SELECT thread,n,slot,path,at,during_widget_read(name) AS name FROM widget_source_rows_test;`);
+    assert.deepEqual(store.untoldWidgetModels("a").map((row) => row.name), ["first", "old"]);
+    assert.deepEqual(store.untoldWidgetModels("a").map((row) => row.name), ["first", "new"]);
+  } finally { other.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("a bad attachment does not make a message write fail", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
     installWidgetSources(db);
     const thread = store.openThread("ember", "EMBER", "bad", null, null).id;
     assert.equal(widgetSourcesStep(db, thread).done, true);
+    store.joinThread(thread, "a", "ember");
     db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments) VALUES(?,1,'message','agent','a',1,?)")
       .run(thread, "not json");
     assert.ok(db.prepare("SELECT 1 FROM widget_source_invalid WHERE thread=? AND n=1").get(thread));
+    store.putWidgetState("a", "/w/item.html", "{}", "selected");
+    assert.throws(() => store.untoldWidgetModels("a"), /malformed JSON/);
+    db.prepare("UPDATE entries SET attachments='[]' WHERE thread=? AND n=1").run(thread);
+    assert.deepEqual(store.untoldWidgetModels("a"), [{ path: "/w/item.html", name: "item.html", thread: null, model: "selected" }]);
   } finally { store.close(); }
 });

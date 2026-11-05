@@ -36,6 +36,12 @@ const needsInsert = `((NEW.kind = 'message' OR NEW.target IS NOT NULL)
   OR EXISTS (SELECT 1 FROM entries e WHERE e.thread=NEW.thread AND e.n=NEW.n)
   OR (NEW.ts IS NOT NULL AND EXISTS (SELECT 1 FROM entries e WHERE e.thread=NEW.thread AND e.ts=NEW.ts))
   OR EXISTS (SELECT 1 FROM entries e WHERE e.rowid=NEW.rowid)`;
+// REPLACE can silently remove an entry in a different thread by rowid. A stage left by IGNORE is cleared on the next
+// write even when that write is outside the requested threads.
+const trackedInsert = `EXISTS (SELECT 1 FROM widget_source_scopes s WHERE s.thread=NEW.thread)
+  OR EXISTS (SELECT 1 FROM entries e JOIN widget_source_scopes s ON s.thread=e.thread WHERE e.rowid=NEW.rowid)
+  OR EXISTS (SELECT 1 FROM widget_source_changed)`;
+const trackedUpdate = `(${trackedInsert}) OR EXISTS (SELECT 1 FROM widget_source_scopes s WHERE s.thread=OLD.thread)`;
 const stage = (updating: boolean) => `DELETE FROM widget_source_changed;
   INSERT INTO widget_source_changed (thread, n, existed, attachments, at, dirty)
     SELECT k.thread, k.n, m.n IS NOT NULL, m.attachments, m.created_at, 0
@@ -73,7 +79,7 @@ const afterDelete = `DELETE FROM widget_source_rows WHERE (thread,n) IN (${oldMe
   DELETE FROM widget_source_invalid WHERE (thread,n) IN (${oldMessages});
   ${insertRows(oldMessages)} ${insertInvalid(oldMessages)}
   UPDATE widget_source_changed SET dirty = 1 WHERE (thread,n) IN (${oldMessages});`;
-const updated = `OLD.thread IS NOT NEW.thread OR OLD.n IS NOT NEW.n OR OLD.kind IS NOT NEW.kind
+const updated = `OLD.rowid IS NOT NEW.rowid OR OLD.thread IS NOT NEW.thread OR OLD.n IS NOT NEW.n OR OLD.kind IS NOT NEW.kind
   OR OLD.target IS NOT NEW.target OR OLD.ts IS NOT NEW.ts OR OLD.attachments IS NOT NEW.attachments OR OLD.at IS NOT NEW.at`;
 
 export function installWidgetSources(db: DatabaseSync): void {
@@ -91,12 +97,12 @@ export function installWidgetSources(db: DatabaseSync): void {
       CREATE TABLE widget_source_invalid (thread INTEGER NOT NULL, n INTEGER NOT NULL, PRIMARY KEY(thread,n)) WITHOUT ROWID;
       CREATE TABLE widget_source_changed (thread INTEGER NOT NULL, n INTEGER NOT NULL, existed INTEGER NOT NULL,
         attachments TEXT, at INTEGER, dirty INTEGER NOT NULL, PRIMARY KEY(thread,n)) WITHOUT ROWID;
-      CREATE TRIGGER widget_source_before_add BEFORE INSERT ON entries BEGIN ${stage(false)} END;
+      CREATE TRIGGER widget_source_before_add BEFORE INSERT ON entries WHEN ${trackedInsert} BEGIN ${stage(false)} END;
       CREATE TRIGGER widget_source_add AFTER INSERT ON entries WHEN EXISTS (SELECT 1 FROM widget_source_changed) BEGIN ${reconcile} END;
-      CREATE TRIGGER widget_source_before_change BEFORE UPDATE OF thread,n,kind,target,ts,attachments,at ON entries
-        WHEN ${updated} BEGIN ${stage(true)} END;
-      CREATE TRIGGER widget_source_change AFTER UPDATE OF thread,n,kind,target,ts,attachments,at ON entries
-        WHEN ${updated} AND EXISTS (SELECT 1 FROM widget_source_changed) BEGIN ${reconcile} END;
+      CREATE TRIGGER widget_source_before_change BEFORE UPDATE OF rowid,_rowid_,oid,thread,n,kind,target,ts,attachments,at ON entries
+        WHEN (${updated}) AND (${trackedUpdate}) BEGIN ${stage(true)} END;
+      CREATE TRIGGER widget_source_change AFTER UPDATE OF rowid,_rowid_,oid,thread,n,kind,target,ts,attachments,at ON entries
+        WHEN (${updated}) AND EXISTS (SELECT 1 FROM widget_source_changed) BEGIN ${reconcile} END;
       CREATE TRIGGER widget_source_drop AFTER DELETE ON entries
         WHEN EXISTS (SELECT 1 FROM widget_source_scopes WHERE thread=OLD.thread) BEGIN ${afterDelete} END;
       CREATE TRIGGER widget_source_drop_thread AFTER DELETE ON threads
