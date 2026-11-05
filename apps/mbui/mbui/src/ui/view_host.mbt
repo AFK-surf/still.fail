@@ -1527,13 +1527,23 @@ fn Ctx::tree_draw_node(
   }
   // (wholly outside the clip it is drawn in, where it is drawn (moved, grown, what holds it scrolled): nothing of its own
   // drawn or made, no glyph of its words asked of the host, as the old frame paints nothing of what lies outside its
-  // clip where it is drawn (scene.mbt's paint, what is moved carried: draw_carries); not where what it draws may lie
-  // elsewhere than its box: turned, shadowed, its ground drawn in a box of its own (View::ground_drawn), or in what is drawn
+  // clip where it is drawn (scene.mbt's paint, what is moved carried: draw_carries), turned by as far as it can turn to; not
+  // where what it draws may lie elsewhere than its box: shadowed, its ground drawn in a box of its own (View::ground_drawn), or in what is drawn
   // stretched (Android's list at an end, moved after it is drawn). What it holds each looked at where it is.)
+  // (the window's edges among what it is drawn in, as the old frame's root clips to the window: a panel past its edge
+  // draws nothing of what is wholly beyond it, whatever its own clip reaches)
   let k = clip_top()
-  if (x > clip_stack[k + 2] || y > clip_stack[k + 3] || x + c.w * s < clip_stack[k] || y + c.h * s < clip_stack[k + 1]) &&
+  let (cx0, cy0) = (dmax(clip_stack[k], 0.0), dmax(clip_stack[k + 1], 0.0))
+  let (cx1, cy1) = (dmin(clip_stack[k + 2], self.width), dmin(clip_stack[k + 3], self.height))
+  // (turned, about whatever point of its box: what it draws no further from its box than the box's diagonal)
+  let (bw, bh) = (c.w * s, c.h * s)
+  let out = if tree.turn_of(c.id).0 == 0.0 {
+    0.0
+  } else {
+    (bw * bw + bh * bh).sqrt()
+  }
+  if (x - out > cx1 || y - out > cy1 || x + bw + out < cx0 || y + bh + out < cy0) &&
     p.stretching.length() == 0 &&
-    tree.turn_of(c.id).0 == 0.0 &&
     tree.ground_drawn_of(c.id) == (0.0, 0.0, 0.0, 0.0) &&
     (c.shadow.2 & 0xFFL) == 0L {
     unseen()
