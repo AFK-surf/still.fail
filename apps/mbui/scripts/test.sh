@@ -310,6 +310,9 @@ for t in $targets; do
   for p in "${pids[@]}"; do wait $p || code=1; done
   for i in "${!runs[@]}"; do [ -f "$out.$i" ] && cat "$out.$i"; rm -f "$out.$i"; done > "$out"
   grep -v "$F" "$out" | grep -v '^Total tests' | tail -${LINES_OUT:-60}
+  # (and every test that failed named, whatever that tail cut off: what failed is never left to how long another
+  # failure's message is)
+  grep -a '^\[[^]]*\] test .* failed' "$out" | sed 's/ failed: .*/ failed/'
   grep '^Total tests' "$out"
   [ -z "${TIMES:-}" ] || cat "$out".time.* 2>/dev/null | sort -rn | sed 's/^/test.sh: a run of /'
   rm -f "$out".time.*
