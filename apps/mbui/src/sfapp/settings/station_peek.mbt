@@ -316,7 +316,7 @@ let peek_meters_room : @ui.Style = @ui.css("w=Full py=S1")
 ///|
 /// 20 high, 8 apart (MeterChips).
 // kept across runs: a value (no field of it changes)
-let peek_meters : @ui.Style = @ui.css("row h=S5 gap=S2 align=ACenter")
+let peek_meters : @ui.Style = @ui.css("row w=Full h=S5 gap=S2 align=ACenter")
 
 ///|
 /// It said what this core cannot read: no reading is on its way, so nothing shows as if one were.
@@ -353,10 +353,7 @@ fn peek_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
       match host {
         Some(Object(_)) =>
           c.box(style=peek_meters, fn() {
-            for m in items(host, "meters") {
-              let m = Some(m)
-              @sf.meter_chip(c, m, key="station-peek/" + text(s, "station"))
-            }
+            @sf.meter_line(c, items(host, "meters"), key="station-peek/" + text(s, "station"))
           })
           |> ignore
         _ => if !unreadable(s) { sample_meters(c, "station-peek/" + text(s, "station")) }
