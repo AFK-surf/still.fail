@@ -24,6 +24,8 @@ final class Native {
     static native void overOther(boolean on);
     /** A message for the app's next frame on `channel` (post.h's mb_post: any thread): its JSON's UTF-8. */
     static native void postBytes(String channel, byte[] json);
+    /** A browser session's end (WebAuth): the URL it came back to, or why not (one of the two null). */
+    static native void webAuthBack(String url, String error);
 
     /** `json` posted as UTF-8 (Java's own encoding of a String into JNI is modified UTF-8, which an emoji is not). */
     static void post(String channel, String json) {
