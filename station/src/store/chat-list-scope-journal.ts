@@ -42,16 +42,21 @@ const memberConflictThread = (extra: string) => `(SELECT thread FROM thread_sess
 const memberConflictSession = (extra: string) => `(SELECT session FROM thread_sessions WHERE rowid = NEW.rowid ${extra})`;
 // A home-less chat with members may affect scopes without an existing row. Record that uncertainty; a named home
 // and an orphan can instead be checked against a workspace without blocking unrelated pages.
-const markVisibility = (thread: string) => {
+const markVisibility = (thread: string, needsNew = "1") => {
   const home = `(SELECT s.ws FROM threads t JOIN sessions s ON s.key = t.home WHERE t.id = ${thread})`;
   const ambiguous = `EXISTS (SELECT 1 FROM threads t WHERE t.id = ${thread} AND t.home IS NULL
     AND EXISTS (SELECT 1 FROM thread_sessions m WHERE m.thread = t.id LIMIT 1))`;
   return `
     UPDATE recent_scope_visibility_dirty SET revision = revision + 1, home_ws = ${home}, ambiguous = ${ambiguous} WHERE thread = ${thread};
     INSERT INTO recent_scope_visibility_dirty(thread, revision, home_ws, ambiguous)
-      SELECT ${thread}, 1, ${home}, ${ambiguous} WHERE ${thread} IS NOT NULL AND EXISTS (SELECT 1 FROM recent_scope_tracked LIMIT 1)
+      SELECT ${thread}, 1, ${home}, ${ambiguous} WHERE ${thread} IS NOT NULL AND (${needsNew})
+        AND EXISTS (SELECT 1 FROM recent_scope_tracked LIMIT 1)
         AND NOT EXISTS (SELECT 1 FROM recent_scope_visibility_dirty WHERE thread = ${thread});`;
 };
+// A new orphan contributes to no explicit workspace. A later membership has its own journal. A previously
+// referenced id or a replaced row still needs rebuilding, as does any chat with a home.
+const newVisibility = `NEW.home IS NOT NULL OR EXISTS (SELECT 1 FROM thread_sessions WHERE thread = NEW.id LIMIT 1)
+  OR EXISTS (SELECT 1 FROM recent_scope_sources INDEXED BY recent_scope_sources_thread WHERE thread = NEW.id LIMIT 1)`;
 // A member can arrive after a job recorded an orphan. Preserve uncertainty until that job has rebuilt its sources.
 const memberMakesVisibilityAmbiguous = (thread: string) => `UPDATE recent_scope_visibility_dirty SET ambiguous = 1
   WHERE thread = ${thread} AND EXISTS (SELECT 1 FROM threads WHERE id = ${thread} AND home IS NULL);`;
@@ -157,7 +162,7 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
         ${markOrder(displacedThread)}
         ${markVisibility(displacedThread)}
       END;
-      CREATE TRIGGER recent_scope_order_thread_add AFTER INSERT ON threads BEGIN ${markOrder("NEW.id")} ${markVisibility("NEW.id")} END;
+      CREATE TRIGGER recent_scope_order_thread_add AFTER INSERT ON threads BEGIN ${markOrder("NEW.id")} ${markVisibility("NEW.id", newVisibility)} END;
       CREATE TRIGGER recent_scope_order_thread_change AFTER UPDATE OF id, created_at ON threads BEGIN ${markOrder("OLD.id")} END;
       CREATE TRIGGER recent_scope_order_thread_move AFTER UPDATE OF id ON threads WHEN OLD.id IS NOT NEW.id BEGIN ${markOrder("NEW.id")} END;
       CREATE TRIGGER recent_scope_visibility_thread_change AFTER UPDATE OF id, home ON threads

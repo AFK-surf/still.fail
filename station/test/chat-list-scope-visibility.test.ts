@@ -112,6 +112,42 @@ for (const recursive of [false, true]) test(`newer chats cannot continually pass
   } finally { store.close(); }
 });
 
+for (const recursive of [false, true]) test(`many unrelated new orphan chats do not make a workspace wait (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    store.insertSession({ key: "here", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "here", createdAt: 1, lastActiveAt: 1, ws: "here" });
+    const target = store.openThreadOf("ember", "EMBER", "target", "Target", null, "here").id;
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    while (!scanRecentWorkspaceStep(db, "here", 2).sourceDone) { /* Prepare the workspace. */ }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    for (let i = 0; i < 100; i++) store.openThread("ember", "EMBER", `orphan-${i}`, "Orphan", null);
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [target], total: 1 },
+      "unrelated new orphans must not accumulate work that blocks this workspace");
+  } finally { store.close(); }
+});
+
+for (const recursive of [false, true]) test(`a new chat with an existing member is accounted for its workspace (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    store.insertSession({ key: "here", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "here", createdAt: 1, lastActiveAt: 1, ws: "here" });
+    db.prepare("INSERT INTO thread_sessions(thread,session,connect,joined_at) VALUES (999,'here','ember',1)").run();
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    while (!scanRecentWorkspaceStep(db, "here", 2).sourceDone) { /* The referenced chat is not there yet. */ }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    db.prepare("INSERT INTO threads(id,surface,channel,thread_ts,created_at) VALUES (999,'ember','EMBER','late',1)").run();
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "existing members still require a visibility pass");
+    while (!settleRecentScopeVisibilityStep(db, 2).visibilityDone) { /* Account the existing membership. */ }
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), recentChatIds(db, "here", "home", 5));
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [999], total: 1 });
+  } finally { store.close(); }
+});
+
 for (const recursive of [false, true]) for (const home of ["two", null]) {
   test(`a changed chat home cannot leave a workspace page stale (home ${home}, recursive triggers ${recursive})`, () => {
     const store = Store.open(":memory:");
@@ -256,6 +292,8 @@ for (const recursive of [false, true]) test(`a new member keeps its workspace pe
     while (!scanRecentWorkspaceStep(db, "here", 2).sourceDone) { /* Prepare the empty scope. */ }
     db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1").run();
     const thread = store.openThread("ember", "EMBER", "new-member", "New", null).id;
+    db.prepare("UPDATE threads SET home = 'missing' WHERE id = ?").run(thread);
+    db.prepare("UPDATE threads SET home = NULL WHERE id = ?").run(thread);
     assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [], total: 0 });
     store.joinThread(thread, "one", "ember");
     assert.equal(readPreparedRecentWorkspace(db, "here", 5), null);
