@@ -2068,14 +2068,34 @@ fn composer_held_box(c : @ui.Ctx, draft : String) -> Double {
 
 ///|
 /// The same source height and release moment in a retained composer, including one created after the send.
-fn composer_held_box_node(owner : @view.View, draft : String) -> Double {
-  match composing.held_boxes.get(draft) {
-    Some(w) => {
-      w.said()
-      w.value_at(if owner.drawn_past(w.end()) { w.end() } else { owner.drawn_at() })
+/// Releasing this height is a layout cause, committed on the input timeline. Sampling a future picture cannot
+/// release it, and measuring the destination of its release cannot restore an earlier hold.
+fn composer_hold_node(owner : @view.View, draft : String) -> () -> Double {
+  let height = @signals.signal(0.0, same=fn(a, b) { a == b })
+  let cancel : Ref[() -> Unit] = Ref(fn() { })
+  owner.reacts(fn() {
+    match composing.held_boxes.get(draft) {
+      Some(w) => {
+        w.said()
+        Some((w.value_at(owner.cause_at()), w.end()))
+      }
+      None => None
     }
-    None => 0.0
-  }
+  }, fn(hold) {
+    (cancel.val)()
+    cancel.val = fn() { }
+    match hold {
+      Some((h, end)) => {
+        height.set(h)
+        if h > 0.0 && end > owner.cause_at() {
+          cancel.val = owner.at_moment(end, fn() { height.set(0.0) })
+        }
+      }
+      None => height.set(0.0)
+    }
+  })
+  owner.owns(fn() { (cancel.val)() }) |> ignore
+  fn() { height.get() }
 }
 
 ///|

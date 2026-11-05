@@ -46,7 +46,7 @@ pub fn composer_node(
   let w_at : Ref[Writing?] = Ref(None)
   let focused = @signals.signal(false, same=fn(a, b) { a == b })
   let held = @signals.signal(false, same=fn(a, b) { a == b })
-  let held_box = fn() { composer_held_box_node(parent, draft) }
+  let held_box = composer_hold_node(parent, draft)
   let release : Ref[() -> Unit] = Ref(fn() {  })
   let ground : Ref[() -> (Double, Double, Double, Double)] = Ref(fn() { (0.0, 0.0, 0.0, 0.0) })
   let ref_keys : Ref[(Int, Int) -> Bool] = Ref(fn(_, _) { false })

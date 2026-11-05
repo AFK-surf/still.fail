@@ -426,9 +426,10 @@ pub fn measured_height(node : Node, width : Double) -> Double {
 }
 
 ///|
-/// The width available to children inside this border box, without placing it.
+/// The width available to children inside an allocated border box, without placing it again. Percentage padding
+/// uses the containing block from that allocation, not the node's own width.
 pub fn content_width(node : Node, width : Double) -> Double {
-  fmax(0.0, width - box_of(node.style, width, undef).pbw())
+  fmax(0.0, width - box_of(node.style, node.p_cbw, node.p_cbh).pbw())
 }
 
 ///|

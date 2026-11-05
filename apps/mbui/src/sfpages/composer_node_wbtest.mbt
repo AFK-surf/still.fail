@@ -1,6 +1,43 @@
 // A retained composer consumes input and asynchronous answers without asking a page to rebuild it.
 
 ///|
+test "a composer's hold releases on its declared input deadline, never on a predicted picture" {
+  @sfbase.reset()
+  composing_reset()
+  let _tester = @ui.Tester::new(fn(_) { }, stable=false)
+  let value : Ref[() -> Double] = Ref(fn() { 0.0 })
+  let said : Array[(Double, Double)] = []
+  let tree = @view.Tree::new(fn(root) {
+    let read = composer_hold_node(root, "hold-time")
+    value.val = read
+    root.reacts(read, fn(h) { said.push((h, root.cause_at())) })
+  })
+  defer { tree.dispose() }
+  tree.frame(400.0, 300.0, now=0.0) |> ignore
+  let hold = @motion.Way::new(140.0)
+  hold.go(0.0, @motion.Snap(100.0), at=0.0)
+  composing.held_boxes["hold-time"] = hold
+  assert_eq((value.val)(), 140.0)
+  tree.at(110.0)
+  tree.frame(400.0, 300.0, now=90.0) |> ignore
+  assert_eq((value.val)(), 140.0, msg="a predicted picture cannot release the source box")
+  tree.event(95.0, fn() { hold.go(0.0, @motion.Snap(100.0), at=95.0) })
+  tree.advance(100.0)
+  assert_eq((value.val)(), 140.0, msg="retiming cancels the first release")
+  tree.advance(300.0)
+  assert_eq(said, [(0.0, 0.0), (140.0, 0.0), (0.0, 195.0)])
+  assert_eq(tree.due_count(), 0)
+  tree.event(310.0, fn() {
+    let next = @motion.Way::new(100.0)
+    next.go(0.0, @motion.Snap(100.0), at=310.0)
+    composing.held_boxes["hold-time"] = next
+  })
+  assert_eq(tree.due_count(), 1)
+  tree.dispose()
+  assert_eq(tree.due_count(), 0)
+}
+
+///|
 test "a retained composer receives picked files and completes a delayed send once, with the same editor" {
   @sfbase.reset()
   composing_reset()
