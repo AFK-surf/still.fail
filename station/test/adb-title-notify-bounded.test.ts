@@ -3,19 +3,27 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { PhoneGrants } from "../src/adb/grants.ts";
 
-function world() {
+function world(extraMembers = 0) {
   const db = new DatabaseSync(":memory:");
-  let fetched = 0, memberReads = 0;
+  db.exec("CREATE TABLE thread_sessions(thread INTEGER NOT NULL, session TEXT NOT NULL, joined_at INTEGER NOT NULL, UNIQUE(thread,session))");
+  const members = ["s", ...Array.from({ length: extraMembers }, (_, n) => `other-${n}`)];
+  const join = db.prepare("INSERT INTO thread_sessions(thread,session,joined_at) VALUES(1,?,?)");
+  members.forEach((session, at) => join.run(session, at));
+  let fetched = 0, memberReads = 0, memberRows = 0;
   const queries: { sql: string; args: any[] }[] = [];
   const traced = new Proxy(db, {
     get(target, property) {
       if (property === "prepare") return (sql: string) => {
         const statement = target.prepare(sql);
-        if (!/\badb_requests\b/i.test(sql)) return statement;
+        const requests = /\badb_requests\b/i.test(sql), memberships = /\bthread_sessions\b/i.test(sql);
+        if (!requests && !memberships) return statement;
         return new Proxy(statement, {
           get(s, p) {
             if (p === "all") return (...args: any[]) => {
-              const rows = s.all(...args); fetched += rows.length; queries.push({ sql, args }); return rows;
+              const rows = s.all(...args);
+              if (requests) { fetched += rows.length; queries.push({ sql, args }); }
+              if (memberships) memberRows += rows.length;
+              return rows;
             };
             const value = Reflect.get(s, p, s);
             return typeof value === "function" ? value.bind(s) : value;
@@ -31,22 +39,51 @@ function world() {
   const named: string[] = [], told: string[] = [];
   const hub = { store: {
     subscribe: (f: typeof changed) => { changed = f; },
-    threadSessions: () => { memberReads++; return [{ session: "s" }]; },
+    threadSessions: () => { memberReads++; memberRows += members.length; return members.map((session) => ({ session })); },
     getSession: () => ({ ws: "w", archivedAt: null }),
   } } as any;
   const grants = new PhoneGrants({ db: traced, hub, home: () => "w", now: () => 1_800_000_000_000,
     title: (r) => { named.push(r.id); return title; }, told: (r, _ws, change) => { if (change === "title") told.push(r.id); } });
   const put = db.prepare("INSERT INTO adb_requests(id,session,owner,status,body) VALUES(?,?,?,?,?)");
-  const add = (id: string, status: "pending" | "granted" = "pending") => {
-    const r = { id, session: "s", chat: "CHAT/1", owner: "p@example.test", reason: "test", at: 1, status,
+  const add = (id: string, status: "pending" | "granted" = "pending", session = "s") => {
+    const r = { id, session, chat: "CHAT/1", owner: "p@example.test", reason: "test", at: 1, status,
       ...(status === "granted" ? { exp: 1_800_003_600 } : {}) };
     put.run(id, r.session, r.owner, status, JSON.stringify(r));
     return r;
   };
-  return { db, grants, add, named, told, queries, fetched: () => fetched, memberReads: () => memberReads,
-    reset: () => { fetched = 0; memberReads = 0; queries.length = 0; named.length = 0; },
+  return { db, grants, add, named, told, queries, fetched: () => fetched, memberReads: () => memberReads, memberRows: () => memberRows,
+    reset: () => { fetched = 0; memberReads = 0; memberRows = 0; queries.length = 0; named.length = 0; },
     rename: (next: string) => { title = next; changed!({ type: "thread", id: 1 }); } };
 }
+
+test("a changed chat skips members with no shown phone request", () => {
+  const reads: number[] = [];
+  for (const size of [40, 400]) {
+    const w = world(size);
+    try {
+      w.grants.shown(w.add("known"));
+      w.reset(); w.rename("After");
+      assert.deepEqual(w.told, ["known"]);
+      reads.push(w.memberRows());
+    } finally { w.db.close(); }
+  }
+  assert.equal(reads[0], reads[1], `the change read ${reads[0]}, then ${reads[1]}, memberships`);
+});
+
+test("shown requests from unrelated sessions do not increase a short chat's membership work", () => {
+  const reads: number[] = [];
+  for (const size of [40, 400]) {
+    const w = world();
+    try {
+      w.grants.shown(w.add("known"));
+      for (let n = 0; n < size; n++) w.grants.shown(w.add(`other-${n}`, "pending", `elsewhere-${n}`));
+      w.reset(); w.rename("After");
+      assert.deepEqual(w.told, ["known"]);
+      reads.push(w.memberRows());
+    } finally { w.db.close(); }
+  }
+  assert.equal(reads[0], reads[1], `the change read ${reads[0]}, then ${reads[1]}, memberships`);
+});
 
 test("a changed chat reads only the phone request titles already shown", () => {
   const reads: number[] = [], nameCounts: number[] = [], renamedReads: number[] = [], plans: string[] = [];
