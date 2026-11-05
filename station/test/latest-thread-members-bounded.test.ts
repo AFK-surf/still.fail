@@ -78,6 +78,19 @@ test("a synchronous read requests old multi-chat preparation and keeps its immed
   } finally { store.close(); }
 });
 
+test("a store refuses an incompatible latest-conversation index without preparing it", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const requested: string[] = [];
+    store.requestLatestThread = (session) => { requested.push(session); };
+    db.exec("UPDATE latest_thread_meta SET version=2 WHERE id=1");
+    assert.throws(() => store.latestThread("s"), /latest thread index version 2 is incompatible/);
+    assert.throws(() => prepareLatestThreadStep(db, "s"), /latest thread index version 2 is incompatible/);
+    assert.deepEqual(requested, []);
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM latest_thread_scopes").get()?.n, 0);
+  } finally { store.close(); }
+});
+
 test("the single-chat check and its answer share a snapshot with another writer", () => {
   const dir = mkdtempSync(join(process.cwd(), ".latest-single-snapshot-")), path = join(dir, "station.db");
   const store = Store.open(path), db = store.db;
