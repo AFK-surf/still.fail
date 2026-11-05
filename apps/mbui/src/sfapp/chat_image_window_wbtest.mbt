@@ -121,14 +121,15 @@ fn image_window_path(each_frame : Bool) -> (Array[String], Array[String], Int) r
     t.advance(@ui.move_most_ms * 4.0)
     t.frame()
   }
-  println("IMAGEWINDOW before owed each=\{each_frame} asked=\{asked.length()} loads=\{t.image_loads()} visible=\{image_window_visible(t)}")
+  // Record requests and decode starts before the next frame: painting that frame is needed only to show the answers.
+  let requests = asked.copy()
+  requests.sort()
+  let loads = t.image_loads().length()
   t.frames_owed()
   let visible = image_window_visible(t)
   assert_false(visible.is_empty(), msg="the final window contains pictures")
-  let loads = t.image_loads().length()
-  asked.sort()
-  println("IMAGEWINDOW each=\{each_frame} asked=\{asked} decoded=\{loads} visible=\{visible}")
-  (visible, asked, loads)
+  println("IMAGEWINDOW each=\{each_frame} asked=\{requests} decoded=\{loads} visible=\{visible}")
+  (visible, requests, loads)
 }
 
 ///|
