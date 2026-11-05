@@ -157,18 +157,19 @@ fn home_top_bar_node(
         end.box(fn(s) {
           s.row(Is(true)).height(Is(Some(34.0))).gap(Is(6.0)).lines_up(Is(Some(Middle))).shrink(Is(1.0)).min_width(Is(Some(0.0)))
           |> ignore
-          let open = fn() {
-            @sfpages.open_workspaces(src, {
-              let (x, y, w, h) = s.placed_window_now()
-              @sf.Anchor::At(x, y, w, h)
+          // (pressed: beside where it is on screen as it is pressed)
+          @sf.presses_node(s, fn() {
+            @sfpages.open_workspaces(src, match s.shown_rect() {
+              Some((x, y, w, h)) => @sf.Anchor::At(x, y, w, h)
+              None => Unanchored
             })
-          }
-          @sf.presses_node(s, open)
-          // (the fixture's home-sheet: opened by it as the app starts, once it is laid out where it opens from)
-          s.reacts(fn() { s.laid_size_told() is Some(_) }, fn(laid) {
-            if laid && home_sheet_at_start.val {
+          })
+          // (the fixture's home-sheet: opened as the app starts, as Home is made: a phone's sheet, from the screen's foot,
+          // beside nothing)
+          s.reacts(fn() { () }, fn(_) {
+            if home_sheet_at_start.val {
               home_sheet_at_start.val = false
-              open()
+              @sfpages.open_workspaces(src, Unanchored)
             }
           })
           s.says(By(fn() { Some(@view.said(Button, label=workspace().map(fn(w) { w.name }).unwrap_or(""))) })) |> ignore

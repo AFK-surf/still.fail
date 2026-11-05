@@ -60,12 +60,11 @@ fn chat_root_node(
     page.show(fn() { side && (col() > 0.0 || open()) }, fn(side) {
       side
       .over(By(over))
-      // (over the chat, from the pane's right)
-      .offset(By(fn() {
-        if over() {
-          (page.laid_size_told().map(fn(z) { z.0 }).unwrap_or(0.0) - col(), 0.0)
-        } else {
-          (0.0, 0.0)
+      // (over the chat, from the pane's right: as wide as this frame laid the page out, read as it is painted)
+      .offset(Painted(fn(laid) {
+        match laid.size(page) {
+          Some((pane, _)) if pane < side_both_least => (pane - col(), 0.0)
+          _ => (0.0, 0.0)
         }
       }))
       .width(By(fn() { Some(col()) }))
