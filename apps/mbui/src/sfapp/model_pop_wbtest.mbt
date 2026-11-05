@@ -98,6 +98,45 @@ test "a frequent model with a different runtime is applied as its panel leaves w
 }
 
 ///|
+test "a new chat's model panel opens where it stays: what the page has shown until its own is read, not first in its bones elsewhere" {
+  // (its own pick read a while after it opens, as a core across a thread answers it; the page's already there)
+  let held = Ref(true)
+  let base = fixture_app("newchat-crowded-model")
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      @settings.fixture_followed()
+      if name == "pick" && held.val {
+        { value: None, error: None, version: -1 }
+      } else {
+        (base.topic)(name, params)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  @sffixture.fix_later(120.0, fn() { held.val = false })
+  let rects : Array[(Double, Double, Double, Double)] = []
+  let till = t.time() + 400.0
+  while t.time() < till {
+    t.frame()
+    match t.query(@ui.Role::Dialog) {
+      Some(d) => if rects.last() != Some(d.rect) { rects.push(d.rect) }
+      None => ()
+    }
+  }
+  assert_true(!held.val, msg="its own read")
+  // (each frame as it ends up, only grown into it from the side it opens from as it comes in: the same corner, the
+  // same shape)
+  let (fx, fy, fw, fh) = rects.last().unwrap()
+  assert_true(
+    rects.iter().all(fn(r) {
+      (r.0 - fx).abs() < 1.0 && (r.1 + r.3 - (fy + fh)).abs() < 1.0 && (r.2 / r.3 - fw / fh).abs() < 0.02 * fw / fh
+    }),
+    msg="\{rects}",
+  )
+}
+
+///|
 /// Whether `a`, `b`, `c` lie in that order along the panel, one way or the other.
 fn in_line(a : Double, b : Double, c : Double) -> Bool {
   (a < b && b < c) || (a > b && b > c)
@@ -231,3 +270,4 @@ test "wide: how much context at the foot after who runs it, as how fast is; its 
   assert_eq(new_fix.context, "300000")
   assert_true(t.query(Button, label="300K") is Some(_), msg="the foot says the step picked")
 }
+

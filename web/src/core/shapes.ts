@@ -843,12 +843,12 @@ export interface PickView {
 	borrow?: PickBorrow;
 	/**
 	 * A new chat's or a chat's: the models (their `model`) new chats here started on most, most first, at most
-	 * four, the station's own: kept nearest what opened its panel, the rest past them.
+	 * four, the station's own, the starred left out: kept nearest what opened its panel, the rest past them.
 	 */
 	near?: string[];
 	/**
-	 * The models (their `model`) starred (`pick.like`), the first starred first, those in `near` left out:
-	 * past them, before the rest.
+	 * The models (their `model`) starred (`pick.like`), the first starred first, every one of them however
+	 * often used: past `near`, before the rest.
 	 */
 	liked?: string[];
 	/**
