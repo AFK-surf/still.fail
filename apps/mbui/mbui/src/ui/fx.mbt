@@ -28,7 +28,7 @@ fn fx_runtime(seed : Int?) -> @effect.Runtime {
   // a fiber woken between frames (a host's callback gave it its answer, a handler forked it): a frame soon
   rt.on_wake(() => h_request_frame())
   // a timer set between frames (a test's step, a host's callback): woken at its moment, as one set in a frame is
-  rt.on_timer(at => g().wake_at_time(at.to_double(), later=true))
+  rt.on_timer(at => fx_wake(g(), at))
   rt
 }
 
@@ -36,6 +36,7 @@ fn fx_runtime(seed : Int?) -> @effect.Runtime {
 /// A new runtime (a Tester starting): what the last one ran is forgotten.
 fn fx_reset(seed : Int?) -> Unit {
   fx.val = fx_runtime(seed)
+  fx_early.val = false
   lives.clear()
 }
 
@@ -48,7 +49,46 @@ pub fn runtime() -> @effect.Runtime {
 ///|
 /// A frame starts at `c.clock`: the runtime goes there (whole milliseconds), its fibers run.
 fn fx_frame_start(c : Ctx) -> Unit {
+  if fx_early.val {
+    fx_early.val = false
+    return
+  }
   fx.val.frame(whole_ms(c.clock).to_int64())
+}
+
+///|
+/// Whether the runtime was moved to this frame's time as it began (fx_frame_early): not again as it is built.
+let fx_early : Ref[Bool] = Ref(false)
+
+///|
+/// The runtime moved to `t` as the frame at `t` begins, a timer of it due: its timers due fire, what they wake runs,
+/// before what the frame does again is decided (frame_drawn): what the fibers change is built again where it is read,
+/// nothing else, as what came from outside is.
+fn fx_frame_early(t : Double) -> Unit {
+  fx_early.val = true
+  fx.val.frame(whole_ms(t).to_int64())
+}
+
+///|
+/// Whether the runtime has something for the frame at `t`: a timer due by then, a fiber waiting for a frame.
+fn fx_due(t : Double) -> Bool {
+  if fx.val.wants_frame() {
+    return true
+  }
+  match fx.val.next_timer() {
+    Some(at) => at.to_double() <= whole_ms(t)
+    None => false
+  }
+}
+
+///|
+/// The window woken at `at`, a timer's: a frame then, where the timer moves the runtime (fx_frame_early); nothing the
+/// frame's builds wait for (none of them read it).
+fn fx_wake(c : Ctx, at : Int64) -> Unit {
+  let at = at.to_double()
+  if c.wake_at < 0.0 || at < c.wake_at {
+    c.wake_at = at
+  }
 }
 
 ///|
@@ -74,7 +114,7 @@ fn fx_frame_end(c : Ctx) -> Unit {
   }
   c.fiber_frame = rt.wants_frame()
   match rt.next_timer() {
-    Some(at) => c.wake_at_time(at.to_double(), later=true)
+    Some(at) => fx_wake(c, at)
     None => ()
   }
 }
@@ -116,3 +156,15 @@ pub fn Ctx::effect(self : Ctx, key : String, f : async (@effect.Scope) -> Unit) 
   }
 }
 
+
+///|
+/// What the runtime asks of a frame that builds nothing (the runtime's frame not ended by it: fx_frame_end): the host's
+/// next frame while a fiber waits for one, a wake at its next timer.
+fn fx_wake_next(c : Ctx) -> Unit {
+  let rt = fx.val
+  c.fiber_frame = rt.wants_frame()
+  match fx.val.next_timer() {
+    Some(at) => fx_wake(c, at)
+    None => ()
+  }
+}

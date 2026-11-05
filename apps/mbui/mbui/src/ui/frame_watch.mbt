@@ -871,8 +871,8 @@ fn looks_told(after : Array[Int], told : Array[Int]) -> Unit {
 /// motion going is no such thing: what reads it, as it is built or as it is painted, reads the clock, and is built or
 /// painted again for it (Ctx::now); what does not read it does nothing for it.
 fn looks_left(c : Ctx, held : Bool) -> Unit {
+  // (a fiber waiting for a frame runs as the next begins, whatever it does: fx_frame_early; nothing left to the build)
   let left = !c.wants_frame &&
-    !c.fiber_frame &&
     !c.read_back_moved &&
     !held &&
     bench.mode == 0 &&
@@ -913,6 +913,8 @@ fn looks_frame(c : Ctx, t : Double) -> Double {
   }
   // (and the moments the rows kept wait for: kept_part.mbt's KeptClock)
   dues_wake(c)
+  // (and the runtime's next timer: fx.mbt)
+  fx_wake_next(c)
   if looks_base.looks {
     looks_base.inst.blit_to(c.inst, len=looks_base.n * inst_size)
     c.ninst = looks_base.n
@@ -948,6 +950,8 @@ fn paint_frame(c : Ctx, t : Double) -> Double {
   c.wake_by = None
   c.wake_at = looks_base.wake
   dues_wake(c)
+  // (and the runtime's next timer: fx.mbt)
+  fx_wake_next(c)
   paint_watch_of().read(fn() { frame_paint(c, paint_base.root, alone=true) })
   c.t_build = 0.0
   c.t_layout = 0.0
@@ -986,6 +990,8 @@ fn alone_frame(c : Ctx, t : Double) -> Double {
     c.wake_at = paint_base.wake
   }
   dues_wake(c)
+  // (and the runtime's next timer: fx.mbt)
+  fx_wake_next(c)
   let drawn = match view_app.val {
     Some(tree) => {
       // (what was told it as the frame went, brought, and taken as its scene's: drawn as it is now)
@@ -1085,6 +1091,14 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   let (part_at, part_who) = (part_clock_at.val, part_clock_who.val)
   part_clock_at.val = ""
   part_clock_who.val = None
+  // (a timer of the runtime due, a fiber waiting for a frame: its fibers run now, before what the frame does again is
+  // decided: what they change built again where it is read, the old frame built whole for none of it; what came from
+  // outside handed on as it is built, read by what reads it there)
+  fx_early.val = false
+  if fx_due(t) {
+    c.clock = t
+    fx_frame_early(t)
+  }
   let why = if said != "" {
     said
   } else if bench_whole.val && bench_measuring.val {
