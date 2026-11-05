@@ -508,6 +508,31 @@ passed all 219 tests. The three host-frame work checks remain unresolved; actual
 transition pictures are being captured separately from these checks.
 This is not a validated release.
 
+The corrected new-chat transition was inspected in actual-app stills at 0, 70
+and 700 ms and in every frame of a 60 Hz, 700 ms film. The illustration and
+heading now fade at their original position while the composer and sent words
+move; the final picture is identical. These films sample the declared moments
+of the app's own renderer, not a recording of an operating-system window.
+
+The host-frame checks exposed two conflated kinds of work. A retained text
+reply after presentation requested a frame by invalidating the old build; typed
+text also left a legacy follow-up input flag even though the retained editor had
+taken it. Both now request only the work that reads the change. The original
+checks failed before these changes; the editor check now asserts every host
+frame, including the frame after the input, rather than callback counts alone.
+
+Running without the old rebuild also exposed glyph ownership tied to that
+rebuild. A hidden layer kept its atlas plots pinned, and atlas epochs did not
+advance on retained-only frames. Each presented frame now begins an atlas epoch;
+unchanged visible layers keep their plots, changed layers claim what they draw,
+and hidden layers hold none. Old-view plots remain recorded for frames that
+retain those views. The strengthened case hides 40 glyphs and shows 40 others in
+one actual host frame: it failed before the epoch fix and now passes. All 1605
+UI tests pass after these changes. The actual-chat trace no longer rebuilds the
+old frame for typing, deleting or moving the caret. Its damage still includes
+the enlarged glass capture, and the scrolling and page-exit work checks remain
+unfinished. This is no claim about Android speed or completed runtime adoption.
+
 The experimental kernel does not yet demonstrate a general owner tree, full
 input/IME, stable-key history insertion/removal or recorded font/resource changes.
 Production integration has exercised actual chat input and scrolling, including

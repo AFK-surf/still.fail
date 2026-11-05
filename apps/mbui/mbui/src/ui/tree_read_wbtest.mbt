@@ -52,3 +52,50 @@ test "a reply to one screen observation is not already in another observation of
   t.draw()
   assert_eq(told[0], 0)
 }
+
+///|
+test "a reply after presentation asks for its retained text without rebuilding the old frame" {
+  let request = @signals.signal(0)
+  let reply = @signals.signal(0)
+  let t = Tester::new(fn(_) { }, w=300.0, h=200.0)
+  set_view_app(fn(root) {
+    root.words(By(fn() { "reply \{reply.get()}" })) |> ignore
+    old(root, fn(c) {
+      c.text("beside", size=10.0) |> ignore
+    }).height(Is(Some(20.0))) |> ignore
+    read_drawn(root, fn() { request.get() }, fn(v) { reply.set(v) })
+  })
+  t.draw()
+  t.measure_as_host()
+  let at = t.time()
+  request.set(1)
+  t.frame_at(at + 1000.0 / 60.0)
+  assert_true(t.fake.wants, msg="the reply must ask the host for the frame that shows it")
+  assert_false(t.at_rest())
+  // The reply is taken after the frame showing the request. Its own node is
+  // drawn by the next frame, while the unrelated old view stays as it was.
+  t.frame_at(at + 2000.0 / 60.0)
+  assert_true(t.text_runs().iter().any(fn(r) { r.text == "reply 1" }))
+  assert_eq(t.built_why(), "", msg="a retained-only reply must not invalidate the old frame")
+}
+
+///|
+test "a reply after presentation still updates an old view that reads it" {
+  let request = @signals.signal(0)
+  let reply = @signals.signal(0)
+  let t = Tester::new(fn(_) { }, w=300.0, h=200.0)
+  set_view_app(fn(root) {
+    old(root, fn(c) {
+      c.text("reply \{reply.get()}", size=10.0) |> ignore
+    }).height(Is(Some(20.0))) |> ignore
+    read_drawn(root, fn() { request.get() }, fn(v) { reply.set(v) })
+  })
+  t.draw()
+  t.measure_as_host()
+  let at = t.time()
+  request.set(1)
+  t.frame_at(at + 1000.0 / 60.0)
+  assert_true(t.fake.wants)
+  t.frame_at(at + 2000.0 / 60.0)
+  assert_true(t.text_runs().iter().any(fn(r) { r.text == "reply 1" }))
+}

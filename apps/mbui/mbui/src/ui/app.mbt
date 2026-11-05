@@ -118,6 +118,11 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // run's input: envrec.mbt)
   c.device_frame_start()
   env_at_frame()
+  // Atlas ownership lasts for one presented frame, including frames which build nothing of the old view.
+  faces_from_env()
+  if text_frame() {
+    c.epoch = c.epoch + 1
+  }
   // (built whole where what it read changed, painted alone where only what its paint read did, or of its looks by the
   // clock alone: frame_watch.mbt)
   // what is made once laid out, placed and drawn as its frame does; the old view in the room its node is given
@@ -163,7 +168,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   c.motion_read = false
   // (what the window's tree has going: drawn as the clock goes; what ends at a moment, woken then: view_host.mbt; what a
   // layer of its scene waits for, scene_layers.mbt)
-  view_frame_end(c)
+  let tree_owed = view_frame_end(c)
   c.scene_wake_into()
   // (a layout read back that moved: what was placed from it, placed again)
   if c.read_back_moved {
@@ -171,11 +176,11 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   }
   // whether the frame left nothing that ends to come (Ctx::at_rest): said of a run, asserted (Tester::at_rest), never
   // waited on
-  c.frame_rest = c.at_rest()
+  c.frame_rest = c.at_rest() && !tree_owed
   let held = bench.held
   bench.held = false
   looks_left(c, held)
-  if c.wants_frame || c.took_input || bench.mode > 0 || held || paint_left() || layout_left() {
+  if tree_owed || c.wants_frame || c.took_input || bench.mode > 0 || held || paint_left() || layout_left() {
     h_request_frame()
   } else if c.motion_left || c.cycling || c.fiber_frame {
     // what moves on (a motion, a fiber stepping a frame at a time) is drawn as the clock goes, on the host's next
@@ -209,6 +214,10 @@ pub fn frame_offscreen(
   t : Double,
 ) -> Ctx {
   g_view.val = view
+  faces_from_env()
+  if text_frame() {
+    g().epoch = g().epoch + 1
+  }
   frame_body(g(), w, h, scale, t) |> ignore
   g()
 }
@@ -270,11 +279,6 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.read_back_moved = false
   // (what of the layout the frame's builds read, from none: frame_watch.mbt layout_read_at)
   layout_read_at.val = ""
-  faces_from_env()
-  if text_frame() {
-    // (what the host measures changed: every layout made anew, kept rows' too)
-    c.epoch = c.epoch + 1
-  }
   if bench.mode > 0 && c.bench_list != 0 && bench.frames >= 30 {
     c.scroll_list(c.bench_list, bench.speed)
   }

@@ -1575,6 +1575,7 @@ test "words typed into a field of the tree's: the field alone told, no old view 
     for _ in 0..<3 {
       at = at + 1000.0 / 120.0
       t.frame_at(at)
+      assert_eq(t.built_why(), "", msg="typed \{k + 1}: the old frame must stay kept in every host frame")
     }
     assert_eq(builds.val, was, msg="typed \{k + 1}: the old view built again for them: \{t.built_why()}")
   }
@@ -1585,6 +1586,7 @@ test "words typed into a field of the tree's: the field alone told, no old view 
     for _ in 0..<3 {
       at = at + 1000.0 / 120.0
       t.frame_at(at)
+      assert_eq(t.built_why(), "", msg="\{what}: the old frame must stay kept in every host frame")
     }
     assert_eq(builds.val, was, msg="\{what}: the old view built again for it: \{t.built_why()}")
   }

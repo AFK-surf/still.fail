@@ -956,7 +956,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     self.scene_alone(tree, before_old=true) |> ignore
   }
   // (the last frame's instances kept to copy the layers kept from: scene_layers.mbt)
-  self.scene_begin()
+  self.scene_begin(tree)
   let n0 = self.ninst
   // (what is drawn off where it is laid out drawn off by whole pixels of this frame's: View::drawn_off)
   tree.set_pixel_grid(self.scale)
@@ -2766,10 +2766,10 @@ fn view_tapped_old() -> Unit {
 ///|
 /// As the frame ends: what reads the window's tree's clock keeps the frames coming as the clock goes (a look by the
 /// time, a node fading as it leaves); what only ends at a moment (a leaving nothing draws by) is woken for then.
-fn view_frame_end(c : Ctx) -> Unit {
+fn view_frame_end(c : Ctx) -> Bool {
   let tree = match view_app.val {
     Some(t) => t
-    None => return
+    None => return false
   }
   // (where the old frame's topmost modal layer is in the window's stack of layers, as this frame built it: what of the
   // tree is not over it takes no input, Tree::hold_under)
@@ -2780,11 +2780,6 @@ fn view_frame_end(c : Ctx) -> Unit {
   }
   if tree.clock_read() {
     c.motion_left = true
-  }
-  // (what it was told after it was painted, or what of the scene was told then (a layer's drawing read what changed):
-  // drawn by the next frame)
-  if tree.told_since() || scene_wanted() {
-    c.wants_frame = true
   }
   // (a wait drawn by the clock: its frames as an old view's cycle has them, Ctx::cycle)
   if tree.cycle_read() {
@@ -2798,6 +2793,9 @@ fn view_frame_end(c : Ctx) -> Unit {
       }
     None => ()
   }
+  // A node told after it was drawn owes a frame, not a rebuild of the old views.
+  // Old views that read the change have their own watch; the host request is separate.
+  tree.told_since() || scene_wanted()
 }
 
 ///|

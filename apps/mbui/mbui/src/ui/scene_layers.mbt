@@ -343,11 +343,18 @@ fn scene_layer_gone(l : SceneLayer) -> Unit {
 }
 
 ///|
-/// As a frame the old frame paints begins, before anything of it places a glyph: the plots of the atlas each layer kept
-/// draws from said drawn from in this frame (Atlas::drawn: never emptied for another while it is), as the glyphs an
-/// old view draws are as it draws them; a layer copied draws from them still.
-fn scene_plots_drawn() -> Unit {
+/// Before anything places a glyph: the plots of unchanged layers still shown kept through this frame. Changed
+/// layers claim their glyphs as they draw them; hidden layers claim none. A frame of the tree alone also keeps the
+/// old views' plots, since their instances stay where they are without being painted again.
+fn scene_plots_drawn(tree : @view.Tree, old_kept? : Bool = false) -> Unit {
   for _, l in scene.layers {
+    if l.plots.is_empty() || l.told || scene.marked.contains(l.id) || (l.own_only && !old_kept) {
+      continue
+    }
+    match tree.placed_of(l.id) {
+      Some((_, _, a, _, _, _, _, _)) if a > 0.002 => ()
+      _ => continue
+    }
     for p in l.plots {
       let (a, _) = atlas_for(p.0)
       if a.sized() {
@@ -638,7 +645,7 @@ let drawn_by_none : DrawnBy = {
 ///|
 /// As a frame the old frame paints begins (view_paint): the last frame's instances kept to copy from, this frame's
 /// into the other buffer; drawn whole where what draws it changed.
-fn Ctx::scene_begin(self : Ctx) -> Unit {
+fn Ctx::scene_begin(self : Ctx, tree : @view.Tree) -> Unit {
   scene.frame = scene.frame + 1
   scene_work.full = scene_work.full + 1
   scene.copy_why = ""
@@ -679,7 +686,7 @@ fn Ctx::scene_begin(self : Ctx) -> Unit {
   scene.fresh = scene.fresh || looks_rebuilt.val || inst_owners.on || words_zoom.val != 1.0
   // (what is kept draws from the atlas still: said so before anything of this frame places a glyph)
   if !scene.fresh {
-    scene_plots_drawn()
+    scene_plots_drawn(tree)
   }
   // (who drew the last frame's, where that is kept: put with what is copied of it)
   scene.owners = if inst_owners_kept() && !scene.fresh { Some(owners_run(0, scene.prev_n)) } else { None }
@@ -1183,10 +1190,7 @@ fn Ctx::scene_drawn(
       l.bands.push(k - k0)
     }
   }
-  // (an old view's plots the old frame's, drawn from each frame it paints)
-  if l.own_only {
-    l.plots.clear()
-  }
+  // Old views' plots are kept too: a frame of the tree alone keeps their instances without painting them.
   scene_work.layers = scene_work.layers + 1
   // (its own: what it holds that are layers counted as each is drawn or copied)
   let mut own = l.count
@@ -1395,6 +1399,7 @@ fn Ctx::scene_alone(self : Ctx, tree : @view.Tree, before_old? : Bool = false) -
     }
   }
   let drawn : Array[(SceneLayer, Int, Int, FixedArray[Double], Array[Double], OwnersRun?)] = []
+  scene_plots_drawn(tree, old_kept=true)
   scene.trying = true
   scene.undo.clear()
   // (the frame's glass as it stood: a try that drew glass and failed told none of its captures)

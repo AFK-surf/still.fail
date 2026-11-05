@@ -39,14 +39,12 @@ fn took_input(kind : String, t : Double, args : Array[Double], text? : String) -
   let moved = (kind == "pointer" && (args[0] == 1.0 || args[0] == 7.0)) || (kind == "back" && args[0] == 1.0)
   // (a wheel: what it turned says whether it is taken, on_wheel; a list's place a signal of its own)
   let wheel = kind == "wheel"
-  if !moved && !wheel {
-    inputs_taken.val = true
-  }
   // (words typed into a field of the window's tree: its own, told it as signals (its words, what is composed) and its
   // paint (tree_field_redraw), no old view's nor anything else's: nothing of the old frame nor any part kept built again
   // for them, typed_in_tree)
   let typed = kind == "text" && typed_in_tree(args[0].to_int())
   if !(moved || wheel) && !typed {
+    inputs_taken.val = true
     // (a press is the hand's: what it changes is built again, and what is kept is built for it where it went (the hand's
     // events, frame_watch.mbt; an old view's alone where it went to one: view_host.mbt), not as from outside)
     if kind == "pointer" {
