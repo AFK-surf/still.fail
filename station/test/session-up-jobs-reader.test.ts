@@ -91,6 +91,7 @@ test("a session detail answers during handover, then prepares its old jobs in th
   const previous = Promise.withResolvers<void>();
   const readers = new Readers(dir, 1, undefined, 1, { previousGone: previous.promise });
   const preparing = Promise.withResolvers<void>(), prepared = Promise.withResolvers<void>();
+  void prepared.promise.catch(() => {});
   const prepare = readers.prepareSessionUpJobs.bind(readers);
   let calls = 0;
   readers.prepareSessionUpJobs = (sessions, signal) => {
@@ -115,6 +116,9 @@ test("a session detail answers during handover, then prepares its old jobs in th
     assert.ok(answer.jobs.some((job: { id: string }) => job.id === "old"));
     await preparing.promise;
     assert.equal(sessionUpJobsReady(store.db, "mine"), false);
+    const whileWaiting = JSON.parse(await readers.read("session", args, "en"));
+    assert.deepEqual(whileWaiting.jobs.map((job: { id: string }) => job.id), answer.jobs.map((job: { id: string }) => job.id));
+    assert.equal(calls, 1, "repeated reads share one background preparation during handover");
     await readers.read("summary", { key: "mine" }, "en");
     assert.equal(calls, 1, "a later read does not repeat the previous reader's request");
     await assert.rejects(readers.read("session", { ...args, viewer: { ...viewer, workspace: "other" } }, "en"));
@@ -125,5 +129,22 @@ test("a session detail answers during handover, then prepares its old jobs in th
     const again = JSON.parse(await readers.read("session", args, "en"));
     assert.deepEqual(again.jobs.map((job: { id: string }) => job.id), answer.jobs.map((job: { id: string }) => job.id));
     assert.equal(calls, 1);
+
+    store.db.exec("UPDATE session_up_job_meta SET fresh=0; DELETE FROM session_up_job_scopes WHERE session='mine'");
+    let attempts = 0;
+    const retried = Promise.withResolvers<void>();
+    void retried.promise.catch(() => {});
+    readers.prepareSessionUpJobs = (sessions, signal) => {
+      if (++attempts === 1) return Promise.reject(new Error("injected preparation failure"));
+      const pending = prepare(sessions, signal);
+      void pending.then(retried.resolve, retried.reject);
+      return pending;
+    };
+    await readers.read("session", args, "en");
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await readers.read("session", args, "en");
+    await retried.promise;
+    assert.equal(attempts, 2, "a later read retries a failed background preparation");
+    assert.equal(sessionUpJobsReady(store.db, "mine"), true);
   } finally { previous.resolve(); readers.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
