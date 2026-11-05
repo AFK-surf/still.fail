@@ -1257,6 +1257,7 @@ fn answers_by_the_frame() -> Unit {
   // (the frames as its answers count them: this one begun before they are told, so what reads one as it is told
   // takes it, the window's tree as the old views do as they are built after)
   answers_frames.val += 1
+  notice_answer_by_the_frame()
   let kinds : Map[Int, Bool] = {}
   for k, _ in outside_tickets {
     kinds[(k >> 32).to_int()] = true
