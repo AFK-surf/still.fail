@@ -98,7 +98,7 @@ test("a chat's copy destinations do not traverse its older linked threads", () =
     const recent = Array.from({ length: 20 }, (_, n) => add(`recent-${n}`, 100_000 + n)).reverse();
     for (let n = 0; n < 40; n++) add(`old-${n}`, n + 1);
     let visits = 0;
-    db.function("visited_cc_candidate", (_id) => { visits++; return 1; });
+    db.function("visited_cc_candidate", (id) => { visits++; return id; });
     const sql = CC_SESSION_KEYS.replace("CAST(thread AS TEXT)", "visited_cc_candidate(thread)");
     assert.notEqual(sql, CC_SESSION_KEYS, "the per-session candidate lookup is observed");
     const read = () => db.prepare(sql).all("agent").map((row) => row.thread);
