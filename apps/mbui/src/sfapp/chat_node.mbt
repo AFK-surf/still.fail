@@ -1,7 +1,6 @@
 // A chat's page (chat.mbt's chat_page) made once in the window's tree on a narrow screen: its root a node of the
 // stack's, kept by the chat, made again only as the workspace in view changes; what it shows followed by getters. Its
-// messages (sfpages chat_list_node), composer (sfpages chat_composer_node), and bar its own nodes. Deferred menu
-// actions (opening links and copying text or pictures) are still drained in this page's context.
+// messages (sfpages chat_list_node), composer (sfpages chat_composer_node), and bar its own nodes.
 
 ///|
 /// Chat `r`'s page in `v` while it shows (entry `entry` of the stack): its messages under its bar over its composer's
@@ -143,18 +142,6 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
       b.over(Is(true)).width_share(Is(1.0)).lies_along(Is(Start)) |> ignore
       b.show(fn() { app.nav.shows(entry) }, fn(o) {
         chat_bar_node(o, src, w, r, view, stint, frame)
-        // A menu's choice may leave host work to finish through this page's context.
-        @ui.old(
-          o,
-          fn(c) {
-            app.nav.page_old(c, entry, fn(c) {
-              // (what a menu's choice in its messages left: menus.mbt)
-              @sfpages.chat_menus_frame(c)
-            })
-          },
-          natural=true,
-        )
-        .over(Is(true)) |> ignore
       })
     })
     |> ignore
