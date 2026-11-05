@@ -552,6 +552,11 @@ fn size_node(
   perform : Bool,
 ) -> Double {
   touch(node)
+  // (what it holds said by its room: told it before what it holds is laid out, Node's on_room)
+  match node.on_room {
+    Some(f) => f(if known(kw) { kw } else { aw }, if known(kh) { kh } else { ah })
+    None => ()
+  }
   if perform {
     // laid out before as now asked, nothing under it changed since: it
     // stands as it is. (A layout is always asked with the space available
@@ -805,6 +810,15 @@ fn size_uncached(
     let share = fmax(fmin(s.content_share, 1.0), 0.0)
     let sized = clamp_size(pbh + (natural - pbh) * share, b.min_h, b.max_h)
     return layout_flex(node, b, if known(w) { w } else { fw }, sized, aw, ah, perform)
+  }
+  // as wide as its share of what it holds comes to, what it holds laid out at that whole width (Style's
+  // content_share_across): what it holds sized first, laid out at that width, the box that share of it
+  if known(s.content_share_across) && !known(w) {
+    let fw = layout_flex(node, b, w, h, aw, ah, false)
+    let share = fmax(fmin(s.content_share_across, 1.0), 0.0)
+    let sized = clamp_size(pbw + (fw - pbw) * share, b.min_w, b.max_w)
+    layout_flex(node, b, fw, h, aw, ah, perform) |> ignore
+    return sized
   }
   layout_flex(node, b, w, h, aw, ah, perform)
 }

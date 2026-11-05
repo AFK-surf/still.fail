@@ -39,6 +39,10 @@ priv struct AnchoredIn[K] {
   tucked : K?
   /// the row last asked to be brought into sight, and how often one was
   reveal : (K?, Int)
+  /// the row last asked to have a part of it it reports brought to the window's middle (`put_passage`): which, the
+  /// name it reports the part by, how far down the window it may be before it is, and how often one was
+  passage : (K, String, Double)?
+  passage_n : Int
   /// said to follow its end again while short of it, not there yet (Scroll::to_end_told)
   to_end : Bool
 }
@@ -60,6 +64,7 @@ impl[K : Eq] Eq for AnchoredIn[K] with equal(a, b) {
   a.foot_cover == b.foot_cover &&
   a.tucked == b.tucked &&
   a.reveal == b.reveal &&
+  a.passage_n == b.passage_n &&
   a.to_end == b.to_end
 }
 
@@ -89,10 +94,13 @@ pub(all) struct AnchoredSource[K] {
 /// Blocks `keys` names, each made by `make` in a row of its own as it comes in the window or `ahead` past it, laid out
 /// from the column's end (at its foot while they are fewer than fill it; shown at its end; kept there as rows come
 /// while it is there), as View::scrolls_window's from its end says, by its anchor. `follows` says whether it is at
-/// its end; `shown` is told the keys in sight; `put` puts a row's top that far under the window's top; `room` is a
+/// its end; `shown` is told the keys in sight; `put` puts a row's top that far under the window's top; `put_passage` (a row, a name, a share) puts the part of the
+/// row it reports by that name (Layout::report_span) in the window's middle where its middle is further down than that
+/// share of the window, as it is laid out, held there as a put row is; `room` is a
 /// row's room as its measured height changes, `moving` says when rooms move; `kept_keys` rows made and laid out
 /// though not in sight (a send's landing); `foot_room` room under the last row. `foot_cover` what covers its foot (a composer over
-/// it): nothing laid out by it, told in `sighted` (what of the window is in sight). An indexed source supplies its
+/// it): nothing laid out by it, told in `sighted` (what of the window is in sight). Both given by what holds it as it
+/// measures it (Layout::measure's `foot`), those in place of these. An indexed source supplies its
 /// keys by position instead of `keys`. `sighted` is told, once each frame is painted, the rows that came in sight or
 /// within `ahead` of it, or were gone past on the way, since it was last laid out, and how wide the list is
 /// laid out (what a row's pictures are decoded for: the same width the rows are drawn at): the same rows whether the frames
@@ -111,6 +119,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   shown? : @signals.Signal[Array[K]],
   put? : @signals.Signal[(K, Double)?],
   rooms? : () -> (K, Double) -> ListRoom,
+  put_passage? : @signals.Signal[(K, String, Double)?],
   fresh? : (K) -> Bool = fn(_) { false },
   read_from_top? : (K) -> Bool = fn(_) { true },
   cover? : () -> Double = fn() { 0.0 },
@@ -124,7 +133,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
 ) -> View {
   self.scrolls_anchored_impl(
     s, keys, make, est~, from_end~, ahead~, slop?=slop, bar?=bar, follows~, shown?=shown,
-    put?=put, rooms?=rooms, fresh~, read_from_top~, cover~, tucked~, kept_keys?=kept_keys,
+    put?=put, put_passage?=put_passage, rooms?=rooms, fresh~, read_from_top~, cover~, tucked~, kept_keys?=kept_keys,
     bar_clear~, foot_room~, foot_cover~, indexed?=indexed, sighted?=sighted,
   )
 }
@@ -145,6 +154,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   shown? : @signals.Signal[Array[K]],
   put? : @signals.Signal[(K, Double)?],
   rooms? : () -> (K, Double) -> ListRoom,
+  put_passage? : @signals.Signal[(K, String, Double)?],
   fresh? : (K) -> Bool = fn(_) { false },
   read_from_top? : (K) -> Bool = fn(_) { true },
   cover? : () -> Double = fn() { 0.0 },
@@ -159,6 +169,13 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
 ) -> View {
   guard self.live() is Some(_) else { return self }
   let put_at = put.unwrap_or(@signals.signal(None))
+  let passage_at = put_passage.unwrap_or(@signals.signal(None))
+  // (how many times a part of a row was asked to the window's middle, and how many of those its layout has done)
+  let passage_n = @signals.computed(fn(was : Int?) {
+    let n = was.unwrap_or(0)
+    if passage_at.get() is Some(_) { n + 1 } else { n }
+  })
+  let passage_laid = Ref(0)
   // (where it is: the row whose foot is nearest under the window's foot and how far under; none at its end)
   let anchor : Ref[ListAnchor[K]?] = Ref(None)
   // (how far it was scrolled as last laid out: what it moved by since is what the anchor moves by)
@@ -276,6 +293,8 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
       short_due.val = fn() { }
       reading.val = None
       pinned.val = None
+      // (a part asked to the middle not yet laid out: the hand has it now)
+      passage_laid.val = @signals.untracked(fn() { passage_n.get() })
     }
     if from_end && d < 0.0 && @signals.untracked(fn() { follows.get() }) {
       follows.set(false)
@@ -384,6 +403,8 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           foot: foot_room(),
           put: put_at.get(),
           put_n: put_n.get(),
+          passage: passage_at.get(),
+          passage_n: passage_n.get(),
           kept: match kept_keys {
             Some(f) => f()
             None => []
@@ -426,8 +447,14 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           reset_fixed = true
         }
         count.val = n
-        foot_laid.val = c.foot
-        let h = l.height - c.foot
+        // (the room under its last row and what covers its foot, as what holds it gave them as it measured it
+        // (Layout::measure's `foot`), in place of its own `foot_room` and `foot_cover`)
+        let (foot, foot_covered) = match l.given_foot() {
+          Some(f) => f
+          None => (c.foot, c.foot_cover)
+        }
+        foot_laid.val = foot
+        let h = l.height - foot
         window_h.val = h
         // (the row a key is, looked for from where it was, out both ways)
         let find = fn(k : K, near : Int) -> Int? {
@@ -748,6 +775,48 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             }
           _ => if glide is Some(_) || read_held.val { pinned.val = None }
         }
+        // (a part of a row asked to the window's middle (`put_passage`): the row in sight first where it is not, its top at
+        // the window's top; then where the part it reports by that name (Layout::report_span) is as it is laid out now:
+        // its middle further down the window than `within` of it, the row put so that middle is the window's, kept there
+        // as a put row is; else left where it is)
+        let mut passage_put = false
+        match c.passage {
+          Some((k, name, within)) if c.passage_n > passage_laid.val => {
+            let q_of = fn() {
+              let mut q = -1
+              for j in 0..<r.keys.length() {
+                if r.keys[j] == k {
+                  q = j
+                }
+              }
+              q
+            }
+            if q_of() < 0 {
+              match find(k, r.first) {
+                Some(i) => r = lay(Some({ key: k, under: if from_end { measure(i) - h } else { 0.0 }, near: i }), 0.0)
+                None => ()
+              }
+            }
+            let q = q_of()
+            if q >= 0 {
+              passage_laid.val = c.passage_n
+              passage_put = true
+              match slots.get(k).bind(fn(row) { l.reported_span(row, name) }) {
+                Some((y0, y1)) if r.tops[q] + (y0 + y1) / 2.0 > within * h =>
+                  match find(k, r.first + q) {
+                    Some(i) => {
+                      let top = h / 2.0 - (y0 + y1) / 2.0
+                      r = lay(Some({ key: k, under: if from_end { top + r.heights[q] - h } else { -top }, near: i }), 0.0)
+                      pinned.val = if from_end { Some((k, top)) } else { None }
+                    }
+                    None => ()
+                  }
+                _ => ()
+              }
+            }
+          }
+          _ => ()
+        }
         anchor.val = r.anchor
         // (how far it is counted to be scrolled among all it holds, the bar's, as laid out now)
         let at_end = from_end && r.at_end
@@ -833,7 +902,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
               sighted_last.add(k)
             }
             let rows = Array::makei(r.keys.length(), fn(q) { (r.keys[q], r.tops[q], r.heights[q]) })
-            let covered = (c.cover, c.foot_cover)
+            let covered = (c.cover, foot_covered)
             let moved = rows != sighted_rows.val || h != sighted_h.val || covered != sighted_cover.val
             sighted_cover.val = covered
             sighted_rows.val = rows
@@ -921,6 +990,8 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           @double.infinity
         }
         self.tree.once_laid_out(fn() { s.end_below.set(below) })
+        // (and to what holds it, as it measures it in this same layout: Layout::reported(list, "end_below"))
+        l.report("end_below", below)
         self.tree.once_laid_out(fn() {
           let in_sight = []
           for q in 0..<r.keys.length() {
@@ -938,6 +1009,9 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             if @signals.untracked(fn() { put_n.get() }) == c.put_n {
               put_at.set(None)
             }
+          }
+          if passage_put && @signals.untracked(fn() { passage_n.get() }) == c.passage_n {
+            passage_at.set(None)
           }
           if read_held.val {
             read_held.val = false

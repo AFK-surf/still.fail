@@ -16,6 +16,10 @@ pub struct Way {
   /// and how long it goes
   priv mut start : Double
   priv mut dur : Double
+  /// set out with how far it goes not yet known (@motion.laid): where it set out from till a layout tells it
+  /// (Layout::way_over), how long it goes worked out then; and whether motion was reduced as it set out
+  priv mut laid : Bool
+  priv mut still : Bool
   priv mover : @ui.Mover
   /// told as a way is said (gone on, put): what works out where it is at a moment follows it by reading it (Way::said)
   priv told : @signals.Signal[Int]
@@ -31,6 +35,8 @@ pub fn Way::new(v : Double) -> Way {
     spec: Snap(0.0),
     start: 0.0,
     dur: 0.0,
+    laid: false,
+    still: false,
     mover: @ui.Mover::new(),
     told: @signals.signal(0),
   }
@@ -40,7 +46,10 @@ pub fn Way::new(v : Double) -> Way {
 /// Where it is at `t` (ms, the one clock) and how fast (per second): before it set out, where it set out from; after
 /// its end, at its end.
 pub fn Way::at(self : Way, t : Double) -> (Double, Double) {
-  if self.dur <= 0.0 {
+  if self.laid {
+    // (how far it goes not known yet: where it set out from, as fast)
+    (self.from, self.v0)
+  } else if self.dur <= 0.0 {
     (self.to, 0.0)
   } else if t >= self.end() {
     // (at its end: where its spec has it once its length is out (Spec::value_at at a whole ms past it), which a way of
@@ -96,7 +105,7 @@ pub fn Way::ends_at(self : Way) -> Double {
 ///|
 /// Whether it still goes at `t`.
 pub fn Way::goes_at(self : Way, t : Double) -> Bool {
-  self.dur > 0.0 && t < self.end()
+  self.laid || (self.dur > 0.0 && t < self.end())
 }
 
 ///|
@@ -118,7 +127,10 @@ pub fn Way::go(
   self.to = target
   self.spec = spec
   self.start = at
-  self.dur = if @ui.current().still() { 0.0 } else { spec.duration(x, target, self.v0) }
+  self.still = @ui.current().still()
+  // (how far it goes said by a layout (@motion.laid): how long, once that is told, Way::over_laid)
+  self.laid = spec is Moved(_, over, _) && over == laid && !self.still
+  self.dur = if self.still || self.laid { 0.0 } else { spec.duration(x, target, self.v0) }
   self.mover.changed()
   // (who it is for the performance record: who sent it, not where to)
   self.mover.told_as("a Way", loc)
@@ -129,12 +141,13 @@ pub fn Way::go(
 /// There at once, still: at any moment.
 pub fn Way::put(self : Way, v : Double) -> Unit {
   // (there already, still: nothing said, nothing told)
-  if self.from == v && self.to == v && self.dur <= 0.0 {
+  if self.from == v && self.to == v && self.dur <= 0.0 && !self.laid {
     return
   }
   self.mover.changed()
   self.from = v
   self.to = v
+  self.laid = false
   self.v0 = 0.0
   self.spec = Snap(0.0)
   self.start = 0.0
@@ -158,4 +171,17 @@ pub fn Way::get(self : Way) -> Double {
   let t = c.moment()
   c.shows_motion(self.mover, self.goes_at(t))
   self.value_at(t)
+}
+
+///|
+/// Told how far it goes, `whole` points, by the layout that knows it (Layout::way_over), where it set out not knowing
+/// (`@motion.move(over=@motion.laid)`): how long it goes then, as `over=whole` would have made it, from its cause's
+/// moment still; told only that first time.
+pub impl @view.LaidOver for Way with over_laid(self, whole) {
+  guard self.laid else { return }
+  self.laid = false
+  self.spec = self.spec.over(whole)
+  self.dur = if self.still { 0.0 } else { self.spec.duration(self.from, self.to, self.v0) }
+  self.mover.changed()
+  self.told.set(@signals.untracked(fn() { self.told.get() }) + 1)
 }

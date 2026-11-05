@@ -43,6 +43,7 @@ pub fn View::bones(self : View, color : Live[Int64]) -> View {
   match color {
     Is(v) => set(v)
     Painted(_) => not_painted("what is said here")
+    Roomed(_, _) => not_roomed()
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })

@@ -26,6 +26,7 @@ pub fn View::sticks(self : View, top : Live[Double]) -> View {
     match top {
       Is(v) => v
       Painted(_) => not_painted("what is said here")
+      Roomed(_, _) => not_roomed()
       By(f) => f()
     }
   }

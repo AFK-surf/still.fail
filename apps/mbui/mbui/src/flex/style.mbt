@@ -179,6 +179,9 @@ pub(all) struct Style {
   // at its width, what it holds laid out whole in it (past it where the share is less than 1): a room opening on what
   // it holds, its height and what it holds the same layout's, whatever what it holds comes to as it opens.
   mut content_share : Double
+  // Not CSS's: the same across: a box whose own width, not said, is this share (0 … 1; NaN: none) of the width what it
+  // holds comes to, what it holds laid out at that whole width in it (past its end where the share is less than 1)
+  mut content_share_across : Double
   // Not CSS's: a column whose items are a page's list's rows set on a host's pixels (this many a point; 0: anywhere): each
   // as tall as whole pixels, rounded up, what is under it lower by as much, the column as much taller (an old view's
   // list's rows', ui's Ctx::row_slot).
@@ -264,6 +267,7 @@ pub fn Style::new() -> Style {
     min_held: false,
     wrap_least: false,
     content_share: 0.0 / 0.0,
+    content_share_across: 0.0 / 0.0,
     rows_grid: 0.0,
     ver: 0,
     basis_v: 0.0,
@@ -1017,6 +1021,10 @@ pub(all) struct Node {
   // as it is probed too, and is as tall as it says (a list of files, a card as tall as its words).
   mut layout_children : ((Double, Double, Double, Double) -> Double)?
   mut sized_by_children : Bool
+  // told, as it is sized or measured, how big it is laid out (where its holder says) or the room it is given (else):
+  // what of what it holds is said by that (a title no wider than a share of a page's width), set before what it
+  // holds is laid out, in the same compute
+  mut on_room : ((Double, Double) -> Unit)?
   // the result: position relative to the parent's border box, and size
   mut left : Double
   mut top : Double
@@ -1084,6 +1092,7 @@ pub fn Node::new() -> Node {
     measure: None,
     layout_children: None,
     sized_by_children: false,
+    on_room: None,
     left: 0.0,
     top: 0.0,
     width: 0.0,
