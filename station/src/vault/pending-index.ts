@@ -72,6 +72,14 @@ export const PENDING_SEED_FIRST = `SELECT r.id, r.body FROM vault_pending_lookup
 export const PENDING_SEED = `SELECT r.id, r.body FROM vault_pending_lookup p
   JOIN vault_requests r ON r.ws = p.ws AND r.id = p.id WHERE p.ws = ? AND p.id > ? ORDER BY p.id LIMIT ?`;
 export const PENDING_BACKFILL_AFTER = "SELECT id FROM vault_requests WHERE ws = ? AND id > ? ORDER BY id LIMIT ?";
+// Visit workspace boundaries by the existing (ws, id) key. A prepared workspace's pending lookup avoids its history;
+// an unprepared one keeps the old read until that workspace has been backfilled.
+export const REBOX_WORKSPACE_FIRST = "SELECT ws FROM vault_requests WHERE ws >= '' ORDER BY ws LIMIT 1";
+export const REBOX_WORKSPACE_NEXT = "SELECT ws FROM vault_requests WHERE ws > ? ORDER BY ws LIMIT 1";
+export const REBOX_PREPARED = `SELECT r.ws, r.id, CAST(r.rowid AS TEXT) AS position FROM vault_pending_lookup p
+  JOIN vault_requests r ON r.ws = p.ws AND r.id = p.id WHERE p.ws = ?`;
+export const REBOX_OLDER = `SELECT ws, id, CAST(rowid AS TEXT) AS position FROM vault_requests
+  WHERE ws = ? AND status = 'pending'`;
 
 export function initializePendingIndex(db: DatabaseSync): void {
   db.exec("SAVEPOINT vault_pending_schema");

@@ -53,7 +53,8 @@ import { type CardEnd, cardsEnded } from "../src/connects/card-ends.ts";
 import { fileAway } from "./archived-before.ts";
 import { testClock } from "./hub-fakes.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
-import { PENDING_BACKFILL_AFTER, PENDING_BODIES, PENDING_DUE, PENDING_MEMBER, PENDING_NO_TIME, PENDING_OTHER_TIME, PENDING_OWN, PENDING_SEED, PENDING_SEED_FIRST } from "../src/vault/pending-index.ts";
+import { PENDING_BACKFILL_AFTER, PENDING_BODIES, PENDING_DUE, PENDING_MEMBER, PENDING_NO_TIME, PENDING_OTHER_TIME, PENDING_OWN, PENDING_SEED, PENDING_SEED_FIRST,
+  REBOX_OLDER, REBOX_PREPARED, REBOX_WORKSPACE_FIRST, REBOX_WORKSPACE_NEXT } from "../src/vault/pending-index.ts";
 import { Secrets } from "../src/vault/secrets.ts";
 import { VaultStore } from "../src/vault/store.ts";
 
@@ -97,6 +98,10 @@ function assertPendingVaultPlans() {
     [PENDING_SEED_FIRST, ["w", 32], ["SEARCH p USING PRIMARY KEY", "SEARCH r USING INDEX"]],
     [PENDING_SEED, ["w", "r", 32], ["SEARCH p USING PRIMARY KEY", "SEARCH r USING INDEX"]],
     [PENDING_BACKFILL_AFTER, ["w", "r", 32], ["SEARCH vault_requests USING COVERING INDEX"]],
+    [REBOX_WORKSPACE_FIRST, [], ["SEARCH vault_requests USING COVERING INDEX"]],
+    [REBOX_WORKSPACE_NEXT, ["w"], ["SEARCH vault_requests USING COVERING INDEX"]],
+    [REBOX_PREPARED, ["w"], ["SEARCH p USING", "SEARCH r USING"]],
+    [REBOX_OLDER, ["w"], ["SEARCH vault_requests USING INDEX"]],
   ];
   for (const [sql, args, expected] of queries) {
     const steps = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((row) => row.detail);
@@ -104,6 +109,11 @@ function assertPendingVaultPlans() {
     assert.ok(steps.every((step) => !step.startsWith("SCAN ") && !step.includes("TEMP B-TREE")), detail);
     for (const part of expected) assert.ok(steps.some((step) => step.includes(part)), detail);
   }
+  assert.match(REBOX_WORKSPACE_FIRST, /LIMIT 1$/);
+  assert.match(REBOX_WORKSPACE_NEXT, /LIMIT 1$/);
+  const reboxPlan = (db.prepare(`EXPLAIN QUERY PLAN ${REBOX_PREPARED}`).all("w") as { detail: string }[]).map((row) => row.detail);
+  assert.ok(reboxPlan.some((step) => step.startsWith("SEARCH p USING") && step.includes("(ws=?)")), reboxPlan.join(" | "));
+  assert.ok(reboxPlan.some((step) => step.startsWith("SEARCH r USING") && step.includes("(ws=? AND id=?)")), reboxPlan.join(" | "));
 }
 
 function assertRecentChatPlans() {

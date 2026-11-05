@@ -31,7 +31,8 @@ import { Proxy, placeholder } from "./proxy.ts";
 import { ACCOUNT_VAR, type Captured, type Ran, SECRET_VAR, capture, runWith } from "./run.ts";
 import type { VaultStore } from "./store.ts";
 import { UseIndex } from "./use-index.ts";
-import { hasVaultMembers, initializePendingIndex, pendingIndexComplete, PENDING_BODIES, PENDING_DUE, PENDING_MEMBER, PENDING_NO_TIME, PENDING_OTHER_TIME, PENDING_OWN, PENDING_SEED, PENDING_SEED_FIRST } from "./pending-index.ts";
+import { hasVaultMembers, initializePendingIndex, pendingIndexComplete, PENDING_BODIES, PENDING_DUE, PENDING_MEMBER, PENDING_NO_TIME, PENDING_OTHER_TIME, PENDING_OWN, PENDING_SEED, PENDING_SEED_FIRST,
+  REBOX_OLDER, REBOX_PREPARED, REBOX_WORKSPACE_FIRST, REBOX_WORKSPACE_NEXT } from "./pending-index.ts";
 import { hasInvalidVaultMembers, vaultMembersComplete } from "./member-index.ts";
 
 const SCHEMA = `
@@ -435,7 +436,21 @@ export class Secrets {
   /// waiting whose box is not here gets a new one, told to its deciders, so that it may still be granted (the box holds
   /// no secret: only what is sealed to it once granted).
   reboxed() {
-    const rows = this.#d.db.prepare("SELECT ws, id FROM vault_requests WHERE status = 'pending'").all() as { ws: string; id: string }[];
+    const rows: { ws: string; id: string; position: bigint }[] = [];
+    // The old query read in rowid order under one SQLite snapshot. Keep both properties across the workspace seeks,
+    // including while the previous process may still be writing.
+    this.#d.db.exec("SAVEPOINT vault_rebox_read");
+    try {
+      let workspace = this.#d.db.prepare(REBOX_WORKSPACE_FIRST).get() as { ws: string } | undefined;
+      while (workspace !== undefined) {
+        const ws = workspace.ws;
+        const sql = pendingIndexComplete(this.#d.db, ws) ? REBOX_PREPARED : REBOX_OLDER;
+        const pending = this.#d.db.prepare(sql).all(ws) as { ws: string; id: string; position: string }[];
+        for (const row of pending) rows.push({ ...row, position: BigInt(row.position) });
+        workspace = this.#d.db.prepare(REBOX_WORKSPACE_NEXT).get(ws) as { ws: string } | undefined;
+      }
+    } finally { this.#d.db.exec("RELEASE vault_rebox_read"); }
+    rows.sort((a, b) => a.position < b.position ? -1 : a.position > b.position ? 1 : 0);
     const resolved = new Set<string>();
     for (const { ws, id } of rows) {
       const k = this.#kept(ws, id)!;
