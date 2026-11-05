@@ -75,6 +75,7 @@ pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter |
   match on {
     Is(v) => set(v, true)
     Painted(_) => not_painted("what is said here")
+    Roomed(_, _) => not_roomed()
     By(f) =>
       self.owning(fn() {
         // (its first reading, done as it is said, by this call; each after it, as what it read changed)
@@ -397,6 +398,26 @@ pub fn View::focus_returns(self : View) -> View {
 }
 
 ///|
+/// A layer that gives the focus back, as it goes, to `to` (what opened it: a menu's trigger, a sheet's button), not to
+/// what had it as it opened (View::focus_opens), where `to` is there then and takes the focus; else to what had it. Said
+/// with View::focus_opens, focus_opens_first or focus_returns, which say what it gives the focus to as it opens.
+pub fn View::returns_focus_to(self : View, to : NodeId) -> View {
+  guard self.live() is Some(_) else { return self }
+  let layer = self.id()
+  let tree = self.tree
+  tree.focus_backs[layer] = to
+  self.owns(fn() { tree.focus_backs.remove(layer) }) |> ignore
+  self
+}
+
+///|
+/// What layer `layer` gives the focus back to as it goes where it says (View::returns_focus_to); none: what had it as it
+/// opened.
+pub fn Tree::focus_back_of(self : Tree, layer : NodeId) -> NodeId? {
+  self.focus_backs.get(layer)
+}
+
+///|
 /// Layer `self` told as giving the focus to `target` as it opens (none: nothing), giving back as it goes.
 fn View::layer_focus(self : View, target : NodeId?) -> View {
   guard self.live() is Some(_) else { return self }
@@ -500,6 +521,7 @@ pub fn View::tab_stop(self : View, on : Live[Bool]) -> View {
   match on {
     Is(v) => set(v, true)
     Painted(_) => not_painted("what is said here")
+    Roomed(_, _) => not_roomed()
     By(f) =>
       self.owning(fn() {
         let first = Ref(true)

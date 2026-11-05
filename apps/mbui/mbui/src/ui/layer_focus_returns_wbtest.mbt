@@ -83,3 +83,62 @@ test "a kept page laid nowhere while a gate shows gets its node's focus back as 
   t.draw()
   assert_eq(t.ctx().focus, 0)
 }
+
+///|
+test "a layer said to give the focus back to what opened it: closed, the focus on its opener, not on the field that had it; its opener gone, on that field" {
+  let open = @signals.signal(false)
+  let opener_on = @signals.signal(true)
+  let opener : Ref[@view.NodeId?] = Ref(None)
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.box(fn(f) {
+      f
+      .width(Is(Some(80.0)))
+      .height(Is(Some(40.0)))
+      .focusable(Is(true))
+      .says(Is(Some(@view.said(Button, label="原来的"))))
+      |> ignore
+    })
+    |> ignore
+    root.show(fn() { opener_on.get() }, fn(o) {
+      opener.val = Some(o.id())
+      o
+      .width(Is(Some(80.0)))
+      .height(Is(Some(40.0)))
+      .focusable(Is(true))
+      .says(Is(Some(@view.said(Button, label="打开的"))))
+      |> ignore
+    })
+    root.show(fn() { open.get() }, fn(l) {
+      l.over(Is(true)).stacked(Is(2)).modal(Is(true)) |> ignore
+      let b = l.box(fn(x) {
+        x
+        .width(Is(Some(80.0)))
+        .height(Is(Some(40.0)))
+        .focusable(Is(true))
+        .says(Is(Some(@view.said(Button, label="层里的"))))
+        |> ignore
+      })
+      l.focus_opens(b).returns_focus_to(opener.val.unwrap()) |> ignore
+    })
+  })
+  t.draw()
+  let said = fn() { t.focused().map(fn(s) { s.label }).unwrap_or("none") }
+  t.act(Button, Focus, label="原来的")
+  open.set(true)
+  t.draw()
+  let opened = said()
+  open.set(false)
+  t.draw()
+  let closed = said()
+  t.act(Button, Focus, label="原来的")
+  open.set(true)
+  t.draw()
+  @signals.start_batch()
+  opener_on.set(false)
+  open.set(false)
+  @signals.end_batch()
+  t.draw()
+  assert_eq((opened, closed, said()), ("层里的", "打开的", "原来的"))
+}

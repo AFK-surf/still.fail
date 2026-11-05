@@ -357,3 +357,40 @@ test "went_told: placed above its anchor, then its anchor gone: told it goes bes
   t.frame(400.0, 500.0) |> ignore
   assert_eq((placed, said.val), (Some(@view.Side::Top), None))
 }
+
+///|
+test "beside, as wide as its anchor: laid out at the anchor's width in the pass that places it, following it as it grows" {
+  let aw = @signals.signal(120.0, same=fn(a, b) { a == b })
+  let ids : Map[String, @view.NodeId] = {}
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(a) {
+        ids["a"] = a.id()
+        a.over(Is(true)).width(By(fn() { Some(aw.get()) })).height(Is(Some(20.0))).offset(Is((40.0, 100.0))) |> ignore
+      })
+      |> ignore
+      root.box(fn(b) {
+        ids["b"] = b.id()
+        b.height(Is(Some(30.0))).beside(ids["a"], side=Bottom, along=Start, offset=4.0, as_wide=true) |> ignore
+        b.box(fn(c) {
+          ids["c"] = c.id()
+          c.height(Is(Some(10.0))) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(400.0, 300.0) |> ignore
+  let drawn = fn(k : String) {
+    let d = t.drawn_of(ids[k]).unwrap()
+    (d.x, d.y, d.w)
+  }
+  assert_eq(drawn("b"), (40.0, 124.0, 120.0), msg="as wide as its anchor, below it")
+  assert_eq(drawn("c").2, 120.0, msg="what it holds laid out at that width")
+  t.event(10.0, fn() { aw.set(200.0) })
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(drawn("b"), (40.0, 124.0, 200.0), msg="the anchor grown: as wide again")
+  assert_eq(drawn("c").2, 200.0)
+}

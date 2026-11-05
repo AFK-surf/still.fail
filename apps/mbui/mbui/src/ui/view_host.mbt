@@ -4967,6 +4967,8 @@ priv struct LayerFocus {
   mut fresh : Bool
   /// to give the focus to the first of what it holds that takes it, once that is built (View::focus_opens_first)
   mut first : Bool
+  /// what it gives the focus back to instead, where that is there then and takes it (View::returns_focus_to)
+  mut back_to : @view.NodeId?
 }
 
 ///|
@@ -5036,6 +5038,16 @@ fn focus_node_of(id : Int) -> @view.NodeId? {
 fn view_layers_focus(t : @view.Tree, gone : Array[@view.NodeId], opened : Array[(@view.NodeId, @view.NodeId?)]) -> Unit {
   let c = g()
   let going = layer_focus_open.filter(fn(l) { gone.contains(l.layer) })
+  // (one said to give it back to what opened it (View::returns_focus_to): to that, where it is there and takes it now)
+  for l in going {
+    match l.back_to {
+      Some(to) if t.can_focus(to) => {
+        l.back = tree_said_id(to)
+        l.back_in = layer_focus_holding(t, l.back)
+      }
+      _ => ()
+    }
+  }
   // (given back through what goes: each in it given back to what it would have, till none is)
   for l in going {
     for m in layer_focus_open {
@@ -5081,8 +5093,17 @@ fn view_layers_focus(t : @view.Tree, gone : Array[@view.NodeId], opened : Array[
         layer_focus_open[i].back_in = had_in
         layer_focus_open[i].fresh = true
         layer_focus_open[i].first = t.opens_first(layer)
+        layer_focus_open[i].back_to = t.focus_back_of(layer)
       }
-      None => layer_focus_open.push({ layer, back: had, back_in: had_in, fresh: true, first: t.opens_first(layer) })
+      None =>
+        layer_focus_open.push({
+          layer,
+          back: had,
+          back_in: had_in,
+          fresh: true,
+          first: t.opens_first(layer),
+          back_to: t.focus_back_of(layer),
+        })
     }
     // (one that gives the focus nothing as it opens (View::focus_returns): what had it before it still what had it, for
     // what opens over it)

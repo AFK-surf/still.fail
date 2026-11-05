@@ -77,3 +77,24 @@ test "a named picture does not wait for another picture and an ambiguous name fa
   let logs = t.drive("image_ready one/poster.png\nexit")
   assert_true(logs.iter().any(fn(line) { line == "DRIVE PASS" }), msg=logs.join("\n"))
 }
+
+///|
+test "images_ready: each named picture decoded at its size or failed, by the decodes' states alone" {
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.image_want("a.png", 100.0)
+      c.image_want("b.png", 100.0)
+    },
+    images=[("a.png", 100, 100), ("b.png", 100, 100)],
+    finish=false,
+  )
+  let pending = t.pending()
+  let ready = fn() { @ui.images_ready([("a.png", 100.0), ("b.png", 100.0)]) }
+  let none = ready()
+  t.finish(1, pending[0].1)
+  t.draw()
+  let one = ready()
+  t.finish(1, pending[1].1, ok=false)
+  t.draw()
+  assert_eq((pending.length(), none, one, ready()), (2, false, false, true))
+}

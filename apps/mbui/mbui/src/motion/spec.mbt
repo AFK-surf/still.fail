@@ -52,9 +52,16 @@ pub fn tween(ms : Double, ease~ : @ui.Ease, delay? : Double = 0.0) -> Spec {
 /// fast as it went (or as the hand let it go: Anim::animate's `velocity`). `points`: how many points one of its units
 /// is (a progress from 0 to 1 over a way 300 points long: 300); `over`: how far it goes, said for it (what moves
 /// together, the furthest of them: Spec::over).
+/// `over=laid`: how far, said by the layout that knows it as it is laid out (Layout::way_over), where it sets out at
+/// its cause not knowing it yet.
 pub fn move(points? : Double = 1.0, over? : Double = -1.0, delay? : Double = 0.0) -> Spec {
   Moved(points, over, delay)
 }
+
+///|
+/// How far a Move goes, said by a layout (`move(over=laid)`): known once it is laid out, told the Way then
+/// (Layout::way_over).
+pub let laid : Double = -2.0
 
 ///|
 /// A Move said to go `points` far (what moves with others of the same cause, as long as the furthest of them); any
