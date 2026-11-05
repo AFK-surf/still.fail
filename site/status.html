@@ -146,7 +146,7 @@ h2{margin:40px 0 4px;font-size:13px;font-weight:500;color:var(--dim)}
   }
 
   // Incidents are written down by people (site/incidents.json): the checks see a service that does not answer, not one
-  // whose answers an app cannot use. P1: most people cannot use still.fail or a main page of it.
+  // whose answers an app cannot use. P1: still.fail or a main page of it cannot be used, on the test channel too.
   var incidents = [];
   function stamp(iso) { return new Date(iso).toLocaleString(en ? "en" : "zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); }
   function incident(item) {
