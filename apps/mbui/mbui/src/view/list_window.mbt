@@ -213,6 +213,14 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       None => list_room(natural.get(k).unwrap_or(est))
     }
   }
+  // (block `b`'s slot `h` tall: to be laid out again so where it was not)
+  let slot_to = fn(b : Block, h : Double) {
+    if h != b.slot_h {
+      b.slot_h = h
+      tree.nodes[b.slot.at].flex.style.set_height(Pt(h))
+      tree.nodes[b.slot.at].flex.dirty = true
+    }
+  }
   // (block `b` laid out at the column's width: how tall what it holds comes to, kept by its key; its slot as tall as
   // its room of that, laid out again where that is another; counted so. Whether its count changed.)
   let lay_block = fn(k : K, b : Block, w : Double) -> Bool {
@@ -225,9 +233,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     natural[k] = nat
     let (slot_h, _) = slot_of(k, nat)
     if slot_h != b.slot_h {
-      b.slot_h = slot_h
-      tree.nodes[b.slot.at].flex.style.set_height(Pt(slot_h))
-      tree.nodes[b.slot.at].flex.dirty = true
+      slot_to(b, slot_h)
       b.slot.block_laid(w) |> ignore
     }
     if b.i >= 0 && b.i < index.val.length() && index.val.get(b.i) != slot_h {
@@ -496,6 +502,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   }
   // (put where it is to be, not placed yet: laid out to be read alone, Tree::measured_now)
   let to_place = Ref(false)
+  // (where the column was as it was last laid out, and whether it was moved from there since by anything but its list)
+  let left_at = Ref(@double.neg_infinity)
+  let moved = Ref(true)
   // the blocks laid out, once all else is: what shows made and laid out, as many as fill it, those no more in sight let
   // go, each put where those over it end
   let lay_now = fn(place : Bool) -> Bool {
@@ -505,6 +514,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     let all = keys()
     let grid = tree.rows_grid_said.get()
     let words = tree.words_redone.get()
+    // (moved from where it was left as last laid out by anything but itself since: the hand, a glide, a fling)
+    if s.drawn(tree) != left_at.val {
+      moved.val = true
+    }
     // (put, said: it follows no end and is held at that block from now)
     match put_at.get() {
       Some(p) => {
@@ -529,7 +542,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       laid_grid.val = grid
       laid_words.val = words
     }
+    // (each counted anew as the keys are another array, or as rooms are said and which are on their way is not: any
+    // may have changed)
     let recount = anew ||
+      (room is Some(_) && moving is None) ||
       (match index_keys.val {
         Some(a) => !physical_equal(a, all)
         None => true
@@ -562,6 +578,12 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         hn.kids.append(held)
         tree.order_marked()
       }
+      // (the made ones' slots as tall as they are counted now: laid out again so)
+      for _, b in blocks {
+        if b.i >= 0 {
+          slot_to(b, index.val.get(b.i))
+        }
+      }
     }
     // (those on their way, and those that were: their rooms counted anew, the rest as they were)
     let now_moving = match moving {
@@ -580,12 +602,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         Some(i) => {
           let (slot_h, _) = slot_of(k, natural.get(k).unwrap_or(est))
           match blocks.get(k) {
-            Some(b) if b.slot_h != slot_h => {
-              b.slot_h = slot_h
-              tree.nodes[b.slot.at].flex.style.set_height(Pt(slot_h))
-              tree.nodes[b.slot.at].flex.dirty = true
-            }
-            _ => ()
+            Some(b) => slot_to(b, slot_h)
+            None => ()
           }
           if index.val.get(i) != slot_h {
             index.val.set(i, slot_h)
@@ -617,7 +635,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // over it as it is, again till what shows is all made
     let mut rounds = 0
     let mut sight : Array[K] = []
-    while rounds < 64 {
+    while rounds < 512 {
       rounds = rounds + 1
       hold(vh)
       if held_at.val is None {
@@ -629,10 +647,12 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       let x = s.drawn(tree)
       let xa = (if x > most { most } else if x < 0.0 { 0.0 } else { x }) - lead_of(vh)
       sight = sight_of(all, xa, vh)
-      // (the first in sight that was laid out before, its top as counted now: held where it is drawn as what comes
-      // into sight over it is laid out other than it was counted, the column moved with it (none in sight: nothing
-      // drawn there to hold, the column where it was put))
-      if held_at.val is None {
+      // (moved from where it was left as last laid out (the hand, a glide, put): the first in sight that was laid out
+      // before, its top as counted now, held where it is drawn as what comes into sight over it is laid out other than
+      // it was counted, the column moved with it, till it is moved so again (none in sight: nothing drawn there to
+      // hold, the column where it was put))
+      if held_at.val is None && moved.val {
+        moved.val = false
         anchor.val = match sight.iter().find_first(fn(k) { blocks.contains(k) }) {
           Some(k) => place_of.val.get(k).map(fn(i) { (k, index.val.top(i)) })
           None => None
@@ -640,16 +660,17 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       }
       let made = Ref(false)
       @signals.untracked(fn() {
-        for k in sight {
-          if !blocks.contains(k) {
-            match place_of.val.get(k) {
-              Some(i) => {
-                made_block(k, i, w)
-                made.val = true
-              }
-              None => ()
-            }
+        // (the first in sight not made: made and laid out, what shows looked at again as it comes to before the next
+        // is made, none made for room another takes)
+        match sight.iter().find_first(fn(k) { !blocks.contains(k) && place_of.val.contains(k) }) {
+          Some(k) => {
+            made_block(k, place_of.val.get(k).unwrap(), w)
+            made.val = true
           }
+          None => ()
+        }
+        if made.val {
+          return
         }
         for k in kept_keys_now {
           if !blocks.contains(k) {
@@ -673,13 +694,22 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       break
     }
     laid_once.val = true
-    // (the first in sight, its top as counted now: what shows held where it is as what is over it changes height)
+    // (what shows held where it is as what is over it changes height: the block it was held by while it is in sight,
+    // else the first in sight, its top as counted now)
     if held_at.val is None {
-      anchor.val = match sight.iter().find_first(fn(k) { blocks.contains(k) }) {
-        Some(k) => place_of.val.get(k).map(fn(i) { (k, index.val.top(i)) })
-        None => None
+      let kept_anchor = match anchor.val {
+        Some((k, _)) => sight.contains(k) && blocks.contains(k)
+        None => false
+      }
+      if !kept_anchor {
+        anchor.val = match sight.iter().find_first(fn(k) { blocks.contains(k) }) {
+          Some(k) => place_of.val.get(k).map(fn(i) { (k, index.val.top(i)) })
+          None => None
+        }
       }
     }
+    // (where it was left: moved from there by anything but itself, anchored again)
+    left_at.val = s.drawn(tree)
     // (those no more in sight nor kept: let go)
     let keep : Map[K, Bool] = Map([])
     for k in sight {
