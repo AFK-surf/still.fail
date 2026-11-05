@@ -78,11 +78,12 @@ test "what a chat's agent needs is said under its last message" {
   // its bell's middle the middle of the words' first line: the bell's column as high as their line, whatever line the
   // theme gives them (on 18 the bell stood a point under the words, 2026-10-27)
   let run = t.text_runs().filter(fn(r) { need.has_prefix(r.text) })[0]
-  // (the window's tree's nodes among them: the line is the list's node)
+  // (the window's tree's nodes among them: the line is the list's node; in the window, not a row made ahead of it)
   let bell = t
     .boxes_held()
     .filter(fn(b) {
-      (b.w - 14.0).abs() < 0.01 && (b.h - 14.0).abs() < 0.01 && b.x + b.w <= run.x0 && b.x > run.x0 - 30.0
+      (b.w - 14.0).abs() < 0.01 && (b.h - 14.0).abs() < 0.01 && b.x + b.w <= run.x0 && b.x > run.x0 - 30.0 &&
+      b.y + b.h > 0.0 && b.y < 844.0
     })
   // (its place and the icon in it: one square)
   assert_true(bell.length() > 0 && bell.all(fn(b) { b.y == bell[0].y }), msg="\{bell.map(fn(b) { (b.x, b.y, b.w, b.h) })}")
