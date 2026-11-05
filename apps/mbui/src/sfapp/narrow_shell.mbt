@@ -61,6 +61,7 @@ fn shell_is(src : Source, width : Double) -> ShellIs {
 fn narrow_shell(v : @view.View, src : Source) -> Unit {
   // (on the window's ground, as the old view whole is (app_state_tree's): what no page covers, a page sliding, shows it)
   v.ground(By(fn() { @sf.theme().p.bg })) |> ignore
+  shell_reacts(v, src)
   @ui.old(v, fn(c) { narrow_under(c, src) }).over(Is(true)) |> ignore
   // back at the stack's root while the shell takes it (narrow_takes_back), a node of the window's tree's: before the
   // pages, what they and what is over them say takes back (a page's own stack, a menu, a sheet) taking it first; whose
@@ -166,7 +167,7 @@ fn narrow_under(c : @ui.Ctx, src : Source) -> Unit {
   }
   frame_bare.val = false
   match workspace_in_view(src).0 {
-    Some(w) => signed_in_frame(c, src, w)
+    Some(w) => signed_in_frame(c, src, w, reacted=true)
     None => ()
   }
   narrow_lists(c)
@@ -195,26 +196,22 @@ fn narrow_page_held(c : @ui.Ctx, src : Source, w : Workspace, page : Page) -> Un
 ///|
 /// What the frame does with the app signed in and workspace `w` in view, in every tier, before its frame: what is
 /// told as the frame ends, the icon's number, links, updates, what was shared in, the keys, whether the first page waits.
-fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  // (told once the frame's builds are over, as the last saw the app, the workspace and the page on top)
-  c.after_build("attend", fn() { attend(src, w.id, app.nav.top() is NewChat) })
+/// `reacted`: in a shell of the window's tree, whose node does what follows the state as it changes (shell_reacts), not
+/// here: what is told the core, the links and the icon's number, the update asked for.
+fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace, reacted? : Bool = false) -> Unit {
+  if !reacted {
+    signed_in_said(c, src, w)
+  }
   // (a person's act taken as an old view builds (a row pressed: its change is that build's), done with it: where it
   // left from let go where it went nowhere; where the app is noted as it changes, app_state_tree)
   c.after_build("history", fn() { @sfbase.history_settled() })
   // notifications: shown while the app is, a tapped one's chat opened, the one of a chat on top taken off (once the
   // frame's builds are over: a build let go of follows no workspace)
   c.after_build("notices", fn() { notices_frame(src, w) })
-  // the core and the workspace links are opened against, as the frame ends (links.mbt)
-  c.after_build("links", fn() { links_frame(src, w) })
-  // the number on the app's icon (app_frame.mbt)
-  badge_frame(c, src, w)
   // a link the system opened the app with, told once: what the core says of it shown by the frame after (Ctx::tell)
   if !link_later.is_empty() {
     c.tell("links-given", fn() { links_given(src) })
   }
-  // a newer build of the app asked for once (updates.mbt)
-  // (asked once, with the app's version: nothing a build changes)
-  update_first(src)
   // what another app shared in (share.mbt)
   share_in_frame(c)
   // files being kept on the device, said once kept (keep.mbt)
@@ -225,6 +222,53 @@ fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // page opening is: under the splash till then (view_in), not its loading look and its list a frame or two later
   first_waiting.val = !first_page_shown(c, src, w)
   first_hide(first_waiting.val)
+}
+
+///|
+/// What the old frame signed in (signed_in, where the window is no tree) tells each frame as the shell's node does as it
+/// changes (shell_reacts): the app attended to, the links' workspace, the icon's number, the update asked for once.
+fn signed_in_said(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  // (told once the frame's builds are over, as the last saw the app, the workspace and the page on top)
+  c.after_build("attend", fn() { attend(src, w.id, app.nav.top() is NewChat) })
+  // the core and the workspace links are opened against, as the frame ends (links.mbt)
+  c.after_build("links", fn() { links_frame(src, w) })
+  // the number on the app's icon (app_frame.mbt)
+  badge_frame(c, src, w)
+  // a newer build of the app asked for once (updates.mbt)
+  // (asked once, with the app's version: nothing a build changes)
+  update_first(src)
+}
+
+///|
+/// What the signed-in shell in node `v` (narrow_shell's, taped_shell's, paned_shell's) does as the state it follows
+/// comes to hold, at the moment it does, never found frame by frame: the core told the workspace in view and whether a
+/// new chat is on top (attend), the links opened against it, the icon's number as the core says its marks; a newer
+/// build asked for once.
+fn shell_reacts(v : @view.View, src : Source) -> Unit {
+  update_first(src)
+  v.reacts(
+    fn() {
+      match workspace_in_view(src).0 {
+        Some(w) => Some((w.id, app.nav.top() is NewChat))
+        None => None
+      }
+    },
+    fn(said) {
+      match (said, @signals.untracked(fn() { workspace_in_view(src).0 })) {
+        (Some((id, new_chat)), Some(w)) => {
+          attend(src, id, new_chat)
+          links_frame(src, w)
+        }
+        _ => ()
+      }
+    },
+  )
+  v.reacts(fn() { workspace_in_view(src).0.bind(fn(w) { badge_of(src, w) }) }, fn(badge) {
+    match badge {
+      Some(n) => badge_say(n)
+      None => ()
+    }
+  })
 }
 
 ///|

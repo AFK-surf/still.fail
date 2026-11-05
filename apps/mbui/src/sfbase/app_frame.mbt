@@ -269,20 +269,33 @@ let badge_told : @signals.Signal[Int] = @signals.signal(-1, same=fn(a, b) { a ==
 /// Each frame signed in, `w` in view: the number on the app's icon (the desktop app's followBadge), the core's badge,
 /// else what is wrong and what waits in every workspace; told as it changes, once the frame's builds are over.
 pub fn badge_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  match badge_of(src, w) {
+    Some(badge) if badge != badge_told.get() => c.after_build("badge", fn() { badge_say(badge) })
+    _ => ()
+  }
+}
+
+///|
+/// The number on the app's icon in workspace `w`, as the core says its marks (None till it has).
+pub fn badge_of(src : Source, w : Workspace) -> Int? {
   let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value
-  let badge = match field(marks, "badge") {
-    Some(Number(_, ..)) => count(marks, "badge")
+  guard marks is Some(_) else { return None }
+  match field(marks, "badge") {
+    Some(Number(_, ..)) => Some(count(marks, "badge"))
     _ =>
       match field(marks, "workspaces") {
-        Some(Object(m)) => m.values().fold(init=0, fn(n, x) { n + count(Some(x), "alert") + count(Some(x), "wait") })
-        _ => 0
+        Some(Object(m)) => Some(m.values().fold(init=0, fn(n, x) { n + count(Some(x), "alert") + count(Some(x), "wait") }))
+        _ => Some(0)
       }
   }
-  if marks is Some(_) && badge != badge_told.get() {
-    c.after_build("badge", fn() {
-      badge_told.set(badge)
-      @ui.set_badge(badge)
-    })
+}
+
+///|
+/// The number `badge` put on the app's icon, where it is another than the one put there last.
+pub fn badge_say(badge : Int) -> Unit {
+  if badge != @signals.untracked(fn() { badge_told.get() }) {
+    badge_told.set(badge)
+    @ui.set_badge(badge)
   }
 }
 

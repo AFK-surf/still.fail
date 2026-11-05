@@ -15,6 +15,7 @@
 fn taped_shell(v : @view.View, src : Source) -> Unit {
   // (on the tape's ground, the sidebar's, as the old frame's tape was: what no panel covers shows it)
   v.ground(By(fn() { @sf.theme().p.sidebar })) |> ignore
+  shell_reacts(v, src)
   @ui.old(v, fn(c) { taped_under(c, src) }).over(Is(true)) |> ignore
   // a page opened in the page's panel shows once the core has given what it shows, the one before staying till then
   // (page_local_ms at most), as a page pushed on a phone slides in then
@@ -29,6 +30,7 @@ fn taped_shell(v : @view.View, src : Source) -> Unit {
 fn paned_shell(v : @view.View, src : Source) -> Unit {
   // (on the page's ground, as the old frame's row was: what nothing covers shows it)
   v.ground(By(fn() { @sf.theme().p.bg })) |> ignore
+  shell_reacts(v, src)
   @ui.old(v, fn(c) { paned_under(c, src) }).over(Is(true)) |> ignore
   // a page opened in the pane shows once the core has given what it shows (page_local_ms at most: pane_page_wait, pane_pages)
   @sfdesk.pane_view(v, src, ready=fn(p) { pane_ready(src, p) }, most=page_local_ms)
@@ -60,7 +62,7 @@ fn paned_under(c : @ui.Ctx, src : Source) -> Unit {
   let (now, all, _, _) = workspace_in_view(src)
   match now {
     Some(w) => {
-      signed_in_frame(c, src, w)
+      signed_in_frame(c, src, w, reacted=true)
       @sfdesk.pane_under(c, src, w, all)
     }
     None => ()
@@ -80,7 +82,7 @@ fn taped_under(c : @ui.Ctx, src : Source) -> Unit {
   let (now, all, _, _) = workspace_in_view(src)
   match now {
     Some(w) => {
-      signed_in_frame(c, src, w)
+      signed_in_frame(c, src, w, reacted=true)
       @sfdesk.tape_under(c, src, w, all)
     }
     None => ()
