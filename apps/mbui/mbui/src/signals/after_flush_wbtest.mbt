@@ -72,3 +72,29 @@ test "none under way: done at once" {
   log.push("then")
   assert_eq(log, ["now", "then"])
 }
+
+///|
+test "many asked by one change, each asking another: all done, in order" {
+  let a = signal(0)
+  let n = 200000
+  let log : Array[Int] = []
+  effect(fn() {
+    if a.get() > 0 {
+      for i in 0..<n {
+        after_flush(fn() {
+          log.push(i)
+          after_flush(fn() { log.push(n + i) })
+        })
+      }
+    }
+  })
+  |> ignore
+  a.set(1)
+  assert_eq(log.length(), 2 * n)
+  for i, v in log {
+    assert_eq(v, i)
+  }
+  // (none left over for the next change)
+  after_flush(fn() { log.push(-1) })
+  assert_eq(log.length(), 2 * n + 1)
+}
