@@ -1643,9 +1643,11 @@ fn Ctx::sync_ime(self : Ctx) -> Unit {
       match st.tl {
         Some(tl) => {
           // its input method's action said before the field takes it (the host starts the input method anew)
-          if st.ime_action != self.ime_action_told {
-            self.ime_action_told = st.ime_action
-            h_ime_action(st.ime_action)
+          // (a secret's whatever its own: the keyboard told to learn and suggest nothing of what is typed in it)
+          let action = if st.secret { @hostapi.ime_action_secret } else { st.ime_action }
+          if action != self.ime_action_told {
+            self.ime_action_told = action
+            h_ime_action(action)
           }
           let coff = st.caret + st.marked.length()
           let (cx, cl) = st.place_of(tl, coff)

@@ -1,6 +1,6 @@
 #before android-pin 1234
 # The phone, approved in flow 60, turns its vault on (设置 › 密钥 › 开启密钥库): the recovery words shown once, then its own
-# vault, unlocked; then its whole library and the editor of a new token, as a person adds one.
+# vault, unlocked; then a token added to its library (e2e-token), agents let ask for it through the proxy to one host.
 # The screen lock (a PIN, as a phone has) is what the box key is kept under.
 #only android
 timeout 120000
@@ -29,3 +29,19 @@ shot 5-kinds
 tap Token
 until 添加密钥
 shot 6-editor
+# (the hosts first, under the fold while nothing is focused: once a field is, the system's keyboard takes the sheet's
+# foot and the hosts' field lies under its buttons)
+tap switch:允许 agent 申请
+until 限定域名
+wheel 300
+tap api.github.com, *.example.com
+type api.example.test
+tap GitHub token
+type e2e-token
+tap ghp_
+type e2e-secret-0123456789
+shot 7-filled
+tap =保存
+gone 添加密钥
+until e2e-token
+shot 8-saved

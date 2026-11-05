@@ -342,7 +342,7 @@ final class Device {
     }
 
     /**
-     * The input method's action for the field about to type (hostapi ime_action: 0 none, 1 search, 2 an address's go, 3 a number's done), read as the view
+     * The input method's action for the field about to type (hostapi ime_action: 0 none, 1 search, 2 an address's go, 3 a number's done, 4 a secret's), read as the view
      * makes its input connection (MBView); another than before, the input method is started again with it.
      */
     static volatile int imeAction;
