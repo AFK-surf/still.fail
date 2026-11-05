@@ -1,7 +1,7 @@
 // A picture copy belongs to the menu choice, even after the menu is gone. A later choice owns the clipboard instead.
 
 ///|
-fn pending_copy(t : @ui.Tester, src : String) -> Int {
+fn pending_copy(t : @ui.Tester, src : String) -> Int raise {
   let pending = t.pending().filter(fn(p) { p.0 == 1 && t.image_src(p.1) == src })
   assert_eq(pending.length(), 1, msg="one decode requested for \{src}")
   pending[0].1
