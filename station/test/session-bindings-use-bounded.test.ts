@@ -29,12 +29,13 @@ function observe(store: Store) {
         let sql = source;
         sql = sql.replace("SELECT connect, session_key FROM bindings", "SELECT visit_binding_use() AS visit, connect, session_key FROM bindings")
           .replace("SELECT i.session, i.connect", "SELECT visit_binding_use() AS visit, i.session, i.connect")
+          .replace("SELECT 1 FROM session_binding_rows WHERE", "SELECT 1 FROM session_binding_rows WHERE visit_binding_use() AND")
           .replace("DELETE FROM bindings WHERE session_key = ?", "DELETE FROM bindings WHERE visit_binding_use() AND session_key = ?")
           .replace("SELECT binding_rowid FROM session_binding_rows WHERE", "SELECT binding_rowid FROM session_binding_rows WHERE visit_binding_use() AND");
         const statement = target.prepare(sql);
         if (!source.includes("FROM bindings") && !source.includes("session_binding_rows")) return statement;
         return new Proxy(statement, { get(t, p) {
-          if (p === "all" || p === "run") return (...args: unknown[]) => {
+          if (p === "all" || p === "run" || p === "get") return (...args: unknown[]) => {
             plans.push((target.prepare(`EXPLAIN QUERY PLAN ${source}`).all(...args as any[]) as { detail: string }[]).map((row) => row.detail));
             return (t[p] as any)(...args);
           };
@@ -65,7 +66,10 @@ test("auto-archive checks bindings only for active sessions", async () => {
       extra(40, 400); observed.reset(); autoArchive(r.hub, Date.now() + 3 * 86_400_000);
       assert.equal(r.store.getSession("mine")?.archivedAt, null);
       assert.equal(observed.visits(), before, `binding visits grew from ${before} to ${observed.visits()}`);
-      assert.ok(observed.plans().some((plan) => plan.some((line) => line.startsWith("SEARCH i ") && line.includes("session=?"))));
+      assert.ok(observed.plans().some((plan) => plan.some((line) => line.includes("SEARCH session_binding_rows") && line.includes("session=?"))));
+      for (let i = 0; i < 400; i++) put.run(`also-mine-${i}`, "mine");
+      observed.reset(); autoArchive(r.hub, Date.now() + 3 * 86_400_000);
+      assert.equal(observed.visits(), before, "one binding is enough to keep a session active");
     } finally { observed.restore(); }
   } finally { await r.close(); }
 });
@@ -96,6 +100,7 @@ test("archive waits for old bindings without guessing which sessions are bound",
   try {
     session(r.store, "bound"); session(r.store, "free");
     db.exec("INSERT INTO bindings(connect,session_key) VALUES('old-connect','bound')");
+    const own = r.store.openThread("ember", "EMBER", "own", null, null).id;
     makeOld(r.store);
     assert.equal(sessionBindingsReady(db), false);
     let requested = 0;
@@ -103,12 +108,26 @@ test("archive waits for old bindings without guessing which sessions are bound",
     assert.equal(requested, 1);
     assert.equal(r.store.getSession("bound")?.archivedAt, null);
     assert.equal(r.store.getSession("free")?.archivedAt, null);
+    assert.notEqual(r.store.getThread(own)?.hiddenAt, null, "an unrelated own chat can still be archived");
     while (!sessionBindingsReady(db)) sessionBindingsStep(db, 1);
     autoArchive(r.hub, Date.now() + 3 * 86_400_000, undefined, () => { requested++; });
     assert.equal(requested, 1);
     assert.equal(r.store.getSession("bound")?.archivedAt, null);
     assert.notEqual(r.store.getSession("free")?.archivedAt, null);
   } finally { await r.close(); }
+});
+
+test("deleting a session removes all its indexed bindings, including wide rowids", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    session(store, "gone"); session(store, "kept");
+    db.exec("INSERT INTO bindings(rowid,connect,session_key) VALUES(-9007199254740993,'low','gone'),(1,NULL,'gone'),(2,'other','kept'),(9007199254740993,'high','gone')");
+    store.deleteSession("gone");
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM bindings WHERE session_key='gone'").get()?.n, 0);
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM session_binding_rows WHERE session='gone'").get()?.n, 0);
+    assert.equal(store.binding("other"), "kept");
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM session_binding_rows WHERE session='kept'").get()?.n, 1);
+  } finally { store.close(); }
 });
 
 test("deleting a session still removes unseen old bindings before preparation", () => {
@@ -158,5 +177,32 @@ test("the archive timer prepares old bindings once and retries when ready", asyn
     stop();
     assert.equal(signal?.aborted, true);
     assert.equal(timer, null);
+  } finally { stop(); ready.resolve(); await r.close(); }
+});
+
+test("stopping the archive timer cancels pending binding preparation", async () => {
+  const r = new Rig(), ready = Promise.withResolvers<void>();
+  let timer: { ms: number; run: () => void } | null = null, signal: AbortSignal | undefined;
+  const time = { after(ms: number, run: () => void) {
+    const next = { ms, run }; timer = next;
+    return () => { if (timer === next) timer = null; };
+  } };
+  let stop = () => {};
+  try {
+    session(r.store, "bound");
+    r.store.db.exec("INSERT INTO bindings(connect,session_key) VALUES('old-connect','bound')");
+    makeOld(r.store);
+    stop = startAutoArchiveTimer(r.hub, time, {
+      prepareSaid: async () => {}, prepareSessionBindings: (s) => { signal = s; return ready.promise; },
+    });
+    const task = timer as { ms: number; run: () => void } | null;
+    assert.ok(task); assert.equal(task.ms, 60_000); timer = null; task.run();
+    stop();
+    assert.equal(signal?.aborted, true);
+    ready.resolve();
+    await ready.promise;
+    await Promise.resolve();
+    assert.equal(timer, null);
+    assert.equal(r.store.getSession("bound")?.archivedAt, null);
   } finally { stop(); ready.resolve(); await r.close(); }
 });

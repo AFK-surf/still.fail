@@ -43,7 +43,7 @@ import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from
 import { RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiveJobs } from "./active-jobs.ts";
 import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
 import { installSessionListIndex } from "./session-list-index.ts";
-import { installSessionBindingsIndex, SESSION_BINDINGS_DELETE, SESSION_BINDINGS_SELECTED, sessionBindingsReady } from "./session-bindings-index.ts";
+import { installSessionBindingsIndex, SESSION_BINDINGS_DELETE, SESSION_BINDINGS_EXISTS, sessionBindingsReady } from "./session-bindings-index.ts";
 import { installSessionCounts, sessionCountsReady, SESSION_COUNT_TOTAL, SESSION_COUNT_CONNECT,
   SESSION_COUNTS, SESSION_COUNTS_VISIBLE, SESSION_COUNTS_HOME } from "./session-counts.ts";
 import { installPostBlocks, PostBlocksUnavailable, POST_BLOCK_SIZE, type PostPosition } from "./post-blocks.ts";
@@ -1172,17 +1172,14 @@ export class Store {
   }
 
   /// Connects bound to each session (by session key, in the BTreeMap's order).
-  listBindings(keys?: readonly string[]): Map<string, string[]> {
+  listBindings(): Map<string, string[]> {
     const out = new Map<string, string[]>();
-    if (keys !== undefined && keys.length === 0) return out;
-    const selected = keys === undefined ? null : new Set(keys);
-    const indexed = selected !== null && sessionBindingsReady(this.db);
-    const rows = indexed ? this.#all(SESSION_BINDINGS_SELECTED, JSON.stringify([...selected]))
-      : this.#all("SELECT connect, session_key AS session FROM bindings");
-    for (const r of rows) if (selected === null || selected.has(r.session))
-      out.set(r.session, [...(out.get(r.session) ?? []), r.connect]);
+    for (const r of this.#all("SELECT connect, session_key FROM bindings")) out.set(r.session_key, [...(out.get(r.session_key) ?? []), r.connect]);
     return new Map([...out].sort(([a], [b]) => byBytes(a, b)));
   }
+
+  /// Whether a session has a binding, after the session-binding lookup is ready.
+  preparedSessionBound(key: string): boolean { return this.#one(SESSION_BINDINGS_EXISTS, key) !== undefined; }
 
   // ── threads ──
 

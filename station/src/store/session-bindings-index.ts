@@ -10,6 +10,7 @@ export const SESSION_BINDINGS_NEXT = `SELECT CAST(rowid AS TEXT) AS position FRO
   WHERE rowid > CAST(? AS INTEGER) AND rowid <= CAST(? AS INTEGER) ORDER BY rowid LIMIT ?`;
 export const SESSION_BINDINGS_SELECTED = `SELECT i.session, i.connect FROM json_each(?) k
   CROSS JOIN session_binding_rows i WHERE i.session = k.value ORDER BY i.binding_rowid`;
+export const SESSION_BINDINGS_EXISTS = "SELECT 1 FROM session_binding_rows WHERE session = ? LIMIT 1";
 export const SESSION_BINDINGS_DELETE = `DELETE FROM bindings WHERE rowid IN
   (SELECT binding_rowid FROM session_binding_rows WHERE session = ?)`;
 
