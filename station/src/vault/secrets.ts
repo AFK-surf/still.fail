@@ -133,6 +133,8 @@ export type SecretsDeps = {
   home(): string | null;
   /// A chat's title, for the uses of a secret.
   title?(session: string): string | null;
+  /// Its title without an old-order fallback; undefined means its order needs preparation.
+  titleIfReady?(session: string): string | null | undefined;
   hub: Hub;
   /// The station's data directory: the proxy's CA is kept under `vault/`.
   data: string;
@@ -404,22 +406,25 @@ export class Secrets {
     const requests = bodies.map((body) => JSON.parse(body) as Request);
     const names = new Map<string, string | null>();
     const prepare = this.#d.hub.prepareLatestThreads;
-    if (this.#d.title && prepare) {
-      const store = this.#d.hub.store;
+    const titleIfReady = this.#d.titleIfReady;
+    if (titleIfReady && prepare) {
       const sessions = new Set(requests.map((r) => r.session));
       for (;;) {
         // The vault may have changed while the worker prepared old sessions.
         if (vault !== PLAIN && (this.#d.lock(ws) === null || this.#d.vaults.vault(ws, vault)?.members.includes(viewer.sub) !== true)) return [];
         const missing: string[] = [];
         names.clear();
-        // sender() reads the session's own chat first, then its latest. Read readiness and its name in one snapshot:
-        // another writer cannot make the fallback sort necessary in between. Release it before waiting for the worker.
+        // Read readiness and the name in one snapshot. Release it before waiting for the worker.
         this.#d.db.exec("SAVEPOINT vault_use_titles");
         try {
           for (const session of sessions) {
-            if (store.getSession(session) === null) names.set(session, null);
-            else if (store.sessionHomeThread(session) === null && store.latestThreadIfReady(session) === undefined) missing.push(session);
-            else names.set(session, this.#title(session));
+            try {
+              const name = titleIfReady(session);
+              if (name === undefined) missing.push(session);
+              else names.set(session, name);
+            } catch {
+              names.set(session, null);
+            }
           }
         } finally {
           this.#d.db.exec("RELEASE vault_use_titles");

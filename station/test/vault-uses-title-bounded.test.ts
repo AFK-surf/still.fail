@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { sender } from "../src/sessions/messages.ts";
+import { sender, senderTitleIfReady } from "../src/sessions/messages.ts";
 import { prepareLatestThreadStep } from "../src/store/latest-thread-index.ts";
 import { Store } from "../src/store/store.ts";
 import { Secrets } from "../src/vault/secrets.ts";
@@ -48,7 +48,7 @@ test("a page of secret uses prepares only the names it shows without sorting the
       const secrets = new Secrets({ db, hub, data: ".", now: () => 0, home: () => "w",
         lock: () => ({} as never), proxy: {} as never,
         vaults: { vault: () => ({ members: ["p"] }) } as never, plain: {} as never,
-        title: (session) => sender(hub, session)[0] });
+        title: (session) => sender(hub, session)[0], titleIfReady: (session) => senderTitleIfReady(hub, session) });
       const body = JSON.stringify({ ws: "w", id: "r", vault: "v", owner: "p@example.test", at: 1,
         item: "item", session: "s", mode: "env", status: "granted" });
       db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w','r','s','granted',?)").run(body);
@@ -81,7 +81,8 @@ function waitingUses() {
   const secrets = new Secrets({ db, hub, data: ".", now: () => 0, home: () => "w",
     lock: () => ({} as never), proxy: {} as never,
     vaults: { vault: () => ({ members: permitted ? ["p"] : [] }) } as never, plain: {} as never,
-    title: () => { titles++; return "shown"; } });
+    title: () => { titles++; return "shown"; },
+    titleIfReady: () => { if (!present) return null; if (!ready) return undefined; titles++; return "shown"; } });
   const body = JSON.stringify({ ws: "w", id: "r", vault: "v", owner: "p@example.test", at: 1,
     item: "item", session: "s", mode: "env", status: "granted" });
   db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w','r','s','granted',?)").run(body);
@@ -138,7 +139,7 @@ test("a use keeps the session title when its latest-chat index is incompatible",
     const secrets = new Secrets({ db, hub, data: ".", now: () => 0, home: () => "w",
       lock: () => ({} as never), proxy: {} as never,
       vaults: { vault: () => ({ members: ["p"] }) } as never, plain: {} as never,
-      title: (session) => sender(hub, session)[0] });
+      title: (session) => sender(hub, session)[0], titleIfReady: (session) => senderTitleIfReady(hub, session) });
     const body = JSON.stringify({ ws: "w", id: "r", vault: "v", owner: "p@example.test", at: 1,
       item: "item", session: "s", mode: "env", status: "granted" });
     db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w','r','s','granted',?)").run(body);
@@ -146,5 +147,38 @@ test("a use keeps the session title when its latest-chat index is incompatible",
     const rows = await secrets.uses("w", {} as never, "v", { sub: "p", email: "p@example.test" });
     assert.equal(rows[0]?.chatTitle, "Session title");
     assert.equal(prepares, 0);
+  } finally { store.close(); }
+});
+
+test("uses of a session's own chat read its name once without looking for its latest chat", async () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    store.insertSession({ key: "s", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/s",
+      token: "s", createdAt: 1, lastActiveAt: 1 });
+    const own = store.openThreadOf("ember", "CHAT", "own", "Own chat", null, "s");
+    store.joinThread(own.id, "s", "ember");
+    const reads = { session: 0, home: 0, latest: 0, link: 0 };
+    const observed = new Proxy(store, { get(target, property) {
+      const value = Reflect.get(target, property, target);
+      if (typeof value !== "function") return value;
+      return (...args: unknown[]) => {
+        if (property === "getSession") reads.session++;
+        if (property === "sessionHomeThread") reads.home++;
+        if (property === "latestThreadIfReady") reads.latest++;
+        return value.apply(target, args);
+      };
+    } });
+    const hub = { store: observed, link: () => { reads.link++; return null; },
+      prepareLatestThreads: async () => { throw new Error("an own chat needs no preparation"); } } as any;
+    const secrets = new Secrets({ db, hub, data: ".", now: () => 0, home: () => "w",
+      lock: () => ({} as never), proxy: {} as never,
+      vaults: { vault: () => ({ members: ["p"] }) } as never, plain: {} as never,
+      title: (session) => sender(hub, session)[0], titleIfReady: (session) => senderTitleIfReady(hub, session) });
+    const insert = db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w',?,'s','granted',?)");
+    for (const id of ["r1", "r2"]) insert.run(id, JSON.stringify({ ws: "w", id, vault: "v", at: 1,
+      item: "item", session: "s", mode: "env", status: "granted" }));
+    const rows = await secrets.uses("w", {} as never, "v", { sub: "p", email: "p@example.test" });
+    assert.deepEqual(rows.map((r) => r.chatTitle), ["Own chat", "Own chat"]);
+    assert.deepEqual(reads, { session: 1, home: 1, latest: 0, link: 0 });
   } finally { store.close(); }
 });
