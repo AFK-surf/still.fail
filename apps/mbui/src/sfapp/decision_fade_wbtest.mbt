@@ -19,7 +19,7 @@ fn fade_alpha_of(t : @ui.Tester, s : String) -> Int? {
 test "a card's option chosen by touch at 740: its card, who decides and 忽略 fade out frame by frame as main's" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat", w=740.0, h=1000.0, platform=2)
-  t.set_frame_period(1000.0 / 120.0)
+  t.set_frame_period(host_phone_period)
   t.run_for(@ui.move_most_ms * 2.0)
   // (on the tape the page brought over, a tap on what shows of it beside the list)
   let tap = fn(x : Double, y : Double, hold : Double) {
@@ -36,7 +36,7 @@ test "a card's option chosen by touch at 740: its card, who decides and 忽略 f
       Some((_, y, _, _)) if y >= 700.0 => t.drag(530.0, 600.0, 530.0, 450.0, steps=10)
       _ => t.drag(530.0, 400.0, 530.0, 600.0, steps=10)
     }
-    t.run_for(400.0)
+    t.run_for(@ui.move_most_ms)
   }
   let option = t.semantics().iter().find_first(fn(s) { s.role == Button && s.label == "一起换 把首页和聊天页的截图都更新" }).unwrap()
   let (x, y, w, h) = option.rect
