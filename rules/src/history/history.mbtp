@@ -144,3 +144,15 @@ predicate supersedes_complete(seq_a : Int64, deleted_a : Bool, epoch_a : Int64, 
 predicate supersedes_post(seq_a : Int64, deleted_a : Bool, epoch_a : Int64, seq_b : Int64, deleted_b : Bool, epoch_b : Int64, text : Int, result : Bool) {
   supersedes_sound(seq_a, deleted_a, epoch_a, seq_b, deleted_b, epoch_b, text, result) && supersedes_complete(seq_a, deleted_a, epoch_a, seq_b, deleted_b, epoch_b, text, result)
 }
+
+predicate item_open_sound(was : Bool, result : Bool) {
+  result → !was
+}
+
+predicate item_open_complete(was : Bool, result : Bool) {
+  !was → result
+}
+
+predicate item_open_post(was : Bool, result : Bool) {
+  item_open_sound(was, result) && item_open_complete(was, result)
+}

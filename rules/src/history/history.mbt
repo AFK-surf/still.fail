@@ -87,3 +87,15 @@ pub fn supersedes(seq_a : Int64, deleted_a : Bool, epoch_a : Int64, seq_b : Int6
     text > 0
   }
 }
+
+///|
+/// Whether an item's version may follow the one held (`was`: it deleted the item): never after a deletion.
+pub fn item_open(was : Bool) -> Bool where {
+  proof_ensure: result => item_open_post(was, result),
+} {
+  if was {
+    false
+  } else {
+    true
+  }
+}

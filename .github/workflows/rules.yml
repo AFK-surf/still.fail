@@ -85,3 +85,23 @@ jobs:
           why3 --version
           why3 config detect >/dev/null
           cd rules && moon prove
+  # Each mistake planted in the proved rules makes the proof fail (rules/planted.sh), beside `proved`.
+  planted:
+    needs: tools
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/mbui-moonbit
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/prove-tools
+          key: ${{ needs.tools.outputs.key }}
+          fail-on-cache-miss: true
+      - name: each planted mistake fails the proof
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends z3 >/dev/null
+          install -m 755 ~/prove-tools/bin/moonc-prove "$MOON_HOME/bin/moonc-prove"
+          export PATH="$HOME/prove-tools/opam/w3/bin:$PATH"
+          why3 config detect >/dev/null
+          sh rules/planted.sh
