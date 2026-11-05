@@ -180,7 +180,7 @@ fn host_frame_drawn(at : Double) -> Unit {
   } else {
     0.0
   }
-  let old_built = !(p.looks || p.painted || p.alone)
+  let old_built = frame_drawn_as.val == Built
   r.push({
     at,
     asked: host_asked_next.val,
