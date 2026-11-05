@@ -541,6 +541,7 @@ export const AgentsLive = (control: Control) =>
       hub.prepareWidgetSources = (threads, signal) => readers.prepareWidgetSources(threads, signal);
       hub.prepareCcSessions = (sessions, signal) => readers.prepareCcSessions(sessions, signal);
       hub.prepareSessionChatNames = (sessions, signal) => readers.prepareSessionChatNames(sessions, signal);
+      hub.prepareLatestThreads = (sessions, signal) => readers.prepareLatestThreads(sessions, signal);
       const namesPreparing = new Set<string>();
       const requestSessionChat = (session: string) => {
         if (namesPreparing.has(session)) return;
