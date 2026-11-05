@@ -40,6 +40,8 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
         revision INTEGER NOT NULL, PRIMARY KEY(kind, ws, session)) WITHOUT ROWID;
       CREATE TABLE recent_scope_session_work (ws TEXT NOT NULL, session TEXT NOT NULL, revision INTEGER NOT NULL,
         phase TEXT NOT NULL, after INTEGER, PRIMARY KEY(ws, session)) WITHOUT ROWID;
+      CREATE TABLE recent_scope_member_dirty (ws TEXT NOT NULL, thread INTEGER NOT NULL, session TEXT NOT NULL,
+        revision INTEGER NOT NULL, PRIMARY KEY(ws, thread, session)) WITHOUT ROWID;
       CREATE TABLE recent_scope_sources (ws TEXT NOT NULL, thread INTEGER NOT NULL, session TEXT NOT NULL,
         PRIMARY KEY(ws, thread, session)) WITHOUT ROWID;
       CREATE INDEX recent_scope_sources_session ON recent_scope_sources(ws, session, thread);

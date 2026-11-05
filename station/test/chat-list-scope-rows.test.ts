@@ -61,3 +61,20 @@ test("workspace contributions keep the original ordering and count once per shar
     assert.deepEqual(readPreparedRecentWorkspace(db, "elsewhere", 50), otherBefore, "a different scope remains ready");
   } finally { db.setAuthorizer(null); store.close(); }
 });
+
+for (const recursive of [false, true]) test(`a new membership cannot leave a ready workspace page stale (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:");
+  const db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    store.insertSession({ key: "one", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "one", createdAt: 1, lastActiveAt: 1, ws: "here" });
+    const id = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [], total: 0 });
+    store.joinThread(id, "one", "ember");
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "the new chat has not yet been accounted");
+  } finally { store.close(); }
+});
