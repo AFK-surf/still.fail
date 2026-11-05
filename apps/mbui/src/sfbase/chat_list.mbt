@@ -366,7 +366,18 @@ pub fn entries_of(v : ChatView) -> Array[Entry] {
     }
   }
   out.push(Foot)
+  entries_count.val += out.length()
   out
+}
+
+///|
+// kept across runs: a count for tests (entries_made)
+let entries_count : Ref[Int] = Ref(0)
+
+///|
+/// How many entries chats' lists were made of so far (entries_of): for a test that counts what a page costs.
+pub fn entries_made() -> Int {
+  entries_count.val
 }
 
 ///|
