@@ -205,6 +205,8 @@ fn scene_entries_kept(id : @view.NodeId, place : (Double, Double, Double, Double
     Some(l) if l.entries is Some(_) &&
       !l.told &&
       !scene.marked.contains(id) &&
+      // (holding one drawn again: how it was drawn holds that one as it was, walked anew)
+      !scene.holding.contains(id) &&
       l.entries_as.0 == place.2 &&
       l.entries_as.1 == place.3 => Some(l)
     _ => None
@@ -594,7 +596,10 @@ fn scene_told(
               None => ()
             }
         }
-      Some(l) => scene_mark(l)
+      Some(l) => {
+        if scene_probe.val { println("PROBE mark \{l.at}.\{l.gen} by \{id.at}.\{id.gen} moved=\{moved} placed=\{placed}") }
+        scene_mark(l)
+      }
       None => ()
     }
   }
@@ -1272,7 +1277,9 @@ fn scene_place_now(tree : @view.Tree, l : SceneLayer) -> (Double, Double, Double
     return Some(tree.root_place())
   }
   guard l.outer is Some(o) && scene.layers.get(o) is Some(ol) else { return None }
-  let (ox, oy, oa, os, oux, ouy) = ol.held
+  // (what holds it where the tree has it now, out to the root: never where that was last drawn, which it may have been
+  // placed away from since without being drawn)
+  guard scene_place_now(tree, ol) is Some((ox, oy, oa, os, oux, ouy)) else { return None }
   match tree.placed_in(l.id, o.at, oa, os) {
     Some((x, y, a, s, ux, uy)) => Some((ox + x, oy + y, a, s, oux + ux, ouy + uy))
     None => None
@@ -1751,11 +1758,8 @@ fn scene_shifted(ranges : Array[(Int, Int)]) -> Unit {
 /// was kept) where one does not: the old frame paints it.
 fn Ctx::scene_alone(self : Ctx, tree : @view.Tree, before_old? : Bool = false) -> Bool {
   guard scene_alone_may() else { return false }
-  let due = scene_alone_due()
-  let (recorded0, parts0) = (scene_work.recorded, scene.parts.work())
-  // (those held by none other drawn again: each draws what it holds)
-  let todo : Array[SceneLayer] = []
-  for id in due {
+  // (held by another drawn again: drawn by that one's walk where the tree has it now)
+  let under = fn(id : @view.NodeId) {
     let mut under = false
     let mut h = tree.holder_of(id)
     while h is Some(n) && !under {
@@ -1764,7 +1768,40 @@ fn Ctx::scene_alone(self : Ctx, tree : @view.Tree, before_old? : Bool = false) -
       }
       h = tree.holder_of(n)
     }
-    if !under {
+    under
+  }
+  // (one held by none other drawn again is drawn again where it was, into its own instances: one placed elsewhere now
+  // (a row as its list scrolls), what holds it drawn again instead, walked, out to one placed where it was, what it was
+  // drawn in made anew by that walk)
+  let mut again = true
+  while again {
+    again = false
+    for id in scene_alone_due() {
+      if under(id) {
+        continue
+      }
+      match scene.layers.get(id) {
+        Some(l) if l.id.at != 0 && scene_place_now(tree, l) != Some(l.held) =>
+          match l.outer {
+            Some(o) if scene.layers.contains(o) => {
+              scene_mark(o)
+              again = true
+            }
+            _ => {
+              scene.alone_why = "layer \{id.at}: drawn elsewhere, in nothing kept"
+              return false
+            }
+          }
+        _ => ()
+      }
+    }
+  }
+  let due = scene_alone_due()
+  let (recorded0, parts0) = (scene_work.recorded, scene.parts.work())
+  // (those held by none other drawn again: each draws what it holds)
+  let todo : Array[SceneLayer] = []
+  for id in due {
+    if !under(id) {
       match scene.layers.get(id) {
         Some(l) => todo.push(l)
         // (let go since it was marked: what held it drawn again without it)
@@ -2429,3 +2466,6 @@ fn scene_spans_wrong(spans : Array[(Int, Int, Int, Int, Int, Int, Int, Int)], ta
   }
   None
 }
+
+///|
+pub let scene_probe : Ref[Bool] = Ref(false)

@@ -11,6 +11,7 @@ test "the chats' list flung on a phone: every frame of it drawn by the window's 
   t.run_for(@ui.move_most_ms)
   t.record_host()
   t.host_frames() |> ignore
+  @ui.scene_probe.val = true
   let (x, y0) = (195.0, 700.0)
   t.touch_at(0, x, y0, t.time())
   t.run_as_host(1000.0 / 240.0)
