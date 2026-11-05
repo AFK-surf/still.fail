@@ -4,7 +4,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { Worker } from "node:worker_threads";
 import { log } from "../ops/log.ts";
 import { releaseStoppedBackfill } from "../store/backfill.ts";
-import { backfillPendingIndex, pendingIndexComplete } from "./pending-index.ts";
+import { backfillPendingPreparation, pendingPreparationComplete } from "./pending-index.ts";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS vault_use_lookup (
@@ -185,9 +185,9 @@ export class UseIndex {
 
   /// Prepare one workspace's pending lookup in bounded transactions on the same worker as use-history preparation.
   async preparePending(ws: string): Promise<void> {
-    if (pendingIndexComplete(this.#db, ws)) return;
+    if (pendingPreparationComplete(this.#db, ws)) return;
     if (this.#path === null) {
-      while (!pendingIndexComplete(this.#db, ws) && !backfillPendingIndex(this.#db, ws)) await new Promise<void>((resolve) => setImmediate(resolve));
+      while (!pendingPreparationComplete(this.#db, ws) && !backfillPendingPreparation(this.#db, ws)) await new Promise<void>((resolve) => setImmediate(resolve));
       return;
     }
     const answer = await this.#ask({ kind: "pending", id: ++this.#next, ws });

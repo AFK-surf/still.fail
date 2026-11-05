@@ -1,6 +1,7 @@
 // Pending vault requests: filled a bounded batch at a time from old requests and maintained with each change.
 // Creating an ordinary SQLite index over the old table would scan and sort the entire history at station startup.
 import type { DatabaseSync } from "node:sqlite";
+import { backfillVaultMembers, vaultMembersComplete } from "./member-index.ts";
 
 // `save` follows JavaScript truthiness: a plain-library request or a save is decided by its owner, a use of a vault
 // by its current members. In particular an old null, false, zero or empty-string save is not a save.
@@ -62,6 +63,24 @@ export function initializePendingIndex(db: DatabaseSync): void {
 
 export function pendingIndexComplete(db: DatabaseSync, ws: string): boolean {
   return (db.prepare("SELECT done FROM vault_pending_backfill WHERE ws = ?").get(ws) as { done: number } | undefined)?.done === 1;
+}
+
+// Test and embedded stores can use Secrets without a VaultStore. A real VaultStore creates this lookup with vaults.
+export function hasVaultMembers(db: DatabaseSync): boolean {
+  return db.prepare("SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'vault_member_backfill'").get() !== undefined;
+}
+
+export function pendingPreparationComplete(db: DatabaseSync, ws: string): boolean {
+  return pendingIndexComplete(db, ws) && (!hasVaultMembers(db) || vaultMembersComplete(db, ws));
+}
+
+/// At most one request or vault batch per turn, so both share the worker fairly with foreground writes.
+export function backfillPendingPreparation(db: DatabaseSync, ws: string): boolean {
+  if (!pendingIndexComplete(db, ws)) {
+    if (!backfillPendingIndex(db, ws)) return false;
+    return !hasVaultMembers(db) || vaultMembersComplete(db, ws);
+  }
+  return !hasVaultMembers(db) || vaultMembersComplete(db, ws) || backfillVaultMembers(db, ws);
 }
 
 /// One transaction reads at most `limit` old request ids. The triggers keep writes ahead of and behind its cursor.

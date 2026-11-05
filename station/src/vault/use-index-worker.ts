@@ -4,14 +4,13 @@ import { parentPort, threadId, workerData } from "node:worker_threads";
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { BACKFILL_PAUSE_MS, REQUEST_BACKFILL_PAUSE_MS, giveBackfill, takeBackfill } from "../store/backfill.ts";
-import { backfillPendingIndex, pendingIndexComplete } from "./pending-index.ts";
+import { backfillPendingPreparation, pendingPreparationComplete } from "./pending-index.ts";
 import { backfillNextWorkspace, backfillUseIndex, readUses, useIndexComplete, type PendingPrepare, type UseAnswer, type UseRead } from "./use-index.ts";
 
 const db = new DatabaseSync(workerData.path as string, { timeout: 100 });
 db.exec("PRAGMA synchronous = NORMAL");
 const waiting: (UseRead | PendingPrepare)[] = [];
 const ready = new Set<string>();
-const pendingReady = new Set<string>();
 let backgroundComplete = false;
 let scheduled = false;
 let foregroundWaiting = false;
@@ -27,9 +26,8 @@ function schedule(delay = 0) {
     if (q) {
       try {
         const pending = "kind" in q;
-        if (pending ? pendingReady.has(q.ws) || pendingIndexComplete(db, q.ws) : ready.has(q.ws) || useIndexComplete(db, q.ws)) {
+        if (pending ? pendingPreparationComplete(db, q.ws) : ready.has(q.ws) || useIndexComplete(db, q.ws)) {
           if (pending) {
-            pendingReady.add(q.ws);
             parentPort!.postMessage({ id: q.id, ready: true } satisfies UseAnswer);
           } else {
             ready.add(q.ws);
@@ -59,9 +57,8 @@ function schedule(delay = 0) {
     try {
       if (q) {
         const pending = "kind" in q;
-        if (pending ? backfillPendingIndex(db, q.ws) : backfillUseIndex(db, q.ws)) {
+        if (pending ? backfillPendingPreparation(db, q.ws) : backfillUseIndex(db, q.ws)) {
           if (pending) {
-            pendingReady.add(q.ws);
             parentPort!.postMessage({ id: q.id, ready: true } satisfies UseAnswer);
           } else {
             ready.add(q.ws);

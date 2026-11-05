@@ -4,6 +4,7 @@
 // station from before has none, and one from before opens this one's database as it was).
 import type { DatabaseSync } from "node:sqlite";
 import type { BoxCert, Item, Vault } from "./crypto.ts";
+import { initializeVaultMembers } from "./member-index.ts";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS vaults (
@@ -37,6 +38,7 @@ export class VaultStore {
   constructor(db: DatabaseSync) {
     this.#db = db;
     db.exec(SCHEMA);
+    initializeVaultMembers(db);
   }
 
   /// Every vault of a workspace held here, latest versions.
