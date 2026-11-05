@@ -1486,7 +1486,7 @@ export class Directory extends DurableObject<Env> {
       this.#run("UPDATE users SET last_seen = ? WHERE sub = ?", nowSeconds(), sub);
       this.ctx.acceptWebSocket(pair[1], [`sub:${sub}`]);
       pair[1].serializeAttachment({ sub } satisfies Attachment);
-      return new Response(null, { status: 101, webSocket: pair[0], headers: { "sec-websocket-protocol": header(request, "protocol") ?? EVENTS_PROTOCOLS[1] } });
+      return new Response(null, { status: 101, webSocket: pair[0], headers: { "sec-websocket-protocol": header(request, "protocol") ?? EVENTS_PROTOCOLS[0] } });
     }
     const station = header(request, "station")!;
     if (!this.isStation(station)) return Response.json({ error: "station_removed" }, { status: 404 });
