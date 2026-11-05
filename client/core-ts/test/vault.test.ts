@@ -22,7 +22,7 @@ import {
   openSeal, recoveryPair, saveContext, sealWith, sign, signedOk, toWords, verifies,
 } from "../src/vault/crypto.ts";
 import { checkLock } from "../src/vault/lock-check.ts";
-import { forgetVerifiedHere, keepVerified } from "../src/vault/verified.ts";
+import { checkWith, forgetVerifiedHere, keepVerified } from "../src/vault/verified.ts";
 import { BOX_KEY, BOX_PUB, UNLOCK_MS } from "../src/views/vault.ts";
 import { read as readLock } from "../src/views/lock.ts";
 import { subscribe, call } from "./helpers.ts";
@@ -52,6 +52,21 @@ test("a_signature_is_checked_once_for_what_it_is_over_not_again_each_time_it_is_
   assert.equal(signedOk({ ...record, device: "d-other" }, TAG.box), false);
   assert.equal(signedOk(record, TAG.vault), false);
   assert.equal(verifies.count - before, 3);
+});
+
+test("a_signature_is_checked_by_the_hosts_own_where_it_has_one_and_by_nobles_where_it_says_it_cannot", () => {
+  // A native app's shell checks by libcrux (formally verified); what it says is what counts, true or false.
+  const signer = key(fill(8));
+  const record = sign({ device: "d-host", ws: "w", box: "x25519:" + "00".repeat(32) }, TAG.box, signer);
+  const asked: string[] = [];
+  checkWith((alg) => (asked.push(alg), false));
+  assert.equal(signedOk(record, TAG.box), false, "the host's answer, though noble's would be yes");
+  assert.deepEqual(asked, ["Ed25519"]);
+  // One that cannot (null): noble's.
+  checkWith(() => null);
+  assert.equal(signedOk({ ...record, device: "d-host2" }, TAG.box), false);
+  assert.equal(signedOk(sign({ device: "d-host3", ws: "w", box: "x25519:" + "00".repeat(32) }, TAG.box, signer), TAG.box), true);
+  checkWith(null);
 });
 
 test("a_signature_checked_on_this_device_is_kept_past_the_run_not_checked_again_as_the_app_starts", () => {

@@ -9,6 +9,7 @@ mod keep;
 mod thumbs;
 mod local;
 mod usage;
+mod verify;
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex as StdMutex};

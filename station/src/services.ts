@@ -15,6 +15,7 @@ import { Cloud as CloudState } from "./cloud/state.ts";
 import { type ControlPlaneShape, makeControlPlane } from "./cloud/plane.ts";
 import type { Provider } from "./cloud/provider.ts";
 import { type Mesh, loadMesh } from "./mesh/native.ts";
+import { verifyWith } from "./cloud/lock.ts";
 import { Readers as ReaderPool } from "./read/pool.ts";
 import { makeStore } from "./read/store.ts";
 import { apiOf, entryViews, spokenIn } from "./read/views.ts";
@@ -413,5 +414,10 @@ export class AdminApi extends Context.Service<AdminApi, Admin>()("stillfail/Admi
 
 /// The native mesh addon.
 export class MeshNative extends Context.Service<MeshNative, Mesh>()("stillfail/MeshNative") {
-  static readonly layer = Layer.effect(MeshNative, Effect.sync(loadMesh));
+  // (and the lock's and the vault's signatures checked by its libcrux from now on, where it has it: cloud/lock.ts)
+  static readonly layer = Layer.effect(MeshNative, Effect.sync(() => {
+    const mesh = loadMesh();
+    if (mesh.verify) verifyWith((alg, key, signature, message) => mesh.verify!(alg, key, signature, message));
+    return mesh;
+  }));
 }

@@ -28,6 +28,9 @@ napi = { version = "3", features = ["async", "tokio_rt"] }
 napi-derive = "3"
 noq-proto = { version = "1", default-features = false }
 sha2 = "0.10"
+# Signatures checked by formally verified implementations (src/verify.rs), as a native app's shell checks them.
+libcrux-ed25519 = { version = "=0.0.10", default-features = false }
+libcrux-ecdsa = { version = "=0.0.9", default-features = false }
 # Thumbnails (src/thumbs.rs): exactly as mesh/app builds them (mesh/Cargo.lock), so both stations make the same bytes;
 # the codecs under `image` pinned too (Cargo.lock is not kept here).
 image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }

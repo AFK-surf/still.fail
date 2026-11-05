@@ -35,7 +35,7 @@ import { CloudSync } from "./sync/cloud.ts";
 import { Priority, Scheduler } from "./sync/scheduler.ts";
 import { Kind, SAMPLE, Tracer } from "./trace.ts";
 import { spentClock } from "./spent.ts";
-import { keepVerified } from "./vault/verified.ts";
+import { checkWith, keepVerified } from "./vault/verified.ts";
 import { Wakes, WakingHost } from "./wake.ts";
 import { Workspaces } from "./workspace.ts";
 import { install as installStationCalls } from "./station/calls.ts";
@@ -213,6 +213,8 @@ export class Core {
       yield* inner.data.open(inner.accounts.list().map((a) => a.sub));
       // (signatures checked once on this device, kept with its own values: vault/verified.ts)
       keepVerified({ get: (k) => inner.data.device.get("verified", k), put: (k, ok) => void inner.data.device.put("verified", k, ok) });
+      // (checked by the host's own, where it has one: a native app's shell, libcrux)
+      checkWith(inner.host.verify ? (alg, key, signature, message) => inner.host.verify!(alg, key, signature, message) : null);
       prefs.followLang(inner.data);
       prefs.followApp(inner.data);
       // What goes out is what the clients' types say (client/core-ts/src/shapes/schema.ts).
