@@ -247,6 +247,68 @@ test "laid out otherwise by a signal, where a box was laid out read as it was bu
   t.clock_frame()
   t.clock_frame()
   assert_eq(t.built_why(), "")
+test "a tell a build says once (a page left): told once, and the frames after it of the look alone, as before it" {
+  let poke = @signals.signal(0)
+  let seen = Ref(0)
+  let told = Ref(0)
+  let t = Tester::new(fn(c) {
+    // (read, its change showing nothing: what is built of it the same, the tell its only work)
+    let n = poke.get()
+    c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+      c.text("waiting", size=12.0) |> ignore
+      let mark = c.box(w=Px(20.0), h=Px(8.0), bg=0x3366CCFFL, fn() {  })
+      c.cycle_look(mark, looks_turn_ms, fn(f) { look(rot=f * 6.283185307179586) })
+    })
+    |> ignore
+    if n != seen.val {
+      seen.val = n
+      c.after_build("once", fn() { told.val = told.val + 1 })
+    }
+  })
+  t.clock_frame()
+  t.clock_frame()
+  poke.set(1)
+  t.clock_frame()
+  assert_true(t.built_why().has_prefix("what it read changed"), msg=t.built_why())
+  assert_eq(told.val, 1)
+  // (sent by that build: nothing of it for the next to build again, whether the next tells it or not)
+  t.clock_frame()
+  assert_eq(t.built_why(), "")
+  t.clock_frame()
+  assert_eq(t.built_why(), "")
+  assert_eq(told.val, 1)
+}
+
+///|
+test "a tell a build goes on saying, said otherwise: the frame after it built whole, as it changes" {
+  let what = @signals.signal("a")
+  let told : Array[String] = []
+  let t = Tester::new(fn(c) {
+    let w = what.get()
+    c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+      c.text("waiting", size=12.0) |> ignore
+      let mark = c.box(w=Px(20.0), h=Px(8.0), bg=0x3366CCFFL, fn() {  })
+      c.cycle_look(mark, looks_turn_ms, fn(f) { look(rot=f * 6.283185307179586) })
+    })
+    |> ignore
+    // (said by every build: what it tells goes on, under a key of what it is)
+    c.after_build("keeps " + w, fn() { told.push(w) })
+  })
+  t.clock_frame()
+  t.clock_frame()
+  t.clock_frame()
+  what.set("b")
+  t.clock_frame()
+  assert_true(t.built_why().has_prefix("what it read changed"), msg=t.built_why())
+  // (what it goes on telling changed: what that does read by the frame after it, built whole)
+  t.clock_frame()
+  assert_eq(t.built_why(), "it told outside otherwise")
+  // (told on, the same again each frame built: then the frames after it of the look alone)
+  t.clock_frame()
+  t.clock_frame()
+  t.clock_frame()
+  assert_eq(t.built_why(), "")
+  assert_true(told.contains("b"))
 }
 
 ///|
