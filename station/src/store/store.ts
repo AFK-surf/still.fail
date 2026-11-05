@@ -24,7 +24,7 @@ import {
   type SessionBusy, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
   type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, type InWorkspace, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
   byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
-  CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
+  CC_THREADS_SQL, LAST_MESSAGE, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addRuntimeSessionRuntime, hasRuntimeOrderIndex, addCardOutcomes, addListState, addLetters, addPendingCards, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle, addLeftColumn } from "./schema.ts";
 import { installUsageCompactions, usageCompactionsReady } from "./usage-compactions.ts";
@@ -44,6 +44,7 @@ import { RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiv
 import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
 import { installSessionListIndex } from "./session-list-index.ts";
 import { installSessionBindingsIndex, SESSION_BINDINGS_DELETE, SESSION_BINDINGS_EXISTS, sessionBindingsReady } from "./session-bindings-index.ts";
+import { ARCHIVE_KEEP_EXISTS, ARCHIVE_PIN_EXISTS, archiveMarksReady, installArchiveMarkIndex } from "./archive-mark-index.ts";
 import { installSessionUpJobs, SESSION_UP_JOB, SESSION_UP_JOBS, sessionUpJobsReady } from "./session-up-jobs.ts";
 import { installSessionCounts, sessionCountsReady, SESSION_COUNT_TOTAL, SESSION_COUNT_CONNECT,
   SESSION_COUNTS, SESSION_COUNTS_VISIBLE, SESSION_COUNTS_HOME } from "./session-counts.ts";
@@ -376,6 +377,7 @@ export class Store {
       installSessionCounts(db);
       installSessionListIndex(db);
       installSessionBindingsIndex(db);
+      installArchiveMarkIndex(db);
       installSessionUpJobs(db);
       addCardOutcomes(db);
       installUsageChatStats(db);
@@ -1383,7 +1385,7 @@ export class Store {
 
   /// The thread's latest message as merged, for lists.
   lastMessage(thread: number): MessageRow | null {
-    const r = this.#one("SELECT * FROM merged WHERE thread = ? ORDER BY n DESC LIMIT 1", thread);
+    const r = this.#one(LAST_MESSAGE, thread);
     return r ? toMessage(r) : null;
   }
 
@@ -1822,55 +1824,11 @@ export class Store {
     return new Set(this.#all("SELECT DISTINCT session FROM pins").map((r) => r.session));
   }
 
-  /// The marks needed by one automatic archive pass. A large history is sought by viewer for each candidate; a small
-  /// table, many viewers, or many candidates is read once instead. Neither choice needs an index of its own.
+  /// The marks needed by one automatic archive pass. Until old marks are prepared, keep every candidate safely.
   archiveMarks(): { pinned: (session: string) => boolean; kept: (thread: number) => boolean } {
-    return {
-      pinned: this.#archiveMark("pins", "session", () => this.pinnedSessions()),
-      kept: this.#archiveMark("kept_chats", "thread", () => this.keptChats(null)),
-    };
-  }
-
-  #archiveMark<K extends string | number>(table: "pins" | "kept_chats", key: "session" | "thread", all: () => Set<K>): (key: K) => boolean {
-    let initialized = false;
-    let complete: Set<K> | null = null;
-    let viewers = "[]";
-    let viewerCount = 0;
-    let remaining = 0;
-    const answers = new Map<K, boolean>();
-    const collect = () => { complete = all(); };
-    return (value) => {
-      const answer = answers.get(value);
-      if (answer !== undefined) return answer;
-      if (!initialized) {
-        initialized = true;
-        // A rowid span bounds the number of rows, even if old rows were deleted or explicit rowids were used. Cap the
-        // budget in SQL so very large rowids never have to be represented as a JavaScript integer.
-        remaining = this.#one(`WITH bounds(span) AS (
-          SELECT (SELECT MAX(rowid) FROM ${table}) - (SELECT MIN(rowid) FROM ${table})
-        ) SELECT CASE WHEN COALESCE(span, 0) < 512 THEN 0
-          WHEN span >= 2097152 THEN 32768 ELSE CAST(span / 64 AS INTEGER) END AS budget FROM bounds`)!.budget;
-        if (remaining > 0) {
-          const rows = this.#all(`WITH RECURSIVE viewers(viewer, n) AS (
-            SELECT (SELECT viewer FROM ${table} ORDER BY viewer LIMIT 1), 1
-            UNION ALL SELECT (SELECT viewer FROM ${table} WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.n + 1
-              FROM viewers v WHERE v.viewer IS NOT NULL AND v.n < ?1
-          ) SELECT viewer FROM viewers WHERE viewer IS NOT NULL`, remaining + 1);
-          viewerCount = rows.length;
-          if (viewerCount > remaining) remaining = 0;
-          else viewers = JSON.stringify(rows.map((row) => row.viewer));
-        }
-      }
-      if (complete === null && remaining < viewerCount) collect();
-      if (complete === null && remaining === 0) collect();
-      if (complete !== null) return complete.has(value);
-      const found = this.#one(
-        `SELECT 1 FROM ${table} WHERE viewer IN (SELECT value FROM json_each(?2)) AND ${key} = ?1 LIMIT 1`, value, viewers,
-      ) !== undefined;
-      remaining -= viewerCount;
-      answers.set(value, found);
-      return found;
-    };
+    if (!archiveMarksReady(this.db)) return { pinned: () => true, kept: () => true };
+    return { pinned: (key) => this.#one(ARCHIVE_PIN_EXISTS, key) !== undefined,
+      kept: (id) => this.#one(ARCHIVE_KEEP_EXISTS, id) !== undefined };
   }
 
   /// Pins a chat to the top of a viewer's list, or lets it go. Pinned again, it keeps when it was first pinned.

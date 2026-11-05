@@ -984,11 +984,29 @@ fn leave_archived(item : ChatItem) -> Unit {
 let archive_at_share : Double = 0.35
 
 ///|
-/// How fast a fling left must be (points per ms) to archive a row that went at least `fling_from` across.
-let fling_speed : Double = 0.5
+/// How fast a fling left must be (points per ms) to archive a row that went at least `fling_from_share` of the line
+/// across: a deliberate flick, not the sideways drift of a finger scrolling the list.
+let fling_speed : Double = 1.0
 
 ///|
-let fling_from : Double = 16.0
+/// How far towards the line (`archive_at_share`) a row flung left must have gone for the fling to archive it.
+let fling_from_share : Double = 0.5
+
+///|
+/// Whether a row `w` wide let go `at` across (to the left: negative), its finger going `vx` (points per ms), is
+/// archived: past the line, or flung left from past `fling_from_share` of the way to it.
+fn swipe_archives(at : Double, w : Double, vx : Double) -> Bool {
+  let line = w * archive_at_share
+  at < -line || (vx < -fling_speed && at < -line * fling_from_share)
+}
+
+///|
+/// Whether a finger moved (dx, dy) from where it went down on a row takes it for the row's swipe to archive: left
+/// past the slop and plainly across (at most half as far up or down), so one scrolling the list that drifts a little
+/// sideways as it sets off scrolls it.
+fn swipe_claims(dx : Double, dy : Double) -> Bool {
+  dx < -@ui.touch_slop() && dx.abs() > 2.0 * dy.abs()
+}
 
 ///|
 /// How long a swiped row's 归档 takes to fill in ink. Let go to archive, it goes off to the left on a Move as long as
@@ -1029,8 +1047,7 @@ fn swipe_to_archive(
       if d.take_end() {
         let at = off.get()
         let v = d.vx * 1000.0
-        let fling = d.vx < -fling_speed && at < -fling_from
-        if at < -width * archive_at_share || fling {
+        if swipe_archives(at, width, d.vx) {
           if busy {
             back(v)
           } else if item.swipe_ask is Some(_) {

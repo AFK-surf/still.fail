@@ -57,6 +57,14 @@ test("list: folders first, names by their numbers; the station's own data left o
   assert.equal(season.path, "Season 1");
 });
 
+test("list: Ogg and 3GPP videos keep their media types", async () => {
+  const { root, drive } = place();
+  for (const name of ["clip.ogv", "clip.3GP", "clip.3g2"]) writeFileSync(join(root, "Season 1", name), "video");
+  const entries = (await drive.list(root, "Season 1")).entries;
+  const type = (name: string) => entries.find((e) => e.name === name)?.type;
+  assert.deepEqual([type("clip.ogv"), type("clip.3GP"), type("clip.3g2")], ["video/ogg", "video/3gpp", "video/3gpp2"]);
+});
+
 test("a path stays in its root: `..`, a link out, the station's data, a root not named", async () => {
   const { base, root, drive } = place();
   symlinkSync(join(base, "outside.txt"), join(root, "out-link"));

@@ -480,10 +480,15 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Uni
       Fold =>
         e.current = Some({ ..t, pose: Float, clock: pose_clock(Float.ms(), Some(at)), span: Float.ms(), warp: None })
       Float => {
-        if sending != -1.0 {
+        // (held till words sent from here land, as their way declared: built again then, their flight's end read by
+        // nothing)
+        if sending == -2.0 || sending > at {
           if sending > e.held_until {
             e.held_until = sending
             c.moving(e.mover, e as &@ui.Moving)
+          }
+          if sending >= 0.0 {
+            c.wake_in(dmax(sending - now, 0.0))
           }
           break
         }

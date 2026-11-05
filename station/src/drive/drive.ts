@@ -145,7 +145,7 @@ export function typeOf(name: string): string {
 
 const TYPES: Record<string, string> = {
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml", heic: "image/heic", bmp: "image/bmp",
-  mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm", mkv: "video/x-matroska", avi: "video/x-msvideo", ts: "video/mp2t",
+  mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm", ogv: "video/ogg", "3gp": "video/3gpp", "3g2": "video/3gpp2", mkv: "video/x-matroska", avi: "video/x-msvideo", ts: "video/mp2t",
   mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", flac: "audio/flac", wav: "audio/wav", ogg: "audio/ogg", opus: "audio/opus",
   pdf: "application/pdf", zip: "application/zip",
   txt: "text/plain; charset=utf-8", md: "text/markdown; charset=utf-8", markdown: "text/markdown; charset=utf-8", log: "text/plain; charset=utf-8",

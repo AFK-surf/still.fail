@@ -611,6 +611,15 @@ export const CLOSED_THREAD_SINCE = "SELECT thread, n, viewer, at, rowid AS order
 /// A thread's people's messages since `?2` (the items of a sidebar a change touched), by schema.ts entries_people_since.
 export const SAID_SINCE = "SELECT thread, n FROM entries WHERE thread = ? AND author_kind = 'person' AND kind = 'message' AND at >= ?";
 
+/// The last message as merged, including letters kept among old entries. Seek each kind before reading its edit.
+/// A partially upgraded old store may lack entries_letters; SQLite still reads it there, using the thread's entries.
+export const LAST_MESSAGE = `SELECT * FROM merged WHERE thread = ?1 AND n = (
+  SELECT MAX(n) FROM (
+    SELECT (SELECT n FROM entries INDEXED BY entries_said WHERE thread = ?1 AND kind = 'message' AND letter IS NULL ORDER BY n DESC LIMIT 1) AS n
+    UNION ALL SELECT (SELECT n FROM entries WHERE thread = ?1 AND kind = 'message' AND letter IS NOT NULL ORDER BY n DESC LIMIT 1)
+  )
+)`;
+
 /// The usage page's calls are kept added up by this much time (schema.ts USAGE_QUARTERS): a quarter of an hour, which
 /// every time zone's offset is a whole number of.
 export const QUARTER_MS = 900_000;

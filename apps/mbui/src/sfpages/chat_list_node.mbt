@@ -8,6 +8,7 @@
 ///|
 /// Chat `r`'s list in `v`: `view` and `entries` as the core says them now (none while it is read the first time),
 /// `top` the room over its first row, `foot` under its last (the composer's), `core` the settings' over its workspace;
+/// `composer_across` the same width the page gives its composer, so the floating actions align with it;
 /// `follows` said whether it is kept at its end, as that changes.
 pub fn chat_list_node(
   v : @view.View,
@@ -19,6 +20,7 @@ pub fn chat_list_node(
   foot : () -> Double,
   core : Core,
   foot_gap? : Double = 0.0,
+  composer_across? : () -> Double,
   follows? : @signals.Signal[Bool] = @signals.signal(true, same=fn(a, b) { a == b }),
 ) -> ChatListNode {
   let rk = r.station + "\u{1}" + r.session
@@ -831,6 +833,13 @@ pub fn chat_list_node(
       }
     })
   }
+  // Both actions stand six points inside the composer's end. The page supplies the same width it gives the
+  // composer, including a panel's corners; a list made alone falls back to the width in its own room.
+  let float_right = fn() {
+    let w = v.laid_size_told().map(fn(z) { z.0 }).unwrap_or(0.0)
+    let cw = composer_across.map(fn(f) { f() }).unwrap_or(composer_width(w))
+    (w - cw) / 2.0 + float_in
+  }
   v.reacts(fn() { asking() }, fn(a) { rd0.ask = a })
   v.box(fn(f) {
     f
@@ -838,9 +847,8 @@ pub fn chat_list_node(
     .lies_along(Is(End))
     .lines_up(Is(Some(End)))
     .padding(By(fn() {
-      let w = v.laid_size_told().map(fn(z) { z.0 }).unwrap_or(0.0)
       let above = !follows.get() || view().map(fn(cv) { cv.newer }).unwrap_or(false)
-      (0.0, 0.0, (w - composer_width(w)) / 2.0 + float_in, foot() + float_lift + (if above { float_above } else { 0.0 }))
+      (0.0, 0.0, float_right(), foot() + float_lift + (if above { float_above } else { 0.0 }))
     }))
     |> ignore
     f.show(asking, fn(b) {
@@ -887,8 +895,7 @@ pub fn chat_list_node(
     .lies_along(Is(End))
     .lines_up(Is(Some(End)))
     .padding(By(fn() {
-      let w = v.laid_size_told().map(fn(z) { z.0 }).unwrap_or(0.0)
-      (0.0, 0.0, (w - composer_width(w)) / 2.0 + float_in, foot() + float_lift)
+      (0.0, 0.0, float_right(), foot() + float_lift)
     }))
     |> ignore
     f.show(fn() { !follows.get() || view().map(fn(cv) { cv.newer }).unwrap_or(false) }, fn(b) {

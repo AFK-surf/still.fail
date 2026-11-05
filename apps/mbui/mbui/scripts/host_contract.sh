@@ -678,6 +678,21 @@ INSTALL
       echo "play contract ($H): the host said \"$have\", not \"$want\""; tail -30 $O/play.log; exit 1
     fi
     echo "play contract ($H): $have"
+    if [ "$H" = mac ]; then
+      # System WebM playback reads through the app, plays to the end and gives it a frame.
+      play_mac_format() {
+        local name=$1 file=$2 kind=$3 log=$O/play-$1.log
+        local vars="$kind=1 MBUI_PLAYCHECK=$(base64 < "$file" | tr -d '\n\r')" have
+        local want="PLAYCHECK ready 1000 64x48|PLAYCHECK ended|PLAYCHECK grabbed"
+        run "$vars" "$log" || true
+        have=$(grep -a "PLAYCHECK" "$log" | sed 's/.*PLAYCHECK/PLAYCHECK/' | tr -d '\r' | paste -sd'|' -)
+        if [ "$have" != "$want" ]; then
+          echo "$name play contract ($H): the host said \"$have\", not \"$want\""; tail -30 "$log"; return 1
+        fi
+        echo "$name play contract ($H): $have"
+      }
+      play_mac_format WebM test/host/playcheck.webm MBUI_PLAYCHECK_WEBM
+    fi
     if [ "$H" = android ]; then
       # (sent behind as it plays, at a tenth of its speed, and brought back: paused as the app went, not played on
       # behind to its end; the app's log and the system's events from its start, as scripts/android-keyboard.sh's)
