@@ -1,6 +1,7 @@
 // An incremental default-home index. Message ordering, overlap with the explicit home workspace, and the real
 // reader are not connected yet: this module cannot certify a complete page.
 import type { DatabaseSync } from "node:sqlite";
+import type { RecentChatPage } from "./chat-list-index.ts";
 import { recentHomeChatStep } from "./chat-list-home-source.ts";
 import { acknowledgeRecentScopeSession, installRecentScopeJournal, trackRecentScope } from "./chat-list-scope-journal.ts";
 import { recentScopeSessionThreadsStep } from "./chat-list-scope-source.ts";
@@ -166,4 +167,19 @@ export function settleRecentHomeChatStep(db: DatabaseSync, limit = 64): { chatsD
     db.exec("COMMIT");
     return { chatsDone: done, visited: batch.visited };
   } catch (error) { db.exec("ROLLBACK"); throw error; }
+}
+
+/// Prototype for the default range alone; do not expose it until message-order changes and the home union are
+/// covered. It reads count and rows on the same snapshot and waits for the journals currently implemented.
+export function readPreparedDefaultHome(db: DatabaseSync, limit: number): RecentChatPage | null {
+  if (limit === 0) return { ids: [], total: 0 };
+  db.exec("SAVEPOINT recent_home_page");
+  try {
+    const meta = db.prepare("SELECT scan_done, total FROM recent_home_meta WHERE id = 1").get() as { scan_done: number; total: number };
+    if (meta.scan_done !== 1 || db.prepare("SELECT 1 FROM recent_home_dirty LIMIT 1").get() !== undefined ||
+        db.prepare("SELECT 1 FROM recent_scope_session_dirty WHERE kind = 0 AND ws = '' LIMIT 1").get() !== undefined) return null;
+    const rows = db.prepare("SELECT thread FROM recent_home_rows INDEXED BY recent_home_order ORDER BY at DESC, said_at DESC, created_at DESC, thread DESC LIMIT ?")
+      .all(limit) as { thread: number }[];
+    return { ids: rows.map((row) => row.thread), total: meta.total };
+  } finally { db.exec("RELEASE recent_home_page"); }
 }

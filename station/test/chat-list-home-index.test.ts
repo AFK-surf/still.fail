@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { constants } from "node:sqlite";
 import { test } from "node:test";
 import { recentChatIds } from "../src/store/chat-list.ts";
-import { installRecentHomeIndex, scanRecentHomeChatsStep, settleRecentHomeChatStep, settleRecentHomeSessionStep } from "../src/store/chat-list-home-index.ts";
+import { installRecentHomeIndex, readPreparedDefaultHome, scanRecentHomeChatsStep, settleRecentHomeChatStep, settleRecentHomeSessionStep } from "../src/store/chat-list-home-index.ts";
 import { Store } from "../src/store/store.ts";
 
 test("old default-home chats are built in bounded steps while new chats arrive behind the cursor", () => {
@@ -121,5 +121,23 @@ for (const recursive of [false, true]) test(`a session moving again while home c
     assert.deepEqual(rows.map((row) => row.thread), expected.ids);
     assert.equal(db.prepare("SELECT total FROM recent_home_meta").get()?.total, expected.total);
     assert.equal(expected.total, 8);
+  } finally { store.close(); }
+});
+
+for (const recursive of [false, true]) test(`a message time change cannot leave the default home order stale (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    const first = store.openThread("ember", "EMBER", "first", "First", null).id;
+    const second = store.openThread("ember", "EMBER", "second", "Second", null).id;
+    const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',?)");
+    put.run(first, 1);
+    put.run(second, 2);
+    installRecentHomeIndex(db);
+    while (!scanRecentHomeChatsStep(db, 2).scanDone) { /* Enqueue the old chats. */ }
+    while (!settleRecentHomeChatStep(db, 2).chatsDone) { /* Account for the old chats. */ }
+    assert.deepEqual(readPreparedDefaultHome(db, 5), { ids: [second, first], total: 2 });
+    db.prepare("UPDATE entries SET at = 30 WHERE thread = ? AND n = 1").run(first);
+    assert.equal(readPreparedDefaultHome(db, 5), null, "the changed order has not yet been accounted");
   } finally { store.close(); }
 });
