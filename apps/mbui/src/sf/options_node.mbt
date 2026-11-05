@@ -135,7 +135,7 @@ fn option_row_node(
   |> ignore
   // (its label and what it leads to; one that waits, why under them)
   row.box(fn(words) {
-    words.grow(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+    words.grow(Is(1.0)).basis(Is(Some(0.0))).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
     words.box(fn(w) {
       w.alpha(By(fn() { woken.shown(w) })) |> ignore
       w.box(fn(l) {

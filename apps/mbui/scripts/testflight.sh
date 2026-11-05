@@ -97,8 +97,12 @@ cp -R "$APPDIR" "$T/Payload/"
 (cd "$T" && zip -qry app.ipa Payload)
 # Check again after build/sign, and after environment approval; no automatic retry of upload.
 bash "$D/testflight-guard.sh" checkout
-# Built and signed beside the tests: uploaded only once they all passed.
-bash "$D/../../../scripts/testflight-tests.sh"
+# Built and signed beside the tests: uploaded only once they all passed, unless the dispatch said not to wait for them.
+if [ "${RELEASE_SKIP_TESTS:-}" = true ]; then
+  echo '::warning::skip_tests: uploading without waiting for the tests'
+else
+  bash "$D/../../../scripts/testflight-tests.sh"
+fi
 asc_preflight
 # altool changed its option spelling in newer Xcode. Select from this runner's
 # advertised help, never trial-upload/retry against Apple. (No --validate-app first: an upload is validated as it is
