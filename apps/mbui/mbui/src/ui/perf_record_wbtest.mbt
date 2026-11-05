@@ -28,6 +28,9 @@ test "the frame probe's summary goes into the performance record every 5 s while
   let frames = lines.filter(fn(l) { l.has_prefix("frames: fps=") })
   assert_eq(frames.length(), 1)
   assert_true(frames[0].contains(" main_busy=") && frames[0].contains(" slow="))
+  // (the window's tree's part of each frame first among its phases; the memory held, the most of the span's frames
+  // too: none on the fake host)
+  assert_true(frames[0].contains(" avg tree/msgs/build/layout/paint/present=[") && frames[0].contains(" mem=-1MB mem_peak=-1MB "), msg=frames[0])
   // its seconds' busiest beside its average, its span, what its last frame was for
   assert_true(frames[0].contains(" fps_peak=1 ") && frames[0].contains(" span=5") && frames[0].contains(" (last: "), msg=frames[0])
   // what they were for, the heaviest first, each its work and count
