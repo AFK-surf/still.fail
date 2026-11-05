@@ -149,7 +149,9 @@ async function claudeUsageResponse(base: string, token: string, lang: Lang): Pro
           .filter((k) => body[k] !== null && typeof body[k] === "object" && !Array.isArray(body[k]) && labels[k] !== undefined)
           .map((k) => ({ label: labels[k]!, usedPercent: percent(body[k].utilization), resetsAt: at(body[k].resets_at), minutes: k === "five_hour" ? 300 : WEEK_MINUTES }))
       : [];
-  return [quota("ok", windows, null), false];
+  const q = quota("ok", windows, null);
+  if (typeof body?.extra_usage?.is_enabled === "boolean") q.extraUsage = body.extra_usage.is_enabled;
+  return [q, false];
 }
 
 const isObject = (v: unknown): v is Record<string, any> => v !== null && typeof v === "object" && !Array.isArray(v);

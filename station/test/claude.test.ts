@@ -245,7 +245,7 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     await session.dispose();
   });
 
-  test("Fast on an Anthropic key is Claude Code's fastMode, as the session is set else as its profile is, and needs a new process", async () => {
+  test("Fast on an Anthropic key or a Claude subscription is Claude Code's fastMode, as the session is set else as its profile is, and needs a new process", async () => {
     const d = driver();
     const fastMode = async (o: OpenOptions & { dump: string }) => {
       const { push, until } = listen();
@@ -266,6 +266,10 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     assert.equal(sessionOff, false, "the session's own over its profile's, said so a /fast in its home does not stay on");
     const [, off] = await fastMode(keyed());
     assert.equal(off, false);
+    // A Claude subscription's goes to Claude Code too: it runs Fast while the account's usage credits are on.
+    const sub = options({ fast: true });
+    const [onSubscription, subscriptionFast] = await fastMode({ ...sub, profile: { ...sub.profile, access: { kind: "subscription" } } });
+    assert.equal(subscriptionFast, true);
     const [notKeyed, other] = await fastMode(options({ fast: true }));
     assert.equal(other, undefined, "not an account that takes it");
     // Another Fast is not taken in place; the same is, with another model.
@@ -274,7 +278,7 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     assert.equal(standard.retune?.({ ...o, model: "m2", fast: true }), false);
     assert.equal(standard.retune?.({ ...o, model: "m2", fast: undefined }), false, "back to its profile's, which is on");
     assert.equal(notKeyed.retune?.({ ...options({ fast: false }), model: "m2" }), true);
-    await Promise.all([onProfile, standard, notKeyed].map((s) => s.dispose()));
+    await Promise.all([onProfile, standard, onSubscription, notKeyed].map((s) => s.dispose()));
   });
 
   test("a Kimi Code sign-in's key is read from its home by Claude Code's key helper, not given it", async () => {

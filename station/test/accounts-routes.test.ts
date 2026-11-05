@@ -1008,6 +1008,20 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
+  test("a Claude subscription has a Fast default only while its allowance says its usage credits are on", async () => {
+    let extraUsage: boolean | undefined;
+    const t = await rig({ readQuota: async () => ({ state: "ok", windows: [], detail: null, checkedAt: 0, ...(extraUsage === undefined ? {} : { extraUsage }) }) });
+    assert.equal((await t.call("PUT", "/profiles/cc", { fast: true, access: { kind: "subscription" } }))[0], 200);
+    assert.equal(t.view("cc")!.fast, null, "not known yet");
+    extraUsage = false;
+    await t.call("POST", "/profiles/cc/quota");
+    assert.equal(t.view("cc")!.fast, null, "credits off");
+    extraUsage = true;
+    await t.call("POST", "/profiles/cc/quota");
+    assert.equal(t.view("cc")!.fast, true);
+    await t.close();
+  });
+
   test("the automatic decisions use a model a profile verified, set by a workspace manager", async () => {
     const t = await rig({
       discover: async (profile) =>

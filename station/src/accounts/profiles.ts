@@ -59,6 +59,9 @@ export type ProfileQuota = {
   resetExpiries?: number[];
   /// The subscription tier, when the provider reports it with the allowance.
   plan?: string;
+  /// Whether a Claude subscription has usage credits (extra usage) turned on: what its Fast is billed to, so only then
+  /// can it run Fast.
+  extraUsage?: boolean;
   detail: string | null;
   checkedAt: number;
   /// Asked with a login that turned out to be over: its profile's check is updated. Not kept in the allowance.
