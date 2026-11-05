@@ -7,7 +7,9 @@
 name: mbui-ci
 on:
   push:
-    branches: [main]
+    # (arch/next too: the units it builds kept for the pull requests into it, which can read its caches and not one
+    # another's; main's are too far from it to spare them building most of them again)
+    branches: [main, arch/next]
     paths: ["apps/mbui/mbui/**", ".github/workflows/mbui-ci.yml", ".github/actions/mbui-moonbit/**"]
   pull_request:
     paths: ["apps/mbui/mbui/**", ".github/workflows/mbui-ci.yml", ".github/actions/mbui-moonbit/**"]
@@ -101,7 +103,7 @@ jobs:
         shell: bash
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - uses: ./.github/actions/mbui-moonbit
-      # moon's own build as main's newest run left it (not the units' store, nor each test program's objects: the store
+      # moon's own build as main's (or arch/next's) newest run left it (not the units' store, nor each test program's objects: the store
       # keeps those), over it moon making again only what changed; each file an mtime of its content for that
       - uses: actions/cache/restore@v4
         id: moon
@@ -169,7 +171,7 @@ jobs:
         with:
           path: ${{ env.MBC_STORE }}
           key: ${{ env.BUILD_KEY }}
-      - if: always() && github.ref == 'refs/heads/main' && steps.moon.outputs.cache-hit != 'true'
+      - if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arch/next') && steps.moon.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: |
