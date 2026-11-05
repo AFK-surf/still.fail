@@ -231,6 +231,12 @@ export class PhoneGrants {
     return this.#load("SELECT body FROM adb_requests WHERE owner = ? AND status IN ('pending', 'granted')", owner.toLowerCase())
       .filter((r) => (workspace === undefined || this.#workspace(r) === workspace) && this.#live(r)).map((r) => this.shown(r));
   }
+  /// Internal phone-link work needs live grants, not the pending requests or their displayed chat titles. Expired
+  /// grants are still ended here, just as when listing them to their owner.
+  grantedOfOwner(owner: string): PhoneRequest[] {
+    return this.#load("SELECT body FROM adb_requests WHERE owner = ? AND status = 'granted'", owner.toLowerCase())
+      .filter((r) => r.status === "granted" && this.#live(r));
+  }
   /// Every grant live now, of everyone (the phones lent to this station are lent for these).
   live(): PhoneRequest[] {
     return this.#load("SELECT body FROM adb_requests WHERE status = 'granted'").filter((r) => this.#live(r));
@@ -338,8 +344,8 @@ export class PhoneGrants {
   linked(owner: string, state: { adb: string; message?: string } | null) {
     const link = state === null ? "gone" : state.adb;
     if (!LINKS.has(link)) return;
-    for (const r of this.ofOwner(owner)) {
-      if (r.status !== "granted" || r.link === link) continue;
+    for (const r of this.grantedOfOwner(owner)) {
+      if (r.link === link) continue;
       r.link = link;
       const tell = (link === "connected" || link === "unpaired") && r.toldLink !== link;
       if (tell) r.toldLink = link;
