@@ -1,5 +1,5 @@
-// An incremental default-home index. Message ordering, overlap with the explicit home workspace, and the real
-// reader are not connected yet: this module cannot certify a complete page.
+// An incremental default-home index. Overlap with the explicit home workspace and the real reader are not
+// connected yet: this module cannot certify a complete home page.
 import type { DatabaseSync } from "node:sqlite";
 import type { RecentChatPage } from "./chat-list-index.ts";
 import { recentHomeChatStep } from "./chat-list-home-source.ts";
@@ -13,6 +13,15 @@ const mark = (thread: string) => `
 const conflictingThread = `(SELECT t.id FROM threads t WHERE t.surface = NEW.surface AND t.channel = NEW.channel
   AND t.thread_ts = NEW.thread_ts AND t.id IS NOT NEW.id)`;
 const conflictingMember = `(SELECT thread FROM thread_sessions WHERE rowid = NEW.rowid)`;
+const markOrder = (thread: string) => `INSERT INTO recent_home_order_dirty(thread)
+  SELECT ${thread} WHERE ${thread} IS NOT NULL AND EXISTS (SELECT 1 FROM recent_home_rows WHERE thread = ${thread})
+    AND NOT EXISTS (SELECT 1 FROM recent_home_order_dirty WHERE thread = ${thread});`;
+const insertedSaid = `EXISTS (SELECT 1 FROM thread_state s WHERE s.thread = NEW.thread AND
+  (s.said_n = NEW.n OR (NEW.ts IS NOT NULL AND EXISTS (SELECT 1 FROM entries e WHERE e.thread = s.thread
+    AND e.n = s.said_n AND e.kind = 'message' AND e.ts = NEW.ts))))`;
+const displacedSaid = `EXISTS (SELECT 1 FROM thread_state s JOIN entries e ON e.thread = s.thread AND e.n = s.said_n AND e.kind = 'message'
+  WHERE s.thread = NEW.thread AND (e.n = NEW.n OR (NEW.ts IS NOT NULL AND e.ts = NEW.ts))
+    AND (e.thread IS NOT OLD.thread OR e.n IS NOT OLD.n))`;
 
 /// Install empty tables and triggers, and track session changes in the same transaction as the initial boundary.
 export function installRecentHomeIndex(db: DatabaseSync): void {
@@ -28,6 +37,7 @@ export function installRecentHomeIndex(db: DatabaseSync): void {
         INSERT INTO recent_home_meta SELECT 1, NULL, (SELECT MAX(id) FROM threads),
           NOT EXISTS (SELECT 1 FROM threads LIMIT 1), 0;
         CREATE TABLE recent_home_dirty (thread INTEGER PRIMARY KEY, revision INTEGER NOT NULL);
+        CREATE TABLE recent_home_order_dirty (thread INTEGER PRIMARY KEY);
         CREATE TABLE recent_home_work (thread INTEGER PRIMARY KEY, revision INTEGER NOT NULL, after_session TEXT, seen INTEGER NOT NULL);
         CREATE TABLE recent_home_session_work (session TEXT PRIMARY KEY, revision INTEGER NOT NULL, phase TEXT NOT NULL, after INTEGER);
         CREATE TABLE recent_home_rows (thread INTEGER PRIMARY KEY, at INTEGER NOT NULL, said_at INTEGER NOT NULL, created_at INTEGER NOT NULL);
@@ -42,6 +52,7 @@ export function installRecentHomeIndex(db: DatabaseSync): void {
         CREATE TRIGGER recent_home_thread_change AFTER UPDATE OF id, home ON threads
           WHEN OLD.id IS NOT NEW.id OR OLD.home IS NOT NEW.home BEGIN ${mark("OLD.id")} END;
         CREATE TRIGGER recent_home_thread_move AFTER UPDATE OF id ON threads WHEN OLD.id IS NOT NEW.id BEGIN ${mark("NEW.id")} END;
+        CREATE TRIGGER recent_home_thread_order AFTER UPDATE OF created_at ON threads BEGIN ${markOrder("NEW.id")} END;
         CREATE TRIGGER recent_home_thread_drop AFTER DELETE ON threads BEGIN ${mark("OLD.id")} END;
         CREATE TRIGGER recent_home_member_before_add BEFORE INSERT ON thread_sessions BEGIN ${mark(conflictingMember)} END;
         CREATE TRIGGER recent_home_member_add AFTER INSERT ON thread_sessions BEGIN ${mark("NEW.thread")} END;
@@ -52,6 +63,19 @@ export function installRecentHomeIndex(db: DatabaseSync): void {
         CREATE TRIGGER recent_home_member_change AFTER UPDATE OF thread, session ON thread_sessions
           WHEN OLD.thread IS NOT NEW.thread OR OLD.session IS NOT NEW.session BEGIN ${mark("NEW.thread")} END;
         CREATE TRIGGER recent_home_member_drop BEFORE DELETE ON thread_sessions BEGIN ${mark("OLD.thread")} END;
+        CREATE TRIGGER recent_home_state_add AFTER INSERT ON thread_state BEGIN ${markOrder("NEW.thread")} END;
+        CREATE TRIGGER recent_home_state_change AFTER UPDATE OF thread, said_n ON thread_state
+          WHEN OLD.thread IS NOT NEW.thread OR OLD.said_n IS NOT NEW.said_n BEGIN ${markOrder("OLD.thread")} END;
+        CREATE TRIGGER recent_home_state_move AFTER UPDATE OF thread ON thread_state
+          WHEN OLD.thread IS NOT NEW.thread BEGIN ${markOrder("NEW.thread")} END;
+        CREATE TRIGGER recent_home_state_drop AFTER DELETE ON thread_state WHEN OLD.said_n IS NOT NULL BEGIN ${markOrder("OLD.thread")} END;
+        CREATE TRIGGER recent_home_entry_before_add BEFORE INSERT ON entries WHEN ${insertedSaid} BEGIN ${markOrder("NEW.thread")} END;
+        CREATE TRIGGER recent_home_entry_before_change BEFORE UPDATE OF thread, n, ts ON entries
+          WHEN ${displacedSaid} BEGIN ${markOrder("NEW.thread")} END;
+        CREATE TRIGGER recent_home_entry_change AFTER UPDATE OF thread, n, kind, at ON entries BEGIN ${markOrder("OLD.thread")} END;
+        CREATE TRIGGER recent_home_entry_move AFTER UPDATE OF thread ON entries
+          WHEN OLD.thread IS NOT NEW.thread BEGIN ${markOrder("NEW.thread")} END;
+        CREATE TRIGGER recent_home_entry_drop AFTER DELETE ON entries BEGIN ${markOrder("OLD.thread")} END;
       `);
       trackRecentScope(db, { kind: "home" });
     }
@@ -163,20 +187,48 @@ export function settleRecentHomeChatStep(db: DatabaseSync, limit = 64): { chatsD
     }
     db.prepare("DELETE FROM recent_home_work WHERE thread = ?").run(pending.thread);
     db.prepare("DELETE FROM recent_home_dirty WHERE thread = ? AND revision = ?").run(pending.thread, pending.revision);
+    db.prepare("DELETE FROM recent_home_order_dirty WHERE thread = ?").run(pending.thread);
     const done = db.prepare("SELECT 1 FROM recent_home_dirty LIMIT 1").get() === undefined;
     db.exec("COMMIT");
     return { chatsDone: done, visited: batch.visited };
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
 
-/// Prototype for the default range alone; do not expose it until message-order changes and the home union are
-/// covered. It reads count and rows on the same snapshot and waits for the journals currently implemented.
+/// Update the ordering of at most `limit` already indexed default-home chats without rescanning their members.
+export function settleRecentHomeOrderStep(db: DatabaseSync, limit = 64): { ordersDone: boolean; visited: number } {
+  if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError("recent home order batch must be positive");
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const query = db.prepare("SELECT thread FROM recent_home_order_dirty ORDER BY thread LIMIT ?");
+    query.setReadBigInts(true);
+    const rows = query.all(limit) as { thread: bigint }[];
+    const current = db.prepare(`SELECT COALESCE(e.at, t.created_at) AS at, COALESCE(e.at, 0) AS said_at, t.created_at
+      FROM threads t LEFT JOIN thread_state s ON s.thread = t.id
+      LEFT JOIN entries e ON e.thread = t.id AND e.n = s.said_n AND e.kind = 'message' WHERE t.id = ?`);
+    current.setReadBigInts(true);
+    const update = db.prepare(`UPDATE recent_home_rows SET at = ?, said_at = ?, created_at = ? WHERE thread = ?
+      AND (at IS NOT ? OR said_at IS NOT ? OR created_at IS NOT ?)`);
+    const clean = db.prepare("DELETE FROM recent_home_order_dirty WHERE thread = ?");
+    for (const item of rows) {
+      const row = current.get(item.thread) as { at: bigint; said_at: bigint; created_at: bigint } | undefined;
+      if (row) update.run(row.at, row.said_at, row.created_at, item.thread, row.at, row.said_at, row.created_at);
+      clean.run(item.thread);
+    }
+    const done = db.prepare("SELECT 1 FROM recent_home_order_dirty LIMIT 1").get() === undefined;
+    db.exec("COMMIT");
+    return { ordersDone: done, visited: rows.length };
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+}
+
+/// Prototype for the default range alone; do not expose it until the home union is covered. It reads count and
+/// rows on the same snapshot and waits for the journals currently implemented.
 export function readPreparedDefaultHome(db: DatabaseSync, limit: number): RecentChatPage | null {
   if (limit === 0) return { ids: [], total: 0 };
   db.exec("SAVEPOINT recent_home_page");
   try {
     const meta = db.prepare("SELECT scan_done, total FROM recent_home_meta WHERE id = 1").get() as { scan_done: number; total: number };
     if (meta.scan_done !== 1 || db.prepare("SELECT 1 FROM recent_home_dirty LIMIT 1").get() !== undefined ||
+        db.prepare("SELECT 1 FROM recent_home_order_dirty LIMIT 1").get() !== undefined ||
         db.prepare("SELECT 1 FROM recent_scope_session_dirty WHERE kind = 0 AND ws = '' LIMIT 1").get() !== undefined) return null;
     const rows = db.prepare("SELECT thread FROM recent_home_rows INDEXED BY recent_home_order ORDER BY at DESC, said_at DESC, created_at DESC, thread DESC LIMIT ?")
       .all(limit) as { thread: number }[];

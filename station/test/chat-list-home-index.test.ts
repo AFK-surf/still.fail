@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { constants } from "node:sqlite";
 import { test } from "node:test";
 import { recentChatIds } from "../src/store/chat-list.ts";
-import { installRecentHomeIndex, readPreparedDefaultHome, scanRecentHomeChatsStep, settleRecentHomeChatStep, settleRecentHomeSessionStep } from "../src/store/chat-list-home-index.ts";
+import { installRecentHomeIndex, readPreparedDefaultHome, scanRecentHomeChatsStep, settleRecentHomeChatStep, settleRecentHomeOrderStep, settleRecentHomeSessionStep } from "../src/store/chat-list-home-index.ts";
 import { Store } from "../src/store/store.ts";
 
 test("old default-home chats are built in bounded steps while new chats arrive behind the cursor", () => {
@@ -139,5 +139,8 @@ for (const recursive of [false, true]) test(`a message time change cannot leave 
     assert.deepEqual(readPreparedDefaultHome(db, 5), { ids: [second, first], total: 2 });
     db.prepare("UPDATE entries SET at = 30 WHERE thread = ? AND n = 1").run(first);
     assert.equal(readPreparedDefaultHome(db, 5), null, "the changed order has not yet been accounted");
+    assert.deepEqual(settleRecentHomeOrderStep(db, 1), { ordersDone: true, visited: 1 });
+    assert.deepEqual(readPreparedDefaultHome(db, 5), recentChatIds(db, "fallback", "fallback", 5));
+    assert.equal(readPreparedDefaultHome(db, 5)?.ids[0], first);
   } finally { store.close(); }
 });
