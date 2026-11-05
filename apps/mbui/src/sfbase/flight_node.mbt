@@ -37,19 +37,44 @@ impl Eq for QuoteLanding with equal(self, other) {
 ///|
 /// An ordinary row can still be making way when the send hands its copy back: meet it where it is drawn. A first
 /// send carries its list on this very flight's path, so its destination excludes that path's drawing displacement.
+/// Read plainly as the tree is placed (Live's Placed), never followed: none before it is placed.
 fn flight_target_window(f : SendFlight, v : @view.View) -> (Double, Double, Double, Double)? {
-  if f.carried { v.laid_window_told() } else { v.drawn_window_told() }
+  if f.carried { v.placed_window_was() } else { v.drawn_window_now() }
+}
+
+///|
+/// Where a send's landing `v` is laid out and how big, read at its cause (as it comes, laid out as of that moment:
+/// View::laid_window_now): how far the send flies, how big what flies lands; none where it is as wide as nothing.
+fn flight_landing_laid(v : @view.View) -> (Double, Double, Double, Double)? {
+  guard v.alive() else { return None }
+  let r = v.laid_window_now()
+  if r.2 > 0.0 { Some(r) } else { None }
+}
+
+///|
+/// Send `f` set on its way as its landing comes, at that cause's moment (`at`): from `from` to where the landing is laid
+/// out then (`to`), as long as so far takes where it carries no list of its own (whose way is the list's); a landing
+/// come again for it (another row for the same message) none of that again.
+fn flight_landed_at(f : SendFlight, to : (Double, Double, Double, Double), from : (Double, Double), at : Double) -> Unit {
+  if !f.placed {
+    if !f.carried {
+      f.ms = flight_way_ms(flies_desk(f), dmax((to.0 - from.0).abs(), (to.1 - from.1).abs()))
+    }
+    f.timed = true
+    flight_placed_at(@ui.current(), f, at)
+  }
 }
 
 ///|
 /// A new chat's list comes up with its first sent words on the send's own path. `landing` is the bubble (or the
 /// first file for a send without words) as laid out, without this drawing offset. No layout target starts a motion.
+/// Read as the tree is placed (a drawing offset's Live's Placed).
 pub fn send_list_rise(node : @view.View, draft : String, landing : (SendFlight) -> @view.View?) -> Double {
   match flight_of(draft) {
     Some(f) if f.carried => {
       let up = flight_up(f.way.shown(node), flies_desk(f))
       if f.placed {
-        landing(f).bind(fn(v) { v.laid_window_told() })
+        landing(f).bind(fn(v) { v.placed_window_was() })
         .map(fn(r) { (f.from_top - r.1) * (1.0 - up) }).unwrap_or(0.0)
       } else { 0.0 }
     }
@@ -117,7 +142,8 @@ pub fn send_flight_node(
       }
     })
     slot.owns(fn() { (ends.val)() }) |> ignore
-    let origin = fn() { layer.drawn_window_told().unwrap_or((0.0, 0.0, 0.0, 0.0)) }
+    // (where the layer is drawn: read as the tree is placed, what is placed by it Live's Placed)
+    let origin = fn() { layer.drawn_window_now().unwrap_or((0.0, 0.0, 0.0, 0.0)) }
     slot.pick(fn() { landing(f).map(fn(pair) { NodeLanding::{ bubble: pair.0, words: pair.1 } }) }, fn(part, at) {
       part.over(Is(true)) |> ignore
       match at {
@@ -143,7 +169,9 @@ pub fn send_flight_node(
 
 ///|
 /// The quote's own card carried over the list. Its source is frozen before the draft is taken; its destination
-/// remains the message's actual card, and all of its width, position and colour changes use the send's path.
+/// remains the message's actual card, and all of its width, position and colour changes use the send's path. How big
+/// it lands and how far it goes, read where its card is laid out as it comes (its cause); where it goes, where that is
+/// drawn as the tree is placed.
 fn flight_quote_node(
   parent : @view.View,
   f : SendFlight,
@@ -151,16 +179,17 @@ fn flight_quote_node(
   landing : @sf.QuoteCardNode?,
   origin : () -> (Double, Double, Double, Double),
 ) -> Unit {
-  let target = fn() { landing.bind(fn(q) { flight_target_window(f, q.card) }) }
-  let natural = fn() { landing.bind(fn(q) { q.words.laid_size_told() }).map(fn(s) { s.0 }) }
-  parent.reacts(fn() { (target(), natural()) }, fn(r) {
-    guard r is (Some(to), Some(w)) && to.2 > 0.0 && w > 0.0 else { return }
-    if !f.placed {
-      if !f.carried { f.ms = flight_way_ms(flies_desk(f), dmax((to.0 - ff.from.0).abs(), (to.1 - ff.from.1).abs())) }
-      f.timed = true
-      flight_placed_at(@ui.current(), f, parent.cause_at())
+  // (its card where it is laid out, and its words how wide, as it comes)
+  let laid = landing.bind(fn(q) {
+    match (flight_landing_laid(q.card), flight_landing_laid(q.words)) {
+      (Some(to), Some(w)) => Some((to, w.2))
+      _ => None
     }
   })
+  match laid {
+    Some((to, _)) => flight_landed_at(f, to, (ff.from.0, ff.from.1), parent.cause_at())
+    None => ()
+  }
   match landing {
     Some(q) => {
       q.root.alpha(Is(0.0)).hides(Is(true)) |> ignore
@@ -168,40 +197,50 @@ fn flight_quote_node(
     }
     None => ()
   }
-  let across = fn() { if target() is Some(_) { flight_across(f.way.shown(parent), flies_desk(f)) } else { 0.0 } }
-  let up = fn() { if target() is Some(_) { flight_up(f.way.shown(parent), flies_desk(f)) } else { 0.0 } }
+  let size_to = laid.map(fn(l) { l.0 }).unwrap_or(ff.from)
+  // (where its card is drawn now, as the tree is placed: where it goes)
+  let target = fn() { landing.bind(fn(q) { flight_target_window(f, q.card) }).unwrap_or(size_to) }
+  let across = fn() { if laid is Some(_) { flight_across(f.way.shown(parent), flies_desk(f)) } else { 0.0 } }
+  let up = fn() { if laid is Some(_) { flight_up(f.way.shown(parent), flies_desk(f)) } else { 0.0 } }
   let scale = fn() { ff.source_scale + (1.0 - ff.source_scale) * up() }
-  let ground = fn() {
-    let to = target().unwrap_or(ff.from)
+  // (its ground on its way from where it was to `to`, by how far along it is)
+  let ground_by = fn(to : (Double, Double, Double, Double)) {
     let a = across()
     let p = up()
     (ff.from.0 + (to.0 - ff.from.0) * a, ff.from.1 + (to.1 - ff.from.1) * p,
       ff.from.2 + (to.2 - ff.from.2) * a, ff.from.3 + (to.3 - ff.from.3) * p)
   }
-  let visible = flight_visible_node(parent, ff.shown, ff.from, ground, up, origin)
-  visible.pick(fn() { target() is Some(_) && natural() is Some(_) }, fn(part, ready) {
-    part.over(Is(true)) |> ignore
-    if ready {
-      let q = landing.unwrap()
+  // (how big: to how big its card was laid out as it came; where: to where its card is drawn, as the tree is placed)
+  let ground_size = fn() {
+    let g = ground_by(size_to)
+    (g.2, g.3)
+  }
+  let ground_at = fn() {
+    let g = ground_by(target())
+    (g.0, g.1)
+  }
+  let visible = flight_visible_node(parent, ff.shown, ff.from, ground_at, ground_size, up, origin)
+  match (landing, laid) {
+    (Some(q), Some((_, natural))) => visible.box(fn(part) {
+      part.over(Is(true)) |> ignore
       let copy = (q.copy)(part, fn() {
-        match (ff.quote_words, natural()) {
-          (Some((_, from)), Some(to)) => Some(from + (to - from) * across())
-          _ => None
+        match ff.quote_words {
+          Some((_, from)) => Some(from + (natural - from) * across())
+          None => None
         }
       })
-      copy.root.over(Is(true)).width(By(fn() { target().map(fn(r) { r.2 }) }))
+      copy.root.over(Is(true)).width(Is(Some(size_to.2)))
       .scale(By(scale), about=@view.At(0.0, 0.0))
       .offset(By(fn() {
         let shift = (q.sent_shift)()
         (shift.0 * (1.0 - across()) * scale(), shift.1 * (1.0 - up()) * scale())
       })) |> ignore
-      copy.card.ground_drawn(By(fn() {
-        let g = ground()
-        let to = target().unwrap_or(ff.from)
+      copy.card.ground_drawn(Placed(fn() {
+        let (gw, gh) = ground_size()
         let shift = (q.sent_shift)()
-        let h = copy.card.laid_size_told().map(fn(size) { size.1 }).unwrap_or(to.3)
+        let h = copy.card.laid_size().1
         let s = scale()
-        let (w, h) = if s > 0.0 { (g.2 / s - to.2, g.3 / s - h) } else { (0.0, 0.0) }
+        let (w, h) = if s > 0.0 { (gw / s - size_to.2, gh / s - h) } else { (0.0, 0.0) }
         (-shift.0 * (1.0 - across()), -shift.1 * (1.0 - up()), w, h)
       }))
       .ground(By(fn() {
@@ -209,9 +248,10 @@ fn flight_quote_node(
         let from = if ff.ground != 0L { @sf.over(@sf.theme().p.bg, ff.ground) } else { own }
         @sf.mix_seen(from, 1.0 - up(), own)
       })) |> ignore
-    } else {
+    }) |> ignore
+    _ =>
       match ff.node {
-        Some(make) => part.box(fn(snapshot) {
+        Some(make) => visible.box(fn(snapshot) {
           let wide = if ff.source_scale > 0.0 { ff.from.2 / ff.source_scale } else { ff.from.2 }
           snapshot.over(Is(true)).width(Is(Some(wide)))
           .scale(Is(ff.source_scale), about=@view.At(0.0, 0.0)) |> ignore
@@ -219,8 +259,7 @@ fn flight_quote_node(
         }) |> ignore
         None => ()
       }
-    }
-  })
+  }
   // The composer's close control and empty comment hint leave with the card, on the original leave path.
   parent.show(fn() { f.gone.shown(parent) < 1.0 }, fn(leaving) {
     leaving.over(Is(true)).alpha(By(fn() { 1.0 - f.gone.shown(leaving) })) |> ignore
@@ -228,17 +267,17 @@ fn flight_quote_node(
     let reach = @sf.corner_remove_reach(@sf.composer_inner())
     let close_from = (ff.from.0 + ff.from.2 + reach - side, ff.from.1 - reach, side, side)
     let close_room = flight_visible_node(leaving, ff.shown, close_from, fn() {
-      let g = ground()
-      (g.0 + g.2 + reach - side, g.1 - reach, side, side)
-    }, up, origin)
+      let (gx, gy) = ground_at()
+      (gx + ground_size().0 + reach - side, gy - reach)
+    }, fn() { (side, side) }, up, origin)
     let close = @sf.corner_remove_face_node(close_room)
     close.scale(By(fn() { 1.0 - (1.0 - @sf.leave_scale) * f.gone.shown(close) })) |> ignore
     match (ff.leaving, ff.leaving_node) {
       (Some((r, _)), Some(make)) => {
         let hint = flight_visible_node(leaving, ff.shown, r, fn() {
-          let g = ground()
-          (g.0 + r.0 - ff.from.0, g.1 + r.1 - ff.from.1, r.2, r.3)
-        }, up, origin)
+          let (gx, gy) = ground_at()
+          (gx + r.0 - ff.from.0, gy + r.1 - ff.from.1)
+        }, fn() { (r.2, r.3) }, up, origin)
         make(hint)
       }
       _ => ()
@@ -248,23 +287,27 @@ fn flight_quote_node(
 
 ///|
 /// The portion of a source still visible as it leaves an opening container, translated to the flight's current
-/// rectangle. Only an existing cut is carried: an unclipped source may draw beyond its own layout while reshaping.
+/// rectangle: where (`at`, read as the tree is placed: Live's Placed), how big (`size`, of the way's progress and what
+/// was laid out as it came alone). Only an existing cut is carried: an unclipped source may draw beyond its own layout
+/// while reshaping.
 fn flight_visible_node(
   parent : @view.View,
   shown : @ui.DrawnState?,
   from : (Double, Double, Double, Double),
-  rect : () -> (Double, Double, Double, Double),
+  at : () -> (Double, Double),
+  size : () -> (Double, Double),
   up : () -> Double,
   origin : () -> (Double, Double, Double, Double),
 ) -> @view.View {
   let visible = fn() { flight_visible(shown, from, up()) }
   let crop = parent.box(fn(crop) {
     crop.over(Is(true))
-    .width(By(fn() { let v = visible(); Some(rect().2 * dmax(0.0, v.right - v.left)) }))
-    .height(By(fn() { let v = visible(); Some(rect().3 * dmax(0.0, v.bottom - v.top)) }))
-    .offset(By(fn() {
+    .width(By(fn() { let v = visible(); Some(size().0 * dmax(0.0, v.right - v.left)) }))
+    .height(By(fn() { let v = visible(); Some(size().1 * dmax(0.0, v.bottom - v.top)) }))
+    .offset(Placed(fn() {
       let v = visible()
-      let (x, y, w, h) = rect()
+      let (x, y) = at()
+      let (w, h) = size()
       let o = origin()
       (x + w * v.left - o.0, y + h * v.top - o.1)
     }))
@@ -277,8 +320,8 @@ fn flight_visible_node(
     })) |> ignore
   })
   crop.box(fn(body) {
-    body.over(Is(true)).width(By(fn() { Some(rect().2) })).height(By(fn() { Some(rect().3) }))
-    .offset(By(fn() { let v = visible(); let r = rect(); (-r.2 * v.left, -r.3 * v.top) })) |> ignore
+    body.over(Is(true)).width(By(fn() { Some(size().0) })).height(By(fn() { Some(size().1) }))
+    .offset(By(fn() { let v = visible(); let (w, h) = size(); (-w * v.left, -h * v.top) })) |> ignore
   })
 }
 
@@ -287,7 +330,7 @@ fn flight_waiting_node(parent : @view.View, f : SendFlight, origin : () -> (Doub
   if f.text == "" { return }
   parent.box(fn(room) {
     room.over(Is(true)).width(Is(Some(f.field_w))).height(Is(Some(f.field_h)))
-    .offset(By(fn() { let o = origin(); (f.field_x - o.0, f.field_y - o.1) })).clips(Is(true)) |> ignore
+    .offset(Placed(fn() { let o = origin(); (f.field_x - o.0, f.field_y - o.1) })).clips(Is(true)) |> ignore
     room.box(fn(w) {
       w.width(Is(Some(f.field_w))).offset(Is((f.from_x - f.field_x, f.from_y - f.field_y)))
       .words_runs(By(fn() { person_runs(f.text, f.runs, @sf.theme().p.accent) }))
@@ -299,6 +342,9 @@ fn flight_waiting_node(parent : @view.View, f : SendFlight, origin : () -> (Doub
 }
 
 ///|
+/// The words sent flown to where their row lands them: how far, how big their bubble lands and what they are laid out
+/// as there (in pieces where the field and the message wrap otherwise), read where the bubble and its words are laid
+/// out as they come (its cause); where they go, where those are drawn as the tree is placed.
 fn flight_landing_node(
   parent : @view.View,
   f : SendFlight,
@@ -306,35 +352,32 @@ fn flight_landing_node(
   words : @view.View,
   origin : () -> (Double, Double, Double, Double),
 ) -> Unit {
-  let brect = fn() { flight_target_window(f, bubble).unwrap_or((0.0, 0.0, 0.0, 0.0)) }
-  let wrect = fn() { flight_target_window(f, words).unwrap_or((0.0, 0.0, 0.0, 0.0)) }
-  let ready = @signals.signal(false)
-  parent.reacts(fn() { (flight_target_window(f, bubble), flight_target_window(f, words)) }, fn(rects) {
-    guard rects is (Some(b), Some(w)) && b.2 > 0.0 && w.2 > 0.0 else { return }
-    if !f.placed {
-      if !f.carried {
-        f.ms = flight_way_ms(flies_desk(f), dmax((w.0 - f.from_x).abs(), (w.1 - f.from_y).abs()))
-      }
-      f.timed = true
-      flight_placed_at(@ui.current(), f, parent.cause_at())
-    }
-    ready.set(true)
-  })
+  let laid = match (flight_landing_laid(bubble), flight_landing_laid(words)) {
+    (Some(b), Some(w)) => Some((b, w))
+    _ => None
+  }
+  match laid {
+    Some((_, w)) => flight_landed_at(f, w, (f.from_x, f.from_y), parent.cause_at())
+    None => ()
+  }
   bubble.alpha(Is(0.0)).hides(Is(true)) |> ignore
   parent.owns(fn() { bubble.alpha(Is(1.0)).hides(Is(false)) |> ignore }) |> ignore
-  parent.pick(fn() { ready.get() }, fn(paint, placed) {
+  guard laid is Some((b_laid, w_laid)) else {
+    flight_waiting_node(parent, f, origin)
+    return
+  }
+  // (where they are drawn now, as the tree is placed: where it goes)
+  let brect = fn() { flight_target_window(f, bubble).unwrap_or(b_laid) }
+  let wrect = fn() { flight_target_window(f, words).unwrap_or(w_laid) }
+  parent.box(fn(paint) {
     paint.over(Is(true)) |> ignore
-    if !placed {
-      flight_waiting_node(paint, f, origin)
-      return
-    }
     let across = fn() { flight_across(f.way.shown(paint), flies_desk(f)) }
     let up = fn() { flight_up(f.way.shown(paint), flies_desk(f)) }
     let bx = fn() { let b = brect(); f.from_x - bubble_in_x + (b.0 - f.from_x + bubble_in_x) * across() }
     let by = fn() { let b = brect(); f.from_y - bubble_in_y + (b.1 - f.from_y + bubble_in_y) * up() }
     paint.box(fn(ground) {
-      ground.over(Is(true)).width(By(fn() { Some(brect().2) })).height(By(fn() { Some(brect().3) }))
-      .offset(By(fn() { let o = origin(); (bx() - o.0, by() - o.1) }))
+      ground.over(Is(true)).width(Is(Some(b_laid.2))).height(Is(Some(b_laid.3)))
+      .offset(Placed(fn() { let o = origin(); (bx() - o.0, by() - o.1) }))
       // The flying copy carries the bubble's surface as seen on its page. Neutral alone is a translucent tint:
       // over another row it would tint that row's words instead of covering them as the bubble passes.
       .ground(By(fn() {
@@ -343,50 +386,43 @@ fn flight_landing_node(
       }))
       .radius(By(fn() { @ui.tree_theme().corner(Xl2) })) |> ignore
     }) |> ignore
-    let pieces : @signals.Signal[Array[FlightPiece]?] = @signals.signal(None)
-    // (shape is re-read only when the paragraph or its width changes, never on an animation frame)
-    paint.reacts(fn() { (words.words_said(), wrect().2) }, fn(_) {
-      pieces.set(@ui.runs_words_now(words).bind(fn(w) { flight_pieces_of(f, Some(w)).map(fn(p) { p.0 }) }))
-    })
-    paint.pick(fn() { pieces.get() is Some(_) }, fn(group, split) {
-      group.over(Is(true)) |> ignore
-      if split {
-        group.each(fn() { pieces.get().unwrap_or([]).mapi(fn(i, _) { i }) }, fn(i) { i }, fn(cell, i) {
-          cell.over(Is(true)) |> ignore
-          let piece = fn() { pieces.get().unwrap()[i.get()] }
-          // (where the field and the message wrap at different places the pieces cross: each only the room the larger
-          // pieces leave it, as the old frame's pieces have it, flight_pieces_drawn; its path its own)
-          let room = fn() {
-            let w = wrect()
-            flight_piece_room(pieces.get().unwrap(), i.get(), w.0, w.1, across(), up())
-          }
-          cell.width(By(fn() { let (l, r) = room(); Some(dmax(0.0, r - l)) })).height(By(fn() { Some(piece().at.3) })).clips(Is(true))
-          .offset(By(fn() {
-            let q = piece()
-            let w = wrect()
-            let o = origin()
-            (q.from.0 + (w.0 + q.at.0 - q.from.0) * across() - o.0 + room().0,
-              q.from.1 + (w.1 + q.at.1 - q.from.1) * up() - o.1)
-          })) |> ignore
-          flight_words_node(cell, words, fn() { wrect().2 }, fn() { let q = piece(); (-q.at.0 - room().0, -q.at.1) })
-        })
-      } else {
-        flight_words_node(group, words, fn() { wrect().2 }, fn() {
+    // (its words as they are laid out where they land, read as they come: in pieces where the field wrapped them
+    // otherwise, each on a path of its own)
+    match @ui.runs_words_now(words).bind(fn(w) { flight_pieces_of(f, Some(w)).map(fn(p) { p.0 }) }) {
+      Some(pieces) =>
+        for i, piece in pieces {
+          paint.box(fn(cell) {
+            cell.over(Is(true)) |> ignore
+            // (where the field and the message wrap at different places the pieces cross: each only the room the
+            // larger pieces leave it, as the old frame's pieces have it, flight_pieces_drawn; its path its own; the
+            // same wherever they land, all moved alike)
+            let room = fn() { flight_piece_room(pieces, i, w_laid.0, w_laid.1, across(), up()) }
+            cell.width(By(fn() { let (l, r) = room(); Some(dmax(0.0, r - l)) })).height(Is(Some(piece.at.3))).clips(Is(true))
+            .offset(Placed(fn() {
+              let w = wrect()
+              let o = origin()
+              (piece.from.0 + (w.0 + piece.at.0 - piece.from.0) * across() - o.0 + room().0,
+                piece.from.1 + (w.1 + piece.at.1 - piece.from.1) * up() - o.1)
+            })) |> ignore
+            flight_words_node(cell, words, w_laid.2, By(fn() { (-piece.at.0 - room().0, -piece.at.1) }))
+          }) |> ignore
+        }
+      None =>
+        flight_words_node(paint, words, w_laid.2, Placed(fn() {
           let b = brect()
           let w = wrect()
           let o = origin()
           (bx() + w.0 - b.0 - o.0, by() + w.1 - b.1 - o.1)
-        })
-      }
-    })
-  })
+        }))
+    }
+  }) |> ignore
 }
 
 ///|
-fn flight_words_node(parent : @view.View, words : @view.View, width : () -> Double, offset : () -> (Double, Double)) -> Unit {
+fn flight_words_node(parent : @view.View, words : @view.View, width : Double, offset : @view.Live[(Double, Double)]) -> Unit {
   let set = fn() { words.words_said() |> ignore; words.runs_set_now() }
   parent.box(fn(w) {
-    w.over(Is(true)).width(By(fn() { Some(width()) })).offset(By(offset))
+    w.over(Is(true)).width(Is(Some(width))).offset(offset)
     .words_runs(By(fn() { set().0 })).words_look(By(fn() { set().1 })).runs_look(By(fn() { set().2 }))
     .ink(By(fn() { @ui.style_ink(@sf.theme().t.words) })) |> ignore
   }) |> ignore

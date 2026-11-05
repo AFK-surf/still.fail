@@ -83,8 +83,8 @@ pub fn note_list_node(node : @view.View, key : String, bar : () -> Double, room 
 
 ///|
 fn tree_thumb_of(c : @ui.Ctx, node : @view.View, look : () -> ThumbLook) -> Thumb? {
-  // Follow placement even while it is laid out nowhere, so showing the same node again tells its readers.
-  ignore(node.drawn_window_told())
+  // (where it is drawn read plainly: as the tree is placed (what flies from it is laid out after all else) or at a
+  // cause, never followed)
   guard node.alive() && !node.shown_nowhere() else { return None }
   guard @ui.view_tree() is Some(tree) else { return None }
   let l = look()

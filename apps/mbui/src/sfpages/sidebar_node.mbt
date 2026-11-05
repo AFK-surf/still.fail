@@ -135,11 +135,8 @@ fn chats_pane_node(
   let key = "chats/" + id + "/" + filter
   let read = fn() { @sfbase.chats_of(src, id, filter) }
   let scroll = list_scroll(key)
-  // how far it is put to tuck its search out of view, as it was first placed (tucked_by's); the room its foot keeps for
-  // that; whether it is to be put there still (the hand not on it since)
-  let tuck : @signals.Signal[Double?] = @signals.signal(tucked_by.get(key))
-  let slack : @signals.Signal[Double] = @signals.signal(0.0)
-  let owed = Ref(false)
+  // (where it is put, said: the list there as it lays out its lines)
+  let put : @signals.Signal[(String, Double)?] = @signals.signal(None)
   // (while the hand is on the list or it glides, its rows keep their places; a row the viewer moved goes at once)
   let held = fn() { v.pointed_in() || scroll.glides_till() is Some(_) }
   // its days in the order shown, and its rows by their names: worked out once as what is read, or the hand on it,
@@ -169,9 +166,6 @@ fn chats_pane_node(
     },
     fn(at) {
       let days = seen.val
-      if at.1 {
-        owed.val = false
-      }
       let hold = at.1 && !@sfbase.viewer_moved(key, days)
       let shown = @sfbase.held_order(key, days, hold)
       let by_name : Map[String, ChatItem] = {}
@@ -187,8 +181,9 @@ fn chats_pane_node(
     },
   )
   let days = fn() { ordered.get() }
-  // its lines' keys: its room under the bar, what the frame puts at its top, its states, its days, its foot
-  let keys = fn() {
+  // its lines' keys: its room under the bar, what the frame puts at its top, its states, its days, its foot (worked
+  // out once as what they read changes: what the list lays out, where its search is tucked)
+  let lines = @signals.computed(fn(_) {
     let (view, _) = read()
     let out = ["top"]
     if search_tucked(view) {
@@ -216,7 +211,7 @@ fn chats_pane_node(
     }
     out.push("foot")
     out
-  }
+  })
   // (each row's chat by its name, as the days have it now)
   let item_of = fn(name : String) -> ChatItem? { rows.get().get(name) }
   // (the shown one's rows: those an archived chat's neighbour is looked for in)
@@ -236,72 +231,41 @@ fn chats_pane_node(
     }
   }
   // the list's first time with its rows: the search tucked over them out of view, the first line after it at the foot
-  // of what covers the list (frame.under: a phone's top bar, not the room under it), there once scrolled to (as far as
-  // the room over the list and the field's line come to past that foot)
-  // (where the field is laid out, as it is first: put by where it is, never by what it is said to be)
-  let search_line : Ref[@view.View?] = Ref(None)
-  let search_laid : @signals.Signal[Bool] = @signals.signal(false)
-  v.reacts(fn() { (search_tucked(read().0), search_laid.get()) }, fn(now) {
-    if now.0 && now.1 && !placed.contains(key) && search_line.val is Some(line) && line.alive() {
+  // of what covers the list (frame.under: a phone's top bar, not the room under it; a side column's band, the room over
+  // the list), `tucked_foot` under it: put there once by that cause (the old view's list_scroll_to), as the list lays
+  // its lines out; however few they are, the list going as far as that (reach_to)
+  let tucked_at = fn() -> (String, Double)? {
+    let ks = lines.get()
+    guard ks.get(1) is Some("search") && ks.get(2) is Some(after) else { return None }
+    let cover = match frame.at {
+      Side => (frame.top)()
+      Whole => (frame.under)()
+    }
+    Some((after, cover + tucked_foot))
+  }
+  v.reacts(fn() { search_tucked(read().0) }, fn(tucked) {
+    if tucked && !placed.contains(key) {
       placed[key] = true
-      // (what covers the list's top: Home's top bar to its foot; a side column's band, the room over the list)
-      let cover = match frame.at {
-        Side => (frame.top)()
-        Whole => (frame.under)()
-      }
-      // (not scrolled yet: where it is in the list is where it is laid out in it)
-      let (_, fy, _, fh) = line.placed_window_now()
-      let (_, vy, _, _) = v.placed_window_now()
-      let at = fy - vy + fh - cover
-      tucked_by[key] = at
-      tuck.set(Some(at))
-      owed.val = true
-      scroll.put(at)
-    }
-  })
-  // (as far as it goes with fewer rows than it is tall: its foot keeps the room it lacks to go there, the search tucked
-  // all the same however few they are; put there again where it came short of it as it was laid out, till the hand is
-  // on it)
-  v.reacts(fn() { (tuck.get(), scroll.reach(), search_tucked(read().0)) }, fn(now) {
-    let had = @signals.untracked(fn() { slack.get() })
-    let want = match now {
-      (Some(at), most, true) => dmax(0.0, at - (most - had))
-      _ => 0.0
-    }
-    if (want - had).abs() >= 0.5 {
-      slack.set(want)
-      return
-    }
-    match now.0 {
-      Some(at) if owed.val && scroll.at(v.tree) < at - 0.5 && now.1 >= at - 0.5 => scroll.put(at)
-      _ => ()
+      put.set(@signals.untracked(tucked_at))
     }
   })
   v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
   // (its bar along its right, clear of what is over its top and at its foot: the band, the bars)
   v.scrolls_window(
     scroll,
-    keys,
+    fn() { lines.get() },
     est=@signals.untracked(fn() { @sf.theme().chat_list.row_h }),
     bar=@ui.tree_scroll_bar(),
     bar_clear=fn() { ((frame.top)(), (frame.foot)()) },
-    foot_room=fn() { slack.get() },
+    put~,
+    reach_to=tucked_at,
     fn(b, k) {
     b.box(fn(line) {
       @sf.style_node(line, fn() { @sf.list_line(frame.at) })
       match k {
         "top" => line.height(By(fn() { Some((frame.top)() + @sf.theme().chat_list.top_in) })) |> ignore
         "foot" => line.height(By(fn() { Some((frame.foot)() + @sf.list_foot_in(frame.at)) })) |> ignore
-        "search" => {
-          let field = search_field_node(line, frame.at)
-          // (told as it is first laid out: where it is then)
-          field.reacts(fn() { field.laid_size_told() is Some(_) }, fn(laid) {
-            if laid {
-              search_line.val = Some(field)
-              search_laid.set(true)
-            }
-          })
-        }
+        "search" => search_field_node(line, frame.at) |> ignore
         "wait" => list_waiting_node(line, src, read, frame.at, tips, stint)
         "empty" => list_empty_node(line, read, filter, frame.at)
         _ if k.has_prefix("part/") => {

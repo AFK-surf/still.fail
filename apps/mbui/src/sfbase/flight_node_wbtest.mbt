@@ -14,7 +14,7 @@ fn retained_flight_at_half(steps : Int, carried? : Bool = false, row_off? : Doub
     @ui.set_tree_theme(@sf.ui_theme_now)
     root.box(fn(viewport) {
       viewport.height(Is(Some(180.0))).clips(Is(true)) |> ignore
-      viewport.drawn_off(By(fn() { (0.0, row_off + send_list_rise(viewport, "chat", fn(_) { landings.get("row").map(fn(l) { l.0 }) })) })) |> ignore
+      viewport.drawn_off(Placed(fn() { (0.0, row_off + send_list_rise(viewport, "chat", fn(_) { landings.get("row").map(fn(l) { l.0 }) })) })) |> ignore
       viewport.show(fn() { row.get() }, fn(bubble) {
         bubble.width(By(fn() { Some(wide.get()) })).offset(By(fn() { (18.0, y.get()) }))
         .padding(Is((14.0, 8.0, 14.0, 8.0))).radius(Is(18.0)).ground(By(fn() { @ui.tree_theme().color(Neutral) })) |> ignore

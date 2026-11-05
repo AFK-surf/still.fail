@@ -211,12 +211,11 @@ fn md_table_body_node(
   files? : (String) -> PlacedNode? = fn(_) { None },
 ) -> Unit {
     outer.margin(Is((-bleed, 0.0, -bleed, 0.0))) |> ignore
+    // (made for the room it is laid out in, in the frame's one layout, again as that is another: View::by_room)
+    outer.by_room(fn(w) { w - 2.0 * bleed }, fn(inner, room_w) {
     let room = fn() {
       outer.words_redone() |> ignore
-      match outer.laid_size_told() {
-        Some((w, _)) => w - 2.0 * bleed
-        None => 0.0
-      }
+      room_w
     }
     // (each cell's extent and the columns' widths, as Md::table works them out: table_widths)
     let widths_for = fn(t : MdTable) {
@@ -246,12 +245,12 @@ fn md_table_body_node(
         None => ([], 0.0)
       }
     }
-    // (its head's row's height, as laid out: where its copy key's middle is)
+    // (its head's row: where its copy key's middle is, as it is placed)
     let head_h : Ref[@view.View?] = Ref(None)
     // (its own key, whatever its words: two tables of the same each their own menu, copy and picture)
     table_nodes_made.val += 1
     let key = "sf-table/\{table_nodes_made.val}"
-    outer.scrolls(@view.Scroll::across(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), bar_in=bleed, fn(held) {
+    inner.scrolls(@view.Scroll::across(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), bar_in=bleed, fn(held) {
       held.padding(Is((bleed, 0.0, bleed, 0.0))) |> ignore
       // (it, then its copy key past it, from their tops: table_beside's; the key hung out in `bleed` where that has its
       // whole room, as Md::table has it)
@@ -354,13 +353,15 @@ fn md_table_body_node(
       if copy {
         table_key_node(beside, key, fn() { table() }, fn() {
           match head_h.val {
-            Some(h) => h.laid_size_told().map(fn(z) { z.1 }).unwrap_or(0.0)
+            Some(h) => h.laid_size().1
             None => 0.0
           }
         }, widths_for)
       }
       })
       |> ignore
+    })
+    |> ignore
     })
     |> ignore
 }
@@ -390,12 +391,14 @@ fn table_key_node(
   let copied_off : Ref[() -> Unit] = Ref(fn() {  })
   let menu_open = @signals.signal(false)
   beside.box(fn(k) {
-    // (its room kept, as tall as the key, whether it shows or not)
+    // (its room kept, as tall as the key, whether it shows or not: what it is beside as tall at least; its middle on
+    // its head's row's, placed so as the row is laid out, as high as the row's top where the row is the shorter)
     let top = fn() { dmax(0.0, (head_h() - table_key_size) / 2.0) }
     k
     .width(Is(Some(table_key_gap + table_key_size + table_key_gap)))
-    .min_height(By(fn() { Some(top() + table_key_size) }))
-    .padding(By(fn() { (table_key_gap, top(), table_key_gap, 0.0) }))
+    .min_height(Is(Some(table_key_size)))
+    .padding(Is((table_key_gap, 0.0, table_key_gap, 0.0)))
+    .offset(Placed(fn() { (0.0, top()) }))
     |> ignore
     let shown = fn() { beside.pointed_in() || menu_open.get() || copied.get() || @ui.pointing() is Finger }
     let seen = EdgeWay::new(0.0)

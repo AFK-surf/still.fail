@@ -174,15 +174,8 @@ fn line_key(line : Line) -> String {
 let placed : Map[String, Bool] = {}
 
 ///|
-/// How far each list made once is scrolled to tuck its search out of view, by its key, as it was first placed: the room
-/// its foot keeps so it goes that far with fewer rows than it is tall.
-// kept across runs: put back by sidebar_reset (reset)
-let tucked_by : Map[String, Double] = {}
-
-///|
 fn sidebar_reset() -> Unit {
   list_scrolls.clear()
-  tucked_by.clear()
   rows_rest_at.val = -1.0
   placed.clear()
   rows_laid.clear()

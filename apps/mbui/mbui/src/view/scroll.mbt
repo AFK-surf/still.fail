@@ -178,13 +178,6 @@ pub fn Scroll::glides_till(self : Scroll) -> Double? {
 }
 
 ///|
-/// The same end, followed as a glide starts, changes or ends. For an observation of the page's reading position;
-/// a layout deciding where to put its contents uses glides_till without following its own scroll changes.
-pub fn Scroll::glides_till_told(self : Scroll) -> Double? {
-  self.rest_now()
-}
-
-///|
 /// When what it is on by itself now ends (a fling, what it meets its end with going back; what shows past an end going
 /// back), followed: none at rest or held.
 fn Scroll::rest_now(self : Scroll) -> Double? {

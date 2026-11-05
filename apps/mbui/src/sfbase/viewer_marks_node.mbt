@@ -26,22 +26,17 @@ fn marks_foot_node(h : @view.View, foot : () -> Double) -> Unit {
   let tips = @sf.TipLayer::new(fn() { tips_at.val })
   h.box(fn(col) {
     col.over(Is(true)).padding(By(fn() { (0.0, 0.0, 0.0, foot()) })) |> ignore
-    // (the room over them the picture's: nothing of the foot's)
+    // (the room over them the picture's: nothing of the foot's; how much the foot takes read of where they are laid
+    // out, at a cause: marks_foot_over)
     let room = col.box(fn(g) { g.grow(Is(1.0)) |> ignore })
-    col.reacts(
-      fn() {
-        marks_said()
-        match (col.laid_size_told(), room.laid_size_told()) {
-          (Some(all), Some(over)) if marking.note < 0 => Some(all.1 - over.1)
-          _ => None
-        }
-      },
-      fn(taken) {
-        if taken is Some(t) {
-          marks_foot_taken.set(t)
-        }
-      },
-    )
+    marks_foot_at.val = Some((col, room))
+    col.owns(fn() {
+      match marks_foot_at.val {
+        Some((was, _)) if was.id() == col.id() => marks_foot_at.val = None
+        _ => ()
+      }
+    })
+    |> ignore
     // (the notes' cards, while no note is written: note_cards_node)
     col.show(
       fn() {
@@ -71,19 +66,31 @@ fn marks_foot_node(h : @view.View, foot : () -> Double) -> Unit {
 }
 
 ///|
-/// How much of the window's foot marking's foot takes (its tools, the colours and the notes' cards over them, the
-/// system's bar under them), its picture fitted clear of it (none while it does not mark). The open note's box in
-/// their place keeps what they took: the picture stays where the pin was put.
-let marks_foot_taken : @signals.Signal[Double] = @signals.signal(0.0)
+/// Marking's foot as it is made (marks_foot_node): its column, and the room over what it holds there.
+let marks_foot_at : Ref[(@view.View, @view.View)?] = Ref(None)
 
 ///|
+/// What marking's foot took as it was last read with no note written (marks_foot_over).
+let marks_foot_taken : Ref[Double] = Ref(0.0)
+
+///|
+/// How much of the window's foot marking's foot takes (its tools, the colours and the notes' cards over them, the
+/// system's bar under them), its picture fitted clear of it (none while it does not mark): read where they are laid out
+/// as of now, at a cause (View::laid_window_now), never followed. The open note's box in their place keeps what they
+/// took: the picture stays where the pin was put.
 pub fn marks_foot_over() -> Double {
-  marks_said()
-  if marking.on {
-    marks_foot_taken.get()
-  } else {
-    0.0
+  guard marking.on else { return 0.0 }
+  if marking.note < 0 {
+    match marks_foot_at.val {
+      Some((col, room)) if col.alive() && room.alive() => {
+        let (_, _, _, all) = col.laid_window_now()
+        let (_, _, _, over) = room.laid_window_now()
+        marks_foot_taken.val = all - over
+      }
+      _ => ()
+    }
   }
+  marks_foot_taken.val
 }
 
 ///|

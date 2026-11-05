@@ -78,6 +78,8 @@ priv struct Block {
 /// `kept`: a block needed outside the visible window too, such as a send's landing while the list glides towards it.
 /// It is laid out in its own slot, still cut by the list, and does not change which rows `shown` reports in sight.
 /// `bar_clear`: the scroll bar's ends kept clear; `foot_room`: room under the last block, laid out even while the last block is off screen.
+/// `reach_to`: a block it goes far enough to put that far under its top however few blocks follow it (what is tucked
+/// over them out of view, kept so with a few): the room at its foot as much more as that takes, as they are counted.
 pub fn[K : Hash + Eq] View::scrolls_window(
   self : View,
   s : Scroll,
@@ -99,6 +101,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   kept_keys? : () -> Array[K],
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
   foot_room? : () -> Double = fn() { 0.0 },
+  reach_to? : () -> (K, Double)? = fn() { None },
 ) -> View {
   guard self.live() is Some(_) else { return self }
   let tree = self.tree
@@ -187,9 +190,20 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       0.0
     }
   }
-  // what it holds: the blocks, nothing else; how far it can go counted by them as they are counted now (read plainly as
-  // the column is placed and as an event comes: Scroll's room)
-  let extent_now = fn() { index.val.total() + foot_room() }
+  // what it holds: the blocks, nothing else, and the room at its foot, as much more as going as far as `reach_to` says
+  // takes; how far it can go counted by them as they are counted now (read plainly as the column is placed and as an
+  // event comes: Scroll's room)
+  let extent_now = fn() {
+    let all = index.val.total() + foot_room()
+    match reach_to() {
+      Some((k, off)) =>
+        match (place_of.val.get(k), self.live()) {
+          (Some(i), Some(n)) => dmax(all, index.val.top(i) - off + n.flex.height)
+          _ => all
+        }
+      None => all
+    }
+  }
   let holder : Ref[View?] = Ref(None)
   // (a block's slot made where it goes among those made, in their order: View::block)
   let made_before = fn(i : Int) -> Int {

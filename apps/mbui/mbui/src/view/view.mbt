@@ -662,6 +662,10 @@ pub struct Tree {
   /// reads changed otherwise since (`laid_due`)
   laid_bounds : Map[Int, Bound]
   laid_due : Array[Bound]
+  /// those again by the root of its own each is in (its windowed list's block, what View::by_room makes, the node laid
+  /// out after: by its index): each root's worked out again as it is about to be laid out, of where what holds it is
+  /// laid out then
+  laid_roots : Map[Int, Map[Int, Bound]]
   /// the nodes laid out alone once all else is (View::laid_after), each with its making, in the order said; whether one
   /// is to be laid out again (what it holds marked, or what it says of its room changed)
   laid_afters : Array[(Int, Int)]
@@ -907,6 +911,7 @@ pub fn Tree::new(
     placed_due: [],
     laid_bounds: Map([]),
     laid_due: [],
+    laid_roots: Map([]),
     laid_afters: [],
     laid_afters_due: false,
     outs_gone: [],
@@ -1662,6 +1667,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.placed_due.clear()
   self.laid_bounds.clear()
   self.laid_due.clear()
+  self.laid_roots.clear()
   self.laid_afters.clear()
   self.timeline.clear()
   self.changed.clear()
@@ -1912,6 +1918,7 @@ fn[T] Tree::queued(
   then : (T) -> Unit,
   placed? : Bool = false,
   laid? : Bool = false,
+  root? : Int = -1,
 ) -> () -> Unit {
   // (its one state, every way it is run read from it: queued for a frame (told as a change ended), marked as what it
   // read changed (in a change's batch too: what asks at once pulls it), live; run once it is due, by any of them, and
@@ -1978,8 +1985,12 @@ fn[T] Tree::queued(
   self.pulls[k] = (w, b)
   if laid {
     // (worked out now, of where things are laid out as they are; again before what holds it is next laid out, of the
-    // layout it reads then)
+    // layout it reads then, and as its root is: Tree::laid_root_run)
     self.laid_bounds[k] = b
+    match self.laid_roots.get(root) {
+      Some(m) => m[k] = b
+      None => self.laid_roots[root] = Map([(k, b)])
+    }
     (b.run)()
   } else if placed {
     // (worked out first as the tree is next placed, of the layout it reads then)
@@ -1996,6 +2007,17 @@ fn[T] Tree::queued(
     self.pulls.remove(k)
     self.placed_bounds.remove(k)
     self.laid_bounds.remove(k)
+    if laid {
+      match self.laid_roots.get(root) {
+        Some(m) => {
+          m.remove(k)
+          if m.is_empty() {
+            self.laid_roots.remove(root)
+          }
+        }
+        None => ()
+      }
+    }
     w.stop()
   }
 }
@@ -2280,7 +2302,7 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
     }
     None => ()
   }
-  let follow = fn(f : () -> T, placed : Bool, laid : Bool) {
+  let follow = fn(f : () -> T, placed : Bool, laid : Bool, root : Int) {
     let last : Ref[T?] = Ref(None)
     let gen = self.gen
     let stop = tree.queued(
@@ -2302,6 +2324,7 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
       },
       placed~,
       laid~,
+      root~,
     )
     n.props[prop] = stop
   }
@@ -2310,29 +2333,57 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
       apply(v)
       marked()
     }
-    By(f) => follow(f, false, false)
+    By(f) => follow(f, false, false, -1)
     Placed(f) =>
       match phase {
-        Place | Paint | Said => follow(f, true, false)
-        // (what layout reads: only where it is laid out alone after all else, of where that is)
-        Layout | Both => if tree.laid_after_all(at) { follow(f, false, true) } else { laid_refused("a property layout reads") }
+        Place | Paint | Said => follow(f, true, false, -1)
+        // (what layout reads: only where it is laid out alone after all else, of where that is, as its root is)
+        Layout | Both =>
+          match tree.laid_root(at) {
+            Some(root) => follow(f, false, true, root)
+            None => laid_refused("a property layout reads")
+          }
       }
   }
 }
 
 ///|
-/// Whether node `at` is laid out alone after all else of the tree (in a windowed list's block, in a node laid out after:
-/// View::laid_after, in what View::by_room makes): what its layout reads may be worked out of where all else is laid out
-/// (Live's Placed), before it is.
-fn Tree::laid_after_all(self : Tree, at : Int) -> Bool {
+/// The root of its own node `at` is laid out alone in, after all else of the tree (a windowed list's block, a node laid
+/// out after: View::laid_after, what View::by_room makes), the nearest: what its layout reads may be worked out of
+/// where all else is laid out (Live's Placed), before it is; none where it is laid out with the tree.
+fn Tree::laid_root(self : Tree, at : Int) -> Int? {
   let mut i = at
   while i >= 0 {
     if self.nodes[i].own_root {
-      return true
+      return Some(i)
     }
     i = self.nodes[i].parent
   }
-  false
+  None
+}
+
+///|
+/// What layout reads in root `root` (Tree::laid_root's) worked out again as it is about to be laid out, of where what
+/// holds it, and all else laid out before it, is laid out then (Live's Placed there): what comes out otherwise laid out
+/// with it now, nothing of it owed after.
+fn Tree::laid_root_run(self : Tree, root : Int) -> Unit {
+  guard self.laid_roots.get(root) is Some(m) && !m.is_empty() else { return }
+  // (what it marks of the root laid out with it as it is now: its list's mark, whether any list or node laid out after
+  // is to be laid out, as they were)
+  let lists_due = self.lists_due
+  let afters_due = self.laid_afters_due
+  let holder = self.nodes[root].parent
+  let marks = self.lists.map(fn(l) { l.holder == holder && l.marked })
+  for b in m.values().collect() {
+    (b.run)()
+  }
+  self.lists_due = lists_due
+  self.laid_afters_due = afters_due
+  for i, l in self.lists {
+    if l.holder == holder && i < marks.length() {
+      l.marked = marks[i]
+    }
+  }
 }
 
 ///|
@@ -3382,6 +3433,8 @@ fn View::block_gone(self : View, v : View) -> Unit {
 /// height then.
 fn View::block_laid(self : View, w : Double) -> Double {
   guard self.live() is Some(n) else { return 0.0 }
+  // (what its layout reads of where what holds it is laid out, as that is now: Live's Placed in it)
+  self.tree.laid_root_run(self.at)
   self.tree.work.computes = self.tree.work.computes + 1
   @flex.compute(n.flex, width=w, round=false, reuse=true)
   n.flex.height
@@ -6847,6 +6900,9 @@ fn Tree::afters_laid(self : Tree, all : Bool) -> Bool {
     let n = self.nodes[at]
     guard n.live && n.gen == gen && n.after is Some(room) && n.after_watch is Some(w) else { continue }
     live.push(e)
+    // (what its layout reads of where all else is laid out, as that is now: Live's Placed in it, marking it to be laid
+    // out again where that comes out otherwise)
+    self.laid_root_run(at)
     let r = w.read(room)
     if !n.flex.dirty && n.after_was == Some(r) {
       continue
@@ -6953,6 +7009,29 @@ fn Tree::bindings_run(self : Tree) -> Unit {
   })
   self.pulls_marked.clear()
   self.pulls_marked.append(still)
+}
+
+///|
+/// `f` done once the change under way is committed whole (what it shows, makes and tells all made and run), the tree
+/// laid out then as an event finds it (Tree::laid_now): where what a change's cause tells reads where things are laid
+/// out for that change (a model told how much room what is laid out takes, as what changes that comes), never as a
+/// frame lays it out (docs/retained.md rule 10). Taken in no change, now. The node's: not done once it is let go.
+pub fn View::when_committed(self : View, f : () -> Unit) -> Unit {
+  guard self.live() is Some(_) else { return }
+  let tree = self.tree
+  let at = self.at
+  let gen = self.gen
+  tree.after_event(fn() {
+    @signals.after_all_flushed(fn() {
+      let n = tree.nodes[at]
+      guard n.live && n.gen == gen else { return }
+      // (inside a layout of the tree's (what it marks done as it is laid out): where things are as it placed them)
+      if !tree.laying {
+        tree.laid_now()
+      }
+      f()
+    })
+  })
 }
 
 ///|

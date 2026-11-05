@@ -954,14 +954,13 @@ fn md_placed_runs(md : MdNode, xs : Array[MdInline]) -> Array[(Int, Array[MdInli
 /// the width it has now, kept by the file and which of its showings in the paragraph it is; another file made again in
 /// its place.
 fn md_image_rows_node(p : @view.View, md : MdNode, images : () -> Array[(String, Double)]) -> Unit {
-  p.padding(Is((0.0, image_row_gap, 0.0, image_row_gap))).gap(Is(image_row_gap)) |> ignore
-  // det-ok(layout-read-back): a message's image is drawn at a width it is given (its box, its picture decoded that size), as image_rows has it
+  // (made for the room it is laid out in, in the frame's one layout, again as that is another: View::by_room; a
+  // message's image drawn at a width it is given, its picture decoded that size, as image_rows has it)
+  p.by_room(fn(w) { w }, fn(col, room_w) {
+  col.padding(Is((0.0, image_row_gap, 0.0, image_row_gap))).gap(Is(image_row_gap)) |> ignore
   let room = fn() {
-    p.words_redone() |> ignore
-    match p.laid_size_told() {
-      Some((w, _)) => w
-      None => p.window().0
-    }
+    col.words_redone() |> ignore
+    room_w
   }
   // (each by its key, the file and how many of it are before it: one file twice two images)
   let rows = fn() {
@@ -985,7 +984,7 @@ fn md_image_rows_node(p : @view.View, md : MdNode, images : () -> Array[(String,
     }
     out
   }
-  p.each(fn() { rows().mapi(fn(i, _) { i }) }, fn(i) { i }, fn(line, i) {
+  col.each(fn() { rows().mapi(fn(i, _) { i }) }, fn(i) { i }, fn(line, i) {
     let i = @signals.untracked(fn() { i.get() })
     line.row(Is(true)).gap(Is(image_row_gap)) |> ignore
     let row = fn() { rows().get(i).unwrap_or([]) }
@@ -1011,4 +1010,6 @@ fn md_image_rows_node(p : @view.View, md : MdNode, images : () -> Array[(String,
       cell.width(By(fn() { Some(width()) })) |> ignore
     })
   })
+  })
+  |> ignore
 }

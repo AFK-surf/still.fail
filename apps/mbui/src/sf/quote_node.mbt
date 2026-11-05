@@ -36,7 +36,8 @@ pub fn quote_card_node(
   let pin = fn() { pin_of(author(), role()) }
   let card_at : Ref[@view.View?] = Ref(None)
   let words_at : Ref[@view.View?] = Ref(None)
-  let picture_height = @signals.signal(0.0)
+  // (its picture's row while it shows: how tall a copy of it keeps its room, as it is laid out as the copy is made)
+  let picture_at : Ref[@view.View?] = Ref(None)
   let make = fn(outer : @view.View) {
     card_at.val = Some(outer.box(fn(card) {
       card.radius(By(fn() { if composer { corner() } else { quote_corner } }))
@@ -108,9 +109,7 @@ pub fn quote_card_node(
           let inset = corner_inset - quote_card_in
           p.row(Is(true)).padding(Is(if composer { (16.0, 6.0, 16.0, 0.0) } else { (inset, 0.0, inset, inset) })) |> ignore
           make_picture(p)
-          p.reacts(fn() { p.laid_size_told().map(fn(size) { size.1 }) }, fn(h) {
-            picture_height.set(h.unwrap_or(0.0))
-          })
+          picture_at.val = Some(p)
         })
         None => ()
       }
@@ -144,9 +143,13 @@ pub fn quote_card_node(
     copy: fn(p, width) {
       // The picture has its own flight. Repeating its factory here would register the flying copy as the real
       // message's landing and preview thumbnail, then remove that registration when the copy is released.
+      let picture_h = match picture_at.val {
+        Some(v) if v.alive() => v.laid_size().1
+        _ => 0.0
+      }
       let picture_room = picture.map(fn(_) {
         fn(room : @view.View) {
-          room.height(By(fn() { Some(picture_height.get()) })) |> ignore
+          room.height(Is(Some(picture_h))) |> ignore
         }
       })
       quote_card_node(p, author, words, role~, comment~, composer~, corner~,

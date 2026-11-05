@@ -3079,7 +3079,8 @@ pub fn file_viewer_reset() -> Unit {
   pv_frames_n.val = 0
   pv_first.clear()
   pv_hidden.set("")
-  marks_foot_taken.set(0.0)
+  marks_foot_taken.val = 0.0
+  marks_foot_at.val = None
   pv_read.clear()
   pv_strip.leaving = None
   pv_strip.way.put(0.0)

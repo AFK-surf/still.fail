@@ -185,20 +185,22 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   )
   // the stage: the room it is laid out in (the keyboard over it, not the stage made shorter for it: FilePreview.kt),
   // and the picture's size (as sent, else as decoded, else its stand-in's: followed by its own decodes), told the zoom
-  // at the moment either changes
+  // at the moment either changes; how much of its foot marking's foot takes, as that is laid out once the change that
+  // changes it (marking, the window) is made whole (View::when_committed), from that moment
   n.reacts(
     fn() {
       let (w, h) = stage()
+      marks_said()
       // (a film's or a song's picture sized by its player alone, Viewer::video_natural: nothing of a picture's asked
       // for it here, its thumbnail none)
-      ((w, h + @ui.current().ime_inset()), if vw.played() { (0.0, 0.0) } else { vw.natural_size(src) }, vw.bar_over(w), marks_foot_over())
+      ((w, h + @ui.current().ime_inset()), if vw.played() { (0.0, 0.0) } else { vw.natural_size(src) }, vw.bar_over(w))
     },
     fn(told) {
-      let ((bw, bh), (nw, nh), bar, foot) = told
+      let ((bw, bh), (nw, nh), bar) = told
       let at = n.cause_at()
       vw.zoom.boxed(bw, bh, at~)
-      vw.zoom.under_bars(bar, foot, at~)
       vw.zoom.natural(nw, nh, at~)
+      n.when_committed(fn() { vw.zoom.under_bars(bar, marks_foot_over(), at~) })
     },
   )
   // lifted over the keyboard while marking, as far as keeps what is being written (or the open note's pin, its box
@@ -349,51 +351,26 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
           _ => None
         }
       }
+      // (each laid out after all else, where its flight has it as the thumbnail is laid out then: View::laid_after;
+      // what it draws as the tree is placed, Live's Placed)
       canvas.box(fn(cut) {
-        cut
-        .over(Is(true))
+        flight_laid(cut, fn() { flight(cut).map(fn(f) { f.0.cut }) }, fn() { (0.0, 0.0) })
         .clips(Is(true))
-        .offset(By(fn() {
-          match flight(cut) {
-            Some((f, _)) => (f.cut.0, f.cut.1)
-            None => (0.0, 0.0)
-          }
-        }))
-        .width(By(fn() { flight(cut).map(fn(f) { f.0.cut.2 }) }))
-        .height(By(fn() { flight(cut).map(fn(f) { f.0.cut.3 }) }))
         |> ignore
         cut.box(fn(b) {
-          b
-          .over(Is(true))
+          flight_laid(b, fn() { flight(b).map(fn(f) { f.0.box }) }, flight_at(fn() { flight(b).map(fn(f) { f.0.cut }) }))
           .clips(Is(true))
-          .corners(By(fn() { flight(b).map(fn(f) { f.0.corners }) }))
-          .offset(By(fn() {
-            match flight(b) {
-              Some((f, _)) => (f.box.0 - f.cut.0, f.box.1 - f.cut.1)
-              None => (0.0, 0.0)
-            }
-          }))
-          .width(By(fn() { flight(b).map(fn(f) { f.0.box.2 }) }))
-          .height(By(fn() { flight(b).map(fn(f) { f.0.box.3 }) }))
+          .corners(Placed(fn() { flight(b).map(fn(f) { f.0.corners }) }))
           |> ignore
           b.box(fn(p) {
-            p
-            .over(Is(true))
-            .offset(By(fn() {
-              match flight(p) {
-                Some((f, _)) => (f.picture.0 - f.box.0, f.picture.1 - f.box.1)
-                None => (0.0, 0.0)
-              }
-            }))
-            .width(By(fn() { flight(p).map(fn(f) { f.0.picture.2 }) }))
-            .height(By(fn() { flight(p).map(fn(f) { f.0.picture.3 }) }))
-            .image(By(fn() {
+            flight_laid(p, fn() { flight(p).map(fn(f) { f.0.picture }) }, flight_at(fn() { flight(p).map(fn(f) { f.0.box }) }))
+            .image(Placed(fn() {
               match flight(p) {
                 Some(_) => vw.picture_shown(src)
                 None => None
               }
             }))
-            .image_for(By(fn() {
+            .image_for(Placed(fn() {
               match (flight(p), vw.picture(src)) {
                 (Some((_, (_, _, w, h))), picture) if picture != "" && picture == vw.image => (w, h)
                 _ => (0.0, 0.0)
@@ -1694,21 +1671,14 @@ fn viewer_player(n : @view.View, src : Source, vw : Viewer) -> Unit {
   // its flight: the box it is cut to, its box round (the thumbnail's corners as far as the flight leaves them), the
   // still in it on the black where it is letterboxed or not decoded yet (one frame), what the thumbnail draws over it
   let flight = fn(node : @view.View) -> FlightBox? { vw.player_flight(src, node, at(node)).map(fn(f) { f.0 }) }
+  // (each laid out after all else, where its flight has it as the thumbnail is laid out then: View::laid_after; what
+  // it draws as the tree is placed, Live's Placed)
   n.box(fn(cut) {
-    cut
-    .over(Is(true))
+    flight_laid(cut, fn() { flight(cut).map(fn(f) { f.cut }) }, fn() { (0.0, 0.0) })
     // (a picture alone: no press taken anywhere in it, whatever is under it its own (it covers the window as it waits
     // for the frame it goes back with))
     .presses(Is(false))
     .clips(Is(true))
-    .offset(By(fn() {
-      match flight(cut) {
-        Some(f) => (f.cut.0, f.cut.1)
-        None => (0.0, 0.0)
-      }
-    }))
-    .width(By(fn() { flight(cut).map(fn(f) { f.cut.2 }) }))
-    .height(By(fn() { flight(cut).map(fn(f) { f.cut.3 }) }))
     |> ignore
     cut.box(fn(b) {
       let picture = fn() {
@@ -1721,20 +1691,11 @@ fn viewer_player(n : @view.View, src : Source, vw : Viewer) -> Unit {
           ""
         }
       }
-      b
-      .over(Is(true))
+      flight_laid(b, fn() { flight(b).map(fn(f) { f.box }) }, flight_at(fn() { flight(b).map(fn(f) { f.cut }) }))
       .clips(Is(true))
-      .corners(By(fn() { flight(b).map(fn(f) { f.corners }) }))
-      .offset(By(fn() {
-        match flight(b) {
-          Some(f) => (f.box.0 - f.cut.0, f.box.1 - f.cut.1)
-          None => (0.0, 0.0)
-        }
-      }))
-      .width(By(fn() { flight(b).map(fn(f) { f.box.2 }) }))
-      .height(By(fn() { flight(b).map(fn(f) { f.box.3 }) }))
+      .corners(Placed(fn() { flight(b).map(fn(f) { f.corners }) }))
       // (no still: the black alone)
-      .ground(By(fn() {
+      .ground(Placed(fn() {
         if flight(b) is Some(_) && picture() == "" {
           0x000000FFL
         } else {
@@ -1747,13 +1708,13 @@ fn viewer_player(n : @view.View, src : Source, vw : Viewer) -> Unit {
       b.box(fn(f) {
         f
         .over(Is(true))
-        .image(By(fn() {
+        .image(Placed(fn() {
           match flight(f) {
             Some(_) if picture() != "" => Some((picture(), "", stage_px))
             _ => None
           }
         }))
-        .image_in(By(fn() {
+        .image_in(Placed(fn() {
           match flight(f) {
             Some(fb) if picture() != "" =>
               Some(((fb.picture.0 - fb.box.0, fb.picture.1 - fb.box.1, fb.picture.2, fb.picture.3), 0x000000FFL))
@@ -1769,7 +1730,7 @@ fn viewer_player(n : @view.View, src : Source, vw : Viewer) -> Unit {
       b.box(fn(o) {
         o
         .over(Is(true))
-        .alpha(By(fn() {
+        .alpha(Placed(fn() {
           match vw.player_flight(src, o, at(o)) {
             Some((_, p)) => dmax(0.0, 1.0 - flight_over_gone * p)
             None => 0.0
@@ -1791,7 +1752,7 @@ fn viewer_player(n : @view.View, src : Source, vw : Viewer) -> Unit {
   n.box(fn(s) {
     s
     .over(Is(true))
-    .alpha(By(fn() {
+    .alpha(Placed(fn() {
       let t = at(s)
       let bars = match vw.player_flight(src, s, t) {
         Some((_, p)) => bars_share(p)
@@ -1994,4 +1955,31 @@ fn Viewer::words_share(self : Viewer, p : Double) -> Double {
 fn Viewer::asked_now(self : Viewer) -> Bool {
   self.asked_told.get() |> ignore
   self.asked
+}
+
+///|
+/// Node `v` of a flight laid out after all else (View::laid_after) where `rect` says in the window, less where what
+/// holds it is (`holder`, its corner in the window too), as the thumbnail it flies from is laid out then; as big as
+/// nothing where it says none.
+fn flight_laid(v : @view.View, rect : () -> (Double, Double, Double, Double)?, holder : () -> (Double, Double)) -> @view.View {
+  v.laid_after(fn() {
+    match rect() {
+      Some((x, y, w, h)) => {
+        let (hx, hy) = holder()
+        (x - hx, y - hy, Some(w), Some(h))
+      }
+      None => (0.0, 0.0, Some(0.0), Some(0.0))
+    }
+  })
+}
+
+///|
+/// Where a flight's box `rect` has its corner, in the window (none: the window's own).
+fn flight_at(rect : () -> (Double, Double, Double, Double)?) -> () -> (Double, Double) {
+  fn() {
+    match rect() {
+      Some((x, y, _, _)) => (x, y)
+      None => (0.0, 0.0)
+    }
+  }
 }
