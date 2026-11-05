@@ -548,6 +548,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // may have changed)
     let recount = anew ||
       (room is Some(_) && moving is None) ||
+      index.val.length() != all.length() ||
       (match index_keys.val {
         Some(a) => !physical_equal(a, all)
         None => true
