@@ -51,6 +51,39 @@ for (const recursive of [false, true]) test(`session list candidates follow repl
   } finally { store.close(); }
 });
 
+for (const recursive of [false, true]) test(`session list candidates stay exact through mixed replacements (recursive triggers ${recursive})`, () => {
+  const { store, db } = fixture(), reference = fixture();
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    reference.db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    dropIndex(reference.store);
+    const statements = (source: typeof db) => ({
+      put: source.prepare("INSERT OR REPLACE INTO sessions (rowid,key,connect,scope,runtime,profile,workspace,token,created_at,last_active_at,ws,archived_at) VALUES (?,?,?,'thread','claude','cc','/w',?,1,1,?,?)"),
+      change: source.prepare("UPDATE OR REPLACE sessions SET rowid=?, key=?, token=?, connect=?, ws=?, archived_at=? WHERE key=?"),
+      drop: source.prepare("DELETE FROM sessions WHERE key=?"),
+    });
+    const actual = statements(db), before = statements(reference.db);
+    const sessions = (source: typeof db) => source.prepare("SELECT rowid AS rowid,key,token,connect,ws,archived_at FROM sessions ORDER BY key").all();
+    const candidates = () => db.prepare("SELECT session,ws,connect,archived FROM session_list_rows ORDER BY session").all();
+    const expected = () => db.prepare("SELECT key AS session,ws,connect,archived_at IS NOT NULL AS archived FROM sessions ORDER BY key").all();
+    let seed = 0x12345678;
+    const next = (n: number) => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed % n; };
+    for (let i = 0; i < 200; i++) {
+      const rowid = next(23) - 5, key = `s${next(13)}`, token = `t${next(13)}`, connect = `c${next(4)}`;
+      const ws = [null, "", "mine", "other"][next(4)]!, archived = next(2) ? 2 : null;
+      const method = i % 4 === 0 ? "drop" : i % 4 === 1 ? "change" : "put";
+      const args = method === "drop" ? [key] : method === "change" ? [rowid, key, token, connect, ws, archived, `s${next(13)}`] : [rowid, key, connect, token, ws, archived];
+      const run = (ops: ReturnType<typeof statements>) => {
+        try { ops[method].run(...args); return null; }
+        catch (error) { return (error as { errcode?: number }).errcode; }
+      };
+      assert.equal(run(actual), run(before), `conflict policy at operation ${i}`);
+      assert.deepEqual(sessions(db), sessions(reference.db), `sessions at operation ${i}`);
+      assert.deepEqual(candidates(), expected(), `session list candidates at operation ${i}`);
+    }
+  } finally { store.close(); reference.store.close(); }
+});
+
 test("old sessions are indexed in bounded batches while they change", () => {
   const { store, db, add, exact } = fixture();
   try {
@@ -84,6 +117,21 @@ test("a failed old-session batch rolls back its cursor and candidates", () => {
     assert.equal(db.prepare("SELECT last_rowid FROM session_list_meta WHERE id=1").get()!.last_rowid, null);
     db.exec("DROP TRIGGER fail_session_list");
     assert.deepEqual(sessionListStep(db, 10), { done: true, visited: 2 });
+    exact();
+  } finally { store.close(); }
+});
+
+test("64-bit old session rowids do not prevent preparing a session list", () => {
+  const { store, db, add, exact } = fixture();
+  try {
+    dropIndex(store);
+    add("low", "x", "mine"); add("high", "y", null);
+    db.exec("UPDATE sessions SET rowid=CAST('-9007199254740993' AS INTEGER) WHERE key='low'");
+    db.exec("UPDATE sessions SET rowid=CAST('9007199254740993' AS INTEGER) WHERE key='high'");
+    installSessionListIndex(db);
+    assert.deepEqual(sessionListStep(db, 1), { done: false, visited: 1 });
+    assert.deepEqual(sessionListStep(db, 1), { done: false, visited: 1 });
+    assert.deepEqual(sessionListStep(db, 1), { done: true, visited: 0 });
     exact();
   } finally { store.close(); }
 });

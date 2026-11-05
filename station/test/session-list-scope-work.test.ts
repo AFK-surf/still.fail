@@ -28,7 +28,7 @@ for (const archived of [false, true]) for (const connect of [null, "client"]) {
             // Count candidates before the workspace predicate when the existing global partial index is used.
             const global = /^SELECT \* FROM sessions INDEXED BY sessions_(?:live|put_away) WHERE /.test(sql);
             const statement = target.prepare(global ? sql.replace(" WHERE ", " WHERE visit_session_candidate() AND ") : sql);
-            if (!/^SELECT\b/i.test(sql)) return statement;
+            if (!/^(SELECT|WITH)\b/i.test(sql)) return statement;
             return new Proxy(statement, { get(t, p) {
               if (p === "all") return (...args: unknown[]) => {
                 plans.push(...(target.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args as any[]) as { detail: string }[]).map((row) => row.detail));
