@@ -1429,7 +1429,8 @@ fn Ctx::tree_draw_node(
   if c.native_anchor != "" {
     let n = scene_anchor_drawn(c.native_anchor, self.ninst)
     self.push_inst(x, y, c.w * s, c.h * s, 0.0, 0.0, 0.0, 0.0, 0L, 0.0, 0.0, 0.0, 0.0, 0.0)
-    // (its number in it, as no notch: native_anchor.mbt's anchor_of)
+    // (its number in it, slot 21, with no notch: renderers read 21 only where 22, the notch's radius, is above 0, and
+    // 22 is 0 here; native_anchor.mbt's anchor_of)
     self.inst[(self.ninst - 1) * inst_size + 21] = (n + 1).to_double()
   }
   // (its edge drawn after what it holds, composed as the rest of it was (moved, turned, faded, cut, its own): taken

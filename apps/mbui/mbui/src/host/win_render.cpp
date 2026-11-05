@@ -125,6 +125,8 @@ static const char *shader_src =
     "  float2 hs = r.zw * 0.5;\n"
     "  return mb_sd_box(p - r.xy - hs, hs, mb_corner_of(p - r.xy - hs, rad), 1e9);\n"
     "}\n"
+    // (slot 21 also carries a native anchor's number, where 22, the notch's radius, is 0: notch_cut reads none of the
+    // notch then; ui/native_anchor.mbt anchor_of. Read 21 otherwise, and the anchors need another slot.)
     "// a notch cut into the top edge (scene.mbt 21-23): a circle about the top's middle (pad.y below it, pad.z its radius),\n"
     "// met by the edge through fillets (pad.w): the rounded intersection with what is outside the circle\n"
     "float notch_cut(float d, float2 p, float4 r, float4 pad) {\n"
