@@ -9,24 +9,30 @@
 // draftWords: their `words`), which the fixture leaves out.
 
 ///|
-/// A person's words in the runs the core draws them in (refLinks.ts draftWords): each mark `@[title]` a reference to
-/// its chat, its title its text; the rest as written.
-fn draft_runs(words : String) -> Json {
+/// A person's words as sent (their marks links, `[title](its page)`: refs.ts expand) in the runs the core draws them in
+/// (refLinks.ts personWords): each link to a chat a reference, its title its text; the rest as written.
+fn person_runs(words : String) -> Json {
   let out : Array[Json] = []
   let mut rest = words
   while true {
-    match rest.find("@[") {
-      Some(i) => {
-        let after = rest.unsafe_substring(start=i + 2, end=rest.length())
-        match after.find("]") {
-          Some(j) => {
+    match rest.find("](https://app.still.fail/") {
+      Some(j) => {
+        let head = rest.unsafe_substring(start=0, end=j)
+        match (head.rev_find("["), rest.unsafe_substring(start=j + 2, end=rest.length()).find(")")) {
+          (Some(i), Some(k)) => {
             if i > 0 {
-              out.push({ "text": Json::string(rest.unsafe_substring(start=0, end=i)) })
+              out.push({ "text": Json::string(head.unsafe_substring(start=0, end=i)) })
             }
-            out.push({ "text": Json::string(after.unsafe_substring(start=0, end=j)), "ref": true })
-            rest = after.unsafe_substring(start=j + 1, end=after.length())
+            let link = rest.unsafe_substring(start=j + 2, end=j + 2 + k)
+            out.push({
+              "text": Json::string(head.unsafe_substring(start=i + 1, end=head.length())),
+              "link": Json::string(link),
+              "ref": true,
+              "to": { "chat": true },
+            })
+            rest = rest.unsafe_substring(start=j + 3 + k, end=rest.length())
           }
-          None => break
+          _ => break
         }
       }
       None => break
@@ -39,49 +45,49 @@ fn draft_runs(words : String) -> Json {
 }
 
 ///|
-/// A person's words with each mark `@[title]` the link the core makes of it once sent (`[title](its page)`, refs.ts):
-/// the chats' pages by their titles in `links`.
-fn marks_linked(words : String, links : Map[String, String]) -> String {
+/// Words going out with each mark of a chat picked its link, as the core sends them (the fixture's links kept for
+/// marks: chat.ref).
+fn outbox_linked(words : String) -> String {
   let mut out = words
-  for title, link in links {
+  for title, link in @sffixture.fix_ref_links {
     out = out.replace_all(old="@[" + title + "]", new="[" + title + "](" + link + ")")
   }
   out
 }
 
 ///|
-/// `v` as the core says it: each entry of the outbox that holds a mark with its words read (draftWords: its `words`),
-/// each message its marks made links (`links`).
-fn with_draft_runs(v : Json, links : Map[String, String]) -> Json {
+/// `v` as the core says it (views.ts): each entry of the outbox and each person's message with its words in runs (its
+/// marks, as the core sends them, links: the fixture's own are made links as it delivers them).
+fn with_draft_runs(v : Json) -> Json {
   match v {
     Object(m) => {
       let o : Map[String, Json] = {}
       for k, x in m {
-        o[k] = with_draft_runs(x, links)
+        o[k] = with_draft_runs(x)
       }
-      match (m.get("text"), m.get("seq"), m.get("state"), m.get("words")) {
-        (Some(String(t)), Some(_), _, _) if t.contains("@[") => o["text"] = Json::string(marks_linked(t, links))
-        (Some(String(t)), None, Some(_), None) if t.contains("@[") => o["words"] = draft_runs(t)
+      match (m.get("text"), m.get("seq"), m.get("state"), m.get("authorKind"), m.get("words")) {
+        (Some(String(t)), Some(_), _, Some(String("person")), None) => o["words"] = person_runs(t)
+        // (an entry of the outbox: its text with its marks made links as it goes out, refs.ts expand, in the runs a
+        // message's are: views.ts personWords)
+        (Some(String(t)), None, Some(_), _, None) if t != "" => o["words"] = person_runs(outbox_linked(t))
         _ => ()
       }
       Json::object(o)
     }
-    Array(a) => Json::array(a.map(fn(x) { with_draft_runs(x, links) }))
+    Array(a) => Json::array(a.map(with_draft_runs))
     _ => v
   }
 }
 
 ///|
-/// The fixture, its core saying a person's words as the core does (`links`: the pages of the chats a mark names).
-fn reads_refs_as_core(links : Map[String, String]) -> (Source) -> Source {
-  fn(s) {
-    {
-      ..s,
-      topic: fn(name, params) {
-        let tv = (s.topic)(name, params)
-        { ..tv, value: tv.value.map(fn(x) { with_draft_runs(x, links) }) }
-      },
-    }
+/// The fixture, its core saying a person's words as the core does.
+fn reads_refs_as_core(s : Source) -> Source {
+  {
+    ..s,
+    topic: fn(name, params) {
+      let tv = (s.topic)(name, params)
+      { ..tv, value: tv.value.map(with_draft_runs) }
+    },
   }
 }
 
@@ -111,8 +117,8 @@ fn ref_inks_in(glyphs : Array[(Double, Double, Int64)], x : Double, y : Double, 
 }
 
 ///|
-/// The grounds under a piece: what is drawn round it no bigger than it with a few points either way (a chip's, not a
-/// bubble's or the page's).
+/// The grounds drawn within a piece: what is drawn round some of its words, no bigger than it with a few points
+/// either way (a reference's chip in its line), not a bubble's or the page's: each its place in the piece and colour.
 fn ref_grounds_in(
   rects : Array[(Double, Double, Double, Double, Int64)],
   x : Double,
@@ -123,8 +129,9 @@ fn ref_grounds_in(
   let out : Array[Int64] = []
   for r in rects {
     let (rx, ry, rw, rh, colour) = r
-    let holds = rx <= x + 1.0 && ry <= y + 1.0 && rx + rw >= x + w - 1.0 && ry + rh >= y + h - 1.0
-    if holds && rw <= w + 24.0 && rh <= h + 12.0 && !out.contains(colour) {
+    let (cx, cy) = (rx + rw / 2.0, ry + rh / 2.0)
+    let within = cx >= x && cx <= x + w && cy >= y && cy <= y + h
+    if within && rw < w + 2.0 && rh <= h + 12.0 && !out.contains(colour) {
       out.push(colour)
     }
   }
@@ -133,24 +140,25 @@ fn ref_grounds_in(
 }
 
 ///|
-/// What a frame drew of words sent: for each place `title` is drawn (the reference), the pieces of the same line that
-/// hold one of `around`, each against it; the one of them like `like` if any (else the first).
+/// What a frame drew of words sent: for each place words holding `title` (the reference) are drawn with one of
+/// `around` in them or on their line, those pieces, each against the first; the first such place found.
 fn ref_pieces(t : @ui.Tester, title : String, around : Array[String], like : Array[RefPiece]?) -> Array[RefPiece]? {
+  ignore(like)
   let words = t.words().filter(fn(d) { d.5 >= 0.05 })
   let glyphs = t.drawn_glyphs()
   let rects = t.drawn_rects()
-  let mut first : Array[RefPiece]? = None
+  let has_around = fn(s : String) { around.iter().any(fn(a) { s.contains(a) }) }
   for a in words {
-    if a.0 != title {
+    // (the agent's answer quotes the words: not them)
+    if !a.0.contains(title) || a.0.contains("收到") {
       continue
     }
-    let (_, ax, ay, aw, ah, _) = a
-    let out : Array[RefPiece] = [
-      { words: title, dx: 0.0, dy: 0.0, w: aw, h: ah, inks: ref_inks_in(glyphs, ax, ay, aw, ah), grounds: ref_grounds_in(rects, ax, ay, aw, ah) },
-    ]
+    let (_, ax, ay, _, ah, _) = a
+    let out : Array[RefPiece] = []
     for d in words {
       let (dw, x, y, w, h, _) = d
-      if dw != title && around.iter().any(fn(s) { dw.contains(s) }) && (y + h / 2.0 - (ay + ah / 2.0)).abs() < ah * 2.0 {
+      let same_line = (y + h / 2.0 - (ay + ah / 2.0)).abs() < ah * 2.0
+      if same_line && !dw.contains("收到") && (dw.contains(title) || has_around(dw)) && (x - ax).abs() < 800.0 {
         out.push({
           words: dw,
           dx: (x - ax).round(),
@@ -162,17 +170,12 @@ fn ref_pieces(t : @ui.Tester, title : String, around : Array[String], like : Arr
         })
       }
     }
-    out[0] = { ..out[0], w: aw.round(), h: ah.round() }
     out.sort_by(fn(p, q) { if p.dx < q.dx { -1 } else if p.dx > q.dx { 1 } else { 0 } })
-    match like {
-      Some(l) if l == out => return Some(out)
-      _ => ()
-    }
-    if first is None && out.length() > 1 {
-      first = Some(out)
+    if out.iter().any(fn(p) { has_around(p.words) }) {
+      return Some(out)
     }
   }
-  first
+  None
 }
 
 ///|
@@ -183,7 +186,7 @@ test "words sent with a reference picked from the @ menu are drawn as their mess
   for s in seen_screens {
     let (name, w, h, platform) = s
     let calls : Array[Made] = []
-    let t = wide_tester(calls, mode="chat", w~, h~, platform~, wrap=reads_refs_as_core({ "首页的列表改成按天分组": "https://app.still.fail/w/ws1/s/st1/chats/s-c2" }))
+    let t = wide_tester(calls, mode="chat", w~, h~, platform~, wrap=reads_refs_as_core)
     t.set_frame_period(if platform == 0 { 1000.0 / 60.0 } else { 1000.0 / 120.0 })
     t.run_for(@ui.move_most_ms)
     seen_tap(t, "发消息")
@@ -203,37 +206,39 @@ test "words sent with a reference picked from the @ menu are drawn as their mess
     t.text_told("这个吧", t.time())
     t.run_as_host(@ui.move_most_ms)
     let typed = t.ime().1
-    // sent: each frame drawn, kept as a host shows it, till the message is in the chat
-    let seen : Array[(Double, Array[RefPiece]?)] = []
-    let landed_at = Ref(-1.0)
+    // sent: each frame's glyphs (where, in what ink), kept as a host shows it, till the message is in the chat
+    let seen : Array[(Double, Array[(Double, Double, Int64)])] = []
     t.record_host()
     t.host_frames() |> ignore
-    t.each_frame(Some(fn() { seen.push((t.time(), ref_pieces(t, title, around, None))) }))
+    t.each_frame(Some(fn() { seen.push((t.time(), t.drawn_glyphs())) }))
     seen_send(t)
     t.run_as_host(fix_deliver_ms + @ui.move_most_ms)
     t.each_frame(None)
-    ignore(landed_at)
-    // (its message, once in the chat and still: what every frame before is held to)
-    let message = ref_pieces(t, title, around, None)
-    match message {
+    let asked : Map[String, Bool] = {}
+    for f in t.host_frames() {
+      asked[f.at.to_string()] = f.asked || !f.changed
+    }
+    // (and on, its agent's answer and its turn over: the message as the chat has it from then)
+    t.run_as_host(fix_answer_ms + fix_turn_end_ms + @ui.move_most_ms)
+    // (its message, once in the chat and still: its glyphs, each against its first, what every frame before is held to)
+    match ref_pieces(t, title, around, None) {
       None => out.push("\{name}: 「\{typed}」 sent: no message with 「\{title}」 and its words in the chat at the end")
       Some(m) => {
-        let asked : Map[String, Bool] = {}
-        for f in t.host_frames() {
-          asked[f.at.to_string()] = f.asked || !f.changed
-        }
-        let mut shown : Array[RefPiece]? = None
+        let line = t.words().filter(fn(d) { d.0 == m[0].words && d.5 >= 0.05 && !d.0.contains("收到") })
+        let (lx, ly, lw, lh) = (line[0].1, line[0].2, line[0].3, line[0].4)
+        let mine = t.drawn_glyphs().filter(fn(g) { g.0 >= lx - 1.0 && g.0 <= lx + lw + 1.0 && g.1 >= ly - 1.0 && g.1 <= ly + lh + 1.0 })
+        mine.sort_by(fn(p, q) { if p.0 < q.0 { -1 } else if p.0 > q.0 { 1 } else { 0 } })
+        let shape = mine.map(fn(g) { (g.0 - mine[0].0, g.1 - mine[0].1, g.2) })
+        let mut shown : Array[(Double, Double, Int64)] = []
         for e in seen {
-          let (at, _) = e
+          let (at, glyphs) = e
           if asked.get(at.to_string()).unwrap_or(true) {
-            shown = ref_pieces_again(e, m)
+            shown = glyphs
           }
-          match shown {
-            Some(p) if p == m => ()
-            other => {
-              out.push("\{name}: at \{at.round()} ms the words sent drawn as \{other}, their message as \{m}")
-              break
-            }
+          let (best, inks) = ref_shape_in(shown, shape)
+          if best < shape.length() {
+            out.push("\{name}: at \{at.round()} ms the words sent are not drawn as their message is: \{best} of its \{shape.length()} glyphs where and in the ink they are in it (its inks \{shape.map(fn(g) { g.2 })}, there \{inks})")
+            break
           }
         }
       }
@@ -243,7 +248,41 @@ test "words sent with a reference picked from the @ menu are drawn as their mess
 }
 
 ///|
-/// A frame's pieces as caught (the first place found), kept to compare.
-fn ref_pieces_again(e : (Double, Array[RefPiece]?), _like : Array[RefPiece]) -> Array[RefPiece]? {
-  e.1
+/// How much of `shape` (glyphs each against the first: where, in what ink) is drawn among `glyphs` at its best place:
+/// how many of its glyphs, and the inks drawn where they are there.
+fn ref_shape_in(glyphs : Array[(Double, Double, Int64)], shape : Array[(Double, Double, Int64)]) -> (Int, Array[Int64]) {
+  let mut best = 0
+  let mut best_inks : Array[Int64] = []
+  for g in glyphs {
+    // (a place its first glyph could be: one in its ink, or any while none is found)
+    if shape.length() > 0 && g.2 != shape[0].2 && best > 0 {
+      continue
+    }
+    let mut n = 0
+    let inks : Array[Int64] = []
+    for s in shape {
+      let (dx, dy, ink) = s
+      let mut here : Int64 = -1L
+      for o in glyphs {
+        if (o.0 - g.0 - dx).abs() < 1.0 && (o.1 - g.1 - dy).abs() < 1.0 {
+          here = o.2
+          if o.2 == ink {
+            break
+          }
+        }
+      }
+      if here == ink {
+        n += 1
+      }
+      inks.push(here)
+    }
+    if n > best {
+      best = n
+      best_inks = inks
+    }
+    if best == shape.length() {
+      break
+    }
+  }
+  (best, best_inks)
 }
