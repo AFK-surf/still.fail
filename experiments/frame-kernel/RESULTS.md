@@ -241,10 +241,64 @@ The same checked-trap shell and 512 KiB stack were used. The full-render input
 and scroll movies also retain identical decoded hashes against the original
 pre-integration baseline for all 18 and 78 frames respectively.
 
-The two corrected programs are being compared under the same normal trap setting,
-in independent/reference/reference/independent order. This comparison reuses the
-validated Wasm modules rather than rebuilding different source states. Previous
-incorrect-presentation runs are not used to claim an adoption speedup.
+### Corrected native comparison
+
+The two corrected programs were compared under the same normal signal-trap
+setting, in independent/reference/reference/independent order. This reused the
+validated Wasm modules rather than rebuilding different source states. All 12
+open/back/reopen, input and scroll trials passed without a layout-cycle diagnostic
+or trap. All 12 final screens were inspected; the four input screens show six
+lines with the same keyboard inset (279.076935 layout units). The native scroll
+end positions differ as actual input/frame schedules differ, so these captures
+are not asserted to be pixel-identical.
+
+The trace joins each measured interval to the thread that emitted its own record.
+Intervals are clipped to the operation's start/end markers, including the input
+work after a start marker in the middle of a frame. Excluding that partial frame
+would, for example, miss a 301 ms click-handling interval in the second
+independent open trial. Every included interval has complete recorded scheduler
+state coverage. The ring-buffer/periodic-flush configuration has no reported
+discard or missing-flush issue; 37 unsupported ftrace setup events remain reported
+as notices. Monotonic clock offsets vary by less than 0.0001 ms.
+
+These are summed milliseconds across each scripted operation, not per-frame
+times. Each cell retains both trials. "Running" is the Android scheduler's
+classification; it cannot exclude descheduling of a virtual CPU by the Mac host.
+"Post-tree" includes the old-frame path, including building, layout and painting,
+and any additional tree work it triggers. It is not just GPU drawing.
+
+| Operation / implementation | Work-bearing frames | Framework wall ms | Framework running ms | Tree running ms | Post-tree running ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Scroll / independent | 60, 73 | 361, 200 | 201, 192 | 21, 19 | 180, 173 |
+| Scroll / reference | 61, 76 | 347, 235 | 241, 219 | 33, 26 | 208, 193 |
+| Six-line input / independent | 11, 11 | 49, 16 | 24, 15 | 2, 3 | 21, 13 |
+| Six-line input / reference | 11, 11 | 46, 21 | 34, 19 | 5, 4 | 29, 15 |
+| Open/back/reopen / independent | 9, 4 | 127, 254 | 109, 240 | 19, 37 | 90, 203 |
+| Open/back/reopen / reference | 12, 5 | 114, 211 | 109, 197 | 17, 19 | 92, 179 |
+
+Input handling outside the frame is separate: each input trial records 12 text
+callbacks and five key callbacks. Their combined running time is 21/18 ms for
+the independent integration and 15/17 ms for the reference. Script-dispatched
+pointer handling is inside the frame's drive interval, not in those text/key
+totals. Including presentation and the drive interval, the open trials spend
+309/748 ms in callbacks for the independent integration and 221/412 ms for the
+reference. The second independent opening contains a 90 ms framework frame and
+a separate 301 ms drive/input interval; neither is cleared by the small average
+cost of ordinary scrolling.
+
+This does not establish an overall win for the independent integration. It
+removes proven historical-row work, but 86–90% of the recorded framework running
+time during scrolling remains after the initial tree stage, and opening remains
+expensive. The two code bases also differ outside the experimental integration;
+the native driver produces different frame schedules. These results cannot
+isolate the intrinsic-height/index changes as the cause of a timing difference.
+Further diagnosis follows the actual long input/build/paint calls rather than
+assuming the remaining cost is layout or thread waiting.
+
+End-of-trial process PSS is 255–294 MiB for the independent integration and
+243–283 MiB for the reference. These are whole-app snapshots, including native
+resources, not a repeated-lifetime leak test or a measured memory improvement.
+Previous incorrect-presentation runs are not used to claim an adoption speedup.
 
 ## Contracts and counterexamples
 
