@@ -1230,7 +1230,9 @@ export class Store {
   /// The thread at this address, made if new as `home`'s own chat (ThreadRow.home).
   openThreadOf(surface: string, channel: string, threadTs: string, title: string | null, createdBy: string | null, home: string | null): ThreadRow {
     this.#run(
-      "INSERT OR IGNORE INTO threads (surface, channel, thread_ts, title, created_by, created_at, home) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      `INSERT OR IGNORE INTO threads (surface, channel, thread_ts, title, created_by, created_at, home)
+       SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 WHERE NOT EXISTS
+         (SELECT 1 FROM threads WHERE surface = ?1 AND channel = ?2 AND thread_ts = ?3)`,
       surface, channel, threadTs, title, createdBy, this.now(), home,
     );
     const thread = this.threadAt(surface, channel, threadTs);

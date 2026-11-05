@@ -1,7 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-// WIP: requested sessions only. This is not connected to station reads while its write and preparation paths are
-// being verified, including high-fanout thread changes, old writers and concurrent snapshots.
+// Requested sessions only. Preparation is bounded; a synchronous caller keeps its old answer until it is ready.
 const VERSION = 1;
 export const LATEST_THREAD_INDEXED = `SELECT t.*,m.connect FROM latest_thread_rows r
   CROSS JOIN thread_sessions m ON m.session=r.session AND m.thread=r.thread
@@ -13,9 +12,9 @@ const lastDelivery = (session: string, thread: string, extra = "") => `(SELECT d
 const priorDelivery = lastDelivery("NEW.session", "NEW.thread", "AND d.rowid<>NEW.rowid");
 const changed = "EXISTS (SELECT 1 FROM latest_thread_changed LIMIT 1)";
 const updating = "EXISTS (SELECT 1 FROM latest_thread_updating LIMIT 1)";
-const stage = (keys: string, table = "latest_thread_changed") => `DELETE FROM ${table};
+const stage = (keys: string, table = "latest_thread_changed", missingThread = false) => `DELETE FROM ${table};
   INSERT INTO ${table}(session,thread,old_valid,old_has,old_last,old_joined,old_member)
-    SELECT k.session,k.thread,m.rowid IS NOT NULL AND t.id IS NOT NULL,
+    SELECT k.session,k.thread,m.rowid IS NOT NULL ${missingThread ? "" : "AND t.id IS NOT NULL"},
       ${lastDelivery("k.session", "k.thread")} IS NOT NULL,COALESCE(${lastDelivery("k.session", "k.thread")},0),m.joined_at,m.rowid
     FROM (${keys}) k LEFT JOIN thread_sessions m ON m.session=k.session AND m.thread=k.thread
       LEFT JOIN threads t ON t.id=k.thread
@@ -117,6 +116,11 @@ export function installLatestThreadIndex(db: DatabaseSync): void {
       CREATE TABLE latest_thread_updating(session TEXT NOT NULL,thread INTEGER NOT NULL,old_valid INTEGER NOT NULL,
         old_has INTEGER NOT NULL,old_last INTEGER NOT NULL,old_joined,old_member INTEGER,
         PRIMARY KEY(session,thread)) WITHOUT ROWID;
+      -- A conflicting thread insert or update may be ignored. Remember at most its old thread ids until it really
+      -- changes; only then examine the tracked members. Memberships and deliveries survive a thread replacement,
+      -- so their current order also identifies the rows that were present before it.
+      CREATE TABLE latest_thread_adding_ids(id INTEGER PRIMARY KEY) WITHOUT ROWID;
+      CREATE TABLE latest_thread_updating_ids(id INTEGER PRIMARY KEY) WITHOUT ROWID;
 
       CREATE TRIGGER latest_delivery_before_add BEFORE INSERT ON deliveries
         WHEN ${changed} OR ${deliveryConflict} BEGIN ${stage(deliveryKeys(false))} END;
@@ -149,18 +153,28 @@ export function installLatestThreadIndex(db: DatabaseSync): void {
       CREATE TRIGGER latest_member_drop AFTER DELETE ON thread_sessions WHEN ${changed} BEGIN ${reconcile()} END;
 
       CREATE TRIGGER latest_thread_before_add BEFORE INSERT ON threads
-        BEGIN ${stage(threadKeys(`NEW.id,${displacedThread}`))} END;
+        BEGIN
+          DELETE FROM latest_thread_adding_ids;
+          INSERT OR IGNORE INTO latest_thread_adding_ids SELECT ${displacedThread} WHERE ${displacedThread} IS NOT NULL;
+        END;
       CREATE TRIGGER latest_thread_add AFTER INSERT ON threads BEGIN
-        INSERT INTO latest_thread_changed(session,thread,old_valid,old_has,old_last,old_joined,old_member)
-          SELECT m.session,m.thread,0,0,0,NULL,NULL FROM latest_thread_members m WHERE m.thread=NEW.id
-            AND NOT EXISTS (SELECT 1 FROM latest_thread_changed x WHERE x.session=m.session AND x.thread=m.thread);
+        ${stage(threadKeys("SELECT id FROM latest_thread_adding_ids UNION SELECT NEW.id"), "latest_thread_changed", true)}
+        DELETE FROM latest_thread_adding_ids;
         ${reconcile()}
       END;
       CREATE TRIGGER latest_thread_before_change BEFORE UPDATE OF id,surface,channel,thread_ts ON threads
         WHEN ${threadChanged}
-        BEGIN ${stage(threadKeys(`OLD.id,NEW.id,${displacedThread}`), "latest_thread_updating")} END;
+        BEGIN
+          DELETE FROM latest_thread_updating_ids;
+          INSERT OR IGNORE INTO latest_thread_updating_ids SELECT OLD.id UNION SELECT NEW.id
+            UNION SELECT ${displacedThread} WHERE ${displacedThread} IS NOT NULL;
+        END;
       CREATE TRIGGER latest_thread_change AFTER UPDATE OF id,surface,channel,thread_ts ON threads
-        WHEN (${threadChanged}) AND ${updating} BEGIN ${reconcile("latest_thread_updating")} END;
+        WHEN ${threadChanged} BEGIN
+          ${stage(threadKeys("SELECT id FROM latest_thread_updating_ids"), "latest_thread_changed", true)}
+          DELETE FROM latest_thread_updating_ids;
+          ${reconcile()}
+        END;
       CREATE TRIGGER latest_thread_before_drop BEFORE DELETE ON threads
         BEGIN ${stage(threadKeys("OLD.id"))} END;
       CREATE TRIGGER latest_thread_drop AFTER DELETE ON threads WHEN ${changed} BEGIN ${reconcile()} END;
