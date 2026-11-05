@@ -255,9 +255,12 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   // (said to follow its end again while short of it (words sent while reading above: View::scrolls_window's
   // to_end): taken there, on to where its end is as rows come, till it is there or the hand takes it away)
   let end_asked = Ref(false)
+  // (where it was last sent asked so: what it goes to as it is laid out again, sent again only where its end moved)
+  let end_glided : Ref[Double?] = Ref(None)
   let was_follows = Ref(@signals.untracked(fn() { follows.get() }))
   self.reacts(fn() { follows.get() }, fn(now) {
     end_asked.val = from_end && now && !was_follows.val
+    end_glided.val = None
     if end_asked.val {
       reading.val = None
       pinned.val = None
@@ -839,7 +842,17 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
               if at_end || !@signals.untracked(fn() { follows.get() }) {
                 end_asked.val = false
               } else if end_asked.val && to_end_open > 0.5 {
-                s.glide_where(c.x + to_end_open, kept=false)
+                let to = c.x + to_end_open
+                match end_glided.val {
+                  // (glided there already and at rest short of it: as near as it comes, asked no more)
+                  Some(was) if s.glides_till() is None && (was - to).abs() < 1.0 => end_asked.val = false
+                  // (on its way there: where its end is now only where that moved)
+                  Some(was) if (was - to).abs() < 1.0 => ()
+                  _ => {
+                    end_glided.val = Some(to)
+                    s.glide_where(to, kept=false)
+                  }
+                }
               }
           }
         })
