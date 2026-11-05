@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { installLatestThreadIndex, prepareLatestThreadStep } from "../src/store/latest-thread-index.ts";
 import { Store } from "../src/store/store.ts";
 
 for (const delivered of [false, true]) {
@@ -24,8 +25,8 @@ for (const delivered of [false, true]) {
       const proxy = new Proxy(db, {
         get(target, property) {
           if (property === "prepare") return (sql: string) => {
-            if (sql.includes("FROM thread_sessions ts JOIN threads t") && sql.includes("FROM deliveries d")) {
-              const observed = sql.replace("WHERE ts.session = ?", "WHERE ts.session = ? AND visited_latest_member(ts.thread)=ts.thread");
+            if (sql.includes("FROM latest_thread_rows r")) {
+              const observed = sql.replace("WHERE r.session=?1", "WHERE r.session=?1 AND visited_latest_member(r.thread)=r.thread");
               assert.notEqual(observed, sql);
               const plan = (text: string) => target.prepare(`EXPLAIN QUERY PLAN ${text}`).all("s").map((row) => row.detail);
               assert.deepEqual(plan(observed), plan(sql), "the counter preserves the actual query plan");
@@ -41,6 +42,8 @@ for (const delivered of [false, true]) {
       (store as any).db = proxy;
       const read = () => { visits = 0; assert.equal(store.latestThread("s")?.thread.id, current.id); return visits; };
       add(1, 40);
+      installLatestThreadIndex(db);
+      while (!prepareLatestThreadStep(db, "s").done) { /* bounded batches */ }
       const before = read();
       assert.ok(traced && before > 0);
       add(41, 400);
@@ -49,3 +52,25 @@ for (const delivered of [false, true]) {
     } finally { store.close(); }
   });
 }
+
+test("a synchronous read requests old multi-chat preparation and keeps its immediate answer", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    installLatestThreadIndex(db);
+    const a = store.openThread("slack", "C", "a", null, null);
+    const b = store.openThread("slack", "C", "b", null, null);
+    const requested: string[] = [];
+    (store as any).requestLatestThread = (session: string) => { requested.push(session); };
+    store.joinThread(a.id, "s", "a");
+    assert.equal(store.latestThread("s")?.thread.id, a.id);
+    assert.deepEqual(requested, [], "one membership needs no prepared order");
+    store.joinThread(b.id, "s", "b");
+    db.prepare("INSERT INTO deliveries(thread,n,session,delivered_at) VALUES(?,1,'s',NULL)").run(a.id);
+    assert.equal(store.latestThread("s")?.thread.id, a.id);
+    assert.deepEqual(requested, ["s"]);
+    while (!prepareLatestThreadStep(db, "s", 1).done) { /* bounded batches */ }
+    db.prepare("INSERT INTO deliveries(thread,n,session,delivered_at) VALUES(?,1,'s',NULL)").run(b.id);
+    assert.equal(store.latestThread("s")?.thread.id, b.id);
+    assert.deepEqual(requested, ["s"], "a prepared order is read directly");
+  } finally { store.close(); }
+});

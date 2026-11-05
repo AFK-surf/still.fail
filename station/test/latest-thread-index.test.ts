@@ -16,6 +16,15 @@ function prepare(store: Store, session: string, limit = 16) {
   return { visited, batches };
 }
 
+// Keep the original query as the oracle even after Store.latestThread is switched to the prepared order.
+function originalLatestId(db: DatabaseSync, session: string): number | null {
+  const row = db.prepare(`SELECT t.id FROM thread_sessions ts JOIN threads t ON t.id=ts.thread WHERE ts.session=?
+    ORDER BY (SELECT d.rowid FROM deliveries d INDEXED BY deliveries_session
+      WHERE d.session=ts.session AND d.thread=ts.thread ORDER BY d.rowid DESC LIMIT 1) DESC,
+    ts.joined_at DESC,ts.rowid DESC LIMIT 1`).get(session);
+  return row ? Number(row.id) : null;
+}
+
 test("a prepared session finds the same latest delivery or last membership", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
@@ -37,7 +46,7 @@ test("a prepared session finds the same latest delivery or last membership", () 
     prepare(store, "empty");
     for (const session of ["s", "without", "empty"]) {
       assert.equal(latestThreadReady(db, session), true);
-      assert.equal(indexedLatestThread(db, session)?.id ?? null, store.latestThread(session)?.thread.id ?? null);
+      assert.equal(indexedLatestThread(db, session)?.id ?? null, originalLatestId(db, session));
     }
     assert.equal(indexedLatestThread(db, "s")?.id, two.id, "negative delivery rowids still precede no delivery");
   } finally { store.close(); }
@@ -63,7 +72,7 @@ test("a prepared session reads one ordered candidate as old memberships grow", (
       assert.deepEqual(plan(observed), plan(LATEST_THREAD_INDEXED));
       assert.match(plan(LATEST_THREAD_INDEXED).join("\n"), /SEARCH r USING PRIMARY KEY \(session=\?\)/);
       assert.doesNotMatch(plan(LATEST_THREAD_INDEXED).join("\n"), /TEMP B-TREE/);
-      assert.equal(db.prepare(observed).get("s")?.id, store.latestThread("s")?.thread.id);
+      assert.equal(db.prepare(observed).get("s")?.id, originalLatestId(db, "s"));
       counts.push(visited);
     } finally { store.close(); }
   }
@@ -80,7 +89,7 @@ test("a prepared order follows deliveries, membership changes and missing thread
     store.joinThread(b.id, "s", "b");
     installLatestThreadIndex(db);
     prepare(store, "s");
-    const check = () => assert.equal(indexedLatestThread(db, "s")?.id ?? null, store.latestThread("s")?.thread.id ?? null);
+    const check = () => assert.equal(indexedLatestThread(db, "s")?.id ?? null, originalLatestId(db, "s"));
     check();
     const add = db.prepare("INSERT INTO deliveries(rowid,thread,n,session,delivered_at) VALUES(?,?,1,'s',NULL)");
     add.run(100, a.id); check();
@@ -114,7 +123,7 @@ test("a membership replaced behind an old-session cursor is not missed", () => {
     db.prepare("INSERT INTO deliveries(rowid,thread,n,session,delivered_at) VALUES(500,?,1,'s',NULL)").run(replacement.id);
     prepare(store, "s", 8);
     assert.equal(indexedLatestThread(db, "s")?.id, replacement.id);
-    assert.equal(indexedLatestThread(db, "s")?.id, store.latestThread("s")?.thread.id);
+    assert.equal(indexedLatestThread(db, "s")?.id, originalLatestId(db, "s"));
     const actual = db.prepare("SELECT member_rowid,thread FROM latest_thread_rows WHERE session='s' ORDER BY member_rowid").all();
     const expected = db.prepare("SELECT m.rowid AS member_rowid,m.thread FROM thread_sessions m JOIN threads t ON t.id=m.thread WHERE m.session='s' ORDER BY m.rowid").all();
     assert.deepEqual(actual, expected);
@@ -137,7 +146,7 @@ test("a delivery ahead of the preparation cursor follows a missing and restored 
     put.run(10, b.id);
     prepare(store, "s", 1);
     db.prepare("INSERT INTO threads(id,surface,channel,thread_ts,created_at) VALUES(?,'slack','C','restored',1)").run(b.id);
-    assert.equal(indexedLatestThread(db, "s")?.id, store.latestThread("s")?.thread.id);
+    assert.equal(indexedLatestThread(db, "s")?.id, originalLatestId(db, "s"));
     assert.equal(indexedLatestThread(db, "s")?.id, a.id);
     assert.equal(db.prepare("SELECT COUNT(*) AS n FROM latest_thread_rows WHERE session='s' AND thread=?").get(b.id)?.n, 1);
   } finally { store.close(); }
@@ -180,7 +189,7 @@ test("readiness and the selected conversation share a snapshot with another writ
     assert.equal(indexedLatestThread(observed, "s")?.id, a.id);
     assert.equal(interleaved, true);
     assert.equal(indexedLatestThread(db, "s")?.id, b.id);
-    assert.equal(store.latestThread("s")?.thread.id, b.id);
+    assert.equal(originalLatestId(db, "s"), b.id);
   } finally { writer?.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -272,7 +281,7 @@ for (const recursive of [false, true]) {
           db.prepare(`SELECT m.thread,m.session FROM thread_sessions m JOIN latest_thread_scopes s ON s.session=m.session
             ORDER BY m.thread,m.session`).all());
         for (const s of ["s1", "s2"].filter((key) => latestThreadReady(db, key)))
-          assert.equal(indexedLatestThread(db, s)?.id ?? null, store.latestThread(s)?.thread.id ?? null);
+          assert.equal(indexedLatestThread(db, s)?.id ?? null, originalLatestId(db, s));
       };
       check();
       db.prepare("DELETE FROM threads WHERE id=?").run(a.id); check();
@@ -307,7 +316,7 @@ for (const recursive of [false, true]) {
       installLatestThreadIndex(db); prepare(store, "s1"); prepare(store, "s2");
       const check = () => {
         for (const s of ["s1", "s2"])
-          assert.equal(indexedLatestThread(db, s)?.id ?? null, store.latestThread(s)?.thread.id ?? null);
+          assert.equal(indexedLatestThread(db, s)?.id ?? null, originalLatestId(db, s));
         assert.deepEqual(db.prepare("SELECT thread,session FROM latest_thread_members ORDER BY thread,session").all(),
           db.prepare(`SELECT m.thread,m.session FROM thread_sessions m JOIN latest_thread_scopes s ON s.session=m.session
             ORDER BY m.thread,m.session`).all());
@@ -344,10 +353,10 @@ test("an ignored update cannot disturb later deliveries or a no-op update", () =
     db.prepare("INSERT INTO deliveries(rowid,thread,n,session,delivered_at) VALUES(102,?,2,'s',NULL)").run(a.id);
     db.prepare("UPDATE deliveries SET n=n WHERE rowid=102").run();
     assert.equal(indexedLatestThread(db, "s")?.id, a.id);
-    assert.equal(indexedLatestThread(db, "s")?.id, store.latestThread("s")?.thread.id);
+    assert.equal(indexedLatestThread(db, "s")?.id, originalLatestId(db, "s"));
     assert.equal(db.prepare("SELECT COUNT(*) AS n FROM latest_thread_rows WHERE session='s' AND thread=?").get(a.id)?.n, 1);
     db.prepare("UPDATE deliveries SET n=3 WHERE rowid=102").run();
-    assert.equal(indexedLatestThread(db, "s")?.id, store.latestThread("s")?.thread.id);
+    assert.equal(indexedLatestThread(db, "s")?.id, originalLatestId(db, "s"));
   } finally { store.close(); }
 });
 
@@ -364,7 +373,7 @@ for (const recursive of [false, true]) {
       installLatestThreadIndex(db); prepare(store, "s");
       db.prepare("UPDATE OR REPLACE threads SET thread_ts='b' WHERE id=?").run(a.id);
       assert.equal(indexedLatestThread(db, "s")?.id, a.id);
-      assert.equal(indexedLatestThread(db, "s")?.id, store.latestThread("s")?.thread.id);
+      assert.equal(indexedLatestThread(db, "s")?.id, originalLatestId(db, "s"));
       assert.equal(db.prepare("SELECT COUNT(*) AS n FROM latest_thread_rows WHERE session='s'").get()?.n, 1);
     } finally { store.close(); }
   });
@@ -395,7 +404,7 @@ for (const recursive of [false, true]) {
         assert.deepEqual(actual.all(), expected.all(), `ordered rows after step ${at}`);
         assert.deepEqual(members.all(), wantedMembers.all(), `tracked members after step ${at}`);
         for (const s of ["s0", "s1", "s2"])
-          assert.equal(indexedLatestThread(db, s)?.id ?? null, store.latestThread(s)?.thread.id ?? null, `${s} after step ${at}`);
+          assert.equal(indexedLatestThread(db, s)?.id ?? null, originalLatestId(db, s), `${s} after step ${at}`);
       };
       for (let n = 0; n < 240; n++) {
         const rollback = n % 11 === 0;
@@ -436,7 +445,7 @@ for (const recursive of [false, true]) for (const alias of ["rowid", "_rowid_", 
       installLatestThreadIndex(db); prepare(store, "s1"); prepare(store, "s2");
       const check = () => {
         for (const s of ["s1", "s2"])
-          assert.equal(indexedLatestThread(db, s)?.id ?? null, store.latestThread(s)?.thread.id ?? null);
+          assert.equal(indexedLatestThread(db, s)?.id ?? null, originalLatestId(db, s));
         assert.deepEqual(db.prepare("SELECT thread,session FROM latest_thread_members ORDER BY thread,session").all(),
           db.prepare(`SELECT m.thread,m.session FROM thread_sessions m JOIN latest_thread_scopes s ON s.session=m.session
             ORDER BY m.thread,m.session`).all());
