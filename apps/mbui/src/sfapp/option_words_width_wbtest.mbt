@@ -20,7 +20,7 @@ test "a chat option's long label and detail wrap before the end of the card's co
   let rows = t.semantics().filter(fn(s) { s.role == Button && s.label == label })
   assert_false(rows.is_empty(), msg="the option is visible")
   let (x, _, w, _) = rows[0].rect
-  // The row ends 12 points before its card's inside edge, as on the previous chat page.
+  // Words end 12 points before the row's right edge, as on the previous chat page.
   let end = x + w - 12.0
   for words in [label, detail] {
     let drawn = t.words().filter(fn(d) { d.0 == words && d.5 > 0.99 })
