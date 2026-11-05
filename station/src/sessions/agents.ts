@@ -540,6 +540,19 @@ export const AgentsLive = (control: Control) =>
       hub.prepareSessionUpJobs = (session) => readers.prepareSessionUpJobs([session]);
       hub.prepareWidgetSources = (threads, signal) => readers.prepareWidgetSources(threads, signal);
       hub.prepareCcSessions = (sessions, signal) => readers.prepareCcSessions(sessions, signal);
+      hub.prepareSessionChatNames = (sessions, signal) => readers.prepareSessionChatNames(sessions, signal);
+      const namesPreparing = new Set<string>();
+      const requestSessionChat = (session: string) => {
+        if (namesPreparing.has(session)) return;
+        namesPreparing.add(session);
+        void readers.prepareSessionChatNames([session]).catch((error: unknown) => {
+          log.warn("store", "a session's chat name could not be prepared", { session, error: String(error) });
+        }).finally(() => namesPreparing.delete(session));
+      };
+      store.requestSessionChat = requestSessionChat;
+      yield* Effect.addFinalizer(() => Effect.sync(() => {
+        if (store.requestSessionChat === requestSessionChat) store.requestSessionChat = null;
+      }));
       const stopLatestThreadRequests = followLatestThreadRequests(store, readers);
       yield* Effect.addFinalizer(() => Effect.sync(stopLatestThreadRequests));
       hub.followRunning();

@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { CcIndexBuilder } from "../src/read/cc-index-builder.ts";
 import { ccSessionReady, installCcIndex } from "../src/store/cc-thread-index.ts";
 import { installLatestThreadIndex, latestThreadReady } from "../src/store/latest-thread-index.ts";
+import { indexedSessionChat, installSessionChatIndex, sessionChatReady } from "../src/store/session-chat-index.ts";
 import { Store } from "../src/store/store.ts";
 
 function oldSessions(store: Store): void {
@@ -138,5 +139,62 @@ test("a session removed before handover does not regain latest conversation stat
     previous.resolve(); await ready;
     assert.equal(latestThreadReady(store.db, "short"), false);
     assert.equal(store.db.prepare("SELECT COUNT(*) AS n FROM latest_thread_scopes WHERE session='short'").get()?.n, 0);
+  } finally { previous.resolve(); await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("chat-name preparation shares the copy worker, waits for handover, and lets a short session finish", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "session-chat-builder-"));
+  const path = join(dir, "stillfail.db"), store = Store.open(path);
+  const previous = Promise.withResolvers<void>();
+  const builder = new CcIndexBuilder(path, { previousGone: previous.promise });
+  try {
+    oldSessions(store);
+    installSessionChatIndex(store.db);
+    const own = store.openThread("ember", "C", "short-own", null, null).id;
+    store.joinThread(own, "short", "ember");
+    store.db.prepare("UPDATE threads SET created_at=100 WHERE id=?").run(own);
+    let longReady = false;
+    const long = builder.readyNames(["long"]).then(() => { longReady = true; });
+    const short = builder.readyNames(["short"]);
+    const copy = builder.ready(["short"]);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(sessionChatReady(store.db, "short"), false);
+    previous.resolve(); await Promise.all([short, copy]);
+    assert.equal(indexedSessionChat(store.db, "short")?.id, own);
+    assert.equal(ccSessionReady(store.db, "short"), true);
+    assert.equal(longReady, false);
+    await long;
+    assert.equal(sessionChatReady(store.db, "long"), true);
+  } finally { previous.resolve(); await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("cancelling a chat-name request does not cancel its copy-destination request", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "session-chat-cancel-"));
+  const path = join(dir, "stillfail.db"), store = Store.open(path);
+  const previous = Promise.withResolvers<void>(), cancel = new AbortController();
+  const builder = new CcIndexBuilder(path, { previousGone: previous.promise });
+  try {
+    oldSessions(store); installSessionChatIndex(store.db);
+    const stopped = builder.readyNames(["short"], cancel.signal), kept = builder.ready(["short"]);
+    cancel.abort(); await assert.rejects(stopped, /read cancelled/);
+    previous.resolve(); await kept;
+    assert.equal(ccSessionReady(store.db, "short"), true);
+    assert.equal(sessionChatReady(store.db, "short"), false);
+  } finally { cancel.abort(); previous.resolve(); await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a session removed before handover does not regain chat-name state", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "session-chat-removed-"));
+  const path = join(dir, "stillfail.db"), store = Store.open(path);
+  const previous = Promise.withResolvers<void>();
+  const builder = new CcIndexBuilder(path, { previousGone: previous.promise });
+  try {
+    oldSessions(store);
+    const ready = builder.readyNames(["short"]);
+    store.deleteSession("short");
+    previous.resolve(); await ready;
+    assert.equal(store.db.prepare("SELECT COUNT(*) AS n FROM session_chat_scopes WHERE session='short'").get()?.n, 0);
+    assert.equal(store.db.prepare("SELECT COUNT(*) AS n FROM session_chat_rows WHERE session='short'").get()?.n, 0);
+    assert.equal(store.db.prepare("SELECT COUNT(*) AS n FROM cc_sessions WHERE session='short'").get()?.n, 0);
   } finally { previous.resolve(); await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
