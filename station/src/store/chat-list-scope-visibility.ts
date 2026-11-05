@@ -11,19 +11,30 @@ export function settleRecentScopeVisibilityStep(db: DatabaseSync, limit = 64): {
   if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError("recent scope visibility batch must be positive");
   db.exec("BEGIN IMMEDIATE");
   try {
-    // Move around the pending chats rather than repeatedly taking the smallest id. One chat can keep changing
-    // while its sources are rebuilt; that must not keep every later chat from making progress. Commit the turn
-    // together with its work so a rollback or worker restart preserves the same fairness.
-    const turn = db.prepare("SELECT after_thread FROM recent_scope_visibility_turn WHERE id = 1");
+    // Walk a finite round of pending chats, rather than repeatedly taking the smallest id or letting new larger
+    // ids postpone a wrap forever. Commit the turn with its work so a rollback or worker restart preserves it.
+    const turn = db.prepare("SELECT after_thread, through_thread FROM recent_scope_visibility_turn WHERE id = 1");
     turn.setReadBigInts(true);
-    const after = (turn.get() as { after_thread: bigint | null }).after_thread;
-    const next = db.prepare("SELECT thread, revision FROM recent_scope_visibility_dirty WHERE thread > ? ORDER BY thread LIMIT 1");
-    const first = db.prepare("SELECT thread, revision FROM recent_scope_visibility_dirty ORDER BY thread LIMIT 1");
-    next.setReadBigInts(true);
-    first.setReadBigInts(true);
-    const pending = ((after === null ? undefined : next.get(after)) ?? first.get()) as { thread: bigint; revision: bigint } | undefined;
-    if (!pending) { db.exec("COMMIT"); return { visibilityDone: true, visited: 0 }; }
-    db.prepare("UPDATE recent_scope_visibility_turn SET after_thread = ? WHERE id = 1").run(pending.thread);
+    const progress = turn.get() as { after_thread: bigint | null; through_thread: bigint | null };
+    let through = progress.through_thread;
+    let pending: { thread: bigint; revision: bigint } | undefined;
+    if (through !== null) {
+      const next = db.prepare(progress.after_thread === null
+        ? "SELECT thread, revision FROM recent_scope_visibility_dirty WHERE thread <= ? ORDER BY thread LIMIT 1"
+        : "SELECT thread, revision FROM recent_scope_visibility_dirty WHERE thread > ? AND thread <= ? ORDER BY thread LIMIT 1");
+      next.setReadBigInts(true);
+      pending = (progress.after_thread === null ? next.get(through) : next.get(progress.after_thread, through)) as typeof pending;
+    }
+    if (!pending) {
+      const last = db.prepare("SELECT MAX(thread) AS thread FROM recent_scope_visibility_dirty");
+      last.setReadBigInts(true);
+      through = (last.get() as { thread: bigint | null }).thread;
+      if (through === null) { db.exec("COMMIT"); return { visibilityDone: true, visited: 0 }; }
+      const first = db.prepare("SELECT thread, revision FROM recent_scope_visibility_dirty WHERE thread <= ? ORDER BY thread LIMIT 1");
+      first.setReadBigInts(true);
+      pending = first.get(through) as { thread: bigint; revision: bigint };
+    }
+    db.prepare("UPDATE recent_scope_visibility_turn SET after_thread = ?, through_thread = ? WHERE id = 1").run(pending.thread, through);
     // A home session can move while this job waits. Refresh the hint before removing any old contributions, so
     // a reader of the new workspace cannot mistake that intermediate state for a finished page.
     db.prepare(`UPDATE recent_scope_visibility_dirty SET

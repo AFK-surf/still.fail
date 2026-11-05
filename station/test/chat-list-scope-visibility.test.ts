@@ -81,6 +81,37 @@ test("visibility work keeps its turn across rollback and reopening", () => {
   }
 });
 
+for (const recursive of [false, true]) test(`newer chats cannot continually pass an older pending workspace (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    for (const [key, ws] of [["a", "a"], ["b", "b"], ["here", "here"], ["away", "away"]] as const)
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws });
+    const target = store.openThread("ember", "EMBER", "target", "Target", null).id;
+    const first = store.openThread("ember", "EMBER", "first", "First", null).id;
+    const move = db.prepare("UPDATE threads SET home = ? WHERE id = ?");
+    move.run("here", target);
+    move.run("a", first);
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    while (!scanRecentWorkspaceStep(db, "here", 1).sourceDone) { /* Prepare the workspace. */ }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    move.run("b", first);
+    settleRecentScopeVisibilityStep(db, 1);
+    move.run("away", target);
+    let page = null;
+    for (let i = 0; i < 16 && page === null; i++) {
+      const added = store.openThread("ember", "EMBER", `new-${i}`, "New", null).id;
+      move.run("a", added);
+      assert.ok(settleRecentScopeVisibilityStep(db, 1).visited <= 1);
+      page = readPreparedRecentWorkspace(db, "here", 5);
+    }
+    assert.deepEqual(page, recentChatIds(db, "here", "home", 5),
+      "an older change must get a turn even while unrelated newer chats arrive");
+  } finally { store.close(); }
+});
+
 for (const recursive of [false, true]) for (const home of ["two", null]) {
   test(`a changed chat home cannot leave a workspace page stale (home ${home}, recursive triggers ${recursive})`, () => {
     const store = Store.open(":memory:");
