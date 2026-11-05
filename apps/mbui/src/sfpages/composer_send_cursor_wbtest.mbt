@@ -55,3 +55,30 @@ test "an enabled send button owns the pointer and sends" {
   assert_eq((old.0, old.1, old.2), ("Hand", false, 1), msg="the old enabled button")
   assert_eq(node, old, msg="the enabled tree button has the same pointer and action")
 }
+
+///|
+test "the send button answers a screen reader only when there is something to send" {
+  @sfbase.reset()
+  composing_reset()
+  @sf.set_words(@sfbase.fill)
+  let ready = @signals.signal(false)
+  let sends = Ref(0)
+  let send : Ref[@view.View?] = Ref(None)
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=120.0, h=60.0, platform=0)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    send.val = Some(@sf.composer_send_node(root, fn() { ready.get() }, fn() { false }, fn() { sends.val += 1 }))
+  })
+  t.draw()
+  let tree = @ui.view_tree().unwrap()
+  let id = send.val.unwrap().id()
+  let disabled = fn() { tree.said_order().iter().find_first(fn(s) { s.id == id }).map(fn(s) { s.disabled }) }
+  assert_eq(disabled(), Some(true))
+  assert_false(tree.activate_at(id, t.time()), msg="a screen reader cannot activate an empty send button")
+  assert_eq(sends.val, 0)
+  ready.set(true)
+  t.draw()
+  assert_eq(disabled(), Some(false))
+  assert_true(tree.activate_at(id, t.time()), msg="a screen reader can send once the button is ready")
+  assert_eq(sends.val, 1)
+}
