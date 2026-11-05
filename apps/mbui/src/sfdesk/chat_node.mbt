@@ -4,9 +4,9 @@
 // over the chat, keep their own page boundaries.
 
 ///|
-/// Chat `r`'s page in `p` while it shows (entry `k` of the stack): its messages under its bar over its composer's room,
-/// the composer at its foot, what flies over them, the bar and what is let go over them; its side panel beside it as its
-/// tabs open it (side_beside's slide). `old_over` builds what of it is the old view's over it, as where it is shows its pages
+/// Chat `r`'s page in `p` while it shows (entry `k` of the stack), `width` as wide as the frame gives it (never what it
+/// last laid out): its messages under its bar over its composer's room, the composer at its foot, what flies over them,
+/// the bar and what is let go over them; its side panel beside it as its tabs open it (side_beside's slide). `old_over` builds what of it is the old view's over it, as where it is shows its pages
 /// (the tape's panel: its bar told the tape, its corners the panel's); no `side` panel beside it where that is shown
 /// apart (the tape's: tape_side); its `ground` where it is (the tape's panel's, a step darker behind the one in use).
 fn chat_root_node(
@@ -14,6 +14,7 @@ fn chat_root_node(
   src : Source,
   r : ChatRef,
   k : Int,
+  width : () -> Double,
   old_over? : (@ui.Ctx, () -> Unit) -> Unit = fn(_, build) { build() },
   corners? : () -> FixedArray[@ui.CornerOf]? = fn() { None },
   side? : Bool = true,
@@ -27,7 +28,7 @@ fn chat_root_node(
     // (its side panel's tabs, as the core says them: open while it has any)
     let open = fn() { view().map(fn(v) { side_of(v).0.length() > 0 }).unwrap_or(false) }
     let whole = fn() {
-      let pane = page.laid_size_told().map(fn(z) { z.0 }).unwrap_or(page.window().0)
+      let pane = width()
       if pane < side_both_least { dmin(side_over_w, pane) } else { side_width(pane) }
     }
     // (how wide it has got: in and out on a Move as long as it is wide, from the change that opens or closes it)
@@ -44,8 +45,9 @@ fn chat_root_node(
       let k = if slide.goes_at(page.logic_at()) { slide.value_at(page.drawn_at()) } else { slide.target() }
       k * whole()
     }
-    let over = fn() { page.laid_size_told().map(fn(z) { z.0 < side_both_least }).unwrap_or(false) }
+    let over = fn() { width() < side_both_least }
     // (the chat: as wide as the pane less the panel beside it; all of it where the panel comes over it)
+    let talk_width = fn() { if over() { width() } else { dmax(0.0, width() - col()) } }
     page.box(fn(talk) {
       talk
       .grow(Is(1.0))
@@ -53,7 +55,7 @@ fn chat_root_node(
       .min_width(Is(Some(0.0)))
       .min_height(Is(Some(0.0)))
       |> ignore
-      chat_talk_node(talk, src, w, r, k, view, entries, old_over, corners, ground)
+      chat_talk_node(talk, src, w, r, k, view, entries, talk_width, old_over, corners, ground)
     })
     |> ignore
     // (its side panel: beside it, cut to how far it has slid; over it from the pane's right where the pane has not the
@@ -64,7 +66,7 @@ fn chat_root_node(
       // (over the chat, from the pane's right)
       .offset(By(fn() {
         if over() {
-          (page.laid_size_told().map(fn(z) { z.0 }).unwrap_or(0.0) - col(), 0.0)
+          (width() - col(), 0.0)
         } else {
           (0.0, 0.0)
         }
@@ -84,9 +86,9 @@ fn chat_root_node(
 }
 
 ///|
-/// The chat itself in `talk` (chat_talk's): its list under the bar's room over the composer's, the composer at its
-/// foot, what flies in it, and over them the bar, what opens over it, what is let go over the pane and what is picked in
-/// the messages, an island.
+/// The chat itself in `talk` (chat_talk's), `width` as wide as the frame gives it: its list under the bar's room over the
+/// composer's, the composer at its foot, what flies in it, and over them the bar, what opens over it, what is let go
+/// over the pane and what is picked in the messages, an island.
 fn chat_talk_node(
   talk : @view.View,
   src : Source,
@@ -95,12 +97,13 @@ fn chat_talk_node(
   k : Int,
   view : () -> ChatView?,
   entries : () -> Array[Entry],
+  width : () -> Double,
   over : (@ui.Ctx, () -> Unit) -> Unit,
   corners : () -> FixedArray[@ui.CornerOf]?,
   ground : (@view.View) -> Int64,
 ) -> Unit {
-  let width = fn() { talk.laid_size_told().map(fn(z) { z.0 }).unwrap_or(talk.window().0) }
-  let height = fn() { talk.laid_size_told().map(fn(z) { z.1 }).unwrap_or(talk.window().1) }
+  // (the composer's field grows to a share of the window's height: text_window_share)
+  let height = fn() { talk.window().1 }
   let geometry = fn() {
     let roots = @ui.tree_corner_roots_now()
     @sfpages.composer_geometry(width(), corners().map(fn(ks) { ks.map(fn(k) { k.radius(roots) }) }))
@@ -115,11 +118,11 @@ fn chat_talk_node(
     b
     .over(Is(true))
     |> ignore
-    @sfpages.chat_waiting_node(b, src, r, fn() { chat_bar_room() + list_head_gap }, fn() { @sf.under_bar_room().px() })
+    @sfpages.chat_waiting_node(b, src, r, width, fn() { chat_bar_room() + list_head_gap }, fn() { @sf.under_bar_room().px() })
   })
   talk.box(fn(l) {
     l.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
-    let list = @sfpages.chat_list_node(l, src, r, view, entries, fn() { chat_bar_room() + list_head_gap }, room_now, settings_core(src, w), foot_gap=list_foot_gap)
+    let list = @sfpages.chat_list_node(l, src, r, view, entries, width, fn() { chat_bar_room() + list_head_gap }, room_now, settings_core(src, w), foot_gap=list_foot_gap)
     latest.val = list.to_latest
     landing.val = list.landing_of
   })

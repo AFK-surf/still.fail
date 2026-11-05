@@ -32,9 +32,20 @@ fn activity_node(row : @view.View, src : Source, here : () -> MessageHere, a : (
   // (folded to its picture from when its first message waits till its last is out)
   let folded = fn() { emit_folded(em, key) }
   let tail = @motion.Way::new(if @signals.untracked(folded) { 0.0 } else { 1.0 })
+  // (what it does now as wide as it was laid out whole, as it set out to fold away: what it is cut to a share of; and
+  // that, made later)
+  let inner_w : @signals.Signal[Double] = @signals.signal(0.0, same=fn(x, y) { x == y })
+  let inner_at : Ref[@view.View?] = Ref(None)
   row.reacts(folded, fn(f) {
     let to = if f { 0.0 } else { 1.0 }
     if tail.target() != to {
+      // (as wide as it is laid out as of this moment, whole as it sets out: said once, never followed)
+      if f && tail.value_at(row.cause_at()) >= 1.0 {
+        match inner_at.val {
+          Some(v) => inner_w.set(v.laid_size().0)
+          None => ()
+        }
+      }
       tail.go(to, @motion.tween(fold_ms, ease=Out), at=row.cause_at())
     }
   })
@@ -100,7 +111,6 @@ fn activity_node(row : @view.View, src : Source, here : () -> MessageHere, a : (
     |> ignore
     // (what it does now and how long: folded away to its width's share, cut there, faded)
     line.box(fn(cut) {
-      let inner_w : @signals.Signal[Double] = @signals.signal(0.0, same=fn(x, y) { x == y })
       cut
       .row(Is(true))
       .min_width(Is(Some(0.0)))
@@ -118,13 +128,8 @@ fn activity_node(row : @view.View, src : Source, here : () -> MessageHere, a : (
       |> ignore
       cut.box(fn(inner) {
         inner.row(Is(true)).gap(Is(8.0)).lines_up(Is(Some(Middle))).min_width(Is(Some(0.0))).shrink(Is(1.0)) |> ignore
-        // (kept at its whole width while it is folded away: what is cut is measured as it was)
-        inner.reacts(fn() { inner.laid_size_told() }, fn(z) {
-          match z {
-            Some((w, _)) if @signals.untracked(tail_k) >= 1.0 => inner_w.set(w)
-            _ => ()
-          }
-        })
+        inner_at.val = Some(inner)
+        inner.owns(fn() { inner_at.val = None }) |> ignore
         // (its clock after its words, made once they are: what their room is less)
         let clock : Ref[Ref[@view.View?]] = Ref(Ref(None))
         steady_node(inner, row_key, said, fn() { (hot.val)() }, came, fn() {

@@ -368,7 +368,8 @@ fn under_node(
   let room = @motion.Way::new(if first { 1.0 } else { 0.0 })
   let seen = @motion.Way::new(if first { 1.0 } else { 0.0 })
   let inner : Ref[@view.View?] = Ref(None)
-  let tall = fn() { inner.val.bind(fn(v) { v.laid_size_told() }).map(fn(z) { z.1 }).unwrap_or(0.0) }
+  // (how tall what is in it is laid out as of a change's moment: how long its room takes to open or close, said then)
+  let tall = fn() { inner.val.map(fn(v) { v.laid_size().1 }).unwrap_or(0.0) }
   // (at rest once both are where they go, as under_rest asks)
   let n = @sfbase.under_goes_told(fn() {
     let now = parent.logic_at()

@@ -99,7 +99,10 @@ fn composer_extras_node(
       })
     })
   })
-  parent.show(fn() { !w.files.get().is_empty() }, fn(flow) {
+  // (its files: a layout of its own, its cards as wide as they may be in the room it is laid out in, worked out of that as
+  // it is laid out: View::by_room, Live's Placed)
+  parent.show(fn() { !w.files.get().is_empty() }, fn(holder) {
+    holder.by_room(fn(_) { () }, fn(flow, _) {
     flow.row(Is(true)).gap(Is(6.0)).wraps(By(fn() { Some(6.0 + @sf.corner_remove_reach(corner())) }))
     .padding(By(fn() { (0.0, 0.0, file_end(), 0.0) })).lines_up(Is(Some(Start))) |> ignore
     flow.each(fn() { w.files.get() }, fn(f) { text(Some(f), "id") }, fn(slot, file) {
@@ -151,8 +154,8 @@ fn composer_extras_node(
               }
             }
             @sf.with_corner_remove_node(p, fn() { remove_label(v(), text(v(), "name")) }, corner,
-              fn() { writing_remove(src, w, id) }, width=fn() {
-                Some(dmin(@sf.file_card_w, flow.laid_size_told().map(fn(s) { dmax(0.0, s.0 - file_end()) }).unwrap_or(@sf.file_card_w)))
+              fn() { writing_remove(src, w, id) }, placed=true, width=fn() {
+                Some(dmin(@sf.file_card_w, dmax(0.0, holder.laid_size().0 - file_end())))
               }, fn(inside) {
                 let card = @sf.file_card_node(inside, fn() { waiting_card_info(v()) }, composer=true, corner~, open~,
                   open_shown=fn() { match waiting_as(v()) { Link => true; ByPath | AnyFile => field(v(), "ref") is Some(Object(_)); _ => false } },
@@ -175,6 +178,8 @@ fn composer_extras_node(
         })
       })
     })
+    })
+    |> ignore
   })
   first.val = false
   made

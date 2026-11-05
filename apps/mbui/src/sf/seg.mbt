@@ -273,7 +273,7 @@ fn option_widths(
 priv struct Fitted {
   widths : Array[Double]
   fit : Fit
-}
+} derive(Eq)
 
 ///|
 /// `labels`' options fitted to `room`, their words said in `base` and `weight`, `side` either side and `least` at the

@@ -135,8 +135,6 @@ fn picked_row() -> (@ui.TreePicked, PickRow)? {
 /// finger picked of a message, the pill over what a mouse did (pick_layer's, pick_pop's); quoted into draft `draft`.
 /// `top` the bar's room over the list, `foot` the composer's under it.
 pub fn pick_bar_node(layer : @view.View, src : Source, draft : String, top : () -> Double, foot : () -> Double) -> Unit {
-  let at : Ref[(Double, Double, Double, Double)?] = Ref(None)
-  layer.reacts(fn() { layer.laid_window_told() }, fn(r) { at.val = r })
   let quote = fn(t : @ui.TreePicked, r : PickRow) {
     let text = t.words.trim(chars=" \n\t").to_string()
     if text != "" {
@@ -191,10 +189,11 @@ pub fn pick_bar_node(layer : @view.View, src : Source, draft : String, top : () 
     guard which is Some(finger) else { return }
     // (back lets go of what is picked before it goes back a page: MessagePick.kt's BackHandler, pick_back's)
     over.over(Is(true)).lines_up(Is(Some(Start))).takes_back(fn() { @sfbase.pick_clear() }) |> ignore
-    // (where it stands: worked out as what is picked changes, from where that is drawn then)
+    // (where it stands: by where what is picked is drawn, in the layer as it is placed, as the tree is placed: Live's
+    // Placed)
     let place = fn() -> (Double, Double) {
       picked_row() |> ignore
-      let (lx, ly, lw, lh) = at.val.unwrap_or((0.0, 0.0, 0.0, 0.0))
+      let (lx, ly, lw, lh) = layer.placed_window_now()
       match @signals.untracked(@ui.picked_box) {
         Some((x, y, w, h)) =>
           if finger {
@@ -217,10 +216,10 @@ pub fn pick_bar_node(layer : @view.View, src : Source, draft : String, top : () 
     over.box(fn(b) {
       // (a tap on it keeps what is picked: what it does is done with it)
       @ui.keeps_picked(b) |> ignore
-      b.offset(By(fn() {
+      b.offset(Placed(fn() {
         let (x, y) = place()
-        let half = b.laid_size_told().map(fn(z) { z.0 / 2.0 }).unwrap_or(0.0)
-        let w = at.val.map(fn(r) { r.2 }).unwrap_or(0.0)
+        let half = b.laid_size().0 / 2.0
+        let w = layer.placed_window_now().2
         // (kept on the screen, 8 in from its sides)
         (dmax(8.0, dmin(x - half, w - half * 2.0 - 8.0)), y)
       }))

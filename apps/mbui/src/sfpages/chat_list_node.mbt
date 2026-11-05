@@ -7,7 +7,9 @@
 
 ///|
 /// Chat `r`'s list in `v`: `view` and `entries` as the core says them now (none while it is read the first time),
-/// `top` the room over its first row, `foot` under its last (the composer's), `core` the settings' over its workspace;
+/// `width` how wide the frame gives it (the pane's, less what is beside it: never what it last laid out), `top` the room
+/// over its first row, `foot` under its last (the composer's, as it is laid out: read plainly where the list lays its
+/// rows out after it and where what is over it is laid out after it), `core` the settings' over its workspace;
 /// `follows` said whether it is kept at its end, as that changes.
 pub fn chat_list_node(
   v : @view.View,
@@ -15,6 +17,7 @@ pub fn chat_list_node(
   r : ChatRef,
   view : () -> ChatView?,
   entries : () -> Array[Entry],
+  width : () -> Double,
   top : () -> Double,
   foot : () -> Double,
   core : Core,
@@ -30,23 +33,19 @@ pub fn chat_list_node(
   }
   // (a card's field with the focus kept in view with the keyboard up, as the window grows shorter under it: out from
   // under the bar and the composer, 16 clear of each, its foot giving way to its top where it does not fit between
-  // them; with touch, as the keyboard comes up on asking (the old list's list_holds_field))
-  v.reacts(fn() { (v.laid_window_told(), top(), clear_foot()) }, fn(now) {
-    guard now.0 is Some((_, ly, _, lh)) &&
+  // them; with touch, as the keyboard comes up on asking (the old list's list_holds_field): brought into sight by the
+  // list as the change that brings the keyboard up or moves it is committed, where all of it is laid out then
+  // (Tree::show_in_sight))
+  v.reacts(fn() { @ui.current().ime_inset() }, fn(inset) {
+    guard inset > 0.0 &&
       !@sf.pointer_rests() &&
-      @ui.current().ime_inset() > 0.0 &&
       @ui.focused_field_in() is Some((island, (_, fy, _, fh))) &&
-      v.tree.holds(v.id(), island) &&
-      v.tree.view_of(island) is Some(iv) else {
+      v.tree.holds(v.id(), island) else {
       return
     }
-    let (_, iy, _, _) = iv.laid_window_now()
-    let y = iy + fy
-    let d = dmin(ly + lh - now.2 - field_held_room - (y + fh), 0.0)
-    let d = dmax(ly + now.1 + field_held_room - y, d)
-    if d.abs() > 0.5 {
-      scroll.glide_to(scroll.at(v.tree) - d, glide=false)
-    }
+    v.tree.show_in_sight(island, within=fn() {
+      Some((fy - top() - field_held_room, fy + fh + clear_foot() + field_held_room))
+    })
   })
   // (shown while it is laid out somewhere: what comes out of its avatars played on then, linger_tick)
   let shown_by = fn() { !v.shown_nowhere() }
@@ -68,13 +67,8 @@ pub fn chat_list_node(
       None => ()
     }
   })
-  // (narrow: 700 or less, as the list is laid out: 20 apart, the pictures at their heads' start)
-  let narrow = fn() {
-    match v.laid_size_told() {
-      Some((w, _)) => w <= chat_narrow_w
-      None => true
-    }
-  }
+  // (narrow: 700 or less, as the frame gives it: 20 apart, the pictures at their heads' start)
+  let narrow = fn() { width() <= chat_narrow_w }
   // (an agent's message waiting its turn to come out of its avatar not in it yet: emit.mbt's emit_held)
   let em = @sfbase.emits_of(rk)
   let rd0 = @sfbase.reading_of(rk)
@@ -130,10 +124,7 @@ pub fn chat_list_node(
   // (in from the pane's sides to the column (row_side's): 16 narrow (as wide as the composer's words beside the
   // system's bars), else the column 760 wide at most in its middle (48 in beside the system's bars))
   let side = fn() {
-    let w = match v.laid_size_told() {
-      Some((w, _)) => w
-      None => v.window().0
-    }
+    let w = width()
     if w <= chat_narrow_w {
       if @sf.native_on() { native_row_inset() } else { row_side_narrow }
     } else if @sf.native_on() {
@@ -250,7 +241,6 @@ pub fn chat_list_node(
   })
   // (the rows made now, by their keys: where each is, what is read)
   let row_views : Map[String, @view.View] = {}
-  let row_rects : @sf.LiveMap[String, (Double, Double, Double, Double)] = @sf.LiveMap::new()
   // (where it is put once, by a row's key and how far under the list's top its top stands)
   let put : @signals.Signal[(String, Double)?] = @signals.signal(None, same=fn(a, b) { a == b })
   // (the message gone to and when it was: its row lit whole as it flashes, flash_start's curve from then)
@@ -295,24 +285,20 @@ pub fn chat_list_node(
         (sized.lend)(slot, k)
         match @signals.untracked(fn() { row_of(k) }) {
           Some((Top, _)) => { slot.height(By(fn() { Some(top()) })) |> ignore; return }
-          Some((Foot, _)) => { slot.height(By(fn() { Some(clear_foot() + foot_gap) })) |> ignore; return }
+          // (the composer's room under the last, as the composer is laid out before the list lays its rows out: Live's
+          // Placed in a block of its)
+          Some((Foot, _)) => { slot.height(Placed(fn() { Some(clear_foot() + foot_gap) })) |> ignore; return }
           _ => ()
         }
         // (its node while it is made, what is read of where it is: the reading's)
         row_views[k] = slot
         slot.owns(fn() {
           match row_views.get(k) {
-            Some(x) if physical_equal(x, slot) => { row_views.remove(k); row_rects.remove(k) }
+            Some(x) if physical_equal(x, slot) => row_views.remove(k) |> ignore
             _ => ()
           }
         })
         |> ignore
-        slot.reacts(fn() { slot.laid_window_told() }, fn(rect) {
-          match rect {
-            Some(rect) => row_rects.set(k, rect)
-            None => row_rects.remove(k)
-          }
-        })
         // (its room: in from the pane's sides to the column, the gap over it; under the bar over the first, the
         // composer under the last)
         slot
@@ -754,9 +740,9 @@ pub fn chat_list_node(
     let in_sight = shown.get().map(fn(k) {
       let e = all.get(k)
       let seq = match e { Some(Said(m)) => m.seq; _ => -1.0 }
-      (seq, row_rects.get(k), e is Some(State(_, _, _)))
+      (seq, row_views.get(k).bind(fn(row) { row.placed_window_was() }), e is Some(State(_, _, _)))
     })
-    (v.laid_window_told(), top(), clear_foot(), in_sight, scroll.glides_till_told(), follows.get(),
+    (v.placed_window_was(), top(), clear_foot(), in_sight, scroll.glides_till(), follows.get(),
       view().map(fn(cv) { cv.newer }), (sized.opening)(), v.shown_nowhere())
   }, fn(now) {
     let (rect, bar, foot, in_sight, moving, at_end, _, opening, hidden) = now
@@ -831,15 +817,18 @@ pub fn chat_list_node(
   }
   v.reacts(fn() { asking() }, fn(a) { rd0.ask = a })
   v.box(fn(f) {
+    // (laid out after the list and the composer, over the list's room less the composer's and the way to the end's
+    // over it: View::laid_after)
     f
-    .over(Is(true))
+    .laid_after(fn() {
+      let (w, h) = v.laid_size()
+      let above = !follows.get() || view().map(fn(cv) { cv.newer }).unwrap_or(false)
+      let side = (w - composer_width(w)) / 2.0 + float_in
+      let under = foot() + float_lift + (if above { float_above } else { 0.0 })
+      (0.0, 0.0, Some(dmax(0.0, w - side)), Some(dmax(0.0, h - under)))
+    })
     .lies_along(Is(End))
     .lines_up(Is(Some(End)))
-    .padding(By(fn() {
-      let w = v.laid_size_told().map(fn(z) { z.0 }).unwrap_or(0.0)
-      let above = !follows.get() || view().map(fn(cv) { cv.newer }).unwrap_or(false)
-      (0.0, 0.0, (w - composer_width(w)) / 2.0 + float_in, foot() + float_lift + (if above { float_above } else { 0.0 }))
-    }))
     |> ignore
     f.show(asking, fn(b) {
       b
@@ -880,14 +869,15 @@ pub fn chat_list_node(
   // button with ↓ (and, short of the chat's end, how many new messages wait there); pressed, the list to its end, or,
   // short of the chat's end, the chat's latest page asked for
   v.box(fn(f) {
+    // (laid out after the list and the composer, over the list's room less the composer's: View::laid_after)
     f
-    .over(Is(true))
+    .laid_after(fn() {
+      let (w, h) = v.laid_size()
+      let side = (w - composer_width(w)) / 2.0 + float_in
+      (0.0, 0.0, Some(dmax(0.0, w - side)), Some(dmax(0.0, h - foot() - float_lift)))
+    })
     .lies_along(Is(End))
     .lines_up(Is(Some(End)))
-    .padding(By(fn() {
-      let w = v.laid_size_told().map(fn(z) { z.0 }).unwrap_or(0.0)
-      (0.0, 0.0, (w - composer_width(w)) / 2.0 + float_in, foot() + float_lift)
-    }))
     |> ignore
     f.show(fn() { !follows.get() || view().map(fn(cv) { cv.newer }).unwrap_or(false) }, fn(b) {
       b
@@ -1019,9 +1009,10 @@ fn emit_flyer_node(layer : @view.View, rk : String, view : () -> ChatView?) -> U
     .height(Is(Some(ring_side)))
     .lies_along(Is(Middle))
     .lines_up(Is(Some(Middle)))
-    .alpha(By(fn() { if at() is Some(_) { 1.0 } else { 0.0 } }))
-    .offset(By(fn() {
-      let (lx, ly, _, _) = layer.drawn_window_told().unwrap_or((0.0, 0.0, 0.0, 0.0))
+    // (drawn where its ends are drawn as the tree is placed: Live's Placed)
+    .alpha(Placed(fn() { if at() is Some(_) { 1.0 } else { 0.0 } }))
+    .offset(Placed(fn() {
+      let (lx, ly, _, _) = layer.drawn_window_now().unwrap_or((0.0, 0.0, 0.0, 0.0))
       match at() {
         Some((x, y, _, _)) => (x - ring_room - lx, y - ring_room - ly)
         None => (0.0, 0.0)

@@ -8,7 +8,8 @@
 /// `by` whose and when (what quoting one says), `at` where in the chat it is (its preview's place); `landed` told each
 /// one's landing by its key as it is made and let go; `corner` its pictures' (a quote's own: @sf.quote_picture_corner);
 /// `by` whose message it is, their role and its ts (what quoting one of them says; none: not quoted from here); `most`
-/// how wide they may be where what holds them is as wide as they are (a quote's card: none, the column's).
+/// how wide they may be where what holds them is as wide as they are (a quote's card: none, the column's). Made by the
+/// room they are laid out in (View::by_room): drawn as wide as that lets them, made again as it changes.
 fn message_files_node(
   col : @view.View,
   src : Source,
@@ -21,7 +22,9 @@ fn message_files_node(
   by? : () -> (String, String, String)? = fn() { None },
   most? : () -> Double? = fn() { None },
 ) -> Unit {
-  col.box(fn(flow) {
+  col.box(fn(holder) {
+    // (as wide as they may be: what holds them where it is as wide as they are, else the column's as it is laid out)
+    holder.by_room(fn(w) { most().unwrap_or(w) }, fn(flow, room_w) {
     flow
     .row(Is(true))
     .gap(Is(files_gap))
@@ -29,17 +32,7 @@ fn message_files_node(
     .lies_along(Is(if mine { End } else { Start }))
     .lines_up(Is(Some(Start)))
     |> ignore
-    // (the column's width as laid out, the pane's till it is)
-    let room = fn() {
-      match most() {
-        Some(w) => w
-        None =>
-          match flow.laid_size_told() {
-            Some((w, _)) if w > 0.0 => w
-            _ => flow.window().0
-          }
-      }
-    }
+    let room = fn() { room_w }
     flow.each(fn() { list().map(fn(a) { @sfbase.file_key(a) }) }, fn(k) { k }, fn(item, k) {
       let key = @signals.untracked(fn() { k.get() })
       // (as it is now; as it last was while it goes)
@@ -66,6 +59,8 @@ fn message_files_node(
       }
       item.owns(fn() { landed(key, None) }) |> ignore
     })
+    })
+    |> ignore
   })
   |> ignore
 }

@@ -24,13 +24,13 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
     // (the composer's room at the page's foot, as it says it: the list's foot over it)
     let room : @signals.Signal[(() -> Double)?] = @signals.signal(None, same=fn(a, b) { a is None && b is None })
     let composer_room = fn() { room.get().map(fn(f) { f() }).unwrap_or(0.0) }
-    let page_height = fn() { p.laid_size_told().map(fn(z) { z.1 }).unwrap_or(height()) }
-    let list_room = fn() { dmax(composer_room(), tabletop_clear_in(page_height(), frame().foot)) }
+    // (the page as tall as the window: the frame's)
+    let list_room = fn() { dmax(composer_room(), tabletop_clear_in(height(), frame().foot)) }
     p.show(fn() { view() is None }, fn(waiting) {
       waiting
       .over(Is(true))
       |> ignore
-      @sfpages.chat_waiting_node(waiting, src, r, list_top, bar_foot)
+      @sfpages.chat_waiting_node(waiting, src, r, width, list_top, bar_foot)
     })
     p.box(fn(l) {
       // (a new chat's list comes up with its first words sent, on their way: flight_node.mbt's send_list_rise)
@@ -43,7 +43,7 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
         }))
       }))
       |> ignore
-      let list = @sfpages.chat_list_node(l, src, r, view, entries, fn() { list_top() }, list_room, settings_core(src, w), foot_gap=list_foot())
+      let list = @sfpages.chat_list_node(l, src, r, view, entries, width, fn() { list_top() }, list_room, settings_core(src, w), foot_gap=list_foot())
       latest.val = list.to_latest
       landing.val = list.landing_of
     })
@@ -56,10 +56,18 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
       .lies_along(By(fn() { if @ui.system_tabletop() is Some(_) { Start } else { End } }))
       .padding(By(fn() {
         let top = match @ui.system_tabletop() {
-          Some((_, foot)) => dmax(0.0, dmin(foot, page_height() - frame().foot - composer_room()))
+          Some((_, foot)) => dmax(0.0, foot)
           None => 0.0
         }
         (0.0, top, 0.0, frame().foot)
+      }))
+      // (folded half open: what it holds at the fold, drawn as far over it as it must be to end over the frame's foot,
+      // as the page and it are laid out: Live's Placed)
+      .offset(Placed(fn() {
+        match @ui.system_tabletop() {
+          Some((_, foot)) => (0.0, dmin(0.0, dmax(0.0, height() - frame().foot - composer_room()) - dmax(0.0, foot)))
+          None => (0.0, 0.0)
+        }
       }))
       |> ignore
       @sfpages.composer_on_page(f, fn() { app.nav.top_stay().0 == entry }, fn(f) {

@@ -199,6 +199,8 @@ fn card_button_node(parent : @view.View, icon : String, label : () -> String, pr
 ///|
 /// A waiting picture or card with its remove button hung on the same corner as with_corner_remove. Both are nodes;
 /// the button's offset moves its hit target as well as its drawing. `width` gives a tile its width; None fills a row.
+/// `placed`: `width` worked out of where things are laid out, in what is laid out after them (Live's Placed: in what a
+/// node holds by its room, View::by_room).
 pub fn with_corner_remove_node(
   parent : @view.View,
   label : () -> String,
@@ -207,13 +209,15 @@ pub fn with_corner_remove_node(
   body : (@view.View) -> Unit,
   width? : () -> Double? = fn() { None },
   turn? : () -> Double = fn() { 0.0 },
+  placed? : Bool = false,
 ) -> @view.View {
+  let live = fn(f : () -> Double?) -> @view.Live[Double?] { if placed { Placed(f) } else { By(f) } }
   parent.box(fn(outer) {
     let reach = fn() { corner_remove_reach(corner()) }
-    outer.row(Is(true)).width(By(fn() { width().map(fn(w) { w + reach() }) })) |> ignore
+    outer.row(Is(true)).width(live(fn() { width().map(fn(w) { w + reach() }) })) |> ignore
     outer.box(fn(inner) {
-      inner.width(By(width)).min_width(Is(Some(0.0)))
-      .grow(By(fn() { if width() is None { 1.0 } else { 0.0 } })) |> ignore
+      inner.width(live(width)).min_width(Is(Some(0.0)))
+      .grow(if placed { Placed(fn() { if width() is None { 1.0 } else { 0.0 } }) } else { By(fn() { if width() is None { 1.0 } else { 0.0 } }) }) |> ignore
       body(inner)
       inner.box(fn(over) {
         over.over(Is(true)).lines_up(Is(Some(End))).lies_along(Is(Start)) |> ignore

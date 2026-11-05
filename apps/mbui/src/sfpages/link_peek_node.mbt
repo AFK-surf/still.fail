@@ -91,16 +91,12 @@ fn link_peeks_node(
         @sfbase.let_go(src, scope)
       })
       |> ignore
-      // (under the piece of line it rests on, at its start; kept in the chat's room)
+      // (under the piece of line it rests on, at its start; kept in the chat's room, as the layer is placed: Live's Placed)
       card
-      .offset(By(fn() {
-        match l.laid_window_told() {
-          Some((lx, ly, lw, _)) => {
-            let cw = card_w.get().unwrap_or(0.0)
-            (dmax(0.0, dmin(px - lx, lw - cw - 8.0)), py + ph + hover_offset - ly)
-          }
-          None => (0.0, 0.0)
-        }
+      .offset(Placed(fn() {
+        let (lx, ly, lw, _) = l.placed_window_now()
+        let cw = card_w.get().unwrap_or(0.0)
+        (dmax(0.0, dmin(px - lx, lw - cw - 8.0)), py + ph + hover_offset - ly)
       }))
       |> ignore
       let tile = peek_tile_of(href, @signals.untracked(link_to))

@@ -833,7 +833,8 @@ pub fn message_row_node(row : @view.View, src : Source, here : () -> MessageHere
 /// made and let go (by its place among them). A quote's own picture (the file of the message's `files` it names: a
 /// preview mark's screenshot) in its card, as a message's file is (message_files_node: `at` where in the chat the
 /// message is), its corner concentric with the card's, told `landed` by its key (quote_picture_key) as what is sent
-/// lands there.
+/// lands there. Another's made by the room the column is laid out in (View::by_room), made again as that changes: their
+/// pictures as wide as their cards may be in it.
 fn quotes_node(
   col : @view.View,
   src : Source,
@@ -846,7 +847,7 @@ fn quotes_node(
   said? : (Int, @sf.QuoteCardNode?) -> Unit = fn(_, _) {  },
   landed? : (String, @sfbase.FileLandingNode?) -> Unit = fn(_, _) {  },
 ) -> Unit {
-  col.box(fn(qs) {
+  let made = fn(qs : @view.View, col_w : Double?) {
     qs.gap(Is(4.0)).lines_up(Is(Some(if mine { End } else { Start }))) |> ignore
     if mine {
       qs.max_width(By(fn() { Some(composer_words_width(width()) + 2.0 * bubble_side) })) |> ignore
@@ -892,7 +893,7 @@ fn quotes_node(
             if mine {
               Some(@sf.quote_picture_room(composer_words_width(width()) + 2.0 * bubble_side))
             } else {
-              col.laid_size_told().map(fn(z) { @sf.quote_picture_room(z.0) })
+              col_w.map(@sf.quote_picture_room)
             }
           }
           message_files_node(pv, src, here, own, false, at=fn() { at() + "/q:" + i.to_string() }, corner=@sf.quote_picture_corner, most~, landed=fn(k, l) {
@@ -913,8 +914,12 @@ fn quotes_node(
       said(i, Some(card))
       slot.owns(fn() { said(i, None) }) |> ignore
     })
-  })
-  |> ignore
+  }
+  if mine {
+    col.box(fn(qs) { made(qs, None) }) |> ignore
+  } else {
+    col.by_room(fn(w) { w }, fn(qs, w) { made(qs, Some(w)) }) |> ignore
+  }
 }
 
 ///|
@@ -956,8 +961,9 @@ fn emits_here(here : MessageHere, m : Message) -> (Emits, String)? {
 /// Node `v` said as where what a message flies between is (emit_places), by `key` as it is now (None: not one of them),
 /// as long as it lives; `dy` below where it is.
 fn emit_place_node(v : @view.View, key : () -> String?, dy? : Double = 0.0) -> Unit {
+  // (where it is drawn, read plainly: by what is drawn where it is as the tree is placed, Live's Placed)
   let at = fn() -> (Double, Double, Double, Double)? {
-    v.drawn_window_told().map(fn(r) { (r.0, r.1 + dy, r.2, r.3) })
+    v.drawn_window_now().map(fn(r) { (r.0, r.1 + dy, r.2, r.3) })
   }
   let room = fn() { v.list_room().map(fn(r) { r.height }) }
   let said = Ref("")

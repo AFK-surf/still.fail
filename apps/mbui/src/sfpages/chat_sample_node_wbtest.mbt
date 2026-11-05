@@ -14,7 +14,7 @@ test "a chat's first read is a retained sample on every width: no sample words, 
       root.show(fn() { loading.get() }, fn(sample) {
         built.val += 1
         sample.grow(Is(1.0)) |> ignore
-        chat_waiting_node(sample, src, r, fn() { 74.0 }, fn() { 60.0 })
+        chat_waiting_node(sample, src, r, fn() { sample.window().0 }, fn() { 74.0 }, fn() { 60.0 })
       })
     })
     for width in [390.0, 740.0, 1280.0, 390.0] {

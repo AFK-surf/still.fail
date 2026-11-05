@@ -4,11 +4,19 @@
 
 ///|
 /// The first read of chat `r`, under its bar: a failed read says why above the still sample; a read in progress
-/// breathes. `top` is the first row's place, `bar` the room in which no error pill may stand.
-pub fn chat_waiting_node(parent : @view.View, src : Source, r : ChatRef, top : () -> Double, bar : () -> Double) -> Unit {
+/// breathes. `width` how wide the frame gives its list, `top` is the first row's place, `bar` the room in which no error
+/// pill may stand.
+pub fn chat_waiting_node(
+  parent : @view.View,
+  src : Source,
+  r : ChatRef,
+  width : () -> Double,
+  top : () -> Double,
+  bar : () -> Double,
+) -> Unit {
   parent.padding(By(fn() { (0.0, bar(), 0.0, 0.0) })) |> ignore
   @sf.waiting_node(parent, fn(sample) {
-    chat_messages_sample_node(sample, fn() { top() - bar() })
+    chat_messages_sample_node(sample, width, fn() { top() - bar() })
   }, error=fn() {
     match @sfbase.view_of_chat(src, r).2 {
       Some(e) => @sf.t("android-chat.chat.unreadable", args=[("error", text(Some(e), "message"))])
@@ -18,10 +26,11 @@ pub fn chat_waiting_node(parent : @view.View, src : Source, r : ChatRef, top : (
 }
 
 ///|
-pub fn chat_messages_sample_node(parent : @view.View, top : () -> Double) -> Unit {
+/// The made-up messages of a chat being read, in `parent` as wide as the frame gives the list (`width`), the first `top`
+/// down.
+pub fn chat_messages_sample_node(parent : @view.View, width : () -> Double, top : () -> Double) -> Unit {
   parent.box(fn(column) {
     column.min_width(Is(Some(0.0))).shrink(Is(0.0)) |> ignore
-    let width = fn() { column.laid_size_told().map(fn(s) { s.0 }).unwrap_or(column.window().0) }
     let narrow = fn() { width() <= chat_narrow_w }
     let side = fn() { row_side_in(width()) }
     let view = @sfbase.chat_view_made({ "title": Json::string(""), "messages": [] })

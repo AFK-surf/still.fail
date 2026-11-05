@@ -350,7 +350,7 @@ fn tape_made(
           fn(v : @view.View, _page, _under, _stint, k : Int) {
             v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
             context_node(v)
-            chat_root_node(v, src, r, k, old_over=tape_chat_over, corners=tape_chat_corners, side=false, ground=tape_page_ground)
+            chat_root_node(v, src, r, k, width, old_over=tape_chat_over, corners=tape_chat_corners, side=false, ground=tape_page_ground)
           },
         ),
       )
@@ -363,7 +363,7 @@ fn tape_made(
             v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
             context_node(v)
             history_beside(src, r, key, entry)
-            chat_root_node(v, src, r, k, old_over=tape_chat_over, corners=tape_chat_corners, side=false, ground=tape_page_ground)
+            chat_root_node(v, src, r, k, width, old_over=tape_chat_over, corners=tape_chat_corners, side=false, ground=tape_page_ground)
           },
         ),
       )

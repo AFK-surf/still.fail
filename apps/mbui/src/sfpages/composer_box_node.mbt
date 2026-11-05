@@ -78,14 +78,15 @@ fn composer_box_node(
                 }
               }) |> ignore
               // Each card grows whole into the room made for it. A card inserted above an existing attachment
-              // has only the space that attachment has opened so far; the existing attachment stays whole.
-              item.scale(By(fn() {
-                match (part.laid_window_told(), item.laid_window_told()) {
+              // has only the space that attachment has opened so far; the existing attachment stays whole. (Where
+              // they are placed, as the tree is placed: Live's Placed.)
+              item.scale(Placed(fn() {
+                match (part.placed_window_was(), item.placed_window_was()) {
                   (Some(p), Some(b)) if b.3 > 0.0 => {
                     let y = b.1 - p.1 + moving.box_change(item).1
                     let mut end = p.3 + moving.box_change(part).3
                     for next in held {
-                      match next.laid_window_told() {
+                      match next.placed_window_was() {
                         Some(n) if n.1 > b.1 + 0.5 && n.0 < b.0 + b.2 && n.0 + n.2 > b.0 => {
                           let gap = dmax(0.0, n.1 - b.1 - b.3)
                           end = dmin(end, n.1 - p.1 + moving.box_change(next).1 - gap)

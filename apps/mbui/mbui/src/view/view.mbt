@@ -32,8 +32,10 @@
 /// A property's value: set once (`Is`), or worked out (`By`), tracked, and set again as what it read changes; or
 /// worked out of where things are laid out (`Placed`: sizes and places as the tree's one layout left them, read plainly,
 /// View::laid_size, View::placed_window_now), as the tree is placed after its layout each time anything of it was laid
-/// out or placed, and as what else it reads changes: only what placing and painting read (where it is drawn, how it
-/// looks), never what layout reads nor what makes or takes anything (docs/retained.md rule 10: nothing goes back).
+/// out or placed, and as what else it reads changes: what placing and painting read (where it is drawn, how it looks);
+/// what layout reads only in a node laid out alone after all else (a windowed list's block, View::laid_after's, what
+/// View::by_room makes), worked out before that is laid out, of where all else is; never what makes or takes anything
+/// (docs/retained.md rule 10: nothing goes back).
 pub(all) enum Live[T] {
   Is(T)
   By(() -> T)
@@ -655,6 +657,11 @@ pub struct Tree {
   /// those whose reads changed otherwise since they ran (`placed_due`), never before the layout they read
   placed_bounds : Map[Int, Bound]
   placed_due : Array[Bound]
+  /// those of them of a property layout reads, in a node laid out alone after all else (Live's Placed there): worked out
+  /// again once the rest is laid out and before that is, after anything of it was laid out or placed, and those whose
+  /// reads changed otherwise since (`laid_due`)
+  laid_bounds : Map[Int, Bound]
+  laid_due : Array[Bound]
   /// the nodes laid out alone once all else is (View::laid_after), each with its making, in the order said; whether one
   /// is to be laid out again (what it holds marked, or what it says of its room changed)
   laid_afters : Array[(Int, Int)]
@@ -851,8 +858,10 @@ struct Bound {
   /// marked as what it read may have changed, found not to have (Tree::pull): the moment of that marking forgotten, the
   /// next change's its cause's
   mut unmarked : () -> Unit
-  /// worked out of where things are laid out (Live's Placed): as the tree is placed alone, never pulled before
+  /// worked out of where things are laid out (Live's Placed): as the tree is placed alone (or, of what layout reads, as
+  /// what is laid out after all else is about to be: `laid`), never pulled before
   placed : Bool
+  laid : Bool
 }
 
 ///|
@@ -896,6 +905,8 @@ pub fn Tree::new(
     laying: false,
     placed_bounds: Map([]),
     placed_due: [],
+    laid_bounds: Map([]),
+    laid_due: [],
     laid_afters: [],
     laid_afters_due: false,
     outs_gone: [],
@@ -1649,6 +1660,8 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.pulls_marked.clear()
   self.placed_bounds.clear()
   self.placed_due.clear()
+  self.laid_bounds.clear()
+  self.laid_due.clear()
   self.laid_afters.clear()
   self.timeline.clear()
   self.changed.clear()
@@ -1893,11 +1906,17 @@ priv enum Phase {
 /// worked out of where things are laid out (Live's Placed): first as the tree is next placed, and each time it is
 /// placed after anything of it was laid out or placed, or what it read changed (Tree::placed_now), never before the
 /// layout it reads.
-fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, placed? : Bool = false) -> () -> Unit {
+fn[T] Tree::queued(
+  self : Tree,
+  read : () -> T,
+  then : (T) -> Unit,
+  placed? : Bool = false,
+  laid? : Bool = false,
+) -> () -> Unit {
   // (its one state, every way it is run read from it: queued for a frame (told as a change ended), marked as what it
   // read changed (in a change's batch too: what asks at once pulls it), live; run once it is due, by any of them, and
   // done with all of them)
-  let b : Bound = { queued: false, marked: false, live: true, run: fn() {  }, unmarked: fn() {  }, placed }
+  let b : Bound = { queued: false, marked: false, live: true, run: fn() {  }, unmarked: fn() {  }, placed: placed || laid, laid }
   // (when what it read was told changed: its cause's moment, whatever frame works it out)
   let told_at = Ref(-1.0)
   let k = self.pulls_made
@@ -1909,7 +1928,9 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, placed? : Bo
       if told_at.val < 0.0 {
         told_at.val = self.now_of_change()
       }
-      if placed {
+      if laid {
+        self.laid_due.push(b)
+      } else if placed {
         self.placed_due.push(b)
       } else {
         self.bindings_due.push(b)
@@ -1955,7 +1976,12 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, placed? : Bo
     self.cause_at = was
   }
   self.pulls[k] = (w, b)
-  if placed {
+  if laid {
+    // (worked out now, of where things are laid out as they are; again before what holds it is next laid out, of the
+    // layout it reads then)
+    self.laid_bounds[k] = b
+    (b.run)()
+  } else if placed {
     // (worked out first as the tree is next placed, of the layout it reads then)
     self.placed_bounds[k] = b
     b.queued = true
@@ -1969,6 +1995,7 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, placed? : Bo
     b.run = fn() {  }
     self.pulls.remove(k)
     self.placed_bounds.remove(k)
+    self.laid_bounds.remove(k)
     w.stop()
   }
 }
@@ -2253,7 +2280,7 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
     }
     None => ()
   }
-  let follow = fn(f : () -> T, placed : Bool) {
+  let follow = fn(f : () -> T, placed : Bool, laid : Bool) {
     let last : Ref[T?] = Ref(None)
     let gen = self.gen
     let stop = tree.queued(
@@ -2274,6 +2301,7 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
         marked()
       },
       placed~,
+      laid~,
     )
     n.props[prop] = stop
   }
@@ -2282,12 +2310,44 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
       apply(v)
       marked()
     }
-    By(f) => follow(f, false)
+    By(f) => follow(f, false, false)
     Placed(f) =>
       match phase {
-        Place | Paint | Said => follow(f, true)
-        Layout | Both => laid_refused("a property layout reads")
+        Place | Paint | Said => follow(f, true, false)
+        // (what layout reads: only where it is laid out alone after all else, of where that is)
+        Layout | Both => if tree.laid_after_all(at) { follow(f, false, true) } else { laid_refused("a property layout reads") }
       }
+  }
+}
+
+///|
+/// Whether node `at` is laid out alone after all else of the tree (in a windowed list's block, in a node laid out after:
+/// View::laid_after, in what View::by_room makes): what its layout reads may be worked out of where all else is laid out
+/// (Live's Placed), before it is.
+fn Tree::laid_after_all(self : Tree, at : Int) -> Bool {
+  let mut i = at
+  while i >= 0 {
+    if self.nodes[i].own_root {
+      return true
+    }
+    i = self.nodes[i].parent
+  }
+  false
+}
+
+///|
+/// What layout reads of what is laid out alone after all else, worked out of where all else is laid out now (Live's
+/// Placed there), before that is laid out: all of it where anything was laid out or placed (`all`), else those whose
+/// reads changed; what comes out otherwise marks what holds it to be laid out again in this same pass.
+fn Tree::laid_bounds_run(self : Tree, all : Bool) -> Unit {
+  let due = if all {
+    self.laid_bounds.values().collect()
+  } else {
+    self.laid_due.filter(fn(b) { b.queued })
+  }
+  self.laid_due.clear()
+  for b in due {
+    (b.run)()
   }
 }
 
@@ -3487,8 +3547,9 @@ fn Tree::measured_now(self : Tree) -> Unit {
         self.walk_from = g
       }
     }
-    // (the windowed lists' blocks laid out by their lists as they are now, what holds them with them, placed by none of
-    // it)
+    // (what layout reads of what is laid out after all else, of where that is now; the windowed lists' blocks laid out by
+    // their lists as they are now, what holds them with them, placed by none of it)
+    self.laid_bounds_run(self.measured_gen >= 0)
     self.lists_laid_out(false) |> ignore
   })
   if shown != at {
@@ -6627,6 +6688,9 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     self.walk_from = -1
     self.walk(0, gen, true)
   }
+  // (what layout reads of what is laid out alone after all else, worked out of where all else is laid out now, before
+  // that is: Live's Placed there)
+  self.laid_bounds_run(placing)
   // (what is laid out alone once all else is (View::laid_after): where and how big what holds it says, of where things
   // are laid out now; all of it looked at again where anything was laid out)
   if self.afters_laid(placing) {
@@ -6709,6 +6773,7 @@ fn Tree::owes(self : Tree) -> Bool {
   self.order_due ||
   !self.bindings_due.is_empty() ||
   self.placed_due.iter().any(fn(b) { b.queued }) ||
+  self.laid_due.iter().any(fn(b) { b.queued }) ||
   !self.places_due.is_empty() ||
   !self.looks_due.is_empty()
 }

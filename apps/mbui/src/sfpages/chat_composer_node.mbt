@@ -47,11 +47,13 @@ pub fn chat_composer_node(
   let node : Ref[ComposerNode?] = Ref(None)
   let extras : Ref[ComposerExtrasNode?] = Ref(None)
   let root_at : Ref[@view.View?] = Ref(None)
+  // (how much room it takes at the page's foot, as it is laid out: read plainly, where what lays out after it reads it
+  // (the list's rows, what is over the list) and at an event, never followed)
   let room = fn(settled : Bool) {
     let n = node.val.unwrap()
     let root = root_at.val.unwrap()
-    let total = root.laid_size_told().map(fn(s) { s.1 }).unwrap_or(0.0)
-    let cap = n.cap.laid_size_told().map(fn(s) { s.1 }).unwrap_or(0.0)
+    let total = root.laid_size().1
+    let cap = n.cap.laid_size().1
     let look = @ui.style_words(@sf.theme().t.words)
     let line = (if look.line > 0.0 { look.line } else { look.size * @ui.tree_theme().text_line }) * @ui.font_scale()
     let opened = @sf.composer_pad + 8.0 + line + 10.0 + @sf.theme().round.side + @sf.capsule_in(place().corner, @sf.theme().round.side)

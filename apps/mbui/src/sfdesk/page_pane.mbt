@@ -154,6 +154,17 @@ fn pane_stack(v : @view.View, src : Source, tips : @sf.TipLayer) -> Unit {
 }
 
 ///|
+/// How wide the frame gives a page made once in the pane off the tape (pane_made), `v` in it: the window's less the
+/// block's column where its move goes (fold_target's), never what the page last laid out.
+fn pane_made_width(v : @view.View, src : Source) -> Double {
+  let ww = v.window().0
+  match @sfbase.workspace_in_view(src).0 {
+    Some(w) => ww - fold_target(src, w, ww).1.col
+    None => ww
+  }
+}
+
+///|
 /// The pages of the library's made once as nodes in the pane off the tape (Large), in the place of their old view
 /// (nav_flat_view's `made`): 关于, 记忆, 更新日志, 一台 station 的记忆; 归档, a station's own archiving, 自动决策; 用量,
 /// 价目表. Laid out by the width the frame gives the pane (the window's less the block's column where its move goes:
@@ -196,13 +207,7 @@ fn pane_made(
                 named: false,
               }
             }
-            let width = fn() {
-              let ww = p.window().0
-              match @sfbase.workspace_in_view(src).0 {
-                Some(w) => ww - fold_target(src, w, ww).1.col
-                None => ww
-              }
-            }
+            let width = fn() { pane_made_width(p, src) }
             p.box(fn(a) {
               a.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
               f(a, core, here, stint, frame, width)
@@ -221,7 +226,7 @@ fn pane_made(
           "chat/" + r.station + ":" + r.session,
           fn(v : @view.View, _page, _under, _stint, k : Int) {
             pane_made_host(v, src, k)
-            chat_root_node(v, src, r, k)
+            chat_root_node(v, src, r, k, fn() { pane_made_width(v, src) })
           },
         ),
       )
@@ -233,7 +238,7 @@ fn pane_made(
           fn(v : @view.View, _page, _under, _stint, k : Int) {
             pane_made_host(v, src, k)
             history_beside(src, r, key, entry)
-            chat_root_node(v, src, r, k)
+            chat_root_node(v, src, r, k, fn() { pane_made_width(v, src) })
           },
         ),
       )

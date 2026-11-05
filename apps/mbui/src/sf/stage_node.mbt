@@ -77,12 +77,16 @@ fn stage_node(
       let body_at : Ref[@view.View?] = Ref(None)
       let body = @ui.old(d, natural=true, gives=true, key=fn() { key + "/body" }, fn(c) {
           let (sw, sh) = room()
+          // (an old view's: read where it was placed as it is built, built again as that changes)
           let given = match body_at.val {
-            Some(b) =>
-              match b.laid_size_told() {
-                Some((_, g)) if g > 0.0 => g
-                _ => sh
+            Some(b) => {
+              let (_, _, _, g) = b.placed_now()
+              if g > 0.0 {
+                g
+              } else {
+                sh
               }
+            }
             None => sh
           }
           let was = (stage_room.val, stage_gives.val)
