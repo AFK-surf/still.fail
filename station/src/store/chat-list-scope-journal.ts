@@ -5,9 +5,9 @@ export type RecentScope = { kind: "home" } | { kind: "workspace"; workspace: str
 
 // Do not use INSERT OR IGNORE: an outer old writer's INSERT OR REPLACE can override it inside a trigger. The
 // existence check coalesces work without discarding the revision a builder uses to notice an interleaved change.
-const markSession = (key: string, workspace: string) => {
-  const refs = `(EXISTS (SELECT 1 FROM thread_sessions INDEXED BY thread_sessions_session WHERE session = ${key} LIMIT 1)
-    OR EXISTS (SELECT 1 FROM threads INDEXED BY threads_home WHERE home = ${key} LIMIT 1))`;
+const markSession = (key: string, workspace: string, homeWhen = "1") => {
+  const refs = `((${homeWhen}) AND (EXISTS (SELECT 1 FROM thread_sessions INDEXED BY thread_sessions_session WHERE session = ${key} LIMIT 1)
+    OR EXISTS (SELECT 1 FROM threads INDEXED BY threads_home WHERE home = ${key} LIMIT 1)))`;
   return `
     UPDATE recent_scope_session_dirty SET revision = revision + 1 WHERE kind = 1 AND ws = ${workspace} AND session = ${key};
     INSERT INTO recent_scope_session_dirty(kind, ws, session, revision)
@@ -24,6 +24,8 @@ const keyConflict = (extra: string) => `(SELECT key FROM sessions WHERE key = NE
 const keyConflictWs = (extra: string) => `(SELECT ws FROM sessions WHERE key = NEW.key ${extra})`;
 const tokenConflict = (extra: string) => `(SELECT key FROM sessions WHERE token = NEW.token ${extra})`;
 const tokenConflictWs = (extra: string) => `(SELECT ws FROM sessions WHERE token = NEW.token ${extra})`;
+const changesHome = `OLD.key IS NOT NEW.key OR (OLD.ws IS NULL AND NEW.ws IS NOT NULL)
+  OR (OLD.ws IS NOT NULL AND NEW.ws IS NULL)`;
 
 export function installRecentScopeJournal(db: DatabaseSync): void {
   const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'recent_scope_tracked'").get() !== undefined;
@@ -42,12 +44,12 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
       CREATE TRIGGER recent_scope_session_add AFTER INSERT ON sessions BEGIN ${markSession("NEW.key", "NEW.ws")} END;
       CREATE TRIGGER recent_scope_session_before_change BEFORE UPDATE OF key, ws, token ON sessions
         WHEN OLD.key IS NOT NEW.key OR OLD.ws IS NOT NEW.ws OR OLD.token IS NOT NEW.token BEGIN
-          ${markSession("OLD.key", "OLD.ws")}
+          ${markSession("OLD.key", "OLD.ws", changesHome)}
           ${markSession(keyConflict("AND key IS NOT OLD.key"), keyConflictWs("AND key IS NOT OLD.key"))}
           ${markSession(tokenConflict("AND key IS NOT OLD.key"), tokenConflictWs("AND key IS NOT OLD.key"))}
       END;
       CREATE TRIGGER recent_scope_session_change AFTER UPDATE OF key, ws, token ON sessions
-        WHEN OLD.key IS NOT NEW.key OR OLD.ws IS NOT NEW.ws OR OLD.token IS NOT NEW.token BEGIN ${markSession("NEW.key", "NEW.ws")} END;
+        WHEN OLD.key IS NOT NEW.key OR OLD.ws IS NOT NEW.ws OR OLD.token IS NOT NEW.token BEGIN ${markSession("NEW.key", "NEW.ws", changesHome)} END;
       CREATE TRIGGER recent_scope_session_drop BEFORE DELETE ON sessions BEGIN ${markSession("OLD.key", "OLD.ws")} END;
     `);
     db.exec("COMMIT");
