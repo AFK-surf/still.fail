@@ -50,6 +50,51 @@ for (const recursive of [false, true]) test(`session totals follow old writers a
   } finally { store.close(); }
 });
 
+for (const recursive of [false, true]) for (const alias of ["rowid", "_rowid_", "oid"]) {
+  test(`replacing a session by ${alias} updates its totals (recursive triggers ${recursive})`, () => {
+    const { store, db, add, exact } = fixture();
+    try {
+      db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+      add("one", "x", "mine"); add("two", "y", null);
+      const id = db.prepare("SELECT rowid AS id FROM sessions WHERE key='two'").get()!.id;
+      db.prepare(`UPDATE OR REPLACE sessions SET ${alias}=? WHERE key='one'`).run(id);
+      exact();
+    } finally { store.close(); }
+  });
+}
+
+for (const recursive of [false, true]) test(`session totals stay exact through mixed replacements (recursive triggers ${recursive})`, () => {
+  const { store, db, exact } = fixture();
+  const reference = fixture();
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    withoutCounts(reference.db);
+    reference.db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    const statements = (source: DatabaseSync) => ({
+      put: source.prepare("INSERT OR REPLACE INTO sessions (rowid,key,connect,scope,runtime,profile,workspace,token,created_at,last_active_at,ws) VALUES (?,?,?,'thread','claude','cc','/w',?,1,1,?)"),
+      change: source.prepare("UPDATE OR REPLACE sessions SET rowid=?, key=?, token=?, connect=?, ws=? WHERE key=?"),
+      drop: source.prepare("DELETE FROM sessions WHERE key=?"),
+    });
+    const actual = statements(db), before = statements(reference.db);
+    const rows = (source: DatabaseSync) => source.prepare("SELECT rowid AS rowid,key,token,connect,ws FROM sessions ORDER BY key").all();
+    let seed = 0x12345678;
+    const next = (n: number) => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed % n; };
+    for (let i = 0; i < 180; i++) {
+      const rowid = next(23) - 5, key = `s${next(13)}`, token = `t${next(13)}`, connect = `c${next(4)}`;
+      const ws = [null, "", "mine", "other"][next(4)]!;
+      const method = i % 4 === 0 ? "drop" : i % 4 === 1 ? "change" : "put";
+      const args = method === "drop" ? [key] : method === "change" ? [rowid, key, token, connect, ws, `s${next(13)}`] : [rowid, key, connect, token, ws];
+      const run = (ops: ReturnType<typeof statements>) => {
+        try { ops[method].run(...args); return null; }
+        catch (error) { return (error as { errcode?: number }).errcode; }
+      };
+      assert.equal(run(actual), run(before), `conflict policy at operation ${i}`);
+      assert.deepEqual(rows(db), rows(reference.db), `sessions at operation ${i}`);
+      exact();
+    }
+  } finally { store.close(); reference.store.close(); }
+});
+
 test("an old store is counted in bounded steps as sessions change", () => {
   const { store, db, add, exact } = fixture();
   try {
@@ -85,6 +130,20 @@ test("a failed session count batch rolls back its counts and cursor", () => {
     assert.equal(db.prepare("SELECT last_rowid FROM session_count_meta").get()!.last_rowid, null);
     db.exec("DROP TRIGGER fail_second_count");
     assert.deepEqual(sessionCountsStep(db, 8), { done: true, visited: 2 });
+    exact();
+  } finally { store.close(); }
+});
+
+test("a count batch advances through several old sessions without reading them all", () => {
+  const { store, db, add, exact } = fixture();
+  try {
+    withoutCounts(db);
+    db.exec("BEGIN");
+    for (let i = 0; i < 300; i++) add(`old-${i}`, "x", "mine");
+    db.exec("COMMIT");
+    installSessionCounts(db);
+    assert.deepEqual(sessionCountsStep(db), { done: false, visited: 256 });
+    assert.deepEqual(sessionCountsStep(db), { done: true, visited: 44 });
     exact();
   } finally { store.close(); }
 });

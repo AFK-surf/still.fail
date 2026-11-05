@@ -111,7 +111,7 @@ export function sessionCountsReady(db: DatabaseSync): boolean {
 
 /// Advance at most `limit` old rows. The fixed rowid boundary prevents newly allocated rows from extending the scan;
 /// triggers count new and changed sessions immediately, including those moved behind or beyond its cursor.
-export function sessionCountsStep(db: DatabaseSync, limit = 64): { done: boolean; visited: number } {
+export function sessionCountsStep(db: DatabaseSync, limit = 256): { done: boolean; visited: number } {
   if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError("session count batch must be positive");
   db.exec("BEGIN IMMEDIATE");
   try {
