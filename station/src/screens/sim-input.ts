@@ -13,7 +13,8 @@ export type SimOp =
   | { op: "pose"; name: string }
   | { op: "rotate" }
   | { op: "button"; name: "volume_up" | "volume_down" }
-  | { op: "memory_warning" };
+  | { op: "memory_warning" }
+  | { op: "hid"; page: number; usage: number; down: boolean };
 
 /// A page's KeyboardEvent.code → the USB HID keyboard usage (page 7).
 export const USAGES: Record<string, number> = {
@@ -84,6 +85,8 @@ export class SimInput {
         return this.#text(e.text);
       case "pose":
         return [{ op: "pose", name: e.name }];
+      case "button":
+        return [{ op: "hid", page: e.page, usage: e.usage, down: e.down }];
       case "device":
         return e.name === "memory_warning" ? [{ op: "memory_warning" }] : e.name === "rotate" ? [{ op: "rotate" }] : [{ op: "button", name: e.name }];
     }

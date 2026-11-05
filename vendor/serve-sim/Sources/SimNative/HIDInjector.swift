@@ -491,6 +491,13 @@ public actor HIDInjector {
         }
     }
 
+    // ember: a hardware button by its HID usage (DeviceKit's chrome.json says each), held as long as a person holds it:
+    // through dtuhidd where the guest has it, as sendButton's are.
+    public func sendHardwareButton(page: UInt32, usage: UInt32, down: Bool) async {
+        if let dtuhidKeys, dtuhidKeys.sendButton(page: page, usage: usage, down: down) { return }
+        await sendButtonHID(page: page, usage: usage, phase: down ? "down" : "up")
+    }
+
     public func sendButton(button: String, deviceUDID: String) async {
         hidLog("[hid] Sending button: \(button)")
 

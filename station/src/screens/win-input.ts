@@ -122,6 +122,7 @@ export class WinInput {
         return e.text === "" ? [] : [{ op: "text", text: e.text }];
       case "pose":
       case "device":
+      case "button":
         return [];
     }
   }

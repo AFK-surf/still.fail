@@ -271,7 +271,7 @@ let screen_max_zoom : Double = 5.0
 /// Where the frame is drawn on the stage now (zoomed), nothing before its size is known.
 fn ScreenUi::shown(self : ScreenUi) -> SRect {
   match self.zoom.rect() {
-    Some((x, y, w, h)) => { x, y, w, h }
+    Some((x, y, w, h)) => cased_in({ x, y, w, h }, self.case_x, self.case_y)
     None => srect_zero
   }
 }

@@ -225,6 +225,10 @@ export function checkInput(input: unknown): J {
     case "device":
       if (input.name !== "volume_up" && input.name !== "volume_down" && input.name !== "memory_warning" && input.name !== "rotate") throw bad();
       return { t: "device", name: input.name };
+    // One of a simulator's device's buttons, by its HID usage (`ScreenChrome.buttons`), as it goes down and comes up.
+    case "button":
+      if (!finite(input.page) || !finite(input.usage) || typeof input.down !== "boolean") throw bad();
+      return { t: "button", page: Math.floor(input.page), usage: Math.floor(input.usage), down: input.down };
     case "text":
       if (typeof input.text !== "string" || input.text === "" || input.text.length > TEXT_MAX) throw bad();
       return { t: "text", text: input.text };
@@ -389,6 +393,8 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
       ...(get(s, "poses") === true && control ? { poses: true } : {}),
       // A simulator's panels, for the device body drawn round its picture.
       ...(Array.isArray(get(s, "panels")) ? { panels: get(s, "panels") } : {}),
+      // Its case and buttons as Xcode has them, each panel's (a station from before them, or a Mac without them: `panels`).
+      ...(Array.isArray(get(s, "chrome")) ? { chrome: get(s, "chrome") } : {}),
       ...(chat ? { chat } : {}),
     };
     const access = accessOf(get(s, "access"));
@@ -567,6 +573,7 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       state.install = may && typeof get(item, "install") === "string" ? get(item, "install") : "";
       state.poses = get(item, "poses") === true && may;
       state.panels = get(item, "panels") ?? [];
+      state.chrome = get(item, "chrome") ?? [];
       const others = othersOf(onIt ?? names(get(item, "viewers")), mine).map(personShown);
       // Who else drives it now: an agent at work, another person.
       const drivers = othersOf(driving ?? names(get(item, "controlledBy")), mine);
@@ -818,6 +825,8 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                 if (isObject(s.cursor) && finite(s.cursor.x) && finite(s.cursor.y)) state.cursor = { x: unit(s.cursor.x), y: unit(s.cursor.y), ...(typeof s.cursor.shape === "string" ? { shape: s.cursor.shape } : {}) };
                 else if (s.cursor === null) delete state.cursor;
                 if (typeof s.title === "string" && s.title !== "") state.title = s.title;
+                // How a simulator's picture is turned: its case is drawn turned with it.
+                if (s.turn === 0 || s.turn === 1 || s.turn === 2 || s.turn === 3) state.turn = s.turn;
                 // The login field in focus, while driving it: this device's password manager may fill it (`fill`).
                 if (s.login === null) delete state.login;
                 else if (state.control && isObject(s.login) && typeof s.login.host === "string" && s.login.host !== "" && s.login.host.length <= 253 && (s.login.field === "username" || s.login.field === "password")) {

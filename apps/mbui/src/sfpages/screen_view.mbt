@@ -48,6 +48,9 @@ priv struct ScreenUi {
   mut stage_x : Double
   mut stage_y : Double
   mut fit_for : (Int, Int)?
+  /// how much a device's case is round its picture each way, as shares of the picture (device_case); none: 0
+  mut case_x : Double
+  mut case_y : Double
   mut over_seen : Bool
   gesture : Gesture
   /// a mouse on the stage (screen_mouse)
@@ -116,6 +119,8 @@ fn screen_ui(key : String) -> ScreenUi {
         stage_x: 0.0,
         stage_y: 0.0,
         fit_for: None,
+        case_x: 0.0,
+        case_y: 0.0,
         over_seen: false,
         gesture: gesture_new(),
         mouse: mouse_drive_new(),

@@ -1824,6 +1824,7 @@ test("the simulators booted, as simctl lists them: their runtime's name, their s
     { udid: "6518D637-E9E0-4293-B844-EAC38471B04F", name: "Apple Vision Pro", runtime: "visionOS 27.0", type: "" },
   ]);
   assert.deepEqual(bootedOf(null), []);
+  assert.equal(runtimeName("com.apple.CoreSimulator.SimRuntime.iOS-27-2-iPhone19-4"), "iOS 27.2");
   assert.equal(runtimeName("something else"), "something else");
   assert.deepEqual(screenOf({ capabilities: { ScreenDimensionsCapability: { "main-screen-width": 1206, "main-screen-height": 2622 } } }), { width: 1206, height: 2622 });
   assert.deepEqual(screenOf({}), { width: 0, height: 0 });

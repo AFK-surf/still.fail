@@ -163,6 +163,7 @@ export const PARAMS: Record<string, string> = {
   "screen.settings": "screen:string",
   "screen.setSetting": "screen:string name:string value:string",
   "screen.screenshot": "screen:string",
+  "screen.chrome": "screen:string panel:number turn:number",
   "screen.install": "screen:string path:string",
   "screen.biometrics": "screen:string what:string",
   "screen.uninstall": "screen:string app:string",
@@ -591,6 +592,8 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("GET", () => `/screens/${p.at("screen")}/settings`, null, NONE);
     case "screen.setSetting":
       return op("POST", () => `/screens/${p.at("screen")}/settings`, p.pick(["name", "value"]), NONE);
+    case "screen.chrome":
+      return op("GET", () => `/screens/${p.at("screen")}/chrome/${p.u64("panel")}/${p.u64("turn")}`, null, NONE);
     case "screen.screenshot":
       return op("POST", () => `/screens/${p.at("screen")}/screenshot`, null, NONE);
     // What Device Hub does of a device besides its keys: a link opened in it, where it is (`at`; none: nowhere), its status
