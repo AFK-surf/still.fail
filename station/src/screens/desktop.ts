@@ -256,6 +256,9 @@ export class HelperView implements ScreenView {
   /// Who hears the pointer, and the last it said (told at once to one who starts to hear it).
   #cursor: ((cursor: ScreenCursor) => void) | null = null;
   #lastCursor: ScreenCursor | null = null;
+  /// Who hears how a simulator's picture is turned, and the last it said (message 10).
+  #turn: ((turn: number) => void) | null = null;
+  #lastTurn: number | null = null;
 
   /// What it was asked for, then what it encodes (its `info`).
   #codec: Codec;
@@ -368,6 +371,16 @@ export class HelperView implements ScreenView {
         this.#cursor?.(this.#lastCursor);
         return;
       }
+      case 10: {
+        let said: any = null;
+        try {
+          said = JSON.parse(payload.toString());
+        } catch {}
+        if (![0, 1, 2, 3].includes(said?.turn)) return;
+        this.#lastTurn = said.turn;
+        this.#turn?.(said.turn);
+        return;
+      }
       case 5: {
         const body = payload.subarray(1);
         const clip: Clip | null = payload[0] === 1 ? { type: "text", text: body.toString("utf8") } : payload[0] === 2 ? { type: "png", data: new Uint8Array(body) } : null;
@@ -454,6 +467,14 @@ export class HelperView implements ScreenView {
     if (this.#lastCursor) heard(this.#lastCursor);
     return () => {
       if (this.#cursor === heard) this.#cursor = null;
+    };
+  }
+
+  watchTurn(heard: (turn: number) => void): () => void {
+    this.#turn = heard;
+    if (this.#lastTurn !== null) heard(this.#lastTurn);
+    return () => {
+      if (this.#turn === heard) this.#turn = null;
     };
   }
 

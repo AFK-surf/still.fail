@@ -1609,6 +1609,8 @@
   "web-pages.screen.device.pose.book": "Half open",
   "web-pages.screen.device.pose.open": "Open",
   "web-pages.screen.device.back": "Back",
+  "web-pages.screen.device.action": "Action button",
+  "web-pages.screen.device.mute": "Silent switch",
   "web-pages.screen.device.home": "Home",
   "web-pages.screen.device.appSwitcher": "App switcher",
   "web-pages.screen.device.rotate": "Rotate",

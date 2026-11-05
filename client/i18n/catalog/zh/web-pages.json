@@ -1534,6 +1534,8 @@
   "web-pages.screen.device.pose.book": "半开",
   "web-pages.screen.device.pose.open": "全开",
   "web-pages.screen.device.back": "返回",
+  "web-pages.screen.device.action": "操作按钮",
+  "web-pages.screen.device.mute": "静音开关",
   "web-pages.screen.device.home": "主屏幕",
   "web-pages.screen.device.appSwitcher": "多任务",
   "web-pages.screen.device.rotate": "旋转",

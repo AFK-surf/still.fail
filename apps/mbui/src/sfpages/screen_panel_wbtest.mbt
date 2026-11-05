@@ -486,12 +486,14 @@ test "a pose pressed shows as chosen at once, before the picture has come" {
   simulator_live(r)
   r.state("live", more={ "kind": Json::string("simulator"), "poses": Json::boolean(true) })
   r.say({ "config": { "codec": "jpeg", "width": 1000.0, "height": 1460.0 } })
+  r.t.stream_shows(r.sess().stream.unwrap().id(), 2.0, 1000, 1460)
   r.t.draw()
   r.tap_label(tr("web-pages.screen.device.pose.open"))
   r.t.draw()
   assert_eq(r.ui().logs.pose_asked, 2)
   // the picture of the inner panel come: it says which, nothing asked any longer
   r.say({ "config": { "codec": "jpeg", "width": 1426.0, "height": 1004.0 } })
+  r.t.stream_shows(r.sess().stream.unwrap().id(), 3.0, 1426, 1004)
   r.t.draw()
   assert_eq(r.ui().logs.pose_asked, -1)
   r.t.run_for(r.t.rest_of("spring") - r.t.time())
@@ -520,12 +522,14 @@ test "a device's body has the corners of the panel its picture is of" {
   // on its side, the smallest all round; none said, square
   assert_eq(panel_corners(duo, 582.0, 400.0), (8.0, 8.0, 8.0, 8.0))
   assert_eq(panel_corners(None, 400.0, 582.0), (0.0, 0.0, 0.0, 0.0))
-  // what is cut off a corner: from the picture's corner along one edge round to the other, nothing inside the curve
+  // what is cut off a corner: from a little past the picture's corner along past one edge, round the curve, and back past the
+  // other, nothing inside the curve
   let cut = corner_cut(400.0, 0.0, -1.0, 1.0, 64.0)
-  assert_eq((cut[0], cut[1]), (400.0, 0.0))
-  assert_eq((cut[2], cut[3]), (336.0, 0.0))
-  assert_true((cut[cut.length() - 2] - 400.0).abs() < 0.001 && (cut[cut.length() - 1] - 64.0).abs() < 0.001)
-  for i in 1..<(cut.length() / 2) {
+  let e = corner_cut_over
+  assert_eq((cut[0], cut[1]), (400.0 + e, -e))
+  assert_eq((cut[2], cut[3]), (336.0, -e))
+  assert_eq((cut[cut.length() - 2], cut[cut.length() - 1]), (400.0 + e, 64.0))
+  for i in 2..<(cut.length() / 2 - 1) {
     let (px, py) = (cut[2 * i] - 336.0, cut[2 * i + 1] - 64.0)
     assert_true(((px * px + py * py).sqrt() - 64.0).abs() < 0.001)
   }

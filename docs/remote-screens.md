@@ -87,7 +87,7 @@ JPEG frames are all key frames and their config has no `description`.
 ### Wire (member link, ALPN `stillfail/admin/1`)
 
 - **List**: `GET /admin/api/screens` →
-  `{"screens":[{id, kind, title, width, height, viewers, controlledBy, access?, clipboard?, drop?, closable?, debug?, openedBy?}]}`; changes come on
+  `{"screens":[{id, kind, title, width, height, viewers, controlledBy, access?, clipboard?, drop?, closable?, debug?, panels?, chrome?, openedBy?}]}`; changes come on
   the station's event stream as `screens` (same shape). `viewers`: the names of those with a view of it open;
   `controlledBy`: those of them whose input is taken. `access`, only when something is missing:
   `{capture, control, message, app?, path?}` (`message` in the asker's language says what to turn on where; the desktop
@@ -458,7 +458,16 @@ says `debug: true` of a simulator; only those who may drive it read or do this (
   part asked for, back) as `simctl io enumerate` says the panel stands; a picture so turned has no edge gestures from here (home
   and the rest by their buttons). Where the guest has `dtuhidd`, fingers go through it as keys do (`DTUHIDKeys`): an Indigo touch
   there could take the guest's backboardd down (seen on an iPhone Duo, 2026-11-02). Its panel is by display number, 1 and 3.
-- **The device's body**: the item's `panels` (`sim-mask.ts`: its type's framebuffer masks read for each panel's corners). The app paints
+- **The device's case**: the item's `chrome`, a panel's each (`sim-chrome.ts`): `{key, width, height, frame, screen, buttons: [{name, x, y, width, height, dx, dy, front?, page?, usage?}]}`, in the
+  case's own points, upright as the framebuffer is: what Xcode has on this Mac for the device type (`/Library/Developer/DeviceKit/Chrome/<id>.devicechrome`'s `chrome.json`, its
+  panels from `capabilities.plist`'s `displays`), laid out as serve-sim does. `GET /admin/api/screens/<id>/chrome/<panel>/<turn>` → `{body, buttons: {<name>: {up, down?}}}`, PNGs in base64 turned
+  `turn` (0..3) quarters clockwise, `body` as large as `frame`: the composite (or the pieces where there is none), the panel's shape (its framebuffer mask) cut out, a notch's sensor bar
+  over it. `sips` draws Apple's PDFs; the pictures are kept in this Mac's temporary files and go nowhere but to those viewing: they are Apple's, not in this repository or any app. A Dynamic Island is not among
+  them (its sensor bar's PDF is empty): the device draws it in its own picture. The picture is turned by `turn` of the view's state (`{turn}` from the helper as it changes, message 10), and the case with it, so the two line up
+  whichever way it stands, an iPhone Duo's inner panel on its side as well. Turned from here, the picture is held while the device's UI goes round inside its framebuffer (`settleTurn`: until CoreSimulator says it turned and it has drawn nothing new for a moment), so that the
+  picture and the case change in one step; nothing draws either of them going round. `screen.input` `{t: "button", page, usage, down}` holds a button by its HID usage from chrome.json (through `dtuhidd`, or Indigo's where the guest has none), for as long as it is held
+  in the app; the app leaves out of its tools what the case has (lock, volume, a home button).
+- **The device's body** where there is no `chrome` (a station from before it, a Mac without Xcode's DeviceKit, a device type it cannot read): the item's `panels` (`sim-mask.ts`: its type's framebuffer masks read for each panel's corners). The app paints
   the body round the picture and the page's ground over what its curve leaves of the picture's corners, square on its layer.
 - **Screenshot**: `POST /admin/api/screens/<id>/screenshot` → `{png}` (base64), in the device's own pixels: a view's own
   picture, not `simctl io`'s, which of a foldable's screens it picks is not the one in use (an iPhone Duo's: black).

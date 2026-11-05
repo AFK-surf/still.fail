@@ -59,6 +59,10 @@ let sim_bezel : Double = 8.0
 let corner_cut_steps : Int = 24
 
 ///|
+/// How far past the picture's edges a cut goes.
+let corner_cut_over : Double = 2.0
+
+///|
 // kept across runs: a value (no field of it changes)
 let device_body : @ui.Color = Data(0x1C1C1EFFL)
 
@@ -101,24 +105,30 @@ fn screen_content(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Un
 /// The room the stage keeps for what the device has itself, out of what the picture is fitted into (the picture and it
 /// then lie in the middle as one, not a pixel between them): by a device taller than wide, a column at its side; under
 /// one wider than tall (an unfolded one, one turned), a row. None but on a wide page.
-fn debug_room(u : ScreenUi, size : (Int, Int)?) -> (Double, Double) {
+fn debug_room(u : ScreenUi, size : (Int, Int)?, cased : DeviceCase?) -> (Double, Double) {
+  let reach = if cased is Some(_) { case_reach } else { 0.0 }
   match size {
-    Some((w, h)) if u.logs.by_device => if w > h { (0.0, debug_row_h) } else { (debug_rail_w + debug_rail_gap, 0.0) }
+    Some((w, h)) if u.logs.by_device => if w > h { (0.0, debug_row_h + reach) } else { (debug_rail_w + debug_rail_gap + reach, 0.0) }
     _ => (0.0, 0.0)
   }
 }
 
 ///|
 /// What the device has itself, where debug_room kept room for it by the picture.
-fn debug_by_device(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, shown : SRect, size : (Int, Int)?) -> Unit {
+fn debug_by_device(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, shown : SRect, size : (Int, Int)?, cased : DeviceCase?) -> Unit {
   guard u.logs.by_device && size is Some((w, h)) else { return }
+  // (clear of the body round the picture, and of where its buttons are pressed)
+  let (body_w, body_h) = match cased {
+    Some(_) => (shown.w * u.case_x + case_reach, shown.h * u.case_y + case_reach)
+    None => (sim_bezel, sim_bezel)
+  }
   c.layer(fn() {
     if w > h {
-      c.box(style=debug_row_place, ty=shown.y + shown.h + sim_bezel, fn() { debug_row(c, s, u, false) }) |> ignore
+      c.box(style=debug_row_place, ty=shown.y + shown.h + body_h, fn() { debug_row(c, s, u, false) }) |> ignore
     } else {
       c.box(
         style=@ui.style(w=Fixed(debug_rail_w)),
-        tx=shown.x + shown.w + sim_bezel + debug_rail_gap,
+        tx=shown.x + shown.w + body_w + debug_rail_gap,
         ty=shown.y,
         fn() { debug_row(c, s, u, true) },
       )
@@ -143,16 +153,20 @@ fn debug_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, column : Bool) -> Unit {
   }
   c.box(style=if column { debug_tools_column } else { debug_tools_bar }, fn() {
     if s.driving() {
-      for k in device_combos(s) {
+      let cased = device_case(c, s, s.frame_size())
+      for k in device_combos(s, cased) {
         if round_button(c, "screen-device/" + k.keys, k.icon, k.name) {
           debug_press(c, s, k)
         }
       }
-      if round_button(c, "screen-volume-up", "volume", @sf.t("web-pages.screen.debug.volumeUp")) {
-        debug_device_input(c, s, "volume_up")
-      }
-      if round_button(c, "screen-volume-down", "volume-x", @sf.t("web-pages.screen.debug.volumeDown")) {
-        debug_device_input(c, s, "volume_down")
+      // (the case's own where it has them)
+      if !(cased is Some(_)) {
+        if round_button(c, "screen-volume-up", "volume", @sf.t("web-pages.screen.debug.volumeUp")) {
+          debug_device_input(c, s, "volume_up")
+        }
+        if round_button(c, "screen-volume-down", "volume-x", @sf.t("web-pages.screen.debug.volumeDown")) {
+          debug_device_input(c, s, "volume_down")
+        }
       }
       if round_button(c, "screen-rotate", "screen-rotate", @sf.t("web-pages.screen.device.rotate")) {
         debug_device_input(c, s, "rotate")
@@ -219,7 +233,7 @@ fn debug_tools(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     u.logs.relaunch_said = ""
   }
   if s.driving() {
-    for k in device_combos(s) {
+    for k in device_combos(s, device_case(c, s, s.frame_size())) {
       if round_button(c, "screen-device/" + k.keys, k.icon, k.name) {
         debug_press(c, s, k)
       }
@@ -317,24 +331,7 @@ fn device_round(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, shown : SRect) -> Uni
   let (tl, tr, br, bl) = panel_corners(field(s.state, "panels"), shown.w, shown.h)
   let body_w = shown.w + sim_bezel + sim_bezel
   let body_h = shown.h + sim_bezel + sim_bezel
-  // the picture's own corners, square, cut off where the body's curve leaves them showing: it lies on the system's video
-  // layer, under all this, where a box can round nothing
-  let ground = c.color(if u.full { Theater } else { Bg })
-  let cuts = [
-    (0.0, 0.0, 1.0, 1.0, tl),
-    (shown.w, 0.0, -1.0, 1.0, tr),
-    (shown.w, shown.h, -1.0, -1.0, br),
-    (0.0, shown.h, 1.0, -1.0, bl),
-  ].filter(fn(k) { k.4 > 0.0 }).map(fn(k) { (corner_cut(k.0, k.1, k.2, k.3, k.4), true) })
-  if cuts.length() > 0 {
-    c.layer(fn() {
-      c.box(style=@ui.style(w=Fixed(shown.w), h=Fixed(shown.h)), tx=shown.x, ty=shown.y, fn() {
-        c.shapes([@ui.shape_of(cuts, fill=ground)], w=Px(shown.w), h=Px(shown.h), name="device-corners") |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-  }
+  device_corners(c, u, shown, tl, tr, br, bl)
   c.layer(fn() {
     c.box(
       style=@ui.style(
@@ -355,15 +352,43 @@ fn device_round(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, shown : SRect) -> Uni
 }
 
 ///|
+/// The picture's own corners, square, cut off in the page's ground where what is round it leaves them showing: it lies on the
+/// system's video layer, under all this, where a box can round nothing.
+fn device_corners(c : @ui.Ctx, u : ScreenUi, shown : SRect, tl : Double, tr : Double, br : Double, bl : Double) -> Unit {
+  let ground = c.color(if u.full { Theater } else { Bg })
+  let e = corner_cut_over
+  let cuts = [
+    (e, e, 1.0, 1.0, tl),
+    (e + shown.w, e, -1.0, 1.0, tr),
+    (e + shown.w, e + shown.h, -1.0, -1.0, br),
+    (e, e + shown.h, 1.0, -1.0, bl),
+  ].filter(fn(k) { k.4 > 0.0 }).map(fn(k) { (corner_cut(k.0, k.1, k.2, k.3, k.4), true) })
+  if cuts.length() > 0 {
+    c.layer(fn() {
+      // (a little past the picture's edges, which may fall between two pixels: nothing of them left to show)
+      let over = corner_cut_over * 2.0
+      c.box(style=@ui.style(w=Fixed(shown.w + over), h=Fixed(shown.h + over)), tx=shown.x - corner_cut_over, ty=shown.y - corner_cut_over, fn() {
+        c.shapes([@ui.shape_of(cuts, fill=ground)], w=Px(shown.w + over), h=Px(shown.h + over), name="device-corners") |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+}
+
+///|
 /// What lies outside a corner's curve of radius `r`, as an outline: from the corner at (`x`, `y`) round the curve, (`dx`, `dy`)
 /// the way into the picture from it.
 fn corner_cut(x : Double, y : Double, dx : Double, dy : Double, r : Double) -> Array[Double] {
-  let points = [x, y]
+  let e = corner_cut_over
+  let points = [x - dx * e, y - dy * e, x + dx * r, y - dy * e]
   for i in 0..=corner_cut_steps {
     let a = i.to_double() / corner_cut_steps.to_double() * @math.PI / 2.0
     points.push(x + dx * r * (1.0 - @dmath.sin(a)))
     points.push(y + dy * r * (1.0 - @dmath.cos(a)))
   }
+  points.push(x - dx * e)
+  points.push(y + dy * r)
   points
 }
 
@@ -439,8 +464,9 @@ fn debug_shot(s : ScreenSess, d : DebugLogs) -> Unit {
 
 ///|
 /// A device's buttons, as combos are: each Simulator.app's shortcut for it (screens/android.ts takes them too). An
-/// Android device has its back (Escape there) and shows its own software keyboard.
-fn device_combos(s : ScreenSess) -> Array[Combo] {
+/// Android device has its back (Escape there) and shows its own software keyboard. What the device's case has itself
+/// (`cased`: its power button, a home button) is pressed there.
+fn device_combos(s : ScreenSess, cased : DeviceCase?) -> Array[Combo] {
   let c = fn(name : String, keys : String, key : String, code : String, mods : Int, icon : String) -> Combo {
     { name: @sf.t(name), keys, key, code, mods, icon }
   }
@@ -450,7 +476,11 @@ fn device_combos(s : ScreenSess) -> Array[Combo] {
   if s.android() {
     [c("web-pages.screen.device.back", "Esc", "Escape", "Escape", 0, "arrow-left"), home, tasks, lock]
   } else {
-    [home, tasks, lock, c("web-pages.screen.device.softKeyboard", "⌘K", "k", "KeyK", mod_meta, "keyboard")]
+    let keyboard = c("web-pages.screen.device.softKeyboard", "⌘K", "k", "KeyK", mod_meta, "keyboard")
+    match cased {
+      Some(k) => if k.has("home") { [tasks, keyboard] } else { [home, tasks, keyboard] }
+      None => [home, tasks, lock, keyboard]
+    }
   }
 }
 
@@ -502,6 +532,8 @@ priv struct DebugLogs {
   mut to_save : (String, String)?
   /// set here (none yet: as `settings` says)
   mut enrolled : Bool?
+  /// the buttons of the device's case held down here, by their names
+  buttons_held : Map[String, Bool]
 }
 
 ///|
@@ -577,6 +609,7 @@ fn debug_logs_new() -> DebugLogs {
     recording: false,
     to_save: None,
     enrolled: None,
+    buttons_held: {},
   }
 }
 

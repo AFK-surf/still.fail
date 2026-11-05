@@ -16,7 +16,7 @@ These patched crates come from the corresponding crates.io releases. The iroh an
 
 ## Vendored Swift sources
 
-still.fail Helper (the station's macOS app) builds in the simulator capture and input of [serve-sim](https://github.com/EvanBacon/serve-sim) (Evan Bacon, `packages/serve-sim/Sources` at `0193e65c481fc9b64a62427f32fcf143dbc3d2c0`), under its [Apache-2.0 license](vendor/serve-sim/LICENSE); the files taken and the local changes are listed in [vendor/README.md](vendor/README.md).
+still.fail Helper (the station's macOS app) builds in the simulator capture and input of [serve-sim](https://github.com/EvanBacon/serve-sim) (Evan Bacon, `packages/serve-sim/Sources` at `0193e65c481fc9b64a62427f32fcf143dbc3d2c0`), under its [Apache-2.0 license](vendor/serve-sim/LICENSE); the files taken and the local changes are listed in [vendor/README.md](vendor/README.md). The station's `station/src/screens/sim-chrome.ts` is ported from serve-sim's `packages/serve-sim/src/devicekit-chrome.ts` and `device-displays.ts`, under the same license; the Apple artwork it reads stays on the Mac it is read on, in no repository or app.
 
 ## scrcpy's server in the station's release
 
