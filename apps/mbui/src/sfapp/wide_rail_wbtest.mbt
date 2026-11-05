@@ -261,6 +261,20 @@ test "wide: ⌃2 goes to the second workspace (prefs.set workspace)" {
 }
 
 ///|
+test "wide: another place's sidebar taken as it was left keeps nothing (no prefs.set sidebars): nothing of it changed" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  for place in ["文件", "对话"] {
+    let (x, y, w, h) = t.query(Button, label=place).unwrap().rect
+    t.tap(x + w / 2.0, y + h / 2.0)
+    t.frame()
+    t.run_for(@ui.move_most_ms)
+  }
+  let kept = named(calls, "prefs.set").filter(fn(m) { field(Some(m.params), "sidebars") is Some(_) })
+  assert_eq(kept.length(), 0, msg="\{kept.map(fn(m) { m.params.stringify() })}")
+}
+
+///|
 test "wide: the gear, in the settings, goes back out of them to the chats, landed again on Home (nav_home)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)

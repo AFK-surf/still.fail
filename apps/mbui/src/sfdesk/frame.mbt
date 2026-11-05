@@ -1150,6 +1150,10 @@ fn side_follow(src : Source, ws : String) -> Unit {
   let group = if @sf.native_on() { "tabs" } else { side_group(src, ws) }
   let key = ws + "\n" + group
   let width_key = "\n" + group
+  // (the sidebar shown not yet this place's and workspace's, side_take's to take as it was left: nothing of it kept)
+  if wide.side_key != key {
+    return
+  }
   if wide.edge_held.get() || (wide.side_w.get() == wide.kept_w.get() && wide.folded.get() == wide.kept_folded.get()) {
     return
   }
@@ -1181,6 +1185,9 @@ fn side_take(src : Source, ws : String) -> Bool {
   let key = ws + "\n" + group
   let width_key = "\n" + group
   if wide.side_key != key {
+    // (one change, the width and fold taken with what is kept of them: side_follow, following each, sees the sidebar
+    // as it was left, nothing of it changed to keep, not the width taken before the fold and what was kept are)
+    @signals.start_batch()
     let kept = field(prefs, "sidebars")
     let parts = text(kept, key).split(",").map(fn(p) { p.to_string() }).collect()
     let closed = parts.contains("closed")
@@ -1200,6 +1207,7 @@ fn side_take(src : Source, ws : String) -> Bool {
     wide.kept_w.set(wide.side_w.get())
     wide.kept_folded.set(wide.folded.get())
     wide.peeking.set(false)
+    @signals.end_batch()
     return true
   }
   false
