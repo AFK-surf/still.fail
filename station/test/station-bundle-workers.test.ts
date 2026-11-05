@@ -41,6 +41,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
     store.insertSession({ key: "old-count", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w",
       token: "old-count", createdAt: 1, lastActiveAt: 1, ws: "mine" });
     store.db.exec("DELETE FROM session_count_seen; UPDATE session_count_meta SET last_rowid=NULL, end_rowid=(SELECT max(rowid) FROM sessions), complete=0");
+    store.db.exec("DELETE FROM session_list_rows; UPDATE session_list_meta SET last_rowid=NULL, end_rowid=(SELECT max(rowid) FROM sessions), complete=0");
     for (const [file, message] of [
       ["sessions/workspace-activity-worker.js", {}],
       ["sessions/session-count-worker.js", {}],
@@ -48,6 +49,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
       ["read/said-worker.js", { thread: saidThread }],
       ["read/said-worker.js", { session: "old-turn" }],
       ["read/recent-chat-worker.js", { scope: JSON.stringify([null, null]) }],
+      ["read/session-list-worker.js", { scope: "all" }],
       ["outflow/chat-index-worker.js", "H"],
       ["vault/signin-save-worker.js", "s"],
     ] as const) {
@@ -71,5 +73,6 @@ test("the workers in a station release start and process a batch", { skip: !proc
     assert.equal(store.db.prepare("SELECT said_other_n FROM thread_state WHERE thread=?").get(saidThread)?.said_other_n, 1);
     assert.equal(store.db.prepare("SELECT n FROM session_turns WHERE session='old-turn'").get()?.n, 70);
     assert.deepEqual(store.sessionCounts(), [{ connect: "ember", ws: "mine", n: 1 }]);
+    assert.equal(store.db.prepare("SELECT session FROM session_list_rows WHERE ws='mine'").get()?.session, "old-count");
   } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
 });
