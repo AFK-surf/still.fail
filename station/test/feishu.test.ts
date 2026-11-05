@@ -120,14 +120,14 @@ test("registration: the link carries what the app is to get; asked until its id 
 });
 
 /// A surface on Feishu's stand-in, with its threads in a temporary directory.
-async function surfaceRig(o: { topics?: boolean; before?: (threads: FeishuThreads, fake: FakeFeishu) => void } = {}) {
+async function surfaceRig(o: { topics?: boolean; threadMode?: boolean; before?: (threads: FeishuThreads, fake: FakeFeishu) => void } = {}) {
   const fake = await FakeFeishu.start();
   if (o.topics) fake.answer("GET /open-apis/im/v1/chats/oc_t", { code: 0, data: { name: "话题群", chat_mode: "group", group_message_type: "thread" } });
   const dir = mkdtempSync(join(tmpdir(), "fs-"));
   const t = testClock();
   const threads = new FeishuThreads(join(dir, "threads.json"));
   o.before?.(threads, fake);
-  const surface = new FeishuSurface({ connect: "fs", appId: "cli_test", appSecret: "s", domain: "feishu", threads, client: new FeishuClient("cli_test", "s", "feishu", fake.base), clock: t.clock });
+  const surface = new FeishuSurface({ connect: "fs", appId: "cli_test", appSecret: "s", domain: "feishu", threads, threadMode: o.threadMode, client: new FeishuClient("cli_test", "s", "feishu", fake.base), clock: t.clock });
   const events: ChatEvent[] = [];
   await surface.start(async (e) => void events.push(e));
   await fake.until("connected", () => surface.socket().connected);
@@ -212,6 +212,97 @@ test("surface: a topic group's topics are conversations of their own, answered i
     assert.equal(reply.length, 1);
     assert.equal(reply[0]!.body.reply_in_thread, true);
     assert.equal(JSON.parse(reply[0]!.body.content).body.elements[0].content, "答案");
+  } finally {
+    await r.close();
+  }
+});
+
+test("surface: thread mode: an @ begins a thread answered in it, a thread goes by its first message, and what calls nobody is no one's", async () => {
+  const r = await surfaceRig({ threadMode: true });
+  try {
+    r.fake.message({ id: "om_a", text: "看看", at: true });
+    r.fake.message({ id: "om_b", text: "闲聊" });
+    r.fake.message({ id: "om_c", text: "接着说", thread: "omt_1", root: "om_a" });
+    await r.fake.until("heard", () => r.events.length === 3);
+    assert.deepEqual(r.events.map((e) => (e.type === "message" ? e.message.threadTs : null)), ["om_a", "om_b", "om_a"]);
+    assert.equal(r.threads.current("fs", "oc_g"), null, "the group has no conversation of its own");
+    await r.surface.post({ channel: "oc_g", threadTs: "om_a" }, "答案", []);
+    const reply = r.fake.calls("POST", "/open-apis/im/v1/messages/om_a/reply");
+    assert.equal(reply.length, 1);
+    assert.equal(reply[0]!.body.reply_in_thread, true);
+    assert.equal(r.fake.calls("POST", "/open-apis/im/v1/messages").length, 0);
+    r.fake.message({ id: "om_d", text: "私聊", p2p: true });
+    await r.fake.until("direct", () => r.events.length === 4);
+    await r.surface.post({ channel: "oc_g", threadTs: "om_a" }, "仍在 thread", []);
+    assert.equal(r.fake.calls("POST", "/open-apis/im/v1/messages/om_a/reply").length, 2);
+    r.fake.answer("GET /open-apis/im/v1/messages/om_a", { code: 0, data: { items: [{ message_id: "om_a", thread_id: "omt_1" }] } });
+    r.fake.answer("GET /open-apis/im/v1/messages", { code: 0, data: { items: [], has_more: false } });
+    assert.deepEqual(await r.surface.history({ channel: "oc_g", threadTs: "om_a" }, "om_c", 10), []);
+    assert.equal(r.fake.calls("GET", "/open-apis/im/v1/messages").at(-1)!.query.container_id, "omt_1");
+  } finally {
+    await r.close();
+  }
+});
+
+test("surface: outside thread mode a group's thread is the group's conversation, answered in the group", async () => {
+  const r = await surfaceRig();
+  try {
+    r.fake.message({ id: "om_a", text: "看看", at: true });
+    r.fake.message({ id: "om_c", text: "接着说", thread: "omt_1", root: "om_a" });
+    await r.fake.until("heard", () => r.events.length === 2);
+    assert.deepEqual(r.events.map((e) => (e.type === "message" ? e.message.threadTs : null)), ["om_a", "om_a"]);
+    await r.surface.post({ channel: "oc_g", threadTs: "om_a" }, "答案", []);
+    assert.equal(r.fake.calls("POST", "/open-apis/im/v1/messages").length, 1);
+  } finally {
+    await r.close();
+  }
+});
+
+test("surface: a turn for a message that called nobody shows no card until the agent does something, and one that says nothing takes its card back", async () => {
+  const r = await surfaceRig();
+  try {
+    const cards = () => r.fake.calls("POST", "/open-apis/im/v1/messages").length;
+    const here = { channel: "oc_g", threadTs: "om_a" };
+    r.fake.message({ id: "om_a", text: "看看", at: true });
+    r.fake.message({ id: "om_b", text: "闲聊" });
+    await r.fake.until("heard", () => r.events.length === 2);
+    // Only thought and read the chat, said nothing: no card at all.
+    r.surface.working(here, "om_b", "正在思考…", null);
+    await settle();
+    await r.t.adjust(1000);
+    r.surface.working(here, "om_b", "正在读取对话…", null);
+    await settle();
+    await r.t.adjust(1000);
+    r.surface.working(here, "om_b", "", null);
+    await settle();
+    assert.equal(cards(), 0);
+    // It went to work, then said nothing: the card went up, and comes down.
+    await r.t.adjust(1000);
+    r.surface.working(here, "om_b", "正在运行命令…", null);
+    await r.fake.until("card made", () => cards() === 1);
+    await r.t.adjust(1000);
+    r.surface.working(here, "om_b", "", null);
+    await r.fake.until("recalled", () => r.fake.calls("DELETE", /^\/open-apis\/im\/v1\/messages\//).length === 1);
+    assert.equal(r.fake.calls("PUT", /^\/open-apis\/cardkit\/v1\/cards\//).length, 0);
+    // It said something: no card for thinking, and none left to change.
+    await r.t.adjust(1000);
+    r.surface.working(here, "om_b", "正在思考…", null);
+    await settle();
+    await r.surface.post(here, "补一句", []);
+    await r.t.adjust(1000);
+    r.surface.working(here, "om_b", "", null);
+    await settle();
+    assert.equal(r.fake.calls("DELETE", /^\/open-apis\/im\/v1\/messages\//).length, 1);
+    assert.equal(cards(), 2, "the card before, and what it said");
+    // Called by an @: the card at once; kept saying the turn is over when Feishu will not recall it.
+    await r.t.adjust(1000);
+    r.fake.answer("POST /open-apis/im/v1/messages", { code: 0, data: { message_id: "om_at" } });
+    r.surface.working(here, "om_a", "正在思考…", null);
+    await r.fake.until("card at once", () => cards() === 3);
+    r.fake.answer("DELETE /open-apis/im/v1/messages/om_at", { code: 230_000, msg: "too old" });
+    await r.t.adjust(1000);
+    r.surface.working(here, "om_a", "", null);
+    await r.fake.until("kept as done", () => r.fake.calls("PUT", /^\/open-apis\/cardkit\/v1\/cards\//).length === 1);
   } finally {
     await r.close();
   }
@@ -330,6 +421,8 @@ test("surface: the status card follows the agent's steps at most once a second a
   const r = await surfaceRig();
   try {
     const here = { channel: "oc_g", threadTs: "om_a" };
+    r.fake.message({ id: "om_a", text: "看看", at: true });
+    await r.fake.until("heard", () => r.events.length === 1);
     r.surface.working(here, "om_a", "正在思考…", "https://still.test/o/w/s/k");
     await r.fake.until("card made", () => r.fake.calls("POST", "/open-apis/im/v1/messages").length === 1);
     assert.equal(JSON.parse(r.fake.calls("POST", "/open-apis/im/v1/messages")[0]!.body.content).type, "card");
@@ -339,6 +432,7 @@ test("surface: the status card follows the agent's steps at most once a second a
     await r.t.adjust(1000);
     await r.fake.until("changed", () => r.fake.calls("PUT", /^\/open-apis\/cardkit\/v1\/cards\//).length === 1);
     await r.t.adjust(64_000);
+    await r.surface.post(here, "好了", []);
     r.surface.working(here, "om_a", "", null);
     await r.fake.until("done", () => r.fake.calls("PUT", /^\/open-apis\/cardkit\/v1\/cards\//).length === 2);
     const puts = r.fake.calls("PUT", /^\/open-apis\/cardkit\/v1\/cards\//);
@@ -374,6 +468,18 @@ test("hub: a Feishu connect's chat is one session, its threads on the connect's 
     await r.close();
     await rig.close();
   }
+});
+
+test("thread mode: kept in a connect's Feishu part as asked, and only where each conversation has its own session", async () => {
+  const { feishuConnects } = await import("../src/feishu/index.ts");
+  const { feishuEntry } = await import("../src/api/routes/feishu.ts");
+  const had = { appId: "cli_1", appSecret: "s", domain: "feishu" };
+  const on = feishuEntry({ threads: true }, had)!;
+  assert.deepEqual(on, { ...had, threads: true });
+  assert.deepEqual(feishuEntry({ appId: "cli_1" }, on), on, "an edit that does not say keeps it");
+  assert.deepEqual(feishuEntry({ threads: false }, on), { ...had, threads: false });
+  const of = (mode: string, feishu: Json) => feishuConnects({ connects: [{ id: "f", kind: "feishu", mode, feishu }] })[0]!.threads;
+  assert.deepEqual([of("multi-session", on), of("single-session", on), of("multi-session", had)], [true, false, false]);
 });
 
 test("routes: a connect of an app given by its id and secret, or made by a scan; edits keep its app; its secret replaced once checked", async () => {

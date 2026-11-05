@@ -1034,6 +1034,7 @@ fn fx_mode_words(feishu : Bool) -> Json {
   if feishu {
     obj([
       ("multi", obj([("label", str("每个群一个会话")), ("description", str("在群里 @ 它开始，之后群里的消息都交给这个会话；@ 它说「新会话」另开一个，话题群的每个话题各一个会话"))])),
+      ("threads", obj([("label", str("每个 thread 一个会话")), ("description", str("在群里 @ 它就开一个 thread，回复都留在 thread 里；每个 thread 一个会话，thread 里的后续消息无需再 @"))])),
       ("single", obj([("label", str("所有群共用一个会话")), ("description", str("它所在的群和私聊都进入同一个会话，适合长期值守的助手"))])),
       ("mentionOn", str("被 @ 后，同一个群里的后续消息无需再 @。")),
       ("mentionOff", str("它所在的群里的每条消息都会进入会话。")),

@@ -610,6 +610,7 @@ export function connect(c: J): J {
   const words = modeWords(kind);
   const single = mode === "single-session";
   const feishu = kind === "feishu";
+  const way = !single && feishu && get(o.feishu, "threads") === true ? words.threads : words.multi;
   return {
     ...o,
     statusText: text,
@@ -617,10 +618,10 @@ export function connect(c: J): J {
     modeText,
     modeShort,
     modeWords: words,
-    modeLabel: single ? words.single.label : words.multi.label,
+    modeLabel: single ? words.single.label : way.label,
     modeSentence: single
       ? words.single.description + t(o.requireMention === false ? "web-pages.connect.everyMessageSentence" : "web-pages.connect.mentionOnlySentence")
-      : words.multi.description,
+      : way.description,
     placeText: str(o.team) ?? (feishu ? (str(get(o.feishu, "domain")) === "lark" ? "Lark" : t("web-pages.connect.feishu.name")) : "Slack"),
     runtimeText: format.runtimeLabel(runtime),
     runText: `${format.runtimeLabel(runtime)} · ${label}`,
@@ -630,7 +631,7 @@ export function connect(c: J): J {
 }
 
 /// How a connect of `kind` says how its conversations become sessions (`ModeWords`): each way's name and what it means,
-/// and what waiting for an @ does there, on and off; a Feishu connect's in its groups' words.
+/// and what waiting for an @ does there, on and off; a Feishu connect's in its groups' words, with its thread mode.
 export function modeWords(kind: string | null): J {
   const feishu = kind === "feishu";
   const way = (m: string) => ({
@@ -638,27 +639,30 @@ export function modeWords(kind: string | null): J {
     description: t(feishu ? `web-main.mode.feishu.${m}.description` : `web-main.mode.${m}.description`),
   });
   const k = (key: string) => (feishu ? `${key}.feishu` : key);
-  return { multi: way("multi"), single: way("single"), mentionOn: t(k("web-pages.connect.mentionOn")), mentionOff: t(k("web-pages.connect.mentionOff")) };
+  return { multi: way("multi"), ...(feishu ? { threads: way("threads") } : {}), single: way("single"), mentionOn: t(k("web-pages.connect.mentionOn")), mentionOff: t(k("web-pages.connect.mentionOff")) };
 }
 
-/// The ways a connect could be switched to (`ModeChange`: every session in one, one each, and one waiting for an @ or
-/// not), each with whether it changes anything, what it does to the connect's conversations in plain words, and its
+/// The ways a connect could be switched to (`ModeChange`: every session in one, one each (a Feishu connect's by its
+/// group or its thread), and one waiting for an @ or not), each with whether it changes anything, what it does to the connect's conversations in plain words, and its
 /// button's words. `running`: its sessions running now.
 export function modeChanges(c: J, running: number): J[] {
   const kind = str(get(c, "kind")) ?? null;
   const mode = str(get(c, "mode")) ?? "multi-session";
   const mention = get(c, "requireMention") !== false;
+  const threads = mode === "multi-session" && get(get(c, "feishu"), "threads") === true;
   // a Feishu connect's groups in place of Slack's threads and channels
   const say = (key: string, o?: Record<string, unknown>) =>
     t(kind === "feishu" && ["toSingle", "toMulti", "threadsRestart", "mentionOnly", "noMention"].some((k) => key.endsWith(`.${k}`)) ? `${key}.feishu` : key, o);
-  const effects = (next: string, nextMention: boolean): string[] => {
+  const effects = (next: string, nextMention: boolean, nextThreads: boolean): string[] => {
     const out: string[] = [];
-    if (mode === "multi-session" && next === "single-session") {
+    if (mode === "multi-session" && next === "multi-session") {
+      if (nextThreads !== threads) out.push(t(nextThreads ? "web-pages.connect.effects.toThreads.feishu" : "web-pages.connect.effects.toGroups.feishu"));
+    } else if (mode === "multi-session" && next === "single-session") {
       out.push(say("web-pages.connect.effects.toSingle"));
       out.push(say(str(get(c, "session")) ? "web-pages.connect.effects.resumeSingle" : "web-pages.connect.effects.newSingle"));
       if (!nextMention) out.push(say("web-pages.connect.effects.noMention"));
     } else if (mode === "single-session" && next === "multi-session") {
-      out.push(say("web-pages.connect.effects.toMulti"));
+      out.push(nextThreads ? t("web-pages.connect.effects.singleToThreads.feishu") : say("web-pages.connect.effects.toMulti"));
       out.push(say("web-pages.connect.effects.threadsRestart"));
       out.push(say("web-pages.connect.effects.switchBack"));
     } else if (nextMention !== mention) {
@@ -667,10 +671,11 @@ export function modeChanges(c: J, running: number): J[] {
     if (running > 0) out.push(say("web-pages.connect.effects.running", { n: running }));
     return out;
   };
-  return ([["multi-session", true], ["single-session", true], ["single-session", false]] as const).map(([next, nextMention]) => {
-    const changed = next !== mode || (next === "single-session" && nextMention !== mention);
+  const ways = [["multi-session", true, false], ...(kind === "feishu" ? [["multi-session", true, true]] : []), ["single-session", true, false], ["single-session", false, false]] as [string, boolean, boolean][];
+  return ways.map(([next, nextMention, nextThreads]) => {
+    const changed = next !== mode || (next === "single-session" && nextMention !== mention) || nextThreads !== threads;
     const action = next === mode ? "web-pages.connect.confirmChange" : next === "single-session" ? "web-pages.connect.toSingle" : "web-pages.connect.toMulti";
-    return { mode: next, requireMention: nextMention, changed, effects: changed ? effects(next, nextMention) : [], action: t(action) };
+    return { mode: next, requireMention: nextMention, ...(kind === "feishu" ? { threads: nextThreads } : {}), changed, effects: changed ? effects(next, nextMention, nextThreads) : [], action: t(action) };
   });
 }
 

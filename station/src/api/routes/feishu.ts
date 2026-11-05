@@ -17,7 +17,7 @@ type Json = any;
 export type FeishuRoutesDeps = Omit<ConnectEditDeps, "entry"> & { feishu: FeishuParts };
 
 /// A Feishu connect's part of its config entry (`feishu`): its app's id and secret as given (blank ones stay as they
-/// were), its domain, and who it is as last seen.
+/// were), its domain, thread mode, and who it is as last seen.
 export const feishuEntry: EntryEdit = (given, had) => {
   if (!isObject(given) && had === null) return null;
   const f: Json = { ...(had ?? {}) };
@@ -27,6 +27,8 @@ export const feishuEntry: EntryEdit = (given, had) => {
   }
   const domain = str(get(given, "domain"));
   if (domain === "feishu" || domain === "lark") f.domain = domain;
+  const threads = get(given, "threads");
+  if (typeof threads === "boolean") f.threads = threads;
   const tenant = get(given, "tenant");
   if (isObject(tenant) && typeof tenant.key === "string") f.tenant = { key: tenant.key, name: typeof tenant.name === "string" ? tenant.name : "" };
   return f;
@@ -75,7 +77,7 @@ export const feishuRoutes = (deps: FeishuRoutesDeps): Route[] => {
     const base = connectSlug(name, "feishu");
     let id = base;
     for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
-    const fields: Json = { appId, appSecret, domain };
+    const fields: Json = { appId, appSecret, domain, ...(get(f, "threads") === true ? { threads: true } : {}) };
     if (identity !== null) {
       fields.botName = identity.botName;
       fields.botOpenId = identity.botUserId;
