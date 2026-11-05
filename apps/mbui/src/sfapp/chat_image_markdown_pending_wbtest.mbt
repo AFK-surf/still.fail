@@ -19,7 +19,7 @@ test "a crossed message's pictures wait for its Markdown and are decoded at thei
           { "name": "phone.png", "path": "work/s-c1/phone.png", "owner": "s-c1", "width": 780, "height": 1688 },
         ]
         { ..got, value: Some(with_chat_message(value, 129.0, [
-          ("text", Json::string(table_images_answer)), ("md", Json::null()),
+          ("text", Json::string(table_images_answer)),
           ("placed", ["web-folded.png", "phone.png"]), ("attachments", Json::array(files)),
         ])) }
       },
