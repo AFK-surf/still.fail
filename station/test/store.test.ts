@@ -33,6 +33,7 @@ import { RECENT_SCOPE_ORDER_PENDING, RECENT_SCOPE_ORDER_SMALL, RECENT_SCOPE_VISI
 import { recentScopeHomeMemberQueries } from "../src/store/chat-list-scope-journal.ts";
 import { FIRST_SCOPE_CANDIDATE_SESSION, NEXT_SCOPE_CANDIDATE_SESSION, PUT_SCOPE_CANDIDATE, RECENT_SCOPE_MEMBER_EXISTS,
   REMOVE_SCOPE_CANDIDATE } from "../src/store/chat-list-scope-build.ts";
+import { RECENT_CHAT_SCHEMA_VERSION } from "../src/store/chat-list-schema.ts";
 import { FIRST_SCOPE_CONNECT, FIRST_SCOPE_HOME_THREADS, FIRST_SCOPE_MEMBER_THREADS, FIRST_SCOPE_OLD_SESSION, FIRST_SCOPE_SESSIONS,
   FIRST_SCOPE_SESSIONS_THROUGH, NEXT_SCOPE_CONNECT, NEXT_SCOPE_OLD_SESSION, SCOPE_HOME_THREADS, SCOPE_MEMBER_THREADS,
   SCOPE_MEMBER_WITHOUT_HOME, SCOPE_SESSIONS, SCOPE_SESSIONS_THROUGH } from "../src/store/chat-list-scope-source.ts";
@@ -73,6 +74,8 @@ function assertRecentChatPlans() {
   installRecentHomeOverlap(db);
   const plan = (sql: string, args: unknown[]) =>
     (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
+  const versionSteps = plan(RECENT_CHAT_SCHEMA_VERSION, ["global", "recent_chat_meta"]);
+  assert.ok(versionSteps.some((s) => s.startsWith("SEARCH ") && s.includes("PRIMARY KEY (part=?)")), versionSteps.join(" | "));
   // An ordered scan is safe here only because the query stops at the requested page size.
   for (const [sql, args, index, seek] of [
     [RECENT_GLOBAL_PAGE, [5], "recent_chat_order", false],

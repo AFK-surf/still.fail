@@ -9,6 +9,7 @@ import { Store } from "../src/store/store.ts";
 import { chatTools } from "../src/tools/chat.ts";
 import { openAgentsDoor } from "../src/tools/http.ts";
 import { McpEndpoint } from "../src/tools/mcp.ts";
+import { installRecentChatIndex } from "../src/store/chat-list-index.ts";
 
 function fixture() {
   const dir = mkdtempSync(join(tmpdir(), "recent-chat-reader-"));
@@ -24,6 +25,16 @@ function fixture() {
   store.openThreadOf("ember", "EMBER", "away", "Away", null, "away");
   return { dir, store, named, shared, orphan, close: () => { store.close(); rmSync(dir, { recursive: true, force: true }); } };
 }
+
+test("a recent reader reports an incompatible index instead of retrying preparation", async () => {
+  const f = fixture();
+  installRecentChatIndex(f.store.db);
+  f.store.db.prepare("UPDATE recent_chat_versions SET version = 2 WHERE part = 'global'").run();
+  const readers = new Readers(f.dir, 1);
+  try {
+    await assert.rejects(readers.read("recentChatList", { ws: null, home: "home", limit: 5 }, "en"), /recent chat.*version/i);
+  } finally { readers.close(); f.close(); }
+});
 
 test("a recent list releases its reader while it waits for handover and shares the requested build", async () => {
   const f = fixture(), previous = Promise.withResolvers<void>();

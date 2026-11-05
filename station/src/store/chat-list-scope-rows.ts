@@ -2,11 +2,12 @@
 // or thread changes by themselves; a builder must keep the scope pending until all such changes have been settled.
 import type { DatabaseSync } from "node:sqlite";
 import type { RecentChatPage } from "./chat-list-index.ts";
+import { recentChatIndexInstalled } from "./chat-list-schema.ts";
 
 type Current = { at: bigint; said_at: bigint; created_at: bigint };
 
 // A small number of undistributed order changes can be checked against this workspace without waiting for other
-// workspaces. Cap the input before probing; above the cap, wait rather than reading an unbounded number of jobs.
+// workspaces. Cap the input before probing; for a larger backlog, the small-workspace check below runs instead.
 export const RECENT_SCOPE_ORDER_PENDING = `SELECT COUNT(*) AS n,
   MAX(EXISTS (SELECT 1 FROM recent_scope_rows r WHERE r.ws = ?1 AND r.thread = d.thread)) AS affects
   FROM (SELECT thread FROM recent_scope_order_dispatch ORDER BY thread LIMIT 65) d`;
@@ -75,6 +76,7 @@ export function removeRecentScopeSource(db: DatabaseSync, ws: string, thread: bi
 
 /// The caller holds a read snapshot while using this count and the corresponding rows.
 export function preparedRecentWorkspaceTotal(db: DatabaseSync, ws: string): number | null {
+  if (!recentChatIndexInstalled(db, "scope")) return null;
   const meta = db.prepare("SELECT total, complete, scan_done, scan_session FROM recent_scope_tracked WHERE kind = 1 AND ws = ?").get(ws) as
     { total: number; complete: number; scan_done: number; scan_session: string | null } | undefined;
   if (!meta || meta.complete !== 1 || db.prepare("SELECT 1 FROM recent_scope_session_dirty WHERE kind = 1 AND ws = ? LIMIT 1").get(ws) !== undefined ||

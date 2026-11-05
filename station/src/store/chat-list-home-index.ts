@@ -5,6 +5,7 @@ import type { RecentChatPage } from "./chat-list-index.ts";
 import { recentHomeChatStep } from "./chat-list-home-source.ts";
 import { acknowledgeRecentScopeSession, installRecentScopeJournal, trackRecentScope } from "./chat-list-scope-journal.ts";
 import { recentScopeSessionThreadsStep } from "./chat-list-scope-source.ts";
+import { markRecentChatIndexInstalled, recentChatIndexInstalled } from "./chat-list-schema.ts";
 
 const mark = (thread: string, when = "1") => `
   UPDATE recent_home_dirty SET revision = revision + 1 WHERE thread = ${thread} AND (${when});
@@ -28,7 +29,7 @@ const displacedSaid = `EXISTS (SELECT 1 FROM thread_state s JOIN entries e ON e.
 /// Install empty tables and triggers, and track session changes in the same transaction as the initial boundary.
 export function installRecentHomeIndex(db: DatabaseSync): void {
   installRecentScopeJournal(db);
-  const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'recent_home_meta'").get() !== undefined;
+  const installed = () => recentChatIndexInstalled(db, "home");
   if (installed()) return;
   db.exec("BEGIN IMMEDIATE");
   try {
@@ -83,6 +84,7 @@ export function installRecentHomeIndex(db: DatabaseSync): void {
         CREATE TRIGGER recent_home_entry_drop AFTER DELETE ON entries BEGIN ${markOrder("OLD.thread")} END;
       `);
       trackRecentScope(db, { kind: "home" });
+      markRecentChatIndexInstalled(db, "home");
     }
     db.exec("COMMIT");
   } catch (error) { db.exec("ROLLBACK"); throw error; }
@@ -233,6 +235,7 @@ export const RECENT_DEFAULT_HOME_PAGE = "SELECT thread FROM recent_home_rows IND
 
 /// The caller holds a read snapshot while using this count and the corresponding rows.
 export function preparedDefaultHomeTotal(db: DatabaseSync): number | null {
+  if (!recentChatIndexInstalled(db, "home") || !recentChatIndexInstalled(db, "scope")) return null;
   const meta = db.prepare("SELECT scan_done, total FROM recent_home_meta WHERE id = 1").get() as { scan_done: number; total: number };
   if (meta.scan_done !== 1 || db.prepare("SELECT 1 FROM recent_home_dirty LIMIT 1").get() !== undefined ||
       db.prepare("SELECT 1 FROM recent_home_order_dirty LIMIT 1").get() !== undefined ||

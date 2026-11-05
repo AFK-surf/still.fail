@@ -4,6 +4,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { installRecentHomeIndex, preparedDefaultHomeTotal } from "./chat-list-home-index.ts";
 import type { RecentChatPage } from "./chat-list-index.ts";
 import { preparedRecentWorkspaceTotal } from "./chat-list-scope-rows.ts";
+import { markRecentChatIndexInstalled, recentChatIndexInstalled } from "./chat-list-schema.ts";
 
 const mark = (thread: string) => `
   UPDATE recent_home_overlap_dirty SET revision = revision + 1 WHERE thread = ${thread};
@@ -13,11 +14,12 @@ const mark = (thread: string) => `
 /// Install the intersection writers without walking old chats. The old default-home rows are scheduled separately.
 export function installRecentHomeOverlap(db: DatabaseSync): void {
   installRecentHomeIndex(db);
-  const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'recent_home_overlap_meta'").get() !== undefined;
+  const installed = () => recentChatIndexInstalled(db, "overlap");
   if (installed()) return;
   db.exec("BEGIN IMMEDIATE");
   try {
-    if (!installed()) db.exec(`
+    if (!installed()) {
+      db.exec(`
       CREATE TABLE recent_home_overlap_meta (id INTEGER PRIMARY KEY CHECK (id = 1), cursor INTEGER, through INTEGER, scan_done INTEGER NOT NULL);
       INSERT INTO recent_home_overlap_meta SELECT 1, NULL, (SELECT MAX(thread) FROM recent_home_rows),
         NOT EXISTS (SELECT 1 FROM recent_home_rows LIMIT 1);
@@ -45,6 +47,8 @@ export function installRecentHomeOverlap(db: DatabaseSync): void {
       CREATE TRIGGER recent_home_overlap_home_add AFTER INSERT ON recent_home_rows BEGIN ${mark("NEW.thread")} END;
       CREATE TRIGGER recent_home_overlap_home_drop AFTER DELETE ON recent_home_rows BEGIN ${mark("OLD.thread")} END;
     `);
+      markRecentChatIndexInstalled(db, "overlap");
+    }
     db.exec("COMMIT");
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
@@ -135,6 +139,7 @@ export function readPreparedRecentHome(db: DatabaseSync, home: string, limit: nu
   if (limit === 0) return { ids: [], total: 0 };
   db.exec("SAVEPOINT recent_home_union");
   try {
+    if (!recentChatIndexInstalled(db, "overlap")) return null;
     const meta = db.prepare("SELECT scan_done FROM recent_home_overlap_meta WHERE id = 1").get() as { scan_done: number };
     if (meta.scan_done !== 1 || db.prepare("SELECT 1 FROM recent_home_overlap_dirty LIMIT 1").get() !== undefined) return null;
     const defaults = preparedDefaultHomeTotal(db), workspace = preparedRecentWorkspaceTotal(db, home);

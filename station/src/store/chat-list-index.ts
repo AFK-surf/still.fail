@@ -1,6 +1,7 @@
 // A maintained ordering for the recent chat tool. This first part keeps the unscoped ordering; workspace visibility
 // and its independently prepared counts are built on it separately.
 import type { DatabaseSync } from "node:sqlite";
+import { markRecentChatIndexInstalled, recentChatIndexInstalled } from "./chat-list-schema.ts";
 
 export type RecentChatPage = { ids: number[]; total: number };
 export const RECENT_GLOBAL_PAGE = "SELECT thread FROM recent_chat_rows INDEXED BY recent_chat_order ORDER BY at DESC, said_at DESC, created_at DESC, thread DESC LIMIT ?";
@@ -52,11 +53,11 @@ CREATE TRIGGER recent_chat_entry_drop AFTER DELETE ON entries BEGIN ${dirty("OLD
 
 /// Install empty tables and writers without reading historical chats. Old rows are added by bounded later steps.
 export function installRecentChatIndex(db: DatabaseSync): void {
-  const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'recent_chat_meta'").get() !== undefined;
+  const installed = () => recentChatIndexInstalled(db, "global");
   if (installed()) return;
   db.exec("BEGIN IMMEDIATE");
   try {
-    if (!installed()) db.exec(SCHEMA);
+    if (!installed()) { db.exec(SCHEMA); markRecentChatIndexInstalled(db, "global"); }
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
@@ -130,6 +131,7 @@ export function readGlobalRecentChatIndex(db: DatabaseSync, limit: number): Rece
   if (limit === 0) return { ids: [], total: 0 };
   db.exec("SAVEPOINT recent_chat_page");
   try {
+    if (!recentChatIndexInstalled(db, "global")) return null;
     const meta = db.prepare("SELECT total, complete FROM recent_chat_meta WHERE id = 1").get() as { total: number; complete: number };
     if (meta.complete !== 1 || db.prepare("SELECT 1 FROM recent_chat_dirty LIMIT 1").get() !== undefined) return null;
     const rows = db.prepare(RECENT_GLOBAL_PAGE).all(limit) as { thread: number }[];

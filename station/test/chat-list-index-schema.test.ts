@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
-import { constants } from "node:sqlite";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { constants, DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { recentChatPage, RECENT_CHAT_PENDING } from "../src/read/recent-chat.ts";
 import { installRecentHomeIndex } from "../src/store/chat-list-home-index.ts";
 import { installRecentHomeOverlap } from "../src/store/chat-list-home-overlap.ts";
 import { installRecentChatIndex } from "../src/store/chat-list-index.ts";
 import { installRecentScopeJournal, trackRecentScope } from "../src/store/chat-list-scope-journal.ts";
+import { RECENT_CHAT_SCHEMA_TABLES, recentChatIndexInstalled } from "../src/store/chat-list-schema.ts";
 import { Store } from "../src/store/store.ts";
 
 for (const part of ["global", "scope", "home", "overlap"] as const) test(`a recent ${part} index with another version is not read or built`, () => {
@@ -26,6 +30,7 @@ for (const part of ["global", "scope", "home", "overlap"] as const) test(`a rece
     const install = { global: installRecentChatIndex, scope: installRecentScopeJournal,
       home: installRecentHomeIndex, overlap: installRecentHomeOverlap }[part];
     assert.throws(() => install(db), /recent chat.*version/i, "the builder must not write an incompatible index");
+    if (part === "scope") assert.throws(() => recentChatPage(db, "here", "here", 5), /recent chat.*version/i);
     if (part !== "global") assert.deepEqual(recentChatPage(db, null, "home", 5), { ids: [], total: 0 });
     db.prepare("UPDATE recent_chat_versions SET version = 1 WHERE part = ?").run(part);
     assert.deepEqual(page(), { ids: [], total: 0 });
@@ -33,6 +38,36 @@ for (const part of ["global", "scope", "home", "overlap"] as const) test(`a rece
     assert.throws(page, /recent chat.*version/i, "an existing index without its marker is not assumed compatible");
     assert.throws(() => install(db), /recent chat.*version/i);
   } finally { store.close(); }
+});
+
+test("a component installed on another connection during the version check is recognized", () => {
+  const dir = mkdtempSync(join(tmpdir(), "recent-index-version-")), path = join(dir, "station.db");
+  const store = Store.open(path), other = new DatabaseSync(path, { timeout: 5000 });
+  try {
+    installRecentChatIndex(store.db);
+    let installed = false;
+    const interleaved = new Proxy(store.db, {
+      get(target, property) {
+        if (property === "prepare") return (sql: string) => {
+          const statement = target.prepare(sql);
+          if (sql !== RECENT_CHAT_SCHEMA_TABLES) return statement;
+          return new Proxy(statement, { get(query, method) {
+            if (method === "get") return (...args: never[]) => {
+              const row = query.get(...args);
+              if (!installed) { installed = true; installRecentScopeJournal(other); }
+              return row;
+            };
+            const value = Reflect.get(query, method, query);
+            return typeof value === "function" ? value.bind(query) : value;
+          } });
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    assert.equal(recentChatIndexInstalled(interleaved, "scope"), true);
+    assert.ok(installed);
+  } finally { other.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 for (const part of ["global", "scope", "home", "overlap"] as const) test(`a failed recent ${part} version marker rolls back its component`, () => {

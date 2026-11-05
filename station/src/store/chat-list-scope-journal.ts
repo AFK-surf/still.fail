@@ -1,5 +1,6 @@
 // A workspace being prepared needs to see session changes that occur behind its scan cursor.
 import type { DatabaseSync } from "node:sqlite";
+import { markRecentChatIndexInstalled, recentChatIndexInstalled } from "./chat-list-schema.ts";
 
 export type RecentScope = { kind: "home" } | { kind: "workspace"; workspace: string };
 
@@ -110,11 +111,12 @@ const displacedThread = `(SELECT t.id FROM threads t WHERE t.surface = NEW.surfa
   AND t.thread_ts = NEW.thread_ts AND t.id IS NOT NEW.id)`;
 
 export function installRecentScopeJournal(db: DatabaseSync): void {
-  const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'recent_scope_tracked'").get() !== undefined;
+  const installed = () => recentChatIndexInstalled(db, "scope");
   if (installed()) return;
   db.exec("BEGIN IMMEDIATE");
   try {
-    if (!installed()) db.exec(`
+    if (!installed()) {
+      db.exec(`
       CREATE TABLE recent_scope_tracked (kind INTEGER NOT NULL, ws TEXT NOT NULL, total INTEGER NOT NULL DEFAULT 0,
         complete INTEGER NOT NULL DEFAULT 0, scan_connect TEXT, scan_after INTEGER, scan_done INTEGER NOT NULL DEFAULT 0,
         scan_high INTEGER, scan_connections INTEGER NOT NULL DEFAULT 0, scan_rowids INTEGER NOT NULL DEFAULT 0,
@@ -248,6 +250,8 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
       CREATE TRIGGER recent_scope_order_entry_move AFTER UPDATE OF thread ON entries WHEN OLD.thread IS NOT NEW.thread BEGIN ${markOrder("NEW.thread")} END;
       CREATE TRIGGER recent_scope_order_entry_drop AFTER DELETE ON entries BEGIN ${markOrder("OLD.thread")} END;
     `);
+      markRecentChatIndexInstalled(db, "scope");
+    }
     db.exec("COMMIT");
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
