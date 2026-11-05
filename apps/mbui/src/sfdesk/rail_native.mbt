@@ -26,17 +26,11 @@ let floating_bar : Ref[@hostapi.NavBar?] = { val: None }
 let native_floating : Ref[Array[@hostapi.NavFloating]] = { val: [] }
 
 ///|
-// kept across runs: the anchors' hook is installed once
-let floating_installed : Ref[Bool] = { val: false }
-
-///|
 /// A box over which UIKit draws control `item` in its glass, as big as `style` says: put where the box is drawn each
 /// frame (View::native_anchor, by `name`: native_workspace_placed), read out as a button.
 fn native_glass_node(o : @view.View, name : String, style : () -> @ui.Style, item : () -> @hostapi.NavItem?) -> Unit {
-  if !floating_installed.val {
-    floating_installed.val = true
-    @ui.on_native_anchors(native_workspace_placed)
-  }
+  // (said again as each is built: a Tester starting anew lets go of what heard the anchors)
+  @ui.on_native_anchors("sidebar glass", native_workspace_placed)
   native_sidebar_items[name] = item
   o.box(fn(b) {
     @sf.style_node(b, style)

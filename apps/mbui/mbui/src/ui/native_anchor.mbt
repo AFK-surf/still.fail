@@ -4,7 +4,9 @@
 // that is done. Its layer keeps where among its instances it is (SceneLayer's `anchors`), so the frame's end reads each
 // straight from the frame's instances by its layer's first and its place, as many reads as there are anchors, never a
 // walk of the frame (docs/retained.md rule 14). A layer not in the frame hands none of its anchors: the host hides
-// those controls. Its rect is no part of what changed (@damage's reach of a rect that draws nothing).
+// those controls. Its rect is no part of what changed (@damage's reach of a rect that draws nothing). Its number is in
+// it (slot 21, its notch's middle, read by no renderer while its notch's radius, 22, is 0): what a Tester's check finds
+// walking the frame (anchors_checked), held to what the layers' places read.
 
 ///|
 /// The anchors' names by their numbers, and their numbers by name: the same number for a name from frame to frame, so
@@ -23,9 +25,8 @@ let anchored_layers : Map[@view.NodeId, Bool] = {}
 let anchors_drawn : Array[(String, (Double, Double, Double, Double))] = []
 
 ///|
-/// What hears the anchors as each frame ends (on_native_anchors).
-// kept across runs: installed once in the process by the packages over ui, as on_after_layout's
-let anchors_heard : Array[(Ctx, Array[(String, (Double, Double, Double, Double))]) -> Unit] = []
+/// What hears the anchors as each frame ends (on_native_anchors), by the name each was said with.
+let anchors_heard : Map[String, (Ctx, Array[(String, (Double, Double, Double, Double))]) -> Unit] = {}
 
 ///|
 /// All of it put back, as a Tester begins (reset_globals).
@@ -34,6 +35,7 @@ fn anchors_reset() -> Unit {
   anchor_numbers.clear()
   anchored_layers.clear()
   anchors_drawn.clear()
+  anchors_heard.clear()
 }
 
 ///|
@@ -51,11 +53,25 @@ fn native_anchor_number(name : String) -> Int {
 }
 
 ///|
-/// Anchor `name` drawn now, its instance the next the frame takes (`at`): kept by the layer being drawn.
-fn scene_anchor_drawn(name : String, at : Int) -> Unit {
+/// Anchor `name` drawn now, its instance the next the frame takes (`at`): kept by the layer being drawn. Its number.
+fn scene_anchor_drawn(name : String, at : Int) -> Int {
+  let n = native_anchor_number(name)
   match scene.drawing {
-    Some(l) => l.anchors.push((native_anchor_number(name), at))
+    Some(l) => l.anchors.push((n, at))
     None => ()
+  }
+  n
+}
+
+///|
+/// Whether instance `k` of `a` is an anchor's (the number in it: slot 21 its number and one, 22 none): its number, -1
+/// none.
+fn anchor_of(a : FixedArray[Double], k : Int) -> Int {
+  let b = k * inst_size
+  if a[b + 5] == 0.0 && a[b + 11] == 0.0 && a[b + 22] == 0.0 && a[b + 21] > 0.0 {
+    a[b + 21].to_int() - 1
+  } else {
+    -1
   }
 }
 
@@ -118,7 +134,10 @@ fn Ctx::anchors_after_paint(self : Ctx) -> Unit {
   let now = self.anchors_now()
   anchors_drawn.clear()
   anchors_drawn.append(now)
-  for f in anchors_heard {
+  if frame_checked() {
+    self.anchors_checked(now)
+  }
+  for _, f in anchors_heard {
     f(self, now)
   }
 }
@@ -142,8 +161,44 @@ pub fn native_anchor_drawn(name : String) -> (Double, Double, Double, Double)? {
 }
 
 ///|
-/// `f` told the anchors (native_anchors') as each frame's paint is over, from now on: what hands them to the host (a
-/// bar's floating controls) at the frame they were drawn in.
-pub fn on_native_anchors(f : (Ctx, Array[(String, (Double, Double, Double, Double))]) -> Unit) -> Unit {
-  anchors_heard.push(f)
+/// `f` told the anchors (native_anchors') as each frame's paint is over, from now on, said by `name` (said again by it,
+/// the one said last: what installs it may as often as it is built): what hands them to the host (a bar's floating
+/// controls) at the frame they were drawn in. Let go as a Tester starts.
+pub fn on_native_anchors(name : String, f : (Ctx, Array[(String, (Double, Double, Double, Double))]) -> Unit) -> Unit {
+  anchors_heard[name] = f
+}
+
+///|
+/// A Tester's check of the anchors read by their layers' places (`now`): the frame walked, every anchor's instance in
+/// it found by the number in it, cut as it was drawn, must be what they read, one for one. A place gone wrong (a layer
+/// split or its instances moved and its places not with them) fails here, naming the anchors.
+fn Ctx::anchors_checked(self : Ctx, now : Array[(String, (Double, Double, Double, Double))]) -> Unit {
+  let found : Array[(String, (Double, Double, Double, Double))] = []
+  for k in 0..<self.ninst {
+    let n = anchor_of(self.inst, k)
+    if n >= 0 && n < anchor_names.length() {
+      match anchor_rect(self.inst, k) {
+        Some(r) => found.push((anchor_names[n], r))
+        None => ()
+      }
+    }
+  }
+  let read = now.copy()
+  read.sort_by(fn(a, b) { anchor_order(a, b) })
+  found.sort_by(fn(a, b) { anchor_order(a, b) })
+  if read != found {
+    let s = "the anchors read by their layers' places are not those drawn: read \{read}, drawn \{found}"
+    println(s)
+    abort(s)
+  }
+}
+
+///|
+/// Anchors in order: by name, then where.
+fn anchor_order(a : (String, (Double, Double, Double, Double)), b : (String, (Double, Double, Double, Double))) -> Int {
+  if a.0 != b.0 {
+    a.0.compare(b.0)
+  } else {
+    a.1.compare(b.1)
+  }
 }
