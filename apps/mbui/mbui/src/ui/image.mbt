@@ -480,6 +480,14 @@ pub fn Ctx::image_ready(self : Ctx, src : String, px : Double) -> Bool {
 }
 
 ///|
+/// The decode of `src` to show at `px` pixels on the long side asked for now, as image_for asks it where none of that size
+/// is ready or coming: by what holds a row's pictures outside the row (a list's rows `sighted`, .View::scrolls_anchored),
+/// at the size the row draws it, so what a row draws is ready or coming whatever frames there were between.
+pub fn Ctx::image_want(self : Ctx, src : String, px : Double) -> Unit {
+  self.image_for(src, px) |> ignore
+}
+
+///|
 /// Its size in the layout: proportional when one side is free.
 fn image_leaf_size(
   n : Node,
