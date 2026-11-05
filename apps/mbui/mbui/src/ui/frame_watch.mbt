@@ -580,12 +580,8 @@ fn looks_apply(c : Ctx) -> Unit {
 /// What of the host the frame is drawn by and its build reads (the window, its scale, the system's settings as
 /// envrec.mbt records them, the faces' atlas, whether something reads the widgets out, the layout's epoch), as one line.
 fn looks_env(c : Ctx, w : Double, h : Double, scale : Double) -> String {
-  // (what of it changed since the frame before, named, where a probe or a test says why a frame was built: frame_drawn.
-  // Else none of that: no frame's work for what nobody reads)
-  if !(perf_frames_said() || fake.val is Some(_)) {
-    return "\{w} \{h} \{scale} \{whole_px_layout()} \{font_scale()} \{h_atlas_generation()} \{h_a11y_on()} \{reduced_motion()} \{h_reduce_transparency()} \{system_dark()} \{window_inset()} \{h_h264_here()} \{h_stream_feeds()} \{h_stream_layers()} \{copy_shown()} \{layout_reuse.val} \{c.epoch} \{view_island_said()}"
-  }
   let terms = looks_env_terms(c, w, h, scale)
+  // (what of it changed since the frame before, named: the probe's why, frame_drawn)
   let was = env_terms_before.val
   env_changed.val = if was.length() == terms.length() {
     terms.mapi(fn(i, t) { if t.1 != was[i].1 { t.0 } else { "" } }).filter(fn(n) { n != "" }).join(", ")

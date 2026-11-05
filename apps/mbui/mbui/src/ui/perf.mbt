@@ -241,22 +241,16 @@ pub fn Tester::bench_whole(self : Tester, on : Bool) -> Unit {
 let perf_frames_on : Ref[Int] = Ref(-1)
 
 ///|
-/// Whether each frame is said on the log (perf_frames_on), asked of the process the first time.
-fn perf_frames_said() -> Bool {
-  if perf_frames_on.val < 0 {
-    perf_frames_on.val = if @hostapi.env("MBUI_PROBE_FRAMES") == "1" { 1 } else { 0 }
-  }
-  perf_frames_on.val == 1
-}
-
-///|
 /// Frame at `t` presented (on_frame): what it did, its work and its presenting (ms), what of the window it drew again,
 /// the GPU's time of the last done, the rows and parts it built and kept (kept_nodes.mbt), why it was built (the
 /// last frame built's, frame_watch.mbt's built_why: what it read changed and where, a moment come, nothing for one of
 /// its looks alone), a PERF line on the log, where asked (perf_frames_on): what still.fail's scripts/appbench.sh reads
 /// of a phone.
 fn perf_log(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
-  if !perf_frames_said() {
+  if perf_frames_on.val < 0 {
+    perf_frames_on.val = if @hostapi.env("MBUI_PROBE_FRAMES") == "1" { 1 } else { 0 }
+  }
+  if perf_frames_on.val == 0 {
     return
   }
   let p = frame_perf()
