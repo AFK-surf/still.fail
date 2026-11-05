@@ -2334,7 +2334,9 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
         if !n.live || n.gen != gen {
           return
         }
-        let v = watch.read(fn() { f(w, h) })
+        // (its rule a node's own read, as a binding's (reads_own): what is laid out read in it as told last, wherever
+        // the layout runs, a hand-off's laying out as of its moment too)
+        let v = watch.read(fn() { reads_own(fn() { f(w, h) }) })
         if last.val != Some(v) {
           last.val = Some(v)
           apply(v)
@@ -8831,9 +8833,10 @@ pub fn shut_layout_reads(why : String?) -> String? {
 
 ///|
 /// `g` done as one of a node's own reads, what is laid out open to it, shut again after it as it was. The boundary of
-/// shut_layout_reads (@ui.on_host_said's): every node's own binding (Tree::queued: a property said By) and structure
-/// (Tree::structured: show, pick, each, View::reacts) reads what is laid out as told last, wherever it runs, a hand-off's
-/// write having set it off or a node made in it; what is shut is the hand-off's own code alone, what it reads itself.
+/// shut_layout_reads (@ui.on_host_said's): every node's own binding (Tree::queued: a property said By; a Roomed one's
+/// rule, run as it is laid out) and structure (Tree::structured: show, pick, each, View::reacts) reads what is laid out
+/// as told last, wherever it runs, a hand-off's write having set it off or a node made in it; what is shut is the
+/// hand-off's own code alone, what it reads itself.
 fn[T] reads_own(g : () -> T) -> T {
   let was = layout_reads_shut.val
   layout_reads_shut.val = None
