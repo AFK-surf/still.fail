@@ -932,6 +932,24 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   // order, the one old view the whole window or not (the way there: an old view's overlay not yet placed, cut and
   // ordered as its island is); each at its place in the window's stack of layers (Ctx::old_layer_stack), under what of
   // the tree is over it there (View::stacked, View::over_all): painted as that comes, those over all of it after it
+  // (the node drawn over the old frame's scrim being drawn now, what it holds with it, and where its instances begin:
+  // View::over_scrim; each one's taken as what is drawn next is no longer in it, put over the scrim as that is painted)
+  tree_over_scrim.clear()
+  let raising : Ref[(@view.NodeId, Int)?] = Ref(None)
+  let raise_close = fn(next : @view.NodeId?) {
+    match raising.val {
+      Some((id, k0)) if (match next {
+          Some(n) => !tree.holds(id, n)
+          None => true
+        }) => {
+        if self.ninst > k0 {
+          tree_over_scrim.push((k0, self.ninst))
+        }
+        raising.val = None
+      }
+      _ => ()
+    }
+  }
   let painted : Map[Int, Bool] = Map([])
   let paint_layers_under = fn(stack : Int) {
     let mut ch = self.nodes[root].first
@@ -949,6 +967,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   }
   tree.each_drawn_laid(fn(c, x, y, a, s, ux, uy) {
     close_to(Some(c.id))
+    raise_close(Some(c.id))
     while fading.length() > 0 && !tree.holds(fading[fading.length() - 1].0, c.id) {
       fading.pop() |> ignore
     }
@@ -986,7 +1005,11 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     let stack = tree.stack_of(c.id)
     if stack >= 0 && tree.root_holds(c.id) {
       close_to(None)
+      raise_close(None)
       paint_layers_under(stack)
+    }
+    if raising.val is None && !dr.scrims.is_empty() && tree.over_scrim_of(c.id) {
+      raising.val = Some((c.id, self.ninst))
     }
     // (what it draws, and an old view it hosts, faded out towards the edges of each that holds it so, each pixel by
     // where it is; then what it holds towards its own, not its own drawing: View::fades)
@@ -1212,9 +1235,54 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     }
   })
   close_to(None)
+  raise_close(None)
   paint_layers_under(2147483647)
+  tree_over_scrim.clear()
   dr.targets_said = false
   view_paint_work.handed = view_paint_work.handed + (self.ninst - n0)
+}
+
+///|
+/// What of the tree is drawn over the old frame's scrim this frame (View::over_scrim): its instances' ranges, in order,
+/// put after all painted so far as the scrim is (scene.mbt's paint).
+// kept across runs: emptied as each frame's tree is painted
+let tree_over_scrim : Array[(Int, Int)] = []
+
+///|
+/// Where the top of what comes up over the scrim is in the window this frame (points: a sheet's, what the menu from the
+/// foot is in), as what draws it says it once it is laid out; none where nothing is up. What of the tree is drawn over
+/// the scrim stays clear of it (View::over_scrim: the old views' @sf.lift_over).
+// kept across runs: said once, as the program starts (@sf's)
+pub let over_scrim_floor : Ref[(Ctx) -> Double?] = Ref(fn(_) { None })
+
+///|
+/// How far over the top of what comes up over the scrim what is drawn over it stays.
+let over_scrim_clear : Double = 12.0
+
+///|
+/// What of the tree is drawn over the scrim (tree_over_scrim) moved up clear of what comes up over it, as far as it
+/// reaches past it and no further than that has come up into the window (what hangs past the window's foot is not
+/// thrown up as it starts out from under it).
+fn Ctx::tree_over_scrim_clear(self : Ctx) -> Unit {
+  guard (over_scrim_floor.val)(self) is Some(top) else { return }
+  let a = self.inst
+  let mut foot = -1.0e300
+  for r in tree_over_scrim {
+    for k in r.0..<r.1 {
+      let b = k * inst_size
+      // (its shadow, blurred past it, not what keeps clear)
+      if a[b + 5] != 2.0 {
+        foot = dmax(foot, a[b + 1] + a[b + 3])
+      }
+    }
+  }
+  guard foot + over_scrim_clear > top else { return }
+  let dy = dmin(0.0, dmax(top - over_scrim_clear - foot, top - self.window_h))
+  for r in tree_over_scrim {
+    for k in r.0..<r.1 {
+      shift_inst(a, k * inst_size, 0.0, dy)
+    }
+  }
 }
 
 ///|
