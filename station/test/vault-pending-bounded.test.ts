@@ -229,6 +229,52 @@ test("an old unscoped handover forgotten immediately restores lost saves in othe
   } finally { db.close(); }
 });
 
+test("the prepared list has the same results and expiry events as the original across request kinds", async () => {
+  async function world(prepared: boolean) {
+    const db = new DatabaseSync(":memory:");
+    const vaults = new VaultStore(db);
+    const putVault = (id: string, members: string[]) => vaults.putVault({ ws: "w", id, seq: 0, members } as never);
+    putVault("a", ["alice"]); putVault("b", ["bob"]); putVault("shared", ["alice", "bob"]);
+    let now = 100_000_000;
+    const secrets = new Secrets({ db, data: ".", now: () => now, home: () => "w", lock: () => null,
+      hub: { store: { subscribe() {}, getSession() { return {}; } } } as never,
+      proxy: {} as never, vaults, plain: {} as never });
+    const events: [string, string][] = [];
+    secrets.listen((r) => events.push([r.id, r.status]));
+    const insert = db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES(?,?,'s',?,?)");
+    const carries: ReturnType<Secrets["carried"]> = { keeper: { boxes: [], held: [] }, unsaved: [] };
+    const saves = [undefined, false, { typed: true }, { typed: false }] as const;
+    const times = [0, 13_600, 13_601, 100_000, null, "1", undefined] as const;
+    const names = [PLAIN, "a", "b", "shared", "missing"] as const;
+    for (let i = 0; i < 120; i++) {
+      const ws = i % 11 === 0 ? "other" : "w", id = `r-${String(i).padStart(3, "0")}`;
+      const status = i % 9 === 0 ? "denied" : "pending", owner = i % 3 === 0 ? "alice@example.test" : "bob@example.test";
+      const request = { ws, id, session: "s", status, owner, vault: names[i % names.length], at: times[i % times.length],
+        item: "i", mode: "env", save: saves[i % saves.length], sealed: i % 7 === 0 ? [{}] : [] };
+      insert.run(ws, id, status, JSON.stringify(request));
+      if (status === "pending" && i % 13 === 0) carries.unsaved.push([id, { value: "held" }, [{ ws, owner }]]);
+    }
+    secrets.carry(carries);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    if (prepared) await secrets.preparePending("w");
+    const state = () => ({ events: [...events], rows: db.prepare("SELECT ws,id,status FROM vault_requests ORDER BY ws,id").all() });
+    return { db, secrets, putVault, state, advance: () => { now = 200_000_000; } };
+  }
+  const slow = await world(false), fast = await world(true);
+  try {
+    const lock = { ws: "w" } as never;
+    for (const [sub, email] of [["alice", "alice@example.test"], ["bob", "bob@example.test"]] as const) {
+      if (sub === "bob") {
+        slow.putVault("a", ["bob"]); fast.putVault("a", ["bob"]);
+        slow.advance(); fast.advance();
+      }
+      const viewer = { sub, email };
+      assert.deepEqual(fast.secrets.pending("w", lock, viewer), slow.secrets.pending("w", lock, viewer));
+      assert.deepEqual(fast.state(), slow.state());
+    }
+  } finally { slow.db.close(); fast.db.close(); }
+});
+
 test("a prepared list settles other people's lost and overdue saves in request order", async () => {
   const db = new DatabaseSync(":memory:");
   try {
