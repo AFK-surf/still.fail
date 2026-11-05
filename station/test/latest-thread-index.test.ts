@@ -240,6 +240,24 @@ test("a changed thread does not inspect memberships of unprepared sessions", () 
   assert.deepEqual(counts, [1, 1]);
 });
 
+test("opening an existing shared conversation does not stage its tracked memberships", () => {
+  const counts: number[] = [];
+  for (const members of [40, 400]) {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      const shared = store.openThread("slack", "C", "shared", null, null);
+      db.exec("BEGIN");
+      for (let n = 0; n < members; n++) store.joinThread(shared.id, `s-${n}`, "slack");
+      db.exec("COMMIT");
+      for (let n = 0; n < members; n++) prepare(store, `s-${n}`);
+      assert.equal(db.prepare("SELECT COUNT(*) AS n FROM latest_thread_changed").get()?.n, 0);
+      assert.equal(store.openThread("slack", "C", "shared", null, null).id, shared.id);
+      counts.push(Number(db.prepare("SELECT COUNT(*) AS n FROM latest_thread_changed").get()?.n));
+    } finally { store.close(); }
+  }
+  assert.deepEqual(counts, [0, 0], "a no-op does not write a row for each tracked session");
+});
+
 test("a nested change seeks only its affected outer-update snapshot", () => {
   const counts: number[] = [];
   for (const others of [40, 400]) {
