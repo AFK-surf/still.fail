@@ -17,6 +17,7 @@ fn taped_shell(v : @view.View, src : Source) -> Unit {
   v.ground(By(fn() { @sf.theme().p.sidebar })) |> ignore
   // how the panes' lists take a mouse, as the hand changes
   @ui.mouse_drags_lists(v, @sfdesk.pane_finger)
+  window_band_node(v)
   @ui.old(v, fn(c) { taped_under(c, src) }).over(Is(true)) |> ignore
   // a page opened in the page's panel shows once the core has given what it shows, the one before staying till then
   // (page_local_ms at most), as a page pushed on a phone slides in then
@@ -33,6 +34,7 @@ fn paned_shell(v : @view.View, src : Source) -> Unit {
   v.ground(By(fn() { @sf.theme().p.bg })) |> ignore
   // how the panes' lists take a mouse, as the hand changes
   @ui.mouse_drags_lists(v, @sfdesk.pane_finger)
+  window_band_node(v)
   @ui.old(v, fn(c) { paned_under(c, src) }).over(Is(true)) |> ignore
   // a page opened in the pane shows once the core has given what it shows (page_local_ms at most: pane_page_wait, pane_pages)
   @sfdesk.pane_view(v, src, ready=fn(p) { pane_ready(src, p) }, most=page_local_ms)
@@ -55,16 +57,11 @@ fn wide_viewer(v : @view.View, src : Source) -> Unit {
 ///|
 /// Under the wide frame off the tape (an island): as taped_under, the frame's own sfdesk's pane_under.
 fn paned_under(c : @ui.Ctx, src : Source) -> Unit {
-  if @ui.window_inset() {
-    let id = c.id("window-ground-band")
-    c.window_drag(id)
-    c.box(style=@ui.style(h=Fixed(window_band())), left=0.0, top=0.0, right=0.0, id~, fn() {  }) |> ignore
-  }
   frame_bare.val = false
   let (now, all, _, _) = workspace_in_view(src)
   match now {
     Some(w) => {
-      signed_in_frame(c, src, w)
+      signed_in_frame(c, src, w, reacted=true)
       @sfdesk.pane_under(c, src, w, all)
     }
     None => ()
@@ -75,16 +72,11 @@ fn paned_under(c : @ui.Ctx, src : Source) -> Unit {
 /// Under the tape's panels (an island): what every frame of the app's state does (app_state_island's), what the
 /// signed-in frame does before its pages (signed_in_frame), what the tape's frame does under them (sfdesk's tape_under).
 fn taped_under(c : @ui.Ctx, src : Source) -> Unit {
-  if @ui.window_inset() {
-    let id = c.id("window-ground-band")
-    c.window_drag(id)
-    c.box(style=@ui.style(h=Fixed(window_band())), left=0.0, top=0.0, right=0.0, id~, fn() {  }) |> ignore
-  }
   frame_bare.val = false
   let (now, all, _, _) = workspace_in_view(src)
   match now {
     Some(w) => {
-      signed_in_frame(c, src, w)
+      signed_in_frame(c, src, w, reacted=true)
       @sfdesk.tape_under(c, src, w, all)
     }
     None => ()

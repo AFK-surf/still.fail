@@ -88,6 +88,10 @@ pub fn back_step() -> (() -> Unit)?
 
 pub fn badge_frame(@ui.Ctx, Source, Workspace) -> Unit
 
+pub fn badge_of(Source, Workspace) -> Int32?
+
+pub fn badge_say(Int32) -> Unit
+
 pub fn bar_as_nodes(Viewer, Double) -> Bool
 
 pub fn bare_shell() -> Shell
@@ -155,6 +159,8 @@ pub fn chat_screens_open(ChatRef, Array[ChatScreen], from~ : @sf.Beside, along? 
 pub fn chat_take(@ui.Ctx, String, Reading, ChatView, shown~ : Bool, in_front~ : Bool) -> Unit
 
 pub fn chat_tick(@ui.Ctx, String, Reading, ChatView, shown~ : Bool, in_front~ : Bool) -> Unit
+
+pub fn chat_view_left(ChatRef) -> Unit
 
 pub fn chat_view_made(@json.Json) -> ChatView
 
@@ -405,6 +411,8 @@ pub fn emit_clock(@ui.Ctx, Turn) -> Double
 pub let emit_drop_ms : Double
 
 pub fn emit_emitting(Emits, Double) -> Bool
+
+pub fn emit_ended(Emits, String) -> Double
 
 pub fn emit_flight(@ui.Ctx, String, Emits, Array[String]) -> (Double, Double, Double, Double)?
 
@@ -766,7 +774,11 @@ pub fn keeping_stop(Source, String) -> Unit
 
 pub fn keeping_stop_all(Source) -> Unit
 
+pub fn keeps_answered() -> Bool
+
 pub fn keeps_frame(@ui.Ctx) -> Unit
+
+pub fn keeps_take() -> Array[() -> Unit]
 
 pub let kept_frame_side : Double
 
@@ -1048,7 +1060,17 @@ pub let notice_host : @ref.Ref[NoticeHost]
 
 pub let notice_state : NoticeState
 
+pub fn notices_followed(Source, String, Bool) -> Unit
+
 pub fn notices_frame(Source, Workspace) -> Unit
+
+pub fn notices_host_said() -> NoticesSaid?
+
+pub fn notices_host_take(Source, NoticesSaid) -> Unit
+
+pub fn notices_said(Source, @json.Json?, Bool) -> Unit
+
+pub fn notices_top(Page) -> Unit
 
 pub fn number(@json.Json?, String) -> Double
 
@@ -1128,9 +1150,9 @@ pub let page_bridge_js : String
 
 pub fn page_glass() -> @paint.Glass
 
-pub fn page_holder(Page) -> Holder
-
 pub let page_glass_blur : Double
+
+pub fn page_holder(Page) -> Holder
 
 pub let page_js : String
 
@@ -1780,6 +1802,8 @@ pub fn viewer_node(@view.View, Source, () -> (Double, Double)) -> Unit
 
 pub fn viewer_place(Viewer, Source) -> (Int32, Int32)
 
+pub fn views_worked() -> Int32
+
 pub fn viz_asked(Source, String, String, String, size? : Double) -> VizLoad
 
 pub fn viz_base_name(String) -> String
@@ -2092,6 +2116,7 @@ pub struct ChatImages {
   reached : Map[String, Bool]
   held : Map[String, Bool]
   coming : Map[String, (Double, Double?)]
+  told : Map[String, @signals.Signal[Int32]]
 }
 pub fn ChatImages::again(Self, String) -> Unit
 pub fn ChatImages::clear(Self) -> Unit
@@ -2423,6 +2448,7 @@ pub(all) struct Emits {
   done : Map[String, Bool]
   queue : Array[(Double, String, String, @motion.Anim)]
   mut current : Turn?
+  ended : Map[String, Double]
   mut aimed : (Double, Double)?
   mut aimed_at : Double
   mut landed : (Double, Double)?
@@ -2631,6 +2657,7 @@ pub(all) struct Install {
 pub struct Kept[T] {
   // private fields
 }
+pub fn[T] Kept::forget(Self[T], String) -> Unit
 pub fn[T] Kept::new() -> Self[T]
 pub fn[T] Kept::peek(Self[T], String) -> T?
 pub fn[T] Kept::read(Self[T], String, (T?) -> T, same? : (T, T) -> Bool) -> T
@@ -2868,6 +2895,12 @@ pub(all) struct NoticeState {
   mut token : String
   mut cancelled : String
   mut src : Source?
+}
+
+pub(all) struct NoticesSaid {
+  answer : Bool?
+  opened : String
+  token : String
 }
 
 pub(all) struct OpenedChat {
@@ -3165,6 +3198,7 @@ pub(all) struct Reading {
   mut motion_list : String
   mut motion_keys : Array[String]
   mut rows : @ui.ListRows[Entry]
+  landing : @signals.Computed[Double]
 }
 pub fn Reading::sees(Self, Int32, Double?) -> Bool
 pub fn Reading::shown(Self, @ui.Ctx) -> Bool

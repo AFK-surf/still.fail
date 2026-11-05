@@ -581,6 +581,8 @@ pub using @sfbase {
   share_over,
   workspace_in_view,
   badge_frame,
+  badge_of,
+  badge_say,
   update_from_menu,
   notices_frame,
   seq_of,

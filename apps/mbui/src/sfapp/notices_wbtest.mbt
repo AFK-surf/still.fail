@@ -64,13 +64,13 @@ let a_notice : Json = {
 }
 
 ///|
-/// Home over the fixture, the core's `notify` as `notify` (the device's) and its notices to show as `show`, every
-/// call kept (and answered as the core would, where it says).
+/// Home over the fixture, the core's `notify` as `notify` (the device's) and its notices to show as `show` (each told as
+/// it changes, as the core's topics are), every call kept (and answered as the core would, where it says).
 fn notify_core(
   calls : Array[Made],
   sys : FakeSystem,
   notify? : @signals.Signal[Json] = @signals.signal({ "on": true, "asked": true, "push": true, "show": [] }),
-  show? : Array[Json] = [],
+  show? : @signals.Signal[Array[Json]] = @signals.signal([]),
   env? : Array[(String, String)] = [],
 ) -> @ui.Tester {
   new_run()
@@ -82,7 +82,7 @@ fn notify_core(
       match name {
         "notify" =>
           if params.contains("workspace") {
-            { value: Some({ "show": Json::array(show) }), error: None, version: show.length() }
+            { value: Some({ "show": Json::array(show.get()) }), error: None, version: show.get().length() }
           } else {
             { value: Some(notify.get()), error: None, version: 1 }
           }
@@ -108,7 +108,7 @@ fn notify_core(
 test "a notice the core says to show: taken, then shown once in the system, as the chat's" {
   let calls : Array[Made] = []
   let sys = fake_system()
-  let t = notify_core(calls, sys, show=[a_notice])
+  let t = notify_core(calls, sys, show=@signals.signal([a_notice]))
   assert_eq(named(calls, "notice.claim").length(), 1)
   assert_eq(sys.shown.length(), 1)
   let (tag, title, body, opens) = sys.shown[0]
@@ -127,7 +127,7 @@ test "a notice the core says to show: taken, then shown once in the system, as t
 test "tapped, the notice's chat opens over Home at its message, which flashes; its notification goes" {
   let calls : Array[Made] = []
   let sys = fake_system()
-  let t = notify_core(calls, sys, show=[a_notice])
+  let t = notify_core(calls, sys, show=@signals.signal([a_notice]))
   sys.opened = "/o/ws1/st1/s-c2?message=2\n2"
   t.frame()
   // its chat slid in
@@ -177,7 +177,7 @@ test "共享调试's notification tapped (AdbShare.java): settings' 共享调试
 test "tapped while a file is open over the window, the file is put down and the notice's chat shows" {
   let calls : Array[Made] = []
   let sys = fake_system()
-  let t = notify_core(calls, sys, show=[a_notice])
+  let t = notify_core(calls, sys, show=@signals.signal([a_notice]))
   let a : Attachment = {
     name: "界面草图.png",
     path: "uploads/fx/界面草图.png",
@@ -209,14 +209,14 @@ test "tapped while a file is open over the window, the file is put down and the 
 test "put away where the app goes on (a desktop's tray, minimized), its notices still come; behind for good, left" {
   let calls : Array[Made] = []
   let sys = fake_system()
-  let show : Array[Json] = []
+  let show : @signals.Signal[Array[Json]] = @signals.signal([])
   let t = notify_core(calls, sys, show~)
   assert_eq(notice_state.following, "ws1")
   // put away, the host still running it (Windows' notification area): followed, a notice come meanwhile shown
   t.app_state(false, false, awake=true)
   assert_true(@ui.app_awake())
   assert_eq(notice_state.following, "ws1")
-  show.push(a_notice)
+  show.set([a_notice])
   t.frame()
   assert_eq(named(calls, "notice.claim").length(), 1)
   assert_eq(sys.shown.length(), 1)
