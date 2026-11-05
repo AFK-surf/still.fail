@@ -691,10 +691,6 @@ pub struct Tree {
   /// the node a back gesture is held by, as it said it then (Tree::back_step): from its start till it is let go,
   /// called off or the node goes
   mut backing : (NodeId, Int)?
-  /// the nodes said to take back (View::takes_back, View::follows_back), each once: those of them that take it still
-  /// gone over to find what takes it (Tree::back_taker), never the whole tree; one let go, or said anew to take it no
-  /// more, dropped then
-  back_said_at : Array[Int]
   mut focused : NodeId?
   mut focus_visible : Bool
   /// the node that had the focus as it was laid out nowhere (and whether it showed), given it back as it is laid out again
@@ -885,7 +881,6 @@ pub fn Tree::new(
     drawn_marks: [],
     bars_due: false,
     backing: None,
-    back_said_at: [],
     focused: None,
     focus_parked: None,
     focus_visible: false,
@@ -1487,7 +1482,6 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.composed.clear()
   self.hosting = -1
   self.modals.clear()
-  self.back_said_at.clear()
   // (its nodes but the root and what they keep dropped, their room given back: the tree itself may never be let go of,
   // held by what its arrays were emptied of (moonc's native backend, moonbitlang/core#4611), each Tester's left with
   // all it held; its root kept, holding nothing and let go, for what is asked of it after: it answers none)
@@ -4011,7 +4005,7 @@ pub fn Tree::key_at(
 
 ///|
 /// The nodes from `at` down that `has` says of, the one drawn last first (after what holds it, its later kids before its
-/// earlier): Tree::key_at's.
+/// earlier): Tree::key_at's, back_taker's.
 fn Tree::topmost_from(self : Tree, at : Int, has : (Node) -> Bool, out : Array[Int]) -> Unit {
   let n = self.nodes[at]
   let mut k = n.kids.length() - 1
