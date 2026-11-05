@@ -363,9 +363,10 @@ off over, a few frames on: no frame more is asked for).
 **The way there,** each a PR, CI at its baseline, the six steps' table no worse, one pass a frame where the step
 reaches:
 1. the framework's: `Drawn`, `Laid`, `shown_rect`, `by_room`, `min_width`/`max_width` of a `Dim`, the list's intents and
-   its rooms set in its layout, `on_first_drawn`; the old interfaces kept, marking nothing in a frame (no pass more);
+   its rooms set in its layout, `on_first_drawn`; the old interfaces kept as they are (laid out again in the frame,
+   under the cap), so the passes a frame counted fall only as readers move, never by telling later;
 2. the app's readers moved, by the inventory (85 lines: paint 16, the hand 6, a holder's layout 60, a wait 3);
-3. the faults on, the old interfaces gone;
+3. the faults on, the old interfaces gone with detlint's count at 0;
 4. the passes' cap, `once_laid_out` and the moments said by hand gone; `laid_out` once.
 
 ## Held by the tests
