@@ -32,7 +32,18 @@ test "an image added to a visible message is requested without waiting for a fra
   t.run_for(first_page_ms + @ui.move_most_ms + @sfpages.reveal_ms)
   assert_true(asked.contains("many-29.png"), msg="the changed message is already in sight")
   assert_false(asked.contains("new-picture.png"))
-  changed.set(1)
+  // The message arrives during another change. A later observer of that delivery must see the file request.
+  let requested_with_delivery = Ref(false)
+  let deliver = @signals.signal(false)
+  let stop = @signals.effect(fn() {
+    if deliver.get() {
+      @signals.after_flush(fn() { requested_with_delivery.val = asked.contains("new-picture.png") })
+      changed.set(1)
+    }
+  })
+  deliver.set(true)
+  stop()
+  assert_true(requested_with_delivery.val, msg="the request is made in the message's own delivery")
   // No frame is drawn between the new message data and these checks.
   assert_true(asked.contains("new-picture.png"), msg="the new picture is requested by the message change")
   assert_eq(t.image_loads().filter(fn(load) { load.0 == "bytes:\{fresh.length()}" }).length(), 1,
