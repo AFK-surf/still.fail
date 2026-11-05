@@ -44,15 +44,26 @@ test "a file card that cannot open still lets its retry button be pressed" {
   let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=390.0, h=300.0, platform=2)
   let opened = Ref(0)
   let retried = Ref(0)
+  let held : Ref[@view.View?] = Ref(None)
   @ui.set_view_app(fn(root) {
     @ui.set_tree_theme(ui_theme_now)
     root.padding(Is((20.0, 20.0, 20.0, 20.0))) |> ignore
-    file_card_node(root, fn() { file_card_info("draft.txt", 100.0, error="Transfer failed") }, composer=true,
+    held.val = Some(file_card_node(root, fn() { file_card_info("draft.txt", 100.0, error="Transfer failed") }, composer=true,
       open=fn() { opened.val += 1 }, open_shown=fn() { false },
-      retry=fn() { retried.val += 1 }, retry_label=fn() { "Try again" }) |> ignore
+      retry=fn() { retried.val += 1 }, retry_label=fn() { "Try again" }))
   })
   t.draw()
   t.click(Button, label="Try again")
   assert_eq(retried.val, 1)
   assert_eq(opened.val, 0)
+  let tree = @ui.view_tree().unwrap()
+  let card = held.val.unwrap().id()
+  let retry = tree.said_order().iter().find_first(fn(s) {
+    s.said.map(fn(said) { said.label == "Try again" }).unwrap_or(false)
+  }).unwrap()
+  assert_eq(tree.said_order().iter().find_first(fn(s) { s.id == card }).map(fn(s) { s.disabled }), Some(true))
+  assert_false(retry.disabled)
+  assert_false(tree.activate_at(card, t.time()))
+  assert_true(tree.activate_at(retry.id, t.time()))
+  assert_eq((opened.val, retried.val), (0, 2))
 }
