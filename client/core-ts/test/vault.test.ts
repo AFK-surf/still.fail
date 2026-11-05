@@ -205,7 +205,10 @@ function fakeStation() {
     if (!locked.on) return status(409, { error: "no lock", code: "vault_needs_lock" });
     switch (key) {
       case "GET /vault/vaults":
-        return { vaults: [...vaults.values()] };
+        // (a member's: as the station lists them, those this person is in)
+        return { vaults: [...vaults.values()].filter((v) => v.members.includes("s1")) };
+      case "POST /vault/vaults/latest":
+        return { vaults: (body.held as Vault[]).map((h) => vaults.get(h.id)).filter((v): v is Vault => v !== undefined) };
       case "PUT /vault/vaults": {
         const prev = vaults.get(body.id);
         // A copy from another station: any later version; one no later answered with the one held.
@@ -480,6 +483,35 @@ test("a later vault version a station made up (signed by a member who is not its
   const put = await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "x", fields: { value: "1" } } });
   assert.equal(r.st.items.get(put.id)!.epoch, v.epoch);
   assert.deepEqual(r.st.vaults.get(id)!.members, ["s1"], "s2 was never let in");
+  r.core.close();
+});
+
+test("a vault a station lists no more is let go here only by the version taking this person out; one it hides without one is held still", async () => {
+  const r = await rig();
+  r.putLock();
+  await r.ask("vault.setup", {});
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  const mine = r.st.boxes.get("ab".repeat(32))!;
+  // s2's vault, this person in it, keyed for this device.
+  const id = "v_01M4871X3MTC0903ZX5CPB8JH7";
+  const key = fill(11);
+  const v0 = sign({ v: 1 as const, ws: "ws", id, seq: 0, owner: "s2", name: "Team", members: ["s2", "s1"], epoch: 0, keys: [{ cert: mine, wrapped: sealWith(mine.box, key, keyContext("ws", id, 0), fill(12)) }], at: 2000 }, TAG.vault, r.other);
+  r.st.vaults.set(id, v0);
+  r.push("vault", v0);
+  await r.host.time.pass(200);
+  assert.ok(vaults().vaults.some((v: any) => v.id === id));
+  // The station hides it (lists it no more, and has no later version to show): held here still.
+  r.st.vaults.delete(id);
+  const again = await r.watch(2, { topic: "vaultItems", workspace: "ws", vault: id });
+  await r.host.time.pass(1000);
+  assert.ok(vaults().vaults.some((v: any) => v.id === id), "held still: a station not listing it says nothing of why");
+  again();
+  // s2 takes this person out: the station lists it no more, and gives the version that did when asked by the one held.
+  const v1 = sign({ v: 1 as const, ws: "ws", id, seq: 1, owner: "s2", name: "Team", members: ["s2"], epoch: 1, keys: [], at: 2001 }, TAG.vault, r.other);
+  r.st.vaults.set(id, v1);
+  await r.watch(3, { topic: "vaultUses", workspace: "ws", vault: id, item: "x" });
+  await r.host.time.pass(1000);
+  assert.ok(!vaults().vaults.some((v: any) => v.id === id), "let go: the version taking this person out, checked");
   r.core.close();
 });
 
