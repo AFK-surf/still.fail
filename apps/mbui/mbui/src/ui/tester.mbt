@@ -765,6 +765,8 @@ pub fn Tester::frame_at(self : Tester, at : Double) -> Unit {
 /// there, nothing later: no step or end taken past it), what is drawn sampled at `shown` (a moment later, as a host's
 /// frame is drawn for its vsync). The next events may come at any moment from `now`.
 pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Unit {
+  // (what was done since the frame before, outside it, as its host would count it: tester_host.mbt)
+  host_frame_begin()
   fake_op_look()
   let at = now
   self.fake.time = at

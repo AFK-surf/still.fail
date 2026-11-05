@@ -25,9 +25,14 @@ pub(all) struct HostFrame {
   whole_why : Int
   /// the area of glass copied again for it (each capture of glass a part reaches, where the part reaches it)
   glass : Double
-  /// nodes laid out anew (the old frame's and the window's tree's) and the old frame's builds
+  /// nodes laid out anew in it (the old frame's and the window's tree's) and the old frame's builds
   laid : Int
   passes : Int
+  /// what was done between the frame before and this one, outside any frame (the events taken then: Tree::event_said,
+  /// at_cause, settle_now; what a host's PERF and a frame's counts do not see): the window's tree's nodes made,
+  /// bindings run, structure bindings run (show, pick, each), nodes laid out, settles; and each count a test said
+  /// (Tester::count_between), by its name
+  between : Array[(String, Int)]
 } derive(Show)
 
 ///|
@@ -57,10 +62,72 @@ let host_tree_laid : Ref[Int] = Ref(0)
 let host_hash_last : Ref[Int64] = Ref(0L)
 
 ///|
+/// The window's tree's work and the test's counts as the frame recorded last ended (host_work_now's).
+// kept across runs: written by each frame recorded; put back as a run begins (host_record_forget)
+let host_work_end : Ref[Array[(String, Int)]] = Ref([])
+
+///|
+/// What was done between the frame before and the one drawing now (host_frame_begin's).
+// kept across runs: written by each frame recorded; put back as a run begins (host_record_forget)
+let host_between_now : Ref[Array[(String, Int)]] = Ref([])
+
+///|
+/// The counts a test said (Tester::count_between), each read as frames begin and end.
+// kept across runs: a test's, said by it; put back as a run begins (host_record_forget)
+let host_counts : Array[(String, () -> Int)] = []
+
+///|
 fn host_record_forget() -> Unit {
   host_record.val = None
   host_asked_next.val = true
   host_parts_last.val = ([], 0.0)
+  host_work_end.val = []
+  host_between_now.val = []
+  host_counts.clear()
+}
+
+///|
+/// `count` read as each frame recorded begins and ends: what it went up by between them said in HostFrame's
+/// `between` as `name` (an app's own work outside frames: a list's entries made, messages made).
+pub fn Tester::count_between(self : Tester, name : String, count : () -> Int) -> Unit {
+  ignore(self)
+  host_counts.push((name, count))
+}
+
+///|
+/// The window's tree's work and the test's counts now.
+fn host_work_now() -> Array[(String, Int)] {
+  let out : Array[(String, Int)] = match view_tree() {
+    Some(t) => {
+      let w = t.work()
+      [("made", w.made), ("bound", w.bound), ("structure", w.structure), ("laid", w.laid), ("settles", w.settles)]
+    }
+    None => []
+  }
+  for c in host_counts {
+    out.push((c.0, (c.1)()))
+  }
+  out
+}
+
+///|
+/// A frame begins (frame_shown_at's start): what was done since the frame recorded last ended, kept for it.
+fn host_frame_begin() -> Unit {
+  guard host_record.val is Some(_) else { return }
+  let now = host_work_now()
+  let was = host_work_end.val
+  host_between_now.val = now.mapi(fn(i, c) {
+    let before = match was.get(i) {
+      Some(b) if b.0 == c.0 => b.1
+      _ => c.1
+    }
+    (c.0, c.1 - before)
+  })
+  // (the frame's own laying out counted from here: what came before it is `between`'s)
+  host_tree_laid.val = match view_tree() {
+    Some(t) => t.work().laid
+    None => host_tree_laid.val
+  }
 }
 
 ///|
@@ -73,6 +140,7 @@ pub fn Tester::record_host(self : Tester) -> Unit {
     None => 0
   }
   host_hash_last.val = drawn_hash()
+  host_work_end.val = host_work_now()
 }
 
 ///|
@@ -126,7 +194,10 @@ fn host_frame_drawn(at : Double) -> Unit {
     glass,
     laid: p.laid + tree_laid - host_tree_laid.val,
     passes: p.passes,
+    between: host_between_now.val,
   })
+  host_between_now.val = []
+  host_work_end.val = host_work_now()
   host_tree_laid.val = tree_laid
   host_hash_last.val = hash
   host_asked_next.val = true
