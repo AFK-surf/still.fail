@@ -11,9 +11,12 @@ on:
     workflows: [preview]
     types: [completed]
     branches: [arch/next]
+# (one at a time, the one running let finish: a newer one waits, and one newer still takes its place. Cancelled as each
+# merge came, arch/next's merges minutes apart and a run 3-4 minutes long, none of four in a row finished, 2026-11-05
+# (42064784077, 42064968220, 42065096144): a branch took an `a-` some merges old and compiled 92 of 631 units again)
 concurrency:
   group: preview-arch
-  cancel-in-progress: true
+  cancel-in-progress: false
 permissions:
   contents: read
 jobs:
