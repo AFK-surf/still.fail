@@ -2,7 +2,7 @@
 // room laid out by the chat's own room in the first layout (sfdesk chat_node.mbt's chat_talk_node), not grown into it.
 
 ///|
-/// On a window `w` by `h` (a mouse's), the chat list's row a third down its side clicked: the y of `last` (the last
+/// On a window `w` by `h` (a mouse's), the chat list's row a third down its side clicked (pressed and let go at once): the y of `last` (the last
 /// message of the chat it opens) in each frame it shows in until it has rested, and where it rests.
 fn opened_last_ys(w : Double, h : Double, last : String) -> (Array[Double], Double) {
   let calls : Array[Made] = []
@@ -30,9 +30,8 @@ fn opened_last_ys(w : Double, h : Double, last : String) -> (Array[Double], Doub
       None => ()
     }
   }))
-  t.touch_at(0, x, y, t.time())
-  t.run_for(80.0)
-  t.touch_at(2, x, y, t.time())
+  t.touch(0, x, y)
+  t.touch(2, x, y)
   t.run_for(@ui.move_most_ms * 3.0)
   t.each_frame(None)
   let rest = t.words().iter().find_first(fn(wd) { wd.0 == last }).unwrap().2
