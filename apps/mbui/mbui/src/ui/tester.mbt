@@ -334,6 +334,8 @@ pub fn Tester::new(
     clipboard_secret: -1.0,
     clipboard_image: -1,
     back_on: false,
+    backs_out: 0,
+    back_going: false,
     window_shows: 0,
     platform,
     keys: keys.unwrap_or(platform),
@@ -1698,10 +1700,23 @@ pub fn Tester::press(self : Tester, name : String) -> Unit {
 }
 
 ///|
-/// Back, as a back button (or the system's back with no gesture) asks.
+/// Back, as a back button (or the system's back with no gesture) asks: the app's while it takes back (as the host was
+/// told, @hostapi.back_enabled), as every host hands it on; else the system's own (Tester::backs_out), as Android closes
+/// the app's window.
 pub fn Tester::back(self : Tester) -> Unit {
-  on_back(2, 0.0, 1.0, 0)
+  if self.fake.back_on {
+    on_back(2, 0.0, 1.0, 0)
+  } else {
+    self.fake.backs_out += 1
+  }
   self.draw()
+}
+
+///|
+/// How many times back was gone back with the app taking none (Tester::back, back_raw, back_gesture): the system's own,
+/// on Android the app's window closed.
+pub fn Tester::backs_out(self : Tester) -> Int {
+  self.fake.backs_out
 }
 
 ///|
@@ -1709,6 +1724,14 @@ pub fn Tester::back(self : Tester) -> Unit {
 /// `kind` 0 its gesture begun, 1 moved to `x` (from the edge it came from), 2 gone back (a back with no gesture where none
 /// began), 3 called off.
 pub fn Tester::back_raw(self : Tester, kind : Int, x : Double, at : Double) -> Unit {
+  // (handed on only while the app takes back; a gesture begun so, to its end)
+  if !self.fake.back_on && !self.fake.back_going {
+    if kind == 2 {
+      self.fake.backs_out += 1
+    }
+    return
+  }
+  self.fake.back_going = kind == 0 || kind == 1
   self.fake.event_at = at
   on_back(kind, x, if kind == 2 { 1.0 } else { 0.0 }, 0)
   self.fake.event_at = -1.0
@@ -1724,6 +1747,14 @@ pub fn Tester::back_gesture(
   commit : Bool,
   steps? : Int = 10,
 ) -> Unit {
+  // (the system's own while the app takes no back: Tester::back's)
+  if !self.fake.back_on {
+    if commit {
+      self.fake.backs_out += 1
+    }
+    self.draw()
+    return
+  }
   on_back(0, 0.0, 0.0, 0)
   for i in 1..=steps {
     let at = self.fake.time + input_step_ms

@@ -37,6 +37,11 @@ struct FakeHost {
   mut clipboard_image : Int
   // whether the app takes back (a page to go back to), as last told
   mut back_on : Bool
+  // how many times the system's back was gone back with the app taking none (the host hands it on only while the app
+  // takes back): the system's own, Android's the app's window closed
+  mut backs_out : Int
+  // a back gesture handed on to the app, not ended: handed on to its end, whether the app takes back meanwhile or not
+  mut back_going : Bool
   // how many times the window held (window_hold) was asked to be shown (@hostapi.window_show)
   mut window_shows : Int
   // the system it plays (as @hostapi.platform: 0 macOS, 1 iOS, 2 Android)
