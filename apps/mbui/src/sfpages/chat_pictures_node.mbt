@@ -3,7 +3,7 @@
 ///|
 struct ChatPicture {
   key : @signals.Signal[String]
-  pixels : Array[Double]
+  pixels : Array[Int]
   mut watching : Bool
 }
 
@@ -20,7 +20,6 @@ struct ChatPictures {
 /// A sighted message's data and any Markdown answer still needed for the pictures it places.
 struct ChatPictureRow {
   watch : @signals.Watch
-  widths : Array[Double]
   mut width : Double
   mut inside : Bool
   mut waiting : Bool
@@ -111,7 +110,9 @@ fn ChatPictures::want(self : ChatPictures, here : MessageHere, a : Attachment, r
   } else {
     reveal_px(@ui.current(), w * sx, h * sy)
   }
-  if !held.pixels.contains(px) { held.pixels.push(px) }
+  // Different rooms can ask for the same host decode. Keep each actual decode size once while following its answer.
+  let decoded_px = @ui.image_decoded_px(px)
+  if !held.pixels.contains(decoded_px) { held.pixels.push(decoded_px) }
   if held.watching {
     let key = @signals.untracked(fn() { held.key.get() })
     if key != "" && key != "!" { @ui.current().image_want(key, px) }
@@ -124,7 +125,7 @@ fn ChatPictures::want(self : ChatPictures, here : MessageHere, a : Attachment, r
     let p = message_media(@ui.current(), self.src, here.station, owner, a)
     if p.key != "" && p.key != "!" {
       @signals.untracked(fn() {
-        for size in held.pixels { @ui.current().image_want(p.key, size) }
+        for size in held.pixels { @ui.current().image_want(p.key, size.to_double()) }
       })
     }
     held.key.set(p.key)

@@ -360,10 +360,8 @@ pub fn chat_list_node(
         None => false
       }
       row.waiting = waiting
-      if row.widths.is_empty() { row.widths.push(width) }
-      for w in row.widths { pictures.want_message(here, m, w, !waiting) }
+      pictures.want_message(here, m, width, !waiting)
       if !waiting {
-        row.widths.clear()
         match row.reading { Some(reading) => reading.stop(); None => () }
         row.reading = None
         row.reading_text = ""
@@ -485,7 +483,7 @@ pub fn chat_list_node(
               picture_changed.set(@signals.untracked(fn() { picture_changed.get() }) + 1)
             })
             picture_rows[k] = {
-              watch, widths: [], width: s.width, inside: true, waiting: false, message: None,
+              watch, width: s.width, inside: true, waiting: false, message: None,
               reading_text: "", reading: None,
             }
           }
@@ -493,7 +491,6 @@ pub fn chat_list_node(
             Some(row) => {
               row.inside = true
               row.width = s.width
-              if !row.widths.contains(s.width) { row.widths.push(s.width) }
             }
             None => ()
           }
