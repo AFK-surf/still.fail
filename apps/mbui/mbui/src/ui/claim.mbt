@@ -133,7 +133,17 @@ fn claim_takes(c : Ctx, id : Int, dx : Double, dy : Double) -> Bool {
 /// A press going down at (x, y): what lies under it waits (`press_chain`), the innermost as `drag_scroll`; taken at
 /// once when the innermost does not wait, or it is the only one there.
 fn claim_down(c : Ctx, x : Double, y : Double) -> Unit {
-  let chain = claim_chain(c, x, y)
+  let under = claim_chain(c, x, y)
+  // a desktop's page: the mouse drags no list (Ctx::mouse_drags_lists; the wheel scrolls, a drag is the pointer's
+  // own), so none of the lists under the press waits for it: not the one pressed, and not one around what is pressed
+  // in it (a code block or a table scrolled sideways, a row swiped across, a drag area), which would otherwise hand the
+  // press up or down to it below (claim_move) (2026-11-05 用户: codeblock/table 啥的，鼠标是可以拖动导致 chat 页面
+  // 滚动的)
+  let chain = if desk.mouse_drags {
+    under
+  } else {
+    under.filter(fn(id) { !c.lists.contains(id) })
+  }
   c.press_chain = chain
   c.drag_scroll = if chain.length() > 0 { chain[0] } else { 0 }
   // (one alone there to be held first waits for the hold all the same: Ctx::drag_on's `hold`)

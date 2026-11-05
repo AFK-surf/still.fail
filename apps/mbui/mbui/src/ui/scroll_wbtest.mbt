@@ -533,6 +533,58 @@ test "a list dragged again once the frames no longer say a drag is the pointer's
 }
 
 ///|
+/// A desktop's list (the mouse drags no list) whose rows hold what else takes a press: a box scrolled sideways (a code
+/// block, a table) and a row swiped across (a drag area along its row).
+fn desk_rows_with_others(at : Ref[Double]) -> (Ctx) -> Unit {
+  fn(c) {
+    c.mouse_drags_lists(false)
+    c.list("l", 100, 50.0, fn(i) {
+      if i == 2 {
+        // (where it is scrolled to, read where it is built: its key is the row's)
+        at.val = c.sideways_at("wide")
+        c.sideways("wide", fn() {
+          c.rich([plain("x".repeat(400))], size=10.0, wrap=false) |> ignore
+        })
+        |> ignore
+      } else if i == 4 {
+        let id = c.id("swiped")
+        c.drag_on(id, axis=Horizontal)
+        c.box(h=Px(50.0), id~, fn() { c.text("swiped row") |> ignore }) |> ignore
+      } else {
+        c.box(h=Px(50.0), fn() { c.text("row \{i}") |> ignore }) |> ignore
+      }
+    })
+    |> ignore
+  }
+}
+
+///|
+test "desktop: the mouse dragged up or down on a code block or a swiped row in a list drags the list no more than on a row (2026-11-05 用户: codeblock/table 啥的，鼠标是可以拖动导致 chat 页面滚动的)" {
+  let at = Ref::new(0.0)
+  let t = Tester::new(desk_rows_with_others(at), w=900.0, h=800.0)
+  t.draw()
+  // on the sideways box's row (its third row: 100 to 150), dragged up: the list stands
+  let (_, y, _, _) = t.rect_of("xxxx").unwrap()
+  t.drag(200.0, y + 5.0, 200.0, y - 300.0)
+  t.frame()
+  assert_eq(t.list_offset(), 0.0)
+  // dragged sideways there: the box scrolls, the list stands
+  t.drag(250.0, y + 5.0, 50.0, y + 5.0)
+  t.draw()
+  assert_true(at.val > 150.0)
+  assert_eq(t.list_offset(), 0.0)
+  // on the swiped row, dragged up: the list stands
+  let (_, sy, _, _) = t.rect_of("swiped row").unwrap()
+  t.drag(200.0, sy + 5.0, 200.0, sy - 300.0)
+  t.frame()
+  assert_eq(t.list_offset(), 0.0)
+  // the wheel scrolls it as ever
+  t.wheel(200.0, 400.0, 300.0)
+  run_to_rest(t)
+  assert_true(t.list_offset() > 0.0)
+}
+
+///|
 test "a finger scrolling a list lets go of the keyboard, whichever field has it" {
   let view = fn(c : Ctx) {
     c.list("l", 100, 50.0, fn(i) {
