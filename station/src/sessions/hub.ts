@@ -715,12 +715,8 @@ export class Hub {
       const row = this.store.getSession(key);
       if (row && this.online(row)) void this.actor(row).kick();
     }
-    this.recoverWaits();
-  }
-
-  /// Waits on record that were not handed over: taken up so each asks again when it would have, or put right by the
-  /// actor. An old store retains its original recovery path until its lookup has been prepared.
-  private recoverWaits() {
+    // Waits on record that were not handed over: taken up so each asks again when it would have, or put right by the
+    // actor. An old store retains its original recovery path until its lookup has been prepared.
     const indexed = this.store.recoveryWaits?.();
     if (indexed != null) {
       for (const { row, refill } of indexed) {

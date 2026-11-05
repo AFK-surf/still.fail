@@ -2,7 +2,7 @@
 // batches; writes from either station keep both sides of the cursor current.
 import type { DatabaseSync } from "node:sqlite";
 
-const wanted = (key: string) => `EXISTS (SELECT 1 FROM sessions s WHERE s.key = ${key} AND s.archived_at IS NULL AND s.running = 0)
+const wanted = (key: string) => `EXISTS (SELECT 1 FROM sessions s WHERE s.key = ${key} AND s.archived_at IS NULL AND s.running != 1)
   AND EXISTS (SELECT 1 FROM turns t WHERE t.rowid = (SELECT rowid FROM turns INDEXED BY turns_by_session
     WHERE session_key = ${key} ORDER BY started_at DESC, rowid DESC LIMIT 1)
     AND t.ended_at IS NOT NULL AND (t.declared = 'waiting' OR (t.outcome = 'failed' AND substr(t.detail, 1, 11) = 'rate_limit:')))`;
@@ -16,13 +16,16 @@ const reconcile = (stage: string) => `DELETE FROM session_recover_waits WHERE se
     AND NOT EXISTS (SELECT 1 FROM session_recover_waits w WHERE w.session = r.session);
   DELETE FROM ${stage} WHERE session IS NOT NULL;`;
 
-export const RECOVER_WAITS = `SELECT s.*, t.outcome AS recovery_outcome, t.detail AS recovery_detail
-  FROM session_recover_waits w CROSS JOIN sessions s ON s.key = w.session
+const recoverySource = `FROM session_recover_waits w CROSS JOIN sessions s ON s.key = w.session
   CROSS JOIN turns t ON t.rowid = (SELECT rowid FROM turns INDEXED BY turns_by_session
-    WHERE session_key = s.key ORDER BY started_at DESC, rowid DESC LIMIT 1)
-  WHERE s.archived_at IS NULL AND s.running = 0 AND t.ended_at IS NOT NULL
+    WHERE session_key = s.key ORDER BY started_at DESC, rowid DESC LIMIT 1)`;
+export const RECOVER_WAITS = `SELECT s.*, t.outcome AS recovery_outcome, t.detail AS recovery_detail
+  ${recoverySource}
+  WHERE s.archived_at IS NULL AND s.running != 1 AND t.ended_at IS NOT NULL
     AND (t.declared = 'waiting' OR (t.outcome = 'failed' AND substr(t.detail, 1, 11) = 'rate_limit:'))
   ORDER BY s.last_active_at DESC, s.rowid DESC`;
+export const RECOVER_AWAKE_WAITS = `SELECT t.ended_at, t.wait_seconds ${recoverySource}
+  WHERE s.archived_at IS NULL AND s.running != 1 AND t.ended_at IS NOT NULL AND t.declared = 'waiting'`;
 export const RECOVER_BACKFILL_FIRST = "SELECT key FROM sessions ORDER BY key LIMIT ?";
 export const RECOVER_BACKFILL_NEXT = "SELECT key FROM sessions WHERE key > ? ORDER BY key LIMIT ?";
 

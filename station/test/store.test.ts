@@ -30,7 +30,7 @@ import { installUsageSummaryBlocks, usageSummaryBlocksRangeScan, usageSummaryBlo
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../src/store/remote-runs.ts";
 import { RUNNING_WAIT_JOBS } from "../src/store/active-jobs.ts";
 import { HAS_SESSION_ACTIVE_WATCH } from "../src/store/watch-jobs.ts";
-import { RECOVER_BACKFILL_FIRST, RECOVER_BACKFILL_NEXT, RECOVER_WAITS } from "../src/store/recover-waits.ts";
+import { RECOVER_AWAKE_WAITS, RECOVER_BACKFILL_FIRST, RECOVER_BACKFILL_NEXT, RECOVER_WAITS } from "../src/store/recover-waits.ts";
 import * as read from "../src/read/store.ts";
 import { usageSummaryEdgeQuery } from "../src/read/usage-batched.ts";
 import { usageSummaryBlockOverlayQuery, usageSummaryBlockPendingQuery, usageSummaryBlockQueries } from "../src/read/usage-summary-blocks.ts";
@@ -87,11 +87,13 @@ function assertRecoveryWaitPlans() {
   const db = memory().db;
   const plan = (sql: string, args: unknown[]) =>
     (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
-  const steps = plan(RECOVER_WAITS, []), detail = steps.join(" | ");
-  assert.ok(steps.some((s) => /^SCAN w\b/.test(s)), detail); // Only the maintained waiting keys are enumerated.
-  assert.ok(steps.some((s) => s.startsWith("SEARCH s ") && s.includes("key=?")), detail);
-  assert.ok(steps.some((s) => s.includes("turns_by_session") && s.includes("session_key=?")), detail);
-  assert.ok(steps.every((s) => !/^SCAN (s|t|turns)\b/.test(s)), detail);
+  for (const sql of [RECOVER_WAITS, RECOVER_AWAKE_WAITS]) {
+    const steps = plan(sql, []), detail = steps.join(" | ");
+    assert.ok(steps.some((s) => /^SCAN w\b/.test(s)), detail); // Only the maintained waiting keys are enumerated.
+    assert.ok(steps.some((s) => s.startsWith("SEARCH s ") && s.includes("key=?")), detail);
+    assert.ok(steps.some((s) => s.includes("turns_by_session") && s.includes("session_key=?")), detail);
+    assert.ok(steps.every((s) => !/^SCAN (s|t|turns)\b/.test(s)), detail);
+  }
   for (const sql of [RECOVER_BACKFILL_FIRST, RECOVER_BACKFILL_NEXT]) assert.match(sql, /LIMIT \?$/);
   assert.ok(plan(RECOVER_BACKFILL_NEXT, ["a", 64]).some((s) => s.startsWith("SEARCH sessions ")), "backfill must seek after its cursor");
 }

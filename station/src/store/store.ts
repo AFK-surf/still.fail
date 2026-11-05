@@ -42,7 +42,7 @@ import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts"
 import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from "./watch-jobs.ts";
 import { RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiveJobs } from "./active-jobs.ts";
 import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
-import { installRecoverWaits, recoverWaitsReady, RECOVER_WAITS } from "./recover-waits.ts";
+import { installRecoverWaits, recoverWaitsReady, RECOVER_AWAKE_WAITS, RECOVER_WAITS } from "./recover-waits.ts";
 import { installSessionListIndex } from "./session-list-index.ts";
 import { installSessionBindingsIndex, SESSION_BINDINGS_DELETE, SESSION_BINDINGS_EXISTS, sessionBindingsReady } from "./session-bindings-index.ts";
 import { ARCHIVE_KEEP_EXISTS, ARCHIVE_PIN_EXISTS, archiveMarksReady, installArchiveMarkIndex } from "./archive-mark-index.ts";
@@ -602,6 +602,12 @@ export class Store {
     return this.#all(RECOVER_WAITS).map((r) => ({
       row: toSession(r), refill: r.recovery_outcome === "failed" && typeof r.recovery_detail === "string" && r.recovery_detail.startsWith("rate_limit:"),
     }));
+  }
+
+  /// Whether a live recorded wait is still within its awake interval; null while an older lookup is being prepared.
+  awakeWait(now: number, lingerMs: number): boolean | null {
+    if (!recoverWaitsReady(this.db)) return null;
+    return this.#all(RECOVER_AWAKE_WAITS).some((r) => now < r.ended_at + (r.wait_seconds ?? 0) * 1000 + lingerMs);
   }
 
   /// The sessions running a turn now (archived ones too).

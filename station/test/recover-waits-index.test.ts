@@ -68,6 +68,21 @@ test("only each live idle session's latest ended wait or allowance failure is re
   } finally { db.close(); }
 });
 
+test("old noncanonical running values use the same rule as session reads", () => {
+  const { db, session, turn, actual, query } = fixture();
+  try {
+    installRecoverWaits(db);
+    session("s"); turn("t", "s", 1, "waiting");
+    db.prepare("UPDATE sessions SET running=2 WHERE key='s'").run();
+    assert.deepEqual(actual(), ["s"]);
+    assert.deepEqual(query(), ["s"]);
+    db.prepare("UPDATE sessions SET running=1 WHERE key='s'").run();
+    assert.deepEqual(actual(), []);
+    db.prepare("UPDATE sessions SET running=-1 WHERE key='s'").run();
+    assert.deepEqual(actual(), ["s"]);
+  } finally { db.close(); }
+});
+
 for (const recursive of [false, true]) test(`replacement and ignored writes keep recovery current (recursive triggers ${recursive})`, () => {
   const { db, session, turn, actual } = fixture();
   try {
@@ -145,7 +160,7 @@ test("the lookup agrees with the original latest-turn rule across changing sessi
       const latest = db.prepare("SELECT ended_at,outcome,detail,declared FROM turns WHERE session_key=? ORDER BY started_at DESC,rowid DESC LIMIT 1");
       const expected = () => (db.prepare("SELECT key,running,archived_at FROM sessions ORDER BY last_active_at DESC,rowid DESC").all() as {key:string;running:number;archived_at:number|null}[])
         .filter((s) => {
-          if (s.running || s.archived_at !== null) return false;
+          if (s.running === 1 || s.archived_at !== null) return false;
           const last = latest.get(s.key) as {ended_at:number|null;outcome:string|null;detail:string|null;declared:string|null} | undefined;
           return last !== undefined && last.ended_at !== null && (last.declared === "waiting" || (last.outcome === "failed" && last.detail?.startsWith("rate_limit:")));
         }).map((s) => s.key);
