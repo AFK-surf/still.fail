@@ -8,7 +8,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { type Entry, admit, apply, canonical, endpointBytes, entryHash, fold, genesis, LockRefusal, shortCode, signedBytes } from "../src/cloud/lock.ts";
+import { type Entry, admit, apply, canonical, devicesFor, endpointBytes, entryHash, fold, genesis, LockRefusal, memberWithEmail, shortCode, signedBytes } from "../src/cloud/lock.ts";
 import { applyState } from "../src/cloud/presence.ts";
 import { Cloud, writeState } from "../src/cloud/state.ts";
 import { verifyMember } from "../src/mesh/credential.ts";
@@ -70,6 +70,20 @@ test("a genesis is its owner's, signed by the owner's own device in it", () => {
   assert.throws(() => genesis(signed({ ...w.first, sig: undefined } as any, w.bob.signer)), /owner/);
   // Changed after signing.
   assert.throws(() => genesis({ ...w.first, body: { ...w.first.body, members: [...w.first.body.members, { sub: "eve", email: "e@x", role: "owner" }] } }), /signed/);
+});
+
+test("person and device lookups follow each lock snapshot", () => {
+  const w = workspace();
+  assert.equal(memberWithEmail(w.state, "b@x")?.sub, "bob");
+  assert.deepEqual(devicesFor(w.state, "bob"), [w.bob.base.hex]);
+  const changed = apply(w.state, signed(after(w.state, "member", { sub: "bob", email: "New@x", role: "admin" }), w.alice.signer), 2000);
+  assert.equal(memberWithEmail(changed, "b@x"), null);
+  assert.equal(memberWithEmail(changed, "new@x")?.sub, "bob");
+  assert.equal(memberWithEmail(w.state, "b@x")?.sub, "bob", "the earlier snapshot stays as it was");
+  const removed = apply(changed, signed(after(changed, "member.remove", { sub: "bob" }), w.alice.signer), 2000);
+  assert.equal(memberWithEmail(removed, "new@x"), null);
+  assert.deepEqual(devicesFor(removed, "bob"), []);
+  assert.deepEqual(devicesFor(changed, "bob"), [w.bob.base.hex]);
 });
 
 test("who may sign what: admins manage, members add only their own devices, owners alone touch owners", () => {

@@ -14,7 +14,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { basename } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { LockState } from "../cloud/lock.ts";
+import { devicesFor, memberWithEmail, type LockState } from "../cloud/lock.ts";
 import type { To } from "../api/events.ts";
 import { UNDECIDED, threadAddress } from "../agents/instructions.ts";
 import { wall } from "../ops/fibers.ts";
@@ -175,6 +175,7 @@ export type SignIns = {
 /// What goes over to the next station process at a handover, from memory to memory (never written down): the keeper's
 /// boxes and grants, and the secrets agents asked to keep, until decided.
 type SaveScope = { ws: string; owner: string };
+type CarriedSaveWait = { boxes: Map<string, Map<string, string>> };
 export type SecretsCarried = { keeper: Carried; unsaved: [string, Record<string, string>, SaveScope[]?][] };
 
 /// A command sent to another station to run, or one it sent here, waiting for how it ended.
@@ -212,12 +213,24 @@ export class Secrets {
   readonly #unscopedSaves = new Set<string>();
   /// A save whose card is being posted has not been written yet; a device published meanwhile must get it too.
   readonly #postingSaves = new Map<string, Request>();
+  /// Scoped saves carried before the old process has written their requests, and devices published in the meantime.
+  readonly #carriedSaveWaits = new Map<string, CarriedSaveWait>();
+  /// Certificates published while an older, unscoped handover is still finishing.
+  readonly #legacyBoxes = new Map<string, Map<string, string>>();
+  #legacyBoxesWaiting = false;
+  #previousGone = true;
   /// Commands sent to other stations, by the id they say how they ended under (`vault.done`).
   readonly #away = new Map<string, Away>();
   readonly #incoming = new Map<string, { peer: string; revoked: boolean }>();
 
   constructor(d: SecretsDeps) {
     this.#d = d;
+    if (d.backfill?.previousGone) {
+      this.#previousGone = false;
+      void d.backfill.previousGone.then(() => { this.#previousGone = true; }).catch((error) => {
+        log.warn("vault", "the previous process could not be waited for", { error: (error as Error).message });
+      });
+    }
     d.db.exec(SCHEMA);
     this.#uses = new UseIndex(d.db, d.backfill);
     const ended = (session: string) => {
@@ -283,6 +296,7 @@ export class Secrets {
   #forgetSave(id: string) {
     this.#unsaved.delete(id);
     this.#unscopedSaves.delete(id);
+    this.#carriedSaveWaits.delete(id);
     for (const { ws, owner } of this.#saveScopes.get(id) ?? []) {
       const owners = this.#savesByOwner.get(ws);
       const requests = owners?.get(owner);
@@ -309,7 +323,76 @@ export class Secrets {
       this.#unsaved.set(id, fields);
       for (const scope of scopes ?? []) if (typeof scope.ws === "string" && typeof scope.owner === "string") this.#scopeSave(id, scope.ws, scope.owner);
       if (!this.#saveScopes.has(id)) this.#unscopedSaves.add(id);
+      else this.#waitForCarriedSave(id);
     }
+  }
+
+  /// A handover can arrive while its save's card is still being posted. Once the old process has actually exited,
+  /// either its request is written and any devices published meanwhile can receive it, or the failed save is let go.
+  #waitForCarriedSave(id: string) {
+    const previous = this.#d.backfill?.previousGone;
+    const scopes = this.#saveScopes.get(id) ?? [];
+    if (!previous || this.#carriedSaveWaits.has(id) || scopes.every(({ ws, owner }) => {
+      const request = this.#kept(ws, id)?.request;
+      return request?.status === "pending" && request.save !== undefined && request.owner === owner;
+    })) return;
+    const wait: CarriedSaveWait = { boxes: new Map() };
+    this.#carriedSaveWaits.set(id, wait);
+    void previous.then(() => {
+      if (this.#carriedSaveWaits.get(id) !== wait) return;
+      this.#carriedSaveWaits.delete(id);
+      let found = false;
+      for (const { ws, owner } of this.#saveScopes.get(id) ?? []) {
+        const kept = this.#kept(ws, id);
+        if (kept?.request.status !== "pending" || !kept.request.save || kept.request.owner !== owner) continue;
+        found = true;
+        for (const [device, box] of wait.boxes.get(ws) ?? []) this.#sealCarried(id, ws, device, box);
+      }
+      if (!found && !this.#postingSaves.has(id)) {
+        this.#forgetSave(id);
+        this.keeper.drop(id);
+      }
+    }).catch((error) => log.warn("vault", "a carried save could not be taken up", { error: (error as Error).message }));
+  }
+
+  /// Use the current lock and certificate: a device can have been removed or its box replaced during the handover.
+  #currentBox(ws: string, device: string, box: string): { lock: LockState; cert: BoxCert; sub: string; email: string } | null {
+    const lock = this.#d.lock(ws);
+    const cert = this.#d.vaults.box(ws, device);
+    if (lock === null || lock.ws !== ws || cert === null || cert.device !== device || cert.box !== box || certOk(lock, cert) !== null) return null;
+    const sub = lock.devices.get(device)?.sub;
+    const email = sub === undefined ? undefined : lock.members.get(sub)?.email.toLowerCase();
+    return sub === undefined || email === undefined ? null : { lock, cert, sub, email };
+  }
+
+  #sealCarried(id: string, ws: string, device: string, box: string) {
+    const current = this.#currentBox(ws, device, box);
+    const kept = this.#kept(ws, id);
+    if (!current || kept?.request.status !== "pending" || !this.#sealSave(kept.request, current.lock, current.cert, current.sub, current.email)) return;
+    this.#save(kept);
+    this.#told(kept.request);
+  }
+
+  /// Older handovers did not carry a save's scope. Recheck the device after the previous process exits, using the
+  /// existing compatibility lookup once its request can have been written.
+  #retryLegacyBox(ws: string, cert: BoxCert) {
+    const previous = this.#d.backfill?.previousGone;
+    if (!previous || this.#previousGone) return;
+    const devices = this.#legacyBoxes.get(ws) ?? new Map<string, string>();
+    devices.set(cert.device, cert.box);
+    this.#legacyBoxes.set(ws, devices);
+    if (this.#legacyBoxesWaiting) return;
+    this.#legacyBoxesWaiting = true;
+    void previous.then(() => {
+      this.#legacyBoxesWaiting = false;
+      for (const [workspace, boxes] of this.#legacyBoxes) {
+        for (const [device, box] of boxes) {
+          const current = this.#currentBox(workspace, device, box);
+          if (current) this.boxed(current.lock, current.cert);
+        }
+      }
+      this.#legacyBoxes.clear();
+    }).catch((error) => log.warn("vault", "an older carried save could not be taken up", { error: (error as Error).message }));
   }
 
   /// Nothing more comes from the process before (it handed over, or there was none: a restart): each request still
@@ -397,7 +480,7 @@ export class Secrets {
     if (lock === null) {
       return this.#d.plain.items(ws, email).flatMap((i) => (!i.deleted && i.listing ? [{ vault: PLAIN, item: i.id, owner: i.owner, listing: i.listing }] : []));
     }
-    const sub = [...lock.members.values()].find((m) => m.email.toLowerCase() === email)?.sub;
+    const sub = memberWithEmail(lock, email)?.sub;
     if (sub === undefined) return [];
     return this.#d.vaults
       .vaults(lock.ws)
@@ -653,12 +736,16 @@ export class Secrets {
 
   /// The person a session works for, as the lock has them (their sub), where security mode is on.
   #memberOf(lock: LockState, email: string): string | null {
-    return [...lock.members.values()].find((m) => m.email.toLowerCase() === email)?.sub ?? null;
+    return memberWithEmail(lock, email)?.sub ?? null;
   }
 
   /// `sub`'s devices set up for the vault: their box certificates, checked against the lock.
   #certsOf(lock: LockState, sub: string): BoxCert[] {
-    return this.#d.vaults.boxes(lock.ws).filter((c) => certOk(lock, c) === null && lock.devices.get(c.device)?.sub === sub);
+    // Keep the store's device order, but read certificates only for this person's lock devices.
+    return [...devicesFor(lock, sub)].sort().flatMap((id) => {
+      const cert = this.#d.vaults.box(lock.ws, id);
+      return cert !== null && certOk(lock, cert) === null && lock.devices.get(cert.device)?.sub === sub ? [cert] : [];
+    });
   }
 
   /// The vault a secret kept for `sub` is meant for: one of theirs keyed to a device of theirs, their own first; empty
@@ -880,6 +967,7 @@ export class Secrets {
     // A handover from an older station may contain a save not written yet. Until its scope can be recovered, keep the
     // earlier lookup; reboxed has already scoped those it could find. New saves and handovers carry their own scope.
     if (this.#unscopedSaves.size > 0) {
+      this.#retryLegacyBox(lock.ws, cert);
       const rows = this.#d.db.prepare("SELECT body FROM vault_requests WHERE ws = ? AND status = 'pending'").all(lock.ws) as { body: string }[];
       for (const row of rows) {
         const r = JSON.parse(row.body) as Request;
@@ -892,7 +980,15 @@ export class Secrets {
       const posting = this.#postingSaves.get(id);
       if (posting !== undefined) this.#sealSave(posting, lock, cert, sub, email);
       const row = this.#d.db.prepare("SELECT body, thread, card_ts FROM vault_requests WHERE ws = ? AND id = ? AND status = 'pending'").get(lock.ws, id) as { body: string; thread: number | null; card_ts: string | null } | undefined;
-      if (row === undefined) continue;
+      if (row === undefined) {
+        const wait = this.#carriedSaveWaits.get(id);
+        if (wait) {
+          const boxes = wait.boxes.get(lock.ws) ?? new Map<string, string>();
+          boxes.set(cert.device, cert.box);
+          wait.boxes.set(lock.ws, boxes);
+        }
+        continue;
+      }
       const k: Kept = { request: JSON.parse(row.body), thread: row.thread ?? null, cardTs: row.card_ts ?? null };
       if (!this.#sealSave(k.request, lock, cert, sub, email)) continue;
       this.#save(k);
