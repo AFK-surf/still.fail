@@ -1,0 +1,5 @@
+import {
+  "framekernel/kernel",
+}
+
+options("is-main": true)
