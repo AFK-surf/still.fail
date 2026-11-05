@@ -1136,6 +1136,35 @@ test("a vault of one's own deleted: its last version sealed to no one, brought t
   r.core.close();
 });
 
+test("an item a station keeps back (no longer listed, or given at an older version) is shown here still and brought back to it; a device that held none of it sees it from the other station", async () => {
+  const r = await rig(false, true);
+  r.putLock();
+  const { made: id } = await r.ask("vault.setup", {});
+  const put = await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "Slack", fields: { value: "xoxp-1" } } });
+  await r.ask("vault.putItem", { vault: id, id: put.id, plain: { kind: "token", name: "Slack", fields: { value: "xoxp-2" } } });
+  await r.host.time.pass(1000);
+  const latest = r.st.items.get(put.id)!;
+  assert.deepEqual(r.st2.items.get(put.id), latest);
+  // Its host keeps it back: lists it no more.
+  r.st.items.delete(put.id);
+  const shown = await r.watch(2, { topic: "vaultItems", workspace: "ws", vault: id });
+  await r.host.time.pass(1000);
+  assert.deepEqual(shown().items.map((x: any) => x.id), [put.id], "held here, shown still");
+  assert.deepEqual(r.st.items.get(put.id), latest, "brought back to the station that kept it back");
+  // A device that holds nothing of the vault yet (this one, its records gone): the host gives the older version, the
+  // other station the latest; the latest is the one held.
+  r.st.items.set(put.id, { ...latest, version: 0 });
+  r.core.inner.data.forgetRecord("vault", "ws");
+  r.core.inner.data.forgetRecord("vaultItems", `ws/${id}`);
+  // (the vaults page shown: the stations read again)
+  await r.watch(3, { topic: "vaults", workspace: "ws" });
+  await r.host.time.pass(1000);
+  assert.deepEqual(shown().items.map((x: any) => x.id), [put.id]);
+  const opened = await r.ask("vault.open", { item: put.id });
+  assert.equal(opened.plain.fields.value, "xoxp-2", "the latest version, as the other station holds it");
+  r.core.close();
+});
+
 test("a vault made on one station is copied to the workspace's others, so an agent on any of them may ask for its secrets", async () => {
   const r = await rig(false, true);
   r.putLock();
