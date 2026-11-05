@@ -17,6 +17,7 @@ import { CC_SESSIONS_PENDING, CcSessionsUnavailable, ccSessionReady, indexedCcTh
 import { CARD_POSTS_PENDING, CARD_POST_BEFORE, CARD_POST_LATEST, CARD_POST_NEXT, CARD_POST_SAMPLE, cardPostsReady } from "../store/card-post-index.ts";
 import { SESSION_LIST_CONNECT, SESSION_LIST_PENDING, SESSION_LIST_SCOPE, SESSION_LIST_SCOPE_CONNECT, sessionListReady } from "../store/session-list-index.ts";
 import { SESSION_BINDINGS_PENDING, SESSION_BINDINGS_SELECTED, sessionBindingsReady } from "../store/session-bindings-index.ts";
+import { sessionUpJobsReady } from "../store/session-up-jobs.ts";
 import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
 import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
@@ -80,11 +81,13 @@ export type Store = {
   /// "cold" for one not listed) and the client keys sessions were made with (`client_key`).
   processes: Map<string, string>;
   clientKeys: Map<string, string>;
+  /// An old session whose up-job lookup should be prepared after this read returns.
+  prepareUpJobs: string | null;
 };
 
 /// The store over an open database, with the data directory its archive is in.
 export function makeStore(db: DatabaseSync, dataDir: string): Store {
-  return { db, dataDir, names: new Map(), processes: new Map(), clientKeys: new Map() };
+  return { db, dataDir, names: new Map(), processes: new Map(), clientKeys: new Map(), prepareUpJobs: null };
 }
 
 /// A station's store: `<dataDir>/stillfail.db`, opened read-only.
@@ -1018,9 +1021,23 @@ export const JOBS_NOW = 50;
 /// log: 378 of one session on a station (2026-11-03).
 export const LATEST_JOBS = "SELECT * FROM jobs INDEXED BY jobs_by_session WHERE session_key = ? ORDER BY rowid DESC LIMIT ?";
 export const UP_JOBS_OF = "SELECT * FROM jobs INDEXED BY jobs_up WHERE state = 'running' AND session_key = ?1 UNION ALL SELECT * FROM jobs INDEXED BY jobs_up WHERE state = 'exited' AND port IS NOT NULL AND session_key = ?1";
+/// Keep the old lookup's running-then-restarting and port/rowid order for equal start times.
+export const PREPARED_UP_JOBS_OF = `SELECT j.* FROM session_up_job_rows i CROSS JOIN jobs j ON j.rowid = i.job_rowid
+  WHERE i.session = ? ORDER BY (j.state <> 'running'), j.port, j.rowid`;
 export function jobsNow(s: Store, session: string): JobRow[] {
+  // When every job fits, the recent page already contains every job still up. One extra row makes that certain.
+  const latest = all(s, LATEST_JOBS, session, JOBS_NOW + 1);
+  if (latest.length <= JOBS_NOW) return latest.sort((a, b) => b.started_at - a.started_at).map(toJob);
+  let ready = false;
+  try {
+    ready = sessionUpJobsReady(s.db, session);
+    if (!ready) s.prepareUpJobs = session;
+  } catch (error) {
+    // A reader can also be given a database from before the lookup was installed.
+    if (!(error instanceof Error) || !error.message.includes("no such table: session_up_job_meta")) throw error;
+  }
   const byId = new Map<string, Json>();
-  for (const r of [...all(s, LATEST_JOBS, session, JOBS_NOW), ...all(s, UP_JOBS_OF, session)]) byId.set(r.id, r);
+  for (const r of [...latest.slice(0, JOBS_NOW), ...all(s, ready ? PREPARED_UP_JOBS_OF : UP_JOBS_OF, session)]) byId.set(r.id, r);
   return [...byId.values()].sort((a, b) => b.started_at - a.started_at).map(toJob);
 }
 
@@ -1040,6 +1057,8 @@ export const RUNNING_OF = "SELECT * FROM jobs WHERE session_key IN (SELECT value
 /// Active watches of the named sessions, using their lookup instead of reading every running job or a session's old jobs.
 export const WATCHING_OF = `SELECT j.* FROM active_watch_jobs w INDEXED BY active_watch_jobs_session
   CROSS JOIN jobs j ON j.id = w.job WHERE w.session IN (SELECT value FROM json_each(?)) ORDER BY j.started_at DESC, j.rowid`;
+export const WATCHING_ALL = `SELECT j.* FROM active_watch_jobs w
+  CROSS JOIN jobs j ON j.id = w.job ORDER BY j.started_at DESC, j.rowid`;
 
 /// jobs.rs `watching`: the sessions keeping watch (a watch job running), each with its watches' names, since when, and
 /// when one last said something: of `sessions` alone (a session's summary, the sidebar items a change touched), or of
@@ -1047,16 +1066,12 @@ export const WATCHING_OF = `SELECT j.* FROM active_watch_jobs w INDEXED BY activ
 export function watching(s: Store, sessions: string[] | null = null): Map<string, Json> {
   if (sessions !== null && sessions.length === 0) return new Map();
   const by = new Map<string, JobRow[]>();
-  // (The jobs running, by their state's index: every summary and list asks this, not every job ever.)
   let running: Json[];
-  if (sessions === null) running = all(s, JOBS_RUNNING);
-  else {
-    try { running = all(s, WATCHING_OF, JSON.stringify(sessions)); }
-    catch (error) {
-      // A reader can also open a database from before active watches were kept.
-      if (!(error instanceof Error) || !error.message.includes("no such table: active_watch_jobs")) throw error;
-      running = all(s, RUNNING_OF, JSON.stringify(sessions));
-    }
+  try { running = sessions === null ? all(s, WATCHING_ALL) : all(s, WATCHING_OF, JSON.stringify(sessions)); }
+  catch (error) {
+    // A reader can also open a database from before active watches were kept.
+    if (!(error instanceof Error) || !error.message.includes("no such table: active_watch_jobs")) throw error;
+    running = sessions === null ? all(s, JOBS_RUNNING) : all(s, RUNNING_OF, JSON.stringify(sessions));
   }
   for (const job of running.map(toJob).filter((j) => j.watch)) {
     by.set(job.sessionKey, [...(by.get(job.sessionKey) ?? []), job]);
