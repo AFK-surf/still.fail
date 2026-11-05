@@ -139,7 +139,7 @@ fn composer_extras_node(
                     }
                     None => ()
                   }
-                }).presses(By(fn() { @sfbase.writing_went_to(id) is Some(_) })) |> ignore
+                }).turned_off(By(fn() { @sfbase.writing_went_to(id) is None })) |> ignore
                 tile.reacts(fn() { @sfbase.writing_went_to(id).map(fn(v) { v.0 }).unwrap_or("") }, fn(s) {
                   if s != "" {
                     @sfbase.note_thumb_node(tile, s + "//draft:" + id, corner, fn() { picture().unwrap_or("") })
