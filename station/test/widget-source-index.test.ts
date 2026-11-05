@@ -436,6 +436,23 @@ test("a noncanonical attachment that SQLite can read keeps its original widget s
   } finally { store.close(); }
 });
 
+test("preparing an old noncanonical attachment preserves the original lookup", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    beforeIndex(db);
+    const thread = store.openThread("ember", "EMBER", "old-json5", null, null).id;
+    store.joinThread(thread, "a", "ember");
+    db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
+      VALUES(?,1,'message','agent','a',1,?)`).run(thread, "[{path:'/w/item.html',name:'old-json5.html'}]");
+    installWidgetSources(db);
+    while (!widgetSourcesStep(db, thread, 1).done) {}
+    const path = "/w/item.html";
+    assert.deepEqual(plain(db.prepare(original).get("a", path)), { channel: "EMBER", thread_ts: "old-json5", name: "old-json5.html" });
+    store.putWidgetState("a", path, "{}", "selected");
+    assert.equal(store.untoldWidgetModels("a")[0]?.name, "old-json5.html");
+  } finally { store.close(); }
+});
+
 test("a failed widget index installation leaves no partial tables or triggers", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
