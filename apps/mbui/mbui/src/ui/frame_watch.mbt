@@ -882,6 +882,7 @@ fn looks_frame(c : Ctx, t : Double) -> Double {
   }
   // (and the moments the rows kept wait for: kept_part.mbt's KeptClock)
   dues_wake(c)
+  fx_wake(c)
   if looks_base.looks {
     looks_base.inst.blit_to(c.inst, len=looks_base.n * inst_size)
     c.ninst = looks_base.n
@@ -917,6 +918,7 @@ fn paint_frame(c : Ctx, t : Double) -> Double {
   c.wake_by = None
   c.wake_at = looks_base.wake
   dues_wake(c)
+  fx_wake(c)
   paint_watch_of().read(fn() { frame_paint(c, paint_base.root, alone=true) })
   c.t_build = 0.0
   c.t_layout = 0.0
@@ -955,6 +957,7 @@ fn alone_frame(c : Ctx, t : Double) -> Double {
     c.wake_at = paint_base.wake
   }
   dues_wake(c)
+  fx_wake(c)
   let drawn = match view_app.val {
     Some(tree) => {
       // (what was told it as the frame went, brought, and taken as its scene's: drawn as it is now)
@@ -1017,6 +1020,8 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   messages_arrive()
   // (a Tester's fake host's answers come by the frame, told as it begins: what waits on them reads them)
   answers_by_the_frame()
+  // (the runtime's timers and fibers, gone to this frame's time: what they set told, as any value set, fx.mbt)
+  fx_run_to(t)
   // (what the host says of the streams and the native views, read of it each frame: what changed come from outside)
   streams_arrive()
   views_arrive()

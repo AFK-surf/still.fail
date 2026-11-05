@@ -192,6 +192,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   }
   frame_running.val = false
   frame_built.val = false
+  fx_frame_over()
 }
 
 ///|

@@ -201,6 +201,64 @@ test "a signal the view did not read, set: the next frame is of the look alone" 
 }
 
 ///|
+/// A mark turning beside a word; `shows`: the word is what `set` holds, read as it is built.
+fn fiber_tester(set : @signals.Signal[Int], shows : Bool) -> Tester {
+  Tester::new(fn(c) {
+    c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+      c.text(if shows { "set \{set.get()}" } else { "waiting" }, size=12.0) |> ignore
+      let mark = c.box(w=Px(20.0), h=Px(8.0), bg=0x3366CCFFL, fn() {  })
+      c.cycle_look(mark, looks_turn_ms, fn(f) { look(rot=f * 6.283185307179586) })
+    })
+    |> ignore
+  })
+}
+
+///|
+test "a fiber's timer coming, what it sets read by nothing: no frame built for its moment, what it did done" {
+  let set = @signals.signal(0)
+  let t = fiber_tester(set, false)
+  t.clock_frame()
+  t.clock_frame()
+  runtime().fork(async fn() {
+    @effect.sleep(100)
+    set.set(1)
+  })
+  |> ignore
+  let whys : Array[String] = []
+  for _ in 0..<20 {
+    t.clock_frame()
+    if t.built_why() != "" {
+      whys.push(t.built_why())
+    }
+  }
+  assert_eq(@signals.untracked(fn() { set.get() }), 1)
+  assert_true(!whys.iter().any(fn(w) { w.has_prefix("a moment it waits for came") }), msg="\{whys}")
+}
+
+///|
+test "a fiber's timer coming, what it sets read as the view is built: the frame at it built whole for that, showing it" {
+  let set = @signals.signal(0)
+  let t = fiber_tester(set, true)
+  t.clock_frame()
+  t.clock_frame()
+  runtime().fork(async fn() {
+    @effect.sleep(100)
+    set.set(1)
+  })
+  |> ignore
+  let whys : Array[String] = []
+  for _ in 0..<20 {
+    t.clock_frame()
+    if t.built_why() != "" {
+      whys.push(t.built_why())
+    }
+  }
+  assert_true(t.find("set 1") is Some(_))
+  assert_true(whys.iter().any(fn(w) { w.has_prefix("what it read changed") }), msg="\{whys}")
+  assert_true(!whys.iter().any(fn(w) { w.has_prefix("a moment it waits for came") }), msg="\{whys}")
+}
+
+///|
 test "the clock read as the view is built: each frame built whole, said where it was read" {
   let builds = Ref(0)
   let t = Tester::new(fn(c) {

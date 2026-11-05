@@ -28,14 +28,21 @@ fn fx_runtime(seed : Int?) -> @effect.Runtime {
   // a fiber woken between frames (a host's callback gave it its answer, a handler forked it): a frame soon
   rt.on_wake(() => h_request_frame())
   // a timer set between frames (a test's step, a host's callback): woken at its moment, as one set in a frame is
-  rt.on_timer(at => g().wake_at_time(at.to_double(), later=true))
+  rt.on_timer(at => timer_wake(g(), at.to_double()))
   rt
 }
+
+///|
+/// Whether the runtime has gone to this frame's time (fx_run_to): once a frame, however many times the frame is built;
+/// the frame over, not (fx_frame_over).
+// kept across runs: put back with the runtime (fx_reset), and as each frame ends
+let fx_ran : Ref[Bool] = Ref(false)
 
 ///|
 /// A new runtime (a Tester starting): what the last one ran is forgotten.
 fn fx_reset(seed : Int?) -> Unit {
   fx.val = fx_runtime(seed)
+  fx_ran.val = false
   lives.clear()
 }
 
@@ -48,7 +55,49 @@ pub fn runtime() -> @effect.Runtime {
 ///|
 /// A frame starts at `c.clock`: the runtime goes there (whole milliseconds), its fibers run.
 fn fx_frame_start(c : Ctx) -> Unit {
-  fx.val.frame(whole_ms(c.clock).to_int64())
+  fx_run_to(c.clock)
+}
+
+///|
+/// The runtime gone to the frame's time `t` (whole milliseconds), its timers due fired and its fibers run, once a frame:
+/// as the frame begins, before what it does again is decided (frame_watch.mbt), so that what they set is a value set
+/// like any other, and what read it is built again for it; nothing else is.
+fn fx_run_to(t : Double) -> Unit {
+  if fx_ran.val {
+    return
+  }
+  fx_ran.val = true
+  fx.val.frame(whole_ms(t).to_int64())
+}
+
+///|
+/// The frame is over: the next goes to its own time (fx_run_to).
+fn fx_frame_over() -> Unit {
+  fx_ran.val = false
+}
+
+///|
+/// What the runtime has to come asked of the host, a frame of any kind: a frame while a fiber waits for one or is
+/// ready, a wake at the next timer. A timer's moment is no moment a build waits for (Ctx::wake_at_time's): what it does
+/// is the fibers', and what they set builds what read it.
+fn fx_wake(c : Ctx) -> Unit {
+  let rt = fx.val
+  if !rt.idle() {
+    c.request_frame()
+  }
+  c.fiber_frame = rt.wants_frame()
+  match rt.next_timer() {
+    Some(at) => timer_wake(c, at.to_double())
+    None => ()
+  }
+}
+
+///|
+/// A frame asked of the host at a timer's moment `at`: none built for it (fx_wake).
+fn timer_wake(c : Ctx, at : Double) -> Unit {
+  if c.wake_at < 0.0 || at < c.wake_at {
+    c.wake_at = at
+  }
 }
 
 ///|
@@ -66,17 +115,9 @@ fn fx_frame_end(c : Ctx) -> Unit {
       lives.remove(id)
     }
   }
-  let rt = fx.val
   // (one ready, forked by this frame or woken in it: it runs at the next frame, at this moment, as an input's
-  // frame after)
-  if !rt.idle() {
-    c.request_frame()
-  }
-  c.fiber_frame = rt.wants_frame()
-  match rt.next_timer() {
-    Some(at) => c.wake_at_time(at.to_double(), later=true)
-    None => ()
-  }
+  // frame after; a timer's moment woken at)
+  fx_wake(c)
 }
 
 ///|
