@@ -105,6 +105,25 @@ test("renumbering and vacuuming requests preserve which boxes are recovered and 
   } finally { db.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("a previous connection's prepared writes keep the new recovery lookup current", () => {
+  const dir = mkdtempSync(join(tmpdir(), "rebox-previous-writer-"));
+  const path = join(dir, "station.db");
+  const { db, put, ready } = fixture(new DatabaseSync(path));
+  db.exec("PRAGMA journal_mode=WAL");
+  const previous = new DatabaseSync(path);
+  try {
+    put("w", "old", "pending");
+    // The earlier process prepared these statements before the new process installed its triggers.
+    const add = previous.prepare("INSERT INTO vault_requests (ws,id,session,status,body) VALUES ('w','new','s','pending','{}')");
+    const decide = previous.prepare("UPDATE vault_requests SET status='denied' WHERE ws='w' AND id='old'");
+    initializeReboxIndex(db);
+    add.run();
+    decide.run();
+    while (!backfillReboxIndex(db, 1)) {}
+    assert.deepEqual(ready(), [["w", "new"]]);
+  } finally { previous.close(); db.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("the worker prepares recovery after handover and includes the previous process's writes", { timeout: 30_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), "rebox-worker-"));
   const { db, put, ready } = fixture(new DatabaseSync(join(dir, "station.db")));

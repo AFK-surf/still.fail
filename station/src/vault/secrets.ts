@@ -35,6 +35,8 @@ import { hasVaultMembers, initializePendingIndex, pendingIndexComplete, PENDING_
 import { hasInvalidVaultMembers, vaultMembersComplete } from "./member-index.ts";
 import { reboxIndexComplete, REBOX_LEGACY, REBOX_READY } from "./rebox-index.ts";
 
+export const CARRIED_SAVE_PENDING = "SELECT body FROM vault_requests WHERE ws = ? AND id = ? AND status = 'pending'";
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS vault_requests (
   ws TEXT NOT NULL,
@@ -1089,7 +1091,7 @@ export class Secrets {
     // A handover from an older station may contain a save not written yet. Recheck those known ids in this workspace;
     // reboxed has already scoped those it could find. New saves and handovers carry their own scope.
     if (this.#unscopedSaves.size > 0) {
-      const lookup = this.#d.db.prepare("SELECT body FROM vault_requests WHERE ws = ? AND id = ? AND status = 'pending'");
+      const lookup = this.#d.db.prepare(CARRIED_SAVE_PENDING);
       for (const id of this.#unscopedSaves) {
         const row = lookup.get(lock.ws, id) as { body: string } | undefined;
         if (row === undefined) continue;
