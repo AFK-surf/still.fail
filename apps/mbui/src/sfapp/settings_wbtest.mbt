@@ -389,10 +389,11 @@ test "profiles, connects, the vault: their lists" {
   let t3 = settings_tester("vault")
   assert_true(t3.find("git push origin main") is Some(_))
   assert_true(t3.find("部署机") is None)
-  assert_true(settings_tester("vault-items").find("部署机") is Some(_))
-  // the bottom bar going out of the way, on its own springs and glides, to where it rests
+  // the bottom bar going out of the way, on its own springs and glides, to where it rests (before the next run, which
+  // lets this one's tree go: @ui.run_let_go)
   t3.run_for(bar.rest() - t3.time())
   t3.assert_idle()
+  assert_true(settings_tester("vault-items").find("部署机") is Some(_))
 }
 
 ///|

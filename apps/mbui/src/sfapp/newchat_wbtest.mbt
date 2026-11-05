@@ -181,13 +181,13 @@ test "the bar: drawn up, the panel of the other bar; let go on its first place, 
 ///|
 test "the bar: hidden under a page pushed, back as it comes back" {
   let t = tester("home")
-  assert_true(bar.vis.value > 0.99)
+  assert_true(bar.vis.at(t.time()).0 > 0.99)
   t.tap_text("夜里的构建又失败了")
   t.run_for(bar_hide_ms)
-  assert_true(bar.vis.value < 0.01)
+  assert_true(bar.vis.at(t.time()).0 < 0.01)
   t.back()
   t.run_for(@ui.move_most_ms)
-  assert_true(bar.vis.value > 0.99)
+  assert_true(bar.vis.at(t.time()).0 > 0.99)
 }
 
 ///|
@@ -325,6 +325,16 @@ test "the bar is glass of one capture: the bar with its notch, 令 and the ball 
 }
 
 ///|
+test "the notch shows the action of the place gone to: 令 on the chats, ＋ on a place whose page adds" {
+  let plus = bar_place_with("plus")
+  let (t, _) = bar_at_rest()
+  assert_eq(t.locate("icon:ling").length(), 1, msg="令 on the chats")
+  assert_true(@sfbase.go_place(plus))
+  t.run_for(bar_rest() - t.time())
+  assert_eq((t.locate("icon:plus").length(), t.locate("icon:ling").length()), (1, 0), msg="＋ on \{plus}")
+}
+
+///|
 test "the notch's icon swaps with a short scale and fade while it stays open; closed, at once" {
   let plus = bar_place_with("plus")
   let none = bar_place_with("")
@@ -336,16 +346,16 @@ test "the notch's icon swaps with a short scale and fade while it stays open; cl
   t.frame()
   t.frame()
   assert_eq((m_face.val, bar.icon_was), ("plus", "ling"))
-  let p = bar.icon_swap.value
+  let p = bar.icon_swap.at(t.time()).0
   assert_true(p > 0.0 && p < 1.0, msg="\{p}")
   t.run_for(icon_swap_ms)
-  assert_true(bar.icon_swap.value == 1.0)
+  assert_true(bar.icon_swap.at(t.time()).0 == 1.0)
   // the notch closed (a place with no action), then another action: nothing to see, at once
   ignore(@sfbase.go_place(none))
   t.run_for(bar_rest() - t.time())
   ignore(@sfbase.go_place("chats"))
   t.frame()
-  assert_eq((m_face.val, bar.icon_swap.value), ("ling", 1.0))
+  assert_eq((m_face.val, bar.icon_swap.at(t.time()).0), ("ling", 1.0))
   t.run_for(bar_rest() - t.time())
   t.assert_idle()
 }
@@ -369,7 +379,7 @@ test "the bar chosen in the panel slides down into the bar's place, its places l
     t.frame()
     match bar.swap_at(t.time()) {
       Some(s) => {
-        let k = s.t(bar.o.x)
+        let k = s.t(bar.o.at(t.time()).0)
         assert_true(k >= last)
         last = k
         if k > 0.05 && k < 0.95 {

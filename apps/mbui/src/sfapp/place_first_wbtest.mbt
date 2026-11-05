@@ -8,7 +8,7 @@ test "each place comes in the same way the first time and again" {
     t.frame()
     to_bar_rest(t)
     let tap_place = fn(index : Int) {
-      let xs = bar_centres(390.0 - 44.0, bar.k.x, 2)
+      let xs = bar_centres(390.0 - 44.0, bar.k.at(t.time()).0, 2)
       t.tap_once(xs[index] + 22.0, 844.0 - 22.0 - 28.0)
     }
     let sample = fn() {
@@ -218,7 +218,7 @@ fn usage_coming_in(rebuilt : Bool) -> Array[(Double, Double)] {
   bars_picked.set(Some(([["chats", "usage"]], 0)))
   t.frame()
   to_bar_rest(t)
-  let xs = bar_centres(390.0 - 44.0, bar.k.x, 2)
+  let xs = bar_centres(390.0 - 44.0, bar.k.at(t.time()).0, 2)
   t.tap_once(xs[1] + 22.0, 844.0 - 22.0 - 28.0)
   let at = t.time()
   let duration = @ui.move_ms(switch_slide)
@@ -253,7 +253,7 @@ test "a place made once, its place tapped again on the bar (no switch), then mad
   bars_picked.set(Some(([["chats", "usage"]], 0)))
   t.frame()
   to_bar_rest(t)
-  let xs = bar_centres(390.0 - 44.0, bar.k.x, 2)
+  let xs = bar_centres(390.0 - 44.0, bar.k.at(t.time()).0, 2)
   t.tap_once(xs[1] + 22.0, 844.0 - 22.0 - 28.0)
   t.run_for(@ui.move_most_ms)
   to_bar_rest(t)
