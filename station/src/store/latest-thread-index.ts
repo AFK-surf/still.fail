@@ -1,11 +1,31 @@
 import type { DatabaseSync } from "node:sqlite";
 
 // Requested sessions only. Preparation is bounded; a synchronous caller keeps its old answer until it is ready.
-const VERSION = 1;
+export const LATEST_THREAD_VERSION = 1;
+const VERSION = LATEST_THREAD_VERSION;
+export const LATEST_THREAD_SCOPE = "SELECT complete FROM latest_thread_scopes WHERE session=?";
 export const LATEST_THREAD_INDEXED = `SELECT t.*,m.connect FROM latest_thread_rows r
   CROSS JOIN thread_sessions m ON m.session=r.session AND m.thread=r.thread
   CROSS JOIN threads t ON t.id=r.thread WHERE r.session=?1
   ORDER BY r.has_last DESC,r.last_delivery DESC,r.joined_at DESC,r.member_rowid DESC LIMIT 1`;
+// One statement keeps the readiness check, the at-most-two-member test, and the answer in the same snapshot. The
+// sentinel row also says when an old multi-chat session needs preparation before a caller can use the ordered index.
+export const LATEST_THREAD_ATTEMPT = `WITH small AS MATERIALIZED (
+    SELECT thread FROM thread_sessions INDEXED BY thread_sessions_session WHERE session=?1 LIMIT 2
+  ), choice AS MATERIALIZED (
+    SELECT (SELECT version FROM latest_thread_meta WHERE id=1) AS version,
+      (SELECT COUNT(*) FROM small) AS members,
+      COALESCE((SELECT complete FROM latest_thread_scopes WHERE session=?1),0) AS ready
+  )
+  SELECT p.version AS _latest_version,p.members AS _latest_members,p.ready AS _latest_ready,t.*,ts.connect
+  FROM choice p LEFT JOIN thread_sessions ts ON ts.session=?1 AND ts.thread = CASE
+    WHEN p.ready=1 THEN (SELECT t2.id FROM latest_thread_rows r
+      CROSS JOIN thread_sessions m ON m.session=r.session AND m.thread=r.thread
+      CROSS JOIN threads t2 ON t2.id=r.thread WHERE r.session=?1
+      ORDER BY r.has_last DESC,r.last_delivery DESC,r.joined_at DESC,r.member_rowid DESC LIMIT 1)
+    WHEN p.members<2 THEN (SELECT thread FROM small LIMIT 1)
+    ELSE NULL END
+  LEFT JOIN threads t ON t.id=ts.thread`;
 
 const lastDelivery = (session: string, thread: string, extra = "") => `(SELECT d.rowid FROM deliveries d INDEXED BY deliveries_session
   WHERE d.session=${session} AND d.thread=${thread} ${extra} ORDER BY d.rowid DESC LIMIT 1)`;
@@ -197,7 +217,7 @@ export function checkLatestThreadIndex(db: DatabaseSync): void {
 
 export function latestThreadReady(db: DatabaseSync, session: string): boolean {
   checkLatestThreadIndex(db);
-  return (db.prepare("SELECT complete FROM latest_thread_scopes WHERE session=?").get(session) as { complete: number } | undefined)?.complete === 1;
+  return (db.prepare(LATEST_THREAD_SCOPE).get(session) as { complete: number } | undefined)?.complete === 1;
 }
 
 /// Read readiness and the candidate from one database snapshot.

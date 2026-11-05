@@ -52,7 +52,7 @@ import { installPostBlocks, PostBlocksUnavailable, POST_BLOCK_SIZE, type PostPos
 import { checkWidgetSources, installWidgetSources, WIDGET_SOURCE, WIDGET_SOURCE_MISSING, WIDGET_SOURCE_ORIGINAL,
   WIDGET_SOURCE_UNUSUAL, WidgetSourcesUnavailable } from "./widget-sources.ts";
 import { indexedCcThreads, installCcIndex } from "./cc-thread-index.ts";
-import { indexedLatestThread, installLatestThreadIndex, latestThreadReady } from "./latest-thread-index.ts";
+import { installLatestThreadIndex, LATEST_THREAD_ATTEMPT, LATEST_THREAD_VERSION } from "./latest-thread-index.ts";
 import { CARD_POST_BEFORE, CARD_POST_LATEST, cardPostsReady, installCardPosts } from "./card-post-index.ts";
 import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
 import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
@@ -66,6 +66,16 @@ export const ANY_RUNNING = "SELECT 1 AS r FROM sessions WHERE running = 1 LIMIT 
 export const RUNNING_SESSIONS = "SELECT * FROM sessions WHERE running = 1";
 export const SESSION_THREAD_BY_ID = `SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread
   WHERE ts.thread = ?1 AND ts.session = ?2`;
+export const THREAD_INSERT_IF_ABSENT = `INSERT OR IGNORE INTO threads (surface, channel, thread_ts, title, created_by, created_at, home)
+  SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 WHERE NOT EXISTS
+    (SELECT 1 FROM threads WHERE surface = ?1 AND channel = ?2 AND thread_ts = ?3)`;
+export const MEMBER_JOIN_IF_NEEDED = `INSERT INTO thread_sessions (thread, session, connect, joined_at)
+  SELECT ?1, ?2, ?3, ?4 WHERE NOT EXISTS
+    (SELECT 1 FROM thread_sessions WHERE thread = ?1 AND session = ?2 AND left_at IS NULL)
+  ON CONFLICT (thread, session) DO UPDATE SET left_at = NULL WHERE thread_sessions.left_at IS NOT NULL`;
+export const DELIVERY_INSERT_IF_ABSENT = `INSERT OR IGNORE INTO deliveries (thread, n, session)
+  SELECT ?1, ?2, ?3 WHERE NOT EXISTS
+    (SELECT 1 FROM deliveries WHERE thread = ?1 AND n = ?2 AND session = ?3)`;
 export const SESSION_HOME_THREAD = `SELECT t.*, ts.connect FROM threads t INDEXED BY threads_home
   CROSS JOIN thread_sessions ts WHERE t.home = ?1 AND ts.thread = t.id AND ts.session = ?1
   ORDER BY ts.joined_at DESC, ts.rowid DESC LIMIT 1`;
@@ -1230,9 +1240,7 @@ export class Store {
   /// The thread at this address, made if new as `home`'s own chat (ThreadRow.home).
   openThreadOf(surface: string, channel: string, threadTs: string, title: string | null, createdBy: string | null, home: string | null): ThreadRow {
     this.#run(
-      `INSERT OR IGNORE INTO threads (surface, channel, thread_ts, title, created_by, created_at, home)
-       SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 WHERE NOT EXISTS
-         (SELECT 1 FROM threads WHERE surface = ?1 AND channel = ?2 AND thread_ts = ?3)`,
+      THREAD_INSERT_IF_ABSENT,
       surface, channel, threadTs, title, createdBy, this.now(), home,
     );
     const thread = this.threadAt(surface, channel, threadTs);
@@ -1254,10 +1262,7 @@ export class Store {
   joinThread(thread: number, session: string, connect: string): boolean {
     return this.#with((changes) => {
       const joined = this.#run(
-        `INSERT INTO thread_sessions (thread, session, connect, joined_at)
-         SELECT ?1, ?2, ?3, ?4 WHERE NOT EXISTS
-           (SELECT 1 FROM thread_sessions WHERE thread = ?1 AND session = ?2 AND left_at IS NULL)
-         ON CONFLICT (thread, session) DO UPDATE SET left_at = NULL WHERE thread_sessions.left_at IS NOT NULL`,
+        MEMBER_JOIN_IF_NEEDED,
         thread, session, connect, this.now(),
       ) > 0;
       if (joined) {
@@ -1340,20 +1345,12 @@ export class Store {
   /// The thread a session last heard from: where the station's own notices go and whose connect's name the agent goes
   /// by. Falls back to the thread it joined last when it has heard nothing yet.
   latestThread(session: string): SessionThread | null {
-    // Read readiness, the small-session check and the result in one snapshot if another connection writes meanwhile.
-    this.db.exec("SAVEPOINT latest_thread_select");
-    try {
-      if (latestThreadReady(this.db, session)) {
-        const latest = indexedLatestThread(this.db, session);
-        return latest ? toSessionThread(latest) : null;
-      }
-      // Zero or one membership needs neither a delivery lookup nor a persistent projection. For old larger sessions,
-      // request background preparation; callers that must answer synchronously retain the original answer until ready.
-      const members = this.#all("SELECT thread FROM thread_sessions INDEXED BY thread_sessions_session WHERE session=? LIMIT 2", session);
-      if (members.length < 2) {
-        const only = members[0] && this.#one(SESSION_THREAD_BY_ID, members[0].thread, session);
-        return only ? toSessionThread(only) : null;
-      }
+    const attempt = this.#one(LATEST_THREAD_ATTEMPT, session)!;
+    if (attempt._latest_version !== LATEST_THREAD_VERSION)
+      throw new Error(`latest thread index version ${attempt._latest_version ?? "missing"} is incompatible with ${LATEST_THREAD_VERSION}`);
+    if (attempt._latest_ready !== 1 && attempt._latest_members > 1) {
+      // Old larger sessions are prepared in the background. A synchronous caller keeps its exact immediate answer
+      // until preparation is done; the fallback is a single query in its own snapshot.
       this.requestLatestThread?.(session);
       const latest = this.#one(
         `SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread
@@ -1364,7 +1361,8 @@ export class Store {
         session,
       );
       return latest ? toSessionThread(latest) : null;
-    } finally { this.db.exec("RELEASE latest_thread_select"); }
+    }
+    return attempt.id === null ? null : toSessionThread(attempt);
   }
 
   /// Threads with their sessions, last entry, latest message and the viewer's unread count, most recently said in
@@ -1716,9 +1714,7 @@ export class Store {
     return this.#with((changes) => {
       const added: string[] = [];
       for (const s of sessions) {
-        if (this.#run(`INSERT OR IGNORE INTO deliveries (thread, n, session)
-          SELECT ?1, ?2, ?3 WHERE NOT EXISTS
-            (SELECT 1 FROM deliveries WHERE thread = ?1 AND n = ?2 AND session = ?3)`, thread, n, s) > 0) {
+        if (this.#run(DELIVERY_INSERT_IF_ABSENT, thread, n, s) > 0) {
           added.push(s);
           changes.push({ type: "session", key: s });
         }

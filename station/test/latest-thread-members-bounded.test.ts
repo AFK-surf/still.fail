@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { installLatestThreadIndex, prepareLatestThreadStep } from "../src/store/latest-thread-index.ts";
+import { installLatestThreadIndex, LATEST_THREAD_ATTEMPT, prepareLatestThreadStep } from "../src/store/latest-thread-index.ts";
 import { Store } from "../src/store/store.ts";
 
 for (const delivered of [false, true]) {
@@ -88,28 +88,26 @@ test("the single-chat check and its answer share a snapshot with another writer"
     store.joinThread(first.id, "s", "first");
     writer = new DatabaseSync(path);
     let interleaved = false;
+    db.function("join_during_latest", (thread) => {
+      if (!interleaved) {
+        writer!.exec("BEGIN");
+        writer!.prepare("INSERT INTO thread_sessions(thread,session,connect,joined_at) VALUES(?,'s','second',2)").run(second.id);
+        writer!.prepare("INSERT INTO deliveries(thread,n,session,delivered_at) VALUES(?,1,'s',NULL)").run(second.id);
+        writer!.exec("COMMIT");
+        interleaved = true;
+      }
+      return thread;
+    });
     const observed = new Proxy(db, {
       get(target, property) {
         if (property === "prepare") return (sql: string) => {
-          const statement = target.prepare(sql);
-          if (!sql.includes("FROM thread_sessions INDEXED BY thread_sessions_session WHERE session=? LIMIT 2")) return statement;
-          return new Proxy(statement, {
-            get(s, p) {
-              if (p === "all") return (...args: any[]) => {
-                const rows = s.all(...args);
-                if (!interleaved) {
-                  writer!.exec("BEGIN");
-                  writer!.prepare("INSERT INTO thread_sessions(thread,session,connect,joined_at) VALUES(?,'s','second',2)").run(second.id);
-                  writer!.prepare("INSERT INTO deliveries(thread,n,session,delivered_at) VALUES(?,1,'s',NULL)").run(second.id);
-                  writer!.exec("COMMIT");
-                  interleaved = true;
-                }
-                return rows;
-              };
-              const value = Reflect.get(s, p, s);
-              return typeof value === "function" ? value.bind(s) : value;
-            },
-          });
+          if (sql !== LATEST_THREAD_ATTEMPT) return target.prepare(sql);
+          const traced = sql.replace("SELECT thread FROM thread_sessions INDEXED BY thread_sessions_session",
+            "SELECT join_during_latest(thread) AS thread FROM thread_sessions INDEXED BY thread_sessions_session");
+          assert.notEqual(traced, sql);
+          const plan = (query: string) => target.prepare(`EXPLAIN QUERY PLAN ${query}`).all("s").map((row) => row.detail);
+          assert.deepEqual(plan(traced), plan(sql));
+          return target.prepare(traced);
         };
         const value = Reflect.get(target, property, target);
         return typeof value === "function" ? value.bind(target) : value;
