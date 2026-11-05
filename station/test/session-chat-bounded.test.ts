@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Store } from "../src/store/store.ts";
+import { SESSION_CHAT_EMBER, SESSION_CHAT_INDEXED, SESSION_CHAT_OTHER, SessionChatPreparation } from "../src/store/session-chat-index.ts";
 
 test("naming a session's most recent chat does not traverse its older chats", () => {
   const store = Store.open(":memory:"), db = store.db;
@@ -18,12 +19,18 @@ test("naming a session's most recent chat does not traverse its older chats", ()
     };
     let visits = 0, traced = false;
     db.function("visited_session_chat", (thread) => { visits++; return thread; });
+    const prepare = () => {
+      const work = new SessionChatPreparation();
+      while (!work.step(db, "s").done) {}
+    };
     const proxy = new Proxy(db, {
       get(target, property) {
         if (property === "prepare") return (sql: string) => {
-          const marker = "WHERE m.session = ?";
-          if (sql.includes("SELECT t.* FROM thread_sessions m JOIN threads t ON t.id = m.thread") && sql.includes(marker)) {
-            const observed = sql.replace(marker, `${marker} AND visited_session_chat(m.thread)=m.thread`);
+          if (sql === SESSION_CHAT_INDEXED) {
+            const own = SESSION_CHAT_EMBER.replace("WHERE session=?1", "WHERE session=?1 AND visited_session_chat(thread)=thread");
+            const other = SESSION_CHAT_OTHER.replace("WHERE session=?1", "WHERE session=?1 AND visited_session_chat(thread)=thread");
+            const observed = sql.replace(SESSION_CHAT_EMBER, own).replace(SESSION_CHAT_OTHER, other);
+            assert.notEqual(observed, sql);
             const plan = (s: string) => target.prepare(`EXPLAIN QUERY PLAN ${s}`).all("s").map((r) => r.detail);
             assert.deepEqual(plan(observed), plan(sql), "counting keeps the actual query plan");
             traced = true;
@@ -42,9 +49,11 @@ test("naming a session's most recent chat does not traverse its older chats", ()
       return visits;
     };
     add(1, 40);
+    prepare();
     const before = read();
     assert.ok(traced && before > 0, "the chat lookup's candidates are counted");
     add(41, 400);
+    prepare();
     const after = read();
     assert.equal(after, before, `naming the chat visited ${before}, then ${after}, linked chats`);
   } finally { store.close(); }

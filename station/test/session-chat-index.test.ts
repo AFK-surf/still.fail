@@ -21,6 +21,13 @@ function prepare(store: Store, session: string, limit = 8): number {
   throw new Error("session chat preparation did not finish");
 }
 
+// The order the store used before the prepared index, retained as an independent reference for old data.
+function original(store: Store, session: string): unknown {
+  return store.db.prepare(`SELECT t.id FROM thread_sessions m JOIN threads t ON t.id=m.thread WHERE m.session=?
+    ORDER BY (SELECT e.at FROM entries e WHERE e.thread=t.id ORDER BY e.n DESC LIMIT 1) DESC,
+      t.created_at DESC,t.id DESC LIMIT 1`).get(session)?.id ?? null;
+}
+
 test("a prepared session chooses its latest chat across surfaces and follows changes", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
@@ -32,7 +39,10 @@ test("a prepared session chooses its latest chat across surfaces and follows cha
     db.prepare("UPDATE threads SET created_at=1 WHERE id IN (?,?,?)").run(own, slack, empty);
     const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at) VALUES(?,?,'message','person','p',?)");
     put.run(own, 1, 10); put.run(slack, 1, 20);
-    const same = () => assert.equal(indexedSessionChat(db, "s")?.id ?? null, store.sessionChat("s")?.thread.id ?? null);
+    const same = () => {
+      assert.equal(indexedSessionChat(db, "s")?.id ?? null, original(store, "s"));
+      assert.equal(store.sessionChat("s")?.thread.id ?? null, original(store, "s"));
+    };
     assert.equal(sessionChatReady(db, "s"), false);
     prepare(store, "s"); same();
     assert.equal(indexedSessionChat(db, "s")?.id, slack);
@@ -73,7 +83,7 @@ test("old sessions are prepared in bounded batches, including members added behi
     db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at) VALUES(?,1,'message','person','p',1000)").run(late);
     prepare(store, "s", 8);
     assert.equal(indexedSessionChat(db, "s")?.id, late);
-    assert.equal(store.sessionChat("s")?.thread.id, late);
+    assert.equal(original(store, "s"), late);
   } finally { store.close(); }
 });
 
@@ -103,15 +113,15 @@ test("the two orders keep SQLite's tie breaking and old non-integer times", () =
     });
     prepare(store, "s");
     assert.equal(indexedSessionChat(db, "s")?.id, ids[3]);
-    assert.equal(indexedSessionChat(db, "s")?.id, store.sessionChat("s")?.thread.id);
+    assert.equal(indexedSessionChat(db, "s")?.id, original(store, "s"));
     db.prepare("UPDATE entries SET at=? WHERE thread=? AND n=1").run("old-text-time", ids[0]!);
     prepare(store, "s");
     assert.equal(indexedSessionChat(db, "s")?.id, ids[0]);
-    assert.equal(indexedSessionChat(db, "s")?.id, store.sessionChat("s")?.thread.id);
+    assert.equal(indexedSessionChat(db, "s")?.id, original(store, "s"));
     db.prepare("UPDATE entries SET at=? WHERE thread=? AND n=1").run("z-old-text-time", ids[1]!);
     prepare(store, "s");
     assert.equal(indexedSessionChat(db, "s")?.id, ids[1]);
-    assert.equal(indexedSessionChat(db, "s")?.id, store.sessionChat("s")?.thread.id);
+    assert.equal(indexedSessionChat(db, "s")?.id, original(store, "s"));
   } finally { store.close(); }
 });
 
@@ -127,11 +137,11 @@ test("empty chats sort by creation and thread id across both surfaces", () => {
     });
     prepare(store, "s");
     assert.equal(indexedSessionChat(db, "s")?.id, ids[3]);
-    assert.equal(indexedSessionChat(db, "s")?.id, store.sessionChat("s")?.thread.id);
+    assert.equal(indexedSessionChat(db, "s")?.id, original(store, "s"));
     db.prepare("DELETE FROM thread_sessions WHERE thread=? AND session='s'").run(ids[3]!);
     prepare(store, "s");
     assert.equal(indexedSessionChat(db, "s")?.id, ids[2]);
-    assert.equal(indexedSessionChat(db, "s")?.id, store.sessionChat("s")?.thread.id);
+    assert.equal(indexedSessionChat(db, "s")?.id, original(store, "s"));
   } finally { store.close(); }
 });
 
@@ -157,7 +167,7 @@ for (const recursive of [false, true]) {
         .run(rowid, other);
       prepare(store, "s");
       assert.equal(indexedSessionChat(db, "s")?.id, other);
-      assert.equal(indexedSessionChat(db, "s")?.id, store.sessionChat("s")?.thread.id);
+      assert.equal(indexedSessionChat(db, "s")?.id, original(store, "s"));
     } finally { store.close(); }
   });
 }
@@ -242,6 +252,24 @@ test("a writer between readiness and a preparation transaction is not missed", (
     assert.ok(changed);
     prepare(store, "s");
     assert.equal(indexedSessionChat(db, "s")?.id, later);
-    assert.equal(indexedSessionChat(db, "s")?.id, store.sessionChat("s")?.thread.id);
+    assert.equal(indexedSessionChat(db, "s")?.id, original(store, "s"));
   } finally { writer.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a synchronous title keeps its immediate answer while requesting preparation", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const thread = store.openThread("ember", "C", "first", null, null).id;
+    store.joinThread(thread, "s", "c");
+    const requests: string[] = [];
+    store.requestSessionChat = (session) => requests.push(session);
+    assert.equal(store.sessionChat("s")?.thread.id, thread);
+    assert.deepEqual(requests, ["s"]);
+    prepare(store, "s");
+    assert.equal(store.sessionChat("s")?.thread.id, thread);
+    assert.deepEqual(requests, ["s"]);
+    db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at) VALUES(?,1,'message','person','p',10)").run(thread);
+    assert.equal(store.sessionChat("s")?.thread.id, thread);
+    assert.deepEqual(requests, ["s", "s"]);
+  } finally { store.close(); }
 });

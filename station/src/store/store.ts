@@ -52,6 +52,7 @@ import { installPostBlocks, PostBlocksUnavailable, POST_BLOCK_SIZE, type PostPos
 import { checkWidgetSources, installWidgetSources, WIDGET_SOURCE, WIDGET_SOURCE_MISSING, WIDGET_SOURCE_ORIGINAL,
   WIDGET_SOURCE_UNUSUAL, WidgetSourcesUnavailable } from "./widget-sources.ts";
 import { indexedCcThreads, installCcIndex } from "./cc-thread-index.ts";
+import { indexedSessionChat, installSessionChatIndex, SessionChatUnavailable } from "./session-chat-index.ts";
 import { CARD_POST_BEFORE, CARD_POST_LATEST, cardPostsReady, installCardPosts } from "./card-post-index.ts";
 import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
 import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
@@ -301,6 +302,8 @@ export class Store {
   #listeners: ((change: StoreChange) => void)[] = [];
   #workspaceListeners = new Set<() => void>();
   #statements = new Map<string, StatementSync>();
+  /// Ask for the old members of a session to be prepared without delaying a synchronous notification.
+  requestSessionChat: ((session: string) => void) | null = null;
   /// How many times the decision checks or the archive policy were written in this process (decisionsVersion).
   #decisions = 0;
   /// Hand-written title changes in this process, for requests that must not overwrite a later rename.
@@ -398,6 +401,7 @@ export class Store {
       installSaidState(db);
       installWidgetSources(db);
       installCcIndex(db);
+      installSessionChatIndex(db);
       installCardPosts(db);
     } catch (e) {
       db.close();
@@ -1343,11 +1347,19 @@ export class Store {
   /// come from them (not a still.fail chat's: read/views.ts `titleOf`), its first person's words. Null when it has none.
   /// A row's lookups, not a list's: titles are asked of every chat a list of checks names.
   sessionChat(session: string): { thread: ThreadRow; firstText: string | null } | null {
-    const r = this.#one(
-      `SELECT t.* FROM thread_sessions m JOIN threads t ON t.id = m.thread WHERE m.session = ?
-       ORDER BY (SELECT e.at FROM entries e WHERE e.thread = t.id ORDER BY e.n DESC LIMIT 1) DESC, t.created_at DESC, t.id DESC LIMIT 1`,
-      session,
-    );
+    let r: Json | null;
+    try { r = indexedSessionChat(this.db, session); }
+    catch (error) {
+      if (!(error instanceof SessionChatUnavailable)) throw error;
+      this.requestSessionChat?.(session);
+      // This synchronous path also names phone-grant events: while an old session is prepared it must say the title
+      // at once, as before, rather than delay or invent it. Prepared sessions use the bounded lookup above.
+      r = this.#one(
+        `SELECT t.* FROM thread_sessions m JOIN threads t ON t.id = m.thread WHERE m.session = ?
+         ORDER BY (SELECT e.at FROM entries e WHERE e.thread = t.id ORDER BY e.n DESC LIMIT 1) DESC, t.created_at DESC, t.id DESC LIMIT 1`,
+        session,
+      ) ?? null;
+    }
     if (!r) return null;
     const thread = toThread(r);
     return { thread, firstText: thread.surface === STILLFAIL_SURFACE ? null : this.firstText(thread.id) };

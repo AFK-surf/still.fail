@@ -67,11 +67,15 @@ export function sessionChatReady(db: DatabaseSync, session: string): boolean {
   return row?.complete === 1 && ccSessionReady(db, session);
 }
 
+export class SessionChatUnavailable extends Error {
+  constructor() { super("session chat is still being prepared"); }
+}
+
 /// Read both readiness and the chosen thread in one SQLite snapshot.
 export function indexedSessionChat(db: DatabaseSync, session: string): Record<string, unknown> | null {
   db.exec("SAVEPOINT session_chat_read");
   try {
-    if (!sessionChatReady(db, session)) throw new Error("session chat is still being prepared");
+    if (!sessionChatReady(db, session)) throw new SessionChatUnavailable();
     return db.prepare(SESSION_CHAT_INDEXED).get(session) ?? null;
   } finally { db.exec("RELEASE session_chat_read"); }
 }

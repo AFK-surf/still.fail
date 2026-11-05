@@ -539,6 +539,14 @@ export const AgentsLive = (control: Control) =>
       hub.prepareSessionUpJobs = (session) => readers.prepareSessionUpJobs([session]);
       hub.prepareWidgetSources = (threads, signal) => readers.prepareWidgetSources(threads, signal);
       hub.prepareCcSessions = (sessions, signal) => readers.prepareCcSessions(sessions, signal);
+      const namesPreparing = new Set<string>();
+      store.requestSessionChat = (session) => {
+        if (namesPreparing.has(session)) return;
+        namesPreparing.add(session);
+        void readers.prepareSessionChatNames([session]).catch((error: unknown) => {
+          log.warn("store", "a session's chat name could not be prepared", { session, error: String(error) });
+        }).finally(() => namesPreparing.delete(session));
+      };
       hub.followRunning();
       // The readers say what runs, and which chats clients made: the hub's.
       readers.processes = () => hub.processes();
