@@ -31,6 +31,9 @@ test("the pending index resumes in bounded batches and follows requests changed 
     ]);
     const bodies = db.prepare(PENDING_BODIES).all("w") as { body: string }[];
     assert.deepEqual(bodies.map((row) => JSON.parse(row.body).id), ["r1", "r2", "r4", "r5"]);
+    const plan = (db.prepare(`EXPLAIN QUERY PLAN ${PENDING_BODIES}`).all("w") as { detail: string }[]).map((row) => row.detail).join("\n");
+    assert.match(plan, /SEARCH p USING PRIMARY KEY/);
+    assert.match(plan, /SEARCH r USING INDEX/);
     db.prepare("DELETE FROM vault_requests WHERE ws='w' AND id='r2'").run();
     assert.deepEqual(rows().map((row) => row.id), ["r1", "r4", "r5"]);
   } finally { db.close(); }
@@ -45,6 +48,10 @@ test("changing only a waiting request's box does not write its lookup again", ()
     const before = count();
     db.prepare("UPDATE vault_requests SET body=json_set(body,'$.box','new') WHERE ws='w' AND id='r'").run();
     assert.equal(count() - before, 1);
+    put("old", "denied");
+    const afterInsert = count();
+    db.prepare("UPDATE vault_requests SET body=json_set(body,'$.box','new') WHERE ws='w' AND id='old'").run();
+    assert.equal(count() - afterInsert, 1);
   } finally { db.close(); }
 });
 

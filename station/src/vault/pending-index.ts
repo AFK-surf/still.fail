@@ -34,11 +34,12 @@ CREATE TABLE IF NOT EXISTS vault_pending_backfill (
 CREATE TRIGGER IF NOT EXISTS vault_pending_add AFTER INSERT ON vault_requests WHEN NEW.status = 'pending' BEGIN
   INSERT OR REPLACE INTO vault_pending_lookup VALUES (${values("NEW")});
 END;
-CREATE TRIGGER IF NOT EXISTS vault_pending_change AFTER UPDATE ON vault_requests WHEN ${changed} BEGIN
+CREATE TRIGGER IF NOT EXISTS vault_pending_change AFTER UPDATE ON vault_requests
+  WHEN (OLD.status = 'pending' OR NEW.status = 'pending') AND (${changed}) BEGIN
   DELETE FROM vault_pending_lookup WHERE ws = OLD.ws AND id = OLD.id;
   INSERT OR REPLACE INTO vault_pending_lookup SELECT ${values("NEW")} WHERE NEW.status = 'pending';
 END;
-CREATE TRIGGER IF NOT EXISTS vault_pending_drop AFTER DELETE ON vault_requests BEGIN
+CREATE TRIGGER IF NOT EXISTS vault_pending_drop AFTER DELETE ON vault_requests WHEN OLD.status = 'pending' BEGIN
   DELETE FROM vault_pending_lookup WHERE ws = OLD.ws AND id = OLD.id;
 END;
 `;
@@ -48,7 +49,15 @@ export const PENDING_BODIES = `SELECT r.body FROM vault_pending_lookup p
 export const PENDING_BACKFILL_AFTER = "SELECT id FROM vault_requests WHERE ws = ? AND id > ? ORDER BY id LIMIT ?";
 
 export function initializePendingIndex(db: DatabaseSync): void {
-  db.exec(SCHEMA);
+  db.exec("SAVEPOINT vault_pending_schema");
+  try {
+    db.exec(SCHEMA);
+    db.exec("RELEASE vault_pending_schema");
+  } catch (error) {
+    db.exec("ROLLBACK TO vault_pending_schema");
+    db.exec("RELEASE vault_pending_schema");
+    throw error;
+  }
 }
 
 export function pendingIndexComplete(db: DatabaseSync, ws: string): boolean {
