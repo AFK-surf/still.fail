@@ -460,7 +460,6 @@
   "core-logic.history.task.command.other": "Background command {status}: {name}",
   "core-logic.jobs.ago": "{span} ago",
   "core-logic.jobs.ago.now": "just now",
-  "core-logic.jobs.ago.yesterday": "yesterday",
   "core-logic.jobs.all": "All {n}",
   "core-logic.jobs.exit_code": "Exit code {code}",
   "core-logic.jobs.list_sep": ", ",

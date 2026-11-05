@@ -28,7 +28,6 @@
     "one": "1 sec ago",
     "other": "{n} sec ago"
   },
-  "web-main.ago.yesterday": "Yesterday",
   "web-main.annotate.cancel": "Cancel",
   "web-main.annotate.chatLocked": "Can't send to this chat now",
   "web-main.annotate.color": "Color",
