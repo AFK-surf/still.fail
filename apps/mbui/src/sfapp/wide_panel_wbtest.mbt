@@ -171,9 +171,18 @@ test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: 
     Some(at) => at
     None => fail("no 长篇小说.txt in the tab")
   }
-  t.drag(x, y, 400.0, 400.0)
-  t.frame()
-  t.frame()
+  // (into it as it is let go, at that moment: no frame first)
+  t.touch(0, x, y)
+  for i in 1..=10 {
+    let k = i.to_double() / 10.0
+    t.touch(1, x + (400.0 - x) * k, y + (400.0 - y) * k)
+    t.frame_at(t.next_frame_time())
+  }
+  t.touch(2, 400.0, 400.0)
+  let refs = @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.get() }).unwrap_or([])
+  assert_eq(refs.length(), 2)
+  // (and once only, the frames after it taking nothing more)
+  t.run_for(@ui.move_most_ms)
   let refs = @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.get() }).unwrap_or([])
   assert_eq(refs.length(), 2)
   assert_eq(text(field(refs.get(1), "ref"), "path"), fix_docs + "/长篇小说.txt")

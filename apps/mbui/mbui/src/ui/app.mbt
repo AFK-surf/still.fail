@@ -855,6 +855,10 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
   // takes it (the tree's nodes, what they take presses by bound to it, or the old view) this one: view_host.mbt)
   view_event_said(fn() { pointing_said_by_host(by) }, fn() {
     pointer_in_now(kind, x, y, button, mods, by~)
+    // (let go: told what takes it there, at this moment: drag.mbt takes_let_go)
+    if kind == 2 && button != 2 {
+      let_go_told(x, y)
+    }
   })
 }
 

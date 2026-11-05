@@ -114,6 +114,18 @@ fn fdrag_press(c : @ui.Ctx, item : Dragged) -> Unit {
 }
 
 ///|
+/// What is carried, taken where it was let go (a chat's page, at that moment: chat_node.mbt), the drag over: nothing of
+/// it let go anywhere else after (drag_frame). None where nothing is carried.
+fn drag_taken() -> Dragged? {
+  let item = fdrag.item.get()
+  if item is Some(_) {
+    fdrag.item.set(None)
+    fdrag.press = None
+  }
+  item
+}
+
+///|
 /// Whether a row is what is being dragged.
 fn fdrag_carried(station : String, root : String, path : String) -> Bool {
   match fdrag.item.get() {

@@ -314,3 +314,57 @@ pub fn Ctx::on_back(self : Ctx, f : () -> Unit) -> Unit {
   self.back_island_next = self.island_said()
   self.back_says()
 }
+
+///|
+/// A node that takes what is let go on it (takes_let_go), and what it does with where it was let go.
+priv struct LetGoTaker {
+  view : @view.View
+  take : (Double, Double) -> Bool
+}
+
+///|
+/// The nodes that take what is let go on them, as they said so (takes_let_go).
+// kept across runs: each let go with its node
+let let_go_takers : Array[LetGoTaker] = []
+
+///|
+/// Node `v` told a button or a finger let go on what it holds (the topmost of what is under it there that it holds,
+/// Tree::under, as the window's tree is at that event's moment): `take` with where it was let go (in the window),
+/// saying whether it took it (a row carried onto a chat, put into its draft). What holds it asked after what it holds,
+/// the innermost first, till one takes it. Done no more once `v` is let go.
+pub fn takes_let_go(v : @view.View, take : (Double, Double) -> Bool) -> Unit {
+  let taker = { view: v, take }
+  let_go_takers.push(taker)
+  v.owns(fn() {
+    match let_go_takers.search_by(fn(t) { physical_equal(t, taker) }) {
+      Some(i) => let_go_takers.remove(i) |> ignore
+      None => ()
+    }
+  }) |> ignore
+}
+
+///|
+/// A button or a finger let go at (`x`, `y`), in its event (pointer_in), the window's tree brought to its moment: told
+/// to what takes it there (takes_let_go), the innermost of those holding what is drawn topmost there first.
+fn let_go_told(x : Double, y : Double) -> Unit {
+  guard !let_go_takers.is_empty() && view_app.val is Some(t) else { return }
+  let under = t.under(x, y)
+  let mut k = under.length() - 1
+  while k >= 0 {
+    let id = under[k]
+    let holding = let_go_takers.filter(fn(h) { t.holds(h.view.id(), id) })
+    if !holding.is_empty() {
+      // (the innermost first: one held by another before it)
+      holding.sort_by(fn(a, b) {
+        if t.holds(b.view.id(), a.view.id()) { -1 } else if t.holds(a.view.id(), b.view.id()) { 1 } else { 0 }
+      })
+      for h in holding {
+        if (h.take)(x, y) {
+          return
+        }
+      }
+      return
+    }
+    k = k - 1
+  }
+}
