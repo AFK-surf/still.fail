@@ -352,6 +352,8 @@ pub let mod_shift_key : Int32
 
 pub fn mods_held() -> Int32
 
+pub fn mouse_drags_lists(@view.View, () -> Bool) -> Unit
+
 pub let move_least_ms : Double
 
 pub let move_most_ms : Double

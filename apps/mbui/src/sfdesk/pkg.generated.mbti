@@ -218,6 +218,8 @@ pub fn page_goes_on() -> Bool
 
 pub fn pane_content_span() -> (Double, Double)?
 
+pub fn pane_finger() -> Bool
+
 pub fn pane_fold_at(Double) -> (Double, Double)?
 
 pub fn pane_fold_from() -> (Double, Double)?

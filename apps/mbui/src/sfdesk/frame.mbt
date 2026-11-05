@@ -609,7 +609,7 @@ let dock_side : @ui.Style = @ui.css("h=Full")
 ///|
 /// Whether a finger has the pointer now (the frame's panes: a finger drags their lists and holds to pick words, a mouse
 /// scrolls them by the wheel and drags to pick).
-fn pane_finger() -> Bool {
+pub fn pane_finger() -> Bool {
   @ui.pointing() is Finger
 }
 

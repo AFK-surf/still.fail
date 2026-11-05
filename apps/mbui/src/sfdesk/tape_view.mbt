@@ -1326,7 +1326,6 @@ fn tape_panel_edge(n : @view.View, holder : @view.View, tips : @sf.TipLayer, on 
 /// own bars, what the page's bars and the sidebar's parts work out from (as open, apart: on the tape nothing of them
 /// moves), the chat landed on, the window's buttons' row, the web services' pages let go.
 pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]) -> Unit {
-  c.mouse_drags_lists(pane_finger())
   window_upright.set({
     let (ww, wh) = c.window_size()
     ww <= wh
