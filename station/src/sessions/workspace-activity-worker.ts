@@ -6,16 +6,21 @@ import { giveBackfill, takeBackfill } from "../store/backfill.ts";
 import { workspaceActivityStep } from "../store/workspace-activity.ts";
 import { recoverWaitsStep } from "../store/recover-waits.ts";
 import { awakeWaitsStep } from "../store/awake-waits.ts";
+import { disableSandboxIndex, enableSandboxIndex, sandboxIndexStep } from "../store/sandbox-index.ts";
 
 const db = new DatabaseSync(workerData.path as string);
 const priority = new Int32Array(workerData.priority as SharedArrayBuffer);
 db.exec("PRAGMA busy_timeout = 250; PRAGMA synchronous = NORMAL");
 
-parentPort!.on("message", async (message: { kind?: "activity" | "recovery" | "awake" }) => {
+parentPort!.on("message", async (message: { kind?: "activity" | "recovery" | "awake" | "sandbox" | "sandbox-off" }) => {
   const kind = message.kind ?? "activity";
   let result: { done: boolean; error?: string } = { done: false };
   if (takeBackfill(priority, threadId)) {
-    try { result = kind === "recovery" ? recoverWaitsStep(db) : kind === "awake" ? awakeWaitsStep(db) : workspaceActivityStep(db); }
+    try {
+      if (kind === "sandbox") { enableSandboxIndex(db); result = sandboxIndexStep(db); }
+      else if (kind === "sandbox-off") { disableSandboxIndex(db); result = { done: true }; }
+      else result = kind === "recovery" ? recoverWaitsStep(db) : kind === "awake" ? awakeWaitsStep(db) : workspaceActivityStep(db);
+    }
     catch (error) {
       const code = (error as { errcode?: number }).errcode;
       if (code === undefined || ![5, 6].includes(code & 255)) result = { done: false, error: (error as Error).message };

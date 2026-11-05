@@ -214,6 +214,7 @@ export const AgentsLive = (control: Control) =>
       const hub = new Hub({
         config: settings,
         store,
+        previous,
         // The connects' chats (Slack's: slack/module.ts, which says them below); the station's own chat is the hub's.
         chats: (id) => {
           for (const chats of surfaceChats) {
