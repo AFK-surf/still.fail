@@ -4,7 +4,7 @@
 ///|
 /// Whether times say when (pressed, every one in the app says the other: the web's ui.tsx useAbsoluteTime), not how
 /// long ago.
-pub let absolute_times : Ref[Bool] = { val: false }
+pub let absolute_times : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
 
 ///|
 /// How much of `accent` a reference's `@` has.

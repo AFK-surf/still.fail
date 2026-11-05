@@ -165,6 +165,17 @@ pub fn sent_local(
 ///|
 /// What was sent from chat `rk` (key: sent_local's) did not go: it leaves the list.
 pub fn sent_local_gone(rk : String, key : String) -> Unit {
+  // Rejected by the core: there is no destination for this send. Its source belongs to the restored draft again,
+  // not to a flying copy waiting at the old field's position. A later send has its own row and is left alone.
+  match send_flight.get() {
+    Some(f) if f.turns == rk && f.key == key => {
+      send_flight.set(None)
+      (f.hold)(0.0)
+      let c = @ui.current()
+      turns_of(rk).over(c, Send, c.moment())
+    }
+    _ => ()
+  }
   let sending = sending_of(rk)
   match sending.search_by(fn(l) { "o:" + l.row.id == key }) {
     Some(i) => sending.remove(i) |> ignore

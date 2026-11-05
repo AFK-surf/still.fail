@@ -6,6 +6,43 @@
 let picked_runs : Array[Run] = [plain("hello "), bold("wide"), plain(" world")]
 
 ///|
+test "a word picked by a still finger stays that word when its paragraph moves; sliding the finger then extends it" {
+  for retained in [false, true] {
+    let shifted = @signals.signal(0.0)
+    let t = Tester::new(fn(_) { }, w=400.0, h=300.0, platform=2)
+    set_view_app(fn(root) {
+      if retained {
+        root.box(fn(p) {
+          words_picked(p)
+          p.offset(By(fn() { (0.0, 40.0 + shifted.get()) }))
+          .width(Is(Some(300.0)))
+          .words_runs(Is(picked_runs), look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false }) |> ignore
+        }) |> ignore
+      } else {
+        old(root, fn(c) {
+          c.box(top=40.0 + shifted.get(), w=Px(300.0), fn() {
+            c.selectable(fn() { c.rich(picked_runs, size=15.0, line=22.0) |> ignore })
+          }) |> ignore
+        }).grow(Is(1.0)) |> ignore
+      }
+    })
+    t.draw()
+    t.press_at(60.0, 51.0)
+    t.run_for(long_press_ms)
+    assert_eq(t.ctx().selected_text(), "wide")
+    shifted.set(80.0)
+    t.draw()
+    t.move(60.0, 51.0)
+    t.draw()
+    assert_eq(t.ctx().selected_text(), "wide", msg="the paragraph moved, retained=\{retained}")
+    t.move(200.0, 131.0)
+    t.draw()
+    assert_eq(t.ctx().selected_text(), "wide world", msg="the finger moved, retained=\{retained}")
+    t.release(200.0, 131.0)
+  }
+}
+
+///|
 /// A node of picked_runs 300 wide 40 down (its line in its middle where `centered`), in a page whose words are picked
 /// where `picks` (words_picked), on `platform`.
 fn tree_picked_tester(picks : Bool, platform? : Int = 0, centered? : Bool = false) -> Tester {

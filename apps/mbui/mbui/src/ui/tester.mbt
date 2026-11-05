@@ -33,6 +33,21 @@ pub struct Tester {
 pub let frame_period_default : Double = 1000.0 / 60.0
 
 ///|
+/// Whether the Tester's frames are drawn as a host draws them, none of its checks run on them (Tester::measure_as_host).
+// kept across runs: put back as a run begins (reset_globals)
+let measured_as_host : Ref[Bool] = Ref(false)
+
+///|
+/// From now on its frames drawn as a host draws them, for a bench to measure (src/scenebench): none of the Tester's checks
+/// run on them (the looks drawn whole and compared, words over words, rows steady, what is seen whole, the corners), no
+/// instance's owner kept for them.
+pub fn Tester::measure_as_host(self : Tester) -> Unit {
+  self.check_looks(false)
+  measured_as_host.val = true
+  inst_owners.track = false
+}
+
+///|
 /// The run before let go of, before the next one's inputs are said: the window's tree disposed (what it made, what its
 /// bindings followed, what was due on its timeline), what is made once forgotten. Said where a run is begun before
 /// its Tester is made (what the app is given before it, its made-up core opening a page, then reaches no tree of the
@@ -84,6 +99,7 @@ fn reset_globals() -> Unit {
   text_runs.on = false
   inst_owners.on = false
   inst_owners.track = false
+  measured_as_host.val = false
   inst_owners_clear()
   text_runs.runs.clear()
   desk_reset()
@@ -113,6 +129,8 @@ fn reset_globals() -> Unit {
   messages_reset()
   drop_reset()
   fake_op.val = None
+  fake_op_seen.val = (false, false)
+  fake_op_told.set(0)
   fake_op_runs.clear()
   fake_op_pending.val = false
   fake_autofill.val = false
@@ -746,6 +764,7 @@ pub fn Tester::frame_at(self : Tester, at : Double) -> Unit {
 /// there, nothing later: no step or end taken past it), what is drawn sampled at `shown` (a moment later, as a host's
 /// frame is drawn for its vsync). The next events may come at any moment from `now`.
 pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Unit {
+  fake_op_look()
   let at = now
   self.fake.time = at
   // decodes started last frame are done, the views opened are ready: the host's events for them (unless the test
@@ -771,10 +790,12 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   }
   on_frame(self.w, self.h, self.fake.scale, if shown > at { shown } else { at })
   self.frames = self.frames + 1
-  self.hold_words_over()
-  self.hold_rows_steady()
-  self.hold_seen_whole_now()
-  self.hold_corners()
+  if !measured_as_host.val {
+    self.hold_words_over()
+    self.hold_rows_steady()
+    self.hold_seen_whole_now()
+    self.hold_corners()
+  }
   match self.each {
     Some(f) => f()
     None => ()
@@ -905,14 +926,15 @@ pub fn Tester::find(self : Tester, s : String) -> (Double, Double)? {
       return Some((n.x + n.fw / 2.0, n.y + n.fh / 2.0))
     }
   }
-  // (or the words of a node of the window's tree, where it is drawn: as it is made, however faded this frame, as an
+  // (or the words of a node of the window's tree, where it takes input: as it is made, however faded this frame, as an
   // old view's text is found; none once let go of. What is seen is the glyphs' to say: Tester::glyphs_seen)
   match view_tree() {
     Some(tree) =>
       for d in tree.drawn() {
         // (none of a page's bones: View::bones)
         if d.bones == 0L && view_words_found(d).contains(s) {
-          return Some((d.x + d.w / 2.0, d.y + d.h / 2.0))
+          let (x, y, w, h) = tree.view_of(d.id).unwrap().rect()
+          return Some((x + w / 2.0, y + h / 2.0))
         }
       }
     None => ()
@@ -945,9 +967,47 @@ pub fn Tester::find_last(self : Tester, s : String) -> (Double, Double)? {
       k = c.nodes[k].next
     }
   }
-  for i in 0..<c.count {
-    if c.nodes[i].parent < 0 {
-      walk(i, false)
+  match view_tree() {
+    Some(tree) => {
+      // (the hosted old views where the tree paints them, with the old root's layers between the tree's layers:
+      // Ctx::view_paint. Visiting all old views first would make an earlier retained message win over a later island)
+      let painted : Map[Int, Bool] = Map([])
+      let layers_under = fn(stack : Int) {
+        if c.count == 0 { return }
+        let mut ch = c.nodes[0].first
+        while ch >= 0 {
+          let n = c.nodes[ch]
+          if (n.layer || n.portal) && !painted.contains(ch) &&
+            !old_boxes.values().any(fn(i) { i == ch }) && c.old_layer_stack(0, ch) < stack {
+            painted[ch] = true
+            walk(ch, false)
+          }
+          ch = n.next
+        }
+      }
+      for d in tree.drawn() {
+        let stack = tree.stack_of(d.id)
+        if stack >= 0 && tree.root_holds(d.id) { layers_under(stack) }
+        if d.hosted {
+          if old_whole.val && c.count > 0 {
+            let mut ch = c.nodes[0].first
+            while ch >= 0 {
+              let n = c.nodes[ch]
+              if !n.layer && !n.portal { walk(ch, false) }
+              ch = n.next
+            }
+          } else if old_boxes.get(d.id) is Some(i) {
+            walk(i, false)
+          }
+        } else if d.bones == 0L && view_words_found(d).contains(s) {
+          let (x, y, w, h) = tree.view_of(d.id).unwrap().rect()
+          found.val = Some((x + w / 2.0, y + h / 2.0))
+        }
+      }
+      layers_under(2147483647)
+    }
+    None => for i in 0..<c.count {
+      if c.nodes[i].parent < 0 { walk(i, false) }
     }
   }
   // (one over everything may hold another: painted after it)
@@ -955,14 +1015,6 @@ pub fn Tester::find_last(self : Tester, s : String) -> (Double, Double)? {
   while j < over.length() {
     walk(over[j], true)
     j += 1
-  }
-  match view_tree() {
-    Some(tree) => for d in tree.drawn() {
-      if d.bones == 0L && view_words_found(d).contains(s) {
-        found.val = Some((d.x + d.w / 2.0, d.y + d.h / 2.0))
-      }
-    }
-    None => ()
   }
   found.val
 }
@@ -1328,12 +1380,12 @@ pub fn Tester::rect_of(self : Tester, s : String) -> (Double, Double, Double, Do
       return Some((n.x, n.y, n.fw, n.fh))
     }
   }
-  // (or the words of a node of the window's tree, where it is drawn, as Tester::find finds them)
+  // (or the words of a node of the window's tree, where it takes input, as Tester::find finds them)
   match view_tree() {
     Some(tree) =>
       for d in tree.drawn() {
-        if d.bones == 0L && view_words_found(d).contains(s) && d.alpha > 0.0 {
-          return Some((d.x, d.y, d.w, d.h))
+        if d.bones == 0L && view_words_found(d).contains(s) {
+          return Some(tree.view_of(d.id).unwrap().rect())
         }
       }
     None => ()
@@ -1344,6 +1396,21 @@ pub fn Tester::rect_of(self : Tester, s : String) -> (Double, Double, Double, Do
 ///|
 /// Visible list rows: (item, y, height), top to bottom.
 pub fn Tester::rows(self : Tester) -> Array[(Int, Double, Double)] {
+  match view_tree() {
+    Some(tree) if tree.list_rows() is Some((first, last)) => {
+      let rows = []
+      if first >= 0 {
+        for i in first..=last {
+          match tree.list_row(i) {
+            Some((_, y, _, h)) => rows.push((i, y, h))
+            None => ()
+          }
+        }
+      }
+      return rows
+    }
+    _ => ()
+  }
   let c = g()
   let out = []
   for i in 0..<c.count {
@@ -1356,15 +1423,45 @@ pub fn Tester::rows(self : Tester) -> Array[(Int, Double, Double)] {
       }
     }
   }
+  if out.is_empty() {
+    match view_tree() {
+      Some(tree) => {
+        let (first, last) = tree.list_rows().unwrap_or((-1, -1))
+        if first >= 0 {
+          for i in first..=last {
+            match tree.list_row(i) {
+              Some((_, y, _, h)) => out.push((i, y, h))
+              None => ()
+            }
+          }
+        }
+      }
+      None => ()
+    }
+  }
   out
 }
 
 ///|
-/// The lines of the first text node whose text contains `s`, as laid out.
-pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
+/// The lines of the first text node whose text contains `s`, as laid out. `visible` leaves out transparent nodes,
+/// such as a flight's landing while its words are still carried above the list.
+pub fn Tester::lines_of(self : Tester, s : String, visible? : Bool = false) -> Array[String] {
   let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
+    if visible {
+      let mut alpha = 1.0
+      let mut p = i
+      while p >= 0 {
+        alpha = alpha * c.nodes[p].opacity
+        match c.drawn_entry(p) {
+          Some(e) => alpha = alpha * e.look_now().alpha
+          None => ()
+        }
+        p = c.nodes[p].parent
+      }
+      if alpha <= 0.0 { continue }
+    }
     if n.bones == 0L && n.kind == kind_text && n.text.contains(s) {
       match n.tl {
         Some(tl) =>
@@ -1386,7 +1483,28 @@ pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
       }
     }
   }
-  []
+  let found : Ref[Array[String]?] = Ref(None)
+  match view_tree() {
+    Some(tree) => tree.each_drawn(fn(d, _, _, alpha) {
+      if found.val is None && (!visible || alpha > 0.0) && d.bones == 0L && !tree.leaving(d.id) && d.words.contains(s) {
+        if !d.runs.is_empty() {
+          let (_, lay, _) = view_runs_laid(d.runs, d.words_look, d.runs_look, d.w)
+          found.val = Some(Array::makei(lay.line_count(), fn(l) {
+            let (a, b) = lay.line_range(l)
+            lay.text.unsafe_substring(start=a, end=b)
+          }))
+        } else {
+          let lay = view_plain_laid(d.words_drawn.unwrap_or(d.words), d.words_look, d.w)
+          found.val = Some(Array::makei(lay.line_start.length(), fn(l) {
+            let (a, b) = lay.line_range(l)
+            lay.text.unsafe_substring(start=a, end=b)
+          }))
+        }
+      }
+    })
+    None => ()
+  }
+  found.val.unwrap_or([])
 }
 
 ///|
@@ -1424,6 +1542,13 @@ pub fn Tester::ctx(self : Tester) -> Ctx {
 /// Scrolls the (first) list so that row `item` starts at its top, from the
 /// next frame on.
 pub fn Tester::scroll_to(self : Tester, item : Int) -> Unit {
+  // (an old view's list where one is on screen; else the window's tree's, Tree::list_to_row)
+  if !self.old_list_shown() {
+    match view_tree() {
+      Some(tree) if tree.list_to_row(item) => return
+      _ => ()
+    }
+  }
   self.list_state().scroll_to(item)
 }
 
@@ -1435,19 +1560,62 @@ pub fn Tester::scroll_to_end(self : Tester) -> Unit {
 ///|
 /// The first and last rows of the list in view (-1, -1 when none).
 pub fn Tester::visible(self : Tester) -> (Int, Int) {
+  // (an old view's list where one is on screen; else the window's tree's, Tree::list_rows)
+  if !self.old_list_shown() {
+    match view_tree().bind(fn(tree) { tree.list_rows() }) {
+      Some(r) => return r
+      None => ()
+    }
+  }
   let st = self.list_state()
   (st.vis_first, st.vis_last)
 }
 
 ///|
+/// Whether an old view's list is on screen.
+fn Tester::old_list_shown(self : Tester) -> Bool {
+  ignore(self)
+  // A retained page list is the page being driven. An old sidebar or an island's list can coexist with it.
+  if view_tree().bind(fn(tree) { tree.list_rows() }) is Some(_) { return false }
+  let c = g()
+  for i in 0..<c.count {
+    if c.nodes[i].kind == kind_list && c.lists.get(c.nodes[i].id) is Some(_) {
+      return true
+    }
+  }
+  false
+}
+
+///|
 pub fn Tester::at_end(self : Tester) -> Bool {
-  self.list_state().at_end
+  if !self.old_list_shown() {
+    match view_tree().bind(fn(tree) { tree.list_at_end() }) {
+      Some(at) => return at
+      None => ()
+    }
+  }
+  // (an old view's list where one is on screen; else the window's tree's, Tree::list_at_end)
+  let c = g()
+  for i in 0..<c.count {
+    if c.nodes[i].kind == kind_list && c.lists.get(c.nodes[i].id) is Some(st) {
+      return st.at_end
+    }
+  }
+  match view_tree() {
+    Some(tree) => tree.list_at_end().unwrap_or_else(fn() { self.list_state().at_end })
+    None => self.list_state().at_end
+  }
 }
 
 ///|
 /// Where row `item` of the list is (x, y, w, h), if built.
 pub fn Tester::row(self : Tester, item : Int) -> (Double, Double, Double, Double)? {
-  ignore(self)
+  if !self.old_list_shown() {
+    match view_tree() {
+      Some(tree) if tree.list_rows() is Some(_) => return tree.list_row(item)
+      _ => ()
+    }
+  }
   let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
@@ -1462,7 +1630,7 @@ pub fn Tester::row(self : Tester, item : Int) -> (Double, Double, Double, Double
       }
     }
   }
-  None
+  view_tree().bind(fn(tree) { tree.list_row(item) })
 }
 
 ///|
@@ -1611,6 +1779,12 @@ pub fn Tester::time(self : Tester) -> Double {
 /// The (first) list's scroll position: how far its top is from its first
 /// row's.
 pub fn Tester::list_offset(self : Tester) -> Double {
+  if !self.old_list_shown() {
+    match view_tree().bind(fn(tree) { tree.list_offset() }) {
+      Some(o) => return o
+      None => ()
+    }
+  }
   self.list_state().offset()
 }
 
@@ -1624,9 +1798,20 @@ pub fn Tester::list_overscroll(self : Tester) -> Double {
 
 ///|
 /// Whether the (first) list moves on its own (a fling, an overscroll going
-/// back).
+/// back): an old view's, else the window's tree's.
 pub fn Tester::list_moving(self : Tester) -> Bool {
-  self.list_state().moving()
+  // (an old view's list where one is on screen; else the window's tree's, Tree::lists_moving)
+  let c = g()
+  let mut old = false
+  for i in 0..<c.count {
+    if c.nodes[i].kind == kind_list && c.lists.get(c.nodes[i].id) is Some(_) {
+      old = true
+    }
+  }
+  match view_tree() {
+    Some(tree) if !old && tree.has_list() => tree.lists_moving()
+    _ => self.list_state().moving()
+  }
 }
 
 ///|
@@ -1877,12 +2062,14 @@ pub fn Tester::drawn_shadows(self : Tester) -> Array[(Double, Double, Double, Do
 }
 
 ///|
-/// The glyphs drawn in the last frame: (x, y, colour).
-pub fn Tester::drawn_glyphs(self : Tester) -> Array[(Double, Double, Int64)] {
+/// The glyphs drawn in the last frame: (x, y, colour). With `node`, only that retained node's own glyphs, even when
+/// another node draws in the same place and colour (a field's hidden hint under words flying over it).
+pub fn Tester::drawn_glyphs(self : Tester, node? : @view.NodeId) -> Array[(Double, Double, Int64)] {
   ignore(self)
   let c = g()
   let out = []
   for k in 0..<c.ninst {
+    if node is Some(id) && inst_tree_owner(k) != Some(id) { continue }
     let b = k * inst_size
     if c.inst[b + 5] == 1.0 {
       let ch = fn(v : Double) { (v * 255.0).round().to_int64() }
@@ -1993,7 +2180,8 @@ pub fn Tester::rich_of(self : Tester, s : String) -> (RichLayout, Double, Double
 /// (x, y, w, h). An old view's paragraph, else a node of the window's tree's words in pieces (View::words_runs: laid
 /// out as it draws them, view_runs_laid; as big as it is drawn), the first that holds them.
 pub fn Tester::run_rects(self : Tester, s : String) -> Array[(Double, Double, Double, Double)] {
-  match self.rich_of(s) {
+  // (an old view's paragraph's, where one draws them; else, or where it lays none of them out, the tree's)
+  let old = match self.rich_of(s) {
     Some((rl, x, y)) =>
       match rl.text.find(s) {
         Some(a) =>
@@ -2002,8 +2190,43 @@ pub fn Tester::run_rects(self : Tester, s : String) -> Array[(Double, Double, Do
           .map(fn(r) { (r.0 + x, r.1 + y, r.2, r.3) })
         None => []
       }
-    None => tree_run_rects(s)
+    None => []
   }
+  if old.length() > 0 {
+    old
+  } else {
+    tree_run_rects(s)
+  }
+}
+
+///|
+/// The pieces of the first node of the window's tree drawn whose words in pieces hold `s`, as it says them now.
+pub fn Tester::tree_runs_of(self : Tester, s : String) -> Array[@text.Run]? {
+  ignore(self)
+  guard view_app.val is Some(tree) else { return None }
+  tree.laid_as_now()
+  let mut out : Array[@text.Run]? = None
+  tree.each_drawn_scaled(fn(c, _, _, a, _) {
+    if out is None && !c.runs.is_empty() && a > 0.0 && c.words.contains(s) {
+      out = Some(c.runs)
+    }
+  })
+  out
+}
+
+///|
+/// How big across and down and how clear the first node of the window's tree drawn whose words hold `what` is drawn
+/// (Tester::look_of's, of the tree's).
+fn tree_look_of(what : String) -> (Double, Double, Double)? {
+  guard view_app.val is Some(tree) else { return None }
+  tree.laid_as_now()
+  let mut out : (Double, Double, Double)? = None
+  tree.each_drawn_scaled(fn(c, _, _, a, sc) {
+    if out is None && c.words.contains(what) {
+      out = Some((sc, sc, a))
+    }
+  })
+  out
 }
 
 ///|
@@ -2255,11 +2478,11 @@ pub fn Tester::drawn_of(self : Tester, s : String) -> (Double, Double)? {
       return Some(c.drawn_at(i))
     }
   }
-  // (or the words of a node of the window's tree, where it is drawn, as Tester::rect_of finds them)
+  // (or the window's tree's node whose words have it, where it is drawn, as Tester::words finds it)
   match view_tree() {
     Some(tree) =>
       for d in tree.drawn() {
-        if d.bones == 0L && view_words_set(d.words, d.words_look).contains(s) && d.alpha > 0.0 {
+        if d.bones == 0L && view_words_found(d).contains(s) {
           return Some((d.x, d.y))
         }
       }
@@ -2298,33 +2521,19 @@ pub fn Tester::shown_of(self : Tester, s : String) -> (Double, Double, Double, D
       return Some((x0, y0, dmax(x1 - x0, 0.0), dmax(y1 - y0, 0.0)))
     }
   }
-  // (or the words of a node of the window's tree, as much of them as is drawn: cut by what holds them that cuts what
-  // it holds (View::clips), as drawn)
+  // (or the window's tree's node whose words have it, cut by what holds it that clips: Tree::seen_bounds)
   match view_tree() {
-    Some(tree) => {
-      let drawn = tree.drawn_held()
-      for e in drawn {
-        let (d, holder, _) = e
-        if d.bones == 0L && view_words_set(d.words, d.words_look).contains(s) && d.alpha > 0.0 {
-          let mut x0 = d.x
-          let mut y0 = d.y
-          let mut x1 = d.x + d.w
-          let mut y1 = d.y + d.h
-          let mut h = holder
-          while h >= 0 {
-            let (a, up, _) = drawn[h]
-            if a.clips {
-              x0 = dmax(x0, a.x)
-              y0 = dmax(y0, a.y)
-              x1 = dmin(x1, a.x + a.w)
-              y1 = dmin(y1, a.y + a.h)
-            }
-            h = up
-          }
+    Some(tree) =>
+      for d in tree.drawn() {
+        if d.bones == 0L && view_words_found(d).contains(s) {
+          let (bx0, by0, bx1, by1) = tree.seen_bounds(d.id, drawing=true)
+          let x0 = dmax(d.x, bx0)
+          let y0 = dmax(d.y, by0)
+          let x1 = dmin(d.x + d.w, bx1)
+          let y1 = dmin(d.y + d.h, by1)
           return Some((x0, y0, dmax(x1 - x0, 0.0), dmax(y1 - y0, 0.0)))
         }
       }
-    }
     None => ()
   }
   None
@@ -2339,7 +2548,8 @@ pub fn Tester::shown_of(self : Tester, s : String) -> (Double, Double, Double, D
 pub fn Tester::look_of(self : Tester, what : String) -> (Double, Double, Double)? {
   let c = g()
   let found = self.node_named(what)
-  guard found >= 0 else { return None }
+  // (of the window's tree's words, where they are none of an old view's: as big and as clear as they are drawn)
+  guard found >= 0 else { return tree_look_of(what) }
   let k = c.nodes[found].kind
   let words = k == kind_text || k == kind_rich || k == kind_editor
   let mut sx = 1.0
@@ -2591,6 +2801,30 @@ pub fn Tester::drags_window_at(self : Tester, x : Double, y : Double) -> Bool {
 /// Tab (Shift+Tab when `back`): the focus to the next stop (focus.mbt).
 pub fn Tester::tab(self : Tester, back? : Bool = false) -> Unit {
   self.key(key_tab, mods=if back { mod_shift_key } else { 0 })
+}
+
+///|
+/// What a press at (x, y) targets, as named in the semantics tree, with the same press reach and layer order as input.
+/// None for a target that says no semantics. A control's press room may extend beyond the box it draws.
+pub fn Tester::press_target_at(self : Tester, x : Double, y : Double) -> SemNode? {
+  let c = self.ctx()
+  let old = fn() { hit_in(c.hit_ids, c.hit_rects, x, y) }
+  let id = match view_tree() {
+    None => old()
+    Some(tree) => {
+      old_hits_place(c, Some(tree))
+      if old_root_hit(c, x, y) {
+        old()
+      } else {
+        match tree.target_at(x, y) {
+          Pressed(id) | Dragged(id) | TopRow(id) => tree_said_id(id)
+          Hosted(_) => old()
+          Nothing => if old_whole.val && island_allows(old_whole_island()) { old() } else { 0 }
+        }
+      }
+    }
+  }
+  if id == 0 { None } else { self.semantics().iter().find_first(fn(s) { !s.hidden && s.id == id }) }
 }
 
 ///|

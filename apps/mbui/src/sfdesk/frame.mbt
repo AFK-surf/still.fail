@@ -60,12 +60,6 @@ pub(all) struct Wide {
   mut list_band : Double
   mut band : Double
   mut mark : Double
-  /// the page's bars' padding at its left (clear of the closed bar) and their margins while the folded sidebar is shown
-  /// a while: from its edge (the sidebar less 8 less how far the page moved) to the window's (how far it moved); where
-  /// the block's move has got to, as the page beside them
-  mut bar_pl : Double
-  mut bar_ml : Double
-  mut bar_mr : Double
   /// where the page starts (the column the block takes, where its move has got)
   mut page_from : Double
   /// the chat last opened here by the frame (the core's last chat taken once per workspace)
@@ -134,9 +128,6 @@ pub let wide : Wide = {
   list_band: 0.0,
   band: 0.0,
   mark: 0.0,
-  bar_pl: 0.0,
-  bar_ml: 0.0,
-  bar_mr: 0.0,
   page_from: 0.0,
   landed: @signals.signal("", same=fn(a, b) { a == b }),
   rail_menu: @signals.signal(None, same=fn(a, b) { a == b }),
@@ -203,9 +194,7 @@ fn wide_reset() -> Unit {
   wide.band = 0.0
   list_room_told()
   wide.mark = 0.0
-  wide.bar_pl = 0.0
-  wide.bar_ml = 0.0
-  wide.bar_mr = 0.0
+  bar_room_now.set((0.0, 0.0, 0.0))
   wide.page_from = 0.0
   wide.landed.set("")
   wide.rail_menu.set(None)
@@ -946,8 +935,15 @@ let frame_gate : @ui.Style = @ui.css("bg=Bg")
 /// aside taken back): where the block's move has got to (side_moves' page-bar), so a bar built of them moves with the
 /// page it is on, its words not jumping ahead of it.
 pub fn page_bar_room() -> (Double, Double, Double, Double) {
-  (wide.bar_pl, if wide.tape { @sf.tape_bar_end(bar_in) } else { @sf.window_end_in(bar_in) }, wide.bar_ml, wide.bar_mr)
+  let (pl, ml, mr) = bar_room_now.get()
+  (pl, if wide.tape { @sf.tape_bar_end(bar_in) } else { @sf.window_end_in(bar_in) }, ml, mr)
 }
+
+///|
+/// The page's bars' room as the frame sets it, on the tape or on the block's way. Stored and told together, so
+/// retained bars always read the value that caused the change.
+// kept across runs: put back by wide_reset
+let bar_room_now : @signals.Signal[(Double, Double, Double)] = @signals.signal((0.0, 0.0, 0.0), same=fn(a, b) { a == b })
 
 ///|
 /// A page's bar's row (`style`: as wide as the page, its height) with its room (page_bar_room) round what `bar` builds
@@ -969,7 +965,8 @@ pub fn page_bar_row(c : @ui.Ctx, style : @ui.Style, bar : (Double, Double) -> Un
 /// At the end of a page's bar that has no padding of its own there (a new chat's): as wide as its right margin while the
 /// folded sidebar is shown a while (page_bar_room), its end by the window's; moved with the block as that is.
 pub fn page_bar_end(c : @ui.Ctx) -> Unit {
-  c.box(style=@ui.style(w=Fixed(wide.bar_mr)), fn() {  }) |> ignore
+  let (_, _, room) = bar_room_now.get()
+  c.box(style=@ui.style(w=Fixed(room)), fn() {  }) |> ignore
 }
 
 ///|
@@ -1037,13 +1034,8 @@ fn main_page(
   page : Page,
 ) -> Unit {
   match page {
-    Chat(r) => chat_page(c, src, w, r)
-    // an agent's history, asked as a page (a link's `?history=…&entry=…`): on the desktop its chat with the history
-    // open beside it at the entry asked (ChatPage.tsx's `history`), the page the chat's
-    History(r, key, entry) => {
-      c.tell("history-page/" + key, fn() { history_beside(src, r, key, entry) })
-      chat_page(c, src, w, r)
-    }
+    // (a chat, and an agent's history asked as a page: made once of the tree's, chat_node.mbt; no old view of it)
+    Chat(_) | History(_, _, _) => ()
     // the chats' list is the sidebar's: nothing open (yet), the page's ground
     Home => ()
     // the settings come to beside their list: its first row's page (settings_frame.mbt settings_landing)

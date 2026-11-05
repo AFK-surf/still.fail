@@ -53,6 +53,7 @@ pub struct Cap {
   cell_h : Double
 }
 
+#derive(Eq, Show, @debug.Debug)
 pub(all) enum Key {
   Letter(Char)
   Break
@@ -63,30 +64,34 @@ pub(all) enum Key {
   Space
   EnterKey
   Words(String)
-} derive(Eq, Show, @debug.Debug)
+}
 
+#derive(Eq, Show, @debug.Debug)
 pub(all) enum Look {
   Light
   Grey
   Green
-} derive(Eq, Show, @debug.Debug)
+}
 
+#derive(Eq, Show, @debug.Debug)
 pub(all) enum Out {
   Commit(String)
   Delete
   Enter
-} derive(Eq, Show, @debug.Debug)
+}
 
+#derive(Eq, Show, @debug.Debug)
 pub(all) enum Page {
   Letters
   Signs
-} derive(Eq, Show, @debug.Debug)
+}
 
+#derive(Eq, Show, @debug.Debug)
 pub(all) enum Shift {
   Off
   Once
   Locked
-} derive(Eq, Show, @debug.Debug)
+}
 
 // Type aliases
 

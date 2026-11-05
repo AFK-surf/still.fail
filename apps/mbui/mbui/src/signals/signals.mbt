@@ -21,6 +21,7 @@ priv struct Run {
   mut cycle : Int
   mut run_depth : Int
   mut batch_depth : Int
+  mut batch_changed : Bool
   mut notify_index : Int
   mut queued_length : Int
   mut active_sub : ReactiveNode?
@@ -32,6 +33,8 @@ priv struct Run {
   /// algorithm, a hook beside it for what reads where a change left things once all it told is told
   mut flushing : Int
   afters : Array[() -> Unit]
+  /// what waits for that and for all of `afters` (after_all_flushed): done once none of them is left
+  lasts : Array[() -> Unit]
   /// doing what waits for a change told whole (after_flush): one at a time, in order, whatever they set meanwhile
   mut draining : Bool
 }
@@ -41,6 +44,7 @@ let run : Run = {
   cycle: 0,
   run_depth: 0,
   batch_depth: 0,
+  batch_changed: false,
   notify_index: 0,
   queued_length: 0,
   active_sub: None,
@@ -48,6 +52,7 @@ let run : Run = {
   queued: [],
   flushing: 0,
   afters: [],
+  lasts: [],
   draining: false,
 }
 
@@ -111,6 +116,7 @@ fn update(node : ReactiveNode) -> Bool {
 
 ///|
 fn notify(first : ReactiveNode) -> Unit {
+  if run.batch_depth > 0 { run.batch_changed = true }
   let mut effect = first
   let mut insert_index = run.queued_length
   let mut first_inserted = insert_index
@@ -217,13 +223,16 @@ pub fn batch_depth() -> Int {
 
 ///|
 pub fn start_batch() -> Unit {
+  if run.batch_depth == 0 { run.batch_changed = false }
   run.batch_depth += 1
 }
 
 ///|
 pub fn end_batch() -> Unit {
   run.batch_depth -= 1
-  if run.batch_depth == 0 {
+  // An unchanged batch inside a queued watcher adds no work of its own. Let the outer flush finish the queue
+  // instead of nesting every independent watcher. A batch that writes still commits before its caller continues.
+  if run.batch_depth == 0 && (run.flushing == 0 || run.batch_changed) {
     flush()
   }
 }
@@ -472,16 +481,23 @@ fn flush() -> Unit {
   // flushed in its turn, what waits on that after it)
   if run.flushing == 0 && run.batch_depth == 0 && !run.draining {
     run.draining = true
-    // (taken by where the queue is up to, not removed from its head: removing the first shifted all the rest down
+    // (taken by where each queue is up to, not removed from its head: removing the first shifted all the rest down
     // each time, a change that asked 10⁴s of them (a long page's buttons each going together) held the desktop app's
     // main thread 3.2 s, 0.1.7302, 2026-11-05)
     let mut a = 0
-    while a < run.afters.length() {
-      let f = run.afters[a]
-      a += 1
+    let mut l = 0
+    while a < run.afters.length() || l < run.lasts.length() {
+      let f = if a < run.afters.length() {
+        a += 1
+        run.afters[a - 1]
+      } else {
+        l += 1
+        run.lasts[l - 1]
+      }
       f()
     }
     run.afters.clear()
+    run.lasts.clear()
     run.draining = false
   }
 }
@@ -493,6 +509,18 @@ fn flush() -> Unit {
 pub fn after_flush(f : () -> Unit) -> Unit {
   if run.flushing > 0 || run.batch_depth > 0 || run.draining {
     run.afters.push(f)
+  } else {
+    f()
+  }
+}
+
+///|
+/// `f` done as after_flush does it, but once all that waits by after_flush is done too (what that set in its turn and
+/// what waits on that included): for what must see where the change left things after everything set going by it,
+/// whatever order its effects ran in.
+pub fn after_all_flushed(f : () -> Unit) -> Unit {
+  if run.flushing > 0 || run.batch_depth > 0 || run.draining {
+    run.lasts.push(f)
   } else {
     f()
   }
@@ -559,6 +587,7 @@ pub fn[T] Signal::set(self : Signal[T], value : T, loc~ : SourceLoc) -> Unit {
   let changed = !same_as(state.same, state.pending, value)
   state.pending = value
   if changed {
+    if run.batch_depth > 0 { run.batch_changed = true }
     // (set as a watch reads: where, for it to say what changed what it read as it read, Watch::set_as_read)
     if watch_reading.depth > 0 && watch_reading.sets.length() < 4 {
       watch_reading.sets.push(loc.to_string())
@@ -721,6 +750,7 @@ pub fn[T] untracked(f : () -> T) -> T {
 /// The computed worked out again as it is next read, whatever it read (what reads it told, as a signal set tells it):
 /// for one built again for what is no signal (a part kept, Ctx::kept_part: its key, the pointer over it).
 pub fn[T] Computed::invalidate(self : Computed[T]) -> Unit {
+  if run.batch_depth > 0 { run.batch_changed = true }
   let node = self.0
   node.flags = node.flags | DIRTY
   match node.subs {
@@ -984,4 +1014,3 @@ pub fn Watch::on_marked(self : Watch, f : () -> Unit) -> Unit {
   guard self.node.own is WatchOwned(o) else { abort("a watch without its own") }
   o.marked.val = Some(f)
 }
-

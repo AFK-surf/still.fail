@@ -6,7 +6,12 @@
 ///|
 /// The card of file `id` in draft `w` pressed: its panel up, by `card` (its card's id).
 fn ref_panel(src : Source, w : Writing, station : String, id : String, name : String, card : Int) -> Unit {
-  @sf.panel(name, fn(c, _) { ref_panel_body(c, src, w.key, station, id) }, from=Of(card))
+  ref_panel_from(src, w, station, id, name, Of(card))
+}
+
+///|
+fn ref_panel_from(src : Source, w : Writing, station : String, id : String, name : String, from : @sf.Anchor) -> Unit {
+  @sf.panel(name, fn(c, _) { ref_panel_body(c, src, w.key, station, id) }, from~)
 }
 
 ///|
@@ -19,7 +24,7 @@ pub fn ref_panel_put(src : Source, key : String, station : String, id : String, 
 ///|
 fn ref_panel_body(c : @ui.Ctx, src : Source, key : String, station : String, id : String) -> Unit {
   let w = @sfbase.writing(src, key)
-  guard w.files.iter().find_first(fn(f) { text(Some(f), "id") == id }) is Some(f) else { return }
+  guard w.files.get().iter().find_first(fn(f) { text(Some(f), "id") == id }) is Some(f) else { return }
   let r = field(Some(f), "ref")
   let path = text(r, "path")
   let dir = flag(r, "dir")

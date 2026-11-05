@@ -16,8 +16,8 @@ priv struct TreeField {
   st : EditorState
   /// its words' size, as said (followed: its paint and its measure read it)
   font_size : () -> Double
-  line : Double
-  max_lines : Int
+  line : () -> Double
+  max_lines : () -> Int
   /// what it says it is while empty, as it is now (followed: its paint and what it says read it)
   hint : () -> String
   shorter : Array[String]
@@ -26,6 +26,9 @@ priv struct TreeField {
   pasted : (String) -> Unit
   /// what is told files pasted into it (⌘V with files or a picture on the clipboard), where it takes them
   files : ((Array[(String, Bytes)]) -> Unit)?
+  files_when : () -> Bool
+  /// keys taken by what completes or navigates this field, before editing or Tab, only while it owns the focus
+  keys : ((Int, Int) -> Bool)?
   /// where the press on it now went down (the window's terms), none held; whether it took it as it went down (the
   /// caret put there, what is picked dragged on from there); whether a finger waiting for a tap went past the slop
   mut down : (Double, Double)?
@@ -33,6 +36,8 @@ priv struct TreeField {
   mut strayed : Bool
   /// the node it is (what times a finger's hold on it: View::at_moment), what calls that hold's moment off
   view : @view.View
+  /// where its last paint showed it (window x, y, scale, laid width and height); its lines fly from what was visible
+  mut drawn : (Double, Double, Double, Double, Double)?
   mut hold_off : () -> Unit
   /// how many presses in a row the one held is (a double click's 2, a triple's 3), Shift held as it went down; the last
   /// press's run (how many, when, where: as the old frame counts them, app.mbt's press_run)
@@ -64,7 +69,8 @@ let tree_fields : Map[@view.NodeId, TreeField] = Map([])
 fn view_words_found(d : @view.Drawn) -> String {
   match tree_fields.get(d.id) {
     Some(tf) => (tf.hint)()
-    None => view_words_set(d.words, d.words_look)
+    // (broken where they say so, words in pieces that are: RunsLook's breaks)
+    None => if d.runs_look.breaks { d.words } else { view_words_set(d.words, d.words_look) }
   }
 }
 
@@ -77,7 +83,9 @@ fn view_words_found(d : @view.Drawn) -> String {
 /// its words lay out between `min_lines` (one unless said) and `max_lines` (Field::laid), read out as a field of its words. `submitted`: what
 /// is told its words as they are given up (Enter, where it gives them up), once, at that key's moment; `pasted`, a
 /// paste of `paste_limit` characters or more, not put in, once, at that paste's. `placeholder_by`: its placeholder as it
-/// is now, followed (in place of `placeholder`). The node made.
+/// is now, followed (in place of `placeholder`). `line_by`, `max_lines_by`, `enter_by` and `paste_limit_by`: those
+/// options as they change, keeping the same editor, selection and undo. `files_when`: whether it takes files at the
+/// paste's moment (else its words, like a field without `files`). The node made.
 pub fn field(
   parent : @view.View,
   field : Field,
@@ -102,8 +110,14 @@ pub fn field(
   pasted? : (String) -> Unit = fn(_) {  },
   files? : (Array[(String, Bytes)]) -> Unit,
   size_by? : () -> Double,
+  line_by? : () -> Double,
+  max_lines_by? : () -> Int,
+  enter_by? : () -> Bool,
+  paste_limit_by? : () -> Int,
+  files_when? : () -> Bool = fn() { true },
   colors_by? : () -> (Int64, Int64, Int64),
   placeholder_by? : () -> String,
+  keys? : (Int, Int) -> Bool,
 ) -> @view.View {
   // (its size and its colours as said once, or followed as they change (`size_by`; `colors_by`: its words', its
   // placeholder's, its caret's): words written over a picture, as big as the picture is drawn, in the colour picked)
@@ -111,6 +125,10 @@ pub fn field(
     Some(f) => f
     None => fn() { font_size }
   }
+  let line_now = line_by.unwrap_or(fn() { line })
+  let lines_now = max_lines_by.unwrap_or(fn() { max_lines })
+  let enter_now = enter_by.unwrap_or(fn() { enter_sends.unwrap_or(enter_sends_by(lines_now(), ime_action)) })
+  let limit_now = paste_limit_by.unwrap_or(fn() { paste_limit })
   // (what it says it is while empty as said once, or followed as it changes (`placeholder_by`: in the words as they
   // are now), its node and its editor kept
   let hint = match placeholder_by {
@@ -145,10 +163,12 @@ pub fn field(
         })
       None => ()
     }
-    st.enter_sends = enter_sends.unwrap_or(enter_sends_by(max_lines, ime_action))
+    f.reacts(fn() { (enter_now(), limit_now()) }, fn(options) {
+      st.enter_sends = options.0
+      st.limit = options.1
+    })
     st.leaves = leaves
     st.ime_action = ime_action
-    st.limit = paste_limit
     st.secret = secret
     st.words = words
     st.look = look
@@ -156,18 +176,21 @@ pub fn field(
     tree_fields[id] = {
       st,
       font_size: size,
-      line,
-      max_lines,
+      line: line_now,
+      max_lines: lines_now,
       hint,
       shorter,
       trim,
       submitted,
       pasted,
       files,
+      files_when,
+      keys,
       down: None,
       editing: false,
       strayed: false,
       view: f,
+      drawn: None,
       hold_off: fn() {  },
       clicks: 0,
       shifted: false,
@@ -181,9 +204,14 @@ pub fn field(
       last_tap: (-1.0e9, 0.0, 0.0),
     }
     g().editors[tree_said_id(id)] = st
+    // The field owns its edit menu, before any menu of the page containing it. Publish the same request an old
+    // field gives the host's menu; editing keeps the selection and the editor's own identity.
+    f.on_menu(fn(m) {
+      field.edit_menu(m.wx, m.wy)
+    }) |> ignore
     // (more lines than it shows: its words scroll in it as an old view's field's do, the wheel, a finger (Ctx::editor's
     // scroll_state), how far the layout's (Ctx::lay_out_field))
-    if max_lines > 1 {
+    if lines_now() > 1 {
       let sw = g().scroll_state(tree_said_id(id), true)
       sw.field = true
     }
@@ -193,7 +221,7 @@ pub fn field(
     // where only its look's colours change, a frame for them all the same)
     .measured(
       By(fn() {
-        let laid = field.laid(font_size=size(), line~, min_lines~, max_lines~, trim~)
+        let laid = field.laid(font_size=size(), line=line_now(), min_lines~, max_lines=lines_now(), trim~)
         // (its words as written followed as well as with what is composed: what is composed put in as written shows
         // the same, its look's not, EditorState::look_shown)
         field.text() |> ignore
@@ -203,7 +231,7 @@ pub fn field(
       }),
       fn(k, w) { k.0.size(w) },
     )
-    .focusable(Is(true), keys=0)
+    .focusable(Is(true), keys=0, typing=true)
     // (the pointer an I-beam over it, as over an old view's editor: Ctx's pointer shape, desktop.mbt)
     .cursor(Is(Some(IBeam)))
     // (its words read out, a secret's none: as an old view's editor says them)
@@ -218,6 +246,25 @@ pub fn field(
     // (its editor no longer the window's as it is let go, whatever lets it go)
     .owns(fn() { tree_field_gone(id) })
     |> ignore
+    // A focused field can be fully transparent on the first frame of its entrance. Its input method needs the
+    // laid-out words then too; layout for input cannot wait for painting to have anything visible to draw.
+    f.reacts(fn() {
+      if f.focused() {
+        Some((f.laid_window_told(), field.laid(font_size=size(), line=line_now(), max_lines=lines_now(), trim~)))
+      } else {
+        None
+      }
+    }, fn(ready) {
+      match (ready, tree_fields.get(id)) {
+        (Some((Some(rect), _)), Some(tf)) => {
+          let fb = g().tree_field_box(id, tf, rect)
+          st.placed_x = rect.0
+          st.placed_y = rect.1
+          g().lay_out_field(st, fb)
+        }
+        _ => ()
+      }
+    })
     // (the focus asked for it before it was held: given it now, it able to take it, Field::focus)
     if st.focus_asked {
       st.focus_asked = false
@@ -235,6 +282,41 @@ pub fn Field::focus(self : Field) -> Unit {
     Some(id) if tree_fields.contains(id) => tree_field_focus(id)
     _ => self.st.focus_asked = true
   }
+}
+
+///|
+/// Ask for this retained field's editing menu at the pointer, preserving its selection. Its surrounding input
+/// surface may ask too, just as a press there gives the field focus. The host reads it with field_right_clicked.
+pub fn Field::edit_menu(self : Field, x : Double, y : Double) -> Unit {
+  guard self.st.tree_node is Some(id) && tree_fields.contains(id) else { return }
+  guard view_app.val is Some(tree) && tree.can_focus(id) else { return }
+  tree_field_focus(id)
+  desk.mutable_menus.push(([tree_said_id(id)], x, y))
+  hand_event()
+}
+
+///|
+/// This field's visible lines when its retained node was last drawn, in the window, including its scroll and the
+/// node's motion or scale. Read at an action's cause, before the field is cleared, for words sent from it to fly from
+/// the lines the person saw. None until its node has been drawn. The snapshot keeps its layout after another edit.
+pub fn Field::lines(self : Field) -> FieldLines? {
+  guard self.st.tree_node is Some(id) else { return None }
+  guard tree_fields.get(id) is Some(tf) else { return None }
+  guard tf.drawn is Some((x, y, scale, w, h)) else { return None }
+  guard self.st.tl is Some(tl) else { return None }
+  let st = self.st
+  let n = tl.shaped.starts.length()
+  let at = fn(c : Int) { if c < n { tl.shaped.starts[c] } else { tl.text.length() } }
+  Some({
+    text: tl.text,
+    starts: tl.line_start.map(at),
+    ends: tl.line_end.map(at),
+    room: (x, y, w * scale, h * scale),
+    layout: tl,
+    x: x + (st.ox - st.placed_x) * scale,
+    y: y + (st.oy - st.placed_y) * scale,
+    scale,
+  })
 }
 
 ///|
@@ -273,7 +355,9 @@ pub fn Ctx::focus_field(self : Ctx, field : Field) -> Unit {
 /// Field node `id` given the keyboard's focus where it can take it now (the tree's: under no modal layer that does not
 /// hold it, able to take it); else the focus where it was.
 fn tree_field_focus(id : @view.NodeId) -> Unit {
-  guard view_app.val is Some(tree) && tree.can_focus(id) else { return }
+  guard view_app.val is Some(tree) else { return }
+  if view_focus_kept_under(tree, id, tree_said_id(id)) { return }
+  guard tree.can_focus(id) else { return }
   g().focus_moved(tree_said_id(id))
   tree_field_redraw()
 }
@@ -796,7 +880,7 @@ fn tree_fields_pasting(now : Double) -> Unit {
       desk.pasting = None
       // (where it takes files: the files, else the picture as one, told it once; else the words, as Ctx::editor takes
       // them)
-      match (tf.files, got.files, got.picture) {
+      match (if (tf.files_when)() { tf.files } else { None }, got.files, got.picture) {
         (Some(told), [_, ..] as fs, _) => told(fs)
         (Some(told), [], Png(png)) => told([(pasted_picture_name, png)])
         _ =>
@@ -843,6 +927,30 @@ fn tree_field_told(tf : TreeField) -> Unit {
 }
 
 ///|
+/// The same word layout for input and painting, in the field's laid-out rectangle.
+fn Ctx::tree_field_box(self : Ctx, id : @view.NodeId, tf : TreeField, rect : (Double, Double, Double, Double)) -> FieldBox {
+  let z = self.editor_sizing((tf.font_size)(), (tf.line)(), (tf.max_lines)(), true, tree_theme().text_line)
+  {
+    id: tree_said_id(id),
+    x: rect.0,
+    y: rect.1,
+    w: rect.2,
+    h: rect.3,
+    pad_l: z.pad_x,
+    pad_t: z.pad_y,
+    pad_r: z.pad_x,
+    pad_b: z.pad_y,
+    font_size: z.font_size,
+    weight: Node::new().weight,
+    line_h: z.line,
+    wrap: z.wrap,
+    trim: tf.trim,
+    hint: (tf.hint)(),
+    shorter: tf.shorter,
+  }
+}
+
+///|
 /// Field node `id` drawn this frame at (`x`, `y`), laid out `w` by `h` (in its own terms), `s` as big, `alpha` opaque:
 /// placed there, laid out and drawn as an old view's field is (Ctx::lay_out_field, Ctx::paint_field), then drawn as big
 /// as it is about that place, as what its block draws is.
@@ -861,33 +969,17 @@ fn Ctx::paint_tree_field(
   // (painted where its node is laid out (`laid`), its words set on the pixels by their lines there, then moved to where
   // it is drawn and made as big there: as the tree's own words are, view_blit; not placed on the pixels as a whole, as
   // an old view's field is with its old view, old_place)
+  // (drawn each frame its node is: what its editor holds is no binding of the tree's, scene_layers.mbt)
+  scene_drawn_each()
   let (ux, uy) = laid
-  let z = self.editor_sizing((tf.font_size)(), tf.line, tf.max_lines, true, tree_theme().text_line)
-  let fb : FieldBox = {
-    id: tree_said_id(id),
-    x: ux,
-    y: uy,
-    w,
-    h,
-    pad_l: z.pad_x,
-    pad_t: z.pad_y,
-    pad_r: z.pad_x,
-    pad_b: z.pad_y,
-    font_size: z.font_size,
-    weight: Node::new().weight,
-    line_h: z.line,
-    wrap: z.wrap,
-    trim: tf.trim,
-    hint: (tf.hint)(),
-    shorter: tf.shorter,
-  }
+  let fb = self.tree_field_box(id, tf, (ux, uy, w, h))
   let st = tf.st
   // (painted again as what is its own changes it (tree_field_redraw), and with the clock while its words are flung on)
   tree_fields_drawn.get() |> ignore
   // (more lines than it shows: its words' scroll brought to this frame as an old view's field's is as it is built
   // (Ctx::editor: Ctx::scroll_state, its fling stepped, its bar's and its fling's motion told), kept as this frame's;
   // painted again with the clock while it is flung)
-  if tf.max_lines > 1 {
+  if (tf.max_lines)() > 1 {
     let sw = self.scroll_state(fb.id, true)
     sw.field = true
     sw.theme = self.theme
@@ -898,12 +990,19 @@ fn Ctx::paint_tree_field(
   }
   st.placed_x = ux
   st.placed_y = uy
+  tf.drawn = Some((x, y, s, w, h))
   self.lay_out_field(st, fb)
   // (drawn where it is its own, cut by nothing it is drawn in but its own box (Ctx::paint_field's), then as big as it is
   // about its top left and within what cuts it where it is drawn: as a block of the tree's is composed, view_blit)
   let (outer, outer_r, outer_s) = clip_at(clip_top())
   let i0 = self.ninst
   push_unclipped()
+  // (painted outside its kept block, but still this node's own instances, as a tree picture's are; found by its
+  // hint as an old editor is, even when another node's words pass over the field in the same colour)
+  let (was, was_tree) = (inst_owners.painting, inst_owners.tree_painting)
+  inst_owners.painting = -1
+  inst_owners.tree_painting = Some(id)
+  inst_owners.tree_words[id] = fb.hint
   // (its bar, where its words scroll in it, found where it is drawn as an old view's field's is (Ctx::bar_at): kept for
   // the pointer with the frame's bars where those are found alone)
   self.paint_field(
@@ -940,6 +1039,8 @@ fn Ctx::paint_tree_field(
     // pointer is and where its bar is drawn, nothing kept; painted again as the pointer goes, tree_fields_pointed)
     bar_pointed=fn(b) { tree_field_thumb_pointed(id, bar_drawn_at(b, laid, x, y, s, outer)) },
   )
+  inst_owners.painting = was
+  inst_owners.tree_painting = was_tree
   pop_clip()
   self.transform_insts(i0, self.ninst, ux, uy, s, s, x - ux, y - uy, outer, outer_r, outer_s)
 }
@@ -958,7 +1059,7 @@ pub fn Tester::drawn_words_found(self : Tester) -> Array[(@view.Drawn, Int, Bool
   .map(fn(e) {
     let (d, holder, presses) = e
     let size = match tree_fields.get(d.id) {
-      Some(tf) => c.editor_sizing((tf.font_size)(), tf.line, tf.max_lines, true, tree_theme().text_line).font_size
+      Some(tf) => c.editor_sizing((tf.font_size)(), (tf.line)(), (tf.max_lines)(), true, tree_theme().text_line).font_size
       None => d.words_look.size
     }
     (d, holder, presses, view_words_found(d), size)

@@ -431,6 +431,19 @@ pub fn Tester::shape_boxes(self : Tester) -> Array[(String, Double, Double, Doub
       out.push((n.text, n.x, n.y, n.fw, n.fh))
     }
   }
+  // (and the window's tree's nodes that draw shapes, called as an old view's are: "sf" and the name it draws by
+  // (View::drawn_as), its size where it is a square's, where they are drawn)
+  match view_tree() {
+    Some(tree) =>
+      for d in tree.drawn() {
+        if d.shapes.length() > 0 {
+          let name = tree.drawn_name(d.id)
+          let side = if d.w == d.h && d.w == d.w.floor() { d.w.to_int().to_string() } else { "" }
+          out.push(("sf" + name + side, d.x, d.y, d.w, d.h))
+        }
+      }
+    None => ()
+  }
   out
 }
 

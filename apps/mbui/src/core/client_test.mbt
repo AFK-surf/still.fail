@@ -17,10 +17,10 @@ test "subscribe asks once, keyed, and takes the first value" {
   assert_eq(sent.length(), 1)
   let want : Json = { "id": 1, "subscribe": { "topic": "accounts" }, "keyed": true }
   assert_eq(sent[0].stringify(), want.stringify())
-  assert_true(s.value is None)
+  assert_true(s.value() is None)
   // recorded: the smoke run's first message
   assert_true(c.receive("{\"id\":1,\"value\":[]}"))
-  assert_eq(s.value.unwrap().stringify(), "[]")
+  assert_eq(s.value().unwrap().stringify(), "[]")
   assert_eq(s.version, 1)
 }
 
@@ -99,19 +99,19 @@ test "deltas apply to the value; versions count the messages" {
   let v0 = c.version
   c.receive("{\"id\":1,\"delta\":[{\"path\":[],\"set\":1}]}") |> ignore
   // a delta before any value is not applied
-  assert_true(s.value is None)
+  assert_true(s.value() is None)
   assert_eq(s.version, 0)
   c.receive(
     "{\"id\":1,\"value\":[{\"id\":\"a\",\"t\":\"A\"},{\"id\":\"b\",\"t\":\"B\"}]}",
   )
   |> ignore
-  let first = s.value.unwrap()
+  let first = s.value().unwrap()
   c.receive(
     "{\"id\":1,\"delta\":[{\"path\":[],\"key\":[\"id\"],\"move\":\"b\",\"before\":\"a\"},{\"path\":[],\"key\":[\"id\"],\"patch\":\"a\",\"ops\":[{\"path\":[\"t\"],\"set\":\"A2\"}]}]}",
   )
   |> ignore
   assert_eq(
-    s.value.unwrap().stringify(),
+    s.value().unwrap().stringify(),
     "[{\"id\":\"b\",\"t\":\"B\"},{\"id\":\"a\",\"t\":\"A2\"}]",
   )
   // the value a view held before is as it was
@@ -127,12 +127,12 @@ test "an error clears the value until the next one" {
   c.receive("{\"id\":1,\"value\":{\"a\":1}}") |> ignore
   c.receive("{\"id\":1,\"error\":{\"code\":\"offline\",\"message\":\"no network\"}}")
   |> ignore
-  assert_true(s.value is None)
+  assert_true(s.value() is None)
   assert_true(s.error is Some(_))
   c.receive("{\"id\":1,\"delta\":[{\"path\":[\"a\"],\"set\":2}]}") |> ignore
-  assert_true(s.value is None)
+  assert_true(s.value() is None)
   c.receive("{\"id\":1,\"value\":{\"a\":3}}") |> ignore
-  assert_eq(s.value.unwrap().stringify(), "{\"a\":3}")
+  assert_eq(s.value().unwrap().stringify(), "{\"a\":3}")
   assert_true(s.error is None)
   assert_eq(s.version, 3)
 }
@@ -164,7 +164,7 @@ test "a fatal fails the calls in flight; restarted asks every subscription again
     ({ "id": 1, "subscribe": { "topic": "accounts" }, "keyed": true } : Json).stringify(),
   )
   // the old value stays until the new core's
-  assert_eq(s.value.unwrap().stringify(), "[]")
+  assert_eq(s.value().unwrap().stringify(), "[]")
 }
 
 ///|
@@ -174,7 +174,7 @@ test "unsubscribe tells the core and forgets the subscription" {
   c.unsubscribe(s)
   assert_eq(sent[1].stringify(), ({ "id": 1, "unsubscribe": true } : Json).stringify())
   c.receive("{\"id\":1,\"value\":[1]}") |> ignore
-  assert_true(s.value is None)
+  assert_true(s.value() is None)
   let again = c.subscribe("accounts")
   assert_eq(again.id, 2)
 }
@@ -323,7 +323,7 @@ test "a subscription's changes are pushed: what read it in a computed follows ea
     worked.val += 1
     // (as an app's source reads a topic: core_topic)
     let read = c.subscribe("accounts").followed()
-    match read.value {
+    match read.value() {
       Some(Array(a)) => a.length()
       _ => -1
     }

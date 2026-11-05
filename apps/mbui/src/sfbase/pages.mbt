@@ -322,10 +322,12 @@ pub fn reset() -> Unit {
   // a new chat while it is made (fresh.mbt)
   fresh_reset()
   // how times are said (message_words.mbt)
-  absolute_times.val = false
+  absolute_times.set(false)
   // a chat's list's turns and its messages out of avatars (list_turns.mbt, emit.mbt)
   turns_by.clear()
   emits.clear()
+  emit_places.clear()
+  emit_rooms.clear()
   // words sent flying (flight.mbt)
   send_flight.set(None)
   landing_shares.clear()

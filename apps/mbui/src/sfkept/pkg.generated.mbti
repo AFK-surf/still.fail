@@ -1,10 +1,14 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "stillfail/sfkept"
 
-// Values
-pub fn answer(String, Json, Bytes?) -> Result[(Json, Bytes?), Json]?
+import {
+  "moonbitlang/core/json",
+}
 
-pub fn has(String, Json) -> Bool
+// Values
+pub fn answer(String, @json.Json, Bytes?) -> Result[(@json.Json, Bytes?), @json.Json]?
+
+pub fn has(String, @json.Json) -> Bool
 
 // Errors
 

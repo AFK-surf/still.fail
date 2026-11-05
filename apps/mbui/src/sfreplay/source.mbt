@@ -110,10 +110,13 @@ pub fn source() -> @sfapp.Source {
   {
     topic: fn(name, params) {
       let s = @core.subscribe(name, params=replay_topic_params(name, params)).followed()
-      let value = if name == "prefs" { with_rail_view(s.value) } else { s.value }
+      let value = if name == "prefs" { with_rail_view(s.rest()) } else { s.rest() }
       { value, error: s.error, version: s.version }
     },
     waits: fn(name, params) { @core.subscribe(name, params=replay_topic_params(name, params)).followed().waiting },
+    list: fn(name, params, path, fields) {
+      Some(@core.subscribe(name, params=replay_topic_params(name, params)).list(path, fields))
+    },
     // The core's pure calls (`markdown`, `code.ink`, `reader.*`) answered as the real core answered them, kept
     // (src/sfkept): tapes older than a call have none of it, and it is a pure function of what is asked, not made up
     // here. Any other ask the tape does not have still diverges; ⌘K's `commands.find` is the tape's (it says it in the

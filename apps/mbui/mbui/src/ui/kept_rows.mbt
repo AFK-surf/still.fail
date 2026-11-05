@@ -8,6 +8,35 @@ pub fn Tester::rows_kept(self : Tester) -> Int {
 }
 
 ///|
+/// The rows of the window's tree's lists (View::each) that lived when it was last asked (tree_rows_kept).
+// kept across runs: put back by each Tester (tree_rows_kept asks of the run's tree alone)
+let tree_rows_were : Ref[Array[@view.NodeId]] = Ref([])
+
+///|
+/// How many of the rows of the window's tree's lists (View::each) that lived when this was last asked live still,
+/// kept as their nodes (not made anew); the first time, none. A list of the tree's draws its rows again as they are,
+/// never building them: what a test of rows kept reads of one, as rows_kept of an old view's.
+pub fn Tester::tree_rows_kept(self : Tester) -> Int {
+  ignore(self)
+  guard view_app.val is Some(tree) else { return 0 }
+  let now = tree.rows_alive()
+  let was = tree_rows_were.val
+  tree_rows_were.val = now
+  // (both in the tree's order, by where each is: walked side by side, not each looked for among the other)
+  let mut i = 0
+  let mut kept = 0
+  for id in now {
+    while i < was.length() && was[i].at < id.at {
+      i = i + 1
+    }
+    if i < was.length() && was[i] == id {
+      kept = kept + 1
+    }
+  }
+  kept
+}
+
+///|
 /// Whether parts kept and a list's rows kept are kept as their nodes (true, as on a host) or built every frame
 /// (false): a test's, to hold what is kept to what building it draws.
 pub fn Tester::drawn_again(self : Tester, on : Bool) -> Unit {

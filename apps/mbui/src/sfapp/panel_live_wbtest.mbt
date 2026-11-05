@@ -47,20 +47,20 @@ test "panel live, 大屏 keyboard and mouse: in the middle, a share of the windo
   }
   // (as main has it)
   assert_eq(out, [
-    "middle (, , ): dialog Some((面板里的话，长一些，好看它怎么折行 好的 关闭, (380, 341.1, 520, 117.8))) title [] step [] says [] close [(851.5, 357.6, 32, 32)] words [(424, 365.1, 432, 22)]",
-    "middle (任务, , ): dialog Some((任务, (380, 315.6, 520, 168.8))) title [(414, 341.6, 44, 30)] step [] says [] close [(851.5, 332.1, 32, 32)] words [(424, 390.6, 432, 22)]",
-    "middle (任务, 第 1 步, 说的话): dialog Some((任务, (380, 302.6, 520, 194.8))) title [(414, 328.6, 44, 30)] step [(466, 338.6, 42, 20)] says [(414, 365.6, 462, 20)] close [(851.5, 319.1, 32, 32)] words [(424, 403.6, 432, 22)]",
-    "middle (, 第 1 步, ): dialog Some((第 1 步 关闭 面板里的话，长一些，好看它怎么折行 好的, (380, 315.6, 520, 168.8))) title [] step [(422, 351.6, 42, 20)] says [] close [(851.5, 332.1, 32, 32)] words [(424, 390.6, 432, 22)]",
-    "middle (, , 说的话): dialog Some((说的话 面板里的话，长一些，好看它怎么折行 好的 关闭, (380, 328.1, 520, 143.8))) title [] step [] says [(414, 358.1, 462, 20)] close [(851.5, 344.6, 32, 32)] words [(424, 378.1, 432, 22)]",
-    "middle (, , ): dialog Some((面板里的话，长一些，好看它怎么折行 好的 关闭, (380, 341.1, 520, 117.8))) title [] step [] says [] close [(851.5, 357.6, 32, 32)] words [(424, 365.1, 432, 22)]",
-    "tall (, , ): dialog Some((面板里的话，长一些，好看它怎么折行 好的 关闭, (380, 104, 520, 592))) title [] step [] says [] close [(851.5, 120.5, 32, 32)] words [(424, 128, 432, 22)]",
-    "tall (任务, , ): dialog Some((任务, (380, 78.5, 520, 643))) title [(414, 104.5, 44, 30)] step [] says [] close [(851.5, 95, 32, 32)] words [(424, 153.5, 432, 22)]",
-    "tall (任务, 第 1 步, 说的话): dialog Some((任务, (380, 65.5, 520, 669))) title [(414, 91.5, 44, 30)] step [(466, 101.5, 42, 20)] says [(414, 128.5, 462, 20)] close [(851.5, 82, 32, 32)] words [(424, 166.5, 432, 22)]",
-    "tall (, , ): dialog Some((面板里的话，长一些，好看它怎么折行 好的 关闭, (380, 104, 520, 592))) title [] step [] says [] close [(851.5, 120.5, 32, 32)] words [(424, 128, 432, 22)]",
-    "beside (, , ): dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 106, 280, 65.8))) title [] step [] says [] close [] words [(616, 112, 248, 22)]",
-    "beside (任务, , ): dialog Some((任务 面板里的话，长一些，好看它怎么折行 好的, (600, 106, 280, 95.8))) title [(616, 118, 248, 20)] step [] says [] close [] words [(616, 142, 248, 22)]",
-    "beside (任务, 第 1 步, 说的话): dialog Some((任务 面板里的话，长一些，好看它怎么折行 好的, (600, 106, 280, 95.8))) title [(616, 118, 248, 20)] step [] says [] close [] words [(616, 142, 248, 22)]",
-    "beside (, , ): dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 106, 280, 65.8))) title [] step [] says [] close [] words [(616, 112, 248, 22)]",
+    "middle (, , ): dialog Some((面板里的话，长一些，好看它怎么折行 好的 关闭, (380, 323, 520, 154))) title [] step [] says [] close [(842, 349, 32, 32)] words [(414, 381, 452, 22)]",
+    "middle (任务, , ): dialog Some((任务, (380, 314.5, 520, 171))) title [(404, 340.5, 44, 30)] step [] says [] close [(842, 340.5, 32, 32)] words [(414, 389.5, 452, 22)]",
+    "middle (任务, 第 1 步, 说的话): dialog Some((任务, (380, 301.5, 520, 197))) title [(404, 327.5, 44, 30)] step [(456, 337.5, 42, 20)] says [(404, 364.5, 472, 20)] close [(842, 327.5, 32, 32)] words [(414, 402.5, 452, 22)]",
+    "middle (, 第 1 步, ): dialog Some((第 1 步 关闭 面板里的话，长一些，好看它怎么折行 好的, (380, 314.5, 520, 171))) title [] step [(412, 350.5, 42, 20)] says [] close [(842, 340.5, 32, 32)] words [(414, 389.5, 452, 22)]",
+    "middle (, , 说的话): dialog Some((说的话 面板里的话，长一些，好看它怎么折行 好的 关闭, (380, 310, 520, 180))) title [] step [] says [(404, 340, 472, 20)] close [(842, 336, 32, 32)] words [(414, 394, 452, 22)]",
+    "middle (, , ): dialog Some((面板里的话，长一些，好看它怎么折行 好的 关闭, (380, 323, 520, 154))) title [] step [] says [] close [(842, 349, 32, 32)] words [(414, 381, 452, 22)]",
+    "tall (, , ): dialog Some((面板里的话，长一些，好看它怎么折行 好的 关闭, (380, 87, 520, 626))) title [] step [] says [] close [(842, 113, 32, 32)] words [(414, 145, 452, 22)]",
+    "tall (任务, , ): dialog Some((任务, (380, 78.5, 520, 643))) title [(404, 104.5, 44, 30)] step [] says [] close [(842, 104.5, 32, 32)] words [(414, 153.5, 452, 22)]",
+    "tall (任务, 第 1 步, 说的话): dialog Some((任务, (380, 65.5, 520, 669))) title [(404, 91.5, 44, 30)] step [(456, 101.5, 42, 20)] says [(404, 128.5, 472, 20)] close [(842, 91.5, 32, 32)] words [(414, 166.5, 452, 22)]",
+    "tall (, , ): dialog Some((面板里的话，长一些，好看它怎么折行 好的 关闭, (380, 87, 520, 626))) title [] step [] says [] close [(842, 113, 32, 32)] words [(414, 145, 452, 22)]",
+    "beside (, , ): dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 106, 296, 68))) title [] step [] says [] close [] words [(616, 112, 264, 22)]",
+    "beside (任务, , ): dialog Some((任务 面板里的话，长一些，好看它怎么折行 好的, (600, 106, 296, 98))) title [(616, 118, 264, 20)] step [] says [] close [] words [(616, 142, 264, 22)]",
+    "beside (任务, 第 1 步, 说的话): dialog Some((任务 面板里的话，长一些，好看它怎么折行 好的, (600, 106, 296, 98))) title [(616, 118, 264, 20)] step [] says [] close [] words [(616, 142, 264, 22)]",
+    "beside (, , ): dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 106, 296, 68))) title [] step [] says [] close [] words [(616, 112, 264, 22)]",
   ])
   assert_eq(drawn, [
     true, true, true, true, true, true, true, true, true, true, true, true, true, true,
@@ -80,8 +80,10 @@ fn live_frames(t : @ui.Tester, n : Int) -> Unit {
 /// cut to (its clip and its outer one), as panel_reach_said reads them: the first and the last.
 fn rows_seen(t : @ui.Tester) -> (String?, String?) {
   let drawn = t.drawn_instances()
+  // A clipped row can have the title's glyphs inside its old bounds. First require that this row itself is drawn.
+  let runs = t.text_runs()
   let seen = t.words().filter(fn(x) {
-    x.0.has_prefix("第") && {
+    x.0.has_prefix("第") && runs.iter().any(fn(r) { r.text == x.0 }) && {
       let glyphs = drawn.filter(fn(d) {
         d[5] == 1.0 && d[11] > 0.0 && d[0] >= x.1 - 0.01 && d[0] < x.1 + x.3 && d[1] >= x.2 - 0.01 && d[1] < x.2 + x.4
       })
@@ -134,13 +136,14 @@ test "panel live in the middle, 大屏 keyboard and mouse, in a short window: it
   title.set("")
   live_frames(t, 30)
   let again = said()
-  // (as main has it: the same dialog and field, 甲 kept; the rows seen a few higher while its head is there, its body
-  // the shorter, back as it goes)
+  // (the same dialog and field, 甲 kept; untitled, what it holds starts under its close button, where a titled one's
+  // starts under its head: row 2 cut by the top of what scrolls, row 3 the first whole; titled, its title covers the
+  // rows behind its head, back as it goes)
   let body_said = "填一下 第0行 第1行 第2行 第3行 第4行 第5行 第6行 第7行 第8行 第9行 第10行 第11行 第12行 第13行 第14行 第15行 第16行 第17行 第18行 第19行 第20行 第21行 第22行 第23行 第24行 第25行 第26行 第27行 第28行 第29行 面板里的话，长一些，好看它怎么折行 好的 关闭"
   assert_eq([before, titled, again], [
-    (true, true, Some(body_said), "甲", (Some("第4行"), Some("第14行"))),
-    (true, true, Some("任务"), "甲", (Some("第2行"), Some("第13行"))),
-    (true, true, Some(body_said), "甲", (Some("第4行"), Some("第14行"))),
+    (true, true, Some(body_said), "甲", (Some("第3行"), Some("第13行"))),
+    (true, true, Some("任务"), "甲", (Some("第4行"), Some("第13行"))),
+    (true, true, Some(body_said), "甲", (Some("第3行"), Some("第13行"))),
   ])
 }
 

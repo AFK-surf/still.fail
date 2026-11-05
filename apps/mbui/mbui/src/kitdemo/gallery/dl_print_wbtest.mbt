@@ -331,75 +331,98 @@ test "lines are drawn where they are said to be" {
 }
 
 ///|
-/// A screen in which only a spinner moves (docs/partial-redraw.md), at `phase` of its turn: in a window 240 by 200 at
-/// scale 2, under a bar of frosted glass whose capture reaches it, a box turned with it, a card with a
-/// shadow, shapes, and far from it a dot whose colour changes with it. Its two moments drawn one after the other, the second only where it differs, are the second
-/// drawn whole, to the byte (mbui-render MBUI_DL_FROM: scripts/render_offscreen.sh, render_check.sh).
-fn partial_shown(phase : Double) -> @ui.Tester {
+/// A screen of the window's tree in which only a spinner moves (docs/partial-redraw.md), in a window 240 by 200 at scale
+/// 2: under a bar of frosted glass whose capture its turn reaches, a box turned with it, a card with a shadow, shapes,
+/// and far from it a dot whose colour changes with it. At the spinner's first moment; `second`: then turned on to its
+/// second, its scene saying where the window changed (Tester::drawlist's `parts`). The second drawn over the first only
+/// there is the second drawn whole, to the byte (mbui-render MBUI_DL_FROM: scripts/render_offscreen.sh, render_check.sh).
+fn partial_shown(second : Bool) -> @ui.Tester {
   let red = 0xFF3B30FFL
   let blue = 0x1559C4FFL
   let pi = 3.141592653589793
-  let t = @ui.Tester::new(
-    fn(c) {
-      c.box(w=Fill(1.0), h=Fill(1.0), bg=0xF2F2F2FFL, align=AStart, fn() {
-        c.box(dir=Row, w=Fill(1.0), h=Px(36.0), fn() {
-          c.box(w=Px(60.0), h=Fill(1.0), bg=red, fn() { () }) |> ignore
-          c.box(w=Px(60.0), h=Fill(1.0), bg=blue, fn() { () }) |> ignore
-        })
-        |> ignore
-        c.box(dir=Row, pl=16.0, pt=8.0, gap=16.0, fn() {
-          c.lines(
-            [
-              @ui.line(@ui.arc(12.0, 12.0, 10.0, from=0.0, sweep=2.0 * pi), width=3.0, color=0x1559C433L),
-              @ui.line(@ui.arc(12.0, 12.0, 10.0, from=phase * 2.0 * pi, sweep=0.6 * pi), width=3.0, color=blue),
-            ],
-            w=Px(24.0),
-            h=Px(24.0),
-          )
-          |> ignore
-          let b = c.box(w=Px(16.0), h=Px(16.0), radius=3.0, bg=red, fn() { () })
-          c.look(b, @ui.look(rot=phase * 2.0 * pi))
-        })
-        |> ignore
-        c.box(pl=16.0, pt=16.0, fn() {
-          c.box(w=Px(120.0), h=Px(40.0), radius=8.0, bg=0xFFFFFFFFL, shadow=6.0, fn() { () }) |> ignore
-        })
-        |> ignore
-        c.shapes(
+  let phase = @signals.signal(0.1)
+  let t = @ui.Tester::new(fn(_) {  }, w=240.0, h=200.0, scale=2.0)
+  @ui.set_view_app(fn(root) {
+    root.ground(Is(0xF2F2F2FFL)) |> ignore
+    root.box(fn(bar) {
+      bar.row(Is(true)).height(Is(Some(36.0))) |> ignore
+      bar.box(fn(b) { b.width(Is(Some(60.0))).height(Is(Some(36.0))).ground(Is(red)) |> ignore }) |> ignore
+      bar.box(fn(b) { b.width(Is(Some(60.0))).height(Is(Some(36.0))).ground(Is(blue)) |> ignore }) |> ignore
+    })
+    |> ignore
+    root.box(fn(r) {
+      r.row(Is(true)).padding(Is((16.0, 8.0, 0.0, 0.0))).gap(Is(16.0)) |> ignore
+      r.box(fn(s) {
+        s
+        .width(Is(Some(24.0)))
+        .height(Is(Some(24.0)))
+        .lines(By(fn() {
           [
-            @ui.shape_of([([20.0, 10.0, 60.0, 10.0, 40.0, 40.0], true)], fill=red),
-            @ui.shape_of([([80.0, 10.0, 120.0, 40.0], false)], stroke=blue, width=4.0),
-          ],
-          w=Px(160.0),
-          h=Px(50.0),
-        )
-        |> ignore
-        // (a dot far from it, its colour with the turn: a part of its own)
-        c.layer(fn() {
-          c.box(w=Fill(1.0), h=Fill(1.0), pl=210.0, pt=176.0, align=AStart, fn() {
-            c.box(w=Px(12.0), h=Px(12.0), radius=6.0, bg=if phase < 0.25 { red } else { blue }, fn() { () }) |> ignore
-          })
-          |> ignore
-        })
-        |> ignore
-        c.layer(fn() {
-          c.box(
-            w=Fill(1.0),
-            h=Px(36.0),
-            glass=@ui.Glass::frosted(blur=8.0, tint=0xFFFFFF80L, solid=0xFFFFFFFFL),
-            fn() {  },
-          )
-          |> ignore
-        })
+            @paint.line(@paint.arc(12.0, 12.0, 10.0, from=0.0, sweep=2.0 * pi), width=3.0, color=0x1559C433L),
+            @paint.line(@paint.arc(12.0, 12.0, 10.0, from=phase.get() * 2.0 * pi, sweep=0.6 * pi), width=3.0, color=blue),
+          ]
+        }))
         |> ignore
       })
       |> ignore
-    },
-    w=240.0,
-    h=200.0,
-    scale=2.0,
-  )
+      r.box(fn(b) {
+        b
+        .width(Is(Some(16.0)))
+        .height(Is(Some(16.0)))
+        .radius(Is(3.0))
+        .ground(Is(red))
+        .turn(By(fn() { phase.get() * 2.0 * pi }))
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+    root.box(fn(c) {
+      c.padding(Is((16.0, 16.0, 0.0, 0.0))) |> ignore
+      c.box(fn(card) {
+        card.width(Is(Some(120.0))).height(Is(Some(40.0))).radius(Is(8.0)).ground(Is(0xFFFFFFFFL)).shadow(Is((6.0, 0.0, 0x00000040L)))
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+    root.box(fn(sh) {
+      sh
+      .width(Is(Some(160.0)))
+      .height(Is(Some(50.0)))
+      .shapes(Is([
+        @paint.shape_of([([20.0, 10.0, 60.0, 10.0, 40.0, 40.0], true)], fill=red),
+        @paint.shape_of([([80.0, 10.0, 120.0, 40.0], false)], stroke=blue, width=4.0),
+      ]))
+      |> ignore
+    })
+    |> ignore
+    // (a dot far from it, its colour with the turn: a part of its own)
+    root.box(fn(d) {
+      d
+      .over(Is(true))
+      .offset(Is((210.0, 176.0)))
+      .width(Is(Some(12.0)))
+      .height(Is(Some(12.0)))
+      .radius(Is(6.0))
+      .ground(By(fn() { if phase.get() < 0.25 { red } else { blue } }))
+      |> ignore
+    })
+    |> ignore
+    root.box(fn(g) {
+      g
+      .over(Is(true))
+      .height(Is(Some(36.0)))
+      .glass(Is(Some(@paint.Glass::frosted(blur=8.0, tint=0xFFFFFF80L, solid=0xFFFFFFFFL))))
+      |> ignore
+    })
+    |> ignore
+  })
   t.draw()
+  if second {
+    phase.set(0.35)
+    t.draw()
+  }
   t
 }
 
@@ -408,7 +431,7 @@ test "a spinner's two moments' draw lists printed when asked (MBUI_DL_PRINT=part
   let which = node_env("MBUI_DL_PRINT")
   if which == "partial-a" || which == "partial-b" {
     println("DLBEGIN")
-    println(partial_shown(if which == "partial-a" { 0.1 } else { 0.35 }).drawlist())
+    println(partial_shown(which == "partial-b").drawlist(parts=which == "partial-b"))
     println("DLEND")
   }
 }

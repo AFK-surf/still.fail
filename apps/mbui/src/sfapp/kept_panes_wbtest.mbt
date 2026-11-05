@@ -6,7 +6,7 @@
 /// Chat "chat" opened `w` by `h`, read out; then two chats of the sidebar opened in turn and its list dragged: what is
 /// drawn, said and read out at moments after each, the panes drawn again where they can be (`again`) or built every
 /// frame; how many panes were drawn again over it all.
-fn kept_panes_run(again : Bool, w : Double, h : Double) -> (Array[Array[String]], Int) {
+fn kept_panes_run(again : Bool, w : Double, h : Double) -> (Array[Array[String]], Int) raise {
   let t = kept_rows_open("chat", w, h)
   t.keep_parts(true)
   t.drawn_again(again)
@@ -16,9 +16,17 @@ fn kept_panes_run(again : Bool, w : Double, h : Double) -> (Array[Array[String]]
   // (counted as each frame is drawn: a frame of the working marks' looks alone builds nothing, keeps nothing)
   let mut kept = 0
   t.each_frame(Some(fn() { kept = kept + t.parts_kept() }))
-  let look = fn() {
+  let look = fn() raise {
+    let tree = @ui.view_tree().unwrap()
+    let panes : Ref[Array[@view.NodeId]] = Ref([])
     for _ in 0..<6 {
       t.run_for(kept_rows_still_ms)
+      // A retained chat has no old frame-part to count. Its title keeps the same node across these frames;
+      // compare that identity as well as the whole frame's drawing and semantics below.
+      let title = open_title()
+      let now = tree.drawn().filter(fn(d) { d.words == title && d.y >= 0.0 && d.y < @sf.wide_bar_h }).map(fn(d) { d.id })
+      if panes.val.is_empty() { panes.val = now } else { assert_eq(now, panes.val) }
+      kept = kept + now.length()
       out.push(drawn_from(t, -1000.0).map(kept_rows_inst) + kept_rows_read_out(t, true) + kept_rows_said(t))
     }
   }

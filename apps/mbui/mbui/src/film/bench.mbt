@@ -70,7 +70,6 @@ pub fn bench(
   // (MBUI_BENCH_WHOLE=1: every frame measured built whole, keeping nothing: what building a frame anew costs)
   t.bench_whole(arg("MBUI_BENCH_WHOLE") == "1")
   let buf = Ref::new(FixedArray::make(0, 0.0))
-  let damage = @damage.Damage::new()
   let timing = FixedArray::make(2, 0.0)
   let drawn : Array[Measured] = []
   let lines : Array[String] = []
@@ -116,10 +115,9 @@ pub fn bench(
     }
     let perf = t.frame_perf()
     let (n, (r, g, b)) = host_frame(t, buf)
-    // (what of it differs worked out as a window's host does, on its main thread before it is drawn: h_present)
-    let d0 = now_ms()
-    let parts = damage.next(buf.val, n, w, h, scale, r, g, b)
-    let damage_ms = now_ms() - d0
+    // (where it changed, as the frame's scene said it at its causes and its host was told: h_present)
+    let parts = @ui.scene_parts()
+    let damage_ms = @ui.parts_ms()
     let area = parts.fold(init=0.0, fn(a, p) { if p.2 < 0.0 { a + w * h } else { a + p.2 * p.3 } })
     if parts.is_empty() {
       // (nothing differs: the window's picture as it was, nothing drawn)

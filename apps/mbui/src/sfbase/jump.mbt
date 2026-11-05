@@ -7,12 +7,18 @@
 pub let go_tos : Map[String, Double] = {}
 
 ///|
+/// Told each time a chat is said to go to a message (go_to): what follows it (a list made once) reads go_tos again.
+// kept across runs: it goes on counting
+pub let go_to_said : @signals.Signal[Int] = @signals.signal(0)
+
+///|
 /// The chat `r`, once open and in place, goes to its message `seq` (the pages before it brought in until it is
 /// there), which flashes (ChatHost.kt goTo, jumpTo.ts jumpTo): only the `passage` of it a quote quoted, where its words
 /// have it (Chat.tsx Quotes' jump); the whole message else.
 pub fn go_to(r : ChatRef, seq : Double, passage? : String = "") -> Unit {
   let k = r.station + "\u{1}" + r.session
   go_tos[k] = seq
+  go_to_said.set(@signals.untracked(fn() { go_to_said.get() }) + 1)
   if passage.trim(chars=" \n\t") != "" {
     go_to_passages[k] = passage
   } else {

@@ -273,6 +273,8 @@ priv struct Picked {
   /// picked by a finger (finger_select.mbt): held on a word, its ends' handles, the system's text menu over it; the
   /// old view it was picked in (an old view's words: Node's `island`), the only one whose words it picks
   mut finger : Bool
+  /// the finger has slid after picking its word; layout moving under a still hold does not widen that word
+  mut slid : Bool
   mut island : @view.NodeId?
   /// the word a finger's hold picked (its start and its end), widened from by words while the finger slides on
   mut word : (SelSpot, SelSpot)?
@@ -293,6 +295,7 @@ let picked : Picked = {
   layer: OldLayer(0),
   made: 0,
   finger: false,
+  slid: false,
   island: None,
   word: None,
   handle: 0,
@@ -369,6 +372,11 @@ fn desk_build_start() -> Unit {
 /// As a frame ends (its targets in place): the shapes and drag areas it said are the ones in force, the pointer's
 /// target found again where it rests (what moved under it), its shape shown.
 fn Ctx::desk_frame_end(self : Ctx) -> Unit {
+  if self.pointer_pending {
+    self.pointer_pending = false
+    // The frame has read the event. A resting mouse follows the current target again from here.
+    view_point_seen.val = (-1, false, -1)
+  }
   desk.mouse_drags = match desk.next_mouse_drags.last() {
     Some(on) => on
     None => true
@@ -1180,7 +1188,7 @@ fn Ctx::select_after_layout(self : Ctx) -> Unit {
   // (read so: hand.mbt)
   hand.down.get() |> ignore
   // (the window's tree's: as each frame lays it out, view_frame)
-  if picked.dragging && self.down && !tree_picking() {
+  if select_sliding() && self.down && !tree_picking() {
     hand.pointer.get() |> ignore
     self.select_to(self.px, self.py)
   }
@@ -1210,7 +1218,7 @@ fn Ctx::select_edge(self : Ctx) -> Unit {
     return
   }
   let v = match self.bar_drawn(id) {
-    Some(b) if picked.dragging && self.down && !b.foot => {
+    Some(b) if select_sliding() && self.down && !b.foot => {
       let top = b.y0 + b.top_in
       let foot = b.y1 - b.foot_in
       if foot <= top {
@@ -1469,6 +1477,18 @@ fn Ctx::select_move(self : Ctx, x : Double, y : Double) -> Bool {
   if !picked.dragging {
     return false
   }
-  self.select_to(x, y)
+  if x != self.last_x || y != self.last_y {
+    picked.slid = true
+  }
+  if select_sliding() {
+    self.select_to(x, y)
+  }
   picked.spans.values().any(fn(s) { s.a < s.b })
+}
+
+///|
+/// A mouse's drag or a finger that moved from its picked word (or took a handle): follow the pointer as the page
+/// moves under it. A word picked by a still finger stays that word even when its paragraph moves.
+fn select_sliding() -> Bool {
+  picked.dragging && (!picked.finger || picked.slid || picked.handle != 0)
 }

@@ -77,11 +77,11 @@ test "a login whose page gives a code to paste back: 打开登录页, then the c
   assert_true(t.find("在 github.com 登录，把页面给的码贴到下面") is Some(_))
   t.tap_text("打开登录页")
   assert_true(t.opened().contains("https://app.devin.ai/login"))
-  assert_true(words_node(t, "完成") is None, msg="完成 once a code is in")
+  assert_true(done_at(t) is None, msg="完成 once a code is in")
   t.tap_text("粘贴登录码")
   t.type_text("ABC-123")
   t.frame()
-  let (x, y) = words_node(t, "完成").unwrap()
+  let (x, y) = done_at(t).unwrap()
   t.tap(x, y)
   let sent = named(calls, "machineLogin.answer")
   assert_eq(sent.length(), 1)
@@ -206,7 +206,7 @@ test "a login code sent (完成, or the keyboard's Done) lets go of the keyboard
     if by_enter {
       t.enter()
     } else {
-      let (x, y) = words_node(t, "完成").unwrap()
+      let (x, y) = done_at(t).unwrap()
       t.tap(x, y)
     }
     assert_eq(named(calls, "machineLogin.answer").length(), 1, msg="enter \{by_enter}")
@@ -274,4 +274,13 @@ test "a login card's field keeps in view as the keyboard comes up: under the bar
   t.frame()
   guard t.focused() is Some({ rect: (_, y2, _, h2), .. }) else { fail("the field let go of the focus") }
   assert_true(y2 >= @sfpages.bar_foot && y2 + h2 <= composer, msg="field at \{y2}..\{y2 + h2}")
+}
+
+///|
+/// Where the login card's 完成 is: at the end of its code's field, on its row (the keyboard's own 完成 is elsewhere).
+fn done_at(t : @ui.Tester) -> (Double, Double)? {
+  guard t.rect_of("粘贴登录码") is Some((_, fy, _, fh)) else { return None }
+  t.words().iter().find_first(fn(w) { w.0 == "完成" && w.2 + w.4 / 2.0 >= fy && w.2 + w.4 / 2.0 <= fy + fh }).map(fn(w) {
+    (w.1 + w.3 / 2.0, w.2 + w.4 / 2.0)
+  })
 }

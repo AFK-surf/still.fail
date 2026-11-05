@@ -592,7 +592,7 @@ test "wide: folding moves the block as the web's: the list where it was as the b
   let (px, _, _, _) = t.query(Button, label="展开侧边栏").unwrap().rect
   // (its line in the middle of its strip)
   assert_eq(px + @sfdesk.edge_half, @sfdesk.closed_edge + @sfdesk.wide.side_w.get() + @sfdesk.edge_half)
-  assert_true(@sfdesk.wide.bar_mr >= 0.0)
+  assert_true(@sfdesk.page_bar_room().3 >= 0.0)
 }
 
 ///|
@@ -603,7 +603,11 @@ test "wide: shown a while, the page moves aside as far as what it shows is from 
   t.move(1000.0, 400.0)
   t.run_for(@ui.move_most_ms)
   // folded: what the page shows across (its bar left out), and where its field is
-  let (left, right) = t.ctx().shown_across(@sfdesk.pane_page_id(), but="page-bar").unwrap()
+  // (a page made once of the tree's: what its parts show across; else the old view's page)
+  let (left, right) = match @sfdesk.pane_made_seen().bind(fn(id) { @ui.view_tree().unwrap().view_of(id) }) {
+    Some(_) => @sfdesk.pane_content_span().unwrap()
+    None => t.ctx().shown_across(@sfdesk.pane_page_id(), but="page-bar").unwrap()
+  }
   let (x0, _, _, _) = t.rect_of("发消息").unwrap()
   // the pointer on the bar: shown a while, the page moved aside as far as that needs, no further than the room on its
   // right or the sidebar's width
@@ -891,13 +895,13 @@ test "wide: a newer build of the desktop app ready: 重启更新 the update key 
   t.run_for(@ui.move_most_ms)
   let (fx, _, _, _) = t.query(Button, label="重启更新").unwrap().rect
   assert_eq(fx, @sfdesk.update_closed_in)
-  assert_eq(@sfdesk.wide.bar_pl, @sfdesk.bar_update_in)
+  assert_eq(@sfdesk.page_bar_room().0, @sfdesk.bar_update_in)
   // shown a while: 更新 back in the sidebar's first row, the bar starting past the sidebar with its own 12
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
   t.move(rx + rw / 2.0, ry + rh / 2.0)
   t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.wide.peeking.get())
-  assert_eq(@sfdesk.wide.bar_pl, @sfdesk.bar_in)
+  assert_eq(@sfdesk.page_bar_room().0, @sfdesk.bar_in)
 }
 
 ///|

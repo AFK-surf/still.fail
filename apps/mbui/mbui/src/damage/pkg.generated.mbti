@@ -2,23 +2,34 @@
 package "mbui/damage"
 
 // Values
+pub fn capture_of(FixedArray[Double], Int32) -> (Double, (Double, Double, Double, Double))?
+
+pub let nowhere : (Double, Double, Double, Double)
+
+pub fn shows_stream(FixedArray[Double], Int32) -> Bool
+
 pub let stream_tex_base : Double
+
+pub fn union((Double, Double, Double, Double), (Double, Double, Double, Double)) -> (Double, Double, Double, Double)
 
 pub let view_tex_base : Double
 
 // Errors
 
 // Types and methods
-pub struct Damage {
+pub struct Parts {
   // private fields
 }
-pub fn Damage::forget(Self) -> Unit
-pub fn Damage::new() -> Self
-pub fn Damage::next(Self, FixedArray[Double], Int32, Double, Double, Double, Double, Double, Double) -> Array[(Double, Double, Double, Double)]
-pub fn Damage::tell(Self, Bool) -> Unit
-pub fn Damage::telling(Self) -> Bool
-pub fn Damage::told(Self) -> String
-pub fn Damage::why(Self) -> Int32
+pub fn Parts::add(Self, (Double, Double, Double, Double)) -> Unit
+pub fn Parts::add_changed(Self, FixedArray[Double], Int32, FixedArray[Double], Int32) -> Unit
+pub fn Parts::any(Self) -> Bool
+pub fn Parts::new() -> Self
+pub fn Parts::reach_of(Self, FixedArray[Double], Int32, Int32) -> (Double, Double, Double, Double)
+pub fn Parts::take(Self, Double, Double, Array[(Double, Double, Double, Double)]) -> Array[(Double, Double, Double, Double)]
+pub fn Parts::whole(Self, Int32) -> Unit
+pub fn Parts::whole_said(Self) -> Bool
+pub fn Parts::why(Self) -> Int32
+pub fn Parts::work(Self) -> Int32
 
 // Type aliases
 

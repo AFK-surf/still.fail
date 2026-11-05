@@ -259,9 +259,9 @@ test "an iPhone Duo on its side, the soft keyboard rising: the cards end on it f
 /// it, its foot left corner its own).
 fn composer_and_page(t : @ui.Tester) -> (@ui.Laid, @ui.Laid)? {
   let bs = t.boxes_held()
-  guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
-  let ed = bs[e]
-  let round = fn(b : @ui.Laid) { b.x <= ed.x && ed.x + ed.w <= b.x + b.w && b.y <= ed.y && ed.y + ed.h <= b.y + b.h }
+  guard tape_composer_field(t) is Some(ed) else { return None }
+  let (x, y, w, h) = ed.rect
+  let round = fn(b : @ui.Laid) { b.x <= x && x + w <= b.x + b.w && b.y <= y && y + h <= b.y + b.h }
   let mut page : @ui.Laid? = None
   let mut box : @ui.Laid? = None
   for b in bs {
@@ -462,7 +462,7 @@ test "an iPhone Duo on its side: a service alone in the side panel a card in it,
   let (x, y, hw, hh) = holes[0]
   // the panel it is alone in: the roundest at its foot left of those round it
   let mut panel : @ui.Laid? = None
-  for b in t.boxes() {
+  for b in t.boxes_held() {
     if b.radii.3 > 0.0 && b.x < x && x + hw <= b.x + b.w && b.y < y && y + hh < b.y + b.h &&
       (panel is None || panel.unwrap().w > b.w) {
       panel = Some(b)
@@ -635,8 +635,8 @@ test "an iPhone Duo: the workspace's button has a dot while another workspace ha
 ///|
 /// The composer's width in the chat's page (the page's own width less its room), as last drawn.
 fn composer_w(t : @ui.Tester) -> Double {
-  match t.boxes().search_by(fn(b) { b.kind == "editor" }) {
-    Some(i) => t.boxes()[i].w
+  match tape_composer_field(t) {
+    Some(field) => field.rect.2
     None => 0.0
   }
 }

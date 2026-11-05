@@ -1342,14 +1342,10 @@ fn Ctx::emit_rich_glyphs(
     }
     let gx = glyph_x(ox + lay.xs[c] + lay.pre[c] + g.ox / z, sc)
     let gy = glyph_row(top + lay.line_base[l], g.oy / z, sc)
-    match unplaced {
-      Some(u) => u.push((self.ninst, ox + lay.xs[c] + lay.pre[c] + g.ox / z, top + lay.line_base[l], g.oy / z))
-      None => ()
-    }
     let (gw, gh) = (g.gw / z, g.gh / z)
     // (the uniform scale is about its ink's middle; an extra horizontal scale is about its advance's middle, so a
     // glyph stays in its place while that place changes width)
-    let (gx, gy, gw, gh, ga) = match own {
+    let (lx, ly, gw, gh, ga) = match own {
       Some(gl) => {
         let ink_x = gx + gw * (1.0 - gl.scale) / 2.0
         let cell_x = ox + lay.xs[c] + lay.adv[c] / 2.0
@@ -1358,6 +1354,14 @@ fn Ctx::emit_rich_glyphs(
       }
       None => (gx, gy, gw, gh, alpha)
     }
+    // (where it is before it is set on the pixels, moved as its own look moves it: what places it again elsewhere (a
+    // node's words, view_blit) places it there)
+    match unplaced {
+      Some(u) =>
+        u.push((self.ninst, ox + lay.xs[c] + lay.pre[c] + g.ox / z + (lx - gx), top + lay.line_base[l], g.oy / z + (ly - gy)))
+      None => ()
+    }
+    let (gx, gy) = (lx, ly)
     glyph_pushing.val = true
     self.push_inst(
       gx,

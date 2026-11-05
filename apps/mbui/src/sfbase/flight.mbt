@@ -76,9 +76,9 @@ pub(all) struct SendFlight {
   mut key : String
   mut placed : Bool
   mut placed_frame : Int
-  way : @motion.Anim
+  way : FlightWay
   /// what was the composer's alone (a quote's ✕ and empty comment hint) leaving as they set out (@sf.leave)
-  gone : @motion.Anim
+  gone : FlightWay
   /// a new chat's first words: the list comes up with them (flight_carry_start). Where what they go to is to start
   /// from (their bubble's corner, or the first file's tile without words)
   carried : Bool
@@ -105,9 +105,14 @@ pub(all) struct FlyingFile {
   from : (Double, Double, Double, Double)
   /// The source's visible part and opacity, if it was still coming into its container when sent.
   shown : @ui.DrawnState?
+  /// The scale at which the source's contents were drawn; its `from` rectangle already includes it.
+  source_scale : Double
   picture : String?
   mut paint : ((Double, Double, @ui.Fit, Double) -> Unit)?
   face : () -> Unit
+  /// The same waiting face in a retained page's flight layer, taking its snapshot before the draft is emptied.
+  node : ((@view.View) -> Unit)?
+  leaving_node : ((@view.View) -> Unit)?
   ground : Int64
   leaving : ((Double, Double, Double, Double), () -> Unit)?
   quote_words : (String, Double)?
@@ -153,7 +158,7 @@ pub let flight_wait_ms : Double = 2000.0
 let flight_fly : Double = 0.8
 
 ///|
-let flight_settle : Double = 0.24
+pub let flight_settle : Double = 0.24
 
 ///|
 /// What is sent from the composer of chat `chat` takes off from its field (`field`, before it is emptied: its words set
@@ -174,14 +179,36 @@ pub fn flight_start(
   marks? : Array[(Int, Int)] = [],
   runs? : Json? = None,
 ) -> Unit {
+  flight_start_from(c, chat, turns, key, words, room, files, c.field_lines(field), hold~, desk~, marks~, runs~)
+}
+
+///|
+/// The same flight starting in the visible lines of a retained field (Field::lines), captured before it is cleared.
+/// The source's geometry is supplied by the editor; flight timing, the list's turn and the destination stay shared.
+pub fn flight_start_from(
+  c : @ui.Ctx,
+  chat : String,
+  turns : String,
+  key : String,
+  words : String,
+  room : Double,
+  files : Array[FlyingFile],
+  source : @ui.FieldLines?,
+  hold~ : (Double) -> Unit,
+  desk~ : Bool,
+  marks? : Array[(Int, Int)] = [],
+  runs? : Json? = None,
+) -> Unit {
   send_flight.set(None)
   if @ui.reduced_motion() || (words == "" && files.is_empty()) {
     return
   }
-  match c.field_words(field) {
-    Some(((x, y), (rx, ry, w, h))) => {
+  match source {
+    Some(source) => {
+      let (x, y) = (source.x, source.y)
+      let (rx, ry, w, h) = source.room
       // the field's words as laid out (scrolled to its last lines when there were more than it holds), its room
-      let (lines, lead) = field_lines_of(c, field, words)
+      let (lines, lead) = lines_of(Some(source), words)
       send_flight.set(Some({
         chat,
         turns,
@@ -203,7 +230,7 @@ pub fn flight_start(
         key,
         placed: false,
         placed_frame: -1,
-        way: @motion.Anim::new(0.0),
+        way: FlightWay::new(),
         gone: leaving(),
         carried: false,
         from_top: y - 8.0,
@@ -223,8 +250,8 @@ pub fn flight_start(
 
 ///|
 /// What leaves as what was sent sets out (SendFlight's `gone`), set off now.
-fn leaving() -> @motion.Anim {
-  let a = @motion.Anim::new(0.0)
+fn leaving() -> FlightWay {
+  let a = FlightWay::new()
   a.animate(1.0, @motion.tween(@sf.leave_ms, ease=Leave))
   a
 }
@@ -280,7 +307,7 @@ pub fn flight_carry_start(
         key: "",
         placed: false,
         placed_frame: -1,
-        way: @motion.Anim::new(0.0),
+        way: FlightWay::new(),
         gone: leaving(),
         carried: true,
         ms: flight_carry_ms,
@@ -534,22 +561,29 @@ pub fn flight_takes(chat : String, key : String) -> Bool {
 /// The row the words go to is in the list: they go from the next frame on, all of their way said now (and the
 /// composer let go a quarter of the way).
 pub fn flight_placed(c : @ui.Ctx, f : SendFlight) -> Unit {
+  flight_placed_at(c, f, c.moment())
+}
+
+///|
+/// A retained landing has its geometry in the placement pass, and keeps the cause's moment when declaring the
+/// same path. The old frame calls this with its moment before measuring that landing on its next frame.
+fn flight_placed_at(c : @ui.Ctx, f : SendFlight, at : Double) -> Unit {
   if !f.placed {
     f.placed = true
     // the message sent is in the list, its row by its key (its outbox entry's id, or the message's): what a run waits
     // for (`said`), not the words' way there
     c.say("sent row in the list \{f.key}")
     f.placed_frame = c.frame_number()
-    f.set_out = c.moment()
+    f.set_out = at
     if f.carried {
       // a new chat's: once its choices have faded (web: 90 ms after what leaves has begun to); in the wide frame at
       // once, the composer going to the chat's foot with them (Chat.tsx toMadeChat: no wait)
       f.after = if f.desk { 0.0 } else { flight_carry_after_ms }
-      f.way.animate(1.0, @motion.tween(f.ms, ease=Linear, delay=f.after))
+      f.way.animate(1.0, @motion.tween(f.ms, ease=Linear, delay=f.after), start_at=at)
       // (the composer let go as they set out: their ground comes in round them from there)
       (f.hold)(f.after)
     } else {
-      f.way.animate(1.0, @motion.tween(f.ms, ease=Linear))
+      f.way.animate(1.0, @motion.tween(f.ms, ease=Linear), start_at=at)
       (f.hold)(flight_settle * f.ms)
     }
   }
@@ -689,11 +723,17 @@ pub(all) struct FlightPiece {
 /// message's words are laid out, or when those are not the words sent (a run the core changed, such as a link written out), nor for
 /// a new chat's first words (they come up with its list): they go as one block.
 pub fn flight_pieces(c : @ui.Ctx, f : SendFlight) -> (Array[FlightPiece], @ui.WordsPiece)? {
+  flight_pieces_of(f, c.words_shape_of(flight_words_key))
+}
+
+///|
+/// The same pieces for a retained message's words, taken from their actual rich layout.
+pub fn flight_pieces_of(f : SendFlight, words : @ui.Words?) -> (Array[FlightPiece], @ui.WordsPiece)? {
   guard f.lines is Some(lines) && !f.carried else { return None }
   // (their shape, not where they lie: placed where they are as laid out, flight_pieces_drawn)
   let gone = marks_brackets(f.marks)
   let said = flight_said(f)
-  guard c.words_shape_of(flight_words_key) is Some(w) &&
+  guard words is Some(w) &&
     w.pieces.length() == 1 &&
     w.text == said else {
     return None
@@ -928,7 +968,12 @@ fn flight_pieces_drawn(
 /// The field's lines (`field`'s, as it laid them out) and where `words` start in them, after what came before them
 /// that was trimmed off; none when they are not there as they are.
 fn field_lines_of(c : @ui.Ctx, field : String, words : String) -> (@ui.FieldLines?, Int) {
-  match c.field_lines(field) {
+  lines_of(c.field_lines(field), words)
+}
+
+///|
+fn lines_of(source : @ui.FieldLines?, words : String) -> (@ui.FieldLines?, Int) {
+  match source {
     Some(l) => {
       let mut lead = 0
       while lead < l.text.length() &&
@@ -1018,14 +1063,25 @@ pub fn flight_quote_words(c : @ui.Ctx, f : SendFlight, key : String) -> (String,
 }
 
 ///|
-/// A thing sent while it was coming into its container starts with the part and opacity that were visible. As it goes
-/// to its message, its existing flight opens that cut and brings its opacity to the message's, on the same way.
-fn flight_shown(c : @ui.Ctx, node : Int, shown : @ui.DrawnState?, from : (Double, Double, Double, Double), w : Double, h : Double, up : Double) -> Double {
+priv struct FlightShown {
+  left : Double
+  top : Double
+  right : Double
+  bottom : Double
+  soft : Double
+  alpha : Double
+}
+
+///|
+/// A thing sent while it was coming into its container starts with the part and opacity that were visible. Both
+/// rendering paths open that same cut and opacity on the send's path, in shares of the thing's current size.
+fn flight_visible(shown : @ui.DrawnState?, from : (Double, Double, Double, Double), up : Double) -> FlightShown {
+  let whole : FlightShown = { left: 0.0, top: 0.0, right: 1.0, bottom: 1.0, soft: 0.0, alpha: 1.0 }
   match shown {
-    None => 1.0
+    None => whole
     Some(s) => {
       let (x, y, fw, fh) = from
-      if fw <= 0.0 || fh <= 0.0 { return s.alpha }
+      if fw <= 0.0 || fh <= 0.0 { return { ..whole, alpha: s.alpha } }
       let p = dclamp(up, 0.0, 1.0)
       let (l, t, r, b) = s.clip
       let left = dclamp((l - x) / fw, 0.0, 1.0) * (1.0 - p)
@@ -1033,13 +1089,19 @@ fn flight_shown(c : @ui.Ctx, node : Int, shown : @ui.DrawnState?, from : (Double
       let right = 1.0 - (1.0 - dclamp((r - x) / fw, 0.0, 1.0)) * (1.0 - p)
       let bottom = 1.0 - (1.0 - dclamp((b - y) / fh, 0.0, 1.0)) * (1.0 - p)
       let soft = dmax(dmax(s.soft.0, s.soft.1), dmax(s.soft.2, s.soft.3)) * (1.0 - p)
-      if left > 0.0 { c.cut_to_right(node, w * (1.0 - left), soft~) }
-      if top > 0.0 { c.cut_to_bottom(node, h * (1.0 - top), soft~) }
-      if right < 1.0 { c.cut_to_left(node, w * right, soft~) }
-      if bottom < 1.0 { c.cut_to_top(node, h * bottom, soft~) }
-      s.alpha + (1.0 - s.alpha) * p
+      { left, top, right, bottom, soft, alpha: s.alpha + (1.0 - s.alpha) * p }
     }
   }
+}
+
+///|
+fn flight_shown(c : @ui.Ctx, node : Int, shown : @ui.DrawnState?, from : (Double, Double, Double, Double), w : Double, h : Double, up : Double) -> Double {
+  let v = flight_visible(shown, from, up)
+  if v.left > 0.0 { c.cut_to_right(node, w * (1.0 - v.left), soft=v.soft) }
+  if v.top > 0.0 { c.cut_to_bottom(node, h * (1.0 - v.top), soft=v.soft) }
+  if v.right < 1.0 { c.cut_to_left(node, w * v.right, soft=v.soft) }
+  if v.bottom < 1.0 { c.cut_to_top(node, h * v.bottom, soft=v.soft) }
+  v.alpha
 }
 
 ///|

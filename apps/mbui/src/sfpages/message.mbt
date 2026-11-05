@@ -40,14 +40,20 @@ pub(all) struct ListMotion {
 /// the chat (find.mbt); none out of a chat's list.
 fn marked_of(here : MessageHere, ts : String) -> Array[String] {
   match here.list {
-    Some(l) => {
-      let rd = reading_of(l.rk)
-      if rd.found_at != "" && rd.found_at == ts {
-        rd.found_words
-      } else {
-        find_words_in(l.rk)
+    // (its chat's reading as it is, none made for a chat left)
+    Some(l) =>
+      match readings.get(l.rk) {
+        Some(rd) => {
+          // (as the search said it, followed)
+          rd.found_told.get() |> ignore
+          if rd.found_at != "" && rd.found_at == ts {
+            rd.found_words
+          } else {
+            find_words_in(l.rk)
+          }
+        }
+        None => find_words_in(l.rk)
       }
-    }
     None => []
   }
 }
@@ -428,10 +434,10 @@ fn message_time(c : @ui.Ctx, key : String, time : Stamp?) -> Unit {
     Some(s) => {
       let id = c.id("msg-time/" + key)
       if c.clicked(id) {
-        absolute_times.val = !absolute_times.val
+        absolute_times.set(!absolute_times.get())
       }
-      @sf.tip(c, "msg-time/" + key, id, if absolute_times.val { s.ago } else { s.full })
-      c.box(id~, keep=true, fn() { c.text(if absolute_times.val { s.full } else { s.ago }, style=msg_time) |> ignore }) |> ignore
+      @sf.tip(c, "msg-time/" + key, id, if absolute_times.get() { s.ago } else { s.full })
+      c.box(id~, keep=true, fn() { c.text(if absolute_times.get() { s.full } else { s.ago }, style=msg_time) |> ignore }) |> ignore
     }
   }
 }
@@ -1046,89 +1052,6 @@ fn beside_quotes(quotes : Array[Quote], files : Array[Attachment]) -> Array[Atta
   } else {
     files.filter(fn(a) { !own.contains(a.name) })
   }
-}
-
-///|
-/// What an agent of the chat said in Slack (or Feishu, or another chat) rather than here, or a person's message there
-/// it was given (SentElsewhere): drawn as a message of theirs, that place's mark on the picture's corner and, after the
-/// name, where it went or came from (its link), red where sending it failed.
-pub fn sent_elsewhere(c : @ui.Ctx, src : Source, here : MessageHere, s : Elsewhere) -> Unit {
-  let agent = if !s.received && s.by.agent != "" && here.view.agents.iter().any(fn(a) { a.key == s.by.agent }) {
-    s.by.agent
-  } else {
-    ""
-  }
-  let surface = match s.place {
-    Some(p) => p.surface
-    None => "slack"
-  }
-  let key = "e:" + s.key
-  others_message(
-    c,
-    here.inline,
-    key,
-    s.time,
-    fn() {
-      if s.received {
-        c.box(style=person_avatar_room, fn() {
-          person_avatar(c, src, s.by.name, s.by.name, s.by.picture)
-          place_corner(c, surface)
-        })
-        |> ignore
-      } else {
-        agent_avatar(c, src, here, key, s.by.maker, s.by.runtime, if surface == "feishu" { "feishu" } else { "slack" }, agent)
-      }
-    },
-    fn() { message_name(c, src, here, key, s.by.name, agent, "") },
-    Some(fn() { elsewhere_route(c, key, s) }),
-    fn() {
-      @sf.markdown(c, s.text, key="msg-elsewhere/" + s.key, size=body_size, on_link=fn(h) {
-        open_link(h)
-      })
-      |> ignore
-      message_files(c, src, here, s.attachments, false)
-    },
-  )
-}
-
-///|
-/// Where it went or came from (msgRoute): its mark, 发送到 or 来自 Slack, the place (its mark and its name, a link
-/// where it has one: hPlace), 发送失败 in red.
-fn elsewhere_route(c : @ui.Ctx, key : String, s : Elsewhere) -> Unit {
-  let t = @sf.theme()
-  let (url, app) = match s.place {
-    Some(p) => (p.url, p.app)
-    None => ("", "")
-  }
-  let place = if url != "" { c.id("msg-place/" + key) } else { 0 }
-  if place != 0 {
-    if c.clicked(place) {
-      c.tell("msg-place/" + key, fn() { @sfbase.open_slack(app, url) |> ignore })
-    }
-  }
-  c.box(style=msg_route, fn() {
-    @sf.icon(c, if s.received { "received" } else { "send" }, size=route_icon, color=t.p.accent) |> ignore
-    c.text(@sf.t(if s.received { "web-main.chat.fromSlack" } else { "web-main.history.sentTo" }).trim_end(chars=" ").to_string(), style=route_words)
-    |> ignore
-    c.box(style=if place != 0 && c.hovered(place) { route_place_hot } else { route_place }, id=place, fn() {
-      let (mark, name) = match s.place {
-        Some(p) => (p.surface, p.name)
-        None => ("slack", "Slack")
-      }
-      match mark {
-        "ember" | "stillfail" => @sf.drawable(c, if t.dark { "stillfail_mark_dark" } else { "stillfail_mark" }, route_mark) |> ignore
-        "feishu" => @sf.feishu_mark(c, route_mark) |> ignore
-        _ => @sf.slack_mark(c, route_mark) |> ignore
-      }
-      c.text(name, style=route_place_words) |> ignore
-    })
-    |> ignore
-    if s.failed {
-      c.box(style=route_failed, fn() { c.text(@sf.t("web-main.history.sendFailed"), style=route_failed_words) |> ignore })
-      |> ignore
-    }
-  })
-  |> ignore
 }
 
 ///|

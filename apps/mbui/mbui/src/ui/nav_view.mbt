@@ -67,12 +67,15 @@ fn[P] Nav::top_beside(self : Nav[P]) -> (NavPage[P], NavPage[P]?) {
 }
 
 ///|
-/// Whether page `serial` shows: the top, or the one beside it as one moves (read: told as it changes).
-fn[P] Nav::shows(self : Nav[P], serial : Int) -> Bool {
+/// Whether page `serial` shows: the top, or the one beside it as one moves, or the one kept shown in the top's place
+/// while that waits for what it shows (Nav::flat_keep) (read: told as it changes).
+pub fn[P] Nav::shows(self : Nav[P], serial : Int) -> Bool {
   self.said.get() |> ignore
   self.shown.get() |> ignore
   let (top, beside) = self.top_beside()
-  top.serial == serial || (beside is Some(b) && b.serial == serial)
+  top.serial == serial ||
+  (beside is Some(b) && b.serial == serial) ||
+  (self.flat_kept_entry() is Some(e) && e.serial == serial)
 }
 
 ///|
@@ -462,6 +465,29 @@ fn[P] Nav::page_built(
     c.back_island_next = before_island
     c.back_chain_next = before_chain
   }
+}
+
+///|
+/// `body` building page `serial` of the stack's old view in `c` as Nav::page_built builds a page: as that page (what
+/// Nav::under answers for, its time on top, what it owns), its ids its own (in its serial's scope); none where it has
+/// left the stack, but where it is kept shown in the top's place (Nav::flat_keep). For an old view a page made once as nodes holds (an island of it).
+pub fn[P] Nav::page_old(self : Nav[P], c : Ctx, serial : Int, body : (Ctx) -> Unit) -> Unit {
+  // (of the stack, or kept shown in the top's place while that waits (Nav::flat_keep), gone from it though it is)
+  let e = match self.entry(serial) {
+    Some(e) => e
+    None =>
+      match self.flat_kept_entry() {
+        Some(e) if e.serial == serial => e
+        _ => return
+      }
+  }
+  let saved = c.owner
+  let saved_stint = c.stint
+  c.owner = e.serial
+  c.stint = e.stint
+  self.built_by(e, fn() { c.scope(e.serial, fn() { body(c) }) })
+  c.owner = saved
+  c.stint = saved_stint
 }
 
 ///|
