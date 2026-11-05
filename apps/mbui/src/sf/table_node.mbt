@@ -526,22 +526,16 @@ fn table_md(c : @ui.Ctx) -> Md {
 /// A table's cell of only the message's images (Md::cell_images', of the window's tree): each one's proportion and its
 /// drawing in a node as wide as it is given; None for any other cell, drawn as words.
 fn cell_images_of(cell : Array[MdInline], files : (String) -> PlacedNode?) -> Array[(Double, (@view.View, () -> Double) -> Unit)]? {
+  let names = match md_cell_picture_names(cell, fn(name) { files(name).bind(fn(f) { f.image }).map(fn(im) { im.0 }) }) {
+    Some(images) => images
+    None => return None
+  }
   let out = []
-  for x in cell {
-    match x {
-      Text(t) if t.trim(chars=" \n\t").to_string() == "" => ()
-      SoftBreak | HardBreak => ()
-      Image(src, _) =>
-        match files(file_name_of(src)) {
-          Some({ image: Some((r, draw)), .. }) => out.push((dmax(dmin(r, 4.0), 0.25), draw))
-          _ => return None
-        }
-      _ => return None
+  for im in names {
+    match files(im.0).bind(fn(f) { f.image }) {
+      Some((_, draw)) => out.push((im.1, draw))
+      None => return None
     }
   }
-  if out.length() == 0 {
-    None
-  } else {
-    Some(out)
-  }
+  Some(out)
 }
