@@ -170,12 +170,18 @@ pub fn message_files(
 ///|
 /// The session whose workspace keeps a message's file: as the core says it, else the chat's first agent's (useKeeper).
 fn owner_of(here : MessageHere, a : Attachment) -> String {
+  file_owner(here.session, Some(here.view), a)
+}
+
+///|
+/// A file's keeper depends on chat data, not on the layout of the row showing it.
+fn file_owner(session : String, view : ChatView?, a : Attachment) -> String {
   if a.owner != "" {
     a.owner
   } else {
-    match here.view.agents.get(0) {
+    match view.bind(fn(v) { v.agents.get(0) }) {
       Some(ag) => ag.key
-      None => here.session
+      None => session
     }
   }
 }

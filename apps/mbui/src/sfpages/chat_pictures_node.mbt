@@ -11,6 +11,8 @@ struct ChatPicture {
 struct ChatPictures {
   owner : @view.View
   src : Source
+  chat : ChatRef
+  view : () -> ChatView?
   pictures : Map[String, ChatPicture]
 }
 
@@ -37,8 +39,8 @@ let chat_pictures_lent : @view.Lent[ChatPictures] = @view.Lent::new()
 let chat_picture_in_sight : @view.Lent[() -> Bool] = @view.Lent::new()
 
 ///|
-fn ChatPictures::new(owner : @view.View, src : Source) -> ChatPictures {
-  { owner, src, pictures: {} }
+fn ChatPictures::new(owner : @view.View, src : Source, chat : ChatRef, view : () -> ChatView?) -> ChatPictures {
+  { owner, src, chat, view, pictures: {} }
 }
 
 ///|
@@ -65,9 +67,9 @@ fn ChatPictures::picture(self : ChatPictures, id : String) -> ChatPicture {
 
 ///|
 /// A row reads only the value the chat's picture owner has already obtained.
-fn ChatPictures::read(self : ChatPictures, here : MessageHere, a : Attachment) -> MediaPicture {
-  let station = here.station
-  let owner = owner_of(here, a)
+fn ChatPictures::read(self : ChatPictures, a : Attachment) -> MediaPicture {
+  let station = self.chat.station
+  let owner = file_owner(self.chat.session, (self.view)(), a)
   let kind = file_kind(a.name)
   let sent = sent_picture(station, a)
   let uploading = a.upload != "" && a.path == @sfbase.upload_path(a.upload)

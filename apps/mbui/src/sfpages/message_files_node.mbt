@@ -90,7 +90,7 @@ fn media_file_node(
   // A chat owns the picture request for a sighted row; measuring the row only reads the answer.
   let picture = fn() {
     match item.lent(chat_pictures_lent) {
-      Some(pictures) => pictures.read(here(), a())
+      Some(pictures) => pictures.read(a())
       None => message_media(@ui.current(), src, here().station, owner(), a())
     }
   }

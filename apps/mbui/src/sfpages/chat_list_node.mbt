@@ -305,7 +305,7 @@ pub fn chat_list_node(
   }
   // The chat, rather than a row made by layout, owns its image requests and their answers. Keep one data watch per
   // sighted row; a row only passed on the way is asked too, then its watch is let go.
-  let pictures = ChatPictures::new(v, src)
+  let pictures = ChatPictures::new(v, src, r, view)
   v.lends(chat_pictures_lent, pictures) |> ignore
   let picture_rows : Map[String, ChatPictureRow] = {}
   let picture_changes : Map[String, Bool] = {}
