@@ -121,19 +121,25 @@ fn top_acts() -> PageActs {
 }
 
 ///|
-/// How many times a page's nodes changed what it hands the bars (page_acts_told): read by the frame that hands them
-/// (nav_frame), built again as they change.
-// kept across runs: only ever counts on
-let page_acts_said : @signals.Signal[Int] = @signals.signal(0)
+/// Whether the frame that hands the system its bars is being built (nav_frame): what a page's nodes hand meanwhile
+/// handed with the rest as it ends.
+let nav_framing : Ref[Bool] = { val: false }
 
 ///|
-/// What `f` hands as page `page`'s actions, at its cause (a page's node's): the bars told, where that changed them.
+/// What `f` hands as page `page`'s actions, at its cause (a page's node's): handed to the system there and then where
+/// that changed what the page on top has in the bars (once a frame said what the bars hold: nav_want), not by a frame
+/// built again for it.
 fn page_acts_told(page : Page, f : () -> Unit) -> Unit {
   let was = acts_of(page).acts.map(fn(p) { p.0 })
   f()
-  if acts_of(page).acts.map(fn(p) { p.0 }) != was {
-    page_acts_said.set(@signals.untracked(fn() { page_acts_said.get() }) + 1)
+  if nav_framing.val || nav_want.val is None || page != app.nav.top() || acts_of(page).acts.map(fn(p) { p.0 }) == was {
+    return
   }
+  histories_ticked()
+  let handed = top_acts().acts.copy()
+  nav_page_before.clear()
+  nav_page_before.append(handed)
+  nav_hand(handed)
 }
 
 ///|
@@ -497,15 +503,15 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
   // (the column as the window is now, turned or not, before anything is laid out beside it)
   native_side_now()
   // (the page's actions as they were while the same page is shown: one built again hands them again)
-  // (what the page's nodes hand, handed as they change it: page_acts_told)
-  page_acts_said.get() |> ignore
   let page = app.nav.top()
   if nav_page_of.val != Some(page) {
     page_acts_left(page)
     nav_page_of.val = Some(page)
   }
   top_drawn.val = false
+  nav_framing.val = true
   body()
+  nav_framing.val = false
   // (what is up over the whole window as it said it, built again this frame or its part kept; gone once it is not)
   @sf.native_over_gone()
   // (the page come not drawn yet, the one before it still shown in its place: that one's actions kept in the bars as
@@ -518,6 +524,15 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
   let handed = if !top_drawn.val && !made_top && !pa.node && nav_page.is_empty() { nav_page_before.copy() } else { nav_page.copy() }
   nav_page_before.clear()
   nav_page_before.append(handed)
+  nav_hand(handed)
+}
+
+///|
+/// The page's actions `handed` to the system's bars, with the places and what is up over the whole window (nothing
+/// where the frame wants none: nav_want).
+fn nav_hand(handed : Array[(@hostapi.NavItem, () -> Unit)]) -> Unit {
+  let pa = top_acts()
+  let nav_page = pa.acts
   // (a chat's own as it handed them, not one on its way out handing none, nor what was kept for it)
   if pa.chat is Some(_) && pa.carried.length() == 0 && nav_page.iter().any(fn(p) { p.0.id.has_prefix("page/chat/") }) {
     bar_chat_last.clear()
