@@ -50,6 +50,8 @@ export interface Env {
   SERVICE_STATUS: DurableObjectNamespace<ServiceStatus>;
   /** The pages still.fail/status checks, by what the page calls them (status.ts). Unset: none. */
   STATUS_PAGES?: Record<string, string>;
+  /** The GitHub repository whose issues labelled `incident` still.fail/status shows (status.ts). Unset: none. */
+  STATUS_REPO?: string;
   /** still.fail's own relay process, in the relay's Worker (relay-worker.ts): its counters, read by the cron. Unset: not read. */
   RELAY?: DurableObjectNamespace<Relay>;
   GOOGLE_CLIENT_ID: string;
