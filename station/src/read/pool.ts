@@ -223,7 +223,7 @@ export class Readers {
     if (op === "outflowUsage") return this.outflowUsageRead(args, lang, told, signal);
     if (op === "outflowChats") return this.outflowChatsRead(args, lang, told, signal);
     if (op === "recentChatList") return this.recentChatRead(args, lang, told, signal);
-    if (op === "sessions") return this.sessionListRead(args, lang, told, signal);
+    if (op === "sessions") return this.sessionListRead(args, lang, told, background, signal);
     return this.saidRead(op, args, lang, told, background || filling(op, args), signal);
   }
 
@@ -345,9 +345,9 @@ export class Readers {
     throw new HttpError(502, "station stopping");
   }
 
-  private async sessionListRead(args: unknown, lang: Ask["lang"], told: boolean, signal?: AbortSignal): Promise<string> {
+  private async sessionListRead(args: unknown, lang: Ask["lang"], told: boolean, background: boolean, signal?: AbortSignal): Promise<string> {
     while (!this.closed) {
-      try { return await this.saidRead("sessions", args, lang, told, false, signal); }
+      try { return await this.saidRead("sessions", args, lang, told, background, signal); }
       catch (error) {
         if (!(error instanceof HttpError) || error.message !== SESSION_LIST_PENDING) throw error;
         this.sessionList ??= new SessionListBuilder(join(this.data, "stillfail.db"), this.backfill);
