@@ -12,6 +12,8 @@ import {
 
 options(
   "is-main": true,
+  // (what the native shell calls of the program, in a program built for Wasm alone: as the app's)
+  targets: { "wasm_shell.mbt": [ "wasm" ] },
   link: {
     "js": { "format": "iife" },
     // (run by mbui's native shell as the app is: what it calls of the program, wasm_shell.mbt)
