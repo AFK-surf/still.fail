@@ -283,7 +283,7 @@ fi
 FEED=$ZIP_NAME-mac.yml
 OWN_FEED=$U/feed/releases/mac/latest.json
 [ "$VARIANT" = stable ] || OWN_FEED=$U/feed/releases/mac/beta/latest.json
-sh "$CHAT/scripts/mac-feeds.sh" "$U/feed/releases/desktop/$ZIP" "$ZIP" "$N" "$OWN_FEED" "$U/feed/releases/desktop/$FEED"
+sh "$EMBER/scripts/mac-feeds.sh" "$U/feed/releases/desktop/$ZIP" "$ZIP" "$N" "$OWN_FEED" "$U/feed/releases/desktop/$FEED"
 
 # the window part (opened, above), with the screen; then what it made is taken away (done_with)
 was=$was HANDOFF_BUILD=$N OLD_APP=$OLD_APP on_screen bash "$D/handoff.sh" --opened

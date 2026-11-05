@@ -74,7 +74,7 @@ sign() {
   codesign --force --sign "${MAC_SIGN_IDENTITY:--}" "${how[@]}" "$APPDIR"
   codesign --verify --deep --strict --verbose=2 "$APPDIR" 2>&1 | sed 's/^/codesign: /'
   codesign -dvv "$APPDIR" 2>&1 | grep -E '^(Identifier|Authority|TeamIdentifier|Signature|Format)=' | sed 's/^/codesign: /'
-  case "${MAC_SIGN_IDENTITY:-}" in "Developer ID Application:"*) python3 "$CHAT/.github/mac_signing.py" notarize "$APPDIR" --no-staple ;; esac
+  case "${MAC_SIGN_IDENTITY:-}" in "Developer ID Application:"*) python3 "$EMBER/.github/mac_signing.py" notarize "$APPDIR" --no-staple ;; esac
   spctl --assess --type execute -vv "$APPDIR" 2>&1 | sed 's/^/spctl: /' || true
   rm -f "$ZIP"
   (cd "$OUT" && ditto -c -k --sequesterRsrc --keepParent "$NAME.app" "$(basename "$ZIP")")
