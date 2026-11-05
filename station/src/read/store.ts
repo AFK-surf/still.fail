@@ -682,8 +682,10 @@ export function keptChats(s: Store, viewer: string | null, threads: number[] | n
 /// The thread's card still pending, if any: its latest post with a card, as long as no person has written in the
 /// thread since (nor was it closed). The post as merged, and its card.
 export function pendingCard(s: Store, thread: number): [MessageRow, Json] | null {
-  if (!cardPostsReady(s.db, thread) && threadsWithCards(s, [thread]).length === 0) return null;
-  requireCardPosts(s, [thread]);
+  if (!cardPostsReady(s.db, thread)) {
+    if (threadsWithCards(s, [thread]).length === 0) return null;
+    throw new Refused(503, CARD_POSTS_PENDING + JSON.stringify([thread]));
+  }
   const asked = one(s, CARD_POST_LATEST, thread);
   return asked === undefined ? null : cardAt(s, thread, asked.n);
 }

@@ -8,6 +8,7 @@ import { test } from "node:test";
 import { CardPostsBuilder } from "../src/read/card-posts-builder.ts";
 import { Readers } from "../src/read/pool.ts";
 import { answersSince, makeStore, pendingCard } from "../src/read/store.ts";
+import { chats } from "../src/read/views.ts";
 import { cardPostsReady, installCardPosts } from "../src/store/card-post-index.ts";
 import { Store } from "../src/store/store.ts";
 
@@ -153,4 +154,33 @@ test("a card answer and its prepared posts are read from the same snapshot", asy
     db.exec("COMMIT");
     assert.deepEqual(answersSince(read, 0, [thread]).map((a) => [a.question.n, a.answer?.n]), [[2, 3]]);
   } finally { db?.close(); await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a list of cardless chats does not look up card post readiness for each row", () => {
+  const dir = mkdtempSync(join(tmpdir(), "cardless-pages-"));
+  const store = Store.open(join(dir, "stillfail.db")), db = store.db;
+  try {
+    for (let i = 0; i < 5; i++) {
+      const key = `s${i}`;
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: `/w/${key}`,
+        token: key, createdAt: 1, lastActiveAt: 1 });
+      const thread = store.openThread("ember", "EMBER", `cardless-${i}`, null, null).id;
+      store.joinThread(thread, key, "ember");
+      db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES(?,1,'message','agent',?,'hello',1)").run(thread, key);
+    }
+    let lookups = 0;
+    const traced = new Proxy(db, {
+      get(target, property) {
+        if (property === "prepare") return (sql: string) => {
+          if (/\bcard_post(?:s|_scopes|_meta)\b/i.test(sql)) lookups++;
+          return target.prepare(sql);
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const viewer = { sub: "me", email: "me", name: "Me", role: "owner", workspace: "w", device: "d" } as const;
+    assert.equal(chats(makeStore(traced, dir), viewer, false).length, 5);
+    assert.equal(lookups, 0);
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
