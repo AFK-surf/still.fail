@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { Store } from "../src/store/store.ts";
-import { ccSessionReady } from "../src/store/cc-thread-index.ts";
+import { ccSessionReady, CcIndexPreparation } from "../src/store/cc-thread-index.ts";
 import { indexedSessionChat, installSessionChatIndex, SESSION_CHAT_EMBER, SESSION_CHAT_OTHER,
   SessionChatPreparation, sessionChatReady } from "../src/store/session-chat-index.ts";
 
@@ -253,6 +253,41 @@ test("a writer between readiness and a preparation transaction is not missed", (
     prepare(store, "s");
     assert.equal(indexedSessionChat(db, "s")?.id, later);
     assert.equal(indexedSessionChat(db, "s")?.id, original(store, "s"));
+  } finally { writer.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+for (const tracked of [false, true]) test(`a session removed before ${tracked ? "name" : "copy"} tracking is not recreated`, () => {
+  const dir = mkdtempSync(join(tmpdir(), "session-chat-removed-")), path = join(dir, "stillfail.db");
+  const store = Store.open(path), db = store.db, writer = new DatabaseSync(path);
+  try {
+    store.insertSession({ key: "s", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "s", createdAt: 1, lastActiveAt: 1 });
+    const thread = store.openThread("ember", "CHAT", "s", null, null).id;
+    store.joinThread(thread, "s", "ember");
+    if (tracked) {
+      const copy = new CcIndexPreparation();
+      while (!ccSessionReady(db, "s")) copy.step(db, "s");
+    }
+    let removed = false;
+    const proxy = new Proxy(db, {
+      get(target, property) {
+        if (property === "exec") return (sql: string) => {
+          if (sql === "BEGIN IMMEDIATE" && !removed) {
+            writer.prepare("DELETE FROM sessions WHERE key='s'").run();
+            removed = true;
+          }
+          return target.exec(sql);
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const work = new SessionChatPreparation();
+    work.step(proxy, "s", 64, { existingSession: true });
+    assert.equal(work.step(proxy, "s", 64, { existingSession: true }).done, true);
+    assert.equal(removed, true);
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM session_chat_scopes WHERE session='s'").get()?.n, 0);
+    if (!tracked) assert.equal(db.prepare("SELECT COUNT(*) AS n FROM cc_sessions WHERE session='s'").get()?.n, 0);
   } finally { writer.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
