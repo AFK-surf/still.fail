@@ -125,7 +125,7 @@ for (const change of ["member.remove", "device.remove", "member"] as const) test
   const secrets = { preparePending: () => preparing, pending: () => [{ id: "private" }] };
   const route = requestRoutes({ secrets: secrets as never, plain: {} as never, lock: () => current })
     .find((r) => r.method === "GET" && r.pattern.test("/vault/requests"))!;
-  const answer = route.handle({ viewer: { sub: "bob", email: "bob@x.com", workspace: WS, device: w.bob.base.hex } } as never);
+  const answer = route.handle({ viewer: { sub: "bob", email: "bob@x.com", workspace: WS, device: w.bob.base.hex } } as never, []);
   const body = change === "member.remove" ? { sub: "bob" } : change === "device.remove" ? { id: w.bob.base.hex } : { sub: "carol", email: "carol@x.com", role: "member" };
   const entry = { v: 1 as const, ws: WS, seq: current.seq + 1, prev: current.head, at: 1001, kind: change, body };
   current = applyLock(current, { ...entry, sig: { key: w.alice.signer.id, alg: "Ed25519", sig: w.alice.signer.sign(lockBytes(entryHash(entry as Entry))) } }, 1001);
