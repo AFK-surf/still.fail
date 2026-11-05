@@ -1796,7 +1796,7 @@ pub fn quota_said(@json.Json?) -> String
 
 pub fn quote_card(@ui.Ctx, String, String, String, role? : String, comment? : String, composer? : Bool, jump? : Bool, remove? : Bool, picture? : () -> Unit, comment_field? : () -> Unit, words_width? : Double, words_key? : String) -> QuoteCardDone
 
-pub fn quote_card_node(@view.View, () -> String, () -> String, role? : () -> String, comment? : () -> String, composer? : Bool, corner? : () -> Double, jump? : () -> Unit, remove? : () -> Unit, picture? : (@view.View) -> Unit, picture_shown? : () -> Bool, comment_field? : (@view.View) -> Unit, words_width? : () -> Double?, tips? : TipLayer) -> QuoteCardNode
+pub fn quote_card_node(@view.View, () -> String, () -> String, role? : () -> String, comment? : () -> String, composer? : Bool, corner? : () -> Double, jump? : () -> Unit, remove? : () -> Unit, picture? : (@view.View) -> Unit, picture_box? : (@view.View) -> Unit, picture_shown? : () -> Bool, comment_field? : (@view.View) -> Unit, words_width? : () -> Double?, tips? : TipLayer) -> QuoteCardNode
 
 pub fn quote_ground() -> Int64
 

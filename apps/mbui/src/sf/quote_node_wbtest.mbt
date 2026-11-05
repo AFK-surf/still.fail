@@ -60,7 +60,12 @@ test "a quote's flying copy reserves its picture's room without making or owning
   @ui.set_view_app(fn(root) {
     @ui.set_tree_theme(ui_theme_now)
     let card = quote_card_node(root, fn() { "Ana" }, fn() { "图片的引用" }, comment=fn() { "留在图片下的评论" },
-      picture_shown=fn() { visible.get() }, picture=fn(p) {
+      picture_shown=fn() { visible.get() },
+      // (the box its picture is laid out in, as its caller says it: the copy's room for it)
+      picture_box=fn(p) {
+        p.box(fn(content) { content.width(Is(Some(180.0))).height(By(fn() { Some(height.get()) })) |> ignore }) |> ignore
+      },
+      picture=fn(p) {
         made.val += 1
         p.owns(fn() { released.val += 1 }) |> ignore
         p.box(fn(content) {

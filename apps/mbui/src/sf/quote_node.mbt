@@ -1,5 +1,7 @@
 // The same quote card in a message and waiting in the composer. Its source and comment stay in place as the
-// quote changes; the caller supplies the picture and the editable comment, owned by this card.
+// quote changes; the caller supplies the picture and the editable comment, owned by this card, and the box its picture
+// is laid out in without the picture (`picture_box`: a copy's room for it, the same box by what the caller says of it,
+// nothing of the picture read back as laid out).
 
 ///|
 pub(all) struct QuoteCardNode {
@@ -27,6 +29,7 @@ pub fn quote_card_node(
   jump? : () -> Unit,
   remove? : () -> Unit,
   picture? : (@view.View) -> Unit,
+  picture_box? : (@view.View) -> Unit,
   picture_shown? : () -> Bool = fn() { true },
   comment_field? : (@view.View) -> Unit,
   words_width? : () -> Double? = fn() { None },
@@ -36,7 +39,6 @@ pub fn quote_card_node(
   let pin = fn() { pin_of(author(), role()) }
   let card_at : Ref[@view.View?] = Ref(None)
   let words_at : Ref[@view.View?] = Ref(None)
-  let picture_height = @signals.signal(0.0)
   let make = fn(outer : @view.View) {
     card_at.val = Some(outer.box(fn(card) {
       card.radius(By(fn() { if composer { corner() } else { quote_corner } }))
@@ -108,9 +110,6 @@ pub fn quote_card_node(
           let inset = corner_inset - quote_card_in
           p.row(Is(true)).padding(Is(if composer { (16.0, 6.0, 16.0, 0.0) } else { (inset, 0.0, inset, inset) })) |> ignore
           make_picture(p)
-          p.reacts(fn() { p.laid_size_told().map(fn(size) { size.1 }) }, fn(h) {
-            picture_height.set(h.unwrap_or(0.0))
-          })
         })
         None => ()
       }
@@ -144,13 +143,10 @@ pub fn quote_card_node(
     copy: fn(p, width) {
       // The picture has its own flight. Repeating its factory here would register the flying copy as the real
       // message's landing and preview thumbnail, then remove that registration when the copy is released.
-      let picture_room = picture.map(fn(_) {
-        fn(room : @view.View) {
-          room.height(By(fn() { Some(picture_height.get()) })) |> ignore
-        }
-      })
+      // (its room as its caller says it is laid out, `picture_box`: the same box the picture is laid out in, nothing
+      // of the picture's laid size read back; none said, none)
       quote_card_node(p, author, words, role~, comment~, composer~, corner~,
-        picture?=picture_room, picture_shown~, words_width=width)
+        picture?=picture.bind(fn(_) { picture_box }), picture_shown~, words_width=width)
     },
   }
 }

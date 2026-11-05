@@ -980,6 +980,24 @@ let note_card_end : Double = 12.0
 let note_card_foot : Double = 9.0
 
 ///|
+/// A note's tray card's words' line (under its first), as the system's size of words makes it.
+let note_body_line : Double = 17.0
+
+///|
+/// Marking's tools' row (marks_tools_node's): how tall, 8 over the foot; the colours' row over it, 12 apart.
+let marks_tools_row_h : Double = 44.0
+
+///|
+let marks_tools_pad : Double = 8.0
+
+///|
+let marks_tools_gap : Double = 12.0
+
+///|
+/// The colours' row: a picture_button's 32 and 4 round it.
+let marks_palette_row_h : Double = 40.0
+
+///|
 /// The dark theme's colours the notes take (Theme.kt Dark): the page, its words, muted, subtle, the accent; their
 /// ground the raised grey at 72% over the page (Glass.kt floatingStill).
 pub let note_bg : Int64 = 0x1B1C1FFFL
