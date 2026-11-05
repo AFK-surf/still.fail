@@ -168,7 +168,7 @@ export type SignIns = {
   passkeysIn?(session: string, d: { sites: string[]; cookies: string }): Promise<void>;
   /// Grant `request`'s sign-in put into `session`'s chat's browser until `until` (unix seconds): its cookies of `sites`
   /// set now, taken out again then.
-  signIn(session: string, d: { request: string; sites: string[]; cookies: string; until: number }): Promise<void>;
+  signIn(session: string, d: { request: string; workspace?: string; sites: string[]; cookies: string; until: number }): Promise<void>;
   extendSignIn?(session: string, request: string, until: number): void;
 };
 
@@ -916,7 +916,7 @@ export class Secrets {
     if (typeof held === "string" || cookies === null || this.#d.browsers === undefined) return;
     this.keeper.spend(r.id);
     this.#audit(r, "use", `browser ${held.grant.hosts.join(" ")}`);
-    void this.#d.browsers.signIn(r.session, { request: r.id, sites: held.grant.hosts, cookies, until: held.grant.exp }).catch((e) =>
+    void this.#d.browsers.signIn(r.session, { request: r.id, workspace: r.ws, sites: held.grant.hosts, cookies, until: held.grant.exp }).catch((e) =>
       log.warn("vault", "a sign-in could not be put into its chat's browser", { request: r.id, error: (e as Error).message }));
   }
 
@@ -925,7 +925,7 @@ export class Secrets {
     for (const h of this.keeper.held(session)) {
       const cookies = h.grant.mode === "browser" ? valueOf(h.secret) : null;
       if (cookies === null || this.#d.browsers === undefined) continue;
-      void this.#d.browsers.signIn(session, { request: h.request.id, sites: h.grant.hosts, cookies, until: h.until ?? h.grant.exp }).catch((e) =>
+      void this.#d.browsers.signIn(session, { request: h.request.id, workspace: h.request.ws, sites: h.grant.hosts, cookies, until: h.until ?? h.grant.exp }).catch((e) =>
         log.warn("vault", "a sign-in could not be put into its chat's browser again", { request: h.request.id, error: (e as Error).message }));
     }
   }
@@ -953,18 +953,25 @@ export class Secrets {
   /// A sign-in taken out of its chat's browser as its grant ended, with its cookies as they were then: kept as the
   /// item's new version where the station keeps it (the plain library), so the next chat given it has the site's latest.
   /// A vault's item is written only by its members' apps: not here.
-  renewed(session: string, request: string, cookies: string) {
-    const row = this.#d.db.prepare("SELECT ws FROM vault_requests WHERE id = ? AND session = ?").get(request, session) as { ws: string } | undefined;
-    const k = row ? this.#kept(row.ws, request) : null;
-    if (k === null) return;
-    if (k.request.vault !== PLAIN) return this.#renewSealed(k.request, cookies);
-    const item = this.#d.plain.item(k.request.ws, k.request.item);
+  renewed(session: string, request: string, cookies: string, workspace?: string) {
+    // Contexts made before the workspace was kept still need their original lookup: the session may have moved.
+    let r: Request | undefined;
+    if (workspace === undefined) {
+      const row = this.#d.db.prepare("SELECT ws FROM vault_requests WHERE id = ? AND session = ?").get(request, session) as { ws: string } | undefined;
+      r = row === undefined ? undefined : this.#kept(row.ws, request)?.request;
+    } else {
+      const row = this.#d.db.prepare("SELECT body FROM vault_requests WHERE ws = ? AND id = ? AND session = ?").get(workspace, request, session) as { body: string } | undefined;
+      r = row === undefined ? undefined : JSON.parse(row.body) as Request;
+    }
+    if (r === undefined) return;
+    if (r.vault !== PLAIN) return this.#renewSealed(r, cookies);
+    const item = this.#d.plain.item(r.ws, r.item);
     if (item === null || item.deleted || item.kind !== "browser" || item.fields.cookies === cookies) return;
     const next: PlainItem = { ...item, version: item.version + 1, fields: { ...item.fields, cookies }, at: Math.floor(this.#d.now() / 1000) };
     const why = plainOk(item, next, item.owner);
     if (why !== null) return log.warn("vault", "a sign-in's new cookies not kept", { request, why });
     this.#d.plain.put(next);
-    this.#audit(k.request, "renewed", "");
+    this.#audit(r, "renewed", "");
     this.#plainWritten(next);
   }
 
@@ -972,7 +979,7 @@ export class Secrets {
   /// sealed to its members' devices set up and kept (the latest only) until a grant of it carries them: the app that
   /// grants the next request for it writes them as the item's next version (docs/vault.md 登录态 写回).
   #renewSealed(r: Request, cookies: string) {
-    const lock = this.#d.lock(this.#d.hub.store.getSession(r.session)?.ws ?? null);
+    const lock = this.#d.lock(r.ws);
     const vault = lock === null ? null : this.#d.vaults.vault(lock.ws, r.vault);
     if (lock === null || vault === null) return;
     const certs = vault.members.flatMap((sub) => this.#certsOf(lock, sub));

@@ -60,5 +60,6 @@ export function expired(cookies: CookieParam[]): CookieParam[] {
   return cookies.map((c) => ({ ...c, value: "", expires: 1 }));
 }
 
-/// A sign-in put into a chat's browser: the grant's request, its sites, until when (unix seconds).
-export type SignedIn = { request: string; sites: string[]; until: number };
+/// A sign-in put into a chat's browser: its request and workspace, sites, and end (unix seconds). Older kept contexts
+/// do not have the workspace.
+export type SignedIn = { request: string; workspace?: string; sites: string[]; until: number };

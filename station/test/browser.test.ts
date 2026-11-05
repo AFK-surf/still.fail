@@ -864,6 +864,28 @@ test("a sign-in goes into its chat's context, its sites' cookies only, and out a
   await b.close();
 });
 
+test("a sign-in returns to its original workspace after a station handover", async () => {
+  const chrome = fakeChrome();
+  const { clock: c, adjust } = clock();
+  const dir = scratch();
+  const first = new Browsers({ later: () => () => {}, dir, chrome: chrome.host, clock: c });
+  const signIn = { request: "r_1", workspace: "original", sites: ["github.com"],
+    cookies: JSON.stringify([{ name: "a", value: "1", domain: "github.com", path: "/" }]), until: 60 };
+  await first.signIn("chat-1", signIn);
+  const running = first.station.status();
+  await first.close();
+  chrome.leave({ pid: 7, started: 0, port: 9300, ws: running.ws!, binary: "chrome", headless: true, userAgent: "UA" });
+  await adjust(120_000);
+  const next = new Browsers({ later: () => () => {}, dir, chrome: chrome.host, clock: c });
+  try {
+    const returned: unknown[][] = [];
+    next.onTakenOut((...args) => { returned.push(args); });
+    await next.resume();
+    await next.endpoint("chat-1");
+    assert.deepEqual(returned.map((r) => [r[0], r[1], r[3]]), [["chat-1", "r_1", "original"]]);
+  } finally { await next.close(); }
+});
+
 test("a sign-in whose grant ended while the browser was closed is taken out before the chat's agent has it again", async () => {
   const chrome = fakeChrome();
   const { clock: c, adjust } = clock();
