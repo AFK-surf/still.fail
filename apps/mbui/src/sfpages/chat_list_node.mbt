@@ -308,9 +308,6 @@ pub fn chat_list_node(
   let pictures = ChatPictures::new(v, src, r, view)
   v.lends(chat_pictures_lent, pictures) |> ignore
   let picture_rows : Map[String, ChatPictureRow] = {}
-  let picture_changes : Map[String, Bool] = {}
-  let picture_changed = @signals.signal(0)
-  let picture_live = Ref(true)
   let forget_picture_row = fn(k : String) {
     match picture_rows.get(k) {
       Some(row) => {
@@ -320,7 +317,6 @@ pub fn chat_list_node(
       }
       None => ()
     }
-    picture_changes.remove(k)
   }
   let request_picture_row = fn(k : String) {
     guard picture_rows.get(k) is Some(row) else { return }
@@ -374,28 +370,12 @@ pub fn chat_list_node(
     if !row.inside && !row.waiting { forget_picture_row(k) }
   }
   v.owns(fn() {
-    picture_live.val = false
     for row in picture_rows.values() {
       row.watch.stop()
       match row.reading { Some(reading) => reading.stop(); None => () }
     }
     picture_rows.clear()
   }) |> ignore
-  // A visible message can gain a file without its row moving. Its data change asks for the file after the change is
-  // delivered, using the last sighted width; it does not need another frame to be drawn.
-  let stop_picture_changes = @signals.effect(fn() {
-    picture_changed.get() |> ignore
-    @signals.after_flush(fn() {
-      if picture_live.val {
-        @signals.untracked(fn() {
-          let changed = picture_changes.keys().to_array()
-          picture_changes.clear()
-          for k in changed { request_picture_row(k) }
-        })
-      }
-    })
-  })
-  v.owns(stop_picture_changes) |> ignore
   // (the rows made now, by their keys: where each is, what is read)
   let row_views : Map[String, @view.View] = {}
   // The list reports the rows it actually drew after paint. Keep that observation outside the tree: it must never
@@ -479,8 +459,13 @@ pub fn chat_list_node(
         for k in s.came {
           if !picture_rows.contains(k) {
             let watch = @signals.watch(fn() {
-              picture_changes[k] = true
-              picture_changed.set(@signals.untracked(fn() { picture_changed.get() }) + 1)
+              // The row's data changed: ask at that cause, with the last sighted width. Any picture follower made
+              // here belongs to the chat, not to whichever effect happened to deliver the new message.
+              @signals.untracked(fn() {
+                let owner = @signals.set_owner(None)
+                request_picture_row(k)
+                @signals.set_owner(owner) |> ignore
+              })
             })
             picture_rows[k] = {
               watch, width: s.width, inside: true, waiting: false, message: None,

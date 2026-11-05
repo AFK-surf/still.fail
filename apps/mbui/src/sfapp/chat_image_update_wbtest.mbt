@@ -1,12 +1,13 @@
 // A picture added to a message already in sight is wanted when the message changes, before another display frame.
 
 ///|
-test "an image added to a visible message is requested without waiting for a frame" {
+fn image_update_delivery(late : Bool) -> Unit raise {
   let changed = @signals.signal(0)
   let images = @sfbase.ChatImages::new()
   let asked : Array[String] = []
   let calls : Array[Made] = []
   let fresh = fixture_file_png("peek.png")
+  let answer : Ref[(Result[(Json, Bytes?), Json]) -> Unit] = Ref(fn(_) {  })
   let t = wide_tester(calls, mode="chat-many-images", w=390.0, h=844.0, platform=2, wrap=fn(base) {
     { ..base, images,
       topic: fn(name, params) {
@@ -23,7 +24,11 @@ test "an image added to a visible message is requested without waiting for a fra
       file: fn(station, key, name) {
         images.get(station, @sfbase.file_image_id(station, key, name), "mem:update-test/" + name, fn(_, done) {
           asked.push(name)
-          done(Ok((Json::object({}), Some(if name == "new-picture.png" { fresh } else { fixture_file_png("many-0.png") }))))
+          if late && name == "new-picture.png" {
+            answer.val = done
+          } else {
+            done(Ok((Json::object({}), Some(if name == "new-picture.png" { fresh } else { fixture_file_png("many-0.png") }))))
+          }
         })
       },
     }
@@ -46,6 +51,16 @@ test "an image added to a visible message is requested without waiting for a fra
   assert_true(requested_with_delivery.val, msg="the request is made in the message's own delivery")
   // No frame is drawn between the new message data and these checks.
   assert_true(asked.contains("new-picture.png"), msg="the new picture is requested by the message change")
+  if late {
+    assert_eq(t.image_loads().filter(fn(load) { load.0 == "bytes:\{fresh.length()}" }).length(), 0)
+    (answer.val)(Ok((Json::object({}), Some(fresh))))
+  }
   assert_eq(t.image_loads().filter(fn(load) { load.0 == "bytes:\{fresh.length()}" }).length(), 1,
-    msg="the new picture is decoded without waiting for a frame")
+    msg="the new picture is decoded without waiting for a frame, even after the delivery's effect has stopped")
+}
+
+///|
+test "an image added to a visible message is requested during delivery, whether its answer is immediate or later" {
+  image_update_delivery(false)
+  image_update_delivery(true)
 }
