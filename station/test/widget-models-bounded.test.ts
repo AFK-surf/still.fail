@@ -3,6 +3,46 @@ import { test } from "node:test";
 import { MERGED } from "../src/store/schema.ts";
 import { Store } from "../src/store/store.ts";
 
+test("widget models name the latest matching message as edits and membership change", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    for (const key of ["widget-session", "other-session"]) {
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w",
+        token: key, createdAt: 1, lastActiveAt: 1 });
+    }
+    const one = store.openThread("ember", "EMBER", "one", null, null).id;
+    const two = store.openThread("ember", "EMBER", "two", null, null).id;
+    const other = store.openThread("ember", "EMBER", "other", null, null).id;
+    store.joinThread(one, "widget-session", "ember");
+    store.joinThread(two, "widget-session", "ember");
+    store.joinThread(other, "other-session", "ember");
+    const path = "/w/target.html";
+    const attachment = (name: string) => JSON.stringify([{ path, name, size: 1 }]);
+    const put = db.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,text,at,attachments)
+      VALUES(?,?,?,?, 'agent','widget-session','words',?,?)`);
+    put.run(one, 1, "message", null, 100, attachment("first.html"));
+    put.run(two, 1, "message", null, 200, attachment("newer.html"));
+    put.run(other, 1, "message", null, 999, attachment("other.html"));
+    store.putWidgetState("widget-session", path, "{}", "selected");
+    const expect = (name: string, thread: string | null) => assert.deepEqual(store.untoldWidgetModels("widget-session"),
+      [{ path, name, thread: thread === null ? null : ["EMBER", thread], model: "selected" }]);
+    expect("newer.html", "two");
+    put.run(two, 2, "edit", 1, 300, "[]");
+    expect("first.html", "one");
+    put.run(one, 2, "edit", 1, 400, attachment("edited.html"));
+    put.run(two, 3, "message", null, 50, attachment("earlier.html"));
+    expect("edited.html", "one");
+    db.prepare("DELETE FROM entries WHERE thread=? AND n=2").run(one);
+    expect("first.html", "one");
+    db.prepare("UPDATE entries SET attachments=? WHERE thread=? AND n=2").run(attachment("revived.html"), two);
+    expect("revived.html", "two");
+    db.prepare("DELETE FROM thread_sessions WHERE thread=? AND session=?").run(two, "widget-session");
+    expect("first.html", "one");
+    db.prepare("DELETE FROM entries WHERE thread=? AND n=1").run(one);
+    expect("target.html", null);
+  } finally { store.close(); }
+});
+
 test("a widget model does not traverse other messages to find its attachment", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
