@@ -15,10 +15,9 @@ let nav_want : Ref[(Source, Workspace, Array[Workspace])?] = { val: None }
 let nav_untaken : Ref[Bool] = { val: false }
 
 ///|
-let native_workspace_anchor : Ref[Int] = { val: 0 }
-
-///|
-let native_sidebar_items : Map[Int, @hostapi.NavItem] = {}
+/// The system's glass controls over the sidebar's band (native_glass_node), by the name of the anchor each is put at:
+/// what it is now (None: none there).
+let native_sidebar_items : Map[String, () -> @hostapi.NavItem?] = {}
 
 ///|
 let floating_bar : Ref[@hostapi.NavBar?] = { val: None }
@@ -27,53 +26,55 @@ let floating_bar : Ref[@hostapi.NavBar?] = { val: None }
 let native_floating : Ref[Array[@hostapi.NavFloating]] = { val: [] }
 
 ///|
-// kept across runs: the layout hook is installed once
-let floating_installed : Ref[Bool] = { val: false }
+/// A box over which UIKit draws control `item` in its glass, as big as `style` says: put where the box is drawn each
+/// frame (View::native_anchor, by `name`: native_workspace_placed), read out as a button.
+fn native_glass_node(o : @view.View, name : String, style : () -> @ui.Style, item : () -> @hostapi.NavItem?) -> Unit {
+  // (said again as each is built: a Tester starting anew lets go of what heard the anchors)
+  @ui.on_native_anchors("sidebar glass", native_workspace_placed)
+  native_sidebar_items[name] = item
+  o.box(fn(b) {
+    @sf.style_node(b, style)
+    b.native_anchor(Is(name)) |> ignore
+    b.says(By(fn() { item().map(fn(i) { @view.said(Button, label=i.title) }) })) |> ignore
+  })
+  |> ignore
+}
 
 ///|
-/// Reserve a place in the list; UIKit draws the actual button there after this frame's layout and motion.
-fn native_workspace(c : @ui.Ctx, src : Source, w : Workspace, node : Int, id : Int) -> Unit {
-  ignore(c)
-  ignore(node)
-  native_workspace_anchor.val = id
-  if !floating_installed.val {
-    floating_installed.val = true
-    @ui.on_after_layout(native_workspace_placed)
-  }
+/// The workspace switch: its icon and name in one native glass capsule.
+fn native_workspace_item(src : Source, w : Workspace) -> @hostapi.NavItem {
   let others = field((src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value, "others") is Some(String(_))
-  native_sidebar_items[id] = {
+  {
     id: "workspace-switch", title: w.name, icon: ws_badge(w),
     dot: others || @sfpages.invitations_waiting(src).length() > 0, prominent: true, menu: [],
   }
 }
 
 ///|
-fn native_workspace_placed(c : @ui.Ctx) -> Unit {
+/// The controls the frame drew anchors for, handed to the system's bar where each was drawn, as the frame ends.
+fn native_workspace_placed(c : @ui.Ctx, anchors : Array[(String, (Double, Double, Double, Double))]) -> Unit {
   guard floating_bar.val is Some(bar) else { return }
   let floating : Array[@hostapi.NavFloating] = []
   let blocked = @sf.presenter_visible()
-  let semantics = c.semantics_tree()
-  if !bar.bare && !switcher_open() && (!wide.tape || wide.tape_at.get() == Side) {
-    // Semantic anchors also survive a sidebar drawn from its kept part.
-    for s in semantics {
-      if !s.hidden || blocked {
-        match native_sidebar_items.get(s.id) {
-          Some(item) => {
-            let (x, y, w, h) = s.rect
-            // Native views sit above the canvas: keep uncovered controls visible but inert,
-            // and never draw them through a presenter that physically covers their bounds.
-            // Direct kit popovers (the chat menu and services) are not sf presenters.
-            // Their visible bounds still cover native controls, including during exit.
-            let covered = semantics.iter().any(fn(p) {
-              let (px, py, pw, ph) = p.rect
-              // Accessibility-hidden popovers can still be painted over a kept pane.
-              (p.role == @ui.Role::Dialog || p.role == @ui.Role::Menu) &&
-                x < px + pw && x + w > px && y < py + ph && y + h > py
-            })
-            if w > 0.0 && h > 0.0 && !covered { floating.push({ item, x, y, w, h, blocked }) }
-          }
-          None => ()
+  if !bar.bare && !switcher_open() && (!wide.tape || wide.tape_at.get() == Side) && !anchors.is_empty() {
+    let semantics = c.semantics_tree()
+    for a in anchors {
+      let (name, (x, y, w, h)) = a
+      match native_sidebar_items.get(name).bind(fn(f) { @signals.untracked(f) }) {
+        Some(item) => {
+          // Native views sit above the canvas: keep uncovered controls visible but inert,
+          // and never draw them through a presenter that physically covers their bounds.
+          // Direct kit popovers (the chat menu and services) are not sf presenters.
+          // Their visible bounds still cover native controls, including during exit.
+          let covered = semantics.iter().any(fn(p) {
+            let (px, py, pw, ph) = p.rect
+            // Accessibility-hidden popovers can still be painted over a kept pane.
+            (p.role == @ui.Role::Dialog || p.role == @ui.Role::Menu) &&
+              x < px + pw && x + w > px && y < py + ph && y + h > py
+          })
+          if !covered { floating.push({ item, x, y, w, h, blocked }) }
         }
+        None => ()
       }
     }
   }
@@ -712,7 +713,10 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         open_settings()
       }
     } else if id == "workspace-switch" {
-      @sfpages.open_workspaces(src, Of(native_workspace_anchor.val), compact=true)
+      @sfpages.open_workspaces(src, match @ui.native_anchor_drawn("side/workspaces") {
+        Some((x, y, w, h)) => At(x, y, w, h)
+        None => Unanchored
+      }, compact=true)
     } else if id == "sidebar/search" {
       switcher_toggle(c)
     } else if id.has_prefix("sidebar/filter/") {
@@ -827,7 +831,6 @@ fn nav_hold(src : Source) -> Unit {
 ///|
 /// What this file keeps put back as the app begins anew (desk.mbt reset).
 fn rail_native_reset() -> Unit {
-  native_workspace_anchor.val = 0
   column_short.set(false)
   @sf.native_bars_reset()
   nav_want.val = None

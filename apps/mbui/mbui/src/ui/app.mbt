@@ -553,6 +553,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.said_logged()
   // the streams' frames taken in this frame said shown (stream.mbt)
   streams_after_paint()
+  c.anchors_after_paint()
   // back goes where the stack drawn now says (Ctx::nav, while building)
   c.back = c.back_next
   c.back_node = c.back_node_next

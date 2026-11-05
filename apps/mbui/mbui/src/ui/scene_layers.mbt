@@ -21,6 +21,9 @@ priv struct SceneLayer {
   mut seg_count : Int
   /// its bands of shapes (kind 11), from its first instance: their first piece told again where it is copied
   mut bands : Array[Int]
+  /// the host's controls put where it draws them (View::native_anchor): each one's number (native_anchor_number) and
+  /// its instance, from its first; while it is drawn, the instance's place among the frame's (scene_anchor_drawn)
+  mut anchors : Array[(Int, Int)]
   /// the layers it holds, at once below it: moved with it where it is copied; and the layer it is in at once
   mut inner : Array[@view.NodeId]
   mut outer : @view.NodeId?
@@ -987,6 +990,7 @@ fn scene_undo() -> Unit {
     l.seg_from = was.seg_from
     l.seg_count = was.seg_count
     l.bands = was.bands
+    l.anchors = was.anchors
     l.inner = was.inner
     l.outer = was.outer
     l.clip = was.clip
@@ -1100,6 +1104,7 @@ fn Ctx::scene_drawn(
         seg_from: 0,
         seg_count: 0,
         bands: [],
+        anchors: [],
         inner: [],
         outer: None,
         clip,
@@ -1143,8 +1148,10 @@ fn Ctx::scene_drawn(
     l.images = []
     l.plots = []
     l.bands = []
+    l.anchors = []
   } else {
     l.inner.clear()
+    l.anchors.clear()
   }
   // (drawn again alone, from what it began in: what holds it as it was)
   match outer {
@@ -1194,6 +1201,11 @@ fn Ctx::scene_drawn(
   l.seg_from = s0
   l.seg_count = self.segs.length() / 4 - s0
   l.seen = scene.frame
+  // (the host's controls it drew, each by its instance from its first: where it is put, the same)
+  for i, a in l.anchors {
+    l.anchors[i] = (a.0, a.1 - k0)
+  }
+  anchors_layer_said(l)
   l.bands.clear()
   for k in k0..<self.ninst {
     if self.inst[k * inst_size + 5] == 11.0 {

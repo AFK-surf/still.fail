@@ -364,6 +364,10 @@ pub fn move_ms(Double) -> Double
 
 pub fn move_path(Double, Double, Double, Double) -> (Double, Double)
 
+pub fn native_anchor_drawn(String) -> (Double, Double, Double, Double)?
+
+pub fn native_anchors() -> Array[(String, (Double, Double, Double, Double))]
+
 pub fn native_call(String, @json.Json) -> NativeCall
 
 pub fn native_pointing() -> Pointing
@@ -425,6 +429,8 @@ pub fn on_list_underlay((Ctx, Int32) -> Unit) -> Unit
 pub fn on_message(String, (String, Bytes?) -> Unit) -> Unit
 
 pub fn on_message_said(String, (String, Bytes?) -> Bool) -> Unit
+
+pub fn on_native_anchors(String, (Ctx, Array[(String, (Double, Double, Double, Double))]) -> Unit) -> Unit
 
 pub fn on_reset(() -> Unit) -> Unit
 

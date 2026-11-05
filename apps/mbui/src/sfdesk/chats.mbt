@@ -2,85 +2,6 @@
 // filter; the lists under it are sfpages' (sidebar.mbt).
 
 ///|
-/// The band over the lists (SidebarList.tsx NavTop): its top row, then 新建对话 and the filter (SidebarActions.tsx),
-/// then 待处理 where the rail has no bell; on the sidebar's own ground, whole (no glass: asked, 2026-10-24), the closed
-/// bar's as it closes (moved with it).
-fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let t = @sf.theme()
-  let (view, _) = chats_of(src, w.id, "all")
-  let band = c.box(style=side_full.then(@ui.style(bg=Data(@sf.mix(apart_ground(), wide.band, t.p.sidebar)))), fn() {
-    side_top(c)
-    // in the closed bar, what stands in its top right corner (the filter) 6 from its top and side, the band ending 6
-    // under it (Sidebar.css.ts navNew, closed)
-    let in_bar = wide.in_bar
-    c.box(style=if wide.tape { band_new_tape() } else { band_new_pane() }, fn() {
-      let is_new = app.nav.top() is NewChat
-      c.box(style=side_full, fn() {
-        // (on one line with the search's field under it: its ground's edge, its mark and its words the band's; in the
-        // column of the system's glass instead where the rail's places are there: rail_native.mbt)
-        // (新建对话 the system's tab bar's own action where it has the places: the row the card's title there, the list
-        // shown in the workspace, on the line of the page's title beside it: rail_native.mbt)
-        if @sf.native_on() {
-          // (as high as 新建对话's row, the filter beside it on the tape's line: band_new_tape_over)
-          workspace_heading(c, src, w)
-        } else if band_row(c, "side/new", is_new, fn() {
-            band_mark(c, "compose", t.p.muted)
-            band_words(c, @sf.t("web-main.sidebar.newChat"))
-          }) {
-          new_chat()
-        }
-      })
-      |> ignore
-      // catching up on what changed while away, before 更新 and the filter (the keys' size: brand.mbt)
-      let (syncing, said) = match view {
-        Some({ syncing: Some(y), .. }) => (true, y)
-        _ => (false, "")
-      }
-      @sf.sync_key(c, "side/syncing", update_key_side, update_key_mark, syncing, said)
-      // 更新 here, before the filter, wherever the sidebar shows this row (brand.mbt update_in_row)
-      if update_shown() {
-        update_in_row(c, src)
-      }
-      if @sf.native_on() {
-        sidebar_glass(c, "sidebar/search", @sf.t("android-chat.search.field"), "search", [])
-      }
-      match view {
-        // (never lit for the list shown: asked 2026-10-27)
-        Some(v) if v.stations > 0 => filter_button(c, src, w, list_place(list_mode(src, w)), in_bar)
-        _ => ()
-      }
-    })
-    |> ignore
-    // with no bell in the rail: 待处理 under 新建对话 (cloud/workspace.tsx SidebarTodo); the column's beside the system's
-    if !@sf.native_on() {
-      side_todo(c, src, w)
-    }
-  })
-  // over the lists: their scroll bar keeps clear of it (the web's --nav-top)
-  c.floats_over(band)
-}
-
-///|
-/// The workspace icon and name share one native glass capsule.
-fn workspace_heading(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let id = c.id("side/workspaces")
-  let size = @sf.band_row_h()
-  let b = c.box(style=@ui.style(w=Full, h=Fixed(size)), id~, fn() {  })
-  native_workspace(c, src, w, b, id)
-  c.semantics(b, Button, id~, label=w.name)
-}
-
-///|
-/// Icon-only controls in the same native glass as the workspace switch.
-fn sidebar_glass(c : @ui.Ctx, key : String, title : String, icon : String, menu : Array[(String, String, Bool, String)]) -> Unit {
-  let id = c.id(key)
-  let size = @sf.band_row_h()
-  let b = c.box(style=@ui.style(w=Fixed(size), h=Fixed(size)), id~, fn() { })
-  native_sidebar_items[id] = { id: key, title, icon: @sf.icon_path(icon), dot: false, prominent: false, menu }
-  c.semantics(b, Button, id~, label=title)
-}
-
-///|
 /// A value in the band's open and floating looks, on the block's own trajectory between them (`at`'s: the old views'
 /// as the frame has said it, else the tree's where its block is).
 fn band_between(open : Double, bar : Double, at? : BandAt = band_at_old()) -> Double {
@@ -241,46 +162,6 @@ let side_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=
 ///|
 // kept across runs: a value (no field of it changes)
 let side_words_bad : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger, leading=L6)
-
-///|
-/// The list's filter (components.tsx MineFilter, compact): a circle 32 across, unmarked whichever list is shown, its tip 筛选会话; pressed, its menu (filter_menu).
-fn filter_button(
-  c : @ui.Ctx,
-  src : Source,
-  w : Workspace,
-  shown : String,
-  in_bar : Bool,
-) -> Unit {
-  if @sf.native_on() {
-    let rows = [("all", "web-main.filter.chats.all"), ("mine", "web-main.filter.chats.mine"),
-      ("watching", "web-main.filter.watching"), ("archive", "web-main.filter.archived")].map(fn(p) {
-        ("sidebar/filter/" + p.0, @sf.t(p.1), p.0 == (if shown == "chats" { "all" } else { shown }), "")
-      })
-    sidebar_glass(c, "sidebar/filter", @sf.t("web-main.filter.chats.named", args=[("named", filter_named(shown))]), "filter", rows)
-    return
-  }
-  let t = @sf.theme()
-  let id = c.id("side/filter")
-  // its menu (sfpages' filter_menu): a filter its list, 已归档 the archive's list (rail_go)
-  if c.clicked(id) {
-    @sfpages.filter_menu(Of(id), if shown == "chats" { "all" } else { shown }, fn(f) {
-      match f {
-        "all" => rail_go(c, src, w, "chats")
-        f => rail_go(c, src, w, f)
-      }
-    })
-  }
-  // its ground and colour moved over 140 ms (page.css.ts iconBtn: transition background, color)
-  let hot = @kit.animate(c, "side/filter/hover", if c.lit(id) || @sfpages.filter_menu_open() { 1.0 } else { 0.0 }, transition=nav_fade)
-  let ground = @sf.alpha(t.p.hover, hot)
-  // (in the closed bar's corner, concentric with it as the rail's places are: Sidebar.css.ts navNew, closed)
-  let look = if in_bar { filter_box_bar() } else { filter_box }
-  let b = c.box(style=look.then(@ui.style(bg=Data(ground))), id~, fn() {
-    @sf.icon(c, "filter", size=side_icon, color=@sf.mix(t.p.text, hot, t.p.muted)) |> ignore
-  })
-  c.semantics(b, Button, id~, label=@sf.t("web-main.filter.chats.named", args=[("named", filter_named(shown))]))
-  @sf.tip(c, "side/filter-tip", id, @sf.t("web-main.filter.chats"))
-}
 
 ///|
 /// The list shown (list_place), named (MineFilter `named`): 已归档, 我参与的, 监控中, else 全部.

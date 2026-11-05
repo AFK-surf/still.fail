@@ -117,21 +117,7 @@ fn lists_side_node(s : @view.View, src : Source, tips : @sf.TipLayer, at : () ->
   // as tall as it is, the lists under them the rest (what the pointer is over and a press takes there)
   s.box(fn(o) {
     o.over(Is(true)).alpha(By(fn() { 1.0 - away() })) |> ignore
-    // (beside the system's bars as they come to be, or as they go: the one or the other, as the system says it now)
-    o.pick(@sf.native_on, fn(b, native) {
-      if native {
-        @ui.old(b, fn(c) {
-          match workspace() {
-            Some(w) => lists_band(c, src, w)
-            None => ()
-          }
-        }, natural=true)
-        |> @ui.old_takes_own
-        |> ignore
-      } else {
-        lists_band_node(b, src, tips, workspace, at)
-      }
-    })
+    lists_band_node(o, src, tips, workspace, at)
     o.box(fn(between) { between.grow(Is(1.0)) |> ignore }) |> ignore
     lists_foot_node(o, src, tips, workspace, at)
   })
@@ -145,6 +131,9 @@ fn lists_side_node(s : @view.View, src : Source, tips : @sf.TipLayer, at : () ->
 /// The band over the chats' lists (lists_band's) in `o`, where `at` says the block has it: on the sidebar's own ground
 /// (the closed bar's as it closes), its top row, then 新建对话, what is catching up, the update where one
 /// is offered and the filter (with stations to narrow) on one line; 待处理 under them where the rail has no bell.
+/// Beside the system's bars (as they come to be, or as they go: @sf.native_on as the system says it now), the
+/// workspace's switch in 新建对话's place and the search before the filter, in the system's glass (rail_native.mbt
+/// native_glass_node), and 待处理 in the column's.
 fn lists_band_node(
   o : @view.View,
   src : Source,
@@ -176,9 +165,19 @@ fn lists_band_node(
       })
       line.box(fn(full) {
         full.row(Is(true)).grow(Is(1.0)) |> ignore
-        @sf.band_row_node(full, fn() { app.nav.top() is NewChat }, fn() { @sf.t("web-main.sidebar.newChat") }, new_chat, fn(r) {
-          @sf.icon_node(r, "compose", @sf.theme().chat_list.band_icon, By(fn() { @sf.theme().p.muted })) |> ignore
-          @sf.nav_words_node(r, fn() { @sf.t("web-main.sidebar.newChat") })
+        // (新建对话 the system's tab bar's own action where it has the places: rail_native.mbt)
+        full.pick(@sf.native_on, fn(k, native) {
+          if native {
+            k.grow(Is(1.0)) |> ignore
+            native_glass_node(k, "side/workspaces", fn() { @ui.style(w=Full, h=Fixed(@sf.band_row_h())) }, fn() {
+              workspace().map(fn(w) { native_workspace_item(src, w) })
+            })
+          } else {
+            @sf.band_row_node(k, fn() { app.nav.top() is NewChat }, fn() { @sf.t("web-main.sidebar.newChat") }, new_chat, fn(r) {
+              @sf.icon_node(r, "compose", @sf.theme().chat_list.band_icon, By(fn() { @sf.theme().p.muted })) |> ignore
+              @sf.nav_words_node(r, fn() { @sf.t("web-main.sidebar.newChat") })
+            })
+          }
         })
       })
       |> ignore
@@ -217,15 +216,41 @@ fn lists_band_node(
           offered=fn() { update_now() is Offered(_, ..) },
         )
       })
+      // the search, in the system's glass beside its bars
+      line.show(@sf.native_on, fn(k) {
+        native_glass_node(k, "sidebar/search", fn() { @ui.style(w=Fixed(@sf.band_row_h()), h=Fixed(@sf.band_row_h())) }, fn() {
+          Some({
+            id: "sidebar/search", title: @sf.t("android-chat.search.field"), icon: @sf.icon_path("search"), dot: false,
+            prominent: false, menu: [],
+          })
+        })
+      })
       // the filter: its menu (sfpages' filter_menu), a filter its list, 已归档 the archive's list
       line.show(fn() { view().map(fn(v) { v.stations > 0 }).unwrap_or(false) }, fn(k) {
-        k.box(fn(f) {
-          let shown = fn() {
-            match workspace() {
-              Some(w) => list_place(list_mode(src, w))
-              None => "chats"
-            }
+        let shown = fn() {
+          match workspace() {
+            Some(w) => list_place(list_mode(src, w))
+            None => "chats"
           }
+        }
+        // (beside the system's bars, in its glass: its menu the system's, rail_native.mbt's sidebar/filter/ rows)
+        k.pick(@sf.native_on, fn(k, native) {
+          if native {
+            native_glass_node(k, "sidebar/filter", fn() { @ui.style(w=Fixed(@sf.band_row_h()), h=Fixed(@sf.band_row_h())) }, fn() {
+              let now = shown()
+              let lit = if now == "chats" { "all" } else { now }
+              let rows = [("all", "web-main.filter.chats.all"), ("mine", "web-main.filter.chats.mine"),
+                ("watching", "web-main.filter.watching"), ("archive", "web-main.filter.archived")].map(fn(p) {
+                  ("sidebar/filter/" + p.0, @sf.t(p.1), p.0 == lit, "")
+                })
+              Some({
+                id: "sidebar/filter", title: @sf.t("web-main.filter.chats.named", args=[("named", filter_named(now))]),
+                icon: @sf.icon_path("filter"), dot: false, prominent: false, menu: rows,
+              })
+            })
+            return
+          }
+        k.box(fn(f) {
           let hot = @sf.EdgeWay::new(0.0)
           f.reacts(fn() { @sf.lit_node(f) || @sfpages.filter_menu_open() }, fn(on) {
             hot.go(f, if on { 1.0 } else { 0.0 }, @sf.dur_ms)
@@ -263,11 +288,12 @@ fn lists_band_node(
           @sf.tip_node(tips, f, fn() { @sf.t("web-main.filter.chats") }) |> ignore
         })
         |> ignore
+        })
       })
     })
     |> ignore
     // 待处理 under 新建对话 where the rail has no bell
-    band.show(fn() { workspace().map(fn(w) { todo_shown(src, w) }).unwrap_or(false) }, fn(k) {
+    band.show(fn() { !@sf.native_on() && workspace().map(fn(w) { todo_shown(src, w) }).unwrap_or(false) }, fn(k) {
       k.box(fn(t) {
         @sf.style_node(t, fn() { todo_box })
         let n = fn() { workspace().map(fn(w) { todo_all(src, w) }).unwrap_or(0) }

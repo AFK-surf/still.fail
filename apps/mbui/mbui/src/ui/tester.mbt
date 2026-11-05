@@ -93,6 +93,8 @@ fn reset_globals() -> Unit {
   checks_every.val = 1
   checks_frame.val = 0
   checks_between.val = 0
+  // (the host's controls' anchors: their numbers, the layers that drew them, what hears them: native_anchor.mbt)
+  anchors_reset()
   window_zoom_reset()
   run_let_go()
   the_ctx.val.let_go()
