@@ -394,9 +394,36 @@ export class Secrets {
     const bodies = await this.#uses.read(ws, vault, vault === PLAIN ? viewer.email.toLowerCase() : null, limit);
     // A large old database may still have been filling its index: access can change while that read waits.
     if (vault !== PLAIN && (this.#d.lock(ws) === null || this.#d.vaults.vault(ws, vault)?.members.includes(viewer.sub) !== true)) return [];
-    return bodies
-      .map((body) => JSON.parse(body) as Request)
-      .map((r) => ({ item: r.item, at: r.at, session: r.session, chatTitle: this.#title(r.session), mode: r.mode, command: r.command ?? null, hosts: r.hosts ?? [], denied: r.status === "denied" }));
+    const requests = bodies.map((body) => JSON.parse(body) as Request);
+    const names = new Map<string, string | null>();
+    const prepare = this.#d.hub.prepareLatestThreads;
+    if (this.#d.title && prepare) {
+      const store = this.#d.hub.store;
+      const sessions = new Set(requests.map((r) => r.session));
+      for (;;) {
+        // The vault may have changed while the worker prepared old sessions.
+        if (vault !== PLAIN && (this.#d.lock(ws) === null || this.#d.vaults.vault(ws, vault)?.members.includes(viewer.sub) !== true)) return [];
+        const missing: string[] = [];
+        names.clear();
+        // sender() reads the session's own chat first, then its latest. Read readiness and its name in one snapshot:
+        // another writer cannot make the fallback sort necessary in between. Release it before waiting for the worker.
+        this.#d.db.exec("SAVEPOINT vault_use_titles");
+        try {
+          for (const session of sessions) {
+            if (store.getSession(session) === null) names.set(session, null);
+            else if (store.sessionHomeThread(session) === null && store.latestThreadIfReady(session) === undefined) missing.push(session);
+            else names.set(session, this.#title(session));
+          }
+        } finally {
+          this.#d.db.exec("RELEASE vault_use_titles");
+        }
+        if (missing.length === 0) break;
+        await prepare(missing);
+      }
+    } else {
+      for (const session of new Set(requests.map((r) => r.session))) names.set(session, this.#title(session));
+    }
+    return requests.map((r) => ({ item: r.item, at: r.at, session: r.session, chatTitle: names.get(r.session) ?? null, mode: r.mode, command: r.command ?? null, hosts: r.hosts ?? [], denied: r.status === "denied" }));
   }
 
   #title(session: string): string | null {
