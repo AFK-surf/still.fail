@@ -90,7 +90,8 @@ pub(all) struct AnchoredSource[K] {
 /// row's room as its measured height changes, `moving` says when rooms move; `kept_keys` rows made and laid out
 /// though not in sight (a send's landing); `foot_room` room under the last row. An indexed source supplies its
 /// keys by position instead of `keys`. `sighted` is told, once each frame is painted, the rows that came in sight or
-/// within `ahead` of it, or were gone past on the way, since it was last laid out: the same rows whether the frames
+/// within `ahead` of it, or were gone past on the way, since it was last laid out, and how wide the list is
+/// laid out (what a row's pictures are decoded for: the same width the rows are drawn at): the same rows whether the frames
 /// between were many or one (what asks for a row's pictures asks by it, never by the row being made).
 pub fn[K : Hash + Eq] View::scrolls_anchored(
   self : View,
@@ -114,7 +115,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
   foot_room? : () -> Double = fn() { 0.0 },
   indexed? : AnchoredSource[K],
-  sighted? : (Array[K]) -> Unit,
+  sighted? : (Array[K], Double) -> Unit,
 ) -> View {
   self.scrolls_anchored_impl(
     s, keys, make, est~, from_end~, ahead~, slop?=slop, bar?=bar, follows~, shown?=shown,
@@ -148,7 +149,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   foot_room? : () -> Double = fn() { 0.0 },
   indexed? : AnchoredSource[K],
   fixed_estimate? : Bool = false,
-  sighted? : (Array[K]) -> Unit,
+  sighted? : (Array[K], Double) -> Unit,
 ) -> View {
   guard self.live() is Some(_) else { return self }
   let put_at = put.unwrap_or(@signals.signal(None))
@@ -806,7 +807,8 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
               sighted_last.add(k)
             }
             if !fresh_in.is_empty() {
-              self.tree.said_after_paint(fn() { tell(fresh_in) })
+              let width = l.width
+              self.tree.said_after_paint(fn() { tell(fresh_in, width) })
             }
           }
           None => ()

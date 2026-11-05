@@ -1257,6 +1257,7 @@ pub fn Ctx::image(Self, String, w? : Size, h? : Size, fit? : Fit, radius? : Doub
 pub fn Ctx::image_bytes(Self, String, Bytes) -> Unit
 pub fn Ctx::image_pixels(Self, String, Int32) -> ImagePixels
 pub fn Ctx::image_ready(Self, String, Double) -> Bool
+pub fn Ctx::image_want(Self, String, Double) -> Unit
 pub fn Ctx::ime_inset(Self) -> Double
 pub fn Ctx::in_bones(Self) -> Bool
 pub fn Ctx::in_frame(Self) -> Bool
