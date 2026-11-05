@@ -227,6 +227,10 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   // (the row come to be read from its top, held under the cover as its room opens; whether a layout held it)
   let reading : Ref[K?] = Ref(None)
   let read_held = Ref(false)
+  // (the row it was put at and how far under the window's top its top was put: kept there as the rows round it are
+  // measured or open, till the hand moves it, it is put again or asked to its end; from its end its anchor is the row
+  // at its foot, which moves what is over it as it grows)
+  let pinned : Ref[(K, Double)?] = Ref(None)
   // (the hand scrolling it toward its start: no more at its end, from the hand's cause, before what it brings in is
   // measured)
   s.on_hand = fn(d) {
@@ -235,6 +239,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
       (short_due.val)()
       short_due.val = fn() { }
       reading.val = None
+      pinned.val = None
     }
     if from_end && d < 0.0 && @signals.untracked(fn() { follows.get() }) {
       follows.set(false)
@@ -255,6 +260,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
     end_asked.val = from_end && now && !was_follows.val
     if end_asked.val {
       reading.val = None
+      pinned.val = None
     }
     was_follows.val = now
   })
@@ -502,8 +508,10 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         match c.put {
           Some((k, off)) if putting =>
             match find(k, anchor.val.map(fn(a) { a.near }).unwrap_or(n - 1)) {
-              Some(i) =>
+              Some(i) => {
                 anchor.val = Some({ key: k, under: if from_end { off + measure(i) - h } else { -off }, near: i })
+                pinned.val = if from_end { Some((k, off)) } else { None }
+              }
               None => ()
             }
           _ => ()
@@ -664,6 +672,22 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
               }
             }
           _ => ()
+        }
+        // (put at a row and nothing moved it since: its top where it was put, whatever came to be measured round it)
+        match pinned.val {
+          Some((k, off)) if glide is None && !read_held.val =>
+            for q in 0..<r.keys.length() {
+              if r.keys[q] == k {
+                if (r.tops[q] - off).abs() > 0.01 {
+                  match find(k, r.first + q) {
+                    Some(i) => r = lay(Some({ key: k, under: off + r.heights[q] - h, near: i }), 0.0)
+                    None => ()
+                  }
+                }
+                break
+              }
+            }
+          _ => if glide is Some(_) || read_held.val { pinned.val = None }
         }
         anchor.val = r.anchor
         // (how far it is counted to be scrolled among all it holds, the bar's, as laid out now)
