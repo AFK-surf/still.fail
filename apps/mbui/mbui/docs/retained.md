@@ -320,8 +320,9 @@ three places, each untracked, and nowhere else:
    ring around what is picked, a thumbnail following its node: paint, drawn where things are in the frame shown, a frame
    behind nothing.
 2. **The hand and the next event, the frame on screen's.** `View::shown_rect()` / `shown_size()`, plain values of the
-   frame last drawn, read in an event's handler and in hit tests (a menu opened beside what was pressed, where a row was
-   for a jump, whether the pointer is on a card). A menu that stays beside its anchor is placed by `View::beside` in
+   frame last drawn, read only in an input event's handler and in a hit test (a menu opened beside what was pressed,
+   where a row was for a jump, whether the pointer is on a card); in a reaction, an effect, a timer or a build, even
+   untracked, it would set state a frame late, by how many frames there were. A menu that stays beside its anchor is placed by `View::beside` in
    layout, not by a rectangle read once.
 3. **The layout of what holds both.** Where one size decides another, their nearest common holder lays both out:
    `View::layout_box` (layout_box.mbt, Compose's `Layout`/`SubcomposeLayout`) is given its constraints, makes the
@@ -340,10 +341,19 @@ three places, each untracked, and nowhere else:
      room (`ListRoom`: offset, cut, fade) is set on the row's holder by the list as it places it, for paint. Going to a
      row, keeping the focused field in sight, following the end: an intent an event sets on the list's state, taken by
      its next layout (`ListState::reveal(key, align)`, `follow_end`), not a scroll set by a reaction to a rectangle.
+     A scroll moves the anchor by the heights of the rows it goes past, each measured as it is passed if it was not;
+     an estimate is only for the scroll bar and for a jump by key far off, so where a drag stops is the same at 60 Hz,
+     at 120 Hz or in one jump.
+
+What a layout makes (a list's rows, `by_room`'s and `layout_box`'s children) is a cache of the picture: how many are
+made and let go is by the frames there were and the room there is. So it holds no state of the app's and starts nothing
+that lasts (a subscription, a download, a decoded picture, a draft): those are kept outside it by the data's key, and
+what it makes reads them.
 
 What waits for a node "to be laid out" (a sheet opened once the page is there, a keyboard asked for once the field is)
 waits for nothing that is the tree's: it is done at its cause; where the host must have the node drawn first, the node's
-`on_first_drawn` is an event on the timeline (rule 8) at the frame that drew it, said once.
+`on_first_drawn` is an event on the timeline (rule 8) at the frame that drew it, said once, and only asks the host for
+something (the keyboard, a native view); it sets nothing a build or a layout reads.
 
 **The frame.** `Tree::laid_out` runs once a frame, at the frame's moment: the events due by then committed first at
 their own (rule 9), then the bindings, then layout, then paint. No settling inside it, no clock turned there and back.
@@ -354,11 +364,15 @@ their room (#4095's `rooms_told`) and its extent held up from below (#4115's `ex
 host shuts and opens of layout reads (`shut_layout_reads`, `reads_own`: #4105, #4109), which the rule below holds
 everywhere. An old view hosted still lays out the old way, its passes counted as owed until it is gone (rule 10).
 
-**Wrong is red.** A size or a place of layout's read where something tracks (a build, a `By`, a `computed`, a
-`reacts`, a layout box's `place` outside its own children) is a fault naming what read it and which node; `laid_out`
+**Wrong is red,** by where a read is, not by whether it is tracked: the frame's phase says where it is (an input
+event, a hit test, a `Drawn` being painted, a layout box's `place` of its own children). `laid` read outside a `Drawn`,
+`shown_*` outside an event's handler or a hit test, a size or a place of layout's anywhere else, and a signal a build or
+a layout reads set in `on_first_drawn`: each a fault naming what read it and which node; `laid_out`
 entered a second time in a frame is a fault; detlint's `layout-read-back` counts what is left and only falls, to 0. In
 every Tester: one layout pass a frame, and the frames stop once nothing is due (the last input and the motions it set
-off over, a few frames on: no frame more is asked for).
+off over, a few frames on: no frame more is asked for); a drag over rows 40 and 80 tall in turn stops on the same row
+at the same offset, and a scroll leaves the same state and decodes the same pictures as often, drawn frame by frame or
+in one jump; a row let go and made again decodes nothing again.
 
 **The way there,** each a PR, CI at its baseline, the six steps' table no worse, one pass a frame where the step
 reaches:
