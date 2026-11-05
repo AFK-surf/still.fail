@@ -25,60 +25,66 @@ fn chat_root_node(
     let view = fn() { @sfbase.chat_view_now(src, r) }
     // (its side panel's tabs, as the core says them: open while it has any)
     let open = fn() { view().map(fn(v) { side_of(v).0.length() > 0 }).unwrap_or(false) }
-    let whole = fn() {
-      let pane = page.laid_size_told().map(fn(z) { z.0 }).unwrap_or(page.window().0)
-      if pane < side_both_least { dmin(side_over_w, pane) } else { side_width(pane) }
-    }
-    // (how wide it has got: in and out on a Move as long as it is wide, from the change that opens or closes it)
+    // (how far it has slid in: in and out on a Move as long as it is wide, from the change that opens or closes it)
     let slide = @motion.Way::new(if @signals.untracked(open) { 1.0 } else { 0.0 })
     page.reacts(open, fn(o) {
       let to = if o { 1.0 } else { 0.0 }
       if slide.target() != to {
-        slide.go(to, @motion.move(over=@signals.untracked(whole)), at=page.cause_at())
+        let pane = page.laid_size_told().map(fn(z) { z.0 }).unwrap_or(page.window().0)
+        slide.go(to, @motion.move(over=side_whole(pane)), at=page.cause_at())
       }
     })
-    let col = fn() {
+    let slid = fn() {
       guard side else { return 0.0 }
       slide.said()
-      let k = if slide.goes_at(page.logic_at()) { slide.value_at(page.drawn_at()) } else { slide.target() }
-      k * whole()
+      if slide.goes_at(page.logic_at()) { slide.value_at(page.drawn_at()) } else { slide.target() }
     }
-    let over = fn() { page.laid_size_told().map(fn(z) { z.0 < side_both_least }).unwrap_or(false) }
-    // (the chat: as wide as the pane less the panel beside it; all of it where the panel comes over it)
-    page.box(fn(talk) {
-      talk
-      .grow(Is(1.0))
-      .shrink(Is(1.0))
-      .min_width(Is(Some(0.0)))
-      .min_height(Is(Some(0.0)))
-      |> ignore
-      chat_talk_node(talk, src, w, r, k, view, old_over, corners, ground)
+    // laid out by the pane's room (View::layout_box: nothing of its size read back): the chat as wide as the pane less
+    // the panel beside it, all of it where the panel comes over it (narrower than both take); the panel from the pane's
+    // right edge as far in as it has slid, cut there (the page cuts it), over the chat or beside it, each its own child
+    page
+    .clips(Is(true))
+    .layout_box(By(fn() { (side && open(), slid(), panel_own.width.get()) }), fn(l, at) {
+      let (opened, slid_in, wanted) = at
+      let pane = l.width
+      let whole = side_whole_of(pane, wanted)
+      let col = slid_in * whole
+      let over = pane < side_both_least
+      let talk = l.child("talk", fn(talk) {
+        talk.min_width(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
+        chat_talk_node(talk, src, w, r, k, view, old_over, corners, ground)
+      })
+      l.measure(talk, if over { pane } else { pane - col }, height=l.height) |> ignore
+      l.place(talk, 0.0, 0.0)
+      if side && (col > 0.0 || opened) {
+        let panel = l.child(if over { "side over" } else { "side beside" }, fn(panel) {
+          side_panel_node(panel, src, w, r, view, over=fn() { over }, old_page=fn(c, build) {
+            app.nav.page_old(c, k, fn(_) { build() })
+          })
+        })
+        l.measure(panel, whole, height=l.height) |> ignore
+        l.place(panel, pane - col, 0.0)
+      }
     })
     |> ignore
-    // (its side panel: beside it, cut to how far it has slid; over it from the pane's right where the pane has not the
-    // room for both)
-    page.show(fn() { side && (col() > 0.0 || open()) }, fn(side) {
-      side
-      .over(By(over))
-      // (over the chat, from the pane's right: as wide as this frame laid the page out, read as it is painted)
-      .offset(Painted(fn(laid) {
-        match laid.size(page) {
-          Some((pane, _)) if pane < side_both_least => (pane - col(), 0.0)
-          _ => (0.0, 0.0)
-        }
-      }))
-      .width(By(fn() { Some(col()) }))
-      .clips(By(fn() { col() < whole() }))
-      |> ignore
-      side.box(fn(panel) {
-        panel.width(By(fn() { Some(whole()) })).grow(Is(1.0)) |> ignore
-        side_panel_node(panel, src, w, r, view, over~, old_page=fn(c, build) {
-          app.nav.page_old(c, k, fn(_) { build() })
-        })
-      })
-      |> ignore
-    })
   })
+}
+
+///|
+/// How wide a chat's side panel is in a pane `pane` wide: over the chat (ChatPage.css.ts sidePanel on a narrow page:
+/// min(460px, 100vw)) where the pane has not the room for both, else beside it (side_width).
+fn side_whole(pane : Double) -> Double {
+  side_whole_of(pane, panel_own.width.get())
+}
+
+///|
+/// side_whole with the width the person dragged it to (`wanted`, panel_own's) given: what a layout reads, taken before it.
+fn side_whole_of(pane : Double, wanted : Double?) -> Double {
+  if pane < side_both_least {
+    dmin(side_over_w, pane)
+  } else {
+    side_width_of(pane, wanted)
+  }
 }
 
 ///|

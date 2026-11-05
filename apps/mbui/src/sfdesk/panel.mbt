@@ -99,7 +99,13 @@ let panel_max : Double = 960.0
 /// How wide the panel is (ChatSide.tsx panelWidth: the width dragged, else 38% of the page and at least 360), the
 /// chat keeping 360 at least.
 pub fn side_width(pane : Double) -> Double {
-  let wanted = match panel_own.width.get() {
+  side_width_of(pane, panel_own.width.get())
+}
+
+///|
+/// side_width with the width the person dragged it to (`wanted`, panel_own's) given.
+fn side_width_of(pane : Double, wanted : Double?) -> Double {
+  let wanted = match wanted {
     Some(w) => w
     None => dmax(360.0, (pane * 0.38).floor())
   }
