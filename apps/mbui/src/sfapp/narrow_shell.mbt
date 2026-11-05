@@ -199,9 +199,6 @@ fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace, reacted? : Bool = f
   if !reacted {
     signed_in_said(c, src, w)
   }
-  // (a person's act taken as an old view builds (a row pressed: its change is that build's), done with it: where it
-  // left from let go where it went nowhere; where the app is noted as it changes, app_state_tree)
-  c.after_build("history", fn() { @sfbase.history_settled() })
   if !reacted {
     // notifications: shown while the app is, a tapped one's chat opened, the one of a chat on top taken off (once the
     // frame's builds are over: a build let go of follows no workspace)

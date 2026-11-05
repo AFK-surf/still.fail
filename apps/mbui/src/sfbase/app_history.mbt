@@ -118,6 +118,11 @@ pub fn history_push() -> Unit {
   }
   history_acting.val = true
   history_from.val = Some(spot_here())
+  // (done once the change the act is in is told whole: where it is taken in an old view's build, once the frame's builds
+  // are over, whichever of them took it (Ctx::tell: kept through a build again); elsewhere (a node's press, an event of
+  // the window's tree's, history_act's batch) once that change is (@signals.after_flush). The one place an act is said
+  // done)
+  @ui.current().tell("history", fn() { @signals.after_flush(history_settled) })
 }
 
 ///|
@@ -125,19 +130,15 @@ pub fn history_push() -> Unit {
 /// pushed first (history_push), where the app is noted once, as `f` is done, an entry for where it left from where it
 /// went somewhere else.
 pub fn history_act(f : () -> Unit) -> Unit {
-  let outer = history_acting.val
-  history_push()
+  // (pushed in the act's own change: said done as that change is told whole, by history_push, not here as well)
   @signals.start_batch()
+  history_push()
   f()
   @signals.end_batch()
-  if !outer {
-    history_settled()
-  }
 }
 
 ///|
-/// A person's act done (history_act, as its change ends; an old view's build its act was taken in: sfapp's
-/// signed_in_frame): where it went noted once that change is committed (history_note), an entry for where it left from
+/// A person's act done (history_push's, as the change it is in is told whole): where it went noted once that change is committed (history_note), an entry for where it left from
 /// where it went somewhere else, none where it went nowhere (a page opened again).
 pub fn history_settled() -> Unit {
   if !history_acting.val {
