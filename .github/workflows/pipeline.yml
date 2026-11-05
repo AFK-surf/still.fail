@@ -480,7 +480,7 @@ jobs:
   # monoid's cloud (deploy.py CLOUDS: monoid.build, its test channel monoid.zone), in the company's Cloudflare account:
   # the same API and static parts, after still.fail's, as their own jobs (each fits its 5 minutes on its own). Its
   # secrets are its own token and keys.json; the Google client, the push keys, PostHog and Axiom are still.fail's (one
-  # app). Not its sites (still.fail's words and downloads, until monoid has its own) nor its relay (by hand, as ours).
+  # app). Not its sites (still.fail's words and downloads, until monoid has its own), still.fail's status page, nor its relay (by hand, as ours).
   # monoid's jobs (monoid-*) run only while the repository's variable MONOID_CI is on (turned off 2026-11-04, as asked).
   monoid-api:
     needs: [plan, api]
@@ -516,7 +516,7 @@ jobs:
     steps:
       - id: parts
         run: |
-          parts=$(printf '%s\n' ${{ needs.plan.outputs.parts }} | { grep -vE '^site(-beta)?$' || true; } | tr '\n' ' ')
+          parts=$(printf '%s\n' ${{ needs.plan.outputs.parts }} | { grep -vE '^(site(-beta)?|status)$' || true; } | tr '\n' ' ')
           echo "parts=$parts" >> "$GITHUB_OUTPUT"
       - if: steps.parts.outputs.parts != ''
         uses: actions/checkout@v5

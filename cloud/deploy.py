@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deploys still.fail cloud, seven Workers (wrangler.jsonc says what each is; they keep their names from before the
+"""Deploys still.fail cloud, eight Workers (wrangler.jsonc says what each is; they keep their names from before the
 rename to still.fail, as do their Durable Objects, bucket and secrets: renaming would make new, empty ones):
   api       stillfail-cloud     the API (wrangler.jsonc)
   relay     stillfail-relay     the relay and its container (wrangler.relay.jsonc)
@@ -8,6 +8,7 @@ rename to still.fail, as do their Durable Objects, bucket and secrets: renaming 
   admin     stillfail-admin     the admin's console, static (wrangler.admin.jsonc)
   preview   stillfail-preview   the preview host, static (wrangler.preview.jsonc)
   share     stillfail-share     the share host, static (wrangler.share.jsonc): published chats, on share.still.fail
+  status    still-fail-status   still.fail/status, static (wrangler.status.jsonc)
 Each is deployed on its own: deploying the API drops no relay connection and serves no page. (And the official
 site, `site`, still-fail-site; and the test channel's, `site-beta`, youdid-wtf-site on youdid.wtf, only when named.)
 The test channel lives on its own domain, youdid.wtf: until that zone is active on Cloudflare (or with STILLFAIL_BETA=off)
@@ -19,7 +20,7 @@ The web app goes to the test channel first: a deploy without parts deploys web-b
 deployed in <deploy>/builds/<commit>/cloud-web (the newest ten). Once tried there, that very build (not a new one) goes
 to app.still.fail with promote-web. `web` named deploys a new build to app.still.fail straight away.
 
-    python3 deploy.py                   # all but web and site-beta: relay, api, then web-beta, admin, preview, share, site
+    python3 deploy.py                   # all but web and site-beta: relay, api, then web-beta, admin, preview, share, status, site
     python3 deploy.py api web-beta      # only these (the static ones are built first)
     python3 deploy.py web               # a new build to app.still.fail, without the test channel
     python3 deploy.py promote-web <dir> # a build already made (a directory, or a commit kept in <deploy>/builds) to app.still.fail
@@ -112,7 +113,7 @@ def write_private(path: Path, value) -> None:
     os.replace(tmp, path)
 
 
-PARTS = {"relay": "wrangler.relay.jsonc", "api": "wrangler.jsonc", "web": "wrangler.web.jsonc", "web-beta": "wrangler.web-beta.jsonc", "admin": "wrangler.admin.jsonc", "preview": "wrangler.preview.jsonc", "share": "wrangler.share.jsonc", "site": "wrangler.site.jsonc", "site-beta": "wrangler.site-beta.jsonc"}
+PARTS = {"relay": "wrangler.relay.jsonc", "api": "wrangler.jsonc", "web": "wrangler.web.jsonc", "web-beta": "wrangler.web-beta.jsonc", "admin": "wrangler.admin.jsonc", "preview": "wrangler.preview.jsonc", "share": "wrangler.share.jsonc", "status": "wrangler.status.jsonc", "site": "wrangler.site.jsonc", "site-beta": "wrangler.site-beta.jsonc"}
 # What a deploy without parts deploys: the web app only to the test channel (promote-web takes it on); not youdid.wtf's site.
 DEFAULT_PARTS = [p for p in PARTS if p not in ("web", "site-beta")]
 # The test channel's parts, on its own domain (youdid.wtf): deployed only once that zone is on Cloudflare (beta_zone()).
@@ -561,6 +562,7 @@ def main() -> None:
         "admin": [f"{admin}/", f"{old_admin}/"],
         "preview": ["https://preview.still.fail/_stillfail/frame", "https://preview.ember.3720.org/_ember/frame"],
         "share": ["https://share.still.fail/", "https://share.still.fail/frame"],
+        "status": ["https://still.fail/status"],
         "site": ["https://still.fail/"],
         "site-beta": [f"https://{beta_zone()}/"],
     }

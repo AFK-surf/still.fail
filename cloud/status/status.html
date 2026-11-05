@@ -8,7 +8,7 @@
 <meta name="color-scheme" content="light dark">
 <link rel="icon" type="image/png" href="/favicon-32.png">
 <!-- still.fail/status: all of it in this file, asking only GET /v1/status (cloud/src/status.ts) and the incidents written
-     down beside it (incidents.json), so that it loads when the rest does not (web/vite.demo.config.ts statusPage). The theme and the language are the site's choices
+     down beside it (incidents.json), so that it loads when the rest does not. Deployed on its own (cloud/wrangler.status.jsonc). The theme and the language are the site's choices
      (web/src/site/ThemeSwitch.tsx, Site.tsx). -->
 <script>try{var t=localStorage.getItem("stillfail.site.theme");if(t!=="system")document.documentElement.dataset.theme=t==="dark"?"dark":"light"}catch(e){document.documentElement.dataset.theme="light"}</script>
 <style>
@@ -145,7 +145,7 @@ h2{margin:40px 0 4px;font-size:13px;font-weight:500;color:var(--dim)}
     });
   }
 
-  // Incidents are written down by people (site/incidents.json): the checks see a service that does not answer, not one
+  // Incidents are written down by people (status/incidents.json): the checks see a service that does not answer, not one
   // whose answers an app cannot use. P1: still.fail or a main page of it cannot be used, on the test channel too.
   var incidents = [];
   function stamp(iso) { return new Date(iso).toLocaleString(en ? "en" : "zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); }
