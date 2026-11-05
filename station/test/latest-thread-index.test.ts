@@ -25,6 +25,39 @@ function originalLatestId(db: DatabaseSync, session: string): number | null {
   return row ? Number(row.id) : null;
 }
 
+test("deleting a session does not stage its already unjoined deliveries", () => {
+  const counts: number[] = [];
+  for (const size of [40, 400]) {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      for (const key of ["s", "other"]) {
+        store.insertSession({ key, connect: "slack", runtime: "claude", profile: "cc", workspace: `/w/${key}`,
+          token: key, createdAt: 1, lastActiveAt: 1 });
+      }
+      const shared = store.openThread("slack", "C", "shared", null, null);
+      store.joinThread(shared.id, "s", "slack");
+      store.joinThread(shared.id, "other", "slack");
+      const delivery = db.prepare("INSERT INTO deliveries(thread,n,session,delivered_at) VALUES(?,?,?,NULL)");
+      db.exec("BEGIN");
+      for (let n = 1; n <= size; n++) delivery.run(shared.id, n, "s");
+      delivery.run(shared.id, 1, "other");
+      db.exec("COMMIT");
+      prepare(store, "s"); prepare(store, "other");
+      let staged = 0;
+      db.function("count_latest_delete_stage", () => { staged++; return 1; });
+      db.exec(`CREATE TEMP TRIGGER count_latest_delete_stage AFTER INSERT ON latest_thread_changed
+        WHEN NEW.session='s' BEGIN SELECT count_latest_delete_stage(); END`);
+      store.deleteSession("s");
+      counts.push(staged);
+      assert.equal(store.latestThread("other")?.thread.id, shared.id);
+      assert.equal(db.prepare("SELECT 1 FROM latest_thread_scopes WHERE session='s'").get(), undefined);
+      assert.equal(db.prepare("SELECT 1 FROM latest_thread_members WHERE session='s'").get(), undefined);
+      assert.equal(db.prepare("SELECT 1 FROM latest_thread_rows WHERE session='s'").get(), undefined);
+    } finally { store.close(); }
+  }
+  assert.deepEqual(counts, [1, 1], "only removal of the membership changes its prepared order");
+});
+
 test("a prepared session finds the same latest delivery or last membership", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
