@@ -37,6 +37,9 @@ priv struct Run {
   lasts : Array[() -> Unit]
   /// doing what waits for a change told whole (after_flush): one at a time, in order, whatever they set meanwhile
   mut draining : Bool
+  /// how many changes were begun: one is a write or a batch begun where none is under way (no batch, no flush, nothing
+  /// waiting for one told whole), with all that it sets going till it is told whole (change_now)
+  mut change : Int
 }
 
 ///|
@@ -54,6 +57,7 @@ let run : Run = {
   afters: [],
   lasts: [],
   draining: false,
+  change: 0,
 }
 
 ///|
@@ -224,17 +228,47 @@ pub fn batch_depth() -> Int {
 ///|
 pub fn start_batch() -> Unit {
   if run.batch_depth == 0 { run.batch_changed = false }
+  change_begun()
   run.batch_depth += 1
+}
+
+///|
+/// A change begun where none is under way: counted (change_now).
+fn change_begun() -> Unit {
+  if run.batch_depth == 0 && run.flushing == 0 && !run.draining {
+    run.change += 1
+  }
+}
+
+///|
+/// Which change is under way, or was last: the same number from a write or batch begun where none was under way till
+/// all it set going is told whole (its effects, what they set, what waits for it all), the next one another. Not
+/// alien-signals': for what gives one change one of something of its own (a window's tree, one moment).
+pub fn change_now() -> Int {
+  run.change
 }
 
 ///|
 pub fn end_batch() -> Unit {
   run.batch_depth -= 1
-  // An unchanged batch inside a queued watcher adds no work of its own. Let the outer flush finish the queue
-  // instead of nesting every independent watcher. A batch that writes still commits before its caller continues.
-  if run.batch_depth == 0 && (run.flushing == 0 || run.batch_changed) {
+  flush_outermost()
+}
+
+///|
+/// What was told run, where nothing runs it already: outside every batch and every flush. Inside a flush (an effect, a
+/// watch told, what one of them sets), what it told is queued after what is queued already and run by the flush under
+/// way, in its turn: no effect is ever run inside another's run, so how deep the stack goes does not grow with how
+/// long a chain of effects setting what the next reads is (a page let go telling a thousand of its rows).
+fn flush_outermost() -> Unit {
+  if run.batch_depth == 0 && run.flushing == 0 {
     flush()
   }
+}
+
+///|
+/// How deep in flushes it is now: 1 inside the one under way, never more (flush_outermost); 0 outside.
+pub fn flush_depth() -> Int {
+  run.flushing
 }
 
 ///|
@@ -327,6 +361,7 @@ pub fn effect_scope(f : () -> Unit) -> () -> Unit {
 pub fn trigger(f : () -> Unit) -> Unit {
   let sub = ReactiveNode::new(WATCHING | RECURSED_CHECK, TriggerNode)
   let prev_sub = set_active_sub(Some(sub))
+  change_begun()
   run.batch_depth += 1
   f()
   run.active_sub = prev_sub
@@ -349,9 +384,7 @@ pub fn trigger(f : () -> Unit) -> Unit {
     }
   }
   run.batch_depth -= 1
-  if run.batch_depth == 0 {
-    flush()
-  }
+  flush_outermost()
 }
 
 ///|
@@ -587,6 +620,7 @@ pub fn[T] Signal::set(self : Signal[T], value : T, loc~ : SourceLoc) -> Unit {
   let changed = !same_as(state.same, state.pending, value)
   state.pending = value
   if changed {
+    change_begun()
     if run.batch_depth > 0 { run.batch_changed = true }
     // (set as a watch reads: where, for it to say what changed what it read as it read, Watch::set_as_read)
     if watch_reading.depth > 0 && watch_reading.sets.length() < 4 {
@@ -601,9 +635,7 @@ pub fn[T] Signal::set(self : Signal[T], value : T, loc~ : SourceLoc) -> Unit {
         let was = setting.val
         setting.val = Some(loc)
         propagate(subs, run.run_depth != 0)
-        if run.batch_depth == 0 {
-          flush()
-        }
+        flush_outermost()
         setting.val = was
       }
       None => ()
@@ -750,15 +782,14 @@ pub fn[T] untracked(f : () -> T) -> T {
 /// The computed worked out again as it is next read, whatever it read (what reads it told, as a signal set tells it):
 /// for one built again for what is no signal (a part kept, Ctx::kept_part: its key, the pointer over it).
 pub fn[T] Computed::invalidate(self : Computed[T]) -> Unit {
+  change_begun()
   if run.batch_depth > 0 { run.batch_changed = true }
   let node = self.0
   node.flags = node.flags | DIRTY
   match node.subs {
     Some(subs) => {
       propagate(subs, run.run_depth != 0)
-      if run.batch_depth == 0 {
-        flush()
-      }
+      flush_outermost()
     }
     None => ()
   }

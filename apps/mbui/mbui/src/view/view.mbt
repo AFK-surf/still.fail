@@ -566,6 +566,13 @@ pub struct Tree {
   time : (() -> Double)?
   /// the moment the change a queued binding works out was told, while it is (-1: none)
   mut cause_at : Double
+  /// the moment of what is under way (a frame's, the clock's as it is set), held for all it sets going whatever time
+  /// the work takes (-1: nothing under way)
+  mut moment : Double
+  /// the change from outside last given a moment (signals' change_now) and that moment: the host's clock read once a
+  /// change, where it comes with no moment of its own (Tree::now_of_change)
+  mut outside_change : Int
+  mut outside_at : Double
   /// how words are measured: (words, how they are set, width offered) -> (width, height)
   measure : (String, WordsLook, Double) -> (Double, Double)
   /// and words in pieces set their own way (View::words_runs): (the pieces, how the words are set, width offered)
@@ -642,6 +649,8 @@ pub struct Tree {
   // what is to be done once the event being taken is committed whole (Tree::after_event), in order
   afters : Array[() -> Unit]
   mut modals_due : Bool
+  /// what a modal layer said asked to be told as the change under way is told whole (Tree::modals_at_end)
+  mut modals_asked : Bool
   /// the node a finger is held on (View::on_drag), from its down till it is let go, called off or the node goes
   mut held : NodeId?
   /// whether a gesture's finger let go was its tap (View::gesture: not moved past its slop, not held, not called off),
@@ -800,6 +809,9 @@ struct Bound {
   mut marked : Bool
   mut live : Bool
   mut run : () -> Unit
+  /// marked as what it read may have changed, found not to have (Tree::pull): the moment of that marking forgotten, the
+  /// next change's its cause's
+  mut unmarked : () -> Unit
 }
 
 ///|
@@ -843,6 +855,9 @@ pub fn Tree::new(
     outs_gone: [],
     time,
     cause_at: -1.0,
+    moment: -1.0,
+    outside_change: -1,
+    outside_at: 0.0,
     measure,
     measure_runs,
     measure_shorter: match measure_shorter {
@@ -877,6 +892,7 @@ pub fn Tree::new(
     committing: 0,
     afters: [],
     modals_due: false,
+    modals_asked: false,
     held: None,
     gesture_tapped: false,
     taps_withheld: false,
@@ -1450,6 +1466,11 @@ pub fn Tree::at(self : Tree, ms : Double) -> Unit {
 /// by what reads it and its node living, the rest let go; told of what was followed as this began, what is followed
 /// anew meanwhile kept for the next.
 fn Tree::clock_to(self : Tree, ms : Double) -> Unit {
+  // (what its moving tells is of the moment it moved to, where nothing under way says another)
+  let was = self.moment
+  if self.cause_at < 0.0 && self.moment < 0.0 {
+    self.moment = ms
+  }
   // (the moment and whether it is past each followed, told as one: no reader sees the one without the other)
   @signals.start_batch()
   self.clock.set(ms)
@@ -1467,6 +1488,7 @@ fn Tree::clock_to(self : Tree, ms : Double) -> Unit {
     }
   }
   @signals.end_batch()
+  self.moment = was
 }
 
 ///|
@@ -1747,7 +1769,7 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
   // (its one state, every way it is run read from it: queued for a frame (told as a change ended), marked as what it
   // read changed (in a change's batch too: what asks at once pulls it), live; run once it is due, by any of them, and
   // done with all of them)
-  let b : Bound = { queued: false, marked: false, live: true, run: fn() {  } }
+  let b : Bound = { queued: false, marked: false, live: true, run: fn() {  }, unmarked: fn() {  } }
   // (when what it read was told changed: its cause's moment, whatever frame works it out)
   let told_at = Ref(-1.0)
   let k = self.pulls_made
@@ -1755,9 +1777,9 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
   let w = @signals.watch(fn() {
     if b.live && !b.queued {
       b.queued = true
-      told_at.val = match self.time {
-        Some(f) => f()
-        None => self.logic
+      // (its cause's moment: as it was marked, inside the change that set what it read)
+      if told_at.val < 0.0 {
+        told_at.val = self.now_of_change()
       }
       self.bindings_due.push(b)
       self.marked()
@@ -1771,7 +1793,17 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
       b.marked = true
       self.pulls_marked.push(k)
     }
+    // (the moment of the change that marked it, first since it last ran: whenever and wherever it is told and run)
+    if b.live && told_at.val < 0.0 {
+      told_at.val = self.now_of_change()
+    }
   })
+  b.unmarked = fn() {
+    b.marked = false
+    if !b.queued {
+      told_at.val = -1.0
+    }
+  }
   b.run = fn() {
     b.queued = false
     b.marked = false
@@ -1811,7 +1843,7 @@ fn Tree::pull(self : Tree) -> Unit {
           if w.changed_now() {
             (b.run)()
           } else {
-            b.marked = false
+            (b.unmarked)()
           }
         }
         _ => ()
@@ -1835,13 +1867,17 @@ pub fn Tree::bindings_held(self : Tree) -> Int {
 fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Unit {
   let live = Ref(true)
   let last : Ref[T?] = Ref(None)
+  // (the moment of the change that marked it, first since it was last told: its cause's, wherever it is told)
+  let told_at = Ref(-1.0)
   // (the watch reads anew as it is told; let go as it stops)
   let watch : Ref[@signals.Watch?] = Ref(None)
   let w = @signals.watch(fn() {
     guard live.val && watch.val is Some(w) else { return }
+    let at = if told_at.val >= 0.0 { told_at.val } else { self.now_of_change() }
+    told_at.val = -1.0
     // (read and done as of one moment, the change's that told it: what the read works out at the cause's moment is
     // of the same moment the change is committed at)
-    self.at_cause(fn() {
+    self.at_cause_of(at, fn() {
       // (still bound once what was due by then is settled: one let go then reads nothing more, follows nothing again)
       guard live.val else { return false }
       let v = w.read(read)
@@ -1855,6 +1891,11 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> 
         false
       }
     })
+  })
+  w.on_marked(fn() {
+    if live.val && told_at.val < 0.0 {
+      told_at.val = self.now_of_change()
+    }
   })
   watch.val = Some(w)
   let v = w.read(read)
@@ -1889,15 +1930,26 @@ fn Tree::committed(self : Tree, f : () -> Unit) -> Unit {
 /// brought there first (what had left by then let go), that moment its cause's for all `f` reads and does; what is
 /// marked taken where `f` says it changed something.
 fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
-  let at = if self.cause_at >= 0.0 {
-    self.cause_at
-  } else {
-    match self.time {
-      Some(now) => now()
-      None => self.logic
-    }
+  self.at_cause_of(self.now_of_change(), f)
+}
+
+///|
+/// `f` done as of `at`, the moment of the change being committed (Tree::at_cause). What was due by then is done first,
+/// each its own change; where any was and a flush is under way (this told by it, as an effect is), what that set going
+/// waits in its queue: `f` is done once all of it is told (signals' after_flush), finding things as it left them (a
+/// node let go by what was due: what its own structure follows done nothing). No flush is run inside another for it.
+fn Tree::at_cause_of(self : Tree, at : Double, f : () -> Bool) -> Unit {
+  if self.advance_logic(at) && @signals.flush_depth() > 0 {
+    @signals.after_flush(fn() { self.at_cause_now(at, f) })
+    return
   }
-  self.advance_logic(at)
+  self.at_cause_now(at, f)
+}
+
+///|
+/// `f` done as of `at`, what was due by then done already (Tree::at_cause_of).
+fn Tree::at_cause_now(self : Tree, at : Double, f : () -> Bool) -> Unit {
+  self.advance_logic(at) |> ignore
   // What was due has finished. Advancing the drawing clock can notify bindings too: tell it with the structure's
   // change, so a child already queued by the new data cannot run before its parent has had the chance to let it go.
   @signals.start_batch()
@@ -3378,7 +3430,30 @@ fn Tree::modals_told(self : Tree) -> Unit {
     self.modals_due = true
     return
   }
+  // (told by an effect of a change under way, the commits of its other structures still queued: at its end)
+  if @signals.flush_depth() > 0 {
+    self.modals_due = true
+    self.modals_at_end()
+    return
+  }
   self.modals_now()
+}
+
+///|
+/// What a modal layer said told once the change under way is told whole (signals' after_flush): its structures' commits,
+/// each run in its turn by the one flush, all done first, whatever order they were told in.
+fn Tree::modals_at_end(self : Tree) -> Unit {
+  if self.modals_asked {
+    return
+  }
+  self.modals_asked = true
+  @signals.after_flush(fn() {
+    self.modals_asked = false
+    if self.committing == 0 && self.modals_due {
+      self.modals_due = false
+      self.modals_now()
+    }
+  })
 }
 
 ///|
@@ -3386,8 +3461,13 @@ fn Tree::modals_told(self : Tree) -> Unit {
 /// layer said in it told now.
 fn Tree::modals_settled(self : Tree) -> Unit {
   if self.committing == 0 && self.modals_due {
-    self.modals_due = false
-    self.modals_now()
+    // (one commit of a change whose others are still queued in the flush under way: told once all of them are)
+    if @signals.flush_depth() > 0 {
+      self.modals_at_end()
+    } else {
+      self.modals_due = false
+      self.modals_now()
+    }
   }
   self.withins_settled()
 }
@@ -5555,10 +5635,34 @@ pub fn Tree::moment(self : Tree) -> Double? {
 ///|
 /// The time now, as a change is told (the host's, else the clock's).
 fn Tree::time_now(self : Tree) -> Double {
-  match self.time {
+  self.now_of_change()
+}
+
+///|
+/// The moment of the change being made now: the one being committed's (Tree::at_cause, an event), else what is under
+/// way's (a frame's: Tree::brought; a change from outside already given one), else the host's now, taken once and held
+/// for all that change sets going till what it told is told whole: what is worked out for one change is of one moment,
+/// however long the working out takes on the host's clock (a phone's, which goes on as it works: a leaving read at a
+/// later moment on each pass of a layout that follows sizes it changes, 2026-11-05's crash leaving a chat).
+fn Tree::now_of_change(self : Tree) -> Double {
+  if self.cause_at >= 0.0 {
+    return self.cause_at
+  }
+  if self.moment >= 0.0 {
+    return self.moment
+  }
+  // (a change from outside: one moment for all of it, the host's as it began)
+  let change = @signals.change_now()
+  if change == self.outside_change {
+    return self.outside_at
+  }
+  let at = match self.time {
     Some(f) => f()
     None => self.logic
   }
+  self.outside_change = change
+  self.outside_at = at
+  at
 }
 
 ///|
@@ -5787,27 +5891,28 @@ fn Tree::due_leaving(self : Tree, id : NodeId) -> Unit {
 /// its turn. Frames, inputs and the host's calls each advance it to their moment and no further: how often they come
 /// changes nothing of what it does.
 pub fn Tree::advance(self : Tree, upto : Double) -> Unit {
-  self.advance_logic(upto)
+  self.advance_logic(upto) |> ignore
   self.advance_clock(upto)
 }
 
 ///|
 /// What was due before a new change, committed before that change reads or writes anything. The drawing clock is
 /// told separately so a structure can tell it together with its own change (Tree::at_cause).
-fn Tree::advance_logic(self : Tree, upto : Double) -> Unit {
+fn Tree::advance_logic(self : Tree, upto : Double) -> Bool {
   // (one thing due at a time, all it does committed before the next is chosen: asked again while one is being done (a
   // structure it changed committing), the loop doing it goes on from where it is once that one is done)
   if self.advancing {
-    return
+    return false
   }
   self.advancing = true
-  self.advance_loop(upto)
+  let done = self.advance_loop(upto)
   self.advancing = false
   // (where its logic now stands: what is said next is of this moment, not of the last frame; what is drawn is drawn
   // at no moment before it)
   if upto > self.logic {
     self.logic = upto
   }
+  done
 }
 
 ///|
@@ -5818,7 +5923,8 @@ fn Tree::advance_clock(self : Tree, upto : Double) -> Unit {
 }
 
 ///|
-fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
+fn Tree::advance_loop(self : Tree, upto : Double) -> Bool {
+  let mut done = false
   while true {
     let mut next = -1
     let mut next_at = 0.0
@@ -5844,8 +5950,9 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
       i = i + 1
     }
     if next < 0 {
-      return
+      return done
     }
+    done = true
     let d = self.timeline[next]
     let was = self.cause_at
     self.cause_at = next_at
@@ -5888,6 +5995,7 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
       self.settle_now(next_at)
     }
   }
+  done
 }
 
 ///|
@@ -5973,6 +6081,9 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
   if self.nodes.length() == 0 || !self.nodes[0].live {
     return false
   }
+  // (the whole frame of its one moment: what its size tells, and all that sets going, as of `upto`)
+  let was = self.moment
+  self.moment = upto
   if w != self.last_w || h != self.last_h {
     self.last_w = w
     self.last_h = h
@@ -5984,6 +6095,7 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
     self.room.set((w, h))
   }
   self.brought(upto)
+  self.moment = was
   let drawn = self.drawn_due
   self.drawn_due = false
   if self.telling_due {
@@ -6003,7 +6115,9 @@ pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
     return
   }
   // (its logic first, to the moment, then what it draws drawn as of it (a frame to be shown later drawn ahead of it:
-  // drawn again as of now, for where a press finds things), then what it marked)
+  // drawn again as of now, for where a press finds things), then what it marked; all of it of that one moment)
+  let was = self.moment
+  self.moment = at
   self.advance(at)
   self.clock_to(at)
   // (what the change under way set so far, and the clock, pulled into its properties: an input in a change's batch
@@ -6012,14 +6126,20 @@ pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
   if self.last_w >= 0.0 {
     self.brought(at)
   }
+  self.moment = was
 }
 
 ///|
 /// What was marked done, at the clock's now (Tree::frame, Tree::bring_to).
 fn Tree::brought(self : Tree, upto : Double) -> Unit {
+  // (all of it of `upto`: what its layout tells and what that sets going worked out as of then, never at the host's
+  // clock as it goes on while this is worked out)
+  let was = self.moment
+  self.moment = upto
   // what is due by now done (and the logic at `upto`, nothing due or not: what is said next is of then)
   self.advance(upto)
   self.laid_out(upto)
+  self.moment = was
 }
 
 ///|
