@@ -120,6 +120,22 @@ test("a destination's surface, time, membership and removal are reflected after 
   } finally { store.close(); }
 });
 
+test("removing a membership releases its copy destination row even if that session is never requested again", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const shared = store.openThread("slack:one", "C", "retired-member", null, null).id;
+    for (const session of ["retired", "kept"]) store.joinThread(shared, session, "slack");
+    put(db, shared, 1, 10);
+    for (const session of ["retired", "kept"]) { trackCcSession(db, session); finish(db, session); }
+    db.prepare("DELETE FROM thread_sessions WHERE thread=? AND session=?").run(shared, "retired");
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM cc_session_rows WHERE session=?").get("retired")?.n, 0);
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM cc_session_dirty WHERE session=?").get("retired")?.n, 0);
+    put(db, shared, 2, 20);
+    finish(db, "kept");
+    assert.deepEqual(ccSessionRows(db, "kept", 20).map((row) => row.thread), [shared]);
+  } finally { store.close(); }
+});
+
 test("merging a source chat's session candidates preserves its original twenty destinations and connects", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {

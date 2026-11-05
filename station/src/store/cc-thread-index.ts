@@ -59,7 +59,11 @@ export function installCcIndex(db: DatabaseSync): void {
         WHEN OLD.thread IS NOT NEW.thread OR OLD.session IS NOT NEW.session OR OLD.rowid IS NOT NEW.rowid BEGIN
           ${memberChange("NEW.thread", "NEW.session")}
       END;
-      CREATE TRIGGER cc_member_drop AFTER DELETE ON thread_sessions BEGIN ${memberChange("OLD.thread", "OLD.session")} END;
+      -- A departed membership no longer needs a row or a future reconciliation, even if its session is never read again.
+      CREATE TRIGGER cc_member_drop AFTER DELETE ON thread_sessions BEGIN
+        DELETE FROM cc_session_rows WHERE session=OLD.session AND thread=OLD.thread;
+        DELETE FROM cc_session_dirty WHERE session=OLD.session AND thread=OLD.thread;
+      END;
 
       -- A row added behind a running distributor's cursor stays dirty until that distribution has ended.
       CREATE TRIGGER cc_row_add AFTER INSERT ON cc_session_rows
