@@ -214,7 +214,9 @@ fn composer_ground_node() -> (@view.View, @view.View) {
 /// The list's actual allocated room for its composer. A new row's words are laid out at their full natural height
 /// while its slot opens from zero; subtracting those words from the animated scroll extent mixes two geometries.
 fn list_composer_room(t : @ui.Tester, rk : String) -> Double {
-  let foot = reading_of(rk).rows.sized().keys.search("foot").unwrap()
+  ignore(rk)
+  // (the room under its last row, Foot's: the last in sight, the list at its end)
+  let (_, foot) = t.visible()
   t.row(foot).unwrap().3
 }
 

@@ -62,6 +62,11 @@ impl[K : Eq] Eq for AnchoredIn[K] with equal(a, b) {
 let anchored_tail = 8
 
 ///|
+/// How many rows under the first laid out a list asked to its end glides over (scrolls_anchored's end asked): further
+/// off it is taken there at once.
+let anchored_ask_rows = 64
+
+///|
 /// A keyed list that can be read by position without assembling all of its keys. Snapshot follows changes to the
 /// set or order and returns its revision and length. Key and find read that snapshot without signals; find may use
 /// near as a hint. Removed_since returns keys removed after a revision, or None if that history is no longer
@@ -735,6 +740,18 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           }
         }
         let to_tail = dmax(0.0, tail_end - h)
+        // (asked to its end: where its end will be once the rooms opening now are open, each row as tall as it is (or is
+        // counted to be): one glide there, not one to where the end is this frame and another after)
+        // (no more than so many rows under its first laid out: further, it is taken to its end at once, as to_end does)
+        let to_end_open = if end_asked.val && n - r.first <= anchored_ask_rows {
+          let mut foot = r.tops.get(0).unwrap_or(h)
+          for i in r.first..<n {
+            foot += heights.get(key_at(i)).unwrap_or(mean())
+          }
+          dmax(0.0, foot - h)
+        } else {
+          0.0
+        }
         // (told once all of it is laid out, to what reads it there and after: what is in sight, whether it is at its
         // end, how far it is counted to be scrolled (what holds its rows moved by as much as they were placed for: what
         // its layout reads not moved), and a glide to what came, from this moment; nothing its layout reads changed)
@@ -797,8 +814,8 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             _ =>
               if at_end || !@signals.untracked(fn() { follows.get() }) {
                 end_asked.val = false
-              } else if end_asked.val && to_tail > 0.5 && s.glides_till() is None {
-                s.glide_where(c.x + to_tail, kept=false)
+              } else if end_asked.val && to_end_open > 0.5 {
+                s.glide_where(c.x + to_end_open, kept=false)
               }
           }
         })

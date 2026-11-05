@@ -181,3 +181,35 @@ test "an indexed list's row gone and come again in one change is there still, no
   assert_eq((rows.moving)(), [])
   assert_eq(t.row(29).map(fn(r) { r.3 }), Some(60.0))
 }
+
+///|
+/// How many times a row's room was worked out, and how many rows were measured, opening a list of `n` rows 60 tall in a
+/// window 300 tall, 160 made ahead of it each way: those in sight and ahead alone, whatever `n`.
+fn indexed_open_work(n : Int) -> (Int, Int) {
+  let src = IndexedRows::new(n)
+  let sizes : ListRows[(String, Double)] = ListRows::new()
+  let t = Tester::new(fn(_) { }, w=300.0, h=300.0, stable=false)
+  set_view_app(fn(root) {
+    let rows = sizes.in_node_indexed(root, src.source(), fn(i) { src.item(i) }, fn() {
+      let all = src.pending.copy()
+      src.pending.clear()
+      all
+    }, fn(k) { src.at.get(k).map(fn(_) { 0 }) })
+    root.height(Is(Some(300.0))).scrolls_anchored(@view.Scroll::list(), fn() { [] }, est=60.0, ahead=160.0,
+      indexed=rows.source, rooms=rows.room_now, fn(row, k) {
+        row.height(By(fn() { (rows.item_of)(k).map(fn(x) { x.0.1 }) })) |> ignore
+      }) |> ignore
+  })
+  let measured = view_tree().map(fn(tree) { tree.work.measured }).unwrap_or(0)
+  t.draw()
+  t.run_for(row_size_ms)
+  (sizes.rooms_worked(), view_tree().map(fn(tree) { tree.work.measured }).unwrap_or(0) - measured)
+}
+
+///|
+test "a list opened works out the rooms of and measures the rows in sight and ahead of it alone, of 30 as of 3000" {
+  let (rooms, measured) = indexed_open_work(3000)
+  assert_eq((rooms, measured), indexed_open_work(30))
+  // (300 in sight and 160 ahead under it, rows 60 tall: 8 of them, each worked out a few times over as it opens)
+  assert_true(rooms <= 8 * 4, msg="\{rooms} rooms worked out")
+}
