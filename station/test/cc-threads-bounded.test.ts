@@ -33,6 +33,44 @@ test("copy destinations keep shared membership and the last entry's order", () =
   } finally { store.close(); }
 });
 
+test("shared copy destinations are counted once before the twenty most recent are chosen", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const home = store.openThread("ember", "EMBER", "home-many", null, null).id;
+    store.joinThread(home, "a", "ember");
+    store.joinThread(home, "b", "ember");
+    const put = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at)
+      VALUES(?,1,'message','person','viewer',?)`);
+    const destinations = Array.from({ length: 25 }, (_, n) => {
+      const id = store.openThread("slack:one", "C", `destination-${n}`, null, null).id;
+      store.joinThread(id, "a", "slack");
+      if (n >= 13) store.joinThread(id, "b", "slack");
+      put.run(id, n + 1);
+      return id;
+    });
+    assert.deepEqual(store.ccThreads(home).map(({ thread }) => thread.id), destinations.slice(5).reverse());
+  } finally { store.close(); }
+});
+
+test("copy destinations with the same last entry time use creation time and thread id", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const home = store.openThread("ember", "EMBER", "home-ties", null, null).id;
+    store.joinThread(home, "agent", "ember");
+    const make = (name: string, created: number, at: number | null) => {
+      const id = store.openThread("slack:one", "C", name, null, null).id;
+      store.joinThread(id, "agent", "slack");
+      db.prepare("UPDATE threads SET created_at=? WHERE id=?").run(created, id);
+      if (at !== null) db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at)
+        VALUES(?,1,'message','person','viewer',?)`).run(id, at);
+      return id;
+    };
+    const first = make("first", 10, 5), second = make("second", 20, 5);
+    const third = make("third", 20, 5), empty = make("empty", 30, null);
+    assert.deepEqual(store.ccThreads(home).map(({ thread }) => thread.id), [third, second, first, empty]);
+  } finally { store.close(); }
+});
+
 test("a chat's copy destinations do not traverse its older linked threads", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
