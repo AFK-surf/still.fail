@@ -17,6 +17,7 @@ import { readTimeline, sessionPlaces, sharedTranscripts, transcriptSources } fro
 import { forgetMarks, marksDir } from "../read/transcripts.ts";
 import { ARCHIVED_WORKSPACE_BATCH, AUTO, type ArchivedWorkspace, type Attachment, MANUAL, type Quote, STILLFAIL_SURFACE, type ThreadRow } from "../store/store.ts";
 import { sessionBindingsReady } from "../store/session-bindings-index.ts";
+import { archiveMarksReady } from "../store/archive-mark-index.ts";
 import type { SessionChange } from "./accounts.ts";
 import { unlockWorktrees, withLock } from "./archive.ts";
 import { roomOf } from "./footprint.ts";
@@ -335,7 +336,7 @@ export async function relieveArchived(hub: Hub, free: () => number): Promise<voi
 /// A session heard only in Slack goes after slackArchiveMs even when stopped at a block: nobody answers it from here.
 /// With autoArchiveReviewed, the rest goes only once the archive review recommended each of its chats.
 export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: number) => void, prepareBindings?: () => void,
-  prepareJobs?: (session: string) => void): number | null {
+  prepareJobs?: (session: string) => void, prepareMarks?: () => void): number | null {
   const { store } = hub;
   const { autoArchiveMs: after, slackArchiveMs, autoArchiveReviewed, automaticDecisions } = hub.config();
   if (after <= 0 && slackArchiveMs <= 0) return null;
@@ -356,6 +357,8 @@ export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: numb
   const live = store.liveSessions();
   const own = store.chatsOfTheirOwn();
   if (live.length === 0 && own.length === 0) return null;
+  // An old station's reverse mark lookup may be incomplete. Never guess that a chat is unpinned or not kept.
+  if (!archiveMarksReady(store.db)) { prepareMarks?.(); return null; }
   const bindingsReady = live.length === 0 || sessionBindingsReady(store.db);
   const waitingForBindings = !bindingsReady && prepareBindings !== undefined;
   if (waitingForBindings) prepareBindings?.();
@@ -420,12 +423,13 @@ export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: numb
 /// Check on the usual schedule, and try again when an old chat's missing unread boundary is ready.
 export function startAutoArchiveTimer(hub: Hub, time: { after(ms: number, run: () => void): () => void },
   readers: { prepareSaid(threads: readonly number[], signal?: AbortSignal): Promise<void>; prepareSessionBindings(signal?: AbortSignal): Promise<void>;
-    prepareSessionUpJobs(sessions: readonly string[], signal?: AbortSignal): Promise<void> }): () => void {
+    prepareSessionUpJobs(sessions: readonly string[], signal?: AbortSignal): Promise<void>; prepareArchiveMarks?(signal?: AbortSignal): Promise<void> }): () => void {
   const cancel = new AbortController();
   let timer: (() => void) | null = null;
   let preparing = false;
   let preparingBindings = false;
   let preparingJobs = false;
+  let preparingMarks = false;
   const schedule = (ms: number) => {
     timer?.();
     timer = time.after(ms, check);
@@ -436,12 +440,23 @@ export function startAutoArchiveTimer(hub: Hub, time: { after(ms: number, run: (
     const missing = new Set<number>();
     const missingJobs = new Set<string>();
     let missingBindings = false;
+    let missingMarks = false;
     try {
-      next = autoArchive(hub, hub.now(), (thread) => missing.add(thread), () => { missingBindings = true; }, (session) => missingJobs.add(session));
+      next = autoArchive(hub, hub.now(), (thread) => missing.add(thread), () => { missingBindings = true; }, (session) => missingJobs.add(session), () => { missingMarks = true; });
     } catch (error) {
       log.warn("hub", "auto-archiving failed", { error: (error as Error).message });
     }
     schedule(Math.min(600_000, next === null ? Infinity : next - hub.now()));
+    if (!preparingMarks && missingMarks && readers.prepareArchiveMarks) {
+      preparingMarks = true;
+      void readers.prepareArchiveMarks(cancel.signal).then(() => {
+        preparingMarks = false;
+        if (!cancel.signal.aborted) schedule(0);
+      }, (error) => {
+        preparingMarks = false;
+        if (!cancel.signal.aborted) log.warn("hub", "preparing archive marks failed", { error: (error as Error).message });
+      });
+    }
     if (!preparing && missing.size) {
       preparing = true;
       void readers.prepareSaid([...missing], cancel.signal).then(() => {
