@@ -25,6 +25,10 @@ for (const { column, sql } of [
       db.function("visited_card_kind", (kind) => { visits++; return kind; });
       const counted = sql.replace("kind = 'message'", "visited_card_kind(kind) = 'message'");
       assert.notEqual(counted, sql, "the card candidate lookup is observed");
+      const plan = (statement: string) => db.prepare(`EXPLAIN QUERY PLAN ${statement}`).all(thread, 1000)
+        .map((row) => String(row.detail)).join("\n");
+      assert.match(plan(sql), new RegExp(`entries_${column === "card" ? "cards" : "options"}`));
+      assert.match(plan(counted), new RegExp(`entries_${column === "card" ? "cards" : "options"}`));
       const query = db.prepare(counted);
       assert.equal(query.get(thread, 1000)?.n, 1);
       const before = visits;
