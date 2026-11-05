@@ -81,7 +81,14 @@ pub fn became_starts(wide~ : Bool) -> Unit {
   leave.animate(1.0, @motion.tween(new_leave_ms, ease=Leave))
   let fade = new_fade(c)
   fade.snap(0.0)
-  fade.animate(1.0, @motion.tween(new_fade_ms, ease=Leave))
+  fade.animate(1.0, new_fade_spec())
+}
+
+///|
+/// How the new chat's choices fade as it leaves (became_starts): what of the tree draws them reads where it puts them at
+/// the moment each frame is drawn (composer_node's leaving copy).
+pub fn new_fade_spec() -> @motion.Spec {
+  @motion.tween(new_fade_ms, ease=Leave)
 }
 
 ///|

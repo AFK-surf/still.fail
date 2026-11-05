@@ -60,6 +60,7 @@ pub fn new_chat_ask(what : String) -> Unit {
 ///|
 /// Told each time one of the page's picks is asked open (new_chat_ask): what of the page's nodes opens it follows it
 /// (new_tools_node's), and takes it (take_asked).
+// kept across runs: only counted on, never read for its number (what follows it takes what was asked: take_asked)
 let new_asked_told : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
