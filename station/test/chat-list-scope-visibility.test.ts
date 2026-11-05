@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { recentChatIds } from "../src/store/chat-list.ts";
 import { scanRecentWorkspaceStep, settleRecentWorkspaceMemberStep } from "../src/store/chat-list-scope-build.ts";
 import { installRecentScopeJournal, trackRecentScope } from "../src/store/chat-list-scope-journal.ts";
+import { settleRecentWorkspaceOrderStep } from "../src/store/chat-list-scope-order.ts";
 import { readPreparedRecentWorkspace } from "../src/store/chat-list-scope-rows.ts";
 import { settleRecentScopeVisibilityStep } from "../src/store/chat-list-scope-visibility.ts";
 import { Store } from "../src/store/store.ts";
@@ -83,3 +84,37 @@ for (const recursive of [false, true]) test(`a home and its members can change d
     }
   } finally { store.close(); }
 });
+
+for (const recursive of [false, true]) for (const how of ["insert", "update"] as const) {
+  test(`a chat ${how} replacing another keeps workspace visibility exact (recursive triggers ${recursive})`, () => {
+    const store = Store.open(":memory:");
+    const db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+      for (const [key, ws] of [["one", "here"], ["two", "elsewhere"]] as const)
+        store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+          token: key, createdAt: 1, lastActiveAt: 1, ws });
+      const first = store.openThread("ember", "EMBER", "first", "First", null).id;
+      const second = store.openThread("ember", "EMBER", "second", "Second", null).id;
+      db.prepare("UPDATE threads SET home = ? WHERE id = ?").run("one", first);
+      db.prepare("UPDATE threads SET home = ? WHERE id = ?").run("two", second);
+      installRecentScopeJournal(db);
+      for (const ws of ["here", "elsewhere"]) {
+        trackRecentScope(db, { kind: "workspace", workspace: ws });
+        while (!scanRecentWorkspaceStep(db, ws, 2).sourceDone) { /* Prepare the original scopes. */ }
+      }
+      db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1").run();
+      if (how === "insert")
+        db.prepare("INSERT OR REPLACE INTO threads(id,surface,channel,thread_ts,created_at,home) VALUES (999,'ember','EMBER','first',10,'two')").run();
+      else db.prepare("UPDATE OR REPLACE threads SET thread_ts = 'first' WHERE id = ?").run(second);
+      assert.equal(readPreparedRecentWorkspace(db, "here", 5), null);
+      let done = false;
+      for (let i = 0; i < 20 && !done; i++) done = settleRecentScopeVisibilityStep(db, 1).visibilityDone;
+      assert.ok(done);
+      for (const ws of ["here", "elsewhere"]) {
+        while (!settleRecentWorkspaceOrderStep(db, ws, 1).ordersDone) { /* Account for removed rows. */ }
+        assert.deepEqual(readPreparedRecentWorkspace(db, ws, 5), recentChatIds(db, ws, "home", 5), ws);
+      }
+    } finally { store.close(); }
+  });
+}
