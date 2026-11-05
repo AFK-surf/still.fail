@@ -127,6 +127,24 @@ test "what the host has once handed on writes what another node's reaction follo
 }
 
 ///|
+test "what the host has once handed on shows a node whose binding reads its own size as told: no fault, it laid out" {
+  let host = OnceHad::new()
+  let shown = @signals.signal(false)
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  set_view_app(fn(root) {
+    root.show(fn() { shown.get() }, fn(n) {
+      n.width(Is(Some(100.0))).height(By(fn() { n.laid_size_told().map(fn(z) { z.0 / 2.0 }) })) |> ignore
+    })
+    on_host_said(root, kind="page-opened", fn() { host.said() }, fn(_) { shown.set(true) })
+  })
+  t.draw()
+  host.had.val = Some("opened")
+  t.draw()
+  t.draw()
+  assert_eq(shown.get(), true)
+}
+
+///|
 test "panic: what is laid out read by what is handed on itself, laid_window_told, aborts" {
   let host = OnceHad::new()
   let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
