@@ -14,7 +14,7 @@ test("restart recovery finds a connect only for sessions with work to resume", (
     const turns = new Map<string, any>([
       ...idleRows.map((r) => [r.key, { endedAt: 1, outcome: "ok", declared: "done" }] as const),
       [waiting.key, { endedAt: 1, declared: "waiting" }],
-      [refill.key, { endedAt: 1, outcome: "failed", detail: "rate_limit:later" }],
+      [refill.key, { endedAt: 1, outcome: "failed", detail: "rate_limit:later", declared: "waiting" }],
       [offline.key, { endedAt: 1, declared: "waiting" }],
       [running.key, { endedAt: 1, declared: "waiting" }],
       [active.key, { endedAt: null, declared: "waiting" }],
