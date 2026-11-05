@@ -23,13 +23,16 @@ for (const delivered of [false, true]) {
         }
         db.exec("COMMIT");
       };
-      let visits = 0, traced = false;
+      let visits = 0, smallVisits = 0, traced = false;
       db.function("visited_latest_member", (thread) => { visits++; return thread; });
+      db.function("visited_small_member", (thread) => { smallVisits++; return thread; });
       const proxy = new Proxy(db, {
         get(target, property) {
           if (property === "prepare") return (sql: string) => {
             if (sql.includes("FROM latest_thread_rows r")) {
-              const observed = sql.replace("WHERE r.session=?1", "WHERE r.session=?1 AND visited_latest_member(r.thread)=r.thread");
+              const observed = sql.replace("WHERE r.session=?1", "WHERE r.session=?1 AND visited_latest_member(r.thread)=r.thread")
+                .replace("SELECT thread FROM thread_sessions INDEXED BY thread_sessions_session",
+                  "SELECT visited_small_member(thread) AS thread FROM thread_sessions INDEXED BY thread_sessions_session");
               assert.notEqual(observed, sql);
               const plan = (text: string) => target.prepare(`EXPLAIN QUERY PLAN ${text}`).all("s").map((row) => row.detail);
               assert.deepEqual(plan(observed), plan(sql), "the counter preserves the actual query plan");
@@ -43,15 +46,20 @@ for (const delivered of [false, true]) {
         },
       });
       (store as any).db = proxy;
-      const read = () => { visits = 0; assert.equal(store.latestThread("s")?.thread.id, current.id); return visits; };
+      const read = () => {
+        visits = 0; smallVisits = 0;
+        assert.equal(store.latestThread("s")?.thread.id, current.id);
+        return [visits, smallVisits];
+      };
       add(1, 40);
       installLatestThreadIndex(db);
       while (!prepareLatestThreadStep(db, "s").done) { /* bounded batches */ }
       const before = read();
-      assert.ok(traced && before > 0);
+      assert.ok(traced && before[0]! > 0);
+      assert.equal(before[1], 2);
       add(41, 400);
       const after = read();
-      assert.equal(after, before, `finding the chat visited ${before}, then ${after}, memberships`);
+      assert.deepEqual(after, before, `finding the chat visited ${before}, then ${after}, memberships`);
     } finally { store.close(); }
   });
 }
