@@ -151,16 +151,15 @@ fn open_job_row_node(r : @view.View, src : Source, job : @signals.Signal[Json]) 
 /// A group's heading and 还有 N 个 (caption, muted, one line): on the theme's share of its size, as words said only by
 /// their size are (open_jobs's), not the caption's own line.
 fn open_jobs_head() -> @ui.TextStyle {
-  let th = @ui.tree_theme()
-  @ui.text_style(size=Caption, color=Muted, wrap=false, leading=Exact(th.text_size(Caption).0 * th.text_line))
+  @ui.text_style(size=Caption, color=Muted, wrap=false, leading=@sf.caption_share_line())
 }
 
 ///|
 /// A job's name (14 on 18, the ink, cut short on its line).
 // kept across runs: a value (no field of it changes)
-let open_job_name : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, leading=Exact(18.0), w=Cut)
+let open_job_name : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, leading=@sf.job_name_line, w=Cut)
 
 ///|
 /// Where it is and how long (caption on 16, muted, cut short on its line).
 // kept across runs: a value (no field of it changes)
-let open_job_where : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false, leading=Exact(16.0), w=Cut)
+let open_job_where : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false, leading=@sf.job_where_line, w=Cut)
