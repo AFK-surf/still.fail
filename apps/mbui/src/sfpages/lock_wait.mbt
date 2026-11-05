@@ -92,6 +92,18 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false
     }
   } else if state == "finding" || asking {
     note(@sf.t("web-pages.security.pairFinding"), true)
+    // asked again while it looks: the person opened a trusted device and nothing came up, so it looks again now
+    // rather than once its dials run out (2026-11-06 the user: 「直接加个没收到重新申请的按钮」)
+    if !asking {
+      c.box(style=if in_card { lock_actions.then(@sf.foot_reach(@sf.button_height())) } else { lock_actions }, fn() {
+        @sf.card_foot_words(on=in_card, fn() {
+          if @sf.button(c, @sf.t("web-pages.security.pairRetry"), key="lock-pair-retry/" + ws, tone=Ghost) {
+            @settings.lock_call(core, ws, "pair", @sf.t("web-pages.security.pairRetry"), [])
+          }
+        })
+      })
+      |> ignore
+    }
   } else {
     match state {
       "none" => note(@sf.t("web-pages.security.pairNone"), false)
