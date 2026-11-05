@@ -187,7 +187,12 @@ export class Readers {
         // read 40 MB of a transcript in 10 s on a station short of memory (2026-11-03), every write and read waiting on the
         // disk meanwhile.
         if (asked.background) line.rested = now + (now - asked.took);
-        if (answer.text !== undefined) asked.resolve(answer.text);
+        if (answer.text !== undefined) {
+          if (answer.prepareUpJobs !== undefined) void this.prepareSessionUpJobs([answer.prepareUpJobs]).catch((error) => {
+            if (!this.closed) log.warn("readers", "preparing a session's up jobs failed", { error: (error as Error).message });
+          });
+          asked.resolve(answer.text);
+        }
         else asked.reject(new HttpError(answer.status ?? 500, answer.error ?? "read failed"));
       }
       this.pump(line);

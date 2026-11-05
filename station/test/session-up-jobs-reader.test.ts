@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { pathToFileURL } from "node:url";
 import { SessionUpJobsBuilder } from "../src/read/session-up-jobs-builder.ts";
+import { Readers } from "../src/read/pool.ts";
 import { installSessionUpJobs, sessionUpJobsReady } from "../src/store/session-up-jobs.ts";
 import { Store } from "../src/store/store.ts";
 
@@ -82,4 +83,47 @@ test("a stopped old-job worker resumes its pending session", async () => {
       assert.deepEqual(f.store.upJobIds("short"), ["short"]);
     } finally { await builder.close(); }
   } finally { f.close(); }
+});
+
+test("a session detail answers during handover, then prepares its old jobs in the background", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "session-up-detail-"));
+  const store = Store.open(join(dir, "stillfail.db"));
+  const previous = Promise.withResolvers<void>();
+  const readers = new Readers(dir, 1, undefined, 1, { previousGone: previous.promise });
+  const preparing = Promise.withResolvers<void>(), prepared = Promise.withResolvers<void>();
+  const prepare = readers.prepareSessionUpJobs.bind(readers);
+  let calls = 0;
+  readers.prepareSessionUpJobs = (sessions, signal) => {
+    calls++;
+    preparing.resolve();
+    const pending = prepare(sessions, signal);
+    void pending.then(() => prepared.resolve(), prepared.reject);
+    return pending;
+  };
+  try {
+    store.insertSession({ key: "mine", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "mine", createdAt: 1, lastActiveAt: 1, ws: "mine" });
+    store.db.exec(`INSERT INTO jobs(id,token,session_key,state,name,command,cwd,started_at,log)
+      VALUES('old','old','mine','running','','','',1,''); UPDATE session_up_job_meta SET fresh=0`);
+    const ended = store.db.prepare(`INSERT INTO jobs(id,token,session_key,state,name,command,cwd,started_at,log)
+      VALUES(?,?,'mine','exited','','','',?, '')`);
+    for (let i = 0; i < 60; i++) ended.run(`ended-${i}`, `ended-${i}`, i + 10);
+    const viewer = { sub: "u", email: "u@example.com", name: "U", role: "owner", workspace: "mine", device: "d", home: false };
+    const args = { key: "mine", viewer, lang: "en", jobs: "now", turns: "0" };
+    const answer = JSON.parse(await readers.read("session", args, "en"));
+    assert.equal(answer.jobs.length, 51);
+    assert.ok(answer.jobs.some((job: { id: string }) => job.id === "old"));
+    await preparing.promise;
+    assert.equal(sessionUpJobsReady(store.db, "mine"), false);
+    await readers.read("summary", { key: "mine" }, "en");
+    assert.equal(calls, 1, "a later read does not repeat the previous reader's request");
+    await assert.rejects(readers.read("session", { ...args, viewer: { ...viewer, workspace: "other" } }, "en"));
+    assert.equal(calls, 1, "a refused read does not request preparation");
+    previous.resolve();
+    await prepared.promise;
+    assert.equal(sessionUpJobsReady(store.db, "mine"), true);
+    const again = JSON.parse(await readers.read("session", args, "en"));
+    assert.deepEqual(again.jobs.map((job: { id: string }) => job.id), answer.jobs.map((job: { id: string }) => job.id));
+    assert.equal(calls, 1);
+  } finally { previous.resolve(); readers.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
