@@ -18,6 +18,9 @@
   Wireless debugging the app cannot turn on), the card says what first and 查看步骤 (the 共享调试 page) takes 允许's
   place; Wireless debugging the app may turn on, it turns on as it is allowed. A grant ends as its scope does, when the chat is archived or deleted, or when the owner
 >   takes it back (the card, the phone's notification, settings).
+> - **Allowed on the person's own key** (2026-11-05, docs/personal-lock.md): 允许 signs the grant with this device's
+>   personal key, asking the person, and the phone lends only on a grant it checks itself against the lock it pinned;
+>   what a station says of a grant alone lends nothing. A web page signs nothing, so it cannot allow.
 > - **Only that chat's agent reaches the phone.** The station runs an adb server of the grant's own
 >   (`adb -P <port> server`), the phone connected in it alone, and gives its port to that session's commands only
 >   (`ANDROID_ADB_SERVER_PORT`); the phone's tunnel listener takes connections from that server's process alone (the

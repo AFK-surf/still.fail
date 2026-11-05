@@ -66,6 +66,7 @@ priv struct SettingsFixture {
   /// a new device of lin's asking to be let in with this one's code (settings-lock-prompt), until turned away or its
   /// prompt closed
   mut pairing : Bool
+  mut pairing_personal : Bool
   /// Maple is being added to security mode (settings-security-protecting).
   mut protecting : Bool
   /// how its prompt went: "deny" (turned away), "hide" (closed, the code still good), "" while it is up
@@ -133,6 +134,7 @@ let fx : SettingsFixture = {
   reset_expiry: false,
   models_added: [],
   pairing: false,
+  pairing_personal: false,
   protecting: false,
   pair_ended: "",
   key_ask: false,
@@ -237,6 +239,7 @@ fn fixture_reset() -> Unit {
   fx.vault_off = false
   fx.plain_left = 0
   fx.pairing = false
+  fx.pairing_personal = false
   fx.protecting = false
   fx.pair_ended = ""
   fx.key_ask = false
@@ -500,6 +503,11 @@ pub fn fixture_page(mode : String) -> String {
     "settings-vault-off" => fx.vault_off = true
     "settings-vault-plain" => fx.plain_left = 2
     "settings-lock-prompt" => fx.pairing = true
+    // (one asking into the person's own lock: no workspace named)
+    "settings-lock-prompt-personal" => {
+      fx.pairing = true
+      fx.pairing_personal = true
+    }
     "settings-vault-prompt" => fx.key_ask = true
     "settings-vault-words" => recovery_words["ws1"] = fx_words()
     "settings-vault-add" => fixture_open.desk = "vault-add"
@@ -545,7 +553,7 @@ pub fn fixture_page(mode : String) -> String {
       "stations"
     "settings-adb" | "settings-adb-off" | "settings-adb-unpaired" | "settings-adb-pairing" | "settings-adb-connected" | "settings-adb-failed" =>
       "adb:ws1/st1"
-    "settings-adb-chats" | "settings-adb-chats-off" | "settings-adb-chats-long" | "settings-adb-idle" => "adb:"
+    "settings-adb-chats" | "settings-adb-chats-off" | "settings-adb-chats-long" | "settings-adb-idle" | "settings-adb-lock-member" | "settings-adb-lock-outside" | "settings-adb-lock-code" | "settings-adb-lock-replaced" => "adb:"
     // the second station a phone is lent to, its first paired already
     "settings-adb-second" => "adb:ws1/st2"
     "settings-profile-menu" | "settings-profile-lower" | "settings-profile-share" | "settings-profile-login" | "settings-profile-login-station" =>
@@ -574,7 +582,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-vault-motion" => "vault-items"
     "settings-local-fonts" => "fonts"
     "settings-security-join" | "settings-security-off" | "settings-security-protecting" => "security"
-    "settings-notify-off" | "settings-lock-prompt" | "settings-vault-prompt" => "home"
+    "settings-notify-off" | "settings-lock-prompt" | "settings-lock-prompt-personal" | "settings-vault-prompt" => "home"
     // (the notifications' page; the system having refused them: its banner's way to allow them)
     "settings-notify" | "settings-notify-denied" => "notifications"
     "settings-station" | "settings-station-many-profiles" => "station:ws1/st1"
@@ -2009,7 +2017,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                   ("deviceText", str("Pixel 9")),
                   ("created_at", Json::number(0.0)),
                   ("untilText", str("14:05 前有效")),
-                  ("workspaces", [obj([("id", str("ws1")), ("name", str("星火工作室"))]), obj([("id", str("ws2")), ("name", str("个人"))])]),
+                  ("workspaces", if fx.pairing_personal { [] } else { [obj([("id", str("ws1")), ("name", str("星火工作室"))]), obj([("id", str("ws2")), ("name", str("个人"))])] }),
                 ]),
               ]
             } else {
@@ -3404,6 +3412,20 @@ fn fx_adb_share() -> Json {
     )
   }
   match fx_adb.val {
+    // the person's own lock on the page (docs/personal-lock.md): this device on it, outside it, or asked for a code
+    "lock-member" =>
+      lent("connected", [
+        ("personal", obj([("standing", str("member")), ("devices", Json::array([
+          obj([("key", str("ed25519:aa")), ("label", str("OPPO PLP110")), ("me", Json::boolean(true))]),
+          obj([("key", str("ed25519:bb")), ("label", str("MacBook Pro")), ("me", Json::boolean(false))]),
+        ]))])),
+      ])
+    "lock-outside" => lent("connected", [("personal", obj([("standing", str("outside")), ("devices", Json::array([]))]))])
+    "lock-code" =>
+      lent("connected", [
+        ("personal", obj([("standing", str("outside")), ("devices", Json::array([])), ("pair", obj([("state", str("code")), ("devices", Json::number(1.0)), ("untilText", str("14:05 前有效"))]))])),
+      ])
+    "lock-replaced" => lent("connected", [("personal", obj([("standing", str("replaced")), ("devices", Json::array([]))]))])
     "unpaired" => lent("unpaired", [])
     "pairing" => lent("unpaired", [("pairPort", Json::number(37115.0))])
     "connected" => lent("connected", [("tunnels", Json::number(1.0))])

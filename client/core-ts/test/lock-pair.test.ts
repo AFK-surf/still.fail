@@ -16,6 +16,8 @@ import { utf8 } from "../src/util.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { Bridge, BridgeHost } from "../src/hosts/bridge.ts";
 import { t } from "../src/i18n.ts";
+import type { Entry } from "../src/lock.ts";
+import { PersonalLock, checkChain } from "../src/personal-lock.ts";
 import { pairs } from "../src/views/lock.ts";
 import { keep, PAIR_GRACE_MS, PAIR_WAIT_MS, served, serveTrusted, streamDuplex, trying, tryOne } from "../src/views/pair.ts";
 import { run as runEffect } from "./run.ts";
@@ -366,4 +368,54 @@ test("over iroh: the trusted device takes the new one on its endpoint, and the c
   connection.close(0, "done");
   await runEffect(newEnd.close());
   await runEffect(trustedEnd.close());
+});
+
+test("a device joins its person's own lock face to face: the code shown on a device on it lets it in, nothing else does", async () => {
+  const m = await met();
+  const inner = m.core.inner;
+  // A lock this device is on, at a cloud of the test's; the new device's key comes in its hello.
+  const kept: { entries: Entry[] } = { entries: [] };
+  const personal = new PersonalLock({
+    host: m.host, runner: inner.runner, device: () => Effect.succeed(ME), label: () => "this", changed: () => {},
+    cloud: (_s, method, _p, body) => Effect.sync(() => {
+      if (method === "GET") return { entries: kept.entries };
+      const adding = (body as { entries: Entry[] }).entries;
+      kept.entries = adding[0]!.seq === 0 ? adding : [...kept.entries, ...adding];
+      return { entries: kept.entries };
+    }),
+  });
+  const sealed = new Map<string, Uint8Array>();
+  m.host.secureSet = (k: string, v: Uint8Array) => Effect.sync(() => void sealed.set(k, v));
+  const lockedGet = m.host.secureGet;
+  m.host.secureGet = (k: string, o: { user: boolean; reason?: string }) => (o.user ? Effect.succeed(sealed.get(k) ?? null) : lockedGet!.call(m.host, k, o));
+  inner.adb.personal = () => personal;
+  await m.run(personal.signGrant("s1", { station: "ws/st", request: "p", session: "s", chat: "c", scope: "hour", exp: 2_000_000_000 }, "why"));
+  assert.equal(personal.standing("s1"), "member");
+
+  // A second connection (the rig's first is taken by a workspace's hello elsewhere): asked into the lock.
+  const [trusted, phone] = await pipe();
+  inner.runner.fork(serveTrusted(inner, PHONE, ME, trusted));
+  const KEY = `ed25519:${"11".repeat(32)}`;
+  const said = await m.run(Effect.andThen(phone.send({ t: "hello", v: 1, workspaces: [], kind: "app", label: "Pixel 8", sign_key: null, personal: { sub: "s1", key: KEY } }), phone.next()));
+  assert.deepEqual(said, { ok: { t: "code", workspaces: ["person:s1"] } });
+  const shown = (await m.prompts()).pairing.find((p: { device: string }) => p.device === PHONE);
+  assert.match(shown.code, /^[0-9]{6}$/);
+  const met2 = { id: ME, d: phone, workspaces: ["person:s1"] };
+  const wrong = shown.code === "000000" ? "000001" : "000000";
+  assert.deepEqual(await m.run(tryOne(inner, met2, PHONE, wrong)), { ok: { left: PAIR_TRIES - 1 } });
+  assert.equal(personal.chain("s1")!.devices.has(KEY), false, "a wrong code lets nobody in");
+  const right = await m.run(tryOne(inner, met2, PHONE, shown.code)) as { ok: { approved: { chain: Entry[] } } };
+  assert.equal(personal.chain("s1")!.devices.has(KEY), true);
+  assert.equal(checkChain(right.ok.approved.chain, "s1")!.devices.has(KEY), true, "it brings the whole lock to pin");
+});
+
+test("a device not on the lock shows no code for it, and someone else's lock is not asked here", async () => {
+  const m = await met();
+  const inner = m.core.inner;
+  const none = new PersonalLock({ host: m.host, runner: inner.runner, device: () => Effect.succeed(ME), label: () => "this", changed: () => {}, cloud: () => Effect.succeed({ entries: [] }) });
+  inner.adb.personal = () => none;
+  const [trusted, phone] = await pipe();
+  inner.runner.fork(serveTrusted(inner, PHONE, ME, trusted));
+  const said = await m.run(Effect.andThen(phone.send({ t: "hello", v: 1, workspaces: [], kind: "app", label: "x", sign_key: null, personal: { sub: "s1", key: `ed25519:${"11".repeat(32)}` } }), phone.next()));
+  assert.deepEqual(said, { ok: { t: "no", error: "not_here" } });
 });

@@ -412,3 +412,11 @@ test "共享调试 of a station a grant lends the phone to: no switch that canno
   let t = settings_tester("adb:ws1/st2", shows="settings-adb-second")
   assert_true(t.find("自动填配对码") is Some(_))
 }
+
+///|
+test "an agent's request on a phone not on the person's own lock: joined first, and 允许 is not there" {
+  let t = phone_chat("chat-phone-outside", adb_phone_of(wireless=true))
+  assert_true(t.find("先把这台设备加入个人锁") is Some(_))
+  assert_eq(t.words().filter(fn(x) { x.0 == "允许" }).length(), 0)
+  assert_true(t.find("查看步骤") is Some(_))
+}

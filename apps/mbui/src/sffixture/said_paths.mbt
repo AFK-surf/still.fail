@@ -14,6 +14,9 @@ pub let said_paths : Map[String, Array[String]] = {
     "grants.*.chatTitle",
     "grants.*.reason",
     "lends.*.message",
+    "personal.devices.*.label",
+    "personal.pair.error",
+    "personal.pair.untilText",
   ],
   "agentCard": [
     "jobs",
