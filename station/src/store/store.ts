@@ -52,6 +52,7 @@ import { installPostBlocks, PostBlocksUnavailable, POST_BLOCK_SIZE, type PostPos
 import { checkWidgetSources, installWidgetSources, WIDGET_SOURCE, WIDGET_SOURCE_MISSING, WIDGET_SOURCE_ORIGINAL,
   WIDGET_SOURCE_UNUSUAL, WidgetSourcesUnavailable } from "./widget-sources.ts";
 import { indexedCcThreads, installCcIndex } from "./cc-thread-index.ts";
+import { indexedLatestThread, installLatestThreadIndex, latestThreadReady } from "./latest-thread-index.ts";
 import { CARD_POST_BEFORE, CARD_POST_LATEST, cardPostsReady, installCardPosts } from "./card-post-index.ts";
 import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
 import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
@@ -304,6 +305,8 @@ export class Store {
   #listeners: ((change: StoreChange) => void)[] = [];
   #workspaceListeners = new Set<() => void>();
   #statements = new Map<string, StatementSync>();
+  /// Request bounded preparation while a synchronous caller keeps its immediate answer for an old session.
+  requestLatestThread: ((session: string) => void) | null = null;
   /// How many times the decision checks or the archive policy were written in this process (decisionsVersion).
   #decisions = 0;
   /// Hand-written title changes in this process, for requests that must not overwrite a later rename.
@@ -401,6 +404,7 @@ export class Store {
       installSaidState(db);
       installWidgetSources(db);
       installCcIndex(db);
+      installLatestThreadIndex(db);
       installCardPosts(db);
     } catch (e) {
       db.close();
@@ -1332,18 +1336,27 @@ export class Store {
   /// The thread a session last heard from: where the station's own notices go and whose connect's name the agent goes
   /// by. Falls back to the thread it joined last when it has heard nothing yet.
   latestThread(session: string): SessionThread | null {
-    // The delivery index groups by session and thread. Seek the last row within each joined thread rather than sort
-    // every delivery the session has ever received. A null last row sorts after a delivery, then the join order is the
-    // same fallback as sessionThreads. This still visits each joined thread, but writes no per-delivery summary.
-    const latest = this.#one(
-      `SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread
-       WHERE ts.session = ?
-       ORDER BY (SELECT d.rowid FROM deliveries d INDEXED BY deliveries_session
-                 WHERE d.session = ts.session AND d.thread = ts.thread ORDER BY d.rowid DESC LIMIT 1) DESC,
-                ts.joined_at DESC, ts.rowid DESC LIMIT 1`,
-      session,
-    );
-    return latest ? toSessionThread(latest) : null;
+    // Read readiness, the small-session check and the result in one snapshot if another connection writes meanwhile.
+    this.db.exec("SAVEPOINT latest_thread_select");
+    try {
+      if (latestThreadReady(this.db, session)) {
+        const latest = indexedLatestThread(this.db, session);
+        return latest ? toSessionThread(latest) : null;
+      }
+      // A zero- or one-member session is already bounded and needs no persistent projection. For old larger sessions,
+      // request background preparation; callers that must answer synchronously retain the original answer until ready.
+      if (this.#all("SELECT rowid FROM thread_sessions INDEXED BY thread_sessions_session WHERE session=? LIMIT 2", session).length > 1)
+        this.requestLatestThread?.(session);
+      const latest = this.#one(
+        `SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread
+         WHERE ts.session = ?
+         ORDER BY (SELECT d.rowid FROM deliveries d INDEXED BY deliveries_session
+                   WHERE d.session = ts.session AND d.thread = ts.thread ORDER BY d.rowid DESC LIMIT 1) DESC,
+                  ts.joined_at DESC, ts.rowid DESC LIMIT 1`,
+        session,
+      );
+      return latest ? toSessionThread(latest) : null;
+    } finally { this.db.exec("RELEASE latest_thread_select"); }
   }
 
   /// Threads with their sessions, last entry, latest message and the viewer's unread count, most recently said in

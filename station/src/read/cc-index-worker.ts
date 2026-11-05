@@ -16,7 +16,7 @@ parentPort!.on("message", async (message: { session: string; latest?: boolean; c
   let owns = false;
   try {
     if ((owns = takeBackfill(priority, threadId))) result = { done: message.latest
-      ? prepareLatestThreadStep(db, message.session).done : preparation.step(db, message.session).done };
+      ? prepareLatestThreadStep(db, message.session, 64, { existingSession: true }).done : preparation.step(db, message.session).done };
   } catch (error) {
     const code = (error as { errcode?: number }).errcode;
     if (code === undefined || ![5, 6].includes(code & 255)) result = { done: false, error: (error as Error).message };

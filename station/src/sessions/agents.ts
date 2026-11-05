@@ -539,6 +539,18 @@ export const AgentsLive = (control: Control) =>
       hub.prepareSessionUpJobs = (session) => readers.prepareSessionUpJobs([session]);
       hub.prepareWidgetSources = (threads, signal) => readers.prepareWidgetSources(threads, signal);
       hub.prepareCcSessions = (sessions, signal) => readers.prepareCcSessions(sessions, signal);
+      const latestPreparing = new Set<string>();
+      const requestLatestThread = (session: string) => {
+        if (latestPreparing.has(session)) return;
+        latestPreparing.add(session);
+        void readers.prepareLatestThreads([session]).catch((error: unknown) => {
+          log.warn("store", "a session's latest conversation could not be prepared", { session, error: String(error) });
+        }).finally(() => latestPreparing.delete(session));
+      };
+      store.requestLatestThread = requestLatestThread;
+      yield* Effect.addFinalizer(() => Effect.sync(() => {
+        if (store.requestLatestThread === requestLatestThread) store.requestLatestThread = null;
+      }));
       hub.followRunning();
       // The readers say what runs, and which chats clients made: the hub's.
       readers.processes = () => hub.processes();

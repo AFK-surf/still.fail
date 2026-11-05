@@ -210,11 +210,17 @@ const addMember = `INSERT INTO latest_thread_members(thread,session)
     AND NOT EXISTS (SELECT 1 FROM latest_thread_members r WHERE r.thread=m.thread AND r.session=m.session)`;
 
 /// Begin and advance an old session's walk in transactions bounded by `limit` source memberships.
-export function prepareLatestThreadStep(db: DatabaseSync, session: string, limit = 64): { done: boolean; visited: number } {
+export function prepareLatestThreadStep(db: DatabaseSync, session: string, limit = 64,
+  options: { existingSession?: boolean } = {}): { done: boolean; visited: number } {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 128) throw new RangeError("latest thread batch must be between 1 and 128");
   db.exec("BEGIN IMMEDIATE");
   try {
     checkLatestThreadIndex(db);
+    // The worker can be handed a session which was deleted while it waited. Check under this same write transaction,
+    // so no later batch can recreate its scope after the deletion has removed it.
+    if (options.existingSession && !db.prepare("SELECT 1 FROM sessions WHERE key=?").get(session)) {
+      db.exec("COMMIT"); return { done: true, visited: 0 };
+    }
     db.prepare(`INSERT INTO latest_thread_scopes(session,scan_end)
       SELECT ?1,(SELECT rowid FROM thread_sessions INDEXED BY thread_sessions_session WHERE session=?1 ORDER BY rowid DESC LIMIT 1)
       WHERE NOT EXISTS (SELECT 1 FROM latest_thread_scopes WHERE session=?1)`).run(session);
