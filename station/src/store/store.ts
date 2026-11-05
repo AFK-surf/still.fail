@@ -40,7 +40,7 @@ import { installEmptyUsageHistory, moveUsageHistory } from "./usage-history.ts";
 import { compactRecentlyCompacted, hasCompactUsage, savedCompactContext } from "./usage-compact.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
 import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from "./watch-jobs.ts";
-import { AWAKE_JOBS, RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiveJobs } from "./active-jobs.ts";
+import { AWAKE_JOBS, REMOTE_QUEUE_JOBS, RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiveJobs, installRemoteQueueIndex } from "./active-jobs.ts";
 import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
 import { installRecoverWaits, recoverWaitsReady, RECOVER_AWAKE_WAITS, RECOVER_WAITS } from "./recover-waits.ts";
 import { AWAKE_WAIT_STATUS, awakeWaitsReady, exactAwakeTime } from "./awake-waits.ts";
@@ -388,6 +388,7 @@ export class Store {
       addWatchColumn(db);
       installActiveWatches(db);
       installOtherActiveJobs(db);
+      installRemoteQueueIndex(db);
       addQueueColumns(db);
       addSizeColumn(db);
       addSmallJobColumn(db);
@@ -2581,10 +2582,18 @@ export class Store {
     return (session === null ? this.#all("SELECT * FROM jobs ORDER BY started_at DESC") : this.#all(SESSION_JOBS, session)).map(toJob);
   }
 
-  /// The jobs running now, as listJobs gives them (by the index on their state: the queue reads them at each look, and
-  /// each second a command waits for the screen, jobs/jobs.ts `line`).
+  /// The jobs running now, as listJobs gives them, by the index on their state.
   jobsRunning(): JobRow[] {
     return this.#all(JOBS_RUNNING).map(toJob);
+  }
+
+  /// The remote queue's running jobs, in the same order, without unrelated running jobs.
+  remoteQueueJobs(): Pick<JobRow, "id" | "sessionKey" | "startedAt" | "queued" | "screen" | "small">[] {
+    return this.#all(REMOTE_QUEUE_JOBS).map((r) => ({
+      id: r.id, sessionKey: r.session_key, startedAt: r.started_at,
+      ...(r.queued === 1 ? { queued: true } : {}), ...(r.screen === 1 ? { screen: true } : {}),
+      ...(r.small === 1 ? { small: true } : {}),
+    }));
   }
 
   /// The running commands and watches that can keep the machine awake, without unrelated services on ports.
