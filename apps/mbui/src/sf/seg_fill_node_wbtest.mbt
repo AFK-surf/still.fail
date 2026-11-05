@@ -410,3 +410,41 @@ test "a narrow page's choice as nodes, chosen by a finger as the old view's: tap
     assert_eq((made_n, made_at), (old_n, old_at), msg="\{what}: as the old one: chosen \{made_n} times, the \{made_at}; the old one \{old_n}, the \{old_at}")
   }
 }
+
+///|
+/// Whether a lens is among what is drawn (round as a pill: its corner past any box's).
+fn seg_lens_drawn(drawn : Array[String]) -> Bool {
+  drawn.iter().any(fn(row) {
+    match row.split(",").nth(4) {
+      Some(r) => r.split(".").nth(0).map(fn(whole) { whole.to_string().length() >= 6 }).unwrap_or(false)
+      None => false
+    }
+  })
+}
+
+///|
+test "a narrow page's choice as nodes, a finger held on an option as its room changes from fitted to shared: the hold let go with the options laid out before, the lens put away, nothing chosen as the finger comes up" {
+  // (300 wide, five fitted; 360, shared: another arrangement; the last one held from 0 on, the room changed at 120)
+  let x = 300.0 - 12.0 - 2.0 - 8.0
+  let r = seg_rig(true, 300.0, seg_five)
+  let steps = [(0.0, Down(x)), (120.0, Change(fn(t) { t.resize_next(360.0, 200.0) })), (600.0, Up)]
+  let moments = [100.0, 500.0, 900.0]
+  let drawn = seg_drive(r.t, steps, moments)
+  assert_true(seg_lens_drawn(drawn[0]), msg="held, before the room changed: a lens over it")
+  assert_true(!seg_lens_drawn(drawn[1]), msg="the room changed under the finger, still held: the lens gone (put away on the hand's spring)")
+  assert_eq((r.chosen.val, r.at.get()), (0, 0), msg="the finger up where the options were made again: nothing chosen")
+  seg_same(drawn[2], seg_fill_drawn(true, 360.0, 0, seg_five), "at rest after the finger came up: the first one chosen, at rest")
+}
+
+///|
+test "a narrow page's choice as nodes, side by side again from the chosen one alone with a chevron, another chosen meanwhile: its thumb at rest on the one chosen from the first frame" {
+  let r = seg_rig(true, 390.0, seg_three)
+  // (too narrow at 0; the third chosen at 16, while the thumb would still be on its way at 60; side by side again at 60)
+  let steps = [
+    (0.0, Change(fn(t) { t.resize_next(150.0, 200.0) })),
+    (16.0, Change(fn(_) { r.at.set(2) })),
+    (60.0, Change(fn(t) { t.resize_next(390.0, 200.0) })),
+  ]
+  let drawn = seg_drive(r.t, steps, [32.0, 60.0])
+  seg_same(drawn[1], seg_fill_drawn(true, 390.0, 2, seg_three), "side by side again, its first frame")
+}
