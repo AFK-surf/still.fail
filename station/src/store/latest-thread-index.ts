@@ -1,12 +1,71 @@
 import type { DatabaseSync } from "node:sqlite";
 
-// WIP: requested sessions only. The static builder and read below are not yet kept current by source writes and must
-// not be used by the station until the write, replacement, deletion and interleaving paths are implemented.
+// WIP: requested sessions only. This is not connected to station reads while its write and preparation paths are
+// being verified, including high-fanout thread changes, old writers and concurrent snapshots.
 const VERSION = 1;
 export const LATEST_THREAD_INDEXED = `SELECT t.*,m.connect FROM latest_thread_rows r
   CROSS JOIN thread_sessions m ON m.session=r.session AND m.thread=r.thread
   CROSS JOIN threads t ON t.id=r.thread WHERE r.session=?1
   ORDER BY r.has_last DESC,r.last_delivery DESC,r.joined_at DESC,r.member_rowid DESC LIMIT 1`;
+
+const lastDelivery = (session: string, thread: string, extra = "") => `(SELECT d.rowid FROM deliveries d INDEXED BY deliveries_session
+  WHERE d.session=${session} AND d.thread=${thread} ${extra} ORDER BY d.rowid DESC LIMIT 1)`;
+const priorDelivery = lastDelivery("NEW.session", "NEW.thread", "AND d.rowid<>NEW.rowid");
+const changed = "EXISTS (SELECT 1 FROM latest_thread_changed LIMIT 1)";
+const stage = (keys: string) => `DELETE FROM latest_thread_changed;
+  INSERT INTO latest_thread_changed(session,thread,old_valid,old_has,old_last,old_joined,old_member)
+    SELECT k.session,k.thread,m.rowid IS NOT NULL AND t.id IS NOT NULL,
+      ${lastDelivery("k.session", "k.thread")} IS NOT NULL,COALESCE(${lastDelivery("k.session", "k.thread")},0),m.joined_at,m.rowid
+    FROM (${keys}) k LEFT JOIN thread_sessions m ON m.session=k.session AND m.thread=k.thread
+      LEFT JOIN threads t ON t.id=k.thread
+    WHERE k.session IS NOT NULL AND k.thread IS NOT NULL
+      AND EXISTS (SELECT 1 FROM latest_thread_scopes s WHERE s.session=k.session);`;
+// The changed set holds the old ordered keys before a source write. An ignored insert may leave it behind, but did
+// not change the source or the order; the next staged write clears it before collecting its own affected pairs.
+const reconcile = `DELETE FROM latest_thread_rows WHERE (session,has_last,last_delivery,joined_at,member_rowid) IN
+    (SELECT session,old_has,old_last,old_joined,old_member FROM latest_thread_changed WHERE old_valid=1);
+  INSERT INTO latest_thread_rows(session,has_last,last_delivery,joined_at,member_rowid,thread)
+    SELECT m.session,d.rowid IS NOT NULL,COALESCE(d.rowid,0),m.joined_at,m.rowid,m.thread
+    FROM latest_thread_changed x CROSS JOIN thread_sessions m ON m.session=x.session AND m.thread=x.thread
+      CROSS JOIN threads t ON t.id=m.thread
+      LEFT JOIN deliveries d ON d.rowid=${lastDelivery("m.session", "m.thread")}
+    WHERE NOT EXISTS (SELECT 1 FROM latest_thread_rows r WHERE r.session=m.session AND r.has_last=(d.rowid IS NOT NULL)
+      AND r.last_delivery=COALESCE(d.rowid,0) AND r.joined_at IS m.joined_at AND r.member_rowid=m.rowid);
+  DELETE FROM latest_thread_changed;`;
+const deliveryKeys = (update: boolean) => `SELECT NEW.session AS session,NEW.thread AS thread
+  UNION SELECT d.session,d.thread FROM deliveries d WHERE d.rowid=NEW.rowid
+  UNION SELECT d.session,d.thread FROM deliveries d WHERE d.thread=NEW.thread AND d.n=NEW.n AND d.session=NEW.session
+  ${update ? "UNION SELECT OLD.session,OLD.thread" : ""}`;
+const memberKeys = (update: boolean) => `SELECT NEW.session AS session,NEW.thread AS thread
+  UNION SELECT m.session,m.thread FROM thread_sessions m WHERE m.rowid=NEW.rowid
+  UNION SELECT m.session,m.thread FROM thread_sessions m WHERE m.thread=NEW.thread AND m.session=NEW.session
+  ${update ? "UNION SELECT OLD.session,OLD.thread" : ""}`;
+const threadKeys = (ids: string) => `SELECT m.session,m.thread FROM thread_sessions m WHERE m.thread IN (${ids})`;
+const displacedThread = `(SELECT id FROM threads WHERE surface=NEW.surface AND channel=NEW.channel AND thread_ts=NEW.thread_ts)`;
+const deliveryConflict = `EXISTS (SELECT 1 FROM deliveries WHERE rowid=NEW.rowid)
+  OR EXISTS (SELECT 1 FROM deliveries WHERE thread=NEW.thread AND n=NEW.n AND session=NEW.session)`;
+const memberConflict = `EXISTS (SELECT 1 FROM thread_sessions WHERE rowid=NEW.rowid)
+  OR EXISTS (SELECT 1 FROM thread_sessions WHERE thread=NEW.thread AND session=NEW.session)`;
+
+// A normal new delivery needs no staging or second identity index. Its previous last row is the last row other than
+// NEW, sought in the existing (session,thread) index; removing and reinserting the ordered row touches one tree.
+const fastDelivery = `DELETE FROM latest_thread_rows WHERE session=NEW.session AND thread=NEW.thread
+    AND has_last=(${priorDelivery} IS NOT NULL) AND last_delivery=COALESCE(${priorDelivery},0)
+    AND joined_at IS (SELECT joined_at FROM thread_sessions WHERE session=NEW.session AND thread=NEW.thread)
+    AND member_rowid=(SELECT rowid FROM thread_sessions WHERE session=NEW.session AND thread=NEW.thread);
+  INSERT INTO latest_thread_rows(session,has_last,last_delivery,joined_at,member_rowid,thread)
+    SELECT m.session,1,NEW.rowid,m.joined_at,m.rowid,m.thread FROM thread_sessions m
+    WHERE m.session=NEW.session AND m.thread=NEW.thread AND NOT EXISTS
+      (SELECT 1 FROM latest_thread_rows r WHERE r.session=m.session AND r.has_last=1 AND r.last_delivery=NEW.rowid
+        AND r.joined_at IS m.joined_at AND r.member_rowid=m.rowid);`;
+const fastMember = `INSERT INTO latest_thread_rows(session,has_last,last_delivery,joined_at,member_rowid,thread)
+    SELECT m.session,d.rowid IS NOT NULL,COALESCE(d.rowid,0),m.joined_at,m.rowid,m.thread
+    FROM thread_sessions m CROSS JOIN threads t ON t.id=m.thread
+      LEFT JOIN deliveries d ON d.rowid=${lastDelivery("m.session", "m.thread")}
+    WHERE m.session=NEW.session AND m.thread=NEW.thread AND EXISTS
+      (SELECT 1 FROM latest_thread_scopes s WHERE s.session=m.session) AND NOT EXISTS
+      (SELECT 1 FROM latest_thread_rows r WHERE r.session=m.session AND r.has_last=(d.rowid IS NOT NULL)
+        AND r.last_delivery=COALESCE(d.rowid,0) AND r.joined_at IS m.joined_at AND r.member_rowid=m.rowid);`;
 
 export function installLatestThreadIndex(db: DatabaseSync): void {
   const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='latest_thread_meta'").get() !== undefined;
@@ -19,7 +78,63 @@ export function installLatestThreadIndex(db: DatabaseSync): void {
         complete INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID;
       CREATE TABLE latest_thread_rows(session TEXT NOT NULL,has_last INTEGER NOT NULL,last_delivery INTEGER NOT NULL,
         joined_at NOT NULL,member_rowid INTEGER NOT NULL,thread INTEGER NOT NULL,
-        PRIMARY KEY(session,has_last DESC,last_delivery DESC,joined_at DESC,member_rowid DESC)) WITHOUT ROWID;`);
+        PRIMARY KEY(session,has_last DESC,last_delivery DESC,joined_at DESC,member_rowid DESC)) WITHOUT ROWID;
+      CREATE TABLE latest_thread_changed(session TEXT NOT NULL,thread INTEGER NOT NULL,old_valid INTEGER NOT NULL,
+        old_has INTEGER NOT NULL,old_last INTEGER NOT NULL,old_joined,old_member INTEGER,
+        PRIMARY KEY(session,thread)) WITHOUT ROWID;
+
+      CREATE TRIGGER latest_delivery_before_add BEFORE INSERT ON deliveries
+        WHEN ${changed} OR ${deliveryConflict} BEGIN ${stage(deliveryKeys(false))} END;
+      CREATE TRIGGER latest_delivery_add AFTER INSERT ON deliveries WHEN ${changed} BEGIN ${reconcile} END;
+      CREATE TRIGGER latest_delivery_fast_add AFTER INSERT ON deliveries
+        WHEN EXISTS (SELECT 1 FROM latest_thread_scopes WHERE session=NEW.session)
+          AND EXISTS (SELECT 1 FROM thread_sessions m JOIN threads t ON t.id=m.thread
+            WHERE m.session=NEW.session AND m.thread=NEW.thread)
+          AND (${priorDelivery} IS NULL OR NEW.rowid>${priorDelivery}) BEGIN ${fastDelivery} END;
+      CREATE TRIGGER latest_delivery_before_change BEFORE UPDATE OF rowid,_rowid_,oid,thread,n,session ON deliveries
+        WHEN OLD.rowid IS NOT NEW.rowid OR OLD.thread IS NOT NEW.thread OR OLD.n IS NOT NEW.n OR OLD.session IS NOT NEW.session
+        BEGIN ${stage(deliveryKeys(true))} END;
+      CREATE TRIGGER latest_delivery_change AFTER UPDATE OF rowid,_rowid_,oid,thread,n,session ON deliveries
+        WHEN ${changed} BEGIN ${reconcile} END;
+      CREATE TRIGGER latest_delivery_before_drop BEFORE DELETE ON deliveries
+        BEGIN ${stage("SELECT OLD.session AS session,OLD.thread AS thread")} END;
+      CREATE TRIGGER latest_delivery_drop AFTER DELETE ON deliveries WHEN ${changed} BEGIN ${reconcile} END;
+
+      CREATE TRIGGER latest_member_before_add BEFORE INSERT ON thread_sessions
+        WHEN ${changed} OR ${memberConflict} BEGIN ${stage(memberKeys(false))} END;
+      CREATE TRIGGER latest_member_add AFTER INSERT ON thread_sessions WHEN ${changed} BEGIN ${reconcile} END;
+      CREATE TRIGGER latest_member_fast_add AFTER INSERT ON thread_sessions BEGIN ${fastMember} END;
+      CREATE TRIGGER latest_member_before_change BEFORE UPDATE OF rowid,_rowid_,oid,thread,session,joined_at ON thread_sessions
+        WHEN OLD.rowid IS NOT NEW.rowid OR OLD.thread IS NOT NEW.thread OR OLD.session IS NOT NEW.session OR OLD.joined_at IS NOT NEW.joined_at
+        BEGIN ${stage(memberKeys(true))} END;
+      CREATE TRIGGER latest_member_change AFTER UPDATE OF rowid,_rowid_,oid,thread,session,joined_at ON thread_sessions
+        WHEN ${changed} BEGIN ${reconcile} END;
+      CREATE TRIGGER latest_member_before_drop BEFORE DELETE ON thread_sessions
+        BEGIN ${stage("SELECT OLD.session AS session,OLD.thread AS thread")} END;
+      CREATE TRIGGER latest_member_drop AFTER DELETE ON thread_sessions WHEN ${changed} BEGIN ${reconcile} END;
+
+      CREATE TRIGGER latest_thread_before_add BEFORE INSERT ON threads
+        BEGIN ${stage(threadKeys(`NEW.id,${displacedThread}`))} END;
+      CREATE TRIGGER latest_thread_add AFTER INSERT ON threads BEGIN
+        INSERT INTO latest_thread_changed(session,thread,old_valid,old_has,old_last,old_joined,old_member)
+          SELECT m.session,m.thread,0,0,0,NULL,NULL FROM thread_sessions m WHERE m.thread=NEW.id
+            AND EXISTS (SELECT 1 FROM latest_thread_scopes s WHERE s.session=m.session)
+            AND NOT EXISTS (SELECT 1 FROM latest_thread_changed x WHERE x.session=m.session AND x.thread=m.thread);
+        ${reconcile}
+      END;
+      CREATE TRIGGER latest_thread_before_change BEFORE UPDATE OF id,surface,channel,thread_ts ON threads
+        WHEN OLD.id IS NOT NEW.id OR OLD.surface IS NOT NEW.surface OR OLD.channel IS NOT NEW.channel OR OLD.thread_ts IS NOT NEW.thread_ts
+        BEGIN ${stage(threadKeys(`OLD.id,NEW.id,${displacedThread}`))} END;
+      CREATE TRIGGER latest_thread_change AFTER UPDATE OF id,surface,channel,thread_ts ON threads
+        WHEN ${changed} BEGIN ${reconcile} END;
+      CREATE TRIGGER latest_thread_before_drop BEFORE DELETE ON threads
+        BEGIN ${stage(threadKeys("OLD.id"))} END;
+      CREATE TRIGGER latest_thread_drop AFTER DELETE ON threads WHEN ${changed} BEGIN ${reconcile} END;
+      CREATE TRIGGER latest_thread_session_drop AFTER DELETE ON sessions BEGIN
+        DELETE FROM latest_thread_rows WHERE session=OLD.key;
+        DELETE FROM latest_thread_changed WHERE session=OLD.key;
+        DELETE FROM latest_thread_scopes WHERE session=OLD.key;
+      END;`);
     else checkLatestThreadIndex(db);
     db.exec("COMMIT");
   } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
