@@ -64,6 +64,15 @@ test "a row's head that sticks: where it is laid out, scrolled into its row 10 u
   // (scrolled 280: its row's foot 20 under the column's top, it above that, going on up with it)
   let (leaving, _) = k.scrolled(130.0, 20.0)
   assert_eq(leaving, -20.0)
+  // (turned back: down with its row's foot as it comes back in, then held 10 under the top again, no jump between)
+  let (coming, _) = k.scrolled(-20.0, 30.0)
+  assert_eq(coming, 0.0)
+  let (held, _) = k.scrolled(-10.0, 40.0)
+  assert_eq(held, 10.0)
+  let (still, _) = k.scrolled(-100.0, 50.0)
+  assert_eq(still, 10.0)
+  let (home, _) = k.scrolled(-150.0, 60.0)
+  assert_eq(home, 10.0)
 }
 
 ///|
