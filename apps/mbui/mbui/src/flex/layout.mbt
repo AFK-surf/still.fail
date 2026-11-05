@@ -1124,6 +1124,8 @@ fn layout_flex(
     let mut cross_by_height = false
     let mut any_baseline = false
     let mut any_fits = false
+    // (its first item's padding at the end of its cross axis: what of its gutter that leaves, Style's `gutter`)
+    let mut first_pad_end = -1.0
     for j, c in flow {
       let cs = c.style
       if cs.position == Absolute {
@@ -1153,6 +1155,9 @@ fn layout_flex(
           c.box_ver = cs.ver
           nb
         }
+      }
+      if first_pad_end < 0.0 {
+        first_pad_end = if row { cb.pad_b } else { cb.pad_r }
       }
       let al = item_align(s, cs)
       let margin_main = if row { cb.mar_l + cb.mar_r } else { cb.mar_t + cb.mar_b }
@@ -1491,10 +1496,21 @@ fn layout_flex(
     for ln in lines {
       lines_cross = lines_cross + ln.cross
     }
+    // (room at its cross end for its bar while what its line holds runs past it (Style's `gutter`), less what its first
+    // item's padding there leaves already; its own cross size from what it holds alone)
+    let gut = if s.gutter > 0.0 &&
+      s.overflow == Scroll &&
+      !known(inner_cross) &&
+      count > 0 &&
+      max_line_main > main_size + 0.5 {
+      fmax(0.0, s.gutter - fmax(first_pad_end, 0.0))
+    } else {
+      0.0
+    }
     let cross_size = if known(inner_cross) {
       inner_cross
     } else {
-      let pb = if row { pbh } else { pbw }
+      let pb = (if row { pbh } else { pbw }) + gut
       let lo = if row { b.min_h } else { b.min_w }
       let hi = if row { b.max_h } else { b.max_w }
       clamp_size(lines_cross + pb, lo, hi) - pb
@@ -1632,8 +1648,8 @@ fn layout_flex(
         flow.unsafe_get(at.unsafe_get(k)).line = pool.line_of.unsafe_get(k)
       }
     }
-    let fw = if row { main_size + pbw } else { cross_size + pbw }
-    fh = if row { cross_size + pbh } else { main_size + pbh }
+    let fw = if row { main_size + pbw } else { cross_size + pbw + gut }
+    fh = if row { cross_size + pbh + gut } else { main_size + pbh }
     if !perform &&
       row &&
       s.wrap == NoWrap &&

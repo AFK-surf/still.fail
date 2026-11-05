@@ -133,7 +133,6 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   let laid_grid = Ref(-1.0)
   let laid_words = Ref(-1)
   let laid_vh = Ref(-1.0)
-  let laid_total = Ref(-1.0)
   // (how tall what holds them was last said to be: as far as they reach, View::scrolls_window's holder)
   let laid_reach = Ref(-1.0)
   let laid_once = Ref(false)
@@ -142,9 +141,6 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // held where it is as what is over it changes height)
   let in_sight : Ref[Array[K]] = Ref([])
   let anchor : Ref[(K, Double)?] = Ref(None)
-  // (told as how far it can go may have changed: how tall what it holds is counted, or what shows)
-  let extent_told : @signals.Signal[Int] = @signals.signal(0)
-  let tell_extent = fn() { extent_told.set(@signals.untracked(fn() { extent_told.get() }) + 1) }
   // (the keys kept made outside what shows, worked out again only as they or what says them change)
   let kept_now = @signals.computed(fn(_) {
     match kept_keys {
@@ -191,13 +187,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       0.0
     }
   }
-  // what it holds: the blocks, nothing else; how far it can go counted by them as they are counted now (told as that
-  // changes, for what follows it: Scroll's room)
+  // what it holds: the blocks, nothing else; how far it can go counted by them as they are counted now (read plainly as
+  // the column is placed and as an event comes: Scroll's room)
   let extent_now = fn() { index.val.total() + foot_room() }
-  let extent = fn() {
-    extent_told.get() |> ignore
-    extent_now()
-  }
   let holder : Ref[View?] = Ref(None)
   // (a block's slot made where it goes among those made, in their order: View::block)
   let made_before = fn(i : Int) -> Int {
@@ -743,13 +735,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         blocks.remove(k)
       }
     }
-    // (how far it can go, told as how tall what it holds is counted, or what shows, changed)
-    let total = index.val.total()
-    if total != laid_total.val || vh != laid_vh.val {
-      laid_total.val = total
-      laid_vh.val = vh
-      tell_extent()
-    }
+    // (as tall as what shows as last laid out)
+    laid_vh.val = vh
     // (what holds them as tall as they reach, with the room at its foot; from its end, at least as tall as what shows,
     // they at its foot: laid out so, what asks how far what it holds goes finds it there, as for any that scrolls
     // (whether it scrolls, whether what it holds ends above its foot: Tree::scrolls_now, the corner rule))
@@ -863,7 +850,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     },
   ))
   self.owns(fn() { s.rows = None }) |> ignore
-  let out = self.scrolls(s, slop?=slop, bar?=bar, content_extent=extent, bar_clear~, fn(held) {
+  let out = self.scrolls(s, slop?=slop, bar?=bar, content_extent=extent_now, bar_clear~, fn(held) {
     holder.val = Some(held)
     tree.lays_blocks(held, lay)
   })

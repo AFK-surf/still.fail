@@ -168,26 +168,30 @@ fn View::scroll_bar(
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
 ) -> Unit {
   let across = s.across
-  // (where its thumb runs and how long, how far the column goes for a point it moves: ui's bar_track over all of its
-  // right, nothing over it kept clear; across, along its foot from `bar_in` to as far from its end)
+  // (how big the column is laid out, read plainly: as it is placed and as an event comes)
+  let laid = fn() {
+    match self.live() {
+      Some(n) => (n.flex.width, n.flex.height)
+      None => (0.0, 0.0)
+    }
+  }
+  // (where its thumb runs and how long, how far the column goes for a point it moves, as the column and what it holds
+  // are laid out: ui's bar_track over all of its right, nothing over it kept clear; across, along its foot from
+  // `bar_in` to as far from its end)
   // (across, as an old view's foot_bar along the view it is for: `bar_in` in from either side, no more than leaves it
   // its least twice, what scrolls and what it holds as wide less that)
   let track = fn(x : Double) {
-    let (vh, ends) = match self.laid_size_told() {
-      Some((w, h)) => if across { (w, dclamp(bar_in, 0.0, dmax(0.0, w / 2.0 - b.least))) } else { (h, 0.0) }
-      None => (0.0, 0.0)
-    }
+    let (w, h) = laid()
+    let (vh, ends) = if across { (w, dclamp(bar_in, 0.0, dmax(0.0, w / 2.0 - b.least))) } else { (h, 0.0) }
     let content = vh + s.most_now()
     // (down a column, what lies over its top and its foot kept clear: `bar_clear`, as ui's bar_track's start and end)
     let (start, end) = if across { (0.0, 0.0) } else { bar_clear() }
     bar_track_of(ends, vh - 2.0 * ends, vh - 2.0 * ends, content - 2.0 * ends, x, start, end, b.least, b.inset)
   }
-  // (whether it has a bar at all: what it holds more than a point past what shows, as ui's bar_drawn has it; drawn,
-  // come out along its edge and pressed by that alone)
-  let has_bar = fn() { s.most_now() > 1.0 }
-  // (how far it shows as it is drawn: by the time while it is not at rest)
+  // (how far it shows as it is drawn: by the time while it is not at rest; none where it has no bar as it is laid out,
+  // what it holds no more than a point past what shows (Scroll::has_bar): read as it is placed, Live's Placed)
   let level = fn() {
-    if !(b.drawn)() || !has_bar() {
+    if !(b.drawn)() || !s.has_bar() {
       return 0.0
     }
     // (coming in or going: by the time as it is drawn; out or gone: as it stands, no time read)
@@ -210,8 +214,9 @@ fn View::scroll_bar(
     // (over what it holds, none of the column's own fading or stretching what it holds: its own showing alone, on its
     // own track; what holds the column drawing it as it draws the column)
     over.over(Is(true)).drawn_clear_of(self) |> ignore
-    // (the pointer along its right brings it out: the innermost column at the pointer's, View::bar_near)
-    over.reacts(fn() { (b.drawn)() && self.bar_near(if has_bar() { b.near } else { 0.0 }, across~) }, fn(on) {
+    // (the pointer along its right brings it out: the innermost column with a bar at the pointer's, as it is found where
+    // things are placed, View::bar_near)
+    over.reacts(fn() { (b.drawn)() && self.bar_near(b.near, across~) }, fn(on) {
       let t = self.logic_at()
       // (come out first, then along it: as ui's bar_near does, its coming in from how far it showed then)
       if on {
@@ -231,13 +236,22 @@ fn View::scroll_bar(
       self.tree.thumbs[me.at] = me
       thumb.owns(fn() { if self.tree.thumbs.get(me.at) == Some(me) { self.tree.thumbs.remove(me.at) } }) |> ignore
       let held_y = Ref(0.0)
-      let long = fn() { Some(track(s.where_at(0.0)).1 + b.grab * 2.0) }
-      let thick = Is(Some(b.size + b.grab * 2.0))
-      // (along its right; across, along its foot)
-      (if across { thumb.height(thick).width(By(long)) } else { thumb.width(thick).height(By(long)) })
-      .offset(By(fn() {
-        let (w, h) = self.laid_size_told().unwrap_or((0.0, 0.0))
-        let x = s.where_at(if s.fling.get() is Some(_) { thumb.drawn_at() } else { 0.0 })
+      // (as long as its track has it and as thick as a press takes it, along its right (across, along its foot): laid
+      // out once the column and what it holds are, by how they are laid out then (View::laid_after); nothing of it
+      // where the column has no bar, nothing pressed there)
+      thumb
+      .laid_after(fn() {
+        let (thick, long) = if s.has_bar() { (b.size + b.grab * 2.0, track(0.0).1 + b.grab * 2.0) } else { (0.0, 0.0) }
+        if across {
+          (0.0, 0.0, Some(long), Some(thick))
+        } else {
+          (0.0, 0.0, Some(thick), Some(long))
+        }
+      })
+      // (where its view is in what the column holds, as it is placed: by the time while it moves by itself)
+      .offset(Placed(fn() {
+        let (w, h) = laid()
+        let x = s.where_at(if s.goes_on() { thumb.drawn_at() } else { 0.0 })
         if across {
           (track(x).0 - b.grab, h - b.inset - b.size - b.grab)
         } else {
@@ -246,9 +260,7 @@ fn View::scroll_bar(
       }))
       // (a target while it shows: coming, out or going, or out at rest along its edge or held; said by its state,
       // never by the time, as a structure's change is said)
-      .presses(By(fn() {
-        (b.drawn)() && has_bar() && bar.phase.get() != 0
-      }))
+      .presses(By(fn() { (b.drawn)() && bar.phase.get() != 0 }))
       .on_drag(fn(d) {
         match d.kind {
           Down => {
@@ -273,13 +285,14 @@ fn View::scroll_bar(
         }
       })
       |> ignore
+      // (its ink in it as far in as a press takes it round it, as thick as it is drawn and as long as the thumb has it)
       thumb.box(fn(ink) {
-        let long = fn() { Some(track(s.where_at(0.0)).1) }
-        (if across { ink.height(Is(Some(b.size))).width(By(long)) } else { ink.width(Is(Some(b.size))).height(By(long)) })
-        .offset(Is((b.grab, b.grab)))
+        ink
+        .margin(Is((b.grab, b.grab, b.grab, b.grab)))
+        .grow(Is(1.0))
         .radius(Is(b.size / 2.0))
         .ground(By(fn() { if bar.held.get() || thumb.pointed() { (b.ink_held)() } else { (b.ink)() } }))
-        .alpha(By(level))
+        .alpha(Placed(level))
         |> ignore
       })
       |> ignore

@@ -222,14 +222,28 @@ pub fn MoveGroup::arrive_from(
 
 ///|
 /// A member's window rectangle, including its own ways, at a declared moment, kept for an action handing it to
-/// another owner. Its last laid rectangle and its ways survive the node being let go; a handover between frames
-/// samples the same way.
+/// another owner. Its last placed rectangle (read plainly where it is laid out somewhere, as it was placed last as it
+/// is let go: View::placed_window_was) and its ways survive the node being let go; a handover between frames samples
+/// the same way.
 pub fn MoveGroup::position(self : MoveGroup, v : @view.View) -> (Double) -> (Double, Double, Double, Double)? {
-  let laid : Ref[(Double, Double, Double, Double)?] = Ref(None)
-  v.reacts(fn() { v.laid_window_told() }, fn(r) { if r is Some(_) { laid.val = r } })
+  let kept : Ref[(Double, Double, Double, Double)?] = Ref(None)
+  v.owns(fn() {
+    match v.placed_window_was() {
+      Some(r) => kept.val = Some(r)
+      None => ()
+    }
+  })
+  |> ignore
+  let laid = fn() {
+    match v.placed_window_was() {
+      Some(r) if !v.shown_nowhere() => kept.val = Some(r)
+      _ => ()
+    }
+    kept.val
+  }
   let mover = self.movers.iter().find_first(fn(m) { !m.gone && m.v.id() == v.id() })
   fn(at) {
-    match (laid.val, mover) {
+    match (laid(), mover) {
       (Some(r), Some(m)) => {
         let x = r.0 + m.ways[0].way.value_at(at) - m.to[0]
         let y = r.1 + m.ways[1].way.value_at(at) - m.to[1]

@@ -206,7 +206,7 @@ pub fn View::runs_picked_now(self : View) -> (Int, Int) {
 
 ///|
 /// Where the pointer is in its own terms (where it is drawn now, as big as it is drawn), as the tree last had it; None
-/// where the tree has it nowhere (gone from the window) or it is let go. Read once, not followed (pointer_here_told).
+/// where the tree has it nowhere (gone from the window) or it is let go. Read once, not followed (View::pointer_in).
 pub fn View::pointer_here(self : View) -> (Double, Double)? {
   guard self.alive() else { return None }
   self.tree.pointer_in(self.at)
@@ -226,16 +226,19 @@ fn Tree::pointer_in(self : Tree, at : Int) -> (Double, Double)? {
 }
 
 ///|
-/// Where the pointer is in its own terms (pointer_here's), followed: told as the pointer moves and as what changed is
-/// placed (it, or what holds it, moved or grown under a pointer that stays where it is), at the change's end, no frame
-/// waited for (as View::pointer_within is: Tree::withins_told). Never what a move of the pointer's own is told by
-/// (View::on_pointer_moved).
-pub fn View::pointer_here_told(self : View) -> (Double, Double)? {
+/// Where the pointer is in its own terms (pointer_here's), followed as the pointer's own is (View::pointer_within):
+/// told as the pointer moves and, the pointer still, as what is under it in it is placed otherwise (it, or what holds
+/// it, moved, or it laid out another size), with what the frame places, as a pointer's move is told then
+/// (Tree::withins_told: a hit test of the pointer's, nothing told back of how it is laid out). Never what a move of the
+/// pointer's own is told by (View::on_pointer_moved).
+pub fn View::pointer_in(self : View) -> (Double, Double)? {
   guard self.live() is Some(n) else { return None }
   let cell = match n.here_cell {
     Some(c) => c
     None => {
-      let c = @signals.signal(self.tree.pointer_in(self.at), same=fn(a, b) { a == b })
+      let c = @signals.signal(self.tree.pointer_in(self.at).map(fn(p) { (p.0, p.1, n.lw, n.lh) }), same=fn(a, b) {
+        a == b
+      })
       n.here_cell = Some(c)
       if n.within_cell is None {
         self.tree.withins_at.push((self.at, n.gen))
@@ -243,7 +246,7 @@ pub fn View::pointer_here_told(self : View) -> (Double, Double)? {
       c
     }
   }
-  cell.get()
+  cell.get().map(fn(p) { (p.0, p.1) })
 }
 
 ///|

@@ -1,12 +1,11 @@
-// A frame is worked out as of its one moment (Tree::now_of_change): what its layout tells and what that sets going,
-// however long the working out takes on the host's clock, which goes on as it works (a phone's: the clock read anew
-// on each pass of a layout following sizes that a leaving changes, never coming to rest, 2026-11-05).
+// A frame is worked out as of its one moment (Tree::now_of_change): what it lays out and what is placed by where that
+// puts things, however long the working out takes on the host's clock, which goes on as it works (a phone's: the clock
+// read anew on each pass of a layout following sizes that a leaving changes, never coming to rest, 2026-11-05).
 
 ///|
-test "a frame and what its layout tells are of the frame's moment, however the host's clock goes on meanwhile" {
+test "a frame and what is placed by where its layout puts things are of the frame's moment, however the host's clock goes on meanwhile" {
   let host = Ref(0.0)
   let reads = Ref(0)
-  let shown_tall = Ref(0)
   let tall_h : Ref[Double] = Ref(0.0)
   let tree = @view.Tree::new(
     fn(root) {
@@ -20,17 +19,18 @@ test "a frame and what its layout tells are of the frame's moment, however the h
           .shrink(Is(0.0))
           |> ignore
         })
-        // (made as it is told taller than 25: what follows its size, as a list follows its rows')
-        col.show(fn() { grows.laid_size_told().map(fn(z) { z.1 }).unwrap_or(0.0) > 25.0 }, fn(t) {
-          shown_tall.val += 1
-          t.width(Is(Some(40.0))).height(Is(Some(10.0))) |> ignore
-          t.reacts(fn() { grows.laid_size_told() }, fn(z) {
-            match z {
-              Some((_, h)) => tall_h.val = h
-              None => ()
-            }
-          })
+        // (placed by how tall that is laid out, as the tree is placed: Live's Placed)
+        col.box(fn(t) {
+          t
+          .width(Is(Some(40.0)))
+          .height(Is(Some(10.0)))
+          .offset(Placed(fn() {
+            tall_h.val = grows.laid_size().1
+            (0.0, 0.0)
+          }))
+          |> ignore
         })
+        |> ignore
       })
       |> ignore
     },
@@ -49,7 +49,6 @@ test "a frame and what its layout tells are of the frame's moment, however the h
   assert_eq(reads.val, 0)
   assert_eq(tree.logic_at(), 100.0)
   assert_eq(tree.drawn_at(), 100.0)
-  assert_eq(shown_tall.val, 1)
   assert_eq(tall_h.val, 30.0)
 }
 

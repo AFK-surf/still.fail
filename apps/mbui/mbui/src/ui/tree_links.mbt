@@ -159,15 +159,16 @@ pub fn runs_links(
   }))
   |> ignore
   // (what changes which piece is under a pointer that stays where it is: what lies over it come or gone (whether it is
-  // pointed at), where the pointer is in it as it or what holds it moves or grows (View::pointer_here_told), how its
-  // words are set and how big it is laid out; worked out again as each is told, at the change's end)
+  // pointed at), where the pointer is in it as it or what holds it moves, or it is laid out another size, as the
+  // pointer's own is told (View::pointer_in), how its words are set; worked out again as each is told, at the change's
+  // end)
   v.reacts(
     fn() {
       // (only while it is pointed at: none of its links pointed at otherwise, nothing else of it followed, a node not
       // pointed at following no pointer's place)
       if v.pointed() {
         // (its words measured again in the faces or at the size of words the window has now: Tree::words_again)
-        Some((v.pointer_here_told(), v.words_said(), v.laid_size_told(), v.words_redone()))
+        Some((v.pointer_in(), v.words_said(), v.words_redone()))
       } else {
         None
       }

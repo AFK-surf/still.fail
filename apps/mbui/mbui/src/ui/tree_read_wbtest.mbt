@@ -1,5 +1,5 @@
 ///|
-test "a drawn observation tells the final layout once, including a paint-only change, and stops with its node" {
+test "a drawn observation tells where things were placed as each frame drew them once, a paint-only change too, and stops with its node" {
   let rows = @signals.signal([30.0])
   let shifted = @signals.signal(0.0)
   let visible = @signals.signal(true)
@@ -8,17 +8,13 @@ test "a drawn observation tells the final layout once, including a paint-only ch
   set_view_app(fn(root) {
     root.show(fn() { visible.get() }, fn(list) {
       list.offset(By(fn() { (0.0, shifted.get()) })) |> ignore
-      let tall = @signals.signal(0.0)
+      // (as tall as what it holds, laid out with it)
       list.box(fn(contents) {
         contents.each(fn() { rows.get() }, fn(h) { h }, fn(row, h) {
           row.height(By(fn() { Some(h.get()) })) |> ignore
         }) |> ignore
-        contents.reacts(fn() { contents.laid_size_told() }, fn(size) {
-          tall.set(size.map(fn(s) { s.1 }).unwrap_or(0.0))
-        })
       }) |> ignore
-      list.height(By(fn() { Some(tall.get()) })) |> ignore
-      read_drawn(list, fn() { list.laid_window_told() }, fn(rect) {
+      read_drawn(list, fn() { list.placed_window_was() }, fn(rect) {
         match rect { Some((_, y, _, h)) => told.push((y, h)); None => () }
       })
     })

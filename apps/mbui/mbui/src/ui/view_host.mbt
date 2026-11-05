@@ -985,6 +985,8 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   tree_over_scrim.clear()
   dr.targets_said = false
   view_paint_work.handed = view_paint_work.handed + (self.ninst - n0)
+  // (the field with the focus none of which was painted: laid out for its input method all the same)
+  self.unseen_field_laid(tree)
 }
 
 ///|

@@ -172,15 +172,17 @@ fn panel_node(
             }
           })
         }
-        // (the side of what opened it it went on, as the tree placed it (View::went_told: flipped there for want of room,
-        // told as it goes to the other): what its parts keep nearest what opened it is by that side (panel_opens_up), read
-        // as each is built, so built again as it goes to the other side, never as it only moves; what was told before
-        // given back after, for no other panel to read)
+        // (the side of what opened it it went on, as the tree placed it (View::went: flipped there for want of room): what
+        // its parts keep nearest what opened it is by that side (panel_opens_up), read as each is built, so built again as
+        // it goes to the other side (by their keys: the tree placed before they are built), never as it only moves; what
+        // was told before given back after, for no other panel to read)
+        let went = fn() { p.went().unwrap_or(x.side) }
         let opened = fn() {
           let was = beside_given.val
-          beside_given.val = { side: p.went_told().unwrap_or(x.side), room: 1.0e9, panel: 0 }
+          beside_given.val = { side: went(), room: 1.0e9, panel: 0 }
           was
         }
+        let side_key = fn() { if went() is Top { "/up" } else { "" } }
         // (each part of it out to the panel's edges it stands by, the panel's padding round what it holds inside it: what
         // reaches into that padding on purpose (a head's search in its top corner, a foot's buttons in its foot corner, a
         // row out to its sides) drawn and pressed there, cut by the panel alone, as small_panel's are)
@@ -210,7 +212,7 @@ fn panel_node(
         let out_under = if footed { 0.0 } else { panel_pad }
         // (its title, panel_head's: out to the panel's edges over it, on `v`'s node)
         let head = fn(v : @view.View) {
-          @ui.old(v, natural=true, fits?=fits(0), key=fn() { key + "/head" }, fn(c) {
+          @ui.old(v, natural=true, fits?=fits(0), key=fn() { key + "/head" + side_key() }, fn(c) {
             let was = opened()
             let held = c.box(style=panel_part_in(panel_pad, 0.0), fn() { panel_head(c, title(), end?=x.head_end) })
             beside_given.val = was
@@ -234,7 +236,7 @@ fn panel_node(
           p.box(fn(b) {
             b.grow(Is(1.0)).min_height(Is(Some(0.0))).margin(By(fn() { (-panel_pad, -over(), -panel_pad, -out_under) })).focusable(Is(x.focus), keys=0, tab=false) |> ignore
             body_box.val = Some(b)
-            @ui.old(b, key=fn() { key + "/body" }, fn(c) {
+            @ui.old(b, key=fn() { key + "/body" + side_key() }, fn(c) {
               let was = opened()
               let held = c.box(style=panel_grows.then(panel_part_in(over(), under)), fn() {
                 panel_sides_in.val = panel_pad
@@ -268,7 +270,7 @@ fn panel_node(
             |> ignore
             body_box.val = Some(b)
             b.scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(s) {
-              @ui.old(s, natural=true, fits?=fits(1), key=fn() { key + "/body" }, fn(c) {
+              @ui.old(s, natural=true, fits?=fits(1), key=fn() { key + "/body" + side_key() }, fn(c) {
               let was = opened()
                 let held = c.box(style=held_in().then(@ui.style(pt=room(over()), pb=room(under))), fn() {
                   // (held shorter than what it holds: what would scroll in itself there laid out whole, panel_held)
@@ -302,7 +304,7 @@ fn panel_node(
         // (its foot: its buttons in its foot corner, a line over them where `ruled`)
         match x.foot {
           Some(f) =>
-            @ui.old(p, natural=true, fits?=fits(2), key=fn() { key + "/foot" }, fn(c) {
+            @ui.old(p, natural=true, fits?=fits(2), key=fn() { key + "/foot" + side_key() }, fn(c) {
               let was = opened()
               let held = c.box(style=panel_part_in(0.0, panel_pad), fn() {
                 if x.ruled {

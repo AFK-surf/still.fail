@@ -38,6 +38,9 @@ priv struct TreeField {
   view : @view.View
   /// where its last paint showed it (window x, y, scale, laid width and height); its lines fly from what was visible
   mut drawn : (Double, Double, Double, Double, Double)?
+  /// the frame it was last painted in (Ctx's frame_no; -1 none): one with the focus not painted in a frame laid out for
+  /// its input method all the same (Ctx::unseen_field_laid)
+  mut painted : Int
   mut hold_off : () -> Unit
   /// how many presses in a row the one held is (a double click's 2, a triple's 3), Shift held as it went down; the last
   /// press's run (how many, when, where: as the old frame counts them, app.mbt's press_run)
@@ -191,6 +194,7 @@ pub fn field(
       strayed: false,
       view: f,
       drawn: None,
+      painted: -1,
       hold_off: fn() {  },
       clicks: 0,
       shifted: false,
@@ -246,25 +250,6 @@ pub fn field(
     // (its editor no longer the window's as it is let go, whatever lets it go)
     .owns(fn() { tree_field_gone(id) })
     |> ignore
-    // A focused field can be fully transparent on the first frame of its entrance. Its input method needs the
-    // laid-out words then too; layout for input cannot wait for painting to have anything visible to draw.
-    f.reacts(fn() {
-      if f.focused() {
-        Some((f.laid_window_told(), field.laid(font_size=size(), line=line_now(), max_lines=lines_now(), trim~)))
-      } else {
-        None
-      }
-    }, fn(ready) {
-      match (ready, tree_fields.get(id)) {
-        (Some((Some(rect), _)), Some(tf)) => {
-          let fb = g().tree_field_box(id, tf, rect)
-          st.placed_x = rect.0
-          st.placed_y = rect.1
-          g().lay_out_field(st, fb)
-        }
-        _ => ()
-      }
-    })
     // (the focus asked for it before it was held: given it now, it able to take it, Field::focus)
     if st.focus_asked {
       st.focus_asked = false
@@ -927,6 +912,22 @@ fn tree_field_told(tf : TreeField) -> Unit {
 }
 
 ///|
+/// The field with the focus where this frame painted none of it (all of it transparent on the first frame it comes in,
+/// cut away): its words laid out for its input method all the same, where its node is placed now, as its paint lays
+/// them out (Ctx::paint_tree_field): what the input method asks of it is where its words are as the tree is drawn,
+/// nothing waiting for something of it to show, nothing told back of where it is laid out.
+fn Ctx::unseen_field_laid(self : Ctx, tree : @view.Tree) -> Unit {
+  guard tree.focused_now().0 is Some(id) && tree_fields.get(id) is Some(tf) && tf.painted != self.frame_no else {
+    return
+  }
+  guard tf.view.alive() else { return }
+  let (x, y, w, h) = tf.view.placed_window_now()
+  tf.st.placed_x = x
+  tf.st.placed_y = y
+  self.lay_out_field(tf.st, self.tree_field_box(id, tf, (x, y, w, h)))
+}
+
+///|
 /// The same word layout for input and painting, in the field's laid-out rectangle.
 fn Ctx::tree_field_box(self : Ctx, id : @view.NodeId, tf : TreeField, rect : (Double, Double, Double, Double)) -> FieldBox {
   let z = self.editor_sizing((tf.font_size)(), (tf.line)(), (tf.max_lines)(), true, tree_theme().text_line)
@@ -991,6 +992,7 @@ fn Ctx::paint_tree_field(
   st.placed_x = ux
   st.placed_y = uy
   tf.drawn = Some((x, y, s, w, h))
+  tf.painted = self.frame_no
   self.lay_out_field(st, fb)
   // (drawn where it is its own, cut by nothing it is drawn in but its own box (Ctx::paint_field's), then as big as it is
   // about its top left and within what cuts it where it is drawn: as a block of the tree's is composed, view_blit)

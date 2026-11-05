@@ -362,8 +362,9 @@ struct Node {
   mut pointed_in_cell : @signals.Signal[Bool]?
   /// whether the pointer is within it as it was last placed, made as first read (View::pointer_within)
   mut within_cell : @signals.Signal[Bool]?
-  /// where the pointer is in its own terms as it was last placed, made as first read (View::pointer_here_told)
-  mut here_cell : @signals.Signal[(Double, Double)?]?
+  /// where the pointer is in its own terms as it was last placed, and how big it was laid out then (what is under the
+  /// pointer in it another as either changes), made as first read (View::pointer_in)
+  mut here_cell : @signals.Signal[(Double, Double, Double, Double)?]?
   /// how many times how its words are set was said (their words, pieces, look: View::words_said), made as first read
   mut said_cell : @signals.Signal[Int]?
   /// a row of a list made by its key (View::each): the same while its key is there, whatever is made in it anew
@@ -656,8 +657,8 @@ pub struct Tree {
   placed_due : Array[Bound]
   /// the nodes laid out alone once all else is (View::laid_after), each with its making, in the order said; whether one
   /// is to be laid out again (what it holds marked, or what it says of its room changed)
-  afters : Array[(Int, Int)]
-  mut afters_due : Bool
+  laid_afters : Array[(Int, Int)]
+  mut laid_afters_due : Bool
   /// the nodes left out in this layout, what they held, their focus and their back to be let go of as it is done
   outs_gone : Array[Int]
   /// the node hosting the old view, if any (View::hosted)
@@ -892,8 +893,8 @@ pub fn Tree::new(
     laying: false,
     placed_bounds: Map([]),
     placed_due: [],
-    afters: [],
-    afters_due: false,
+    laid_afters: [],
+    laid_afters_due: false,
     outs_gone: [],
     time,
     cause_at: -1.0,
@@ -1644,7 +1645,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.pulls_marked.clear()
   self.placed_bounds.clear()
   self.placed_due.clear()
-  self.afters.clear()
+  self.laid_afters.clear()
   self.timeline.clear()
   self.changed.clear()
   self.composed.clear()
@@ -1739,6 +1740,17 @@ pub fn View::rect(self : View) -> (Double, Double, Double, Double) {
 }
 
 ///|
+/// Where it is drawn in the window and how big, as it was last placed: what holds it drawn off, grown or shrunk with
+/// it, its own drawing too (Tree::drawn_of's), even where it draws nothing (no opacity), clipping not counted. Read
+/// plainly, never followed: by what is drawn where another is drawn, as the tree is placed (Live's Placed), and at an
+/// event, never by what is laid out. None before it is first placed, or where it is laid out nowhere.
+pub fn View::drawn_window_now(self : View) -> (Double, Double, Double, Double)? {
+  guard self.live() is Some(n) && n.placed && !self.tree.out_at(self.at) else { return None }
+  let (x, y, _, s) = self.tree.projected(self.at, drawing=true)
+  Some((x, y, n.lw * s, n.lh * s))
+}
+
+///|
 /// Where node `at` is drawn in the window and how big (its scale and its holders'), from the root down (Tree::projected):
 /// a point of the window in its own terms is (x - its x) / its scale.
 fn Tree::placed(self : Tree, at : Int) -> (Double, Double, Double) {
@@ -1782,7 +1794,7 @@ fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
     // else is, nothing over it; in one laid out alone once all else is (View::laid_after): that one again then)
     if n.own_root {
       if n.after is Some(_) {
-        self.afters_due = true
+        self.laid_afters_due = true
         self.marked()
       } else {
         self.block_marked(i)
@@ -3232,13 +3244,13 @@ pub fn View::laid_after(self : View, room : () -> (Double, Double, Double?, Doub
   n.after_was = None
   // (what it reads otherwise than where things are laid out: it laid out again as that changes, Tree::afters_laid)
   let w = @signals.watch(fn() {
-    tree.afters_due = true
+    tree.laid_afters_due = true
     tree.marked()
   })
   n.after_watch = Some(w)
   self.owns(fn() { w.stop() }) |> ignore
-  tree.afters.push((self.at, self.gen))
-  tree.afters_due = true
+  tree.laid_afters.push((self.at, self.gen))
+  tree.laid_afters_due = true
   // (out of what holds it: its boxes put again without it)
   match self.parent() {
     Some(p) => p.boxes_again()
@@ -3376,6 +3388,29 @@ pub fn View::placed_window_now(self : View) -> (Double, Double, Double, Double) 
     i = m.parent
   }
   (x, y, n.lw, n.lh)
+}
+
+///|
+/// Where it was last placed in the window, and how big, as placed_window_now has it, read as it is let go too (in what
+/// it owns as it goes: View::owns, what holds it still where it was): none before it is first placed, or once its place
+/// in the tree is another's. For what samples where a thing stood once it is gone (a part handed to another owner as
+/// its own goes), read plainly, never followed.
+pub fn View::placed_window_was(self : View) -> (Double, Double, Double, Double)? {
+  guard self.at >= 0 && self.at < self.tree.nodes.length() else { return None }
+  let n = self.tree.nodes[self.at]
+  guard n.gen == self.gen && n.placed else { return None }
+  let mut x = 0.0
+  let mut y = 0.0
+  let mut i = self.at
+  while i >= 0 {
+    let m = self.tree.nodes[i]
+    if !m.slot {
+      x = x + m.lx
+      y = y + m.ly
+    }
+    i = m.parent
+  }
+  Some((x, y, n.lw, n.lh))
 }
 
 ///|
@@ -6668,17 +6703,17 @@ fn Tree::places_run(self : Tree) -> Unit {
 /// laid out so where that came out otherwise or what it holds is marked, placed there with what of it was laid out; `all`
 /// (anything laid out before it): each looked at, else only where one is marked. Whether any was laid out.
 fn Tree::afters_laid(self : Tree, all : Bool) -> Bool {
-  if self.afters.is_empty() {
-    self.afters_due = false
+  if self.laid_afters.is_empty() {
+    self.laid_afters_due = false
     return false
   }
-  if !all && !self.afters_due {
+  if !all && !self.laid_afters_due {
     return false
   }
-  self.afters_due = false
+  self.laid_afters_due = false
   let mut laid = false
   let live = []
-  for e in self.afters {
+  for e in self.laid_afters {
     let (at, gen) = e
     let n = self.nodes[at]
     guard n.live && n.gen == gen && n.after is Some(room) && n.after_watch is Some(w) else { continue }
@@ -6712,8 +6747,8 @@ fn Tree::afters_laid(self : Tree, all : Bool) -> Bool {
     self.walk(at, g, true)
     laid = true
   }
-  self.afters.clear()
-  self.afters.append(live)
+  self.laid_afters.clear()
+  self.laid_afters.append(live)
   laid
 }
 
@@ -8327,7 +8362,7 @@ pub fn View::pointer_within(self : View) -> Bool {
     None => {
       let s = @signals.signal(self.tree.within(self.at), same=fn(a, b) { a == b })
       n.within_cell = Some(s)
-      // (once for both it and where the pointer is in it: View::pointer_here_told)
+      // (once for both it and where the pointer is in it: View::pointer_in)
       if n.here_cell is None {
         self.tree.withins_at.push((self.at, n.gen))
       }
@@ -8373,7 +8408,7 @@ fn Tree::withins_told(self : Tree) -> Bool {
     }
     match n.here_cell {
       Some(cell) => {
-        let now = self.pointer_in(at)
+        let now = self.pointer_in(at).map(fn(p) { (p.0, p.1, n.lw, n.lh) })
         if @signals.untracked(fn() { cell.get() }) != now {
           changed = true
           cell.set(now)
@@ -8391,12 +8426,12 @@ fn Tree::withins_told(self : Tree) -> Bool {
 }
 
 ///|
-/// Whether the pointer is along its right edge, `near` in from it (0: it has no bar to come out now, nothing to scroll),
-/// as what scrolls the bar of comes out there (a column that scrolls, its bar: scroll_bar.mbt), followed: of all those, the last drawn the pointer is in (the innermost of
-/// those holding one another, the upper of those over one another; where what holds it lets it be found, taking input:
-/// Tree::input_bounds), if the pointer is along its edge; none where that one's is not (as an old view's bar_near_at
-/// takes the innermost box that scrolls there). Told as the pointer moves, as the frame places what changed, and as
-/// what is drawn or found there changes otherwise.
+/// Whether the pointer is along its right edge, `near` in from it (0: none), as what scrolls the bar of comes out there
+/// (a column that scrolls, its bar: scroll_bar.mbt), followed: of all those with a bar as they are laid out
+/// (Scroll::has_bar), the last drawn the pointer is in (the innermost of those holding one another, the upper of those
+/// over one another; where what holds it lets it be found, taking input: Tree::input_bounds), if the pointer is along its
+/// edge; none where that one's is not (as an old view's bar_near_at takes the innermost box that scrolls there). Told as
+/// the pointer moves, as the frame places what changed, and as what is drawn or found there changes otherwise.
 pub fn View::bar_near(self : View, near : Double, across? : Bool = false) -> Bool {
   guard self.live() is Some(n) else { return false }
   // (said anew, none where it has no bar now (nothing to scroll: 0): which one the pointer is along told anew too)
@@ -8426,12 +8461,13 @@ fn Tree::bar_near_at(self : Tree) -> Int? {
   guard px >= 0.0 && self.nodes.length() > 0 else { return None }
   // (of the columns whose bars come out so, the last drawn the pointer is in, found there within what holds it and
   // taking input: the innermost of those holding one another, the upper of those over one another; nothing else drawn
-  // counts, its bar's own room over it none of it)
+  // counts, its bar's own room over it none of it; one with no bar as it is laid out (Scroll::has_bar) none of them)
   let top : Ref[Int] = Ref(-1)
   self.walk_taken(px, py, fn(c, cx, cy, _, s) {
     let n = self.nodes[c.id.at]
     if n.bar_near > 0.0 &&
       n.bar_near_cell is Some(_) &&
+      self.scrolls_at.get(c.id.at).map(fn(sc) { sc.has_bar() }).unwrap_or(true) &&
       !self.pressless_at(c.id.at) &&
       px >= cx &&
       py >= cy &&

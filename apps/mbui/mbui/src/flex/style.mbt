@@ -183,6 +183,12 @@ pub(all) struct Style {
   // as tall as whole pixels, rounded up, what is under it lower by as much, the column as much taller (an old view's
   // list's rows', ui's Ctx::row_slot).
   mut rows_grid : Double
+  // Not CSS's: one that scrolls along its main axis (overflow Scroll) with room at the end of its cross axis while what
+  // its line holds runs past its content box: a bar's room at the foot of a row that scrolls across, taken as a classic
+  // scroll bar takes it (CSS's scrollbar-gutter, there only while it scrolls); less what its first item's own padding
+  // at that end leaves there already, the bar lying over that. Its own size from what it holds alone: one of a set
+  // cross size keeps it. Laid out in the same pass as what it holds, whose size along it decides it (0: none).
+  mut gutter : Double
   // bumped by every change to what the box comes from (its lengths and box
   // sizing): a node's box stands while it is the same (Node's box_ver)
   priv mut ver : Int
@@ -265,6 +271,7 @@ pub fn Style::new() -> Style {
     wrap_least: false,
     content_share: 0.0 / 0.0,
     rows_grid: 0.0,
+    gutter: 0.0,
     ver: 0,
     basis_v: 0.0,
     basis_k: LEN_AUTO,
