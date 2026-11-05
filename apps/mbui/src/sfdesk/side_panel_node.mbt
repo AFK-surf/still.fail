@@ -105,11 +105,11 @@ fn side_panel_node(
       bar.show(fn() { !column_short.get() }, fn(button) {
         @sf.icon_button_node(button, "panel-close", fn() { @sf.t("web-pages.chat.closePanel") }, fn() {
           side_change(src, r, "clear", None)
-        }, tips~, icon_now=fn() { if alone() { "close" } else { "panel-close" } })
-        .radius(By(fn() {
-          if tape || @ui.window_keys_own() { @sf.bar_key_side / 2.0 }
-          else { @sf.window_corner_key().radius(@ui.tree_corner_roots_now()) }
-        })) |> ignore
+        }, tips~, icon_now=fn() { if alone() { "close" } else { "panel-close" } }, linked=fn() {
+          // (round on the tape and where the window's own buttons are the app's; else linked to the window's corner,
+          // the corner rule told so: @sf.bar_keys_link's)
+          if tape || @ui.window_keys_own_now() { None } else { Some(@sf.window_corner_key()) }
+        }) |> ignore
       })
     })
     panel.box(fn(body) {

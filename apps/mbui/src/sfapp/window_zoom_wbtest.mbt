@@ -294,6 +294,24 @@ test "window zoom: the chat's bar stays clear of the window corner when its cont
 }
 
 ///|
+test "window zoom: the chat's bar keys at the window's corner follow it at every size their link lets them, at rest" {
+  // (linked to the window's corner and told the corner rule so, as an old view's keys are: judged as the link judges
+  // it, as round as the screen draws it; a Mac's 16 at 1.5, 6 in, 4.67 drawn 7: concentric there, not a corner the
+  // ranges refuse)
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat", w=1280.0, h=800.0, window_corner=16.0, window_inset=true)
+  let faults : Array[String] = []
+  for key in ['=', '=', '=', '0', '-', '-', '-', '-', '-'] {
+    t.key(@ui.key_of_char(key), mods=@ui.mod_cmd)
+    t.run_for(@ui.move_most_ms)
+    for f in t.corner_faults() {
+      faults.push("\{@ui.window_zoom()}: \{f}")
+    }
+  }
+  assert_true(faults.is_empty(), msg=faults.join("\n"))
+}
+
+///|
 test "window zoom: a short rail keeps settings visible and scrolls its places" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat", w=1280.0, h=800.0, window_corner=16.0, window_inset=true)

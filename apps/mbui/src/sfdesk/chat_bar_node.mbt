@@ -105,12 +105,12 @@ fn chat_bar_node(parent : @view.View, src : Source, w : Workspace, r : ChatRef, 
         })
         inner.show(fn() { !finding() && view() is Some(_) }, fn(keys) {
           keys.row(Is(true)).gap(By(fn() { @sf.keys_apart() })).lines_up(Is(Some(Middle))) |> ignore
+          // (round on the tape and where the window's own buttons are the app's; else the corner a bar's keys share at
+          // the window's corner, linked to it and told the corner rule so: @sf.bar_keys_link's)
           let button = fn(p : @view.View, icon : String, label : String, press : () -> Unit) {
-            @sf.icon_button_node(p, icon, fn() { @sf.t(label) }, press, tips~)
-            .radius(By(fn() {
-              if corners() is Some(_) || @ui.window_keys_own() { @sf.bar_key_side / 2.0 }
-              else { @sf.window_corner_key().radius(@ui.tree_corner_roots_now()) }
-            }))
+            @sf.icon_button_node(p, icon, fn() { @sf.t(label) }, press, tips~, linked=fn() {
+              if corners() is Some(_) || @ui.window_keys_own_now() { None } else { Some(@sf.window_corner_key()) }
+            })
           }
           keys.show(fn() { !native() && view().map_or(false, fn(v) { v.archivable && !v.archived }) }, fn(a) {
             button(a, "archive", "web-pages.chat.archive", fn() {

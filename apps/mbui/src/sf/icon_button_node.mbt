@@ -5,7 +5,9 @@
 
 ///|
 /// The icon button in `parent` showing icon `icon`, `size` across (round), its icon `icon_size`; named `label` (read
-/// out, and its tip in `tips`); `press` done as it is pressed. The node.
+/// out, and its tip in `tips`); `press` done as it is pressed. `linked`: its corner where that comes from as it says now
+/// (a bar's buttons' at the window's corner: window_corner_key), all four alike and the corner rule told so
+/// (@ui.tree_corners_linked), as icon_button's `linked` is; round where it says none. The node.
 pub fn icon_button_node(
   parent : @view.View,
   icon : String,
@@ -15,6 +17,7 @@ pub fn icon_button_node(
   size? : Double = icon_button_side,
   icon_size? : Double = 16.0,
   icon_now? : () -> String,
+  linked? : () -> @ui.CornerOf?,
 ) -> @view.View {
   parent.box(fn(v) {
     // (the hand on it: a mouse over it or pressing it, a finger pressing it; the keyboard's focus shown on it)
@@ -33,6 +36,12 @@ pub fn icon_button_node(
     .height(Is(Some(size)))
     .padding(Is((pad, pad, pad, pad)))
     .radius(Is(size / 2.0))
+    |> ignore
+    match linked {
+      Some(link) => @ui.tree_corners_linked(v, fn() { link().map(fn(k) { FixedArray::make(4, k) }) })
+      None => ()
+    }
+    v
     .presses(Is(true))
     .focusable(Is(true))
     // (the page's hover, as a tint of the ink it sits with: icon_button's)
