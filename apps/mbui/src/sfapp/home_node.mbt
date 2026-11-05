@@ -23,10 +23,10 @@ fn home_node(v : @view.View, src : Source, tips : @sf.TipLayer, stint : () -> In
     before: fn(_, _) {
       let parts : Array[@sfpages.NodePart] = []
       if @sfpages.update_card_shown() {
-        parts.push({ key: "update-card", make: fn(p) { @ui.old(p, fn(c) { @sfpages.update_card(c, src) }, natural=true, unlaid=fn() { p.window().1 }) |> @ui.old_takes_own |> ignore } })
+        parts.push({ key: "update-card", make: fn(p) { @sfpages.update_card_node(p, src) } })
       }
       if @sfpages.news_of(src) is Some(_) {
-        parts.push({ key: "changelog-news", make: fn(p) { @ui.old(p, fn(c) { @sfpages.changelog_news(c, src) }, natural=true, unlaid=fn() { p.window().1 }) |> @ui.old_takes_own |> ignore } })
+        parts.push({ key: "changelog-news", make: fn(p) { @sfpages.changelog_news_node(p, src, tips) } })
       }
       parts
     },
@@ -34,7 +34,7 @@ fn home_node(v : @view.View, src : Source, tips : @sf.TipLayer, stint : () -> In
     after: fn(_, _) {
       match workspace() {
         Some(w) if items((src.topic)("longJobs", { "scope": Json::string(w.id) }).value, "groups").length() > 0 =>
-          [{ key: "open-jobs", make: fn(p) { @ui.old(p, fn(c) { open_jobs(c, src, w) }, natural=true, unlaid=fn() { p.window().1 }) |> ignore } }]
+          [{ key: "open-jobs", make: fn(p) { open_jobs_node(p, src, w) } }]
         _ => []
       }
     },

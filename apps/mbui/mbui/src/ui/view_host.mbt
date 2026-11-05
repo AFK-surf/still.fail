@@ -3240,6 +3240,14 @@ pub fn old_views_here(c : Ctx) -> Unit {
 }
 
 ///|
+/// How many old views the window's tree hosts now (old's islands), for the gate tests of taking the hosting out: what a
+/// page made of nodes alone hosts none of. Gone with `old_islands` once every gate holds it at none.
+pub fn Tester::old_views_hosted(self : Tester) -> Int {
+  ignore(self)
+  old_islands.length()
+}
+
+///|
 /// Whether the window's tree holds old views put by what is built around them (set_view_app's `around`).
 pub fn old_islands_around() -> Bool {
   old_around.val
