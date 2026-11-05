@@ -5728,6 +5728,10 @@ fn Tree::settle_now(self : Tree, at : Double) -> Unit {
   self.standing = true
   self.work.settles = self.work.settles + 1
   let shown = @signals.untracked(fn() { self.clock.get() })
+  // (a change told by what a frame's layout told (a size, a place), settled within that layout: at the frame's moment,
+  // as that layout places all of it, never at the change's own between its passes, the clock set back and forth: what
+  // is placed by the clock (a page sliding in) told at the one moment and then the other, pass after pass)
+  let at = if self.laid_passes > 0 && at < shown { shown } else { at }
   // A due change settles at its own moment, before the outer advance reaches its destination. Its looks must
   // see that same logical moment when they decide whether a finished way still needs the drawing clock.
   let cause = self.cause_at

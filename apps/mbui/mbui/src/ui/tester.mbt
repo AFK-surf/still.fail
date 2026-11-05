@@ -371,6 +371,7 @@ pub fn Tester::new(
     view_ready: {},
     view_reads: 0,
     auto_finish: finish,
+    shown_ahead: 0.0,
     finished: [],
     site: [],
     cursor: 0,
@@ -762,9 +763,16 @@ pub fn Tester::set_frame_times(self : Tester, times : Array[Double]) -> Unit {
 }
 
 ///|
+/// Each frame's picture drawn for `ms` ahead of the host's now, as a device draws its frame for its next vsync: what is
+/// drawn sampled then, the logic at the host's now (Tester::frame_shown_at). By default 0: drawn at its now.
+pub fn Tester::frames_shown_ahead(self : Tester, ms : Double) -> Unit {
+  self.fake.shown_ahead = ms
+}
+
+///|
 /// Draws one frame at `at` on the clock, whatever the display's frames (a host's run replayed: where it drew).
 pub fn Tester::frame_at(self : Tester, at : Double) -> Unit {
-  self.frame_shown_at(at, at)
+  self.frame_shown_at(at, at + self.fake.shown_ahead)
 }
 
 ///|

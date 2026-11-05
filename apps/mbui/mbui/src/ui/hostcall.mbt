@@ -103,6 +103,9 @@ struct FakeHost {
   /// what the host does for the app is done by itself at the next frame (Tester::new's `finish`); else the test says
   /// when (Tester::finish, finish_all)
   auto_finish : Bool
+  /// how far ahead of the host's now each frame's picture is drawn for (Tester::frames_shown_ahead: a device's, drawn
+  /// for its next vsync); 0 drawn at its now
+  mut shown_ahead : Double
   /// what it finished, in that order ((kind, id))
   finished : Array[(Int, Int)]
   /// what its sites say, oldest first (Tester::site_says), as a site view's host would (view_site_next)
