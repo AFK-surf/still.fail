@@ -16,6 +16,28 @@ function beforeIndex(db: DatabaseSync): void {
 const posts = (db: DatabaseSync, thread: number) => db.prepare(
   "SELECT CAST(n AS TEXT) AS n FROM card_posts WHERE thread=? ORDER BY card_posts.n",
 ).all(thread).map((row) => row.n);
+
+test("a failed card post index installation leaves no partial schema", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    beforeIndex(db);
+    db.exec("CREATE TABLE card_posts (sentinel INTEGER)");
+    assert.throws(() => installCardPosts(db), /already exists/);
+    const objects = db.prepare("SELECT type,name FROM sqlite_master WHERE name LIKE 'card_post%' ORDER BY name").all();
+    assert.deepEqual(objects.map((row) => [row.type, row.name]), [["table", "card_posts"]]);
+  } finally { store.close(); }
+});
+
+test("an incompatible card post index is neither read nor prepared", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const thread = store.openThread("ember", "EMBER", "incompatible", null, null).id;
+    db.exec("UPDATE card_post_meta SET version=999");
+    assert.throws(() => cardPostsReady(db, thread), /incompatible/);
+    assert.throws(() => cardPostsStep(db, thread), /incompatible/);
+    assert.throws(() => installCardPosts(db), /incompatible/);
+  } finally { store.close(); }
+});
 const original = (db: DatabaseSync, thread: number) => db.prepare(
   "SELECT CAST(n AS TEXT) AS n FROM entries WHERE thread=? AND kind='message' AND (card IS NOT NULL OR options IS NOT NULL) ORDER BY entries.n",
 ).all(thread).map((row) => row.n);

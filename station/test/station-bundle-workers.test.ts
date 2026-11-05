@@ -50,6 +50,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
     store.db.exec("DELETE FROM session_up_job_rows; UPDATE session_up_job_meta SET fresh=0");
     store.db.prepare("UPDATE entries SET attachments=? WHERE thread=? AND n=1")
       .run(JSON.stringify([{ path: "/w/bundle.html", name: "bundle.html" }]), thread);
+    store.db.prepare("UPDATE entries SET card=? WHERE thread=? AND n=1").run('{"type":"text"}', thread);
     store.db.prepare("DELETE FROM widget_source_rows WHERE thread=?").run(thread);
     store.db.prepare("DELETE FROM widget_source_scopes WHERE thread=?").run(thread);
     store.db.prepare("DELETE FROM card_posts WHERE thread=?").run(thread);
@@ -97,5 +98,6 @@ test("the workers in a station release start and process a batch", { skip: !proc
     assert.deepEqual(store.upJobIds("old-count"), ["old-job"]);
     assert.equal(store.db.prepare("SELECT name FROM widget_source_rows WHERE thread=? AND path='/w/bundle.html'").get(thread)?.name, "bundle.html");
     assert.equal(store.db.prepare("SELECT complete FROM cc_sessions WHERE session='old-cc'").get()?.complete, 1);
+    assert.equal(store.db.prepare("SELECT n FROM card_posts WHERE thread=?").get(thread)?.n, 1);
   } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
 });
