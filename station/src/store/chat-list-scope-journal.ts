@@ -53,9 +53,10 @@ const markVisibility = (thread: string, needsNew = "1") => {
         AND EXISTS (SELECT 1 FROM recent_scope_tracked LIMIT 1)
         AND NOT EXISTS (SELECT 1 FROM recent_scope_visibility_dirty WHERE thread = ${thread});`;
 };
-// A new orphan contributes to no explicit workspace. A later membership has its own journal. A previously
-// referenced id or a replaced row still needs rebuilding, as does any chat with a home.
-const newVisibility = `NEW.home IS NOT NULL OR EXISTS (SELECT 1 FROM thread_sessions WHERE thread = NEW.id LIMIT 1)
+// A new orphan or a chat in a scope nobody has requested contributes to no prepared workspace. A later membership
+// or session change has its own journal. A previously referenced id or replaced row still needs rebuilding.
+const newVisibility = `EXISTS (SELECT 1 FROM sessions s JOIN recent_scope_tracked r ON r.kind = 1 AND r.ws = s.ws WHERE s.key = NEW.home)
+  OR (NEW.home IS NULL AND EXISTS (SELECT 1 FROM thread_sessions WHERE thread = NEW.id LIMIT 1))
   OR EXISTS (SELECT 1 FROM recent_scope_sources INDEXED BY recent_scope_sources_thread WHERE thread = NEW.id LIMIT 1)`;
 // A member can arrive after a job recorded an orphan. Preserve uncertainty until that job has rebuilt its sources.
 const memberMakesVisibilityAmbiguous = (thread: string) => `UPDATE recent_scope_visibility_dirty SET ambiguous = 1

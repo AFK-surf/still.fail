@@ -129,6 +129,50 @@ for (const recursive of [false, true]) test(`many unrelated new orphan chats do 
   } finally { store.close(); }
 });
 
+for (const recursive of [false, true]) test(`many new chats in an untracked workspace do not make another workspace wait (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    for (const [key, ws] of [["here", "here"], ["away", "away"]] as const)
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws });
+    const target = store.openThreadOf("ember", "EMBER", "target", "Target", null, "here").id;
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    while (!scanRecentWorkspaceStep(db, "here", 2).sourceDone) { /* Prepare the workspace. */ }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    for (let i = 0; i < 100; i++) store.openThreadOf("ember", "EMBER", `away-${i}`, "Away", null, "away");
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [target], total: 1 },
+      "a scope that has never been requested must not accumulate work for this workspace");
+    trackRecentScope(db, { kind: "workspace", workspace: "away" });
+    while (!scanRecentWorkspaceStep(db, "away", 20).sourceDone) { /* Its own first read scans its sessions. */ }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'away'").run();
+    assert.deepEqual(readPreparedRecentWorkspace(db, "away", 5), recentChatIds(db, "away", "home", 5));
+    store.openThreadOf("ember", "EMBER", "new-here", "New here", null, "here");
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "a new chat in a prepared scope must be accounted");
+    while (!settleRecentScopeVisibilityStep(db, 2).visibilityDone) { /* Account the new named home. */ }
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), recentChatIds(db, "here", "home", 5));
+  } finally { store.close(); }
+});
+
+for (const recursive of [false, true]) test(`a previously unknown home becoming known is added to its workspace (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    while (!scanRecentWorkspaceStep(db, "here", 2).sourceDone) { /* Prepare the empty scope. */ }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    const chat = store.openThreadOf("ember", "EMBER", "unknown", "Unknown", null, "later").id;
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [], total: 0 });
+    store.insertSession({ key: "later", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "later", createdAt: 1, lastActiveAt: 1, ws: "here" });
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null);
+    while (!settleRecentWorkspaceSessionStep(db, "here", 2).sessionsDone) { /* Find the newly known home. */ }
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [chat], total: 1 });
+  } finally { store.close(); }
+});
+
 for (const recursive of [false, true]) test(`a new chat with an existing member is accounted for its workspace (recursive triggers ${recursive})`, () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
