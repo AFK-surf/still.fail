@@ -122,6 +122,7 @@ pub fn[T] ListRows::in_node(
   })
   let room = fn(k : String, natural : Double) -> @view.ListRoom {
     let (items, _) = all.get()
+    self.rooms += 1
     let c = self.causes
     c.read()
     // (nothing of the list on its way, nothing leaving: each row as tall as it is, its height kept for a way that may

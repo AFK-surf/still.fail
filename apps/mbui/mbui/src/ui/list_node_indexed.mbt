@@ -367,6 +367,7 @@ pub fn[T] ListRows::in_node_indexed(
   // (what of a row its room is worked out by, as in_node: whether it comes in place, the room over it, whether its
   // content grows with its room, whether its content goes on the way itself)
   let room_with = fn(now : Double, k : String, natural : Double, of : (String) -> (Bool, Double, Bool, Bool)?) -> @view.ListRoom {
+    self.rooms += 1
     let c = self.causes
     guard of(k) is Some((in_middle, over, grows, owns)) else { return @view.list_room(natural) }
     let going = self.going.contains(k) || going_at(k) is Some(_)

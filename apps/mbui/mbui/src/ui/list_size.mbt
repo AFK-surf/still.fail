@@ -553,11 +553,20 @@ pub struct ListRows[T] {
   priv mut last_items : Array[T]
   /// the keys going, read by each row as whether it is one
   priv going_said : @signals.Keyed[String]
+  /// how many times a row's room was worked out (ListRows::rooms_worked): for a test that counts what a layout costs
+  priv mut rooms : Int
 }
 
 ///|
 pub fn[T] ListRows::new() -> ListRows[T] {
-  { was: {}, order: [], going: {}, causes: { by: {}, keys: [], said: @signals.signal(0), n: 0, start: -1.0, end: -1.0, own: Set::new(), by_room: Set::new(), opened: {}, leads: {}, laid: -10, way_at: -1.0, way_frame: -1, way_offs: {}, way_speed: None }, given: false, last_keys: [], last_items: [], going_said: @signals.keyed() }
+  { was: {}, order: [], going: {}, causes: { by: {}, keys: [], said: @signals.signal(0), n: 0, start: -1.0, end: -1.0, own: Set::new(), by_room: Set::new(), opened: {}, leads: {}, laid: -10, way_at: -1.0, way_frame: -1, way_offs: {}, way_speed: None }, given: false, last_keys: [], last_items: [], going_said: @signals.keyed(), rooms: 0 }
+}
+
+///|
+/// How many times a row's room was worked out since it was made, each row each time its list lays it out: for a test
+/// that counts what a layout costs (only rows in sight, whatever the list's length).
+pub fn[T] ListRows::rooms_worked(self : ListRows[T]) -> Int {
+  self.rooms
 }
 
 ///|

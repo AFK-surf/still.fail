@@ -318,6 +318,9 @@ pub fn chat_list_node(
       fn() { [] },
       indexed=sized.source,
       est=chat_row_est,
+      // (what shows measured, nothing past it: a row out of sight counted as tall as its kind is guessed to be, measured
+      // as it comes in; none of it made, its words shaped or its pictures decoded before)
+      ahead=0.0,
       follows~,
       shown~,
       put~,
@@ -475,8 +478,11 @@ pub fn chat_list_node(
             None => here_of(r, @sfbase.chat_view_made(Json::object({})), rk, @sfbase.turns_of(rk), @sfbase.emits_of(rk), None, core, inline=narrow(), gutter=@signals.untracked(side))
           }
         }
+        // (what it is as it was last found: a row going not found among them for a moment, as its list takes its going,
+        // keeps showing what it showed)
+        let kind_was = Ref(0)
         slot.pick(fn() {
-          match row_of(k) {
+          let kind = match row_of(k) {
             Some((Said(m), _)) => message_made_whole(m.message())
             Some((Out(_), _)) => 3
             Some((Working(_), _)) => 4
@@ -485,8 +491,10 @@ pub fn chat_list_node(
             Some((Empty, _)) => 9
             Some((State(_, _, _), _)) => 10
             Some((Sent(_), _)) => 11
-            _ => 0
+            _ => kind_was.val
           }
+          kind_was.val = kind
+          kind
         }, fn(row, whole) {
           // (the first of what was sent from here not in the chat yet: where a message out of an avatar comes in over
           // it, emit.mbt)
