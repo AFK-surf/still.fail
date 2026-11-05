@@ -58,6 +58,25 @@ test("deleting a session does not stage its already unjoined deliveries", () => 
   assert.deepEqual(counts, [1, 1], "only removal of the membership changes its prepared order");
 });
 
+for (const recursive of [false, true]) {
+  test(`replacing an unjoined delivery still updates the joined conversation (recursive triggers ${recursive})`, () => {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers=${recursive ? "ON" : "OFF"}`);
+      const a = store.openThread("slack", "C", "a", null, null);
+      const b = store.openThread("slack", "C", "b", null, null);
+      store.joinThread(a.id, "s", "slack"); store.joinThread(b.id, "s", "slack");
+      db.prepare("INSERT INTO deliveries(rowid,thread,n,session) VALUES(1,?,1,'s')").run(a.id);
+      db.prepare("INSERT INTO deliveries(rowid,thread,n,session) VALUES(100,?,1,'orphan')").run(a.id);
+      prepare(store, "s"); prepare(store, "orphan");
+      db.prepare("INSERT OR REPLACE INTO deliveries(rowid,thread,n,session) VALUES(100,?,2,'s')").run(b.id);
+      assert.equal(indexedLatestThread(db, "s")?.id, b.id);
+      assert.equal(indexedLatestThread(db, "s")?.id, originalLatestId(db, "s"));
+      assert.equal(indexedLatestThread(db, "orphan"), null);
+    } finally { store.close(); }
+  });
+}
+
 test("a prepared session finds the same latest delivery or last membership", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {

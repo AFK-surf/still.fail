@@ -154,7 +154,11 @@ export function installLatestThreadIndex(db: DatabaseSync): void {
         BEGIN ${stage(deliveryKeys(true), "latest_thread_updating")} END;
       CREATE TRIGGER latest_delivery_change AFTER UPDATE OF rowid,_rowid_,oid,thread,n,session ON deliveries
         WHEN (${deliveryChanged}) AND ${updating} BEGIN ${reconcile("latest_thread_updating")} END;
+      -- A session deletion removes its memberships before its deliveries. Once a membership is gone, its old
+      -- deliveries cannot affect the prepared order; do not stage each one as the session is cleared.
       CREATE TRIGGER latest_delivery_before_drop BEFORE DELETE ON deliveries
+        WHEN ${changed} OR EXISTS (SELECT 1 FROM thread_sessions m JOIN latest_thread_scopes s ON s.session=m.session
+          WHERE m.thread=OLD.thread AND m.session=OLD.session)
         BEGIN ${stage("SELECT OLD.session AS session,OLD.thread AS thread")} END;
       CREATE TRIGGER latest_delivery_drop AFTER DELETE ON deliveries WHEN ${changed} BEGIN ${reconcile()} END;
 
