@@ -280,6 +280,33 @@ for (const recursive of [false, true]) {
   });
 }
 
+for (const recursive of [false, true]) test(`interleaved old entry and membership changes keep the original name order (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers=${recursive ? "ON" : "OFF"}`);
+    const threads = Array.from({ length: 5 }, (_, n) => store.openThread(n % 2 ? "slack" : "ember", "C", `t-${n}`, null, null).id);
+    for (const session of ["a", "b"]) for (const thread of threads.slice(0, 3)) store.joinThread(thread, session, "c");
+    for (const session of ["a", "b"]) prepare(store, session);
+    let random = 0x3a92bc17;
+    const pick = (n: number) => { random = (Math.imul(random, 1664525) + 1013904223) >>> 0; return (random >>> 8) % n; };
+    for (let step = 0; step < 120; step++) {
+      const thread = threads[pick(threads.length)]!, session = pick(2) === 0 ? "a" : "b", n = 1 + pick(4);
+      switch (pick(6)) {
+        case 0: db.prepare("INSERT OR IGNORE INTO thread_sessions(thread,session,connect,joined_at) VALUES(?,?,'c',?)").run(thread, session, step); break;
+        case 1: db.prepare("DELETE FROM thread_sessions WHERE thread=? AND session=?").run(thread, session); break;
+        case 2: db.prepare("INSERT OR REPLACE INTO entries(thread,n,kind,author_kind,author,at) VALUES(?,?,'message','person','p',?)").run(thread, n, pick(100)); break;
+        case 3: db.prepare("DELETE FROM entries WHERE thread=? AND n=?").run(thread, n); break;
+        case 4: db.prepare("UPDATE entries SET at=? WHERE thread=? AND n=?").run(pick(100), thread, n); break;
+        case 5: db.prepare("UPDATE threads SET created_at=? WHERE id=?").run(pick(100), thread); break;
+      }
+      for (const key of ["a", "b"]) {
+        prepare(store, key);
+        assert.equal(indexedSessionChat(db, key)?.id ?? null, original(store, key), `step ${step}, session ${key}`);
+      }
+    }
+  } finally { store.close(); }
+});
+
 test("readiness and the chosen chat share a snapshot with another writer", () => {
   const dir = mkdtempSync(join(tmpdir(), "session-chat-snapshot-")), path = join(dir, "stillfail.db");
   const store = Store.open(path), db = store.db, writer = new DatabaseSync(path);
