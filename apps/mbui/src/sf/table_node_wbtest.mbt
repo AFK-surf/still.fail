@@ -428,3 +428,60 @@ test "a table's cell with a link, as nodes: tapped on its link, where it leads t
   tt.run_for(@ui.move_most_ms)
   assert_eq((before, led), ([], ["https://still.fail"]))
 }
+
+///|
+/// A table of two columns, its second's words wrapping where it is narrower than they are on one line: as Markdown,
+/// and as the core reads it.
+let tn_long : String = "| 名称 | 说明 |\n| --- | --- |\n| Opus 5.5 | 这是一段比较长的说明文字，用来让这一列在窄的时候换行，在宽的时候排成一行 |"
+
+///|
+fn tn_long_tree() -> Json {
+  let cell = fn(s : String) { Json::array([Json::string("td"), Json::array([Json::string(s)])]) }
+  let line = fn(cs : Array[String]) { Json::array([Json::string("tr"), Json::array(cs.map(cell))]) }
+  Json::array([
+    Json::array([
+      Json::string("table"),
+      Json::array([line(["名称", "说明"]), line(["Opus 5.5", "这是一段比较长的说明文字，用来让这一列在窄的时候换行，在宽的时候排成一行"])]),
+      Json::object({ "md": Json::string(tn_long), "csv": Json::string("名称,说明") }),
+    ]),
+  ])
+}
+
+///|
+test "a table whose key cannot hang in its bleed: at its narrowest, its room shared, and as wide as it is, its key past it, as an old view's" {
+  // (where its head's first and last cells and its key are, by the window's width: 32 of it the page's sides, its bleed
+  // 8: as the old frame laid them out, arch/next 718b7221d7's; at 500 its room between its narrowest and its widest,
+  // the table as wide as its room and its key past it, scrolled across to)
+  let seen = []
+  for w in [300.0, 500.0, 700.0] {
+    let tt = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w~, h=400.0, platform=2)
+    markdown_read.val = Some(fn(_, done) { done(Some(tn_long_tree())) })
+    @ui.set_view_app(fn(root) {
+      @ui.set_tree_theme(ui_theme_now)
+      root.box(fn(b) {
+        b.padding(Is((16.0, 0.0, 16.0, 0.0))) |> ignore
+        table_node(b, fn() { tn_long }, bleed=8.0)
+      })
+      |> ignore
+    })
+    tt.draw()
+    tt.draw()
+    tt.run_for(@ui.move_most_ms)
+    let at = fn(label : String) {
+      match tt.semantics().search_by(fn(n) { n.label == label }) {
+        Some(i) => {
+          let r = tt.semantics()[i].rect
+          (r.0, r.2)
+        }
+        None => (-1.0, -1.0)
+      }
+    }
+    seen.push((w, at("名称"), at("说明"), at(t("web-main.prose.copyTable"))))
+    markdown_read.val = None
+  }
+  assert_eq(seen, [
+    (300.0, (16.0, 64.0), (104.0, 182.0), (292.0, 32.0)),
+    (500.0, (16.0, 64.0), (104.0, 380.0), (490.0, 32.0)),
+    (700.0, (16.0, 64.0), (104.0, 468.0), (578.0, 32.0)),
+  ])
+}
