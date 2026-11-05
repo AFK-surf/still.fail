@@ -1771,10 +1771,7 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
   let w = @signals.watch(fn() {
     if b.live && !b.queued {
       b.queued = true
-      told_at.val = match self.time {
-        Some(f) => f()
-        None => self.logic
-      }
+      told_at.val = self.time_now()
       self.bindings_due.push(b)
       self.marked()
       // (where things stand once the change that told it is told whole, a frame drawn after or none: placed then, where
@@ -1908,10 +1905,7 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   let at = if self.cause_at >= 0.0 {
     self.cause_at
   } else {
-    match self.time {
-      Some(now) => now()
-      None => self.logic
-    }
+    self.time_now()
   }
   self.advance_logic(at)
   // What was due has finished. Advancing the drawing clock can notify bindings too: tell it with the structure's
@@ -5573,7 +5567,8 @@ pub fn Tree::moment(self : Tree) -> Double? {
 }
 
 ///|
-/// The time now, as a change is told (the host's, else the clock's).
+/// The time of a change: the declared frame or input moment while it is being processed, else the host's.
+/// Every notification reads time here so work inside a frame cannot introduce a new host timestamp.
 fn Tree::time_now(self : Tree) -> Double {
   if self.bringing_at >= 0.0 {
     return self.bringing_at
