@@ -10,6 +10,10 @@ type Current = { at: bigint; said_at: bigint; created_at: bigint };
 export const RECENT_SCOPE_ORDER_PENDING = `SELECT COUNT(*) AS n,
   MAX(EXISTS (SELECT 1 FROM recent_scope_rows r WHERE r.ws = ?1 AND r.thread = d.thread)) AS affects
   FROM (SELECT thread FROM recent_scope_order_dispatch ORDER BY thread LIMIT 65) d`;
+export const RECENT_SCOPE_VISIBILITY_PENDING = `SELECT COUNT(*) AS n,
+  MAX(d.ambiguous OR COALESCE(d.home_ws = ?1, 0) OR
+    EXISTS (SELECT 1 FROM recent_scope_rows r WHERE r.ws = ?1 AND r.thread = d.thread)) AS affects
+  FROM (SELECT thread, home_ws, ambiguous FROM recent_scope_visibility_dirty ORDER BY thread LIMIT 65) d`;
 
 function atomic<T>(db: DatabaseSync, f: () => T): T {
   db.exec("SAVEPOINT recent_scope_contribution");
@@ -59,9 +63,10 @@ export function readPreparedRecentWorkspace(db: DatabaseSync, ws: string, limit:
       { total: number; complete: number } | undefined;
     if (!meta || meta.complete !== 1 || db.prepare("SELECT 1 FROM recent_scope_session_dirty WHERE kind = 1 AND ws = ? LIMIT 1").get(ws) !== undefined ||
         db.prepare("SELECT 1 FROM recent_scope_member_dirty WHERE ws = ? LIMIT 1").get(ws) !== undefined ||
-        db.prepare("SELECT 1 FROM recent_scope_order_dirty WHERE ws = ? LIMIT 1").get(ws) !== undefined ||
-        db.prepare("SELECT 1 FROM recent_scope_visibility_dirty LIMIT 1").get() !== undefined)
+        db.prepare("SELECT 1 FROM recent_scope_order_dirty WHERE ws = ? LIMIT 1").get(ws) !== undefined)
       return null;
+    const visibility = db.prepare(RECENT_SCOPE_VISIBILITY_PENDING).get(ws) as { n: number; affects: number | null };
+    if (visibility.n > 64 || visibility.affects === 1) return null;
     const pending = db.prepare(RECENT_SCOPE_ORDER_PENDING).get(ws) as { n: number; affects: number | null };
     if (pending.n > 64 || pending.affects === 1) return null;
     const rows = db.prepare(`SELECT thread FROM recent_scope_rows INDEXED BY recent_scope_order WHERE ws = ?

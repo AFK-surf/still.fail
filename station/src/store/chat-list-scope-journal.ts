@@ -40,13 +40,21 @@ const markMember = (thread: string, session: string) => {
 };
 const memberConflictThread = (extra: string) => `(SELECT thread FROM thread_sessions WHERE rowid = NEW.rowid ${extra})`;
 const memberConflictSession = (extra: string) => `(SELECT session FROM thread_sessions WHERE rowid = NEW.rowid ${extra})`;
-// A changed home can affect every member's scope, including scopes that do not have a row for this chat yet.
-// Keep it pending globally until a worker has visited both the old contributions and the current sources.
-const markVisibility = (thread: string) => `
-  UPDATE recent_scope_visibility_dirty SET revision = revision + 1 WHERE thread = ${thread};
-  INSERT INTO recent_scope_visibility_dirty(thread, revision)
-    SELECT ${thread}, 1 WHERE ${thread} IS NOT NULL AND EXISTS (SELECT 1 FROM recent_scope_tracked LIMIT 1)
-      AND NOT EXISTS (SELECT 1 FROM recent_scope_visibility_dirty WHERE thread = ${thread});`;
+// A home-less chat with members may affect scopes without an existing row. Record that uncertainty; a named home
+// and an orphan can instead be checked against a workspace without blocking unrelated pages.
+const markVisibility = (thread: string) => {
+  const home = `(SELECT s.ws FROM threads t JOIN sessions s ON s.key = t.home WHERE t.id = ${thread})`;
+  const ambiguous = `EXISTS (SELECT 1 FROM threads t WHERE t.id = ${thread} AND t.home IS NULL
+    AND EXISTS (SELECT 1 FROM thread_sessions m WHERE m.thread = t.id LIMIT 1))`;
+  return `
+    UPDATE recent_scope_visibility_dirty SET revision = revision + 1, home_ws = ${home}, ambiguous = ${ambiguous} WHERE thread = ${thread};
+    INSERT INTO recent_scope_visibility_dirty(thread, revision, home_ws, ambiguous)
+      SELECT ${thread}, 1, ${home}, ${ambiguous} WHERE ${thread} IS NOT NULL AND EXISTS (SELECT 1 FROM recent_scope_tracked LIMIT 1)
+        AND NOT EXISTS (SELECT 1 FROM recent_scope_visibility_dirty WHERE thread = ${thread});`;
+};
+// A member can arrive after a job recorded an orphan. Preserve uncertainty until that job has rebuilt its sources.
+const memberMakesVisibilityAmbiguous = (thread: string) => `UPDATE recent_scope_visibility_dirty SET ambiguous = 1
+  WHERE thread = ${thread} AND EXISTS (SELECT 1 FROM threads WHERE id = ${thread} AND home IS NULL);`;
 // Most chats belong to a few workspaces. For a highly shared chat, defer distributing the change so a single write
 // cannot walk an arbitrary number of workspaces; readers wait while that distribution is incomplete.
 const markOrder = (thread: string) => {
@@ -87,7 +95,8 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
         revision INTEGER NOT NULL, PRIMARY KEY(ws, thread, session)) WITHOUT ROWID;
       CREATE TABLE recent_scope_order_dirty (ws TEXT NOT NULL, thread INTEGER NOT NULL, PRIMARY KEY(ws, thread)) WITHOUT ROWID;
       CREATE TABLE recent_scope_order_dispatch (thread INTEGER PRIMARY KEY, after_ws TEXT);
-      CREATE TABLE recent_scope_visibility_dirty (thread INTEGER PRIMARY KEY, revision INTEGER NOT NULL);
+      CREATE TABLE recent_scope_visibility_dirty (thread INTEGER PRIMARY KEY, revision INTEGER NOT NULL,
+        home_ws TEXT, ambiguous INTEGER NOT NULL);
       CREATE TABLE recent_scope_visibility_work (thread INTEGER PRIMARY KEY, revision INTEGER NOT NULL,
         phase TEXT NOT NULL, after_ws TEXT, after_session TEXT);
       CREATE TABLE recent_scope_sources (ws TEXT NOT NULL, thread INTEGER NOT NULL, session TEXT NOT NULL,
@@ -117,7 +126,9 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
       CREATE TRIGGER recent_scope_member_before_add BEFORE INSERT ON thread_sessions BEGIN
         ${markMember(memberConflictThread(""), memberConflictSession(""))}
       END;
-      CREATE TRIGGER recent_scope_member_add AFTER INSERT ON thread_sessions BEGIN ${markMember("NEW.thread", "NEW.session")} END;
+      CREATE TRIGGER recent_scope_member_add AFTER INSERT ON thread_sessions BEGIN
+        ${markMember("NEW.thread", "NEW.session")} ${memberMakesVisibilityAmbiguous("NEW.thread")}
+      END;
       CREATE TRIGGER recent_scope_member_before_change BEFORE UPDATE OF thread, session, rowid ON thread_sessions
         WHEN OLD.thread IS NOT NEW.thread OR OLD.session IS NOT NEW.session OR OLD.rowid IS NOT NEW.rowid BEGIN
           ${markMember("OLD.thread", "OLD.session")}
@@ -126,6 +137,7 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
       CREATE TRIGGER recent_scope_member_change AFTER UPDATE OF thread, session, rowid ON thread_sessions
         WHEN OLD.thread IS NOT NEW.thread OR OLD.session IS NOT NEW.session OR OLD.rowid IS NOT NEW.rowid BEGIN
           ${markMember("NEW.thread", "NEW.session")}
+          ${memberMakesVisibilityAmbiguous("NEW.thread")}
       END;
       CREATE TRIGGER recent_scope_member_drop BEFORE DELETE ON thread_sessions BEGIN ${markMember("OLD.thread", "OLD.session")} END;
       -- Rows inserted behind a running distributor's cursor must also be marked. Existing dirty rows remain

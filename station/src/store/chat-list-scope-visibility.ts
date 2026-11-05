@@ -15,6 +15,12 @@ export function settleRecentScopeVisibilityStep(db: DatabaseSync, limit = 64): {
     next.setReadBigInts(true);
     const pending = next.get() as { thread: bigint; revision: bigint } | undefined;
     if (!pending) { db.exec("COMMIT"); return { visibilityDone: true, visited: 0 }; }
+    // A home session can move while this job waits. Refresh the hint before removing any old contributions, so
+    // a reader of the new workspace cannot mistake that intermediate state for a finished page.
+    db.prepare(`UPDATE recent_scope_visibility_dirty SET
+      home_ws = (SELECT s.ws FROM threads t JOIN sessions s ON s.key = t.home WHERE t.id = ?1),
+      ambiguous = EXISTS (SELECT 1 FROM threads t WHERE t.id = ?1 AND t.home IS NULL
+        AND EXISTS (SELECT 1 FROM thread_sessions m WHERE m.thread = t.id LIMIT 1)) WHERE thread = ?1`).run(pending.thread);
     const getWork = db.prepare("SELECT revision, phase, after_ws, after_session FROM recent_scope_visibility_work WHERE thread = ?");
     getWork.setReadBigInts(true);
     let work = getWork.get(pending.thread) as Work | undefined;
