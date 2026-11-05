@@ -156,3 +156,18 @@ pub fn[K : Eq] View::layout_box(self : View, content : Live[K], place : (Layout,
   }) |> ignore
   self
 }
+
+///|
+/// What it holds chosen by the room it is given (its holder's constraints, as it is laid out): `pick` says which of its
+/// arrangements that room calls for (窄排法 or 宽排法, a segment's words as they fit its track), the child of that
+/// arrangement made by `make` and laid out filling it, in the same layout: nothing of its size read back and set. A
+/// layout_box of one child; it is as big as its holder lays it out (grown, a share, over all of it), not as its child.
+/// The child of an arrangement not picked in a layout is let go (a cache of the picture: it keeps nothing of the app's).
+pub fn[K : Show] View::by_room(self : View, pick : (Double, Double) -> K, make : (View, K) -> Unit) -> View {
+  self.layout_box(Is(()), fn(l, _) {
+    let k = pick(l.width, l.height)
+    let child = l.child(k.to_string(), fn(v) { make(v, k) })
+    l.measure(child, l.width, height=l.height) |> ignore
+    l.place(child, 0.0, 0.0)
+  })
+}
