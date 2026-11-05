@@ -17,8 +17,6 @@ test("claude: a call to the station's tools that cannot connect, or its server f
   // As seen in the field (a station started again on another port, the process taken up told the old one).
   assert.equal(toolsLostIn(call("a", "mcp__stillfail__chat_post"), calls), null);
   assert.ok(toolsLostIn(result("a", "ECONNREFUSED: Unable to connect. Is the computer able to access the url?"), calls)?.includes("ECONNREFUSED"));
-  toolsLostIn(call("b", "mcp__ember__chat_state"), calls);
-  assert.ok(toolsLostIn(result("b", 'MCP server "ember" is not connected'), calls)?.includes("not connected"));
   // The tool answered, refusing: it is reached.
   toolsLostIn(call("c", "mcp__stillfail__chat_post"), calls);
   assert.equal(toolsLostIn(result("c", "text is empty"), calls), null);

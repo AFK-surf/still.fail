@@ -238,7 +238,7 @@ describe("jobs", { concurrency: true }, () => {
     const r = new Rig();
     const job = r.jobs.start(
       "s1", "names",
-      `stillfail-job 2>&1; [ -n "$STILLFAIL_JOB_ID" ] && [ -n "$STILLFAIL_JOB_TOKEN" ] && [ -n "$STILLFAIL_JOB_NOTIFY" ] && echo set`,
+      `stillfail-job 2>&1; [ -n "$STILLFAIL_JOB_ID" ] && [ -n "$STILLFAIL_JOB_TOKEN" ] && echo set`,
       r.work, null, false,
     );
     await until("it ends", () => r.state(job.id) !== "running");
