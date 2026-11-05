@@ -14,6 +14,14 @@ type Progress = { scan_connect: string | null; scan_after: bigint | null; scan_d
 // arriving while this scan runs, switch to a finite rowid walk of the sessions that existed when tracking began.
 const MAX_SCAN_CONNECTIONS = 64n;
 
+// While a session's journal entry is pending, the workspace cannot be read. Refreshing this small per-session
+// membership at the end of reconciliation lets the reader test a shared chat without walking its entire member list.
+function syncRecentScopeSession(db: DatabaseSync, ws: string, session: string): void {
+  db.prepare("DELETE FROM recent_scope_sessions WHERE ws = ? AND session = ?").run(ws, session);
+  db.prepare(`INSERT INTO recent_scope_sessions(ws, session) SELECT ?1, key FROM sessions WHERE key = ?2 AND ws = ?1`)
+    .run(ws, session);
+}
+
 /// One transaction advances at most `limit` source units. An empty session phase or connection also costs one unit,
 /// so ordinary short sessions can share a batch without an unbounded scan. A crash leaves rows and cursor together.
 /// Completion here means only the initial scan is finished.
@@ -67,6 +75,10 @@ export function scanRecentWorkspaceStep(db: DatabaseSync, ws: string, limit = 64
             progress.scan_rowids = 1n;
             progress.scan_after = null;
           }
+        }
+        if (progress.scan_session !== null) {
+          db.prepare(`INSERT INTO recent_scope_sessions(ws, session) SELECT ?1, ?2 WHERE NOT EXISTS
+            (SELECT 1 FROM recent_scope_sessions WHERE ws = ?1 AND session = ?2)`).run(ws, progress.scan_session);
         }
         progress.scan_phase = progress.scan_session === null ? null : "home";
         progress.scan_thread_after = null;
@@ -125,6 +137,7 @@ export function settleRecentWorkspaceSessionStep(db: DatabaseSync, ws: string, l
     const current = db.prepare("SELECT ws FROM sessions WHERE key = ?").get(pending.session) as { ws: string | null } | undefined;
     if (current?.ws !== ws) {
       db.prepare("DELETE FROM recent_scope_session_work WHERE ws = ? AND session = ?").run(ws, pending.session);
+      syncRecentScopeSession(db, ws, pending.session);
       acknowledgeRecentScopeSession(db, { kind: "workspace", workspace: ws }, pending.session, pending.revision);
       const done = db.prepare("SELECT 1 FROM recent_scope_session_dirty WHERE kind = 1 AND ws = ? LIMIT 1").get(ws) === undefined;
       db.exec("COMMIT");
@@ -134,6 +147,7 @@ export function settleRecentWorkspaceSessionStep(db: DatabaseSync, ws: string, l
     for (const thread of batch.threads) putRecentScopeSource(db, ws, thread, pending.session);
     if (batch.cursor.phase === "done") {
       db.prepare("DELETE FROM recent_scope_session_work WHERE ws = ? AND session = ?").run(ws, pending.session);
+      syncRecentScopeSession(db, ws, pending.session);
       acknowledgeRecentScopeSession(db, { kind: "workspace", workspace: ws }, pending.session, pending.revision);
     } else db.prepare("UPDATE recent_scope_session_work SET phase = ?, after = ? WHERE ws = ? AND session = ?")
       .run(batch.cursor.phase, batch.cursor.after, ws, pending.session);

@@ -108,7 +108,10 @@ for (const count of [64, 65]) test(`a home with ${count} members remains exact a
       assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [target], total: 1 });
       for (const ws of scopes) while (!settleRecentWorkspaceMemberStep(db, ws, 8).membersDone) { /* Reconcile small changes. */ }
     } else {
-      assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "a large shared change waits for bounded distribution");
+      assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [target], total: 1 },
+        "a large shared change cannot block a workspace without any of its members");
+      assert.equal(readPreparedRecentWorkspace(db, "member-00", 5), null,
+        "a workspace gaining the shared chat must wait for bounded distribution");
       let done = false;
       for (let i = 0; i < 30 && !done; i++) {
         const result = settleRecentScopeVisibilityStep(db, 8);
@@ -118,6 +121,114 @@ for (const count of [64, 65]) test(`a home with ${count} members remains exact a
       assert.ok(done);
     }
     for (const ws of scopes) assert.deepEqual(readPreparedRecentWorkspace(db, ws, 5), recentChatIds(db, ws, "home", 5));
+  } finally { store.close(); }
+});
+
+for (const count of [64, 65]) test(`a workspace with ${count} sessions checks a large shared change within its read budget`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    store.insertSession({ key: "owner", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "owner", createdAt: 1, lastActiveAt: 1, ws: "away" });
+    for (let i = 0; i < count; i++) {
+      const key = `here-${String(i).padStart(2, "0")}`;
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws: "here" });
+    }
+    const target = store.openThreadOf("ember", "EMBER", `here-${count}`, "Here", null, "here-00").id;
+    const shared = store.openThreadOf("ember", "EMBER", `large-${count}`, "Large", null, "owner").id;
+    for (let i = 0; i < 65; i++) store.joinThread(shared, `unknown-${i}`, "ember");
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    while (!scanRecentWorkspaceStep(db, "here", 32).sourceDone) { /* Prepare the old sessions. */ }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    db.prepare("UPDATE threads SET home = NULL WHERE id = ?").run(shared);
+    if (count === 64) {
+      assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [target], total: 1 });
+      store.joinThread(shared, "here-00", "ember");
+      assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "a new member must keep the workspace pending");
+      while (!settleRecentWorkspaceMemberStep(db, "here", 8).membersDone) { /* Reconcile the new member. */ }
+      assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "the global visibility pass is still in progress");
+    } else assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "a larger session set waits rather than scanning it all");
+    while (!settleRecentScopeVisibilityStep(db, 8).visibilityDone) { /* Finish the bounded pass. */ }
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), recentChatIds(db, "here", "home", 5));
+  } finally { store.close(); }
+});
+
+for (const recursive of [false, true]) test(`a session moving while a shared change waits updates its workspace membership (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    for (const [key, ws] of [["owner", "away"], ["moving", "here"], ["survivor", "here"]] as const)
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws });
+    const target = store.openThreadOf("ember", "EMBER", "target-moving-session", "Target", null, "survivor").id;
+    const shared = store.openThreadOf("ember", "EMBER", "shared-moving-session", "Shared", null, "owner").id;
+    store.joinThread(shared, "moving", "ember");
+    for (let i = 0; i < 64; i++) store.joinThread(shared, `unknown-${i}`, "ember");
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    while (!scanRecentWorkspaceStep(db, "here", 8).sourceDone) { /* Prepare the old sessions. */ }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    const move = db.prepare("UPDATE sessions SET ws = ? WHERE key = 'moving'");
+    const settle = () => {
+      let done = false;
+      for (let i = 0; i < 100 && !done; i++) done = settleRecentWorkspaceSessionStep(db, "here", 2).sessionsDone;
+      assert.ok(done);
+    };
+    move.run("away");
+    settle();
+    db.prepare("UPDATE threads SET home = NULL WHERE id = ?").run(shared);
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [target], total: 1 });
+    move.run("here");
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null);
+    settle();
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "the returned member is affected by the pending change");
+    move.run("away");
+    settle();
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [target], total: 1 },
+      "the departed member no longer makes this workspace wait");
+    while (!settleRecentScopeVisibilityStep(db, 8).visibilityDone) { /* Finish the shared pass. */ }
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), recentChatIds(db, "here", "home", 5));
+  } finally { store.close(); }
+});
+
+test("checking an unrelated large shared chat visits only the bounded workspace sessions", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    store.insertSession({ key: "owner", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "owner", createdAt: 1, lastActiveAt: 1, ws: "away" });
+    for (let i = 0; i < 64; i++) {
+      const key = `here-${String(i).padStart(2, "0")}`;
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws: "here" });
+    }
+    const target = store.openThreadOf("ember", "EMBER", "bounded-target", "Target", null, "here-00").id;
+    const shared = store.openThreadOf("ember", "EMBER", "bounded-shared", "Shared", null, "owner").id;
+    for (let i = 0; i < 65; i++) store.joinThread(shared, `unknown-${i}`, "ember");
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    while (!scanRecentWorkspaceStep(db, "here", 64).sourceDone) { /* Prepare the workspace. */ }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    db.prepare("UPDATE threads SET home = NULL WHERE id = ?").run(shared);
+    let visited = 0;
+    db.function("visit_scope_session", (_session) => { visited++; return 1; });
+    const instrumented = new Proxy(db, {
+      get(target, property) {
+        if (property === "prepare") return (sql: string) => target.prepare(sql.replace(
+          "WHERE ws = ?1 ORDER BY session LIMIT 64", "WHERE ws = ?1 AND visit_scope_session(session) ORDER BY session LIMIT 64"));
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const check = () => {
+      visited = 0;
+      assert.deepEqual(readPreparedRecentWorkspace(instrumented, "here", 5), { ids: [target], total: 1 });
+      return visited;
+    };
+    const before = check();
+    for (let i = 65; i < 1000; i++) store.joinThread(shared, `unknown-${i}`, "ember");
+    assert.equal(before, 64);
+    assert.equal(check(), before, "more shared members cannot increase the work of this workspace's read");
   } finally { store.close(); }
 });
 

@@ -27,7 +27,8 @@ import { HISTORY_AFTER, HISTORY_DAYS, HISTORY_SCOPES, HISTORY_SEED_CALLS, HISTOR
 import { installRecentChatIndex, RECENT_GLOBAL_PAGE } from "../src/store/chat-list-index.ts";
 import { RECENT_DEFAULT_HOME_PAGE } from "../src/store/chat-list-home-index.ts";
 import { installRecentHomeOverlap, RECENT_HOME_ORDER_PAGE, RECENT_HOME_WORKSPACE_ORDER_PAGE } from "../src/store/chat-list-home-overlap.ts";
-import { RECENT_SCOPE_ORDER_PENDING, RECENT_SCOPE_VISIBILITY_PENDING, RECENT_WORKSPACE_PAGE } from "../src/store/chat-list-scope-rows.ts";
+import { RECENT_SCOPE_ORDER_PENDING, RECENT_SCOPE_VISIBILITY_AMBIGUOUS, RECENT_SCOPE_VISIBILITY_PENDING, RECENT_SCOPE_VISIBILITY_SESSION_LIMIT,
+  RECENT_WORKSPACE_PAGE } from "../src/store/chat-list-scope-rows.ts";
 import { recentScopeHomeMemberQueries } from "../src/store/chat-list-scope-journal.ts";
 import { FIRST_SCOPE_CONNECT, FIRST_SCOPE_HOME_THREADS, FIRST_SCOPE_MEMBER_THREADS, FIRST_SCOPE_OLD_SESSION, FIRST_SCOPE_SESSIONS,
   FIRST_SCOPE_SESSIONS_THROUGH, NEXT_SCOPE_CONNECT, NEXT_SCOPE_OLD_SESSION, SCOPE_HOME_THREADS, SCOPE_MEMBER_THREADS,
@@ -89,6 +90,12 @@ function assertRecentChatPlans() {
     assert.ok(steps.some((s) => s.includes("SEARCH r USING PRIMARY KEY (ws=? AND thread=?)")), detail);
     assert.ok(steps.every((s) => !s.includes("TEMP B-TREE")), detail);
   }
+  const visibilitySteps = plan(RECENT_SCOPE_VISIBILITY_AMBIGUOUS, ["ws"]);
+  assert.match(RECENT_SCOPE_VISIBILITY_AMBIGUOUS, /WHERE ws = \?1 ORDER BY session LIMIT 64/);
+  assert.match(RECENT_SCOPE_VISIBILITY_SESSION_LIMIT, /WHERE ws = \? LIMIT 1 OFFSET 64/);
+  assert.ok(plan(RECENT_SCOPE_VISIBILITY_SESSION_LIMIT, ["ws"]).some((s) => s.startsWith("SEARCH ") && s.includes("PRIMARY KEY (ws=?)")));
+  assert.ok(visibilitySteps.some((s) => s.startsWith("SEARCH ") && s.includes("PRIMARY KEY (ws=?)")), visibilitySteps.join(" | "));
+  assert.ok(visibilitySteps.some((s) => s.startsWith("SEARCH m ") && s.includes("thread=? AND session=?")), visibilitySteps.join(" | "));
   const memberWrites = recentScopeHomeMemberQueries("?1");
   for (const sql of [memberWrites.update, memberWrites.insert]) {
     const steps = plan(sql, [1]), detail = `${sql}\n  ${steps.join(" | ")}`;
