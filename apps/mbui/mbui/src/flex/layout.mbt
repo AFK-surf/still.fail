@@ -516,6 +516,69 @@ fn size_node(
   cb_h : Double,
   perform : Bool,
 ) -> Double {
+  descent.push(node)
+  if descent.length() == 257 {
+    descent_said()
+  }
+  let w = size_node_now(node, kw, kh, aw, ah, cb_w, cb_h, perform)
+  descent.pop() |> ignore
+  w
+}
+
+///|
+/// (a probe: the nodes sized now, from the root down, each inside the one before)
+let descent : Array[Node] = []
+
+///|
+/// Where a descent past 256 is said (the host's log, set by mbui/ui); the program ends after.
+pub let descent_deep_said : Ref[(String) -> Unit] = Ref(fn(_) {  })
+
+///|
+fn descent_said() -> Unit {
+  let n = descent.length()
+  // (a node met again on the way down: the tree goes round)
+  let mut again = ""
+  for i in 0..<n {
+    for j in (i + 1)..<n {
+      if again == "" && physical_equal(descent[i], descent[j]) {
+        again = "node at depth \{i} met again at depth \{j}"
+      }
+    }
+  }
+  let levels = []
+  for i in 0..<n {
+    let d = descent[i]
+    let at = if i + 1 < n {
+      let mut k = -1
+      for c in 0..<d.children.length() {
+        if physical_equal(d.children[c], descent[i + 1]) {
+          k = c
+        }
+      }
+      k
+    } else {
+      -2
+    }
+    if i < 24 || i >= n - 24 {
+      levels.push("\{i}:\{d.children.length()}/\{at}\{if d.measure is Some(_) { "m" } else { "" }} \{d.width.to_int()}x\{d.height.to_int()}")
+    }
+  }
+  let said = "FLEXDEEP depth \{n}; \{if again == "" { "no node twice" } else { again }}; levels (depth:children/index of the next, m measured, last size): \{levels}"
+  (descent_deep_said.val)(said)
+  abort(said)
+}
+
+///|
+fn size_node_now(
+  node : Node,
+  kw : Double,
+  kh : Double,
+  aw : Double,
+  ah : Double,
+  cb_w : Double,
+  cb_h : Double,
+  perform : Bool,
+) -> Double {
   touch(node)
   if perform {
     // laid out before as now asked, nothing under it changed since: it
