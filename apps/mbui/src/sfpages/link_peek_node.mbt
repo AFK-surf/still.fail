@@ -41,6 +41,17 @@ fn link_peeks_node(
   })
   let card_on : Ref[@view.View?] = Ref(None)
   let due : Ref[() -> Unit] = Ref(fn() {  })
+  // (what was read ahead as the pointer came onto a link, held by that coming alone: the card it opens takes it over,
+  // let go with it; the pointer onto another link before any card took it, let go then; as the words go, too)
+  let ahead : Ref[@sfbase.Holder?] = Ref(None)
+  let ahead_go = fn() {
+    match ahead.val {
+      Some(h) => h.let_go()
+      None => ()
+    }
+    ahead.val = None
+  }
+  w.owns(ahead_go) |> ignore
   let on_it = fn() {
     let (href, _) = on_link()
     @sf.pointer_rests() &&
@@ -60,7 +71,10 @@ fn link_peeks_node(
       let words = @signals.untracked(on_link).1
       let at = @signals.untracked(fn() { links.pointed_at.get() })
       // (read as the pointer comes onto it: the card's words there as it opens)
-      warm_peek(src, here, href, @signals.untracked(agent), @signals.untracked(chats), @signals.untracked(link_to))
+      ahead_go()
+      let h = @sfbase.Holder::new("link read ahead")
+      ahead.val = Some(h)
+      warm_peek(src, h, here, href, @signals.untracked(agent), @signals.untracked(chats), @signals.untracked(link_to))
       match at {
         Some(rect) =>
           due.val = w.at_moment(w.cause_at() + hover_open_ms, fn() {
@@ -84,16 +98,20 @@ fn link_peeks_node(
     place.show(fn() { open.get() is Some(_) }, fn(anchor) {
     guard @signals.untracked(fn() { open.get() }) is Some((href, words, (px, py, _, ph))) else { return }
     // (what this card reads held by it alone, not by the name of its link: a card for the same link made as this one
-    // goes holds what it shows itself, and keeps it shown; what was read ahead for the link let go with it too)
-    let ahead = "link-peek-node/" + href
+    // goes holds what it shows itself, and keeps it shown; what was read ahead for it taken over, let go with it)
     link_cards.val += 1
-    let scope = ahead + "\u{1}" + link_cards.val.to_string()
+    let scope = "link-peek-node/" + href + "\u{1}" + link_cards.val.to_string()
+    let read_ahead = ahead.val
+    ahead.val = None
     l.box(fn(card) {
       let card_w : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
       card.owns(fn() {
         card_on.val = None
-        @sfbase.let_go(src, scope)
-        @sfbase.let_go(src, ahead)
+        @sfbase.let_go_named(src, scope)
+        match read_ahead {
+          Some(h) => h.let_go()
+          None => ()
+        }
       })
       |> ignore
       // (under the piece of line it rests on, at its start; kept in the chat's room)
@@ -189,6 +207,7 @@ fn peek_tile_of(href : String, link_to : (String) -> @sf.LinkTo) -> Bool {
 /// chat_peek's naming).
 fn warm_peek(
   src : Source,
+  held : @sfbase.Holder,
   here : () -> MessageHere,
   href : String,
   agent : String,
@@ -197,16 +216,15 @@ fn warm_peek(
 ) -> Unit {
   let h = @signals.untracked(here)
   guard h.station != "" else { return }
-  let scope = "link-peek-node/" + href
   match peek_of(href, agent, chats, link_to) {
     File(path, line) => {
       let params = file_peek_params(h.station, agent, path, line)
       // (the file may have been written or removed since the last time the pointer was here)
       (src.leave)("filePeek", params)
-      ignore(@sfbase.hold(src, scope, "filePeek", params))
+      ignore(held.hold(src, "filePeek", params))
     }
     Chat(_) => ignore(chat_named(src, h.station, href))
-    Web(_) => ignore(@sfbase.hold(src, scope, "linkPreview", link_params(h.station, href)))
+    Web(_) => ignore(held.hold(src, "linkPreview", link_params(h.station, href)))
     NoPeek => ()
   }
 }

@@ -84,8 +84,8 @@ fn chat_left(src : Source, r : ChatRef) -> Unit {
   (src.leave)("chatJobs", chat_params(r))
   (src.leave)("chatJobs", chat_jobs_summary_params(r))
   // what its agents' lines and its jobs' sheets read: their work as it goes, their logs as they grow
-  @sfbase.let_go(src, @sfbase.chat_scope(r.station, r.session))
-  @sfbase.let_go(src, @sfbase.jobs_scope(r.station))
+  @sfbase.let_go_named(src, @sfbase.chat_scope(r.station, r.session))
+  @sfbase.let_go_named(src, @sfbase.jobs_scope(r.station))
   // what its agents and other chats' wrote each other, read for its sheet: let go if it was (held only once opened)
   match dui.letters_held.get(k) {
     Some(th) => {

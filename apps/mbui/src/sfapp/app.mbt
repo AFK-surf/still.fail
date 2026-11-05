@@ -283,6 +283,8 @@ fn home() -> Unit {
 /// The pages left since a build last began, told so (where each was left, what it held let go).
 fn pages_left(src : Source) -> Unit {
   for p in left_pages {
+    // (what it held as it was on the stack let go: what nothing else holds left)
+    @sfbase.page_let_go(p)
     match p {
       Chat(r) => {
         chat_left(src, r)
@@ -297,7 +299,7 @@ fn pages_left(src : Source) -> Unit {
       // the stack (a folder entered over another, its columns reading those above it, keeps them)
       Files | Drive(_) =>
         if !app.nav.pages().iter().any(fn(q) { q is (Files | Drive(_) | DriveRead(_) | DrivePlay(_)) }) {
-          @sfbase.let_go(src, @sfbase.drive_scope)
+          @sfbase.let_go_named(src, @sfbase.drive_scope)
         }
       Screen(at) => @sfpages.screen_left(src, at.station, at.screen)
       _ => ()
@@ -811,7 +813,9 @@ fn page_view(
         Archived => setting_page(c, src, w, @settings.Route::Archive)
         Settings => setting_page(c, src, w, @settings.Route::Home)
         Setting(r) => setting_page(c, src, w, r)
-        History(r, key, entry) => history_page(c, src, r, key, entry)
+        // (what it reads of its history held by it as it is on the stack: page_holder, let go as it leaves)
+        History(r, key, entry) =>
+          history_page(c, @sfbase.held_src(src, @sfbase.page_holder(page), ["history", "host"]), r, key, entry)
         Words(head, words) => words_page(c, src, head, words)
         Screen(at) => @sfpages.screen_page(c, src, at, system_frame())
       }

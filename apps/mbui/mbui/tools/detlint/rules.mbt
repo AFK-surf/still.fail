@@ -25,7 +25,7 @@ let rule_words : Map[String, String] = {
   "frame-count": "a test runs a fixed number of frames: give the inputs and run_for a declared time",
   "literal-time": "a time given as a bare number: name what it is (an animation's or a timer's declared length)",
   "stable-mode": "the app draws otherwise when it is screenshotted (Ctx::stable): the picture is taken at a time its animations declare, of the app as it runs",
-  "retired-api": "an interface given up (an animation is data, declared once with its start and end): frames_until, animating, animating_until, run_animations; held_build (a topic held by its holder, not by the build that read it); motion_end run to, or read by the app",
+  "retired-api": "an interface given up (an animation is data, declared once with its start and end): frames_until, animating, animating_until, run_animations; held_build (a topic held by its holder, not by the build that read it), hold_named and let_go_named (by a name two may share); motion_end run to, or read by the app",
   "app-clock": "the app reads the clock to work out an animation or a time passed: motion / wake_at do it from what they declared",
   "wall-clock": "the machine's own clock or randomness, outside the host that provides them",
   "engine-math": "a sine, an exponential, a power from @math: on js the engine's Math.*, whose last bits are the machine's; @dmath's (mbui/dmath) are the same on every machine",
@@ -88,6 +88,9 @@ let retired : Array[String] = [
   // (a topic held for being read in the build its holder ended in: a topic is held by its holder, still.fail's
   // sfbase/held.mbt, 2026-11-05)
   "held_build",
+  // (a topic held by a name two may share: a holder is one thing, sfbase's Holder; those left kept from growing by
+  // their files' bars)
+  "hold_named", "let_go_named",
 ]
 
 ///|

@@ -49,6 +49,7 @@ fn tab_job(tab : String) -> String? {
 /// drawn (the panel shows what it showed as it slides out: sv_sweep); opened again before, kept.
 fn tab_let_go(r : ChatRef, tab : String) -> Unit {
   panel_screen_pages.remove(tabs_key(r) + "/" + tab)
+  history_let_go(r, tab)
   match tab_job(tab) {
     Some(job) => sv_closing[service_key(r.station, job)] = (r.station, job)
     None => ()

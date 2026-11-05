@@ -510,6 +510,8 @@ fn side_front(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatVie
     ()
   } else if front != "" {
     // one of its agents' execution histories
-    agent_history(c, src, r.station, front, agent_json((src.topic)("chat", chat_params(r)).value, front))
+    // (what it reads of the history held by its tab: let go as the tab is closed, tab_let_go)
+    let held = @sfbase.held_src(src, history_held(r, front), ["history", "host"])
+    agent_history(c, held, r.station, front, agent_json((src.topic)("chat", chat_params(r)).value, front))
   }
 }

@@ -708,6 +708,8 @@ pub let held_pictures_waiting : @ref.Ref[Bool]
 
 pub fn held_seed(String, @hostapi.Picked) -> String
 
+pub fn held_src(Source, Holder, Array[String]) -> Source
+
 pub let highlight_limit : Int32
 
 pub fn history_act(() -> Unit) -> Unit
@@ -728,7 +730,7 @@ pub fn history_settled() -> Unit
 
 pub fn history_tops() -> (Array[Page], Page?)
 
-pub fn hold(Source, String, String, Map[String, @json.Json]) -> Topic
+pub fn hold_named(Source, String, String, Map[String, @json.Json]) -> Topic
 
 pub fn hold_node(@view.View, Source, String, Map[String, @json.Json]) -> Topic
 
@@ -782,9 +784,9 @@ pub let left_pages : Array[Page]
 
 pub let left_said : @signals.Signal[Int32]
 
-pub fn let_go(Source, String) -> Unit
-
 pub fn let_go_all(Source, String) -> Unit
+
+pub fn let_go_named(Source, String) -> Unit
 
 pub fn lift_of(Thumb) -> Double
 
@@ -1126,6 +1128,8 @@ pub let page_bridge_js : String
 
 pub fn page_glass() -> @paint.Glass
 
+pub fn page_holder(Page) -> Holder
+
 pub let page_glass_blur : Double
 
 pub let page_js : String
@@ -1135,6 +1139,8 @@ pub let page_js_path : String
 pub let page_js_tag : String
 
 pub fn page_kind(Page) -> String
+
+pub fn page_let_go(Page) -> Unit
 
 pub fn page_link_drop(Source, PageLink) -> Unit
 
@@ -2604,6 +2610,13 @@ pub(all) struct FreshChat {
   room : @signals.Signal[Double]
   foot : @signals.Signal[Double]
 }
+
+pub struct Holder {
+  // private fields
+}
+pub fn Holder::hold(Self, Source, String, Map[String, @json.Json]) -> Topic
+pub fn Holder::let_go(Self) -> Unit
+pub fn Holder::new(String) -> Self
 
 pub(all) struct Install {
   runtime : String

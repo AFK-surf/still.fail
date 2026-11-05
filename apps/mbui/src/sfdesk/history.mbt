@@ -133,7 +133,7 @@ fn wh_details(c : @ui.Ctx, src : Source, station : String, key : String, a : Jso
   let on = [("station", station), ("key", key)]
   let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
   let card = (src.topic)("agentCard", params).value
-  let host = @sfbase.hold(src, @sfbase.history_scope(station, key), "host", { "station": Json::string(station) }).value
+  let host = (src.topic)("host", { "station": Json::string(station) }).value
   let compacts = flag(s, "canCompact")
   let clears = flag(s, "canClear")
   // (what is under way and what failed a moment ago, as the core's `doing` says: useContextActions)
@@ -462,3 +462,33 @@ let wh_link_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false
 /// The steps under the head: the rest of the panel.
 // kept across runs: a value (no field of it changes)
 let wh_fill : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
+/// The holder of what a chat's tab of an agent's history reads, by the chat and the tab: let go as the tab is closed.
+// kept across runs: let go of as each tab is closed (history_let_go)
+let history_holders : Map[String, @sfbase.Holder] = {}
+
+///|
+fn history_held(r : ChatRef, tab : String) -> @sfbase.Holder {
+  let k = tabs_key(r) + "/" + tab
+  match history_holders.get(k) {
+    Some(h) => h
+    None => {
+      let h = @sfbase.Holder::new("history tab")
+      history_holders[k] = h
+      h
+    }
+  }
+}
+
+///|
+/// The chat's tab `tab` closed: what its history read let go.
+fn history_let_go(r : ChatRef, tab : String) -> Unit {
+  match history_holders.get(tabs_key(r) + "/" + tab) {
+    Some(h) => {
+      history_holders.remove(tabs_key(r) + "/" + tab)
+      h.let_go()
+    }
+    None => ()
+  }
+}
