@@ -322,6 +322,14 @@ pub fn View::shadow(self : View, cast : Live[(Double, Double, Int64)]) -> View {
 }
 
 ///|
+/// Its shadow (View::shadow) cast outside its outline only, none under it (what is under it seen through it, its own
+/// ground or glass frosting none of it), as an old view's box's `shadow_out`, as it changes: paint's.
+pub fn View::shadow_outside(self : View, out : Live[Bool]) -> View {
+  self.bind(ShadowOut, out, Paint, fn(o) { self.tree.nodes[self.at].look.shadow_out = o })
+  self
+}
+
+///|
 /// How wide it may grow at most (points; None: as wide as its holder lets it), as it changes: layout's.
 pub fn View::max_width(self : View, w : Live[Double?]) -> View {
   self.bind(MaxWidth, w, Layout, fn(w) {

@@ -184,6 +184,14 @@ pub(all) struct Look {
   /// the edge drawn round its ground, inside it (how wide, its colour; 0 wide: none): View::edge
   mut edge : (Double, Int64)
   mut edge_dashed : Bool
+  /// the notch cut into its top (where its circle's middle is below the top, its radius, its fillets'; a radius of 0:
+  /// none): its ground's, its glass's and its edge's, as an old view's box's (Ctx::box `notch_*`): View::notch
+  mut notch : (Double, Double, Double)
+  /// its shadow cast outside its outline only (none under it), as an old view's box's `shadow_out`: View::shadow_outside
+  mut shadow_out : Bool
+  /// where across it cuts what it holds (from, to, in its own terms; None: all of it), as it is painted, where it clips
+  /// (View::clips): View::cut_across
+  mut cut_across : (Double, Double)?
   /// the picture it shows over its ground, all of it filled (its source as what hosts the tree keeps pictures by, what
   /// stands in for it till it is decoded at the size it is drawn ("" none), the most pixels it is asked at), drawn as
   /// what hosts the tree draws one (None: none): View::image
@@ -275,6 +283,12 @@ pub(all) struct Content {
   /// the edge round its ground (View::edge)
   edge : (Double, Int64)
   edge_dashed : Bool
+  /// the notch cut into its top (View::notch)
+  notch : (Double, Double, Double)
+  /// its shadow outside its outline only (View::shadow_outside)
+  shadow_out : Bool
+  /// where across it cuts what it holds (View::cut_across)
+  cut_across : (Double, Double)?
   /// the picture it shows, all of it filled (View::image)
   image : (String, String, Int)?
   /// the room its picture is judged ready for (View::image_for)
@@ -352,6 +366,12 @@ pub(all) struct Drawn {
   /// the edge round its ground (View::edge)
   edge : (Double, Int64)
   edge_dashed : Bool
+  /// the notch cut into its top (View::notch)
+  notch : (Double, Double, Double)
+  /// its shadow outside its outline only (View::shadow_outside)
+  shadow_out : Bool
+  /// where across it cuts what it holds (View::cut_across)
+  cut_across : (Double, Double)?
   /// the picture it shows, all of it filled (View::image)
   image : (String, String, Int)?
   /// the room its picture is judged ready for (View::image_for)
@@ -1191,6 +1211,9 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.corners = None
       n.look.edge = (0.0, 0L)
       n.look.edge_dashed = false
+      n.look.notch = (0.0, 0.0, 0.0)
+      n.look.shadow_out = false
+      n.look.cut_across = None
       n.look.image = None
       n.look.image_for = (0.0, 0.0)
       n.look.image_cover = false
@@ -1319,7 +1342,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), runs_lit: (0, 0, 0L, 0.0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), edge_dashed: false, image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None, glyphs_at: None, native_anchor: "" },
+        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), runs_lit: (0, 0, 0L, 0.0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), edge_dashed: false, notch: (0.0, 0.0, 0.0), shadow_out: false, cut_across: None, image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None, glyphs_at: None, native_anchor: "" },
         parent,
         allow_ellipsis: false,
         kids: [],
@@ -2140,6 +2163,9 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
 /// two that set the same thing two ways one binding (Width: View::width in points, View::width_share as a share;
 /// Words: View::words, View::words_runs), any other its own, so that one bound never lets go of another's.
 priv enum Prop {
+  CutAcross
+  Notch
+  ShadowOut
   Width
   Height
   Padding
@@ -2542,6 +2568,15 @@ pub fn View::clips(self : View, on : Live[Bool]) -> View {
 }
 
 ///|
+/// Where across it cuts what it holds, where it clips (View::clips), as it changes (from and to in its own terms, met by
+/// its own cut; none left between them: nothing of what it holds drawn; None: all of it), as an old view's
+/// Ctx::cut_across_by: paint's. Its cut is another, so what it holds is drawn again, all of it.
+pub fn View::cut_across(self : View, across : Live[(Double, Double)?]) -> View {
+  self.bind(CutAcross, across, Paint, fn(a) { self.tree.nodes[self.at].look.cut_across = a })
+  self
+}
+
+///|
 /// Whether hosted content needs the node's clip, independently of a clip the node's caller sets.
 pub fn View::hosted_clips(self : View, on : Live[Bool]) -> View {
   if self.live() is Some(n) && !n.hosted {
@@ -2840,6 +2875,15 @@ pub fn View::corners(self : View, corners : Live[(Double, Double, Double, Double
 /// drawn with its ground (one rect, filled and edged), its corners its ground's: paint's.
 pub fn View::edge(self : View, e : Live[(Double, Int64)]) -> View {
   self.bind(Edge, e, Paint, fn(e) { self.tree.nodes[self.at].look.edge = e })
+  self
+}
+
+///|
+/// The notch cut into its top, as it changes: a circle about the middle of its top, its middle `y` below the edge
+/// (above it when negative), of radius `r`, met by the edge through fillets of `f` (a radius of 0: none); its ground,
+/// its glass and its edge cut alike, as an old view's box's (Ctx::box `notch_y`, `notch_r`, `notch_fillet`): paint's.
+pub fn View::notch(self : View, notch : Live[(Double, Double, Double)]) -> View {
+  self.bind(Notch, notch, Paint, fn(n) { self.tree.nodes[self.at].look.notch = n })
   self
 }
 
@@ -7140,6 +7184,9 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     corners: n.look.corners,
     edge: n.look.edge,
     edge_dashed: n.look.edge_dashed,
+    notch: n.look.notch,
+    shadow_out: n.look.shadow_out,
+    cut_across: n.look.cut_across,
     image: n.look.image,
     image_for: n.look.image_for,
     image_cover: n.look.image_cover,
@@ -7448,6 +7495,9 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     corners: c.corners,
     edge: c.edge,
     edge_dashed: c.edge_dashed,
+    notch: c.notch,
+    shadow_out: c.shadow_out,
+    cut_across: c.cut_across,
     image: c.image,
     image_for: c.image_for,
     image_cover: c.image_cover,
