@@ -68,11 +68,9 @@ fn agent_hover_node(pic : @view.View, src : Source, here : () -> MessageHere, ag
 let agent_card_most : Double = 420.0
 
 ///|
-/// Whether the pointer is over card `v` (where it is laid out, what it holds the old view's: its own hover and tips
-/// by it, so not pointed at as a node of the tree's is), followed as it moves.
+/// Whether the pointer is over card `v` (where it is drawn, as big as it is laid out, whatever is over it there: what it
+/// holds the old view's, its own hover and tips by it, so not pointed at as a node of the tree's is), followed as it
+/// moves and as what is placed moves under it: the tree's hit test (View::pointer_within), no size of layout's read.
 fn pointer_over(v : @view.View) -> Bool {
-  match (v.pointer_here_told(), v.laid_size_told()) {
-    (Some((x, y)), Some((w, h))) => x >= 0.0 && y >= 0.0 && x < w && y < h
-    _ => false
-  }
+  v.pointer_within()
 }

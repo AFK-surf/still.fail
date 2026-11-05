@@ -874,7 +874,8 @@ fn login_step_node(
       |> ignore
       // (the presenters' menu: from the foot on a small screen, beside it on the others)
       @sf.presses_node(m, fn() {
-        let at : @sf.Beside = match m.laid_window_told() {
+        // (beside where it is on screen as it is pressed)
+        let at : @sf.Beside = match m.shown_rect() {
           Some((x, y, w, h)) => @sf.Beside::At(x, y, w, h)
           None => @sf.at_point(0.0, 0.0)
         }
