@@ -35,8 +35,9 @@ let reach_pad = 2.0
 let whole_share = 0.5
 
 ///|
-/// A rect, x0 y0 x1 y1 (empty where x1 <= x0 or y1 <= y0).
-priv struct Rect {
+/// A rect, x0 y0 x1 y1 (empty where x1 <= x0 or y1 <= y0): what is worked out of how far things drawn reach, kept and
+/// worked out again in place where it is kept (Parts::reach_add), nothing made for it each time.
+pub struct Rect {
   mut x0 : Double
   mut y0 : Double
   mut x1 : Double
@@ -44,8 +45,30 @@ priv struct Rect {
 }
 
 ///|
-fn Rect::none() -> Rect {
+/// None: what nothing drawn reaches (`nowhere`).
+pub fn Rect::none() -> Rect {
   { x0: 1.0e18, y0: 1.0e18, x1: -1.0e18, y1: -1.0e18 }
+}
+
+///|
+/// It as none again (Rect::none).
+pub fn Rect::clear(self : Rect) -> Unit {
+  self.x0 = 1.0e18
+  self.y0 = 1.0e18
+  self.x1 = -1.0e18
+  self.y1 = -1.0e18
+}
+
+///|
+/// What `o` reaches taken into it, as `union` takes it.
+pub fn Rect::take(self : Rect, o : Rect) -> Unit {
+  self.add(o.x0, o.y0, o.x1, o.y1)
+}
+
+///|
+/// It as x0 y0 x1 y1.
+pub fn Rect::rect(self : Rect) -> (Double, Double, Double, Double) {
+  (self.x0, self.y0, self.x1, self.y1)
 }
 
 ///|
@@ -54,7 +77,8 @@ fn Rect::empty(self : Rect) -> Bool {
 }
 
 ///|
-fn Rect::add(self : Rect, x0 : Double, y0 : Double, x1 : Double, y1 : Double) -> Unit {
+/// Rect x0 y0 x1 y1 taken into it (none of it where it is empty), as `union` takes it.
+pub fn Rect::add(self : Rect, x0 : Double, y0 : Double, x1 : Double, y1 : Double) -> Unit {
   if x1 <= x0 || y1 <= y0 {
     return
   }
@@ -239,6 +263,18 @@ pub fn Parts::reach_of(self : Parts, a : FixedArray[Double], from : Int, to : In
     self.work = self.work + (to - from)
   }
   (r.x0, r.y0, r.x1, r.y1)
+}
+
+///|
+/// As far as any pixel of instances `from` until `to` of `a` reaches, taken into `into` (Parts::reach_of's, as `union`
+/// takes it), counted as work as reach_of counts it.
+pub fn Parts::reach_add(self : Parts, a : FixedArray[Double], from : Int, to : Int, into : Rect) -> Unit {
+  for k in from..<to {
+    reach(a, k, into)
+  }
+  if to > from {
+    self.work = self.work + (to - from)
+  }
 }
 
 ///|

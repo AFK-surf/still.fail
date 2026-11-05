@@ -7455,7 +7455,13 @@ pub fn Tree::laid_held(self : Tree) -> Array[(Drawn, Int, Bool)] {
 /// its ground, under the edge round it (an old view's box's border_over: drawn after what it holds).
 pub fn Tree::holds_drawn(self : Tree, id : NodeId) -> Bool {
   guard self.alive_id(id) else { return false }
-  self.nodes[id.at].kids.iter().any(fn(k) { self.nodes[k].live && !self.nodes[k].out })
+  // (asked of each node drawn that has an edge or cuts what it holds, each frame it is drawn: nothing made to ask it)
+  for k in self.nodes[id.at].kids {
+    if self.nodes[k].live && !self.nodes[k].out {
+      return true
+    }
+  }
+  false
 }
 
 ///|

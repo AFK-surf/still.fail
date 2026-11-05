@@ -71,6 +71,13 @@ priv struct SceneLayer {
 /// were nothing grown or shrunk. A layer drawn where it is put now goes through these, not the tree, each node's own
 /// drawing read as the tree has it then (its content, its looks), as a walk of the tree reads it: where each is in the
 /// window its layer's place and its own in it, added, either way.
+///
+/// Of a node, too, what else of the tree its drawing reads (SceneEntry::read), read as the tree was gone through: none
+/// of it changes unsaid but where its node begins the layer (a place property bound begins one: Tree::starts_layer;
+/// what else changes it makes its node again or places it, its layer marked), so a layer drawn as it keeps how it is
+/// drawn asks the tree again only of its own node; its instances as made where it is its own (view_blocks'), composed
+/// again wherever it is drawn; and how far it and what it holds reached as last drawn (scene's `reach`). So a layer
+/// placed otherwise is drawn where it is put by going through these alone: nothing made, nothing looked up.
 priv struct SceneEntry {
   c : @view.Content
   depth : Int
@@ -81,20 +88,118 @@ priv struct SceneEntry {
   ux : Double
   uy : Double
   layer : Bool
+  /// the looks its glyphs and those of all it holds are drawn by (Tree::glyphs_of), whether it is drawn over the scrim,
+  /// how it is turned, where its ground is drawn off and bigger, how what it holds fades towards its edges (its soft cut's
+  /// where it cuts softly), how what it holds is stretched, and whether it has a field of its own
+  mut glyphs : ((Double, @view.GlyphAt) -> @view.GlyphLook)?
+  mut over_scrim : Bool
+  mut turn : Double
+  mut turn_drawn : Bool
+  mut ground_x : Double
+  mut ground_y : Double
+  mut ground_w : Double
+  mut ground_h : Double
+  mut fade_start : Double
+  mut fade_top : Double
+  mut fade_end : Double
+  mut fade_foot : Double
+  mut stretch : Double
+  mut field : Bool
+  /// its instances as made where it is its own, as last drawn (none: not made, out of sight as it was drawn)
+  mut block : ViewBlock?
+  /// how far it and what it holds reached as last drawn; whether what it holds is drawn anew with it in the frame being
+  /// drawn (TreePaint's `open`); how many instances its edge drawn after what it holds is
+  reach : @damage.Rect
+  mut moved : Bool
+  mut ring_n : Int
 }
 
 ///|
-/// How layer `id` is drawn, as it keeps it, where that still stands for its node drawn where `place` says: nothing of it
-/// changed since (no node of it made again, placed, let go nor added, nothing its drawing read: it would be marked or
-/// told), its node as opaque and as big as it was then; nothing kept where the frame draws all of it anew (a check's,
-/// nothing kept to copy). None: the tree gone through for it.
-fn scene_entries_kept(
-  id : @view.NodeId,
-  place : (Double, Double, Double, Double, Double, Double),
-) -> Array[SceneEntry]? {
+/// An entry of how a layer is drawn, as the walk of the tree finds it: what else of the tree its drawing reads not read
+/// yet (SceneEntry::read).
+fn scene_entry(
+  c : @view.Content,
+  depth : Int,
+  x : Double,
+  y : Double,
+  a : Double,
+  s : Double,
+  ux : Double,
+  uy : Double,
+  layer : Bool,
+) -> SceneEntry {
+  {
+    c,
+    depth,
+    x,
+    y,
+    a,
+    s,
+    ux,
+    uy,
+    layer,
+    glyphs: None,
+    over_scrim: false,
+    turn: 0.0,
+    turn_drawn: false,
+    ground_x: 0.0,
+    ground_y: 0.0,
+    ground_w: 0.0,
+    ground_h: 0.0,
+    fade_start: 0.0,
+    fade_top: 0.0,
+    fade_end: 0.0,
+    fade_foot: 0.0,
+    stretch: 0.0,
+    field: false,
+    block: None,
+    reach: @damage.Rect::none(),
+    moved: false,
+    ring_n: 0,
+  }
+}
+
+///|
+/// What else of the tree node entry `e`'s drawing reads read, as the tree has it now (SceneEntry).
+fn SceneEntry::read(self : SceneEntry, tree : @view.Tree) -> Unit {
+  let id = self.c.id
+  self.glyphs = tree.glyphs_of(id)
+  self.over_scrim = tree.over_scrim_of(id)
+  let (turn, about_drawn) = tree.turn_of(id)
+  self.turn = turn
+  self.turn_drawn = about_drawn
+  let (gx, gy, gw, gh) = tree.ground_drawn_of(id)
+  self.ground_x = gx
+  self.ground_y = gy
+  self.ground_w = gw
+  self.ground_h = gh
+  // (what it holds past its top and foot faded towards them, as far as it reaches past, no further than half of what
+  // shows: View::cuts_softly; else as far before its edges as it says, View::fades)
+  let (start, top, end, foot) = match tree.cut_soft_of(id) {
+    Some((over_top, over_foot, h)) => (0.0, cut_soft(over_top, h / 2.0), 0.0, cut_soft(over_foot, h / 2.0))
+    None => tree.fades_of(id)
+  }
+  self.fade_start = start
+  self.fade_top = top
+  self.fade_end = end
+  self.fade_foot = foot
+  self.stretch = tree.stretch_of(id)
+  self.field = tree_fields.contains(id)
+}
+
+///|
+/// Layer `id`, where how it keeps it is drawn still stands for its node drawn where `place` says (its `entries`):
+/// nothing of it changed since (no node of it made again, placed, let go nor added, nothing its drawing read: it would
+/// be marked or told), its node as opaque and as big as it was then; none where the frame draws all of it anew (a
+/// check's, nothing kept to copy). None: the tree gone through for it.
+fn scene_entries_kept(id : @view.NodeId, place : (Double, Double, Double, Double, Double, Double)) -> SceneLayer? {
   guard !scene.fresh && !scene_checking() else { return None }
   match scene.layers.get(id) {
-    Some(l) if !l.told && !scene.marked.contains(id) && l.entries_as == (place.2, place.3) => l.entries
+    Some(l) if l.entries is Some(_) &&
+      !l.told &&
+      !scene.marked.contains(id) &&
+      l.entries_as.0 == place.2 &&
+      l.entries_as.1 == place.3 => Some(l)
     _ => None
   }
 }
@@ -114,8 +219,9 @@ fn scene_entries_keep(
 /// The scene of the window's tree, kept across frames.
 priv struct Scene {
   layers : Map[@view.NodeId, SceneLayer]
-  /// as far as each node drawn, and all it holds, reaches (as last drawn), and the layer it was drawn in
-  reach : Map[@view.NodeId, (Double, Double, Double, Double)]
+  /// each node drawn, its entry in how its layer is drawn: as far as it, and all it holds, reaches (as last drawn, each
+  /// time its layer is: SceneEntry's `reach`); and the layer it was drawn in
+  reach : Map[@view.NodeId, SceneEntry]
   drawn_in : Map[@view.NodeId, @view.NodeId]
   /// what changed since the frame before, at its causes: each node drawn again where it reached (said already) and
   /// where it reaches once drawn (said as the frame ends: `due`); the layers to draw again (`marked`); the nodes all of
@@ -446,7 +552,7 @@ fn scene_told(
   }
   let tell = fn(id : @view.NodeId, moved : Bool, placed : Bool) {
     match scene.reach.get(id) {
-      Some(r) => scene.parts.add(r)
+      Some(e) => scene.parts.add(e.reach.rect())
       None => ()
     }
     scene.due.push(id)
@@ -493,7 +599,7 @@ fn scene_told(
   }
   for id in removed {
     match scene.reach.get(id) {
-      Some(r) => scene.parts.add(r)
+      Some(e) => scene.parts.add(e.reach.rect())
       None => ()
     }
     scene.reach.remove(id)
@@ -787,7 +893,7 @@ fn Ctx::scene_end(self : Ctx) -> Unit {
   if !scene_checking() {
     for id in scene.due {
       match scene.reach.get(id) {
-        Some(r) => scene.parts.add(r)
+        Some(e) => scene.parts.add(e.reach.rect())
         None => ()
       }
     }
@@ -967,6 +1073,15 @@ fn clip_put_back(level : FixedArray[Double], window : Bool, apart : Bool) -> Uni
 }
 
 ///|
+/// Layer `id` not copied, for `why` (the first of the frame's said: scene_alone_why).
+fn copy_not(id : @view.NodeId, why : String) -> Bool {
+  if scene.copy_why == "" {
+    scene.copy_why = "\{id.at}: \{why}"
+  }
+  false
+}
+
+///|
 /// Layer `id` kept as it was drawn last frame and copied into this one where it is put now, all it holds with it, at
 /// the frame's end: whether it was (it is in the scene, nothing of it changed, nothing it is drawn in changed, and it
 /// is no layer drawn otherwise than by the tree alone). `forced`: what holds it was drawn again whole.
@@ -979,32 +1094,26 @@ fn Ctx::scene_copied(
   stretching : Array[(@view.NodeId, Double, Double, Double, Double, Double)],
   glyphing : Array[(@view.NodeId, (Double, @view.GlyphAt) -> @view.GlyphLook, (Double, Double))],
 ) -> Bool {
-  let not = fn(why : String) {
-    if scene.copy_why == "" {
-      scene.copy_why = "\{id.at}: \{why}"
-    }
-    false
-  }
-  guard !scene.fresh else { return not("nothing kept") }
-  guard !forced else { return not("what holds it drawn whole") }
-  guard scene.layers.get(id) is Some(l) else { return not("not kept") }
-  guard l.seen == scene.src_seen else { return not("seen \{l.seen}, kept of \{scene.src_seen}") }
+  guard !scene.fresh else { return copy_not(id, "nothing kept") }
+  guard !forced else { return copy_not(id, "what holds it drawn whole") }
+  guard scene.layers.get(id) is Some(l) else { return copy_not(id, "not kept") }
+  guard l.seen == scene.src_seen else { return copy_not(id, "seen \{l.seen}, kept of \{scene.src_seen}") }
   guard l.start >= 0 && l.start + l.count <= scene.src_n else {
-    return not("at \{l.start} for \{l.count} of \{scene.src_n}")
+    return copy_not(id, "at \{l.start} for \{l.count} of \{scene.src_n}")
   }
-  guard !l.own_only else { return not("own only") }
-  guard !l.each else { return not("drawn each frame") }
+  guard !l.own_only else { return copy_not(id, "own only") }
+  guard !l.each else { return copy_not(id, "drawn each frame") }
   guard !inst_owners_kept() || scene.owners is Some(_) else {
-    return not("who drew it not kept")
+    return copy_not(id, "who drew it not kept")
   }
-  guard !l.told && !scene.marked.contains(id) else { return not("marked, told \{l.told}") }
-  guard !scene.holding.contains(id) else { return not("holds one marked") }
+  guard !l.told && !scene.marked.contains(id) else { return copy_not(id, "marked, told \{l.told}") }
+  guard !scene.holding.contains(id) else { return copy_not(id, "holds one marked") }
   // (placed otherwise: what its node's place draws of it (turned, its ground drawn in a box of its own, what it holds
   // faded, stretched, glyphed by it) may be another where it is drawn in the same place; drawn as it keeps how it is
   // drawn, its node's place as it is now)
-  guard !scene.moved_layers.contains(id) else { return not("placed otherwise") }
+  guard !scene.moved_layers.contains(id) else { return copy_not(id, "placed otherwise") }
   // (what it was drawn in, as it is drawn in now: its key; another, drawn anew)
-  guard scene_began_same(l, held, fading, stretching, glyphing) else { return not("drawn in otherwise") }
+  guard scene_began_same(l, held, fading, stretching, glyphing) else { return copy_not(id, "drawn in otherwise") }
   let n = l.count
   while (self.ninst + n + 1) * inst_size > self.inst.length() {
     self.grow()
@@ -1172,10 +1281,10 @@ fn Ctx::scene_drawn(
   watched? : Bool = true,
   draw : () -> Unit,
 ) -> SceneLayer {
-  let (clip, window, apart) = clip_kept()
   let l = match scene.layers.get(id) {
     Some(l) => l
     None => {
+      let (clip, window, apart) = clip_kept()
       let l : SceneLayer = {
         id,
         start: 0,
@@ -1209,35 +1318,8 @@ fn Ctx::scene_drawn(
       l
     }
   }
-  scene_keep_undo(l)
-  l.clip = clip
-  l.clip_window = window
-  l.clip_apart = apart
-  l.fading = fading.copy()
-  l.stretching = stretching.copy()
-  l.glyphing = glyphing.copy()
-  l.held = held
-  l.scrim = !dr.scrims.is_empty()
-  l.own_only = false
-  l.each = false
-  l.told = false
-  // (drawn again into new tables while the frame is tried alone: those it had kept as they were, put back where the try
-  // does not come to be, scene_keep_undo)
-  if scene.trying {
-    l.inner = []
-    l.images = []
-    l.plots = []
-    l.bands = []
-  } else {
-    l.inner.clear()
-  }
-  // (drawn again alone, from what it began in: what holds it as it was)
-  match outer {
-    Some(o) => l.outer = Some(o.id)
-    None => if l.id.at == 0 { l.outer = None }
-  }
-  l.images.clear()
-  l.reads_clock = false
+  scene_drawn_begin(l, outer, held, fading, stretching, glyphing, false)
+  // (the glyphs' plots it draws from held anew as it draws them)
   l.plots.clear()
   let k0 = self.ninst
   let s0 = self.segs.length() / 4
@@ -1258,13 +1340,150 @@ fn Ctx::scene_drawn(
     draw()
   }
   scene.drawing = was
+  self.scene_drawn_end(l, outer, k0, s0)
+  l
+}
+
+///|
+/// Layer `l` drawn where `place` says its node is, `depth` deep, in what holds it (`outer`), as it keeps how it is drawn
+/// (scene_entries_kept): its entries gone through alone (Ctx::tree_walk), nothing of the tree gone through, nothing
+/// made but what was out of sight as it was drawn and is not now, nothing of what draws a node asked of the tree again
+/// but its own node's (SceneEntry). What it reads stays followed as its walk read it: its drawing reads nothing anew
+/// that the walk did not (each node's instances as kept), so nothing of it is read under its watch again; but where
+/// what it holds draws otherwise than by the tree alone, or each frame (an old view, glass, a field: what each reads
+/// as it is drawn, read anew), its watch reads all it reads again, as its walk did. Kept as this frame has it, its
+/// glyphs' plots held as they were, drawn from through this frame.
+fn Ctx::scene_replayed(
+  self : Ctx,
+  p : TreePaint,
+  l : SceneLayer,
+  outer : SceneLayer?,
+  place : (Double, Double, Double, Double, Double, Double),
+  depth : Int,
+) -> Unit {
+  // (as last drawn: whether what it holds draws otherwise than by the tree alone (its plots not held then: an old
+  // view's the old frame's), or each frame)
+  let own = l.own_only
+  let each = l.each
+  scene_drawn_begin(l, outer, place, p.fading, p.stretching, p.glyphing, true)
+  if !own {
+    for pl in l.plots {
+      let (a, _) = atlas_for(pl.0)
+      if a.sized() {
+        a.drawn(pl.1)
+      }
+    }
+  }
+  let k0 = self.ninst
+  let s0 = self.segs.length() / 4
+  let was = scene.drawing
+  scene.drawing = Some(l)
+  let was_held = scene_blocks_held.val
+  scene_blocks_held.val = !own
+  let entries = l.entries
+  match l.watch {
+    Some(w) if own || each => w.read(fn() { self.tree_walk(p, l.id.at, place, depth, entries) |> ignore })
+    Some(_) => {
+      let was_sub = @signals.set_active_sub(None)
+      self.tree_walk(p, l.id.at, place, depth, entries) |> ignore
+      @signals.set_active_sub(was_sub) |> ignore
+    }
+    // (what it reads followed by what draws it: an old view's, as its walk's was)
+    None => self.tree_walk(p, l.id.at, place, depth, entries) |> ignore
+  }
+  scene_blocks_held.val = was_held
+  scene.drawing = was
+  self.scene_drawn_end(l, outer, k0, s0)
+}
+
+///|
+/// Whether the layer drawn now, as it keeps how it is drawn (scene_replayed), holds the glyphs' plots its nodes'
+/// instances draw from (SceneLayer's `plots`: not an old view's, whose are the old frame's): each node's instances as it
+/// keeps them drawn from them, as a layer copied draws from them, none of their glyphs looked up again.
+// kept across runs: set and put back within each layer drawn so
+let scene_blocks_held : Ref[Bool] = Ref(false)
+
+///|
+/// As layer `l` is drawn (scene_drawn, scene_replayed): kept with what it is drawn in now (the clip painted in, the
+/// fades, stretches and glyph looks of what holds it, where its node is drawn), what it holds told anew as it is drawn.
+/// `kept`: drawn as it keeps how it is drawn, what it is drawn in kept as it was where it is the same (nothing made of
+/// it).
+fn scene_drawn_begin(
+  l : SceneLayer,
+  outer : SceneLayer?,
+  held : (Double, Double, Double, Double, Double, Double),
+  fading : Array[(@view.NodeId, (Double, Double, Double, Double), (Double, Double, Double, Double))],
+  stretching : Array[(@view.NodeId, Double, Double, Double, Double, Double)],
+  glyphing : Array[(@view.NodeId, (Double, @view.GlyphAt) -> @view.GlyphLook, (Double, Double))],
+  kept : Bool,
+) -> Unit {
+  scene_keep_undo(l)
+  if !kept || !scene_clip_same(l) {
+    let (clip, window, apart) = clip_kept()
+    l.clip = clip
+    l.clip_window = window
+    l.clip_apart = apart
+  }
+  if !kept || l.fading != fading {
+    l.fading = fading.copy()
+  }
+  if !kept || l.stretching != stretching {
+    l.stretching = stretching.copy()
+  }
+  // (the looks themselves no numbers to compare: taken as they are)
+  if !kept || !glyphing.is_empty() || !l.glyphing.is_empty() {
+    l.glyphing = glyphing.copy()
+  }
+  l.held = held
+  l.scrim = !dr.scrims.is_empty()
+  l.own_only = false
+  l.each = false
+  l.told = false
+  // (drawn again into new tables while the frame is tried alone: those it had kept as they were, put back where the try
+  // does not come to be, scene_keep_undo)
+  if scene.trying {
+    l.inner = []
+    l.images = []
+    if !kept {
+      l.plots = []
+    }
+    l.bands = []
+  } else {
+    l.inner.clear()
+  }
+  // (drawn again alone, from what it began in: what holds it as it was)
+  match outer {
+    Some(o) => l.outer = Some(o.id)
+    None => if l.id.at == 0 { l.outer = None }
+  }
+  l.images.clear()
+  l.reads_clock = false
+}
+
+///|
+/// Whether the clip painted in now is the one layer `l` was drawn in as it began (its level, whether it is the
+/// window's, its outer apart).
+fn scene_clip_same(l : SceneLayer) -> Bool {
+  let k = clip_top()
+  for j in 0..<clip_n {
+    if clip_stack[k + j] != l.clip[j] {
+      return false
+    }
+  }
+  clip_is_window(k) == l.clip_window && clip_is_apart(k) == l.clip_apart
+}
+
+///|
+/// Layer `l` drawn (scene_drawn, scene_replayed), its instances from `k0` and its shapes' pieces from `s0`: kept as
+/// this frame has it, told what holds it (`outer`).
+fn Ctx::scene_drawn_end(self : Ctx, l : SceneLayer, outer : SceneLayer?, k0 : Int, s0 : Int) -> Unit {
   if l.reads_clock {
     scene.clock_read = true
   }
   // (what holds it: as own only as anything it holds, and what it holds below it)
   match outer {
     Some(o) => {
-      o.inner.push(id)
+      o.inner.push(l.id)
       if l.own_only {
         o.own_only = true
       }
@@ -1299,7 +1518,6 @@ fn Ctx::scene_drawn(
     }
   }
   scene_work.recorded = scene_work.recorded + own
-  l
 }
 
 ///|
@@ -1562,7 +1780,8 @@ fn Ctx::scene_alone(self : Ctx, tree : @view.Tree, before_old? : Bool = false) -
   scene.alone_reach = @damage.nowhere
   for id in scene.due {
     match scene.reach.get(id) {
-      Some(r) => {
+      Some(e) => {
+        let r = e.reach.rect()
         scene.parts.add(r)
         scene.alone_reach = @damage.union(scene.alone_reach, r)
       }
@@ -1630,12 +1849,16 @@ fn Ctx::scene_redrawn(
   }
   let outer = scene.drawing
   scene.drawing = None
-  let entries_kept = scene_entries_kept(l.id, l.held)
-  let entries : Ref[Array[SceneEntry]] = Ref([])
-  let m = self.scene_drawn(l.id, None, l.held, l.fading, l.stretching, l.glyphing, fn() {
-    entries.val = self.tree_walk(p, l.id.at, l.held, 0, entries_kept)
-  })
-  scene_entries_keep(m, entries.val, l.held)
+  match scene_entries_kept(l.id, l.held) {
+    Some(k) => self.scene_replayed(p, k, None, l.held, 0)
+    None => {
+      let entries : Ref[Array[SceneEntry]] = Ref([])
+      let m = self.scene_drawn(l.id, None, l.held, l.fading, l.stretching, l.glyphing, fn() {
+        entries.val = self.tree_walk(p, l.id.at, l.held, 0, None)
+      })
+      scene_entries_keep(m, entries.val, l.held)
+    }
+  }
   scene.drawing = outer
   pop_clip()
   let mine = match kept {
