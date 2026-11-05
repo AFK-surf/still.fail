@@ -35,13 +35,34 @@ let host_erased : Int = 5
 /// page's, not the made-up source's.
 fn core_lists(base : Source) -> Source {
   let kept : Map[String, (Json, @rows.TopicList)] = {}
+  // (each topic told only as its answer comes out otherwise, as the core tells a subscription: the made-up core tells
+  // every reader of every topic of any change of it, and a page that read the workspaces or the prefs was built
+  // again for a chat read in the list)
+  let told : Map[String, @signals.Computed[String]] = {}
+  let topic = fn(name : String, params : Map[String, Json]) {
+    let key = name + "\u{1}" + Json::object(params).stringify()
+    let c = match told.get(key) {
+      Some(c) => c
+      None => {
+        let c = @signals.computed(fn(_) {
+          let t = (base.topic)(name, params)
+          Json::object({ "value": t.value.unwrap_or(Json::null()), "error": t.error.unwrap_or(Json::null()) }).stringify()
+        }, same=fn(a, b) { a == b })
+        told[key] = c
+        c
+      }
+    }
+    c.get() |> ignore
+    @signals.untracked(fn() { (base.topic)(name, params) })
+  }
   {
     ..base,
+    topic,
     list: fn(name, params, path, fields) {
       if name != "chat" {
         return (base.list)(name, params, path, fields)
       }
-      let v = (base.topic)(name, params).value
+      let v = topic(name, params).value
       let messages = match v {
         Some(Object(o)) => o.get("messages").unwrap_or(Json::null())
         _ => Json::null()
