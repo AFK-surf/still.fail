@@ -480,6 +480,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
 /// build the last one's (frame_watch.mbt): what that build made for the frames after it (its layers, what takes the
 /// focus) is as it left it.
 fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
+  // (where the old views are as it paints them: a frame of the tree alone draws them there only, scene_alone_may)
+  old_painted_at.val = old_placed_said()
   paint_phase.val = 1
   paint_base.wake = -1.0
   paint_clock_at.val = ""

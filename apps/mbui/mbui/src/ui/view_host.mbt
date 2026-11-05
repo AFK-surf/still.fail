@@ -5592,3 +5592,15 @@ fn tree_text_lines(tree : @view.Tree, out : Array[TextRun]) -> Unit {
     }
   }
 }
+
+///|
+/// Where the old views are placed, as one line (each where it is drawn, as big and as opaque): what the old frame paints
+/// them by (old_frame's moved_by, its look).
+fn old_placed_said() -> String {
+  old_placed.map(fn(p) { "\{p.0.at}.\{p.0.gen}:\{p.1},\{p.2},\{p.3},\{p.4},\{p.5},\{p.8}" }).join(" ")
+}
+
+///|
+/// Where the old views were as the old frame last painted them (frame_paint).
+// kept across runs: written by each paint of the old frame
+let old_painted_at : Ref[String] = Ref("")

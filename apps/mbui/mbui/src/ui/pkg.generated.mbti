@@ -1694,6 +1694,11 @@ pub(all) struct HostFrame {
   old_built : Bool
   why : String
   parts_built : Int32
+  tree_alone : Bool
+  alone_why : String
+  layers_drawn : Int32
+  insts_recorded : Int32
+  insts_moved : Int32
   damage : Array[(Double, Double, Double, Double)]
   damage_share : Double
   whole_why : Int32

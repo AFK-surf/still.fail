@@ -74,8 +74,10 @@ priv struct Scene {
   /// the layers holding one marked: not copied whole (what they hold is drawn again in them)
   holding : Map[@view.NodeId, Bool]
   moved : Map[@view.NodeId, Bool]
-  /// nodes let go since the frame before
+  /// nodes let go since the frame before, and of them those drawn in no layer kept (what the tree alone cannot draw
+  /// again without: scene_alone_may)
   mut removed : Int
+  mut removed_unkept : Int
   /// where the window changed, said by the causes
   parts : @damage.Parts
   /// the last frame's instances and pieces (what a frame the old frame paints copies the layers kept from), and the
@@ -162,6 +164,7 @@ let scene : Scene = {
   holding: Map([]),
   moved: Map([]),
   removed: 0,
+  removed_unkept: 0,
   parts: @damage.Parts::new(),
   prev: FixedArray::make(0, 0.0),
   prev_n: 0,
@@ -236,6 +239,12 @@ let scene_work : SceneWork = {
 }
 
 ///|
+/// The instances the frames of the tree alone moved to another place in the frame, as they were: put after a layer
+/// drawn again that grew or shrank (Ctx::scene_spliced).
+// kept across runs: counts on
+let scene_moved_insts : Ref[Int] = Ref(0)
+
+///|
 /// What drawing the window's tree did so far (SceneWork), for a test to count what a frame does.
 pub fn scene_done() -> SceneWork {
   { ..scene_work, parts: scene.parts.work() }
@@ -246,8 +255,10 @@ pub fn scene_done() -> SceneWork {
 /// nowhere: no frame of the app's.
 fn scene_unrecorded(f : () -> Unit) -> Unit {
   let was = { ..scene_work }
+  let moved = scene_moved_insts.val
   let parts = scene.parts.work()
   f()
+  scene_moved_insts.val = moved
   scene_work.layers = was.layers
   scene_work.recorded = was.recorded
   scene_work.copied = was.copied
@@ -284,6 +295,7 @@ fn scene_forget() -> Unit {
   scene.holding.clear()
   scene.moved.clear()
   scene.removed = 0
+  scene.removed_unkept = 0
   scene.prev_n = 0
   scene.prev_segs.clear()
   scene.seg_tail = 0
@@ -421,18 +433,34 @@ fn scene_told(
       None => ()
     }
     scene.reach.remove(id)
-    // (the layer it was drawn in, what holds that, drawn again without it)
-    match scene.drawn_in.get(id) {
-      Some(l) if l != id => if scene.layers.contains(l) { scene_mark(l) }
+    // (the layer it was drawn in, what holds that, drawn again without it; none kept that drew it, where it drew: the
+    // tree cannot draw the frame alone without it, scene_alone_may)
+    let kept = match scene.drawn_in.get(id) {
+      Some(l) if l != id =>
+        if scene.layers.contains(l) {
+          scene_mark(l)
+          true
+        } else {
+          false
+        }
       _ =>
         match scene.layers.get(id) {
+          // (a layer: what drew it drawn again without it; where its instances are not among that one's (a layer raised
+          // over the window, drawn in its stack), drawing that again leaves them, and the tree cannot draw the frame alone)
           Some(x) =>
             match x.outer {
-              Some(o) => if scene.layers.contains(o) { scene_mark(o) }
-              None => ()
+              Some(o) if scene.layers.get(o) is Some(ol) => {
+                scene_mark(o)
+                scene_holds_all(ol, x)
+              }
+              _ => false
             }
-          None => ()
+          // (drawn in no layer kept, nor one itself: nothing of it in what the scene keeps)
+          None => scene.drawn_in.get(id) is None
         }
+    }
+    if !kept {
+      scene.removed_unkept = scene.removed_unkept + 1
     }
     scene.drawn_in.remove(id)
     match scene.layers.get(id) {
@@ -694,6 +722,7 @@ fn Ctx::scene_end(self : Ctx) -> Unit {
     scene.holding.clear()
     scene.moved.clear()
     scene.removed = 0
+    scene.removed_unkept = 0
     scene_again()
     // (nothing kept clear over the scrim this frame: where it was drawn so, drawn again)
     if !scene.over_scrim_said {
@@ -1192,8 +1221,18 @@ fn Ctx::scene_drawn(
 /// Whether the frame may be drawn by the tree alone (scene_alone): nothing the old frame draws changed, nothing let
 /// go, and each layer to be drawn again one drawn by the tree alone, kept where it was.
 fn scene_alone_may() -> Bool {
-  scene.alone_why = if scene.removed > 0 {
-    "\{scene.removed} let go"
+  // (what was let go drawn in a layer kept: that one drawn again without it, marked; one drawn in none, the old frame
+  // paints the frame)
+  scene.alone_why = if scene.removed_unkept > 0 {
+    "\{scene.removed_unkept} let go of what no layer kept"
+  } else if old_placed_said() != old_painted_at.val {
+    // (an old view laid out elsewhere than the old frame last painted it (what grew above it in the tree moved it):
+    // the old frame paints it where it is now)
+    "an old view placed otherwise than painted"
+  } else if tree_picking() {
+    // (words picked in the tree: what marks them the old frame's paint, worked out of where the tree lays them out as
+    // it paints; what changed of the tree may have moved them)
+    "words picked over the tree"
   } else if scene.fresh {
     "nothing kept"
   } else if scene.marked.is_empty() {
@@ -1213,10 +1252,8 @@ fn scene_alone_may() -> Bool {
         scene.alone_why = "layer \{id.at} seen \{l.seen} of \{scene.frame}, at \{l.start}, own \{l.own_only}"
         return false
       }
-      None => {
-        scene.alone_why = "layer \{id.at} not kept"
-        return false
-      }
+      // (one let go since it was marked: what held it is drawn again without it, marked as it went, scene_told)
+      None => ()
     }
   }
   true
@@ -1354,13 +1391,35 @@ fn Ctx::scene_alone(self : Ctx, tree : @view.Tree, before_old? : Bool = false) -
   guard scene_alone_may() else { return false }
   // (each drawn where what holds it is drawn now, as it was drawn in: else the old frame paints it, all it is in gone
   // through)
-  for id, _ in scene.marked {
-    match scene.layers.get(id) {
-      Some(l) if l.id.at != 0 && scene_holder_at(tree, l.id) != Some(l.held) => {
-        scene.alone_why = "layer \{id.at}: what holds it drawn elsewhere"
-        return false
+  // (one whose holder is drawn elsewhere now (a list's row as the list scrolls): the layer round it drawn again in its
+  // place, out to one drawn where it was, what it holds with it)
+  let mut again = true
+  while again {
+    again = false
+    let moved_out : Array[(@view.NodeId, @view.NodeId)] = []
+    for id, _ in scene.marked {
+      match scene.layers.get(id) {
+        Some(l) if l.id.at != 0 && scene_holder_at(tree, l.id) != Some(l.held) =>
+          match l.outer {
+            // (what drew it, where its instances are among that one's: else drawing that again leaves them)
+            Some(o) if scene.layers.get(o) is Some(x) &&
+              x.seen == scene.frame &&
+              x.start >= 0 &&
+              !x.own_only &&
+              !x.each &&
+              scene_holds_all(x, l) => moved_out.push((id, o))
+            _ => {
+              scene.alone_why = "layer \{id.at}: what holds it drawn elsewhere"
+              return false
+            }
+          }
+        _ => ()
       }
-      _ => ()
+    }
+    for m in moved_out {
+      scene.marked.remove(m.0)
+      scene_mark(m.1)
+      again = true
     }
   }
   let (recorded0, parts0) = (scene_work.recorded, scene.parts.work())
@@ -1378,11 +1437,44 @@ fn Ctx::scene_alone(self : Ctx, tree : @view.Tree, before_old? : Bool = false) -
     if !under {
       match scene.layers.get(id) {
         Some(l) => todo.push(l)
-        None => return false
+        // (let go since it was marked: what held it drawn again without it)
+        None => ()
       }
     }
   }
-  let drawn : Array[(SceneLayer, Int, Int, FixedArray[Double], Array[Double], OwnersRun?)] = []
+  // (and those whose instances lie within another's drawn again, held by it in the frame though not in the tree (a
+  // layer raised over the window, drawn in its stack): drawn again with it, once)
+  // (what drew it, out to the window: one of those drawn again draws it again)
+  let drawn_by = fn(l : SceneLayer, o : SceneLayer) {
+    let mut at = l.outer
+    let mut found = false
+    let mut steps = 0
+    while at is Some(id) && !found && steps < 256 {
+      found = id == o.id
+      at = scene.layers.get(id).bind(fn(x) { x.outer })
+      steps = steps + 1
+    }
+    found
+  }
+  let todo = todo.filter(fn(l) {
+    !todo.iter().any(fn(o) {
+      !physical_equal(o, l) && (drawn_by(l, o) || (l.count > 0 && o.count > l.count && scene_holds_all(o, l)))
+    })
+  })
+  // (two that share instances, neither holding the other's all: no frame put together round them)
+  let spans = todo.map(fn(l) { (l.start, l.start + l.count) })
+  spans.sort()
+  let mut end = -1
+  for s in spans {
+    if s.0 < end {
+      scene.alone_why = "layers drawn again share instances"
+      return false
+    }
+    if s.1 > end {
+      end = s.1
+    }
+  }
+  let drawn : Array[(SceneLayer, Int, Int, FixedArray[Double], Array[Double], OwnersRun?, Int, Int, Int)] = []
   scene.trying = true
   scene.undo.clear()
   // (the frame's glass as it stood: a try that drew glass and failed told none of its captures)
@@ -1390,46 +1482,53 @@ fn Ctx::scene_alone(self : Ctx, tree : @view.Tree, before_old? : Bool = false) -
   for l in todo {
     let (start, seg_from, count, seg_count) = (l.start, l.seg_from, l.count, l.seg_count)
     let (inst, n, segs, owners) = self.scene_redrawn(tree, l, before_old~, into=drawn.length())
-    if n != count || segs.length() / 4 != seg_count || l.own_only || l.each {
+    // (one come to another number of instances or of pieces: the frame's put together anew round it, scene_spliced;
+    // not before the old frame paints)
+    let other = n != count || segs.length() / 4 != seg_count
+    if l.own_only || l.each || (other && (before_old || start < 0)) {
       scene.alone_why = "layer \{l.id.at} came to \{n} of \{count}, \{segs.length() / 4} pieces of \{seg_count}, own \{l.own_only}"
       scene.trying = false
       scene_undo()
       glass_put_back(glass_was)
       return false
     }
-    drawn.push((l, start, seg_from, inst, segs, owners))
+    drawn.push((l, start, seg_from, inst, segs, owners, n, count, seg_count))
   }
   scene.trying = false
   scene.undo.clear()
   // (put where each was: into what the frame is shown from, the base the old frame's cycles are applied over where
-  // it has them (what is copied from as the old frame paints after, too: scene_begin))
-  let into = if looks_base.looks { looks_base.inst } else { self.inst }
-  for d in drawn {
-    let (l, start, seg_from, inst, segs, owners) = d
-    let n = l.count
-    match owners {
-      Some(o) => owners_put(o, start)
-      None => ()
+  // it has them (what is copied from as the old frame paints after, too: scene_begin); one come to another number of
+  // instances or pieces, the frame put together anew round it, each where it now is: scene_spliced)
+  if drawn.iter().any(fn(d) { d.6 != d.7 || d.4.length() / 4 != d.8 }) {
+    self.scene_spliced(drawn)
+  } else {
+    let into = if looks_base.looks { looks_base.inst } else { self.inst }
+    for d in drawn {
+      let (l, start, seg_from, inst, segs, owners, n, _, _) = d
+      match owners {
+        Some(o) => owners_put(o, start)
+        None => ()
+      }
+      for b in l.bands {
+        inst[b * inst_size + 12] = inst[b * inst_size + 12] + seg_from.to_double()
+      }
+      inst.blit_to(into, len=n * inst_size, dst_offset=start * inst_size)
+      // (the frame's pieces: as the old frame paints, those it keeps of the last frame's, scene_segs_kept)
+      let pieces = if before_old { scene.prev_segs } else { self.segs }
+      for q in 0..<segs.length() {
+        pieces[seg_from * 4 + q] = segs[q]
+      }
+      // (its pieces where the frame keeps them, after every instance drawn: shape.mbt's emit_segs)
+      for i in 0..<(segs.length() / 4) {
+        let piece = seg_from + i
+        let o = (scene.seg_tail + piece / 6) * inst_size + seg_slots[piece % 6] * 4
+        into[o] = segs[4 * i]
+        into[o + 1] = segs[4 * i + 1]
+        into[o + 2] = segs[4 * i + 2]
+        into[o + 3] = segs[4 * i + 3]
+      }
+      scene_moved_to(l, start, seg_from)
     }
-    for b in l.bands {
-      inst[b * inst_size + 12] = inst[b * inst_size + 12] + seg_from.to_double()
-    }
-    inst.blit_to(into, len=n * inst_size, dst_offset=start * inst_size)
-    // (the frame's pieces: as the old frame paints, those it keeps of the last frame's, scene_segs_kept)
-    let pieces = if before_old { scene.prev_segs } else { self.segs }
-    for q in 0..<segs.length() {
-      pieces[seg_from * 4 + q] = segs[q]
-    }
-    // (its pieces where the frame keeps them, after every instance drawn: shape.mbt's emit_segs)
-    for i in 0..<(segs.length() / 4) {
-      let piece = seg_from + i
-      let o = (scene.seg_tail + piece / 6) * inst_size + seg_slots[piece % 6] * 4
-      into[o] = segs[4 * i]
-      into[o + 1] = segs[4 * i + 1]
-      into[o + 2] = segs[4 * i + 2]
-      into[o + 3] = segs[4 * i + 3]
-    }
-    scene_moved_to(l, start, seg_from)
   }
   scene.alone_reach = @damage.nowhere
   for id in scene.due {
@@ -1445,6 +1544,8 @@ fn Ctx::scene_alone(self : Ctx, tree : @view.Tree, before_old? : Bool = false) -
   scene.marked.clear()
   scene.holding.clear()
   scene.moved.clear()
+  scene.removed = 0
+  scene.removed_unkept = 0
   scene_again()
   if !before_old {
     scene_work.alone = scene_work.alone + 1
@@ -1452,6 +1553,230 @@ fn Ctx::scene_alone(self : Ctx, tree : @view.Tree, before_old? : Bool = false) -
     scene_work.alone_parts = scene_work.alone_parts + (scene.parts.work() - parts0)
   }
   true
+}
+
+///|
+/// The frame put together anew from what it held and the layers `drawn` drawn again, some come to another number of
+/// instances or of shapes' pieces (a list's rows come into it and gone out of it as it scrolls): what lies between and
+/// after them, the old frame's and the tree's, moved along as far as those before it grew or shrank, each layer kept
+/// where it now is, the bands of shapes after them pointing to their pieces where those now are, the pieces put after
+/// every instance as the frame keeps them (shape.mbt's emit_segs). Once over the frame's instances, nothing drawn
+/// again of what was not drawn again (a list scrolled: drawn by the tree alone, not painted whole for each row in or
+/// out, 2026-11-05).
+fn Ctx::scene_spliced(self : Ctx, drawn : Array[(SceneLayer, Int, Int, FixedArray[Double], Array[Double], OwnersRun?, Int, Int, Int)]) -> Unit {
+  let looks = looks_base.looks
+  let from = if looks { looks_base.inst } else { self.inst }
+  let total = if looks { looks_base.n } else { self.ninst }
+  let tail = scene.seg_tail
+  let old_segs = self.segs
+  let order = drawn.copy()
+  // (by where each was, one that drew nothing before one that drew from the same place)
+  order.sort_by(fn(a, b) { (a.1, a.7).compare((b.1, b.7)) })
+  // (the frame's instances before its pieces, and its pieces, put together anew: what is between the layers drawn
+  // again copied as it was)
+  let mut grown = 0
+  let mut grown_segs = 0
+  for d in order {
+    grown = grown + d.6 - d.7
+    grown_segs = grown_segs + d.4.length() / 4 - d.8
+  }
+  let new_tail = tail + grown
+  let pieces = old_segs.length() / 4 + grown_segs
+  let new_total = new_tail + (pieces + 5) / 6
+  let out = FixedArray::make(imax(new_total, total) * inst_size + inst_size, 0.0)
+  let segs : Array[Double] = []
+  // (where an instance of the frame's, and a piece, as they were, are now: moved on by those drawn again before it)
+  let at_moves : Array[(Int, Int)] = []
+  let seg_moves : Array[(Int, Int)] = []
+  let mut i = 0
+  let mut j = 0
+  let mut k = 0
+  // (who drew what, where that is kept (a check's): each run where it now is, put once all are taken)
+  let owned = inst_owners_kept()
+  let runs : Array[(OwnersRun, Int)] = []
+  for d in order {
+    let (l, start, seg_from, inst, ls, owners, n, count, seg_count) = d
+    // (what lies before it, as it was, moved on)
+    if owned {
+      runs.push((owners_run(i, start), j))
+    }
+    from.blit_to(out, len=(start - i) * inst_size, src_offset=i * inst_size, dst_offset=j * inst_size)
+    if j != i {
+      scene_moved_insts.val = scene_moved_insts.val + (start - i)
+    }
+    j = j + (start - i)
+    for q in (k * 4)..<(seg_from * 4) {
+      segs.push(old_segs[q])
+    }
+    let new_seg = segs.length() / 4
+    for b in l.bands {
+      inst[b * inst_size + 12] = inst[b * inst_size + 12] + new_seg.to_double()
+    }
+    inst.blit_to(out, len=n * inst_size, dst_offset=j * inst_size)
+    match owners {
+      Some(o) => runs.push((o, j))
+      None => ()
+    }
+    for q in 0..<ls.length() {
+      segs.push(ls[q])
+    }
+    at_moves.push((start + count, j + n - (start + count)))
+    seg_moves.push((seg_from + seg_count, new_seg + ls.length() / 4 - (seg_from + seg_count)))
+    scene_moved_to(l, j, new_seg)
+    j = j + n
+    i = start + count
+    k = seg_from + seg_count
+  }
+  if owned {
+    runs.push((owners_run(i, tail), j))
+  }
+  from.blit_to(out, len=(tail - i) * inst_size, src_offset=i * inst_size, dst_offset=j * inst_size)
+  if j != i {
+    scene_moved_insts.val = scene_moved_insts.val + (tail - i)
+  }
+  for r in runs {
+    owners_put(r.0, r.1)
+  }
+  if owned {
+    owners_cut(new_tail)
+  }
+  for q in (k * 4)..<old_segs.length() {
+    segs.push(old_segs[q])
+  }
+  // (how far what was at `at` moved: as far as the last drawn again before it grew)
+  // (`edge` of a layer, its start or its end: moved as what is before it moved; where it is just where one drawn
+  // again ends (one that drew nothing begins there too), moved with it only if it lies after it: a start of one not
+  // holding it, an end of one holding it)
+  let holds_drawn = fn(l : SceneLayer, k : Int) {
+    let mut at = order[k].0.outer
+    let mut steps = 0
+    let mut found = false
+    while at is Some(id) && !found && steps < 256 {
+      found = id == l.id
+      at = scene.layers.get(id).bind(fn(x) { x.outer })
+      steps = steps + 1
+    }
+    found
+  }
+  // (a piece as far as what is before it moved)
+  let pieces_moved_by = fn(at : Int) {
+    let mut by = 0
+    for m in seg_moves {
+      if at >= m.0 {
+        by = m.1
+      }
+    }
+    by
+  }
+  let moved_by = fn(moves : Array[(Int, Int)], at : Int, l : SceneLayer, is_end : Bool) {
+    let mut by = 0
+    for k, m in moves {
+      if at > m.0 || (at == m.0 && holds_drawn(l, k) == is_end) {
+        by = m.1
+      }
+    }
+    by
+  }
+  // (the layers not drawn again, each where it now is; the bands of shapes of what was copied pointing to their
+  // pieces where those now are)
+  let redrawn : Map[@view.NodeId, Bool] = {}
+  for d in order {
+    let todo = [d.0]
+    while todo.pop() is Some(x) {
+      redrawn[x.id] = true
+      for c in x.inner {
+        match scene.layers.get(c) {
+          Some(y) => todo.push(y)
+          None => ()
+        }
+      }
+    }
+  }
+  // (one holding a layer drawn again as large as it now is: its end moved on as far as what is before it grew, its
+  // bands found where they now are in it)
+  let holders : Array[SceneLayer] = []
+  for id, l in scene.layers {
+    if !redrawn.contains(id) && l.start >= 0 && l.seen == scene.frame {
+      let (end, seg_end, count) = (l.start + l.count, l.seg_from + l.seg_count, l.count)
+      // (one that holds nothing (none drawn again in it) moves whole, its end with its start)
+      let mut holds_any = false
+      for k in 0..<order.length() {
+        if holds_drawn(l, k) {
+          holds_any = true
+        }
+      }
+      let empty = count == 0 && !holds_any
+      let by = moved_by(at_moves, l.start, l, false)
+      let end_by = moved_by(at_moves, end, l, true)
+      l.start = l.start + by
+      l.count = end + (if empty { by } else { end_by }) - l.start
+      let seg_by = moved_by(seg_moves, l.seg_from, l, false)
+      let seg_end_by = moved_by(seg_moves, seg_end, l, true)
+      l.seg_from = l.seg_from + seg_by
+      l.seg_count = seg_end + (if l.seg_count == 0 && !holds_any { seg_by } else { seg_end_by }) - l.seg_from
+      if l.count != count {
+        holders.push(l)
+      }
+    }
+  }
+  for x in 0..<new_tail {
+    let b = x * inst_size
+    if out[b + 5] == 11.0 && !redrawn_at(order, x) {
+      let piece = out[b + 12].to_int()
+      out[b + 12] = out[b + 12] + pieces_moved_by(piece).to_double()
+    }
+  }
+  for l in holders {
+    l.bands.clear()
+    for x in l.start..<(l.start + l.count) {
+      if out[x * inst_size + 5] == 11.0 {
+        l.bands.push(x - l.start)
+      }
+    }
+  }
+  // (the pieces after every instance, six to one, as emit_segs puts them)
+  for r in 0..<((pieces + 5) / 6) {
+    let b = (new_tail + r) * inst_size
+    for z in 0..<inst_size {
+      out[b + z] = 0.0
+    }
+    out[b + 5] = 12.0
+    for s in 0..<6 {
+      let p = r * 6 + s
+      if p < pieces {
+        let o = b + seg_slots[s] * 4
+        out[o] = segs[4 * p]
+        out[o + 1] = segs[4 * p + 1]
+        out[o + 2] = segs[4 * p + 2]
+        out[o + 3] = segs[4 * p + 3]
+      }
+    }
+  }
+  scene.seg_tail = new_tail
+  self.segs = segs
+  scene.last_n = new_total
+  if looks {
+    looks_base.inst = out
+    looks_base.n = new_total
+    while new_total * inst_size > self.inst.length() {
+      self.grow()
+    }
+  } else {
+    self.inst = out
+    self.ninst = new_total
+  }
+}
+
+///|
+/// Whether instance `x` of the frame put together anew (scene_spliced) is one of the layers drawn again (`order`,
+/// each where it now is).
+fn redrawn_at(order : Array[(SceneLayer, Int, Int, FixedArray[Double], Array[Double], OwnersRun?, Int, Int, Int)], x : Int) -> Bool {
+  for d in order {
+    if x >= d.0.start && x < d.0.start + d.6 {
+      return true
+    }
+  }
+  false
 }
 
 ///|
@@ -1465,10 +1790,11 @@ fn Ctx::scene_redrawn(
   into? : Int = 0,
 ) -> (FixedArray[Double], Int, Array[Double], OwnersRun?) {
   let (inst, ninst, segs) = (self.inst, self.ninst, self.segs)
-  // (who drew what, where it is kept: the frame's as it was, the layer's own drawn apart; nothing copied without it)
-  // (as far as drawing it apart from 0 writes: what it comes to, if more, is drawn by the old frame's paint after)
-  let kept = if inst_owners_kept() { Some(owners_run(0, l.count + 8)) } else { None }
-  scene.owners = None
+  // (who drew what, where it is kept: the frame's as it was, all of it, what the layers it holds kept are copied with,
+  // and what drawing it apart from 0 writes over put back after)
+  let kept = if inst_owners_kept() { Some(owners_run(0, scene.seg_tail)) } else { None }
+  let owners_was = scene.owners
+  scene.owners = kept
   // (what it holds that is kept copied from the frame as it is)
   scene.src = if looks_base.looks { looks_base.inst } else { inst }
   scene.src_n = scene.seg_tail
@@ -1497,6 +1823,7 @@ fn Ctx::scene_redrawn(
   |> ignore
   scene.drawing = outer
   pop_clip()
+  scene.owners = owners_was
   let mine = match kept {
     Some(k) => {
       let m = owners_run(0, self.ninst)
@@ -1631,6 +1958,28 @@ fn owners_run(from : Int, to : Int) -> OwnersRun {
 }
 
 ///|
+/// Who drew the instances from `n` on let go of: none of the frame's.
+fn owners_cut(n : Int) -> Unit {
+  let o = inst_owners
+  if o.owner.length() > n {
+    o.owner.truncate(n)
+  }
+  if o.cell.length() > n {
+    o.cell.truncate(n)
+  }
+  if o.tree.length() > n {
+    o.tree.truncate(n)
+  }
+  if o.mark.length() > n {
+    o.mark.truncate(n)
+  }
+  let gone = bone_insts.iter().filter(fn(k) { k >= n }).collect()
+  for k in gone {
+    bone_insts.remove(k)
+  }
+}
+
+///|
 /// Who drew `run` said of the instances from `at` on, as it was of theirs.
 fn owners_put(run : OwnersRun, at : Int) -> Unit {
   let (was, was_tree) = (inst_owners.painting, inst_owners.tree_painting)
@@ -1671,3 +2020,11 @@ fn scene_tree_spans() -> Array[(Int, Int)] {
   }
   out
 }
+
+///|
+/// Whether layer `o`'s instances, as the frame has them, hold all of layer `x`'s (what drawing `o` again draws again
+/// of `x`: not where `o` draws it elsewhere, raised over the window in its stack).
+fn scene_holds_all(o : SceneLayer, x : SceneLayer) -> Bool {
+  o.start >= 0 && x.start >= o.start && x.start + x.count <= o.start + o.count
+}
+

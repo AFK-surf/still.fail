@@ -18,6 +18,15 @@ pub(all) struct HostFrame {
   why : String
   /// the rows and kept parts built anew in it (FramePerf's rows)
   parts_built : Int
+  /// drawn by the window's tree alone (frame_drawn's FrameDrawnAs Alone; else built, painted alone or of its looks), and
+  /// where it was asked to be and could not, why (Scene's alone_why: the old frame painted it then)
+  tree_alone : Bool
+  alone_why : String
+  /// the window's tree's layers drawn again in it, the instances they came to (their own: SceneWork's `layers`,
+  /// `recorded`), and the instances moved, as they were, to another place in the frame (scene_moved_insts)
+  layers_drawn : Int
+  insts_recorded : Int
+  insts_moved : Int
   /// the parts of the window drawn again (x, y, w, h; w < 0: all of it), their share of the window (1: all) and why
   /// it was whole (@damage.Parts::why: 0 it was not)
   damage : Array[(Double, Double, Double, Double)]
@@ -55,6 +64,16 @@ let host_parts_last : Ref[(Array[(Double, Double, Double, Double)], Double)] = R
 /// The tree's nodes laid out so far, as the last frame recorded left them.
 // kept across runs: written by each frame recorded
 let host_tree_laid : Ref[Int] = Ref(0)
+
+///|
+/// The window's tree's layers drawn, instances recorded and moved so far, as the frame drawing now began.
+// kept across runs: written by each frame recorded
+let host_scene_began : Ref[(Int, Int, Int)] = Ref((0, 0, 0))
+
+///|
+fn host_scene_now() -> (Int, Int, Int) {
+  (scene_work.layers, scene_work.recorded, scene_moved_insts.val)
+}
 
 ///|
 /// The hash of the frame recorded last.
@@ -123,6 +142,7 @@ fn host_frame_begin() -> Unit {
     }
     (c.0, c.1 - before)
   })
+  host_scene_began.val = host_scene_now()
   // (the frame's own laying out counted from here: what came before it is `between`'s)
   host_tree_laid.val = match view_tree() {
     Some(t) => t.work().laid
@@ -139,6 +159,7 @@ pub fn Tester::record_host(self : Tester) -> Unit {
     Some(t) => t.work().laid
     None => 0
   }
+  host_scene_began.val = host_scene_now()
   host_hash_last.val = drawn_hash()
   host_work_end.val = host_work_now()
 }
@@ -188,6 +209,11 @@ fn host_frame_drawn(at : Double) -> Unit {
     old_built,
     why: if old_built { built_why.val } else { "" },
     parts_built: if old_built { p.rows } else { 0 },
+    tree_alone: frame_drawn_as.val == Alone,
+    alone_why: scene.alone_why,
+    layers_drawn: scene_work.layers - host_scene_began.val.0,
+    insts_recorded: scene_work.recorded - host_scene_began.val.1,
+    insts_moved: scene_moved_insts.val - host_scene_began.val.2,
     damage: parts,
     damage_share: share,
     whole_why: scene.parts.why(),
