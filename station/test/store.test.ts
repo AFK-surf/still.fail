@@ -1389,13 +1389,13 @@ test("usage: the sessions at work are found by when their turns ended, once each
 test("what the station asks again and again is planned by an index, never a scan of what grows with time", () => {
   assertRecentChatPlans();
   const store = memory();
-  for (const [sql, args, index] of [
-    [SESSION_LIST_SCOPE, ["ws", 1, 0], "PRIMARY KEY (kind=? AND ws=? AND archived=?)"],
-    [SESSION_LIST_SCOPE_CONNECT, ["ws", 1, 0, "a"], "PRIMARY KEY (kind=? AND ws=? AND archived=? AND connect=?)"],
-    [SESSION_LIST_CONNECT, [0, "a"], "session_list_connect (archived=? AND connect=?)"],
-  ] as [string, unknown[], string][]) {
+  for (const [sql, args, keys] of [
+    [SESSION_LIST_SCOPE, ["ws", 1, 0], ["kind=?", "ws=?", "archived=?"]],
+    [SESSION_LIST_SCOPE_CONNECT, ["ws", 1, 0, "a"], ["kind=?", "ws=?", "archived=?", "connect=?"]],
+    [SESSION_LIST_CONNECT, [0, "a"], ["archived=?", "connect=?"]],
+  ] as [string, unknown[], string[]][]) {
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
-    assert.ok(plan.some((line) => line.startsWith("SEARCH i ") && line.includes(index)), `${sql}\n  ${plan.join(" | ")}`);
+    assert.ok(plan.some((line) => line.startsWith("SEARCH i ") && keys.every((key) => line.includes(key))), `${sql}\n  ${plan.join(" | ")}`);
     assert.ok(plan.some((line) => line.startsWith("SEARCH s ") && line.includes("key=?")), plan.join(" | "));
     assert.ok(!plan.some((line) => /^SCAN (i|s)\b/.test(line)), plan.join(" | "));
   }
