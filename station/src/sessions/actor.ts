@@ -892,13 +892,13 @@ export class SessionActor {
 
   // ── inside the queue ─────────────────────────────────────────────────────────────────────────────────────────
 
-  /// The notices waiting, as the agent reads them: each a message from the station (via="ember", as before the rename).
+  /// The notices waiting, as the agent reads them: each a message from the station (via="station").
   private takeNotices(): string | null {
     const notices = this.notices;
     this.notices = [];
     if (notices.length === 0) return null;
     const at = this.deps.nextTs();
-    return notices.map((n) => `<message via="ember" from="ember" ts="${at}">\n${n}\n</message>`).join("\n");
+    return notices.map((n) => `<message via="station" from="station" ts="${at}">\n${n}\n</message>`).join("\n");
   }
 
   private async giveNotices() {

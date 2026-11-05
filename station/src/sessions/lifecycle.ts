@@ -24,7 +24,7 @@ import { roomOf } from "./footprint.ts";
 import { type Runtime, runs, runtimeNamed, runtimeTitle } from "./config.ts";
 import { FAST_RUNTIMES } from "../agents/profiles.ts";
 import { CLIENT_KEY_KEPT_MS, type Hub, connectOf, newChatKey, newSingleSessionKey, newToken } from "./hub.ts";
-import { INTERNAL_CHANNEL, INTERNAL_CONNECT } from "./internal.ts";
+import { INTERNAL_CHANNEL, INTERNAL_CONNECT, chatKey, chatWorkspace } from "./internal.ts";
 
 /// A session of its own, talked to in the station's chat.
 export type NewChat = {
@@ -126,7 +126,7 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
   const client = trimmed(options.clientKey);
   // A reply can be lost when the station restarts. The same request must find the rows already made, including when
   // the process stopped between inserting the session, the thread and its membership.
-  const key = client === null ? newChatKey() : `${INTERNAL_CONNECT}:c-${createHash("sha256").update(JSON.stringify([options.ws ?? null, options.createdBy, client])).digest("hex").slice(0, 32)}`;
+  const key = client === null ? newChatKey() : chatKey(`c-${createHash("sha256").update(JSON.stringify([options.ws ?? null, options.createdBy, client])).digest("hex").slice(0, 32)}`, (k) => hub.store.getSession(k) !== null);
   const existing = hub.store.getSession(key);
   if (existing !== null) {
     if (client !== null) hub.clientKeysMade.set(key, [client, hub.now()]);
@@ -157,7 +157,7 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
     const allowed = hub.accounts.modelEfforts(runtime, model, pinned, (p) => here.has(p.id));
     if (!allowed.includes(effort)) throw new Error(`effort must be one of ${allowed.join(", ")}`);
   }
-  const workspace = join(config.dataDir, "sessions", INTERNAL_CONNECT, key.slice(INTERNAL_CONNECT.length + 1), "workspace");
+  const workspace = chatWorkspace(config.dataDir, key);
   mkdirSync(workspace, { recursive: true });
   // (before its rows: one that names no preset of its workspace makes no chat)
   const preset = trimmed(options.preset);
@@ -600,7 +600,7 @@ export async function continueMachineSession(hub: Hub, roots: Roots, found: Mach
   const entries = readTimeline(runtime, copy).length;
   const last = entries > 0 ? entries - 1 : null;
   const key = newChatKey();
-  const workspace = join(config.dataDir, "sessions", INTERNAL_CONNECT, key.slice(INTERNAL_CONNECT.length + 1), "workspace");
+  const workspace = chatWorkspace(config.dataDir, key);
   mkdirSync(workspace, { recursive: true });
   mkdirSync(join(config.dataDir, "repos"), { recursive: true });
   const now = hub.now();
