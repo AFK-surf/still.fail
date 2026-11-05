@@ -21,83 +21,8 @@ fn sidebar(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
 }
 
 ///|
-/// The lists' foot band (Sidebar.css.ts navFoot, navFootStatus): what is wrong with the stations (StationTrouble: their
-/// glyph and its words, red while one fails, leading to them; beside the rail only then), and 运行中 N (OpenJobsChip:
-/// the services left up long, their panel over it). Nothing when neither is, nor with the bell in the rail (they are in
-/// its panel).
-fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let t = @sf.theme()
-  // with the bell in the rail, they are in its panel (workspace.tsx WorkspaceSidebarFooter)
-  if rail_items(src, w.id).contains("attention") {
-    return
-  }
-  let chats = (src.topic)("chats", { "scope": Json::string(w.id), "mine": Json::boolean(false) }).value
-  let trouble = field(chats, "trouble")
-  let jobs = long_jobs(src, w)
-  if trouble is None && jobs == 0 {
-    return
-  }
-  c.box(style=foot_fill, fn() {
-    // (on the sidebar's own ground, whole, as the band over the lists: lists_band)
-    let band = c.box(style=foot_band.then(@ui.style(bg=Data(@sf.mix(apart_ground(), wide.band, t.p.sidebar)))), fn() {
-      match trouble {
-        Some(Object(_)) => {
-          let go = c.id("side/station-trouble")
-          if c.clicked(go) {
-            @sfbase.go_place("stations") |> ignore
-          }
-          c.box(style=foot_trouble, id=go, fn() {
-            @sf.station_glyph(c, stations_at_glance(src, w.id).0, foot_glyph, t.p.text, t.p.red) |> ignore
-            c.text(
-              text(trouble, "text"),
-              style=if text(trouble, "state") == "error" { foot_trouble_red } else { foot_trouble_words },
-            )
-            |> ignore
-          })
-          |> ignore
-        }
-        _ => ()
-      }
-      if jobs > 0 {
-        let chip = c.id("side/open-jobs")
-        // (pressed: opened or closed as it is let go, as it is then)
-        c.on_press(chip, fn() { wide.jobs_open.set(!wide.jobs_open.get()) })
-        let b = c.box(style=foot_chip, id=chip, fn() {
-          c.box(style=foot_chip_dot, fn() {  }) |> ignore
-          c.text(@sf.t("web-main.jobs.chip", args=[("n", jobs.to_string())]), style=foot_chip_words) |> ignore
-        })
-        c.semantics(b, Button, id=chip, label=@sf.t("web-main.jobs.long"))
-        // (dismissed by the hand, Escape or a press outside it and its chip: closed at that moment)
-        c.with_dismissed(fn(_) { wide.jobs_open.set(false) }, fn() {
-          @kit.popover(
-            c,
-            "side/open-jobs",
-            wide.jobs_open.get(),
-            chip,
-            side=Top,
-            along=End,
-            offset=6.0,
-            // (scrolling in itself past 420, or 60% of the window: openJobsPop; or what the room it has leaves it)
-            look=@sf.beside_look(Px(open_jobs_pop_w), most=dmin(open_jobs_pop_most, c.height * 0.6)),
-            fn() { open_jobs(c, src, w) },
-          )
-          |> ignore
-        })
-      }
-    })
-    // over the lists: their scroll bar keeps clear of it (the web's --nav-foot)
-    c.floats_over(band)
-  })
-  |> ignore
-}
-
-///|
 /// The stations' glyph in the foot's line (Sidebar.css.ts stationTroubleMark: 18).
 let foot_glyph : Double = 18.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let foot_fill : @ui.Style = @ui.css("w=Full h=Full justify=JEnd")
 
 ///|
 /// 8 in, its line and the chip 6 apart (Sidebar.css.ts navFoot, navFootStatus).
