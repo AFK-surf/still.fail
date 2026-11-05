@@ -888,6 +888,7 @@ fn looks_frame(c : Ctx, t : Double) -> Double {
   c.t_paint = work_now() - t0
   looks_drawn.val = true
   painted_alone.val = false
+  frame_drawn_as.val = Looks
   looks_frames.val = looks_frames.val + 1
   // (a frame as any: told at its end, as frame_paint tells the others)
   match frame_hook.val {
@@ -918,6 +919,7 @@ fn paint_frame(c : Ctx, t : Double) -> Double {
   c.t_paint = work_now() - t0
   looks_drawn.val = false
   painted_alone.val = true
+  frame_drawn_as.val = Painted
   paints_alone.val = paints_alone.val + 1
   t0
 }
@@ -983,6 +985,7 @@ fn alone_frame(c : Ctx, t : Double) -> Double {
   looks_drawn.val = false
   painted_alone.val = false
   tree_alone_drawn.val = true
+  frame_drawn_as.val = Alone
   // (a frame as any: told at its end, as frame_paint tells the others)
   match frame_hook.val {
     Some(f) if !looks_rebuilt.val => f()
@@ -1116,6 +1119,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     test_step_came.val = false
     nodes_run.whole = bench_whole.val && bench_measuring.val
     let copied = scene_work.copied
+    frame_drawn_as.val = Built
     let t0 = watch.read(fn() { frame_body(c, w, h, scale, t) })
     c.scene_check(copied)
     return t0
@@ -1189,6 +1193,22 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   looks_compare(c, alone, n, wake, cycling, t, then, painted~)
   t0
 }
+
+///|
+/// How a frame was drawn (frame_drawn): built (the old frame built, laid out and painted), painted alone from the last
+/// build's tree, of the window's tree alone, of its looks alone.
+priv enum FrameDrawnAs {
+  Built
+  Painted
+  Alone
+  Looks
+} derive(Eq, Show)
+
+///|
+/// How the last frame was drawn (FrameDrawnAs), said as the way it took is taken: what a host's frame is counted as
+/// (tester_host.mbt), not worked out again from what each way leaves set.
+// kept across runs: written by each frame drawn
+let frame_drawn_as : Ref[FrameDrawnAs] = Ref(Built)
 
 ///|
 /// Whether the frame is being built whole again to be compared with it as it was painted alone or of its looks alone
