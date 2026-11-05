@@ -83,12 +83,32 @@ pub fn[T] ListRows::in_node(
   let motion = NodeRowSizes::{ causes: self.causes, live }
   v.owns(fn() { live.val = false; (due.val)() }) |> ignore
   let all : @signals.Signal[(Array[T], Array[String])] = @signals.signal(([], []))
+  // Model inputs have their own dependencies. Completing a motion reads the same inputs, rather than asking the
+  // page for its rows again and turning a newly allocated, identical array into a change of the whole list.
+  let input : @signals.Computed[(Array[T], Array[String])] = @signals.computed(fn(was) {
+    let given = items()
+    let keys = given.map(key)
+    let keys = match was {
+      Some((_, before)) if before == keys => before
+      _ => keys
+    }
+    (given, keys)
+  })
+  // Versions may read state independently of items. Keep those reads subscribed even when a timer takes the
+  // unchanged-input path in rows_at; a later edit must still start its own change at its own cause.
+  let versions : @signals.Computed[Array[String]] = @signals.computed(fn(was) {
+    let next = input.get().0.map(version)
+    match was {
+      Some(before) if before == next => before
+      _ => next
+    }
+  })
   // Changing the row set also tells its height causes. Publish the rows after that change has been worked out,
   // in one reaction; a lazy computed would tell readers of its causes while it was still replacing its value.
   v.reacts(fn() {
     ended.get() |> ignore
-    let given = items()
-    let rows = self.rows_at(v.cause_at(), given.map(key), given, version,
+    let (given, keys) = input.get()
+    let rows = self.rows_at(v.cause_at(), keys, given, version, versions=versions.get(),
       watched=watched() && !v.shown_nowhere(), ms~, from~, comes~, moves~)
     NodeRowsChange::{ rows, revision: self.causes.n }
   }, fn(change) {
@@ -96,9 +116,11 @@ pub fn[T] ListRows::in_node(
     // A completed way is no longer a source position. Its last measured height is: a row first estimated tall
     // may have ended shorter. Keeping the completed way would make its next departure start from the estimate.
     if self.causes.by.is_empty() { sizes.clear() }
-    let here = Set::from_array(rows.1)
-    for k in shown.keys().collect() {
-      if !here.contains(k) { shown.remove(k); sizes.remove(k) }
+    if !physical_equal(all.get().1, rows.1) {
+      let here = Set::from_array(rows.1)
+      for k in shown.keys().collect() {
+        if !here.contains(k) { shown.remove(k); sizes.remove(k) }
+      }
     }
     (due.val)()
     due.val = if self.causes.end > v.logic_at() {
@@ -113,9 +135,10 @@ pub fn[T] ListRows::in_node(
   })
   // (where each row is among them, by its key: what a row's room reads, not looked for among all of them, the room of
   // each of a long chat's three thousand counted as its windowed list lays them out)
+  let keys = @signals.computed(fn(_) { all.get().1 })
   let key_at = @signals.computed(fn(_) {
     let m : Map[String, Int] = {}
-    for i, k in all.get().1 {
+    for i, k in keys.get() {
       m[k] = i
     }
     m
