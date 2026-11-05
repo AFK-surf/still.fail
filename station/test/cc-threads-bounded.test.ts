@@ -82,6 +82,24 @@ test("copy destinations with the same last entry time use creation time and thre
   } finally { store.close(); }
 });
 
+test("copy destinations with tied times choose the twenty largest thread numbers numerically", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const home = store.openThread("ember", "EMBER", "home-tied-numbers", null, null).id;
+    store.joinThread(home, "agent", "ember");
+    const put = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at)
+      VALUES(?,1,'message','person','viewer',5)`);
+    const ids = Array.from({ length: 30 }, (_, n) => {
+      const id = store.openThread("slack:one", "C", `tied-${n}`, null, null).id;
+      store.joinThread(id, "agent", "slack");
+      db.prepare("UPDATE threads SET created_at=10 WHERE id=?").run(id);
+      put.run(id);
+      return id;
+    });
+    assert.deepEqual(prepared(store, home).map(({ thread }) => thread.id), ids.slice(-20).reverse());
+  } finally { store.close(); }
+});
+
 test("a chat's copy destinations do not traverse its older linked threads", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {

@@ -249,8 +249,9 @@ export function ccSessionReady(db: DatabaseSync, session: string): boolean {
 export const CC_SESSION_ROWS = `SELECT thread,last_at,created_at FROM cc_session_rows INDEXED BY cc_session_order
   WHERE session=?1 AND surface != 'ember' ORDER BY last_at DESC,created_at DESC,thread DESC LIMIT ?2`;
 
+// Read the key as text to keep 64-bit values intact, but order by the integer column, not the text alias.
 export const CC_SESSION_KEYS = `SELECT CAST(thread AS TEXT) AS thread FROM cc_session_rows INDEXED BY cc_session_order
-  WHERE session=?1 AND surface != 'ember' ORDER BY last_at DESC,created_at DESC,thread DESC LIMIT 20`;
+  WHERE session=?1 AND surface != 'ember' ORDER BY last_at DESC,created_at DESC,cc_session_rows.thread DESC LIMIT 20`;
 
 // The union contains at most twenty rows per source session. A destination in the global top twenty must be in the
 // top twenty of every session it shares with the source; otherwise that session alone has twenty distinct earlier
