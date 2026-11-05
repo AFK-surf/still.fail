@@ -86,7 +86,7 @@ test("a reader returns available usage when only old decisions are missing", asy
   let workers: Readers | null = null;
   try {
     writer.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A", createdAt: 0, lastActiveAt: 0 });
-    const thread = writer.openThread("ember", "EMBER", "chat", null, null).id;
+    const thread = writer.openThread("ember", "CHAT", "chat", null, null).id;
     writer.joinThread(thread, "a", "ember");
     const owner = { turn: null, thread, person: "p", profile: "cc" };
     const call = { id: "one", at: 60_000, model: "m", subagent: false, fast: false,

@@ -350,7 +350,7 @@ test("how_a_turn_ended_says_itself_in_words", () => {
 });
 
 test("a_decision_agent_passes_the_chat_shape", () => {
-  let s: J = { key: "ember:c-decision", runtime: "codex", process: "warm", pending: 0, lastTurn: { kind: "message", startedAt: 1, declared: "block", ending: "need_decision", outcome: "completed" } };
+  let s: J = { key: "chat:c-decision", runtime: "codex", process: "warm", pending: 0, lastTurn: { kind: "message", startedAt: 1, declared: "block", ending: "need_decision", outcome: "completed" } };
   s = p.session(s);
   const agent = { status: p.shownStatus(s), badge: p.markOf(s), session: s, profiles: [], choices: [], attention: [], turns: [], threads: [], jobs: [] };
   const checked = conform("ChatAgent", agent) as J;
@@ -597,7 +597,7 @@ test("what_the_clients_show_is_put_in_here", () => {
   let h: J = {
     hostname: "willow", os: "macOS 26", arch: "arm64", cpus: 8, load: 0.5, uptimeSec: 90_000,
     memory: { usedBytes: 8 * GIB, totalBytes: 32 * GIB, swapUsedBytes: null },
-    disk: { totalBytes: 1000 * GIB, freeBytes: 50 * GIB }, emberRssBytes: 100 * 1024 ** 2,
+    disk: { totalBytes: 1000 * GIB, freeBytes: 50 * GIB }, stationRssBytes: 100 * 1024 ** 2,
   };
   h = p.host(h);
   assert.ok(Number.isInteger(h.meters[0].percent) && Number.isInteger(v.quota.windows[0].left));
@@ -608,7 +608,7 @@ test("what_the_clients_show_is_put_in_here", () => {
   h = p.host(h);
   const cpu = h.meters[0];
   assert.deepEqual([cpu.label, cpu.percent, cpu.level, cpu.value, cpu.note], ["CPU", 93, "red", "93%", "负载 4.0 · Apple M1 Pro"]);
-  assert.deepEqual([h.meters[2].level, h.meters[2].value, h.emberText], ["red", "剩余 50.0 GB / 1000 GB", "still.fail 100 MB"]);
+  assert.deepEqual([h.meters[2].level, h.meters[2].value, h.stationText], ["red", "剩余 50.0 GB / 1000 GB", "still.fail 100 MB"]);
   assert.match(h.usage, /^内存 .+ · 磁盘 剩余 50\.0 GB \/ 1000 GB$/);
   assert.equal(h.identity, "Apple M1 Pro · 32 GB · macOS 26");
   assert.deepEqual(h.details.map((d: J) => `${d.label} ${d.value}`), ["主机名 willow", "芯片 Apple M1 Pro · 8 核 · arm64", "已运行 1 天 1 小时", "still.fail 进程占用 100 MB"]);

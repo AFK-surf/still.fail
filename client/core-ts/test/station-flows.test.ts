@@ -1636,7 +1636,7 @@ test("overview_and_host_come_from_events", async () => {
   await host.settle();
   await host.settle();
   assert.deepEqual(open(), ["/events?running=1&views=1&rows=1&shared=1&host=1"]);
-  const sample = { hostname: "studio", os: "macOS 26", arch: "arm64", cpus: 8, cpuModel: "M4", load: 0.2, uptimeSec: 100, memory: { totalBytes: 1024, usedBytes: 512, swapUsedBytes: null }, disk: { path: "/", totalBytes: 1024, freeBytes: 512 }, emberRssBytes: 10, checkedAt: 1 };
+  const sample = { hostname: "studio", os: "macOS 26", arch: "arm64", cpus: 8, cpuModel: "M4", load: 0.2, uptimeSec: 100, memory: { totalBytes: 1024, usedBytes: 512, swapUsedBytes: null }, disk: { path: "/", totalBytes: 1024, freeBytes: 512 }, stationRssBytes: 10, checkedAt: 1 };
   push("host", sample);
   await host.settle();
   apply(host, values);

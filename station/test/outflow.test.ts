@@ -388,9 +388,9 @@ test("v1 reads: the home workspace's usage and chats, field by field, no message
   session("b", "other-ws");
   // Made in the app: it names the home workspace by its id.
   session("c", "ws-home");
-  const home = store.openThreadOf("ember", "EMBER", "100.1", "Fix the build", "ann@x", "a");
-  const away = store.openThreadOf("ember", "EMBER", "100.2", "Theirs", "bob@x", "b");
-  const app = store.openThreadOf("ember", "EMBER", "100.6", "From the app", "ann@x", "c");
+  const home = store.openThreadOf("ember", "CHAT", "100.1", "Fix the build", "ann@x", "a");
+  const away = store.openThreadOf("ember", "CHAT", "100.2", "Theirs", "bob@x", "b");
+  const app = store.openThreadOf("ember", "CHAT", "100.6", "From the app", "ann@x", "c");
   store.joinThread(home.id, "a", "ember");
   store.joinThread(away.id, "b", "ember");
   store.joinThread(app.id, "c", "ember");
@@ -418,7 +418,7 @@ test("v1 reads: the home workspace's usage and chats, field by field, no message
   const later = home.createdAt + 365 * 86_400_000;
   assert.deepEqual(outflowChats(r, later) as any, { since: later, chats: [] });
   // A page at a time: the latest active first, `next` asks for the rest.
-  const second = store.openThreadOf("ember", "EMBER", "100.4", "Ship it", "ann@x", "a");
+  const second = store.openThreadOf("ember", "CHAT", "100.4", "Ship it", "ann@x", "a");
   store.joinThread(second.id, "a", "ember");
   store.insertMessage(newMessage(second.id, "100.5", "person", "ann@x", "ship"));
   readyChats(store);
@@ -443,7 +443,7 @@ test("listing chats for a program does not count the chat's unread history", () 
   const store = Store.open(":memory:");
   try {
     store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/a", token: "a", createdAt: 1, lastActiveAt: 1 });
-    const thread = store.openThreadOf("ember", "EMBER", "100.1", "A chat", "ann@x", "a");
+    const thread = store.openThreadOf("ember", "CHAT", "100.1", "A chat", "ann@x", "a");
     store.joinThread(thread.id, "a", "ember");
     const entry = store.db.prepare("INSERT INTO entries (thread, n, kind, author_kind, author, text, at) VALUES (?, ?, 'message', 'person', 'ann@x', 'body', ?)");
     store.db.exec("BEGIN");
@@ -475,7 +475,7 @@ test("a chat export reads its agents' state without counting pending deliveries"
   const store = Store.open(":memory:");
   try {
     store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", createdAt: 1, lastActiveAt: 1 });
-    const thread = store.openThreadOf("ember", "EMBER", "pending", "Chat", "ann@x", "a");
+    const thread = store.openThreadOf("ember", "CHAT", "pending", "Chat", "ann@x", "a");
     store.joinThread(thread.id, "a", "ember");
     const insert = store.db.prepare("INSERT INTO deliveries (thread,n,session) VALUES (?,?,'a')");
     store.db.exec("BEGIN");
@@ -505,7 +505,7 @@ test("a shared chat's exported agents belong to the requested workspace", () => 
     for (const [key, ws, runtime] of [["a", "A", "claude"], ["b", "B", "codex"], ["home", null, "gemini"]] as const) {
       store.insertSession({ key, connect: "ember", runtime, profile: "p", workspace: "/w", token: key, createdAt: 1, lastActiveAt: 1, ws });
     }
-    const thread = store.openThreadOf("ember", "EMBER", "shared", "Shared", "ann@x", "a");
+    const thread = store.openThreadOf("ember", "CHAT", "shared", "Shared", "ann@x", "a");
     for (const key of ["a", "b", "home"]) store.joinThread(thread.id, key, "ember");
     readyChats(store, { workspace: "A", home: true });
     readyChats(store, { workspace: "B", home: false });
@@ -523,7 +523,7 @@ test("export pages merge home and workspace chats once, including tied activity 
     for (const [key, ws] of [["home", null], ["a", "A"], ["b", "B"]] as const)
       store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, createdAt: 1, lastActiveAt: 1, ws });
     for (const [name, members] of [["one", ["a", "home"]], ["two", ["a"]], ["three", ["home"]], ["four", ["a", "home"]], ["away", ["b"]]] as const) {
-      const thread = store.openThreadOf("ember", "EMBER", name, name, "ann@x", members[0]!);
+      const thread = store.openThreadOf("ember", "CHAT", name, name, "ann@x", members[0]!);
       for (const member of members) store.joinThread(thread.id, member, "ember");
       store.db.prepare("UPDATE threads SET created_at=10 WHERE id=?").run(thread.id);
     }
@@ -545,7 +545,7 @@ test("a page of exported chats does not enumerate every session", () => {
     for (const key of ["a", "b", "c"]) {
       store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key,
         createdAt: 1, lastActiveAt: 1, ws: "A" });
-      const thread = store.openThreadOf("ember", "EMBER", `chat-${key}`, key, "ann@x", key);
+      const thread = store.openThreadOf("ember", "CHAT", `chat-${key}`, key, "ann@x", key);
       store.joinThread(thread.id, key, "ember");
       store.db.prepare("UPDATE threads SET created_at = 10 WHERE id = ?").run(thread.id);
     }
@@ -602,8 +602,8 @@ test("v1 messages: the home workspace's chat's entries after one, oldest first; 
     store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: `/w/${key}`, token: key, createdAt: 1, lastActiveAt: 1, ws } as never);
   session("a", null);
   session("b", "other-ws");
-  const home = store.openThreadOf("ember", "EMBER", "200.1", "Fix the build", "ann@x", "a");
-  const away = store.openThreadOf("ember", "EMBER", "200.2", "Theirs", "bob@x", "b");
+  const home = store.openThreadOf("ember", "CHAT", "200.1", "Fix the build", "ann@x", "a");
+  const away = store.openThreadOf("ember", "CHAT", "200.2", "Theirs", "bob@x", "b");
   store.joinThread(home.id, "a", "ember");
   store.joinThread(away.id, "b", "ember");
   store.insertMessage(newMessage(home.id, "200.3", "person", "ann@x", "the build fails on main"));
@@ -618,7 +618,7 @@ test("v1 messages: the home workspace's chat's entries after one, oldest first; 
   assert.deepEqual([page.messages.map((m: any) => m.text), page.more, page.last], [["fixed in #12"], true, all.messages[2].n]);
   assert.equal(outflowMessages(r, away.id, 0, 100), null, "another workspace's chat");
   // A program names the chat by its thread, a session of it, or its channel and thread ts.
-  assert.deepEqual([outflowThread(r, { session: "a" }), outflowThread(r, { channel: "EMBER", ts: "200.1" }), outflowThread(r, { session: "nobody" }), outflowThread(r, {})], [home.id, home.id, null, null]);
+  assert.deepEqual([outflowThread(r, { session: "a" }), outflowThread(r, { channel: "CHAT", ts: "200.1" }), outflowThread(r, { session: "nobody" }), outflowThread(r, {})], [home.id, home.id, null, null]);
   assert.equal((usageOps.outflowMessages!(r, { session: "a", limit: 1 }) as any).messages[0].text, "the build fails on main");
   assert.equal(outflowMessages(r, 99_999, 0, 100), null);
 });

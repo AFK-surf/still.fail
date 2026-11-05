@@ -1511,7 +1511,7 @@ test("a_workspace_goes_back_to_its_new_chat_once_one_shows_after_a_chat_and_so_w
 test("what_two_chats_agents_wrote_each_other_is_not_in_the_chat_but_on_its_letters_page_by_the_other_chat", async () => {
   const said = (n: number, over: J = {}) => ({ thread: 7, n, kind: "message", ts: `${n}.0`, authorKind: "agent", author: "k1", authorName: null, text: "好", at: n, ...over });
   const backups = { title: "备份", link: "https://x/o/w/s/b" };
-  const coming = (n: number, text: string) => said(n, { author: "peer/ember:c-9", text: `来自 [备份](https://x/o/w/s/b)：\n\n${text}`, letter: { way: "in", ...backups } });
+  const coming = (n: number, text: string) => said(n, { author: "peer/chat:c-9", text: `来自 [备份](https://x/o/w/s/b)：\n\n${text}`, letter: { way: "in", ...backups } });
   const going = (n: number, text: string) => said(n, { text: `发给 [备份](https://x/o/w/s/b)：\n\n${text}`, letter: { way: "out", ...backups } });
   const { host, core } = await started({
     ...base(),
@@ -1519,7 +1519,7 @@ test("what_two_chats_agents_wrote_each_other_is_not_in_the_chat_but_on_its_lette
     "GET /threads/7/entries?limit=50": { first: 1, last: 8, entries: [
       said(1, { authorKind: "person", author: "me@x", text: "改备份" }), coming(2, "脚本放好了"), going(3, "已替换"), said(4),
       // From a station before letters were marked: known by its heading.
-      said(5, { author: "peer/ember:c-8", text: "来自 [部署](https://x/o/w/s/d)：\n\n部署好了" }),
+      said(5, { author: "peer/chat:c-8", text: "来自 [部署](https://x/o/w/s/d)：\n\n部署好了" }),
       coming(6, "**补充**一点\n\n第二段"),
       // The chat's own agent quoting one in the chat says it in the chat.
       said(7, { text: "来自 [备份](https://x/o/w/s/b)：\n\n它的 agent 说了这句" }), said(8),
@@ -1560,7 +1560,7 @@ test("letters_kept_in_their_own_log_are_no_entries_of_the_chat_and_its_letters_p
   // the chat's entries are what it shows, its latest page its latest messages.
   const said = (n: number, over: J = {}) => ({ thread: 7, n, kind: "message", ts: `${n}.0`, authorKind: "agent", author: "k1", authorName: null, text: "好", at: n * 10, ...over });
   const backups = { title: "备份", link: "https://x/o/w/s/b" };
-  const coming = (n: number, at: number, text: string) => ({ ...said(n, { author: "peer/ember:c-9", text: `来自 [备份](https://x/o/w/s/b)：\n\n${text}`, letter: { way: "in", ...backups } }), ts: `l${n}`, at });
+  const coming = (n: number, at: number, text: string) => ({ ...said(n, { author: "peer/chat:c-9", text: `来自 [备份](https://x/o/w/s/b)：\n\n${text}`, letter: { way: "in", ...backups } }), ts: `l${n}`, at });
   const going = (n: number, at: number, text: string) => ({ ...said(n, { text: `发给 [备份](https://x/o/w/s/b)：\n\n${text}`, letter: { way: "out", ...backups } }), ts: `l${n}`, at });
   const s = await started({
     ...base(),
@@ -1746,7 +1746,7 @@ test("a_new_chat_is_there_at_once_and_what_is_sent_to_it_goes_in_once_the_statio
     const path = req.url.replace("https://stillfail.test/admin/api", "");
     if (req.method === "POST" && path === "/sessions") {
       if (!up) return undefined;
-      return { key: "ember:c-1", thread: { ...threadView(9, 0), createdBy: "a@x.com", sessions: [{ thread: 9, session: "ember:c-1", connect: "ember", joinedAt: 1 }] } };
+      return { key: "chat:c-1", thread: { ...threadView(9, 0), createdBy: "a@x.com", sessions: [{ thread: 9, session: "chat:c-1", connect: "ember", joinedAt: 1 }] } };
     }
     if (req.method === "POST" && path === "/threads/9/messages") return { n: 1 };
     return undefined;
@@ -1774,7 +1774,7 @@ test("a_new_chat_is_there_at_once_and_what_is_sent_to_it_goes_in_once_the_statio
   assert.deepEqual([sent.text, sent.client], ["修一下登录", "android 0.1.1123"]);
   // The page is the station's chat now, under the key it was opened with, and says the one the station gave it.
   apply(host, values);
-  assert.deepEqual([v(values, 2).pending, v(values, 2).key], [false, "ember:c-1"]);
+  assert.deepEqual([v(values, 2).pending, v(values, 2).key], [false, "chat:c-1"]);
   core.close();
 });
 
@@ -1814,8 +1814,8 @@ test("a_new_chats_lists_read_before_its_agent_began_and_come_after_it_was_told_a
   // What a new chat changes is read again as its first message goes: the station as it was then, its agent not at work
   // yet. On a slow link that came after the station told the agent at work, and had it at rest again: no activity, no
   // mark, for the whole of its turn (2026-10-25). What was told after a read was asked is no older than what it brings.
-  const made = { ...threadView(9, 0), createdBy: "a@x.com", sessions: [{ thread: 9, session: "ember:c-1", connect: "ember", joinedAt: 1 }] };
-  const atRest = session("ember:c-1");
+  const made = { ...threadView(9, 0), createdBy: "a@x.com", sessions: [{ thread: 9, session: "chat:c-1", connect: "ember", joinedAt: 1 }] };
+  const atRest = session("chat:c-1");
   const working = { ...atRest, process: "running", running: true, turns: 1, lastTurn: { id: "t1", kind: "input", startedAt: 5, endedAt: null } };
   const row = (id: string, session: string, thread: number, agents: J[]) => ({ id, session, thread, title: "新对话", agents, last: null, unread: false, mine: true, lastActiveAt: thread, connect: null, origin: null });
   const answers: J = { ...base(), "GET /chats": [row("7", "k1", 7, [])] };
@@ -1824,13 +1824,13 @@ test("a_new_chats_lists_read_before_its_agent_began_and_come_after_it_was_told_a
   // The station as it is at each moment: what a read is answered with is what it had as it was asked.
   const now = (agent: J) => {
     answers["GET /sessions"] = [session("k1"), agent];
-    answers["GET /sessions/ember%3Ac-1"] = { session: agent, threads: [], turns: agent.lastTurn ? [agent.lastTurn] : [], jobs: [] };
-    answers["GET /chats"] = [row("7", "k1", 7, []), row("9", "ember:c-1", 9, [agent])];
+    answers["GET /sessions/chat%3Ac-1"] = { session: agent, threads: [], turns: agent.lastTurn ? [agent.lastTurn] : [], jobs: [] };
+    answers["GET /chats"] = [row("7", "k1", 7, []), row("9", "chat:c-1", 9, [agent])];
   };
   answers["GET /threads/9"] = { ...made, last: 1 };
   stationReplies(host, (req) => {
     const path = req.url.replace("https://stillfail.test/admin/api", "");
-    if (req.method === "POST" && path === "/sessions") return { key: "ember:c-1", thread: made };
+    if (req.method === "POST" && path === "/sessions") return { key: "chat:c-1", thread: made };
     if (req.method === "POST" && path === "/threads/9/messages") return { n: 1 };
     return undefined;
   });
@@ -1848,7 +1848,7 @@ test("a_new_chats_lists_read_before_its_agent_began_and_come_after_it_was_told_a
   // Its agent begins: the station tells it, and has it so from now.
   now(working);
   s.push("session", working);
-  s.push("chat", row("9", "ember:c-1", 9, [working]));
+  s.push("chat", row("9", "chat:c-1", 9, [working]));
   await host.settle();
   subscribe(core, ui, 4, { topic: "chat", station: "ws/st", thread: 9 });
   await host.settle();
@@ -1865,7 +1865,7 @@ test("what_waited_for_a_new_chat_goes_as_soon_as_it_is_made_not_after_the_lists_
   const { host, core } = await started();
   stationReplies(host, (req) => {
     const path = req.url.replace("https://stillfail.test/admin/api", "");
-    if (req.method === "POST" && path === "/sessions") return { key: "ember:c-1", thread: { ...threadView(9, 0), createdBy: "a@x.com", sessions: [{ thread: 9, session: "ember:c-1", connect: "ember", joinedAt: 1 }] } };
+    if (req.method === "POST" && path === "/sessions") return { key: "chat:c-1", thread: { ...threadView(9, 0), createdBy: "a@x.com", sessions: [{ thread: 9, session: "chat:c-1", connect: "ember", joinedAt: 1 }] } };
     if (req.method === "POST" && path === "/threads/9/messages") return { n: 1 };
     return undefined;
   });

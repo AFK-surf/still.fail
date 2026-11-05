@@ -17,7 +17,7 @@ function fixture() {
     key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token, createdAt: 1, lastActiveAt: 1, ws,
   });
   const addThread = (name: string, members: string[]) => {
-    const thread = store.openThreadOf("ember", "EMBER", name, name, "ann@x", members[0]!);
+    const thread = store.openThreadOf("ember", "CHAT", name, name, "ann@x", members[0]!);
     for (const member of members) store.joinThread(thread.id, member, "ember");
     db.prepare("UPDATE threads SET created_at=10 WHERE id=?").run(thread.id);
     return thread.id;
@@ -96,7 +96,7 @@ for (const recursive of [false, true]) test(`outflow chat order follows replacem
     assert.equal(outflowChatIndexReady(db, viewers[0]!), false);
     settle();
     // A new thread can likewise evict a different id by the surface/channel/thread address.
-    db.prepare("INSERT OR REPLACE INTO threads (id,surface,channel,thread_ts,created_at) VALUES (999,'ember','EMBER','shared',5)").run();
+    db.prepare("INSERT OR REPLACE INTO threads (id,surface,channel,thread_ts,created_at) VALUES (999,'ember','CHAT','shared',5)").run();
     assert.equal(outflowChatIndexReady(db, viewers[0]!), false);
     settle();
     const source = addThread("source", ["a"]), target = addThread("target", ["a"]);

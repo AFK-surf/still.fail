@@ -198,14 +198,14 @@ read code
 echo "got [$code]"
 echo "You are now logged in as [a@x.com]."
 `);
-  const [tool] = loginTools({ logins: () => m.logins, starter: () => ({ ...m.by, chat: "ember:c-1" }), link: (_s, id) => `https://still.fail/w/w1/s/st/login/${id}` });
+  const [tool] = loginTools({ logins: () => m.logins, starter: () => ({ ...m.by, chat: "chat:c-1" }), link: (_s, id) => `https://still.fail/w/w1/s/st/login/${id}` });
   try {
     // Waiting on its prompt is told in the answer of its agent's call, the call waiting on it then (no notice besides).
     const heard: boolean[] = [];
     const stop = m.logins.changes(({ login }) => {
       if (m.logins.get(login)?.waiting) heard.push(m.logins.heard(login));
     });
-    const starting = tool!.run("ember:c-1", { command: "fakegcloud auth login --no-launch-browser" });
+    const starting = tool!.run("chat:c-1", { command: "fakegcloud auth login --no-launch-browser" });
     const id = await upon((w) => m.logins.changes(w), () => m.logins.logins()[0]?.id, "started");
     await m.quietAt(id, "enter the verification code");
     const first = await starting;
@@ -218,7 +218,7 @@ echo "You are now logged in as [a@x.com]."
     assert.match(first, /unless it asks for what the page it gave hands out \(a code to paste back\): then do not answer it; login \{id, paste: true\}/);
     // Not before its agent says so: nothing is to be entered on the card yet.
     assert.throws(() => m.logins.answer(id, "4/abc"), /does not wait for a code/);
-    const told = await tool!.run("ember:c-1", { id, paste: true });
+    const told = await tool!.run("chat:c-1", { id, paste: true });
     assert.equal(m.logins.get(id)!.paste, true);
     assert.match(told, /enter what it gives \(a code\) in the login card's field/);
     assert.match(told, /do not answer its prompt yourself/);
@@ -258,11 +258,11 @@ process.stdin.on("data", (d) => {
   }
 });
 `);
-  const [tool] = loginTools({ logins: () => m.logins, starter: () => ({ ...m.by, chat: "ember:c-1" }), link: (_s, id) => `https://still.fail/w/w1/s/st/login/${id}` });
+  const [tool] = loginTools({ logins: () => m.logins, starter: () => ({ ...m.by, chat: "chat:c-1" }), link: (_s, id) => `https://still.fail/w/w1/s/st/login/${id}` });
   const home = join(m.home, "devin");
   try {
     const command = `env HOME=${home} XDG_DATA_HOME=${home}/.local/share XDG_CONFIG_HOME=${home}/.config ${join(m.bin, "fakedevin")} auth login --force-manual-token-flow`;
-    const starting = tool!.run("ember:c-1", { command });
+    const starting = tool!.run("chat:c-1", { command });
     const id = await upon((w) => m.logins.changes(w), () => m.logins.logins()[0]?.id, "started");
     await m.quietAt(id, "❭");
     const first = await starting;
@@ -274,7 +274,7 @@ process.stdin.on("data", (d) => {
     assert.ok(first.includes("copy the code and paste it below") && !first.includes("app.devin.ai"), first);
     assert.throws(() => m.logins.answer(id, "abc"), /does not wait for a code/);
     // Its agent says so: the card's field, and what the person enters typed at its masked field with Enter.
-    assert.match(await tool!.run("ember:c-1", { id, paste: true }), /in the login card's field/);
+    assert.match(await tool!.run("chat:c-1", { id, paste: true }), /in the login card's field/);
     assert.equal(m.logins.get(id)!.paste, true);
     const answered = m.logins.answer(id, "dvn_code-123", { email: "b@x.com", name: "李四" });
     assert.deepEqual([answered.paste, answered.state], [true, "verifying"]);
@@ -299,9 +299,9 @@ read go
 echo "Waiting for the browser"
 read ok < '${approved.path}'
 `);
-  const [tool] = loginTools({ logins: () => m.logins, starter: () => ({ ...m.by, chat: "ember:c-1", chatTitle: "部署" }), link: (_s, id) => `https://still.fail/w/w1/s/st/login/${id}` });
+  const [tool] = loginTools({ logins: () => m.logins, starter: () => ({ ...m.by, chat: "chat:c-1", chatTitle: "部署" }), link: (_s, id) => `https://still.fail/w/w1/s/st/login/${id}` });
   try {
-    const starting = tool!.run("ember:c-1", { command: "fakegh auth login" });
+    const starting = tool!.run("chat:c-1", { command: "fakegh auth login" });
     const id = await upon((w) => m.logins.changes(w), () => m.logins.logins()[0]?.id, "started");
     await m.quietAt(id, "Authenticate Git");
     const asked = await starting;
@@ -309,7 +309,7 @@ read ok < '${approved.path}'
     assert.match(asked, /It waits on the prompt above: answer it with login/);
     assert.ok(!asked.includes("card"), "no card yet: nothing is the person's to do");
     // Its default, as the agent takes it: Enter.
-    const answering = tool!.run("ember:c-1", { id, key: "enter" });
+    const answering = tool!.run("chat:c-1", { id, key: "enter" });
     await m.quietAt(id, "Press Enter to open");
     await upon((w) => m.logins.follow(id, w), () => m.screen(id).includes("Waiting for the browser"), "opened");
     // Quiet again (its cursor on the line after what it said).
@@ -323,8 +323,8 @@ read ok < '${approved.path}'
     assert.equal(m.logins.get(id)!.chatTitle, "部署");
     await approved.approve();
     await m.until(id, (l) => l.state === "done", "done");
-    assert.match(await tool!.run("ember:c-1", { id }), /It finished/);
-    await assert.rejects(tool!.run("ember:c-1", { id, key: "f13" }), /key: one of/);
+    assert.match(await tool!.run("chat:c-1", { id }), /It finished/);
+    await assert.rejects(tool!.run("chat:c-1", { id, key: "f13" }), /key: one of/);
   } finally {
     await m.logins.close();
   }
@@ -340,13 +340,13 @@ echo "Waiting for the browser"
 read ok < '${approved.path}'
 `);
   const here = { station: "b".repeat(64), name: "TestStation" };
-  const peer = (station: string) => ({ starter: () => ({ ...m.by, chat: null, chatTitle: "部署", peer: { station, session: "ember:c-a" } }), link: (id: string) => `https://still.fail/w/w1/s/${here.station}/login/${id}`, where: here, mine: (id: string) => m.logins.starterOf(id)?.peer?.station === station });
+  const peer = (station: string) => ({ starter: () => ({ ...m.by, chat: null, chatTitle: "部署", peer: { station, session: "chat:c-a" } }), link: (id: string) => `https://still.fail/w/w1/s/${here.station}/login/${id}`, where: here, mine: (id: string) => m.logins.starterOf(id)?.peer?.station === station });
   // The agent's tool hands a call naming a station to the station transport (logins/module.ts), as it was given.
   const asked: unknown[] = [];
-  const [tool] = loginTools({ logins: () => m.logins, starter: () => ({ ...m.by, chat: "ember:c-1" }), link: () => null, remote: async (station, session, args) => (asked.push({ station, session, args }), "told there") });
+  const [tool] = loginTools({ logins: () => m.logins, starter: () => ({ ...m.by, chat: "chat:c-1" }), link: () => null, remote: async (station, session, args) => (asked.push({ station, session, args }), "told there") });
   try {
-    assert.equal(await tool!.run("ember:c-1", { station: "TestStation", command: "gh auth login" }), "told there");
-    assert.deepEqual(asked, [{ station: "TestStation", session: "ember:c-1", args: { station: "TestStation", command: "gh auth login" } }]);
+    assert.equal(await tool!.run("chat:c-1", { station: "TestStation", command: "gh auth login" }), "told there");
+    assert.deepEqual(asked, [{ station: "TestStation", session: "chat:c-1", args: { station: "TestStation", command: "gh auth login" } }]);
     // On the station it runs on: started for the other station's agent, its chat none here.
     const starting = act(m.logins, { command: "fakegh auth login" }, peer("a".repeat(64)));
     const id = await upon((w) => m.logins.changes(w), () => m.logins.logins()[0]?.id, "started");
@@ -358,7 +358,7 @@ read ok < '${approved.path}'
     assert.match(ready, /who should log in to what on TestStation and why/);
     assert.match(ready, /"stationName": "TestStation"/);
     assert.equal(m.logins.get(id)!.chat, undefined, "no chat of this station's");
-    assert.deepEqual(m.logins.starterOf(id)!.peer, { station: "a".repeat(64), session: "ember:c-a" });
+    assert.deepEqual(m.logins.starterOf(id)!.peer, { station: "a".repeat(64), session: "chat:c-a" });
     // Another station acts only on the logins it started.
     await assert.rejects(act(m.logins, { id }, peer("c".repeat(64))), /no login/);
     assert.match(await act(m.logins, { id }, peer("a".repeat(64))), /The person's browser step is ready/);
@@ -731,7 +731,7 @@ test("the logins done here are kept: command, who, when and how each ended, with
   try {
     const ok = await m.logins.start("fakeok", m.by);
     await m.until(ok.id, (l) => l.state === "done", "done");
-    const waits = await m.logins.start("fakewait", { ...m.by, chat: "ember:c-1", chatTitle: "部署" });
+    const waits = await m.logins.start("fakewait", { ...m.by, chat: "chat:c-1", chatTitle: "部署" });
     await m.until(waits.id, (l) => l.step === "device", "device");
     m.logins.cancel(waits.id, { email: "b@x.com", name: "李四" });
     // One kept before names were the program's (named env, its first word): named by its program now.
@@ -744,7 +744,7 @@ test("the logins done here are kept: command, who, when and how each ended, with
     assert.deepEqual(kept.map((l) => [l.name, l.command.join(" "), l.state, l.by.name]), [["fakewait", "fakewait", "cancelled", "张三"], ["fakeok", "fakeok", "done", "张三"], ["devin", old.command.join(" "), "done", "张三"]]);
     assert.ok(kept.every((l) => l.url === undefined && l.code === undefined && l.error === undefined && typeof l.endedAt === "number"));
     assert.equal(again.get(ok.id)!.state, "done");
-    assert.deepEqual([kept[0]!.chat, kept[0]!.chatTitle, kept[0]!.doneBy?.name], ["ember:c-1", "部署", "李四"]);
+    assert.deepEqual([kept[0]!.chat, kept[0]!.chatTitle, kept[0]!.doneBy?.name], ["chat:c-1", "部署", "李四"]);
     await again.close();
   } finally {
     await m.logins.close();

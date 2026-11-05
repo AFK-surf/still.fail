@@ -443,7 +443,7 @@ test("a turn ended before the counter began is not revisited within the safety m
 
 test("a running Codex call with a known path does not search old rollouts while its file has yet to appear", async () => {
   const r = rig();
-  const key = "ember:c-pending-rollout";
+  const key = "chat:c-pending-rollout";
   const id = "pending-rollout";
   const workspace = join(r.data, "workspace");
   const home = join(r.data, "homes/cc");
@@ -482,7 +482,7 @@ test("a turn finishing after its chat switches runtime is counted on its origina
   const time = await today();
   const r = rig({ clock: time.clock });
   const workspace = join(r.data, "sessions/ember/c-switch/workspace");
-  const key = "ember:c-switch";
+  const key = "chat:c-switch";
   session(r.store, key, workspace, r.store.now());
   r.store.startTurnFor("t1", key, "input", { profile: "cc", person: "a@x", thread: null });
   r.store.setRuntimeSessionId(key, "r1");
@@ -502,7 +502,7 @@ test("a switched runtime counts new calls without filling older calls from its t
   const r = rig({ clock: time.clock });
   const now = r.store.now();
   const workspace = join(r.data, "sessions/ember/c-switch-old/workspace");
-  const key = "ember:c-switch-old";
+  const key = "chat:c-switch-old";
   session(r.store, key, workspace, now - 120_000);
   r.store.startTurnFor("t1", key, "input", { profile: "cc", person: "a@x", thread: null });
   r.store.setRuntimeSessionId(key, "r1");
@@ -522,23 +522,23 @@ test("each call is counted once, for whom its turn worked, where and on what", a
   const r = rig({ clock: time.clock });
   const workspace = join(r.data, "sessions/ember/c-1/workspace");
   const created = r.store.now();
-  session(r.store, "ember:c-1", workspace, created);
-  const chat = r.store.openThreadOf("ember", "ember", "1.0", null, "creator@x", "ember:c-1");
-  r.store.joinThread(chat.id, "ember:c-1", "ember");
+  session(r.store, "chat:c-1", workspace, created);
+  const chat = r.store.openThreadOf("ember", "ember", "1.0", null, "creator@x", "chat:c-1");
+  r.store.joinThread(chat.id, "chat:c-1", "ember");
   await pause();
   // A turn from before turns said whom they were for: its first person's message says.
-  r.store.startTurn("t1", "ember:c-1", "input");
+  r.store.startTurn("t1", "chat:c-1", "input");
   const [n] = r.store.insertMessage(newMessage(chat.id, "2.0", "person", "b@x", "hi"));
-  r.store.deliver(chat.id, n, ["ember:c-1"]);
-  r.store.markDelivered("ember:c-1", [{ thread: chat.id, n, apart: false }]);
+  r.store.deliver(chat.id, n, ["chat:c-1"]);
+  r.store.markDelivered("chat:c-1", [{ thread: chat.id, n, apart: false }]);
   r.store.endTurn("t1", "completed", null, null, null);
   await pause();
-  r.store.startTurnFor("t2", "ember:c-1", "input", { profile: "cc2", person: "a@x", thread: chat.id });
+  r.store.startTurnFor("t2", "chat:c-1", "input", { profile: "cc2", person: "a@x", thread: chat.id });
   r.store.endTurn("t2", "completed", null, null, null);
   await pause();
   // A job's notice goes on with the work of the turn before.
-  r.store.startTurn("t3", "ember:c-1", "job");
-  const starts = r.store.listTurns("ember:c-1").map((t) => t.summary.startedAt);
+  r.store.startTurn("t3", "chat:c-1", "job");
+  const starts = r.store.listTurns("chat:c-1").map((t) => t.summary.startedAt);
 
   const project = join(r.data, "transcripts/claude", claudeProject(workspace));
   const main = join(project, "r1.jsonl");
@@ -567,7 +567,7 @@ test("each call is counted once, for whom its turn worked, where and on what", a
   assert.equal(r.store.usageSince(), starts[0]! + 1);
 
   // Its session gone, what it spent stays.
-  r.store.deleteSession("ember:c-1");
+  r.store.deleteSession("chat:c-1");
   assert.equal(r.store.usageGroups(0, MAX, 0).reduce((s, g) => s + g.calls, 0), 4);
 });
 
@@ -576,15 +576,15 @@ test("each part's calls are put to the turns they were made in, those turns alon
   const pause = () => time.adjust(15);
   const r = rig({ clock: time.clock });
   const workspace = join(r.data, "sessions/ember/c-1/workspace");
-  session(r.store, "ember:c-1", workspace, r.store.now());
-  const chat = r.store.openThreadOf("ember", "ember", "1.0", null, "creator@x", "ember:c-1");
-  r.store.joinThread(chat.id, "ember:c-1", "ember");
+  session(r.store, "chat:c-1", workspace, r.store.now());
+  const chat = r.store.openThreadOf("ember", "ember", "1.0", null, "creator@x", "chat:c-1");
+  r.store.joinThread(chat.id, "chat:c-1", "ember");
   // The turns read for each part: from when its first call was made until its last.
   const real = r.store.usageTurns.bind(r.store);
   const asked: [number, number][] = [];
   r.store.usageTurns = (key: string, from: number, until: number) => (asked.push([from, until]), real(key, from, until));
   await pause();
-  r.store.startTurnFor("t1", "ember:c-1", "input", { profile: "cc", person: "a@x", thread: chat.id });
+  r.store.startTurnFor("t1", "chat:c-1", "input", { profile: "cc", person: "a@x", thread: chat.id });
   const main = join(r.data, "transcripts/claude", claudeProject(workspace), "r1.jsonl");
   let last = 0;
   const at = () => (last = r.store.now() + 1);
@@ -598,14 +598,14 @@ test("each part's calls are put to the turns they were made in, those turns alon
   assert.deepEqual(asked.at(-1), [last, last]);
   // A turn begun (a job's notice: for whom the one before worked), and a message taken during it.
   await pause();
-  r.store.startTurn("t2", "ember:c-1", "job");
+  r.store.startTurn("t2", "chat:c-1", "job");
   append(main, [claudeLine("m3", at(), "claude-opus-5-5", usage(3, 0, 0, 0, 1))]);
   assert.equal(await r.usage.read(), 1);
   assert.deepEqual(asked.at(-1), [last, last]);
   await pause();
   const [n] = r.store.insertMessage(newMessage(chat.id, "2.0", "person", "b@x", "再看看"));
-  r.store.deliver(chat.id, n, ["ember:c-1"]);
-  r.store.markDelivered("ember:c-1", [{ thread: chat.id, n, apart: false }]);
+  r.store.deliver(chat.id, n, ["chat:c-1"]);
+  r.store.markDelivered("chat:c-1", [{ thread: chat.id, n, apart: false }]);
   append(main, [claudeLine("m4", at(), "claude-opus-5-5", usage(4, 0, 0, 0, 1))]);
   assert.equal(await r.usage.read(), 1);
   assert.deepEqual(asked.at(-1), [last, last]);

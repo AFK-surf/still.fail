@@ -10,9 +10,9 @@ test("widget models name the latest matching message as edits and membership cha
       store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w",
         token: key, createdAt: 1, lastActiveAt: 1 });
     }
-    const one = store.openThread("ember", "EMBER", "one", null, null).id;
-    const two = store.openThread("ember", "EMBER", "two", null, null).id;
-    const other = store.openThread("ember", "EMBER", "other", null, null).id;
+    const one = store.openThread("ember", "CHAT", "one", null, null).id;
+    const two = store.openThread("ember", "CHAT", "two", null, null).id;
+    const other = store.openThread("ember", "CHAT", "other", null, null).id;
     for (const thread of [one, two, other]) assert.equal(widgetSourcesStep(db, thread).done, true);
     store.joinThread(one, "widget-session", "ember");
     store.joinThread(two, "widget-session", "ember");
@@ -26,7 +26,7 @@ test("widget models name the latest matching message as edits and membership cha
     put.run(other, 1, "message", null, 999, attachment("other.html"));
     store.putWidgetState("widget-session", path, "{}", "selected");
     const expect = (name: string, thread: string | null) => assert.deepEqual(store.untoldWidgetModels("widget-session"),
-      [{ path, name, thread: thread === null ? null : ["EMBER", thread], model: "selected" }]);
+      [{ path, name, thread: thread === null ? null : ["CHAT", thread], model: "selected" }]);
     expect("newer.html", "two");
     put.run(two, 2, "edit", 1, 300, "[]");
     expect("first.html", "one");
@@ -49,7 +49,7 @@ test("a widget model does not traverse other messages to find its attachment", (
   try {
     store.insertSession({ key: "widget-session", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w",
       token: "widget-session", createdAt: 1, lastActiveAt: 1 });
-    const thread = store.openThread("ember", "EMBER", "widget-thread", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "widget-thread", null, null).id;
     assert.equal(widgetSourcesStep(db, thread).done, true);
     store.joinThread(thread, "widget-session", "ember");
     const path = "/w/target.html";
@@ -70,12 +70,12 @@ test("a widget model does not traverse other messages to find its attachment", (
     const plan = db.prepare(`EXPLAIN QUERY PLAN ${WIDGET_SOURCE}`).all("widget-session", path) as { detail: string }[];
     assert.ok(plan.some(({ detail }) => detail.includes("widget_source_by_path")), "the path lookup uses its index");
     const read = () => store.untoldWidgetModels("widget-session");
-    assert.deepEqual(read(), [{ path, name: "target.html", thread: ["EMBER", "widget-thread"], model: "selected" }]);
+    assert.deepEqual(read(), [{ path, name: "target.html", thread: ["CHAT", "widget-thread"], model: "selected" }]);
     const before = visits;
     assert.ok(before > 0, "the attachment lookup was observed");
     add(42, 401);
     visits = 0;
-    assert.deepEqual(read(), [{ path, name: "target.html", thread: ["EMBER", "widget-thread"], model: "selected" }]);
+    assert.deepEqual(read(), [{ path, name: "target.html", thread: ["CHAT", "widget-thread"], model: "selected" }]);
     assert.equal(visits, before, `widget message candidates grew from ${before} to ${visits}`);
   } finally { store.close(); }
 });
@@ -85,7 +85,7 @@ test("a widget model takes only the newest of repeated attachments in a thread",
   try {
     store.insertSession({ key: "widget-session", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w",
       token: "widget-session", createdAt: 1, lastActiveAt: 1 });
-    const thread = store.openThread("ember", "EMBER", "widget-thread", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "widget-thread", null, null).id;
     assert.equal(widgetSourcesStep(db, thread).done, true);
     store.joinThread(thread, "widget-session", "ember");
     const path = "/w/target.html";

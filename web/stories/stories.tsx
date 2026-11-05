@@ -495,13 +495,13 @@ const letters: DemoExtension = {
     if (t.topic !== "chatLetters") return undefined;
     const start = Date.now() - 6 * 60_000;
     const at = (i: number) => start + i * 50_000;
-    const link = "https://app.still.fail/o/w/s/ember%3Ac-4dbf0d0c6e";
+    const link = "https://app.still.fail/o/w/s/chat%3Ac-4dbf0d0c6e";
     const theirs = (chat: string, from: string) => ({ name: `「${chat}」的 agent`, from, maker: ANTHROPIC });
-    const mbui = "https://app.still.fail/o/w/s/ember%3Ac-06ffb79643";
+    const mbui = "https://app.still.fail/o/w/s/chat%3Ac-06ffb79643";
     const ours = { name: "Opus 5.5", maker: ANTHROPIC, runtime: "claude" as const };
     const letter = (i: number, way: "in" | "out", text: string, by = theirs("BFT 备份尺寸分析", link)): ChatMessage => ({
       seq: 100 + i, thread: Number(t.thread), ts: `${at(i) / 1000}`, attachments: [], quotes: [], createdAt: at(i), waiting: false, time: { createdAt: stamp(at(i)) },
-      authorKind: "agent", author: way === "in" ? "peer/ember:c-9" : "ember:c-1", text, md: markdown(text), mine: false, system: false, by: way === "in" ? by : ours, way,
+      authorKind: "agent", author: way === "in" ? "peer/chat:c-9" : "chat:c-1", text, md: markdown(text), mine: false, system: false, by: way === "in" ? by : ours, way,
     });
     return {
       title: "备份改成 zstd",

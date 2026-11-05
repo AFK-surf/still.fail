@@ -31,7 +31,7 @@ test("a failed card post index installation leaves no partial schema", () => {
 test("an incompatible card post index is neither read nor prepared", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const thread = store.openThread("ember", "EMBER", "incompatible", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "incompatible", null, null).id;
     db.exec("UPDATE card_post_meta SET version=999");
     assert.throws(() => cardPostsReady(db, thread), /incompatible/);
     assert.throws(() => cardPostsStep(db, thread), /incompatible/);
@@ -57,7 +57,7 @@ test("a new card post does not stage a conflict", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
     installCardPosts(db);
-    const thread = store.openThread("ember", "EMBER", "fast", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "fast", null, null).id;
     let staged = 0;
     db.function("count_card_post_stage", () => { staged++; return 0; });
     db.exec("CREATE TRIGGER count_card_post_stage AFTER INSERT ON card_post_changed BEGIN SELECT count_card_post_stage(); END");
@@ -77,9 +77,9 @@ for (const recursive of [false, true]) {
     try {
       db.exec(`PRAGMA recursive_triggers=${recursive ? "ON" : "OFF"}`);
       beforeIndex(db);
-      const untracked = store.openThread("ember", "EMBER", "untracked", null, null).id;
+      const untracked = store.openThread("ember", "CHAT", "untracked", null, null).id;
       installCardPosts(db);
-      const tracked = store.openThread("ember", "EMBER", "tracked", null, null).id;
+      const tracked = store.openThread("ember", "CHAT", "tracked", null, null).id;
       assert.equal(cardPostsReady(db, tracked), true);
       assert.equal(cardPostsReady(db, untracked), false);
       const put = db.prepare(`INSERT INTO entries(rowid,thread,n,kind,target,ts,author_kind,author,at,card,options)
@@ -110,8 +110,8 @@ for (const recursive of [false, true]) {
       try {
         db.exec(`PRAGMA recursive_triggers=${recursive ? "ON" : "OFF"}`);
         installCardPosts(db);
-        const a = store.openThread("ember", "EMBER", "a", null, null).id;
-        const b = store.openThread("ember", "EMBER", "b", null, null).id;
+        const a = store.openThread("ember", "CHAT", "a", null, null).id;
+        const b = store.openThread("ember", "CHAT", "b", null, null).id;
         const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at,card) VALUES(?,1,'message','agent','a',1,?)");
         put.run(a, textCard); put.run(b, textCard);
         const rowid = (db.prepare("SELECT rowid FROM entries WHERE thread=? AND n=1").get(b) as { rowid: number }).rowid;
@@ -126,9 +126,9 @@ for (const recursive of [false, true]) {
     try {
       db.exec(`PRAGMA recursive_triggers=${recursive ? "ON" : "OFF"}`);
       beforeIndex(db);
-      const untracked = store.openThread("ember", "EMBER", "untracked", null, null).id;
+      const untracked = store.openThread("ember", "CHAT", "untracked", null, null).id;
       installCardPosts(db);
-      const tracked = ["one", "two"].map((name) => store.openThread("ember", "EMBER", name, null, null).id);
+      const tracked = ["one", "two"].map((name) => store.openThread("ember", "CHAT", name, null, null).id);
       const threads = [...tracked, untracked];
       let seed = 71239;
       const next = (max: number) => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed % max; };
@@ -161,7 +161,7 @@ test("old card posts are prepared in bounded batches while another connection wr
   let other: DatabaseSync | null = null;
   try {
     beforeIndex(db);
-    const thread = store.openThread("ember", "EMBER", "old", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "old", null, null).id;
     const put = db.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,at,card,options)
       VALUES(?,?,?,?,'agent','a',?,?,?)`);
     put.run(thread, 1, "message", null, 1, textCard, null);
@@ -191,7 +191,7 @@ test("a writer between the old-position read and commit cannot be missed", () =>
   let other: DatabaseSync | null = null;
   try {
     beforeIndex(db);
-    const thread = store.openThread("ember", "EMBER", "race", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "race", null, null).id;
     db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at,card) VALUES(?,1,'message','agent','a',1,?)").run(thread, textCard);
     installCardPosts(db);
     other = new DatabaseSync(path);
@@ -232,7 +232,7 @@ test("a failed card post batch rolls back its rows and cursor", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
     beforeIndex(db);
-    const thread = store.openThread("ember", "EMBER", "rollback", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "rollback", null, null).id;
     db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at,card) VALUES(?,1,'message','agent','a',1,?)").run(thread, textCard);
     installCardPosts(db);
     db.exec("CREATE TRIGGER deny_card_post BEFORE INSERT ON card_posts BEGIN SELECT RAISE(ABORT, 'no'); END");
@@ -249,7 +249,7 @@ test("an old store losing a card index during preparation restarts the bounded p
   const store = Store.open(":memory:"), db = store.db;
   try {
     beforeIndex(db);
-    const thread = store.openThread("ember", "EMBER", "missing-index", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "missing-index", null, null).id;
     const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at,card,options) VALUES(?,?,'message','agent','a',?,?,?)");
     put.run(thread, 1, 1, null, '["yes"]');
     put.run(thread, 2, 2, textCard, null);

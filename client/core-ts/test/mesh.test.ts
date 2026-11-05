@@ -1260,10 +1260,10 @@ sim("a_grant_heard_lends_the_phone_to_its_station_and_its_end_lets_it_go", async
   await s.run(adb.run({ kind: "on", on: true }));
   // Asked, not yet granted: nothing lent.
   const exp = Math.floor(s.time.now() / 1000) + 3600;
-  adb.heard(station, { id: "p1", session: "k", chat: "EMBER/1.0", reason: "看首屏", status: "pending", at: 1 });
+  adb.heard(station, { id: "p1", session: "k", chat: "CHAT/1.0", reason: "看首屏", status: "pending", at: 1 });
   assert.deepEqual(adb.wanted(), []);
   assert.equal(adb.grants().length, 1);
-  adb.heard(station, { id: "p1", session: "k", chat: "EMBER/1.0", reason: "看首屏", status: "granted", scope: "hour", exp, at: 1 });
+  adb.heard(station, { id: "p1", session: "k", chat: "CHAT/1.0", reason: "看首屏", status: "granted", scope: "hour", exp, at: 1 });
   assert.deepEqual(adb.wanted(), [station]);
   await s.until(() => seen.offer !== undefined && adb.value().lends?.[0]?.adb === "connected");
   assert.equal(seen.offer.adb.connect, 5555);
@@ -1306,8 +1306,8 @@ sim("a_phone_lent_to_two_stations_says_the_one_waiting_to_be_paired", async (s) 
   const exp = Math.floor(s.time.now() / 1000) + 3600;
   const first = `ws/${paired.id()}`;
   const second = `ws/${waiting.id()}`;
-  adb.heard(first, { id: "p1", session: "k1", chat: "EMBER/1.0", reason: "看首屏", status: "granted", scope: "hour", exp, at: 1 });
-  adb.heard(second, { id: "p2", session: "k2", chat: "EMBER/2.0", reason: "装 mod", status: "granted", scope: "hour", exp, at: 2 });
+  adb.heard(first, { id: "p1", session: "k1", chat: "CHAT/1.0", reason: "看首屏", status: "granted", scope: "hour", exp, at: 1 });
+  adb.heard(second, { id: "p2", session: "k2", chat: "CHAT/2.0", reason: "装 mod", status: "granted", scope: "hour", exp, at: 2 });
   await s.until(() => adb.value().lends?.length === 2 && adb.value().lends.every((l: J) => l.adb !== null));
   assert.deepEqual(adb.value().lends.map((l: J) => [l.station, l.adb]), [[first, "connected"], [second, "unpaired"]]);
   const value = adb.value();

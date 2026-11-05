@@ -208,7 +208,7 @@ test("relaying is refused where the bot is not, through a connect that cannot, a
   const [, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
   await assert.rejects(relay(r.hub, thread, ADA, { connect: "cl", channel: "C9" }, ""), /not in C9/);
   await assert.rejects(relay(r.hub, thread, ADA, { connect: "gpt", channel: "C1" }, ""), /cannot take this chat/);
-  const lone = r.store.openThread("ember", "EMBER", "1.5", null, "ada@x.com");
+  const lone = r.store.openThread("ember", "CHAT", "1.5", null, "ada@x.com");
   await assert.rejects(relay(r.hub, lone, ADA, { connect: "cl", channel: "C1" }, ""), /no agent/);
   assert.equal(begun.length, 0, "nothing was started");
   await assert.rejects(relay(r.hub, thread, ADA, { link: "https://other.slack.com/archives/C1/p1650000000000100" }, ""), /not a link/);

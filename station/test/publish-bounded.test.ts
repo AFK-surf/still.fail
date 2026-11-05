@@ -11,7 +11,7 @@ test("publishing an earlier preview does not read later entries for the preview'
   try {
     store.insertSession({ key: "agent", connect: "ember", runtime: "claude", profile: "cc",
       workspace: "/work", token: "token", createdAt: 1, lastActiveAt: 1 });
-    const thread = store.openThread("ember", "EMBER", "chat", "The chat", null).id;
+    const thread = store.openThread("ember", "CHAT", "chat", "The chat", null).id;
     store.joinThread(thread, "agent", "ember");
     const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,?,'message','agent','agent',?,?)");
     db.exec("BEGIN");

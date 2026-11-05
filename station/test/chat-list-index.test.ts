@@ -12,7 +12,7 @@ test("installing recent chat writers avoids old message and membership history, 
   const store = Store.open(":memory:");
   const db = store.db;
   try {
-    const id = store.openThread("ember", "EMBER", "old", "Old", null).id;
+    const id = store.openThread("ember", "CHAT", "old", "Old", null).id;
     db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',1)").run(id);
     db.setAuthorizer((action, name) => action === constants.SQLITE_CREATE_TRIGGER && name === "recent_chat_entry_before_change"
       ? constants.SQLITE_DENY : constants.SQLITE_OK);
@@ -33,8 +33,8 @@ test("installing recent chat writers avoids old message and membership history, 
 for (const value of ["created time", "message time"] as const) test(`an undisplayed chat's 64-bit ${value} does not prevent a recent page`, () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const visible = store.openThread("ember", "EMBER", "visible", "Visible", null).id;
-    const hidden = store.openThread("ember", "EMBER", "hidden", "Hidden", null).id;
+    const visible = store.openThread("ember", "CHAT", "visible", "Visible", null).id;
+    const hidden = store.openThread("ember", "CHAT", "hidden", "Hidden", null).id;
     db.prepare("UPDATE threads SET created_at = 100 WHERE id = ?").run(visible);
     if (value === "created time") db.prepare("UPDATE threads SET created_at = ? WHERE id = ?").run(-9_007_199_254_740_993n, hidden);
     else {
@@ -53,10 +53,10 @@ for (const value of ["created time", "message time"] as const) test(`an undispla
 for (const arrival of ["old", "new"] as const) test(`an undisplayed ${arrival} chat's 64-bit id does not prevent a recent page`, () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
-    const visible = store.openThread("ember", "EMBER", "visible", "Visible", null).id;
+    const visible = store.openThread("ember", "CHAT", "visible", "Visible", null).id;
     db.prepare("UPDATE threads SET created_at = 100 WHERE id = ?").run(visible);
     const insert = () => db.prepare(`INSERT INTO threads(id,surface,channel,thread_ts,title,created_at)
-      VALUES (?,'ember','EMBER','hidden','Hidden',0)`).run(9_007_199_254_740_993n);
+      VALUES (?,'ember','CHAT','hidden','Hidden',0)`).run(9_007_199_254_740_993n);
     if (arrival === "old") insert();
     installRecentChatIndex(db);
     if (arrival === "new") insert();
@@ -73,7 +73,7 @@ for (const recursive of [false, true]) test(`a global recent page uses a maintai
   try {
     db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
     const thread = (name: string, created: number) => {
-      const id = store.openThread("ember", "EMBER", name, name, null).id;
+      const id = store.openThread("ember", "CHAT", name, name, null).id;
       db.prepare("UPDATE threads SET created_at = ? WHERE id = ?").run(created, id);
       return id;
     };
@@ -125,7 +125,7 @@ for (const recursive of [false, true]) test(`an edit or a letter does not make t
   const db = store.db;
   try {
     db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
-    const id = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
+    const id = store.openThread("ember", "CHAT", "chat", "Chat", null).id;
     db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',1)").run(id);
     installRecentChatIndex(db);
     while (!stepRecentChatIndex(db, 3).done) { /* Prepare the old chat. */ }
@@ -144,8 +144,8 @@ for (const recursive of [false, true]) for (const how of ["append", "replace"] a
     const db = store.db;
     try {
       db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
-      const chat = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
-      const other = store.openThread("ember", "EMBER", "other", "Other", null).id;
+      const chat = store.openThread("ember", "CHAT", "chat", "Chat", null).id;
+      const other = store.openThread("ember", "CHAT", "other", "Other", null).id;
       db.prepare("UPDATE threads SET created_at = 1 WHERE id IN (?, ?)").run(chat, other);
       const message = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,?,'message','person','p','hello',?)");
       message.run(chat, 1, 10);
@@ -168,8 +168,8 @@ for (const recursive of [false, true]) test(`old message inserts keep or restore
   const db = store.db;
   try {
     db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
-    const chat = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
-    const other = store.openThread("ember", "EMBER", "other", "Other", null).id;
+    const chat = store.openThread("ember", "CHAT", "chat", "Chat", null).id;
+    const other = store.openThread("ember", "CHAT", "other", "Other", null).id;
     db.prepare("UPDATE threads SET created_at = 1 WHERE id IN (?, ?)").run(chat, other);
     const message = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,?,'message','person','p','hello',?)");
     message.run(chat, 5, 30);
@@ -196,9 +196,9 @@ for (const recursive of [false, true]) for (const how of ["number", "timestamp",
     const db = store.db;
     try {
       db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
-      const id = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
+      const id = store.openThread("ember", "CHAT", "chat", "Chat", null).id;
       db.prepare("UPDATE threads SET created_at = 100 WHERE id = ?").run(id);
-      const other = store.openThread("ember", "EMBER", "other", "Other", null).id;
+      const other = store.openThread("ember", "CHAT", "other", "Other", null).id;
       db.prepare("UPDATE threads SET created_at = 50 WHERE id = ?").run(other);
       db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at) VALUES (?,1,'message','same','person','p','hello',1)").run(id);
       if (how === "timestamp update")
@@ -225,15 +225,15 @@ for (const recursive of [false, true]) for (const what of ["thread", "thread upd
     const db = store.db;
     try {
       db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
-      const id = store.openThread("ember", "EMBER", "chat", "Chat", null).id;
+      const id = store.openThread("ember", "CHAT", "chat", "Chat", null).id;
       db.prepare("UPDATE threads SET created_at = 100 WHERE id = ?").run(id);
-      const other = store.openThread("ember", "EMBER", "other", "Other", null).id;
+      const other = store.openThread("ember", "CHAT", "other", "Other", null).id;
       db.prepare("UPDATE threads SET created_at = 50 WHERE id = ?").run(other);
       db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',1)").run(id);
       installRecentChatIndex(db);
       while (!stepRecentChatIndex(db, 3).done) { /* Prepare before an older writer replaces a row. */ }
       if (what === "thread")
-        db.prepare("INSERT OR REPLACE INTO threads (id,surface,channel,thread_ts,created_at) VALUES (999,'ember','EMBER','chat',200)").run();
+        db.prepare("INSERT OR REPLACE INTO threads (id,surface,channel,thread_ts,created_at) VALUES (999,'ember','CHAT','chat',200)").run();
       else if (what === "thread update") db.prepare("UPDATE OR REPLACE threads SET thread_ts = 'chat' WHERE id = ?").run(other);
       else db.prepare("INSERT OR REPLACE INTO thread_state(thread,last_n,said_n,person_n,letters) VALUES (?,1,NULL,NULL,0)").run(id);
       assert.equal(readGlobalRecentChatIndex(db, 5), null, "a replaced row must not leave a stale page");
@@ -253,7 +253,7 @@ for (const recursive of [false, true]) test(`recent ordering matches the origina
     const pick = (n: number) => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed % n; };
     let nextName = 0;
     const addThread = () => {
-      const id = store.openThread("ember", "EMBER", `chat-${nextName++}`, "Chat", null).id;
+      const id = store.openThread("ember", "CHAT", `chat-${nextName++}`, "Chat", null).id;
       db.prepare("UPDATE threads SET created_at = ? WHERE id = ?").run(pick(100), id);
     };
     for (let i = 0; i < 20; i++) addThread();
@@ -287,7 +287,7 @@ for (const recursive of [false, true]) test(`recent ordering matches the origina
           insert.run(id, n, pick(2) ? "message" : "edit", null, pick(100));
         } else if (action === 6) db.prepare("UPDATE threads SET created_at = ? WHERE id = ?").run(pick(100), id);
         else if (action === 7) db.prepare("DELETE FROM threads WHERE id = ?").run(id);
-        else if (action === 8) db.prepare("INSERT OR REPLACE INTO threads(id,surface,channel,thread_ts,created_at) VALUES (?,'ember','EMBER',?,?)")
+        else if (action === 8) db.prepare("INSERT OR REPLACE INTO threads(id,surface,channel,thread_ts,created_at) VALUES (?,'ember','CHAT',?,?)")
           .run(100_000 + i, thread_ts, pick(100));
       }
       check(i);
@@ -306,8 +306,8 @@ test("a recent page keeps its count and ordering on one snapshot while another c
   const db = store.db;
   let reader: DatabaseSync | undefined;
   try {
-    const first = store.openThread("ember", "EMBER", "first", "First", null).id;
-    const second = store.openThread("ember", "EMBER", "second", "Second", null).id;
+    const first = store.openThread("ember", "CHAT", "first", "First", null).id;
+    const second = store.openThread("ember", "CHAT", "second", "Second", null).id;
     db.prepare("UPDATE threads SET created_at = 1 WHERE id IN (?, ?)").run(first, second);
     const message = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',?)");
     message.run(first, 10);
@@ -326,7 +326,7 @@ test("a recent page keeps its count and ordering on one snapshot while another c
               if (member === "get") return (...args: Parameters<typeof row.get>) => {
                 const result = row.get(...args);
                 if (added === null) {
-                  added = store.openThread("ember", "EMBER", "added", "Added", null).id;
+                  added = store.openThread("ember", "CHAT", "added", "Added", null).id;
                   message.run(added, 30);
                   while (!stepRecentChatIndex(db, 3).done) { /* The writer finishes between the two reads. */ }
                 }

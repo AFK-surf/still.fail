@@ -22,6 +22,10 @@ import { equal, isObject } from "../util.ts";
 import { ensureFilesKept, ensureKept, ensureLetters, ensureMdKept, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, versionOf } from "./schema.ts";
 import { readItem, type Said } from "../elsewhere.ts";
 import { timed } from "../spent.ts";
+import { OWN_SURFACES } from "../titles.ts";
+
+/// The station's own chats' surfaces, as SQL's list.
+const OWN_IN = OWN_SURFACES.map((s) => `'${s}'`).join(", ");
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -1146,7 +1150,7 @@ export class AccountDb {
 
   /// The station's chat bound to an agent: the still.fail thread it started.
   threadOf(station: string, session: string): number | null {
-    const r = this.sql.all("SELECT id FROM thread WHERE station = ? AND listed = 1 AND first_member = ? AND surface IN ('ember', 'stillfail') ORDER BY sort_at DESC, created_at DESC, id DESC LIMIT 1", [station, session])[0];
+    const r = this.sql.all(`SELECT id FROM thread WHERE station = ? AND listed = 1 AND first_member = ? AND surface IN (${OWN_IN}) ORDER BY sort_at DESC, created_at DESC, id DESC LIMIT 1`, [station, session])[0];
     return r ? (r[0] as number) : null;
   }
 

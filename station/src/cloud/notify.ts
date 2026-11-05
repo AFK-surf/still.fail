@@ -12,6 +12,7 @@ import type { Notice } from "../read/notices.ts";
 import type { Store } from "../store/store.ts";
 import type { Cloud } from "./state.ts";
 import { liveClock } from "../ops/fibers.ts";
+import { STATION_AUTHOR } from "../store/rows.ts";
 
 /// Notices wait this long to go out together; at most this many in one post (the cloud takes no more).
 const GATHER_MS = 1_000;
@@ -66,7 +67,7 @@ export class Notifier {
 
   /// People's messages and the station's ⚠️ in its own chats.
   private said(thread: number, entries: { n: number; kind: string; authorKind: string; text: string | null; at: number }[]) {
-    const worth = entries.some((e) => e.kind === "message" && e.at >= this.since && (e.authorKind === "person" || (e.authorKind === "ember" && (e.text ?? "").startsWith("⚠️"))));
+    const worth = entries.some((e) => e.kind === "message" && e.at >= this.since && (e.authorKind === "person" || (e.authorKind === STATION_AUTHOR && (e.text ?? "").startsWith("⚠️"))));
     if (worth) this.ask("saidNotices", { thread, entries, since: this.since, lang: stationLang() });
   }
 

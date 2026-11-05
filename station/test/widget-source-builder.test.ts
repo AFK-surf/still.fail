@@ -11,8 +11,8 @@ import { Rig } from "./hub-fakes.ts";
 
 function oldThreads(store: Store): [number, number] {
   const db = store.db;
-  const first = store.openThread("ember", "EMBER", "old-first", null, null).id;
-  const second = store.openThread("ember", "EMBER", "old-second", null, null).id;
+  const first = store.openThread("ember", "CHAT", "old-first", null, null).id;
+  const second = store.openThread("ember", "CHAT", "old-second", null, null).id;
   const put = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
     VALUES(?,?,'message','agent','wanted',?,?)`);
   const files = (name: string) => JSON.stringify([{ path: "/w/pick.html", name }]);

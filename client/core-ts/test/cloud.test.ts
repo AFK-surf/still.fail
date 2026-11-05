@@ -219,8 +219,8 @@ test("operations_make_their_requests", () => {
 });
 
 test("pinning_a_chat_goes_by_its_session", () => {
-  const r = req("chat.pin", { station: "ws/st", session: "ember:c-1", pinned: true });
-  assert.deepEqual([r.method, r.path], ["PUT", "/sessions/ember%3Ac-1/pin"]);
+  const r = req("chat.pin", { station: "ws/st", session: "chat:c-1", pinned: true });
+  assert.deepEqual([r.method, r.path], ["PUT", "/sessions/chat%3Ac-1/pin"]);
   assert.equal(req("chat.pin", { station: "ws/st", session: "k", pinned: false }).method, "DELETE");
 });
 

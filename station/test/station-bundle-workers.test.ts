@@ -27,10 +27,10 @@ test("the workers in a station release start and process a batch", { skip: !proc
     store.db.exec(`CREATE TABLE signin_asks (id TEXT PRIMARY KEY, session TEXT NOT NULL, owner TEXT NOT NULL, status TEXT NOT NULL, body TEXT NOT NULL);
       CREATE INDEX signin_asks_by_session ON signin_asks (session, status);`);
     installSigninSaveIndex(store.db);
-    const thread = store.openThread("ember", "EMBER", "old", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "old", null, null).id;
     store.joinThread(thread, "old-cc", "ember");
     store.db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,ts,at) VALUES (?,1,'message','agent','s','post',1)").run(thread);
-    const saidThread = store.openThread("ember", "EMBER", "old-said", null, null).id;
+    const saidThread = store.openThread("ember", "CHAT", "old-said", null, null).id;
     const put = store.db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,ts,at) VALUES (?,?,'message',?,?,?,?)");
     put.run(saidThread, 1, "agent", "s", "first", 1);
     for (let n = 2; n <= 70; n++) put.run(saidThread, n, "person", "p", `m${n}`, n);

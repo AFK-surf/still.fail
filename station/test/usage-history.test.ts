@@ -13,7 +13,7 @@ test("missing old decision results leave the available usage and chat totals vis
   const store = Store.open(":memory:");
   try {
     session(store, "a", "workspace-a");
-    const thread = store.openThread("ember", "EMBER", "chat", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "chat", null, null).id;
     store.joinThread(thread, "a", "ember");
     store.recordUsage("/a", { session: "a", offset: 1, model: "m" }, "claude", [[{
       id: "call", at: 60_000, model: "m", subagent: false, fast: false, input: 2, cacheRead: 0,

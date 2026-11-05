@@ -22,7 +22,7 @@ test("a workspace's session list reads details only for the sessions it shows", 
       store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
         token: `token-${n}`, createdAt: n, lastActiveAt: n });
       ws.run(n < 2 ? "mine" : "elsewhere", key);
-      const thread = store.openThread("ember", "EMBER", `chat-${n}`, null, null).id;
+      const thread = store.openThread("ember", "CHAT", `chat-${n}`, null, null).id;
       store.joinThread(thread, key, "ember");
       put.run(thread, `person-${n}`, n);
       length.run(key, n + 10);

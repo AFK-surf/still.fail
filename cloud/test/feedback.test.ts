@@ -58,7 +58,7 @@ const report = (extra: Record<string, unknown> = {}) => ({
   body: "chat_post 回了 500，消息没出现在 thread 里。",
   area: "station",
   reporter: "Ada, Slack #ops",
-  context: { version: "0.1.1309", session: "ember:c-1", runtime: "claude" },
+  context: { version: "0.1.1309", session: "chat:c-1", runtime: "claude" },
   logs: "ERROR chat_post: 500",
   ...extra,
 });
@@ -146,7 +146,7 @@ test("a report the changelog fixes is marked fixed, and its station told once th
   const h = await harness();
   try {
     const { station, aliceTokens } = await workspace(h);
-    await send(h, station, report({ context: { session: "ember:c-1", thread: "EMBER/1.1" } }));
+    await send(h, station, report({ context: { session: "chat:c-1", thread: "CHAT/1.1" } }));
     await send(h, station, report({ key: "k2", title: "安卓列表跳动" }));
     const bucket = (await h.mf.getR2Bucket("RELEASES", "api")) as unknown as { put(key: string, value: string): Promise<unknown> };
     // Nothing in the changelog yet: nothing fixed.
@@ -169,8 +169,8 @@ test("a report the changelog fixes is marked fixed, and its station told once th
     assert.equal(out[0].version, 1330);
     assert.deepEqual(out[0].parts, ["station"]);
     assert.equal(out[0].released.station, 1335);
-    assert.equal(out[0].session, "ember:c-1");
-    assert.equal(out[0].thread, "EMBER/1.1");
+    assert.equal(out[0].session, "chat:c-1");
+    assert.equal(out[0].thread, "CHAT/1.1");
     // Told: not again.
     assert.deepEqual(await fixed(h, station, [out[0].id]), []);
     await bucket.put("android/latest.json", JSON.stringify({ versionCode: 1341 }));

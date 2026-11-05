@@ -15,7 +15,7 @@ for (const reader of [false, true]) test(`a recent chat list reads details only 
       workspace: "/work", token: "token", createdAt: 1, lastActiveAt: 1 });
     const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person',?,'hello',?)");
     for (let i = 0; i < 250; i++) {
-      const thread = store.openThread("ember", "EMBER", `chat-${i}`, `Title ${i}`, null).id;
+      const thread = store.openThread("ember", "CHAT", `chat-${i}`, `Title ${i}`, null).id;
       store.joinThread(thread, "agent", "ember");
       put.run(thread, `person-${i}`, i);
     }
@@ -69,7 +69,7 @@ test("recent chat selection keeps workspace rules, ordering and the number left 
     }
     const put = db.prepare("INSERT INTO entries(thread,n,kind,target,author_kind,author,text,at) VALUES (?,?,?,?,?,?,?,?)");
     const make = (name: string, home: string | null, members: string[], created: number, said: number | null) => {
-      const thread = store.openThread("ember", "EMBER", name, name, null).id;
+      const thread = store.openThread("ember", "CHAT", name, name, null).id;
       db.prepare("UPDATE threads SET home = ?, created_at = ? WHERE id = ?").run(home, created, thread);
       for (const member of members) store.joinThread(thread, member, "ember");
       if (said !== null) put.run(thread, 1, "message", null, "person", "person", `words ${name}`, said);
