@@ -425,6 +425,8 @@ pub fn fixture_file_png(name : String) -> Bytes {
     "peek.png" => (160, 100, (0xFF, 0xFF, 0xFF), (0x5B, 0x7B, 0xB2))
     // a video's still (its poster: a frame of a screen recording, 16:9)
     "演示录屏.mp4" => (160, 90, (0x1E, 0x2A, 0x3A), (0x5B, 0x7B, 0xB2))
+    // (chat-many-images's pictures: as big as a photo shown in a chat is drawn from)
+    n if n.has_prefix("many-") => (640, 480, (0x30, 0x40, 0x90), (0xE8, 0xB4, 0x3C))
     _ => (120, 80, (0x2F, 0x8F, 0x5B), (0xE8, 0xE4, 0xDC))
   }
   let rgba = FixedArray::make(w * h * 4, b'\x00')
@@ -471,6 +473,8 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
             with_file_links(rich_chat(f.older))
           } else if f.mode == "chat-table-images" {
             with_table_images(rich_chat(f.older))
+          } else if f.mode == "chat-many-images" {
+            with_many_images(rich_chat(f.older))
           } else if f.mode == "chat-screens" || f.mode == "chat-screens-pc" {
             with_message(rich_chat(f.older), screens_answer)
           } else if f.mode == "chat-screens-cold" {
@@ -1722,6 +1726,33 @@ pub let file_links_md : Json = [
     ],
   ],
 ]
+
+///|
+/// MBUI_FIXTURE=chat-many-images: 30 messages more at the chat's end, each a picture of its own (many-N.png, 640 by
+/// 480 pixels as it is made, each its own name, so none is another's in a cache): a chat of many pictures scrolled over
+/// as a phone's is, its frames and its pictures' asking and decoding counted on a device (2026-11-05: its scrolling
+/// took 512 layout passes in one frame on arch/next, a frame of 5 s, none on main)
+pub fn with_many_images(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let all = match m.get("messages") {
+        Some(Array(a)) => a.copy()
+        _ => []
+      }
+      for i in 0..<30 {
+        all.push(
+          msg(100 + i, "agent", by_agent("anthropic", "claude", "s-c1"), "图 \{i}", "1 分钟前", {
+            "attachments": [file("many-\{i}.png", 640, 480, 120000)],
+          }),
+        )
+      }
+      o["messages"] = Json::array(all)
+      Json::object(o)
+    }
+    _ => v
+  }
+}
 
 ///|
 /// MBUI_FIXTURE=chat-table-images: a last message placing two of its pictures in a table's cells, a wide one and a

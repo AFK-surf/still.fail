@@ -1579,8 +1579,17 @@ fn Ctx::tree_unseen(self : Ctx, c : @view.Content, s : Double) -> Unit {
     // (none in its bones: nothing it would show asked for, View::bones)
     Some((src, _, most)) if c.bones == 0L => {
       let (fw, fh) = c.image_for
-      let room = if fw > 0.0 || fh > 0.0 { dmax(fw, fh) * s } else { dmax(c.w * s, c.h * s) }
-      self.image_ready(src, dmin(room * self.scale, most.to_double())) |> ignore
+      // (for the pixels it is drawn at where it shows: where it lies in it as big, else as it covers or fills it, as
+      // Ctx::image_px has an old view's, never the box's longer side for a picture that covers it)
+      let px = if fw > 0.0 || fh > 0.0 {
+        dmax(fw, fh) * s * self.scale
+      } else {
+        match c.image_in {
+          Some(((_, _, iw, ih), _)) => dmax(iw, ih) * s * self.scale
+          None => self.image_px(src, c.w * s, c.h * s, if c.image_cover { FitCover } else { FitFill })
+        }
+      }
+      self.image_ready(src, dmin(px, most.to_double())) |> ignore
     }
     _ => ()
   }
