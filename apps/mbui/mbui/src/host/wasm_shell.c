@@ -66,6 +66,8 @@ void moonbit_panic(void) {
 
 // How deep the program's own stack may go (wasmtime's max_wasm_stack: MBUI_WASM_STACK, in bytes, else wasmtime's own)
 static size_t wasm_stack_max;
+// Whether the program's traps are checked in its code (Android: app.traps "checked"), else taken by signals
+static int traps_checked;
 // Where the program's compiled code lies (wasmtime_module_image_range): a fault's pc said as an offset in it
 static uintptr_t code_start, code_end;
 
@@ -598,9 +600,24 @@ int main(int argc, char **argv) {
   wasmtime_config_max_wasm_stack_set(config, wasm_stack_max);
 #ifdef __ANDROID__
   // (on Android a trap by a signal is never taken by wasmtime's handler, ART's in the way (2026-11-05: an `unreachable`
-  // and the stack's limit each ended the process with SIGILL): the program's traps checked in its code instead, each
-  // returned to its call as any trap is (die, its stack said); the program compiled to match (scripts/wasm-app.sh)
-  wasmtime_config_signals_based_traps_set(config, false);
+  // and the stack's limit each ended the process with SIGILL). The program says how it was compiled for its traps:
+  // app.traps beside it in the app's files, "checked" (in its code: each trap returned to its call, its stack said;
+  // what a build that hunts a crash wants, its CPU dearer) or "signals" (as ever: none said, any ends the process;
+  // what a phone's development build has), scripts/wasm-app.sh MBUI_WASM_TRAPS; none: "signals". The shell takes the
+  // same: a program compiled the other way is told as it is read, not run.)
+  {
+    char traps[16] = {0};
+    FILE *t = fopen(android_file("app.traps"), "rb");
+    if (t) {
+      size_t got = fread(traps, 1, sizeof traps - 1, t);
+      fclose(t);
+      traps[got] = 0;
+      for (size_t k = 0; k < got; k++)
+        if (traps[k] == '\n' || traps[k] == '\r') traps[k] = 0;
+    }
+    traps_checked = strcmp(traps, "checked") == 0;
+    wasmtime_config_signals_based_traps_set(config, !traps_checked);
+  }
 #endif
 #ifdef MBW_CRASH
   {
@@ -635,7 +652,11 @@ int main(int argc, char **argv) {
   if (len > 6 && strcmp(path + len - 6, ".cwasm") == 0) {
     // (compiled ahead for this machine by wasmtime's command line, as this wasmtime would: a device's)
     err = wasmtime_module_deserialize_file(engine, path, &module);
-    if (err) die("the program is not one compiled for this shell", err, NULL);
+    if (err) {
+      report("wasm shell: the shell takes traps %s (app.traps); a program compiled the other way is not run "
+             "(scripts/wasm-app.sh MBUI_WASM_TRAPS)\n", traps_checked ? "checked in the code" : "by signals");
+      die("the program is not one compiled for this shell", err, NULL);
+    }
   } else {
     wasm_byte_vec_t wasm = read_file(path);
     err = wasmtime_module_new(engine, (const uint8_t *)wasm.data, wasm.size, &module);
