@@ -37,6 +37,9 @@ priv struct TriplePanel {
   mut pick : Json?
   /// whether its body was drawn last as a sheet's (its foot then leaves the runtime to the body: triple_foot)
   mut sheet : Bool
+  /// the level the model picked was last brought into view in (its first, all of them, a kind's; "" none yet): once
+  /// as each is come to, not each frame, so what the person scrolled stays where they left it
+  mut shown : String
 }
 
 ///|
@@ -132,7 +135,7 @@ pub fn open_triple_panel(
     return
   }
   triple.open = me
-  let contents : TriplePanel = { serial: 0, field: @ui.Field::new(), query: "", kind: "", all: false, pick: page, sheet: false }
+  let contents : TriplePanel = { serial: 0, field: @ui.Field::new(), query: "", kind: "", all: false, pick: page, sheet: false, shown: "" }
   pick_draft(src, station, of, { "open": Json::boolean(true) })
   @sf.panel(
     @sf.t("android-chat.new.model"),
@@ -330,8 +333,11 @@ fn triple_sample() -> Json {
 fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String, contents : TriplePanel, saved : String, close : () -> Unit) -> Unit {
   let v = contents.pick_now(src, station, of)
   if v is None {
-    // (read the first time: the panel of made-up models, in its bones)
+    // (read the first time: the panel of made-up models, in its bones; the model picked brought into view once its own
+    // are read)
+    let shown = contents.shown
     @sf.waiting(c, fn() { triple_body(c, @sfbase.sample_source, station, of, contents, Some(triple_sample()), saved, close) })
+    contents.shown = shown
     return
   }
   triple_body(c, src, station, of, contents, v, saved, close)
@@ -751,6 +757,13 @@ fn triple_body(
       })
       |> ignore
     }
+  }
+  // the model picked in view as the panel opens and as each level is come to (2026-11-05 用户「模型选择面板打开不会自动
+  // 滚动到能看见已选择模型的地方」), not while what is typed filters them
+  let level = if !all { "first" } else if kind_open { "all/" + kind } else { "all" }
+  if !searching && contents.shown != level {
+    contents.shown = level
+    c.show(c.id("triple/model/" + picked))
   }
   // the model picked is another station's: said over the foot, which borrows it rather than confirming
   let borrow = field(v, "borrow")

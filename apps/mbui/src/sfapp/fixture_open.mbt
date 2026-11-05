@@ -520,6 +520,15 @@ pub fn open_mode(mode : String) -> Unit {
       @sffixture.new_fix.liked.push_iter(["claude-sonnet-5", "kimi-for-coding"].iter())
       @sffixture.new_fix.liked.push_iter(@sffixture.fix_providers[:8].iter().map(fn(p) { p.0 }))
     }
+    // (as many starred, the one picked the first of them: in a sheet risen from the foot the lowest, past what it
+    // shows at first)
+    if mode == "newchat-providers-model-far" {
+      let n = @sffixture.new_fix
+      n.liked.push_iter(["claude-sonnet-5", "kimi-for-coding"].iter())
+      n.liked.push_iter(@sffixture.fix_providers[:8].iter().map(fn(p) { p.0 }))
+      n.model = "claude-sonnet-5"
+      n.d_model = n.model
+    }
     match mode {
       "newchat-station" => @sfpages.new_chat_ask("station")
       "newchat-preset" => @sfpages.new_chat_ask("preset")
@@ -529,7 +538,7 @@ pub fn open_mode(mode : String) -> Unit {
       "newchat-preset-new-add" => @sfpages.new_chat_ask("preset-new-add")
       "newchat-preset-new-browse" => @sfpages.new_chat_ask("preset-new-browse")
       "newchat-preset-picked" => @sffixture.new_fix.preset = "p-sf"
-      "newchat-model" | "newchat-crowded-model" | "newchat-tall-model" | "newchat-crowded-model-liked" | "newchat-providers-model" | "newchat-providers-model-liked" | "newchat-providers-model-many" =>
+      "newchat-model" | "newchat-crowded-model" | "newchat-tall-model" | "newchat-crowded-model-liked" | "newchat-providers-model" | "newchat-providers-model-liked" | "newchat-providers-model-many" | "newchat-providers-model-far" =>
         @sfpages.new_chat_ask("model")
       _ => ()
     }
