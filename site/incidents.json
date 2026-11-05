@@ -1,0 +1,9 @@
+[
+  {
+    "level": "P1",
+    "start": "2026-11-05T21:15:00+08:00",
+    "end": null,
+    "zh": { "title": "旧版 app 打不开 Station 和设置页", "body": "#4108 把 station 上报的 emberRssBytes 改名成 stationRssBytes。旧版 app 还要求旧字段，workspace 里只要有一台更新过的 station，Stations 列表就解码失败，Station 页报错，设置页也刷不出来。修复 #4137 已合并：station 同时发两个名字。更新 app，或把 station 更新到带修复的版本后恢复。" },
+    "en": { "title": "Older apps could not open Stations and Settings", "body": "#4108 renamed a field stations report, emberRssBytes, to stationRssBytes. Older apps still require the old name, so one updated station in a workspace made the Stations list fail to decode, with errors on the Stations page and Settings not loading. The fix, #4137, is merged: stations send both names. Updating the app, or the station to a build with the fix, restores it." }
+  }
+]

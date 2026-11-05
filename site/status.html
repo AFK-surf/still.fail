@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>状态 · still.fail</title>
+<meta name="description" content="still.fail 各项服务现在的状态。">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" type="image/png" href="/favicon-32.png">
+<!-- still.fail/status: all of it in this file, asking only GET /v1/status (cloud/src/status.ts) and the incidents written
+     down beside it (incidents.json), so that it loads when the rest does not (web/vite.demo.config.ts statusPage). The theme and the language are the site's choices
+     (web/src/site/ThemeSwitch.tsx, Site.tsx). -->
+<script>try{var t=localStorage.getItem("stillfail.site.theme");if(t!=="system")document.documentElement.dataset.theme=t==="dark"?"dark":"light"}catch(e){document.documentElement.dataset.theme="light"}</script>
+<style>
+:root{--bg:#FAFAF9;--fg:#18181B;--muted:#52525B;--dim:#71717A;--line:rgba(0,0,0,.09);--empty:rgba(0,0,0,.08);--up:#22A06B;--degraded:#D99A1C;--down:#D9483B}
+:root[data-theme=dark]{--bg:#09090B;--fg:#F4F4F5;--muted:#A1A1AA;--dim:#71717A;--line:rgba(255,255,255,.09);--empty:rgba(255,255,255,.1)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#09090B;--fg:#F4F4F5;--muted:#A1A1AA;--dim:#71717A;--line:rgba(255,255,255,.09);--empty:rgba(255,255,255,.1)}}
+*{box-sizing:border-box}
+html{background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
+main{max-width:720px;margin:0 auto;padding:0 24px 64px}
+a{color:inherit;text-decoration:none}
+.brand{display:flex;align-items:center;height:64px;font-size:18px;font-weight:700;letter-spacing:-.02em}
+.brand i{font-style:normal;color:#E5704A;margin:0 -.035em}
+.verdict{display:flex;align-items:center;gap:12px;margin:32px 0 8px;font-size:28px;font-weight:650;letter-spacing:-.02em;line-height:1.25}
+.when{margin:0 0 40px;color:var(--dim);font-size:13px;font-variant-numeric:tabular-nums}
+h2{margin:40px 0 4px;font-size:13px;font-weight:500;color:var(--dim)}
+.row{padding:16px 0;border-bottom:1px solid var(--line)}
+.top{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.name{font-weight:550}
+.from{color:var(--dim);font-size:13px;font-variant-numeric:tabular-nums}
+.from[data-off]{color:var(--down)}
+.state{margin-left:auto;color:var(--muted);font-size:13px;white-space:nowrap}
+.dot{flex:none;width:9px;height:9px;border-radius:50%;background:var(--dim)}
+.verdict .dot{width:13px;height:13px}
+[data-state=up]{--c:var(--up)}[data-state=degraded]{--c:var(--degraded)}[data-state=down]{--c:var(--down)}
+[data-state] .dot,.dot[data-state]{background:var(--c,var(--dim))}
+.bars{display:flex;gap:2px;height:24px}
+.bars span{flex:1;min-width:0;border-radius:2px;background:var(--empty)}
+.bars span[data-state]{background:var(--c)}
+.range{display:flex;justify-content:space-between;margin-top:6px;color:var(--dim);font-size:12px}
+.incident{padding:16px 0;border-bottom:1px solid var(--line)}
+.incident .top{margin-bottom:4px}
+.level{flex:none;padding:0 7px;border-radius:999px;font-size:12px;font-weight:600;line-height:20px;color:#fff;background:var(--c)}
+.incident p{margin:0;color:var(--muted);font-size:14px}
+.incident time{display:block;margin-bottom:6px;color:var(--dim);font-size:13px;font-variant-numeric:tabular-nums}
+.note{margin:32px 0 0;color:var(--dim);font-size:13px}
+</style>
+</head>
+<body>
+<main>
+<a class="brand" href="/">still<i>.</i>fail</a>
+<div class="verdict" id="verdict"><span class="dot"></span><span id="words"></span></div>
+<p class="when" id="when"></p>
+<div id="now"></div>
+<div id="list"></div>
+<div id="past"></div>
+<p class="note" id="note"></p>
+</main>
+<script>
+(function () {
+  var API = "https://app.still.fail/v1/status";
+  // As the site chooses it: a language chosen there, or the browser's.
+  var en;
+  try { var chosen = localStorage.getItem("stillfail.site.lang"); en = chosen === "en" || (chosen !== "zh" && !/^zh/i.test(navigator.language || "")); } catch (e) { en = !/^zh/i.test(navigator.language || ""); }
+  var say = en ? {
+    title: "Status · still.fail", up: "All systems normal", some: "Some services are having problems", checking: "Checking…",
+    unreachable: "Can't reach still.fail cloud", unreachableWhen: "Either the API is down or your network can't reach it. Retrying every minute.",
+    stale: "Checks have stopped; what is below may be out of date", services: "Services", relays: "Relays", open: "Open incidents", past: "Past incidents", ongoing: "ongoing", incident: "An incident is open",
+    state: { up: "Normal", degraded: "Limited", down: "Down", unknown: "Unknown" }, names: { site: "Website", web: "Web app", api: "API and sign-in", share: "Shared chats", releases: "Install and updates" },
+    place: { "北京": "Beijing", "香港": "Hong Kong", "深圳": "Shenzhen" }, ago: "30 days ago", today: "Today", notChecked: "not checked",
+    updated: function (t) { return "Checked every minute · updated " + t; }, from: function (ms) { return ms + " ms from you"; }, off: "unreachable from you",
+    note: "This covers what still.fail runs itself. Whether your own station is online is shown in the app.",
+  } : {
+    title: "状态 · still.fail", up: "一切正常", some: "部分服务有问题", checking: "正在检查…",
+    unreachable: "连不上 still.fail cloud", unreachableWhen: "可能是 API 挂了，也可能是你的网络到不了它。每分钟重试一次。",
+    stale: "检查已停止，下面的状态可能已经过时", services: "服务", relays: "中继", open: "进行中的事故", past: "过去的事故", ongoing: "进行中", incident: "有进行中的事故",
+    state: { up: "正常", degraded: "受限", down: "故障", unknown: "未知" }, names: { site: "官网", web: "网页版", api: "API 与登录", share: "分享页", releases: "安装与更新" },
+    place: {}, ago: "30 天前", today: "今天", notChecked: "未检查",
+    updated: function (t) { return "每分钟检查一次 · 更新于 " + t; }, from: function (ms) { return "从你这里 " + ms + " ms"; }, off: "从你这里连不上",
+    note: "这里看的是 still.fail 自己运行的服务。你自己的 station 是否在线，要在 app 里看。",
+  };
+  document.documentElement.lang = en ? "en" : "zh-CN";
+  document.title = say.title;
+  document.getElementById("note").textContent = say.note;
+  document.getElementById("words").textContent = say.checking;
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  function verdict(state, words, when) {
+    document.getElementById("verdict").dataset.state = state;
+    document.getElementById("words").textContent = words;
+    document.getElementById("when").textContent = when;
+  }
+  // The share of a day's checks that passed, as a colour: a few minutes' trouble in a day shows.
+  function dayState(share) { return share === null ? null : share >= 0.999 ? "up" : share >= 0.95 ? "degraded" : "down"; }
+
+  function row(service, now, days) {
+    var box = el("div", "row");
+    var top = el("div", "top");
+    top.dataset.state = service.state;
+    top.appendChild(el("span", "dot"));
+    top.appendChild(el("span", "name", service.relay ? say.place[service.name] || service.name : say.names[service.id] || service.id));
+    var from = el("span", "from");
+    if (service.relay) top.appendChild(from);
+    top.appendChild(el("span", "state", say.state[service.state]));
+    box.appendChild(top);
+    var bars = el("div", "bars");
+    service.days.forEach(function (share, i) {
+      var bar = el("span");
+      var state = dayState(share);
+      if (state) bar.dataset.state = state;
+      var day = new Date((now - (days - 1 - i) * 86400) * 1000).toISOString().slice(0, 10);
+      bar.title = day + " · " + (share === null ? say.notChecked : (Math.floor(share * 1000) / 10) + "%");
+      bars.appendChild(bar);
+    });
+    box.appendChild(bars);
+    var range = el("div", "range");
+    range.appendChild(el("span", "", say.ago));
+    range.appendChild(el("span", "", say.today));
+    box.appendChild(range);
+    if (service.relay) time(service.relay, from);
+    return box;
+  }
+
+  // How this browser reaches a relay (its /ping is readable from any page: cloud/src/relay-worker.ts). The second of
+  // two, the first spending its time on the connection.
+  function ping(url) {
+    var started = performance.now();
+    return fetch(url + "/ping", { cache: "no-store", signal: AbortSignal.timeout(8000) }).then(function (r) {
+      if (!r.ok) throw new Error(String(r.status));
+      return r.text().then(function () { return performance.now() - started; });
+    });
+  }
+  function time(url, into) {
+    ping(url).then(function () { return ping(url); }).then(function (ms) {
+      into.textContent = say.from(Math.round(ms));
+    }, function () {
+      into.dataset.off = "";
+      into.textContent = say.off;
+    });
+  }
+
+  // Incidents are written down by people (site/incidents.json): the checks see a service that does not answer, not one
+  // whose answers an app cannot use. P1: most people cannot use still.fail or a main page of it.
+  var incidents = [];
+  function stamp(iso) { return new Date(iso).toLocaleString(en ? "en" : "zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); }
+  function incident(item) {
+    var box = el("div", "incident");
+    var words = item[en ? "en" : "zh"];
+    var top = el("div", "top");
+    var level = el("span", "level", item.level);
+    level.dataset.state = item.end ? "degraded" : "down";
+    top.appendChild(level);
+    top.appendChild(el("span", "name", words.title));
+    box.appendChild(top);
+    box.appendChild(el("time", "", stamp(item.start) + " – " + (item.end ? stamp(item.end) : say.ongoing)));
+    box.appendChild(el("p", "", words.body));
+    return box;
+  }
+  function showIncidents() {
+    var parts = [["now", say.open, function (i) { return !i.end; }], ["past", say.past, function (i) { return i.end; }]];
+    parts.forEach(function (part) {
+      var into = document.getElementById(part[0]);
+      into.replaceChildren();
+      var items = incidents.filter(part[2]).sort(function (a, b) { return a.start < b.start ? 1 : -1; });
+      if (!items.length) return;
+      into.appendChild(el("h2", "", part[1]));
+      items.forEach(function (item) { into.appendChild(incident(item)); });
+    });
+  }
+
+  function show(status) {
+    var list = document.getElementById("list");
+    list.replaceChildren();
+    var groups = [[say.services, status.services.filter(function (s) { return !s.relay; })], [say.relays, status.services.filter(function (s) { return s.relay; })]];
+    groups.forEach(function (group) {
+      if (!group[1].length) return;
+      list.appendChild(el("h2", "", group[0]));
+      group[1].forEach(function (service) { list.appendChild(row(service, status.now, status.days)); });
+    });
+    var states = status.services.map(function (s) { return s.state; });
+    var when = say.updated(new Date(status.now * 1000).toLocaleTimeString(en ? "en" : "zh-CN", { hour: "2-digit", minute: "2-digit" }));
+    if (states.indexOf("down") >= 0) verdict("down", say.some, when);
+    else if (states.indexOf("degraded") >= 0) verdict("degraded", say.some, when);
+    else if (incidents.some(function (i) { return !i.end; })) verdict("down", say.incident, when);
+    else if (states.indexOf("unknown") >= 0) verdict("degraded", say.stale, when);
+    else verdict("up", say.up, when);
+  }
+
+  function load() {
+    fetch(API, { cache: "no-cache", signal: AbortSignal.timeout(15000) }).then(function (r) {
+      if (!r.ok) throw new Error(String(r.status));
+      return r.json();
+    }).then(show).catch(function () {
+      document.getElementById("list").replaceChildren();
+      verdict("down", say.unreachable, say.unreachableWhen);
+    });
+  }
+  function loadIncidents() {
+    return fetch("/incidents.json", { cache: "no-cache" }).then(function (r) { return r.ok ? r.json() : []; }).then(function (list) { incidents = list; showIncidents(); }).catch(function () {});
+  }
+  loadIncidents().then(load);
+  setInterval(function () { loadIncidents().then(load); }, 60000);
+})();
+</script>
+</body>
+</html>
