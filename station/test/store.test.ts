@@ -18,6 +18,7 @@ import { SESSION_LIST_CONNECT, SESSION_LIST_DISPLACED, SESSION_LIST_FIRST, SESSI
   SESSION_LIST_SCOPE_CONNECT } from "../src/store/session-list-index.ts";
 import { SESSION_BINDINGS_DELETE, SESSION_BINDINGS_DISPLACED, SESSION_BINDINGS_EXISTS, SESSION_BINDINGS_FIRST, SESSION_BINDINGS_NEXT, SESSION_BINDINGS_SELECTED } from "../src/store/session-bindings-index.ts";
 import { ARCHIVE_KEEP_EXISTS, ARCHIVE_PIN_EXISTS } from "../src/store/archive-mark-index.ts";
+import { widgetSourcesStep } from "../src/store/widget-sources.ts";
 import { SESSION_UP_JOB, SESSION_UP_JOBS, SESSION_UP_JOBS_CONFLICT, SESSION_UP_JOBS_DISPLACED, SESSION_UP_JOBS_END, SESSION_UP_JOBS_FIRST, SESSION_UP_JOBS_NEXT } from "../src/store/session-up-jobs.ts";
 import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/store/usage.ts";
 import { detailQuery } from "../src/store/usage-detail.ts";
@@ -907,6 +908,7 @@ test("a widget's state is kept by session and path, its model told once until it
   session(store, "a");
   session(store, "b");
   const thread = store.openThread("ember", "EMBER", "3.1", null, null);
+  assert.equal(widgetSourcesStep(store.db, thread.id).done, true);
   store.joinThread(thread.id, "a", "ember");
   const path = "/w/a/uploads/pick.html";
   store.insertMessage({ ...newMessage(thread.id, "3.2", "agent", "a", "![](pick.html)"), attachments: [{ name: "pick.html", path, size: 9 }] });

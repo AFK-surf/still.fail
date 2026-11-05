@@ -51,7 +51,6 @@ test("the workers in a station release start and process a batch", { skip: !proc
       .run(JSON.stringify([{ path: "/w/bundle.html", name: "bundle.html" }]), thread);
     store.db.prepare("DELETE FROM widget_source_rows WHERE thread=?").run(thread);
     store.db.prepare("DELETE FROM widget_source_scopes WHERE thread=?").run(thread);
-    store.db.exec("UPDATE widget_source_meta SET fresh=0");
     for (const [file, message] of [
       ["sessions/workspace-activity-worker.js", {}],
       ["sessions/session-count-worker.js", {}],

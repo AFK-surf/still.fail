@@ -14,7 +14,7 @@ const plain = (row: unknown) => row === undefined ? null : { ...(row as object) 
 const beforeIndex = (db: DatabaseSync) => db.exec(`
   DROP TRIGGER widget_source_before_add; DROP TRIGGER widget_source_add;
   DROP TRIGGER widget_source_before_change; DROP TRIGGER widget_source_change;
-  DROP TRIGGER widget_source_drop; DROP TRIGGER widget_source_new_thread; DROP TRIGGER widget_source_drop_thread;
+  DROP TRIGGER widget_source_drop; DROP TRIGGER widget_source_drop_thread;
   DROP TABLE widget_source_rows; DROP TABLE widget_source_invalid;
   DROP TABLE widget_source_changed; DROP TABLE widget_source_scopes; DROP TABLE widget_source_meta;
 `);
@@ -27,6 +27,8 @@ for (const recursive of [false, true]) {
       db.exec(`PRAGMA recursive_triggers=${recursive ? "ON" : "OFF"}`);
       const first = store.openThread("ember", "EMBER", "first", null, null).id;
       const second = store.openThread("ember", "EMBER", "second", null, null).id;
+      assert.equal(widgetSourcesStep(db, first).done, true);
+      assert.equal(widgetSourcesStep(db, second).done, true);
       store.joinThread(first, "a", "ember");
       store.joinThread(second, "a", "ember");
       const path = "/w/item.html", files = (name: string) => JSON.stringify([{ path, name }]);
@@ -84,6 +86,7 @@ test("an edit that leaves the effective files unchanged does not rewrite them", 
   try {
     installWidgetSources(db);
     const thread = store.openThread("ember", "EMBER", "same", null, null).id;
+    assert.equal(widgetSourcesStep(db, thread).done, true);
     const files = JSON.stringify([{ path: "/w/item.html", name: "item" }]);
     const put = db.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,at,attachments)
       VALUES(?,?,?,?,'agent','a',?,?)`);
@@ -150,6 +153,7 @@ test("a bad attachment does not make a message write fail", () => {
   try {
     installWidgetSources(db);
     const thread = store.openThread("ember", "EMBER", "bad", null, null).id;
+    assert.equal(widgetSourcesStep(db, thread).done, true);
     db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments) VALUES(?,1,'message','agent','a',1,?)")
       .run(thread, "not json");
     assert.ok(db.prepare("SELECT 1 FROM widget_source_invalid WHERE thread=? AND n=1").get(thread));

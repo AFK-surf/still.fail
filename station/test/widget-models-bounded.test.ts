@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Store } from "../src/store/store.ts";
-import { WIDGET_SOURCE } from "../src/store/widget-sources.ts";
+import { WIDGET_SOURCE, widgetSourcesStep } from "../src/store/widget-sources.ts";
 
 test("widget models name the latest matching message as edits and membership change", () => {
   const store = Store.open(":memory:"), db = store.db;
@@ -13,6 +13,7 @@ test("widget models name the latest matching message as edits and membership cha
     const one = store.openThread("ember", "EMBER", "one", null, null).id;
     const two = store.openThread("ember", "EMBER", "two", null, null).id;
     const other = store.openThread("ember", "EMBER", "other", null, null).id;
+    for (const thread of [one, two, other]) assert.equal(widgetSourcesStep(db, thread).done, true);
     store.joinThread(one, "widget-session", "ember");
     store.joinThread(two, "widget-session", "ember");
     store.joinThread(other, "other-session", "ember");
@@ -49,6 +50,7 @@ test("a widget model does not traverse other messages to find its attachment", (
     store.insertSession({ key: "widget-session", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w",
       token: "widget-session", createdAt: 1, lastActiveAt: 1 });
     const thread = store.openThread("ember", "EMBER", "widget-thread", null, null).id;
+    assert.equal(widgetSourcesStep(db, thread).done, true);
     store.joinThread(thread, "widget-session", "ember");
     const path = "/w/target.html";
     const put = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,text,at,attachments)
@@ -84,6 +86,7 @@ test("a widget model takes only the newest of repeated attachments in a thread",
     store.insertSession({ key: "widget-session", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w",
       token: "widget-session", createdAt: 1, lastActiveAt: 1 });
     const thread = store.openThread("ember", "EMBER", "widget-thread", null, null).id;
+    assert.equal(widgetSourcesStep(db, thread).done, true);
     store.joinThread(thread, "widget-session", "ember");
     const path = "/w/target.html";
     const put = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)

@@ -1,7 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 
-// The effective files of a message, keyed by the path a widget reports. Old threads are prepared on demand; triggers
-// follow both old and new station processes while they are prepared. The source of truth remains the merged view.
+// The effective files of messages in threads whose widget sources have been requested. Triggers follow both old and new
+// station processes while those threads are prepared. The source of truth remains the merged view.
 const VERSION = 1;
 
 export class WidgetSourcesUnavailable extends Error {
@@ -40,7 +40,8 @@ const stage = (updating: boolean) => `DELETE FROM widget_source_changed;
   INSERT INTO widget_source_changed (thread, n, existed, attachments, at, dirty)
     SELECT k.thread, k.n, m.n IS NOT NULL, m.attachments, m.created_at, 0
     FROM (${candidates("NEW")} UNION ${conflicts}${updating ? ` UNION ${candidates("OLD")}` : ""}) k
-    LEFT JOIN merged m ON m.thread = k.thread AND m.n = k.n${updating ? "" : ` WHERE ${needsInsert}`};`;
+    LEFT JOIN merged m ON m.thread = k.thread AND m.n = k.n
+    WHERE EXISTS (SELECT 1 FROM widget_source_scopes s WHERE s.thread=k.thread)${updating ? "" : ` AND (${needsInsert})`};`;
 const changed = `(c.dirty = 1 OR c.existed IS NOT (m.n IS NOT NULL)
   OR c.attachments IS NOT m.attachments OR c.at IS NOT m.created_at)`;
 const changes = `SELECT c.thread, c.n FROM widget_source_changed c
@@ -77,12 +78,12 @@ const updated = `OLD.thread IS NOT NEW.thread OR OLD.n IS NOT NEW.n OR OLD.kind 
 
 export function installWidgetSources(db: DatabaseSync): void {
   const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='widget_source_meta'").get() !== undefined;
-  if (installed()) { widgetSourcesFresh(db); return; }
+  if (installed()) { checkWidgetSources(db); return; }
   db.exec("BEGIN IMMEDIATE");
   try {
     if (!installed()) db.exec(`
-      CREATE TABLE widget_source_meta (id INTEGER PRIMARY KEY CHECK (id=1), version INTEGER NOT NULL, fresh INTEGER NOT NULL) WITHOUT ROWID;
-      INSERT INTO widget_source_meta SELECT 1, ${VERSION}, NOT EXISTS (SELECT 1 FROM entries LIMIT 1);
+      CREATE TABLE widget_source_meta (id INTEGER PRIMARY KEY CHECK (id=1), version INTEGER NOT NULL) WITHOUT ROWID;
+      INSERT INTO widget_source_meta SELECT 1, ${VERSION};
       CREATE TABLE widget_source_scopes (thread INTEGER PRIMARY KEY, last_n INTEGER, end_n INTEGER, complete INTEGER NOT NULL) WITHOUT ROWID;
       CREATE TABLE widget_source_rows (thread INTEGER NOT NULL, n INTEGER NOT NULL, slot INTEGER NOT NULL,
         path TEXT NOT NULL, at INTEGER NOT NULL, name, PRIMARY KEY(thread,n,slot)) WITHOUT ROWID;
@@ -95,29 +96,25 @@ export function installWidgetSources(db: DatabaseSync): void {
       CREATE TRIGGER widget_source_before_change BEFORE UPDATE OF thread,n,kind,target,ts,attachments,at ON entries
         WHEN ${updated} BEGIN ${stage(true)} END;
       CREATE TRIGGER widget_source_change AFTER UPDATE OF thread,n,kind,target,ts,attachments,at ON entries
-        WHEN ${updated} BEGIN ${reconcile} END;
-      CREATE TRIGGER widget_source_drop AFTER DELETE ON entries BEGIN ${afterDelete} END;
-      CREATE TRIGGER widget_source_new_thread AFTER INSERT ON threads
-        WHEN NOT EXISTS (SELECT 1 FROM entries WHERE thread=NEW.id)
-        BEGIN INSERT INTO widget_source_scopes (thread,last_n,end_n,complete)
-          SELECT NEW.id,NULL,NULL,1 WHERE NOT EXISTS (SELECT 1 FROM widget_source_scopes WHERE thread=NEW.id); END;
+        WHEN ${updated} AND EXISTS (SELECT 1 FROM widget_source_changed) BEGIN ${reconcile} END;
+      CREATE TRIGGER widget_source_drop AFTER DELETE ON entries
+        WHEN EXISTS (SELECT 1 FROM widget_source_scopes WHERE thread=OLD.thread) BEGIN ${afterDelete} END;
       CREATE TRIGGER widget_source_drop_thread AFTER DELETE ON threads
         WHEN NOT EXISTS (SELECT 1 FROM entries WHERE thread=OLD.id)
         BEGIN DELETE FROM widget_source_scopes WHERE thread=OLD.id; END;
     `);
-    else widgetSourcesFresh(db);
+    else checkWidgetSources(db);
     db.exec("COMMIT");
   } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
 }
 
-export function widgetSourcesFresh(db: DatabaseSync): boolean {
-  const meta = db.prepare("SELECT version, fresh FROM widget_source_meta WHERE id=1").get() as { version: number; fresh: number } | undefined;
+export function checkWidgetSources(db: DatabaseSync): void {
+  const meta = db.prepare("SELECT version FROM widget_source_meta WHERE id=1").get() as { version: number } | undefined;
   if (!meta || meta.version !== VERSION) throw new Error(`widget source index version ${meta?.version ?? "missing"} is incompatible with ${VERSION}`);
-  return meta.fresh === 1;
 }
 
 export function widgetSourcesReady(db: DatabaseSync, thread: number): boolean {
-  if (widgetSourcesFresh(db)) return true;
+  checkWidgetSources(db);
   return (db.prepare("SELECT complete FROM widget_source_scopes WHERE thread=?").get(thread) as { complete: number } | undefined)?.complete === 1;
 }
 

@@ -49,7 +49,7 @@ import { installSessionUpJobs, SESSION_UP_JOB, SESSION_UP_JOBS, sessionUpJobsRea
 import { installSessionCounts, sessionCountsReady, SESSION_COUNT_TOTAL, SESSION_COUNT_CONNECT,
   SESSION_COUNTS, SESSION_COUNTS_VISIBLE, SESSION_COUNTS_HOME } from "./session-counts.ts";
 import { installPostBlocks, PostBlocksUnavailable, POST_BLOCK_SIZE, type PostPosition } from "./post-blocks.ts";
-import { installWidgetSources, WIDGET_SOURCE, WidgetSourcesUnavailable, widgetSourcesFresh } from "./widget-sources.ts";
+import { checkWidgetSources, installWidgetSources, WIDGET_SOURCE, WidgetSourcesUnavailable } from "./widget-sources.ts";
 import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
 import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
 
@@ -2561,12 +2561,11 @@ export class Store {
     try {
       const untold = this.#all("SELECT path, model FROM widget_states WHERE session = ? AND model IS NOT NULL AND told_at IS NULL ORDER BY updated_at, rowid", session);
       if (untold.length === 0) return [];
-      if (!widgetSourcesFresh(this.db)) {
-        const missing = this.#all(`SELECT ts.thread FROM thread_sessions ts JOIN threads t ON t.id=ts.thread
-          LEFT JOIN widget_source_scopes s ON s.thread=ts.thread
-          WHERE ts.session=? AND COALESCE(s.complete,0)=0`, session).map((row) => row.thread as number);
-        if (missing.length !== 0) throw new WidgetSourcesUnavailable(missing);
-      }
+      checkWidgetSources(this.db);
+      const missing = this.#all(`SELECT ts.thread FROM thread_sessions ts JOIN threads t ON t.id=ts.thread
+        LEFT JOIN widget_source_scopes s ON s.thread=ts.thread
+        WHERE ts.session=? AND COALESCE(s.complete,0)=0`, session).map((row) => row.thread as number);
+      if (missing.length !== 0) throw new WidgetSourcesUnavailable(missing);
       if (this.#one(`SELECT 1 FROM thread_sessions ts JOIN threads t ON t.id=ts.thread
         CROSS JOIN widget_source_invalid i ON i.thread=ts.thread
         WHERE ts.session=? LIMIT 1`, session)) throw new Error("malformed JSON in a message's attachments");
