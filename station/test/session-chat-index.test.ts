@@ -81,7 +81,7 @@ test("both chat candidates seek their own ordered index", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
     installSessionChatIndex(db);
-    for (const [sql, index] of [[SESSION_CHAT_EMBER, "session_chat_ember_order"], [SESSION_CHAT_OTHER, "cc_session_order"]] as const) {
+    for (const [sql, index] of [[SESSION_CHAT_EMBER, "session_chat_ember USING PRIMARY KEY"], [SESSION_CHAT_OTHER, "cc_session_order"]] as const) {
       const plan = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all("s").map((row) => String(row.detail)).join("\n");
       assert.match(plan, new RegExp(`SEARCH .*${index} \\(session=\\?\\)`));
       assert.doesNotMatch(plan, /SCAN |TEMP B-TREE/);
@@ -110,6 +110,53 @@ test("the two orders keep SQLite's tie breaking and old non-integer times", () =
     assert.equal(indexedSessionChat(db, "s")?.id, store.sessionChat("s")?.thread.id);
   } finally { store.close(); }
 });
+
+test("empty chats sort by creation and thread id across both surfaces", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    installSessionChatIndex(db);
+    const ids = Array.from({ length: 4 }, (_, n) => {
+      const id = store.openThread(n % 2 ? "ember" : "slack", "C", `empty-${n}`, null, null).id;
+      store.joinThread(id, "s", "c");
+      db.prepare("UPDATE threads SET created_at=? WHERE id=?").run(n < 2 ? 1 : 2, id);
+      return id;
+    });
+    prepare(store, "s");
+    assert.equal(indexedSessionChat(db, "s")?.id, ids[3]);
+    assert.equal(indexedSessionChat(db, "s")?.id, store.sessionChat("s")?.thread.id);
+    db.prepare("DELETE FROM thread_sessions WHERE thread=? AND session='s'").run(ids[3]!);
+    prepare(store, "s");
+    assert.equal(indexedSessionChat(db, "s")?.id, ids[2]);
+    assert.equal(indexedSessionChat(db, "s")?.id, store.sessionChat("s")?.thread.id);
+  } finally { store.close(); }
+});
+
+for (const recursive of [false, true]) {
+  test(`replacing and rolling back source rows keeps the chosen chat (recursive triggers ${recursive})`, () => {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers=${recursive ? "ON" : "OFF"}`);
+      installSessionChatIndex(db);
+      const own = store.openThread("ember", "C", "own", null, null).id;
+      const other = store.openThread("slack", "C", "other", null, null).id;
+      store.joinThread(own, "s", "c"); store.joinThread(other, "s", "c");
+      const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at) VALUES(?,1,'message','person','p',?)");
+      put.run(own, 30); put.run(other, 20);
+      prepare(store, "s");
+      const rowid = db.prepare("SELECT rowid FROM entries WHERE thread=? AND n=1").get(own)!.rowid as number;
+      db.exec("BEGIN");
+      db.prepare("INSERT OR REPLACE INTO entries(rowid,thread,n,kind,author_kind,author,at) VALUES(?,?,2,'message','person','p',40)")
+        .run(rowid, other);
+      db.exec("ROLLBACK");
+      assert.equal(indexedSessionChat(db, "s")?.id, own);
+      db.prepare("INSERT OR REPLACE INTO entries(rowid,thread,n,kind,author_kind,author,at) VALUES(?,?,2,'message','person','p',40)")
+        .run(rowid, other);
+      prepare(store, "s");
+      assert.equal(indexedSessionChat(db, "s")?.id, other);
+      assert.equal(indexedSessionChat(db, "s")?.id, store.sessionChat("s")?.thread.id);
+    } finally { store.close(); }
+  });
+}
 
 test("readiness and the chosen chat share a snapshot with another writer", () => {
   const dir = mkdtempSync(join(tmpdir(), "session-chat-snapshot-")), path = join(dir, "stillfail.db");

@@ -9,36 +9,36 @@ export function installSessionChatIndex(db: DatabaseSync): void {
     session TEXT PRIMARY KEY, scan_after INTEGER, scan_end INTEGER, complete INTEGER NOT NULL DEFAULT 0
   ) WITHOUT ROWID;
   CREATE TABLE IF NOT EXISTS session_chat_ember (
-    session TEXT NOT NULL, thread INTEGER NOT NULL, last_at INTEGER, created_at INTEGER,
-    PRIMARY KEY(session, thread)
+    session TEXT NOT NULL, has_last INTEGER NOT NULL, last_at NOT NULL, created_at INTEGER NOT NULL, thread INTEGER NOT NULL,
+    PRIMARY KEY(session, has_last DESC, last_at DESC, created_at DESC, thread DESC)
   ) WITHOUT ROWID;
-  CREATE INDEX IF NOT EXISTS session_chat_ember_order ON session_chat_ember
-    (session, last_at DESC, created_at DESC, thread DESC);
   CREATE TRIGGER IF NOT EXISTS session_chat_cc_add AFTER INSERT ON cc_session_rows
     WHEN NEW.surface='ember' AND EXISTS (SELECT 1 FROM session_chat_scopes WHERE session=NEW.session) BEGIN
-      INSERT INTO session_chat_ember(session,thread,last_at,created_at)
-        VALUES(NEW.session,NEW.thread,NEW.last_at,NEW.created_at)
-        ON CONFLICT(session,thread) DO UPDATE SET last_at=excluded.last_at,created_at=excluded.created_at
-        WHERE last_at IS NOT excluded.last_at OR created_at IS NOT excluded.created_at;
+      INSERT OR IGNORE INTO session_chat_ember(session,has_last,last_at,created_at,thread)
+        VALUES(NEW.session,NEW.last_at IS NOT NULL,COALESCE(NEW.last_at,0),NEW.created_at,NEW.thread);
   END;
   CREATE TRIGGER IF NOT EXISTS session_chat_cc_change AFTER UPDATE ON cc_session_rows
     WHEN OLD.session IS NOT NEW.session OR OLD.thread IS NOT NEW.thread OR OLD.surface IS NOT NEW.surface
       OR OLD.last_at IS NOT NEW.last_at OR OLD.created_at IS NOT NEW.created_at BEGIN
-      DELETE FROM session_chat_ember WHERE session=OLD.session AND thread=OLD.thread
-        AND (OLD.session IS NOT NEW.session OR OLD.thread IS NOT NEW.thread OR NEW.surface IS NOT 'ember');
-      INSERT INTO session_chat_ember(session,thread,last_at,created_at)
-        SELECT NEW.session,NEW.thread,NEW.last_at,NEW.created_at WHERE NEW.surface='ember'
-          AND EXISTS (SELECT 1 FROM session_chat_scopes WHERE session=NEW.session)
-        ON CONFLICT(session,thread) DO UPDATE SET last_at=excluded.last_at,created_at=excluded.created_at
-        WHERE last_at IS NOT excluded.last_at OR created_at IS NOT excluded.created_at;
+      DELETE FROM session_chat_ember WHERE OLD.surface='ember' AND session=OLD.session
+        AND has_last=(OLD.last_at IS NOT NULL) AND last_at IS COALESCE(OLD.last_at,0)
+        AND created_at IS OLD.created_at AND thread=OLD.thread;
+      INSERT OR IGNORE INTO session_chat_ember(session,has_last,last_at,created_at,thread)
+        SELECT NEW.session,NEW.last_at IS NOT NULL,COALESCE(NEW.last_at,0),NEW.created_at,NEW.thread
+        WHERE NEW.surface='ember' AND EXISTS (SELECT 1 FROM session_chat_scopes WHERE session=NEW.session);
   END;
   CREATE TRIGGER IF NOT EXISTS session_chat_cc_drop AFTER DELETE ON cc_session_rows BEGIN
-    DELETE FROM session_chat_ember WHERE session=OLD.session AND thread=OLD.thread;
+    DELETE FROM session_chat_ember WHERE OLD.surface='ember' AND session=OLD.session
+      AND has_last=(OLD.last_at IS NOT NULL) AND last_at IS COALESCE(OLD.last_at,0)
+      AND created_at IS OLD.created_at AND thread=OLD.thread;
   END;`);
 }
 
-export const SESSION_CHAT_EMBER = `SELECT thread,last_at,created_at FROM session_chat_ember INDEXED BY session_chat_ember_order
-  WHERE session=?1 ORDER BY last_at DESC,created_at DESC,thread DESC LIMIT 1`;
+// The flag lets the single ordered primary key represent NULL timestamps without a second lookup index. NULL sorts
+// below every non-NULL SQLite value; among NULLs the creation time and thread id still break ties.
+export const SESSION_CHAT_EMBER = `SELECT thread,CASE WHEN has_last=0 THEN NULL ELSE last_at END AS last_at,created_at
+  FROM session_chat_ember WHERE session=?1
+  ORDER BY has_last DESC,session_chat_ember.last_at DESC,created_at DESC,thread DESC LIMIT 1`;
 export const SESSION_CHAT_OTHER = `SELECT thread,last_at,created_at FROM cc_session_rows INDEXED BY cc_session_order
   WHERE session=?1 AND surface != 'ember' ORDER BY last_at DESC,created_at DESC,thread DESC LIMIT 1`;
 export const SESSION_CHAT_INDEXED = `WITH own AS MATERIALIZED (${SESSION_CHAT_EMBER}), other AS MATERIALIZED (${SESSION_CHAT_OTHER})
@@ -89,10 +89,8 @@ export class SessionChatPreparation {
       scan.setReadBigInts(true);
       const rows = (scope.scan_after === null ? scan.all(session, scope.scan_end, limit)
         : scan.all(session, scope.scan_after, scope.scan_end, limit)) as { thread: bigint; surface: string | null; last_at: number | bigint | string | null; created_at: number | bigint | string | null }[];
-      const put = db.prepare(`INSERT INTO session_chat_ember(session,thread,last_at,created_at) VALUES(?,?,?,?)
-        ON CONFLICT(session,thread) DO UPDATE SET last_at=excluded.last_at,created_at=excluded.created_at
-        WHERE last_at IS NOT excluded.last_at OR created_at IS NOT excluded.created_at`);
-      for (const row of rows) if (row.surface === "ember") put.run(session, row.thread, row.last_at, row.created_at);
+      const put = db.prepare("INSERT OR IGNORE INTO session_chat_ember(session,has_last,last_at,created_at,thread) VALUES(?,?,?,?,?)");
+      for (const row of rows) if (row.surface === "ember") put.run(session, row.last_at === null ? 0 : 1, row.last_at ?? 0, row.created_at, row.thread);
       const done = rows.length < limit;
       db.prepare("UPDATE session_chat_scopes SET scan_after=?,complete=? WHERE session=?")
         .run(rows.at(-1)?.thread ?? scope.scan_after, done ? 1 : 0, session);
