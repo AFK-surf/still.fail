@@ -2,6 +2,42 @@
 // Markdown tree and the same row and cell rules that lay the pictures out; it does not ask a row for its layout.
 
 ///|
+/// A message owner holds its Markdown reading while it needs the places of pictures that entered the window. This
+/// remains independent of the rows made to measure or draw that message.
+pub struct MdPictureReading {
+  priv text : String
+  priv tree : Json?
+  priv mut held : Bool
+}
+
+///|
+/// Start following a message's Markdown at the cause that needs its pictures, not while laying out its row.
+pub fn md_picture_reading(text : String, tree : Json?) -> MdPictureReading {
+  let held = text != "" && tree is None
+  if held {
+    md_read_by(text, 1)
+    md_ask(text)
+  }
+  { text, tree, held }
+}
+
+///|
+/// Whether the core's reading is still coming. A watch that reads this is told when that answer arrives.
+pub fn MdPictureReading::waiting(self : MdPictureReading) -> Bool {
+  if self.held { md_answer(self.text).get() |> ignore }
+  md_node_laying(self.text, self.tree)
+}
+
+///|
+/// Let this owner go once it has used the answer or no longer needs it.
+pub fn MdPictureReading::stop(self : MdPictureReading) -> Unit {
+  if self.held {
+    self.held = false
+    md_read_by(self.text, -1)
+  }
+}
+
+///|
 /// The spans of a paragraph's images, in order, each row holding as many as fit at its least height.
 fn md_picture_row_spans(ratios : Array[Double], room : Double) -> Array[(Int, Int)] {
   if ratios.is_empty() { return [] }
@@ -46,13 +82,14 @@ fn md_cell_picture_names(cell : Array[MdInline], ratio : (String) -> Double?) ->
 ///|
 /// Where the Markdown tree places each picture, and the width of its room there. `fills` is true for pictures in a
 /// row or table cell; a picture drawn by itself is at most as wide as its own image box. The same file can occur in
-/// more than one place, each of its rooms returned. `ratio` names only images actually placed by the message.
+/// more than one place, each of its rooms returned. `placed` names the message's files, `ratio` its placed images.
 pub fn md_picture_places(
   text : String,
   tree : Json?,
   width : Double,
   size : Double,
   ratio : (String) -> Double?,
+  placed : (String) -> Bool,
 ) -> Array[(String, Double, Bool)] {
   let out : Array[(String, Double, Bool)] = []
   fn blocks(bs : Array[MdBlock], room : Double) -> Unit {
@@ -64,7 +101,7 @@ pub fn md_picture_places(
             match parts[0] {
               Link(href, _, _) => {
                 let name = file_name_of(href)
-                if ratio(name) is Some(_) { out.push((name, room, false)) }
+                if placed(name) { out.push((name, room, false)) }
               }
               _ => ()
             }
@@ -98,7 +135,7 @@ pub fn md_picture_places(
               match x {
                 Image(src, _) => {
                   let name = file_name_of(src)
-                  if ratio(name) is Some(_) { out.push((name, room, false)) }
+                  if placed(name) { out.push((name, room, false)) }
                 }
                 _ => ()
               }

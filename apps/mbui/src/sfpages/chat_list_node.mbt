@@ -307,30 +307,80 @@ pub fn chat_list_node(
   // sighted row; a row only passed on the way is asked too, then its watch is let go.
   let pictures = ChatPictures::new(v, src)
   v.lends(chat_pictures_lent, pictures) |> ignore
-  let picture_rows : Map[String, @signals.Watch] = {}
+  let picture_rows : Map[String, ChatPictureRow] = {}
   let picture_changes : Map[String, Bool] = {}
   let picture_changed = @signals.signal(0)
-  let picture_width = Ref(0.0)
   let picture_live = Ref(true)
+  let forget_picture_row = fn(k : String) {
+    match picture_rows.get(k) {
+      Some(row) => {
+        row.watch.stop()
+        match row.reading { Some(reading) => reading.stop(); None => () }
+        picture_rows.remove(k)
+      }
+      None => ()
+    }
+    picture_changes.remove(k)
+  }
   let request_picture_row = fn(k : String) {
-    guard picture_rows.get(k) is Some(watch) else { return }
-    let entry = watch.read(fn() { row_of(k).map(fn(row) { row.0 }) })
+    guard picture_rows.get(k) is Some(row) else { return }
+    let entry = row.watch.read(fn() { if row.inside { row_of(k).map(fn(item) { item.0 }) } else { None } })
     guard @signals.untracked(view) is Some(cv) else { return }
-    let width = picture_width.val
+    let width = row.width
     let here = here_of(r, cv, rk, @sfbase.turns_of(rk), em, None, core,
       inline=width <= chat_narrow_w, gutter=row_side_in(width))
-    match entry {
+    let message = match entry {
       Some(Said(s)) => {
         let m = s.message()
-        pictures.want_files(here, m.attachments, m.quotes, m.mine, width)
+        row.message = Some(m)
+        Some(m)
       }
-      Some(Out(o)) => pictures.want_files(here, o.attachments, o.quotes, true, width)
-      _ => ()
+      Some(Out(o)) => {
+        pictures.want_files(here, o.attachments, o.quotes, true, width)
+        None
+      }
+      _ => if row.inside { None } else { row.message }
     }
+    if message is Some(m) {
+      let needs_reading = picture_markdown(m) && !m.placed.is_empty() && m.md is None && m.text != ""
+      if !needs_reading || row.reading_text != m.text {
+        match row.reading { Some(reading) => reading.stop(); None => () }
+        row.reading = None
+        row.reading_text = ""
+      }
+      if needs_reading && row.reading is None {
+        row.reading = Some(@sf.md_picture_reading(m.text, m.md))
+        row.reading_text = m.text
+      }
+      let waiting = match row.reading {
+        Some(reading) => row.watch.read(fn() {
+          if row.inside { row_of(k) |> ignore }
+          reading.waiting()
+        })
+        None => false
+      }
+      row.waiting = waiting
+      if row.widths.is_empty() { row.widths.push(width) }
+      for w in row.widths { pictures.want_message(here, m, w, !waiting) }
+      if !waiting {
+        row.widths.clear()
+        match row.reading { Some(reading) => reading.stop(); None => () }
+        row.reading = None
+        row.reading_text = ""
+      }
+    } else {
+      row.waiting = false
+      match row.reading { Some(reading) => reading.stop(); None => () }
+      row.reading = None
+    }
+    if !row.inside && !row.waiting { forget_picture_row(k) }
   }
   v.owns(fn() {
     picture_live.val = false
-    for watch in picture_rows.values() { watch.stop() }
+    for row in picture_rows.values() {
+      row.watch.stop()
+      match row.reading { Some(reading) => reading.stop(); None => () }
+    }
     picture_rows.clear()
   }) |> ignore
   // A visible message can gain a file without its row moving. Its data change asks for the file after the change is
@@ -428,22 +478,40 @@ pub fn chat_list_node(
       sighted=fn(s) {
         last_sighted.val = Some(s)
         read_sighted(s)
-        picture_width.val = s.width
         for k in s.came {
           if !picture_rows.contains(k) {
-            picture_rows[k] = @signals.watch(fn() {
+            let watch = @signals.watch(fn() {
               picture_changes[k] = true
               picture_changed.set(@signals.untracked(fn() { picture_changed.get() }) + 1)
             })
+            picture_rows[k] = {
+              watch, widths: [], width: s.width, inside: true, waiting: false, message: None,
+              reading_text: "", reading: None,
+            }
+          }
+          match picture_rows.get(k) {
+            Some(row) => {
+              row.inside = true
+              row.width = s.width
+              if !row.widths.contains(s.width) { row.widths.push(s.width) }
+            }
+            None => ()
           }
           request_picture_row(k)
         }
         for k in s.left {
           match picture_rows.get(k) {
-            Some(watch) => { watch.stop(); picture_rows.remove(k) }
+            Some(row) => {
+              row.inside = false
+              if row.waiting {
+                // Only its unfinished Markdown answer is followed after it has left, not later message changes.
+                request_picture_row(k)
+              } else {
+                forget_picture_row(k)
+              }
+            }
             None => ()
           }
-          picture_changes.remove(k)
         }
       },
       rooms=sized.room_now,

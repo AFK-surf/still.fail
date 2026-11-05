@@ -15,6 +15,19 @@ struct ChatPictures {
 }
 
 ///|
+/// A sighted message's data and any Markdown answer still needed for the pictures it places.
+struct ChatPictureRow {
+  watch : @signals.Watch
+  widths : Array[Double]
+  mut width : Double
+  mut inside : Bool
+  mut waiting : Bool
+  mut message : Message?
+  mut reading_text : String
+  mut reading : @sf.MdPictureReading?
+}
+
+///|
 let chat_pictures_lent : @view.Lent[ChatPictures] = @view.Lent::new()
 
 ///|
@@ -125,5 +138,49 @@ fn ChatPictures::want_files(
   for a in files {
     let quoted = quotes.any(fn(q) { q.file != "" && q.file == a.name })
     self.want(here, a, if quoted { quote_room } else { room }, false)
+  }
+}
+
+///|
+/// Whether another person's message draws its Markdown, as others_message_node does.
+fn picture_markdown(m : Message) -> Bool {
+  if m.system || m.mine || m.author_kind == "person" { return false }
+  match m.card {
+    Some({ ask: Some(_), .. }) | Some({ phone: Some(_), .. }) | Some({ signin: Some(_), .. }) => false
+    _ => true
+  }
+}
+
+///|
+/// A message's quoted and unplaced pictures can be wanted immediately. Placed pictures use their Markdown's actual
+/// picture rows and table cells once its reading has arrived.
+fn ChatPictures::want_message(self : ChatPictures, here : MessageHere, m : Message, width : Double, placed : Bool) -> Unit {
+  if m.system { return }
+  let room = dmax(0.0, width - 2.0 * row_side_in(width))
+  let quote_room = if m.mine {
+    @sf.quote_picture_room(composer_words_width(width) + 2.0 * bubble_side)
+  } else {
+    @sf.quote_picture_room(room)
+  }
+  for q in m.quotes {
+    match quote_file(q, m.attachments) {
+      Some(a) => self.want(here, a, quote_room, false)
+      None => ()
+    }
+  }
+  let markdown = picture_markdown(m)
+  if !m.mine && m.author_kind != "person" && !markdown { return }
+  for a in beside_quotes(m.quotes, m.attachments) {
+    if !markdown || !m.placed.contains(a.name) { self.want(here, a, room, false) }
+  }
+  if markdown && placed && !m.placed.is_empty() {
+    let file = fn(name : String) { placed_of(m, name) }
+    let ratio = fn(name : String) { file(name).bind(image_ratio) }
+    for (name, w, fills) in @sf.md_picture_places(m.text, m.md, room, body_size, ratio, fn(name) { file(name) is Some(_) }) {
+      match file(name) {
+        Some(a) => self.want(here, a, w, fills)
+        None => ()
+      }
+    }
   }
 }
