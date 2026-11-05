@@ -59,3 +59,43 @@ test "a node's clip as painted said again: what it holds drawn again, where it i
   assert_true(t.frame_export() != first)
   assert_true(white_line(t).contains("clip=40,210,140,240"), msg=white_line(t))
 }
+
+///|
+test "a node's clip as painted: what it cuts away is pressed nowhere, what it shows is" {
+  let rect = @signals.signal(Some((10.0, 5.0, 50.0, 20.0)), same=fn(a, b) { a == b })
+  let pressed = Ref(0)
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=400.0)
+  set_view_app(fn(root) {
+    root.box(fn(p) { p.height(Is(Some(200.0))) |> ignore }) |> ignore
+    root.box(fn(b) {
+      b.width(Is(Some(200.0))).height(Is(Some(56.0))).clip_drawn(By(fn() { rect.get() })) |> ignore
+      b.box(fn(k) {
+        k
+        .width(Is(Some(200.0)))
+        .height(Is(Some(56.0)))
+        .ground(Is(0xFFFFFFFFL))
+        .presses(Is(true))
+        .on_press(fn() { pressed.val += 1 })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.frame()
+  // (cut away: in the key's box, outside the rect it is cut to)
+  t.tap(150.0, 240.0)
+  t.frame()
+  assert_eq(pressed.val, 0)
+  // (shown: within the rect)
+  t.tap(30.0, 215.0)
+  t.frame()
+  assert_eq(pressed.val, 1)
+  // (none: all of it pressed)
+  rect.set(None)
+  t.frame()
+  t.tap(150.0, 240.0)
+  t.frame()
+  assert_eq(pressed.val, 2)
+}
