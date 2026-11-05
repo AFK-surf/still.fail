@@ -2853,7 +2853,7 @@ pub fn Tester::drags_window_at(self : Tester, x : Double, y : Double) -> Bool {
       }
       match tree.target_at(x, y) {
         TopRow(id) => tree.moves_window(id)
-        Pressed(_) | Dragged(_) => false
+        Pressed(_) | Dragged(_) | Off(_) => false
         Hosted(_) => old()
         Nothing => old_whole.val && island_allows(old_whole_island()) && old()
       }
@@ -2881,7 +2881,7 @@ pub fn Tester::press_target_at(self : Tester, x : Double, y : Double) -> SemNode
         old()
       } else {
         match tree.target_at(x, y) {
-          Pressed(id) | Dragged(id) | TopRow(id) => tree_said_id(id)
+          Pressed(id) | Dragged(id) | TopRow(id) | Off(id) => tree_said_id(id)
           Hosted(_) => old()
           Nothing => if old_whole.val && island_allows(old_whole_island()) { old() } else { 0 }
         }
