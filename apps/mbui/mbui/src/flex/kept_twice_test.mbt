@@ -15,7 +15,7 @@ fn kept_twice_tree(twice : Ref[Bool]) -> (@flex.Node, @flex.Node, @flex.Node) {
   part.style.set_height(Pt(50.0))
   row.add(part)
   root.add(row)
-  root.layout_children = Some(fn(w, _h, _x, _y) {
+  root.layout_children = Some(fn(w, _h, _x, _y, _r) {
     @flex.layout_child(row, w) |> ignore
     if twice.val {
       @flex.layout_child(row, w) |> ignore

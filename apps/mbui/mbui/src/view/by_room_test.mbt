@@ -56,7 +56,7 @@ test "by_room: what it holds made for the width it is laid out at, in the frame 
 }
 
 ///|
-test "a property layout reads worked out of where what holds its root is laid out, as that root is laid out, and what a block makes by its room for the width the block gives it: in a block of a windowed list, the list laid out wider and narrower" {
+test "a share of the width a windowed list's block is laid out at, and what the block makes by its room for that width, in the list's one layout: the list laid out wider and narrower" {
   let holder : Ref[@view.View?] = Ref(None)
   let placed : Ref[@view.View?] = Ref(None)
   let roomed : Ref[@view.View?] = Ref(None)
@@ -67,8 +67,8 @@ test "a property layout reads worked out of where what holds its root is laid ou
       col.scrolls_window(s, fn() { ["a"] }, fn(b, _) {
         holder.val = Some(
           b.box(fn(h) {
-            // (half as wide as the column the list is in: worked out as the block is laid out, of where that is)
-            placed.val = Some(h.box(fn(i) { i.width(Placed(fn() { Some(col.laid_size().0 / 2.0) })).height(Is(Some(10.0))) |> ignore }))
+            // (half as wide as the block, as wide as the column the list is in: its layout's, as the list lays the block out)
+            placed.val = Some(h.box(fn(i) { i.width_share(Is(0.5)).height(Is(Some(10.0))) |> ignore }))
             // (half as wide as it is laid out in the block: made so by its room, in the block's layout)
             h.box(fn(r) {
               r.by_room(fn(w) { w / 2.0 }, fn(v, half) {
@@ -97,7 +97,7 @@ test "a property layout reads worked out of where what holds its root is laid ou
 }
 
 ///|
-test "a property layout reads worked out of where what holds its root is laid out, and what a block makes by its room, asked at a cause before any frame lays it out: worked out as the read lays things out, never asked of again inside that" {
+test "a share of a windowed list's block's width, and what the block makes by its room, asked at a cause before any frame lays it out: worked out as the read lays things out, never asked of again inside that" {
   let holder : Ref[@view.View?] = Ref(None)
   let placed : Ref[@view.View?] = Ref(None)
   let roomed : Ref[@view.View?] = Ref(None)
@@ -109,7 +109,7 @@ test "a property layout reads worked out of where what holds its root is laid ou
       col.scrolls_window(s, fn() { ["a"] }, fn(b, _) {
         holder.val = Some(
           b.box(fn(h) {
-            placed.val = Some(h.box(fn(i) { i.width(Placed(fn() { Some(col.laid_size().0 / 2.0) })).height(Is(Some(10.0))) |> ignore }))
+            placed.val = Some(h.box(fn(i) { i.width_share(Is(0.5)).height(Is(Some(10.0))) |> ignore }))
             h.box(fn(r) {
               r.by_room(fn(w) { w / 2.0 }, fn(v, half) {
                 roomed.val = Some(v.box(fn(i) { i.width(Is(Some(half))).height(Is(Some(10.0))) |> ignore }))

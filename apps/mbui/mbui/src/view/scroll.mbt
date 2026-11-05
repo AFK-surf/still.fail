@@ -654,8 +654,9 @@ pub fn View::scroll_holding(self : View, across? : Bool = false) -> Scroll? {
 /// across past the slop; its bar along its foot, `bar_in` in from either end (under what it is for, where what it holds
 /// reaches past that: Ctx::sideways's), room under what it holds for it while it can go (its bar never over what it
 /// holds' last line), none while it cannot. `for_field`: the editor these choices belong to; scrolling keeps
-/// that editor's keyboard, as an old view's capped column does. `content_extent`: a virtual list's counted content
-/// height (width across), available when its heights change, before those heights have been laid out in its holder.
+/// that editor's keyboard, as an old view's capped column does. `content_room`: a windowed list's, how far it can go as
+/// what lays out what it holds counts it (as far as its blocks reach, less how tall the column it lays them out in is:
+/// the layout under way's as it goes, before the column is placed), none before that first lays it out.
 /// `bar_clear`: the top and foot room kept clear by the scroll bar.
 pub fn View::scrolls(
   self : View,
@@ -665,7 +666,7 @@ pub fn View::scrolls(
   bar? : ScrollBar,
   bar_in? : Double = 0.0,
   for_field? : NodeId,
-  content_extent? : () -> Double,
+  content_room? : () -> Double?,
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
 ) -> View {
   guard self.live() is Some(_) else { return self }
@@ -708,18 +709,19 @@ pub fn View::scrolls(
   let kept_room : Ref[Double?] = Ref(None)
   s.room = fn() {
     let now = match self.live() {
-      Some(n) if n.placed && !self.tree.out_at(self.at) => {
-        let own = if across { n.flex.width } else { n.flex.height }
-        match content_extent {
-          // (counted by what lays it out, in the same pass as it is laid out: as tall as it is counted now)
-          Some(extent) => Some(extent() - own)
+      Some(n) if !self.tree.out_at(self.at) =>
+        match content_room {
+          // (counted by what lays it out, as it is laid out: as far as it is counted now)
+          Some(room) => room()
           None =>
             match inner.val.bind(fn(h) { h.live() }) {
-              Some(h) if h.placed => Some((if across { h.flex.width } else { h.flex.height }) - own)
+              Some(h) if n.placed && h.placed => {
+                let own = if across { n.flex.width } else { n.flex.height }
+                Some((if across { h.flex.width } else { h.flex.height }) - own)
+              }
               _ => None
             }
         }
-      }
       _ => None
     }
     match now {

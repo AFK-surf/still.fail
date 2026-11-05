@@ -10,7 +10,7 @@ fn empty_custom_tree(laid : Ref[Int]) -> @flex.Node {
   let held = @flex.Node::new()
   held.style.set_width(Pt(300.0))
   held.style.set_height(Pt(300.0))
-  held.layout_children = Some(fn(_w, _h, _x, _y) {
+  held.layout_children = Some(fn(_w, _h, _x, _y, _r) {
     laid.val += 1
     0.0 / 0.0
   })

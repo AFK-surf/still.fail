@@ -18,7 +18,7 @@ pub fn[K : Eq] View::by_room(self : View, fit : (Double) -> K, make : (View, K) 
   // (what `fit` read changed since: laid out again with all else as a frame lays it out)
   let watch = @signals.watch(fn() { tree.layout_marked_at(self.at) })
   n.flex.sized_by_children = true
-  n.flex.layout_children = Some(fn(width, height, x, y) {
+  n.flex.layout_children = Some(fn(width, height, x, y, _room_h) {
     let was_owner = tree.layout_owner
     tree.layout_owner = self.at
     let k = watch.read(fn() { fit(width) })
