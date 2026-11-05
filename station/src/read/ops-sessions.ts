@@ -2,7 +2,8 @@
 import type { ReadOp } from "./ops.ts";
 import { job, jobLog, openJobs } from "./jobs.ts";
 import { firstText, getSession, getThread, lastSaid, listThreads, messagesBefore, threadSessions } from "./store.ts";
-import { recentChatIds, searchChats } from "../store/chat-list.ts";
+import { searchChats } from "../store/chat-list.ts";
+import { recentChatPage } from "./recent-chat.ts";
 import { session, sessionPlace, sessions, summary, thread, threads, timeline, transcriptFile, transcriptState, widgetState } from "./sessions.ts";
 
 /// `?turns=`: how many of a session's latest turns; none (or not a count): all of them, as a device from before reads.
@@ -13,7 +14,7 @@ export const sessionOps: Record<string, ReadOp> = {
   threadList: (s) => listThreads(s, "", null, null, "none"),
   /// The first page of chat_list and its count, read together in the reader's snapshot.
   recentChatList: (s, a) => {
-    const { ids, total } = recentChatIds(s.db, a.ws, a.home, a.limit);
+    const { ids, total } = recentChatPage(s.db, a.ws, a.home, a.limit);
     const threads = ids.flatMap((id) => {
       const thread = getThread(s, id);
       if (thread === null) return [];

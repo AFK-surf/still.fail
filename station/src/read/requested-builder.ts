@@ -13,7 +13,7 @@ export class RequestedBuilder<K extends number | string> {
   readonly #options: { previousGone?: Promise<void>; priority?: SharedArrayBuffer };
   readonly #workerFile: URL | undefined;
   readonly #timers: Fibers;
-  readonly #field: "thread" | "session";
+  readonly #field: "thread" | "session" | "scope";
   readonly #waiting = new Map<K, Set<Waiter>>();
   #worker: Worker | null = null;
   #current: K | null = null;
@@ -25,7 +25,7 @@ export class RequestedBuilder<K extends number | string> {
   #retryMs = 250;
 
   constructor(path: string, options: { previousGone?: Promise<void>; priority?: SharedArrayBuffer }, workerFile: URL | undefined,
-    field: "thread" | "session", name: string) {
+    field: "thread" | "session" | "scope", name: string) {
     this.#path = path; this.#options = options; this.#workerFile = workerFile; this.#field = field; this.#timers = new Fibers(name);
   }
 
