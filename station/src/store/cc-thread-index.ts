@@ -4,8 +4,9 @@ import type { DatabaseSync } from "node:sqlite";
 // batches; a dirty session cannot be read until every relevant distribution and its own reconciliation have ended.
 const VERSION = 1;
 const orderChange = (thread: string) => `
-  INSERT INTO cc_order_dispatch(thread, after_session)
-    SELECT ${thread}, NULL WHERE ${thread} IS NOT NULL
+  INSERT INTO cc_order_dispatch(thread, after_session, through_session)
+    SELECT ${thread}, NULL, (SELECT session FROM cc_session_rows INDEXED BY cc_rows_thread
+      WHERE thread=${thread} ORDER BY session DESC LIMIT 1) WHERE ${thread} IS NOT NULL
       AND EXISTS (SELECT 1 FROM cc_session_rows INDEXED BY cc_rows_thread WHERE thread=${thread} LIMIT 1)
       AND NOT EXISTS (SELECT 1 FROM cc_order_dispatch WHERE thread=${thread});`;
 const memberChange = (thread: string, session: string) => `
@@ -37,7 +38,7 @@ export function installCcIndex(db: DatabaseSync): void {
       CREATE INDEX cc_rows_thread ON cc_session_rows(thread,session);
       CREATE TABLE cc_session_dirty (session TEXT NOT NULL, thread INTEGER NOT NULL,
         PRIMARY KEY(session,thread)) WITHOUT ROWID;
-      CREATE TABLE cc_order_dispatch (thread INTEGER PRIMARY KEY, after_session TEXT);
+      CREATE TABLE cc_order_dispatch (thread INTEGER PRIMARY KEY, after_session TEXT, through_session TEXT NOT NULL);
       CREATE TABLE cc_order_turn (id INTEGER PRIMARY KEY CHECK(id=1), after_thread INTEGER, through_thread INTEGER);
       INSERT INTO cc_order_turn VALUES(1,NULL,NULL);
 
@@ -168,11 +169,11 @@ export function dispatchCcOrderStep(db: DatabaseSync, limit = 64): { done: boole
     turn.setReadBigInts(true);
     const progress = turn.get() as { after_thread: bigint | null; through_thread: bigint | null };
     let through = progress.through_thread;
-    let pending: { thread: bigint; after_session: string | null } | undefined;
+    let pending: { thread: bigint; after_session: string | null; through_session: string } | undefined;
     if (through !== null) {
       const next = db.prepare(progress.after_thread === null
-        ? "SELECT thread,after_session FROM cc_order_dispatch WHERE thread<=? ORDER BY thread LIMIT 1"
-        : "SELECT thread,after_session FROM cc_order_dispatch WHERE thread>? AND thread<=? ORDER BY thread LIMIT 1");
+        ? "SELECT thread,after_session,through_session FROM cc_order_dispatch WHERE thread<=? ORDER BY thread LIMIT 1"
+        : "SELECT thread,after_session,through_session FROM cc_order_dispatch WHERE thread>? AND thread<=? ORDER BY thread LIMIT 1");
       next.setReadBigInts(true);
       pending = (progress.after_thread === null ? next.get(through) : next.get(progress.after_thread, through)) as typeof pending;
     }
@@ -180,16 +181,16 @@ export function dispatchCcOrderStep(db: DatabaseSync, limit = 64): { done: boole
       const last = db.prepare("SELECT MAX(thread) AS thread FROM cc_order_dispatch"); last.setReadBigInts(true);
       through = (last.get() as { thread: bigint | null }).thread;
       if (through === null) { db.exec("COMMIT"); return { done: true, visited: 0 }; }
-      const first = db.prepare("SELECT thread,after_session FROM cc_order_dispatch WHERE thread<=? ORDER BY thread LIMIT 1");
+      const first = db.prepare("SELECT thread,after_session,through_session FROM cc_order_dispatch WHERE thread<=? ORDER BY thread LIMIT 1");
       first.setReadBigInts(true); pending = first.get(through) as typeof pending;
     }
     if (!pending) throw new Error("copy destination dispatch disappeared");
     db.prepare("UPDATE cc_order_turn SET after_thread=?,through_thread=? WHERE id=1").run(pending.thread, through);
     const members = db.prepare(pending.after_session === null
-      ? "SELECT session FROM cc_session_rows INDEXED BY cc_rows_thread WHERE thread=?1 ORDER BY session LIMIT ?2"
-      : "SELECT session FROM cc_session_rows INDEXED BY cc_rows_thread WHERE thread=?1 AND session>?2 ORDER BY session LIMIT ?3");
-    const rows = (pending.after_session === null ? members.all(pending.thread, limit)
-      : members.all(pending.thread, pending.after_session, limit)) as { session: string }[];
+      ? "SELECT session FROM cc_session_rows INDEXED BY cc_rows_thread WHERE thread=?1 AND session<=?2 ORDER BY session LIMIT ?3"
+      : "SELECT session FROM cc_session_rows INDEXED BY cc_rows_thread WHERE thread=?1 AND session>?2 AND session<=?3 ORDER BY session LIMIT ?4");
+    const rows = (pending.after_session === null ? members.all(pending.thread, pending.through_session, limit)
+      : members.all(pending.thread, pending.after_session, pending.through_session, limit)) as { session: string }[];
     const mark = db.prepare(`INSERT INTO cc_session_dirty(session,thread) SELECT ?1,?2 WHERE NOT EXISTS
       (SELECT 1 FROM cc_session_dirty WHERE session=?1 AND thread=?2)`);
     for (const row of rows) mark.run(row.session, pending.thread);

@@ -70,6 +70,32 @@ test("a shared destination changed during distribution leaves every requested se
   } finally { store.close(); }
 });
 
+test("newly requested sessions cannot extend an in-progress distribution forever", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const shared = store.openThread("slack:one", "C", "growing", null, null).id;
+    for (const session of ["a", "b"]) store.joinThread(shared, session, "slack");
+    put(db, shared, 1, 10);
+    installCcIndex(db);
+    for (const session of ["a", "b"]) { trackCcSession(db, session); finish(db, session); }
+    put(db, shared, 2, 20);
+    assert.equal(dispatchCcOrderStep(db, 1).done, false);
+    const added: string[] = [];
+    let done = false;
+    for (let n = 0; n < 4 && !done; n++) {
+      const session = `z${n}`;
+      added.push(session); store.joinThread(shared, session, "slack");
+      trackCcSession(db, session); scanCcSessionStep(db, session, 1);
+      done = dispatchCcOrderStep(db, 1).done;
+    }
+    assert.equal(done, true, "the distribution has a finite membership boundary");
+    for (const session of ["a", "b", ...added]) {
+      finish(db, session, 1);
+      assert.equal(ccSessionRows(db, session, 1)[0]?.thread, shared);
+    }
+  } finally { store.close(); }
+});
+
 test("a destination's surface, time, membership and removal are reflected after preparation", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
