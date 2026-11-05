@@ -1136,7 +1136,9 @@ export class Updates {
       end();
       if (this.following === end) this.following = null;
       for (const f of ["update.started", "update.step"]) rmSync(join(runDir, f), { force: true });
-      log.info("updates", "the station's update ended", { failed: failed !== null });
+      // With what the installer said last when it failed (as a runtime's failure is said): the station's own pages
+      // are where else it shows, and only to whoever looks at them.
+      log.info("updates", "the station's update ended", failed !== null ? { failed: true, why: say(failed, "en") } : { failed: false });
       this.set("station", (i) => {
         i.updating = null;
         i.step = null;

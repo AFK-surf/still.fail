@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, test } from "node:test";
 import { ConfigFile } from "../src/ops/config.ts";
+import { hearLines, type Line } from "../src/ops/log.ts";
 import { type Env, type Found, howToInstall, howToUpdate, findCommand, ownNode, pinNpmVersion, run, runLines, Unable, kindCommand, kindPackage } from "../src/updates/runtimes.ts";
 import { hold } from "../src/updates/holds.ts";
 import { Updates, type UpdatesOptions } from "../src/updates/updates.ts";
@@ -290,11 +291,18 @@ describe("updates", { concurrency: true }, () => {
     mkdirSync(runDir, { recursive: true });
     const updates = installed(dir, "1300", null);
     t.after(() => updates.close());
+    // And says it on the station's log, which still.fail hears of (a station of someone else's workspace: its pages
+    // are not ours to look at).
+    const lines: Line[] = [];
+    hearLines((l) => void (l.at === "updates" && lines.push(l)));
+    t.after(() => hearLines(null));
     writeFileSync(join(runDir, "update.log"), "one\ntwo\nthree\nfour\nfive\n");
     updates.follow({ at: Date.now(), from: "0.1.1300" });
     writeFileSync(join(runDir, "update.exit"), "1\n");
     await until("failed", () => station(updates).state === "failed");
     assert.equal(station(updates).message, "two\nthree\nfour\nfive");
+    const ended = lines.find((l) => l.message === "the station's update ended");
+    assert.deepEqual(ended?.fields, { failed: true, why: "two\nthree\nfour\nfive" });
   });
 
   test("switched back from the beta the stable release is offered and kept in the config", async (t) => {
