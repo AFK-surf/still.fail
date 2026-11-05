@@ -750,8 +750,11 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
       case "disable": {
         // The person's own secrets opened while the lock still says whose they are (docs/vault.md 一个库): once it is
         // off they go into the plain library, as the dialog said. Turned down there, nothing is turned off.
-        const secrets = yield* unsealOwn(inner, c.workspace);
-        yield* askPerson(inner, t("core-misc.lock.reason.disable"));
+        // (the person asked once, for this: the box key's prompt says it, the vaults' keys unsealed with it; asked by
+        // itself only where none was needed. Two prompts in a row for one tap: found on Android, 2026-11-05)
+        let asked = false;
+        const secrets = yield* unsealOwn(inner, c.workspace, t("core-misc.lock.reason.disable"), () => (asked = true));
+        if (!asked) yield* askPerson(inner, t("core-misc.lock.reason.disable"));
         result = yield* lock.append("disable", {});
         if (secrets.length > 0) inner.runner.fork(writePlain(inner, c.workspace, secrets));
         break;

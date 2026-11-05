@@ -896,10 +896,11 @@ export function itemsView(inner: Inner, ws: string, id: string): J {
 
 // ── security mode turned off (docs/vault.md 一个库) ──
 
-/// What the person's own vaults hold, opened on this device while the lock is still on (the person asked, unless the
-/// vaults are unlocked): none where this device keeps no vault keys or holds none of theirs.
-export function unsealOwn(inner: Inner, ws: string): Effect.Effect<{ plain: Plain; listing: Listing | null }[], CoreError> {
-  return new Vaults(inner, ws, null).unsealOwn();
+/// What the person's own vaults hold, opened on this device while the lock is still on (the person asked, saying
+/// `reason`, unless the vaults are unlocked; `asked` told when they were): none where this device keeps no vault keys
+/// or holds none of theirs.
+export function unsealOwn(inner: Inner, ws: string, reason?: string, asked?: () => void): Effect.Effect<{ plain: Plain; listing: Listing | null }[], CoreError> {
+  return new Vaults(inner, ws, null).unsealOwn(reason, asked);
 }
 
 /// Those secrets written into the plain library once the lock is off: tried again a while, as the station may not have
@@ -1765,7 +1766,7 @@ class Vaults {
   }
 
   /// The person's own vaults' items opened (their plaintext and listing), for security mode turned off.
-  unsealOwn(): Effect.Effect<{ plain: Plain; listing: Listing | null }[], CoreError> {
+  unsealOwn(reason?: string, asked?: () => void): Effect.Effect<{ plain: Plain; listing: Listing | null }[], CoreError> {
     const self = this;
     return Effect.gen(function* () {
       const inner = self.#inner;
@@ -1778,7 +1779,7 @@ class Vaults {
         if (!trusted(lock, v) || v.owner !== who.sub || !v.keys.some((k) => k.cert.device === who.device)) continue;
         const all = Object.values(items(inner, self.ws, v.id)).filter((i) => !i.deleted && i.epoch === v.epoch);
         if (all.length === 0) continue;
-        const key = yield* self.#key(v, who, false, t("core-misc.vault.reason.unlock", { name: v.name }));
+        const key = yield* self.#key(v, who, false, reason ?? t("core-misc.vault.reason.unlock", { name: v.name }), true, () => asked?.());
         for (const item of all) {
           const bytes = yield* Effect.result(self.#plain(lock, v, item, key));
           if (bytes._tag === "Success") out.push({ plain: plainOf(JSON.parse(new TextDecoder().decode(bytes.success))), listing: item.listing ?? null });

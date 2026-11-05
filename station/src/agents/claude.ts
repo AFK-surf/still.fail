@@ -129,6 +129,8 @@ export function classifyResult(text: string): FailureReason {
     ["rate limit", "rate-limit", "rate_limit", "ratelimit", "usage limit"].some((s) => lower.includes(s)) ||
     ["session", "weekly", "daily"].some((window) => lower.includes(`hit your ${window} limit`)) ||
     /\bhit your \d+[- ]hour limit\b/.test(lower) ||
+    // A model's own allowance: "You've reached your Fable limit. Switch to another model, or manage usage credits…"
+    /\breached your [\w.\- ]+ limit\b/.test(lower) ||
     lower.includes("you've hit your limit")
   ) {
     return "rate_limit";
