@@ -179,6 +179,21 @@ test("a pending-request read retries if security mode ends while old requests ar
   assert.equal((await answer).status, 409);
 });
 
+test("a pending-request read prepares vault membership if security mode starts while it waits", async () => {
+  const w = world();
+  let current: typeof w.state | null = null, ready!: () => void;
+  const preparing = new Promise<void>((resolve) => { ready = resolve; });
+  const scopes: boolean[] = [];
+  const secrets = { preparePending: (_ws: string, members: boolean) => { scopes.push(members); return scopes.length === 1 ? preparing : Promise.resolve(); }, pending: () => [] };
+  const route = requestRoutes({ secrets: secrets as never, plain: {} as never, lock: () => current })
+    .find((r) => r.method === "GET" && r.pattern.test("/vault/requests"))!;
+  const answer = route.handle({ viewer: { sub: "bob", email: "bob@x.com", workspace: WS, device: w.bob.base.hex } } as never, []);
+  current = w.state;
+  ready();
+  assert.equal((await answer).status, 200);
+  assert.deepEqual(scopes, [false, true]);
+});
+
 test("a still-needed secret save can be asked again without reading the secret again", async () => {
   const h = harness(() => null);
   try {

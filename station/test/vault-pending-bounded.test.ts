@@ -45,6 +45,32 @@ test("a prepared pending lookup does not traverse decided history", async () => 
   assert.deepEqual(await Promise.all([visited("history", 40), visited("history", 400)]), [1, 1]);
 });
 
+test("an unlocked pending list does not prepare old vault memberships", async () => {
+  async function visits(n: number) {
+    const db = new DatabaseSync(":memory:");
+    db.exec("CREATE TABLE vaults(ws TEXT NOT NULL,id TEXT NOT NULL,seq INTEGER NOT NULL,body TEXT NOT NULL,PRIMARY KEY(ws,id))");
+    const insert = db.prepare("INSERT INTO vaults VALUES('w',?,0,?)");
+    for (let i = 0; i < n; i++) insert.run(`v-${i}`, JSON.stringify({ members: ["somebody"] }));
+    let seen = 0;
+    db.function("vault_seen", (_id) => { seen++; return 1; });
+    const observed = new Proxy(db, { get(target, property) {
+      if (property === "prepare") return (sql: string) => target.prepare(sql.startsWith("SELECT id FROM vaults WHERE ws = ?")
+        ? sql.replace("SELECT id FROM", "SELECT id, vault_seen(id) AS observed FROM") : sql);
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    try {
+      const secrets = new Secrets({ db: observed, data: ".", now: () => 0, home: () => "w", lock: () => null,
+        hub: { store: { subscribe() {}, getSession() { return {}; } } } as never,
+        proxy: {} as never, vaults: new VaultStore(observed), plain: {} as never });
+      await secrets.preparePending("w");
+      assert.deepEqual(secrets.pending("w", null, { sub: "alice", email: "alice@example.test" }), []);
+      return seen;
+    } finally { db.close(); }
+  }
+  assert.deepEqual(await Promise.all([visits(40), visits(400)]), [0, 0]);
+});
+
 test("a pending list reads its member vaults and follows membership changes", async () => {
   const db = new DatabaseSync(":memory:");
   let seen = 0, reading = false;
