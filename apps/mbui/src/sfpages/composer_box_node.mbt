@@ -26,7 +26,7 @@ fn composer_box_node(
     let extra = fn() { dmax(0.0, (line() - @sf.theme().round.side) / 2.0) }
     let tools_in = fn() { @sf.capsule_in(place().corner, @sf.theme().round.side) - @sf.composer_pad }
     cap.row(Is(true)).wraps(By(fn() { if opened() { Some(10.0) } else { None } }))
-    .gap(By(fn() { if opened() { 4.0 } else { 2.0 } }))
+    .gap(By(fn() { if opened() { 4.0 } else { 1.0 } }))
     .lines_up(Is(Some(Middle)))
     .padding(By(fn() {
       let pad = if opened() { @sf.composer_pad } else { place().capsule_pad }

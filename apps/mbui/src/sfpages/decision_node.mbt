@@ -319,14 +319,19 @@ fn dismiss_node(
   let shown = fn() { key() is Some(_) && (asked() || resolved()) && asking() && !let_go() }
   let live = fn() { shown() && !resolved() }
   under_node(b, shown, lead~, scale_out=archive_scale, out=archive_tween, about=(0.0, 0.0), fn(u) {
-    u.padding(Is((0.0, 2.0, 0.0, 0.0))) |> ignore
     u.box(fn(w) {
       let hot = fn() { live() && w.pointed() }
       w
-      .words_runs(By(fn() { [@ui.span(@sf.t("web-main.chat.asks.dismiss"), underline=hot())] }))
-      .words_look(By(fn() { @ui.style_words(if hot() { dismiss_words_hot } else { dismiss_words }) }))
-      .ink(By(fn() { @ui.style_ink(if hot() { dismiss_words_hot } else { dismiss_words }) }))
+      .padding(Is((0.0, 2.0, 0.0, 0.0)))
       .says(By(fn() { Some(@view.said(Button, label=@sf.t("web-main.chat.asks.dismiss"))) }))
+      |> ignore
+      w.box(fn(words) {
+        words
+        .words_runs(By(fn() { [@ui.span(@sf.t("web-main.chat.asks.dismiss"), underline=hot())] }))
+        .words_look(By(fn() { @ui.style_words(if hot() { dismiss_words_hot } else { dismiss_words }) }))
+        .ink(By(fn() { @ui.style_ink(if hot() { dismiss_words_hot } else { dismiss_words }) }))
+        |> ignore
+      })
       |> ignore
       @sf.presses_node(w, on=live, fn() {
         guard key() is Some(k) && thread() is Some(th) else { return }
