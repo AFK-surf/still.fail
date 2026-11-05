@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { autoArchive, startAutoArchiveTimer } from "../src/sessions/lifecycle.ts";
-import { saidScanStep, type SaidScan } from "../src/store/said-state.ts";
+import { SAID_LATEST, SAID_SCAN, saidScanStep, type SaidScan } from "../src/store/said-state.ts";
 import { Store } from "../src/store/store.ts";
 import { Rig } from "./hub-fakes.ts";
 
@@ -30,7 +30,7 @@ function track(r: Rig) {
       if (property === "prepare") return (sql: string) => target.prepare(
         sql.includes("SELECT COUNT(*) AS c FROM entries")
           ? sql.replace("AND NOT (author_kind", "AND visit_archive_unread(n) IS NOT NULL AND NOT (author_kind")
-          : sql.includes("INDEXED BY entries_said") && sql.includes("ORDER BY n DESC")
+          : sql === SAID_LATEST || sql === SAID_SCAN
             ? sql.replace("ORDER BY n DESC", "AND visit_archive_unread(n) IS NOT NULL ORDER BY n DESC")
             : sql,
       );
@@ -64,6 +64,7 @@ test("auto-archive does not count a long run of unread messages", async () => {
     try {
       autoArchive(r.hub, later());
       assert.equal(r.store.getThread(thread)?.hiddenAt, null);
+      assert.ok(trace.visited() > 0, "the unread lookup was observed");
       assert.ok(trace.visited() <= 64, `the decision visited ${trace.visited()} messages`);
     } finally { trace.restore(); }
   } finally { await r.close(); }
@@ -78,6 +79,7 @@ test("auto-archive does not scan a long run of the starter's messages", async ()
     try {
       autoArchive(r.hub, later());
       assert.notEqual(r.store.getThread(thread)?.hiddenAt, null);
+      assert.ok(trace.visited() > 0, "the unread lookup was observed");
       assert.ok(trace.visited() <= 64, `the decision visited ${trace.visited()} messages`);
     } finally { trace.restore(); }
   } finally { await r.close(); }
@@ -139,7 +141,8 @@ test("an old unknown boundary is prepared before archiving", async () => {
       autoArchive(r.hub, later(), (id: number) => need.push(id));
       assert.equal(r.store.getThread(thread)?.hiddenAt, null, "unknown is not treated as read");
       assert.deepEqual(need, [thread]);
-      assert.ok(trace.visited() <= 65, `the foreground visited ${trace.visited()} messages`);
+      assert.ok(trace.visited() > 0, "the unread lookup was observed");
+      assert.ok(trace.visited() <= 65, `the unread decision visited ${trace.visited()} messages`);
     } finally { trace.restore(); }
     let scan: SaidScan | null = null;
     for (;;) {
