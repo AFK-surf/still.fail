@@ -130,8 +130,6 @@ pub fn source() -> @sfapp.Source {
         Some(Ok((v, _))) => {
           // (the tape told it was asked, its answer to it let go: the run's ask of it, if the run asked, is had)
           @core.call(name, params~, on_done=fn(_) {  })
-          // (answered at once, as the core's answer comes from outside: what it changes of what is no signal taken so)
-          @ui.came_from_outside()
           done(Ok(v))
         }
         // (one always answered here, not kept yet: said on the output for scripts/kept, never the run's to give)
@@ -142,7 +140,6 @@ pub fn source() -> @sfapp.Source {
     call_bytes: fn(name, params, bytes, done) {
       match @sfkept.answer(name, params, Some(bytes)) {
         Some(Ok((v, _))) => {
-          @ui.came_from_outside()
           done(Ok(v))
         }
         _ => @core.call(name, params~, bytes=Some(bytes), on_done=done)
@@ -151,7 +148,6 @@ pub fn source() -> @sfapp.Source {
     read_bytes: fn(name, params, done) {
       match @sfkept.answer(name, params, None) {
         Some(Ok((v, b))) => {
-          @ui.came_from_outside()
           done(Ok((v, b.unwrap_or(Bytes::new(0)))))
           return
         }

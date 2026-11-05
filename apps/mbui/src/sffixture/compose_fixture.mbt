@@ -136,8 +136,7 @@ pub fn fix_compose_call(f : Fixture, name : String, params : Json) -> Result[Jso
       w.text = text(p, "text")
       // (as the core's: its composer's topic and its draft's told, no other, fixture_topic's fix_typed; not counted,
       // the page has the words already)
-      fix_typed.val += 1
-      @settings.fixture_changed()
+      fix_typed.set(@signals.untracked(fn() { fix_typed.get() }) + 1)
       Some(Ok(Json::object({ "version": Json::number(w.version.to_double()) })))
     }
     "composer.quote" => {

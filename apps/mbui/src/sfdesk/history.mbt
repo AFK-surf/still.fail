@@ -8,10 +8,11 @@
 
 ///|
 /// What the history keeps of its own (the rest is the core's): 只看收发 (for every history, as the web keeps it), its
-/// details folded; where its runtime keeps each session's transcript (by station and session; "" none), asked once.
+/// details folded; where its runtime keeps each session's transcript (by station and session; "" none), asked once,
+/// a signal: what shows it is built again as the core's answer sets it.
 priv struct HistoryOwn {
   mut shut : Bool
-  transcripts : Map[String, String]
+  transcripts : Map[String, @signals.Signal[String]]
 }
 
 ///|
@@ -263,13 +264,15 @@ fn wh_evict(c : @ui.Ctx, src : Source, station : String, key : String) -> Unit {
 /// whole path in its tip), and its path to copy. Nothing before it is written, nor from a station from before it.
 fn wh_transcript(c : @ui.Ctx, src : Source, station : String, key : String, me : String) -> Unit {
   let t = @sf.theme()
-  match history_own.transcripts.get(me) {
+  match history_own.transcripts.get(me).map(fn(p) { p.get() }) {
     None => {
-      history_own.transcripts[me] = ""
+      let said = @signals.signal("")
+      history_own.transcripts[me] = said
+      said.get() |> ignore
       c.tell("history/transcript/" + me, fn() {
         (src.call)("session.transcript", { "station": Json::string(station), "key": Json::string(key) }, fn(res) {
           match res {
-            Ok(j) => history_own.transcripts[me] = text(Some(j), "path")
+            Ok(j) => said.set(text(Some(j), "path"))
             // not written yet, or a station from before it: nothing said
             Err(_) => ()
           }

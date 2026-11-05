@@ -444,9 +444,9 @@ pub fn Client::unread(self : Client, name : String) -> Unit {
 }
 
 ///|
-/// Whether message `m` is a call's alone and changes nothing a frame reads: a value of a call that says it changes
-/// nothing (Client::quiet), or the answer of one whose answer nobody reads (Client::unread, its wait ended with it),
-/// so it may be taken as it comes, before the frame decides what it does (@ui.on_message_said).
+/// Whether message `m` is a call's alone and changes nothing a frame reads but by signals, so it may be taken as it
+/// comes, before the frame decides what it does (@ui.on_message_said): a call's answer (what awaits it sets signals;
+/// not an edit's awaited till its draft comes), a value of a call that says it changes nothing (Client::quiet).
 pub fn Client::call_said(self : Client, m : Map[String, Json]) -> Bool {
   if m.contains("fatal") {
     return false
@@ -458,8 +458,11 @@ pub fn Client::call_said(self : Client, m : Map[String, Json]) -> Bool {
   if self.subs.contains(id) {
     return false
   }
+  // (a call's answer: what awaits it sets signals, what reads them built again (docs/retained.md: made a signal); one
+  // that changes something a frame reads and is no signal is caught by the Tester's checks, made a signal there. But an
+  // edit's, awaited till its draft comes: Client::echo_of)
   if m.contains("ok") || m.contains("error") {
-    return self.unread_calls.contains(id) && !self.echo_waits.contains(id)
+    return self.calls.contains(id) && !self.echo_waits.contains(id)
   }
   match (m.get("value"), self.quiet_calls.get(id)) {
     (Some(v), Some(f)) => self.progress.contains(id) && f(v)
