@@ -206,7 +206,7 @@ fn media_reveal_node(
   }
   let e = fn() { @ui.Out.at(way()) }
   s.clips(Is(true)) |> ignore
-  s.box(fn(i) {
+  s.show(fn() { seen.get() }, fn(i) {
     i
     .over(Is(true))
     .width(By(fn() { Some(width()) }))
@@ -216,7 +216,6 @@ fn media_reveal_node(
     |> ignore
     media_image(i, fn() { picture().key }, width, height, fit)
   })
-  |> ignore
   // (the frost over it as it comes, none under a quarter deep)
   s.show(fn() { ready() && reveal_blur * (1.0 - e()) > reveal_blur_least }, fn(f) {
     f
