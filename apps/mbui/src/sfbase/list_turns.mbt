@@ -226,16 +226,21 @@ pub fn Turns::start(self : Turns, key : String) -> Double? {
 ///|
 /// The turn under way, of words sent or messages out of avatars, is over (`at`: when it was declared to end).
 pub fn Turns::over(self : Turns, c : @ui.Ctx, what : TurnFor, at : Double) -> Unit {
-  // (words sent landed: what waits for them goes from here)
+  // (words sent landed: what waits for them goes from here. Said to move only where a turn waits to be played, its
+  // time now nearer (Moving::rest_at): with none asked, nothing of the list is built for it)
   if what == Send && self.sent_at >= 0.0 {
     self.sent_until = dmin(self.sent_until, at + turn_calm_ms)
-    c.moving(self.mover, self as &@ui.Moving, what="a chat's list turns")
+    if self.asks.length() > 0 {
+      c.moving(self.mover, self as &@ui.Moving, what="a chat's list turns")
+    }
     return
   }
   if self.on == Some(what) && self.open {
     self.open = false
     self.until = dmin(self.until, at + turn_calm_ms)
-    c.moving(self.mover, self as &@ui.Moving, what="a chat's list turns")
+    if self.asks.length() > 0 {
+      c.moving(self.mover, self as &@ui.Moving, what="a chat's list turns")
+    }
   }
   // (one asked and not come yet, over before it came: it goes)
   match self.asks.search_by(fn(a) { a.what == what }) {
