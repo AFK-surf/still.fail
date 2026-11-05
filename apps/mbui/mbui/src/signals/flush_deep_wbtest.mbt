@@ -82,3 +82,23 @@ test "an effect setting what it read itself: run once, nothing said" {
   s1()
   assert_eq(said, [])
 }
+
+///|
+test "an effect taking a flag it reads and putting it back, untracked: its own, nothing said" {
+  let said : Array[String] = []
+  effect_round_said.val = fn(s) { said.push(s) }
+  let go = signal(false)
+  let sent = Ref(0)
+  let s1 = effect(fn() {
+    if go.get() {
+      untracked(fn() {
+        go.set(false)
+        sent.val += 1
+      })
+    }
+  })
+  go.set(true)
+  effect_round_said.val = fn(s) { abort(s) }
+  s1()
+  assert_eq((said, sent.val, go.get()), ([], 1, false))
+}

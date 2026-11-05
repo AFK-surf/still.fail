@@ -191,7 +191,7 @@ fn propagate(start : Link, inner_write : Bool) -> Unit {
       sub.flags = flags | (RECURSED | PENDING)
       // (an effect under way, what it read already set by another run inside it: it is not run again, and stays as it
       // was before that set, the two going round never settled; said, signals.mbt's effect_round_said)
-      if sub.kind is EffectNode && !(run.active_sub is Some(a) && physical_equal(a, sub)) {
+      if sub.kind is EffectNode && !(run.running is Some(r) && physical_equal(r, sub)) {
         effect_round()
       }
       flags = flags & MUTABLE

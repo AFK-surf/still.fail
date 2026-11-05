@@ -39,6 +39,8 @@ priv struct Run {
   mut draining : Bool
   /// where each flush under way was set off from (the set under way, flush_said): the innermost last
   flush_trail : Array[String]
+  /// the effect or watch running now, the innermost (what it writes is its own, however untracked: effect_round)
+  mut running : ReactiveNode?
 }
 
 ///|
@@ -57,6 +59,7 @@ let run : Run = {
   lasts: [],
   draining: false,
   flush_trail: [],
+  running: None,
 }
 
 ///|
@@ -297,7 +300,10 @@ fn effect_of(f : () -> (() -> Unit)?) -> () -> Unit {
     None => ()
   }
   run.run_depth += 1
+  let running = run.running
+  run.running = Some(e)
   e.cleanup = f()
+  run.running = running
   run.run_depth -= 1
   run.active_sub = prev_sub
   run.owner = prev_owner
@@ -420,7 +426,10 @@ fn run_effect(e : ReactiveNode) -> Unit {
       if was is None {
         setting.val = o.marked_by.val
       }
+      let running = run.running
+      run.running = Some(e)
       (o.told)()
+      run.running = running
       setting.val = was
     }
     o.marked_by.val = None
@@ -456,7 +465,10 @@ fn run_effect(e : ReactiveNode) -> Unit {
     run.run_depth += 1
     if e.kind is EffectNode {
       guard e.own is EffectOwn(f) else { abort("an effect without its fn") }
+      let running = run.running
+      run.running = Some(e)
       e.cleanup = f()
+      run.running = running
     }
     run.run_depth -= 1
     run.active_sub = prev_sub
