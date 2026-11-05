@@ -47,6 +47,10 @@ test("the workers in a station release start and process a batch", { skip: !proc
     store.insertJob({ id: "old-job", sessionKey: "old-count", name: "old-job", command: "true", cwd: "/", port: null,
       token: "old-job", state: "running", pgid: null, exitCode: null, startedAt: 1, endedAt: null, restarts: 0, log: "/dev/null", watch: false });
     store.db.exec("DELETE FROM session_up_job_rows; UPDATE session_up_job_meta SET fresh=0");
+    store.db.prepare("UPDATE entries SET attachments=? WHERE thread=? AND n=1")
+      .run(JSON.stringify([{ path: "/w/bundle.html", name: "bundle.html" }]), thread);
+    store.db.prepare("DELETE FROM widget_source_rows WHERE thread=?").run(thread);
+    store.db.prepare("DELETE FROM widget_source_scopes WHERE thread=?").run(thread);
     for (const [file, message] of [
       ["sessions/workspace-activity-worker.js", {}],
       ["sessions/session-count-worker.js", {}],
@@ -57,6 +61,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
       ["read/session-list-worker.js", { scope: "all" }],
       ["read/session-bindings-worker.js", { scope: "all" }],
       ["read/session-up-jobs-worker.js", { session: "old-count" }],
+      ["read/widget-sources-worker.js", { thread }],
       ["read/archive-mark-worker.js", { scope: "all" }],
       ["outflow/chat-index-worker.js", "H"],
       ["vault/signin-save-worker.js", "s"],
@@ -85,5 +90,6 @@ test("the workers in a station release start and process a batch", { skip: !proc
     assert.equal(store.db.prepare("SELECT connect FROM session_binding_rows WHERE session='old-count'").get()?.connect, "old-binding");
     assert.equal(store.db.prepare("SELECT session FROM archive_pin_rows WHERE session='old-count'").get()?.session, "old-count");
     assert.deepEqual(store.upJobIds("old-count"), ["old-job"]);
+    assert.equal(store.db.prepare("SELECT name FROM widget_source_rows WHERE thread=? AND path='/w/bundle.html'").get(thread)?.name, "bundle.html");
   } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
 });

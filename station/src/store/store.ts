@@ -49,6 +49,8 @@ import { installSessionUpJobs, SESSION_UP_JOB, SESSION_UP_JOBS, sessionUpJobsRea
 import { installSessionCounts, sessionCountsReady, SESSION_COUNT_TOTAL, SESSION_COUNT_CONNECT,
   SESSION_COUNTS, SESSION_COUNTS_VISIBLE, SESSION_COUNTS_HOME } from "./session-counts.ts";
 import { installPostBlocks, PostBlocksUnavailable, POST_BLOCK_SIZE, type PostPosition } from "./post-blocks.ts";
+import { checkWidgetSources, installWidgetSources, WIDGET_SOURCE, WIDGET_SOURCE_MISSING, WIDGET_SOURCE_ORIGINAL,
+  WIDGET_SOURCE_UNUSUAL, WidgetSourcesUnavailable } from "./widget-sources.ts";
 import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
 import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
 
@@ -387,6 +389,7 @@ export class Store {
       addPendingCards(db);
       addTellIndexes(db);
       installSaidState(db);
+      installWidgetSources(db);
     } catch (e) {
       db.close();
       throw e;
@@ -2554,19 +2557,26 @@ export class Store {
   /// The session's widget models it has not been told, with where each widget was posted (the latest of its threads'
   /// messages that carry the file).
   untoldWidgetModels(session: string): WidgetModel[] {
-    const untold = this.#all("SELECT path, model FROM widget_states WHERE session = ? AND model IS NOT NULL AND told_at IS NULL ORDER BY updated_at, rowid", session);
-    return untold.map(({ path, model }) => {
-      const found = this.#one(
-        `SELECT t.channel, t.thread_ts, json_extract(a.value, '$.name') AS name FROM merged m
-         JOIN threads t ON t.id = m.thread JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = ?1, json_each(m.attachments) a
-         WHERE m.attachments IS NOT NULL AND json_extract(a.value, '$.path') = ?2 ORDER BY m.created_at DESC LIMIT 1`,
-        session, path,
-      );
-      const base: string = path.split(/[/\\]/).pop() ?? path;
-      if (found === undefined) return { path, name: base, thread: null, model };
-      const name = typeof found.name === "string" && found.name !== "" ? found.name : base;
-      return { path, name, thread: [found.channel, found.thread_ts], model };
-    });
+    // Membership, readiness and the selected messages must agree while another station writes.
+    this.db.exec("SAVEPOINT widget_source_read");
+    try {
+      const untold = this.#all("SELECT path, model FROM widget_states WHERE session = ? AND model IS NOT NULL AND told_at IS NULL ORDER BY updated_at, rowid", session);
+      if (untold.length === 0) return [];
+      checkWidgetSources(this.db);
+      const missing = this.#all(WIDGET_SOURCE_MISSING, session).map((row) => row.thread as number);
+      if (missing.length !== 0) throw new WidgetSourcesUnavailable(missing);
+      const unusual = this.#one(WIDGET_SOURCE_UNUSUAL, session) !== undefined;
+      return untold.map(({ path, model }) => {
+        const found = this.#one(
+          unusual ? WIDGET_SOURCE_ORIGINAL : WIDGET_SOURCE,
+          session, path,
+        );
+        const base: string = path.split(/[/\\]/).pop() ?? path;
+        if (found === undefined) return { path, name: base, thread: null, model };
+        const name = typeof found.name === "string" && found.name !== "" ? found.name : base;
+        return { path, name, thread: [found.channel, found.thread_ts], model };
+      });
+    } finally { this.db.exec("RELEASE widget_source_read"); }
   }
 
   /// The agent was told these (path, model): each is marked told unless its model changed since.

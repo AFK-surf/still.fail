@@ -22,6 +22,7 @@ import { SESSION_LIST_PENDING } from "../store/session-list-index.ts";
 import { SessionBindingsBuilder } from "./session-bindings-builder.ts";
 import { ArchiveMarkBuilder } from "./archive-mark-builder.ts";
 import { SessionUpJobsBuilder } from "./session-up-jobs-builder.ts";
+import { WidgetSourcesBuilder } from "./widget-sources-builder.ts";
 import { SESSION_BINDINGS_PENDING } from "../store/session-bindings-index.ts";
 import { OUTFLOW_CHATS_PENDING } from "./outflow.ts";
 import type { Answer, Ask, Ready } from "./worker.ts";
@@ -121,6 +122,7 @@ export class Readers {
   private sessionBindings: SessionBindingsBuilder | null = null;
   private archiveMarks: ArchiveMarkBuilder | null = null;
   private sessionUpJobs: SessionUpJobsBuilder | null = null;
+  private widgetSources: WidgetSourcesBuilder | null = null;
   /// A checkpoint is armed or running (`checkpointSoon`), and the store changed again since it was armed.
   private checkpointing = false;
   private again = false;
@@ -260,6 +262,13 @@ export class Readers {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
     this.sessionUpJobs ??= new SessionUpJobsBuilder(join(this.data, "stillfail.db"), this.backfill);
     return this.covered(this.sessionUpJobs.ready(sessions, signal), signal);
+  }
+
+  /// Prepare only old threads whose widget sources a delivery needs.
+  prepareWidgetSources(threads: readonly number[], signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.widgetSources ??= new WidgetSourcesBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.widgetSources.ready(threads, signal), signal);
   }
 
   private async saidRead(op: string, args: unknown, lang: Ask["lang"], told: boolean, background: boolean, signal?: AbortSignal): Promise<string> {
@@ -514,6 +523,7 @@ export class Readers {
     if (this.sessionBindings !== null) void this.sessionBindings.close();
     if (this.archiveMarks !== null) void this.archiveMarks.close();
     if (this.sessionUpJobs !== null) void this.sessionUpJobs.close();
+    if (this.widgetSources !== null) void this.widgetSources.close();
     for (const line of [this.asked, this.told, this.log, this.pages]) {
       for (const asked of line.waiting.splice(0)) asked.reject(new HttpError(502, "station stopping"));
       for (const { worker } of line.slots) void worker.terminate();
