@@ -137,6 +137,8 @@ test "the same scroll requests and decodes the same pictures with or without int
   let continuous = image_window_path(true)
   let end_only = image_window_path(false)
   assert_eq(continuous.0, end_only.0, msg="the same images are visible at the end")
+  assert_eq(continuous.1.length(), 26, msg="every picture crossed by this scroll was requested")
+  assert_eq(continuous.2, 26, msg="each crossed picture was decoded once")
   assert_eq(continuous.1, end_only.1, msg="image requests do not depend on display frames")
   assert_eq(continuous.2, end_only.2, msg="image decode count does not depend on display frames")
 }
