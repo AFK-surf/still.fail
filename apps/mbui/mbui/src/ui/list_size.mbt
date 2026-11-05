@@ -555,6 +555,7 @@ pub struct ListRows[T] {
   priv mut given : Bool
   priv mut last_keys : Array[String]
   priv mut last_items : Array[T]
+  priv mut last_versions : Array[String]?
   /// the keys going, read by each row as whether it is one
   priv going_said : @signals.Keyed[String]
   /// how many times a row's room was worked out (ListRows::rooms_worked): for a test that counts what a layout costs
@@ -563,7 +564,7 @@ pub struct ListRows[T] {
 
 ///|
 pub fn[T] ListRows::new() -> ListRows[T] {
-  { was: {}, order: [], going: {}, causes: { by: {}, keys: [], said: @signals.signal(0), n: 0, start: -1.0, end: -1.0, own: Set::new(), by_room: Set::new(), opened: {}, leads: {}, laid: -10, way_at: -1.0, way_frame: -1, way_offs: {}, way_speed: None }, given: false, last_keys: [], last_items: [], going_said: @signals.keyed(), rooms: 0 }
+  { was: {}, order: [], going: {}, causes: { by: {}, keys: [], said: @signals.signal(0), n: 0, start: -1.0, end: -1.0, own: Set::new(), by_room: Set::new(), opened: {}, leads: {}, laid: -10, way_at: -1.0, way_frame: -1, way_offs: {}, way_speed: None }, given: false, last_keys: [], last_items: [], last_versions: None, going_said: @signals.keyed(), rooms: 0 }
 }
 
 ///|
@@ -614,6 +615,7 @@ fn[T] ListRows::rows_at(
   keys : Array[String],
   items : Array[T],
   version : (T) -> String,
+  versions? : Array[String],
   watched~ : Bool,
   ms~ : (String) -> Double?,
   from~ : (String) -> Double?,
@@ -621,11 +623,17 @@ fn[T] ListRows::rows_at(
   moves~ : (T) -> Bool,
 ) -> (Array[T], Array[String]) {
   // (the same arrays as last given: nothing of them changed, nothing to look over)
+  let same_versions = match (versions, self.last_versions) {
+    (None, None) => true
+    (Some(a), Some(b)) => physical_equal(a, b)
+    _ => false
+  }
   let same = self.given &&
     physical_equal(keys, self.last_keys) &&
-    physical_equal(items, self.last_items)
+    physical_equal(items, self.last_items) && same_versions
   self.last_keys = keys
   self.last_items = items
+  self.last_versions = versions
   let here : Map[String, Bool] = {}
   if !same {
     for k in keys {
@@ -653,7 +661,7 @@ fn[T] ListRows::rows_at(
     ()
   } else if self.given && watched {
     for i, k in keys {
-      let v = version(items[i])
+      let v = match versions { Some(values) => values[i]; None => version(items[i]) }
       match self.was.get(k) {
         None =>
           if comes(items[i]) {
@@ -777,7 +785,7 @@ fn[T] ListRows::rows_at(
   if !same {
     self.was.clear()
     for i, k in keys {
-      self.was[k] = version(items[i])
+      self.was[k] = match versions { Some(values) => values[i]; None => version(items[i]) }
     }
     self.order = keys.mapi(fn(i, k) { (k, items[i]) })
   }
