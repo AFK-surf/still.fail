@@ -2007,7 +2007,9 @@ pub fn Ctx::blur(self : Ctx) -> Unit {
     l.back_in = None
     l.fresh = false
   }
-  if had {
+  // focus_moved already tells the field and every reader of the focus. Only an old build in progress may need
+  // another pass; a retained scroll dismissing the keyboard has no unrelated old frame to rebuild.
+  if had && building.val {
     self.read_changed("the focus let go")
   }
 }

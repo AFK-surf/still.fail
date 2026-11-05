@@ -15,7 +15,7 @@ let view_tree_made : Ref[Int] = Ref(0)
 ///|
 /// What a node lends what it holds: its words are picked with the pointer (words_picked).
 // kept across runs: what each node lends (View::lends), let go with it
-let words_picks : @view.Lent[Bool] = @view.Lent::new()
+let words_picks : @view.Lent[@view.NodeId] = @view.Lent::new()
 
 ///|
 /// The words in pieces node `v` holds, now or later, picked with the pointer, a mouse's (a page's, as an old view's
@@ -24,7 +24,7 @@ let words_picks : @view.Lent[Bool] = @view.Lent::new()
 /// `color`: what is picked of them drawn on, and its handles in it whole (else the page's: Ctx::selectable's);
 /// `lined`: a finger's handles a line down its ends' lines with a knob, whatever the platform's are.
 pub fn words_picked(v : @view.View, color? : Int64, lined? : Bool = false) -> Unit {
-  v.lends(words_picks, true).lends(@view.runs_picker, words_picked_span) |> ignore
+  v.lends(words_picks, v.id()).lends(@view.runs_picker, words_picked_span) |> ignore
   // (the I-beam over them, pointed at alone where the pointer is in it (what holds it pointed in still), as over an old
   // view's page's words picked so (Ctx::selectable); what takes presses in it its own, a link of theirs the hand:
   // runs_links')
@@ -121,7 +121,7 @@ fn tree_sels(finger? : Bool = false) -> Array[SelTarget] {
           return
         }
         match tree.view_of(c.id) {
-          Some(v) if v.lent(words_picks) == Some(true) => {
+          Some(v) if v.lent(words_picks) is Some(_) => {
             let (r, lay, _) = view_runs_laid(c.runs, c.words_look, c.runs_look, c.w)
             let (bx0, by0, bx1, by1) = tree.seen_bounds(c.id)
             let place = tree_place(v)
@@ -204,6 +204,50 @@ fn tree_picking() -> Bool {
 }
 
 ///|
+/// The selection owns a mouse press on its words. Its owner is the node that lends selection, not the paragraph
+/// that happens to show the anchor now: a virtual list may let that paragraph go while the selection continues.
+fn tree_pick_down(x : Double, y : Double, at : Double) -> @view.NodeId? {
+  guard tree_sel_at(x, y) is Some(target) else { return None }
+  guard view_app.val is Some(tree) && target.node is Some(id) else { return None }
+  guard tree.view_of(id).bind(fn(v) { v.lent(words_picks) }) is Some(owner) else { return None }
+  let c = g()
+  c.press_count(x, y, at)
+  c.select_press(x, y, c.clicks)
+  match c.editors.get(c.focus_allowed()) {
+    Some(st) => st.anchor = st.caret
+    None => ()
+  }
+  c.focus_on_press(0)
+  // The old controls have no press. The selection's hold is ViewHeld::Picking, as a field or gesture owns its hold.
+  Some(owner)
+}
+
+///|
+/// Move only the selection. Readers of picked_said redraw what it changes; no old frame input is pending.
+fn tree_pick_move(x : Double, y : Double) -> Unit {
+  guard view_held.val is Some(Picking(p)) else { return }
+  if x != p.x || y != p.y {
+    picked.slid = true
+  }
+  p.x = x
+  p.y = y
+  if select_sliding() {
+    g().select_to(x, y)
+  }
+  tree_edge_to(y, select_sliding())
+}
+
+///|
+/// The selection's press ended or its owner stopped taking input. Keep what was picked and stop edge scrolling.
+fn tree_pick_up() -> Unit {
+  if picked.dragging {
+    picked.dragging = false
+    picked_told()
+  }
+  select_edge_stop()
+}
+
+///|
 /// The column of the window's tree words are being picked in (the nearest scrolling up and down that holds the
 /// paragraph the press went down in: View::scroll_holding; known by the column, not by that paragraph, whose node may
 /// scroll away and be made anew while picking goes on), and how fast it was last said to go toward the pointer
@@ -234,13 +278,13 @@ fn tree_edge_from(t : SelTarget) -> Unit {
 }
 
 ///|
-/// The column words of the window's tree are being picked in toward the pointer (at the Ctx's py) while `held`: past
+/// The column words of the window's tree are being picked in toward the pointer at `y` while `held`: past
 /// where it shows (its top, its foot, as it is laid out and cut by what holds it now: as the window or the page
 /// changes, those then), as fast as select_edge has an old view's list go that far past (select_edge_rate, from
 /// select_edge_least); within it, or let go, still. Said to it only as how fast changes (Scroll::edge_toward goes on as
 /// it is said, its place a function of time), never again for the same. The column let go, or shown nowhere (its page
 /// covered by another, or left): still, and known no more, at once.
-fn tree_edge_to(c : Ctx, held : Bool) -> Unit {
+fn tree_edge_to(py : Double, held : Bool) -> Unit {
   guard tree_edge.val is Some(e) else { return }
   guard view_app.val is Some(tree) else { return }
   // (laid out and placed as of the moment it is asked: what changed since the last frame (the column moved, made
@@ -259,10 +303,10 @@ fn tree_edge_to(c : Ctx, held : Bool) -> Unit {
   let (top, foot) = (dmax(y, by0), dmin(y + h, by1))
   let v = if !held || foot <= top {
     0.0
-  } else if c.py < top {
-    -(top - c.py + select_edge_least) * select_edge_rate
-  } else if c.py > foot {
-    (c.py - foot + select_edge_least) * select_edge_rate
+  } else if py < top {
+    -(top - py + select_edge_least) * select_edge_rate
+  } else if py > foot {
+    (py - foot + select_edge_least) * select_edge_rate
   } else {
     0.0
   }

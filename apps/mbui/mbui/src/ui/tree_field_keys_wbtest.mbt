@@ -136,9 +136,15 @@ test "scrolling a retained editor's choices keeps its keyboard, but dismisses an
     t.draw()
     assert_true(t.ime().0)
     let (x, y) = t.find("选项 2").unwrap()
-    t.drag(x + 5.0, y + 5.0, x + 5.0, y - 70.0)
+    t.measure_as_host()
+    let at = t.time()
+    t.touch_at(0, x + 5.0, y + 5.0, at)
+    t.touch_at(1, x + 5.0, y - 70.0, at + 10.0)
+    t.touch_at(2, x + 5.0, y - 70.0, at + 20.0)
+    t.frame_at(at + 30.0)
     assert_eq(t.ime().0, own)
     let (_, after) = t.find("选项 2").unwrap_or((x, y))
     assert_true(after < y, msg="the choices scrolled")
+    assert_eq(t.built_why(), "", msg="a retained scroll and its focus change build no old view: own=\{own}, \{t.built_why()}")
   }
 }

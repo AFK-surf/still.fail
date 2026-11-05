@@ -105,6 +105,79 @@ fn picked_drawn(t : Tester) -> Array[(Double, Double, Double, Double)] {
 }
 
 ///|
+test "dragging across retained words updates the selection in each host frame without rebuilding old views" {
+  let t = tree_picked_tester(true)
+  t.measure_as_host()
+  let at = t.time()
+  t.touch_at(0, 1.0, 51.0, at)
+  t.frame_at(at + 1000.0 / 60.0)
+  assert_eq(t.built_why(), "", msg="the selection owns the press from its first frame: \{t.built_why()}")
+  let mut count = 0
+  for i in 1..=3 {
+    t.touch_at(1, 30.0 * i.to_double(), 51.0, t.time())
+    t.frame_at(at + (i + 1).to_double() * 1000.0 / 60.0)
+    let selected = t.ctx().selected_text()
+    assert_true(selected.length() > count, msg="the mouse must extend the selected words")
+    count = selected.length()
+    assert_true(picked_drawn(t).length() > 0, msg="the current selection must be drawn")
+    assert_eq(t.built_why(), "", msg="move \{i}: a retained selection must not rebuild the old frame: \{t.built_why()}")
+  }
+  let words = t.ctx().selected_text()
+  t.touch_at(2, 90.0, 51.0, t.time())
+  t.frame_at(at + 5.0 * 1000.0 / 60.0)
+  assert_eq(t.ctx().selected_text(), words)
+  assert_true(tree_picked() is Some(_), msg="the completed selection is available to its actions")
+  assert_eq(t.built_why(), "", msg="releasing the selection must not rebuild the old frame")
+}
+
+///|
+test "double and triple clicks on retained words select by their event times without rebuilding old views" {
+  let t = tree_picked_tester(true)
+  t.measure_as_host()
+  let at = t.time()
+  for i, words in ["", "wide", "hello wide world"] {
+    let when = at + i.to_double() * 100.0
+    t.touch_at(0, 60.0, 51.0, when)
+    t.touch_at(2, 60.0, 51.0, when)
+    t.frame_at(when + 1000.0 / 60.0)
+    assert_eq(t.ctx().selected_text(), words)
+    assert_eq(t.built_why(), "", msg="click \{i + 1}: \{t.built_why()}")
+  }
+}
+
+///|
+test "a modal taking the selection owner's input ends the hold and preserves the words already picked" {
+  let modal = @signals.signal(false)
+  let t = Tester::new(fn(_) { }, w=400.0, h=300.0)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.box(fn(page) {
+      words_picked(page)
+      page.width(Is(Some(300.0))).words_runs(Is(picked_runs),
+        look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false }) |> ignore
+    }) |> ignore
+    root.show(fn() { modal.get() }, fn(m) {
+      m.over(Is(true)).modal(Is(true)).width(Is(Some(400.0))).height(Is(Some(300.0))) |> ignore
+    }) |> ignore
+  })
+  t.draw()
+  t.measure_as_host()
+  let at = t.time()
+  t.touch_at(0, 1.0, 11.0, at)
+  t.touch_at(1, 60.0, 11.0, at + 10.0)
+  t.frame_at(at + 20.0)
+  let words = t.ctx().selected_text()
+  assert_true(words.length() > 0 && picked.dragging)
+  modal.set(true)
+  assert_false(picked.dragging, msg="the new modal stops the selection at its cause")
+  t.touch_at(1, 200.0, 11.0, at + 30.0)
+  t.touch_at(2, 200.0, 11.0, at + 40.0)
+  t.frame_at(at + 50.0)
+  assert_eq(t.ctx().selected_text(), words)
+  assert_true(tree_edge.val is None)
+}
+
+///|
 test "a node's words in pieces in a page whose words are picked: dragged over with the mouse, picked as an old view's paragraph of the same pieces is (from where it went down to where it let go), drawn picked under them; a press elsewhere lets them go" {
   for case in [(1.0, 300.0, "hello wide world"), (1.0, 60.0, "hello w")] {
     let (x0, x1, _) = case

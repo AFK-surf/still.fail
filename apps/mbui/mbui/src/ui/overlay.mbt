@@ -367,9 +367,8 @@ fn Ctx::in_layer(self : Ctx, l : Layer, x : Double, y : Double) -> Bool {
 /// As the frame starts: Escape to the topmost layer; a press since the last frame dismisses the layers it was outside
 /// of, from the top down to the first it was in (or a modal one: what is under that never saw it).
 fn Ctx::layer_keys(self : Ctx) -> Unit {
-  // (the keys and the focus, read so: hand.mbt)
+  // Key events trigger this bookkeeping; the controls reading focus own its invalidation.
   hand_presses_read()
-  hand.focus_id.get() |> ignore
   // a dismissal of a layer the last frame did not build (the view closed it its own way meanwhile) is let go: opened
   // again, the layer is not dismissed by it
   let stale : Array[Int] = []
@@ -635,7 +634,8 @@ fn Ctx::link_last(self : Ctx, p : Int, i : Int) -> Unit {
 /// As the frame is laid out: the focus into the layers that opened (as they say), back from those that went; given
 /// there, the view that read it is built again in this frame (Ctx::read_changed).
 fn Ctx::layers_focus(self : Ctx) -> Unit {
-  hand.focus_id.get() |> ignore
+  // Opening and closing layers already causes their build. Reading focus here would also make every retained
+  // field's focus change rebuild the old frame, even when it has no layer to hand focus to.
   let had = self.focus
   // opened: not there (or leaving) the last frame
   for l in self.layers {

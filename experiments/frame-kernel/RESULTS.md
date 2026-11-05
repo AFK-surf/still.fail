@@ -533,6 +533,26 @@ old frame for typing, deleting or moving the caret. Its damage still includes
 the enlarged glass capture, and the scrolling and page-exit work checks remain
 unfinished. This is no claim about Android speed or completed runtime adoption.
 
+Retained mouse selection now owns its press, pointer coordinates and release,
+including double/triple clicks, modal cancellation and scrolling past an edge.
+The previous route passed through the old input state, which both rebuilt the
+old frame and let legacy hover cleanup erase the selection's pointer. Selection
+readers now subscribe to its state; focus bookkeeping no longer subscribes the
+whole old frame to retained focus changes. The application's three shell
+underlays take input only at their own targets. The strengthened host-frame
+selection and editor-focus checks failed first; all 1608 UI checks now pass.
+
+The actual chat's six pairs of pictures were inspected: typing at all three
+screen sizes, mouse selection at medium/large, and finger scrolling at small.
+Every pair is byte-identical to its control. The baseline and updated Wasm
+hashes are `65bb8d3a9a0b4e27ac09dc1e6a53c972058eb17954f9283d2297d3bb63d0c1d8`
+and `06d8fb8ee292eced5b797e83d30895c0bf81ce246b8af63a681ae0e483b78009`.
+The long-chat host checks still have three failures: glass damage extends beyond
+the composer or becomes the whole window, the first large-screen drag rebuilds
+one old island, and the small-screen page exit still triggers old builds. The
+small-screen drag/fling no longer rebuilds old views. None of this establishes
+an Android speedup or completion of the runtime redesign.
+
 The experimental kernel does not yet demonstrate a general owner tree, full
 input/IME, stable-key history insertion/removal or recorded font/resource changes.
 Production integration has exercised actual chat input and scrolling, including

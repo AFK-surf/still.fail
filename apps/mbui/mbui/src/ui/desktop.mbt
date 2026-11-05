@@ -806,6 +806,7 @@ pub fn Ctx::selected_text(self : Ctx) -> String {
 ///|
 /// The words picked with the pointer, each paragraph's on a line of its own in the page's order ("" none).
 fn selected_words() -> String {
+  picked_said.get() |> ignore
   let spans : Array[SelSpan] = picked.spans.values().filter(fn(s) { s.a < s.b }).collect()
   spans.sort_by(fn(p, q) { order_cmp(p.at, q.at) })
   spans.map(fn(s) { s.text.view(start_offset=s.a, end_offset=s.b).to_string() }).join("\n")
@@ -1043,6 +1044,7 @@ fn selectable_painted(
 ///|
 /// What of paragraph `base` is picked: a rectangle a line, in its text's terms.
 fn selected_rects(base : SelKey, lay : RichLayout) -> Array[(Double, Double, Double, Double)] {
+  picked_said.get() |> ignore
   match picked.spans.get(base) {
     Some(s) if s.a < s.b => lay.rects(s.a, s.b)
     _ => []
@@ -1328,6 +1330,7 @@ fn Ctx::select_press(self : Ctx, x : Double, y : Double, clicks : Int) -> Unit {
 /// taken; what reads it tells a new one from the same one built again.
 pub fn Ctx::selection_made(self : Ctx) -> Int {
   ignore(self)
+  picked_said.get() |> ignore
   picked.made
 }
 
@@ -1358,6 +1361,7 @@ fn keeps_selection_on(target : Int) -> Bool {
 /// lines), or None: none picked, or still being dragged.
 pub fn Ctx::selection_box(self : Ctx) -> (Double, Double, Double, Double)? {
   ignore(self)
+  picked_said.get() |> ignore
   if picked.dragging {
     return None
   }
@@ -1391,6 +1395,7 @@ pub fn Ctx::selection_box(self : Ctx) -> (Double, Double, Double, Double)? {
 #callsite(autofill(loc))
 pub fn Ctx::selection_end(self : Ctx, loc~ : SourceLoc) -> (Double, Double, Double)? {
   ignore(self)
+  picked_said.get() |> ignore
   let v = selection_end_drawn().map(fn(e) {
     let (dx, dy) = sel_moved.val
     (e.1 + dx, e.2 + dy, e.3)

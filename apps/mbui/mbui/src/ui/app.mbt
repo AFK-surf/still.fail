@@ -971,17 +971,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
       h_window_drag()
       return
     }
-    // how many presses in a row this one is (NSEvent's clickCount: a double click's second 2, a triple's third 3):
-    // one soon after the last (double_click_ms) and near it (double_click_slop) counts on from it
-    let (n, at, ax, ay) = c.press_run
-    c.clicks = if t - at <= double_click_ms &&
-      (x - ax).abs() <= double_click_slop &&
-      (y - ay).abs() <= double_click_slop {
-      n + 1
-    } else {
-      1
-    }
-    c.press_run = (c.clicks, t, x, y)
+    c.press_count(x, y, t)
     // words picked with the pointer (desktop.mbt), not in a field, nor on what keeps them (Ctx::keeps_selection);
     // picking them lets go of what the focused field had picked, the focus staying its (focus.mbt): one thing picked
     // in the window, as in a browser, and it is what ⌘C copies
@@ -1200,8 +1190,9 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
       } else if c.edge > 0 && c.edge_move(x, y, t) {
         quiet = edge_following
       } else if c.select_move(x, y) {
-        // picking words: the press is no tap
+        // What reads the selection follows picked_said; moving it is no other view's input.
         c.active = 0
+        quiet = true
       } else if c.editor_drag {
         match c.editors.get(c.active) {
           Some(st) if c.clicks > 1 && (c.press_mods & mod_shift_key) == 0 =>
@@ -1422,6 +1413,20 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     inputs_taken.val = true
     h_request_frame()
   }
+}
+
+///|
+/// Count consecutive presses by their event times and positions, shared by fields, old controls and tree words.
+fn Ctx::press_count(self : Ctx, x : Double, y : Double, at : Double) -> Unit {
+  let (n, before, ax, ay) = self.press_run
+  self.clicks = if at - before <= double_click_ms &&
+    (x - ax).abs() <= double_click_slop &&
+    (y - ay).abs() <= double_click_slop {
+    n + 1
+  } else {
+    1
+  }
+  self.press_run = (self.clicks, at, x, y)
 }
 
 ///|

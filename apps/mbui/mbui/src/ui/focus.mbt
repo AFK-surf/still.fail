@@ -207,9 +207,9 @@ pub fn Ctx::focused_id(self : Ctx) -> Int {
 /// As the frame starts: the keys since the last one that move or use the focus, and the actions asked (see the file's
 /// head).
 fn Ctx::focus_frame_start(self : Ctx) -> Unit {
-  // (the keys, what a reader asked and the focus, read so: hand.mbt)
+  // The frame consumes key actions here. Focus itself is observed by the controls that draw it, not by this
+  // bookkeeping: moving it between retained fields must not invalidate the old frame's build.
   hand_presses_read()
-  hand.focus_id.get() |> ignore
   self.actions.clear()
   for a in self.asked_actions {
     self.actions.push(a)

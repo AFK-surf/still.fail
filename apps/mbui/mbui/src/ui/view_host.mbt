@@ -97,7 +97,17 @@ priv enum ViewHeld {
   Old(Int, @view.NodeId?)
   /// a node of the tree's held (View::on_drag): what the finger does till it is let go is its
   Dragging(@view.NodeId)
+  /// words picked by the mouse, owned by the node lending selection (not by a virtualized paragraph)
+  Picking(TreePick)
   Nowhere
+}
+
+///|
+/// A selection's pointer stays where it was held, independently of what an old view hovers or no longer hovers.
+priv struct TreePick {
+  owner : @view.NodeId
+  mut x : Double
+  mut y : Double
 }
 
 ///|
@@ -653,10 +663,15 @@ fn view_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // scrolled on under a pointer that stays where it is, words come), whether or not an old view is built in it; the
   // column toward the pointer, shown nowhere now let go: tree_edge_to)
   let c = g()
-  if tree_picking() && select_sliding() && c.down {
-    c.select_to(c.px, c.py)
+  let (x, y, held) = match view_held.val {
+    Some(Picking(p)) => (p.x, p.y, true)
+    _ => (c.px, c.py, c.down)
   }
-  tree_edge_to(c, select_sliding() && c.down)
+  let picking = select_sliding() && held
+  if tree_picking() && picking {
+    c.select_to(x, y)
+  }
+  tree_edge_to(y, picking)
 }
 
 ///|
@@ -2589,14 +2604,11 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
         // (nothing of the tree's there: where the one old view is the whole window, its own (the old root's, as it was
         // before the tree: what it draws past the window, a list scrolled on below it, is its own: a way there, no rule
         // of the tree's); else nobody's)
-        // (words of the tree's picked with the pointer under it (words_picked), nothing of the tree's taking the press
-        // there (what scrolls them claims it only as it moves): the selection's, the old view's way to it told it so
-        // (Ctx::select_press, its moves and its let go its too), as an old view's page's words are, its lists not
-        // dragged by the mouse there)
-        Nothing if button != 2 && pointing() is Mouse && tree_sel_at(x, y) is Some(_) => {
-          view_held.val = Some(Old(-1, None))
-          view_input_went(-1)
-          false
+        // (words with no press target: their selection owns the pointer, including every move and its release)
+        Nothing if button != 2 && pointing() is Mouse && tree_pick_down(x, y, at) is Some(owner) => {
+          view_held.val = Some(Picking({ owner, x, y }))
+          view_down.val = None
+          true
         }
         Nothing if old_whole.val && island_allows(old_whole_island()) => {
           view_held.val = Some(Old(-1, old_whole_island()))
@@ -2617,6 +2629,10 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
     // down: View::claims), what had it called off)
     // (a field of the tree's the press went down on: what is picked dragged on, where it took it as it went down; how far
     // a finger went, where it waits for a tap: tree_field_moved)
+    (1, Some(Picking(_))) => {
+      tree_pick_move(x, y)
+      true
+    }
     (1, Some(Node(id))) if tree_field_moved(id, x, y, at) => true
     (1, Some(Node(_) | Nowhere)) if view_claimed(tree, x, y, at) => true
     // (held by a gesture waiting on a tap, a hold or its own slop: taken over as a press is, Tree::yields; what holds it
@@ -2700,7 +2716,17 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       tree.event(at, fn() { tree.hold_lost_in(0) })
       true
     }
+    (4 | 5 | 6 | 8, Some(Picking(_))) => {
+      tree_pick_up()
+      view_held.val = Some(Nowhere)
+      true
+    }
     (4 | 5 | 6 | 8, Some(Nowhere)) => true
+    (2 | 3, Some(Picking(_))) => {
+      view_held.val = None
+      tree_pick_up()
+      true
+    }
     (2 | 3, Some(Dragging(id))) => {
       view_held.val = None
       tree.gesture_tap_taken() |> ignore
@@ -3114,6 +3140,11 @@ fn view_event_said(said : () -> Unit, f : () -> Unit) -> Unit {
 fn view_hold_lost() -> Unit {
   pointer_down_now.set(false)
   match (view_app.val, view_held.val) {
+    (_, Some(Picking(_))) => {
+      tree_pick_up()
+      view_held.val = Some(Nowhere)
+      view_cursor_tell()
+    }
     (Some(tree), Some(Dragging(_))) | (Some(tree), Some(Node(_))) => {
       // (a field of the tree's holding it: the press called off, nothing of it kept, tree_field.mbt)
       match view_held.val {
@@ -3134,7 +3165,7 @@ fn view_hold_lost() -> Unit {
 /// off): all the pointer's events till it is let go are the tree's, a second finger's too, none an old view's.
 fn view_holds() -> Bool {
   match view_held.val {
-    Some(Dragging(_)) | Some(Node(_)) | Some(Nowhere) => true
+    Some(Dragging(_)) | Some(Node(_)) | Some(Picking(_)) | Some(Nowhere) => true
     _ => false
   }
 }
@@ -3575,6 +3606,13 @@ fn view_captures_off(at : Double, gone : (@view.NodeId?) -> Bool, back_gone? : (
     _ => ()
   }
   match view_held.val {
+    Some(Picking(p)) if gone(Some(p.owner)) => {
+      tree_pick_up()
+      view_held.val = Some(Nowhere)
+      if !in_frame.val {
+        h_frame_owed()
+      }
+    }
     Some(Old(part, island)) if gone(island) => {
       view_held.val = Some(Nowhere)
       c.press_called_off(c.px, c.py, at)
@@ -4956,6 +4994,7 @@ fn view_cursor_tell() -> Unit {
     (None, _) => desk.old_shape
     (Some(tree), Some(Dragging(id))) | (Some(tree), Some(Node(id))) => tree.cursor_of(id).code()
     (Some(_), Some(Old(_, _))) => desk.old_shape
+    (Some(_), Some(Picking(_))) => @view.Cursor::IBeam.code()
     (Some(tree), _) =>
       match view_shape_of.val {
         OfNode(id) => tree.cursor_of(id).code()

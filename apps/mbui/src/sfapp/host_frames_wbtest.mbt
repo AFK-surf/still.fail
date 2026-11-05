@@ -70,6 +70,8 @@ fn core_lists(base : Source) -> Source {
 struct HostStep {
   what : String
   frames : Array[@ui.HostFrame]
+  rows : (Int, Int)
+  offset : Double
   /// the times the chat's view was worked out in it, its frames and between them (@sfbase.views_worked)
   views : Int
 }
@@ -80,6 +82,8 @@ struct HostStep {
 fn host_walk(mode : String, w : Double, h : Double, platform : Int) -> (Array[HostStep], (Double, Double, Double, Double)) {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode~, w~, h~, platform~, wrap=core_lists)
+  // These pointer events are fingers on either screen. The native input still determines control sizes.
+  t.host_says_finger(Some(true))
   t.set_frame_period(if platform == 0 { host_desk_period } else { host_phone_period })
   t.run_for(@ui.move_most_ms)
   if w > 600.0 && w < 840.0 {
@@ -92,7 +96,8 @@ fn host_walk(mode : String, w : Double, h : Double, platform : Int) -> (Array[Ho
     let views = @sfbase.views_worked()
     f()
     t.run_as_host(ms)
-    steps.push({ what, frames: t.host_frames(), views: @sfbase.views_worked() - views })
+    steps.push({ what, frames: t.host_frames(), rows: t.visible(), offset: t.list_offset(),
+      views: @sfbase.views_worked() - views })
   }
   t.record_host()
   // (what a chat's page makes outside frames too: its list's entries, its messages made of their JSON)
@@ -230,6 +235,9 @@ test "a long chat's messages flung build nothing of the old frame and are never 
   let out : Array[String] = []
   for w in [390.0, 1280.0] {
     let (steps, _) = host_walk_of("chat-long", w)
+    let from = steps[steps.search_by(fn(s) { s.what == "dragged" }).unwrap()]
+    let to = steps[steps.search_by(fn(s) { s.what == "flung" }).unwrap()]
+    assert_true((from.rows, from.offset) != (to.rows, to.offset), msg="the finger must actually scroll the messages at \{w}")
     for s in steps {
       if !s.what.has_prefix("dragged") && s.what != "flung" {
         continue

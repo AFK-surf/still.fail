@@ -151,7 +151,7 @@ pub fn runs_links(
   v.cursor(By(fn() {
     if pointed.get() >= 0 {
       Some(Hand)
-    } else if v.lent(words_picks) == Some(true) {
+    } else if v.lent(words_picks) is Some(_) {
       Some(IBeam)
     } else {
       None
