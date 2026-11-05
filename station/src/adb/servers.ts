@@ -1,13 +1,19 @@
 // An adb server of each grant's own (docs/adb-share.md, 2026-10-29): a phone granted to a chat is connected in that
 // grant's server alone, its port given to that chat's agent (phone_use), and the phone's listener takes connections
 // from those servers' processes alone (`allowed`). An agent of another chat, though it knows the ports, reaches neither:
-// the phone is not in the station's own server (5037), and a connection of its to the phone's port is turned away.
+// the phone is not in the station's own server (5037), a connection of its to the phone's port is turned away, and the
+// server's own port is a door that lets the grant's session through alone (door.ts; none on Windows, where the machine's
+// processes are not read: there the server serves on the port as it is).
 import { type ChildProcess, spawn } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
 import { readFile, rename, writeFile } from "node:fs/promises";
 import net from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { platform } from "../platform/index.ts";
+import { type Admit, openDoor } from "./door.ts";
 
 export type Server = { port: number; child: ChildProcess };
 
@@ -25,7 +31,7 @@ function freePort(): Promise<number> {
 
 /// A server started here, as written down (`record`): its process, and when that started (another process given its pid
 /// later is not it).
-type Kept = { pid: number; port: number; started: number | null };
+type Kept = { pid: number; port: number; started: number | null; dir?: string };
 
 export class GrantServers {
   readonly #adb: () => string | null;
@@ -36,10 +42,13 @@ export class GrantServers {
   readonly #record: string | null;
   readonly #kept = new Map<number, Kept>();
   #writing: Promise<void> = Promise.resolve();
+  /// Who may use a server (door.ts); none: its port is the server's own.
+  readonly #admit: Admit | null;
 
-  constructor(adb: () => string | null, record: string | null = null) {
+  constructor(adb: () => string | null, record: string | null = null, admit: Admit | null = null) {
     this.#adb = adb;
     this.#record = record;
+    this.#admit = admit;
   }
 
   /// Stops the servers a station process before left running (once it is gone: `previousGone`), as written down.
@@ -53,6 +62,7 @@ export class GrantServers {
     let stopped = 0;
     for (const k of Array.isArray(left) ? left : []) {
       if (!Number.isSafeInteger(k?.pid) || this.#kept.has(k.pid)) continue;
+      if (typeof k.dir === "string") rmSync(k.dir, { recursive: true, force: true });
       const started = platform.startTimeOf(k.pid);
       // Not that process any more (gone, or its pid another's).
       if (started === null || (k.started !== null && Math.abs(started - k.started) > 2000)) continue;
@@ -97,16 +107,26 @@ export class GrantServers {
     const adb = this.#adb();
     if (adb === null) return null;
     for (let i = 0; i < 3; i++) {
-      const port = await freePort();
-      const r = platform.runnable(adb, ["-P", String(port), "server", "nodaemon"], process.env);
-      const child = spawn(r.file, r.args, { stdio: "ignore", windowsHide: true, windowsVerbatimArguments: r.windowsVerbatimArguments });
+      // Behind its door, on a socket of a directory of its own, named in its environment and not on its command line;
+      // else on the port itself.
+      const dir = this.#admit === null ? null : mkdtempSync(join(tmpdir(), "sf-adb-"));
+      const path = dir === null ? null : join(dir, "s");
+      const door = path === null ? null : await openDoor(id, path, (p) => platform.tcpPortPids(p), this.#admit!);
+      const port = door?.port ?? (await freePort());
+      const env = path === null ? process.env : { ...process.env, ADB_SERVER_SOCKET: `localfilesystem:${path}` };
+      const r = platform.runnable(adb, path === null ? ["-P", String(port), "server", "nodaemon"] : ["server", "nodaemon"], env);
+      const child = spawn(r.file, r.args, { env, stdio: "ignore", windowsHide: true, windowsVerbatimArguments: r.windowsVerbatimArguments });
+      const closed = () => {
+        door?.close();
+        if (dir !== null) rmSync(dir, { recursive: true, force: true });
+      };
       const up = await new Promise<boolean>((resolve) => {
         child.once("exit", () => resolve(false));
         child.once("error", () => resolve(false));
-        // Up once it takes a connection on its port.
+        // Up once it takes a connection on its socket or port.
         const tries = { n: 0 };
         const poke = () => {
-          const c = net.connect({ host: "127.0.0.1", port }, () => {
+          const c = net.connect(path === null ? { host: "127.0.0.1", port } : { path }, () => {
             c.destroy();
             resolve(true);
           });
@@ -121,10 +141,11 @@ export class GrantServers {
       if (up) {
         const pid = child.pid;
         if (pid !== undefined) {
-          this.#kept.set(pid, { pid, port, started: platform.startTimeOf(pid) });
+          this.#kept.set(pid, { pid, port, started: platform.startTimeOf(pid), ...(dir === null ? {} : { dir }) });
           void this.#write();
         }
         child.once("exit", () => {
+          closed();
           if (pid !== undefined && this.#kept.delete(pid)) void this.#write();
           // Gone (killed, crashed): started anew when next wanted.
           if (this.#servers.get(id) !== undefined) this.#servers.delete(id);
@@ -133,6 +154,7 @@ export class GrantServers {
         return { port, child };
       }
       child.kill("SIGKILL");
+      closed();
     }
     log.warn("adb", "a grant's adb server did not start", { grant: id });
     this.#servers.delete(id);
