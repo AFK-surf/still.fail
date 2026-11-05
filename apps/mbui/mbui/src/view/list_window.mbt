@@ -513,6 +513,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     guard holder.val is Some(h) && h.live() is Some(hn) && self.live() is Some(sn) && sn.placed else { return false }
     let w = hn.flex.width
     let vh = sn.flex.height
+    // (laid out as wide as nothing: nothing of it can be laid out, its blocks as they were)
+    if w <= 0.0 {
+      return false
+    }
     let all = keys()
     let grid = tree.rows_grid_said.get()
     let words = tree.words_redone.get()

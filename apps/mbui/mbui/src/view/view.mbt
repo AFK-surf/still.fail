@@ -3012,9 +3012,15 @@ fn Tree::lists_laid(self : Tree, place : Bool) -> Bool {
   let mut rounds = 0
   while rounds < 2 {
     self.lists_due = false
+    // (what they set going told once they are all laid out, as one change: a block made reads what it reads as it is
+    // then, what follows it told after)
+    @signals.start_batch()
     for l in self.lists.copy() {
       let n = self.nodes[l.holder]
       if n.live && n.gen == l.gen {
+        // (what holds its blocks laid out already in this pass: as big as it is told so before they are made, what
+        // they read of it as it is, not as it was last told)
+        self.sizes_told_up(l.holder)
         let marked = l.marked
         l.marked = false
         if (l.lay)(place, marked) {
@@ -3022,12 +3028,34 @@ fn Tree::lists_laid(self : Tree, place : Bool) -> Bool {
         }
       }
     }
+    @signals.end_batch()
     rounds = rounds + 1
     if !self.lists_due {
       break
     }
   }
   placed
+}
+
+///|
+/// Node `at` and each that holds it, laid out in this pass: how big each is told now where it is followed (View::
+/// laid_size_told), what is laid out after them in the same pass reading them as they are (a windowed list's blocks,
+/// Tree::lists_laid); what is laid out nowhere keeping the size it had, as all is told (Tree::sizes_told).
+fn Tree::sizes_told_up(self : Tree, at : Int) -> Unit {
+  let mut i = at
+  while i >= 0 {
+    let n = self.nodes[i]
+    match n.size_cell {
+      Some(cell) if n.live && !self.out_at(i) => {
+        let size = Some((n.flex.width, n.flex.height))
+        if @signals.untracked(fn() { cell.get() }) != size {
+          cell.set(size)
+        }
+      }
+      _ => ()
+    }
+    i = n.parent
+  }
 }
 
 ///|
@@ -6320,7 +6348,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   // (what goes beside another placed by it only where anything was laid out or placed again: View::beside)
   let mut placing = false
   let mut rounds = 0
-  while rounds == 0 || (!self.bindings_due.is_empty() && rounds < 4) {
+  while rounds == 0 || ((!self.bindings_due.is_empty() || self.layout_due) && rounds < 4) {
     rounds = rounds + 1
     // the bindings whose reads changed since, each once, in the order they were told (what they make runs its own
     // now, what they set again marks what it marks)
