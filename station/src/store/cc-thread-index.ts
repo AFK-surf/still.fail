@@ -139,6 +139,7 @@ export function scanCcSessionStep(db: DatabaseSync, session: string, limit = 64)
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 128) throw new RangeError("copy destination batch must be between 1 and 128");
   db.exec("BEGIN IMMEDIATE");
   try {
+    checkCcIndex(db);
     const scopeQuery = db.prepare("SELECT scan_after,scan_end,complete FROM cc_sessions WHERE session=?");
     scopeQuery.setReadBigInts(true);
     const scope = scopeQuery.get(session) as { scan_after: bigint | null; scan_end: bigint | null; complete: bigint } | undefined;
@@ -165,6 +166,7 @@ export function dispatchCcOrderStep(db: DatabaseSync, limit = 64): { done: boole
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 128) throw new RangeError("copy destination batch must be between 1 and 128");
   db.exec("BEGIN IMMEDIATE");
   try {
+    checkCcIndex(db);
     const turn = db.prepare("SELECT after_thread,through_thread FROM cc_order_turn WHERE id=1");
     turn.setReadBigInts(true);
     const progress = turn.get() as { after_thread: bigint | null; through_thread: bigint | null };
@@ -206,6 +208,7 @@ export function dispatchCcOrderStep(db: DatabaseSync, limit = 64): { done: boole
 export function settleCcSessionStep(db: DatabaseSync, session: string): { done: boolean; visited: number } {
   db.exec("BEGIN IMMEDIATE");
   try {
+    checkCcIndex(db);
     if (!db.prepare("SELECT 1 FROM cc_sessions WHERE session=?").get(session)) throw new Error("copy destination session is not tracked");
     const next = db.prepare("SELECT thread FROM cc_session_dirty WHERE session=? ORDER BY thread LIMIT 1");
     next.setReadBigInts(true);

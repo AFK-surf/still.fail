@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { DatabaseSync } from "node:sqlite";
+import { DatabaseSync } from "node:sqlite";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Store } from "../src/store/store.ts";
 import {
-  ccSessionReady, ccSessionRows, dispatchCcOrderStep, installCcIndex,
+  CC_SESSION_ROWS, ccSessionReady, ccSessionRows, dispatchCcOrderStep, installCcIndex,
   scanCcSessionStep, settleCcSessionStep, trackCcSession,
 } from "../src/store/cc-thread-index.ts";
 
@@ -114,4 +117,98 @@ test("a destination's surface, time, membership and removal are reflected after 
     finish(db, "agent");
     assert.deepEqual(ccSessionRows(db, "agent", 20), []);
   } finally { store.close(); }
+});
+
+for (const recursive of [false, true]) {
+  for (const alias of ["rowid", "_rowid_", "oid"]) test(`copy destination rows agree after ${alias} replacements and rollback (recursive triggers ${recursive})`, () => {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers=${recursive ? "ON" : "OFF"}`);
+      const home = store.openThread("ember", "EMBER", "home", null, null).id;
+      store.joinThread(home, "agent", "ember");
+      const ids = Array.from({ length: 6 }, (_, n) => {
+        const id = store.openThread("slack:one", "C", `target-${n}`, null, null).id;
+        store.joinThread(id, "agent", "slack"); put(db, id, 1, n + 1); return id;
+      });
+      installCcIndex(db); trackCcSession(db, "agent"); finish(db, "agent");
+      const matches = () => {
+        finish(db, "agent");
+        assert.deepEqual(ccSessionRows(db, "agent", 20).map((r) => r.thread),
+          store.ccThreads(home).map((r) => r.thread.id));
+      };
+      matches();
+      db.exec("BEGIN");
+      db.prepare("UPDATE entries SET at=1000 WHERE thread=? AND n=1").run(ids[0]);
+      assert.equal(ccSessionReady(db, "agent"), false);
+      db.exec("ROLLBACK");
+      assert.equal(ccSessionReady(db, "agent"), true);
+      matches();
+      const member = db.prepare("SELECT rowid FROM thread_sessions WHERE thread=? AND session='agent'").get(ids[0]) as { rowid: number };
+      db.prepare(`INSERT OR REPLACE INTO thread_sessions(${alias},thread,session,connect,joined_at)
+        VALUES(?,?,'another','slack',1)`).run(member.rowid, ids[1]);
+      matches();
+      const entry = db.prepare("SELECT rowid FROM entries WHERE thread=? AND n=1").get(ids[2]) as { rowid: number };
+      db.prepare(`INSERT OR REPLACE INTO entries(${alias},thread,n,kind,author_kind,author,at)
+        VALUES(?,?,2,'message','person','viewer',100)`).run(entry.rowid, ids[3]);
+      matches();
+      db.prepare("UPDATE threads SET surface='ember' WHERE id=?").run(ids[4]);
+      matches();
+      db.prepare(`INSERT OR REPLACE INTO threads(surface,channel,thread_ts,created_at)
+        VALUES('slack:one','C','target-5',200)`).run();
+      matches();
+    } finally { store.close(); }
+  });
+}
+
+test("a prepared session seeks its newest destinations independently of older ones", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const add = (name: string, at: number) => {
+      const id = store.openThread("slack:one", "C", name, null, null).id;
+      store.joinThread(id, "agent", "slack"); put(db, id, 1, at); return id;
+    };
+    const newest = Array.from({ length: 20 }, (_, n) => add(`new-${n}`, 1_000 + n)).reverse();
+    for (let n = 0; n < 40; n++) add(`old-${n}`, n);
+    installCcIndex(db); trackCcSession(db, "agent"); finish(db, "agent");
+    let visited = 0;
+    db.function("visited_cc_row", (id) => { visited++; return id; });
+    const observed = CC_SESSION_ROWS.replace("SELECT thread,", "SELECT visited_cc_row(thread) AS thread,");
+    assert.notEqual(observed, CC_SESSION_ROWS);
+    const read = () => db.prepare(observed).all("agent", 20).map((r) => r.thread);
+    assert.deepEqual(read(), newest);
+    const before = visited;
+    for (let n = 40; n < 400; n++) add(`old-${n}`, n);
+    finish(db, "agent"); visited = 0;
+    assert.deepEqual(read(), newest);
+    assert.equal(visited, before);
+    const plan = db.prepare(`EXPLAIN QUERY PLAN ${CC_SESSION_ROWS}`).all("agent", 20).map((r) => String(r.detail));
+    assert.ok(plan.some((line) => line.includes("cc_session_order")), plan.join("\n"));
+    assert.ok(!plan.some((line) => line.includes("TEMP B-TREE")), plan.join("\n"));
+  } finally { store.close(); }
+});
+
+test("another writer cannot be missed during preparation or between readiness and a read", () => {
+  const dir = mkdtempSync(join(tmpdir(), "cc-index-")), store = Store.open(join(dir, "station.db")), db = store.db;
+  let other: DatabaseSync | null = null;
+  try {
+    const ids = Array.from({ length: 6 }, (_, n) => {
+      const id = store.openThread("slack:one", "C", `target-${n}`, null, null).id;
+      store.joinThread(id, "agent", "slack"); put(db, id, 1, n); return id;
+    });
+    installCcIndex(db); trackCcSession(db, "agent");
+    assert.equal(scanCcSessionStep(db, "agent", 2).done, false);
+    other = new DatabaseSync(join(dir, "station.db"));
+    put(other, ids[0]!, 2, 100);
+    finish(db, "agent", 2);
+    assert.equal(ccSessionRows(db, "agent", 1)[0]?.thread, ids[0]);
+    db.exec("BEGIN");
+    assert.equal(ccSessionReady(db, "agent"), true);
+    put(other, ids[1]!, 2, 200);
+    // The read still sees the state in which readiness was checked.
+    assert.equal(ccSessionRows(db, "agent", 1)[0]?.thread, ids[0]);
+    db.exec("COMMIT");
+    assert.equal(ccSessionReady(db, "agent"), false);
+    finish(db, "agent", 2);
+    assert.equal(ccSessionRows(db, "agent", 1)[0]?.thread, ids[1]);
+  } finally { other?.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
