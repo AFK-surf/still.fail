@@ -9,7 +9,8 @@
 /// Chat `r`'s list in `v`: `view` as the core says it now (none while it is read the first time), its rows read by
 /// index (sfbase ChatRows: a message come is that row's change alone),
 /// `top` the room over its first row, `foot` under its last (the composer's), `core` the settings' over its workspace;
-/// `composer_across` the same width the page gives its composer, so the floating actions align with it;
+/// `composer_across` the width the page gives its composer in a list as wide as given, so the floating actions align
+/// with it;
 /// `follows` said whether it is kept at its end, as that changes.
 pub fn chat_list_node(
   v : @view.View,
@@ -20,7 +21,7 @@ pub fn chat_list_node(
   foot : () -> Double,
   core : Core,
   foot_gap? : Double = 0.0,
-  composer_across? : () -> Double,
+  composer_across? : (Double) -> Double = composer_width,
   follows? : @signals.Signal[Bool] = @signals.signal(true, same=fn(a, b) { a == b }),
 ) -> ChatListNode {
   let rk = r.station + "\u{1}" + r.session
@@ -956,22 +957,18 @@ pub fn chat_list_node(
     }
     !asks.iter().all(seen)
   }
-  // Both actions stand six points inside the composer's end. The page supplies the same width it gives the
-  // composer, including a panel's corners; a list made alone falls back to the width in its own room.
-  let float_right = fn() {
-    let w = v.laid_size_told().map(fn(z) { z.0 }).unwrap_or(0.0)
-    let cw = composer_across.map(fn(f) { f() }).unwrap_or(composer_width(w))
-    (w - cw) / 2.0 + float_in
-  }
+  // Both actions stand six points inside the composer's end: the composer as wide as the page gives it in the list's
+  // width, a panel's corners counted (composer_across), worked out as the list is laid out.
+  let float_right = fn(w : Double) { (w - composer_across(w)) / 2.0 + float_in }
   v.reacts(fn() { asking() }, fn(a) { rd0.ask = a })
   v.box(fn(f) {
     f
     .over(Is(true))
     .lies_along(Is(End))
     .lines_up(Is(Some(End)))
-    .padding(By(fn() {
+    .padding(Roomed(v, fn(w, _) {
       let above = jump_shown()
-      (0.0, 0.0, float_right(), foot() + float_lift + (if above { float_above } else { 0.0 }))
+      (0.0, 0.0, float_right(w), foot() + float_lift + (if above { float_above } else { 0.0 }))
     }))
     |> ignore
     f.show(asking, fn(b) {
@@ -1025,9 +1022,7 @@ pub fn chat_list_node(
     .over(Is(true))
     .lies_along(Is(End))
     .lines_up(Is(Some(End)))
-    .padding(By(fn() {
-      (0.0, 0.0, float_right(), foot() + float_lift)
-    }))
+    .padding(Roomed(v, fn(w, _) { (0.0, 0.0, float_right(w), foot() + float_lift) }))
     |> ignore
     let initial = Ref(true)
     f.show(jump_shown, fn(b) {
