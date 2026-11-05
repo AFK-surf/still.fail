@@ -21,6 +21,10 @@ on:
         description: Also add this build to the external group and submit it to Beta App Review
         default: false
         type: boolean
+      skip_tests:
+        description: Upload whatever this run's tests say (they still run, and fail the run)
+        default: false
+        type: boolean
 # All versions of this app share one upload lock. Other uploaders must coordinate manually.
 concurrency:
   group: mbui-testflight-6818750243
@@ -68,6 +72,7 @@ jobs:
       RELEASE_SHA: ${{ inputs.sha }}
       RELEASE_VERSION: ${{ inputs.version }}
       RELEASE_BUILD: ${{ inputs.build }}
+      RELEASE_SKIP_TESTS: ${{ inputs.skip_tests }}
     steps:
       - uses: actions/checkout@v5
         with:
