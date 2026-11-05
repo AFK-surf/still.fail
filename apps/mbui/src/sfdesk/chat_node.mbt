@@ -201,7 +201,7 @@ fn chat_talk_node(
       |> ignore
       @ui.old(s, fn(c) {
         app.nav.page_old(c, k, fn(c) {
-          over(c, fn() { chat_over(c, src, w, r, @signals.untracked(room_now), fn() { pane_rect.val }) })
+          over(c, fn() { chat_over(c, src, w, r, fn() { pane_rect.val }) })
         })
       })
       .grow(Is(1.0))
@@ -215,25 +215,20 @@ fn chat_talk_node(
 
 ///|
 /// What of chat `r`'s page is drawn over its messages by the old view it was (chat_page's, chat_talk's): the bar and
-/// its popovers, what a row carried over the pane frosts and what is let go there, what is picked in the messages, the
-/// new chat it became leaving over it. `room` the composer's at the foot; `pane_at` where the pane is in the window, as
-/// the tree laid it out.
+/// its popovers, what a row carried over the pane frosts and what is let go there, the
+/// new chat it became leaving over it. `pane_at` where the pane is in the window, as the tree laid it out.
 fn chat_over(
   c : @ui.Ctx,
   src : Source,
   w : Workspace,
   r : ChatRef,
-  room : Double,
   pane_at : () -> (Double, Double, Double, Double)?,
 ) -> Unit {
-  let chat = (src.topic)("chat", chat_params(r)).value
   let view = view_of_chat(src, r).0
   let draft = r.station + ":" + r.session
-  chat_bar_host(c, src, w, r, view, chat)
   let pane = c.box(style=chat_over_box, fn() { })
   if view is Some(_) {
     drop_hint(c, pane)
-    chat_layers(c, src, r, draft, pane, room)
   }
   // (a row of the 文件 tab let go over it, into the draft: chat_talk's; files from Finder and words from another app
   // the composer's own, over all of the chat: chat_composer_node's `drops`)

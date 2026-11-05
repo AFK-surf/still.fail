@@ -1,24 +1,7 @@
-// What lies over a chat's pane on the desktop round its composer (ember web/src/Chat.tsx useSelectionQuote, ChatSide.tsx
-// useChatDrop, DropHint; ChatPage.css.ts dropHint; keymap.ts composer.focus, panel.close): a passage of a message
-// picked (with the mouse its pill, with a finger its handles and bar: sfbase's pick.mbt) quoted into the chat's draft;
-// a row of the 文件 tab carried over the pane frosting it under the composer, let go there into the draft; the
-// chat's own keys.
-
-///|
-/// Over chat `r`'s pane `pane` (its draft `draft`; `room`, what the composer keeps at its foot), after its composer:
-/// what is picked in its messages, what is carried over it.
-fn chat_layers(c : @ui.Ctx, src : Source, r : ChatRef, draft : String, pane : Int, room : Double) -> Unit {
-  @sfbase.pick_layer(c, list_key(r), bar_foot, room, @sfbase.mouse_picks(), fn(author, words, ts, role) {
-    c.tell("pick/quote", fn() {
-      writing_quote(src, writing(src, draft), {
-        "author": Json::string(author),
-        "text": Json::string(words),
-        "ts": Json::string(ts),
-        "role": Json::string(role),
-      })
-    })
-  })
-}
+// What lies over a chat's pane on the desktop round its composer (ember web/src/ChatSide.tsx useChatDrop, DropHint;
+// ChatPage.css.ts dropHint; keymap.ts panel.close): a row of the 文件 tab carried over the pane frosting it under the
+// composer, let go there into the draft. (What is picked of a message, quoted into the draft: the messages' own,
+// sfpages' pick_node.mbt.)
 
 ///|
 /// A row of the 文件 tab carried over box `pane` (DropHint, ChatPage.css.ts dropHint): the pane frosted over under the

@@ -2,39 +2,56 @@
 // data; only the independent bodies opened by its controls are still hosted old views.
 
 ///|
-/// The system's own navigation bar is the host boundary: hand it the same chat actions at each published frame.
-/// The independent archive confirmation still belongs to the page's presenter.
-fn chat_bar_host(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, view : ChatView?, chat : Json?) -> Unit {
-  if native_turned(c, info_width) {
-    chat_own.info_open.set(false)
-    chat_own.jobs_open.set(false)
-  }
-  match view {
-    Some(v) => {
-      let extra = @sfpages.chat_extra_items(src, r, chat)
-      let rows = if @sf.native_on() { @sfpages.chat_menu_of(src, w.id, r, extra) } else { [] }
-      let more = fn() {
-        let (from, along) = bar_menu_from(c, c.id("chat-more"))
-        @sfpages.open_chat_menu(src, w.id, r, extra, from~, along~)
+/// The chat's actions handed to the system's navigation bar (bar_chat) as page `Chat(r)`'s, at their causes: as the
+/// chat's view, its menu, its services and screens come and change, whatever page is on top meanwhile; let go with
+/// `talk`. What opened from the bar's items closed as the window turns (native_turned).
+fn chat_bar_said(talk : @view.View, src : Source, w : Workspace, r : ChatRef, view : () -> ChatView?, chat : () -> Json?) -> Unit {
+  let page : Page = Chat(r)
+  talk.owns(@signals.effect(fn() {
+    guard @sf.native_on() else { return }
+    page_acts_told(page, fn() {
+      match view() {
+        Some(v) => {
+          let extra = @sfpages.chat_extra_items(src, r, chat())
+          let rows = @sfpages.chat_menu_of(src, w.id, r, extra)
+          let more = fn() {
+            let c = @ui.current()
+            let (from, along) = bar_menu_from(c, c.id("chat-more"))
+            @sfpages.open_chat_menu(src, w.id, r, extra, from~, along~)
+          }
+          let screen = if v.screens.length() > 0 {
+            Some((fn() {
+              let c = @ui.current()
+              let (from, along) = bar_menu_from(c, c.id("chat-screen"))
+              chat_screens_open(r, v.screens, from~, along~)
+            }, chat_screens_driven(v.screens)))
+          } else { None }
+          let jobs_view = (src.topic)("chatJobs", chat_jobs_summary_params(r)).value
+          let jobs = if flag(jobs_view, "hasJobs") || items(jobs_view, "jobs").length() > 0 {
+            Some((jobs_toggle, text(jobs_view, "alarm") != ""))
+          } else { None }
+          bar_chat(src, r, v.agents,
+            fn() { chat_own.info_open.set(!@signals.untracked(fn() { chat_own.info_open.get() })) },
+            rows, more, jobs, screen,
+            if v.archivable && !v.archived { Some(fn() {
+              // (chosen as the frame under the tape is built: once its builds are over)
+              @ui.current().tell("chat/archive", fn() { archive_asked(src, w, r, v, @signals.untracked(chat)) })
+            }) } else { None },
+            page~) |> ignore
+        }
+        None => bar_chat_waiting(page~) |> ignore
       }
-      let screen = if v.screens.length() > 0 {
-        Some((fn() {
-          let (from, along) = bar_menu_from(c, c.id("chat-screen"))
-          chat_screens_open(r, v.screens, from~, along~)
-        }, chat_screens_driven(v.screens)))
-      } else { None }
-      let jobs_view = (src.topic)("chatJobs", chat_jobs_summary_params(r)).value
-      let jobs = if flag(jobs_view, "hasJobs") || items(jobs_view, "jobs").length() > 0 {
-        Some((jobs_toggle, text(jobs_view, "alarm") != ""))
-      } else { None }
-      bar_chat(src, r, v.agents,
-        fn() { chat_own.info_open.set(!@signals.untracked(fn() { chat_own.info_open.get() })) },
-        rows, more, jobs, screen,
-        if v.archivable && !v.archived { Some(fn() { c.tell("chat/archive", fn() { archive_asked(src, w, r, v, chat) }) }) } else { None }) |> ignore
+    })
+  })).owns(fn() { page_acts_gone(page) }) |> ignore
+  // (what opened from the bar's items is where the window was: closed as it turns, as the system's popovers are)
+  let was = Ref(0.0)
+  talk.reacts(fn() { talk.window().0 }, fn(width) {
+    if was.val > 0.0 && was.val != width && @signals.untracked(fn() { @sf.native_on() }) {
+      chat_own.info_open.set(false)
+      chat_own.jobs_open.set(false)
     }
-    None => bar_chat_waiting() |> ignore
-  }
-  chat_archive_confirm(c, src, w, r, view, chat)
+    was.val = width
+  })
 }
 
 ///|
@@ -54,6 +71,7 @@ fn chat_bar_node(parent : @view.View, src : Source, w : Workspace, r : ChatRef, 
   let finding = fn() { find_chat() == chat_key(r) && view().map_or(false, fn(v) { v.thread is Some(_) }) }
   let native = fn() { @sf.native_on() }
   let jobs = fn() { (src.topic)("chatJobs", chat_jobs_summary_params(r)).value }
+  chat_bar_said(parent, src, w, r, view, chat)
   let popup = @sf.popup_root_node(parent)
   let tips = @sf.TipLayer::new(fn() { Some(popup) })
   let info_at : Ref[@view.View?] = Ref(None)

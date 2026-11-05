@@ -7,14 +7,13 @@
 
 ///|
 /// What the chat's page keeps of its own (the rest is the core's): its info's popover open, its services' popover
-/// open, archiving it asked to confirm (its key, "" none: one keeping watch). The popovers' as signals: opened or
+/// open. The popovers' as signals: opened or
 /// closed from another island than the page's (an item of the system's bars chosen as the frame under the tape is
 /// built, after the page was: rail_native.mbt), the page's is told and built again, not kept as it was till the hand
 /// comes to it (an iPhone Duo's ⓘ, 2026-11-01: the popover only once a finger moved).
 priv struct ChatOwn {
   info_open : @signals.Signal[Bool]
   jobs_open : @signals.Signal[Bool]
-  mut archive_asking : String
 }
 
 ///|
@@ -22,14 +21,12 @@ priv struct ChatOwn {
 let chat_own : ChatOwn = {
   info_open: @signals.signal(false, same=fn(a, b) { a == b }),
   jobs_open: @signals.signal(false, same=fn(a, b) { a == b }),
-  archive_asking: "",
 }
 
 ///|
 fn chat_page_reset() -> Unit {
   chat_own.info_open.set(false)
   chat_own.jobs_open.set(false)
-  chat_own.archive_asking = ""
 }
 
 ///|
@@ -151,7 +148,13 @@ fn stop_agents(src : Source, r : ChatRef, v : ChatView) -> Unit {
 /// Into the archive, asked first where the chat keeps watch (in the core's words).
 fn archive_asked(src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
   if field(chat, "watch") is Some(Object(_)) {
-    chat_own.archive_asking = chat_key(r)
+    @sf.confirm(
+      @sf.t("web-pages.chat.archiveConfirm", args=[("title", v.title)]),
+      text(field(chat, "watch"), "ask"),
+      @sf.t("web-pages.chat.archive"),
+      fn() { archive(src, w, r, v) },
+      danger=true,
+    )
   } else {
     archive(src, w, r, v)
   }
@@ -196,30 +199,6 @@ fn archive(src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
       Err(e) => toast_later(@sf.t("web-pages.chat.archiveFailed", args=[("error", error_words(e))]))
     }
   })
-}
-
-///|
-fn chat_archive_confirm(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView?, chat : Json?) -> Unit {
-  // a chat keeping watch, archived once asked (the core's words)
-  let asked = @sf.confirm_dialog(
-    c,
-    "archive-confirm/" + chat_key(r),
-    chat_own.archive_asking == chat_key(r),
-    @sf.t("web-pages.chat.archiveConfirm", args=[("title", match v { Some(view) => view.title; None => r.title })]),
-    text(field(chat, "watch"), "ask"),
-    @sf.t("web-pages.chat.archive"),
-    cancel=@sf.t("common.cancel"),
-  )
-  if asked.confirmed {
-    chat_own.archive_asking = ""
-    match v {
-      // (once the frame's builds are over)
-      Some(view) => c.tell("chat/archive", fn() { archive(src, w, r, view) })
-      None => ()
-    }
-  } else if chat_own.archive_asking == chat_key(r) && !asked.open {
-    chat_own.archive_asking = ""
-  }
 }
 
 ///|
@@ -969,4 +948,3 @@ let info_people_list : @ui.Style = @ui.css("gap=S1_5")
 
 ///|
 /// The window's width as the chat's bar's popovers were last drawn (bar_popovers: a turn closes them).
-let info_width : FixedArray[Double] = [0.0]
