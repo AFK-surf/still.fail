@@ -149,6 +149,36 @@ test("a cancelled pending-request read does not settle requests after preparatio
   assert.equal(read, false);
 });
 
+test("cancelling one pending-request read leaves another caller's preparation intact", async () => {
+  let ready!: () => void;
+  const preparing = new Promise<void>((resolve) => { ready = resolve; });
+  let reads = 0;
+  const secrets = { preparePending: () => preparing, pending: () => { reads++; return []; } };
+  const route = requestRoutes({ secrets: secrets as never, plain: {} as never, lock: () => null })
+    .find((r) => r.method === "GET" && r.pattern.test("/vault/requests"))!;
+  const controller = new AbortController(), viewer = { sub: "bob", email: "bob@x.com", workspace: WS };
+  const cancelled = route.handle({ viewer, signal: controller.signal } as never, []);
+  const remaining = route.handle({ viewer } as never, []);
+  controller.abort();
+  assert.equal((await cancelled).status, 503);
+  ready();
+  assert.equal((await remaining).status, 200);
+  assert.equal(reads, 1);
+});
+
+test("a pending-request read retries if security mode ends while old requests are prepared", async () => {
+  const w = world();
+  let current: typeof w.state | null = w.state, ready!: () => void;
+  const preparing = new Promise<void>((resolve) => { ready = resolve; });
+  const secrets = { preparePending: () => preparing, pending: () => { throw new Error("must not read"); } };
+  const route = requestRoutes({ secrets: secrets as never, plain: {} as never, lock: () => current })
+    .find((r) => r.method === "GET" && r.pattern.test("/vault/requests"))!;
+  const answer = route.handle({ viewer: { sub: "bob", email: "bob@x.com", workspace: WS, device: w.bob.base.hex } } as never, []);
+  current = null;
+  ready();
+  assert.equal((await answer).status, 409);
+});
+
 test("a still-needed secret save can be asked again without reading the secret again", async () => {
   const h = harness(() => null);
   try {
