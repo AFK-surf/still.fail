@@ -87,11 +87,11 @@ fn peek_read(
 ) -> Unit {
   let drawn = Ref(false)
   if c.hovered(id) {
-    ignore(@sfbase.hold(src, scope, name, params))
+    ignore(@sfbase.hold_named(src, scope, name, params))
   }
   card(fn() { drawn.val = true })
   if !c.hovered(id) && !drawn.val {
-    @sfbase.let_go(src, scope)
+    @sfbase.let_go_named(src, scope)
   }
 }
 
@@ -134,7 +134,7 @@ fn link_card(
   peek? : String = "",
   copy? : () -> Unit = fn() {  },
 ) -> Unit {
-  let read = @sfbase.hold(src, scope, "linkPreview", params)
+  let read = @sfbase.hold_named(src, scope, "linkPreview", params)
   let v = match read.value {
     Some(Object(_)) as v => v
     _ => None
@@ -495,7 +495,7 @@ fn file_peek_params(station : String, session : String, path : String, line : In
 /// directory's first entries; and its foot: how big it is (or how many entries), and its path to copy. Why not, read
 /// and refused; bars while it is read.
 fn file_card(c : @ui.Ctx, src : Source, scope : String, params : Map[String, Json], path : String) -> Unit {
-  let read = @sfbase.hold(src, scope, "filePeek", params)
+  let read = @sfbase.hold_named(src, scope, "filePeek", params)
   let v = match read.value {
     Some(Object(_)) as v => v
     _ => None
@@ -804,7 +804,7 @@ fn chat_peek(c : @ui.Ctx, src : Source, here : String, href : String, id : Int, 
   })
   |> ignore
   if !c.hovered(id) && !drawn.val {
-    @sfbase.let_go(src, scope)
+    @sfbase.let_go_named(src, scope)
   }
 }
 
@@ -921,7 +921,7 @@ fn chat_card_of(c : @ui.Ctx, item : ChatItem, elsewhere : Bool, history : Bool, 
 /// its words (six lines at most). That it can't be read, for one gone or a station that won't say; bones while it is read.
 fn message_said(c : @ui.Ctx, src : Source, scope : String, station : String, thread : Double, seq : Double) -> Unit {
   let params : Map[String, Json] = { "station": Json::string(station), "thread": Json::number(thread), "seq": Json::number(seq) }
-  let read = @sfbase.hold(src, scope, "messagePeek", params)
+  let read = @sfbase.hold_named(src, scope, "messagePeek", params)
   match read.value {
     Some(Object(_)) as v => {
       let ago = text(field(field(v, "time"), "at"), "ago")

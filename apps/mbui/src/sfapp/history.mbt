@@ -24,11 +24,9 @@ fn history_params(r : ChatRef, key : String) -> Map[String, Json] {
 }
 
 ///|
-/// The history's page left: what it followed let go.
+/// The history's page left: where it was placed forgotten (what it read, held by its page: page_holder, let go with it).
 fn history_left(src : Source, r : ChatRef, key : String) -> Unit {
-  (src.leave)("history", history_params(r, key))
-  // the station's figures its details read
-  @sfbase.let_go(src, @sfbase.history_scope(r.station, key))
+  ignore(src)
   history_placed.remove("history/" + r.station + "/" + key)
   history_short.remove("history/" + r.station + "/" + key)
 }
@@ -229,7 +227,7 @@ fn history_details(c : @ui.Ctx, src : Source, r : ChatRef, key : String, a : Jso
   let s = field(a, "session")
   let card = (src.topic)("agentCard", { "station": Json::string(r.station), "key": Json::string(key) }).value
   let usage = @sfpages.history_usage(src, r.station, key)
-  let host = @sfbase.hold(src, @sfbase.history_scope(r.station, key), "host", { "station": Json::string(r.station) }).value
+  let host = (src.topic)("host", { "station": Json::string(r.station) }).value
   let detail = fn(label : String, value : String, marked : Bool) {
     c.box(dir=Row, w=Fill(1.0), gap=16.0, fn() {
       c.box(w=Px(76.0), fn() { c.text(label, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore })

@@ -1397,6 +1397,18 @@ test "given-up interfaces are forbidden" {
     4,
   )
   |> ignore
+  // held_build: a topic held for being read in the build its holder ended in, given up
+  found(
+    [
+      (
+        "src/app/held.mbt",
+        "pub fn held_build(n : Int) -> Unit {\n  ()\n}\nfn v(c : @ui.Ctx) -> Unit {\n  @sfbase.held_build(c.build_number())\n}\n",
+      ),
+    ],
+    "retired-api",
+    2,
+  )
+  |> ignore
   // motion_end: the framework's own, not a test's nor the app's
   found(
     [

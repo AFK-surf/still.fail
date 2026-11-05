@@ -17,7 +17,7 @@ fn activity_node(row : @view.View, src : Source, here : () -> MessageHere, a : (
       Some((_, _, w)) => ("wait", if w != "" { w } else { @sf.t("web-main.activity.waiting") }, false, true)
       None => {
         let h = here()
-        let live = @sfbase.hold(src, @sfbase.chat_scope(h.station, h.session), "live", {
+        let live = @sfbase.hold_named(src, @sfbase.chat_scope(h.station, h.session), "live", {
           "station": Json::string(h.station),
           "key": Json::string(key),
         })

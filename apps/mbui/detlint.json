@@ -214,7 +214,20 @@
     "frame-count": {},
     "literal-time": {},
     "stable-mode": {},
-    "retired-api": {},
+    "retired-api": {
+      "src/sfapp/app.mbt": 1,
+      "src/sfapp/chat.mbt": 2,
+      "src/sfapp/sheets.mbt": 1,
+      "src/sfbase/held.mbt": 3,
+      "src/sfbase/held_wbtest.mbt": 16,
+      "src/sfbase/term.mbt": 1,
+      "src/sfdesk/drive_views.mbt": 1,
+      "src/sfdesk/jobs.mbt": 1,
+      "src/sfdesk/station_pick.mbt": 1,
+      "src/sfpages/activity_node.mbt": 1,
+      "src/sfpages/link_peek_node.mbt": 1,
+      "src/sfpages/peeks.mbt": 6
+    },
     "app-clock": {},
     "wall-clock": {},
     "engine-math": {

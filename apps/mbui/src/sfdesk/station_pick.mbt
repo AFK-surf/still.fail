@@ -207,7 +207,7 @@ fn places_pick_sample(c : @ui.Ctx) -> Unit {
 /// A folder: itself to tick as a whole, then what is in it (a folder entered, a file ticked).
 fn station_pick_folder(c : @ui.Ctx, src : Source, at : PickAt) -> Unit {
   let t = @sf.theme()
-  let topic = @sfbase.hold(src, @sfbase.drive_scope, "drive", {
+  let topic = @sfbase.hold_named(src, @sfbase.drive_scope, "drive", {
     "station": Json::string(at.station),
     "root": Json::string(at.root),
     "path": Json::string(at.path),
