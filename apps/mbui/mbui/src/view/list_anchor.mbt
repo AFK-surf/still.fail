@@ -219,6 +219,9 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
       None => natural_room
     }
   })
+  // (the row come to be read from its top, held under the cover as its room opens; whether a layout held it)
+  let reading : Ref[K?] = Ref(None)
+  let read_held = Ref(false)
   // (the hand scrolling it toward its start: no more at its end, from the hand's cause, before what it brings in is
   // measured)
   s.on_hand = fn(d) {
@@ -226,6 +229,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
       short_glide.val = false
       (short_due.val)()
       short_due.val = fn() { }
+      reading.val = None
     }
     if from_end && d < 0.0 && @signals.untracked(fn() { follows.get() }) {
       follows.set(false)
@@ -237,6 +241,17 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   let put_n = @signals.computed(fn(was : Int?) {
     let n = was.unwrap_or(0)
     if put_at.get() is Some(_) { n + 1 } else { n }
+  })
+  // (said to follow its end again while short of it (words sent while reading above: View::scrolls_window's
+  // to_end): taken there, on to where its end is as rows come, till it is there or the hand takes it away)
+  let end_asked = Ref(false)
+  let was_follows = Ref(@signals.untracked(fn() { follows.get() }))
+  self.reacts(fn() { follows.get() }, fn(now) {
+    end_asked.val = from_end && now && !was_follows.val
+    if end_asked.val {
+      reading.val = None
+    }
+    was_follows.val = now
   })
   // A requested place takes the list away from following its end before layout. If the requested row turns out to
   // be at the end, the finished layout says so again below.
@@ -534,6 +549,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
                       if was.keys[q] == over {
                         anchor.val = Some({ key: over, under: was.tops[q] + was.heights[q] - h, near: i - 1 })
                         glide = Some(f)
+                        reading.val = if f.1 { Some(f.0) } else { None }
                         if fixed_estimate && was.first == 0 && was.tops[0] > 0.0 {
                           short_glide.val = true
                           let mut j = i
@@ -622,6 +638,26 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
               }
             }
           }
+          _ => ()
+        }
+        // (one come to be read from its top, at its end: kept there while its room opens till its top reaches what
+        // covers the list's top, its top held under that from then (Follow.kt), the end followed no more)
+        match reading.val {
+          Some(k) if from_end =>
+            for q in 0..<r.keys.length() {
+              if r.keys[q] == k {
+                if r.tops[q] < c.cover - 0.5 {
+                  match find(k, r.first + q) {
+                    Some(i) => {
+                      r = lay(Some({ key: k, under: c.cover + r.heights[q] - h, near: i }), 0.0)
+                      read_held.val = true
+                    }
+                    None => ()
+                  }
+                }
+                break
+              }
+            }
           _ => ()
         }
         anchor.val = r.anchor
@@ -723,6 +759,12 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
               put_at.set(None)
             }
           }
+          if read_held.val {
+            read_held.val = false
+            if @signals.untracked(fn() { follows.get() }) {
+              follows.set(false)
+            }
+          }
           if at_end && !@signals.untracked(fn() { follows.get() }) {
             follows.set(true)
           }
@@ -750,10 +792,12 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
                 s.glide_where(c.x + to_end, kept=false)
               }
             }
-            // (said to follow its end and short of it, nothing taking it there: what was its end as it was sent there
-            // is no more (a row come since, its room opened), so on to where its end is now)
+            // (asked to its end and short of it, nothing taking it there: what was its end as it was sent there is no
+            // more (a row come since, its room opened), so on to where its end is now)
             _ =>
-              if !at_end && to_tail > 0.5 && s.glides_till() is None && @signals.untracked(fn() { follows.get() }) {
+              if at_end || !@signals.untracked(fn() { follows.get() }) {
+                end_asked.val = false
+              } else if end_asked.val && to_tail > 0.5 && s.glides_till() is None {
                 s.glide_where(c.x + to_tail, kept=false)
               }
           }
