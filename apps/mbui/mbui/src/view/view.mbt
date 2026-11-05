@@ -1653,7 +1653,14 @@ fn Tree::placed(self : Tree, at : Int) -> (Double, Double, Double) {
 
 ///|
 /// Something for a frame to do: what hosts it told as there first is.
-fn Tree::marked(self : Tree) -> Unit {
+#callsite(autofill(loc))
+fn Tree::marked(self : Tree, loc~ : SourceLoc) -> Unit {
+  // (probe, not for merging: from the 40th layout pass in one, each pass's marking said to the host's log)
+  if self.laid_passes >= 40 && !self.due {
+    @hostapi.log(
+      "view: pass \{self.laid_passes} marked at \{loc}, last set at \{@signals.last_set_at()}, waits \{self.laid_waits.length()} shows \{self.shows_due.length()} outs \{self.outs_changed} sized \{self.sized.length()} bindings \{self.bindings_due.length()} places \{self.places_due.length()}",
+    )
+  }
   if !self.due {
     self.due = true
     // (the host is already being told: it will ask for a frame for everything marked by that telling too. Laying out
