@@ -1,0 +1,4 @@
+import {
+  "mbui/view",
+  "mbui/signals",
+} for "test"

@@ -442,18 +442,35 @@ the actual composer/send/flight checks plus floating-action allocation passed 36
 The previous scroll allocation change passed 867 view/flex tests and 35 app tests.
 Its 78-frame scroll film is byte-identical after decoding, as are the attachment
 stills. The next chat-layout build preserves the small and large screen pictures,
-including the visible return-to-latest action, pixel for pixel; the matching
-720-by-900 picture also matches, but did not expose that action and is not evidence
-for its placement there. These are actual app scenes rendered from distinct Wasm
+including the visible return-to-latest action, pixel for pixel. A corrected drive
+opens the middle pane before scrolling; its 720-by-900 pictures now also expose
+the action and match pixel for pixel. These are actual app scenes rendered from distinct Wasm
 programs (baseline `1188c0ad1461df1f83d1beeed96a29d3027ffbc20ec6f79432b9a1937fe6dbee`,
 chat allocation `0cb2631496fa4f430f942d52776e1dce8a204d745fc7cfc4fed74be3077988f4`).
 They establish presentation preservation for these scenes, not a speedup.
 
 The scroll range still writes scroll state from layout notifications; the list's
 row selection, anchor and responsive row bindings still use layout results.
-These are unresolved violations of the forward frame contract. The layout
-primitive's state-write guard alone does not forbid hidden geometry reads or
-imperative view mutations, so it is not yet a sufficient boundary for adoption.
+These are unresolved violations of the forward frame contract.
+
+The new arrangement boundary rejects signal reads during projection, geometry
+reads during input capture, state writes, binding changes and child construction.
+Computed values retain whether they observed geometry, including nested cached
+values and untracked reads; a change of provenance propagates even when the
+numeric value is unchanged. The six prohibited operations first passed silently
+on the baseline, then each failed as required in an isolated Wasm test package.
+The focused signal, boundary, allocation and text-measurement suite passed 222
+tests. This boundary covers explicit arrangements and the guarded APIs, not
+arbitrary Ref storage or the legacy layout bindings.
+
+Actual app adoption exposed three hidden dependencies: the scrollbar captured
+the list's old position table despite measuring its complete content; text
+measurement read the live theme; and attachment layout read the prior chat width
+through its corner calculation. The scroll measurement now supplies its own
+extent, text shaping captures its theme before measurement, and a pane supplies
+the composer's shape from its allocation inputs. A row-filling quote no longer
+reads an unused corner reach. The expanded app checks and before/after scenes
+for this boundary change are still in progress; it is not a validated release.
 
 The experimental kernel does not yet demonstrate a general owner tree, full
 input/IME, stable-key history insertion/removal or recorded font/resource changes.

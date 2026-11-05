@@ -376,13 +376,18 @@ fn[T] update_computed(c : ReactiveNode, state : ComputedState[T]) -> Bool {
   let prev_sub = set_active_sub(Some(c))
   run.cycle += 1
   let old_value = state.value
+  let old_output = c.observes_output
+  let prev_deriving = deriving.val
+  deriving.val = Some(c)
+  c.observes_output = false
   let value = (state.getter)(old_value)
+  deriving.val = prev_deriving
   state.value = Some(value)
   run.active_sub = prev_sub
   c.flags = c.flags & RECURSED_CHECK.lnot()
   purge_deps(c)
   match old_value {
-    Some(old) => !same_as(state.same, old, value)
+    Some(old) => old_output != c.observes_output || !same_as(state.same, old, value)
     None => true
   }
 }
@@ -529,6 +534,7 @@ pub fn after_all_flushed(f : () -> Unit) -> Unit {
 ///|
 /// The computed's value, worked out again first if what it read changed since (computedOper).
 pub fn[T] Computed::get(self : Computed[T]) -> T {
+  signal_read()
   let node = self.0
   let state = self.1
   let flags = node.flags
@@ -554,10 +560,15 @@ pub fn[T] Computed::get(self : Computed[T]) -> T {
   } else if flags == 0 {
     node.flags = MUTABLE | RECURSED_CHECK
     let prev_sub = set_active_sub(Some(node))
+    let prev_deriving = deriving.val
+    deriving.val = Some(node)
+    node.observes_output = false
     state.value = Some((state.getter)(None))
+    deriving.val = prev_deriving
     run.active_sub = prev_sub
     node.flags = node.flags & RECURSED_CHECK.lnot()
   }
+  if node.observes_output { output_read() }
   track(node)
   state.value.unwrap()
 }
@@ -565,6 +576,7 @@ pub fn[T] Computed::get(self : Computed[T]) -> T {
 ///|
 /// The signal's value (signalOper read): what was set, once it is read after.
 pub fn[T] Signal::get(self : Signal[T]) -> T {
+  signal_read()
   let node = self.0
   let state = self.1
   if (node.flags & DIRTY) != 0 {
@@ -717,6 +729,8 @@ fn purge_deps(sub : ReactiveNode) -> Unit {
 ///|
 /// What the computed made last, not worked out again (none before it was first read).
 pub fn[T] Computed::peek(self : Computed[T]) -> T? {
+  signal_read()
+  if self.0.observes_output { output_read() }
   let state = self.1
   state.value
 }
@@ -773,7 +787,10 @@ pub fn[T] Computed::invalidate(self : Computed[T]) -> Unit {
 /// computed's run reads anew, as what it read is.
 pub fn[T, U] Computed::reading(self : Computed[T], f : () -> U) -> U {
   let prev_sub = set_active_sub(Some(self.0))
+  let prev_deriving = deriving.val
+  deriving.val = Some(self.0)
   let v = f()
+  deriving.val = prev_deriving
   run.active_sub = prev_sub
   v
 }
@@ -782,6 +799,7 @@ pub fn[T, U] Computed::reading(self : Computed[T], f : () -> U) -> U {
 /// What the computed read read by `to` as well, as though `to`'s run had read it after what it read (as
 /// Computed::reading: a row's build, run by a computed of its own, read for the part it is in).
 pub fn[T, U] Computed::lend(self : Computed[T], to : Computed[U]) -> Unit {
+  if self.0.observes_output { to.0.observes_output = true }
   let mut l = self.0.deps
   while true {
     match l {

@@ -22,6 +22,8 @@ pub struct ReactiveNode {
   priv update : ((ReactiveNode) -> Bool)?
   /// an effect's cleanup, as its fn returned it (EffectNode.cleanup)
   priv mut cleanup : (() -> Unit)?
+  /// Whether the cached computed value read a later phase's output.
+  priv mut observes_output : Bool
 }
 
 ///|
@@ -98,7 +100,7 @@ fn ReactiveNode::new(
   own? : Own = NoOwn,
   update? : (ReactiveNode) -> Bool,
 ) -> ReactiveNode {
-  { deps: None, deps_tail: None, subs: None, subs_tail: None, flags, kind, own, update, cleanup: None }
+  { deps: None, deps_tail: None, subs: None, subs_tail: None, flags, kind, own, update, cleanup: None, observes_output: false }
 }
 
 ///|

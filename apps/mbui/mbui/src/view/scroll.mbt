@@ -698,7 +698,7 @@ pub fn View::scrolls(
     }
     None => None
   }
-  self.scroll_layout(held, thumb, across, bar, bar_in, content_extent, bar_clear)
+  self.scroll_layout(held, thumb, across, bar, bar_in, bar_clear)
   // (what it holds faded out towards its top and its foot where it goes on past them, as far as it does, at most
   // scroll_soft_most: an old view's capped's fade_to; by the time while flung, as it is drawn)
   // (a page's list's not, as an old view's list's is not; stretched instead where Android's is past an end, as it is

@@ -222,7 +222,12 @@ pub fn with_corner_remove_node(
         .says(By(fn() { Some(@view.said(Button, label=label())) })).on_press(remove) |> ignore
       }) |> ignore
     })
-    outer.layout(By(fn() { (width(), reach()) }), fn(inputs, space) {
+    // A row-filling quote reserves no extra width for its overlaid control.
+    // Only a fixed tile needs that reach in its measurement input.
+    outer.layout(By(fn() {
+      let preferred = width()
+      (preferred, if preferred is Some(_) { reach() } else { 0.0 })
+    }), fn(inputs, space) {
       let (preferred, reach) = inputs
       let offered = match space.width() { Some(w) => Some(w); None => space.max_width() }
       let width = match (preferred, offered) {

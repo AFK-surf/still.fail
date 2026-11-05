@@ -1008,6 +1008,7 @@ pub fn words_measure(words : String, _look : WordsLook, width : Double) -> (Doub
 ///|
 /// A node made in `parent` (-1: the root), its scope its own (made with nothing reading: owned by nothing else).
 fn Tree::made(self : Tree, parent : Int) -> View {
+  @signals.require_mutable()
   self.work.made = self.work.made + 1
   self.hits = self.hits + 1
   let at = match self.free.pop() {
@@ -1652,6 +1653,7 @@ pub fn View::drawn_at(self : View) -> Double {
 /// Where it is drawn, in the window (what holds it drawn off with it, its own offset with it), and how big (as big as
 /// it and what holds it are drawn: View::scale): where a press finds it as where it is drawn.
 pub fn View::rect(self : View) -> (Double, Double, Double, Double) {
+  @signals.output_read()
   guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
   let (x, y, s) = self.tree.placed(self.at)
   (x, y, n.flex.width * s, n.flex.height * s)
@@ -2051,6 +2053,7 @@ priv enum Prop {
 /// reads changes (Tree::queued: as the frame takes it), set again only if it came out otherwise than it last did,
 /// marking what its phase does again.
 fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, apply : (T) -> Unit) -> Unit {
+  @signals.require_mutable()
   guard self.live() is Some(n) else { return }
   let tree = self.tree
   let at = self.at
@@ -2238,6 +2241,7 @@ pub fn View::basis(self : View, b : Live[Double?]) -> View {
 /// changed before it asks, laid out as a frame would), as of the window's size its last frame gave (0 by 0 before the
 /// first). For what is said at a moment by how big a thing is then (how long a slide across it takes), never followed.
 pub fn View::laid_size(self : View) -> (Double, Double) {
+  @signals.output_read()
   guard self.live() is Some(n) else { return (0.0, 0.0) }
   // (laid out as of the logic's moment, what the change under way set so far counted, nothing of the logic run; read,
   // not placed by: each node where it stood till the change is placed, Tree::measured_now)
@@ -3001,6 +3005,7 @@ pub fn View::laid_before_causes(self : View) -> Unit {
 /// and its offset), drawn off and grown or shrunk by nothing: as it stood before a change told now is laid out, in the
 /// terms of laid_window_now (for what moves from there for that change's cause, said once at that moment).
 pub fn View::placed_window_now(self : View) -> (Double, Double, Double, Double) {
+  @signals.output_read()
   guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
   let mut x = 0.0
   let mut y = 0.0
@@ -3063,6 +3068,7 @@ fn Tree::measured_now(self : Tree) -> Unit {
 /// it is laid out too, drawn off and grown or shrunk by nothing): where a change told now puts it, said once at that
 /// moment, never followed.
 pub fn View::laid_window_now(self : View) -> (Double, Double, Double, Double) {
+  @signals.output_read()
   guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
   self.tree.measured_now()
   let mut x = 0.0
@@ -3085,6 +3091,7 @@ pub fn View::laid_window_now(self : View) -> (Double, Double, Double, Double) {
 /// change's brought to its moment), drawn off nothing: as it stood before a change told now is laid out (for what moves
 /// from there for that change's cause, said once at that moment, never followed).
 pub fn View::placed_now(self : View) -> (Double, Double, Double, Double) {
+  @signals.output_read()
   guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
   (n.lx, n.ly, n.lw, n.lh)
 }
@@ -3094,6 +3101,7 @@ pub fn View::placed_now(self : View) -> (Double, Double, Double, Double) {
 /// counted, as a frame would lay it out; its offset with it): where it goes for that change's cause, said once at that
 /// moment (View::laid_size's terms), never followed.
 pub fn View::laid_place_now(self : View) -> (Double, Double, Double, Double) {
+  @signals.output_read()
   guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
   self.tree.measured_now()
   (
@@ -6348,6 +6356,7 @@ fn Tree::shown_now(self : Tree) -> Unit {
 /// the first layout after it is first asked has been done (not measured yet: no size of nothing). Never a motion's
 /// target.
 pub fn View::laid_size_told(self : View) -> (Double, Double)? {
+  @signals.output_read()
   guard self.live() is Some(n) else { return None }
   let cell = match n.size_cell {
     Some(c) => c
@@ -6368,6 +6377,7 @@ pub fn View::laid_size_told(self : View) -> (Double, Double)? {
 /// Drawing transforms are excluded, as in placed_window_now. This describes geometry; it never starts or retimes a
 /// motion. A flight declares its way once for the send and uses this only to locate its destination on that way.
 pub fn View::laid_window_told(self : View) -> (Double, Double, Double, Double)? {
+  @signals.output_read()
   guard self.live() is Some(n) else { return None }
   let cell = match n.rect_cell {
     Some(c) => c
@@ -6388,6 +6398,7 @@ pub fn View::laid_window_told(self : View) -> (Double, Double, Double, Double)? 
 /// placement in the same pass, or None before that pass and while laid out nowhere. Unlike laid_window_told, this
 /// follows a landing on its way; it must not be used to define that landing's own motion.
 pub fn View::drawn_window_told(self : View) -> (Double, Double, Double, Double)? {
+  @signals.output_read()
   guard self.live() is Some(n) else { return None }
   let cell = match n.drawn_rect_cell {
     Some(c) => c

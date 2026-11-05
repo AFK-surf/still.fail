@@ -257,22 +257,26 @@ pub fn set_view_app(make : (@view.View) -> Unit, around? : (Ctx) -> Unit) -> Uni
 fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   // (a change told as it is made, at the host's now: what it sets going starts then, whatever frame takes it)
   let made : Ref[@view.Tree?] = Ref(None)
+  let words_style = Ref(0)
   let t = @view.Tree::new(
     fn(root) {
-      make(root)
       // (its words shaped as the theme it is drawn in says (its digits all one width or not: the app's, set_tree_theme,
       // else the window's for its width): as that changes, every word measured and drawn again so at the change's
       // moment, whatever is read of it before a frame; followed by its root, let go with it. As made, shaped so.)
-      root.reacts(view_words_style, fn(_s) {
+      root.reacts(view_words_style, fn(style) {
+        // Capture the theme's shaping input before any measurement. A parent
+        // arrangement may measure words without reading model signals itself.
+        words_style.val = style
         match made.val {
           Some(tree) => tree.words_again()
           None => ()
         }
       })
+      make(root)
     },
-    measure=view_words_measure,
-    measure_runs=view_runs_measure,
-    measure_shorter=view_shorter_measure,
+    measure=fn(words, look, width) { view_words_measure(words, look, width, style=words_style.val) },
+    measure_runs=fn(runs, look, set, width) { view_runs_measure(runs, look, set, width, style=words_style.val) },
+    measure_shorter=fn(words, shorter, look, width) { view_shorter_measure(words, shorter, look, width, style=words_style.val) },
     time=fn() { h_event_time() },
   )
   made.val = Some(t)
@@ -432,7 +436,7 @@ fn view_forget() -> Unit {
 ///|
 /// Words of a node made once measured as they are drawn (text.mbt), in `width` (< 0: as wide as they are): at the
 /// system's size of words, as an old view's are (Ctx::sp: the look's size and line said at 1).
-fn view_words_measure(words : String, look : @view.WordsLook, width : Double) -> (Double, Double) {
+fn view_words_measure(words : String, look : @view.WordsLook, width : Double, style? : Int = view_words_style()) -> (Double, Double) {
   let c = g()
   let tl = layout_words(
     view_words_set(words, look),
@@ -443,7 +447,7 @@ fn view_words_measure(words : String, look : @view.WordsLook, width : Double) ->
     balance=look.balance,
     line=view_line(c, look),
     spacing=view_spacing(c, look),
-    style=view_words_style(),
+    style~,
   )
   // (broken onto more lines than their own where the width ran out: as wide as it, as an old view's words are, leaf_size)
   (if width >= 0.0 && look.wrap && soft_wrapped(tl.line_end, tl.shaped.cu) { width } else { tl.w }, tl.h)
@@ -478,10 +482,10 @@ fn view_plain_laid(shown : String, look : @view.WordsLook, width : Double) -> Te
 ///|
 /// How wide a node's words too wide for `width` on one line are drawn where they say `shorter` ways (View::shorter), as
 /// an old view's are laid out (said_in: the first that fits whole, else the last cut with an ellipsis).
-fn view_shorter_measure(words : String, shorter : Array[String], look : @view.WordsLook, width : Double) -> Double {
+fn view_shorter_measure(words : String, shorter : Array[String], look : @view.WordsLook, width : Double, style? : Int = view_words_style()) -> Double {
   let c = g()
   let lay = fn(s : String) {
-    layout_text(s, c.sp(look.size), look.weight, 1.0e9, false, line=view_line(c, look), spacing=view_spacing(c, look), style=view_words_style())
+    layout_text(s, c.sp(look.size), look.weight, 1.0e9, false, line=view_line(c, look), spacing=view_spacing(c, look), style~)
   }
   // (set on one line as they are drawn, its own and the shorter ones alike: view_words_set)
   let words = view_words_set(words, look)
@@ -505,7 +509,7 @@ fn view_words_style() -> Int {
 /// words' own, the node's), the rest as `set` says (a link's ink, code's: RunsLook), at the system's size of words, in
 /// the theme's digits where they are the app's own words (view_words_style), in the face chosen for a person's words
 /// where they are those (faces_style, as Ctx::rich's `words`).
-fn view_rich(runs : Array[@text.Run], look : @view.WordsLook, set : @view.RunsLook) -> Rich {
+fn view_rich(runs : Array[@text.Run], look : @view.WordsLook, set : @view.RunsLook, style? : Int = view_words_style()) -> Rich {
   let c = g()
   // (on one line where they do not wrap: what breaks them run on with a space across all of them at once, a break and
   // what blanks follow it perhaps in two of them, as Ctx::rich's; each as weighty and inked as it was)
@@ -534,7 +538,7 @@ fn view_rich(runs : Array[@text.Run], look : @view.WordsLook, set : @view.RunsLo
     base: 0,
     select: false,
     max_lines: set.max_lines,
-    faces: if set.words { faces_style(true, 0) } else { view_words_style() },
+    faces: if set.words { faces_style(true, 0) } else { style },
     shaped_in: words_shaped_in.val,
   }
 }
@@ -591,8 +595,9 @@ fn view_runs_measure(
   look : @view.WordsLook,
   set : @view.RunsLook,
   width : Double,
+  style? : Int = view_words_style(),
 ) -> (Double, Double) {
-  let r = view_rich(runs, look, set)
+  let r = view_rich(runs, look, set, style~)
   let w = if width < 0.0 || !look.wrap { 1.0e9 } else { width }
   let whole = layout_rich(r, w)
   let lay = if r.wrap && r.max_lines > 0 && whole.line_start.length() > r.max_lines {

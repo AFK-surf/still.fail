@@ -4,10 +4,9 @@
 ///|
 fn View::scroll_layout(
   self : View, held : View, thumb : View?, across : Bool, bar : ScrollBar?, bar_in : Double,
-  content_extent : (() -> Double)?, bar_clear : () -> (Double, Double),
+  bar_clear : () -> (Double, Double),
 ) -> Unit {
-  self.layout(By(fn() { (content_extent.map(fn(f) { f() }), bar_clear()) }), fn(inputs, space) {
-    let (extent, clear) = inputs
+  self.layout(By(bar_clear), fn(clear, space) {
     let content = if across {
       space.measure(held, height?=space.height(), max_width=None)
     } else {
@@ -32,7 +31,10 @@ fn View::scroll_layout(
       (Some(thumb), Some(b)) => {
         let (left, top, right, bottom) = space.insets()
         let length = if across { w + left + right } else { h + top + bottom }
-        let total = extent.unwrap_or(if across { content.size().0 } else { content.size().1 })
+        // A windowed list includes its unmade rows as measured gaps. The
+        // holder's measurement therefore already includes the whole extent;
+        // its previous position table is not an input to this layout.
+        let total = if across { content.size().0 } else { content.size().1 }
         let ends = if across { dclamp(bar_in, 0.0, dmax(0.0, length / 2.0 - b.least)) } else { 0.0 }
         let (start, end) = if across { (0.0, 0.0) } else { clear }
         let long = bar_track_of(ends, length - 2.0 * ends, length - 2.0 * ends,

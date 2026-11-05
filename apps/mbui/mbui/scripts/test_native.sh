@@ -7,7 +7,7 @@
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
-pkgs=${*:-mbui/ui mbui/view mbui/motion mbui/kit mbui/figure mbui/kitdemo/gallery mbui/effecttest mbui/effectdemo}
+pkgs=${*:-mbui/ui mbui/view mbui/view/faults/model_read mbui/view/faults/geometry_read mbui/view/faults/binding_write mbui/view/faults/structure_write mbui/view/faults/input_write mbui/view/faults/cached_geometry mbui/motion mbui/kit mbui/figure mbui/kitdemo/gallery mbui/effecttest mbui/effectdemo}
 args=()
 for p in $pkgs; do args+=(-p "$p"); done
 # The kinds of test program a package has none of (internal: a test in its own files; blackbox: *_test.mbt;

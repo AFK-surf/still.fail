@@ -130,6 +130,16 @@ fn tape_chat_corners() -> FixedArray[@ui.CornerOf]? {
 }
 
 ///|
+// The shape follows the same current allocation that sizes the page panel.
+// Reading the last placed chat width here would feed geometry back into the
+// attachment layout's inputs. A chat outside a panel uses composer_alone.
+fn tape_chat_composer_place(n : @view.View) -> @sfpages.ComposerPlace {
+  let roots = @ui.tree_corner_roots_now()
+  @sfpages.composer_geometry(tape_page_at(tape_drawn_at(n)),
+    tape_chat_corners().map(fn(ks) { ks.map(fn(k) { k.radius(roots) }) })).2
+}
+
+///|
 /// A page's bar on the tape as its page said it the last time it was built (tape_bar_collected), and what its back
 /// does then; or what a page made once said of itself (tape_made); the node of the tree's that shows it reads it
 /// (tape_bar_head).
@@ -350,7 +360,8 @@ fn tape_made(
           fn(v : @view.View, _page, _under, _stint, k : Int) {
             v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
             context_node(v)
-            chat_root_node(v, src, r, k, old_over=tape_chat_over, corners=tape_chat_corners, side=false, ground=tape_page_ground)
+            chat_root_node(v, src, r, k, old_over=tape_chat_over, corners=tape_chat_corners,
+              composer_place=tape_chat_composer_place, side=false, ground=tape_page_ground)
           },
         ),
       )
@@ -363,7 +374,8 @@ fn tape_made(
             v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
             context_node(v)
             history_beside(src, r, key, entry)
-            chat_root_node(v, src, r, k, old_over=tape_chat_over, corners=tape_chat_corners, side=false, ground=tape_page_ground)
+            chat_root_node(v, src, r, k, old_over=tape_chat_over, corners=tape_chat_corners,
+              composer_place=tape_chat_composer_place, side=false, ground=tape_page_ground)
           },
         ),
       )

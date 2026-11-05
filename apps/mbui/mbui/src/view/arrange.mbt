@@ -42,16 +42,23 @@ pub fn arrangement(width : Double, height : Double, children : Array[@flex.Place
 ///|
 /// Own the layout of this container's children. `inputs` reads model state in
 /// the binding phase. `arrange` receives that immutable value and the current
-/// constraints; it must return a plan without changing model state.
+/// constraints; it must return a plan without reading signals, previous placed
+/// geometry, changing bindings or creating nodes. Input capture cannot write
+/// model state or read geometry, including through a cached computed. Children
+/// are measured through Layout::measure and placed from those current answers.
 pub fn[T : Eq] View::layout(
   self : View,
   inputs : Live[T],
   arrange : (T, Layout) -> @flex.Arrangement,
 ) -> View {
   guard self.live() is Some(n) else { return self }
-  self.bind(Arrangement, inputs, Layout, fn(value) {
+  let captured = match inputs {
+    Is(value) => Is(value)
+    By(read) => By(fn() { @signals.capture_inputs(read) })
+  }
+  self.bind(Arrangement, captured, Layout, fn(value) {
     n.flex.arrange = Some(fn(space) {
-      @signals.read_only(fn() { arrange(value, { space, tree: self.tree }) })
+      @signals.project(fn() { arrange(value, { space, tree: self.tree }) })
     })
   })
   self

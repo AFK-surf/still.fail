@@ -30,6 +30,17 @@ own source, not from what the port seems to want.
   settling a change (where things stand laid out and placed, `Tree::settle_after_change`), which a group moving together
   (`moves_together`) measures from in its own `after_flush` and then changes again. It is not a later `after_flush`
   for anything that merely runs too early: such a thing reads what it waits for, or is told by it.
+- Added for forward layout, not alien-signals': `capture_inputs` follows model reads while forbidding writes and
+  reads of previous geometry; `project` permits neither signal reads nor writes. `untracked` changes dependency
+  tracking, not these permissions. View geometry accessors call `output_read`; imperative binding and construction
+  entry points call `require_mutable`.
+- Computed values carry whether their getter observed an output, including through another cached computed,
+  `peek`, `reading`, `lend` or an untracked read. This bit is part of the cached answer: changing from a model input
+  to an output must notify readers even when the numeric value is equal. It is reset when the getter runs anew.
+  This extends upstream's value comparison; the graph's link and propagation algorithms are unchanged. It does
+  not trace arbitrary mutable fields or an effect copying geometry into a separate model signal; those legacy
+  routes still need migration. A failed contract terminates the calculation, not an exception callers may recover
+  from. Deliberate panic tests each run in their own package (`src/view/faults`).
 
 ## Under reference counting
 

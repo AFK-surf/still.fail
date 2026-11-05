@@ -24,6 +24,8 @@ pub fn after_flush(() -> Unit) -> Unit
 
 pub fn batch_depth() -> Int32
 
+pub fn[T] capture_inputs(() -> T) -> T
+
 pub fn[T] computed((T?) -> T, same? : (T, T) -> Bool) -> Computed[T]
 
 pub fn effect(() -> Unit) -> () -> Unit
@@ -37,6 +39,14 @@ pub fn end_batch() -> Unit
 pub fn[K : Hash + Eq] keyed() -> Keyed[K]
 
 pub fn last_set_at() -> String
+
+pub fn output_read() -> Unit
+
+pub fn[T] project(() -> T) -> T
+
+pub fn[T] read_only(() -> T) -> T
+
+pub fn require_mutable() -> Unit
 
 pub fn set_active_sub(ReactiveNode?) -> ReactiveNode?
 

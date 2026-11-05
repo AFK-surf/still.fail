@@ -16,6 +16,7 @@ fn chat_root_node(
   k : Int,
   old_over? : (@ui.Ctx, () -> Unit) -> Unit = fn(_, build) { build() },
   corners? : () -> FixedArray[@ui.CornerOf]? = fn() { None },
+  composer_place? : (@view.View) -> @sfpages.ComposerPlace = fn(_) { @sfpages.composer_alone },
   side? : Bool = true,
   ground? : (@view.View) -> Int64 = fn(_) { @sf.theme().p.bg },
 ) -> Unit {
@@ -53,7 +54,7 @@ fn chat_root_node(
       .min_width(Is(Some(0.0)))
       .min_height(Is(Some(0.0)))
       |> ignore
-      chat_talk_node(talk, src, w, r, k, view, entries, old_over, corners, ground)
+      chat_talk_node(talk, src, w, r, k, view, entries, old_over, corners, fn() { composer_place(talk) }, ground)
     })
     |> ignore
     // (its side panel: beside it, cut to how far it has slid; over it from the pane's right where the pane has not the
@@ -97,6 +98,7 @@ fn chat_talk_node(
   entries : () -> Array[Entry],
   over : (@ui.Ctx, () -> Unit) -> Unit,
   corners : () -> FixedArray[@ui.CornerOf]?,
+  place : () -> @sfpages.ComposerPlace,
   ground : (@view.View) -> Int64,
 ) -> Unit {
   let width = fn() { talk.laid_size_told().map(fn(z) { z.0 }).unwrap_or(talk.window().0) }
@@ -143,7 +145,7 @@ fn chat_talk_node(
       fn() { geometry().0 },
       height,
       fn() { geometry().1 },
-      fn() { geometry().2 },
+      place,
       fn(_key) { (latest.val)() },
       active=fn() { app.nav.drawn_stay().0 == k },
       drops=talk,
