@@ -7597,6 +7597,19 @@ fn Tree::once_laid_out(self : Tree, f : () -> Unit) -> Unit {
 }
 
 ///|
+/// `f` done once all of it is laid out as it is next (Tree::once_laid_out: every pass over, the sizes told), the node's:
+/// not done where the node is let go before. What is to be done where things are once laid out (a menu put beside what
+/// it was opened from, a list scrolled to what it is to show), never as the frame is built or what the host says comes.
+pub fn View::once_laid_out(self : View, f : () -> Unit) -> Unit {
+  guard self.alive() else { return }
+  self.tree.once_laid_out(fn() {
+    if self.alive() {
+      f()
+    }
+  })
+}
+
+///|
 /// How a page's list (Scroll::list) moves where what hosts the tree draws it, as it is asked (as the platform's own
 /// lists: an old view's list's way there), and how many pixels a point is there (Android's fling and stretch are in
 /// them); none said, the desktop's, at 1.
