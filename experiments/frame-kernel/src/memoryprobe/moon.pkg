@@ -1,0 +1,13 @@
+import {
+  "framekernel/kernel",
+}
+
+options(
+  "is-main": true,
+  link: {
+    "wasm": {
+      "exports": ["run_round", "hold_control", "release_control"],
+      "export-memory-name": "memory",
+    },
+  },
+)

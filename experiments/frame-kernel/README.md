@@ -5,6 +5,7 @@ framework. It does not wrap `view.Tree` or change its scheduling flags. Existing
 `mbui/flex` measurement, `mbui/motion` curve solvers and `mbui/signals` dependency
 tracking remain the calculation primitives. No application imports this module.
 The fuller rationale and unimplemented requirements are in [DESIGN.md](DESIGN.md).
+Recorded results and their limits are in [RESULTS.md](RESULTS.md).
 
 ## Requirements before mechanisms
 
@@ -126,3 +127,8 @@ the computation under a 512 KiB Wasm stack, not Android rendering or throughput.
 clock. Each workload is calibrated toward 300 ms and sampled three times; it
 reports whole milliseconds and the iteration count. The linear reference is a
 comparison for index traversal cost, not the existing application's runtime.
+
+`src/memoryprobe` exports bounded rounds to `node observe-memory.mjs <wasm>`.
+That host observes linear memory between repeated semantic owner lifetimes,
+with retained allocations as a positive control. This runs classic Wasm in
+Node/V8, not Wasmtime or Android. Memory high-water marks are not live-byte counts.
