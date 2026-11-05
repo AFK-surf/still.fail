@@ -894,8 +894,6 @@ pub struct Tree {
   /// the layers that give the focus back as they go to a node said, not to what had it as they opened
   /// (View::returns_focus_to)
   focus_backs : Map[NodeId, NodeId]
-  /// how far the ways the layouts of this pass know the lengths of go (Layout::way_over), told them once those are done
-  ways_over : Array[() -> Unit]
   /// the room under what it holds and its foot covered, given each node measured so (Layout::measure's `foot`), and
   /// the box that reads it under it (Layout::given_foot)
   feet : Map[Int, (Double, Double)]
@@ -1100,7 +1098,6 @@ pub fn Tree::new(
     focus_gone: [],
     focus_firsts: Set::new(),
     focus_backs: {},
-    ways_over: [],
     feet: {},
     foot_readers: {},
     reports: {},
@@ -5499,6 +5496,10 @@ fn View::slot(self : View) -> View {
 /// The boxes node `at` lays out as its own, in order: its own, or a slot's, those of what it holds.
 fn Tree::boxes(self : Tree, at : Int, into : Array[@flex.Node]) -> Unit {
   let n = self.nodes[at]
+  // (one as wide as what it goes beside laid out alone, after its anchor: none of what holds it lays it out, View::beside)
+  if n.beside is Some(b) && b.as_wide {
+    return
+  }
   if n.slot {
     for k in n.kids {
       self.boxes(k, into)
@@ -6506,14 +6507,6 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool) {
     self.measured_gen = -1
     self.walk_from = -1
     self.walk(0, gen, true)
-  }
-  // (how far what set out at its cause goes, as this layout knew it: told the ways now, before anything is painted)
-  if self.ways_over.length() > 0 {
-    let ways = self.ways_over.copy()
-    self.ways_over.clear()
-    for f in ways {
-      @signals.untracked(f)
-    }
   }
   // (placed or faded by its own: it alone composed again)
   let places_done = fn() {

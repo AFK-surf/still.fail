@@ -290,3 +290,30 @@ test "opens_across: as wide as its share of what it holds, what it holds laid ou
   assert_eq(tree.work().computes - computes, 1, msg="one layout")
   tree.dispose()
 }
+
+///|
+test "panic: Layout::reported read of a child not measured in the same layout aborts" {
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(page) {
+      page
+      .width(Is(Some(300.0)))
+      .height(Is(Some(300.0)))
+      .layout_box(Is(()), fn(l, _) {
+        let c = l.child("c", fn(c) {
+          c.layout_box(Is(()), sized=true, fn(cl, _) {
+            cl.report("cap", 10.0)
+            cl.size_to(20.0)
+          })
+          |> ignore
+        })
+        // (read before it is measured: what a layout before said, never this one's)
+        l.reported(c, "cap") |> ignore
+        l.measure(c, l.width) |> ignore
+        l.place(c, 0.0, 0.0)
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  tree.frame(390.0, 844.0) |> ignore
+}

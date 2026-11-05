@@ -194,34 +194,14 @@ test "a way going read by nothing, or by what is let go as it goes: no frame ask
 }
 
 ///|
-test "a way set out not knowing how far it goes: where it set out from till its layout says, then as long as a way said that far, from its cause's moment" {
+test "a move timed by a length known as it is laid out: where it is a moment after its cause, worked out from those alone, as a way said that far is" {
   let _ = @ui.Tester::new(fn(_c) {  })
-  let w = @motion.Way::new(0.0)
-  let room = @signals.signal(300.0, same=fn(a, b) { a == b })
-  let t = @view.Tree::new(
-    fn(root) {
-      root.box(fn(b) {
-        b
-        .width(By(fn() { Some(room.get()) }))
-        .height(Is(Some(40.0)))
-        .layout_box(Is(()), fn(l, _) { l.way_over(w, l.width) })
-        |> ignore
-      })
-      |> ignore
-    },
-    time=fn() { 0.0 },
-  )
-  t.frame(800.0, 600.0) |> ignore
-  w.go(1.0, @motion.move(over=@motion.laid), at=set_out_at)
-  let before = (w.value_at(set_out_at + 50.0), w.ends_at())
-  // (laid out again, the room changed: the way told how far now)
-  t.event(set_out_at, fn() { room.set(460.0) })
-  t.frame(800.0, 600.0) |> ignore
   let said = @motion.Way::new(0.0)
   said.go(1.0, @motion.move(over=460.0), at=set_out_at)
-  // (told once: a later layout's width changes nothing)
-  t.event(set_out_at + 10.0, fn() { room.set(200.0) })
-  t.frame(800.0, 600.0) |> ignore
-  assert_eq(before, (0.0, -1.0))
-  assert_eq((w.ends_at(), w.value_at(set_out_at + 100.0)), (said.ends_at(), said.value_at(set_out_at + 100.0)))
+  let spec = @motion.move(over=460.0)
+  let at = fn(t : Double) { spec.at_since(t - set_out_at, 0.0, 1.0) }
+  assert_eq(
+    (at(set_out_at - 10.0), at(set_out_at + 100.0), at(set_out_at + 5000.0)),
+    (0.0, said.value_at(set_out_at + 100.0), said.value_at(set_out_at + 5000.0)),
+  )
 }
