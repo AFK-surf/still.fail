@@ -96,6 +96,7 @@ function waitingVault() {
     listing: { name: "test key", kind: "token", modes: ["env"], hosts: [] }, at: 1 });
   let present = true, workspace = "w", owner = "p@example.test", ready = false, prepared = 0, captured = 0;
   let lock: any = null;
+  let now = 1_800_000_000_000;
   const posts: string[] = [];
   const thread = { connect: "slack", thread: { id: 1, channel: "C", threadTs: "latest", surface: "slack" } };
   const hub = {
@@ -111,12 +112,13 @@ function waitingVault() {
     shared: () => {}, notify: () => {},
   } as any;
   const secrets = new Secrets({ db, vaults, plain, hub, data: dir, home: () => "w", lock: () => lock,
-    now: () => 1_800_000_000_000, browsers: {
+    now: () => now, browsers: {
       cookies: async () => { captured++; return cookies.promise; }, signIn: async () => {},
     } });
   return { db, dir, gate, cookies, secrets, posts, prepared: () => prepared, captured: () => captured,
     ready: () => { ready = true; }, remove: () => { present = false; },
     move: () => { workspace = "other"; }, changeOwner: () => { owner = "other@example.test"; },
+    advance: (ms: number) => { now += ms; },
     lockWithoutOwner: () => { lock = { members: new Map() }; },
     lockWithOwner: () => { lock = { ws: "w", members: new Map([["p", { sub: "p", email: "p@example.test" }]]), devices: new Map() }; } };
 }
@@ -164,6 +166,16 @@ test("a secret save does not survive deletion or a change of workspace, owner or
       noRequest(w);
     } finally { w.gate.resolve(); w.db.close(); rmSync(w.dir, { recursive: true, force: true }); }
   }
+});
+
+test("a secret save starts its expiry when the request is made after preparation", async () => {
+  const w = waitingVault();
+  try {
+    const asking = w.secrets.save("s", { name: "new key", kind: "token", reason: "test", value: "fake", cwd: w.dir });
+    w.advance(2 * 86_400_000); w.ready(); w.gate.resolve();
+    await asking;
+    assert.equal(w.secrets.pending("w", null, { sub: "p", email: "p@example.test" }).length, 1);
+  } finally { w.gate.resolve(); w.db.close(); rmSync(w.dir, { recursive: true, force: true }); }
 });
 
 test("a secret save uses security mode enabled while its chat order is prepared", async () => {

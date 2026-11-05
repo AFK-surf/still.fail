@@ -697,7 +697,8 @@ export class Secrets {
     sub = lock === null ? null : this.#memberOf(lock, email);
     if (lock !== null && sub === null) throw new Refused(`${email} is not in the workspace's security mode: there is no vault of theirs to keep it in.`);
     const fields = typed ? null : fieldsOf(value);
-    const id = `r_${ulid(now)}`;
+    const requestedAt = this.#d.now();
+    const id = `r_${ulid(requestedAt)}`;
     const save: Save = {
       kind, name, modes, hosts, ...(a.env ? { env: a.env } : {}), ...(a.username ? { username: a.username } : {}), ...(a.public_key ? { public_key: a.public_key } : {}), ...(filename ? { filename } : {}),
       ...(typed ? { typed: true as const } : {}),
@@ -706,7 +707,7 @@ export class Secrets {
       id, ws, vault: lock === null ? PLAIN : this.#vaultFor(lock, sub!), item, session, chat: "", mode: modes[0]!, reason: a.reason.trim(),
       ...(command !== undefined ? { command } : {}), ...(hosts.length ? { hosts } : {}),
       // A vault's: a box for the grant to this chat that comes with keeping it (the app seals the secret to it too).
-      box: lock === null ? "" : this.keeper.open(id), at: Math.floor(now / 1000), status: "pending", owner: email, save, ...(from ? { runOn: from } : {}),
+      box: lock === null ? "" : this.keeper.open(id), at: Math.floor(requestedAt / 1000), status: "pending", owner: email, save, ...(from ? { runOn: from } : {}),
       ...(lock !== null && fields !== null ? { sealed: this.#certsOf(lock, sub!).map((c) => this.#sealTo(c, ws, id, fields)) } : {}),
     };
     if (fields !== null) this.#unsaved.set(id, fields);
