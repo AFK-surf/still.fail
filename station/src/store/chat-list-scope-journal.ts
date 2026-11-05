@@ -40,6 +40,20 @@ const markMember = (thread: string, session: string, home = false) => {
 };
 const memberConflictThread = (extra: string) => `(SELECT thread FROM thread_sessions WHERE rowid = NEW.rowid ${extra})`;
 const memberConflictSession = (extra: string) => `(SELECT session FROM thread_sessions WHERE rowid = NEW.rowid ${extra})`;
+// Limit raw memberships before looking up their sessions or tracked workspaces. The tuple IN lets SQLite seek each
+// dirty key, rather than scanning a workspace's or the whole station's existing journal.
+export function recentScopeHomeMemberQueries(thread: string): { update: string; insert: string } {
+  const members = `SELECT s.ws AS ws, ${thread} AS thread, m.session AS session
+    FROM (SELECT session FROM thread_sessions WHERE thread = ${thread} ORDER BY session LIMIT 64) m
+    JOIN sessions s ON s.key = m.session JOIN recent_scope_tracked r ON r.kind = 1 AND r.ws = s.ws`;
+  return {
+    update: `UPDATE recent_scope_member_dirty SET revision = revision + 1 WHERE (ws, thread, session) IN (${members})`,
+    insert: `INSERT INTO recent_scope_member_dirty(ws, thread, session, revision)
+      SELECT m.ws, m.thread, m.session, 1 FROM (${members}) m WHERE NOT EXISTS
+        (SELECT 1 FROM recent_scope_member_dirty d WHERE d.ws = m.ws AND d.thread = m.thread AND d.session = m.session)`,
+  };
+}
+const manyHomeMembers = `EXISTS (SELECT 1 FROM thread_sessions WHERE thread = NEW.id LIMIT 1 OFFSET 64)`;
 // A home-less chat with members may affect scopes without an existing row. Record that uncertainty; a named home
 // and an orphan can instead be checked against a workspace without blocking unrelated pages.
 const markVisibility = (thread: string, needsNew = "1") => {
@@ -168,7 +182,7 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
       CREATE TRIGGER recent_scope_order_thread_move AFTER UPDATE OF id ON threads WHEN OLD.id IS NOT NEW.id BEGIN ${markOrder("NEW.id")} END;
       CREATE TRIGGER recent_scope_visibility_thread_change AFTER UPDATE OF id, home ON threads
         WHEN (OLD.id IS NOT NEW.id OR OLD.home IS NOT NEW.home) AND
-          (OLD.id IS NOT NEW.id OR OLD.home IS NULL OR NEW.home IS NULL OR
+          (OLD.id IS NOT NEW.id OR ((OLD.home IS NULL OR NEW.home IS NULL) AND ${manyHomeMembers}) OR
             EXISTS (SELECT 1 FROM recent_scope_visibility_dirty WHERE thread = OLD.id))
         BEGIN ${markVisibility("OLD.id")} END;
       -- With two named homes, only those sessions can contribute. Journal each one directly instead of queuing
@@ -176,6 +190,14 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
       CREATE TRIGGER recent_scope_named_home_change AFTER UPDATE OF home ON threads
         WHEN OLD.id IS NEW.id AND OLD.home IS NOT NULL AND NEW.home IS NOT NULL AND OLD.home IS NOT NEW.home BEGIN
           ${markMember("NEW.id", "OLD.home", true)} ${markMember("NEW.id", "NEW.home", true)}
+        END;
+      -- A small shared chat can similarly mark its old/new home and each of its members directly. A larger chat,
+      -- or a chat already being rebuilt, keeps the bounded global visibility pass and its revision barrier.
+      CREATE TRIGGER recent_scope_small_shared_home_change AFTER UPDATE OF home ON threads
+        WHEN OLD.id IS NEW.id AND OLD.home IS NOT NEW.home AND (OLD.home IS NULL OR NEW.home IS NULL)
+          AND NOT ${manyHomeMembers} AND NOT EXISTS (SELECT 1 FROM recent_scope_visibility_dirty WHERE thread = OLD.id) BEGIN
+          ${markMember("NEW.id", "OLD.home", true)} ${markMember("NEW.id", "NEW.home", true)}
+          ${recentScopeHomeMemberQueries("NEW.id").update}; ${recentScopeHomeMemberQueries("NEW.id").insert};
         END;
       CREATE TRIGGER recent_scope_visibility_thread_move AFTER UPDATE OF id ON threads
         WHEN OLD.id IS NOT NEW.id BEGIN ${markVisibility("NEW.id")} END;

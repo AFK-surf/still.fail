@@ -40,6 +40,87 @@ for (const recursive of [false, true]) test(`many named home moves do not block 
   } finally { store.close(); }
 });
 
+for (const recursive of [false, true]) test(`a home becoming shared does not block a workspace without its members (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    for (const [key, ws] of [["a", "a"], ["b", "b"], ["here", "here"]] as const)
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws });
+    const target = store.openThreadOf("ember", "EMBER", "target-shared", "Target", null, "here").id;
+    const changing = store.openThreadOf("ember", "EMBER", "changing-shared", "Changing", null, "a").id;
+    store.joinThread(changing, "b", "ember");
+    installRecentScopeJournal(db);
+    for (const ws of ["a", "b", "here"]) {
+      trackRecentScope(db, { kind: "workspace", workspace: ws });
+      while (!scanRecentWorkspaceStep(db, ws, 2).sourceDone) { /* Prepare the existing scopes. */ }
+    }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1").run();
+    db.prepare("UPDATE threads SET home = NULL WHERE id = ?").run(changing);
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [target], total: 1 },
+      "its known members cannot make an unrelated workspace wait");
+    for (const ws of ["a", "b"]) {
+      assert.equal(readPreparedRecentWorkspace(db, ws, 5), null);
+      while (!settleRecentWorkspaceMemberStep(db, ws, 2).membersDone) { /* Account for its changed home. */ }
+      assert.deepEqual(readPreparedRecentWorkspace(db, ws, 5), recentChatIds(db, ws, "home", 5));
+    }
+    db.prepare("UPDATE threads SET home = 'a' WHERE id = ?").run(changing);
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [target], total: 1 });
+    for (const ws of ["a", "b"]) {
+      assert.equal(readPreparedRecentWorkspace(db, ws, 5), null);
+      while (!settleRecentWorkspaceMemberStep(db, ws, 2).membersDone) { /* Account for the named home. */ }
+      assert.deepEqual(readPreparedRecentWorkspace(db, ws, 5), recentChatIds(db, ws, "home", 5));
+    }
+    db.prepare("UPDATE threads SET home = NULL WHERE id = ?").run(changing);
+    db.prepare("UPDATE threads SET home = 'a' WHERE id = ?").run(changing);
+    db.prepare("UPDATE threads SET home = NULL WHERE id = ?").run(changing);
+    for (const ws of ["a", "b"]) {
+      assert.equal(readPreparedRecentWorkspace(db, ws, 5), null);
+      while (!settleRecentWorkspaceMemberStep(db, ws, 1).membersDone) { /* Use the latest home and members. */ }
+      assert.deepEqual(readPreparedRecentWorkspace(db, ws, 5), recentChatIds(db, ws, "home", 5));
+    }
+  } finally { store.close(); }
+});
+
+for (const count of [64, 65]) test(`a home with ${count} members remains exact at the direct-work boundary`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    for (const [key, ws] of [["owner", "owner"], ["here", "here"]] as const)
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws });
+    const changing = store.openThreadOf("ember", "EMBER", `boundary-${count}`, "Changing", null, "owner").id;
+    const target = store.openThreadOf("ember", "EMBER", `here-${count}`, "Here", null, "here").id;
+    for (let i = 0; i < count; i++) {
+      const key = `member-${String(i).padStart(2, "0")}`;
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws: key });
+      store.joinThread(changing, key, "ember");
+    }
+    installRecentScopeJournal(db);
+    const scopes = ["owner", "member-00", "member-63", "here"];
+    for (const ws of scopes) {
+      trackRecentScope(db, { kind: "workspace", workspace: ws });
+      while (!scanRecentWorkspaceStep(db, ws, 8).sourceDone) { /* Prepare the existing scopes. */ }
+    }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1").run();
+    db.prepare("UPDATE threads SET home = NULL WHERE id = ?").run(changing);
+    if (count === 64) {
+      assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [target], total: 1 });
+      for (const ws of scopes) while (!settleRecentWorkspaceMemberStep(db, ws, 8).membersDone) { /* Reconcile small changes. */ }
+    } else {
+      assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "a large shared change waits for bounded distribution");
+      let done = false;
+      for (let i = 0; i < 30 && !done; i++) {
+        const result = settleRecentScopeVisibilityStep(db, 8);
+        assert.ok(result.visited <= 8);
+        done = result.visibilityDone;
+      }
+      assert.ok(done);
+    }
+    for (const ws of scopes) assert.deepEqual(readPreparedRecentWorkspace(db, ws, 5), recentChatIds(db, ws, "home", 5));
+  } finally { store.close(); }
+});
+
 for (const recursive of [false, true]) test(`a frequently moving chat does not prevent another workspace from settling (recursive triggers ${recursive})`, () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
@@ -52,6 +133,7 @@ for (const recursive of [false, true]) test(`a frequently moving chat does not p
     const move = db.prepare("UPDATE threads SET home = ? WHERE id = ?");
     move.run("a", hot);
     move.run("here", target);
+    for (const id of [hot, target]) for (let i = 0; i < 65; i++) store.joinThread(id, `unknown-${i}`, "ember");
     installRecentScopeJournal(db);
     trackRecentScope(db, { kind: "workspace", workspace: "here" });
     while (!scanRecentWorkspaceStep(db, "here", 1).sourceDone) { /* Prepare the target workspace. */ }
@@ -86,6 +168,7 @@ test("visibility work keeps its turn across rollback and reopening", () => {
     const move = db.prepare("UPDATE threads SET home = ? WHERE id = ?");
     move.run("a", hot);
     move.run("here", target);
+    for (const id of [hot, target]) for (let i = 0; i < 65; i++) store.joinThread(id, `unknown-${i}`, "ember");
     installRecentScopeJournal(db);
     trackRecentScope(db, { kind: "workspace", workspace: "here" });
     while (!scanRecentWorkspaceStep(db, "here", 1).sourceDone) { /* Prepare the workspace. */ }
@@ -125,6 +208,7 @@ for (const recursive of [false, true]) test(`newer chats cannot continually pass
     const move = db.prepare("UPDATE threads SET home = ? WHERE id = ?");
     move.run("here", target);
     move.run("a", first);
+    for (const id of [target, first]) for (let i = 0; i < 65; i++) store.joinThread(id, `unknown-${i}`, "ember");
     installRecentScopeJournal(db);
     trackRecentScope(db, { kind: "workspace", workspace: "here" });
     while (!scanRecentWorkspaceStep(db, "here", 1).sourceDone) { /* Prepare the workspace. */ }
@@ -137,6 +221,7 @@ for (const recursive of [false, true]) test(`newer chats cannot continually pass
     let page = null;
     for (let i = 0; i < 16 && page === null; i++) {
       const added = store.openThread("ember", "EMBER", `new-${i}`, "New", null).id;
+      for (let j = 0; j < 65; j++) store.joinThread(added, `unknown-${j}`, "ember");
       move.run("a", added);
       assert.ok(settleRecentScopeVisibilityStep(db, 1).visited <= 1);
       page = readPreparedRecentWorkspace(db, "here", 5);
@@ -275,6 +360,7 @@ for (const recursive of [false, true]) test(`a home and its members can change d
     const thread = store.openThread("ember", "EMBER", "shared", "Shared", null).id;
     db.prepare("UPDATE threads SET home = 'm01' WHERE id = ?").run(thread);
     for (const key of keys.slice(1)) store.joinThread(thread, key, "ember");
+    for (let i = 0; i < 65; i++) store.joinThread(thread, `unknown-${i}`, "ember");
     installRecentScopeJournal(db);
     for (const ws of keys) {
       trackRecentScope(db, { kind: "workspace", workspace: ws });
@@ -292,7 +378,7 @@ for (const recursive of [false, true]) test(`a home and its members can change d
     store.joinThread(thread, "m00", "ember");
     db.prepare("DELETE FROM thread_sessions WHERE thread = ? AND session = 'm01'").run(thread);
     let done = false;
-    for (let i = 0; i < 20 && !done; i++) {
+    for (let i = 0; i < 80 && !done; i++) {
       const batch = settleRecentScopeVisibilityStep(db, 2);
       assert.ok(batch.visited <= 2);
       done = batch.visibilityDone;
@@ -374,6 +460,7 @@ for (const recursive of [false, true]) test(`a new member keeps its workspace pe
     const thread = store.openThread("ember", "EMBER", "new-member", "New", null).id;
     db.prepare("UPDATE threads SET home = 'missing' WHERE id = ?").run(thread);
     db.prepare("UPDATE threads SET home = NULL WHERE id = ?").run(thread);
+    db.prepare("INSERT OR REPLACE INTO threads(id,surface,channel,thread_ts,created_at,home) VALUES (?,'ember','EMBER','new-member',1,NULL)").run(thread);
     assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [], total: 0 });
     store.joinThread(thread, "one", "ember");
     assert.equal(readPreparedRecentWorkspace(db, "here", 5), null);
@@ -394,6 +481,7 @@ for (const recursive of [false, true]) test(`a moving home stays pending while i
       token: "one", createdAt: 1, lastActiveAt: 1, ws: "here" });
     const thread = store.openThread("ember", "EMBER", "moving-home", "Moving", null).id;
     db.prepare("UPDATE threads SET home = 'one' WHERE id = ?").run(thread);
+    for (let i = 0; i < 65; i++) store.joinThread(thread, `unknown-${i}`, "ember");
     installRecentScopeJournal(db);
     for (const ws of ["here", "elsewhere"]) {
       trackRecentScope(db, { kind: "workspace", workspace: ws });

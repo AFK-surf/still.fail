@@ -28,6 +28,7 @@ import { installRecentChatIndex, RECENT_GLOBAL_PAGE } from "../src/store/chat-li
 import { RECENT_DEFAULT_HOME_PAGE } from "../src/store/chat-list-home-index.ts";
 import { installRecentHomeOverlap, RECENT_HOME_ORDER_PAGE, RECENT_HOME_WORKSPACE_ORDER_PAGE } from "../src/store/chat-list-home-overlap.ts";
 import { RECENT_SCOPE_ORDER_PENDING, RECENT_SCOPE_VISIBILITY_PENDING, RECENT_WORKSPACE_PAGE } from "../src/store/chat-list-scope-rows.ts";
+import { recentScopeHomeMemberQueries } from "../src/store/chat-list-scope-journal.ts";
 import { FIRST_SCOPE_CONNECT, FIRST_SCOPE_HOME_THREADS, FIRST_SCOPE_MEMBER_THREADS, FIRST_SCOPE_SESSIONS,
   NEXT_SCOPE_CONNECT, SCOPE_HOME_THREADS, SCOPE_MEMBER_THREADS, SCOPE_MEMBER_WITHOUT_HOME, SCOPE_SESSIONS } from "../src/store/chat-list-scope-source.ts";
 import { FIRST_HOME_CHAT_MEMBERS, NEXT_HOME_CHAT_MEMBERS } from "../src/store/chat-list-home-source.ts";
@@ -86,6 +87,14 @@ function assertRecentChatPlans() {
     assert.match(sql, /ORDER BY thread LIMIT 65/);
     assert.ok(steps.some((s) => s.includes("SEARCH r USING PRIMARY KEY (ws=? AND thread=?)")), detail);
     assert.ok(steps.every((s) => !s.includes("TEMP B-TREE")), detail);
+  }
+  const memberWrites = recentScopeHomeMemberQueries("?1");
+  for (const sql of [memberWrites.update, memberWrites.insert]) {
+    const steps = plan(sql, [1]), detail = `${sql}\n  ${steps.join(" | ")}`;
+    assert.match(sql, /WHERE thread = \?1 ORDER BY session LIMIT 64/);
+    assert.ok(steps.some((s) => s.startsWith("SEARCH ") && s.includes("thread_sessions") && s.includes("thread=?")), detail);
+    assert.ok(steps.some((s) => s.startsWith("SEARCH ") && s.includes("PRIMARY KEY")), detail);
+    assert.ok(steps.every((s) => !s.startsWith("SCAN recent_scope_member_dirty") && !s.includes("TEMP B-TREE")), detail);
   }
   // Old source scans seek each connection, workspace, session or chat before applying their batch limits.
   for (const [sql, args, index, seek] of [
