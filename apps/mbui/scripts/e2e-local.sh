@@ -18,6 +18,11 @@
 #   scripts/e2e-local.sh restore NAME          back to it (the station and the cloud stopped, put back, started)
 #   scripts/e2e-local.sh all        up, mac, down (what a later slice runs to check itself)
 #   scripts/e2e-local.sh peer ARGS  e2e/peer.ts as alice's other device (send TEXT, create, chats, …)
+#   scripts/e2e-local.sh peer-bg ARGS   the same left running beside the run (its output in run/peer-bg.out)
+#   scripts/e2e-local.sh peer-said WORD   until that output has a line beginning WORD: SAY its first field (a code)
+#   scripts/e2e-local.sh peer-wait  until that peer has ended (its output; fails as it failed)
+#   scripts/e2e-local.sh android-pin PIN   the emulator's screen lock set to PIN (a phone with a lock, as the vault needs)
+#   scripts/e2e-local.sh lock-state the security mode as the test station keeps it: LOCK, DEVICE lines, STATIONS
 #   scripts/e2e-local.sh sql SQL    the test station's database, read only
 #   scripts/e2e-local.sh android-ime off|on   the emulator's own keyboard off (the run composes) or back
 #   scripts/e2e-local.sh android-installer    until the system's installer is the emulator's top activity, then back
@@ -326,6 +331,48 @@ peer() {
    E2E_EMBER=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/peer E2E_FILES=$WORK/files node $ROOT/e2e/peer.ts "$@")
 }
 
+# e2e/peer.ts left running beside the run (a device online to be met face to face: `peer-bg lock-await 120`), its
+# output in $RUN/peer-bg.out; `peer-said WORD` waits for a line of it beginning WORD and says its first field
+# (`SAY <code>`: e2e/runner-do.sh tells the app, its drive's `typedone` types it); `peer-wait` until it has ended
+peer_bg() {
+  : > $RUN/peer-bg.out
+  (peer "$@" >> $RUN/peer-bg.out 2>&1; echo "PEER EXIT $?" >> $RUN/peer-bg.out) </dev/null &
+  echo $! > $RUN/peer-bg.pid
+}
+# (the line as the peer writes it, or its end: mbui's scripts/chk logwait, the file's write events)
+peer_said() {
+  local l
+  l=$("$MBUI_DIR/scripts/chk" logwait --log $RUN/peer-bg.out --line "^($1 |PEER EXIT)" --deadline 180) || { cat $RUN/peer-bg.out; return 1; }
+  case "$l" in "PEER EXIT"*) cat $RUN/peer-bg.out; return 1 ;; esac
+  echo "$l"; echo "SAY $(echo "$l" | cut -d' ' -f2 | cut -f1)"
+}
+peer_wait() {
+  "$MBUI_DIR/scripts/chk" logwait --log $RUN/peer-bg.out --line "^PEER EXIT" --deadline 300 >/dev/null || return 1
+  cat $RUN/peer-bg.out; grep -q "^PEER EXIT 0" $RUN/peer-bg.out
+}
+
+# the security mode as the test station keeps it (its lock.json, read by the station's own rules): LOCK on|off,
+# DEVICE <id> <person> <kind> own=<own> a line each, STATIONS n
+lock_state() {
+  local f=$(find $STATION/data -name lock.json 2>/dev/null | head -1)
+  [ -n "$f" ] || { echo "LOCK off"; return; }
+  (cd $E/station && node --input-type=module -e "
+import { readFileSync } from 'node:fs';
+const { fold } = await import('./src/cloud/lock.ts');
+const j = JSON.parse(readFileSync(process.argv[1], 'utf8'));
+const s = fold(j.entries ?? j, null);
+console.log(s.disabled ? 'LOCK off' : 'LOCK on ' + s.seq);
+for (const [id, d] of s.devices) console.log('DEVICE ' + id.slice(0, 12) + ' ' + d.sub + ' ' + d.kind + ' own=' + d.own + ' ' + (d.label ?? ''));
+console.log('STATIONS ' + s.stations.size);
+" "$f")
+}
+
+# the emulator's screen lock (EMU_PORT): a PIN set, as a person's phone has one (what the vault's box key asks for)
+android_pin() {
+  local adb="${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb -s emulator-${EMU_PORT:-5586}"
+  $adb shell locksettings set-pin "$1" >/dev/null 2>&1 || $adb shell locksettings verify --old "$1" >/dev/null
+}
+
 sql() { sqlite3 -readonly $STATION/data/stillfail.db "$@"; }
 
 # the test station's Node (not the launcher, which would start another): frozen, it neither answers nor goes, as a
@@ -607,6 +654,12 @@ case "${1:-all}" in
   status)
     for p in relay cloud station; do echo "$p: $(alive $p && echo "up ($(cat $RUN/$p.pid))" || echo down)"; done ;;
   peer) shift; peer "$@" ;;
+  peer-bg) shift; peer_bg "$@" ;;
+  peer-said) shift; peer_said "$@" ;;
+  peer-wait) peer_wait ;;
+  lock-state) lock_state ;;
+  android-pin) shift; android_pin "$@" ;;
+  android-tap) shift; "${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb" -s emulator-${EMU_PORT:-5586} shell input tap "$@" ;;
   sql) shift; sql "$@" ;;
   connects) shift; connects "$@" ;;
   profiles) shift; profiles "$@" ;;

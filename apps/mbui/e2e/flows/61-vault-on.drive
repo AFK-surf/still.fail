@@ -1,0 +1,31 @@
+#before android-pin 1234
+# The phone, approved in flow 60, turns its vault on (设置 › 密钥 › 开启密钥库): the recovery words shown once, then its own
+# vault, unlocked; then its whole library and the editor of a new token, as a person adds one.
+# The screen lock (a PIN, as a phone has) is what the box key is kept under.
+#only android
+timeout 120000
+until 端到端测试
+tap icon:settings
+until =密钥
+shot 0-settings
+tap =密钥
+until 开启密钥库
+shot 1-off
+tap =开启密钥库
+until 抄写恢复码
+shot 2-words
+tap1 已抄写
+# (the words gone as 已抄写 is pressed: they stayed up 20 s to a minute, or till something else built the page)
+timeout 8000
+until 已解锁，5 分钟后自动锁定
+shot 3-on
+timeout 120000
+tap 全部密钥
+until icon:plus
+shot 4-all
+tap icon:plus
+until Token
+shot 5-kinds
+tap Token
+until 添加密钥
+shot 6-editor

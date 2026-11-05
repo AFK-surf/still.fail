@@ -214,6 +214,8 @@ using @settings {
   mode_name,
   profile_groups,
   recovery_words,
+  recovery_words_turned,
+  recovery_words_changed,
   vault_act,
   vault_ask,
   vault_hosts,

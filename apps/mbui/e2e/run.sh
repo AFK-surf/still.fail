@@ -165,6 +165,17 @@ if [ $PLATFORM = android ]; then
     [ -n "${E2E_NOBUILD:-}${E2E_APK:-}" ] || APP=stillfail scripts/android.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
   fi
   scripts/android.sh emu >$OUT/emu.log 2>&1 || { tail $OUT/emu.log; exit 1; }
+  # (no screen lock left from a run before, whose flows set one: the app's files are reached by run-as, which a locked
+  # device's keeps from it)
+  # (booted with one, the device's own files stay locked until it is given: verified first, which unlocks them)
+  # (`locksettings verify` with no credential: verified where none is set)
+  unlocked() { $ADB shell locksettings verify 2>&1 | grep -qi "verified successfully"; }
+  if ! unlocked; then
+    $ADB shell locksettings verify --old ${E2E_PIN:-1234} >/dev/null 2>&1
+    $ADB shell locksettings clear --old ${E2E_PIN:-1234} >/dev/null 2>&1
+    unlocked || { echo "the emulator keeps a screen lock this run cannot clear (not ${E2E_PIN:-1234}): wipe it (scripts/android.sh)"; exit 1; }
+  fi
+  $ADB shell wm dismiss-keyguard >/dev/null 2>&1
   $ADB install -r ${E2E_APK:-android/app/build/outputs/apk/debug/app-debug.apk} >/dev/null || exit 1
   $ADB shell pm clear $E2E_PKG >/dev/null
   # (the program after the app's data is cleared: it lies in its files)
@@ -315,6 +326,9 @@ for f in $flows; do
     echo "FAIL $name (${FAILS#|})" | tee -a $TABLE
   fi
 done
+# (a screen lock a flow set, cleared while the device is unlocked still: booted with one, the next run's emulator would
+# keep the app's files locked until it was typed)
+[ $PLATFORM != android ] || $ADB shell locksettings clear --old ${E2E_PIN:-1234} >/dev/null 2>&1
 echo "$passed of $total flows passed ($PLATFORM)" | tee -a $TABLE
 # this run's drive folder goes with it (one per run would push the newest out of the drive's picker)
 rm -rf "${DRIVE:?}"

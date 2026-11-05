@@ -62,6 +62,8 @@ fn vault_first(
 ) -> Array[() -> Unit]? {
   let topic = (core.topic)("vaults", { "workspace": str(ws) })
   let v = topic.value
+  // (the words as they are now: read, so that this is built again as they come or go)
+  recovery_words_turned.get() |> ignore
   match v {
     _ if recovery_words.get(ws) is Some(w) => Some([fn() { vault_words(c, ws, w) }])
     None =>
@@ -144,6 +146,7 @@ fn vault_setup(core : Core, ws : String) -> Unit {
   vault_act(core, ws, "setup", [], @sf.t("android-settings.vault.turnOn"), then=fn(said) {
     if opt_text(Some(said), "words") is Some(words) {
       recovery_words[ws] = words.trim(chars=" \n").to_owned().split(" ").map(fn(w) { w.to_owned() }).filter(fn(w) { w != "" }).collect()
+      recovery_words_changed()
     }
   })
 }
@@ -181,6 +184,7 @@ fn vault_words(c : @ui.Ctx, ws : String, words : Array[String]) -> Unit {
     @sf.card_foot(c, fn() {
       if @sf.button(c, @sf.t("android-settings.vault.wordsDone"), key="vault-words-done", tone=Primary) {
         recovery_words.remove(ws)
+        recovery_words_changed()
       }
     })
   })
