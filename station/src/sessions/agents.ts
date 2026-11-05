@@ -19,7 +19,7 @@ import { AgyDriver } from "../agents/agy.ts";
 import { DevinDriver } from "../agents/devin.ts";
 import { Jobs, notifyEndpoint, screenEndpoint } from "../jobs/jobs.ts";
 import { liveMemory } from "../jobs/memory.ts";
-import { WorkspaceWatch, type WorkspaceReading } from "../jobs/workspace-size.ts";
+import { WorkspaceWatch, workspaceWorking, type WorkspaceReading } from "../jobs/workspace-size.ts";
 import { Remote, followRoster } from "../jobs/remote.ts";
 import { ConfigFile } from "../ops/config.ts";
 import { DISK_EVERY_MS, DISK_LOW_BYTES, diskFree } from "../ops/disk.ts";
@@ -286,10 +286,7 @@ export const AgentsLive = (control: Control) =>
       // machines that hold them; an offline or older station supplies no reading until it can answer.
       const workingRow = (row: NonNullable<ReturnType<typeof store.getSession>>, jobsRunning: Set<string>, waiting?: Set<string>): boolean =>
         row.archivedAt === null && (row.running || hub.processState(row.key) === "running" || jobsRunning.has(row.key) || (waiting ? waiting.has(row.key) : store.lastTurn(row.key)?.declared === "waiting"));
-      const working = (key: string): boolean => {
-        const row = store.getSession(key);
-        return row !== null && workingRow(row, new Set(store.jobsRunning().map((j) => j.sessionKey)));
-      };
+      const working = (key: string): boolean => workspaceWorking(store, (session) => hub.processState(session), key);
       const workspaceWatch: WorkspaceWatch = new WorkspaceWatch({
         data,
         clock: hub.clock,
