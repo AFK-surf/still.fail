@@ -200,14 +200,17 @@ pub fn TopicList::find(self : TopicList, key : String, near~ : Int) -> Int? {
   if n == 0 || !self.holds.contains(key) {
     return None
   }
-  // History is inserted before the first row, even if the last change was an arrival at the other end.
-  self.work += 1
-  if self.key_now(0) == key { return Some(0) }
-  if n > 1 {
-    self.work += 1
-    if self.key_now(n - 1) == key { return Some(n - 1) }
-  }
   let from = if near < 0 { 0 } else if near >= n { n - 1 } else { near }
+  // (where it was looked for first; then the ends: history is put before the first row, even where what was looked
+  // for last came at the other end)
+  self.work += 1
+  if self.key_now(from) == key { return Some(from) }
+  for end in [0, n - 1] {
+    if end != from {
+      self.work += 1
+      if self.key_now(end) == key { return Some(end) }
+    }
+  }
   let mut d = 0
   while from - d >= 0 || from + d < n {
     let a = from - d
