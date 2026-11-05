@@ -57,10 +57,16 @@ test "a native anchor that alone moves draws nothing of the window again" {
     |> ignore
   })
   t.draw()
-  scene_parts() |> ignore
+  t.frame()
+  t.record_host()
   off.set(60.0)
   t.frame()
-  assert_eq((native_anchor_drawn("glass"), scene_parts()), (Some((60.0, 30.0, 40.0, 20.0)), []))
+  let frames = t.host_frames()
+  assert_eq(
+    (native_anchor_drawn("glass"), frames.length() > 0, frames.map(fn(f) { f.damage }).filter(fn(d) { !d.is_empty() })),
+    (Some((60.0, 30.0, 40.0, 20.0)), true, []),
+    msg="\{frames}",
+  )
 }
 
 ///|
