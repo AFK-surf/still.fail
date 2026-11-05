@@ -61,6 +61,21 @@ test("an abandoned session read does not prepare bindings after handover", async
   } finally { controller.abort(); previous.resolve(); readers.close(); f.close(); }
 });
 
+test("archive preparation and a session read share old binding work", async () => {
+  const f = fixture(), previous = Promise.withResolvers<void>(), controller = new AbortController();
+  const readers = new Readers(f.dir, 1, undefined, 1, { previousGone: previous.promise });
+  try {
+    const abandoned = readers.prepareSessionBindings(controller.signal);
+    const kept = readers.read("summary", { key: "mine" }, "en");
+    assert.deepEqual(JSON.parse(await readers.read("sessions", empty, "en")), []);
+    controller.abort();
+    await assert.rejects(abandoned, /read cancelled/);
+    previous.resolve();
+    assert.deepEqual(JSON.parse(await kept).boundTo, ["z-first", "a-second"]);
+    assert.equal(sessionBindingsReady(f.store.db), true);
+  } finally { controller.abort(); previous.resolve(); readers.close(); f.close(); }
+});
+
 test("a session reader reports an incompatible binding index", async () => {
   const f = fixture(), readers = new Readers(f.dir, 1);
   try {

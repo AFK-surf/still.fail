@@ -16,7 +16,7 @@ import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import { SESSION_COUNT_FIRST, SESSION_COUNT_NEXT, SESSION_COUNT_TOTAL, SESSION_COUNT_CONNECT, SESSION_COUNT_DISPLACED } from "../src/store/session-counts.ts";
 import { SESSION_LIST_CONNECT, SESSION_LIST_DISPLACED, SESSION_LIST_FIRST, SESSION_LIST_NEXT, SESSION_LIST_SCOPE,
   SESSION_LIST_SCOPE_CONNECT } from "../src/store/session-list-index.ts";
-import { SESSION_BINDINGS_DISPLACED, SESSION_BINDINGS_FIRST, SESSION_BINDINGS_NEXT, SESSION_BINDINGS_SELECTED } from "../src/store/session-bindings-index.ts";
+import { SESSION_BINDINGS_DELETE, SESSION_BINDINGS_DISPLACED, SESSION_BINDINGS_EXISTS, SESSION_BINDINGS_FIRST, SESSION_BINDINGS_NEXT, SESSION_BINDINGS_SELECTED } from "../src/store/session-bindings-index.ts";
 import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/store/usage.ts";
 import { detailQuery } from "../src/store/usage-detail.ts";
 import { installCompactUsage } from "../src/store/usage-compact.ts";
@@ -1466,6 +1466,7 @@ test("what the station asks again and again is planned by an index, never a scan
     [SESSION_COUNT_FIRST, ["100", 64]], [SESSION_COUNT_NEXT, ["1", "100", 64]],
     [SESSION_LIST_FIRST, ["100", 64]], [SESSION_LIST_NEXT, ["1", "100", 64]],
     [SESSION_BINDINGS_FIRST, ["100", 64]], [SESSION_BINDINGS_NEXT, ["1", "100", 64]],
+    [SESSION_BINDINGS_EXISTS, ["a"]],
     [LATEST_DECISIONS, [0]], [CLOSED_SINCE, [0]], [CLOSED_THREAD_SINCE, [1, 0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
     [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]], [SESSION_OF_RUNTIME, ["claude", "r1"]], [SAID_SINCE, [1, 0]],
     [HEARD_IN, ["a", 1]], [MODELS_USED_BY, ["a@x", 0]], [REMOTE_RUNS_OF, ["ws", 0]], [REMOTE_RUNS_ALL, [0]],
@@ -1500,6 +1501,7 @@ test("what the station asks again and again is planned by an index, never a scan
   assert.ok(plans.get(SESSION_LIST_NEXT)!.some((d) => d.includes("INTEGER PRIMARY KEY (rowid>? AND rowid<?)")));
   assert.ok(plans.get(SESSION_BINDINGS_FIRST)!.some((d) => d.includes("INTEGER PRIMARY KEY (rowid<?)")));
   assert.ok(plans.get(SESSION_BINDINGS_NEXT)!.some((d) => d.includes("INTEGER PRIMARY KEY (rowid>? AND rowid<?)")));
+  assert.ok(plans.get(SESSION_BINDINGS_EXISTS)!.some((d) => d.includes("session_binding_rows USING PRIMARY KEY (session=?)")));
   // A session's messages not delivered yet: by the index of those alone, not every message it was ever given; and its
   // turns not counted (auto-archiving read each shown session's every delivery and turn so: 13 s and 22 s on a station).
   assert.ok(plans.get(STATS_OF)!.some((d) => d.includes("deliveries_pending (session=?)")), plans.get(STATS_OF)!.join(" | "));
@@ -1572,6 +1574,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
     [SESSION_COUNT_DISPLACED, ["a", "token", 1]],
     [SESSION_LIST_DISPLACED, ["a", "token", 1]],
     [SESSION_BINDINGS_DISPLACED, ["a", 1]],
+    [SESSION_BINDINGS_DELETE, ["a"]],
   ];
   const scans = /^SCAN (?!CONSTANT ROW$|\(subquery-\d+\)$|json_each VIRTUAL TABLE\b)/;
   const plans = new Map<string, string[]>();
@@ -1588,6 +1591,8 @@ test("what is told as chats change is planned by the size of what it finds, not 
     "session list updates find displaced rows by unique identity");
   assert.equal(plans.get(SESSION_BINDINGS_DISPLACED)!.filter((d) => d.startsWith("SEARCH b ")).length, 2,
     "binding updates find displaced rows by connection or rowid");
+  has(SESSION_BINDINGS_DELETE, "session_binding_rows USING PRIMARY KEY (session=?)");
+  has(SESSION_BINDINGS_DELETE, "bindings USING INTEGER PRIMARY KEY (rowid=?)");
   has(read.UNREAD, "COVERING INDEX entries_said (thread=? AND n>?)");
   has(read.ASKED_DURING, "entries_agent_at (thread=? AND at>? AND at<?)");
   const stats = `${read.SESSION_STATS} WHERE s.key = ?`;

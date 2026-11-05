@@ -237,14 +237,20 @@ export class Readers {
     return this.covered(this.said.ready(threads, signal), signal);
   }
 
+  /// Prepare the old connection bindings for session reads and auto-archiving together.
+  prepareSessionBindings(signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.sessionBindings ??= new SessionBindingsBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.sessionBindings.readyIndex(signal), signal);
+  }
+
   private async saidRead(op: string, args: unknown, lang: Ask["lang"], told: boolean, background: boolean, signal?: AbortSignal): Promise<string> {
     while (!this.closed) {
       try { return await this.enqueue(op, args, lang, told, op === CHECKPOINT, background, signal); }
       catch (error) {
         if (!(error instanceof HttpError)) throw error;
         if (error.message === SESSION_BINDINGS_PENDING) {
-          this.sessionBindings ??= new SessionBindingsBuilder(join(this.data, "stillfail.db"), this.backfill);
-          await this.covered(this.sessionBindings.readyIndex(signal), signal);
+          await this.prepareSessionBindings(signal);
           continue;
         }
         if (error.message.startsWith(TURN_COUNT_PENDING)) {
