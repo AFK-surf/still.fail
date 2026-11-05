@@ -416,6 +416,35 @@ for (const recursive of [false, true]) {
 }
 
 for (const recursive of [false, true]) {
+  test(`one thread write can replace two different threads (recursive triggers ${recursive})`, () => {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers=${recursive ? 1 : 0}`);
+      const a = store.openThread("slack", "C", "a", null, null);
+      const b = store.openThread("slack", "C", "b", null, null);
+      const c = store.openThread("slack", "C", "c", null, null);
+      for (const [session, thread] of [["s-a", a], ["s-b", b], ["s-c", c]] as const) {
+        store.joinThread(thread.id, session, "slack");
+        db.prepare("INSERT INTO deliveries(thread,n,session,delivered_at) VALUES(?,1,?,NULL)").run(thread.id, session);
+        prepare(store, session);
+      }
+      const check = () => {
+        for (const session of ["s-a", "s-b", "s-c"])
+          assert.equal(indexedLatestThread(db, session)?.id ?? null, originalLatestId(db, session));
+        assert.deepEqual(db.prepare("SELECT session,thread FROM latest_thread_rows ORDER BY session,thread").all(),
+          db.prepare(`SELECT m.session,m.thread FROM thread_sessions m JOIN latest_thread_scopes s ON s.session=m.session
+            JOIN threads t ON t.id=m.thread ORDER BY m.session,m.thread`).all());
+      };
+      const replace = db.prepare("INSERT OR REPLACE INTO threads(id,surface,channel,thread_ts,created_at) VALUES(?,'slack','C','b',1)");
+      db.exec("BEGIN"); replace.run(a.id); check(); db.exec("ROLLBACK"); check();
+      const update = db.prepare("UPDATE OR REPLACE threads SET id=?,thread_ts='c' WHERE id=?");
+      db.exec("BEGIN"); update.run(b.id, a.id); check(); db.exec("ROLLBACK"); check();
+      replace.run(a.id); check();
+    } finally { store.close(); }
+  });
+}
+
+for (const recursive of [false, true]) {
   test(`interleaved source writes agree with the original order (recursive triggers ${recursive})`, () => {
     const store = Store.open(":memory:"), db = store.db;
     try {
