@@ -766,7 +766,9 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       tape_goes.parts.push(side)
       side.width(By(fn() { Some(tape_col_at(tape_drawn_at(side))) })) |> ignore
       tape_swipes(side, Side)
-      @ui.old(side, fn(c) { tape_side_built(c, src) }, key=tape_island_key).over(Is(true)) |> ignore
+      // (cut to its column, as the old view was in a box of its own: its panel's shadow stops at the column's edge, not
+      // on into the gap and under the page's panel)
+      @ui.old(side, fn(c) { tape_side_built(c, src) }, key=tape_island_key).over(Is(true)).clips(Is(true)) |> ignore
       // (the sidebar made once, the tree's, over the panel where it lays its sidebar out; nothing of it read out while
       // the panel is behind the one in use: tape_behind's)
       side.box(fn(sides) {

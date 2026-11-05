@@ -328,9 +328,10 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
         link: @sfbase.message_link(h.station, h.session, now.seq),
       })
     })
-    // (its words and its files under them 4 apart, as message_row's: a person's, and an agent's Markdown and the files
-    // it does not place, prose_with_files')
-    body.gap(Is(4.0)) |> ignore
+    // (its files under its words 4 apart, as message_row's column has them; but an agent's in a chat's list right under
+    // its Markdown, where picking holds them in one box with no gap (prose_with_files'); out of a list picking holds
+    // nothing and the column's 4 is theirs too)
+    body.gap(By(fn() { if person || here().list is None { 4.0 } else { 0.0 } })) |> ignore
     if person {
       body.show(fn() { m().text != "" }, fn(w) {
         person_words_node(w, fn() { m().text }, fn() { m().words }, fn() { marked_of(here(), m().ts) }, fn(href) {
