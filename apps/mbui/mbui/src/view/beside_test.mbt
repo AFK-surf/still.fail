@@ -394,3 +394,99 @@ test "beside, as wide as its anchor: laid out at the anchor's width in the pass 
   assert_eq(drawn("b"), (40.0, 124.0, 200.0), msg="the anchor grown: as wide again")
   assert_eq(drawn("c").2, 200.0)
 }
+
+///|
+test "what a child made in a layout sets off after a flush runs once that layout is placed: where it is put and as wide as it is laid out, beside as wide as its anchor too" {
+  let seen : Array[String] = []
+  let ids : Map[String, @view.NodeId] = {}
+  let tree_ref : Ref[@view.Tree?] = Ref(None)
+  let said = fn(k : String) {
+    @signals.after_flush(fn() {
+      let at = tree_ref.val.unwrap().drawn_of(ids[k]).map(fn(d) { "\{d.x},\{d.y} \{d.w}" }).unwrap_or("none")
+      seen.push("\{k} \{at}")
+    })
+  }
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(a) {
+        ids["a"] = a.id()
+        a.over(Is(true)).width(Is(Some(120.0))).height(Is(Some(20.0))).offset(Is((40.0, 100.0))) |> ignore
+      })
+      |> ignore
+      root.box(fn(page) {
+        page
+        .width(Is(Some(300.0)))
+        .height(Is(Some(300.0)))
+        .layout_box(Is(()), fn(l, _) {
+          let c = l.child("c", fn(c) {
+            ids["c"] = c.id()
+            c.height(Is(Some(10.0))) |> ignore
+            said("c")
+          })
+          l.measure(c, 200.0) |> ignore
+          l.place(c, 30.0, 40.0)
+        })
+        |> ignore
+      })
+      |> ignore
+      root.box(fn(b) {
+        b.height(Is(Some(30.0))).beside(ids["a"], side=Bottom, along=Start, as_wide=true) |> ignore
+        b.layout_box(Is(()), fn(l, _) {
+          let r = l.child("r", fn(r) {
+            ids["r"] = r.id()
+            r.height(Is(Some(10.0))) |> ignore
+            said("r")
+          })
+          l.measure(r, l.width) |> ignore
+          l.place(r, 0.0, 0.0)
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  tree_ref.val = Some(t)
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(seen, ["c 30,40 200", "r 40,124 120"])
+}
+
+///|
+test "what a child made in a layout a change asks for to read sizes sets off after a flush runs as that change ends, reading where it is laid out" {
+  let seen : Array[String] = []
+  let more = @signals.signal(false)
+  let page_ref : Ref[@view.View?] = Ref(None)
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(page) {
+        page_ref.val = Some(page)
+        page
+        .width(Is(Some(300.0)))
+        .height(Is(Some(300.0)))
+        .layout_box(By(fn() { more.get() }), fn(l, more) {
+          if more {
+            let d = l.child("d", fn(d) {
+              d.height(Is(Some(10.0))) |> ignore
+              @signals.after_flush(fn() {
+                let (x, y, w, _) = d.laid_window_now()
+                seen.push("\{x},\{y} \{w}")
+              })
+            })
+            l.measure(d, 200.0) |> ignore
+            l.place(d, 30.0, 40.0)
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(400.0, 300.0) |> ignore
+  // (in a change, a size read: laid out to be read, placed as the frame is; what it set off done as it ends)
+  t.event(10.0, fn() {
+    more.set(true)
+    page_ref.val.unwrap().laid_size() |> ignore
+  })
+  assert_eq(seen, ["30,40 200"])
+}

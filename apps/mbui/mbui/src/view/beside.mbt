@@ -270,10 +270,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
         if n.flex.width != want {
           n.flex.style.set_width(Pt(want))
         }
-        self.work.computes = self.work.computes + 1
-        let g = @flex.computes() + 1
-        @flex.compute(n.flex, width=want, height=self.last_h / hs, round=false, reuse=true)
-        self.walk(at, g, true)
+        self.laid_out_now(at, want, self.last_h / hs, fn(g) { self.walk(at, g, true) })
       }
     }
     // (where it is beside: all of its anchor as drawn now; by the pointer, the point it is at, while it is on it)

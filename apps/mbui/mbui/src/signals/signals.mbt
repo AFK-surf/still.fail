@@ -37,6 +37,8 @@ priv struct Run {
   lasts : Array[() -> Unit]
   /// doing what waits for a change told whole (after_flush): one at a time, in order, whatever they set meanwhile
   mut draining : Bool
+  /// how deep in what holds back what waits for a change told whole (afters_held: a layout under way)
+  mut afters_held : Int
   /// where each flush under way was set off from (the set under way, flush_said): the innermost last
   flush_trail : Array[String]
   /// the effect or watch running now, the innermost (what it writes is its own, however untracked: effect_round)
@@ -60,6 +62,7 @@ let run : Run = {
   flushing: 0,
   afters: [],
   lasts: [],
+  afters_held: 0,
   draining: false,
   flush_trail: [],
   running: None,
@@ -567,7 +570,13 @@ fn flush() -> Unit {
   run.flush_trail.pop() |> ignore
   // (the change told whole, every effect it set going run: what waits for that, in order; what one of them sets
   // flushed in its turn, what waits on that after it)
-  if run.flushing == 0 && run.batch_depth == 0 && !run.draining {
+  afters_drained()
+}
+
+///|
+/// What waits for a change told whole done, in order, where nothing holds it back: no flush, batch or layout under way.
+fn afters_drained() -> Unit {
+  if run.flushing == 0 && run.batch_depth == 0 && !run.draining && run.afters_held == 0 {
     run.draining = true
     // (taken by where each queue is up to, not removed from its head: removing the first shifted all the rest down
     // each time, a change that asked 10⁴s of them (a long page's buttons each going together) held the desktop app's
@@ -595,7 +604,7 @@ fn flush() -> Unit {
 /// every effect it set going run); none under way, now. Not alien-signals': a hook beside it, for what must see where
 /// one change left things and never half of it (where a window's tree stands as the next change comes).
 pub fn after_flush(f : () -> Unit) -> Unit {
-  if run.flushing > 0 || run.batch_depth > 0 || run.draining {
+  if run.flushing > 0 || run.batch_depth > 0 || run.draining || run.afters_held > 0 {
     run.afters.push(f)
   } else {
     f()
@@ -607,7 +616,7 @@ pub fn after_flush(f : () -> Unit) -> Unit {
 /// what waits on that included): for what must see where the change left things after everything set going by it,
 /// whatever order its effects ran in.
 pub fn after_all_flushed(f : () -> Unit) -> Unit {
-  if run.flushing > 0 || run.batch_depth > 0 || run.draining {
+  if run.flushing > 0 || run.batch_depth > 0 || run.draining || run.afters_held > 0 {
     run.lasts.push(f)
   } else {
     f()
@@ -1111,4 +1120,15 @@ fn computed_done() -> Unit {
   if run.computing == 0 && run.batch_depth == 0 && run.flushing == 0 && run.notify_index < run.queued_length {
     flush()
   }
+}
+
+///|
+/// `f` done with what waits for a change told whole (after_flush, after_all_flushed) held back till it is over, then
+/// done where nothing else holds it: what a layout makes sets off where it lands once that layout is placed, never between
+/// its making and its measuring. What `f` sets is told and its effects run as ever, in it.
+pub fn afters_held(f : () -> Unit) -> Unit {
+  run.afters_held += 1
+  f()
+  run.afters_held -= 1
+  afters_drained()
 }
