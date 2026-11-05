@@ -115,7 +115,7 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
   foot_room? : () -> Double = fn() { 0.0 },
   indexed? : AnchoredSource[K],
-  sighted? : (Array[K], Double) -> Unit,
+  sighted? : (Sighted[K]) -> Unit,
 ) -> View {
   self.scrolls_anchored_impl(
     s, keys, make, est~, from_end~, ahead~, slop?=slop, bar?=bar, follows~, shown?=shown,
@@ -149,7 +149,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   foot_room? : () -> Double = fn() { 0.0 },
   indexed? : AnchoredSource[K],
   fixed_estimate? : Bool = false,
-  sighted? : (Array[K], Double) -> Unit,
+  sighted? : (Sighted[K]) -> Unit,
 ) -> View {
   guard self.live() is Some(_) else { return self }
   let put_at = put.unwrap_or(@signals.signal(None))
@@ -161,6 +161,8 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   let heights : Map[K, Double] = Map([])
   // (the rows in sight or within `ahead` of it as last laid out: what is sighted anew is what is not among them)
   let sighted_last : Set[K] = Set::new()
+  // (the width they were told at: laid out at another, all in sight told again with it)
+  let sighted_width : Ref[Double] = Ref(-1.0)
   let known_sum = Ref(0.0)
   let measured_width = Ref(-1.0)
   let measured_words = Ref(-1)
@@ -794,21 +796,34 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           Some(tell) => {
             let now : Set[K] = Set::new()
             let fresh_in : Array[K] = []
+            let widened = l.width != sighted_width.val
+            sighted_width.val = l.width
             for k in went_past.iter().concat(r.keys.iter()) {
               if !now.contains(k) {
                 now.add(k)
-                if !sighted_last.contains(k) {
+                if widened || !sighted_last.contains(k) {
                   fresh_in.push(k)
                 }
+              }
+            }
+            // (out of it now: what was in it, and what was only gone past on the way)
+            let in_now : Set[K] = Set::new()
+            for k in r.keys {
+              in_now.add(k)
+            }
+            let left : Array[K] = []
+            for k in sighted_last.iter().concat(went_past.iter()) {
+              if !in_now.contains(k) && !left.contains(k) {
+                left.push(k)
               }
             }
             sighted_last.clear()
             for k in r.keys {
               sighted_last.add(k)
             }
-            if !fresh_in.is_empty() {
-              let width = l.width
-              self.tree.said_after_paint(fn() { tell(fresh_in, width) })
+            if !fresh_in.is_empty() || !left.is_empty() {
+              let s : Sighted[K] = { came: fresh_in, left, width: l.width }
+              self.tree.said_after_paint(fn() { tell(s) })
             }
           }
           None => ()
@@ -1073,4 +1088,16 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
 ///|
 fn dmax_i(a : Int, b : Int) -> Int {
   if a > b { a } else { b }
+}
+
+///|
+/// What a list laid out from its anchor tells as a frame is painted of the rows in sight or within `ahead` of it
+/// (View::scrolls_anchored's `sighted`): those that came in it since it was last laid out, or were gone past on the way
+/// (all in it again when it is laid out at another width), those that left it (and those only gone past), and the width
+/// its rows are laid out at. What holds a row's pictures keeps which are in it by these (came, then left) and asks by
+/// them, and by the row's data as it changes, never by a row being made or where it was laid out.
+pub(all) struct Sighted[K] {
+  came : Array[K]
+  left : Array[K]
+  width : Double
 }
