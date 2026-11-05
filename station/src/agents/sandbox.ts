@@ -11,6 +11,8 @@ import { execFile } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { sandboxName } from "./sandbox-name.ts";
+export { keyPart, sandboxName } from "./sandbox-name.ts";
 
 export const BRIDGE = fileURLToPath(new URL("./sandbox-bridge.mjs", import.meta.url));
 
@@ -74,26 +76,11 @@ export function checkSandbox(raw: any): void {
   if (s.idleMinutes !== undefined && (typeof s.idleMinutes !== "number" || !(s.idleMinutes > 0))) throw new Error("sandbox.idleMinutes must be a number of minutes above 0");
 }
 
-/// A sandbox's name for a station's key (a session's): what the front door takes (a lowercase letter, then lowercase
-/// letters, digits and `-`, 31 at most), the same for the same key, apart for keys that clean up the same.
-export function sandboxName(key: string): string {
-  const clean = key.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 16).replace(/-+$/, "");
-  const hash = createHash("sha256").update(key).digest("hex").slice(0, 10);
-  return clean === "" ? `s-${hash}` : `s-${clean}-${hash}`;
-}
-
 /// The key a runner's id was made from (agents/process.ts `runnerId`: `<kind>-<clean>[-<hash>]`): the session's for a
 /// session's process, the profile's for a process its sessions share (Codex's host).
 export function keyOfRunner(id: string): string {
   // A Codex app-server started while one of its key was being replaced has `.<n>` after it (codex.ts `runnerFor`).
   return id.replace(/^[a-z]+-/, "").replace(/\.[0-9a-z]+$/, "");
-}
-
-/// A station's key (a session's) as a runner's id has it after its kind (agents/process.ts `runnerId`): safe as a file
-/// name, a hash keeping two keys that clean up the same apart. A session's sandbox is named from it.
-export function keyPart(key: string): string {
-  const clean = key.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 24);
-  return clean === key ? clean : `${clean}-${createHash("sha256").update(key).digest("hex").slice(0, 10)}`;
 }
 
 /// ssh's command line to the sandbox `name`, up to (not including) the remote command.
