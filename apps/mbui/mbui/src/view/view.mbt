@@ -7600,6 +7600,8 @@ fn Tree::once_laid_out(self : Tree, f : () -> Unit) -> Unit {
 /// `f` done once all of it is laid out as it is next (Tree::once_laid_out: every pass over, the sizes told), the node's:
 /// not done where the node is let go before. What is to be done where things are once laid out (a menu put beside what
 /// it was opened from, a list scrolled to what it is to show), never as the frame is built or what the host says comes.
+/// What `f` reads of the layout told (View::laid_size_told, laid_window_told) is this layout's, where it was asked once
+/// before: a told value is followed only from its first asking, none till a layout after that.
 pub fn View::once_laid_out(self : View, f : () -> Unit) -> Unit {
   guard self.alive() else { return }
   self.tree.once_laid_out(fn() {
