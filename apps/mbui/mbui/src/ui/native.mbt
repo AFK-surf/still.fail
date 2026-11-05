@@ -1565,10 +1565,11 @@ pub let wheel_mod_pinch : Int = 16
 
 ///|
 /// The box of `id` (given to it this frame) takes the pointer: a finger dragging on it keeps it pressed (`pressed`,
-/// `pointer`: a pan), nothing under it scrolls, and the wheel over it is kept for `wheel`.
-pub fn capture(c : Ctx, id : Int) -> Unit {
+/// `pointer`: a pan), nothing under it scrolls, and the wheel over it is kept for `wheel`. `zooms`: it zooms by a pinch
+/// (or a wheel with ⌃ held), which a browser's page then leaves to it (keep_zoom_wheel); else the page zooms by one.
+pub fn capture(c : Ctx, id : Int, zooms? : Bool = false) -> Unit {
   ignore(c)
-  captures[id] = true
+  captures[id] = zooms || captures.get(id).unwrap_or(false)
 }
 
 ///|

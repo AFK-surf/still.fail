@@ -13,6 +13,7 @@
 pub(open) trait Host {
   set_window_zoom(Self, Double) -> Unit = _
   set_window_key(Self, FuncRef[(Int, Int) -> Int]) -> Unit = _
+  wheel_kept(Self, Bool) -> Unit = _
   window_setup(Self, Double, Double, Double, Double, Bool) -> Unit = _
   window_inset(Self) -> Bool = _
   window_hold(Self) -> Unit = _
@@ -245,6 +246,11 @@ impl Host with set_window_zoom(_, _) {
 
 ///|
 impl Host with set_window_key(_, _) {
+  ()
+}
+
+///|
+impl Host with wheel_kept(_, _) {
   ()
 }
 
@@ -1404,6 +1410,14 @@ pub fn set_window_zoom(zoom : Double) -> Unit {
 /// An app's window-wide key, offered before an embedded native page takes it; nonzero when the app took it.
 pub fn set_window_key(f : FuncRef[(Int, Int) -> Int]) -> Unit {
   current.val.set_window_key(f)
+}
+
+///|
+/// Whether the wheel just handed in (a pinch, or with ⌃ held) zoomed something of the app's (a picture, a remote
+/// screen): said as the wheel is handled. A browser's page leaves one the app kept nothing of to the browser, which
+/// zooms the page by it.
+pub fn wheel_kept(kept : Bool) -> Unit {
+  current.val.wheel_kept(kept)
 }
 
 ///|

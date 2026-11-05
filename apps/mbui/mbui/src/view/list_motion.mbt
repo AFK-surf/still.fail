@@ -376,3 +376,7 @@ pub fn ease_end(total : Double, v0 : Double) -> Double {
 /// A wheel's notch (what hosts the tree adds to a wheel's `mods` for one: a mouse's wheel, not a trackpad's fingers
 /// nor their momentum): a page's list eases it in (Scroll::list), as an old view's list does (ui's Ctx::ease_list).
 pub let wheel_notch : Int = 32
+
+///|
+/// A trackpad's pinch (ui's wheel_mod_pinch, in a wheel's `mods`): what zooms takes it, no list scrolls by it.
+pub let wheel_pinch : Int = 16

@@ -47,7 +47,7 @@ pub fn built_used(() -> Unit) -> Unit
 
 pub fn came_from_outside() -> Unit
 
-pub fn capture(Ctx, Int32) -> Unit
+pub fn capture(Ctx, Int32, zooms? : Bool) -> Unit
 
 pub let caret_blink_android_ms : Double
 
@@ -214,6 +214,8 @@ pub fn keep(String, String, Bytes, way? : @hostapi.KeepWay) -> Keep?
 pub fn keep_awake(Bool) -> Unit
 
 pub fn keep_begin(String, String, way? : @hostapi.KeepWay) -> Keep?
+
+pub fn keep_zoom_wheel() -> Unit
 
 pub let key_code_backspace : Int32
 
@@ -2706,6 +2708,7 @@ pub fn Tester::visible(Self) -> (Int32, Int32)
 pub fn Tester::wanted_after(Self) -> Double
 pub fn Tester::wanted_why(Self) -> String
 pub fn Tester::wheel(Self, Double, Double, Double) -> Unit
+pub fn Tester::wheel_kept(Self) -> Bool
 pub fn Tester::wheel_phase(Self, Double, Double, Double, Int32) -> Unit
 pub fn Tester::wheel_told(Self, Double, Double, Double, Double, Int32, Double) -> Unit
 pub fn Tester::wheel_with(Self, Double, Double, Double, Double, Int32) -> Unit

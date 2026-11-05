@@ -37,6 +37,8 @@ struct FakeHost {
   mut clipboard_image : Int
   // whether the app takes back (a page to go back to), as last told
   mut back_on : Bool
+  // whether the last wheel handed in zoomed something of the app's, as told (@hostapi.wheel_kept)
+  mut wheel_kept : Bool
   // how many times the window held (window_hold) was asked to be shown (@hostapi.window_show)
   mut window_shows : Int
   // the system it plays (as @hostapi.platform: 0 macOS, 1 iOS, 2 Android)
@@ -1062,6 +1064,14 @@ fn h_back_enabled(on : Bool) -> Unit {
   match fake.val {
     Some(f) => f.back_on = on
     None => @hostapi.back_enabled(on)
+  }
+}
+
+///|
+fn h_wheel_kept(kept : Bool) -> Unit {
+  match fake.val {
+    Some(f) => f.wheel_kept = kept
+    None => @hostapi.wheel_kept(kept)
   }
 }
 
