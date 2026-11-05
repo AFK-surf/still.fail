@@ -2396,6 +2396,13 @@ web-pages.screen.resolution
 web-pages.screen.resolutionFits
 web-pages.screen.resolutionMark
 web-pages.screen.section
+web-pages.screen.endOthers
+web-pages.screen.viewControl
+web-pages.screen.viewEnd
+web-pages.screen.viewHere
+web-pages.screen.viewWatch
+web-pages.screen.viewWatchOnly
+web-pages.screen.viewsEndAll
 web-pages.screen.someone
 web-pages.screen.stat.beforeSent
 web-pages.screen.stat.bitrate

@@ -422,6 +422,7 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
                   ) {
                   @sfbase.open_page(Screen({ station: address, screen: text(sv, "id"), title: text(sv, "title"), until_gone: false }))
                 }
+                screen_views(c, core, here, address, sv)
               }
               if screens.length() == 0 {
                 @sf.link_row(c, "", note, goes=false, lead=fn() { st_row_mark(c, "monitor") }) |> ignore
@@ -835,6 +836,65 @@ fn grant_icon(id : String) -> String {
     "network" => "server"
     "localNetwork" => "devices"
     _ => "folder"
+  }
+}
+
+///|
+/// Who is on one of its screens now (docs/remote-screens.md "Who is on a screen"): a row a view, whose and on which
+/// device, whether it drives it and since when; 转为只看 and 断开 at its end for one the viewer may let go of, and 全部断开
+/// once there is more than one.
+fn screen_views(c : @ui.Ctx, core : Core, here : Here, address : String, screen : Json?) -> Unit {
+  let id = text(screen, "id")
+  let views = items(screen, "views")
+  let asked = fn(name : String, what : String, params : Array[(String, Json)]) {
+    @settings.act(core, what, name, obj([("station", str(address)), ("screen", str(id)), ("account", str(here.sub)), ..params]))
+  }
+  for v in views {
+    let vv = Some(v)
+    let view = text(vv, "id")
+    let on = [("view", view)]
+    let device = if flag(vv, "here") { @sf.t("web-pages.screen.viewHere") } else { text(vv, "device") }
+    let mode = @sf.t(if flag(vv, "control") { "web-pages.screen.viewControl" } else { "web-pages.screen.viewWatch" })
+    @sf.link_row(
+      c,
+      "screen-view/" + address + "/" + id + "/" + view,
+      text(vv, "name"),
+      // (the device is what tells one's own views apart: in the note, which wraps where 转为只看 and 断开 leave little room)
+      note=if device == "" { mode + " · " + text(vv, "ago") } else { device + " · " + mode + " · " + text(vv, "ago") },
+      goes=false,
+      control?=if flag(vv, "may") {
+        Some(fn() {
+          if flag(vv, "control") {
+            let what = @sf.t("web-pages.screen.viewWatchOnly")
+            if @sf.button(c, what, key="screen-view-watch/" + view, tone=Ghost, busy=is_doing(core, ["screen.watchOnly"], on)) {
+              asked("screen.watchOnly", what, [("view", str(view))])
+            }
+          }
+          let what = @sf.t("web-pages.screen.viewEnd")
+          if @sf.button(c, what, key="screen-view-end/" + view, tone=Ghost, busy=is_doing(core, ["screen.endView"], on)) {
+            asked("screen.endView", what, [("view", str(view))])
+          }
+        })
+      } else {
+        None
+      },
+    )
+    |> ignore
+  }
+  if views.filter(fn(v) { flag(Some(v), "may") }).length() > 1 {
+    let what = @sf.t("web-pages.screen.viewsEndAll")
+    @sf.link_row(
+      c,
+      "screen-views-end/" + address + "/" + id,
+      "",
+      goes=false,
+      control=fn() {
+        if @sf.button(c, what, key="screen-views-end/" + id, tone=Ghost, busy=is_doing(core, ["screen.endViews"], [("screen", id)])) {
+          asked("screen.endViews", what, [])
+        }
+      },
+    )
+    |> ignore
   }
 }
 

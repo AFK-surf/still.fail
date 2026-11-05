@@ -730,6 +730,31 @@ alone); a press on the stage gives it the keyboard (a key catcher: words as text
 is not drawn, the mouse's own taking its shape. 全屏 fills the screen with the window, the bar kept, and closing the
 screen puts the window back.
 
+### Who is on a screen
+
+Each view of a screen is told to members (`views` of `GET /screens`, the `screens` event and a view's own `state`): `id`,
+the hub's; `name`; `control`; `at`, when it opened; `device`, the member's device it came over (the credential's); `client`
+and `app`, the name and kind of app that device says it is (a view's ask, shown only, so not to be trusted further than
+a name; none from a client before them, which shows the device id's start); `agent` for an agent's own view. A preview is
+not among them. The station's page lists them under each screen (`ScreenItem.views`; apps/mbui, sfpages/station_page.mbt), with 转为只看 and 断开 for each and 全部断开; a viewer's bar also names the viewer's own other
+devices it is open on (`core-views.screen.elsewhere`), as a view forgotten behind a window holds agents off all the same,
+and 控制中心 has 断开其他连接 (`ScreenViewState.otherViews`).
+
+- `POST /admin/api/screens/<id>/views/<view>/end`, `POST …/views/end` (every person's; answers `{ended: n}`): the view ends
+  with `{ended: "<who> ended this connection"}` in its person's language, which every client takes as over for good: it
+  is not opened again by itself, unlike after a dropped link or a station's update.
+- `POST /admin/api/screens/<id>/views/<view>/watch`: the view goes on only looking; it is told `{control: false}`, and
+  its core (`wanted`) then asks for no control when the stream opens again, until its person asks.
+
+Both are refused a read-only member as every write is, 404 for a view that ended meanwhile, 405 for an agent's (it comes back
+at the agent's next action).
+
+Agents have the same through the `screen` tool (`action`: `disconnect`, `watch_only`, `disconnect_all`) and
+`take_control`, which makes every person's driving view only look, so that an agent asked to ("you take control") need
+not find which window holds it. Only the tool's description holds an agent to a person's asking: the station cannot tell, and
+logs each use. No view stops counting as driving by itself, after a time idle or with its window hidden: a person who
+holds it holds it until they, or someone they ask, let go.
+
 ### Asking a person to take over
 
 The agents' `screen` tool lists the station's screens and gives a link to one: `<cloud>/w/<workspace>/s/<station>/screen/<id>`.
@@ -778,8 +803,8 @@ The screenshot is the newest frame the view had (a source sends one only when th
 content with its size and its scale to the source's; coordinates are the screenshot's pixels, sent as 0..1. A click
 is move, down, up (twice for a double click); a drag is move, down, 8 moves held, up; a key combination (`cmd+c`) is
 the modifiers down, the key down and up, the modifiers up; text goes as `text`, a newline as Enter. While a person
-(any view in `controlledBy` that is not an agent's) drives the screen, the agent's input is refused with a message to
-wait or ask; screenshots still work. A missing grant answers with the access message and the screen's link, for the
+(any view in `controlledBy` that is not an agent's) drives the screen, the agent's input is refused with a message naming
+the device it is held from and how a person lets go of it ("Who is on a screen"); screenshots still work. A missing grant answers with the access message and the screen's link, for the
 agent to post with need_human. Clients open a view with `control: false` while a person only watches, so the agent is
 not held off by a watcher.
 

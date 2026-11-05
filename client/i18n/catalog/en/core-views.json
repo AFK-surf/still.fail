@@ -597,6 +597,8 @@
   "core-views.screen.control": "Controlling",
   "core-views.screen.watch": "View only",
   "core-views.screen.alsoOn": "{names} also viewing",
+  "core-views.screen.elsewhere": "also open on {names}",
+  "core-views.screen.unnamedDevice": "Device {id}",
   "core-views.screen.agent": "Agent “{title}”",
   "core-views.screen.driving": "{names} controlling",
   "core-views.screen.paused": "{names} paused",

@@ -20,6 +20,7 @@ import { HELPER_APP, HelperApp } from "../src/helper/app.ts";
 import { Desktop, HelperView, TO_HELPER, helperClip, helperMessage } from "../src/screens/desktop.ts";
 import { dropFolder } from "../src/drive/drive.ts";
 import { ScreenHub, ScreenRefused } from "../src/screens/hub.ts";
+import { described, letGo } from "../src/tools/screen.ts";
 import { CLICK_MS, FLAGS, KEYCODES, MacInput } from "../src/screens/mac-input.ts";
 import { USAGES, SimInput } from "../src/screens/sim-input.ts";
 import type { SimDebug } from "../src/screens/sim-debug.ts";
@@ -33,6 +34,9 @@ import { MAX_UNACKED, QUEUE_MS, START_RATE, START_UNACKED, STILL_MS, ownRate, ra
 import type { Clock } from "effect";
 import { memoryMesh, vanish } from "./memory-mesh.ts";
 import { Superseded } from "../src/mesh/superseded.ts";
+
+/// Who is on a screen by name, its views aside.
+const named = ({ viewers, controlledBy }: { viewers: string[]; controlledBy: string[] }) => ({ viewers, controlledBy });
 
 const member: Viewer = { sub: "u1", email: "pat@example.com", name: "Pat", role: "member", workspace: "w", device: "d" };
 const reader: Viewer = { sub: "u2", email: "vic@example.com", name: "Vic", role: "viewer", workspace: "w", device: "e" };
@@ -201,7 +205,7 @@ test("a view: its answer, what it is, then the config and frames as the source g
   assert.deepEqual(source.opened, [{ maxWidth: 8192, maxHeight: 1080, codecs: ["h264"], bitrate: START_RATE }]);
   const states: any[] = [];
   const config = json(await until(v.frames, KIND.config, states));
-  assert.deepEqual(states, [{ title: "Tab", control: true }, { viewers: ["Pat"], controlledBy: ["Pat"] }]);
+  assert.deepEqual([states[0], named(states[1])], [{ title: "Tab", control: true }, { viewers: ["Pat"], controlledBy: ["Pat"] }]);
   assert.deepEqual(config, { codec: "h264", width: 64, height: 36, description: Buffer.from([1, 100, 0, 31]).toString("base64") });
   const first = await until(v.frames, KIND.video);
   assert.equal(first[0], 1, "the first frame is a key frame");
@@ -659,8 +663,11 @@ test("who is on a screen: every view's person, told to all on it and in the list
   const states: any[] = [];
   await until(driver.frames, KIND.video, states);
   await settle();
-  assert.deepEqual(hub.people("fake"), { viewers: ["Pat", "Vic"], controlledBy: ["Pat"] });
-  assert.deepEqual(hub.listed("en").screens, [{ id: "fake", kind: "browser", title: "Tab", width: 1280, height: 720, viewers: ["Pat", "Vic"], controlledBy: ["Pat"] }]);
+  const { views, ...named } = hub.people("fake");
+  assert.deepEqual(named, { viewers: ["Pat", "Vic"], controlledBy: ["Pat"] });
+  assert.deepEqual(views.map(({ at: _at, id: _id, ...v }) => v), [{ name: "Pat", control: true, device: member.device }, { name: "Vic", control: false, device: reader.device }]);
+  assert.ok(views.every((v) => v.at > 0 && v.id !== ""));
+  assert.deepEqual(hub.listed("en").screens, [{ id: "fake", kind: "browser", title: "Tab", width: 1280, height: 720, viewers: ["Pat", "Vic"], controlledBy: ["Pat"], views }]);
   assert.equal(told, 2);
   await watcher.stream.finish();
   await watcher.served;
@@ -671,12 +678,111 @@ test("who is on a screen: every view's person, told to all on it and in the list
     if (got?.kind === KIND.state) later.push(json(got.payload));
     if (later.some((s) => s.viewers?.length === 1)) break;
   }
-  assert.deepEqual(later.at(-1), { viewers: ["Pat"], controlledBy: ["Pat"] });
-  assert.deepEqual(hub.people("fake"), { viewers: ["Pat"], controlledBy: ["Pat"] });
+  assert.deepEqual([later.at(-1).viewers, later.at(-1).controlledBy, later.at(-1).views.length], [["Pat"], ["Pat"], 1]);
+  assert.deepEqual([hub.people("fake").viewers, hub.people("fake").controlledBy], [["Pat"], ["Pat"]]);
   assert.equal(told, 3);
   await driver.stream.finish();
   await driver.served;
-  assert.deepEqual(hub.people("fake"), { viewers: [], controlledBy: [] });
+  assert.deepEqual(hub.people("fake"), { viewers: [], controlledBy: [], views: [] });
+});
+
+test("a view let go of from elsewhere: ended, said why and by whom; made to only look, its input dropped and its pictures going on", async () => {
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  hub.add(source);
+  const ask = { maxWidth: 1920, maxHeight: 1080, codecs: ["h264"], control: true };
+  const first = await open(hub, member, { ...ask, client: "youdid.wtf 桌面版 · pengx17", app: "desktop" });
+  const second = await open(hub, { ...member, device: "other-device" }, { ...ask, client: "still.fail iOS", app: "ios" });
+  await settle();
+  const [a, b] = hub.people("fake").views;
+  assert.deepEqual([a!.client, a!.app, b!.client, b!.device], ["youdid.wtf 桌面版 · pengx17", "desktop", "still.fail iOS", "other-device"]);
+
+  // 转为只看: it goes on, told so; what it sends then is not posted; the list says who holds it.
+  hub.watchOnly("fake", a!.id);
+  assert.deepEqual(hub.people("fake").views.map((v) => v.control), [false, true]);
+  const told: any[] = [];
+  for (;;) {
+    const got = await first.frames.next();
+    if (got?.kind === KIND.state) told.push(json(got.payload));
+    if (told.some((s) => s.control === false && s.title === undefined)) break;
+  }
+  await first.stream.write(frame(KIND.input, Buffer.from(JSON.stringify({ t: "pointer", kind: "move", x: 0.5, y: 0.5, buttons: 0 }))));
+  await settle();
+  assert.deepEqual(source.views[0]!.inputs, []);
+
+  // It opens again on its own (its link went as it was told): still only looking; its person asking lets it drive.
+  const again = await open(hub, member, ask);
+  await settle();
+  assert.equal(hub.people("fake").views.at(-1)!.control, false);
+  const asked_ = await open(hub, member, { ...ask, taken: true, self: "main-id" });
+  await settle();
+  assert.deepEqual([hub.people("fake").views.at(-1)!.control, hub.people("fake").views.at(-1)!.self], [true, "main-id"]);
+  await again.stream.finish();
+  await asked_.stream.finish();
+  await again.served;
+  await asked_.served;
+
+  // 断开: over for good, in the words its person reads, and off the list.
+  hub.endView("fake", b!.id, "Alex");
+  const ended = await rest(second.frames);
+  assert.equal(ended.at(-1).ended, "Alex ended this connection");
+  await second.served;
+  assert.deepEqual(hub.people("fake").viewers, ["Pat"]);
+
+  // One that went meanwhile, and an agent's, are not to be let go of.
+  assert.throws(() => hub.endView("fake", b!.id, "Alex"), (e: ScreenRefused) => e.status === 404);
+  const agent = await hub.openAs("fake", { maxWidth: 100, maxHeight: 100, codecs: ["jpeg"] }, { name: "agent: 部署", control: true });
+  const theirs = hub.people("fake").views.find((v) => v.agent)!;
+  assert.throws(() => hub.endView("fake", theirs.id, "Alex"), (e: ScreenRefused) => e.status === 405);
+  assert.throws(() => hub.watchOnly("fake", theirs.id), (e: ScreenRefused) => e.status === 405);
+
+  // 全部断开: every person's; the agent's stays.
+  assert.equal(hub.endViews("fake", "Alex"), 1);
+  await rest(first.frames);
+  await first.served;
+  assert.deepEqual(hub.people("fake").viewers, ["agent: 部署"]);
+  agent.close();
+});
+
+test("made to only look with a key and the button down: both let go of, the release after it not needed", async () => {
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  hub.add(source);
+  const v = await open(hub, member);
+  const press = (e: unknown) => v.stream.write(frame(KIND.input, Buffer.from(JSON.stringify(e))));
+  await press({ t: "key", kind: "down", key: "Shift", code: "ShiftLeft", mods: 8 });
+  await press({ t: "key", kind: "down", key: "a", code: "KeyA", mods: 8 });
+  await press({ t: "key", kind: "up", key: "a", code: "KeyA", mods: 8 });
+  await press({ t: "pointer", kind: "down", x: 0.25, y: 0.5, buttons: 1 });
+  await settle();
+  hub.watchOnly("fake", hub.people("fake").views[0]!.id);
+  await settle();
+  assert.deepEqual(source.views[0]!.inputs.slice(4), [{ t: "key", kind: "up", key: "Shift", code: "ShiftLeft", mods: 8 }, { t: "pointer", kind: "up", x: 0.25, y: 0.5, buttons: 0 }]);
+  await v.stream.finish();
+  await v.served;
+});
+
+test("the agents' screen tool says each view's device, and lets go of a view only as asked", () => {
+  const hub = new ScreenHub();
+  hub.add(new FakeSource());
+  const ended: string[] = [];
+  const leave = hub.join("fake", { name: "Pat", control: true, device: "cb93bcd36171ffff", client: "youdid.wtf 桌面版 · pengx17", app: "desktop", tell: () => {}, end: (by) => ended.push(by), watchOnly: () => {} });
+  const [view] = hub.people("fake").views;
+  const said = described(hub, null);
+  assert.match(said, /youdid\.wtf 桌面版 · pengx17, device cb93bcd36171, opened just now/);
+  assert.match(said, new RegExp(`"view": "${view!.id}"`));
+  assert.match(letGo(hub, "agent: 部署", "fake", "take_control", undefined), /1 people's views of fake now only look/);
+  assert.deepEqual(hub.people("fake").controlledBy, []);
+  assert.match(letGo(hub, "agent: 部署", "fake", "take_control", undefined), /^0 /);
+  assert.match(letGo(hub, "agent: 部署", "fake", "watch_only", view!.id), /only looks/);
+  assert.deepEqual(hub.people("fake").controlledBy, []);
+  assert.match(letGo(hub, "agent: 部署", "fake", "disconnect", view!.id), /disconnected/);
+  assert.deepEqual(ended, ["agent: 部署"]);
+  assert.throws(() => letGo(hub, "agent: 部署", "fake", "disconnect", undefined), /needs view/);
+  assert.throws(() => letGo(hub, "agent: 部署", "fake", "disconnect", "nope"), /already ended/);
+  assert.throws(() => letGo(hub, "agent: 部署", undefined, "disconnect_all", undefined), /needs id/);
+  assert.throws(() => letGo(hub, "agent: 部署", "fake", "click", undefined), /no action/);
+  leave();
 });
 
 test("an app killed with a view open: connecting again, its dead connection is closed and its view lets the screen go; a live one's stays", async () => {
@@ -725,7 +831,7 @@ test("an app killed with a view open: connecting again, its dead connection is c
   assert.equal(first.theirs.isClosed(), true);
   assert.equal(tab.theirs.isClosed(), true);
   assert.equal(again.theirs.isClosed(), false);
-  assert.deepEqual(hub.people("fake"), { viewers: ["Pat"], controlledBy: ["Pat"] });
+  assert.deepEqual(named(hub.people("fake")), { viewers: ["Pat"], controlledBy: ["Pat"] });
 });
 
 test("a preview (a link's card in a chat) only looks, is not among those on it, and only of a source that can be previewed", async () => {
@@ -743,7 +849,7 @@ test("a preview (a link's card in a chat) only looks, is not among those on it, 
   await settle();
   assert.equal(states[0].control, false);
   assert.equal(source.opened.at(-1)!.peek, true);
-  assert.deepEqual(hub.people("fake"), { viewers: [], controlledBy: [] });
+  assert.deepEqual(named(hub.people("fake")), { viewers: [], controlledBy: [] });
   // Its input is dropped: it only looks.
   await card.stream.write(frame(KIND.input, Buffer.from(JSON.stringify({ t: "text", text: "x" }))));
   await card.stream.finish();
@@ -801,7 +907,7 @@ test("a view ends when the client finishes, the source goes or has no more, the 
   e.conn.close(0, "gone");
   await e.served;
   assert.equal(source.views[4]!.closed, true);
-  assert.deepEqual(hub.people("fake"), { viewers: [], controlledBy: [] });
+  assert.deepEqual(named(hub.people("fake")), { viewers: [], controlledBy: [] });
   // A frame too large breaks it.
   const f = await open(hub, member);
   await until(f.frames, KIND.video);
@@ -849,7 +955,7 @@ test("the list: GET /screens with each source's access; an old station's 404; `s
   const answer = await ask(new Admin({ names: new Map(), read: async () => "{}" } as any, { screens: hub }), "zh");
   assert.equal(answer.status, 200);
   assert.deepEqual(JSON.parse((answer.body as Buffer).toString()).screens[1], {
-    id: "desktop", kind: "desktop", title: "studio", width: 0, height: 0, viewers: [], controlledBy: [],
+    id: "desktop", kind: "desktop", title: "studio", width: 0, height: 0, viewers: [], controlledBy: [], views: [],
     access: { capture: false, control: false, message: "目前仅支持查看 macOS 和 Windows station 的本机屏幕" },
   });
   // What a station without screens (one from before) answers.
@@ -1481,19 +1587,19 @@ test("a view the station opens itself (an agent's) shows who has it, driving or 
   let told = 0;
   hub.onChange(() => told++);
   const view = await hub.openAs("fake", { maxWidth: 800, maxHeight: 600, codecs: ["jpeg"] }, { name: "agent: 登录 GitHub", control: true });
-  assert.deepEqual(hub.people("fake"), { viewers: ["agent: 登录 GitHub"], controlledBy: ["agent: 登录 GitHub"] });
+  assert.deepEqual(named(hub.people("fake")), { viewers: ["agent: 登录 GitHub"], controlledBy: ["agent: 登录 GitHub"] });
   // A person on it too is told who drives it.
   const person = await open(hub, member, { codecs: ["jpeg"], control: false });
   const states: any[] = [];
   await until(person.frames, KIND.video, states);
-  assert.deepEqual(states[1], { viewers: ["agent: 登录 GitHub", "Pat"], controlledBy: ["agent: 登录 GitHub"] });
+  assert.deepEqual(named(states[1]), { viewers: ["agent: 登录 GitHub", "Pat"], controlledBy: ["agent: 登录 GitHub"] });
   // Its input goes to the source with nobody's link in between.
   await view.input({ t: "text", text: "hello" });
   assert.deepEqual(source.views[0]!.inputs, [{ t: "text", text: "hello" }]);
   assert.equal((await view.next())!.ts, 1000);
   view.close();
   assert.equal(source.views[0]!.closed, true);
-  assert.deepEqual(hub.people("fake"), { viewers: ["Pat"], controlledBy: [] });
+  assert.deepEqual(named(hub.people("fake")), { viewers: ["Pat"], controlledBy: [] });
   await assert.rejects(hub.openAs("elsewhere", { maxWidth: 800, maxHeight: 600, codecs: ["jpeg"] }, { name: "agent", control: false }), (e: ScreenRefused) => e.status === 404);
   assert.ok(told >= 3);
   await person.stream.finish();

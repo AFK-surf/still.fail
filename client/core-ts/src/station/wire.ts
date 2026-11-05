@@ -97,14 +97,16 @@ export interface StationWire {
   screen?(station: StationAddr, head: RequestHead, screen: ScreenAsk): Effect.Effect<WireSocket, CoreError, Scope.Scope>;
 }
 
-/// What a screen view asks for, as its head line's `screen` has it (docs/remote-screens.md).
+/// What a screen view asks for, as its head line's `screen` has it (docs/remote-screens.md). `client`, `app`: this device's
+/// name and which app it is, for those who look at who is on the screen; `self`: its main id, by which it knows its own
+/// views there (the link may be another's, made for a LAN or a relay); `taken`: its person asked to drive it.
 /// `peek`: a preview (a link's card in a chat): it only looks and is not among those on the screen (a station from
 /// before previews would take it for a view; one is asked only of a screen its list says can be previewed).
 /// `fit`: the stage it is shown on, on a phone or a tablet (its CSS pixels and their scale): a tab of the station's
 /// browser is laid out for it while the view drives it (docs/remote-screens.md).
 /// `quality`: the 画质 chosen (none: 自动): the most the station lets its bit rate go to (a station before it lets it be).
 /// `fps`: the 帧率 chosen (none: 自动): the most frames a second the station sends (a station before it lets it be).
-export type ScreenAsk = { maxWidth: number; maxHeight: number; codecs: string[]; control: boolean; peek?: boolean; audio?: "pcm_s16le"; quality?: ScreenQuality; fps?: ScreenFps; fit?: { width: number; height: number; scale: number }; gamut?: "p3" };
+export type ScreenAsk = { maxWidth: number; maxHeight: number; codecs: string[]; control: boolean; peek?: boolean; audio?: "pcm_s16le"; quality?: ScreenQuality; fps?: ScreenFps; fit?: { width: number; height: number; scale: number }; gamut?: "p3"; client?: string; app?: string; self?: string; taken?: boolean };
 export type ScreenQuality = "smooth" | "hd" | "original";
 export const SCREEN_FPS = [120, 90, 60, 30, 15] as const;
 export type ScreenFps = (typeof SCREEN_FPS)[number];

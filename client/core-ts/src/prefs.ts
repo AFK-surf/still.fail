@@ -377,6 +377,11 @@ export function sentFrom(data: Data): string | null {
   return deviceSaid(data, "sentFrom");
 }
 
+/// Which kind of app this is (`desktop`, `ios`, `android`, `web`); none until told.
+export function deviceApp(data: Data): string | null {
+  return deviceSaid(data, "app");
+}
+
 /// The name the device signs in as.
 export function deviceName(data: Data): string | null {
   return deviceSaid(data, "name");

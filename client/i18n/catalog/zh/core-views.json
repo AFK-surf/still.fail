@@ -519,6 +519,8 @@
   "core-views.screen.control": "控制",
   "core-views.screen.watch": "只看",
   "core-views.screen.alsoOn": "{names} 也在查看",
+  "core-views.screen.elsewhere": "还开在 {names}",
+  "core-views.screen.unnamedDevice": "设备 {id}",
   "core-views.screen.agent": "Agent「{title}」",
   "core-views.screen.driving": "{names} 正在控制",
   "core-views.screen.paused": "{names} 已暂停",
