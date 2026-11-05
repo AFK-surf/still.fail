@@ -163,6 +163,8 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   let sighted_last : Set[K] = Set::new()
   // (the width they were told at: laid out at another, all in sight told again with it)
   let sighted_width : Ref[Double] = Ref(-1.0)
+  // (where those in sight were told to be: told again as they move, the frame painted where they are)
+  let sighted_rows : Ref[Array[(K, Double, Double)]] = Ref([])
   let known_sum = Ref(0.0)
   let measured_width = Ref(-1.0)
   let measured_words = Ref(-1)
@@ -821,8 +823,11 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             for k in r.keys {
               sighted_last.add(k)
             }
-            if !fresh_in.is_empty() || !left.is_empty() {
-              let s : Sighted[K] = { came: fresh_in, left, width: l.width }
+            let rows = Array::makei(r.keys.length(), fn(q) { (r.keys[q], r.tops[q], r.heights[q]) })
+            let moved = rows != sighted_rows.val
+            sighted_rows.val = rows
+            if !fresh_in.is_empty() || !left.is_empty() || moved {
+              let s : Sighted[K] = { came: fresh_in, left, width: l.width, rows, height: h }
               self.tree.said_after_paint(fn() { tell(s) })
             }
           }
@@ -1093,11 +1098,18 @@ fn dmax_i(a : Int, b : Int) -> Int {
 ///|
 /// What a list laid out from its anchor tells as a frame is painted of the rows in sight or within `ahead` of it
 /// (View::scrolls_anchored's `sighted`): those that came in it since it was last laid out, or were gone past on the way
-/// (all in it again when it is laid out at another width), those that left it (and those only gone past), and the width
-/// its rows are laid out at. What holds a row's pictures keeps which are in it by these (came, then left) and asks by
+/// (all in it again when it is laid out at another width), those that left it (and those only gone past), the width its
+/// rows are laid out at, and where each in it is: told as any of these changes, as the frame that laid them so is
+/// painted. What holds a row's pictures keeps which are in it by these (came, then left) and asks by
 /// them, and by the row's data as it changes, never by a row being made or where it was laid out.
 pub(all) struct Sighted[K] {
   came : Array[K]
   left : Array[K]
   width : Double
+  /// those in sight or within `ahead` of it as this frame laid them out, from the first: each one's key, its top under
+  /// the list's window's top and its height (what reads how far one is read, the one at the top or the foot, where it
+  /// is scrolled to, as it is drawn: read here, never followed)
+  rows : Array[(K, Double, Double)]
+  /// how tall the list's window is
+  height : Double
 }

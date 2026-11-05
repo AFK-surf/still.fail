@@ -166,3 +166,36 @@ test "scrolls_anchored: what is told sighted, came and then left, keeps the rows
   // (a window 100 tall: two or three rows 40 and 80 tall, none of those gone past)
   assert_true(one.length() >= 1 && one.length() <= 3, msg="\{one}")
 }
+
+///|
+test "scrolls_anchored: rows moved in sight, none come or gone: told again where they are, as the frame is painted" {
+  let told : Array[@view.Sighted[Int]] = []
+  let scroll = @view.Scroll::list()
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(o) {
+      o.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
+      o.scrolls_anchored(scroll, fn() { Array::makei(30, fn(i) { i }) }, est=40.0, ahead=0.0, sighted=fn(s) { told.push(s) }, fn(b, _) {
+        b.height(Is(Some(40.0))) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  let frame = fn(t : Double) {
+    tree.frame(390.0, 844.0, now=t) |> ignore
+    for f in tree.take_after_paint() {
+      f()
+    }
+  }
+  frame(0.0)
+  let first = told[told.length() - 1]
+  assert_eq(first.height, 100.0)
+  // (the last at the foot: its top 60 under the window's)
+  assert_eq(first.rows[first.rows.length() - 1], (29, 60.0, 40.0))
+  // (wheeled 4 toward its start: the same rows, each 4 lower)
+  tree.wheel_at(150.0, 50.0, 0.0, -4.0, 0, 1000.0) |> ignore
+  frame(1000.0 + 5000.0)
+  let last = told[told.length() - 1]
+  assert_eq(last.came, [])
+  assert_eq(last.rows[last.rows.length() - 1], (29, 64.0, 40.0))
+}
