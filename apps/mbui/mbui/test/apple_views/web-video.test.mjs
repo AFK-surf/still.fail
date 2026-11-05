@@ -26,6 +26,8 @@ class Video {
     this.playbackRate = 1;
     this.buffered = { length: 0 };
     this.error = null;
+    this.muted = false;
+    this.refusePlay = false;
     if (!videoFrames) this.requestVideoFrameCallback = undefined;
   }
   get currentTime() { return this.time; }
@@ -58,18 +60,22 @@ class Video {
   }
   finishSeek() { this.seeking = false; this.emit("seeked"); }
   load() {}
-  play() { this.paused = false; return Promise.resolve(); }
+  play() {
+    if (this.refusePlay) return Promise.reject(new Error("refused"));
+    this.paused = false;
+    return Promise.resolve();
+  }
   pause() { this.paused = true; }
 }
 
-function player(videoFrames = true) {
+function player(videoFrames = true, mp4 = false) {
   const video = new Video(videoFrames), messages = [];
   const context = {
     document: { getElementById: () => video },
     window: { webkit: { messageHandlers: { mbvideo: { postMessage: (m) => messages.push(m) } } } },
     requestAnimationFrame: () => {},
   };
-  vm.runInNewContext(script, context);
+  vm.runInNewContext(mp4 ? script.replace("const playToSeek=false,", "const playToSeek=true,") : script, context);
   return {
     video,
     api: context.window.mbPlayer,
@@ -192,4 +198,125 @@ test("an error completes a pending grab and a host without frame callbacks uses 
   assert.equal(b.count("grabReady"), 0);
   b.video.finishSeek();
   assert.equal(b.count("grabReady"), 1);
+});
+
+// VP9 in MP4: WebKit often never finishes a seek made while paused (#3993).
+test("a paused MP4 seek plays muted to the target frame, then pauses there", () => {
+  const { video, api, count, state } = player(true, true);
+  video.frame();
+  api.seek(2500);
+  assert.equal(video.paused, false, "the seek is made while playing");
+  assert.equal(video.muted, true, "no sound while getting there");
+  assert.equal(video.playbackRate, 0.1, "no frame after the old position is due before the seek lands");
+  assert.equal(state().rate, 1);
+  assert.equal(state().playing, false);
+  assert.equal(state().position, 2500);
+  api.grab(-1);
+  video.finishSeek();
+  assert.equal(video.playbackRate, 1, "the target frame is not slowed");
+  video.frame(2.6);
+  assert.equal(video.paused, true);
+  assert.equal(video.muted, false);
+  assert.equal(video.playbackRate, 1);
+  assert.equal(state().playing, false);
+  assert.equal(state().position, 2500, "the target, not where the muted play got to");
+  assert.equal(count("grabReady"), 1);
+});
+
+test("a paused MP4 frame capture elsewhere goes there and back the same way", () => {
+  const { video, api, count, state } = player(true, true);
+  video.frame();
+  api.seek(2500);
+  video.finishSeek();
+  video.frame(2.5);
+  video.time = 2.53;
+  api.grab(1000);
+  assert.equal(video.paused, false);
+  video.finishSeek();
+  video.frame(1);
+  assert.equal(count("grabReady"), 1);
+  assert.equal(video.paused, true);
+  api.endGrab();
+  assert.equal(video.currentTime, 2.5, "back to the target the app was told");
+  assert.equal(video.paused, false);
+  video.finishSeek();
+  video.frame(2.5);
+  assert.equal(video.paused, true);
+  assert.equal(state().position, 2500);
+});
+
+test("playing during a paused MP4 seek keeps playing with its sound", () => {
+  const { video, api, state } = player(true, true);
+  video.muted = true;
+  video.frame();
+  api.seek(2500);
+  api.volume(1);
+  video.muted = true;
+  api.play();
+  assert.equal(video.muted, true, "the page's own mute is restored, not cleared");
+  const b = player(true, true);
+  b.video.frame();
+  b.api.seek(2500);
+  b.api.rate(2);
+  assert.equal(b.state().rate, 2);
+  b.api.play();
+  assert.equal(b.video.muted, false);
+  assert.equal(b.video.playbackRate, 2, "the speed asked for meanwhile");
+  b.video.finishSeek();
+  b.video.frame(2.5);
+  assert.equal(b.video.paused, false, "the target frame does not pause a play");
+  assert.equal(b.state().playing, true);
+  b.video.time = 2.7;
+  b.api.pause();
+  assert.equal(b.state().position, 2700);
+  assert.equal(state().playing, true);
+});
+
+test("a paused MP4 seek that cannot play still seeks, and WebM and a playing MP4 seek directly", async () => {
+  const a = player(true, true);
+  a.video.frame();
+  a.video.refusePlay = true;
+  a.api.seek(2500);
+  await new Promise((r) => setImmediate(r));
+  assert.equal(a.video.muted, false);
+  assert.equal(a.video.currentTime, 2.5);
+  const b = player();
+  b.video.frame();
+  b.api.seek(2500);
+  assert.equal(b.video.paused, true);
+  const c = player(true, true);
+  c.video.frame();
+  c.api.play();
+  c.api.seek(2500);
+  assert.equal(c.video.muted, false);
+  assert.equal(c.state().playing, true);
+  const d = player(true, true);
+  d.video.frame();
+  d.api.seek(10000);
+  assert.equal(d.video.paused, true, "the very end is not played to");
+});
+
+test("a paused MP4 seek whose frame never comes stops a second past the target, or at the end", () => {
+  const { video, api, state } = player(true, true);
+  video.frame();
+  api.seek(2500);
+  video.finishSeek();
+  video.time = 3.4;
+  video.emit("timeupdate");
+  assert.equal(video.paused, false, "not yet a second past");
+  video.time = 3.6;
+  video.emit("timeupdate");
+  assert.equal(video.paused, true);
+  assert.equal(video.muted, false);
+  assert.equal(state().playing, false);
+  const b = player(true, true);
+  b.video.frame();
+  b.api.seek(4500);
+  b.video.finishSeek();
+  b.video.time = 5;
+  b.video.paused = true;
+  b.video.ended = true;
+  b.video.emit("ended");
+  assert.equal(b.video.muted, false);
+  assert.equal(b.state().playing, false);
 });

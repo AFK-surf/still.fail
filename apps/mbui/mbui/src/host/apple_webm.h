@@ -70,36 +70,52 @@
 // native snapshot when the app asks for a frame; a canvas cannot read media served from a custom scheme.
 // A seek can deliver a callback for a frame queued before it. Compare its media time to the target using the recent
 // frame interval (one second until that interval is known), so that an old frame is not used for a capture.
+// WebKit often never finishes a seek made while VP9 in MP4 is paused (#3993). There a paused seek plays muted until the
+// target frame is shown and pauses on it; the app is told the target position and a paused player throughout. Until the
+// seek lands it plays at a tenth of the speed, so that no frame after the old position is due and shown before it.
+// WebKit sometimes presents no frame at all after such a seek while the time runs on: a second past the target, or at
+// the end, it stops there rather than play the file through unseen; a grab waiting for that frame is given up by the app.
 static NSString *const kWebVideoHTML =
     @"<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'>"
      "<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}"
      "video{width:100%;height:100%;object-fit:fill;display:block}</style>"
      "<video id='v' playsinline preload='none'></video>"
      "<script>"
+     "const playToSeek=false,quietRate=.1;"
      "const v=document.getElementById('v');let waiting=false,ticking=false,changes=0,grabRestore=null,pendingGrab=null,grabWait=null;"
      "const post=o=>window.webkit.messageHandlers.mbvideo.postMessage(o);"
      "const videoFrames=typeof v.requestVideoFrameCallback==='function'&&typeof v.cancelVideoFrameCallback==='function';"
      "let frameReady=!videoFrames,frameGeneration=0,frameRequest=null,seekTarget=null,lastFrame=null,frameStep=1;"
+     "let quiet=null,held=null;"
+     "const at=()=>held!==null?held:v.currentTime;"
+     "function endQuiet(){if(quiet===null)return;const q=quiet;quiet=null;v.pause();v.muted=q.muted;v.playbackRate=q.rate}"
+     "function loudAgain(){if(quiet===null)return;v.muted=quiet.muted;v.playbackRate=quiet.rate;quiet=null}"
      "function tryGrab(){if(pendingGrab!==null){const ms=pendingGrab;pendingGrab=null;grab(ms)}}"
      "function watchFrame(){if(!videoFrames)return;const generation=frameGeneration;"
      "frameRequest=v.requestVideoFrameCallback((_,m)=>{if(generation!==frameGeneration)return;"
      "if(seekTarget!==null&&Math.abs(m.mediaTime-seekTarget)>frameStep*1.5){watchFrame();return}"
      "if(seekTarget===null&&lastFrame!==null){const step=m.mediaTime-lastFrame;if(step>0&&step<=1)frameStep=step}"
-     "lastFrame=m.mediaTime;seekTarget=null;frameReady=true;watchFrame();status();tryGrab()})}"
-     "function seekTo(t){if(Math.abs(v.currentTime-t)<.001&&!v.seeking)return false;"
+     "lastFrame=m.mediaTime;seekTarget=null;frameReady=true;endQuiet();watchFrame();status();tryGrab()})}"
+     "function seekTo(t,still){if(Math.abs(at()-t)<.001&&!v.seeking&&quiet===null)return false;"
      "if(videoFrames){frameReady=false;seekTarget=t;frameGeneration++;if(frameRequest!==null)v.cancelVideoFrameCallback(frameRequest);watchFrame()}"
-     "v.currentTime=t;return true}"
+     "held=null;const playing=quiet===null&&!v.paused;"
+     "if(playToSeek&&still&&!playing&&!(Number.isFinite(v.duration)&&t>=v.duration-.05)){"
+     "if(quiet===null){quiet={muted:v.muted,rate:v.playbackRate};v.muted=true}v.playbackRate=quietRate;held=t;v.currentTime=t;"
+     "v.play().catch(()=>{endQuiet();status()});return true}"
+     "endQuiet();v.currentTime=t;return true}"
      "function status(){let b=0;for(let i=0;i<v.buffered.length;i++){"
      "if(v.buffered.start(i)<=v.currentTime+.001)b=Math.max(b,v.buffered.end(i));}"
      "post({type:'state',duration:Number.isFinite(v.duration)?v.duration*1000:-1,"
-     "position:Number.isFinite(v.currentTime)?v.currentTime*1000:0,playing:!v.paused&&!v.ended,"
+     "position:Number.isFinite(at())?at()*1000:0,playing:quiet===null&&!v.paused&&!v.ended,"
      "width:v.videoWidth,height:v.videoHeight,shown:v.readyState>=2&&frameReady,ready:v.readyState>=2&&frameReady,"
-     "waiting:waiting,buffered:b*1000,ended:v.ended,rate:v.playbackRate,error:v.error?v.error.code:0});}"
+     "waiting:waiting,buffered:b*1000,ended:v.ended,rate:quiet!==null?quiet.rate:v.playbackRate,error:v.error?v.error.code:0});}"
      "function tick(){if(v.paused||v.ended){ticking=false;return}status();requestAnimationFrame(tick)}"
      "function startTick(){if(!ticking){ticking=true;requestAnimationFrame(tick)}}"
      "for(const e of ['loadedmetadata','loadeddata','durationchange','progress','timeupdate','pause','seeked','ended','ratechange','volumechange'])"
      "v.addEventListener(e,status);"
-     "v.addEventListener('seeked',tryGrab);"
+     "v.addEventListener('seeked',()=>{if(!videoFrames)endQuiet();else if(quiet!==null)v.playbackRate=quiet.rate;tryGrab()});"
+     "v.addEventListener('timeupdate',()=>{if(quiet!==null&&!v.seeking&&held!==null&&v.currentTime>held+1){endQuiet();status()}});"
+     "v.addEventListener('ended',()=>{if(quiet!==null){endQuiet();status()}});"
      "v.addEventListener('waiting',()=>{waiting=true;status()});"
      "v.addEventListener('playing',()=>{waiting=false;status();startTick()});"
      "v.addEventListener('canplay',()=>{waiting=false;status()});"
@@ -112,14 +128,15 @@ static NSString *const kWebVideoHTML =
      "const failed=()=>{clear();post({type:'grabFailed'})};"
      "for(const e of ['loadeddata','canplay','seeked'])v.addEventListener(e,loaded,{once:true});"
      "v.addEventListener('error',failed,{once:true});grabWait=clear;return;}"
-     "if(ms>=0&&Math.abs(v.currentTime*1000-ms)>=1){"
-     "grabRestore={time:v.currentTime,changes};"
-     "pendingGrab=-1;seekTo(ms/1000);return;}"
+     "if(ms>=0&&Math.abs(at()*1000-ms)>=1){"
+     "grabRestore={time:at(),changes};"
+     "pendingGrab=-1;seekTo(ms/1000,true);return;}"
      "if(!atOnce&&(v.seeking||!frameReady)){pendingGrab=ms;return;}post({type:'grabReady'});}"
-     "function endGrab(){pendingGrab=null;if(grabWait)grabWait();if(grabRestore&&grabRestore.changes===changes&&!v.error)seekTo(grabRestore.time);grabRestore=null;}"
-     "window.mbPlayer={play(){changes++;if(v.ended)seekTo(0);v.play().catch(()=>status())},"
-     "pause(){changes++;v.pause();status()},seek(ms){changes++;seekTo(Math.max(0,Math.min(Number.isFinite(v.duration)?v.duration:Infinity,ms/1000)));status()},"
-     "rate(r){v.playbackRate=r;status()},volume(n){v.volume=n;status()},grab,endGrab};"
+     "function endGrab(){pendingGrab=null;if(grabWait)grabWait();if(grabRestore&&grabRestore.changes===changes&&!v.error)seekTo(grabRestore.time,true);grabRestore=null;}"
+     "window.mbPlayer={play(){changes++;loudAgain();held=null;"
+     "if(v.ended)seekTo(0);v.play().catch(()=>status());status()},"
+     "pause(){changes++;endQuiet();v.pause();status()},seek(ms){changes++;seekTo(Math.max(0,Math.min(Number.isFinite(v.duration)?v.duration:Infinity,ms/1000)),true);status()},"
+     "rate(r){if(quiet!==null)quiet.rate=r;else v.playbackRate=r;status()},volume(n){v.volume=n;status()},grab,endGrab};"
      "watchFrame();v.preload='auto';v.src='mbvideo://local/file.media';v.load();status();"
      "</script>";
 
@@ -521,7 +538,9 @@ static BOOL webm_range(NSString *header, long long size, long long *start, long 
 static void set_up_web_video(MBNative *v, NSString *mime) {
   MBWebVideo *video = [MBWebVideo new];
   video.owner = v; video.total = v.total; video.mime = mime;
-  video.html = kWebVideoHTML;
+  video.html = [mime isEqualToString:@"video/mp4"]
+      ? [kWebVideoHTML stringByReplacingOccurrencesOfString:@"const playToSeek=false," withString:@"const playToSeek=true,"]
+      : kWebVideoHTML;
   video.delivered = [NSMutableIndexSet new];
   video.loads = [NSMutableArray new]; video.pending = [NSMutableArray new];
   video.taken = [NSMutableDictionary new]; video.lettingGo = [NSMutableArray new]; video.commands = [NSMutableArray new];
