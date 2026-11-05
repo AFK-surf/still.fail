@@ -33,6 +33,18 @@ test("a card a person's message closed is changed where its connect shows it", (
   }
 });
 
+test("an unprepared old chat tells its connect at the event, before a later withdrawal", () => {
+  const r = rig("slack:T1");
+  try {
+    r.store.db.prepare("DELETE FROM card_post_scopes WHERE thread=?").run(r.thread.id);
+    r.store.insertMessage({ ...newMessage(r.thread.id, "1.2", "agent", "a", "合并吗？"), card: { type: "text" } });
+    r.store.insertMessage(newMessage(r.thread.id, "1.3", "person", "U1", "等等"));
+    assert.deepEqual(r.told, [[{ channel: "C1", threadTs: "1.1" }, "1.2", "合并吗？", { why: "message", by: "U1", byTs: "1.3" }]]);
+    assert.equal(r.store.withdrawCard("a", r.thread.id, "1.2"), true);
+    assert.equal(r.told.length, 1, "a later withdrawal does not retell the answer");
+  } finally { r.stop(); r.store.close(); }
+});
+
 test("a station chat's cards are the app's alone: no surface is asked", () => {
   const r = rig("ember");
   try {
