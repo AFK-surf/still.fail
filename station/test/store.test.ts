@@ -16,7 +16,7 @@ import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import { SESSION_COUNT_FIRST, SESSION_COUNT_NEXT, SESSION_COUNT_TOTAL, SESSION_COUNT_CONNECT, SESSION_COUNT_DISPLACED } from "../src/store/session-counts.ts";
 import { SESSION_LIST_CONNECT, SESSION_LIST_DISPLACED, SESSION_LIST_FIRST, SESSION_LIST_NEXT, SESSION_LIST_SCOPE,
   SESSION_LIST_SCOPE_CONNECT } from "../src/store/session-list-index.ts";
-import { SESSION_BINDINGS_DISPLACED, SESSION_BINDINGS_FIRST, SESSION_BINDINGS_NEXT, SESSION_BINDINGS_SELECTED } from "../src/store/session-bindings-index.ts";
+import { SESSION_BINDINGS_DELETE, SESSION_BINDINGS_DISPLACED, SESSION_BINDINGS_FIRST, SESSION_BINDINGS_NEXT, SESSION_BINDINGS_SELECTED } from "../src/store/session-bindings-index.ts";
 import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/store/usage.ts";
 import { detailQuery } from "../src/store/usage-detail.ts";
 import { installCompactUsage } from "../src/store/usage-compact.ts";
@@ -1572,6 +1572,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
     [SESSION_COUNT_DISPLACED, ["a", "token", 1]],
     [SESSION_LIST_DISPLACED, ["a", "token", 1]],
     [SESSION_BINDINGS_DISPLACED, ["a", 1]],
+    [SESSION_BINDINGS_DELETE, ["a"]],
   ];
   const scans = /^SCAN (?!CONSTANT ROW$|\(subquery-\d+\)$|json_each VIRTUAL TABLE\b)/;
   const plans = new Map<string, string[]>();
@@ -1588,6 +1589,8 @@ test("what is told as chats change is planned by the size of what it finds, not 
     "session list updates find displaced rows by unique identity");
   assert.equal(plans.get(SESSION_BINDINGS_DISPLACED)!.filter((d) => d.startsWith("SEARCH b ")).length, 2,
     "binding updates find displaced rows by connection or rowid");
+  has(SESSION_BINDINGS_DELETE, "session_binding_rows USING PRIMARY KEY (session=?)");
+  has(SESSION_BINDINGS_DELETE, "bindings USING INTEGER PRIMARY KEY (rowid=?)");
   has(read.UNREAD, "COVERING INDEX entries_said (thread=? AND n>?)");
   has(read.ASKED_DURING, "entries_agent_at (thread=? AND at>? AND at<?)");
   const stats = `${read.SESSION_STATS} WHERE s.key = ?`;

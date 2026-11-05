@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { autoArchive } from "../src/sessions/lifecycle.ts";
+import { autoArchive, startAutoArchiveTimer } from "../src/sessions/lifecycle.ts";
 import { installSessionBindingsIndex, sessionBindingsReady, sessionBindingsStep } from "../src/store/session-bindings-index.ts";
 import { Store } from "../src/store/store.ts";
 import { Rig } from "./hub-fakes.ts";
@@ -8,6 +8,14 @@ import { Rig } from "./hub-fakes.ts";
 function session(store: Store, key: string) {
   store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: `/w/${key}`,
     token: key, createdAt: 1, lastActiveAt: 1 });
+}
+
+function makeOld(store: Store) {
+  const db = store.db;
+  for (const row of db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'session_binding_%'").all() as { name: string }[])
+    db.exec(`DROP TRIGGER ${row.name}`);
+  db.exec("DROP TABLE session_binding_rows; DROP TABLE session_binding_replaced; DROP TABLE session_binding_meta");
+  installSessionBindingsIndex(db);
 }
 
 function observe(store: Store) {
@@ -88,10 +96,7 @@ test("archive waits for old bindings without guessing which sessions are bound",
   try {
     session(r.store, "bound"); session(r.store, "free");
     db.exec("INSERT INTO bindings(connect,session_key) VALUES('old-connect','bound')");
-    for (const row of db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'session_binding_%'").all() as { name: string }[])
-      db.exec(`DROP TRIGGER ${row.name}`);
-    db.exec("DROP TABLE session_binding_rows; DROP TABLE session_binding_replaced; DROP TABLE session_binding_meta");
-    installSessionBindingsIndex(db);
+    makeOld(r.store);
     assert.equal(sessionBindingsReady(db), false);
     let requested = 0;
     autoArchive(r.hub, Date.now() + 3 * 86_400_000, undefined, () => { requested++; });
@@ -104,4 +109,54 @@ test("archive waits for old bindings without guessing which sessions are bound",
     assert.equal(r.store.getSession("bound")?.archivedAt, null);
     assert.notEqual(r.store.getSession("free")?.archivedAt, null);
   } finally { await r.close(); }
+});
+
+test("deleting a session still removes unseen old bindings before preparation", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    session(store, "gone"); session(store, "kept");
+    db.exec("INSERT INTO bindings(connect,session_key) VALUES('first','gone'),('other','kept'),('last','gone')");
+    makeOld(store);
+    assert.equal(sessionBindingsReady(db), false);
+    store.deleteSession("gone");
+    assert.equal(store.binding("first"), null);
+    assert.equal(store.binding("last"), null);
+    assert.equal(store.binding("other"), "kept");
+    while (!sessionBindingsReady(db)) sessionBindingsStep(db, 1);
+    assert.deepEqual([...store.listBindings()], [["kept", ["other"]]]);
+  } finally { store.close(); }
+});
+
+test("the archive timer prepares old bindings once and retries when ready", async () => {
+  const r = new Rig(), ready = Promise.withResolvers<void>();
+  let timer: { ms: number; run: () => void } | null = null, signal: AbortSignal | undefined, calls = 0;
+  const time = { after(ms: number, run: () => void) {
+    const next = { ms, run }; timer = next;
+    return () => { if (timer === next) timer = null; };
+  } };
+  const fire = (ms: number) => { const task = timer; assert.ok(task); assert.equal(task.ms, ms); timer = null; task.run(); };
+  let stop = () => {};
+  try {
+    session(r.store, "bound"); session(r.store, "free");
+    r.store.db.exec("INSERT INTO bindings(connect,session_key) VALUES('old-connect','bound')");
+    makeOld(r.store);
+    stop = startAutoArchiveTimer(r.hub, time, {
+      prepareSaid: async () => {}, prepareSessionBindings: (s) => { signal = s; calls++; return ready.promise; },
+    });
+    fire(60_000);
+    assert.equal(calls, 1);
+    assert.equal(r.store.getSession("free")?.archivedAt, null);
+    fire(600_000);
+    assert.equal(calls, 1);
+    while (!sessionBindingsReady(r.store.db)) sessionBindingsStep(r.store.db, 1);
+    ready.resolve();
+    await ready.promise;
+    await Promise.resolve();
+    fire(0);
+    assert.equal(r.store.getSession("bound")?.archivedAt, null);
+    assert.notEqual(r.store.getSession("free")?.archivedAt, null);
+    stop();
+    assert.equal(signal?.aborted, true);
+    assert.equal(timer, null);
+  } finally { stop(); ready.resolve(); await r.close(); }
 });

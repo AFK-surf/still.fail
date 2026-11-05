@@ -43,7 +43,7 @@ import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from
 import { RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiveJobs } from "./active-jobs.ts";
 import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
 import { installSessionListIndex } from "./session-list-index.ts";
-import { installSessionBindingsIndex } from "./session-bindings-index.ts";
+import { installSessionBindingsIndex, SESSION_BINDINGS_DELETE, SESSION_BINDINGS_SELECTED, sessionBindingsReady } from "./session-bindings-index.ts";
 import { installSessionCounts, sessionCountsReady, SESSION_COUNT_TOTAL, SESSION_COUNT_CONNECT,
   SESSION_COUNTS, SESSION_COUNTS_VISIBLE, SESSION_COUNTS_HOME } from "./session-counts.ts";
 import { installPostBlocks, PostBlocksUnavailable, POST_BLOCK_SIZE, type PostPosition } from "./post-blocks.ts";
@@ -1115,7 +1115,7 @@ export class Store {
         this.#run("DELETE FROM letter_deliveries WHERE session = ?", key);
         this.#run("DELETE FROM turns WHERE session_key = ?", key);
         this.#run("DELETE FROM runtime_sessions WHERE session_key = ?", key);
-        this.#run("DELETE FROM bindings WHERE session_key = ?", key);
+        this.#run(sessionBindingsReady(this.db) ? SESSION_BINDINGS_DELETE : "DELETE FROM bindings WHERE session_key = ?", key);
         this.#run("DELETE FROM job_notices WHERE job_id IN (SELECT id FROM jobs WHERE session_key = ?)", key);
         this.#run("DELETE FROM jobs WHERE session_key = ?", key);
         this.#run("DELETE FROM widget_states WHERE session = ?", key);
@@ -1172,9 +1172,15 @@ export class Store {
   }
 
   /// Connects bound to each session (by session key, in the BTreeMap's order).
-  listBindings(): Map<string, string[]> {
+  listBindings(keys?: readonly string[]): Map<string, string[]> {
     const out = new Map<string, string[]>();
-    for (const r of this.#all("SELECT connect, session_key FROM bindings")) out.set(r.session_key, [...(out.get(r.session_key) ?? []), r.connect]);
+    if (keys !== undefined && keys.length === 0) return out;
+    const selected = keys === undefined ? null : new Set(keys);
+    const indexed = selected !== null && sessionBindingsReady(this.db);
+    const rows = indexed ? this.#all(SESSION_BINDINGS_SELECTED, JSON.stringify([...selected]))
+      : this.#all("SELECT connect, session_key AS session FROM bindings");
+    for (const r of rows) if (selected === null || selected.has(r.session))
+      out.set(r.session, [...(out.get(r.session) ?? []), r.connect]);
     return new Map([...out].sort(([a], [b]) => byBytes(a, b)));
   }
 
