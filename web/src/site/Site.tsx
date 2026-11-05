@@ -272,6 +272,7 @@ function Page({ mountDemo, demo }: DemoProps) {
           <a className={css.navLink} href={WINDOWS}>Windows</a>
           <a className={css.navLink} href={ANDROID}>Android</a>
           <a className={css.navLink} href={GITHUB}>GitHub</a>
+          <a className={css.navLink} href="/status">{say.status}</a>
           {/* The legal pages: static files in web/public (terms.html, privacy.html, trademark.html; en/ their English). */}
           <a className={css.navLink} href={`${say.legal}/terms`}>{say.terms}</a>
           <a className={css.navLink} href={`${say.legal}/privacy`}>{say.privacy}</a>
