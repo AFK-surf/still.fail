@@ -19,9 +19,12 @@ pub fn chat_waiting_node(parent : @view.View, src : Source, r : ChatRef, top : (
 
 ///|
 pub fn chat_messages_sample_node(parent : @view.View, top : () -> Double) -> Unit {
-  parent.box(fn(column) {
-    column.min_width(Is(Some(0.0))).shrink(Is(0.0)) |> ignore
-    let width = fn() { column.laid_size_told().map(fn(s) { s.0 }).unwrap_or(column.window().0) }
+  // (made for the width its holder gives it, in its layout, and as tall as it comes out (by_room, sized): its rows by
+  // that width, 窄排法 or 宽排法, nothing of it read back)
+  parent.box(fn(holder) {
+    holder.min_width(Is(Some(0.0))).shrink(Is(0.0)) |> ignore
+    holder.by_room(Is(()), fn(_, w, _) { w }, sized=true, fn(column, w) {
+    let width = fn() { w }
     let narrow = fn() { width() <= chat_narrow_w }
     let side = fn() { row_side_in(width()) }
     let view = @sfbase.chat_view_made({ "title": Json::string(""), "messages": [] })
@@ -55,6 +58,8 @@ pub fn chat_messages_sample_node(parent : @view.View, top : () -> Double) -> Uni
       })
       |> ignore
     }
+    })
+    |> ignore
   })
   |> ignore
 }
