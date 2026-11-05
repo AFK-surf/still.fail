@@ -7,6 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { Worker } from "node:worker_threads";
 import { PLAIN } from "../src/vault/plain.ts";
+import { initializeReboxIndex } from "../src/vault/rebox-index.ts";
 import { Secrets } from "../src/vault/secrets.ts";
 import { backfillNextWorkspace, backfillUseIndex, initializeUseIndex, PLAIN_USES, USE_BACKFILL_AFTER, UseIndex, VAULT_USES } from "../src/vault/use-index.ts";
 
@@ -182,6 +183,7 @@ test("vault backfill waits for a foreground writer, then serves the indexed page
     for (let n = 0; n < 100; n++) put.run(`old-${n}`, body(`old-${n}`, n));
     initializeUseIndex(db);
     Atomics.store(priority, 0, 1);
+    initializeReboxIndex(db);
     worker = new Worker(new URL("../src/vault/use-index-worker.ts", import.meta.url), { workerData: { path, priority: priority.buffer } });
     const [notice] = await once(worker, "message") as [{ foreground?: boolean }];
     assert.equal(notice.foreground, true);
@@ -215,6 +217,7 @@ test("a ready vault page can be read while a foreground write is pending", async
     initializeUseIndex(db);
     assert.equal(backfillUseIndex(db, "w"), true);
     Atomics.store(priority, 0, 1);
+    initializeReboxIndex(db);
     worker = new Worker(new URL("../src/vault/use-index-worker.ts", import.meta.url), { workerData: { path, priority: priority.buffer } });
     const messages = on(worker, "message");
     const next = async () => (await messages.next()).value![0] as { id?: number; foreground?: boolean; request?: number; bodies?: string[] };
