@@ -338,3 +338,24 @@ test "wide: a chat of a Slack thread alone has its \"…\" too: where it is, its
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("在 Slack 中打开") is Some(_))
 }
+
+///|
+test "wide: the side panel beside the chat, and over it once the pane is too narrow for both, laid out by the pane's room as the frame begins: nothing of its size read back and laid out again after" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat-tabs-side")
+  t.run_for(@ui.move_most_ms)
+  let said = []
+  @view.laid_passes_traced.val = true
+  @view.laid_passes_trace.val = fn(s) { said.push(s) }
+  // (narrower: the pane less than both take, the panel over the chat; wider again: beside it)
+  for w in [1000.0, 1280.0] {
+    t.resize(w, 800.0)
+    t.frame()
+  }
+  @view.laid_passes_traced.val = false
+  @view.laid_passes_trace.val = fn(s) { println(s) }
+  // (the chat and the panel laid out at their widths in the frame's first pass, never at the width the page had last
+  // frame, a pass after, then again: what is laid out after the first is only the composer, whose width the chat's
+  // talk still reads back (chat_talk_node's `width`), a second pass at most)
+  assert_eq(said.filter(fn(x) { !x.contains("layout pass 1:") && !x.contains("layout pass 2:") }), [])
+}
