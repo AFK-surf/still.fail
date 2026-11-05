@@ -85,6 +85,21 @@ function open(path: string, archive: string | null = null): Store {
 
 const memory = () => open(":memory:");
 
+function assertSessionJobPlans() {
+  const db = memory().db;
+  const up = (db.prepare(`EXPLAIN QUERY PLAN ${read.PREPARED_UP_JOBS_OF}`).all("a") as { detail: string }[]).map((r) => r.detail);
+  const upDetail = up.join(" | ");
+  assert.ok(up.some((s) => s.startsWith("SEARCH i USING PRIMARY KEY") && s.includes("session=?")), upDetail);
+  assert.ok(up.some((s) => s.startsWith("SEARCH j USING INTEGER PRIMARY KEY") && s.includes("rowid=?")), upDetail);
+  assert.ok(up.every((s) => !/^SCAN (i|j|jobs)\b/.test(s)), upDetail);
+
+  const watches = (db.prepare(`EXPLAIN QUERY PLAN ${read.WATCHING_ALL}`).all() as { detail: string }[]).map((r) => r.detail);
+  const watchDetail = watches.join(" | ");
+  assert.ok(watches.some((s) => /^SCAN w\b/.test(s)), watchDetail); // Only running watches are in this lookup.
+  assert.ok(watches.some((s) => s.startsWith("SEARCH j ") && s.includes("id=?")), watchDetail);
+  assert.ok(watches.every((s) => !/^SCAN (j|jobs)\b/.test(s)), watchDetail);
+}
+
 function assertAwakeJobPlan() {
   const steps = (memory().db.prepare(`EXPLAIN QUERY PLAN ${AWAKE_JOBS}`).all() as { detail: string }[]).map((r) => r.detail);
   const detail = steps.join(" | ");
@@ -1488,6 +1503,7 @@ test("what the station asks again and again is planned by an index, never a scan
   assertPendingVaultPlans();
   assertRecoveryWaitPlans();
   assertAwakeJobPlan();
+  assertSessionJobPlans();
   assertRemoteQueuePlan();
   const store = memory();
   for (const [sql, value, table, key] of [[ARCHIVE_PIN_EXISTS, "s", "archive_pin_rows", "session"], [ARCHIVE_KEEP_EXISTS, 1, "archive_keep_rows", "thread"]] as const) {
@@ -1699,6 +1715,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
   assertPendingVaultPlans();
   assertRecoveryWaitPlans();
   assertAwakeJobPlan();
+  assertSessionJobPlans();
   assertRemoteQueuePlan();
   const store = memory();
   // As node's SQLite plans each, over the file the readers read: a chat's unread messages counted from the index of its
