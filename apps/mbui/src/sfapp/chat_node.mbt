@@ -28,8 +28,6 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
     p.show(fn() { view() is None }, fn(waiting) {
       waiting
       .over(Is(true))
-      .width(By(fn() { p.laid_size_told().map(fn(z) { z.0 }) }))
-      .height(By(fn() { p.laid_size_told().map(fn(z) { z.1 }) }))
       |> ignore
       @sfpages.chat_waiting_node(waiting, src, r, list_top, bar_foot)
     })
@@ -55,8 +53,6 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
       // (over all of the page, what it holds at its foot)
       f
       .over(Is(true))
-      .width(By(fn() { p.laid_size_told().map(fn(z) { z.0 }) }))
-      .height(By(fn() { p.laid_size_told().map(fn(z) { z.1 }) }))
       .lies_along(By(fn() { if @ui.system_tabletop() is Some(_) { Start } else { End } }))
       .padding(By(fn() {
         let top = match @ui.system_tabletop() {
@@ -102,8 +98,6 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
     p.box(fn(fl) {
       fl
       .over(Is(true))
-      .width(By(fn() { p.laid_size_told().map(fn(z) { z.0 }) }))
-      .height(By(fn() { p.laid_size_told().map(fn(z) { z.1 }) }))
       |> ignore
       @sfpages.chat_flight_layer_made(r, fl)
       // (words sent: from the composer to their row's bubble and words, as the list has that row)
@@ -118,8 +112,6 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
     p.box(fn(pl) {
       pl
       .over(Is(true))
-      .width(By(fn() { p.laid_size_told().map(fn(z) { z.0 }) }))
-      .height(By(fn() { p.laid_size_told().map(fn(z) { z.1 }) }))
       |> ignore
       @sfpages.pick_bar_node(pl, src, r.station + ":" + r.session, fn() { bar_foot() }, list_room)
     })
@@ -129,8 +121,6 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
     p.box(fn(l) {
       l
       .over(Is(true))
-      .width(By(fn() { p.laid_size_told().map(fn(z) { z.0 }) }))
-      .height(By(fn() { p.laid_size_told().map(fn(z) { z.1 }) }))
       |> ignore
       // (let go once it has left: nothing of it read again, its way's clock no more)
       let left = @signals.signal(false, same=fn(a, b) { a == b })

@@ -223,7 +223,11 @@
       "src/kit/menu.mbt": 2,
       "src/kit/pick.mbt": 1,
       "src/kit/popover.mbt": 5,
-      "src/kit/toast.mbt": 1
+      "src/kit/toast.mbt": 1,
+      "src/view/list_window.mbt": 8,
+      "src/view/scroll.mbt": 3,
+      "src/view/scroll_bar.mbt": 2,
+      "src/view/sticks.mbt": 2
     },
     "motion-length": {}
   },

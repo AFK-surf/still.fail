@@ -2021,14 +2021,17 @@ test "layout-read-back" {
         "  match c.rect_of(c.id(\"rail\")) { _ => () }\n" +
         "  let r = c.laid_rect(id)\n" +
         "  let m = @motion.measured_rect(c, \"thumb\")\n" +
+        "  let z = v.laid_size_told()\n" +
+        "  let q = p.laid_window_told()\n" +
+        "  let d = v.drawn_window_told()\n" +
         "}\n",
       ),
-      ("src/app/card_wbtest.mbt", "test \"t\" {\n  t.ctx().rect_of(1)\n}\n"),
-      ("src/ui/list.mbt", "fn w(c : Ctx) -> Unit {\n  c.rect_of(1) |> ignore\n}\n"),
+      ("src/app/card_wbtest.mbt", "test \"t\" {\n  t.ctx().rect_of(1)\n  v.laid_size_told()\n}\n"),
+      ("src/ui/list.mbt", "fn w(c : Ctx) -> Unit {\n  c.rect_of(1) |> ignore\n  v.laid_window_told() |> ignore\n}\n"),
     ],
     "layout-read-back",
-    3,
+    6,
     cfg~,
   )
-  assert_eq(lines(fs), [2, 3, 4])
+  assert_eq(lines(fs), [2, 3, 4, 6, 7, 8])
 }
