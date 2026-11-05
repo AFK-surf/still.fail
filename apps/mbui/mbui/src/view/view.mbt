@@ -649,6 +649,11 @@ pub struct Tree {
   /// the properties said `Painted`, each worked out again as each frame is painted (Tree::painted_now): its node and
   /// making, and what works it out and sets it where it came out otherwise
   painted : Array[(Int, Int, () -> Unit)]
+  /// what is told once the frame is painted (Tree::take_after_paint: the host's side runs it then): a list's rows
+  /// sighted, a node first drawn
+  after_paint : Array[() -> Unit]
+  /// the nodes waiting to be first drawn (View::on_first_drawn): node, making, what is then told
+  first_drawn : Array[(Int, Int, () -> Unit)]
   /// what is due at a moment of its own, in the order told (Tree::advance): a node leaving or coming back ending, a
   /// step of what goes by steps (View::steps); and how many were ever told (each one's place among those due together)
   timeline : Array[Due]
@@ -932,6 +937,8 @@ pub fn Tree::new(
     looks_due: [],
     places_due: [],
     painted: [],
+    after_paint: [],
+    first_drawn: [],
     bindings_due: [],
     pulls: {},
     pulls_made: 0,
@@ -6196,6 +6203,7 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
     self.room.set((w, h))
   }
   self.brought(upto)
+  self.first_drawn_now()
   let drawn = self.drawn_due
   self.drawn_due = false
   if self.telling_due {
@@ -8475,4 +8483,54 @@ pub fn View::shown_rect(self : View) -> (Double, Double, Double, Double)? {
 /// How big it is as the tree last placed it (View::shown_rect's terms). None: let go, or laid out nowhere.
 pub fn View::shown_size(self : View) -> (Double, Double)? {
   { tree: self.tree }.size(self)
+}
+
+///|
+/// `f` told once the frame being made is painted (Tree::take_after_paint).
+fn Tree::said_after_paint(self : Tree, f : () -> Unit) -> Unit {
+  self.after_paint.push(f)
+}
+
+///|
+/// What was said to be told once the frame is painted, taken: the host's side runs each, in order, after it paints the
+/// frame (a list's rows sighted, View::scrolls_anchored's `sighted`; a node first drawn, View::on_first_drawn). Events
+/// of that frame's moment: what they ask the host for (a picture, the keyboard) they ask; they set nothing the frame read.
+pub fn Tree::take_after_paint(self : Tree) -> Array[() -> Unit] {
+  let out = self.after_paint.copy()
+  self.after_paint.clear()
+  out
+}
+
+///|
+/// `f` told once, after the first frame that draws it is painted (laid out somewhere, not left out): what asks the host
+/// for something only once there is a node for it in the window (the keyboard for a field, a native view over it). It
+/// sets nothing a build or a layout reads: what waits for a node to be laid out waits for nothing of the tree's
+/// (retained.md, "Layout read back").
+pub fn View::on_first_drawn(self : View, f : () -> Unit) -> View {
+  guard self.live() is Some(_) else { return self }
+  self.tree.first_drawn.push((self.at, self.gen, f))
+  self.tree.marked()
+  self
+}
+
+///|
+/// Those waiting to be first drawn that this frame laid out somewhere: told after it is painted; those let go dropped.
+fn Tree::first_drawn_now(self : Tree) -> Unit {
+  if self.first_drawn.is_empty() {
+    return
+  }
+  let waiting = []
+  for e in self.first_drawn {
+    let n = self.nodes[e.0]
+    if !n.live || n.gen != e.1 {
+      continue
+    }
+    if self.out_at(e.0) {
+      waiting.push(e)
+    } else {
+      self.after_paint.push(e.2)
+    }
+  }
+  self.first_drawn.clear()
+  self.first_drawn.append(waiting)
 }

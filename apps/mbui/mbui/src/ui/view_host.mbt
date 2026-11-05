@@ -5629,3 +5629,17 @@ fn old_placed_said() -> String {
 /// Where the old views were as the old frame last painted them (frame_paint).
 // kept across runs: written by each paint of the old frame
 let old_painted_at : Ref[String] = Ref("")
+
+///|
+/// What the tree said to be told once its frame is painted (Tree::take_after_paint: a list's rows sighted, a node first
+/// drawn), told now, as the frame's paint is over, each untracked: what it asks the host for asked at the frame that
+/// drew it.
+fn view_after_paint() -> Unit {
+  match view_tree() {
+    Some(tree) =>
+      for f in tree.take_after_paint() {
+        @signals.untracked(f)
+      }
+    None => ()
+  }
+}
