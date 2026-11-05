@@ -204,6 +204,8 @@ pub fn image_natural(String) -> (Double, Double)?
 
 pub fn image_state(String) -> Int32
 
+pub fn ime_inset() -> Double
+
 pub fn ink_on(Int64, Array[Int64]) -> Int64
 
 pub let input_step_ms : Double

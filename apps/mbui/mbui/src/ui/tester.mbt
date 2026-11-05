@@ -106,7 +106,8 @@ fn reset_globals() -> Unit {
   desk_reset()
   tester_size.val = None
   env_kept.val = ""
-  app_state.val = 3
+  app_state.set(app_shown_in_front)
+  corners_said.set(None)
   driver.val = None
   track_x.reset()
   track_y.reset()
