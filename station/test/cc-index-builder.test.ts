@@ -182,3 +182,18 @@ test("cancelling a chat-name request does not cancel its copy-destination reques
     assert.equal(sessionChatReady(store.db, "short"), false);
   } finally { cancel.abort(); previous.resolve(); await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("a session removed before handover does not regain chat-name state", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "session-chat-removed-"));
+  const path = join(dir, "stillfail.db"), store = Store.open(path);
+  const previous = Promise.withResolvers<void>();
+  const builder = new CcIndexBuilder(path, { previousGone: previous.promise });
+  try {
+    oldSessions(store);
+    const ready = builder.readyNames(["short"]);
+    store.deleteSession("short");
+    previous.resolve(); await ready;
+    assert.equal(store.db.prepare("SELECT COUNT(*) AS n FROM session_chat_scopes WHERE session='short'").get()?.n, 0);
+    assert.equal(store.db.prepare("SELECT COUNT(*) AS n FROM session_chat_ember WHERE session='short'").get()?.n, 0);
+  } finally { previous.resolve(); await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
