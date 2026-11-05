@@ -55,3 +55,32 @@ test "a retained attachment keeps its card as the upload changes and a quote kee
   t.draw()
   assert_true(!e.files.contains("image"))
 }
+
+///|
+/// A waiting file's card as wide as a card is (file_card_w) at most, or as the row of what waits leaves it (its end,
+/// `file_end`, kept clear) where that is less, from the first frame that draws it: held to that as it is laid out, not
+/// read back from the row's laid size a frame on.
+test "a waiting file's card is held to the row's room from the first frame that draws it" {
+  for room in [390.0, 200.0] {
+    @sfbase.reset()
+    composing_reset()
+    @sf.set_words(@sfbase.fill)
+    let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=room, h=600.0)
+    let src = @sfbase.made_source(call=fn(_, _, done) { done(Ok({})) })
+    let writing : Ref[Writing?] = Ref(None)
+    let extras : Ref[ComposerExtrasNode?] = Ref(None)
+    @ui.set_view_app(fn(root) {
+      @ui.set_tree_theme(@sf.ui_theme_now)
+      let w = @sfbase.writing_in(root, src, "extras-room")
+      writing.val = Some(w)
+      extras.val = Some(composer_extras_node(root, src, w, fn() { "station" }, fn() { 18.0 }, fn() { 18.0 },
+        fn(p, _, wide, high, _, radius) {
+          p.width(By(fn() { Some(wide()) })).height(By(fn() { Some(high()) })).radius(By(radius)).ground(Is(0xFFFFFFFFL)) |> ignore
+        }))
+    })
+    writing.val.unwrap().files.set([{ "id": "f1", "name": "notes.txt", "size": 100, "sent": 10 }])
+    t.draw()
+    let (_, _, wide, _) = extras.val.unwrap().files["f1"].rect()
+    assert_eq(wide, dmin(@sf.file_card_w, room - 18.0), msg="room \{room}")
+  }
+}
