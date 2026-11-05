@@ -250,9 +250,10 @@ test "a quote sent alone is in the list at once, its card flying there from the 
     }
   }
   assert_false(hinted)
-  // and back once it is out of it
+  // and not back once it is out of it: the words' field has the cursor its comment line had (composer_hint)
   t.run_for(@sf.hint_back_ms)
-  assert_true(hint_seen(t))
+  assert_eq(focused_field(t), "发消息")
+  assert_false(hint_seen(t))
   assert_true(send_flight.get() is None)
   // landed in its message, over the composer, as wide as it needs
   let (_, y) = quote_once(t)
