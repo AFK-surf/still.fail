@@ -235,30 +235,41 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
   |> ignore
   // (its picture: inline over its head's start, 3 down; else out in the margin, 29 before its words; where a message
   // out of an agent's picture lands, away while the flying one is over it: emit.mbt)
-  row.box(fn(a) {
-    a
+  row.box(fn(room) {
+    // (the room holds to the message's foot and, outside the head, to the same top as the old page. Inline pictures
+    // go with their heads; a top far above the list leaves them where they were laid.)
+    room
     .over(Is(true))
-    .offset(By(fn() { (if inline() { 0.0 } else { -29.0 }, 3.0) }))
-    .alpha(By(fn() {
-      match emits_here(here(), m()) {
-        Some((em, _)) if emit_emitting(em, m().seq) || emit_awaited(em, m().seq) => 0.0
-        _ => 1.0
-      }
-    }))
+    .width(Is(Some(avatar_side)))
+    .height(Is(Some(avatar_side + @ui.Space::px(@sf.message_avatar_down))))
+    .sticks(By(fn() { if inline() { -1.0e9 } else { avatar_held_at } }))
     |> ignore
-    // (said as the old view's box round it was, 3 over it: emit_flight puts the face 3 down it)
-    emit_place_node(a, fn() { emits_here(here(), m()).map(fn(e) { "emit-landing/" + e.1 + "/" + seq_s(m().seq) }) }, dy=-3.0)
-    a.pick(fn() { m().author_kind }, fn(slot, kind) {
-      match kind {
-        "agent" => {
-          let face = agent_avatar_node(slot, fn() { m().by.maker }, fn() { m().by.runtime }, fn() { "" })
-          // (its card while the pointer rests on it: agent_hover's)
-          agent_hover_node(face, src, here, fn() { m().by.agent })
+    room.box(fn(a) {
+      a
+      .over(Is(true))
+      .offset(By(fn() { (if inline() { 0.0 } else { -29.0 }, 3.0) }))
+      .alpha(By(fn() {
+        match emits_here(here(), m()) {
+          Some((em, _)) if emit_emitting(em, m().seq) || emit_awaited(em, m().seq) => 0.0
+          _ => 1.0
         }
-        "ember" | "stillfail" => agent_avatar_node(slot, fn() { "" }, fn() { "" }, fn() { "" }) |> ignore
-        _ => person_avatar_node(slot, src, fn() { m().author }, fn() { m().by.name }, fn() { m().by.picture }, fn() { 0 })
-      }
+      }))
+      |> ignore
+      // (said as the old view's box round it was, 3 over it: emit_flight puts the face 3 down it)
+      emit_place_node(a, fn() { emits_here(here(), m()).map(fn(e) { "emit-landing/" + e.1 + "/" + seq_s(m().seq) }) }, dy=-3.0)
+      a.pick(fn() { m().author_kind }, fn(slot, kind) {
+        match kind {
+          "agent" => {
+            let face = agent_avatar_node(slot, fn() { m().by.maker }, fn() { m().by.runtime }, fn() { "" })
+            // (its card while the pointer rests on it: agent_hover's)
+            agent_hover_node(face, src, here, fn() { m().by.agent })
+          }
+          "ember" | "stillfail" => agent_avatar_node(slot, fn() { "" }, fn() { "" }, fn() { "" }) |> ignore
+          _ => person_avatar_node(slot, src, fn() { m().author }, fn() { m().by.name }, fn() { m().by.picture }, fn() { 0 })
+        }
+      })
     })
+    |> ignore
   })
   |> ignore
   // (what it quotes, over its words)
