@@ -17,11 +17,10 @@ priv struct Triple {
   mut shown : Int
   mut asked : String
   mut accounts_asked : Bool
-  mut borrow_asking : String
 }
 
 ///|
-let triple : Triple = { open: "", shown: 0, asked: "", accounts_asked: false, borrow_asking: "" }
+let triple : Triple = { open: "", shown: 0, asked: "", accounts_asked: false }
 
 ///|
 /// One panel's filter, what it shows and its pick: whether all the models are shown (past those used most and
@@ -61,7 +60,6 @@ fn triple_reset() -> Unit {
   triple.shown = 0
   triple.asked = ""
   triple.accounts_asked = false
-  triple.borrow_asking = ""
 }
 
 ///|
@@ -302,7 +300,6 @@ pub fn model_triple(
     },
   )
   |> ignore
-  borrow_dialog(c, src, station, of, v)
 }
 
 ///|
@@ -958,8 +955,8 @@ fn triple_foot(c : @ui.Ctx, src : Source, station : String, of : String, content
   if borrow is Some(Object(_)) &&
     @sf.button(c, text(borrow, "action"), key="triple/borrow", tone=Primary, disabled=!flag(borrow, "allowed")) {
     triple.open = ""
-    triple.borrow_asking = station + "\u{1}" + of
     close()
+    borrow_ask(src, station, of)
   }
 }
 
@@ -1323,73 +1320,38 @@ fn triple_accounts(c : @ui.Ctx, src : Source, station : String, of : String, clo
 }
 
 ///|
-/// Borrowing the picked model's account from another station, asked first (ModelTriple.tsx's Dialog): what it does,
-/// 取消 and its action.
-fn borrow_dialog(c : @ui.Ctx, src : Source, station : String, of : String, v : Json?) -> Unit {
-  let me = station + "\u{1}" + of
-  let borrow = field(v, "borrow")
+/// Borrowing the picked model's account from another station, asked first (ModelTriple.tsx's Dialog), as its panel's
+/// 借用 is pressed: through the presenters, in the window's middle, its title, what it does, 取消 and its action
+/// (a ring while it is done; pressed for nothing where the core says it may not be), whichever control's panel asked
+/// it (a new chat's, a chat's, a connect's). Done or let go, it closes.
+fn borrow_ask(src : Source, station : String, of : String) -> Unit {
   let dkey = "pick.borrow/" + station + "/" + of
-  let open = triple.borrow_asking == me && borrow is Some(Object(_))
-  let lines = items(borrow, "lines").map(fn(l) {
-    match l {
-      String(s) => s
-      _ => ""
-    }
-  })
-  match wide_confirm(c, "borrow/" + me, open, text(borrow, "title"), lines, text(borrow, "action"), doing(dkey), flag(borrow, "allowed")) {
-    Some(true) =>
-      act(src, text(borrow, "action"), dkey, "pick.borrow", Json::object(pick_params(station, of)), done=@sf.t("web-main.model.borrowed"), ok=fn(_) {
-        triple.borrow_asking = ""
-      })
-    Some(false) => triple.borrow_asking = ""
-    None => ()
-  }
-}
-
-///|
-/// A dialog that asks before something is done (the web's Confirm, Dialog): its title, its lines, 取消 and `action`
-/// (`danger`: in red). Some(true) on the frame after the action was pressed, Some(false) after 取消, Esc or a press
-/// outside; None meanwhile.
-fn wide_confirm(
-  c : @ui.Ctx,
-  key : String,
-  open : Bool,
-  title : String,
-  lines : Array[String],
-  action : String,
-  busy : Bool,
-  allowed : Bool,
-) -> Bool? {
-  let mut said : Bool? = None
-  let d = @sf.dialog(
-    c,
-    key,
-    open,
-    title,
-    w=dmin(confirm_w, c.width - 32.0),
-    close_label=@sf.t("common.close"),
-    fn() {
-      for l in lines {
-        c.text(l, style=confirm_line) |> ignore
+  let borrow = fn() { field((src.topic)("pick", pick_params(station, of)).value, "borrow") }
+  guard borrow() is Some(Object(_)) else { return }
+  @sf.panel(text(borrow(), "title"), from=Unanchored, w=confirm_w, fn(c, close) {
+    let b = borrow()
+    for l in items(b, "lines") {
+      match l {
+        String(line) => c.text(line, style=confirm_line) |> ignore
+        _ => ()
       }
-      c.box(style=confirm_foot, fn() {
-        if small_button(c, key + "/cancel", @sf.t("common.cancel"), false, true) {
-          said = Some(false)
-        }
-        if busy {
-          @sf.spinner(c, size=14.0) |> ignore
-        }
-        if small_button(c, key + "/ok", action, true, allowed && !busy) {
-          said = Some(true)
-        }
-      })
-      |> ignore
-    },
-  )
-  if open && !d && said is None {
-    said = Some(false)
-  }
-  said
+    }
+    let busy = doing(dkey)
+    c.box(style=confirm_foot, fn() {
+      if small_button(c, "borrow/cancel", @sf.t("common.cancel"), false, true) {
+        close()
+      }
+      if busy {
+        @sf.spinner(c, size=14.0) |> ignore
+      }
+      if small_button(c, "borrow/ok", text(b, "action"), true, flag(b, "allowed") && !busy) {
+        act(src, text(b, "action"), dkey, "pick.borrow", Json::object(pick_params(station, of)), done=@sf.t("web-main.model.borrowed"), ok=fn(_) {
+          close()
+        })
+      }
+    })
+    |> ignore
+  })
 }
 
 ///|

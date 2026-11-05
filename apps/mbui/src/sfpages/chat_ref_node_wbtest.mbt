@@ -31,7 +31,7 @@ fn retained_ref_tester() -> (@ui.Tester, ComposerNode, Array[(String, Json)], Re
     @ui.set_tree_theme(@sf.ui_theme_now)
     root.lies_along(Is(End)) |> ignore
     made.val = Some(composer_node(root, src, "refs", fn() {
-      { station: "ws/st", draft: "refs", session: "chat", placeholder: "Write", toolbar: None, note: [], tail: None,
+      { station: "ws/st", draft: "refs", session: "chat", placeholder: "Write", toolbar: None, toolbar_node: None, note: [], tail: None,
         roomy: false, locked: false, offline: false, warm_agent: false }
     }, fn(_) { sent.val += 1 }, fn() { 900.0 }, fn(_, _, _, _) {  }))
   })

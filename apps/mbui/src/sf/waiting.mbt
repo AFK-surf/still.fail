@@ -572,7 +572,7 @@ pub fn waiting_node(
 
 ///|
 /// A wait's placeholders at their faintest (breathe's `low`).
-let wait_low : Double = 0.5
+pub let wait_low : Double = 0.5
 
 ///|
 /// wait_pills' room (px=S5, pt=S3_5, pb=S1, gap=S2).

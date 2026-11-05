@@ -2580,6 +2580,8 @@ pub fn wait_line(@ui.Ctx, String, key? : String, error? : Bool) -> Unit
 
 pub fn wait_line_node(@view.View, () -> String) -> @view.View
 
+pub let wait_low : Double
+
 pub fn wait_more(@ui.Ctx, WaitNote?, () -> Unit) -> Unit
 
 pub fn wait_pill(@ui.Ctx, String, key? : String, error? : Bool) -> Unit

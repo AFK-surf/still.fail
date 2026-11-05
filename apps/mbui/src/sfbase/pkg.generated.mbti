@@ -482,6 +482,8 @@ pub fn feel_hold(@ui.Ctx, String) -> Unit
 
 pub fn feel_needed(@ui.Ctx, ChatRef, ChatView) -> Unit
 
+pub fn feel_needed_node(@view.View, () -> ChatView?, () -> Bool) -> Unit
+
 pub fn felt_change(@ui.Ctx, String, Bool, @ui.Haptic) -> Unit
 
 pub fn field(@json.Json?, String) -> @json.Json?
@@ -852,6 +854,8 @@ pub fn link_token(String) -> Bool
 
 pub let link_words : @ui.Style
 
+pub let links_came : @signals.Signal[Int32]
+
 pub fn links_frame(Source, Workspace) -> Unit
 
 pub fn links_given(Source) -> Unit
@@ -1017,6 +1021,8 @@ pub fn new_chat_made(@ui.Ctx, ChatRef) -> Bool
 pub fn new_fade(@ui.Ctx) -> @motion.Anim
 
 pub let new_fade_ms : Double
+
+pub fn new_fade_spec() -> @motion.Spec
 
 pub fn new_leave(@ui.Ctx) -> @motion.Anim
 

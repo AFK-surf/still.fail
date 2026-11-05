@@ -1465,9 +1465,13 @@ fn anchor_of(c : @ui.Ctx, from : Anchor) -> (Int, (Double, Double, Double, Doubl
   match from {
     Of(id) => (id, None)
     At(x, y, w, h) => (0, Some((x, y, w, h)))
-    // (a node of the tree's: no old frame's to stand beside, the window's middle a third down, as where nothing opened it;
-    // the tree's presenters stand beside it, presented_node.mbt)
-    Node(_) | Unanchored => {
+    // (a node of the tree's: what it opens is the tree's to draw beside it (presented_node.mbt tree_draws); come here,
+    // a kind of panel the tree does not draw yet: a fault, never put in the window's middle as if nothing opened it)
+    Node(_) => {
+      @view.fault("presented beside a node of the tree, drawn by the old frame: a kind of panel panel_node does not take yet")
+      (0, None)
+    }
+    Unanchored => {
       let (ww, wh) = c.window_size()
       (0, Some((ww / 2.0, wh / 3.0, 0.0, 0.0)))
     }

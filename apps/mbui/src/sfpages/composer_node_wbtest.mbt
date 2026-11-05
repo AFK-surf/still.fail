@@ -24,7 +24,7 @@ test "a retained composer receives picked files and completes a delayed send onc
     built.val += 1
     node.val = Some(composer_node(root, src, "node-draft", fn() {
       { station: "workspace/station", draft: "node-draft", session: "chat", placeholder: "Write",
-        toolbar: None, note: [], tail: None, roomy: false, locked: false, offline: offline.get(), warm_agent: true }
+        toolbar: None, toolbar_node: None, note: [], tail: None, roomy: false, locked: false, offline: offline.get(), warm_agent: true }
     }, fn(w) { sent.push(w.text.get()) }, fn() { 900.0 }, fn(_, _, _, _) {  }))
   })
   t.draw()
@@ -82,7 +82,7 @@ test "a composer made after its new chat sends keeps the source box until that s
     @ui.set_tree_theme(@sf.ui_theme_now)
     node.val = Some(composer_node(root, src, "carried", fn() {
       { station: "ws/st", draft: "carried", session: "chat", placeholder: "Write",
-        toolbar: None, note: [], tail: None, roomy: false, locked: false, offline: false, warm_agent: true }
+        toolbar: None, toolbar_node: None, note: [], tail: None, roomy: false, locked: false, offline: false, warm_agent: true }
     }, fn(_) { }, fn() { 900.0 }, fn(_, _, _, _) { }))
   })
   t.draw()

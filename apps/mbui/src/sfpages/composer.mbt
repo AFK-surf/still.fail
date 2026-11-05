@@ -19,6 +19,9 @@ pub(all) struct ComposerSpec {
   session : String
   placeholder : String
   toolbar : (() -> Unit)?
+  /// the same choices as nodes of the window's tree (a new chat's: new_tools_node), what a composer of the tree's
+  /// shows of them as they leave (composer_node's leaving copy, turned off), where `toolbar` is an old view's
+  toolbar_node : ((@view.View) -> Unit)?
   /// what it says just before send (where a chat's messages are copied: each thread's mark, "slack" or "feishu", and
   /// its place), nothing to press: on one line and in its row once opened alike, in one place, going with send as it
   /// changes shape; empty nothing
@@ -39,6 +42,7 @@ priv struct ComposerOrigin {
   roomy : Bool
   places : (Double) -> Map[String, (Double, Double, Double, Double)]
   toolbar : (() -> Unit)?
+  toolbar_node : ((@view.View) -> Unit)?
 }
 
 ///|
@@ -461,7 +465,7 @@ pub fn composer(
   }
   @motion.measure(c, box, "composer/content")
   composing.origin = Some({
-    old: true, roomy: spec.roomy, toolbar: spec.toolbar,
+    old: true, roomy: spec.roomy, toolbar: spec.toolbar, toolbar_node: spec.toolbar_node,
     places: fn(_) {
       let out : Map[String, (Double, Double, Double, Double)] = {}
       for name in ["box", "words", "plus", "choices", "note", "send"] {
