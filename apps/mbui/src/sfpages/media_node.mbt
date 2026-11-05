@@ -145,27 +145,17 @@ fn media_reveal_node(
   fit : () -> @ui.Fit,
 ) -> Unit {
   let px = fn() { dmin(dmax(width(), height()) * @ui.current().scale, image_px_most) }
-  // (in the window once: from then on its picture asked for, decoded, drawn. Laid out ahead of what shows (a list's
-  // row made before it comes in), it is only measured: its size is its message's, nothing of it decoded till it shows)
-  let in_sight = @signals.computed(fn(_) {
-    match s.laid_window_told() {
-      Some((_, y, _, h)) => y + h > 0.0 && y < s.window().1
-      None => false
+  // A list's pictures are wanted by its owner for the rows it sighted. Outside a list the first drawing asks for
+  // this one; reading the host's decode state does not itself start a decode.
+  s.on_first_drawn(fn() {
+    if s.lent(chat_pictures_lent) is None {
+      @ui.current().image_want(picture().key, px())
     }
-  }, same=fn(a, b) { a == b })
-  let seen = @signals.signal(false, same=fn(a, b) { a == b })
-  let ready = fn() { seen.get() && @ui.current().image_ready(picture().key, px()) }
+  }) |> ignore
+  let ready = fn() { @ui.image_state(picture().key) == 1 }
   // (when it came in: none, there at once; its way in's end the moment it is all in)
-  let came : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
-  // (decoded already, or held while it waits, as it first shows: there at once)
-  s.reacts(fn() { in_sight.get() }, fn(now) {
-    if now && !@signals.untracked(fn() { seen.get() }) {
-      if @signals.untracked(fn() { @ui.current().image_ready(picture().key, px()) || picture().held }) {
-        came.set(Some(-1.0e18))
-      }
-      seen.set(true)
-    }
-  })
+  let initial = if @signals.untracked(fn() { ready() || picture().held }) { Some(-1.0e18) } else { None }
+  let came : @signals.Signal[Double?] = @signals.signal(initial, same=fn(a, b) { a == b })
   let moving = @signals.signal(false, same=fn(a, b) { a == b })
   s.reacts(fn() { (ready(), picture().held) }, fn(now) {
     let (decoded, held) = now
@@ -206,7 +196,7 @@ fn media_reveal_node(
   }
   let e = fn() { @ui.Out.at(way()) }
   s.clips(Is(true)) |> ignore
-  s.show(fn() { seen.get() }, fn(i) {
+  s.show(ready, fn(i) {
     i
     .over(Is(true))
     .width(By(fn() { Some(width()) }))

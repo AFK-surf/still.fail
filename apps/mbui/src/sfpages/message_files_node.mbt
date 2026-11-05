@@ -91,11 +91,9 @@ fn media_file_node(
   let side = if kind == "image" { image_min_side } else { 0.0 }
   let boxed = fn() { image_box(a(), least, min_side=side) }
   // (`fills`: as wide as its room, a row of the images its message places, each as high as the others)
-  let w = fn() { if fills { room() } else { dmin(boxed().0, room()) } }
-  let h = fn() {
-    let (bw, bh, _) = boxed()
-    bh * w() / bw
-  }
+  let size = fn() { media_box_size(a(), kind, room(), fills) }
+  let w = fn() { size().0 }
+  let h = fn() { size().1 }
   let letterbox = fn() { boxed().2 }
   let share = fn() { picture_share(a(), least, min_side=side) }
   let top_crop = fn() { kind == "image" && tall_image_cropped(a()) }

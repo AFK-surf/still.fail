@@ -265,6 +265,16 @@ pub fn image_box(a : Attachment, least : Double, min_side? : Double = 0.0) -> (D
 }
 
 ///|
+/// A file's box at the room its message gives it. The list's image owner and the drawn file use the same sizing rule.
+fn media_box_size(a : Attachment, kind : String, room : Double, fills : Bool) -> (Double, Double) {
+  let least = if kind == "image" { image_least } else { video_least }
+  let side = if kind == "image" { image_min_side } else { 0.0 }
+  let (bw, bh, _) = image_box(a, least, min_side=side)
+  let w = if fills { room } else { dmin(bw, room) }
+  (w, bh * w / bw)
+}
+
+///|
 /// An image's width over its height in the chat (its image_box's), as a table's cell draws it that wide (@sf.Placed's
 /// `image`); None for any other file.
 fn image_ratio(a : Attachment) -> Double? {
