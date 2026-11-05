@@ -27,24 +27,28 @@ test "the long chat dragged up three screens and down four comes back to its end
   let calls : Array[Made] = []
   let (w, h) = (390.0, 844.0)
   let t = wide_tester(calls, mode="chat-long", w~, h~, platform=2)
+  // (the moments it is looked at: a drag's own end let go, the list come to rest after drags, a fling's run out)
+  let between_drags = 200.0
+  let rested = 1500.0
+  let flung_out = 2500.0
   t.set_frame_period(1000.0 / 120.0)
-  t.run_for(1000.0)
+  t.run_for(rested)
   let opened = end_room(t, h)
   for _ in 0..<3 {
     t.drag(w / 2.0, h * 0.25, w / 2.0, h * 0.75, steps=20)
-    t.run_for(200.0)
+    t.run_for(between_drags)
   }
-  t.run_for(1500.0)
+  t.run_for(rested)
   for _ in 0..<4 {
     t.drag(w / 2.0, h * 0.75, w / 2.0, h * 0.25, steps=20)
-    t.run_for(200.0)
+    t.run_for(between_drags)
   }
-  t.run_for(1500.0)
+  t.run_for(rested)
   assert_eq(end_room(t, h), opened, msg="the room under the last message: \{end_room(t, h)}, as it opened \{opened}")
   // (and flung down once more: still there)
   t.drag(w / 2.0, h * 0.25, w / 2.0, h * 0.75, steps=20)
-  t.run_for(300.0)
+  t.run_for(between_drags)
   t.drag(w / 2.0, h * 0.75, w / 2.0, h * 0.2, steps=4)
-  t.run_for(2500.0)
+  t.run_for(flung_out)
   assert_eq(end_room(t, h), opened, msg="flung down: \{end_room(t, h)}, as it opened \{opened}")
 }
