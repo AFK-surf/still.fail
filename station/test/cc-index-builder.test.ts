@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import { test } from "node:test";
 import { CcIndexBuilder } from "../src/read/cc-index-builder.ts";
 import { ccSessionReady, installCcIndex } from "../src/store/cc-thread-index.ts";
+import { indexedSessionChat, installSessionChatIndex, sessionChatReady } from "../src/store/session-chat-index.ts";
 import { Store } from "../src/store/store.ts";
 
 function oldSessions(store: Store): void {
@@ -70,4 +71,45 @@ test("a stopped copy destination worker resumes its request", async () => {
     assert.ok(existsSync(marker));
     assert.equal(ccSessionReady(store.db, "short"), true);
   } finally { await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("chat-name preparation shares the copy worker, waits for handover, and lets a short session finish", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "session-chat-builder-"));
+  const path = join(dir, "stillfail.db"), store = Store.open(path);
+  const previous = Promise.withResolvers<void>();
+  const builder = new CcIndexBuilder(path, { previousGone: previous.promise });
+  try {
+    oldSessions(store);
+    installSessionChatIndex(store.db);
+    const own = store.openThread("ember", "C", "short-own", null, null).id;
+    store.joinThread(own, "short", "ember");
+    store.db.prepare("UPDATE threads SET created_at=100 WHERE id=?").run(own);
+    let longReady = false;
+    const long = builder.readyNames(["long"]).then(() => { longReady = true; });
+    const short = builder.readyNames(["short"]);
+    const copy = builder.ready(["short"]);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(sessionChatReady(store.db, "short"), false);
+    previous.resolve(); await Promise.all([short, copy]);
+    assert.equal(indexedSessionChat(store.db, "short")?.id, own);
+    assert.equal(ccSessionReady(store.db, "short"), true);
+    assert.equal(longReady, false);
+    await long;
+    assert.equal(sessionChatReady(store.db, "long"), true);
+  } finally { previous.resolve(); await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("cancelling a chat-name request does not cancel its copy-destination request", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "session-chat-cancel-"));
+  const path = join(dir, "stillfail.db"), store = Store.open(path);
+  const previous = Promise.withResolvers<void>(), cancel = new AbortController();
+  const builder = new CcIndexBuilder(path, { previousGone: previous.promise });
+  try {
+    oldSessions(store); installSessionChatIndex(store.db);
+    const stopped = builder.readyNames(["short"], cancel.signal), kept = builder.ready(["short"]);
+    cancel.abort(); await assert.rejects(stopped, /read cancelled/);
+    previous.resolve(); await kept;
+    assert.equal(ccSessionReady(store.db, "short"), true);
+    assert.equal(sessionChatReady(store.db, "short"), false);
+  } finally { cancel.abort(); previous.resolve(); await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });

@@ -14,6 +14,7 @@ export class RequestedBuilder<K extends number | string> {
   readonly #workerFile: URL | undefined;
   readonly #timers: Fibers;
   readonly #field: "thread" | "session" | "scope";
+  readonly #message: ((item: K, cancel: boolean) => Record<string, unknown>) | undefined;
   readonly #waiting = new Map<K, Set<Waiter>>();
   #worker: Worker | null = null;
   #current: K | null = null;
@@ -25,8 +26,9 @@ export class RequestedBuilder<K extends number | string> {
   #retryMs = 250;
 
   constructor(path: string, options: { previousGone?: Promise<void>; priority?: SharedArrayBuffer }, workerFile: URL | undefined,
-    field: "thread" | "session" | "scope", name: string) {
+    field: "thread" | "session" | "scope", name: string, message?: (item: K, cancel: boolean) => Record<string, unknown>) {
     this.#path = path; this.#options = options; this.#workerFile = workerFile; this.#field = field; this.#timers = new Fibers(name);
+    this.#message = message;
   }
 
   ready(items: readonly K[], signal?: AbortSignal): Promise<void> {
@@ -76,7 +78,7 @@ export class RequestedBuilder<K extends number | string> {
       else if (waiters) { this.#waiting.delete(item); this.#waiting.set(item, waiters); }
       this.#retryMs = 250;
     }
-    if (!this.#waiting.has(item) && !result.done) this.#worker?.postMessage({ [this.#field]: item, cancel: true });
+    if (!this.#waiting.has(item) && !result.done) this.#worker?.postMessage(this.#message?.(item, true) ?? { [this.#field]: item, cancel: true });
     this.#pump();
   }
 
@@ -128,7 +130,7 @@ export class RequestedBuilder<K extends number | string> {
       });
     }
     const item = this.#waiting.keys().next().value as K | undefined;
-    if (item !== undefined) { this.#current = item; this.#worker.postMessage({ [this.#field]: item }); }
+    if (item !== undefined) { this.#current = item; this.#worker.postMessage(this.#message?.(item, false) ?? { [this.#field]: item }); }
   }
 
   async close(): Promise<void> {
