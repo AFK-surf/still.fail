@@ -3837,6 +3837,15 @@ pub fn[K : Eq] View::measured(self : View, content : Live[K], size : (K, Double?
 }
 
 ///|
+/// What it hosts to be measured again as it is next laid out (View::measured: what it is measured by changed with nothing
+/// it follows saying so), the layout it was in kept else. For ui's old views hosted in the tree alone (view_host.mbt: an
+/// old view built anew as the old frame is); what a node of the tree's own shows says it changed by what it follows.
+pub fn View::measure_again(self : View) -> Unit {
+  guard self.live() is Some(_) else { return }
+  self.tree.layout_marked_at(self.at)
+}
+
+///|
 /// The words it shows in pieces, each set its own way (a weight, an ink: @text.Run), one paragraph laid out as one
 /// (View::words otherwise: read out, found and measured as the pieces' words one after another), as they change.
 pub fn View::words_runs(

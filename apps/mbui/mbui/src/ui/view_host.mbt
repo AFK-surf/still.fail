@@ -64,7 +64,25 @@ priv struct OldIsland {
   /// number of checks (for tests of the work an unchanged island does)
   mut overflow_walks : Int
   mut held_box : Int
+  /// its node: measured again as the tree is laid out in the old frame's build (old_island_measure), a `natural`
+  /// one's that does not give way
+  node : @view.View
+  /// what the build that measured it last made of it: that build's number (Ctx::build_no, -1 none), the width it was
+  /// measured at, its box among the old frame's and how tall what it holds came to
+  mut measured : (Int, Double, Int, Double)
+  /// where its layout puts it (left, top) as its box was last placed: read as it is moved (old_island_box)
+  at : Ref[(Double, Double)]
+  /// how tall it is taken to be till first measured (old's `unlaid`)
+  unlaid : (() -> Double)?
 }
+
+///|
+/// The old frame's Ctx while the tree is laid out in its build (old_frame): the old views measured then are built
+/// there, in the place and the scope they are built in, and laid out at the width the tree measures them at
+/// (old_island_measure); None else (a frame painted alone, the tree laid out as the frame begins): measured as they
+/// last were.
+// kept across runs: set only around a layout of the tree in a build
+let island_measuring : Ref[Ctx?] = Ref(None)
 
 ///|
 /// The old views in the tree, in the order they were made, and how many were ever (each one's name its own).
@@ -830,122 +848,328 @@ fn old_frame(c : Ctx) -> Unit {
   }
   old_box_owners.clear()
   old_boxes.clear()
+  // (the tree laid out in this build, the old views as tall as what they hold measured as it is: each built here at the
+  // width the tree gives it and laid out, its node as tall as that in the same layout (old_island_measure); placed then)
+  let measures = old_islands.filter(fn(o) { o.natural is Some(_) && !o.gives })
+  match view_app.val {
+    Some(tree) if measures.length() > 0 => {
+      // (measured again where what it holds may come out otherwise: never measured, what it read changed, an input
+      // to it in this frame; else as it was, its node laid out again only as its width changes)
+      for o in measures {
+        if old_island_stale(o) {
+          o.node.measure_again()
+        }
+      }
+      island_measuring.val = Some(c)
+      view_brought(tree)
+      // (what the tree reads of how wide an old view came to (a panel as wide as what it holds: its width the one its
+      // old view told), told as it was measured: laid out again with it, in this build, those measured put back as
+      // they were measured)
+      let told = measures.iter().any(fn(o) {
+        match o.fits {
+          Some(_) => o.measured.0 == c.build_no
+          None => false
+        }
+      })
+      if told || tree.told_since() {
+        // (what the measuring told pulled into the tree's properties as a change under way is: laid out with it)
+        @signals.untracked(fn() { tree.bring_to(view_logic_at.val) })
+        view_brought(tree)
+      }
+      island_measuring.val = None
+    }
+    _ => ()
+  }
+  let boxes : Array[Int] = []
   for p in old_placed {
     match old_islands.iter().find_first(fn(o) { o.id == p.0 }) {
       Some(o) => {
         // (laid out where its layout puts it, on no pixel it is not on, as the old frame lays out what it holds)
-        let (id, _, _, w, h, _, ox, oy, _) = p
-        let (left, top) = (ox, oy)
-        let i = c.box(
-          // (one as tall as what it holds: as tall as that is laid out, whatever its node was given (its height its node's
-          // as that is told, old_natural_after_layout), what grows in it laid out by what it holds, not the room it had)
-          // (one that gives way: laid out in the height its node is given, as tall as what it holds asks all the same)
-          // (the box lays out the island; only a clipping ancestor cuts what the island draws past it)
-          style=if o.natural is Some(_) && !o.gives {
-            style(w=Fixed(w))
-          } else {
-            style(w=Fixed(w), h=Fixed(h))
-          },
-          left~,
-          top~,
-          fn() {
-            // (its part's id, as made_put names it here: what is let go with it, what an input to it builds)
-            o.part = c.id(o.key)
-            // (built for its own room: what it reads of the window's size is its node's)
-            // (as tall as what it holds: built for its width, its Ctx::height the window's (where it is built, not how
-            // tall it may be), never the height it is given, which is what it holds's)
-            let room_h = if o.natural is Some(_) { c.height } else { h }
-            // (as wide as what it holds: built for the most it may be, whatever it is now)
-            let room_w = match o.fits {
-              Some((most, _)) => most
-              None => w
+        let (_, _, _, w, h, _, ox, oy, _) = p
+        o.at.val = (ox, oy)
+        let (pass, mw, mi, _) = o.measured
+        if pass == c.build_no && mi >= 0 && mi < c.count {
+          // (built as it was measured: placed where the tree put it, at the width it was measured at; one as wide as what
+          // it holds given a node wider than that (its width said of it), what it holds laid out as wide as its node,
+          // never narrower: wider, its words fold no more than they did, so it is no taller)
+          if o.fits is Some(_) && w > mw && o.held_box >= 0 && o.held_box < c.count {
+            c.nodes[mi].w = Px(w)
+            c.nodes[o.held_box].min_w = w
+            if c.nodes[o.held_box].parent >= 0 {
+              c.nodes[c.nodes[o.held_box].parent].w = Px(w)
             }
-            o.room.val = (room_w, room_h)
-            let put = fn() { owned_by(o.owner, fn() { o.watch.read(fn() { c.made(o.key, fn() { o.made }) }) }) }
-            c.sized(room_w, room_h, fn() {
-              match o.natural {
-                // (as tall as what it holds at its width, in a box of its own: how tall that is laid out, its node's
-                // height, old_natural_after_layout; as wide as what it holds, `most` at most, no narrower than its node:
-                // how wide that is laid out, what its node is told)
-                Some(_) =>
-                  match o.fits {
-                    // (laid out in the room of the most it may be, at its start: as wide as what it holds there, no
-                    // narrower than its node; whatever its node is now)
-                    Some((most, width)) => {
-                      let most = dmax(w, most)
-                      // (the island follows its own reads, rather than its host's watch; measure again when that part
-                      // is stale or its build key changes, before putting its retained nodes at the new width)
-                      let part_changed = match kept_nodes.get((o.part, -1)) {
-                        Some(rn) => {
-                          let key = match o.made.island {
-                            Some((_, k, _, _)) => @signals.untracked(k)
-                            None => ""
-                          }
-                          let event = nodes_run.fresh && evented_for(o.part) && o.fit_event_frame != c.frame_no
-                          if event {
-                            o.fit_event_frame = c.frame_no
-                          }
-                          rn.watch.is_stale() || rn.key != key || rn.seed != c.id_seed || rn.owner != c.owner ||
-                            event
-                        }
-                        None => true
-                      }
-                      if part_changed {
-                        o.fit_probe.val = true
-                      }
-                      o.fit_probing = o.fit_probe.val
-                      let laid_width = if o.fit_probing {
-                        most
-                      } else {
-                        dmin(most, dmax(w, @signals.untracked(fn() { width.get() }).unwrap_or(w)))
-                      }
-                      c.box(style=style(w=Fixed(laid_width), align=AStart), fn() {
-                        o.held_box = c.box(style=style(w=Hug, min_w=Fixed(w), max_w=Fixed(most)), fn() { put() })
-                      })
-                      |> ignore
-                    }
-                    // (one that gives way: in the height its node is given, all of it)
-                    None if o.gives => o.held_box = c.box(style=style(w=Fixed(w), h=Full), fn() { put() })
-                    None => o.held_box = c.box(style=style(w=Fixed(w)), fn() { put() })
-                  }
-                None => {
-                  o.held_box = -1
-                  put()
-                }
-              }
-            })
-          },
-        )
-        // (moved to where it is drawn, from where it is laid out, as it is painted (Ctx::moved_by): what it holds, its
-        // clip, where it takes a finger and where its words are, with it; read again as the tree is: where the tree draws
-        // its node, on no pixel the tree does not put it on (what moves by a look of the tree's, on whole pixels already:
-        // Tree::each_drawn_in_order's pixel_grid), its words set on the pixels where it is laid out and carried with it,
-        // glyphs_carried)
-        c.moved_carries(i, fn(_, _) {
-          old_moved.get() |> ignore
-          match old_placed.iter().find_first(fn(q) { q.0 == id }) {
-            Some(q) => (q.1 - left, q.2 - top)
-            None => (0.0, 0.0)
+          } else if mw != w {
+            island_width_twice(o, mw, w)
           }
-        })
-        // (drawn as big as it is, about where it is moved to (its top left): what it holds with it; laid out as big as
-        // its node, where it is told it takes a finger, its words are and it is read out projected so as each is read:
-        // Ctx::island_now)
-        c.look_by(i, fn() {
-          old_moved.get() |> ignore
-          let s = island_scale(id)
-          if s == 1.0 {
-            still_look
-          } else {
-            look(scale=s, ox=0.0, oy=0.0)
-          }
-        })
-        old_boxes[o.id] = i
-        old_box_owners[i] = (o.owner, o.id)
+          let n = c.nodes[mi]
+          n.at_l = ox
+          n.at_t = oy
+          old_boxes[o.id] = mi
+          old_box_owners[mi] = (o.owner, o.id)
+          boxes.push(mi)
+        } else {
+          boxes.push(old_island_box(c, o, w, h, o.at))
+        }
       }
       None => ()
     }
   }
+  // (in the tree's order among the old frame's, as placed: what is over another after it, its presses and its back
+  // taken first; those measured were built as the tree measured them)
+  if measures.length() > 0 {
+    old_boxes_in_order(c, boxes)
+  }
+}
+
+///|
+/// Whether what old view `o` holds may come out otherwise than it was last measured: never measured, what its build read
+/// changed (its own watch, or its part's), its part let go, or an input to it in this frame (its part built anew).
+fn old_island_stale(o : OldIsland) -> Bool {
+  o.measured.0 < 0 ||
+  o.watch.is_stale() ||
+  evented_for(o.part) ||
+  (match kept_nodes.get((o.part, -1)) {
+    Some(rn) => rn.watch.is_stale() || rn.n == 0
+    None => true
+  })
+}
+
+///|
+/// Old view `id`'s node measured as the tree is laid out (`w`: the width it is given, None as wide as it comes to): in
+/// the old frame's build (island_measuring), built there at that width and laid out, as tall as what it holds comes to
+/// (its `natural` height told then, not after the frame is laid out: old_natural_after_layout finds it the same); else
+/// as tall as it was last measured (a frame painted alone lays the tree out as the build before it measured it), or
+/// as it is taken to be till first measured (`unlaid`).
+fn old_island_measure(id : @view.NodeId, w : Double?) -> (Double, Double) {
+  guard old_islands.iter().find_first(fn(o) { o.id == id }) is Some(o) else { return (w.unwrap_or(0.0), 0.0) }
+  guard o.natural is Some(s) else { return (w.unwrap_or(0.0), 0.0) }
+  // (as tall as the build before measured it: what is measured is kept as it was, told nothing, so that no frame is
+  // owed for it)
+  let last = fn() {
+    match (o.measured, s.get(), o.unlaid) {
+      ((pass, _, _, h), _, _) if pass >= 0 => h
+      (_, Some(h), _) => h
+      (_, None, Some(f)) => f()
+      (_, None, None) => 0.0
+    }
+  }
+  match (island_measuring.val, if o.fits is Some(_) { Some(w.unwrap_or(0.0)) } else { w }) {
+    (Some(c), Some(w)) => {
+      let (pass, mw, _, mh) = o.measured
+      if pass == c.build_no {
+        // (a node as wide as what holds it says is measured at one width in a layout; one asked twice says so. One as
+        // wide as what it holds is asked with no width and then at the one it came to: the same, built once)
+        if mw != w && o.fits is None {
+          island_width_twice(o, mw, w)
+        }
+        return (mw, mh)
+      }
+      match o.fits {
+        Some((most, width)) => {
+          // (as wide as what it holds, `most` at most, never narrower than it has been: built in the room of the most
+          // and laid out there (its box as wide as that, what it holds as wide as it comes to); placed at that width,
+          // the box made as wide, nothing built again: laid out at the width what it holds came to in the most, its
+          // words fold where they did, none more (that width is how wide they are unfolded where they may be))
+          let was = @signals.untracked(fn() { width.get() }).unwrap_or(0.0)
+          o.fit_probe.val = true
+          let i = old_island_box(c, o, was, 0.0, o.at)
+          c.layout(i, 0.0, 0.0, dmax(was, most), c.height) |> ignore
+          let (cw, h) = if o.held_box >= 0 && o.held_box < c.count {
+            (c.nodes[o.held_box].fw, c.nodes[o.held_box].fh)
+          } else {
+            (was, 0.0)
+          }
+          // (its box, and the one it was laid out in the room of the most in, as wide as it came to: not laid out again at
+          // that width, what it holds where it was, as the box it is laid out in holds it at its start (AStart) and it is
+          // as wide as it comes to (Hug); held otherwise (centred, at the end), it would have to be laid out again)
+          c.nodes[i].w = Px(cw)
+          if o.held_box >= 0 && o.held_box < c.count && c.nodes[o.held_box].parent >= 0 {
+            c.nodes[c.nodes[o.held_box].parent].w = Px(cw)
+          }
+          o.fit_probe.val = false
+          // (how wide it came to told what reads it (the panel as wide as it): read as the tree is laid out again in this
+          // build, old_frame; the frame after owed for it once, as it first comes to it)
+          told_if_new(width, Some(cw))
+          o.measured = (c.build_no, cw, i, h)
+          return (cw, h)
+        }
+        None => ()
+      }
+      let i = old_island_box(c, o, w, 0.0, o.at)
+      c.layout(i, 0.0, 0.0, w, c.height) |> ignore
+      let h = if o.held_box >= 0 && o.held_box < c.count { c.nodes[o.held_box].fh } else { 0.0 }
+      o.measured = (c.build_no, w, i, h)
+      (w, h)
+    }
+    _ => (w.unwrap_or(0.0), last())
+  }
+}
+
+///|
+/// `v` told `sig` where it is not what it holds already: a size measured as it was in every build after the first is
+/// set nowhere, so no frame is owed for it (frame_watch.mbt: what the build read, set as it was built).
+fn told_if_new(sig : @signals.Signal[Double?], v : Double?) -> Unit {
+  if @signals.untracked(fn() { sig.get() }) != v {
+    sig.set(v)
+  }
+}
+
+///|
+/// Old view `o` measured at width `was` in this build, and asked at `now` too (its node said another width as the tree
+/// was laid out, or placed at another than it was measured at): built once, at the first, so laid out wrong at the
+/// second. A Tester stops there; a host's run says it and goes on with the first.
+fn island_width_twice(o : OldIsland, was : Double, now : Double) -> Unit {
+  let said = "\{o.key} measured at width \{was}, then asked at \{now} in the same build"
+  if fake.val is Some(_) {
+    println(said)
+    abort(said)
+  }
+  h_log(said)
+}
+
+///|
+/// The old views' boxes (`boxes`, in the tree's order), among what holds them, put in that order: those measured as
+/// the tree was laid out were built in the order it measured them.
+fn old_boxes_in_order(c : Ctx, boxes : Array[Int]) -> Unit {
+  guard c.cur >= 0 && boxes.length() > 1 else { return }
+  let p = c.nodes[c.cur]
+  let others : Array[Int] = []
+  let mut k = p.first
+  while k >= 0 {
+    if !boxes.contains(k) {
+      others.push(k)
+    }
+    k = c.nodes[k].next
+  }
+  // (what else it holds first, as it was built before them; the old views after, in the tree's order)
+  let all = others + boxes
+  p.first = -1
+  p.last = -1
+  for i in all {
+    c.nodes[i].next = -1
+    if p.last >= 0 {
+      c.nodes[p.last].next = i
+    } else {
+      p.first = i
+    }
+    p.last = i
+  }
+}
+
+///|
+/// Old view `o`'s box among the old frame's, `w` by `h` as its node is laid out (as tall as what it holds where it is
+/// `natural`), at `at` where its layout puts it (left, top: read again as it is moved, the box placed there anew where
+/// it was built before it was placed, old_island_measure): what it holds built in it as old_frame builds it.
+fn old_island_box(c : Ctx, o : OldIsland, w : Double, h : Double, at : Ref[(Double, Double)]) -> Int {
+  let id = o.id
+  let (left, top) = at.val
+  let i = c.box(
+    // (one as tall as what it holds: as tall as that is laid out, whatever its node was given (its height its node's
+    // as that is told, old_natural_after_layout), what grows in it laid out by what it holds, not the room it had)
+    // (one that gives way: laid out in the height its node is given, as tall as what it holds asks all the same)
+    // (the box lays out the island; only a clipping ancestor cuts what the island draws past it)
+    style=if o.natural is Some(_) && !o.gives {
+      style(w=Fixed(w))
+    } else {
+      style(w=Fixed(w), h=Fixed(h))
+    },
+    left~,
+    top~,
+    fn() {
+      // (its part's id, as made_put names it here: what is let go with it, what an input to it builds)
+      o.part = c.id(o.key)
+      // (built for its own room: what it reads of the window's size is its node's)
+      // (as tall as what it holds: built for its width, its Ctx::height the window's (where it is built, not how
+      // tall it may be), never the height it is given, which is what it holds's)
+      let room_h = if o.natural is Some(_) { c.height } else { h }
+      // (as wide as what it holds: built for the most it may be, whatever it is now)
+      let room_w = match o.fits {
+        Some((most, _)) => most
+        None => w
+      }
+      o.room.val = (room_w, room_h)
+      let put = fn() { owned_by(o.owner, fn() { o.watch.read(fn() { c.made(o.key, fn() { o.made }) }) }) }
+      c.sized(room_w, room_h, fn() {
+        match o.natural {
+          // (as tall as what it holds at its width, in a box of its own: how tall that is laid out, its node's
+          // height, old_natural_after_layout; as wide as what it holds, `most` at most, no narrower than its node:
+          // how wide that is laid out, what its node is told)
+          Some(_) =>
+            match o.fits {
+              // (laid out in the room of the most it may be, at its start: as wide as what it holds there, no
+              // narrower than its node; whatever its node is now)
+              Some((most, width)) => {
+                let most = dmax(w, most)
+                // (the island follows its own reads, rather than its host's watch; measure again when that part
+                // is stale or its build key changes, before putting its retained nodes at the new width)
+                let part_changed = match kept_nodes.get((o.part, -1)) {
+                  Some(rn) => {
+                    let key = match o.made.island {
+                      Some((_, k, _, _)) => @signals.untracked(k)
+                      None => ""
+                    }
+                    let event = nodes_run.fresh && evented_for(o.part) && o.fit_event_frame != c.frame_no
+                    if event {
+                      o.fit_event_frame = c.frame_no
+                    }
+                    rn.watch.is_stale() || rn.key != key || rn.seed != c.id_seed || rn.owner != c.owner ||
+                      event
+                  }
+                  None => true
+                }
+                if part_changed {
+                  o.fit_probe.val = true
+                }
+                o.fit_probing = o.fit_probe.val
+                let laid_width = if o.fit_probing {
+                  most
+                } else {
+                  dmin(most, dmax(w, @signals.untracked(fn() { width.get() }).unwrap_or(w)))
+                }
+                c.box(style=style(w=Fixed(laid_width), align=AStart), fn() {
+                  o.held_box = c.box(style=style(w=Hug, min_w=Fixed(w), max_w=Fixed(most)), fn() { put() })
+                })
+                |> ignore
+              }
+              // (one that gives way: in the height its node is given, all of it)
+              None if o.gives => o.held_box = c.box(style=style(w=Fixed(w), h=Full), fn() { put() })
+              None => o.held_box = c.box(style=style(w=Fixed(w)), fn() { put() })
+            }
+          None => {
+            o.held_box = -1
+            put()
+          }
+        }
+      })
+    },
+  )
+  // (moved to where it is drawn, from where it is laid out, as it is painted (Ctx::moved_by): what it holds, its
+  // clip, where it takes a finger and where its words are, with it; read again as the tree is: where the tree draws
+  // its node, on no pixel the tree does not put it on (what moves by a look of the tree's, on whole pixels already:
+  // Tree::each_drawn_in_order's pixel_grid), its words set on the pixels where it is laid out and carried with it,
+  // glyphs_carried)
+  c.moved_carries(i, fn(_, _) {
+    old_moved.get() |> ignore
+    match old_placed.iter().find_first(fn(q) { q.0 == id }) {
+      Some(q) => (q.1 - at.val.0, q.2 - at.val.1)
+      None => (0.0, 0.0)
+    }
+  })
+  // (drawn as big as it is, about where it is moved to (its top left): what it holds with it; laid out as big as
+  // its node, where it is told it takes a finger, its words are and it is read out projected so as each is read:
+  // Ctx::island_now)
+  c.look_by(i, fn() {
+    old_moved.get() |> ignore
+    let s = island_scale(id)
+    if s == 1.0 {
+      still_look
+    } else {
+      look(scale=s, ox=0.0, oy=0.0)
+    }
+  })
+  old_boxes[o.id] = i
+  old_box_owners[i] = (o.owner, o.id)
+  i
 }
 
 ///|
@@ -2889,19 +3113,27 @@ pub fn old(
     let overflow = @signals.signal(false, same=fn(a, b) { a == b })
     n.hosted_clips(By(fn() { overflow.get() })) |> ignore
     // (as tall as what it holds at the width it is given, as the old frame last laid that out: old_natural_after_layout)
+    let id = n.id()
     let natural_h : @signals.Signal[Double?]? = if natural {
       let s = @signals.signal(None, same=fn(a, b) { a == b })
-      // (`unlaid`: how tall it is taken to be till the old frame has laid it out, in that frame's first pass (built
-      // again with it once known, never drawn so): what lays out by the room it leaves (a list making its rows as far
-      // as they show) making nothing for room it does not leave)
-      n.height(By(fn() {
-        match (s.get(), unlaid) {
-          (Some(h), _) => Some(h)
-          (None, Some(f)) => Some(f())
-          (None, None) => None
-        }
-      }))
-      |> ignore
+      if gives {
+        // (`unlaid`: how tall it is taken to be till the old frame has laid it out, in that frame's first pass (built
+        // again with it once known, never drawn so): what lays out by the room it leaves (a list making its rows as far
+        // as they show) making nothing for room it does not leave)
+        n.height(By(fn() {
+          match (s.get(), unlaid) {
+            (Some(h), _) => Some(h)
+            (None, Some(f)) => Some(f())
+            (None, None) => None
+          }
+        }))
+        |> ignore
+      } else {
+        // (as tall as what it holds, measured as the tree is laid out in the old frame's build: built there at the width
+        // the tree gives it and laid out, how tall that comes to its node's height in the same layout, nothing built
+        // again for it; as last measured where the tree is laid out with no build, old_island_measure)
+        n.measured(Is(0), fn(_, w) { old_island_measure(id, w) }) |> ignore
+      }
       Some(s)
     } else {
       None
@@ -2910,7 +3142,6 @@ pub fn old(
     old_made.val = old_made.val + 1
     let room : Ref[(Double, Double)] = Ref((0.0, 0.0))
     let fit_probe = Ref(true)
-    let id = n.id()
     // (a scope of the node's: all it makes as it is built and laid out is owned by it, stopped as the node goes)
     let owner : Ref[@signals.ReactiveNode?] = Ref(None)
     @signals.effect_scope(fn() { owner.val = @signals.active_sub() }) |> ignore
@@ -2975,6 +3206,10 @@ pub fn old(
       overflow_size: (-1.0, -1.0),
       overflow_walks: 0,
       held_box: -1,
+      node: n,
+      measured: (-1, 0.0, -1, 0.0),
+      at: Ref((0.0, 0.0)),
+      unlaid,
     })
     n.owns(fn() {
       match old_islands.search_by(fn(o) { o.id == id }) {
@@ -4791,6 +5026,9 @@ fn old_content_overflows(c : Ctx, root : Int, x : Double, y : Double, w : Double
 fn old_natural_after_layout(c : Ctx) -> Unit {
   for o in old_islands {
     match o.natural {
+      // (measured as the tree is laid out (one that does not give way): its node as big as it came to already, in this
+      // build or, as nothing it holds changed since, as the build that measured it, old_island_measure)
+      Some(_) if !o.gives && o.measured.0 >= 0 => ()
       Some(s) if o.held_box >= 0 && o.held_box < c.count => {
         // (one that gives way: as tall as what it holds is laid out with no bound on its height, not the height it was
         // given and laid out in)
