@@ -436,6 +436,8 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
   const reviewed = ids.length === 0 ? new Set<number>() : new Set<number>(store.reviewedThreads(s, ids));
   // The cards they wait on as kept; a chat with a card from before they were kept, worked out as it was.
   const cards = store.pendingCards(s, ids);
+  // Prepare legacy cards together: otherwise each old chat would cause the entire marks read to be retried.
+  store.requireCardPosts(s, cards === null ? store.threadsWithCards(s, ids) : [...cards.before]);
   const keptCard = (id: number): number | null | undefined => (cards === null || cards.before.has(id) ? undefined : (cards.at.get(id) ?? null));
   for (const t of own) {
     const id = t.thread.id;
@@ -581,6 +583,9 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
   // The cards answered lately, by chat, with who answered.
   const answered = new Map<number, Json[]>();
   const itemThreads = threads.filter((t) => t.thread.surface === STILLFAIL_SURFACE && listed(t) && inChat(t).length > 0);
+  const carded = !archived && !titlesOnly ? store.threadsWithCards(s, itemThreads.map((t) => t.thread.id)) : [];
+  // Each card view below can need its old posts. Ask once for the list, rather than retrying it once per chat.
+  store.requireCardPosts(s, carded);
   const saidByThread = new Map<number, ReturnType<typeof store.saidOf>>();
   const needSaid: number[] = [];
   for (const t of titlesOnly ? [] : itemThreads) {
@@ -594,7 +599,6 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
   if (!archived && !titlesOnly) {
     // Only these items can show an answer, and a chat without cards cannot have one. Looking at every person's recent
     // messages first made even a change to one cardless chat read that chat's whole recent conversation.
-    const carded = store.threadsWithCards(s, itemThreads.map((t) => t.thread.id));
     for (const a of store.answersSince(s, store.nowMs() - ANSWERED_WITHIN, carded)) {
       const list = answered.get(a.question.thread) ?? [];
       list.push({ ...answeredView(a), by: creator(a.by) });

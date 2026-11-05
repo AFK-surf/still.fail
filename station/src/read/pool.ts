@@ -277,6 +277,13 @@ export class Readers {
     return this.covered(this.widgetSources.ready(threads, signal), signal);
   }
 
+  /// Prepare old card posts requested by a read; concurrent reads share this work.
+  prepareCardPosts(threads: readonly number[], signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.cardPosts ??= new CardPostsBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.cardPosts.ready(threads, signal), signal);
+  }
+
   /// Prepare the sessions needed to choose a chat's copy destinations.
   prepareCcSessions(sessions: readonly string[], signal?: AbortSignal): Promise<void> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
@@ -304,8 +311,7 @@ export class Readers {
           let threads: unknown;
           try { threads = JSON.parse(error.message.slice(CARD_POSTS_PENDING.length)); } catch { throw error; }
           if (!Array.isArray(threads) || threads.length === 0 || !threads.every(Number.isSafeInteger)) throw error;
-          this.cardPosts ??= new CardPostsBuilder(join(this.data, "stillfail.db"), this.backfill);
-          await this.covered(this.cardPosts.ready(threads, signal), signal);
+          await this.prepareCardPosts(threads, signal);
           continue;
         }
         if (error.message.startsWith(TURN_COUNT_PENDING)) {

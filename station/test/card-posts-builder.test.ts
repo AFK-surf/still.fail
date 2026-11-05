@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { pathToFileURL } from "node:url";
 import { test } from "node:test";
 import { CardPostsBuilder } from "../src/read/card-posts-builder.ts";
+import { Readers } from "../src/read/pool.ts";
 import { answersSince, makeStore, pendingCard } from "../src/read/store.ts";
 import { cardPostsReady, installCardPosts } from "../src/store/card-post-index.ts";
 import { Store } from "../src/store/store.ts";
@@ -98,4 +100,57 @@ test("a read asks for its old card threads together and keeps their original ans
       [[first, 1, 1000], [second, 1, 1000]]);
     assert.equal(pendingCard(read, first), null);
   } finally { await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+for (const operation of ["chats", "chatMarks"] as const) {
+  test(`${operation} prepares the old cards it needs together and retries the read`, async () => {
+    const dir = mkdtempSync(join(tmpdir(), "card-post-pages-"));
+    const store = Store.open(join(dir, "stillfail.db"));
+    const readers = new Readers(dir, 1);
+    try {
+      const threads = oldThreads(store);
+      const sessions = threads.map((thread, i) => {
+        const key = `s${i}`;
+        store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: `/w/${key}`,
+          token: key, createdAt: 1, lastActiveAt: 1 });
+        store.joinThread(thread, key, "ember");
+        return key;
+      });
+      // The cards predate the table that remembers a pending card.
+      store.db.exec("DELETE FROM pending_cards; UPDATE pending_cards_from SET entry=(SELECT MAX(rowid) FROM entries)");
+      const batches: number[][] = [];
+      const prepare = readers.prepareCardPosts.bind(readers);
+      readers.prepareCardPosts = (items, signal) => { batches.push([...items]); return prepare(items, signal); };
+      const viewer = { sub: "me", email: "me", name: "Me", role: "owner", workspace: "w", device: "d" };
+      const args = operation === "chats" ? { viewer, archived: false } : { viewer, scope: { sessions, threads } };
+      const result = JSON.parse(await readers.read(operation, args, "en"));
+      if (operation === "chats") {
+        for (const thread of threads) assert.equal(result.find((row: any) => row.thread === thread)?.card?.seq, 1);
+      } else {
+        for (const thread of threads) assert.equal(result.card[thread]?.seq, 1);
+      }
+      assert.equal(batches.length, 1, "the list is prepared in one request");
+      assert.deepEqual(new Set(batches[0]), new Set(threads));
+    } finally { readers.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+}
+
+test("a card answer and its prepared posts are read from the same snapshot", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "card-post-snapshot-"));
+  const path = join(dir, "stillfail.db"), store = Store.open(path);
+  const builder = new CardPostsBuilder(path);
+  let db: DatabaseSync | null = null;
+  try {
+    const [, thread] = oldThreads(store);
+    await builder.ready([thread]);
+    db = new DatabaseSync(path, { readOnly: true });
+    const read = makeStore(db, dir);
+    db.exec("BEGIN");
+    assert.equal(cardPostsReady(db, thread), true);
+    store.db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at,card) VALUES(?,2,'message','agent','a',2,'{}')").run(thread);
+    store.db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES(?,3,'message','person','p','yes',3)").run(thread);
+    assert.deepEqual(answersSince(read, 0, [thread]), []);
+    db.exec("COMMIT");
+    assert.deepEqual(answersSince(read, 0, [thread]).map((a) => [a.question.n, a.answer?.n]), [[2, 3]]);
+  } finally { db?.close(); await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
