@@ -1343,10 +1343,14 @@ export class Store {
         const latest = indexedLatestThread(this.db, session);
         return latest ? toSessionThread(latest) : null;
       }
-      // A zero- or one-member session is already bounded and needs no persistent projection. For old larger sessions,
+      // Zero or one membership needs neither a delivery lookup nor a persistent projection. For old larger sessions,
       // request background preparation; callers that must answer synchronously retain the original answer until ready.
-      if (this.#all("SELECT rowid FROM thread_sessions INDEXED BY thread_sessions_session WHERE session=? LIMIT 2", session).length > 1)
-        this.requestLatestThread?.(session);
+      const members = this.#all("SELECT thread FROM thread_sessions INDEXED BY thread_sessions_session WHERE session=? LIMIT 2", session);
+      if (members.length < 2) {
+        const only = members[0] && this.#one(SESSION_THREAD_BY_ID, members[0].thread, session);
+        return only ? toSessionThread(only) : null;
+      }
+      this.requestLatestThread?.(session);
       const latest = this.#one(
         `SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread
          WHERE ts.session = ?

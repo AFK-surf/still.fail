@@ -34,7 +34,7 @@ test("a session's latest chat follows delivery order and falls back to its lates
   } finally { store.close(); }
 });
 
-test("finding the latest chat seeks one delivery per joined chat", () => {
+test("one joined chat is found without examining its deliveries", () => {
   const { store, thread } = fixture();
   const db = store.db;
   try {
@@ -60,7 +60,7 @@ test("finding the latest chat seeks one delivery per joined chat", () => {
     Object.defineProperty(store, "db", { value: traced, configurable: true });
     try {
       assert.equal(store.latestThread("s")?.thread.id, id);
-      assert.ok(visited > 0 && visited <= 2, `the existing session and thread index seeks past old deliveries (visited ${visited})`);
+      assert.equal(visited, 0, "only one membership makes its delivery order irrelevant");
     } finally { Object.defineProperty(store, "db", { value: db, configurable: true }); }
   } finally { store.close(); }
 });
