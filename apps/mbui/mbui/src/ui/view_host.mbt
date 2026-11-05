@@ -51,6 +51,9 @@ priv struct OldIsland {
   /// old frame last laid it out, told the signal (None before it first is)
   fits : (Double, @signals.Signal[Double?])?
   mut held_box : Int
+  /// the box it is laid out in where it gives way (old's `gives`), named for its build to read how tall that is laid
+  /// out (Ctx::old_given; 0: none this frame)
+  mut given_id : Int
 }
 
 ///|
@@ -778,6 +781,7 @@ fn old_frame(c : Ctx) -> Unit {
   // (none laid out yet in this pass: each placed says its own, none where the old frame is the one old view)
   for o in old_islands {
     o.held_box = -1
+    o.given_id = 0
   }
   if old_whole.val {
     match old_islands.iter().find_first(fn(o) { old_placed.iter().any(fn(p) { p.0 == o.id }) }) {
@@ -842,7 +846,10 @@ fn old_frame(c : Ctx) -> Unit {
                       |> ignore
                     }
                     // (one that gives way: in the height its node is given, all of it)
-                    None if o.gives => o.held_box = c.box(style=style(w=Fixed(w), h=Full), fn() { put() })
+                    None if o.gives => {
+                      o.given_id = c.id(o.key + "/given")
+                      o.held_box = c.box(style=style(w=Fixed(w), h=Full), id=o.given_id, taps=false, fn() { put() })
+                    }
                     None => o.held_box = c.box(style=style(w=Fixed(w)), fn() { put() })
                   }
                 None => {
@@ -3089,6 +3096,7 @@ pub fn old(
       gives: natural && gives,
       fits: if natural { fits } else { None },
       held_box: -1,
+      given_id: 0,
     })
     n.owns(fn() {
       match old_islands.search_by(fn(o) { o.id == id }) {
@@ -3110,6 +3118,20 @@ pub fn old(
     })
     |> ignore
   })
+}
+
+///|
+/// How tall the old view being built is laid out where it gives way (old's `gives`): the height its node is given, as
+/// the old frame last laid out the box it lays it out in, read back as an old view reads what it lays out (Ctx::laid_size:
+/// laid out otherwise, the frame is built again in it). None before that is first laid out, outside an old view and in
+/// one that does not give way.
+#callsite(autofill(loc))
+pub fn Ctx::old_given(self : Ctx, loc~ : SourceLoc) -> Double? {
+  guard island_building.val is Some(id) else { return None }
+  match old_islands.iter().find_first(fn(o) { o.id == id }) {
+    Some(o) if o.gives && o.given_id != 0 => self.laid_size(o.given_id, loc~).map(fn(s) { s.1 })
+    _ => None
+  }
 }
 
 ///|

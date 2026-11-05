@@ -76,14 +76,13 @@ fn stage_node(
       @ui.old(d, natural=true, gives=true, key=fn() { key + "/body" }, fn(c) {
           let (sw, sh) = room()
           // (the room the column gives it, what it is drawn smaller to: the height its node is given, which the old
-          // frame lays what it holds out in (old's `gives`), read back as an old view reads what it laid out (the frame
-          // built again where that comes out otherwise), never where the tree places it as it is built)
-          let given_id = c.id(key + "/given")
-          let given = match c.laid_size(given_id) {
-            Some((_, g)) if g > 0.0 => g
+          // frame lays what it holds out in (old's `gives`), read back as an old view reads what it lays out
+          // (Ctx::old_given: the frame built again where that comes out otherwise), never where the tree places it as it
+          // is built)
+          let given = match c.old_given() {
+            Some(g) if g > 0.0 => g
             _ => sh
           }
-          c.box(style=stage_given_box, id=given_id, left=0.0, top=0.0, taps=false, fn() {  }) |> ignore
           let was = (stage_room.val, stage_gives.val)
           stage_room.val = Some((sw, sh))
           stage_gives.val = true
@@ -143,11 +142,6 @@ fn stage_node(
 ///|
 /// The most a stage's parts are laid out as wide as (old's `fits`): past any window, what each holds deciding.
 let stage_fits_most : Double = 100000.0
-
-///|
-/// Over all a stage's body's old view is laid out in, out of its flow: as tall as the height its node is given (old's
-/// `gives`: its held box as tall), what is read back of it as the room it is drawn smaller to.
-let stage_given_box : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// How long a stage's night takes to come: its surface, the night in by the time what it holds begins to come (kit's

@@ -1329,6 +1329,8 @@ pub fn Ctx::now(Self, loc~ : SourceLoc) -> Double
 pub fn Ctx::now_before(Self, Double, loc~ : SourceLoc) -> Double
 #callsite(autofill(loc))
 pub fn Ctx::now_of(Self, Mover, loc~ : SourceLoc) -> Double
+#callsite(autofill(loc))
+pub fn Ctx::old_given(Self, loc~ : SourceLoc) -> Double?
 pub fn Ctx::on_back(Self, () -> Unit) -> Unit
 pub fn Ctx::on_key(Self, Int32, (Int32, Int32) -> Bool) -> Unit
 pub fn Ctx::on_page_release(Self, String, () -> Unit) -> Unit

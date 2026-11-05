@@ -159,13 +159,13 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
     let (before, after) = vw.near(src)
     vw.read_near(src, before, after)
   })
-  // where its picture flies from and back into, kept as the chat lays its thumbnail out while it flies: where it was
+  // where its picture flies from and back into, kept as the chat draws its thumbnail while it flies: where it was
   // last, what showed of it moved with it, for the frames it is on the screen no more (Viewer::flight_from; its nodes
-  // read it where it is in the frame they draw)
-  n.reacts(
+  // read it where it is in the frame they draw, as the tree is placed). Read as each frame is drawn, where the
+  // thumbnail was drawn then (@ui.read_drawn): no change of anything's, never followed as layout goes
+  @ui.read_drawn(
+    n,
     fn() {
-      // (followed whether it flies or not: its flight said at each cause, the thumbnail's place as it is measured)
-      vw.fly.said()
       // (all of it that the flight is drawn by: where it is, what showed of it, where its list leaves it clear, its
       // corners, how its picture sits in it, which; what it draws over its picture goes with it)
       let at = vw
@@ -186,17 +186,16 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   // the stage: the room it is laid out in (the keyboard over it, not the stage made shorter for it: FilePreview.kt),
   // and the picture's size (as sent, else as decoded, else its stand-in's: followed by its own decodes), told the zoom
   // at the moment either changes; how much of its foot marking's foot takes, as that is laid out once the change that
-  // changes it (marking, the window) is made whole (View::when_committed), from that moment
+  // may change it (each of marking's, the window's) is made whole (View::when_committed), from that moment
   n.reacts(
     fn() {
       let (w, h) = stage()
-      marks_said()
       // (a film's or a song's picture sized by its player alone, Viewer::video_natural: nothing of a picture's asked
-      // for it here, its thumbnail none)
-      ((w, h + @ui.current().ime_inset()), if vw.played() { (0.0, 0.0) } else { vw.natural_size(src) }, vw.bar_over(w))
+      // for it here, its thumbnail none; marking's each change, its foot laid out with it: marks_told)
+      ((w, h + @ui.current().ime_inset()), if vw.played() { (0.0, 0.0) } else { vw.natural_size(src) }, vw.bar_over(w), marks_told.get())
     },
     fn(told) {
-      let ((bw, bh), (nw, nh), bar) = told
+      let ((bw, bh), (nw, nh), bar, _) = told
       let at = n.cause_at()
       vw.zoom.boxed(bw, bh, at~)
       vw.zoom.natural(nw, nh, at~)

@@ -2361,7 +2361,7 @@ priv enum Prop {
   Corners
   Bones
   BoneWhole
-} derive(Eq, Hash)
+} derive(Eq, Hash, Show)
 
 ///|
 /// Property `prop` of the node (its one binding: one bound before is let go), set by `apply`: once, or as what it
@@ -2415,7 +2415,7 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
       placed~,
       laid~,
       root~,
-      about=fn() { "a property's binding of " + tree.named_up(at) },
+      about=fn() { "a property's binding (\{prop}) of " + tree.named_up(at) },
     )
     n.props[prop] = stop
   }
@@ -6967,7 +6967,8 @@ pub fn Tree::owes_why(self : Tree) -> String {
     why.push("its layout")
   }
   if self.lists_due {
-    why.push("a windowed list or what is made by its room")
+    let marked = self.lists.filter(fn(l) { l.marked }).map(fn(l) { self.named_up(l.holder) })
+    why.push("a windowed list or what is made by its room" + (if marked.is_empty() { "" } else { " (marked: " + marked.join(", ") + ")" }))
   }
   if self.laid_afters_due {
     why.push("what is laid out after all else")
