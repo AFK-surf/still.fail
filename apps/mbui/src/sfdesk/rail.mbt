@@ -261,12 +261,9 @@ fn rail(
         wide.peeking.set(!wide.peeking.get())
       } else if lit == "settings" {
         @sfbase.history_push()
-        while app.nav.depth() > 1 {
-          if !app.nav.pop() {
-            break
-          }
-        }
+        // (landed afresh: on the chat last open, as the stack comes to Home)
         wide.landed.set("")
+        @sfbase.nav_home()
       } else {
         open_settings()
         wide.peek_next.set(wide.crowded)
@@ -694,17 +691,6 @@ fn rail_place(
 /// 和 profiles tab 的 hover 卡片去掉吧」); the others keep their tip.
 fn rail_carded(place : String) -> Bool {
   place == "chats" || place == "usage"
-}
-
-///|
-/// Back to the stack's root as another workspace comes into view: what is over the pages put down, the menu closed.
-fn desk_home() -> Unit {
-  app.menu = false
-  while app.nav.depth() > 1 {
-    if !app.nav.pop() {
-      break
-    }
-  }
 }
 
 ///|

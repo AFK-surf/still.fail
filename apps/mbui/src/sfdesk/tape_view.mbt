@@ -673,6 +673,8 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
     }
   })
   v.reacts(fn() { (panel_own.leaving.get(), (tape_goes.panel_of)() is None) }, fn(_) { tape_left() })
+  // the chats' place landed on its chat, the sidebar kept as it is left: at their causes (wide_keeps)
+  wide_keeps(v, src)
   // another place's sidebar at its own width (side_take: as it was left): the tape moved to it from where it is then, as
   // the sidebar is (brand.tsx moveSidebar, 380 ms); not the width the edge drags, which is followed at once
   let side_took = Ref(false)
@@ -1335,7 +1337,6 @@ pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
     ww <= wh
   })
   wide.side_place = side_place()
-  side_follow(c, src, w.id)
   wide.tape = true
   wide.crowded = false
   side_crowded()
@@ -1352,7 +1353,6 @@ pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
   wide.band = 1.0
   list_room_told()
   wide.mark = 0.0
-  land(src, w)
   // (beside the system's action at the column's foot, the cards' foot corners the one the composer stands concentric in
   // on its line: said before any of them is built; another than the last frame's, what was kept of them drawn anew, as
   // for the screen's corner: rail_native.mbt native_frame)

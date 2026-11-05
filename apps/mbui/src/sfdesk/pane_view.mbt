@@ -477,6 +477,8 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   |> ignore
   // what the page's pane shows as the page on top changes, at its cause's moment (page_wait.mbt)
   pane_page_wait.follow(v, fn(p) { (fold_goes.ready)(p) }, fn() { fold_goes.most })
+  // the chats' place landed on its chat, the sidebar kept as it is left: at their causes (wide_keeps)
+  wide_keeps(v, src)
   // another place's or workspace's sidebar as it was left (side_take), at that cause, as the tape takes it: not as the
   // frame after it is built, so what follows it before then (its place pressed again) finds it so
   v.reacts(
@@ -827,7 +829,6 @@ fn pane_block_built(c : @ui.Ctx, src : Source) -> Unit {
 /// chat landed on, the window's buttons' row, the web services' pages let go.
 pub fn pane_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]) -> Unit {
   wide.side_place = side_place()
-  side_follow(c, src, w.id)
   wide.tape = false
   tape_off()
   native_frame(c, src, w, all)
@@ -838,7 +839,6 @@ pub fn pane_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
   // (under the window's buttons where they are the system's, at its left: macOS's)
   let peek_top = if @ui.window_keys_left() { closed_bar_top } else { bar_in_now() }
   side_peek(c, bar_in_now(), r.top + peek_top, peek_r, c.height - r.foot - bar_in_now())
-  land(src, w)
   if @ui.window_inset() {
     title_row(c, "window-title-row", closed_bar_top)
   }

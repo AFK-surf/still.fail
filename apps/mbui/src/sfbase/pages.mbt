@@ -190,14 +190,18 @@ fn setting_way(r : @settings.Route) -> Array[@settings.Route] {
 }
 
 ///|
-/// Back to Home (the stack's root), the filter's menu closed: a workspace left, from either frame.
+/// Back to Home (the stack's root), the filter's menu closed: a workspace left, from either frame. One change, all its
+/// pops (as history_go's): what acts as the stack comes to Home (the wide frame's land) acts on Home come to, not on a
+/// page half-way down, whose push the pops after it would take off again.
 pub fn nav_home() -> Unit {
+  @signals.start_batch()
   app.menu = false
   while app.nav.depth() > 1 {
     if !app.nav.pop() {
       break
     }
   }
+  @signals.end_batch()
 }
 
 ///|

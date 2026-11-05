@@ -999,21 +999,21 @@ pub fn landing(w : Workspace) -> Bool {
 }
 
 ///|
-/// The chats' place with nothing open: the chat the core says was open last in this workspace, else a new chat
+/// The chats' place with nothing open: the chat the core says was open last in workspace `ws`, else a new chat
 /// (workspace.tsx WorkspaceHome; once per workspace, so closing the chat goes back to the list on a phone).
-fn land(src : Source, w : Workspace) -> Unit {
+fn land(src : Source, ws : String) -> Unit {
   if app.nav.depth() != 1 || app.nav.top() != Home {
     return
   }
   // come back to the chats (a chat closed, settings left): a new chat, as the web's empty place is
-  if wide.landed.get() == w.id {
+  if wide.landed.get() == ws {
     app.nav.push(NewChat)
     return
   }
-  let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
+  let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(ws) })
   guard marks.value is Some(_) else { return }
-  wide.landed.set(w.id)
-  let chat = field(field(field(marks.value, "workspaces"), w.id), "chat")
+  wide.landed.set(ws)
+  let chat = field(field(field(marks.value, "workspaces"), ws), "chat")
   let station = text(chat, "station")
   let key = text(chat, "key")
   if station != "" && key != "" {
@@ -1021,6 +1021,53 @@ fn land(src : Source, w : Workspace) -> Unit {
   } else {
     app.nav.push(NewChat)
   }
+}
+
+///|
+/// What the wide frame (the tape's, the panes') keeps of the workspace in view as it changes, in its node `v`, each at
+/// its cause's moment: the chats' place with nothing open landed on its chat (land: as the place comes to be the
+/// chats' with nothing open, or the core's mark of it comes), and the sidebar's width and fold kept as they are left
+/// (side_follow: once a drag of its edge is over, or it is folded or opened).
+fn wide_keeps(v : @view.View, src : Source) -> Unit {
+  v.reacts(
+    fn() {
+      match @sfbase.workspace_in_view(src).0 {
+        Some(w) if app.nav.depth() == 1 && app.nav.top() == Home =>
+          Some((w.id, (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value))
+        _ => None
+      }
+    },
+    fn(now) {
+      match now {
+        Some((ws, _)) => land(src, ws)
+        None => ()
+      }
+    },
+  )
+  v.reacts(
+    fn() {
+      match @sfbase.workspace_in_view(src).0 {
+        Some(w) if (src.topic)("prefs", {}).value is Some(_) =>
+          Some(
+            (
+              w.id,
+              wide.edge_held.get(),
+              wide.side_w.get(),
+              wide.folded.get(),
+              wide.kept_w.get(),
+              wide.kept_folded.get(),
+            ),
+          )
+        _ => None
+      }
+    },
+    fn(now) {
+      match now {
+        Some((ws, _, _, _, _, _)) => side_follow(src, ws)
+        None => ()
+      }
+    },
+  )
 }
 
 ///|
@@ -1095,10 +1142,7 @@ fn side_default(group : String) -> Double {
 /// workspace (`<width>` or `<width>,closed` there) is read where none is kept across them. What changes of it is
 /// kept, once a drag of its edge is over. (The user, 2026-10-27: a sidebar's width is the person's, not the
 /// workspace's.)
-fn side_follow(c : @ui.Ctx, src : Source, ws : String) -> Unit {
-  if side_take(src, ws) {
-    return
-  }
+fn side_follow(src : Source, ws : String) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
   if prefs is None {
     return
@@ -1106,6 +1150,10 @@ fn side_follow(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   let group = if @sf.native_on() { "tabs" } else { side_group(src, ws) }
   let key = ws + "\n" + group
   let width_key = "\n" + group
+  // (the sidebar shown not yet this place's and workspace's, side_take's to take as it was left: nothing of it kept)
+  if wide.side_key != key {
+    return
+  }
   if wide.edge_held.get() || (wide.side_w.get() == wide.kept_w.get() && wide.folded.get() == wide.kept_folded.get()) {
     return
   }
@@ -1116,12 +1164,9 @@ fn side_follow(c : @ui.Ctx, src : Source, ws : String) -> Unit {
     (width_key, if w == "" { Json::null() } else { Json::string(w) }),
     (key, if wide.folded.get() { Json::string("closed") } else { Json::null() }),
   ])
-  // (kept once the frame's builds are over, as the last saw it)
-  c.after_build("side-kept", fn() {
-    wide.kept_w.set(kept_w)
-    wide.kept_folded.set(kept_folded)
-    (src.call)("prefs.set", Json::object({ "sidebars": Json::object(said) }), fn(_) {  })
-  })
+  wide.kept_w.set(kept_w)
+  wide.kept_folded.set(kept_folded)
+  (src.call)("prefs.set", Json::object({ "sidebars": Json::object(said) }), fn(_) {  })
 }
 
 ///|
@@ -1140,6 +1185,9 @@ fn side_take(src : Source, ws : String) -> Bool {
   let key = ws + "\n" + group
   let width_key = "\n" + group
   if wide.side_key != key {
+    // (one change, the width and fold taken with what is kept of them: side_follow, following each, sees the sidebar
+    // as it was left, nothing of it changed to keep, not the width taken before the fold and what was kept are)
+    @signals.start_batch()
     let kept = field(prefs, "sidebars")
     let parts = text(kept, key).split(",").map(fn(p) { p.to_string() }).collect()
     let closed = parts.contains("closed")
@@ -1159,6 +1207,7 @@ fn side_take(src : Source, ws : String) -> Bool {
     wide.kept_w.set(wide.side_w.get())
     wide.kept_folded.set(wide.folded.get())
     wide.peeking.set(false)
+    @signals.end_batch()
     return true
   }
   false
