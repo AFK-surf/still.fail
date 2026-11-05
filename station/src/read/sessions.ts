@@ -142,7 +142,8 @@ function summaryWith(s: Store, key: string, l: Lists): Json {
 
 /// views.rs `summary`: one session's.
 export function summary(s: Store, key: string): Json {
-  return summaryWith(s, key, { stats: store.sessionStats(s, key), bindings: store.listBindings(s), participants: store.participants(s, key), watches: watching(s, [key]), lengths: store.transcriptLengths(s, key), usages: store.sessionUsages(s, key) });
+  const bindings = store.listBindings(s, [key]);
+  return summaryWith(s, key, { stats: store.sessionStats(s, key), bindings, participants: store.participants(s, key), watches: watching(s, [key]), lengths: store.transcriptLengths(s, key), usages: store.sessionUsages(s, key) });
 }
 
 /// GET /sessions (views.rs `sessions`): the sessions shown in lists, or only the archived ones; those of one connect;
@@ -151,7 +152,8 @@ export function sessions(s: Store, connect: string | null, archived: boolean, la
   setLang(lang);
   const rows = store.listedSessions(s, connect, archived, viewer);
   const keys = rows.map((row) => row.key);
-  const l: Lists = { stats: store.sessionStats(s, keys), bindings: store.listBindings(s), participants: store.participants(s, keys), watches: watching(s, keys), lengths: store.transcriptLengths(s, keys), usages: store.sessionUsages(s, keys) };
+  const bindings = store.listBindings(s, keys);
+  const l: Lists = { stats: store.sessionStats(s, keys), bindings, participants: store.participants(s, keys), watches: watching(s, keys), lengths: store.transcriptLengths(s, keys), usages: store.sessionUsages(s, keys) };
   return rows.map((x) => summaryWith(s, x.key, l));
 }
 
