@@ -1060,22 +1060,12 @@ fn bar_action(src : Source, ws : Workspace, active : String?, place_add : ((@sf.
 }
 
 ///|
-/// The notch's key as the bar last drew it: what its action opens is opened by it (a popover beside it).
-// kept across runs: said again each time the bar is drawn
+/// The notch's key as the bar last made it (bar_node.mbt): what its action opens is opened beside it (a popover).
+// kept across runs: said again as the bar's nodes are made
 let bar_action_anchor : Ref[@view.View?] = Ref(None)
 
 ///|
-/// The bar's glass and its notch's key as nodes of the window's tree (bar_glass_node), as last made: what the bar's
-/// places and its key, drawn by the old view, are pressed through (Ctx::presses_to_node).
-// kept across runs: said again as the nodes are made; one of a tree let go is no node's of the tree that is now
-let bar_glass_at : Ref[@view.NodeId?] = Ref(None)
-
-///|
-// kept across runs: said again as the nodes are made; one of a tree let go is no node's of the tree that is now
-let bar_notch_at : Ref[@view.NodeId?] = Ref(None)
-
-///|
-/// The notch's action, pressed at `t` (its key a node of the window's tree's: bar_glass_node): 令 a new chat, ＋ what
+/// The notch's action, pressed at `t` (its key the action's disc: bar_node.mbt): 令 a new chat, ＋ what
 /// the place's page adds (the files lent where it is 文件's); only with the notch open by then.
 fn bar_action_run(src : Source, ws : Workspace, t : Double) -> Unit {
   let told = match bar.told {
@@ -1763,7 +1753,6 @@ fn bar_glass_node(v : @view.View, src : Source, ws : () -> Workspace?) -> Unit {
     |> ignore
     b.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
     b.box(fn(g) {
-      bar_glass_at.val = Some(g.id())
       g
       .height(By(fn() {
         match told() {
@@ -1805,49 +1794,6 @@ fn bar_glass_node(v : @view.View, src : Source, ws : () -> Workspace?) -> Unit {
       |> ignore
       // what it draws: the bar (bar_node.mbt), what a press on the glass goes to holding it
       bar_node(g, src, ws)
-      // the notch's key, over the glass where the notch is (in the middle of the bar, risen over its edge), pressed
-      // while the place has an action
-      g.box(fn(o) {
-        o
-        .over(Is(true))
-        .padding(By(fn() {
-          match told() {
-            Some(t) => {
-              let l = bar_laid(t)
-              (l.w / 2.0 - drop / 2.0, l.row_top - lift - drop / 2.0, 0.0, 0.0)
-            }
-            None => (0.0, 0.0, 0.0, 0.0)
-          }
-        }))
-        |> ignore
-        o.box(fn(k) {
-          bar_notch_at.val = Some(k.id())
-          k
-          .width(Is(Some(drop)))
-          .height(Is(Some(drop)))
-          .presses(By(fn() {
-            match told() {
-              Some(t) => t.shown && t.action != ""
-              None => false
-            }
-          }))
-          // (taken only where the notch is drawn open at its moment: closing, the panel up, what is under it the panel's)
-          .takes(fn(w, h, at) { if bar.drag < 0.0 && !bar.holds && bar.k_at(at) > 0.9 { [(0.0, 0.0, w, h)] } else { [] } })
-          .on_press(fn() {
-            match ws() {
-              Some(w) =>
-                bar_action_run(src, w, match @ui.tree_cause() {
-                  Some(at) => at
-                  None => @ui.current().moment()
-                })
-              None => ()
-            }
-          })
-          |> ignore
-        })
-        |> ignore
-      })
-      |> ignore
     })
     |> ignore
   })

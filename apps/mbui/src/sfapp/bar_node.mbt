@@ -147,8 +147,30 @@ fn bar_holder_node(holder : @view.View, src : Source, ws : () -> Workspace?, lai
   })
   bar_disc_look(under)
   bar_glass_capsule(holder, w, clip_top, panel, drift)
+  // (the notch's key itself: pressed while the place has an action, taken only where the notch is drawn open at its
+  // moment (closing, the panel up, what is under it the panel's); what it opens opened beside it)
   let disc = bar_at(holder, disc_x, disc_y, fn() { drop }, fn() { drop }, fn(d) {
-    d.radius(Is(drop / 2.0)).glass(By(fn() { Some(@sf.glass_action().sharing()) })) |> ignore
+    d
+    .radius(Is(drop / 2.0))
+    .glass(By(fn() { Some(@sf.glass_action().sharing()) }))
+    .presses(By(fn() {
+      match bar_told_now.get() {
+        Some(t) => t.shown && t.action != ""
+        None => false
+      }
+    }))
+    .takes(fn(w, h, at) { if bar.drag < 0.0 && !bar.holds && bar.k_at(at) > 0.9 { [(0.0, 0.0, w, h)] } else { [] } })
+    .on_press(fn() {
+      match ws() {
+        Some(w) =>
+          bar_action_run(src, w, match @ui.tree_cause() {
+            Some(at) => at
+            None => @ui.current().moment()
+          })
+        None => ()
+      }
+    })
+    |> ignore
     d.box(fn(c) {
       c.width(Is(Some(drop))).height(Is(Some(drop))).lines_up(Is(Some(Middle))).lies_along(Is(Middle)) |> ignore
       // (the action's icon, made anew as the action is another: m_face, said as the bar is told)
