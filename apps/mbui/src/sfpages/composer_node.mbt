@@ -58,8 +58,8 @@ pub fn composer_node(
   let root = parent.box(fn(root) {
     let w = @sfbase.writing_in(root, src, draft)
     w_at.val = Some(w)
-    // An entering chat's first shape includes the cursor it will take on a keyboard-driven screen.
-    if active() && !spec().locked && !@sf.soft_keyboard() && !@ui.current().field_focused() {
+    // A chat replacing an existing composer starts with the cursor it will take on a keyboard-driven screen.
+    if origin is Some(_) && active() && !spec().locked && !@sf.soft_keyboard() && !@ui.current().field_focused() {
       w.field.focus()
     }
     let ready = fn() { (w.ready.get() || (w.text.get().trim() != "" && !w.starting.get())) && !spec().locked }
