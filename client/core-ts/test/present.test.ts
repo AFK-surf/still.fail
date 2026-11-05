@@ -765,6 +765,18 @@ test("a_connect_says_where_it_is_reached_how_it_runs_and_what_switching_it_does"
   assert.deepEqual([same.changed, same.effects, same.action], [false, [], "确认更改"]);
   const all = changes.find((x: J) => x.mode === "single-session" && !x.requireMention);
   assert.equal(all.effects[0], "无需 @：它所在的所有群和私聊中的每条消息都会发送给 agent，用量会明显增加。");
+  // thread mode: a way of its own for a Feishu connect, switched to and from one each by group; Slack's has none
+  const groups = { ...base, mode: "multi-session", feishu: { appId: "cli_1", domain: "feishu" } };
+  const threads = { ...groups, feishu: { ...groups.feishu, threads: true } };
+  assert.equal(p.connect(threads).modeLabel, "每个 thread 一个会话");
+  assert.equal(p.connect(groups).modeLabel, "每个群一个会话");
+  assert.equal(p.modeWords("slack").threads, undefined);
+  const way = (c: J, on: boolean) => p.modeChanges(c, 0).find((x: J) => x.mode === "multi-session" && x.threads === on);
+  assert.deepEqual([way(groups, true).changed, way(groups, false).changed], [true, false]);
+  assert.ok(way(groups, true).effects[0].includes("回复留在 thread 里"));
+  assert.ok(way(threads, false).effects[0].includes("回复发在群里"));
+  assert.ok(way(base, true).effects[0].includes("回复留在 thread 里"));
+  assert.equal(p.modeChanges({ ...base, kind: "slack", feishu: undefined }, 0).length, 3);
 });
 
 test("a_slack_apps_permissions_are_said_in_sections_those_only_admins_allow_marked", () => {

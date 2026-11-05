@@ -29,11 +29,10 @@ function spanAgo(ms: number): string {
   return t("web-main.ago.days", { n: Math.floor(s / 86400) });
 }
 
-/** How long ago: 刚刚, 12 秒前, 4 分钟前, 3 小时前, 昨天, 2 天前. */
+/** How long ago: 刚刚, 12 秒前, 4 分钟前, 3 小时前, 1 天前 (elapsed, so never 昨天). */
 function ago(at: number, now: number): string {
   const s = Math.round((now - at) / 1000);
   if (s < 5) return t("web-main.ago.now");
-  if (s >= 86400 && s < 2 * 86400) return t("web-main.ago.yesterday");
   return spanAgo(now - at);
 }
 

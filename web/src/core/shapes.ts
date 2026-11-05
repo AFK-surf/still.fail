@@ -1199,6 +1199,8 @@ export interface FeishuApp {
 	appSecret: string;
 	/** feishu | lark */
 	domain: string;
+	/** Thread mode: each thread of a group its own conversation, answered in it (docs/feishu.md). */
+	threads?: boolean;
 	/** The app's page in the developer console (core). */
 	console?: string;
 }
@@ -1243,6 +1245,8 @@ export interface ModeWord {
 /** How a connect of a kind says the ways its conversations become sessions (a Feishu one in its groups' words). */
 export interface ModeWords {
 	multi: ModeWord;
+	/** A Feishu connect's thread mode: one each by thread, not by group. */
+	threads?: ModeWord;
 	single: ModeWord;
 	/** What waiting for an @ does, on. */
 	mentionOn: string;
@@ -3377,6 +3381,8 @@ export interface ConnectFlowView {
 	feishu?: ConnectFeishuFlow;
 	/** How the ways its conversations become sessions are said, as its platform says them. */
 	modeWords: ModeWords;
+	/** Feishu: thread mode chosen. */
+	threads?: boolean;
 	/** The app's permissions as its form shows them. */
 	sections: SlackGroupSection[];
 }
@@ -3385,6 +3391,8 @@ export interface ConnectFlowView {
 export interface ModeChange {
 	mode: ConnectMode;
 	requireMention: boolean;
+	/** A Feishu connect: thread mode. */
+	threads?: boolean;
 	/** Whether switching to it changes anything. */
 	changed: boolean;
 	/** What switching to it does to the connect's conversations, in plain words. */

@@ -254,7 +254,7 @@ test("a_machines_session_is_a_line_its_home_as_tilde", () => {
   assert.equal(meta("/Users/bob/src/x", 3_000), "Claude Code · ~/src/x · 刚刚");
   assert.equal(meta("/home/bob", 12_000), "Claude Code · ~ · 12 秒前");
   assert.equal(meta("/srv/x", 4 * 60_000), "Claude Code · /srv/x · 4 分钟前");
-  assert.equal(meta("/Users/bob/x", 30 * 3_600_000), "Claude Code · ~/x · 昨天");
+  assert.equal(meta("/Users/bob/x", 30 * 3_600_000), "Claude Code · ~/x · 1 天前");
   assert.equal(meta("/Users/bob/x", 3 * 86_400_000), "Claude Code · ~/x · 3 天前");
 });
 

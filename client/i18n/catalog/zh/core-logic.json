@@ -346,7 +346,6 @@
   "core-logic.history.task.command.other": "后台命令 {status}：{name}",
   "core-logic.jobs.ago": "{span}前",
   "core-logic.jobs.ago.now": "刚刚",
-  "core-logic.jobs.ago.yesterday": "昨天",
   "core-logic.jobs.all": "全部 {n} 个",
   "core-logic.jobs.exit_code": "退出码 {code}",
   "core-logic.jobs.list_sep": "，",

@@ -289,6 +289,10 @@ pub fn profile_groups(Array[@json.Json]) -> Array[(String, Array[@json.Json])]
 
 pub let recovery_words : Map[String, Array[String]]
 
+pub fn recovery_words_changed() -> Unit
+
+pub let recovery_words_turned : @signals.Signal[Int32]
+
 pub fn reset() -> Unit
 
 pub fn role_label(String) -> String

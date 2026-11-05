@@ -259,6 +259,9 @@ try {
     // (online until a new device shows this one's code, then until it is done with it, confirmed or turned down: its
     // prompt gone from the lockPrompts topic; then gone, so that another of these commands may take this device's data)
     const most = Number(rest[0] ?? 60) * 1000;
+    // (online, its prompts read: a new device's request finds it from here on)
+    await until({ topic: "lockPrompts" }, (v) => (v === undefined ? undefined : true), most);
+    console.log("AWAITING online");
     const p = await until({ topic: "lockPrompts" }, (v) => v?.pairing?.[0], most);
     console.log(`PAIRING ${p.code}\t${p.name || p.email}\t${p.label}`);
     await until({ topic: "lockPrompts" }, (v) => !(v?.pairing ?? []).some((q: J) => q.code === p.code) || undefined, most);

@@ -17,7 +17,7 @@ const texts = (v: J) => v.meta.map((p: J) => p.text).join("");
 
 test("times_in_words_and_when_they_change", () => {
   assert.deepEqual([span(12_000), span(4 * 60_000 + 59_000), span(3 * 3_600_000), span(2 * 86_400_000)], ["12 秒", "4 分钟", "3 小时", "2 天"]);
-  assert.deepEqual([ago(NOW - 2_000, NOW), ago(NOW - 12_000, NOW), ago(NOW - 30 * 3_600_000, NOW), ago(NOW - 3 * 86_400_000, NOW)], ["刚刚", "12 秒前", "昨天", "3 天前"]);
+  assert.deepEqual([ago(NOW - 2_000, NOW), ago(NOW - 12_000, NOW), ago(NOW - 30 * 3_600_000, NOW), ago(NOW - 3 * 86_400_000, NOW)], ["刚刚", "12 秒前", "1 天前", "3 天前"]);
   assert.deepEqual([nextChange(12_000), nextChange(250_000)], [500, 49_500]);
 });
 

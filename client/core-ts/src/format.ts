@@ -140,7 +140,8 @@ export function relativeTimeIn(lang: Lang, ms: number, now: number, offsetMin: n
   if (hours < 24) return tr(lang, "core-logic.format.ago.hours", { n: hours });
   const [, month, day] = local(ms, offsetMin);
   const time = clock(ms, offsetMin);
-  if (hours < 48) return tr(lang, "core-logic.format.ago.yesterday", { time });
+  // Yesterday is the calendar day before today, not 24 to 48 hours ago: 11/3 18:12 seen on 11/5 at noon is two days back.
+  if (localDay(now, offsetMin) - localDay(ms, offsetMin) === 1) return tr(lang, "core-logic.format.ago.yesterday", { time });
   return tr(lang, "core-logic.format.date_time", { date: monthDay(lang, month, day), time });
 }
 

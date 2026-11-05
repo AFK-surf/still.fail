@@ -122,6 +122,17 @@ pub fn vault_act(
 pub let recovery_words : Map[String, Array[String]] = Map([])
 
 ///|
+/// recovery_words changed (given, written down): what shows them reads `recovery_words_turned`, so that a page kept
+/// across frames is built again as they come or go (they are no signal of their own: 已抄写 left them up until
+/// something else built the page, a minute on, as the end-to-end flow on Android found).
+pub let recovery_words_turned : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+pub fn recovery_words_changed() -> Unit {
+  recovery_words_turned.set(@signals.untracked(fn() { recovery_words_turned.get() }) + 1)
+}
+
+///|
 /// What `vault.open` gave of the item on its page (by item), while the page is up; whether it is being opened.
 priv struct Opened {
   plain : @sf.LiveMap[String, Json]

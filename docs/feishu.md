@@ -14,6 +14,7 @@
 - 群里和私聊里不在话题里的话，算一个长期会话：THREAD_TS 是这段会话开头那条消息的 id（`om_…`），station 记在 `<data>/feishu-threads.json`。第一次 @ 机器人（私聊不用 @）开会话，之后这个群里的每条消息都交给它，不用再 @：hub 现有的「已有会话的线程，每条都投递」。
 - 「新会话」：@机器人 说「新会话」（或 `/new`），这条消息成为新会话的开头，THREAD_TS 换成它的 id，旧会话留在 still.fail 里照常归档。
 - 话题群（群设置里的「话题」模式）的每个话题：THREAD_TS 是 `thread_id`（`omt_…`），和 Slack 的 thread 一样，要 @ 才开会话，中途进来的读一遍之前的消息，回复发到话题里。普通群里「回复到话题」的消息仍算这个群的会话（他原来的 bot 就是按群分的），回复发在群里。
+- thread 模式（connect 的 `feishu.threads` 为 true，只在 multi-session 下生效）：普通群也和 Slack 一样，每个 thread 一个会话，THREAD_TS 是 thread 第一条消息的 id（`om_…`，飞书的 `root_id`）。要 @ 才开会话；在 thread 外 @，就从这条消息开一个 thread；没 @ 也不在已有会话的 thread 里的话不交给 agent。回复都用 `reply_in_thread` 发到 thread 里，中途进来的读一遍之前的消息。私聊和话题群不变。切换模式后，已有的群会话不再收到新消息，记录保留。
 - 消息的 ts 是飞书的 `message_id`；卡片按钮的回答不是消息，ts 是 `card-<event_id>`。
 - surface 是 `feishu:<connect id>`：两个机器人在同一个群里各是各的线程（飞书的 open_id 按应用分，人也对不上）。
 - 人：`slack:<connect>:<open_id>`（这串的前缀本来就只是「connect 的人」，沿用，不改客户端的解析）；名字和邮箱从通讯录接口取，取不到时用群成员列表里的名字，记在 `<data>/feishu-names.json`；creator 的 `via` 是 `"feishu"`。
@@ -25,15 +26,15 @@
 - image、file、audio、media：附件，`GET /im/v1/messages/:id/resources/:key` 下载到会话的 uploads（50 MB 以内）。
 - 其他类型（表情包、卡片、合并转发、分享群名片……）：一个 `[类型]` 占位。
 - 飞书没有「消息被编辑」的事件，改过的消息 station 不知道。
-- 长连接断着的时候飞书不补发事件（2026-10-20 实测：建好就发的第一条私聊丢了）。所以每次连上，station 都按 `feishu-threads.json` 里记的「最后听到的时间」把有会话的群从那之后的消息读一遍（`GET /im/v1/messages`），库按消息 id 去重。话题群和还没开过会话的私聊不补。
+- 长连接断着的时候飞书不补发事件（2026-10-20 实测：建好就发的第一条私聊丢了）。所以每次连上，station 都按 `feishu-threads.json` 里记的「最后听到的时间」把有会话的群从那之后的消息读一遍（`GET /im/v1/messages`），库按消息 id 去重。话题群、thread 模式的 thread 和还没开过会话的私聊不补。
 
 ## 发出去的样子
 
 - 文字一律发成卡片（JSON 2.0 的 markdown 组件）：飞书卡片的 Markdown 和 still.fail 的写法基本一样（标题、列表、表格、代码块），agent 照 still.fail chat 的写法写。太长的分成几张（每张 6000 字以内）。@人写 `<at id=ou_xxx></at>`。
 - 文件跟在文字后面各发一条：图片 `im/v1/images` 上传后发图片消息，其他 `im/v1/files` 上传后发文件消息。
-- 话题群的话题里就回到话题（`reply_in_thread`），否则直接发到群里。
+- 话题群的话题和 thread 模式的 thread 里就回到其中（`reply_in_thread`），否则直接发到群里。
 - 选项卡片（`card.type` 为 options）：按钮，推荐的那个是主按钮，点了就当那个人说了这个选项（addressed），卡片换成「已选：…」不再能点；文字卡片（text）：不放输入框，卡片带橙色标题「✍️ 需要你回答」，正文下一行灰字「直接回复作答」（有 placeholder 时跟在后面），回复就是回答。login 卡片不在飞书里出，agent 只发链接。
-- 「工作中」：一轮开始时发一张状态卡片（CardKit 卡片实体，不受消息编辑次数的限制），跟着 agent 当前在做的事更新（读文件、跑命令……，最多一秒一次），结束时变成一行「完成 · 用时」和执行历史的链接。
+- 「工作中」：一轮开始时发一张状态卡片（CardKit 卡片实体，不受消息编辑次数的限制），跟着 agent 当前在做的事更新（读文件、跑命令……，最多一秒一次），结束时变成一行「完成 · 用时」和执行历史的链接。消息没叫到机器人（没 @、不是私聊、不是卡片的回答）时，agent 只是在想或读 chat 就不发卡片，真正动手才发；一轮结束 agent 什么都没发，卡片就撤回（`DELETE /im/v1/messages/:id`，飞书不让撤时才留下那一行）。
 - 新会话开始时不另发「查看会话」链接：状态卡片上有。
 
 ## 配置

@@ -90,6 +90,8 @@
 //                               (a locked screen's window is covered): a run about the app put away (e2e/win's)
 //   shown                       the host's word that the app is shown again (after it was not: another app's page
 //                               over it gone) since the last step that acted, and a frame drawn after it
+//   typedone X                  the words the runner found doing X (`ok WORDS`: a code another device shows) typed, as
+//                               `type` types its own, once it has done X
 //   done X                      the run's runner (still.fail's run.sh: what `log do: X` asked of it) has done X: its
 //                               file X come in the directory the run names (MBUI_DONE_DIR, else $MBUI_SHOT_DIR/done),
 //                               the host told of it by its system (src/host/done_watch.h: macOS, Android, Windows);
@@ -1028,7 +1030,7 @@ fn drive_steps(c : Ctx) -> Unit {
           return
         }
       }
-      "done" => {
+      "done" | "typedone" => {
         if !d.watching {
           drive_fail(
             c,
@@ -1041,7 +1043,20 @@ fn drive_steps(c : Ctx) -> Unit {
         match d.runner_done.get(arg) {
           Some(said) =>
             match said.trim(chars=" \n\r\t").to_string() {
-              "" | "ok" => {
+              "" | "ok" if cmd == "done" => {
+                h_log("DRIVE ok \{line} (\{waited.to_int()} ms)")
+                next()
+              }
+              // (what the runner found, typed: the code another device shows, as a person reads it off and types it)
+              words if cmd == "typedone" && words.has_prefix("ok ") => {
+                let typed = words.view(start_offset=3).to_string()
+                if !h_drive(0, typed) {
+                  on_text(0, typed, 0, 0)
+                }
+                acted()
+                return
+              }
+              why if cmd == "done" && why.has_prefix("ok ") => {
                 h_log("DRIVE ok \{line} (\{waited.to_int()} ms)")
                 next()
               }

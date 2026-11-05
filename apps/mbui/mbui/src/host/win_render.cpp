@@ -29,7 +29,7 @@
 #pragma comment(lib, "windowscodecs.lib")
 #pragma comment(lib, "ole32.lib")
 
-int mb_atlas_size = 2048;
+int mb_atlas_size = 4096;
 
 static ID3D11Device *dev;
 static ID3D11DeviceContext *ctx;
@@ -222,7 +222,7 @@ static const char *shader_src =
     "    // within its own cell (c2: where in the atlas, in texels), however its rect is stretched or turned: a sample\n"
     "    // past the cell's edge texels would blend in what lies beside it (another glyph, one left from before the atlas\n"
     "    // started over)\n"
-    "    float2 uv = clamp(I.c2.xy + (p - I.rect.xy) / I.rect.zw * I.c2.zw, I.c2.xy + 0.5, I.c2.xy + I.c2.zw - 0.5) / 2048.0;\n"
+    "    float2 uv = clamp(I.c2.xy + (p - I.rect.xy) / I.rect.zw * I.c2.zw, I.c2.xy + 0.5, I.c2.xy + I.c2.zw - 0.5) / 4096.0;\n"
     "    float4 t = atlas.SampleLevel(samp, uv, 0);\n"
     "    if (kind == 1) {\n"
     "      // (a mask drawn in gray has its three the same as its alpha: as before; a glyph drawn larger or smaller than\n"

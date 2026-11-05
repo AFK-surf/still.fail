@@ -81,11 +81,10 @@ export function span(ms: number): string {
   return t("core-logic.jobs.span.days", { n: Math.trunc(s / 86_400) });
 }
 
-/// How long ago: 刚刚, 12 秒前, 4 分钟前, 3 小时前, 昨天, 2 天前.
+/// How long ago: 刚刚, 12 秒前, 4 分钟前, 3 小时前, 1 天前. Counted in elapsed time, so never 昨天: 40 hours back can be two days back.
 export function ago(at: number, now: number): string {
   const s = format.round((now - at) / 1000);
   if (s < 5) return t("core-logic.jobs.ago.now");
-  if (s >= 86_400 && s < 2 * 86_400) return t("core-logic.jobs.ago.yesterday");
   return t("core-logic.jobs.ago", { span: span(now - at) });
 }
 

@@ -30,6 +30,9 @@ test("words_as_the_clients_had_them", () => {
   assert.equal(f.relativeTime(now - 10_000, now, 480), "刚刚");
   assert.equal(f.relativeTime(now - 3 * MINUTE, now, 480), "3 分钟前");
   assert.equal(f.relativeTime(now - 30 * 60 * MINUTE, now, 480), "昨天 02:00");
+  // 40 hours back is two calendar days back, not yesterday.
+  assert.equal(f.relativeTime(now - 40 * 60 * MINUTE, now, 480), "9月25日 16:00");
+  assert.equal(f.relativeTime(now - 9 * 60 * MINUTE, now, 480), "9 小时前");
   assert.equal(f.dayLabel(now, now, 480), "今天");
   assert.equal(f.dayLabel(now - DAY, now, 480), "昨天");
   assert.equal(f.dayLabel(now - 20 * DAY, now, 480), "9月7日");
@@ -68,6 +71,7 @@ test("words_in_english", () => {
   assert.equal(f.relativeTimeIn("en", now - MINUTE, now, 480), "1 min ago");
   assert.equal(f.relativeTimeIn("en", now - 3 * 60 * MINUTE, now, 480), "3 hr ago");
   assert.equal(f.relativeTimeIn("en", now - 30 * 60 * MINUTE, now, 480), "yesterday 02:00");
+  assert.equal(f.relativeTimeIn("en", now - 40 * 60 * MINUTE, now, 480), "Sep 25, 16:00");
   assert.equal(f.relativeTimeIn("en", now - 20 * DAY, now, 480), "Sep 7, 08:00");
   assert.equal(f.dayLabelIn("en", now - 3 * DAY, now, 480), "Thursday");
   assert.equal(f.dayLabelIn("en", now - 20 * DAY, now, 480), "Sep 7");

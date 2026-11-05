@@ -22,6 +22,7 @@ import { Said, tr, stationLang } from "../ops/i18n.ts";
 import { failureOf, runtimeKind, runtimeLabel, type RuntimeKind } from "../agents/runtime.ts";
 import { type Handed, type MessageRow, type PendingMessage, handedOf } from "../store/rows.ts";
 import { PostBlocksUnavailable } from "../store/post-blocks.ts";
+import { WidgetSourcesUnavailable } from "../store/widget-sources.ts";
 
 /// How an agent ended its turn (chat_post / chat_state `kind`).
 export type DeclaredState = { kind: "all_done" } | { kind: "need_help" } | { kind: "waiting"; seconds: number };
@@ -117,6 +118,7 @@ export type SessionDeps = {
   store: SessionStore;
   /// An older store brings forward only the message ranges this delivery needs.
   preparePostsAfter?(messages: readonly { thread: number; n: number }[], signal?: AbortSignal): Promise<void>;
+  prepareWidgetSources?(threads: readonly number[], signal?: AbortSignal): Promise<void>;
   chat(connect: string): Surface | undefined;
   driver(runtime: RuntimeKind): AgentDriver;
   /// The profile a session's runtime starts on now: its own while usable, else another that can take it on (`holding`:
@@ -1047,7 +1049,15 @@ export class SessionActor {
       cards.set(m, { ended: ended[0], current, special });
     }
     const text = formatInbound(said, newThreads, names, selves, posts, cards, this.key);
-    const models = store.untoldWidgetModels(this.key);
+    let models: any[];
+    for (;;) {
+      if (signal.aborted) throw new Error("delivery cancelled");
+      try { models = store.untoldWidgetModels(this.key); break; }
+      catch (error) {
+        if (!(error instanceof WidgetSourcesUnavailable) || !this.deps.prepareWidgetSources) throw error;
+        await this.deps.prepareWidgetSources(error.threads, signal);
+      }
+    }
     const widgets = models.map((w: any): [string, string] => [w.path, w.model]);
     const told = formatWidgetModels(models);
     return [told === "" ? text : text === "" ? told : `${text}\n\n${told}`, widgets];
