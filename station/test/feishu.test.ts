@@ -12,6 +12,7 @@ import { questionCard, textCards, took } from "../src/feishu/cards.ts";
 import { CONTROL, DATA, Parts, decode, encode, header } from "../src/feishu/frame.ts";
 import { messageOf, resourceOf } from "../src/feishu/parse.ts";
 import { ADDONS, Registrations, encodeAddons } from "../src/feishu/register.ts";
+import { NameBook } from "../src/connects/names.ts";
 import { MEMBERS_MS } from "../src/connects/surface.ts";
 import { FeishuSurface } from "../src/feishu/surface.ts";
 import { FeishuThreads } from "../src/feishu/threads.ts";
@@ -120,14 +121,15 @@ test("registration: the link carries what the app is to get; asked until its id 
 });
 
 /// A surface on Feishu's stand-in, with its threads in a temporary directory.
-async function surfaceRig(o: { topics?: boolean; threadMode?: boolean; before?: (threads: FeishuThreads, fake: FakeFeishu) => void } = {}) {
+async function surfaceRig(o: { topics?: boolean; threadMode?: boolean; names?: boolean; before?: (threads: FeishuThreads, fake: FakeFeishu) => void } = {}) {
   const fake = await FakeFeishu.start();
   if (o.topics) fake.answer("GET /open-apis/im/v1/chats/oc_t", { code: 0, data: { name: "话题群", chat_mode: "group", group_message_type: "thread" } });
   const dir = mkdtempSync(join(tmpdir(), "fs-"));
   const t = testClock();
   const threads = new FeishuThreads(join(dir, "threads.json"));
   o.before?.(threads, fake);
-  const surface = new FeishuSurface({ connect: "fs", appId: "cli_test", appSecret: "s", domain: "feishu", threads, threadMode: o.threadMode, client: new FeishuClient("cli_test", "s", "feishu", fake.base), clock: t.clock });
+  const book = o.names ? new NameBook(join(dir, "names.json"), { clock: t.clock }) : null;
+  const surface = new FeishuSurface({ connect: "fs", appId: "cli_test", appSecret: "s", domain: "feishu", threads, threadMode: o.threadMode, book, client: new FeishuClient("cli_test", "s", "feishu", fake.base), clock: t.clock });
   const events: ChatEvent[] = [];
   await surface.start(async (e) => void events.push(e));
   await fake.until("connected", () => surface.socket().connected);
@@ -135,6 +137,7 @@ async function surfaceRig(o: { topics?: boolean; threadMode?: boolean; before?: 
     fake, surface, events, threads, t,
     close: async () => {
       await surface.stop();
+      await book?.close();
       await fake.close();
       await t.close();
       rmSync(dir, { recursive: true, force: true });
@@ -549,6 +552,34 @@ test("routes: a connect of an app given by its id and secret, or made by a scan;
     store.close();
     await fake.close();
     rmSync(data, { recursive: true, force: true });
+  }
+});
+
+test("surface: a person known without an email is asked for again after a day, one with an email never", async () => {
+  const r = await surfaceRig({ names: true });
+  try {
+    const known = () => r.surface.knownPerson("ou_bo");
+    const asked = () => r.fake.calls("GET", "/open-apis/contact/v3/users/ou_bo").length;
+    // Another person's answer: what the book would have asked about Bo by then has been asked.
+    const others = (id: string) => r.fake.until(id, () => r.surface.knownPerson(id) !== null);
+    let email = "";
+    r.fake.answer("GET /open-apis/contact/v3/users/ou_bo", () => ({ code: 0, data: { user: { name: "Bo", email } } }));
+    assert.equal(known(), null);
+    await r.fake.until("Bo learned", () => known() !== null);
+    assert.deepEqual(known(), { name: "Bo", email: "" });
+    await others("ou_a");
+    assert.equal(asked(), 1, "not again within the day");
+    email = "bo@example.test";
+    await r.t.adjust(24 * 60 * 60_000);
+    assert.deepEqual(known(), { name: "Bo", email: "" }, "what is known answers at once");
+    await r.fake.until("Bo's email", () => known()?.email === "bo@example.test");
+    assert.equal(asked(), 2);
+    await r.t.adjust(24 * 60 * 60_000);
+    known();
+    await others("ou_b");
+    assert.equal(asked(), 2, "an email found stays");
+  } finally {
+    await r.close();
   }
 });
 

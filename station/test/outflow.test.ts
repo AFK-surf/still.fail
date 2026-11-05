@@ -355,6 +355,29 @@ test("asked for the workspace, an admin may leave it to this station", async () 
   assert.equal((await call(r, "GET", "/v1/usage?from=0&to=1&station=st-there", undefined, body.token)).status, 403);
 });
 
+test("v1 usage: a Feishu person's name and email as far as the names book knows them, never their id for a name", () => {
+  const dir = tempdir();
+  const store = Store.open(join(dir, "stillfail.db"), null);
+  after(() => store.close());
+  writeFileSync(join(dir, "config.json"), JSON.stringify({ connects: [{ id: "fs", kind: "feishu", feishu: {} }] }));
+  writeFileSync(join(dir, "feishu-names.json"), JSON.stringify({
+    "u:fs:ou_ada": { person: { name: "Ada", email: "ada@x" }, at: 1 },
+    "u:fs:ou_bo": { person: { name: "Bo", email: "" }, at: 1 },
+  }));
+  store.insertSession({ key: "a", connect: "fs", runtime: "claude", profile: "cc", workspace: "/w/a", token: "a", createdAt: 1, lastActiveAt: 1, createdBy: "slack:fs:ou_ada", ws: null } as never);
+  const thread = store.openThreadOf("feishu:fs", "oc_1", "om_1", "A group", "slack:fs:ou_ada", "a");
+  store.joinThread(thread.id, "a", "feishu:fs");
+  const call = (id: string) => ({ id, at: 86_400_000 + 1, model: "claude-opus-5-5", subagent: false, fast: false, input: 1, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context: null, window: null });
+  const people = ["slack:fs:ou_ada", "slack:fs:ou_bo", "slack:fs:ou_cy"];
+  store.recordUsage("/a.jsonl", { session: "a", offset: 1, model: null }, "claude", people.map((person) => [call(person), { turn: null, person, thread: thread.id, profile: "cc" }]) as never);
+  const usage = outflowUsage(read.openStore(dir), "en", 86_400_000, 2 * 86_400_000, 0) as any;
+  assert.deepEqual(usage.people, {
+    "slack:fs:ou_ada": { name: "Ada", email: "ada@x", via: "feishu" },
+    "slack:fs:ou_bo": { name: "Bo", email: null, via: "feishu" },
+    "slack:fs:ou_cy": { name: null, email: null, via: "feishu" },
+  });
+});
+
 test("v1 reads: the home workspace's usage and chats, field by field, no message", () => {
   const dir = tempdir();
   const store = Store.open(join(dir, "stillfail.db"), null);
@@ -383,7 +406,7 @@ test("v1 reads: the home workspace's usage and chats, field by field, no message
   assert.deepEqual(Object.keys(usage.rows[0]).sort(), ["account", "cacheRead", "cacheWrite", "calls", "cost", "day", "input", "model", "output", "person", "runtime", "session", "thread"].sort());
   assert.deepEqual(usage.rows.map((x: any) => [x.thread, x.person, x.calls, x.input, x.cacheWrite]), [[home.id, "ann@x", 1, 100, 10]], "another workspace's chats are not the station's to give");
   assert.ok(usage.rows[0].cost > 0);
-  assert.deepEqual(usage.people, { "ann@x": { email: "ann@x", via: "cloud" } });
+  assert.deepEqual(usage.people, { "ann@x": { name: null, email: "ann@x", via: "cloud" } });
   const otherUsage = outflowUsage(r, "en", 86_400_000, 2 * 86_400_000, 0, { workspace: "other-ws", home: false }) as any;
   assert.deepEqual(otherUsage.rows.map((x: any) => [x.session, x.thread]), [["b", away.id]]);
 
