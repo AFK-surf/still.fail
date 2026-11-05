@@ -219,6 +219,8 @@ pub fn lock_waiting(Core, String) -> Bool
 
 pub fn machine_sessions_offer(@ui.Ctx, Core, String, String) -> Unit
 
+pub fn machine_sessions_offer_node(@view.View, Core, () -> String, () -> String) -> Unit
+
 pub fn mark_login(String, String) -> Unit
 
 pub let memory_chevron : Double
