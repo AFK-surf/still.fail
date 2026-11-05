@@ -28,7 +28,7 @@ test("a scoped recent-answer read does not enumerate a chat's old cards", () => 
             get(query, method) {
               if (method === "all") return (...args: any[]) => {
                 const rows = query.all(...args);
-                if (/\bfrom entries\b/i.test(sql) && /\b(?:card|options) IS NOT NULL\b/i.test(sql)) cardsRead += rows.length;
+                if (/\bfrom card_posts\b/i.test(sql)) cardsRead += rows.length;
                 return rows;
               };
               const value = Reflect.get(query, method, query);
@@ -42,7 +42,7 @@ test("a scoped recent-answer read does not enumerate a chat's old cards", () => 
     });
     const actual = answersSince(makeStore(traced, "."), 100, [thread]);
     assert.deepEqual(actual, expected);
-    assert.ok(cardsRead <= 130, `reading recent answers returned ${cardsRead} old card entries`);
+    assert.ok(cardsRead > 0 && cardsRead <= 65, `reading recent answers returned ${cardsRead} old card entries`);
   } finally { store.close(); }
 });
 

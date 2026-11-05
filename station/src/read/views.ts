@@ -436,6 +436,8 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
   const reviewed = ids.length === 0 ? new Set<number>() : new Set<number>(store.reviewedThreads(s, ids));
   // The cards they wait on as kept; a chat with a card from before they were kept, worked out as it was.
   const cards = store.pendingCards(s, ids);
+  // Prepare legacy cards together: otherwise each old chat would cause the entire marks read to be retried.
+  store.requireCardPosts(s, cards === null ? store.threadsWithCards(s, ids) : [...cards.before]);
   const keptCard = (id: number): number | null | undefined => (cards === null || cards.before.has(id) ? undefined : (cards.at.get(id) ?? null));
   for (const t of own) {
     const id = t.thread.id;
@@ -462,7 +464,7 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
   const answered: Json = {};
   // Of the chats that ever had a card alone: each of the others' people's messages of the last day and a half was looked
   // at with half a dozen lookups for a card it answered, 3.2 s for one busy chat on a station short of memory (2026-11-03).
-  const carded = store.threadsWithCards(s, own.map((t) => t.thread.id));
+  const carded = store.threadsWithCards(s, ids);
   for (const a of store.answersSince(s, store.nowMs() - ANSWERED_WITHIN, carded)) {
     if (!mine(creator(a.by))) continue;
     (answered[a.question.thread] ??= []).push(answeredView(a));
@@ -581,6 +583,10 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
   // The cards answered lately, by chat, with who answered.
   const answered = new Map<number, Json[]>();
   const itemThreads = threads.filter((t) => t.thread.surface === STILLFAIL_SURFACE && listed(t) && inChat(t).length > 0);
+  const carded = !archived && !titlesOnly ? store.threadsWithCards(s, itemThreads.map((t) => t.thread.id)) : [];
+  const cardedSet = new Set(carded);
+  // Each card view below can need its old posts. Ask once for the list, rather than retrying it once per chat.
+  store.requireCardPosts(s, carded);
   const saidByThread = new Map<number, ReturnType<typeof store.saidOf>>();
   const needSaid: number[] = [];
   for (const t of titlesOnly ? [] : itemThreads) {
@@ -594,7 +600,6 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
   if (!archived && !titlesOnly) {
     // Only these items can show an answer, and a chat without cards cannot have one. Looking at every person's recent
     // messages first made even a change to one cardless chat read that chat's whole recent conversation.
-    const carded = store.threadsWithCards(s, itemThreads.map((t) => t.thread.id));
     for (const a of store.answersSince(s, store.nowMs() - ANSWERED_WITHIN, carded)) {
       const list = answered.get(a.question.thread) ?? [];
       list.push({ ...answeredView(a), by: creator(a.by) });
@@ -664,7 +669,7 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
     const clientKey = s.clientKeys.get(String(key));
     if (clientKey !== undefined) row.clientKey = clientKey;
     // The card it waits on, if any, and whether the viewer dismissed it; an options card is its `decision` too.
-    const card = archived || names === null ? null : cardView(api, t.thread.id, dismissed, names);
+    const card = archived || names === null || !cardedSet.has(t.thread.id) ? null : cardView(api, t.thread.id, dismissed, names);
     if (card !== null) {
       if (field(card.card, "type") === "options") {
         const decision = swapRemove(card, "card");

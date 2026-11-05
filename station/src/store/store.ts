@@ -52,6 +52,7 @@ import { installPostBlocks, PostBlocksUnavailable, POST_BLOCK_SIZE, type PostPos
 import { checkWidgetSources, installWidgetSources, WIDGET_SOURCE, WIDGET_SOURCE_MISSING, WIDGET_SOURCE_ORIGINAL,
   WIDGET_SOURCE_UNUSUAL, WidgetSourcesUnavailable } from "./widget-sources.ts";
 import { indexedCcThreads, installCcIndex } from "./cc-thread-index.ts";
+import { CARD_POST_BEFORE, CARD_POST_LATEST, cardPostsReady, installCardPosts } from "./card-post-index.ts";
 import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
 import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
 
@@ -197,6 +198,9 @@ export const CLOSED_CARD_AFTER = `SELECT
   EXISTS (SELECT 1 FROM entries INDEXED BY entries_people_by_n WHERE thread = ?1 AND n > ?2 AND kind = 'message' AND author_kind = 'person')
   OR EXISTS (SELECT 1 FROM entries INDEXED BY entries_cards WHERE thread = ?1 AND n > ?2 AND kind = 'message' AND card IS NOT NULL)
   OR EXISTS (SELECT 1 FROM entries INDEXED BY entries_options WHERE thread = ?1 AND n > ?2 AND kind = 'message' AND options IS NOT NULL) AS ended`;
+export const CLOSED_CARD_AFTER_POSTS = `SELECT
+  EXISTS (SELECT 1 FROM entries INDEXED BY entries_people_by_n WHERE thread = ?1 AND n > ?2 AND kind = 'message' AND author_kind = 'person')
+  OR EXISTS (SELECT 1 FROM card_posts WHERE thread = ?1 AND n > ?2) AS ended`;
 /// Whether a pending delivery can actually be read by the session, without loading the message's text or edits.
 export const HAS_PENDING_MESSAGE = `SELECT 1 FROM deliveries d INDEXED BY deliveries_pending
   JOIN entries m ON m.thread = d.thread AND m.n = d.n AND m.kind = 'message'
@@ -392,6 +396,7 @@ export class Store {
       installSaidState(db);
       installWidgetSources(db);
       installCcIndex(db);
+      installCardPosts(db);
     } catch (e) {
       db.close();
       throw e;
@@ -1896,21 +1901,34 @@ export class Store {
   /// The thread's card still pending, if any: its latest post with a card (a newer one replaces an older one), as long
   /// as no person has written in the thread since. The post as merged, and its card.
   pendingCard(thread: number): [MessageRow, Json] | null {
-    // The latest of each kind (cards, and options from before cards), each read by its own index.
-    const latest = (column: string): Json | undefined =>
-      this.#one(`SELECT n, card, options FROM entries WHERE thread = ? AND kind = 'message' AND ${column} IS NOT NULL ORDER BY n DESC LIMIT 1`, thread);
-    const a = latest("card");
-    const b = latest("options");
-    const asked = a && b ? (a.n >= b.n ? a : b) : (a ?? b);
-    if (!asked) return null;
-    const n: number = asked.n;
+    let n: number | undefined;
+    if (cardPostsReady(this.db, thread)) n = this.#one(CARD_POST_LATEST, thread)?.n;
+    else {
+      // Until an old thread is prepared, preserve its synchronous event-time answer using the original indexes.
+      const latest = (column: string): Json | undefined =>
+        this.#one(`SELECT n FROM entries WHERE thread = ? AND kind = 'message' AND ${column} IS NOT NULL ORDER BY n DESC LIMIT 1`, thread);
+      const a = latest("card"), b = latest("options");
+      n = a && b ? Math.max(a.n, b.n) : (a ?? b)?.n;
+    }
+    if (n === undefined) return null;
     const answered = this.#one("SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? LIMIT 1", thread, n) !== undefined;
     const closed = this.#one("SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, n) !== undefined;
     if (answered || closed) return null;
-    const card = cardOf(asked.card, asked.options);
-    if (card === undefined) return null;
-    const m = this.#one("SELECT * FROM merged WHERE thread = ? AND n = ?", thread, n);
-    return m ? [toMessage(m), card] : null;
+    return this.#cardPost(thread, n);
+  }
+
+  /// A prepared thread seeks the previous post directly. An old thread still being prepared uses the original query:
+  /// callers that tell a connect about this event must answer now, from the event's current state.
+  #previousCard(thread: number, n: number): number | null {
+    if (cardPostsReady(this.db, thread)) return this.#one(CARD_POST_BEFORE, thread, n).n;
+    const card: number | null = this.#one(CARD_BEFORE, thread, n).n;
+    const options: number | null = this.#one(OPTIONS_BEFORE, thread, n).n;
+    return card === null ? options : options === null ? card : Math.max(card, options);
+  }
+
+  #cardEndedAfter(thread: number, n: number): boolean {
+    const sql = cardPostsReady(this.db, thread) ? CLOSED_CARD_AFTER_POSTS : CLOSED_CARD_AFTER;
+    return this.#one(sql, thread, n)!.ended !== 0;
   }
 
   /// The card whose wait ended with this person's message. This follows the same entry-order rules as pendingCard and
@@ -1919,9 +1937,7 @@ export class Store {
   cardEndedByMessage(thread: number, n: number): [MessageRow, Json] | null {
     const person = this.#one("SELECT 1 FROM entries WHERE thread = ? AND n = ? AND kind = 'message' AND author_kind = 'person'", thread, n);
     if (!person) return null;
-    const cardN: number | null = this.#one(CARD_BEFORE, thread, n).n;
-    const optionsN: number | null = this.#one(OPTIONS_BEFORE, thread, n).n;
-    const asked = cardN === null ? optionsN : optionsN === null ? cardN : Math.max(cardN, optionsN);
+    const asked = this.#previousCard(thread, n);
     if (asked === null) return null;
     const earlier = this.#one("SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? AND n < ? LIMIT 1", thread, asked, n);
     const closed = this.#one("SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, asked);
@@ -1937,9 +1953,7 @@ export class Store {
   cardReplacedBy(thread: number, n: number): [MessageRow, Json] | null {
     const carded = this.#one("SELECT 1 FROM entries WHERE thread = ? AND n = ? AND kind = 'message' AND (card IS NOT NULL OR options IS NOT NULL)", thread, n);
     if (!carded) return null;
-    const cardN: number | null = this.#one(CARD_BEFORE, thread, n).n;
-    const optionsN: number | null = this.#one(OPTIONS_BEFORE, thread, n).n;
-    const asked = cardN === null ? optionsN : optionsN === null ? cardN : Math.max(cardN, optionsN);
+    const asked = this.#previousCard(thread, n);
     if (asked === null) return null;
     const answered = this.#one("SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? AND n < ? LIMIT 1", thread, asked, n);
     const closed = this.#one("SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, asked);
@@ -1952,7 +1966,7 @@ export class Store {
   /// agent withdrawing it, or a person's choice).
   closedCard(thread: number, n: number): [MessageRow, Json, string] | null {
     const by = this.#one("SELECT viewer FROM closed_cards WHERE thread = ? AND n = ?", thread, n);
-    if (by === undefined || this.#one(CLOSED_CARD_AFTER, thread, n)!.ended !== 0) return null;
+    if (by === undefined || this.#cardEndedAfter(thread, n)) return null;
     const found = this.#cardPost(thread, n);
     return found === null ? null : [...found, by.viewer as string];
   }
@@ -1987,12 +2001,7 @@ export class Store {
   answersSince(since: number): CardAnswer[] {
     const out: CardAnswer[] = [];
     const said = this.#all("SELECT thread, n FROM entries WHERE author_kind = 'person' AND kind = 'message' AND at >= ?", since);
-    const askedBefore = (thread: number, n: number): number | null => {
-      const card: number | null = this.#one(CARD_BEFORE, thread, n).n;
-      const options: number | null = this.#one(OPTIONS_BEFORE, thread, n).n;
-      // Option's max: None below any Some.
-      return card === null ? options : options === null ? card : Math.max(card, options);
-    };
+    const askedBefore = (thread: number, n: number): number | null => this.#previousCard(thread, n);
     const cardAt = (thread: number, n: number): [MessageRow, Json] | null => {
       const row = this.#one("SELECT card, options FROM entries WHERE thread = ? AND n = ?", thread, n);
       const card = row ? cardOf(row.card, row.options) : undefined;
@@ -2103,7 +2112,7 @@ export class Store {
         if (this.#one("SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, n) !== undefined) return true;
         // The offered row exists and has a card. Only a later person, card or legacy options can end its wait;
         // reuse the same indexed checks as closedCard instead of walking the intervening ordinary messages.
-        if (this.#one(CLOSED_CARD_AFTER, thread, n)!.ended !== 0) return false;
+        if (this.#cardEndedAfter(thread, n)) return false;
         // Do not race the agent still composing its question / recording its ending.
         const composing = this.#one("SELECT ended_at IS NULL AS c FROM turns WHERE session_key = ? ORDER BY started_at DESC LIMIT 1", offered.author);
         if (composing !== undefined && composing.c !== 0) return false;

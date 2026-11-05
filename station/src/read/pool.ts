@@ -24,7 +24,9 @@ import { ArchiveMarkBuilder } from "./archive-mark-builder.ts";
 import { SessionUpJobsBuilder } from "./session-up-jobs-builder.ts";
 import { WidgetSourcesBuilder } from "./widget-sources-builder.ts";
 import { CcIndexBuilder } from "./cc-index-builder.ts";
+import { CardPostsBuilder } from "./card-posts-builder.ts";
 import { CC_SESSIONS_PENDING } from "../store/cc-thread-index.ts";
+import { CARD_POSTS_PENDING } from "../store/card-post-index.ts";
 import { SESSION_BINDINGS_PENDING } from "../store/session-bindings-index.ts";
 import { OUTFLOW_CHATS_PENDING } from "./outflow.ts";
 import type { Answer, Ask, Ready } from "./worker.ts";
@@ -125,6 +127,7 @@ export class Readers {
   private archiveMarks: ArchiveMarkBuilder | null = null;
   private sessionUpJobs: SessionUpJobsBuilder | null = null;
   private widgetSources: WidgetSourcesBuilder | null = null;
+  private cardPosts: CardPostsBuilder | null = null;
   private ccIndex: CcIndexBuilder | null = null;
   /// A checkpoint is armed or running (`checkpointSoon`), and the store changed again since it was armed.
   private checkpointing = false;
@@ -274,6 +277,13 @@ export class Readers {
     return this.covered(this.widgetSources.ready(threads, signal), signal);
   }
 
+  /// Prepare old card posts requested by a read; concurrent reads share this work.
+  prepareCardPosts(threads: readonly number[], signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.cardPosts ??= new CardPostsBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.cardPosts.ready(threads, signal), signal);
+  }
+
   /// Prepare the sessions needed to choose a chat's copy destinations.
   prepareCcSessions(sessions: readonly string[], signal?: AbortSignal): Promise<void> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
@@ -295,6 +305,13 @@ export class Readers {
           try { sessions = JSON.parse(error.message.slice(CC_SESSIONS_PENDING.length)); } catch { throw error; }
           if (!Array.isArray(sessions) || sessions.length === 0 || !sessions.every((key) => typeof key === "string")) throw error;
           await this.prepareCcSessions(sessions, signal);
+          continue;
+        }
+        if (error.message.startsWith(CARD_POSTS_PENDING)) {
+          let threads: unknown;
+          try { threads = JSON.parse(error.message.slice(CARD_POSTS_PENDING.length)); } catch { throw error; }
+          if (!Array.isArray(threads) || threads.length === 0 || !threads.every(Number.isSafeInteger)) throw error;
+          await this.prepareCardPosts(threads, signal);
           continue;
         }
         if (error.message.startsWith(TURN_COUNT_PENDING)) {
@@ -541,6 +558,7 @@ export class Readers {
     if (this.archiveMarks !== null) void this.archiveMarks.close();
     if (this.sessionUpJobs !== null) void this.sessionUpJobs.close();
     if (this.widgetSources !== null) void this.widgetSources.close();
+    if (this.cardPosts !== null) void this.cardPosts.close();
     if (this.ccIndex !== null) void this.ccIndex.close();
     for (const line of [this.asked, this.told, this.log, this.pages]) {
       for (const asked of line.waiting.splice(0)) asked.reject(new HttpError(502, "station stopping"));
