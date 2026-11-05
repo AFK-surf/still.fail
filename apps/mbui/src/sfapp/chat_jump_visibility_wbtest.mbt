@@ -63,6 +63,23 @@ test "farther from the end a slow drag offers the way to latest" {
 }
 
 ///|
+test "the way to latest stays hidden while the list returns, and comes back if the hand takes it away" {
+  let t = jump_visibility_tester()
+  jump_visibility_drag(t, 300.0)
+  t.touch_at(2, 195.0, 500.0, t.time())
+  t.run_for(jump_test_after_drag_ms)
+  assert_true(jump_visible(t))
+  t.click(Button, label=@sf.t("web-main.chat.toLatest"))
+  t.frame_at(t.next_frame_time())
+  assert_false(jump_visible(t), msg="the button leaves as the list goes to its end")
+  t.run_for(jump_test_step_ms)
+  assert_false(jump_visible(t), msg="the button stays gone during the return")
+  jump_visibility_drag(t, 300.0)
+  assert_true(jump_visible(t), msg="the hand took the list away from its end again")
+  t.touch_at(2, 195.0, 500.0, t.time())
+}
+
+///|
 test "a page short of the newest still offers the way to latest at its end" {
   let calls : Array[Made] = []
   let t = fake_core(calls, over=fn(name, topic) {

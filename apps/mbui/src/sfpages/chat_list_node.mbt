@@ -894,7 +894,7 @@ pub fn chat_list_node(
   let newer = fn() { view().map(fn(cv) { cv.newer }).unwrap_or(false) }
   let jump_shown = fn() {
     let below = scroll.end_below_told()
-    let going_to_end = follows.get() && below > 0.5
+    let going_to_end = scroll.to_end_told()
     newer() || (!shown.get().is_empty() && below > 120.0 && !going_to_end)
   }
   v.reacts(fn() { (jump_shown(), follows.get(), newer()) }, fn(now) {
