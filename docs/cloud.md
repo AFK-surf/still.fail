@@ -119,7 +119,7 @@ relay 转发的是包，不替收方攒：一个包在发给某个客户端的�
 station 在哪、怎么连，设备自己找，不经过 still.fail cloud：
 
 - **局域网**：mDNS（服务名 `stillfail`，兼容期内也查旧名 `ember`；见 `station/native/mesh/src/lib.rs` 的 `MDNS_SERVICE`，只有 station 广播，设备只查询）。每块网卡都收发；路由器在子网之间转发的 mDNS 也认。
-- **公网**：station 把自己所在的 relay 发布到 Mainline DHT，设备查得到它换过的 relay。
+- **公网**：默认不用 Mainline DHT（它的 bootstrap 域名，如 `relay.pkarr.org`，会被一些公司标为高危）；station 换了 relay，设备从 cloud 得知。station 设 `STILLFAIL_DHT=1` 才把所在的 relay 发布到 DHT；设备的 shell 只在 `iroh.bind` 带 `dht: true` 时去 DHT 查。
 - 浏览器（wasm）只能走 relay：still.fail 的，或下面说的 workspace 自己的。
 
 **workspace 自己的 relay**：owner 和管理员可以给 workspace 加最多 4 个自己部署的 iroh-relay（`PUT /v1/workspaces/:id/relays {relays: [url]}`，`workspace.setRelays`；https，云本身是 http 时也收 http；存在 `workspaces.relays`）。云不去探它通不通：云在海外，大陆的 relay 它多半连不上。它们只给这个 workspace 用：

@@ -1137,11 +1137,15 @@ impl Inner {
             builder = builder.clear_ip_transports();
         }
         // Stations on the LAN (mDNS, never announced itself) and which relay they are on (the DHT), as client/core-ts's.
+        // The DHT only when asked (`dht`): off by default, as a station's is (its bootstrap names, relay.pkarr.org among
+        // them, are marked risky by some companies' filters); a station's changed relay then comes from the cloud.
         if a.get("lookup").and_then(Value::as_bool).unwrap_or(false) && !relays.is_empty() {
             builder = builder
                 .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE).advertise(false))
-                .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE).advertise(false))
-                .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().no_publish());
+                .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE).advertise(false));
+            if a.get("dht").and_then(Value::as_bool).unwrap_or(false) {
+                builder = builder.address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().no_publish());
+            }
         }
         let endpoint = builder.bind().await.map_err(err)?;
         Ok(Answer::json(json!({ "id": self.keep(Handle::Endpoint(endpoint, Accepted::default())) })))
