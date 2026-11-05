@@ -560,6 +560,7 @@ export class Secrets {
       }
       rows = [...selected].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([, body]) => ({ body }));
     }
+    const vaultDecisions = new Map<string, boolean>();
     return rows
       .map((r) => JSON.parse(r.body) as Request)
       .filter((r) => {
@@ -569,7 +570,14 @@ export class Secrets {
         this.#settle(r, "expired");
         return false;
       })
-      .filter((r) => this.#decides(r, viewer, lock));
+      .filter((r) => {
+        if (r.vault === PLAIN || r.save || lock === null) return this.#decides(r, viewer, lock);
+        const checked = vaultDecisions.get(r.vault);
+        if (checked !== undefined) return checked;
+        const mayDecide = this.#decides(r, viewer, lock);
+        vaultDecisions.set(r.vault, mayDecide);
+        return mayDecide;
+      });
   }
 
   #requestLive(r: Request, now: number): boolean {

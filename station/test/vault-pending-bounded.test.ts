@@ -192,6 +192,25 @@ test("other people's carried saves do not get read on every prepared list", asyn
   assert.deepEqual(await Promise.all([visits(40), visits(400)]), [0, 0]);
 });
 
+test("forgetting a carried save rechecks the same request id in its other workspaces", async () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    const secrets = new Secrets({ db, data: ".", now: () => 0, home: () => "a", lock: () => null,
+      hub: { store: { subscribe() {}, getSession() { return {}; } }, notify() {} } as never,
+      proxy: {} as never, vaults: {} as never, plain: { item: () => null } as never });
+    const insert = db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES(?,'same','s','pending',?)");
+    for (const ws of ["a", "b"]) insert.run(ws, JSON.stringify({ ws, id: "same", session: "s", vault: PLAIN,
+      owner: "bob@example.test", at: 0, item: "i", mode: "env", status: "pending", save: { typed: false } }));
+    secrets.carry({ keeper: { boxes: [], held: [] }, unsaved: [["same", { value: "secret" }, [
+      { ws: "a", owner: "bob@example.test" }, { ws: "b", owner: "bob@example.test" },
+    ]]] });
+    await Promise.all([secrets.preparePending("a"), secrets.preparePending("b")]);
+    assert.equal(secrets.denyPlain("a", "bob@example.test", { request: "same" }), null);
+    secrets.pending("b", null, { sub: "alice", email: "alice@example.test" });
+    assert.equal((db.prepare("SELECT status FROM vault_requests WHERE ws='b' AND id='same'").get() as { status: string }).status, "expired");
+  } finally { db.close(); }
+});
+
 test("a prepared list settles other people's lost and overdue saves in request order", async () => {
   const db = new DatabaseSync(":memory:");
   try {
