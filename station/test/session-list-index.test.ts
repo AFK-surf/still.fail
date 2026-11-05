@@ -51,6 +51,29 @@ for (const recursive of [false, true]) test(`session list candidates follow repl
   } finally { store.close(); }
 });
 
+for (const recursive of [false, true]) for (const alias of ["rowid", "_rowid_", "oid"]) {
+  test(`replacing a session by ${alias} updates its list candidate (recursive triggers ${recursive})`, () => {
+    const { store, db, add, exact } = fixture();
+    try {
+      db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+      add("one", "x", "mine"); add("two", "y", null);
+      const id = db.prepare("SELECT rowid AS id FROM sessions WHERE key='two'").get()!.id;
+      db.prepare(`UPDATE OR REPLACE sessions SET ${alias}=? WHERE key='one'`).run(id);
+      exact();
+    } finally { store.close(); }
+  });
+}
+
+test("the home list keeps null and empty workspace identities separate", () => {
+  const { store, db, add } = fixture();
+  try {
+    add("old-home", "x", null); add("empty-workspace", "x", ""); add("other", "x", "other");
+    const read = makeStore(db, "/none");
+    assert.deepEqual(listedSessions(read, null, false, { workspace: "", home: false }).map((row) => row.key), ["empty-workspace"]);
+    assert.deepEqual(listedSessions(read, null, false, { workspace: "", home: true }).map((row) => row.key), ["old-home", "empty-workspace"]);
+  } finally { store.close(); }
+});
+
 for (const recursive of [false, true]) test(`session list candidates stay exact through mixed replacements (recursive triggers ${recursive})`, () => {
   const { store, db } = fixture(), reference = fixture();
   try {
