@@ -112,3 +112,17 @@ test("a session removed while use titles are prepared does not keep the page wai
     assert.equal(w.titles(), 0);
   } finally { w.gate.resolve(); w.db.close(); }
 });
+
+test("a ready title is read once for repeated uses of the same chat", async () => {
+  const w = waitingUses();
+  try {
+    const body = JSON.stringify({ ws: "w", id: "r2", vault: "v", owner: "p@example.test", at: 2,
+      item: "item-2", session: "s", mode: "env", status: "granted" });
+    w.db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w','r2','s','granted',?)").run(body);
+    w.ready();
+    const rows = await w.secrets.uses("w", {} as never, "v", { sub: "p", email: "p@example.test" });
+    assert.deepEqual(rows.map((r) => r.chatTitle), ["shown", "shown"]);
+    assert.equal(w.prepares(), 0);
+    assert.equal(w.titles(), 1);
+  } finally { w.gate.resolve(); w.db.close(); }
+});
