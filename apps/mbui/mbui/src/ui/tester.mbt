@@ -1713,7 +1713,7 @@ pub fn Tester::back(self : Tester) -> Unit {
 }
 
 ///|
-/// How many times back was gone back with the app taking none (Tester::back, back_raw, back_gesture): the system's own,
+/// How many times back was gone back with the app taking none (Tester::back, back_raw, back_told, back_gesture): the system's own,
 /// on Android the app's window closed.
 pub fn Tester::backs_out(self : Tester) -> Int {
   self.fake.backs_out
