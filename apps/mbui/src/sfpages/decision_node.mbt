@@ -325,7 +325,12 @@ fn dismiss_node(
   under_node(b, shown, lead~, scale_out=archive_scale, out=archive_tween, about=(0.0, 0.0), fn(u) {
     u.box(fn(w) {
       let hot = fn() { live() && w.pointed() }
+      // (let go or answered on screen: faded where it is from that change, as its room goes too (main's dismiss-live
+      // presence, archive_tween), the two looks one over the other)
+      let lit = @motion.Way::new(if @signals.untracked(live) { 1.0 } else { 0.0 })
+      w.reacts(live, fn(on) { lit.go(if on { 1.0 } else { 0.0 }, archive_tween, at=w.cause_at()) })
       w
+      .alpha(By(fn() { way_shown(lit, w) }))
       .padding(Is((0.0, 2.0, 0.0, 0.0)))
       .says(By(fn() { Some(@view.said(Button, label=@sf.t("web-main.chat.asks.dismiss"))) }))
       |> ignore
@@ -426,8 +431,19 @@ fn under_node(
   })
   parent.show(fn() { shown() || way_shown(room, parent) > 0.0 }, fn(r) {
     // (cut at both ends as it opens and closes, fading out to them: under_post's reveal)
-    r.opens(By(fn() { Some(dmin(1.0, way_shown(room, r))) })).clips(By(fn() { way_shown(room, r) < 1.0 })) |> ignore
-    r.box(fn(u) {
+    r.opens(By(fn() { Some(dmin(1.0, way_shown(room, r))) })).clips(By(fn() { way_shown(room, r) < 1.0 }))
+    .cuts_softly(By(fn() { way_shown(room, r) < 1.0 })) |> ignore
+    // (what it holds as big as its room is open and faded in from half open, about the middle of what it draws: a list's
+    // row coming and going where it is, under_post's reveal `middle`, @motion.reveal_node's)
+    r.box(fn(held) {
+    held
+    .scale(By(fn() { dmax(0.0, dmin(1.0, way_shown(room, held))) }), about=Drawn)
+    .alpha(By(fn() {
+      let k = way_shown(room, held)
+      if k >= 1.0 { 1.0 } else { dmax(0.0, (k - @ui.row_gone_at) / (1.0 - @ui.row_gone_at)) }
+    }))
+    |> ignore
+    held.box(fn(u) {
       inner.val = Some(u)
       u.owns(fn() { inner.val = None }) |> ignore
       u
@@ -440,6 +456,8 @@ fn under_node(
       |> ignore
       // The leading room belongs to this block; the body's own inset (dismiss_room's, for example) is inside it.
       u.box(body) |> ignore
+    })
+    |> ignore
     })
     |> ignore
   })
