@@ -153,3 +153,63 @@ test "a custom parent measures a child's ordinary font inputs without treating t
   assert_eq(sizes, [(200.0, 20.0)])
   t.dispose()
 }
+
+///|
+/// A column 300 tall: a bar 40 tall, then a layout box sized by its share of what is left (no height of its own), its
+/// one row `row` tall at its top; how many times the column's layout was computed and where the bar is.
+fn sized_by_parent(row : @signals.Signal[Double]) -> (Tree, Ref[View?], Ref[View?]) {
+  let bar : Ref[View?] = Ref(None)
+  let boxed : Ref[View?] = Ref(None)
+  let t = Tree::new(fn(root) {
+    root.box(fn(b) { bar.val = Some(b); b.height(Is(Some(40.0))) |> ignore }) |> ignore
+    root.box(fn(n) {
+      boxed.val = Some(n)
+      n.grow(Is(1.0)).layout_box(Is(0), fn(l, _) {
+        let r = l.child("row", fn(c) { c.height(By(fn() { Some(row.get()) })) |> ignore })
+        l.measure(r, l.width) |> ignore
+        l.place(r, 0.0, 0.0)
+      }) |> ignore
+    })
+    |> ignore
+  })
+  (t, bar, boxed)
+}
+
+///|
+test "a layout box is as big as what holds it makes it, never as what it holds: a row of it grown, it and those beside it stay" {
+  let row = @signals.signal(20.0, same=fn(a, b) { a == b })
+  let (t, bar, boxed) = sized_by_parent(row)
+  t.frame(200.0, 300.0, now=0.0) |> ignore
+  let box_h = t.nodes[boxed.val.unwrap().at].flex.height
+  assert_eq(box_h, 260.0)
+  row.set(500.0)
+  t.frame(200.0, 300.0, now=10.0) |> ignore
+  // (its height its share of the column's, as before: what it holds laid out inside it, the column's other rows not
+  // moved for it; so marking it stops there, its own layout_owner)
+  assert_eq(t.nodes[boxed.val.unwrap().at].flex.height, 260.0)
+  assert_eq(t.nodes[bar.val.unwrap().at].flex.top, 0.0)
+  t.dispose()
+}
+
+///|
+test "a layout box given no height of its own nor a share is as tall as nothing, whatever it holds: its rows never make it taller" {
+  let row = @signals.signal(20.0, same=fn(a, b) { a == b })
+  let boxed : Ref[View?] = Ref(None)
+  let t = Tree::new(fn(root) {
+    root.box(fn(n) {
+      boxed.val = Some(n)
+      n.layout_box(Is(0), fn(l, _) {
+        let r = l.child("row", fn(c) { c.height(By(fn() { Some(row.get()) })) |> ignore })
+        l.measure(r, l.width) |> ignore
+        l.place(r, 0.0, 0.0)
+      }) |> ignore
+    })
+    |> ignore
+  })
+  t.frame(200.0, 300.0, now=0.0) |> ignore
+  assert_eq(t.nodes[boxed.val.unwrap().at].flex.height, 0.0)
+  row.set(500.0)
+  t.frame(200.0, 300.0, now=10.0) |> ignore
+  assert_eq(t.nodes[boxed.val.unwrap().at].flex.height, 0.0)
+  t.dispose()
+}
