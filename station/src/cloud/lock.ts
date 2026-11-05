@@ -158,6 +158,8 @@ export function endpointProof(ws: string, base: string, endpoint: string, proof:
 // hold for each state is theirs, given back to them for the next entry; the state here is a copy to read.
 const crypto = { sha256Hex: (s: string) => sha256(s).toString("hex"), sigValid, validKeyId, endpointProof };
 const held = new WeakMap<LockState, unknown>();
+// A lock state is a snapshot: apply makes a new one. These groups are made as its maps are copied, not at a lookup.
+const people = new WeakMap<LockState, { emails: Map<string, Member[]>; devices: Map<string, string[]> }>();
 
 type Pairs<T> = [string, T][];
 type Told = Omit<LockState, "members" | "devices" | "signKeys" | "passkeys" | "signed" | "stations" | "gateways"> & {
@@ -167,12 +169,51 @@ type Told = Omit<LockState, "members" | "devices" | "signKeys" | "passkeys" | "s
 function taken(out: { state: Told; rules: unknown } | { error: string }): LockState {
   if ("error" in out) throw new Error(out.error);
   const t = out.state;
+  const members = new Map<string, Member>(), devices = new Map<string, Device>();
+  const emails = new Map<string, Member[]>(), byPerson = new Map<string, string[]>();
+  for (const [sub, member] of t.members) {
+    members.set(sub, member);
+    const email = member.email.toLowerCase();
+    const group = emails.get(email) ?? [];
+    group.push(member);
+    emails.set(email, group);
+  }
+  for (const [id, device] of t.devices) {
+    devices.set(id, device);
+    const group = byPerson.get(device.sub) ?? [];
+    group.push(id);
+    byPerson.set(device.sub, group);
+  }
   const s: LockState = {
-    ...t, members: new Map(t.members), devices: new Map(t.devices), signKeys: new Map(t.signKeys), passkeys: new Map(t.passkeys),
+    ...t, members, devices, signKeys: new Map(t.signKeys), passkeys: new Map(t.passkeys),
     signed: new Set(t.signed), stations: new Map(t.stations), gateways: new Set(t.gateways),
   };
   held.set(s, out.rules);
+  people.set(s, { emails, devices: byPerson });
   return s;
+}
+
+/// The first member with this lower-case email, in the lock's existing order.
+export function memberWithEmail(s: LockState, email: string): Member | null {
+  const index = people.get(s);
+  if (index) return index.emails.get(email)?.[0] ?? null;
+  // A caller may construct a lock view itself, rather than taking a rules snapshot.
+  for (const member of s.members.values()) if (member.email.toLowerCase() === email) return member;
+  return null;
+}
+
+/// Every member with this lower-case email, in the lock's existing order.
+export function membersWithEmail(s: LockState, email: string): readonly Member[] {
+  const index = people.get(s);
+  if (index) return index.emails.get(email) ?? [];
+  return [...s.members.values()].filter((member) => member.email.toLowerCase() === email);
+}
+
+/// Device ids of a person in this lock snapshot.
+export function devicesFor(s: LockState, sub: string): readonly string[] {
+  const index = people.get(s);
+  if (index) return index.devices.get(sub) ?? [];
+  return [...s.devices].flatMap(([id, device]) => device.sub === sub ? [id] : []);
 }
 
 function rulesOf(s: LockState): unknown {

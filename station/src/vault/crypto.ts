@@ -217,7 +217,19 @@ export const ITEM_ID = new RegExp(`^i_${ULID}$`);
 /// key sealed to it under its certificate from before; 2026-11-03); and a device that is no longer its person's own
 /// keeps the key it was given, which the owner's own device signed into the vault (its new versions keep it).
 export function certOk(lock: LockState, cert: BoxCert, ever = false): string | null {
-  return rules.cert_ok_js(lock, cert, ever, rulesCrypto);
+  // The certificate rule reads only this device, its member and its own signing-key history. Give the rules bridge
+  // just those entries; otherwise it copies every member and device before checking each individual certificate.
+  const id = typeof cert?.device === "string" ? cert.device : null;
+  const device = id === null ? undefined : lock.devices.get(id);
+  const member = device === undefined ? undefined : lock.members.get(device.sub);
+  // A newly published certificate must use the current key; historical keys matter only for `ever`.
+  const keys = !ever || id === null ? undefined : lock.signKeys.get(id);
+  return rules.cert_ok_js({
+    ws: lock.ws,
+    devices: new Map(id !== null && device !== undefined ? [[id, device]] : []),
+    members: new Map(device !== undefined && lock.members.has(device.sub) ? [[device.sub, member]] : []),
+    signKeys: new Map(id !== null && keys !== undefined ? [[id, keys]] : []),
+  }, cert, ever, rulesCrypto);
 }
 
 /// Why `next` may not follow `prev` (null: it is the vault's first version), or null when it may. `copy`: a later
