@@ -92,3 +92,46 @@ test "placing a folded container consumes its measured content without measuring
     assert_eq((content.width, content.height), (120.0, 20.0))
   }
 }
+
+///|
+test "equal occupied sizes do not make arrangements at different available widths interchangeable" {
+  let root = @flex.Node::new()
+  root.style.direction = Row
+  root.style.align_items = FlexStart
+  let fold = @flex.Node::new()
+  let content = @flex.Node::new()
+  fold.add(content)
+  root.add(fold)
+  fold.arrange = Some(fn(room) {
+    let child = room.measure(content, width=room.max_width().unwrap(), height=20.0)
+    @flex.arrangement(50.0, 20.0, [child.at(0.0, 0.0)])
+  })
+  for width in [300.0, 200.0, 400.0, 200.0] {
+    @flex.compute(root, width~, round=false, reuse=true)
+    assert_eq((fold.width, fold.height), (50.0, 20.0))
+    assert_eq((content.width, content.height), (width, 20.0))
+  }
+}
+
+///|
+test "a parent's chosen measurement retains its child placement after other measurements" {
+  let root = @flex.Node::new()
+  let card = @flex.Node::new()
+  let content = @flex.Node::new()
+  root.add(card)
+  card.add(content)
+  card.style.set_padding_left(Pt(7.0))
+  card.arrange = Some(fn(room) {
+    let w = room.width().unwrap()
+    let child = room.measure(content, width=w / 2.0, height=w / 4.0)
+    @flex.arrangement(w, w / 2.0, [child.at(w / 4.0, 3.0)])
+  })
+  root.arrange = Some(fn(room) {
+    let chosen = room.measure(card, width=127.0)
+    for width in 140..<180 { room.measure(card, width=width.to_double()) |> ignore }
+    @flex.arrangement(300.0, 100.0, [chosen.at(11.0, 13.0)])
+  })
+  @flex.compute(root, width=300.0, round=false)
+  assert_eq((card.left, card.top, card.width, card.height), (11.0, 13.0, 127.0, 60.0))
+  assert_eq((content.left, content.top, content.width, content.height), (37.0, 3.0, 60.0, 30.0))
+}

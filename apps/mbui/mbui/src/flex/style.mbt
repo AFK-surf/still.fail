@@ -1012,7 +1012,10 @@ pub(all) struct Node {
   children : Array[Node]
   mut measure : MeasureFn?
   mut arrange : ArrangeFn?
-  mut arrangements : Array[Arranged]?
+  // Placement plans belong to the corresponding numeric measurement cache entry.
+  mut arrangements : Array[Arranged?]?
+  mut p_arranged : Arranged?
+  mut pre_arranged : Array[Measured?]?
   // the result: position relative to the parent's border box, and size
   mut left : Double
   mut top : Double
@@ -1076,6 +1079,8 @@ pub fn Node::new() -> Node {
     measure: None,
     arrange: None,
     arrangements: None,
+    p_arranged: None,
+    pre_arranged: None,
     left: 0.0,
     top: 0.0,
     width: 0.0,

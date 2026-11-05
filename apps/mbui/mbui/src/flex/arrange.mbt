@@ -24,6 +24,7 @@ pub struct Measured {
   ah : Double
   cbw : Double
   cbh : Double
+  plan : Arranged?
 }
 
 ///|
@@ -48,13 +49,17 @@ pub type ArrangeFn = (Layout) -> Arrangement
 // size does not ask the component to measure again with the answer as input:
 // a clipped or folded container can occupy less room than its children.
 struct Arranged {
-  space : Layout
   result : Arrangement
   w : Double
   h : Double
-  pbw : Double
-  pbh : Double
+  x : Double
+  y : Double
 }
+
+///|
+// Returned beside out_h. Only a custom container produces a placement plan;
+// each caller takes ownership of it before measuring another child.
+let out_arranged : Ref[Arranged?] = Ref(None)
 
 ///|
 /// The content size allocated by the parent, or None during intrinsic measure.
@@ -95,7 +100,19 @@ pub fn Layout::measure(
   let ah = height.unwrap_or(self.ah)
   let mw = size_node(child, w, h, aw, ah, self.w, self.h, false)
   let mh = out_h.val
-  { owner: self.owner, child, w: mw, h: mh, kw: w, kh: h, aw, ah, cbw: self.w, cbh: self.h }
+  { owner: self.owner, child, w: mw, h: mh, kw: w, kh: h, aw, ah, cbw: self.w, cbh: self.h, plan: out_arranged.val }
+}
+
+///|
+// A flex item's measurement, when it came from a custom container. The flex
+// algorithm carries this value through allocation just as Layout::measure does.
+fn measured_arrangement(
+  owner : Node, child : Node, kw : Double, kh : Double,
+  aw : Double, ah : Double, cbw : Double, cbh : Double,
+) -> Measured? {
+  out_arranged.val.map(fn(plan) {
+    { owner, child, w: plan.w, h: plan.h, kw, kh, aw, ah, cbw, cbh, plan: Some(plan) }
+  })
 }
 
 ///|
@@ -135,49 +152,63 @@ fn arrange_node(
     aw: inner(available(w, aw, b.min_w, b.max_w), b.pbw()),
     ah: inner(available(h, ah, b.min_h, b.max_h), b.pbh()),
   }
-  let plans = match node.arrangements {
-    Some(plans) => plans
-    None => {
-      let plans = []
-      node.arrangements = Some(plans)
-      plans
-    }
-  }
-  for plan in plans {
-    let same_width = same(space.w, plan.space.w) && same(space.aw, plan.space.aw)
-    let same_height = same(space.h, plan.space.h) && same(space.ah, plan.space.ah)
-    if b.pbw() == plan.pbw && b.pbh() == plan.pbh &&
-      (same_width || (perform && known(w) && w == plan.w)) &&
-      (same_height || (perform && known(h) && h == plan.h)) {
-      if perform { place_arrangement(node, b, plan.result) }
-      out_h.val = plan.h
-      return plan.w
-    }
-  }
   let result = arrange(space)
   guard result.w >= 0.0 && !result.w.is_inf() && result.h >= 0.0 && !result.h.is_inf() else {
     abort("a layout returns finite nonnegative dimensions")
   }
   let fw = if known(w) { w } else { clamp_size(result.w + b.pbw(), b.min_w, b.max_w) }
   let fh = if known(h) { h } else { clamp_size(result.h + b.pbh(), b.min_h, b.max_h) }
-  plans.push({ space, result, w: fw, h: fh, pbw: b.pbw(), pbh: b.pbh() })
-  if perform { place_arrangement(node, b, result) }
+  let plan = { result, w: fw, h: fh, x: b.bor_l + b.pad_l, y: b.bor_t + b.pad_t }
+  if perform { place_arrangement(node, plan) }
   out_h.val = fh
+  out_arranged.val = Some(plan)
   fw
 }
 
 ///|
-fn place_arrangement(node : Node, b : Box, result : Arrangement) -> Unit {
+fn place_arrangement(node : Node, plan : Arranged) -> Unit {
   for child in node.children { child.line = -1 }
-  for placed in result.children {
+  for placed in plan.result.children {
     let m = placed.measured
     guard physical_equal(m.owner, node) else { abort("a measurement belongs to its parent layout") }
     let c = m.child
     guard c.line == -1 else { abort("a layout places each child once") }
     c.line = 0
-    c.width = size_node(c, m.kw, m.kh, m.aw, m.ah, m.cbw, m.cbh, true)
-    c.height = out_h.val
-    c.left = on_grid(b.bor_l + b.pad_l + placed.x)
-    c.top = on_grid(b.bor_t + b.pad_t + placed.y)
+    place_measured(m)
+    c.left = on_grid(plan.x + placed.x)
+    c.top = on_grid(plan.y + placed.y)
+  }
+}
+
+///|
+fn place_measured(m : Measured) -> Unit {
+  let c = m.child
+  match m.plan {
+    Some(plan) => {
+      touch(c)
+      if reusing.val && c.p_ok && (c.p_arranged is Some(was) && physical_equal(was, plan)) {
+        c.skip_gen = generation.val
+        counters[1] = counters[1] + 1
+      } else {
+        place_arrangement(c, plan)
+        c.p_ok = true
+        c.p_kw = m.kw
+        c.p_kh = m.kh
+        c.p_aw = m.aw
+        c.p_ah = m.ah
+        c.p_cbw = m.cbw
+        c.p_cbh = m.cbh
+        c.p_w = m.w
+        c.p_h = m.h
+        c.p_arranged = Some(plan)
+        c.laid_gen = generation.val
+      }
+      c.width = m.w
+      c.height = m.h
+    }
+    None => {
+      c.width = size_node(c, m.kw, m.kh, m.aw, m.ah, m.cbw, m.cbh, true)
+      c.height = out_h.val
+    }
   }
 }

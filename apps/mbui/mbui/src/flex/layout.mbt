@@ -285,6 +285,8 @@ fn touch(node : Node) -> Unit {
     if !reusing.val || node.dirty {
       node.cache_n = 0
       node.arrangements = None
+      node.p_arranged = None
+      node.pre_arranged = None
       node.p_ok = false
       node.dirty = false
     }
@@ -412,6 +414,7 @@ pub fn compute(
   if round {
     round_layout(root, 0.0, 0.0)
   }
+  out_arranged.val = None
 }
 
 ///|
@@ -423,6 +426,7 @@ pub fn measured_height(node : Node, width : Double) -> Double {
   let b = box_of(node.style, width, undef)
   let w = or_else(b.w, width)
   size_node(node, w, undef, w, undef, w, undef, false) |> ignore
+  out_arranged.val = None
   out_h.val
 }
 
@@ -452,6 +456,7 @@ pub fn[T] measure_pass(read : () -> T) -> T {
 pub fn Node::measure_stale(self : Node) -> Unit {
   self.cache_n = 0
   self.arrangements = None
+  self.pre_arranged = None
   self.pre_gen = -1
 }
 
@@ -568,6 +573,7 @@ fn size_node(
       node.skip_gen = generation.val
       counters[1] = counters[1] + 1
       out_h.val = node.p_h
+      out_arranged.val = node.p_arranged
       return node.p_w
     }
   } else {
@@ -588,7 +594,12 @@ fn size_node(
     let mut k = 0
     while k < n {
       let same_cb = same(c[k + 4], cb_w) && same(c[k + 5], cb_h)
-      if (
+      let matches = if node.arrange is Some(_) {
+        // A container's answer includes where its content goes. Equal outside
+        // dimensions do not make different offered constraints interchangeable.
+        same_cb && same(c[k], kw) && same(c[k + 1], kh) &&
+          same(c[k + 2], aw) && same(c[k + 3], ah)
+      } else { (
           same_cb ||
           (
             (any_w || same(c[k + 4], cb_w)) &&
@@ -598,9 +609,11 @@ fn size_node(
           )
         ) &&
         reusable(kw, aw, c[k], c[k + 2], c[k + 6]) &&
-        reusable(kh, ah, c[k + 1], c[k + 3], c[k + 7]) {
+        reusable(kh, ah, c[k + 1], c[k + 3], c[k + 7]) }
+      if matches {
         counters[1] = counters[1] + 1
         out_h.val = c[k + 7]
+        out_arranged.val = node.arrangements.bind(fn(plans) { plans[k / 8] })
         return c[k + 6]
       }
       k = k + 8
@@ -609,6 +622,8 @@ fn size_node(
   counters[0] = counters[0] + 1
   let w = size_uncached(node, kw, kh, aw, ah, cb_w, cb_h, perform)
   let h = out_h.val
+  let plan = if node.arrange is Some(_) { out_arranged.val } else { None }
+  out_arranged.val = plan
   if perform {
     node.p_ok = true
     node.p_kw = kw
@@ -619,6 +634,7 @@ fn size_node(
     node.p_cbh = cb_h
     node.p_w = w
     node.p_h = h
+    node.p_arranged = plan
     node.laid_gen = generation.val
     // (the size it was laid out at is looked for again only by a compute
     // that reuses: in one that does not, nothing measures it after its
@@ -631,6 +647,7 @@ fn size_node(
   let mut n = node.cache_n
   if n >= 8 * 16 {
     n = 0
+    node.arrangements = None
   }
   let mut c = node.cache
   if n + 8 > c.length() {
@@ -649,6 +666,14 @@ fn size_node(
   c[n + 5] = cb_h
   c[n + 6] = w
   c[n + 7] = h
+  match node.arrangements {
+    Some(plans) => plans.push(plan)
+    None => if plan is Some(_) {
+      let plans : Array[Arranged?] = Array::make(n / 8, None)
+      plans.push(plan)
+      node.arrangements = Some(plans)
+    }
+  }
   node.cache_n = n + 8
   out_h.val = h
   w
@@ -924,8 +949,8 @@ priv struct Line {
 /// Per depth of containers being laid out (each lays out its children,
 /// one level down, before it is done): its items (which of the container's
 /// children each is, its alignment, numbers, flags and line), and the lines
-/// in use and made so far to take them from. (It holds no node or box: one
-/// put in an array and taken out again is counted in and out each time.)
+/// in use and made so far to take them from. Ordinary items retain numbers;
+/// custom containers additionally retain the measurement chosen for placement.
 priv struct Pool {
   // the items in use (count of them: the rest is what is left from before)
   mut count : Int
@@ -935,6 +960,7 @@ priv struct Pool {
   mut f : Array[Double]
   mut flags : Array[Int]
   mut line_of : Array[Int]
+  mut arranged : Array[Measured?]
   lines : Array[Line]
   line_store : Array[Line]
 }
@@ -956,6 +982,7 @@ fn Pool::add(self : Pool, at : Int, al : Align) -> Int {
   }
   self.at.unsafe_set(k, at)
   self.aligns.unsafe_set(k, al)
+  self.arranged.unsafe_set(k, None)
   self.count = k + 1
   k
 }
@@ -975,17 +1002,20 @@ fn Pool::grow(self : Pool) -> Unit {
   let line_of = Array::make(n, 0)
   let at = Array::make(n, 0)
   let aligns : Array[Align] = Array::make(n, Auto)
+  let arranged : Array[Measured?] = Array::make(n, None)
   for i in 0..<k {
     flags[i] = self.flags[i]
     line_of[i] = self.line_of[i]
     at[i] = self.at[i]
     aligns[i] = self.aligns[i]
+    arranged[i] = self.arranged[i]
   }
   self.f = f
   self.flags = flags
   self.line_of = line_of
   self.at = at
   self.aligns = aligns
+  self.arranged = arranged
 }
 
 ///|
@@ -1092,6 +1122,7 @@ fn layout_flex(
       f: [],
       flags: [],
       line_of: [],
+      arranged: [],
       lines: [],
       line_store: [],
     })
@@ -1134,6 +1165,7 @@ fn layout_flex(
       }
       pool.at.unsafe_set(k, j)
       pool.aligns.unsafe_set(k, Auto)
+      pool.arranged.unsafe_set(k, node.pre_arranged.bind(fn(plans) { plans[k] }))
       pool.count = k + 1
       let i = k * ITEM
       let p = 3 + k * 4
@@ -1180,6 +1212,8 @@ fn layout_flex(
         if !reusing.val || c.dirty {
           c.cache_n = 0
           c.arrangements = None
+          c.p_arranged = None
+          c.pre_arranged = None
           c.p_ok = false
           c.dirty = false
         }
@@ -1300,30 +1334,15 @@ fn layout_flex(
         if !known(kc) && stretch && known(inner_cross) && s.wrap == NoWrap {
           kc = fmax(inner_cross - margin_cross, 0.0)
         }
-        let cw = if row {
-          size_node(
-            c,
-            undef,
-            kc,
-            if known(held_main) { held_main - margin_main } else { undef },
-            if known(avail_cross) { avail_cross - margin_cross } else { undef },
-            cb_w,
-            cb_h,
-            false,
-          )
-        } else {
-          size_node(
-            c,
-            kc,
-            undef,
-            if known(avail_cross) { avail_cross - margin_cross } else { undef },
-            if known(held_main) { held_main - margin_main } else { undef },
-            cb_w,
-            cb_h,
-            false,
-          )
-        }
+        let am = if known(held_main) { held_main - margin_main } else { undef }
+        let ac = if known(avail_cross) { avail_cross - margin_cross } else { undef }
+        let kw = if row { undef } else { kc }
+        let kh = if row { kc } else { undef }
+        let aw = if row { am } else { ac }
+        let ah = if row { ac } else { am }
+        let cw = size_node(c, kw, kh, aw, ah, cb_w, cb_h, false)
         let ch = out_h.val
+        pool.arranged.unsafe_set(k, measured_arrangement(node, c, kw, kh, aw, ah, cb_w, cb_h))
         basis = if row { cw } else { ch }
         if known(declared) {
           basis = fmax(basis, declared)
@@ -1473,12 +1492,23 @@ fn layout_flex(
           undef
         }
         let main = f.unsafe_get(i + MAIN)
-        let cw = if row {
-          size_node(flow.unsafe_get(at.unsafe_get(k)), main, kc, main, ac, cb_w, cb_h, false)
-        } else {
-          size_node(flow.unsafe_get(at.unsafe_get(k)), kc, main, ac, main, cb_w, cb_h, false)
+        let (cw, ch) = match pool.arranged.unsafe_get(k) {
+          Some(measured) if main == (if row { measured.w } else { measured.h }) =>
+            // Flex allocated the measured main size unchanged. Its content is
+            // the measurement's plan, even when that content is clipped or folded.
+            (measured.w, measured.h)
+          _ => {
+            let n = flow.unsafe_get(at.unsafe_get(k))
+            let kw = if row { main } else { kc }
+            let kh = if row { kc } else { main }
+            let aw = if row { main } else { ac }
+            let ah = if row { ac } else { main }
+            let cw = size_node(n, kw, kh, aw, ah, cb_w, cb_h, false)
+            let ch = out_h.val
+            pool.arranged.unsafe_set(k, measured_arrangement(node, n, kw, kh, aw, ah, cb_w, cb_h))
+            (cw, ch)
+          }
         }
-        let ch = out_h.val
         f.unsafe_set(
           i + CROSS,
           clamp_size(
@@ -1511,10 +1541,13 @@ fn layout_flex(
           let iw = f.unsafe_get(i + MAIN)
           let ih = f.unsafe_get(i + CROSS)
           let n = flow.unsafe_get(at.unsafe_get(k))
-          let rw = size_node(n, iw, ih, iw, ih, cb_w, cb_h, true)
-          let rh = out_h.val
-          n.width = rw
-          n.height = rh
+          match pool.arranged.unsafe_get(k) {
+            Some(m) if m.w == iw && m.h == ih => place_measured(m)
+            _ => {
+              n.width = size_node(n, iw, ih, iw, ih, cb_w, cb_h, true)
+              n.height = out_h.val
+            }
+          }
           let ascent = node_baseline(n) + f.unsafe_get(i + MAR_CROSS_START)
           f.unsafe_set(i + ASCENT, ascent)
           asc = fmax(asc, ascent)
@@ -1713,8 +1746,12 @@ fn layout_flex(
         pre.unsafe_set(j + 3, f.unsafe_get(i + CROSS_POS))
       }
       node.pre_gen = cache_generation.val
+      node.pre_arranged = if pool.arranged.iter().take(count).any(fn(m) { m is Some(_) }) {
+        Some(pool.arranged.iter().take(count).collect())
+      } else { None }
     } else if !perform {
       node.pre_gen = -1
+      node.pre_arranged = None
     }
     fw
   }
@@ -1730,9 +1767,12 @@ fn layout_flex(
       let n = flow.unsafe_get(at.unsafe_get(k))
       let iw = if row { f.unsafe_get(i + MAIN) } else { f.unsafe_get(i + CROSS) }
       let ih = if row { f.unsafe_get(i + CROSS) } else { f.unsafe_get(i + MAIN) }
-      if !reusing.val &&
+      if pool.arranged.unsafe_get(k) is Some(m) && m.w == iw && m.h == ih {
+        place_measured(m)
+      } else if !reusing.val &&
         n.children.length() == 0 &&
         n.measure is None &&
+        n.arrange is None &&
         known(iw) &&
         known(ih) {
         // a box with nothing in it, its size given: what size_node comes
@@ -1756,6 +1796,7 @@ fn layout_flex(
         n.p_cbh = cb_h
         n.p_w = rw
         n.p_h = rh
+        n.p_arranged = None
         n.laid_gen = generation.val
         n.width = rw
         n.height = rh
@@ -1805,6 +1846,7 @@ fn layout_flex(
       }
     }
   }
+  for k in 0..<pool.count { pool.arranged.unsafe_set(k, None) }
   pool.count = 0
   depth.val = d
   out_h.val = fh
@@ -2516,10 +2558,15 @@ fn place_absolute(cb : Node, parent : Node, c : Node, ox : Double, oy : Double) 
     false,
   )
   let fh = out_h.val
-  let rw = size_node(c, fw, fh, fw, fh, cw, ch, true)
-  let rh = out_h.val
-  c.width = rw
-  c.height = rh
+  match measured_arrangement(parent, c, w, h, if known(w) { w } else { cw }, if known(h) { h } else { ch }, cw, ch) {
+    Some(m) => place_measured(m)
+    None => {
+      c.width = size_node(c, fw, fh, fw, fh, cw, ch, true)
+      c.height = out_h.val
+    }
+  }
+  let rw = c.width
+  let rh = c.height
   // static position: where it would sit in its parent's content box
   let row = is_row(ps.direction)
   let inner_w = parent.width - pb.pbw()
