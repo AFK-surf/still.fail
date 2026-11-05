@@ -182,6 +182,15 @@ test("the pages: a chat says where it can be copied, and a message sent with cc 
     while (slack.posts.length === 0) await settle();
     assert.deepEqual(slack.posts, [[{ channel: "C1", threadTs: "1700.000100" }, ccText("Ada (a@x)", "and there")]]);
     assert.deepEqual(store.messagesBefore(id, null, 10).filter((m) => m.authorKind === "person").map((m) => m.text), ["just here", "and there"]);
+    // A list of new chats asks for their copy destinations together, rather than rebuilding the whole list once per chat.
+    const [second] = newSession(hub, { runtime: "claude", createdBy: "a@x", ws: "w" });
+    const [third] = newSession(hub, { runtime: "claude", createdBy: "a@x", ws: "w" });
+    const prepare = readers.prepareCcSessions.bind(readers), batches: string[][] = [];
+    readers.prepareCcSessions = (sessions, signal) => { batches.push([...sessions]); return prepare(sessions, signal); };
+    const [status] = await ask("GET", "/threads");
+    assert.equal(status, 200);
+    assert.equal(batches.length, 1, "new chats are prepared in one request");
+    assert.deepEqual(new Set(batches[0]), new Set([made.key, second, third]));
   } finally {
     await hub.shutdown();
     await jobs.shutdown();

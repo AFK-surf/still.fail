@@ -13,7 +13,7 @@ import { compactQuery, compactScopeReady, compactUsageSince, hasCompactUsage } f
 import { type UsageChatCoverage, usageCardOutcomesComplete, usageChatStatsReady } from "../store/usage-chat-stats.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
 import { hasRuntimeOrderIndex } from "../store/schema.ts";
-import { CC_SESSIONS_PENDING, CcSessionsUnavailable, indexedCcThreads } from "../store/cc-thread-index.ts";
+import { CC_SESSIONS_PENDING, CcSessionsUnavailable, ccSessionReady, indexedCcThreads } from "../store/cc-thread-index.ts";
 import { SESSION_LIST_CONNECT, SESSION_LIST_PENDING, SESSION_LIST_SCOPE, SESSION_LIST_SCOPE_CONNECT, sessionListReady } from "../store/session-list-index.ts";
 import { SESSION_BINDINGS_PENDING, SESSION_BINDINGS_SELECTED, sessionBindingsReady } from "../store/session-bindings-index.ts";
 import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
@@ -305,6 +305,12 @@ export function getThread(s: Store, id: number): ThreadRow | null {
 /// The threads a session is in, the one it joined last first (store.rs session_threads).
 export function sessionThreads(s: Store, session: string): ThreadRow[] {
   return all(s, "SELECT t.* FROM thread_sessions ts JOIN threads t ON t.id = ts.thread WHERE ts.session = ? ORDER BY ts.joined_at DESC, ts.rowid DESC", session).map(toThread);
+}
+
+/// A page listing many chats asks for all their pending copy destinations together before constructing the views.
+export function requireCcSessions(s: Store, sessions: readonly string[]): void {
+  const missing = [...new Set(sessions)].filter((session) => !ccSessionReady(s.db, session));
+  if (missing.length) throw new Refused(503, CC_SESSIONS_PENDING + JSON.stringify(missing));
 }
 
 /// The threads a still.fail chat can copy people's messages to (rows.ts CC_THREADS_SQL), with the connect posting
