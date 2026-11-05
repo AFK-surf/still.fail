@@ -58,18 +58,14 @@ pub fn View::lays_first(self : View, first : (Laying) -> Unit) -> View {
     let was_owner = tree.layout_owner
     tree.layout_owner = self.at
     watch.read(fn() { first({ tree, w, h }) })
-    // (what it set of what it reads as it went: that step again as that is now, in the same layout, till it sets nothing
-    // more of it)
-    let mut again = 0
-    while watch.is_stale() && again < 4 {
-      watch.read(fn() { first({ tree, w, h }) })
-      again = again + 1
-    }
+    tree.layout_owner = was_owner
+    // (what it set of what it reads as it went: done once, as it was then, the next frame's to do again (a fault: laid
+    // out twice for one change, docs/retained.md rule 10))
     if watch.is_stale() {
       let set_at = watch.set_as_read().join(", ")
-      read_fault("what a node lays out first sets what it reads each time it does: \{set_at}")
+      read_fault("what a node lays out first sets what it reads as it does: \{set_at}")
+      tree.layout_marked_at(self.at)
     }
-    tree.layout_owner = was_owner
   })
   self.owns(fn() {
     watch.stop()

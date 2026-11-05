@@ -326,11 +326,17 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   let last_lead = Ref(-1.0)
   let last_vh = Ref(-1.0)
   let awaiting : Map[K, Bool] = Map([])
+  // (what its layout sets as it lays its blocks out (where the column is drawn from, how it glides, whether it follows
+  // its end, where it is put), read there as it is then, nothing of it followed by what lays them out, laid out as it
+  // left it: followed once they are laid out (`moves`), they laid out again as anything else changes it)
+  let x_now = fn() { @signals.untracked(fn() { s.drawn(tree) }) }
+  let gliding = fn() { @signals.untracked(fn() { s.glides_till() is Some(_) }) }
+  let following = fn() { @signals.untracked(fn() { follows.get() }) }
   // (kept at its end as it follows it, what it holds grown or come: glided after what came that is new to it, to the
   // top of one taller than what shows; at once else. Whether it was moved at once.)
   let follow = fn(all : Array[K], vh : Double) -> Bool {
     let most = dmax(0.0, extent_at(vh) - vh)
-    let x = s.drawn(tree)
+    let x = x_now()
     let lead_now = if vh > index.val.total() { vh - index.val.total() } else { 0.0 }
     // (the same blocks as last time it was told: nothing come, nothing looked for among them all)
     let same_keys = match last_keys_of.val {
@@ -371,7 +377,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     last_lead.val = lead_now
     let grew = most != last_most.val || fell != 0.0
     // (moved up from where it was: scrolled from its end, whatever else changed with it; not while it glides by itself)
-    let up = s.glides_till() is None && x < (if most < last_x.val { most } else { last_x.val }) - 0.5
+    let up = !gliding() && x < (if most < last_x.val { most } else { last_x.val }) - 0.5
     let count = all.length()
     let came = last_count.val >= 0 &&
       count > last_count.val &&
@@ -419,10 +425,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     last_x.val = x
     let mut at_once = false
     if up {
-      if follows.get() {
+      if following() {
         follows.set(false)
       }
-    } else if grew && follows.get() {
+    } else if grew && following() {
       // (one come taller than what shows: as far as its top under what covers its top, no further)
       let to = match newest_top {
         Some(top) => {
@@ -448,7 +454,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         newest.val = None
         glide(to)
         follows.set(false)
-      } else if (room is None && (came || newest.val is Some(_) || s.glides_till() is Some(_))) || s.sent_to() is Some(_) {
+      } else if (room is None && (came || newest.val is Some(_) || gliding())) ||
+        @signals.untracked(fn() { s.sent_to() is Some(_) }) {
         // (blocks come at its end, one new to it not counted yet, or come while it glides after them: glided after, to
         // where its end is now. A requested glide follows changing rooms too.)
         glide(most)
@@ -457,10 +464,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         last_x.val = most
         at_once = true
       }
-    } else if held_at.val is None && most > 0.0 && s.glides_till() is None {
+    } else if held_at.val is None && most > 0.0 && !gliding() {
       // (not while it is put somewhere and held there, nor before it can go anywhere)
       let at_end = x >= most - 0.5
-      if at_end != follows.get() {
+      if at_end != following() {
         follows.set(at_end)
       }
     }
@@ -541,11 +548,11 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // (as tall as what shows as it is laid out: how far it can go counted so from here, Scroll's room)
     laid_vh.val = vh
     // (moved from where it was left as last laid out by anything but itself since: the hand, a glide, a fling)
-    if s.drawn(tree) != left_at.val {
+    if x_now() != left_at.val {
       moved.val = true
     }
     // (put, said: it follows no end and is held at that block from now)
-    match put_at.get() {
+    match @signals.untracked(fn() { put_at.get() }) {
       Some(p) => {
         follows.set(false)
         held_at.val = Some(p)
@@ -652,7 +659,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       held_by_anchor()
     }
     // (first laid out from its end: there before anything is made, nothing made at its top to be let go)
-    if from_end && !laid_once.val && held_at.val is None && follows.get() {
+    if from_end && !laid_once.val && held_at.val is None && following() {
       s.x.set(dmax(0.0, extent_at(vh) - vh))
     }
     // what shows made and laid out, as many as fill it: each made counted as it comes to, what shows moved with what
@@ -668,7 +675,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       // (where it shows from, within how far it can go as it is counted now: where it is drawn from once it is put
       // there, Scroll's room)
       let most = dmax(0.0, extent_at(vh) - vh)
-      let x = s.drawn(tree)
+      let x = x_now()
       let xa = (if x > most { most } else if x < 0.0 { 0.0 } else { x }) - lead_of(vh)
       sight = sight_of(all, xa, vh)
       // (moved from where it was left as last laid out (the hand, a glide, put): the first in sight that was laid out
@@ -733,7 +740,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       }
     }
     // (where it was left: moved from there by anything but itself, anchored again)
-    left_at.val = s.drawn(tree)
+    left_at.val = x_now()
     // (those no more in sight nor kept: let go)
     let keep : Map[K, Bool] = Map([])
     for k in sight {
@@ -780,6 +787,16 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
   })
   self.owns(fn() { watch.stop() }) |> ignore
+  // (what its layout sets as it lays its blocks out (x_now's), followed as it left it once they are laid out: as
+  // anything else changes it (the hand, a glide's moments, its end asked to be followed, a block it is put at), they
+  // laid out again so)
+  let moves = @signals.watch(fn() {
+    match holder.val {
+      Some(h) => tree.layout_marked_at(h.at)
+      None => ()
+    }
+  })
+  self.owns(fn() { moves.stop() }) |> ignore
   // (the compute it was last laid out in)
   let laid_in = Ref(-1)
   // what holds its blocks laid out (its own layout, Node's layout_children: `w` wide, from `(ox, oy)` in it), in the
@@ -795,6 +812,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       w == laid_w.val &&
       vh == laid_vh.val &&
       !watch.is_stale() &&
+      !moves.is_stale() &&
       !blocks.values().any(fn(b) { tree.nodes[b.slot.at].flex.dirty }) {
       put_blocks(ox, oy, vh)
       return laid_reach.val
@@ -803,19 +821,22 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     tree.layout_owner = h.at
     // (what it sets going as it lays them out told as one change, once they are laid out)
     @signals.start_batch()
-    let mut reach = watch.read(fn() { lay_now(w, vh, ox, oy) })
-    // (what it set of what it reads as it laid them out (where it is scrolled to, whether it follows its end, where it
-    // is put): laid out again as that is now, in the same layout, till it sets nothing more of it)
-    let mut again = 0
-    while watch.is_stale() && again < 4 {
-      reach = watch.read(fn() { lay_now(w, vh, ox, oy) })
-      again = again + 1
-    }
+    let reach = watch.read(fn() { lay_now(w, vh, ox, oy) })
+    moves.read(fn() {
+      s.drawn(tree) |> ignore
+      s.glides_till() |> ignore
+      s.sent_to() |> ignore
+      follows.get() |> ignore
+      put_at.get() |> ignore
+    })
+    tree.layout_owner = was_owner
+    // (what it read set as it laid them out, other than what it sets itself (x_now's): laid out once, as it was then,
+    // the next frame's to lay out again (a fault: laid out twice for one change, docs/retained.md rule 10))
     if watch.is_stale() {
       let set_at = watch.set_as_read().join(", ")
-      read_fault("a windowed list sets what it reads each time it lays out its blocks: \{set_at}")
+      read_fault("a windowed list sets what it reads as it lays out its blocks: \{set_at}")
+      tree.layout_marked_at(h.at)
     }
-    tree.layout_owner = was_owner
     @signals.end_batch()
     laid_in.val = @flex.computes()
     reach

@@ -6939,6 +6939,10 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   self.bindings_run()
   // (what goes beside another placed by it only where anything was laid out or placed again: View::beside)
   let mut placing = self.layout_due || !self.places_due.is_empty()
+  // (what its layout sets going as it lays things out (which of a list's blocks are in sight, whether it follows its
+  // end) told once all of it is laid out, nothing of the tree made or let go as it is laid out: as what layout told,
+  // Tree::layout_telling)
+  @signals.start_batch()
   if self.layout_due {
     self.layout_due = false
     // (laid out already to be read, nothing marked since: placed by that; else laid out now, what was laid out to be
@@ -6964,6 +6968,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   // Tree::layout_marked_at)
   let was_telling = self.layout_telling
   self.layout_telling = true
+  @signals.end_batch()
   // (what layout reads of what is laid out alone after all else, worked out of where all else is laid out now, before
   // that is: Live's Placed there)
   self.laid_bounds_run(placing)
