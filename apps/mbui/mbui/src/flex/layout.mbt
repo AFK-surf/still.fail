@@ -426,6 +426,12 @@ pub fn measured_height(node : Node, width : Double) -> Double {
 }
 
 ///|
+/// The width available to children inside this border box, without placing it.
+pub fn content_width(node : Node, width : Double) -> Double {
+  fmax(0.0, width - box_of(node.style, width, undef).pbw())
+}
+
+///|
 /// Resolve intrinsic queries after their inputs changed, without placing any
 /// node. A fresh cache generation observes dirty content even if no layout has
 /// run since the change. Unchanged subtrees retain their measured sizes.

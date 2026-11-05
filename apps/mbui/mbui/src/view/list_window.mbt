@@ -105,7 +105,30 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   let forgot = Ref(false)
   // (those that show now: laid out again as they are, each told anew where it comes out otherwise; the rest forgotten)
   let showing : Map[K, Bool] = Map([])
+  let measured_rows : Map[K, View] = Map([])
   let slots : Map[K, View] = Map([])
+  // Measure this container's render children at its allocated width. The answer
+  // updates the private position index; it is not the child's placed-size signal.
+  // All newly revealed rows are resolved before another whole-tree placement.
+  let measure_id = self.id()
+  self.tree.list_measures[measure_id] = fn() {
+    guard self.live() is Some(_) else { return false }
+    guard @signals.untracked(fn() { self.laid_size_told() }) is Some((width, _)) else { return false }
+    let width = @flex.content_width(self.tree.nodes[self.at].flex, width)
+    let mut changed = false
+    for k, row in measured_rows {
+      guard row.live() is Some(node) else { continue }
+      let h = @flex.measured_height(node.flex, width)
+      if heights.get(k) != Some(h) {
+        heights[k] = h
+        told_keys[k] = true
+        changed = true
+      }
+    }
+    if changed { tell() }
+    changed
+  }
+  self.owns(fn() { self.tree.list_measures.remove(measure_id) }) |> ignore
   // (what each block's row is known by, whatever slot it is made in: View::row_known_as; forgotten as its key goes, a
   // block of the same key come again another row, nothing picked in the one before found in it)
   let row_ids : Map[K, NodeId] = Map([])
@@ -565,18 +588,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         }
         showing[k] = true
         v.owns(fn() { showing.remove(k) }) |> ignore
-        // (how tall it is told as it is laid out, kept by its key)
-        v.reacts(fn() { v.laid_size_told() }, fn(z) {
-          match z {
-            Some((_, h)) if heights.get(k) != Some(h) => {
-              heights[k] = h
-              told_keys[k] = true
-              tell()
-            }
-            _ => ()
-          }
-        })
         make(v, k)
+        measured_rows[k] = v
+        v.owns(fn() { measured_rows.remove(k) }) |> ignore
       })
     })
   })

@@ -631,6 +631,10 @@ pub struct Tree {
   height_users : Map[NodeId, Set[NodeId]]
   height_queries : Map[NodeId, HeightQuery]
   heights_due : Set[NodeId]
+  // The compatibility list adapter resolves owned intrinsic rows before placement.
+  // These callbacks are private to the adapter, not application geometry observers.
+  list_measures : Map[NodeId, () -> Bool]
+  mut measuring_lists : Bool
   /// what is to be brought into sight once laid out (Tree::show_in_sight): a node, and where in it (its own terms, asked
   /// then; none: all of it)
   shows_due : Array[(NodeId, () -> (Double, Double)?)]
@@ -854,6 +858,8 @@ pub fn Tree::new(
     height_users: {},
     height_queries: {},
     heights_due: Set::new(),
+    list_measures: {},
+    measuring_lists: false,
     shows_due: [],
     outs_gone: [],
     time,
@@ -1553,6 +1559,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.pulls.clear()
   self.pulls_marked.clear()
   self.timeline.clear()
+  self.list_measures.clear()
   self.changed.clear()
   self.composed.clear()
   self.hosting = -1
@@ -3009,6 +3016,9 @@ pub fn View::placed_window_now(self : View) -> (Double, Double, Double, Double) 
 /// by what goes from where they stood to there for its cause (View::laid_window_now), the same for all that read it in
 /// that change.
 fn Tree::measured_now(self : Tree) -> Unit {
+  guard !self.measuring_lists else {
+    abort("a list's intrinsic measurement cannot request whole-tree geometry")
+  }
   if self.last_w <= 0.0 {
     return
   }
@@ -3021,16 +3031,7 @@ fn Tree::measured_now(self : Tree) -> Unit {
     self.clock_to(at)
     self.beat.set(at)
     self.pull()
-    let mut i = 0
-    while i < self.bindings_due.length() {
-      let b = self.bindings_due[i]
-      if b.queued {
-        (b.run)()
-      }
-      i = i + 1
-    }
-    self.bindings_due.clear()
-    self.heights_resolved()
+    self.layout_inputs()
     if self.layout_due && self.measured_gen < 0 {
       self.work.computes = self.work.computes + 1
       let g = @flex.computes() + 1
@@ -6080,17 +6081,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   defer { self.standing = was_standing }
   // the bindings whose reads changed since, each once, in the order they were told (what they make runs its own now,
   // what they set again marks what it marks)
-  let mut i = 0
-  while i < self.bindings_due.length() {
-    // (one run already, pulled as something asked at once: not again)
-    let b = self.bindings_due[i]
-    if b.queued {
-      (b.run)()
-    }
-    i = i + 1
-  }
-  self.bindings_due.clear()
-  self.heights_resolved()
+  self.layout_inputs()
   // (those marked that ran so, no longer to be pulled; one marked in a change not ended yet still is)
   let still = self.pulls_marked.filter(fn(k) {
     match self.pulls.get(k) {
