@@ -1254,7 +1254,9 @@ export class Store {
   joinThread(thread: number, session: string, connect: string): boolean {
     return this.#with((changes) => {
       const joined = this.#run(
-        `INSERT INTO thread_sessions (thread, session, connect, joined_at) VALUES (?, ?, ?, ?)
+        `INSERT INTO thread_sessions (thread, session, connect, joined_at)
+         SELECT ?1, ?2, ?3, ?4 WHERE NOT EXISTS
+           (SELECT 1 FROM thread_sessions WHERE thread = ?1 AND session = ?2 AND left_at IS NULL)
          ON CONFLICT (thread, session) DO UPDATE SET left_at = NULL WHERE thread_sessions.left_at IS NOT NULL`,
         thread, session, connect, this.now(),
       ) > 0;
@@ -1714,7 +1716,9 @@ export class Store {
     return this.#with((changes) => {
       const added: string[] = [];
       for (const s of sessions) {
-        if (this.#run("INSERT OR IGNORE INTO deliveries (thread, n, session) VALUES (?, ?, ?)", thread, n, s) > 0) {
+        if (this.#run(`INSERT OR IGNORE INTO deliveries (thread, n, session)
+          SELECT ?1, ?2, ?3 WHERE NOT EXISTS
+            (SELECT 1 FROM deliveries WHERE thread = ?1 AND n = ?2 AND session = ?3)`, thread, n, s) > 0) {
           added.push(s);
           changes.push({ type: "session", key: s });
         }

@@ -287,6 +287,13 @@ test("a repeated join or delivery does not stage an unchanged latest order", () 
       else assert.deepEqual(store.deliver(thread.id, 1, ["s"]), []);
       counts.push(Number(db.prepare("SELECT COUNT(*) AS n FROM latest_thread_changed").get()?.n));
       assert.equal(indexedLatestThread(db, "s")?.id, thread.id);
+      if (operation === "join") {
+        const before = db.prepare("SELECT connect,joined_at FROM thread_sessions WHERE thread=? AND session='s'").get(thread.id);
+        assert.equal(store.leaveThread(thread.id, "s"), true);
+        assert.equal(store.joinThread(thread.id, "s", "other-connect"), true);
+        assert.deepEqual(db.prepare("SELECT connect,joined_at FROM thread_sessions WHERE thread=? AND session='s'").get(thread.id), before);
+        assert.equal(indexedLatestThread(db, "s")?.id, thread.id);
+      }
     } finally { store.close(); }
   }
   assert.deepEqual(counts, [0, 0]);
