@@ -27,8 +27,11 @@ fn history_params(r : ChatRef, key : String) -> Map[String, Json] {
 /// The history's page left: what it followed let go.
 fn history_left(src : Source, r : ChatRef, key : String) -> Unit {
   (src.leave)("history", history_params(r, key))
-  // the station's figures its details read
-  @sfbase.let_go(src, @sfbase.history_scope(r.station, key))
+  // the station's figures its details read, unless the same history is shown still (pushed again over it: its own page
+  // holds them; let go as that is left)
+  if !app.nav.pages().iter().any(fn(p) { p is History(r2, k2, _) && r2.station == r.station && r2.session == r.session && k2 == key }) {
+    @sfbase.let_go(src, @sfbase.history_scope(r.station, key))
+  }
   history_placed.remove("history/" + r.station + "/" + key)
   history_short.remove("history/" + r.station + "/" + key)
 }

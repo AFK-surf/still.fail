@@ -83,12 +83,17 @@ fn link_peeks_node(
     place.over(Is(true)) |> ignore
     place.show(fn() { open.get() is Some(_) }, fn(anchor) {
     guard @signals.untracked(fn() { open.get() }) is Some((href, words, (px, py, _, ph))) else { return }
-    let scope = "link-peek-node/" + href
+    // (what this card reads held by it alone, not by the name of its link: a card for the same link made as this one
+    // goes holds what it shows itself, and keeps it shown; what was read ahead for the link let go with it too)
+    let ahead = "link-peek-node/" + href
+    link_cards.val += 1
+    let scope = ahead + "\u{1}" + link_cards.val.to_string()
     l.box(fn(card) {
       let card_w : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
       card.owns(fn() {
         card_on.val = None
         @sfbase.let_go(src, scope)
+        @sfbase.let_go(src, ahead)
       })
       |> ignore
       // (under the piece of line it rests on, at its start; kept in the chat's room)
@@ -227,3 +232,8 @@ fn peek_body(
     NoPeek => ()
   }
 }
+
+///|
+/// The link cards made so far: each one's own holder of what it reads (link_peek_node's `scope`).
+// kept across runs: only counts on
+let link_cards : Ref[Int] = Ref(0)
