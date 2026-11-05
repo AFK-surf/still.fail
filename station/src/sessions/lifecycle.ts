@@ -16,6 +16,7 @@ import { type MachineSession, type Roots, rolloutOf, rolloutsIn } from "../read/
 import { readTimeline, sessionPlaces, sharedTranscripts, transcriptSources } from "../read/transcript.ts";
 import { forgetMarks, marksDir } from "../read/transcripts.ts";
 import { ARCHIVED_WORKSPACE_BATCH, AUTO, type ArchivedWorkspace, type Attachment, MANUAL, type Quote, STILLFAIL_SURFACE, type ThreadRow } from "../store/store.ts";
+import { sessionBindingsReady } from "../store/session-bindings-index.ts";
 import type { SessionChange } from "./accounts.ts";
 import { unlockWorktrees, withLock } from "./archive.ts";
 import { roomOf } from "./footprint.ts";
@@ -332,7 +333,7 @@ export async function relieveArchived(hub: Hub, free: () => number): Promise<voi
 /// auto-archiving off): what is idle but not done by now is not on a clock, so it is looked at again after a while.
 /// A session heard only in Slack goes after slackArchiveMs even when stopped at a block: nobody answers it from here.
 /// With autoArchiveReviewed, the rest goes only once the archive review recommended each of its chats.
-export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: number) => void): number | null {
+export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: number) => void, prepareBindings?: () => void): number | null {
   const { store } = hub;
   const { autoArchiveMs: after, slackArchiveMs, autoArchiveReviewed, automaticDecisions } = hub.config();
   if (after <= 0 && slackArchiveMs <= 0) return null;
@@ -353,7 +354,10 @@ export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: numb
   const live = store.liveSessions();
   const own = store.chatsOfTheirOwn();
   if (live.length === 0 && own.length === 0) return null;
-  const bound = store.listBindings();
+  const bindingsReady = live.length === 0 || sessionBindingsReady(store.db);
+  const waitingForBindings = !bindingsReady && prepareBindings !== undefined;
+  if (waitingForBindings) prepareBindings?.();
+  const oldBindings = !bindingsReady && !waitingForBindings ? store.listBindings() : null;
   // Each session's undelivered messages and last turn, read for those idle long enough alone, once each: read for every
   // session shown and every member of their chats at each look, the station's thread was held 17 s on a station short of
   // memory (2026-11-03), what was said meanwhile waiting.
@@ -376,7 +380,7 @@ export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: numb
   // Where only what the archive review recommended goes (`autoArchiveReviewed`): none while the review is off.
   const recommended = (thread: number) => !autoArchiveReviewed || (automaticDecisions.completion.enabled && store.archiveSuggested(thread));
   for (const s of live) {
-    if (bound.has(s.key) || pinned(s.key)) continue;
+    if (waitingForBindings || (bindingsReady ? store.preparedSessionBound(s.key) : oldBindings!.has(s.key)) || pinned(s.key)) continue;
     // Idle long enough by its times alone, before anything else of it is read.
     const quiet = idle([s.lastActiveAt, s.shownAt]);
     const quietLong = idle([s.lastActiveAt, s.shownAt], slackArchiveMs);
@@ -403,10 +407,11 @@ export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: numb
 
 /// Check on the usual schedule, and try again when an old chat's missing unread boundary is ready.
 export function startAutoArchiveTimer(hub: Hub, time: { after(ms: number, run: () => void): () => void },
-  readers: { prepareSaid(threads: readonly number[], signal?: AbortSignal): Promise<void> }): () => void {
+  readers: { prepareSaid(threads: readonly number[], signal?: AbortSignal): Promise<void>; prepareSessionBindings(signal?: AbortSignal): Promise<void> }): () => void {
   const cancel = new AbortController();
   let timer: (() => void) | null = null;
   let preparing = false;
+  let preparingBindings = false;
   const schedule = (ms: number) => {
     timer?.();
     timer = time.after(ms, check);
@@ -415,8 +420,9 @@ export function startAutoArchiveTimer(hub: Hub, time: { after(ms: number, run: (
     timer = null;
     let next: number | null = null;
     const missing = new Set<number>();
+    let missingBindings = false;
     try {
-      next = autoArchive(hub, hub.now(), (thread) => missing.add(thread));
+      next = autoArchive(hub, hub.now(), (thread) => missing.add(thread), () => { missingBindings = true; });
     } catch (error) {
       log.warn("hub", "auto-archiving failed", { error: (error as Error).message });
     }
@@ -429,6 +435,16 @@ export function startAutoArchiveTimer(hub: Hub, time: { after(ms: number, run: (
       }, (error) => {
         preparing = false;
         if (!cancel.signal.aborted) log.warn("hub", "preparing unread state for auto-archiving failed", { error: (error as Error).message });
+      });
+    }
+    if (!preparingBindings && missingBindings) {
+      preparingBindings = true;
+      void readers.prepareSessionBindings(cancel.signal).then(() => {
+        preparingBindings = false;
+        if (!cancel.signal.aborted) schedule(0);
+      }, (error) => {
+        preparingBindings = false;
+        if (!cancel.signal.aborted) log.warn("hub", "preparing bindings for auto-archiving failed", { error: (error as Error).message });
       });
     }
   };
