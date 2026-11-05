@@ -191,14 +191,18 @@ test "scrolls_anchored: what a frame does is the same with 30 rows and with 3000
 }
 
 ///|
-test "scrolls_anchored: scrolled 1000 rows in one layout, it makes and measures what then shows, none of those it went past" {
-  let c = anchored_case(3000)
-  let before = c.tree.work.made + c.tree.work.measured
-  c.tree.wheel_at(150.0, 50.0, 0.0, -40000.0, 0, 10.0) |> ignore
-  c.tree.frame(390.0, 844.0, now=1000.0) |> ignore
-  let work = c.tree.work.made + c.tree.work.measured - before
-  assert_true(work < 100, msg="made and measured \{work}")
-  assert_true(c.made().length() <= 4, msg="made \{c.made()}")
+test "scrolls_anchored: scrolled 1000 rows in one layout, it measures those it went past, as many in a list of 3000 as of 30000, and keeps only what then shows" {
+  // (a scroll goes by the heights of the rows it passes, each measured once where it was not: what it costs is how far
+  // it went, never the list's length; what is made only to be measured is let go)
+  let scrolled = fn(n : Int) -> Int raise {
+    let c = anchored_case(n)
+    let before = c.tree.work.made + c.tree.work.measured
+    c.tree.wheel_at(150.0, 50.0, 0.0, -40000.0, 0, 10.0) |> ignore
+    c.tree.frame(390.0, 844.0, now=1000.0) |> ignore
+    assert_true(c.made().length() <= 4, msg="made \{c.made()}")
+    c.tree.work.made + c.tree.work.measured - before
+  }
+  assert_eq(scrolled(3000), scrolled(30000))
 }
 
 

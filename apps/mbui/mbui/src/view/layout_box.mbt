@@ -171,3 +171,17 @@ pub fn[K : Show] View::by_room(self : View, pick : (Double, Double) -> K, make :
     l.place(child, 0.0, 0.0)
   })
 }
+
+///|
+/// Its child by `key`, asked for in this layout (Layout::child), let go as it ends unless asked for again: one made only
+/// to be measured (a row a scroll went past), kept by nothing.
+pub fn Layout::let_go(self : Layout, key : String) -> Unit {
+  guard self.live.val && self.owner.tree.layout_owner == self.owner.at else {
+    abort("a layout context is only used inside its own callback")
+  }
+  self.seen.remove(key)
+  match self.used.search(key) {
+    Some(i) => self.used.remove(i) |> ignore
+    None => ()
+  }
+}

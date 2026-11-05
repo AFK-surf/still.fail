@@ -503,9 +503,14 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             |> ignore
           })
         }
+        // (rows made in this layout only to be measured, gone past: let go once it has placed what shows)
+        let made_to_measure : Array[K] = []
         // (a row measured: as tall as it is, its room's height where its room moves)
         let measure = fn(i : Int) -> Double {
           let k = key_at(i)
+          if !slots.contains(k) {
+            made_to_measure.push(k)
+          }
           let slot = slot_of(k)
           self.tree.nodes[slot.at].row_index = Some(i)
           let natural = l.measure(slot, l.width).1
@@ -619,13 +624,11 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         was_tail.val = Array::makei(n - tail_start, fn(i) { key_at(tail_start + i) })
         let key_of = fn(i : Int) { key_at(i) }
         let known = fn(i : Int) { heights.get(key_at(i)) }
-        // (a row gone past far out of sight, never measured: as tall as one is counted to be, not made for it)
-        let guess = Some(mean())
         let lay = fn(from : ListAnchor[K]?, by : Double) {
           if from_end {
-            list_laid_from_end(n, key_of, find, measure, from, h, by~, ahead~, known~, guess~, slack=if short_glide.val { h } else { 0.0 })
+            list_laid_from_end(n, key_of, find, measure, from, h, by~, ahead~, known~, slack=if short_glide.val { h } else { 0.0 })
           } else {
-            list_laid_from_top(n, key_of, find, measure, from, h, by~, ahead~, known~, guess~, slack~)
+            list_laid_from_top(n, key_of, find, measure, from, h, by~, ahead~, known~, slack~)
           }
         }
         let from = anchor.val
@@ -773,6 +776,12 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
               }
             }
           None => ()
+        }
+        // (a row a scroll only went past, measured for how far it went: not kept, a cache of the picture of what shows)
+        for k in made_to_measure {
+          if !r.keys.contains(k) && !c.kept.contains(k) {
+            l.let_go(name_of(k))
+          }
         }
         laid.val = Some(r)
         // (where the one come is, its top in the window: what it is glided to)
