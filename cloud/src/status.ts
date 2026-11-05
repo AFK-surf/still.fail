@@ -1,4 +1,4 @@
-// What still.fail/status shows (site/status.html, GET /v1/status): each of still.fail's services, checked by the cron
+// What still.fail/status shows (status/status.html, GET /v1/status): each of still.fail's services, checked by the cron
 // every minute, and how each has done on each of the last days. What is checked is only what still.fail runs itself: a
 // station's own state is seen from the devices that reach it (docs/cloud.md), and a client that fails on what a service
 // answers is not seen here.

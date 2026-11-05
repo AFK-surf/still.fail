@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // still.fail/status (status/status.html, docs/cloud.md): its page and the incidents written down beside it, static
+  // files as they are, nothing built. A Worker of its own, not the official site's: the site goes out only with a stable
+  // release, and an incident cannot wait for one. A route takes precedence over the site's Custom Domain on the same host.
+  "name": "still-fail-status",
+  "compatibility_date": "2026-09-08",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    { "pattern": "still.fail/status*", "zone_name": "still.fail" },
+    { "pattern": "still.fail/incidents.json*", "zone_name": "still.fail" },
+  ],
+  "assets": { "directory": "./status", "html_handling": "auto-trailing-slash", "not_found_handling": "none" },
+}
