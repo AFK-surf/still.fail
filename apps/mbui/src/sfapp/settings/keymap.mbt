@@ -13,6 +13,7 @@ pub let keys_recording : @signals.Signal[String] = @signals.signal("", same=fn(a
 fn keymap_reset() -> Unit {
   keys_recording.set("")
   action_asked.val = ""
+  actions_nodes.clear()
 }
 
 ///|
@@ -175,9 +176,77 @@ pub fn action_pressed(c : @ui.Ctx, prefs : Json?, action : String, in_field? : B
 let action_asked : Ref[String] = Ref("")
 
 ///|
-/// One of the menu bar's items chosen: `action` done by the frame after, as if one of its keys was pressed.
+/// One of the menu bar's items chosen: done at once by the node that does `action` (actions_node) and takes input now,
+/// the one highest in the window's stack of layers (the last said of those as high), as if one of its keys was pressed
+/// there; where none does, by the frame after, as if one of its keys was pressed (action_pressed: an old view's).
 pub fn ask_action(action : String) -> Unit {
-  action_asked.val = action
+  let mut taker : (ActionsOwn, () -> Bool)? = None
+  let mut high = 0
+  for own in actions_nodes {
+    match own.actions.iter().find_first(fn(a) { a.0 == action }) {
+      Some((_, _, act)) if own.view.alive() && @signals.untracked(fn() { own.view.takes_input() }) => {
+        let stack = match @ui.view_tree() {
+          Some(t) => t.stack_of(own.view.id())
+          None => 0
+        }
+        if taker is None || stack >= high {
+          taker = Some((own, act))
+          high = stack
+        }
+      }
+      _ => ()
+    }
+  }
+  match taker {
+    Some((_, act)) => @ui.host_event(fn() { act() |> ignore })
+    None => action_asked.val = action
+  }
+}
+
+///|
+/// A node's actions of the keymap (actions_node): each by its name, whether a key a focused field had does it too,
+/// and what it does (whether it did it).
+priv struct ActionsOwn {
+  view : @view.View
+  actions : Array[(String, Bool, () -> Bool)]
+}
+
+///|
+/// The nodes that do actions of the keymap, as they were said (actions_node), each gone with its node.
+// kept across runs: each let go with its node
+let actions_nodes : Array[ActionsOwn] = []
+
+///|
+/// The keymap's `actions` done by node `v` while it takes input (`prefs` the core's prefs as they are now): each by its
+/// name, whether a key a focused field had does it too (`in_field`), and what it does, saying whether it did (one that
+/// cannot now, a chat's find with no thread, does nothing and says not). A key that is one of an action's keys, as the
+/// tree asks it of what takes keys (View::on_key: from what has the focus up through what holds it, then the rest
+/// topmost first), does the first of them it is that does, at its moment, and is taken where one did; one while the 快捷键 page
+/// records new keys does none. One of the menu bar's items chosen does its action here too (ask_action).
+pub fn actions_node(v : @view.View, prefs : () -> Json?, actions : Array[(String, Bool, () -> Bool)]) -> Unit {
+  v.on_key(fn(k) {
+    if keys_recording.get() != "" {
+      return false
+    }
+    guard binding_of(k.code, k.mods) is Some(binding) else { return false }
+    let p = prefs()
+    let field = @ui.current().field_focused()
+    for a in actions {
+      let (action, in_field, act) = a
+      if (in_field || !field) && keys_of(p, action).contains(binding) && act() {
+        return true
+      }
+    }
+    false
+  }) |> ignore
+  let own = { view: v, actions }
+  actions_nodes.push(own)
+  v.owns(fn() {
+    match actions_nodes.search_by(fn(o) { physical_equal(o, own) }) {
+      Some(i) => actions_nodes.remove(i) |> ignore
+      None => ()
+    }
+  }) |> ignore
 }
 
 ///|

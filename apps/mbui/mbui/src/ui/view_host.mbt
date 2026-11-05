@@ -3196,6 +3196,13 @@ fn view_event(f : () -> Unit) -> Unit {
 }
 
 ///|
+/// What the host told the app outside the hand's own events (an item of the system's menu bar chosen), taken by the
+/// window's tree as one event at its moment (view_event's): what it sets off starts then, as one change.
+pub fn host_event(f : () -> Unit) -> Unit {
+  view_event(f)
+}
+
+///|
 /// One event (view_event's) whose own facts (`said`: what the host says it came by) are so as of its moment, told
 /// before it is taken (Tree::event_said).
 fn view_event_said(said : () -> Unit, f : () -> Unit) -> Unit {
