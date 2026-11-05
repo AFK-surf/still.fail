@@ -109,9 +109,7 @@ pub fn chat_list_node(
     @sfbase.ChatRows::new(@sfbase.ChatMessages::of_value(None), key_of, end_key=id_of),
     same=fn(a, b) { physical_equal(a, b) },
   )
-  // (the same, read where no signal may be: the list's layout's)
-  let rows_current : Ref[@sfbase.ChatRows] = Ref(@signals.untracked(fn() { rows_now.get() }))
-  v.owns(fn() { rows_current.val.let_go() }) |> ignore
+  v.owns(fn() { @signals.untracked(fn() { rows_now.get() }).let_go() }) |> ignore
   v.reacts(fn() {
     em.read()
     ListedFrom::{ cv: view(), f: @sfbase.send_flight.get(), lingered: rd0.linger_said.get(), emitted: em.said.get() }
@@ -130,7 +128,6 @@ pub fn chat_list_node(
       @sfbase.ChatRows::new(cv.messages, key_of, end_key=id_of)
     }
     cr.take(cv, tail, empty=@sfbase.fresh_view(r) is None, held~)
-    rows_current.val = cr
     rows_now.set(cr)
   })
   // (in from the pane's sides to the column (row_side's): 16 narrow (as wide as the composer's words beside the
@@ -250,7 +247,7 @@ pub fn chat_list_node(
     }
     foot_said.val = true
   })
-  let sized = rows_sized(row_sizes, v, fn() { rows_now.get() }, rows_current, watched=fn() { !view().map_or(false, fn(cv) { cv.newer }) },
+  let sized = rows_sized(row_sizes, v, fn() { rows_now.get() }, watched=fn() { !view().map_or(false, fn(cv) { cv.newer }) },
     from=fn(_) {
       match leaving() {
         Some(f) if !f.carried => {
@@ -892,12 +889,19 @@ pub fn chat_list_node(
     }
     @sfbase.tell_focus(src, r, cv, rd, seen, rd.seen_whole)
   })
-  // (away from its end, or short of the chat's: told the page's reading, as the old list told it, Reading's `jump`)
-  v.reacts(fn() { !follows.get() || view().map(fn(cv) { cv.newer }).unwrap_or(false) }, fn(away) {
-    rd0.jump = away
+  // The old list offered the way back only after layout, more than 120 points from its end, except while gliding to it.
+  // A page short of the chat's newest page always offers it, even when the list itself is at its end.
+  let newer = fn() { view().map(fn(cv) { cv.newer }).unwrap_or(false) }
+  let jump_shown = fn() {
+    let below = scroll.end_below_told()
+    let going_to_end = follows.get() && below > 0.5
+    newer() || (!shown.get().is_empty() && below > 120.0 && !going_to_end)
+  }
+  v.reacts(fn() { (jump_shown(), follows.get(), newer()) }, fn(now) {
+    rd0.jump = now.0
     // Following new rows is the reader's intent, even while their opening rooms mean the end is not yet seen.
     // Keep the avatar's turn watched through that movement, as the old list's following_row does.
-    rd0.following_row = !away
+    rd0.following_row = now.1 && !now.2
   })
   // what waits to be decided and does not show (ToAsk: the core's `asks`): a bell over the list right over the send
   // button, over the way to the end where both show; pressed, the chat goes to the first one's post, the next one's the
@@ -933,7 +937,7 @@ pub fn chat_list_node(
     .lies_along(Is(End))
     .lines_up(Is(Some(End)))
     .padding(By(fn() {
-      let above = !follows.get() || view().map(fn(cv) { cv.newer }).unwrap_or(false)
+      let above = jump_shown()
       (0.0, 0.0, float_right(), foot() + float_lift + (if above { float_above } else { 0.0 }))
     }))
     |> ignore
@@ -982,6 +986,7 @@ pub fn chat_list_node(
     }
     core_doing(src, ["chat.latest"], [("station", r.station), ("thread", thread)])
   }
+  let jump_fade_ms = 160.0
   v.box(fn(f) {
     f
     .over(Is(true))
@@ -991,7 +996,10 @@ pub fn chat_list_node(
       (0.0, 0.0, float_right(), foot() + float_lift)
     }))
     |> ignore
-    f.show(fn() { !follows.get() || view().map(fn(cv) { cv.newer }).unwrap_or(false) }, fn(b) {
+    let initial = Ref(true)
+    f.show(jump_shown, fn(b) {
+      let fade = @motion.trans(fade=0.0, spec=@motion.tween(jump_fade_ms, ease=Out))
+      let look = @motion.presence_node(b, initial=initial.val, enter=fade, exit=fade)
       b
       .row(Is(true))
       .height(Is(Some(float_side)))
@@ -1003,6 +1011,8 @@ pub fn chat_list_node(
       .radius(Is(float_side / 2.0))
       .ground(By(fn() { if @sf.lit_node(b) { @ui.tree_theme().color(Hover) } else { @ui.tree_theme().color(Surface) } }))
       .edge(By(fn() { (1.0, @ui.tree_theme().color(Line)) }))
+      .alpha(By(fn() { look().alpha }))
+      .hides(By(fn() { b.leaving() }))
       .shadow(By(fn() {
         let (blur, dy) = @ui.Shadow::blur_y(Md)
         (blur, dy, @ui.tree_theme().shadow)
@@ -1027,7 +1037,7 @@ pub fn chat_list_node(
             }
           _ => to_end()
         }
-      })
+      }, on=fn() { !b.leaving() })
       b.pick(latest_coming, fn(icon, coming) {
         if coming {
           @sf.spinner_node(icon, size=float_icon) |> ignore
@@ -1040,7 +1050,8 @@ pub fn chat_list_node(
           @sf.t("web-main.chat.newMessages", args=[("n", view().map(fn(cv) { cv.unread.to_int() }).unwrap_or(0).to_string())])
         }, fn() { float_count }) |> ignore
       })
-    })
+    }, leave=jump_fade_ms)
+    initial.val = false
   })
   |> ignore
   {
