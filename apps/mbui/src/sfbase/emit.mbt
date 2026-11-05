@@ -64,6 +64,9 @@ pub(all) struct Emits {
   /// waiting: seq, its message's ts (its row's key: Turn's), agent, its activity's folding (from when it began waiting)
   queue : Array[(Double, String, String, @motion.Anim)]
   mut current : Turn?
+  /// when each agent's last message came out of its avatar, as its poses declared it to end (not the frame that saw
+  /// it end): its line's lingering counted from there (chat_tick)
+  ended : Map[String, Double]
   /// where the flying avatar was last sent, for which message; where it last let one out
   mut aimed : (Double, Double)?
   mut aimed_at : Double
@@ -122,6 +125,7 @@ pub fn emits_of(key : String) -> Emits {
         done: {},
         queue: [],
         current: None,
+        ended: {},
         aimed: None,
         aimed_at: -1.0,
         landed: None,
@@ -345,6 +349,10 @@ pub fn emit_release(e : Emits) -> Unit {
 ///|
 pub fn emit_next(c : @ui.Ctx, e : Emits, agent : String, at? : Double) -> Unit {
   e.changed()
+  match e.current {
+    Some(t) => e.ended[t.agent] = t.clock.ends()
+    None => ()
+  }
   if e.queue.length() == 0 {
     e.current = None
     return
@@ -920,4 +928,10 @@ pub fn emit_glyph_out(
 fn last_seq(v : ChatView) -> Double {
   let n = v.messages.length()
   if n > 0 { v.messages.seq_at(n - 1) } else { -1.0e300 }
+}
+
+///|
+/// When agent `agent`'s last message came out of its avatar, as declared (-1: none yet).
+pub fn emit_ended(e : Emits, agent : String) -> Double {
+  e.ended.get(agent).unwrap_or(-1.0)
 }

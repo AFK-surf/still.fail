@@ -749,7 +749,9 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
     let at = "linger/" + rk + "/" + k + "/\{l.id}/\{l.n}"
     let held = keeps.contains(k)
     // (asked while held too: its count starts at the last build they were still coming)
-    if @kit.after(c, at + "/gone", true, linger_ms) && !held {
+    // (counted from when its last message came out of its avatar as declared, not from the frame that saw it: a
+    // frame drawn late counts from then all the same)
+    if @kit.after(c, at + "/gone", true, linger_ms, since=if held { -1.0 } else { emit_ended(em, k) }) && !held {
       over.push(k)
     }
   }

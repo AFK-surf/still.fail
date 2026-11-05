@@ -45,7 +45,7 @@ test "its turn over while another page covers its chat: its moment goes by meanw
 }
 
 ///|
-test "its answer out of its avatar past its activity's whole stay: it stays its moment from when the last is out" {
+test "its answer out of its avatar past its activity's whole stay: it stays its moment from when the last is out, as declared" {
   let t = linger_core()
   let em = emits_of("ws1/st1\u{1}s-c1")
   let mut turn_over_at = -1.0
@@ -68,8 +68,12 @@ test "its answer out of its avatar past its activity's whole stay: it stays its 
   // its turn over while its answer was still coming out of its avatar, the way out longer than the whole stay
   assert_true(turn_over_at >= 0.0 && last_keep_at > turn_over_at)
   assert_true(emit_all_ms() > linger_ms)
-  // its moment from the last frame its answer was still coming: gone 600 ms on (the frame that reaches it)
+  // its moment from when its answer was declared out of its avatar (emit_ended: the end its poses said, after the
+  // last frame it was still coming, whatever frames came between): gone 600 ms on (the frame that reaches it)
   let frame = 16.0
-  assert_true(gone_at >= last_keep_at + linger_ms && gone_at < last_keep_at + linger_ms + frame)
+  let mut ended = -1.0
+  em.ended.each(fn(_, at) { ended = dmax(ended, at) })
+  assert_true(ended > last_keep_at, msg="declared out at \{ended}, last seen coming at \{last_keep_at}")
+  assert_true(gone_at >= ended + linger_ms && gone_at < ended + linger_ms + frame, msg="gone at \{gone_at}, out at \{ended}")
   t.assert_idle()
 }
