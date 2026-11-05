@@ -33,21 +33,6 @@ pub struct Tester {
 pub let frame_period_default : Double = 1000.0 / 60.0
 
 ///|
-/// Whether the Tester's frames are drawn as a host draws them, none of its checks run on them (Tester::measure_as_host).
-// kept across runs: put back as a run begins (reset_globals)
-let measured_as_host : Ref[Bool] = Ref(false)
-
-///|
-/// From now on its frames drawn as a host draws them, for a bench to measure (src/scenebench): none of the Tester's checks
-/// run on them (the looks drawn whole and compared, words over words, rows steady, what is seen whole, the corners), no
-/// instance's owner kept for them.
-pub fn Tester::measure_as_host(self : Tester) -> Unit {
-  self.check_looks(false)
-  measured_as_host.val = true
-  inst_owners.track = false
-}
-
-///|
 /// The run before let go of, before the next one's inputs are said: the window's tree disposed (what it made, what its
 /// bindings followed, what was due on its timeline), what is made once forgotten. Said where a run is begun before
 /// its Tester is made (what the app is given before it, its made-up core opening a page, then reaches no tree of the
@@ -99,7 +84,6 @@ fn reset_globals() -> Unit {
   text_runs.on = false
   inst_owners.on = false
   inst_owners.track = false
-  measured_as_host.val = false
   inst_owners_clear()
   text_runs.runs.clear()
   desk_reset()
@@ -790,12 +774,10 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   }
   on_frame(self.w, self.h, self.fake.scale, if shown > at { shown } else { at })
   self.frames = self.frames + 1
-  if !measured_as_host.val {
-    self.hold_words_over()
-    self.hold_rows_steady()
-    self.hold_seen_whole_now()
-    self.hold_corners()
-  }
+  self.hold_words_over()
+  self.hold_rows_steady()
+  self.hold_seen_whole_now()
+  self.hold_corners()
   match self.each {
     Some(f) => f()
     None => ()

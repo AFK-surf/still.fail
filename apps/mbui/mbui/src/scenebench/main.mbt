@@ -1,7 +1,6 @@
 // What a frame of the window's tree costs, in milliseconds, natively (docs/retained.md rule 14; matklad's "Benchmark
-// In Milliseconds"): a Tester's window drawn as a host draws it (Tester::measure_as_host: none of a test's checks; its
-// frames the display's, none a step of a test's), each scene's frames timed together, five runs each, every run said in
-// whole ms, and how many of the spinners' frames the window's tree drew alone.
+// In Milliseconds"): a Tester's window drawn as a host draws it, no check run, each scene's frames timed together, five
+// runs each, every run said in whole ms.
 //
 //   spinner-3000: a spinner turning on the resident clock over a chat's list of 3000 messages, 30000 of its steps
 //   spinner-empty: the same spinner over an empty page, 30000 steps
@@ -22,7 +21,7 @@ let spin_period_ms : Double = 800.0
 fn spinner(n : Int) -> @ui.Tester {
   // (no check of a test's run on its frames: what a host draws, alone)
   let t = @ui.Tester::new(fn(_) {  }, w=400.0, h=600.0, corners_held=false, words_over_held=false)
-  t.measure_as_host()
+  t.check_looks(false)
   @ui.set_view_app(fn(root) {
     root.box(fn(page) {
       page.width(Is(Some(400.0))).height(Is(Some(600.0))).ground(Is(0xFFFFFFFFL)) |> ignore
@@ -64,7 +63,7 @@ fn rows(words : @signals.Signal[String]) -> @ui.Tester {
   let n = 3000
   // (no check of a test's run on its frames: what a host draws, alone)
   let t = @ui.Tester::new(fn(_) {  }, w=400.0, h=600.0, corners_held=false, words_over_held=false)
-  t.measure_as_host()
+  t.check_looks(false)
   @ui.set_view_app(fn(root) {
     root
     .width(Is(Some(400.0)))
@@ -84,22 +83,23 @@ fn main {
   // (`long`: the spinner over the list alone, ten times as long: for a sampler to see where its frames go)
   if @env.args().contains("long") || @env.args().contains("long-empty") {
     let t = spinner(if @env.args().contains("long-empty") { 0 } else { 3000 })
-    t.set_frame_period(@view.resident_step_ms)
-    t.run_for(@view.resident_step_ms * (steps * (if @env.args().contains("long-empty") { 100 } else { 10 })).to_double())
+    for _ in 0..<(steps * (if @env.args().contains("long-empty") { 100 } else { 10 })) {
+      t.run_for(@view.resident_step_ms)
+    }
     return
   }
   let said = []
   let spin = fn(name : String, n : Int) {
     let t = spinner(n)
-    // (a frame each of the display's, a step of the resident clock's apart, as a host draws them: none of them a step
-    // of a test's, which builds the frame after it whole, Tester::run_for)
-    t.set_frame_period(@view.resident_step_ms)
     t.run_for(@view.resident_step_ms * 30.0)
     let runs = []
     let w0 = @ui.scene_done()
     for _ in 0..<5 {
       let t0 = now_ms()
-      t.run_for(@view.resident_step_ms * steps.to_double())
+      // (a step at a time, each the resident clock's: every step a frame, as a host's display draws them)
+      for _ in 0..<steps {
+        t.run_for(@view.resident_step_ms)
+      }
       runs.push((now_ms() - t0).round().to_int())
     }
     let w1 = @ui.scene_done()
