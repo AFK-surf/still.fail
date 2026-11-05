@@ -119,6 +119,9 @@ fn reset_globals() -> Unit {
   text_cache.generation = -1
   text_cache.frame = 0
   text_cache.thinned = -1
+  text_cache.short = false
+  text_cache.started_over = -1
+  text_cache.too_much = false
   web_lines.val = false
   faces_reset()
   text_table.val = None
