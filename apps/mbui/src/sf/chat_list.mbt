@@ -48,9 +48,8 @@ pub(all) struct ChatList {
   face_ring : @ui.Style
   /// the room over its first row and under its last, past what the frame gives (navScroll's padding; none on a touch
   /// device, across the whole screen its rows' grounds reaching its edges); under its last in a side column
-  /// (list_foot_in): navScroll's with keyboard and mouse, touch's a panel's corner (its rows 16
-  /// in from its sides, band_in, round by a row's 18, not a card's 26: its last row's ground clear of the arc of a
-  /// panel's foot corners, the corner rule)
+  /// (list_foot_in): a panel's corner with either input (its rows 8 or 16 in from its sides, band_in, round by a
+  /// row's 18, not a card's 26: its last row's ground clear of the arc of a panel's foot corners, the corner rule)
   top_in : Double
   foot_in : Double
   side_foot_in : Double
@@ -137,7 +136,9 @@ pub let mouse_chat_list : ChatList = {
   face_ring: @ui.css("w=S5 h=S5 radius=Full border=B1 border_color=Fg"),
   top_in: 4.0,
   foot_in: 12.0,
-  side_foot_in: 12.0,
+  // (in a panel of its own, its foot corners the panel's 42 (0.1.7190's sidebar, #3975): its last row clear of their
+  // arc, as touch's)
+  side_foot_in: pane_corner,
   band_in: mouse_band_in,
   band_pad: mouse_band_pad,
   band_icon: 16.0,
