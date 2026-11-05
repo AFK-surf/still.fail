@@ -108,7 +108,10 @@ fn words_forgotten() -> Unit {
   // it has later than it is given (a page's, loaded) moves them on again, and what was laid out till then is laid out
   // again (text_frame))
   scene_anew(false)
-  text_cache.generation = h_atlas_generation()
+  // (moved on by this, in the frame or between: what the frame reads of it from now, at its cause, atlas_now)
+  let g = h_atlas_generation()
+  atlas_said.val = Some(g)
+  text_cache.generation = g
   view_words_rescaled()
 }
 

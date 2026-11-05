@@ -1058,6 +1058,7 @@ fn Ctx::let_go(self : Ctx) -> Unit {
   self.focusables.shrink_to_fit()
   self.last_focusables.clear()
   self.last_focusables.shrink_to_fit()
+  atlas_said.val = None
   built_in_island.clear()
   self.groups.clear()
   self.layers.clear()

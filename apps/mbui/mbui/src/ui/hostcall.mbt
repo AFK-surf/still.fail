@@ -804,7 +804,13 @@ fn h_face_clear(face : Int) -> Unit {
 }
 
 ///|
+/// How many times the host was asked its glyphs' generation (h_atlas_generation): what a test counts per frame.
+// kept across runs: counted, read by a test
+let atlas_asked : Ref[Int] = Ref(0)
+
+///|
 fn h_atlas_generation() -> Int {
+  atlas_asked.val = atlas_asked.val + 1
   match fake.val {
     Some({ live: Some(l), .. }) => l.host.atlas_generation()
     Some(f) => f.generation
@@ -2467,5 +2473,23 @@ fn h_window_snap(x : Double, y : Double, w : Double, h : Double) -> Unit {
   match fake.val {
     Some(f) => f.snap = (x, y, w, h)
     None => @hostapi.window_snap(x, y, w, h)
+  }
+}
+
+///|
+/// The host's glyphs' generation (@hostapi.atlas_generation) as the frame being drawn began: asked once a frame
+/// (frame_drawn), read by all of it that follows (what words are measured by, the scene's key, the frame's terms), never
+/// asked again in it. It moves on as the faces or the scale do (the hosts' faces_changed, set_scale, an Android surface
+/// anew): the scale and a surface between frames; the faces as one is given or let go (words_forgotten), said again
+/// there. Before any frame, asked.
+// kept across runs: said as each frame begins
+let atlas_said : Ref[Int?] = Ref(None)
+
+///|
+/// The host's glyphs' generation as the frame began (atlas_said), asked where no frame said it.
+fn atlas_now() -> Int {
+  match atlas_said.val {
+    Some(g) => g
+    None => h_atlas_generation()
   }
 }

@@ -832,7 +832,7 @@ fn scene_drawn_by(c : Ctx) -> DrawnBy {
     h: c.window_h,
     scale: c.scale,
     ground: c.clear,
-    atlas: h_atlas_generation(),
+    atlas: atlas_now(),
     solid: glass_paint.solid,
     zoom: words_zoom.val,
   }
