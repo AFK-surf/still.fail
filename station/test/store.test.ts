@@ -53,6 +53,9 @@ import { type CardEnd, cardsEnded } from "../src/connects/card-ends.ts";
 import { fileAway } from "./archived-before.ts";
 import { testClock } from "./hub-fakes.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
+import { PENDING_BACKFILL_AFTER, PENDING_BODIES, PENDING_DUE, PENDING_MEMBER, PENDING_NO_TIME, PENDING_OTHER_TIME, PENDING_OWN, PENDING_SEED, PENDING_SEED_FIRST } from "../src/vault/pending-index.ts";
+import { Secrets } from "../src/vault/secrets.ts";
+import { VaultStore } from "../src/vault/store.ts";
 
 const dirs: string[] = [];
 const stores: Store[] = [];
@@ -78,6 +81,30 @@ function open(path: string, archive: string | null = null): Store {
 }
 
 const memory = () => open(":memory:");
+
+function assertPendingVaultPlans() {
+  const db = memory().db;
+  const vaults = new VaultStore(db);
+  new Secrets({ db, vaults, data: ".", now: () => 0, home: () => null, lock: () => null,
+    hub: { store: { subscribe() {}, getSession() { return null; } } } as never, proxy: {} as never, plain: {} as never });
+  const queries: [string, unknown[], string[]][] = [
+    [PENDING_OWN, ["w", "alice"], ["vault_pending_decider", "SEARCH r USING INDEX"]],
+    [PENDING_MEMBER, ["w", "alice"], ["SEARCH m USING PRIMARY KEY", "vault_pending_decider", "SEARCH r USING INDEX"]],
+    [PENDING_DUE, ["w", 0], ["vault_pending_at", "SEARCH r USING INDEX"]],
+    [PENDING_NO_TIME, ["w"], ["vault_pending_at", "SEARCH r USING INDEX"]],
+    [PENDING_OTHER_TIME, ["w"], ["vault_pending_at", "SEARCH r USING INDEX"]],
+    [PENDING_BODIES, ["w"], ["SEARCH p USING PRIMARY KEY", "SEARCH r USING INDEX"]],
+    [PENDING_SEED_FIRST, ["w", 32], ["SEARCH p USING PRIMARY KEY", "SEARCH r USING INDEX"]],
+    [PENDING_SEED, ["w", "r", 32], ["SEARCH p USING PRIMARY KEY", "SEARCH r USING INDEX"]],
+    [PENDING_BACKFILL_AFTER, ["w", "r", 32], ["SEARCH vault_requests USING COVERING INDEX"]],
+  ];
+  for (const [sql, args, expected] of queries) {
+    const steps = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((row) => row.detail);
+    const detail = `${sql}\n  ${steps.join(" | ")}`;
+    assert.ok(steps.every((step) => !step.startsWith("SCAN ") && !step.includes("TEMP B-TREE")), detail);
+    for (const part of expected) assert.ok(steps.some((step) => step.includes(part)), detail);
+  }
+}
 
 function assertRecentChatPlans() {
   const db = memory().db;
@@ -1400,6 +1427,7 @@ test("usage: the sessions at work are found by when their turns ended, once each
 
 test("what the station asks again and again is planned by an index, never a scan of what grows with time", () => {
   assertRecentChatPlans();
+  assertPendingVaultPlans();
   const store = memory();
   for (const [sql, value, table, key] of [[ARCHIVE_PIN_EXISTS, "s", "archive_pin_rows", "session"], [ARCHIVE_KEEP_EXISTS, 1, "archive_keep_rows", "thread"]] as const) {
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(value) as { detail: string }[]).map((r) => r.detail);
@@ -1607,6 +1635,7 @@ test("what the station asks again and again is planned by an index, never a scan
 
 test("what is told as chats change is planned by the size of what it finds, not by a chat's or a session's history", () => {
   assertRecentChatPlans();
+  assertPendingVaultPlans();
   const store = memory();
   // As node's SQLite plans each, over the file the readers read: a chat's unread messages counted from the index of its
   // messages alone; an agent's message during a turn by the index of theirs by time; a session's turns as counted, its
