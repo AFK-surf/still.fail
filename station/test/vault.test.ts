@@ -337,8 +337,15 @@ test("routes: a member sees the vaults they are in and their items, and is told 
   // Bob taken out (a new epoch): he is told it is gone, and sees it no more.
   const v1 = vaultOf(w, { seq: 1, epoch: 1 });
   assert.equal((await s.ask("PUT", "/vault/vaults", "alice", v1)).status, 200);
-  assert.deepEqual(s.told.slice(-2), [{ event: "vault", data: v1, to: ["alice"] }, { event: "vault-gone", data: { id: VAULT }, to: ["bob"] }]);
+  // (told with the version taking him out, signed by its owner: what his device checks it by)
+  assert.deepEqual(s.told.slice(-2), [{ event: "vault", data: v1, to: ["alice"] }, { event: "vault-gone", data: { id: VAULT, vault: v1 }, to: ["bob"] }]);
   assert.deepEqual((await s.ask("GET", "/vault/vaults", "bob")).body.vaults, []);
+  // A device of his away as it happened asks by the version it holds, naming him: given the latest. Carol, shown no
+  // version naming her, is given nothing; nor is bob for a version not its owner's.
+  const held0 = v0;
+  assert.deepEqual((await s.ask("POST", "/vault/vaults/latest", "bob", { held: [held0] })).body.vaults, [v1]);
+  assert.deepEqual((await s.ask("POST", "/vault/vaults/latest", "carol", { held: [held0] })).body.vaults, []);
+  assert.deepEqual((await s.ask("POST", "/vault/vaults/latest", "bob", { held: [{ ...held0, owner: "bob" }] })).body.vaults, []);
   assert.equal((await s.ask("GET", `/vault/items?vault=${VAULT}`, "bob")).status, 404);
 });
 

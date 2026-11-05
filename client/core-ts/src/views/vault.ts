@@ -321,6 +321,7 @@ function readStation(inner: Inner, address: string): Effect.Effect<void, CoreErr
     for (const v of [...(plainItems !== null ? [PLAIN] : []), ...(list ?? []).map((v) => v.id)]) yield* readUses(inner, address, v);
     // (what it says checked against the lock as held here; its items against their vaults as held once it is read)
     const fit = fits(inner, ws);
+    const missing: string[] = [];
     // (a station read anew, its lock maybe caught up or itself updated: a version it refused is tried once more)
     for (const v of list ?? []) mem(inner).refused.delete(v.id);
     change(inner, ws, (h) => {
@@ -328,9 +329,13 @@ function readStation(inner: Inner, address: string): Effect.Effect<void, CoreErr
         delete h.refused[station];
         if (!h.keeps.includes(station)) h.keeps.push(station);
         const ids = new Set(list.map((v) => v.id));
-        // Those it held and holds no more (one held from before copies were kept: where it was).
+        // Those it held and holds no more (one held from before copies were kept: where it was): held still here, as
+        // its not listing one says nothing of why (a station that lies hides none so); asked for below.
         for (const id of new Set([...Object.keys(h.on), ...Object.keys(h.at)])) {
-          if (!ids.has(id) && (h.on[id]?.[station] !== undefined || (h.on[id] === undefined && h.at[id] === station))) letGo(h, id, station);
+          if (!ids.has(id) && (h.on[id]?.[station] !== undefined || (h.on[id] === undefined && h.at[id] === station))) {
+            unheld(h, id, station);
+            if (h.vaults[id] !== undefined) missing.push(id);
+          }
         }
         for (const v of list) {
           holds(h, v, station, all.filter((i) => i.vault === v.id), fit);
@@ -357,6 +362,9 @@ function readStation(inner: Inner, address: string): Effect.Effect<void, CoreErr
         for (const i of all) if (i.vault === v.id && newer(i, held[i.id], fit)) held[i.id] = i;
       });
     }
+    // Those it lists no more: the latest versions it holds of them, as the versions held here show this person was in
+    // them; one taking them out (or deleting it), checked, lets it go here.
+    if (missing.length > 0) yield* askLatest(inner, address, missing);
     if (list !== null) spreadAll(inner, ws);
     // This device's certificate brought to a station that lacks it (one added to the workspace, or away, since this
     // device was set up): what its agents ask to keep is sealed to this device too, and the requests waiting there are
@@ -404,6 +412,53 @@ function holds(h: Held, v: Vault, station: string, items: Item[] | null, fit: Fi
   // Two versions of one seq (written on two stations at once): the one every station and device keeps.
   const had = h.vaults[v.id];
   if (had === undefined || over(fit.vault(v), () => fit.vault(had), rules.vault_supersedes_js(v, had))) h.vaults[v.id] = v;
+}
+
+/// `station` no longer holds vault `id` (the version held kept, whoever holds it): its host another that does.
+function unheld(h: Held, id: string, station: string): void {
+  const on = h.on[id];
+  if (on !== undefined) delete on[station];
+  if (on !== undefined && Object.keys(on).length === 0) delete h.on[id];
+  if (h.at[id] === station || h.at[id] === undefined) {
+    const left = Object.keys(h.on[id] ?? {}).sort();
+    if (left.length > 0) h.at[id] = left[0]!;
+    else delete h.at[id];
+  }
+}
+
+/// Whether the version of vault `id` held here takes this person out of it, or deletes it.
+function outOf(inner: Inner, ws: string, id: string): boolean {
+  const v = held(inner, ws).vaults[id];
+  const sub = inner.workspaces.owner(ws);
+  return v !== undefined && (v.deleted === true || sub === null || !v.members.includes(sub));
+}
+
+/// Vault `id` let go here where the version held says this person is out of it.
+function forgetIfOut(inner: Inner, ws: string, id: string, station: string): void {
+  if (!outOf(inner, ws, id)) return;
+  change(inner, ws, (h) => letGo(h, id, station));
+  inner.data.forgetRecord("vaultItems", `${ws}/${id}`);
+}
+
+/// The latest versions `address` holds of vaults `ids`, asked by the versions held here (each naming this person, its
+/// owner's: station/src/api/routes/vault.ts `vault/vaults/latest`); taken as any it says, checked; those taking this
+/// person out let go. A station from before answers 404: nothing taken, nothing let go.
+function askLatest(inner: Inner, address: string, ids: string[]): Effect.Effect<void> {
+  const ws = ofAddress(address);
+  const station = address.slice(ws.length + 1);
+  const mine = ids.map((id) => held(inner, ws).vaults[id]).filter((v): v is Vault => v !== undefined);
+  return Effect.flatMap(
+    Effect.orElseSucceed(Effect.map(ask(inner, address, "POST", "/vault/vaults/latest", { held: mine }), (r) => arr(get(r, "vaults")) as Vault[]), () => [] as Vault[]),
+    (latest) => Effect.sync(() => {
+      const fit = fits(inner, ws);
+      change(inner, ws, (h) => {
+        for (const v of latest) if (ids.includes(v.id)) holds(h, v, station, null, fit);
+        // (it holds them: the copy of a station that lists one no more for this person; held here no longer as theirs)
+        for (const v of latest) unheld(h, v.id, station);
+      });
+      for (const id of ids) forgetIfOut(inner, ws, id, station);
+    }),
+  );
 }
 
 /// `station` no longer holds vault `id`: gone where no station holds it; its host another that does.
@@ -489,8 +544,13 @@ function heard(inner: Inner, address: string, name: string, data: unknown): void
     }
     case "vault-gone":
       if (typeof d?.id !== "string") return;
-      change(inner, ws, (h) => letGo(h, d.id, station));
-      if (held(inner, ws).vaults[d.id] === undefined) inner.data.forgetRecord("vaultItems", `${ws}/${d.id}`);
+      // Gone here only by the version taking this person out, checked (`vault`, as the station tells it); else held
+      // still, the station holding it no more.
+      change(inner, ws, (h) => {
+        if (isObject(d.vault) && d.vault.id === d.id) holds(h, d.vault as Vault, station, null, fits(inner, ws));
+        unheld(h, d.id, station);
+      });
+      forgetIfOut(inner, ws, d.id, station);
       return;
     case "vault-item":
       if (typeof d?.vault === "string" && typeof d?.id === "string") {
