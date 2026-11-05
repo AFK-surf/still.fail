@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import { recentChatIds } from "../src/store/chat-list.ts";
 import { readPreparedRecentHome } from "../src/store/chat-list-home-overlap.ts";
@@ -44,5 +47,60 @@ for (const recursive of [false, true]) test(`requested recent pages prepare in b
     }
     assert.ok(allDone, "each requested scope becomes ready");
     for (const scope of scopes) assert.deepEqual(page(scope), recentChatIds(db, scope.ws, scope.home, 5));
+  } finally { store.close(); }
+});
+
+test("requested workspace preparation resumes after the database is reopened", () => {
+  const dir = mkdtempSync(join(tmpdir(), "recent-preparation-restart-"));
+  const path = join(dir, "station.db");
+  let store = Store.open(path);
+  try {
+    store.insertSession({ key: "here", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "here", createdAt: 1, lastActiveAt: 1, ws: "here" });
+    for (let i = 0; i < 30; i++) {
+      const id = store.openThread("ember", "EMBER", `chat-${i}`, "Chat", null).id;
+      store.joinThread(id, "here", "ember");
+    }
+    const scope = { ws: "here", home: "home" };
+    let prep = new RecentChatPreparation(store.db, 2);
+    for (let i = 0; i < 5; i++) assert.equal(prep.step(scope).done, false);
+    store.close();
+    store = Store.open(path);
+    prep = new RecentChatPreparation(store.db, 2);
+    let done = false;
+    for (let i = 0; i < 100 && !done; i++) {
+      const result = prep.step(scope);
+      assert.ok(result.visited <= 2);
+      done = result.done;
+    }
+    assert.ok(done);
+    assert.deepEqual(readPreparedRecentWorkspace(store.db, "here", 5), recentChatIds(store.db, "here", "home", 5));
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a busy workspace cannot starve another requested home's preparation", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    for (const [key, ws] of [["a", "a"], ["b", "b"], ["busy", "busy"]] as const)
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws });
+    const changing = store.openThreadOf("ember", "EMBER", "changing", "Changing", null, "a").id;
+    const orphan = store.openThread("ember", "EMBER", "orphan", "Orphan", null).id;
+    for (let i = 0; i < 400; i++) {
+      const key = `busy-${i}`;
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws: "busy" });
+    }
+    const prep = new RecentChatPreparation(db, 2), home = { ws: "home", home: "home" }, busy = { ws: "busy", home: "home" };
+    let ready = false;
+    for (let round = 0; round < 100 && !ready; round++) {
+      db.prepare("UPDATE threads SET home = ? WHERE id = ?").run(round % 2 === 0 ? "b" : "a", changing);
+      assert.ok(prep.step(busy).visited <= 2);
+      const result = prep.step(home);
+      assert.ok(result.visited <= 2);
+      ready = result.done;
+    }
+    assert.ok(ready, "the home gets turns while the other scope still has old chats to scan");
+    assert.deepEqual(readPreparedRecentHome(db, "home", 5), { ids: [orphan], total: 1 });
   } finally { store.close(); }
 });

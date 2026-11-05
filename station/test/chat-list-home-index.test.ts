@@ -145,6 +145,48 @@ for (const recursive of [false, true]) test(`a message time change cannot leave 
   } finally { store.close(); }
 });
 
+for (const recursive of [false, true]) test(`a chat moving between named workspaces does not delay the default home (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    for (const [key, ws] of [["a", "a"], ["b", "b"]] as const)
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws });
+    const thread = store.openThreadOf("ember", "EMBER", "named", "Named", null, "a").id;
+    installRecentHomeIndex(db);
+    while (!scanRecentHomeChatsStep(db, 2).scanDone) { /* Prepare the default scope. */ }
+    while (!settleRecentHomeChatStep(db, 2).chatsDone) { /* The chat belongs to neither default range. */ }
+    assert.deepEqual(readPreparedDefaultHome(db, 5), { ids: [], total: 0 });
+    db.prepare("UPDATE threads SET home = 'b' WHERE id = ?").run(thread);
+    assert.deepEqual(readPreparedDefaultHome(db, 5), { ids: [], total: 0 }, "both homes have named workspaces");
+    db.prepare("UPDATE threads SET home = 'missing' WHERE id = ?").run(thread);
+    assert.equal(readPreparedDefaultHome(db, 5), null, "an unknown home can enter the default range");
+    while (!settleRecentHomeChatStep(db, 2).chatsDone) { /* Account the unknown home. */ }
+    assert.deepEqual(readPreparedDefaultHome(db, 5), { ids: [thread], total: 1 });
+  } finally { store.close(); }
+});
+
+for (const recursive of [false, true]) for (const home of ["a", "missing"]) {
+  test(`members of a chat with a home do not delay the default home (home ${home}, recursive triggers ${recursive})`, () => {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+      store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: "a", createdAt: 1, lastActiveAt: 1, ws: "a" });
+      const thread = store.openThreadOf("ember", "EMBER", "named", "Named", null, home).id;
+      installRecentHomeIndex(db);
+      while (!scanRecentHomeChatsStep(db, 2).scanDone) { /* Prepare the default scope. */ }
+      while (!settleRecentHomeChatStep(db, 2).chatsDone) { /* Account the home. */ }
+      const expected = recentChatIds(db, "fallback", "fallback", 5);
+      assert.deepEqual(readPreparedDefaultHome(db, 5), expected);
+      store.joinThread(thread, "a", "ember");
+      assert.deepEqual(readPreparedDefaultHome(db, 5), expected, "a home determines the default range by itself");
+      db.prepare("DELETE FROM thread_sessions WHERE thread = ? AND session = 'a'").run(thread);
+      assert.deepEqual(readPreparedDefaultHome(db, 5), expected, "removing a member cannot change that home");
+    } finally { store.close(); }
+  });
+}
+
 for (const recursive of [false, true]) for (const how of ["number", "timestamp", "timestamp update", "state"] as const) {
   test(`replacing ${how} keeps the default home order exact (recursive triggers ${recursive})`, () => {
     const store = Store.open(":memory:"), db = store.db;

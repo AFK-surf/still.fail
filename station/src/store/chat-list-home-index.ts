@@ -50,7 +50,10 @@ export function installRecentHomeIndex(db: DatabaseSync): void {
         END;
         CREATE TRIGGER recent_home_thread_add AFTER INSERT ON threads BEGIN ${mark("NEW.id")} END;
         CREATE TRIGGER recent_home_thread_change AFTER UPDATE OF id, home ON threads
-          WHEN OLD.id IS NOT NEW.id OR OLD.home IS NOT NEW.home BEGIN ${mark("OLD.id")} END;
+          WHEN OLD.id IS NOT NEW.id OR (OLD.home IS NOT NEW.home AND
+            (OLD.home IS NULL OR NEW.home IS NULL
+              OR NOT EXISTS (SELECT 1 FROM sessions WHERE key = OLD.home AND ws IS NOT NULL)
+              OR NOT EXISTS (SELECT 1 FROM sessions WHERE key = NEW.home AND ws IS NOT NULL))) BEGIN ${mark("OLD.id")} END;
         CREATE TRIGGER recent_home_thread_move AFTER UPDATE OF id ON threads WHEN OLD.id IS NOT NEW.id BEGIN ${mark("NEW.id")} END;
         CREATE TRIGGER recent_home_thread_order AFTER UPDATE OF created_at ON threads BEGIN ${markOrder("NEW.id")} END;
         CREATE TRIGGER recent_home_thread_drop AFTER DELETE ON threads BEGIN ${mark("OLD.id")} END;
