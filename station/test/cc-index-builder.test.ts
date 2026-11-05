@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import { test } from "node:test";
 import { CcIndexBuilder } from "../src/read/cc-index-builder.ts";
 import { ccSessionReady, installCcIndex } from "../src/store/cc-thread-index.ts";
+import { installLatestThreadIndex, latestThreadReady } from "../src/store/latest-thread-index.ts";
 import { Store } from "../src/store/store.ts";
 
 function oldSessions(store: Store): void {
@@ -70,4 +71,25 @@ test("a stopped copy destination worker resumes its request", async () => {
     assert.ok(existsSync(marker));
     assert.equal(ccSessionReady(store.db, "short"), true);
   } finally { await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("latest conversation preparation shares the copy worker and lets a short session finish", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "latest-thread-builder-"));
+  const path = join(dir, "stillfail.db"), store = Store.open(path);
+  const previous = Promise.withResolvers<void>();
+  const builder = new CcIndexBuilder(path, { previousGone: previous.promise });
+  try {
+    oldSessions(store); installLatestThreadIndex(store.db);
+    assert.equal(typeof builder.readyLatest, "function");
+    let longReady = false;
+    const long = builder.ready(["long"]).then(() => { longReady = true; });
+    const short = builder.readyLatest(["short"]);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(latestThreadReady(store.db, "short"), false);
+    previous.resolve(); await short;
+    assert.equal(latestThreadReady(store.db, "short"), true);
+    assert.equal(longReady, false);
+    await long;
+    assert.equal(ccSessionReady(store.db, "long"), true);
+  } finally { previous.resolve(); await builder.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
