@@ -93,6 +93,38 @@ for (const recursive of [false, true]) {
       assert.deepEqual(plain(db.prepare(WIDGET_SOURCE).get("a", path)), plain(db.prepare(original).get("a", path)));
     } finally { store.close(); }
   });
+  test(`widget sources agree with the original after mixed writes (recursive triggers ${recursive})`, () => {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers=${recursive ? "ON" : "OFF"}`);
+      const threads = ["one", "two", "unrequested"].map((name) => store.openThread("ember", "EMBER", name, null, null).id);
+      for (const thread of threads.slice(0, 2)) { widgetSourcesStep(db, thread); store.joinThread(thread, "a", "ember"); }
+      const paths = ["/w/one", "/w/two", "/w/three"];
+      let seed = 71239;
+      const next = (max: number) => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed % max; };
+      const files = () => next(4) === 0 ? "[]" : JSON.stringify([{ path: paths[next(paths.length)], name: `n${next(9)}` }]);
+      const insert = db.prepare(`INSERT OR REPLACE INTO entries(rowid,thread,n,kind,target,ts,author_kind,author,at,attachments)
+        VALUES(?,?,?,?,?,?,'agent','a',?,?)`);
+      const ignore = db.prepare(`INSERT OR IGNORE INTO entries(rowid,thread,n,kind,target,ts,author_kind,author,at,attachments)
+        VALUES(?,?,?,?,?,?,'agent','a',?,?)`);
+      const update = db.prepare(`UPDATE OR REPLACE entries SET rowid=?,thread=?,n=?,kind=?,target=?,ts=?,at=?,attachments=? WHERE rowid=?`);
+      for (let step = 0; step < 100; step++) {
+        const current = db.prepare("SELECT rowid FROM entries ORDER BY rowid").all() as { rowid: number }[];
+        const action = current.length === 0 ? 0 : next(4);
+        if (action === 3) {
+          db.prepare("DELETE FROM entries WHERE rowid=?").run(current[next(current.length)]!.rowid);
+        } else {
+          const kind = next(3) === 0 ? "edit" : "message";
+          const args = [next(25) + 1, threads[next(threads.length)]!, next(16) - 3, kind,
+            kind === "edit" ? next(16) - 3 : null, next(4) === 0 ? `ts-${next(8)}` : null, next(20), files()] as const;
+          if (action === 2) update.run(...args, current[next(current.length)]!.rowid);
+          else (action === 1 ? ignore : insert).run(...args);
+        }
+        for (const path of paths)
+          assert.deepEqual(plain(db.prepare(WIDGET_SOURCE).get("a", path)), plain(db.prepare(original).get("a", path)), `step ${step}, ${path}`);
+      }
+    } finally { store.close(); }
+  });
 }
 
 test("old widget sources are built in bounded batches while messages change", () => {
@@ -248,6 +280,24 @@ test("a failed widget index installation leaves no partial tables or triggers", 
     assert.equal(db.prepare("SELECT 1 FROM sqlite_master WHERE name LIKE 'widget_source_%'").get(), undefined);
     installWidgetSources(db);
   } finally { db.setAuthorizer(null); store.close(); }
+});
+
+test("widget source ties follow the original membership and attachment order", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const first = store.openThread("ember", "EMBER", "first", null, null).id;
+    const second = store.openThread("ember", "EMBER", "second", null, null).id;
+    widgetSourcesStep(db, first); widgetSourcesStep(db, second);
+    store.joinThread(second, "a", "ember"); store.joinThread(first, "a", "ember");
+    const path = "/w/item.html", put = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
+      VALUES(?,?,'message','agent','a',5,?)`);
+    put.run(first, 1, JSON.stringify([{ path, name: "first" }, { path, name: "duplicate" }]));
+    put.run(second, 1, JSON.stringify([{ path, name: "second" }]));
+    const check = () => assert.deepEqual(plain(db.prepare(WIDGET_SOURCE).get("a", path)), plain(db.prepare(original).get("a", path)));
+    check();
+    db.prepare("DELETE FROM thread_sessions WHERE thread=? AND session='a'").run(second);
+    check();
+  } finally { store.close(); }
 });
 
 test("a failed widget source batch rolls back its rows and cursor", () => {
