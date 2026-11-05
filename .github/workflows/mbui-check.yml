@@ -215,6 +215,63 @@ jobs:
             [ -z "$why" ] || { echo '```'; printf '%s\n' "$why" | cut -c1-300; echo '```'; }
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # mbui's ui on wasm-gc, as the app runs in development (scripts/wasm-app.sh: the app compiled for Wasm, no C): the
+  # same tests as mbui-ci's native ones, which passed while 62 of ui's 1650 failed on wasm-gc at 3b18bf9032 (a phone's
+  # crash, 7336, as likely Wasm's alone, 2026-11-05, as asked). moon's own build kept as the native jobs keep theirs.
+  wasm:
+    name: wasm-gc (${{ matrix.part }})
+    # (arch/next's run keeps its units: its tests are its pipeline's)
+    if: github.event_name != 'workflow_run'
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ github.event_name == 'push' && 5 || 10 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # (mbui's ui, in apps/mbui/mbui: 34 s, its tests 14. Not yet the app's pages, sfapp's: built and run on wasm-gc
+        # they took more than the 5 minutes, cancelled at 4 min 43 s of its tests' step, 42033580953)
+        include:
+          - { part: mbui ui, dir: apps/mbui/mbui, pkgs: "-p mbui/ui", key: ui }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version-file: .node-version, package-manager-cache: false }
+      - uses: ./.github/actions/mbui-moonbit
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ matrix.dir }}/_build/wasm-gc
+          key: mbui-wasm-${{ matrix.key }}-${{ github.sha }}
+          restore-keys: mbui-wasm-${{ matrix.key }}-
+      - run: bash apps/mbui/scripts/moon-mtimes.sh
+      - name: The tests (wasm-gc, ${{ matrix.part }})
+        id: tests
+        working-directory: ${{ matrix.dir }}
+        run: |
+          set -o pipefail
+          touch "$RUNNER_TEMP/start"
+          moon test --target wasm-gc --release ${{ matrix.pkgs }} 2>&1 | grep -av '^Warning\|^ *│\|^ *╭\|^ *╰\|^─\|^ *[0-9]* │' > "$RUNNER_TEMP/wasm-test.log"
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: ${{ matrix.dir }}/_build/wasm-gc
+          key: mbui-wasm-${{ matrix.key }}-${{ github.sha }}
+      # Every test that failed, named, all of them in the log and the summary (the annotation says how many)
+      - name: What failed
+        if: always()
+        run: |
+          grep -a 'Total tests' "$RUNNER_TEMP/wasm-test.log" || tail -40 "$RUNNER_TEMP/wasm-test.log"
+          failed=$(grep -a 'test .* failed' "$RUNNER_TEMP/wasm-test.log" | sed 's/^\[[^]]*\] test //; s/ failed.*//' | sort -u)
+          [ -n "$failed" ] || exit 0
+          printf '%s\n' "$failed"
+          subject=$(git log -1 --format='%h %an: %s' "$GITHUB_SHA")
+          echo "::error title=check-mbui (wasm-gc ${{ matrix.part }}) failed at ${GITHUB_SHA:0:9}::$(printf '%s\n' "$failed" | wc -l) tests failed, all named in the log and the summary"
+          {
+            echo "### check-mbui (wasm-gc ${{ matrix.part }}) failed at $subject"
+            echo
+            echo '```'
+            printf '%s\n' "$failed"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # sfapp's test program built once (scripts/test.sh APP_BUILD_OUT), its units kept as the native job keeps its own
   app-build:
     name: native (app build)
