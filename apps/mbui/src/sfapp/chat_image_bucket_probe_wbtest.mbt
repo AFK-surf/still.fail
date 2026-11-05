@@ -3,7 +3,7 @@
 
 ///|
 test "table pictures are decoded once at their drawn size" {
-  for width in [390.0, 740.0] {
+  for width in [390.0, 740.0, 1280.0] {
     let asked : Array[String] = []
     let images = @sfbase.ChatImages::new()
     let calls : Array[Made] = []
@@ -12,7 +12,10 @@ test "table pictures are decoded once at their drawn size" {
     let web = @sffixture.fixture_png(160, 100)
     let phone = @sffixture.fixture_png(195, 422)
     let other = fixture_file_png("compare.png")
-    let t = wide_tester(calls, mode="chat-table-images", w=width, h=1000.0, platform=2, wrap=fn(base) {
+    let t = wide_tester(calls, mode="chat-table-images", w=width, h=1000.0, platform=2, images=[
+      ("mem:bucket-test/web-folded.png", 1440, 900),
+      ("mem:bucket-test/phone.png", 780, 1688),
+    ], wrap=fn(base) {
       { ..base, images, file: fn(station, key, name) {
         images.get(station, @sfbase.file_image_id(station, key, name), "mem:bucket-test/" + name, fn(_, done) {
           asked.push(name)

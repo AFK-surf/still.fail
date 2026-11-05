@@ -10,6 +10,7 @@ fn wide_tester(
   platform? : Int = 0,
   window_corner? : Double = 0.0,
   window_inset? : Bool = false,
+  images? : Array[(String, Int, Int)] = [],
   before? : (Source) -> Unit = fn(_) {  },
   wrap? : (Source) -> Source = fn(s) { s },
 ) -> @ui.Tester {
@@ -27,7 +28,7 @@ fn wide_tester(
   }
   // (what the run is made with, said after it is begun and before the window is: a window of its own's page)
   before(src)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~, window_corner~, window_inset~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~, window_corner~, window_inset~, images~)
   t
 }
 

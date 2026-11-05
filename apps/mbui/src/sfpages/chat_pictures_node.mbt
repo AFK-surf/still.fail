@@ -97,7 +97,12 @@ fn ChatPictures::want(self : ChatPictures, here : MessageHere, a : Attachment, r
   } else {
     (1.0, 1.0)
   }
-  let px = reveal_px(@ui.current(), w * sx, h * sy)
+  // The box may crop a tall image: its whole long side, not just the visible box, determines the decode size.
+  let px = if kind == "image" {
+    dmin(@ui.image_placed_px(w * sx, h * sy, FitCover, own_size(a), @ui.current().scale), image_px_most)
+  } else {
+    reveal_px(@ui.current(), w * sx, h * sy)
+  }
   if !held.pixels.contains(px) { held.pixels.push(px) }
   if held.watching {
     let key = @signals.untracked(fn() { held.key.get() })

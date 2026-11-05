@@ -375,16 +375,20 @@ fn image_size(src : String) -> (Double, Double)? {
 }
 
 ///|
-/// How many pixels on its long side `src` is decoded at to be shown in a box `bw` × `bh` at `fit`: the box's long
-/// side, unless the picture covers the box and its proportions are known: then its own long side as it is drawn,
-/// cropped. (A wide screenshot covering a square tile is as tall as the tile and several times as wide: decoded at the
-/// tile's side it would be stretched several times over, blurred.)
-fn Ctx::image_px(self : Ctx, src : String, bw : Double, bh : Double, fit : Fit) -> Double {
-  match (fit, image_size(src)) {
+/// How many pixels on its long side a picture needs in a `bw` × `bh` box at `fit`, with its original `size` if known.
+/// A covering picture may extend past the box: its cropped-away part needs pixels too. A list's owner can use the
+/// dimensions supplied with a picture before it is decoded, with the same rule used when the picture is drawn.
+pub fn image_placed_px(bw : Double, bh : Double, fit : Fit, size : (Double, Double)?, scale : Double) -> Double {
+  match (fit, size) {
     (FitCover | FitCoverAt(_), Some((ow, oh))) if ow > 0.0 && oh > 0.0 && bw > 0.0 && bh > 0.0 =>
-      dmax(ow, oh) * dmax(bw / ow, bh / oh) * self.scale
-    _ => dmax(bw, bh) * self.scale
+      dmax(ow, oh) * dmax(bw / ow, bh / oh) * scale
+    _ => dmax(bw, bh) * scale
   }
+}
+
+///|
+fn Ctx::image_px(self : Ctx, src : String, bw : Double, bh : Double, fit : Fit) -> Double {
+  image_placed_px(bw, bh, fit, image_size(src), self.scale)
 }
 
 ///|

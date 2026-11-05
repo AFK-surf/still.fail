@@ -34,6 +34,8 @@ test "a crossed message's pictures wait for its Markdown and are decoded at thei
       },
     }
   })
+  t.add_image("mem:markdown-pending/web-folded.png", 1440, 900)
+  t.add_image("mem:markdown-pending/phone.png", 780, 1688)
   t.check_looks(false)
   t.run_for(first_page_ms + @ui.move_most_ms + @sfpages.reveal_ms)
   @sf.markdown_read.val = Some(fn(text, done) {
