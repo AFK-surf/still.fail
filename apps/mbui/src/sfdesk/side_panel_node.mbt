@@ -20,7 +20,7 @@ fn tape_side_pane(v : @view.View, src : Source) -> Unit {
         .padding(By(fn() { (0.0, 0.0, tape_room_now().under, 0.0) })) |> ignore
         @ui.tree_corners_linked(pane, fn() { Some(tape_pane_corners(Panel, true)) })
         let corners = fn() { Some(beside_column(tape_pane_corners(Panel, true), tape_room_now().under)) }
-        side_panel_node(pane, src, w, r, fn() { view_of_chat(src, r).0 }, tape=true, over=fn() { true },
+        side_panel_node(pane, src, w, r, fn() { @sfbase.chat_view_now(src, r) }, tape=true, over=fn() { true },
           leaving=fn() { (tape_goes.panel_of)() is None }, corners~, ground~, old_page=fn(c, build) {
             tape_behind(c, Panel, fn() {
               let was = @sf.pane_round.val

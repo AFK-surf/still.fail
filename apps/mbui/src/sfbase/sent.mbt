@@ -48,19 +48,13 @@ pub fn local_sent(o : Outgoing) -> Bool {
 }
 
 ///|
-/// The rows of the view `v` there when words were sent: an outbox entry's, a message's, and the outbox entry it was
-/// (rows are keyed by it: row_keys).
+/// The rows of the view `v` there when words were sent that what comes after may be taken for: its outbox entries'. A
+/// message there then is never one (only those newer than its newest are looked at: LocalSent's `newest`), so none is
+/// read.
 fn sent_before(v : ChatView) -> Map[String, Bool] {
   let before : Map[String, Bool] = {}
   for o in v.outbox {
     before["o:" + o.id] = true
-  }
-  for i in 0..<v.messages.length() {
-    let m = v.messages.row(i)
-    if m.outgoing != "" {
-      before["o:" + m.outgoing] = true
-    }
-    before["m:" + m.ts] = true
   }
   before
 }
@@ -156,15 +150,10 @@ pub fn sent_local(
       None => Map::new()
     },
     newest: match v {
+      // (the messages in the order of their seqs: the last one's)
       Some(v) => {
-        let mut n = -@double.infinity
-        for i in 0..<v.messages.length() {
-          let s = v.messages.row(i).seq
-          if s > n {
-            n = s
-          }
-        }
-        n
+        let n = v.messages.length()
+        if n > 0 { v.messages.seq_at(n - 1) } else { -@double.infinity }
       }
       None => -@double.infinity
     },

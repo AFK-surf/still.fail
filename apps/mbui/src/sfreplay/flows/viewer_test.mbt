@@ -6,7 +6,15 @@
 ///|
 test "96-viewer" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace("viewer"), seed~, env=[("MBUI_VIEWER_AWAKE", "1")])
+    // (the run's list told the core it was off its end with the marked picture's message read, for the frames its
+    // glide to the end went on after that message's room had opened: a list kept at its end as its rows open, as it is
+    // laid out from its anchor, is never off it then, and tells it at its end at once)
+    let f = @sfreplay.Flow::start(
+      @sfreplay.trace("viewer"),
+      seed~,
+      env=[("MBUI_VIEWER_AWAKE", "1")],
+      drop=["\"end\":false,\"seen\":4"],
+    )
     // (what the host drew of the marks, as the run's gave it: the PNG it sent up)
     // (handed to the core whole: composer.add; a run from before, its parts: station.upload.part)
     let handed = match f.r.sent_bytes_from("composer.add", "name", "e2e-photo-标注-") {

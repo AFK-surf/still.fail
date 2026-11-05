@@ -22,8 +22,7 @@ fn chat_root_node(
   p.pick(fn() { @sfbase.workspace_in_view(src).0.map(fn(w) { w.id }) }, fn(page, _id) {
     page.grow(Is(1.0)).min_height(Is(Some(0.0))).row(Is(true)).ground(By(fn() { ground(page) })) |> ignore
     guard @signals.untracked(fn() { @sfbase.workspace_in_view(src).0 }) is Some(w) else { return }
-    let view = fn() { view_of_chat(src, r).0 }
-    let entries = fn() { view_of_chat(src, r).1 }
+    let view = fn() { @sfbase.chat_view_now(src, r) }
     // (its side panel's tabs, as the core says them: open while it has any)
     let open = fn() { view().map(fn(v) { side_of(v).0.length() > 0 }).unwrap_or(false) }
     let whole = fn() {
@@ -53,7 +52,7 @@ fn chat_root_node(
       .min_width(Is(Some(0.0)))
       .min_height(Is(Some(0.0)))
       |> ignore
-      chat_talk_node(talk, src, w, r, k, view, entries, old_over, corners, ground)
+      chat_talk_node(talk, src, w, r, k, view, old_over, corners, ground)
     })
     |> ignore
     // (its side panel: beside it, cut to how far it has slid; over it from the pane's right where the pane has not the
@@ -94,7 +93,6 @@ fn chat_talk_node(
   r : ChatRef,
   k : Int,
   view : () -> ChatView?,
-  entries : () -> Array[Entry],
   over : (@ui.Ctx, () -> Unit) -> Unit,
   corners : () -> FixedArray[@ui.CornerOf]?,
   ground : (@view.View) -> Int64,
@@ -121,7 +119,7 @@ fn chat_talk_node(
   })
   talk.box(fn(l) {
     l.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
-    let list = @sfpages.chat_list_node(l, src, r, view, entries, fn() { chat_bar_room() + list_head_gap }, room_now, settings_core(src, w),
+    let list = @sfpages.chat_list_node(l, src, r, view, fn() { chat_bar_room() + list_head_gap }, room_now, settings_core(src, w),
       foot_gap=list_foot_gap, composer_across=fn() { geometry().0 })
     latest.val = list.to_latest
     landing.val = list.landing_of
