@@ -785,6 +785,17 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         self.tree.once_laid_out(fn() { laid_n.set(@signals.untracked(fn() { laid_n.get() }) + 1) })
         let extent_now = extent()
         self.tree.once_laid_out(fn() { extent_said.set(extent_now) })
+        // (where its last row's foot is below where it shows to, laid out; as far as can be where it is not:
+        // Scroll::end_below_told)
+        let last_q = r.keys.length() - 1
+        // (its last row laid out this time: how far its foot is below where it shows; not laid out, as far as can be,
+        // however near rows measured before would put it)
+        let below = if n > 0 && last_q >= 0 && r.last == n - 1 {
+          r.tops[last_q] + r.heights[last_q] - h
+        } else {
+          @double.infinity
+        }
+        self.tree.once_laid_out(fn() { s.end_below.set(below) })
         self.tree.once_laid_out(fn() {
           let in_sight = []
           for q in 0..<r.keys.length() {

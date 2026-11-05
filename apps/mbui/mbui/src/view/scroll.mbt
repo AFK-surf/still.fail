@@ -98,6 +98,9 @@ pub struct Scroll {
   /// what a virtual list's counted extent is told by, read where how far it can go is followed (none: as it is laid
   /// out alone): View::scrolls_anchored's
   priv mut extent_told : () -> Unit
+  /// how far its last row's foot is below where it shows to (a list laid out from its end: View::scrolls_anchored; as
+  /// far as can be while its last row is laid out nowhere, or it is no such list), told once laid out
+  priv end_below : @signals.Signal[Double]
   /// a page's list's blocks (View::scrolls_window): the first and last of them in sight, by their places, it put with
   /// one of them at its top, by its place, and how far past the first in sight's top it is (what a test reads and asks
   /// of an old view's list)
@@ -170,6 +173,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     rebase: fn() { },
     reveal: fn(_, _) { },
     extent_told: fn() { },
+    end_below: @signals.signal(@double.infinity, same=fn(a, b) { a == b }),
     rows: None,
   }
 }
@@ -1027,3 +1031,12 @@ pub fn Tree::in_scroller(self : Tree, id : NodeId) -> Bool {
   }
   false
 }
+
+///|
+/// How far the last row's foot of a list laid out from its end (View::scrolls_anchored) is below where the list shows to,
+/// as it was last laid out (0 or less: in sight), followed: as far as can be while that row is laid out nowhere (scrolled
+/// far from it) or this is no such list. What it reads is only what was laid out: the rows in sight and near.
+pub fn Scroll::end_below_told(self : Scroll) -> Double {
+  self.end_below.get()
+}
+
