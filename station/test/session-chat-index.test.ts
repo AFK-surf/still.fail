@@ -103,6 +103,43 @@ test("a prepared name follows remaining entries when their old state row is abse
     prepare(store, "s");
     assert.equal(original(store, "s"), first);
     assert.equal(indexedSessionChat(db, "s")?.id, first);
+    // With no state row, the copy-destination projection stays NULL even though the remaining entry changes.
+    db.prepare("UPDATE entries SET at=40 WHERE thread=? AND n=1").run(first);
+    prepare(store, "s");
+    assert.equal(original(store, "s"), second);
+    assert.equal(indexedSessionChat(db, "s")?.id, second);
+  } finally { store.close(); }
+});
+
+test("old missing state is handled during preparation on either chat surface", () => {
+  for (const surface of ["ember", "slack"]) {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      const first = store.openThread(surface, "C", "first", null, null).id;
+      const second = store.openThread("ember", "C", "second", null, null).id;
+      store.joinThread(first, "s", "c"); store.joinThread(second, "s", "c");
+      const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at) VALUES(?,?,'message','person','p',?)");
+      put.run(first, 1, 10); put.run(first, 2, 100); put.run(second, 1, 50);
+      db.prepare("DELETE FROM entries WHERE thread=? AND n=1").run(first);
+      assert.equal(db.prepare("SELECT 1 FROM thread_state WHERE thread=?").get(first), undefined);
+      prepare(store, "s");
+      assert.equal(original(store, "s"), first);
+      assert.equal(indexedSessionChat(db, "s")?.id, first);
+    } finally { store.close(); }
+  }
+});
+
+test("copy destination tracking alone does not prepare chat names", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const thread = store.openThread("slack", "C", "only-copy", null, null).id;
+    store.joinThread(thread, "s", "c");
+    const work = new CcIndexPreparation();
+    while (!ccSessionReady(db, "s")) work.step(db, "s");
+    db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at) VALUES(?,1,'message','person','p',10)").run(thread);
+    while (!ccSessionReady(db, "s")) work.step(db, "s");
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM session_chat_scopes").get()?.n, 0);
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM session_chat_rows").get()?.n, 0);
   } finally { store.close(); }
 });
 
