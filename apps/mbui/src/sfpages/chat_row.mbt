@@ -728,7 +728,7 @@ fn chat_menu_items(src : Source, item : ChatItem, extra : Array[@sf.MenuItem?]) 
   }
   match (item.thread, item.hidden) {
     (Some(_), Some(hidden)) =>
-      items.push(Some(@sf.menu_item_of(@sf.t(if hidden { "web-main.chat.unhide" } else { "web-main.chat.hide" }), icon="eye", fn() {
+      items.push(Some(@sf.menu_item_of(@sf.t(if hidden { "web-main.chat.unhide" } else { "web-main.chat.hide" }), icon=if hidden { "eye" } else { "eye-off" }, fn() {
         hide_row(src, item, !hidden)
       })))
     _ => ()

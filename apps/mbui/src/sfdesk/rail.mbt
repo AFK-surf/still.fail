@@ -941,7 +941,7 @@ fn rail_icon(place : String) -> String {
     "chats" => "chats"
     "mine" => "user"
     "watching" => "watch"
-    "hidden" => "eye"
+    "hidden" => "eye-off"
     "archive" => "archive"
     "files" => "folder"
     "profiles" => "quota"

@@ -157,6 +157,10 @@ export function External(props: IconProps) {
   return <Svg {...props}><path d="M11 4H8Q3.5 4 3.5 8.5V16Q3.5 20.5 8 20.5H15.5Q20 20.5 20 16V13 M11 13L20 4 M14.5 3.5H20.5V9.5" /></Svg>;
 }
 
+export function EyeOff(props: IconProps) {
+  return <Svg {...props}><path d="M6.68 15.09Q4.59 13.98 2.5 12Q8.39 6.42 14.28 7.76 M17.32 8.91Q19.41 10.02 21.5 12Q15.61 17.58 9.72 16.24" /><path d="M12 9.4A2.6 2.6 0 0 0 9.4 12 M12 14.6A2.6 2.6 0 0 0 14.6 12 M3.5 20.5L20.5 3.5" /></Svg>;
+}
+
 export function Eye(props: IconProps) {
   return <Svg {...props}><path d="M2.5 12Q12 3 21.5 12Q12 21 2.5 12Z" /><circle cx="12" cy="12" r="2.6" /></Svg>;
 }
@@ -647,6 +651,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "edit": Edit,
   "expand": Expand,
   "external": External,
+  "eye-off": EyeOff,
   "eye": Eye,
   "file-audio": FileAudio,
   "file-code": FileCode,
