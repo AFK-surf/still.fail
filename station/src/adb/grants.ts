@@ -219,9 +219,12 @@ export class PhoneGrants {
     if (reason.trim() === "") throw new Refused("say why you need the phone (reason)");
     const owner = this.starter(session);
     if (owner === null) throw new Refused("this chat has no person who started it: nobody to lend a phone");
-    const thread = this.#d.hub.store.latestThread(session);
-    if (thread === null) throw new Refused("this session has no chat to ask in");
     const pending = this.#bySession(session).find((r) => r.status === "pending");
+    // A still-joined original chat already proves the session has a chat. A reused request does not need to choose
+    // the latest one: a reasked card goes back to its original place. Older requests may not record that place.
+    const original = pending?.thread == null ? null : this.#d.hub.store.sessionThreadById(session, pending.thread);
+    const thread = original ?? this.#d.hub.store.latestThread(session);
+    if (thread === null) throw new Refused("this session has no chat to ask in");
     const r: PhoneRequest = pending ?? {
       id: this.#d.id?.() ?? `p_${this.#d.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
       session, chat: threadAddress(thread.thread.channel, thread.thread.threadTs), owner, reason: reason.trim(), at: this.#secs(), status: "pending",

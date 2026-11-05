@@ -96,8 +96,10 @@ test("reusing a pending phone request does not find the latest of the session's 
 
 test("a pending phone request still needs a joined chat when its original chat is gone", async () => {
   const w = world();
-  await w.grants.ask("s1", "debug the screen");
+  const first = await w.grants.ask("s1", "debug the screen");
   w.withoutOriginal();
+  assert.equal((await w.grants.ask("s1", "again")).id, first.id, "another joined chat still permits reuse");
+  await assert.rejects(w.grants.ask("s1", "again", true), /original conversation is no longer available/);
   w.withoutChats();
   await assert.rejects(w.grants.ask("s1", "again"), /no chat to ask in/);
 });
