@@ -114,10 +114,11 @@ fn link_peeks_node(
         }
       })
       |> ignore
-      // (under the piece of line it rests on, at its start; kept in the chat's room)
+      // (under the piece of line it rests on, at its start; kept in the chat's room: from where this frame laid the
+      // layer out, read as it is painted)
       card
-      .offset(By(fn() {
-        match l.laid_window_told() {
+      .offset(Painted(fn(laid) {
+        match laid.rect(l) {
           Some((lx, ly, lw, _)) => {
             let cw = card_w.get().unwrap_or(0.0)
             (dmax(0.0, dmin(px - lx, lw - cw - 8.0)), py + ph + hover_offset - ly)

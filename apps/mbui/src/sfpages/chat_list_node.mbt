@@ -1225,8 +1225,9 @@ fn emit_flyer_node(layer : @view.View, rk : String, view : () -> ChatView?) -> U
     .lies_along(Is(Middle))
     .lines_up(Is(Some(Middle)))
     .alpha(By(fn() { if at() is Some(_) { 1.0 } else { 0.0 } }))
-    .offset(By(fn() {
-      let (lx, ly, _, _) = layer.drawn_window_told().unwrap_or((0.0, 0.0, 0.0, 0.0))
+    // (from where this frame laid the layer out, read as it is painted)
+    .offset(Painted(fn(laid) {
+      let (lx, ly, _, _) = laid.rect(layer).unwrap_or((0.0, 0.0, 0.0, 0.0))
       match at() {
         Some((x, y, _, _)) => (x - ring_room - lx, y - ring_room - ly)
         None => (0.0, 0.0)
