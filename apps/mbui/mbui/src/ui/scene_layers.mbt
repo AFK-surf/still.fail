@@ -1752,11 +1752,12 @@ fn scene_shifted(ranges : Array[(Int, Int)]) -> Unit {
 fn Ctx::scene_alone(self : Ctx, tree : @view.Tree, before_old? : Bool = false) -> Bool {
   guard scene_alone_may() else { return false }
   let due = scene_alone_due()
-  // (each drawn where it was drawn, as it was drawn in: else the old frame paints it, all it is in gone through)
+  // (each drawn where it is put now, as it keeps how it is drawn or drawn again there, in what it was drawn in (a row
+  // changed as its list scrolls): one put nowhere, the old frame paints it, all it is in gone through)
   for id in due {
     match scene.layers.get(id) {
-      Some(l) if scene_place_now(tree, l) != Some(l.held) => {
-        scene.alone_why = "layer \{id.at}: drawn elsewhere"
+      Some(l) if scene_place_now(tree, l) is None => {
+        scene.alone_why = "layer \{id.at}: put nowhere"
         return false
       }
       _ => ()
@@ -1821,7 +1822,8 @@ fn Ctx::scene_alone(self : Ctx, tree : @view.Tree, before_old? : Bool = false) -
   let glass_was = { ..glass_paint }
   for l in todo {
     let (start, seg_from, count, seg_count) = (l.start, l.seg_from, l.count, l.seg_count)
-    let (inst, n, segs, owners) = self.scene_redrawn(tree, l, before_old~, into=drawn.length())
+    let place = scene_place_now(tree, l).unwrap_or(l.held)
+    let (inst, n, segs, owners) = self.scene_redrawn(tree, l, place, before_old~, into=drawn.length())
     // (one come to another number of instances or of pieces: the frame's put together anew round it, scene_spliced;
     // not before the old frame paints)
     let other = n != count || segs.length() / 4 != seg_count
@@ -2138,6 +2140,7 @@ fn Ctx::scene_redrawn(
   self : Ctx,
   tree : @view.Tree,
   l : SceneLayer,
+  place : (Double, Double, Double, Double, Double, Double),
   before_old? : Bool = false,
   into? : Int = 0,
 ) -> (FixedArray[Double], Int, Array[Double], OwnersRun?) {
@@ -2179,14 +2182,15 @@ fn Ctx::scene_redrawn(
   }
   let outer = scene.drawing
   scene.drawing = None
-  match scene_entries_kept(l.id, l.held) {
-    Some(k) => self.scene_replayed(p, k, None, l.held, 0)
+  // (where it is put now: a row of a list scrolled as it changed drawn where the list has it)
+  match scene_entries_kept(l.id, place) {
+    Some(k) => self.scene_replayed(p, k, None, place, 0)
     None => {
       let entries : Ref[Array[SceneEntry]] = Ref([])
-      let m = self.scene_drawn(l.id, None, l.held, l.fading, l.stretching, l.glyphing, fn() {
-        entries.val = self.tree_walk(p, l.id.at, l.held, 0, None)
+      let m = self.scene_drawn(l.id, None, place, l.fading, l.stretching, l.glyphing, fn() {
+        entries.val = self.tree_walk(p, l.id.at, place, 0, None)
       })
-      scene_entries_keep(m, entries.val, l.held)
+      scene_entries_keep(m, entries.val, place)
     }
   }
   scene.drawing = outer
