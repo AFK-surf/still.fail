@@ -84,6 +84,7 @@ pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter |
         })
         n.props[Focusable] = stop
       })
+    Placed(_) => laid_refused("what takes the focus")
   }
   self
 }
@@ -507,6 +508,7 @@ pub fn View::tab_stop(self : View, on : Live[Bool]) -> View {
         })
         n.props[TabStop] = stop
       })
+    Placed(_) => laid_refused("what Tab stops at")
   }
   self
 }

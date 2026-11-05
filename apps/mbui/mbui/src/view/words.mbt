@@ -91,6 +91,11 @@ pub fn View::runs_look(self : View, look : Live[RunsLook]) -> View {
           (l.link, l.pressed, l.code_ink, l.code_ground)
         }),
       )
+    // (their sizes laid out: refused, as bind refuses it)
+    Placed(_) => {
+      laid_refused("how words in pieces are set")
+      return self
+    }
   }
   self.bind(RunsSet, set, Both, fn(s) {
     let l = tree.nodes[at].look.runs_look
@@ -671,6 +676,7 @@ pub fn View::points(self : View, on : Live[Bool]) -> View {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
         n.props[Points] = stop
       })
+    Placed(_) => laid_refused("what is pointed at")
   }
   self
 }

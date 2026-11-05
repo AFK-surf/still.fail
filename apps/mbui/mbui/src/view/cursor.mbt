@@ -64,6 +64,7 @@ pub fn View::cursor(self : View, shape : Live[Cursor?]) -> View {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
         n.props[Cursor] = stop
       })
+    Placed(_) => laid_refused("the pointer's shape")
   }
   self
 }

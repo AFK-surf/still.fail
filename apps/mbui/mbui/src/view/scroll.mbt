@@ -6,8 +6,9 @@
 // is asked) and, let go, flings it on, slowing; the focus come to what it holds brings that into sight once laid out
 // (View::shows). As tall as what it holds
 // where there is the room, it gives way (to nothing) where what holds it is short of room (a dialog no taller than the
-// window), how far it can go told as it is laid out (View::laid_size_told). Where it is, a function of the time while
-// flung, is the column's own (Scroll), let go with the node. One made as a page's list (Scroll::list) moves as an old
+// window). Where it is is the column's own (Scroll), let go with the node: a function of the time while it goes by
+// itself, and of how far it can go as it is laid out then (read as the tree is placed, never told back: what it holds is
+// drawn off by it as the tree is placed after its layout, docs/retained.md rule 10). One made as a page's list (Scroll::list) moves as an old
 // view's list does on the platform it is on instead (scroll_list.mbt). One made to scroll across (Scroll::across) is a
 // row that scrolls sideways the same way (an old view's Ctx::sideways): along its width, the wheel and a hold across,
 // its bar along its foot, what holds it asked what goes up or down.
@@ -45,9 +46,12 @@ priv struct Edge {
 pub struct Scroll {
   priv x : @signals.Signal[Double]
   priv fling : @signals.Signal[Fling?]
-  /// how far it can go, as laid out (told as all of the layout is done: the node's and what it holds' heights; none
-  /// before they are first laid out)
+  /// how far it can go, as laid out last (the node's and what it holds' heights, read plainly; none before they are
+  /// first laid out)
   priv mut room : () -> Double?
+  /// a page's list's fling down toward its foot as it meets that foot where it is laid out now (Scroll::fling_now): the
+  /// fling said, the foot it was worked out for, and how it goes then; kept for the same of both
+  priv mut met : (Fling, Double, Fling)?
   /// what ends the fling's settling at its end (View::at_moment's), as it is called off
   priv mut settle_off : () -> Unit
   /// where the hand held on it was last (the window's, down) and when, and how fast it went (points a ms, down the
@@ -128,6 +132,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     x: @signals.signal(0.0, same=fn(a, b) { a == b }),
     fling: @signals.signal(None, same=fn(a, b) { same_ref(a, b) }),
     room: fn() { None },
+    met: None,
     settle_off: fn() {  },
     hand_y: 0.0,
     hand_wy: 0.0,
@@ -184,7 +189,7 @@ fn Scroll::rest_now(self : Scroll) -> Double? {
     Some(e) => return if e.parked { None } else { Some(e.end_t) }
     None => ()
   }
-  match self.fling.get() {
+  match self.flung_now() {
     Some(f) =>
       match f.way {
         Some({ hit: Some({ back: Some(p), .. }), .. }) => Some(p.rest)
@@ -262,7 +267,7 @@ fn Scroll::where_at(self : Scroll, t : Double) -> Double {
     Some(e) => return dclamp(e.at(t), 0.0, most)
     None => ()
   }
-  match self.fling.get() {
+  match self.flung_now() {
     Some(f) =>
       if t >= f.end_t {
         dclamp(f.end_x, 0.0, most)

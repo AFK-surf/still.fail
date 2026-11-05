@@ -47,6 +47,7 @@ pub fn View::bones(self : View, color : Live[Int64]) -> View {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
         n.props[Bones] = stop
       })
+    Placed(_) => laid_refused("what is drawn in its bones")
   }
   self
 }
