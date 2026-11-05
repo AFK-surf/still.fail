@@ -245,6 +245,46 @@ for (const recursive of [false, true]) {
   });
 }
 
+for (const recursive of [false, true]) {
+  test(`updates replacing other deliveries or memberships keep every affected order (recursive triggers ${recursive})`, () => {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers=${recursive ? 1 : 0}`);
+      const a = store.openThread("slack", "C", "a", null, null);
+      const b = store.openThread("slack", "C", "b", null, null);
+      const c = store.openThread("slack", "C", "c", null, null);
+      const d = store.openThread("slack", "C", "d", null, null);
+      store.joinThread(a.id, "s1", "a"); store.joinThread(c.id, "s1", "c");
+      store.joinThread(b.id, "s2", "b"); store.joinThread(d.id, "s2", "d");
+      const put = db.prepare("INSERT INTO deliveries(rowid,thread,n,session,delivered_at) VALUES(?,?,1,?,NULL)");
+      put.run(100, a.id, "s1"); put.run(99, c.id, "s1"); put.run(101, b.id, "s2"); put.run(98, d.id, "s2");
+      installLatestThreadIndex(db); prepare(store, "s1"); prepare(store, "s2");
+      const check = () => {
+        for (const s of ["s1", "s2"])
+          assert.equal(indexedLatestThread(db, s)?.id ?? null, store.latestThread(s)?.thread.id ?? null);
+        assert.deepEqual(db.prepare("SELECT thread,session FROM latest_thread_members ORDER BY thread,session").all(),
+          db.prepare(`SELECT m.thread,m.session FROM thread_sessions m JOIN latest_thread_scopes s ON s.session=m.session
+            ORDER BY m.thread,m.session`).all());
+        const actual = db.prepare("SELECT session,thread,has_last,last_delivery,joined_at,member_rowid FROM latest_thread_rows ORDER BY session,thread").all();
+        const expected = db.prepare(`SELECT m.session,m.thread,d.rowid IS NOT NULL AS has_last,COALESCE(d.rowid,0) AS last_delivery,
+          m.joined_at,m.rowid AS member_rowid FROM thread_sessions m JOIN latest_thread_scopes s ON s.session=m.session
+          JOIN threads t ON t.id=m.thread LEFT JOIN deliveries d ON d.rowid=(SELECT rowid FROM deliveries
+            WHERE session=m.session AND thread=m.thread ORDER BY rowid DESC LIMIT 1) ORDER BY m.session,m.thread`).all();
+        assert.deepEqual(actual, expected);
+      };
+      check();
+      const replaceDelivery = db.prepare("UPDATE OR REPLACE deliveries SET rowid=101,thread=?,session='s2' WHERE rowid=100");
+      db.exec("BEGIN"); replaceDelivery.run(b.id); check(); db.exec("ROLLBACK"); check();
+      replaceDelivery.run(b.id); check();
+      const source = db.prepare("SELECT rowid FROM thread_sessions WHERE session='s1' AND thread=?").get(a.id)!.rowid;
+      const other = db.prepare("SELECT rowid FROM thread_sessions WHERE session='s1' AND thread=?").get(c.id)!.rowid;
+      const replaceMember = db.prepare("UPDATE OR REPLACE thread_sessions SET rowid=?,thread=?,session='s2' WHERE rowid=?");
+      db.exec("BEGIN"); replaceMember.run(other, b.id, source); check(); db.exec("ROLLBACK"); check();
+      replaceMember.run(other, b.id, source); check();
+    } finally { store.close(); }
+  });
+}
+
 for (const recursive of [false, true]) for (const alias of ["rowid", "_rowid_", "oid"]) {
   test(`a prepared order follows ${alias} replacements and rollback (recursive triggers ${recursive})`, () => {
     const store = Store.open(":memory:"), db = store.db;
