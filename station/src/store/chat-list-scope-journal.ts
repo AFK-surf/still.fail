@@ -144,18 +144,24 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
         ${markVisibility(displacedThread)}
       END;
       CREATE TRIGGER recent_scope_order_thread_add AFTER INSERT ON threads BEGIN ${markOrder("NEW.id")} ${markVisibility("NEW.id")} END;
-      CREATE TRIGGER recent_scope_order_thread_change AFTER UPDATE OF id, created_at ON threads BEGIN ${markOrder("OLD.id")} ${markOrder("NEW.id")} END;
+      CREATE TRIGGER recent_scope_order_thread_change AFTER UPDATE OF id, created_at ON threads BEGIN ${markOrder("OLD.id")} END;
+      CREATE TRIGGER recent_scope_order_thread_move AFTER UPDATE OF id ON threads WHEN OLD.id IS NOT NEW.id BEGIN ${markOrder("NEW.id")} END;
       CREATE TRIGGER recent_scope_visibility_thread_change AFTER UPDATE OF id, home ON threads
-        WHEN OLD.id IS NOT NEW.id OR OLD.home IS NOT NEW.home BEGIN ${markVisibility("OLD.id")} ${markVisibility("NEW.id")} END;
+        WHEN OLD.id IS NOT NEW.id OR OLD.home IS NOT NEW.home BEGIN ${markVisibility("OLD.id")} END;
+      CREATE TRIGGER recent_scope_visibility_thread_move AFTER UPDATE OF id ON threads
+        WHEN OLD.id IS NOT NEW.id BEGIN ${markVisibility("NEW.id")} END;
       CREATE TRIGGER recent_scope_order_thread_drop AFTER DELETE ON threads BEGIN ${markOrder("OLD.id")} ${markVisibility("OLD.id")} END;
       CREATE TRIGGER recent_scope_order_state_add AFTER INSERT ON thread_state BEGIN ${markOrder("NEW.thread")} END;
       CREATE TRIGGER recent_scope_order_state_change AFTER UPDATE OF thread, said_n ON thread_state
-        WHEN OLD.thread IS NOT NEW.thread OR OLD.said_n IS NOT NEW.said_n BEGIN ${markOrder("OLD.thread")} ${markOrder("NEW.thread")} END;
+        WHEN OLD.thread IS NOT NEW.thread OR OLD.said_n IS NOT NEW.said_n BEGIN ${markOrder("OLD.thread")} END;
+      CREATE TRIGGER recent_scope_order_state_move AFTER UPDATE OF thread ON thread_state
+        WHEN OLD.thread IS NOT NEW.thread BEGIN ${markOrder("NEW.thread")} END;
       CREATE TRIGGER recent_scope_order_state_drop AFTER DELETE ON thread_state WHEN OLD.said_n IS NOT NULL BEGIN ${markOrder("OLD.thread")} END;
       CREATE TRIGGER recent_scope_order_entry_before_add BEFORE INSERT ON entries WHEN ${insertedSaid} BEGIN ${markOrder("NEW.thread")} END;
       CREATE TRIGGER recent_scope_order_entry_before_change BEFORE UPDATE OF thread, n, ts ON entries
         WHEN ${displacedSaid} BEGIN ${markOrder("NEW.thread")} END;
-      CREATE TRIGGER recent_scope_order_entry_change AFTER UPDATE OF thread, n, kind, at ON entries BEGIN ${markOrder("OLD.thread")} ${markOrder("NEW.thread")} END;
+      CREATE TRIGGER recent_scope_order_entry_change AFTER UPDATE OF thread, n, kind, at ON entries BEGIN ${markOrder("OLD.thread")} END;
+      CREATE TRIGGER recent_scope_order_entry_move AFTER UPDATE OF thread ON entries WHEN OLD.thread IS NOT NEW.thread BEGIN ${markOrder("NEW.thread")} END;
       CREATE TRIGGER recent_scope_order_entry_drop AFTER DELETE ON entries BEGIN ${markOrder("OLD.thread")} END;
     `);
     db.exec("COMMIT");
