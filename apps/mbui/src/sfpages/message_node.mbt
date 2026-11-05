@@ -238,6 +238,7 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
   row.box(fn(room) {
     // (the room holds to the message's foot and, outside the head, to the same top as the old page. Inline pictures
     // go with their heads; a top far above the list leaves them where they were laid.)
+    // View::sticks has no disabled value yet; -1e9 leaves inline pictures at their laid position.
     room
     .over(Is(true))
     .width(Is(Some(avatar_side)))
