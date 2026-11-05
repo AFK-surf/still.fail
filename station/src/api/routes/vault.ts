@@ -9,7 +9,7 @@
 // is answered with the one held, unchanged), so that agents on any station may ask for its secrets.
 import { type LockState, admit } from "../../cloud/lock.ts";
 import type { Viewer } from "../../mesh/credential.ts";
-import { type BoxCert, type Item, type Vault, certOk, itemOk, itemSupersedes, vaultOk, vaultSupersedes } from "../../vault/crypto.ts";
+import { type BoxCert, type Item, type Vault, TAG, certOk, itemOk, itemSupersedes, signedOk, signerOf, vaultOk, vaultSupersedes } from "../../vault/crypto.ts";
 import type { VaultStore } from "../../vault/store.ts";
 import type { Route } from "../admin.ts";
 import type { Events, To } from "../events.ts";
@@ -69,6 +69,27 @@ export const routes = ({ vaults, lock, events, boxed }: VaultDeps): Route[] => {
       },
     },
     {
+      // The latest versions of vaults the viewer was a member of, each shown by a version naming them that its owner's
+      // device signed (`held`): how a device taken out of a vault (or one that was away as it was) knows it was, rather
+      // than taking a station's not listing it for it. Nothing for one the viewer was never shown.
+      method: "POST",
+      pattern: /^\/vault\/vaults\/latest$/,
+      handle: async (r) => {
+        const l = locked(r);
+        if (isAnswer(l)) return l;
+        const held = (body(r) as { held?: unknown } | null)?.held;
+        if (!Array.isArray(held) || held.length > 256) return refuse(400, "vault_invalid", "held is a list of vault versions");
+        const latest: Vault[] = [];
+        for (const h of held as Vault[]) {
+          if (h === null || typeof h !== "object" || typeof h.id !== "string" || h.ws !== r.viewer.workspace || !Array.isArray(h.members) || !h.members.includes(r.viewer.sub)) continue;
+          if (!signedOk(h, TAG.vault) || signerOf(l, h.sig.key)?.sub !== h.owner) continue;
+          const v = vaults.vault(l.ws, h.id);
+          if (v !== null && v.owner === h.owner) latest.push(v);
+        }
+        return json(200, JSON.stringify({ vaults: latest }));
+      },
+    },
+    {
       method: "PUT",
       pattern: /^\/vault\/vaults$/,
       handle: async (r) => {
@@ -97,7 +118,8 @@ export const routes = ({ vaults, lock, events, boxed }: VaultDeps): Route[] => {
         vaults.putVault(next);
         tell("vault", next, `vault\0${next.id}`, members(next));
         const gone = (prev?.members ?? []).filter((m) => !next.members.includes(m));
-        if (gone.length > 0) tell("vault-gone", { id: next.id }, `vault-gone\0${next.id}`, { workspace: next.ws, subs: gone });
+        // (the version taking them out told them too: what they check it by)
+        if (gone.length > 0) tell("vault-gone", { id: next.id, vault: next }, `vault-gone\0${next.id}`, { workspace: next.ws, subs: gone });
         return json(200, JSON.stringify({ vault: next }));
       },
     },
