@@ -28,7 +28,7 @@ import { detailQuery } from "../src/store/usage-detail.ts";
 import { installCompactUsage } from "../src/store/usage-compact.ts";
 import { installUsageSummaryBlocks, usageSummaryBlocksRangeScan, usageSummaryBlocksScan } from "../src/store/usage-summary-blocks.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../src/store/remote-runs.ts";
-import { RUNNING_WAIT_JOBS } from "../src/store/active-jobs.ts";
+import { AWAKE_JOBS, RUNNING_WAIT_JOBS } from "../src/store/active-jobs.ts";
 import { HAS_SESSION_ACTIVE_WATCH } from "../src/store/watch-jobs.ts";
 import { RECOVER_AWAKE_WAITS, RECOVER_BACKFILL_FIRST, RECOVER_BACKFILL_NEXT, RECOVER_WAITS } from "../src/store/recover-waits.ts";
 import * as read from "../src/read/store.ts";
@@ -83,6 +83,15 @@ function open(path: string, archive: string | null = null): Store {
 }
 
 const memory = () => open(":memory:");
+
+function assertAwakeJobPlan() {
+  const steps = (memory().db.prepare(`EXPLAIN QUERY PLAN ${AWAKE_JOBS}`).all() as { detail: string }[]).map((r) => r.detail);
+  const detail = steps.join(" | ");
+  assert.ok(steps.some((s) => /^SCAN w\b/.test(s)), detail); // The watch lookup contains only running watches.
+  assert.ok(steps.some((s) => s.startsWith("SEARCH j ") && s.includes("id=?")), detail);
+  assert.ok(steps.some((s) => s.includes("jobs_up") && s.includes("state=?") && s.includes("port=?")), detail);
+  assert.ok(steps.every((s) => !/^SCAN (j|jobs)\b/.test(s)), detail);
+}
 
 function assertRecoveryWaitPlans() {
   const db = memory().db;
@@ -1456,6 +1465,7 @@ test("what the station asks again and again is planned by an index, never a scan
   assertRecentChatPlans();
   assertPendingVaultPlans();
   assertRecoveryWaitPlans();
+  assertAwakeJobPlan();
   const store = memory();
   for (const [sql, value, table, key] of [[ARCHIVE_PIN_EXISTS, "s", "archive_pin_rows", "session"], [ARCHIVE_KEEP_EXISTS, 1, "archive_keep_rows", "thread"]] as const) {
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(value) as { detail: string }[]).map((r) => r.detail);
@@ -1665,6 +1675,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
   assertRecentChatPlans();
   assertPendingVaultPlans();
   assertRecoveryWaitPlans();
+  assertAwakeJobPlan();
   const store = memory();
   // As node's SQLite plans each, over the file the readers read: a chat's unread messages counted from the index of its
   // messages alone; an agent's message during a turn by the index of theirs by time; a session's turns as counted, its
