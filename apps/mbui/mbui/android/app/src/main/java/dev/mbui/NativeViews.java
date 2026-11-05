@@ -2344,7 +2344,7 @@ final class NativeViews {
         /**
          * The page scrolled to the part its frame is, by its own script (main thread). A page's own scroll: the WebView's
          * (WebView.scrollTo) is a user's, which a page whose root does not scroll takes nothing of (as a viz's does not:
-         * ember-viz.css, overflow: hidden), and a picture of its top said to be a part of it far down (0.1.5309).
+         * viz.css, overflow: hidden), and a picture of its top said to be a part of it far down (0.1.5309).
          */
         void scrollToPart() {
             if (web == null || partTop < 0 || atPart(web.getScrollY())) return;

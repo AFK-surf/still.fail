@@ -20,7 +20,7 @@ export class ConfigFile {
 
   constructor(data: string) {
     this.data = data;
-    this.path = process.env.STILLFAIL_CONFIG || process.env.EMBER_CONFIG || join(data, "config.json");
+    this.path = process.env.STILLFAIL_CONFIG || join(data, "config.json");
     this.raw();
   }
 

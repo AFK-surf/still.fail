@@ -1,18 +1,18 @@
 // Inline visualizations: an HTML file an agent attached and placed in its message's text (`[title](figure.html)` on a
-// line of its own), drawn there in a sandboxed frame instead of shown as a card; the ember-viz skill says how agents
+// line of its own), drawn there in a sandboxed frame instead of shown as a card; the stillfail-viz skill says how agents
 // make one. After Codex's Visualize: only a file placed so is drawn, never an html code block, so nothing half written
 // is. A ```mermaid block is drawn the same way, by mermaid loaded into a frame of its own.
 //
 // The frame runs the file's scripts but has no origin of the page's: it cannot reach the page, its storage or the
 // station, and its CSP lets it load scripts and styles from a few public CDNs only, with no requests of its own. The
-// page hands it still.fail's tokens for the theme it shows (viz/ember-viz.css maps them to the names agents write against),
+// page hands it still.fail's tokens for the theme it shows (viz/viz.css maps them to the names agents write against),
 // sizes it to its content (on its own, beside the chat, it is a web service's preview: Preview.tsx), keeps what the widget asks to keep (widgetState, on the station, whose model part reaches
 // the agent with the next message), and puts what it asks to send (sendFollowUpMessage, on a click) in the chat's
 // composer for the person to send.
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import bridge from "./viz/bridge.js?raw";
 import components from "./viz/components.js?raw";
-import stylesheet from "./viz/ember-viz.css?raw";
+import stylesheet from "./viz/viz.css?raw";
 import { useApi, type Attachment } from "./api.ts";
 import { FilePreview, useFileText } from "./FilePreview.tsx";
 import { Expand, PanelOpen } from "@stillfail/ui/icons.tsx";
@@ -127,7 +127,7 @@ function documentOf(html: string, state: unknown): string {
     + `<meta http-equiv="Content-Security-Policy" content="${csp(sheets)}">`
     + sheets.map((href) => `<link rel="stylesheet" href="${href.replace(/[<>"&]/g, "")}">`).join("")
     + `<style>:root{color-scheme:${theme};${vars}}</style><style>${stylesheet}</style>`
-    + `<script type="application/json" id="ember-viz-state">${scriptJson({ widgetState: state })}</script>`
+    + `<script type="application/json" id="viz-state">${scriptJson({ widgetState: state })}</script>`
     + `<script type="application/json" id="viz-icons">${ICONS}</script>`
     + `<script>${bridge}</script><script>${components}</script></head><body>${html}</body></html>`;
 }
@@ -143,7 +143,7 @@ function pageDocument(html: string): string {
   return at ? html.slice(0, at.index + at[0].length) + head + html.slice(at.index + at[0].length) : head + html;
 }
 
-/** Whether an HTML file is a fragment (as the ember-viz skill has agents write them), to be drawn in the stylesheet. */
+/** Whether an HTML file is a fragment (as the stillfail-viz skill has agents write them), to be drawn in the stylesheet. */
 export function isFragment(html: string): boolean {
   return !/<!doctype|<html[\s>]/i.test(html.slice(0, 2048));
 }
@@ -184,9 +184,9 @@ export function useVizMessages(wins: () => Window[], { origin = "*", draftKey: g
   latest.current = { wins, origin, draftKey, toast, onHeight, onState, onError, onReady };
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
-      const data = event.data as { emberViz?: boolean; type?: string; [k: string]: unknown } | null;
+      const data = event.data as { vizMessage?: boolean; type?: string; [k: string]: unknown } | null;
       const { wins, origin, draftKey, toast, onHeight, onState, onError, onReady } = latest.current;
-      if (!data?.emberViz || !wins().includes(event.source as Window) || (origin !== "*" && event.origin !== origin)) return;
+      if (!data?.vizMessage || !wins().includes(event.source as Window) || (origin !== "*" && event.origin !== origin)) return;
       if (data.type === "height" && typeof data.height === "number") onHeight?.(data.height);
       if (data.type === "state" && JSON.stringify(data.state ?? null).length <= MAX_STATE) onState?.(data.state ?? null);
       if (data.type === "failed" && typeof data.message === "string") onError?.(data.message);
@@ -200,7 +200,7 @@ export function useVizMessages(wins: () => Window[], { origin = "*", draftKey: g
     addEventListener("message", onMessage);
     return () => removeEventListener("message", onMessage);
   }, []);
-  useThemeChange(() => { for (const win of latest.current.wins()) win.postMessage({ emberViz: true, type: "theme", tokens: tokens(), scheme: scheme(), sheets: faceSheets() }, latest.current.origin); });
+  useThemeChange(() => { for (const win of latest.current.wins()) win.postMessage({ vizMessage: true, type: "theme", tokens: tokens(), scheme: scheme(), sheets: faceSheets() }, latest.current.origin); });
 }
 
 /**
@@ -358,7 +358,7 @@ const MERMAID = "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mj
 function mermaidDocument(code: string): string {
   return `<pre class="mermaid-src" hidden>${code.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre><div id="chart" style="display:flex;justify-content:center"></div>
 <script type="module">
-  const post = (m) => parent.postMessage({ emberViz: true, ...m }, "*");
+  const post = (m) => parent.postMessage({ vizMessage: true, ...m }, "*");
   const source = document.querySelector(".mermaid-src").textContent;
   let mermaid;
   try { mermaid = (await import("${MERMAID}")).default; } catch (e) { post({ type: "failed", message: ${JSON.stringify(t("web-main.viz.mermaidFailed"))} }); }
@@ -385,7 +385,7 @@ function mermaidDocument(code: string): string {
       chart.innerHTML = svg;
     } catch (e) { post({ type: "failed", message: String(e?.message ?? e) }); }
   }
-  addEventListener("ember-viz:theme", draw);
+  addEventListener("viz:theme", draw);
   // After the observer's turn: drawing in it changes the layout it reports on.
   new ResizeObserver(() => { if (waiting && chart.clientWidth) setTimeout(draw); }).observe(chart);
   draw();

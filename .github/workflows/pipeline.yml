@@ -1059,7 +1059,7 @@ jobs:
           target=$(cat "$HOME/.stillfail/agent/skills/stillfail/station-update-host")
           test -n "$target"
           printf '::add-mask::%s\n' "$target"
-          ssh -o BatchMode=yes "$target" 'env -u EMBER_DATA -u STILLFAIL_DATA STILLFAIL_CHANNEL=beta ~/.local/bin/stillfail update --beta > /tmp/ember-station-update.log 2>&1 && tail -2 /tmp/ember-station-update.log'
+          ssh -o BatchMode=yes "$target" 'env -u STILLFAIL_DATA STILLFAIL_CHANNEL=beta ~/.local/bin/stillfail update --beta > /tmp/ember-station-update.log 2>&1 && tail -2 /tmp/ember-station-update.log'
 
   # The changelog, when nothing was released (put, which puts it after the releases, did not run): a fix in still.fail
   # cloud counts as out as soon as it is listed, not before the API carrying it is deployed.

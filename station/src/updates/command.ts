@@ -14,12 +14,12 @@ import { setChannel } from "./channel.ts";
 import { planUpdate } from "./release.ts";
 import { type Channel, channelOf, releaseChannel } from "./versions.ts";
 
-const configPath = (data: string) => process.env.STILLFAIL_CONFIG || process.env.EMBER_CONFIG || join(data, "config.json");
+const configPath = (data: string) => process.env.STILLFAIL_CONFIG || join(data, "config.json");
 
 /// Where the releases of the control plane the station is in are (cloud.json: its origin, and Comma's under
-/// /stations); none before it joined one. Before the station first ran, its data may still be at the old place.
+/// /stations); none before it joined one.
 export function releaseBaseIn(data: string): string | null {
-  for (const file of [join(data, "mesh", "cloud.json"), join(homedir(), ".ember", "mesh", "cloud.json")]) {
+  for (const file of [join(data, "mesh", "cloud.json")]) {
     let said: any;
     try {
       said = JSON.parse(readFileSync(file, "utf8"));

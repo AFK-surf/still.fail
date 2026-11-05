@@ -272,12 +272,12 @@ const host: Host = {
 /// A PowerShell string of `s`.
 const q = (s: string) => `'${s.replaceAll("'", "''")}'`;
 
-/// run/update.ps1 (startInstaller): the STILLFAIL_ (and EMBER_DATA) variables of `env`, then run/install.ps1 (the
+/// run/update.ps1 (startInstaller): the STILLFAIL_ variables of `env`, then run/install.ps1 (the
 /// installer the release carries, copied there) run, what it says (both streams, UTF-8) in run/update.log and its exit
 /// in run/update.exit, then `task` removed. With a BOM, as PowerShell 5.1 reads a file of non-ASCII words.
 export function windowsUpdateScript(runDir: string, env: Record<string, string>, task: string): string {
   return String.fromCharCode(0xfeff) + `${[
-    ...Object.entries(env).filter(([k]) => k.startsWith("STILLFAIL_") || k === "EMBER_DATA").map(([k, v]) => `$env:${k} = ${q(v)}`),
+    ...Object.entries(env).filter(([k]) => k.startsWith("STILLFAIL_")).map(([k, v]) => `$env:${k} = ${q(v)}`),
     "[Console]::OutputEncoding = [Text.Encoding]::UTF8",
     `$run = ${q(runDir)}`,
     "$log = Join-Path $run 'update.log'",
@@ -481,7 +481,7 @@ export const windows: Platform = {
       const name = execFileSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", `(Get-Process -Id ${pid} -ErrorAction Stop).ProcessName`], {
         encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], windowsHide: true,
       }).trim();
-      return /^(stillfail|ember)-station(-w)?$/i.test(name);
+      return /^stillfail-station(-w)?$/i.test(name);
     } catch {
       return false;
     }

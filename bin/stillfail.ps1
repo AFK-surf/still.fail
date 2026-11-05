@@ -6,10 +6,10 @@
 #   stillfail station enroll <cloud-origin> <token> [--provider comma]
 #   stillfail station id
 #   stillfail lock status|reset                   the workspace lock on this station (docs/workspace-lock.md)
-# The data is in $env:STILLFAIL_DATA (else $env:EMBER_DATA), default ~\.stillfail.
+# The data is in $env:STILLFAIL_DATA, default ~\.stillfail.
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $PSScriptRoot
-$data = if ($env:STILLFAIL_DATA) { $env:STILLFAIL_DATA } elseif ($env:EMBER_DATA) { $env:EMBER_DATA } else { Join-Path $env:USERPROFILE '.stillfail' }
+$data = if ($env:STILLFAIL_DATA) { $env:STILLFAIL_DATA } else { Join-Path $env:USERPROFILE '.stillfail' }
 $station = if ($env:STILLFAIL_STATION_BIN) { $env:STILLFAIL_STATION_BIN } else { Join-Path $here 'mesh\target\release\stillfail-station.exe' }
 $usage = 'usage: stillfail start [--port N] | stillfail status | stillfail update [--beta|--stable] | stillfail station enroll <cloud-origin> <token> [--provider comma] | stillfail station id | stillfail lock status|reset'
 $a = @($args)

@@ -47,8 +47,8 @@ export const PLANS = {
 } as const;
 export type Plan = keyof typeof PLANS;
 
-/** The events socket's subprotocols (api.ts socketToken), the new one first: clients from before the rename say "ember-events". */
-export const EVENTS_PROTOCOLS = ["stillfail-events", "ember-events"] as const;
+/** The events socket's subprotocols (api.ts socketToken). */
+export const EVENTS_PROTOCOLS = ["stillfail-events"] as const;
 /** How long a revocation is kept and told: a day more than a credential lasts (grants.ts). */
 const REVOCATION_DAYS = 31;
 
@@ -1475,9 +1475,7 @@ export class Directory extends DurableObject<Env> {
    * Upgrades reach here only through the Worker, which has authenticated
    * them: `/events` names the account in `x-stillfail-sub` (and the
    * subprotocol to select in `x-stillfail-protocol`), `/stations/connect` the
-   * station (whose signature it checked) in `x-stillfail-station`. (The
-   * x-ember-* ones are read too: a Worker from before the rename may still be
-   * passing a request on while this object already runs the new code.)
+   * station (whose signature it checked) in `x-stillfail-station`.
    */
   async fetch(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname;

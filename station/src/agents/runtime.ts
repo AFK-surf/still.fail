@@ -124,8 +124,8 @@ export type BackgroundTask = { id: string; kind: "agent" | "command"; descriptio
 /// where it stands (completed, in_progress, or anything else: still to do).
 export type PlanItem = { text: string; status: string };
 
-/// The station's tools by their server's name (before the rename: ember).
-export const TOOL_SERVERS = ["stillfail", "ember"];
+/// The station's tools by their server's name.
+export const TOOL_SERVERS = ["stillfail"];
 
 /// A tool call's error that says the station's tools could not be reached at all (not that the tool refused).
 export function unreachable(text: string): boolean {

@@ -61,7 +61,7 @@ function hermesUpdate(update: Json): Json {
   if (update?.sessionUpdate !== "tool_call" || typeof update.title !== "string") return update;
   const name = update.title.split(": ", 1)[0]!;
   // Hermes 0.22 scopes editor MCP servers by session: keep our tools recognisable across those hashes.
-  const title = name.replace(/^mcp__editor_(stillfail|ember)_[0-9a-f]{8}__/, "mcp__$1__");
+  const title = name.replace(/^mcp__editor_stillfail_[0-9a-f]{8}__/, "mcp__stillfail__");
   return { ...update, title };
 }
 

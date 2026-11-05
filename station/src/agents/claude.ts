@@ -22,7 +22,7 @@ import { LiveFromClaude, chars, type ClaudeLiveState } from "./live.ts";
 import { CLAUDE_TOKEN_MARGIN_MS, machineClaudeToken, type Env, type MachineToken } from "./machine-logins.ts";
 import { fileCredentials, takeBack } from "./no-keychain.ts";
 import { type Events, OwnProcessDriver, OwnProcessSession, parseLine } from "./own-process.ts";
-import { bothNames, expandRoute, isMachine, keyFile, profileEnv, profileFast, profileModel, takesFast } from "./profiles.ts";
+import { expandRoute, isMachine, keyFile, profileEnv, profileFast, profileModel, takesFast } from "./profiles.ts";
 import type { RunnerInfo } from "./runner.ts";
 import { OVERLOADED, TOOL_SERVERS, cleanEnv, failureRest, unreachable, uuid, type BackgroundTask, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import { wall } from "../ops/fibers.ts";
@@ -336,7 +336,7 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
     // Web services of the workspace's other stations: <this>/<station>/<port>/<path> (mesh/peer-http.ts).
     env.STILLFAIL_PEER_HTTP = peerHttpBase(options.mcpUrl);
     // Lets the agent name its own transcript, e.g. for an independent reviewer (codex has CODEX_THREAD_ID).
-    for (const name of bothNames("RUNTIME_SESSION_ID")) env[name] = sessionId;
+    env.STILLFAIL_RUNTIME_SESSION_ID = sessionId;
     // A machine profile runs on the machine's own login, handed over as its current token (machine_logins.rs).
     // Another station's subscription the same way, with the token that station lends.
     const renew = this.renewer(options.profile);

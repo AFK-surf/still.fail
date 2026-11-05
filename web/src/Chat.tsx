@@ -1465,7 +1465,7 @@ function ProseWithFiles({ text, md, files, session = null, from }: {
 
 /**
  * A file the text places on a line of its own: an HTML one is a visualization, drawn there (Viz.tsx; how agents make
- * one is the ember-viz skill), any other shows as below the text.
+ * one is the stillfail-viz skill), any other shows as below the text.
  */
 function PlacedFile({ sessionKey, file }: { sessionKey: string | null; file: Attachment }) {
   const tick = useContext(FileTick);

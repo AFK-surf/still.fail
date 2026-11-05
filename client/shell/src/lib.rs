@@ -27,7 +27,6 @@ use tokio_tungstenite::tungstenite::{Error as WsError, Message};
 mod adb;
 
 const MDNS_SERVICE: &str = "stillfail";
-const FORMER_MDNS_SERVICE: &str = "ember";
 
 /// `complete(ctx, id, json, json_len, error, error_len, bytes, bytes_len, has_bytes)`: an operation's answer, its JSON
 /// (when it succeeded) or its error, and its bytes if it has any. Called on any thread.
@@ -1140,7 +1139,6 @@ impl Inner {
         if a.get("lookup").and_then(Value::as_bool).unwrap_or(false) && !relays.is_empty() {
             builder = builder
                 .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE).advertise(false))
-                .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE).advertise(false))
                 .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().no_publish());
         }
         let endpoint = builder.bind().await.map_err(err)?;

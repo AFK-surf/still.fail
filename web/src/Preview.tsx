@@ -15,7 +15,7 @@ import { useHref } from "react-router";
 import { useLink } from "./station.tsx";
 import { core } from "./core/react.ts";
 import { useJob } from "./api.ts";
-import { bridge, type Answer, type Asked } from "./previewBridge.ts";
+import { bridge, fromPreview, toPreview, type Answer, type Asked } from "./previewBridge.ts";
 import * as css from "./Preview.css.ts";
 import { useMarks } from "./annotate/Marks.tsx";
 import { Tip, WaitLine } from "./ui.tsx";
@@ -185,8 +185,8 @@ function Restart({ name, restarting, reload }: { name: string; restarting: Resta
 }
 
 /**
- * The bar over a frame that keeps the service's history (cloud/src/preview.ts): it says where the service is and whether it can go back or on (ember-preview-at), and is
- * told where to go (ember-preview-nav). `frame` is the frame at `origin`, loaded with `src`.
+ * The bar over a frame that keeps the service's history (cloud/src/preview.ts): it says where the service is and whether it can go back or on (stillfail-preview-at), and is
+ * told where to go (stillfail-preview-nav). `frame` is the frame at `origin`, loaded with `src`.
  */
 function Framed({ name, external, restarting, draftKey, viewKey, origin, src, nonce, frame, fixed = false, loading }:
   Omit<Shown, "station" | "port" | "service" | "file"> & { viewKey: string | undefined; origin: string | null; src: string | null; nonce: string; frame: RefObject<HTMLIFrameElement | null>; fixed?: boolean; loading?: ReactNode }) {
@@ -202,7 +202,7 @@ function Framed({ name, external, restarting, draftKey, viewKey, origin, src, no
     if (!origin) return;
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== origin || event.source !== frame.current?.contentWindow || event.data?.nonce !== nonce) return;
-      if (event.data?.type !== "ember-preview-at" || typeof event.data.path !== "string") return;
+      if (!fromPreview(event.data, "at") || typeof event.data.path !== "string") return;
       setAt(event.data.path);
       setMoves({ back: event.data.back === true, forward: event.data.forward === true });
       setMarkable(event.data.annotate === true);
@@ -211,7 +211,7 @@ function Framed({ name, external, restarting, draftKey, viewKey, origin, src, no
     return () => window.removeEventListener("message", onMessage);
   }, [origin, nonce, frame]);
   const nav = useCallback((action: "back" | "forward" | "reload" | "go", path?: string) => {
-    if (origin) frame.current?.contentWindow?.postMessage({ type: "ember-preview-nav", action, path }, origin);
+    if (origin) frame.current?.contentWindow?.postMessage({ type: toPreview("nav"), action, path }, origin);
   }, [origin, frame]);
   const reload = useCallback(() => nav("reload"), [nav]);
   return (
@@ -248,11 +248,11 @@ function WebPreview({ station, port, file: _, serve, frame: given, fixed = false
     const bridges: (() => void)[] = [];
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== ORIGIN || event.source !== frame.current?.contentWindow || event.data?.nonce !== nonce) return;
-      if (event.data?.type !== "ember-preview-ready") return;
+      if (!fromPreview(event.data, "ready")) return;
       const { port1, port2 } = new MessageChannel();
       const streams = event.data.streams === true;
       bridges.push(bridge(port1, { call, station, service: port, serve: () => served.current, streams }));
-      frame.current?.contentWindow?.postMessage({ type: "ember-preview-port", streams }, ORIGIN, [port2]);
+      frame.current?.contentWindow?.postMessage({ type: toPreview("port"), streams }, ORIGIN, [port2]);
     };
     window.addEventListener("message", onMessage);
     return () => {
@@ -260,7 +260,7 @@ function WebPreview({ station, port, file: _, serve, frame: given, fixed = false
       for (const stop of bridges) stop();
     };
   }, [nonce, station, port, call]);
-  return <Framed {...shown} loading={port ? <PreviewLoad station={station} port={port} /> : undefined} viewKey={shown.service && previewKey(station, shown.service)} origin={ORIGIN} src={`${ORIGIN}/_ember/frame?n=${nonce}&path=${encodeURIComponent(first)}`} nonce={nonce} frame={frame} fixed={fixed} />;
+  return <Framed {...shown} loading={port ? <PreviewLoad station={station} port={port} /> : undefined} viewKey={shown.service && previewKey(station, shown.service)} origin={ORIGIN} src={`${ORIGIN}/_stillfail/frame?n=${nonce}&path=${encodeURIComponent(first)}`} nonce={nonce} frame={frame} fixed={fixed} />;
 }
 
 /** A web service on a page of its own (its "open on its own"): the whole window with its bar, found by its job. */
