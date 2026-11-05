@@ -150,10 +150,21 @@ let glyph_blink_faces : Array[Double] = [0.0, 2300.0, 2400.0, 2500.0]
 let glyph_breath_period : Double = 1400.0
 
 ///|
-/// The stations' glyph `size` square in `tint` (failing ones' dots in `red`). It blinks while a station works and an
-/// arc breathes while a link is on its way (endless decorations, Ctx::cycle: resident, up as long as Home is, so on the
-/// one clock's steps); still with motion reduced.
-pub fn station_glyph(c : @ui.Ctx, g : GlyphCounts, size : Double, tint : Int64, red : Int64) -> Int {
+/// What the stations' glyph is drawn of (station_glyph's, station_glyph_node's): its key, what stays (the ring, the
+/// dots, the face where it does not blink), the breathing arcs, the face with its eyes as open as said, whether it
+/// blinks and breathes.
+priv struct GlyphParts {
+  key : String
+  layers : Array[@pixels.VectorPath]
+  breaths : Array[@pixels.VectorPath]
+  face : (Double) -> @pixels.VectorPath
+  blink : Bool
+  breathing : Bool
+}
+
+///|
+/// The parts of the stations' glyph for counts `g` in `tint` (failing ones' dots in `red`).
+fn glyph_parts(g : GlyphCounts, tint : Int64, red : Int64) -> GlyphParts {
   let (arcs, dots) = glyph_layout(g)
   let still = @ui.reduced_motion()
   let blinking = if g.asleep { 0 } else { g.working }
@@ -203,6 +214,15 @@ pub fn station_glyph(c : @ui.Ctx, g : GlyphCounts, size : Double, tint : Int64, 
     layers.push(face(1.0))
   }
   let key = "glyph-state/\{g.online}/\{g.dim}/\{g.failing}/\{g.connecting}/\{g.asleep}/\{blinking}/\{blink}/\{breathing}/\{red}/\{tint}"
+  { key, layers, breaths, face, blink, breathing }
+}
+
+///|
+/// The stations' glyph `size` square in `tint` (failing ones' dots in `red`). It blinks while a station works and an
+/// arc breathes while a link is on its way (endless decorations, Ctx::cycle: resident, up as long as Home is, so on the
+/// one clock's steps); still with motion reduced.
+pub fn station_glyph(c : @ui.Ctx, g : GlyphCounts, size : Double, tint : Int64, red : Int64) -> Int {
+  let { key, layers, breaths, face, blink, breathing } = glyph_parts(g, tint, red)
   if !breathing && !blink {
     return draw_drawable(c, key, { w: 24.0, h: 24.0, layers }, size, None)
   }
@@ -366,3 +386,64 @@ fn glyph_icon_of(g : GlyphCounts) -> String {
 ///|
 /// The ring's track in the system's bars: fainter than the ink, as it is drawn, but seen on its glass.
 let glyph_icon_track : Double = 0.3
+
+///|
+/// The stations' glyph as a node (station_glyph's): `size` square, for counts `g()` in `tint()` (failing ones' dots in
+/// `red()`), each as it changes; blinking and breathing on the resident clock's steps (View::cycle_resident), as the
+/// old view's looks by the clock were: what holds it not built again for them. The node.
+pub fn station_glyph_node(
+  parent : @view.View,
+  g : () -> GlyphCounts,
+  size : Double,
+  tint : () -> Int64,
+  red : () -> Int64,
+) -> @view.View {
+  let parts = fn() { glyph_parts(g(), tint(), red()) }
+  let drawn = fn(layers : Array[@pixels.VectorPath]) -> @pixels.Vector { { w: 24.0, h: 24.0, layers } }
+  parent.box(fn(v) {
+    v.width(Is(Some(size))).height(Is(Some(size))) |> ignore
+    v.box(fn(base) {
+      base.over(Is(true)).width(Is(Some(size))).height(Is(Some(size))).picture(By(fn() { Some(drawn(parts().layers)) }))
+      |> ignore
+    })
+    |> ignore
+    v.show(fn() { parts().breathing }, fn(b) {
+      b
+      .over(Is(true))
+      .width(Is(Some(size)))
+      .height(Is(Some(size)))
+      .picture(By(fn() { Some(drawn(parts().breaths)) }))
+      .alpha(By(fn() {
+        let p = b.cycle_resident(glyph_breath_period) * 2.0
+        let p = if p < 1.0 { p } else { 2.0 - p }
+        ((glyph_track + (0.85 - glyph_track) * standard_at(p)) * 20.0).round() / 20.0
+      }))
+      |> ignore
+    })
+    v.show(fn() { parts().blink }, fn(k) {
+      for i, from in glyph_blink_faces {
+        let to = if i + 1 < glyph_blink_faces.length() { glyph_blink_faces[i + 1] } else { glyph_blink_period }
+        let eye = glyph_blink_eye(from)
+        k.box(fn(f) {
+          f
+          .over(Is(true))
+          .width(Is(Some(size)))
+          .height(Is(Some(size)))
+          .picture(By(fn() { Some(drawn([(parts().face)(eye)])) }))
+          .alpha(By(fn() {
+            // (the step of the clock it is at, in the blink's loop)
+            let t = (f.cycle_resident(glyph_blink_period) * glyph_blink_period / @ui.cycle_step_ms).round() *
+              @ui.cycle_step_ms
+            if t >= from && t < to {
+              1.0
+            } else {
+              0.0
+            }
+          }))
+          |> ignore
+        })
+        |> ignore
+      }
+    })
+  })
+}

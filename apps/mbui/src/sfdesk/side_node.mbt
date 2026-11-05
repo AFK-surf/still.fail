@@ -44,7 +44,7 @@ fn side_made(place : String) -> Bool {
 ///|
 /// The chats' sidebar (lists_side's) in node `s` as wide as the sidebar: the lists (sfpages' chats_lists_node: 全部,
 /// 我参与的, 监控中, then 已归档 on its track) under the band (新建对话 and the filter) and over the foot; the band, the
-/// foot and 已归档's list their old views, hosted.
+/// foot nodes too; 已归档's list its old view, hosted.
 fn lists_side_node(s : @view.View, src : Source, tips : @sf.TipLayer, at : () -> SideAt) -> Unit {
   let workspace = fn() { @sfbase.workspace_in_view(src).0 }
   let mode = fn() {
@@ -112,7 +112,7 @@ fn lists_side_node(s : @view.View, src : Source, tips : @sf.TipLayer, at : () ->
     @sfpages.chats_lists_node(lists, src, workspace, frame, tips, fn() { 0 })
   })
   |> ignore
-  // the band over the lists (beside the system's tabs, its old view), the foot under them (its old view): each only
+  // the band over the lists (beside the system's tabs, its old view), the foot under them: each only
   // as tall as it is, the lists under them the rest (what the pointer is over and a press takes there)
   s.box(fn(o) {
     o.over(Is(true)).alpha(By(fn() { 1.0 - away() })) |> ignore
@@ -132,14 +132,7 @@ fn lists_side_node(s : @view.View, src : Source, tips : @sf.TipLayer, at : () ->
       }
     })
     o.box(fn(between) { between.grow(Is(1.0)) |> ignore }) |> ignore
-    @ui.old(o, fn(c) {
-      match workspace() {
-        Some(w) => lists_foot(c, src, w)
-        None => ()
-      }
-    }, natural=true)
-    |> @ui.old_takes_own
-    |> ignore
+    lists_foot_node(o, src, tips, workspace, at)
   })
   |> ignore
   s.show(@sfpages.search_on_lists, fn(k) {
@@ -149,7 +142,7 @@ fn lists_side_node(s : @view.View, src : Source, tips : @sf.TipLayer, at : () ->
 
 ///|
 /// The band over the chats' lists (lists_band's) in `o`, where `at` says the block has it: on the sidebar's own ground
-/// (the closed bar's as it closes), its top row, then 新建对话, what is catching up (its old view), the update where one
+/// (the closed bar's as it closes), its top row, then 新建对话, what is catching up, the update where one
 /// is offered and the filter (with stations to narrow) on one line; 待处理 under them where the rail has no bell.
 fn lists_band_node(
   o : @view.View,
@@ -188,25 +181,15 @@ fn lists_band_node(
         })
       })
       |> ignore
-      // catching up on what changed while away (its old view)
+      // catching up on what changed while away (sync_key_node, only while it is: no tick once it stops, as the old
+      // view's was here)
       line.show(fn() { view().map(fn(v) { v.syncing is Some(_) }).unwrap_or(false) }, fn(k) {
-        // (as wide as it is laid out, told by the old frame)
-        let wide : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
-        k.shrink(Is(0.0)).width(By(fn() { wide.get() })) |> ignore
-        @ui.old(
-          k,
-          fn(c) {
-            let said = match view() {
-              Some({ syncing: Some(y), .. }) => y
-              _ => ""
-            }
-            @sf.sync_key(c, "side/syncing", update_key_side, update_key_mark, true, said)
-          },
-          natural=true,
-          fits=(update_key_side, wide),
-        )
-        |> @ui.old_takes_own
-        |> ignore
+        @sf.sync_key_node(k, tips, update_key_side, update_key_mark, fn() { true }, fn() {
+          match view() {
+            Some({ syncing: Some(y), .. }) => y
+            _ => ""
+          }
+        })
       })
       // 更新 before the filter where one is offered (brand.mbt update_in_row)
       line.show(update_shown, fn(k) {
@@ -311,3 +294,107 @@ fn lists_band_node(
   |> ignore
 }
 
+
+///|
+/// The lists' foot band (lists_foot's) in `o`, where `at` says the block has it: what is wrong with the stations
+/// (their glyph and its words, red while one fails, leading to them) and 运行中 N (the services left up long, their
+/// panel over it); nothing when neither is, nor with the bell in the rail (they are in its panel). On the sidebar's own
+/// ground, the closed bar's as it closes, as the band over the lists.
+fn lists_foot_node(
+  o : @view.View,
+  src : Source,
+  tips : @sf.TipLayer,
+  workspace : () -> Workspace?,
+  at : () -> SideAt,
+) -> Unit {
+  ignore(tips)
+  let chats = fn() {
+    match workspace() {
+      Some(w) => (src.topic)("chats", { "scope": Json::string(w.id), "mine": Json::boolean(false) }).value
+      None => None
+    }
+  }
+  let trouble = fn() { field(chats(), "trouble") }
+  let jobs = fn() {
+    match workspace() {
+      Some(w) => long_jobs(src, w)
+      None => 0
+    }
+  }
+  let shown = fn() {
+    match workspace() {
+      Some(w) => !rail_items(src, w.id).contains("attention") && !(trouble() is None && jobs() == 0)
+      None => false
+    }
+  }
+  o.show(shown, fn(f) {
+    f.box(fn(band) {
+      @sf.style_node(band, fn() { foot_band })
+      band.ground(By(fn() { @sf.mix(apart_ground(), at().band, @sf.theme().p.sidebar) })) |> ignore
+      // what is wrong with the stations, leading to them
+      // (the shown node itself the row: what holds it in the band takes what the band leaves, as foot_trouble's w=Full)
+      band.show(fn() { trouble() is Some(Object(_)) }, fn(r) {
+        @sf.style_node(r, fn() { foot_trouble }, in_row=true)
+        r.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
+        r.ground(By(fn() { if @sf.lit_node(r) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
+        @sf.pressed_node(r, fn() { @sfbase.go_place("stations") |> ignore }, By(fn() { @ui.tree_theme().corner(@sf.side_row_radius) }), Button, fn() {
+          text(trouble(), "text")
+        })
+        @sf.station_glyph_node(
+          r,
+          fn() {
+            match workspace() {
+              Some(w) => stations_at_glance(src, w.id).0
+              None => { online: 0, dim: 0, failing: 0, working: 0, asleep: false, connecting: 0 }
+            }
+          },
+          foot_glyph,
+          fn() { @sf.theme().p.text },
+          fn() { @sf.theme().p.red },
+        )
+        |> ignore
+        r.box(fn(w) {
+          w.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
+          @sf.words_node(w, fn() { text(trouble(), "text") }, fn() {
+            if text(trouble(), "state") == "error" {
+              foot_trouble_red
+            } else {
+              foot_trouble_words
+            }
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      // 运行中 N: the services left up long, their panel over it
+      band.show(fn() { jobs() > 0 }, fn(k) {
+        let chip = k.box(fn(c) {
+          @sf.style_node(c, fn() { foot_chip }, in_row=true)
+          @sf.pressed_node(c, fn() { wide.jobs_open.set(!@signals.untracked(fn() { wide.jobs_open.get() })) }, Is(1.0e6), Button, fn() {
+            @sf.t("web-main.jobs.long")
+          })
+          c.box(fn(d) { @sf.style_node(d, fn() { foot_chip_dot }) }) |> ignore
+          @sf.words_node(c, fn() { @sf.t("web-main.jobs.chip", args=[("n", jobs().to_string())]) }, fn() { foot_chip_words })
+          |> ignore
+        })
+        @sf.panel_by_node(
+          k,
+          "side/open-jobs",
+          fn() { jobs() > 0 && wide.jobs_open.get() },
+          fn(_) { chip },
+          fn(c, _) {
+            match @signals.untracked(workspace) {
+              Some(w) => open_jobs(c, src, w)
+              None => ()
+            }
+          },
+          fn() { wide.jobs_open.set(false) },
+          w=open_jobs_pop_w,
+          side=Top,
+          along=End,
+        )
+      })
+    })
+    |> ignore
+  })
+}
