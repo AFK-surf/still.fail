@@ -8,7 +8,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { type Entry, admit, apply, canonical, devicesFor, endpointBytes, entryHash, fold, genesis, LockRefusal, memberWithEmail, shortCode, signedBytes } from "../src/cloud/lock.ts";
+import { type Entry, admit, apply, canonical, devicesFor, endpointBytes, entryHash, fold, genesis, LockRefusal, memberWithEmail, membersWithEmail, shortCode, signedBytes } from "../src/cloud/lock.ts";
 import { applyState } from "../src/cloud/presence.ts";
 import { Cloud, writeState } from "../src/cloud/state.ts";
 import { verifyMember } from "../src/mesh/credential.ts";
@@ -84,6 +84,10 @@ test("person and device lookups follow each lock snapshot", () => {
   assert.equal(memberWithEmail(removed, "new@x"), null);
   assert.deepEqual(devicesFor(removed, "bob"), []);
   assert.deepEqual(devicesFor(changed, "bob"), [w.bob.base.hex]);
+  const sameEmail = apply(changed, signed(after(changed, "member", { sub: "carol", email: "NEW@x", role: "member" }), w.alice.signer), 2000);
+  assert.deepEqual(membersWithEmail(sameEmail, "new@x").map((m) => m.sub), ["bob", "carol"]);
+  assert.equal(memberWithEmail(sameEmail, "new@x")?.sub, "bob");
+  assert.deepEqual(membersWithEmail(changed, "new@x").map((m) => m.sub), ["bob"]);
 });
 
 test("who may sign what: admins manage, members add only their own devices, owners alone touch owners", () => {

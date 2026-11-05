@@ -38,12 +38,12 @@ function signed<T extends Record<string, unknown>>(o: T, tag: string, key: Key):
 }
 
 /// A lock: alice and bob, each with a device; alice's vault, keyed to her device.
-function world(otherDevices = 0) {
+function world(otherDevices = 0, sameEmail = false) {
   const [alice, bob] = ["alice", "bob"].map((sub) => ({ sub, signer: ed(), base: ed(), box: newBoxPair() })) as [Person, Person];
   const extras = Array.from({ length: otherDevices }, (_, i) => ({ id: i.toString(16).padStart(64, "0"), sub: "bob", kind: "app", label: "bob", sign_key: bob.signer.id }));
   const body = {
     owner: "alice", origins: ["https://app.still.fail"], rp_id: "app.still.fail", cloud_keys: { keys: [] },
-    members: [{ sub: "alice", email: "alice@x.com", role: "owner" }, { sub: "bob", email: "bob@x.com", role: "member" },
+    members: [{ sub: "alice", email: "alice@x.com", role: "owner" }, { sub: "bob", email: sameEmail ? "alice@x.com" : "bob@x.com", role: "member" },
       ...Array.from({ length: otherDevices }, (_, i) => ({ sub: `other-${i}`, email: `other-${i}@x.com`, role: "member" }))],
     devices: [...[alice, bob].map((p) => ({ id: p.base.hex, sub: p.sub, kind: "app", label: p.sub, sign_key: p.signer.id })), ...extras],
     passkeys: [], stations: [], gateways: [],
@@ -409,6 +409,206 @@ test("a device registered during a handover receives a save the old process has 
     rmSync(h.dir, { recursive: true, force: true });
   }
 });
+
+for (const legacy of [false, true]) for (const afterExit of [false, true]) {
+  test(`a device registered before ${legacy ? "an older" : "a scoped"} handover arrives receives its save${afterExit ? " even when the handover arrives after exit" : ""}`, async () => {
+    const w = world();
+    const h = harness(() => w.state);
+    let exited!: () => void;
+    const previousGone = new Promise<void>((resolve) => { exited = resolve; });
+    try {
+      let next!: Secrets;
+      let carried!: ReturnType<Secrets["carried"]>;
+      h.onPost(() => {
+        h.onPost(null);
+        next = h.make({ previousGone });
+        carried = JSON.parse(JSON.stringify(h.secrets.carried()));
+        if (legacy) carried.unsaved = carried.unsaved.map(([id, fields]) => [id, fields]);
+        const cert = w.cert(w.alice);
+        h.vaults.putBox(cert);
+        next.boxed(w.state, cert);
+        if (!afterExit) {
+          next.carry(carried);
+          next.reboxed();
+        }
+      });
+      await h.secrets.save("s1", { name: "Early device", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+      exited();
+      await tick();
+      if (afterExit) {
+        next.carry(carried);
+        next.reboxed();
+        await tick();
+      }
+      const [request] = pendingOf(next, w.state, "alice@x.com");
+      assert.ok(request);
+      assert.deepEqual(opened(request, w.alice), { value: "sample" });
+    } finally {
+      exited();
+      rmSync(h.dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test("an early device of another member with the same email receives a carried save", async () => {
+  const w = world(0, true);
+  const h = harness(() => w.state);
+  let exited!: () => void;
+  const previousGone = new Promise<void>((resolve) => { exited = resolve; });
+  try {
+    let next!: Secrets;
+    h.onPost(() => {
+      h.onPost(null);
+      next = h.make({ previousGone });
+      const cert = w.cert(w.bob);
+      h.vaults.putBox(cert);
+      next.boxed(w.state, cert);
+      next.carry(JSON.parse(JSON.stringify(h.secrets.carried())));
+      next.reboxed();
+    });
+    await h.secrets.save("s1", { name: "Shared email", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    exited();
+    await tick();
+    const [request] = pendingOf(next, w.state, "alice@x.com");
+    assert.ok(request);
+    assert.deepEqual(opened(request, w.bob), { value: "sample" });
+  } finally {
+    exited();
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+for (const legacy of [false, true, "mixed"] as const) test(`an early device tells ${legacy === "mixed" ? "mixed older and scoped" : legacy ? "older" : "scoped"} carried saves in their existing request order`, async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  let exited!: () => void;
+  const previousGone = new Promise<void>((resolve) => { exited = resolve; });
+  try {
+    await h.secrets.save("s1", { name: "First", kind: "token", reason: "test", value: "one", cwd: h.dir });
+    await h.secrets.save("s1", { name: "Second", kind: "token", reason: "test", value: "two", cwd: h.dir });
+    const carried = JSON.parse(JSON.stringify(h.secrets.carried()));
+    carried.unsaved.sort((a: [string], b: [string]) => a[0] < b[0] ? 1 : -1);
+    const ids = carried.unsaved.map(([id]: [string]) => id).sort();
+    carried.unsaved = carried.unsaved.map(([id, fields, scopes]: [string, Record<string, string>, unknown], i: number) => legacy === true || (legacy === "mixed" && i === 0) ? [id, fields] : [id, fields, scopes]);
+    const next = h.make({ previousGone });
+    const told: string[] = [];
+    next.listen((request) => told.push(request.id));
+    const cert = w.cert(w.alice);
+    h.vaults.putBox(cert);
+    next.boxed(w.state, cert);
+    next.carry(carried);
+    next.reboxed();
+    exited();
+    await tick();
+    assert.deepEqual(told, ids);
+  } finally {
+    exited();
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+for (const removed of [false, true]) {
+  test(`an early device ${removed ? "removed" : "given a new certificate"} before carry is checked again`, async () => {
+    const w = world();
+    let lock = w.state;
+    const h = harness(() => lock);
+    const newer = { ...w.alice, box: newBoxPair() };
+    let exited!: () => void;
+    const previousGone = new Promise<void>((resolve) => { exited = resolve; });
+    try {
+      let next!: Secrets;
+      h.onPost(() => {
+        h.onPost(null);
+        next = h.make({ previousGone });
+        const cert = w.cert(w.alice);
+        h.vaults.putBox(cert);
+        next.boxed(lock, cert);
+        if (removed) lock = { ...lock, devices: new Map([...lock.devices].filter(([id]) => id !== w.alice.base.hex)) };
+        else h.vaults.putBox(w.cert(newer));
+        next.carry(JSON.parse(JSON.stringify(h.secrets.carried())));
+        next.reboxed();
+      });
+      await h.secrets.save("s1", { name: "Early device", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+      exited();
+      await tick();
+      const [request] = pendingOf(next, lock, "alice@x.com");
+      assert.ok(request);
+      if (removed) assert.deepEqual(request.sealed, []);
+      else {
+        assert.equal(request.sealed?.length, 1);
+        assert.deepEqual(opened(request, newer), { value: "sample" });
+      }
+    } finally {
+      exited();
+      rmSync(h.dir, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const legacy of [false, true]) {
+  test(`a failed save after an early device and ${legacy ? "an older" : "a scoped"} handover leaves no secret`, async () => {
+    const w = world();
+    const h = harness(() => w.state);
+    let exited!: () => void;
+    const previousGone = new Promise<void>((resolve) => { exited = resolve; });
+    try {
+      let next!: Secrets;
+      h.onPost(() => {
+        h.onPost(null);
+        next = h.make({ previousGone });
+        const cert = w.cert(w.alice);
+        h.vaults.putBox(cert);
+        next.boxed(w.state, cert);
+        const carried = JSON.parse(JSON.stringify(h.secrets.carried()));
+        if (legacy) carried.unsaved = carried.unsaved.map(([id, fields]: [string, Record<string, string>]) => [id, fields]);
+        next.carry(carried);
+        next.reboxed();
+        throw new Error("post failed");
+      });
+      await assert.rejects(h.secrets.save("s1", { name: "Failed early", kind: "token", reason: "test", value: "sample", cwd: h.dir }), /post failed/);
+      exited();
+      await tick();
+      assert.deepEqual(next.carried().unsaved, []);
+      assert.deepEqual(next.carried().keeper.boxes, []);
+    } finally {
+      exited();
+      rmSync(h.dir, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const legacy of [false, true]) {
+  test(`a save granted before ${legacy ? "an older" : "a scoped"} handover arrives keeps its grant`, async () => {
+    const w = world();
+    const h = harness(() => w.state);
+    let exited!: () => void;
+    const previousGone = new Promise<void>((resolve) => { exited = resolve; });
+    try {
+      h.vaults.putBox(w.cert(w.alice));
+      h.vaults.putVault(w.vault);
+      await h.secrets.save("s1", { name: "Already approved", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+      const carried = JSON.parse(JSON.stringify(h.secrets.carried()));
+      if (legacy) carried.unsaved = carried.unsaved.map(([id, fields]: [string, Record<string, string>]) => [id, fields]);
+      const next = h.make({ previousGone });
+      next.reboxed();
+      const [request] = pendingOf(next, w.state, "alice@x.com");
+      assert.ok(request);
+      h.vaults.putItem(written(request, w.alice, { value: "sample" }));
+      const grant: Grant = signed({ v: 1 as const, ws: WS, request: request.id, vault: VAULT, item: request.item, mode: "env" as const, hosts: [], scope: "chat" as const, exp: 1000 + 30 * 86400, secret: seal(request.box, Buffer.from(JSON.stringify({ kind: "token", name: "Already approved", fields: { value: "sample" } })), grantContext(WS, request.id)), at: 1000 }, TAG.grant, w.alice.signer);
+      assert.equal(next.saved(w.state, "alice", { request: request.id, vault: VAULT, grant }), null);
+      assert.equal(next.held("s1").length, 1);
+      next.carry(carried);
+      exited();
+      await tick();
+      assert.deepEqual(next.held("s1").map((held) => held.secret.fields), [{ value: "sample" }]);
+      assert.deepEqual(next.carried().unsaved, []);
+      assert.deepEqual(next.carried().keeper.boxes, []);
+    } finally {
+      exited();
+      rmSync(h.dir, { recursive: true, force: true });
+    }
+  });
+}
 
 test("an older handover retries a device registered before its save is written", async () => {
   const w = world();

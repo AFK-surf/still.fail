@@ -260,6 +260,11 @@ export class Keeper {
     this.#forget(id);
   }
 
+  /// A stale waiting box can be discarded without ending a grant already accepted for the request.
+  discardBox(id: string) {
+    this.#boxes.delete(id);
+  }
+
   /// Whether `session` holds a grant here (used up or not).
   holds(session: string): boolean {
     return this.#heldBySession.has(session);
