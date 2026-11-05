@@ -177,6 +177,8 @@ export class Hub {
   prepareCcSessions: ((sessions: readonly string[], signal?: AbortSignal) => Promise<void>) | null = null;
   /// The sessions whose old conversation order is needed to name them.
   prepareSessionChatNames: ((sessions: readonly string[], signal?: AbortSignal) => Promise<void>) | null = null;
+  /// The sessions whose latest conversation must be ready before an asynchronous operation can continue.
+  prepareLatestThreads: ((sessions: readonly string[], signal?: AbortSignal) => Promise<void>) | null = null;
   private awaitingWorkspaceActivity = new Set<string>();
   /// When each idle process is next looked at for eviction.
   private deadlines = new Map<string, Fiber.Fiber<void>>();

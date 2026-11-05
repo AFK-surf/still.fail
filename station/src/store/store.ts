@@ -1346,27 +1346,32 @@ export class Store {
     ).map(toSessionThread);
   }
 
-  /// The thread a session last heard from: where the station's own notices go and whose connect's name the agent goes
-  /// by. Falls back to the thread it joined last when it has heard nothing yet.
-  latestThread(session: string): SessionThread | null {
+  /// The latest thread when its order is ready, or undefined while an old multi-chat session needs preparation.
+  /// Read readiness and the answer together so another writer cannot change them between the two.
+  latestThreadIfReady(session: string): SessionThread | null | undefined {
     const attempt = this.#one(LATEST_THREAD_ATTEMPT, session)!;
     if (attempt._latest_version !== LATEST_THREAD_VERSION)
       throw new Error(`latest thread index version ${attempt._latest_version ?? "missing"} is incompatible with ${LATEST_THREAD_VERSION}`);
-    if (attempt._latest_ready !== 1 && attempt._latest_members > 1) {
-      // Old larger sessions are prepared in the background. A synchronous caller keeps its exact immediate answer
-      // until preparation is done; the fallback is a single query in its own snapshot.
-      this.requestLatestThread?.(session);
-      const latest = this.#one(
-        `SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread
-         WHERE ts.session = ?
-         ORDER BY (SELECT d.rowid FROM deliveries d INDEXED BY deliveries_session
-                   WHERE d.session = ts.session AND d.thread = ts.thread ORDER BY d.rowid DESC LIMIT 1) DESC,
-                  ts.joined_at DESC, ts.rowid DESC LIMIT 1`,
-        session,
-      );
-      return latest ? toSessionThread(latest) : null;
-    }
+    if (attempt._latest_ready !== 1 && attempt._latest_members > 1) return undefined;
     return attempt.id === null ? null : toSessionThread(attempt);
+  }
+
+  /// The thread a session last heard from: where the station's own notices go and whose connect's name the agent goes
+  /// by. Falls back to the thread it joined last when it has heard nothing yet.
+  latestThread(session: string): SessionThread | null {
+    const ready = this.latestThreadIfReady(session);
+    if (ready !== undefined) return ready;
+    // A synchronous caller keeps its exact immediate answer until the old session is prepared.
+    this.requestLatestThread?.(session);
+    const latest = this.#one(
+      `SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread
+       WHERE ts.session = ?
+       ORDER BY (SELECT d.rowid FROM deliveries d INDEXED BY deliveries_session
+                 WHERE d.session = ts.session AND d.thread = ts.thread ORDER BY d.rowid DESC LIMIT 1) DESC,
+                ts.joined_at DESC, ts.rowid DESC LIMIT 1`,
+      session,
+    );
+    return latest ? toSessionThread(latest) : null;
   }
 
   /// Threads with their sessions, last entry, latest message and the viewer's unread count, most recently said in

@@ -68,6 +68,7 @@ export type GrantsDeps = {
       getSession(key: string): { archivedAt?: number | null; ws: string | null } | null;
       starter(session: string): string | null;
       latestThread(session: string): SessionThread | null;
+      latestThreadIfReady?(session: string): SessionThread | null | undefined;
       sessionThreadById(session: string, thread: number): SessionThread | null;
       pendingCard(thread: number): [{ ts: string }, unknown] | null;
       insertMessage(m: Record<string, unknown>): number[];
@@ -76,6 +77,7 @@ export type GrantsDeps = {
       threadSessions(thread: number): { session: string }[];
       subscribe(f: (c: { type: string; key?: string; id?: number; ws?: string | null }) => void): void;
     };
+    prepareLatestThreads?: ((sessions: readonly string[]) => Promise<void>) | null;
     chat(connect: string): { post(where: { channel: string; threadTs: string }, text: string, files: string[]): Promise<string> };
     shared(thread: number, n: number, session: string, text: string): void;
     notify(session: string, text: string): void;
@@ -275,7 +277,21 @@ export class PhoneGrants {
     // A still-joined original chat already proves the session has a chat. A reused request does not need to choose
     // the latest one: a reasked card goes back to its original place. Older requests may not record that place.
     const original = pending?.thread == null ? null : this.#d.hub.store.sessionThreadById(session, pending.thread);
-    const thread = original ?? this.#d.hub.store.latestThread(session);
+    let thread = original;
+    if (thread === null) {
+      const prepare = this.#d.hub.prepareLatestThreads;
+      const ready = this.#d.hub.store.latestThreadIfReady;
+      if (prepare && ready) {
+        const found = ready.call(this.#d.hub.store, session);
+        if (found === undefined) {
+          await prepare([session]);
+          if (this.#ended(session)) throw new Refused("this chat is archived or gone");
+          // A request, a grant, or a new delivery may have arrived while the old order was prepared.
+          return this.ask(session, reason, reask);
+        }
+        thread = found;
+      } else thread = this.#d.hub.store.latestThread(session);
+    }
     if (thread === null) throw new Refused("this session has no chat to ask in");
     const r: PhoneRequest = pending ?? {
       id: this.#d.id?.() ?? `p_${this.#d.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
