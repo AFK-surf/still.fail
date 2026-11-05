@@ -1904,12 +1904,6 @@ fn on_key_now(code : Int, mods : Int) -> Unit {
     input_taped("key", h_now(), [code.to_double(), mods.to_double()])
     return
   }
-  // (none of its nodes took it, the focus a field of the tree's that takes it as its own: that field's alone,
-  // key_in_tree_field)
-  if key_in_tree_field(code, mods) {
-    input_taped("key", h_now(), [code.to_double(), mods.to_double()])
-    return
-  }
   took_input("key", h_now(), [code.to_double(), mods.to_double()])
   hand_event()
   key_in(code, mods)
@@ -1917,26 +1911,6 @@ fn on_key_now(code : Int, mods : Int) -> Unit {
   if code == key_escape {
     g().layer_keys_now()
   }
-}
-
-///|
-/// Key `code` taken by the field of the window's tree with the focus, where it is one of a field's own (its caret, its
-/// words: field_key) and reaches it (no layer over it taking its keys, Ctx::keys_reach):
-/// that field's alone, told it and painted again (tree_field_redraw), no old view's, nothing of the old frame nor any
-/// part kept built again for it (an input of the old views': on_key_now). False where it is no such key or field.
-fn key_in_tree_field(code : Int, mods : Int) -> Bool {
-  let c = g()
-  let focus = c.focus_allowed()
-  guard tree_said_ids.contains(focus) && c.keys_reach(focus) else { return false }
-  // (copying, cutting, all picked: what the page's words picked with the pointer may take before the field, key_in;
-  // one held with ⌥, ⌃ or ⌘: what the app reads of the keys may take it first, ⌥↓ the next chat, Ctx::key_pressed)
-  guard code != key_copy && code != key_cut && code != key_select_all && (mods & (mod_ctrl | mod_alt | mod_cmd)) == 0 else {
-    return false
-  }
-  guard c.editors.get(focus) is Some(st) && field_key(code) else { return false }
-  st.key(code, mods, h_now())
-  tree_field_redraw()
-  true
 }
 
 ///|
@@ -2028,13 +2002,8 @@ fn on_text(kind : Int, s : String, a : Int, b : Int) -> Unit {
 
 ///|
 fn on_text_now(kind : Int, s : String, a : Int, b : Int) -> Unit {
-  // (into a field of the window's tree: told it alone, typed_in_tree; no discrete event of the hand's for what reads
-  // them to be built again)
-  let typed = typed_in_tree(kind)
   took_input("text", h_now(), [kind.to_double(), a.to_double(), b.to_double()], text=s)
-  if !typed {
-    hand_event()
-  }
+  hand_event()
   let c = g()
   // (words for a focus a modal layer of the window's tree keeps from input: none's, island_allows; but a field it
   // leaves what is typed to, its: Ctx::typing_allowed)
@@ -2060,11 +2029,10 @@ fn on_text_now(kind : Int, s : String, a : Int, b : Int) -> Unit {
   // the input method deleting around the caret (`a` before, `b` after: Android's deleteSurroundingText): a field's
   // Backspace, its Delete
   if kind == text_delete_around {
-    // (a field of the tree's: its own Backspace and Delete, key_in_tree_field)
-    if a > 0 && !(typed && key_in_tree_field(key_backspace, 0)) {
+    if a > 0 {
       key_in(key_backspace, 0)
     }
-    if b > 0 && !(typed && key_in_tree_field(key_delete, 0)) {
+    if b > 0 {
       key_in(key_delete, 0)
     }
     return
@@ -2072,20 +2040,11 @@ fn on_text_now(kind : Int, s : String, a : Int, b : Int) -> Unit {
   match c.editors.get(c.focus) {
     Some(st) if kind == text_float_begin || kind == text_float_move || kind == text_float_end => {
       float_caret(c, st, kind, a.to_double() / text_float_unit, b.to_double() / text_float_unit, h_now())
-      if typed {
-        tree_field_redraw()
-      } else {
-        h_request_frame()
-      }
+      h_request_frame()
     }
     Some(st) => {
       st.text_input(kind, s, a, b, h_now())
-      // (a field of the tree's painted again for it, its words told as signals; an old view's editor, the frame)
-      if typed {
-        tree_field_redraw()
-      } else {
-        h_request_frame()
-      }
+      h_request_frame()
     }
     None => ()
   }

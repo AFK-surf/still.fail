@@ -42,11 +42,7 @@ fn took_input(kind : String, t : Double, args : Array[Double], text? : String) -
   if !moved && !wheel {
     inputs_taken.val = true
   }
-  // (words typed into a field of the window's tree: its own, told it as signals (its words, what is composed) and its
-  // paint (tree_field_redraw), no old view's nor anything else's: nothing of the old frame nor any part kept built again
-  // for them, typed_in_tree)
-  let typed = kind == "text" && typed_in_tree(args[0].to_int())
-  if !(moved || wheel) && !typed {
+  if !(moved || wheel) {
     // (a press is the hand's: what it changes is built again, and what is kept is built for it where it went (the hand's
     // events, frame_watch.mbt; an old view's alone where it went to one: view_host.mbt), not as from outside)
     if kind == "pointer" {
@@ -56,18 +52,10 @@ fn took_input(kind : String, t : Double, args : Array[Double], text? : String) -
     }
   }
   // (what is no pointer's goes to whatever old view takes it: all of them, view_host.mbt)
-  if kind != "pointer" && !typed {
+  if kind != "pointer" {
     view_input_went(-1)
   }
   input_taped(kind, t, args, text?)
-}
-
-///|
-/// Whether the input method's text event of `kind` (on_text's) goes to a field of the window's tree, the focus its: its
-/// words, what is composed, its caret, a delete about it (its own Backspace and Delete: key_in_tree_field). Not the
-/// keyboard put away (the focus let go: what reads where the focus is, anywhere).
-fn typed_in_tree(kind : Int) -> Bool {
-  kind != text_keyboard_gone && tree_said_ids.contains(g().focus)
 }
 
 ///|
