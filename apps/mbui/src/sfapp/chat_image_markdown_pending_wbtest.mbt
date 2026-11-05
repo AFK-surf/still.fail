@@ -60,3 +60,53 @@ test "a crossed message's pictures wait for its Markdown and are decoded at thei
   assert_true(decoded.contains(("bytes:\{web.length()}", 512)), msg="the wide picture is decoded at its table cell's size")
   assert_true(decoded.contains(("bytes:\{phone.length()}", 1024)), msg="the tall picture includes the part cropped by its table cell")
 }
+
+///|
+test "a crossed picture whose Markdown arrives after resizing uses its last sighted width" {
+  let images = @sfbase.ChatImages::new()
+  let calls : Array[Made] = []
+  let picture = @sffixture.fixture_png(160, 120)
+  let text = "![画面](resize-photo.png)"
+  let tree : Json = [["p", [["img", { "src": "resize-photo.png" }]]]]
+  let changed = @signals.signal(false)
+  let answer : Ref[((Json?) -> Unit)?] = Ref(None)
+  let t = wide_tester(calls, mode="chat-many-images", w=390.0, h=844.0, platform=2, wrap=fn(base) {
+    { ..base, images,
+      topic: fn(name, params) {
+        let got = (base.topic)(name, params)
+        if name != "chat" || !changed.get() { return got }
+        guard got.value is Some(value) else { return got }
+        let file : Json = { "name": "resize-photo.png", "path": "work/s-c1/resize-photo.png", "owner": "s-c1", "width": 640, "height": 480 }
+        { ..got, version: got.version + 1, value: Some(with_chat_message(value, 129.0, [
+          ("text", Json::string(text)), ("placed", ["resize-photo.png"]), ("attachments", [file]),
+        ])) }
+      },
+      file: fn(station, owner, name) {
+        images.get(station, @sfbase.file_image_id(station, owner, name), "mem:resize-markdown/" + name, fn(_, done) {
+          let bytes = if name == "resize-photo.png" { picture } else { fixture_file_png("many-0.png") }
+          done(Ok((Json::object({}), Some(bytes))))
+        })
+      },
+    }
+  })
+  t.add_image("mem:resize-markdown/resize-photo.png", 640, 480)
+  t.check_looks(false)
+  t.run_for(first_page_ms + @ui.move_most_ms + @sfpages.reveal_ms)
+  @sf.markdown_read.val = Some(fn(words, done) {
+    if words == text { answer.val = Some(done) } else { done(None) }
+  })
+  changed.set(true)
+  t.frames_owed()
+  assert_true(answer.val is Some(_), msg="the picture's Markdown is pending")
+  t.resize(250.0, 844.0)
+  let (_, last_before) = @ui.view_tree().unwrap().list_rows().unwrap()
+  t.drag(125.0, 250.0, 125.0, 650.0, steps=2)
+  t.run_for(@ui.move_most_ms * 4.0)
+  let (_, last_after) = @ui.view_tree().unwrap().list_rows().unwrap()
+  assert_true(last_after < last_before, msg="the message has left the window")
+  match answer.val { Some(done) => done(Some(tree)); None => fail("no Markdown request") }
+  @sf.markdown_read.val = None
+  let loads = t.image_loads().filter(fn(load) { load.0 == "bytes:\{picture.length()}" })
+  assert_eq(loads, [("bytes:\{picture.length()}", 512)],
+    msg="the answer uses the last, narrower room, not the wider room before resizing")
+}
