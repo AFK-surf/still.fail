@@ -5,8 +5,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../src/store/store.ts";
+import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import {
-  CC_SESSION_ROWS, ccSessionReady, ccSessionRows, dispatchCcOrderStep, installCcIndex,
+  CC_SESSION_ROWS, CcIndexPreparation, CcSessionsUnavailable, ccSessionReady, ccSessionRows, dispatchCcOrderStep, indexedCcThreads, installCcIndex,
   scanCcSessionStep, settleCcSessionStep, trackCcSession,
 } from "../src/store/cc-thread-index.ts";
 
@@ -119,6 +120,45 @@ test("a destination's surface, time, membership and removal are reflected after 
   } finally { store.close(); }
 });
 
+test("merging a source chat's session candidates preserves its original twenty destinations and connects", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const home = store.openThread("ember", "EMBER", "multi", null, null).id;
+    store.joinThread(home, "b", "ember"); store.joinThread(home, "a", "ember");
+    for (let n = 0; n < 35; n++) {
+      const id = store.openThread("slack:one", "C", `target-${n}`, null, null).id;
+      if (n % 3 !== 0) store.joinThread(id, "b", "b-slack");
+      if (n % 3 !== 1) store.joinThread(id, "a", "a-slack");
+      put(db, id, 1, n % 7);
+    }
+    installCcIndex(db); trackCcSession(db, "a"); finish(db, "a");
+    assert.throws(() => indexedCcThreads(db, home), (error: unknown) =>
+      error instanceof CcSessionsUnavailable && error.sessions.length === 1 && error.sessions[0] === "b");
+    trackCcSession(db, "b"); finish(db, "b");
+    const before = db.prepare(CC_THREADS_SQL).all(home).map((r) => ({ id: r.id, connect: r.connect }));
+    const after = indexedCcThreads(db, home).map((r) => ({ id: r.id, connect: r.connect }));
+    assert.deepEqual(after, before);
+    assert.equal(after.length, 20);
+  } finally { store.close(); }
+});
+
+test("merged copy destinations keep SQLite's ordering of old non-integer entry times", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const home = store.openThread("ember", "EMBER", "old-times", null, null).id;
+    store.joinThread(home, "a", "ember"); store.joinThread(home, "b", "ember");
+    for (const [n, at] of [1, 5.5, "old", null].entries()) {
+      const id = store.openThread("slack:one", "C", `old-${n}`, null, null).id;
+      store.joinThread(id, n % 2 ? "a" : "b", "slack");
+      if (at !== null) db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at)
+        VALUES(?,1,'message','person','viewer',?)`).run(id, at);
+    }
+    installCcIndex(db);
+    for (const session of ["a", "b"]) { trackCcSession(db, session); finish(db, session); }
+    assert.deepEqual(indexedCcThreads(db, home).map((r) => r.id), db.prepare(CC_THREADS_SQL).all(home).map((r) => r.id));
+  } finally { store.close(); }
+});
+
 for (const recursive of [false, true]) {
   for (const alias of ["rowid", "_rowid_", "oid"]) test(`copy destination rows agree after ${alias} replacements and rollback (recursive triggers ${recursive})`, () => {
     const store = Store.open(":memory:"), db = store.db;
@@ -150,6 +190,15 @@ for (const recursive of [false, true]) {
       const entry = db.prepare("SELECT rowid FROM entries WHERE thread=? AND n=1").get(ids[2]) as { rowid: number };
       db.prepare(`INSERT OR REPLACE INTO entries(${alias},thread,n,kind,author_kind,author,at)
         VALUES(?,?,2,'message','person','viewer',100)`).run(entry.rowid, ids[3]);
+      matches();
+      const displacedMember = db.prepare("SELECT rowid FROM thread_sessions WHERE thread=? AND session='agent'")
+        .get(ids[3]) as { rowid: number };
+      db.prepare(`UPDATE OR REPLACE thread_sessions SET ${alias}=? WHERE thread=? AND session='agent'`)
+        .run(displacedMember.rowid, ids[2]);
+      matches();
+      const displacedEntry = db.prepare("SELECT rowid FROM entries WHERE thread=? AND n=1").get(ids[4]) as { rowid: number };
+      db.prepare(`UPDATE OR REPLACE entries SET ${alias}=? WHERE thread=? AND n=1`)
+        .run(displacedEntry.rowid, ids[5]);
       matches();
       db.prepare("UPDATE threads SET surface='ember' WHERE id=?").run(ids[4]);
       matches();
@@ -184,6 +233,56 @@ test("a prepared session seeks its newest destinations independently of older on
     const plan = db.prepare(`EXPLAIN QUERY PLAN ${CC_SESSION_ROWS}`).all("agent", 20).map((r) => String(r.detail));
     assert.ok(plan.some((line) => line.includes("cc_session_order")), plan.join("\n"));
     assert.ok(!plan.some((line) => line.includes("TEMP B-TREE")), plan.join("\n"));
+  } finally { store.close(); }
+});
+
+test("a shared destination's writes queue one bounded distribution", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const shared = store.openThread("slack:one", "C", "many", null, null).id;
+    for (let n = 0; n < 40; n++) store.joinThread(shared, `agent-${n}`, "slack");
+    put(db, shared, 1, 1);
+    installCcIndex(db);
+    for (let n = 0; n < 40; n++) { const key = `agent-${n}`; trackCcSession(db, key); finish(db, key); }
+    put(db, shared, 2, 2); put(db, shared, 3, 3);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM cc_order_dispatch").get() as { n: number }).n, 1);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM cc_session_dirty").get() as { n: number }).n, 0);
+    assert.deepEqual(dispatchCcOrderStep(db, 3), { done: false, visited: 3 });
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM cc_session_dirty").get() as { n: number }).n, 3);
+  } finally { store.close(); }
+});
+
+test("a short copy destination request finishes while a longer session is prepared", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    for (let n = 0; n < 30; n++) {
+      const id = store.openThread("slack:one", "C", `long-${n}`, null, null).id;
+      store.joinThread(id, "long", "slack"); put(db, id, 1, n);
+    }
+    const short = store.openThread("slack:one", "C", "short", null, null).id;
+    store.joinThread(short, "short", "slack"); put(db, short, 1, 100);
+    installCcIndex(db);
+    const prep = new CcIndexPreparation();
+    let shortDone = false;
+    for (let n = 0; n < 6 && !shortDone; n++) {
+      assert.ok(prep.step(db, "long", 2).visited <= 2);
+      const result = prep.step(db, "short", 2);
+      assert.ok(result.visited <= 2); shortDone = result.done;
+    }
+    assert.equal(shortDone, true);
+    assert.equal(ccSessionReady(db, "long"), false);
+    assert.equal(ccSessionRows(db, "short", 1)[0]?.thread, short);
+  } finally { store.close(); }
+});
+
+test("an incompatible copy destination index is neither read nor prepared", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    installCcIndex(db);
+    db.prepare("UPDATE cc_index_meta SET version=2 WHERE id=1").run();
+    assert.throws(() => trackCcSession(db, "agent"), /incompatible/);
+    assert.throws(() => ccSessionReady(db, "agent"), /incompatible/);
+    assert.throws(() => dispatchCcOrderStep(db), /incompatible/);
   } finally { store.close(); }
 });
 

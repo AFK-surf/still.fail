@@ -244,6 +244,42 @@ export function ccSessionReady(db: DatabaseSync, session: string): boolean {
 export const CC_SESSION_ROWS = `SELECT thread,last_at,created_at FROM cc_session_rows INDEXED BY cc_session_order
   WHERE session=?1 AND surface != 'ember' ORDER BY last_at DESC,created_at DESC,thread DESC LIMIT ?2`;
 
+export const CC_SESSION_KEYS = `SELECT CAST(thread AS TEXT) AS thread FROM cc_session_rows INDEXED BY cc_session_order
+  WHERE session=?1 AND surface != 'ember' ORDER BY last_at DESC,created_at DESC,thread DESC LIMIT 20`;
+
+// The union contains at most twenty rows per source session. A destination in the global top twenty must be in the
+// top twenty of every session it shares with the source; otherwise that session alone has twenty distinct earlier
+// destinations. SQLite compares the original values for the final ordering, including NULL and non-integer values.
+export const CC_INDEXED_THREADS = `SELECT t.*,o.connect FROM json_each(?1) c
+  CROSS JOIN threads t ON t.id=CAST(json_extract(c.value,'$[0]') AS INTEGER)
+  CROSS JOIN thread_sessions o ON o.thread=t.id AND o.session=json_extract(c.value,'$[1]')
+  WHERE t.surface != 'ember'
+  ORDER BY (SELECT e.at FROM thread_state st JOIN entries e ON e.thread=st.thread AND e.n=st.last_n
+    WHERE st.thread=t.id) DESC, t.created_at DESC, t.id DESC LIMIT 20`;
+
+export class CcSessionsUnavailable extends Error {
+  readonly sessions: string[];
+  constructor(sessions: string[]) { super("copy destinations are still being prepared"); this.sessions = sessions; }
+}
+
+/// The caller gets readiness, candidate selection and the final rows from one snapshot.
+export function indexedCcThreads(db: DatabaseSync, thread: number): Record<string, unknown>[] {
+  db.exec("SAVEPOINT cc_threads_read");
+  try {
+    const sessions = db.prepare("SELECT session FROM thread_sessions WHERE thread=? ORDER BY session")
+      .all(thread) as { session: string }[];
+    const missing = sessions.filter(({ session }) => !ccSessionReady(db, session)).map(({ session }) => session);
+    if (missing.length) throw new CcSessionsUnavailable(missing);
+    const keys = db.prepare(CC_SESSION_KEYS), candidates = new Map<string, string>();
+    for (const { session } of sessions) {
+      for (const row of keys.all(session) as { thread: string }[])
+        if (!candidates.has(row.thread)) candidates.set(row.thread, session);
+    }
+    if (candidates.size === 0) return [];
+    return db.prepare(CC_INDEXED_THREADS).all(JSON.stringify([...candidates])) as Record<string, unknown>[];
+  } finally { db.exec("RELEASE cc_threads_read"); }
+}
+
 export function ccSessionRows(db: DatabaseSync, session: string, limit: number): { thread: number; last_at: number | null; created_at: number }[] {
   if (!Number.isSafeInteger(limit) || limit < 0) throw new RangeError("copy destination limit must be nonnegative");
   db.exec("SAVEPOINT cc_destination_read");
@@ -251,4 +287,41 @@ export function ccSessionRows(db: DatabaseSync, session: string, limit: number):
     if (!ccSessionReady(db, session)) throw new Error("copy destinations are still being prepared");
     return db.prepare(CC_SESSION_ROWS).all(session, limit) as { thread: number; last_at: number | null; created_at: number }[];
   } finally { db.exec("RELEASE cc_destination_read"); }
+}
+
+/// Give a requested session one bounded slice of its initial scan, shared-thread distribution, or reconciliation.
+/// Alternating the lanes prevents a busy shared thread from indefinitely postponing a short session's initial scan.
+export class CcIndexPreparation {
+  readonly #turns = new Map<string, number>();
+
+  cancel(session: string): void { this.#turns.delete(session); }
+
+  step(db: DatabaseSync, session: string, limit = 64): { done: boolean; visited: number } {
+    checkCcIndex(db);
+    let scope = db.prepare("SELECT complete FROM cc_sessions WHERE session=?").get(session) as { complete: number } | undefined;
+    if (!scope) {
+      trackCcSession(db, session);
+      scope = db.prepare("SELECT complete FROM cc_sessions WHERE session=?").get(session) as { complete: number };
+    }
+    if (ccSessionReady(db, session)) { this.#turns.delete(session); return { done: true, visited: 0 }; }
+    const lanes = [
+      { pending: () => scope!.complete === 0, step: () => scanCcSessionStep(db, session, limit).visited },
+      { pending: () => db.prepare("SELECT 1 FROM cc_order_dispatch LIMIT 1").get() !== undefined,
+        step: () => dispatchCcOrderStep(db, limit).visited },
+      { pending: () => db.prepare("SELECT 1 FROM cc_session_dirty WHERE session=? LIMIT 1").get(session) !== undefined,
+        step: () => settleCcSessionStep(db, session).visited },
+    ];
+    const turn = this.#turns.get(session) ?? 0;
+    for (let n = 0; n < lanes.length; n++) {
+      const at = (turn + n) % lanes.length, lane = lanes[at]!;
+      if (!lane.pending()) continue;
+      this.#turns.set(session, (at + 1) % lanes.length);
+      const visited = lane.step();
+      const done = ccSessionReady(db, session);
+      if (done) this.#turns.delete(session);
+      return { done, visited };
+    }
+    if (ccSessionReady(db, session)) { this.#turns.delete(session); return { done: true, visited: 0 }; }
+    throw new Error("copy destination preparation has no runnable work");
+  }
 }
