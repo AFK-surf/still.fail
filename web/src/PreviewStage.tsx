@@ -11,7 +11,7 @@ import { dims, useTouch, ViewportSheet, type Zoom } from "./ViewportSize.tsx";
 import * as css from "./PreviewStage.css.ts";
 import { t } from "./i18n.ts";
 import { play } from "@stillfail/ui/motion.ts";
-import { fromPreview } from "./previewBridge.ts";
+import { fromPreview, toPreview } from "./previewBridge.ts";
 
 /** The page's box in the stage: its top-left, how much it is drawn at, and the size it is laid out at. */
 export interface Placed { x: number; y: number; scale: number; width: number; height: number }
@@ -200,7 +200,7 @@ export function PreviewStage({ stage, link, over, children, after }:
   useEffect(() => {
     const { frame, origin, nonce } = link;
     if (!origin) return;
-    const tell = () => { if (heard.current) frame.current?.contentWindow?.postMessage({ type: "ember-preview-annotate", canvas }, origin); };
+    const tell = () => { if (heard.current) frame.current?.contentWindow?.postMessage({ type: toPreview("annotate"), canvas }, origin); };
     tell();
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== origin || event.source !== frame.current?.contentWindow || event.data?.nonce !== nonce) return;

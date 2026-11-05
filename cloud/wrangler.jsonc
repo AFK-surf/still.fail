@@ -3,7 +3,7 @@
   // still.fail cloud's API (src/index.ts). Template; deploy.py copies it to the ignored wrangler.local.json with the
   // account id. still.fail cloud is five Workers (deploy.py deploys each only when it changed):
   //   stillfail-cloud this one: the API, on the paths below
-  //   ember-relay    the relay (wrangler.relay.jsonc)
+  //   stillfail-relay the relay (wrangler.relay.jsonc)
   //   stillfail-web      the web app, static, on PUBLIC_ORIGIN's Custom Domain (wrangler.web.jsonc)
 //   stillfail-web-beta the same files, on BETA_ORIGIN's: the test channel (wrangler.web-beta.jsonc)
   //   stillfail-admin    the admin's console, static, on ADMIN_ORIGIN's (wrangler.admin.jsonc)

@@ -1,12 +1,10 @@
 // still.fail was called ember (docs/rename-still-fail.md). No station, app or page from before the rename is left
 // (2026-11-05: none in two weeks of telemetry), so the cloud answers only the new names, but for its old hosts (the
 // *_ORIGIN_ALIASES, bound to the same Workers: stations enrolled then may still be told them in their own settings,
-// which they move off themselves) and the tag of a station's notices (push.ts: stations of now still sign with it).
+// which they move off themselves).
 
 /** The prefix of the names on the wire. */
 const PREFIX = "stillfail";
-/** The prefix a station's notices are still signed under, by stations from before 2026-11-05 (station/src/cloud/provider.ts). */
-export const FORMER_NOTICE_PREFIX = "ember";
 
 /** `primary` and its aliases (a comma-separated list of origins), primary first, no empties. */
 export function originList(primary: string, aliases?: string): string[] {

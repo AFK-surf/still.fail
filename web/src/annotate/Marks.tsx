@@ -11,7 +11,7 @@ import * as css from "./Marks.css.ts";
 import { Tip } from "../ui.tsx";
 import { t } from "../i18n.ts";
 import * as pageCss from "@stillfail/ui/styles/page.css.ts";
-import { fromPreview } from "../previewBridge.ts";
+import { fromPreview, toPreview } from "../previewBridge.ts";
 
 interface Mark { picked: Picked; comment: string }
 interface Box { x: number; y: number; width: number; height: number }
@@ -58,7 +58,7 @@ export function useMarks({ frame, origin, nonce, name, draftKey, able, scale = 1
   }, [shown]);
 
   const tell = useCallback((data: Record<string, unknown>) => {
-    if (origin) frame.current?.contentWindow?.postMessage({ type: "ember-preview-annotate", ...data }, origin);
+    if (origin) frame.current?.contentWindow?.postMessage({ type: toPreview("annotate"), ...data }, origin);
   }, [origin, frame]);
 
   useEffect(() => {

@@ -40,7 +40,7 @@ const parent = await listen(async (req, res) => {
   res.setHeader('content-type', 'text/html');
   res.end(`<script src="/bridge.js"></script><script>
     addEventListener('message', e => {
-      if(e.data?.type !== 'ember-preview-ready') return;
+      if(e.data?.type !== 'stillfail-preview-ready') return;
       const c = new MessageChannel();
       window.stopBridge = preview.bridge(c.port1, { station:'fixture', service:1, streams:true, call: async (_, p, _bytes, progress, signal) => {
         const r = await (await fetch('/rpc' + p.path, {headers:p.headers, signal})).json();
@@ -48,7 +48,7 @@ const parent = await listen(async (req, res) => {
         if(r.body) progress({chunk:true}, Uint8Array.from(atob(r.body), c => c.charCodeAt(0)));
         return {value:null};
       }});
-      e.source.postMessage({type:'ember-preview-port',streams:true}, e.origin, [c.port2]);
+      e.source.postMessage({type:'stillfail-preview-port',streams:true}, e.origin, [c.port2]);
     });
   </script><iframe src="${origin(previewHost)}/_stillfail/frame?n=cache-test&path=%2F"></iframe>`);
 });
