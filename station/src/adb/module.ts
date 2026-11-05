@@ -78,7 +78,7 @@ export const AdbLive = Layer.effectDiscard(
           new Shares({
             cloud: plane.state,
             servers,
-            granted: (email) => grants.ofOwner(email).filter((r) => r.status === "granted").map((r) => r.id),
+            granted: (email) => grants.grantedOfOwner(email).map((r) => r.id),
             stated: (email, state) => grants.linked(email, state),
             used: (id, force) => grants.used(id, force),
           }),
@@ -134,7 +134,7 @@ export const AdbLive = Layer.effectDiscard(
     );
     parts.tools(
       // Phones lent with an app's switch (from before grants): any agent's. A phone granted to chats is theirs alone.
-      adbTools(() => lent.list().filter((p) => !grants.ofOwner(p.owner.email).some((r) => r.status === "granted"))),
+      adbTools(() => lent.list().filter((p) => grants.grantedOfOwner(p.owner.email).length === 0)),
     );
   }),
 );

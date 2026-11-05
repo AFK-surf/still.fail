@@ -76,6 +76,20 @@ test("a phone link change only reads live grants and does not compute request ti
   assert.deepEqual({ reads, named }, { reads: [1, 1], named: [0, 0] });
 });
 
+test("the internal owner grant list ignores pending requests and does not mark titles shown", () => {
+  const reads: number[] = [], named: number[] = [];
+  for (const pending of [40, 400]) {
+    const w = fixture(pending, true);
+    try {
+      w.reset();
+      assert.deepEqual(w.grants.grantedOfOwner("P@EXAMPLE.TEST").map((r) => r.id), ["live"]);
+      reads.push(w.ownerFetched());
+      named.push(w.titles());
+    } finally { w.db.close(); }
+  }
+  assert.deepEqual({ reads, named }, { reads: [1, 1], named: [0, 0] });
+});
+
 test("finding a held phone grant does not read the session's pending requests", () => {
   const reads: number[] = [];
   for (const pending of [40, 400]) {

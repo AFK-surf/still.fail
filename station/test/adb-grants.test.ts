@@ -102,6 +102,21 @@ test("phone request status stays consistent as it is asked, granted and ended", 
   } finally { w.db.close(); }
 });
 
+test("internal owner grant reads end expired grants and retain the other live ones", async () => {
+  const w = world();
+  try {
+    await w.grants.ask("s1", "one hour");
+    assert.equal(w.grants.decide("pat@example.com", "p1", "hour", "work-a"), null);
+    await w.grants.ask("s2", "until archived");
+    assert.equal(w.grants.decide("pat@example.com", "p2", "chat", "work-b"), null);
+    w.pass(3600_000);
+    assert.deepEqual(w.grants.grantedOfOwner("PAT@example.com").map((r) => r.id), ["p2"]);
+    assert.equal(w.grants.get("p1")!.status, "ended");
+    assert.equal(w.heard.at(-1)!.status, "ended");
+    assert.equal(w.audiences.at(-1), "work-a");
+  } finally { w.db.close(); }
+});
+
 test("reusing a pending phone request does not find the latest of the session's other chats", async () => {
   const w = world();
   const first = await w.grants.ask("s1", "debug the screen");
