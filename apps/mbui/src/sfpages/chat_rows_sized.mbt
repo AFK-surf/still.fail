@@ -4,13 +4,11 @@
 // go on from the last one's, the new one's first change all of it.
 
 ///|
-/// Chat rows `rows` (the ChatRows now, followed; `current` the same, read where no signal may be: a layout's) kept in
-/// `v` by `sizes`.
+/// Chat rows `rows` kept in `v` by `sizes`. The snapshot follows them; layout reads the rows captured by that snapshot.
 fn rows_sized(
   sizes : @ui.ListRows[Entry],
   v : @view.View,
   rows : () -> @sfbase.ChatRows,
-  current : Ref[@sfbase.ChatRows],
   watched~ : () -> Bool,
   ms~ : (String) -> Double?,
   from~ : (String) -> Double?,
@@ -25,10 +23,14 @@ fn rows_sized(
   let counted : Ref[@sfbase.ChatRows?] = Ref(None)
   let base = Ref(0)
   let last = Ref(0)
-  let now = fn() { current.val }
+  // A layout reads no signals, even untracked. Capture the very same rows whose revision and length the snapshot
+  // returns, so every later key, index and change read belongs to that snapshot.
+  let captured = Ref(@signals.untracked(rows))
+  let now = fn() { captured.val }
   let source : @view.AnchoredSource[String] = {
     snapshot: fn() {
       let cr = rows()
+      captured.val = cr
       let (shape, n) = cr.snapshot()
       match counted.val {
         Some(was) if physical_equal(was, cr) => ()
