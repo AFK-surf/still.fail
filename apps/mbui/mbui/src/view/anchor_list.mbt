@@ -48,6 +48,7 @@ pub fn[K : Eq] list_laid_from_end(
   ahead? : Double = 0.0,
   known? : (Int) -> Double? = fn(_) { None },
   slack? : Double = 0.0,
+  went_past? : (Int) -> Unit = fn(_) {  },
 ) -> ListLaid[K] {
   if n == 0 {
     return { first: 0, last: -1, keys: [], tops: [], heights: [], anchor: None, at_start: true, at_end: true }
@@ -77,6 +78,7 @@ pub fn[K : Eq] list_laid_from_end(
   // measured, measured now: a scroll goes by the heights of the rows it passes, never a guess, so where it stops is the
   // same in one jump as in many: retained.md, "Layout read back")
   let passed = fn(i : Int) {
+    went_past(i)
     match measured.get(i) {
       Some(v) => v
       None =>
@@ -196,6 +198,7 @@ pub fn[K : Eq] list_laid_from_top(
   ahead? : Double = 0.0,
   known? : (Int) -> Double? = fn(_) { None },
   slack? : Double = 0.0,
+  went_past? : (Int) -> Unit = fn(_) {  },
 ) -> ListLaid[K] {
   // (the same list turned over: its last row its first, its foot its top)
   let m = fn(i : Int) { n - 1 - i }
@@ -210,6 +213,7 @@ pub fn[K : Eq] list_laid_from_top(
     ahead~,
     known=fn(i) { known(m(i)) },
     slack~,
+    went_past=fn(i) { went_past(m(i)) },
   )
   let count = r.keys.length()
   let keys = []

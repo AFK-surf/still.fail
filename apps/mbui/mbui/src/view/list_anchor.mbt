@@ -89,7 +89,9 @@ pub(all) struct AnchoredSource[K] {
 /// its end; `shown` is told the keys in sight; `put` puts a row's top that far under the window's top; `room` is a
 /// row's room as its measured height changes, `moving` says when rooms move; `kept_keys` rows made and laid out
 /// though not in sight (a send's landing); `foot_room` room under the last row. An indexed source supplies its
-/// keys by position instead of `keys`.
+/// keys by position instead of `keys`. `sighted` is told, once each frame is painted, the rows that came in sight or
+/// within `ahead` of it, or were gone past on the way, since it was last laid out: the same rows whether the frames
+/// between were many or one (what asks for a row's pictures asks by it, never by the row being made).
 pub fn[K : Hash + Eq] View::scrolls_anchored(
   self : View,
   s : Scroll,
@@ -112,11 +114,12 @@ pub fn[K : Hash + Eq] View::scrolls_anchored(
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
   foot_room? : () -> Double = fn() { 0.0 },
   indexed? : AnchoredSource[K],
+  sighted? : (Array[K]) -> Unit,
 ) -> View {
   self.scrolls_anchored_impl(
     s, keys, make, est~, from_end~, ahead~, slop?=slop, bar?=bar, follows~, shown?=shown,
     put?=put, rooms?=rooms, fresh~, read_from_top~, cover~, tucked~, kept_keys?=kept_keys,
-    bar_clear~, foot_room~, indexed?=indexed,
+    bar_clear~, foot_room~, indexed?=indexed, sighted?=sighted,
   )
 }
 
@@ -145,6 +148,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   foot_room? : () -> Double = fn() { 0.0 },
   indexed? : AnchoredSource[K],
   fixed_estimate? : Bool = false,
+  sighted? : (Array[K]) -> Unit,
 ) -> View {
   guard self.live() is Some(_) else { return self }
   let put_at = put.unwrap_or(@signals.signal(None))
@@ -154,6 +158,8 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   let seen_x : Ref[Double?] = Ref(None)
   // (each row's height as last measured, by its key: for how tall all of it is counted, the bar's, and nothing else)
   let heights : Map[K, Double] = Map([])
+  // (the rows in sight or within `ahead` of it as last laid out: what is sighted anew is what is not among them)
+  let sighted_last : Set[K] = Set::new()
   let known_sum = Ref(0.0)
   let measured_width = Ref(-1.0)
   let measured_words = Ref(-1)
@@ -624,11 +630,15 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         was_tail.val = Array::makei(n - tail_start, fn(i) { key_at(tail_start + i) })
         let key_of = fn(i : Int) { key_at(i) }
         let known = fn(i : Int) { heights.get(key_at(i)) }
+        // (the rows the last of these layouts went past on the way: in sight on the way, sighted)
+        let went_past : Array[K] = []
         let lay = fn(from : ListAnchor[K]?, by : Double) {
+          went_past.clear()
+          let past = fn(i : Int) { went_past.push(key_at(i)) }
           if from_end {
-            list_laid_from_end(n, key_of, find, measure, from, h, by~, ahead~, known~, slack=if short_glide.val { h } else { 0.0 })
+            list_laid_from_end(n, key_of, find, measure, from, h, by~, ahead~, known~, slack=if short_glide.val { h } else { 0.0 }, went_past=past)
           } else {
-            list_laid_from_top(n, key_of, find, measure, from, h, by~, ahead~, known~, slack~)
+            list_laid_from_top(n, key_of, find, measure, from, h, by~, ahead~, known~, slack~, went_past=past)
           }
         }
         let from = anchor.val
@@ -775,6 +785,30 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
                 _ => ()
               }
             }
+          None => ()
+        }
+        // (what came in sight or within `ahead` of it, or was gone past on the way, since the last layout: sighted, told
+        // once the frame is painted, whether the frames between were many or one)
+        match sighted {
+          Some(tell) => {
+            let now : Set[K] = Set::new()
+            let fresh_in : Array[K] = []
+            for k in went_past.iter().concat(r.keys.iter()) {
+              if !now.contains(k) {
+                now.add(k)
+                if !sighted_last.contains(k) {
+                  fresh_in.push(k)
+                }
+              }
+            }
+            sighted_last.clear()
+            for k in r.keys {
+              sighted_last.add(k)
+            }
+            if !fresh_in.is_empty() {
+              self.tree.said_after_paint(fn() { tell(fresh_in) })
+            }
+          }
           None => ()
         }
         // (a row a scroll only went past, measured for how far it went: not kept, a cache of the picture of what shows)
