@@ -103,6 +103,14 @@ fn composer_extras_node(
     flow.row(Is(true)).gap(Is(6.0)).wraps(By(fn() { Some(6.0 + @sf.corner_remove_reach(corner())) }))
     .padding(By(fn() { (0.0, 0.0, file_end(), 0.0) })).lines_up(Is(Some(Start))) |> ignore
     flow.each(fn() { w.files.get() }, fn(f) { text(Some(f), "id") }, fn(slot, file) {
+      // (a card as wide as a card is at most, or as the row leaves it where that is less, its remove button's reach
+      // room past it as a tile's: said to the row, so it is laid out so, not read back from the row's laid size)
+      let card = fn() { waiting_picture(src, w, Some(file.get())) is None }
+      slot
+      .width(By(fn() { if card() { Some(@sf.file_card_w) } else { None } }))
+      .max_width_within(By(fn() { if card() { Some(@sf.file_card_w) } else { None } }))
+      .margin(By(fn() { (0.0, 0.0, if card() { @sf.corner_remove_reach(corner()) } else { 0.0 }, 0.0) }))
+      |> ignore
       coming(slot, fn(item) {
         let id = @signals.untracked(fn() { text(Some(file.get()), "id") })
         let v = fn() { Some(file.get()) }
@@ -151,9 +159,7 @@ fn composer_extras_node(
               }
             }
             @sf.with_corner_remove_node(p, fn() { remove_label(v(), text(v(), "name")) }, corner,
-              fn() { writing_remove(src, w, id) }, width=fn() {
-                Some(dmin(@sf.file_card_w, flow.laid_size_told().map(fn(s) { dmax(0.0, s.0 - file_end()) }).unwrap_or(@sf.file_card_w)))
-              }, fn(inside) {
+              fn() { writing_remove(src, w, id) }, fn(inside) {
                 let card = @sf.file_card_node(inside, fn() { waiting_card_info(v()) }, composer=true, corner~, open~,
                   open_shown=fn() { match waiting_as(v()) { Link => true; ByPath | AnyFile => field(v(), "ref") is Some(Object(_)); _ => false } },
                   retry=fn() { match waiting_as(v()) { Pasted => @sfbase.writing_paste_again(src, w, id); _ => writing_retry(src, w, id) } },
