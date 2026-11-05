@@ -969,8 +969,6 @@ fn Ctx::paint_tree_field(
   // (painted where its node is laid out (`laid`), its words set on the pixels by their lines there, then moved to where
   // it is drawn and made as big there: as the tree's own words are, view_blit; not placed on the pixels as a whole, as
   // an old view's field is with its old view, old_place)
-  // (drawn each frame its node is: what its editor holds is no binding of the tree's, scene_layers.mbt)
-  scene_drawn_each()
   let (ux, uy) = laid
   let fb = self.tree_field_box(id, tf, (ux, uy, w, h))
   let st = tf.st

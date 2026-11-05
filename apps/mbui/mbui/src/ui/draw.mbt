@@ -1558,8 +1558,6 @@ fn Ctx::raise_ranges(self : Ctx, ranges : Array[(Int, Int)]) -> Unit {
   if inst_owners_kept() {
     inst_owners_raised(ranges, self.ninst)
   }
-  // (the scene's layers where they are now: scene_layers.mbt)
-  scene_raised(ranges, self.ninst)
 }
 
 ///|

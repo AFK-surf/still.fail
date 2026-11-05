@@ -72,31 +72,3 @@ test "none under way: done at once" {
   log.push("then")
   assert_eq(log, ["now", "then"])
 }
-
-///|
-test "what waits for all of it: done once what waits by after_flush is done, what that asked included, whatever order they were asked in" {
-  let a = signal(0)
-  let log : Array[String] = []
-  effect(fn() {
-    let v = a.get()
-    if v > 0 {
-      after_all_flushed(fn() { log.push("last \{a.get()}") })
-    }
-  })
-  |> ignore
-  effect(fn() {
-    let v = a.get()
-    if v > 0 {
-      after_flush(fn() {
-        log.push("after \{v}")
-        after_flush(fn() { log.push("after that") })
-      })
-    }
-  })
-  |> ignore
-  a.set(1)
-  assert_eq(log, ["after 1", "after that", "last 1"])
-  // none under way: at once
-  after_all_flushed(fn() { log.push("now") })
-  assert_eq(log.length(), 4)
-}

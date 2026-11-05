@@ -235,7 +235,6 @@ fn paint_watch_of() -> @signals.Watch {
 fn clock_read(loc : SourceLoc) -> Unit {
   if @signals.active_sub() is Some(_) {
     clock_read_by(loc.to_string(), None)
-    scene_clock_read_now()
     frame_clock.get() |> ignore
   }
 }
@@ -246,7 +245,6 @@ fn clock_read(loc : SourceLoc) -> Unit {
 fn clock_read_here(who? : Mover) -> Unit {
   if @signals.active_sub() is Some(_) {
     clock_read_by("a motion, the host's clock or its state (Ctx::shows_motion, @ui.now, @hostapi.polled)", who)
-    scene_clock_read_now()
     frame_clock.get() |> ignore
   }
 }
@@ -472,12 +470,6 @@ let looks_drawn : Ref[Bool] = Ref(false)
 let painted_alone : Ref[Bool] = Ref(false)
 
 ///|
-/// Whether the last frame was drawn by the window's tree alone, what of its scene changed drawn again where it is
-/// (scene_layers.mbt's scene_alone), nothing of the old frame painted.
-// kept across runs: written by each frame
-let tree_alone_drawn : Ref[Bool] = Ref(false)
-
-///|
 /// How many frames of the looks alone were drawn (a test's: those drawn whole after them as well are counted too).
 // kept across runs: only counts on
 let looks_frames : Ref[Int] = Ref(0)
@@ -518,7 +510,6 @@ fn looks_reset() -> Unit {
   looks_tells.before = []
   looks_drawn.val = false
   painted_alone.val = false
-  tree_alone_drawn.val = false
   clock_read_at.val = ""
   paint_clock_at.val = ""
   paint_said.val = ""
@@ -545,8 +536,7 @@ fn looks_wake(t : Double, loc : SourceLoc) -> Unit {
       looks_own.wake = t
     }
   } else if paint_phase.val == 1 {
-    // (asked as a layer of the window's tree's scene is drawn: that layer's, drawn again then, scene_layers.mbt)
-    if !scene_wake_said(t) && soonest(paint_base.wake) {
+    if soonest(paint_base.wake) {
       paint_base.wake = t
     }
   } else if soonest(looks_base.wake) {
@@ -682,9 +672,7 @@ fn looks_keep(c : Ctx) -> Unit {
   // (what it drew said as one number, read once: not kept whole and compared with the paint before, two more passes
   // over every instance; kept whole only where a frame of the looks alone draws it again)
   let len = c.ninst * inst_size
-  // (what of it the old frame drew: the window's tree's layers drawn by it alone are its scene's, kept by what they
-  // read, scene_layers.mbt)
-  let said = insts_said_but(c.inst, c.ninst, scene_tree_spans())
+  let said = insts_said(c.inst, c.ninst)
   looks_base.settled = looks_base.built && c.ninst == looks_base.n && said == looks_base.said
   looks_base.built = true
   looks_base.n = c.ninst
@@ -720,31 +708,6 @@ fn insts_said(a : FixedArray[Double], n : Int) -> Int64 {
     k = k + 4
   }
   (((h0 * 31L) ^ h1) * 31L ^ h2) * 31L ^ h3
-}
-
-///|
-/// The first `n` instances of `a` as one number, as insts_said folds them, but those in `skip` (ranges of instances, in
-/// order, apart).
-fn insts_said_but(a : FixedArray[Double], n : Int, skip : Array[(Int, Int)]) -> Int64 {
-  if skip.is_empty() {
-    return insts_said(a, n)
-  }
-  let mut h = -3750763034362895579L
-  let mut k = 0
-  let mut s = 0
-  while k < n {
-    if s < skip.length() && k >= skip[s].0 {
-      k = skip[s].1
-      s = s + 1
-      continue
-    }
-    let end = if s < skip.length() && skip[s].0 < n { skip[s].0 } else { n }
-    for q in (k * inst_size)..<(end * inst_size) {
-      h = (h ^ inst_bits(a[q], q % inst_size)) * 1099511628211L
-    }
-    k = end
-  }
-  h
 }
 
 ///|
@@ -873,75 +836,6 @@ fn paint_frame(c : Ctx, t : Double) -> Double {
 }
 
 ///|
-/// What a frame painted tells the host of the window's tree, told by a frame that paints nothing of the old frame: its
-/// widgets as read out, what takes back, the field with the keys, its menu and what it can do.
-fn tree_told_host(c : Ctx) -> Unit {
-  c.a11y_after_paint()
-  c.back_told_host()
-  c.sync_ime()
-  c.sync_text_menu()
-  c.sync_edit_can()
-}
-
-///|
-/// The frame at `t` of the window's tree alone: what of its scene changed drawn again where it lies in the last frame's
-/// instances (Ctx::scene_alone), the looks by the clock applied; nothing of the old frame painted. Where the tree cannot
-/// draw it alone (a layer come to another number of instances, something let go, an old view in what changed), painted
-/// alone as the old frame paints it, nothing of the old frame's said to have changed for it. When it began.
-fn alone_frame(c : Ctx, t : Double) -> Double {
-  perf_frame_start()
-  let t0 = work_now()
-  c.clock = t
-  c.wants_frame = false
-  c.cycling = false
-  c.wake_at = looks_base.wake
-  if paint_base.wake >= 0.0 && (c.wake_at < 0.0 || paint_base.wake < c.wake_at) {
-    c.wake_at = paint_base.wake
-  }
-  dues_wake(c)
-  let drawn = match view_app.val {
-    Some(tree) => {
-      // (what was told it as the frame went, brought, and taken as its scene's: drawn as it is now)
-      if tree.told_since() {
-        view_brought(tree)
-      }
-      view_changes_taken(tree)
-      paint_phase.val = 1
-      c.scene_alone(tree)
-    }
-    None => false
-  }
-  paint_phase.val = 2
-  if !drawn {
-    scene_full_for(fn() { "alone: " + scene.alone_why })
-    scene.old_due = false
-    return paint_frame(c, t)
-  }
-  if looks_base.looks {
-    looks_base.inst.blit_to(c.inst, len=looks_base.n * inst_size)
-    c.ninst = looks_base.n
-  }
-  // (the looks by the clock, and the tree's resident clock's next step, asked as any frame asks them)
-  looks_apply(c)
-  // (the streams' frames taken in it said shown, as a frame painted says them: stream.mbt; what the widgets are, read out,
-  // and what takes back, the keys and the field's menu told the host, as a frame painted tells them)
-  streams_after_paint()
-  tree_told_host(c)
-  c.t_build = 0.0
-  c.t_layout = 0.0
-  c.t_paint = work_now() - t0
-  looks_drawn.val = false
-  painted_alone.val = false
-  tree_alone_drawn.val = true
-  // (a frame as any: told at its end, as frame_paint tells the others)
-  match frame_hook.val {
-    Some(f) if !looks_rebuilt.val => f()
-    _ => ()
-  }
-  t0
-}
-
-///|
 /// The frame at `t`: built whole under the run's watch where what the last read changed, a moment it waits for came
 /// or it left something to come (why: built_why); else painted alone where what its paint read changed, a moment its
 /// paint waits for came or the paint before drew otherwise (painted_why); else of its looks alone. Where looks_check
@@ -1042,14 +936,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   built_why.val = if why != "" { why } else { laid_why }
   frame_told_at.val = ""
   frame_built.val = true
-  // (the layers of the window's tree's scene whose moments came: drawn again, scene_layers.mbt)
-  c.scene_wakes(t)
-  tree_alone_drawn.val = false
   if why != "" || laid_why != "" {
-    // (the old frame built: what it draws may have changed anywhere it draws)
-    scene_full_for(fn() { "built: " + built_why.val })
-    scene.old_due = true
-    scene.old_told = false
     looks_drawn.val = false
     painted_alone.val = false
     painted_why.val = ""
@@ -1063,15 +950,10 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     nodes_run.evented_only = if outside || test_step_came.val { -1 } else { went_to }
     test_step_came.val = false
     nodes_run.whole = bench_whole.val && bench_measuring.val
-    let copied = scene_work.copied
-    let t0 = watch.read(fn() { frame_body(c, w, h, scale, t) })
-    c.scene_check(copied)
-    return t0
+    return watch.read(fn() { frame_body(c, w, h, scale, t) })
   }
   let paint_why = if paint_told != "" {
     paint_told
-  } else if scene.old_told {
-    "what an old view's paint read changed"
   } else if paint.is_stale() {
     if paint_clock_at.val != "" {
       "the clock read as it was painted at \{said_clock(paint_clock_at.val, paint_clock_who.val)}"
@@ -1086,33 +968,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     ""
   }
   painted_why.val = paint_why
-  scene.old_told = false
-  // (painted for what the old frame's paint read; else what changed of the window's tree drawn by it alone, where it can
-  // be; else the looks alone)
-  let copied = scene_work.copied
-  // (what the hand did or what came from outside, in a frame the tree changed: what the old frame shows of the hand (a
-  // focus, a caret) may have changed with it, its paint follows no signal of it; painted, nothing of it kept)
-  let paint_why = if paint_why == "" && scene_wanted() && (evented || outside) {
-    "the hand or what came from outside, with the tree"
-  } else {
-    paint_why
-  }
-  let t0 = if paint_why != "" {
-    scene_full_for(fn() { "painted: " + paint_why })
-    scene.old_due = true
-    paint_frame(c, t)
-  } else if scene_wanted() {
-    alone_frame(c, t)
-  } else {
-    let t0 = looks_frame(c, t)
-    // (what of the window's tree is told the host as a frame paints it, its widgets read out, what takes back and the
-    // keys: told as it changed, nothing drawn for it)
-    if view_app.val is Some(_) {
-      tree_told_host(c)
-    }
-    t0
-  }
-  c.scene_check(copied)
+  let t0 = if paint_why != "" { paint_frame(c, t) } else { looks_frame(c, t) }
   if !looks_check.val {
     return t0
   }
@@ -1128,9 +984,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   nodes_run.fresh = true
   nodes_run.whole = true
   looks_rebuilt.val = true
-  // (nothing of the old frame's said to change for it: a check's, no frame of the app's)
-  scene.old_due = false
-  scene_unrecorded(fn() { watch.read(fn() { frame_body(c, w, h, scale, t) }) |> ignore })
+  watch.read(fn() { frame_body(c, w, h, scale, t) }) |> ignore
   looks_rebuilt.val = false
   looks_drawn.val = false
   painted_alone.val = false

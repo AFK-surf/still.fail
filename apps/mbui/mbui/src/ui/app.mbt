@@ -136,12 +136,9 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // what the shots being taken drew read back (shot.mbt)
   c.shots_after_present()
   log_drawn(w, h, scale, t)
-  // (a frame of the looks alone, or of the tree alone, drew no picture of its own: none is let go for it)
-  if !looks_drawn.val && !tree_alone_drawn.val {
+  // (a frame of the looks alone drew no picture of its own: none is let go for it)
+  if !looks_drawn.val {
     c.trim_images()
-  } else {
-    // (what is said of a picture nothing follows any more let go all the same: none of it drawn)
-    images_said_trim()
   }
   let t4 = work_now()
   c.t_present = t4 - t3
@@ -159,10 +156,8 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // shown (motion_data.mbt)
   c.motion_left = c.motion_owed() || c.motion_read
   c.motion_read = false
-  // (what the window's tree has going: drawn as the clock goes; what ends at a moment, woken then: view_host.mbt; what a
-  // layer of its scene waits for, scene_layers.mbt)
+  // (what the window's tree has going: drawn as the clock goes; what ends at a moment, woken then: view_host.mbt)
   view_frame_end(c)
-  c.scene_wake_into()
   // (a layout read back that moved: what was placed from it, placed again)
   if c.read_back_moved {
     c.wants_frame = true
@@ -489,8 +484,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   }
   cycle_looks_begin()
   dr.tops.clear()
-  // (the last frame's pieces kept for what of its scene is copied: scene_layers.mbt)
-  scene_segs_kept(c)
+  c.segs.clear()
   text_runs.runs.clear()
   words_alpha.val = 1.0
   look_surface.val = (1.0, -1)
@@ -510,7 +504,6 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.glass_frame()
   // (the window's tree in its order, the old frame or its old views in their places in it: view_host.mbt)
   c.view_paint(root)
-  let tree_end = c.ninst
   // what flies that no stratum over it took (strata.mbt), then what is over everything of the page wherever it was
   // painted (an editor's handles), after the rest of it (a layer's after the rest of the layer: Ctx::paint)
   c.land_flying()
@@ -523,18 +516,9 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.paint_over_layers()
   // (the handles of words a finger picked, over everything, as a field's: finger_select.mbt)
   c.paint_finger_ends()
-  // (what the old frame drew over the tree, its own: scene_layers.mbt)
-  if view_app.val is Some(_) {
-    c.scene_old_drawn(None, if tree_end < c.ninst { tree_end } else { c.ninst })
-  }
   // what was shaped and not drawn, for the host to draw ahead while it presents this frame (text.mbt)
   glyphs_ahead()
-  scene.seg_tail = c.ninst
   c.emit_segs()
-  // (the scene as this frame drew it: what changed drawn where it reaches now, scene_layers.mbt)
-  if view_app.val is Some(_) {
-    c.scene_end()
-  }
   // what is drawn by the clock, as its cycle is now (cycle_look.mbt), what it is drawn over kept for a frame of it alone
   // (frame_watch.mbt)
   looks_keep(c)
@@ -2316,7 +2300,7 @@ let probe_parts : FixedArray[Int] = FixedArray::make(3, 0)
 ///|
 /// Why the frames drawn whole were (@damage.Damage::why), each its count.
 // kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
-let probe_why : FixedArray[Int] = FixedArray::make(7, 0)
+let probe_why : FixedArray[Int] = FixedArray::make(6, 0)
 
 ///|
 // kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
@@ -2473,6 +2457,7 @@ let probe_record_ms : Double = 5000.0
 fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
   if probe_on.val < 0 {
     probe_on.val = if @hostapi.env("MBUI_PROBE") == "1" { 1 } else { 0 }
+    presented.tell(@hostapi.env("MBUI_PROBE_DAMAGE") == "1")
   }
   let recording = @hostapi.perf_recording()
   if probe_on.val == 0 && !recording {
@@ -2526,7 +2511,7 @@ fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
   // (how much of the window each drew again, docs/partial-redraw.md; the GPU's time of the last done)
   let share = presented_share.val
   probe_parts[if share >= 1.0 { 0 } else if share > 0.0 { 1 } else { 2 }] += 1
-  probe_why[scene.parts.why()] += 1
+  probe_why[presented.why()] += 1
   probe_share.val = probe_share.val + share
   probe_damage.val = probe_damage.val + presented_ms.val
   let gms = h_gpu_ms()

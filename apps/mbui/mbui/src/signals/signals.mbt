@@ -33,8 +33,6 @@ priv struct Run {
   /// algorithm, a hook beside it for what reads where a change left things once all it told is told
   mut flushing : Int
   afters : Array[() -> Unit]
-  /// what waits for that and for all of `afters` (after_all_flushed): done once none of them is left
-  lasts : Array[() -> Unit]
   /// doing what waits for a change told whole (after_flush): one at a time, in order, whatever they set meanwhile
   mut draining : Bool
 }
@@ -52,7 +50,6 @@ let run : Run = {
   queued: [],
   flushing: 0,
   afters: [],
-  lasts: [],
   draining: false,
 }
 
@@ -481,8 +478,8 @@ fn flush() -> Unit {
   // flushed in its turn, what waits on that after it)
   if run.flushing == 0 && run.batch_depth == 0 && !run.draining {
     run.draining = true
-    while run.afters.length() > 0 || run.lasts.length() > 0 {
-      let f = if run.afters.length() > 0 { run.afters.remove(0) } else { run.lasts.remove(0) }
+    while run.afters.length() > 0 {
+      let f = run.afters.remove(0)
       f()
     }
     run.draining = false
@@ -496,18 +493,6 @@ fn flush() -> Unit {
 pub fn after_flush(f : () -> Unit) -> Unit {
   if run.flushing > 0 || run.batch_depth > 0 || run.draining {
     run.afters.push(f)
-  } else {
-    f()
-  }
-}
-
-///|
-/// `f` done as after_flush does it, but once all that waits by after_flush is done too (what that set in its turn and
-/// what waits on that included): for what must see where the change left things after everything set going by it,
-/// whatever order its effects ran in.
-pub fn after_all_flushed(f : () -> Unit) -> Unit {
-  if run.flushing > 0 || run.batch_depth > 0 || run.draining {
-    run.lasts.push(f)
   } else {
     f()
   }

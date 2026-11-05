@@ -754,8 +754,6 @@ pub struct Tree {
   /// the nodes whose content was made again since the host last took them (Tree::take_changed), and whether anything
   /// drawn changed since the last frame
   pending : Array[NodeId]
-  /// the nodes placed, faded, turned or cut otherwise since the host last took them (Tree::take_placed)
-  placed_pending : Array[NodeId]
   mut drawn_due : Bool
   /// how many ask for where things stand as each change comes, before it is taken (View::laid_before_causes): what is
   /// laid out otherwise by a change before it laid out and placed as that one comes, whether a frame came or not
@@ -924,7 +922,6 @@ pub fn Tree::new(
     composed: [],
     removed: [],
     pending: [],
-    placed_pending: [],
     drawn_due: false,
     before_causes: 0,
     standing: false,
@@ -1702,8 +1699,6 @@ fn Tree::place_marked_at(self : Tree, at : Int) -> Unit {
   if !n.place_due {
     n.place_due = true
     self.places_due.push(at)
-    // (where it is drawn may change: what the scene draws again of it, at this cause, Tree::take_placed)
-    self.placed_pending.push({ at, gen: n.gen })
     self.hits = self.hits + 1
     self.marked()
   }
@@ -3297,8 +3292,6 @@ fn Tree::stack_at(self : Tree, at : Int) -> Int {
 fn Tree::top_last(self : Tree) -> Unit {
   // (the order they are drawn, found and read out in is worked out again: Tree::root_layers)
   self.order_marked()
-  // (what is drawn over what in the window changed: all of it drawn again where the scene keeps it, Tree::take_placed)
-  self.placed_pending.push({ at: 0, gen: self.nodes[0].gen })
 }
 
 ///|
@@ -5626,10 +5619,7 @@ fn Tree::settle_after_change(self : Tree, at : Double) -> Unit {
     return
   }
   self.settle_asked = true
-  // (once all that waits for the change is done too: what it set going measures where things stand, and what that
-  // pulls is told then, View::laid_before_causes's own way (moves_together); the same one change settled once,
-  // whichever order its effects ran in)
-  @signals.after_all_flushed(fn() {
+  @signals.after_flush(fn() {
     self.settle_asked = false
     // (inside an event or a moment's change: done as that one ends, Tree::event_said, Tree::advance_loop)
     if self.committing > 0 || self.cause_at >= 0.0 || self.standing {
@@ -6615,7 +6605,6 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
   if went {
     self.work.composed = self.work.composed + 1
     self.composed.push({ at, gen: n.gen })
-    self.placed_pending.push({ at, gen: n.gen })
   }
   if sized || n.look_due {
     self.made_again(at)
