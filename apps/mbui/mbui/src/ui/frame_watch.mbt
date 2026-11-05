@@ -563,16 +563,20 @@ fn looks_wake(t : Double, loc : SourceLoc) -> Unit {
 }
 
 ///|
-/// The looks by the clock applied to what the frame drew (Ctx::cycle_looks), what they ask for said as theirs.
-fn looks_apply(c : Ctx) -> Unit {
+/// The looks by the clock applied to what the frame drew (Ctx::cycle_looks; none where the frame has no looks of its
+/// own, `looks` false), what they ask for said as theirs: the tree's resident clock's next step asked either way, as a
+/// frame built whole asks it, never left as the frame before asked it (a step already drawn).
+fn looks_apply(c : Ctx, looks? : Bool = true) -> Unit {
   looks_own.wake = -1.0
   looks_own.cycling = false
   in_looks.val = true
-  c.cycle_looks()
+  if looks {
+    c.cycle_looks()
+  }
   // (the window's tree's endless decorations on the resident clock (View::cycle_resident): its next step woken for,
   // said later, as a look's here is: nothing built for it; a step nobody can see waits)
   match view_app.val {
-    Some(tree) if tree.resident_read() && app_visible() => c.wake_at_time(tree.resident_next(), later=true)
+    Some(tree) if tree.resident_read() && app_visible() => c.wake_at_time(tree.resident_next(c.clock), later=true)
     _ => ()
   }
   in_looks.val = false
@@ -892,8 +896,8 @@ fn looks_frame(c : Ctx, t : Double) -> Double {
   if looks_base.looks {
     looks_base.inst.blit_to(c.inst, len=looks_base.n * inst_size)
     c.ninst = looks_base.n
-    looks_apply(c)
   }
+  looks_apply(c, looks=looks_base.looks)
   c.t_build = 0.0
   c.t_layout = 0.0
   c.t_paint = work_now() - t0

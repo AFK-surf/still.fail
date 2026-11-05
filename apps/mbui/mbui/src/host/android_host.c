@@ -1220,6 +1220,57 @@ void mb_host_browser_login_end(int32_t id) {
   (*env)->CallStaticVoidMethod(env, login_cls, m_bl_end, id);
 }
 
+// The system's browser session (an app's engine's web_auth, the still.fail core's core_client.h): dev.mbui.WebAuth, a
+// Custom Tab the browser comes back from on the app's own scheme, its package's (mb_host_app_scheme), as an intent.
+// One at a time, as iOS's: `done` is told once, from the main thread (Native.webAuthBack).
+static void (*web_auth_done)(const char *url, const char *error, void *ctx);
+static void *web_auth_ctx;
+static jclass web_auth_cls;
+
+static jclass web_auth_class(JNIEnv *env) {
+  if (!web_auth_cls) web_auth_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/WebAuth"));
+  return web_auth_cls;
+}
+
+void mb_host_web_auth(const char *url, const char *scheme, void (*done)(const char *, const char *, void *), void *ctx) {
+  (void)scheme;  // the app's own (mb_host_app_scheme), as the core asked for its redirect
+  JNIEnv *env = env_();
+  jclass c = web_auth_class(env);
+  // one under way is given up for this one, as iOS starts a new session
+  if (web_auth_done) web_auth_done(NULL, "cancelled", web_auth_ctx);
+  web_auth_done = done;
+  web_auth_ctx = ctx;
+  jstring u = (*env)->NewStringUTF(env, url);
+  (*env)->CallStaticBooleanMethod(env, c, (*env)->GetStaticMethodID(env, c, "open", "(Ljava/lang/String;)Z"), u);
+  (*env)->DeleteLocalRef(env, u);
+}
+
+// The scheme the browser session comes back on: the app's package (UTF-8, kept); "" before the activity is there.
+const char *mb_host_app_scheme(void) {
+  static char kept[256];
+  if (kept[0]) return kept;
+  JNIEnv *env = env_();
+  jclass c = web_auth_class(env);
+  jstring s = (jstring)(*env)->CallStaticObjectMethod(env, c, (*env)->GetStaticMethodID(env, c, "scheme", "()Ljava/lang/String;"));
+  if (!s) return kept;
+  const char *u = (*env)->GetStringUTFChars(env, s, NULL);
+  snprintf(kept, sizeof kept, "%s", u);
+  (*env)->ReleaseStringUTFChars(env, s, u);
+  (*env)->DeleteLocalRef(env, s);
+  return kept;
+}
+
+JNIEXPORT void JNICALL Java_dev_mbui_Native_webAuthBack(JNIEnv *env, jclass c, jstring url, jstring error) {
+  void (*done)(const char *, const char *, void *) = web_auth_done;
+  web_auth_done = NULL;
+  if (!done) return;
+  jstring s = url ? url : error;
+  const char *text = s ? (*env)->GetStringUTFChars(env, s, NULL) : "the browser session ended";
+  if (url) done(text, NULL, web_auth_ctx);
+  else done(NULL, text, web_auth_ctx);
+  if (s) (*env)->ReleaseStringUTFChars(env, s, text);
+}
+
 // ---------------------------------------------------------------------------
 // Files picked (pick.mbt): dev.mbui.Picks opens the system's pickers and reads what comes back.
 

@@ -13,7 +13,8 @@ fn agent_hover_node(pic : @view.View, src : Source, here : () -> MessageHere, ag
   let card_on : Ref[@view.View?] = Ref(None)
   let due : Ref[() -> Unit] = Ref(fn() {  })
   let on_it = fn() {
-    @sf.pointer_rests() && (pic.pointed() || card_on.val.map(pointer_over).unwrap_or(false))
+    // A name's link takes the pointer inside its room; the card belongs to the room that keeps that link.
+    @sf.pointer_rests() && (pic.pointed_in() || card_on.val.map(pointer_over).unwrap_or(false))
   }
   // (rested on, opened; left, both it and the card, closed: each from the moment the pointer came or went)
   pic.reacts(fn() { agent() != "" && on_it() }, fn(on) {

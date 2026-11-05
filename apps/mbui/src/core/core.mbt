@@ -401,8 +401,8 @@ fn restart() -> Unit {
 
 ///|
 /// Signs a person in with still.fail cloud: `auth.begin` for the login page, the system's browser session for it
-/// (ASWebAuthenticationSession on iOS), which brings back the `stillfail://auth/callback` URL the cloud
-/// sends the browser to, then `auth.complete` with its query. `on_done` gets `auth.complete`'s answer
+/// (ASWebAuthenticationSession on iOS; a Custom Tab on Android), which brings back the `<scheme>://auth/callback` URL
+/// the cloud sends the browser to (`auth_redirect`: stillfail, or the app's own where its engine has one), then `auth.complete` with its query. `on_done` gets `auth.complete`'s answer
 /// (`{account, return_to}`) or why not (the person closed the page, or an error of the core's).
 pub fn sign_in(on_done : (Result[Json, Json]) -> Unit) -> Unit {
   let params : Map[String, Json] = {
@@ -428,7 +428,7 @@ pub fn sign_in(on_done : (Result[Json, Json]) -> Unit) -> Unit {
                 Err(why) => on_done(Err(error_json("auth", why)))
               }
             }
-            if ffi_web_auth(token, url, "stillfail") == 0 {
+            if ffi_web_auth(token, url, auth_scheme()) == 0 {
               engine.auths.remove(token)
               on_done(Err(error_json("auth", "no browser session in this build")))
             }
@@ -443,8 +443,9 @@ pub fn sign_in(on_done : (Result[Json, Json]) -> Unit) -> Unit {
 }
 
 ///|
-/// Whether this build has the system's browser session `sign_in` needs (ASWebAuthenticationSession on iOS); where it
-/// has not (Android, macOS, Windows), an app signs in on `@hostapi.browser_login` (a loopback address) instead.
+/// Whether this build has the system's browser session `sign_in` needs (ASWebAuthenticationSession on iOS, a Custom Tab
+/// coming back on the app's scheme on Android); where it has not (macOS, Windows), an app signs in on
+/// `@hostapi.browser_login` (a loopback address) instead.
 pub fn has_browser_session() -> Bool {
   ffi_has_web_auth() != 0
 }

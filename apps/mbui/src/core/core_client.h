@@ -27,6 +27,9 @@ typedef struct {
   /// A remote screen's frame `ts` acknowledged straight to its station, by the shell that reads its view (`call`, the
   /// app's call id) itself: 1, else 0 (the app asks the core). NULL: never.
   int (*screen_ack)(double call, double ts);
+  /// The scheme `web_auth` comes back on (UTF-8, kept by the engine): the app's own where each build has one (Android:
+  /// its package, so the stable, beta and dev apps side by side each get their own way back). NULL: "stillfail".
+  const char *(*auth_scheme)(void);
 } mbc_engine;
 
 // mbui's (its src/host/post_api.h, the host's own file): for an engine to hand over (`post`, `post_drop`)

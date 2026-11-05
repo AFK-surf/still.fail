@@ -9,23 +9,54 @@
 let felt_seen : Map[String, (Bool, Int)] = {}
 
 ///|
+/// What the last build saw of each (felt_change: its key, whether it is, its page's stint, how it is felt), and which
+/// build that was.
+let felt_now : Map[String, (Bool, Int, @ui.Haptic)] = {}
+
+///|
+let felt_build : Ref[Int] = Ref(-1)
+
+///|
 /// As at the start (the app's reset).
 fn felt_reset() -> Unit {
   felt_seen.clear()
+  felt_now.clear()
+  felt_build.val = -1
 }
 
 ///|
 /// `kind` felt as what `key` names comes to be (`now`, after it was seen not to be on the same stint of its page), with
 /// the app in front; not as it is first seen, nor while it stays, nor as its page is come back to with it so. Once the
-/// frame's builds are over, whichever of them saw it.
+/// frame's builds are over, what the last of them saw (felt_take): nothing told outside for it, so that what is felt
+/// builds no frame after it, whatever chat is open and whichever builds see it.
 pub fn felt_change(c : @ui.Ctx, key : String, now : Bool, kind : @ui.Haptic) -> Unit {
-  let stint = c.page_stint()
-  c.after_build("haptic/change/" + key, fn() {
+  if !felt_hooked.val {
+    felt_hooked.val = true
+    @ui.on_frame_built(fn(_) { felt_take() })
+  }
+  if felt_build.val != c.build_number() {
+    felt_build.val = c.build_number()
+    felt_now.clear()
+  }
+  felt_now[key] = (now, c.page_stint(), kind)
+}
+
+///|
+/// Whether felt_take runs as each frame's builds are over (installed once in the process).
+// kept across runs: installed once
+let felt_hooked : Ref[Bool] = Ref(false)
+
+///|
+/// What the last build saw felt where it came to be, and kept as seen; let go once taken.
+fn felt_take() -> Unit {
+  felt_now.each(fn(key, seen) {
+    let (now, stint, kind) = seen
     if now && felt_seen.get(key) == Some((false, stint)) && app_in_front() {
       @ui.haptic(kind)
     }
     felt_seen[key] = (now, stint)
   })
+  felt_now.clear()
 }
 
 ///|

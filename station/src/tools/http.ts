@@ -145,6 +145,7 @@ export function openAgentsDoor(
     }
     busy++;
     const send = (status: number, body: unknown) => {
+      if (res.destroyed) return;
       if (body === undefined) res.writeHead(status).end();
       else res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(body));
     };
@@ -163,9 +164,14 @@ export function openAgentsDoor(
         const answer = body === null ? { status: 400, body: { error: "length limit exceeded" } } : screened(req.headers.authorization, body);
         send(answer.status, answer.body);
       } else if (path === "/mcp") {
-        const body = (await bodyOf(req, Number.MAX_SAFE_INTEGER))!;
-        const reply = await mcp.handle(req.method ?? "GET", req.headers.authorization, body);
-        send(reply.status, reply.body);
+        const stop = new AbortController();
+        const disconnected = () => { if (!res.writableEnded) stop.abort(); };
+        res.once("close", disconnected);
+        try {
+          const body = (await bodyOf(req, Number.MAX_SAFE_INTEGER))!;
+          const reply = await mcp.handle(req.method ?? "GET", req.headers.authorization, body, stop.signal);
+          send(reply.status, reply.body);
+        } finally { res.off("close", disconnected); }
       } else res.writeHead(404, { "content-type": "text/plain" }).end();
     } catch (error) {
       log.warn("mcp", "a request to the agents' door failed", { error: (error as Error).message });

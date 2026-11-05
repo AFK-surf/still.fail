@@ -4,6 +4,7 @@ import { sessionOps } from "../src/read/ops-sessions.ts";
 import { makeStore } from "../src/read/store.ts";
 import type { Hub } from "../src/sessions/hub.ts";
 import { chatList } from "../src/sessions/others.ts";
+import { RecentChatPreparation } from "../src/store/chat-list-prepare.ts";
 import { Store } from "../src/store/store.ts";
 
 for (const reader of [false, true]) test(`a recent chat list reads details only for its displayed chats (reader ${reader})`, async () => {
@@ -23,6 +24,10 @@ for (const reader of [false, true]) test(`a recent chat list reads details only 
     const old = { ...common, threadList: async () => sessionOps.threadList!(plain, {}) } as unknown as Hub;
     const expected = await chatList(old, "agent", { limit: 5 });
     assert.match(expected, /\(245 more; raise limit or narrow query\)/);
+    if (reader) {
+      const prep = new RecentChatPreparation(db);
+      while (!prep.step({ ws: null, home: null }).done) { /* Prepare the reader's global page. */ }
+    }
 
     let visited = 0;
     let details = 0;
@@ -94,6 +99,8 @@ test("recent chat selection keeps workspace rules, ordering and the number left 
       recentChatList: async (ws: string | null, home: string | null, limit: number) => sessionOps.recentChatList!(read, { ws, home, limit }),
       searchChatList: async (ws: string | null, home: string | null, limit: number, query: string) => sessionOps.searchChatList!(read, { ws, home, limit, query }),
     } as unknown as Hub;
+    const prep = new RecentChatPreparation(db);
+    while (!prep.step({ ws: "here", home: "home" }).done) { /* Prepare the reader's workspace page. */ }
     for (const limit of [1, 2, 5, 100, "not-a-number"]) {
       assert.equal(await chatList(recent, "agent", { limit }), await chatList(old, "agent", { limit }), `limit ${limit}`);
     }

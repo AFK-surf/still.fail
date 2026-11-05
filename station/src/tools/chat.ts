@@ -497,7 +497,7 @@ export function chatTools(hub: Hub): Tool[] {
     { ...CHAT_STATE, run: (key, args) => chatState(hub, key, args) },
     { ...CHAT_LEAVE, run: async (key, args) => chatLeave(hub, key, args) },
     { ...CHAT_HISTORY, run: (key, args) => chatHistory(hub, key, args) },
-    { ...CHAT_LIST, run: async (key, args) => chatList(hub, key, args) },
+    { ...CHAT_LIST, run: async (key, args, signal) => chatList(hub, key, args, signal) },
     { ...CHAT_READ, run: (key, args) => afar(hub, key, "chat_read", args) ?? chatRead(hub, key, args, undefined, scopeOf(hub, key)) },
     { ...SESSION_SEND, run: (key, args) => withStaged(hub, key, args, false, (a) => sessionSend(hub, key, a)) },
     { ...CHAT_CREATE, run: (key, args) => withStaged(hub, key, args, false, (a) => chatCreate(hub, key, a)) },
