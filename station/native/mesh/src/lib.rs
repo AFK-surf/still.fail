@@ -24,6 +24,7 @@ use napi_derive::napi;
 use tokio::sync::Mutex;
 
 const MDNS_SERVICE: &str = "stillfail";
+const FORMER_MDNS_SERVICE: &str = "ember";
 
 fn failed(error: impl std::fmt::Display) -> napi::Error {
     napi::Error::from_reason(error.to_string())
@@ -162,10 +163,12 @@ pub async fn bind(options: Options) -> napi::Result<Endpoint> {
     if options.lookup.unwrap_or(false) && !relays.is_empty() {
         builder = builder
             .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE).advertise(false)))
+            .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE).advertise(false)))
             .address_lookup(Optional("the DHT", iroh_mainline_address_lookup::DhtAddressLookup::builder().no_publish()));
     } else if options.discovery.unwrap_or(true) {
         builder = builder
             .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE)))
+            .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE)))
             .address_lookup(Optional("the DHT", iroh_mainline_address_lookup::DhtAddressLookup::builder().secret_key(key)));
     }
     Ok(Endpoint { inner: builder.bind().await.map_err(failed)?, keepers: Arc::default(), homes: relays, held: Arc::default(), accepted: Arc::default() })
