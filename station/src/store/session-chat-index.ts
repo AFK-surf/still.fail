@@ -1,7 +1,8 @@
 import type { DatabaseSync } from "node:sqlite";
 import { ccSessionReady, CcIndexPreparation } from "./cc-thread-index.ts";
 
-const VERSION = 1;
+export const SESSION_CHAT_VERSION = 1;
+const VERSION = SESSION_CHAT_VERSION;
 
 // A name uses the last entry itself, including on old databases whose thread_state row is missing. Copy destinations
 // use thread_state instead, so their ordering cannot be reused for names. This order starts empty on an old station;
@@ -85,7 +86,8 @@ export const SESSION_CHAT_INDEXED = `SELECT t.* FROM session_chat_rows r INDEXED
 // JavaScript separately: an old orphaned membership may contain an integer outside JavaScript's safe range.
 export const SESSION_CHAT_SMALL = `WITH small AS MATERIALIZED
   (SELECT thread FROM thread_sessions INDEXED BY thread_sessions_session WHERE session=?1 LIMIT 2)
-  SELECT (SELECT COUNT(*) FROM small) AS _member_count,t.* FROM (SELECT 1) x
+  SELECT (SELECT version FROM session_chat_meta WHERE id=1) AS _session_chat_version,
+    (SELECT COUNT(*) FROM small) AS _member_count,t.* FROM (SELECT 1) x
   LEFT JOIN threads t ON (SELECT COUNT(*) FROM small)=1 AND t.id=(SELECT thread FROM small LIMIT 1)`;
 export const SESSION_CHAT_MANY = `SELECT 1 FROM thread_sessions INDEXED BY thread_sessions_session
   WHERE session=?1 LIMIT 1 OFFSET 1`;

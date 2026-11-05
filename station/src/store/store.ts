@@ -52,7 +52,7 @@ import { installPostBlocks, PostBlocksUnavailable, POST_BLOCK_SIZE, type PostPos
 import { checkWidgetSources, installWidgetSources, WIDGET_SOURCE, WIDGET_SOURCE_MISSING, WIDGET_SOURCE_ORIGINAL,
   WIDGET_SOURCE_UNUSUAL, WidgetSourcesUnavailable } from "./widget-sources.ts";
 import { indexedCcThreads, installCcIndex } from "./cc-thread-index.ts";
-import { indexedSessionChat, installSessionChatIndex, SessionChatUnavailable } from "./session-chat-index.ts";
+import { indexedSessionChat, installSessionChatIndex, SESSION_CHAT_SMALL, SESSION_CHAT_VERSION, SessionChatUnavailable } from "./session-chat-index.ts";
 import { installLatestThreadIndex, LATEST_THREAD_ATTEMPT, LATEST_THREAD_VERSION } from "./latest-thread-index.ts";
 import { CARD_POST_BEFORE, CARD_POST_LATEST, cardPostsReady, installCardPosts } from "./card-post-index.ts";
 import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
@@ -1375,18 +1375,26 @@ export class Store {
   /// come from them (not a still.fail chat's: read/views.ts `titleOf`), its first person's words. Null when it has none.
   /// A row's lookups, not a list's: titles are asked of every chat a list of checks names.
   sessionChat(session: string): { thread: ThreadRow; firstText: string | null } | null {
+    // Most sessions have just their own chat. This one cached statement reads the version, at most two memberships,
+    // and the answer in one snapshot, without starting a transaction or preparing an order for that common case.
+    const small = this.#one(SESSION_CHAT_SMALL, session)!;
+    if (small._session_chat_version !== SESSION_CHAT_VERSION)
+      throw new Error(`session chat index version ${small._session_chat_version ?? "missing"} is incompatible with ${SESSION_CHAT_VERSION}`);
     let r: Json | null;
-    try { r = indexedSessionChat(this.db, session); }
-    catch (error) {
-      if (!(error instanceof SessionChatUnavailable)) throw error;
-      this.requestSessionChat?.(session);
-      // This synchronous path also names phone-grant events: while an old session is prepared it must say the title
-      // at once, as before, rather than delay or invent it. Prepared sessions use the bounded lookup above.
-      r = this.#one(
-        `SELECT t.* FROM thread_sessions m JOIN threads t ON t.id = m.thread WHERE m.session = ?
-         ORDER BY (SELECT e.at FROM entries e WHERE e.thread = t.id ORDER BY e.n DESC LIMIT 1) DESC, t.created_at DESC, t.id DESC LIMIT 1`,
-        session,
-      ) ?? null;
+    if (small._member_count < 2) r = small.id === null ? null : small;
+    else {
+      try { r = indexedSessionChat(this.db, session); }
+      catch (error) {
+        if (!(error instanceof SessionChatUnavailable)) throw error;
+        this.requestSessionChat?.(session);
+        // This synchronous path also names phone-grant events: while an old session is prepared it must say the title
+        // at once, as before, rather than delay or invent it. Prepared sessions use the bounded lookup above.
+        r = this.#one(
+          `SELECT t.* FROM thread_sessions m JOIN threads t ON t.id = m.thread WHERE m.session = ?
+           ORDER BY (SELECT e.at FROM entries e WHERE e.thread = t.id ORDER BY e.n DESC LIMIT 1) DESC, t.created_at DESC, t.id DESC LIMIT 1`,
+          session,
+        ) ?? null;
+      }
     }
     if (!r) return null;
     const thread = toThread(r);
