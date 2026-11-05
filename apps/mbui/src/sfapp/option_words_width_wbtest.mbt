@@ -9,15 +9,17 @@ test "a chat option's long label and detail wrap before the end of the card's co
   t.run_for(@ui.move_most_ms)
   let label = @sffixture.said_longest("一起换")
   let detail = @sffixture.said_longest("把首页和聊天页的截图都更新")
+  // (the option read out by its words in order: its name, its line under it)
+  let said = label + " " + detail
   // Bring the option into view without relying on a particular list offset or other messages' heights.
   for _ in 0..<8 {
-    if t.semantics().iter().any(fn(s) { s.role == Button && s.label == label }) {
+    if t.semantics().iter().any(fn(s) { s.role == Button && s.label == said }) {
       break
     }
     t.wheel(195.0, 400.0, -300.0)
     t.run_for(@ui.move_most_ms)
   }
-  let rows = t.semantics().filter(fn(s) { s.role == Button && s.label == label })
+  let rows = t.semantics().filter(fn(s) { s.role == Button && s.label == said })
   assert_false(rows.is_empty(), msg="the option is visible")
   let (x, _, w, _) = rows[0].rect
   // Words end 12 points before the row's right edge, as on the previous chat page.
