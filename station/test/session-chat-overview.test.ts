@@ -4,6 +4,26 @@ import { overview } from "../src/api/overview.ts";
 import { sessionChatReady, SessionChatPreparation } from "../src/store/session-chat-index.ts";
 import { Store } from "../src/store/store.ts";
 
+test("the overview names a single chat without preparing an index", async () => {
+  const store = Store.open(":memory:");
+  try {
+    store.insertSession({ key: "s", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "s", createdAt: 1, lastActiveAt: 1, ws: "mine" });
+    const thread = store.openThread("ember", "CHAT", "s", "Only chat", null);
+    store.joinThread(thread.id, "s", "ember");
+    const hub: any = { processes: () => [], config: () => ({ dataDir: "/" }),
+      prepareSessionChatNames: async () => { throw new Error("a single chat should not need preparation"); } };
+    const accounts: any = { profilesView: () => [], loginsView: () => [], apiProviders: () => [], machineLogins: () => [],
+      decisionModels: () => [], automaticDecisionsView: (_viewer: unknown, options: any) => ({
+        recent: [{ session: "s", title: options.title("s") }],
+      }) };
+    const viewer = { sub: "s", email: "p@example.test", name: "P", role: "admin" as const,
+      workspace: "mine", device: "d", home: false };
+    const result: any = await overview({ store, hub, accounts, cloud: { state: null } as any, config: () => ({ connects: [] }) }, viewer, "en");
+    assert.deepEqual(result.automaticDecisions.recent, [{ session: "s", title: "Only chat" }]);
+  } finally { store.close(); }
+});
+
 test("the overview prepares the names it needs together before reading them", async () => {
   const store = Store.open(":memory:");
   try {

@@ -3,6 +3,21 @@ import { test } from "node:test";
 import { Store } from "../src/store/store.ts";
 import { SESSION_CHAT_EMBER, SESSION_CHAT_INDEXED, SESSION_CHAT_OTHER, SessionChatPreparation } from "../src/store/session-chat-index.ts";
 
+test("naming a session with at most one chat needs no background preparation", () => {
+  const store = Store.open(":memory:");
+  try {
+    const requests: string[] = [];
+    store.requestSessionChat = (session) => requests.push(session);
+    assert.equal(store.sessionChat("s"), null);
+    const thread = store.openThread("ember", "CHAT", "only", "Only chat", null);
+    store.joinThread(thread.id, "s", "ember");
+    assert.equal(store.sessionChat("s")?.thread.id, thread.id);
+    assert.deepEqual(requests, []);
+    assert.equal(store.db.prepare("SELECT COUNT(*) AS n FROM session_chat_scopes").get()?.n, 0);
+    assert.equal(store.db.prepare("SELECT COUNT(*) AS n FROM cc_sessions").get()?.n, 0);
+  } finally { store.close(); }
+});
+
 test("naming a session's most recent chat does not traverse its older chats", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
