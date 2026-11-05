@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { sessionThreadOf } from "../src/sessions/others.ts";
-import { Store } from "../src/store/store.ts";
+import { SESSION_HOME_THREAD, Store } from "../src/store/store.ts";
 
 test("finding a session's own conversation does not traverse its other memberships", () => {
   const store = Store.open(":memory:"), db = store.db;
@@ -46,6 +46,9 @@ test("finding a session's own conversation does not traverse its other membershi
     add(41, 400);
     const after = read();
     assert.equal(after, before, `finding the owned chat read ${before}, then ${after}, candidates`);
+    const plan = db.prepare(`EXPLAIN QUERY PLAN ${SESSION_HOME_THREAD}`).all("s").map((row) => String(row.detail)).join("\n");
+    assert.match(plan, /SEARCH t USING INDEX threads_home \(home=\?\)/);
+    assert.match(plan, /SEARCH ts USING INDEX sqlite_autoindex_thread_sessions_1 \(thread=\? AND session=\?\)/);
   } finally { store.close(); }
 });
 
