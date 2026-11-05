@@ -3,6 +3,28 @@ import type { DatabaseSync } from "node:sqlite";
 
 export type RecentScope = { kind: "home" } | { kind: "workspace"; workspace: string };
 
+// Do not use INSERT OR IGNORE: an outer old writer's INSERT OR REPLACE can override it inside a trigger. The
+// existence check coalesces work without discarding the revision a builder uses to notice an interleaved change.
+const markSession = (key: string, workspace: string) => {
+  const refs = `(EXISTS (SELECT 1 FROM thread_sessions INDEXED BY thread_sessions_session WHERE session = ${key} LIMIT 1)
+    OR EXISTS (SELECT 1 FROM threads INDEXED BY threads_home WHERE home = ${key} LIMIT 1))`;
+  return `
+    UPDATE recent_scope_session_dirty SET revision = revision + 1 WHERE kind = 1 AND ws = ${workspace} AND session = ${key};
+    INSERT INTO recent_scope_session_dirty(kind, ws, session, revision)
+      SELECT 1, ${workspace}, ${key}, 1 WHERE ${key} IS NOT NULL AND ${workspace} IS NOT NULL
+        AND EXISTS (SELECT 1 FROM recent_scope_tracked WHERE kind = 1 AND ws = ${workspace})
+        AND NOT EXISTS (SELECT 1 FROM recent_scope_session_dirty WHERE kind = 1 AND ws = ${workspace} AND session = ${key});
+    UPDATE recent_scope_session_dirty SET revision = revision + 1 WHERE kind = 0 AND ws = '' AND session = ${key} AND ${refs};
+    INSERT INTO recent_scope_session_dirty(kind, ws, session, revision)
+      SELECT 0, '', ${key}, 1 WHERE ${key} IS NOT NULL AND ${refs}
+        AND EXISTS (SELECT 1 FROM recent_scope_tracked WHERE kind = 0 AND ws = '')
+        AND NOT EXISTS (SELECT 1 FROM recent_scope_session_dirty WHERE kind = 0 AND ws = '' AND session = ${key});`;
+};
+const keyConflict = (extra: string) => `(SELECT key FROM sessions WHERE key = NEW.key ${extra})`;
+const keyConflictWs = (extra: string) => `(SELECT ws FROM sessions WHERE key = NEW.key ${extra})`;
+const tokenConflict = (extra: string) => `(SELECT key FROM sessions WHERE token = NEW.token ${extra})`;
+const tokenConflictWs = (extra: string) => `(SELECT ws FROM sessions WHERE token = NEW.token ${extra})`;
+
 export function installRecentScopeJournal(db: DatabaseSync): void {
   const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'recent_scope_tracked'").get() !== undefined;
   if (installed()) return;
@@ -12,6 +34,21 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
       CREATE TABLE recent_scope_tracked (kind INTEGER NOT NULL, ws TEXT NOT NULL, PRIMARY KEY(kind, ws)) WITHOUT ROWID;
       CREATE TABLE recent_scope_session_dirty (kind INTEGER NOT NULL, ws TEXT NOT NULL, session TEXT NOT NULL,
         revision INTEGER NOT NULL, PRIMARY KEY(kind, ws, session)) WITHOUT ROWID;
+      -- REPLACE can remove another session without a DELETE trigger, whether it conflicts by key or token.
+      CREATE TRIGGER recent_scope_session_before_add BEFORE INSERT ON sessions BEGIN
+        ${markSession(keyConflict(""), keyConflictWs(""))}
+        ${markSession(tokenConflict(""), tokenConflictWs(""))}
+      END;
+      CREATE TRIGGER recent_scope_session_add AFTER INSERT ON sessions BEGIN ${markSession("NEW.key", "NEW.ws")} END;
+      CREATE TRIGGER recent_scope_session_before_change BEFORE UPDATE OF key, ws, token ON sessions
+        WHEN OLD.key IS NOT NEW.key OR OLD.ws IS NOT NEW.ws OR OLD.token IS NOT NEW.token BEGIN
+          ${markSession("OLD.key", "OLD.ws")}
+          ${markSession(keyConflict("AND key IS NOT OLD.key"), keyConflictWs("AND key IS NOT OLD.key"))}
+          ${markSession(tokenConflict("AND key IS NOT OLD.key"), tokenConflictWs("AND key IS NOT OLD.key"))}
+      END;
+      CREATE TRIGGER recent_scope_session_change AFTER UPDATE OF key, ws, token ON sessions
+        WHEN OLD.key IS NOT NEW.key OR OLD.ws IS NOT NEW.ws OR OLD.token IS NOT NEW.token BEGIN ${markSession("NEW.key", "NEW.ws")} END;
+      CREATE TRIGGER recent_scope_session_drop BEFORE DELETE ON sessions BEGIN ${markSession("OLD.key", "OLD.ws")} END;
     `);
     db.exec("COMMIT");
   } catch (error) { db.exec("ROLLBACK"); throw error; }
