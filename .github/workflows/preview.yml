@@ -501,7 +501,10 @@ jobs:
           # clang on Linux's runner of the same four cores the same 159 in 22, chat-opener-groups 41250236826,
           # 2026-11-01; MSVC's link and lib all the same, scripts/mbc shim)
           # The app's win.sh selects it for both this build and its release variants, which share these objects.
-          # (each line it says with the seconds since it began: what of its time is MoonBit's, what the C's, 2026-11-05)
+          # (each line it says with the seconds since it began; mbc's own account (out/mbc.log, said after moon ends,
+          # as moon says what it ran only then) each line with its seconds since then too, MBC_T0: what of its time is
+          # MoonBit's, what the C's, 2026-11-05)
+          export MBC_T0=$(date +%s)
           nohup bash -c 'MBUI_WIN_CORE=0 bash apps/mbui/scripts/win.sh build 2>&1 | while IFS= read -r l; do printf "%4d %s\n" $SECONDS "$l"; done > "$0/log"; echo ${PIPESTATUS[0]} > "$0/status"' "$B" > /dev/null 2>&1 &
       - uses: ./.github/actions/setup
       # core.hbc by its inputs (HBC_CACHE, scripts/core.sh hermes), as the other jobs keep it: the core's step was 12-17 s

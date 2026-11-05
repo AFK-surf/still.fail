@@ -42,7 +42,21 @@ fn log(msg : String) -> Unit {
   match getenv("MBC_LOG") {
     // moon shows a command's output only when it fails: the wrapper's account of a build goes here too
     Some(p) if p.length() > 0 => {
-      let _ = c_append(p, utf8("mbc: " + msg + "\n"))
+      // (each line with its seconds since MBC_T0 where that is said (a build's start, epoch seconds): when in a build
+      // each of its compiles came, CI's account of where a build's time goes)
+      let at = match getenv("MBC_T0") {
+        Some(t) if t.length() > 0 => {
+          let mut t0 = 0.0
+          for b in t {
+            if b >= b'0' && b <= b'9' {
+              t0 = t0 * 10.0 + (b.to_int() - 48).to_double()
+            }
+          }
+          "[+\{secs(t0)} s] "
+        }
+        _ => ""
+      }
+      let _ = c_append(p, utf8("mbc: " + at + msg + "\n"))
 
     }
     _ => ()
