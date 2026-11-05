@@ -171,6 +171,8 @@ export class Hub {
   waitForSessionCounts: (() => Promise<boolean>) | null = null;
   /// An old thread's requested message suffix is indexed off the station thread before delivery.
   preparePostsAfter: ((messages: readonly { thread: number; n: number }[], signal?: AbortSignal) => Promise<void>) | null = null;
+  /// The message files needed to identify an old widget's source.
+  prepareWidgetSources: ((threads: readonly number[], signal?: AbortSignal) => Promise<void>) | null = null;
   private awaitingWorkspaceActivity = new Set<string>();
   /// When each idle process is next looked at for eviction.
   private deadlines = new Map<string, Fiber.Fiber<void>>();
@@ -1154,6 +1156,10 @@ export class Hub {
       preparePostsAfter: (messages, signal) => {
         if (!this.preparePostsAfter) throw new Error("post block builder unavailable");
         return this.preparePostsAfter(messages, signal);
+      },
+      prepareWidgetSources: (threads, signal) => {
+        if (!this.prepareWidgetSources) throw new Error("widget source builder unavailable");
+        return this.prepareWidgetSources(threads, signal);
       },
       chat: (connect) => this.chatOf(connect),
       driver: (runtime) => this.sessionDriver(runtime),

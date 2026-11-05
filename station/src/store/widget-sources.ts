@@ -5,7 +5,8 @@ import type { DatabaseSync } from "node:sqlite";
 const VERSION = 1;
 
 export class WidgetSourcesUnavailable extends Error {
-  constructor(readonly threads: readonly number[]) { super("widget sources are still being prepared"); }
+  readonly threads: readonly number[];
+  constructor(threads: readonly number[]) { super("widget sources are still being prepared"); this.threads = threads; }
 }
 
 // Within each thread, take only its newest matching attachment. The outer ordering compares those candidates in the

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { MERGED } from "../src/store/schema.ts";
 import { Store } from "../src/store/store.ts";
+import { WIDGET_SOURCE } from "../src/store/widget-sources.ts";
 
 test("widget models name the latest matching message as edits and membership change", () => {
   const store = Store.open(":memory:"), db = store.db;
@@ -62,9 +62,11 @@ test("a widget model does not traverse other messages to find its attachment", (
     add(2, 41);
     store.putWidgetState("widget-session", path, "{}", "selected");
     let visits = 0;
-    db.function("visited_widget_message_kind", (kind) => { visits++; return kind; });
-    db.exec("DROP VIEW merged");
-    db.exec(MERGED.replace("WHERE m.kind = 'message'", "WHERE visited_widget_message_kind(m.kind) = 'message'"));
+    db.function("visited_widget_source", (name) => { visits++; return name; });
+    db.exec(`ALTER TABLE widget_source_rows RENAME TO widget_source_rows_test;
+      CREATE VIEW widget_source_rows AS SELECT thread,n,slot,path,at,visited_widget_source(name) AS name FROM widget_source_rows_test;`);
+    const plan = db.prepare(`EXPLAIN QUERY PLAN ${WIDGET_SOURCE}`).all("widget-session", path) as { detail: string }[];
+    assert.ok(plan.some(({ detail }) => detail.includes("widget_source_by_path")), "the path lookup uses its index");
     const read = () => store.untoldWidgetModels("widget-session");
     assert.deepEqual(read(), [{ path, name: "target.html", thread: ["EMBER", "widget-thread"], model: "selected" }]);
     const before = visits;
