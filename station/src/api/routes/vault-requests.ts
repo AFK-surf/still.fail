@@ -53,7 +53,10 @@ export const routes = ({ secrets, plain, lock, events }: VaultRequestsDeps): Rou
     {
       method: "GET",
       pattern: /^\/vault\/requests$/,
-      handle: async (r) => json(200, JSON.stringify({ requests: secrets.pending(r.viewer.workspace, locked(r), r.viewer) })),
+      handle: async (r) => {
+        await secrets.preparePending(r.viewer.workspace);
+        return json(200, JSON.stringify({ requests: secrets.pending(r.viewer.workspace, locked(r), r.viewer) }));
+      },
     },
     {
       method: "POST",

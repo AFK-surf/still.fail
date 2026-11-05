@@ -4,12 +4,14 @@ import { parentPort, threadId, workerData } from "node:worker_threads";
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { BACKFILL_PAUSE_MS, REQUEST_BACKFILL_PAUSE_MS, giveBackfill, takeBackfill } from "../store/backfill.ts";
-import { backfillNextWorkspace, backfillUseIndex, readUses, useIndexComplete, type UseAnswer, type UseRead } from "./use-index.ts";
+import { backfillPendingIndex, pendingIndexComplete } from "./pending-index.ts";
+import { backfillNextWorkspace, backfillUseIndex, readUses, useIndexComplete, type PendingPrepare, type UseAnswer, type UseRead } from "./use-index.ts";
 
 const db = new DatabaseSync(workerData.path as string, { timeout: 100 });
 db.exec("PRAGMA synchronous = NORMAL");
-const waiting: UseRead[] = [];
+const waiting: (UseRead | PendingPrepare)[] = [];
 const ready = new Set<string>();
+const pendingReady = new Set<string>();
 let backgroundComplete = false;
 let scheduled = false;
 let foregroundWaiting = false;
@@ -24,9 +26,15 @@ function schedule(delay = 0) {
     // A completed page is a WAL read, not a backfill write. It must stay available even while a writer is waiting.
     if (q) {
       try {
-        if (ready.has(q.ws) || useIndexComplete(db, q.ws)) {
-          ready.add(q.ws);
-          parentPort!.postMessage({ id: q.id, bodies: readUses(db, q) } satisfies UseAnswer);
+        const pending = "kind" in q;
+        if (pending ? pendingReady.has(q.ws) || pendingIndexComplete(db, q.ws) : ready.has(q.ws) || useIndexComplete(db, q.ws)) {
+          if (pending) {
+            pendingReady.add(q.ws);
+            parentPort!.postMessage({ id: q.id, ready: true } satisfies UseAnswer);
+          } else {
+            ready.add(q.ws);
+            parentPort!.postMessage({ id: q.id, bodies: readUses(db, q) } satisfies UseAnswer);
+          }
           if (waiting.length || !backgroundComplete) schedule(waiting.length ? REQUEST_BACKFILL_PAUSE_MS : BACKFILL_PAUSE_MS);
           return;
         }
@@ -50,9 +58,15 @@ function schedule(delay = 0) {
     foregroundWaiting = false;
     try {
       if (q) {
-        if (backfillUseIndex(db, q.ws)) {
-          ready.add(q.ws);
-          parentPort!.postMessage({ id: q.id, bodies: readUses(db, q) } satisfies UseAnswer);
+        const pending = "kind" in q;
+        if (pending ? backfillPendingIndex(db, q.ws) : backfillUseIndex(db, q.ws)) {
+          if (pending) {
+            pendingReady.add(q.ws);
+            parentPort!.postMessage({ id: q.id, ready: true } satisfies UseAnswer);
+          } else {
+            ready.add(q.ws);
+            parentPort!.postMessage({ id: q.id, bodies: readUses(db, q) } satisfies UseAnswer);
+          }
         } else waiting.push(q); // Give other workspaces a turn between this one's batches.
       } else if (!backgroundComplete) backgroundComplete = backfillNextWorkspace(db);
     } catch (e) {
@@ -78,7 +92,7 @@ function schedule(delay = 0) {
   else setImmediate(step);
 }
 
-parentPort!.on("message", (q: UseRead) => {
+parentPort!.on("message", (q: UseRead | PendingPrepare) => {
   foregroundWaiting = false;
   waiting.push(q);
   schedule();

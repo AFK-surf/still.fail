@@ -31,6 +31,7 @@ import { Proxy, placeholder } from "./proxy.ts";
 import { ACCOUNT_VAR, type Captured, type Ran, SECRET_VAR, capture, runWith } from "./run.ts";
 import type { VaultStore } from "./store.ts";
 import { UseIndex } from "./use-index.ts";
+import { initializePendingIndex, pendingIndexComplete, PENDING_BODIES } from "./pending-index.ts";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS vault_requests (
@@ -222,6 +223,7 @@ export class Secrets {
   constructor(d: SecretsDeps) {
     this.#d = d;
     d.db.exec(SCHEMA);
+    initializePendingIndex(d.db);
     this.#uses = new UseIndex(d.db, d.backfill);
     const ended = (session: string) => {
       const row = d.hub.store.getSession(session);
@@ -487,10 +489,16 @@ export class Secrets {
     return this.#d.vaults.vault(viewer.workspace, vault)?.members.includes(viewer.sub) === true;
   }
 
+  /// Fill this workspace's old pending lookup before its request list is read.
+  async preparePending(ws: string): Promise<void> {
+    await this.#uses.preparePending(ws);
+  }
+
   /// The requests `viewer` may decide in workspace `ws`, still waiting.
   pending(ws: string, lock: LockState | null, viewer: { sub: string; email: string }): Request[] {
     const now = Math.floor(this.#d.now() / 1000);
-    const rows = this.#d.db.prepare("SELECT body FROM vault_requests WHERE ws = ? AND status = 'pending'").all(ws) as { body: string }[];
+    const sql = pendingIndexComplete(this.#d.db, ws) ? PENDING_BODIES : "SELECT body FROM vault_requests WHERE ws = ? AND status = 'pending'";
+    const rows = this.#d.db.prepare(sql).all(ws) as { body: string }[];
     return rows
       .map((r) => JSON.parse(r.body) as Request)
       .filter((r) => {
