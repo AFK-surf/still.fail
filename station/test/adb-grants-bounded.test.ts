@@ -6,18 +6,32 @@ import { PhoneGrants } from "../src/adb/grants.ts";
 function fixture(pending: number, granted: boolean) {
   const db = new DatabaseSync(":memory:");
   let fetched = 0;
+  let ownerFetched = 0;
+  let titles = 0;
   const queries: string[] = [];
   // Count rows actually returned to the grants reader, without changing its SQL or query plan.
   const traced = new Proxy(db, {
     get(target, property) {
       if (property === "prepare") return (sql: string) => {
         const statement = target.prepare(sql);
-        if (!/FROM adb_requests WHERE session\s*=\s*\?/.test(sql)) return statement;
-        queries.push(sql);
+        const bySession = /FROM adb_requests WHERE session\s*=\s*\?/.test(sql);
+        const byOwner = /FROM adb_requests WHERE owner\s*=\s*\?/.test(sql);
+        if (!bySession && !byOwner) return statement;
+        if (bySession) queries.push(sql);
         return new Proxy(statement, {
           get(s, p) {
-            if (p === "all") return (...args: any[]) => { const rows = s.all(...args); fetched += rows.length; return rows; };
-            if (p === "get") return (...args: any[]) => { const row = s.get(...args); if (row !== undefined) fetched++; return row; };
+            if (p === "all") return (...args: any[]) => {
+              const rows = s.all(...args);
+              if (bySession) fetched += rows.length;
+              if (byOwner) ownerFetched += rows.length;
+              return rows;
+            };
+            if (p === "get") return (...args: any[]) => {
+              const row = s.get(...args);
+              if (row !== undefined && bySession) fetched++;
+              if (row !== undefined && byOwner) ownerFetched++;
+              return row;
+            };
             const value = Reflect.get(s, p, s);
             return typeof value === "function" ? value.bind(s) : value;
           },
@@ -34,7 +48,7 @@ function fixture(pending: number, granted: boolean) {
       latestThread: () => thread, sessionThreadById: () => thread, pendingCard: () => null,
     },
   } as any;
-  const grants = new PhoneGrants({ db: traced, hub, home: () => "w", title: () => null, now: () => 1_800_000_000_000 });
+  const grants = new PhoneGrants({ db: traced, hub, home: () => "w", title: () => { titles++; return null; }, now: () => 1_800_000_000_000 });
   const put = db.prepare("INSERT INTO adb_requests(id,session,owner,status,body) VALUES(?,?,?,?,?)");
   const add = (id: string, status: "pending" | "granted") => {
     const body = { id, session: "s", chat: "CHAT/1", owner: "p@example.test", reason: "test", at: 1,
@@ -43,8 +57,24 @@ function fixture(pending: number, granted: boolean) {
   };
   for (let n = 0; n < pending; n++) add(`p-${n}`, "pending");
   if (granted) add("live", "granted");
-  return { db, grants, queries, reset: () => { fetched = 0; queries.length = 0; }, fetched: () => fetched };
+  return { db, grants, queries, reset: () => { fetched = 0; ownerFetched = 0; titles = 0; queries.length = 0; },
+    fetched: () => fetched, ownerFetched: () => ownerFetched, titles: () => titles };
 }
+
+test("a phone link change only reads live grants and does not compute request titles", () => {
+  const reads: number[] = [], named: number[] = [];
+  for (const pending of [40, 400]) {
+    const w = fixture(pending, true);
+    try {
+      w.db.prepare("UPDATE adb_requests SET body=json_set(body,'$.link','connected') WHERE id='live'").run();
+      w.reset();
+      w.grants.linked("P@EXAMPLE.TEST", { adb: "connected" });
+      reads.push(w.ownerFetched());
+      named.push(w.titles());
+    } finally { w.db.close(); }
+  }
+  assert.deepEqual({ reads, named }, { reads: [1, 1], named: [0, 0] });
+});
 
 test("finding a held phone grant does not read the session's pending requests", () => {
   const reads: number[] = [];
