@@ -2864,7 +2864,7 @@ pub fn Ctx::spring_rest(self : Ctx, key : String) -> Double {
 ///|
 #callsite(autofill(loc))
 fn Ctx::wake_at_time(self : Ctx, t : Double, later? : Bool = false, loc~ : SourceLoc) -> Unit {
-  part_wake(self.clock, t, later, loc)
+  part_wake(self.clock, t, later)
   // (asked as a list's row is built: the row's, built again as it comes by what it read of it, kept_part.mbt's
   // KeptClock; not the frame's own, frame_watch.mbt)
   if nodes_run.building is None {

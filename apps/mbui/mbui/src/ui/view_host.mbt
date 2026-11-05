@@ -2836,8 +2836,8 @@ pub fn old(
       watch.val = Some(
         @signals.watch(fn() {
           // (its build's reads are the old frame's, which builds it: told, that frame is built again (what came from
-          // outside its own, frame_watch.mbt); between frames, one asked for. Said as set where what it read was)
-          outside_counted(by?=@signals.setting_at())
+          // outside its own, frame_watch.mbt); between frames, one asked for)
+          outside_counted()
           if !frame_running.val {
             h_frame_owed()
           }
