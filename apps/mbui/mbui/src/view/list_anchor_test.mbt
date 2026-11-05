@@ -14,7 +14,7 @@ priv struct AnchoredCase {
 }
 
 ///|
-fn anchored_case(n : Int, ahead? : Double = 0.0, from_end? : Bool = true, kept? : () -> Array[Int] = fn() { [] }, rooms? : () -> (Int, Double) -> @view.ListRoom) -> AnchoredCase {
+fn anchored_case(n : Int, ahead? : Double = 0.0, from_end? : Bool = true, kept? : () -> Array[Int] = fn() { [] }, rooms? : () -> (Int, Double) -> @view.ListRoom, tall_of? : (Int) -> Double = fn(_) { 40.0 }) -> AnchoredCase {
   let scroll = @view.Scroll::list()
   let keys = @signals.signal(Array::makei(n, fn(i) { i }), same=fn(a, b) { physical_equal(a, b) })
   let heights : Map[Int, @signals.Signal[Double]] = Map([])
@@ -26,7 +26,7 @@ fn anchored_case(n : Int, ahead? : Double = 0.0, from_end? : Bool = true, kept? 
     match heights.get(k) {
       Some(h) => h
       None => {
-        let h = @signals.signal(40.0, same=fn(a, b) { a == b })
+        let h = @signals.signal(tall_of(k), same=fn(a, b) { a == b })
         heights[k] = h
         h
       }
@@ -357,4 +357,24 @@ test "a kept row under what shows, part of it asked into sight: that part's foot
   d.tree.show_in_sight(d.live[99].id(), within=fn() { Some((30.0, 180.0)) })
   d.tree.frame(390.0, 844.0, now=20.0) |> ignore
   assert_eq(d.top(99), Some(-30.0))
+}
+
+///|
+test "scrolls_anchored: flung from its end, it goes as far among 3000 rows as among 300" {
+  let gone = fn(n : Int) {
+    // (rows of many heights, counted 80 each till measured: what it counts itself scrolled by changes as they are)
+    let c = anchored_case(n, tall_of=fn(k) { 40.0 + (k % 7).to_double() * 60.0 })
+    let id = match c.tree.claimer_of(c.tree.claimers_at(150.0, 10.0), 0.0, 85.0) {
+      Some(id) => id
+      None => abort("not taken")
+    }
+    c.tree.drag_at(id, Down, 150.0, 10.0, 100.0) |> ignore
+    c.tree.drag_at(id, Moved, 150.0, 50.0, 105.0) |> ignore
+    c.tree.drag_at(id, Moved, 150.0, 95.0, 110.0) |> ignore
+    c.tree.drag_at(id, Up, 150.0, 95.0, 110.0) |> ignore
+    c.tree.frame(390.0, 844.0, now=3000.0) |> ignore
+    let made = c.made()
+    n - 1 - made[made.length() - 1]
+  }
+  assert_eq(gone(3000), gone(300))
 }

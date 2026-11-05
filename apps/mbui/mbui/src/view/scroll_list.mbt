@@ -538,9 +538,13 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
     self.fling.set(None)
     self.past.set(None)
     self.notch.set(None)
+    // (a list that holds itself at its ends (reads_free: one laid out from its anchor) where its fling or glide ends,
+    // in the hand's terms: how far it can go is in its own, as it counts itself, which the hand's are not till it is
+    // put by them as it comes to them again (rebase); held to that, it would be moved by as much as the two differ)
+    let free = self.reads_free
     match (flung, notch) {
-      (Some(f), _) => self.x.set(dclamp(f.end_x, 0.0, self.most()))
-      (_, Some(n)) => self.x.set(if n.kept { dclamp(n.x0 + n.total, 0.0, self.most()) } else { n.x0 + n.total })
+      (Some(f), _) => self.x.set(if free { f.end_x } else { dclamp(f.end_x, 0.0, self.most()) })
+      (_, Some(n)) => self.x.set(if n.kept && !free { dclamp(n.x0 + n.total, 0.0, self.most()) } else { n.x0 + n.total })
       _ => ()
     }
   })
