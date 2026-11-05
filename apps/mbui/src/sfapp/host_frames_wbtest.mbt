@@ -70,6 +70,8 @@ fn core_lists(base : Source) -> Source {
 struct HostStep {
   what : String
   frames : Array[@ui.HostFrame]
+  /// the times the chat's view was worked out in it, its frames and between them (@sfbase.views_worked)
+  views : Int
 }
 
 ///|
@@ -87,9 +89,10 @@ fn host_walk(mode : String, w : Double, h : Double, platform : Int) -> (Array[Ho
   let steps : Array[HostStep] = []
   let step = fn(what : String, ms : Double, f : () -> Unit) {
     t.host_frames() |> ignore
+    let views = @sfbase.views_worked()
     f()
     t.run_as_host(ms)
-    steps.push({ what, frames: t.host_frames() })
+    steps.push({ what, frames: t.host_frames(), views: @sfbase.views_worked() - views })
   }
   t.record_host()
   // (what a chat's page makes outside frames too: its list's entries, its messages made of their JSON)
@@ -380,6 +383,25 @@ test "a key in a long chat's composer makes no entries and no messages, on a pho
         if n > 0 {
           out.push("\{s.what} at \{w}: \{k} \{n}")
         }
+      }
+    }
+  }
+  assert_eq(out, [])
+}
+
+///|
+/// Entering a chat, leaving it, choosing another and sending in it work the chat's view out (view_of_chat: on a device
+/// the core's topic asked for, its params made and written out to find it among the subscriptions) once for each
+/// change of what it is made of, however many times its page reads it: never once a read. Each of a page's reads
+/// asking anew took 185 of a leave's 378 ms on a phone (2026-11-05): 329 as a chat is left here, 420 as it is
+/// entered.
+test "entering, leaving or choosing a chat works its view out once for each change, not once for each read, on a phone and a desktop" {
+  let out : Array[String] = []
+  for w in [390.0, 1280.0] {
+    let (long, _) = host_walk_of("chat-long", w)
+    for s in long {
+      if ["left", "entered", "another chosen", "chosen back", "sent"].contains(s.what) && s.views > 2 {
+        out.push("\{s.what} at \{w}: worked out \{s.views} times")
       }
     }
   }
