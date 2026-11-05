@@ -1629,3 +1629,33 @@ test("a login card in Slack: only for a login here waiting for its page's code; 
   await settle();
   await r.close();
 });
+
+test("a chat an agent opens told no effort runs the one its starter uses most with its model there, else the model's", async () => {
+  const r = new Rig({ link: true });
+  const a = say("<@UBOT> think hard");
+  await r.accept(a);
+  await settle();
+  const keyA = sessionKey("cl", "C1", a.threadTs);
+  // Never named one: the model's own.
+  await r.call(keyA, "chat_create", { key: "first", text: "first" });
+  const first = r.session(r.store.openedBy(keyA)[0]!.child);
+  assert.equal(first.effort ?? null, null);
+  // Their chats on that runtime and model ran at high, more than at low: high.
+  const ran = (effort: string, keys: string[]) => {
+    for (const k of keys) r.store.db.prepare("UPDATE sessions SET runtime = ?, model = ?, effort = ? WHERE key = ?").run(first.runtime, first.model ?? null, effort, k);
+  };
+  ran("high", [keyA, first.key]);
+  await r.call(keyA, "chat_create", { key: "second", text: "second" });
+  const second = r.session(r.store.openedBy(keyA)[1]!.child);
+  assert.equal(second.effort, "high");
+  // One named stays as named.
+  await r.call(keyA, "chat_create", { key: "third", text: "third", effort: "low" });
+  assert.equal(r.session(r.store.openedBy(keyA)[2]!.child).effort, "low");
+  // One no profile here runs any longer: the model's own, not refused.
+  ran("no-such-effort", [keyA, first.key, second.key]);
+  r.store.setOpenedState("", first.key, "all_done");
+  r.store.setOpenedState("", second.key, "all_done");
+  await r.call(keyA, "chat_create", { key: "fourth", text: "fourth" });
+  assert.equal(r.session(r.store.openedBy(keyA)[3]!.child).effort ?? null, null);
+  await r.close();
+});
