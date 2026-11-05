@@ -324,9 +324,15 @@ pub fn made_chat(session : String) -> Json {
 ///|
 /// Thousands of messages, of the kinds a long chat has: short words back and forth, an agent's Markdown now and then.
 pub fn long_chat(n : Int) -> Json {
+  long_chat_last(n, n)
+}
+
+///|
+/// The last `k` of long_chat(n)'s messages alone, the same as there: a short chat that shows what the long one shows.
+pub fn long_chat_last(n : Int, k : Int) -> Json {
   let claude = by_agent("anthropic", "claude", "s-c1")
   let out : Array[Json] = []
-  for i in 0..<n {
+  for i in (n - k)..<n {
     let seq = i + 1
     let m = match i % 5 {
       0 => msg(seq, "person", by_person("林"), "第 \{seq} 条：这一步看起来可以了，继续下一步。", "昨天", { "mine": true })
@@ -442,6 +448,10 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
         None
       } else if f.mode == "chat-long" {
         Some(kept_chat("long", fn() { long_chat(3000) }))
+      } else if f.mode == "chat-long-30" {
+        // (the last 30 of the same chat alone: a frame of it costs what one of the 3000 does, sfapp's
+        // host_frames_wbtest.mbt)
+        Some(kept_chat("long-30", fn() { long_chat_last(3000, 30) }))
       } else if session == "s-c1" {
         let base = kept_chat("rich/\{f.older}/\{f.mode}/\{f.step}", fn() {
           let v = if f.mode == "chat-overload-before" || f.mode == "chat-overload-after" {

@@ -808,10 +808,15 @@ fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
   // where the frame changed, as the scene was told it at its causes: the parts a host that keeps its picture draws
   // again (docs/partial-redraw.md, scene_layers.mbt)
   let t0 = h_now()
+  let captures = scene.captures.map(fn(k) { k.1 })
   let parts = c.scene_parts_taken()
   presented_ms.val = h_now() - t0
   match fake.val {
-    Some(f) => f.instances = count
+    Some(f) => {
+      f.instances = count
+      // (what a host that keeps its picture is told, kept for a test that records it: tester_host.mbt)
+      host_parts_last.val = (parts, host_glass_of(parts, captures, c.window_w, c.window_h))
+    }
     None => {
       let (r, gg, b) = c.clear
       let mut area = 0.0
