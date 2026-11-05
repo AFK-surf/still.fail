@@ -97,6 +97,47 @@ these operations, not Android execution times. The comparison baseline remains
 `351cef2857f2b281a25728363e9416fbc6b469bb`; it is not the subsequently updated
 `arch/next` or a deployed build.
 
+## Android measurements and the current architecture reference
+
+The development app was built as classic Wasm and compiled with Wasmtime 50.0.1
+for aarch64 Android, using the same APK shell for each source state and a 512 KiB
+Wasm stack. The fixture needed its native input allocation exports added before
+the native text-input path could run. This did not change the host ABI.
+
+The first host timing record started after the retained tree had already been
+built and laid out. A charged-work regression failed on that implementation;
+moving the start before the retained tree made the five timing/record tests
+pass. The production work figure now includes that tree. Its legacy build,
+layout and paint components still describe the old-frame portion; they must not
+be summed and presented as all work. Temporary instrumentation also measured
+input callbacks outside the frame, host presentation, the drive and the tail.
+
+The second Android comparison explicitly waited for the keyboard's inset
+callback before typing. All four six-line input runs had the same reported
+keyboard inset (279.0769348144531), 11 measured frames and 17 input callbacks.
+Runs were ordered baseline, experiment, experiment, baseline. The complete
+framework-work totals were respectively 72, 76, 37 and 237 ms; their largest
+single frames were 25, 18, 9 and 138 ms. Input-callback totals were 60, 99, 38 and
+211 ms. These shared-machine measurements do not establish a stable speedup.
+The scroll runs also had different frame counts, so comparing their totals or
+number of frames as a speedup would be invalid.
+
+The open-chat scenario failed in both states because its script looked for the
+chat page's title on Home. The actual Home row is `整理发布清单`; it is not
+`一个很长的对话`. This was a script failure, and the run's successful shell exit
+does not make that scenario pass. The final input screenshot was also not proof
+that the last text update had reached drawing: the `field` assertion reads the
+editor's value. The next diagnostic records the matching text at its paint site.
+
+The current architecture reference is pinned separately at
+`2e870349057312211e7ac1de96d6e6371fd9f5a2`. It already has anchored chat history
+and logical-time layout changes absent from the original baseline above. The
+experimental integration must be compared with this reference before claiming
+it improves on the current architecture. A separate branch applies only the
+model/motion dependency boundary, native input exports and complete-frame
+accounting to that reference (`ce0ae7f3ec`); its 33 framework and 28 chat tests
+pass. It does not adopt the experimental intrinsic-height graph or extent index.
+
 ## Contracts and counterexamples
 
 The scoped Wasm-GC suite passed 29/29 tests. These cover controlled model
