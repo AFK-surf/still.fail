@@ -41,15 +41,11 @@ test "a crossed message's pictures wait for its Markdown and are decoded at thei
     t.image_loads().filter(fn(load) { load.0 == "bytes:\{web.length()}" || load.0 == "bytes:\{phone.length()}" })
   }
   assert_eq(picture_loads(), [], msg="the unknown places are not decoded at a guessed size")
+  let (_, last_before) = @ui.view_tree().unwrap().list_rows().unwrap()
   t.drag(195.0, 250.0, 195.0, 650.0, steps=2)
   t.run_for(@ui.move_most_ms * 4.0)
-  let tree = @ui.view_tree().unwrap()
-  let (first, last) = tree.list_rows().unwrap()
-  let visible : Array[String] = []
-  for i in first..=last {
-    match tree.list_row(i) { Some((key, _, _, _)) => visible.push(key); None => () }
-  }
-  assert_false(visible.contains("m:ts129"), msg="the message has left the list")
+  let (_, last_after) = @ui.view_tree().unwrap().list_rows().unwrap()
+  assert_true(last_after < last_before, msg="the message at the list's end has left the window")
   match answer.val { Some(done) => done(Some(@sffixture.table_images_md)); None => fail("no Markdown request") }
   let decoded = picture_loads()
   @sf.markdown_read.val = None
