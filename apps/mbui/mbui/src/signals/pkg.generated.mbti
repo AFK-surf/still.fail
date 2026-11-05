@@ -44,6 +44,8 @@ pub fn[K : Hash + Eq] keyed() -> Keyed[K]
 
 pub fn last_set_at() -> String
 
+pub fn[T] lazy_signal(T, same? : (T, T) -> Bool) -> LazySignal[T]
+
 pub fn output_read() -> Unit
 
 pub fn[T] project(() -> T) -> T
@@ -88,6 +90,14 @@ pub struct Keyed[K] {
 pub fn[K : Hash + Eq] Keyed::has(Self[K], K) -> Bool
 pub fn[K : Hash + Eq] Keyed::peek(Self[K], K) -> Bool
 pub fn[K : Hash + Eq] Keyed::set(Self[K], Array[K]) -> Unit
+
+pub struct LazySignal[T] {
+  // private fields
+}
+pub fn[T] LazySignal::get(Self[T]) -> T
+pub fn[T] LazySignal::is_read(Self[T]) -> Bool
+#callsite(autofill(loc))
+pub fn[T] LazySignal::set(Self[T], T, loc~ : SourceLoc) -> Unit
 
 type Link
 

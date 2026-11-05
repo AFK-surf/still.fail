@@ -19,10 +19,7 @@ pub fn Tree::lit_all(self : Tree, on : Bool) -> Unit {
       Some(s) => s.set(on || self.pointed == id)
       None => ()
     }
-    match n.pressed_cell {
-      Some(s) => s.set(on || self.pressing == id)
-      None => ()
-    }
+    n.pressed_cell.set(on || self.pressing == id)
     match n.pointed_in_cell {
       Some(s) => s.set(on || self.pointed_within_at(at))
       None => ()
@@ -65,7 +62,7 @@ pub fn Tree::hand_nodes(self : Tree) -> Array[HandNode] {
       key,
       holder,
       said: n.look.words,
-      lights: n.pointed_cell is Some(_) || n.pressed_cell is Some(_) || n.on_press is Some(_) || self.input_hover.contains(at),
+      lights: n.pointed_cell is Some(_) || n.pressed_cell.is_read() || n.on_press is Some(_) || self.input_hover.contains(at),
       y: n.ly,
       w: n.lw,
       h: n.lh,

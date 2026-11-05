@@ -355,7 +355,7 @@ struct Node {
   mut back_said : Int
   /// whether it is held, and pointed at, as what reads it reads it (View::pressed, View::pointed): made as first read,
   /// let go with it
-  mut pressed_cell : @signals.Signal[Bool]?
+  mut pressed_cell : @signals.LazySignal[Bool]
   mut pointed_cell : @signals.Signal[Bool]?
   /// what it does as the pointer moves onto it or over it (View::on_pointer_moved): the pointer's own moving, not a
   /// layout putting it under a still pointer
@@ -397,7 +397,7 @@ struct Node {
   mut focus_tab : Bool
   /// whether Tab's stop on it is said by View::tab_stop (the last saying of it), not by View::focusable's `tab`
   mut tab_by_stop : Bool
-  mut focused_cell : @signals.Signal[Bool]?
+  mut focused_cell : @signals.LazySignal[Bool]
   /// how big it was laid out, told once all of the layout is done (View::laid_size_told: none till then); made as
   /// first read
   mut size_cell : @signals.Signal[(Double, Double)?]?
@@ -460,7 +460,7 @@ struct Node {
   /// (Tree::set_rows_grid), each laid out as tall as whole pixels (@flex.Style's rows_grid) and all moved alike so the
   /// first one's top is on one, as an old view's list's are (ui's Ctx::row_slot, Ctx::rows_on_pixels)
   mut list_rows : Bool
-  mut focus_shown_cell : @signals.Signal[Bool]?
+  mut focus_shown_cell : @signals.LazySignal[Bool]
   /// what a finger or the pointer held on it does as it goes (View::on_drag)
   mut on_drag : ((Drag) -> Unit)?
   /// how many fingers held on it at once it takes (View::on_drag's `fingers`): one more calls the hold off
@@ -1096,7 +1096,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.on_key = None
       n.on_back = None
       n.on_back_step = None
-      n.pressed_cell = None
+      n.pressed_cell = @signals.lazy_signal(self.lit_every, same=fn(a, b) { a == b })
       n.pointed_cell = None
       n.on_pointer_moved = None
       n.pointed_in_cell = None
@@ -1115,7 +1115,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.beside = None
       n.beside_last = None
       n.beside_point = None
-      n.focused_cell = None
+      n.focused_cell = @signals.lazy_signal(false, same=fn(a, b) { a == b })
       n.size_cell = None
       n.rect_cell = None
       n.drawn_rect_cell = None
@@ -1138,7 +1138,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.scroll_held = -1
       n.scroll_across = false
       n.list_rows = false
-      n.focus_shown_cell = None
+      n.focus_shown_cell = @signals.lazy_signal(false, same=fn(a, b) { a == b })
       n.key_said = 0
       n.wheel_said = 0
       n.on_drag = None
@@ -1190,7 +1190,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         on_back: None,
         on_back_step: None,
         back_said: 0,
-        pressed_cell: None,
+        pressed_cell: @signals.lazy_signal(self.lit_every, same=fn(a, b) { a == b }),
         pointed_cell: None,
         on_pointer_moved: None,
         pointed_in_cell: None,
@@ -1210,7 +1210,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         focus_keys: 0,
         focus_tab: true,
         tab_by_stop: false,
-        focused_cell: None,
+        focused_cell: @signals.lazy_signal(false, same=fn(a, b) { a == b }),
         size_cell: None,
         rect_cell: None,
         drawn_rect_cell: None,
@@ -1237,7 +1237,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         scroll_held: -1,
         scroll_across: false,
         list_rows: false,
-        focus_shown_cell: None,
+        focus_shown_cell: @signals.lazy_signal(false, same=fn(a, b) { a == b }),
         on_drag: None,
         fingers: 1,
         drag_said: 0,
@@ -5072,7 +5072,7 @@ fn View::let_go(self : View) -> Unit {
   n.bones = 0L
   n.bone_whole = false
   n.cut = false
-  n.pressed_cell = None
+  n.pressed_cell = @signals.lazy_signal(false, same=fn(a, b) { a == b })
   n.pointed_cell = None
   n.on_pointer_moved = None
   n.pointed_in_cell = None
@@ -5088,8 +5088,8 @@ fn View::let_go(self : View) -> Unit {
   n.beside = None
   n.beside_last = None
   n.beside_point = None
-  n.focused_cell = None
-  n.focus_shown_cell = None
+  n.focused_cell = @signals.lazy_signal(false, same=fn(a, b) { a == b })
+  n.focus_shown_cell = @signals.lazy_signal(false, same=fn(a, b) { a == b })
   n.size_cell = None
   n.rect_cell = None
   n.drawn_rect_cell = None
@@ -6202,7 +6202,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     }
     self.pull()
     self.bindings_applied()
-    guard !self.layout_due else { abort("presentation hover marked layout") }
+    if self.layout_due { fault("presentation hover marked layout") }
     let painted = self.paint_outputs(false)
     if painted || !self.changed.is_empty() || !self.composed.is_empty() { self.drawn_due = true }
     self.due = false
@@ -7716,8 +7716,8 @@ fn Tree::held_to(self : Tree, h : NodeId?) -> Unit {
   }
   if was != h {
     self.pressing = h
-    self.hand_told(was, fn(n) { n.pressed_cell }, false)
-    self.hand_told(h, fn(n) { n.pressed_cell }, true)
+    self.input_told(was, fn(n) { n.pressed_cell }, false)
+    self.input_told(h, fn(n) { n.pressed_cell }, true)
   }
 }
 
@@ -7733,19 +7733,19 @@ fn Tree::hand_told(self : Tree, id : NodeId?, cell : (Node) -> @signals.Signal[B
 }
 
 ///|
+/// Input values exist from the node's birth. Only their subscription cells are
+/// lazy, so a paint reader cannot become the source of press or focus state.
+fn Tree::input_told(self : Tree, id : NodeId?, cell : (Node) -> @signals.LazySignal[Bool], on : Bool) -> Unit {
+  guard id is Some(i) && self.alive_id(i) else { return }
+  cell(self.nodes[i.at]).set(on || self.lit_every)
+}
+
+///|
 /// Whether a finger or the pointer is held on it now (from its down till it is let go or called off): what reads it
-/// told only as that comes or goes. Its cell made as first read, let go with it.
+/// told only as that comes or goes. Its subscription cell is made as first read.
 pub fn View::pressed(self : View) -> Bool {
   guard self.live() is Some(n) else { return false }
-  let s = match n.pressed_cell {
-    Some(s) => s
-    None => {
-      let s = @signals.signal(self.tree.lit_every || self.tree.pressing == Some(self.id()), same=fn(a, b) { a == b })
-      n.pressed_cell = Some(s)
-      s
-    }
-  }
-  s.get()
+  n.pressed_cell.get()
 }
 
 ///|

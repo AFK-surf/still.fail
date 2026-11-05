@@ -241,7 +241,11 @@ pub fn end_batch() -> Unit {
 ///|
 /// A signal holding `initial`.
 pub fn[T] signal(initial : T, same? : (T, T) -> Bool) -> Signal[T] {
-  let hovered = from_hover()
+  signal_with_source(initial, from_hover(), same?)
+}
+
+///|
+fn[T] signal_with_source(initial : T, hovered : Bool, same? : (T, T) -> Bool) -> Signal[T] {
   let state : SignalState[T] = { current: initial, pending: initial, pending_hover: hovered, same }
   let node = ReactiveNode::new(MUTABLE, SignalNode, update=signal_update(state))
   node.observes_hover = hovered

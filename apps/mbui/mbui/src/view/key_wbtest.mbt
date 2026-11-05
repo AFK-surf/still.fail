@@ -41,7 +41,7 @@ test "hand: a node's cells of whether it is held or pointed at made as read, let
   )
   t.frame(390.0, 844.0) |> ignore
   let cells = fn() {
-    t.nodes.iter().filter(fn(n) { n.pressed_cell is Some(_) || n.pointed_cell is Some(_) }).count()
+    t.nodes.iter().filter(fn(n) { n.pressed_cell.is_read() || n.pointed_cell is Some(_) }).count()
   }
   let at_first = cells()
   for _ in 0..<20 {

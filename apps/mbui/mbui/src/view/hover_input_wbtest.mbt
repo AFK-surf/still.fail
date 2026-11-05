@@ -1,4 +1,29 @@
 ///|
+test "input state first read by hover paint still belongs to the input, in either read order" {
+  for case in 0..<6 {
+    let which = case % 3
+    let t = Tree::new(fn(root) {
+      root.box(fn(v) {
+        let input = fn() {
+          match which {
+            0 => v.pressed()
+            1 => v.focused()
+            _ => v.focus_shown()
+          }
+        }
+        if case >= 3 { input() |> ignore }
+        v.ground(By(fn() { v.pointed() |> ignore; if input() { 1L } else { 0L } }))
+        .width(By(fn() { Some(if input() { 80.0 } else { 100.0 }) }))
+        .height(Is(Some(40.0))) |> ignore
+      }) |> ignore
+    })
+    defer { t.dispose() }
+    t.frame(300.0, 300.0, now=0.0) |> ignore
+    assert_false(t.layout_due)
+  }
+}
+
+///|
 test "publishing hover during a frame does not taint the frame's later model writes" {
   for source in 0..<3 {
     let model = @signals.signal(0)

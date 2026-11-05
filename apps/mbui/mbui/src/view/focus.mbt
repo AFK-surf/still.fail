@@ -93,15 +93,7 @@ pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter |
 /// first read, let go with it.
 pub fn View::focused(self : View) -> Bool {
   guard self.live() is Some(n) else { return false }
-  let s = match n.focused_cell {
-    Some(s) => s
-    None => {
-      let s = @signals.signal(self.tree.focused == Some(self.id()), same=fn(a, b) { a == b })
-      n.focused_cell = Some(s)
-      s
-    }
-  }
-  s.get()
+  n.focused_cell.get()
 }
 
 ///|
@@ -109,17 +101,7 @@ pub fn View::focused(self : View) -> Bool {
 /// :focus-visible). Its cell made as first read, let go with it.
 pub fn View::focus_shown(self : View) -> Bool {
   guard self.live() is Some(n) else { return false }
-  let s = match n.focus_shown_cell {
-    Some(s) => s
-    None => {
-      let s = @signals.signal(self.tree.focused == Some(self.id()) && self.tree.focus_visible, same=fn(a, b) {
-        a == b
-      })
-      n.focus_shown_cell = Some(s)
-      s
-    }
-  }
-  s.get()
+  n.focus_shown_cell.get()
 }
 
 ///|
@@ -245,12 +227,12 @@ fn Tree::focus_set(self : Tree, id : NodeId?, visible : Bool) -> Unit {
   // (told as one change: what reads both never sees one half of it)
   @signals.start_batch()
   if was != id {
-    self.hand_told(was, fn(n) { n.focused_cell }, false)
-    self.hand_told(id, fn(n) { n.focused_cell }, true)
+    self.input_told(was, fn(n) { n.focused_cell }, false)
+    self.input_told(id, fn(n) { n.focused_cell }, true)
   }
   if was != id || shown_was != visible {
-    self.hand_told(was, fn(n) { n.focus_shown_cell }, false)
-    self.hand_told(id, fn(n) { n.focus_shown_cell }, visible)
+    self.input_told(was, fn(n) { n.focus_shown_cell }, false)
+    self.input_told(id, fn(n) { n.focus_shown_cell }, visible)
   }
   // (come to one: brought into sight by what holds it, once laid out: Tree::show_in_sight)
   match id {

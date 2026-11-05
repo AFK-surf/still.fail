@@ -582,7 +582,7 @@ pub let edge_line_steps : Int32
 
 pub fn edge_look(@ui.Ctx, String, over~ : Bool, on~ : Bool, active~ : Bool, line? : Bool) -> Unit
 
-pub fn edge_look_node(@view.View, () -> Bool, () -> Bool, () -> Bool, line? : () -> Bool) -> @view.View
+pub fn edge_look_node(@view.View, () -> Bool, () -> Bool, () -> Bool, line? : () -> Bool, on_input? : () -> Bool) -> @view.View
 
 pub fn edge_node(@view.View, () -> String, () -> Double, () -> Double, () -> Double, @view.Side, (Resized, Double) -> Unit, (Bool) -> Unit, on_beside? : (Double) -> Bool, beside? : (Double) -> Unit, tips? : TipLayer, side? : @view.Side) -> @view.View
 
@@ -1047,6 +1047,8 @@ pub let list_words_room : @ui.Space
 pub let lit_apart : Double
 
 pub fn lit_in_node(@view.View) -> Bool
+
+pub fn lit_in_on_input_node(@view.View) -> Bool
 
 pub fn lit_node(@view.View) -> Bool
 
@@ -3187,7 +3189,7 @@ pub(all) struct Placed {
 
 pub(all) struct PlacedNode {
   draw : (@view.View) -> Unit
-  image : (Double, (@view.View, () -> Double) -> Unit)?
+  image : (Double, (@view.View) -> Unit)?
 }
 
 pub(all) struct Playing {
