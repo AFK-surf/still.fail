@@ -626,6 +626,27 @@ test("sending_to_an_archived_chat_restores_it_before_delivery_and_keeps_a_failed
   core.close();
 });
 
+test("a_message_in_the_outbox_carries_its_words_in_runs_as_its_message_will", async () => {
+  const thread = threadView(7, 0);
+  const { host, core } = await started({
+    ...base(),
+    "GET /threads": [thread],
+    "GET /threads/7/entries?limit=50": { first: 1, last: 0, entries: [], thread },
+  });
+  stationReplies(host, (req) => (req.method === "POST" && req.url.endsWith("/threads/7/messages") ? status(500, { error: "busy" }) : undefined));
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", session: "k1" });
+  await host.settle();
+  call(core, ui, 2, "chat.send", { station: "ws/st", thread: 7, text: "看 [首页](https://app.still.fail/w/ws/s/st/chats/s-c2) 吧" });
+  await host.settle();
+  apply(host, values);
+  // What the page draws while it is in the outbox: the reference, never `[首页](…)` as written.
+  const pending = v(values, 1).outbox[0];
+  assert.deepEqual(pending.words.map((r: J) => [r.text, r.ref ?? false]), [["看 ", false], ["首页", true], [" 吧", false]]);
+  core.close();
+});
+
 test("two_messages_sent_during_a_restore_do_not_lose_the_second_if_the_first_restore_fails", async () => {
   const thread: J = { ...threadView(7, 0), hiddenAt: 42 };
   const { host, core } = await started({

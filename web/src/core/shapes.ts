@@ -2790,6 +2790,11 @@ export interface Outgoing {
 	id: string;
 	text: string;
 	/**
+	 * Its words in runs, as its message will draw them (refLinks.ts personWords: a reference to a chat `ref`, a
+	 * bare web address `link`). Absent when it has none.
+	 */
+	words?: unknown;
+	/**
 	 * Its files as its message will draw them, an image still going up among them already (its `upload`; its
 	 * `path` `upload:<id>` until it is up, no station having it yet).
 	 */
