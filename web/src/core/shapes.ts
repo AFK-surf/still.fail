@@ -4899,6 +4899,10 @@ export interface LockPair {
 	untilText?: string;
 	/** The trusted devices it dials here: open still.fail on one of those (none from a core of before). */
 	approvers?: LockApprover[];
+	/** Those in words, for its page (在任意一台上打开 still.fail 就会弹出安全码：…); none where it dials none. */
+	approversText?: string;
+	/** Those showing a code now, in words (安全码弹在：…); none where none does. */
+	showingText?: string;
 }
 
 /** This device in the workspace's lock. */

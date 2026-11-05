@@ -579,6 +579,11 @@ export function lockView(inner: Inner, ws: string): J {
         return { id: a.id, showing: a.showing === true, nameText: v?.fullText ?? t("web-pages.security.appDevice"), usedText: v?.usedText ?? null, lastSeen: v?.lastSeen ?? null };
       })
       .sort((a: J, b: J) => Number(b.showing) - Number(a.showing) || (b.lastSeen ?? -1) - (a.lastSeen ?? -1));
+    // In words, for the page: which to open (all of them, while it looks), which show a code now.
+    const names = (list: J[]) => list.map((a) => a.nameText).join(t("core-misc.lock.listSep"));
+    const showing = pair.approvers.filter((a: J) => a.showing);
+    if (pair.approvers.length > 0) pair.approversText = t("core-misc.lock.pairApprovers", { names: names(pair.approvers) });
+    if (showing.length > 0) pair.showingText = t("core-misc.lock.pairShowingOn", { names: names(showing) });
   }
   return {
     available: true,

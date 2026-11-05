@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Effect } from "effect";
 import { CoreError } from "../src/error.ts";
+import { t } from "../src/i18n.ts";
 import { type Duplex, dialer, PAIR_DIAL_MS, PAIR_DIAL_TRIES, PAIR_REDIAL_MS } from "../src/views/pair.ts";
 import { ME, elsewhere, genesis, pipe, rig } from "./lock-rig.ts";
 
@@ -63,8 +64,13 @@ test("a trusted device opened after the new device asked shows its code: dialled
   await w.ask("lock.pair", { workspace: "ws" });
   // 25 s on, neither reached: still looking (not "none", as when each was dialled once), each dialled three times.
   await w.host.time.pass(25_000);
-  assert.equal((await w.pair()).state, "finding");
+  const finding = await w.pair();
+  assert.equal(finding.state, "finding");
   assert.deepEqual([w.dials[PHONE_APP], w.dials[LAPTOP_APP]], [3, 3]);
+  // Its page says which to open, and that none shows a code yet.
+  assert.equal(finding.approversText, t("core-misc.lock.pairApprovers", { names: finding.approvers.map((a: { nameText: string }) => a.nameText).join(t("core-misc.lock.listSep")) }));
+  assert.match(finding.approversText, /Pixel 8/);
+  assert.equal(finding.showingText, undefined);
   // The person opens still.fail on their phone: it shows a code at the next dial.
   w.ways[PHONE_APP] = "code";
   await w.host.time.pass(PAIR_REDIAL_MS);
@@ -72,6 +78,7 @@ test("a trusted device opened after the new device asked shows its code: dialled
   assert.equal(p.state, "code");
   assert.deepEqual(p.approvers.map((a: { id: string; showing: boolean }) => [a.id, a.showing]), [[PHONE_APP, true], [LAPTOP_APP, false]]);
   assert.match(p.approvers[0].nameText, /Pixel 8/);
+  assert.equal(p.showingText, t("core-misc.lock.pairShowingOn", { names: p.approvers[0].nameText }), "where the code shows");
   assert.equal((w.hellos[0] as { t: string }).t, "hello");
   // The phone kept, not dialled again; the laptop still is, a code shown elsewhere or not, PAIR_DIAL_TRIES times in all.
   await w.host.time.pass(10 * PAIR_REDIAL_MS);

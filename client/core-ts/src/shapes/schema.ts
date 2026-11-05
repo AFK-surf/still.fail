@@ -1653,6 +1653,8 @@ export const SHAPES: Record<string, Shape> = {
     ["until", opt("i64"), { client: opt("I54"), doc: "While a code is typed: when the last trusted device's code is too old (ms)." }],
     ["untilText", opt("String"), { said: true, doc: "That, in words (14:05 前有效)." }],
     ["approvers", opt(vec("LockApprover")), { doc: "The trusted devices it dials here: open still.fail on one of those (none from a core of before)." }],
+    ["approversText", opt("String"), { said: true, doc: "Those in words, for its page (在任意一台上打开 still.fail 就会弹出安全码：…); none where it dials none." }],
+    ["showingText", opt("String"), { said: true, doc: "Those showing a code now, in words (安全码弹在：…); none where none does." }],
   ], { doc: "This device's try to be approved face to face (views/pair.ts)." }),
   LockDraftDevice: struct([
     ["id", "String"],

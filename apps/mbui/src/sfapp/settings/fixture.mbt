@@ -2857,14 +2857,17 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
 fn waiting_lock(mode : String) -> Json {
   let mode = if mode.has_suffix("-dark") { mode.unsafe_substring(start=0, end=mode.length() - 5) } else { mode }
   let pair = match mode {
-    "lock-finding" => obj([("state", str("finding"))])
+    // (the devices it dials, in the core's words: which to open; and where the code shows, once one does)
+    "lock-finding" =>
+      obj([("state", str("finding")), ("approversText", str("在其中任意一台上打开 still.fail，就会弹出安全码：Pixel 9 · still.fail Android、林的 MacBook Pro · still.fail 桌面版"))])
     "lock-code" | "lock-upgrade" =>
-      obj([("state", str("code")), ("left", Json::number(3.0)), ("untilText", str("14:05 前有效"))])
+      obj([("state", str("code")), ("left", Json::number(3.0)), ("untilText", str("14:05 前有效")), ("showingText", str("安全码弹在：Pixel 9 · still.fail Android"))])
     "lock-wrong" => obj([("state", str("wrong")), ("left", Json::number(2.0)), ("untilText", str("14:05 前有效"))])
     "lock-wrong-gone" =>
       obj([("state", str("wrong")), ("left", Json::number(2.0)), ("error", str("安全码不对，或显示它的设备已断开，还可以试 2 次")), ("untilText", str("14:05 前有效"))])
     "lock-checking" => obj([("state", str("checking")), ("left", Json::number(3.0))])
-    "lock-none" => obj([("state", str("none"))])
+    "lock-none" =>
+      obj([("state", str("none")), ("approversText", str("在其中任意一台上打开 still.fail，就会弹出安全码：Pixel 9 · still.fail Android、林的 MacBook Pro · still.fail 桌面版"))])
     "lock-failed" => obj([("state", str("failed")), ("error", str("配对超时"))])
     "lock-elsewhere" =>
       obj([("state", str("failed")), ("devices", Json::number(0.0)), ("error", str("此设备已在「日常」获批，在这里还需要此 workspace 的管理员或你在这里的受信任设备批准"))])
