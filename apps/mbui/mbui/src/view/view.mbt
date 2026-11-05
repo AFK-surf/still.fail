@@ -356,9 +356,6 @@ struct Node {
   mut said_cell : @signals.Signal[Int]?
   /// a row of a list made by its key (View::each): the same while its key is there, whatever is made in it anew
   mut each_row : Bool
-  /// what that row is known by where it is made anew for the same key (View::row_known_as: a windowed list's block,
-  /// its slot let go as it leaves the window): what is picked in it found in it again as it comes back
-  mut row_id : NodeId?
   /// whether it takes input now as what reads it reads it (View::takes_input): made as first read, let go with it
   mut input_cell : @signals.Signal[Bool]?
   /// whether it can take the keyboard's focus, which of Enter (1) and Space (2) press it as it has it (View::focusable;
@@ -535,11 +532,6 @@ struct Node {
 ///|
 /// The nodes made once of a window, its clock and what it did.
 pub struct Tree {
-  /// which node a row made anew for its key is now, by the name it is known by (View::row_known_as: one of
-  /// Tree::row_name's, never a node's own)
-  rows_known : Map[NodeId, Int]
-  /// how many such names were given (Tree::row_name)
-  mut rows_named : Int
   /// the moment what is drawn is drawn at (a frame's, to be shown then), a signal a look follows (Tree::drawn_at); the
   /// logic follows no clock (its moment `logic`, what is due on its timeline said once: Tree::advance)
   clock : @signals.Signal[Double]
@@ -843,8 +835,6 @@ pub fn Tree::new(
       Some(f) => f
       None => fn(words, shorter, look, room) { shorter_w_by(measure, words, shorter, look, room) }
     },
-    rows_known: {},
-    rows_named: 0,
     nodes: [],
     free: [],
     looks_due: [],
@@ -1058,7 +1048,6 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.here_cell = None
       n.said_cell = None
       n.each_row = false
-      n.row_id = None
       n.focusable = false
       n.focus_typing = false
       n.focus_keys = 0
@@ -1152,7 +1141,6 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         here_cell: None,
         said_cell: None,
         each_row: false,
-        row_id: None,
         focusable: false,
         focus_typing: false,
         input_cell: None,
@@ -4980,11 +4968,6 @@ fn View::let_go(self : View) -> Unit {
     self.tree.hosting = -1
   }
   self.tree.removed.push({ at: self.at, gen: self.gen })
-  // (a row known by a name for its key no longer this node: the name to none till its next is made, View::row_known_as)
-  match self.tree.nodes[self.at].row_id {
-    Some(id) if self.tree.rows_known.get(id) == Some(self.at) => self.tree.rows_known.remove(id)
-    _ => ()
-  }
   self.tree.free.push(self.at)
   self.tree.order_marked()
   self.tree.work.let_go = self.tree.work.let_go + 1

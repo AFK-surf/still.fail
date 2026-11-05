@@ -124,13 +124,6 @@ pub fn View::shown_across(self : View, but? : View) -> (Double, Double)? {
 ///|
 /// The node `id` names, while it lives (that making of it); None let go.
 pub fn Tree::view_of(self : Tree, id : NodeId) -> View? {
-  // (a row's name for its key (Tree::row_name): the row it is now, made anew as that may be; none while it is not made)
-  if id.at < -1 {
-    return match self.rows_known.get(id) {
-      Some(at) if self.nodes[at].live && self.nodes[at].row_id == Some(id) => Some(self.handle(at))
-      _ => None
-    }
-  }
   if id.at < 0 || id.at >= self.nodes.length() {
     return None
   }

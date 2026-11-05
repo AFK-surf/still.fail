@@ -298,14 +298,11 @@ test "a chat's page with nothing changed makes none of its rows again; a message
   let alive = @ui.view_tree().unwrap().rows_alive().length()
   let kept = t.tree_rows_kept()
   assert_true(alive > 0 && kept == alive, msg="\{kept} of \{alive} rows kept")
-  // one more said: the rows there kept as they were, the new one among them once it has come in (a row gone out of
-  // sight over them as the list follows its end let go, as a windowed list's are)
-  let (first, _) = @ui.view_tree().unwrap().list_rows().unwrap()
+  // one more said: the rows there kept as they were, the new one among them once it has come in
   messages.push(said(31, "新的一句"))
   changes.set(2)
   t.frame()
-  let (first_now, _) = @ui.view_tree().unwrap().list_rows().unwrap()
-  assert_eq(t.tree_rows_kept(), alive - (first_now - first), msg="the rows there before kept")
+  assert_eq(t.tree_rows_kept(), alive, msg="the rows there before kept")
   t.run_for(@sf.enter_ms)
   assert_true(t.find("新的一句") is Some(_))
 }

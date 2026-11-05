@@ -164,32 +164,7 @@ pub fn View::row_place(self : View) -> (NodeId, Array[Int]) {
     up.push(p.kids().search_by(fn(k) { k.at == at.at }).unwrap_or(0))
     at = p
   }
-  let id = match at.live() {
-    Some(n) if n.each_row => n.row_id.unwrap_or(at.id())
-    _ => at.id()
-  }
-  (id, up.rev())
-}
-
-///|
-/// A name for a row of a list made by its key (View::row_known_as), never a node's own: no node it names is let go and
-/// made again under it.
-pub fn Tree::row_name(self : Tree) -> NodeId {
-  self.rows_named = self.rows_named + 1
-  { at: -1 - self.rows_named, gen: 0 }
-}
-
-///|
-/// A row of a list made by its key known by `id` (Tree::row_name's), as the rows made for the same key before it were
-/// (View::row_place, Tree::view_of): its node made anew where that one was let go.
-pub fn View::row_known_as(self : View, id : NodeId) -> Unit {
-  match self.live() {
-    Some(n) => {
-      n.row_id = Some(id)
-      self.tree.rows_known[id] = self.at
-    }
-    None => ()
-  }
+  (at.id(), up.rev())
 }
 
 ///|
