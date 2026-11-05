@@ -44,7 +44,7 @@ fn jobs_toggle() -> Unit {
 
 ///|
 fn chat_bar_node(parent : @view.View, src : Source, w : Workspace, r : ChatRef, stint : Int,
-  view : () -> ChatView?, width : () -> Double, corners : () -> FixedArray[@ui.CornerOf]?,
+  view : () -> ChatView?, corners : () -> FixedArray[@ui.CornerOf]?,
   ground : (@view.View) -> Int64) -> Unit {
   let chat = fn() { (src.topic)("chat", chat_params(r)).value }
   let station = fn() {
@@ -58,111 +58,132 @@ fn chat_bar_node(parent : @view.View, src : Source, w : Workspace, r : ChatRef, 
   let tips = @sf.TipLayer::new(fn() { Some(popup) })
   let info_at : Ref[@view.View?] = Ref(None)
   let jobs_at : Ref[@view.View?] = Ref(None)
-  let room = fn(p : @view.View, n : () -> Double) {
-    p.box(fn(s) { s.width(By(fn() { Some(n()) })).shrink(Is(0.0)) |> ignore }) |> ignore
+  let on = [("station", r.station), ("session", r.session)]
+  let renaming = fn() {
+    items((src.topic)("doing", {}).value, "doing").iter().find_first(fn(d) {
+      text(Some(d), "call") == "chat.rename" && text(Some(d), "stage") != "failed" &&
+        on.iter().all(fn(kv) { text(field(Some(d), "params"), kv.0) == kv.1 })
+    }).map(fn(d) { text(field(Some(d), "params"), "title") }).unwrap_or("")
+  }
+  let failed = fn() { core_failed(src, ["chat.rename"], on) }
+  let people = fn() { view().map(fn(v) { v.people }).unwrap_or([]) }
+  let agents = fn() { view().map(fn(v) { v.agents }).unwrap_or([]) }
+  let parts = fn() {
+    let parts = [("title", 0)]
+    if renaming() != "" || failed() is Some(_) { parts.push(("rename", 0)) }
+    if view().map_or(false, fn(v) { v.agents.length() == 0 }) && station() is Some(_) {
+      parts.push(("station", 0))
+    }
+    if !people().is_empty() { parts.push(("people", chat_bar_drop_people)) }
+    for i, agent in agents() {
+      parts.push(("agent/" + agent.key, if i == 0 { 0 } else { chat_bar_drop_agents }))
+    }
+    parts
   }
   parent.box(fn(row) {
     pane_bar_made(row)
     row.over(Is(true)).width_share(Is(1.0)).row(Is(true)).moves_window(By(@ui.window_inset_now))
     .height(By(fn() { Some(@sf.wide_bar_h + (if corners() is Some(_) { @sf.tape_bar_over() } else { 0.0 })) }))
     .offset(By(fn() { (dmin(0.0, page_bar_room().2), 0.0) })) |> ignore
-    room(row, fn() { dmax(0.0, page_bar_room().2) })
-    row.box(fn(bar) {
-      bar_fills(bar.row(Is(true)).lines_up(Is(Some(Middle))))
-      .height_share(Is(1.0)).ground(By(fn() { ground(bar) }))
-      .padding(By(fn() { (0.0, if corners() is Some(_) { @sf.tape_bar_over() } else { 0.0 }, 0.0, 1.0) }))
-      |> ignore
-      room(bar, fn() { page_bar_room().0 })
-      bar.box(fn(inner) {
-        bar_fills(inner.row(Is(true)).lines_up(Is(Some(Middle)))).gap(Is(@ui.Space::px(S4))) |> ignore
-        inner.box(fn(title) {
-          bar_fills(title.row(Is(true)).lines_up(Is(Some(Middle))))
-          .padding(Is((@ui.Space::px(S2), 0.0, @ui.Space::px(S1), 0.0)))
-          .gap(Is(@ui.Space::px(S2_5))).fits(Is(true)) |> ignore
-          chat_title_node(title, src, r, view, width, tips)
-          title.show(fn() { view().map_or(false, fn(v) { v.agents.length() == 0 }) && station() is Some(_) }, fn(s) {
-            chat_station_node(s, r.station, fn() { station().unwrap() }, fn() { stint })
-          })
-          let people = fn() { view().map(fn(v) { v.people }).unwrap_or([]) }
-          title.show(fn() { people().length() > 0 }, fn(p) {
-            p.drops(Is(chat_bar_drop_people)) |> ignore
-            people_stack_node(p, src, people, 5, fn() { stint }, tips)
-          })
-          let agents = fn() { view().map(fn(v) { v.agents }).unwrap_or([]) }
-          title.each(fn() { agents().map(fn(a) { a.key }) }, fn(a) { a }, fn(tile, key) {
-            let first = fn() { agents().length() > 0 && agents()[0].key == key.get() }
-            tile.drops(By(fn() { if first() { 0 } else { chat_bar_drop_agents } })) |> ignore
-            let initial = @signals.untracked(fn() { agents().iter().find_first(fn(a) { a.key == key.get() }).unwrap() })
-            agent_tile_node(tile, src, r,
-              fn() { agents().iter().find_first(fn(a) { a.key == key.get() }).unwrap_or(initial) },
-              fn() { view().map_or(false, fn(v) { v.agents.length() > 1 && side_of(v).1 == key.get() }) },
-              fn() { if first() { station() } else { None } }, fn() { stint }, fn() { ground(tile) })
-          })
-        }) |> ignore
-        inner.show(finding, fn(f) {
-          guard @signals.untracked(view) is Some(v) && v.thread is Some(th) else { return }
-          @sfpages.find_bar_node(f, src, r, th, chat_find_list(r), tips) |> ignore
-        })
-        inner.show(fn() { !finding() && view() is Some(_) }, fn(keys) {
-          keys.row(Is(true)).gap(By(fn() { @sf.keys_apart() })).lines_up(Is(Some(Middle))) |> ignore
-          let button = fn(p : @view.View, icon : String, label : String, press : () -> Unit) {
-            @sf.icon_button_node(p, icon, fn() { @sf.t(label) }, press, tips~)
-            .radius(By(fn() {
-              if corners() is Some(_) || @ui.window_keys_own() { @sf.bar_key_side / 2.0 }
-              else { @sf.window_corner_key().radius(@ui.tree_corner_roots_now()) }
-            }))
-          }
-          keys.show(fn() { !native() && view().map_or(false, fn(v) { v.archivable && !v.archived }) }, fn(a) {
-            button(a, "archive", "web-pages.chat.archive", fn() {
-              match view() { Some(v) => archive_asked(src, w, r, v, chat()); None => () }
-            }) |> ignore
-          })
-          keys.show(fn() { (!native() || column_short.get()) && (flag(jobs(), "hasJobs") || items(jobs(), "jobs").length() > 0) }, fn(j) {
-            let b = button(j, "web", "web-pages.chat.services", jobs_toggle)
-            jobs_at.val = Some(b)
-            j.owns(fn() { jobs_at.val = None }) |> ignore
-            chat_key_dot_node(j, fn() { text(jobs(), "alarm") }, fn() { ground(j) })
-          })
-          keys.show(fn() { (!native() || column_short.get()) && view().map_or(false, fn(v) { v.screens.length() > 0 }) }, fn(s) {
-            button(s, "monitor", "web-pages.chat.screen", fn() {
-              match view() { Some(v) => {
-                let (x, y, ww, hh) = s.placed_window_now()
-                chat_screens_open(r, v.screens, from=At(x, y, ww, hh))
-              }; None => () }
-            }) |> ignore
-            chat_key_dot_node(s, fn() { if view().map_or(false, fn(v) { chat_screens_driven(v.screens) }) { "restart" } else { "" } }, fn() { ground(s) })
-          })
-          keys.show(fn() { !native() }, fn(ours) {
-            ours.row(Is(true)).gap(By(fn() { @sf.keys_apart() })) |> ignore
-            let b = button(ours, "info", "web-pages.chat.info", fn() {
-              chat_own.info_open.set(!@signals.untracked(fn() { chat_own.info_open.get() }))
-            })
-            info_at.val = Some(b)
-            ours.owns(fn() { info_at.val = None }) |> ignore
-            ours.box(fn(m) {
-              button(m, "more", "common.more", fn() {
-                let (x, y, ww, hh) = m.placed_window_now()
-                @sfpages.open_chat_menu(src, w.id, r, @sfpages.chat_extra_items(src, r, chat()), from=At(x, y, ww, hh))
-              }) |> ignore
-            }) |> ignore
-            ours.show(fn() { view().map_or(false, fn(v) { side_of(v).0.length() == 0 && v.agents.length() > 0 }) }, fn(p) {
-              button(p, "panel-open", "web-pages.chat.openPanel", fn() {
-                match view() { Some(v) if v.agents.length() > 0 => side_change(src, r, "open", Some(v.agents[0].key)); _ => () }
-              }) |> ignore
-            })
-          })
-        })
-      }) |> ignore
-      room(bar, fn() {
-        match corners() {
-          Some(ks) => @sf.tape_bar_end_of(ks, @ui.tree_corner_roots_now(), bar_in,
-            side=if finding() { @sfpages.find_field_h } else { @sf.bar_key_side })
-          None => if view().map_or(false, fn(v) { side_of(v).0.length() > 0 }) { bar_in }
-            else if finding() { @sf.window_clear_in(bar_in) } else { page_bar_room().1 }
+    let back = row.box(fn(bar) { bar.ground(By(fn() { ground(bar) })) |> ignore })
+    let cells : Map[String, @view.View] = {}
+    row.each(parts, fn(part) { part.0 }, fn(part, value) {
+      let key = @signals.untracked(fn() { value.get().0 })
+      cells[key] = part
+      part.owns(fn() { cells.remove(key) }) |> ignore
+      match key {
+        "title" => {
+          part.words(By(fn() { if renaming() != "" { renaming() } else { view().map(fn(v) { v.title }).unwrap_or(r.title) } }))
+          .words_look(By(fn() { @ui.style_words(chat_title_words) })).ink(By(fn() { @ui.style_ink(chat_title_words) }))
+          .cuts(Is(true), keep=true).allow_ellipsis(Is(true)) |> ignore
         }
+        "rename" => {
+          part.points(Is(true)) |> ignore
+          part.show(fn() { renaming() != "" }, fn(s) { @sf.spinner_node(s) |> ignore })
+          part.show(fn() { renaming() == "" && failed() is Some(_) }, fn(f) {
+            @sf.icon_node(f, "info", 14.0, By(fn() { @sf.theme().p.red })) |> ignore
+          })
+          @sf.tip_node(tips, part, fn() { failed().unwrap_or(@sf.t("web-pages.settings.stations.renaming")) }) |> ignore
+        }
+        "station" => chat_station_node(part, r.station, fn() { station().unwrap() }, fn() { stint })
+        "people" => people_stack_node(part, src, people, 5, fn() { stint }, tips)
+        _ => {
+          let agent_key = key.unsafe_substring(start=6, end=key.length())
+          let first = fn() { agents().length() > 0 && agents()[0].key == agent_key }
+          let initial = @signals.untracked(fn() { agents().iter().find_first(fn(a) { a.key == agent_key }).unwrap() })
+          agent_tile_node(part, src, r,
+            fn() { agents().iter().find_first(fn(a) { a.key == agent_key }).unwrap_or(initial) },
+            fn() { view().map_or(false, fn(v) { v.agents.length() > 1 && side_of(v).1 == agent_key }) },
+            fn() { if first() { station() } else { None } }, fn() { stint }, fn() { ground(part) })
+        }
+      }
+    })
+    let actions = row.box(fn(actions) {
+      actions.show(finding, fn(f) {
+        guard @signals.untracked(view) is Some(v) && v.thread is Some(th) else { return }
+        @sfpages.find_bar_node(f, src, r, th, chat_find_list(r), tips) |> ignore
       })
-    }) |> ignore
-    room(row, fn() { let (_, _, ml, mr) = page_bar_room(); mr + dmin(0.0, ml) })
+      actions.show(fn() { !finding() && view() is Some(_) }, fn(keys) {
+        keys.row(Is(true)).gap(By(fn() { @sf.keys_apart() })).lines_up(Is(Some(Middle))) |> ignore
+        let button = fn(p : @view.View, icon : String, label : String, press : () -> Unit) {
+          @sf.icon_button_node(p, icon, fn() { @sf.t(label) }, press, tips~)
+          .radius(By(fn() {
+            if corners() is Some(_) || @ui.window_keys_own() { @sf.bar_key_side / 2.0 }
+            else { @sf.window_corner_key().radius(@ui.tree_corner_roots_now()) }
+          }))
+        }
+        keys.show(fn() { !native() && view().map_or(false, fn(v) { v.archivable && !v.archived }) }, fn(a) {
+          button(a, "archive", "web-pages.chat.archive", fn() {
+            match view() { Some(v) => archive_asked(src, w, r, v, chat()); None => () }
+          }) |> ignore
+        })
+        keys.show(fn() { (!native() || column_short.get()) && (flag(jobs(), "hasJobs") || items(jobs(), "jobs").length() > 0) }, fn(j) {
+          let b = button(j, "web", "web-pages.chat.services", jobs_toggle)
+          jobs_at.val = Some(b)
+          j.owns(fn() { jobs_at.val = None }) |> ignore
+          chat_key_dot_node(j, fn() { text(jobs(), "alarm") }, fn() { ground(j) })
+        })
+        keys.show(fn() { (!native() || column_short.get()) && view().map_or(false, fn(v) { v.screens.length() > 0 }) }, fn(s) {
+          button(s, "monitor", "web-pages.chat.screen", fn() {
+            match view() { Some(v) => {
+              let (x, y, ww, hh) = s.placed_window_now()
+              chat_screens_open(r, v.screens, from=At(x, y, ww, hh))
+            }; None => () }
+          }) |> ignore
+          chat_key_dot_node(s, fn() { if view().map_or(false, fn(v) { chat_screens_driven(v.screens) }) { "restart" } else { "" } }, fn() { ground(s) })
+        })
+        keys.show(fn() { !native() }, fn(ours) {
+          ours.row(Is(true)).gap(By(fn() { @sf.keys_apart() })) |> ignore
+          let b = button(ours, "info", "web-pages.chat.info", fn() {
+            chat_own.info_open.set(!@signals.untracked(fn() { chat_own.info_open.get() }))
+          })
+          info_at.val = Some(b)
+          ours.owns(fn() { info_at.val = None }) |> ignore
+          ours.box(fn(m) {
+            button(m, "more", "common.more", fn() {
+              let (x, y, ww, hh) = m.placed_window_now()
+              @sfpages.open_chat_menu(src, w.id, r, @sfpages.chat_extra_items(src, r, chat()), from=At(x, y, ww, hh))
+            }) |> ignore
+          }) |> ignore
+          ours.show(fn() { view().map_or(false, fn(v) { side_of(v).0.length() == 0 && v.agents.length() > 0 }) }, fn(p) {
+            button(p, "panel-open", "web-pages.chat.openPanel", fn() {
+              match view() { Some(v) if v.agents.length() > 0 => side_change(src, r, "open", Some(v.agents[0].key)); _ => () }
+            }) |> ignore
+          })
+        })
+      })
+    })
+    chat_bar_layout(row, back, cells, actions, parts, fn() {
+      let (pl, _, ml, mr) = page_bar_room()
+      let top = if corners() is Some(_) { @sf.tape_bar_over() } else { 0.0 }
+      let end = match corners() {
+        Some(ks) => @sf.tape_bar_end_of(ks, @ui.tree_corner_roots_now(), bar_in,
+          side=if finding() { @sfpages.find_field_h } else { @sf.bar_key_side })
+        None => if view().map_or(false, fn(v) { side_of(v).0.length() > 0 }) { bar_in }
+          else if finding() { @sf.window_clear_in(bar_in) } else { page_bar_room().1 }
+      }
+      (pl, end, ml, mr, top, finding() || view() is Some(_))
+    })
   }) |> ignore
   let active = fn() { app.nav.drawn_stay().0 == stint && view() is Some(_) }
   popup.pick(fn() { (@sf.native_side(), column_short.get()) }, fn(layer, arrangement) {
@@ -188,32 +209,6 @@ fn chat_bar_node(parent : @view.View, src : Source, w : Workspace, r : ChatRef, 
       }, fn() { chat_own.jobs_open.set(false) }, w=jobs_pop_w,
       side=if from_side && !short { Left } else { Bottom },
       along=if from_side && !short { Start } else { End })
-  })
-}
-
-///|
-fn chat_title_node(parent : @view.View, src : Source, r : ChatRef, view : () -> ChatView?, width : () -> Double, tips : @sf.TipLayer) -> Unit {
-  let on = [("station", r.station), ("session", r.session)]
-  let renaming = fn() {
-    items((src.topic)("doing", {}).value, "doing").iter().find_first(fn(d) {
-      text(Some(d), "call") == "chat.rename" && text(Some(d), "stage") != "failed" &&
-        on.iter().all(fn(kv) { text(field(Some(d), "params"), kv.0) == kv.1 })
-    }).map(fn(d) { text(field(Some(d), "params"), "title") }).unwrap_or("")
-  }
-  parent.box(fn(t) {
-    t.words(By(fn() { if renaming() != "" { renaming() } else { view().map(fn(v) { v.title }).unwrap_or(r.title) } }))
-    .words_look(By(fn() { @ui.style_words(chat_title_words) })).ink(By(fn() { @ui.style_ink(chat_title_words) }))
-    .max_width(By(fn() { Some(dmax(chat_title_least, width() * chat_title_part)) }))
-    .cuts(Is(true), keep=true).allow_ellipsis(Is(true)) |> ignore
-  }) |> ignore
-  let failed = fn() { core_failed(src, ["chat.rename"], on) }
-  parent.show(fn() { renaming() != "" || failed() is Some(_) }, fn(mark) {
-    mark.points(Is(true)) |> ignore
-    mark.show(fn() { renaming() != "" }, fn(s) { @sf.spinner_node(s) |> ignore })
-    mark.show(fn() { renaming() == "" && failed() is Some(_) }, fn(f) {
-      @sf.icon_node(f, "info", 14.0, By(fn() { @sf.theme().p.red })) |> ignore
-    })
-    @sf.tip_node(tips, mark, fn() { failed().unwrap_or(@sf.t("web-pages.settings.stations.renaming")) }) |> ignore
   })
 }
 

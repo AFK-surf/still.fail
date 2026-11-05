@@ -203,7 +203,7 @@ fn chat_talk_node(
     })
   })
   |> ignore
-  chat_bar_node(talk, src, w, r, k, view, width, corners, ground)
+  chat_bar_node(talk, src, w, r, k, view, corners, ground)
 }
 
 ///|
