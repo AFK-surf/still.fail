@@ -2,6 +2,10 @@
 // the text cursor over those words.
 
 ///|
+/// The touch press used in the frame comparison before the pointer walks across the page.
+let chat_toprow_touch_ms : Double = 80.0
+
+///|
 fn chat_toprow_shapes(t : @ui.Tester, w : Double, h : Double, points : Array[(Double, Double)]) -> Array[String] {
   let found = Array::make(points.length(), "")
   let mut y = 24.0
@@ -37,7 +41,7 @@ test "words under a chat brought to the front say the text cursor" {
   chat_toprow_shapes(t, 740.0, 1000.0, []) |> ignore
   t.move(790.0, 1050.0)
   t.touch_at(0, 712.0, 500.0, t.time())
-  t.run_for(80.0)
+  t.run_for(chat_toprow_touch_ms)
   t.touch_at(2, 712.0, 500.0, t.time())
   t.run_for(@ui.move_most_ms * 2.0)
   assert_eq(chat_toprow_shapes(t, 740.0, 1000.0, [(120.0, 24.0), (168.0, 24.0)]), ["IBeam", "IBeam"])
