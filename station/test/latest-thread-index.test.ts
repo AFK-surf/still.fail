@@ -254,15 +254,15 @@ test("opening an existing shared conversation does not stage its tracked members
       assert.equal(db.prepare("SELECT COUNT(*) AS n FROM latest_thread_changed").get()?.n, 0);
       assert.equal(store.openThread("slack", "C", "shared", null, null).id, shared.id);
       counts.push(Number(db.prepare("SELECT COUNT(*) AS n FROM latest_thread_changed").get()?.n));
-      assert.equal(db.prepare("SELECT COUNT(*) AS n FROM latest_thread_adding_ids").get()?.n, 0,
+      assert.equal(db.prepare("SELECT COUNT(*) AS n FROM latest_thread_change_ids WHERE op=0").get()?.n, 0,
         "this station does not attempt an insert for an existing conversation");
       // An older writer can still attempt the insert, or ignore a conflicting update. Neither operation needs
       // a snapshot for each tracked member, and the original order remains readable.
       db.prepare("INSERT OR IGNORE INTO threads(surface,channel,thread_ts,created_at) VALUES('slack','C','shared',1)").run();
-      oldWriterIds.push(Number(db.prepare("SELECT COUNT(*) AS n FROM latest_thread_adding_ids").get()?.n));
+      oldWriterIds.push(Number(db.prepare("SELECT COUNT(*) AS n FROM latest_thread_change_ids WHERE op=0").get()?.n));
       assert.equal(db.prepare("SELECT COUNT(*) AS n FROM latest_thread_changed").get()?.n, 0);
       db.prepare("UPDATE OR IGNORE threads SET thread_ts='occupied' WHERE id=?").run(shared.id);
-      ignoredUpdateIds.push(Number(db.prepare("SELECT COUNT(*) AS n FROM latest_thread_updating_ids").get()?.n));
+      ignoredUpdateIds.push(Number(db.prepare("SELECT COUNT(*) AS n FROM latest_thread_change_ids WHERE op=1").get()?.n));
       assert.equal(db.prepare("SELECT COUNT(*) AS n FROM latest_thread_updating").get()?.n, 0);
       assert.equal(indexedLatestThread(db, "s-0")?.id, shared.id);
       db.prepare("UPDATE threads SET thread_ts='renamed' WHERE id=?").run(occupied.id);
