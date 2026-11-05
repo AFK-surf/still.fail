@@ -42,10 +42,23 @@ fn ffi_wall_ms() -> Double = "mbhost" "mbc_wall_ms"
 
 fn ffi_screen_ack(call : Double, ts : Double) -> Int = "mbhost" "mbc_screen_ack"
 
+fn mbw_mbc_auth_scheme() -> Int = "mbhost" "mbc_auth_scheme"
+
+///|
+fn ffi_auth_scheme() -> String {
+  @wasmrt.take_string(mbw_mbc_auth_scheme())
+}
+
+///|
+/// The scheme the system's browser session comes back on: the engine's (Android: the app's package), else stillfail.
+fn auth_scheme() -> String {
+  ffi_auth_scheme()
+}
+
 ///|
 /// Where the cloud sends a sign-in back to: the app's own scheme, which the system's browser session hands back.
 fn auth_redirect() -> String {
-  "stillfail://auth/callback"
+  auth_scheme() + "://auth/callback"
 }
 
 ///|

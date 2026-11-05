@@ -42,6 +42,12 @@ fn ffi_screen_ack(_call : Double, _ts : Double) -> Int {
 }
 
 ///|
+/// The scheme the system's browser session comes back on (none here).
+fn auth_scheme() -> String {
+  "stillfail"
+}
+
+///|
 /// Where the cloud sends a sign-in back to: the web's own page for it (web/src/cloud/accounts.ts), which takes it in
 /// and goes on to `return_to`.
 extern "js" fn auth_redirect() -> String =

@@ -48,6 +48,12 @@ fn ffi_screen_ack(_call : Double, _ts : Double) -> Int {
 }
 
 ///|
+/// The scheme the system's browser session comes back on (none here).
+fn auth_scheme() -> String {
+  "stillfail"
+}
+
+///|
 fn auth_redirect() -> String {
   "stillfail://auth/callback"
 }
