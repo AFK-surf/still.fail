@@ -339,6 +339,22 @@ pub fn window_corner() -> Double {
 /// Tester's `window_corners`, else its `window_corner`), each its own where they differ (an iPhone Duo's outer screen:
 /// 8 along its hinge), window_corner the roundest of them.
 pub fn window_corner_at(k : Int) -> Double {
+  match corners_said.get() {
+    Some(c) => c[k & 3]
+    None => window_corner_now(k)
+  }
+}
+
+///|
+/// The window's four corners as the host has them as this frame began (window_corner_now's), a signal: what reads them
+/// (window_corner_at) built again as the window's size, scale or full screen changes them, nothing as they do not. None
+/// before the first frame (the host asked at once then).
+// kept across runs: said as each frame begins (device_frame_start)
+let corners_said : @signals.Signal[FixedArray[Double]?] = @signals.signal(None, same=fn(a, b) { a == b })
+
+///|
+/// Corner `k` of the window as the host has it now (window_corner_at's, untracked: what is said each frame begins).
+fn window_corner_now(k : Int) -> Double {
   let corner = match fake.val {
     Some(f) =>
       if f.full {

@@ -2212,8 +2212,14 @@ pub fn Ctx::focus_editor(self : Ctx, key : String) -> Unit {
 }
 
 ///|
-/// Whether the app is shown (1) and in front (2), as the host last said (shown and in front until it says).
-let app_state : Ref[Int] = Ref::new(3)
+/// Whether the app is shown (1) and in front (2), as the host last said (shown and in front until it says): a signal,
+/// what reads it (app_visible, app_focused, app_awake) built again as the host says it otherwise, nothing as it does not.
+// kept across runs: said by the host as it changes
+let app_state : @signals.Signal[Int] = @signals.signal(app_shown_in_front, same=fn(a, b) { a == b })
+
+///|
+/// The app shown (1) and in front (2): as it is until the host says otherwise (app_state).
+let app_shown_in_front : Int = 1 | 2
 
 ///|
 /// Who is told when that changes (the app's one: `on_app_change`).
@@ -2251,10 +2257,10 @@ fn on_app_state_now(s : Int) -> Unit {
 ///|
 /// The app's state as `s` says it (1 shown, 2 in front, 4 going on not shown): who is told of it told, a frame asked.
 fn app_state_taken(s : Int) -> Unit {
-  if s == app_state.val {
+  if s == @signals.untracked(fn() { app_state.get() }) {
     return
   }
-  app_state.val = s
+  app_state.set(s)
   // (no longer in front: the fingers down called off, all of it (touches.mbt); a finger held on the window's tree let
   // go of now)
   if (s & 2) == 0 {
@@ -2273,13 +2279,13 @@ fn app_state_taken(s : Int) -> Unit {
 ///|
 /// Whether the app's window is shown (not hidden, minimized, covered; Android: the activity resumed).
 pub fn app_visible() -> Bool {
-  (app_state.val & 1) != 0
+  (app_state.get() & 1) != 0
 }
 
 ///|
 /// Whether it is also in front (the key window of the active app; Android: with the window's focus).
 pub fn app_focused() -> Bool {
-  (app_state.val & 2) != 0
+  (app_state.get() & 2) != 0
 }
 
 ///|
@@ -2287,7 +2293,7 @@ pub fn app_focused() -> Bool {
 /// desktop's app put away to the notification area or minimized: Windows'). Not an Android app behind another, whose
 /// frames stop.
 pub fn app_awake() -> Bool {
-  (app_state.val & (1 | 4)) != 0
+  (app_state.get() & (1 | 4)) != 0
 }
 
 ///|

@@ -654,6 +654,13 @@ pub fn Ctx::key_catcher_place(self : Ctx, key : String, x : Double, y : Double, 
 /// laid out above it.
 pub fn Ctx::ime_inset(self : Ctx) -> Double {
   ignore(self)
+  ime_inset()
+}
+
+///|
+/// How far the soft keyboard reaches over the window's foot as this frame began, in points (0: down), read where it is
+/// read: what reads it built again as it moves, nothing else.
+pub fn ime_inset() -> Double {
   ime_said.get()
 }
 
@@ -680,6 +687,8 @@ let ime_up : @signals.Computed[Bool] = @signals.computed(fn(_) { ime_said.get() 
 fn Ctx::device_frame_start(self : Ctx) -> Unit {
   self.dev.ime_inset = h_ime_inset()
   ime_said.set(self.dev.ime_inset)
+  // (and the window's corners: what reads them told only as they change)
+  corners_said.set(Some(FixedArray::makei(4, window_corner_now)))
 }
 
 ///|
