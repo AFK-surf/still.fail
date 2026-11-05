@@ -753,6 +753,12 @@ pub(all) struct ChatListNode {
   landing_of : (String) -> MineLanding?
 }
 
+type ChatPicture
+
+type ChatPictureRow
+
+type ChatPictures
+
 type ComposerExtrasNode
 
 pub(all) struct ComposerNode {

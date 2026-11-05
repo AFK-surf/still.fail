@@ -1124,6 +1124,10 @@ pub fn md_node_at(@json.Json) -> Int32
 
 pub fn md_node_depth(@json.Json) -> Int32?
 
+pub fn md_picture_places(String, @json.Json?, Double, Double, (String) -> Double?, (String) -> Bool) -> Array[(String, Double, Bool)]
+
+pub fn md_picture_reading(String, @json.Json?) -> MdPictureReading
+
 pub fn media_bar_box() -> @ui.Style
 
 pub fn media_bar_foot() -> Double
@@ -3048,6 +3052,12 @@ pub(all) struct MarksActionsSaid {
   put : String
   making : String
 }
+
+pub struct MdPictureReading {
+  // private fields
+}
+pub fn MdPictureReading::stop(Self) -> Unit
+pub fn MdPictureReading::waiting(Self) -> Bool
 
 pub(all) struct MediaInk {
   text : Int64

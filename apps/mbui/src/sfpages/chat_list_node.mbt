@@ -303,7 +303,102 @@ pub fn chat_list_node(
     rows_now.get().lead() |> ignore
     (sized.item_of)(k)
   }
-  // (the rows made now, by their keys: where each is)
+  // The chat, rather than a row made by layout, owns its image requests and their answers. Keep one data watch per
+  // sighted row; a row only passed on the way is asked too, then its watch is let go.
+  let pictures = ChatPictures::new(v, src)
+  v.lends(chat_pictures_lent, pictures) |> ignore
+  let picture_rows : Map[String, ChatPictureRow] = {}
+  let picture_changes : Map[String, Bool] = {}
+  let picture_changed = @signals.signal(0)
+  let picture_live = Ref(true)
+  let forget_picture_row = fn(k : String) {
+    match picture_rows.get(k) {
+      Some(row) => {
+        row.watch.stop()
+        match row.reading { Some(reading) => reading.stop(); None => () }
+        picture_rows.remove(k)
+      }
+      None => ()
+    }
+    picture_changes.remove(k)
+  }
+  let request_picture_row = fn(k : String) {
+    guard picture_rows.get(k) is Some(row) else { return }
+    let entry = row.watch.read(fn() { if row.inside { row_of(k).map(fn(item) { item.0 }) } else { None } })
+    guard @signals.untracked(view) is Some(cv) else { return }
+    let width = row.width
+    let here = here_of(r, cv, rk, @sfbase.turns_of(rk), em, None, core,
+      inline=width <= chat_narrow_w, gutter=row_side_in(width))
+    let message = match entry {
+      Some(Said(s)) => {
+        let m = s.message()
+        row.message = Some(m)
+        Some(m)
+      }
+      Some(Out(o)) => {
+        pictures.want_files(here, o.attachments, o.quotes, true, width)
+        None
+      }
+      _ => if row.inside { None } else { row.message }
+    }
+    if message is Some(m) {
+      let needs_reading = picture_markdown(m) && !m.placed.is_empty() && m.md is None && m.text != ""
+      if !needs_reading || row.reading_text != m.text {
+        match row.reading { Some(reading) => reading.stop(); None => () }
+        row.reading = None
+        row.reading_text = ""
+      }
+      if needs_reading && row.reading is None {
+        row.reading = Some(@sf.md_picture_reading(m.text, m.md))
+        row.reading_text = m.text
+      }
+      let waiting = match row.reading {
+        Some(reading) => row.watch.read(fn() {
+          if row.inside { row_of(k) |> ignore }
+          reading.waiting()
+        })
+        None => false
+      }
+      row.waiting = waiting
+      if row.widths.is_empty() { row.widths.push(width) }
+      for w in row.widths { pictures.want_message(here, m, w, !waiting) }
+      if !waiting {
+        row.widths.clear()
+        match row.reading { Some(reading) => reading.stop(); None => () }
+        row.reading = None
+        row.reading_text = ""
+      }
+    } else {
+      row.waiting = false
+      match row.reading { Some(reading) => reading.stop(); None => () }
+      row.reading = None
+    }
+    if !row.inside && !row.waiting { forget_picture_row(k) }
+  }
+  v.owns(fn() {
+    picture_live.val = false
+    for row in picture_rows.values() {
+      row.watch.stop()
+      match row.reading { Some(reading) => reading.stop(); None => () }
+    }
+    picture_rows.clear()
+  }) |> ignore
+  // A visible message can gain a file without its row moving. Its data change asks for the file after the change is
+  // delivered, using the last sighted width; it does not need another frame to be drawn.
+  let stop_picture_changes = @signals.effect(fn() {
+    picture_changed.get() |> ignore
+    @signals.after_flush(fn() {
+      if picture_live.val {
+        @signals.untracked(fn() {
+          let changed = picture_changes.keys().to_array()
+          picture_changes.clear()
+          for k in changed { request_picture_row(k) }
+        })
+      }
+    })
+  })
+  v.owns(stop_picture_changes) |> ignore
+  // (the rows made now, by their keys: where each is, what is read)
   let row_views : Map[String, @view.View] = {}
   // The list reports the rows it actually drew after paint. Keep that observation outside the tree: it must never
   // become an input to another layout. Non-layout changes can still report the last drawn place.
@@ -383,6 +478,41 @@ pub fn chat_list_node(
       sighted=fn(s) {
         last_sighted.val = Some(s)
         read_sighted(s)
+        for k in s.came {
+          if !picture_rows.contains(k) {
+            let watch = @signals.watch(fn() {
+              picture_changes[k] = true
+              picture_changed.set(@signals.untracked(fn() { picture_changed.get() }) + 1)
+            })
+            picture_rows[k] = {
+              watch, widths: [], width: s.width, inside: true, waiting: false, message: None,
+              reading_text: "", reading: None,
+            }
+          }
+          match picture_rows.get(k) {
+            Some(row) => {
+              row.inside = true
+              row.width = s.width
+              if !row.widths.contains(s.width) { row.widths.push(s.width) }
+            }
+            None => ()
+          }
+          request_picture_row(k)
+        }
+        for k in s.left {
+          match picture_rows.get(k) {
+            Some(row) => {
+              row.inside = false
+              if row.waiting {
+                // Only its unfinished Markdown answer is followed after it has left, not later message changes.
+                request_picture_row(k)
+              } else {
+                forget_picture_row(k)
+              }
+            }
+            None => ()
+          }
+        }
       },
       rooms=sized.room_now,
       // The flying copy needs its real landing before the glide brings the row into sight.
@@ -410,6 +540,9 @@ pub fn chat_list_node(
       },
       fn(slot, k) {
         (sized.lend)(slot, k)
+        slot.lends(chat_picture_in_sight, fn() {
+          picture_rows.get(k).map_or(false, fn(row) { row.inside })
+        }) |> ignore
         match @signals.untracked(fn() { row_of(k) }) {
           Some((Top, _)) => { slot.height(By(fn() { Some(top()) })) |> ignore; return }
           Some((Foot, _)) => { slot.height(By(fn() { Some(clear_foot() + foot_gap) })) |> ignore; return }

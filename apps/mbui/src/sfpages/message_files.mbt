@@ -265,6 +265,37 @@ pub fn image_box(a : Attachment, least : Double, min_side? : Double = 0.0) -> (D
 }
 
 ///|
+/// A picture's intrinsic box and the row's optional width limit, shared by drawing and its owner's decode plan.
+fn media_box_width(a : Attachment, kind : String, room : Double?, fills : Bool) -> Double {
+  let least = if kind == "image" { image_least } else { video_least }
+  let side = if kind == "image" { image_min_side } else { 0.0 }
+  let (bw, _, _) = image_box(a, least, min_side=side)
+  match room {
+    Some(w) => if fills { w } else { dmin(bw, w) }
+    None => bw
+  }
+}
+
+///|
+/// The intrinsic width over height, so a row can derive its picture's height from its own width in layout.
+fn media_box_ratio(a : Attachment, kind : String) -> Double {
+  let least = if kind == "image" { image_least } else { video_least }
+  let side = if kind == "image" { image_min_side } else { 0.0 }
+  let (w, h, _) = image_box(a, least, min_side=side)
+  if h > 0.0 { w / h } else { 0.0 }
+}
+
+///|
+/// A picture's box at a known room, for the list's image owner.
+fn media_box_size(a : Attachment, kind : String, room : Double, fills : Bool) -> (Double, Double) {
+  let w = media_box_width(a, kind, Some(room), fills)
+  let least = if kind == "image" { image_least } else { video_least }
+  let side = if kind == "image" { image_min_side } else { 0.0 }
+  let (bw, bh, _) = image_box(a, least, min_side=side)
+  (w, if bw > 0.0 { bh * w / bw } else { 0.0 })
+}
+
+///|
 /// An image's width over its height in the chat (its image_box's), as a table's cell draws it that wide (@sf.Placed's
 /// `image`); None for any other file.
 fn image_ratio(a : Attachment) -> Double? {

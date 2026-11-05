@@ -29,17 +29,6 @@ fn message_files_node(
     .lies_along(Is(if mine { End } else { Start }))
     .lines_up(Is(Some(Start)))
     |> ignore
-    // (the column's width as laid out, the pane's till it is)
-    let room = fn() {
-      match most() {
-        Some(w) => w
-        None =>
-          match flow.laid_size_told() {
-            Some((w, _)) if w > 0.0 => w
-            _ => flow.window().0
-          }
-      }
-    }
     flow.each(fn() { list().map(fn(a) { @sfbase.file_key(a) }) }, fn(k) { k }, fn(item, k) {
       let key = @signals.untracked(fn() { k.get() })
       // (as it is now; as it last was while it goes)
@@ -56,11 +45,11 @@ fn message_files_node(
       let kind = @signals.untracked(fn() { file_kind(a().name) })
       match kind {
         "image" | "video" => {
-          let landing = media_file_node(item, src, here, a, kind, room, at, corner, by)
+          let landing = media_file_node(item, src, here, a, kind, most, at, corner, by)
           landed(key, Some(landing))
         }
         _ => {
-          let landing = card_file_node(item, src, here, a, room, at, by)
+          let landing = card_file_node(item, src, here, a, most, at, by)
           landed(key, Some(landing))
         }
       }
@@ -81,7 +70,7 @@ fn media_file_node(
   here : () -> MessageHere,
   a : () -> Attachment,
   kind : String,
-  room : () -> Double,
+  room : () -> Double?,
   at : () -> String,
   corner : Double,
   by : () -> (String, String, String)?,
@@ -90,17 +79,21 @@ fn media_file_node(
   let least = if kind == "image" { image_least } else { video_least }
   let side = if kind == "image" { image_min_side } else { 0.0 }
   let boxed = fn() { image_box(a(), least, min_side=side) }
-  // (`fills`: as wide as its room, a row of the images its message places, each as high as the others)
-  let w = fn() { if fills { room() } else { dmin(boxed().0, room()) } }
-  let h = fn() {
-    let (bw, bh, _) = boxed()
-    bh * w() / bw
-  }
+  // Its own width and ratio are data. The row supplies the available width in the same layout that wraps it.
+  // (`fills`: a placed image whose row or table cell says its width.)
+  let most = fn() { media_box_width(a(), kind, room(), fills) }
+  item.width(By(fn() { Some(most()) })).max_width_within(By(fn() { Some(most()) })) |> ignore
   let letterbox = fn() { boxed().2 }
   let share = fn() { picture_share(a(), least, min_side=side) }
   let top_crop = fn() { kind == "image" && tall_image_cropped(a()) }
   let owner = fn() { owner_of(here(), a()) }
-  let picture = fn() { message_media(@ui.current(), src, here().station, owner(), a()) }
+  // A chat owns the picture request for a sighted row; measuring the row only reads the answer.
+  let picture = fn() {
+    match item.lent(chat_pictures_lent) {
+      Some(pictures) => pictures.read(here(), a())
+      None => message_media(@ui.current(), src, here().station, owner(), a())
+    }
+  }
   let fit = fn() -> @ui.Fit {
     if kind == "video" {
       if letterbox() { FitContain } else { FitCover }
@@ -116,8 +109,8 @@ fn media_file_node(
   }
   let view = item.box(fn(b) {
     b
-    .width(By(fn() { Some(w()) }))
-    .height(By(fn() { Some(h()) }))
+    .width_share(Is(1.0))
+    .aspect(By(fn() { media_box_ratio(a(), kind) }))
     .radius(Is(corner))
     .clips(Is(true))
     .ground(By(fn() {
@@ -164,18 +157,16 @@ fn media_file_node(
     // (a letterboxed one's picture its own proportions in the box's middle, the box's ground round it)
     b.box(fn(room) {
       room
-      .width(By(fn() { Some(w()) }))
-      .height(By(fn() { Some(h()) }))
+      .over(Is(true))
       .lies_along(Is(Middle))
       .lines_up(Is(Some(Middle)))
       |> ignore
-      let (pw, ph) = if kind == "image" {
-        (fn() { w() * share().0 }, fn() { h() * share().1 })
-      } else {
-        (w, h)
-      }
       // (none of it drawn while the viewer has its picture, flying from it or back into it: note_thumb's hidden)
-      room.show(fn() { @sfbase.thumb_shows(thumb()) > 0.0 }, fn(m) { media_fitted_node(m, picture, pw, ph, fit, fn() { 0.0 }) })
+      room.show(fn() { @sfbase.thumb_shows(thumb()) > 0.0 }, fn(m) {
+        m.width_share(By(fn() { if kind == "image" { share().0 } else { 1.0 } }))
+        .height_share(By(fn() { if kind == "image" { share().1 } else { 1.0 } })) |> ignore
+        media_fitted_fill_node(m, picture, fit, fn() { 0.0 })
+      })
     })
     |> ignore
     if kind == "video" {
@@ -233,7 +224,7 @@ fn card_file_node(
   src : Source,
   here : () -> MessageHere,
   a : () -> Attachment,
-  room : () -> Double,
+  room : () -> Double?,
   at : () -> String,
   by : () -> (String, String, String)?,
 ) -> @sfbase.FileLandingNode {
@@ -255,7 +246,7 @@ fn card_file_node(
     )
   }
   let id = fn() { text(coming().0, "id") }
-  item.max_width(By(fn() { Some(room()) })) |> ignore
+  item.max_width_within(By(fn() { Some(dmin(@sf.file_card_w, room().unwrap_or(@sf.file_card_w))) })) |> ignore
   let view = @sf.file_card_node(
     item,
     info,
