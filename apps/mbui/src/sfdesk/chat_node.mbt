@@ -104,10 +104,11 @@ fn chat_talk_node(
 ) -> Unit {
   let width = fn() { talk.laid_size_told().map(fn(z) { z.0 }).unwrap_or(talk.window().0) }
   let height = fn() { talk.laid_size_told().map(fn(z) { z.1 }).unwrap_or(talk.window().1) }
-  let geometry = fn() {
+  let radii = fn() {
     let roots = @ui.tree_corner_roots_now()
-    @sfpages.composer_geometry(width(), corners().map(fn(ks) { ks.map(fn(k) { k.radius(roots) }) }))
+    corners().map(fn(ks) { ks.map(fn(k) { k.radius(roots) }) })
   }
+  let geometry = fn() { @sfpages.composer_geometry(width(), radii()) }
   let latest : Ref[() -> Unit] = Ref(fn() {  })
   let landing : Ref[(String) -> @sfpages.MineLanding?] = Ref(fn(_) { None })
   let room : @signals.Signal[(() -> Double)?] = @signals.signal(None, same=fn(a, b) { a is None && b is None })
@@ -142,7 +143,7 @@ fn chat_talk_node(
       src,
       r,
       view,
-      fn() { geometry().0 },
+      fn() { @sfpages.composer_side_in(radii()) },
       height,
       fn() { geometry().1 },
       fn() { geometry().2 },

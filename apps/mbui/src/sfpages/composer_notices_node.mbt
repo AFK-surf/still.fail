@@ -14,7 +14,7 @@ priv struct ComposerNotice {
 } derive(Eq)
 
 ///|
-fn composer_notices_node(parent : @view.View, src : Source, r : ChatRef, view : () -> ChatView?, width : () -> Double) -> @view.View {
+fn composer_notices_node(parent : @view.View, src : Source, r : ChatRef, view : () -> ChatView?) -> @view.View {
   let key = r.station + ":" + r.session
   let items = fn() {
     let all : Array[ComposerNotice] = []
@@ -41,7 +41,7 @@ fn composer_notices_node(parent : @view.View, src : Source, r : ChatRef, view : 
   }
   let first = Ref(true)
   parent.box(fn(notices) {
-    notices.lines_up(Is(Some(Middle))) |> ignore
+    notices.lines_up(Is(Some(Middle))).width_share(Is(1.0)).max_width(By(composer_widest)) |> ignore
     notices.each(items, fn(n) { n.kind }, fn(n, data) {
       let kind = @signals.untracked(fn() { data.get().kind })
       let cached = kind == 1
@@ -56,21 +56,27 @@ fn composer_notices_node(parent : @view.View, src : Source, r : ChatRef, view : 
         let line = (if t.line > 0.0 { t.line } else { t.size * @ui.tree_theme().text_line }) * @ui.font_scale()
         dmax(0.0, (line - @sf.theme().round.side) / 2.0)
       }
-      let beside = fn() {
-        if !cached { return false }
+      // (how wide a notice of the cache's needs its summary and its choice in one row: as wide as its room is, beside
+      // each other, else the choice under the summary; a notice of another kind has them in no row)
+      let beside_needs = fn() {
+        if !cached { return @double.infinity }
         let across = fn(s, style) { @view.words_measure(s, @ui.style_words(style), 1.0e9).0 }
         let high = dmax(text_line(), 28.0)
         let side = high + 16.0
         let inset = capsule_pad_alone + extra() + (@sf.theme().round.side + 1.0) / 2.0 - side / 2.0
         let summary = across(data.get().said, composer_notice_status) + 8.0 + across(data.get().detail, composer_notice_flow_words)
         let choice = dmax(across(@sf.t("web-main.chat.goOn"), composer_notice_choice_words), across(@sf.t("web-main.chat.afresh"), composer_notice_choice_words)) + 33.0
-        side + summary + 12.0 + choice + (side - 28.0) / 2.0 <= width() - 2.0 * inset
+        side + summary + 12.0 + choice + (side - 28.0) / 2.0 + 2.0 * inset
       }
+      n.width_share(Is(1.0)).margin(Is((0.0, 0.0, 0.0, 8.0))) |> ignore
+      n.by_room(By(beside_needs), fn(needs, room, _) { needs <= room }, sized=true, fn(held, beside_now) {
+      let beside = fn() { beside_now }
       let high = fn() { if beside() { dmax(text_line(), 28.0) } else { text_line() } }
       let side = fn() { high() + 16.0 }
       let inset = fn() { capsule_pad_alone + extra() + (@sf.theme().round.side + 1.0) / 2.0 - side() / 2.0 }
-      n.width(By(fn() { Some(width() - 2.0 * inset()) })).margin(Is((0.0, 0.0, 0.0, 8.0)))
-      .padding(By(fn() { (0.0, 8.0, if beside() { (side() - 28.0) / 2.0 } else { 16.0 }, 8.0) }))
+      held.padding(By(fn() { (inset(), 0.0, inset(), 0.0) })) |> ignore
+      held.box(fn(card) {
+      card.padding(By(fn() { (0.0, 8.0, if beside() { (side() - 28.0) / 2.0 } else { 16.0 }, 8.0) }))
       .gap(Is(4.0)).radius(By(fn() { @ui.tree_theme().corner(@sf.line_capsule_corner(side())) }))
       .glass(By(fn() { Some(@sf.glass_floating()) })) |> ignore
       let mark = fn(p : @view.View) {
@@ -96,7 +102,7 @@ fn composer_notices_node(parent : @view.View, src : Source, r : ChatRef, view : 
         let disabled = fn() { n.leaving() || src.read_only || data.get().offline || @sfbase.doing(doing()) }
         let open_key = notice_choice_key(key, "wait")
         n.owns(fn() { if composing.cold_open.get() == open_key { composing.cold_open.set("") } }) |> ignore
-        n.box(fn(flow) {
+        card.box(fn(flow) {
           flow.row(By(beside)).gap(By(fn() { if beside() { 12.0 } else { 0.0 } }))
           .lines_up(By(fn() { if beside() { Some(Middle) } else { None } })) |> ignore
           flow.box(fn(title) {
@@ -127,7 +133,7 @@ fn composer_notices_node(parent : @view.View, src : Source, r : ChatRef, view : 
           }) |> ignore
         }) |> ignore
       } else {
-        n.box(fn(row) {
+        card.box(fn(row) {
           row.row(Is(true)).lines_up(Is(Some(Start))) |> ignore
           mark(row)
           words(row, fn() { data.get().said }, composer_notice_words)
@@ -148,12 +154,14 @@ fn composer_notices_node(parent : @view.View, src : Source, r : ChatRef, view : 
           }
         }) |> ignore
         if kind == 0 {
-          n.show(fn() { composing.restore_errors.contains(key) }, fn(error) {
+          card.show(fn() { composing.restore_errors.contains(key) }, fn(error) {
             error.padding(By(fn() { (side(), 0.0, 0.0, 0.0) })) |> ignore
             words(error, fn() { composing.restore_errors.get(key).unwrap_or("") }, composer_notice_failed) |> ignore
           })
         }
       }
+      }) |> ignore
+      }) |> ignore
     }, leave=@sf.leave_ms)
     first.val = false
   })
