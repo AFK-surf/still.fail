@@ -92,6 +92,9 @@ export type FeishuSurfaceOptions = {
   appSecret: string;
   domain: Domain;
   threads: FeishuThreads;
+  /// In a group, one conversation for each thread, begun by an @ and answered in it (docs/feishu.md「会话怎么分」); else
+  /// one for the group.
+  threadMode?: boolean;
   /// Keeps names across restarts and lets the admin API ask without waiting (knownPerson, knownChannel).
   book?: NameBook | null;
   /// The client (tests: one pointed at a stand-in).
@@ -115,6 +118,9 @@ export class FeishuSurface extends ConnectedSurface {
   readonly client: FeishuClient;
   readonly domain: Domain;
   private threads: FeishuThreads;
+  private readonly threadMode: boolean;
+  /// The messages that called it, the latest kept: a turn for one of them shows its status card at once.
+  private called = new Set<string>();
   /// Chats as Feishu says: their name, whether they are a topic group (each topic its own conversation), a direct one.
   private chats = new Map<string, { name: string | null; topics: boolean; p2p: boolean }>();
   /// The chat a person was last heard in: where their name is looked up when the contacts API will not say it.
@@ -130,6 +136,7 @@ export class FeishuSurface extends ConnectedSurface {
     this.domain = options.domain;
     this.client = options.client ?? new FeishuClient(options.appId, options.appSecret, options.domain);
     this.threads = options.threads;
+    this.threadMode = options.threadMode === true;
   }
 
   protected identify() {
@@ -253,16 +260,27 @@ export class FeishuSurface extends ConnectedSurface {
     }
   }
 
-  /// Which thread a message is in (docs/feishu.md「会话怎么分」): a topic group's topic is its own; anything else said in
+  private wasCalled(ts: string) {
+    this.called.add(ts);
+    // The oldest go once there are many: a turn still working for one of those has its card once it does something.
+    if (this.called.size > 500) this.called.delete(this.called.keys().next().value!);
+  }
+
+  /// Which thread a message is in (docs/feishu.md「会话怎么分」): a topic group's topic is its own; in thread mode a
+  /// group's thread is, by its first message (one that @s the bot outside a thread begins one); anything else said in
   /// the chat is the chat's conversation now, begun by the first message that @s the bot (or a new one asked for).
   private async heard(m: FeishuMessage, handler: Handler) {
     this.heardIn.set(m.user, m.chat);
+    if (m.addressed) this.wasCalled(m.id);
     if (m.at > 0) this.threads.heard(this.connect, m.chat, m.at);
     let threadTs: string;
     const topics = m.topic !== null && !m.p2p && (await this.chatInfo(m.chat)).topics;
     if (topics) {
       threadTs = m.topic!;
       this.threads.heardTopic(this.connect, m.topic!, m.root ?? m.id);
+    } else if (this.threadMode && !m.p2p) {
+      threadTs = m.root ?? m.id;
+      if (m.topic !== null || m.addressed) this.threads.heardTopic(this.connect, threadTs, threadTs);
     } else {
       const current = this.threads.current(this.connect, m.chat);
       if (current === null || m.fresh) {
@@ -287,6 +305,7 @@ export class FeishuSurface extends ConnectedSurface {
     if (said === "") return { toast: { type: "warning", content: tr(lang, "station.feishu.answerEmpty") } };
     const asked = this.asked.get(a.message);
     if (asked?.answered) return { toast: { type: "info", content: tr(lang, "station.feishu.answeredBefore") } };
+    this.wasCalled(`card-${a.event}`);
     await handler({ type: "message", message: { channel: a.chat, threadTs: value.t, ts: `card-${a.event}`, user: a.user, text: said, addressed: true } });
     if (asked) asked.answered = true;
     const who = this.names.get(a.user)?.name || this.knownPerson(a.user)?.name || "";
@@ -295,9 +314,9 @@ export class FeishuSurface extends ConnectedSurface {
     return answer;
   }
 
-  /// Posts a message where the thread is: a topic's reply in it, else in the chat. Its message id.
+  /// Posts a message where the thread is: a topic's or a thread's reply in it, else in the chat. Its message id.
   private async send(thread: ThreadRef, msgType: string, content: string): Promise<string> {
-    const root = thread.threadTs.startsWith("omt_") ? this.threads.topicRoot(this.connect, thread.threadTs) : null;
+    const root = this.threads.topicRoot(this.connect, thread.threadTs);
     const answer =
       root !== null
         ? await this.client.api("POST", `/open-apis/im/v1/messages/${encodeURIComponent(root)}/reply`, { msg_type: msgType, content, reply_in_thread: true })
@@ -310,6 +329,7 @@ export class FeishuSurface extends ConnectedSurface {
   /// The agent's words as cards (a question's buttons or field with them), then each file as a message of its own. The
   /// first message's id stands for the whole.
   async post(thread: ThreadRef, message: string, files: Attachment[], card?: Json | null): Promise<string> {
+    (this.lines.get(`${thread.channel}/${thread.threadTs}`) as FeishuStatus | undefined)?.spoke();
     let first: string | null = null;
     const lang = stationLang();
     const question = card && (card.type === "options" || card.type === "text") ? card : null;
@@ -408,7 +428,8 @@ export class FeishuSurface extends ConnectedSurface {
         this.threads.heardTopic(this.connect, topic, id);
         thread = { channel: chat, threadTs: topic };
       } else {
-        this.threads.begin(this.connect, chat, id);
+        if (this.threadMode) this.threads.heardTopic(this.connect, id, id);
+        else this.threads.begin(this.connect, chat, id);
         thread = { channel: chat, threadTs: id };
       }
     }
@@ -493,15 +514,21 @@ export class FeishuSurface extends ConnectedSurface {
     return (await this.chatInfo(channel)).name;
   }
 
-  /// What a topic said before `before` (a chat's conversation begins with the message the station first heard: there is
-  /// nothing before it of its own).
+  /// What a topic or a thread said before `before` (a chat's conversation begins with the message the station first
+  /// heard: there is nothing before it of its own).
   history(thread: ThreadRef, before: string, limit: number): Promise<ChatMessage[]> {
     return (async () => {
-      if (!thread.threadTs.startsWith("omt_")) return [];
+      let container = thread.threadTs;
+      if (!container.startsWith("omt_")) {
+        if (this.threads.topicRoot(this.connect, container) === null) return [];
+        // A thread goes by its first message here, by its own id there; none yet: that message is all it is.
+        container = text((await this.client.api("GET", `/open-apis/im/v1/messages/${encodeURIComponent(container)}`))?.data?.items?.[0]?.thread_id);
+        if (container === "") return [];
+      }
       const all: ChatMessage[] = [];
       let token = "";
       for (let page = 0; page < 20; page++) {
-        const d = (await this.client.api("GET", "/open-apis/im/v1/messages", null, { container_id_type: "thread", container_id: thread.threadTs, sort_type: "ByCreateTimeAsc", page_size: "50", ...(token ? { page_token: token } : {}) }))?.data ?? {};
+        const d = (await this.client.api("GET", "/open-apis/im/v1/messages", null, { container_id_type: "thread", container_id: container, sort_type: "ByCreateTimeAsc", page_size: "50", ...(token ? { page_token: token } : {}) }))?.data ?? {};
         for (const item of Array.isArray(d.items) ? d.items : []) {
           const id = text(item?.message_id);
           if (id === before) return all.slice(Math.max(0, all.length - limit));
@@ -535,6 +562,6 @@ export class FeishuSurface extends ConnectedSurface {
   }
 
   protected statusLine(thread: ThreadRef) {
-    return new FeishuStatus({ api: (method, path, body) => this.client.api(method, path, body), send: (type, content) => this.send(thread, type, content) }, this.run);
+    return new FeishuStatus({ api: (method, path, body) => this.client.api(method, path, body), send: (type, content) => this.send(thread, type, content), called: (ts) => this.called.has(ts) }, this.run);
   }
 }

@@ -333,9 +333,9 @@ fn nc_body(
       "feishuBind" | "bind" => {
         nc_models(c, src, core, f, v)
         @sf.field(c, @sf.t("web-pages.connect.mode"), fn() {
-          let (m, r) = mode_choices(c, "nc-mode/" + f.form, field(v, "modeWords"), text(v, "mode"), flag(v, "requireMention"))
-          if m != text(v, "mode") || r != flag(v, "requireMention") {
-            nc_edit(core, f, obj([("mode", str(m)), ("requireMention", Json::boolean(r))]))
+          let (m, r, by_thread) = mode_choices(c, "nc-mode/" + f.form, field(v, "modeWords"), text(v, "mode"), flag(v, "requireMention"), flag(v, "threads"))
+          if m != text(v, "mode") || r != flag(v, "requireMention") || by_thread != flag(v, "threads") {
+            nc_edit(core, f, obj([("mode", str(m)), ("requireMention", Json::boolean(r)), ("threads", Json::boolean(by_thread))]))
           }
         })
         if step == "bind" && error != "" {

@@ -432,6 +432,7 @@ function initial(input: J): J {
     config: "",
     mode: "multi-session",
     requireMention: true,
+    threads: false,
   };
 }
 
@@ -539,7 +540,7 @@ export class ConnectFlows {
       if (v !== undefined && v !== null && typeof v !== "string") throw CoreError.invalid(t("core-misc.params.not_text"));
     }
     if (get(patch, "config") !== undefined && typeof patch.config !== "string") throw CoreError.invalid(t("core-misc.connect.config_not_text"));
-    for (const field of ["adding", "requireMention"]) if (get(patch, field) !== undefined && typeof patch[field] !== "boolean") throw CoreError.invalid(t("core-misc.params.not_bool"));
+    for (const field of ["adding", "requireMention", "threads"]) if (get(patch, field) !== undefined && typeof patch[field] !== "boolean") throw CoreError.invalid(t("core-misc.params.not_bool"));
     if (get(patch, "mode") !== undefined && patch.mode !== "single-session" && patch.mode !== "multi-session") throw CoreError.invalid(t("core-misc.connect.no_such_mode"));
     const platform = get(patch, "platform");
     if (platform !== undefined && platform !== "slack" && platform !== "feishu") throw CoreError.invalid(t("core-misc.connect.not_ready"));
@@ -551,7 +552,7 @@ export class ConnectFlows {
       if (get(feishu, "way") !== undefined && feishu.way !== "scan" && feishu.way !== "app") throw CoreError.invalid(t("core-misc.connect.not_ready"));
       for (const field of ["way", "appId", "appSecret", "lark"]) if (get(feishu, field) !== undefined) d.value.feishu[field] = feishu[field];
     }
-    for (const field of ["team", "adding", "settings", "icon", "iconError", "config", "mode", "requireMention", "platform"]) if (get(patch, field) !== undefined) d.value[field] = patch[field];
+    for (const field of ["team", "adding", "settings", "icon", "iconError", "config", "mode", "requireMention", "threads", "platform"]) if (get(patch, field) !== undefined) d.value[field] = patch[field];
     if (typeof get(patch, "config") === "string") d.value.config = patch.config.trim();
     this.#store.invalidate(topic);
   }
@@ -668,7 +669,7 @@ export class ConnectFlows {
     else if (action === "verify" && step === "feishuApp" && v.feishu.canVerify === true) [name, p] = ["feishu.verify", feishuApp(v.feishu)];
     else if (action === "create" && v.canCreate === true && ((step === "feishuApp" && v.feishu.verified === true) || (step === "feishuScan" && get(v.feishu.registration, "state") === "done"))) {
       const app = step === "feishuApp" ? feishuApp(v.feishu) : { registration: get(v.feishu.registration, "id") };
-      [name, p] = ["feishu.createConnect", { feishu: app, bind: bindOf(v.pick), mode: v.mode, requireMention: v.requireMention }];
+      [name, p] = ["feishu.createConnect", { feishu: v.threads === true ? { ...app, threads: true } : app, bind: bindOf(v.pick), mode: v.mode, requireMention: v.requireMention }];
     }
     else if (action === "create" && step === "bind" && v.canCreate === true && verified) {
       let slack: J = { ...tokenInput };

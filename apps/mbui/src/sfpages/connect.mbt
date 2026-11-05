@@ -379,39 +379,48 @@ fn cd_token_dialog(core : Core, station : String, cv : Json?) -> Unit {
 
 ///|
 /// How its conversations become sessions, to choose from (ModeChoices; the core's ModeWords, as its kind says them):
-/// one each or all in one, the latter with whether it waits for an @. What is chosen now.
-fn mode_choices(c : @ui.Ctx, key : String, words : Json?, mode : String, mention : Bool) -> (String, Bool) {
+/// one each (a Feishu connect's by its group or its thread) or all in one, the latter with whether it waits for an @.
+/// What is chosen now: the mode, the @, thread mode.
+fn mode_choices(c : @ui.Ctx, key : String, words : Json?, mode : String, mention : Bool, threads : Bool) -> (String, Bool, Bool) {
   let multi = field(words, "multi")
+  let by_thread = field(words, "threads")
   let single = field(words, "single")
-  let out = Ref((mode, mention))
+  let out = Ref((mode, mention, threads))
+  let now = if threads { "threads" } else { mode }
+  let ways = [("multi-session", text(multi, "label"), text(multi, "description"))]
+  if text(by_thread, "label") != "" {
+    ways.push(("threads", text(by_thread, "label"), text(by_thread, "description")))
+  }
+  ways.push(("single-session", text(single, "label"), text(single, "description")))
   let picked = @sf.choices(
     c,
     key,
-    mode,
-    [
-      ("multi-session", text(multi, "label"), text(multi, "description")),
-      ("single-session", text(single, "label"), text(single, "description")),
-    ],
+    now,
+    ways,
     label=@sf.t("web-pages.connect.mode"),
     extra=fn(v) {
       guard v == "single-session" else { None }
       Some(fn() {
-        let now = @sf.switch_row(
+        let waits = @sf.switch_row(
           c,
           key + "/mention",
           @sf.t("web-pages.connect.mentionOnly"),
           mention,
           note=text(words, if mention { "mentionOn" } else { "mentionOff" }),
         )
-        if now != mention {
-          out.val = (mode, now)
+        if waits != mention {
+          out.val = (mode, waits, false)
         }
       })
     },
   )
-  if picked != mode {
+  if picked != now {
     // (one each always waits for an @)
-    out.val = (picked, if picked == "multi-session" { true } else { mention })
+    out.val = match picked {
+      "threads" => ("multi-session", true, true)
+      "multi-session" => ("multi-session", true, false)
+      _ => (picked, mention, false)
+    }
   }
   out.val
 }
@@ -523,13 +532,13 @@ pub fn cd_mode_dialog(core : Core, station : String, item : Json?) -> Unit {
   let cv = field(item, "connect")
   let id = text(cv, "id")
   let key = "connect-mode/" + (desk_dialogs.val + 1).to_string()
-  let next : Ref[(String, Bool)] = Ref((text(cv, "mode"), flag(cv, "requireMention")))
+  let next : Ref[(String, Bool, Bool)] = Ref((text(cv, "mode"), flag(cv, "requireMention"), flag(field(cv, "feishu"), "threads")))
   let change = fn() -> Json? {
-    let (mode, mention) = next.val
+    let (mode, mention, threads) = next.val
     items(item, "changes")
     .iter()
     .find_first(fn(ch) {
-      text(Some(ch), "mode") == mode && (mode == "multi-session" || flag(Some(ch), "requireMention") == mention)
+      text(Some(ch), "mode") == mode && flag(Some(ch), "threads") == threads && (mode == "multi-session" || flag(Some(ch), "requireMention") == mention)
     })
   }
   open_dialog(
@@ -537,7 +546,7 @@ pub fn cd_mode_dialog(core : Core, station : String, item : Json?) -> Unit {
     description=@sf.t("web-pages.connect.modeLead"),
     wide=true,
     fn(c, _) {
-      next.val = mode_choices(c, key + "/choices", field(cv, "modeWords"), next.val.0, next.val.1)
+      next.val = mode_choices(c, key + "/choices", field(cv, "modeWords"), next.val.0, next.val.1, next.val.2)
       let effects = strings(change(), "effects")
       if effects.length() > 0 {
         c.box(style=cd_amber.then(@ui.style(bg=Data(@sf.theme().p.amber_bg))), fn() {
@@ -562,12 +571,16 @@ pub fn cd_mode_dialog(core : Core, station : String, item : Json?) -> Unit {
       }
       let ch = change()
       if @sf.button(c, text(ch, "action"), key=key + "/save", tone=Primary, disabled=!flag(ch, "changed")) {
-        let (mode, mention) = next.val
+        let (mode, mention, threads) = next.val
+        let input = [("mode", str(mode)), ("requireMention", Json::boolean(mention))]
+        if text(cv, "kind") == "feishu" {
+          input.push(("feishu", obj([("threads", Json::boolean(threads))])))
+        }
         cd_put(
           core,
           station,
           id,
-          obj([("mode", str(mode)), ("requireMention", Json::boolean(mention))]),
+          obj(input),
           done=@sf.t("web-pages.connect.modeChanged"),
         )
         shut()

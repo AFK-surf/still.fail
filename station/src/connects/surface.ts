@@ -61,7 +61,7 @@ export abstract class ConnectedSurface implements Connection {
   /// People found by their email (userOf), by it.
   private byEmail = new Map<string, string>();
   /// Each thread an agent works for: its status line.
-  private lines = new Map<string, StatusLine>();
+  protected lines = new Map<string, StatusLine>();
   private readonly pingMs: number;
   private readonly staleMs: number;
   private readonly backoffMs: number;

@@ -447,6 +447,7 @@ export const SHAPES: Record<string, Shape> = {
   ]),
   ModeWords: struct([
     ["multi", "ModeWord"],
+    ["threads", opt("ModeWord"), { doc: "A Feishu connect's thread mode: one each by thread, not by group." }],
     ["single", "ModeWord"],
     ["mentionOn", "String", { doc: "What waiting for an @ does, on." }],
     ["mentionOff", "String", { doc: "What answering every message does." }],
@@ -454,6 +455,7 @@ export const SHAPES: Record<string, Shape> = {
   ModeChange: struct([
     ["mode", "ConnectMode"],
     ["requireMention", "bool"],
+    ["threads", opt("bool"), { doc: "A Feishu connect: thread mode." }],
     ["changed", "bool", { doc: "Whether switching to it changes anything." }],
     ["effects", vec("String"), { doc: "What switching to it does to the connect's conversations, in plain words." }],
     ["action", "String", { doc: "Its button's words." }],
@@ -474,6 +476,7 @@ export const SHAPES: Record<string, Shape> = {
     ["appId", "String"],
     ["appSecret", "String", { doc: "Masked." }],
     ["domain", "String", { doc: "feishu | lark" }],
+    ["threads", opt("bool"), { doc: "Thread mode: each thread of a group its own conversation, answered in it (docs/feishu.md)." }],
     ["console", opt("String"), { doc: "The app's page in the developer console (core)." }],
   ], { doc: "A Feishu (or Lark) connect's app." }),
   FeishuRegistration: struct([
@@ -3937,6 +3940,7 @@ export const SHAPES: Record<string, Shape> = {
     ["platforms", vec("String"), { doc: "What the station connects to (feishu only where it has the Feishu connect)." }],
     ["feishu", opt("ConnectFeishuFlow")],
     ["modeWords", "ModeWords", { doc: "How the ways its conversations become sessions are said, as its platform says them." }],
+    ["threads", opt("bool"), { doc: "Feishu: thread mode chosen." }],
     ["sections", vec("SlackGroupSection"), { doc: "The app's permissions as its form shows them." }],
   ], { doc: "One transient connect wizard. Decisions and navigation come from the core on every client." }),
   AutomaticDecisionView: struct([
