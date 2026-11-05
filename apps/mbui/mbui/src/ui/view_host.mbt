@@ -898,6 +898,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       if scene.old_due {
         scene.parts.whole(6)
       }
+      paint_split_mark(0)
       return
     }
   }
@@ -934,6 +935,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     }
     None => ()
   }
+  paint_split_mark(0)
   if tree.told_since() && !scene_checking() {
     view_brought(tree)
   }
@@ -950,6 +952,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   if !scene_checking() && !scene.old_due && scene_wanted() {
     self.scene_alone(tree, before_old=true) |> ignore
   }
+  paint_split_mark(1)
   // (the last frame's instances kept to copy the layers kept from: scene_layers.mbt)
   self.scene_begin()
   let n0 = self.ninst
@@ -972,11 +975,12 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     fn() {
       self.tree_walk(p, Some(0), at_root)
       let k = self.ninst
-      self.paint_layers_under(p, 0, true)
+      paint_old_timed(fn() { self.paint_layers_under(p, 0, true) })
       self.scene_old_drawn(None, k)
     },
   )
   |> ignore
+  paint_split_mark(2)
   tree_over_scrim.clear()
   dr.targets_said = false
   view_paint_work.handed = view_paint_work.handed + (self.ninst - n0)
@@ -1236,7 +1240,7 @@ fn Ctx::tree_visit(
     if a > 0.002 && !(c.bones != 0L && c.bone_as == 2) && stack >= 0 && tree.root_holds(c.id) && !p.alone {
       self.tree_close_to(p, None)
       self.tree_raise_close(p, None)
-      self.paint_layers_under(p, stack, false)
+      paint_old_timed(fn() { self.paint_layers_under(p, stack, false) })
     }
     // (a layer of its own: copied as kept where nothing of it, nor what it is drawn in, changed; else drawn by a walk
     // of its own, followed by its own watch)
@@ -1263,6 +1267,10 @@ fn Ctx::tree_visit(
   let k0 = self.ninst
   scene_node_drawn(c.id)
   self.tree_draw_node(p, c, x, y, a, s, ux, uy)
+  walk_nodes.val = walk_nodes.val + 1
+  if self.ninst > k0 {
+    walk_drew.val = walk_drew.val + 1
+  }
   // (how far what it drew itself reaches; what it holds adds to it as it is closed)
   p.open.push((c.id, Ref(scene.parts.reach_of(self.inst, k0, self.ninst)), scene.moved.contains(c.id)))
   true
@@ -1440,8 +1448,10 @@ fn Ctx::tree_draw_node(
       return
     }
     let kh = self.ninst
-    self.view_hosted_paint(p, c, a)
-    self.scene_old_drawn(Some(c.id), kh)
+    paint_old_timed(fn() {
+      self.view_hosted_paint(p, c, a)
+      self.scene_old_drawn(Some(c.id), kh)
+    })
     return
   }
   // (wholly outside the clip it is drawn in, where it is drawn (moved, grown, what holds it scrolled): nothing of its own

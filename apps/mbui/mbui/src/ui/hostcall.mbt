@@ -657,6 +657,7 @@ fn h_shape(
       k
     }
     None => {
+      host_shaped.val = host_shaped.val + 1
       let k = @hostapi.shape(text, size, weight, style, out)
       rec_shape(text, size, weight, style, out, k)
       k
@@ -712,6 +713,7 @@ fn h_glyph(key : Int, out : FixedArray[Double]) -> Unit {
       out[6] = if key >= 0x1F000 { 1.0 } else { 0.0 }
     }
     None => {
+      host_glyphs.val = host_glyphs.val + 1
       @hostapi.glyph(key, out)
       rec_glyph(key, out)
     }

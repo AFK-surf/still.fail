@@ -261,8 +261,142 @@ fn perf_log(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
   }
   let p = frame_perf()
   h_log(
-    "PERF t=\{t} work=\{work} build=\{c.t_build} layout=\{c.t_layout} paint=\{c.t_paint} present=\{present} gpu=\{h_gpu_ms()} nodes=\{p.nodes} laid=\{p.laid} insts=\{p.insts} looks=\{if p.looks { 1 } else { 0 }} painted=\{if p.painted { 1 } else { 0 }} share=\{presented_share.val} whole=\{scene.parts.why()} passes=\{p.passes} rows=\{nodes_run.built} kept=\{nodes_run.kept} why=\{built_why.val.escape()} painted_why=\{painted_why.val.escape()}",
+    "PERF t=\{t} work=\{work} build=\{c.t_build} layout=\{c.t_layout} paint=\{c.t_paint} present=\{present} gpu=\{h_gpu_ms()} nodes=\{p.nodes} laid=\{p.laid} insts=\{p.insts} looks=\{if p.looks { 1 } else { 0 }} painted=\{if p.painted { 1 } else { 0 }} share=\{presented_share.val} whole=\{scene.parts.why()} passes=\{p.passes} rows=\{nodes_run.built} kept=\{nodes_run.kept} pp=\{paint_split_said()} po=\{(paint_old_ms.val * 100.0).round() / 100.0} pb=\{parts_built_said()} walk=\{walk_said()} shaped=\{host_shaped.val} glyphs=\{host_glyphs.val} why=\{built_why.val.escape()} painted_why=\{painted_why.val.escape()}",
   )
+  host_shaped.val = 0
+  host_glyphs.val = 0
+  paint_old_ms.val = 0.0
+}
+
+///|
+/// Where a frame's paint went (frame_paint's, said on its PERF line as `pp=` where asked: perf_frames_on), its parts'
+/// times (ms) in the order it paints them: the input targets found (Ctx::view_targets), what of the tree changed taken
+/// and drawn alone, the window's tree walked with the old views in it, what is drawn over them, the glyphs drawn
+/// ahead, the scene's segments and its end, the looks, shots and native views, what a screen reader reads, the rest;
+/// and after it, the runtime's fibers (fx_frame_end). `po=`: of the walk, the old views painted in it.
+// kept across runs: said and set to nothing by each PERF line
+let paint_split : FixedArray[Double] = FixedArray::make(10, 0.0)
+
+///|
+// kept across runs: said and set to nothing by each PERF line
+let paint_old_ms : Ref[Double] = Ref(0.0)
+
+///|
+// kept across runs: how deep in old views painted the paint is (only the outermost timed)
+let paint_old_depth : Ref[Int] = Ref(0)
+
+///|
+/// `f`, old views painted in the walk of the window's tree, timed into paint_old_ms where asked.
+fn paint_old_timed(f : () -> Unit) -> Unit {
+  if perf_frames_on.val != 1 || paint_old_depth.val > 0 {
+    f()
+    return
+  }
+  paint_old_depth.val = 1
+  let t0 = work_now()
+  f()
+  paint_old_ms.val = paint_old_ms.val + work_now() - t0
+  paint_old_depth.val = 0
+}
+
+///|
+/// The parts built since the last PERF line that took longest (`pb=`, where asked: perf_frames_on), at most
+/// three: what it is (its name, else where it is made), why it was built (new, what it read changed, another key, the
+/// frame built anew, …: Ctx::part_nodes), how long it took (ms, what it holds built with it).
+// kept across runs: said and set to nothing by each PERF line
+let parts_built_most : Array[(String, String, Double)] = []
+
+///|
+/// A part built (Ctx::part_nodes): `what`, why, in `ms`.
+fn part_built_said(what : String, why : String, ms : Double) -> Unit {
+  // (where it is made, said by its file and line alone)
+  let what = match what.split("/").collect().last() {
+    Some(s) => {
+      let bits = s.split(":").collect()
+      if bits.length() > 1 { "\{bits[0]}:\{bits[1]}" } else { s.to_string() }
+    }
+    None => what
+  }
+  parts_built_most.push((what, why, ms))
+  parts_built_most.sort_by(fn(a, b) { b.2.compare(a.2) })
+  while parts_built_most.length() > 3 {
+    parts_built_most.pop() |> ignore
+  }
+}
+
+///|
+/// parts_built_most as said on a PERF line, let go.
+fn parts_built_said() -> String {
+  let s = parts_built_most.map(fn(p) { "\{p.0}/\{p.1}/\{(p.2 * 100.0).round() / 100.0}" }).join(";")
+  parts_built_most.clear()
+  s
+}
+
+///|
+/// The nodes of the window's tree its walks went through since the last PERF line, and those of them that drew
+/// something of their own (`walk=`, where asked: perf_frames_on); with what the scene drew of its layers and copied of
+/// them as kept (SceneWork's, since the last).
+// kept across runs: said and set to nothing by each PERF line
+let walk_nodes : Ref[Int] = Ref(0)
+
+///|
+// kept across runs: as walk_nodes
+let walk_drew : Ref[Int] = Ref(0)
+
+///|
+// kept across runs: the scene's work as the last PERF line said it
+let scene_work_said : Ref[SceneWork?] = Ref(None)
+
+///|
+/// walk_nodes, walk_drew and the scene's layers drawn, copied, its instances made and copied since the last PERF line,
+/// said and set to nothing.
+fn walk_said() -> String {
+  let now = scene_done()
+  let was = scene_work_said.val.unwrap_or(now)
+  scene_work_said.val = Some(now)
+  let s = "\{walk_nodes.val}/\{walk_drew.val} layers=\{now.layers - was.layers}/\{now.copied - was.copied} made=\{now.recorded - was.recorded}/\{now.copied_insts - was.copied_insts}"
+  walk_nodes.val = 0
+  walk_drew.val = 0
+  s
+}
+
+///|
+// kept across runs: where the part being timed began
+let paint_split_at : Ref[Double] = Ref(0.0)
+
+///|
+/// What the host shaped and the glyphs it drew since the last PERF line (`shaped=`, `glyphs=`).
+// kept across runs: said and set to nothing by each PERF line
+let host_shaped : Ref[Int] = Ref(0)
+
+///|
+// kept across runs: as host_shaped
+let host_glyphs : Ref[Int] = Ref(0)
+
+///|
+/// A part of the paint (paint_split) begun.
+fn paint_split_begin() -> Unit {
+  if perf_frames_on.val == 1 {
+    paint_split_at.val = work_now()
+  }
+}
+
+///|
+/// Part `k` of the paint (paint_split) done, the next begun.
+fn paint_split_mark(k : Int) -> Unit {
+  if perf_frames_on.val == 1 {
+    let t = work_now()
+    paint_split[k] = paint_split[k] + t - paint_split_at.val
+    paint_split_at.val = t
+  }
+}
+
+///|
+/// paint_split as said on a PERF line, set to nothing.
+fn paint_split_said() -> String {
+  let s = paint_split.iter().map(fn(v) { ((v * 100.0).round() / 100.0).to_string() }).collect().join(",")
+  paint_split.fill(0.0)
+  s
 }
 
 ///|

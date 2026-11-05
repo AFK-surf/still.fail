@@ -464,9 +464,11 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     Some(p) => p.read(fn() { frame_paint(c, root) })
     None => frame_paint(c, root)
   }
+  paint_split_begin()
   // the runtime's fibers as the frame ends: what is ready runs at the next frame, a timer's wakes it (fx.mbt)
   fx_frame_end(c)
   let t3 = work_now()
+  paint_split_mark(9)
   c.t_build = t1 - t0
   c.t_layout = t2 - t1
   c.t_paint = t3 - t2
@@ -480,6 +482,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
 /// focus) is as it left it.
 fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   paint_phase.val = 1
+  paint_split_begin()
   paint_base.wake = -1.0
   paint_clock_at.val = ""
   // what is placed by the clock placed where it is now (Ctx::moved_by: a page sliding), read as it is painted
@@ -529,14 +532,17 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   if view_app.val is Some(_) {
     c.scene_old_drawn(None, if tree_end < c.ninst { tree_end } else { c.ninst })
   }
+  paint_split_mark(3)
   // what was shaped and not drawn, for the host to draw ahead while it presents this frame (text.mbt)
   glyphs_ahead()
+  paint_split_mark(4)
   scene.seg_tail = c.ninst
   c.emit_segs()
   // (the scene as this frame drew it: what changed drawn where it reaches now, scene_layers.mbt)
   if view_app.val is Some(_) {
     c.scene_end()
   }
+  paint_split_mark(5)
   // what is drawn by the clock, as its cycle is now (cycle_look.mbt), what it is drawn over kept for a frame of it alone
   // (frame_watch.mbt)
   looks_keep(c)
@@ -544,8 +550,10 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   // the shots being taken, each into instances of its own (shot.mbt)
   c.paint_shots()
   c.sync_views()
+  paint_split_mark(6)
   // what the widgets are, for a screen reader reading them (a11y.mbt)
   c.a11y_after_paint()
+  paint_split_mark(7)
   // what the paint said, where a Tester asks (said.mbt)
   c.said_logged()
   // the streams' frames taken in this frame said shown (stream.mbt)
@@ -619,6 +627,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
     Some(f) if !looks_rebuilt.val => f()
     _ => ()
   }
+  paint_split_mark(8)
   paint_phase.val = 2
 }
 

@@ -61,7 +61,9 @@ fn shell_is(src : Source, width : Double) -> ShellIs {
 fn narrow_shell(v : @view.View, src : Source) -> Unit {
   // (on the window's ground, as the old view whole is (app_state_tree's): what no page covers, a page sliding, shows it)
   v.ground(By(fn() { @sf.theme().p.bg })) |> ignore
-  @ui.old(v, fn(c) { narrow_under(c, src) }).over(Is(true)) |> ignore
+  // (a finger taken only where it has something of its own, the band the window is dragged by: a press on a page made
+  // once as nodes that none of them takes (its list, dragged as it moves) is the tree's, no input of the old frame's)
+  @ui.old(v, fn(c) { narrow_under(c, src) }).over(Is(true)) |> @ui.old_takes_own |> ignore
   // back at the stack's root while the shell takes it (narrow_takes_back), a node of the window's tree's: before the
   // pages, what they and what is over them say takes back (a page's own stack, a menu, a sheet) taking it first; whose
   // it is said at the cause that changes it (a tab of the bar pressed), done as it is done (sfbase's back_step then)

@@ -1172,12 +1172,28 @@ fn Ctx::part_nodes(
       _ => ()
     }
   }
+  // (why it is built, for what measures the frame: part_built_said)
+  let why = if rn.n == 0 {
+    "new"
+  } else if rn.watch.is_stale() {
+    "read"
+  } else if rn.key != key {
+    "key"
+  } else if !may_keep {
+    "unkept"
+  } else {
+    "frame"
+  }
   let b = self.nodes_begin(rn)
   let r = self.count
   nodes_run.building = Some(rn)
   let was = nodes_run.part_fresh
   nodes_run.part_fresh = fresh
+  let t0 = if perf_frames_on.val == 1 { work_now() } else { 0.0 }
   rn.watch.read(build)
+  if perf_frames_on.val == 1 {
+    part_built_said(if named != "" { named } else { made_at.map(fn(l) { l.to_string() }).unwrap_or("\{id}") }, why, work_now() - t0)
+  }
   nodes_run.part_fresh = was
   nodes_run.building = outer
   rn.key = key
