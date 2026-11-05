@@ -1325,6 +1325,49 @@ test("a_shared_chat_created_while_the_stream_is_away_is_listed_when_it_cannot_re
   core.close();
 });
 
+test("a_resumed_shared_stream_does_not_read_the_list_again", async () => {
+  const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [], dismissed: [], reads: {} };
+  const answers: J = { ...base(), "GET /chats": [], "GET /chats?marks=1": marks, "GET /chats?shared=1": [] };
+  const { host, core, push, read, end, streams, gate } = await ui(answers);
+  await read();
+  push("made", { rows: true, marks: true, shared: true });
+  await coalesce(host);
+  const before = gets(host, "/admin/api/chats?shared=1");
+  assert.equal(before, 1);
+  Queue.offerUnsafe(streams.at(-1)!.queue, new TextEncoder().encode('id: 1f2e3d4c.9\nevent: overview\ndata: {}\n\n'));
+  await host.settle();
+  gate.resumes = true;
+  end();
+  await host.time.pass(RECONNECT_MS + 50, 50);
+  await coalesce(host);
+  assert.equal(gets(host, "/admin/api/chats?shared=1"), before);
+  core.close();
+});
+
+test("a_failed_shared_list_refresh_keeps_the_old_list_and_retries", async () => {
+  const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [], dismissed: [], reads: {} };
+  const row = (id: string) => ({ id, session: id, thread: 8, agents: [{ key: id, runtime: "claude" }], lastActiveAt: 1, ws: null, named: { thread: { surface: "ember", title: id }, firstText: null, channelName: null }, mineOf: [], said: null });
+  const answers: J = { ...base(), "GET /chats": [], "GET /chats?marks=1": marks, "GET /chats?shared=1": [row("old")] };
+  const { host, core, push, read, end, streams } = await ui(answers);
+  await read();
+  push("made", { rows: true, marks: true, shared: true });
+  await coalesce(host);
+  assert.ok(core.inner.data.chat(ST, "old"));
+  Queue.offerUnsafe(streams.at(-1)!.queue, new TextEncoder().encode('id: 1f2e3d4c.9\nevent: overview\ndata: {}\n\n'));
+  await host.settle();
+  answers["GET /chats?shared=1"] = status(503, { error: "not ready" });
+  end();
+  await host.time.pass(RECONNECT_MS + 50, 50);
+  await coalesce(host);
+  assert.ok(core.inner.data.chat(ST, "old"), "a failed refresh does not empty the list");
+  answers["GET /chats?shared=1"] = [row("new")];
+  await host.time.pass(READ_RETRY_MS + 200, 50);
+  await coalesce(host);
+  assert.equal(core.inner.data.chat(ST, "old"), undefined);
+  assert.ok(core.inner.data.chat(ST, "new"));
+  core.close();
+});
+
 for (const removed of [false, true]) test(`a_shared_chat_${removed ? "removed" : "added"}_while_the_list_is_read_is_not_lost`, async () => {
   const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [], dismissed: [], reads: {} };
   const row = {
