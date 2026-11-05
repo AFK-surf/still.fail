@@ -401,6 +401,7 @@ fn view_forget() -> Unit {
   old_islands.clear()
   old_placed.clear()
   old_placed_off.clear()
+  old_places_was.val = (true, [])
   old_hits.clear()
   next_old_hits.clear()
   layer_hits.clear()
@@ -661,7 +662,7 @@ let view_logic_at : Ref[Double] = Ref(0.0)
 
 ///|
 /// What the frame took as it began (messages, the host's answers, the hand) told the window's tree: brought, before the
-/// frame decides what of the old views it builds again (where they are placed is part of that: view_island_said).
+/// frame decides what of the old views it builds again (where they are placed is part of that: old_places_said).
 fn view_arrived() -> Unit {
   match view_app.val {
     Some(tree) if tree.told_since() => {
@@ -750,17 +751,37 @@ fn old_place(tree : @view.Tree) -> Unit {
     }) &&
     // (one as tall as what it holds measured in a box of its own, whatever it fills: old_natural_after_layout)
     !old_islands.iter().any(fn(o) { o.id == old_placed[0].0 && o.natural is Some(_) })
+  old_places_tell()
 }
 
 ///|
-/// Where the old views are laid out, said as the frame's settings are (frame_watch.mbt looks_env): one laid out
-/// elsewhere or resized, the old frame is built again; one only moved or faded (what moves it, or what holds it, by its
+/// Where the old views are laid out, read by the old frame as it builds them (old_frame): one laid out elsewhere or
+/// resized, or one come, the old frame is built again; one only moved or faded (what moves it, or what holds it, by its
 /// offset, a page slid by its width) builds nothing: it is moved where it is drawn and drawn as opaque as it is as the
-/// frame is painted (old_frame's moved_by, view_paint).
-fn view_island_said() -> String {
-  // (and whether the one is the frame whole, the rest of the tree showing nothing: built so or in a box of its own)
-  "\{old_whole.val} " +
-  old_placed.map(fn(p) { "\{p.0.at}.\{p.0.gen}:\{p.6},\{p.7},\{p.3},\{p.4}" }).join(" ")
+/// frame is painted (old_frame's moved_by, view_paint). One let go, the rest where they were, builds nothing either:
+/// each is a part of its own, and the tree no longer holding it, it is painted no more (view_hosted_paint), what it drew
+/// gone as the frame is painted (old_places_tell).
+// kept across runs: told as the old views are placed (old_places_tell), only counts on
+let old_places_said : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+/// Where the old views were last placed (old_place): whether the one was the frame whole, and each placed's own.
+// kept across runs: put back as a run begins (view_forget)
+let old_places_was : Ref[(Bool, Array[String])] = Ref((true, []))
+
+///|
+/// Where the old views are placed now told (old_places_said), unless all that changed is that some were let go.
+fn old_places_tell() -> Unit {
+  let now = old_placed.map(fn(p) { "\{p.0.at}.\{p.0.gen}:\{p.6},\{p.7},\{p.3},\{p.4}" })
+  let (whole_was, was) = old_places_was.val
+  old_places_was.val = (old_whole.val, now)
+  // (none come since they were last placed, none laid out otherwise, the old frame in boxes as it was: one let go
+  // builds nothing, each else a part of its own as it was built; what is told stays as it was till one comes or is
+  // laid out otherwise)
+  if whole_was == old_whole.val && now.iter().all(fn(e) { was.contains(e) }) {
+    return
+  }
+  old_places_said.set(@signals.untracked(fn() { old_places_said.get() }) + 1)
 }
 
 ///|
@@ -775,6 +796,8 @@ fn old_frame(c : Ctx) -> Unit {
       old_islands.iter().any(fn(o) { !old_placed.iter().any(fn(p) { p.0 == o.id }) }) => view_brought(tree)
     _ => ()
   }
+  // (where they are placed, as told: one let go builds nothing, old_places_tell)
+  old_places_said.get() |> ignore
   // (none laid out yet in this pass: each placed says its own, none where the old frame is the one old view)
   for o in old_islands {
     o.held_box = -1
