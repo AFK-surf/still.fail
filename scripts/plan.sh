@@ -26,6 +26,7 @@ decide() {
   # The share host's page is the web's Markdown and visualizations, its words, the iroh it binds (client/), and its headers.
   if has '^(web/|client/|rules/js/|package\.json$|pnpm-lock\.yaml$|cloud/(src/share\.ts|share-hosts\.ts|build-static\.ts|wrangler\.share\.jsonc|wrangler\.jsonc|deploy\.py)$)'; then static+=(share); fi
   if has '^(web/src/site/|cloud/wrangler\.site-beta\.jsonc$)'; then static+=(site-beta); fi
+  if has '^cloud/(status/|wrangler\.status\.jsonc$)'; then static+=(status); fi
   api=false
   if has_but '^cloud/(src/|wrangler\.jsonc$|package\.json$|deploy\.py$)' '^cloud/src/(relay|relay-worker|preview|share)\.ts$'; then api=true; fi
   # (and what cloud/src takes from outside cloud/: the lock's rules through the station's lock, the client's words and

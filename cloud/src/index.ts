@@ -20,7 +20,9 @@ export { Account } from "./account";
 export { Directory } from "./directory";
 export { LoginAttempt, LoginLimiter } from "./login";
 export { RelayLoad } from "./relay-load";
+export { ServiceStatus } from "./status";
 import { sampleOwnRelay } from "./relay-load";
+import { checkServices } from "./status";
 import { PROBE_EVERY_MIN, probeRelays } from "./probes";
 import { relayUrls } from "./relays";
 
@@ -63,10 +65,11 @@ export default {
     if (parent?.sampled) ctx.waitUntil(recordCall(env, parent, request, response, started, Date.now(), notes));
     return response;
   },
-  // Every minute (wrangler.jsonc triggers): still.fail's own relay's counters, for the console (relay-load.ts); every
+  // Every minute (wrangler.jsonc triggers): still.fail's own relay's counters, for the console (relay-load.ts), then
+  // the services checked for still.fail/status (status.ts); every
   // PROBE_EVERY_MIN, the relays probed from China's networks (probes.ts), where RELAY_PROBES says so.
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(sampleOwnRelay(env));
+    ctx.waitUntil(sampleOwnRelay(env).catch(() => []).then((full) => checkServices(env, full)));
     if (env.RELAY_PROBES === "globalping" && Math.floor(controller.scheduledTime / 60_000) % PROBE_EVERY_MIN === 0) ctx.waitUntil(probeAndSay(env));
   },
 } satisfies ExportedHandler<Env>;

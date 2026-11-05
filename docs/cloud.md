@@ -43,6 +43,13 @@ still.fail 以 p2p 为主：设备直接连 station，看 station 在不在线�
 
 账号按邮箱合并（Directory `accountFor`）：验证码登录时，这个邮箱已有账号（包括 Google 的）就登进那个；Google 登录时，Google `sub` 还没有账号而这个邮箱已有（先用邮箱注册的），也进那个。App Store 审核账号（`pw-`）不参与。没有 `EMAIL` 绑定或 `EMAIL_FROM` 时不出选择页，直接去 Google，和以前一样。
 
+## 状态页
+
+[still.fail/status](https://still.fail/status)（`cloud/status/status.html`）是一个不依赖其他资源的静态页，有自己的 Worker（`still-fail-status`），随 main 部署，不等发正式版。它只读 `GET /v1/status`，里面有两样东西：
+
+- **检查**（`cloud/src/status.ts`）：cron 每分钟检查一次官网、网页版、分享页（`STATUS_PAGES`）、API（Directory 能读）、安装与更新（R2 的 `station.json`）和各中继（几分钟内上报过计数，`relay-load.ts`；自家中继到了预算上限算受限）。连续失败两次才算故障，每天的通过比例保留 30 天。页面还在访问者的浏览器里测每个中继的 `/ping`。
+- **事故**是仓库里带 `incident` 标签的 GitHub issue，再加 `P1` 或 `P2` 标签。开 issue 就是发布，关 issue 就是结束，cron 每分钟读一次，一分钟内上页面，不用部署。只有仓库成员能打标签，外人开的 issue 不会上页面。探活只能看出服务不响应，看不出 app 用不了它的响应（2026-11-05 的 `emberRssBytes` 就是这样），所以这类问题要开 issue。标题和正文公开显示；事故比 issue 开得早时，正文里单独一行写 `started: 2026-11-05T21:15:00+08:00`。级别：**P1** 是用不了 still.fail 或它的某个主要页面，只发生在测试版也算；**P2** 是次要功能受影响。
+
 ## 套餐和额度
 
 免费版每个账号可创建 1 个 workspace，每个 workspace 限 1 人；标准版的人数和 workspace 额度各自计算。所有 workspace 最多加入 64 台 station；已超过的 station 保留，但不能再加入新的。

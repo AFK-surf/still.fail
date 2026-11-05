@@ -54,6 +54,10 @@ export async function harness(
     /** RELAY_URLS and RELAY_NAMES: relays beside it, and what they are called (the console's 中继 page). */
     relayUrls?: string;
     relayNames?: Record<string, string>;
+    /** STATUS_PAGES: the pages the cron checks for still.fail/status; answered by `push` (they are outside). */
+    statusPages?: Record<string, string>;
+    /** STATUS_REPO: whose issues labelled `incident` it shows; answered by `push`. */
+    statusRepo?: string;
     /** The console's admin (alice unless said otherwise). */
     adminEmail?: string;
     /** The console's host. */
@@ -175,6 +179,8 @@ export async function harness(
         ...(options.relayUrl ? { RELAY_URL: options.relayUrl } : {}),
         ...(options.relayUrls ? { RELAY_URLS: options.relayUrls } : {}),
         ...(options.relayNames ? { RELAY_NAMES: options.relayNames } : {}),
+        ...(options.statusPages ? { STATUS_PAGES: options.statusPages } : {}),
+        ...(options.statusRepo ? { STATUS_REPO: options.statusRepo } : {}),
         ...(options.vapid ? { VAPID_PUBLIC_KEY: options.vapid.publicKey, VAPID_PRIVATE_KEY: options.vapid.privateKey, VAPID_SUBJECT: "mailto:ops@example.test" } : {}),
         ...(options.fcm ? { FCM_SERVICE_ACCOUNT: options.fcm } : {}),
         ...(options.apns ? { APNS_KEY: options.apns } : {}),
@@ -184,7 +190,7 @@ export async function harness(
       },
       r2Buckets: ["RELEASES"],
       durableObjects: {
-        ...Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Directory", "TelemetryLimiter", "RelayLoad"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "DIRECTORY", "TELEMETRY_LIMITS", "RELAY_LOAD"][i], { className, useSQLite: true }])),
+        ...Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Directory", "TelemetryLimiter", "RelayLoad", "ServiceStatus"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "DIRECTORY", "TELEMETRY_LIMITS", "RELAY_LOAD", "SERVICE_STATUS"][i], { className, useSQLite: true }])),
         RELAY: { className: "Relay", scriptName: "relay", useSQLite: true },
       },
       outboundService: async (request) => {

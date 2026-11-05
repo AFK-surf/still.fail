@@ -40,6 +40,11 @@ export class RelayLoad extends DurableObject<Env> {
     return relayLoadView(relay, rows.map((r) => ({ at: r.at, load: JSON.parse(r.load) as Load })), now).today;
   }
 
+  /** When a relay's counters last came (status.ts); null: never, or none kept. */
+  lastSampled(relay: string): number | null {
+    return this.ctx.storage.sql.exec<{ at: number }>("SELECT at FROM samples WHERE relay = ? ORDER BY at DESC LIMIT 1", relay).toArray()[0]?.at ?? null;
+  }
+
   /** The relays' views, in the order given. */
   view(relays: string[]): RelayLoadView[] {
     const now = nowSeconds();
@@ -77,9 +82,10 @@ export async function receiveLoad(request: Request, env: Env): Promise<Response>
  * Axiom says how near it is to each of its budget's limits (relay.ts admit: LIMITS), and which it has reached
  * (`full`): 2026-10-30 it answered every new connection 429 from 12:22 in Beijing, and nothing said whether the day's
  * bytes or the connections held had run out. Said while the process is not running too (the budget run out stops it).
+ * Gives those it has reached, for still.fail/status (status.ts).
  */
-export async function sampleOwnRelay(env: Env): Promise<void> {
-  if (!env.RELAY || env.RELAY_URL) return;
+export async function sampleOwnRelay(env: Env): Promise<string[]> {
+  if (!env.RELAY || env.RELAY_URL) return [];
   const text = await env.RELAY.getByName("primary").metrics().catch(() => null);
   const url = relayUrls(env)[0]!;
   const loads = env.RELAY_LOAD.getByName("primary");
@@ -106,6 +112,7 @@ export async function sampleOwnRelay(env: Env): Promise<void> {
     limit_connects: LIMITS.connectsPerMinute,
     full: full.join(",") || "none",
   });
+  return full;
 }
 
 /** The console's 中继 page: every relay, named, still.fail's own with the budget it is held to (relay.ts). */

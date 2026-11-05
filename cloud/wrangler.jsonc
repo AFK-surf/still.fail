@@ -68,6 +68,10 @@
     "RELAY_PROBES": "globalping",
     // What they are called on a station's card (经中继北京).
     "RELAY_NAMES": { "https://app.still.fail": "Cloudflare", "https://39.105.157.122": "北京", "https://47.76.247.168": "香港", "https://120.24.233.158": "深圳", "https://39.105.157.122:8443": "北京转香港", "https://47.76.247.168:8443": "香港转北京" },
+    // The pages still.fail/status checks (src/status.ts).
+    "STATUS_PAGES": { "site": "https://still.fail/", "web": "https://app.still.fail/", "share": "https://share.still.fail/" },
+    // Whose issues labelled `incident` it shows.
+    "STATUS_REPO": "AFK-surf/still.fail",
     "GOOGLE_CLIENT_ID": "",
     // Where the sign-in codes come from (src/mail.ts).
     "EMAIL_FROM": "noreply@still.fail",
@@ -87,6 +91,8 @@
       { "name": "TELEMETRY_LIMITS", "class_name": "TelemetryLimiter" },
       // How loaded the relays are, for the console (src/relay-load.ts).
       { "name": "RELAY_LOAD", "class_name": "RelayLoad" },
+      // What still.fail/status shows (src/status.ts).
+      { "name": "SERVICE_STATUS", "class_name": "ServiceStatus" },
       // still.fail's relay process, in the relay's Worker: the cron reads its counters (src/relay-load.ts).
       { "name": "RELAY", "class_name": "Relay", "script_name": "stillfail-relay" },
     ],
@@ -98,5 +104,6 @@
   "migrations": [
     { "tag": "stillfail-v1", "new_sqlite_classes": ["Account", "Directory", "LoginAttempt", "LoginLimiter", "TelemetryLimiter"] },
     { "tag": "stillfail-v2", "new_sqlite_classes": ["RelayLoad"] },
+    { "tag": "stillfail-v3", "new_sqlite_classes": ["ServiceStatus"] },
   ],
 }

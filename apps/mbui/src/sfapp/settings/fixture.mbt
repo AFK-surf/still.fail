@@ -77,6 +77,8 @@ priv struct SettingsFixture {
   mut mba_online : Bool
   // (settings-station-away: Willow away, what it last said of itself kept)
   mut willow_away : Bool
+  // (settings-stations-incompatible: Willow up, saying what this core cannot read)
+  mut willow_incompatible : Bool
   /// the subscriptions' allowances a month's window too, three in all (settings-profiles-monthly: OpenCode Go's)
   mut monthly : Bool
   /// The same subscription independently signed in and borrowed on several stations.
@@ -134,6 +136,7 @@ let fx : SettingsFixture = {
   key_ask_ended: "",
   mba_online: false,
   willow_away: false,
+  willow_incompatible: false,
   monthly: false,
   profile_hosts: false,
   profile_one_owner: false,
@@ -236,6 +239,7 @@ fn fixture_reset() -> Unit {
   fx.key_ask_ended = ""
   fx.mba_online = false
   fx.willow_away = false
+  fx.willow_incompatible = false
   fx.monthly = false
   fx.profile_hosts = false
   fx.profile_one_owner = false
@@ -423,6 +427,7 @@ pub fn fixture_page(mode : String) -> String {
       fx.outflow_link = Some({ "on": true, "state": "running", "address": "tcADDRESS", "port": 7480 })
     }
     // its 设置 while it is away: only what can be changed then
+    "settings-stations-incompatible" => fx.willow_incompatible = true
     "settings-station-away" => {
       fx.willow_away = true
       station_parts["ws1/st1"] = "settings"
@@ -559,7 +564,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-prices" => "prices:7"
     "settings-run" | "settings-run-models" | "settings-run-accounts" | "settings-run-runtime" => "run:ws1/st1#s-c1"
     "settings-add-people" | "settings-workspace-mark" | "settings-workspace-motion" => "workspace"
-    "settings-stations-motion" => "stations"
+    "settings-stations-motion" | "settings-stations-incompatible" => "stations"
     "settings-connects-motion" => "connects"
     "settings-vault-motion" => "vault-items"
     "settings-local-fonts" => "fonts"
@@ -1157,9 +1162,9 @@ fn fx_station(address : String) -> Json {
       ("id", str(id)),
       ("name", str(renamed.unwrap_or("Willow"))),
       ("icon", str(fx.marks.get(id).unwrap_or("glyph:desktop"))),
-      ("summary", str(if fx.gpus { "AMD EPYC · 2 个 agent 在工作" } else { "Apple M1 Pro · 2 个 agent 在工作" })),
+      ("summary", str(if fx.willow_incompatible { "版本不兼容，需要更新" } else if fx.gpus { "AMD EPYC · 2 个 agent 在工作" } else { "Apple M1 Pro · 2 个 agent 在工作" })),
       ("face", str("working")),
-      ("line", str(if fx.gpus { "AMD EPYC · 32 GB · Linux" } else { "Apple M1 Pro · 32 GB · macOS 26" })),
+      ("line", str(if fx.willow_incompatible { "版本不兼容，需要更新" } else if fx.gpus { "AMD EPYC · 32 GB · Linux" } else { "Apple M1 Pro · 32 GB · macOS 26" })),
       ("online", Json::boolean(!fx.willow_away)),
       ("profileGroups", Json::array(fx_station_profile_groups(profiles))),
       ("profileStates", fx_station_profile_states(profiles)),
@@ -1167,7 +1172,9 @@ fn fx_station(address : String) -> Json {
       ("stateText", str(if fx.willow_away { "2 天前在线" } else { "" })),
       (
         "problems",
-        if fx.willow_away {
+        if fx.willow_incompatible {
+          [obj([("key", str("incompatible")), ("level", str("amber")), ("text", str("版本不兼容：这台 station 和这个 still.fail 的版本不匹配，部分信息无法显示。请更新 still.fail 和这台 station。"))])]
+        } else if fx.willow_away {
           [obj([("key", str("away")), ("level", str("red")), ("text", str("离线：在该机器上打开 still.fail 即可重新连接"))])]
         } else {
           []
@@ -1184,6 +1191,9 @@ fn fx_station(address : String) -> Json {
       ),
       (
         "host",
+        if fx.willow_incompatible {
+          Json::null()
+        } else {
         obj([
           ("identity", str(if fx.gpus { "AMD EPYC · 32 GB · Linux" } else { "Apple M1 Pro · 32 GB · macOS 26" })),
           ("gpus", if fx.gpus {
@@ -1214,7 +1224,8 @@ fn fx_station(address : String) -> Json {
               obj([("label", str("进程")), ("value", str("station 412 MB"))]),
             ],
           ),
-        ]),
+        ])
+        },
       ),
       (
         "net",

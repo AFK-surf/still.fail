@@ -24,6 +24,7 @@ import { topicKey, type Topic } from "../protocol.ts";
 import { Kind, type SpanContext } from "../trace.ts";
 import { equal, get, isObject, parseJson } from "../util.ts";
 import { Priority } from "../sync/scheduler.ts";
+import * as present from "../present.ts";
 import { activity as historyActivity } from "../history.ts";
 import { StationAddr } from "./addr.ts";
 import { IDEMPOTENCY_KEY, JSON_IDLE_MS, READS, Requests, httpError } from "./requests.ts";
@@ -1458,6 +1459,11 @@ export class StationsSync {
         if (link) {
           link.memory.set("host", data);
           this.onChange(address, "host");
+          const unreadable = !present.hostFits(data);
+          if (unreadable !== link.hostUnreadable) {
+            link.hostUnreadable = unreadable;
+            this.onChange(address, "link");
+          }
         }
         return;
       }

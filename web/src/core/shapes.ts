@@ -3086,7 +3086,7 @@ export interface StationState {
 }
 
 /**
- * What is wrong with the workspace's stations, in a line, and the worst of it: offline | error | reconnecting.
+ * What is wrong with the workspace's stations, in a line, and the worst of it: offline | error | reconnecting | incompatible.
  * `retry`: always false now (a station down is tried again from the stations' page); true from older cores while down.
  */
 export interface StationTrouble {
@@ -5355,7 +5355,7 @@ export interface NewChatPreset {
 
 /** Something wrong with a station, in words (StationView `problems`). */
 export interface StationProblem {
-	/** silent | blocked | away */
+	/** silent | blocked | away | updating | incompatible */
 	key: string;
 	/** amber | red */
 	level: string;

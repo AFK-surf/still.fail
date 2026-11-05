@@ -114,3 +114,10 @@ test "a short status stays on one line beside a chat title" {
     assert_eq(t.lines_of(status), [status], msg=lang)
   }
 }
+
+///|
+test "a station this core cannot read says so, and shows no reading as on its way" {
+  let t = screen_in("settings-stations-incompatible", corner_windows[0], "zh")
+  assert_true(shows(t, "版本不兼容，需要更新"))
+  assert_true(shows(t, "Maple"), msg="the other stations stay")
+}

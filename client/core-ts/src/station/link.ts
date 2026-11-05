@@ -193,6 +193,8 @@ export class Link {
   /// was, until the threads it found behind have their latest on the device. Before it has looked (`tallied`), what is
   /// behind is not known; null once caught up, or while it is not reached.
   catching: { tallied: boolean; behind: Set<number> } | null = null;
+  /// Its last host reading is not one this core can read (a station newer than the app).
+  hostUnreadable = false;
 
   constructor(address: string, addr: StationAddr, scoped: Scoped, memory: Memory = new Memory()) {
     this.address = address;

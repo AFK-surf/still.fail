@@ -99,7 +99,7 @@ function linkValue(v: Value | undefined): J {
   if ("err" in v) return { state: "error", message: v.err.message };
   const cause = get(v.ok, "cause");
   const catching = get(v.ok, "catching");
-  return { state: get(v.ok, "state") ?? "connecting", message: get(v.ok, "message") ?? null, last: get(v.ok, "last") ?? null, ...(get(v.ok, "retrying") === true ? { retrying: true } : {}), ...(typeof cause === "string" ? { cause } : {}), ...(typeof catching === "number" ? { catching } : {}) };
+  return { state: get(v.ok, "state") ?? "connecting", message: get(v.ok, "message") ?? null, last: get(v.ok, "last") ?? null, ...(get(v.ok, "hostUnreadable") === true ? { hostUnreadable: true } : {}), ...(get(v.ok, "retrying") === true ? { retrying: true } : {}), ...(typeof cause === "string" ? { cause } : {}), ...(typeof catching === "number" ? { catching } : {}) };
 }
 
 const stationOnline = (v: Value | undefined): boolean => !down(linkValue(v));
@@ -1487,6 +1487,7 @@ export class Views implements Owner {
       if (state === "offline") troubles.push(["offline", downWords(this.link(s.address), s.name), get(this.link(s.address), "cause") === "network", s.address]);
       else if (state === "error") troubles.push(["error", t("core-views.station.unreachable", { name: s.name }), false, s.address]);
       else if (state === "connecting" && read && "ok" in read) troubles.push(["reconnecting", t("core-views.station.reconnecting", { name: s.name }), false, s.address]);
+      else if (state === "online" && get(this.link(s.address), "hostUnreadable") === true) troubles.push(["incompatible", t("core-views.station.incompatible_named", { name: s.name }), false, s.address]);
       const cause = state === "offline" ? get(this.link(s.address), "cause") : undefined;
       // Refused for a security mode: why.
       if (cause === "lock") message = get(this.link(s.address), "message") ?? null;
@@ -1497,7 +1498,7 @@ export class Views implements Owner {
     let trouble: J = null;
     if (troubles.length === 1) trouble = { text: troubles[0][1], state: troubles[0][0], retry: false, station: troubles[0][3] };
     else if (troubles.length > 1) {
-      const worst = ["error", "offline", "reconnecting"].find((w) => troubles.some(([s]) => s === w)) ?? "offline";
+      const worst = ["error", "offline", "reconnecting", "incompatible"].find((w) => troubles.some(([s]) => s === w)) ?? "offline";
       // Every one down as the device's network is: that, once, and not as so many stations amiss.
       const network = troubles.every(([, , n]) => n === true);
       trouble = { text: network ? t("core-views.station.network") : t("core-views.station.troubles", { n: troubles.length }), state: worst, retry: false };
@@ -1787,9 +1788,13 @@ export class Views implements Owner {
     let silentNext = Infinity;
     const byId = new Map(stations.map((s) => [String(s.id), s]));
     const items = stations.map((s) => {
-      const overview = this.ok({ topic: "overview", station: s.address });
+      const read = this.ok({ topic: "overview", station: s.address });
       const hostRaw = this.ok({ topic: "host", station: s.address });
-      const { host, shown } = this.#stationParts(s.address, overview, hostRaw, c);
+      const { host, shown } = this.#stationParts(s.address, read, hostRaw, c);
+      // What it says that this core cannot read (a station newer than the app): the row stays, saying so, and the other
+      // stations' are not lost with it.
+      const unreadable = (read !== undefined && shown === null) || (isObject(hostRaw) && host === null);
+      const overview = read !== undefined && shown === null ? undefined : read;
       let summary: string;
       const cause = get(this.link(s.address), "cause");
       if (!s.online && cause === "updating") summary = t("core-views.station.updating_short");
@@ -1798,7 +1803,8 @@ export class Views implements Owner {
       else if (!s.online && cause === "lock") summary = t("core-views.station.lock_short");
       else if (!s.online) {
         summary = typeof s.lastSeen === "number" ? t("core-views.station.offline_since", { ago: format.relativeTime(s.lastSeen * 1000, c.now, c.offsetMin) }) : t("core-views.station.offline_short");
-      } else if (host !== null) {
+      } else if (unreadable) summary = t("core-views.station.incompatible_short");
+      else if (host !== null) {
         const running = u64(get(get(overview, "counts"), "running")) ?? 0;
         const what = str(host.identity) || str(host.os) || "";
         // What its agents do first: a narrow card cuts the line short at its end.
@@ -1809,7 +1815,7 @@ export class Views implements Owner {
       const state = str(this.link(s.address).state);
       // Up without a host reading for SILENT_MS: said to be silent (the cloud says it is up, nothing answers).
       let silent = false;
-      if (s.online && host === null) {
+      if (s.online && host === null && !unreadable) {
         const since = this.#hostless.get(s.address) ?? c.now;
         this.#hostless.set(s.address, since);
         silent = c.now - since >= SILENT_MS;
@@ -1825,11 +1831,11 @@ export class Views implements Owner {
         ...(s.icon ? { icon: s.icon } : {}),
         summary,
         face: looks.face(s.online, overview),
-        line: !s.online && cause === "lock" ? t("core-views.station.lock_short") : looks.stationLine(s.online, host),
+        line: !s.online && cause === "lock" ? t("core-views.station.lock_short") : s.online && unreadable ? t("core-views.station.incompatible_short") : looks.stationLine(s.online, host),
         online: s.online,
         reconnecting: s.online && state !== "online" && state !== "error",
-        ...stationState(s.online, blocked !== null || cause === "updating", summary, typeof s.lastSeen === "number" ? s.lastSeen : null, overview !== undefined, running, c),
-        problems: stationProblems(s.online, silent, blocked, typeof s.lastSeen === "number", cause === "updating"),
+        ...stationState(s.online, blocked !== null || cause === "updating", summary, typeof s.lastSeen === "number" ? s.lastSeen : null, read !== undefined, running, c),
+        problems: stationProblems(s.online, silent, blocked, typeof s.lastSeen === "number", cause === "updating", unreadable),
         // Down for a security mode: why, in place of the page's 离线 words.
         ...(blocked !== null ? { blocked } : {}),
         lastSeen: s.lastSeen,
@@ -2589,10 +2595,10 @@ export class Views implements Owner {
 const pinnedAt = new WeakMap<object, number>();
 
 /// `value` put through shape `ty` once, as it would go out, and marked so (`shaped`: shared, never changed, not copied or
-/// shaped again where it goes out inside another value); as it is when it does not fit (its topic's shape says why).
+/// shaped again where it goes out inside another value); null when it does not fit (the station's row says so).
 function asShaped(ty: Ty, value: J): J {
   const out = conformTy(ty, value);
-  if (!("ok" in out) || out.ok === null || typeof out.ok !== "object") return value;
+  if (!("ok" in out) || out.ok === null || typeof out.ok !== "object") return null;
   shaped.add(sharedValue(out.ok));
   return out.ok;
 }
@@ -2736,8 +2742,10 @@ export function stationState(online: boolean, saysWhy: boolean, summary: string,
 }
 
 /// What may be wrong with a station, each in words, worst first (StationCards.tsx problems): silent though up, down for
-/// a security mode (why), away (red once it has been online, else amber: never connected).
-export function stationProblems(online: boolean, silent: boolean, blocked: string | null, seen: boolean, updating = false): { key: string; level: string; text: string }[] {
+/// a security mode (why), away (red once it has been online, else amber: never connected). Up and saying what this core
+/// cannot read comes first: it explains the rest.
+export function stationProblems(online: boolean, silent: boolean, blocked: string | null, seen: boolean, updating = false, unreadable = false): { key: string; level: string; text: string }[] {
+  if (online && unreadable) return [{ key: "incompatible", level: "amber", text: t("core-views.station.incompatible", { name: brand.name() }) }];
   if (online && silent) return [{ key: "silent", level: "amber", text: t("core-views.station.silent", { name: brand.name() }) }];
   if (!online && blocked !== null) return [{ key: "blocked", level: "red", text: blocked }];
   // Gone for its update: back by itself once it is done.

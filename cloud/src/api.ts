@@ -17,6 +17,7 @@ import { receiveFeedback } from "./feedback";
 import { pushKey, registration, stationNotify } from "./push";
 import { relays, relayUrls } from "./relays";
 import { receiveLoad, relaysLoad } from "./relay-load";
+import { serveStatus } from "./status";
 import { receiveLogs, receiveTraces } from "./tracing";
 import { ICON_URL_CHARS, keptIcon, serveIcon } from "./icons";
 import { servePicture } from "./pictures";
@@ -169,6 +170,8 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   // still.fail's relays, for anyone: the page that shows a published chat (share.still.fail, src/share.ts) reaches the
   // station through them, signed in to nothing (docs/public-share.md). From any page: what it says is no secret.
   if (path === "/v1/relays" && method === "GET") return reply({ relay_urls: relayUrls(env) }, 200, { "access-control-allow-origin": "*", "cache-control": "public, max-age=300" });
+  // What still.fail/status shows (status.ts).
+  if (path === "/v1/status" && method === "GET") return serveStatus(env);
 
   // Notices of a station's chats, signed with its key like its spans, pushed to the people they are for (push.ts).
   if (path === "/v1/stations/notify" && method === "POST") return stationNotify(request, env);
