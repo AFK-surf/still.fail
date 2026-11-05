@@ -12,9 +12,6 @@ fn init {
     ("src/sfreplay/flows/bar_archive_test.mbt", 2),
     ("src/sfreplay/flows/card_motion_test.mbt", 1),
     ("src/sfreplay/flows/drive_upload_test.mbt", 1),
-    // (rolled back to 0.1.7190's chat page, 2026-11-05: a chat row jumps 8.5 in a frame as a message comes in; to be
-    // found and mended, then this taken out)
-    ("src/sfreplay/flows/glass_test.mbt", 1),
     ("src/sfreplay/flows/history_test.mbt", 1),
     ("src/sfreplay/flows/offline_retry_test.mbt", 1),
     ("src/sfreplay/flows/settings_add_station_test.mbt", 1),
