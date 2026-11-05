@@ -39,6 +39,21 @@ test("the pending index resumes in bounded batches and follows requests changed 
   } finally { db.close(); }
 });
 
+test("a workspace does not write a pending lookup before anyone prepares its list", () => {
+  const { db, put, rows } = fixture();
+  try {
+    initializePendingIndex(db);
+    const count = () => (db.prepare("SELECT total_changes() AS n").get() as { n: number }).n;
+    const before = count();
+    put("before", "pending");
+    assert.equal(count() - before, 1);
+    assert.deepEqual(rows(), []);
+    assert.equal(backfillPendingIndex(db, "w"), true);
+    put("after", "pending");
+    assert.deepEqual(rows().map((row) => row.id), ["after", "before"]);
+  } finally { db.close(); }
+});
+
 test("changing only a waiting request's box does not write its lookup again", () => {
   const { db, put } = fixture();
   try {

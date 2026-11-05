@@ -53,6 +53,23 @@ test("a vault version with unchanged members does not rewrite their lookup", () 
   } finally { db.close(); }
 });
 
+test("vault versions do not write a member lookup before that workspace is prepared", () => {
+  const { db, put, members } = fixture();
+  try {
+    initializeVaultMembers(db);
+    const count = () => (db.prepare("SELECT total_changes() AS n").get() as { n: number }).n;
+    const before = count();
+    put("w", "v", ["alice", "bob"]);
+    assert.equal(count() - before, 1);
+    assert.deepEqual(members("w", "alice"), []);
+    assert.equal(backfillVaultMembers(db, "w"), true);
+    assert.deepEqual(members("w", "alice"), ["v"]);
+    put("w", "v", ["bob", "carol"], 1);
+    assert.deepEqual(members("w", "alice"), []);
+    assert.deepEqual(members("w", "carol"), ["v"]);
+  } finally { db.close(); }
+});
+
 test("a failed vault member batch rolls its entries and cursor back together", () => {
   const { db, put, members } = fixture();
   try {
