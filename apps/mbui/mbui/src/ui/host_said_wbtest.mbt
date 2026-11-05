@@ -145,6 +145,33 @@ test "what the host has once handed on shows a node whose binding reads its own 
 }
 
 ///|
+test "what the host has once handed on lays the tree out as of its moment (laid_size, laid_window_now): the tree tells where it placed what follows that, no fault" {
+  let host = OnceHad::new()
+  let wide = @signals.signal(100.0)
+  let seen : Array[Bool] = []
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  set_view_app(fn(root) {
+    root.box(fn(b) {
+      b.width(By(fn() { Some(wide.get()) })).height(Is(Some(40.0))) |> ignore
+      // (what follows where it is placed: the tree tells it once laid out, Tree::sizes_told)
+      b.reacts(fn() { b.laid_window_told() }, fn(r) { seen.push(r is Some(_)) })
+      on_host_said(root, kind="slide-asked", fn() { host.said() }, fn(_) {
+        wide.set(160.0)
+        // (how wide it is and where as of now, laid out for it there and then: a slide's length said by it; reads that
+        // lay out as of the moment, not shut)
+        b.laid_size() |> ignore
+        b.laid_window_now() |> ignore
+      })
+    })
+    |> ignore
+  })
+  t.draw()
+  host.had.val = Some("asked")
+  t.draw()
+  assert_eq(seen.last(), Some(true))
+}
+
+///|
 test "panic: what is laid out read by what is handed on itself, laid_window_told, aborts" {
   let host = OnceHad::new()
   let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)

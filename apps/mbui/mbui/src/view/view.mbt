@@ -3090,7 +3090,6 @@ fn Tree::measured_now(self : Tree) -> Unit {
 /// it is laid out too, drawn off and grown or shrunk by nothing): where a change told now puts it, said once at that
 /// moment, never followed.
 pub fn View::laid_window_now(self : View) -> (Double, Double, Double, Double) {
-  layout_read("laid_window_now")
   guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
   self.tree.measured_now()
   let mut x = 0.0
@@ -6314,7 +6313,15 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
 
 ///|
 /// The sizes followed (View::laid_size_told), all of it laid out, told as one change: whether any was told otherwise.
+/// The tree's own telling of what it laid out, wherever its layout runs (a hand-off's change brought to its moment
+/// too): reads what is laid out as its own (reads_own), never as the hand-off's code.
 fn Tree::sizes_told(self : Tree) -> Bool {
+  reads_own(fn() { self.sizes_told_now() })
+}
+
+///|
+/// What Tree::sizes_told does.
+fn Tree::sizes_told_now(self : Tree) -> Bool {
   let keep = []
   // (each once, however often it was asked: a set, not the array gone through for each)
   let kept : Set[Int] = Set::new()
@@ -8264,7 +8271,11 @@ let layout_reads_shut : Ref[String?] = Ref(None)
 
 ///|
 /// From now on what is laid out may not be read (`why`: where), until it is put back with what this gives (None: it may
-/// be read). Only ui's hand-off of what the host has once (host_said_arrive) says it; an app never does.
+/// be read). Only ui's hand-off of what the host has once (host_said_arrive) says it; an app never does. What is shut is
+/// what this frame has yet to lay out, read as if it were: where it was placed (placed_window_now) and the sizes and
+/// places told (laid_size_told, laid_window_told). A read that lays it out there and then, as of the logic's moment
+/// (laid_size, laid_window_now: how big a thing is at a change, a slide's length said by it), is not of them: it may
+/// be read.
 pub fn shut_layout_reads(why : String?) -> String? {
   let was = layout_reads_shut.val
   layout_reads_shut.val = why
