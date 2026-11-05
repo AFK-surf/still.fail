@@ -492,6 +492,18 @@ fn scene_mark(id : @view.NodeId) -> Unit {
 }
 
 ///|
+/// A layer's painting changed without a tree property changing: redraw where it reached before and where its new
+/// drawing reaches. Marking its instances stale alone does not tell a partial renderer which pixels to replace.
+fn scene_paint_told(id : @view.NodeId) -> Unit {
+  match scene.reach.get(id) {
+    Some(r) => scene.parts.add(r)
+    None => ()
+  }
+  scene.due.push(id)
+  scene_mark(id)
+}
+
+///|
 /// Whether the frame being drawn is a check's (drawn anew to be compared: Ctx::scene_check, looks_check's frame built
 /// whole): the tree as it is, nothing told it taken.
 fn scene_checking() -> Bool {
@@ -527,7 +539,7 @@ fn scene_watch(id : @view.NodeId) -> @signals.Watch {
       }
       None => ()
     }
-    scene_mark(id)
+    scene_paint_told(id)
     if !in_frame.val {
       h_frame_owed()
     }
@@ -570,7 +582,7 @@ fn scene_again() -> Unit {
   scene.again.clear()
   for id in again {
     if scene.layers.contains(id) {
-      scene_mark(id)
+      scene_paint_told(id)
     }
   }
 }
@@ -1290,7 +1302,7 @@ fn Ctx::scene_wakes(self : Ctx, t : Double) -> Unit {
   for w in scene.wakes {
     if w.0 <= t {
       if scene.layers.contains(w.1) {
-        scene_mark(w.1)
+        scene_paint_told(w.1)
       }
     } else {
       left.push(w)
@@ -2027,4 +2039,3 @@ fn scene_tree_spans() -> Array[(Int, Int)] {
 fn scene_holds_all(o : SceneLayer, x : SceneLayer) -> Bool {
   o.start >= 0 && x.start >= o.start && x.start + x.count <= o.start + o.count
 }
-
