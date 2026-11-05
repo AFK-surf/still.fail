@@ -63,6 +63,8 @@ export const LIVE_SESSIONS = "SELECT * FROM sessions WHERE archived_at IS NULL O
 export { SESSION_COUNTS, SESSION_COUNTS_VISIBLE, SESSION_COUNTS_HOME };
 export const ANY_RUNNING = "SELECT 1 AS r FROM sessions WHERE running = 1 LIMIT 1";
 export const RUNNING_SESSIONS = "SELECT * FROM sessions WHERE running = 1";
+export const SESSION_THREAD_BY_ID = `SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread
+  WHERE ts.thread = ?1 AND ts.session = ?2`;
 // Ordering still considers every thread, but it reads only its latest message's time; people and full summaries are
 // needed only after the limit. Applying the connect filter outside the limit preserves the prior cross-connect order.
 export const RECENT_CONNECT_THREADS = `WITH recent AS MATERIALIZED (
@@ -1296,6 +1298,12 @@ export class Store {
       "SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread WHERE ts.session = ? AND t.channel = ? AND t.thread_ts = ?",
       session, channel, threadTs,
     );
+    return r ? toSessionThread(r) : null;
+  }
+
+  /// One thread of a session, by its id, and the connect it posts through there.
+  sessionThreadById(session: string, thread: number): SessionThread | null {
+    const r = this.#one(SESSION_THREAD_BY_ID, thread, session);
     return r ? toSessionThread(r) : null;
   }
 

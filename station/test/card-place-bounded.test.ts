@@ -37,6 +37,7 @@ test("an operation finds its original card without reading the session's other c
     add(41, 400);
     const after = locate();
     assert.equal(after, before, `finding the card read ${before}, then ${after}, linked conversations`);
+    assert.equal(after, 0, "finding the card does not list the session's conversations");
   } finally { store.close(); }
 });
 

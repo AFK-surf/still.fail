@@ -59,7 +59,7 @@ export type GrantsDeps = {
       getSession(key: string): { archivedAt?: number | null; ws: string | null } | null;
       starter(session: string): string | null;
       latestThread(session: string): SessionThread | null;
-      sessionThreads(session: string): SessionThread[];
+      sessionThreadById(session: string, thread: number): SessionThread | null;
       pendingCard(thread: number): [{ ts: string }, unknown] | null;
       insertMessage(m: Record<string, unknown>): number[];
       withdrawCard(agent: string, thread: number, ts: string): boolean;
