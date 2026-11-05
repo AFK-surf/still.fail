@@ -155,6 +155,29 @@ test("old widget sources are built in bounded batches while messages change", ()
   } finally { store.close(); }
 });
 
+test("old widget preparation skips edits that are not messages", () => {
+  const visited = (edits: number) => {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      beforeIndex(db);
+      const thread = store.openThread("ember", "EMBER", "edits", null, null).id;
+      const files = JSON.stringify([{ path: "/w/item", name: "item" }]);
+      const put = db.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,at,attachments)
+        VALUES(?,?,?,?,'agent','a',?,?)`);
+      put.run(thread, 1, "message", null, 1, files);
+      for (let n = 2; n <= edits + 1; n++) put.run(thread, n, "edit", 1, n, files);
+      installWidgetSources(db);
+      let total = 0;
+      for (;;) {
+        const result = widgetSourcesStep(db, thread, 16);
+        total += result.visited;
+        if (result.done) return total;
+      }
+    } finally { store.close(); }
+  };
+  assert.deepEqual([visited(40), visited(400)], [1, 1]);
+});
+
 test("an edit that leaves the effective files unchanged does not rewrite them", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
