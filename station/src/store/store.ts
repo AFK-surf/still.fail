@@ -250,6 +250,10 @@ export const PENDING_SESSIONS = `WITH RECURSIVE
 /// How many chats someone started since a time, by runtime and model (`modelsUsedBy`): from the index of them alone
 /// (schema.ts sessions_models), not each session's row (1.2 s on a station, as an agent opened a chat).
 export const MODELS_USED_BY = "SELECT runtime, model, COUNT(*) AS n FROM sessions INDEXED BY sessions_models WHERE created_by = ? AND created_at >= ? GROUP BY runtime, model";
+/// How many of someone's chats on a runtime and model (`IS`: null for its default) since a time ran at each effort they
+/// named, the most used first, then the latest (`effortsUsedBy`).
+export const EFFORTS_USED_BY =
+  "SELECT effort, COUNT(*) AS n, MAX(created_at) AS last FROM sessions INDEXED BY sessions_efforts WHERE created_by = ? AND runtime = ? AND model IS ? AND created_at >= ? AND effort IS NOT NULL AND effort != '' GROUP BY effort ORDER BY n DESC, last DESC";
 export const LOGIN_CARDS =
   "SELECT thread, n, author FROM entries INDEXED BY entries_login_cards WHERE kind = 'message' AND author_kind = 'agent' AND card LIKE '%\"login\"%' AND card LIKE ? AND NOT EXISTS (SELECT 1 FROM closed_cards c WHERE c.thread = entries.thread AND c.n = entries.n)";
 export const PEOPLE_SAID_AFTER =
@@ -938,6 +942,12 @@ export class Store {
   openedWith(parentStation: string, parent: string, key: string, childStation: string): Opened | null {
     const r = this.#one("SELECT * FROM opened_chats WHERE parent_station = ? AND parent = ? AND key = ? AND child_station = ?", parentStation, parent, key, childStation);
     return r ? toOpened(r) : null;
+  }
+
+  /// The efforts `createdBy`'s chats on `runtime` and `model` here since `since` ran at, the most used first (what
+  /// chat_create runs when it is told no effort).
+  effortsUsedBy(createdBy: string, runtime: string, model: string | null, since: number): { effort: string; n: number }[] {
+    return this.#all(EFFORTS_USED_BY, createdBy, runtime, model, since).map((r) => ({ effort: r.effort as string, n: Number(r.n) }));
   }
 
   /// Who opened session `child` of this station, if another agent did.
