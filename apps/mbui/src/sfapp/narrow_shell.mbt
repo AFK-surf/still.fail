@@ -156,6 +156,46 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
     let (left, right) = sides_room()
     (dmax(0.0, w - left - right), h)
   })
+  // over all of it, the splash while the first page waits for what it shows (first_page_node)
+  first_page_node(v, src)
+}
+
+///|
+/// The narrow shell's first page as it opens, in node `v`: under the splash (the workspaces' words, as view_in's splash
+/// while the first page waits) till the core has answered for what it shows (page_ready, followed) or first_page_ms
+/// after the shell came with its workspace, whichever comes first (at_moment), then shown from that change on; the
+/// chats' lists drawn at none meanwhile (first_hide). Said at its causes, nothing built each frame for it (an island's
+/// first_page_shown before).
+fn first_page_node(v : @view.View, src : Source) -> Unit {
+  first_by_node.val = true
+  v.owns(fn() { first_by_node.val = false }) |> ignore
+  let timed = @signals.signal(false, same=fn(a, b) { a == b })
+  let unwait : Ref[() -> Unit] = Ref(fn() {  })
+  let ws = fn() { workspace_in_view(src).0 }
+  // (first_page_ms from the moment the shell has its workspace; let go once the page is shown: nothing waited for then)
+  v.reacts(fn() { ws() is Some(_) }, fn(has) {
+    if has && !first_shown.val {
+      unwait.val = v.at_moment(v.cause_at() + first_page_ms, fn() { timed.set(true) })
+    }
+  })
+  // (with its workspace and not shown yet: what it shows not answered for, first_page_ms not gone by)
+  let waiting = fn() {
+    match ws() {
+      Some(w) => !first_shown.val && !timed.get() && !page_ready(src, w, app.nav.top())
+      None => false
+    }
+  }
+  v.reacts(waiting, fn(on) {
+    if !on && ws() is Some(_) {
+      first_shown.val = true
+      (unwait.val)()
+    }
+    first_hide(on)
+  })
+  v.show(waiting, fn(s) {
+    s.over(Is(true)) |> ignore
+    splash_of_tree(s, fn() { Some(t_reading_workspaces(src)) }, fn() { false })
+  })
 }
 
 ///|
@@ -164,7 +204,7 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
 fn narrow_under(c : @ui.Ctx, src : Source) -> Unit {
   frame_bare.val = false
   match workspace_in_view(src).0 {
-    Some(w) => signed_in_frame(c, src, w, reacted=true)
+    Some(w) => signed_in_frame(c, src, w, reacted=true, first=false)
     None => ()
   }
 }
@@ -195,7 +235,7 @@ fn narrow_page_held(c : @ui.Ctx, src : Source, w : Workspace, page : Page) -> Un
 /// `reacted`: in a shell of the window's tree, whose node does what follows the state as it changes and what the host
 /// says as each frame begins (signed_in_node), not here: what is told the core, the links and the icon's number, the
 /// update asked for, the notifications, a link given, a keep answered.
-fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace, reacted? : Bool = false) -> Unit {
+fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace, reacted? : Bool = false, first? : Bool = true) -> Unit {
   if !reacted {
     signed_in_said(c, src, w)
   }
@@ -215,9 +255,12 @@ fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace, reacted? : Bool = f
   // the app's keys, in every tier (sfdesk's keys.mbt): what is the wide frame's alone does nothing laid out Small
   @sfdesk.keys(c, src, w)
   // the first page built as it opens, asking for all it shows, and shown once it has it (first_page_ms at most), as a
-  // page opening is: under the splash till then (view_in), not its loading look and its list a frame or two later
-  first_waiting.val = !first_page_shown(c, src, w)
-  first_hide(first_waiting.val)
+  // page opening is: under the splash till then (view_in), not its loading look and its list a frame or two later;
+  // the narrow shell's its own node's (first_page_node)
+  if first {
+    first_waiting.val = !first_page_shown(c, src, w)
+    first_hide(first_waiting.val)
+  }
 }
 
 ///|
