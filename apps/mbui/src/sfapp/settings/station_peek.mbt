@@ -319,6 +319,12 @@ let peek_meters_room : @ui.Style = @ui.css("w=Full py=S1")
 let peek_meters : @ui.Style = @ui.css("row h=S5 gap=S2 align=ACenter")
 
 ///|
+/// It said what this core cannot read: no reading is on its way, so nothing shows as if one were.
+fn unreadable(s : Json?) -> Bool {
+  items(s, "problems").iter().any(fn(p) { text(Some(p), "key") == "incompatible" })
+}
+
+///|
 /// A machine's CPU, memory and disk made up, for what shows while they are read (their chips in their bones).
 fn sample_meters(c : @ui.Ctx, key : String) -> Unit {
   @sf.bones(c, fn() {
@@ -353,7 +359,7 @@ fn peek_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
             }
           })
           |> ignore
-        _ => sample_meters(c, "station-peek/" + text(s, "station"))
+        _ => if !unreadable(s) { sample_meters(c, "station-peek/" + text(s, "station")) }
       }
     })
     |> ignore

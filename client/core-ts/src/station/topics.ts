@@ -261,8 +261,8 @@ export class StationTopics implements Owner {
         if (!link) return { ok: { state: "offline", message: t("core-views.station.not_listed") } };
         // While catching up on what was missed: how many chats are left to (-1 while that is not known yet).
         // And while the archive's pages are read, or why that stopped short (views/archive.ts).
-        if (link.catching === null && !link.archiveReading && link.archiveFailed === null) return { ok: link.state };
-        return { ok: { ...link.state, ...(link.catching === null ? {} : { catching: link.catching.tallied ? link.catching.behind.size : -1 }), ...(link.archiveReading ? { archiveReading: true } : {}), ...(link.archiveFailed !== null ? { archiveFailed: link.archiveFailed } : {}) } };
+        if (link.catching === null && !link.archiveReading && link.archiveFailed === null && !link.hostUnreadable) return { ok: link.state };
+        return { ok: { ...link.state, ...(link.hostUnreadable ? { hostUnreadable: true } : {}), ...(link.catching === null ? {} : { catching: link.catching.tallied ? link.catching.behind.size : -1 }), ...(link.archiveReading ? { archiveReading: true } : {}), ...(link.archiveFailed !== null ? { archiveFailed: link.archiveFailed } : {}) } };
       case "host": {
         const v = link?.memory.get("host");
         return v === undefined ? undefined : { ok: v };
