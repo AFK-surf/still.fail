@@ -121,6 +121,28 @@ test("a membership replaced behind an old-session cursor is not missed", () => {
   } finally { store.close(); }
 });
 
+test("a delivery ahead of the preparation cursor follows a missing and restored thread", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const a = store.openThread("slack", "C", "a", null, null);
+    const b = store.openThread("slack", "C", "b", null, null);
+    store.joinThread(a.id, "s", "a"); store.joinThread(b.id, "s", "b");
+    const put = db.prepare("INSERT INTO deliveries(rowid,thread,n,session,delivered_at) VALUES(?,?,1,'s',NULL)");
+    put.run(50, a.id);
+    installLatestThreadIndex(db);
+    assert.deepEqual(prepareLatestThreadStep(db, "s", 1), { done: false, visited: 1 });
+    put.run(100, b.id);
+    db.prepare("DELETE FROM threads WHERE id=?").run(b.id);
+    db.prepare("DELETE FROM deliveries WHERE rowid=100").run();
+    put.run(10, b.id);
+    prepare(store, "s", 1);
+    db.prepare("INSERT INTO threads(id,surface,channel,thread_ts,created_at) VALUES(?,'slack','C','restored',1)").run(b.id);
+    assert.equal(indexedLatestThread(db, "s")?.id, store.latestThread("s")?.thread.id);
+    assert.equal(indexedLatestThread(db, "s")?.id, a.id);
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM latest_thread_rows WHERE session='s' AND thread=?").get(b.id)?.n, 1);
+  } finally { store.close(); }
+});
+
 test("readiness and the selected conversation share a snapshot with another writer", () => {
   const dir = mkdtempSync(join(process.cwd(), ".latest-thread-snapshot-")), path = join(dir, "station.db");
   const store = Store.open(path), db = store.db;
