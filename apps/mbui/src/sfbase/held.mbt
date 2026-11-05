@@ -46,6 +46,8 @@ pub fn let_go(src : Source, scope : String) -> Unit {
       held_topics.remove(scope)
       for key, t in m {
         if held_read.get(key) == Some(held_now.val) {
+          let others = held_topics.iter().filter(fn(o) { o.1.contains(key) }).map(fn(o) { o.0 }).collect()
+          println("HELD-PROBE kept \{scope} \{key} held by \{others}")
           continue
         }
         held_read.remove(key)
