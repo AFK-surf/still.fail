@@ -1631,3 +1631,32 @@ test "a mouse press in either kind of field lets go of page words picked before 
     assert_true(f.text().contains("X"), msg="field edited, tree=\{tree}")
   }
 }
+
+///|
+test "words typed into a field of the tree's build nothing of the old frame in the frames after them either: what they changed is the field's signals, none come late" {
+  let f = Field::new(text="")
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  set_view_app(fn(root) {
+    root.box(fn(h) {
+      h.width(Is(Some(200.0))).height(Is(Some(20.0))) |> ignore
+      field(h, f, font_size=10.0, max_lines=1) |> ignore
+    })
+    |> ignore
+  })
+  t.set_frame_period(1000.0 / 120.0)
+  t.draw()
+  t.tap(30.0, 10.0)
+  t.run_for(move_most_ms)
+  t.record_host()
+  let built = []
+  for ch in ["a", "b", "c", "d"] {
+    t.text_told(ch, t.time())
+    t.run_as_host(t.frame_period() * 4.0)
+    for fr in t.host_frames() {
+      if fr.old_built {
+        built.push("typed \{ch}: at \{fr.at}, \{fr.why}")
+      }
+    }
+  }
+  assert_eq((f.text(), built), ("abcd", []))
+}
