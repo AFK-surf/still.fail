@@ -336,10 +336,42 @@ including the send that previously exhausted memory. These changes are in
 `0f410f2f33` and `aa6b667c85`; the first is an intermediate WIP with the failing
 integration still present.
 
-The same-host Android and full-render frame comparisons for this local
-measurement change are pending. It still uses the existing tree and arbitrary
-row renderers; it neither makes their callbacks pure nor replaces their semantic
-ownership with the independent kernel. No speedup is claimed from these checks.
+The combined view/flex/motion/UI suite then passed 2682 tests. On the same
+Android Wasmtime shell, both versions completed opening/back/reopening, six-line
+input and scrolling without a trap or layout-cycle diagnostic. The input and
+scroll full-render films match the previously corrected baseline at every
+decoded frame (18 and 78 frames). The native screenshots were also inspected;
+the six lines are present. The native scroll end positions differ because this
+driver delivers samples on the actual frame schedule, so those screenshots are
+not asserted equal. Sending is covered by the application tests above, not by
+these three native scripts.
+
+One before/after pair under shared-host load gave the following operation sums.
+Definitions and scheduler limitations are the same as the corrected comparison
+above. Full-frame time includes presentation and script-dispatched pointer
+input, with the operation's boundary frames clipped to its markers. Text/key
+callbacks delivered outside those frames are shown separately.
+
+| Operation | Work-bearing frames, before / after | Framework running ms | Full-frame running ms | Outside text/key running ms |
+| --- | ---: | ---: | ---: | ---: |
+| Scroll | 36 / 69 | 209 / 289 | 691 / 515 | — |
+| Six-line input | 11 / 11 | 35 / 29 | 76 / 78 | 42 / 32 |
+| Open/back/reopen | 4 / 5 | 77 / 110 | 200 / 315 | — |
+
+These results do not establish a speedup. In particular, the open operation's
+script/input interval consumed 104 / 176 ms of running time. Fewer repeated
+whole-tree placements in a focused test have not removed the actual opening
+bottleneck. Different native frame schedules also change the input positions
+during page motion and the number of frames being summed. The local-measurement
+program's Wasm SHA-256 is
+`2a8771df9dc2f24c77ca740d1ef6d703f541775eff9ab3be7b5a4f78be48aee6`.
+
+This remains an adapter using the existing tree and arbitrary row renderers; it
+neither makes their callbacks pure nor replaces their semantic ownership with
+the independent kernel. It is a checkpoint of diagnosed old-runtime behavior,
+not completion of the independent architecture. The next adoption must connect
+the actual chat's input, allocation and presentation to the forward contract;
+more isolated fixes to the old scheduler do not satisfy that requirement.
 
 ## Contracts and counterexamples
 
