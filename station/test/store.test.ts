@@ -17,6 +17,7 @@ import { SESSION_COUNT_FIRST, SESSION_COUNT_NEXT, SESSION_COUNT_TOTAL, SESSION_C
 import { SESSION_LIST_CONNECT, SESSION_LIST_DISPLACED, SESSION_LIST_FIRST, SESSION_LIST_NEXT, SESSION_LIST_SCOPE,
   SESSION_LIST_SCOPE_CONNECT } from "../src/store/session-list-index.ts";
 import { SESSION_BINDINGS_DELETE, SESSION_BINDINGS_DISPLACED, SESSION_BINDINGS_EXISTS, SESSION_BINDINGS_FIRST, SESSION_BINDINGS_NEXT, SESSION_BINDINGS_SELECTED } from "../src/store/session-bindings-index.ts";
+import { ARCHIVE_KEEP_EXISTS, ARCHIVE_PIN_EXISTS } from "../src/store/archive-mark-index.ts";
 import { SESSION_UP_JOB, SESSION_UP_JOBS, SESSION_UP_JOBS_CONFLICT, SESSION_UP_JOBS_DISPLACED, SESSION_UP_JOBS_END, SESSION_UP_JOBS_FIRST, SESSION_UP_JOBS_NEXT } from "../src/store/session-up-jobs.ts";
 import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/store/usage.ts";
 import { detailQuery } from "../src/store/usage-detail.ts";
@@ -1391,6 +1392,10 @@ test("usage: the sessions at work are found by when their turns ended, once each
 test("what the station asks again and again is planned by an index, never a scan of what grows with time", () => {
   assertRecentChatPlans();
   const store = memory();
+  for (const [sql, value, table, key] of [[ARCHIVE_PIN_EXISTS, "s", "archive_pin_rows", "session"], [ARCHIVE_KEEP_EXISTS, 1, "archive_keep_rows", "thread"]] as const) {
+    const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(value) as { detail: string }[]).map((r) => r.detail);
+    assert.ok(plan.some((s) => s.includes(`SEARCH ${table} USING PRIMARY KEY (${key}=?)`)), plan.join(" | "));
+  }
   const bindingPlan = (store.db.prepare(`EXPLAIN QUERY PLAN ${SESSION_BINDINGS_SELECTED}`).all('["a"]') as { detail: string }[]).map((r) => r.detail);
   assert.ok(bindingPlan.some((line) => line.startsWith("SEARCH i ") && line.includes("session=?")), bindingPlan.join(" | "));
   assert.ok(!bindingPlan.some((line) => /^SCAN i\b/.test(line)), bindingPlan.join(" | "));

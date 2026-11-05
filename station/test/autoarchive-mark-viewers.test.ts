@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { autoArchive } from "../src/sessions/lifecycle.ts";
+import { autoArchive, startAutoArchiveTimer } from "../src/sessions/lifecycle.ts";
+import { archiveMarksReady, archiveMarksStep, installArchiveMarkIndex } from "../src/store/archive-mark-index.ts";
 import { Rig } from "./hub-fakes.ts";
 
 test("automatic archive does not read marks belonging only to other viewers' chats", async () => {
@@ -55,4 +56,43 @@ test("automatic archive does not read marks belonging only to other viewers' cha
       assert.equal(r.store.getThread(own)?.hiddenAt, null);
     } finally { Object.defineProperty(r.store, "db", { configurable: true, value: db }); }
   } finally { await r.close(); }
+});
+
+test("automatic archive waits for old marks, then keeps pinned sessions", async () => {
+  const r = new Rig(), db = r.store.db, ready = Promise.withResolvers<void>();
+  let timer: { ms: number; run: () => void } | null = null, signal: AbortSignal | undefined, calls = 0;
+  const time = { after(ms: number, run: () => void) {
+    const next = { ms, run }; timer = next;
+    return () => { if (timer === next) timer = null; };
+  } };
+  const fire = (ms: number) => { const task = timer; assert.ok(task); assert.equal(task.ms, ms); timer = null; task.run(); };
+  let stop = () => {};
+  try {
+    for (const key of ["pinned", "free"]) r.store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc",
+      workspace: `/w/${key}`, token: key, createdAt: 1, lastActiveAt: 1 });
+    for (const row of db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND (name LIKE 'archive_pin_%' OR name LIKE 'archive_keep_%')").all() as { name: string }[]) db.exec(`DROP TRIGGER ${row.name}`);
+    db.exec("DROP TABLE archive_pin_rows; DROP TABLE archive_keep_rows; DROP TABLE archive_pin_replaced; DROP TABLE archive_keep_replaced; DROP TABLE archive_mark_meta");
+    db.exec("INSERT INTO pins(viewer,session,at) VALUES('person','pinned',1)");
+    installArchiveMarkIndex(db);
+    assert.equal(archiveMarksReady(db), false);
+    stop = startAutoArchiveTimer(r.hub, time, {
+      prepareSaid: async () => {}, prepareSessionBindings: async () => {}, prepareSessionUpJobs: async () => {},
+      prepareArchiveMarks: (s) => { calls++; signal = s; return ready.promise; },
+    });
+    fire(60_000);
+    assert.equal(calls, 1);
+    assert.equal(r.store.getSession("free")?.archivedAt, null);
+    fire(600_000);
+    assert.equal(calls, 1);
+    while (!archiveMarksReady(db)) archiveMarksStep(db, 1);
+    ready.resolve();
+    await ready.promise;
+    await Promise.resolve();
+    fire(0);
+    assert.equal(r.store.getSession("pinned")?.archivedAt, null);
+    assert.notEqual(r.store.getSession("free")?.archivedAt, null);
+    stop();
+    assert.equal(signal?.aborted, true);
+    assert.equal(timer, null);
+  } finally { stop(); ready.resolve(); await r.close(); }
 });

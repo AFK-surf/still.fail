@@ -25,21 +25,15 @@ test("auto-archiving reads marks for its visible candidates, not old chats", asy
     let pins = 0;
     let kept = 0;
     const queries = new Map<string, string>();
-    db.function("visit_pin", (_viewer, _session) => { pins++; return 1; });
-    db.function("visit_keep", (_viewer, _thread) => { kept++; return 1; });
+    db.function("visit_pin", () => { pins++; return 1; });
+    db.function("visit_keep", () => { kept++; return 1; });
     Object.defineProperty(r.store, "db", { configurable: true, value: new Proxy(db, {
       get(target, property) {
         if (property === "prepare") return (source: string) => {
           let sql = source;
-          for (const [table, key, visit] of [["pins", "session", "visit_pin"], ["kept_chats", "thread", "visit_keep"]]) {
-            if (sql.includes(`SELECT 1 FROM ${table} WHERE viewer IN`)) queries.set(table!, sql);
-            const check = `${visit}(viewer, ${key}) IS NOT NULL`;
-            sql = sql.replace(`SELECT DISTINCT ${key} FROM ${table}`, `SELECT DISTINCT ${key} FROM ${table} WHERE ${check}`)
-              .replaceAll(`SELECT MAX(rowid) FROM ${table}`, `SELECT MAX(rowid) FROM ${table} WHERE ${check}`)
-              .replaceAll(`SELECT MIN(rowid) FROM ${table}`, `SELECT MIN(rowid) FROM ${table} WHERE ${check}`)
-              .replaceAll(`SELECT viewer FROM ${table} ORDER BY viewer LIMIT 1`, `SELECT viewer FROM ${table} WHERE ${check} ORDER BY viewer LIMIT 1`)
-              .replaceAll(`SELECT viewer FROM ${table} WHERE viewer >`, `SELECT viewer FROM ${table} WHERE ${check} AND viewer >`)
-              .replace(`SELECT 1 FROM ${table} WHERE viewer IN`, `SELECT 1 FROM ${table} WHERE ${check} AND viewer IN`);
+          for (const [table, visit] of [["archive_pin_rows", "visit_pin"], ["archive_keep_rows", "visit_keep"]]) {
+            if (sql.includes(`SELECT 1 FROM ${table}`)) queries.set(table!, sql);
+            sql = sql.replace(`SELECT 1 FROM ${table}`, `SELECT ${visit}() FROM ${table}`);
           }
           return target.prepare(sql);
         };
@@ -52,12 +46,12 @@ test("auto-archiving reads marks for its visible candidates, not old chats", asy
       assert.equal(r.store.getSession("live")?.archivedAt, null);
       assert.equal(r.store.getThread(own)?.hiddenAt, null);
       assert.ok(pins > 0 && pins <= 512 && kept > 0 && kept <= 512, `the archive check read ${pins} pins and ${kept} kept chats`);
-      for (const [table, value, key] of [["pins", "live", "session"], ["kept_chats", own, "thread"]] as const) {
+      for (const [table, value, key] of [["archive_pin_rows", "live", "session"], ["archive_keep_rows", own, "thread"]] as const) {
         const query = queries.get(table);
         assert.ok(query, `a targeted ${table} lookup was made`);
-        const plan = (db.prepare(`EXPLAIN QUERY PLAN ${query}`).all(value, '["viewer-39"]') as { detail: string }[])
+        const plan = (db.prepare(`EXPLAIN QUERY PLAN ${query}`).all(value) as { detail: string }[])
           .map((row) => row.detail).join(" | ");
-        assert.match(plan, new RegExp(`SEARCH ${table} USING COVERING INDEX .*viewer=\\? AND ${key}=\\?`));
+        assert.match(plan, new RegExp(`SEARCH ${table} USING PRIMARY KEY \\(${key}=\\?\\)`));
       }
     } finally { Object.defineProperty(r.store, "db", { configurable: true, value: db }); }
   } finally { await r.close(); }
