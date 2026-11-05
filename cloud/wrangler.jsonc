@@ -70,6 +70,8 @@
     "RELAY_NAMES": { "https://app.still.fail": "Cloudflare", "https://39.105.157.122": "北京", "https://47.76.247.168": "香港", "https://120.24.233.158": "深圳", "https://39.105.157.122:8443": "北京转香港", "https://47.76.247.168:8443": "香港转北京" },
     // The pages still.fail/status checks (src/status.ts).
     "STATUS_PAGES": { "site": "https://still.fail/", "web": "https://app.still.fail/", "share": "https://share.still.fail/" },
+    // Whose issues labelled `incident` it shows.
+    "STATUS_REPO": "AFK-surf/still.fail",
     "GOOGLE_CLIENT_ID": "",
     // Where the sign-in codes come from (src/mail.ts).
     "EMAIL_FROM": "noreply@still.fail",

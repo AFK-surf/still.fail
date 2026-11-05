@@ -70,3 +70,26 @@ test("the status page's numbers: what the cron found of each service, a failure 
     await h.close();
   }
 });
+
+test("incidents are the repository's issues labelled incident: opening one shows it, closing one ends it, and GitHub being out keeps them", async () => {
+  const issue = { number: 7, html_url: "https://github.com/o/r/issues/7", title: "Stations will not open", body: "started: 2030-01-01T10:00:00Z\n\nStable apps fail on it.", created_at: "2030-01-01T11:00:00Z", closed_at: null as string | null, labels: [{ name: "incident" }, { name: "P1" }] };
+  let answer: { status: number; body?: string } = { status: 200, body: JSON.stringify([issue, { number: 8, html_url: "x", title: "a pull request", created_at: "2030-01-01T11:00:00Z", pull_request: {}, labels: [] }]) };
+  const asked: string[] = [];
+  const h = await harness({ statusRepo: "o/r", push: (request) => (asked.push(request.url), answer) });
+  try {
+    const api = (await h.mf.getWorker("api")) as unknown as { scheduled(options: { cron: string }): Promise<{ outcome: string }> };
+    const incidents = async () => {
+      assert.equal((await api.scheduled({ cron: "* * * * *" })).outcome, "ok");
+      return ((await (await h.fetch("/v1/status")).json()) as { incidents: unknown[] }).incidents;
+    };
+    const open = { number: 7, url: issue.html_url, level: "P1", title: issue.title, body: "Stable apps fail on it.", start: "2030-01-01T10:00:00Z", end: null };
+    assert.deepEqual(await incidents(), [open]);
+    assert.deepEqual(asked, ["https://api.github.com/repos/o/r/issues?labels=incident&state=all&per_page=20"]);
+    answer = { status: 503 };
+    assert.deepEqual(await incidents(), [open]);
+    answer = { status: 200, body: JSON.stringify([{ ...issue, closed_at: "2030-01-01T12:00:00Z" }]) };
+    assert.deepEqual(await incidents(), [{ ...open, end: "2030-01-01T12:00:00Z" }]);
+  } finally {
+    await h.close();
+  }
+});
