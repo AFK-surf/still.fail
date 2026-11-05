@@ -658,7 +658,7 @@ pub fn View::scrolls(
       None => None
     }
   }
-  self.box(fn(held) {
+  let held = self.box(fn(held) {
     inner.val = Some(held)
     self.tree.nodes[self.at].scroll_held = held.at
     self.tree.nodes[self.at].scroll_across = across
@@ -678,26 +678,10 @@ pub fn View::scrolls(
       }
     }))
     |> ignore
-    // (across with a bar: room at its foot for it while it can go, as laid out (none while it cannot), its bar never
-    // over what it holds' last line: Ctx::sideways's bar_room, from this layout's told reach, not a frame's before)
-    // (under what it holds, its own room at its foot counted, as Ctx::sideways' `foot` is the more of its padding there
-    // and the bar's room: what of the bar's room its padding there has not, under it)
-    match bar {
-      Some(b) if across =>
-        held.margin(By(fn() {
-          let room = if s.most_now() > 0.5 { b.size + 2.0 * b.inset } else { 0.0 }
-          let st = self.tree.nodes[held.at].flex.style
-          let pad = if st.padding_bottom_kind() == @flex.LEN_PT { st.padding_bottom_value() } else { 0.0 }
-          (0.0, 0.0, 0.0, if room > pad { room - pad } else { 0.0 })
-        }))
-        |> ignore
-      _ => ()
-    }
     build(held)
   })
-  |> ignore
   // (its bar, over what it holds, told as it scrolls)
-  match bar {
+  let thumb = match bar {
     Some(b) => {
       // (a fling under way: till its end, as it is now, none once stopped)
       let state = BarState::new(fn() {
@@ -708,11 +692,13 @@ pub fn View::scrolls(
           (None, None) => -1.0e9
         }
       })
-      self.scroll_bar(s, b, state, bar_in~, bar_clear~)
+      let thumb = self.scroll_bar(s, b, state, bar_in~, bar_clear~)
       s.on_scrolled = fn(t) { state.woke(b, self, t, scrolled=true) }
+      Some(thumb)
     }
-    None => ()
+    None => None
   }
+  self.scroll_layout(held, thumb, across, bar, bar_in, content_extent, bar_clear)
   // (what it holds faded out towards its top and its foot where it goes on past them, as far as it does, at most
   // scroll_soft_most: an old view's capped's fade_to; by the time while flung, as it is drawn)
   // (a page's list's not, as an old view's list's is not; stretched instead where Android's is past an end, as it is

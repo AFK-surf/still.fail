@@ -21,11 +21,17 @@ pub fn Layout::max_width(self : Layout) -> Double? { self.space.max_width() }
 pub fn Layout::max_height(self : Layout) -> Double? { self.space.max_height() }
 
 ///|
-pub fn Layout::measure(self : Layout, child : View, width? : Double, height? : Double) -> @flex.Measured {
+pub fn Layout::insets(self : Layout) -> (Double, Double, Double, Double) { self.space.insets() }
+
+///|
+pub fn Layout::measure(
+  self : Layout, child : View, width? : Double, height? : Double,
+  max_width? : Double?, max_height? : Double?,
+) -> @flex.Measured {
   guard physical_equal(self.tree, child.tree) && child.live() is Some(n) else {
     abort("a layout measures a live child of its tree")
   }
-  self.space.measure(n.flex, width?, height?)
+  self.space.measure(n.flex, width?, height?, max_width?, max_height?)
 }
 
 ///|

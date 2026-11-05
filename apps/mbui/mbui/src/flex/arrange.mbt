@@ -10,6 +10,7 @@ pub struct Layout {
   h : Double
   aw : Double
   ah : Double
+  insets : (Double, Double, Double, Double)
 }
 
 ///|
@@ -83,6 +84,10 @@ pub fn Layout::max_height(self : Layout) -> Double? {
 }
 
 ///|
+/// The resolved space from this container's border box to its content box.
+pub fn Layout::insets(self : Layout) -> (Double, Double, Double, Double) { self.insets }
+
+///|
 /// Measure a direct child without placing anything. A later child can be
 /// allocated the space left by this answer in this same parent calculation.
 pub fn Layout::measure(
@@ -90,14 +95,16 @@ pub fn Layout::measure(
   child : Node,
   width? : Double,
   height? : Double,
+  max_width? : Double?,
+  max_height? : Double?,
 ) -> Measured {
   guard self.owner.children.any(fn(n) { physical_equal(n, child) }) else {
     abort("a layout measures only its direct children")
   }
   let w = width.unwrap_or(undef)
   let h = height.unwrap_or(undef)
-  let aw = width.unwrap_or(self.aw)
-  let ah = height.unwrap_or(self.ah)
+  let aw = width.unwrap_or(match max_width { Some(w) => w.unwrap_or(undef); None => self.aw })
+  let ah = height.unwrap_or(match max_height { Some(h) => h.unwrap_or(undef); None => self.ah })
   let mw = size_node(child, w, h, aw, ah, self.w, self.h, false)
   let mh = out_h.val
   { owner: self.owner, child, w: mw, h: mh, kw: w, kh: h, aw, ah, cbw: self.w, cbh: self.h, plan: out_arranged.val }
@@ -151,6 +158,7 @@ fn arrange_node(
     w: inner(w, b.pbw()), h: inner(h, b.pbh()),
     aw: inner(available(w, aw, b.min_w, b.max_w), b.pbw()),
     ah: inner(available(h, ah, b.min_h, b.max_h), b.pbh()),
+    insets: (b.bor_l + b.pad_l, b.bor_t + b.pad_t, b.bor_r + b.pad_r, b.bor_b + b.pad_b),
   }
   let result = arrange(space)
   guard result.w >= 0.0 && !result.w.is_inf() && result.h >= 0.0 && !result.h.is_inf() else {
