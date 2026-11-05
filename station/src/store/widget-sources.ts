@@ -43,8 +43,9 @@ const stage = (updating: boolean) => `DELETE FROM widget_source_changed;
     LEFT JOIN merged m ON m.thread = k.thread AND m.n = k.n${updating ? "" : ` WHERE ${needsInsert}`};`;
 const changed = `(c.dirty = 1 OR c.existed IS NOT (m.n IS NOT NULL)
   OR c.attachments IS NOT m.attachments OR c.at IS NOT m.created_at)`;
-const affected = `SELECT c.thread, c.n FROM widget_source_changed c
+const changes = `SELECT c.thread, c.n FROM widget_source_changed c
   LEFT JOIN merged m ON m.thread = c.thread AND m.n = c.n WHERE ${changed}`;
+const affected = "SELECT thread,n FROM widget_source_changed WHERE dirty=1";
 const validAttachments = `CASE WHEN json_valid(m.attachments) THEN m.attachments ELSE '[]' END`;
 const pathOf = `CASE WHEN json_valid(a.value) THEN json_extract(a.value, '$.path') END`;
 const nameOf = `CASE WHEN json_valid(a.value) THEN json_extract(a.value, '$.name') END`;
@@ -61,7 +62,8 @@ const insertRows = (messages: string) => `INSERT INTO widget_source_rows (thread
 const insertInvalid = (messages: string) => `INSERT INTO widget_source_invalid (thread,n)
   SELECT m.thread, m.n FROM (${messages}) k CROSS JOIN merged m ON m.thread = k.thread AND m.n = k.n
   WHERE ${invalid} AND NOT EXISTS (SELECT 1 FROM widget_source_invalid i WHERE i.thread = m.thread AND i.n = m.n);`;
-const reconcile = `DELETE FROM widget_source_rows WHERE (thread,n) IN (${affected});
+const reconcile = `UPDATE widget_source_changed SET dirty=1 WHERE (thread,n) IN (${changes});
+  DELETE FROM widget_source_rows WHERE (thread,n) IN (${affected});
   DELETE FROM widget_source_invalid WHERE (thread,n) IN (${affected});
   ${insertRows(affected)} ${insertInvalid(affected)} DELETE FROM widget_source_changed;`;
 const oldMessages = `SELECT OLD.thread AS thread, OLD.n AS n WHERE OLD.kind = 'message'
