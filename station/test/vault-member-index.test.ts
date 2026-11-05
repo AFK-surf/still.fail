@@ -40,6 +40,7 @@ test("a vault version with unchanged members does not rewrite their lookup", () 
   const { db, put, members } = fixture();
   try {
     initializeVaultMembers(db);
+    backfillVaultMembers(db, "w");
     put("w", "v", ["alice", "bob"]);
     const count = () => (db.prepare("SELECT total_changes() AS n").get() as { n: number }).n;
     const before = count();

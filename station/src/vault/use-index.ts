@@ -47,7 +47,7 @@ export const PLAIN_USES = `SELECT r.body FROM vault_use_lookup u INDEXED BY vaul
 export const USE_BACKFILL_AFTER = "SELECT id FROM vault_requests WHERE ws = ? AND id > ? ORDER BY id LIMIT ?";
 
 export type UseRead = { id: number; ws: string; vault: string; owner: string | null; limit: number };
-export type PendingPrepare = { kind: "pending"; id: number; ws: string };
+export type PendingPrepare = { kind: "pending"; id: number; ws: string; members: boolean };
 export type UseAnswer = { id: number; bodies?: string[]; ready?: true; error?: string };
 
 export function initializeUseIndex(db: DatabaseSync): void {
@@ -184,13 +184,13 @@ export class UseIndex {
   }
 
   /// Prepare one workspace's pending lookup in bounded transactions on the same worker as use-history preparation.
-  async preparePending(ws: string): Promise<void> {
-    if (pendingPreparationComplete(this.#db, ws)) return;
+  async preparePending(ws: string, members: boolean): Promise<void> {
+    if (pendingPreparationComplete(this.#db, ws, members)) return;
     if (this.#path === null) {
-      while (!pendingPreparationComplete(this.#db, ws) && !backfillPendingPreparation(this.#db, ws)) await new Promise<void>((resolve) => setImmediate(resolve));
+      while (!pendingPreparationComplete(this.#db, ws, members) && !backfillPendingPreparation(this.#db, ws, members)) await new Promise<void>((resolve) => setImmediate(resolve));
       return;
     }
-    const answer = await this.#ask({ kind: "pending", id: ++this.#next, ws });
+    const answer = await this.#ask({ kind: "pending", id: ++this.#next, ws, members });
     if (answer.ready !== true) throw new Error("the vault reader did not prepare pending requests");
   }
 

@@ -32,15 +32,20 @@ CREATE INDEX IF NOT EXISTS vault_pending_at ON vault_pending_lookup (ws, at, id)
 CREATE TABLE IF NOT EXISTS vault_pending_backfill (
   ws TEXT PRIMARY KEY, after_id TEXT, done INTEGER NOT NULL
 ) WITHOUT ROWID;
-CREATE TRIGGER IF NOT EXISTS vault_pending_add AFTER INSERT ON vault_requests WHEN NEW.status = 'pending' BEGIN
+CREATE TRIGGER IF NOT EXISTS vault_pending_add AFTER INSERT ON vault_requests
+  WHEN NEW.status = 'pending' AND EXISTS (SELECT 1 FROM vault_pending_backfill WHERE ws = NEW.ws) BEGIN
   INSERT OR REPLACE INTO vault_pending_lookup VALUES (${values("NEW")});
 END;
 CREATE TRIGGER IF NOT EXISTS vault_pending_change AFTER UPDATE ON vault_requests
-  WHEN (OLD.status = 'pending' OR NEW.status = 'pending') AND (${changed}) BEGIN
+  WHEN (OLD.status = 'pending' OR NEW.status = 'pending') AND (${changed})
+    AND (EXISTS (SELECT 1 FROM vault_pending_backfill WHERE ws = OLD.ws)
+      OR EXISTS (SELECT 1 FROM vault_pending_backfill WHERE ws = NEW.ws)) BEGIN
   DELETE FROM vault_pending_lookup WHERE ws = OLD.ws AND id = OLD.id;
-  INSERT OR REPLACE INTO vault_pending_lookup SELECT ${values("NEW")} WHERE NEW.status = 'pending';
+  INSERT OR REPLACE INTO vault_pending_lookup SELECT ${values("NEW")}
+    WHERE NEW.status = 'pending' AND EXISTS (SELECT 1 FROM vault_pending_backfill WHERE ws = NEW.ws);
 END;
-CREATE TRIGGER IF NOT EXISTS vault_pending_drop AFTER DELETE ON vault_requests WHEN OLD.status = 'pending' BEGIN
+CREATE TRIGGER IF NOT EXISTS vault_pending_drop AFTER DELETE ON vault_requests
+  WHEN OLD.status = 'pending' AND EXISTS (SELECT 1 FROM vault_pending_backfill WHERE ws = OLD.ws) BEGIN
   DELETE FROM vault_pending_lookup WHERE ws = OLD.ws AND id = OLD.id;
 END;
 `;
@@ -89,17 +94,17 @@ export function hasVaultMembers(db: DatabaseSync): boolean {
   return db.prepare("SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'vault_member_backfill'").get() !== undefined;
 }
 
-export function pendingPreparationComplete(db: DatabaseSync, ws: string): boolean {
-  return pendingIndexComplete(db, ws) && (!hasVaultMembers(db) || vaultMembersComplete(db, ws));
+export function pendingPreparationComplete(db: DatabaseSync, ws: string, members: boolean): boolean {
+  return pendingIndexComplete(db, ws) && (!members || !hasVaultMembers(db) || vaultMembersComplete(db, ws));
 }
 
 /// At most one request or vault batch per turn, so both share the worker fairly with foreground writes.
-export function backfillPendingPreparation(db: DatabaseSync, ws: string): boolean {
+export function backfillPendingPreparation(db: DatabaseSync, ws: string, members: boolean): boolean {
   if (!pendingIndexComplete(db, ws)) {
     if (!backfillPendingIndex(db, ws)) return false;
-    return !hasVaultMembers(db) || vaultMembersComplete(db, ws);
+    return !members || !hasVaultMembers(db) || vaultMembersComplete(db, ws);
   }
-  return !hasVaultMembers(db) || vaultMembersComplete(db, ws) || backfillVaultMembers(db, ws);
+  return !members || !hasVaultMembers(db) || vaultMembersComplete(db, ws) || backfillVaultMembers(db, ws);
 }
 
 /// One transaction reads at most `limit` old request ids. The triggers keep writes ahead of and behind its cursor.

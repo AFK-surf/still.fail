@@ -327,7 +327,7 @@ test("the prepared list has the same results and expiry events as the original a
     }
     secrets.carry(carries);
     await new Promise<void>((resolve) => setImmediate(resolve));
-    if (prepared) await secrets.preparePending("w");
+    if (prepared) await secrets.preparePending("w", true);
     const state = () => ({ events: [...events], rows: db.prepare("SELECT ws,id,status FROM vault_requests ORDER BY ws,id").all() });
     return { db, secrets, putVault, state, advance: () => { now = 200_000_000; } };
   }

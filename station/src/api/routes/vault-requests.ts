@@ -69,11 +69,13 @@ export const routes = ({ secrets, plain, lock, events }: VaultRequestsDeps): Rou
       method: "GET",
       pattern: /^\/vault\/requests$/,
       handle: async (r) => {
-        const before = locked(r);
-        if (r.signal?.aborted) return refuse(503, "read_cancelled", "read cancelled");
-        if (!await preparedBeforeCancel(secrets.preparePending(r.viewer.workspace), r.signal)) return refuse(503, "read_cancelled", "read cancelled");
-        const current = locked(r);
-        if (current !== before) {
+        let current = locked(r);
+        for (;;) {
+          const before = current;
+          if (r.signal?.aborted) return refuse(503, "read_cancelled", "read cancelled");
+          if (!await preparedBeforeCancel(secrets.preparePending(r.viewer.workspace, before !== null), r.signal)) return refuse(503, "read_cancelled", "read cancelled");
+          current = locked(r);
+          if (current === before) break;
           if (current === null) return refuse(409, "lock_changed", "the workspace's security mode changed while the requests were prepared; try again");
           const v = r.viewer;
           try {

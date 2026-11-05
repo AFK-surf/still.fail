@@ -547,14 +547,14 @@ export class Secrets {
   }
 
   /// Fill this workspace's old pending lookup before its request list is read.
-  async preparePending(ws: string): Promise<void> {
+  async preparePending(ws: string, members = this.#d.lock(ws) !== null): Promise<void> {
     // Do not make a request wait for an earlier process that is still running: the original query remains available.
     if (!this.#previousExited) return;
-    if (this.#lostSaves.get(ws)?.ready === true) return this.#uses.preparePending(ws);
+    await this.#uses.preparePending(ws, members);
+    if (this.#lostSaves.get(ws)?.ready === true) return;
     const already = this.#preparingPending.get(ws);
     if (already !== undefined) return already;
     const prepare = (async () => {
-      await this.#uses.preparePending(ws);
       // Once the earlier process has exited, writes to requests are made here and update this set in #save.
       const state = { ids: new Set<string>(), ready: false };
       this.#lostSaves.set(ws, state);

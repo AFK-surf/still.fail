@@ -58,6 +58,7 @@ test("changing only a waiting request's box does not write its lookup again", ()
   const { db, put } = fixture();
   try {
     initializePendingIndex(db);
+    backfillPendingIndex(db, "w");
     put("r", "pending");
     const count = () => (db.prepare("SELECT total_changes() AS n").get() as { n: number }).n;
     const before = count();
@@ -89,6 +90,7 @@ test("only a truthy save or the plain library is decided by its owner", () => {
   const { db, put, rows } = fixture();
   try {
     initializePendingIndex(db);
+    backfillPendingIndex(db, "w");
     const saves: unknown[] = [null, false, 0, "", true, 1, "yes", {}, []];
     for (const [i, save] of saves.entries()) put(String(i), "pending", { vault: "v", save });
     assert.deepEqual(rows().map((row) => row.owner_decides), saves.map((save) => save ? 1 : 0));

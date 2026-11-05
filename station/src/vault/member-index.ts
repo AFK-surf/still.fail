@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS vault_member_invalid (
 CREATE TABLE IF NOT EXISTS vault_member_backfill (
   ws TEXT PRIMARY KEY, after_id TEXT, done INTEGER NOT NULL
 ) WITHOUT ROWID;
-CREATE TRIGGER IF NOT EXISTS vault_member_add AFTER INSERT ON vaults BEGIN
+CREATE TRIGGER IF NOT EXISTS vault_member_add AFTER INSERT ON vaults
+  WHEN EXISTS (SELECT 1 FROM vault_member_backfill WHERE ws = NEW.ws) BEGIN
   INSERT INTO vault_member_invalid SELECT NEW.ws, NEW.id WHERE (${validMembers("NEW.body")}) = 0
     ON CONFLICT(ws, vault) DO NOTHING;
   INSERT INTO vault_member_lookup
@@ -26,20 +27,25 @@ CREATE TRIGGER IF NOT EXISTS vault_member_add AFTER INSERT ON vaults BEGIN
     ON CONFLICT(ws, sub, vault) DO NOTHING;
 END;
 CREATE TRIGGER IF NOT EXISTS vault_member_change AFTER UPDATE ON vaults
-  WHEN OLD.ws IS NOT NEW.ws OR OLD.id IS NOT NEW.id
+  WHEN (OLD.ws IS NOT NEW.ws OR OLD.id IS NOT NEW.id
     OR CASE WHEN json_valid(OLD.body) AND json_valid(NEW.body)
       THEN json_extract(OLD.body, '$.members') IS NOT json_extract(NEW.body, '$.members')
-      ELSE OLD.body IS NOT NEW.body END BEGIN
+      ELSE OLD.body IS NOT NEW.body END)
+    AND (EXISTS (SELECT 1 FROM vault_member_backfill WHERE ws = OLD.ws)
+      OR EXISTS (SELECT 1 FROM vault_member_backfill WHERE ws = NEW.ws)) BEGIN
   DELETE FROM vault_member_invalid WHERE ws = OLD.ws AND vault = OLD.id;
   INSERT INTO vault_member_invalid SELECT NEW.ws, NEW.id WHERE (${validMembers("NEW.body")}) = 0
+    AND EXISTS (SELECT 1 FROM vault_member_backfill WHERE ws = NEW.ws)
     ON CONFLICT(ws, vault) DO NOTHING;
   DELETE FROM vault_member_lookup WHERE ws = OLD.ws AND vault = OLD.id AND sub IN
     (SELECT value FROM json_each(${membersBody("OLD.body")}, '$.members') WHERE type = 'text');
   INSERT INTO vault_member_lookup
     SELECT NEW.ws, m.value, NEW.id FROM json_each(${membersBody("NEW.body")}, '$.members') m WHERE m.type = 'text'
+      AND EXISTS (SELECT 1 FROM vault_member_backfill WHERE ws = NEW.ws)
     ON CONFLICT(ws, sub, vault) DO NOTHING;
 END;
-CREATE TRIGGER IF NOT EXISTS vault_member_drop AFTER DELETE ON vaults BEGIN
+CREATE TRIGGER IF NOT EXISTS vault_member_drop AFTER DELETE ON vaults
+  WHEN EXISTS (SELECT 1 FROM vault_member_backfill WHERE ws = OLD.ws) BEGIN
   DELETE FROM vault_member_invalid WHERE ws = OLD.ws AND vault = OLD.id;
   DELETE FROM vault_member_lookup WHERE ws = OLD.ws AND vault = OLD.id AND sub IN
     (SELECT value FROM json_each(${membersBody("OLD.body")}, '$.members') WHERE type = 'text');

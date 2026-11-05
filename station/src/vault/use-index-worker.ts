@@ -26,7 +26,7 @@ function schedule(delay = 0) {
     if (q) {
       try {
         const pending = "kind" in q;
-        if (pending ? pendingPreparationComplete(db, q.ws) : ready.has(q.ws) || useIndexComplete(db, q.ws)) {
+        if (pending ? pendingPreparationComplete(db, q.ws, q.members) : ready.has(q.ws) || useIndexComplete(db, q.ws)) {
           if (pending) {
             parentPort!.postMessage({ id: q.id, ready: true } satisfies UseAnswer);
           } else {
@@ -57,7 +57,7 @@ function schedule(delay = 0) {
     try {
       if (q) {
         const pending = "kind" in q;
-        if (pending ? backfillPendingPreparation(db, q.ws) : backfillUseIndex(db, q.ws)) {
+        if (pending ? backfillPendingPreparation(db, q.ws, q.members) : backfillUseIndex(db, q.ws)) {
           if (pending) {
             parentPort!.postMessage({ id: q.id, ready: true } satisfies UseAnswer);
           } else {
