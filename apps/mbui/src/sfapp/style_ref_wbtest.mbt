@@ -57,10 +57,10 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     #|waiting wide 58348:6d17d918
     #|waiting-dark narrow 28177:273f1828
     #|waiting-dark wide 58173:f6c85a4e
-    #|finding narrow 33120:e0cb13d0
-    #|finding wide 63877:9fe7c0d
-    #|finding-dark narrow 33233:7bd3d895
-    #|finding-dark wide 63899:d53179f6
+    #|finding narrow 34240:be2ffdf1
+    #|finding wide 64997:dd17f0e5
+    #|finding-dark narrow 34337:52a2c840
+    #|finding-dark wide 65003:8cb003d6
     #|code narrow 26964:88a7f87b
     #|code wide 57180:53acc254
     #|code-dark narrow 26856:ce8b5d5e
