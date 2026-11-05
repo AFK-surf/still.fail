@@ -201,6 +201,50 @@ test "a signal the view did not read, set: the next frame is of the look alone" 
 }
 
 ///|
+test "a fiber answered between frames, setting nothing the view read: a frame asked for, of the look alone" {
+  let builds = Ref(0)
+  let answer : Ref[((Result[String, Error]) -> Unit)?] = Ref(None)
+  let got = Ref("")
+  let t = Tester::new(fn(c) {
+    builds.val = builds.val + 1
+    c.effect("fetch", async fn(_s) { got.val = @effect.host_call(done => answer.val = Some(done)) })
+    c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+      c.text("waiting", size=12.0) |> ignore
+      let mark = c.box(w=Px(20.0), h=Px(8.0), bg=0x3366CCFFL, fn() {  })
+      c.cycle_look(mark, looks_turn_ms, fn(f) { look(rot=f * 6.283185307179586) })
+    })
+    |> ignore
+  })
+  t.check_looks(false)
+  t.clock_frame()
+  t.clock_frame()
+  let built = builds.val
+  // (the host answers outside a frame: the fiber goes on in the next, and what it set nobody read)
+  (answer.val.unwrap())(Ok("hello"))
+  assert_true(t.fake.wants)
+  t.clock_frame()
+  assert_eq(got.val, "hello")
+  assert_eq(builds.val, built, msg=t.built_why())
+  assert_true(looks_drawn.val)
+}
+
+///|
+test "a motion set out between frames that the view does not show: a frame asked for, of the look alone" {
+  let builds = Ref(0)
+  let word = @signals.signal("waiting")
+  let t = signal_tester(builds, word)
+  t.check_looks(false)
+  t.clock_frame()
+  let built = builds.val
+  let who = Mover::new()
+  t.ctx().set_out(who, Endless::{  }, what="Anim \"elsewhere\"") |> ignore
+  assert_true(t.fake.wants)
+  t.clock_frame()
+  assert_eq(builds.val, built, msg=t.built_why())
+  assert_true(looks_drawn.val)
+}
+
+///|
 /// A mark as wide as `wide` says, turning, the view's builds counted; `reads`: it reads where the mark was laid out
 /// (Ctx::laid_rect) as it is built.
 fn laid_tester(wide : @signals.Signal[Bool], reads : Bool) -> Tester {
