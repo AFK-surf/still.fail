@@ -121,6 +121,8 @@ fn image_window_path(each_frame : Bool) -> (Array[String], Array[String], Int) r
     t.advance(@ui.move_most_ms * 4.0)
     t.frame()
   }
+  println("IMAGEWINDOW before owed each=\{each_frame} asked=\{asked.length()} loads=\{t.image_loads()} visible=\{image_window_visible(t)}")
+  t.frames_owed()
   let visible = image_window_visible(t)
   assert_false(visible.is_empty(), msg="the final window contains pictures")
   let loads = t.image_loads().length()
