@@ -89,7 +89,8 @@ the input or frame observes the model. A zero-time causal cycle is an error
 with its chain, not a reason to take another frame or deepen the call stack.
 
 The slice implements interrupted trajectories and one page owner's exit
-deadline. It does not implement a general deadline heap or owner tree yet.
+deadline, including immediate completion and late delivery tagged with the
+deadline's cause. It does not implement a general deadline heap or owner tree yet.
 
 ## Geometry has an owner
 
@@ -127,11 +128,35 @@ that information free. Jumping to a known key is different: its key and offset
 can be the anchor without measuring the entire preceding history.
 
 For continuous motion, geometry discovered by optional frames must not silently
-change its logical anchor. A production scrolling protocol needs to specify
-which crossed rows must be measured, how unknown spans are represented, and
-whether a resource metric update is a recorded input. "Visible rows only" must
-not conceal a change in meaning under skipped frames. The current slice proves
-local row updates and jumps by anchor only; it does not yet prove scrolling.
+change its logical anchor. The reference resolver samples a forward distance
+from an explicit row key, measuring unknown crossed rows, then filling the
+viewport. Its alternating-height example reaches rows 17–18 whether earlier
+frames ran or not. It also supports jumping directly to a key and filling the
+end window. This is position resolution, not a complete scrolling interaction:
+gesture velocity, overscroll, insertion, removal and anchor preservation across
+resource updates still require a specified event protocol.
+
+The indexed resolver assigns dependencies to intervals. The source collection's
+single-item write increments the versions on that item's path. Layout reads
+only the intervals it actually skips and the rows it uses; checking whether an
+unused cached interval is valid creates no dependency. Thus a change before the
+anchor does not dirty this query, while a changed crossed height does. No text
+measurement or layout runs while the versions are written. This source is a
+fixed-length collection of stable slots; insertion and removal are not supported.
+
+An uncached crossing costs O(crossed + visible + log N); a cached crossing uses
+O(log N + visible) work, with changed paths recomputed when read. Initialization
+and source metadata are O(N); cached geometry grows with the visited content.
+These are algorithmic bounds, not a phone frame-budget measurement.
+
+Even floating-point addition order can turn a cache into a semantic input.
+For example, rounding a 0.7 + 0.1 interval before comparing it with a requested
+distance can disagree with subtracting the two rows separately. The index uses
+exact binary sums of the supplied finite Double heights and rounds only the
+final coordinate. The reference `Extent` uses a normalized integer and binary
+exponent; BigInt makes the contract direct to audit. Its memory and allocation
+cost is not yet justified for the production runtime. Neither an arbitrary
+epsilon nor pixel quantization is used to hide a boundary discrepancy.
 
 ## Comparison and integration
 

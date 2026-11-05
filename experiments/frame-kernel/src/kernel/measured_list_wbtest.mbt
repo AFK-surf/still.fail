@@ -57,3 +57,16 @@ test "a requested distance near or beyond the end keeps the final window filled"
   assert_eq(list.sample(0, 21.0, 300.0, 100.0), at_end)
   assert_eq(list.sample(0, 1000.0, 300.0, 100.0), at_end)
 }
+
+///|
+test "already measured history does not require rereading every crossed row" {
+  let store = Store::new()
+  let rows = IndexedRows::new(store, Array::makei(3000, fn(_) { Fixed(40.0) }))
+  let list = IndexedList::new(rows)
+  list.sample(0, 80000.0, 300.0, 100.0) |> ignore
+  let reads = list.reads
+  let shown = list.sample(0, 80001.0, 300.0, 100.0)
+  assert_eq(shown.map(fn(row) { row.0 }), [2000, 2001, 2002])
+  assert_eq(shown[0].1.y, -1.0)
+  assert_true(list.reads - reads <= 4, msg="previously crossed history must be skipped")
+}

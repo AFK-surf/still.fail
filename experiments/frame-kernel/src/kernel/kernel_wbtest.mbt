@@ -67,6 +67,7 @@ test "sampling a page ahead neither lays out again nor finishes its logical life
   k.frame(400.0, 408.0, 390.0, 844.0) |> ignore
   k.frame(800.0, 808.0, 390.0, 844.0) |> ignore
   assert_eq(k.owner_releases, 1)
+  assert_eq(k.owner_released_at, Some(400.0))
 }
 
 ///|
@@ -113,4 +114,29 @@ test "hit testing uses the same projection and clip as the picture" {
 test "a zero-duration transition is already at its target at its cause" {
   let trajectory = Trajectory::still(0.0).toward(390.0, 100.0, Snap(0.0))
   assert_eq(trajectory.sample(100.0), (390.0, 0.0))
+}
+
+///|
+test "an immediate exit completes before another input at the same moment" {
+  let k = Kernel::new(30)
+  defer { k.placement.release() }
+  k.commit(100.0, Leave(390.0, Snap(0.0)))
+  assert_false(k.alive)
+  assert_eq(k.owner_released_at, Some(100.0))
+  assert_eq(k.owner_releases, 1)
+  k.commit(100.0, Return(@motion.spring()))
+  assert_false(k.alive)
+  assert_eq(k.owner_releases, 1)
+}
+
+///|
+test "a late observation records the deadline's cause and rejects late owner input" {
+  let k = Kernel::new(30)
+  defer { k.placement.release() }
+  k.commit(100.0, Leave(390.0, @motion.tween(300.0, ease=Linear)))
+  k.commit(1000.0, Return(@motion.spring()))
+  assert_false(k.alive)
+  assert_eq(k.owner_released_at, Some(400.0))
+  assert_eq(k.owner_releases, 1)
+  assert_eq(k.page.target, 390.0)
 }

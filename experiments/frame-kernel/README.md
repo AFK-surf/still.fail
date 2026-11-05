@@ -22,7 +22,8 @@ The fuller rationale and unimplemented requirements are in [DESIGN.md](DESIGN.md
 ## Alternative contract
 
 1. **Timed input is the only state writer.** `commit(at, change)` advances due
-   logical work, then applies the input. The kernel has no host clock provider.
+   logical work, applies the input, and completes work newly due at that same
+   moment. The kernel has no host clock provider.
    A production version must route core answers, resource completion and input
    through this same boundary with their captured timestamps and sequence.
 2. **Geometry is a result.** The common parent measures the composer, then passes
@@ -58,6 +59,14 @@ synthetic intrinsic measurements passed through the existing flex engine.
 `editor_wbtest.mbt` exercises the real editor's `FieldLaid` measurement and its
 legacy leaf renderer under the Tester's text host; it is not a full editor port.
 
+`measured_list.mbt` is a linear reference for exact known row heights.
+`indexed_list.mbt` adds a range index whose collection owns invalidation. A
+known crossed interval can be skipped; an item update invalidates its path,
+without calculating geometry during the write. An unknown interval still costs
+the measurements needed to cross it. The index stores exact binary extents to
+keep fractional boundaries independent of cache grouping. Its BigInt storage is
+a reference representation, with allocation cost still to evaluate.
+
 This is not yet evidence for phone smoothness. Real-host text shaping, GPU
 submission, general derived queries (nested queries are deliberately rejected),
 nested lazy containers, live core data, full owner trees, scrolling physics,
@@ -80,13 +89,27 @@ completion. Then run the same dev target and host on Android and measure frame
 budget, allocations and memory. A simpler model is a hypothesis until that
 comparison succeeds.
 
-The existing failing control is
-`apps/mbui/mbui/src/view/frame_moment_test.mbt`: specifying a frame at 100 while
-the host is at 200 gives logic/drawing at 200 after four host clock reads. Fixing
-that single path is a useful control, but does not by itself establish the
-alternative's broader contracts.
+The frame-time counterexample is in `src/control/frame_time_test.mbt`:
+specifying a frame at 100 while the host is at 200 gives logic/drawing at 200
+after four host clock reads. The desired assertion was first verified red in
+commit `0f5ba584f8`; the experiment now retains the observed baseline behavior
+without adding a deliberately failing test to the framework's normal suite.
+Fixing that single path does not by itself establish the broader contracts.
 
 Run on the build station:
 `moon test --target wasm-gc --release src/kernel src/control` from this module.
 The control tests assert the counterexamples found in the pinned current runtime;
 they describe gaps in its contract, not desired behavior for a replacement.
+
+For the bounded classic-Wasm executable (separate from the Wasm-GC test suite):
+
+```sh
+moon build --target wasm --release --no-strip src/probe
+PROBE_WASM=$(rg --files _build/wasm/release/build | rg '/probe/probe.wasm$')
+"$WASMTIME_BIN" run -W max-wasm-stack=524288 -D max-backtrace=100 \
+  --preload spectest=spectest.wat "$PROBE_WASM"
+```
+
+`WASMTIME_BIN` names the installed development runtime. The preload supplies
+ASCII diagnostic printing; it is not an application host. The executable tests
+the computation under a 512 KiB Wasm stack, not Android rendering or throughput.

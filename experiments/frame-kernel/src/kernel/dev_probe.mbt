@@ -31,4 +31,26 @@ pub fn check_development_runtime() -> Unit {
     query.release()
     println("classic Wasm: rows=\{count} cycles=25 layout/motion/scroll contracts passed")
   }
+  let store = Store::new()
+  let source = IndexedRows::new(store, Array::makei(3000, fn(_) { Fixed(40.0) }))
+  let index = IndexedList::new(source)
+  let query = store.query(fn(distance : Double) { index.sample(0, distance, 300.0, 100.0) })
+  query.get(80000.0) |> ignore
+  let reads = index.reads
+  let nodes = index.nodes
+  let measures = index.measures
+  let shown = query.get(80001.0)
+  guard shown.map(fn(row) { row.0 }) == [2000, 2001, 2002] else { abort("indexed history changed the window") }
+  guard index.reads - reads <= 4 else { abort("indexed history was reread") }
+  println("classic Wasm: indexed warm read_rows=\{index.reads - reads} visited_spans=\{index.nodes - nodes} measured_rows=\{index.measures - measures}")
+  store.commit(100.0, fn(tx) { source.set(tx, 10, Fixed(80.0)) })
+  guard index.measures == measures else { abort("a write performed geometry work") }
+  let changed = query.get(80001.0)
+  guard changed.map(fn(row) { row.0 }) == [1999, 2000, 2001] else { abort("a changed crossed span was ignored") }
+  guard index.measures - measures == 1 else { abort("a row change measured unrelated history") }
+  query.release()
+  let k = Kernel::new(30)
+  k.commit(100.0, Leave(390.0, Snap(0.0)))
+  guard !k.alive && k.owner_released_at == Some(100.0) else { abort("an immediate exit escaped its cause") }
+  println("classic Wasm: indexed invalidation and immediate owner completion passed")
 }

@@ -107,6 +107,7 @@ struct Kernel {
   mut leaves_at : Double?
   mut alive : Bool
   mut owner_releases : Int
+  mut owner_released_at : Double?
   work : Work
 }
 
@@ -153,6 +154,7 @@ fn Kernel::new(count : Int) -> Kernel {
     leaves_at: None,
     alive: true,
     owner_releases: 0,
+    owner_released_at: None,
     work,
   }
 }
@@ -165,6 +167,7 @@ fn Kernel::advance(self : Kernel, at : Double) -> Unit {
     self.alive = false
     self.leaves_at = None
     self.owner_releases += 1
+    self.owner_released_at = Some(end)
     self.work.released += self.inputs.leaves.length()
     self.inputs.leaves.clear()
     self.placement.release()
@@ -201,6 +204,10 @@ fn Kernel::commit(self : Kernel, at : Double, change : Change) -> Unit {
       self.leaves_at = None
     }
   } })
+  // The input may create due work at its own timestamp (for example Snap(0)).
+  // Its consequences belong to this input, before the next input can observe it.
+  // This slice has one deadline; a general scheduler drains an ordered queue.
+  self.advance(at)
 }
 
 ///|
