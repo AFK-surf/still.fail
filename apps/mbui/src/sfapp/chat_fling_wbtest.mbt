@@ -3,6 +3,10 @@
 // end the hand's fling is held to as it rests (a jump of 636 rows as it came to rest, 2026-11-05).
 
 ///|
+/// How often the fling is looked at as it goes: a frame a tenth of a second, as host_frames_wbtest's walk draws it.
+let fling_look_ms : Double = 100.0
+
+///|
 /// How many rows from its end chat `mode` rests, flung from its end on a phone as host_frames_wbtest's walk flings it.
 fn rows_from_end_flung(mode : String) -> Int {
   let t = wide_tester([], mode~, w=390.0, h=844.0, platform=2)
@@ -15,9 +19,8 @@ fn rows_from_end_flung(mode : String) -> Int {
     t.touch_at(1, lx, ly + 15.0 * i.to_double(), t.time())
   }
   t.touch_at(2, lx, ly + 180.0, t.time())
-  // (looked at as it goes, a frame a tenth of a second: as host_frames_wbtest's walk draws it)
   for _ in 0..<20 {
-    t.run_for(100.0)
+    t.run_for(fling_look_ms)
     t.draw()
   }
   n - t.visible().1
