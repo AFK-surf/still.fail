@@ -120,3 +120,36 @@ test "a property layout reads worked out of where what holds its root is laid ou
   assert_eq((at_cause, seen()), ((300.0, 150.0), (300.0, 150.0)))
   assert_true(!tree.told_since(), msg="nothing owed")
 }
+
+///|
+/// What a windowed list's block makes by its room laid out with the block as the list measures it: the block as tall as
+/// that the first time it is counted, so the list makes what shows and no block past it (a message's pictures laid out
+/// a round after their row was measured short: the rows under it made, their words measured, let go again).
+test "by_room in a windowed list's blocks: each block counted as tall as what its room makes as it is first laid out, none made past what shows" {
+  let made : Array[Int] = []
+  let s = @view.Scroll::list()
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(col) {
+      col.height(Is(Some(300.0))) |> ignore
+      col.scrolls_window(
+        s,
+        fn() { Array::makei(20, fn(i) { i }) },
+        fn(b, k) {
+          made.push(k)
+          b.box(fn(h) {
+            h.by_room(fn(w) { w }, fn(v, _) { v.box(fn(p) { p.height(Is(Some(200.0))) |> ignore }) |> ignore })
+            |> ignore
+          })
+          |> ignore
+        },
+        est=20.0,
+      )
+      |> ignore
+    })
+    |> ignore
+  })
+  tree.frame(400.0, 300.0) |> ignore
+  // (300 tall, each block 200: the first two show)
+  assert_eq(made, [0, 1])
+  assert_true(!tree.told_since(), msg="nothing owed")
+}

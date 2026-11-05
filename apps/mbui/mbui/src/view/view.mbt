@@ -2266,6 +2266,10 @@ fn Tree::at_cause_now(self : Tree, at : Double, f : () -> Bool) -> Unit {
   @signals.end_batch()
   self.committing -= 1
   self.modals_settled()
+  // (what waits for the change committed whole (View::when_committed), as for an event's: where it is inside none)
+  if was < 0.0 {
+    self.afters_run()
+  }
   self.cause_at = was
   if changed {
     self.marked()
@@ -3347,12 +3351,14 @@ fn Tree::rows_list(self : Tree, at : Int) -> Unit {
 
 ///|
 /// A windowed list's blocks' holder (Tree::lays_blocks): its node, its making, what lays its blocks out, and whether one
-/// of them was marked to be laid out again since.
+/// of them was marked to be laid out again since; the root its node is laid out in alone (Tree::laid_root's: a block
+/// of a list's, what is made by a room; -1 none, the tree's; -2 not found yet), where it is laid out as that is.
 priv struct ListLaid {
   holder : Int
   gen : Int
   lay : (Bool, Bool) -> Bool
   mut marked : Bool
+  mut root : Int
 }
 
 ///|
@@ -3362,7 +3368,7 @@ priv struct ListLaid {
 /// where what asks only lays out to read: Tree::measured_now), and says whether it placed any. As long as the holder
 /// lives.
 fn Tree::lays_blocks(self : Tree, holder : View, lay : (Bool, Bool) -> Bool) -> Unit {
-  self.lists.push({ holder: holder.at, gen: holder.gen, lay, marked: true })
+  self.lists.push({ holder: holder.at, gen: holder.gen, lay, marked: true, root: -2 })
   self.lists_due = true
   self.marked()
   holder.owns(fn() {
@@ -3538,7 +3544,39 @@ fn View::block_laid(self : View, w : Double) -> Double {
   self.tree.laid_root_run(self.at)
   self.tree.work.computes = self.tree.work.computes + 1
   @flex.compute(n.flex, width=w, round=false, reuse=true)
+  // (what is made by its room in it (View::by_room) and the lists in it laid out in it now, at the widths it gives them,
+  // it laid out again as they come to other heights: as tall as all it holds comes to as it is measured, never a round
+  // after it, what follows it in its list counted from a height it does not have)
+  let mut rounds = 0
+  while rounds < lists_rounds && self.tree.lists_within(self.at) {
+    self.tree.work.computes = self.tree.work.computes + 1
+    @flex.compute(n.flex, width=w, round=false, reuse=true)
+    rounds = rounds + 1
+  }
   n.flex.height
+}
+
+///|
+/// The windowed lists and what is made by its room (Tree::lays_blocks) laid out in root `root` alone (Tree::laid_root's:
+/// the nearest root their node is laid out in), each living: laid out now as their own lay says, to be read (placed by
+/// their own lay once the tree is placed); whether `root` is to be laid out again for what they came to.
+fn Tree::lists_within(self : Tree, root : Int) -> Bool {
+  for l in self.lists.copy() {
+    let n = self.nodes[l.holder]
+    if !n.live || n.gen != l.gen {
+      continue
+    }
+    if l.root == -2 {
+      l.root = self.laid_root(l.holder).unwrap_or(-1)
+    }
+    if l.root != root {
+      continue
+    }
+    let marked = l.marked
+    l.marked = false
+    (l.lay)(false, marked) |> ignore
+  }
+  self.nodes[root].flex.dirty
 }
 
 ///|
@@ -6382,16 +6420,7 @@ pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> U
   @signals.end_batch()
   self.committing -= 1
   self.modals_settled()
-  // (what waits for it committed whole, each a change of its own of this moment, in order)
-  while self.afters.length() > 0 {
-    let next = self.afters.remove(0)
-    self.committing += 1
-    @signals.start_batch()
-    @signals.untracked(next)
-    @signals.end_batch()
-    self.committing -= 1
-    self.modals_settled()
-  }
+  self.afters_run()
   self.cause_at = was
   // (where things stand once it is told whole, for the next change: Tree::settle_after_change)
   if was < 0.0 {
@@ -6471,6 +6500,22 @@ fn Tree::after_event(self : Tree, f : () -> Unit) -> Unit {
     self.afters.push(f)
   } else {
     f()
+  }
+}
+
+///|
+/// What waits for the change being committed to be committed whole (Tree::after_event), as it is: each a change of its
+/// own of the same moment, in order, what one of them says to wait done in its turn. Run where a change inside no
+/// other ends (an event, what reacts at its cause, what is due at its moment), its moment still the cause's.
+fn Tree::afters_run(self : Tree) -> Unit {
+  while self.afters.length() > 0 {
+    let next = self.afters.remove(0)
+    self.committing += 1
+    @signals.start_batch()
+    @signals.untracked(next)
+    @signals.end_batch()
+    self.committing -= 1
+    self.modals_settled()
   }
 }
 
@@ -6672,6 +6717,10 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Bool {
     }
     self.committing -= 1
     self.modals_settled()
+    // (what waits for it committed whole (View::when_committed), as for an event's: where it is inside none)
+    if was < 0.0 {
+      self.afters_run()
+    }
     self.cause_at = was
     // (where things stand once it is told whole, as of its moment, for the next change: Tree::settle_after_change)
     if was < 0.0 {
