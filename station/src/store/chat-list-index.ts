@@ -1,6 +1,7 @@
 // A maintained ordering for the recent chat tool. This first part keeps the unscoped ordering; workspace visibility
 // and its independently prepared counts are built on it separately.
 import type { DatabaseSync } from "node:sqlite";
+import { recentChatDisplacedEntry } from "./chat-list-entry-rowid.ts";
 import { markRecentChatIndexInstalled, recentChatIndexInstalled } from "./chat-list-schema.ts";
 
 export type RecentChatPage = { ids: number[]; total: number };
@@ -47,6 +48,12 @@ CREATE TRIGGER recent_chat_entry_before_add BEFORE INSERT ON entries
   WHEN ${insertedSaid} BEGIN ${dirty("NEW.thread")} END;
 CREATE TRIGGER recent_chat_entry_before_change BEFORE UPDATE OF thread, n, ts ON entries
   WHEN ${replacedSaid(true)} BEGIN ${dirty("NEW.thread")} END;
+CREATE TRIGGER recent_chat_entry_before_rowid_add BEFORE INSERT ON entries
+  WHEN EXISTS (${recentChatDisplacedEntry("NEW.rowid")})
+  BEGIN ${dirty("(SELECT thread FROM entries WHERE rowid = NEW.rowid)")} END;
+CREATE TRIGGER recent_chat_entry_before_rowid_change BEFORE UPDATE ON entries
+  WHEN OLD.rowid IS NOT NEW.rowid AND EXISTS (${recentChatDisplacedEntry("NEW.rowid")})
+  BEGIN ${dirty("(SELECT thread FROM entries WHERE rowid = NEW.rowid)")} END;
 CREATE TRIGGER recent_chat_entry_change AFTER UPDATE OF thread, n, kind, at ON entries BEGIN ${dirty("OLD.thread")} ${dirty("NEW.thread")} END;
 CREATE TRIGGER recent_chat_entry_drop AFTER DELETE ON entries BEGIN ${dirty("OLD.thread")} END;
 `;

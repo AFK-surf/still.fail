@@ -11,7 +11,7 @@ const scopes: { name: string; scope: RecentChatScope }[] = [
   { name: "home", scope: { ws: "here", home: "here" } },
 ];
 
-for (const recursive of [false, true]) for (const how of ["insert", "update"] as const) for (const { name, scope } of scopes)
+for (const recursive of [false, true]) for (const how of ["insert", "insert negative", "update", "update _rowid_", "update oid"] as const) for (const { name, scope } of scopes)
   test(`an entry ${how} replacing another chat's rowid keeps the ${name} order exact (recursive triggers ${recursive})`, () => {
     const store = Store.open(":memory:"), db = store.db;
     try {
@@ -25,7 +25,8 @@ for (const recursive of [false, true]) for (const how of ["insert", "update"] as
       db.prepare("UPDATE threads SET created_at = 0 WHERE id IN (?, ?)").run(victim, other);
       const message = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',?)");
       message.run(victim, 100); message.run(other, 50);
-      if (how === "update") db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,2,'edit','person','p','edit',1)").run(other);
+      if (how.startsWith("update")) db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,2,'edit','person','p','edit',1)").run(other);
+      if (how === "insert negative") db.prepare("UPDATE entries SET rowid = -1 WHERE thread = ? AND n = 1").run(victim);
       const preparation = new RecentChatPreparation(db, 16);
       const prepare = () => {
         let done = false;
@@ -35,9 +36,12 @@ for (const recursive of [false, true]) for (const how of ["insert", "update"] as
       prepare();
       assert.deepEqual(recentChatPage(db, scope.ws, scope.home, 5).ids, [victim, other]);
       const rowid = (db.prepare("SELECT rowid FROM entries WHERE thread = ? AND n = 1").get(victim) as { rowid: number }).rowid;
-      if (how === "insert") db.prepare(`INSERT OR REPLACE INTO entries(rowid,thread,n,kind,author_kind,author,text,at)
+      if (how.startsWith("insert")) db.prepare(`INSERT OR REPLACE INTO entries(rowid,thread,n,kind,author_kind,author,text,at)
         VALUES (?,?,2,'edit','person','p','edit',1)`).run(rowid, other);
-      else db.prepare("UPDATE OR REPLACE entries SET rowid = ? WHERE thread = ? AND n = 2").run(rowid, other);
+      else {
+        const column = how === "update _rowid_" ? "_rowid_" : how === "update oid" ? "oid" : "rowid";
+        db.prepare(`UPDATE OR REPLACE entries SET ${column} = ? WHERE thread = ? AND n = 2`).run(rowid, other);
+      }
       const expected = recentChatIds(db, scope.ws, scope.home, 5);
       assert.deepEqual(expected.ids, [other, victim], "the displaced latest message changes the original ordering");
       try {

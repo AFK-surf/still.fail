@@ -23,6 +23,7 @@ import { HAS_SESSION_ACTIVE_WATCH } from "../src/store/watch-jobs.ts";
 import * as read from "../src/read/store.ts";
 import { usageSummaryEdgeQuery } from "../src/read/usage-batched.ts";
 import { usageSummaryBlockOverlayQuery, usageSummaryBlockPendingQuery, usageSummaryBlockQueries } from "../src/read/usage-summary-blocks.ts";
+import { recentChatDisplacedEntry } from "../src/store/chat-list-entry-rowid.ts";
 import { HISTORY_AFTER, HISTORY_DAYS, HISTORY_SCOPES, HISTORY_SEED_CALLS, HISTORY_TOTAL } from "../src/store/usage-history.ts";
 import { installRecentChatIndex, RECENT_GLOBAL_PAGE } from "../src/store/chat-list-index.ts";
 import { RECENT_DEFAULT_HOME_PAGE } from "../src/store/chat-list-home-index.ts";
@@ -76,6 +77,9 @@ function assertRecentChatPlans() {
     (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
   const versionSteps = plan(RECENT_CHAT_SCHEMA_VERSION, ["global", "recent_chat_meta"]);
   assert.ok(versionSteps.some((s) => s.startsWith("SEARCH ") && s.includes("PRIMARY KEY (part=?)")), versionSteps.join(" | "));
+  const displacedSteps = plan(recentChatDisplacedEntry("?"), [1]);
+  assert.ok(displacedSteps.some((s) => s.startsWith("SEARCH e ") && s.includes("INTEGER PRIMARY KEY (rowid=?)")), displacedSteps.join(" | "));
+  assert.ok(displacedSteps.some((s) => s.startsWith("SEARCH s ") && s.includes("INTEGER PRIMARY KEY (rowid=?)")), displacedSteps.join(" | "));
   // An ordered scan is safe here only because the query stops at the requested page size.
   for (const [sql, args, index, seek] of [
     [RECENT_GLOBAL_PAGE, [5], "recent_chat_order", false],

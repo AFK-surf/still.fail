@@ -1,6 +1,7 @@
 // An incremental index for the default part of home. A complete home page also needs the explicit workspace and
 // overlap counts in chat-list-home-overlap.ts.
 import type { DatabaseSync } from "node:sqlite";
+import { recentChatDisplacedEntry } from "./chat-list-entry-rowid.ts";
 import type { RecentChatPage } from "./chat-list-index.ts";
 import { recentHomeChatStep } from "./chat-list-home-source.ts";
 import { acknowledgeRecentScopeSession, installRecentScopeJournal, trackRecentScope } from "./chat-list-scope-journal.ts";
@@ -78,6 +79,12 @@ export function installRecentHomeIndex(db: DatabaseSync): void {
         CREATE TRIGGER recent_home_entry_before_add BEFORE INSERT ON entries WHEN ${insertedSaid} BEGIN ${markOrder("NEW.thread")} END;
         CREATE TRIGGER recent_home_entry_before_change BEFORE UPDATE OF thread, n, ts ON entries
           WHEN ${displacedSaid} BEGIN ${markOrder("NEW.thread")} END;
+        CREATE TRIGGER recent_home_entry_before_rowid_add BEFORE INSERT ON entries
+          WHEN EXISTS (${recentChatDisplacedEntry("NEW.rowid")})
+          BEGIN ${markOrder("(SELECT thread FROM entries WHERE rowid = NEW.rowid)")} END;
+        CREATE TRIGGER recent_home_entry_before_rowid_change BEFORE UPDATE ON entries
+          WHEN OLD.rowid IS NOT NEW.rowid AND EXISTS (${recentChatDisplacedEntry("NEW.rowid")})
+          BEGIN ${markOrder("(SELECT thread FROM entries WHERE rowid = NEW.rowid)")} END;
         CREATE TRIGGER recent_home_entry_change AFTER UPDATE OF thread, n, kind, at ON entries BEGIN ${markOrder("OLD.thread")} END;
         CREATE TRIGGER recent_home_entry_move AFTER UPDATE OF thread ON entries
           WHEN OLD.thread IS NOT NEW.thread BEGIN ${markOrder("NEW.thread")} END;

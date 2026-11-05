@@ -1,5 +1,6 @@
 // A workspace being prepared needs to see session changes that occur behind its scan cursor.
 import type { DatabaseSync } from "node:sqlite";
+import { recentChatDisplacedEntry } from "./chat-list-entry-rowid.ts";
 import { markRecentChatIndexInstalled, recentChatIndexInstalled } from "./chat-list-schema.ts";
 
 export type RecentScope = { kind: "home" } | { kind: "workspace"; workspace: string };
@@ -246,6 +247,12 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
       CREATE TRIGGER recent_scope_order_entry_before_add BEFORE INSERT ON entries WHEN ${insertedSaid} BEGIN ${markOrder("NEW.thread")} END;
       CREATE TRIGGER recent_scope_order_entry_before_change BEFORE UPDATE OF thread, n, ts ON entries
         WHEN ${displacedSaid} BEGIN ${markOrder("NEW.thread")} END;
+      CREATE TRIGGER recent_scope_order_entry_before_rowid_add BEFORE INSERT ON entries
+        WHEN EXISTS (${recentChatDisplacedEntry("NEW.rowid")})
+        BEGIN ${markOrder("(SELECT thread FROM entries WHERE rowid = NEW.rowid)")} END;
+      CREATE TRIGGER recent_scope_order_entry_before_rowid_change BEFORE UPDATE ON entries
+        WHEN OLD.rowid IS NOT NEW.rowid AND EXISTS (${recentChatDisplacedEntry("NEW.rowid")})
+        BEGIN ${markOrder("(SELECT thread FROM entries WHERE rowid = NEW.rowid)")} END;
       CREATE TRIGGER recent_scope_order_entry_change AFTER UPDATE OF thread, n, kind, at ON entries BEGIN ${markOrder("OLD.thread")} END;
       CREATE TRIGGER recent_scope_order_entry_move AFTER UPDATE OF thread ON entries WHEN OLD.thread IS NOT NEW.thread BEGIN ${markOrder("NEW.thread")} END;
       CREATE TRIGGER recent_scope_order_entry_drop AFTER DELETE ON entries BEGIN ${markOrder("OLD.thread")} END;
