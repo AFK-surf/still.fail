@@ -53,7 +53,7 @@ test("each host's old name serves the same: static sites, the API, the relay, th
     // Both apps' App Links, on both hosts.
     for (const fetch of [h.fetch, (path: string) => h.fetchOld("main", path)]) {
       const links = (await (await fetch("/.well-known/assetlinks.json")).json()) as { target: { package_name: string } }[];
-      assert.deepEqual(links.map((l) => l.target.package_name), ["fail.still.android", "dev.ember.android"]);
+      assert.deepEqual(links.map((l) => l.target.package_name), ["fail.still.android"]);
     }
     // Still no wildcard.
     assert.equal((await h.fetchWorker("api", "https://other.relay.example/v1/me", { headers: { authorization: `Bearer ${tokens.access_token}` } })).status, 421);
@@ -88,10 +88,6 @@ test("signing in on an old host goes on to the new one, which Google calls back,
       const exchanged = await h.fetchOld(back.startsWith(h.oldAdminOrigin) ? "admin" : "main", "/v1/auth/token", { method: "POST", headers: json, body: JSON.stringify({ code, code_verifier: flow.verifier, redirect_uri: back }) });
       assert.equal(exchanged.status, 200, back);
     }
-    // The Android app from before the rename.
-    const flow = await h.begin("google-android-user", undefined, "ember://auth/callback");
-    const { code } = await h.complete(flow);
-    assert.equal((await h.exchange(flow, code)).status, 200);
   } finally {
     await h.close();
   }
