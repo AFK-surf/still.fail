@@ -11,6 +11,8 @@ pub struct Layout {
   priv keyed : Map[String, View]
   priv used : Array[String]
   priv seen : Set[String]
+  /// the children placed, by their nodes, in the order they were last placed: the order the keyed are drawn and hit in
+  priv placed : Array[Int]
 }
 
 ///|
@@ -81,6 +83,12 @@ pub fn Layout::place(self : Layout, child : View, x : Double, y : Double) -> Uni
   n.left = self.origin.0 + x
   n.top = self.origin.1 + y
   n.line = 0
+  // (placed again: where this placing has it, the last)
+  match self.placed.search(child.at) {
+    Some(i) => self.placed.remove(i) |> ignore
+    None => ()
+  }
+  self.placed.push(child.at)
 }
 
 ///|
@@ -96,7 +104,7 @@ pub fn[K : Eq] View::layout_box(self : View, content : Live[K], place : (Layout,
     let was_owner = self.tree.layout_owner
     self.tree.layout_owner = self.at
     let ctx : Layout = {
-      width, height, owner: self, origin: (x, y), live: Ref(true), keyed, used: [], seen: Set::new(),
+      width, height, owner: self, origin: (x, y), live: Ref(true), keyed, used: [], seen: Set::new(), placed: [],
     }
     // Only the final state is published by Tree::walk, so a child kept hidden and then placed never disappears.
     for at in n.kids { self.tree.nodes[at].flex.line = -1 }
@@ -116,12 +124,19 @@ pub fn[K : Eq] View::layout_box(self : View, content : Live[K], place : (Layout,
       keyed.remove(k)
       self.drop(child)
     }
-    // Fixed children keep their order; the keyed part follows this layout's requests, including rows kept hidden.
-    // Changing keys' order must change paint and hit order without rebuilding those keys' nodes.
+    // Fixed children keep their order; the keyed part is drawn and hit in the order this layout placed it (a list's
+    // rows top to bottom, whichever it measured first), then those kept hidden, as they were requested. Changing keys'
+    // order must change paint and hit order without rebuilding those keys' nodes.
     let keyed_at : Set[Int] = Set::new()
     for _, child in keyed { keyed_at.add(child.at) }
     let ordered = n.kids.filter(fn(at) { !keyed_at.contains(at) })
-    for k in ctx.used { ordered.push(keyed[k].at) }
+    for at in ctx.placed {
+      if keyed_at.contains(at) { ordered.push(at) }
+    }
+    for k in ctx.used {
+      let at = keyed[k].at
+      if !ctx.placed.contains(at) { ordered.push(at) }
+    }
     if ordered != n.kids {
       n.kids.clear()
       n.kids.append(ordered)
