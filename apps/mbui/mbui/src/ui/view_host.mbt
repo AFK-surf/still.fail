@@ -1354,6 +1354,20 @@ fn Ctx::tree_draw_node(
   if c.bones != 0L && c.bone_as == 2 {
     return
   }
+  // A paint mask consumes this frame's allocated box. It never changes the
+  // content's measurement or publishes its dimensions to a binding.
+  match c.clip_fraction {
+    Some((left, top, right, bottom)) => {
+      let px = fn(v : Double) { (v * self.scale).round() / self.scale }
+      let x0 = x + px(c.w * s * dclamp(left, 0.0, 1.0))
+      let y0 = y + px(c.h * s * dclamp(top, 0.0, 1.0))
+      let x1 = x + px(c.w * s * dclamp(right, 0.0, 1.0))
+      let y1 = y + px(c.h * s * dclamp(bottom, 0.0, 1.0))
+      push_clip(x0, y0, dmax(x0, x1), dmax(y0, y1))
+      p.clipping.push(c.id)
+    }
+    None => ()
+  }
   if p.raising is None && !dr.scrims.is_empty() && tree.over_scrim_of(c.id) {
     p.raising = Some((c.id, self.ninst))
     // (moved over the old frame's scrim as it is painted: drawn otherwise than by the tree alone)
@@ -1549,9 +1563,15 @@ fn Ctx::tree_draw_node(
         // (covering it where it says so, as an old view's picture does: View::image_covers; fading in where it says so,
         // View::image_fades; a GIF that moves going through its frames, each woken for, as an old view's: moving_key)
         None => {
-          let fit = if c.image_cover { FitCover } else { FitFill }
+          let (fit, matte) = c.image_fit
           let shown = self.moving_key(shown, w, h, fit)
-          self.draw_image(shown, x, y, w, h, fit, c.radius * s, a, fade=c.image_fade, max_px=most)
+          let before = self.ninst
+          self.draw_image(shown, x, y, w, h, fit, c.radius * s, a, fade=c.image_fade, max_px=most,
+            ground=matte, matte=fit is FitContain || fit is FitCoverAt(_))
+          match c.corners {
+            Some((tl, tr, br, bl)) if self.ninst > before => self.corners_last_each(tl * s, tr * s, br * s, bl * s)
+            _ => ()
+          }
         }
       }
       inst_owners.painting = was

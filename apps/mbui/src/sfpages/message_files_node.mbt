@@ -7,8 +7,8 @@
 /// Files `list` (as they are now) of a message in `col`, as wide as the column at most; `mine` the viewer's own;
 /// `by` whose and when (what quoting one says), `at` where in the chat it is (its preview's place); `landed` told each
 /// one's landing by its key as it is made and let go; `corner` its pictures' (a quote's own: @sf.quote_picture_corner);
-/// `by` whose message it is, their role and its ts (what quoting one of them says; none: not quoted from here); `most`
-/// how wide they may be where what holds them is as wide as they are (a quote's card: none, the column's).
+/// `by` whose message it is, their role and its ts (what quoting one of them says; none: not quoted from here).
+/// Each item receives its width from the flow's current constraints, including inside a quote's card.
 fn message_files_node(
   col : @view.View,
   src : Source,
@@ -19,7 +19,6 @@ fn message_files_node(
   landed? : (String, @sfbase.FileLandingNode?) -> Unit = fn(_, _) {  },
   corner? : Double = @sf.message_file_corner,
   by? : () -> (String, String, String)? = fn() { None },
-  most? : () -> Double? = fn() { None },
 ) -> Unit {
   col.box(fn(flow) {
     flow
@@ -29,17 +28,6 @@ fn message_files_node(
     .lies_along(Is(if mine { End } else { Start }))
     .lines_up(Is(Some(Start)))
     |> ignore
-    // (the column's width as laid out, the pane's till it is)
-    let room = fn() {
-      match most() {
-        Some(w) => w
-        None =>
-          match flow.laid_size_told() {
-            Some((w, _)) if w > 0.0 => w
-            _ => flow.window().0
-          }
-      }
-    }
     flow.each(fn() { list().map(fn(a) { @sfbase.file_key(a) }) }, fn(k) { k }, fn(item, k) {
       let key = @signals.untracked(fn() { k.get() })
       // (as it is now; as it last was while it goes)
@@ -56,11 +44,11 @@ fn message_files_node(
       let kind = @signals.untracked(fn() { file_kind(a().name) })
       match kind {
         "image" | "video" => {
-          let landing = media_file_node(item, src, here, a, kind, room, at, corner, by)
+          let landing = media_file_node(item, src, here, a, kind, at, corner, by)
           landed(key, Some(landing))
         }
         _ => {
-          let landing = card_file_node(item, src, here, a, room, at, by)
+          let landing = card_file_node(item, src, here, a, at, by)
           landed(key, Some(landing))
         }
       }
@@ -81,7 +69,6 @@ fn media_file_node(
   here : () -> MessageHere,
   a : () -> Attachment,
   kind : String,
-  room : () -> Double,
   at : () -> String,
   corner : Double,
   by : () -> (String, String, String)?,
@@ -90,12 +77,6 @@ fn media_file_node(
   let least = if kind == "image" { image_least } else { video_least }
   let side = if kind == "image" { image_min_side } else { 0.0 }
   let boxed = fn() { image_box(a(), least, min_side=side) }
-  // (`fills`: as wide as its room, a row of the images its message places, each as high as the others)
-  let w = fn() { if fills { room() } else { dmin(boxed().0, room()) } }
-  let h = fn() {
-    let (bw, bh, _) = boxed()
-    bh * w() / bw
-  }
   let letterbox = fn() { boxed().2 }
   let share = fn() { picture_share(a(), least, min_side=side) }
   let top_crop = fn() { kind == "image" && tall_image_cropped(a()) }
@@ -116,8 +97,6 @@ fn media_file_node(
   }
   let view = item.box(fn(b) {
     b
-    .width(By(fn() { Some(w()) }))
-    .height(By(fn() { Some(h()) }))
     .radius(Is(corner))
     .clips(Is(true))
     .ground(By(fn() {
@@ -164,18 +143,16 @@ fn media_file_node(
     // (a letterboxed one's picture its own proportions in the box's middle, the box's ground round it)
     b.box(fn(room) {
       room
-      .width(By(fn() { Some(w()) }))
-      .height(By(fn() { Some(h()) }))
+      .over(Is(true))
       .lies_along(Is(Middle))
       .lines_up(Is(Some(Middle)))
       |> ignore
-      let (pw, ph) = if kind == "image" {
-        (fn() { w() * share().0 }, fn() { h() * share().1 })
-      } else {
-        (w, h)
-      }
-      // (none of it drawn while the viewer has its picture, flying from it or back into it: note_thumb's hidden)
-      room.show(fn() { @sfbase.thumb_shows(thumb()) > 0.0 }, fn(m) { media_fitted_node(m, picture, pw, ph, fit, fn() { 0.0 }) })
+      // The picture occupies its share of the parent's current box.
+      room.show(fn() { @sfbase.thumb_shows(thumb()) > 0.0 }, fn(m) {
+        m.width_share(By(fn() { if kind == "image" { share().0 } else { 1.0 } }))
+        .height_share(By(fn() { if kind == "image" { share().1 } else { 1.0 } })) |> ignore
+        media_fill_node(m, picture, fit, fn() { 0.0 })
+      })
     })
     |> ignore
     if kind == "video" {
@@ -216,6 +193,14 @@ fn media_file_node(
       list=@signals.untracked(fn() { list_of(here()) }),
     )
   })
+  item.layout(By(boxed), fn(box, space) {
+    let (bw, bh, _) = box
+    let offered = space.width().unwrap_or(space.max_width().unwrap_or(bw))
+    let width = if fills { offered } else { dmin(bw, offered) }
+    let height = bh * width / bw
+    let picture = space.measure(view, width~, height~)
+    @view.arrangement(width, height, [picture.at(0.0, 0.0)])
+  }) |> ignore
   {
     view,
     share,
@@ -233,7 +218,6 @@ fn card_file_node(
   src : Source,
   here : () -> MessageHere,
   a : () -> Attachment,
-  room : () -> Double,
   at : () -> String,
   by : () -> (String, String, String)?,
 ) -> @sfbase.FileLandingNode {
@@ -255,7 +239,6 @@ fn card_file_node(
     )
   }
   let id = fn() { text(coming().0, "id") }
-  item.max_width(By(fn() { Some(room()) })) |> ignore
   let view = @sf.file_card_node(
     item,
     info,

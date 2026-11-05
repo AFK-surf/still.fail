@@ -72,7 +72,7 @@ fn media_content(c : @ui.Ctx, p : MediaPicture, w : Double, h : Double, fit : @u
   } else if p.key != "" {
     c.image(p.key, w=Px(w), h=Px(h), fit~, radius~, bg=0L, fade=false) |> ignore
   } else {
-    match image_wait_colours(p.hash, w, h) {
+    match image_wait_colours(p.hash) {
       Some(likeness) => {
         c.image(likeness, w=Px(w), h=Px(h), fit=FitFill, radius~, bg=0L, fade=false) |> ignore
       }
@@ -447,7 +447,7 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   let (pw, ph) = (w * sw, h * sh)
   let top_crop = tall_image_cropped(a)
   let fit : @ui.Fit = if top_crop { FitCoverAt(0.0) } else { FitCover }
-  let likeness = image_wait_colours(a.thumbhash, pw, ph).unwrap_or("")
+  let likeness = image_wait_colours(a.thumbhash).unwrap_or("")
   let picture = fn() { media_content(c, p, pw, ph, fit, 0.0) }
   // one the device holds and not decoded yet: what the app's first page waits for
   if a.held && !p.sent && (key == "" || (key != "!" && !c.image_ready(key, reveal_px(c, pw, ph)))) {
@@ -823,7 +823,7 @@ pub fn image_reveal(
   if waited <= 0.0 {
     return
   }
-  let likeness = image_wait_colours(hash, w, h)
+  let likeness = image_wait_colours(hash)
   // (each step on the screen's pixels: one meets the next with no seam)
   let px_of = fn(y : Double) { (y * c.scale).round() / c.scale }
   let wait = fn(y0 : Double, y1 : Double, alpha : Double) {

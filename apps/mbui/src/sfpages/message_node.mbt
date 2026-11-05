@@ -377,8 +377,8 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
           Some({
             draw: fn(v) { message_files_node(v, src, here, fn() { [a] }, false, at~, by~) },
             image: image_ratio(a).map(fn(r) {
-              (r, fn(v : @view.View, w : () -> Double) {
-                ignore(media_file_node(v, src, here, fn() { a }, "image", w, at, @sf.message_file_corner, by, fills=true))
+              (r, fn(v : @view.View) {
+                ignore(media_file_node(v, src, here, fn() { a }, "image", at, @sf.message_file_corner, by, fills=true))
               })
             }),
           })
@@ -886,16 +886,7 @@ fn quotes_node(
               None => []
             }
           }
-          // (as wide as the card may be, not as its words are: what the viewer sends may be (the pane's, as the
-          // composer sets it), else the message's column; less the card's own room)
-          let most = fn() {
-            if mine {
-              Some(@sf.quote_picture_room(composer_words_width(width()) + 2.0 * bubble_side))
-            } else {
-              col.laid_size_told().map(fn(z) { @sf.quote_picture_room(z.0) })
-            }
-          }
-          message_files_node(pv, src, here, own, false, at=fn() { at() + "/q:" + i.to_string() }, corner=@sf.quote_picture_corner, most~, landed=fn(k, l) {
+          message_files_node(pv, src, here, own, false, at=fn() { at() + "/q:" + i.to_string() }, corner=@sf.quote_picture_corner, landed=fn(k, l) {
             match l {
               Some(_) => {
                 current.val = Some(k)

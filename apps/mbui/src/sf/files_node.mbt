@@ -198,7 +198,8 @@ fn card_button_node(parent : @view.View, icon : String, label : () -> String, pr
 
 ///|
 /// A waiting picture or card with its remove button hung on the same corner as with_corner_remove. Both are nodes;
-/// the button's offset moves its hit target as well as its drawing. `width` gives a tile its width; None fills a row.
+/// the button's offset moves its hit target as well as its drawing. `width` is the preferred tile width, constrained
+/// by the parent's available space with room for the corner control; None fills a row.
 pub fn with_corner_remove_node(
   parent : @view.View,
   label : () -> String,
@@ -210,10 +211,9 @@ pub fn with_corner_remove_node(
 ) -> @view.View {
   parent.box(fn(outer) {
     let reach = fn() { corner_remove_reach(corner()) }
-    outer.row(Is(true)).width(By(fn() { width().map(fn(w) { w + reach() }) })) |> ignore
-    outer.box(fn(inner) {
-      inner.width(By(width)).min_width(Is(Some(0.0)))
-      .grow(By(fn() { if width() is None { 1.0 } else { 0.0 } })) |> ignore
+    outer.max_width(By(fn() { width().map(fn(w) { w + reach() }) })) |> ignore
+    let inner = outer.box(fn(inner) {
+      inner.min_width(Is(Some(0.0))) |> ignore
       body(inner)
       inner.box(fn(over) {
         over.over(Is(true)).lines_up(Is(Some(End))).lies_along(Is(Start)) |> ignore
@@ -221,6 +221,18 @@ pub fn with_corner_remove_node(
         .offset(By(fn() { (reach(), -reach()) })).presses(Is(true)).focusable(Is(true))
         .says(By(fn() { Some(@view.said(Button, label=label())) })).on_press(remove) |> ignore
       }) |> ignore
+    })
+    outer.layout(By(fn() { (width(), reach()) }), fn(inputs, space) {
+      let (preferred, reach) = inputs
+      let offered = match space.width() { Some(w) => Some(w); None => space.max_width() }
+      let width = match (preferred, offered) {
+        (Some(w), Some(room)) => Some(dmin(w, dmax(0.0, room - reach)))
+        (Some(w), None) => Some(w)
+        (None, room) => room
+      }
+      let measured = space.measure(inner, width?=width)
+      let (w, h) = measured.size()
+      @view.arrangement(w + (if preferred is Some(_) { reach } else { 0.0 }), h, [measured.at(0.0, 0.0)])
     }) |> ignore
   })
 }

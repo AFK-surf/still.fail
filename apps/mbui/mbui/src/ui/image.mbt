@@ -2,17 +2,9 @@
 // a power of two, so a few sizes serve every layout), kept while used and
 // dropped least recently used first once they take more than the budget.
 
-///|
-pub(all) enum Fit {
-  /// fills the box, cropping what sticks out
-  FitCover
-  /// fills the box, placing the vertical crop at 0 (top) to 1 (bottom)
-  FitCoverAt(Double)
-  /// shows all of it inside the box
-  FitContain
-  /// stretched to the box
-  FitFill
-} derive(Eq)
+pub using @view {
+  type Fit,
+}
 
 ///|
 priv struct ImageEntry {
@@ -475,6 +467,18 @@ pub fn Ctx::image(
 pub fn Ctx::image_ready(self : Ctx, src : String, px : Double) -> Bool {
   match self.image_for(src, px) {
     Some(e) => e.state == 1
+    None => false
+  }
+}
+
+///|
+/// Whether the host has a decoded image it can show. This observes host input;
+/// it neither requests a decode nor needs layout dimensions. Painting chooses
+/// and requests the resolution for the box actually allocated to the image.
+pub fn image_available(src : String) -> Bool {
+  image_decodes_read(src)
+  match image_cache.get(src) {
+    Some(entries) => entries.any(fn(e) { e.state == 1 })
     None => false
   }
 }

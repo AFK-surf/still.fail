@@ -38,3 +38,30 @@ test "a hung remove button takes presses where its corner is drawn" {
   t.click(Button, label="Remove preview")
   assert_eq(removed.val, 1)
 }
+
+///|
+test "a file card and its hung remove target fit the parent's current width without a geometry binding" {
+  let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=390.0, h=250.0, platform=2)
+  let removed = Ref(0)
+  let card : Ref[@view.View?] = Ref(None)
+  let holder : Ref[@view.View?] = Ref(None)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(ui_theme_now)
+    root.padding(Is((20.0, 20.0, 20.0, 20.0))) |> ignore
+    holder.val = Some(with_corner_remove_node(root, fn() { "Remove file" }, fn() { 18.0 }, fn() { removed.val += 1 },
+      width=fn() { Some(file_card_w) }, fn(p) {
+        card.val = Some(file_card_node(p, fn() { file_card_info("a-long-file-name.txt", 1024.0) }, composer=true))
+      }))
+  })
+  t.draw()
+  let id = card.val.unwrap().id()
+  for width in [180.0, 500.0, 390.0] {
+    t.resize(width, 250.0)
+    let w = dmin(file_card_w, width - 40.0 - corner_remove_reach(18.0))
+    assert_eq(card.val.unwrap().rect(), (20.0, 20.0, w, 56.0))
+    assert_eq(holder.val.unwrap().rect(), (20.0, 20.0, w + corner_remove_reach(18.0), 56.0))
+    assert_eq(card.val.unwrap().id(), id)
+    t.click(Button, label="Remove file")
+  }
+  assert_eq(removed.val, 3)
+}

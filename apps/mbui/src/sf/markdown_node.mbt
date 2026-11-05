@@ -121,7 +121,7 @@ priv struct MdNode {
 /// now).
 pub(all) struct PlacedNode {
   draw : (@view.View) -> Unit
-  image : (Double, (@view.View, () -> Double) -> Unit)?
+  image : (Double, (@view.View) -> Unit)?
 }
 
 ///|
@@ -954,61 +954,61 @@ fn md_placed_runs(md : MdNode, xs : Array[MdInline]) -> Array[(Int, Array[MdInli
 /// the width it has now, kept by the file and which of its showings in the paragraph it is; another file made again in
 /// its place.
 fn md_image_rows_node(p : @view.View, md : MdNode, images : () -> Array[(String, Double)]) -> Unit {
-  p.padding(Is((0.0, image_row_gap, 0.0, image_row_gap))).gap(Is(image_row_gap)) |> ignore
-  // det-ok(layout-read-back): a message's image is drawn at a width it is given (its box, its picture decoded that size), as image_rows has it
-  let room = fn() {
-    p.words_redone() |> ignore
-    match p.laid_size_told() {
-      Some((w, _)) => w
-      None => p.window().0
-    }
-  }
-  // (each by its key, the file and how many of it are before it: one file twice two images)
-  let rows = fn() {
-    let out : Array[Array[(String, String, Double)]] = [[]]
-    let mut used = 0.0
-    let r = room()
+  p.padding(Is((0.0, image_row_gap, 0.0, image_row_gap))) |> ignore
+  // Identity belongs to a picture's occurrence, not to whichever row it fits
+  // this frame. Reflow moves these same nodes; it creates no new components.
+  let named = fn() {
     let seen : Map[String, Int] = {}
-    for named in images() {
-      let k = seen.get(named.0).unwrap_or(0)
-      seen[named.0] = k + 1
-      let im = (named.0 + "#" + k.to_string(), named.0, named.1)
-      let row = out[out.length() - 1]
-      let w = im.2 * image_row_least + (if row.length() > 0 { image_row_gap } else { 0.0 })
-      if row.length() > 0 && used + w > r {
-        out.push([im])
+    images().map(fn(im) {
+      let k = seen.get(im.0).unwrap_or(0)
+      seen[im.0] = k + 1
+      (im.0 + "#" + k.to_string(), im.0, im.1)
+    })
+  }
+  let cells : Map[String, @view.View] = {}
+  p.each(named, fn(im) { im.0 }, fn(cell, value) {
+    let (key, name, _) = @signals.untracked(fn() { value.get() })
+    cells[key] = cell
+    cell.owns(fn() { cells.remove(key) }) |> ignore
+    match (md.files)(name).bind(fn(f) { f.image }) {
+      Some(im) => (im.1)(cell)
+      None => ()
+    }
+  })
+  p.layout(By(named), fn(images, room) {
+    let natural = images.fold(init=0.0, fn(w, im) { w + im.2 * image_row_least }) +
+      image_row_gap * dmax(0.0, (images.length() - 1).to_double())
+    let width = room.width().unwrap_or(room.max_width().unwrap_or(natural))
+    let rows : Array[Array[(String, String, Double)]] = [[]]
+    let mut used = 0.0
+    for im in images {
+      let row = rows[rows.length() - 1]
+      let w = im.2 * image_row_least + (if row.is_empty() { 0.0 } else { image_row_gap })
+      if !row.is_empty() && used + w > width {
+        rows.push([im])
         used = im.2 * image_row_least
       } else {
         row.push(im)
         used = used + w
       }
     }
-    out
-  }
-  p.each(fn() { rows().mapi(fn(i, _) { i }) }, fn(i) { i }, fn(line, i) {
-    let i = @signals.untracked(fn() { i.get() })
-    line.row(Is(true)).gap(Is(image_row_gap)) |> ignore
-    let row = fn() { rows().get(i).unwrap_or([]) }
-    let h = fn() {
-      let all = row()
-      let ratios = all.fold(init=0.0, fn(n, im) { n + im.2 })
-      if ratios <= 0.0 { 0.0 } else { dmin(image_row_most, (room() - image_row_gap * (all.length() - 1).to_double()) / ratios) }
+    let placed = []
+    let mut y = 0.0
+    for row in rows {
+      guard !row.is_empty() else { continue }
+      let ratios = row.fold(init=0.0, fn(r, im) { r + im.2 })
+      let h = if ratios <= 0.0 { 0.0 } else {
+        dmax(0.0, dmin(image_row_most, (width - image_row_gap * (row.length() - 1).to_double()) / ratios))
+      }
+      let mut x = 0.0
+      for im in row {
+        let w = (im.2 * h).floor()
+        let cell = room.measure(cells[im.0], width=w, height=h)
+        placed.push(cell.at(x, y))
+        x = x + w + image_row_gap
+      }
+      y = y + h + image_row_gap
     }
-    line.each(fn() { row().map(fn(im) { im.0 }) }, fn(k) { k }, fn(cell, k) {
-      let k = @signals.untracked(fn() { k.get() })
-      let at = fn() { row().search_by(fn(im) { im.0 == k }) }
-      let width = fn() {
-        match at() {
-          Some(j) => (row()[j].2 * h()).floor()
-          None => 0.0
-        }
-      }
-      let n = @signals.untracked(fn() { at().map(fn(j) { row()[j].1 }).unwrap_or("") })
-      match (md.files)(n).bind(fn(f) { f.image }) {
-        Some(im) => (im.1)(cell, width)
-        None => ()
-      }
-      cell.width(By(fn() { Some(width()) })) |> ignore
-    })
-  })
+    @view.arrangement(width, dmax(0.0, y - image_row_gap), placed)
+  }) |> ignore
 }

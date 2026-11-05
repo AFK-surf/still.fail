@@ -308,7 +308,7 @@ fn md_table_body_node(
                     row.box(fn(one) {
                       let w = cell_image_width(im.0)
                       one.width(Is(Some(w))) |> ignore
-                      (im.1)(one, fn() { w })
+                      (im.1)(one)
                     })
                     |> ignore
                   }
@@ -525,7 +525,7 @@ fn table_md(c : @ui.Ctx) -> Md {
 ///|
 /// A table's cell of only the message's images (Md::cell_images', of the window's tree): each one's proportion and its
 /// drawing in a node as wide as it is given; None for any other cell, drawn as words.
-fn cell_images_of(cell : Array[MdInline], files : (String) -> PlacedNode?) -> Array[(Double, (@view.View, () -> Double) -> Unit)]? {
+fn cell_images_of(cell : Array[MdInline], files : (String) -> PlacedNode?) -> Array[(Double, (@view.View) -> Unit)]? {
   let out = []
   for x in cell {
     match x {

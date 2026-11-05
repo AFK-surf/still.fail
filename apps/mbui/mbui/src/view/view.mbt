@@ -84,8 +84,9 @@ pub(all) struct Look {
   /// that room; (0, 0): where it is drawn), as what a picture on its way somewhere is judged by where it goes:
   /// View::image_for
   mut image_for : (Double, Double)
-  /// its picture covering it, cut where it is not as wide for as tall (View::image_covers); else filling it
-  mut image_cover : Bool
+  /// how its picture fits the allocated box, and its matte (View::image_fits)
+  mut image_fit : (Fit, Int64)
+  mut clip_fraction : (Double, Double, Double, Double)?
   /// its picture fading in as it is decoded (View::image_fades); else there at once
   mut image_fade : Bool
   /// where in it its picture lies (x, y, w, h, in its own terms) and the matte filling the rest of it, drawn with the
@@ -169,8 +170,9 @@ pub(all) struct Content {
   image : (String, String, Int)?
   /// the room its picture is judged ready for (View::image_for)
   image_for : (Double, Double)
-  /// its picture covering it, not stretched to it (View::image_covers)
-  image_cover : Bool
+  /// how its picture fits the allocated box, and its matte (View::image_fits)
+  image_fit : (Fit, Int64)
+  clip_fraction : (Double, Double, Double, Double)?
   /// its picture fading in as it is decoded (View::image_fades)
   image_fade : Bool
   /// where in it its picture lies and the matte round it (View::image_in)
@@ -243,8 +245,9 @@ pub(all) struct Drawn {
   image : (String, String, Int)?
   /// the room its picture is judged ready for (View::image_for)
   image_for : (Double, Double)
-  /// its picture covering it, not stretched to it (View::image_covers)
-  image_cover : Bool
+  /// how its picture fits the allocated box, and its matte (View::image_fits)
+  image_fit : (Fit, Int64)
+  clip_fraction : (Double, Double, Double, Double)?
   /// its picture fading in as it is decoded (View::image_fades)
   image_fade : Bool
   /// where in it its picture lies and the matte round it (View::image_in)
@@ -1034,7 +1037,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.edge_dashed = false
       n.look.image = None
       n.look.image_for = (0.0, 0.0)
-      n.look.image_cover = false
+      n.look.image_fit = (FitFill, 0L)
+      n.look.clip_fraction = None
       n.look.image_fade = false
       n.look.image_in = None
       n.look.glass = None
@@ -1156,7 +1160,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), runs_lit: (0, 0, 0L, 0.0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), edge_dashed: false, image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None, glyphs_at: None },
+        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), runs_lit: (0, 0, 0L, 0.0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), edge_dashed: false, image: None, image_for: (0.0, 0.0), image_fit: (FitFill, 0L), clip_fraction: None, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None, glyphs_at: None },
         parent,
         allow_ellipsis: false,
         kids: [],
@@ -2033,7 +2037,8 @@ priv enum Prop {
   EdgeDashed
   Image
   ImageFor
-  ImageCover
+  ImageFit
+  ClipFraction
   ImageFade
   ImageIn
   Corners
@@ -2564,7 +2569,7 @@ pub fn View::image(self : View, image : Live[(String, String, Int)?]) -> View {
 /// Its picture (View::image) covering it as it changes, its middle shown and what is past it cut where it is not as wide
 /// for as tall (an old view's FitCover: a face, a mark put up); else, as said none, filling it; paint's.
 pub fn View::image_covers(self : View, on : Live[Bool]) -> View {
-  self.bind(ImageCover, on, Paint, fn(on) { self.tree.nodes[self.at].look.image_cover = on })
+  self.bind(ImageFit, on, Paint, fn(on) { self.tree.nodes[self.at].look.image_fit = (if on { FitCover } else { FitFill }, 0L) })
   self
 }
 
@@ -6689,7 +6694,8 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     edge_dashed: n.look.edge_dashed,
     image: n.look.image,
     image_for: n.look.image_for,
-    image_cover: n.look.image_cover,
+    image_fit: n.look.image_fit,
+    clip_fraction: n.look.clip_fraction,
     image_fade: n.look.image_fade,
     image_in: n.look.image_in,
     glass: n.look.glass,
@@ -6996,7 +7002,8 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     edge_dashed: c.edge_dashed,
     image: c.image,
     image_for: c.image_for,
-    image_cover: c.image_cover,
+    image_fit: c.image_fit,
+    clip_fraction: c.clip_fraction,
     image_fade: c.image_fade,
     image_in: c.image_in,
     glass: c.glass,

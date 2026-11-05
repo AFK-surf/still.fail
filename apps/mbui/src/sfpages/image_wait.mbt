@@ -3,15 +3,14 @@
 // interpolated premultiplied by alpha, so a transparent image keeps its clear parts without dark fringes.
 
 ///|
-fn image_wait_colours(hash : String, w : Double, h : Double) -> String? {
-  if hash == "" || w <= 0.0 || h <= 0.0 {
+fn image_wait_colours(hash : String) -> String? {
+  if hash == "" {
     return None
   }
-  let longest = 32
-  let short = (longest.to_double() * (if w < h { w / h } else { h / w })).round().to_int()
-  let short = if short < 2 { 2 } else { short }
-  let (pw, ph) = if w >= h { (longest, short) } else { (short, longest) }
-  let key = "mem:wait-picture/\{hash}/\{pw}x\{ph}"
+  // The field is content in unit coordinates. Layout can stretch that field
+  // into any box without regenerating it or reading a previous frame's size.
+  let (pw, ph) = (32, 32)
+  let key = "mem:wait-picture/\{hash}/field"
   if @ui.has_image(key) {
     return Some(key)
   }

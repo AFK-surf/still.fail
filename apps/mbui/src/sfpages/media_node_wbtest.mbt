@@ -42,22 +42,28 @@ test "a retained picture keeps its identity while its flight changes crop, width
   t.draw()
   let tree = @ui.view_tree().unwrap()
   let image = fn() { tree.drawn().iter().find_first(fn(d) { d.image is Some(_) }).unwrap() }
+  let uv = fn() {
+    let i = t.drawn_instances().iter().find_first(fn(i) { i[5] == 4.0 }).unwrap()
+    (i[12], i[13], i[14], i[15])
+  }
   let id = image().id
-  assert_eq(image().image_in, Some(((90.0, 0.0, 60.0, 120.0), 0L)))
+  assert_eq(uv(), (-1.5, 0.0, 4.0, 1.0))
   mode.set(1)
   t.draw()
   assert_eq(image().id, id)
-  assert_eq(image().image_in, Some(((0.0, -180.0, 240.0, 480.0), 0L)))
+  assert_eq(uv(), (0.0, 0.375, 1.0, 0.25))
   mode.set(2)
   wide.set(180.0)
   t.draw()
   assert_eq(image().id, id)
-  assert_eq(image().image_in, Some(((0.0, 0.0, 180.0, 360.0), 0L)))
+  let (u, v, du, dv) = uv()
+  assert_eq((u, v, du), (0.0, 0.0, 1.0))
+  assert_true((dv - 1.0 / 3.0).abs() < 1.0e-12)
   assert_eq(image().radius, 9.0)
   assert_eq(t.drawn_images().length(), 1)
   mode.set(3)
   t.draw()
   assert_eq(image().id, id)
-  assert_true(image().image_cover)
+  assert_eq(image().image_fit.0, @view.FitCover)
   assert_eq(image().image_in, None)
 }

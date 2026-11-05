@@ -151,9 +151,7 @@ fn composer_extras_node(
               }
             }
             @sf.with_corner_remove_node(p, fn() { remove_label(v(), text(v(), "name")) }, corner,
-              fn() { writing_remove(src, w, id) }, width=fn() {
-                Some(dmin(@sf.file_card_w, flow.laid_size_told().map(fn(s) { dmax(0.0, s.0 - file_end()) }).unwrap_or(@sf.file_card_w)))
-              }, fn(inside) {
+              fn() { writing_remove(src, w, id) }, width=fn() { Some(@sf.file_card_w) }, fn(inside) {
                 let card = @sf.file_card_node(inside, fn() { waiting_card_info(v()) }, composer=true, corner~, open~,
                   open_shown=fn() { match waiting_as(v()) { Link => true; ByPath | AnyFile => field(v(), "ref") is Some(Object(_)); _ => false } },
                   retry=fn() { match waiting_as(v()) { Pasted => @sfbase.writing_paste_again(src, w, id); _ => writing_retry(src, w, id) } },

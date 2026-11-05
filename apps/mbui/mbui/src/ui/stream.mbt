@@ -745,7 +745,7 @@ fn Ctx::paint_stream(self : Ctx, i : Int, n : Node, alpha : Double) -> Bool {
     Some((pw, ph)) if !s.closed && s.id != 0 && pw > 0 && ph > 0 => (pw.to_double(), ph.to_double())
     _ => return true
   }
-  let (bx, by, bw, bh, fit) = match at {
+  let (bx, by, bw, bh, fit) : (Double, Double, Double, Double, Fit) = match at {
     Some((x, y, w, h)) => (n.x + x, n.y + y, w, h, FitFill)
     None => (n.x, n.y, n.fw, n.fh, n.fit)
   }

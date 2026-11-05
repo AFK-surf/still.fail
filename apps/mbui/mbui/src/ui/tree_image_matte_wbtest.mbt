@@ -73,3 +73,57 @@ test "a node's picture in a matte, the node's corners each its own: the frame dr
   let frames = t.drawn_instances().filter(fn(a) { a[5] == 4.0 })
   assert_eq(frames.map(fn(a) { (a[36], a[37], a[38], a[39]) }), [(12.0, 12.0, 0.0, 0.0)])
 }
+
+///|
+test "a retained picture fits its allocated box on resize without a geometry binding" {
+  let fits : Array[Fit] = [FitContain, FitCoverAt(0.0), FitCoverAt(0.5), FitCover]
+  for fit in fits {
+    let t = Tester::new(fn(_) { }, w=240.0, h=120.0, images=[("portrait", 200, 400)])
+    set_view_app(fn(root) {
+      root.box(fn(picture) {
+        picture.over(Is(true)).image(Is(Some(("portrait", "", 8192))))
+        .image_fits(Is((fit, 0x000000FFL))) |> ignore
+      }) |> ignore
+    })
+    for width in [240.0, 180.0] {
+      t.resize(width, 120.0)
+      let drawn = matte_drawn(t)
+      assert_eq(drawn.length(), 1)
+      let (x, y, w, h, u, v, du, dv, _, _, _) = drawn[0]
+      assert_eq((x, y, w, h), (0.0, 0.0, width, 120.0))
+      match fit {
+        FitContain => assert_true((u - (60.0 - width) / 120.0).abs() < 1.0e-12 && v == 0.0 && (du - width / 60.0).abs() < 1.0e-12 && dv == 1.0)
+        FitCoverAt(at) => assert_true(u == 0.0 && (v - (1.0 - 60.0 / width) * at).abs() < 1.0e-12 && du == 1.0 && (dv - 60.0 / width).abs() < 1.0e-12)
+        _ => assert_true(u == 0.0 && (v - (1.0 - 60.0 / width) / 2.0).abs() < 1.0e-12 && du == 1.0 && (dv - 60.0 / width).abs() < 1.0e-12)
+      }
+    }
+  }
+}
+
+///|
+test "a fractional paint mask clips the same content without changing its layout or the next sibling" {
+  let top = @signals.signal(0.25)
+  let t = Tester::new(fn(_) { }, w=240.0, h=120.0, images=[("field", 32, 32)])
+  set_view_app(fn(root) {
+    root.box(fn(p) {
+      p.over(Is(true)).image(Is(Some(("field", "", 64))))
+      .clip_fraction(By(fn() { Some((0.0, top.get(), 1.0, 0.75)) })) |> ignore
+    }) |> ignore
+    root.box(fn(sibling) { sibling.width(Is(Some(10.0))).height(Is(Some(10.0))).ground(Is(0xFF0000FFL)) |> ignore }) |> ignore
+  })
+  for h in [120.0, 200.0] {
+    t.resize(240.0, h)
+    for from in [0.25, 0.5] {
+      top.set(from)
+      t.draw()
+      let picture = t.drawn_instances().iter().find_first(fn(i) { i[5] == 4.0 }).unwrap()
+      assert_eq((picture[0], picture[1], picture[2], picture[3]), (0.0, 0.0, 240.0, h))
+      assert_eq((picture[12], picture[13], picture[14], picture[15]), (0.0, 0.0, 1.0, 1.0))
+      assert_eq((picture[16], picture[17], picture[18], picture[19]), (0.0, from * h, 240.0, 0.75 * h))
+      let sibling = t.drawn_instances().iter().find_first(fn(i) { i[5] == 0.0 && i[2] == 10.0 }).unwrap()
+      assert_true(sibling[16] <= sibling[0] && sibling[17] <= sibling[1] &&
+        sibling[18] >= sibling[0] + sibling[2] && sibling[19] >= sibling[1] + sibling[3],
+        msg="the following sibling is entirely outside the preceding picture's mask")
+    }
+  }
+}

@@ -7,7 +7,7 @@
 /// What a picture shows (`p`), as media_content picks it: a video's still (1) or its black ground till it has one (2);
 /// no preview (3); an image the core sends coming in (4); one sent from here, there at once (5); waited on in the
 /// colours its ThumbHash makes (6) or on the neutral ground (7).
-fn media_state(p : MediaPicture, w : Double, h : Double) -> Int {
+fn media_state(p : MediaPicture) -> Int {
   if p.kind == "video" {
     if p.key != "" && p.key != "!" { 1 } else { 2 }
   } else if p.key == "!" {
@@ -16,7 +16,7 @@ fn media_state(p : MediaPicture, w : Double, h : Double) -> Int {
     4
   } else if p.key != "" {
     5
-  } else if image_wait_colours(p.hash, w, h) is Some(_) {
+  } else if image_wait_colours(p.hash) is Some(_) {
     6
   } else {
     7
@@ -50,23 +50,34 @@ fn media_fitted_node(
   radius : () -> Double,
 ) -> Unit {
   parent.box(fn(m) {
-    m
-    .width(By(fn() { Some(width()) }))
-    .height(By(fn() { Some(height()) }))
-    .radius(By(radius))
-    |> ignore
+    m.width(By(fn() { Some(width()) })).height(By(fn() { Some(height()) })) |> ignore
+    media_fill_node(m, picture, fit, radius)
+  }) |> ignore
+}
+
+///|
+/// Media content fills the box allocated by its parent. No build or binding
+/// reads that box back: the renderer owns fit and reveal masks.
+fn media_fill_node(
+  parent : @view.View,
+  picture : () -> MediaPicture,
+  fit : () -> @ui.Fit,
+  radius : () -> Double,
+) -> Unit {
+  parent.box(fn(m) {
+    m.over(Is(true)).radius(By(radius)) |> ignore
     // (by its state, and one coming in by its picture too: another's way in its own, from its own decode)
     m.pick(fn() {
       let p = picture()
-      let state = media_state(p, width(), height())
+      let state = media_state(p)
       (state, if state == 4 { p.key } else { "" })
     }, fn(s, which) {
       let state = which.0
-      s.width(By(fn() { Some(width()) })).height(By(fn() { Some(height()) })).radius(By(radius)) |> ignore
+      s.over(Is(true)).radius(By(radius)) |> ignore
       match state {
         1 => {
           s.ground(Is(0x000000FFL)) |> ignore
-          media_image(s, fn() { picture().key }, width, height, fit, matte=Some(0x000000FFL))
+          media_image(s, fn() { picture().key }, fit, matte=Some(0x000000FFL))
         }
         2 => s.ground(Is(0x000000FFL)) |> ignore
         3 => {
@@ -79,11 +90,11 @@ fn media_fitted_node(
           )
           |> ignore
         }
-        4 => media_reveal_node(s, picture, width, height, fit)
-        5 => media_image(s, fn() { picture().key }, width, height, fit)
+        4 => media_reveal_node(s, picture, fit)
+        5 => media_image(s, fn() { picture().key }, fit)
         6 =>
           s.image(By(fn() {
-            image_wait_colours(picture().hash, width(), height()).map(fn(k) { (k, "", 64) })
+            image_wait_colours(picture().hash).map(fn(k) { (k, "", 64) })
           }))
           |> ignore
         _ => s.ground(By(fn() { @ui.tree_theme().color(Neutral) })) |> ignore
@@ -99,36 +110,14 @@ fn media_fitted_node(
 fn media_image(
   s : @view.View,
   key : () -> String,
-  width : () -> Double,
-  height : () -> Double,
   fit : () -> @ui.Fit,
   matte? : Int64? = None,
 ) -> Unit {
   s
   .image(By(fn() { Some((key(), "", image_px_most.to_int())) }))
   .image_fades(Is(false))
+  .image_fits(By(fn() { (fit(), matte.unwrap_or(0L)) }))
   |> ignore
-  s.image_covers(By(fn() { fit() is FitCover })) |> ignore
-  s.image_in(By(fn() {
-    let mode = fit()
-    match mode {
-      FitContain | FitCoverAt(_) => {
-        match @ui.image_natural(key()) {
-          Some((iw, ih)) if iw > 0.0 && ih > 0.0 => {
-            let (w, h) = (width(), height())
-            let (k, at) = match mode {
-              FitCoverAt(y) => (dmax(w / iw, h / ih), dclamp(y, 0.0, 1.0))
-              _ => (dmin(w / iw, h / ih), 0.5)
-            }
-            let (dw, dh) = (iw * k, ih * k)
-            Some((((w - dw) / 2.0, (h - dh) * at, dw, dh), matte.unwrap_or(0L)))
-          }
-          _ => None
-        }
-      }
-      _ => None
-    }
-  })) |> ignore
 }
 
 ///|
@@ -140,12 +129,9 @@ fn media_image(
 fn media_reveal_node(
   s : @view.View,
   picture : () -> MediaPicture,
-  width : () -> Double,
-  height : () -> Double,
   fit : () -> @ui.Fit,
 ) -> Unit {
-  let px = fn() { dmin(dmax(width(), height()) * @ui.current().scale, image_px_most) }
-  let ready = fn() { @ui.current().image_ready(picture().key, px()) }
+  let ready = fn() { @ui.image_available(picture().key) }
   // (when it came in: none, there at once; its way in's end the moment it is all in)
   let first = @signals.untracked(fn() { ready() || picture().held })
   let came : @signals.Signal[Double?] = @signals.signal(if first { Some(-1.0e18) } else { None }, same=fn(a, b) { a == b })
@@ -192,20 +178,16 @@ fn media_reveal_node(
   s.box(fn(i) {
     i
     .over(Is(true))
-    .width(By(fn() { Some(width()) }))
-    .height(By(fn() { Some(height()) }))
     .alpha(By(fn() { if ready() { 1.0 } else { 0.0 } }))
     .scale(By(fn() { 1.0 + reveal_grow * (1.0 - e()) }))
     |> ignore
-    media_image(i, fn() { picture().key }, width, height, fit)
+    media_image(i, fn() { picture().key }, fit)
   })
   |> ignore
   // (the frost over it as it comes, none under a quarter deep)
   s.show(fn() { ready() && reveal_blur * (1.0 - e()) > reveal_blur_least }, fn(f) {
     f
     .over(Is(true))
-    .width(By(fn() { Some(width()) }))
-    .height(By(fn() { Some(height()) }))
     .glass(By(fn() { Some(@ui.Glass::frosted(blur=reveal_blur * (1.0 - e()), tint=0L, solid=0L, contained=true)) }))
     |> ignore
   })
@@ -213,50 +195,32 @@ fn media_reveal_node(
   // foot, in steps on the screen's pixels, and all under it)
   s.show(fn() { waited() > 0.0 }, fn(w) {
     w.over(Is(true)) |> ignore
-    let likeness = fn() { image_wait_colours(picture().hash, width(), height()) }
-    let px_of = fn(y : Double) { (y * @ui.current().scale).round() / @ui.current().scale }
-    // (step k's top and foot and how much of it shows; k == reveal_steps: all under the band)
+    let likeness = fn() { image_wait_colours(picture().hash) }
+    // The mask moves in unit coordinates. The image always occupies the full
+    // allocated box; clipping it does no layout work and preserves its colour field.
     let step = fn(k : Int) -> (Double, Double, Double) {
-      let h = height()
       if !ready() {
-        if k == reveal_steps { (0.0, h, 1.0) } else { (0.0, 0.0, 0.0) }
+        if k == reveal_steps { (0.0, 1.0, 1.0) } else { (0.0, 0.0, 0.0) }
       } else {
-        let band = h * 0.5
-        let top = -band + (h + band) * e()
+        let band = 0.5
+        let top = -band + (1.0 + band) * e()
         let one = band / reveal_steps.to_double()
-        let (y0, y1, a) = if k == reveal_steps {
-          (top + band, h, 1.0)
+        if k == reveal_steps {
+          (top + band, 1.0, 1.0)
         } else {
           (top + k.to_double() * one, top + (k + 1).to_double() * one, (k.to_double() + 0.5) / reveal_steps.to_double())
         }
-        (px_of(dmax(0.0, y0)), px_of(dmin(h, y1)), a)
       }
     }
     for k in 0..=reveal_steps {
       w.box(fn(strip) {
-        strip
-        .over(Is(true))
-        .clips(Is(true))
-        .width(By(fn() { Some(width()) }))
-        .offset(By(fn() { (0.0, step(k).0) }))
-        .height(By(fn() {
-          let (y0, y1, _) = step(k)
-          Some(dmax(0.0, y1 - y0))
-        }))
+        strip.over(Is(true))
+        .clip_fraction(By(fn() { let (top, foot, _) = step(k); Some((0.0, top, 1.0, foot)) }))
         .alpha(By(fn() { step(k).2 * waited() }))
+        .image(By(fn() { likeness().map(fn(l) { (l, "", 64) }) }))
+        .ground(By(fn() { if likeness() is Some(_) { 0L } else { @ui.tree_theme().color(Neutral) } }))
         |> ignore
-        strip.box(fn(inner) {
-          inner
-          .width(By(fn() { Some(width()) }))
-          .height(By(fn() { Some(height()) }))
-          .offset(By(fn() { (0.0, -step(k).0) }))
-          .image(By(fn() { likeness().map(fn(l) { (l, "", 64) }) }))
-          .ground(By(fn() { if likeness() is Some(_) { 0L } else { @ui.tree_theme().color(Neutral) } }))
-          |> ignore
-        })
-        |> ignore
-      })
-      |> ignore
+      }) |> ignore
     }
   })
 }
