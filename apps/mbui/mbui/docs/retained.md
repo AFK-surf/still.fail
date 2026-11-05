@@ -303,6 +303,71 @@ page moved makes nothing again; a list's rows reused and let go as they should b
 timer or native resource; frames at 60 Hz, 120 Hz and a jump to the moment come out the same. A renderer may go through
 the records kept to draw them; nothing finds what changed by working the tree out whole or comparing it.
 
+## Layout read back: how rule 10 is made so (2026-11-05)
+
+Today a size or a place layout worked out is a signal (`View::laid_size_told`, `laid_window_told`,
+`drawn_window_told`, the tree's `sizes_told`), read by bindings, `computed` and `reacts` that change the structure, a
+property layout reads, or where a list is scrolled to; `Tree::laid_out` then calls itself until nothing more is marked
+(up to `laid_passes_most`), and a change settled in the middle of it turns the clock to its moment and back. Told a
+frame later instead, the loop is only moved between frames: the frames do not stop, and what they show depends on how
+many there were (rule 9). So none of it is a signal any more, in a frame or after it. What layout works out is read in
+three places, each untracked, and nowhere else:
+
+1. **Paint, this frame's.** A place property (`offset`, `drawn_off`, `scale`, `alpha`, `radius`) may be given as
+   `Drawn(fn(laid) { … })`, a third `Live` beside `Is` and `By`: worked out as the frame is painted, after its one
+   layout, reading where nodes were laid out this frame through `laid` (`Laid::rect(v)`, `Laid::size(v)`). A signal it
+   reads, or a node it read laid out elsewhere, draws its layer again (rule 16), never lays anything out. What a flight lands on, a preview beside its link, a
+   ring around what is picked, a thumbnail following its node: paint, drawn where things are in the frame shown, a frame
+   behind nothing.
+2. **The hand and the next event, the frame on screen's.** `View::shown_rect()` / `shown_size()`, plain values of the
+   frame last drawn, read in an event's handler and in hit tests (a menu opened beside what was pressed, where a row was
+   for a jump, whether the pointer is on a card). A menu that stays beside its anchor is placed by `View::beside` in
+   layout, not by a rectangle read once.
+3. **The layout of what holds both.** Where one size decides another, their nearest common holder lays both out:
+   `View::layout_box` (layout_box.mbt, Compose's `Layout`/`SubcomposeLayout`) is given its constraints, makes the
+   children it asks for by key, measures and places them, all in one pass. On it:
+   - *room down, size up*: an arrangement by the width given (窄排法 / 宽排法, a segment's words fitted to its track, a
+     table's columns, a side panel's width, what a pane holds by its width) is a key chosen from the constraints and the
+     child of that key made; `View::by_room(pick, make)` is the case of one child;
+   - *what one is laid out at, from another measured first* (the composer measured, the list given what is left; a
+     header's copy key at the header's foot; a box opening to a share of what it holds measured whole);
+   - *filling what holds it* needs nothing new: `over(Is(true))` is laid out over all of its holder, `width_share(1.0)`
+     as wide, `Within(n)` as wide as `n` or the holder where that is less; `min_width` and `max_width` take a `Dim` as
+     `width` does, so a card between 360 and 560 within its room is said, not read back;
+   - *a long list* (rule 11) lays out its rows from its anchor in its own layout box (list_anchor.mbt): which rows are
+     made, where they are, how far it may scroll, whether it is at its end, all from one pass; what it measured last
+     time (its `ListLaid`, the heights it kept by key) is its own record, read by its next layout, never a signal; a row's
+     room (`ListRoom`: offset, cut, fade) is set on the row's holder by the list as it places it, for paint. Going to a
+     row, keeping the focused field in sight, following the end: an intent an event sets on the list's state, taken by
+     its next layout (`ListState::reveal(key, align)`, `follow_end`), not a scroll set by a reaction to a rectangle.
+
+What waits for a node "to be laid out" (a sheet opened once the page is there, a keyboard asked for once the field is)
+waits for nothing that is the tree's: it is done at its cause; where the host must have the node drawn first, the node's
+`on_first_drawn` is an event on the timeline (rule 8) at the frame that drew it, said once.
+
+**The frame.** `Tree::laid_out` runs once a frame, at the frame's moment: the events due by then committed first at
+their own (rule 9), then the bindings, then layout, then paint. No settling inside it, no clock turned there and back.
+Gone with the signals: `laid_size_told`, `laid_window_told`, `drawn_window_told`, `Tree::sizes_told` and the nodes'
+size, rect and drawn-rect cells; `View::once_laid_out`; `laid_passes_most` and `laid_marked_at`; the clock turned
+inside layout (`settle_now`'s, #4106) and each place given the frame's moment by hand (#4025, #4113); a list's rows told
+their room (#4095's `rooms_told`) and its extent held up from below (#4115's `extent_floor`); what a hand-off from the
+host shuts and opens of layout reads (`shut_layout_reads`, `reads_own`: #4105, #4109), which the rule below holds
+everywhere. An old view hosted still lays out the old way, its passes counted as owed until it is gone (rule 10).
+
+**Wrong is red.** A size or a place of layout's read where something tracks (a build, a `By`, a `computed`, a
+`reacts`, a layout box's `place` outside its own children) is a fault naming what read it and which node; `laid_out`
+entered a second time in a frame is a fault; detlint's `layout-read-back` counts what is left and only falls, to 0. In
+every Tester: one layout pass a frame, and the frames stop once nothing is due (the last input and the motions it set
+off over, a few frames on: no frame more is asked for).
+
+**The way there,** each a PR, CI at its baseline, the six steps' table no worse, one pass a frame where the step
+reaches:
+1. the framework's: `Drawn`, `Laid`, `shown_rect`, `by_room`, `min_width`/`max_width` of a `Dim`, the list's intents and
+   its rooms set in its layout, `on_first_drawn`; the old interfaces kept, marking nothing in a frame (no pass more);
+2. the app's readers moved, by the inventory (85 lines: paint 16, the hand 6, a holder's layout 60, a wait 3);
+3. the faults on, the old interfaces gone;
+4. the passes' cap, `once_laid_out` and the moments said by hand gone; `laid_out` once.
+
 ## Held by the tests
 
 The Tester keeps its one check, said another way: whatever a frame did by what was marked, the same state made into
