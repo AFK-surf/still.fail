@@ -65,7 +65,7 @@ function written(r: Request, by: Person, fields: Record<string, string>): Item {
   );
 }
 
-function harness(lock: () => ReturnType<typeof world>["state"] | null, starter = "alice@x.com") {
+function harness(lock: (ws: string | null) => ReturnType<typeof world>["state"] | null, starter = "alice@x.com") {
   const db = new DatabaseSync(":memory:");
   const vaults = new VaultStore(db);
   const plain = new PlainStore(db);
@@ -74,9 +74,10 @@ function harness(lock: () => ReturnType<typeof world>["state"] | null, starter =
   const withdrawn: string[] = [];
   let hidden = false;
   let onPost: (() => void) | null = null;
+  let sessionWs: string | null = null;
   const hub = {
     store: {
-      getSession: (k: string) => (k === "s1" ? { key: "s1", ws: null, workspace: "/tmp", archivedAt: null } : null),
+      getSession: (k: string) => (k === "s1" ? { key: "s1", ws: sessionWs, workspace: "/tmp", archivedAt: null } : null),
       starter: () => starter.toLowerCase(),
       latestThread: () => ({ connect: "c", thread: { id: 1, channel: "CHAT", threadTs: "1.0", surface: STILLFAIL_SURFACE } }),
       sessionThreadById: () => ({ connect: "c", thread: { id: 1, channel: "CHAT", threadTs: "1.0", surface: STILLFAIL_SURFACE } }),
@@ -92,14 +93,14 @@ function harness(lock: () => ReturnType<typeof world>["state"] | null, starter =
   };
   const dir = mkdtempSync(join(tmpdir(), "vault-save-"));
   // The chats' browsers: the cookies each was asked for (`jar`, as JSON) and the sign-ins put in.
-  const browser = { jar: "[]", at: 1_000_000, asked: [] as [string, string[], boolean][], signedIn: [] as [string, { request: string; sites: string[]; cookies: string; until: number }][], extended: [] as [string, string, number][] };
+  const browser = { jar: "[]", at: 1_000_000, asked: [] as [string, string[], boolean][], signedIn: [] as [string, { request: string; workspace?: string; sites: string[]; cookies: string; until: number }][], extended: [] as [string, string, number][] };
   const browsers = {
     cookies: async (session: string, sites: string[], station: boolean) => (browser.asked.push([session, sites, station]), browser.jar),
     signIn: async (session: string, d: { request: string; sites: string[]; cookies: string; until: number }) => void browser.signedIn.push([session, d]),
     extendSignIn: (session: string, request: string, until: number) => void browser.extended.push([session, request, until]),
   };
   const make = () => new Secrets({ db, vaults, plain, home: () => WS, hub: hub as never, data: dir, lock, now: () => browser.at, browsers });
-  return { db, vaults, plain, notified, cards, withdrawn, dir, make, browser, secrets: make(), hideCard: () => { hidden = true; }, occupyCard: () => { cards.push({ text: "another question", card: { type: "text" } }); hidden = false; }, onPost: (f: (() => void) | null) => { onPost = f; } };
+  return { db, vaults, plain, notified, cards, withdrawn, dir, make, browser, secrets: make(), hideCard: () => { hidden = true; }, occupyCard: () => { cards.push({ text: "another question", card: { type: "text" } }); hidden = false; }, onPost: (f: (() => void) | null) => { onPost = f; }, setSessionWs: (ws: string | null) => { sessionWs = ws; } };
 }
 
 /// What the agent was told of request `asked` once decided: secret_save answers at once that it waits, and the decision
@@ -486,6 +487,7 @@ test("a sign-in to keep: its sites' cookies read from the chat's browser (or the
     assert.match(await decided(h, asked), /Kept/);
     // Kept, the chat that asked has it in its browser, for as long as its grant lasts.
     assert.deepEqual(h.browser.signedIn.map(([s, d]) => [s, d.request, d.sites, d.cookies]), [["s1", r.id, ["github.com"], h.browser.jar]]);
+    assert.equal(h.browser.signedIn[0]![1].workspace, WS);
     await assert.rejects(h.secrets.run("s1", { grant: r.id, command: "true", cwd: h.dir }), /is not run with/);
     // Asked again (another chat would): its card says where it goes, and it goes in once granted.
     void h.secrets.ask("s1", { item: "GitHub · bob", reason: "看 PR" });
@@ -505,6 +507,29 @@ test("a sign-in to keep: its sites' cookies read from the chat's browser (or the
     // A context made anew: what is still granted goes in again.
     h.secrets.signInAgain("s1");
     assert.equal(h.browser.signedIn.length, 4);
+    assert.ok(h.browser.signedIn.every(([, d]) => d.workspace === WS));
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a vault sign-in returns to its original workspace after its chat moves", () => {
+  const w = world();
+  const h = harness((ws) => ws === null || ws === WS ? w.state : null);
+  try {
+    h.vaults.putVault(w.vault);
+    h.vaults.putBox(w.cert(w.alice));
+    const item = `i_${"0".repeat(26)}`;
+    h.db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES(?,?,?,?,?)").run(WS, "request", "s1", "granted", JSON.stringify({
+      ws: WS, id: "request", session: "s1", vault: VAULT, item, owner: "alice@x.com", mode: "browser", status: "granted",
+    }));
+    h.setSessionWs("another-workspace");
+    const cookies = JSON.stringify([{ name: "session", value: "renewed", domain: "github.com", path: "/" }]);
+    h.secrets.renewed("s1", "request", cookies, WS);
+    const row = h.db.prepare("SELECT body FROM vault_renewals WHERE ws = ? AND item = ?").get(WS, item) as { body: string } | undefined;
+    assert.ok(row);
+    const renewal = JSON.parse(row.body) as { id: string; sealed: { secret: string }[] };
+    assert.deepEqual(JSON.parse(Buffer.from(openSeal(w.alice.box.priv, renewal.sealed[0]!.secret, saveContext(WS, renewal.id))).toString()), { cookies });
   } finally {
     rmSync(h.dir, { recursive: true, force: true });
   }

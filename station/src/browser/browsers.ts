@@ -20,7 +20,7 @@ import type { TabInfo } from "./tabs.ts";
 
 /// A sign-in taken out of a chat's context as its grant ended: its cookies (and passkeys) as they were then (the site may
 /// have given new ones since), as the vault keeps them (signins.ts `keptOf`), for it to keep (secrets.ts `renewed`).
-export type TakenOut = (session: string, request: string, cookies: string) => void;
+export type TakenOut = (session: string, request: string, cookies: string, workspace?: string) => void;
 
 /// Each chat's context in the Chrome that runs, kept beside it (<data>/browser/contexts.json) so the next station
 /// process takes them up with the browser: Chrome's DevTools address (which Chrome they are of) and, by session, its
@@ -239,12 +239,12 @@ export class Browsers {
 
   /// A sign-in granted (`request`): its cookies and passkeys of `sites` put into `session`'s chat's context (the browser
   /// started if it is not running), taken out again at `until` (unix seconds).
-  async signIn(session: string, d: { request: string; sites: string[]; cookies: string; until: number }): Promise<void> {
+  async signIn(session: string, d: { request: string; workspace?: string; sites: string[]; cookies: string; until: number }): Promise<void> {
     const state = stateOf(d.cookies);
     const cookies = siteCookies(state.cookies, d.sites);
     const passkeys = sitePasskeys(state.passkeys, d.sites);
     const ctx = await this.context(session);
-    const x: SignedIn = { request: d.request, sites: d.sites, until: d.until };
+    const x: SignedIn = { request: d.request, ...(d.workspace === undefined ? {} : { workspace: d.workspace }), sites: d.sites, until: d.until };
     this.#signedIn.set(session, [...(this.#signedIn.get(session) ?? []).filter((y) => y.request !== d.request), x]);
     this.#write();
     if (cookies.length > 0) await this.station.send("Storage.setCookies", { browserContextId: ctx, cookies });
@@ -272,7 +272,7 @@ export class Browsers {
       if (cookies.length > 0) await this.station.send("Storage.setCookies", { browserContextId: ctx, cookies: expired(cookies) });
       const passkeys = await keys.takeOut(ctx, x.sites);
       log.info("browser", "a sign-in taken out of a chat's context as its grant ended", { session, request: x.request, sites: x.sites });
-      if (cookies.length > 0 || passkeys.length > 0) this.#takenOut(session, x.request, keptOf({ cookies, passkeys }));
+      if (cookies.length > 0 || passkeys.length > 0) this.#takenOut(session, x.request, keptOf({ cookies, passkeys }), x.workspace);
     }
   }
 
