@@ -178,6 +178,37 @@ test("old widget preparation skips edits that are not messages", () => {
   assert.deepEqual([visited(40), visited(400)], [1, 1]);
 });
 
+for (const missing of [null, "entries_said", "entries_letters"] as const) {
+  test(`old widget preparation keeps ordinary and letter messages${missing ? ` without ${missing}` : ""}`, () => {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      beforeIndex(db);
+      const thread = store.openThread("ember", "EMBER", "old-letters", null, null).id;
+      store.joinThread(thread, "a", "ember");
+      const path = "/w/item.html", files = (name: string) => JSON.stringify([{ path, name }]);
+      const put = db.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,at,attachments,letter)
+        VALUES(?,?,?,?,'agent','a',?,?,?)`);
+      put.run(thread, 1, "message", null, 1, files("ordinary"), null);
+      put.run(thread, 2, "edit", 1, 2, files("edited"), null);
+      put.run(thread, 3, "message", null, 3, files("letter"), "{}");
+      put.run(thread, 4, "edit", 3, 4, files("letter edited"), "{}");
+      put.run(thread, 5, "message", null, 5, "[]", null);
+      if (missing) db.exec(`DROP INDEX ${missing}`);
+      installWidgetSources(db);
+      let batches = 0;
+      for (;;) {
+        const result = widgetSourcesStep(db, thread, 2);
+        assert.ok(result.visited <= 2);
+        batches++;
+        if (result.done) break;
+        assert.ok(batches < 10);
+      }
+      assert.deepEqual(plain(db.prepare(WIDGET_SOURCE).get("a", path)), plain(db.prepare(original).get("a", path)));
+      assert.equal((db.prepare(WIDGET_SOURCE).get("a", path) as { name: string }).name, "letter edited");
+    } finally { store.close(); }
+  });
+}
+
 test("an edit that leaves the effective files unchanged does not rewrite them", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
