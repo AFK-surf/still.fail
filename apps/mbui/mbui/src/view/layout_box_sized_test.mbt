@@ -71,3 +71,47 @@ test "panic: a layout box sized by what it holds that says no height aborts" {
   })
   tree.frame(390.0, 844.0) |> ignore
 }
+
+///|
+test "a layout box sized by what it holds, in a row that scrolls across: as tall as it says, what holds it as tall" {
+  let probe = fn(across : Bool) {
+    let at : Ref[(@view.View, @view.View)?] = Ref(None)
+    let tree = @view.Tree::new(fn(root) {
+      root.box(fn(col) {
+        let body = fn(held : @view.View) {
+          let b = held.box(fn(beside) {
+            beside.min_width(Is(Some(424.0))) |> ignore
+            beside.box(fn(grid) {
+              grid.layout_box(
+                Is(()),
+                fn(l, _) {
+                  let a = l.child("a", fn(v) { v.height(Is(Some(70.0))) |> ignore })
+                  l.measure(a, l.width) |> ignore
+                  l.place(a, 0.0, 0.0)
+                  l.size_to(70.0)
+                },
+                sized=true,
+              )
+              |> ignore
+            })
+            |> ignore
+          })
+          at.val = Some((held, b))
+        }
+        if across {
+          col.box(fn(outer) { outer.scrolls(@view.Scroll::across(), fn(held) { body(held) }) |> ignore }) |> ignore
+        } else {
+          col.box(fn(r) { r.row(Is(true)).box(fn(held) { held.shrink(Is(0.0)) |> ignore; body(held) }) |> ignore }) |> ignore
+        }
+      })
+      |> ignore
+    })
+    tree.frame(300.0, 844.0, now=0.0) |> ignore
+    let (held, b) = at.val.unwrap()
+    let out = (held.rect().3, b.rect().3)
+    tree.dispose()
+    out
+  }
+  assert_eq(probe(false), (70.0, 70.0), msg="in a row")
+  assert_eq(probe(true), (70.0, 70.0), msg="in a row that scrolls across")
+}

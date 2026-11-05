@@ -296,6 +296,14 @@ fn touch(node : Node) -> Unit {
 let out_h : Ref[Double] = { val: 0.0 }
 
 ///|
+/// Whether what was just sized held one sized by what it holds (Node's `sized_by_children`) asked without its width:
+/// as tall as nothing then, its children not laid out to say it (layout_children's), so what holds it came out of a
+/// size its content has not given. Such a size is the probe's alone, kept for no other ask: one with the width it came
+/// out at (reusable's) would else take its height, nothing (a box of a least width holding a table laid out by its
+/// room came out as wide as that least and nothing tall, and was taken so when asked at that width, 2026-11-05).
+let vague : Ref[Bool] = { val: false }
+
+///|
 /// The space between items distribute found, beside the lead it returns.
 let out_b : Ref[Double] = { val: 0.0 }
 
@@ -601,8 +609,12 @@ fn size_node(
     }
   }
   counters[0] = counters[0] + 1
+  let vague_before = vague.val
+  vague.val = false
   let w = size_uncached(node, kw, kh, aw, ah, cb_w, cb_h, perform)
   let h = out_h.val
+  let was_vague = vague.val
+  vague.val = vague_before || was_vague
   if perform {
     node.p_ok = true
     node.p_gen = generation.val
@@ -620,6 +632,11 @@ fn size_node(
       out_h.val = h
       return w
     }
+  }
+  // (a size of a probe that left a child sized by what it holds unasked: kept for none)
+  if was_vague {
+    out_h.val = h
+    return w
   }
   let mut n = node.cache_n
   if n >= 8 * 16 {
@@ -699,6 +716,10 @@ fn size_uncached(
         let said = layout(fmax(w - pbw, 0.0), undef, b.bor_l + b.pad_l, b.bor_t + b.pad_t)
         out_h.val = clamp_size((if known(said) { said } else { 0.0 }) + pbh, b.min_h, b.max_h)
         return w
+      }
+      // (asked without its width, it says nothing of its height: what holds it is sized so for that ask alone)
+      if node.sized_by_children && !known(w) && !known(h) {
+        vague.val = true
       }
       // A viewport's intrinsic content is empty; its parent must give it the final bounds (flex share, explicit
       // dimensions or insets). Only that final layout is allowed to subcompose its visible children.
