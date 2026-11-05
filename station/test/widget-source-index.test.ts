@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { constants, DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { Store } from "../src/store/store.ts";
-import { installWidgetSources, WIDGET_SOURCE, widgetSourcesReady, widgetSourcesStep } from "../src/store/widget-sources.ts";
+import { installWidgetSources, WIDGET_SOURCE, WIDGET_SOURCE_POSITIONS_FIRST, WIDGET_SOURCE_POSITIONS_NEXT, widgetSourcesReady, widgetSourcesStep } from "../src/store/widget-sources.ts";
 
 const original = `SELECT t.channel, t.thread_ts, json_extract(a.value, '$.name') AS name FROM merged m
   JOIN threads t ON t.id = m.thread JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = ?1, json_each(m.attachments) a
@@ -178,7 +178,7 @@ test("old widget preparation skips edits that are not messages", () => {
   assert.deepEqual([visited(40), visited(400)], [1, 1]);
 });
 
-test("old widget preparation orders message numbers numerically across batches", () => {
+for (const missing of [null, "entries_said", "entries_letters"] as const) test(`old widget preparation orders message numbers numerically across batches${missing ? ` without ${missing}` : ""}`, () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
     beforeIndex(db);
@@ -191,10 +191,25 @@ test("old widget preparation orders message numbers numerically across batches",
       const files = n === 2 || n === 9 ? JSON.stringify([{ path, name: `source-${n}` }]) : "[]";
       put.run(thread, n, n, files);
     }
+    if (missing) db.exec(`DROP INDEX ${missing}`);
     installWidgetSources(db);
     while (!widgetSourcesStep(db, thread, 3).done) {}
     assert.deepEqual(plain(db.prepare(WIDGET_SOURCE).get("a", path)), plain(db.prepare(original).get("a", path)));
     assert.equal((db.prepare(WIDGET_SOURCE).get("a", path) as { name: string }).name, "source-9");
+  } finally { store.close(); }
+});
+
+test("old widget preparation seeks the ordinary and legacy message indexes", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    for (const [sql, args] of [
+      [WIDGET_SOURCE_POSITIONS_FIRST, [1, "100", 2]],
+      [WIDGET_SOURCE_POSITIONS_NEXT, [1, "1", "100", 2]],
+    ] as const) {
+      const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((row) => row.detail).join("\n");
+      assert.match(plan, /SEARCH entries USING (?:COVERING )?INDEX entries_said \(thread=\?/);
+      assert.match(plan, /SEARCH entries USING (?:COVERING )?INDEX entries_letters \(thread=\?/);
+    }
   } finally { store.close(); }
 });
 
@@ -271,8 +286,8 @@ test("old message numbers beyond JavaScript's safe integers are prepared without
     const path = "/w/item.html", files = JSON.stringify([{ path, name: "wide" }]);
     const put = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
       VALUES(?,CAST(? AS INTEGER),'message','agent','a',?,?)`);
-    put.run(thread, "-9007199254740993", 1, "[]");
-    put.run(thread, "9007199254740993", 2, files);
+    put.run(thread, "-9223372036854775808", 1, "[]");
+    put.run(thread, "9223372036854775807", 2, files);
     installWidgetSources(db);
     assert.deepEqual(widgetSourcesStep(db, thread, 1), { done: false, visited: 1 });
     assert.deepEqual(widgetSourcesStep(db, thread, 1), { done: false, visited: 1 });
@@ -329,7 +344,7 @@ test("a writer between the old-position read and batch commit cannot be missed",
       get(target, key) {
         if (key === "prepare") return (sql: string) => {
           const statement = target.prepare(sql);
-          if (!sql.startsWith("SELECT CAST(n AS TEXT) AS n FROM entries")) return statement;
+          if (!sql.startsWith("SELECT CAST(n AS TEXT) AS n FROM")) return statement;
           return new Proxy(statement, {
             get(s, name) {
               if (name === "all") return (...args: Parameters<typeof s.all>) => {

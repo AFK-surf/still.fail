@@ -49,7 +49,7 @@ import { installSessionUpJobs, SESSION_UP_JOB, SESSION_UP_JOBS, sessionUpJobsRea
 import { installSessionCounts, sessionCountsReady, SESSION_COUNT_TOTAL, SESSION_COUNT_CONNECT,
   SESSION_COUNTS, SESSION_COUNTS_VISIBLE, SESSION_COUNTS_HOME } from "./session-counts.ts";
 import { installPostBlocks, PostBlocksUnavailable, POST_BLOCK_SIZE, type PostPosition } from "./post-blocks.ts";
-import { checkWidgetSources, installWidgetSources, WIDGET_SOURCE, WidgetSourcesUnavailable } from "./widget-sources.ts";
+import { checkWidgetSources, installWidgetSources, WIDGET_SOURCE, WIDGET_SOURCE_ORIGINAL, WidgetSourcesUnavailable } from "./widget-sources.ts";
 import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
 import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
 
@@ -2566,12 +2566,12 @@ export class Store {
         LEFT JOIN widget_source_scopes s ON s.thread=ts.thread
         WHERE ts.session=? AND COALESCE(s.complete,0)=0`, session).map((row) => row.thread as number);
       if (missing.length !== 0) throw new WidgetSourcesUnavailable(missing);
-      if (this.#one(`SELECT 1 FROM thread_sessions ts JOIN threads t ON t.id=ts.thread
+      const unusual = this.#one(`SELECT 1 FROM thread_sessions ts JOIN threads t ON t.id=ts.thread
         CROSS JOIN widget_source_invalid i ON i.thread=ts.thread
-        WHERE ts.session=? LIMIT 1`, session)) throw new Error("malformed JSON in a message's attachments");
+        WHERE ts.session=? LIMIT 1`, session) !== undefined;
       return untold.map(({ path, model }) => {
         const found = this.#one(
-          WIDGET_SOURCE,
+          unusual ? WIDGET_SOURCE_ORIGINAL : WIDGET_SOURCE,
           session, path,
         );
         const base: string = path.split(/[/\\]/).pop() ?? path;

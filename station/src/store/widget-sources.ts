@@ -18,6 +18,12 @@ export const WIDGET_SOURCE = `SELECT t.channel, t.thread_ts, i.name FROM thread_
     WHERE x.thread = ts.thread AND x.path = ?2 ORDER BY x.at DESC, x.n, x.slot LIMIT 1
   ) WHERE ts.session = ?1 ORDER BY i.at DESC, ts.rowid LIMIT 1`;
 
+// Noncanonical JSON accepted by a newer SQLite cannot be indexed safely by an older writer's json_valid(). Keep the
+// original lookup for those threads; malformed JSON continues to fail there as it did before.
+export const WIDGET_SOURCE_ORIGINAL = `SELECT t.channel, t.thread_ts, json_extract(a.value, '$.name') AS name FROM merged m
+  JOIN threads t ON t.id = m.thread JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = ?1, json_each(m.attachments) a
+  WHERE m.attachments IS NOT NULL AND json_extract(a.value, '$.path') = ?2 ORDER BY m.created_at DESC LIMIT 1`;
+
 const candidates = (row: string) => `SELECT ${row}.thread AS thread, ${row}.n AS n WHERE ${row}.kind = 'message'
   UNION SELECT ${row}.thread, ${row}.target WHERE ${row}.target IS NOT NULL`;
 const conflicts = `SELECT e.thread, e.n FROM entries e WHERE e.thread = NEW.thread AND e.n = NEW.n AND e.kind = 'message'
@@ -56,7 +62,7 @@ const validAttachments = `CASE WHEN json_valid(m.attachments) THEN m.attachments
 const pathOf = `CASE WHEN json_valid(a.value) THEN json_extract(a.value, '$.path') END`;
 const nameOf = `CASE WHEN json_valid(a.value) THEN json_extract(a.value, '$.name') END`;
 
-// A malformed attachment was already an error in the old lookup. Remember it without making the write itself fail.
+// Remember malformed or noncanonical attachments without making the write itself fail.
 const invalid = `(m.attachments IS NOT NULL AND (NOT json_valid(m.attachments) OR EXISTS
   (SELECT 1 FROM json_each(${validAttachments}) a WHERE a.value IS NOT NULL AND NOT json_valid(a.value))))`;
 const insertRows = (messages: string) => `INSERT INTO widget_source_rows (thread,n,slot,path,at,name)
@@ -135,6 +141,23 @@ const scopeOf = (db: DatabaseSync, thread: number): Scope | undefined => db.prep
   "SELECT CAST(last_n AS TEXT) AS last_n, CAST(end_n AS TEXT) AS end_n, complete FROM widget_source_scopes WHERE thread=?",
 ).get(thread) as Scope | undefined;
 
+// Keep numeric ordering inside the bounded selection and cast only afterwards, so JavaScript cannot round a cursor.
+// The letter index also contains rare non-message entries; take those as candidates so each batch stays bounded.
+const positionQuery = (after: boolean, indexed: boolean): string => {
+  const range = after ? "thread=?1 AND n>CAST(?2 AS INTEGER) AND n<=CAST(?3 AS INTEGER)" : "thread=?1 AND n<=CAST(?2 AS INTEGER)";
+  const limit = after ? "?4" : "?3";
+  if (!indexed) return `SELECT CAST(entries.n AS TEXT) AS n FROM entries WHERE ${range} ORDER BY entries.n LIMIT ${limit}`;
+  return `SELECT CAST(n AS TEXT) AS n FROM (
+    SELECT n FROM entries INDEXED BY entries_said WHERE ${range} AND kind='message' AND letter IS NULL
+    UNION ALL SELECT n FROM entries INDEXED BY entries_letters WHERE ${range} AND letter IS NOT NULL
+    ORDER BY n LIMIT ${limit}
+  )`;
+};
+export const WIDGET_SOURCE_POSITIONS_FIRST = positionQuery(false, true);
+export const WIDGET_SOURCE_POSITIONS_NEXT = positionQuery(true, true);
+const WIDGET_SOURCE_POSITIONS_FIRST_FALLBACK = positionQuery(false, false);
+const WIDGET_SOURCE_POSITIONS_NEXT_FALLBACK = positionQuery(true, false);
+
 /// Prepare one old thread in bounded batches. Read cold positions before taking the writer; triggers preserve any
 /// changes between that read and the primary-key recheck made while committing the batch.
 export function widgetSourcesStep(db: DatabaseSync, thread: number, limit = 128): { done: boolean; visited: number } {
@@ -151,9 +174,13 @@ export function widgetSourcesStep(db: DatabaseSync, thread: number, limit = 128)
   }
   const before = scopeOf(db, thread)!;
   if (before.complete === 1) return { done: true, visited: 0 };
+  // A partially upgraded store may lack one of these indexes. Its existing primary-key walk is still bounded per batch.
+  const indexes = db.prepare(`SELECT count(*) AS n FROM sqlite_master WHERE type='index'
+    AND name IN ('entries_said','entries_letters')`).get() as { n: number };
+  const indexed = indexes.n === 2;
   const positions = (before.last_n === null
-    ? db.prepare("SELECT CAST(n AS TEXT) AS n FROM entries WHERE thread=? AND n<=CAST(? AS INTEGER) ORDER BY n LIMIT ?").all(thread, before.end_n, limit)
-    : db.prepare("SELECT CAST(n AS TEXT) AS n FROM entries WHERE thread=? AND n>CAST(? AS INTEGER) AND n<=CAST(? AS INTEGER) ORDER BY n LIMIT ?").all(thread, before.last_n, before.end_n, limit)) as { n: string }[];
+    ? db.prepare(indexed ? WIDGET_SOURCE_POSITIONS_FIRST : WIDGET_SOURCE_POSITIONS_FIRST_FALLBACK).all(thread, before.end_n, limit)
+    : db.prepare(indexed ? WIDGET_SOURCE_POSITIONS_NEXT : WIDGET_SOURCE_POSITIONS_NEXT_FALLBACK).all(thread, before.last_n, before.end_n, limit)) as { n: string }[];
   db.exec("BEGIN IMMEDIATE");
   try {
     const now = scopeOf(db, thread);
