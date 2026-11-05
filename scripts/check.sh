@@ -246,6 +246,11 @@ if part ts; then
   if touches '^design/(station-)?icons/|^apps/mbui/(tools/icons/|scripts/icons$)|^web/ui/src/icons\.tsx$'; then
     step icons bash apps/mbui/scripts/icons . --check
   fi
+  # Every file cloud's api, the station and the beta apps' core are built from deploys them (scripts/plan.sh).
+  if touches '^(cloud/src/|station/src/|client/|apps/mbui/core/|rules/|media/core/|scripts/plan)'; then
+    prep station deps station
+    step "what is deployed for each file" after station node scripts/plan-covers.ts
+  fi
   # Every CI job may take 5 minutes at most (only scripts/ci-timeouts.py's LONGER 10), and says so (timeout-minutes).
   if touches '^\.github/workflows/|^scripts/ci-timeouts\.py$'; then
     step "CI jobs: 5 minutes at most" python3 scripts/ci-timeouts.py
