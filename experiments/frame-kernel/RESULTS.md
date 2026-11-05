@@ -300,6 +300,47 @@ End-of-trial process PSS is 255–294 MiB for the independent integration and
 resources, not a repeated-lifetime leak test or a measured memory improvement.
 Previous incorrect-presentation runs are not used to claim an adoption speedup.
 
+## Local list measurement in the actual application adapter
+
+The opening trace was followed into the long input call. Filling the visible
+window repeatedly created a row, placed the whole tree, published the row's
+height, and then created another row. Two openings recorded approximately 28 and
+22 ms of scheduled running time in the enclosing layout call. Nested calls
+overlap: adding their inclusive durations would count the same work repeatedly.
+
+The adapter now measures the list's owned visible rows at its allocated content
+width before the next whole-tree placement. Those answers update its private
+position index, without depending on the child's placed-size notification. A
+30/3000-row counterexample first failed because another whole-tree calculation
+occurred between successive row constructions. The local measurement version
+passed the flex/view suite's 857 tests. A further percentage-padding case caught
+an incorrect width basis: the containing block, rather than the list's own
+border width, determines that padding. The corrected width, visible-window
+resize, content-change and disposal cases passed together (3 tests).
+
+Framework tests did not establish application correctness. The first real send
+test repeatedly queried destination geometry until the Wasm-GC executor ran out
+of memory. Bounded instrumentation identified the repeated caller as the
+composer's motion group. Its held-height getter sampled the drawing clock to
+decide whether to release the box. Releasing changed the shape key; measuring
+the resulting motion at the earlier logical time restored the hold, restarting
+the same group. The local list heights were already unchanged during these
+repetitions.
+
+Release is now scheduled on the input timeline, with cancellation when the hold
+is retimed or its render owner is disposed. Prediction at 110 does not release a
+hold while input time is 90; a retiming input at 95 cancels the old deadline at
+100, and a late advance to 300 delivers the new release with cause 195. The
+actual composer, row motion and foot-clearance checks then passed (31 tests),
+including the send that previously exhausted memory. These changes are in
+`0f410f2f33` and `aa6b667c85`; the first is an intermediate WIP with the failing
+integration still present.
+
+The same-host Android and full-render frame comparisons for this local
+measurement change are pending. It still uses the existing tree and arbitrary
+row renderers; it neither makes their callbacks pure nor replaces their semantic
+ownership with the independent kernel. No speedup is claimed from these checks.
+
 ## Contracts and counterexamples
 
 The scoped Wasm-GC suite passed 29/29 tests. These cover controlled model

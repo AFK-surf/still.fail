@@ -92,6 +92,23 @@ The slice implements interrupted trajectories and one page owner's exit
 deadline, including immediate completion and late delivery tagged with the
 deadline's cause. It does not implement a general deadline heap or owner tree yet.
 
+The actual send flow exposes why a pure trajectory alone is not enough. The
+composer's held height was a step function sampled at the drawing time. Crossing
+its end changed the shape key and started a layout transition. That transition
+queried destination geometry at the logical time, temporarily restoring the held
+height and starting another transition. Every individual sample was a pure
+calculation, but its use as a structural cause joined two different moments into
+a cycle.
+
+A model change such as releasing that hold must be an ordered deadline, rather
+than a consequence of observing a future picture. Retiming the hold cancels its
+previous deadline; a late host dispatch still reports the declared cause time.
+The application adapter now tests that distinction on the real send path. A
+replacement runtime should provide the owned deadline through its model API, so
+components do not each manage cancellation closures or subscribe to a global
+display clock. Visual trajectories remain sampled values and do not acquire
+authority to commit model changes.
+
 ## Geometry has an owner
 
 Sibling geometry belongs to the nearest parent that needs both sizes. In a
