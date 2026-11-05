@@ -4,7 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Readers } from "../src/read/pool.ts";
+import type { Hub } from "../src/sessions/hub.ts";
 import { Store } from "../src/store/store.ts";
+import { chatTools } from "../src/tools/chat.ts";
+import { openAgentsDoor } from "../src/tools/http.ts";
+import { McpEndpoint } from "../src/tools/mcp.ts";
 
 function fixture() {
   const dir = mkdtempSync(join(tmpdir(), "recent-chat-reader-"));
@@ -52,6 +56,75 @@ test("an abandoned recent list does not start preparation after handover", async
     await Promise.resolve();
     assert.equal(f.store.db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'recent_scope_tracked'").get(), undefined);
   } finally { readers.close(); previous.resolve(); f.close(); }
+});
+
+test("a disconnected chat_list stops its requested preparation before handover", async () => {
+  const f = fixture(), previous = Promise.withResolvers<void>(), called = Promise.withResolvers<void>();
+  const cancelled = Promise.withResolvers<void>(), controller = new AbortController();
+  const readers = new Readers(f.dir, 1, undefined, 1, { previousGone: previous.promise });
+  const hub = { store: f.store, workspaces: () => ["here"], wsOf: (key: string | null) => key === null ? "home" : "here",
+    recentChatList: async (ws: string | null, home: string | null, limit: number, signal?: AbortSignal) => {
+      signal?.addEventListener("abort", () => cancelled.resolve(), { once: true });
+      called.resolve();
+      return JSON.parse(await readers.read("recentChatList", { ws, home, limit }, "en", { signal }));
+    },
+  } as unknown as Hub;
+  const endpoint = new McpEndpoint(() => "here", chatTools(hub));
+  const door = await openAgentsDoor({ port: 0 }, endpoint, () => ({ status: 404, body: undefined }));
+  try {
+    const call = fetch(door.url, { method: "POST", headers: { authorization: "Bearer token", "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "chat_list", arguments: { limit: 5 } } }),
+      signal: controller.signal });
+    const rejected = assert.rejects(call);
+    await called.promise;
+    await readers.read("recentChatList", { ws: "here", home: "home", limit: 0 }, "en");
+    assert.equal(f.store.db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'recent_scope_tracked'").get(), undefined);
+    controller.abort();
+    await rejected;
+    await cancelled.promise;
+    previous.resolve();
+    await readers.read("recentChatList", { ws: "here", home: "home", limit: 0 }, "en");
+    assert.equal(f.store.db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'recent_scope_tracked'").get(), undefined);
+  } finally {
+    controller.abort(); previous.resolve();
+    await door.close(); readers.close(); f.close();
+  }
+});
+
+test("one disconnected chat_list does not cancel another request for the same page", async () => {
+  const f = fixture(), previous = Promise.withResolvers<void>(), firstCalled = Promise.withResolvers<void>(), bothCalled = Promise.withResolvers<void>();
+  const stopped = Promise.withResolvers<void>(), controller = new AbortController();
+  const readers = new Readers(f.dir, 1, undefined, 1, { previousGone: previous.promise });
+  let calls = 0;
+  const hub = { store: f.store, workspaces: () => ["here"], wsOf: (key: string | null) => key === null ? "home" : "here",
+    outsideChats: () => [], link: () => undefined,
+    recentChatList: async (ws: string | null, home: string | null, limit: number, signal?: AbortSignal) => {
+      if (++calls === 1) { signal?.addEventListener("abort", () => stopped.resolve(), { once: true }); firstCalled.resolve(); }
+      if (calls === 2) bothCalled.resolve();
+      return JSON.parse(await readers.read("recentChatList", { ws, home, limit }, "en", { signal }));
+    },
+  } as unknown as Hub;
+  const door = await openAgentsDoor({ port: 0 }, new McpEndpoint(() => "here", chatTools(hub)), () => ({ status: 404, body: undefined }));
+  const options = { method: "POST", headers: { authorization: "Bearer token", "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "chat_list", arguments: { limit: 5 } } }) };
+  try {
+    const abandoned = fetch(door.url, { ...options, signal: controller.signal });
+    const rejected = assert.rejects(abandoned);
+    await firstCalled.promise;
+    const kept = fetch(door.url, options);
+    await bothCalled.promise;
+    await readers.read("recentChatList", { ws: "here", home: "home", limit: 0 }, "en");
+    controller.abort();
+    await rejected;
+    await stopped.promise;
+    previous.resolve();
+    const answer = await (await kept).json() as { result: { content: { text: string }[]; isError?: boolean } };
+    assert.equal(answer.result.isError, undefined);
+    assert.match(answer.result.content[0]!.text, /Named/);
+  } finally {
+    controller.abort(); previous.resolve();
+    await door.close(); readers.close(); f.close();
+  }
 });
 
 test("recent readers return exact global, workspace and home pages after changes", async () => {
