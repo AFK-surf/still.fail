@@ -1299,6 +1299,29 @@ test("a_station_that_makes_the_chat_list_for_everyone_has_the_sidebar_made_of_it
   core.close();
 });
 
+test("a_shared_chat_created_while_the_stream_is_away_is_listed_when_it_cannot_resume", async () => {
+  const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [], dismissed: [], reads: {} };
+  const row = {
+    id: "new-chat", session: "new-chat", thread: 8, title: "", agents: [{ key: "new-chat", runtime: "claude" }],
+    last: { seq: 1, authorKind: "agent", author: "new-chat", text: "ready", createdAt: 1 },
+    lastActiveAt: 1, ws: null, named: { thread: { surface: "ember", title: "New chat" }, firstText: null, channelName: null },
+    mineOf: [], said: { n: 1, authorKind: "agent", author: "new-chat", other: 1 },
+  };
+  const answers: J = { ...base(), "GET /chats": [], "GET /chats?marks=1": marks, "GET /chats?shared=1": [] };
+  const { host, core, push, read } = await ui(answers);
+  await read();
+  push("made", { rows: true, marks: true, shared: true });
+  await coalesce(host);
+  assert.equal(core.inner.data.chat(ST, "new-chat"), undefined);
+
+  // Another device creates the chat while this stream is away. The station cannot replay the missed events.
+  answers["GET /chats?shared=1"] = [row];
+  push("missed", {});
+  await coalesce(host);
+  assert.equal((core.inner.data.chat(ST, "new-chat") as J)?.title, "New chat", "the refreshed list includes the missed chat");
+  core.close();
+});
+
 test("a_gap_is_read_once_and_what_came_meanwhile_waits_for_it", async () => {
   const { host, core, push, values, read } = await ui({
     ...base(),
