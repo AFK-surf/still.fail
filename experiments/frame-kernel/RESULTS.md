@@ -162,8 +162,19 @@ renderer preserved the previous pixels. A new input regression failed with
 `changed=true`, 23 recorded instances and `damage=[]`. Carrying paint dependency,
 timed wake and glyph-retry changes through previous/new extent invalidation made
 the complete UI package pass 1624 tests, including caret disappearance and
-reappearance. The narrow reference change is `1de556022c`; actual-host visual
-confirmation is still required before calling it complete.
+reappearance. The narrow reference change is `1de556022c`. A subsequent Android
+comparison using the same shell and keyboard inset confirmed the missing sixth
+line before the change and all six lines plus the caret afterward. Both complete
+screenshots were inspected and posted in the task chat. This confirms the
+presentation correction, not a frame-time improvement.
+
+The independent integration's Android failure was also rerun with checked traps,
+using the same Wasm program and 512 KiB stack. It reports `call stack exhausted`
+while a geometry-reading structure runs through `Tree::at_cause`, signal batch
+completion and another structure's notification. The recorded 20 frames are the
+runtime's default backtrace capture limit, not evidence of a 20-frame-deep stack
+([Wasmtime configuration](https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_backtrace_max_frames)).
+That diagnostic compiler setting is not part of the performance comparison.
 
 The traces join explicit frame-phase timestamps to the same GL thread's
 scheduler records. Measured intervals have complete recorded state coverage.
