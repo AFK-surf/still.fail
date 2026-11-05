@@ -32,7 +32,7 @@ import { ACCOUNT_VAR, type Captured, type Ran, SECRET_VAR, capture, runWith } fr
 import type { VaultStore } from "./store.ts";
 import { UseIndex } from "./use-index.ts";
 import { hasVaultMembers, initializePendingIndex, pendingIndexComplete, PENDING_BODIES, PENDING_DUE, PENDING_MEMBER, PENDING_NO_TIME, PENDING_OTHER_TIME, PENDING_OWN, PENDING_SEED, PENDING_SEED_FIRST } from "./pending-index.ts";
-import { vaultMembersComplete } from "./member-index.ts";
+import { hasInvalidVaultMembers, vaultMembersComplete } from "./member-index.ts";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS vault_requests (
@@ -221,6 +221,7 @@ export class Secrets {
   /// A held id can also name a pending save outside the scopes that came with it.
   readonly #heldLostScopes = new Map<string, Set<string>>();
   readonly #preparingPending = new Map<string, Promise<void>>();
+  #previousExited = false;
   /// Carried saves to reconcile after the old process can no longer write their requests.
   readonly #carriedSaves = new Set<string>();
   #carriedSavesWaiting = false;
@@ -230,6 +231,8 @@ export class Secrets {
 
   constructor(d: SecretsDeps) {
     this.#d = d;
+    this.#previousExited = d.backfill?.previousGone === undefined;
+    if (d.backfill?.previousGone !== undefined) void d.backfill.previousGone.then(() => { this.#previousExited = true; }, () => {});
     d.db.exec(SCHEMA);
     initializePendingIndex(d.db);
     this.#uses = new UseIndex(d.db, d.backfill);
@@ -545,13 +548,14 @@ export class Secrets {
 
   /// Fill this workspace's old pending lookup before its request list is read.
   async preparePending(ws: string): Promise<void> {
+    // Do not make a request wait for an earlier process that is still running: the original query remains available.
+    if (!this.#previousExited) return;
     if (this.#lostSaves.get(ws)?.ready === true) return this.#uses.preparePending(ws);
     const already = this.#preparingPending.get(ws);
     if (already !== undefined) return already;
     const prepare = (async () => {
       await this.#uses.preparePending(ws);
       // Once the earlier process has exited, writes to requests are made here and update this set in #save.
-      await this.#d.backfill?.previousGone;
       const state = { ids: new Set<string>(), ready: false };
       this.#lostSaves.set(ws, state);
       try {
@@ -586,7 +590,7 @@ export class Secrets {
     const now = Math.floor(this.#d.now() / 1000);
     const lost = this.#lostSaves.get(ws);
     const ready = lost?.ready === true && pendingIndexComplete(this.#d.db, ws)
-      && (lock === null || (lock.ws === ws && hasVaultMembers(this.#d.db) && vaultMembersComplete(this.#d.db, ws)));
+      && (lock === null || (lock.ws === ws && hasVaultMembers(this.#d.db) && vaultMembersComplete(this.#d.db, ws) && !hasInvalidVaultMembers(this.#d.db, ws)));
     let rows: { body: string }[];
     if (!ready) {
       const sql = pendingIndexComplete(this.#d.db, ws) ? PENDING_BODIES : "SELECT body FROM vault_requests WHERE ws = ? AND status = 'pending'";
