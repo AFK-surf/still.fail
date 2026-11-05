@@ -1,6 +1,8 @@
 ///|
 test "a place coming in is painted as it moves without building the old frame each time" {
   let t = tester("home")
+  // Count host frames without the Tester's additional paint-verification builds.
+  t.check_looks(false)
   t.set_frame_period(host_phone_period)
   t.run_for(first_page_ms + @ui.move_most_ms)
   to_bar_rest(t)
