@@ -34,7 +34,8 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
   try {
     if (!installed()) db.exec(`
       CREATE TABLE recent_scope_tracked (kind INTEGER NOT NULL, ws TEXT NOT NULL, total INTEGER NOT NULL DEFAULT 0,
-        complete INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(kind, ws)) WITHOUT ROWID;
+        complete INTEGER NOT NULL DEFAULT 0, scan_connect TEXT, scan_after INTEGER, scan_done INTEGER NOT NULL DEFAULT 0,
+        scan_session TEXT, scan_phase TEXT, scan_thread_after INTEGER, PRIMARY KEY(kind, ws)) WITHOUT ROWID;
       CREATE TABLE recent_scope_session_dirty (kind INTEGER NOT NULL, ws TEXT NOT NULL, session TEXT NOT NULL,
         revision INTEGER NOT NULL, PRIMARY KEY(kind, ws, session)) WITHOUT ROWID;
       CREATE TABLE recent_scope_sources (ws TEXT NOT NULL, thread INTEGER NOT NULL, session TEXT NOT NULL,
