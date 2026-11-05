@@ -50,7 +50,8 @@
 //   conn.closeReason {id}; conn.paths {id}; conn.stats {id}; release {id} (a handle let go); text.collate {names} →
 //   each one's place in the order people read them (the system's collation; a shell without it: an error, and the
 //   core orders them by hand); ed25519.sign {seed, message} (hex) → {publicKey, signature} (hex; a shell without it:
-//   an error, and the core signs in JS: Host.ed25519Sign).
+//   an error, and the core signs in JS: Host.ed25519Sign); crypto.verify {alg, key, signature, message} (hex) → whether
+//   it is (libcrux's; a shell without it: an error, and the core checks in JS: Host.verify).
 import type { Recorder } from "../record.ts";
 import { Effect, type Scope } from "effect";
 import { Core } from "../core.ts";
@@ -191,6 +192,20 @@ export class BridgeHost implements Host {
       // A shell from before it.
     }
     this.#collates = false;
+    return null;
+  }
+
+  /// The shell's signature check (`crypto.verify`: libcrux), until it says it has none.
+  #verifies = true;
+  verify(alg: "Ed25519" | "ES256" | "ES256-der", key: Uint8Array, signature: Uint8Array, message: Uint8Array): boolean | null {
+    if (!this.#verifies) return null;
+    try {
+      const out = this.#bridge.sync("crypto.verify", { alg, key: hex(key), signature: hex(signature), message: hex(message) });
+      if (typeof out === "boolean") return out;
+    } catch {
+      // A shell from before it.
+    }
+    this.#verifies = false;
     return null;
   }
 

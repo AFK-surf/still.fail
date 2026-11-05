@@ -1250,6 +1250,31 @@ impl Inner {
             let message = hex::decode(str_of(a, "message")?).map_err(err)?;
             return Ok(json!({ "publicKey": hex::encode(key.public().as_bytes()), "signature": hex::encode(key.sign(&message).to_bytes()) }));
         }
+        // Whether `signature` is `key`'s over `message` (hex all): Ed25519 (a 32-byte key, a 64-byte signature) or ECDSA
+        // P-256 over SHA-256 (`ES256`: an uncompressed point and r‖s; `ES256-der`: the signature DER, as WebAuthn gives
+        // it), by libcrux's formally verified implementations: what the core checks the lock's entries and the vault's
+        // records by (client/core-ts vault/verified.ts) where the shell has it, not @noble's in JS.
+        if op == "crypto.verify" {
+            let key = hex::decode(str_of(a, "key")?).map_err(err)?;
+            let signature = hex::decode(str_of(a, "signature")?).map_err(err)?;
+            let message = hex::decode(str_of(a, "message")?).map_err(err)?;
+            let ok = match str_of(a, "alg")? {
+                "Ed25519" => match (<[u8; 32]>::try_from(key.as_slice()), <[u8; 64]>::try_from(signature.as_slice())) {
+                    (Ok(k), Ok(s)) => libcrux_ed25519::verify(&message, &k, &s).is_ok(),
+                    _ => false,
+                },
+                alg @ ("ES256" | "ES256-der") => {
+                    use libcrux_ecdsa::p256::{PublicKey, Signature, verify};
+                    let s = if alg == "ES256" { <[u8; 64]>::try_from(signature.as_slice()).ok().map(Signature::from_bytes) } else { Signature::from_der(&signature).ok() };
+                    match (s, PublicKey::try_from(key.as_slice())) {
+                        (Some(s), Ok(k)) if key.len() == 65 => verify(libcrux_ecdsa::DigestAlgorithm::Sha256, &message, &s, &k).is_ok(),
+                        _ => false,
+                    }
+                }
+                other => return Err(format!("no {other} here")),
+            };
+            return Ok(json!(ok));
+        }
         // What the DHT lookup's socket and lookups went through since the last take, while the core records (`keep`;
         // false: none kept from now on): the record's `dht:` lines (client/core-ts mesh.ts, vendor/n0-mainline's ember).
         if op == "dht.said" {
@@ -1864,6 +1889,27 @@ mod tests {
             json!("92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00")
         );
         assert!(sync("ed25519.sign", r#"{"seed":"4ccd","message":"72"}"#)["error"].is_string());
+    }
+
+    #[test]
+    fn checks_ed25519_and_p256_signatures() {
+        let dir = TempDir::new();
+        let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+        let sync = |op: &str, json: &str| -> Value { serde_json::from_slice(&shell.call_sync(op, json.as_bytes())).unwrap() };
+        // RFC 8032's test 2; then the message changed
+        let ed = |message: &str| sync("crypto.verify", &format!(r#"{{"alg":"Ed25519","key":"3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c","signature":"92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00","message":"{message}"}}"#));
+        assert_eq!(ed("72")["value"], json!(true));
+        assert_eq!(ed("73")["value"], json!(false));
+        // RFC 6979 A.2.5, P-256 with SHA-256, message "sample": r‖s, then DER
+        let key = "0460fed4ba255a9d31c961eb74c6356d68c049b8923b61fa6ce669622e60f29fb67903fe1008b8bc99a41ae9e95628bc64f2f1b20c2d7e9f5177a3c294d4462299";
+        let r = "efd48b2aacb6a8fd1140dd9cd45e81d69d2c877b56aaf991c34d0ea84eaf3716";
+        let s = "f7cb1c942d657c41d436c7a1b6e29f65f3e900dbb9aff4064dc4ab2f843acda8";
+        let p = |alg: &str, signature: &str, message: &str| sync("crypto.verify", &format!(r#"{{"alg":"{alg}","key":"{key}","signature":"{signature}","message":"{message}"}}"#));
+        assert_eq!(p("ES256", &format!("{r}{s}"), "73616d706c65")["value"], json!(true));
+        assert_eq!(p("ES256", &format!("{r}{s}"), "73616d706c66")["value"], json!(false));
+        assert_eq!(p("ES256-der", &format!("3046022100{r}022100{s}"), "73616d706c65")["value"], json!(true));
+        assert_eq!(p("ES256", "00", "73616d706c65")["value"], json!(false));
+        assert!(sync("crypto.verify", r#"{"alg":"RS256","key":"00","signature":"00","message":"00"}"#)["error"].is_string());
     }
 
     #[test]
