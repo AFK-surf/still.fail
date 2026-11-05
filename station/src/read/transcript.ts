@@ -795,34 +795,48 @@ function findFrom(chars: string[], from: number, needle: string): number | null 
 
 const bytes = (s: string) => Buffer.byteLength(s);
 
+/// The spaces at `from` in `s`: where they end (in UTF-16 units) and how many bytes they are.
+function spacesAt(s: string, from: number): [number, number] {
+  SPACES.lastIndex = from;
+  const end = SPACES.test(s) ? SPACES.lastIndex : from;
+  return [end, bytes(s.slice(from, end))];
+}
+const SPACES = /\p{White_Space}+/uy;
+
 /// strip_wrapping: `text(await )`, `await` and `text()` taken out (spaces inside allowed), until none is left. As the
 /// Rust does, what spaces it skips it counts in bytes over characters.
+/// Looked at in place from each character: the rest joined again at each was 18 s for a page of a history whose scripts
+/// were tens of KB (2026-11-05).
 function stripWrapping(rest: string): string {
   let s = rest;
   for (;;) {
     const before = s;
     let out = "";
     const chars = Array.from(s);
+    // Where each character starts in `s`.
+    const at: number[] = [];
+    let unit = 0;
+    for (const c of chars) {
+      at.push(unit);
+      unit += c.length;
+    }
     let i = 0;
     while (i < chars.length) {
-      const tail = chars.slice(i).join("");
-      if (tail.startsWith("text(")) {
-        const after = tail.slice(5);
-        const trimmed = trimStart(after);
-        const skipped = bytes(after) - bytes(trimmed);
-        if (trimmed.startsWith("await")) {
-          const afterAwait = trimmed.slice(5);
-          const t2 = trimStart(afterAwait);
-          if (t2.startsWith(")")) {
-            i += 5 + skipped + 5 + (bytes(afterAwait) - bytes(t2)) + 1;
+      const here = at[i]!;
+      if (s.startsWith("text(", here)) {
+        const [trimmed, skipped] = spacesAt(s, here + 5);
+        if (s.startsWith("await", trimmed)) {
+          const [t2, skipped2] = spacesAt(s, trimmed + 5);
+          if (s.startsWith(")", t2)) {
+            i += 5 + skipped + 5 + skipped2 + 1;
             continue;
           }
-        } else if (trimmed.startsWith(")")) {
+        } else if (s.startsWith(")", trimmed)) {
           i += 5 + skipped + 1;
           continue;
         }
       }
-      if (tail.startsWith("await")) {
+      if (s.startsWith("await", here)) {
         i += 5;
         continue;
       }
