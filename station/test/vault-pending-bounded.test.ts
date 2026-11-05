@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { PENDING_BODIES } from "../src/vault/pending-index.ts";
+import { PENDING_DUE, PENDING_MEMBER, PENDING_NO_TIME, PENDING_OTHER_TIME, PENDING_OWN } from "../src/vault/pending-index.ts";
 import { PLAIN } from "../src/vault/plain.ts";
 import { Secrets } from "../src/vault/secrets.ts";
+import { VaultStore } from "../src/vault/store.ts";
 
 async function visited(kind: "history" | "pending", others: number) {
   const db = new DatabaseSync(":memory:");
@@ -11,7 +12,7 @@ async function visited(kind: "history" | "pending", others: number) {
   db.function("pending_seen", (_id) => { if (reading) count++; return 1; });
   const observed = new Proxy(db, { get(target, property) {
     if (property === "prepare") return (sql: string) => {
-      if (sql === PENDING_BODIES) {
+      if ([PENDING_OWN, PENDING_DUE, PENDING_NO_TIME, PENDING_OTHER_TIME].includes(sql)) {
         traced = true;
         return target.prepare(sql.replace("WHERE p.ws = ?", "WHERE pending_seen(p.id) AND p.ws = ?"));
       }
@@ -42,6 +43,65 @@ async function visited(kind: "history" | "pending", others: number) {
 
 test("a prepared pending lookup does not traverse decided history", async () => {
   assert.deepEqual(await Promise.all([visited("history", 40), visited("history", 400)]), [1, 1]);
+});
+
+test("a pending list reads its member vaults and follows membership changes", async () => {
+  const db = new DatabaseSync(":memory:");
+  let seen = 0, reading = false;
+  db.function("pending_seen", (_id) => { if (reading) seen++; return 1; });
+  const observed = new Proxy(db, { get(target, property) {
+    if (property === "prepare") return (sql: string) => target.prepare(sql === PENDING_MEMBER
+      ? sql.replace("AND p.ws = m.ws", "AND pending_seen(p.id) AND p.ws = m.ws") : sql);
+    const value = Reflect.get(target, property, target);
+    return typeof value === "function" ? value.bind(target) : value;
+  } });
+  try {
+    const vaults = new VaultStore(observed);
+    const putVault = (id: string, members: string[]) => vaults.putVault({ ws: "w", id, seq: 0, members } as never);
+    putVault("mine", ["alice"]);
+    putVault("theirs", ["bob"]);
+    const secrets = new Secrets({ db: observed, data: ".", now: () => 0, home: () => "w", lock: () => ({ ws: "w" } as never),
+      hub: { store: { subscribe() {}, getSession() { return {}; } } } as never,
+      proxy: {} as never, vaults, plain: {} as never });
+    const insert = db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w',?,'s','pending',?)");
+    const put = (id: string, vault: string) => insert.run(id, JSON.stringify({ ws: "w", id, session: "s", vault, at: 0, item: "i", mode: "env", status: "pending" }));
+    put("mine", "mine");
+    for (let i = 0; i < 400; i++) put(`other-${i}`, "theirs");
+    await secrets.preparePending("w");
+    const viewer = { sub: "alice", email: "alice@example.test" }, lock = { ws: "w" } as never;
+    reading = true;
+    assert.deepEqual(secrets.pending("w", lock, viewer).map((r) => r.id), ["mine"]);
+    reading = false;
+    assert.equal(seen, 1);
+    putVault("mine", ["bob"]);
+    assert.deepEqual(secrets.pending("w", lock, viewer), []);
+    putVault("mine", ["alice"]);
+    assert.deepEqual(secrets.pending("w", lock, viewer).map((r) => r.id), ["mine"]);
+  } finally { db.close(); }
+});
+
+test("a prepared list settles other people's lost and overdue saves in request order", async () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    const secrets = new Secrets({ db, data: ".", now: () => 100_000_000, home: () => "w", lock: () => null,
+      hub: { store: { subscribe() {}, getSession() { return {}; } } } as never,
+      proxy: {} as never, vaults: {} as never, plain: {} as never });
+    const insert = db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w',?,'s','pending',?)");
+    const put = (id: string, fields: Record<string, unknown>) => insert.run(id, JSON.stringify({
+      ws: "w", id, session: "s", vault: PLAIN, owner: "bob@example.test", at: 100_000, item: "i", mode: "env", status: "pending", ...fields,
+    }));
+    put("a-lost", { save: { typed: false } });
+    put("b-overdue", { at: 0 });
+    put("c-bad-time", { at: null });
+    put("d-string-time", { at: "1" }); // JavaScript adds before comparing: '1' + 86400 is 186400.
+    put("mine", { owner: "alice@example.test" });
+    const told: [string, string][] = [];
+    secrets.listen((r) => told.push([r.id, r.status]));
+    await secrets.preparePending("w");
+    assert.deepEqual(secrets.pending("w", null, { sub: "alice", email: "alice@example.test" }).map((r) => r.id), ["mine"]);
+    assert.deepEqual(told, [["a-lost", "expired"], ["b-overdue", "expired"], ["c-bad-time", "expired"]]);
+    assert.equal((db.prepare("SELECT status FROM vault_requests WHERE ws='w' AND id='d-string-time'").get() as { status: string }).status, "pending");
+  } finally { db.close(); }
 });
 
 test("a prepared pending lookup does not traverse another person's waiting requests", async () => {

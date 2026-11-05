@@ -10,16 +10,18 @@ CREATE TABLE IF NOT EXISTS vault_member_backfill (
   ws TEXT PRIMARY KEY, after_id TEXT, done INTEGER NOT NULL
 ) WITHOUT ROWID;
 CREATE TRIGGER IF NOT EXISTS vault_member_add AFTER INSERT ON vaults BEGIN
-  INSERT OR IGNORE INTO vault_member_lookup
-    SELECT NEW.ws, m.value, NEW.id FROM json_each(NEW.body, '$.members') m WHERE m.type = 'text';
+  INSERT INTO vault_member_lookup
+    SELECT NEW.ws, m.value, NEW.id FROM json_each(NEW.body, '$.members') m WHERE m.type = 'text'
+    ON CONFLICT(ws, sub, vault) DO NOTHING;
 END;
 CREATE TRIGGER IF NOT EXISTS vault_member_change AFTER UPDATE ON vaults
   WHEN OLD.ws IS NOT NEW.ws OR OLD.id IS NOT NEW.id
     OR json_extract(OLD.body, '$.members') IS NOT json_extract(NEW.body, '$.members') BEGIN
   DELETE FROM vault_member_lookup WHERE ws = OLD.ws AND vault = OLD.id AND sub IN
     (SELECT value FROM json_each(OLD.body, '$.members') WHERE type = 'text');
-  INSERT OR IGNORE INTO vault_member_lookup
-    SELECT NEW.ws, m.value, NEW.id FROM json_each(NEW.body, '$.members') m WHERE m.type = 'text';
+  INSERT INTO vault_member_lookup
+    SELECT NEW.ws, m.value, NEW.id FROM json_each(NEW.body, '$.members') m WHERE m.type = 'text'
+    ON CONFLICT(ws, sub, vault) DO NOTHING;
 END;
 CREATE TRIGGER IF NOT EXISTS vault_member_drop AFTER DELETE ON vaults BEGIN
   DELETE FROM vault_member_lookup WHERE ws = OLD.ws AND vault = OLD.id AND sub IN

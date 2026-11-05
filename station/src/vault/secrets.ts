@@ -31,7 +31,8 @@ import { Proxy, placeholder } from "./proxy.ts";
 import { ACCOUNT_VAR, type Captured, type Ran, SECRET_VAR, capture, runWith } from "./run.ts";
 import type { VaultStore } from "./store.ts";
 import { UseIndex } from "./use-index.ts";
-import { initializePendingIndex, pendingIndexComplete, PENDING_BODIES } from "./pending-index.ts";
+import { hasVaultMembers, initializePendingIndex, pendingIndexComplete, PENDING_BODIES, PENDING_DUE, PENDING_MEMBER, PENDING_NO_TIME, PENDING_OTHER_TIME, PENDING_OWN, PENDING_SEED, PENDING_SEED_FIRST } from "./pending-index.ts";
+import { vaultMembersComplete } from "./member-index.ts";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS vault_requests (
@@ -213,6 +214,9 @@ export class Secrets {
   readonly #unscopedSaves = new Set<string>();
   /// A save whose card is being posted has not been written yet; a device published meanwhile must get it too.
   readonly #postingSaves = new Map<string, Request>();
+  /// Saves whose fields have gone and which have no sealed copy, by workspace; built once after the previous process exits.
+  readonly #lostSaves = new Map<string, { ids: Set<string>; ready: boolean }>();
+  readonly #preparingPending = new Map<string, Promise<void>>();
   /// Carried saves to reconcile after the old process can no longer write their requests.
   readonly #carriedSaves = new Set<string>();
   #carriedSavesWaiting = false;
@@ -313,6 +317,7 @@ export class Secrets {
     for (const [id, fields, scopes] of c.unsaved ?? []) {
       if (this.#unsaved.has(id)) continue;
       this.#unsaved.set(id, fields);
+      for (const waiting of this.#lostSaves.values()) waiting.ids.delete(id);
       for (const scope of scopes ?? []) if (typeof scope.ws === "string" && typeof scope.owner === "string") this.#scopeSave(id, scope.ws, scope.owner);
       if (!this.#saveScopes.has(id)) this.#unscopedSaves.add(id);
       this.#carriedSaves.add(id);
@@ -420,6 +425,11 @@ export class Secrets {
     this.#d.db
       .prepare("INSERT INTO vault_requests (ws, id, session, status, body, thread, card_ts) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (ws, id) DO UPDATE SET status = excluded.status, body = excluded.body, thread = excluded.thread, card_ts = excluded.card_ts")
       .run(r.ws, r.id, r.session, r.status, JSON.stringify(r), k.thread, k.cardTs);
+    const lost = this.#lostSaves.get(r.ws);
+    if (lost !== undefined) {
+      if (r.status === "pending" && !this.#recoverable(r)) lost.ids.add(r.id);
+      else lost.ids.delete(r.id);
+    }
   }
 
   #audit(r: Request, kind: string, detail: string) {
@@ -491,14 +501,65 @@ export class Secrets {
 
   /// Fill this workspace's old pending lookup before its request list is read.
   async preparePending(ws: string): Promise<void> {
-    await this.#uses.preparePending(ws);
+    if (this.#lostSaves.get(ws)?.ready === true) return this.#uses.preparePending(ws);
+    const already = this.#preparingPending.get(ws);
+    if (already !== undefined) return already;
+    const prepare = (async () => {
+      await this.#uses.preparePending(ws);
+      // Once the earlier process has exited, writes to requests are made here and update this set in #save.
+      await this.#d.backfill?.previousGone;
+      const state = { ids: new Set<string>(), ready: false };
+      this.#lostSaves.set(ws, state);
+      try {
+        let after: string | null = null;
+        for (;;) {
+          const rows = (after === null ? this.#d.db.prepare(PENDING_SEED_FIRST).all(ws, 32)
+            : this.#d.db.prepare(PENDING_SEED).all(ws, after, 32)) as { id: string; body: string }[];
+          for (const row of rows) {
+            const request = JSON.parse(row.body) as Request;
+            if (!this.#recoverable(request)) state.ids.add(row.id);
+            else state.ids.delete(row.id);
+          }
+          if (rows.length < 32) break;
+          after = rows.at(-1)!.id;
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
+        state.ready = true;
+      } catch (error) {
+        if (this.#lostSaves.get(ws) === state) this.#lostSaves.delete(ws);
+        throw error;
+      }
+    })();
+    this.#preparingPending.set(ws, prepare);
+    try { await prepare; }
+    finally { if (this.#preparingPending.get(ws) === prepare) this.#preparingPending.delete(ws); }
   }
 
   /// The requests `viewer` may decide in workspace `ws`, still waiting.
   pending(ws: string, lock: LockState | null, viewer: { sub: string; email: string }): Request[] {
     const now = Math.floor(this.#d.now() / 1000);
-    const sql = pendingIndexComplete(this.#d.db, ws) ? PENDING_BODIES : "SELECT body FROM vault_requests WHERE ws = ? AND status = 'pending'";
-    const rows = this.#d.db.prepare(sql).all(ws) as { body: string }[];
+    const lost = this.#lostSaves.get(ws);
+    const ready = lost?.ready === true && pendingIndexComplete(this.#d.db, ws)
+      && (lock === null || (lock.ws === ws && hasVaultMembers(this.#d.db) && vaultMembersComplete(this.#d.db, ws)));
+    let rows: { body: string }[];
+    if (!ready) {
+      const sql = pendingIndexComplete(this.#d.db, ws) ? PENDING_BODIES : "SELECT body FROM vault_requests WHERE ws = ? AND status = 'pending'";
+      rows = this.#d.db.prepare(sql).all(ws) as { body: string }[];
+    } else {
+      const selected = new Map<string, string>();
+      const add = (found: unknown[]) => { for (const row of found as { id: string; body: string }[]) selected.set(row.id, row.body); };
+      add(this.#d.db.prepare(PENDING_OWN).all(ws, viewer.email.toLowerCase()));
+      if (lock !== null) add(this.#d.db.prepare(PENDING_MEMBER).all(ws, viewer.sub));
+      add(this.#d.db.prepare(PENDING_DUE).all(ws, now - PENDING_SECS));
+      add(this.#d.db.prepare(PENDING_NO_TIME).all(ws));
+      add(this.#d.db.prepare(PENDING_OTHER_TIME).all(ws));
+      if (this.#d.coming?.() !== true) for (const id of lost!.ids) {
+        const kept = this.#kept(ws, id);
+        if (kept?.request.status === "pending") selected.set(id, JSON.stringify(kept.request));
+        else lost!.ids.delete(id);
+      }
+      rows = [...selected].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([, body]) => ({ body }));
+    }
     return rows
       .map((r) => JSON.parse(r.body) as Request)
       .filter((r) => {
@@ -512,8 +573,12 @@ export class Secrets {
   }
 
   #requestLive(r: Request, now: number): boolean {
-    const live = this.#d.coming?.() === true || !r.save || r.save.typed === true || this.#unsaved.has(r.id) || (r.vault !== PLAIN && (r.sealed?.length ?? 0) > 0);
+    const live = this.#d.coming?.() === true || this.#recoverable(r);
     return r.at + PENDING_SECS > now && live;
+  }
+
+  #recoverable(r: Request): boolean {
+    return !r.save || r.save.typed === true || this.#unsaved.has(r.id) || (r.vault !== PLAIN && (r.sealed?.length ?? 0) > 0);
   }
 
   /// The uses of a vault's (or the plain library's) secrets `viewer` may see, the latest first: the requests decided.

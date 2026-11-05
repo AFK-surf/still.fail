@@ -47,6 +47,25 @@ END;
 
 export const PENDING_BODIES = `SELECT r.body FROM vault_pending_lookup p
   JOIN vault_requests r ON r.ws = p.ws AND r.id = p.id WHERE p.ws = ? ORDER BY p.id`;
+export const PENDING_OWN = `SELECT r.id, r.body FROM vault_pending_lookup p INDEXED BY vault_pending_owner
+  JOIN vault_requests r ON r.ws = p.ws AND r.id = p.id
+  WHERE p.ws = ? AND p.owner_decides = 1 AND p.owner = ?`;
+// CROSS JOIN keeps the member's vaults on the outside: no scan of other vaults' waiting requests.
+export const PENDING_MEMBER = `SELECT r.id, r.body FROM vault_member_lookup m
+  CROSS JOIN vault_pending_lookup p INDEXED BY vault_pending_vault
+  JOIN vault_requests r ON r.ws = p.ws AND r.id = p.id
+  WHERE m.ws = ? AND m.sub = ? AND p.ws = m.ws AND p.owner_decides = 0 AND p.vault = m.vault`;
+export const PENDING_DUE = `SELECT r.id, r.body FROM vault_pending_lookup p INDEXED BY vault_pending_at
+  JOIN vault_requests r ON r.ws = p.ws AND r.id = p.id WHERE p.ws = ? AND p.at <= ?`;
+// Old malformed timestamps are tested in JavaScript too. Restrict each query to the relevant index range.
+export const PENDING_NO_TIME = `SELECT r.id, r.body FROM vault_pending_lookup p INDEXED BY vault_pending_at
+  JOIN vault_requests r ON r.ws = p.ws AND r.id = p.id WHERE p.ws = ? AND p.at IS NULL`;
+export const PENDING_OTHER_TIME = `SELECT r.id, r.body FROM vault_pending_lookup p INDEXED BY vault_pending_at
+  JOIN vault_requests r ON r.ws = p.ws AND r.id = p.id WHERE p.ws = ? AND p.at >= ''`;
+export const PENDING_SEED_FIRST = `SELECT r.id, r.body FROM vault_pending_lookup p
+  JOIN vault_requests r ON r.ws = p.ws AND r.id = p.id WHERE p.ws = ? ORDER BY p.id LIMIT ?`;
+export const PENDING_SEED = `SELECT r.id, r.body FROM vault_pending_lookup p
+  JOIN vault_requests r ON r.ws = p.ws AND r.id = p.id WHERE p.ws = ? AND p.id > ? ORDER BY p.id LIMIT ?`;
 export const PENDING_BACKFILL_AFTER = "SELECT id FROM vault_requests WHERE ws = ? AND id > ? ORDER BY id LIMIT ?";
 
 export function initializePendingIndex(db: DatabaseSync): void {
