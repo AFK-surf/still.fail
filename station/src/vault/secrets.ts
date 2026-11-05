@@ -330,6 +330,13 @@ export class Secrets {
     return this.#d.hub.store.starter(session);
   }
 
+  /// A ready answer, or undefined while the existing worker prepares an old multi-chat session.
+  #latestThreadReady(session: string): SessionThread | null | undefined {
+    return this.#d.hub.prepareLatestThreads
+      ? this.#d.hub.store.latestThreadIfReady(session)
+      : this.#d.hub.store.latestThread(session);
+  }
+
   /// The items a session may ask for: those with a listing of whoever started its chat, in their vaults (security
   /// mode on) or their plain library (off).
   listings(session: string): Listed[] {
@@ -435,6 +442,14 @@ export class Secrets {
     if (a.timeout && (!["idle", "fixed"].includes(a.timeout.kind) || !Number.isSafeInteger(a.timeout.seconds) || a.timeout.seconds < 60 || a.timeout.seconds > 30 * 86400 || a.timeout.seconds % 60 !== 0)) throw new Refused("timeout must be idle or fixed, in whole minutes from 1 minute to 30 days");
     const hosts = a.hosts?.length ? a.hosts : hosted(mode) ? listing.hosts : [];
     if (mode === "browser" && this.#d.browsers === undefined) throw new Refused("This station has no browser for a sign-in to go into.");
+    const thread = this.#latestThreadReady(session);
+    if (thread === undefined) {
+      await this.#d.hub.prepareLatestThreads!([session]);
+      const current = this.#d.hub.store.getSession(session);
+      if (current === null || current.archivedAt != null) throw new Refused("This chat is archived or gone.");
+      // The item, owner or latest delivery may have changed while the order was prepared.
+      return this.ask(session, a);
+    }
     const now = this.#d.now();
     const id = `r_${ulid(now)}`;
     const request: Request = {
@@ -445,7 +460,6 @@ export class Secrets {
       ...(mode === "browser" && !plain ? this.#renewalOf(ws, found.item) : {}),
     };
     const kept: Kept = { request, thread: null, cardTs: null };
-    const thread = this.#d.hub.store.latestThread(session);
     if (thread !== null) {
       request.chat = threadAddress(thread.thread.channel, thread.thread.threadTs);
       const posted = await this.#post(session, thread, request, listing, found.owner ?? undefined);
@@ -604,7 +618,9 @@ export class Secrets {
       quiet?: (request: string) => void;
     },
   ): Promise<string> {
-    const { ws, lock } = this.#placeOf(session);
+    const place = this.#placeOf(session);
+    const ws = place.ws;
+    let lock = place.lock;
     const kind = a.kind as Kind;
     // A sign-in is read from a browser, never given, printed or typed in.
     if (kind === "browser" && (a.value !== undefined || a.command !== undefined || a.path !== undefined || a.station !== undefined)) throw new Refused("A sign-in (kind browser) is read from this chat's browser (or the station's: browser \"station\"), its cookies of hosts: give no value, command, path or station.");
@@ -631,7 +647,7 @@ export class Secrets {
     if (!modes.every((m) => MODES.includes(m))) throw new Refused("modes are proxy, ssh, env, file or browser");
     if (modes.includes("ssh") !== (kind === "ssh_key")) throw new Refused("an SSH key is given by ssh (or env), and only an SSH key is");
     if (kind === "file" && (modes.length !== 1 || modes[0] !== "file")) throw new Refused("a file is given as a file (modes: [\"file\"])");
-    const sub = lock === null ? null : this.#memberOf(lock, email);
+    let sub = lock === null ? null : this.#memberOf(lock, email);
     if (lock !== null && sub === null) throw new Refused(`${email} is not in the workspace's security mode: there is no vault of theirs to keep it in.`);
     const listing: Listing = { name, kind, modes, hosts, ...(a.env ? { env: a.env } : {}) };
     const now = this.#d.now();
@@ -662,6 +678,25 @@ export class Secrets {
     }
     if (kind === "file" && Buffer.byteLength(value, "base64") > FILE_MOST) throw new Refused(`The file is more than ${FILE_MOST / 1024} KB; nothing was kept.`);
     if (value === "" && !typed) throw new Refused("The secret is empty; nothing was kept.");
+    // A command or browser read must happen only once. Keep its result in this call while an old order is prepared,
+    // and recheck who may keep it before making a box or saving anything.
+    const currentLock = () => {
+      const current = this.#d.hub.store.getSession(session);
+      if (current === null || current.archivedAt != null) throw new Refused("This chat is archived or gone; nothing was kept.");
+      const next = this.#placeOf(session);
+      if (next.ws !== ws || this.#starter(session) !== email) throw new Refused("This chat's owner or workspace changed; nothing was kept.");
+      return next.lock;
+    };
+    currentLock();
+    let thread = this.#latestThreadReady(session);
+    while (thread === undefined) {
+      await this.#d.hub.prepareLatestThreads!([session]);
+      currentLock();
+      thread = this.#latestThreadReady(session);
+    }
+    lock = currentLock();
+    sub = lock === null ? null : this.#memberOf(lock, email);
+    if (lock !== null && sub === null) throw new Refused(`${email} is not in the workspace's security mode: there is no vault of theirs to keep it in.`);
     const fields = typed ? null : fieldsOf(value);
     const id = `r_${ulid(now)}`;
     const save: Save = {
@@ -677,7 +712,6 @@ export class Secrets {
     };
     if (fields !== null) this.#unsaved.set(id, fields);
     const kept: Kept = { request, thread: null, cardTs: null };
-    const thread = this.#d.hub.store.latestThread(session);
     if (thread !== null) {
       request.chat = threadAddress(thread.thread.channel, thread.thread.threadTs);
       kept.cardTs = a.quiet ? null : await this.#postSave(session, thread, request);

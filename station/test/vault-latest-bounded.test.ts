@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { prepareLatestThreadStep } from "../src/store/latest-thread-index.ts";
 import { Store } from "../src/store/store.ts";
@@ -84,3 +85,124 @@ for (const operation of ["ask", "save"] as const) {
     }
   });
 }
+
+function waitingVault() {
+  const db = new DatabaseSync(":memory:");
+  const dir = mkdtempSync(join(tmpdir(), "vault-wait-"));
+  const gate = Promise.withResolvers<void>(), cookies = Promise.withResolvers<string>();
+  const plain = new PlainStore(db), vaults = new VaultStore(db);
+  plain.put({ ws: "w", id: "i_00000000000000000000000001", owner: "p@example.test", version: 0,
+    kind: "token", name: "test key", fields: { value: "fake" }, notes: "",
+    listing: { name: "test key", kind: "token", modes: ["env"], hosts: [] }, at: 1 });
+  let present = true, workspace = "w", owner = "p@example.test", ready = false, prepared = 0, captured = 0;
+  let lock: any = null;
+  const posts: string[] = [];
+  const thread = { connect: "slack", thread: { id: 1, channel: "C", threadTs: "latest", surface: "slack" } };
+  const hub = {
+    store: {
+      getSession: () => present ? { ws: workspace, archivedAt: null } : null,
+      starter: () => owner, latestThread: () => { throw new Error("unbounded latest read"); },
+      latestThreadIfReady: () => ready ? thread : undefined, subscribe: () => {},
+      sessionThreadById: () => thread, pendingCard: () => null, insertMessage: () => [1],
+      withdrawCard: () => true, restateCard: () => true,
+    },
+    prepareLatestThreads: async () => { prepared++; await gate.promise; },
+    chat: () => ({ post: async (where: { threadTs: string }) => { posts.push(where.threadTs); return "posted"; } }),
+    shared: () => {}, notify: () => {},
+  } as any;
+  const secrets = new Secrets({ db, vaults, plain, hub, data: dir, home: () => "w", lock: () => lock,
+    now: () => 1_800_000_000_000, browsers: {
+      cookies: async () => { captured++; return cookies.promise; }, signIn: async () => {},
+    } });
+  return { db, dir, gate, cookies, secrets, posts, prepared: () => prepared, captured: () => captured,
+    ready: () => { ready = true; }, remove: () => { present = false; },
+    move: () => { workspace = "other"; }, changeOwner: () => { owner = "other@example.test"; },
+    lockWithoutOwner: () => { lock = { members: new Map() }; } };
+}
+
+function noRequest(w: ReturnType<typeof waitingVault>) {
+  assert.equal(w.db.prepare("SELECT COUNT(*) AS n FROM vault_requests").get()?.n, 0);
+  assert.deepEqual(w.posts, []);
+  assert.deepEqual(w.secrets.carried().unsaved, []);
+  assert.deepEqual(w.secrets.carried().keeper.boxes, []);
+}
+
+for (const operation of ["ask", "save"] as const) {
+  test(`a failed secret ${operation} preparation leaves no request or held secret`, async () => {
+    const w = waitingVault();
+    try {
+      const asking = operation === "ask" ? w.secrets.ask("s", { item: "test key", reason: "test" })
+        : w.secrets.save("s", { name: "new key", kind: "token", reason: "test", value: "fake", cwd: w.dir });
+      assert.equal(w.prepared(), 1);
+      w.gate.reject(new Error("preparation stopped"));
+      await assert.rejects(asking, /preparation stopped/);
+      noRequest(w);
+    } finally { w.db.close(); rmSync(w.dir, { recursive: true, force: true }); }
+  });
+}
+
+test("a removed session or changed owner cannot receive a secret use after preparation", async () => {
+  for (const change of ["remove", "changeOwner"] as const) {
+    const w = waitingVault();
+    try {
+      const asking = w.secrets.ask("s", { item: "test key", reason: "test" });
+      w[change](); w.ready(); w.gate.resolve();
+      await assert.rejects(asking);
+      noRequest(w);
+    } finally { w.gate.resolve(); w.db.close(); rmSync(w.dir, { recursive: true, force: true }); }
+  }
+});
+
+test("a secret save does not survive deletion or a change of workspace, owner or membership during preparation", async () => {
+  for (const change of ["remove", "move", "changeOwner", "lockWithoutOwner"] as const) {
+    const w = waitingVault();
+    try {
+      const asking = w.secrets.save("s", { name: "new key", kind: "token", reason: "test", value: "fake", cwd: w.dir });
+      w[change](); w.ready(); w.gate.resolve();
+      await assert.rejects(asking, /archived or gone|owner or workspace changed|not in the workspace/);
+      noRequest(w);
+    } finally { w.gate.resolve(); w.db.close(); rmSync(w.dir, { recursive: true, force: true }); }
+  }
+});
+
+test("a ready secret request does not prepare the chat order", async () => {
+  for (const operation of ["ask", "save"] as const) {
+    const w = waitingVault();
+    try {
+      w.ready();
+      if (operation === "ask") await w.secrets.ask("s", { item: "test key", reason: "test" });
+      else await w.secrets.save("s", { name: "new key", kind: "token", reason: "test", value: "fake", cwd: w.dir });
+      assert.equal(w.prepared(), 0);
+      assert.deepEqual(w.posts, ["latest"]);
+    } finally { w.gate.resolve(); w.db.close(); rmSync(w.dir, { recursive: true, force: true }); }
+  }
+});
+
+test("a session removed during browser capture does not keep the secret", async () => {
+  const w = waitingVault();
+  try {
+    const asking = w.secrets.save("s", { name: "test site", kind: "browser", reason: "test", hosts: ["example.com"], cwd: w.dir });
+    w.remove();
+    w.cookies.resolve(JSON.stringify([{ name: "fake", value: "fake", domain: "example.com", path: "/" }]));
+    await assert.rejects(asking, /archived or gone/);
+    assert.equal(w.prepared(), 0);
+    noRequest(w);
+  } finally { w.gate.resolve(); w.db.close(); rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("a browser sign-in is captured once even if its chat needs preparation afterwards", async () => {
+  const w = waitingVault();
+  try {
+    const asking = w.secrets.save("s", { name: "test site", kind: "browser", reason: "test", hosts: ["example.com"], cwd: w.dir });
+    assert.equal(w.captured(), 1);
+    w.cookies.resolve(JSON.stringify([{ name: "fake", value: "fake", domain: "example.com", path: "/" }]));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(w.prepared(), 1);
+    noRequest(w);
+    w.ready(); w.gate.resolve();
+    await asking;
+    assert.equal(w.captured(), 1);
+    assert.deepEqual(w.posts, ["latest"]);
+    assert.equal(w.db.prepare("SELECT COUNT(*) AS n FROM vault_requests").get()?.n, 1);
+  } finally { w.gate.resolve(); w.db.close(); rmSync(w.dir, { recursive: true, force: true }); }
+});
