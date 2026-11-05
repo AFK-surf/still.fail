@@ -208,6 +208,10 @@ fn activity_clock_node(parent : @view.View, src : Source, a : () -> Agent, came 
     let next : Ref[() -> Unit] = Ref(fn() {  })
     let wake : Ref[() -> Unit] = Ref(fn() {  })
     wake.val = fn() {
+      // (on a page laid out nowhere (another over it, its rows kept): no second told till it shows again)
+      if @signals.untracked(fn() { c.shown_nowhere() }) {
+        return
+      }
       match @signals.untracked(since) {
         Some((from, most)) => {
           let now = (src.now)()
@@ -224,7 +228,7 @@ fn activity_clock_node(parent : @view.View, src : Source, a : () -> Agent, came 
         None => ()
       }
     }
-    c.reacts(since, fn(_) {
+    c.reacts(fn() { (since(), c.shown_nowhere()) }, fn(_) {
       (next.val)()
       (wake.val)()
     })
