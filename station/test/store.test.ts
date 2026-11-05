@@ -31,6 +31,7 @@ import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../src/store/remote-runs.ts";
 import { AWAKE_JOBS, RUNNING_WAIT_JOBS } from "../src/store/active-jobs.ts";
 import { HAS_SESSION_ACTIVE_WATCH } from "../src/store/watch-jobs.ts";
 import { RECOVER_AWAKE_WAITS, RECOVER_BACKFILL_FIRST, RECOVER_BACKFILL_NEXT, RECOVER_WAITS } from "../src/store/recover-waits.ts";
+import { AWAKE_BACKFILL_FIRST, AWAKE_BACKFILL_NEXT, AWAKE_WAIT_STATUS, reconcileAwakeWaits, syncAwakeWait } from "../src/store/awake-waits.ts";
 import * as read from "../src/read/store.ts";
 import { usageSummaryEdgeQuery } from "../src/read/usage-batched.ts";
 import { usageSummaryBlockOverlayQuery, usageSummaryBlockPendingQuery, usageSummaryBlockQueries } from "../src/read/usage-summary-blocks.ts";
@@ -106,6 +107,18 @@ function assertRecoveryWaitPlans() {
   }
   for (const sql of [RECOVER_BACKFILL_FIRST, RECOVER_BACKFILL_NEXT]) assert.match(sql, /LIMIT \?$/);
   assert.ok(plan(RECOVER_BACKFILL_NEXT, ["a", 64]).some((s) => s.startsWith("SEARCH sessions ")), "backfill must seek after its cursor");
+  const awake = plan(AWAKE_WAIT_STATUS, [0]).join(" | ");
+  assert.match(awake, /SEARCH session_awake_deadlines USING PRIMARY KEY.*deadline>\?/);
+  assert.match(awake, /SEARCH session_awake_deadlines USING PRIMARY KEY.*deadline=\?/);
+  for (const sql of [AWAKE_BACKFILL_FIRST, AWAKE_BACKFILL_NEXT]) assert.match(sql, /LIMIT \?$/);
+  assert.ok(plan(AWAKE_BACKFILL_NEXT, ["a", 64]).some((s) => s.startsWith("SEARCH session_recover_waits ")));
+  for (const sql of syncAwakeWait("?1").split(";").filter((s) => s.trim())) {
+    const steps = plan(sql, ["a"]), detail = steps.join(" | ");
+    assert.ok(steps.every((s) => !/^SCAN (s|t|turns|session_recover_waits|session_awake_deadlines)\b/.test(s)), detail);
+  }
+  const staged = plan(reconcileAwakeWaits("session_recover_turn_stage"), []).join(" | ");
+  assert.match(staged, /SEARCH session_recover_waits USING PRIMARY KEY/);
+  assert.doesNotMatch(staged, /SCAN (sessions|turns|session_recover_waits|session_awake_deadlines)\b/);
 }
 
 function assertPendingVaultPlans() {

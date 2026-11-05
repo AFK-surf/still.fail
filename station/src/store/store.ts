@@ -43,6 +43,7 @@ import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from
 import { AWAKE_JOBS, RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiveJobs } from "./active-jobs.ts";
 import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
 import { installRecoverWaits, recoverWaitsReady, RECOVER_AWAKE_WAITS, RECOVER_WAITS } from "./recover-waits.ts";
+import { AWAKE_WAIT_STATUS, awakeWaitsReady, exactAwakeTime } from "./awake-waits.ts";
 import { installSessionListIndex } from "./session-list-index.ts";
 import { installSessionBindingsIndex, SESSION_BINDINGS_DELETE, SESSION_BINDINGS_EXISTS, sessionBindingsReady } from "./session-bindings-index.ts";
 import { ARCHIVE_KEEP_EXISTS, ARCHIVE_PIN_EXISTS, archiveMarksReady, installArchiveMarkIndex } from "./archive-mark-index.ts";
@@ -607,6 +608,10 @@ export class Store {
   /// Whether a live recorded wait is still within its awake interval; null while an older lookup is being prepared.
   awakeWait(now: number, lingerMs: number): boolean | null {
     if (!recoverWaitsReady(this.db)) return null;
+    if (awakeWaitsReady(this.db) && exactAwakeTime(now, lingerMs)) {
+      const state = this.#one(AWAKE_WAIT_STATUS, now - lingerMs)!;
+      if (state.uncertain === 0) return state.awake === 1;
+    }
     return this.#all(RECOVER_AWAKE_WAITS).some((r) => now < r.ended_at + (r.wait_seconds ?? 0) * 1000 + lingerMs);
   }
 

@@ -1,19 +1,21 @@
 // Sessions whose last completed turn may need to be taken up after a restart. Old stores are prepared in bounded
 // batches; writes from either station keep both sides of the cursor current.
 import type { DatabaseSync } from "node:sqlite";
+import { AWAKE_WAIT_TRIGGERS, awakeDeadline, reconcileAwakeWaits, syncAwakeWait } from "./awake-waits.ts";
 
 const wanted = (key: string) => `EXISTS (SELECT 1 FROM sessions s WHERE s.key = ${key} AND s.archived_at IS NULL AND s.running != 1)
   AND EXISTS (SELECT 1 FROM turns t WHERE t.rowid = (SELECT rowid FROM turns INDEXED BY turns_by_session
     WHERE session_key = ${key} ORDER BY started_at DESC, rowid DESC LIMIT 1)
     AND t.ended_at IS NOT NULL AND (t.declared = 'waiting' OR (t.outcome = 'failed' AND substr(t.detail, 1, 11) = 'rate_limit:')))`;
 const remove = (key: string, guard = "1") => `DELETE FROM session_recover_waits WHERE session = ${key} AND (${guard}) AND NOT (${wanted(key)});`;
-const add = (key: string, guard = "1") => `INSERT INTO session_recover_waits (session) SELECT ${key} WHERE (${guard}) AND ${wanted(key)}
+const add = (key: string, guard = "1") => `INSERT INTO session_recover_waits (session, awake_deadline) SELECT ${key}, ${awakeDeadline(key)} WHERE (${guard}) AND ${wanted(key)}
   AND NOT EXISTS (SELECT 1 FROM session_recover_waits WHERE session = ${key});`;
-const sync = (key: string, guard = "1") => `${remove(key, guard)} ${add(key, guard)}`;
+const sync = (key: string, guard = "1") => `${remove(key, guard)} ${add(key, guard)} ${syncAwakeWait(key, guard)}`;
 const reconcile = (stage: string) => `DELETE FROM session_recover_waits WHERE session IN (SELECT session FROM ${stage})
     AND NOT (${wanted("session_recover_waits.session")});
-  INSERT INTO session_recover_waits (session) SELECT r.session FROM ${stage} r WHERE ${wanted("r.session")}
+  INSERT INTO session_recover_waits (session, awake_deadline) SELECT r.session, ${awakeDeadline("r.session")} FROM ${stage} r WHERE ${wanted("r.session")}
     AND NOT EXISTS (SELECT 1 FROM session_recover_waits w WHERE w.session = r.session);
+  ${reconcileAwakeWaits(stage)}
   DELETE FROM ${stage} WHERE session IS NOT NULL;`;
 
 const recoverySource = `FROM session_recover_waits w CROSS JOIN sessions s ON s.key = w.session
@@ -31,15 +33,37 @@ export const RECOVER_BACKFILL_NEXT = "SELECT key FROM sessions WHERE key > ? ORD
 
 export function installRecoverWaits(db: DatabaseSync): void {
   const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'session_recover_wait_meta'").get() !== undefined;
-  if (installed()) return;
+  const awakeInstalled = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'session_awake_wait_meta'").get() !== undefined;
+  if (installed() && awakeInstalled()) return;
   db.exec("BEGIN IMMEDIATE");
   try {
     if (!installed()) db.exec(`
-      CREATE TABLE session_recover_waits (session TEXT PRIMARY KEY) WITHOUT ROWID;
+      CREATE TABLE session_recover_waits (session TEXT PRIMARY KEY, awake_deadline INTEGER) WITHOUT ROWID;
       CREATE TABLE session_recover_turn_stage (session TEXT PRIMARY KEY) WITHOUT ROWID;
       CREATE TABLE session_recover_session_stage (session TEXT PRIMARY KEY) WITHOUT ROWID;
       CREATE TABLE session_recover_wait_meta (id INTEGER PRIMARY KEY CHECK (id = 1), cursor TEXT, complete INTEGER NOT NULL);
       INSERT INTO session_recover_wait_meta VALUES (1, NULL, NOT EXISTS (SELECT 1 FROM sessions LIMIT 1));
+    `);
+    if (!awakeInstalled()) {
+      const columns = db.prepare("PRAGMA table_info(session_recover_waits)").all() as { name: string }[];
+      if (!columns.some((column) => column.name === "awake_deadline")) db.exec("ALTER TABLE session_recover_waits ADD COLUMN awake_deadline INTEGER");
+      db.exec(`
+      CREATE TABLE session_awake_deadlines (deadline INTEGER NOT NULL, session TEXT NOT NULL, PRIMARY KEY (deadline, session)) WITHOUT ROWID;
+      CREATE TABLE session_awake_wait_meta (id INTEGER PRIMARY KEY CHECK (id = 1), cursor TEXT, complete INTEGER NOT NULL);
+      INSERT INTO session_awake_wait_meta VALUES (1, NULL,
+        (SELECT complete FROM session_recover_wait_meta WHERE id = 1) AND NOT EXISTS (SELECT 1 FROM session_recover_waits LIMIT 1));
+      ${AWAKE_WAIT_TRIGGERS}
+
+      DROP TRIGGER IF EXISTS session_recover_before_turn_add;
+      DROP TRIGGER IF EXISTS session_recover_turn_add;
+      DROP TRIGGER IF EXISTS session_recover_before_turn_move;
+      DROP TRIGGER IF EXISTS session_recover_turn_change;
+      DROP TRIGGER IF EXISTS session_recover_turn_drop;
+      DROP TRIGGER IF EXISTS session_recover_before_session_add;
+      DROP TRIGGER IF EXISTS session_recover_session_add;
+      DROP TRIGGER IF EXISTS session_recover_before_session_move;
+      DROP TRIGGER IF EXISTS session_recover_session_change;
+      DROP TRIGGER IF EXISTS session_recover_session_drop;
 
       CREATE TRIGGER session_recover_before_turn_add BEFORE INSERT ON turns BEGIN
         DELETE FROM session_recover_turn_stage WHERE session IS NOT NULL;
@@ -53,9 +77,10 @@ export function installRecoverWaits(db: DatabaseSync): void {
         DELETE FROM session_recover_turn_stage WHERE session IS NOT NULL;
         INSERT INTO session_recover_turn_stage SELECT session_key FROM turns WHERE id = NEW.id AND rowid != OLD.rowid;
       END;
-      CREATE TRIGGER session_recover_turn_change AFTER UPDATE OF id, session_key, started_at, ended_at, outcome, detail, declared ON turns
+      CREATE TRIGGER session_recover_turn_change AFTER UPDATE OF id, session_key, started_at, ended_at, outcome, detail, declared, wait_seconds ON turns
         WHEN OLD.id IS NOT NEW.id OR OLD.session_key IS NOT NEW.session_key OR OLD.started_at IS NOT NEW.started_at
-          OR OLD.ended_at IS NOT NEW.ended_at OR OLD.outcome IS NOT NEW.outcome OR OLD.detail IS NOT NEW.detail OR OLD.declared IS NOT NEW.declared BEGIN
+          OR OLD.ended_at IS NOT NEW.ended_at OR OLD.outcome IS NOT NEW.outcome OR OLD.detail IS NOT NEW.detail
+          OR OLD.declared IS NOT NEW.declared OR OLD.wait_seconds IS NOT NEW.wait_seconds BEGIN
         ${sync("OLD.session_key")}
         ${sync("NEW.session_key", "OLD.session_key IS NOT NEW.session_key")}
         ${reconcile("session_recover_turn_stage")}
@@ -86,6 +111,7 @@ export function installRecoverWaits(db: DatabaseSync): void {
         DELETE FROM session_recover_waits WHERE session = OLD.key;
       END;
     `);
+    }
     db.exec("COMMIT");
   } catch (error) {
     try { db.exec("ROLLBACK"); } catch {}

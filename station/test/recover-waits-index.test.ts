@@ -8,7 +8,7 @@ function fixture(path = ":memory:") {
   db.exec(`CREATE TABLE sessions (key TEXT PRIMARY KEY, token TEXT NOT NULL UNIQUE, running INTEGER NOT NULL DEFAULT 0,
       archived_at INTEGER, last_active_at INTEGER NOT NULL);
     CREATE TABLE turns (id TEXT PRIMARY KEY, session_key TEXT NOT NULL, started_at INTEGER NOT NULL, ended_at INTEGER,
-      outcome TEXT, detail TEXT, declared TEXT, wait_for TEXT);
+      outcome TEXT, detail TEXT, declared TEXT, wait_for TEXT, wait_seconds INTEGER);
     CREATE INDEX turns_by_session ON turns (session_key, started_at);`);
   const addSession = db.prepare("INSERT INTO sessions(key,token,last_active_at) VALUES (?,?,?)");
   const addTurn = db.prepare("INSERT INTO turns(id,session_key,started_at,ended_at,outcome,detail,declared) VALUES (?,?,?,?,?,?,?)");
@@ -91,9 +91,9 @@ for (const recursive of [false, true]) test(`replacement and ignored writes keep
     session("a"); session("b"); session("c");
     turn("a-wait", "a", 1, "waiting");
     turn("b-wait", "b", 1, "waiting");
-    db.prepare("INSERT OR IGNORE INTO turns VALUES ('a-wait','c',2,1,'completed',NULL,'all_done',NULL)").run();
+    db.prepare("INSERT OR IGNORE INTO turns(id,session_key,started_at,ended_at,outcome,detail,declared,wait_for) VALUES ('a-wait','c',2,1,'completed',NULL,'all_done',NULL)").run();
     assert.deepEqual(actual(), ["a", "b"]);
-    db.prepare("INSERT OR REPLACE INTO turns VALUES ('a-wait','c',2,1,'completed',NULL,'all_done',NULL)").run();
+    db.prepare("INSERT OR REPLACE INTO turns(id,session_key,started_at,ended_at,outcome,detail,declared,wait_for) VALUES ('a-wait','c',2,1,'completed',NULL,'all_done',NULL)").run();
     assert.deepEqual(actual(), ["b"]);
     turn("a-next", "a", 2, "waiting");
     db.prepare("UPDATE OR REPLACE turns SET id='b-wait' WHERE id='a-next'").run();
@@ -155,7 +155,7 @@ test("the lookup agrees with the original latest-turn rule across changing sessi
       for (let i = 0; i < 12; i++) session(`s${i}`, i);
       let state = seed;
       const random = (n: number) => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return Math.floor(state / 0x100000000 * n); };
-      const put = db.prepare("INSERT OR REPLACE INTO turns VALUES (?,?,?,?,?,?,?,NULL)");
+      const put = db.prepare("INSERT OR REPLACE INTO turns(id,session_key,started_at,ended_at,outcome,detail,declared,wait_for) VALUES (?,?,?,?,?,?,?,NULL)");
       const change = db.prepare("UPDATE turns SET session_key=?,started_at=?,ended_at=?,outcome=?,detail=?,declared=? WHERE id=?");
       const latest = db.prepare("SELECT ended_at,outcome,detail,declared FROM turns WHERE session_key=? ORDER BY started_at DESC,rowid DESC LIMIT 1");
       const expected = () => (db.prepare("SELECT key,running,archived_at FROM sessions ORDER BY last_active_at DESC,rowid DESC").all() as {key:string;running:number;archived_at:number|null}[])

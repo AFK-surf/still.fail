@@ -4,12 +4,13 @@ import { log } from "../ops/log.ts";
 import { releaseStoppedBackfill } from "../store/backfill.ts";
 import { workspaceActivityReady, workspaceActivityStep } from "../store/workspace-activity.ts";
 import { recoverWaitsReady, recoverWaitsStep } from "../store/recover-waits.ts";
+import { awakeWaitsReady, awakeWaitsStep } from "../store/awake-waits.ts";
 import type { Store } from "../store/store.ts";
 
-type Kind = "activity" | "recovery";
+type Kind = "activity" | "recovery" | "awake";
 
-/// A single worker prepares both lookups after handover, in bounded batches. Workspace activity is prepared first so
-/// its existing callers are not held up by the restart lookup. Both cursors can resume after interruption.
+/// One worker prepares the lookups after handover, in bounded batches. Workspace activity is prepared first so its
+/// existing callers are not held up by restart and awake preparation. Every cursor can resume after interruption.
 export function buildWorkspaceActivity(store: Store, previous: Promise<void>, workerFile?: URL): {
   ready: Promise<boolean>; close: () => Promise<void>;
 } {
@@ -21,15 +22,17 @@ export function buildWorkspaceActivity(store: Store, previous: Promise<void>, wo
   let closed = false;
   let activityDone = workspaceActivityReady(store.db);
   let recoveryDone = recoverWaitsReady(store.db);
+  let awakeDone = awakeWaitsReady(store.db);
   let pending: Kind = "activity";
   let retryMs = 250;
   if (activityDone) activity.resolve(true);
-  const complete = () => activityDone && recoveryDone;
-  const next = (): Kind => activityDone ? "recovery" : "activity";
+  const complete = () => activityDone && recoveryDone && awakeDone;
+  const next = (): Kind => !activityDone ? "activity" : !recoveryDone ? "recovery" : "awake";
   const finish = (kind: Kind) => {
     if (closed) return;
     if (kind === "activity" && !activityDone) { activityDone = true; activity.resolve(true); }
     if (kind === "recovery" && !recoveryDone) recoveryDone = true;
+    if (kind === "awake" && !awakeDone) awakeDone = true;
   };
   const retry = () => {
     if (closed || complete() || cancel !== null) return;
@@ -41,7 +44,7 @@ export function buildWorkspaceActivity(store: Store, previous: Promise<void>, wo
     if (closed || complete()) return;
     const kind = next();
     try {
-      const result = kind === "activity" ? workspaceActivityStep(store.db) : recoverWaitsStep(store.db);
+      const result = kind === "activity" ? workspaceActivityStep(store.db) : kind === "recovery" ? recoverWaitsStep(store.db) : awakeWaitsStep(store.db);
       if (result.done) finish(kind);
       if (!complete()) cancel = retries.after(20, () => { cancel = null; memoryStep(); });
     } catch (error) {
