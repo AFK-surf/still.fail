@@ -616,16 +616,23 @@ fn app_state(c : @ui.Ctx, src : Source, state : AppIs) -> Unit {
 }
 
 ///|
+/// Where the window's buttons are in the app's top row (@ui.window_inset), its top band in node `v`, under all else of
+/// it: dragging it moves the window.
+fn window_band_node(v : @view.View) -> Unit {
+  v.show(fn() { @ui.window_inset_now() }, fn(o) {
+    o.over(Is(true)) |> ignore
+    o.box(fn(b) { b.height(By(fn() { Some(window_band_now()) })).moves_window(Is(true)) |> ignore }) |> ignore
+  })
+}
+
+///|
 /// A window of its own (sfbase's window.mbt) in node `v` (shell_is's Lone): on the window's ground, its top dragging it
 /// where its buttons are in the app's top row (under all of it), its page alone over all of it, an old view the tree
 /// hosts (lone_page_view: closing it ends the run), the library's presenters and the toasts over that, taking a finger
 /// only where they draw something.
 fn lone_tree(v : @view.View, src : Source) -> Unit {
   v.ground(By(fn() { @sf.theme().p.bg })) |> ignore
-  v.show(fn() { @ui.window_inset_now() }, fn(o) {
-    o.over(Is(true)) |> ignore
-    o.box(fn(b) { b.height(By(fn() { Some(window_band_now()) })).moves_window(Is(true)) |> ignore }) |> ignore
-  })
+  window_band_node(v)
   @ui.old(v, fn(c) {
     match @sfbase.lone_page.val {
       Some(p) => lone_page_view(c, src, p)

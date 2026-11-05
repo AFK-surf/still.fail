@@ -62,6 +62,7 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
   // (on the window's ground, as the old view whole is (app_state_tree's): what no page covers, a page sliding, shows it)
   v.ground(By(fn() { @sf.theme().p.bg })) |> ignore
   shell_reacts(v, src)
+  window_band_node(v)
   @ui.old(v, fn(c) { narrow_under(c, src) }).over(Is(true)) |> ignore
   // back at the stack's root while the shell takes it (narrow_takes_back), a node of the window's tree's: before the
   // pages, what they and what is over them say takes back (a page's own stack, a menu, a sheet) taking it first; whose
@@ -160,11 +161,6 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
 /// Under the narrow shell's pages (an island): what every frame of the app's state does (app_state_island's), what the
 /// signed-in frame does before its pages (signed_in_frame), how the lists take a mouse.
 fn narrow_under(c : @ui.Ctx, src : Source) -> Unit {
-  if @ui.window_inset() {
-    let id = c.id("window-ground-band")
-    c.window_drag(id)
-    c.box(style=@ui.style(h=Fixed(window_band())), left=0.0, top=0.0, right=0.0, id~, fn() {  }) |> ignore
-  }
   frame_bare.val = false
   match workspace_in_view(src).0 {
     Some(w) => signed_in_frame(c, src, w, reacted=true)
