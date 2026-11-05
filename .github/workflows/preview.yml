@@ -183,7 +183,13 @@ jobs:
           node scripts/native.ts fetch shell linux-${{ matrix.arch }}
           (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           touch "$RUNNER_TEMP/start"
+      # (its own 3 minutes inside the job's 5: a branch's first push builds near all the app's units (its store
+      # arch/next's, which a branch's push cannot read, not main's: 1046 of 1232, 162 s of compiling, 2026-11-05,
+      # #4141), and stopped by the job's limit it kept none of them, its next push as cold. Stopped here, what it
+      # compiled is kept below and the next push goes on from it.)
       - name: Build (APP=stillfail)
+        id: build
+        timeout-minutes: 3
         run: bash apps/mbui/scripts/linux.sh build
       - name: Tarred with its installer
         run: bash apps/mbui/scripts/beta.sh linux
@@ -195,11 +201,15 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: github.ref != 'refs/heads/main'
         with: { name: "mbui-linux-${{ matrix.arch }}-${{ github.sha }}", path: ".ci/release/release/${{ matrix.part }}", retention-days: 7 }
+      # (a branch's after a build that failed or was stopped too: all it had and all it compiled, nothing pruned, for
+      # its next push to go on from)
       - name: The caches' keys, by what they hold
+        if: success() || (always() && github.ref != 'refs/heads/main')
         run: |
-          sh apps/mbui/scripts/used.sh "$RUNNER_TEMP/start" .ci/mbc-store
+          [ "${{ steps.build.outcome }}" != success ] || sh apps/mbui/scripts/used.sh "$RUNNER_TEMP/start" .ci/mbc-store
+          find .ci/mbc-store -name '*.lock' -delete 2>/dev/null || true
           echo "STORE_KEY=mbui-linux-${{ matrix.arch }}-${{ github.ref == 'refs/heads/main' && 'm' || 'b' }}-$(sh apps/mbui/scripts/held.sh .ci/mbc-store .ci/hbc)" >> "$GITHUB_ENV"
-      - if: env.STORE_KEY != steps.store.outputs.cache-matched-key && env.STORE_KEY != steps.own.outputs.cache-matched-key
+      - if: (success() || (always() && github.ref != 'refs/heads/main')) && env.STORE_KEY != '' && env.STORE_KEY != steps.store.outputs.cache-matched-key && env.STORE_KEY != steps.own.outputs.cache-matched-key
         uses: actions/cache/save@v4
         with:
           path: |
@@ -536,6 +546,7 @@ jobs:
           [ ! -d .ci/hbc ] || echo "HBC_CACHE: $(ls .ci/hbc | wc -l) files, $(du -sm .ci/hbc | cut -f1) MB"
           [ ! -d .ci/hbc ] || echo "HBC_KEY=mbui-win-hbc-$(ls .ci/hbc | sha256sum | cut -c1-16)" >> "$GITHUB_ENV"
       - name: Build (APP=stillfail)
+        id: build
         run: |
           B=$RUNNER_TEMP/build E=$RUNNER_TEMP/e2e; mkdir -p "$E"
           # (the e2e flow told the app is not coming, else it would wait its 10 minutes)
@@ -556,6 +567,21 @@ jobs:
           d=$(sh apps/mbui/scripts/mbui.sh)
           c=$(sha256sum "$d/out/win/app/_build/native/release/build/stillfail/stillfail/stillfail.c" | cut -c1-16)
           echo "BUILD_KEY=mbui-win-build-mono-$c" >> "$GITHUB_ENV"
+      # A branch's units kept as soon as the app is built, or its build failed: before the installer, the checks and the
+      # e2e flow, any of which the job's 5 minutes may stop (#4141's and #4143's: built in 139-141 s, cold, then stopped
+      # at the installer with nothing kept, 2026-11-05, so the next push was as cold). Pruned to what it used only after
+      # a build that went through.
+      - name: The branch's units, by what they hold
+        if: always() && github.ref != 'refs/heads/main' && steps.build.outcome != 'skipped'
+        run: |
+          [ "${{ steps.build.outcome }}" != success ] || sh apps/mbui/scripts/used.sh "$RUNNER_TEMP/start" .ci/mbc-store
+          find .ci/mbc-store -name '*.lock' -delete 2>/dev/null || true
+          echo "STORE_KEY=mbui-win-store-b-$(sh apps/mbui/scripts/held.sh .ci/mbc-store)" >> "$GITHUB_ENV"
+      - if: always() && github.ref != 'refs/heads/main' && env.STORE_KEY != '' && env.STORE_KEY != steps.own.outputs.cache-matched-key
+        uses: actions/cache/save@v4
+        with:
+          path: .ci/mbc-store
+          key: ${{ env.STORE_KEY }}
       # the installer (apps/mbui/windows/setup.c) made of the app as built, put into a folder of this run's, put again
       # over it, taken away (e2e/win/setup.sh: ~5 s)
       - name: The installer, installed and taken away (win.sh setup, e2e/win/setup.sh)
@@ -610,16 +636,6 @@ jobs:
             apps/mbui/mbui/_build
             apps/mbui/mbui/out
           key: ${{ env.BUILD_KEY }}
-      - name: The branch's units, by what they hold
-        if: github.ref != 'refs/heads/main'
-        run: |
-          sh apps/mbui/scripts/used.sh "$RUNNER_TEMP/start" .ci/mbc-store
-          echo "STORE_KEY=mbui-win-store-b-$(sh apps/mbui/scripts/held.sh .ci/mbc-store)" >> "$GITHUB_ENV"
-      - if: github.ref != 'refs/heads/main' && env.STORE_KEY != steps.own.outputs.cache-matched-key
-        uses: actions/cache/save@v4
-        with:
-          path: .ci/mbc-store
-          key: ${{ env.STORE_KEY }}
       - name: The Windows app's installer signed, put, checked, then its feed
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
