@@ -18,6 +18,8 @@ pub struct Layout {
   priv placed : Array[Int]
   /// how tall what it holds is, as `place` says (Layout::size_to): a box sized by what it holds is as tall as that
   priv said_h : Ref[Double]
+  /// the children measured in this layout (Layout::measure, fit): what Layout::reported reads of, none else
+  priv measured : Set[Int]
 }
 
 ///|
@@ -97,6 +99,7 @@ pub fn Layout::measure(
   // (the tree's layout owner still this box: what the child does to another branch aborted)
   let guard_before = @signals.set_access_guard(@signals.phase_guard(Layout))
   let size = @flex.layout_child(child.tree.nodes[child.at].flex, width, height?, containing_height=self.height)
+  self.measured.add(child.at)
   @signals.set_access_guard(guard_before) |> ignore
   size
 }
@@ -107,6 +110,7 @@ pub fn Layout::fit(self : Layout, child : View, most : Double) -> (Double, Doubl
   self.check(child)
   let guard_before = @signals.set_access_guard(@signals.phase_guard(Layout))
   let size = @flex.layout_child_fitted(child.tree.nodes[child.at].flex, most, containing_height=self.height)
+  self.measured.add(child.at)
   @signals.set_access_guard(guard_before) |> ignore
   size
 }
@@ -159,6 +163,7 @@ pub fn[K : Eq] View::layout_box(
       seen: Set::new(),
       placed: [],
       said_h: Ref(0.0 / 0.0),
+      measured: Set::new(),
     }
     // Only the final state is published by Tree::walk, so a child kept hidden and then placed never disappears.
     for at in n.kids { self.tree.nodes[at].flex.line = -1 }
@@ -262,26 +267,6 @@ pub fn Layout::let_go(self : Layout, key : String) -> Unit {
 }
 
 ///|
-/// What sets out at its cause with how far it goes not yet known (a Way told `@motion.move(over=@motion.laid)`), told
-/// that once a layout knows it (Layout::way_over).
-pub(open) trait LaidOver {
-  over_laid(Self, Double) -> Unit
-}
-
-///|
-/// How far `way` goes, `whole` points, known in this layout (a sidebar's width as the pane it opens in is laid out),
-/// told it once this layout is done, in the same pass and before anything is painted: how long it goes then worked out
-/// from that as `over` would have, from its cause's moment still. Told only the first time after it set out; after that
-/// its length is its own. What sets it out is read by this box (its `content`), so it is laid out again at that
-/// cause.
-pub fn[W : LaidOver] Layout::way_over(self : Layout, way : W, whole : Double) -> Unit {
-  guard self.live.val && self.owner.tree.layout_owner == self.owner.at else {
-    abort("a layout context is only used inside its own callback")
-  }
-  self.owner.tree.ways_over.push(fn() { way.over_laid(whole) })
-}
-
-///|
 /// The room under what it holds and how much of its foot is covered, as what holds it (or a holder of that) gave it as
 /// it measured it (Layout::measure's `foot`), in this layout: None where none did. Read so, it is laid out again as
 /// that changes.
@@ -339,6 +324,10 @@ pub fn Layout::reported(self : Layout, child : View, name : String) -> Double? {
 /// The span `child` reported by `name` (Layout::report_span), as Layout::reported reads a number.
 pub fn Layout::reported_span(self : Layout, child : View, name : String) -> (Double, Double)? {
   self.check(child)
+  // (what it said in this layout, measured here first: never what a layout before said, read before it is measured)
+  guard self.measured.contains(child.at) else {
+    abort("Layout::reported: a child is read only after it is measured in the same layout (Layout::measure, fit)")
+  }
   let tree = child.tree
   // (the nearest of it and what it holds that says it, from it down)
   let todo = [child.at]

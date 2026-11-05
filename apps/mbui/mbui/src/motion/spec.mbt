@@ -52,16 +52,9 @@ pub fn tween(ms : Double, ease~ : @ui.Ease, delay? : Double = 0.0) -> Spec {
 /// fast as it went (or as the hand let it go: Anim::animate's `velocity`). `points`: how many points one of its units
 /// is (a progress from 0 to 1 over a way 300 points long: 300); `over`: how far it goes, said for it (what moves
 /// together, the furthest of them: Spec::over).
-/// `over=laid`: how far, said by the layout that knows it as it is laid out (Layout::way_over), where it sets out at
-/// its cause not knowing it yet.
 pub fn move(points? : Double = 1.0, over? : Double = -1.0, delay? : Double = 0.0) -> Spec {
   Moved(points, over, delay)
 }
-
-///|
-/// How far a Move goes, said by a layout (`move(over=laid)`): known once it is laid out, told the Way then
-/// (Layout::way_over).
-pub let laid : Double = -2.0
 
 ///|
 /// A Move said to go `points` far (what moves with others of the same cause, as long as the furthest of them); any
@@ -383,4 +376,20 @@ fn dmax(a : Double, b : Double) -> Double {
   } else {
     b
   }
+}
+
+///|
+/// Where a motion by this spec is `ms` after its cause, from `from` to `to`, as long as it goes there (Spec::duration,
+/// as fast as nothing at its start): worked out where what it moves is drawn, from the cause's moment and a length known
+/// only as things are laid out (a sidebar's width: `move(over=whole)`, whole read in `Painted` as it is laid out), each
+/// frame from those alone, nothing kept or told.
+pub fn Spec::at_since(self : Spec, ms : Double, from : Double, to : Double) -> Double {
+  if ms <= 0.0 {
+    return from
+  }
+  let dur = self.duration(from, to, 0.0)
+  if dur <= 0.0 || ms >= dur {
+    return self.value_at(dur.ceil(), dur, from, to, 0.0).0
+  }
+  self.value_at(ms, dur, from, to, 0.0).0
 }

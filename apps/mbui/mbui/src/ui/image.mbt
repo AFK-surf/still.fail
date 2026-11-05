@@ -224,6 +224,13 @@ fn bucket(px : Double) -> Int {
 }
 
 ///|
+/// The size a picture is decoded at to be shown `px` pixels on its long side (Ctx::image_want, image_ready: one decode for
+/// every size it stands for): what asks for a picture at sizes that change (a list as its width does) asks once for each.
+pub fn image_decoded_px(px : Double) -> Int {
+  bucket(px)
+}
+
+///|
 fn ImageEntry::poll(self : ImageEntry, now : Double) -> Unit {
   if self.state == 0 {
     let st = h_image_info(self.id, image_info_out)

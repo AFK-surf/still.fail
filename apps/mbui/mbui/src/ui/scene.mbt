@@ -770,6 +770,13 @@ fn Ctx::notch_last(self : Ctx, n : Node) -> Unit {
   if r <= 0.0 {
     return
   }
+  self.notch_last_at(y, r, f)
+}
+
+///|
+/// The notch on the instance just emitted (its circle's middle below the top, 21; its radius, 22; its fillets', 23):
+/// an old view's box's (Ctx::notch_last) and a node's (View::notch) alike.
+fn Ctx::notch_last_at(self : Ctx, y : Double, r : Double, f : Double) -> Unit {
   let b = (self.ninst - 1) * inst_size
   self.inst[b + 21] = y
   self.inst[b + 22] = r

@@ -98,3 +98,11 @@ test "images_ready: each named picture decoded at its size or failed, by the dec
   t.draw()
   assert_eq((pending.length(), none, one, ready()), (2, false, false, true))
 }
+
+///|
+test "image_decoded_px: the size a picture is decoded at for a size it is shown at, one for every size it stands for" {
+  assert_eq(
+    [10.0, 64.0, 65.0, 300.0, 512.0, 513.0, 100000.0].map(@ui.image_decoded_px),
+    [64, 64, 128, 512, 512, 1024, 8192],
+  )
+}
