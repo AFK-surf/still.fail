@@ -1847,7 +1847,7 @@ fn Ctx::scene_redrawn(
 /// a layer something of changed and nothing told (a read not followed, a cause not said): the test fails, saying where.
 /// `copied`: the layers copied before the frame.
 fn Ctx::scene_check(self : Ctx, copied : Int) -> Unit {
-  guard looks_check.val &&
+  guard frame_checked() &&
     (scene_work.copied > copied || tree_alone_drawn.val) &&
     view_app.val is Some(tree) &&
     // (told something since it was drawn (what the frame published after it painted: where an anchor is, what its

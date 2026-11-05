@@ -480,6 +480,9 @@ pub fn Tester::new(
   rows_grid_test.val = false
   // (each frame of the looks by the clock alone drawn whole after it as well, and the two compared: frame_watch.mbt)
   looks_check.val = true
+  // (every frame of it checked till it says otherwise: Tester::scene_checks_every)
+  checks_every.val = 1
+  checks_frame.val = 0
   looks_made_at.val = loc.to_string()
   words_over_begin(loc.to_string(), words_over_held)
   rows_steady_begin(loc.to_string(), words_over_held)
