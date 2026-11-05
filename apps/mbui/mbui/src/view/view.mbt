@@ -3406,14 +3406,13 @@ fn Tree::measured_now(self : Tree) -> Unit {
     }
     self.bindings_due.clear()
     if self.layout_due && self.measured_gen < 0 {
-      self.work.computes = self.work.computes + 1
-      let g = @flex.computes() + 1
-      @flex.compute(self.nodes[0].flex, width=self.last_w, height=self.last_h, round=false, reuse=true)
-      self.measured_gen = g
-      // (placed by once things are placed, whatever is laid out again before that)
-      if self.walk_from < 0 {
-        self.walk_from = g
-      }
+      self.laid_out_now(0, self.last_w, self.last_h, fn(g) {
+        self.measured_gen = g
+        // (placed by once things are placed, whatever is laid out again before that)
+        if self.walk_from < 0 {
+          self.walk_from = g
+        }
+      })
     }
   })
   if shown != at {
@@ -6565,21 +6564,19 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool) {
     self.layout_due = false
     // (laid out already to be read, nothing marked since: placed by that; else laid out now, what was laid out to be
     // read before it and not placed by yet placed too, Tree::measured_now)
-    let gen = if self.measured_gen >= 0 {
-      if self.walk_from >= 0 { self.walk_from } else { self.measured_gen }
+    if self.measured_gen >= 0 {
+      let gen = if self.walk_from >= 0 { self.walk_from } else { self.measured_gen }
+      self.measured_gen = -1
+      self.walk_from = -1
+      self.walk(0, gen, true)
     } else {
-      self.work.computes = self.work.computes + 1
-      let g = @flex.computes() + 1
-      @flex.compute(self.nodes[0].flex, width=w, height=h, round=false, reuse=true)
-      if self.walk_from >= 0 && self.walk_from < g {
-        self.walk_from
-      } else {
-        g
-      }
+      self.laid_out_now(0, w, h, fn(g) {
+        let gen = if self.walk_from >= 0 && self.walk_from < g { self.walk_from } else { g }
+        self.measured_gen = -1
+        self.walk_from = -1
+        self.walk(0, gen, true)
+      })
     }
-    self.measured_gen = -1
-    self.walk_from = -1
-    self.walk(0, gen, true)
   }
   // (placed or faded by its own: it alone composed again)
   let places_done = fn() {
@@ -6607,7 +6604,8 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool) {
         }
       }
     }
-    self.besides_placed()
+    // (what one laid out as wide as its anchor set off done once it is placed beside it too: Tree::laid_out_now)
+    @signals.afters_held(fn() { self.besides_placed() })
   }
   // (what changed of its look alone: its content, nothing else)
   for at in self.looks_due {
@@ -6660,6 +6658,29 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool) {
     }
   }
   (placing, ordered)
+}
+
+///|
+/// Node `at` and what it holds laid out `width` by `height` now, with `then` (what is placed from it: walked,
+/// Tree::walk), the generation of that layout given `then`: what a child made in it sets off after a flush (a move
+/// from a composer handed over measuring where it lands) waits till it is laid out and placed (@signals.afters_held;
+/// its effects run as ever), never between its making and its measuring. Every layout of the tree goes through here (a frame's, one a change asks for: Tree::measured_now,
+/// what goes beside another as wide as it: Tree::besides_placed).  A layout a change asks for to read sizes (placed as the
+/// frame is): what it sets off done as it ends, reading where it is laid out (View::laid_window_now: from the layout,
+/// not from where it is placed).
+fn Tree::laid_out_now(
+  self : Tree,
+  at : Int,
+  width : Double,
+  height : Double,
+  then : (Int) -> Unit,
+) -> Unit {
+  self.work.computes = self.work.computes + 1
+  let g = @flex.computes() + 1
+  @signals.afters_held(fn() {
+    @flex.compute(self.nodes[at].flex, width~, height~, round=false, reuse=true)
+    then(g)
+  })
 }
 
 ///|
