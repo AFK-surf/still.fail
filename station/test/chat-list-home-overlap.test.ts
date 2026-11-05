@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { constants } from "node:sqlite";
 import { test } from "node:test";
+import { recentChatIds } from "../src/store/chat-list.ts";
 import { installRecentHomeIndex, scanRecentHomeChatsStep, settleRecentHomeChatStep } from "../src/store/chat-list-home-index.ts";
-import { installRecentHomeOverlap, scanRecentHomeOverlapStep, settleRecentHomeOverlapStep } from "../src/store/chat-list-home-overlap.ts";
+import { installRecentHomeOverlap, readPreparedRecentHome, scanRecentHomeOverlapStep, settleRecentHomeOverlapStep } from "../src/store/chat-list-home-overlap.ts";
 import { scanRecentWorkspaceStep } from "../src/store/chat-list-scope-build.ts";
 import { trackRecentScope } from "../src/store/chat-list-scope-journal.ts";
 import { putRecentScopeSource, removeRecentScopeSource } from "../src/store/chat-list-scope-rows.ts";
@@ -26,6 +28,7 @@ for (const recursive of [false, true]) test(`home and workspace overlap is count
     }
     while (!scanRecentHomeChatsStep(db, 2).scanDone) { /* Enqueue default-home chats. */ }
     while (!settleRecentHomeChatStep(db, 2).chatsDone) { /* Prepare the default scope. */ }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1").run();
     installRecentHomeOverlap(db);
     while (!scanRecentHomeOverlapStep(db, 1).scanDone) { /* Schedule old default rows. */ }
     const settle = () => {
@@ -41,12 +44,19 @@ for (const recursive of [false, true]) test(`home and workspace overlap is count
     settle();
     assert.equal(count("home"), 1);
     assert.equal(count("elsewhere"), 1);
+    const cases = ["home", "elsewhere"].flatMap((home) => [1, 2, 10].map((limit) =>
+      ({ home, limit, expected: recentChatIds(db, home, home, limit) })));
+    db.setAuthorizer((action, name) => action === constants.SQLITE_READ &&
+      ["threads", "thread_state", "entries", "sessions", "thread_sessions"].includes(name ?? "") ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    try { for (const { home, limit, expected } of cases) assert.deepEqual(readPreparedRecentHome(db, home, limit), expected); }
+    finally { db.setAuthorizer(null); }
     removeRecentScopeSource(db, "home", BigInt(shared), "one");
     assert.equal(count("home"), 0);
     putRecentScopeSource(db, "home", BigInt(shared), "one");
     assert.equal(count("home"), 1);
     db.prepare("DELETE FROM thread_sessions WHERE thread = ? AND session = 'missing'").run(shared);
     while (!settleRecentHomeChatStep(db, 2).chatsDone) { /* All remaining members have named workspaces. */ }
+    assert.equal(readPreparedRecentHome(db, "home", 5), null, "a pending overlap cannot supply a complete count");
     settle();
     assert.equal(count("home"), 0);
     assert.equal(count("elsewhere"), 0);
@@ -57,6 +67,7 @@ for (const recursive of [false, true]) test(`home and workspace overlap is count
       const expected = db.prepare(`SELECT count(*) AS n FROM recent_scope_rows s
         JOIN recent_home_rows h ON h.thread = s.thread WHERE s.ws = ?`).get(ws)!.n;
       assert.equal(count(ws), expected);
+      assert.deepEqual(readPreparedRecentHome(db, ws, 5), recentChatIds(db, ws, ws, 5));
     }
-  } finally { store.close(); }
+  } finally { db.setAuthorizer(null); store.close(); }
 });

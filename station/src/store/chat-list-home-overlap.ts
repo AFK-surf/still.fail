@@ -1,7 +1,9 @@
 // A default-home chat can also be in a named workspace. These rows/counts let a future home reader count that
 // intersection exactly; it must wait for both the old-row scan and every pending overlap batch before using it.
 import type { DatabaseSync } from "node:sqlite";
-import { installRecentHomeIndex } from "./chat-list-home-index.ts";
+import { installRecentHomeIndex, readPreparedDefaultHome } from "./chat-list-home-index.ts";
+import type { RecentChatPage } from "./chat-list-index.ts";
+import { readPreparedRecentWorkspace } from "./chat-list-scope-rows.ts";
 
 const mark = (thread: string) => `
   UPDATE recent_home_overlap_dirty SET revision = revision + 1 WHERE thread = ${thread};
@@ -111,4 +113,41 @@ export function settleRecentHomeOverlapStep(db: DatabaseSync, limit = 64): { ove
     db.exec("COMMIT");
     return { overlapsDone: done, visited: rows.length };
   } catch (error) { db.exec("ROLLBACK"); throw error; }
+}
+
+type Ordered = { thread: bigint; at: bigint; said_at: bigint; created_at: bigint };
+const before = (a: Ordered, b: Ordered) => a.at !== b.at ? a.at > b.at : a.said_at !== b.said_at ? a.said_at > b.said_at
+  : a.created_at !== b.created_at ? a.created_at > b.created_at : a.thread >= b.thread;
+
+/// Prototype for the home union: both inputs and the exact overlap count are read on one snapshot. This is not
+/// connected to the real reader or scheduler; those must complete all builders and handle waiting first.
+export function readPreparedRecentHome(db: DatabaseSync, home: string, limit: number): RecentChatPage | null {
+  if (!Number.isSafeInteger(limit) || limit < 0) throw new RangeError("recent home page size must be nonnegative");
+  if (limit === 0) return { ids: [], total: 0 };
+  db.exec("SAVEPOINT recent_home_union");
+  try {
+    const meta = db.prepare("SELECT scan_done FROM recent_home_overlap_meta WHERE id = 1").get() as { scan_done: number };
+    if (meta.scan_done !== 1 || db.prepare("SELECT 1 FROM recent_home_overlap_dirty LIMIT 1").get() !== undefined) return null;
+    const defaults = readPreparedDefaultHome(db, limit), workspace = readPreparedRecentWorkspace(db, home, limit);
+    if (!defaults || !workspace) return null;
+    const count = db.prepare("SELECT total FROM recent_home_overlap_totals WHERE ws = ?").get(home) as { total: number } | undefined;
+    const defaultQuery = db.prepare(`SELECT thread, at, said_at, created_at FROM recent_home_rows INDEXED BY recent_home_order
+      ORDER BY at DESC, said_at DESC, created_at DESC, thread DESC LIMIT ?`);
+    const workspaceQuery = db.prepare(`SELECT thread, at, said_at, created_at FROM recent_scope_rows INDEXED BY recent_scope_order
+      WHERE ws = ? ORDER BY at DESC, said_at DESC, created_at DESC, thread DESC LIMIT ?`);
+    defaultQuery.setReadBigInts(true);
+    workspaceQuery.setReadBigInts(true);
+    const left = defaultQuery.all(limit) as Ordered[], right = workspaceQuery.all(home, limit) as Ordered[];
+    const ids: number[] = [], seen = new Set<bigint>();
+    let i = 0, j = 0;
+    while (ids.length < limit && (i < left.length || j < right.length)) {
+      const item = j >= right.length || (i < left.length && before(left[i]!, right[j]!)) ? left[i++]! : right[j++]!;
+      if (seen.has(item.thread)) continue;
+      const id = Number(item.thread);
+      if (!Number.isSafeInteger(id)) throw new RangeError("recent chat id exceeds JavaScript's safe integer range");
+      seen.add(item.thread);
+      ids.push(id);
+    }
+    return { ids, total: defaults.total + workspace.total - (count?.total ?? 0) };
+  } finally { db.exec("RELEASE recent_home_union"); }
 }
