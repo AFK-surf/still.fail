@@ -324,6 +324,8 @@ export class SessionActor {
   private unread: PendingMessage[] = [];
   private queued = 0;
   private formatAbort: AbortController | null = null;
+  /// File work cannot be interrupted by closing the effect that awaits it; disposal waits for it to stop.
+  private archiving: Promise<void> | null = null;
 
   constructor(key: string, runtime: RuntimeKind, deps: SessionDeps) {
     this.key = key;
@@ -373,7 +375,11 @@ export class SessionActor {
   cleanArchive(): Promise<void> {
     return this.enqueue(async () => {
       if (this.agent || this.turn || this.waiting !== null || this.notices.length > 0) return;
-      await this.deps.cleanArchive?.(this.key);
+      const work = this.deps.cleanArchive?.(this.key);
+      if (work === undefined) return;
+      const archiving = Promise.resolve(work);
+      this.archiving = archiving;
+      try { await archiving; } finally { if (this.archiving === archiving) this.archiving = null; }
     });
   }
 
@@ -889,7 +895,8 @@ export class SessionActor {
     const agent = this.agent;
     this.agent = null;
     this.close();
-    await agent?.session.dispose();
+    try { await agent?.session.dispose(); }
+    finally { await this.archiving?.catch(() => {}); }
   }
 
   // ── inside the queue ─────────────────────────────────────────────────────────────────────────────────────────
