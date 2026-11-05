@@ -311,6 +311,7 @@ pub fn chat_list_node(
   let picture_changes : Map[String, Bool] = {}
   let picture_changed = @signals.signal(0)
   let picture_width = Ref(0.0)
+  let picture_live = Ref(true)
   let request_picture_row = fn(k : String) {
     guard picture_rows.get(k) is Some(watch) else { return }
     let entry = watch.read(fn() { row_of(k).map(fn(row) { row.0 }) })
@@ -328,16 +329,25 @@ pub fn chat_list_node(
     }
   }
   v.owns(fn() {
+    picture_live.val = false
     for watch in picture_rows.values() { watch.stop() }
     picture_rows.clear()
   }) |> ignore
-  // A visible message can gain a file without its row moving. Respond to that data change after the frame is drawn,
-  // without following the layout result in a binding.
-  @ui.read_drawn(v, fn() { picture_changed.get() }, fn(_) {
-    let changed = picture_changes.keys().to_array()
-    picture_changes.clear()
-    for k in changed { request_picture_row(k) }
+  // A visible message can gain a file without its row moving. Its data change asks for the file after the change is
+  // delivered, using the last sighted width; it does not need another frame to be drawn.
+  let stop_picture_changes = @signals.effect(fn() {
+    picture_changed.get() |> ignore
+    @signals.after_flush(fn() {
+      if picture_live.val {
+        @signals.untracked(fn() {
+          let changed = picture_changes.keys().to_array()
+          picture_changes.clear()
+          for k in changed { request_picture_row(k) }
+        })
+      }
+    })
   })
+  v.owns(stop_picture_changes) |> ignore
   // (the rows made now, by their keys: where each is, what is read)
   let row_views : Map[String, @view.View] = {}
   // The list reports the rows it actually drew after paint. Keep that observation outside the tree: it must never
