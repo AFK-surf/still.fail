@@ -8,6 +8,36 @@ import { readPreparedRecentWorkspace } from "../src/store/chat-list-scope-rows.t
 import { settleRecentScopeVisibilityStep } from "../src/store/chat-list-scope-visibility.ts";
 import { Store } from "../src/store/store.ts";
 
+for (const recursive of [false, true]) test(`a frequently moving chat does not prevent another workspace from settling (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    for (const [key, ws] of [["a", "a"], ["b", "b"], ["here", "here"], ["away", "away"]] as const)
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws });
+    const hot = store.openThread("ember", "EMBER", "hot", "Hot", null).id;
+    const target = store.openThread("ember", "EMBER", "target", "Target", null).id;
+    const move = db.prepare("UPDATE threads SET home = ? WHERE id = ?");
+    move.run("a", hot);
+    move.run("here", target);
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    while (!scanRecentWorkspaceStep(db, "here", 1).sourceDone) { /* Prepare the target workspace. */ }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [target], total: 1 });
+    move.run("away", target);
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null);
+    let page = null;
+    for (let i = 0; i < 16 && page === null; i++) {
+      move.run(i % 2 === 0 ? "b" : "a", hot);
+      assert.ok(settleRecentScopeVisibilityStep(db, 1).visited <= 1);
+      page = readPreparedRecentWorkspace(db, "here", 5);
+    }
+    assert.deepEqual(page, recentChatIds(db, "here", "home", 5),
+      "work on the unrelated changing chat must not indefinitely postpone this workspace");
+  } finally { store.close(); }
+});
+
 for (const recursive of [false, true]) for (const home of ["two", null]) {
   test(`a changed chat home cannot leave a workspace page stale (home ${home}, recursive triggers ${recursive})`, () => {
     const store = Store.open(":memory:");
