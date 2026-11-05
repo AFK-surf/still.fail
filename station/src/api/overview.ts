@@ -11,7 +11,7 @@ import { platform } from "../platform/index.ts";
 import type { Lang } from "../ops/i18n.ts";
 import type { Hub } from "../sessions/hub.ts";
 import type { Store } from "../store/store.ts";
-import { sessionChatReady } from "../store/session-chat-index.ts";
+import { sessionChatReadable } from "../store/session-chat-index.ts";
 import type { Updates } from "../updates/updates.ts";
 import { type RootView, rootView, rootsOf } from "../drive/drive.ts";
 import { sees } from "../store/rows.ts";
@@ -277,7 +277,7 @@ async function decisionsView(d: OverviewDeps, viewer: Viewer): Promise<unknown> 
           // A historical check can name a session deleted while the worker was preparing it. It has no scope to
           // prepare; retain the original title fallback rather than waiting for that scope forever.
           if (d.store.getSession(session) === null) names.set(session, chatTitleOf(d.store, session));
-          else if (!sessionChatReady(d.store.db, session)) missing.push(session);
+          else if (!sessionChatReadable(d.store.db, session)) missing.push(session);
           else names.set(session, chatTitleOf(d.store, session));
         }
       } finally { d.store.db.exec("RELEASE overview_chat_names"); }

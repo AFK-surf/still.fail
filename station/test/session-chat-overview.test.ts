@@ -30,6 +30,8 @@ test("the overview prepares the names it needs together before reading them", as
     for (const [key, title] of [["s1", "First"], ["s2", "Second"], ["elsewhere", "Other"]]) {
       store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
         token: key, createdAt: 1, lastActiveAt: 1, ws: "mine" });
+      const older = store.openThread("slack", "C", `${key}-older`, null, null);
+      store.joinThread(older.id, key, "slack");
       const thread = store.openThread("ember", "EMBER", key, title, null);
       store.joinThread(thread.id, key, "ember");
     }
@@ -65,6 +67,8 @@ test("a session moved to another workspace while names are prepared is not shown
   try {
     store.insertSession({ key: "s", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
       token: "s", createdAt: 1, lastActiveAt: 1, ws: "mine" });
+    const older = store.openThread("slack", "C", "older", null, null);
+    store.joinThread(older.id, "s", "slack");
     const thread = store.openThread("ember", "EMBER", "s", "Private title", null);
     store.joinThread(thread.id, "s", "ember");
     const hub: any = { processes: () => [], config: () => ({ dataDir: "/" }),
@@ -89,6 +93,8 @@ test("a home-workspace session deleted during name preparation does not keep the
   try {
     store.insertSession({ key: "s", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
       token: "s", createdAt: 1, lastActiveAt: 1 });
+    const older = store.openThread("slack", "C", "older", null, null);
+    store.joinThread(older.id, "s", "slack");
     const thread = store.openThread("ember", "CHAT", "s", "Old title", null);
     store.joinThread(thread.id, "s", "ember");
     let requests = 0;

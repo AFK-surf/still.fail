@@ -294,7 +294,9 @@ for (const tracked of [false, true]) test(`a session removed before ${tracked ? 
 test("a synchronous title keeps its immediate answer while requesting preparation", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
+    const older = store.openThread("slack", "C", "older", null, null).id;
     const thread = store.openThread("ember", "C", "first", null, null).id;
+    store.joinThread(older, "s", "c");
     store.joinThread(thread, "s", "c");
     const requests: string[] = [];
     store.requestSessionChat = (session) => requests.push(session);

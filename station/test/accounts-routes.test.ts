@@ -1110,6 +1110,8 @@ test("an overview names only the visible chats once when it makes the archive po
   try {
     for (const [key, ws] of [["b1", "B"], ["b2", "B"], ["w", "W"]] as const) {
       t.store.insertSession({ key, ws, connect: "ds", runtime: "claude", profile: "cc", workspace: `/w/${key}`, token: key, createdAt: 1, lastActiveAt: 1 });
+      const older = t.store.openThread("slack", "C", `${key}-older`, null, null);
+      t.store.joinThread(older.id, key, "ds");
       const thread = t.store.openThread(`chat:${key}`, key, key, null, null);
       t.store.joinThread(thread.id, key, "ds");
       t.store.setThreadTitle(thread.id, `title-${key}`);

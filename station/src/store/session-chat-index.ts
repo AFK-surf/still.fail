@@ -64,10 +64,25 @@ export const SESSION_CHAT_INDEXED = `WITH own AS MATERIALIZED (${SESSION_CHAT_EM
   SELECT t.* FROM (SELECT * FROM own UNION ALL SELECT * FROM other) c JOIN threads t ON t.id=c.thread
   ORDER BY c.last_at DESC,c.created_at DESC,c.thread DESC LIMIT 1`;
 
+// Zero or one membership determines the answer without maintaining an order. Do not read the membership's id into
+// JavaScript separately: an old orphaned membership may contain an integer outside JavaScript's safe range.
+export const SESSION_CHAT_SMALL = `WITH small AS MATERIALIZED
+  (SELECT thread FROM thread_sessions INDEXED BY thread_sessions_session WHERE session=?1 LIMIT 2)
+  SELECT (SELECT COUNT(*) FROM small) AS _member_count,t.* FROM (SELECT 1) x
+  LEFT JOIN threads t ON (SELECT COUNT(*) FROM small)=1 AND t.id=(SELECT thread FROM small LIMIT 1)`;
+export const SESSION_CHAT_MANY = `SELECT 1 FROM thread_sessions INDEXED BY thread_sessions_session
+  WHERE session=?1 LIMIT 1 OFFSET 1`;
+
 export function sessionChatReady(db: DatabaseSync, session: string): boolean {
   checkSessionChatIndex(db);
   const row = db.prepare("SELECT complete FROM session_chat_scopes WHERE session=?").get(session) as { complete: number } | undefined;
   return row?.complete === 1 && ccSessionReady(db, session);
+}
+
+/// Small sessions need no prepared order; the caller reads this and its answer in the same snapshot.
+export function sessionChatReadable(db: DatabaseSync, session: string): boolean {
+  checkSessionChatIndex(db);
+  return db.prepare(SESSION_CHAT_MANY).get(session) === undefined || sessionChatReady(db, session);
 }
 
 export class SessionChatUnavailable extends Error {
@@ -78,6 +93,9 @@ export class SessionChatUnavailable extends Error {
 export function indexedSessionChat(db: DatabaseSync, session: string): Record<string, unknown> | null {
   db.exec("SAVEPOINT session_chat_read");
   try {
+    checkSessionChatIndex(db);
+    const small = db.prepare(SESSION_CHAT_SMALL).get(session) as ({ _member_count: number; id: number | null } & Record<string, unknown>);
+    if (small._member_count < 2) return small.id === null ? null : small;
     if (!sessionChatReady(db, session)) throw new SessionChatUnavailable();
     return db.prepare(SESSION_CHAT_INDEXED).get(session) ?? null;
   } finally { db.exec("RELEASE session_chat_read"); }
