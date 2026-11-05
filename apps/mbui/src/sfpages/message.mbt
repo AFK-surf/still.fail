@@ -312,7 +312,7 @@ pub fn others_message(
 fn message_avatar(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, agent : String) -> Unit {
   match m.author_kind {
     "agent" => agent_avatar(c, src, here, "m:" + m.ts, m.by.maker, m.by.runtime, "", agent)
-    "ember" | "stillfail" => agent_avatar(c, src, here, "m:" + m.ts, "", "", "", "")
+    "station" | "ember" | "stillfail" => agent_avatar(c, src, here, "m:" + m.ts, "", "", "", "")
     _ => person_avatar(c, src, m.author, m.by.name, m.by.picture)
   }
 }

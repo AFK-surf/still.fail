@@ -34,6 +34,7 @@ import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
 import { ReadWhole, useWhole } from "./brief.ts";
 import { sampleHistory } from "./samples.ts";
+import { isOwnSurface } from "../../client/core-ts/src/titles.ts";
 
 /** The room between two items of a history (History.css.ts `historyBody`). */
 const GAP_PX = 14;
@@ -288,7 +289,7 @@ function Ev({ icon, state, tone, children }: { icon: ReactNode; state?: string |
 /** A place as its platform's mark and its name: a Slack thread opens in Slack; a still.fail chat, its agent's page. */
 function Where({ place }: { place: Place }) {
   const link = useLink();
-  const inner = <>{(place.surface === "ember" || place.surface === "stillfail") ? <Mark size={12} /> : <ElsewhereLogo kind={place.surface} size={12} />}<span className={css.hPlaceName}>{place.name}</span></>;
+  const inner = <>{isOwnSurface(place.surface) ? <Mark size={12} /> : <ElsewhereLogo kind={place.surface} size={12} />}<span className={css.hPlaceName}>{place.name}</span></>;
   if (place.url) return <a className={css.hPlace} href={place.url} target="_blank" rel="noopener">{inner}</a>;
   return place.session
     ? <Link className={css.hPlace} to={link(`/chats/${encodeURIComponent(place.session)}`)}>{inner}</Link>

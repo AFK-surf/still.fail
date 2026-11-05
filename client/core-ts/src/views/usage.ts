@@ -11,6 +11,7 @@ import * as model from "../shapes/model.ts";
 import type { Value } from "../store.ts";
 import { arr as arrU, get as getU, isObject } from "../util.ts";
 import { scale } from "./scale.ts";
+import { isOwnSurface } from "../titles.ts";
 
 export { scale };
 
@@ -361,7 +362,7 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
         const title = typeof get(known, "title") === "string" ? known.title : t("core-views.usage.deleted_chat");
         const archived = get(known, "archived") === true;
         const surface = get(known, "surface");
-        const slack = typeof surface === "string" && !(surface === "ember" || surface === "stillfail");
+        const slack = typeof surface === "string" && !isOwnSurface(surface);
         const sub = [place, slack ? "Slack" : null, archived ? t("core-views.usage.archived") : null].filter((x) => x !== null);
         let page: J = null;
         if (known !== undefined && !slack) page = { station: s.address, thread };

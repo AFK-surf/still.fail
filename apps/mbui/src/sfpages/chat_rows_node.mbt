@@ -354,7 +354,7 @@ fn elsewhere_route_node(r : @view.View, s : () -> Elsewhere) -> Unit {
       }
     }, fn(m, mark) {
       match mark {
-        "ember" | "stillfail" =>
+        "chat" | "ember" | "stillfail" =>
           @sf.drawable_node(m, fn() { if @sf.theme().dark { "stillfail_mark_dark" } else { "stillfail_mark" } }, route_mark) |> ignore
         "feishu" => @sf.place_mark_node(m, fn() { true }, route_mark) |> ignore
         _ => @sf.place_mark_node(m, fn() { false }, route_mark) |> ignore
