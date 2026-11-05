@@ -320,7 +320,8 @@ export const AgentsLive = (control: Control) =>
       yield* Effect.addFinalizer(() => Effect.promise(() => workspaceWatch.close()));
       // What the agents run here, watched for the machine's memory (jobs/memory.ts): their agents told when it is much,
       // the largest stopped only when the machine is about to run out.
-      const memory = liveMemory({ data, store, jobs, notify: (session, text) => hub.notify(session, text), clock: hub.clock });
+      const memory = liveMemory({ data, store, jobs, notify: (session, text) => hub.notify(session, text),
+        clock: hub.clock, runnerNames: (runners) => hub.runnerNameSessions(runners) });
       memory.start();
       yield* Effect.addFinalizer(() => Effect.promise(() => memory.close()));
       // Tasks of stations no longer in the workspace, or no longer allowed, stop: once the mesh is up, and as the roster

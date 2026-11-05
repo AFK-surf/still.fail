@@ -20,6 +20,19 @@ export const hasSandboxIndex = (db: DatabaseSync): boolean => db.prepare(EXISTS)
 export const SANDBOX_SESSION = `SELECT s.key FROM sandbox_name_rows n
   CROSS JOIN sessions s ON s.key = n.session
   WHERE n.name = ? ORDER BY s.last_active_at ASC, s.rowid DESC LIMIT 1`;
+/// The old runner lookup preferred live sessions, then the least recently active among sessions with the same id.
+/// Its live and all-session queries use different tie ordering; keep both while checking the unhashed runner part.
+const RUNNER_ORDER = `(s.archived_at IS NULL) DESC, s.last_active_at ASC,
+  CASE WHEN s.archived_at IS NULL THEN s.rowid END ASC,
+  CASE WHEN s.archived_at IS NOT NULL THEN s.rowid END DESC`;
+export const RUNNER_SESSION_CANDIDATES = `SELECT s.key FROM sandbox_name_rows n
+  CROSS JOIN sessions s ON s.key = n.session WHERE n.name = ?
+  ORDER BY ${RUNNER_ORDER}`;
+export const RUNNER_DIRTY_LIMIT = 64;
+export function runnerChoiceFromKeys(count: number): string {
+  if (!Number.isSafeInteger(count) || count < 1 || count > RUNNER_DIRTY_LIMIT + 1) throw new RangeError("bad runner candidate count");
+  return `SELECT s.key FROM sessions s WHERE s.key IN (${Array(count).fill("?").join(", ")}) ORDER BY ${RUNNER_ORDER} LIMIT 1`;
+}
 export const SANDBOX_SCAN_FIRST = "SELECT key AS session FROM sessions WHERE key <= ? ORDER BY key LIMIT ?";
 export const SANDBOX_SCAN_NEXT = "SELECT key AS session FROM sessions WHERE key > ? AND key <= ? ORDER BY key LIMIT ?";
 export const SANDBOX_PRUNE_FIRST = "SELECT session FROM sandbox_name_rows WHERE session <= ? ORDER BY session LIMIT ?";
@@ -106,6 +119,45 @@ export function sandboxSessions(db: DatabaseSync, names: readonly string[]): Map
     for (const name of names) {
       const row = lookup.get(name) as { key: string } | undefined;
       if (row !== undefined) found.set(name, row.key);
+    }
+    db.exec("COMMIT");
+    return found;
+  } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
+}
+
+/// A runner uses the same session-key part as a sandbox. Verify it after the sandbox-name lookup: both names are
+/// shortened, so a collision in the sandbox name alone must not attribute a runner to another session.
+export function runnerNameSessions(db: DatabaseSync, runners: readonly { id: string; part: string }[]): Map<string, string> | null {
+  db.exec("BEGIN");
+  try {
+    // Once historical preparation is complete, a small pending journal can be overlaid on the indexed names. This
+    // keeps one newly created session from making the next memory check reread every unrelated session.
+    const prepared = db.prepare("SELECT 1 FROM sandbox_name_meta WHERE id = 1 AND version = ? AND enabled = 1 AND phase = 2").get(VERSION);
+    if (prepared === undefined) { db.exec("COMMIT"); return null; }
+    const dirty = db.prepare(SANDBOX_DIRTY_BATCH).all(RUNNER_DIRTY_LIMIT + 1) as { session: string }[];
+    if (dirty.length > RUNNER_DIRTY_LIMIT) { db.exec("COMMIT"); return null; }
+    const lookup = db.prepare(RUNNER_SESSION_CANDIDATES);
+    const wanted = new Set(runners.map(({ part }) => part));
+    const changed = new Map<string, string[]>();
+    for (const { session } of dirty) {
+      const part = keyPart(session);
+      if (wanted.has(part)) changed.set(part, [...(changed.get(part) ?? []), session]);
+    }
+    const parts = new Map<string, string | undefined>();
+    const found = new Map<string, string>();
+    for (const { id, part } of runners) {
+      if (!parts.has(part)) {
+        const rows = lookup.all(sandboxName(part)) as { key: string }[];
+        let key = rows.find((row) => keyPart(row.key) === part)?.key;
+        const updates = changed.get(part);
+        if (updates !== undefined) {
+          const choices = [...new Set(key === undefined ? updates : [key, ...updates])];
+          key = (db.prepare(runnerChoiceFromKeys(choices.length)).get(...choices) as { key: string } | undefined)?.key;
+        }
+        parts.set(part, key);
+      }
+      const key = parts.get(part);
+      if (key !== undefined) found.set(id, key);
     }
     db.exec("COMMIT");
     return found;

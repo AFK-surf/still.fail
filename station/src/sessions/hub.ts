@@ -805,6 +805,16 @@ export class Hub {
     if (await stopSandbox(data, keyPart(actor.key))) log.info("hub", "idle session's sandbox stopped", { session: actor.key });
   }
 
+  /// The same session-name lookup serves idle sandboxes and runners, whose ids use the same session-key part.
+  private sandboxNameLookup(): SandboxNameBuilder {
+    return this.sandboxNames ??= new SandboxNameBuilder(this.store, this.options?.previous ?? Promise.resolve(),
+      () => sandboxIdleMs(this.config().dataDir) !== null);
+  }
+
+  runnerNameSessions(runners: readonly { id: string; part: string }[]): Map<string, string> | "fallback" {
+    return runners.length === 0 && this.sandboxNames === null ? new Map() : this.sandboxNameLookup().runners(runners);
+  }
+
   /// Stops the sandboxes of this station's sessions that nothing runs in: a session whose process ended some other way
   /// than going idle (it exited, the station restarted without it), left with its sandbox. Every `SWEEP_MS` while the
   /// station runs things in sandboxes (agents.ts).
@@ -812,9 +822,7 @@ export class Hub {
     const data = this.config().dataDir;
     if (sandboxIdleMs(data) === null) {
       if (sandboxIndexEnabled(this.store.db)) {
-        const lookup = this.sandboxNames ??= new SandboxNameBuilder(this.store, this.options?.previous ?? Promise.resolve(),
-          () => sandboxIdleMs(this.config().dataDir) !== null);
-        await lookup.disable();
+        await this.sandboxNameLookup().disable();
       }
       return;
     }
@@ -822,8 +830,7 @@ export class Hub {
     // Once the lookup exists, keep its journal caught up even when no sandbox is idle. A station that has never
     // needed it does no preparation at all until an idle sandbox is seen.
     if (idle.length === 0 && !sandboxIndexEnabled(this.store.db)) return;
-    const lookup = this.sandboxNames ??= new SandboxNameBuilder(this.store, this.options?.previous ?? Promise.resolve(),
-      () => sandboxIdleMs(this.config().dataDir) !== null);
+    const lookup = this.sandboxNameLookup();
     let sessions = await lookup.sessions(idle);
     // Keep the previous immediate sweep while a handover or a failed preparation keeps the lookup unavailable.
     if (sessions === "fallback" && idle.length > 0)
