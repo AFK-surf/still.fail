@@ -7,6 +7,12 @@ import type { Env } from "../src/env.ts";
 const env = { AUTH_SIGNING_KEY: randomSecret(), PUBLIC_ORIGIN: "https://relay.example", PUBLIC_ORIGIN_ALIASES: "https://old.relay.example", ADMIN_ORIGIN: "https://admin.relay.example", ADMIN_ORIGIN_ALIASES: "https://admin.old.relay.example" } as Env;
 test("only loopback callbacks, this origin's and the console's web callbacks (new host and old) and the app's callback are accepted", () => {
   assert.equal(validRedirect(env, "http://127.0.0.1:43025/oauth/callback"), true);
+  assert.equal(validRedirect(env, "fail.still.android://auth/callback"), true);
+  assert.equal(validRedirect(env, "fail.still.android.beta://auth/callback"), true);
+  assert.equal(validRedirect(env, "fail.still.android.dev://auth/callback"), true);
+  assert.equal(validRedirect(env, "build.monoid.android://auth/callback"), true);
+  assert.equal(validRedirect(env, "fail.still.android.evil://auth/callback"), false);
+  assert.equal(validRedirect(env, "fail.still.android://auth/callback?x=1"), false);
   assert.equal(validRedirect(env, "https://relay.example/auth/callback"), true);
   assert.equal(validRedirect(env, "https://admin.relay.example/auth/callback"), true);
   assert.equal(validRedirect(env, "https://old.relay.example/auth/callback"), true);
