@@ -1286,7 +1286,7 @@ let rows_checking : Ref[RowsCheck?] = Ref(None)
 /// builds tell outside and before it is painted: built again from the same state, it must come out the same, node for
 /// node, and say the same of the frame; so it is painted the same.
 fn Ctx::rows_check_begin(self : Ctx, kept0 : Int) -> Bool {
-  if !looks_check.val || nodes_run.kept <= kept0 || rows_checking.val is Some(_) {
+  if !frame_checked() || nodes_run.kept <= kept0 || rows_checking.val is Some(_) {
     return false
   }
   // (what it read changed as it was built or laid out, a measure taken as it was laid out: built again, it would build

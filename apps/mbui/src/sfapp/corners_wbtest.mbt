@@ -91,7 +91,7 @@ fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
     let squeezed = squeeze_windows.contains(win.0)
     for mode in corner_modes {
       let at = "\{win.0}-\{lang} \{mode}"
-      let t = screen_in(mode, win, lang)
+      let t = screen_in(mode, win, lang, checks=scan_checks)
       if press_room {
         // (a press's room, at rest and with what shows only under the hand shown: rooms_known_wbtest.mbt; and the
         // contrast's, in the light theme, once: contrast_wbtest.mbt)

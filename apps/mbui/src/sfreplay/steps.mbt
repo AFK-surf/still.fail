@@ -105,6 +105,9 @@ pub fn Flow::start(
     Some(text) => @ui.Tester::new(app, w~, h~, env=r.env() + env, text~, platform~, tree=@sfapp.app_tree(the_source), loc~)
     None => @ui.Tester::new(app, w~, h~, env=r.env() + env, platform~, tree=@sfapp.app_tree(the_source), loc~)
   }
+  // (its frames checked as a sweep's are, its first and every flow_checks-th: a flow seen again is a run's frames, none
+  // of them its own test of what moves)
+  t.scene_checks_every(flow_checks)
   // (which station this machine is, as the run's host said)
   if r.local_station() != "" {
     t.set_local_station(r.local_station())
@@ -1038,3 +1041,8 @@ pub fn Flow::share_in(self : Flow, text : String, title? : String = "") -> Unit 
   self.t.draw()
   self.core()
 }
+
+///|
+/// How often a flow seen again checks its frames (Tester::scene_checks_every: its first, then every 8th; mbui,
+/// 2026-11-05).
+let flow_checks : Int = 8

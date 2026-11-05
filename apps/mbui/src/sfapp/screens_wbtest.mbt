@@ -119,6 +119,8 @@ fn screen_played(mode : String, opening : Double, tree? : Bool = true) -> @ui.Te
     time=host_start,
     stable=true,
   )
+  // (each screen's frames checked as a sweep's are: its first and every scan_checks-th)
+  t.scene_checks_every(scan_checks)
   // drawn when the Mac drew (its section's DRAWHASH times): what turns while shown (a spinner, Ctx::cycle) turns
   // through the frames the Mac's did, to the one its picture is of; what its host said of its views (a player's
   // state, a video's frames: VIEWSAID) said again where it said it
