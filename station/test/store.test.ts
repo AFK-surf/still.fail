@@ -8,11 +8,12 @@ import { constants, DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
-  ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_CARD_AFTER_POSTS, CLOSED_SINCE, CLOSED_THREAD_SINCE, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
-  MANUAL, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, POST_AFTER_FIRST, POST_AFTER_INDEXED, POST_BLOCKS_READY, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_JOBS, SESSION_OF_RUNTIME, SESSION_THREAD_BY_ID, STATS_OF, Store, type StoreChange, newMessage,
+  ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_CARD_AFTER_POSTS, CLOSED_SINCE, CLOSED_THREAD_SINCE, DELIVERY_INSERT_IF_ABSENT, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
+  MANUAL, MEMBER_JOIN_IF_NEEDED, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, POST_AFTER_FIRST, POST_AFTER_INDEXED, POST_BLOCKS_READY, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_JOBS, SESSION_OF_RUNTIME, SESSION_THREAD_BY_ID, STATS_OF, Store, type StoreChange, THREAD_INSERT_IF_ABSENT, newMessage,
 } from "../src/store/store.ts";
 import { addListState, firstDelivery, MERGED, SCHEMA } from "../src/store/schema.ts";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
+import { LATEST_THREAD_ATTEMPT, LATEST_THREAD_SCOPE } from "../src/store/latest-thread-index.ts";
 import { CARD_POST_AFTER, CARD_POST_BEFORE, CARD_POST_LATEST, CARD_POST_NEXT, CARD_POST_SAMPLE } from "../src/store/card-post-index.ts";
 import { SESSION_COUNT_FIRST, SESSION_COUNT_NEXT, SESSION_COUNT_TOTAL, SESSION_COUNT_CONNECT, SESSION_COUNT_DISPLACED } from "../src/store/session-counts.ts";
 import { SESSION_LIST_CONNECT, SESSION_LIST_DISPLACED, SESSION_LIST_FIRST, SESSION_LIST_NEXT, SESSION_LIST_SCOPE,
@@ -1476,6 +1477,9 @@ test("what the station asks again and again is planned by an index, never a scan
     [read.ORIGINAL_RUNTIME, ["a"]],
     [ACTIVE_SESSIONS, [0]], [LIVE_SESSIONS, []], [ANY_RUNNING, []], [RUNNING_SESSIONS, []], [JOBS_RUNNING, []], [JOBS_UP, []], [JOB_AT_PORT, [5100]], [SESSION_JOBS, ["a"]],
     [HAS_SESSION_ACTIVE_WATCH, ["a"]], [RUNNING_WAIT_JOBS, ["a"]], [SESSION_THREAD_BY_ID, [1, "a"]],
+    [LATEST_THREAD_ATTEMPT, ["a"]], [LATEST_THREAD_SCOPE, ["a"]],
+    [THREAD_INSERT_IF_ABSENT, ["slack", "C", "1", null, null, 1, null]],
+    [MEMBER_JOIN_IF_NEEDED, [1, "a", "slack", 1]], [DELIVERY_INSERT_IF_ABSENT, [1, 1, "a"]],
     [STATS_OF, ["a"]], [SESSION_COUNT_TOTAL, [1, "ws"]], [SESSION_COUNT_CONNECT, [1, "ws", "a"]],
     [SESSION_COUNT_FIRST, ["100", 64]], [SESSION_COUNT_NEXT, ["1", "100", 64]],
     [SESSION_LIST_FIRST, ["100", 64]], [SESSION_LIST_NEXT, ["1", "100", 64]],
@@ -1506,6 +1510,8 @@ test("what the station asks again and again is planned by an index, never a scan
     assert.ok(!plan.some((d) => scans.test(d)
       && !(sql === detail.sql && d === "SCAN target" && plan.includes("MATERIALIZE targets"))
       && !(sql === RUNNING_WAIT_JOBS && d === "SCAN active" && plan.includes("CO-ROUTINE active"))
+      // `small` contains at most two memberships; `choice` is its one-row sentinel.
+      && !(sql === LATEST_THREAD_ATTEMPT && (d === "SCAN small" || d === "SCAN p"))
       && !(sql === POST_AFTER_INDEXED && (d === "SCAN first" || d === "SCAN second"))
       // One row a workspace.
       && !(sql === HISTORY_SCOPES && d === "SCAN usage_history_total")), `${sql}\n  ${plan.join(" | ")}`);
@@ -1515,6 +1521,14 @@ test("what the station asks again and again is planned by an index, never a scan
     "a port is sought among running and restarting services");
   assert.ok(plans.get(SESSION_THREAD_BY_ID)!.some((d) => d.includes("(thread=? AND session=?)")));
   assert.ok(plans.get(SESSION_THREAD_BY_ID)!.some((d) => d.includes("INTEGER PRIMARY KEY (rowid=?)")));
+  assert.match(LATEST_THREAD_ATTEMPT, /session=\?1 LIMIT 2/);
+  assert.ok(plans.get(LATEST_THREAD_ATTEMPT)!.some((d) => d.includes("thread_sessions_session (session=?)")));
+  assert.ok(plans.get(LATEST_THREAD_ATTEMPT)!.some((d) => d.includes("SEARCH r USING PRIMARY KEY (session=?)")));
+  assert.ok(!plans.get(LATEST_THREAD_ATTEMPT)!.some((d) => d.includes("TEMP B-TREE")));
+  assert.ok(plans.get(LATEST_THREAD_SCOPE)!.some((d) => d.includes("PRIMARY KEY (session=?)")));
+  assert.ok(plans.get(THREAD_INSERT_IF_ABSENT)!.some((d) => d.includes("(surface=? AND channel=? AND thread_ts=?)")));
+  assert.ok(plans.get(MEMBER_JOIN_IF_NEEDED)!.some((d) => d.includes("(thread=? AND session=?)")));
+  assert.ok(plans.get(DELIVERY_INSERT_IF_ABSENT)!.some((d) => d.includes("(thread=? AND n=? AND session=?)")));
   assert.ok(plans.get(SESSION_COUNT_TOTAL)!.some((d) => d.includes("PRIMARY KEY (kind=? AND ws=?)")));
   assert.ok(plans.get(SESSION_COUNT_CONNECT)!.some((d) => d.includes("PRIMARY KEY (kind=? AND ws=? AND connect=?)")));
   assert.ok(plans.get(SESSION_COUNT_FIRST)!.some((d) => d.includes("INTEGER PRIMARY KEY (rowid<?)")));
@@ -1611,13 +1625,17 @@ test("what is told as chats change is planned by the size of what it finds, not 
     [SESSION_UP_JOBS_DISPLACED, ["a", "token", 1]],
     [SESSION_UP_JOBS_CONFLICT, ["a", "token", 1]],
     [SESSION_THREAD_BY_ID, [1, "a"]],
+    [LATEST_THREAD_ATTEMPT, ["a"]], [LATEST_THREAD_SCOPE, ["a"]],
+    [THREAD_INSERT_IF_ABSENT, ["slack", "C", "1", null, null, 1, null]],
+    [MEMBER_JOIN_IF_NEEDED, [1, "a", "slack", 1]], [DELIVERY_INSERT_IF_ABSENT, [1, 1, "a"]],
     [WIDGET_SOURCE, ["a", "/w/item.html"]], [WIDGET_SOURCE_MISSING, ["a"]], [WIDGET_SOURCE_UNUSUAL, ["a"]],
   ];
   const scans = /^SCAN (?!CONSTANT ROW$|\(subquery-\d+\)$|json_each VIRTUAL TABLE\b)/;
   const plans = new Map<string, string[]>();
   for (const [sql, args] of planned) {
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
-    assert.ok(!plan.some((d) => scans.test(d)), `${sql}\n  ${plan.join(" | ")}`);
+    assert.ok(!plan.some((d) => scans.test(d)
+      && !(sql === LATEST_THREAD_ATTEMPT && (d === "SCAN small" || d === "SCAN p"))), `${sql}\n  ${plan.join(" | ")}`);
     plans.set(sql, plan);
   }
   const has = (sql: string, step: string) => assert.ok(plans.get(sql)!.some((d) => d.includes(step)), `${step}\n  ${plans.get(sql)!.join(" | ")}`);
@@ -1636,6 +1654,13 @@ test("what is told as chats change is planned by the size of what it finds, not 
   has(SESSION_BINDINGS_DELETE, "bindings USING INTEGER PRIMARY KEY (rowid=?)");
   has(SESSION_THREAD_BY_ID, "(thread=? AND session=?)");
   has(SESSION_THREAD_BY_ID, "INTEGER PRIMARY KEY (rowid=?)");
+  has(LATEST_THREAD_ATTEMPT, "thread_sessions_session (session=?)");
+  has(LATEST_THREAD_ATTEMPT, "SEARCH r USING PRIMARY KEY (session=?)");
+  lacks(LATEST_THREAD_ATTEMPT, "TEMP B-TREE");
+  has(LATEST_THREAD_SCOPE, "PRIMARY KEY (session=?)");
+  has(THREAD_INSERT_IF_ABSENT, "(surface=? AND channel=? AND thread_ts=?)");
+  has(MEMBER_JOIN_IF_NEEDED, "(thread=? AND session=?)");
+  has(DELIVERY_INSERT_IF_ABSENT, "(thread=? AND n=? AND session=?)");
   has(read.UNREAD, "COVERING INDEX entries_said (thread=? AND n>?)");
   has(read.ASKED_DURING, "entries_agent_at (thread=? AND at>? AND at<?)");
   const stats = `${read.SESSION_STATS} WHERE s.key = ?`;
