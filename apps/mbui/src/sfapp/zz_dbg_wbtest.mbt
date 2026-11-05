@@ -1,33 +1,12 @@
 ///|
 test "zz dbg floor" {
   let t = linger_core()
-  t.run_for(fix_deliver_ms + fix_answer_ms + fix_turn_end_ms + emit_all_ms())
-  println("DBG floor working=\{t.find(tr("android-chat.chat.working"))} end=\{t.at_end()} vis=\{t.visible()} rows=\{t.rows()}")
-  for w in t.words() {
-    if w.2 > -200.0 && w.2 < 900.0 {
-      println("DBGW y=\{w.2} a=\{w.5} \{w.0}")
-    }
+  let total = fix_deliver_ms + fix_answer_ms + fix_turn_end_ms + emit_all_ms()
+  let mut at = 0.0
+  while at < total + 400.0 {
+    t.run_for(100.0)
+    at += 100.0
+    let rd = readings.get("ws1/st1\u{1}s-c1")
+    println("DBG t=\{at}/\{total} working=\{t.find(tr("android-chat.chat.working")) is Some(_)} linger=\{rd.map(fn(r) { r.linger.length() })} running=\{rd.map(fn(r) { r.running.length() })} rows=\{t.rows().length()} last=\{t.rows().last()}")
   }
-}
-
-///|
-test "zz dbg emit" {
-  let clock = Ref::new(0.0)
-  let t = emit_core(clock)
-  let more = Array::makei(30, fn(i) { "第 \{i + 1} 段，接着往下讲。" }).join("\n\n")
-  fix_later(1.0, fn() {
-    fix_chat("s-c1").sent.push(
-      msg(170, "agent", @sffixture.by_agent("anthropic", "claude", "s-c1"), long_reply + "\n\n" + more, "刚刚", {
-        "ts": Json::string("long170"),
-        "said": true,
-      }),
-    )
-  })
-  fix_clock_set(clock, clock.val + 1.0)
-  t.draw()
-  for i in 0..<12 {
-    t.run_for((emit_all_ms() + 1000.0) / 12.0)
-    println("DBG emit +\{i} end=\{t.at_end()} top=\{t.drawn_of("列表改成虚拟列表")} rows=\{t.rows()}")
-  }
-  emit_restore()
 }
