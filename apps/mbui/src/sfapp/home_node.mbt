@@ -82,7 +82,9 @@ fn home_top_bar_node(
   view : () -> ChatsView?,
 ) -> Unit {
   v.box(fn(g) {
-    g.glass(By(fn() { Some(@sf.glass_bar()) })) |> ignore
+    // (pointed at itself, the arrow over it where nothing of it says otherwise, as over main's bar: not left to what is
+    // under its glass, an old view's words picked with the pointer and their I-beam)
+    g.glass(By(fn() { Some(@sf.glass_bar()) })).cursor(Is(Some(Arrow))).points(Is(true)) |> ignore
     g.box(fn(row) {
       row
       .row(Is(true))
