@@ -424,8 +424,9 @@ fn Ctx::sideways_after_layout(self : Ctx) -> Unit {
 }
 
 ///|
-/// What was asked into view (Ctx::show): the id, and the frame it was asked in.
-let shows_asked : Array[(Int, Int)] = []
+/// What was asked into view (Ctx::show): the id, the frame it was asked in, and the frame it was first laid out in
+/// (-1 not yet).
+let shows_asked : Array[(Int, Int, Int)] = []
 
 ///|
 /// What `id` names brought into view once laid out, in every box that scrolls round it (Ctx::capped, Ctx::sideways),
@@ -435,14 +436,18 @@ let shows_asked : Array[(Int, Int)] = []
 /// rows (Ctx::list_scroll_to).
 pub fn Ctx::show(self : Ctx, id : Int) -> Unit {
   if id != 0 {
-    shows_asked.push((id, self.frame_no))
+    shows_asked.push((id, self.frame_no, -1))
   }
 }
 
 ///|
 /// Once laid out: what was asked into view (Ctx::show) brought there, scrolled at once (a step of the keys, as a
 /// browser's menu: no glide behind each press); one not laid out this frame waits for the next (a menu laid out the
-/// frame after the key that opened it), then is forgotten.
+/// frame after the key that opened it), then is forgotten. Brought there again by each build of the frame it was first
+/// laid out in and of every frame after it that still had to move it: what holds it laid out again at another size
+/// (a sheet as tall as what it holds, read back the frame after) would have it out of view again, and nothing asks
+/// again (2026-11-05 选模型浮窗: scrolled for the sheet's first height, the model picked under its foot once it took its
+/// own). Forgotten once a frame after that finds it in view, a box the person scrolls then left where they leave it.
 fn Ctx::shows_after_layout(self : Ctx) -> Unit {
   if shows_asked.is_empty() {
     return
@@ -454,19 +459,20 @@ fn Ctx::shows_after_layout(self : Ctx) -> Unit {
       boxes[st.box] = (id, st)
     }
   })
-  let left : Array[(Int, Int)] = []
+  let left : Array[(Int, Int, Int)] = []
   for ask in shows_asked {
-    let (want, frame) = ask
+    let (want, frame, laid) = ask
     let mut k = 0
     while k < self.count && self.nodes[k].id != want {
       k = k + 1
     }
     if k >= self.count {
-      if self.frame_no <= frame + 1 {
+      if laid < 0 && self.frame_no <= frame + 1 || laid == self.frame_no {
         left.push(ask)
       }
       continue
     }
+    let mut moved_any = false
     // its rect as laid out (each box's scroll in it already), less how much further the boxes inside the one looked at
     // were scrolled here
     let p = self.nodes[k]
@@ -493,6 +499,7 @@ fn Ctx::shows_after_layout(self : Ctx) -> Unit {
           let to = dclamp(to, 0.0, dmax(st.max, 0.0))
           let moved = to - st.x
           if to != st.x {
+            moved_any = true
             st.x = to
             st.rest = -1.0
             st.vel = 0.0
@@ -511,6 +518,11 @@ fn Ctx::shows_after_layout(self : Ctx) -> Unit {
         None => ()
       }
       a = self.nodes[a].parent
+    }
+    // (again in this frame's builds after this one, and in the next frame's where it moved)
+    let laid = if laid < 0 { self.frame_no } else { laid }
+    if laid == self.frame_no || moved_any {
+      left.push((want, frame, laid))
     }
   }
   shows_asked.clear()
