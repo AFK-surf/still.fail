@@ -362,8 +362,9 @@ test "a kept row under what shows, part of it asked into sight: that part's foot
 ///|
 test "scrolls_anchored: flung from its end, it goes as far among 3000 rows as among 300" {
   let gone = fn(n : Int) {
-    // (rows of many heights, counted 80 each till measured: what it counts itself scrolled by changes as they are)
-    let c = anchored_case(n, tall_of=fn(k) { 40.0 + (k % 7).to_double() * 60.0 })
+    // (rows of many heights, the same from its end on, counted 80 each till measured: what it counts itself scrolled by
+    // changes as they are, by as much more as there are more of them)
+    let c = anchored_case(n, tall_of=fn(k) { 40.0 + ((n - 1 - k) % 7).to_double() * 60.0 })
     let id = match c.tree.claimer_of(c.tree.claimers_at(150.0, 10.0), 0.0, 85.0) {
       Some(id) => id
       None => abort("not taken")
