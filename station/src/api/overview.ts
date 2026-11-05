@@ -97,13 +97,21 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
   const raw = d.config() ?? {};
   // What is of the viewer's workspace (docs/multi-workspace.md): its chats, and the connects added in it.
   // (Counted by connect from the viewer's workspace in the index; the processes not cold are the hub's few.)
-  const counted = d.store.sessionCounts(viewer);
-  const sessionsOf = (connect: string | null) => counted.reduce((n, c) => (connect === null || c.connect === connect ? n + c.n : n), 0);
+  const visibleConnects = (Array.isArray(raw.connects) ? raw.connects : []).filter((c: any) => sees(viewer, typeof c?.workspace === "string" && c.workspace !== "" ? c.workspace : null));
+  const ids = visibleConnects.map((c: any) => c.id);
+  let counted = d.store.overviewSessionCounts(viewer, ids);
+  if (counted === null) {
+    if (d.hub.waitForSessionCounts == null || !await d.hub.waitForSessionCounts()) throw new Error("session counts are not ready");
+    counted = d.store.overviewSessionCounts(viewer, ids);
+    if (counted === null) throw new Error("session counts are not ready");
+  }
+  const counts = counted;
+  const sessionsOf = (connect: unknown) => connect === null ? counts.total : typeof connect === "string" ? counts.byConnect.get(connect) ?? 0 : 0;
   const states = [...d.hub.processes()].filter(([key]) => sees(viewer, d.store.getSession(key)?.ws ?? null)).map(([, state]) => state);
   // The agents' runtime processes; background jobs' groups are recorded too (to be reaped), but they are jobs.
   const processes = d.store.listProcesses().filter((p) => p.runtime !== "job");
   const memory = await keptMemory(d, processes.map((p) => p.pgid));
-  const connects = (Array.isArray(raw.connects) ? raw.connects : []).filter((c: any) => sees(viewer, typeof c?.workspace === "string" && c.workspace !== "" ? c.workspace : null)).map((c: any) => {
+  const connects = visibleConnects.map((c: any) => {
     const mode = c.mode ?? "multi-session";
     const runtime = c.bind?.runtime;
     const nonEmpty = (v: unknown) => (typeof v === "string" && v !== "" ? v : null);

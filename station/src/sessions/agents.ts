@@ -65,6 +65,7 @@ import type { TailState } from "../read/tail.ts";
 import { ColdRooms } from "./cold.ts";
 import { Hub } from "./hub.ts";
 import { buildWorkspaceActivity } from "./workspace-activity-builder.ts";
+import { buildSessionCounts } from "./session-count-builder.ts";
 import { PostBlockBuilder } from "./post-block-builder.ts";
 import { roomOf } from "./footprint.ts";
 import { InternalChat } from "./internal.ts";
@@ -249,6 +250,11 @@ export const AgentsLive = (control: Control) =>
         (builder) => Effect.promise(() => builder.close()),
       );
       hub.waitForWorkspaceActivity = () => workspaceActivity.ready;
+      const sessionCounts = yield* Effect.acquireRelease(
+        Effect.sync(() => buildSessionCounts(store, previous)),
+        (builder) => Effect.promise(() => builder.close()),
+      );
+      hub.waitForSessionCounts = () => sessionCounts.ready;
       const postBlocks = yield* Effect.acquireRelease(
         Effect.sync(() => new PostBlockBuilder(store, previous)),
         (builder) => Effect.promise(() => builder.close()),
@@ -768,6 +774,7 @@ export const AgentsLive = (control: Control) =>
           stopArchiving();
           await postBlocks.close();
           await workspaceActivity.close();
+          await sessionCounts.close();
           await time.close();
           await sharing?.close();
           await xshare.close();
