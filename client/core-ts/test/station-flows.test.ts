@@ -14,7 +14,7 @@ import { topicKey } from "../src/protocol.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { SseParser } from "../src/station/sse.ts";
 import { run } from "./run.ts";
-import { Raw, base, entries, entry, overview, session, started, status, stationReplies, threadView } from "./station-fixture.ts";
+import { Raw, base, entries, entry, overview, session, started, status, stationLater, stationReplies, threadView } from "./station-fixture.ts";
 import { merge } from "../src/entries.ts";
 import { apply, call, readsOf, subscribe, v } from "./helpers.ts";
 import { COALESCE_MS, EVICT_AFTER_MS } from "../src/store.ts";
@@ -29,7 +29,7 @@ import { JSON_IDLE_MS, SOCKET_OPEN_MS } from "../src/station/requests.ts";
 import { HostWire, concat, encodeFrame, readAll, takeFrames, type LinkNet } from "../src/station/wire.ts";
 import { NET_EVERY_MS } from "../src/station/topics.ts";
 import { apply as applyOps, type Op } from "../src/delta.ts";
-import type { FakeHost } from "../src/testing.ts";
+import { jsonResponse, type FakeHost } from "../src/testing.ts";
 
 const gets = (host: FakeHost, path: string) => host.requests.flatMap(readsOf).filter((url) => url.endsWith(path)).length;
 const text = (b: Uint8Array | null | undefined) => (b === undefined || b === null ? undefined : new TextDecoder().decode(b));
@@ -1319,6 +1319,31 @@ test("a_shared_chat_created_while_the_stream_is_away_is_listed_when_it_cannot_re
   push("missed", {});
   await coalesce(host);
   assert.equal((core.inner.data.chat(ST, "new-chat") as J)?.title, "New chat", "the refreshed list includes the missed chat");
+  core.close();
+});
+
+for (const removed of [false, true]) test(`a_shared_chat_${removed ? "removed" : "added"}_while_the_list_is_read_is_not_lost`, async () => {
+  const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [], dismissed: [], reads: {} };
+  const row = {
+    id: "new-chat", session: "new-chat", thread: 8, agents: [{ key: "new-chat", runtime: "claude" }],
+    lastActiveAt: 1, ws: null, named: { thread: { surface: "ember", title: "New chat" }, firstText: null, channelName: null },
+    mineOf: [], said: null,
+  };
+  const answers: J = { ...base(), "GET /chats": [], "GET /chats?marks=1": marks };
+  const { host, core, push, read } = await ui(answers);
+  await read();
+  let answer: (() => void) | undefined;
+  stationLater(host, (req) => req.url.endsWith("/chats?shared=1")
+    ? new Promise((resolve) => { answer = () => resolve(jsonResponse(200, removed ? [row] : [])); })
+    : undefined);
+  push("made", { rows: true, marks: true, shared: true });
+  await host.time.pass(400, 20);
+  assert.ok(answer, "the station is answering the list");
+  push(removed ? "chat-shared-removed" : "chat-shared", removed ? { id: row.id } : row);
+  await host.time.pass(400, 20);
+  answer();
+  await coalesce(host);
+  assert.equal((core.inner.data.chat(ST, row.id) as J)?.title, removed ? undefined : "New chat");
   core.close();
 });
 
