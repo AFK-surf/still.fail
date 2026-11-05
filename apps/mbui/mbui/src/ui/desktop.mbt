@@ -337,6 +337,7 @@ fn desk_reset() -> Unit {
   desk.pasted.clear()
   desk.next_mouse_drags.clear()
   desk.mouse_drags = true
+  mouse_drags_said.val = None
   desk.selecting = false
   desk.next_sels.clear()
   desk.sels = []
@@ -379,7 +380,11 @@ fn Ctx::desk_frame_end(self : Ctx) -> Unit {
   }
   desk.mouse_drags = match desk.next_mouse_drags.last() {
     Some(on) => on
-    None => true
+    None =>
+      match mouse_drags_said.val {
+        Some((_, on)) => on
+        None => true
+      }
   }
   desk.sels = desk.next_sels.copy()
   // (drawn where they are: none moved since)
@@ -638,6 +643,37 @@ pub fn Ctx::mouse_drags_lists(self : Ctx, on : Bool) -> Unit {
   ignore(self)
   desk.next_mouse_drags.push(on)
 }
+
+///|
+/// Whether a mouse's drag moves a list as a finger does, said for the whole window by node `owner` (the window's root)
+/// as `on` gives it, at the moment that changes. An old view saying it in a frame (Ctx::mouse_drags_lists) is over this
+/// for that frame. Said no more once `owner` is let go.
+pub fn mouse_drags_lists(owner : @view.View, on : () -> Bool) -> Unit {
+  let who = owner.id()
+  // (in force at once, at the moment of its cause: no frame waited for; a frame's old view saying it is over it then)
+  owner.reacts(on, fn(drags) {
+    mouse_drags_said.val = Some((who, drags))
+    desk.mouse_drags = drags
+  })
+  // (let go: nothing said, only where what is said is still its own: a node saying it since, the shell's root made
+  // anew before this one is let go, keeps what it said)
+  owner.owns(fn() {
+    match mouse_drags_said.val {
+      Some((said_by, _)) if said_by == who => {
+        mouse_drags_said.val = None
+        desk.mouse_drags = true
+      }
+      _ => ()
+    }
+  })
+  |> ignore
+}
+
+///|
+/// What the window's root says of a mouse's drag on the lists (mouse_drags_lists), and the node that says it: None,
+/// nothing said.
+// kept across runs: put back by desk_reset, let go with the node that says it
+let mouse_drags_said : Ref[(@view.NodeId, Bool)?] = Ref(None)
 
 ///|
 /// Whether key `code` came since the last frame with exactly `mods` held (with `in_field`, also one a focused field

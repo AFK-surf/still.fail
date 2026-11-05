@@ -826,7 +826,6 @@ fn pane_block_built(c : @ui.Ctx, src : Source) -> Unit {
 /// system's tabs where it has its own bars, the folded sidebar shown a while as the pointer comes on the closed bar, the
 /// chat landed on, the window's buttons' row, the web services' pages let go.
 pub fn pane_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]) -> Unit {
-  c.mouse_drags_lists(pane_finger())
   wide.side_place = side_place()
   side_follow(c, src, w.id)
   wide.tape = false
