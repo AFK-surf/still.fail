@@ -359,6 +359,19 @@ fn opened_by_first(r : Json) -> Json {
 }
 
 ///|
+/// The chat keeping watch, archiving it asked first (chat-watch).
+fn with_watch(v : Json?) -> Json? {
+  match v {
+    Some(Object(m)) => {
+      let m = m.copy()
+      m["watch"] = { "ask": "它还在盯着发布流水线，归档后就不再提醒你。" }
+      Some(Json::object(m))
+    }
+    _ => v
+  }
+}
+
+///|
 /// The first row's chat with the chats its agent made (chat-opened), as the core lists them: one waiting for the
 /// viewer, one done, one in the archive.
 fn with_opened(v : Json?) -> Json? {
@@ -742,6 +755,8 @@ fn fixture_answer(f : Fixture, name : String, params : Map[String, Json], versio
       fixture_with_tabs(f, params, with_opened(value))
     "chat" if f.mode.has_prefix("chat-opener") && params.get("session") is Some(String("s-c1")) =>
       fixture_with_tabs(f, params, with_opener(value))
+    "chat" if f.mode == "chat-watch" && params.get("session") is Some(String("s-c1")) =>
+      fixture_with_tabs(f, params, with_watch(value))
     "chat" => fixture_with_tabs(f, params, value)
     "stationNet" => {
       let address = text(Some(Json::object(params)), "station")

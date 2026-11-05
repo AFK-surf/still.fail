@@ -83,9 +83,77 @@ fn native_workspace_placed(c : @ui.Ctx, anchors : Array[(String, (Double, Double
 }
 
 ///|
-/// The page's actions in the navigation bar this frame (bar_action), in their order from the bar's end in, and what
-/// each does; those of the frame before, for what is chosen between frames.
-let nav_page : Array[(@hostapi.NavItem, () -> Unit)] = []
+/// A page's actions in the navigation bar (bar_action), in their order from the bar's end in, and what each does; the
+/// ids bar_chat_waiting carried in for it from the chat before; the chat whose actions bar_chat handed (the chat's side
+/// panel switch said again each frame by it: histories_ticked). Handed by a page's nodes at their causes (`node`: kept
+/// till those let go of them, whatever page is on top meanwhile) or as a page's frame builds it (let go as it is no more
+/// the page on top: nav_frame).
+priv struct PageActs {
+  page : Page
+  acts : Array[(@hostapi.NavItem, () -> Unit)]
+  carried : Array[String]
+  mut chat : (Source, ChatRef)?
+  mut node : Bool
+}
+
+///|
+/// The pages' actions in the navigation bar, each page's its own (PageActs): the bars hand the page on top's.
+// kept across runs: put back as the app begins anew (rail_native_reset)
+let page_acts : Array[PageActs] = []
+
+///|
+/// Page `page`'s actions, made empty as it first hands one.
+fn acts_of(page : Page) -> PageActs {
+  match page_acts.iter().find_first(fn(a) { a.page == page }) {
+    Some(a) => a
+    None => {
+      let a = { page, acts: [], carried: [], chat: None, node: false }
+      page_acts.push(a)
+      a
+    }
+  }
+}
+
+///|
+/// The page on top's actions (acts_of).
+fn top_acts() -> PageActs {
+  acts_of(app.nav.top())
+}
+
+///|
+/// Whether the frame that hands the system its bars is being built (nav_frame): what a page's nodes hand meanwhile
+/// handed with the rest as it ends.
+// kept across runs: put back by rail_native_reset
+let nav_framing : Ref[Bool] = { val: false }
+
+///|
+/// What `f` hands as page `page`'s actions, at its cause (a page's node's): handed to the system there and then where
+/// that changed what the page on top has in the bars (once a frame said what the bars hold: nav_want), not by a frame
+/// built again for it.
+fn page_acts_told(page : Page, f : () -> Unit) -> Unit {
+  let was = acts_of(page).acts.map(fn(p) { p.0 })
+  f()
+  if nav_framing.val || nav_want.val is None || page != app.nav.top() || acts_of(page).acts.map(fn(p) { p.0 }) == was {
+    return
+  }
+  histories_ticked()
+  let handed = top_acts().acts.copy()
+  nav_page_before.clear()
+  nav_page_before.append(handed)
+  nav_hand(handed)
+}
+
+///|
+/// A page's actions its frame built let go as another comes on top (a node's kept: what handed them lets them go).
+fn page_acts_left(top : Page) -> Unit {
+  page_acts.retain(fn(a) { a.node || a.page == top })
+}
+
+///|
+/// Page `page`'s actions its nodes handed let go (their node let go: the page gone from the stack).
+fn page_acts_gone(page : Page) -> Unit {
+  page_acts.retain(fn(a) { !(a.node && a.page == page) })
+}
 
 ///|
 let nav_page_was : Map[String, () -> Unit] = {}
@@ -149,13 +217,15 @@ fn bar_action(
   raw? : String,
   rows? : Array[@sf.MenuItem?],
   dot? : Bool = false,
+  page? : Page,
 ) -> Bool {
-  if drawn_page.val is Some(p) && p != app.nav.top() {
+  if page is None && drawn_page.val is Some(p) && p != app.nav.top() {
     return false
   }
+  let acts = acts_of(page.unwrap_or(app.nav.top())).acts
   let key = "page/" + id
-  match nav_page.search_by(fn(p) { p.0.id == key }) {
-    Some(i) => nav_page.remove(i) |> ignore
+  match acts.search_by(fn(p) { p.0.id == key }) {
+    Some(i) => acts.remove(i) |> ignore
     None => ()
   }
   // Even the short system column needs its entries to the chat's info and menu. (Read as the page is built: the column
@@ -191,7 +261,7 @@ fn bar_action(
     }
     None => ()
   }
-  nav_page.push(({ id: key, title, icon: data, dot, prominent: false, menu }, act))
+  acts.push(({ id: key, title, icon: data, dot, prominent: false, menu }, act))
   true
 }
 
@@ -215,20 +285,25 @@ fn bar_chat(
   jobs : (() -> Unit, Bool)?,
   screen : (() -> Unit, Bool)?,
   archive : (() -> Unit)?,
+  page? : Page,
 ) -> Bool {
   if !@sf.native_on() {
     return false
   }
-  if drawn_page.val is Some(p) && p != app.nav.top() {
+  if page is None && drawn_page.val is Some(p) && p != app.nav.top() {
     return true
   }
-  bar_chat_of.val = Some((src, r))
+  let pa = acts_of(page.unwrap_or(app.nav.top()))
+  if page is Some(_) {
+    pa.node = true
+  }
+  pa.chat = Some((src, r))
   // This is the chat's complete set, including absent optional actions. The previous view may have handed its
   // actions itself while kept on screen, rather than through bar_chat_waiting; none of those may remain either.
-  nav_page.retain(fn(p) { !p.0.id.has_prefix("page/chat/") })
-  bar_chat_carried.clear()
-  bar_action("chat/more", @sf.t("common.more"), "more", more, rows?=if rows.iter().any(fn(i) { i is Some(_) }) { Some(rows) } else { None }) |> ignore
-  bar_action("chat/info", @sf.t("web-pages.chat.info"), "info", info) |> ignore
+  pa.acts.retain(fn(p) { !p.0.id.has_prefix("page/chat/") })
+  pa.carried.clear()
+  bar_action("chat/more", @sf.t("common.more"), "more", more, rows?=if rows.iter().any(fn(i) { i is Some(_) }) { Some(rows) } else { None }, page?) |> ignore
+  bar_action("chat/info", @sf.t("web-pages.chat.info"), "info", info, page?) |> ignore
   let (tabs, _) = side_now(src, r)
   // (a screen alone in its panel has no × of its own there: this one, as one)
   let icon = if screen_tab_alone(tabs) { "close" } else if tabs.length() > 0 { "panel-close" } else { "panel-open" }
@@ -242,18 +317,18 @@ fn bar_chat(
       } else if key is Some(_) {
         side_change(src, r, "open", key)
       }
-    }) |> ignore
+    }, page?) |> ignore
   }
   match jobs {
-    Some((act, alarm)) => bar_action("chat/jobs", @sf.t("web-pages.chat.services"), "web", act, dot=alarm) |> ignore
+    Some((act, alarm)) => bar_action("chat/jobs", @sf.t("web-pages.chat.services"), "web", act, dot=alarm, page?) |> ignore
     None => ()
   }
   match screen {
-    Some((act, driven)) => bar_action("chat/screen", @sf.t("web-pages.chat.screen"), "monitor", act, dot=driven) |> ignore
+    Some((act, driven)) => bar_action("chat/screen", @sf.t("web-pages.chat.screen"), "monitor", act, dot=driven, page?) |> ignore
     None => ()
   }
   match archive {
-    Some(act) => bar_action("chat/archive", @sf.t("web-pages.chat.archive"), "archive", act) |> ignore
+    Some(act) => bar_action("chat/archive", @sf.t("web-pages.chat.archive"), "archive", act, page?) |> ignore
     None => ()
   }
   true
@@ -264,21 +339,25 @@ fn bar_chat(
 /// till its own come, so the system's column keeps its buttons in place rather than taking them away and bringing them
 /// back (each brought back is a button made anew, faded in: the user, 2026-10-31, 按钮没变也会闪). Pressed meanwhile,
 /// nothing. False where there are no system's bars.
-fn bar_chat_waiting() -> Bool {
+fn bar_chat_waiting(page? : Page) -> Bool {
   if !@sf.native_on() {
     return false
   }
-  if drawn_page.val is Some(p) && p != app.nav.top() {
+  if page is None && drawn_page.val is Some(p) && p != app.nav.top() {
     return true
+  }
+  let pa = acts_of(page.unwrap_or(app.nav.top()))
+  if page is Some(_) {
+    pa.node = true
   }
   for item in bar_chat_last {
     // (as bar_action hands them: the short column the info alone)
     if column_short.get() && item.id != "page/chat/info" && item.id != "page/chat/more" {
       continue
     }
-    if !nav_page.iter().any(fn(p) { p.0.id == item.id }) {
-      nav_page.push((item, fn() {  }))
-      bar_chat_carried.push(item.id)
+    if !pa.acts.iter().any(fn(p) { p.0.id == item.id }) {
+      pa.acts.push((item, fn() {  }))
+      pa.carried.push(item.id)
       // (its menu's rows kept as they were, the other chat's: pressed meanwhile, nothing)
       for m in item.menu {
         nav_rows_was.remove(m.0)
@@ -287,10 +366,6 @@ fn bar_chat_waiting() -> Bool {
   }
   true
 }
-
-///|
-/// The ids bar_chat_waiting put in the page's actions, taken out as the chat hands its own (bar_chat).
-let bar_chat_carried : Array[String] = []
 
 ///|
 /// The chat's actions as the last chat whose view was read handed them (bar_chat_waiting).
@@ -306,16 +381,13 @@ let history_item : String = "chat/history"
 let side_close_item : String = "side/close"
 
 ///|
-/// The chat whose actions bar_chat handed (kept with it while the page's part is kept), None as another page comes.
-// kept across runs: said by bar_chat, put back with the page's actions (nav_frame)
-let bar_chat_of : Ref[(Source, ChatRef)?] = Ref(None)
-
-///|
 /// The chat's side panel switch as the panel is this frame (its icon and words open or closed): said again each
 /// frame, the page that handed it kept as it was drawn or not (its part kept while the panel
 /// changes).
 fn histories_ticked() -> Unit {
-  guard bar_chat_of.val is Some((src, r)) else { return }
+  let pa = top_acts()
+  guard pa.chat is Some((src, r)) else { return }
+  let nav_page = pa.acts
   let (tabs, _) = side_now(src, r)
   let icon = @sf.icon_path(if screen_tab_alone(tabs) { "close" } else if tabs.length() > 0 { "panel-close" } else { "panel-open" })
   let title = @sf.t(if tabs.length() > 0 { "web-pages.chat.closePanel" } else { "web-pages.chat.openPanel" })
@@ -434,13 +506,13 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
   // (the page's actions as they were while the same page is shown: one built again hands them again)
   let page = app.nav.top()
   if nav_page_of.val != Some(page) {
-    nav_page.clear()
-    bar_chat_carried.clear()
-    bar_chat_of.val = None
+    page_acts_left(page)
     nav_page_of.val = Some(page)
   }
   top_drawn.val = false
+  nav_framing.val = true
   body()
+  nav_framing.val = false
   // (what is up over the whole window as it said it, built again this frame or its part kept; gone once it is not)
   @sf.native_over_gone()
   // (the page come not drawn yet, the one before it still shown in its place: that one's actions kept in the bars as
@@ -448,11 +520,22 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
   histories_ticked()
   // (one made once in the pane shows, built by no frame: what it hands, none)
   let made_top = pane_made_shown() is Some(_)
-  let handed = if !top_drawn.val && !made_top && nav_page.is_empty() { nav_page_before.copy() } else { nav_page.copy() }
+  let pa = top_acts()
+  let nav_page = pa.acts
+  let handed = if !top_drawn.val && !made_top && !pa.node && nav_page.is_empty() { nav_page_before.copy() } else { nav_page.copy() }
   nav_page_before.clear()
   nav_page_before.append(handed)
+  nav_hand(handed)
+}
+
+///|
+/// The page's actions `handed` to the system's bars, with the places and what is up over the whole window (nothing
+/// where the frame wants none: nav_want).
+fn nav_hand(handed : Array[(@hostapi.NavItem, () -> Unit)]) -> Unit {
+  let pa = top_acts()
+  let nav_page = pa.acts
   // (a chat's own as it handed them, not one on its way out handing none, nor what was kept for it)
-  if bar_chat_of.val is Some(_) && bar_chat_carried.length() == 0 && nav_page.iter().any(fn(p) { p.0.id.has_prefix("page/chat/") }) {
+  if pa.chat is Some(_) && pa.carried.length() == 0 && nav_page.iter().any(fn(p) { p.0.id.has_prefix("page/chat/") }) {
     bar_chat_last.clear()
     for p in nav_page {
       if p.0.id.has_prefix("page/chat/") {
@@ -685,9 +768,7 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // one come to hands its own as it is drawn after this: nav_frame)
   defer {
     if nav_page_of.val != Some(app.nav.top()) {
-      nav_page.clear()
-      bar_chat_carried.clear()
-      bar_chat_of.val = None
+      page_acts_left(app.nav.top())
       nav_page_of.val = Some(app.nav.top())
     }
   }
@@ -839,8 +920,7 @@ fn rail_native_reset() -> Unit {
   native_sidebar_items.clear()
   floating_bar.val = None
   native_floating.val = []
-  nav_page.clear()
-  bar_chat_of.val = None
+  page_acts.clear()
   nav_page_was.clear()
   nav_rows_was.clear()
   nav_over_was.clear()
@@ -848,8 +928,8 @@ fn rail_native_reset() -> Unit {
   nav_page_of.val = None
   bar_chat_last.clear()
   nav_page_before.clear()
-  bar_chat_carried.clear()
   top_drawn.val = false
+  nav_framing.val = false
   native_mark.val = 0
   // (where the system said an item was last chosen: none yet, what opens from one by the bell till one says so)
   for k in 0..<4 {
@@ -858,7 +938,6 @@ fn rail_native_reset() -> Unit {
   tabs_kept.clear()
   nav_log_was.val = ""
   attention_size[0] = 0.0
-  info_width[0] = 0.0
 }
 
 ///|
