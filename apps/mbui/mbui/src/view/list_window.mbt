@@ -495,6 +495,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
             if now != was {
               anchor.val = Some((k, now))
               s.grew_above(now - was)
+              // (moved by itself, with what shows: where it was seen as it follows its end moved with it, no move of
+              // the hand's up or down from there)
+              last_x.val = last_x.val + (now - was)
             }
           }
           None => anchor.val = None
