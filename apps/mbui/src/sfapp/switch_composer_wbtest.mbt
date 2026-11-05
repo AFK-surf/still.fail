@@ -4,7 +4,7 @@
 // switched.
 
 ///|
-/// The composer's glass (the one round send) and send, as each frame drew them (x, y, w, h each).
+/// The composer's glass, send and placeholder, as each frame drew them.
 fn switch_composer_seen(t : @ui.Tester) -> String {
   match t.query(Button, label=@sf.t("web-main.composer.send")) {
     Some(s) => {
@@ -12,7 +12,8 @@ fn switch_composer_seen(t : @ui.Tester) -> String {
       let cy = s.rect.1 + s.rect.3 / 2.0
       let glass = t.drawn_glass().filter(fn(g) { cx >= g.0 && cx <= g.0 + g.2 && cy >= g.1 && cy <= g.1 + g.3 })
       let g = glass.get(0).map(fn(g) { "\{(g.0, g.1, g.2, g.3)}" }).unwrap_or("none")
-      "send \{s.rect}, glass \{g}"
+      let hint = t.words().filter(fn(w) { w.0 == "发消息" }).get(0).map(fn(w) { "\{(w.1, w.2)}" }).unwrap_or("none")
+      "send \{s.rect}, glass \{g}, hint \{hint}"
     }
     None => "no send"
   }
@@ -28,6 +29,7 @@ test "choosing another chat in a large screen's sidebar moves nothing of the com
   t.run_for(@ui.move_most_ms)
   let before = switch_composer_seen(t)
   assert_true(before != "no send", msg="the starting chat has a composer")
+  assert_true(!before.contains("hint none"), msg="the starting chat has its placeholder")
   assert_eq(t.focused().map(fn(s) { "\{s.role} \{s.label}" }).unwrap_or("none"), "TextField 发消息")
   for name in ["夜里的构建又失败了", "整理发布清单"] {
     let (x, y) = match t.find(name) {
