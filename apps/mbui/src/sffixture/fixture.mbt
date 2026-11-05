@@ -653,13 +653,17 @@ pub fn Fixture::changes(self : Fixture) -> Int {
 
 ///|
 pub fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topic {
-  // (read in a computed, followed as the made-up core changes: Fixture::changed)
+  // (read in a computed, followed as the made-up core changes: Fixture::changed; a composer's and a draft's as what is
+  // typed is told too, fix_typed, and no other: as the core tells them)
   @settings.fixture_followed()
+  if name == "composer" || name == "draft" {
+    fix_typed.get() |> ignore
+  }
   fix_tick()
   // (the same answer while the made-up core is as it was, as the core's own: a subscription's value kept, not worked
   // out again each time it is read)
   let version = f.changes() + @settings.fixture_version() + fix_browse.changes + fix_presets_said.val +
-    (if name == "composer" || name == "draft" { fix_typed.val } else { 0 })
+    (if name == "composer" || name == "draft" { @signals.untracked(fn() { fix_typed.get() }) } else { 0 })
   let key = name + "\u{1}" + f.mode + "\u{1}" + Json::object(params).stringify()
   match fixture_answers.get(key) {
     Some(t) if t.version == version => return t
@@ -674,7 +678,7 @@ pub fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> 
 /// How many times the made-up core's composers were told what is typed (`composer.text`): as the core's own, only the
 /// composer's topic and its draft's told for it (client/core-ts composer.ts #tell), nothing else of the core changed.
 // kept across runs: it only counts on
-let fix_typed : Ref[Int] = Ref(0)
+let fix_typed : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 /// The made-up core's answers given, by topic and what was asked, each as of the version it was given at
@@ -1213,11 +1217,6 @@ pub fn fixture(mode : String) -> Source {
   {
     topic: fn(name, params) { fixture_topic(f, name, params) },
     call: fn(name, params, done) {
-      // (answered at once, as a core's answer comes from outside: what it changes of what is no signal taken so)
-      let done = fn(r) {
-        @ui.came_from_outside()
-        done(r)
-      }
       match fixture_kept(name, params, None) {
         Some(r) => {
           done(r.map(fn(a) { a.0 }))

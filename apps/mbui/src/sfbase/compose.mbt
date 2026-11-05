@@ -157,7 +157,10 @@ pub fn writing_in(owner : @view.View, src : Source, key : String) -> Writing {
 /// read back, taken, put back, carried on) into the field.
 fn writing_adopt(w : Writing, v : Json?, version : Int) -> Unit {
   guard v is Some(Object(_)) else { return }
-  if w.pending.get() > 0 || number(v, "version") < w.acked || w.adopted == version {
+  // (whether an edit of the page's is unanswered, looked at, not followed: what asks for the draft (a page's build,
+  // writing) is not built again for each answer; what adopts the core's value as an answer comes follows it itself,
+  // writing_in)
+  if @signals.untracked(fn() { w.pending.get() }) > 0 || number(v, "version") < w.acked || w.adopted == version {
     return
   }
   w.adopted = version
