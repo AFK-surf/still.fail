@@ -1626,6 +1626,13 @@ fn BarModel::swap_at(self : BarModel, now : Double) -> Swap? {
 ///|
 /// The bar as it is this frame (bottom_bar's part).
 fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown : Bool) -> Unit {
+  // A bar that has finished leaving draws nothing. Its data and the rest of its motions need no watches until it is
+  // shown again; `shown` is part of the kept part's key, so coming back builds it from the current state.
+  let m = bar
+  m.sample()
+  if m.vis.value <= 0.0 && !shown {
+    return
+  }
   let t = @sf.theme()
   // (laid out as what it is told says: BarLaid, the same its glass takes a finger by, bar_glass_node)
   let place_add = bar_place_add(src, ws, active)
@@ -1658,11 +1665,9 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   }
   bar_glyph.val = Some(glyph)
   bar_stations_said.val = said
-  let m = bar
   // where it is at the frame's moment, by what it was told at the moments of their causes (bar_tell: the app's state,
   // narrow_shell's reaction; bar_retell: the finger, read below as it is built): read only, the same in every build at
   // that moment, whichever frames came
-  m.sample()
   let now = bar_clock.now
   // what goes is read in the phase that draws it. The notch opening or closing, each place lighting up or going dim,
   // the bar going down or coming back or drawn up, the ball going, coming, held and let go (where it is, how big, its
@@ -1704,9 +1709,6 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
     @motion.log_frame(c, "bar/swap", "value=\{m.o.x} to=\{m.o.to}")
   } else if m.o.x != m.o.to {
     @motion.log_frame(c, "bar/panel", "value=\{m.o.x} to=\{m.o.to}")
-  }
-  if m.vis.value <= 0.0 && !shown {
-    return
   }
   let under = match cand {
     Some((_, _, set, key)) => if set == cur { key } else { "" }
