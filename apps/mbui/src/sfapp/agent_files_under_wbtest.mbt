@@ -9,9 +9,10 @@ fn files_under_words(t : @ui.Tester) -> Double? {
   }
   let bottom = line.2 + line.4
   let mut top : Double? = None
-  for r in t.drawn_rects() {
-    let (x, y, w, h, _) = r
-    if x == line.1 && y >= line.2 && y < bottom + 40.0 && w > 100.0 && h > 100.0 {
+  // Read the picture itself: the rectangles underneath it are only the portions of its waiting animation.
+  for image in t.drawn_images() {
+    let (x, y, w, h) = (image[0], image[1], image[2], image[3])
+    if (x - line.1).abs() < 0.5 && y >= line.2 && y < bottom + 40.0 && w > 100.0 && h > 100.0 {
       top = Some(match top { Some(v) => if y < v { y } else { v }; None => y })
     }
   }

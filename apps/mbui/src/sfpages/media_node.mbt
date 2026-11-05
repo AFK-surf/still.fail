@@ -131,8 +131,6 @@ fn media_image(
 ) -> Unit {
   s
   .image(Painted(fn(laid) {
-    // In a chat, the list's picture owner requests the decode. Painting a row made for measurement must not ask.
-    if s.lent(chat_pictures_lent) is Some(_) && @ui.image_state(key()) != 1 { return None }
     if visible {
       match laid.rect(s) {
         Some((_, y, _, h)) if y + h > 0.0 && y < s.window().1 => ()
@@ -185,6 +183,7 @@ fn media_reveal_node(
   let in_sight = fn() { s.lent(chat_picture_in_sight).map(fn(sight) { sight() }).unwrap_or(true) }
   // (when it came in: none, there at once; its way in's end the moment it is all in)
   let initial = if @signals.untracked(fn() { ready() || picture().held }) { Some(-1.0e18) } else { None }
+  let first_shown = s.cause_at()
   let came : @signals.Signal[Double?] = @signals.signal(initial, same=fn(a, b) { a == b })
   let moving = @signals.signal(false, same=fn(a, b) { a == b })
   s.reacts(fn() { (ready(), picture().held) }, fn(now) {
@@ -193,7 +192,9 @@ fn media_reveal_node(
       // (held while it waits: there at once as it comes)
       if held {
         came.set(Some(-1.0e18))
-      } else if decoded && !@signals.untracked(in_sight) {
+      } else if decoded &&
+        ((s.lent(chat_picture_in_sight) is Some(_) && s.cause_at() <= first_shown) || !@signals.untracked(in_sight)) {
+        // A decode at the first sight is already there, as one decoded before the row entered is.
         came.set(Some(-1.0e18))
       } else if decoded {
         let at = s.cause_at()

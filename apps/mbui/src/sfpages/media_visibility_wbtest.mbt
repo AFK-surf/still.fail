@@ -1,6 +1,42 @@
 // A picture that was decoded while its row was outside the window is already there when the row comes into view.
 
 ///|
+test "a list picture decoded at the moment it is first shown is already there" {
+  let p : MediaPicture = { kind: "image", key: "first-picture", hash: "", sent: false, held: false, unreached: false }
+  let t = @ui.Tester::new(fn(_) {  }, w=400.0, h=400.0, images=[("first-picture", 600, 400)], finish=false)
+  @ui.set_view_app(fn(root) {
+    root.lends(chat_picture_in_sight, fn() { true }) |> ignore
+    media_content_node(root, fn() { p }, fn() { 300.0 }, fn() { 200.0 }, FitCover, fn() { 8.0 })
+  })
+  t.draw()
+  let pending = t.pending().filter(fn(item) { item.0 == 1 })
+  assert_eq(pending.length(), 1, msg="the picture has been asked for")
+  let at = t.time()
+  t.finish(1, pending[0].1)
+  t.frame_at(at)
+  assert_eq(@ui.image_state("first-picture"), 1)
+  assert_eq(t.drawn_glass().length(), 0, msg="the first sight is not revealed again")
+}
+
+///|
+test "a list picture decoded later while in sight is revealed" {
+  let p : MediaPicture = { kind: "image", key: "later-picture", hash: "", sent: false, held: false, unreached: false }
+  let t = @ui.Tester::new(fn(_) {  }, w=400.0, h=400.0, images=[("later-picture", 600, 400)], finish=false)
+  @ui.set_view_app(fn(root) {
+    root.lends(chat_picture_in_sight, fn() { true }) |> ignore
+    media_content_node(root, fn() { p }, fn() { 300.0 }, fn() { 200.0 }, FitCover, fn() { 8.0 })
+  })
+  t.draw()
+  let pending = t.pending().filter(fn(item) { item.0 == 1 })
+  assert_eq(pending.length(), 1)
+  t.advance(@ui.first_frame_ms)
+  t.finish(1, pending[0].1)
+  t.frame_at(t.time())
+  assert_eq(@ui.image_state("later-picture"), 1)
+  assert_eq(t.drawn_glass().length(), 1, msg="the waited-for picture begins its reveal")
+}
+
+///|
 test "a picture decoded before its row enters the window does not reveal again" {
   let top = @signals.signal(480.0)
   let p : MediaPicture = { kind: "image", key: "outside-picture", hash: "", sent: false, held: false, unreached: false }
