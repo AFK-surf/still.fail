@@ -1731,9 +1731,11 @@ fn layout_flex(
       if !reusing.val &&
         n.children.length() == 0 &&
         n.measure is None &&
+        n.layout_children is None &&
         known(iw) &&
         known(ih) {
-        // a box with nothing in it, its size given: what size_node comes
+        // a box with nothing in it (none that lays out its own: what it
+        // holds made as it is laid out), its size given: what size_node comes
         // to (its box the one set up above, its caches already started in
         // this compute, nothing kept for a compute that reuses), without
         // the calls
