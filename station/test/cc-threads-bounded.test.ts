@@ -3,6 +3,36 @@ import { test } from "node:test";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import { Store } from "../src/store/store.ts";
 
+test("copy destinations keep shared membership and the last entry's order", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const home = store.openThread("ember", "EMBER", "home", null, null).id;
+    store.joinThread(home, "a", "ember");
+    store.joinThread(home, "b", "ember");
+    const shared = store.openThread("slack:one", "C", "shared", null, null).id;
+    const later = store.openThread("slack:one", "C", "later", null, null).id;
+    const empty = store.openThread("slack:one", "C", "empty", null, null).id;
+    const other = store.openThread("slack:one", "C", "other", null, null).id;
+    store.joinThread(shared, "a", "a-slack"); store.joinThread(shared, "b", "b-slack");
+    store.joinThread(later, "a", "a-slack"); store.joinThread(empty, "b", "b-slack");
+    store.joinThread(other, "another", "other-slack");
+    const put = db.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,at)
+      VALUES(?,?,?,?,'person','viewer',?)`);
+    put.run(shared, 1, "message", null, 20);
+    put.run(later, 1, "message", null, 10);
+    put.run(later, 2, "edit", 1, 30);
+    put.run(other, 1, "message", null, 1_000);
+    const read = () => store.ccThreads(home).map(({ thread, connect }) => [thread.id, connect]);
+    assert.deepEqual(read(), [[later, "a-slack"], [shared, "a-slack"], [empty, "b-slack"]]);
+    store.leaveThread(later, "a");
+    assert.deepEqual(read(), [[later, "a-slack"], [shared, "a-slack"], [empty, "b-slack"]]);
+    db.prepare("UPDATE entries SET at=5 WHERE thread=? AND n=2").run(later);
+    assert.deepEqual(read(), [[shared, "a-slack"], [later, "a-slack"], [empty, "b-slack"]]);
+    db.prepare("DELETE FROM thread_sessions WHERE thread=? AND session='a'").run(shared);
+    assert.deepEqual(read(), [[shared, "b-slack"], [later, "a-slack"], [empty, "b-slack"]]);
+  } finally { store.close(); }
+});
+
 test("a chat's copy destinations do not traverse its older linked threads", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
