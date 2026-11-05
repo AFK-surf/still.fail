@@ -136,6 +136,24 @@ test("64-bit old session rowids do not prevent preparing a session list", () => 
   } finally { store.close(); }
 });
 
+test("new sessions do not keep the old session list scan open", () => {
+  const { store, db, add, exact } = fixture();
+  try {
+    dropIndex(store); add("old-1", "x", "mine"); add("old-2", "y", null);
+    installSessionListIndex(db);
+    let done = false, batches = 0;
+    while (!done && batches < 10) {
+      for (let i = 0; i < 5; i++) add(`new-${batches}-${i}`, "x", "other");
+      const step = sessionListStep(db, 1);
+      assert.ok(step.visited <= 1);
+      done = step.done; batches++;
+    }
+    assert.equal(done, true);
+    assert.equal(batches, 3);
+    exact();
+  } finally { store.close(); }
+});
+
 test("incompatible session list index versions cannot be read or built", () => {
   const { store, db, add } = fixture();
   try {
