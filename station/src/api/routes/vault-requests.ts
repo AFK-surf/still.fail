@@ -12,7 +12,8 @@
 // A secret an agent asked to keep (secret_save, docs/vault.md agent 存入), approved: POST vault/saves `{request, vault}`
 // once the viewer's app wrote it into their vault (and brought its copy here), POST vault/plain/saves `{request}` to
 // write it into their plain library here (`{request, fields}`: one they typed in on its card). Turned down: vault/denials or vault/plain/denials, as any request.
-import type { LockState } from "../../cloud/lock.ts";
+import { admit, type LockState } from "../../cloud/lock.ts";
+import { wall } from "../../ops/fibers.ts";
 import type { Deny, Grant } from "../../vault/crypto.ts";
 import { type PlainItem, type PlainStore, plainOk, shown } from "../../vault/plain.ts";
 import type { Secrets } from "../../vault/secrets.ts";
@@ -54,8 +55,19 @@ export const routes = ({ secrets, plain, lock, events }: VaultRequestsDeps): Rou
       method: "GET",
       pattern: /^\/vault\/requests$/,
       handle: async (r) => {
+        const before = locked(r);
         await secrets.preparePending(r.viewer.workspace);
-        return json(200, JSON.stringify({ requests: secrets.pending(r.viewer.workspace, locked(r), r.viewer) }));
+        const current = locked(r);
+        if (current !== before) {
+          if (current === null) return refuse(409, "lock_changed", "the workspace's security mode changed while the requests were prepared; try again");
+          const v = r.viewer;
+          try {
+            admit(current, { sub: v.sub, endpoint: v.device, base: v.lockDevice?.base, proof: v.lockDevice?.proof }, Math.floor(wall.now() / 1000));
+          } catch {
+            return refuse(403, "lock_unconfirmed", "this device is no longer admitted to the workspace");
+          }
+        }
+        return json(200, JSON.stringify({ requests: secrets.pending(r.viewer.workspace, current, r.viewer) }));
       },
     },
     {

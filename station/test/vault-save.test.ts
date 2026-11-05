@@ -117,7 +117,7 @@ const decided = async (h: { notified: [string, string][] }, asked: Promise<strin
 const pendingOf = (secrets: Secrets, lock: ReturnType<typeof world>["state"] | null, email: string, sub = email.split("@")[0]!) => secrets.pending(WS, lock, { sub, email });
 const opened = (r: Request, p: Person) => JSON.parse(Buffer.from(openSeal(p.box.priv, r.sealed!.find((s) => s.box === p.box.pub)!.secret, saveContext(WS, r.id))).toString());
 
-test("a pending-request read refused if its viewer is removed while old requests are prepared", async () => {
+for (const change of ["member.remove", "device.remove", "member"] as const) test(`a pending-request read checks ${change} while old requests are prepared`, async () => {
   const w = world();
   let current = w.state;
   let ready!: () => void;
@@ -126,10 +126,11 @@ test("a pending-request read refused if its viewer is removed while old requests
   const route = requestRoutes({ secrets: secrets as never, plain: {} as never, lock: () => current })
     .find((r) => r.method === "GET" && r.pattern.test("/vault/requests"))!;
   const answer = route.handle({ viewer: { sub: "bob", email: "bob@x.com", workspace: WS, device: w.bob.base.hex } } as never);
-  const entry = { v: 1 as const, ws: WS, seq: current.seq + 1, prev: current.head, at: 1001, kind: "member.remove", body: { sub: "bob" } };
+  const body = change === "member.remove" ? { sub: "bob" } : change === "device.remove" ? { id: w.bob.base.hex } : { sub: "carol", email: "carol@x.com", role: "member" };
+  const entry = { v: 1 as const, ws: WS, seq: current.seq + 1, prev: current.head, at: 1001, kind: change, body };
   current = applyLock(current, { ...entry, sig: { key: w.alice.signer.id, alg: "Ed25519", sig: w.alice.signer.sign(lockBytes(entryHash(entry as Entry))) } }, 1001);
   ready();
-  assert.equal((await answer).status, 403);
+  assert.equal((await answer).status, change === "member" ? 200 : 403);
 });
 
 test("a still-needed secret save can be asked again without reading the secret again", async () => {
