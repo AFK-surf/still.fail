@@ -107,3 +107,65 @@ pub fn Tester::frame_export(self : Tester) -> Array[String] {
   }
   out
 }
+
+///|
+/// What a point of the window answers as a pointer comes to rest on it: the pointer moved there and a frame drawn, then
+/// what a press there would come to (the innermost widget whose room holds it: its role, its name, else the words
+/// shown in it), the pointer's shape, and what the frame drew otherwise than before it came (what lights up), as
+/// Tester::frame_export's lines: those gone first (-), then those come (+). The pointer stays there.
+pub fn Tester::probe_at(self : Tester, x : Double, y : Double) -> String {
+  let before = self.frame_export()
+  self.move(x, y)
+  self.frame()
+  let after = self.frame_export()
+  let counted : Map[String, Int] = {}
+  for l in before {
+    counted[l] = counted.get(l).unwrap_or(0) + 1
+  }
+  let came : Array[String] = []
+  for l in after {
+    match counted.get(l) {
+      Some(n) if n > 0 => counted[l] = n - 1
+      _ => came.push("+" + l)
+    }
+  }
+  let gone : Array[String] = []
+  for l, n in counted {
+    for _ in 0..<n {
+      gone.push("-" + l)
+    }
+  }
+  gone.sort()
+  // (the innermost widget that can be acted on whose room holds the point)
+  let mut target = "none"
+  let mut depth = -1
+  for s in self.semantics() {
+    let (rx, ry, rw, rh) = s.rect
+    if !s.hidden && s.actions.length() > 0 && x >= rx && x < rx + rw && y >= ry && y < ry + rh && s.depth > depth {
+      depth = s.depth
+      let words = self
+        .words()
+        .filter(fn(w) { w.1 >= rx - 0.5 && w.2 >= ry - 0.5 && w.1 + w.3 <= rx + rw + 0.5 && w.2 + w.4 <= ry + rh + 0.5 })
+        .map(fn(w) { w.0 })
+      target = "\{s.role} \"" + (if s.label != "" { s.label } else { words.join(" ") }) + "\""
+    }
+  }
+  "target=\{target} cursor=\{self.cursor()}\n" + (gone + came).join("\n")
+}
+
+///|
+/// Where the focus is: the widget that has it (its role and name, else the words shown in it, and its room), none.
+pub fn Tester::focus_said(self : Tester) -> String {
+  match self.focused() {
+    Some(s) => {
+      let (rx, ry, rw, rh) = s.rect
+      let words = self
+        .words()
+        .filter(fn(w) { w.1 >= rx - 0.5 && w.2 >= ry - 0.5 && w.1 + w.3 <= rx + rw + 0.5 && w.2 + w.4 <= ry + rh + 0.5 })
+        .map(fn(w) { w.0 })
+      let half = fn(v : Double) { (v * 2.0).round() / 2.0 }
+      "\{s.role} \"" + (if s.label != "" { s.label } else { words.join(" ") }) + "\" at \{half(rx)},\{half(ry)} \{half(rw)}x\{half(rh)}"
+    }
+    None => "none"
+  }
+}
