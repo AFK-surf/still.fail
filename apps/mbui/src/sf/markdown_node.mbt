@@ -564,7 +564,7 @@ fn md_words_node(
   }
   let look = fn() -> @view.WordsLook {
     let size = size()
-    { size, weight: if weight > 0 { weight } else { 400 }, line: md_line(md, size), wrap, tracking: @view.letters_own }
+    { size, weight: if weight > 0 { weight } else { 400 }, line: md_line(md, size), wrap, tracking: @view.letters_own, balance: false }
   }
   p.box(fn(w) {
     w.words_runs(By(runs)).words_look(By(look)).runs_look(By(table_runs_look)).ink(By(md.ink)) |> ignore
@@ -840,6 +840,7 @@ fn code_block_node(p : @view.View, code : () -> String, lang : () -> String, col
           line: if over { code_line_wide } else { 18.0 },
           wrap: false,
           tracking: @view.letters_own,
+          balance: false,
         }
         w.words_runs(By(runs), look~).ink(By(fn() { theme().p.text })) |> ignore
       })
@@ -891,7 +892,7 @@ let md_task_check : Double = 11.0
 ///|
 /// Words of `size` on one line, in 400, on lines `line` high (0: the theme's line for that size, as old text's with none said).
 fn md_plain_look(size : Double, line : Double) -> @view.WordsLook {
-  { size, weight: 400, line: if line > 0.0 { line } else { @ui.tree_theme().text_line * size }, wrap: false, tracking: @view.letters_own }
+  { size, weight: 400, line: if line > 0.0 { line } else { @ui.tree_theme().text_line * size }, wrap: false, tracking: @view.letters_own, balance: false }
 }
 
 ///|
