@@ -3,13 +3,32 @@
 // thread. Every chat lives in one channel, INTERNAL_CHANNEL; its thread_ts is its address. The messages themselves are
 // the store's, like every thread's.
 import type { Clock } from "effect";
+import { join } from "node:path";
 import { liveClock } from "../ops/fibers.ts";
 import type { Attachment } from "../store/store.ts";
 import type { ChatSurface, ThreadRef } from "./chat.ts";
 
-/// The connect id the station's own chat goes by. Not configurable; never in config.json.
+/// The connect id the station's own chat goes by, as its rows store it (named as before the rename, like the threads'
+/// surface, store/rows.ts STILLFAIL_SURFACE: the stations' data has it). Not configurable; never in config.json.
 export const INTERNAL_CONNECT = "ember";
-export const INTERNAL_CHANNEL = "EMBER";
+/// The channel its chats are made in, their address `CHAT/<ts>`; chats made before the rename are in EMBER and keep
+/// their address.
+export const INTERNAL_CHANNEL = "CHAT";
+const FORMER_CHANNEL = "EMBER";
+/// Whether a channel is the station's own chats'.
+export const isInternalChannel = (channel: string) => channel === INTERNAL_CHANNEL || channel === FORMER_CHANNEL;
+/// What the keys of sessions made for its chats begin with (`chat:c-…`); those made before the rename, `ember:c-…`.
+export const CHAT_KEY = "chat";
+const FORMER_CHAT_KEY = "ember";
+/// A chat's session key, from its id (`c-…`): the one already made with `made` (true: it is the station's), else a
+/// new one.
+export const chatKey = (id: string, made: (key: string) => boolean = () => false) =>
+  [FORMER_CHAT_KEY, CHAT_KEY].map((p) => `${p}:${id}`).find(made) ?? `${CHAT_KEY}:${id}`;
+/// Where a chat session's workspace is, under the station's data: `sessions/<its key's first part>/<the rest>`.
+export const chatWorkspace = (dataDir: string, key: string) => {
+  const at = key.indexOf(":");
+  return join(dataDir, "sessions", key.slice(0, at), key.slice(at + 1), "workspace");
+};
 /// How the agent is named in these chats.
 export const INTERNAL_BOT_USER = "UEMBER";
 
@@ -43,7 +62,7 @@ export class InternalChat implements ChatSurface {
 
   /// Nothing to send anywhere: the message is recorded under the ts this gives, and the page reads it from there.
   async post(thread: ThreadRef, _message: string, _files: Attachment[]): Promise<string> {
-    if (thread.channel !== INTERNAL_CHANNEL) throw new Error(`no still.fail chat ${thread.channel}/${thread.threadTs}`);
+    if (!isInternalChannel(thread.channel)) throw new Error(`no still.fail chat ${thread.channel}/${thread.threadTs}`);
     return nextTsAt(this.clock.currentTimeMillisUnsafe());
   }
 

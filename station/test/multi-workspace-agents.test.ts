@@ -154,7 +154,7 @@ test("what another station asks reaches the chats of the workspace it asked in; 
   const message = { method: "session.message", session: "s9", to: two, text: "hello" };
   await assert.rejects(fromPeer(rig.hub, "A", message, W1), /no session/);
   await assert.rejects(fromPeer(rig.hub, "A", { ...message, to: one }, W2), /no session/);
-  assert.equal((await fromPeer(rig.hub, "B", message, W2)).thread.startsWith("EMBER/"), true);
+  assert.equal((await fromPeer(rig.hub, "B", message, W2)).thread.startsWith("CHAT/"), true);
   const made = createForPeer(rig.hub, "B", { session: "s9", key: "k", runtime: "claude", title: "from B" }, W2);
   assert.equal(rig.store.getSession(made.session)?.ws, W2);
   assert.ok(made.link.includes(`/o/${W2}/st/`), made.link);
