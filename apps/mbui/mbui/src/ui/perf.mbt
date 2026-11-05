@@ -344,6 +344,11 @@ let walk_nodes : Ref[Int] = Ref(0)
 let walk_drew : Ref[Int] = Ref(0)
 
 ///|
+/// The layers drawn as they keep how they are drawn, the tree not gone through for them (Ctx::tree_walk's `kept`).
+// kept across runs: as walk_nodes
+let walk_kept : Ref[Int] = Ref(0)
+
+///|
 // kept across runs: the scene's work as the last PERF line said it
 let scene_work_said : Ref[SceneWork?] = Ref(None)
 
@@ -354,9 +359,10 @@ fn walk_said() -> String {
   let now = scene_done()
   let was = scene_work_said.val.unwrap_or(now)
   scene_work_said.val = Some(now)
-  let s = "\{walk_nodes.val}/\{walk_drew.val} layers=\{now.layers - was.layers}/\{now.copied - was.copied} made=\{now.recorded - was.recorded}/\{now.copied_insts - was.copied_insts}"
+  let s = "\{walk_nodes.val}/\{walk_drew.val}/\{walk_kept.val} layers=\{now.layers - was.layers}/\{now.copied - was.copied} made=\{now.recorded - was.recorded}/\{now.copied_insts - was.copied_insts}"
   walk_nodes.val = 0
   walk_drew.val = 0
+  walk_kept.val = 0
   s
 }
 

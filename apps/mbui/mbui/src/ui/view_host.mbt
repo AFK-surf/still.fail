@@ -1215,6 +1215,7 @@ fn Ctx::tree_walk(
   )
   let entries = match kept {
     Some(es) => {
+      walk_kept.val = walk_kept.val + 1
       for e in es {
         self.tree_step(p, from, at, depth, e, false)
       }
