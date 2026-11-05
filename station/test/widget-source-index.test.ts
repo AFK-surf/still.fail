@@ -353,6 +353,21 @@ test("a bad attachment does not make a message write fail", () => {
   } finally { store.close(); }
 });
 
+test("a noncanonical attachment that SQLite can read keeps its original widget source", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const thread = store.openThread("ember", "EMBER", "json5", null, null).id;
+    widgetSourcesStep(db, thread);
+    store.joinThread(thread, "a", "ember");
+    db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
+      VALUES(?,1,'message','agent','a',1,?)`).run(thread, "[{path:'/w/item.html',name:'json5.html'}]");
+    const path = "/w/item.html", expected = plain(db.prepare(original).get("a", path));
+    assert.deepEqual(expected, { channel: "EMBER", thread_ts: "json5", name: "json5.html" });
+    store.putWidgetState("a", path, "{}", "selected");
+    assert.equal(store.untoldWidgetModels("a")[0]?.name, "json5.html");
+  } finally { store.close(); }
+});
+
 test("a failed widget index installation leaves no partial tables or triggers", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
