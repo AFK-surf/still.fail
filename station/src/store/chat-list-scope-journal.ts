@@ -28,7 +28,8 @@ const changesHome = `OLD.key IS NOT NEW.key OR (OLD.ws IS NULL AND NEW.ws IS NOT
   OR (OLD.ws IS NOT NULL AND NEW.ws IS NULL)`;
 const markMember = (thread: string, session: string) => {
   const ws = `(SELECT ws FROM sessions WHERE key = ${session})`;
-  const relevant = `EXISTS (SELECT 1 FROM threads WHERE id = ${thread} AND home IS NULL)`;
+  const relevant = `(EXISTS (SELECT 1 FROM threads WHERE id = ${thread} AND home IS NULL)
+    OR EXISTS (SELECT 1 FROM recent_scope_visibility_dirty WHERE thread = ${thread}))`;
   return `
     UPDATE recent_scope_member_dirty SET revision = revision + 1
       WHERE ws = ${ws} AND thread = ${thread} AND session = ${session} AND ${relevant};
@@ -39,6 +40,13 @@ const markMember = (thread: string, session: string) => {
 };
 const memberConflictThread = (extra: string) => `(SELECT thread FROM thread_sessions WHERE rowid = NEW.rowid ${extra})`;
 const memberConflictSession = (extra: string) => `(SELECT session FROM thread_sessions WHERE rowid = NEW.rowid ${extra})`;
+// A changed home can affect every member's scope, including scopes that do not have a row for this chat yet.
+// Keep it pending globally until a worker has visited both the old contributions and the current sources.
+const markVisibility = (thread: string) => `
+  UPDATE recent_scope_visibility_dirty SET revision = revision + 1 WHERE thread = ${thread};
+  INSERT INTO recent_scope_visibility_dirty(thread, revision)
+    SELECT ${thread}, 1 WHERE ${thread} IS NOT NULL AND EXISTS (SELECT 1 FROM recent_scope_tracked LIMIT 1)
+      AND NOT EXISTS (SELECT 1 FROM recent_scope_visibility_dirty WHERE thread = ${thread});`;
 // Most chats belong to a few workspaces. For a highly shared chat, defer distributing the change so a single write
 // cannot walk an arbitrary number of workspaces; readers wait while that distribution is incomplete.
 const markOrder = (thread: string) => {
@@ -79,9 +87,13 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
         revision INTEGER NOT NULL, PRIMARY KEY(ws, thread, session)) WITHOUT ROWID;
       CREATE TABLE recent_scope_order_dirty (ws TEXT NOT NULL, thread INTEGER NOT NULL, PRIMARY KEY(ws, thread)) WITHOUT ROWID;
       CREATE TABLE recent_scope_order_dispatch (thread INTEGER PRIMARY KEY, after_ws TEXT);
+      CREATE TABLE recent_scope_visibility_dirty (thread INTEGER PRIMARY KEY, revision INTEGER NOT NULL);
+      CREATE TABLE recent_scope_visibility_work (thread INTEGER PRIMARY KEY, revision INTEGER NOT NULL,
+        phase TEXT NOT NULL, after_ws TEXT, after_session TEXT);
       CREATE TABLE recent_scope_sources (ws TEXT NOT NULL, thread INTEGER NOT NULL, session TEXT NOT NULL,
         PRIMARY KEY(ws, thread, session)) WITHOUT ROWID;
       CREATE INDEX recent_scope_sources_session ON recent_scope_sources(ws, session, thread);
+      CREATE INDEX recent_scope_sources_thread ON recent_scope_sources(thread, ws, session);
       CREATE TABLE recent_scope_rows (ws TEXT NOT NULL, thread INTEGER NOT NULL, at INTEGER NOT NULL,
         said_at INTEGER NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(ws, thread)) WITHOUT ROWID;
       CREATE INDEX recent_scope_order ON recent_scope_rows(ws, at DESC, said_at DESC, created_at DESC, thread DESC);
@@ -125,13 +137,17 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
       END;
       CREATE TRIGGER recent_scope_order_thread_before_add BEFORE INSERT ON threads BEGIN
         ${markOrder("NEW.id")} ${markOrder(displacedThread)}
+        ${markVisibility("(SELECT id FROM threads WHERE id = NEW.id)")} ${markVisibility(displacedThread)}
       END;
       CREATE TRIGGER recent_scope_order_thread_before_change BEFORE UPDATE OF id, surface, channel, thread_ts ON threads BEGIN
         ${markOrder(displacedThread)}
+        ${markVisibility(displacedThread)}
       END;
-      CREATE TRIGGER recent_scope_order_thread_add AFTER INSERT ON threads BEGIN ${markOrder("NEW.id")} END;
+      CREATE TRIGGER recent_scope_order_thread_add AFTER INSERT ON threads BEGIN ${markOrder("NEW.id")} ${markVisibility("NEW.id")} END;
       CREATE TRIGGER recent_scope_order_thread_change AFTER UPDATE OF id, created_at ON threads BEGIN ${markOrder("OLD.id")} ${markOrder("NEW.id")} END;
-      CREATE TRIGGER recent_scope_order_thread_drop AFTER DELETE ON threads BEGIN ${markOrder("OLD.id")} END;
+      CREATE TRIGGER recent_scope_visibility_thread_change AFTER UPDATE OF id, home ON threads
+        WHEN OLD.id IS NOT NEW.id OR OLD.home IS NOT NEW.home BEGIN ${markVisibility("OLD.id")} ${markVisibility("NEW.id")} END;
+      CREATE TRIGGER recent_scope_order_thread_drop AFTER DELETE ON threads BEGIN ${markOrder("OLD.id")} ${markVisibility("OLD.id")} END;
       CREATE TRIGGER recent_scope_order_state_add AFTER INSERT ON thread_state BEGIN ${markOrder("NEW.thread")} END;
       CREATE TRIGGER recent_scope_order_state_change AFTER UPDATE OF thread, said_n ON thread_state
         WHEN OLD.thread IS NOT NEW.thread OR OLD.said_n IS NOT NEW.said_n BEGIN ${markOrder("OLD.thread")} ${markOrder("NEW.thread")} END;

@@ -54,7 +54,8 @@ export function readPreparedRecentWorkspace(db: DatabaseSync, ws: string, limit:
     if (!meta || meta.complete !== 1 || db.prepare("SELECT 1 FROM recent_scope_session_dirty WHERE kind = 1 AND ws = ? LIMIT 1").get(ws) !== undefined ||
         db.prepare("SELECT 1 FROM recent_scope_member_dirty WHERE ws = ? LIMIT 1").get(ws) !== undefined ||
         db.prepare("SELECT 1 FROM recent_scope_order_dirty WHERE ws = ? LIMIT 1").get(ws) !== undefined ||
-        db.prepare("SELECT 1 FROM recent_scope_order_dispatch LIMIT 1").get() !== undefined)
+        db.prepare("SELECT 1 FROM recent_scope_order_dispatch LIMIT 1").get() !== undefined ||
+        db.prepare("SELECT 1 FROM recent_scope_visibility_dirty LIMIT 1").get() !== undefined)
       return null;
     const rows = db.prepare(`SELECT thread FROM recent_scope_rows INDEXED BY recent_scope_order WHERE ws = ?
       ORDER BY at DESC, said_at DESC, created_at DESC, thread DESC LIMIT ?`).all(ws, limit) as { thread: number }[];
