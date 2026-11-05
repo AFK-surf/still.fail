@@ -160,7 +160,7 @@ test("the archive timer prepares old bindings once and retries when ready", asyn
     r.store.db.exec("INSERT INTO bindings(connect,session_key) VALUES('old-connect','bound')");
     makeOld(r.store);
     stop = startAutoArchiveTimer(r.hub, time, {
-      prepareSaid: async () => {}, prepareSessionBindings: (s) => { signal = s; calls++; return ready.promise; },
+      prepareSaid: async () => {}, prepareSessionBindings: (s) => { signal = s; calls++; return ready.promise; }, prepareSessionUpJobs: async () => {},
     });
     fire(60_000);
     assert.equal(calls, 1);
@@ -193,7 +193,7 @@ test("stopping the archive timer cancels pending binding preparation", async () 
     r.store.db.exec("INSERT INTO bindings(connect,session_key) VALUES('old-connect','bound')");
     makeOld(r.store);
     stop = startAutoArchiveTimer(r.hub, time, {
-      prepareSaid: async () => {}, prepareSessionBindings: (s) => { signal = s; return ready.promise; },
+      prepareSaid: async () => {}, prepareSessionBindings: (s) => { signal = s; return ready.promise; }, prepareSessionUpJobs: async () => {},
     });
     const task = timer as { ms: number; run: () => void } | null;
     assert.ok(task); assert.equal(task.ms, 60_000); timer = null; task.run();
