@@ -155,11 +155,15 @@ fn pane_stack(v : @view.View, src : Source, tips : @sf.TipLayer) -> Unit {
 
 ///|
 /// How wide the frame gives a page made once in the pane off the tape (pane_made), `v` in it: the window's less the
-/// block's column where its move goes (fold_target's), never what the page last laid out.
+/// block's column where its move has got as it is drawn (pane_view's column is as wide, by the same: fold_along at
+/// fold_drawn_at), never what the page last laid out.
 fn pane_made_width(v : @view.View, src : Source) -> Double {
   let ww = v.window().0
   match @sfbase.workspace_in_view(src).0 {
-    Some(w) => ww - fold_target(src, w, ww).1.col
+    Some(w) => {
+      let (_, now) = fold_target(src, w, ww)
+      ww - fold_along(fold_drawn_at(v), now).col
+    }
     None => ww
   }
 }

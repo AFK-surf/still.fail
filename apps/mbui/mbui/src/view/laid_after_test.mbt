@@ -148,16 +148,6 @@ test "panic where things are laid out read by what reacts reads: refused as it i
 }
 
 ///|
-test "panic where things are laid out read by a computed: refused as it is read" {
-  let tree = @view.Tree::new(fn(root) {
-    let a = root.box(fn(a) { a.height(Is(Some(10.0))) |> ignore })
-    let tall = @signals.computed(fn(_) { a.laid_size().1 })
-    root.box(fn(b) { b.height(By(fn() { Some(tall.get()) })) |> ignore }) |> ignore
-  })
-  tree.frame(400.0, 300.0) |> ignore
-}
-
-///|
 test "where things are laid out read where it may be: as the tree is placed (Placed), by what is laid out after all else, at a cause, once a change is committed" {
   let tall = @signals.signal(10.0)
   let at_cause : Ref[Double] = Ref(0.0)

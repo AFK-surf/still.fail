@@ -47,7 +47,7 @@ test "a quote made once keeps the old source and comment positions, in a message
 }
 
 ///|
-test "a quote's flying copy reserves its picture's room without making or owning that picture again" {
+test "a quote's flying copy reserves its picture's room as the picture was laid out as the copy was made (its cause), without making or owning that picture again" {
   set_words(fn(key, args) { if key == "web-main.quote.author" { args[0].1 + ": " } else { key } })
   let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=390.0, h=700.0, platform=2)
   let visible = @signals.signal(true)
@@ -75,22 +75,28 @@ test "a quote's flying copy reserves its picture's room without making or owning
   copies.set(true)
   t.draw()
   assert_eq(made.val, 1, msg="the flight must not replace the real picture's landing or preview registration")
-  let same_room = fn() raise {
-    assert_eq(flying.val.unwrap().card.laid_size(), original.val.unwrap().card.laid_size())
+  let rooms = fn() { (flying.val.unwrap().card.laid_size(), original.val.unwrap().card.laid_size()) }
+  let drawn_once = fn() raise {
     assert_eq(t.words().filter(fn(s) { s.0 == "这里由图片自己的飞行副本绘制" }).length(), 1)
   }
-  same_room()
+  let (made_as, _) = rooms()
+  assert_eq(made_as, rooms().1, msg="made as big as the card it copies")
+  drawn_once()
+  // (the picture laid out taller after: the copy keeps the room it was made with, as the picture's own flight keeps
+  // the size its cause gave it; nothing followed of where the picture is laid out)
   height.set(140.0)
   t.draw()
-  same_room()
+  assert_eq(rooms(), (made_as, (made_as.0, made_as.1 + 50.0)))
+  drawn_once()
   visible.set(false)
   t.draw()
   assert_eq(released.val, 1)
-  assert_eq(flying.val.unwrap().card.laid_size(), original.val.unwrap().card.laid_size())
+  assert_eq(rooms().0, rooms().1, msg="neither with the picture's room")
   visible.set(true)
   t.draw()
   assert_eq(made.val, 2)
-  same_room()
+  assert_eq(rooms(), (made_as, (made_as.0, made_as.1 + 50.0)))
+  drawn_once()
   copies.set(false)
   t.draw()
   assert_eq(released.val, 1, msg="letting the flying copy go cannot release the real picture")
