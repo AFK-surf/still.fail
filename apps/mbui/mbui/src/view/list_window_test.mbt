@@ -83,17 +83,19 @@ test "scrolls_window: a block come over what shows moves the column with it: wha
 }
 
 ///|
-test "scrolls_window: a block laid out taller than it was as it comes back into sight: what showed first stays where it was, what is under it moved on" {
+test "scrolls_window: a block laid out taller than it was counted as it comes back into sight over what shows: what showed moved as far as the hand moved it, the block grown over it" {
   let k = window_case()
   k.tree.wheel_at(150.0, 50.0, 0.0, 100.0, 0, 10.0) |> ignore
   k.tree.frame(390.0, 844.0) |> ignore
-  // (block 1, out of sight, comes to be 70 tall; scrolled back up to 70, it shows again, laid out so)
+  let (_, y2_was, _, _) = k.live[2].rect()
+  // (block 1, out of sight, comes to be 70 tall; scrolled back up by 30, it shows again, laid out so: block 2, in
+  // sight before, 30 further down, as the wheel moved it, and the column on by the 30 block 1 grew over it)
   k.heights[1].set(70.0)
   k.tree.wheel_at(150.0, 50.0, 0.0, -30.0, 0, 20.0) |> ignore
   k.tree.frame(390.0, 844.0) |> ignore
   let (_, y1, _, h1) = k.live[1].rect()
   let (_, y2, _, _) = k.live[2].rect()
-  assert_eq((k.scroll.at(k.tree), k.shown(), y1, h1, y2), (70.0, [1, 2, 3], -30.0, 70.0, 40.0))
+  assert_eq((y2_was, k.scroll.at(k.tree), k.shown(), y1, h1, y2), (-20.0, 100.0, [1, 2, 3, 4], -60.0, 70.0, 10.0))
 }
 
 ///|

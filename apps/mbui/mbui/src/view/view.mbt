@@ -790,10 +790,9 @@ pub struct Tree {
   mut rows_grid : Double
   /// the nodes holding such a list's rows (Node's list_rows), let go or not
   rows_lists : Array[Int]
-  /// the windowed lists (View::scrolls_window), each by the node holding its blocks (its index and making) and what
-  /// lays them out once all else is laid out (placing them too, or not: Tree::measured_now); and whether one of their
-  /// blocks is to be laid out again (a block's own, Node's own_root)
-  lists : Array[(Int, Int, (Bool) -> Bool)]
+  /// the windowed lists (View::scrolls_window), each by the node holding its blocks, laid out once all else is (Tree::
+  /// lays_blocks); and whether any is to be laid out again (one of its blocks marked, what it read told)
+  priv lists : Array[ListLaid]
   mut lists_due : Bool
   /// the thumbs of its columns' bars (View::scroll_bar), by their places: what a node over one yields to (ui's
   /// yield_thumbs, Tree::thumb_at)
@@ -1695,8 +1694,7 @@ fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
     // (in a windowed list's block, laid out by its list as a root of its own: the list to lay it out again once all
     // else is, nothing over it)
     if n.own_root {
-      self.lists_due = true
-      self.marked()
+      self.block_marked(i)
       return
     }
     i = n.parent
@@ -2968,16 +2966,27 @@ fn Tree::rows_list(self : Tree, at : Int) -> Unit {
 }
 
 ///|
+/// A windowed list's blocks' holder (Tree::lays_blocks): its node, its making, what lays its blocks out, and whether one
+/// of them was marked to be laid out again since.
+priv struct ListLaid {
+  holder : Int
+  gen : Int
+  lay : (Bool, Bool) -> Bool
+  mut marked : Bool
+}
+
+///|
 /// Node `holder` holds a windowed list's blocks (View::scrolls_window), laid out by `lay` once all else is laid out and
-/// placed, each a root of its own (View::block): `lay(place)` lays them out and puts them where they go, placing them
-/// too where `place` says (not where what asks only lays out to read: Tree::measured_now), and says whether it placed
-/// any. As long as the holder lives.
-fn Tree::lays_blocks(self : Tree, holder : View, lay : (Bool) -> Bool) -> Unit {
-  self.lists.push((holder.at, holder.gen, lay))
+/// placed, each a root of its own (View::block): `lay(place, marked)` lays them out and puts them where they go, where
+/// anything of it is to be (`marked`: one of its blocks was marked since), placing them too where `place` says (not
+/// where what asks only lays out to read: Tree::measured_now), and says whether it placed any. As long as the holder
+/// lives.
+fn Tree::lays_blocks(self : Tree, holder : View, lay : (Bool, Bool) -> Bool) -> Unit {
+  self.lists.push({ holder: holder.at, gen: holder.gen, lay, marked: true })
   self.lists_due = true
   self.marked()
   holder.owns(fn() {
-    match self.lists.search_by(fn(l) { l.0 == holder.at && l.1 == holder.gen }) {
+    match self.lists.search_by(fn(l) { l.holder == holder.at && l.gen == holder.gen }) {
       Some(i) => self.lists.remove(i) |> ignore
       None => ()
     }
@@ -2986,8 +2995,9 @@ fn Tree::lays_blocks(self : Tree, holder : View, lay : (Bool) -> Bool) -> Unit {
 }
 
 ///|
-/// The windowed lists' blocks laid out by their lists (Tree::lays_blocks), each living: once, and once more where one
-/// of their blocks was marked meanwhile (in another's, by what one made); whether any placed anything.
+/// The windowed lists' blocks laid out by their lists (Tree::lays_blocks), each living, where anything of it is to be:
+/// once, and once more where one of their blocks was marked meanwhile (in another's, by what one made); whether any
+/// placed anything.
 fn Tree::lists_laid(self : Tree, place : Bool) -> Bool {
   if self.lists.is_empty() {
     self.lists_due = false
@@ -2998,10 +3008,13 @@ fn Tree::lists_laid(self : Tree, place : Bool) -> Bool {
   while rounds < 2 {
     self.lists_due = false
     for l in self.lists.copy() {
-      let (at, gen, lay) = l
-      let n = self.nodes[at]
-      if n.live && n.gen == gen && lay(place) {
-        placed = true
+      let n = self.nodes[l.holder]
+      if n.live && n.gen == l.gen {
+        let marked = l.marked
+        l.marked = false
+        if (l.lay)(place, marked) {
+          placed = true
+        }
       }
     }
     rounds = rounds + 1
@@ -3013,6 +3026,19 @@ fn Tree::lists_laid(self : Tree, place : Bool) -> Bool {
 }
 
 ///|
+/// Block `at` of a windowed list (Node's own_root) marked to be laid out again: its list's, once all else is.
+fn Tree::block_marked(self : Tree, at : Int) -> Unit {
+  let holder = self.nodes[at].parent
+  for l in self.lists {
+    if l.holder == holder {
+      l.marked = true
+    }
+  }
+  self.lists_due = true
+  self.marked()
+}
+
+///|
 /// A block of the windowed list `self` holds (Tree::lays_blocks): made by `make` as the `i`th of what it holds (its
 /// place among them, in their order), laid out by the list as a root of its own: no box of the holder's, nothing over
 /// it laid out again for it.
@@ -3020,6 +3046,8 @@ fn View::block(self : View, i : Int, make : (View) -> Unit) -> View {
   guard self.live() is Some(n) else { return self.tree.none() }
   let v = self.tree.made(self.at)
   self.tree.nodes[v.at].own_root = true
+  // (a row by its key: what is made in it known by it, View::row_place; a layer of its own)
+  self.tree.nodes[v.at].each_row = true
   let i = if i < 0 { 0 } else if i > n.kids.length() { n.kids.length() } else { i }
   n.kids.insert(i, v.at)
   v.owning(fn() { make(v) })
@@ -6274,53 +6302,43 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   if !self.due {
     return
   }
-  // the bindings whose reads changed since, each once, in the order they were told (what they make runs its own now,
-  // what they set again marks what it marks)
-  let mut i = 0
-  while i < self.bindings_due.length() {
-    // (one run already, pulled as something asked at once: not again)
-    let b = self.bindings_due[i]
-    if b.queued {
-      (b.run)()
-    }
-    i = i + 1
-  }
-  self.bindings_due.clear()
-  // (those marked that ran so, no longer to be pulled; one marked in a change not ended yet still is)
-  let still = self.pulls_marked.filter(fn(k) {
-    match self.pulls.get(k) {
-      Some((_, b)) => b.marked
-      None => false
-    }
-  })
-  self.pulls_marked.clear()
-  self.pulls_marked.append(still)
   // (what goes beside another placed by it only where anything was laid out or placed again: View::beside)
-  let mut placing = self.layout_due || !self.places_due.is_empty()
-  if self.layout_due {
-    self.layout_due = false
-    // (laid out already to be read, nothing marked since: placed by that; else laid out now, what was laid out to be
-    // read before it and not placed by yet placed too, Tree::measured_now)
-    let gen = if self.measured_gen >= 0 {
-      if self.walk_from >= 0 { self.walk_from } else { self.measured_gen }
-    } else {
-      self.work.computes = self.work.computes + 1
-      let g = @flex.computes() + 1
-      @flex.compute(self.nodes[0].flex, width=w, height=h, round=false, reuse=true)
-      if self.walk_from >= 0 && self.walk_from < g {
-        self.walk_from
-      } else {
-        g
-      }
+  let mut placing = false
+  let mut rounds = 0
+  while rounds == 0 || (!self.bindings_due.is_empty() && rounds < 4) {
+    rounds = rounds + 1
+    // the bindings whose reads changed since, each once, in the order they were told (what they make runs its own
+    // now, what they set again marks what it marks)
+    self.bindings_run()
+    if self.layout_due || !self.places_due.is_empty() {
+      placing = true
     }
-    self.measured_gen = -1
-    self.walk_from = -1
-    self.walk(0, gen, true)
-  }
-  // (the windowed lists' blocks, all else laid out and placed: each list as tall and wide as it came to, its blocks
-  // laid out by it, each a root of its own, and placed where it puts them, in this same pass)
-  if self.lists_laid(true) {
-    placing = true
+    if self.layout_due {
+      self.layout_due = false
+      // (laid out already to be read, nothing marked since: placed by that; else laid out now, what was laid out to be
+      // read before it and not placed by yet placed too, Tree::measured_now)
+      let gen = if self.measured_gen >= 0 {
+        if self.walk_from >= 0 { self.walk_from } else { self.measured_gen }
+      } else {
+        self.work.computes = self.work.computes + 1
+        let g = @flex.computes() + 1
+        @flex.compute(self.nodes[0].flex, width=w, height=h, round=false, reuse=true)
+        if self.walk_from >= 0 && self.walk_from < g {
+          self.walk_from
+        } else {
+          g
+        }
+      }
+      self.measured_gen = -1
+      self.walk_from = -1
+      self.walk(0, gen, true)
+    }
+    // (the windowed lists' blocks, all else laid out and placed: each list as tall and wide as it came to, its blocks
+    // laid out by it, each a root of its own, and placed where it puts them; where it puts its column as it does
+    // (what came over what shows moving it with that), what follows that worked out in this same pass, again)
+    if self.lists_laid(true) {
+      placing = true
+    }
   }
   // (placed or faded by its own: it alone composed again)
   for at in self.places_due {
@@ -6417,6 +6435,30 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   if self.lists_due && !self.due {
     self.marked()
   }
+}
+
+///|
+/// The bindings whose reads changed since, each once, in the order they were told (Tree::laid_out); those marked that
+/// ran so no longer to be pulled (one marked in a change not ended yet still is).
+fn Tree::bindings_run(self : Tree) -> Unit {
+  let mut i = 0
+  while i < self.bindings_due.length() {
+    // (one run already, pulled as something asked at once: not again)
+    let b = self.bindings_due[i]
+    if b.queued {
+      (b.run)()
+    }
+    i = i + 1
+  }
+  self.bindings_due.clear()
+  let still = self.pulls_marked.filter(fn(k) {
+    match self.pulls.get(k) {
+      Some((_, b)) => b.marked
+      None => false
+    }
+  })
+  self.pulls_marked.clear()
+  self.pulls_marked.append(still)
 }
 
 ///|

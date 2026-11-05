@@ -188,10 +188,12 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       0.0
     }
   }
-  // what it holds: the blocks, nothing else; how far it can go counted by them as they are counted now
+  // what it holds: the blocks, nothing else; how far it can go counted by them as they are counted now (told as that
+  // changes, for what follows it: Scroll's room)
+  let extent_now = fn() { index.val.total() + foot_room() }
   let extent = fn() {
     extent_told.get() |> ignore
-    index.val.total() + foot_room()
+    extent_now()
   }
   let holder : Ref[View?] = Ref(None)
   // (a block's slot made where it goes among those made, in their order: View::block)
@@ -313,7 +315,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // (kept at its end as it follows it, what it holds grown or come: glided after what came that is new to it, to the
   // top of one taller than what shows; at once else. Whether it was moved at once.)
   let follow = fn(all : Array[K], vh : Double) -> Bool {
-    let most = dmax(0.0, extent() - vh)
+    let most = dmax(0.0, extent_now() - vh)
     let x = s.drawn(tree)
     let lead_now = if vh > index.val.total() { vh - index.val.total() } else { 0.0 }
     // (the same blocks as last time it was told: nothing come, nothing looked for among them all)
@@ -468,7 +470,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     anchor.val = Some((k, top))
     s.x.set(to)
     // (let go once it is laid out as it is and can go there: what shows all laid out as it is, by then)
-    let most = dmax(0.0, extent() - vh)
+    let most = dmax(0.0, extent_now() - vh)
     let inside = offset >= 0.0 || -offset < h
     if known && inside && to <= most + 0.5 {
       held_at.val = None
@@ -492,6 +494,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       None => ()
     }
   }
+  // (put where it is to be, not placed yet: laid out to be read alone, Tree::measured_now)
+  let to_place = Ref(false)
   // the blocks laid out, once all else is: what shows made and laid out, as many as fill it, those no more in sight let
   // go, each put where those over it end
   let lay_now = fn(place : Bool) -> Bool {
@@ -600,9 +604,14 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       }
     })
     let kept_keys_now = kept_now.get()
+    // (what came over what showed as it was last laid out, or what of that was laid out again: what showed moved with
+    // it, where it is drawn)
+    if held_at.val is None {
+      held_still()
+    }
     // (first laid out from its end: there before anything is made, nothing made at its top to be let go)
     if from_end && !laid_once.val && held_at.val is None && follows.get() {
-      s.x.set(dmax(0.0, extent() - vh))
+      s.x.set(dmax(0.0, extent_now() - vh))
     }
     // what shows made and laid out, as many as fill it: each made counted as it comes to, what shows moved with what
     // over it as it is, again till what shows is all made
@@ -616,10 +625,19 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       }
       // (where it shows from, within how far it can go as it is counted now: where it is drawn from once it is put
       // there, Scroll's room)
-      let most = dmax(0.0, extent() - vh)
+      let most = dmax(0.0, extent_now() - vh)
       let x = s.drawn(tree)
       let xa = (if x > most { most } else if x < 0.0 { 0.0 } else { x }) - lead_of(vh)
       sight = sight_of(all, xa, vh)
+      // (the first in sight that was laid out before, its top as counted now: held where it is drawn as what comes
+      // into sight over it is laid out other than it was counted, the column moved with it (none in sight: nothing
+      // drawn there to hold, the column where it was put))
+      if held_at.val is None {
+        anchor.val = match sight.iter().find_first(fn(k) { blocks.contains(k) }) {
+          Some(k) => place_of.val.get(k).map(fn(i) { (k, index.val.top(i)) })
+          None => None
+        }
+      }
       let made = Ref(false)
       @signals.untracked(fn() {
         for k in sight {
@@ -697,6 +715,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // each put where those over it end, under the room at its foot while they are shorter than what shows
     let lead = lead_of(vh)
     let mut placed = false
+    let mut owed = false
     for _, b in blocks {
       if b.i < 0 {
         continue
@@ -704,26 +723,45 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       let y = lead + index.val.top(b.i)
       if y != b.y || b.unplaced >= 0 {
         b.slot.block_put(0.0, y, if place { b.unplaced } else { -1 }, place)
-        // (where it was placed: put only to be read, it is placed there yet)
+        // (where it was placed: put only to be read, it is placed there yet, by the next that places)
         if place {
           b.y = y
           b.unplaced = -1
           placed = true
+        } else {
+          owed = true
         }
       }
     }
+    to_place.val = owed
     placed
   }
   // (what it read followed: as any of it changes, laid out again with all else as a frame lays it out)
+  let told = Ref(true)
   let watch = @signals.watch(fn() {
+    told.val = true
     tree.lists_due = true
     tree.marked()
   })
   let laying = Ref(false)
-  let lay = fn(place : Bool) -> Bool {
+  let lay = fn(place : Bool, marked : Bool) -> Bool {
     if laying.val {
       return false
     }
+    // (nothing it read changed, none of its blocks marked, its column as wide and as tall as it was laid out in, all
+    // of it placed where it is to be: nothing of it to lay out)
+    let same_room = match (holder.val, self.live()) {
+      (Some(h), Some(sn)) =>
+        match h.live() {
+          Some(hn) => hn.flex.width == laid_w.val && sn.flex.height == laid_vh.val
+          None => false
+        }
+      _ => false
+    }
+    if !told.val && !marked && same_room && !(place && to_place.val) {
+      return false
+    }
+    told.val = false
     laying.val = true
     @signals.start_batch()
     let placed = watch.read(fn() { lay_now(place) })
