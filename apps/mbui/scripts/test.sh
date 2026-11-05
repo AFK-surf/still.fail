@@ -156,9 +156,26 @@ for t in $targets; do
       # leaves behind that a later one trips on shows (shards, a process each, hide it))
       runs+=("${pages[*]}")
     elif [ -n "${APP_EXE:-}" ]; then
-      # (on a program built elsewhere: the pages in one run whose n programs each take the next file (exe_run's
-      # xargs -P), not dealt out beforehand: by name round four one took 75 s while another took 21, 2026-11-01)
-      runs+=("${pages[*]}")
+      # (on a program built elsewhere: the pages in runs whose programs each take the next file (exe_run's xargs -P),
+      # not dealt out beforehand to the programs: by name round four one took 75 s while another took 21, 2026-11-01)
+      # (dealt to the four runners by the cores each has free: all of them on the fourth, its job's tests were
+      # 218-276 s, cut at its 5 minutes, while the first ran two processes for 143 s, the second four for 150 (one
+      # long, three short), the third three for 90, 2026-11-05: of each fifteen, seven to the fourth with four
+      # programs, three to the first and four to the second with two each, one to the third with one)
+      if [ -n "${APP_GROUP:-}" ] && [ "${APP_GROUP#*/}" = 4 ]; then
+        g1=() g2=() g3=() g4=()
+        for i in "${!pages[@]}"; do
+          case $((i % 15)) in
+            0 | 2 | 4 | 6 | 8 | 10 | 12) g4+=("${pages[i]}") ;;
+            1 | 7 | 13) g1+=("${pages[i]}") ;;
+            3 | 9 | 11 | 14) g2+=("${pages[i]}") ;;
+            *) g3+=("${pages[i]}") ;;
+          esac
+        done
+        runs+=("@pages 1 2 ${g1[*]}" "@pages 2 2 ${g2[*]}" "@pages 3 1 ${g3[*]}" "@pages 4 $n ${g4[*]}")
+      else
+        runs+=("@pages 0 $n ${pages[*]}")
+      fi
       export APP_JOBS=$n
     else
       for ((k = 0; k < n; k++)); do
@@ -225,6 +242,7 @@ for t in $targets; do
       "src/sfapp/kept_rows_kinds_wbtest.mbt --index 8-"*) echo 2 ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt "*) echo 3 ;;
       "src/sfapp/contrast_wbtest.mbt  ") echo contrast ;;
+      "@pages "*) [ "$2" = 0 ] && echo 1 || echo "$2" ;;
       *) [ $# -gt 2 ] && echo 4 || echo 1 ;;
     esac
   }
@@ -240,6 +258,7 @@ for t in $targets; do
   fi
   run_name() {
     [ "$1" = @flows ] && shift
+    [ "$1" = @pages ] && shift 3
     case " $* " in
       *" -p "*) echo "the packages$(echo " $* " | sed 's| -p stillfail/| |g')" ;;
       *" --index "*) echo "$(basename "$1") (tests $3)" ;;
@@ -276,6 +295,9 @@ for t in $targets; do
         exe_run "$fx" $f/__blackbox_test_info.json ${REPLAY_SHARDS:-3} stillfail/sfreplay/flows \
           ${runs[i]#@flows } > "$out.$i" 2>&1
       # (the packages' run is moon test's even then: only sfapp's program is APP_EXE)
+      elif [ "${runs[i]%% *}" = @pages ]; then
+        set -- ${runs[i]}
+        exe_run "$APP_EXE" "$APP_INFO" $3 stillfail/sfapp "${@:4}" > "$out.$i" 2>&1
       elif [ -n "${APP_EXE:-}" ] && [[ " ${runs[i]} " != *" -p "* ]]; then
         exe_run "$APP_EXE" "$APP_INFO" ${APP_JOBS:-1} stillfail/sfapp ${runs[i]} > "$out.$i" 2>&1
       else moon test $mode ${runs[i]} ${UPDATE:+--update} > "$out.$i" 2>&1; fi; c=$?
