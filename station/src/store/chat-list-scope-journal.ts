@@ -115,6 +115,8 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
         revision INTEGER NOT NULL, PRIMARY KEY(ws, thread, session)) WITHOUT ROWID;
       CREATE TABLE recent_scope_order_dirty (ws TEXT NOT NULL, thread INTEGER NOT NULL, PRIMARY KEY(ws, thread)) WITHOUT ROWID;
       CREATE TABLE recent_scope_order_dispatch (thread INTEGER PRIMARY KEY, after_ws TEXT);
+      CREATE TABLE recent_scope_order_turn (id INTEGER PRIMARY KEY CHECK (id = 1), after_thread INTEGER, through_thread INTEGER);
+      INSERT INTO recent_scope_order_turn VALUES (1, NULL, NULL);
       CREATE TABLE recent_scope_visibility_dirty (thread INTEGER PRIMARY KEY, revision INTEGER NOT NULL,
         home_ws TEXT, ambiguous INTEGER NOT NULL);
       CREATE TABLE recent_scope_visibility_work (thread INTEGER PRIMARY KEY, revision INTEGER NOT NULL,

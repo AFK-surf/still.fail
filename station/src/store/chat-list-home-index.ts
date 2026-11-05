@@ -1,5 +1,5 @@
-// An incremental default-home index. Overlap with the explicit home workspace and the real reader are not
-// connected yet: this module cannot certify a complete home page.
+// An incremental index for the default part of home. A complete home page also needs the explicit workspace and
+// overlap counts in chat-list-home-overlap.ts.
 import type { DatabaseSync } from "node:sqlite";
 import type { RecentChatPage } from "./chat-list-index.ts";
 import { recentHomeChatStep } from "./chat-list-home-source.ts";

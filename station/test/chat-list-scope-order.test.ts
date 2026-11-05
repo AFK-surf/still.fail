@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { constants } from "node:sqlite";
 import { test } from "node:test";
 import { recentChatIds } from "../src/store/chat-list.ts";
 import { scanRecentWorkspaceStep, settleRecentWorkspaceMemberStep } from "../src/store/chat-list-scope-build.ts";
@@ -7,6 +11,71 @@ import { dispatchRecentScopeOrderStep, settleRecentWorkspaceOrderStep } from "..
 import { putRecentScopeSource, readPreparedRecentWorkspace, RECENT_SCOPE_ORDER_PENDING } from "../src/store/chat-list-scope-rows.ts";
 import { settleRecentScopeVisibilityStep } from "../src/store/chat-list-scope-visibility.ts";
 import { Store } from "../src/store/store.ts";
+
+test("a frequently updated shared chat does not starve another shared chat's ordering", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const hot = store.openThread("ember", "EMBER", "hot-dispatch", "Hot", null).id;
+    const other = store.openThread("ember", "EMBER", "other-dispatch", "Other", null).id;
+    const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',1)");
+    put.run(hot); put.run(other);
+    const workspaces: [string, number][] = [];
+    for (const [prefix, thread] of [["h", hot], ["t", other]] as const) for (let i = 0; i < 65; i++) {
+      const ws = `${prefix}${String(i).padStart(3, "0")}`;
+      store.insertSession({ key: ws, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: ws, createdAt: 1, lastActiveAt: 1, ws });
+      store.joinThread(thread, ws, "ember");
+      workspaces.push([ws, thread]);
+    }
+    installRecentScopeJournal(db);
+    for (const [ws, thread] of workspaces) {
+      trackRecentScope(db, { kind: "workspace", workspace: ws });
+      putRecentScopeSource(db, ws, BigInt(thread), ws);
+    }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1").run();
+    const change = db.prepare("UPDATE entries SET at = ? WHERE thread = ? AND n = 1");
+    change.run(10, hot); change.run(10, other);
+    let dispatched = false;
+    for (let i = 0; i < 25 && !dispatched; i++) {
+      change.run(11 + i, hot);
+      assert.ok(dispatchRecentScopeOrderStep(db, 16).visited <= 16);
+      dispatched = db.prepare("SELECT 1 FROM recent_scope_order_dispatch WHERE thread = ?").get(other) === undefined;
+    }
+    assert.ok(dispatched, "the other shared chat gets turns while the first is continuously updated");
+    while (!settleRecentWorkspaceOrderStep(db, "t000", 1).ordersDone) { /* Settle the affected workspace. */ }
+    assert.deepEqual(readPreparedRecentWorkspace(db, "t000", 5), recentChatIds(db, "t000", "home", 5));
+  } finally { store.close(); }
+});
+
+test("order dispatch keeps its turn across rollback and reopening", () => {
+  const dir = mkdtempSync(join(tmpdir(), "recent-order-turn-")), path = join(dir, "station.db");
+  let store = Store.open(path);
+  try {
+    let db = store.db;
+    installRecentScopeJournal(db);
+    db.exec(`INSERT INTO recent_scope_rows(ws, thread, at, said_at, created_at) VALUES
+      ('a',1,1,1,1), ('b',1,1,1,1), ('c',2,1,1,1), ('d',2,1,1,1);
+      INSERT INTO recent_scope_order_dispatch(thread) VALUES (1), (2);`);
+    db.setAuthorizer((action, name) => action === constants.SQLITE_INSERT && name === "recent_scope_order_dirty"
+      ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    try { assert.throws(() => dispatchRecentScopeOrderStep(db, 1)); }
+    finally { db.setAuthorizer(null); }
+    assert.deepEqual({ ...db.prepare("SELECT after_thread, through_thread FROM recent_scope_order_turn").get() },
+      { after_thread: null, through_thread: null });
+    assert.equal(dispatchRecentScopeOrderStep(db, 1).visited, 1);
+    store.close();
+    store = Store.open(path);
+    db = store.db;
+    assert.equal(dispatchRecentScopeOrderStep(db, 1).visited, 1);
+    assert.ok(db.prepare("SELECT 1 FROM recent_scope_order_dirty WHERE ws = 'c' AND thread = 2").get(),
+      "the next chat gets its turn after reopening");
+    assert.ok(db.prepare("SELECT 1 FROM recent_scope_order_dispatch WHERE thread = 1").get(), "the first still has work");
+  } finally {
+    store.db.setAuthorizer(null);
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 for (const recursive of [false, true]) test(`a changed message updates only its own workspace order (recursive triggers ${recursive})`, () => {
   const store = Store.open(":memory:");

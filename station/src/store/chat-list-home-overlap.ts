@@ -1,5 +1,5 @@
-// A default-home chat can also be in a named workspace. These rows/counts let a future home reader count that
-// intersection exactly; it must wait for both the old-row scan and every pending overlap batch before using it.
+// A default-home chat can also be in a named workspace. These rows/counts let the home reader count that intersection
+// exactly; it waits for both the old-row scan and every pending overlap batch before using them.
 import type { DatabaseSync } from "node:sqlite";
 import { installRecentHomeIndex, preparedDefaultHomeTotal } from "./chat-list-home-index.ts";
 import type { RecentChatPage } from "./chat-list-index.ts";

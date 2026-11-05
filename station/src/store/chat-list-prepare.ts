@@ -1,4 +1,4 @@
-// A single bounded piece of requested recent-chat preparation. This coordinator is not yet connected to readers.
+// A single bounded piece of requested recent-chat preparation, run by the reader's background worker.
 import type { DatabaseSync } from "node:sqlite";
 import { installRecentHomeIndex, scanRecentHomeChatsStep, settleRecentHomeChatStep,
   settleRecentHomeOrderStep, settleRecentHomeSessionStep } from "./chat-list-home-index.ts";

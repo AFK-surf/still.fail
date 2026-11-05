@@ -1,5 +1,5 @@
 // Bounded distribution and reconciliation for changes to a chat's ordering. Other visibility journals must also
-// be settled before a workspace can be exposed; this prototype is not connected to the station reader.
+// be settled before a workspace can be exposed.
 import type { DatabaseSync } from "node:sqlite";
 import { removeRecentScopeSource } from "./chat-list-scope-rows.ts";
 
@@ -9,10 +9,30 @@ export function dispatchRecentScopeOrderStep(db: DatabaseSync, limit = 64): { di
   if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError("recent scope dispatch batch must be positive");
   db.exec("BEGIN IMMEDIATE");
   try {
-    const next = db.prepare("SELECT thread, after_ws FROM recent_scope_order_dispatch ORDER BY thread LIMIT 1");
-    next.setReadBigInts(true);
-    const pending = next.get() as { thread: bigint; after_ws: string | null } | undefined;
-    if (!pending) { db.exec("COMMIT"); return { dispatchDone: true, visited: 0 }; }
+    // A finite round gives other chats a turn even if an earlier one is updated again immediately after dispatch.
+    // The boundary and turn commit with each batch, including across rollback and worker restarts.
+    const turn = db.prepare("SELECT after_thread, through_thread FROM recent_scope_order_turn WHERE id = 1");
+    turn.setReadBigInts(true);
+    const progress = turn.get() as { after_thread: bigint | null; through_thread: bigint | null };
+    let through = progress.through_thread;
+    let pending: { thread: bigint; after_ws: string | null } | undefined;
+    if (through !== null) {
+      const next = db.prepare(progress.after_thread === null
+        ? "SELECT thread, after_ws FROM recent_scope_order_dispatch WHERE thread <= ? ORDER BY thread LIMIT 1"
+        : "SELECT thread, after_ws FROM recent_scope_order_dispatch WHERE thread > ? AND thread <= ? ORDER BY thread LIMIT 1");
+      next.setReadBigInts(true);
+      pending = (progress.after_thread === null ? next.get(through) : next.get(progress.after_thread, through)) as typeof pending;
+    }
+    if (!pending) {
+      const last = db.prepare("SELECT MAX(thread) AS thread FROM recent_scope_order_dispatch");
+      last.setReadBigInts(true);
+      through = (last.get() as { thread: bigint | null }).thread;
+      if (through === null) { db.exec("COMMIT"); return { dispatchDone: true, visited: 0 }; }
+      const first = db.prepare("SELECT thread, after_ws FROM recent_scope_order_dispatch WHERE thread <= ? ORDER BY thread LIMIT 1");
+      first.setReadBigInts(true);
+      pending = first.get(through) as { thread: bigint; after_ws: string | null };
+    }
+    db.prepare("UPDATE recent_scope_order_turn SET after_thread = ?, through_thread = ? WHERE id = 1").run(pending.thread, through);
     const query = db.prepare(pending.after_ws === null
       ? "SELECT ws FROM recent_scope_rows INDEXED BY recent_scope_rows_thread WHERE thread = ?1 ORDER BY ws LIMIT ?2"
       : "SELECT ws FROM recent_scope_rows INDEXED BY recent_scope_rows_thread WHERE thread = ?1 AND ws > ?2 ORDER BY ws LIMIT ?3");

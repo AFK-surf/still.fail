@@ -1,5 +1,5 @@
 // Rebuild one chat's explicit-workspace contributions after its home changes. The home/default scope and its
-// overlap with an explicit workspace are separate work; this prototype must not certify a complete reader yet.
+// overlap with an explicit workspace are prepared separately.
 import type { DatabaseSync } from "node:sqlite";
 import { putRecentScopeSource, removeRecentScopeSource } from "./chat-list-scope-rows.ts";
 
