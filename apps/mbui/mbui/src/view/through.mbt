@@ -1,12 +1,13 @@
-// A hold handed through: a node (a cover over what is shown and not in use) whose press is its own (a tap, a drag),
-// but a finger held still on it long is what lies under it's (View::gesture's `through`). One holder at a time, one
+// A hold handed through: a node (a cover over what is shown and not in use) whose press is its own (a tap, a drag), but
+// a finger held still on it long is what lies under it's (View::gesture's `through`). One holder at a time, one
 // recognizer: the gesture alone says whether the finger is a tap, a drag or a hold (its slop, its hold's moment); a
 // hold of one going through is handed, nothing else. What lies under it is found as the finger goes down, by the rules
 // a finger finds a node by, and kept by who it is (a node of the tree's by its index's making; what a node hosts by
-// what its host says is there). At the hold's moment, as things are then, the cover's hold is ended first (told Off,
-// as any called off), what was found looked at again after what that did, then the finger handed to it where it is
-// then: a node of the tree's told a down at that moment, as long held as since the finger went down (Drag's `since`);
-// what a node hosts, its host told so (Tree::on_through).
+// what its host says is there). (A wheel turned over a cover goes through by its own saying: View::wheel_through.) At
+// the hold's moment, as things are then, the cover's hold is ended first (told Off, as any called off), what was found
+// looked at again after what that did, then the finger handed to it where it is then: a node of the tree's told a down
+// at that moment, as long held as since the finger went down (Drag's `since`); what a node hosts, its host told so
+// (Tree::on_through).
 
 ///|
 /// What a hold going through is handed to (View::gesture's `through`), as it was found as the finger went down.

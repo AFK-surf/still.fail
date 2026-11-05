@@ -402,6 +402,8 @@ struct Node {
   mut went_cell : @signals.Signal[Side?]?
   /// what it holds is found by a finger or the pointer within it alone (View::bounds_input)
   mut bounds_input : Bool
+  /// a wheel turned over it what is drawn under it's, its presses still its own (View::wheel_through)
+  mut wheel_through : Bool
   /// what it and what it holds are drawn clear of the fading and stretching of (View::drawn_clear_of)
   mut drawn_clear : NodeId?
   /// how far in from its right edge the pointer brings its bar out (View::bar_near; 0 none), and whether it does now
@@ -1105,6 +1107,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.drawn_rect_cell = None
       n.went_cell = None
       n.bounds_input = false
+      n.wheel_through = false
       n.drawn_clear = None
       n.bar_near = 0.0
       n.bar_across = false
@@ -1201,6 +1204,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         drawn_rect_cell: None,
         went_cell: None,
         bounds_input: false,
+        wheel_through: false,
         drawn_clear: None,
         bar_near: 0.0,
         bar_across: false,
@@ -2025,6 +2029,7 @@ priv enum Prop {
   Clips
   HostedClips
   BoundsInput
+  WheelThrough
   OverScrim
   Measured
   LayoutBox
@@ -2295,6 +2300,18 @@ pub fn View::hosted_clips(self : View, on : Live[Bool]) -> View {
     abort("hosted_clips of a node hosting nothing")
   }
   self.bind(HostedClips, on, Paint, fn(on) { self.tree.nodes[self.at].hosted_clips = on })
+  self
+}
+
+///|
+/// Whether a wheel turned over it (down or across, a mouse's or a trackpad's) is what is drawn under it's, as it
+/// changes: its presses, drags and menus still its own, and the pointer over it still over it (View::pointed), not over
+/// what it covers. Not found by a wheel (Tree::wheel_at), what it holds found as ever. For a cover that takes a tap over
+/// what it covers but leaves its scrolling to it: a panel not in use on the tape (still.fail's tape_cover), a tap
+/// bringing it over, the wheel scrolling the page under it where it shows, as it would were nothing over it. Which of a
+/// press held long goes through is the gesture's `through` (through.mbt).
+pub fn View::wheel_through(self : View, on : Live[Bool]) -> View {
+  self.bind(WheelThrough, on, Paint, fn(on) { self.tree.nodes[self.at].wheel_through = on })
   self
 }
 
@@ -3997,6 +4014,9 @@ pub fn Tree::wheel_at(
     self.walk_taken(x, y, fn(c, cx, cy, _, s) {
       if self.finger_on(c, cx, cy, s, x, y, now, tracked=false) {
         let n = self.nodes[c.id.at]
+        if n.wheel_through {
+          return
+        }
         if n.on_wheel is Some(_) ||
           n.on_drag is Some(_) ||
           n.on_press is Some(_) ||

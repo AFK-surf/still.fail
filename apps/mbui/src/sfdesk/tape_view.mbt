@@ -924,6 +924,8 @@ fn tape_cover(n : @view.View, p : TapePane, room : () -> (Double, Double, Double
         // or pulled over, its own widgets read out)
         .says(By(fn() { Some(@view.said(Button, label=tape_words(p))) }))
         .hides(By(fn() { wide.tape_at.get() == p }))
+        // (a wheel turned over it what it covers': the page not in use scrolled where it shows, as were nothing over it)
+        .wheel_through(Is(true))
         // (pressed by a screen reader: brought over at that moment, as a tap brings it; a finger and the pointer its
         // gesture's, as ever: what drags a node is what a press on it finds)
         .on_press(fn() {

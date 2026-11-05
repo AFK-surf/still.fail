@@ -100,3 +100,47 @@ test "wheel: the tree let go asks none" {
   let gone = t.wheel_at(50.0, 50.0, 0.0, 30.0, 0, 20.0)
   assert_eq((first, gone, told.copy()), (true, false, [40]))
 }
+
+///|
+test "wheel: a cover over a sibling, its presses its own, lets the wheel through to what it covers only when it says so, across too; the pointer still over the cover" {
+  let through = @signals.signal(false)
+  let told : Array[String] = []
+  let covers : Ref[@view.View?] = Ref(None)
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(under) {
+        under
+        .width(Is(Some(300.0)))
+        .height(Is(Some(300.0)))
+        .on_press(fn() { told.push("under pressed") })
+        .on_wheel(fn(w) { told.push("under \{w.dx.to_int()} \{w.dy.to_int()}") })
+        |> ignore
+      })
+      |> ignore
+      root.box(fn(cover) {
+        covers.val = Some(cover)
+        cover
+        .over(Is(true))
+        .on_press(fn() { told.push("pressed") })
+        .wheel_through(By(fn() { through.get() }))
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(390.0, 844.0) |> ignore
+  let cover = covers.val.unwrap()
+  // (the cover taking presses: the wheel its, nothing under it asked)
+  t.wheel_at(50.0, 50.0, 0.0, 40.0, 0, 10.0) |> ignore
+  assert_eq(told.copy(), [])
+  // (said to let it through: what it covers takes it, down and across; the pointer over the cover still, not what it
+  // covers)
+  through.set(true)
+  t.frame(390.0, 844.0, now=20.0) |> ignore
+  t.wheel_at(50.0, 50.0, 0.0, 30.0, 0, 30.0) |> ignore
+  t.wheel_at(50.0, 50.0, 25.0, 0.0, 0, 40.0) |> ignore
+  assert_eq(told.copy(), ["under 0 30", "under 25 0"])
+  t.point_at(50.0, 50.0)
+  assert_eq(t.pointed_now(), Some(cover.id()))
+}
