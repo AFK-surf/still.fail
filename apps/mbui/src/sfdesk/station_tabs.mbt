@@ -96,7 +96,7 @@ let panel_screen_pages : Map[String, @sfbase.ScreenAt] = {}
 let panel_screens : Map[String, (String, String, Int)] = {}
 
 ///|
-fn station_tab_pane(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, tab : String) -> Bool {
+fn station_tab_pane(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, tab : String, own_bar? : @ui.Style? = None) -> Bool {
   guard station_tab(tab) is Some((kind, station, screen)) else { return false }
   let frame : PageFrame = { back: None, top: 0.0, foot: 0.0, named: false }
   match kind {
@@ -104,7 +104,7 @@ fn station_tab_pane(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, tab :
       panel_screens[tab] = (station, screen, c.frame_number())
       let at = panel_screen_pages.get(tabs_key(r) + "/" + tab).unwrap_or({ station, screen, title: "", until_gone: false })
       @sfpages.screen_page(c, src, at, frame,
-        on_close=fn() { side_change(src, r, "close", Some(tab)) }, in_tab=true)
+        on_close=fn() { side_change(src, r, "close", Some(tab)) }, in_tab=true, own_bar~)
     }
     "drive" => files_tab(c, src, w.id, tabs_key(r), station, only_station=true, scope=station_files_scope(r, station))
     // (the settings' own page, not one for every frame yet: its head with no back, the tab is the way to close it)

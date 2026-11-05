@@ -27,6 +27,8 @@ priv struct ScreenUi {
   mut fulled : Bool
   /// shown as a tab beside its chat, whose tab closes it: no close of its own (the same thing twice)
   mut in_tab : Bool
+  /// the only tab of a panel of its own: the panel's bar, its style, in place of a row of the panel's over it
+  mut own_bar : @ui.Style?
   mut tools_open : Bool
   /// how far the folded tools were dragged from their corner (so they cover another part of the screen)
   tools_moved : Afloat
@@ -106,6 +108,7 @@ fn screen_ui(key : String) -> ScreenUi {
         full: false,
         fulled: false,
         in_tab: false,
+        own_bar: None,
         tools_open: false,
         tools_moved: afloat_new(),
         mouse_moved: afloat_new(),
@@ -173,6 +176,7 @@ pub fn screen_page(
   frame : PageFrame,
   on_close? : () -> Unit,
   in_tab? : Bool = false,
+  own_bar? : @ui.Style? = None,
 ) -> Unit {
   let station = at.station
   let screen = at.screen
@@ -183,6 +187,7 @@ pub fn screen_page(
   s.said.get() |> ignore
   let u = screen_ui(key)
   u.in_tab = in_tab
+  u.own_bar = own_bar
   // its 关闭: closed through the shell, the page it is; the window back as it was where its 全屏 filled the screen
   let close = fn() {
     if u.fulled && @ui.full_screen() {
@@ -737,7 +742,7 @@ fn round_button(c : @ui.Ctx, key : String, icon : String, label : String, on? : 
 /// figures) and the core's line (只看 or 控制, who else is on it), 只看/控制, pasting, 控制中心 (sending files and 全屏
 /// there).
 fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, close : () -> Unit) -> Unit {
-  c.box(style=screen_bar, fn() {
+  c.box(style=match u.own_bar { Some(own) => own; None => if u.in_tab { screen_bar_in_tabs } else { screen_bar } }, fn() {
     if !u.in_tab && round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close")) {
       close()
     }
@@ -748,7 +753,10 @@ fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, clo
         Some(t) if t != "" => t
         _ => if title != "" { title } else { @sf.t("android-misc.screen.title") }
       }
-      c.text(said, style=screen_title_words) |> ignore
+      // (among a panel's tabs, the tab in front names it)
+      if !u.in_tab || u.own_bar is Some(_) {
+        c.text(said, style=screen_title_words) |> ignore
+      }
       // while another drives it, who does is said below (with 接管), not twice
       let line = text(s.state, "line")
       let said_line = line != "" && s.open_now() && !s.can_take_over()
@@ -783,6 +791,10 @@ fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, clo
     // (全屏 in 控制中心: the title keeps its room)
     if s.open_now() {
       center_button(c, s, u, close)
+    }
+    // (a panel's bar of its own: the panel's close at its end; where the system has bars, there, bar_chat)
+    if u.own_bar is Some(_) && !@sf.native_on() && round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close")) {
+      close()
     }
   })
   |> ignore
@@ -1249,6 +1261,10 @@ fn afloat_kept(c : @ui.Ctx, f : Afloat, capsule : Int, laid_dx : Double, laid_dy
       let (ww, wh) = now
       let x0 = x - laid_dx
       let y0 = y - laid_dy
+      // (its panel still past the window's edge, on the tape: nothing to keep it inside of yet)
+      if x0 < 0.0 || x0 + w > ww {
+        return
+      }
       f.dx = dmax(-x0, dmin(ww - w - x0, f.dx))
       f.dy = dmax(-y0, dmin(wh - h - y0, f.dy))
     }
