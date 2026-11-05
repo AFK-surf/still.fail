@@ -11,6 +11,7 @@ import { platform } from "../platform/index.ts";
 import type { Lang } from "../ops/i18n.ts";
 import type { Hub } from "../sessions/hub.ts";
 import type { Store } from "../store/store.ts";
+import { sessionChatReadable } from "../store/session-chat-index.ts";
 import type { Updates } from "../updates/updates.ts";
 import { type RootView, rootView, rootsOf } from "../drive/drive.ts";
 import { sees } from "../store/rows.ts";
@@ -139,7 +140,7 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
   });
   const profiles = d.accounts?.profilesView(viewer) ?? [];
   return {
-    automaticDecisions: d.accounts ? decisionsView(d, viewer) : null,
+    automaticDecisions: d.accounts ? await decisionsView(d, viewer) : null,
     archiving: archivingView(raw, viewer),
     viewer: { via: "mesh", ...viewer },
     mesh: meshStatus(d.cloud, viewer),
@@ -231,7 +232,7 @@ function withPermissions(d: OverviewDeps, viewer: Viewer): { permissions?: unkno
 /// The automatic decisions as the viewer sees them: the checks of their workspace's chats only, and the archive policy of
 /// their workspace (docs/multi-workspace.md: one each), which its owners and admins edit (`canEditPolicy`). The rest
 /// (the rule, its model) is the station's, its workspaces' managers' alike.
-function decisionsView(d: OverviewDeps, viewer: Viewer): unknown {
+async function decisionsView(d: OverviewDeps, viewer: Viewer): Promise<unknown> {
   // Made again only once a check or the policy is written, the rule or its models change, or DECISIONS_KEPT_MS on (the
   // last days' window moves, a chat is renamed): each making reads the checks of the last days and names their chats.
   const stamp = JSON.stringify([d.store.decisionsVersion(), d.config()?.automaticDecisions ?? null, d.accounts!.decisionModels()]);
@@ -241,8 +242,65 @@ function decisionsView(d: OverviewDeps, viewer: Viewer): unknown {
   const now = d.store.now();
   const was = kept.get(whose);
   if (was !== undefined && was.stamp === stamp && now - was.at < DECISIONS_KEPT_MS) return structuredClone(was.view);
-  const view = madeDecisionsView(d, viewer);
-  kept.set(whose, { at: now, stamp, view: structuredClone(view) });
+  let view: unknown;
+  if (d.hub.prepareSessionChatNames == null) view = madeDecisionsView(d, viewer, (session) => chatTitleOf(d.store, session));
+  else {
+    // The policy and checks already select the names they show. Collect those names as placeholders while making the
+    // view once, prepare them together, and replace only the placeholders after their bounded reads are ready.
+    const placeholders = new Map<string, object>();
+    const sessions = new WeakMap<object, string>();
+    const pendingTitle = (session: string): string => {
+      let placeholder = placeholders.get(session);
+      if (placeholder === undefined) {
+        placeholder = {};
+        placeholders.set(session, placeholder);
+        sessions.set(placeholder, session);
+      }
+      return placeholder as unknown as string;
+    };
+    const visible = new Map<string, boolean>();
+    view = madeDecisionsView(d, viewer, pendingTitle, visible);
+    const names = new Map<string, string>();
+    let waited = false;
+    for (;;) {
+      const missing: string[] = [];
+      let moved = false;
+      names.clear();
+      // Read readiness and all names in one snapshot; a writer cannot make a name fall back to the old scan between
+      // the readiness check and sessionChat(). Do not hold a database snapshot while waiting for the worker.
+      d.store.db.exec("SAVEPOINT overview_chat_names");
+      try {
+        if (waited) for (const [session, was] of visible) {
+          if (sees(viewer, d.store.getSession(session)?.ws ?? null) !== was) { moved = true; break; }
+        }
+        if (!moved) for (const session of placeholders.keys()) {
+          // A historical check can name a session deleted while the worker was preparing it. It has no scope to
+          // prepare; retain the original title fallback rather than waiting for that scope forever.
+          if (d.store.getSession(session) === null) names.set(session, chatTitleOf(d.store, session));
+          else if (!sessionChatReadable(d.store.db, session)) missing.push(session);
+          else names.set(session, chatTitleOf(d.store, session));
+        }
+      } finally { d.store.db.exec("RELEASE overview_chat_names"); }
+      if (moved) return decisionsView(d, viewer);
+      if (missing.length === 0) break;
+      await d.hub.prepareSessionChatNames(missing);
+      waited = true;
+    }
+    const fill = (value: any): any => {
+      if (value === null || typeof value !== "object") return value;
+      const session = sessions.get(value);
+      if (session !== undefined) return names.get(session)!;
+      if (Array.isArray(value)) return value.map(fill);
+      for (const key of Object.keys(value)) value[key] = fill(value[key]);
+      return value;
+    };
+    view = fill(view);
+    // Checks or policy may have changed during old-data preparation. Build their view again instead of caching an
+    // obsolete selection with the old stamp.
+    const current = JSON.stringify([d.store.decisionsVersion(), d.config()?.automaticDecisions ?? null, d.accounts!.decisionModels()]);
+    if (current !== stamp) return decisionsView(d, viewer);
+  }
+  kept.set(whose, { at: d.store.now(), stamp, view: structuredClone(view) });
   return view;
 }
 
@@ -250,8 +308,8 @@ function decisionsView(d: OverviewDeps, viewer: Viewer): unknown {
 const DECISIONS_KEPT_MS = 60_000;
 const decisionsKept = new WeakMap<object, Map<string, { at: number; stamp: string; view: unknown }>>();
 
-function madeDecisionsView(d: OverviewDeps, viewer: Viewer): unknown {
-  const visible = new Map<string, boolean>();
+function madeDecisionsView(d: OverviewDeps, viewer: Viewer, name: (session: string) => string,
+  visible = new Map<string, boolean>()): unknown {
   const mine = (session: unknown) => {
     if (typeof session !== "string") return false;
     let isMine = visible.get(session);
@@ -261,7 +319,7 @@ function madeDecisionsView(d: OverviewDeps, viewer: Viewer): unknown {
   const titles = new Map<string, string>();
   const title = (session: string) => {
     let named = titles.get(session);
-    if (named === undefined) titles.set(session, (named = chatTitleOf(d.store, session)));
+    if (named === undefined) titles.set(session, (named = name(session)));
     return named;
   };
   const view = d.accounts!.automaticDecisionsView(viewer, { includePolicy: false, visible: mine, title });

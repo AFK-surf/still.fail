@@ -291,6 +291,13 @@ export class Readers {
     return this.covered(this.ccIndex.ready(sessions, signal), signal);
   }
 
+  /// Prepare the ordered chat names for only the sessions a caller needs.
+  prepareSessionChatNames(sessions: readonly string[], signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.ccIndex ??= new CcIndexBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.ccIndex.readyNames(sessions, signal), signal);
+  }
+
   /// Prepare the latest conversation for only the old sessions a caller needs.
   prepareLatestThreads(sessions: readonly string[], signal?: AbortSignal): Promise<void> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));

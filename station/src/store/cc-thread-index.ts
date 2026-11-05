@@ -115,14 +115,15 @@ export function checkCcIndex(db: DatabaseSync): void {
   if (row?.version !== VERSION) throw new Error(`copy destination index version ${row?.version ?? "missing"} is incompatible with ${VERSION}`);
 }
 
-export function trackCcSession(db: DatabaseSync, session: string): void {
+export function trackCcSession(db: DatabaseSync, session: string, existingSession = false): void {
   checkCcIndex(db);
   db.exec("BEGIN IMMEDIATE");
   try {
     db.prepare(`INSERT INTO cc_sessions(session,scan_end)
       SELECT ?1,(SELECT rowid FROM thread_sessions INDEXED BY thread_sessions_session
         WHERE session=?1 ORDER BY rowid DESC LIMIT 1)
-      WHERE NOT EXISTS (SELECT 1 FROM cc_sessions WHERE session=?1)`).run(session);
+      WHERE NOT EXISTS (SELECT 1 FROM cc_sessions WHERE session=?1)
+        AND (?2=0 OR EXISTS (SELECT 1 FROM sessions WHERE key=?1))`).run(session, existingSession ? 1 : 0);
     db.exec("COMMIT");
   } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
 }
@@ -303,12 +304,18 @@ export class CcIndexPreparation {
 
   cancel(session: string): void { this.#turns.delete(session); }
 
-  step(db: DatabaseSync, session: string, limit = 64): { done: boolean; visited: number } {
+  step(db: DatabaseSync, session: string, limit = 64,
+    options: { existingSession?: boolean } = {}): { done: boolean; visited: number } {
     checkCcIndex(db);
+    if (options.existingSession && !db.prepare("SELECT 1 FROM sessions WHERE key=?").get(session)) {
+      this.#turns.delete(session);
+      return { done: true, visited: 0 };
+    }
     let scope = db.prepare("SELECT complete FROM cc_sessions WHERE session=?").get(session) as { complete: number } | undefined;
     if (!scope) {
-      trackCcSession(db, session);
-      scope = db.prepare("SELECT complete FROM cc_sessions WHERE session=?").get(session) as { complete: number };
+      trackCcSession(db, session, options.existingSession);
+      scope = db.prepare("SELECT complete FROM cc_sessions WHERE session=?").get(session) as { complete: number } | undefined;
+      if (!scope) { this.#turns.delete(session); return { done: true, visited: 0 }; }
     }
     if (ccSessionReady(db, session)) { this.#turns.delete(session); return { done: true, visited: 0 }; }
     const lanes = [
