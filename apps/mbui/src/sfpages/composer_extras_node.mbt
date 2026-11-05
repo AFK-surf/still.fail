@@ -95,6 +95,11 @@ fn composer_extras_node(
             field.reacts(fn() { w.focus.get() == id }, fn(yes) {
               if yes { f.focus(); writing_focused(src, w) }
             })
+            // (its quote sent or taken out while this line has the focus: the words' field has it as the line goes, not
+            // the window none and the screen's keyboard down)
+            let had = Ref(false)
+            field.reacts(fn() { field.focused() }, fn(f) { had.val = f })
+            field.owns(fn() { if had.val { w.field.focus() } }) |> ignore
           }, tips?=tips)
         made.quotes[id] = card
         item.owns(fn() { made.quotes.remove(id); made.comments.remove(id) }) |> ignore
