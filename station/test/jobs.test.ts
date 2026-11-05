@@ -20,7 +20,7 @@ import { agentNice } from "../src/ops/nice.ts";
 import { jobTools } from "../src/tools/jobs.ts";
 import { JOB_AT_PORT, Store } from "../src/store/store.ts";
 import { remoteRunsSince } from "../src/read/store.ts";
-import { WINDOWS, platform } from "../src/platform/index.ts";
+import { WINDOWS } from "../src/platform/index.ts";
 
 const dirs: string[] = [];
 const all: Jobs[] = [];
