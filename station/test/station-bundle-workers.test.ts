@@ -28,6 +28,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
       CREATE INDEX signin_asks_by_session ON signin_asks (session, status);`);
     installSigninSaveIndex(store.db);
     const thread = store.openThread("ember", "EMBER", "old", null, null).id;
+    store.joinThread(thread, "old-cc", "ember");
     store.db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,ts,at) VALUES (?,1,'message','agent','s','post',1)").run(thread);
     const saidThread = store.openThread("ember", "EMBER", "old-said", null, null).id;
     const put = store.db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,ts,at) VALUES (?,?,'message',?,?,?,?)");
@@ -62,6 +63,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
       ["read/session-bindings-worker.js", { scope: "all" }],
       ["read/session-up-jobs-worker.js", { session: "old-count" }],
       ["read/widget-sources-worker.js", { thread }],
+      ["read/cc-index-worker.js", { session: "old-cc" }],
       ["read/archive-mark-worker.js", { scope: "all" }],
       ["outflow/chat-index-worker.js", "H"],
       ["vault/signin-save-worker.js", "s"],
@@ -91,5 +93,6 @@ test("the workers in a station release start and process a batch", { skip: !proc
     assert.equal(store.db.prepare("SELECT session FROM archive_pin_rows WHERE session='old-count'").get()?.session, "old-count");
     assert.deepEqual(store.upJobIds("old-count"), ["old-job"]);
     assert.equal(store.db.prepare("SELECT name FROM widget_source_rows WHERE thread=? AND path='/w/bundle.html'").get(thread)?.name, "bundle.html");
+    assert.equal(store.db.prepare("SELECT complete FROM cc_sessions WHERE session='old-cc'").get()?.complete, 1);
   } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
 });
