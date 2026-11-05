@@ -194,7 +194,57 @@ also reported missing flush/discard-buffer configuration warnings and unsupporte
 ftrace setup events; interval coverage was checked rather than assuming every
 requested event was recorded. Both current and narrow-reference startup logs
 reported hitting the 512-pass layout guard. Those loops and the independent
-Android trap remain correctness failures to investigate, not benchmark noise.
+Android trap were correctness failures to investigate, not benchmark noise.
+
+### Keep layout output inside its derivation
+
+Tracing the repeated placement showed the drawing clock alternating between
+25307.770053 and 25267.907595 within one frame. A shift changed, the resulting
+geometry notified observers, and those notifications entered input settlement,
+rewinding the drawing clock to the earlier cause. Reverting the shift notified
+the observers again. The current runtime stopped at its 512-pass guard; the
+older independent integration could recurse until exhausting the Wasm stack.
+
+A minimal test needed both a predicted drawing time and a size change with a
+geometry observer. A clock-only test passed and did not cover the failure. The
+complete case failed with the same 512-pass diagnostic. Keeping geometry
+notifications inside the active layout phase made all 545 view/motion tests
+pass on the current reference, including the tests that settle real input
+changes between frames. The independent integration also needed its two
+remaining direct host-clock reads in `queued` and `at_cause` routed through the
+declared-time helper; without that, the clock-read tests failed at 4 and 1 reads.
+
+The actual Android rerun used independent `6be1d6d682` and narrow-reference
+`7139dcf402`, the same shell, checked traps and the unchanged 512 KiB Wasm stack.
+Both states passed open/back/reopen, six-line input after the keyboard inset,
+and scrolling. All six full-screen results were inspected. The input pixels
+contain all six lines in both states, and none of the six logs contains a
+512-pass diagnostic, Wasm trap or drive failure. The independent framework
+suite passed 2291 tests and the reference UI suite passed 1624. These results
+clear the previously observed cases for these builds; checked-trap timings are
+not a performance comparison.
+
+A further timing counterexample fails at those commits: sampling a
+future display time can notify a geometry or clock observer that advances the
+logical timeline and executes a deadline before an intervening input. The
+native success above does not establish the full input/projection contract.
+Treating display sampling as derivation too, retaining the logical cause in its
+queued properties, and preventing derived callbacks from advancing the timeline
+makes the two counterexamples pass. The reference view/motion suite passes 547
+tests, including cancellation of a future deadline by an intervening input.
+The change is independent `12b4583e39` and narrow-reference `371cdd47a6`.
+The independent view/UI/signals/motion suite passes 2293 tests; the reference UI
+suite passes 1624. The actual Android rerun again passes all six open/back/reopen,
+keyboard input and scrolling trials, without layout-cycle diagnostics or traps.
+All six resulting screens were inspected; both input screens show all six lines.
+The same checked-trap shell and 512 KiB stack were used. The full-render input
+and scroll movies also retain identical decoded hashes against the original
+pre-integration baseline for all 18 and 78 frames respectively.
+
+The two corrected programs are being compared under the same normal trap setting,
+in independent/reference/reference/independent order. This comparison reuses the
+validated Wasm modules rather than rebuilding different source states. Previous
+incorrect-presentation runs are not used to claim an adoption speedup.
 
 ## Contracts and counterexamples
 
