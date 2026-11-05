@@ -358,23 +358,6 @@ fn scene_told(
   placed : Array[@view.NodeId],
   removed : Array[@view.NodeId],
 ) -> Unit {
-  // (the layer the scene keeps that each layer is drawn in, found once for all those told at once: a page made, each
-  // of its thousands of nodes told, goes up through the same layers, none of them kept yet)
-  let kept_in : Map[@view.NodeId, @view.NodeId?] = {}
-  fn kept_of(at : @view.NodeId?) -> @view.NodeId? {
-    guard at is Some(l) else { return None }
-    if scene.layers.contains(l) {
-      return Some(l)
-    }
-    match kept_in.get(l) {
-      Some(k) => k
-      None => {
-        let k = kept_of(tree.holder_of(l).bind(fn(h) { tree.layer_of(h) }))
-        kept_in[l] = k
-        k
-      }
-    }
-  }
   let tell = fn(id : @view.NodeId, moved : Bool) {
     match scene.reach.get(id) {
       Some(r) => scene.parts.add(r)
@@ -385,7 +368,13 @@ fn scene_told(
       scene.moved[id] = true
     }
     // (the layer it is drawn in: itself where it begins one, else the nearest holding it the scene keeps)
-    let at = kept_of(tree.layer_of(id))
+    let mut at : @view.NodeId? = tree.layer_of(id)
+    while at is Some(l) && !scene.layers.contains(l) {
+      at = match tree.holder_of(l) {
+        Some(h) => tree.layer_of(h)
+        None => None
+      }
+    }
     match at {
       Some(l) => scene_mark(l)
       None => ()
