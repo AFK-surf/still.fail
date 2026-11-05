@@ -153,7 +153,7 @@ pub fn Tree::seen_bounds(self : Tree, id : NodeId, drawing? : Bool = false) -> (
   let mut i = self.nodes[id.at].parent
   while i >= 0 {
     let n = self.nodes[i]
-    if n.look.clips {
+    if n.look.clips || n.hosted_clips {
       let (x, y, _, sc) = self.projected(i, drawing~)
       let (x1, y1) = (x + n.flex.width * sc, y + n.flex.height * sc)
       b = (dmax(b.0, x), dmax(b.1, y), dmin(b.2, x1), dmin(b.3, y1))

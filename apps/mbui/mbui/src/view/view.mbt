@@ -473,6 +473,8 @@ struct Node {
   mut fault_to : ((String) -> Unit)?
   /// drawn by what hosts the tree (View::hosted)
   mut hosted : Bool
+  /// the hosted content needs its node's clip in addition to any clip explicitly set on the node
+  mut hosted_clips : Bool
   /// what it says it is, read out (View::says); None nothing
   mut said : Said?
   /// what it and all it holds are kept from what is read out (View::hides)
@@ -1050,6 +1052,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.slot = false
       n.fault_to = None
       n.hosted = false
+      n.hosted_clips = false
       n.on_press = None
       n.top_row = false
       n.moves_window = false
@@ -1210,6 +1213,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         slot: false,
         fault_to: None,
         hosted: false,
+        hosted_clips: false,
         said: None,
         said_hidden: false,
         bones: 0L,
@@ -1976,6 +1980,7 @@ priv enum Prop {
   MovesWindow
   KeepsHeld
   Clips
+  HostedClips
   BoundsInput
   OverScrim
   Measured
@@ -2236,6 +2241,16 @@ pub fn View::over(self : View, on : Live[Bool]) -> View {
 /// finger or the pointer is taken is as it was (what is past it still takes them), unlike an old view's clip.
 pub fn View::clips(self : View, on : Live[Bool]) -> View {
   self.bind(Clips, on, Paint, fn(on) { self.tree.nodes[self.at].look.clips = on })
+  self
+}
+
+///|
+/// Whether hosted content needs the node's clip, independently of a clip the node's caller sets.
+pub fn View::hosted_clips(self : View, on : Live[Bool]) -> View {
+  if self.live() is Some(n) && !n.hosted {
+    abort("hosted_clips of a node hosting nothing")
+  }
+  self.bind(HostedClips, on, Paint, fn(on) { self.tree.nodes[self.at].hosted_clips = on })
   self
 }
 
@@ -6661,7 +6676,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     runs_lit: n.look.runs_lit,
     shadow: n.look.shadow,
     hosted: n.hosted,
-    clips: n.look.clips,
+    clips: n.look.clips || n.hosted_clips,
     words_center: n.look.words_center,
     ellipsis_past: n.look.ellipsis_past,
     picture: n.look.picture,

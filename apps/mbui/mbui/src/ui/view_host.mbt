@@ -50,6 +50,8 @@ priv struct OldIsland {
   /// as wide as what it holds, `most` at most and never narrower than it is (old's `fits`): the least that is, as the
   /// old frame last laid it out, told the signal (None before it first is)
   fits : (Double, @signals.Signal[Double?])?
+  /// whether laid-out content exceeds the hosted node, which then cuts it at its own edges
+  overflow : @signals.Signal[Bool]
   mut held_box : Int
 }
 
@@ -1415,9 +1417,9 @@ fn Ctx::tree_draw_node(
       p.stretching.push((c.id, ov, y, c.h * s, c0, c1))
     }
   }
-  // (what it holds cut to it, as an old view's clipping box cuts what it holds (push_round_clip's, after its own): at
-  // its edge's inside where it draws one over what it holds, its corners concentric with its own there)
-  defer {
+  // (what it holds cut to it, as an old view's clipping box cuts what it holds: at its edge's inside where it draws one
+  // over what it holds, its corners concentric with its own there)
+  let cut_held = fn() {
     if c.clips {
       let r = c.radius * s
       let corners = match c.corners {
@@ -1427,6 +1429,16 @@ fn Ctx::tree_draw_node(
       let bw = if c.edge.0 > 0.0 && tree.holds_drawn(c.id) { c.edge.0 * s } else { 0.0 }
       push_inset_clip(x, y, c.w * s, c.h * s, fn(j) { corners[j] }, bw)
       p.clipping.push(c.id)
+    }
+  }
+  // (a hosted old view is what the node holds, so it is cut before it is painted; a tree node's own ground and shadow
+  // are painted first, then the same clip is opened for what it holds)
+  if c.hosted {
+    cut_held()
+  }
+  defer {
+    if !c.hosted {
+      cut_held()
     }
   }
   // (an old view hosted in its bones: its box a bone, as an old view's view of another app is, bones.mbt)
@@ -2807,6 +2819,9 @@ pub fn old(
   unlaid? : () -> Double,
 ) -> @view.View {
   v.hosted(make=fn(n) {
+    // (its caller may also declare a clip: the two are independent, either one cuts what it hosts)
+    let overflow = @signals.signal(false, same=fn(a, b) { a == b })
+    n.hosted_clips(By(fn() { overflow.get() })) |> ignore
     // (as tall as what it holds at the width it is given, as the old frame last laid that out: old_natural_after_layout)
     let natural_h : @signals.Signal[Double?]? = if natural {
       let s = @signals.signal(None, same=fn(a, b) { a == b })
@@ -2882,6 +2897,7 @@ pub fn old(
       natural: natural_h,
       gives: natural && gives,
       fits: if natural { fits } else { None },
+      overflow,
       held_box: -1,
     })
     n.owns(fn() {
@@ -4650,6 +4666,48 @@ fn focus_told_tree(c : Ctx) -> Unit {
 let old_show_due : Ref[Int?] = Ref(None)
 
 ///|
+/// Whether content laid out in an island extends beyond its host. Its layout wrappers and paint outsets such as
+/// shadows are not content; a clipping box inside the old view cuts its descendants before they are compared.
+fn old_content_overflows(c : Ctx, root : Int, x : Double, y : Double, w : Double, h : Double) -> Bool {
+  let pending : Array[(Int, Double, Double, Double, Double)] = []
+  let mut child = c.nodes[root].first
+  while child >= 0 {
+    pending.push((child, -1.0e9, -1.0e9, 1.0e9, 1.0e9))
+    child = c.nodes[child].next
+  }
+  while !pending.is_empty() {
+    let (i, left, top, right, foot) = pending.pop().unwrap()
+    let n = c.nodes[i]
+    // (these are painted elsewhere, not as part of the hosted content)
+    if n.portal || n.shot || n.opacity <= 0.01 {
+      continue
+    }
+    if n.squeeze_shows() {
+      let (x0, y0) = (dmax(n.x, left), dmax(n.y, top))
+      let (x1, y1) = (dmin(n.x + n.fw, right), dmin(n.y + n.fh, foot))
+      if x0 < x1 && y0 < y1 &&
+        (x0 < x - 0.01 || y0 < y - 0.01 || x1 > x + w + 0.01 || y1 > y + h + 0.01) {
+        return true
+      }
+    }
+    let (l, t, r, b) = if n.squeeze_cuts() {
+      (dmax(left, n.x), dmax(top, n.y), dmin(right, n.x + n.fw), dmin(foot, n.y + n.fh))
+    } else {
+      (left, top, right, foot)
+    }
+    if l >= r || t >= b {
+      continue
+    }
+    let mut k = n.first
+    while k >= 0 {
+      pending.push((k, l, t, r, b))
+      k = c.nodes[k].next
+    }
+  }
+  false
+}
+
+///|
 /// The old views as tall as what they hold (old's `natural`), the old frame laid out: each one's height, what it holds
 /// laid out at its width in a box as tall as that (not the box it is cut to), told its node where it differs; the frame
 /// built again then, in this frame (Ctx::read_changed), what comes after it placed under it from the frame it changed.
@@ -4677,6 +4735,19 @@ fn old_natural_after_layout(c : Ctx) -> Unit {
         }
       }
       _ => ()
+    }
+    // (the host clips only when the content, as laid out, exceeds it; shadows may extend without being cut)
+    let overflow = match (old_boxes.get(o.id), old_placed.iter().find_first(fn(p) { p.0 == o.id })) {
+      (Some(box), Some((_, _, _, w, h, _, _, _, _))) if box >= 0 && box < c.count => {
+        let root = if o.held_box >= 0 { o.held_box } else { box }
+        // (the old frame can place its wrapper inside another offset box: compare in that same laid-out space)
+        root < c.count && old_content_overflows(c, root, c.nodes[box].x, c.nodes[box].y, w, h)
+      }
+      _ => false
+    }
+    if @signals.untracked(fn() { o.overflow.get() }) != overflow {
+      o.overflow.set(overflow)
+      c.read_changed("an old view's content beyond its host")
     }
   }
 }

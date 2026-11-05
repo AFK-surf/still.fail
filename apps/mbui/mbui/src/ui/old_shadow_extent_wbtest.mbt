@@ -52,3 +52,90 @@ test "an old view is still cut by a tree ancestor that says clips" {
   assert_eq(shadows.length(), 1, msg="the old view's shadow")
   assert_eq(shadows[0].5, (80.0, 60.0, 180.0, 140.0), msg="the ancestor cuts the shadow")
 }
+
+///|
+test "a host that says clips cuts the old view it holds" {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  set_view_app(fn(root) {
+    root.box(fn(p) {
+      p.over(Is(true)).offset(Is((80.0, 60.0))).width(Is(Some(100.0))).height(Is(Some(80.0))) |> ignore
+      old(p, fn(c) {
+        c.box(w=Px(100.0), h=Px(80.0), bg=0x336699FFL, radius=12.0,
+          shadow=16.0, shadow_y=12.0, shadow_color=0x00000033L, fn() {  }) |> ignore
+      }).width(Is(Some(100.0))).height(Is(Some(80.0))).clips(Is(true)) |> ignore
+    }) |> ignore
+  })
+  t.draw()
+  let shadows = t.drawn_cut().filter(fn(d) { d.0 == 2 && d.3 == 100.0 && d.4 == 80.0 })
+  assert_eq(shadows.length(), 1, msg="the old view's shadow: \{shadows}")
+  assert_eq(shadows[0].5, (80.0, 60.0, 180.0, 140.0), msg="the host clips what it holds")
+}
+
+///|
+test "an old view wider than its host is cut at the host's edge" {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  set_view_app(fn(root) {
+    root.box(fn(p) {
+      p.over(Is(true)).offset(Is((80.0, 60.0))).width(Is(Some(100.0))).height(Is(Some(80.0))) |> ignore
+      old(p, fn(c) {
+        c.box(w=Px(600.0), h=Px(80.0), bg=0x336699FFL, fn() {  }) |> ignore
+      }).width(Is(Some(100.0))).height(Is(Some(80.0))).clips(Is(false)) |> ignore
+    }) |> ignore
+  })
+  t.draw()
+  let content = t.drawn_cut().filter(fn(d) { d.0 == 0 && d.3 == 600.0 && d.4 == 80.0 })
+  assert_eq(content.length(), 1, msg="the old view's content: \{content}")
+  assert_eq(content[0].5, (80.0, 60.0, 180.0, 140.0), msg="content wider than its host is cut")
+  let faults = t.squeeze_faults()
+  assert_true(!faults.iter().any(fn(f) { f.contains("past the window's edge") }),
+    msg="the layout check sees the host's clip: \{faults}")
+}
+
+///|
+test "content already cut inside the old view does not cut its shadow" {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  set_view_app(fn(root) {
+    root.box(fn(p) {
+      p.over(Is(true)).offset(Is((80.0, 60.0))).width(Is(Some(100.0))).height(Is(Some(80.0))) |> ignore
+      old(p, fn(c) {
+        c.box(w=Px(100.0), h=Px(80.0), bg=0xFFFFFFFFL, clip=true, radius=12.0,
+          shadow=16.0, shadow_y=12.0, shadow_color=0x00000033L, fn() {
+            c.box(w=Px(140.0), h=Px(40.0), bg=0x336699FFL, fn() {  }) |> ignore
+          }) |> ignore
+      }).width(Is(Some(100.0))).height(Is(Some(80.0))) |> ignore
+    }) |> ignore
+  })
+  t.draw()
+  let shadows = t.drawn_cut().filter(fn(d) { d.0 == 2 && d.3 == 100.0 && d.4 == 80.0 })
+  assert_eq(shadows.length(), 1, msg="the old view's shadow: \{shadows}")
+  let (left, top, right, bottom) = shadows[0].5
+  assert_true(left <= 72.0 && top <= 52.0 && right >= 188.0 && bottom >= 148.0,
+    msg="an internal clip does not cut its own shadow: \{shadows[0]}")
+}
+
+///|
+test "an old view that fits is clipped only while its content is taller than its host" {
+  let cap = @signals.signal(80.0)
+  let wide = @signals.signal(None, same=fn(a : Double?, b : Double?) { a == b })
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  set_view_app(fn(root) {
+    root.box(fn(p) {
+      p.over(Is(true)).offset(Is((80.0, 60.0))).width(Is(Some(100.0))) |> ignore
+      old(p, natural=true, fits=(100.0, wide), fn(c) {
+        c.box(w=Px(100.0), h=Px(140.0), bg=0x336699FFL, radius=12.0,
+          shadow=16.0, shadow_y=12.0, shadow_color=0x00000033L, fn() {  }) |> ignore
+      }).width(Is(Some(100.0))).max_height(By(fn() { Some(cap.get()) })) |> ignore
+    }) |> ignore
+  })
+  t.draw()
+  let content = t.drawn_cut().filter(fn(d) { d.0 == 0 && d.3 == 100.0 && d.4 == 140.0 })
+  assert_eq(content.length(), 1, msg="the old view's content: \{content}")
+  assert_eq(content[0].5, (80.0, 60.0, 180.0, 140.0), msg="the content taller than its host is cut")
+  cap.set(200.0)
+  t.draw()
+  let shadows = t.drawn_cut().filter(fn(d) { d.0 == 2 && d.3 == 100.0 && d.4 == 140.0 })
+  assert_eq(shadows.length(), 1, msg="the old view's shadow: \{shadows}")
+  let (left, top, right, bottom) = shadows[0].5
+  assert_true(left <= 72.0 && top <= 52.0 && right >= 188.0 && bottom >= 208.0,
+    msg="the shadow can extend beyond the host when its content fits: \{shadows[0]}")
+}
