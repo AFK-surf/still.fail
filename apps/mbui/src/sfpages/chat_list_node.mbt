@@ -621,7 +621,6 @@ pub fn chat_list_node(
     }
   })
   let to_end = fn() {
-    println("DBGE to_end")
     // (further than list_glide_rows rows from its end, at once: an old view's list_to_end's glide_to_end)
     let far = @signals.untracked(fn() {
       match shown.get().last() {

@@ -4505,7 +4505,6 @@ fn Tree::laid_now(self : Tree) -> Unit {
   if self.last_w <= 0.0 {
     return
   }
-  let dbg_m0 = self.work.made
   let at = self.logic_at()
   let shown = @signals.untracked(fn() { self.clock.get() })
   // (its clock set to the moment and back: what that tells is no change of its own to settle after)
@@ -4517,7 +4516,6 @@ fn Tree::laid_now(self : Tree) -> Unit {
     self.pull()
     self.laid_out(at)
   })
-  if self.work.made - dbg_m0 > 40 { println("DBGL laid_now made \{self.work.made - dbg_m0}") }
   if shown != at {
     @signals.untracked(fn() {
       self.clock_to(shown)
