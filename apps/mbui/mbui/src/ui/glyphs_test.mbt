@@ -98,5 +98,73 @@ test "words scrolled through, more than the atlas holds: what stays on the scree
 }
 
 ///|
+/// The words of these codes, and which glyphs what was drawn of them drew from, in order of code.
+fn square_words(codes : Array[Int]) -> String {
+  let line = StringBuilder()
+  for code in codes {
+    line.write_char(Int::unsafe_to_char(code))
+  }
+  line.to_string()
+}
+
+///|
+fn square_drawn_from(t : @ui.Tester, host : SquareHost) -> Array[Int] {
+  let (inst, n, _) = t.presented()
+  let from : Array[Int] = []
+  for k in 0..<n {
+    if inst[k * glyphs_inst + 5] == 1.0 {
+      let at = (inst[k * glyphs_inst + 12].to_int(), inst[k * glyphs_inst + 13].to_int())
+      from.push(host.put.get(at).unwrap_or(-1))
+    }
+  }
+  from.sort()
+  from
+}
+
+///|
+test "a glyph of what is on the screen in every plot of a full atlas: a new word has its glyph by the next frame" {
+  let host = SquareHost::{ drawn: [], put: {} }
+  let words = Ref::new(square_words(Array::makei(100, fn(i) { 0x4E00 + i })))
+  let t = @ui.Tester::new(
+    fn(c) { c.text(words.val, wrap=false) |> ignore },
+    w=4000.0,
+    scale=1.0,
+    live={ host, turn: fn() {  } },
+  )
+  // the atlas full, its four plots of 25 each: then one glyph from each with a new one after them
+  t.draw()
+  let codes = [0x4E00, 0x4E00 + 25, 0x4E00 + 50, 0x4E00 + 75, 0x5E00]
+  words.val = square_words(codes)
+  t.draw()
+  t.draw()
+  assert_eq(square_drawn_from(t, host), codes)
+  // and it stays, drawn no more
+  let drawn = host.drawn.length()
+  t.draw()
+  assert_eq(square_drawn_from(t, host), codes)
+  assert_eq(host.drawn.length(), drawn)
+}
+
+///|
+test "more on the screen than a whole atlas holds: started over once, not every frame" {
+  let host = SquareHost::{ drawn: [], put: {} }
+  let t = @ui.Tester::new(
+    fn(c) { c.text(square_words(Array::makei(101, fn(i) { 0x4E00 + i })), wrap=false) |> ignore },
+    w=4000.0,
+    scale=1.0,
+    live={ host, turn: fn() {  } },
+  )
+  t.draw()
+  t.draw()
+  t.draw()
+  // from here only the one with no room is asked for, each frame
+  let drawn = host.drawn.length()
+  t.draw()
+  t.draw()
+  assert_eq(host.drawn.length(), drawn + 2)
+  assert_eq(square_drawn_from(t, host).length(), 100)
+}
+
+///|
 /// The numbers of an instance (scene.mbt).
 let glyphs_inst = 60
