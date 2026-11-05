@@ -852,11 +852,11 @@ fn page_view(
     },
   )
   if root {
-    // The place moves as it is painted; its motion does not rebuild the page it carries on every frame.
-    c.look_by(whole, fn() {
-      let e = place_switch.get()
-      @ui.look(dx=app.switch_way.to_double() * switch_slide * (1.0 - e), alpha=e)
+    // Move the place, including where it takes input, without rebuilding it on every frame.
+    c.moved_by(whole, fn(_, _) {
+      (app.switch_way.to_double() * switch_slide * (1.0 - place_switch.get()), 0.0)
     })
+    c.look_by(whole, fn() { @ui.look(alpha=place_switch.get()) })
   }
 }
 
