@@ -365,6 +365,14 @@ describe("slack", { concurrency: true }, () => {
       await fake.until("done said", () => fake.calls("chat.update").length === 4);
       assert.deepEqual(blocks(fake.calls("chat.update")[3]!).map((b: any) => b.type), ["markdown", "actions", "context"]);
       assert.equal(fake.calls("chat.postMessage").length, 4, "nothing posted for the question");
+      // Left the thread (chat_leave): said under its goodbye, whatever the turn ended as.
+      const bye = await surface.post(thread, "好，需要时再 @ 我", []);
+      surface.standsAt(thread, { kind: "left", words: null });
+      await fake.until("left said", () => fake.calls("chat.update").some((c) => c.params.ts === bye));
+      assert.deepEqual(blocks(fake.calls("chat.update").filter((c) => c.params.ts === bye).at(-1)!).at(-1), {
+        type: "context",
+        elements: [{ type: "mrkdwn", text: "🔕 已退出这个 thread，@ 我即可回来" }],
+      });
     } finally {
       await surface.stop();
       await fake.close();

@@ -72,6 +72,8 @@ export type SessionStore = {
   cardEndedByMessage(thread: number, n: number): [MessageRow, any] | null;
   pendingCard(thread: number): [MessageRow, any] | null;
   threadSessions(thread: number): { session: string; connect: string }[];
+  /// Whether the session left this thread (chat_leave) and was not mentioned there since (optional: never without it).
+  leftThread?(session: string, connect: string, channel: string, threadTs: string): boolean;
   getSession(key: string): any | null;
   hasTurns(key: string): boolean;
   toldNotes(key: string): number | null;
@@ -104,7 +106,7 @@ export type Surface = {
   post(thread: { channel: string; threadTs: string }, text: string, files: unknown[]): Promise<string>;
   userName?(user: string): Promise<string | null>;
   working?(thread: { channel: string; threadTs: string }, messageTs: string | null, status: string, page?: string | null): void;
-  standsAt?(thread: { channel: string; threadTs: string }, stands: { kind: "done" | "need"; words: string | null } | null): void;
+  standsAt?(thread: { channel: string; threadTs: string }, stands: { kind: "done" | "need" | "left"; words: string | null } | null): void;
   mention?(user: string): string;
   botName?(): string;
   botUserId?(): string;
@@ -1482,9 +1484,13 @@ export class SessionActor {
       const ended = turn.declared?.kind === "all_done" ? "all_done" : turn.declared?.kind === "need_help" ? "need_human" : retry ? null : outcome.kind === "failed" ? "failed" : outcome.kind === "aborted" && stopRequested ? "stopped" : null;
       const words = ended === "failed" ? (outcome.kind === "failed" ? outcome.message : null) : (store.lastTurn(this.key)?.need ?? null);
       // Where it stands, said in its threads under their last message as its chat says it at its end: done, or what it
-      // needs (failed and stopped have their notice there already; waiting says nothing)
+      // needs (failed and stopped have their notice there already; waiting says nothing); in a thread it left
+      // (chat_leave), that it left, however the turn ended, so people there see it no longer follows
       const stands = ended === "all_done" ? { kind: "done" as const, words } : ended === "need_human" ? { kind: "need" as const, words } : null;
-      for (const w of this.endedFor) this.deps.chat(w.connect)?.standsAt?.({ channel: w.channel, threadTs: w.threadTs }, stands);
+      for (const w of this.endedFor) {
+        const left = store.leftThread?.(this.key, w.connect, w.channel, w.threadTs) === true;
+        this.deps.chat(w.connect)?.standsAt?.({ channel: w.channel, threadTs: w.threadTs }, left ? { kind: "left", words: null } : stands);
+      }
       if (ended !== null) {
         try {
           this.deps.settled?.(this.key, ended, words);

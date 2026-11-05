@@ -1255,6 +1255,17 @@ export class Store {
     });
   }
 
+  /// Whether a session left a thread it takes part in through `connect` (leaveThread) and was not mentioned there since.
+  leftThread(session: string, connect: string, channel: string, threadTs: string): boolean {
+    return (
+      this.#one(
+        `SELECT 1 FROM thread_sessions m JOIN threads t ON t.id = m.thread
+         WHERE m.session = ? AND m.connect = ? AND t.channel = ? AND t.thread_ts = ? AND m.left_at IS NOT NULL LIMIT 1`,
+        session, connect, channel, threadTs,
+      ) !== undefined
+    );
+  }
+
   threadSessions(thread: number): Membership[] {
     return this.#all("SELECT * FROM thread_sessions WHERE thread = ? ORDER BY joined_at, rowid", thread).map(toMembership);
   }

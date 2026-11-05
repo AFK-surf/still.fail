@@ -106,12 +106,14 @@ export function endedBlocks(text: string, words: string): Json[] {
 }
 
 /// Where a thread stands once its agent's turn ended (the line still.fail's chat shows at its end, and its row): done,
-/// or what it needs of a person; in small grey words under its last message (a context block), led as the app leads it.
-export type Stands = { kind: "done" | "need"; words: string | null };
+/// or what it needs of a person, or that the agent left it (chat_leave) until mentioned; in small grey words under its
+/// last message (a context block), led as the app leads it.
+export type Stands = { kind: "done" | "need" | "left"; words: string | null };
 export function standsBlock(stands: Stands, lang: Lang): Json {
   return { type: "context", elements: [{ type: "mrkdwn", text: escape(standsText(stands, lang)) }] };
 }
 export function standsText(stands: Stands, lang: Lang): string {
+  if (stands.kind === "left") return `🔕 ${tr(lang, "station.slack.standsLeft")}`;
   const words = stands.words?.trim() ?? "";
   const [mark, key, name] = stands.kind === "done" ? ["✓", "station.slack.standsDone", "done"] : ["🔔", "station.slack.standsNeed", "need"];
   return `${mark} ${words === "" ? tr(lang, `${key}Bare`) : tr(lang, key, { [name]: cut(words, STANDS_CHARS) })}`;
