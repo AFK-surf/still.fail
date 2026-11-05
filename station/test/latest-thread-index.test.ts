@@ -274,6 +274,24 @@ test("opening an existing shared conversation does not stage its tracked members
   assert.deepEqual(ignoredUpdateIds, [2, 2]);
 });
 
+test("a repeated join or delivery does not stage an unchanged latest order", () => {
+  const counts: number[] = [];
+  for (const operation of ["join", "delivery"]) {
+    const store = Store.open(":memory:"), db = store.db;
+    try {
+      const thread = store.openThread("slack", "C", "shared", null, null);
+      store.joinThread(thread.id, "s", "slack");
+      assert.deepEqual(store.deliver(thread.id, 1, ["s"]), ["s"]);
+      prepare(store, "s");
+      if (operation === "join") assert.equal(store.joinThread(thread.id, "s", "slack"), false);
+      else assert.deepEqual(store.deliver(thread.id, 1, ["s"]), []);
+      counts.push(Number(db.prepare("SELECT COUNT(*) AS n FROM latest_thread_changed").get()?.n));
+      assert.equal(indexedLatestThread(db, "s")?.id, thread.id);
+    } finally { store.close(); }
+  }
+  assert.deepEqual(counts, [0, 0]);
+});
+
 test("a nested change seeks only its affected outer-update snapshot", () => {
   const counts: number[] = [];
   for (const others of [40, 400]) {
