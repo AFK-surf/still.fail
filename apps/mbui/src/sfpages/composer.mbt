@@ -427,9 +427,11 @@ pub fn composer(
   // first point on, ios_app.m ime_over)
   @motion.reshape(c, box, "composer/box", by=holds, spec=shape, carry=moved, foot=!spec.roomy && @sf.native_side())
   composing.shaped = Some((c.build_number(), holds, shape))
+  // (its ＋ and send drawn whole on their way, its field going up past them as it opens: composer_hint_wbtest, the user
+  // 2026-10-30 「输入框盖住了加号和发送」)
   for part in [(plus, "plus"), (words, "words"), (send_i, "send"), (chosen, "choices"), (said, "note")] {
     if part.0 >= 0 {
-      @motion.layout(c, part.0, "composer/part/" + part.1, spec=shape, by=holds)
+      @motion.layout(c, part.0, "composer/part/" + part.1, spec=shape, by=holds, whole=part.1 == "plus" || part.1 == "send")
     }
   }
   @motion.measure(c, box, "composer/content")
