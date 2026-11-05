@@ -1895,8 +1895,12 @@ fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
       Some(about) => " (" + about() + ")"
       None => ""
     }
+    let set_by = match .setting_at() {
+      Some(loc) => ", by what was set at " + loc.to_string()
+      None => ""
+    }
     read_fault(
-      "\{marked}'s layout told as \{owner} lays out what it holds (its layout_children)\{reading}: another's layout marked out of a layout (docs/retained.md rule 10)",
+      "\{marked}'s layout told as \{owner} lays out what it holds (its layout_children)\{reading}\{set_by}: another's layout marked out of a layout (docs/retained.md rule 10)",
     )
   }
   let mut i = at
@@ -1919,8 +1923,12 @@ fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
       Some(about) => " (" + about() + ")"
       None => ""
     }
+    let set_by = match .setting_at() {
+      Some(loc) => ", by what was set at " + loc.to_string()
+      None => ""
+    }
     read_fault(
-      "\{self.named_up(at)}'s layout told as what the tree's layout found is told\{reading}: the tree laid out again for what its own layout told (docs/retained.md rule 10)",
+      "\{self.named_up(at)}'s layout told as what the tree's layout found is told\{reading}\{set_by}: the tree laid out again for what its own layout told (docs/retained.md rule 10)",
     )
   }
   self.layout_due = true

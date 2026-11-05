@@ -340,3 +340,17 @@ fn is_valid_link(check : Link, sub : ReactiveNode) -> Bool {
   }
   false
 }
+
+///|
+/// Whether `sub` has read the node whose subs start at `subs` itself in what it is reading now (a link of it in sub's
+/// deps read so far: is_valid_link's).
+fn read_by_now(subs : Link, sub : ReactiveNode) -> Bool {
+  let mut l : Link? = Some(subs)
+  while l is Some(k) {
+    if physical_equal(k.sub, sub) && is_valid_link(k, sub) {
+      return true
+    }
+    l = k.next_sub
+  }
+  false
+}

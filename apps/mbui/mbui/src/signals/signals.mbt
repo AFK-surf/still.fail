@@ -654,6 +654,13 @@ pub fn[T] Signal::set(self : Signal[T], value : T, loc~ : SourceLoc) -> Unit {
     if watch_reading.depth > 0 && watch_reading.sets.length() < 4 {
       watch_reading.sets.push(loc.to_string())
     }
+    // (the watches reading now that had read nothing changed before it: told of it where it changes what they read)
+    let readers = watch_reading.readers.length()
+    let fresh = if readers > 0 {
+      watch_reading.readers.map(fn(w) { (w.node.flags & (DIRTY | PENDING)) == 0 })
+    } else {
+      []
+    }
     // (where, for what it tells to say: Signal::set_at)
     set_at.val = Some(loc)
     let node = self.0
@@ -663,6 +670,19 @@ pub fn[T] Signal::set(self : Signal[T], value : T, loc~ : SourceLoc) -> Unit {
         let was = setting.val
         setting.val = Some(loc)
         propagate(subs, run.run_depth != 0)
+        // (a reader made stale by it, or one that read it itself before it was set: where what it read changed as it
+        // read; one made stale before by what turns out not to change it (a computed's) not told wrongly of what did)
+        for i in 0..<readers {
+          if i < watch_reading.readers.length() {
+            let w = watch_reading.readers[i]
+            if (w.node.flags & (DIRTY | PENDING)) != 0 && w.set_by.length() < 4 && (fresh[i] || read_by_now(subs, w.node)) {
+              let at = loc.to_string()
+              if !w.set_by.contains(at) {
+                w.set_by.push(at)
+              }
+            }
+          }
+        }
         flush_outermost()
         setting.val = was
       }
@@ -894,11 +914,14 @@ pub struct Watch {
 priv struct WatchReading {
   mut depth : Int
   sets : Array[String]
+  /// the watches reading now, the outermost first: each told where the set was that changed what it read as it read
+  /// (Watch::set_as_read), where one did
+  readers : Array[Watch]
 }
 
 ///|
 // kept across runs: counts back to 0 as each read ends
-let watch_reading : WatchReading = { depth: 0, sets: [] }
+let watch_reading : WatchReading = { depth: 0, sets: [], readers: [] }
 
 ///|
 /// A watch (Watch): stale until it is first read; `changed` called as what a read read first changes after it, once
@@ -939,6 +962,7 @@ pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
   }
   watch_reading.depth += 1
   self.set_by.clear()
+  watch_reading.readers.push(self)
   e.deps_tail = None
   e.flags = WATCHING | RECURSED_CHECK
   // (fresh from here: made stale again as it reads (Watch::touch: what it holds told as it is built), it stays so)
@@ -948,6 +972,7 @@ pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
   let v = f()
   run.active_sub = prev_sub
   watch_reading.depth -= 1
+  watch_reading.readers.pop() |> ignore
   e.flags = e.flags & RECURSED_CHECK.lnot()
   purge_deps(e)
   // (let go as it read (what owned it let go meanwhile): what it read after that let go too, none of it kept as read)
@@ -968,8 +993,11 @@ pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
     e.flags = WATCHING
     guard e.own is WatchOwned(o) else { abort("a watch without its own") }
     if dirty {
-      for s in watch_reading.sets {
-        self.set_by.push(s)
+      // (where what it read was set as it read, where that is known; else every set as it read, what changed it among them)
+      if self.set_by.is_empty() {
+        for s in watch_reading.sets {
+          self.set_by.push(s)
+        }
       }
       (o.told)()
     } else {

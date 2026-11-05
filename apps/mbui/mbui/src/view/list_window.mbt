@@ -775,6 +775,11 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       }
     }
     put_blocks(ox, oy, vh)
+    // (kept within how far it can go as it is laid out now (Scroll::kept_in, as what scrolls is kept once the tree is
+    // laid out): in its own layout, where what that sets (a fling toward its foot met where its foot is now) is what it
+    // has laid its blocks out by, never told it after the tree's layout is done to be laid out again (docs/retained.md
+    // rule 10); what it moves to is no other than where they were laid out for, as far as it can go at most)
+    .untracked(fn() { s.kept_in(self) })
     laid_reach.val = if from_end { dmax(vh, extent_at(vh)) } else { extent_at(vh) }
     laid_reach.val
   }
