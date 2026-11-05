@@ -325,18 +325,6 @@ pub fn chat_list_node(
             None => row_rects.remove(k)
           }
         })
-        // (its room: in from the pane's sides to the column, the gap over it; under the bar over the first, the
-        // composer under the last)
-        slot
-        .padding(By(fn() {
-          let gap = match row_of(k) {
-            Some((e, i)) => over(e, i)
-            None => 0.0
-          }
-          let side = side()
-          (side, gap, side, 0.0)
-        }))
-        |> ignore
         // (its menu open (right clicked, its ⋯): the row in the pointer's ground, easing in and out as a row's under the
         // pointer does: the old list's band)
         let menu_lit = @sf.EdgeWay::new(0.0)
@@ -422,100 +410,112 @@ pub fn chat_list_node(
             None => here_of(r, @sfbase.chat_view_made(Json::object({})), rk, @sfbase.turns_of(rk), @sfbase.emits_of(rk), None, core, inline=narrow(), gutter=@signals.untracked(side))
           }
         }
-        slot.pick(fn() {
+        let content = slot.box(fn(content) {
+          content.pick(fn() {
+            match row_of(k) {
+              Some((Said(m), _)) => message_made_whole(m.message())
+              Some((Out(_), _)) => 3
+              Some((Working(_), _)) => 4
+              Some((Line, _)) => 6
+              Some((Older, _)) => 7
+              Some((Newer, _)) => 8
+              Some((Empty, _)) => 9
+              Some((State(_, _, _), _)) => 10
+              Some((Sent(_), _)) => 11
+              _ => 0
+            }
+          }, fn(row, whole) {
+            // (the first of what was sent from here not in the chat yet: where a message out of an avatar comes in over
+            // it, emit.mbt)
+            emit_place_node(row, fn() { if row_of(k) is Some((Out(_), _)) { Some("emit-out/" + rk + "/" + k) } else { None } })
+            if whole > 0 {
+              // (as it is now; as it last was while its row goes)
+              let last : Ref[Message?] = Ref(None)
+              let m = fn() {
+                match row_of(k) {
+                  Some((Said(r), _)) => {
+                    let m = r.message()
+                    last.val = Some(m)
+                    m
+                  }
+                  _ => last.val.unwrap_or_else(fn() { @sfbase.message_of(Json::object({})) })
+                }
+              }
+              if whole == 6 {
+                unread_line_node(row)
+              } else if whole == 7 || whole == 8 {
+                pages_coming_node(row, whole == 7)
+              } else if whole == 9 {
+                chat_empty_node(row)
+              } else if whole == 10 {
+                // (where it stands as it is now; as it last was while its row goes)
+                let last_s = Ref(("", "", ""))
+                chat_state_node(row, src, here, fn() {
+                  match row_of(k) {
+                    Some((State(w, l, r), _)) => {
+                      last_s.val = (w, l, r)
+                      (w, l, r)
+                    }
+                    _ => last_s.val
+                  }
+                })
+              } else if whole == 11 {
+                let last_e : Ref[Elsewhere?] = Ref(None)
+                sent_elsewhere_node(row, src, here, fn() {
+                  match row_of(k) {
+                    Some((Sent(e), _)) => {
+                      last_e.val = Some(e)
+                      e
+                    }
+                    _ => last_e.val.unwrap()
+                  }
+                })
+              } else if whole == 5 {
+                notice_node(row, src, here, m)
+              } else if whole == 4 {
+                // (an agent at work as it is now; as it last was while its row goes; new to the list as it is
+                // watched, its first words coming in from then)
+                let last_a : Ref[Agent?] = Ref(None)
+                let a = fn() {
+                  match row_of(k) {
+                    Some((Working(a), _)) => {
+                      last_a.val = Some(a)
+                      a
+                    }
+                    _ => last_a.val.unwrap()
+                  }
+                }
+                let came = @signals.untracked(fn() { row_sizes.came(k) })
+                activity_node(row, src, here, a, rk, came)
+              } else if whole == 3 {
+                // (the outbox entry as it is now; as it last was while its row goes)
+                let last_o : Ref[Outgoing?] = Ref(None)
+                let o = fn() {
+                  match row_of(k) {
+                    Some((Out(o), _)) => {
+                      last_o.val = Some(o)
+                      o
+                    }
+                    _ => last_o.val.unwrap()
+                  }
+                }
+                outbox_node(row, src, here, o, fn() { v.window().0 }, None, key=fn() { k })
+              } else if whole == 2 {
+                mine_message_node(row, src, here, m, fn() { v.window().0 }, None, key=fn() { k })
+              } else {
+                others_message_node(row, src, here, m, None)
+              }
+            }
+          })
+        })
+        chat_row_layout(slot, content, fn() {
           match row_of(k) {
-            Some((Said(m), _)) => message_made_whole(m.message())
-            Some((Out(_), _)) => 3
-            Some((Working(_), _)) => 4
-            Some((Line, _)) => 6
-            Some((Older, _)) => 7
-            Some((Newer, _)) => 8
-            Some((Empty, _)) => 9
-            Some((State(_, _, _), _)) => 10
-            Some((Sent(_), _)) => 11
-            _ => 0
-          }
-        }, fn(row, whole) {
-          // (the first of what was sent from here not in the chat yet: where a message out of an avatar comes in over
-          // it, emit.mbt)
-          emit_place_node(row, fn() { if row_of(k) is Some((Out(_), _)) { Some("emit-out/" + rk + "/" + k) } else { None } })
-          if whole > 0 {
-            // (as it is now; as it last was while its row goes)
-            let last : Ref[Message?] = Ref(None)
-            let m = fn() {
-              match row_of(k) {
-                Some((Said(r), _)) => {
-                  let m = r.message()
-                  last.val = Some(m)
-                  m
-                }
-                _ => last.val.unwrap_or_else(fn() { @sfbase.message_of(Json::object({})) })
-              }
+            Some((e, i)) if i > 1 => match e {
+              Said(m) if m.joined => Some(joined_gap)
+              Out(o) if o.joined => Some(joined_gap)
+              _ => None
             }
-            if whole == 6 {
-              unread_line_node(row)
-            } else if whole == 7 || whole == 8 {
-              pages_coming_node(row, whole == 7)
-            } else if whole == 9 {
-              chat_empty_node(row)
-            } else if whole == 10 {
-              // (where it stands as it is now; as it last was while its row goes)
-              let last_s = Ref(("", "", ""))
-              chat_state_node(row, src, here, fn() {
-                match row_of(k) {
-                  Some((State(w, l, r), _)) => {
-                    last_s.val = (w, l, r)
-                    (w, l, r)
-                  }
-                  _ => last_s.val
-                }
-              })
-            } else if whole == 11 {
-              let last_e : Ref[Elsewhere?] = Ref(None)
-              sent_elsewhere_node(row, src, here, fn() {
-                match row_of(k) {
-                  Some((Sent(e), _)) => {
-                    last_e.val = Some(e)
-                    e
-                  }
-                  _ => last_e.val.unwrap()
-                }
-              })
-            } else if whole == 5 {
-              notice_node(row, src, here, m)
-            } else if whole == 4 {
-              // (an agent at work as it is now; as it last was while its row goes; new to the list as it is
-              // watched, its first words coming in from then)
-              let last_a : Ref[Agent?] = Ref(None)
-              let a = fn() {
-                match row_of(k) {
-                  Some((Working(a), _)) => {
-                    last_a.val = Some(a)
-                    a
-                  }
-                  _ => last_a.val.unwrap()
-                }
-              }
-              let came = @signals.untracked(fn() { row_sizes.came(k) })
-              activity_node(row, src, here, a, rk, came)
-            } else if whole == 3 {
-              // (the outbox entry as it is now; as it last was while its row goes)
-              let last_o : Ref[Outgoing?] = Ref(None)
-              let o = fn() {
-                match row_of(k) {
-                  Some((Out(o), _)) => {
-                    last_o.val = Some(o)
-                    o
-                  }
-                  _ => last_o.val.unwrap()
-                }
-              }
-              outbox_node(row, src, here, o, fn() { v.window().0 }, None, key=fn() { k })
-            } else if whole == 2 {
-              mine_message_node(row, src, here, m, fn() { v.window().0 }, None, key=fn() { k })
-            } else {
-              others_message_node(row, src, here, m, None)
-            }
+            _ => Some(0.0)
           }
         })
       },
