@@ -44,7 +44,7 @@ fn side_made(place : String) -> Bool {
 ///|
 /// The chats' sidebar (lists_side's) in node `s` as wide as the sidebar: the lists (sfpages' chats_lists_node: 全部,
 /// 我参与的, 监控中, then 已归档 on its track) under the band (新建对话 and the filter) and over the foot; the band, the
-/// foot nodes too; 已归档's list its old view, hosted.
+/// foot and 已归档's list nodes too.
 fn lists_side_node(s : @view.View, src : Source, tips : @sf.TipLayer, at : () -> SideAt) -> Unit {
   let workspace = fn() { @sfbase.workspace_in_view(src).0 }
   let mode = fn() {
@@ -77,14 +77,15 @@ fn lists_side_node(s : @view.View, src : Source, tips : @sf.TipLayer, at : () ->
     others: [
       fn(p) {
         // (all of its lane, as a list is)
-        @ui.old(p, fn(c) {
+        archive_pane_node(p, src, tips, workspace, fn() {
+          // (read again as the block is said to stand: band_h reads the frame's own)
+          at() |> ignore
+          lists_room.get() |> ignore
           match workspace() {
-            Some(w) => archive_pane(c, src, w)
-            None => ()
+            Some(w) => band_h(src, w)
+            None => 0.0
           }
         })
-        .grow(Is(1.0))
-        |> ignore
       },
     ],
     shown: mode,

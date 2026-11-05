@@ -141,3 +141,56 @@ pub fn list_heading_node(parent : @view.View, label : () -> String, at : ListAt)
   })
   |> ignore
 }
+
+///|
+/// Keys over a row's top end as nodes (row_corner_keys'), over `row` while `shown()`: concentric with its corner, 2
+/// apart, each made by `body` (row_key_node's).
+pub fn row_corner_keys_node(row : @view.View, shown : () -> Bool, body : (@view.View) -> Unit) -> Unit {
+  row.show(shown, fn(o) {
+    let d = capsule_in(row_corner, row_key_side)
+    o.over(Is(true)).lines_up(Is(Some(End))).padding(Is((0.0, d, d, 0.0))) |> ignore
+    o.box(fn(line) {
+      line.row(Is(true)).gap(Is(row_keys_gap)).lines_up(Is(Some(Middle))) |> ignore
+      body(line)
+    })
+    |> ignore
+  })
+}
+
+///|
+/// A row's key as a node (row_key_box's) in `parent`: round, 24 across, the pointer's ground on it; its `icon`
+/// `size` big in `ink(lit)` (lit: pointed at), or turning `spin` big while `busy()` (taking no press then); read out a
+/// button named `label()`, its tip `tip()` in `tips`; pressed, `press`. The key's node.
+pub fn row_key_node(
+  parent : @view.View,
+  tips : TipLayer,
+  icon : String,
+  size : Double,
+  ink : (Bool) -> Int64,
+  label : () -> String,
+  tip : () -> String,
+  press : () -> Unit,
+  busy? : () -> Bool = fn() { false },
+  spin? : Double = 12.0,
+) -> @view.View {
+  parent.box(fn(k) {
+    k
+    .width(Is(Some(row_key_side)))
+    .height(Is(Some(row_key_side)))
+    .radius(Is(1.0e6))
+    .lines_up(Is(Some(Middle)))
+    .lies_along(Is(Middle))
+    .ground(By(fn() { if lit_node(k) { theme().p.hover } else { 0L } }))
+    .says(By(fn() { Some(@view.said(Button, label=label())) }))
+    |> ignore
+    presses_node(k, fn() { if !busy() { press() } })
+    k.pick(busy, fn(m, b) {
+      if b {
+        spinner_node(m, size=spin) |> ignore
+      } else {
+        icon_node(m, icon, size, By(fn() { ink(lit_node(k)) })) |> ignore
+      }
+    })
+    tip_node(tips, k, tip) |> ignore
+  })
+}
