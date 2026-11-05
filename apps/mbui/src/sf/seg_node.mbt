@@ -119,6 +119,8 @@ pub fn seg_node(
           },
           fn(v, key) {
             let f = fits.get(key).unwrap_or(None)
+            // (what the pick worked out for it let go with it: one kept for each arrangement made, none for a room passed)
+            v.owns(fn() { fits.remove(key) }) |> ignore
             // (each option's width: its column, or its share of the room as fitted; its words that much smaller)
             let widths = fn() {
               match f {
