@@ -59,21 +59,28 @@ pub(all) enum AccessPhase {
 } derive(Eq, Show)
 
 ///|
-// kept across runs: what each phase may not read, as said for it (none yet: each reads what it reads now)
-let phase_guards : Map[String, String] = {}
+// kept across runs: what a build and a layout may not read, as said for each (none yet: each reads what it reads now)
+let build_guard : Ref[String?] = Ref(None)
+
+///|
+// kept across runs: as build_guard
+let layout_guard : Ref[String?] = Ref(None)
 
 ///|
 /// The guard of `phase`, what a part of another phase that is one of it (a row made in a layout: a build) runs under:
 /// set_access_guard's, given back as it ends.
 pub fn phase_guard(phase : AccessPhase) -> String? {
-  phase_guards.get(phase.to_string())
+  match phase {
+    Build => build_guard.val
+    Layout => layout_guard.val
+  }
 }
 
 ///|
 /// What `phase` may not read from now (None: what it reads now).
 pub fn set_phase_guard(phase : AccessPhase, reason : String?) -> Unit {
-  match reason {
-    Some(r) => phase_guards[phase.to_string()] = r
-    None => phase_guards.remove(phase.to_string())
+  match phase {
+    Build => build_guard.val = reason
+    Layout => layout_guard.val = reason
   }
 }
