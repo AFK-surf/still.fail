@@ -61,10 +61,11 @@ fn bar_at(
 }
 
 ///|
-/// The bottom bar over the pages laid out Small, in `v` (over them, under its glass's node: bar_glass_node), as the
-/// old frame's bottom_bar drew it: its shadow, the action's disc under the glass, the glass with its notch, the action
-/// in the notch, the ball, the places. `ws`: the workspace in view.
-fn bar_node(v : @view.View, src : Source, ws : () -> Workspace?) -> Unit {
+/// The bottom bar drawn in `g`, its glass's node (bar_glass_node: where the bar is laid out, what takes a finger on it,
+/// so what a press there goes to holds what it draws), as the old frame's bottom_bar drew it: its shadow, the action's
+/// disc under the glass, the glass with its notch, the action in the notch, the ball, the places. `ws`: the workspace in
+/// view.
+fn bar_node(g : @view.View, src : Source, ws : () -> Workspace?) -> Unit {
   let told = fn() { bar_told_now.get() }
   let laid = fn() {
     match told() {
@@ -72,8 +73,8 @@ fn bar_node(v : @view.View, src : Source, ws : () -> Workspace?) -> Unit {
       None => None
     }
   }
-  v.box(fn(b) {
-    b.over(Is(true)).padding(By(fn() { (22.0, 0.0, 22.0, 22.0 + nav_foot()) })) |> ignore
+  g.box(fn(b) {
+    b.over(Is(true)) |> ignore
     // (its ways said to have come to rest at their end: what reads them read again then, at rest)
     let due : Ref[() -> Unit] = Ref(fn() {  })
     b.reacts(fn() { bar_said.get() }, fn(_) {
@@ -86,7 +87,6 @@ fn bar_node(v : @view.View, src : Source, ws : () -> Workspace?) -> Unit {
       }
     })
     b.owns(fn() { (due.val)() }) |> ignore
-    b.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
     // (shown; going, it takes nothing and says nothing, drawn as it goes down out of the way, and is gone once it has:
     // back while it goes, the same, come back)
     b.show(

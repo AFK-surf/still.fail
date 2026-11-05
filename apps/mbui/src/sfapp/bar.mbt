@@ -1713,7 +1713,8 @@ priv enum BarFingerIs {
 }
 
 ///|
-/// The bar's glass, a node of the window's tree over the bar (narrow_shell's): where the bar is laid out as it was told
+/// The bar's glass, a node of the window's tree over the pages (narrow_shell's), the bar drawn in it: where the bar is
+/// laid out as it was told
 /// (BarLaid: as wide as told, as high as its panel, over the system's navigation bar), pressed while it shows, a finger
 /// on it handed to the bar at each event's moment (bar_finger_at). Held still and let go without moving, as a tap: the
 /// place under it (the bar's way before: held, the lens; let go, a place as any tap).
@@ -1802,6 +1803,8 @@ fn bar_glass_node(v : @view.View, src : Source, ws : () -> Workspace?) -> Unit {
         },
       )
       |> ignore
+      // what it draws: the bar (bar_node.mbt), what a press on the glass goes to holding it
+      bar_node(g, src, ws)
       // the notch's key, over the glass where the notch is (in the middle of the bar, risen over its edge), pressed
       // while the place has an action
       g.box(fn(o) {

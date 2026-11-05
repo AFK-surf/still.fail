@@ -140,9 +140,10 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
   // (a press where it has nothing of its own its pages', a page made once as nodes among them: entry_tree's over's)
   |> @ui.old_takes_own
   |> ignore
-  // the bottom bar, over the pages (bar_node.mbt): on a place's top page with nothing over it; none while this device
-  // waits to be confirmed in the workspace's safe mode (its Home is the wait: lock_gate; App.kt PlaceBar)
-  bar_node(v, src, fn() { workspace_in_view(src).0 })
+  // the bottom bar, over the pages: its glass, a finger on it the bar's at each event's moment, the bar drawn in it
+  // (bar_node.mbt); on a place's top page with nothing over it; none while this device waits to be confirmed in the
+  // workspace's safe mode (its Home is the wait: lock_gate; App.kt PlaceBar)
+  bar_glass_node(v, src, fn() { workspace_in_view(src).0 })
   @ui.old(v, fn(c) {
     match workspace_in_view(src).0 {
       Some(w) => {
@@ -155,9 +156,6 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
   .over(Is(true))
   |> @ui.old_takes_own
   |> ignore
-  // the bottom bar's glass, where the bar is laid out: a finger on it the bar's at each event's moment (drawn by the old
-  // view over the pages; what the old frame puts over all of it at its root, its notch's key, menus and sheets, first)
-  bar_glass_node(v, src, fn() { workspace_in_view(src).0 })
   // an image opened over the pages, over the bar: nodes of the tree's of its own (sfbase's viewer_tree.mbt); what is
   // opened otherwise, the old view's over them (narrow_over's preview)
   // (its stage the box it is laid out in, this node's: the window's less the system's bars beside it, as the root's
