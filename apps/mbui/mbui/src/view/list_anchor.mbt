@@ -337,13 +337,16 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   // (how tall all it holds is counted, as its layout last counted it: what its bar reads once it is laid out, no signal
   // read then)
   let foot_laid = Ref(0.0)
+  // (as tall as it is counted to be at least as last laid out: as far as it is counted to be scrolled, its window, what
+  // is laid out under that and the rows under those counted: never shorter than what is laid out from where it is)
+  let extent_floor = Ref(0.0)
   let extent = fn() {
     let total = if fixed_estimate {
       count.val.to_double() * est + fixed_delta.val
     } else {
       count.val.to_double() * mean()
     }
-    total + foot_laid.val
+    dmax(total + foot_laid.val, extent_floor.val)
   }
   // (told once laid out as how tall all it holds is counted comes out otherwise: what follows how far it can go
   // reads it, not its layout)
@@ -722,6 +725,18 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         // (how far it is counted to be scrolled among all it holds, the bar's, as laid out now)
         let at_end = from_end && r.at_end
         if at_end && short_move == 0.0 { short_glide.val = false }
+        // (not at its end: as far as it is counted to be scrolled, and what is under the window counted from what is laid
+        // out (its last row's foot under the window, the rows under it as tall as one is counted to be), its extent no
+        // shorter than that: else, the rows laid out taller than its count, how far it is counted to be scrolled is its
+        // most, a drag toward its end held there while its end is not laid out (0.1.7336: 往下滑不了))
+        extent_floor.val = 0.0
+        if !at_end && r.first > 0 && r.keys.length() > 0 {
+          let over = if fixed_estimate { fixed_above(r.first) } else { r.first.to_double() * mean() }
+          let at = over - r.tops[0]
+          let foot = r.tops[r.keys.length() - 1] + r.heights[r.keys.length() - 1]
+          let under = dmax(0.0, foot - h) + (n - 1 - r.last).to_double() * mean()
+          extent_floor.val = at + h + under + foot_laid.val
+        }
         let most = dmax(0.0, extent() - foot_laid.val - h)
         let counted = if at_end || (!from_end && r.at_start) {
           most
