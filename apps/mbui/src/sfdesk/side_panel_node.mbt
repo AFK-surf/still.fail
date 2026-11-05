@@ -49,7 +49,7 @@ fn side_panel_node(
   old_page? : (@ui.Ctx, () -> Unit) -> Unit = fn(_, build) { build() },
 ) -> Unit {
   let popup = @sf.popup_root_node(parent)
-  let tips = @sf.TipLayer::new(fn() { Some(popup) })
+  let tips = @sf.TipLayer::new(fn() { Some(popup.layer()) })
   parent.show(fn() { view() is Some(_) }, fn(panel) {
     let initial = @signals.untracked(view).unwrap()
     let current = fn() { view().unwrap_or(initial) }

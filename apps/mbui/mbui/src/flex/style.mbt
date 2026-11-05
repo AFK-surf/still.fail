@@ -1026,6 +1026,11 @@ pub(all) struct Node {
   // too, and is as tall as it says (a list of files, a card as tall as its words).
   mut layout_children : ((Double, Double, Double, Double, Double) -> Double)?
   mut sized_by_children : Bool
+  // What a container lays out first of what it holds as it is laid out at last, its size known, before the rest of it
+  // (given its padding box's width and height): one of what it holds laid out (layout_over), what that comes to said to
+  // what lays out another (a composer's height the room under a list's last row), all in the same layout; the rest then
+  // laid out as it would be.
+  mut lays_first : ((Double, Double) -> Unit)?
   // the result: position relative to the parent's border box, and size
   mut left : Double
   mut top : Double
@@ -1093,6 +1098,7 @@ pub fn Node::new() -> Node {
     measure: None,
     layout_children: None,
     sized_by_children: false,
+    lays_first: None,
     left: 0.0,
     top: 0.0,
     width: 0.0,

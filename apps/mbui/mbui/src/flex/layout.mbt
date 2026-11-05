@@ -811,6 +811,12 @@ fn size_uncached(
     let sized = clamp_size(pbh + (natural - pbh) * share, b.min_h, b.max_h)
     return layout_flex(node, b, if known(w) { w } else { fw }, sized, aw, ah, perform)
   }
+  // (what it lays out first of what it holds, its size known as it is laid out at last: its padding box, Node's
+  // lays_first)
+  match node.lays_first {
+    Some(first) if perform && known(w) && known(h) => first(w - b.bor_l - b.bor_r, h - b.bor_t - b.bor_b)
+    _ => ()
+  }
   layout_flex(node, b, w, h, aw, ah, perform)
 }
 
@@ -2543,35 +2549,7 @@ fn place_absolute(cb : Node, parent : Node, c : Node, ox : Double, oy : Double) 
   let r = resolve_of(cs.inset_right_k, cs.inset_right_v, cw)
   let t = resolve_of(cs.inset_top_k, cs.inset_top_v, ch)
   let bt = resolve_of(cs.inset_bottom_k, cs.inset_bottom_v, ch)
-  let mut w = b.w
-  let mut h = b.h
-  if !known(w) && known(l) && known(r) {
-    w = fmax(cw - l - r - b.mar_l - b.mar_r, 0.0)
-  }
-  if !known(h) && known(t) && known(bt) {
-    h = fmax(ch - t - bt - b.mar_t - b.mar_b, 0.0)
-  }
-  if known(w) {
-    w = clamp_size(w, b.min_w, b.max_w)
-  }
-  if known(h) {
-    h = clamp_size(h, b.min_h, b.max_h)
-  }
-  let fw = size_node(
-    c,
-    w,
-    h,
-    if known(w) { w } else { cw },
-    if known(h) { h } else { ch },
-    cw,
-    ch,
-    false,
-  )
-  let fh = out_h.val
-  let rw = size_node(c, fw, fh, fw, fh, cw, ch, true)
-  let rh = out_h.val
-  c.width = rw
-  c.height = rh
+  let (rw, rh) = layout_over(c, cw, ch)
   // static position: where it would sit in its parent's content box
   let row = is_row(ps.direction)
   let inner_w = parent.width - pb.pbw()
@@ -2612,6 +2590,50 @@ fn place_absolute(cb : Node, parent : Node, c : Node, ox : Double, oy : Double) 
       static_y
     },
   )
+}
+
+///|
+/// `c`, a box laid out over its container (positioned absolutely: its insets, its size and its margins say where in it),
+/// laid out within the current compute in a container whose padding box is `cw` by `ch`: how big it comes to. As
+/// place_absolute lays one out, asked the same: one laid out first by its container (Node's lays_first) is laid out
+/// so, its layout kept as its container places it after.
+pub fn layout_over(c : Node, cw : Double, ch : Double) -> (Double, Double) {
+  let cs = c.style
+  let b = box_of(cs, cw, ch)
+  let l = resolve_of(cs.inset_left_k, cs.inset_left_v, cw)
+  let r = resolve_of(cs.inset_right_k, cs.inset_right_v, cw)
+  let t = resolve_of(cs.inset_top_k, cs.inset_top_v, ch)
+  let bt = resolve_of(cs.inset_bottom_k, cs.inset_bottom_v, ch)
+  let mut w = b.w
+  let mut h = b.h
+  if !known(w) && known(l) && known(r) {
+    w = fmax(cw - l - r - b.mar_l - b.mar_r, 0.0)
+  }
+  if !known(h) && known(t) && known(bt) {
+    h = fmax(ch - t - bt - b.mar_t - b.mar_b, 0.0)
+  }
+  if known(w) {
+    w = clamp_size(w, b.min_w, b.max_w)
+  }
+  if known(h) {
+    h = clamp_size(h, b.min_h, b.max_h)
+  }
+  let fw = size_node(
+    c,
+    w,
+    h,
+    if known(w) { w } else { cw },
+    if known(h) { h } else { ch },
+    cw,
+    ch,
+    false,
+  )
+  let fh = out_h.val
+  let rw = size_node(c, fw, fh, fw, fh, cw, ch, true)
+  let rh = out_h.val
+  c.width = rw
+  c.height = rh
+  (rw, rh)
 }
 
 ///|

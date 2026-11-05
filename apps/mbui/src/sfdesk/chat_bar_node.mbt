@@ -55,7 +55,7 @@ fn chat_bar_node(parent : @view.View, src : Source, w : Workspace, r : ChatRef, 
   let native = fn() { @sf.native_on() }
   let jobs = fn() { (src.topic)("chatJobs", chat_jobs_summary_params(r)).value }
   let popup = @sf.popup_root_node(parent)
-  let tips = @sf.TipLayer::new(fn() { Some(popup) })
+  let tips = @sf.TipLayer::new(fn() { Some(popup.layer()) })
   let info_at : Ref[@view.View?] = Ref(None)
   let jobs_at : Ref[@view.View?] = Ref(None)
   let room = fn(p : @view.View, n : () -> Double) {
@@ -165,7 +165,7 @@ fn chat_bar_node(parent : @view.View, src : Source, w : Workspace, r : ChatRef, 
     room(row, fn() { let (_, _, ml, mr) = page_bar_room(); mr + dmin(0.0, ml) })
   }) |> ignore
   let active = fn() { app.nav.drawn_stay().0 == stint && view() is Some(_) }
-  popup.pick(fn() { (@sf.native_side(), column_short.get()) }, fn(layer, arrangement) {
+  popup.layer().pick(fn() { (@sf.native_side(), column_short.get()) }, fn(layer, arrangement) {
     let (from_side, short) = arrangement
     // This branch chooses the window layer's anchor; it must keep the window's room for the panel beside it.
     layer.over(Is(true)) |> ignore

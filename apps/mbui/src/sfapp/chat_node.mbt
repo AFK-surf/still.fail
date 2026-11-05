@@ -24,6 +24,16 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
     // (the composer's room at the page's foot, as it says it: the list's foot over it)
     let room : @signals.Signal[(() -> Double)?] = @signals.signal(None, same=fn(a, b) { a is None && b is None })
     let composer_room = fn() { room.get().map(fn(f) { f() }).unwrap_or(0.0) }
+    // (the composer's box, its room by its parts as the layout under way lays them out (none while it is not made), and
+    // what says the room under the list's last row to it: the page lays the composer out first, below)
+    let composer_box : Ref[@view.View?] = Ref(None)
+    let room_laid : @signals.Signal[(((@view.View) -> (Double, Double)) -> Double)?] = @signals.signal(None, same=fn(
+      a,
+      b,
+    ) {
+      a is None && b is None
+    })
+    let foot_to : Ref[((@view.Laying, Double) -> Unit)?] = Ref(None)
     // (the page as tall as the window: the frame's)
     let list_room = fn() { dmax(composer_room(), tabletop_clear_in(height(), frame().foot)) }
     p.show(fn() { view() is None }, fn(waiting) {
@@ -46,10 +56,12 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
       let list = @sfpages.chat_list_node(l, src, r, view, entries, width, fn() { list_top() }, list_room, settings_core(src, w), foot_gap=list_foot())
       latest.val = list.to_latest
       landing.val = list.landing_of
+      foot_to.val = Some(list.foot_laid)
     })
     |> ignore
     // (the composer over the list at the page's foot, over the navigation bar)
     p.box(fn(f) {
+      composer_box.val = Some(f)
       // (over all of the page, what it holds at its foot)
       f
       .over(Is(true))
@@ -90,8 +102,13 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
         drops=p,
       )
       room.set(Some(made.room))
+      room_laid.set(Some(made.room_laid))
       made.root.shrink(Is(0.0)) |> ignore
-      f.owns(fn() { room.set(None) }) |> ignore
+      f.owns(fn() {
+        room.set(None)
+        room_laid.set(None)
+      })
+      |> ignore
       // The fold owns the room below it. The composer remains the same editor as the pose changes; the recent
       // chats take only the space left below it, and give that space up as the keyboard comes in.
       f.show(fn() { @ui.system_tabletop() is Some(_) }, fn(recent) {
@@ -99,6 +116,23 @@ fn chat_root_node(v : @view.View, src : Source, r : ChatRef, entry : Int, frame 
         recent_list_node(recent, src, w, stint)
       })
       })
+    })
+    |> ignore
+    // (the composer laid out first as the page is laid out, the room it takes at the foot (the fold's at least) the room
+    // under the list's last row in that same layout: never its laid size read back by the list)
+    p.lays_first(fn(l) {
+      match composer_box.val {
+        Some(f) => l.lay_over(f) |> ignore
+        None => ()
+      }
+      let r = match room_laid.get() {
+        Some(by) => by(fn(v) { l.size_of(v) })
+        None => 0.0
+      }
+      match foot_to.val {
+        Some(give) => give(l, dmax(r, tabletop_clear_in(height(), frame().foot)))
+        None => ()
+      }
     })
     |> ignore
     // (what flies in the page: over its messages and its composer, under its bar and what opens over it, cut by

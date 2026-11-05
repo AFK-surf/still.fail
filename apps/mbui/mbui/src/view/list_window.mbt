@@ -789,8 +789,13 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // (asked how tall it is as the column is measured, not laid out yet: as far as its blocks reach as they are counted
     // now, nothing made or laid out for it)
     guard vh == vh && w > 0.0 && holder.val is Some(h) else { return extent_at(dmax(0.0, laid_vh.val)) }
-    // (laid out again in the same compute, as wide, in as tall a column, nothing it read changed since: where it was)
-    if laid_in.val == @flex.computes() && w == laid_w.val && vh == laid_vh.val && !watch.is_stale() {
+    // (laid out again in the same compute, as wide, in as tall a column, nothing it read changed since nor any of its
+    // blocks marked (by what lays out first what holds it: View::lays_first): where it was)
+    if laid_in.val == @flex.computes() &&
+      w == laid_w.val &&
+      vh == laid_vh.val &&
+      !watch.is_stale() &&
+      !blocks.values().any(fn(b) { tree.nodes[b.slot.at].flex.dirty }) {
       put_blocks(ox, oy, vh)
       return laid_reach.val
     }

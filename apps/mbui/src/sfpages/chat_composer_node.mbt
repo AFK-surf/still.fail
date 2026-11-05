@@ -6,6 +6,9 @@ pub(all) struct ChatComposerNode {
   root : @view.View
   composer : ComposerNode
   room : () -> Double
+  /// its room at the page's foot, its parts as big as what is laid out now says (Laying::size_of: in the layout that
+  /// lays it out first)
+  room_laid : ((@view.View) -> (Double, Double)) -> Double
 }
 
 ///|
@@ -47,19 +50,21 @@ pub fn chat_composer_node(
   let node : Ref[ComposerNode?] = Ref(None)
   let extras : Ref[ComposerExtrasNode?] = Ref(None)
   let root_at : Ref[@view.View?] = Ref(None)
-  // (how much room it takes at the page's foot, as it is laid out: read plainly, where what lays out after it reads it
-  // (the list's rows, what is over the list) and at an event, never followed)
-  let room = fn(settled : Bool) {
+  // (how much room it takes at the page's foot, its parts as big as `size` has them: as what lays out the page lays them
+  // out first (Laying::size_of), or as they are laid out, read plainly where what is over the list reads it and at an
+  // event, never followed)
+  let room_by = fn(size : (@view.View) -> (Double, Double), settled : Bool) {
     let n = node.val.unwrap()
     let root = root_at.val.unwrap()
-    let total = root.laid_size().1
-    let cap = n.cap.laid_size().1
+    let total = size(root).1
+    let cap = size(n.cap).1
     let look = @ui.style_words(@sf.theme().t.words)
     let line = (if look.line > 0.0 { look.line } else { look.size * @ui.tree_theme().text_line }) * @ui.font_scale()
     let opened = @sf.composer_pad + 8.0 + line + 10.0 + @sf.theme().round.side + @sf.capsule_in(place().corner, @sf.theme().round.side)
     let shape = if settled { 0.0 } else { (n.ground)().3 }
     dmax(total + shape, total - cap + opened)
   }
+  let room = fn(settled : Bool) { room_by(fn(v) { v.laid_size() }, settled) }
   let root = parent.box(fn(root) {
     root_at.val = Some(root)
     root.lines_up(Is(Some(Middle))).padding(By(fn() { (0.0, 12.0, 0.0, foot()) })) |> ignore
@@ -103,5 +108,5 @@ pub fn chat_composer_node(
       _ => ()
     }
   }) |> ignore
-  { root, composer: node.val.unwrap(), room: fn() { room(false) } }
+  { root, composer: node.val.unwrap(), room: fn() { room(false) }, room_laid: fn(size) { room_by(size, false) } }
 }

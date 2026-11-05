@@ -866,6 +866,9 @@ pub struct Tree {
   /// the node whose layout of its own (Node's layout_children: View::by_room's) is laying out what it holds now, -1: none;
   /// what that makes and lays out marked up to it alone, laid out again by it as it goes on (Tree::layout_marked_at)
   mut layout_owner : Int
+  /// a pass of the tree's past its one compute (Tree::laid_out): what its layout told (what is in sight, under the
+  /// pointer, left out) worked out, never the tree's layout marked again for it (Tree::layout_marked_at: a fault)
+  mut layout_telling : Bool
   /// the thumbs of its columns' bars (View::scroll_bar), by their places: what a node over one yields to (ui's
   /// yield_thumbs, Tree::thumb_at)
   thumbs : Map[Int, NodeId]
@@ -1057,6 +1060,7 @@ pub fn Tree::new(
     rows_grid: 0.0,
     rows_lists: [],
     layout_owner: -1,
+    layout_telling: false,
     thumbs: {},
     rows_grid_said: @signals.signal(0.0),
     on_due: fn() {  },
@@ -1884,8 +1888,15 @@ fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
       }
       return
     }
+    // (said with what each is drawn as, and what was read as it was told, where that was followed)
+    let marked = self.named_up(at)
+    let owner = self.named_up(self.layout_owner)
+    let reading = match self.reading.last() {
+      Some(about) => " (" + about() + ")"
+      None => ""
+    }
     read_fault(
-      "node \{at}'s layout told as node \{self.layout_owner} lays out what it holds (its layout_children): another's layout marked out of a layout (docs/retained.md rule 10)",
+      "\{marked}'s layout told as \{owner} lays out what it holds (its layout_children)\{reading}: another's layout marked out of a layout (docs/retained.md rule 10)",
     )
   }
   let mut i = at
@@ -1899,6 +1910,18 @@ fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
       return
     }
     i = n.parent
+  }
+  // (marked by what a pass's layout told once the tree is laid out (Tree::laid_out): the tree laid out again for what its
+  // own layout found, the next frame or this one, a fault; what is in sight, under the pointer or left out says how
+  // things look and what reacts, never where they are laid out)
+  if self.layout_telling {
+    let reading = match self.reading.last() {
+      Some(about) => " (" + about() + ")"
+      None => ""
+    }
+    read_fault(
+      "\{self.named_up(at)}'s layout told as what the tree's layout found is told\{reading}: the tree laid out again for what its own layout told (docs/retained.md rule 10)",
+    )
   }
   self.layout_due = true
   // (what was laid out to be read no more where it stands)
@@ -5916,6 +5939,63 @@ pub fn View::show(
 }
 
 ///|
+/// `then`'s node while `when` holds, as View::show makes it, in what `place` gives, made there as it first comes to
+/// (nothing of it there till then), let go with `self`: a control's popup at the window's root made as it opens, never
+/// as the control is made (a row's, made as its list lays it out, makes nothing out of it: docs/retained.md rule 10).
+#callsite(autofill(loc))
+pub fn View::show_in(
+  self : View,
+  place : () -> View,
+  when : () -> Bool,
+  then : (View) -> Unit,
+  leave? : Double = 0.0,
+  loc~ : SourceLoc,
+) -> Unit {
+  guard self.alive() else { return }
+  let tree = self.tree
+  // (its place there, made as it first shows, let go with `self`)
+  let slot : Ref[View?] = Ref(None)
+  let had : Ref[View?] = Ref(None)
+  // (the one leaving, shown again as it leaves: the same node, come back)
+  let gone : Ref[View?] = Ref(None)
+  let stop = tree.structured(when, fn(on) {
+    guard self.alive() else { return }
+    match (on, had.val) {
+      (true, None) => {
+        let s = match slot.val {
+          Some(s) if s.alive() => s
+          _ => {
+            let s = place().slot().lives_with(self)
+            slot.val = Some(s)
+            s
+          }
+        }
+        tree.work.structure = tree.work.structure + 1
+        match gone.val {
+          Some(g) if g.alive() && tree.nodes[g.at].left_at >= 0.0 => {
+            s.come_back(g)
+            had.val = Some(g)
+          }
+          _ => had.val = Some(s.box(then))
+        }
+        gone.val = None
+      }
+      (false, Some(v)) => {
+        tree.work.structure = tree.work.structure + 1
+        match slot.val {
+          Some(s) if s.alive() => s.leave(v, leave)
+          _ => v.let_go()
+        }
+        had.val = None
+        gone.val = if leave > 0.0 { Some(v) } else { None }
+      }
+      _ => ()
+    }
+  }, about=fn() { "what shows elsewhere, said at \{loc}" })
+  self.owns(stop) |> ignore
+}
+
+///|
 /// A node made by `make` for what `which` is, made anew (the one before let go) as that changes, kept as it does not.
 #callsite(autofill(loc))
 pub fn[K : Eq] View::pick(self : View, which : () -> K, make : (View, K) -> Unit, loc~ : SourceLoc) -> Unit {
@@ -6880,6 +6960,10 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     self.walk_from = -1
     self.walk(0, gen, true)
   }
+  // (laid out, the tree once: what its layout found told from here on, none of it marking the tree's layout again,
+  // Tree::layout_marked_at)
+  let was_telling = self.layout_telling
+  self.layout_telling = true
   // (what layout reads of what is laid out alone after all else, worked out of where all else is laid out now, before
   // that is: Live's Placed there)
   self.laid_bounds_run(placing)
@@ -6934,6 +7018,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   if !self.due && self.owes() {
     self.marked()
   }
+  self.layout_telling = was_telling
   self.laying = was_laying
 }
 

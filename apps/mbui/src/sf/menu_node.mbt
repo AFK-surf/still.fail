@@ -13,7 +13,8 @@
 // lit, till a key or the pointer moves it.
 
 ///|
-/// A menu in `parent` while `open()` (let go of at once once not): what `content` holds as it is now (None a line
+/// A menu in `parent` (a node, or a control's popups' layer: Popup, made as it first opens) while `open()` (let go of
+/// at once once not): what `content` holds as it is now (None a line
 /// between parts: its rows, what can be chosen of them, the keys' way along them and what a choice does, all from the
 /// same of it, read again as it is told changed, the menu open as it was, its focus where it was), headed by
 /// `title` ("" none), beside what `anchor` makes in its layer (what opened it, where that is drawn), `offset` off
@@ -22,8 +23,8 @@
 /// is typed still its (View::leaves_typing), every key, the wheel and every press the menu's as ever. `choose` with the item chosen, once,
 /// as it closes; `cancel` as it is closed unchosen. `exit`: keep the control's dropdown for its pop_out, as
 /// menu_of does; a presenter's menu otherwise leaves at once. `shown`, `gone`: as dialog_layer_node's.
-pub fn menu_node(
-  parent : @view.View,
+pub fn[P : ShowsIn] menu_node(
+  parent : P,
   open : () -> Bool,
   anchor : (@view.View) -> @view.View,
   content : () -> Array[MenuItem?],
@@ -45,7 +46,7 @@ pub fn menu_node(
   mark_node? : (@view.View, Int) -> Unit,
   exit? : Bool = false,
 ) -> Unit {
-  parent.show(
+  parent.shows_in(
     open,
     fn(layer) {
       shown()
@@ -303,7 +304,11 @@ pub fn menu_node(
       })
       |> ignore
     },
-    leave=if exit { @kit.pop_out_ms } else { 0.0 },
+    if exit {
+      @kit.pop_out_ms
+    } else {
+      0.0
+    },
   )
 }
 

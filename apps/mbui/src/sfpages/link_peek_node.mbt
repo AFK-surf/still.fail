@@ -75,54 +75,60 @@ fn link_peeks_node(
     }
   })
   w.owns(fn() { (due.val)() }) |> ignore
-  // (in the chat's flight layer, in a place of its own there let go with the words; nothing of it in the words: what
-  // is laid out in them theirs alone)
-  guard @signals.untracked(fn() { chat_flight_layer(here_ref(here())) }) is Some(l) else { return }
-  // (made again for another link, closed first: on_link's)
-  l.box(fn(place) {
-    place.over(Is(true)) |> ignore
-    place.show(fn() { open.get() is Some(_) }, fn(anchor) {
-    guard @signals.untracked(fn() { open.get() }) is Some((href, words, (px, py, _, ph))) else { return }
-    let scope = "link-peek-node/" + href
-    l.box(fn(card) {
-      let card_w : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
-      card.owns(fn() {
-        card_on.val = None
-        @sfbase.let_go(src, scope)
-      })
-      |> ignore
-      // (under the piece of line it rests on, at its start; kept in the chat's room, as the layer is placed: Live's Placed)
-      card
-      .offset(Placed(fn() {
-        let (lx, ly, lw, _) = l.placed_window_now()
-        let cw = card_w.get().unwrap_or(0.0)
-        (dmax(0.0, dmin(px - lx, lw - cw - 8.0)), py + ph + hover_offset - ly)
-      }))
-      |> ignore
-      let tile = peek_tile_of(href, @signals.untracked(link_to))
-      @ui.old(card, fn(c) {
-        let h = here()
-        c.box(style=if tile { hover_tile } else { hover_card }, fn() {
-          @sf.small_panel(c, w=Fill(1.0), fn() {
-            c.box(style=hover_inner, fn() {
-              peek_body(c, src, h.station, scope, href, words, agent(), chats(), link_to())
-            })
-            |> ignore
+  // (in the chat's flight layer, in a place of its own there let go with the words, made there as a card first opens
+  // (the pointer at rest on a link a moment): nothing of it in the words, and nothing made for it as they are, in their
+  // list's layout, where what is laid out is the words' alone (docs/retained.md rule 10))
+  let place_made = Ref(false)
+  w.reacts(fn() { open.get() is Some(_) }, fn(on) {
+    guard on && !place_made.val else { return }
+    guard @signals.untracked(fn() { chat_flight_layer(here_ref(here())) }) is Some(l) else { return }
+    place_made.val = true
+    // (made again for another link, closed first: on_link's)
+    l.box(fn(place) {
+      place.over(Is(true)) |> ignore
+      place.show(fn() { open.get() is Some(_) }, fn(anchor) {
+        guard @signals.untracked(fn() { open.get() }) is Some((href, words, (px, py, _, ph))) else { return }
+        let scope = "link-peek-node/" + href
+        l.box(fn(card) {
+          let card_w : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
+          card.owns(fn() {
+            card_on.val = None
+            @sfbase.let_go(src, scope)
           })
           |> ignore
+          // (under the piece of line it rests on, at its start; kept in the chat's room, as the layer is placed: Live's Placed)
+          card
+          .offset(Placed(fn() {
+            let (lx, ly, lw, _) = l.placed_window_now()
+            let cw = card_w.get().unwrap_or(0.0)
+            (dmax(0.0, dmin(px - lx, lw - cw - 8.0)), py + ph + hover_offset - ly)
+          }))
+          |> ignore
+          let tile = peek_tile_of(href, @signals.untracked(link_to))
+          @ui.old(card, fn(c) {
+            let h = here()
+            c.box(style=if tile { hover_tile } else { hover_card }, fn() {
+              @sf.small_panel(c, w=Fill(1.0), fn() {
+                c.box(style=hover_inner, fn() {
+                  peek_body(c, src, h.station, scope, href, words, agent(), chats(), link_to())
+                })
+                |> ignore
+              })
+              |> ignore
+            })
+            |> ignore
+          }, natural=true, fits=(if tile { link_peek_tile_most } else { link_peek_card_w }, card_w))
+          // (as wide as the old frame lays what it holds out: it takes the pointer there, its own lighting by it)
+          .width(By(fn() { card_w.get() }))
+          |> fn(island) { card_on.val = Some(island) }
         })
+        .lives_with(anchor)
         |> ignore
-      }, natural=true, fits=(if tile { link_peek_tile_most } else { link_peek_card_w }, card_w))
-      // (as wide as the old frame lays what it holds out: it takes the pointer there, its own lighting by it)
-      .width(By(fn() { card_w.get() }))
-      |> fn(island) { card_on.val = Some(island) }
+      })
     })
-    .lives_with(anchor)
+    .lives_with(w)
     |> ignore
-    })
   })
-  .lives_with(w)
-  |> ignore
 }
 
 ///|

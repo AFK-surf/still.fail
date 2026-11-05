@@ -112,6 +112,16 @@ fn chat_talk_node(
   let landing : Ref[(String) -> @sfpages.MineLanding?] = Ref(fn(_) { None })
   let room : @signals.Signal[(() -> Double)?] = @signals.signal(None, same=fn(a, b) { a is None && b is None })
   let room_now = fn() { room.get().map(fn(f) { f() }).unwrap_or(0.0) }
+  // (the composer's box, its room by its parts as the layout under way lays them out (none while it is not made), and
+  // what says that room to the list: the talk lays the composer out first, below)
+  let composer_box : Ref[@view.View?] = Ref(None)
+  let room_laid : @signals.Signal[(((@view.View) -> (Double, Double)) -> Double)?] = @signals.signal(None, same=fn(
+    a,
+    b,
+  ) {
+    a is None && b is None
+  })
+  let foot_to : Ref[((@view.Laying, Double) -> Unit)?] = Ref(None)
   // (its view not read yet: its messages to come in their bones, the first where the list's first row will be, or why
   // it cannot be read. A chat just made from a new chat already has fresh_view's view, so it shows no sample.)
   talk.show(fn() { view() is None }, fn(b) {
@@ -125,9 +135,11 @@ fn chat_talk_node(
     let list = @sfpages.chat_list_node(l, src, r, view, entries, width, fn() { chat_bar_room() + list_head_gap }, room_now, settings_core(src, w), foot_gap=list_foot_gap)
     latest.val = list.to_latest
     landing.val = list.landing_of
+    foot_to.val = Some(list.foot_laid)
   })
   |> ignore
   talk.box(fn(f) {
+    composer_box.val = Some(f)
     f
     .over(Is(true))
     .lies_along(Is(End))
@@ -150,8 +162,30 @@ fn chat_talk_node(
       drops=talk,
     )
     room.set(Some(made.room))
-    f.owns(fn() { room.set(None) }) |> ignore
+    room_laid.set(Some(made.room_laid))
+    f.owns(fn() {
+      room.set(None)
+      room_laid.set(None)
     })
+    |> ignore
+    })
+  })
+  |> ignore
+  // (the composer laid out first as the talk is laid out, the room it takes at the foot the room under the list's last
+  // row in that same layout: never its laid size read back by the list)
+  talk.lays_first(fn(l) {
+    match composer_box.val {
+      Some(f) => l.lay_over(f) |> ignore
+      None => ()
+    }
+    let r = match room_laid.get() {
+      Some(by) => by(fn(v) { l.size_of(v) })
+      None => 0.0
+    }
+    match foot_to.val {
+      Some(give) => give(l, r)
+      None => ()
+    }
   })
   |> ignore
   talk.box(fn(fl) {

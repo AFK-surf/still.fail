@@ -28,9 +28,13 @@ pub fn chat_list_node(
   let scroll = @view.Scroll::list()
   // The last row stands above the decision bell when the core says that it can cover the list's end (the old
   // list's ask_clear). The bell itself stays over the composer's room, even while its post is elsewhere in the list.
-  let clear_foot = fn() {
-    foot() + (if view().map_or(false, @sfbase.ask_clears) { float_lift + float_side } else { 0.0 })
-  }
+  let foot_lift = fn() { if view().map_or(false, @sfbase.ask_clears) { float_lift + float_side } else { 0.0 } }
+  let clear_foot = fn() { foot() + foot_lift() }
+  // (the composer's room at its foot as what lays out the chat lays the composer out first and says it here
+  // (ChatListNode's foot_laid), in that same layout: the room under its last row; and that room's node while the foot's
+  // row is made, made as tall as it is said then)
+  let foot_given = Ref(0.0)
+  let foot_room : Ref[@view.View?] = Ref(None)
   // (a card's field with the focus kept in view with the keyboard up, as the window grows shorter under it: out from
   // under the bar and the composer, 16 clear of each, its foot giving way to its top where it does not fit between
   // them; with touch, as the keyboard comes up on asking (the old list's list_holds_field): brought into sight by the
@@ -285,9 +289,24 @@ pub fn chat_list_node(
         (sized.lend)(slot, k)
         match @signals.untracked(fn() { row_of(k) }) {
           Some((Top, _)) => { slot.height(By(fn() { Some(top()) })) |> ignore; return }
-          // (the composer's room under the last, as the composer is laid out before the list lays its rows out: Live's
-          // Placed in a block of its)
-          Some((Foot, _)) => { slot.height(Placed(fn() { Some(clear_foot() + foot_gap) })) |> ignore; return }
+          // (the composer's room under the last, as what lays out the chat lays the composer out first and says it
+          // (foot_laid), in the layout the list lays its rows out in; the bell's lift over it while it asks)
+          Some((Foot, _)) => {
+            slot.padding(By(fn() { (0.0, 0.0, 0.0, foot_lift() + foot_gap) })) |> ignore
+            slot.box(fn(room) {
+              room.height(Is(Some(foot_given.val))) |> ignore
+              foot_room.val = Some(room)
+              room.owns(fn() {
+                match foot_room.val {
+                  Some(x) if physical_equal(x, room) => foot_room.val = None
+                  _ => ()
+                }
+              })
+              |> ignore
+            })
+            |> ignore
+            return
+          }
           _ => ()
         }
         // (its node while it is made, what is read of where it is: the reading's)
@@ -925,6 +944,13 @@ pub fn chat_list_node(
   {
     to_latest: to_end,
     follows,
+    foot_laid: fn(l, h) {
+      foot_given.val = h
+      match foot_room.val {
+        Some(room) => l.make_tall(room, h)
+        None => ()
+      }
+    },
     // (by its row as the list has it: its message's place, or its outbox entry's)
     landing_of: fn(k) {
       match row_of(k) {
@@ -942,11 +968,14 @@ let chat_column_most : Double = 760.0
 
 ///|
 /// A chat's list made once (chat_list_node): to its end, following it again (glided there, at once from further than
-/// chat_glide_rows rows off); whether it follows its end; where what was sent to its row `key` lands (by the key the
-/// list has it by: what was sent from here by the key it was sent as), followed.
+/// chat_glide_rows rows off); whether it follows its end; the room the composer takes at its foot said as what lays out
+/// the chat lays the composer out first (View::lays_first: the room under its last row, laid out so in that layout);
+/// where what was sent to its row `key` lands (by the key the list has it by: what was sent from here by the key it
+/// was sent as), followed.
 pub(all) struct ChatListNode {
   to_latest : () -> Unit
   follows : @signals.Signal[Bool]
+  foot_laid : (@view.Laying, Double) -> Unit
   landing_of : (String) -> MineLanding?
 }
 
