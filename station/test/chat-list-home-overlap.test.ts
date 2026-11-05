@@ -71,3 +71,49 @@ for (const recursive of [false, true]) test(`home and workspace overlap is count
     }
   } finally { db.setAuthorizer(null); store.close(); }
 });
+
+for (const recursive of [false, true]) test(`home overlap survives new scopes and repeated home changes between batches (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    const shared = store.openThread("ember", "EMBER", "shared-many", "Shared", null).id;
+    const workspaces = Array.from({ length: 8 }, (_, i) => `w0${i}`);
+    for (const ws of [...workspaces, "000-new"]) {
+      store.insertSession({ key: ws, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: ws, createdAt: 1, lastActiveAt: 1, ws });
+      store.joinThread(shared, ws, "ember");
+    }
+    store.joinThread(shared, "zzz-missing", "ember");
+    installRecentHomeIndex(db);
+    while (!scanRecentHomeChatsStep(db, 2).scanDone) { /* Prepare the default chat. */ }
+    while (!settleRecentHomeChatStep(db, 2).chatsDone) { /* Its unknown member belongs to home. */ }
+    for (const ws of workspaces) {
+      trackRecentScope(db, { kind: "workspace", workspace: ws });
+      putRecentScopeSource(db, ws, BigInt(shared), ws);
+    }
+    installRecentHomeOverlap(db);
+    while (!scanRecentHomeOverlapStep(db, 2).scanDone) { /* Schedule the existing row. */ }
+    assert.equal(settleRecentHomeOverlapStep(db, 2).visited, 2);
+    trackRecentScope(db, { kind: "workspace", workspace: "000-new" });
+    putRecentScopeSource(db, "000-new", BigInt(shared), "000-new");
+    assert.equal(db.prepare("SELECT total FROM recent_home_overlap_totals WHERE ws = '000-new'").get()?.total, 1,
+      "a scope added behind the cursor is counted immediately");
+    db.prepare("DELETE FROM thread_sessions WHERE thread = ? AND session = 'zzz-missing'").run(shared);
+    while (!settleRecentHomeChatStep(db, 2).chatsDone) { /* The chat leaves default home. */ }
+    assert.equal(settleRecentHomeOverlapStep(db, 2).visited, 2);
+    store.joinThread(shared, "zzz-missing", "ember");
+    while (!settleRecentHomeChatStep(db, 2).chatsDone) { /* The chat enters default home again. */ }
+    let done = false;
+    for (let i = 0; i < 30 && !done; i++) {
+      const batch = settleRecentHomeOverlapStep(db, 2);
+      assert.ok(batch.visited <= 2);
+      done = batch.overlapsDone;
+    }
+    assert.ok(done);
+    for (const ws of [...workspaces, "000-new"]) {
+      assert.equal(db.prepare("SELECT total FROM recent_home_overlap_totals WHERE ws = ?").get(ws)?.total, 1, ws);
+      assert.ok(db.prepare("SELECT 1 FROM recent_home_overlap_rows WHERE ws = ? AND thread = ?").get(ws, shared));
+    }
+    assert.equal(db.prepare("SELECT count(*) AS n FROM recent_home_overlap_rows WHERE thread = ?").get(shared)?.n, 9);
+  } finally { store.close(); }
+});
