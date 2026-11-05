@@ -2,6 +2,13 @@
 // watch lookup while a newer one checks the running limit without reading a session's completed jobs.
 import type { DatabaseSync } from "node:sqlite";
 
+/// The jobs that count as work for the machine's awake check. Watched services use the watch lookup; all jobs without
+/// a port use the existing state-and-port index. A watched job without a port is taken only from the first side.
+export const AWAKE_JOBS = `SELECT j.session_key, j.started_at FROM active_watch_jobs w
+  CROSS JOIN jobs j ON j.id = w.job WHERE j.state = 'running' AND j.watch <> 0
+  UNION ALL
+  SELECT session_key, started_at FROM jobs INDEXED BY jobs_up WHERE state = 'running' AND port IS NULL AND watch = 0`;
+
 export const RUNNING_LIMIT = `SELECT job FROM (
   SELECT job FROM active_watch_jobs INDEXED BY active_watch_jobs_session WHERE session = ?1
   UNION ALL

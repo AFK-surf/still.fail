@@ -40,7 +40,7 @@ import { installEmptyUsageHistory, moveUsageHistory } from "./usage-history.ts";
 import { compactRecentlyCompacted, hasCompactUsage, savedCompactContext } from "./usage-compact.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
 import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from "./watch-jobs.ts";
-import { RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiveJobs } from "./active-jobs.ts";
+import { AWAKE_JOBS, RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiveJobs } from "./active-jobs.ts";
 import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
 import { installRecoverWaits, recoverWaitsReady, RECOVER_AWAKE_WAITS, RECOVER_WAITS } from "./recover-waits.ts";
 import { installSessionListIndex } from "./session-list-index.ts";
@@ -2547,6 +2547,11 @@ export class Store {
   /// each second a command waits for the screen, jobs/jobs.ts `line`).
   jobsRunning(): JobRow[] {
     return this.#all(JOBS_RUNNING).map(toJob);
+  }
+
+  /// The running commands and watches that can keep the machine awake, without unrelated services on ports.
+  awakeJobs(): { sessionKey: string; startedAt: number }[] {
+    return this.#all(AWAKE_JOBS).map((r) => ({ sessionKey: r.session_key, startedAt: r.started_at }));
   }
 
   /// Whether this session has at least `limit` jobs running. The lookup reads at most that many active jobs.
