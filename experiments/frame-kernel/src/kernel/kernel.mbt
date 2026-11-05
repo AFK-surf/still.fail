@@ -4,8 +4,22 @@
 
 ///|
 struct Row {
-  revision : Int
-  height : Double
+  height : Cell[Double]
+}
+
+///|
+#derive(Eq, Debug)
+enum Intrinsic {
+  Fixed(Double)
+  Editor(@ui.FieldLaid)
+}
+
+///|
+fn Intrinsic::height(self : Intrinsic, width : Double) -> Double {
+  match self {
+    Fixed(height) => height
+    Editor(field) => field.size(Some(width)).1
+  }
 }
 
 ///|
@@ -49,7 +63,12 @@ fn Trajectory::still(value : Double) -> Trajectory {
 
 ///|
 fn Trajectory::sample(self : Trajectory, at : Double) -> (Double, Double) {
-  if at < self.starts { return (self.from, self.velocity) }
+  // The initial condition is exact. Re-evaluating a spring's analytic formula
+  // at zero can round its velocity, breaking identity at an interruption.
+  // A zero-duration transition is already at its target at its start.
+  if at < self.starts || (at == self.starts && self.duration > 0.0) {
+    return (self.from, self.velocity)
+  }
   self.spec.value_at(at - self.starts, self.duration, self.from, self.target, self.velocity)
 }
 
@@ -80,18 +99,24 @@ struct Work {
 struct Kernel {
   // Only commit writes these. There is no clock provider, signal publication,
   // geometry notification, or general callback in the layout/presentation API.
-  rows : Array[Row]
-  mut composer_height : Double
-  mut anchor : Int
+  store : Store
+  inputs : LayoutInputs
+  placement : Query[(Double, Double), Layout]
   mut logic_at : Double
   mut page : Trajectory
   mut leaves_at : Double?
   mut alive : Bool
   mut owner_releases : Int
-  mut layout_due : Bool
-  mut width : Double
-  mut height : Double
-  mut kept : Layout?
+  work : Work
+}
+
+///|
+// The query owns render resources only. It cannot own the Kernel that commits
+// model changes, and row creation has no application callback or cleanup.
+struct LayoutInputs {
+  rows : Array[Row]
+  composer_input : Cell[Intrinsic]
+  anchor : Cell[Int]
   leaves : Map[Int, Leaf]
   composer : Leaf
   work : Work
@@ -100,6 +125,7 @@ struct Kernel {
 ///|
 enum Change {
   Composer(Double)
+  ComposerText(@ui.FieldLaid)
   RowHeight(Int, Double)
   Anchor(Int)
   Leave(Double, @motion.Spec)
@@ -108,22 +134,26 @@ enum Change {
 
 ///|
 fn Kernel::new(count : Int) -> Kernel {
+  let store = Store::new()
+  let work : Work = { layouts: 0, row_reads: 0, measures: 0, made: 0, released: 0 }
+  let inputs : LayoutInputs = {
+    rows: Array::makei(count, fn(_) { { height: store.cell(40.0, fn(a, b) { a == b }) } }),
+    composer_input: store.cell(Fixed(60.0), fn(a, b) { a == b }),
+    anchor: store.cell(count - 1, fn(a, b) { a == b }),
+    leaves: {},
+    composer: { node: @flex.Node::new(), revision: -1, width: -1.0, height: 0.0 },
+    work,
+  }
   {
-    rows: Array::makei(count, fn(_) { { revision: 0, height: 40.0 } }),
-    composer_height: 60.0,
-    anchor: count - 1,
+    store,
+    inputs,
+    placement: store.query(fn(size) { inputs.layout(size.0, size.1) }),
     logic_at: 0.0,
     page: Trajectory::still(0.0),
     leaves_at: None,
     alive: true,
     owner_releases: 0,
-    layout_due: true,
-    width: -1.0,
-    height: -1.0,
-    kept: None,
-    leaves: {},
-    composer: { node: @flex.Node::new(), revision: -1, width: -1.0, height: 0.0 },
-    work: { layouts: 0, row_reads: 0, measures: 0, made: 0, released: 0 },
+    work,
   }
 }
 
@@ -135,8 +165,9 @@ fn Kernel::advance(self : Kernel, at : Double) -> Unit {
     self.alive = false
     self.leaves_at = None
     self.owner_releases += 1
-    self.work.released += self.leaves.length()
-    self.leaves.clear()
+    self.work.released += self.inputs.leaves.length()
+    self.inputs.leaves.clear()
+    self.placement.release()
   }
 }
 
@@ -144,23 +175,22 @@ fn Kernel::advance(self : Kernel, at : Double) -> Unit {
 fn Kernel::commit(self : Kernel, at : Double, change : Change) -> Unit {
   self.advance(at)
   guard self.alive else { return }
-  match change {
+  self.store.commit(at, fn(tx) { match change {
     Composer(height) => {
-      if height != self.composer_height {
-        self.composer_height = height
-        self.layout_due = true
-      }
+      self.inputs.composer_input.set(tx, Fixed(height))
+    }
+    ComposerText(field) => {
+      self.inputs.composer_input.set(tx, Editor(field))
     }
     RowHeight(i, height) => {
-      if i >= 0 && i < self.rows.length() {
-        let row = self.rows[i]
-        self.rows[i] = { revision: row.revision + 1, height }
-        if self.leaves.contains(i) { self.layout_due = true }
+      if i >= 0 && i < self.inputs.rows.length() {
+        self.inputs.rows[i].height.set(tx, height)
       }
     }
     Anchor(i) => {
-      guard i >= 0 && i < self.rows.length() else { return }
-      if i != self.anchor { self.anchor = i; self.layout_due = true }
+      if i >= 0 && i < self.inputs.rows.length() {
+        self.inputs.anchor.set(tx, i)
+      }
     }
     Leave(distance, spec) => {
       self.page = self.page.toward(distance, at, spec)
@@ -170,13 +200,14 @@ fn Kernel::commit(self : Kernel, at : Double, change : Change) -> Unit {
       self.page = self.page.toward(0.0, at, spec)
       self.leaves_at = None
     }
-  }
+  } })
 }
 
 ///|
-fn Kernel::measure(self : Kernel, leaf : Leaf, revision : Int, width : Double, height : Double) -> Double {
-  if leaf.revision != revision || leaf.width != width || leaf.height != height {
+fn LayoutInputs::measure(self : LayoutInputs, leaf : Leaf, revision : Int, width : Double, input : Intrinsic) -> Double {
+  if leaf.revision != revision || leaf.width != width {
     self.work.measures += 1
+    let height = input.height(width)
     leaf.node.measure = Some(fn(w, _, _, _) { (w, height) })
     leaf.node.dirty = true
     @flex.compute(leaf.node, width~, round=false, reuse=true)
@@ -188,19 +219,16 @@ fn Kernel::measure(self : Kernel, leaf : Leaf, revision : Int, width : Double, h
 }
 
 ///|
-fn Kernel::layout(self : Kernel, width : Double, height : Double) -> Layout {
-  if !self.layout_due && self.width == width && self.height == height {
-    if self.kept is Some(layout) { return layout }
-  }
+fn LayoutInputs::layout(self : LayoutInputs, width : Double, height : Double) -> Layout {
   self.work.layouts += 1
   // The common parent owns both measurements. The composer's result is a local
   // value passed straight to the list, never a signal sent back into structure.
-  let composer_h = self.measure(self.composer, 0, width, self.composer_height)
+  let composer_h = self.measure(self.composer, self.composer_input.revision, width, self.composer_input.get())
   let viewport_h = if height > composer_h { height - composer_h } else { 0.0 }
   let rows : Array[(Int, Box)] = []
   let used : Set[Int] = Set::new()
   let mut bottom = viewport_h
-  let mut i = self.anchor
+  let mut i = self.anchor.get()
   while i >= 0 && bottom > 0.0 {
     self.work.row_reads += 1
     let row = self.rows[i]
@@ -213,7 +241,7 @@ fn Kernel::layout(self : Kernel, width : Double, height : Double) -> Layout {
         leaf
       }
     }
-    let h = self.measure(leaf, row.revision, width, row.height)
+    let h = self.measure(leaf, row.height.revision, width, Fixed(row.height.get()))
     used.add(i)
     bottom -= h
     rows.push((i, { x: 0.0, y: bottom, width, height: h }))
@@ -227,10 +255,6 @@ fn Kernel::layout(self : Kernel, width : Double, height : Double) -> Layout {
     viewport: { x: 0.0, y: 0.0, width, height: viewport_h },
     rows,
   }
-  self.width = width
-  self.height = height
-  self.kept = Some(layout)
-  self.layout_due = false
   layout
 }
 
@@ -238,7 +262,7 @@ fn Kernel::layout(self : Kernel, width : Double, height : Double) -> Layout {
 fn Kernel::frame(self : Kernel, now : Double, presented_at : Double, width : Double, height : Double) -> Picture {
   self.advance(now)
   let layout = if self.alive {
-    self.layout(width, height)
+    self.placement.get((width, height))
   } else {
     { composer: { x: 0.0, y: 0.0, width: 0.0, height: 0.0 },
       viewport: { x: 0.0, y: 0.0, width, height }, rows: [] }

@@ -2,8 +2,9 @@
 
 This is a competing design experiment, not a production fix or a replacement UI
 framework. It does not wrap `view.Tree` or change its scheduling flags. Existing
-`mbui/flex` measurement and `mbui/motion` curve solvers remain the calculation
-primitives. No application imports this module.
+`mbui/flex` measurement, `mbui/motion` curve solvers and `mbui/signals` dependency
+tracking remain the calculation primitives. No application imports this module.
+The fuller rationale and unimplemented requirements are in [DESIGN.md](DESIGN.md).
 
 ## Requirements before mechanisms
 
@@ -32,16 +33,20 @@ primitives. No application imports this module.
    never advances logical lifetime or writes a reactive clock. Both times belong
    to the same timeline and arrive explicitly at the boundary. A size animation
    needs an explicitly owned layout sample, not a global presentation signal.
-4. **Change knowledge stays local.** Row versions invalidate only their measured
-   leaf. Layout starts at the anchor and ends when the viewport is filled. The
+4. **Change knowledge stays local.** A query observes only the cells it reads.
+   A write makes those observations stale; it does not run layout. Row versions
+   invalidate only their measured leaf. No input handler manually marks layout.
+   Layout starts at the anchor and ends when the viewport is filled. The
    resulting geometry stays usable while only the page transform changes.
 5. **Hit tests read the projected scene.** They use its transform and clip, rather
    than a separately rebuilt registry. An event should project at its event time;
    it must not depend on whichever frame happened to be painted last.
 
 The narrow code here deliberately has no generic user callback in layout, no
-observer publication, and no mutable global clock. It tests whether the causal
-loop can be removed from the model rather than made less likely by a guard.
+geometry publication, and no mutable global clock. Model writes require a live
+input transaction, rejected from queries or after the transaction closes. It
+tests whether the causal loop can be removed from the model rather than made
+less likely by a guard on recursion depth.
 
 ## What this slice can and cannot prove
 
@@ -49,11 +54,17 @@ The tests cover sibling constraints, a visible and an offscreen row mutation,
 30 versus 3000 rows, interrupted motion with sparse/dense frames, sampling ahead
 without early disposal, and projection-consistent hit testing. Row heights are
 synthetic intrinsic measurements passed through the existing flex engine.
+`state_wbtest.mbt` checks write permissions and automatic local invalidation.
+`editor_wbtest.mbt` exercises the real editor's `FieldLaid` measurement and its
+legacy leaf renderer under the Tester's text host; it is not a full editor port.
 
-This is not yet evidence for phone smoothness. Text shaping, GPU submission,
-general component bindings, nested lazy containers, live core data, full owner
-trees, scrolling physics, focus/IME, overlays, old-view migration and actual app
-visual parity are not implemented here. Leaf allocation is an internal render
+This is not yet evidence for phone smoothness. Real-host text shaping, GPU
+submission, general derived queries (nested queries are deliberately rejected),
+nested lazy containers, live core data, full owner trees, scrolling physics,
+focus/IME migration, overlays and actual app visual parity are not implemented
+here. The legacy editor measurement still reads its host/font environment;
+recorded resource inputs and invalidation must replace that implicit dependency
+before it is a production cache. Leaf allocation is an internal render
 cache; its work may differ between frame schedules. Semantic owners must remain
 independent of that cache. This slice has one semantic owner and does not yet
 prove the general case.
@@ -75,4 +86,7 @@ the host is at 200 gives logic/drawing at 200 after four host clock reads. Fixin
 that single path is a useful control, but does not by itself establish the
 alternative's broader contracts.
 
-Run on the build station: `moon test --target wasm-gc --release` from this module.
+Run on the build station:
+`moon test --target wasm-gc --release src/kernel src/control` from this module.
+The control tests assert the counterexamples found in the pinned current runtime;
+they describe gaps in its contract, not desired behavior for a replacement.

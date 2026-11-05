@@ -1,6 +1,7 @@
 ///|
 test "composer and list share one layout result at the requested moment" {
   let k = Kernel::new(3000)
+  defer { k.placement.release() }
   let before = k.frame(0.0, 0.0, 350.7692307692308, 804.9230769230769)
   k.commit(100.0, Composer(100.0))
   let passes = k.work.layouts
@@ -15,8 +16,9 @@ test "composer and list share one layout result at the requested moment" {
 
 ///|
 test "one row changed costs the same with 30 and 3000 rows" {
-  let run = fn(n) {
+  let run = fn(n : Int) -> (Int, Int, Int) raise {
     let k = Kernel::new(n)
+    defer { k.placement.release() }
     k.frame(0.0, 0.0, 390.0, 844.0) |> ignore
     let reads = k.work.row_reads
     let measures = k.work.measures
@@ -33,6 +35,7 @@ test "one row changed costs the same with 30 and 3000 rows" {
 ///|
 test "an offscreen row update does no layout until the row is requested" {
   let k = Kernel::new(3000)
+  defer { k.placement.release() }
   let p = k.frame(0.0, 0.0, 390.0, 844.0)
   let passes = k.work.layouts
   let reads = k.work.row_reads
@@ -49,6 +52,7 @@ test "an offscreen row update does no layout until the row is requested" {
 ///|
 test "sampling a page ahead neither lays out again nor finishes its logical lifetime" {
   let k = Kernel::new(3000)
+  defer { k.placement.release() }
   k.frame(0.0, 0.0, 390.0, 844.0) |> ignore
   k.commit(100.0, Leave(390.0, @motion.tween(300.0, ease=Linear)))
   let passes = k.work.layouts
@@ -67,8 +71,9 @@ test "sampling a page ahead neither lays out again nor finishes its logical life
 
 ///|
 test "interruption and the result at a moment do not depend on intermediate frames" {
-  let run = fn(frames : Bool) {
+  let run = fn(frames : Bool) -> Picture raise {
     let k = Kernel::new(3000)
+    defer { k.placement.release() }
     k.frame(0.0, 0.0, 390.0, 844.0) |> ignore
     k.commit(100.0, Leave(390.0, @motion.spring()))
     if frames {
@@ -92,6 +97,7 @@ test "interruption and the result at a moment do not depend on intermediate fram
 ///|
 test "hit testing uses the same projection and clip as the picture" {
   let k = Kernel::new(30)
+  defer { k.placement.release() }
   k.frame(0.0, 0.0, 390.0, 844.0) |> ignore
   k.commit(100.0, Leave(390.0, @motion.tween(300.0, ease=Linear)))
   let p = k.frame(200.0, 200.0, 390.0, 844.0)
@@ -101,4 +107,10 @@ test "hit testing uses the same projection and clip as the picture" {
   assert_eq(p.row_at(p.offset - 1.0, rect.y + 1.0), None)
   assert_eq(p.row_at(p.offset + 10.0, -1.0), None)
   assert_eq(p.row_at(p.offset + 10.0, p.layout.composer.y + 1.0), None)
+}
+
+///|
+test "a zero-duration transition is already at its target at its cause" {
+  let trajectory = Trajectory::still(0.0).toward(390.0, 100.0, Snap(0.0))
+  assert_eq(trajectory.sample(100.0), (390.0, 0.0))
 }
