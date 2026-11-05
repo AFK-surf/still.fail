@@ -1252,6 +1252,29 @@ fn tint_of(id : String, on : Bool, now : Double) -> Tint {
 }
 
 ///|
+/// What the bar shows of the chats' list of workspace `ws` (its stations at a glance, in words, and whether one is in
+/// trouble), worked out of the list as it changes and followed as that, told only where it is another: the list changes
+/// with every chat's every turn, an agent's words as they come, a draft typed, and the bar's part, which reads this,
+/// is built again only for what it shows (built for each, the whole frame laid out and painted again with it, typing
+/// and an agent at work were as slow as that on a phone).
+fn bar_glance(src : Source, ws : String) -> (@sf.GlyphCounts, String, Bool) {
+  bar_glances.read(
+    ws,
+    fn(_) {
+      let chats = (src.topic)("chats", { "scope": Json::string(ws), "mine": Json::boolean(false) })
+      let (glyph, said) = stations_at_glance(src, ws)
+      (glyph, said, field(chats.value, "trouble") is Some(Object(_)))
+    },
+    same=fn(a, b) { a == b },
+  )
+}
+
+///|
+/// bar_glance's, by the workspace.
+// kept across runs: let go as no frame reads them (Kept), and with the kept as a run begins
+let bar_glances : @sfbase.Kept[(@sf.GlyphCounts, String, Bool)] = @sfbase.Kept::new()
+
+///|
 /// The bottom bar over the pages of `w` (Places.kt PlaceBar, Bar.kt BottomBar). `shown`: on a place's top page with
 /// nothing over it; `active`: the place shown (its top page's).
 fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown : Bool) -> Unit {
@@ -1630,15 +1653,13 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   let bar_mid = row_top + bar_track / 2.0
   let w = l.w
   let slot = (w - 2.0 * c0) / 3.0
-  // the dots: a station in trouble (red)
-  let chats = (src.topic)("chats", { "scope": Json::string(ws.id), "mine": Json::boolean(false) })
+  // the dots: a station in trouble (red); the stations at a glance in Station's place (Places.kt PlaceIcon:
+  // StationGlyph), and in words: read as what is worked out of the chats' list (bar_glance), not the list
+  let (glyph, said, trouble) = bar_glance(src, ws.id)
   let dots : Map[String, Int64] = Map([])
-  match field(chats.value, "trouble") {
-    Some(Object(_)) => dots["stations"] = t.p.red
-    _ => ()
+  if trouble {
+    dots["stations"] = t.p.red
   }
-  // the stations at a glance in Station's place (Places.kt PlaceIcon: StationGlyph), and in words
-  let (glyph, said) = stations_at_glance(src, ws.id)
   bar_glyph.val = Some(glyph)
   bar_stations_said.val = said
   let m = bar
