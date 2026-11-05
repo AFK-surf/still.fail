@@ -113,3 +113,25 @@ test "a structure told of a change is of that change's moment, not of one before
   n.set(3)
   assert_eq(told_at, [300.0])
 }
+
+///|
+test "what is made as of a moment on the timeline (View::logic_past) is of that moment, a frame between or none, whatever else was due between" {
+  for frames in [false, true] {
+    let told_at : Array[Double] = []
+    let tree = @view.Tree::new(fn(root) {
+      root.box(fn(col) {
+        col.width(Is(Some(300.0))).height(Is(Some(600.0))) |> ignore
+        col.reacts(fn() { col.logic_past(100.0) }, fn(p) { if p { told_at.push(col.cause_at()) } })
+        // (something else due later, before the frame that first draws past 100)
+        col.at_moment(200.0, fn() {  }) |> ignore
+      })
+      |> ignore
+    })
+    tree.frame(390.0, 844.0, now=0.0) |> ignore
+    if frames {
+      tree.frame(390.0, 844.0, now=60.0) |> ignore
+    }
+    tree.frame(390.0, 844.0, now=300.0) |> ignore
+    assert_eq(told_at, [100.0], msg="frames between: \{frames}")
+  }
+}

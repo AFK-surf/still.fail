@@ -707,6 +707,9 @@ pub struct Tree {
   /// what follows whether what is drawn is drawn at or past a moment (View::drawn_past): its node, the moment, and
   /// what is told as that comes to be so or not
   drawn_marks : Array[(NodeId, Double, @signals.Signal[Bool])]
+  /// what follows whether the logic is at or past a moment (View::logic_past): its node, the moment, and what is told
+  /// at that moment, on the timeline
+  logic_marks : Array[(NodeId, Double, @signals.Signal[Bool])]
   /// a column's bar said anew to come out or not (View::bar_near): which the pointer is along to be told anew
   mut bars_due : Bool
   /// the node with the keyboard's focus, and whether it shows (it came by the keyboard): its cells told as it comes or
@@ -923,6 +926,7 @@ pub fn Tree::new(
     scrolls_at: {},
     bar_cols: [],
     drawn_marks: [],
+    logic_marks: [],
     bars_due: false,
     backing: None,
     back_said_at: [],
@@ -1528,6 +1532,35 @@ pub fn View::drawn_past(self : View, t : Double) -> Bool {
 }
 
 ///|
+/// Whether the logic is at or past moment `t` (Tree::logic_at's), followed: told at `t` itself, in its turn among what
+/// is due then (a moment's change of its own: Tree::advance), whatever frames are drawn and whatever moment they are
+/// drawn at. What is laid out or made as of a moment says so by this (a box kept as tall as it was till then), never by
+/// View::drawn_past, a look's: what that lays out comes at its moment, from where things stood then, not at the first
+/// frame drawn past it, after whatever was due between. The node's: one for each moment, let go with it.
+pub fn View::logic_past(self : View, t : Double) -> Bool {
+  guard self.live() is Some(_) else { return false }
+  let id = self.id()
+  let tree = self.tree
+  let cell = match tree.logic_marks.iter().find_first(fn(m) { m.0 == id && m.1 == t }) {
+    Some(m) => m.2
+    None => {
+      // (those of nodes let go forgotten as another is said)
+      let keep = tree.logic_marks.filter(fn(m) { tree.alive_id(m.0) })
+      tree.logic_marks.clear()
+      tree.logic_marks.append(keep)
+      let c = @signals.signal(tree.logic >= t, same=fn(a, b) { a == b })
+      tree.logic_marks.push((id, t, c))
+      if tree.logic < t {
+        // (told at its moment as what is due then is: View::at_moment's, the node's)
+        @signals.untracked(fn() { self.at_moment(t, fn() { c.set(true) }) |> ignore })
+      }
+      c
+    }
+  }
+  cell.get()
+}
+
+///|
 /// What it did so far.
 pub fn Tree::work(self : Tree) -> Work {
   { ..self.work }
@@ -1557,6 +1590,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
     self.root().let_go()
   }
   self.drawn_marks.clear()
+  self.logic_marks.clear()
   self.looks_due.clear()
   self.places_due.clear()
   self.bindings_due.clear()

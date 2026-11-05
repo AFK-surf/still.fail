@@ -2069,12 +2069,14 @@ fn composer_held_box(c : @ui.Ctx, draft : String) -> Double {
 }
 
 ///|
-/// The same source height and release moment in a retained composer, including one created after the send.
+/// The same source height and release moment in a retained composer, including one created after the send. As of the
+/// logic's moment, let go at its end on the page's timeline (View::logic_past): what it lays out, and the composer's
+/// shape going down from as tall as it was, from that moment, whatever frames are drawn and whatever is due between.
 fn composer_held_box_node(owner : @view.View, draft : String) -> Double {
   match composing.held_boxes.get(draft) {
     Some(w) => {
       w.said()
-      w.value_at(if owner.drawn_past(w.end()) { w.end() } else { owner.drawn_at() })
+      w.value_at(if owner.logic_past(w.end()) { w.end() } else { owner.logic_at() })
     }
     None => 0.0
   }
