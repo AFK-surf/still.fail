@@ -64,8 +64,8 @@ export function installRecentChatIndex(db: DatabaseSync): void {
   }
 }
 
-type Meta = { cursor: number | null; through: number | null; total: number; complete: number; prefer_dirty: number };
-type Current = { id: number; at: number; said_at: number; created_at: number };
+type Meta = { cursor: bigint | null; through: bigint | null; complete: bigint; prefer_dirty: bigint };
+type Current = { id: bigint; at: bigint | number; said_at: bigint | number; created_at: bigint | number };
 
 /// Account at most `limit` old or changed chats, atomically with the cursor. New writes coalesce by thread. Alternate
 /// old and changed work while both exist so a stream of new messages cannot indefinitely postpone old chats.
@@ -73,18 +73,26 @@ export function stepRecentChatIndex(db: DatabaseSync, limit = 64): { done: boole
   if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError("recent chat batch must be positive");
   db.exec("BEGIN IMMEDIATE");
   try {
-    const meta = db.prepare("SELECT cursor, through, total, complete, prefer_dirty FROM recent_chat_meta WHERE id = 1").get() as Meta;
-    const pending = db.prepare("SELECT thread FROM recent_chat_dirty ORDER BY thread LIMIT ?").all(limit) as { thread: number }[];
-    const useDirty = pending.length > 0 && (meta.complete === 1 || meta.prefer_dirty === 1);
-    const old = !useDirty && meta.complete === 0 && meta.through !== null
-      ? (meta.cursor === null
-        ? db.prepare("SELECT id AS thread FROM threads WHERE id <= ? ORDER BY id LIMIT ?").all(meta.through, limit)
-        : db.prepare("SELECT id AS thread FROM threads WHERE id > ? AND id <= ? ORDER BY id LIMIT ?").all(meta.cursor, meta.through, limit)) as { thread: number }[]
-      : [];
+    const getMeta = db.prepare("SELECT cursor, through, complete, prefer_dirty FROM recent_chat_meta WHERE id = 1");
+    getMeta.setReadBigInts(true);
+    const meta = getMeta.get() as Meta;
+    const getPending = db.prepare("SELECT thread FROM recent_chat_dirty ORDER BY thread LIMIT ?");
+    getPending.setReadBigInts(true);
+    const pending = getPending.all(limit) as { thread: bigint }[];
+    const useDirty = pending.length > 0 && (meta.complete === 1n || meta.prefer_dirty === 1n);
+    let old: { thread: bigint }[] = [];
+    if (!useDirty && meta.complete === 0n && meta.through !== null) {
+      const query = db.prepare(meta.cursor === null
+        ? "SELECT id AS thread FROM threads WHERE id <= ? ORDER BY id LIMIT ?"
+        : "SELECT id AS thread FROM threads WHERE id > ? AND id <= ? ORDER BY id LIMIT ?");
+      query.setReadBigInts(true);
+      old = (meta.cursor === null ? query.all(meta.through, limit) : query.all(meta.cursor, meta.through, limit)) as { thread: bigint }[];
+    }
     const rows = useDirty ? pending : old;
     const current = db.prepare(`SELECT t.id, COALESCE(e.at, t.created_at) AS at, COALESCE(e.at, 0) AS said_at, t.created_at
       FROM threads t LEFT JOIN thread_state s ON s.thread = t.id
       LEFT JOIN entries e ON e.thread = t.id AND e.n = s.said_n AND e.kind = 'message' WHERE t.id = ?`);
+    current.setReadBigInts(true);
     const exists = db.prepare("SELECT 1 FROM recent_chat_rows WHERE thread = ?");
     const put = db.prepare(`INSERT INTO recent_chat_rows (thread, at, said_at, created_at) VALUES (?, ?, ?, ?)
       ON CONFLICT (thread) DO UPDATE SET at = excluded.at, said_at = excluded.said_at, created_at = excluded.created_at
@@ -105,7 +113,7 @@ export function stepRecentChatIndex(db: DatabaseSync, limit = 64): { done: boole
     }
     if (useDirty) db.prepare("UPDATE recent_chat_meta SET total = total + ?, prefer_dirty = 0 WHERE id = 1").run(delta);
     else db.prepare("UPDATE recent_chat_meta SET cursor = ?, total = total + ?, complete = ?, prefer_dirty = 1 WHERE id = 1")
-      .run(rows.at(-1)?.thread ?? meta.cursor, delta, meta.complete === 1 || rows.length < limit ? 1 : 0);
+      .run(rows.at(-1)?.thread ?? meta.cursor, delta, meta.complete === 1n || rows.length < limit ? 1 : 0);
     const done = (db.prepare("SELECT complete FROM recent_chat_meta WHERE id = 1").get() as { complete: number }).complete === 1 &&
       db.prepare("SELECT 1 FROM recent_chat_dirty LIMIT 1").get() === undefined;
     db.exec("COMMIT");

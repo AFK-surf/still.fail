@@ -30,6 +30,43 @@ test("installing recent chat writers avoids old message and membership history, 
   } finally { db.setAuthorizer(null); store.close(); }
 });
 
+for (const value of ["created time", "message time"] as const) test(`an undisplayed chat's 64-bit ${value} does not prevent a recent page`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const visible = store.openThread("ember", "EMBER", "visible", "Visible", null).id;
+    const hidden = store.openThread("ember", "EMBER", "hidden", "Hidden", null).id;
+    db.prepare("UPDATE threads SET created_at = 100 WHERE id = ?").run(visible);
+    if (value === "created time") db.prepare("UPDATE threads SET created_at = ? WHERE id = ?").run(-9_007_199_254_740_993n, hidden);
+    else {
+      db.prepare("UPDATE threads SET created_at = 0 WHERE id = ?").run(hidden);
+      db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',?)")
+        .run(hidden, -9_007_199_254_740_993n);
+    }
+    const expected = db.prepare(RECENT_CHAT_LIST).all(null, null, 1) as { id: number; total: number }[];
+    assert.deepEqual(expected.map((row) => row.id), [visible]);
+    installRecentChatIndex(db);
+    while (!stepRecentChatIndex(db, 2).done) { /* Prepare even the chats outside the requested page. */ }
+    assert.deepEqual(readGlobalRecentChatIndex(db, 1), { ids: [visible], total: 2 });
+  } finally { store.close(); }
+});
+
+for (const arrival of ["old", "new"] as const) test(`an undisplayed ${arrival} chat's 64-bit id does not prevent a recent page`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const visible = store.openThread("ember", "EMBER", "visible", "Visible", null).id;
+    db.prepare("UPDATE threads SET created_at = 100 WHERE id = ?").run(visible);
+    const insert = () => db.prepare(`INSERT INTO threads(id,surface,channel,thread_ts,title,created_at)
+      VALUES (?,'ember','EMBER','hidden','Hidden',0)`).run(9_007_199_254_740_993n);
+    if (arrival === "old") insert();
+    installRecentChatIndex(db);
+    if (arrival === "new") insert();
+    const expected = db.prepare(RECENT_CHAT_LIST).all(null, null, 1) as { id: number; total: number }[];
+    assert.deepEqual(expected.map((row) => row.id), [visible]);
+    while (!stepRecentChatIndex(db, 2).done) { /* Prepare even the chats outside the requested page. */ }
+    assert.deepEqual(readGlobalRecentChatIndex(db, 1), { ids: [visible], total: 2 });
+  } finally { store.close(); }
+});
+
 for (const recursive of [false, true]) test(`a global recent page uses a maintained count and ordering (recursive triggers ${recursive})`, () => {
   const store = Store.open(":memory:");
   const db = store.db;
