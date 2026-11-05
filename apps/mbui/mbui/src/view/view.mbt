@@ -566,6 +566,9 @@ pub struct Tree {
   time : (() -> Double)?
   /// the moment the change a queued binding works out was told, while it is (-1: none)
   mut cause_at : Double
+  // The moment a frame or the clock brings the tree to while it does (Tree::brought, Tree::at), -1 outside one: what
+  // is told meanwhile (a size laid out otherwise, a moment come) is of it
+  mut bringing_at : Double
   /// how words are measured: (words, how they are set, width offered) -> (width, height)
   measure : (String, WordsLook, Double) -> (Double, Double)
   /// and words in pieces set their own way (View::words_runs): (the pieces, how the words are set, width offered)
@@ -843,6 +846,7 @@ pub fn Tree::new(
     outs_gone: [],
     time,
     cause_at: -1.0,
+    bringing_at: -1.0,
     measure,
     measure_runs,
     measure_shorter: match measure_shorter {
@@ -1440,8 +1444,12 @@ pub fn Tree::cycle_read(self : Tree) -> Bool {
 ///|
 /// The clock set to `ms` (a frame's time).
 pub fn Tree::at(self : Tree, ms : Double) -> Unit {
+  // (what the clock set so tells, of its moment: Tree::brought)
+  let was = self.bringing_at
+  self.bringing_at = ms
   self.clock_to(ms)
   self.beat_set(ms)
+  self.bringing_at = was
 }
 
 ///|
@@ -1755,9 +1763,14 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
   let w = @signals.watch(fn() {
     if b.live && !b.queued {
       b.queued = true
-      told_at.val = match self.time {
-        Some(f) => f()
-        None => self.logic
+      // (told as a frame or the clock brings the tree to its moment: of that moment, Tree::brought)
+      told_at.val = if self.bringing_at >= 0.0 {
+        self.bringing_at
+      } else {
+        match self.time {
+          Some(f) => f()
+          None => self.logic
+        }
       }
       self.bindings_due.push(b)
       self.marked()
@@ -1891,6 +1904,9 @@ fn Tree::committed(self : Tree, f : () -> Unit) -> Unit {
 fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   let at = if self.cause_at >= 0.0 {
     self.cause_at
+  } else if self.bringing_at >= 0.0 {
+    // (told as a frame or the clock brings the tree to its moment: of that moment, Tree::brought)
+    self.bringing_at
   } else {
     match self.time {
       Some(now) => now()
@@ -6017,9 +6033,16 @@ pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
 ///|
 /// What was marked done, at the clock's now (Tree::frame, Tree::bring_to).
 fn Tree::brought(self : Tree, upto : Double) -> Unit {
+  // (what it tells as it is laid out, and what that changes, of the frame's moment: no change told so has a moment of
+  // its own to ask the host for. Asked, the host's clock had gone on: each size it told set what moves a little
+  // further, laid out otherwise, told again, laid out again inside the pass before, till the move ended: thousands
+  // deep as a chat was left on an emulator, its GL thread out of stack, 2026-11-05)
+  let was = self.bringing_at
+  self.bringing_at = upto
   // what is due by now done (and the logic at `upto`, nothing due or not: what is said next is of then)
   self.advance(upto)
   self.laid_out(upto)
+  self.bringing_at = was
 }
 
 ///|
