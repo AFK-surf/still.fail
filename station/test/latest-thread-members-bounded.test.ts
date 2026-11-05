@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { installLatestThreadIndex, prepareLatestThreadStep } from "../src/store/latest-thread-index.ts";
 import { Store } from "../src/store/store.ts";
@@ -73,4 +76,53 @@ test("a synchronous read requests old multi-chat preparation and keeps its immed
     assert.equal(store.latestThread("s")?.thread.id, b.id);
     assert.deepEqual(requested, ["s"], "a prepared order is read directly");
   } finally { store.close(); }
+});
+
+test("the single-chat check and its answer share a snapshot with another writer", () => {
+  const dir = mkdtempSync(join(process.cwd(), ".latest-single-snapshot-")), path = join(dir, "station.db");
+  const store = Store.open(path), db = store.db;
+  let writer: DatabaseSync | undefined;
+  try {
+    const first = store.openThread("slack", "C", "first", null, null);
+    const second = store.openThread("slack", "C", "second", null, null);
+    store.joinThread(first.id, "s", "first");
+    writer = new DatabaseSync(path);
+    let interleaved = false;
+    const observed = new Proxy(db, {
+      get(target, property) {
+        if (property === "prepare") return (sql: string) => {
+          const statement = target.prepare(sql);
+          if (!sql.includes("FROM thread_sessions INDEXED BY thread_sessions_session WHERE session=? LIMIT 2")) return statement;
+          return new Proxy(statement, {
+            get(s, p) {
+              if (p === "all") return (...args: any[]) => {
+                const rows = s.all(...args);
+                if (!interleaved) {
+                  writer!.exec("BEGIN");
+                  writer!.prepare("INSERT INTO thread_sessions(thread,session,connect,joined_at) VALUES(?,'s','second',2)").run(second.id);
+                  writer!.prepare("INSERT INTO deliveries(thread,n,session,delivered_at) VALUES(?,1,'s',NULL)").run(second.id);
+                  writer!.exec("COMMIT");
+                  interleaved = true;
+                }
+                return rows;
+              };
+              const value = Reflect.get(s, p, s);
+              return typeof value === "function" ? value.bind(s) : value;
+            },
+          });
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    Object.defineProperty(store, "db", { value: observed, configurable: true });
+    assert.equal(store.latestThread("s")?.thread.id, first.id);
+    assert.equal(interleaved, true);
+    assert.equal(store.latestThread("s")?.thread.id, second.id);
+  } finally {
+    Object.defineProperty(store, "db", { value: db, configurable: true });
+    writer?.close();
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
