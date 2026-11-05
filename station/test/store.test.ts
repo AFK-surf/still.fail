@@ -9,7 +9,7 @@ import { after, test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
   ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_CARD_AFTER_POSTS, CLOSED_SINCE, CLOSED_THREAD_SINCE, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
-  MANUAL, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, POST_AFTER_FIRST, POST_AFTER_INDEXED, POST_BLOCKS_READY, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
+  MANUAL, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, POST_AFTER_FIRST, POST_AFTER_INDEXED, POST_BLOCKS_READY, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_JOBS, SESSION_OF_RUNTIME, SESSION_THREAD_BY_ID, STATS_OF, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
 import { addListState, firstDelivery, MERGED, SCHEMA } from "../src/store/schema.ts";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
@@ -1475,7 +1475,7 @@ test("what the station asks again and again is planned by an index, never a scan
   const planned: [string, unknown[]][] = [
     [read.ORIGINAL_RUNTIME, ["a"]],
     [ACTIVE_SESSIONS, [0]], [LIVE_SESSIONS, []], [ANY_RUNNING, []], [RUNNING_SESSIONS, []], [JOBS_RUNNING, []], [JOBS_UP, []], [JOB_AT_PORT, [5100]], [SESSION_JOBS, ["a"]],
-    [HAS_SESSION_ACTIVE_WATCH, ["a"]], [RUNNING_WAIT_JOBS, ["a"]],
+    [HAS_SESSION_ACTIVE_WATCH, ["a"]], [RUNNING_WAIT_JOBS, ["a"]], [SESSION_THREAD_BY_ID, [1, "a"]],
     [STATS_OF, ["a"]], [SESSION_COUNT_TOTAL, [1, "ws"]], [SESSION_COUNT_CONNECT, [1, "ws", "a"]],
     [SESSION_COUNT_FIRST, ["100", 64]], [SESSION_COUNT_NEXT, ["1", "100", 64]],
     [SESSION_LIST_FIRST, ["100", 64]], [SESSION_LIST_NEXT, ["1", "100", 64]],
@@ -1513,6 +1513,8 @@ test("what the station asks again and again is planned by an index, never a scan
   }
   assert.equal(plans.get(JOB_AT_PORT)!.filter((d) => d.includes("jobs_up (state=? AND port=?)")).length, 2,
     "a port is sought among running and restarting services");
+  assert.ok(plans.get(SESSION_THREAD_BY_ID)!.some((d) => d.includes("(thread=? AND session=?)")));
+  assert.ok(plans.get(SESSION_THREAD_BY_ID)!.some((d) => d.includes("INTEGER PRIMARY KEY (rowid=?)")));
   assert.ok(plans.get(SESSION_COUNT_TOTAL)!.some((d) => d.includes("PRIMARY KEY (kind=? AND ws=?)")));
   assert.ok(plans.get(SESSION_COUNT_CONNECT)!.some((d) => d.includes("PRIMARY KEY (kind=? AND ws=? AND connect=?)")));
   assert.ok(plans.get(SESSION_COUNT_FIRST)!.some((d) => d.includes("INTEGER PRIMARY KEY (rowid<?)")));
@@ -1608,6 +1610,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
     [SESSION_BINDINGS_DELETE, ["a"]],
     [SESSION_UP_JOBS_DISPLACED, ["a", "token", 1]],
     [SESSION_UP_JOBS_CONFLICT, ["a", "token", 1]],
+    [SESSION_THREAD_BY_ID, [1, "a"]],
     [WIDGET_SOURCE, ["a", "/w/item.html"]], [WIDGET_SOURCE_MISSING, ["a"]], [WIDGET_SOURCE_UNUSUAL, ["a"]],
   ];
   const scans = /^SCAN (?!CONSTANT ROW$|\(subquery-\d+\)$|json_each VIRTUAL TABLE\b)/;
@@ -1631,6 +1634,8 @@ test("what is told as chats change is planned by the size of what it finds, not 
     "job inserts check each conflicting identity by an index");
   has(SESSION_BINDINGS_DELETE, "session_binding_rows USING PRIMARY KEY (session=?)");
   has(SESSION_BINDINGS_DELETE, "bindings USING INTEGER PRIMARY KEY (rowid=?)");
+  has(SESSION_THREAD_BY_ID, "(thread=? AND session=?)");
+  has(SESSION_THREAD_BY_ID, "INTEGER PRIMARY KEY (rowid=?)");
   has(read.UNREAD, "COVERING INDEX entries_said (thread=? AND n>?)");
   has(read.ASKED_DURING, "entries_agent_at (thread=? AND at>? AND at<?)");
   const stats = `${read.SESSION_STATS} WHERE s.key = ?`;
