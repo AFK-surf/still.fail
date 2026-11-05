@@ -145,7 +145,15 @@ pub fn View::beside(
   as_wide? : Bool = false,
 ) -> View {
   guard self.live() is Some(n) else { return self }
+  let was_wide = n.beside is Some(b) && b.as_wide
   n.beside = Some({ anchor, side, along, offset, padding, at_pointer, as_wide })
+  // (as wide as its anchor: laid out alone after it, none of what holds it laying it out, Tree::besides_placed)
+  if was_wide != as_wide {
+    match self.parent() {
+      Some(p) => p.boxes_again()
+      None => ()
+    }
+  }
   if !self.tree.besides_at.contains(self.at) {
     self.tree.besides_at.push(self.at)
   }
@@ -255,12 +263,15 @@ fn Tree::besides_placed(self : Tree) -> Unit {
       Some(p) => p
       None => (0.0, 0.0, 1.0)
     }
-    // (as wide as its anchor is drawn (a menu as wide as the field it opens from): laid out again at that width here, its
-    // anchor placed before it in this same pass, nothing of it read back)
+    // (as wide as its anchor is drawn (a menu as wide as the field it opens from): laid out alone here, at that width, once,
+    // its anchor placed before it in this same pass; none of what holds it lays it out (Tree::boxes))
     if b.as_wide && hs > 0.0 {
       let want = a.lw * ascale / hs
-      if want > 0.0 && n.lw != want {
-        n.flex.style.set_width(Pt(want))
+      // (laid out again only as its anchor's width or what it holds changed)
+      if want > 0.0 && (n.flex.width != want || n.flex.dirty) {
+        if n.flex.width != want {
+          n.flex.style.set_width(Pt(want))
+        }
         self.work.computes = self.work.computes + 1
         let g = @flex.computes() + 1
         @flex.compute(n.flex, width=want, height=self.last_h / hs, round=false, reuse=true)
