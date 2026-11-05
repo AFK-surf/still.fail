@@ -193,7 +193,10 @@ is tracked, and layout, paint and composition kept by node. Neither another engi
    painted. Layout is of one moment, the frame's; a frame drawn ahead of it (for when it is shown) samples only paint's
    properties there (a place moved, a look), as a compositor's motions are, never a size. Nothing goes back within the frame (Compose's phases: "no way to go backwards while in the same frame").
    Sizes and places worked out by layout are read by paint, by hit tests and by the next event; no binding, `computed`
-   or `reacts` reads them to change the structure, a property layout reads, or where a list is scrolled to. Where one
+   or `reacts` reads them to change the structure, a property layout reads, or where a list is scrolled to. Nothing of
+   layout is a signal to follow, and each read of it (`View::laid_size`, `rect`, `laid_window_now`, `placed_window_now`,
+   `drawn_window_now`, `went`, `Scroll::most` and the rest) aborts where it is read inside a binding's read, a
+   structure's, what `reacts` reads or a computed's (`layout_read`): the wrong way cannot be written. Where one
    thing's size decides another's (the composer's height and the room the messages leave under them), their nearest
    common holder lays both out (a layout of its own: Compose's "the minimal shared parent serves as the source of
    truth"), not a size told back and set on the other. The one structure made in layout is a lazy container's

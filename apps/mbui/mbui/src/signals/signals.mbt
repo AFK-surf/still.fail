@@ -798,6 +798,16 @@ pub fn[T] Computed::watched(self : Computed[T]) -> Bool {
 }
 
 ///|
+/// Whether what reads now is a computed working itself out (what it reads followed by it, kept till that changes): for
+/// what is no signal to refuse being read there, its change never told it (where things are laid out: mbui's view).
+pub fn computing() -> Bool {
+  match run.active_sub {
+    Some(n) => n.kind is ComputedNode
+    None => false
+  }
+}
+
+///|
 /// What `f` makes, nothing it reads followed by what is reading now.
 pub fn[T] untracked(f : () -> T) -> T {
   let prev_sub = set_active_sub(None)

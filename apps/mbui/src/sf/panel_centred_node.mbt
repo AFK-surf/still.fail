@@ -280,8 +280,8 @@ fn panel_centred_node(
             |> ignore
           })
           // (cut at its box while what it holds is taller than it, and taking presses within it alone then)
-          .clips(By(fn() { scroll.goes() }))
-          .bounds_input(By(fn() { scroll.goes() }))
+          .clips(Placed(fn() { scroll.goes() }))
+          .bounds_input(Placed(fn() { scroll.goes() }))
           |> ignore
         })
         |> ignore

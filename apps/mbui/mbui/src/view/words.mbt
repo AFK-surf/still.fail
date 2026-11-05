@@ -207,7 +207,9 @@ pub fn View::runs_picked_now(self : View) -> (Int, Int) {
 ///|
 /// Where the pointer is in its own terms (where it is drawn now, as big as it is drawn), as the tree last had it; None
 /// where the tree has it nowhere (gone from the window) or it is let go. Read once, not followed (View::pointer_in).
-pub fn View::pointer_here(self : View) -> (Double, Double)? {
+#callsite(autofill(loc))
+pub fn View::pointer_here(self : View, loc~ : SourceLoc) -> (Double, Double)? {
+  self.tree.layout_read("where the pointer is in it (View::pointer_here)", loc)
   guard self.alive() else { return None }
   self.tree.pointer_in(self.at)
 }
@@ -592,7 +594,7 @@ pub fn View::aspect(self : View, wide_for_tall : Live[Double]) -> View {
 ///|
 /// Laid out nowhere while `on` says so, as it changes: no room of its own in what holds it, none of the gap that leaves
 /// between what it holds (a room shut: an old view's not built while it is), left out as one its row has not the room
-/// for is (View::drops, View::left_out): it and all it holds not drawn, pressed (by a finger, by its id, by a screen
+/// for is (View::drops, View::left_out_now): it and all it holds not drawn, pressed (by a finger, by its id, by a screen
 /// reader) or read out, a press held on it called off, from the layout that lays it out so; back, the same nodes, as
 /// it is laid out again. Layout's.
 pub fn View::laid_nowhere(self : View, on : Live[Bool]) -> View {

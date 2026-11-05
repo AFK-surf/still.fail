@@ -87,3 +87,36 @@ test "a property layout reads worked out of where what holds its root is laid ou
   assert_eq((first, narrower, seen()), ((400.0, 200.0), (300.0, 150.0), (500.0, 250.0)))
   assert_true(!tree.told_since(), msg="nothing owed")
 }
+
+///|
+test "a property layout reads worked out of where what holds its root is laid out, asked at a cause before any frame lays it out: worked out as the read lays things out, never asked of again inside that" {
+  let holder : Ref[@view.View?] = Ref(None)
+  let inner : Ref[@view.View?] = Ref(None)
+  let wide = @signals.signal(400.0)
+  let s = @view.Scroll::list()
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(col) {
+      col.width(By(fn() { Some(wide.get()) })).height(Is(Some(300.0))) |> ignore
+      col.scrolls_window(s, fn() { ["a"] }, fn(b, _) {
+        holder.val = Some(
+          b.box(fn(h) {
+            h.by_room(fn(_) { () }, fn(v, _) {
+              inner.val = Some(v.box(fn(i) { i.width(Placed(fn() { Some(h.laid_size().0 / 2.0) })).height(Is(Some(10.0))) |> ignore }))
+            })
+            |> ignore
+          }),
+        )
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  let seen = fn() { (holder.val.unwrap().laid_size().0, inner.val.unwrap().laid_size().0) }
+  tree.frame(500.0, 300.0) |> ignore
+  // (a cause: the column made narrower, where things are read then, before a frame lays them out)
+  wide.set(300.0)
+  let at_cause = seen()
+  tree.frame(500.0, 300.0) |> ignore
+  assert_eq((at_cause, seen()), ((300.0, 150.0), (300.0, 150.0)))
+  assert_true(!tree.told_since(), msg="nothing owed")
+}

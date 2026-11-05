@@ -294,9 +294,9 @@ fn panel_node(
             })
             // (cut at its box while what it holds is taller than it, as @kit.in_room's held list (pick_node's): else what
             // reaches past it drawn whole, in the panel's round corners; what it paints alone, nothing laid out by it)
-            .clips(By(fn() { scroll.goes() }))
+            .clips(Placed(fn() { scroll.goes() }))
             // (and taking presses within its box alone then too)
-            .bounds_input(By(fn() { scroll.goes() }))
+            .bounds_input(Placed(fn() { scroll.goes() }))
             |> ignore
           })
           |> ignore

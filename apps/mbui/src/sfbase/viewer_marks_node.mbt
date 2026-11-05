@@ -540,7 +540,8 @@ fn note_pin_node(parent : @view.View, pin : () -> (Int, Int64)) -> Unit {
 /// at its sides, 8 between), in their numbers' order; where they do not all fit, the last leave the row first, a +N
 /// card at its end standing for them (a menu of them, in their order): nothing scrolled, nothing wrapped. Each card,
 /// pressed (its press let go on it), opens its note; +N's, its menu. Which are left out, how many +N says and what its
-/// menu holds one fact: the row's as it was laid out (View::left_out).
+/// menu holds one fact: the row's as it is laid out (View::left_out_now), +N's words worked out of it as they are laid
+/// out after it, in the same frame (note_more_first_node), what it says as it is placed, its menu at its press.
 fn note_cards_node(r : @view.View) -> Unit {
   r.padding(Is((0.0, 0.0, 0.0, marks_notes_over_tools))) |> ignore
   // (each card's node by its mark: what +N reads of which are left out)
@@ -618,7 +619,7 @@ fn note_cards_node(r : @view.View) -> Unit {
         marks_said()
         mark_notes().filter(fn(x) {
           match cards.get(x.0) {
-            Some(v) => v.left_out()
+            Some(v) => v.left_out_now()
             None => false
           }
         })
@@ -626,9 +627,7 @@ fn note_cards_node(r : @view.View) -> Unit {
       note_tray_card_node(
         more,
         note_more_w,
-        fn(head) {
-          note_first_node(head, fn() { "+\{gone().length()}" }, fn() { false })
-        },
+        fn(head) { note_more_first_node(head, fn() { gone().length() }) },
         fn(_) {  },
         label=fn() { "+\{gone().length()}" },
         press=fn() {
@@ -666,7 +665,8 @@ fn note_tray_card_node(
   .ground(Is(note_ground))
   .shadow(Is((@sf.floating.sigma, @sf.floating.dy, @sf.floating.color)))
   .presses(Is(true))
-  .says(By(fn() {
+  // (as it is placed: +N's label how many its row leaves out as it is laid out)
+  .says(Placed(fn() {
     marks_said()
     Some(@view.said(Button, label=label()))
   }))
@@ -694,6 +694,32 @@ fn note_first_node(head : @view.View, words : () -> String, quiet : () -> Bool) 
         { size, weight: 400, line: 20.0, wrap: false, tracking: @view.letters_own, balance: false }
       }))
       .ink(By(fn() { if quiet() { note_muted } else { note_ink } }))
+      |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// +N's first line in `head`, as note_first_node's: `gone` (how many of the cards its row leaves out, read plainly of the
+/// row's layout) worked out as its words are laid out, after the row is, in the same frame: they are laid out alone after
+/// all else (View::laid_after), in their place's box, as tall as a line.
+fn note_more_first_node(head : @view.View, gone : () -> Int) -> Unit {
+  head.box(fn(f) {
+    f.grow(Is(1.0)).basis(Is(Some(0.0))).shrink(Is(1.0)).clips(Is(true)).height(Is(Some(20.0))) |> ignore
+    f.box(fn(t) {
+      t
+      .laid_after(fn() {
+        let (w, h) = f.laid_size()
+        (0.0, 0.0, Some(w), Some(h))
+      })
+      .words(Placed(fn() { "+\{gone()}" }))
+      .words_look(By(fn() {
+        let (size, _) = @ui.tree_theme().text_size(Meta)
+        { size, weight: 400, line: 20.0, wrap: false, tracking: @view.letters_own, balance: false }
+      }))
+      .ink(Is(note_ink))
       |> ignore
     })
     |> ignore

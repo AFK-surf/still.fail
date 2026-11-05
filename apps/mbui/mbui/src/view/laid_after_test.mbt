@@ -107,3 +107,83 @@ test "panic a property layout reads worked out of where things are laid out" {
   })
   tree.frame(400.0, 300.0) |> ignore
 }
+
+///|
+/// Where things are laid out read plainly in what is followed to make, lay out or say something refuses itself as it
+/// is read (layout_read): its change is told to nothing, so what it worked out would stay as of the read, a frame
+/// behind or worse (docs/retained.md rule 10).
+test "panic where things are laid out read by a binding's read, for a property: refused as it is read" {
+  let tree = @view.Tree::new(fn(root) {
+    let a = root.box(fn(a) { a.height(Is(Some(10.0))) |> ignore })
+    root.box(fn(b) { b.height(By(fn() { Some(a.laid_size().1 * 2.0) })) |> ignore }) |> ignore
+  })
+  tree.frame(400.0, 300.0) |> ignore
+}
+
+///|
+test "panic where things are laid out read by a binding's read, for what is painted alone: refused as it is read (Placed is the way)" {
+  let tree = @view.Tree::new(fn(root) {
+    let a = root.box(fn(a) { a.height(Is(Some(10.0))) |> ignore })
+    root.box(fn(b) { b.alpha(By(fn() { if a.rect().3 > 5.0 { 1.0 } else { 0.5 } })) |> ignore }) |> ignore
+  })
+  tree.frame(400.0, 300.0) |> ignore
+}
+
+///|
+test "panic where things are laid out read by what a structure reads: refused as it is read" {
+  let tree = @view.Tree::new(fn(root) {
+    let a = root.box(fn(a) { a.height(Is(Some(10.0))) |> ignore })
+    root.show(fn() { a.laid_window_now().3 > 5.0 }, fn(v) { v.box(fn(_) {  }) |> ignore })
+  })
+  tree.frame(400.0, 300.0) |> ignore
+}
+
+///|
+test "panic where things are laid out read by what reacts reads: refused as it is read" {
+  let tree = @view.Tree::new(fn(root) {
+    let a = root.box(fn(a) { a.height(Is(Some(10.0))) |> ignore })
+    root.reacts(fn() { a.placed_window_now().3 }, fn(_) {  })
+  })
+  tree.frame(400.0, 300.0) |> ignore
+}
+
+///|
+test "panic where things are laid out read by a computed: refused as it is read" {
+  let tree = @view.Tree::new(fn(root) {
+    let a = root.box(fn(a) { a.height(Is(Some(10.0))) |> ignore })
+    let tall = @signals.computed(fn(_) { a.laid_size().1 })
+    root.box(fn(b) { b.height(By(fn() { Some(tall.get()) })) |> ignore }) |> ignore
+  })
+  tree.frame(400.0, 300.0) |> ignore
+}
+
+///|
+test "where things are laid out read where it may be: as the tree is placed (Placed), by what is laid out after all else, at a cause, once a change is committed" {
+  let tall = @signals.signal(10.0)
+  let at_cause : Ref[Double] = Ref(0.0)
+  let committed : Ref[Double] = Ref(0.0)
+  let a_at : Ref[@view.View?] = Ref(None)
+  let faded : Ref[@view.View?] = Ref(None)
+  let after : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) {
+    let a = root.box(fn(a) { a.height(By(fn() { Some(tall.get()) })) |> ignore })
+    a_at.val = Some(a)
+    faded.val = Some(root.box(fn(b) { b.alpha(Placed(fn() { if a.rect().3 > 15.0 { 1.0 } else { 0.5 } })) |> ignore }))
+    after.val = Some(
+      root.box(fn(c) { c.laid_after(fn() { (0.0, 0.0, Some(a.laid_size().0), Some(a.laid_size().1 * 2.0)) }) |> ignore }),
+    )
+    // (what reacts does is at its cause: where things are laid out as of its moment read plainly)
+    root.reacts(fn() { tall.get() }, fn(_) {
+      at_cause.val = a.laid_size().1
+      a.when_committed(fn() { committed.val = a.laid_window_now().3 })
+    })
+  })
+  tree.frame(400.0, 300.0) |> ignore
+  tall.set(20.0)
+  tree.frame(400.0, 300.0) |> ignore
+  assert_eq(
+    (at_cause.val, committed.val, tree.drawn_of(faded.val.unwrap().id()).map(fn(d) { d.alpha }), after.val.unwrap().rect().3),
+    (20.0, 20.0, Some(1.0), 40.0),
+  )
+  assert_true(!tree.told_since(), msg="nothing owed")
+}

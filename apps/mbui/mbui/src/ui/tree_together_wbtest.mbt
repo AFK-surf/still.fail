@@ -63,17 +63,17 @@ test "a node with a picture, left out of its row and turned: turned, its picture
     turns(turned),
     view_pictures_cut.val - cut,
     view_tree().unwrap().work().laid - laid,
-    v.left_out(),
+    v.left_out_now(),
   )
   // another picture: drawn turned as the node was
   picture.set(Some(small_picture))
   t.frame()
   let other = picture_pieces(t)
-  let other_said = (other.length() > 0, other.length() != at_rest.length(), turns(other), v.left_out())
+  let other_said = (other.length() > 0, other.length() != at_rest.length(), turns(other), v.left_out_now())
   // left out: none of it drawn; turned meanwhile
   w.set(240.0)
   t.frame()
-  let out_said = (picture_pieces(t).length(), v.left_out())
+  let out_said = (picture_pieces(t).length(), v.left_out_now())
   turn.set(0.5)
   t.frame()
   let out_turned = picture_pieces(t).length()
@@ -82,7 +82,7 @@ test "a node with a picture, left out of its row and turned: turned, its picture
   t.frame()
   let back = picture_pieces(t)
   assert_eq(
-    (turns(at_rest), turned_said, other_said, out_said, out_turned, rects(back) == rects(other), turns(back), v.left_out()),
+    (turns(at_rest), turned_said, other_said, out_said, out_turned, rects(back) == rects(other), turns(back), v.left_out_now()),
     ([0.0], (true, [quarter], 0, 0, false), (true, true, [quarter], false), (0, true), 0, true, [0.5], false),
   )
 }

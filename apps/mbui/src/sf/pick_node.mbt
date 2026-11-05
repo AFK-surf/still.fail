@@ -142,9 +142,9 @@ pub fn pick_node(
         })
         // (cut at its box while what it holds is taller than it, as @kit.in_room's held list: else what reaches past
         // it, its last row into the panel's padding, drawn whole; what it paints alone, nothing laid out by it)
-        .clips(By(fn() { list.goes() }))
+        .clips(Placed(fn() { list.goes() }))
         // (and taking presses within its box alone then too: else its last row's reach its own, as drawn)
-        .bounds_input(By(fn() { list.goes() }))
+        .bounds_input(Placed(fn() { list.goes() }))
         |> ignore
       })
       |> ignore

@@ -50,6 +50,9 @@ pub struct Scroll {
   /// how far it can go, as laid out last (the node's and what it holds' heights, read plainly; none before they are
   /// first laid out)
   priv mut room : () -> Double?
+  /// where things are laid out read of it, by what (the tree's it scrolls in, Tree::layout_read: refused in what is
+  /// followed to make, lay out or say something; nothing before it scrolls in one)
+  priv mut laid_read : (String, SourceLoc) -> Unit
   /// how far it could go as its layout last kept it within that (Scroll::kept_in; -1: not yet), and whether what it
   /// holds above where it is grew since (Scroll::grew_above: a fling down toward its foot meeting it where it is laid out
   /// then, however far it can go came out)
@@ -135,6 +138,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     x: @signals.signal(0.0, same=fn(a, b) { a == b }),
     fling: @signals.signal(None, same=fn(a, b) { same_ref(a, b) }),
     room: fn() { None },
+    laid_read: fn(_, _) {  },
     kept_most: -1.0,
     grew_laid: false,
     settle_off: fn() {  },
@@ -356,7 +360,9 @@ pub fn Scroll::grew_above(self : Scroll, d : Double) -> Unit {
 ///|
 /// How far it can go, as it was last laid out (0 before it first is): read plainly, at an event, as it is placed or
 /// painted (Live's Placed), never followed.
-pub fn Scroll::most(self : Scroll) -> Double {
+#callsite(autofill(loc))
+pub fn Scroll::most(self : Scroll, loc~ : SourceLoc) -> Double {
+  (self.laid_read)("how far it can go (Scroll::most)", loc)
   @signals.untracked(fn() { self.most_now() })
 }
 
@@ -695,6 +701,7 @@ pub fn View::scrolls(
   self.tree.layout_marked_at(self.at)
   // (how far it can go: as tall as what it holds is, less as tall as it shows, as they are laid out, read plainly; as it
   // was last laid out where it is laid out nowhere now (left out of its row, let go): none before it first is)
+  s.laid_read = fn(what, loc) { self.tree.layout_read(what, loc) }
   let kept_room : Ref[Double?] = Ref(None)
   s.room = fn() {
     let now = match self.live() {
@@ -803,6 +810,7 @@ pub fn View::scrolls(
     (s.settle_off)()
     s.settle_off = fn() {  }
     s.room = fn() { None }
+    s.laid_read = fn(_, _) {  }
     s.tall = fn() { 0.0 }
     s.host = None
     s.for_field = None

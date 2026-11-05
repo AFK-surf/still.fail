@@ -402,7 +402,9 @@ pub fn View::window_down_point(self : View) -> (Double, Double) {
 ///|
 /// The latest press in the window, in this node's drawn coordinates. Unlike pointer_here, a finger has this
 /// position too. Read as window_downs changes to dismiss a popup only when that press is outside it.
-pub fn View::window_down_here(self : View) -> (Double, Double)? {
+#callsite(autofill(loc))
+pub fn View::window_down_here(self : View, loc~ : SourceLoc) -> (Double, Double)? {
+  self.tree.layout_read("where a press went down in it (View::window_down_here)", loc)
   guard self.alive() && self.tree.last_w > 0.0 else { return None }
   let (count, px, py) = self.tree.pressed_anywhere.get()
   guard count > 0 else { return None }
@@ -546,7 +548,9 @@ pub fn[T : Eq] View::keeps_width(self : View, by : () -> T, most? : () -> Double
 /// the other where it had not the room: place_beside's flip), read plainly, never followed: at an event, and by an old
 /// view as it is built (by its key, built again as that changes: the tree placed before the old views are built); none
 /// before it is first placed, or where it goes beside nothing.
-pub fn View::went(self : View) -> Side? {
+#callsite(autofill(loc))
+pub fn View::went(self : View, loc~ : SourceLoc) -> Side? {
+  self.tree.layout_read("the side it went (View::went)", loc)
   guard self.live() is Some(n) else { return None }
   n.went
 }
