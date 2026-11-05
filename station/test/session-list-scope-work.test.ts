@@ -60,3 +60,38 @@ for (const archived of [false, true]) for (const connect of [null, "client"]) {
     } finally { store.close(); }
   });
 }
+
+for (const archived of [false, true]) test(`a connection's station-wide session list seeks its own rows (archived ${archived})`, () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const add = (key: string, connect: string) => {
+      store.insertSession({ key, connect, runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws: "mine" });
+      if (archived) db.prepare("UPDATE sessions SET archived_at=1 WHERE key=?").run(key);
+    };
+    add("mine-1", "client"); add("mine-2", "client");
+    db.exec("BEGIN");
+    for (let i = 0; i < 400; i++) add(`other-${i}`, "other");
+    db.exec("COMMIT");
+    let plan: string[] = [];
+    const observed = new Proxy(db, { get(target, property) {
+      if (property === "prepare") return (sql: string) => {
+        const statement = target.prepare(sql);
+        if (!/^(SELECT|WITH)\b/i.test(sql)) return statement;
+        return new Proxy(statement, { get(t, p) {
+          if (p === "all") return (...args: unknown[]) => {
+            plan = (target.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args as any[]) as { detail: string }[]).map((row) => row.detail);
+            return (t.all as any)(...args);
+          };
+          const value = Reflect.get(t, p, t);
+          return typeof value === "function" ? value.bind(t) : value;
+        } });
+      };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    const rows = listedSessions(makeStore(observed, "/none"), "client", archived, null);
+    assert.deepEqual(rows.map((row) => row.key), ["mine-1", "mine-2"]);
+    assert.ok(plan.some((line) => /SEARCH i USING (?:COVERING )?INDEX session_list_connect \(archived=\? AND connect=\?\)/.test(line)), plan.join("\n"));
+  } finally { store.close(); }
+});
