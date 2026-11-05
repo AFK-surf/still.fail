@@ -2425,12 +2425,12 @@ pub fn Ctx::built_from_changed(self : Ctx, what : String, loc~ : SourceLoc) -> U
 }
 
 ///|
-/// A motion set out between frames (Ctx::set_out): a frame is owed to show it, the host told now, as a frame asked
-/// between frames is.
+/// A motion set out between frames (Ctx::set_out): a frame is owed to show it, the host told now. Nothing come from
+/// outside the view reads: what was built from where it moves is told by its mover (Mover::changed).
 fn Ctx::owe_frame(self : Ctx) -> Unit {
   self.wants_frame = true
   part_live()
-  h_request_frame()
+  h_frame_owed()
 }
 
 ///|
@@ -2440,7 +2440,7 @@ fn Ctx::owe_frame(self : Ctx) -> Unit {
 fn Ctx::owe_next(self : Ctx) -> Unit {
   self.wants_frame = true
   part_live()
-  h_request_frame()
+  h_frame_owed()
 }
 
 ///|

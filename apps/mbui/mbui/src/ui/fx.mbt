@@ -25,8 +25,9 @@ fn fx_runtime(seed : Int?) -> @effect.Runtime {
     Some(s) => @effect.Runtime::new(seed=s)
     None => @effect.Runtime::new()
   }
-  // a fiber woken between frames (a host's callback gave it its answer, a handler forked it): a frame soon
-  rt.on_wake(() => h_request_frame())
+  // a fiber woken between frames (a host's callback gave it its answer, a handler forked it): a frame soon, to run it;
+  // nothing come from outside the view reads: what the fiber sets the view reads as signals
+  rt.on_wake(() => h_frame_owed())
   // a timer set between frames (a test's step, a host's callback): woken at its moment, as one set in a frame is
   rt.on_timer(at => fx_wake(g(), at))
   rt
