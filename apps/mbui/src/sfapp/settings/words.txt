@@ -1413,6 +1413,7 @@ web-pages.security.pairEnter
 web-pages.security.pairFinding
 web-pages.security.pairNone
 web-pages.security.pairNote
+web-pages.security.pairRetry
 web-pages.security.pairTitle
 web-pages.security.pairWrong
 web-pages.security.people

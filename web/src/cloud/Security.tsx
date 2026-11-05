@@ -384,7 +384,11 @@ function PairSteps({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
         {pair.untilText && <div className={css.waitingNote}>{pair.untilText}</div>}
         <div className={css.actions}><Button variant="ghost" onClick={() => { setCode(""); ask(t("web-pages.security.pairAgain")); }}>{t("web-pages.security.pairAgain")}</Button></div>
       </>}
-  </> : pair?.state === "finding" || asking ? <div className={css.waitingNote}><Spinner inline />{t("web-pages.security.pairFinding")}</div>
+  </> : pair?.state === "finding" || asking ? <>
+    <div className={css.waitingNote}><Spinner inline />{t("web-pages.security.pairFinding")}</div>
+    {/* asked again while it looks: a trusted device opened and nothing came up (2026-11-06) */}
+    {!asking && <div className={css.actions}><Button variant="ghost" onClick={() => ask(t("web-pages.security.pairRetry"))}>{t("web-pages.security.pairRetry")}</Button></div>}
+  </>
     : <>
       <div className={pair?.state === "failed" ? css.waitingFailed : css.waitingNote}>
         {pair?.state === "none" ? t("web-pages.security.pairNone") : pair?.state === "failed" ? (pair.error ?? "") : t(lock.me?.unsigned ? "web-pages.security.upgradeNotAsked" : "web-pages.security.notAsked")}
