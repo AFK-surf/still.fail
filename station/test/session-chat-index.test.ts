@@ -6,7 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { Store } from "../src/store/store.ts";
 import { ccSessionReady, CcIndexPreparation } from "../src/store/cc-thread-index.ts";
-import { indexedSessionChat, installSessionChatIndex, SESSION_CHAT_EMBER, SESSION_CHAT_MANY, SESSION_CHAT_OTHER, SESSION_CHAT_SMALL,
+import { indexedSessionChat, installSessionChatIndex, SESSION_CHAT_INDEXED, SESSION_CHAT_MANY, SESSION_CHAT_SMALL,
   SessionChatPreparation, sessionChatReady } from "../src/store/session-chat-index.ts";
 
 function prepare(store: Store, session: string, limit = 8): number {
@@ -106,15 +106,13 @@ test("a prepared name follows remaining entries when their old state row is abse
   } finally { store.close(); }
 });
 
-test("both chat candidates seek their own ordered index", () => {
+test("the chat candidate seeks its ordered index", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
     installSessionChatIndex(db);
-    for (const [sql, index] of [[SESSION_CHAT_EMBER, "session_chat_ember USING PRIMARY KEY"], [SESSION_CHAT_OTHER, "cc_session_order"]] as const) {
-      const plan = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all("s").map((row) => String(row.detail)).join("\n");
-      assert.match(plan, new RegExp(`SEARCH .*${index} \\(session=\\?\\)`));
-      assert.doesNotMatch(plan, /SCAN |TEMP B-TREE/);
-    }
+    const plan = db.prepare(`EXPLAIN QUERY PLAN ${SESSION_CHAT_INDEXED}`).all("s").map((row) => String(row.detail)).join("\n");
+    assert.match(plan, /SEARCH r USING COVERING INDEX session_chat_order \(session=\?\)/);
+    assert.doesNotMatch(plan, /SCAN |TEMP B-TREE/);
   } finally { store.close(); }
 });
 
@@ -260,7 +258,7 @@ test("readiness and the chosen chat share a snapshot with another writer", () =>
       get(target, property) {
         if (property === "prepare") return (sql: string) => {
           const statement = target.prepare(sql);
-          if (sql.includes("WITH own AS MATERIALIZED")) return new Proxy(statement, {
+          if (sql === SESSION_CHAT_INDEXED) return new Proxy(statement, {
             get(query, key) {
               if (key === "get") return (...args: unknown[]) => {
                 writer.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at) VALUES(?,1,'message','person','p',20)").run(later);
@@ -393,12 +391,12 @@ test("deleting a session releases its prepared chat-name scope", () => {
     store.joinThread(own.id, "s", "ember");
     prepare(store, "s");
     assert.equal(db.prepare("SELECT count(*) AS n FROM session_chat_scopes WHERE session='s'").get()?.n, 1);
-    assert.equal(db.prepare("SELECT count(*) AS n FROM session_chat_ember WHERE session='s'").get()?.n, 1);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM session_chat_rows WHERE session='s'").get()?.n, 1);
     db.exec("SAVEPOINT gone; DELETE FROM sessions WHERE key='s'; ROLLBACK TO gone; RELEASE gone");
     assert.equal(db.prepare("SELECT count(*) AS n FROM session_chat_scopes WHERE session='s'").get()?.n, 1, "a rolled back deletion keeps its scope");
     store.deleteSession("s");
     assert.equal(db.prepare("SELECT count(*) AS n FROM session_chat_scopes WHERE session='s'").get()?.n, 0);
-    assert.equal(db.prepare("SELECT count(*) AS n FROM session_chat_ember WHERE session='s'").get()?.n, 0);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM session_chat_rows WHERE session='s'").get()?.n, 0);
     store.insertSession({ key: "s", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
       token: "new-s", createdAt: 2, lastActiveAt: 2, ws: "mine" });
     const replacement = store.openThread("ember", "EMBER", "new-own", null, null);

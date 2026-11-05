@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Store } from "../src/store/store.ts";
-import { SESSION_CHAT_EMBER, SESSION_CHAT_INDEXED, SESSION_CHAT_OTHER, SessionChatPreparation } from "../src/store/session-chat-index.ts";
+import { SESSION_CHAT_INDEXED, SessionChatPreparation } from "../src/store/session-chat-index.ts";
 
 test("naming a session with at most one chat needs no background preparation", () => {
   const store = Store.open(":memory:");
@@ -42,9 +42,7 @@ test("naming a session's most recent chat does not traverse its older chats", ()
       get(target, property) {
         if (property === "prepare") return (sql: string) => {
           if (sql === SESSION_CHAT_INDEXED) {
-            const own = SESSION_CHAT_EMBER.replace("WHERE session=?1", "WHERE session=?1 AND visited_session_chat(thread)=thread");
-            const other = SESSION_CHAT_OTHER.replace("WHERE session=?1", "WHERE session=?1 AND visited_session_chat(thread)=thread");
-            const observed = sql.replace(SESSION_CHAT_EMBER, own).replace(SESSION_CHAT_OTHER, other);
+            const observed = sql.replace("WHERE r.session=?1", "WHERE r.session=?1 AND visited_session_chat(r.thread)=r.thread");
             assert.notEqual(observed, sql);
             const plan = (s: string) => target.prepare(`EXPLAIN QUERY PLAN ${s}`).all("s").map((r) => r.detail);
             assert.deepEqual(plan(observed), plan(sql), "counting keeps the actual query plan");
