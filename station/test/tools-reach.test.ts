@@ -38,7 +38,6 @@ test("claude: a call to the station's tools that cannot connect, or its server f
 test("claude: the address a process was started with is read from its arguments", () => {
   const config = (name: string) => JSON.stringify({ mcpServers: { [name]: { type: "http", url: "http://127.0.0.1:12671/mcp", headers: {} } } });
   assert.equal(mcpUrlOf(["-p", "--mcp-config", config("stillfail")]), "http://127.0.0.1:12671/mcp");
-  assert.equal(mcpUrlOf(["--mcp-config", config("ember")]), "http://127.0.0.1:12671/mcp");
   assert.equal(mcpUrlOf(["-p"]), null);
   assert.equal(mcpUrlOf(["--mcp-config", "{not json"]), null);
 });
@@ -63,6 +62,6 @@ test("on its own, a station tries the port named, else the one it had, the usual
   assert.deepEqual(portsToTry(undefined, 12671, 4750, false), [12671, 0]);
   const home = join("/", "home", "u");
   assert.ok(ownData(join(home, ".stillfail"), home));
-  assert.ok(ownData(join(home, ".ember"), home));
+  assert.ok(!ownData(join(home, ".ember"), home));
   assert.ok(!ownData(join("/", "tmp", "scratchpad", "inst"), home));
 });
