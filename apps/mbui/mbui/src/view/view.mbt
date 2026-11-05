@@ -1658,6 +1658,9 @@ pub fn Tree::alive(self : Tree) -> Int {
 pub fn Tree::dispose(self : Tree) -> Unit {
   if self.gone { return }
   self.gone = true
+  // (let go, it is read by nothing: a read cut short as it was refused (a test's abort) counted no more)
+  self.reads_followed = 0
+  self.hit_testing = 0
   // A child's cleanup may change state read by its parent or siblings. Publish those changes only once
   // every scope in this tree has stopped, as one removal; no observer may rebuild a half-disposed tree.
   @signals.start_batch()
@@ -8747,7 +8750,15 @@ pub fn View::bar_near(self : View, near : Double, across? : Bool = false) -> Boo
 ///|
 /// The column whose bar the pointer is along now (View::bar_near): of those, the last drawn the pointer is in (found
 /// there within what holds it, taking input), if the pointer is along its edge.
+/// A hit test (Tree::hit_test): where things are placed read by it wherever it runs, its first telling in what follows
+/// it too.
 fn Tree::bar_near_at(self : Tree) -> Int? {
+  self.hit_test(fn() { self.bar_near_found() })
+}
+
+///|
+/// The column whose bar the pointer is along now, found (Tree::bar_near_at).
+fn Tree::bar_near_found(self : Tree) -> Int? {
   let (px, py) = self.pointer_xy
   guard px >= 0.0 && self.nodes.length() > 0 else { return None }
   // (of the columns whose bars come out so, the last drawn the pointer is in, found there within what holds it and

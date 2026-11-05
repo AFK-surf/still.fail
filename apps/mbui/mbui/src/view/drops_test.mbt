@@ -1,4 +1,4 @@
-// A row leaving out what it has not the room for (View::drops, fits, left_out): what is left out, and all it holds,
+// A row leaving out what it has not the room for (View::drops, fits, left_out_now): what is left out, and all it holds,
 // out of the scene, of what is pressed (by a finger, by its id, by a screen reader), of what is read out (its own and
 // what it hosts) and of what takes input, at once; back, the same nodes, as the room comes; a node made again in the
 // place of one left out none of it.
@@ -43,11 +43,19 @@ fn drops_row(
         row.box(fn(m) {
           ids["more"] = m.id()
           views["more"] = m
-          // (how many are left out, said as the row says it: View::left_out)
-          m
-          .width(Is(Some(40.0)))
-          .drops(Is(-1))
-          .words(By(fn() { "+\{["b1", "b2", "b3", "b4"].filter(fn(k) { views[k].left_out() }).length()}" }))
+          m.width(Is(Some(40.0))).drops(Is(-1)) |> ignore
+          // (how many are left out, as the row lays them out: its words laid out after it, in its box, worked out of
+          // the row's layout then: View::left_out_now)
+          m.box(fn(n) {
+            ids["more words"] = n.id()
+            n
+            .laid_after(fn() {
+              let (mw, mh) = m.laid_size()
+              (0.0, 0.0, Some(mw), Some(mh))
+            })
+            .words(Placed(fn() { "+\{["b1", "b2", "b3", "b4"].filter(fn(k) { views[k].left_out_now() }).length()}" }))
+            |> ignore
+          })
           |> ignore
         })
         |> ignore
@@ -67,7 +75,7 @@ test "drops: a row 400 wide holding four 100 wide: all of them, no ⋯; 260 wide
   let ids : Map[String, @view.NodeId] = {}
   let views : Map[String, @view.View] = {}
   let t = drops_row(w, pressed, ids, views)
-  let outs = fn() { ["b1", "b2", "b3", "b4", "more"].filter(fn(k) { views[k].left_out() }) }
+  let outs = fn() { ["b1", "b2", "b3", "b4", "more"].filter(fn(k) { views[k].left_out_now() }) }
   assert_eq(outs(), ["more"], msg="400: all four, no ⋯")
   // (what the last two take input as, followed together)
   let takes : Array[(Bool, Bool)] = []
@@ -84,7 +92,7 @@ test "drops: a row 400 wide holding four 100 wide: all of them, no ⋯; 260 wide
   }
   assert_eq(pressed.get("b4").unwrap_or(0), 0, msg="b4: nothing pressed")
   assert_eq(takes, [(true, true), (false, false)], msg="b3, b4: taking no input, told at once, never half of it")
-  assert_eq(t.drawn_of(ids["more"]).map(fn(d) { d.words }), Some("+2"), msg="the ⋯: drawn, saying how many, in the frame that left them out")
+  assert_eq(t.drawn_of(ids["more words"]).map(fn(d) { d.words }), Some("+2"), msg="the ⋯: drawn, saying how many, in the frame that left them out")
   // (what the second hosts read out where it is not left out)
   assert_true(t.reads_out(ids["hosted"]), msg="what b2 hosts: read out")
   t.event(30.0, fn() { w.set(400.0) })
@@ -126,7 +134,7 @@ test "drops: what a node left out hosts not read out by its id; that node let go
     time=fn() { 0.0 },
   )
   t.frame(800.0, 300.0) |> ignore
-  assert_true(views["b"].left_out(), msg="150 wide: the second left out")
+  assert_true(views["b"].left_out_now(), msg="150 wide: the second left out")
   assert_false(t.reads_out(ids["hosted"]), msg="what it hosts: not read out by its id")
   let was = ids["b"]
   t.event(10.0, fn() { shown.set(false) })
@@ -137,10 +145,10 @@ test "drops: what a node left out hosts not read out by its id; that node let go
   })
   // (made, not laid out yet: nothing of the one before in it)
   assert_true(ids["b"].at == was.at && ids["b"].gen != was.gen, msg="made again in its place: \{was.at} \{was.gen}, \{ids["b"].at} \{ids["b"].gen}")
-  assert_false(views["b"].left_out(), msg="made, before a frame: not left out")
+  assert_false(views["b"].left_out_now(), msg="made, before a frame: not left out")
   assert_true(t.reads_out(ids["hosted"]), msg="what it hosts, before a frame: read out")
   t.frame(800.0, 300.0) |> ignore
-  assert_false(views["b"].left_out(), msg="room for it: the new one not left out")
+  assert_false(views["b"].left_out_now(), msg="room for it: the new one not left out")
   assert_true(t.drawn_of(ids["b"]) is Some(_), msg="the new one drawn")
 }
 
