@@ -195,6 +195,9 @@ pub(all) struct Reading {
   /// its rows as last shown, by key and what each shows (ListRows: what came, went and changed worked out by the
   /// list, docs/list-motion.md): the last list made of it's (chat_list_node's)
   mut rows : @ui.ListRows[Entry]
+  /// when words sent from here to it land, as their way declared it once their row was placed (-2: not placed yet, -1:
+  /// none sent); kept so once they are there, their flight let go (what is drawn of them: nothing of its own here)
+  landing : @signals.Computed[Double]
 }
 
 ///|
@@ -298,6 +301,16 @@ pub fn reading_of(key : String) -> Reading {
         rows_made: None,
         motion_of: [],
         motion_list: "",
+        landing: @signals.computed(fn(was) {
+          match send_flight.get() {
+            Some(f) if f.turns == key => if f.placed { f.way.ends() } else { -2.0 }
+            _ =>
+              match was {
+                Some(at) if at >= 0.0 => at
+                _ => -1.0
+              }
+          }
+        }, same=fn(a, b) { a == b }),
         motion_keys: [],
         rows: @ui.ListRows::new(),
       }
@@ -670,13 +683,9 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
         }
       None => -1.0
     })
-    // words sent from here on their way: their landing as declared (-2: not laid out yet), -1 none or landed
+    // words sent from here: their landing as declared (-2: not laid out yet, -1 none), kept once they are there
     // (emit_step)
-    let sending = match send_flight.get() {
-      Some(f) if f.turns == rk && !f.placed => -2.0
-      Some(f) if f.turns == rk && !f.way.over() => f.way.ends()
-      _ => -1.0
-    }
+    let sending = rd.landing.get()
     emit_step(c, em, turns, sending)
   }
   if lingered {
