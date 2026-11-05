@@ -92,7 +92,7 @@ test "what a box holds chosen by its room, in its own layout: the other made as 
     fn(root) {
       root.box(fn(b) {
         b.grow(Is(1.0)) |> ignore
-        b.by_room(fn(w, _) { if w < 600.0 { "narrow" } else { "wide" } }, fn(v, k) {
+        b.by_room(Is(()), fn(_, w, _) { if w < 600.0 { "narrow" } else { "wide" } }, fn(v, k) {
           made.push(k)
           v.box(fn(x) { x.height(Is(Some(10.0))) |> ignore }) |> ignore
         })
