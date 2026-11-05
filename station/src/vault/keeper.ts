@@ -51,6 +51,9 @@ export function accountOf(secret: Secret): string | null {
 export class Keeper {
   readonly #boxes = new Map<string, Uint8Array>();
   readonly #held = new Map<string, Held>();
+  readonly #heldBySession = new Map<string, Set<string>>();
+  readonly #heldOrder = new Map<string, number>();
+  #nextHeldOrder = 0;
   readonly #timers = new Map<string, () => void>();
   /// Unix seconds.
   readonly #now: () => number;
@@ -62,9 +65,43 @@ export class Keeper {
   }
 
   #hold(h: Held) {
-    this.#held.set(h.request.id, h);
+    this.#put(h);
     this.#schedule(h);
     this.#d.kept?.save(h);
+  }
+
+  // A replacement keeps its position in #held, including when it moves to another session.
+  #put(h: Held) {
+    const id = h.request.id;
+    const previous = this.#held.get(id);
+    const session = h.request.session;
+    if (previous === undefined) this.#heldOrder.set(id, this.#nextHeldOrder++);
+    this.#held.set(id, h);
+    if (previous?.request.session === session) return;
+    if (previous !== undefined) this.#removeFromSession(previous.request.session, id);
+    const ids = this.#heldBySession.get(session);
+    if (ids === undefined) {
+      this.#heldBySession.set(session, new Set([id]));
+    } else if (previous === undefined) {
+      ids.add(id);
+    } else {
+      const order = this.#heldOrder.get(id)!;
+      const sorted = new Set<string>();
+      let inserted = false;
+      for (const other of ids) {
+        if (!inserted && this.#heldOrder.get(other)! > order) { sorted.add(id); inserted = true; }
+        sorted.add(other);
+      }
+      if (!inserted) sorted.add(id);
+      this.#heldBySession.set(session, sorted);
+    }
+  }
+
+  #removeFromSession(session: string, id: string) {
+    const ids = this.#heldBySession.get(session);
+    if (ids === undefined) return;
+    ids.delete(id);
+    if (ids.size === 0) this.#heldBySession.delete(session);
   }
 
   #schedule(h: Held) {
@@ -88,6 +125,8 @@ export class Keeper {
     const h = this.#held.get(id);
     if (h !== undefined) {
       this.#held.delete(id);
+      this.#removeFromSession(h.request.session, id);
+      this.#heldOrder.delete(id);
       this.#d.kept?.forget(h);
     }
   }
@@ -158,7 +197,7 @@ export class Keeper {
 
   /// A grant kept from before a restart, given back.
   restore(h: Held) {
-    this.#held.set(h.request.id, h);
+    this.#put(h);
     this.#schedule(h);
   }
 
@@ -223,18 +262,22 @@ export class Keeper {
 
   /// Whether `session` holds a grant here (used up or not).
   holds(session: string): boolean {
-    for (const h of this.#held.values()) if (h.request.session === session) return true;
-    return false;
+    return this.#heldBySession.has(session);
   }
 
   /// `session`'s chat archived or gone: its grants end.
   end(session: string) {
-    for (const h of [...this.#held.values()]) if (h.request.session === session) this.#forget(h.request.id);
+    for (const id of [...(this.#heldBySession.get(session) ?? [])]) this.#forget(id);
   }
 
   /// The grants `session` holds that may still be used.
   held(session: string): Held[] {
-    return [...this.#held.values()].filter((h) => typeof this.usable(session, h.request.id) !== "string");
+    const result: Held[] = [];
+    for (const id of [...(this.#heldBySession.get(session) ?? [])]) {
+      const h = this.usable(session, id);
+      if (typeof h !== "string") result.push(h);
+    }
+    return result;
   }
 
   /// Whether request `id` still has its box here.
