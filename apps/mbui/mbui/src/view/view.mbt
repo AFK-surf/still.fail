@@ -1662,6 +1662,12 @@ fn Tree::marked(self : Tree, loc~ : SourceLoc) -> Unit {
   if self.laid_passes > 0 && !self.due {
     self.laid_marked_at = "\{loc}, last set at \{@signals.last_set_at()}"
   }
+  // (probe, not for merging: from the 40th layout pass in one, each pass's marking said to the host's log)
+  if self.laid_passes >= 40 && !self.due {
+    @hostapi.log(
+      "view: pass \{self.laid_passes} marked at \{loc}, last set at \{@signals.last_set_at()}, waits \{self.laid_waits.length()} shows \{self.shows_due.length()} outs \{self.outs_changed} sized \{self.sized.length()} bindings \{self.bindings_due.length()} places \{self.places_due.length()}",
+    )
+  }
   if !self.due {
     self.due = true
     // (the host is already being told: it will ask for a frame for everything marked by that telling too. Laying out
@@ -6229,6 +6235,23 @@ pub let laid_passes_trace : Ref[(String) -> Unit] = Ref(fn(s) { println(s) })
 fn Tree::told_noted(self : Tree, at : Int, what : String, was : () -> String, now : () -> String) -> Unit {
   if laid_passes_traced.val {
     (laid_passes_trace.val)("view: layout pass \{self.laid_passes}: node \{at} \{what} \{was()} -> \{now()}")
+  }
+  // (probe, not for merging: from the 40th pass, each node told otherwise said, with the row it is in and its line up)
+  if self.laid_passes >= 40 {
+    let mut p = at
+    let mut row = -1
+    let up = []
+    while p >= 0 && up.length() < 6 {
+      if row < 0 {
+        match self.nodes[p].row_index {
+          Some(r) => row = r
+          None => ()
+        }
+      }
+      up.push(p)
+      p = self.nodes[p].parent
+    }
+    @hostapi.log("view: pass \{self.laid_passes} told node \{at} \{what} \{was()} -> \{now()}, row \{row}, up \{up}")
   }
   if self.laid_passes >= laid_passes_most && self.told_otherwise.length() < 8 {
     self.told_otherwise.push("node \{at} \{what} \{was()} -> \{now()}")
