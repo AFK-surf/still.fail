@@ -191,6 +191,22 @@ test("a recreated name scope rebuilds its order from surviving copy rows", () =>
   } finally { store.close(); }
 });
 
+test("old membership ids outside JavaScript's safe range do not prevent naming another chat", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const small = store.openThread("ember", "C", "small", null, null).id;
+    db.prepare("UPDATE threads SET created_at=20 WHERE id=?").run(small);
+    store.joinThread(small, "s", "c");
+    db.exec(`INSERT INTO threads(id,surface,channel,thread_ts,created_at) VALUES(9007199254740993,'slack','C','large',1);
+      INSERT INTO thread_sessions(thread,session,connect,joined_at) VALUES(9007199254740993,'s','c',1);
+      INSERT INTO thread_sessions(thread,session,connect,joined_at) VALUES(9007199254740995,'s','c',1)`);
+    prepare(store, "s", 1);
+    assert.equal(indexedSessionChat(db, "s")?.id, small);
+    assert.equal(store.sessionChat("s")?.thread.id, small);
+    assert.equal(original(store, "s"), small);
+  } finally { store.close(); }
+});
+
 test("the small-session check reads at most two memberships through their index", () => {
   const store = Store.open(":memory:"), db = store.db;
   try {
