@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { sender } from "../src/sessions/messages.ts";
 import { prepareLatestThreadStep } from "../src/store/latest-thread-index.ts";
@@ -65,4 +66,49 @@ test("a page of secret uses prepares only the names it shows without sorting the
       store.close();
     }
   }
+});
+
+function waitingUses() {
+  const db = new DatabaseSync(":memory:"), gate = Promise.withResolvers<void>();
+  let permitted = true, present = true, ready = false, prepares = 0, titles = 0;
+  const hub = {
+    store: {
+      subscribe: () => {}, getSession: () => present ? { ws: "w" } : null,
+      sessionHomeThread: () => null, latestThreadIfReady: () => ready ? null : undefined,
+    },
+    prepareLatestThreads: async () => { prepares++; await gate.promise; },
+  } as any;
+  const secrets = new Secrets({ db, hub, data: ".", now: () => 0, home: () => "w",
+    lock: () => ({} as never), proxy: {} as never,
+    vaults: { vault: () => ({ members: permitted ? ["p"] : [] }) } as never, plain: {} as never,
+    title: () => { titles++; return "shown"; } });
+  const body = JSON.stringify({ ws: "w", id: "r", vault: "v", owner: "p@example.test", at: 1,
+    item: "item", session: "s", mode: "env", status: "granted" });
+  db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w','r','s','granted',?)").run(body);
+  return { db, gate, secrets, prepares: () => prepares, titles: () => titles,
+    ready: () => { ready = true; }, remove: () => { present = false; }, revoke: () => { permitted = false; } };
+}
+
+test("a vault membership removed while use titles are prepared reveals no results", async () => {
+  const w = waitingUses();
+  try {
+    const reading = w.secrets.uses("w", {} as never, "v", { sub: "p", email: "p@example.test" });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(w.prepares(), 1);
+    w.revoke(); w.ready(); w.gate.resolve();
+    assert.deepEqual(await reading, []);
+    assert.equal(w.titles(), 0);
+  } finally { w.gate.resolve(); w.db.close(); }
+});
+
+test("a session removed while use titles are prepared does not keep the page waiting", async () => {
+  const w = waitingUses();
+  try {
+    const reading = w.secrets.uses("w", {} as never, "v", { sub: "p", email: "p@example.test" });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(w.prepares(), 1);
+    w.remove(); w.gate.resolve();
+    assert.equal((await reading)[0]?.chatTitle, null);
+    assert.equal(w.titles(), 0);
+  } finally { w.gate.resolve(); w.db.close(); }
 });
