@@ -7,27 +7,27 @@ import { backfillVaultMembers, vaultMembersComplete } from "./member-index.ts";
 // by its current members. In particular an old null, false, zero or empty-string save is not a save.
 const ownerDecision = (body: string) => `json_extract(${body}, '$.vault') = 'plain' OR CASE json_type(${body}, '$.save')
   WHEN 'object' THEN 1 WHEN 'array' THEN 1 WHEN 'true' THEN 1
-  WHEN 'text' THEN length(json_extract(${body}, '$.save')) > 0
+  WHEN 'text' THEN json_extract(${body}, '$.save') != ''
   WHEN 'integer' THEN json_extract(${body}, '$.save') != 0
   WHEN 'real' THEN json_extract(${body}, '$.save') != 0 ELSE 0 END`;
 
-const values = (row: string) => `${row}.ws, ${row}.id, json_extract(${row}.body, '$.owner'), json_extract(${row}.body, '$.vault'),
-  CASE WHEN ${ownerDecision(`${row}.body`)} THEN 1 ELSE 0 END, json_extract(${row}.body, '$.at')`;
+const decidesByOwner = (body: string) => `CASE WHEN ${ownerDecision(body)} THEN 1 ELSE 0 END`;
+const decisionTarget = (body: string) => `CASE WHEN ${ownerDecision(body)}
+  THEN json_extract(${body}, '$.owner') ELSE json_extract(${body}, '$.vault') END`;
+const values = (row: string) => `${row}.ws, ${row}.id, ${decidesByOwner(`${row}.body`)},
+  ${decisionTarget(`${row}.body`)}, json_extract(${row}.body, '$.at')`;
 
 const changed = `OLD.ws IS NOT NEW.ws OR OLD.id IS NOT NEW.id OR OLD.status IS NOT NEW.status
-  OR json_extract(OLD.body, '$.owner') IS NOT json_extract(NEW.body, '$.owner')
-  OR json_extract(OLD.body, '$.vault') IS NOT json_extract(NEW.body, '$.vault')
-  OR json_type(OLD.body, '$.save') IS NOT json_type(NEW.body, '$.save')
-  OR json_extract(OLD.body, '$.save') IS NOT json_extract(NEW.body, '$.save')
+  OR (${decidesByOwner("OLD.body")}) IS NOT (${decidesByOwner("NEW.body")})
+  OR (${decisionTarget("OLD.body")}) IS NOT (${decisionTarget("NEW.body")})
   OR json_extract(OLD.body, '$.at') IS NOT json_extract(NEW.body, '$.at')`;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS vault_pending_lookup (
-  ws TEXT NOT NULL, id TEXT NOT NULL, owner TEXT, vault TEXT, owner_decides INTEGER NOT NULL, at,
+  ws TEXT NOT NULL, id TEXT NOT NULL, owner_decides INTEGER NOT NULL, decider TEXT, at,
   PRIMARY KEY (ws, id)
 ) WITHOUT ROWID;
-CREATE INDEX IF NOT EXISTS vault_pending_owner ON vault_pending_lookup (ws, owner_decides, owner, id);
-CREATE INDEX IF NOT EXISTS vault_pending_vault ON vault_pending_lookup (ws, owner_decides, vault, id);
+CREATE INDEX IF NOT EXISTS vault_pending_decider ON vault_pending_lookup (ws, owner_decides, decider, id);
 CREATE INDEX IF NOT EXISTS vault_pending_at ON vault_pending_lookup (ws, at, id);
 CREATE TABLE IF NOT EXISTS vault_pending_backfill (
   ws TEXT PRIMARY KEY, after_id TEXT, done INTEGER NOT NULL
@@ -37,9 +37,9 @@ CREATE TRIGGER IF NOT EXISTS vault_pending_add AFTER INSERT ON vault_requests
   INSERT OR REPLACE INTO vault_pending_lookup VALUES (${values("NEW")});
 END;
 CREATE TRIGGER IF NOT EXISTS vault_pending_change AFTER UPDATE ON vault_requests
-  WHEN (OLD.status = 'pending' OR NEW.status = 'pending') AND (${changed})
-    AND (EXISTS (SELECT 1 FROM vault_pending_backfill WHERE ws = OLD.ws)
-      OR EXISTS (SELECT 1 FROM vault_pending_backfill WHERE ws = NEW.ws)) BEGIN
+  WHEN CASE WHEN (EXISTS (SELECT 1 FROM vault_pending_backfill WHERE ws = OLD.ws)
+      OR EXISTS (SELECT 1 FROM vault_pending_backfill WHERE ws = NEW.ws))
+    AND (OLD.status = 'pending' OR NEW.status = 'pending') THEN (${changed}) ELSE 0 END BEGIN
   DELETE FROM vault_pending_lookup WHERE ws = OLD.ws AND id = OLD.id;
   INSERT OR REPLACE INTO vault_pending_lookup SELECT ${values("NEW")}
     WHERE NEW.status = 'pending' AND EXISTS (SELECT 1 FROM vault_pending_backfill WHERE ws = NEW.ws);
@@ -52,14 +52,14 @@ END;
 
 export const PENDING_BODIES = `SELECT r.body FROM vault_pending_lookup p
   JOIN vault_requests r ON r.ws = p.ws AND r.id = p.id WHERE p.ws = ? ORDER BY p.id`;
-export const PENDING_OWN = `SELECT r.id, r.body FROM vault_pending_lookup p INDEXED BY vault_pending_owner
+export const PENDING_OWN = `SELECT r.id, r.body FROM vault_pending_lookup p INDEXED BY vault_pending_decider
   JOIN vault_requests r ON r.ws = p.ws AND r.id = p.id
-  WHERE p.ws = ? AND p.owner_decides = 1 AND p.owner = ?`;
+  WHERE p.ws = ? AND p.owner_decides = 1 AND p.decider = ?`;
 // CROSS JOIN keeps the member's vaults on the outside: no scan of other vaults' waiting requests.
 export const PENDING_MEMBER = `SELECT r.id, r.body FROM vault_member_lookup m
-  CROSS JOIN vault_pending_lookup p INDEXED BY vault_pending_vault
+  CROSS JOIN vault_pending_lookup p INDEXED BY vault_pending_decider
   JOIN vault_requests r ON r.ws = p.ws AND r.id = p.id
-  WHERE m.ws = ? AND m.sub = ? AND p.ws = m.ws AND p.owner_decides = 0 AND p.vault = m.vault`;
+  WHERE m.ws = ? AND m.sub = ? AND p.ws = m.ws AND p.owner_decides = 0 AND p.decider = m.vault`;
 export const PENDING_DUE = `SELECT r.id, r.body FROM vault_pending_lookup p INDEXED BY vault_pending_at
   JOIN vault_requests r ON r.ws = p.ws AND r.id = p.id WHERE p.ws = ? AND p.at <= ?`;
 // Old malformed timestamps are tested in JavaScript too. Restrict each query to the relevant index range.

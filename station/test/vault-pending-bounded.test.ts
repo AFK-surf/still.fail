@@ -96,7 +96,7 @@ test("a pending list reads its member vaults and follows membership changes", as
     await secrets.preparePending("w");
     const plan = (db.prepare(`EXPLAIN QUERY PLAN ${PENDING_MEMBER}`).all("w", "alice") as { detail: string }[]).map((row) => row.detail).join("\n");
     assert.match(plan, /SEARCH m USING PRIMARY KEY/);
-    assert.match(plan, /SEARCH p USING (?:COVERING )?INDEX vault_pending_vault/);
+    assert.match(plan, /SEARCH p USING (?:COVERING )?INDEX vault_pending_decider/);
     assert.match(plan, /SEARCH r USING INDEX/);
     const viewer = { sub: "alice", email: "alice@example.test" }, lock = { ws: "w" } as never;
     reading = true;
