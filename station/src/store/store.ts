@@ -2559,25 +2559,27 @@ export class Store {
     // Membership, readiness and the selected messages must agree while another station writes.
     this.db.exec("SAVEPOINT widget_source_read");
     try {
-    const untold = this.#all("SELECT path, model FROM widget_states WHERE session = ? AND model IS NOT NULL AND told_at IS NULL ORDER BY updated_at, rowid", session);
-    if (untold.length === 0) return [];
-    if (!widgetSourcesFresh(this.db)) {
-      const missing = this.#all(`SELECT ts.thread FROM thread_sessions ts LEFT JOIN widget_source_scopes s ON s.thread=ts.thread
-        WHERE ts.session=? AND COALESCE(s.complete,0)=0`, session).map((row) => row.thread as number);
-      if (missing.length !== 0) throw new WidgetSourcesUnavailable(missing);
-    }
-    if (this.#one(`SELECT 1 FROM thread_sessions ts CROSS JOIN widget_source_invalid i ON i.thread=ts.thread
-      WHERE ts.session=? LIMIT 1`, session)) throw new Error("malformed JSON in a message's attachments");
-    return untold.map(({ path, model }) => {
-      const found = this.#one(
-        WIDGET_SOURCE,
-        session, path,
-      );
-      const base: string = path.split(/[/\\]/).pop() ?? path;
-      if (found === undefined) return { path, name: base, thread: null, model };
-      const name = typeof found.name === "string" && found.name !== "" ? found.name : base;
-      return { path, name, thread: [found.channel, found.thread_ts], model };
-    });
+      const untold = this.#all("SELECT path, model FROM widget_states WHERE session = ? AND model IS NOT NULL AND told_at IS NULL ORDER BY updated_at, rowid", session);
+      if (untold.length === 0) return [];
+      if (!widgetSourcesFresh(this.db)) {
+        const missing = this.#all(`SELECT ts.thread FROM thread_sessions ts JOIN threads t ON t.id=ts.thread
+          LEFT JOIN widget_source_scopes s ON s.thread=ts.thread
+          WHERE ts.session=? AND COALESCE(s.complete,0)=0`, session).map((row) => row.thread as number);
+        if (missing.length !== 0) throw new WidgetSourcesUnavailable(missing);
+      }
+      if (this.#one(`SELECT 1 FROM thread_sessions ts JOIN threads t ON t.id=ts.thread
+        CROSS JOIN widget_source_invalid i ON i.thread=ts.thread
+        WHERE ts.session=? LIMIT 1`, session)) throw new Error("malformed JSON in a message's attachments");
+      return untold.map(({ path, model }) => {
+        const found = this.#one(
+          WIDGET_SOURCE,
+          session, path,
+        );
+        const base: string = path.split(/[/\\]/).pop() ?? path;
+        if (found === undefined) return { path, name: base, thread: null, model };
+        const name = typeof found.name === "string" && found.name !== "" ? found.name : base;
+        return { path, name, thread: [found.channel, found.thread_ts], model };
+      });
     } finally { this.db.exec("RELEASE widget_source_read"); }
   }
 

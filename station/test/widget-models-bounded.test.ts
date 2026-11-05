@@ -77,3 +77,34 @@ test("a widget model does not traverse other messages to find its attachment", (
     assert.equal(visits, before, `widget message candidates grew from ${before} to ${visits}`);
   } finally { store.close(); }
 });
+
+test("a widget model takes only the newest of repeated attachments in a thread", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    store.insertSession({ key: "widget-session", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w",
+      token: "widget-session", createdAt: 1, lastActiveAt: 1 });
+    const thread = store.openThread("ember", "EMBER", "widget-thread", null, null).id;
+    store.joinThread(thread, "widget-session", "ember");
+    const path = "/w/target.html";
+    const put = db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
+      VALUES(?,?,'message','agent','widget-session',?,?)`);
+    const add = (from: number, to: number) => {
+      db.exec("BEGIN");
+      for (let n = from; n <= to; n++) put.run(thread, n, n, JSON.stringify([{ path, name: `post-${n}.html` }]));
+      db.exec("COMMIT");
+    };
+    add(1, 40);
+    store.putWidgetState("widget-session", path, "{}", "selected");
+    let visits = 0;
+    db.function("visited_repeated_source", (name) => { visits++; return name; });
+    db.exec(`ALTER TABLE widget_source_rows RENAME TO widget_source_rows_test;
+      CREATE VIEW widget_source_rows AS SELECT thread,n,slot,path,at,visited_repeated_source(name) AS name FROM widget_source_rows_test;`);
+    assert.equal(store.untoldWidgetModels("widget-session")[0]?.name, "post-40.html");
+    const before = visits;
+    assert.ok(before > 0);
+    add(41, 400);
+    visits = 0;
+    assert.equal(store.untoldWidgetModels("widget-session")[0]?.name, "post-400.html");
+    assert.equal(visits, before, "repeated postings do not add candidates to the result");
+  } finally { store.close(); }
+});

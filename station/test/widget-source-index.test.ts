@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { Store } from "../src/store/store.ts";
 import { installWidgetSources, WIDGET_SOURCE, widgetSourcesReady, widgetSourcesStep } from "../src/store/widget-sources.ts";
-import type { DatabaseSync } from "node:sqlite";
 
 const original = `SELECT t.channel, t.thread_ts, json_extract(a.value, '$.name') AS name FROM merged m
   JOIN threads t ON t.id = m.thread JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = ?1, json_each(m.attachments) a
@@ -11,7 +14,7 @@ const plain = (row: unknown) => row === undefined ? null : { ...(row as object) 
 const beforeIndex = (db: DatabaseSync) => db.exec(`
   DROP TRIGGER widget_source_before_add; DROP TRIGGER widget_source_add;
   DROP TRIGGER widget_source_before_change; DROP TRIGGER widget_source_change;
-  DROP TRIGGER widget_source_drop; DROP TRIGGER widget_source_new_thread;
+  DROP TRIGGER widget_source_drop; DROP TRIGGER widget_source_new_thread; DROP TRIGGER widget_source_drop_thread;
   DROP TABLE widget_source_rows; DROP TABLE widget_source_invalid;
   DROP TABLE widget_source_changed; DROP TABLE widget_source_scopes; DROP TABLE widget_source_meta;
 `);
@@ -110,6 +113,36 @@ test("old message numbers beyond JavaScript's safe integers are prepared without
     assert.deepEqual(widgetSourcesStep(db, thread, 1), { done: true, visited: 0 });
     assert.deepEqual(plain(db.prepare(WIDGET_SOURCE).get("a", path)), plain(db.prepare(original).get("a", path)));
   } finally { store.close(); }
+});
+
+test("another connection's writes remain exact during and after old-thread preparation", () => {
+  const dir = mkdtempSync(join(tmpdir(), "widget-writers-")), path = join(dir, "station.db");
+  const store = Store.open(path), db = store.db;
+  let other: DatabaseSync | null = null;
+  try {
+    beforeIndex(db);
+    const thread = store.openThread("ember", "EMBER", "writers", null, null).id;
+    store.joinThread(thread, "a", "ember");
+    const pathName = "/w/item.html", files = (name: string) => JSON.stringify([{ path: pathName, name }]);
+    const put = db.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,at,attachments)
+      VALUES(?,?,?,?,'agent','a',?,?)`);
+    put.run(thread, 1, "message", null, 1, files("first"));
+    for (let n = 2; n <= 8; n++) put.run(thread, n, "message", null, n, "[]");
+    installWidgetSources(db);
+    other = new DatabaseSync(path);
+    assert.equal(widgetSourcesStep(db, thread, 2).done, false);
+    other.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,at,attachments)
+      VALUES(?,9,'edit',1,'agent','a',9,?)`).run(thread, files("edited"));
+    while (!widgetSourcesStep(db, thread, 2).done) {}
+    const check = () => assert.deepEqual(plain(db.prepare(WIDGET_SOURCE).get("a", pathName)),
+      plain(db.prepare(original).get("a", pathName)));
+    check();
+    other.prepare(`INSERT OR REPLACE INTO entries(thread,n,kind,author_kind,author,at,attachments)
+      VALUES(?,8,'message','agent','a',100,?)`).run(thread, files("newest"));
+    check();
+    other.prepare("DELETE FROM entries WHERE thread=? AND n=8").run(thread);
+    check();
+  } finally { other?.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("a bad attachment does not make a message write fail", () => {
