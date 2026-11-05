@@ -42,7 +42,12 @@ priv struct TriplePanel {
 ///|
 fn TriplePanel::pick_now(self : TriplePanel, src : Source, station : String, of : String) -> Json? {
   if @sf.presented_open_of(self.serial) {
-    self.pick = (src.topic)("pick", pick_params(station, of)).value
+    // (until its own is read, what the page that opened it has: the same pick, so it opens as it stays, not first
+    // in its bones somewhere else)
+    match (src.topic)("pick", pick_params(station, of)).value {
+      Some(_) as v => self.pick = v
+      None => ()
+    }
   }
   self.pick
 }
@@ -111,6 +116,7 @@ fn pick_save(src : Source, station : String, of : String, patch : Map[String, Js
 /// The panel of the pick `of` on `station` (the control's: see model_triple) opened beside `from`: from the control,
 /// or from elsewhere that says what runs (an agent's card's account: `side` Right, beside the card). Opened already,
 /// it closes (a trigger toggles it: one the panel does not cover, the card's, stays pressable while it is open).
+/// `page`: the pick as the page that opened it has it (a new chat's), shown until the panel's own is read.
 pub fn open_triple_panel(
   src : Source,
   station : String,
@@ -118,6 +124,7 @@ pub fn open_triple_panel(
   from : @sf.Anchor,
   saved? : String = "",
   side? : @ui.Side = Bottom,
+  page? : Json? = None,
 ) -> Unit {
   let me = station + "\u{1}" + of
   if triple.open == me {
@@ -125,7 +132,7 @@ pub fn open_triple_panel(
     return
   }
   triple.open = me
-  let contents : TriplePanel = { serial: 0, field: @ui.Field::new(), query: "", kind: "", all: false, pick: None, sheet: false }
+  let contents : TriplePanel = { serial: 0, field: @ui.Field::new(), query: "", kind: "", all: false, pick: page, sheet: false }
   pick_draft(src, station, of, { "open": Json::boolean(true) })
   @sf.panel(
     @sf.t("android-chat.new.model"),
@@ -187,7 +194,7 @@ pub fn model_triple(
   let open = triple.open == me
   if can && !open && (c.clicked(id) || triple.asked == me) {
     triple.asked = ""
-    open_triple_panel(src, station, of, Of(id), saved~)
+    open_triple_panel(src, station, of, Of(id), saved~, page~)
   }
   let runtime = text(value, "runtime")
   let (words, muted) = if small { (triple_words_xs, triple_muted_xs) } else { (triple_words, triple_muted) }

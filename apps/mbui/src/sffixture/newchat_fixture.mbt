@@ -405,9 +405,10 @@ pub fn fix_pick() -> Json {
   }
   {
     "options": fix_pick_options(fix_shown_models()),
-    "near": Json::array(fix_near().map(Json::string(_))),
-    // (those starred, those used most left out)
-    "liked": Json::array(n.liked.filter(fn(m) { !fix_near().contains(m) }).map(Json::string(_))),
+    // (those used most, the starred left out)
+    "near": Json::array(fix_near().filter(fn(m) { !n.liked.contains(m) }).map(Json::string(_))),
+    // (every one starred, however often used)
+    "liked": Json::array(n.liked.map(Json::string(_))),
     // (the makers of its models, in their order, as the core says them)
     "makers": {
       let makers : Array[(String, String, Int)] = []
