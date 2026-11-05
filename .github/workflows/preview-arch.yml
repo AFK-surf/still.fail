@@ -11,9 +11,12 @@ on:
     workflows: [preview]
     types: [completed]
     branches: [arch/next]
+# (one at a time, the one running let finish: a newer one waits, and one newer still takes its place. Cancelled as each
+# merge came, arch/next's merges minutes apart and a run 3-4 minutes long, none of four in a row finished, 2026-11-05
+# (42064784077, 42064968220, 42065096144): a branch took an `a-` some merges old and compiled 92 of 631 units again)
 concurrency:
   group: preview-arch
-  cancel-in-progress: true
+  cancel-in-progress: false
 permissions:
   contents: read
 jobs:
@@ -124,14 +127,17 @@ jobs:
         run: |
           node scripts/native.ts fetch shell win32-x64
           node scripts/native.ts fetch engine win32-x64
-      # (main's build under its own units, as a branch's preview has them)
+      # (its own build last kept, else main's, under its own units)
       - uses: actions/cache/restore@v4
+        id: build-cache
         with:
           path: |
             apps/mbui/mbui/_build
             apps/mbui/mbui/out
-          key: mbui-win-build-mono-${{ github.event.workflow_run.head_sha }}
-          restore-keys: mbui-win-build-mono-
+          key: mbui-win-build-a-${{ github.event.workflow_run.head_sha }}
+          restore-keys: |
+            mbui-win-build-a-
+            mbui-win-build-mono-
       - uses: actions/cache/restore@v4
         id: own
         with:
@@ -170,6 +176,23 @@ jobs:
         with:
           path: .ci/mbc-store
           key: ${{ env.STORE_KEY }}
+      # arch/next's build itself (moon's _build, the split C and its objects, the .exe), by its C as preview's main build
+      # is kept: a branch off arch/next took main's, and moon made the C of every package arch/next had changed again,
+      # some 70 s of the 139 its build took after the units came from `a-` (42066369298, 2026-11-05); preview.yml's
+      # (arch/next's) takes this one before main's
+      - name: arch/next's build, by its C
+        if: always() && steps.build.outcome == 'success'
+        run: |
+          d=$(sh apps/mbui/scripts/mbui.sh)
+          c=$(sha256sum "$d/out/win/app/_build/native/release/build/stillfail/stillfail/stillfail.c" | cut -c1-16)
+          echo "BUILD_A_KEY=mbui-win-build-a-$c" >> "$GITHUB_ENV"
+      - if: always() && env.BUILD_A_KEY != '' && env.BUILD_A_KEY != steps.build-cache.outputs.cache-matched-key
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            apps/mbui/mbui/_build
+            apps/mbui/mbui/out
+          key: ${{ env.BUILD_A_KEY }}
       - if: always() && env.HBC_A_KEY != '' && env.HBC_A_KEY != steps.hbc.outputs.cache-matched-key
         uses: actions/cache/save@v4
         with:
