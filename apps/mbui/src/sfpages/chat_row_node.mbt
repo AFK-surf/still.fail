@@ -28,8 +28,11 @@ pub fn chat_row_node(
   let finger = !@sf.pointer_rests()
   let first = @signals.untracked(item)
   let key = @sfbase.row_name(first)
-  // (made again for its chat, asked back say: whatever swiped it off before is over)
-  rows.swiped_off.remove(swiped_key(first))
+  // (asked back after an archive: its old swipe is over; one still being archived belongs to its chat)
+  let swipe_key = swiped_key(first)
+  if !rows.pending_swipes.contains(swipe_key) {
+    rows.swiped_off.remove(swipe_key)
+  }
   let r = fn() { row_ref(item()) }
   let offline = fn() { item().offline is Some(_) }
   let menu_ok = fn() { !found && item().offline is None && !item().pending }
@@ -142,7 +145,10 @@ pub fn chat_row_node(
     // and a while after (left_lit_ms), then fades (left_fade_ms); one row so, the chat last in view
     let left = @sf.EdgeWay::new(0.0)
     // (a finger's swiped left in its slot, by so many points: swipe_node's)
-    let off = @sf.EdgeWay::new(0.0)
+    let off = match rows.pending_swipes.get(swipe_key) {
+      Some(pending) => pending.way
+      None => @sf.EdgeWay::new(0.0)
+    }
     let hand = @sf.EdgeWay::new(0.0)
     let chosen = @sf.EdgeWay::new(if @signals.untracked(on) { 1.0 } else { 0.0 })
     let ground = fn() {
@@ -359,7 +365,10 @@ pub fn chat_row_node(
     )
     if swipes {
       let past : @signals.Signal[Bool] = @signals.signal(false)
-      let out : @signals.Signal[Bool] = @signals.signal(false)
+      let out : @signals.Signal[Bool] = match rows.pending_swipes.get(swipe_key) {
+        Some(pending) => pending.out
+        None => @signals.signal(false)
+      }
       row.offset(By(fn() { (off.shown(row), 0.0) })) |> ignore
       swipe_under_node(row, off, past, out)
       swipe_node(holder, src, item, off, past, out)
@@ -542,6 +551,13 @@ fn swipe_node(
         from.val = @signals.untracked(fn() { off.shown(sw) })
         from_x.val = d.wx
         (due.val)()
+        match rows.pending_swipes.get(key) {
+          Some(pending) => {
+            (pending.cancel)()
+            rows.pending_swipes.remove(key)
+          }
+          None => ()
+        }
         off.put(from.val)
         out.set(true)
       }
@@ -568,17 +584,24 @@ fn swipe_node(
             // off to the left, then archived there (no copy of it left behind as it leaves the list: it is out of
             // sight); refused, it comes back from there
             rows.swiped_off[key] = true
-            off.go_by(sw, -w, @motion.move(), velocity=d.vx * 1000.0)
+            let pending : PendingSwipeArchive = { way: off, out, cancel: fn() {  } }
+            rows.pending_swipes[key] = pending
+            let owner = sw.tree.root()
+            off.go_by(owner, -w, @motion.move(), velocity=d.vx * 1000.0)
             // (archived as it is off: as its way there ends, or now, where the finger took it all the way already and
             // it goes no further (no way said: its end none of this one's))
-            sw.at_moment(dmax(off.end(), sw.cause_at()), fn() {
-              archive_row(src, i, failed=fn() {
+            pending.cancel = owner.at_moment(dmax(off.end(), sw.cause_at()), fn() {
+              archive_row(src, i, ok=fn() {
+                rows.pending_swipes.remove(key)
+              }, failed=fn() {
                 rows.swiped_off.remove(key)
-                off.go_from(sw, -w, 0.0, @motion.move_spring)
-                rests()
+                off.go_from(owner, -w, 0.0, @motion.move_spring)
+                pending.cancel = owner.at_moment(off.end(), fn() {
+                  rows.pending_swipes.remove(key)
+                  out.set(false)
+                })
               })
             })
-            |> ignore
           }
         } else {
           back(d.vx)
