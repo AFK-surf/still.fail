@@ -8266,8 +8266,21 @@ fn Tree::alive_id(self : Tree, id : NodeId) -> Bool {
 ///|
 /// Where what is laid out may not be read now (what the host has once handed on, before anything is laid out:
 /// @ui.on_host_said): why. None: it may be read.
-// kept across runs: said and put back around each such hand-off
 let layout_reads_shut : Ref[String?] = Ref(None)
+
+///|
+/// What a run leaves here forgotten (a Tester starting): what was shut around a hand-off is put back as it ends, but a
+/// run stopped in one (a test that aborts there, as it should) leaves it shut, and every run after it faults where it
+/// reads what is laid out.
+pub fn reset_globals() -> Unit {
+  layout_reads_shut.val = None
+  laid_passes_traced.val = false
+  laid_passes_trace.val = fn(s) { println(s) }
+  // (what a node lends, let go with it: one a stopped run made is never let go)
+  windowed_room.lenders.clear()
+  runs_liter.lenders.clear()
+  runs_picker.lenders.clear()
+}
 
 ///|
 /// From now on what is laid out may not be read (`why`: where), until it is put back with what this gives (None: it may

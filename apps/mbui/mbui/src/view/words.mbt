@@ -34,10 +34,12 @@ pub(all) enum Spacing {
 
 ///|
 /// Letters as their font sets them, nothing added.
+// kept across runs: a value, nothing writes it
 pub let letters_own : Spacing = Ems(0.0)
 
 ///|
 /// Words as a node set them till they were said to be otherwise: 15 points, regular, 22 a line, wrapped.
+// kept across runs: a value, nothing writes it
 pub let words_plain : WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: letters_own, balance: false }
 
 ///|
@@ -61,6 +63,7 @@ pub(all) struct RunsLook {
 
 ///|
 /// Pieces set as an old view's paragraph is where it says nothing of it (Ctx::rich's own).
+// kept across runs: a value, nothing writes it
 pub let runs_plain : RunsLook = {
   link: 0x0A84FFFFL,
   pressed: 0x0A84FF29L,

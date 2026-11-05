@@ -182,3 +182,21 @@ test "panic: what is laid out read by what is handed on itself, laid_window_told
   host.had.val = Some("opened")
   t.draw()
 }
+
+///|
+test "a run stopped in a hand-off (what is laid out shut): the Tester after it reads what is laid out" {
+  // (as a test that aborts in on_host_said's hand-off leaves it: shut, never put back)
+  @view.shut_layout_reads(Some("a hand-off a run stopped in")) |> ignore
+  let size : Ref[(Double, Double)?] = Ref(None)
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  set_view_app(fn(root) {
+    root.box(fn(b) {
+      b.width(Is(Some(100.0))).height(Is(Some(40.0))) |> ignore
+      b.reacts(fn() { b.laid_size_told() }, fn(z) { size.val = z })
+    })
+    |> ignore
+  })
+  t.draw()
+  t.draw()
+  assert_eq(size.val, Some((100.0, 40.0)))
+}
