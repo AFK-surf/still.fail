@@ -90,6 +90,16 @@ test("the internal owner grant list ignores pending requests and does not mark t
   assert.deepEqual({ reads, named }, { reads: [1, 1], named: [0, 0] });
 });
 
+test("internal owner grants seek the existing owner and status index", () => {
+  const w = fixture(2, true);
+  try {
+    const plan = w.db.prepare("EXPLAIN QUERY PLAN SELECT body FROM adb_requests WHERE owner = ? AND status = 'granted'")
+      .all("p@example.test").map((row) => String(row.detail)).join(" | ");
+    assert.match(plan, /SEARCH adb_requests USING INDEX adb_requests_by_owner \(owner=\? AND status=\?\)/);
+    assert.doesNotMatch(plan, /SCAN |TEMP B-TREE/);
+  } finally { w.db.close(); }
+});
+
 test("finding a held phone grant does not read the session's pending requests", () => {
   const reads: number[] = [];
   for (const pending of [40, 400]) {
