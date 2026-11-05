@@ -126,6 +126,8 @@ export class Readers {
   private sessionBindings: SessionBindingsBuilder | null = null;
   private archiveMarks: ArchiveMarkBuilder | null = null;
   private sessionUpJobs: SessionUpJobsBuilder | null = null;
+  /// Reads of the same old session share one unattended preparation, including during handover.
+  private preparingUpJobs = new Set<string>();
   private widgetSources: WidgetSourcesBuilder | null = null;
   private cardPosts: CardPostsBuilder | null = null;
   private ccIndex: CcIndexBuilder | null = null;
@@ -187,7 +189,16 @@ export class Readers {
         // read 40 MB of a transcript in 10 s on a station short of memory (2026-11-03), every write and read waiting on the
         // disk meanwhile.
         if (asked.background) line.rested = now + (now - asked.took);
-        if (answer.text !== undefined) asked.resolve(answer.text);
+        if (answer.text !== undefined) {
+          const session = answer.prepareUpJobs;
+          if (session !== undefined && !this.preparingUpJobs.has(session)) {
+            this.preparingUpJobs.add(session);
+            void this.prepareSessionUpJobs([session]).catch((error) => {
+              if (!this.closed) log.warn("readers", "preparing a session's up jobs failed", { error: (error as Error).message });
+            }).finally(() => this.preparingUpJobs.delete(session));
+          }
+          asked.resolve(answer.text);
+        }
         else asked.reject(new HttpError(answer.status ?? 500, answer.error ?? "read failed"));
       }
       this.pump(line);
