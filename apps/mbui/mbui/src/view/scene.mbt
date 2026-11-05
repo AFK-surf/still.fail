@@ -14,6 +14,16 @@ pub fn Tree::take_placed(self : Tree) -> Array[NodeId] {
 }
 
 ///|
+/// The nodes what each holds is drawn in another order since this was last asked (an `each`'s rows moved among
+/// themselves, what is leaving kept where it was): the scene draws again what each is drawn in, in its order now.
+/// Taken: asked again, only those since.
+pub fn Tree::take_ordered(self : Tree) -> Array[NodeId] {
+  let out = self.ordered_pending.copy()
+  self.ordered_pending.clear()
+  out
+}
+
+///|
 /// Whether node `id` begins a layer of the scene: what it and all it holds draw is kept as one, made again only where
 /// something of it changed, the rest of the window left as it was. The window's root; what the root holds (its pages,
 /// what is over them); what a `show`, `pick` or `each` made (a page, a sheet, a row); a list's rows; an old view; what
@@ -106,15 +116,82 @@ pub fn Tree::holds_at(self : Tree, at : Int, inner : NodeId) -> Bool {
 /// gone through (from 0) and that of the innermost that holds it and draws (-1: none), where it is drawn, how opaque,
 /// how big and where were nothing grown or shrunk; `enter` whether what node `at` holds is gone into (what the scene
 /// keeps copied skipped whole). `from`, `held`: one layer gone through again alone, what holds it composed as `held`
-/// says.
+/// says; `own`: `from` itself where `held` says, its own place (a layer gone through in its own terms, its node at 0, 0
+/// as opaque and as big as it is drawn: Tree::placed_in says where each it holds is in it).
 pub fn Tree::walk_scene(
   self : Tree,
   f : (Int, Int, Content, Double, Double, Double, Double, Double, Double) -> Unit,
   enter~ : (Int, Double, Double, Double, Bool) -> Bool,
   from? : Int = 0,
   held? : (Double, Double, Double, Double, Double, Double) = (0.0, 0.0, 1.0, 1.0, 0.0, 0.0),
+  own? : Bool = false,
 ) -> Unit {
-  self.walk_drawn(f, drawing=true, enter~, from~, held~)
+  self.walk_drawn(f, drawing=true, enter~, from~, held~, own~)
+}
+
+///|
+/// Where the root is drawn as the scene goes through it from the window's top left (Tree::walk_scene's from it, nothing
+/// holding it): where, how opaque, how big, and where were nothing grown or shrunk nor drawn off.
+pub fn Tree::root_place(self : Tree) -> (Double, Double, Double, Double, Double, Double) {
+  guard self.nodes.length() > 0 && self.nodes[0].live else { return (0.0, 0.0, 1.0, 1.0, 0.0, 0.0) }
+  let n = self.nodes[0]
+  let g = self.pixel_grid
+  let (ox, oy) = n.look.drawn_off
+  let (ox, oy) = if g > 0.0 && (ox != 0.0 || oy != 0.0) { ((ox * g).round() / g, (oy * g).round() / g) } else { (ox, oy) }
+  (
+    0.0 + 1.0 * (n.lx + ox + (1.0 - n.ls) * n.lpx),
+    0.0 + 1.0 * (n.ly + oy + (1.0 - n.ls) * n.lpy),
+    1.0 * n.la,
+    1.0 * n.ls,
+    0.0 + n.lx,
+    0.0 + n.ly,
+  )
+}
+
+///|
+/// Where node `id` is drawn in node `from` as the scene goes through `from` in its own terms (Tree::walk_scene's `own`,
+/// `from` at 0, 0, as opaque as `a` and as big as `s`): where, how opaque, how big, and where were nothing grown or
+/// shrunk nor drawn off, composed down from `from` as the walk composes it, number for number. None where `from` does
+/// not hold it, or it is left out of its row or held by what is.
+pub fn Tree::placed_in(
+  self : Tree,
+  id : NodeId,
+  from : Int,
+  a : Double,
+  s : Double,
+) -> (Double, Double, Double, Double, Double, Double)? {
+  guard self.alive_id(id) && from >= 0 && from < self.nodes.length() && self.nodes[from].live else { return None }
+  let chain = []
+  let mut i = id.at
+  while i >= 0 && i != from {
+    if !self.nodes[i].slot {
+      chain.push(i)
+    }
+    i = self.nodes[i].parent
+  }
+  guard i == from else { return None }
+  let g = self.pixel_grid
+  let mut x = 0.0
+  let mut y = 0.0
+  let mut a = a
+  let mut s = s
+  let mut ux = 0.0
+  let mut uy = 0.0
+  for k = chain.length() - 1; k >= 0; k = k - 1 {
+    let n = self.nodes[chain[k]]
+    if n.out {
+      return None
+    }
+    let (ox, oy) = n.look.drawn_off
+    let (ox, oy) = if g > 0.0 && (ox != 0.0 || oy != 0.0) { ((ox * g).round() / g, (oy * g).round() / g) } else { (ox, oy) }
+    x = x + s * (n.lx + ox + (1.0 - n.ls) * n.lpx)
+    y = y + s * (n.ly + oy + (1.0 - n.ls) * n.lpy)
+    a = a * n.la
+    s = s * n.ls
+    ux = ux + n.lx
+    uy = uy + n.ly
+  }
+  Some((x, y, a, s, ux, uy))
 }
 
 ///|
@@ -163,7 +240,11 @@ pub fn Tree::placed_of(self : Tree, id : NodeId) -> (Double, Double, Double, Dou
 
 ///|
 /// Whether anything was told the scene since it last took what changed (Tree::take_changed, take_placed,
-/// take_removed): a node made again, placed otherwise or let go, not yet taken.
+/// take_removed, take_ordered): a node made again, placed otherwise, let go or what it holds put in another order, not
+/// yet taken.
 pub fn Tree::scene_told_since(self : Tree) -> Bool {
-  !self.pending.is_empty() || !self.placed_pending.is_empty() || !self.removed.is_empty()
+  !self.pending.is_empty() ||
+  !self.placed_pending.is_empty() ||
+  !self.removed.is_empty() ||
+  !self.ordered_pending.is_empty()
 }

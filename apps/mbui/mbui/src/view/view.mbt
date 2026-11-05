@@ -938,6 +938,8 @@ pub struct Tree {
   pending : Array[NodeId]
   /// the nodes placed, faded, turned or cut otherwise since the host last took them (Tree::take_placed)
   placed_pending : Array[NodeId]
+  /// the nodes what each holds is drawn in another order since the host last took them (Tree::take_ordered)
+  ordered_pending : Array[NodeId]
   mut drawn_due : Bool
   /// how many ask for where things stand as each change comes, before it is taken (View::laid_before_causes): what is
   /// laid out otherwise by a change before it laid out and placed as that one comes, whether a frame came or not
@@ -1121,6 +1123,7 @@ pub fn Tree::new(
     removed: [],
     pending: [],
     placed_pending: [],
+    ordered_pending: [],
     drawn_due: false,
     before_causes: 0,
     standing: false,
@@ -5588,6 +5591,20 @@ fn View::boxes_again(self : View) -> Unit {
 }
 
 ///|
+/// What node `at` holds put in another order: drawn so, told the scene that draws it (Tree::take_ordered) as the node
+/// that holds them in its order (itself, or the first not a slot holding it).
+fn Tree::ordered_at(self : Tree, at : Int) -> Unit {
+  let mut at = at
+  while self.nodes[at].slot && self.nodes[at].parent >= 0 {
+    at = self.nodes[at].parent
+  }
+  let id = { at, gen: self.nodes[at].gen }
+  if !self.ordered_pending.contains(id) {
+    self.ordered_pending.push(id)
+  }
+}
+
+///|
 /// Node `v` let go and taken out of what it holds.
 fn View::drop(self : View, v : View) -> Unit {
   v.let_go()
@@ -5749,6 +5766,7 @@ pub fn[T : Eq, K : Hash + Eq] View::each(
         kids.push(v)
       }
       slot.boxes_again()
+      tree.ordered_at(slot.at)
     }
   })
   slot.owns(stop) |> ignore
@@ -7201,13 +7219,22 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
   n.lpx = px
   n.lpy = py
   if went {
-    self.work.composed = self.work.composed + 1
-    self.composed.push({ at, gen: n.gen })
-    self.placed_pending.push({ at, gen: n.gen })
+    self.composed_again(at)
   }
   if sized || n.look_due {
     self.made_again(at)
   }
+}
+
+///|
+/// Node `at` composed elsewhere than it was in what holds it (placed again, or beside what it goes beside:
+/// Tree::besides_placed): composed again there, and the scene told so at this cause, what it draws drawn where it is now
+/// (Tree::take_placed), however it came to be there.
+fn Tree::composed_again(self : Tree, at : Int) -> Unit {
+  let n = self.nodes[at]
+  self.work.composed = self.work.composed + 1
+  self.composed.push({ at, gen: n.gen })
+  self.placed_pending.push({ at, gen: n.gen })
 }
 
 ///|
@@ -7413,7 +7440,8 @@ fn Tree::each_drawn_in_order(
 /// (x, y) and how big (s): what it says no to skipped whole, none of it visited. No order of every node is kept: what
 /// is gone through is what is there (retained.md rule 13). `from`: that node's subtree alone, what holds it composed as
 /// `held` says (where what holds it is in the window, how opaque, how big, and where it would be were nothing grown or
-/// shrunk nor drawn off), as one layer is gone through again.
+/// shrunk nor drawn off), as one layer is gone through again. `own`: `from` itself where `held` says (its own place,
+/// opacity and size: at 0, 0 for a layer gone through in its own terms, Tree::placed_in), not composed from it.
 fn Tree::walk_drawn(
   self : Tree,
   f : (Int, Int, Content, Double, Double, Double, Double, Double, Double) -> Unit,
@@ -7421,6 +7449,7 @@ fn Tree::walk_drawn(
   enter~ : (Int, Double, Double, Double, Bool) -> Bool,
   from? : Int = 0,
   held? : (Double, Double, Double, Double, Double, Double) = (0.0, 0.0, 1.0, 1.0, 0.0, 0.0),
+  own? : Bool = false,
 ) -> Unit {
   if self.nodes.length() == 0 || !self.nodes[0].live || from < 0 || from >= self.nodes.length() || !self.nodes[from].live {
     return
@@ -7461,14 +7490,15 @@ fn Tree::walk_drawn(
     } else {
       (ox, oy)
     }
-    let x = bx + bs * (n.lx + ox + (1.0 - n.ls) * n.lpx)
-    let y = by + bs * (n.ly + oy + (1.0 - n.ls) * n.lpy)
-    let a = ba * n.la
-    let s = bs * n.ls
+    let mine = own && at == from
+    let x = if mine { bx } else { bx + bs * (n.lx + ox + (1.0 - n.ls) * n.lpx) }
+    let y = if mine { by } else { by + bs * (n.ly + oy + (1.0 - n.ls) * n.lpy) }
+    let a = if mine { ba } else { ba * n.la }
+    let s = if mine { bs } else { bs * n.ls }
     // (and were nothing grown or shrunk nor drawn off: its words set on the pixels there, then drawn off by whole pixels,
     // as an old view's are painted where they are laid out and then moved by its look)
-    let ux = hx + n.lx
-    let uy = hy + n.ly
+    let ux = if mine { hx } else { hx + n.lx }
+    let uy = if mine { hy } else { hy + n.ly }
     let held = match n.content {
       Some(c) => {
         let i = count.val

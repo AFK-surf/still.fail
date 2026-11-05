@@ -34,7 +34,7 @@ test "an old view without a clipping ancestor draws and damages outside its layo
   let (left, top, right, bottom) = s.5
   assert_true(left <= 72.0 && top <= 52.0 && right >= 188.0 && bottom >= 148.0,
     msg="the shadow can draw eight points outside the box: \{s}")
-  let reach = scene.reach.get(host.val.unwrap())
+  let reach = scene.reach.get(host.val.unwrap()).map(fn(e) { e.reach.rect() })
   assert_true(reach is Some((l, u, r, d)) && l <= 72.0 && u <= 52.0 && r >= 188.0 && d >= 148.0,
     msg="the hosted layer reaches its shadow: \{reach}")
   shown.set(false)
