@@ -11,7 +11,7 @@ pub(all) enum Entry {
   Older
   Empty
   Line
-  Said(Message)
+  Said(SaidRow)
   Sent(Elsewhere)
   Newer
   Out(Outgoing)
@@ -342,7 +342,9 @@ pub fn entries_of(v : ChatView) -> Array[Entry] {
   for e in v.elsewhere {
     out.push(Sent(e))
   }
-  for m in v.messages {
+  // (each as its row knows it, read off its JSON: none of them made a Message here, a long chat's thousands)
+  for i in 0..<v.messages.length() {
+    let m = v.messages.row(i)
     match v.unread_line {
       Some(l) if l == m.seq => out.push(Line)
       _ => ()
@@ -429,6 +431,8 @@ fn chat_key(r : ChatRef) -> String {
 priv struct ChatRead {
   view : ChatView
   list : Array[Entry]
+  /// what of its value its entries are made of besides its messages (entry_sign)
+  sign : String
 }
 
 ///|
@@ -455,9 +459,32 @@ fn chat_read(src : Source, params : Map[String, Json], was : ChatRead??) -> Chat
       }
   }
   // (followed: worked out again as one comes, goes or is set; what is made of one gone let go of)
-  messages.read_changes() |> ignore
+  let changed = messages.read_changes()
   let view = chat_view_of(v, messages)
-  Some({ view, list: entries_of(view) })
+  let sign = entry_sign(v)
+  // (its entries as they were where nothing they are made of changed: a key typed in its composer, a read told, its
+  // title, change the chat's value and none of its rows; not gone through again, a long chat's thousands)
+  let list = match was {
+    Some(Some(w)) if changed.is_empty() && physical_equal(w.view.messages, messages) && w.sign == sign => w.list
+    _ => entries_of(view)
+  }
+  Some({ view, list, sign })
+}
+
+///|
+/// What of a chat's value (its topic's, but its messages) its list's entries are made of (entries_of): what the page
+/// before and after say, where the unread line is, what went elsewhere, its outbox, where it stands and its agents.
+fn entry_sign(v : Json) -> String {
+  let s = Some(v)
+  let part = fn(k : String) {
+    match field(s, k) {
+      Some(j) => j.stringify()
+      None => ""
+    }
+  }
+  ["more", "newer", "unreadLine", "elsewhere", "outbox", "stateText", "stateLead", "stateRest", "agents"]
+  .map(part)
+  .join("\u{1}")
 }
 
 ///|
@@ -1925,13 +1952,9 @@ pub(all) struct ListAfter {
 /// decided, how it stands): what it was built from made again the same (the core's view read again) is no change.
 pub fn shown_sign(e : Entry) -> String {
   match e {
-    Said(m) => {
-      let d = match m.decision {
-        Some(d) => "\{d.resolved}\{d.dismissed}\{d.chosen}"
-        None => ""
-      }
-      "m\{m.text.length()}|\{m.attachments.length()}|\{m.quotes.length()}|\{m.time is Some(_)}|\{m.waiting}|\{m.joined}|\{m.followed}|\{d}|\{m.notice_failed}|\{m.notice_words.length()}|\{m.notice_retry_session}|\{m.notice_detail.length()}"
-    }
+    // (a message as its list's version of it: set again, a change of it, whatever of it changed; its JSON read again the
+    // same, none. Not made a Message for it: every row's sign is asked, a long chat's thousands)
+    Said(m) => "m\{m.version}|\{m.joined}"
     Out(o) => "o\{o.text.length()}|\{o.attachments.length()}|\{o.state}|\{o.joined}|\{o.followed}"
     State(a, b, c) => "s" + a + b + c
     Working(_) => "w"
@@ -1977,7 +2000,8 @@ pub fn sent_rows_taken(
       rd.sent[o.seq] = o.id
     }
   }
-  for m in v.messages {
+  for i in 0..<v.messages.length() {
+    let m = v.messages.row(i)
     if m.outgoing != "" {
       rd.sent[m.seq] = m.outgoing
     }

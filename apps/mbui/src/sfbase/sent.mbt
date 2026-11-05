@@ -55,7 +55,8 @@ fn sent_before(v : ChatView) -> Map[String, Bool] {
   for o in v.outbox {
     before["o:" + o.id] = true
   }
-  for m in v.messages {
+  for i in 0..<v.messages.length() {
+    let m = v.messages.row(i)
     if m.outgoing != "" {
       before["o:" + m.outgoing] = true
     }
@@ -155,7 +156,16 @@ pub fn sent_local(
       None => Map::new()
     },
     newest: match v {
-      Some(v) => v.messages.fold(init=-@double.infinity, fn(n, m) { if m.seq > n { m.seq } else { n } })
+      Some(v) => {
+        let mut n = -@double.infinity
+        for i in 0..<v.messages.length() {
+          let s = v.messages.row(i).seq
+          if s > n {
+            n = s
+          }
+        }
+        n
+      }
       None => -@double.infinity
     },
   })

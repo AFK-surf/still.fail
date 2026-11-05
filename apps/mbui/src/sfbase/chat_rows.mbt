@@ -16,7 +16,7 @@ pub struct ChatRows {
   /// their changes since the rows last took them
   priv reader : @rows.ListReader
   /// a message's row's key (as the page keys it: the key it was sent as from here, else `m:` and its ts)
-  priv key_of : (Message) -> String
+  priv key_of : (SaidRow) -> String
   priv mut head : Array[Entry]
   priv mut tail : Array[Entry]
   /// each tail row's sign as last made (shown_sign): another, its version one more
@@ -41,7 +41,7 @@ priv struct RowRead {
 
 ///|
 /// The rows of a chat whose messages are `messages`, each message's row keyed by `key_of`.
-pub fn ChatRows::new(messages : ChatMessages, key_of : (Message) -> String) -> ChatRows {
+pub fn ChatRows::new(messages : ChatMessages, key_of : (SaidRow) -> String) -> ChatRows {
   {
     messages,
     reader: messages.rows.reader(),
@@ -78,7 +78,7 @@ pub fn ChatRows::entry(self : ChatRows, i : Int) -> Entry {
   if i < h {
     self.head[i]
   } else if i < h + n {
-    Said(self.messages[i - h])
+    Said(self.messages.row(i - h))
   } else {
     self.tail[i - h - n]
   }
@@ -181,7 +181,7 @@ fn ChatRows::said_of(self : ChatRows, key : String) -> Unit {
 /// The row of message `at` (by its index among them) told it shows otherwise.
 fn ChatRows::said_at(self : ChatRows, at : Int) -> Unit {
   if at >= 0 && at < self.count() {
-    self.said_of((self.key_of)(self.messages[at]))
+    self.said_of((self.key_of)(self.messages.row(at)))
   }
 }
 
@@ -273,7 +273,7 @@ fn ChatRows::message_at(self : ChatRows, seq : Double) -> Int {
   let mut i = self.count() - 1
   while i >= 0 {
     self.work += 1
-    let m = self.messages[i]
+    let m = self.messages.row(i)
     if m.seq == seq {
       return i
     }

@@ -198,11 +198,18 @@ pub fn emit_take(c : @ui.Ctx, e : Emits, v : ChatView, showing : Map[String, Boo
   for i in came {
     // (where one come then is now: past its end, taken out since)
     guard i < n else { continue }
-    let m = v.messages[i]
-    let k = seq_s(m.seq)
+    // (one not said while the chat shows comes of no avatar: decided off its row, no Message made of it, as a chat's
+    // first take is of all of them, a long chat's thousands)
+    let r = v.messages.row(i)
+    let k = seq_s(r.seq)
     if e.decided.contains(k) {
       continue
     }
+    if !r.said {
+      e.decided[k] = false
+      continue
+    }
+    let m = r.message()
     let agent = if m.author_kind == "agent" && !m.mine && !m.system { m.by.agent } else { "" }
     let goes = e.watched && m.said && agent != "" && showing.contains(agent)
     e.decided[k] = goes
