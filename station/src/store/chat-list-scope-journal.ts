@@ -33,9 +33,17 @@ export function installRecentScopeJournal(db: DatabaseSync): void {
   db.exec("BEGIN IMMEDIATE");
   try {
     if (!installed()) db.exec(`
-      CREATE TABLE recent_scope_tracked (kind INTEGER NOT NULL, ws TEXT NOT NULL, PRIMARY KEY(kind, ws)) WITHOUT ROWID;
+      CREATE TABLE recent_scope_tracked (kind INTEGER NOT NULL, ws TEXT NOT NULL, total INTEGER NOT NULL DEFAULT 0,
+        complete INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(kind, ws)) WITHOUT ROWID;
       CREATE TABLE recent_scope_session_dirty (kind INTEGER NOT NULL, ws TEXT NOT NULL, session TEXT NOT NULL,
         revision INTEGER NOT NULL, PRIMARY KEY(kind, ws, session)) WITHOUT ROWID;
+      CREATE TABLE recent_scope_sources (ws TEXT NOT NULL, thread INTEGER NOT NULL, session TEXT NOT NULL,
+        PRIMARY KEY(ws, thread, session)) WITHOUT ROWID;
+      CREATE INDEX recent_scope_sources_session ON recent_scope_sources(ws, session, thread);
+      CREATE TABLE recent_scope_rows (ws TEXT NOT NULL, thread INTEGER NOT NULL, at INTEGER NOT NULL,
+        said_at INTEGER NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(ws, thread)) WITHOUT ROWID;
+      CREATE INDEX recent_scope_order ON recent_scope_rows(ws, at DESC, said_at DESC, created_at DESC, thread DESC);
+      CREATE INDEX recent_scope_rows_thread ON recent_scope_rows(thread, ws);
       -- REPLACE can remove another session without a DELETE trigger, whether it conflicts by key or token.
       CREATE TRIGGER recent_scope_session_before_add BEFORE INSERT ON sessions BEGIN
         ${markSession(keyConflict(""), keyConflictWs(""))}
