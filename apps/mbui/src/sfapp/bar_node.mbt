@@ -18,14 +18,14 @@ fn bar_said_again() -> Unit {
 }
 
 ///|
-/// The moment the bar is painted at, as `n` paints in the frame `laid` is of: the frame's while any of its ways goes
-/// (Laid::at: each frame painted again for it till they are all at rest), else the logic's (where they rest); read
-/// again as it is told anew and as they come to rest.
-fn bar_moment(laid : @view.Laid, n : @view.View) -> Double {
+/// The moment a part of the bar is painted at, as `n` paints in the frame `laid` is of, its ways ending at `until`: the
+/// frame's while they go (Laid::at: each frame painted again for it till they end), else the logic's (where they rest);
+/// read again as the bar is told anew and as each of its ways ends.
+fn bar_moment(laid : @view.Laid, n : @view.View, until : Double) -> Double {
   bar_said.get() |> ignore
   bar_ways_rested.get() |> ignore
   let now = n.logic_at()
-  if bar.rest() > now {
+  if until > now {
     laid.at()
   } else {
     now
@@ -75,18 +75,28 @@ fn bar_node(g : @view.View, src : Source, ws : () -> Workspace?) -> Unit {
   }
   g.box(fn(b) {
     b.over(Is(true)) |> ignore
-    // (its ways said to have come to rest at their end: what reads them read again then, at rest)
-    let due : Ref[() -> Unit] = Ref(fn() {  })
+    // (each of its ways said to have ended at its end: what reads it read again then, at rest)
+    let due : Array[() -> Unit] = []
+    let let_go = fn() {
+      for stop in due {
+        stop()
+      }
+      due.clear()
+    }
     b.reacts(fn() { bar_said.get() }, fn(_) {
-      (due.val)()
-      let end = bar.rest()
-      due.val = if end > b.logic_at() {
-        b.at_moment(end, fn() { bar_ways_rested.set(@signals.untracked(fn() { bar_ways_rested.get() }) + 1) })
-      } else {
-        fn() {  }
+      let_go()
+      let now = b.logic_at()
+      let ends : Array[Double] = []
+      for e in bar_ends() {
+        if e > now && !ends.contains(e) {
+          ends.push(e)
+        }
+      }
+      for e in ends {
+        due.push(b.at_moment(e, fn() { bar_ways_rested.set(@signals.untracked(fn() { bar_ways_rested.get() }) + 1) }))
       }
     })
-    b.owns(fn() { (due.val)() }) |> ignore
+    b.owns(let_go) |> ignore
     // (shown; going, it takes nothing and says nothing, drawn as it goes down out of the way, and is gone once it has:
     // back while it goes, the same, come back)
     b.show(
@@ -117,14 +127,14 @@ fn bar_holder_node(holder : @view.View, src : Source, ws : () -> Workspace?, lai
     bar_glass_top(l().reach, bar.o.to)
   }
   let drift = fn(laid : @view.Laid, n : @view.View) {
-    bar_glass_top(l().reach, bar.o.at(bar_moment(laid, n)).0) - clip_top()
+    bar_glass_top(l().reach, bar.o.at(bar_moment(laid, n, bar.o.end())).0) - clip_top()
   }
   holder.width(By(fn() { Some(w()) })).height(By(fn() { Some(panel()) })) |> ignore
   holder
-  .alpha(Painted(fn(laid) { bar.vis.at(bar_moment(laid, holder)).0 }))
+  .alpha(Painted(fn(laid) { bar.vis.at(bar_moment(laid, holder, bar.vis.end())).0 }))
   .drawn_off(
     Painted(fn(laid) {
-      let t = bar_moment(laid, holder)
+      let t = bar_moment(laid, holder, dmax(bar.vis.end(), bar.up.end()))
       let v = bar.vis.at(t).0
       let foot = 22.0 + nav_foot()
       let raised = bar_raise(holder.window().1, foot, panel(), status_top()) * bar.up.value_at(t)
@@ -203,7 +213,7 @@ fn bar_holder_node(holder : @view.View, src : Source, ws : () -> Workspace?, lai
 /// the bar (disc_look's), as each frame is painted.
 fn bar_disc_look(d : @view.View) -> Unit {
   let look = fn(laid : @view.Laid) {
-    let t = bar_moment(laid, d)
+    let t = bar_moment(laid, d, bar_k_until())
     let k = bar.k_at(t)
     let up = bar.up.value_at(t)
     let visible = 1.0 - dclamp(up, 0.0, 1.0)
@@ -286,7 +296,7 @@ fn bar_glass_capsule(
   let corner = fn() { dmin(rad, h() / 2.0) }
   // (the notch where it is drawn, and where its lips are then: none while the circle is not through the edge)
   let notch = fn(laid : @view.Laid, n : @view.View) {
-    let (cy, r) = notch_at(bar.k_at(bar_moment(laid, n)))
+    let (cy, r) = notch_at(bar.k_at(bar_moment(laid, n, bar_k_until())))
     (cy, r, notch_lips(w(), cy, r))
   }
   bar_at(holder, fn() { 0.0 }, top, w, h, fn(g) {
@@ -356,7 +366,7 @@ fn bar_ball_node(holder : @view.View) -> Unit {
     bar.ball_y.to
   }
   bar_at(holder, fn() { x0() - ball_size / 2.0 }, fn() { y0() - ball_size / 2.0 }, fn() { ball_size }, fn() { ball_size }, fn(ball) {
-    let at = fn(laid : @view.Laid) { bar_ball_at(bar_moment(laid, ball)) }
+    let at = fn(laid : @view.Laid) { bar_ball_at(bar_moment(laid, ball, bar_ball_until())) }
     ball
     .alpha(
       Painted(fn(laid) {
@@ -421,7 +431,7 @@ fn bar_places_node(
   holder.box(fn(row) {
     row.over(Is(true)) |> ignore
     // (none while a bar chosen lands: bar_swap_node draws them coming down)
-    row.alpha(Painted(fn(laid) { if bar.swap_at(bar_moment(laid, row)) is Some(_) { 0.0 } else { 1.0 } })) |> ignore
+    row.alpha(Painted(fn(laid) { if bar.swap_at(bar_moment(laid, row, bar.o.end())) is Some(_) { 0.0 } else { 1.0 } })) |> ignore
     row.each(items, fn(k) { k }, fn(p, key) {
       let key = @signals.untracked(fn() { key.get() })
       let j = fn() { items().search(key).unwrap_or(0) }
@@ -429,8 +439,8 @@ fn bar_places_node(
       bar_at(p, fn() { x_at(bar.k_end()) }, fn() { bar_mid() - 24.0 }, slot, fn() { 48.0 }, fn(at) {
         // (placed where the notch has it as each frame is painted: drawn, pressed and read out there; nothing laid out
         // for it)
-        at.offset(Painted(fn(laid) { (x_at(bar.k_at(bar_moment(laid, at))), bar_mid() - 24.0) })) |> ignore
-        bar_face_node(at, src, ws, key, fn(t) { bar_tint_at("bar:" + key, t) })
+        at.offset(Painted(fn(laid) { (x_at(bar.k_at(bar_moment(laid, at, bar_k_until()))), bar_mid() - 24.0) })) |> ignore
+        bar_face_node(at, src, ws, key, fn(t) { bar_tint_at("bar:" + key, t) }, fn() { bar_tint_until("bar:" + key) })
       })
       |> ignore
     })
@@ -456,6 +466,7 @@ fn bar_face_node(
   ws : () -> Workspace?,
   key : String,
   lit_at : (Double) -> Double,
+  lit_until : () -> Double,
 ) -> Unit {
   // (the stations at a glance, in words, and whether one is in trouble: bar_glance)
   let glance = fn() {
@@ -466,7 +477,7 @@ fn bar_face_node(
   }
   let idle = fn() { if @sf.theme().dark { 0xD1D5DBFFL } else { 0x6B7280FFL } }
   let lit = fn() { if @sf.theme().dark { 0xFFFFFFFFL } else { 0x111827FFL } }
-  let lit_now = fn(laid : @view.Laid) { lit_at(bar_moment(laid, at)) }
+  let lit_now = fn(laid : @view.Laid) { lit_at(bar_moment(laid, at, lit_until())) }
   at
   .lines_up(Is(Some(Middle)))
   .lies_along(Is(Middle))
@@ -560,7 +571,7 @@ fn bar_rows_node(
       fn(open) {
         open.over(Is(true)) |> ignore
         let look = fn(laid : @view.Laid) {
-          let t = bar_moment(laid, open)
+          let t = bar_moment(laid, open, bar.o.end())
           let o = bar.o.at(t).0
           (if bar.swap_at(t) is Some(_) { 0.0 } else { rows_alpha(o) }, rows_shift(o, l().reach))
         }
@@ -577,7 +588,7 @@ fn bar_rows_node(
             let x = fn() { bar_centres(w(), 0.0, set().length())[set().search(key).unwrap_or(0)] - slot() / 2.0 }
             let y = fn() { over + n().to_double() * bar_row + bar_row / 2.0 - 24.0 }
             bar_at(p, x, y, slot, fn() { 48.0 }, fn(at) {
-              bar_face_node(at, src, ws, key, fn(t) { bar_tint_at("row:" + key, t) })
+              bar_face_node(at, src, ws, key, fn(t) { bar_tint_at("row:" + key, t) }, fn() { bar_tint_until("row:" + key) })
             })
             |> ignore
           })
@@ -610,7 +621,7 @@ fn bar_lens_node(holder : @view.View) -> Unit {
         bar_at(on, fn() { x0() - ball_size / 2.0 }, fn() { y0() - ball_size / 2.0 }, fn() { ball_size }, fn() { ball_size }, fn(
           lens
         ) {
-          let at = fn(laid : @view.Laid) { bar_ball_at(bar_moment(laid, lens)) }
+          let at = fn(laid : @view.Laid) { bar_ball_at(bar_moment(laid, lens, bar_ball_until())) }
           let held = fn(laid : @view.Laid) {
             let b = at(laid)
             if b.held > 0.01 && b.alpha > 0.0 {
@@ -687,7 +698,7 @@ fn bar_swap_node(
         on.over(Is(true)) |> ignore
         let s = bar.swap.unwrap()
         let now = fn(laid : @view.Laid, n : @view.View) {
-          let t = bar_moment(laid, n)
+          let t = bar_moment(laid, n, dmax(bar.o.end(), bar_k_until()))
           let o = bar.o.at(t).0
           let st = s.t(o)
           let (xs, y) = swap_at(s, o, w(), bar.k_at(t), row_top())
@@ -720,7 +731,7 @@ fn bar_swap_node(
                   .alpha(Painted(fn(laid) { now(laid, at).5 }))
                   .drawn_off(Painted(fn(laid) { let n = now(laid, at); (0.0, n.3 + n.4) }))
                   |> ignore
-                  bar_face_node(at, src, ws, key, fn(_) { was("row:" + key) })
+                  bar_face_node(at, src, ws, key, fn(_) { was("row:" + key) }, fn() { -1.0 })
                 })
                 |> ignore
               }
@@ -732,7 +743,7 @@ fn bar_swap_node(
             let y = fn() { bar_mid() - clip_top() - 24.0 }
             bar_at(win, x, y, slot, fn() { 48.0 }, fn(at) {
               at.drawn_off(Painted(fn(laid) { (0.0, now(laid, at).3) })) |> ignore
-              bar_face_node(at, src, ws, key, fn(_) { was("bar:" + key) })
+              bar_face_node(at, src, ws, key, fn(_) { was("bar:" + key) }, fn() { -1.0 })
             })
             |> ignore
           }
@@ -771,7 +782,7 @@ fn bar_swap_node(
                 } else {
                   from + (end - from) * st
                 }
-              })
+              }, fn() { bar.o.end() })
             })
             |> ignore
           }
@@ -780,4 +791,51 @@ fn bar_swap_node(
     )
   })
   |> ignore
+}
+
+///|
+/// Where each of the bar's ways ends (the frames' clock, ms).
+fn bar_ends() -> Array[Double] {
+  let m = bar
+  let ends = [
+    m.o.end(),
+    m.k.end(),
+    m.held.end(),
+    m.up.end(),
+    m.ball_x.end(),
+    m.ball_y.end(),
+    m.vis.end(),
+    m.ball_alpha.end(),
+    m.ball_scale.end(),
+    m.icon_swap.end(),
+  ]
+  for _, g in m.tints {
+    ends.push(g.end())
+  }
+  ends
+}
+
+///|
+/// Where the notch as drawn ends (BarModel::k_at: its spring, the panel's and the rise's).
+fn bar_k_until() -> Double {
+  dmax(bar.k.end(), dmax(bar.o.end(), bar.up.end()))
+}
+
+///|
+/// Where the ball as drawn ends (bar_ball_at: where it is, held, how big, how faint).
+fn bar_ball_until() -> Double {
+  let m = bar
+  dmax(
+    dmax(m.ball_x.end(), m.ball_y.end()),
+    dmax(m.held.end(), dmax(m.ball_scale.end(), m.ball_alpha.end())),
+  )
+}
+
+///|
+/// Where the place of tint `id` ends lighting up or going dim.
+fn bar_tint_until(id : String) -> Double {
+  match bar.tints.get(id) {
+    Some(g) => g.end()
+    None => -1.0
+  }
 }
