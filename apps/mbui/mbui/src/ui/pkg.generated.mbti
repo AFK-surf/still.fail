@@ -198,6 +198,8 @@ pub let hold_slop : Double
 
 pub fn hold_words(channel~ : String, title~ : String, body~ : String) -> Unit
 
+pub fn host_event(() -> Unit) -> Unit
+
 pub let image_fade_ms : Double
 
 pub fn image_natural(String) -> (Double, Double)?
