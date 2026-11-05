@@ -438,6 +438,15 @@ pub fn[T] measure_pass(read : () -> T) -> T {
 }
 
 ///|
+/// Forget intrinsic answers whose dependencies changed, while retaining the
+/// placed layout until the new answer is known. The caller marks `dirty` too
+/// only when that answer changes the node's geometry.
+pub fn Node::measure_stale(self : Node) -> Unit {
+  self.cache_n = 0
+  self.pre_gen = -1
+}
+
+///|
 /// The offset of a relatively positioned box from its insets.
 fn inset_offset(s : Style, cb_w : Double, cb_h : Double, horizontal : Bool) -> Double {
   if s.position != Relative {

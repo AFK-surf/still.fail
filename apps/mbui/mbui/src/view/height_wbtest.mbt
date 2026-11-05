@@ -89,3 +89,25 @@ test "intrinsic reads see changed source content even without another frame mome
     assert_eq(target.val.unwrap().laid_size().1, h)
   }
 }
+
+///|
+test "an unchanged intrinsic result preserves its consumer's placed layout" {
+  let size = @signals.signal(40.0, same=fn(a, b) { a == b })
+  let target : Ref[View?] = Ref(None)
+  let tree = Tree::new(fn(root) {
+    let source = root.box(fn(v) { v.height(By(fn() { Some(size.get()) })) |> ignore })
+    target.val = Some(root.box(fn(v) {
+      v.height_measured(Is(source.natural_height(300.0).maximum(height(100.0)))) |> ignore
+    }))
+  })
+  defer { tree.dispose() }
+  tree.frame(300.0, 300.0, now=0.0) |> ignore
+  let placed = target.val.unwrap().live().unwrap().flex.laid_gen
+  size.set(60.0)
+  tree.frame(300.0, 300.0, now=100.0) |> ignore
+  assert_eq(target.val.unwrap().laid_size().1, 100.0)
+  assert_eq(target.val.unwrap().live().unwrap().flex.laid_gen, placed)
+  size.set(120.0)
+  tree.frame(300.0, 300.0, now=200.0) |> ignore
+  assert_eq(target.val.unwrap().laid_size().1, 120.0)
+}

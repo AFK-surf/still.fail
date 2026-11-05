@@ -1,7 +1,64 @@
 # Evidence for the independent runtime slice
 
 Baseline: `351cef2857f2b281a25728363e9416fbc6b469bb`.
-Combined implementation: `b4217adac8`. No production app imports the experiment.
+Combined experiment: `b4217adac8`. No production app imports this module.
+The subsequent production integration implements intrinsic geometry dependencies
+in `mbui/view` and uses them in the real chat composer/list; it does not run the
+application on the experimental kernel.
+
+## Actual application integration
+
+The initial integration replaced the chat list's read of its composer's previous
+layout with an intrinsic-height expression. Real editor measurement and the
+existing application renderer were used, with the 3000-message `chat-long`
+fixture. Small-screen input and medium/large-screen stills were rendered before
+and after. Their final PNGs were byte-identical.
+
+This was insufficient as a performance change. On the same three-line input,
+the first integration increased layout calculations from 6 to 17: marking an
+input stale invalidated consumers even when a minimum kept their resulting
+height unchanged. Separating a stale measurement from a changed output brought
+that count back to 6. A second counterexample showed that an unchanged consumer
+was still placed again when another branch needed layout; measurement caches and
+placement validity now have separate invalidation. The combined flex/view suite
+passed 848 tests after that change.
+
+The six-line real-input control remains an explicit failed performance result:
+before that final placement separation, baseline and integration did 23 and 24
+layout calculations, respectively (416/442 placed nodes and 12/36 measurements).
+Both final pictures have SHA-256
+`bbb165b1c9b3cc30e5facc7a58bd397d7e4f1eca11f11ebac125952a251360d3`.
+Thus matching appearance and removing one feedback edge did not by themselves
+make the application cheaper. The virtual list still consumes row-layout
+notifications and recomputes its allocation.
+
+These replays use classic Wasm in Node, the real app, native text metrics and
+offscreen rendering. They establish work counts and appearance, not Android
+Wasmtime frame times. The shared build machine's changing load also prevents
+comparing the elapsed times from separate runs as a speedup.
+
+The next comparison changed only the production list's position accumulation:
+an interval index replaces copying and summing all historical rows whenever a
+visible row's height changes. A 30/3000-row regression first failed on the old
+accumulator (`30 != 1` updated rows), then passed with the index. The view suite
+passed 282 tests and the scoped composer/list application suite passed 28.
+
+| Actual `chat-long` replay | Old accumulation | Interval index |
+| --- | ---: | ---: |
+| Six-line input: row records processed | 15,010 | 5 |
+| Six-line input: index intervals visited | 0 | 612 |
+| Six-line input: layout calculations / placed nodes | 24 / 402 | 24 / 402 |
+| Three drags: row records processed | 3,002 | 3,002 |
+| Three drags: index intervals visited | 0 | 6,099 |
+| Three drags: layout calculations / placed nodes | 10 / 664 | 10 / 664 |
+
+The input replay demonstrates avoiding repeated history accumulation. The drag
+replay still rebuilds all row positions once and does not demonstrate less
+work. Both final pictures match their controls byte-for-byte. The drag picture's
+SHA-256 is
+`7cf58a282349d50408f55d30aaf59d49c3f2720608a9e03e4e25d4ed42933554`.
+Index interval visits are a different kind of operation from row processing;
+these counts are not a wall-time ratio.
 
 ## Contracts and counterexamples
 
@@ -59,8 +116,10 @@ or an Android memory measurement.
 
 ## Remaining adoption evidence
 
-The slice does not yet demonstrate a general owner tree, full input/IME,
-stable-key history insertion/removal, recorded font/resource changes, or a
-retained scene submitted to the real GPU. It has not been compared against an
-actual chat replay or measured on Android. The contract evidence justifies the
-next integration work; it does not establish that the phone goal is achieved.
+The experimental kernel does not yet demonstrate a general owner tree, full
+input/IME, stable-key history insertion/removal or recorded font/resource changes.
+Production integration has exercised actual chat input and scrolling, but retains
+the existing runtime's owner, event and rendering system. Final matching stills
+also do not establish matching intermediate motion. Android development-target
+frame and memory measurements remain necessary; the phone goal is not achieved
+by the results above.

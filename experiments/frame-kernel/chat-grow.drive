@@ -1,0 +1,14 @@
+log measure
+tap 发消息
+type 第一行
+enter
+type 第二行
+enter
+type 第三行
+enter
+type 第四行
+enter
+type 第五行
+enter
+type 第六行
+exit

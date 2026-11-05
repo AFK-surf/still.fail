@@ -232,7 +232,7 @@ pub fn draw() -> Int {
         let work = @ui.view_tree().unwrap().work()
         if drawn {
           let perf = t.frame_perf()
-          println("APPWORK {\"at\":\{t.time()},\"computes\":\{work.computes - previous.computes},\"measured\":\{work.measured - previous.measured},\"laid\":\{work.laid - previous.laid},\"bound\":\{work.bound - previous.bound},\"structure\":\{work.structure - previous.structure},\"made\":\{work.made - previous.made},\"released\":\{work.let_go - previous.let_go},\"build_ms\":\{perf.build_ms},\"layout_ms\":\{perf.layout_ms},\"paint_ms\":\{perf.paint_ms}}")
+          println("APPWORK {\"at\":\{t.time()},\"computes\":\{work.computes - previous.computes},\"measured\":\{work.measured - previous.measured},\"laid\":\{work.laid - previous.laid},\"bound\":\{work.bound - previous.bound},\"structure\":\{work.structure - previous.structure},\"made\":\{work.made - previous.made},\"released\":\{work.let_go - previous.let_go},\"list_rows\":\{work.list_rows - previous.list_rows},\"list_spans\":\{work.list_spans - previous.list_spans},\"build_ms\":\{perf.build_ms},\"layout_ms\":\{perf.layout_ms},\"paint_ms\":\{perf.paint_ms}}")
         }
         previous = work
       })

@@ -114,12 +114,20 @@ fn Tree::height_unlink(self : Tree, target : NodeId) -> Unit {
 
 ///|
 fn Tree::height_dirty(self : Tree, at : Int) -> Unit {
-  // Ordinary nodes pay the original ancestor walk when there are no queries.
-  if self.height_users.is_empty() {
-    let mut i = at
-    while i >= 0 { self.nodes[i].flex.dirty = true; i = self.nodes[i].parent }
-    return
+  let mut i = at
+  while i >= 0 {
+    let n = self.nodes[i]
+    n.flex.dirty = true
+    i = n.parent
   }
+  if !self.height_users.is_empty() { self.height_stale(at) }
+}
+
+///|
+// A changed source makes consumers' intrinsic answers stale, not their placed
+// geometry. Carry that distinction through the dependency graph: a clamp may
+// keep the answer unchanged while a different branch really needs layout.
+fn Tree::height_stale(self : Tree, at : Int) -> Unit {
   let todo = [at]
   let seen : Set[Int] = Set::new()
   while todo.length() > 0 {
@@ -127,7 +135,7 @@ fn Tree::height_dirty(self : Tree, at : Int) -> Unit {
     while i >= 0 && !seen.contains(i) {
       seen.add(i)
       let n = self.nodes[i]
-      n.flex.dirty = true
+      n.flex.measure_stale()
       let id = { at: i, gen: n.gen }
       if self.height_queries.contains(id) { self.heights_due.add(id) }
       match self.height_users.get(id) {
@@ -158,6 +166,12 @@ fn Tree::heights_resolved(self : Tree) -> Unit {
           guard value >= 0.0 && !value.is_inf() else { abort("a height expression must be finite and nonnegative") }
           if q.value != Some(value) {
             q.value = Some(value)
+            let mut at = id.at
+            while at >= 0 {
+              let n = self.nodes[at]
+              n.flex.dirty = true
+              at = n.parent
+            }
             changed = true
           }
         }
@@ -208,7 +222,7 @@ pub fn View::height_measured(self : View, expression : Live[Height]) -> View {
     }
     query.expression = expr
     tree.heights_due.add(target)
-    tree.height_dirty(self.at)
+    tree.height_stale(self.at)
   })
   self.owns(fn() {
     tree.height_unlink(target)

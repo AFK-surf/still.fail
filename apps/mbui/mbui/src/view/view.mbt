@@ -298,6 +298,9 @@ pub(all) struct Work {
   mut drawn_boxes : Int
   /// where things stand laid out and placed once a change was told whole (Tree::settle_now: View::laid_before_causes)
   mut settles : Int
+  /// rows whose positions were rebuilt, and intervals touched by the list's position index
+  mut list_rows : Int
+  mut list_spans : Int
 } derive(Eq, Debug)
 
 ///|
@@ -968,6 +971,8 @@ pub fn Tree::new(
       pulled: 0,
       drawn_boxes: 0,
       settles: 0,
+      list_rows: 0,
+      list_spans: 0,
     },
   }
   let root = t.made(-1)

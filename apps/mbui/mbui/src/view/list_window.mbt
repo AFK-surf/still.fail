@@ -131,10 +131,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
   })
   // (each block's top in the column and its height, in order: as tall as it was laid out, else est)
-  // (worked out anew for every block only as the blocks themselves change, as heights are forgotten, as the host's
-  // pixels change; else for those whose heights were told and those on their way (`moving`, where a room is said:
-  // what was and what is), the rest as they were, the tops summed again: a long chat's three thousand rooms each asked
-  // for again as one row was measured or moved, 2026-11-04)
+  // Rebuilt when the ordered keys, measurement context or pixel grid changes.
+  // Otherwise only changed rows and their interval paths are updated. Reading a
+  // visible position never copies or sums the history above it.
   let laid_keys : Ref[Array[K]?] = Ref(None)
   let laid_index : Ref[Map[K, Int]] = Ref(Map([]))
   let laid_moving : Ref[Array[K]] = Ref([])
@@ -156,7 +155,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     (k, 0.0, self.tree.rows_slot(dmax(0.0, r.height)), known, r)
   }
-  let laid = @signals.computed(fn(was : Array[(K, Double, Double, Bool, ListRoom)]?) {
+  let laid = @signals.computed(fn(was : ListTable[K]?) {
     told.get() |> ignore
     let all_keys = keys()
     let now_moving = match moving {
@@ -183,12 +182,15 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       })
       laid_keys.val = Some(all_keys)
       laid_index.val = index
-      out
+      ListTable::new(out, self.tree.work)
     } else {
-      let out = was.unwrap().copy()
+      let out = was.unwrap()
+      let updated : Set[K] = Set::new()
       let again = fn(k : K) {
+        if updated.contains(k) { return }
+        updated.add(k)
         match laid_index.val.get(k) {
-          Some(i) => out[i] = block(k)
+          Some(i) => out.set(i, block(k))
           None => ()
         }
       }
@@ -205,31 +207,13 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     told_keys.clear()
     laid_moving.val = now_moving
-    let mut top = 0.0
-    for i in 0..<out.length() {
-      let (k, _, h, known, r) = out[i]
-      out[i] = (k, top, h, known, r)
-      top = top + h
-    }
     laid_made.val = laid_made.val + 1
-    laid_unknown.val = out.iter().filter(fn(b) { !b.3 }).count()
+    laid_unknown.val = out.unknown
     out
-  })
+  }, same=fn(_, _) { false })
   // (the first block whose foot is at `x` or under it, by halving: the blocks in order down the column, none shorter
   // than nothing; how many there are where there is none)
-  let first_from = fn(all : Array[(K, Double, Double, Bool, ListRoom)], x : Double) -> Int {
-    let mut lo = 0
-    let mut hi = all.length()
-    while lo < hi {
-      let mid = (lo + hi) / 2
-      if all[mid].1 + all[mid].2 < x {
-        lo = mid + 1
-      } else {
-        hi = mid
-      }
-    }
-    lo
-  }
+  let first_from = fn(all : ListTable[K], x : Double) -> Int { all.first_from(x) }
   // (where it is scrolled to, as what it holds is drawn now)
   let at = fn() { s.drawn(self.tree) }
   // (those that show: their room met by the column's, as tall as it shows, from the first down to one not laid out yet;
@@ -240,7 +224,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     let out = []
     let all = laid.get()
     for i in first_from(all, x)..<all.length() {
-      let b = all[i]
+      let b = all.row(i)
       if b.1 >= x + vh && !(room is Some(_) && b.2 == 0.0 && b.1 == x + vh) {
         break
       }
@@ -270,7 +254,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     match room_now {
       Some(vh) =>
         for i in first_from(all, x)..<all.length() {
-          let b = all[i]
+          let b = all.row(i)
           if b.1 > x + vh {
             break
           }
@@ -289,8 +273,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           }
         }
       None =>
-        for i, b in all {
-          if kept(b.0) {
+        for i in 0..<all.length() {
+          if kept(all.rows[i].0) {
             with_slot[i] = true
           }
         }
@@ -303,7 +287,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       if i > last + 1 {
         out.push(Gap(last, i))
       }
-      out.push(Slot(all[i].0, i))
+      out.push(Slot(all.row(i).0, i))
       last = i
     }
     if last + 1 < all.length() {
@@ -314,11 +298,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // (a gap's height: from the bottom of the block before it, or the column's top, to the top of the one after, or the end)
   let gap_height = fn(from : Int, to : Int) -> Double {
     let all = laid.get()
-    let top = if from < 0 { 0.0 } else { all.get(from).map(fn(b) { b.1 + b.2 }).unwrap_or(0.0) }
-    let end = match all.get(to) {
-      Some(b) => b.1
-      None => all.last().map(fn(b) { b.1 + b.2 }).unwrap_or(0.0)
-    }
+    let top = if from < 0 { 0.0 } else if from < all.length() { all.top(from + 1) } else { 0.0 }
+    let end = if to < all.length() { all.top(to) } else { all.total() }
     dmax(0.0, end - top)
   }
   // (its blocks in sight by their places, it put at one, and how far past the first in sight's top it is: what a test
@@ -353,10 +334,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       let x = at()
       let all = laid.get()
       let mut i = first_from(all, x)
-      while i < all.length() && all[i].1 + all[i].2 <= x {
+      while i < all.length() && all.row(i).1 + all.row(i).2 <= x {
         i = i + 1
       }
-      if i < all.length() { x - all[i].1 } else { 0.0 }
+      if i < all.length() { x - all.row(i).1 } else { 0.0 }
     },
     fn(i) {
       keys().get(i).bind(fn(k) {
@@ -377,12 +358,12 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // out as it is)
   let held : Ref[(K, Double, Double)?] = Ref(None)
   release_put.val = fn() { held.val = None; putting.val = false }
-  let hold = fn(all : Array[(K, Double, Double, Bool, ListRoom)]) {
+  let hold = fn(all : ListTable[K]) {
     match held.val {
       Some((k, offset, _)) =>
         match (match laid_index.val.get(k) {
-          Some(j) if j < all.length() && all[j].0 == k => Some(j)
-          _ => all.search_by(fn(b) { b.0 == k })
+          Some(j) if j < all.length() && all.row(j).0 == k => Some(j)
+          _ => None
         }) {
           Some(i) => {
             // (the block itself in sight first, laid out as it is, where it is not yet: how far into it it is put
@@ -390,27 +371,27 @@ pub fn[K : Hash + Eq] View::scrolls_window(
             // A first measurement may include only a row's heading, with its hosted content still to be
             // measured. Keep part of that row in sight until the saved point fits inside it; otherwise the
             // row would be let go before its island can report the rest of its height.
-            let past = if offset < 0.0 { dmin(-offset, dmax(0.0, all[i].2 - 0.5)) } else { -offset }
-            let to = if all[i].3 { all[i].1 + past } else { all[i].1 }
+            let past = if offset < 0.0 { dmin(-offset, dmax(0.0, all.row(i).2 - 0.5)) } else { -offset }
+            let to = if all.row(i).3 { all.row(i).1 + past } else { all.row(i).1 }
             let to = if to < 0.0 { 0.0 } else { to }
             // The requested row remains the reading anchor while what is above it finishes measuring,
             // including a hosted view's later measurement. A provisional row above it cannot take over.
-            anchor.val = Some((k, all[i].1))
+            anchor.val = Some((k, all.row(i).1))
             measuring_anchor.val = true
             s.x.set(to)
             // (let go once what shows is all laid out as it is: the blocks over it as counted no more matter)
             let in_sight = @signals.untracked(fn() { window.get() })
             let known = in_sight.iter().all(fn(w) {
               match laid_index.val.get(w) {
-                Some(j) if j < all.length() && all[j].0 == w => all[j].3
-                _ => all.iter().any(fn(b) { b.0 == w && b.3 })
+                Some(j) if j < all.length() && all.row(j).0 == w => all.row(j).3
+                _ => false
               }
             })
             // (and once it can go there: not while how far it can go, as counted so far, falls short of it, unless all of it
             // is laid out as it is)
             let reached = to <= @signals.untracked(fn() { s.most_now() }) + 0.5 || laid_unknown.val == 0
-            let inside = offset >= 0.0 || -offset < all[i].2
-            held.val = if all[i].3 && inside && known && reached && in_sight.length() > 0 { None } else { Some((k, offset, to)) }
+            let inside = offset >= 0.0 || -offset < all.row(i).2
+            held.val = if all.row(i).3 && inside && known && reached && in_sight.length() > 0 { None } else { Some((k, offset, to)) }
             putting.val = held.val is Some(_)
           }
           None => ()
@@ -448,14 +429,14 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // (a block by its key, where it is among them: as `laid` was last worked out for these blocks)
     let index_of = fn(k : K) -> Int? {
       match laid_index.val.get(k) {
-        Some(i) if i < all.length() && all[i].0 == k => Some(i)
-        _ => all.search_by(fn(b) { b.0 == k })
+        Some(i) if i < all.length() && all.row(i).0 == k => Some(i)
+        _ => None
       }
     }
     match anchor.val {
       Some((k, was)) =>
         match index_of(k) {
-          Some(i) => d = all[i].1 - was
+          Some(i) => d = all.row(i).1 - was
           None => ()
         }
       None => ()
@@ -471,7 +452,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // foot: found by halving, not looked for among them all)
     let lo = first_from(all, x + d)
     let mut hi = lo
-    while hi < all.length() && all[hi].1 < x + d + vh {
+    while hi < all.length() && all.row(hi).1 < x + d + vh {
       hi = hi + 1
     }
     let known_in_sight = fn(b : (K, Double, Double, Bool, ListRoom)) {
@@ -480,7 +461,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     let mut measuring = false
     let mut first_known : (K, Double)? = None
     for i in lo..<hi {
-      let b = all[i]
+      let b = all.row(i)
       if !b.3 && b.1 < x + d + vh && b.1 + b.2 > x + d {
         measuring = true
       }
@@ -489,7 +470,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       }
     }
     let held = match anchor.val.bind(fn(a) {
-      index_of(a.0).bind(fn(i) { if known_in_sight(all[i]) { Some(all[i]) } else { None } })
+      index_of(a.0).bind(fn(i) { if known_in_sight(all.row(i)) { Some(all.row(i)) } else { None } })
     }) {
       Some(b) => Some((b.0, b.1))
       // The previous anchor can be an estimate from before the list followed its end, or no longer visible.
@@ -505,15 +486,15 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       held
     } else {
       let mut i = lo
-      while i < all.length() && all[i].1 + all[i].2 <= x + d {
+      while i < all.length() && all.row(i).1 + all.row(i).2 <= x + d {
         i = i + 1
       }
-      if i < all.length() { Some((all[i].0, all[i].1)) } else { None }
+      if i < all.length() { Some((all.row(i).0, all.row(i).1)) } else { None }
     }
   })
   // The anchor and the scroll range use the same heights. Reading the holder's previous layout here would clamp
   // a compensated anchor to the old end, then mistake that clamp for the reader returning to the end.
-  let extent = fn() { laid.get().last().map(fn(b) { b.1 + b.2 }).unwrap_or(0.0) + foot_room() }
+  let extent = fn() { laid.get().total() + foot_room() }
   let out = self.scrolls(s, slop?=slop, bar?=bar, content_extent=extent, bar_clear~, fn(held) {
     // (shorter than the column: at its foot)
     if from_end {
@@ -616,7 +597,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     let newest : Ref[K?] = Ref(None)
     // (shorter than the column, how far its first block's top is under the column's: the room over them at its foot)
     let lead = fn() {
-      let total = laid.get().last().map(fn(b) { b.1 + b.2 }).unwrap_or(0.0)
+      let total = laid.get().total()
       match self.laid_size_told() {
         Some((_, vh)) => if vh > total { vh - total } else { 0.0 }
         None => 0.0
@@ -650,10 +631,13 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       }
       let mut told_now = false
       if !awaiting.is_empty() {
-        for b in all {
-          if b.3 && awaiting.contains(b.0) {
-            awaiting.remove(b.0)
-            told_now = true
+        for k in awaiting.keys().collect() {
+          match laid_index.val.get(k).bind(fn(i) { all.get(i) }) {
+            Some(b) if b.3 => {
+              awaiting.remove(k)
+              told_now = true
+            }
+            _ => ()
           }
         }
         for k in awaiting.keys().collect() {
@@ -706,7 +690,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           None
         }
         Some(k) =>
-          match @signals.untracked(fn() { laid.get() }).iter().find_first(fn(b) { b.0 == k }) {
+          match laid_index.val.get(k).bind(fn(i) { all.get(i) }) {
             Some(b) if b.3 => {
               // A retained row has been measured before its room has opened. Keep the arrival's target until
               // enough of that room exists to put a tall answer's top under the cover.

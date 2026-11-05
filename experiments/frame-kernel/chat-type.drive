@@ -1,8 +1,8 @@
 log measure
 tap 发消息
-type 输入框换行时，列表应让出实际占用的空间。
+type 第一行
 enter
-type 第二行保留内容和间距。
+type 第二行
 enter
-type 第三行用来检查底部位置。
+type 第三行
 exit
